@@ -298,7 +298,7 @@ export class WarehouseStockReconciliationService {
       for (const itemId of candidates) {
         await orm.transaction(async (tx) => {
           // قفل سطری کالا (سطح ITEMS_STOCK) سپس ردیف‌های موجودی آن — همان ترتیب applyStockMovement
-          const [locked] = await tx.select({ id: items.id }).from(items).where(and(eq(items.id, itemId), eq(items.isDeleted, 0))).for('no key update'); // v10.0.22 (OBS-R1-80): قفل TD-320
+          const [locked] = await tx.select({ id: items.id }).from(items).where(and(eq(items.id, itemId), eq(items.isDeleted, 0))).for('no key update'); // v10.0.157 (OBS-R1-80): قفل TD-320
           if (!locked) return;
           await tx.select({ id: itemWarehouseStocks.id }).from(itemWarehouseStocks).where(eq(itemWarehouseStocks.itemId, itemId)).for('update');
 

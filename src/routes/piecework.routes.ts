@@ -8,6 +8,7 @@ import { PayrollPaymentService } from '../services/accounting/payrollPayment.ser
 import { PayrollPaymentVoidService } from '../services/accounting/payrollPaymentVoid.service.js';
 import { PieceworkService, PieceworkReadService, PayrollReadService, PieceworkPayrollService } from '../services/piecework.service.js';
 import { z } from 'zod';
+import { pieceworkCategoryParamSchema, pieceworkTaskImportSchema } from './importRows.schemas.js';
 import { validate, paramsIdSchema, numericIdString, decimalInput, storageDateParam } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { canAccessSensitivePayrollData, sanitizePayrollRecord } from '../lib/piiMasker.js';
@@ -300,7 +301,7 @@ router.post('/piecework/tasks', requirePermission(PIECEWORK_TASKS_PERMISSION), v
 }));
 
 // POST /api/piecework/tasks/import-excel - Bulk import piecework tasks
-router.post('/piecework/tasks/import-excel', requirePermission(PIECEWORK_TASKS_PERMISSION), asyncHandler(async (req, res) => {
+router.post('/piecework/tasks/import-excel', requirePermission(PIECEWORK_TASKS_PERMISSION), validate(pieceworkTaskImportSchema), asyncHandler(async (req, res) => {
   try {
     const { rows, mode = 'upsert' } = req.body;
     if (!Array.isArray(rows) || rows.length === 0) {
@@ -513,7 +514,7 @@ router.put('/piecework/categories/:id', requirePermission(PIECEWORK_TASKS_PERMIS
 }));
 
 // DELETE /api/piecework/categories/:id
-router.delete('/piecework/categories/:id', requirePermission(PIECEWORK_TASKS_PERMISSION), asyncHandler(async (req, res) => {
+router.delete('/piecework/categories/:id', requirePermission(PIECEWORK_TASKS_PERMISSION), validate(pieceworkCategoryParamSchema), asyncHandler(async (req, res) => {
   try {
     const rawId = req.params.id;
     const result = await PieceworkService.deleteCategory(rawId);

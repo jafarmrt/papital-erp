@@ -17,7 +17,9 @@ import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { BOM_ALLOCATE_PERMISSIONS, BOM_CONSUME_PERMISSIONS, BOM_RELEASE_PERMISSIONS, PROJECT_STOCK_IN_PERMISSIONS } from '../lib/permissions/projectPermissions.js';
 import { WAC_CORRECTION_PERMISSION } from '../lib/inventoryAudit/wacCorrection.js';
 import { ITEM_COST_READ_PERMISSIONS, RESERVATION_BUYER_READ_PERMISSIONS, reservedItemsReportForAccess } from '../lib/inventory/reservedItemsReport.js';
+import { allocationsForCostAccess } from '../lib/inventory/projectMaterialCost.js';
 import type { AuthUserPayload } from '../types.js';
+import { actorDisplayName } from '../lib/auth/actorDisplayName.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -26,7 +28,6 @@ router.use(authenticateToken);
  * کاربر جاری برای نام لاگ. فیلد قدیمی `name` در payload توکن‌های فعلی وجود ندارد
  * (generateToken آن را نمی‌نویسد)، پس عملاً همیشه username استفاده می‌شود؛ برای حفظ رفتار نگه داشته شده است.
  */
-type LegacyNamedUser = AuthUserPayload & { name?: string };
 
 export const paramsItemIdSchema = z.object({
   params: z.object({
@@ -52,7 +53,7 @@ export const transferStockSchema = z.object({
     itemId: z.coerce.number().int().positive('شناسه کالا باید عدد مثبت باشد'),
     fromLocation: z.string().min(1, 'انبار مبدا الزامی است'),
     toLocation: z.string().min(1, 'انبار مقصد الزامی است'),
-    // v10.0.23 (OBS-R1-85): ارقام فارسی و جداکننده‌ها خوانده می‌شوند (TD-385)؛ متن و مقدار خالی ۴۰۰ است، نه صفر
+    // v10.0.158 (OBS-R1-85): ارقام فارسی و جداکننده‌ها خوانده می‌شوند (TD-385)؛ متن و مقدار خالی ۴۰۰ است، نه صفر
     quantity: decimalInput('مقدار انتقال')
       .refine(v => v !== undefined && fin(v).isPositive(), 'مقدار انتقال باید بزرگتر از صفر باشد')
       .transform(v => fin(v as string).toNumber()),
@@ -245,8 +246,8 @@ router.post(
   validate(rebuildStockSchema),
   asyncHandler(async (req, res) => {
     const { itemId } = req.body || {};
-    const user: LegacyNamedUser | undefined = req.user;
-    const userName = user?.name || user?.username || 'مدیر سیستم';
+    const user: AuthUserPayload | undefined = req.user;
+    const userName = actorDisplayName(user, 'مدیر سیستم');
     const userId = user?.id;
 
     if (itemId) {
@@ -301,10 +302,10 @@ router.post(
   authorizePermission(WAC_CORRECTION_PERMISSION),
   validate(correctWacSchema),
   asyncHandler(async (req, res) => {
-    const user: LegacyNamedUser | undefined = req.user;
+    const user: AuthUserPayload | undefined = req.user;
     const result = await InventoryIntegrityService.correctItemWacFromLedger(Number(req.body.itemId), {
       userId: user?.id,
-      user: user?.name || user?.username || 'مدیر سیستم',
+      user: actorDisplayName(user, 'مدیر سیستم'),
     });
     res.json({
       success: true,
@@ -322,8 +323,8 @@ router.post(
   idempotency({ scope: 'inventory' }),
   validate(transferStockSchema),
   asyncHandler(async (req, res) => {
-    const user: LegacyNamedUser | undefined = req.user;
-    const userName = user?.name || user?.username || 'مدیر سیستم';
+    const user: AuthUserPayload | undefined = req.user;
+    const userName = actorDisplayName(user, 'مدیر سیستم');
     const result = await InventoryIntegrityService.executeWarehouseTransfer({
       ...req.body,
       user: userName,
@@ -382,7 +383,9 @@ router.get(
       search
     });
 
-    res.json({ allocations, total: allocations.length });
+    // v10.0.130 (TD-1210): بهای تخصیص فقط برای خوانندگان بهای کالا
+    const canReadCost = await can(req.user, ...ITEM_COST_READ_PERMISSIONS);
+    res.json({ allocations: allocationsForCostAccess(allocations, canReadCost), total: allocations.length });
   })
 );
 
@@ -396,12 +399,12 @@ router.post(
   validate(projectAllocateSchema),
   asyncHandler(async (req, res) => {
     const { projectId, allocations } = req.body;
-    const user: LegacyNamedUser | undefined = req.user;
+    const user: AuthUserPayload | undefined = req.user;
     const result = await InventoryIntegrityService.allocateMaterialsForProject({
       projectId: Number(projectId),
       allocations,
       userId: user?.id,
-      username: user?.name || user?.username || 'مدیر سیستم'
+      username: actorDisplayName(user, 'مدیر سیستم')
     });
 
     await logActivity({
@@ -433,10 +436,10 @@ router.post(
       throw new BadRequestError('شناسه تخصیص نامعتبر است.');
     }
 
-    const user: LegacyNamedUser | undefined = req.user;
+    const user: AuthUserPayload | undefined = req.user;
     const updated = await InventoryIntegrityService.consumeAllocation(id, {
       userId: user?.id,
-      username: user?.name || user?.username || 'سیستم'
+      username: actorDisplayName(user)
     });
 
     await logActivity({
@@ -471,11 +474,11 @@ router.post(
     }
 
     const { reason } = req.body || {};
-    const user: LegacyNamedUser | undefined = req.user;
+    const user: AuthUserPayload | undefined = req.user;
     const updated = await InventoryIntegrityService.releaseAllocation(id, {
       reason,
       userId: user?.id,
-      username: user?.name || user?.username || 'سیستم'
+      username: actorDisplayName(user)
     });
 
     await logActivity({

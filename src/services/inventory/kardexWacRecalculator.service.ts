@@ -96,7 +96,7 @@ export class KardexWacRecalculatorService {
         .select()
         .from(items)
         .where(and(eq(items.id, itemId), eq(items.isDeleted, 0)))
-        // v10.0.22 (OBS-R1-80): همان قفل مسیرهای گردش انبار (TD-320)، نه `FOR UPDATE` که درج ردیف کاردکس سند هم‌زمان را می‌بندد
+        // v10.0.157 (OBS-R1-80): همان قفل مسیرهای گردش انبار (TD-320)، نه `FOR UPDATE` که درج ردیف کاردکس سند هم‌زمان را می‌بندد
         .for('no key update');
 
       if (!item) {

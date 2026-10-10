@@ -48,7 +48,7 @@ export class KardexBackfillService {
     let zeroWacItems = 0;
 
     await orm.transaction(async (tx) => {
-      // v10.0.22 (OBS-R1-80): همه کالاها یک‌جا، به ترتیب شناسه و با `FOR NO KEY UPDATE` (TD-320)، همان قفل مسیرهای سند؛
+      // v10.0.157 (OBS-R1-80): همه کالاها یک‌جا، به ترتیب شناسه و با `FOR NO KEY UPDATE` (TD-320)، همان قفل مسیرهای سند؛
       // پیش‌تر هر کالا جدا با `FOR UPDATE` و به ترتیب دلخواه پرس‌وجو قفل می‌شد و با ثبت هم‌زمان سند بن‌بست می‌ساخت
       await lockStockItems(tx, candidateRows.map(row => Number(row.id)));
       for (const row of candidateRows) {

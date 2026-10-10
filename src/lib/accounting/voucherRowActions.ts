@@ -19,13 +19,15 @@ export interface VoucherRowFacts {
   referenceNumber?: string | null;
 }
 
-export function voucherRowActions(v: VoucherRowFacts): VoucherRowAction[] {
+/** v10.0.27 (TD-965): `canApprove` = دارنده `accounting.vouchers_approve`؛ بی آن بازگشت به پیش‌نویس پیشنهاد نمی‌شود */
+export function voucherRowActions(v: VoucherRowFacts, access: { canApprove?: boolean } = {}): VoucherRowAction[] {
+  const canApprove = access.canApprove ?? true;
   const locked = Boolean(voucherSourceLabel(v.sourceKind)) || (v.sourceFiscalYear !== null && v.sourceFiscalYear !== undefined);
   const reversal = isReversalReference(v.referenceNumber);
   const actions: VoucherRowAction[] = [];
   if (!locked) {
     if (v.status === 'draft') actions.push('edit', 'delete');
-    if (v.status === 'approved') actions.push('revert_to_draft');
+    if (v.status === 'approved' && canApprove) actions.push('revert_to_draft');
     if (!reversal && (v.status === 'approved' || v.status === 'permanent')) actions.push('reverse');
     if (!reversal && v.status === 'approved') actions.push('correct');
   }
@@ -78,4 +80,17 @@ export function voucherConfirmTexts(kind: VoucherConfirmKind, v: VoucherRowFacts
         confirmText: 'بله، حذف شود',
       };
   }
+}
+
+/**
+ * v10.0.121 (TD-1120): کار اصلی ستون اقدام ردیف سند. نشان «قفل دفاتر» فقط برای سند دائم است؛ پیش‌تر هر سندی که دکمه
+ * تأیید یا قطعی‌سازی نداشت (پیش‌نویس یا تأییدشده برای کاربری بی آن مجوز) هم «قفل دفاتر» و «سند دائم» نشان می‌داد.
+ */
+export type VoucherPrimaryAction = 'approve' | 'finalize' | 'locked' | null;
+
+export function voucherPrimaryAction(status: string, access: { canApprove: boolean; canFinalize: boolean }): VoucherPrimaryAction {
+  if (status === 'permanent') return 'locked';
+  if (status === 'draft') return access.canApprove ? 'approve' : null;
+  if (status === 'approved') return access.canFinalize ? 'finalize' : null;
+  return null;
 }

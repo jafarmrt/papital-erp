@@ -820,7 +820,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
 
     // 3. A legacy stored value ('allowed') must be ignored: the effective policy stays 'forbidden'
     //    and the deduction fails with a readable InsufficientStockError, never a raw CHECK violation (23514)
-    //    v10.0.25 (OBS-R1-83): the setting is no longer read at all
+    //    v10.0.160 (OBS-R1-83): the setting is no longer read at all
     await orm.insert(appSettings).values({ key: 'negative_stock_policy', value: 'allowed' })
       .onConflictDoUpdate({ target: appSettings.key, set: { value: 'allowed' } });
     try {

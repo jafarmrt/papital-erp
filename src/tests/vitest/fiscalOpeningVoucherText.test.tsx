@@ -41,7 +41,8 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); });
 
-const ISSUED = 'به عنوان سند شماره ۱ سال جدید ثبت خواهد شد';
+const ISSUED = 'با شماره بعدی رشته اسناد حسابداری ثبت خواهد شد';
+const VOUCHER_ONE = 'سند شماره ۱ سال جدید';
 const NOT_ISSUED = 'سند افتتاحیه صادر نمی‌شود';
 
 // v9.0.163 (TD-577, B03-35): with «صدور خودکار سند افتتاحیه» unticked, step 4 and the execution note still said the
@@ -53,6 +54,8 @@ describe('fiscal closing step 4 follows the opening-voucher checkbox (TD-577)', 
     const input = box.querySelector('input') as HTMLInputElement;
     await waitFor(() => expect(document.body.textContent).toContain(ISSUED));
     expect(document.body.textContent).not.toContain(NOT_ISSUED);
+    // TD-1232 (work-map B-10): voucher numbers come from one sequence (TD-195), so the opening voucher is never «no. 1»
+    expect(document.body.textContent).not.toContain(VOUCHER_ONE);
 
     fireEvent.click(input);
     expect(input.checked).toBe(false);

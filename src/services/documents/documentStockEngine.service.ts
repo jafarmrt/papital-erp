@@ -42,6 +42,17 @@ export interface ApplyStockReversalParams {
   quantityOnly?: boolean;
 }
 
+/**
+ * v10.0.84 (TD-1147): what a reversal leaves in the inventory accounts with no stock behind it. Voiding a receipt keeps the
+ * WAC when the stock left is zero or its remaining value would be negative (the formula the Kardex replay uses too), while
+ * the receipt's voucher is voided at its full value; `residue` is that difference in rials (ledger value left minus stock
+ * value left: positive means the ledger holds more than the stock), zero for every other reversal.
+ */
+export interface StockReversalResult {
+  itemType: string | null;
+  residue: FinancialDecimal;
+}
+
 /** نوع سند انبارگردانی و اصلاح موجودی (شمارش، ورود اکسل، موجودی اولیه و افتتاحیه) در کاردکس */
 export const STOCK_COUNT_DOCUMENT_TYPE = 'audit';
 
@@ -88,7 +99,7 @@ export class DocumentStockEngine {
       .for('no key update'); // v8.0.67 (TD-320): هم‌حالت lockStockItems، بی ارتقای قفل
 
     if (!itemData) {
-      throw new NotFoundError(`کالای مورد نظر با شناسه ${itemId} در سیستم یافت نشد.`);
+      throw new NotFoundError(`کالای مورد نظر با شناسه ${itemId} در سامانه یافت نشد.`);
     }
 
     // v7.0.45 (audit P2-1): موجودی پیش از حرکت از جدول نرمال (منبع حقیقت)، نه از کش JSONB
@@ -189,7 +200,8 @@ export class DocumentStockEngine {
         itemName: itemData.name,
         movementType: inOut,
         quantity: qty,
-        unitPrice: priceDec.toNumber(),
+        // v10.0.42 (TD-930): بهای کاردکس همین ردیف به ریال، نه قیمت فروش سند
+        unitPrice: txUnitPrice.toNumber(),
         warehouseLocation: finalTargetLoc,
         previousStock: oldTotalStock,
         newStock: newTotalStock,
@@ -210,15 +222,15 @@ export class DocumentStockEngine {
   static async applyStockReversal(
     tx: DbClient,
     params: ApplyStockReversalParams
-  ): Promise<void> {
+  ): Promise<StockReversalResult> {
     const { itemId, quantity: qty, originalDirection, unitPrice, location: targetLoc, quantityOnly } = params;
 
     const [itemData] = await tx
-      .select({ weightedAverageCost: items.weightedAverageCost, version: items.version })
+      .select({ weightedAverageCost: items.weightedAverageCost, version: items.version, type: items.type })
       .from(items)
       .where(eq(items.id, itemId))
       .for('no key update'); // v8.0.67 (TD-320): هم‌حالت lockStockItems، بی ارتقای قفل
-    if (!itemData) return;
+    if (!itemData) return { itemType: null, residue: fin(0) };
     const whInfo = await ItemWarehouseStockService.resolveWarehouse(tx, targetLoc);
     const revMovement: 'in' | 'out' = originalDirection === 'in' ? 'out' : 'in';
 
@@ -239,14 +251,18 @@ export class DocumentStockEngine {
 
     const oldWAC = fin(itemData.weightedAverageCost);
     let newWAC = oldWAC;
+    let residue = fin(0);
     if (quantityOnly) {
       // v9.0.80 (TD-489): ابطال حواله انتقال — همان قاعده بازپخش کاردکس (replayKardexWac)
-    } else if (originalDirection === 'in' && newTotalStock > 0) {
+    } else if (originalDirection === 'in') {
       const oldTotalVal = fin(oldTotalStock).multiply(oldWAC);
       const revertVal = fin(qty).multiply(unitPrice);
       const remainingVal = oldTotalVal.subtract(revertVal);
-      if (!remainingVal.isNegative()) {
+      if (newTotalStock > 0 && !remainingVal.isNegative()) {
         newWAC = remainingVal.divide(newTotalStock).round(4);
+      } else {
+        // v10.0.84 (TD-1147): WAC stays; the value the voided voucher leaves behind is posted by the void (voidResidueVoucher)
+        residue = remainingVal.subtract(fin(Math.max(newTotalStock, 0)).multiply(oldWAC));
       }
     } else if (originalDirection === 'out') {
       // v8.0.11 (TD-254): کالای خروجِ ابطال‌شده با بهای کاردکس همان خروج برمی‌گردد و WAC بازمحاسبه می‌شود (همان قاعده
@@ -263,5 +279,6 @@ export class DocumentStockEngine {
         version: nextVersion(itemData.version)
       })
       .where(eq(items.id, itemId));
+    return { itemType: itemData.type ?? null, residue };
   }
 }

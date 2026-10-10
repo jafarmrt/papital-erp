@@ -20,6 +20,8 @@ import { WorkflowStepperWidget } from './workflow/WorkflowStepperWidget';
 import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 import { useProjectVersion } from '../hooks/useProjectVersion';
 import { useProjectPermissions } from '../hooks/useProjectPermissions';
+import { ProjectStatusActions } from './project/ProjectStatusActions';
+import { AddStageForm, DeleteStageButton } from './project/ProjectStageActions';
 
 interface ProjectDetailModalProps {
   projectId: number | null;
@@ -344,6 +346,16 @@ export default function ProjectDetailModal({
               <span className="hidden sm:inline">{isFullscreen ? 'پنجره‌ای' : 'تمام‌صفحه'}</span>
             </button>
 
+            {/* v10.0.66 (TD-1141): توقف، ادامه و لغو پروژه */}
+            {canEdit && project && (
+              <ProjectStatusActions
+                projectId={project.id}
+                status={project.status}
+                version={projectVersion.version}
+                onSaved={(res) => { projectVersion.remember(res); void loadProjectData(); onUpdate(); }}
+              />
+            )}
+
             {onEditProject && project && (
               <button
                 type="button"
@@ -534,7 +546,7 @@ export default function ProjectDetailModal({
                         <thead>
                           <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 font-semibold">
                             <th className="p-2.5">#</th>
-                            <th className="p-2.5">کالای انبار (سیستم)</th>
+                            <th className="p-2.5">کالای انبار</th>
                             <th className="p-2.5">کد اختصاصی مشتری</th>
                             <th className="p-2.5 text-center">تیراژ هدف</th>
                             <th className="p-2.5 text-center">مرحله مونتاژ</th>
@@ -653,6 +665,10 @@ export default function ProjectDetailModal({
                                       <Edit3 className="w-3.5 h-3.5 text-blue-600" />
                                       <span>ویرایش زمان‌بندی و پرسنل</span>
                                     </button>
+                                  )}
+                                  {/* v10.0.67 (TD-1140): حذف مرحله */}
+                                  {canEdit && (
+                                    <DeleteStageButton projectId={project.id} stage={stg} onChanged={() => { void loadProjectData(); onUpdate(); }} />
                                   )}
                                 </div>
                               </div>
@@ -794,6 +810,11 @@ export default function ProjectDetailModal({
                         );
                       })}
                     </div>
+
+                    {/* v10.0.67 (TD-1140): افزودن مرحله پس از ثبت پروژه */}
+                    {canEdit && (
+                      <AddStageForm projectId={project.id} onChanged={() => { void loadProjectData(); onUpdate(); }} />
+                    )}
                   </div>
 
                   {/* Attachments Section */}

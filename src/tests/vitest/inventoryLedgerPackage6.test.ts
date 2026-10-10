@@ -11,7 +11,7 @@ import { SETTINGS_GROUPS } from '../../components/settings/settingsNavigationCon
 const SRC = resolve(__dirname, '../..');
 const source = (path: string) => readFileSync(join(SRC, path), 'utf8');
 
-describe('v10.0.22: Kardex maintenance locks items in id order without FOR UPDATE (OBS-R1-80)', () => {
+describe('v10.0.157: Kardex maintenance locks items in id order without FOR UPDATE (OBS-R1-80)', () => {
   const files = [
     'services/inventory/kardexBackfill.service.ts',
     'services/inventory/kardexWacRecalculator.service.ts',
@@ -29,7 +29,7 @@ describe('v10.0.22: Kardex maintenance locks items in id order without FOR UPDAT
   });
 });
 
-describe('v10.0.23: a transfer quantity is read like every stock quantity (OBS-R1-85)', () => {
+describe('v10.0.158: a transfer quantity is read like every stock quantity (OBS-R1-85)', () => {
   const body = (quantity: unknown) => ({ body: { itemId: 1, fromLocation: 'A', toLocation: 'B', quantity } });
   it('reads Persian digits and the Persian decimal separator', () => {
     expect(transferStockSchema.parse(body('۲')).body.quantity).toBe(2);
@@ -40,7 +40,7 @@ describe('v10.0.23: a transfer quantity is read like every stock quantity (OBS-R
   });
 });
 
-describe('v10.0.24: the unused stock rebuild and allocation wrappers are gone (OBS-R1-84, refactor)', () => {
+describe('v10.0.159: the unused stock rebuild and allocation wrappers are gone (OBS-R1-84, refactor)', () => {
   it('no facade keeps a second entry to the Kardex rebuild or the project allocation list', () => {
     expect(source('services/document.service.ts')).not.toMatch(/reconcileAndRebuildStock/);
     expect(source('services/documents/documentStockEngine.service.ts')).not.toMatch(/reconcileAndRebuildStock/);
@@ -48,7 +48,7 @@ describe('v10.0.24: the unused stock rebuild and allocation wrappers are gone (O
   });
 });
 
-describe('v10.0.25: negative stock has no policy layer to read or change (OBS-R1-83)', () => {
+describe('v10.0.160: negative stock has no policy layer to read or change (OBS-R1-83)', () => {
   it('no settings tab, route or service reads or writes the fixed policy', () => {
     expect(Object.keys(SETTINGS_TAB_ACCESS)).not.toContain('inventory_integrity');
     expect(SETTINGS_GROUPS.flatMap(g => g.tabs.map(t => t.id))).not.toContain('inventory_integrity');
