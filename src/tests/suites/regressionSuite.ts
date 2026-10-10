@@ -5673,7 +5673,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       // 3. Verify PendingMaterialsService submission and approval into official items
       const pendingMat = await PendingMaterialsService.submitPendingMaterial({
         name: `ماده خام تست معماری ${now}`,
-        code: `PM-ARCH-${now}`,
+        code: `PM-ARCH-${now}-101`,
         category: 'سنگ و نگین',
         unit: 'قیراط',
         reorderPoint: 10,
@@ -5688,7 +5688,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const { officialItem } = await PendingMaterialsService.approvePendingMaterial(pendingMat.id);
       createdItemIds.push(officialItem.id);
 
-      if (!officialItem.id || officialItem.code !== `PM-ARCH-${now}`) {
+      if (!officialItem.id || officialItem.code !== `PM-ARCH-${now}-101`) {
         throw new Error('Approving and converting a raw material into an official item through PendingMaterialsService failed.');
       }
 
