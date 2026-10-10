@@ -100,6 +100,8 @@ export interface JournalVoucher {
   sourceFiscalYear?: number | null;
   /** v9.0.294 (TD-552، ت۸): منشأ سند خودکار (یا منشأ سندی که این سند برگشت آن است)؛ null برای سند دستی */
   sourceKind?: VoucherSourceKind | null;
+  /** v10.0.x (TD-1239): شماره سند برگشت فعال این سند (ابطال یا ابطال برای بازثبت)؛ null وقتی برگشت نخورده است */
+  reversedByVoucherNumber?: string | null;
   /** v9.0.295 (TD-555): نسخه سند برای ویرایش هم‌زمان (۴۰۹ OCC_CONFLICT) */
   version?: number;
   currency?: string | null;
