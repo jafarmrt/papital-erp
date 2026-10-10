@@ -58,7 +58,7 @@ export interface InvoiceDocumentDetails {
   crmLeadId?: number | null;
   /** v9.0.336 (TD-778): طرف حساب سند با شناسه */
   partyId?: number | null;
-  /** v10.0.38 (TD-972): نسخه سند که ویرایش آن را می‌فرستد */
+  /** v10.0.108 (TD-972): نسخه سند که ویرایش آن را می‌فرستد */
   version?: number | null;
   items?: InvoiceDocumentLine[];
 }
@@ -66,6 +66,18 @@ export interface InvoiceDocumentDetails {
 /** پاسخ POST /documents */
 export interface InvoiceSaveResponse {
   docId?: number;
+  /** v10.0.86 (TD-1138): کمبود قابل فروش پیش‌فاکتور ذخیره‌شده، هر کالا یک جمله */
+  stockWarnings?: string[];
+}
+
+/**
+ * v10.0.86 (TD-1138، ت۱۴ «هشدار»): متن هشدار کمبود پیش‌فاکتور ذخیره‌شده، یا null وقتی کمبودی نیست. پیش‌فاکتور ذخیره شده
+ * است و فقط قطعی شدنش تا تأمین کالا ممکن نیست.
+ */
+export function proformaStockWarningText(response: InvoiceSaveResponse | null | undefined): string | null {
+  const warnings = Array.isArray(response?.stockWarnings) ? response.stockWarnings.filter(w => typeof w === 'string' && w.trim()) : [];
+  if (warnings.length === 0) return null;
+  return `پیش‌فاکتور ذخیره شد، ولی موجودی قابل فروش کافی نیست و تا تأمین کالا قطعی نمی‌شود. ${warnings.join(' ')}`;
 }
 
 /** بدنه POST /documents و PUT /documents/:id صفحه صدور فاکتور */
@@ -86,7 +98,7 @@ export interface InvoiceSavePayload {
   exchangeRate: number | null;
   crmLeadId: number | undefined;
   vatPercent: number;
-  /** v10.0.38 (TD-972): ویرایش نسخه‌ای را می‌فرستد که فرم از آن ساخته شده است */
+  /** v10.0.108 (TD-972): ویرایش نسخه‌ای را می‌فرستد که فرم از آن ساخته شده است */
   version?: number;
   items: Array<{ itemId: number; quantity: number; unit_price: number; discount: number; location: string }>;
 }
@@ -166,7 +178,7 @@ export interface InvoiceFormValues extends BuyerFields {
   crmLeadId: number | null;
   /** v9.0.336 (TD-778): طرف حساب ذخیره‌شده سند؛ انتخابگر خریدار با آن پر می‌شود، نه با تطبیق نام */
   partyId: number | null;
-  /** v10.0.38 (TD-972): نسخه سند بارشده؛ ویرایش بدون آن ۴۰۰ و با نسخه کهنه ۴۰۹ می‌گیرد */
+  /** v10.0.108 (TD-972): نسخه سند بارشده؛ ویرایش بدون آن ۴۰۰ و با نسخه کهنه ۴۰۹ می‌گیرد */
   version: number | null;
   docItems: InvoiceDocItem[] | null;
 }

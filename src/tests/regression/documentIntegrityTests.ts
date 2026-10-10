@@ -30,6 +30,9 @@ export async function runDocumentIntegrityTests(shouldRun: ShouldRun): Promise<T
     ['reg_document_ref_number_rules_td_783',
       'v9.0.327: a sales document number comes only from the server series (manual 422), a taken warehouse number is 409 instead of a silent swap, a manual number does not move the series, and the audit log keeps the stored number (TD-783)',
       ['td783', 'documents', 'ref_number', 'package8'], documentRefNumberRulesCase],
+    ['reg_document_read_by_id_only_td_990',
+      'v10.0.50: GET /documents/:id reads only a positive whole id: a voided id is 404 even when another document carries that number, and a number is 400 pointing to by-ref instead of an unfiltered lookup across types, years and voided rows (TD-990, OBS-R1-93)',
+      ['td990', 'documents', 'by_id', 'package8'], documentReadByIdOnlyCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -297,4 +300,39 @@ async function documentRefNumberRulesCase(h: Harness, wrong: string[]): Promise<
   }
 
   return `invoice and return with a manual number 422 DOCUMENT_REF_SERVER_SERIES; invoice ${invoiceRef} from the series, logged with that number; receipt ${manual} twice 409 DOCUMENT_REF_TAKEN; manual ${receiptNext + 1} and 900000 leave the series at ${receiptNext}, which then skips ${receiptNext + 1}`;
+}
+
+/** OBS-R1-93 (TD-990): GET /documents/:id fell back to a reference number lookup with no type, year or voided filter */
+async function documentReadByIdOnlyCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const item = await f.item(20, 1_000);
+  const lines = [{ itemId: item, quantity: 1, unit_price: 5_000, location: f.wh }];
+  const voided = await h.post('/api/documents', f.doc('invoice', 'draft', lines));
+  const other = await h.post('/api/documents', f.doc('invoice', 'final', lines));
+  const receipt = await h.post('/api/documents', f.doc('receipt', 'final', lines));
+  if (voided.status !== 200 || other.status !== 200 || receipt.status !== 200) throw new Error(`setup: ${brief(voided)}, ${brief(other)}, ${brief(receipt)}`);
+  const voidedId = docIdOf(voided);
+  const voidRes = await h.del(`/api/documents/${voidedId}`);
+  if (voidRes.status !== 200) throw new Error(`setup void: ${brief(voidRes)}`);
+  const idOf = (res: { body?: unknown }) => Number((res.body as { id?: unknown })?.id);
+
+  // 1) a live document read by its id
+  const live = await h.get(`/api/documents/${docIdOf(other)}`);
+  if (live.status !== 200 || idOf(live) !== docIdOf(other)) wrong.push(`reading invoice ${docIdOf(other)} by id answered ${brief(live)}, expected 200 with it`);
+  // 2) a voided id is 404, even when another document carries that number (was: 200 with the other document)
+  await h.q(`UPDATE documents SET ref_number = $1 WHERE id = $2`, [String(voidedId), docIdOf(other)]);
+  const gone = await h.get(`/api/documents/${voidedId}`);
+  if (gone.status !== 404) wrong.push(`reading voided document ${voidedId} answered ${brief(gone)} (id ${idOf(gone)}), expected 404 instead of invoice ${docIdOf(other)} with that number`);
+  // 3) a number shared by two types is not read here (was: 200 with one of them); by-ref names the type
+  const ref = `P8R-${h.tag}`;
+  await h.q(`UPDATE documents SET ref_number = $1 WHERE id = ANY($2::int[])`, [ref, [docIdOf(other), docIdOf(receipt)]]);
+  const byNumber = await h.get(`/api/documents/${encodeURIComponent(ref)}`);
+  if (byNumber.status !== 400) wrong.push(`reading by the number ${ref} of an invoice and a receipt answered ${brief(byNumber)} (id ${idOf(byNumber)}), expected 400`);
+  const byRef = await h.get(`/api/documents/by-ref/${encodeURIComponent(ref)}?type=receipt`);
+  if (byRef.status !== 200 || idOf(byRef) !== docIdOf(receipt)) wrong.push(`by-ref of the receipt answered ${brief(byRef)}, expected receipt ${docIdOf(receipt)}`);
+  for (const bad of ['0', '12abc', '-3']) {
+    const res = await h.get(`/api/documents/${bad}`);
+    if (res.status !== 400) wrong.push(`reading document "${bad}" answered ${brief(res)}, expected 400`);
+  }
+  return `id ${docIdOf(other)} 200; voided id ${voidedId} 404 though another invoice has that number; the number ${ref} 400 and by-ref finds the receipt; 0, 12abc and -3 are 400`;
 }

@@ -11,13 +11,13 @@ export async function runSalesBalanceTests(shouldRun: ShouldRun): Promise<TestCa
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (h: Harness, wrong: string[]) => Promise<string>]> = [
     ['reg_invoice_balance_less_returns_td_909',
-      'v10.0.36: the remaining amount and settlement status of an invoice count its final returns (net + VAT), never a draft or voided return (TD-909)',
+      'v10.0.106: the remaining amount and settlement status of an invoice count its final returns (net + VAT), never a draft or voided return (TD-909)',
       ['td909', 'documents', 'return', 'settlement', 'package8'], invoiceBalanceLessReturnsCase],
     ['reg_proforma_invoice_finalize_date_td_910',
-      'v10.0.37: a proforma stored with type invoice takes the finalize day and the next invoice number when it is finalized, like type proforma (TD-910)',
+      'v10.0.107: a proforma stored with type invoice takes the finalize day and the next invoice number when it is finalized, like type proforma (TD-910)',
       ['td910', 'documents', 'proforma', 'finalize', 'package8'], proformaInvoiceFinalizeDateCase],
     ['reg_document_edit_version_required_td_972',
-      'v10.0.38: PUT /documents/:id without a version is 400 and with a stale version 409 OCC_CONFLICT; the current version saves (TD-972)',
+      'v10.0.108: PUT /documents/:id without a version is 400 and with a stale version 409 OCC_CONFLICT; the current version saves (TD-972)',
       ['td972', 'documents', 'occ', 'version', 'package8'], documentEditVersionCase],
   ];
   for (const [id, name, tags, run] of cases) {

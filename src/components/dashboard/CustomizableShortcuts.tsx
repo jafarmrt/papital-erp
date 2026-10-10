@@ -179,7 +179,7 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
   {
     id: 'accounting',
     title: 'حسابداری و مالی',
-    description: 'اسناد دوبل، ترازنامه و مرور حساب‌ها',
+    description: 'اسناد حسابداری، ترازنامه و مرور حساب‌ها',
     path: '/accounting/dashboard',
     icon: Landmark,
     color: 'text-violet-700',
