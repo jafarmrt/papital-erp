@@ -8,10 +8,25 @@ import { formatPersianNumber } from '../utils';
 import { useDashboardStatsQuery, useDashboardBIStatsQuery } from '../hooks/queries';
 import { useRialDisplay } from '../hooks/useAppCurrency';
 import { ErrorStateView } from '../components/common/ErrorStateView';
+import { useViewerAccess } from '../contexts/AuthContext';
+import { canOpenPage } from '../lib/permissions/pageAccess';
+import { inventoryStatusShortcutsFor, type InventoryStatusShortcutIcon } from '../lib/inventory/inventoryStatusShortcuts';
+
+/** TD-1157: icon and colour of each quick link */
+const SHORTCUT_ICONS: Record<InventoryStatusShortcutIcon, { Icon: typeof Package; className: string }> = {
+  products: { Icon: PlusCircle, className: 'text-emerald-400' },
+  raw_materials: { Icon: Box, className: 'text-amber-400' },
+  invoices: { Icon: FileText, className: 'text-purple-400' },
+  projects: { Icon: Layers, className: 'text-cyan-400' },
+  transfers: { Icon: Sparkles, className: 'text-purple-300' },
+  reorder: { Icon: AlertTriangle, className: 'text-rose-400 animate-pulse' },
+};
 
 export default function InventoryStatusPage() {
   const navigate = useNavigate();
   const rial = useRialDisplay();
+  const viewer = useViewerAccess();
+  const shortcuts = inventoryStatusShortcutsFor(viewer);
   const { 
     data: stats, 
     isLoading: isStatsLoading, 
@@ -85,55 +100,31 @@ export default function InventoryStatusPage() {
       </div>
 
       {/* Quick Access Toolbar */}
+      {shortcuts.length > 0 && (
       <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-3.5 rounded-2xl shadow-sm text-white flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
           <span>⚡ میانبرهای عملیاتی انبار:</span>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <button
-            onClick={() => navigate('/products')}
-            className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-white font-medium transition-all flex items-center gap-1.5"
-          >
-            <PlusCircle size={14} className="text-emerald-400" />
-            تعریف کالا
-          </button>
-          <button
-            onClick={() => navigate('/products?type=raw_material')}
-            className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-white font-medium transition-all flex items-center gap-1.5"
-          >
-            <Box size={14} className="text-amber-400" />
-            تعریف مواد اولیه
-          </button>
-          <button
-            onClick={() => navigate('/invoices')}
-            className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-white font-medium transition-all flex items-center gap-1.5"
-          >
-            <FileText size={14} className="text-purple-400" />
-            صدور فاکتور / خروج
-          </button>
-          <button
-            onClick={() => navigate('/projects')}
-            className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-white font-medium transition-all flex items-center gap-1.5"
-          >
-            <Layers size={14} className="text-cyan-400" />
-            پروژه‌های تولید
-          </button>
-          <button
-            onClick={() => navigate('/transfers')}
-            className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-white font-medium transition-all flex items-center gap-1.5"
-          >
-            <Sparkles size={14} className="text-purple-300" />
-            کدهای ترنسفر
-          </button>
-          <button
-            onClick={() => navigate('/reorder-alerts')}
-            className="px-3 py-1.5 bg-rose-500/30 hover:bg-rose-500/40 text-rose-200 border border-rose-400/30 rounded-xl font-bold transition-all flex items-center gap-1.5"
-          >
-            <AlertTriangle size={14} className="text-rose-400 animate-pulse" />
-            هشدار نقطه سفارش
-          </button>
+          {shortcuts.map(shortcut => {
+            const { Icon, className } = SHORTCUT_ICONS[shortcut.icon];
+            const alarm = shortcut.icon === 'reorder';
+            return (
+              <button
+                key={shortcut.path}
+                onClick={() => navigate(shortcut.path)}
+                className={alarm
+                  ? 'px-3 py-1.5 bg-rose-500/30 hover:bg-rose-500/40 text-rose-200 border border-rose-400/30 rounded-xl font-bold transition-all flex items-center gap-1.5'
+                  : 'px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-white font-medium transition-all flex items-center gap-1.5'}
+              >
+                <Icon size={14} className={className} />
+                {shortcut.label}
+              </button>
+            );
+          })}
         </div>
       </div>
+      )}
 
       {error && (
         <ErrorStateView
@@ -240,9 +231,11 @@ export default function InventoryStatusPage() {
               </div>
               <div className="mt-4 pt-3 border-t border-slate-800 flex justify-between items-center text-[11px] text-slate-400">
                 <span>تراکنش‌های رسید و حواله</span>
-                <button onClick={() => navigate('/transactions')} className="text-blue-400 hover:underline flex items-center gap-1">
-                  جزئیات ←
-                </button>
+                {canOpenPage('/transactions', viewer) && (
+                  <button onClick={() => navigate('/transactions')} className="text-blue-400 hover:underline flex items-center gap-1">
+                    جزئیات ←
+                  </button>
+                )}
               </div>
             </div>
           </div>
