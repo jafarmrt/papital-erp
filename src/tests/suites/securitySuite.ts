@@ -1454,6 +1454,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // Phase 5 PR «ب» (from TD-904): paths that move stock ask the warehouse permission of the stock document
   const { runProcurementStockPermissionTests } = await import('../security/procurementStockPermissionTests.js');
   results.push(...await runProcurementStockPermissionTests(shouldRunAccess));
+  // Phase 3, lane L4 (TD-1172): the workflow widget shows only the current step's signatures
+  const { runWorkflowStepProgressTests } = await import('../security/workflowStepProgressTests.js');
+  results.push(...await runWorkflowStepProgressTests(shouldRunAccess));
 
   return results;
 }

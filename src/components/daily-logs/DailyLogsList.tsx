@@ -8,6 +8,7 @@ import { SimpleUserOption } from '../../hooks/useDailyLogs';
 import { formatPersianNumber, formatPersianDate, formatPersianDateTime } from '../../utils';
 import { useHasPermission } from '../../contexts/AuthContext';
 import { workModeLabel } from '../../lib/dailyLogs/workMode';
+import { timeOfDayLabel } from '../../lib/dailyLogs/workHours';
 
 interface DailyLogsListProps {
   logs: DailyWorkLog[];
@@ -162,7 +163,7 @@ export function DailyLogsList({
                 <div className="flex items-center gap-1 text-slate-800">
                   <Clock className="w-3.5 h-3.5 text-amber-500" />
                   <span>
-                    {log.start_time || log.startTime} الی {log.end_time || log.endTime}
+                    {timeOfDayLabel(log.start_time || log.startTime)} الی {timeOfDayLabel(log.end_time || log.endTime)}
                   </span>
                   <span className="text-[10px] font-extrabold text-blue-700 bg-blue-100/80 px-1.5 py-0.5 rounded-md mr-1">
                     ({formatPersianNumber(log.work_hours || log.workHours)} ساعت)
