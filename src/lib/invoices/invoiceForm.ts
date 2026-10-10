@@ -64,12 +64,12 @@ export interface InvoiceDocumentDetails {
 /** پاسخ POST /documents */
 export interface InvoiceSaveResponse {
   docId?: number;
-  /** v10.0.84 (TD-1138): کمبود قابل فروش پیش‌فاکتور ذخیره‌شده، هر کالا یک جمله */
+  /** v10.0.86 (TD-1138): کمبود قابل فروش پیش‌فاکتور ذخیره‌شده، هر کالا یک جمله */
   stockWarnings?: string[];
 }
 
 /**
- * v10.0.84 (TD-1138، ت۱۴ «هشدار»): متن هشدار کمبود پیش‌فاکتور ذخیره‌شده، یا null وقتی کمبودی نیست. پیش‌فاکتور ذخیره شده
+ * v10.0.86 (TD-1138، ت۱۴ «هشدار»): متن هشدار کمبود پیش‌فاکتور ذخیره‌شده، یا null وقتی کمبودی نیست. پیش‌فاکتور ذخیره شده
  * است و فقط قطعی شدنش تا تأمین کالا ممکن نیست.
  */
 export function proformaStockWarningText(response: InvoiceSaveResponse | null | undefined): string | null {
