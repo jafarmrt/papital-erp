@@ -7,7 +7,7 @@ import {
 import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
 import { MATERIAL_UNITS } from '../../lib/pendingMaterials/materialRequestRules';
 
-/** v10.0.103 (TD-1202): the same unit list as the keeper's approval window (`MATERIAL_UNITS`) */
+/** v10.0.143 (TD-1202): the same unit list as the keeper's approval window (`MATERIAL_UNITS`) */
 export const COMMON_UNITS = MATERIAL_UNITS;
 
 export const roundToOneDecimal = (val: number | undefined | null): number => {

@@ -124,6 +124,7 @@ export class DocumentCreationService {
         );
       }
 
+      // v10.0.108 (TD-972): مسیر ویرایش (`PUT /documents/:id`) بدون نسخه ۴۰۰ می‌دهد؛ نسخه کهنه اینجا ۴۰۹ می‌گیرد
       if (body.expectedVersion !== undefined || body.version !== undefined) {
         checkOccVersion(existingDoc, {
           entityType: 'Document',

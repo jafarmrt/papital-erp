@@ -34,7 +34,7 @@ import { materialCodeExample, materialUnitOptions, pendingMaterialCodeError, raw
 export default function PendingMaterialsPage({ user }: { user: User }) {
   const { data, isLoading: loading, refetch } = usePendingMaterialsQuery();
   const items = data?.items || [];
-  // v10.0.103 (TD-1202): only raw-material categories, the units of the request form and the code rule of the server
+  // v10.0.143 (TD-1202): only raw-material categories, the units of the request form and the code rule of the server
   const categories = rawMaterialCategories(data?.categories || []);
 
   const approveMutation = useApprovePendingMaterialMutation();

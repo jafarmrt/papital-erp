@@ -133,7 +133,7 @@ export function TrialBalanceView({
                     : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                 }`}
               >
-                {col} ستونی
+                {formatPersianNumber(col)} ستونی
               </button>
             ))}
           </div>
@@ -231,7 +231,7 @@ export function TrialBalanceView({
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm overflow-hidden print:border-none print:shadow-none">
         <div className="p-4 border-b border-slate-200 dark:border-slate-700 text-center">
           <h4 className="text-base font-black text-slate-900 dark:text-white">
-            تراز آزمایشی {trialCols} ستونی حساب‌ها
+            تراز آزمایشی {formatPersianNumber(trialCols)} ستونی حساب‌ها
           </h4>
           <p className="text-xs text-slate-500 mt-0.5">
             سطح گزارش: {trialLevel === 'all' ? '۴ سطح درختی جامع' : trialLevel === 'group' ? 'سطح ۱: گروه' : trialLevel === 'general' ? 'سطح ۲: کل' : trialLevel === 'subsidiary' ? 'سطح ۳: معین' : 'سطح ۴: تفصیلی'}

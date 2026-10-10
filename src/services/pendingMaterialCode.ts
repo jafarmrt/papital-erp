@@ -5,7 +5,7 @@ import { ValidationError } from '../errors/customErrors.js';
 import { pendingMaterialCodeError } from '../lib/pendingMaterials/materialRequestRules.js';
 
 /**
- * v10.0.103 (TD-1202, roles-b finding 8): what an approved raw-material request may become. Its category, when it names a
+ * v10.0.143 (TD-1202, roles-b finding 8): what an approved raw-material request may become. Its category, when it names a
  * live category, is a raw-material one (422 `PENDING_MATERIAL_CATEGORY_INVALID`), and its code follows the raw-material
  * pattern with that category's prefix (422 `PENDING_MATERIAL_CODE_FORMAT`). Before, a product category and any code
  * («XYZ-9») were accepted and the item was created with them.

@@ -679,7 +679,7 @@ export default function PricingPage() {
         )}
       </div>
 
-      {/* v10.0.102 (TD-1201): نوار تغییرات ذخیره‌نشده در جریان صفحه، نه روی کارت‌ها */}
+      {/* v10.0.142 (TD-1201): نوار تغییرات ذخیره‌نشده در جریان صفحه، نه روی کارت‌ها */}
       {canEditPrices && (
         <UnsavedPriceEditsBar
           count={totalLocalEditsCount}

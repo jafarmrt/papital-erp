@@ -1,7 +1,7 @@
 import { codeFormatError } from '../items/itemCodeFormat.js';
 
 /**
- * v10.0.103 (TD-1202): one unit list for a raw-material request and its approval. Before, the project's request form
+ * v10.0.143 (TD-1202): one unit list for a raw-material request and its approval. Before, the project's request form
  * (`COMMON_UNITS` of `projectInventoryUtils.ts`) and the keeper's approval window (a list of its own) offered different
  * units, so a unit chosen in the request could be missing from the approval window.
  */
@@ -22,7 +22,7 @@ export interface MaterialCategoryLike {
   type?: string | null;
 }
 
-/** v10.0.103 (TD-1202): a raw-material request offers only raw-material categories, never product categories */
+/** v10.0.143 (TD-1202): a raw-material request offers only raw-material categories, never product categories */
 export function rawMaterialCategories<T extends MaterialCategoryLike>(categories: readonly T[]): T[] {
   return (Array.isArray(categories) ? categories : []).filter(c => c && c.type === 'raw_material');
 }
@@ -39,7 +39,7 @@ export function materialCodeExample(prefix: string | null | undefined): string {
 }
 
 /**
- * v10.0.103 (roles-b finding 8, TD-1202): the code an approved raw-material request takes follows the raw-material code
+ * v10.0.143 (roles-b finding 8, TD-1202): the code an approved raw-material request takes follows the raw-material code
  * pattern (`codeFormatError`) and starts with its category's prefix, the rule the item form and the next-code
  * suggestion build codes with. Before, any code («XYZ-9») was accepted. Shared by the approval window and
  * `PendingMaterialsService.approvePendingMaterial` (422 `PENDING_MATERIAL_CODE_FORMAT`).

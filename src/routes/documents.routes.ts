@@ -10,6 +10,7 @@ import { recordedSalesType } from '../lib/documents/recordedSalesType.js';
 import { DOCUMENT_TYPE_TITLES } from '../lib/documents/documentTypeTitles.js';
 import { isAutoRefNumber } from '../lib/documents/documentRefRules.js';
 import { DOCUMENT_LIST_PAGE_SIZE } from '../lib/documents/documentListPage.js';
+import { DOCUMENT_VERSION_REQUIRED } from '../lib/documents/documentVersion.js';
 import { assertManualRefAllowed, assertNotProjectDelivery, assertRecordableDocument, createdDocumentStatus, permissionToCreateDocument, permissionToFinalizeDocument } from '../services/documents/documentRecordRule.js';
 import { BACKDATE_PERMISSION } from '../services/inventory/stockMovementDate.js';
 import { z } from 'zod';
@@ -201,6 +202,10 @@ export const documentUpdateSchema = z.object({
     if (body.items) {
       refineDocumentItems(ctx, body.items as unknown as Array<Record<string, unknown>>, false);
     }
+    // v10.0.108 (TD-972، OBS-R1-96): ویرایش سند نسخه‌ای را که از آن ساخته شده می‌فرستد، مانند TD-403
+    if (body.version === undefined && body.expectedVersion === undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['version'], message: DOCUMENT_VERSION_REQUIRED });
+    }
   }),
   params: z.object({
     id: numericIdString
@@ -251,6 +256,11 @@ export const documentsQuerySchema = z.object({
       { message: 'فهرست نوع سند (types) فقط نوع‌های تعریف‌شده سند را می‌پذیرد، جدا شده با ویرگول.' },
     ).optional(),
     status: z.enum(['draft', 'proforma', 'final']).optional(),
+    // v10.0.103 (TD-1197): `statuses=proforma,draft` چند وضعیت با هم
+    statuses: z.string().max(40).refine(
+      raw => (documentListTypes(raw) ?? []).every(s => ['draft', 'proforma', 'final'].includes(s)),
+      { message: 'فهرست وضعیت سند (statuses) فقط پیش‌نویس، پیش‌فاکتور و نهایی را می‌پذیرد، جدا شده با ویرگول.' },
+    ).optional(),
     search: z.string().max(100).optional(),
     startDate: storageDateParam,
     endDate: storageDateParam,
@@ -387,6 +397,7 @@ router.get('/documents', authorizePermission(...READ_PERMISSIONS.documents, ...R
     type,
     types,
     status,
+    statuses: documentListTypes(req.query.statuses),
     search,
     startDate,
     endDate,

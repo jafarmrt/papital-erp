@@ -111,7 +111,7 @@ async function validateSettingValue(key: string, value: string): Promise<void> {
 async function assertKeyPermission(key: string, actor: SettingsActor): Promise<void> {
   if (ADMIN_ONLY_SETTING_KEYS.has(key)) {
     if (actor.role !== SYSTEM_ADMIN_ROLE) {
-      throw new ForbiddenError(`تغییر تنظیم «${key}» (کلیدهای محرمانه یکپارچه‌سازی و فلگ‌های سیستمی) فقط برای مدیر سیستم مجاز است.`);
+      throw new ForbiddenError(`تغییر تنظیم «${key}» (کلیدهای محرمانه یکپارچه‌سازی و پرچم‌های سامانه) فقط برای مدیر سامانه مجاز است.`);
     }
     return;
   }

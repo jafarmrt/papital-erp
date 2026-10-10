@@ -27,7 +27,7 @@ const CATEGORIES = [
 ];
 
 /**
- * v10.0.103 (TD-1202, roles-b finding 8): the raw-material request form and the keeper's approval window share one unit
+ * v10.0.143 (TD-1202, roles-b finding 8): the raw-material request form and the keeper's approval window share one unit
  * list, offer only raw-material categories, and the approval takes a code in the raw-material pattern with its
  * category's prefix (before, «XYZ-9» was accepted).
  */

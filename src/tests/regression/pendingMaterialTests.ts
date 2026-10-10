@@ -27,7 +27,7 @@ export async function runPendingMaterialTests(shouldRun: ShouldRun): Promise<Tes
       'v9.0.398: a request starts the active pending-material workflow, its approve and reject steps review the request, a direct review closes the workflow and the project must exist (TD-826)',
       ['td826', 'pending_materials', 'workflow', 'package7'], workflowCase],
     ['reg_pending_material_category_code_td_1202',
-      'v10.0.103: an approved raw-material request takes a raw-material category and a code in the raw-material pattern with that category\'s prefix (TD-1202)',
+      'v10.0.143: an approved raw-material request takes a raw-material category and a code in the raw-material pattern with that category\'s prefix (TD-1202)',
       ['td1202', 'pending_materials', 'package7'], categoryCodeCase],
   ]);
 }
@@ -36,7 +36,7 @@ const briefBody = (res: { status: number; body?: unknown }) => `${res.status} ${
 
 /** A pending request written straight to the table (the queue had no sender before TD-826) */
 export async function pendingRow(h: Harness, fields: { code?: string; wac?: number; category?: string } = {}): Promise<number> {
-  // since v10.0.103 (TD-1202) an approval checks the code pattern and the prefix of a live category; the default category
+  // since v10.0.143 (TD-1202) an approval checks the code pattern and the prefix of a live category; the default category
   // names no live category, so a unique code in the raw-material pattern is enough
   const [row] = await h.q(
     `INSERT INTO pending_materials (code, name, unit, category, type, requested_by, status, reorder_point, weighted_average_cost, is_deleted)

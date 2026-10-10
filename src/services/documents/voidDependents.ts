@@ -79,7 +79,7 @@ export async function liveTreasuryRowsOf(tx: DbExecutor, documentId: number): Pr
 }
 
 /**
- * v10.0.101 (TD-1203): فهرست ردیف‌های خزانه در پیام رد ابطال؛ ارز با نام فارسی (`formatCurrencyLabel`)، نه کد خام «IRR».
+ * v10.0.141 (TD-1203): فهرست ردیف‌های خزانه در پیام رد ابطال؛ ارز با نام فارسی (`formatCurrencyLabel`)، نه کد خام «IRR».
  */
 export function treasuryRowsListText(rows: ReadonlyArray<Pick<VoidDependentTreasuryRow, 'transactionNumber' | 'type' | 'amount' | 'currency'>>): string {
   return rows

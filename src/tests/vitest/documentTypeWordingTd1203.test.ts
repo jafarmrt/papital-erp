@@ -3,7 +3,7 @@ import { INVOICE_TYPE_BADGES, resolveInvoiceRowFigures } from '../../lib/invoice
 import { treasuryRowsListText } from '../../services/documents/voidDependents';
 
 /**
- * v10.0.101 (TD-1203): the documents list names a production receipt «رسید تولید» (not «سند انبار») and the void
+ * v10.0.141 (TD-1203): the documents list names a production receipt «رسید تولید» (not «سند انبار») and the void
  * refusal names the treasury rows' currency in Persian (not the raw code «IRR»).
  */
 describe('TD-1203 document type and currency wording', () => {

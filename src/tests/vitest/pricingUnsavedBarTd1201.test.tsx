@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { UnsavedPriceEditsBar } from '../../components/pricing/UnsavedPriceEditsBar';
 
 /**
- * v10.0.102 (TD-1201): the pricing page's «ذخیره یکجای تمام تغییرات» bar no longer floats `fixed` over the first card's
+ * v10.0.142 (TD-1201): the pricing page's «ذخیره یکجای تمام تغییرات» bar no longer floats `fixed` over the first card's
  * save button; it is `sticky` in the page flow after the list, so it never hides a card button at the end of the page.
  */
 describe('TD-1201 unsaved price edits bar', () => {

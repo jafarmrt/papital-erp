@@ -25,6 +25,8 @@ export interface InvoiceListDocument {
   id: number;
   type?: string;
   status?: string;
+  /** v10.0.103 (TD-1197): پیش‌نویسی که آخرین گردش کارش رد شده است */
+  workflowRejected?: boolean;
   ref_number?: string;
   date?: string;
   currency?: string;
@@ -206,7 +208,7 @@ export function resolveInvoiceRowFigures(doc: InvoiceListDocument): InvoiceRowFi
   else if (isRemittance) badgeKind = 'remittance';
   else if (isReturn) badgeKind = 'return';
   else if (isWaste) badgeKind = 'waste';
-  // v10.0.101 (TD-1203): رسید تولید پروژه نام خودش را دارد، نه «سند انبار»
+  // v10.0.141 (TD-1203): رسید تولید پروژه نام خودش را دارد، نه «سند انبار»
   else if (doc.type === 'production_receipt') badgeKind = 'production_receipt';
 
   // Numerical Calculations

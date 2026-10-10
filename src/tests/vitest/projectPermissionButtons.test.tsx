@@ -32,7 +32,7 @@ const fetchJson = vi.fn(async (url: string, _opts?: FetchOpts): Promise<unknown>
 });
 vi.mock('../../api', () => ({ fetchJson: (url: string, opts?: FetchOpts) => fetchJson(url, opts) }));
 vi.mock('react-hot-toast', () => ({ toast: { success: vi.fn(), error: vi.fn() }, default: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }));
-vi.mock('../../hooks/queries/useSettingsQueries', () => ({ useWarehousesQuery: () => ({ data: [{ id: 3, code: 'WH-A', name: 'انبار نخست' }] }) }));
+vi.mock('../../hooks/queries/useSettingsQueries', () => ({ useSettingsQuery: () => ({ data: [] }), useWarehousesQuery: () => ({ data: [{ id: 3, code: 'WH-A', name: 'انبار نخست' }] }) }));
 vi.mock('../../components/ProjectModal', () => ({ default: () => null }));
 vi.mock('../../components/ProjectDetailModal', () => ({ default: () => null }));
 const granted = new Set<string>();

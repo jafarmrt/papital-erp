@@ -11,6 +11,7 @@ import {
   BASELINE_FILE,
   compareWithBaseline,
   countFileSites,
+  countServerMessageSites,
   currentState,
   type Baseline,
 } from '../../../scripts/ui-wording-ratchet';
@@ -68,5 +69,29 @@ describe('ui_wording_ratchet_td_1168', () => {
       'src/components/procurement/ConfirmWarehouseDeliveryModal.tsx',
       'src/components/accounting/AccountingDashboard.tsx',
     ]) expect(state[file] ?? 0, file).toBe(0);
+  });
+});
+
+/**
+ * v10.0.117 (TD-1182): an error message the server sends is shown to the user as it is, so the same words are counted in
+ * the messages of `new …Error(…)` in the server code (services, routes, middleware, errors); other server strings (logs,
+ * stored names) are not user-facing text and are not counted.
+ */
+describe('server_error_message_wording_td_1182', () => {
+  it('counts only the literals inside an error constructor', () => {
+    const source = [
+      `const label = '${SYSTEM}';`,
+      `throw new ValidationError('${SYSTEM} x');`,
+      'throw new ConflictError(`a ${b} ' + `${DOUBLE}` + '`, undefined, "CODE");',
+      `logger.info('${SYSTEM}');`,
+    ].join('\n');
+    expect(countServerMessageSites(source, 'src/services/probe.ts')).toBe(2);
+  });
+
+  it('the server error messages hold none of these words', () => {
+    const state = currentState();
+    const server = Object.keys(state).filter(file => /^src\/(services|routes|middleware|errors)\//.test(file));
+    expect(server).toEqual([]);
+    expect(Object.keys(state).some(file => file.startsWith('src/services/'))).toBe(false);
   });
 });
