@@ -42,7 +42,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
   title = 'گردش کار و تأییدها',
   onStateChange
 }) => {
-  const { data: wfData, isLoading } = useWorkflowInstanceQuery(entityType, entityId);
+  const { data: wfData, isLoading, error: readError } = useWorkflowInstanceQuery(entityType, entityId);
   const startWorkflowMutation = useStartWorkflowMutation();
   const executeTransitionMutation = useExecuteTransitionMutation();
 
@@ -55,6 +55,19 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
       <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 animate-pulse">
         <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-3"></div>
         <div className="h-8 bg-gray-100 dark:bg-gray-700 rounded w-full"></div>
+      </div>
+    );
+  }
+
+  // v10.0.163 (TD-1228): a refused or failed read is not «not started»; no start button is offered for it
+  if (readError) {
+    const forbidden = (readError as { status?: number }).status === 403;
+    return (
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-6 shadow-sm">
+        <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400" role="status">
+          <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
+          <span>{forbidden ? 'شما اجازه دیدن گردش کار این سند را ندارید.' : 'گردش کار این سند بارگذاری نشد.'}</span>
+        </div>
       </div>
     );
   }
