@@ -251,6 +251,11 @@ export const documentsQuerySchema = z.object({
       { message: 'فهرست نوع سند (types) فقط نوع‌های تعریف‌شده سند را می‌پذیرد، جدا شده با ویرگول.' },
     ).optional(),
     status: z.enum(['draft', 'proforma', 'final']).optional(),
+    // v10.0.96 (TD-1197): `statuses=proforma,draft` چند وضعیت با هم
+    statuses: z.string().max(40).refine(
+      raw => (documentListTypes(raw) ?? []).every(s => ['draft', 'proforma', 'final'].includes(s)),
+      { message: 'فهرست وضعیت سند (statuses) فقط پیش‌نویس، پیش‌فاکتور و نهایی را می‌پذیرد، جدا شده با ویرگول.' },
+    ).optional(),
     search: z.string().max(100).optional(),
     startDate: storageDateParam,
     endDate: storageDateParam,
@@ -387,6 +392,7 @@ router.get('/documents', authorizePermission(...READ_PERMISSIONS.documents, ...R
     type,
     types,
     status,
+    statuses: documentListTypes(req.query.statuses),
     search,
     startDate,
     endDate,

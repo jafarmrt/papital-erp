@@ -19,6 +19,8 @@ export interface GetDocumentsFilter {
   party?: { id: number; legacyName: string | null };
   /** v9.0.6 (TD-417): چند نوع سند با هم (مثلاً نوع‌های فروش پرونده مشتری) */
   types?: string[];
+  /** v10.0.96 (TD-1197): چند وضعیت با هم */
+  statuses?: string[];
 }
 
 export interface DocumentLineItemInput {
@@ -162,6 +164,8 @@ export interface FormattedDocument {
   destinationCode?: string;
   destinationLocation?: string;
   version?: number | null;
+  /** v10.0.96 (TD-1197): پیش‌نویسی که آخرین گردش کارش رد شده است */
+  workflowRejected?: boolean;
   isDeleted?: number | null;
   projectId?: number | null;
   project_id?: number | null;
