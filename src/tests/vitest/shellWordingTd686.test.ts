@@ -18,7 +18,7 @@ const SHELL_UI = [
   'components/pwa/PwaStatusBanners.tsx', 'components/pwa/InstallAppButton.tsx', 'components/layout/MobileBottomNav.tsx', 'components/layout/mobileNavItems.ts',
 ];
 const REPLACED = /داشبورد|ورکفلو|ورک‌فلو|تسک|متریال|آلارم|دیتابیس|سیستم|منو(?!ی[^\s])|فیلتر|سرور|پروفایل|آنلاین|آپلود|اتوماسیون|استراتژی|ماژول|پروتکل|توکن|فلگ|کانفیگ|اندپوینت|فرانت|بک‌اند|باندل|ری‌استارت/;
-// v10.0.41 (TD-1159): the menu and the shell say «سند حسابداری» / «دوطرفه» (TD-579 glossary) and «فهرست», never «دوبل» or «لیست».
+// v10.0.56 (TD-1159): the menu and the shell say «سند حسابداری» / «دوطرفه» (TD-579 glossary) and «فهرست», never «دوبل» or «لیست».
 const ACCOUNTING_GLOSSARY = /دوبل|لیست/;
 const ENGLISH = /TOMAN|Toman|Drag & Drop|Paste \(|\bKB\b|Tech Stack|AGENTS\.md|⌘K|Invalid time value/;
 
