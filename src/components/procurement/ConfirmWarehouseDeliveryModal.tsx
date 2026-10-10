@@ -17,6 +17,8 @@ export interface ConfirmWarehouseDeliveryModalProps {
     refNumber?: string | null;
     supplierName?: string | null;
     location?: string | null;
+    /** نام انبار مقصد که سرور کنار کدش می‌فرستد (v10.0.61، TD-1131) */
+    locationName?: string | null;
     totalAmount?: number | null;
     itemsCount?: number | null;
     date?: string | null;
@@ -116,7 +118,7 @@ export const ConfirmWarehouseDeliveryModal: React.FC<ConfirmWarehouseDeliveryMod
                   <span className="text-slate-500 block">انبار مقصد ورود:</span>
                   <span className="font-bold text-emerald-800 flex items-center gap-1 mt-0.5">
                     <Warehouse className="w-3.5 h-3.5 text-emerald-600" />
-                    {order.location || 'انبار اصلی'}
+                    {order.locationName || order.location || 'انبار اصلی'}
                   </span>
                 </div>
                 {order.projectName && (
