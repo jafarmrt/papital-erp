@@ -14,7 +14,7 @@ import { invariantProblems, itemState, receive, watermarks } from './scenarioHel
  */
 
 const ADMIN = { username: 'inv', role: 'admin', permissions: [] as string[] };
-/** کاربری بی مجوز «ثبت سند انبار با تاریخ گذشته» (warehouse.backdate); v10.0.39 (TD-1181): انباردار کالای خرید را تحویل می‌گیرد (تصمیم ت۱) */
+/** کاربری بی مجوز «ثبت سند انبار با تاریخ گذشته» (warehouse.backdate); v10.0.91 (TD-1181): انباردار کالای خرید را تحویل می‌گیرد (تصمیم ت۱) */
 const CLERK = { username: 'inv-clerk', role: 'warehouse_keeper', permissions: [] as string[] };
 
 async function requisition(itemId: number, quantity: number): Promise<number> {
@@ -38,7 +38,7 @@ async function order(requisitionId: number, itemId: number, quantity: number, wh
 const NOT_ORDERED_HINT = 'ابتدا سفارش خرید با تأمین‌کننده و قیمت صادر کنید';
 /** Part of the refusal of a requisition that was already received */
 const ALREADY_RECEIVED = 'قبلاً دریافت';
-/** v10.0.39 (TD-1181): the refusal for a missing entity permission, which must not stand in for the backdate refusal */
+/** v10.0.91 (TD-1181): the refusal for a missing entity permission, which must not stand in for the backdate refusal */
 const RECEIVE_PERMISSION_REFUSAL = 'را می‌خواهد';
 
 const receiveItems = (requisitionId: number, user: typeof ADMIN = ADMIN) =>

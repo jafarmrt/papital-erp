@@ -178,6 +178,8 @@ export interface InventoryReorderAlertPayload {
   itemCode: string;
   itemName: string;
   currentStock: number;
+  /** v10.0.43 (TD-937): موجودی کل منهای رزروها، همان سنجه صفحه هشدار نقطه سفارش */
+  freeStock: number;
   reorderPoint: number;
   warehouseLocation: string;
   alertMessage: string;

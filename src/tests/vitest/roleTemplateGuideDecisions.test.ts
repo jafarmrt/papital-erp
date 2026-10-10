@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { ROLE_TEMPLATES } from '../../lib/permissions/roleTemplates';
 
-// v10.0.39 (TD-1181): the product owner's guide decisions ت۱ (the warehouse keeper receives purchased goods)
+// v10.0.91 (TD-1181): the product owner's guide decisions ت۱ (the warehouse keeper receives purchased goods)
 // and ت۳ (the seller sends its pre-invoice for approval, the workshop operator picks projects, the production
 // manager no longer approves raw material requests).
 const permissionsOf = (code: string): readonly string[] => {

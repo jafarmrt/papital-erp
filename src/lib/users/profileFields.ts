@@ -29,7 +29,7 @@ export function isAcceptableAvatar(value: string): boolean {
 }
 
 /**
- * v10.0.38 (TD-1161): the profile picture picker, its check and its hint name the formats the server stores
+ * v10.0.90 (TD-1161): the profile picture picker, its check and its hint name the formats the server stores
  * (`uploadBase64ToStorage`: JPG, PNG, WEBP, GIF). The picture is shrunk in the browser before it is sent
  * (`compressTo300KB`), so the hint names no size limit; it used to say «۵ مگابایت» while the picker left out GIF.
  */

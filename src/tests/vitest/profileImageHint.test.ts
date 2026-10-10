@@ -7,7 +7,7 @@ import * as profileFields from '../../lib/users/profileFields';
 const ROOT = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 
-// v10.0.38 (TD-1161): the profile picture hint said GIF and 5 MB while the picker left GIF out and the server takes 3 MB.
+// v10.0.90 (TD-1161): the profile picture hint said GIF and 5 MB while the picker left GIF out and the server takes 3 MB.
 describe('profile_image_hint_matches_server_td_1161: the profile picture picker and hint follow the server', () => {
   it('the picker accepts exactly the formats the server stores', () => {
     const types = (profileFields as Record<string, unknown>).PROFILE_IMAGE_TYPES as readonly string[] | undefined;

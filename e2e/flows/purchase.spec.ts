@@ -54,7 +54,7 @@ test.afterAll(async () => {
 async function createSupplier(suffix: string): Promise<{ id: number; name: string }> {
   const name = `${DATA.supplierName} ${suffix}`;
   const created = dataOf<Json>(await api.send('post', '/api/customers', {
-    name, phone: `0935${String(Date.now()).slice(-7)}`, type: 'supplier',
+    name, phone: `0935${String(Date.now()).slice(-7)}`, partyType: 'supplier',
   }));
   return { id: Number(created.id), name };
 }
