@@ -15,7 +15,7 @@ export async function runTransferCodeLedgerTests(shouldRun: (id: string, ...extr
   const id = 'reg_transfer_codes_paged_obs_r1_82';
   if (!shouldRun(id, 'obs-r1-82', 'transfers', 'package6')) return results;
 
-  const name = 'v10.0.26: transfer codes are paged in SQL with only the page products and a summary (OBS-R1-82)';
+  const name = 'v10.0.182: transfer codes are paged in SQL with only the page products and a summary (OBS-R1-82)';
   const tStart = Date.now();
   const tag = `Q${Date.now() % 1_000_000_000}`;
   const codeA = `${tag}A`;

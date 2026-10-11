@@ -31,7 +31,7 @@ export function StockDocumentHeader({ actionType, totalReservedItemsCount, onTog
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            مدیریت تراکنش‌های انبار، صدور اسناد رسید ورود و حواله مصرف با محاسبه خودکار میانگین بهای خرید و صدور اسناد دوبل حسابداری.
+            مدیریت تراکنش‌های انبار، صدور اسناد رسید ورود و حواله مصرف با محاسبه خودکار میانگین موزون بها و صدور اسناد حسابداری.
           </p>
         </div>
       </div>

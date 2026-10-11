@@ -22,6 +22,7 @@ import { normalizeDecimalString } from '../lib/numericInput.js';
 import { nextVersion } from '../lib/occHelper.js';
 import { assertProjectVersion, projectVersionConflict } from './projects/projectVersion.js';
 import { assertNoOpenAllocations } from './projects/projectOpenAllocations.js';
+import { assertProjectDeletable } from './projects/projectDeleteGuard.js';
 
 export interface CreateProjectInput {
   title: string;
@@ -325,7 +326,8 @@ export class ProjectService {
       if (!existing) {
         throw new NotFoundError('پروژه یافت نشد');
       }
-      await assertNoOpenAllocations(tx, existing, 'حذف نمی‌شود');
+      // v10.0.172 (TD-922): سند زنده یا مانده ۱۴۰۲ هم حذف را رد می‌کند
+      await assertProjectDeletable(tx, existing);
 
       await tx.update(productionProjects).set({ isDeleted: 1 }).where(eq(productionProjects.id, id));
       await tx.update(projectStages).set({ isDeleted: 1 }).where(eq(projectStages.projectId, id));

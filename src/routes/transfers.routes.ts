@@ -42,7 +42,7 @@ export const listTransfersSchema = z.object({
   }),
 });
 
-// GET /api/transfers — v10.0.26 (OBS-R1-82): یک صفحه از کدها با کالاهای همان صفحه و خلاصه همه کدها، در پایگاه‌داده
+// GET /api/transfers — v10.0.182 (OBS-R1-82): یک صفحه از کدها با کالاهای همان صفحه و خلاصه همه کدها، در پایگاه‌داده
 router.get('/transfers', authenticateToken, authorizePermission(...READ_PERMISSIONS.transfers), validate(listTransfersSchema), asyncHandler(async (req: Request, res: Response) => {
   const query = req.query as unknown as { page?: number; limit?: number; search?: string; image?: TransferImageFilter };
   res.json(await listTransferCodes({

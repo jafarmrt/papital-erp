@@ -4,6 +4,7 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { eventActionRules, roles, users, webhookSubscriptions } from '../../db/schema.js';
 import { decryptSecret } from '../../lib/secretBox.js';
+import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 
 /**
  * Package 15 (events and integrations), TD-710 / B15-08 (decision t6 a): the webhook signing key, the rule token and the
@@ -143,7 +144,7 @@ export async function runWebhookSecretMaskTests(shouldRun: (id: string, ...extra
     if (ruleIds.length > 0) await orm.delete(eventActionRules).where(inArray(eventActionRules.id, ruleIds)).catch(() => undefined);
     if (subIds.length > 0) await orm.delete(webhookSubscriptions).where(inArray(webhookSubscriptions.id, subIds)).catch(() => undefined);
     if (userIds.length > 0) await orm.update(users).set({ isDeleted: 1 }).where(inArray(users.id, userIds)).catch(() => undefined);
-    if (roleIds.length > 0) await orm.delete(roles).where(inArray(roles.id, roleIds)).catch(() => undefined);
+    if (roleIds.length > 0) await deleteTestRoles(inArray(roles.id, roleIds)).catch(() => undefined);
   }
   return results;
 }

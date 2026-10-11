@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useTransfersQuery } from '../../hooks/queries/useTransferQueries';
 
 // Package 6: on v9.0.94 the page called /transfers without a limit and saw only the first 50 codes (TD-493); from
-// v9.0.95 it read every code with all=true. v10.0.26 (OBS-R1-82): it asks the server for one page with its filters.
+// v9.0.95 it read every code with all=true. v10.0.182 (OBS-R1-82): it asks the server for one page with its filters.
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
 vi.mock('react-hot-toast', () => {

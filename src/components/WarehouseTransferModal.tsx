@@ -24,7 +24,7 @@ interface TransferPickItem {
   stocks?: Record<string, number>;
 }
 
-/** v10.0.27 (OBS-R1-86): برچسب کالا در انتخابگر انتقال */
+/** v10.0.183 (OBS-R1-86): برچسب کالا در انتخابگر انتقال */
 export function transferItemOption(it: TransferPickItem) {
   return {
     value: it.id,
@@ -37,7 +37,7 @@ export default function WarehouseTransferModal({
   onClose,
   onSuccess
 }: WarehouseTransferModalProps) {
-  // v10.0.27 (OBS-R1-86): کالا با جست‌وجوی سرور انتخاب می‌شود؛ فهرست کامل کالاها خوانده نمی‌شود
+  // v10.0.183 (OBS-R1-86): کالا با جست‌وجوی سرور انتخاب می‌شود؛ فهرست کامل کالاها خوانده نمی‌شود
   const [selectedItem, setSelectedItem] = useState<TransferPickItem | null>(null);
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const selectedItemId = selectedItem?.id ?? null;

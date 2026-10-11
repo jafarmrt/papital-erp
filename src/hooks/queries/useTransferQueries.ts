@@ -33,7 +33,7 @@ export interface TransferItem {
   products: LinkedProduct[];
 }
 
-/** v10.0.26 (OBS-R1-82): یک صفحه از کدهای ترنسفر با خلاصه همه کدها؛ جست‌وجو و پالایش در سرور */
+/** v10.0.182 (OBS-R1-82): یک صفحه از کدهای ترنسفر با خلاصه همه کدها؛ جست‌وجو و پالایش در سرور */
 export function useTransfersQuery(filters: TransferCodeListFilters) {
   return useQuery<TransferCodePage<TransferItem>>({
     queryKey: [...QUERY_KEYS.transfers.list(), filters],

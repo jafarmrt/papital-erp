@@ -19,7 +19,8 @@ interface ProductTreeInventoryCardsProps {
   handleOpenChangeMaterialModal: (secIdx: number, itemId: string, prodId?: string, gIdx?: number) => void;
   handleOpenUnitConversionModal: OpenUnitConversionModalHandler;
   handleRemoveItemFromSection: (secIdx: number, itemId: string, prodId?: string, itemIdx?: number) => void;
-  handleOpenAddMaterialModal: (secIdx: number, prodId?: string) => void;
+  /** v10.0.162 (TD-1211): left out for a reader without `projects.edit`, so the add button is not shown */
+  handleOpenAddMaterialModal?: (secIdx: number, prodId?: string) => void;
 }
 
 export function ProductTreeInventoryCards({
@@ -319,28 +320,32 @@ export function ProductTreeInventoryCards({
                               </div>
 
                               {/* Button: Add Material to THIS Stage for THIS Product */}
-                              <button
-                                type="button"
-                                onClick={() => handleOpenAddMaterialModal(originalIdx, prod.id)}
-                                className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs"
-                              >
-                                <Plus className="w-3.5 h-3.5" />
-                                <span>افزودن ماده اولیه به این مرحله</span>
-                              </button>
+                              {handleOpenAddMaterialModal && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenAddMaterialModal(originalIdx, prod.id)}
+                                  className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                  <span>افزودن ماده اولیه به این مرحله</span>
+                                </button>
+                              )}
                             </div>
 
                             {/* Materials Table or Empty State */}
                             {materials.length === 0 ? (
                               <div className="py-4 text-center text-slate-400 text-xs border border-dashed border-slate-200 rounded-lg bg-white">
                                 <span>ماده اولیه‌ای برای این مرحله تعریف نشده است.</span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenAddMaterialModal(originalIdx, prod.id)}
-                                  className="text-amber-600 font-bold hover:underline mr-2 cursor-pointer inline-flex items-center gap-1"
-                                >
-                                  <Plus className="w-3 h-3" />
-                                  افزودن اولین ماده اولیه
-                                </button>
+                                {handleOpenAddMaterialModal && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenAddMaterialModal(originalIdx, prod.id)}
+                                    className="text-amber-600 font-bold hover:underline mr-2 cursor-pointer inline-flex items-center gap-1"
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                    افزودن اولین ماده اولیه
+                                  </button>
+                                )}
                               </div>
                             ) : (
                               <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">

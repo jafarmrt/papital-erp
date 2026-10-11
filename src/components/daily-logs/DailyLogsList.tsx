@@ -8,6 +8,7 @@ import { SimpleUserOption } from '../../hooks/useDailyLogs';
 import { formatPersianNumber, formatPersianDate, formatPersianDateTime } from '../../utils';
 import { useHasPermission } from '../../contexts/AuthContext';
 import { workModeLabel } from '../../lib/dailyLogs/workMode';
+import { timeOfDayLabel } from '../../lib/dailyLogs/workHours';
 
 interface DailyLogsListProps {
   logs: DailyWorkLog[];
@@ -19,7 +20,8 @@ interface DailyLogsListProps {
   limit: number;
   user: User;
   systemUsers: SimpleUserOption[];
-  onOpenCreateModal: () => void;
+  /** TD-1156: given only to holders of daily_logs.create */
+  onOpenCreateModal?: () => void;
   onOpenEditModal: (log: DailyWorkLog) => void;
   onDeleteLog: (logId: number) => void;
   onOpenReviewModal: (log: DailyWorkLog) => void;
@@ -103,13 +105,17 @@ export function DailyLogsList({
       <div className="bg-white rounded-2xl p-10 text-center text-slate-400 text-xs flex flex-col items-center gap-2.5 border border-slate-200 font-farsi">
         <Clock className="w-10 h-10 text-slate-300 stroke-1" />
         <p className="font-bold text-slate-700 text-sm">هیچ گزارش کاری در این بخش یافت نشد</p>
-        <p className="text-slate-400">می‌توانید نخستین گزارش کار روزانه خود را ثبت نمایید</p>
-        <button
-          onClick={onOpenCreateModal}
-          className="mt-1 px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs shadow-sm hover:bg-blue-700 transition-colors cursor-pointer"
-        >
-          ثبت گزارش کار جدید
-        </button>
+        {onOpenCreateModal && (
+          <>
+            <p className="text-slate-400">می‌توانید نخستین گزارش کار روزانه خود را ثبت نمایید</p>
+            <button
+              onClick={onOpenCreateModal}
+              className="mt-1 px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs shadow-sm hover:bg-blue-700 transition-colors cursor-pointer"
+            >
+              ثبت گزارش کار جدید
+            </button>
+          </>
+        )}
       </div>
     );
   }
@@ -157,7 +163,7 @@ export function DailyLogsList({
                 <div className="flex items-center gap-1 text-slate-800">
                   <Clock className="w-3.5 h-3.5 text-amber-500" />
                   <span>
-                    {log.start_time || log.startTime} الی {log.end_time || log.endTime}
+                    {timeOfDayLabel(log.start_time || log.startTime)} الی {timeOfDayLabel(log.end_time || log.endTime)}
                   </span>
                   <span className="text-[10px] font-extrabold text-blue-700 bg-blue-100/80 px-1.5 py-0.5 rounded-md mr-1">
                     ({formatPersianNumber(log.work_hours || log.workHours)} ساعت)

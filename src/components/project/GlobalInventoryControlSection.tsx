@@ -8,12 +8,13 @@ import { MaterialNameCell, CurrentStockCell, ProcurementStatusCell, NotesCell, t
 interface GlobalInventoryControlSectionProps {
   sections: ProjectInventoryControlSectionData[];
   warehouseItems: Item[];
-  handleOpenAddMaterialModal: (secIdx: number, prodId?: string) => void;
+  /** v10.0.162 (TD-1211): left out for a reader without `projects.edit`, so the add buttons are not shown */
+  handleOpenAddMaterialModal?: (secIdx: number, prodId?: string) => void;
   handleOpenChangeMaterialModal: (secIdx: number, itemId: string, prodId?: string, gIdx?: number) => void;
   handleOpenUnitConversionModal: OpenUnitConversionModalHandler;
   handleRemoveItemFromSection: (secIdx: number, itemId: string, prodIdOrItemIdx?: string | number, itemIdx?: number) => void;
   handleUpdateGlobalItem: (secIdx: number, gIdx: number, field: string, value: any) => void;
-  handleAddNewSectionOnTheFly: () => void;
+  handleAddNewSectionOnTheFly?: () => void;
   handleRemoveSectionOnTheFly: (secIdx: number) => void;
   handleUpdateSectionDescription: (secIdx: number, newDesc: string) => void;
   handlePurchaseSection?: (secIdx: number) => void;
@@ -60,14 +61,16 @@ export function GlobalInventoryControlSection({
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleAddNewSectionOnTheFly}
-          className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-xs"
-        >
-          <Plus className="w-4 h-4" />
-          <span>افزودن بخش کنترل کلی جدید</span>
-        </button>
+        {handleAddNewSectionOnTheFly && (
+          <button
+            type="button"
+            onClick={handleAddNewSectionOnTheFly}
+            className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-xs"
+          >
+            <Plus className="w-4 h-4" />
+            <span>افزودن بخش کنترل کلی جدید</span>
+          </button>
+        )}
       </div>
 
       {/* Global Sections List or Empty State */}
@@ -163,14 +166,16 @@ export function GlobalInventoryControlSection({
                       </button>
                     )}
                     {/* Add Material to this Global Section */}
-                    <button
-                      type="button"
-                      onClick={() => handleOpenAddMaterialModal(originalIdx)}
-                      className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>افزودن ماده مصرفی عمومی</span>
-                    </button>
+                    {handleOpenAddMaterialModal && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenAddMaterialModal(originalIdx)}
+                        className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>افزودن ماده مصرفی عمومی</span>
+                      </button>
+                    )}
 
                     {/* Delete Section if extra */}
                     {sections.length > 1 && (
@@ -190,14 +195,16 @@ export function GlobalInventoryControlSection({
                 {items.length === 0 ? (
                   <div className="py-6 text-center text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
                     <span>ماده مصرفی عمومی برای این بخش ثبت نشده است.</span>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenAddMaterialModal(originalIdx)}
-                      className="text-amber-600 font-bold hover:underline mr-2 cursor-pointer inline-flex items-center gap-1"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      افزودن اولین قلم
-                    </button>
+                    {handleOpenAddMaterialModal && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenAddMaterialModal(originalIdx)}
+                        className="text-amber-600 font-bold hover:underline mr-2 cursor-pointer inline-flex items-center gap-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        افزودن اولین قلم
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">

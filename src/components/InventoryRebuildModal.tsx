@@ -188,7 +188,7 @@ export default function InventoryRebuildModal({
                         : 'border-slate-200 hover:border-slate-300'
                     }`}
                   >
-                    <div className="font-bold text-xs text-slate-800">تمام کاتالوگ انبار (توصیه‌شده)</div>
+                    <div className="font-bold text-xs text-slate-800">همه کالاهای انبار (توصیه‌شده)</div>
                     <div className="text-[11px] text-slate-500 mt-1">
                       بررسی و تطبیق همزمان کلیه کالاها و اصلاح مغایرت‌های سراسری
                     </div>
@@ -220,7 +220,7 @@ export default function InventoryRebuildModal({
                   <SearchableSelect
                     options={itemsList.map(it => ({
                       value: it.id,
-                      label: `${it.name} (کد: ${it.code}) - موجودی سیستم: ${formatPersianNumber(it.current_stock || it.currentStock || 0)} ${it.unit}`
+                      label: `${it.name} (کد: ${it.code}) - موجودی دفتری: ${formatPersianNumber(it.current_stock || it.currentStock || 0)} ${it.unit}`
                     }))}
                     value={selectedItemId || ''}
                     onChange={(val) => setSelectedItemId(Number(val) || null)}

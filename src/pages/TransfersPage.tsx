@@ -25,7 +25,7 @@ export default function TransfersPage({ user }: { user?: User }) {
   // Pagination states
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(TRANSFER_CODE_PAGE_SIZE);
-  // v10.0.26 (OBS-R1-82): یک صفحه از سرور؛ جست‌وجو، پالایش تصویر و شمارها در پایگاه‌داده
+  // v10.0.182 (OBS-R1-82): یک صفحه از سرور؛ جست‌وجو، پالایش تصویر و شمارها در پایگاه‌داده
   const deferredSearch = useDeferredValue(search.trim());
   const { data: listPage, isLoading: loading, isFetching, refetch } = useTransfersQuery({
     page: currentPage, limit: pageSize, search: deferredSearch, image: filterType,

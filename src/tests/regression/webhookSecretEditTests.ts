@@ -5,6 +5,7 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { roles, users, webhookSubscriptions } from '../../db/schema.js';
 import { decryptSecret } from '../../lib/secretBox.js';
+import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 
 /**
  * Package 15 (events and integrations), TD-719 / B15-17: editing a webhook keeps its signing key when the form sends the
@@ -91,7 +92,7 @@ export async function runWebhookSecretEditTests(shouldRun: (id: string, ...extra
     globalThis.fetch = realFetch;
     if (subscriptionId) await orm.delete(webhookSubscriptions).where(eq(webhookSubscriptions.id, subscriptionId)).catch(() => undefined);
     if (userIds.length > 0) await orm.update(users).set({ isDeleted: 1 }).where(inArray(users.id, userIds)).catch(() => undefined);
-    if (roleIds.length > 0) await orm.delete(roles).where(inArray(roles.id, roleIds)).catch(() => undefined);
+    if (roleIds.length > 0) await deleteTestRoles(inArray(roles.id, roleIds)).catch(() => undefined);
   }
   return results;
 }

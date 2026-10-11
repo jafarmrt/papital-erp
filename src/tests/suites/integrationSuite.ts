@@ -775,15 +775,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
   // 12. Phase 10 — Negative Stock Policy Enforcement
   const t12Start = Date.now();
   try {
-    const { NegativeStockPolicyService } = await import('../../services/inventory/negativeStockPolicy.service.js');
     const { DocumentService } = await import('../../services/document.service.js');
-
-    // 1. Set policy to forbidden
-    await NegativeStockPolicyService.setPolicy('forbidden');
-    const policy = await NegativeStockPolicyService.getPolicy();
-    if (policy !== 'forbidden') {
-      throw new Error('Setting the negative stock policy failed.');
-    }
 
     const testItem2 = await createTestItem({ currentStock: 5 });
 
@@ -801,17 +793,6 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       date: '2026-08-24',
       user: 'test-user'
     }).returning();
-
-    // Check excessive deduction (10 > 5) via checkStockDeduction
-    const checkForbidden = await NegativeStockPolicyService.checkStockDeduction({
-      itemId: testItem2.id,
-      requestedQty: 10,
-      location: 'main'
-    });
-
-    if (checkForbidden.allowed !== false || checkForbidden.wouldBeNegative !== true) {
-      throw new Error('The negative stock ban did not stop a deduction above stock.');
-    }
 
     // Check applyStockMovement with forbidden policy throws
     let applyForbiddenError = false;
@@ -837,25 +818,12 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       throw new Error('Under the forbidden policy applyStockMovement raised no insufficient stock error.');
     }
 
-    // 2. v7.0.22 (TD-180 / audit P0-3): only 'forbidden' may be selected
-    let setAllowedRejected = false;
-    try {
-      await NegativeStockPolicyService.setPolicy('allowed');
-    } catch (err: any) {
-      setAllowedRejected = err?.code === 'VALIDATION_ERROR' || err?.statusCode === 400 || err?.statusCode === 422;
-    }
-    if (!setAllowedRejected) {
-      throw new Error('Choosing the "allowed" policy must be refused with a validation error (only "fully forbidden" is allowed).');
-    }
-
     // 3. A legacy stored value ('allowed') must be ignored: the effective policy stays 'forbidden'
     //    and the deduction fails with a readable InsufficientStockError, never a raw CHECK violation (23514)
-    await orm.update(appSettings).set({ value: 'allowed' }).where(eq(appSettings.key, 'negative_stock_policy'));
+    //    v10.0.160 (OBS-R1-83): the setting is no longer read at all
+    await orm.insert(appSettings).values({ key: 'negative_stock_policy', value: 'allowed' })
+      .onConflictDoUpdate({ target: appSettings.key, set: { value: 'allowed' } });
     try {
-      const legacyPolicy = await NegativeStockPolicyService.getPolicy();
-      if (legacyPolicy !== 'forbidden') {
-        throw new Error(`A legacy stored "allowed" value must not change the effective policy (current value: ${legacyPolicy}).`);
-      }
       let legacyErrorCode = '';
       try {
         await orm.transaction(async (tx) => {
@@ -879,7 +847,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
         throw new Error(`with the legacy value "allowed" a deduction above stock must be refused with INSUFFICIENT_STOCK (code received: ${legacyErrorCode || 'no error'}).`);
       }
     } finally {
-      await NegativeStockPolicyService.setPolicy('forbidden');
+      await orm.delete(appSettings).where(eq(appSettings.key, 'negative_stock_policy'));
     }
 
     const [unchangedItem2] = await orm.select().from(items).where(eq(items.id, testItem2.id));
@@ -915,7 +883,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t12Start,
-      details: 'The "fully forbidden" policy applied; choosing "allowed" was refused; the legacy stored value was ignored and the database constraint violation mapped to a readable stock shortage error (TD-180).'
+      details: 'A deduction above stock was refused; a legacy stored "allowed" value had no effect and the database constraint violation mapped to a readable stock shortage error (TD-180).'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
