@@ -21,6 +21,17 @@ function invalidParty(message: string): ValidationError {
 }
 
 /**
+ * v10.0.258 (TD-954، P5-W10): دریافت، پرداخت یا چک پرسنل بی شناسه پرسنل ثبت نمی‌شود. پیش‌تر ردیف بی `partyId` پذیرفته
+ * می‌شد و ردیف سند حسابداری آن فقط نام داشت: صورت‌حساب پرسنل آن را با نام می‌شمرد ولی مانده مساعده (که فقط با شناسه
+ * خوانده می‌شود) صفر بود، پس کسر مساعده در فیش رد می‌شد.
+ */
+export function assertPersonnelPartyId(partyType: string, partyId: number | null | undefined): void {
+  if (partyType === 'personnel' && !partyId) {
+    throw new ValidationError('پرسنل طرف حساب را از فهرست انتخاب کنید؛ ثبت برای پرسنل بی شناسه ممکن نیست.', undefined, 'TREASURY_PERSONNEL_REQUIRED');
+  }
+}
+
+/**
  * شناسه طرف حساب در جدول همان نوع: مشتری و تأمین‌کننده در `customers` با نوع خودش (یا «هر دو»)، پرسنل در `personnel`؛
  * حذف‌شده پذیرفته نیست. «متفرقه» شناسه ندارد. خروجی نام کنونی طرف حساب است (بی شناسه، `null`).
  */

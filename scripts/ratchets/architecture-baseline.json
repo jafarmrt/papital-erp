@@ -120,7 +120,7 @@
     "src/routes/items.crud.routes.ts": 1,
     "src/routes/items.import.routes.ts": 1,
     "src/routes/personnel.routes.ts": 3,
-    "src/routes/piecework.routes.ts": 11,
+    "src/routes/piecework.routes.ts": 9,
     "src/routes/projects.routes.ts": 2,
     "src/routes/system.routes.ts": 3,
     "src/routes/warehouses.routes.ts": 2,

@@ -10986,5 +10986,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runPartyPermanentA6Tests } = await import('../regression/partyPermanentA6Tests.js');
   results.push(...await runPartyPermanentA6Tests(shouldRun));
 
+  // Phase 3 lane L1, package A7 (v10.0.258): payroll payment void event and audit, «my payslips» paid amount, personnel id on treasury rows
+  const { runPayrollHygieneA7Tests } = await import('../regression/payrollHygieneA7Tests.js');
+  results.push(...await runPayrollHygieneA7Tests(shouldRun));
+
   return results;
 }

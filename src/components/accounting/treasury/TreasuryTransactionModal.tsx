@@ -14,6 +14,7 @@ import { NO_VOUCHER_TREASURY_PERMISSION } from '../../../lib/noVoucherPermission
 import { needsChosenContraAccount, type PersonnelPurpose } from '../../../lib/treasury/partyPurpose';
 import { PartyPurposeFields } from './PartyPurposeFields';
 import { readTreasuryVoucherPreview, type TreasuryVoucherPreview } from '../../../lib/treasury/treasuryVoucherPreview';
+import { personnelPartyName } from '../../../lib/treasury/personnelPartyName';
 import type { BankAccount, Customer, Personnel, FinancialAttachment } from '../../../types';
 
 interface TreasuryTransactionModalProps {
@@ -382,12 +383,12 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                   <SearchableSelect
                     options={safePersonnelList.map(p => ({
                       value: String(p.id),
-                      label: `${p.firstName} ${p.lastName}`.trim(),
+                      label: personnelPartyName(p),
                     }))}
                     value={formData.partyId ? String(formData.partyId) : ''}
                     onChange={(val) => {
                       const p = safePersonnelList.find(x => String(x.id) === val);
-                      setFormData({ ...formData, partyId: p ? p.id : null, partyName: p ? `${p.firstName} ${p.lastName}`.trim() : '' });
+                      setFormData({ ...formData, partyId: p ? p.id : null, partyName: p ? personnelPartyName(p) : '' });
                     }}
                     placeholder="جستجو و انتخاب پرسنل..."
                     maxResults={50}

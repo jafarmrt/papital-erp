@@ -9,6 +9,10 @@ import { fin } from '../../lib/financialDecimal.js';
 import { money, moneyOr } from '../../lib/money.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
+import { domainEventBus } from '../events/domainEventBus.js';
+import { DomainEventType } from '../events/domainEvents.js';
+import { OutboxService } from '../events/outboxService.js';
+import { auditPayrollPaymentVoided } from '../piecework/pieceworkAudit.js';
 
 export interface VoidPayrollPaymentInput {
   payrollId: number;
@@ -16,6 +20,8 @@ export interface VoidPayrollPaymentInput {
   reason: string;
   userId?: number;
   username?: string;
+  /** v10.0.258 (TD-950): درخواست، برای کاربر و IP ردیف ممیزی */
+  req?: unknown;
 }
 
 export interface VoidPayrollPaymentResult {
@@ -91,7 +97,7 @@ export class PayrollPaymentVoidService {
 
       // ۳) تراکنش معکوس خزانه
       const reversalNumber = await TreasuryTransactionService.generateTransactionNumber('receipt', tx);
-      await tx.insert(treasuryTransactions).values({
+      const [reversal] = await tx.insert(treasuryTransactions).values({
         transactionNumber: reversalNumber,
         type: 'receipt',
         date: await businessTodayIsoDate(),
@@ -111,8 +117,29 @@ export class PayrollPaymentVoidService {
         description: `${voidReason}`,
         status: 'completed',
         createdById: input.userId || null,
-      });
+      }).returning({ id: treasuryTransactions.id });
       await tx.update(treasuryTransactions).set({ status: 'voided', updatedAt: sql`now()` }).where(eq(treasuryTransactions.id, payment.id));
+      // v10.0.258 (TD-949): تراکنش معکوس، مانند ابطال خزانه عادی، رویداد خود را در همین تراکنش در صف ارسال می‌نویسد
+      await OutboxService.saveToOutbox(tx, domainEventBus.createEvent(
+        DomainEventType.TREASURY_TRANSACTION_APPROVED,
+        'Treasury',
+        String(reversal.id),
+        {
+          transactionId: reversal.id,
+          voidedTransactionId: payment.id,
+          voidedTransactionNumber: payment.transactionNumber,
+          type: 'deposit',
+          isReversal: true,
+          amount: amount.toNumber(),
+          currency: payment.currency || 'IRR',
+          accountId: bank.id,
+          accountName: bank.title,
+          payrollId: payroll.id,
+          payrollNumber: payroll.payrollNumber,
+          reason,
+        },
+        { userId: input.userId, userName: input.username },
+      ));
 
       // ۴) فیش و کارکردها
       const remainingPaid = fin(payroll.paidAmount ?? 0).subtract(amount);
@@ -125,6 +152,11 @@ export class PayrollPaymentVoidService {
       }).where(eq(pieceworkPayrolls.id, payroll.id)).returning();
       await tx.update(pieceworkLogs).set({ status: 'approved' })
         .where(and(eq(pieceworkLogs.payrollId, payroll.id), eq(pieceworkLogs.status, 'paid')));
+      // v10.0.258 (TD-950): ممیزی ابطال در همین تراکنش، با کاربر و IP و مبلغ
+      await auditPayrollPaymentVoided(tx, updated, {
+        transactionId: payment.id, transactionNumber: payment.transactionNumber, reversalTransactionNumber: reversalNumber,
+        amount: amount.toString(), reason, reversalVoucherId, paidBefore: String(payroll.paidAmount ?? 0),
+      }, { req: input.req, userId: input.userId, username: input.username });
 
       return {
         payroll: updated,
