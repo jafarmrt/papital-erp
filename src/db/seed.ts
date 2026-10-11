@@ -16,12 +16,15 @@ import { withAdvisoryLock, ADVISORY_LOCK_KEYS } from '../lib/advisoryLock.js';
  * v7.0.39 (TD-194): قفل و آزادسازی روی همان اتصال اختصاصی (withAdvisoryLock)؛ پیش‌تر دو کوئری جدای orm
  * ممکن بود روی دو اتصال متفاوت استخر اجرا شوند و قفل روی اتصال اول باقی بماند.
  */
-export async function runSeedWithLock(): Promise<{ success: boolean; message: string }> {
+/** v10.0.180 (TD-959): `failedSections` names every base data section that failed; `success` is false when one did. */
+export interface SeedResult { success: boolean; message: string; failedSections: string[] }
+
+export async function runSeedWithLock(): Promise<SeedResult> {
   try {
     const outcome = await withAdvisoryLock(ADVISORY_LOCK_KEYS.SEED, () => runSeed());
     if (!outcome.acquired) {
       logger.info('[Seed] Another instance is seeding — skipping');
-      return { success: true, message: 'Another instance is seeding — skipped' };
+      return { success: true, message: 'Another instance is seeding — skipped', failedSections: [] };
     }
     return outcome.result;
   } catch (err: any) {
@@ -44,8 +47,11 @@ async function isEmptyTable(table: typeof categories | typeof pieceworkTasks): P
  */
 export async function runSeed(
   options: { migrate?: () => Promise<MigrationResult> } = {}
-): Promise<{ success: boolean; message: string }> {
+): Promise<SeedResult> {
   logger.info('[Seeder] Starting system master data seed process...');
+  // v10.0.180 (TD-959): a failed section is still logged and the others still run (each is insert-only, so the next
+  // boot retries it), but the result says which failed instead of always reporting success
+  const failedSections: string[] = [];
 
   // 1. Ensure database schema is migrated and up-to-date
   // v7.0.50 (TD-217): runMigrations خطا را برنمی‌اندازد؛ seed روی اسکیمای مهاجرت‌نشده اجرا نمی‌شود
@@ -63,6 +69,7 @@ export async function runSeed(
     }
   } catch (err) {
     logger.error('[Seeder] Error seeding categories:', err);
+    failedSections.push('categories');
   }
 
   // 3. System warehouses are user-managed (no hardcoded default warehouse)
@@ -95,6 +102,7 @@ export async function runSeed(
     }
   } catch (err) {
     logger.error('[Seeder] Error seeding app settings:', err);
+    failedSections.push('app settings');
   }
 
   // (v4.0.29) همگام‌سازی جدول changelogs حذف شد — dual-storage مذموم؛ منبع حقیقت
@@ -118,6 +126,7 @@ export async function runSeed(
     }
   } catch (err) {
     logger.error('[Seeder] Error seeding piecework tasks:', err);
+    failedSections.push('piecework tasks');
   }
 
   // 9. Seed standard chart of accounts
@@ -130,6 +139,7 @@ export async function runSeed(
     }
   } catch (err) {
     logger.error('[Seeder] Error seeding standard chart of accounts:', err);
+    failedSections.push('chart of accounts');
   }
 
   // 10. Seed standard workflow definitions
@@ -138,8 +148,14 @@ export async function runSeed(
     logger.info('[Seeder] Seeded standard workflow definitions.');
   } catch (err) {
     logger.error('[Seeder] Error seeding standard workflow definitions:', err);
+    failedSections.push('workflow definitions');
   }
 
+  if (failedSections.length > 0) {
+    const message = `Base data sections failed: ${failedSections.join(', ')}`;
+    logger.error(`[Seeder] ${message}`);
+    return { success: false, message, failedSections };
+  }
   logger.info('[Seeder] Master data seed completed successfully.');
-  return { success: true, message: 'Master data seed completed successfully' };
+  return { success: true, message: 'Master data seed completed successfully', failedSections };
 }

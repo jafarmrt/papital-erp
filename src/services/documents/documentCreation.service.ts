@@ -1,4 +1,5 @@
 import { eq, and, inArray } from 'drizzle-orm';
+import { assertProjectNotCancelled } from '../accounting/projectCancelledGuard.js';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { documents, documentItems, items, productionProjects } from '../../db/schema.js';
 import { resolveJalaliFiscalYear } from '../../lib/businessClock.js';
@@ -36,6 +37,8 @@ import { money } from '../../lib/money.js';
 import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { assertDocumentStatus, assertRecordableDocument, stockDirectionOf } from './documentRecordRule.js';
 import { assertOutflowWithinSellable } from './documentSellableGate.js';
+import { consumesProjectReservation } from '../../lib/transactions/projectIssueTypes.js';
+import { assertDocumentNotInReview } from './documentReviewLock.js';
 import { assertReturnPartyOfInvoice, parseDocumentPartyId, resolveDocumentParty, returnInvoicePartyId } from './documentParty.js';
 import { documentAuditSnapshot, type DocumentAuditChange } from './documentAudit.js';
 
@@ -113,6 +116,8 @@ export class DocumentCreationService {
       if (existingDoc.status === 'final') {
         throw new ValidationError('امکان ویرایش مستقیم سند نهایی‌شده وجود ندارد.');
       }
+      // v10.0.86 (TD-1138، ت۱۳): سندی که در گام بازبینی گردش کار است تا پایان بازبینی ویرایش نمی‌شود
+      await assertDocumentNotInReview(tx, id);
       const before = await documentAuditSnapshot(tx, id);
 
       if (status === 'final') {
@@ -121,6 +126,7 @@ export class DocumentCreationService {
         );
       }
 
+      // v10.0.108 (TD-972): مسیر ویرایش (`PUT /documents/:id`) بدون نسخه ۴۰۰ می‌دهد؛ نسخه کهنه اینجا ۴۰۹ می‌گیرد
       if (body.expectedVersion !== undefined || body.version !== undefined) {
         checkOccVersion(existingDoc, {
           entityType: 'Document',
@@ -387,6 +393,8 @@ export class DocumentCreationService {
         if (!projExists) {
           throw new NotFoundError(`پروژه با شناسه ${finalProjectId} یافت نشد.`);
         }
+        // v10.0.184 (TD-921): سند تازه روی پروژه لغوشده ثبت نمی‌شود
+        await assertProjectNotCancelled(tx, finalProjectId, 'سند');
       }
       // v7.0.21 (TD-178 / audit P0-2): شماره عطف و سال مالی پارتیشن شماره‌گذاری؛ از v9.0.80 (TD-489) در
       // DocumentRefNumberService.assignDocumentRefNumber، مشترک با حواله انتقال بین انبارها
@@ -563,7 +571,8 @@ export class DocumentCreationService {
           await assertOutflowWithinSellable(tx, lines, {
             docLocation,
             excludeDocumentId: body.excludeDocumentId ? Number(body.excludeDocumentId) : null,
-            projectId: finalProjectId,
+            // v10.0.207 (TD-947): رزرو پروژه فقط برای حواله و ضایعات همان پروژه آزاد است، نه فاکتور فروش
+            projectId: consumesProjectReservation(docType) ? finalProjectId : null,
           });
         }
 
@@ -627,7 +636,7 @@ export class DocumentCreationService {
         await insertDocumentLines(tx, lineRows);
 
         // v7.0.102 (TD-233): کسر رزرو پروژه در همان تراکنش خروج قطعی؛ خطا کل سند را برمی‌گرداند
-        if (docStatus === 'final' && stockDirection === 'out' && finalProjectId !== null) {
+        if (docStatus === 'final' && stockDirection === 'out' && finalProjectId !== null && consumesProjectReservation(docType)) {
           projectReservation = await releaseReservationsForDocument(tx, finalProjectId, docId, lines, user, actor.userId);
         }
       }
@@ -653,7 +662,7 @@ export class DocumentCreationService {
           },
           { userName: user }
         );
-        // v10.0.37 (TD-935، تصمیم ت۱۱): ثبت مستقیم قطعی (و فاکتور ووکامرس) هم «ثبت فاکتور» را پیش از «صدور قطعی» می‌نویسد
+        // v10.0.230 (TD-935، تصمیم ت۱۱): ثبت مستقیم قطعی (و فاکتور ووکامرس) هم «ثبت فاکتور» را پیش از «صدور قطعی» می‌نویسد
         if (isApproved) {
           await OutboxService.saveToOutbox(tx, domainEventBus.createEvent<InvoiceEventPayload>(DomainEventType.INVOICE_CREATED, 'Document', String(docId), invEvent.payload, { userName: user }));
         }

@@ -247,7 +247,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
                   onChange={(e) => setRoleForm({ ...roleForm, code: e.target.value })}
                   className="w-full border rounded-lg px-3 py-1.5 text-sm font-mono text-left focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-slate-100 disabled:text-slate-500"
                   dir="ltr"
-                  placeholder="e.g. warehouse_assistant"
+                  placeholder="مثلاً warehouse_assistant"
                 />
               </div>
             </div>

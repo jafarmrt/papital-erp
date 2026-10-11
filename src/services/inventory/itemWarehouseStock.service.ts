@@ -24,7 +24,7 @@ export class ItemWarehouseStockService {
       .orderBy(asc(warehouses.id)); // v7.0.36 (P2-3): پیش‌فرض قطعی = انبار فعال با کمترین شناسه
 
     if (allWarehouses.length === 0) {
-      throw new ValidationError('هیچ انبار فعالی در سیستم تعریف نشده است.');
+      throw new ValidationError('هیچ انبار فعالی در سامانه تعریف نشده است.');
     }
 
     const input = String(raw ?? '').trim();

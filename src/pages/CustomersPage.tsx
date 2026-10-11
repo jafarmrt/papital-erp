@@ -15,9 +15,10 @@ import { customerSaveBody } from '../lib/customers/customerVersion';
 import { customerAccountCardUrl } from '../lib/customers/customerAccountCard';
 import { useQueryClient } from '@tanstack/react-query';
 import { QUERY_KEYS } from '../lib/queryKeys';
-import { formatPersianPhone, normalizePhoneNumber, validateIranianPhoneNumber, formatPersianDate } from '../utils';
+import { formatPersianPhone, normalizePhoneNumber, validateIranianPhoneNumber, formatPersianDate, formatPersianNumber } from '../utils';
 import { useRialDisplay } from '../hooks/useAppCurrency';
 import { useHasPermission } from '../contexts/AuthContext';
+import { blankContactPerson } from '../lib/customers/contactPerson';
 
 export default function CustomersPage({ user }: { user: User }) {
   const rial = useRialDisplay();
@@ -113,7 +114,7 @@ export default function CustomersPage({ user }: { user: User }) {
   });
 
   const [contacts, setContacts] = useState<FormContactPerson[]>([
-    { id: '1', name: '', role: 'مدیر خرید', phone: '', isPrimary: true }
+    blankContactPerson('1', true)
   ]);
 
   useEffect(() => {
@@ -124,7 +125,7 @@ export default function CustomersPage({ user }: { user: User }) {
     const newId = Date.now().toString();
     setContacts(prev => [
       ...prev,
-      { id: newId, name: '', role: form.partyType === 'supplier' ? 'مدیر فروش' : 'حسابدار', phone: '', isPrimary: prev.length === 0 }
+      blankContactPerson(newId, prev.length === 0)
     ]);
   };
 
@@ -134,7 +135,7 @@ export default function CustomersPage({ user }: { user: User }) {
       if (filtered.length > 0 && !filtered.some(c => c.isPrimary)) {
         filtered[0].isPrimary = true;
       }
-      return filtered.length ? filtered : [{ id: Date.now().toString(), name: '', role: 'رابط اصلی', phone: '', isPrimary: true }];
+      return filtered.length ? filtered : [blankContactPerson(Date.now().toString(), true)];
     });
   };
 
@@ -212,7 +213,7 @@ export default function CustomersPage({ user }: { user: User }) {
         cardNumber: ''
       }
     });
-    setContacts([{ id: Date.now().toString(), name: '', role: activeTab === 'supplier' ? 'مدیر فروش' : 'مدیر خرید', phone: '', isPrimary: true }]);
+    setContacts([blankContactPerson(Date.now().toString(), true)]);
   };
 
   const handleEdit = useCallback((c: Customer) => {
@@ -240,7 +241,7 @@ export default function CustomersPage({ user }: { user: User }) {
       setContacts(c.contacts.map((contact, idx) => ({
         id: contact.id || `${idx}-${Date.now()}`,
         name: contact.name || '',
-        role: contact.role || (rawPartyType === 'supplier' ? 'مدیر فروش' : 'مدیر خرید'),
+        role: contact.role || '',
         phone: contact.phone || '',
         isPrimary: contact.isPrimary ?? (idx === 0)
       })));
@@ -248,7 +249,7 @@ export default function CustomersPage({ user }: { user: User }) {
       setContacts([{
         id: '1',
         name: c.contactName || '',
-        role: 'رابط اصلی',
+        role: '',
         phone: c.phone || '',
         isPrimary: true
       }]);
@@ -546,7 +547,7 @@ export default function CustomersPage({ user }: { user: User }) {
                       <button
                         onClick={() => handleOpenLedger(c)}
                         className="p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 rounded-lg transition-colors flex items-center gap-1 text-[10px] font-bold cursor-pointer"
-                        title="مشاهده کاردکس و تراز مالی تفصیلی این شخص در دفاتر دوبل"
+                        title="مشاهده کاردکس و تراز مالی تفصیلی این شخص در دفاتر حسابداری"
                       >
                         <FileText size={12} />
                         تراز مالی
@@ -597,7 +598,7 @@ export default function CustomersPage({ user }: { user: User }) {
       {/* Pagination Footer */}
       <div className="p-3.5 bg-slate-50/80 border-t border-slate-200 flex items-center justify-between mt-auto shrink-0">
         <span className="text-xs text-slate-500 font-medium">
-          نمایش {customers.length} مورد {totalItems > 0 ? `از کل ${totalItems} طرف حساب` : ''}
+          نمایش {formatPersianNumber(customers.length)} مورد {totalItems > 0 ? `از کل ${formatPersianNumber(totalItems)} طرف حساب` : ''}
         </span>
         {totalPages > 1 && (
           <div className="flex items-center gap-1.5">
@@ -652,7 +653,7 @@ export default function CustomersPage({ user }: { user: User }) {
                     کارت حساب و تراز تفصیلی: {selectedLedgerCustomer.name}
                   </h3>
                   <p className="text-[11px] text-slate-400">
-                    سوابق اسناد دوبل خرید، فاکتورها و پرداخت‌های تسویه ثبت شده
+                    سوابق اسناد حسابداری خرید، فاکتورها و پرداخت‌های تسویه ثبت شده
                   </p>
                 </div>
               </div>
@@ -669,21 +670,21 @@ export default function CustomersPage({ user }: { user: User }) {
               {loadingLedger ? (
                 <div className="p-12 flex flex-col items-center justify-center gap-2 text-slate-400">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
-                  <span>در حال محاسبه تراز و بارگذاری اسناد دوبل...</span>
+                  <span>در حال محاسبه تراز و بارگذاری اسناد حسابداری...</span>
                 </div>
               ) : ledgerData && ledgerData.items && ledgerData.items.length > 0 ? (
                 <>
                   {/* Balance Summary Header Cards */}
                   <div className="grid grid-cols-3 gap-3">
                     <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl">
-                      <span className="text-[11px] font-bold text-blue-800">مجموع بدهکار (پرداخت‌ها / فاکتور فروش)</span>
+                      <span className="text-[11px] font-bold text-blue-800">مجموع بدهکار (فروش به شخص و پرداخت به او)</span>
                       <p className="text-sm font-bold font-mono text-blue-900 mt-1">
                         {rial.amount(ledgerData.totalDebit || 0)}
                       </p>
                     </div>
 
                     <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl">
-                      <span className="text-[11px] font-bold text-amber-800">مجموع بستانکار (رسیدهای خرید)</span>
+                      <span className="text-[11px] font-bold text-amber-800">مجموع بستانکار (دریافت از شخص و خرید از او)</span>
                       <p className="text-sm font-bold font-mono text-amber-900 mt-1">
                         {rial.amount(ledgerData.totalCredit || 0)}
                       </p>
@@ -710,7 +711,7 @@ export default function CustomersPage({ user }: { user: User }) {
                         <tr>
                           <th className="p-2.5 w-10">ردیف</th>
                           <th className="p-2.5 w-24">تاریخ</th>
-                          <th className="p-2.5 w-20">سند دوبل</th>
+                          <th className="p-2.5 w-20">سند حسابداری</th>
                           <th className="p-2.5 text-right">شرح سند</th>
                           <th className="p-2.5 text-left w-28">{`بدهکار (${curLbl})`}</th>
                           <th className="p-2.5 text-left w-28">{`بستانکار (${curLbl})`}</th>
@@ -737,8 +738,8 @@ export default function CustomersPage({ user }: { user: User }) {
                 </>
               ) : (
                 <div className="p-10 text-center text-slate-500 border border-dashed border-slate-200 rounded-xl">
-                  <p className="font-bold text-sm text-slate-600">هنوز هیچ تراکنش یا سند دوبل مالی برای این شخص ثبت نشده است.</p>
-                  <p className="text-xs text-slate-400 mt-1">با ثبت رسید خرید کالا یا فاکتور فروش، اسناد دوبل به صورت خودکار در این کارت نمایش می‌یابند.</p>
+                  <p className="font-bold text-sm text-slate-600">هنوز هیچ تراکنش یا سند حسابداری برای این شخص ثبت نشده است.</p>
+                  <p className="text-xs text-slate-400 mt-1">با ثبت رسید خرید کالا یا فاکتور فروش، اسناد حسابداری به صورت خودکار در این کارت نمایش می‌یابند.</p>
                 </div>
               )}
             </div>

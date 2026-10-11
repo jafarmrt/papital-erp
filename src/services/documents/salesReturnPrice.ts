@@ -107,7 +107,7 @@ export async function enforceReturnInvoiceTerms<T extends DocumentLineItemInput>
     return `«${it?.name ?? id}» (${it?.code ?? '-'})`;
   };
 
-  // v10.0.39 (TD-933، تصمیم ب): برگشتی که مقدار کالا را کامل برمی‌گرداند باقی‌مانده دقیق خالص آن را برمی‌گرداند
+  // v10.0.232 (TD-933، تصمیم ب): برگشتی که مقدار کالا را کامل برمی‌گرداند باقی‌مانده دقیق خالص آن را برمی‌گرداند
   const earlierLines = await earlierFinalReturnLines(tx, invoiceId);
   const completionPrices = new Map<number, ReturnType<typeof fin>>();
   for (const [itemId, price] of completeReturnLines(input.lines.map(l => ({ itemId: Number(l.itemId), quantity: l.quantity as DecimalValue })), terms, earlierLines).completionPrices) {
@@ -126,7 +126,7 @@ export async function enforceReturnInvoiceTerms<T extends DocumentLineItemInput>
     }
     const priceLine = line as LinePriceInput;
     const sentPrice = sentValue(priceLine.unit_price, priceLine.unitPrice, priceLine.price);
-    // v10.0.39 (TD-933): ردیف تکمیلی برگشت کامل (یک واحد با باقی‌مانده دقیق) که پیش‌نویس ذخیره کرده هم پذیرفته است
+    // v10.0.232 (TD-933): ردیف تکمیلی برگشت کامل (یک واحد با باقی‌مانده دقیق) که پیش‌نویس ذخیره کرده هم پذیرفته است
     const completion = completionPrices.get(itemId);
     if (sentPrice !== undefined && !isInvoiceNetUnitPrice(sentPrice, itemTerms.netUnitPrice) && !(completion && isInvoiceNetUnitPrice(sentPrice, completion))) {
       problems.push(`قیمت کالای ${itemLabel(itemId)} ${amountText(sentPrice)} است، ولی قیمت خالص هر واحد آن در فاکتور ${amountText(itemTerms.netUnitPrice)} ${currency}`);

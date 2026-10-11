@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { fetchJson } from '../../api';
 import { Plus, Save, Trash2, Clock, ArrowRight, Move, SlidersHorizontal } from 'lucide-react';
 import { 
   useWorkflowDefinitionDetailQuery, 
   useSaveWorkflowDefinitionMutation,
   useUpdateCanvasPositionsMutation 
 } from '../../hooks/queries/useWorkflowQueries';
+import { useRolesQuery } from '../../hooks/queries/useUserQueries';
 import { toast } from 'react-hot-toast';
 import { formatPersianNumber } from '../../utils/persianNumber';
 import { WorkflowEdgeGuardFields } from './WorkflowEdgeGuardFields';
@@ -39,6 +38,7 @@ interface CanvasEdge {
   requiredRole: string;
   requiredPermission: string;
   isInitiatorExcluded: number;
+  isInitiatorOnly: number;
   approvalRuleType: string;
   kValue: number;
   ruleConditionsJson: any[];
@@ -60,14 +60,8 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
   const saveMutation = useSaveWorkflowDefinitionMutation();
   const updatePositionsMutation = useUpdateCanvasPositionsMutation();
 
-  const { data: dbRoles } = useQuery<{ id: number; name: string; code: string; isSystem?: number; permissions?: unknown }[]>({
-    queryKey: ['roles', 'list'],
-    queryFn: async () => {
-      const res = await fetchJson('/users/roles');
-      return Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
-    },
-    staleTime: 5 * 60 * 1000
-  });
+  // v10.0.197 (TD-978): the role list comes from GET /api/roles (the users router has no /users/roles)
+  const { data: dbRoles } = useRolesQuery() as { data?: { id: number; name: string; code: string; isSystem?: number; permissions?: unknown }[] };
 
   const roleOptions = (Array.isArray(dbRoles) ? dbRoles : []).map(r => ({ code: r.code, name: r.name }));
 
@@ -128,6 +122,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
         requiredRole: t.requiredRole || '',
         requiredPermission: t.requiredPermission || '',
         isInitiatorExcluded: Number(t.isInitiatorExcluded) === 1 ? 1 : 0,
+        isInitiatorOnly: Number(t.isInitiatorOnly) === 1 ? 1 : 0,
         approvalRuleType: t.approvalRuleType || 'SINGLE',
         kValue: Number(t.kValue) || 1,
         ruleConditionsJson: t.ruleConditionsJson || [],
@@ -209,6 +204,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
       requiredRole: '',
       requiredPermission: '',
       isInitiatorExcluded: 0,
+      isInitiatorOnly: 0,
       approvalRuleType: 'SINGLE',
       kValue: 1,
       ruleConditionsJson: [],

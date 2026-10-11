@@ -5,6 +5,7 @@ import {
 import { Item, Category, ProjectInventoryControlSectionData } from '../../types';
 import { formatPersianNumber, toPersianDigits } from '../../utils';
 import { COMMON_UNITS } from './projectInventoryUtils';
+import { rawMaterialCategories } from '../../lib/pendingMaterials/materialRequestRules';
 import { MaterialNameField, MaterialUnitSelect, MaterialNumberField, MaterialAttributeFields } from './materialFormFields';
 import { useHasPermission } from '../../contexts/AuthContext';
 import type { CustomMaterialForm } from '../../lib/pendingMaterials/customMaterialRequest';
@@ -200,7 +201,7 @@ export function AddMaterialModal({
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-amber-500 focus:outline-none"
                   >
                     <option value="">- انتخاب دسته‌بندی -</option>
-                    {allCategories.map(c => (
+                    {rawMaterialCategories(allCategories).map(c => (
                       <option key={c.id} value={c.name}>{c.name} {c.prefix ? `(${c.prefix}XXX)` : ''}</option>
                     ))}
                   </select>

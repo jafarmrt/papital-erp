@@ -1,4 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
+import { projectIssuedQuantities } from './projectIssuedQuantities.js';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { items } from '../../db/schema.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
@@ -46,25 +47,28 @@ async function planWithOthersReservations(
   stockItems: ReservationStockItem[],
   reservedAt: string,
   executor: DbExecutor,
+  projectId: number | null,
 ): Promise<ProjectReservationPlan> {
   const draft = planProjectReservation(ic.sections, products, stockItems, ic.manualPurchaseItems, reservedAt);
   // v9.0.372 (TD-820، تصمیم ت۴): ردیف با واحد دیگر و بی تبدیل، ثبت نهایی را رد می‌کند
   if (draft.unitMismatches.length > 0) throw unitMismatchError(draft.unitMismatches);
-  const itemIds = draft.reserved.map(r => Number(r.itemId)).filter(id => Number.isInteger(id) && id > 0);
+  const itemIds = [...new Set([...draft.reserved, ...draft.shortages].map(r => Number(r.itemId)))].filter(id => Number.isInteger(id) && id > 0);
   if (itemIds.length === 0) return draft;
+  const issuedToProject = projectId ? await projectIssuedQuantities(executor, projectId, itemIds) : new Map<number, number>();
   const report = await ItemStockReservationService.getReservedStockDetails(executor, true, { itemIds });
   const reservedByOthers = new Map<number, number>();
   for (const s of report.itemSummaries) {
     if (s.itemId) reservedByOthers.set(Number(s.itemId), Number(s.totalReservedQty) || 0);
   }
-  return planProjectReservation(ic.sections, products, stockItems, ic.manualPurchaseItems, reservedAt, { reservedByOthers });
+  return planProjectReservation(ic.sections, products, stockItems, ic.manualPurchaseItems, reservedAt, { reservedByOthers, issuedToProject });
 }
 
 export async function resolveServerInventoryControl(
   incoming: unknown,
   previous: unknown,
   products: unknown,
-  executor: DbExecutor
+  executor: DbExecutor,
+  projectId: number | null = null,
 ): Promise<InventoryControl> {
   const {
     reservedItems: _ignoredReserved, isReserved: _ignoredFlag, finalizedAt: _ignoredFinalizedAt, reservationShortages: _ignoredShortages, ...rest
@@ -95,7 +99,7 @@ export async function resolveServerInventoryControl(
   let shortages: unknown = prev.reservationShortages;
   if (finalizing) {
     finalizedAt = systemNowUtcIso();
-    const plan = await planWithOthersReservations(rest, products, stockItems, String(finalizedAt), executor);
+    const plan = await planWithOthersReservations(rest, products, stockItems, String(finalizedAt), executor, projectId);
     reservedItems = plan.reserved;
     shortages = plan.shortages;
   } else if (!nowFinal && wasFinal) {

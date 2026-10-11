@@ -22,12 +22,12 @@ function server() {
   fetchJson.mockImplementation((url: string) => {
     if (url === '/warehouses') return Promise.resolve([{ id: 1, name: 'انبار مرکزی', code: 'WH1', is_active: 1 }]);
     if (url === '/documents/next-ref?type=invoice') return Promise.resolve({ nextRef: 'INV-1001' });
-    const paged = /^\/documents\?status=proforma&types=invoice,proforma&page=(\d+)&limit=20$/.exec(url);
+    const paged = /^\/documents\?statuses=proforma,draft&types=invoice,proforma&page=(\d+)&limit=20$/.exec(url);
     if (paged) {
       const page = Number(paged[1]);
       return Promise.resolve({ data: proformaRows(page), total: 45, page, limit: 20 });
     }
-    if (url.startsWith('/documents?status=proforma')) return Promise.resolve({ data: [{ id: 6, type: 'receipt', status: 'proforma', ref_number: 'RCP-6', date: '2026-10-02', buyer_name: 'تامین سنگ' }] });
+    if (url.startsWith('/documents?statuses=proforma,draft')) return Promise.resolve({ data: [{ id: 6, type: 'receipt', status: 'proforma', ref_number: 'RCP-6', date: '2026-10-02', buyer_name: 'تامین سنگ' }] });
     return Promise.resolve([]);
   });
 }
@@ -52,8 +52,8 @@ describe('CreateInvoicePage — open proformas are the sales proformas, page by 
     server();
     renderPage();
     expect(await screen.findByText('PF-1-0')).toBeTruthy();
-    expect(fetchJson).toHaveBeenCalledWith('/documents?status=proforma&types=invoice,proforma&page=1&limit=20', expect.anything());
-    expect(fetchJson.mock.calls.some(([url]) => String(url).startsWith('/documents?status=proforma') && !String(url).includes('types=invoice,proforma'))).toBe(false);
+    expect(fetchJson).toHaveBeenCalledWith('/documents?statuses=proforma,draft&types=invoice,proforma&page=1&limit=20', expect.anything());
+    expect(fetchJson.mock.calls.some(([url]) => String(url).startsWith('/documents?statuses=proforma,draft') && !String(url).includes('types=invoice,proforma'))).toBe(false);
     expect(screen.queryByText('RCP-6')).toBeNull();
     expect(screen.getByText('⏳ پیش فاکتورهای باز (۴۵)')).toBeTruthy();
     expect(screen.getByText('صفحه ۱ از ۳')).toBeTruthy();

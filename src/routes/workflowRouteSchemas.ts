@@ -44,6 +44,7 @@ const designTransitionSchema = z.object({
   ruleConditionsJson: z.unknown().optional(),
   autoActionKey: shortText(100).optional(),
   isInitiatorExcluded: z.union([z.boolean(), z.literal(0), z.literal(1)]).optional(),
+  isInitiatorOnly: z.union([z.boolean(), z.literal(0), z.literal(1)]).optional(),
 });
 
 export const saveDefinitionSchema = z.object({

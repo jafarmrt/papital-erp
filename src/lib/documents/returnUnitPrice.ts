@@ -23,7 +23,7 @@ export interface ReturnItemTerms {
   quantity: FinancialDecimal;
   /** قیمت خالص هر واحد، گرد به چهار رقم */
   netUnitPrice: FinancialDecimal;
-  /** v10.0.39 (TD-933): جمع خالص دقیق کالا در فاکتور (بی گرد کردن) */
+  /** v10.0.232 (TD-933): جمع خالص دقیق کالا در فاکتور (بی گرد کردن) */
   net: FinancialDecimal;
 }
 

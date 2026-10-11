@@ -7,6 +7,7 @@ import { orm, pool } from '../../db/drizzle.js';
 import { activityLogs, itemPrices, items, roles, users, warehouses } from '../../db/schema.js';
 import { withTestMarker } from '../fixtures/testMarker.js';
 import { money } from '../../lib/money.js';
+import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 
 type ShouldRun = (id: string, ...extra: string[]) => boolean;
 type Row = Record<string, unknown>;
@@ -56,7 +57,7 @@ export async function runItemExcelImportTests(shouldRun: ShouldRun): Promise<Tes
       if (ctx.itemIds.length > 0) await orm.update(items).set({ isDeleted: 1 }).where(inArray(items.id, ctx.itemIds)).catch(() => undefined);
       if (ctx.userIds.length > 0) await orm.update(users).set({ isDeleted: 1 }).where(inArray(users.id, ctx.userIds)).catch(() => undefined);
       if (ctx.warehouseIds.length > 0) await orm.update(warehouses).set({ isActive: 0 }).where(inArray(warehouses.id, ctx.warehouseIds)).catch(() => undefined);
-      if (ctx.roleIds.length > 0) await orm.delete(roles).where(inArray(roles.id, ctx.roleIds)).catch(() => undefined);
+      if (ctx.roleIds.length > 0) await deleteTestRoles(inArray(roles.id, ctx.roleIds)).catch(() => undefined);
     }
   }
   return results;

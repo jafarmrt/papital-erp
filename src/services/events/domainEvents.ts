@@ -8,7 +8,7 @@ export enum DomainEventType {
   INVOICE_CREATED = 'InvoiceCreated',
   INVOICE_APPROVED = 'InvoiceApproved',
   INVOICE_CANCELLED = 'InvoiceCancelled',
-  // v10.0.36 (TD-931): ابطال فاکتور یا پیش‌فاکتور فروش
+  // v10.0.229 (TD-931): ابطال فاکتور یا پیش‌فاکتور فروش
   INVOICE_VOIDED = 'InvoiceVoided',
 
   // 2. Purchases & Procurement
@@ -180,6 +180,8 @@ export interface InventoryReorderAlertPayload {
   itemCode: string;
   itemName: string;
   currentStock: number;
+  /** v10.0.43 (TD-937): موجودی کل منهای رزروها، همان سنجه صفحه هشدار نقطه سفارش */
+  freeStock: number;
   reorderPoint: number;
   warehouseLocation: string;
   alertMessage: string;

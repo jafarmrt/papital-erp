@@ -7,6 +7,7 @@ import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType, type InvoiceEventPayload } from '../events/domainEvents.js';
 import { OutboxService } from '../events/outboxService.js';
 import { documentEventAmounts } from './documentEventAmount.js';
+import { formatCurrencyLabel } from '../../utils/formatters.js';
 
 /**
  * v9.0.271 (TD-773، تصمیم ت۴ «الف» بسته ۸): سندی که وابسته زنده دارد باطل نمی‌شود و پاسخ ۴۰۹ وابسته‌ها را نام می‌برد.
@@ -81,12 +82,19 @@ export async function liveTreasuryRowsOf(tx: DbExecutor, documentId: number): Pr
     .orderBy(asc(treasuryTransactions.id));
 }
 
+/**
+ * v10.0.141 (TD-1203): فهرست ردیف‌های خزانه در پیام رد ابطال؛ ارز با نام فارسی (`formatCurrencyLabel`)، نه کد خام «IRR».
+ */
+export function treasuryRowsListText(rows: ReadonlyArray<Pick<VoidDependentTreasuryRow, 'transactionNumber' | 'type' | 'amount' | 'currency'>>): string {
+  return rows
+    .map(r => `«${r.transactionNumber}» (${r.type === 'payment' ? 'پرداخت' : 'دریافت'} ${formatPersianNumber(Number(r.amount) || 0, 4)} ${formatCurrencyLabel(r.currency || 'IRR')})`)
+    .join('، ');
+}
+
 export async function assertVoidHasNoTreasuryRows(tx: DbExecutor, doc: { id: number; refNumber: string | null }): Promise<void> {
   const rows = await liveTreasuryRowsOf(tx, doc.id);
   if (rows.length === 0) return;
-  const listed = rows
-    .map(r => `«${r.transactionNumber}» (${r.type === 'payment' ? 'پرداخت' : 'دریافت'} ${formatPersianNumber(Number(r.amount) || 0, 4)} ${r.currency || 'IRR'})`)
-    .join('، ');
+  const listed = treasuryRowsListText(rows);
   throw new ConflictError(
     `سند «${doc.refNumber || doc.id}» دریافت یا پرداخت خزانه دارد و باطل نمی‌شود: ${listed}. اول هر کدام را در خزانه «علی‌الحساب» کنید، به سند دیگری وصل کنید یا باطل کنید.`,
     { treasuryRows: rows.map(r => ({ ...r, amount: Number(r.amount) || 0 })) },
@@ -94,11 +102,11 @@ export async function assertVoidHasNoTreasuryRows(tx: DbExecutor, doc: { id: num
   );
 }
 
-/** v10.0.36 (TD-931): نوع و شماره سند و کاربر ابطال برای رویداد گردش معکوس انبار */
+/** v10.0.229 (TD-931): نوع و شماره سند و کاربر ابطال برای رویداد گردش معکوس انبار */
 export interface VoidReversalContext { documentType?: string; documentRef: string; user: string }
 
 /**
- * v10.0.36 (TD-931، P5-S-08، تصمیم ت۱۱ «بله»): ابطال فاکتور یا پیش‌فاکتور فروش رویداد `InvoiceVoided` را در outbox همان
+ * v10.0.229 (TD-931، P5-S-08، تصمیم ت۱۱ «بله»): ابطال فاکتور یا پیش‌فاکتور فروش رویداد `InvoiceVoided` را در outbox همان
  * تراکنش ابطال می‌نویسد، با مبلغ‌های سند پیش از ابطال (سطرها هنوز زنده‌اند) و نام ذخیره‌شده خریدار. پیش‌تر ابطال هیچ
  * رویدادی نمی‌نوشت، پس قانون یا وب‌هوکی که ثبت فاکتور را می‌شنید از ابطال آن بی‌خبر می‌ماند. نوع و شماره (`REV-…`) سند و کاربر
  * ابطال را برای رویداد گردش معکوس هر ردیف کاردکس (`applyStockReversal`) برمی‌گرداند.

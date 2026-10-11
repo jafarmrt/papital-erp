@@ -7,6 +7,7 @@ import { AccountMappingService } from '../../services/accounting/accountMapping.
 import { FinancialHealthService } from '../../services/accounting/financialHealth.service.js';
 import { VoucherSyncService } from '../../services/accounting/voucherSync.service.js';
 import { DocumentService } from '../../services/document.service.js';
+import { ProjectService } from '../../services/projects.service.js';
 import { createTestItem } from '../fixtures/factories.js';
 import type { InvariantScope } from './businessInvariants.js';
 import { invariantProblems, legacyZeroCostEntry, receive, watermarks } from './scenarioHelpers.js';
@@ -28,9 +29,10 @@ async function voucherNetByCode(documentId: number): Promise<Map<string, string>
   return new Map(res.rows.map(r => [r.code, fin(r.net).toString()]));
 }
 
-function outflow(docType: 'remittance' | 'waste', itemId: number, quantity: number, wh: string, date: string): Promise<number> {
+function outflow(docType: 'remittance' | 'waste', itemId: number, quantity: number, wh: string, date: string, projectId?: number): Promise<number> {
   return DocumentService.createDocument({
     docType, inOut: 'out', status: 'final', date, user: 'inv', items: [{ itemId, quantity, unitPrice: 0, location: wh }],
+    ...(projectId ? { projectId } : {}),
   });
 }
 
@@ -102,7 +104,8 @@ export async function checkOutflowVoucherAtKardexCost(wh: string): Promise<strin
     await VoucherSyncService.syncWarehouseDocumentVoucher(docId, { username: 'inv' });
   }
   const remNet = await voucherNetByCode(remittance);
-  const expectRem: Array<[string, string]> = [['1402', '7000'], ['1401', '-2000'], ['1403', '-5000']];
+  // v10.0.175 (TD-948): a remittance without a project is unassigned consumption (6003), not work in progress
+  const expectRem: Array<[string, string]> = [['6003', '7000'], ['1401', '-2000'], ['1403', '-5000']];
   for (const [code, expected] of expectRem) {
     if (remNet.get(code) !== expected) problems.push(`Remittance after re-sync: ${code} = ${remNet.get(code) ?? '0'}, expected ${expected} (Kardex cost)`);
   }
@@ -180,7 +183,9 @@ export async function checkHealthLedgerExcludesWorkInProgress(wh: string): Promi
   const before = await metricsOf();
   const material = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
   const receipt = await receive(material.id, 10, 1000, wh, '2026-06-20');
-  const remittance = await outflow('remittance', material.id, 4, wh, '2026-06-21');
+  // v10.0.175 (TD-948): only a project remittance moves work in progress
+  const { project } = await ProjectService.createProject({ title: `Health WIP ${tag()}`, quantity: 1, products: [] } as unknown as Parameters<typeof ProjectService.createProject>[0]);
+  const remittance = await outflow('remittance', material.id, 4, wh, '2026-06-21', project.id);
   const drafted = await metricsOf();
   if (delta(drafted, before, 'warehouseValuation') !== '6000') problems.push(`Warehouse value moved by ${delta(drafted, before, 'warehouseValuation')}, expected 6000`);
   if (delta(drafted, before, 'ledgerValuation') !== '0') problems.push(`Draft vouchers moved the ledger value by ${delta(drafted, before, 'ledgerValuation')}, expected 0`);

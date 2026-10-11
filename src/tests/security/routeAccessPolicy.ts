@@ -6,6 +6,7 @@ import { roles, users, dailyWorkLogs, pendingMaterials, personnel, pieceworkTask
 import { money } from '../../lib/money.js';
 import { buildRouteGuardTable, formatGuards, type RouteGuardRow } from '../../lib/routeGuardTable.js';
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
+import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 
 /**
  * حوزه H نقشه راه V8 — امنیت و دسترسی. جدول «مسیر ← مجوز» از خود روترها ساخته و با سیاست زیر سنجیده می‌شود،
@@ -411,7 +412,7 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
     }
   } finally {
     if (createdUserIds.length > 0) await orm.delete(users).where(inArray(users.id, createdUserIds)).catch(() => undefined);
-    if (createdRoleIds.length > 0) await orm.delete(roles).where(inArray(roles.id, createdRoleIds)).catch(() => undefined);
+    if (createdRoleIds.length > 0) await deleteTestRoles(inArray(roles.id, createdRoleIds)).catch(() => undefined);
   }
   return results;
 }

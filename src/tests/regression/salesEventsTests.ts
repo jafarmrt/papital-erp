@@ -12,16 +12,16 @@ export async function runSalesEventsTests(shouldRun: ShouldRun): Promise<TestCas
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (h: Harness, wrong: string[]) => Promise<string>]> = [
     ['reg_invoice_void_events_td_931',
-      'v10.0.36: voiding a sales invoice writes InvoiceVoided and a stock event for each reversed Kardex row, so the stock events of an item add up to its stock (TD-931)',
+      'v10.0.229: voiding a sales invoice writes InvoiceVoided and a stock event for each reversed Kardex row, so the stock events of an item add up to its stock (TD-931)',
       ['td931', 'documents', 'events', 'void', 'package8'], invoiceVoidEventsCase],
     ['reg_direct_final_invoice_created_event_td_935',
-      'v10.0.37: a sales invoice recorded final writes InvoiceCreated before InvoiceApproved, like a proforma that is finalized later (TD-935)',
+      'v10.0.230: a sales invoice recorded final writes InvoiceCreated before InvoiceApproved, like a proforma that is finalized later (TD-935)',
       ['td935', 'documents', 'events', 'invoice', 'package8'], directFinalInvoiceEventsCase],
     ['reg_woo_invoice_vat_percent_td_936',
-      'v10.0.38: a WooCommerce invoice stores the VAT percent of its order (tax ÷ net) when that percent rebuilds the tax, and its return at that percent is accepted (TD-936)',
+      'v10.0.231: a WooCommerce invoice stores the VAT percent of its order (tax ÷ net) when that percent rebuilds the tax, and its return at that percent is accepted (TD-936)',
       ['td936', 'woocommerce', 'vat', 'return', 'package15'], wooInvoiceVatPercentCase],
     ['reg_full_return_exact_remainder_td_933',
-      'v10.0.39: a return that completes the quantity of an item gives back the exact remaining net of the invoice line, so the customer nets to zero (TD-933)',
+      'v10.0.232: a return that completes the quantity of an item gives back the exact remaining net of the invoice line, so the customer nets to zero (TD-933)',
       ['td933', 'documents', 'return', 'woocommerce', 'package8'], fullReturnExactRemainderCase],
   ];
   for (const [id, name, tags, run] of cases) {

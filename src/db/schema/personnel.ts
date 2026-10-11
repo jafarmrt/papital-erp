@@ -2,6 +2,7 @@ import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, uniqu
 import { sql } from 'drizzle-orm';
 import type { FinancialAttachment } from '../../types';
 import type { FixedSalaryMonthShare } from '../../lib/payroll/fixedSalaryProration';
+import type { TaxBracket } from '../../lib/payroll/statutoryDeductions';
 import { users } from './auth';
 import { registerColumnRef, baseRelations } from './baseRelations';
 import { moneyNumeric } from './moneyColumn';
@@ -24,6 +25,11 @@ export const personnel = pgTable('personnel', {
   monthlySalary: moneyNumeric('monthly_salary').default(sql`0`),
   jobTitle: text('job_title').default(''),
   education: text('education').default(''),
+  // v10.0.199 (TD-1086، طرح حقوق §۳.۴): «آغاز همکاری» میلادی ISO؛ حقوق ثابت از این روز آغاز می‌شود (خالی = رفتار پیشین)
+  startDate: text('start_date').default(''),
+  // v10.0.210 (TD-1087، طرح حقوق ت۵ الف): «مشمول بیمه» و «مشمول مالیات حقوق»؛ پرسنل موجود خاموش (مهاجرت 0104)
+  isInsuranceCovered: integer('is_insurance_covered').notNull().default(0),
+  isTaxCovered: integer('is_tax_covered').notNull().default(0),
   endDate: text('end_date').default(''),
   terminationReason: text('termination_reason').default(''),
   specializedSkills: text('specialized_skills').default(''),
@@ -150,6 +156,22 @@ export const pieceworkPayrolls = pgTable('piecework_payrolls', {
   attachments: jsonb('attachments').$type<FinancialAttachment[]>().default([]),
   // v8.0.30 (TD-284): سهم حقوق ثابت به تفکیک ماه شمسی (مهاجرت 0048)؛ فیش پیشین آرایه خالی دارد
   fixedSalaryMonths: jsonb('fixed_salary_months').$type<FixedSalaryMonthShare[]>().notNull().default([]),
+  // v10.0.199 (TD-1085، طرح حقوق §۳.۴): فیش پیش‌پرداخت (دوره‌ای که پایانش پس از امروز است) و دلیل الزامی آن
+  isPrepayment: integer('is_prepayment').notNull().default(0),
+  prepaymentReason: text('prepayment_reason').notNull().default(''),
+  // v10.0.210 (TD-1087، طرح حقوق §۳.۳): کسورات قانونی فیش؛ سهم کارفرما هزینه کارفرماست و از خالص کم نمی‌شود. شرح، وقتی
+  // مبلغی با پیشنهاد سرور فرق دارد؛ is_statutory_split برای فیش‌های پیش از این نسخه صفر است (مهاجرت 0104)
+  employeeInsurance: moneyNumeric('employee_insurance').notNull().default(sql`0`),
+  employerInsurance: moneyNumeric('employer_insurance').notNull().default(sql`0`),
+  incomeTax: moneyNumeric('income_tax').notNull().default(sql`0`),
+  statutoryOverrideReason: text('statutory_override_reason').notNull().default(''),
+  isStatutorySplit: integer('is_statutory_split').notNull().default(1),
+  // v10.0.222 (TD-1089، طرح حقوق §۳.۸، ت۱۴ تا ت۱۶ الف): فیش عادی سهم عیدی خود را نگه می‌دارد (سال = سال جلالی پایان دوره)؛
+  // «فیش عیدی» (is_eidi) عیدی یک سال را می‌پردازد و eidi_from_accrual بخشی است که از «عیدی پرداختنی» انباشته برداشته می‌شود
+  eidiAmount: moneyNumeric('eidi_amount').notNull().default(sql`0`),
+  eidiFromAccrual: moneyNumeric('eidi_from_accrual').notNull().default(sql`0`),
+  eidiYear: integer('eidi_year'),
+  isEidi: integer('is_eidi').notNull().default(0),
   createdById: integer('created_by_id').references(() => users.id),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),
@@ -160,8 +182,50 @@ export const pieceworkPayrolls = pgTable('piecework_payrolls', {
   idx_ppay_deleted: index('idx_ppay_deleted').on(table.isDeleted),
   // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_piecework_payrolls_created_by_id: index('idx_piecework_payrolls_created_by_id').on(table.createdById).where(sql`${table.createdById} IS NOT NULL`),
+  idx_ppay_eidi_year: index('idx_ppay_eidi_year').on(table.personnelId, table.eidiYear).where(sql`${table.eidiYear} IS NOT NULL`),
 }));
 registerColumnRef('pieceworkPayrolls.id', () => pieceworkPayrolls.id);
+
+/**
+ * v10.0.210 (TD-1087، طرح حقوق §۳.۳ بند ۱، تصمیم ت۴ الف): نرخ‌های بیمه و مالیات حقوق هر سال جلالی که دارنده
+ * `payroll.rates_manage` وارد می‌کند (مهاجرت 0104)؛ پله‌های مالیات ماهانه‌اند (`TaxBracket` در statutoryDeductions.ts).
+ */
+export const payrollStatutoryRates = pgTable('payroll_statutory_rates', {
+  id: serial('id').primaryKey(),
+  jalaliYear: integer('jalali_year').notNull(),
+  employeeInsurancePercent: numeric('employee_insurance_percent', { precision: 7, scale: 4 }).notNull().default('0'),
+  employerInsurancePercent: numeric('employer_insurance_percent', { precision: 7, scale: 4 }).notNull().default('0'),
+  insuranceWageCap: moneyNumeric('insurance_wage_cap').notNull().default(sql`0`),
+  taxBrackets: jsonb('tax_brackets').$type<TaxBracket[]>().notNull().default([]),
+  isInsuranceDeductedFromTax: integer('is_insurance_deducted_from_tax').notNull().default(0),
+  version: integer('version').notNull().default(1),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
+}, (table) => ({
+  uq_payroll_statutory_rates_year: uniqueIndex('uq_payroll_statutory_rates_year').on(table.jalaliYear),
+}));
+
+/**
+ * v10.0.222 (TD-1089، طرح حقوق §۳.۸، ت۱۴ الف): روش و نرخ عیدی هر سال جلالی (مهاجرت 0105) که دارنده `payroll.rates_manage`
+ * وارد می‌کند؛ قاعده‌ها در `src/lib/payroll/eidi.ts`.
+ */
+export const payrollEidiRates = pgTable('payroll_eidi_rates', {
+  id: serial('id').primaryKey(),
+  jalaliYear: integer('jalali_year').notNull(),
+  method: text('method').notNull().default('percent_of_work'),
+  percent: numeric('percent', { precision: 7, scale: 4 }).notNull().default('0'),
+  yearlyCap: moneyNumeric('yearly_cap').notNull().default(sql`0`),
+  laborDays: numeric('labor_days', { precision: 7, scale: 2 }).notNull().default('0'),
+  laborCapDays: numeric('labor_cap_days', { precision: 7, scale: 2 }).notNull().default('0'),
+  minDailyWage: moneyNumeric('min_daily_wage').notNull().default(sql`0`),
+  fixedAmount: moneyNumeric('fixed_amount').notNull().default(sql`0`),
+  taxExemptCap: moneyNumeric('tax_exempt_cap').notNull().default(sql`0`),
+  version: integer('version').notNull().default(1),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
+}, (table) => ({
+  uq_payroll_eidi_rates_year: uniqueIndex('uq_payroll_eidi_rates_year').on(table.jalaliYear),
+}));
 
 export const pieceworkLogs = pgTable('piecework_logs', {
   id: serial('id').primaryKey(),

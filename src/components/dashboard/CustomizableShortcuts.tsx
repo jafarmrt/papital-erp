@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Settings2, Package, Box, FileText, Target, CalendarCheck, Layers, CheckSquare, FileInput, Warehouse, UsersRound, DollarSign, Sparkles, AlertTriangle, Users, Calculator, Landmark, ClipboardList, Check, X, ArrowUpRight, ShoppingBag } from 'lucide-react';
 import { User } from '../../types';
 import { canOpenPage, type ViewerAccess } from '../../lib/permissions/pageAccess';
+import { formatPersianNumber } from '../../utils';
 
 export interface ShortcutItemDef {
   id: string;
@@ -13,6 +14,8 @@ export interface ShortcutItemDef {
   color: string;
   bgColor: string;
   borderColor: string;
+  /** v10.0.134 (TD-1223): میانبری که کاری را ثبت می‌کند، افزون بر صفحه یکی از این مجوزها را می‌خواهد */
+  requiresAnyOf?: readonly string[];
 }
 
 export const ALL_SHORTCUTS: ShortcutItemDef[] = [
@@ -35,6 +38,7 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
     color: 'text-blue-600',
     bgColor: 'bg-blue-50 hover:bg-blue-100/80',
     borderColor: 'border-blue-200/80',
+    requiresAnyOf: ['daily_logs.create'],
   },
   {
     id: 'approval_inbox',
@@ -179,7 +183,7 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
   {
     id: 'accounting',
     title: 'حسابداری و مالی',
-    description: 'اسناد دوبل، ترازنامه و مرور حساب‌ها',
+    description: 'اسناد حسابداری، ترازنامه و مرور حساب‌ها',
     path: '/accounting/dashboard',
     icon: Landmark,
     color: 'text-violet-700',
@@ -200,7 +204,8 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
 
 /** v9.0.131 (TD-668، ت۲ بسته ۱۶): میانبری که صفحه‌اش برای کاربر باز است، از همان جدول دسترسی منو و مسیر */
 export function accessibleShortcutsFor(viewer: ViewerAccess): ShortcutItemDef[] {
-  return ALL_SHORTCUTS.filter((s) => canOpenPage(s.path, viewer));
+  const held = (keys: readonly string[]) => viewer.isAdmin === true || keys.some(k => (viewer.permissions ?? []).includes(k));
+  return ALL_SHORTCUTS.filter((s) => canOpenPage(s.path, viewer) && (!s.requiresAnyOf || held(s.requiresAnyOf)));
 }
 
 const DEFAULT_SELECTED_SHORTCUTS = ['crm', 'daily_logs', 'approval_inbox', 'create_invoice', 'products', 'projects'];
@@ -376,7 +381,7 @@ export function CustomizableShortcuts({ user, userPermissions }: CustomizableSho
             {/* Footer actions */}
             <div className="flex items-center justify-between border-t border-slate-100 pt-3">
               <span className="text-xs text-slate-500">
-                {tempSelectedIds.length} مورد انتخاب شده
+                {formatPersianNumber(tempSelectedIds.length)} مورد انتخاب‌شده
               </span>
               <div className="flex items-center gap-2">
                 <button
