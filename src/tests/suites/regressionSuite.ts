@@ -10880,6 +10880,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runTreasuryPayrollPhase5Tests } = await import('../regression/treasuryPayrollPhase5Tests.js');
   results.push(...await runTreasuryPayrollPhase5Tests(shouldRun));
 
+  // Phase 3 lane L2 (v10.0.169+): package 7 ledger observations (TD-989)
+  const { runInventoryPlanningLedgerTests } = await import('../regression/inventoryPlanningLedgerTests.js');
+  results.push(...await runInventoryPlanningLedgerTests(shouldRun));
   // Payroll duties plan PR 1 (v10.0.21+): voucher approval permission and maker-checker
   const { runVoucherApprovalDutiesTests } = await import('../regression/voucherApprovalDutiesTests.js');
   results.push(...await runVoucherApprovalDutiesTests(shouldRun));

@@ -199,10 +199,10 @@
 
 | شناسه | عنوان | شرح | شاهد روی `8e107ef` | نوع | تصمیم مالک | هم‌پوشان | منبع | وضعیت |
 |---|---|---|---|---|---|---|---|---|
-| OBS-R1-88 | تاریخ رزرو از `businessClock` | تاریخ رزرو پیش‌فاکتوری که تاریخ سند ندارد با `new Date().toISOString()` پر می‌شود. | بله: `itemStockReservation.service.ts:531,564`. | مشاهده | خیر | — | P07.md:246 (§۳.۱-۳)؛ obs_reviews_p01_p08.md | باز |
-| OBS-R1-89 | انبار پیش‌فرض TD-203 در `computeSellable` | `computeSellable` بی محل، `'main'` را پیش‌فرض می‌گیرد، نه انبار پیش‌فرض TD-203. | بله: `itemStockReservation.service.ts:685`. | مشاهده | خیر | — | P07.md:248 (§۳.۱-۵)؛ obs_reviews_p01_p08.md | باز |
-| OBS-R1-90 | صفحه‌بندی فهرست درخواست مواد | `GET /pending-materials` صفحه‌بندی ندارد و در route مستقیم از `orm` می‌خواند. | بله: `pendingMaterials.routes.ts:20-31`. | مشاهده | خیر | — | P07.md:250 (§۳.۱-۷)؛ obs_reviews_p01_p08.md | باز |
-| OBS-R1-91 | فهرست کامل کالا برای پروژه‌ای که از هشدار ساخته می‌شود | `ProjectModal` در صفحه هشدار فقط کالاهای هشدار را به‌عنوان فهرست کالا می‌گیرد. | بله: `ReorderAlertsPage.tsx:33,262` `itemsList={items}`. | مشاهده | خیر | — | P07.md:255 (§۳.۲-۹)؛ obs_reviews_p01_p08.md | باز |
+| OBS-R1-88 | تاریخ رزرو از `businessClock` | تاریخ رزرو پیش‌فاکتوری که تاریخ سند ندارد با `new Date().toISOString()` پر می‌شود. | بله: `itemStockReservation.service.ts:531,564`. | مشاهده | خیر | — | P07.md:246 (§۳.۱-۳)؛ obs_reviews_p01_p08.md | ✅ v10.0.169 |
+| OBS-R1-89 | انبار پیش‌فرض TD-203 در `computeSellable` | `computeSellable` بی محل، `'main'` را پیش‌فرض می‌گیرد، نه انبار پیش‌فرض TD-203. | بله: `itemStockReservation.service.ts:685`. | مشاهده | خیر | — | P07.md:248 (§۳.۱-۵)؛ obs_reviews_p01_p08.md | ✅ v10.0.170 |
+| OBS-R1-90 | صفحه‌بندی فهرست درخواست مواد | `GET /pending-materials` صفحه‌بندی ندارد و در route مستقیم از `orm` می‌خواند. | بله: `pendingMaterials.routes.ts:20-31`. | مشاهده | خیر | — | P07.md:250 (§۳.۱-۷)؛ obs_reviews_p01_p08.md | ✅ v10.0.171 |
+| OBS-R1-91 | فهرست کامل کالا برای پروژه‌ای که از هشدار ساخته می‌شود | `ProjectModal` در صفحه هشدار فقط کالاهای هشدار را به‌عنوان فهرست کالا می‌گیرد. | بله: `ReorderAlertsPage.tsx:33,262` `itemsList={items}`. | مشاهده | خیر | — | P07.md:255 (§۳.۲-۹)؛ obs_reviews_p01_p08.md | رد شد (v10.0.171): `useProjectForm` فهرست کامل کالا و طرف حساب را از فهرست‌های انتخاب خود می‌خواند و بر فهرست صفحه هشدار مقدم می‌دارد |
 
 ### ۲.۸. بسته ۸ — فروش و اسناد (۸ مورد، TD-990)
 

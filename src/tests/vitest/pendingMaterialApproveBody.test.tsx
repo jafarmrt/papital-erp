@@ -33,7 +33,7 @@ describe('pending material approval body (TD-824)', () => {
     const puts: Array<{ url: string; body: Record<string, unknown> }> = [];
     fetchJson.mockImplementation((url: string, init?: RequestInit) => {
       if (init?.method === 'PUT') { puts.push({ url, body: JSON.parse(String(init.body)) }); return Promise.resolve({ message: 'ok' }); }
-      if (url.startsWith('/pending-materials')) return Promise.resolve([request]);
+      if (url.startsWith('/pending-materials')) return Promise.resolve({ data: [request], total: 1, page: 1, limit: 50, statusCounts: { pending: 1, approved: 0, rejected: 0 } });
       if (url.startsWith('/categories')) return Promise.resolve([{ id: 1, name: 'سنگ', prefix: 'S', type: 'raw_material' }]);
       return Promise.resolve({});
     });

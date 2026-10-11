@@ -56,7 +56,7 @@ describe('TD-1202 raw-material request rules', () => {
   it('lists raw-material categories in the approval window and blocks a code without the prefix', async () => {
     const request = { id: 9, code: 'XYZ-9', name: 'مهره آزمون', unit: 'ریسه', category: 'مهره حدید', status: 'pending', weightedAverageCost: 1000, reorderPoint: 0, projectTitle: 'پروژه', requestedBy: 'کاربر' };
     fetchJson.mockImplementation((url: string) => {
-      if (url.startsWith('/pending-materials')) return Promise.resolve([request]);
+      if (url.startsWith('/pending-materials')) return Promise.resolve({ data: [request], total: 1, page: 1, limit: 50, statusCounts: { pending: 1, approved: 0, rejected: 0 } });
       if (url.startsWith('/categories')) return Promise.resolve(CATEGORIES);
       return Promise.resolve({});
     });
