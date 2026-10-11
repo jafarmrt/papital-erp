@@ -36,7 +36,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
   const [tokenError, setTokenError] = useState('');
 
   // Step 1: Admin Account State & Setup Security Token (SEC-012)
-  // v10.0.265 (OBS-R1-13): the token is typed into the form only; one sent in the address is removed from it
+  // v10.0.271 (OBS-R1-13): the token is typed into the form only; one sent in the address is removed from it
   const [setupToken, setSetupToken] = useState('');
   useEffect(() => { removeSetupTokenFromAddress(); }, []);
   const [fullName, setFullName] = useState('');

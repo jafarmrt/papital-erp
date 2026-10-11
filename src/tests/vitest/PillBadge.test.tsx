@@ -42,10 +42,16 @@ describe('PillBadge (TD-108)', () => {
   });
 });
 
+const PENDING_LABEL = 'در انتظار بررسی و تایید';
+const UNDER_REVIEW_LABEL = 'در بررسی تدارکات';
+const MANAGER_APPROVAL_LABEL = 'در انتظار تأیید مدیر';
+
 describe('requisition badges keep their wording and colours', () => {
   it('maps every workflow status to the same badge as before', () => {
     const label = (s: string) => resolvePillVariant(REQUISITION_STATUS_BADGES, s, REQUISITION_STATUS_FALLBACK)?.label;
-    expect(['pending', 'under_review', 'manager_approval'].map(label)).toEqual(Array(3).fill('در انتظار بررسی و تایید'));
+    // OBS-R2-38: the review and manager approval steps have their own labels, still in the pending colours
+    expect(['pending', 'under_review', 'manager_approval'].map(label)).toEqual([PENDING_LABEL, UNDER_REVIEW_LABEL, MANAGER_APPROVAL_LABEL]);
+    expect(REQUISITION_STATUS_BADGES.under_review.className).toBe(REQUISITION_STATUS_BADGES.pending.className);
     expect(['ordered', 'approved'].map(label)).toEqual(Array(2).fill('تایید شده (در حال خرید)'));
     expect(['received', 'completed'].map(label)).toEqual(Array(2).fill('خرید و تحویل انبار شده'));
     expect(['rejected', 'cancelled'].map(label)).toEqual(Array(2).fill('رد شده / لغو'));

@@ -9,6 +9,9 @@ import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
 import { useSupplierSelectOptions } from '../../hooks/useEntitySelectors';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { OverOrderWarning, type OverOrderedItem } from './OverOrderWarning';
+import { requisitionRowRemaining } from '../../lib/procurement/requisitionFields';
+import { overOrdersFromError } from '../../lib/procurement/overOrderError';
+import { lineAmount, sumAmounts } from '../../lib/procurement/procurementNumbers';
 
 interface SplitOrderModalProps {
   isOpen: boolean;
@@ -66,6 +69,8 @@ export function SplitOrderModal({
   const [closureNotes, setClosureNotes] = useState('');
   // v8.0.38 (TD-289): دلیل سفارش بیش از مانده درخواست
   const [overOrderReason, setOverOrderReason] = useState('');
+  // v10.0.252 (OBS-R2-37): کالاهایی که سرور با ۴۲۲ سفارش بیش از مانده می‌داند؛ با تغییر بسته‌ها پاک می‌شود
+  const [serverOverOrders, setServerOverOrders] = useState<OverOrderedItem[]>([]);
 
   // Initial calculation of active items with remaining quantity
   const requisitionItems = useMemo(() => {
@@ -76,9 +81,7 @@ export function SplitOrderModal({
   const initialRemainings = useMemo(() => {
     const map = new Map<string, number>();
     requisitionItems.forEach(it => {
-      const rem = it.remainingQty !== undefined 
-        ? Math.max(0, it.remainingQty) 
-        : Math.max(0, (it.requestedQty || 0) - (it.orderedQty || 0));
+      const rem = requisitionRowRemaining(it);
       map.set(it.id || '', rem);
     });
     return map;
@@ -87,9 +90,7 @@ export function SplitOrderModal({
   // Packages state (lower section) - Starts with Package #1
   const [packages, setPackages] = useState<SplitPackage[]>(() => {
     const activeItems = requisitionItems.filter(i => {
-      const rem = i.remainingQty !== undefined 
-        ? Math.max(0, i.remainingQty) 
-        : Math.max(0, (i.requestedQty || 0) - (i.orderedQty || 0));
+      const rem = requisitionRowRemaining(i);
       return rem > 0;
     });
 
@@ -102,9 +103,7 @@ export function SplitOrderModal({
         status: 'draft',
         notes: `تفکیک سفارش خرید از درخواست ${requisition.code}`,
         items: activeItems.map(it => {
-          const rem = it.remainingQty !== undefined 
-            ? Math.max(0, it.remainingQty) 
-            : Math.max(0, (it.requestedQty || 0) - (it.orderedQty || 0));
+          const rem = requisitionRowRemaining(it);
           return {
             reqItemId: it.id || '',
             itemId: it.itemId || 0,
@@ -121,6 +120,8 @@ export function SplitOrderModal({
   });
 
   // Keep targetWarehouse synced if warehouses loaded after initial render
+  useEffect(() => { setServerOverOrders([]); }, [packages]);
+
   useEffect(() => {
     if (warehouses.length > 0) {
       setPackages(prev => prev.map(p => {
@@ -134,10 +135,7 @@ export function SplitOrderModal({
 
   // Real-time calculation: total allocated across all packages for each requisition item
   const getAllocatedQty = (reqItemId: string) => {
-    return packages.reduce((sum, pkg) => {
-      const found = pkg.items.find(i => i.reqItemId === reqItemId);
-      return sum + (found ? Number(found.quantity || 0) : 0);
-    }, 0);
+    return sumAmounts(packages, pkg => pkg.items.find(i => i.reqItemId === reqItemId)?.quantity ?? 0);
   };
 
   // Real-time calculation: live remaining for requisition item after deducting all package allocations
@@ -170,6 +168,7 @@ export function SplitOrderModal({
       return { key, itemName: it.itemName || it.itemCode || '', unit: it.unit || 'عدد', excess: -getLiveRemainingQty(key) };
     })
     .filter(it => it.excess > 0);
+  const shownOverOrders = overOrderedItems.length > 0 ? overOrderedItems : serverOverOrders;
 
   // Add new split package (Package #2, #3, ...)
   const handleAddPackage = () => {
@@ -328,7 +327,7 @@ export function SplitOrderModal({
       }
     }
 
-    if (overOrderedItems.length > 0 && !overOrderReason.trim()) {
+    if (shownOverOrders.length > 0 && !overOrderReason.trim()) {
       toast.error('سفارش بیش از مانده درخواست است؛ دلیل سفارش بیش از درخواست را وارد کنید.');
       return;
     }
@@ -366,7 +365,7 @@ export function SplitOrderModal({
             orderGroups,
             closeRequisition,
             closureReason: finalClosureReason,
-            overOrderReason: overOrderedItems.length > 0 ? overOrderReason.trim() : undefined
+            overOrderReason: shownOverOrders.length > 0 ? overOrderReason.trim() : undefined
           })
         }
       );
@@ -375,15 +374,15 @@ export function SplitOrderModal({
       onSuccess();
       onClose();
     } catch (err: any) {
+      // v10.0.252 (OBS-R2-37): سفارش بیش از مانده‌ای که فقط سرور دید، کادر دلیل را باز می‌کند
+      setServerOverOrders(overOrdersFromError(err, id => requisitionItems.find(r => Number(r.itemId) === id)?.unit || 'عدد'));
       toast.error(err.message || 'خطا در صدور سفارش‌های خرید');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const grandTotal = packages.reduce((sum, p) => 
-    sum + p.items.reduce((itemSum, i) => itemSum + (i.quantity * i.unitPrice), 0), 0
-  );
+  const grandTotal = sumAmounts(packages, p => sumAmounts(p.items, i => lineAmount(i.quantity, i.unitPrice)));
 
   return (
     <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-farsi">
@@ -551,7 +550,7 @@ export function SplitOrderModal({
 
             {/* List of Split Packages */}
             {packages.map((pkg) => {
-              const packageTotal = pkg.items.reduce((sum, it) => sum + (it.quantity * it.unitPrice), 0);
+              const packageTotal = sumAmounts(pkg.items, it => lineAmount(it.quantity, it.unitPrice));
 
               return (
                 <div 
@@ -750,7 +749,7 @@ export function SplitOrderModal({
                                   />
                                 </td>
                                 <td className="p-2 text-center font-mono font-black text-amber-800">
-                                  {formatPersianPrice(it.quantity * it.unitPrice)}
+                                  {formatPersianPrice(lineAmount(it.quantity, it.unitPrice))}
                                 </td>
                                 <td className="p-2 text-center">
                                   <button
@@ -774,7 +773,7 @@ export function SplitOrderModal({
             })}
           </div>
 
-          <OverOrderWarning items={overOrderedItems} reason={overOrderReason} onReasonChange={setOverOrderReason} />
+          <OverOrderWarning items={shownOverOrders} reason={overOrderReason} onReasonChange={setOverOrderReason} />
 
           {/* REQUISITION CLOSURE & DISCREPANCY REASON CARD */}
           <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">

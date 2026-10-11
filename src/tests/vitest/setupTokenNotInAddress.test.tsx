@@ -6,7 +6,7 @@ vi.mock('../../api', async (orig) => ({ ...(await orig<typeof import('../../api'
 
 import SetupPage from '../../pages/SetupPage';
 
-// OBS-R1-13 (TD-983), v10.0.265: the setup token is typed into the form, never read from the address. On v10.0.262 the
+// OBS-R1-13 (TD-983), v10.0.271: the setup token is typed into the form, never read from the address. On v10.0.262 the
 // wizard filled the field from `?token=` / `?setupToken=`, so the token stayed in the browser history and proxy logs;
 // now the field starts empty and the parameter is removed from the address bar.
 
