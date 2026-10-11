@@ -1,4 +1,4 @@
-import { terminateOpenWorkflows } from '../workflow/workflowTermination.js';
+import { maybeStartEntityWorkflow, terminateEntityWorkflows } from '../system/entityWorkflowPort.js';
 import { eq, and, desc, ilike, asc } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { items, itemPrices, warehouses, itemCodeCounters, documentItems, transactions } from '../../db/schema.js';
@@ -14,7 +14,6 @@ import { advanceItemCodeCounter } from './itemCodeCounter.js';
 import { assertItemCodeAvailable, assertItemNameAvailable, guardItemIdentity } from './itemIdentity.js';
 import { ItemOpeningService, itemIdsWithOpeningVoucher } from '../inventory/itemOpening.service.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
-import { WorkflowEngineService } from '../workflow/workflowEngineService.js';
 import { startsWithLikePattern } from '../../lib/sqlLike.js';
 import { money } from '../../lib/money.js';
 import { ITEM_WAC_COLUMN, priceExportCells } from '../../lib/items/excelPriceColumns.js';
@@ -470,7 +469,7 @@ export class ItemCatalogService {
       }
 
       await executor.update(items).set({ isDeleted: 1 }).where(eq(items.id, itemId));
-      await terminateOpenWorkflows(executor, {
+      await terminateEntityWorkflows(executor, {
         entityType: 'item', entityId: itemId, actionKey: 'terminate', actionTitle: 'بستن فرایند با حذف کالا', comment: 'حذف کالا',
       });
 
@@ -743,7 +742,7 @@ export class ItemCatalogService {
         }
         [updatedItem] = await tx.select().from(items).where(eq(items.id, itemId));
 
-        const wfInstance = await WorkflowEngineService.maybeStartWorkflow({
+        const wfInstance = await maybeStartEntityWorkflow({
           entityType: 'item',
           entityId: String(itemId),
           userId: user?.id,

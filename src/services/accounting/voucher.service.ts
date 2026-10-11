@@ -1,4 +1,4 @@
-import { terminateOpenWorkflows } from '../workflow/workflowTermination.js';
+import { terminateEntityWorkflows } from '../system/entityWorkflowPort.js';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { accounts, journalVouchers, journalVoucherItems } from '../../db/schema.js';
 import { eq, desc, asc, and, or, sql, ilike, inArray, gte, lte } from 'drizzle-orm';
@@ -39,7 +39,7 @@ async function insertVoucherItems(tx: DbExecutor, rows: Array<typeof journalVouc
 /** v9.0.40 (TD-447، ت۵): فرایندهای در جریان سند حسابداری (هر دو نام نوع) با حذف یا ابطال آن بسته می‌شوند */
 async function terminateVoucherWorkflows(tx: DbExecutor, voucherId: number, comment: string, userId?: number, userName?: string): Promise<void> {
   for (const entityType of ['journal_voucher', 'voucher']) {
-    await terminateOpenWorkflows(tx, { entityType, entityId: voucherId, actionKey: 'terminate', actionTitle: 'بستن فرایند با حذف سند حسابداری', comment, userId, userName });
+    await terminateEntityWorkflows(tx, { entityType, entityId: voucherId, actionKey: 'terminate', actionTitle: 'بستن فرایند با حذف سند حسابداری', comment, userId, userName });
   }
 }
 
