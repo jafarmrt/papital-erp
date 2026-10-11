@@ -18,11 +18,13 @@ test('login, issue a final sales invoice and see its journal voucher', async ({ 
 
   // ۲. صدور فاکتور فروش نهایی: ۲ عدد × ۷۵۰٬۰۰۰ ریال
   await page.goto('/invoices/create');
+  // v10.0.191 (TD-1260): type into the picker's own search box; keyboard.type right after the click could send the
+  // first key before the box mounted and searched a broken name
   await page.getByRole('button', { name: /جهت انتخاب خریدار/ }).click();
-  await page.keyboard.type(customerName);
+  await page.getByPlaceholder('جستجو...', { exact: true }).fill(customerName);
   await page.locator('li', { hasText: customerName }).first().click();
   await page.getByRole('button', { name: 'انتخاب کالا / ماده اولیه' }).click();
-  await page.keyboard.type(itemCode);
+  await page.getByPlaceholder('جستجو...', { exact: true }).fill(itemCode);
   await page.locator('li', { hasText: itemCode }).first().click();
   const numbers = page.locator('input[type=number]');
   await numbers.nth(0).fill('2');
