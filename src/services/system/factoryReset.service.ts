@@ -106,7 +106,12 @@ export class FactoryResetService {
       // Re-seed the base data (categories, settings, chart of accounts, task categories, piecework tasks; roles are kept,
       // TD-245) and, as at boot, the default workflows, event rules and webhook subscriptions this reset wiped
       // (v9.0.390, TD-620: before, they stayed missing until the next restart)
-      await runSeed();
+      // v10.0.180 (TD-959): a base data section that failed is reported, never silently left missing
+      const seed = await runSeed();
+      if (!seed.success) {
+        logger.error(`Factory reset: ${seed.message}`);
+        throw new ConflictError('داده‌ها پاک شد، ولی بخشی از داده پایه ساخته نشد. سامانه را دوباره راه‌اندازی کنید تا دوباره ساخته شود.', { failedSections: seed.failedSections }, 'FACTORY_RESET_SEED_INCOMPLETE');
+      }
       await seedDefaultEngines();
       this.invalidateCaches();
 

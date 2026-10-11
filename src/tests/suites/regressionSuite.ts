@@ -10866,6 +10866,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runSystemHealthTests(shouldRun));
   const { runFactoryResetTests } = await import('../regression/factoryResetTests.js');
   results.push(...await runFactoryResetTests(shouldRun));
+  // v10.0.180 (TD-959): the seed names its failed sections
+  const { runSeedSectionTests } = await import('../regression/seedSectionTests.js');
+  results.push(...await runSeedSectionTests(shouldRun));
   const { runInitialSetupTests } = await import('../regression/initialSetupTests.js');
   results.push(...await runInitialSetupTests(shouldRun));
 
