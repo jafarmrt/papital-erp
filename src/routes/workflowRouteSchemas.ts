@@ -44,6 +44,7 @@ const designTransitionSchema = z.object({
   ruleConditionsJson: z.unknown().optional(),
   autoActionKey: shortText(100).optional(),
   isInitiatorExcluded: z.union([z.boolean(), z.literal(0), z.literal(1)]).optional(),
+  isInitiatorOnly: z.union([z.boolean(), z.literal(0), z.literal(1)]).optional(),
 });
 
 export const saveDefinitionSchema = z.object({
@@ -86,5 +87,16 @@ export const createDelegationSchema = z.object({
     startDate: z.string({ error: 'تاریخ شروع تفویض الزامی است' }).trim().min(1, 'تاریخ شروع تفویض الزامی است').max(40),
     endDate: z.string({ error: 'تاریخ پایان تفویض الزامی است' }).trim().min(1, 'تاریخ پایان تفویض الزامی است').max(40),
     reason: shortText(1000).optional(),
+  }),
+});
+
+/** v10.0.35 (TD-979): انجام کار کارتابل؛ پیش‌تر بدنه بی Zod خوانده می‌شد */
+export const executeTaskSchema = z.object({
+  params: z.object({ taskId: z.string().regex(/^[1-9]\d*$/, 'شناسه کار باید عدد صحیح مثبت باشد') }),
+  body: z.object({
+    action: z.enum(['approve', 'reject']).optional(),
+    transitionId: z.union([positiveId('شناسه اقدام'), z.string().regex(/^[1-9]\d*$/, 'شناسه اقدام باید عدد صحیح مثبت باشد').transform(Number), z.null()]).optional(),
+    comment: z.string().max(4000).nullable().optional(),
+    snapshotData: z.record(z.string().max(200), z.unknown()).nullable().optional(),
   }),
 });

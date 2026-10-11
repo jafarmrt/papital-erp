@@ -183,7 +183,7 @@ export function ProcurementOrderList({
                             {order.projectName || 'خرید عمومی سازمان'}
                           </div>
                           <span className="text-[11px] text-slate-500 block mt-0.5">
-                            مقصد: {order.location || 'انبار اصلی'}
+                            مقصد: {order.locationName || order.location || 'انبار اصلی'}
                           </span>
                         </td>
 
@@ -283,7 +283,7 @@ export function ProcurementOrderList({
                                         <td className="p-2 text-center font-mono font-black text-amber-800">
                                           {formatPersianPrice(line.totalPrice)}
                                         </td>
-                                        <td className="p-2 text-center text-slate-600">{line.location}</td>
+                                        <td className="p-2 text-center text-slate-600">{line.locationName || line.location}</td>
                                       </tr>
                                     ))}
                                   </tbody>

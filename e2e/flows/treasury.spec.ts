@@ -25,7 +25,7 @@ const TEXT = {
   pickerSearch: 'جستجو...',
   amount: '50000000',
   chequeSubmit: 'ثبت قطعی چک',
-  chequeCreated: 'چک با موفقیت در سیستم ثبت شد',
+  chequeCreated: 'چک با موفقیت در سامانه ثبت شد',
   chequeSearch: 'جستجو در شماره چک، شناسه صیاد ۱۶ رقمی، طرف حساب یا بانک...',
   statusReceived: 'دریافت شده',
   statusInCollection: 'در جریان وصول (خوابانده به حساب)',
@@ -91,7 +91,7 @@ async function bankBalances(): Promise<Json> {
 }
 
 async function changeChequeStatus(page: Page, chequeNumber: string, current: string, next: string, nextLabel: string): Promise<void> {
-  const row = page.locator('tr', { hasText: chequeNumber });
+  const row = page.locator('tr', { hasText: toPersianDigits(chequeNumber) });
   await row.getByRole('button', { name: current, exact: true }).click();
   const form = page.locator('form', { has: page.getByRole('button', { name: TEXT.statusSubmit }) });
   await form.locator('select').first().selectOption(next);

@@ -1,5 +1,5 @@
 import { inArray } from 'drizzle-orm';
-import { orm, type DbExecutor } from '../../db/drizzle.js';
+import type { DbExecutor } from '../../db/drizzle.js';
 import { productionProjects } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import type { HealthCheckTestResult } from '../../types.js';
@@ -7,7 +7,7 @@ import { formatPersianPrice, toPersianDigits } from '../../utils/persianNumber.j
 import { projectWipBalances } from './projectWipBalance.js';
 
 /**
- * v10.0.25 (TD-919، تصمیم ت۴ ب فاز ۵): پروژه تکمیل‌شده، لغوشده یا حذف‌شده‌ای که هنوز مانده کالای در جریان ساخت (۱۴۰۲)
+ * v10.0.173 (TD-919، تصمیم ت۴ ب فاز ۵): پروژه تکمیل‌شده، لغوشده یا حذف‌شده‌ای که هنوز مانده کالای در جریان ساخت (۱۴۰۲)
  * دارد. دستمزد هزینه دوره است و بهای تحویل فقط بهای مواد (TD-920)، پس پروژه بسته باید مانده صفر داشته باشد؛ مانده‌ای که
  * می‌ماند (تحویل بیش یا کم از مواد، تخصیص پیش از TD-412) با سند اصلاحی بسته می‌شود. ناوردایی I3 حساب ۱۴۰۲ را کنار
  * می‌گذارد، پس این مانده‌ها جایی جز این فهرست دیده نمی‌شوند. خودکار تغییر نمی‌کنند.
@@ -22,7 +22,7 @@ export interface ClosedProjectWip {
   balance: string;
 }
 
-export async function findClosedProjectWipBalances(db: DbExecutor = orm): Promise<ClosedProjectWip[]> {
+export async function findClosedProjectWipBalances(db: DbExecutor): Promise<ClosedProjectWip[]> {
   const balances = await projectWipBalances(db);
   if (balances.size === 0) return [];
   const projects = await db.select({ id: productionProjects.id, projectCode: productionProjects.projectCode, title: productionProjects.title, status: productionProjects.status, isDeleted: productionProjects.isDeleted })

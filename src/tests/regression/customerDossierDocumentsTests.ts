@@ -1,8 +1,9 @@
 import request from 'supertest';
-import { inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { customers, roles, users } from '../../db/schema.js';
+import { customers, documents, roles, users } from '../../db/schema.js';
+import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 
 /**
  * بسته ۹ (مشتریان و CRM) — اسناد پرونده مشتری در مسیر واقعی Express؛ روی کد پیشین قرمز است.
@@ -55,8 +56,10 @@ export async function runCustomerDossierDocumentsTests(shouldRun: (id: string, .
     const foreign = [
       await doc({ buyerName: b.name }),
       await doc({ buyerName: `خریدار دیگر ${tag}`, notes: `تحویل به ${a.name}` }),
-      await doc({ docType: 'receipt', inOut: 'in', buyerName: a.name }),
+      await doc({ docType: 'receipt', inOut: 'in', buyerName: `تأمین‌کننده ${tag}` }),
     ];
+    // since v10.0.98 (TD-1194) a new receipt refuses a customer's name, so the legacy receipt gets A's name directly
+    await orm.update(documents).set({ buyerName: a.name }).where(eq(documents.id, foreign[2]));
 
     const wrong: string[] = [];
     const res = await get(`/api/customers/${a.id}/documents`);
@@ -94,7 +97,7 @@ export async function runCustomerDossierDocumentsTests(shouldRun: (id: string, .
     }));
   } finally {
     if (userIds.length > 0) await orm.delete(users).where(inArray(users.id, userIds)).catch(() => undefined);
-    if (roleIds.length > 0) await orm.delete(roles).where(inArray(roles.id, roleIds)).catch(() => undefined);
+    if (roleIds.length > 0) await deleteTestRoles(inArray(roles.id, roleIds)).catch(() => undefined);
     if (customerIds.length > 0) await orm.update(customers).set({ isDeleted: 1 }).where(inArray(customers.id, customerIds)).catch(() => undefined);
   }
   return results;

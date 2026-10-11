@@ -55,6 +55,7 @@ export interface WorkflowTransitionSnapshot {
   requiredRole?: string | null;
   requiredPermission?: string | null;
   isInitiatorExcluded?: number | null;
+  isInitiatorOnly?: number | null;
   ruleConditionsJson?: unknown;
   approvalRuleType?: string | null;
   kValue?: number | null;
@@ -157,9 +158,12 @@ export class WorkflowTransitionExecutor {
     }
     filtered = permitted;
     // v8.0.102 (TD-392): انتقالی که آغازکننده را کنار می‌گذارد به آغازکننده پیشنهاد نمی‌شود
-    if (userId && filtered.some(t => Number(t.isInitiatorExcluded) === 1)) {
+    // v10.0.120 (TD-1220): انتقال «فقط آغازکننده» فقط به آغازکننده پیشنهاد می‌شود
+    if (filtered.some(t => Number(t.isInitiatorExcluded) === 1 || Number(t.isInitiatorOnly) === 1)) {
       const [inst] = await txExecutor.select({ startedBy: workflowInstances.startedBy }).from(workflowInstances).where(eq(workflowInstances.id, instanceId));
-      filtered = filtered.filter(t => !WorkflowTransitionExecutor.initiatorExcluded(t, inst?.startedBy, { userId, actorId: userId, role: userRole }));
+      const signer = { userId, actorId: userId, role: userRole };
+      filtered = filtered.filter(t => !WorkflowTransitionExecutor.initiatorExcluded(t, inst?.startedBy, signer)
+        && !WorkflowTransitionExecutor.initiatorOnlyRefused(t, inst?.startedBy, signer));
     }
 
     if (entityContext) {
@@ -222,6 +226,21 @@ export class WorkflowTransitionExecutor {
     if (Number(transition.isInitiatorExcluded) !== 1 || !startedBy) return false;
     if (isSystemAdminRole(signer.role)) return false;
     return signer.userId === startedBy || signer.actorId === startedBy;
+  }
+
+  /**
+   * v10.0.120 (TD-1220، یافته B-01): انتقالی که تیک «فقط آغازکننده اجرا کند» دارد فقط برای آغازکننده فرایند باز است، به نام
+   * خودش یا از راه جانشینی که به جای او امضا می‌کند (امضای به نام تفویض‌کننده، TD-377)؛ فرایند بی آغازکننده فقط برای مدیر
+   * سیستم. خروجی true یعنی این امضاکننده رد می‌شود.
+   */
+  static initiatorOnlyRefused(
+    transition: Pick<WorkflowTransitionSnapshot, 'isInitiatorOnly'>,
+    startedBy: number | null | undefined,
+    signer: { userId?: number; actorId?: number; role?: string }
+  ): boolean {
+    if (Number(transition.isInitiatorOnly) !== 1) return false;
+    if (isSystemAdminRole(signer.role)) return false;
+    return !startedBy || (signer.userId !== startedBy && signer.actorId !== startedBy);
   }
 
   /**
@@ -612,6 +631,11 @@ export class WorkflowTransitionExecutor {
       })) {
         throw new ForbiddenError(`آغازکننده فرایند گام «${transition.title}» را برای سند خودش اجرا نمی‌کند.`, undefined, 'WF_INITIATOR_EXCLUDED');
       }
+      if (WorkflowTransitionExecutor.initiatorOnlyRefused(transition, instance.startedBy, {
+        userId: actingFor ? actingFor.fromUserId : params.userId, actorId: params.userId, role: params.userRole,
+      })) {
+        throw new ForbiddenError(`اقدام «${transition.title}» را فقط آغازکننده فرایند اجرا می‌کند.`, undefined, 'WF_INITIATOR_ONLY');
+      }
       // v9.0.35 (TD-445، تصمیم مالک محصول ت۳ الف): گامی که اقدام دامنه دارد مجوز همان موجودیت را از امضاکننده (یا نقش
       // تفویض‌کننده) می‌خواهد؛ پیش‌تر نقش گام بس بود و خزانه‌دار بی مجوز قطعی‌سازی، سند را از گردش‌کار قطعی می‌کرد
       const signerRole = (actingFor ? actingFor.fromRole : params.userRole || '').trim().toLowerCase();
@@ -635,7 +659,7 @@ export class WorkflowTransitionExecutor {
         const ruleEval = WorkflowRuleEngine.evaluateRuleBreakdown(transition.ruleConditionsJson, authoritativeContext);
         if (!ruleEval.passed) {
           const failedRules = ruleEval.breakdown.filter(b => !b.passed).map(b => describeUnmetWorkflowRule(b.rule, b.actualValue));
-          throw new ValidationError(`شرایط سیستمی لازم برای اجرای این مرحله احراز نشد: ${failedRules.join('، ')}`);
+          throw new ValidationError(`شرایط سامانه لازم برای اجرای این مرحله احراز نشد: ${failedRules.join('، ')}`);
         }
       }
 
@@ -1022,6 +1046,15 @@ export class WorkflowTransitionExecutor {
       [currentState] = await txExecutor.select().from(workflowStates).where(eq(workflowStates.id, inst.currentStateId));
     }
 
+    // v10.0.80 (TD-1172): only the progress of the current step's actions; a finished step's signatures stay stored (history,
+    // TD-373) but the stepper showed them under the step being signed
+    const currentStepTransitionIds = new Set(
+      (await WorkflowTransitionExecutor.transitionsFromState(inst, inst.currentStateId, txExecutor)).map(t => String(t.id))
+    );
+    const currentStepProgress = Object.fromEntries(
+      Object.entries((inst.approvalProgressJson as Record<string, unknown> | null) || {}).filter(([id]) => currentStepTransitionIds.has(id))
+    );
+
     return {
       instance: inst,
       definition: def ? { ...def, version: inst.definitionVersion ?? def.version } : undefined,
@@ -1030,7 +1063,7 @@ export class WorkflowTransitionExecutor {
       availableTransitions,
       blockedTransitions,
       history,
-      approvalProgress: (inst.approvalProgressJson as Record<string, unknown> | null) || {},
+      approvalProgress: currentStepProgress,
       entityContext
     };
   }

@@ -6,7 +6,8 @@ import {
   items, 
   customers, 
   crmLeads, 
-  journalVouchers 
+  journalVouchers,
+  purchaseRequisitions
 } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import { logger } from '../../middleware/logger';
@@ -181,6 +182,15 @@ export async function getEntityContext(entityType: string, entityId: string, txE
         context.value = Number(lead.estimatedValue) || 0;
         context.estimatedValue = Number(lead.estimatedValue) || 0;
         context.source = lead.source || '';
+      }
+    } else if (entityType === 'purchase_requisition') {
+      // v10.0.149 (TD-1178): the inbox card shows the requisition's own code and priority, never its row id
+      const [req] = await txExecutor.select().from(purchaseRequisitions).where(eq(purchaseRequisitions.id, numericId));
+      if (req) {
+        context.code = req.code;
+        context.title = req.title;
+        context.priority = req.priority;
+        context.status = req.status;
       }
     } else if (entityType === 'journal_voucher') {
       const [jv] = await txExecutor.select().from(journalVouchers).where(eq(journalVouchers.id, numericId));
