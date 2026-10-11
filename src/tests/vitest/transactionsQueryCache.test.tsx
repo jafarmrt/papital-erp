@@ -21,6 +21,12 @@ vi.mock('react-hot-toast', () => {
   const t = Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), loading: vi.fn(), dismiss: vi.fn() });
   return { toast: t, default: t };
 });
+// v10.0.249 (TD-1130): the integrity tab's Kardex button shows only for a reader of its API; this keeper holds every key
+vi.mock('../../contexts/AuthContext', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../contexts/AuthContext')>()),
+  useHasPermission: () => true,
+  useHasAnyPermission: () => true,
+}));
 const writeFile = vi.fn();
 vi.mock('xlsx', () => ({
   utils: { json_to_sheet: () => ({}), book_new: () => ({}), book_append_sheet: () => undefined },
