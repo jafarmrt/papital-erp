@@ -14,7 +14,7 @@ export interface InvoiceTotals {
   /** پایه مالیات؛ منفی به صفر گرد می‌شود */
   net: number;
   vatAmount: number;
-  /** v10.0.250 (TD-1136): هزینه ارسال و خدمات (`documents.service_charge_amount`) */
+  /** v10.0.251 (TD-1136): هزینه ارسال و خدمات (`documents.service_charge_amount`) */
   serviceCharge: number;
   payable: number;
 }
@@ -24,7 +24,7 @@ export interface InvoiceTotals {
  * `resolveDocumentVat` در src/services/documents/documentVat.ts): مبلغ مالیات = گرد(خالص × درصد ÷ ۱۰۰) به ریال.
  * پیش‌تر فرم آن را با ضرب اعشاری جاوااسکریپت می‌ساخت؛ از v8.0.104 (TD-381) فرم فقط درصد را می‌فرستد و سرور مبلغ را حساب می‌کند.
  * v8.0.105 (TD-382): مالیات به کوچک‌ترین واحد ارز سند گرد می‌شود (ریال بی‌اعشار، ارز خارجی سِنت)، همان قاعده سرور.
- * v10.0.250 (TD-1136): مبلغ قابل پرداخت = خالص + مالیات + هزینه ارسال و خدمات، همان `computeDocumentAmounts` سرور.
+ * v10.0.251 (TD-1136): مبلغ قابل پرداخت = خالص + مالیات + هزینه ارسال و خدمات، همان `computeDocumentAmounts` سرور.
  */
 export function computeInvoiceTotals(
   lines: readonly InvoiceTotalsLine[] | null | undefined, vatPercent: number, currency = 'IRR', serviceCharge: DecimalValue = 0,

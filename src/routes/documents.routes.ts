@@ -140,7 +140,7 @@ export const documentCreateSchema = z.object({
     vatPercent: vatPercentInput,
     vatAmount: vatAmountInput,
     exchangeRate: exchangeRateInput,
-    // v10.0.250 (TD-1136): هزینه ارسال و خدمات فاکتور فروش از فرم دستی (نامنفی بودن و نوع سند در سرویس)
+    // v10.0.251 (TD-1136): هزینه ارسال و خدمات فاکتور فروش از فرم دستی (نامنفی بودن و نوع سند در سرویس)
     serviceChargeAmount: decimalInput('هزینه ارسال و خدمات').optional(),
     attachments: z.array(z.any()).optional()
   }).superRefine((body, ctx) => {

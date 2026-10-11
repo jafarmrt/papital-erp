@@ -117,7 +117,7 @@ export interface UpdateDocumentInput {
   partyId?: number | string | null;
   expectedVersion?: number;
   version?: number;
-  /** v10.0.250 (TD-1136): هزینه ارسال و خدمات فاکتور فروش؛ نفرستاده یعنی بی‌تغییر */
+  /** v10.0.251 (TD-1136): هزینه ارسال و خدمات فاکتور فروش؛ نفرستاده یعنی بی‌تغییر */
   serviceChargeAmount?: number | string | null;
 }
 

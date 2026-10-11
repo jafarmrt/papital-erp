@@ -373,7 +373,7 @@ export class DocumentCreationService {
       throw new ValidationError('فاکتور مرجع فقط برای سند برگشت از فروش قابل ثبت است.');
     }
 
-    // v7.0.103 (TD-191) / v10.0.250 (TD-1136): هزینه ارسال و کارمزد فقط روی فاکتور فروش، نامنفی
+    // v7.0.103 (TD-191) / v10.0.251 (TD-1136): هزینه ارسال و کارمزد فقط روی فاکتور فروش، نامنفی
     const serviceChargeAmount = resolveServiceCharge(docType, body.serviceChargeAmount);
 
     // v8.0.103 (TD-380): تخفیف هر ردیف حداکثر برابر مبلغ همان ردیف

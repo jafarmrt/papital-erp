@@ -74,7 +74,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
   // VAT & Tax states
   const [applyVat, setApplyVat] = useState(false);
   const [vatRate, setVatRate] = useState<number>(10);
-  // v10.0.250 (TD-1136): هزینه ارسال و خدمات فاکتور دستی (`serviceChargeAmount`)
+  // v10.0.251 (TD-1136): هزینه ارسال و خدمات فاکتور دستی (`serviceChargeAmount`)
   const [serviceChargeText, setServiceChargeText] = useState('');
   const serviceCharge = serviceChargeInputOf(serviceChargeText);
 
