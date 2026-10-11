@@ -173,6 +173,8 @@ export class PayrollReadService {
       ...payrollHeadColumns,
       ...payrollPersonnelColumns,
       ...payrollAmountColumns,
+      // v10.0.259 (TD-951): «فیش‌های من» مانده را مانند صفحه مدیر از مبلغ پرداخت‌شده فیش می‌سازد
+      paidAmount: pieceworkPayrolls.paidAmount,
       ...payrollPaymentColumns,
     })
     .from(pieceworkPayrolls)

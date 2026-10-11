@@ -1,11 +1,12 @@
 import { and, asc, eq, inArray, isNull, notInArray, or, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
-import { cheques, crmLeads, customers, documents, journalVoucherItems, journalVouchers, productionProjects } from '../../db/schema.js';
+import { accounts, cheques, crmLeads, customers, documents, journalVoucherItems, journalVouchers, productionProjects } from '../../db/schema.js';
 import { ConflictError } from '../../errors/customErrors.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { VOUCHER_BALANCE_TOLERANCE } from '../../lib/voucherBalance.js';
 import { formatPersianPrice, toPersianDigits } from '../../utils/persianNumber.js';
 import { PARTY_DETAILED_TYPES, partyDetailedRowsCondition } from '../accounting/partyDetailedRows.js';
+import { permanentAccountCondition } from '../accounting/partyTemporaryRows.js';
 import { voucherItemCurrencySql } from '../accounting/voucherItemAmount.js';
 import { documentPartyCondition } from '../documents/documentParty.js';
 
@@ -24,7 +25,10 @@ const LISTED = 5;
 type Party = typeof customers.$inferSelect;
 
 export interface CustomerDeleteBlockers {
-  /** مانده اسناد تأییدشده و دائم هر ارز (بدهکار − بستانکار، ارز خود ردیف) */
+  /**
+   * مانده اسناد تأییدشده و دائم هر ارز روی حساب‌های دائم (بدهکار − بستانکار، ارز خود ردیف)؛ v10.0.257 (TD-915، ت۵ الف):
+   * ردیف حساب موقت (مثل درآمد کالای اهدایی ۵۲۰۴ با تفصیلی تأمین‌کننده) طلب یا بدهی نیست و حذف را نمی‌بندد
+   */
   balances: Array<{ currency: string; balance: string }>;
   draftVoucherNumbers: number[];
   openDocumentRefs: string[];
@@ -43,7 +47,11 @@ export async function findCustomerDeleteBlockers(party: Party, db: DbExecutor): 
   })
     .from(journalVoucherItems)
     .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
-    .where(and(eq(journalVouchers.isDeleted, 0), eq(journalVoucherItems.isDeleted, 0), inArray(journalVouchers.status, ['approved', 'permanent']), partyRows))
+    .innerJoin(accounts, eq(accounts.id, journalVoucherItems.accountId))
+    .where(and(
+      eq(journalVouchers.isDeleted, 0), eq(journalVoucherItems.isDeleted, 0), inArray(journalVouchers.status, ['approved', 'permanent']),
+      permanentAccountCondition(), partyRows,
+    ))
     .groupBy(voucherItemCurrencySql);
   const balances = balanceRows
     .filter(r => fin(r.balance).abs().greaterThanOrEqual(VOUCHER_BALANCE_TOLERANCE))

@@ -140,6 +140,8 @@ export const documentCreateSchema = z.object({
     vatPercent: vatPercentInput,
     vatAmount: vatAmountInput,
     exchangeRate: exchangeRateInput,
+    // v10.0.260 (TD-1136): هزینه ارسال و خدمات فاکتور فروش از فرم دستی (نامنفی بودن و نوع سند در سرویس)
+    serviceChargeAmount: decimalInput('هزینه ارسال و خدمات').optional(),
     attachments: z.array(z.any()).optional()
   }).superRefine((body, ctx) => {
     // اسناد انبارگردانی از physical_stock استفاده می‌کنند و مقدار صفر در آن‌ها مجاز است
@@ -190,6 +192,7 @@ export const documentUpdateSchema = z.object({
     vatPercent: vatPercentInput,
     vatAmount: vatAmountInput,
     exchangeRate: exchangeRateInput,
+    serviceChargeAmount: decimalInput('هزینه ارسال و خدمات').optional(),
     location: z.string().max(100).nullable().optional(),
     // v10.0.238 (TD-913): دلیل سفارش بیش از درخواست در ویرایش سفارش تدارکات (بی آن، ۴۲۲ OVER_ORDER_REASON_REQUIRED)
     overOrderReason: z.string().max(500).optional(),

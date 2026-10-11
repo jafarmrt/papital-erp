@@ -13,6 +13,7 @@ import { toPersianDigits } from '../../utils/persianNumber.js';
  */
 export const WORK_LOG_AUDIT_ENTITY = 'کارکرد پرکیسی';
 export const PAYROLL_AUDIT_ENTITY = 'فیش حقوقی';
+export const PAYROLL_PAYMENT_AUDIT_ENTITY = 'پرداخت حقوق';
 
 export interface AuditActor {
   req?: unknown;
@@ -188,5 +189,49 @@ export async function auditPayrollDeleted(
     entityId: row.id,
     description: `ابطال و حذف فیش حقوقی ${row.payrollNumber} با خالص ${amount(row.netPayable)}؛ ${toPersianDigits(info.freedLogIds.length)} کارکرد آزاد شد`,
     details: { before: payrollSnapshot(row), reason: info.reason, voidedVoucherIds: info.voidedVoucherIds, freedWorkLogIds: info.freedLogIds },
+  });
+}
+
+/**
+ * v10.0.259 (TD-950، P5-W06): پرداخت فیش و ابطال آن ممیزی خود را در تراکنش پرداخت می‌نویسند، با کاربر و IP (`req`)، مبلغ
+ * و پرداخت‌شده فیش پیش و پس از آن. پیش‌تر مسیر پس از commit، بی `tx` و `req` و مبلغ می‌نوشت.
+ */
+export async function auditPayrollPaymentRegistered(
+  tx: DbExecutor, row: PayrollRow,
+  info: { transactionId: number; transactionNumber: string; amount: string; paidBefore: string; voucherId: number | null; voucherNumber: number | string | null },
+  actor: AuditActor,
+): Promise<void> {
+  await logActivity({
+    tx,
+    ...actorFields(actor),
+    action: 'CREATE',
+    entity: PAYROLL_PAYMENT_AUDIT_ENTITY,
+    entityId: row.id,
+    description: `ثبت پرداخت ${amount(info.amount)} برای فیش ${row.payrollNumber} با تراکنش ${info.transactionNumber} (سند تسویه: ${info.voucherNumber !== null ? toPersianDigits(info.voucherNumber) : '—'})`,
+    details: {
+      payrollId: row.id, transactionId: info.transactionId, transactionNumber: info.transactionNumber, amount: info.amount,
+      voucherId: info.voucherId, voucherNumber: info.voucherNumber,
+      before: { paidAmount: info.paidBefore }, after: { paidAmount: text(row.paidAmount), status: payrollStatusLabel(row.status) },
+    },
+  });
+}
+
+export async function auditPayrollPaymentVoided(
+  tx: DbExecutor, row: PayrollRow,
+  info: { transactionId: number; transactionNumber: string; reversalTransactionNumber: string; amount: string; reason: string; reversalVoucherId: number | null; paidBefore: string },
+  actor: AuditActor,
+): Promise<void> {
+  await logActivity({
+    tx,
+    ...actorFields(actor),
+    action: 'DELETE',
+    entity: PAYROLL_PAYMENT_AUDIT_ENTITY,
+    entityId: row.id,
+    description: `ابطال پرداخت ${amount(info.amount)} (${info.transactionNumber}) فیش ${row.payrollNumber} با تراکنش معکوس ${info.reversalTransactionNumber}`,
+    details: {
+      payrollId: row.id, transactionId: info.transactionId, transactionNumber: info.transactionNumber, amount: info.amount, reason: info.reason,
+      reversalTransactionNumber: info.reversalTransactionNumber, reversalVoucherId: info.reversalVoucherId,
+      before: { paidAmount: info.paidBefore }, after: { paidAmount: text(row.paidAmount), status: payrollStatusLabel(row.status) },
+    },
   });
 }

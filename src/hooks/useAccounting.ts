@@ -189,8 +189,8 @@ export function useAccounting() {
   };
 
   // V1.6.0: ثبت گروهی آشتی‌سنجی بانکی
-  const handleReconcileTransactions = async (bankAccountId: number, txIds: number[], batch: string, reconciled: boolean) => {
-    await treasuryMutations.reconcileTransactions.mutateAsync({ bankAccountId, txIds, batch, reconciled });
+  const handleReconcileTransactions = async (bankAccountId: number, txIds: number[], batch: string, reconciled: boolean, chequeIds: number[] = []) => {
+    await treasuryMutations.reconcileTransactions.mutateAsync({ bankAccountId, txIds, chequeIds, batch, reconciled });
   };
 
   // Cheques Operations
