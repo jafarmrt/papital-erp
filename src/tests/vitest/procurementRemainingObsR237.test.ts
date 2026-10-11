@@ -4,6 +4,11 @@ import { canOrderRequisition, requisitionRowRemaining } from '../../lib/procurem
 import { OVER_ORDER_REASON_REQUIRED, overOrdersFromError } from '../../lib/procurement/overOrderError';
 import { ApiError } from '../../api';
 
+const OVER_ORDER_MESSAGE = 'over-order without a reason';
+const SERVER_OVER_ORDERS = {
+  overOrders: [{ itemId: 7, itemName: 'مهره', excess: 3 }, { itemId: 8, itemName: 'سنگ', excess: 0 }],
+};
+
 describe('procurement remaining quantity and server over-order (OBS-R2-37)', () => {
   it('reads the remaining quantity the server wrote, and zero for a closed row', () => {
     expect(requisitionRowRemaining({ requestedQty: 10, orderedQty: 4, remainingQty: 0, closed: true })).toBe(0);
@@ -20,9 +25,7 @@ describe('procurement remaining quantity and server over-order (OBS-R2-37)', () 
   });
 
   it('turns the server 422 into the over-order warning and ignores other errors', () => {
-    const err = new ApiError('سفارش بیش از درخواست', OVER_ORDER_REASON_REQUIRED, 422, {
-      overOrders: [{ itemId: 7, itemName: 'مهره', excess: 3 }, { itemId: 8, itemName: 'سنگ', excess: 0 }],
-    });
+    const err = new ApiError(OVER_ORDER_MESSAGE, OVER_ORDER_REASON_REQUIRED, 422, SERVER_OVER_ORDERS);
     expect(overOrdersFromError(err, id => (id === 7 ? 'بسته' : 'عدد'))).toEqual([
       { key: 'server-7', itemName: 'مهره', unit: 'بسته', excess: 3 },
     ]);
