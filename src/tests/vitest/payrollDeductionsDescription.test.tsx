@@ -27,7 +27,7 @@ const renderForm = (deductions: number, description: string) => render(
     payrollNotes="" setPayrollNotes={noop} payrollPreviewLogs={[]} allowNoLogs advanceDeduction={0} setAdvanceDeduction={noop}
   />,
 );
-const submit = () => screen.getByText('تایید و صدور فیش حقوقی').closest('button') as HTMLButtonElement;
+const submit = () => screen.getByText('صدور فیش حقوقی پیش‌نویس').closest('button') as HTMLButtonElement;
 
 // v9.0.329 (TD-861, owner decision t5): other deductions carry a description and claim no insurance or tax computation
 describe('the deductions box needs a description (TD-861)', () => {

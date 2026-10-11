@@ -277,7 +277,7 @@ export function PieceworkPayrollModal({
                   <span>در حال صدور فیش...</span>
                 </>
               ) : (
-                <span>تایید و صدور فیش حقوقی</span>
+                <span>صدور فیش حقوقی پیش‌نویس</span>
               )}
             </button>
           </div>
