@@ -36,6 +36,7 @@ import { assertOutflowWithinSellable } from './documentSellableGate.js';
 import { documentAuditSnapshot, type DocumentAuditChange, type DocumentAuditSnapshot, type DocumentVoidAudit } from './documentAudit.js';
 import { assertNameNotOtherKind } from './documentParty.js';
 import { lockRequisitionOfOrder, releaseVoidedProcurementOrder } from './procurementOrderVoid.js';
+import { documentVoidVoucherReason } from '../../lib/documents/documentTypeName.js';
 
 export class DocumentLifecycleService {
   /**
@@ -485,7 +486,7 @@ export class DocumentLifecycleService {
           await VoucherService.voidSourceVoucher({
             voucherId: lv.id,
             date: await businessTodayIsoDate(),
-            reason: `حذف سند انبار شماره ${doc.refNumber || id} (${doc.type || ''})`,
+            reason: documentVoidVoucherReason(doc.type, doc.refNumber || String(id)), // TD-1241: the type's Persian name, never its code
             username: deletedByUser,
             externalTx: tx,
           });
