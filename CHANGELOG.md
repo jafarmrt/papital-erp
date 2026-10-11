@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.0.264 — حفظ تفصیلی طرف حساب در سند اختتامیه و افتتاحیه
+- سند اختتامیه و افتتاحیه مانده‌ها را از تراز سطح تفصیلی می‌گیرند و برای هر طرف، پروژه یا حساب بانکی نوع و شناسه تفصیلی را نگه می‌دارند (`closingRowDetail` در `src/services/accounting/closingRowDetail.ts`؛ OBS-R1-45 از TD-985).
+
 ### v10.0.263 — پنهان ماندن رمز نوبیتکس پرسنل در فرم و جزئیات
 - فرم و پنجره جزئیات پرسنل رمز نوبیتکس را پنهان نشان می‌دهند و فقط با «نمایش رمز» آشکار می‌کنند (`src/components/personnel/NobitexPasswordFields.tsx`)؛ وضعیت بی‌استفاده `showNobitexPass` حذف شد (OBS-R2-54 از TD-994).
 

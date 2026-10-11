@@ -11,6 +11,7 @@ import { jalaliYearBounds, isoToJalaliDate, toStorageDate } from '../../utils/ca
 import { toEnglishDigits } from '../../utils/persianNumber.js';
 import { fin, FinancialMath } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
+import { closingRowDetail } from './closingRowDetail.js';
 import { assertEarlierYearsClosed, assertFiscalYearEnded, findEarlierOpenYears, isFiscalYearEnded, lockFiscalYearSequence } from './fiscalYearOrder.js';
 import type {
   FiscalYearClosingPreview,
@@ -519,8 +520,9 @@ export class FiscalYearService {
 
       // VOUCHER 3: سند اختتامیه حساب‌های دائمی (ترازنامه‌ای)
       // V6.0.3 (TD-141): ارسال tx جهت خواندن مانده‌های به‌روزرسانی شده سود انباشته داخل همین تراکنش
+      // v10.0.264 (OBS-R1-45): one row per detail (party, project, bank, …) of each account, not one «other» row per account
       const postTrial = await AccountingReportService.getTrialBalance({
-        level: 'subsidiary',
+        level: 'detailed',
         endDate: normClosingDate,
         includeClosing: true,
       }, tx);
@@ -529,28 +531,28 @@ export class FiscalYearService {
       let closingDebitSum = fin(0);
       let closingCreditSum = fin(0);
 
+      const accountNames = new Map((await ChartOfAccountsService.getAllAccounts(tx)).map(a => [a.id, a.name]));
       for (const r of postTrial) {
+        const detail = closingRowDetail(r, accountNames.get(r.accountId) ?? r.name);
         if (r.accountType === 'asset') {
           const bal = fin(r.debitBalance || 0).subtract(r.creditBalance || 0);
           if (bal.greaterThan(0)) {
             v3Items.push({
               accountId: r.accountId,
-              detailedType: 'other',
-              detailedName: r.name,
+              ...detail,
               debit: 0,
               credit: bal.round(4).toNumber(),
-              description: `بستن مانده بدهکار دارایی ${r.name} در سند اختتامیه`
+              description: `بستن مانده بدهکار دارایی ${detail.detailedName} در سند اختتامیه`
             });
             closingCreditSum = closingCreditSum.add(bal);
           } else if (bal.lessThan(0)) {
             const absBal = bal.abs();
             v3Items.push({
               accountId: r.accountId,
-              detailedType: 'other',
-              detailedName: r.name,
+              ...detail,
               debit: absBal.round(4).toNumber(),
               credit: 0,
-              description: `بستن مانده بستانکار دارایی ${r.name} در سند اختتامیه`
+              description: `بستن مانده بستانکار دارایی ${detail.detailedName} در سند اختتامیه`
             });
             closingDebitSum = closingDebitSum.add(absBal);
           }
@@ -559,22 +561,20 @@ export class FiscalYearService {
           if (bal.greaterThan(0)) {
             v3Items.push({
               accountId: r.accountId,
-              detailedType: 'other',
-              detailedName: r.name,
+              ...detail,
               debit: bal.round(4).toNumber(),
               credit: 0,
-              description: `بستن مانده بستانکار بدهی/حقوق صاحبان سهام ${r.name} در سند اختتامیه`
+              description: `بستن مانده بستانکار بدهی/حقوق صاحبان سهام ${detail.detailedName} در سند اختتامیه`
             });
             closingDebitSum = closingDebitSum.add(bal);
           } else if (bal.lessThan(0)) {
             const absBal = bal.abs();
             v3Items.push({
               accountId: r.accountId,
-              detailedType: 'other',
-              detailedName: r.name,
+              ...detail,
               debit: 0,
               credit: absBal.round(4).toNumber(),
-              description: `بستن مانده بدهکار ${r.name} در سند اختتامیه`
+              description: `بستن مانده بدهکار ${detail.detailedName} در سند اختتامیه`
             });
             closingCreditSum = closingCreditSum.add(absBal);
           }
@@ -602,6 +602,7 @@ export class FiscalYearService {
         const v4Items = v3Items.map(it => ({
           accountId: it.accountId,
           detailedType: it.detailedType,
+          detailedId: it.detailedId,
           detailedName: it.detailedName,
           debit: it.credit,
           credit: it.debit,

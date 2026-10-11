@@ -293,6 +293,9 @@ export class AccountingReportService {
           parentId: det.accountId,
           accountType: parentAcc?.accountType || 'asset',
           nature: parentAcc?.nature || 'debit',
+          detailedType: det.ref.detailedType,
+          detailedId: det.detailedId,
+          detailedName: det.detailedName,
           ...balanceColumns(det),
         });
       }
