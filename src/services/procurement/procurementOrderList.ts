@@ -1,6 +1,7 @@
 import { and, desc, eq, ilike, inArray, isNotNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
-import { documentItems, documents, items, purchaseRequisitions } from '../../db/schema.js';
+import { documentItems, documents, items, purchaseRequisitions, warehouses } from '../../db/schema.js';
+import { createLedgerLocationResolver } from '../inventory/warehouseResolver.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
 import { procurementListPage } from '../../lib/procurement/procurementLists.js';
@@ -77,6 +78,11 @@ export async function listProcurementOrders(
   const catalog = itemIds.length === 0 ? [] : await db.select({ id: items.id, code: items.code, name: items.name, unit: items.unit })
     .from(items).where(inArray(items.id, itemIds));
   const catalogById = new Map(catalog.map(item => [item.id, item]));
+  // v10.0.61 (TD-1131): نام انبار مقصد کنار کدش؛ پیش‌تر تحویل سفارش کد خام انبار («raw») را نشان می‌داد
+  const resolveWarehouse = createLedgerLocationResolver(await db.select({
+    id: warehouses.id, code: warehouses.code, name: warehouses.name, isActive: warehouses.isActive,
+  }).from(warehouses));
+  const warehouseNameOf = (code: string): string => resolveWarehouse(code)?.name || code;
 
   const data = pageRows.map(({ doc, requisitionId, requisitionCode, requisitionProject }): ProcurementOrder => {
     const docLines = lines.filter(line => line.documentId === doc.id);
@@ -98,6 +104,7 @@ export async function listProcurementOrders(
         unitPrice: unitPrice.toNumber(),
         totalPrice: lineTotal.toNumber(),
         location: line.location || docLines[0]?.location || '',
+        locationName: warehouseNameOf(line.location || docLines[0]?.location || ''),
       };
     });
     const projectName = requisitionProject || doc.notes?.match(/\[پروژه:\s*([^\]]+)\]/)?.[1]?.trim() || null;
@@ -113,6 +120,7 @@ export async function listProcurementOrders(
       requisitionCode,
       projectName,
       location: docLines[0]?.location || '',
+      locationName: warehouseNameOf(docLines[0]?.location || ''),
       totalAmount: totalAmount.toNumber(),
       itemsCount: orderItems.length,
       items: orderItems,

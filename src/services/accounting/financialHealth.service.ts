@@ -26,7 +26,7 @@ import {
   findAccountMappingIssues, findDeletedAccountsWithVoucherRows, findNonLatinAccountCodes, findVouchersOnNonPostingAccounts,
 } from './chartOfAccountsHealth.js';
 import { buildAccountingIntegrityHealthTest, findAccountingIntegrityGaps } from './accountingConstraintHealth.js';
-import { buildPayslipDeductionsHealthTest, findPayslipDeductionsInPrepayments } from './payrollDeductionHealth.js';
+import { buildLegacyPayslipDeductionsHealthTest, buildPayslipDeductionsHealthTest, findLegacyPayslipDeductions, findPayslipDeductionsInPrepayments } from './payrollDeductionHealth.js';
 import { buildCategoryIntegrityHealthTest, findCategoryIntegrityIssues, hasCategoryNameUniqueIndex } from '../items/itemCategoryIdentity.js';
 import { buildProcurementOrderLinkHealthTest, findUnresolvedProcurementOrderLinks } from '../procurement/procurementOrderLinks.js';
 import { buildConsolidationSourcesHealthTest, findOpenLegacyConsolidationSources } from '../procurement/consolidationSourceHealth.js';
@@ -39,9 +39,12 @@ import {
 } from '../projects/projectReservationHealth.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
+import { buildClosedProjectWipHealthTest, findClosedProjectWipBalances } from './projectWipHealth.js';
 import { buildProjectStageHealthTest, buildProjectValueHealthTest, findProjectFreeTextValues, findProjectStageIntegrity } from '../projects/projectStageHealth.js';
 import { PROJECT_PRIORITIES, PROJECT_STATUSES, STAGE_STATUSES } from '../../lib/projects/projectStatus.js';
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
+import { buildUnguardedPurchaseActionHealthTest, findUnguardedPurchaseActions } from './unguardedPurchaseActionHealth.js';
+import { buildUnguardedDocumentStepHealthTest, findUnguardedDocumentSteps } from './unguardedDocumentStepHealth.js';
 import { buildWorkflowRoleReviewHealthTest, findWorkflowRoleReviews } from '../workflow/workflowRoleReview.js';
 import { buildRetiredRuleActionHealthTest, findRetiredActionRules } from '../events/retiredRuleActionHealth.js';
 import { buildUnpublishedRuleEventHealthTest, findRulesWithUnpublishedEvent } from '../events/unpublishedRuleEventHealth.js';
@@ -1125,6 +1128,16 @@ export class FinancialHealthService {
     overallScore += unguardedApprovalTest.scoreImpact;
     tests.push(unguardedApprovalTest);
 
+    // آزمون ۱۷ج: v10.0.120 (TD-1220) اقدام دیگر بی نقش و بی مجوز در گردش کار فعال اسناد (ارسال به انبار، بازگشایی)
+    const unguardedDocumentStepTest = buildUnguardedDocumentStepHealthTest(await findUnguardedDocumentSteps(orm));
+    overallScore += unguardedDocumentStepTest.scoreImpact;
+    tests.push(unguardedDocumentStepTest);
+
+    // آزمون ۱۷الف: v10.0.37 (OBS-R2-36) اقدام بی نقش و بی مجوز در گردش کار فعال درخواست خرید
+    const unguardedPurchaseTest = buildUnguardedPurchaseActionHealthTest(await findUnguardedPurchaseActions(orm));
+    overallScore += unguardedPurchaseTest.scoreImpact;
+    tests.push(unguardedPurchaseTest);
+
     // آزمون ۱۷ب: v9.0.128 (TD-542) گام‌های گردش کاری که مهاجرت 0065 برای بازبینی نقش فهرست کرد
     const workflowRoleReviewTest = buildWorkflowRoleReviewHealthTest(await findWorkflowRoleReviews());
     overallScore += workflowRoleReviewTest.scoreImpact;
@@ -1214,6 +1227,8 @@ export class FinancialHealthService {
     tests.push(personnelRateTest);
     // آزمون ۳۹: v9.0.286 (TD-554) کسورات فیش حقوق که سندهای پیشین در ۳۲۰۲ «پیش‌دریافت‌ها از مشتریان» گذاشته‌اند (فقط فهرست)
     tests.push(buildPayslipDeductionsHealthTest(await findPayslipDeductionsInPrepayments()));
+    // v10.0.211 (TD-1088): کسورات فیش‌های پیش از جداسازی بیمه و مالیات که هنوز در ۳۲۰۵ مانده است (فقط فهرست)
+    tests.push(buildLegacyPayslipDeductionsHealthTest(await findLegacyPayslipDeductions()));
     // آزمون ۴۰: v9.0.336 (TD-778) سند فروش و خرید با نام خریدار و بی شناسه طرف حساب (فقط فهرست، بی بازنویسی)
     tests.push(buildUnlinkedPartyDocumentHealthTest(await findUnlinkedPartyDocuments()));
     // آزمون ۴۱: v9.0.338 (TD-786) قید پایگاه‌داده سند و ردیف سند اعتبارسنجی‌نشده یا ردیف قدیمی ناسازگار (فقط فهرست)
@@ -1253,6 +1268,10 @@ export class FinancialHealthService {
     const dueReminderTest = buildDueReminderHealthTest(duplicateDueReminders, dueReminderIndexPresent);
     overallScore += dueReminderTest.scoreImpact;
     tests.push(dueReminderTest);
+    // آزمون ۵۲: v10.0.173 (TD-919، ت۴ ب) مانده ۱۴۰۲ پروژه تکمیل‌شده، لغوشده یا حذف‌شده (فقط فهرست)
+    const closedProjectWipTest = buildClosedProjectWipHealthTest(await findClosedProjectWipBalances(orm));
+    overallScore += closedProjectWipTest.scoreImpact;
+    tests.push(closedProjectWipTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

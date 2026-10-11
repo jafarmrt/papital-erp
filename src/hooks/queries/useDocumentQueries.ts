@@ -14,7 +14,7 @@ export interface DocumentFilters {
   limit?: number;
 }
 
-// v10.0.31 (OBS-R1-97): درخواست فهرست اسناد و داده‌های پایه صفحه اسناد انبار با ترک صفحه لغو می‌شود (`signal`)
+// v10.0.216 (OBS-R1-97): درخواست فهرست اسناد و داده‌های پایه صفحه اسناد انبار با ترک صفحه لغو می‌شود (`signal`)
 export function useDocumentsQuery(filters: DocumentFilters) {
   return useQuery({
     queryKey: QUERY_KEYS.documents.list(filters),

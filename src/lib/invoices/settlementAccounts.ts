@@ -25,7 +25,7 @@ export function defaultSettlementAccountId(accounts: readonly SettlementAccountC
 }
 
 /**
- * v10.0.27 (OBS-R1-100): «نصف مانده» با مقیاس ارز سند گرد می‌شود (ریال بی‌اعشار، ارز خارجی دو رقم)؛ پیش‌تر
+ * v10.0.212 (OBS-R1-100): «نصف مانده» با مقیاس ارز سند گرد می‌شود (ریال بی‌اعشار، ارز خارجی دو رقم)؛ پیش‌تر
  * `Math.round` سنت‌های ارز خارجی را می‌انداخت (۱۰٫۰۵ دلار → ۵).
  */
 export function halfRemainingAmount(remaining: number, currency: string | null | undefined): string {

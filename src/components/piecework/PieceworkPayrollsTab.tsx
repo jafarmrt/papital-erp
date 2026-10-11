@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
-import { Plus, Printer, Trash2, CheckCircle2, Clock, BookOpen, RefreshCw, Wallet, Info } from 'lucide-react';
+import { Plus, Printer, Trash2, BookOpen, RefreshCw, Wallet, Info, Pencil, FileSpreadsheet } from 'lucide-react';
 import { PieceworkPayroll } from '../../types';
 import { formatPersianDate } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 import { fetchJson } from '../../api';
 import { PayrollPaymentModal } from './PayrollPaymentModal';
-import { isPayablePayrollStatus } from '../../lib/payroll/payrollPayable';
-import { payrollStatusLabel } from '../../lib/payroll/payrollStatusLabels';
+import { PayrollStatusCell, StatusChip } from './PayrollStatusCell';
+import { PayrollDraftEditModal } from './PayrollDraftEditModal';
+import { PayrollStatutoryReportModal } from './PayrollStatutoryReportModal';
 
 interface PieceworkPayrollsTabProps {
   payrollsList: PieceworkPayroll[];
@@ -30,10 +31,14 @@ export function PieceworkPayrollsTab({
   const rial = useRialDisplay();
   const curLbl = rial.label;
   // v9.0.320 (TD-805): صدور، تأیید، سند و ابطال فیش با «محاسبه و صدور فیش حقوقی»؛ پرداخت با «پرداخت و ابطال پرداخت فیش»
-  const { canIssuePayroll, canPay } = usePieceworkPermissions();
+  const { canIssuePayroll } = usePieceworkPermissions();
   const [syncingId, setSyncingId] = useState<number | null>(null);
   // V10-4.4: پرداخت فقط از مودال خزانه‌ای
   const [paymentTarget, setPaymentTarget] = useState<PieceworkPayroll | null>(null);
+  // v10.0.200 (TD-1242): ویرایش فیش پیش‌نویس
+  const [editTarget, setEditTarget] = useState<PieceworkPayroll | null>(null);
+  // v10.0.211 (TD-1088): فهرست ماهانه بیمه و مالیات
+  const [isReportOpen, setIsReportOpen] = useState(false);
 
   const handleSyncVoucher = async (payrollId: number) => {
     try {
@@ -42,7 +47,7 @@ export function PieceworkPayrollsTab({
         method: 'POST'
       });
       if (res && res.voucher) {
-        toast.success(`سند دوبل حسابداری به شماره ${res.voucher.voucherNumber} با موفقیت ثبت/همگام شد.`);
+        toast.success(`سند حسابداری به شماره ${res.voucher.voucherNumber} با موفقیت ثبت/همگام شد.`);
         window.location.reload();
       }
     } catch (err: any) {
@@ -59,10 +64,16 @@ export function PieceworkPayrollsTab({
         <div>
           <h3 className="text-xs font-black text-slate-900">لیست فیش‌های حقوقی و تسویه‌های دوره‌ای</h3>
           <p className="text-[11px] text-slate-500">
-            فیش‌های رسمی صادرشده بر اساس تجمیع ردیف‌های کارکرد پرسنل و صدور خودکار سند حسابداری دوبل
+            فیش‌های رسمی صادرشده بر اساس تجمیع ردیف‌های کارکرد پرسنل و صدور خودکار سند حسابداری
           </p>
         </div>
 
+        <div className="flex flex-wrap gap-2 shrink-0">
+        <button type="button" onClick={() => setIsReportOpen(true)}
+          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer">
+          <FileSpreadsheet size={16} />
+          <span>فهرست بیمه و مالیات</span>
+        </button>
         {canIssuePayroll && (
           <button
             onClick={onOpenPayrollModal}
@@ -72,7 +83,9 @@ export function PieceworkPayrollsTab({
             <span>صدور فیش حقوقی جدید</span>
           </button>
         )}
+        </div>
       </div>
+      {isReportOpen && <PayrollStatutoryReportModal onClose={() => setIsReportOpen(false)} />}
 
       {/* Payrolls Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
@@ -90,7 +103,7 @@ export function PieceworkPayrollsTab({
                 <th className="p-3 text-center">{`کسر مساعده (${curLbl})`}</th>
                 <th className="p-3 text-center">{`خالص پرداختی (${curLbl})`}</th>
                 <th className="p-3 text-center">وضعیت پرداخت</th>
-                <th className="p-3 text-center">سند حسابداری دوبل</th>
+                <th className="p-3 text-center">سند حسابداری</th>
                 <th className="p-3 text-center">عملیات</th>
               </tr>
             </thead>
@@ -137,56 +150,13 @@ export function PieceworkPayrollsTab({
                         {rial.number(payroll.netPayable)}
                       </td>
                       <td className="p-3 text-center">
-                        {isPaid ? (
-                          // v8.0.31 (TD-283): فیش تسویه‌شده هم پنجره پرداخت را باز می‌کند (سابقه و ابطال پرداخت)
-                          <button
-                            onClick={() => setPaymentTarget(payroll)}
-                            className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] inline-flex items-center gap-1 font-bold cursor-pointer hover:bg-emerald-100"
-                            title="مشاهده پرداخت‌ها و ابطال پرداخت"
-                          >
-                            <CheckCircle2 size={12} />
-                            پرداخت‌شده
-                          </button>
-                        ) : isPartiallyPaid ? (
-                          <div className="flex flex-col items-center gap-1">
-                            <span className="px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-md text-[10px] inline-flex items-center gap-1 font-bold font-mono">
-                              <Clock size={11} className="text-amber-600" />
-                              جزئی: {rial.amount(paidAmount)}
-                            </span>
-                            {canPay && (
-                              <button
-                                onClick={() => setPaymentTarget(payroll)}
-                                className="px-2 py-0.5 bg-amber-600 hover:bg-emerald-600 text-white rounded-md text-[10px] font-bold cursor-pointer transition-all shadow-xs"
-                                title={`مانده: ${rial.amount(remainingAmount)} — ثبت قسط بعدی`}
-                              >
-                                پرداخت مانده
-                              </button>
-                            )}
-                          </div>
-                        ) : !isPayablePayrollStatus(payroll.status) && !canIssuePayroll ? (
-                          <StatusChip label={payrollStatusLabel(payroll.status)} />
-                        ) : !isPayablePayrollStatus(payroll.status) ? (
-                          // v9.0.269 (TD-816): فیش پیش‌نویس پرداخت نمی‌شود؛ نخست تأیید می‌شود
-                          <button
-                            onClick={() => onUpdateStatus(payroll.id, 'approved')}
-                            className="px-2.5 py-1 bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 border border-slate-200 hover:border-indigo-200 rounded-lg text-[10px] inline-flex items-center gap-1 cursor-pointer transition-all font-bold"
-                            title="فیش پیش‌نویس پیش از ثبت پرداخت تأیید می‌شود"
-                          >
-                            <CheckCircle2 size={12} />
-                            تأیید فیش
-                          </button>
-                        ) : !canPay ? (
-                          <StatusChip label={payrollStatusLabel(payroll.status)} />
-                        ) : (
-                          <button
-                            onClick={() => setPaymentTarget(payroll)}
-                            className="px-2.5 py-1 bg-amber-50 hover:bg-emerald-50 text-amber-700 hover:text-emerald-700 border border-amber-200 hover:border-emerald-200 rounded-lg text-[10px] inline-flex items-center gap-1 cursor-pointer transition-all font-bold"
-                            title="ثبت پرداخت از طریق خزانه‌داری (تراکنش + سند تسویه اتمیک)"
-                          >
-                            <Clock size={12} />
-                            ثبت پرداخت
-                          </button>
-                        )}
+                        <PayrollStatusCell
+                          payroll={payroll}
+                          paidAmount={paidAmount}
+                          remainingAmount={remainingAmount}
+                          onApprove={() => onUpdateStatus(payroll.id, 'approved')}
+                          onOpenPayment={() => setPaymentTarget(payroll)}
+                        />
                       </td>
                       <td className="p-3 text-center">
                         {payroll.voucherNumber ? (
@@ -207,7 +177,7 @@ export function PieceworkPayrollsTab({
                             title="صدور یا همگام‌سازی سند حسابداری"
                           >
                             <RefreshCw size={11} className={isSyncing ? 'animate-spin' : ''} />
-                            <span>{isSyncing ? 'در حال ثبت...' : 'ثبت سند دوبل'}</span>
+                            <span>{isSyncing ? 'در حال ثبت...' : 'ثبت سند حسابداری'}</span>
                           </button>
                         )}
                       </td>
@@ -220,6 +190,11 @@ export function PieceworkPayrollsTab({
                           >
                             <Printer size={16} />
                           </button>
+                          {canIssuePayroll && payroll.status === 'draft' && (
+                            <button onClick={() => setEditTarget(payroll)} title="ویرایش فیش پیش‌نویس" aria-label="ویرایش فیش پیش‌نویس" className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg cursor-pointer">
+                              <Pencil size={16} />
+                            </button>
+                          )}
                           {canIssuePayroll && (
                             <button
                               onClick={() => onDeletePayroll(payroll.id)}
@@ -277,15 +252,7 @@ export function PieceworkPayrollsTab({
         onClose={() => setPaymentTarget(null)}
         onPaid={() => onReload?.()}
       />
+      <PayrollDraftEditModal payroll={editTarget} onClose={() => setEditTarget(null)} onSaved={() => onReload?.()} />
     </div>
-  );
-}
-
-/** وضعیت فیش برای کاربری که دکمه آن کار را ندارد (v9.0.320، TD-805) */
-function StatusChip({ label }: { label: string }) {
-  return (
-    <span className="px-2.5 py-1 bg-slate-50 text-slate-500 border border-slate-200 rounded-lg text-[10px] inline-flex items-center gap-1 font-bold">
-      {label}
-    </span>
   );
 }

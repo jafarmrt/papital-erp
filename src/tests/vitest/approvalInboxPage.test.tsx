@@ -68,9 +68,9 @@ describe('TD-462 a cancelled decision does not carry over to the next task', () 
     fireEvent.click(screen.getByText('انصراف'));
 
     fireEvent.click(openButtons()[1]);
-    expect(await screen.findByText(/«تأیید سند 2»/)).toBeTruthy();
+    expect((await screen.findAllByText(/«تأیید سند 2»/)).length).toBeGreaterThan(0);
     expect(screen.queryByDisplayValue('مبلغ سند ۱ اشتباه است')).toBeNull();
-    fireEvent.click(screen.getByText('تایید و ثبت نهایی وظیفه'));
+    fireEvent.click(screen.getByText('ثبت «تأیید سند 2»'));
     await waitFor(() => expect(executeBody(2)).toBeDefined());
     expect(executeBody(2)).toMatchObject({ taskId: 2, action: 'approve', comment: '' });
   });
@@ -85,9 +85,9 @@ describe('TD-462 a cancelled decision does not carry over to the next task', () 
     fireEvent.click(screen.getByLabelText('بستن'));
 
     fireEvent.click(openButtons()[1]);
-    await screen.findByText(/«تأیید سند 2»/);
+    await screen.findAllByText(/«تأیید سند 2»/);
     expect(screen.queryByDisplayValue('دلیل کار اول')).toBeNull();
-    expect(screen.getByText('تایید و ثبت نهایی وظیفه')).toBeTruthy();
+    expect(screen.getByText('ثبت «تأیید سند 2»')).toBeTruthy();
   });
 });
 
@@ -144,7 +144,7 @@ describe('TD-464 the task modal shows only the opened task entity', () => {
     fireEvent.click(openButtons()[1]);
     expect(await screen.findByText('خریدار دوم')).toBeTruthy();
     await act(async () => { resolveDoc1({ id: 1, refNumber: 'INV-1', buyerName: 'خریدار اول', items: [] }); });
-    expect(screen.getByText(/«تأیید سند 2»/)).toBeTruthy();
+    expect(screen.getAllByText(/«تأیید سند 2»/).length).toBeGreaterThan(0);
     expect(screen.queryByText('خریدار اول')).toBeNull();
     expect(screen.getByText('خریدار دوم')).toBeTruthy();
   });

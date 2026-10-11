@@ -209,3 +209,29 @@ export async function checkBankSyncFromTransactions(): Promise<string[]> {
   if (await bankBalance(w.id) !== '7000') problems.push(`Balance of the account with a draft opening voucher after sync is ${await bankBalance(w.id)}, not 7000`);
   return problems;
 }
+
+/**
+ * TD-1217: «در جریان وصول» با حساب بانکی و «وصول» هم‌زمان همان چک بن‌بست (deadlock) نمی‌سازند. پیش‌تر مسیر غیروصول اول چک
+ * را قفل می‌کرد و هنگام نوشتن حساب بانکی قفل کلید خارجی بانک را می‌خواست، در حالی که «وصول» بانک را FOR UPDATE گرفته و
+ * منتظر چک بود؛ یکی از دو کار با 40P01 رد می‌شد (آزمون «۱۲ کاربر هم‌زمان» شبیه‌ساز روی CI).
+ */
+export async function checkChequeStatusBankLockOrder(): Promise<string[]> {
+  const problems: string[] = [];
+  const bank = await BankAccountService.createBankAccount({
+    title: `بانک آزمون ترتیب قفل چک ${tag('L')}`, type: 'bank', accountId: await accountIdByCode('1003'), initialBalance: 0, currency: 'IRR',
+  });
+  const move = (chequeId: number, status: 'in_collection' | 'passed') => ChequeLifecycleService.updateChequeStatus(chequeId, {
+    status, bankAccountId: bank.id, actionDate: '2026-04-02', username: 'inv',
+  });
+  for (let run = 0; run < 3; run++) {
+    const raced = await receivedCheque(700);
+    const before = Number(await bankBalance(bank.id));
+    const outcomes = await raceBehindRowLock<unknown>('cheques', [raced], [() => move(raced, 'in_collection'), () => move(raced, 'passed')], { staggered: true });
+    const transitionRefused = (_label: string, message: string) => message.includes('مجاز نیست');
+    problems.push(...outcomeProblems(['send to collection', 'cheque clearing'], outcomes, transitionRefused).map(p => `Round ${run + 1}: ${p}`));
+    const row = await chequeRow(raced);
+    const delta = Number(await bankBalance(bank.id)) - before;
+    if (row.status !== 'passed' || delta !== 700) problems.push(`Round ${run + 1}: the cheque ended as ${row.status} with balance change ${delta}, not cleared with 700`);
+  }
+  return problems;
+}

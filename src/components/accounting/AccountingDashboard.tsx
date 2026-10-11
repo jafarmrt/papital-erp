@@ -1,6 +1,7 @@
 import { ArrowUpRight, ArrowDownLeft, Wallet, Building2, CreditCard, FileText, TrendingUp, TrendingDown, PlusCircle } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianDate, toPersianDigits } from '../../utils';
 import type { FinancialSummaryStats, JournalVoucher, Cheque } from '../../types';
+import { voucherMakerName } from '../../lib/accounting/voucherListViewer';
 
 interface AccountingDashboardProps {
   stats: FinancialSummaryStats | null;
@@ -17,6 +18,12 @@ interface AccountingDashboardProps {
   canRecordVoucher: boolean;
   canRecordTreasury: boolean;
   canRecordCheque: boolean;
+  /**
+   * v10.0.122 (TD-1121): کارت‌های مطالبات، بدهی‌ها و سود خالص فقط برای دارنده `accounting.reports` (کلید برگه گزارش‌ها)
+   * به گزارش می‌روند و کارت موجودی نقد فقط برای دارنده `accounting.treasury` به خزانه؛ پیش‌تر خزانه‌دار با کلیک به
+   * صفحه‌ای می‌رسید که اجازه‌اش را نداشت
+   */
+  canOpenReports: boolean;
 }
 
 export function AccountingDashboard({
@@ -30,7 +37,11 @@ export function AccountingDashboard({
   canRecordVoucher,
   canRecordTreasury,
   canRecordCheque,
+  canOpenReports,
 }: AccountingDashboardProps) {
+  const linkCard = (tab: string, allowed: boolean) => (allowed
+    ? { props: { onClick: () => onTabChange(tab), role: 'link' }, cursor: 'hover:shadow-md cursor-pointer' }
+    : { props: {}, cursor: '' });
   const isNetProfitPositive = (stats?.netProfit || 0) >= 0;
   const safeRecentVouchers = Array.isArray(recentVouchers) ? recentVouchers : [];
   const safeUpcomingCheques = Array.isArray(upcomingCheques) ? upcomingCheques : [];
@@ -83,9 +94,9 @@ export function AccountingDashboard({
       {/* Main KPI Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Cash & Banks */}
-        <div 
-          onClick={() => onTabChange('treasury')}
-          className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm hover:shadow-md transition cursor-pointer group"
+        <div
+          {...linkCard('treasury', canRecordTreasury).props}
+          className={`bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm transition group ${linkCard('treasury', canRecordTreasury).cursor}`}
         >
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">موجودی نقد و بانک‌ها</span>
@@ -100,9 +111,9 @@ export function AccountingDashboard({
         </div>
 
         {/* Receivables */}
-        <div 
-          onClick={() => onTabChange('reports?subTab=party_ledger&partyType=customer')}
-          className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm hover:shadow-md transition cursor-pointer group"
+        <div
+          {...linkCard('reports?subTab=party_ledger&partyType=customer', canOpenReports).props}
+          className={`bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm transition group ${linkCard('reports?subTab=party_ledger&partyType=customer', canOpenReports).cursor}`}
           title="مشاهده گردش حساب و کاردکس مطالبات تجاری (مشتریان)"
         >
           <div className="flex items-center justify-between mb-3">
@@ -115,16 +126,18 @@ export function AccountingDashboard({
             {formatPersianPrice(stats?.totalReceivables || 0)}
           </div>
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">مانده بدهکاران تجاری و اسناد دریافتنی</p>
-          <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-700/50 flex items-center justify-between text-[11px] text-blue-600 dark:text-blue-400 font-bold">
-            <span>مشاهده صورت‌حساب و گردش مشتریان</span>
-            <span className="group-hover:translate-x-[-3px] transition-transform">←</span>
-          </div>
+          {canOpenReports && (
+            <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-700/50 flex items-center justify-between text-[11px] text-blue-600 dark:text-blue-400 font-bold">
+              <span>مشاهده صورت‌حساب و گردش مشتریان</span>
+              <span className="group-hover:translate-x-[-3px] transition-transform">←</span>
+            </div>
+          )}
         </div>
 
         {/* Payables */}
-        <div 
-          onClick={() => onTabChange('reports?subTab=party_ledger&partyType=supplier')}
-          className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm hover:shadow-md transition cursor-pointer group"
+        <div
+          {...linkCard('reports?subTab=party_ledger&partyType=supplier', canOpenReports).props}
+          className={`bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm transition group ${linkCard('reports?subTab=party_ledger&partyType=supplier', canOpenReports).cursor}`}
           title="مشاهده گردش حساب و کاردکس بدهی‌ها و تعهدات تجاری"
         >
           <div className="flex items-center justify-between mb-3">
@@ -137,16 +150,18 @@ export function AccountingDashboard({
             {formatPersianPrice(stats?.totalPayables || 0)}
           </div>
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">مانده بستانکاران و اسناد پرداختنی</p>
-          <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-700/50 flex items-center justify-between text-[11px] text-rose-600 dark:text-rose-400 font-bold">
-            <span>مشاهده صورت‌حساب و بدهی به تامین‌کنندگان</span>
-            <span className="group-hover:translate-x-[-3px] transition-transform">←</span>
-          </div>
+          {canOpenReports && (
+            <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-700/50 flex items-center justify-between text-[11px] text-rose-600 dark:text-rose-400 font-bold">
+              <span>مشاهده صورت‌حساب و بدهی به تامین‌کنندگان</span>
+              <span className="group-hover:translate-x-[-3px] transition-transform">←</span>
+            </div>
+          )}
         </div>
 
         {/* Net Profit */}
-        <div 
-          onClick={() => onTabChange('reports')}
-          className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm hover:shadow-md transition cursor-pointer group"
+        <div
+          {...linkCard('reports', canOpenReports).props}
+          className={`bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm transition group ${linkCard('reports', canOpenReports).cursor}`}
         >
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">سود خالص دوره</span>
@@ -191,7 +206,7 @@ export function AccountingDashboard({
 
         <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
           <div>
-            <div className="text-xs text-slate-500 dark:text-slate-400">کل اسناد ثبت‌شده در سیستم</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">کل اسناد ثبت‌شده در سامانه</div>
             <div className="text-base font-bold text-slate-800 dark:text-slate-200 mt-0.5">
               {formatPersianNumber(stats?.totalVouchersCount || 0)} سند مالی
             </div>
@@ -211,12 +226,14 @@ export function AccountingDashboard({
               <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
               <h3 className="font-bold text-slate-900 dark:text-white text-base">آخرین اسناد حسابداری</h3>
             </div>
-            <button
-              onClick={() => onTabChange('vouchers')}
-              className="text-xs text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 font-semibold"
-            >
-              مشاهده همه
-            </button>
+            {canRecordVoucher && (
+              <button
+                onClick={() => onTabChange('vouchers')}
+                className="text-xs text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 font-semibold"
+              >
+                مشاهده همه
+              </button>
+            )}
           </div>
 
           {safeRecentVouchers.length === 0 ? (
@@ -237,7 +254,7 @@ export function AccountingDashboard({
                         {v.description}
                       </div>
                       <div className="text-[11px] text-slate-400 mt-0.5">
-                        {formatPersianDate(v.date)} • {v.createdByUsername || 'کاربر سیستم'}
+                        {formatPersianDate(v.date)} • {voucherMakerName(v, 'سامانه')}
                       </div>
                     </div>
                   </div>
@@ -257,12 +274,14 @@ export function AccountingDashboard({
               <CreditCard className="w-5 h-5 text-amber-600 dark:text-amber-400" />
               <h3 className="font-bold text-slate-900 dark:text-white text-base">چک‌های نیازمند پیگیری و سررسید</h3>
             </div>
-            <button
-              onClick={() => onTabChange('cheques')}
-              className="text-xs text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold"
-            >
-              مدیریت چک‌ها
-            </button>
+            {canRecordCheque && (
+              <button
+                onClick={() => onTabChange('cheques')}
+                className="text-xs text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold"
+              >
+                مدیریت چک‌ها
+              </button>
+            )}
           </div>
 
           {safeUpcomingCheques.length === 0 ? (
@@ -287,7 +306,7 @@ export function AccountingDashboard({
                         {c.bankName} - {c.partyName}
                       </div>
                       <div className="text-[11px] text-slate-400 mt-0.5">
-                        سررسید: {formatPersianDate(c.dueDate)} • شماره: {formatPersianNumber(c.chequeNumber)}
+                        سررسید: {formatPersianDate(c.dueDate)} • شماره: {toPersianDigits(c.chequeNumber)}
                       </div>
                     </div>
                   </div>

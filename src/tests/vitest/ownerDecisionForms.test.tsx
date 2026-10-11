@@ -45,13 +45,13 @@ describe('no-voucher treasury option needs its own permission (TD-409)', () => {
   it('hides the voucher switch of the invoice settlement form without the permission', async () => {
     settlementForm();
     await waitFor(() => expect(screen.getByText('کارت‌خوان')).toBeTruthy());
-    expect(screen.queryByText('صدور خودکار سند حسابداری دوبل')).toBeNull();
+    expect(screen.queryByText('صدور خودکار سند حسابداری')).toBeNull();
   });
 
   it('shows the voucher switch of the invoice settlement form with the permission', async () => {
     granted.value = true;
     settlementForm();
-    expect(await screen.findByText('صدور خودکار سند حسابداری دوبل')).toBeTruthy();
+    expect(await screen.findByText('صدور خودکار سند حسابداری')).toBeTruthy();
   });
 });
 

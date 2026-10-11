@@ -1,6 +1,6 @@
 import { Search, X, ChevronLeft } from 'lucide-react';
 import { SettingCategoryGroup } from './settingsNavigationConfig';
-import { cn } from '../../utils';
+import { cn, formatPersianNumber } from '../../utils';
 import { isSystemAdminSettingsTab } from '../../lib/permissions/pageAccess';
 
 interface SettingsNavigationSidebarProps {
@@ -207,7 +207,7 @@ export function SettingsNavigationSidebar({
 
       {/* Footer Info */}
       <div className="px-3.5 py-2.5 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between text-[11px] text-slate-400">
-        <span>مجموع بخش‌ها: {totalMatchingTabs} سربرگ</span>
+        <span>مجموع بخش‌ها: {formatPersianNumber(totalMatchingTabs)} سربرگ</span>
         <span>پیکربندی یکپارچه سامانه</span>
       </div>
     </aside>

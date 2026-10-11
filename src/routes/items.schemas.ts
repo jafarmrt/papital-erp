@@ -80,3 +80,13 @@ export const itemUpdateSchema = z.object({
     id: numericIdString
   })
 });
+
+/** v10.0.35 (TD-979): گرفتن شماره سری بعدی کد کالا؛ قالب سال، حرف دسته و پیشوند را سرویس می‌سنجد (422) */
+export const consumeNextItemCodeSchema = z.object({
+  body: z.object({
+    type: z.enum(['product', 'raw_material']).optional(),
+    year: z.union([z.string().max(20), z.number()]).transform(v => String(v)).optional(),
+    prefix: z.string().max(40).optional(),
+    transfer: z.string().max(60).optional(),
+  }),
+});

@@ -161,7 +161,7 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
             <DocumentsPage user={user} />
           </ProtectedRoute>
         } />
-        {/* v10.0.28 (OBS-R1-102): حواله انبار در صفحه اسناد انبار ثبت می‌شود؛ پیش‌تر این نشانی فرم فاکتور فروش را باز می‌کرد */}
+        {/* v10.0.213 (OBS-R1-102): حواله انبار در صفحه اسناد انبار ثبت می‌شود؛ پیش‌تر این نشانی فرم فاکتور فروش را باز می‌کرد */}
         <Route path="/remittances" element={<Navigate to="/receipts" replace />} />
         <Route path="/invoices/create" element={
           <ProtectedRoute page="/invoices/create" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>

@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import type { Item } from '../../types';
 
-// v10.0.27..v10.0.31: observations of the package 8 ledger (sales and stock document screens)
+// v10.0.212..v10.0.216: observations of the package 8 ledger (sales and stock document screens)
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
 

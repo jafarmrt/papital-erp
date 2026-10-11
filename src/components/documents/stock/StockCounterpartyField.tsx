@@ -3,6 +3,7 @@ import { Customer, Personnel } from '../../../types';
 import { SearchableSelect } from '../../SearchableSelect';
 import { personnelById, personnelDisplayName } from '../../../lib/documents/stockDocumentParties';
 import type { StockDocumentForm } from '../../../hooks/documents/useStockDocumentForm';
+import { partyFitsDocument } from '../../../lib/documents/documentPartyKind';
 
 interface StockCounterpartyFieldProps {
   form: StockDocumentForm;
@@ -15,7 +16,9 @@ interface StockCounterpartyFieldProps {
  * استخراج‌شده از DocumentsPage.
  */
 export function StockCounterpartyField({ form, personnelList, suppliersList }: StockCounterpartyFieldProps) {
-  const { actionType, buyerName, setBuyerName, selectedSupplierObj, setSelectedSupplierObj, selectedPersonnelObj, setReceiverPersonnelId } = form;
+  const { actionType, docType, buyerName, setBuyerName, selectedSupplierObj, setSelectedSupplierObj, selectedPersonnelObj, setReceiverPersonnelId } = form;
+  // v10.0.44 (TD-939): رسید و خرید فقط تأمین‌کننده، برگشت از فروش فقط مشتری (یا «هر دو»)؛ همان قاعده سرور
+  const partyOptions = (Array.isArray(suppliersList) ? suppliersList : []).filter(s => partyFitsDocument(docType, s.partyType));
 
   return (
     <div>
@@ -40,7 +43,7 @@ export function StockCounterpartyField({ form, personnelList, suppliersList }: S
           <SearchableSelect
             value={selectedPersonnelObj ? String(selectedPersonnelObj.id) : ''}
             onChange={(val) => {
-              // v10.0.30 (OBS-R1-99): انتخاب با شناسه پرسنل؛ نام او در سند ثبت می‌شود
+              // v10.0.215 (OBS-R1-99): انتخاب با شناسه پرسنل؛ نام او در سند ثبت می‌شود
               const picked = personnelById(personnelList, val ? Number(val) : null);
               setReceiverPersonnelId(picked ? Number(picked.id) : null);
               setBuyerName(picked ? personnelDisplayName(picked) : '');
@@ -74,12 +77,11 @@ export function StockCounterpartyField({ form, personnelList, suppliersList }: S
             value={buyerName}
             onChange={(val) => {
               setBuyerName(val);
-              const list = Array.isArray(suppliersList) ? suppliersList : [];
-              const found = list.find(s => s.name.trim().toLowerCase() === val.trim().toLowerCase());
+              const found = partyOptions.find(s => s.name.trim().toLowerCase() === val.trim().toLowerCase());
               setSelectedSupplierObj(found || null);
             }}
             placeholder="انتخاب طرف‌حساب..."
-            options={(Array.isArray(suppliersList) ? suppliersList : []).map((s) => ({
+            options={partyOptions.map((s) => ({
               value: s.name,
               label: `${s.name}${s.supplierCategory ? ` (${s.supplierCategory})` : ''}${s.phone ? ` - ${s.phone}` : ''}`
             }))}

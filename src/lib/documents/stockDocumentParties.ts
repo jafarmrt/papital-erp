@@ -3,7 +3,7 @@ import type { Personnel } from '../../types/personnel.types';
 import { invoiceReturnTerms, type ReturnSourceLine } from './returnUnitPrice';
 
 /**
- * v10.0.29 (OBS-R1-101): ردیف‌های برگشت از فاکتور مرجع کالای کامل فهرست کالاها را می‌گیرند (موجودی، دسته، واحد)؛
+ * v10.0.214 (OBS-R1-101): ردیف‌های برگشت از فاکتور مرجع کالای کامل فهرست کالاها را می‌گیرند (موجودی، دسته، واحد)؛
  * پیش‌تر فقط شناسه، نام، کد و واحد فاکتور را داشتند و جدول جزئیات سند برای آن‌ها موجودی نشان نمی‌داد.
  * کالایی که در فهرست نیست همان شکل کوتاه فاکتور را نگه می‌دارد.
  */
@@ -35,7 +35,7 @@ export function returnRowsFromInvoice(lines: readonly ReturnInvoiceItemLine[], i
 }
 
 /**
- * v10.0.30 (OBS-R1-99): تحویل‌گیرنده حواله با شناسه پرسنل انتخاب و پیدا می‌شود، نه با نام کامل؛ دو کارمند هم‌نام
+ * v10.0.215 (OBS-R1-99): تحویل‌گیرنده حواله با شناسه پرسنل انتخاب و پیدا می‌شود، نه با نام کامل؛ دو کارمند هم‌نام
  * دیگر یکی دیده نمی‌شوند. نام نمایشی همان نامی است که در سند (`buyer_name`) ثبت می‌شود.
  */
 export function personnelDisplayName(p: Pick<Personnel, 'fullName' | 'firstName' | 'lastName'>): string {

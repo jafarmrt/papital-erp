@@ -7,7 +7,7 @@ import {
   ChevronLeft, RefreshCw, Building, ShoppingCart,
   Paperclip, Ban
 } from 'lucide-react';
-import { ProductionProject } from '../types';
+import { Item, ProductionProject } from '../types';
 import { errorMessageOf, formatPersianNumber } from '../utils';
 import { toast } from 'react-hot-toast';
 import ProjectModal from '../components/ProjectModal';
@@ -18,7 +18,6 @@ import {
   fetchProjectRecord,
   useProjectListQuery,
   useCustomerOptionsQuery,
-  useAllItemsQuery,
   useDeleteProjectMutation,
 } from '../hooks/queries';
 import { QUERY_KEYS } from '../lib/queryKeys';
@@ -62,6 +61,10 @@ const KANBAN_COLUMNS = [
     titleClassName: 'text-rose-900', countClassName: 'bg-rose-200 text-rose-900' },
 ] as const;
 
+// v10.0.162 (TD-1211): the project form reads its items from the item pick list itself; the page reads no full item list,
+// which needs products.view and answered 403 to a projects.view reader
+const NO_PRELOADED_ITEMS: Item[] = [];
+
 export default function ProjectsPage() {
   const queryClient = useQueryClient();
 
@@ -81,7 +84,6 @@ export default function ProjectsPage() {
 
   const projectsQuery = useProjectListQuery(filters, page, PROJECT_LIST_PAGE_SIZE);
   const customersQuery = useCustomerOptionsQuery();
-  const itemsQuery = useAllItemsQuery();
   const deleteProjectMutation = useDeleteProjectMutation();
   // v9.0.417 (TD-752): تعریف، ویرایش و حذف فقط با کلید API خودشان
   const { canCreate, canEdit, canDelete } = useProjectPermissions();
@@ -90,8 +92,7 @@ export default function ProjectsPage() {
   const projectTotal = projectsQuery.data?.total ?? 0;
   const statusCounts = projectsQuery.data?.statusCounts ?? {};
   const customersList = customersQuery.data ?? [];
-  const itemsList = itemsQuery.data ?? [];
-  const loading = projectsQuery.isPending || customersQuery.isPending || itemsQuery.isPending;
+  const loading = projectsQuery.isPending || customersQuery.isPending;
 
   // صفحه‌ای که پس از حذف یا صافی دیگر پروژه‌ای ندارد به صفحه آخر برمی‌گردد
   const lastPage = Math.max(1, Math.ceil(projectTotal / PROJECT_LIST_PAGE_SIZE));
@@ -138,7 +139,8 @@ export default function ProjectsPage() {
 
   const handleDeleteProject = async (id: number, code: string) => {
     if (!(await confirmAction({ title: 'حذف پروژه تولید', message: `آیا از حذف پروژه تولید با کد ${code} مطمئن هستید؟` }))) return;
-    await deleteProjectMutation.mutateAsync(id);
+    // v10.0.147 (TD-1216): the mutation's onError shows a refusal (422); the rejection is not passed on to the click handler
+    deleteProjectMutation.mutate(id);
   };
 
   // Summary Statistics (v9.0.412, TD-743): شمار هر وضعیت از سرور، با صافی‌های جستجو و اولویت
@@ -536,7 +538,7 @@ export default function ProjectsPage() {
         onClose={() => setIsModalOpen(false)}
         projectToEdit={projectToEdit}
         customersList={customersList}
-        itemsList={itemsList}
+        itemsList={NO_PRELOADED_ITEMS}
         onSuccess={loadInitialData}
         onOpenStages={(p) => {
           setIsModalOpen(false);

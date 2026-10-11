@@ -14,6 +14,7 @@ import { EventSourcingReplayService } from '../services/events/eventSourcingRepl
 import { logActivity } from '../lib/auditLogger.js';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { z } from 'zod';
+import { createActionRuleSchema, createWebhookSchema, dlqDismissSchema, dlqPayloadSchema, dlqReplayBatchSchema, dlqReplaySchema, outboxProcessSchema, ruleDraftSchema, simulateDomainEventSchema, simulateReplaySchema, testStoredRuleSchema, updateActionRuleSchema, updateWebhookSchema } from './events.schemas.js';
 import { errorMessageOf } from '../utils.js';
 import { AppError, NotFoundError } from '../errors/customErrors.js';
 import { isEnteredSecret } from '../lib/secrets/maskedSecret.js';
@@ -117,7 +118,7 @@ router.get('/domain-events', authorizePermission('events.view'), asyncHandler(as
 }));
 
 // v9.0.430 (TD-708, decision t5 a): the simulation publishes nothing; it only shows which rules and webhooks the event reaches
-router.post('/domain-events/simulate', authorizePermission('events.manage'), asyncHandler(async (req, res) => {
+router.post('/domain-events/simulate', authorizePermission('events.manage'), validate(simulateDomainEventSchema), asyncHandler(async (req, res) => {
   const { eventType, aggregateType, aggregateId, payload } = req.body ?? {};
   const result = await simulateDomainEvent({ eventType, aggregateType, aggregateId, payload }, { id: req.user?.id, username: req.user?.username });
   res.json({ success: true, ...result });
@@ -163,9 +164,9 @@ router.get('/outbox', authorizePermission('events.view'), asyncHandler(async (re
   }
 }));
 
-router.post(['/outbox/process-now', '/outbox/process'], authorizePermission('events.manage'), asyncHandler(async (req, res) => {
+router.post(['/outbox/process-now', '/outbox/process'], authorizePermission('events.manage'), validate(outboxProcessSchema), asyncHandler(async (req, res) => {
   try {
-    const batchSize = req.body.batchSize ? parseInt(req.body.batchSize, 10) : 25;
+    const batchSize = req.body.batchSize ?? 25;
     const result = await OutboxService.processPendingBatch(batchSize);
 
     res.json({
@@ -264,7 +265,7 @@ router.get(['/action-rules/:id', '/rules/:id'], authorizePermission('events.view
   }
 }));
 
-router.post(['/action-rules', '/rules'], authorizePermission('events.manage'), asyncHandler(async (req, res) => {
+router.post(['/action-rules', '/rules'], authorizePermission('events.manage'), validate(createActionRuleSchema), asyncHandler(async (req, res) => {
   try {
     const { name, description, eventType, conditions, conditionsJson, actionType, actionConfigJson, actions, isActive } = req.body;
 
@@ -309,7 +310,7 @@ router.post(['/action-rules', '/rules'], authorizePermission('events.manage'), a
   }
 }));
 
-router.put(['/action-rules/:id', '/rules/:id'], authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.put(['/action-rules/:id', '/rules/:id'], authorizePermission('events.manage'), validate(updateActionRuleSchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const updatedRule = await EventActionEngineService.updateRule(id, req.body);
@@ -367,7 +368,7 @@ router.post(['/action-rules/:id/toggle', '/rules/:id/toggle'], authorizePermissi
 }));
 
 // v9.0.430 (TD-708, decision t5 a): a rule test evaluates the stored rule and shows what its action would do; it never runs it
-router.post(['/action-rules/:id/test', '/rules/:id/test'], authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.post(['/action-rules/:id/test', '/rules/:id/test'], authorizePermission('events.manage'), validate(testStoredRuleSchema), asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const testResult = await testStoredRule(id, req.body?.customEvent);
   res.json({
@@ -378,7 +379,7 @@ router.post(['/action-rules/:id/test', '/rules/:id/test'], authorizePermission('
 }));
 
 // v9.0.377 (TD-712): the draft is really evaluated (invalid draft → 422 RULE_DRAFT_INVALID) and nothing is sent or written
-router.post('/action-rules/test-draft', authorizePermission('events.manage'), asyncHandler(async (req, res) => {
+router.post('/action-rules/test-draft', authorizePermission('events.manage'), validate(ruleDraftSchema), asyncHandler(async (req, res) => {
   const evaluation = await evaluateRuleDraft(req.body?.rule);
   res.json({ success: true, ...evaluation, evaluatedConditions: evaluation.conditionMatches });
 }));
@@ -453,7 +454,7 @@ router.get('/dlq', authorizePermission('events.view'), asyncHandler(async (req, 
   }
 }));
 
-router.post('/dlq/:id/replay', authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.post('/dlq/:id/replay', authorizePermission('events.manage'), validate(dlqReplaySchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const { payload, adjustedPayload } = req.body;
@@ -477,7 +478,7 @@ router.post('/dlq/:id/replay', authorizePermission('events.manage'), validate(pa
   }
 }));
 
-router.post('/dlq/replay-batch', authorizePermission('events.manage'), asyncHandler(async (req, res) => {
+router.post('/dlq/replay-batch', authorizePermission('events.manage'), validate(dlqReplayBatchSchema), asyncHandler(async (req, res) => {
   try {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -506,13 +507,13 @@ router.post('/dlq/replay-batch', authorizePermission('events.manage'), asyncHand
   }
 }));
 
-router.post('/dlq/:id/dismiss', authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.post('/dlq/:id/dismiss', authorizePermission('events.manage'), validate(dlqDismissSchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const { notes } = req.body;
     const userId = req.user?.id;
 
-    const item = await DeadLetterQueueService.dismissEvent(id, userId, notes);
+    const item = await DeadLetterQueueService.dismissEvent(id, userId, notes ?? undefined);
 
     res.json({
       success: true,
@@ -524,7 +525,7 @@ router.post('/dlq/:id/dismiss', authorizePermission('events.manage'), validate(p
   }
 }));
 
-router.put('/dlq/:id/payload', authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.put('/dlq/:id/payload', authorizePermission('events.manage'), validate(dlqPayloadSchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const { payload } = req.body;
@@ -618,7 +619,7 @@ router.get(['/event-sourcing/timeline', '/timeline'], authorizePermission('event
   }
 }));
 
-router.post(['/event-sourcing/simulate-replay', '/timeline/simulate-replay'], authorizePermission('events.manage'), asyncHandler(async (req, res) => {
+router.post(['/event-sourcing/simulate-replay', '/timeline/simulate-replay'], authorizePermission('events.manage'), validate(simulateReplaySchema), asyncHandler(async (req, res) => {
   try {
     const { event, eventId, eventType, aggregateType, aggregateId, payload, dryRun } = req.body;
 
@@ -688,7 +689,7 @@ router.get('/webhooks/:id', authorizePermission('events.view'), validate(paramsI
   }
 }));
 
-router.post('/webhooks', authorizePermission('events.manage'), asyncHandler(async (req, res) => {
+router.post('/webhooks', authorizePermission('events.manage'), validate(createWebhookSchema), asyncHandler(async (req, res) => {
   try {
     const { name, targetUrl, eventPatterns, secretKey, customHeaders, retryLimit, timeoutMs, timeoutSeconds } = req.body;
 
@@ -741,7 +742,7 @@ router.post('/webhooks', authorizePermission('events.manage'), asyncHandler(asyn
   }
 }));
 
-router.put('/webhooks/:id', authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.put('/webhooks/:id', authorizePermission('events.manage'), validate(updateWebhookSchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const updated = await WebhookSubscriptionService.updateSubscription(id, req.body);

@@ -65,8 +65,8 @@ export class WarehouseService {
     if (existing) {
       // v9.0.112 (TD-490، تصمیم ت۵): کد انبار غیرفعال با فعال‌سازی دوباره برمی‌گردد، نه با ساخت انبار تازه
       throw new ConflictError(existing.isActive === 1
-        ? `انباری با کد «${cleanCode}» از قبل در سیستم تعریف شده است.`
-        : `انبار «${existing.name}» با کد «${cleanCode}» غیرفعال است. مدیر سیستم می‌تواند آن را در «مدیریت انبارها» دوباره فعال کند.`,
+        ? `انباری با کد «${cleanCode}» از قبل در سامانه تعریف شده است.`
+        : `انبار «${existing.name}» با کد «${cleanCode}» غیرفعال است. مدیر سامانه می‌تواند آن را در «مدیریت انبارها» دوباره فعال کند.`,
       { field: 'code', value: cleanCode, warehouseId: existing.id, isActive: existing.isActive });
     }
 

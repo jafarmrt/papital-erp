@@ -52,7 +52,7 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
   const [date, setDate] = useState<string>(() => getTodayJalaliDate());
   const [location, setLocation] = useState('');
   const [buyerName, setBuyerName] = useState('');
-  // v10.0.30 (OBS-R1-99): تحویل‌گیرنده حواله با شناسه پرسنل
+  // v10.0.215 (OBS-R1-99): تحویل‌گیرنده حواله با شناسه پرسنل
   const [receiverPersonnelId, setReceiverPersonnelId] = useState<number | null>(null);
   const [selectedSupplierObj, setSelectedSupplierObj] = useState<Customer | null>(null);
   const [currency, setCurrency] = useState('IRR');
