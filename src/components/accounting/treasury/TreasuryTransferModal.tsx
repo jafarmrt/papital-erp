@@ -218,7 +218,7 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
               disabled={isSaving}
               className="px-4 py-2 text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white rounded-xl disabled:opacity-50 cursor-pointer"
             >
-              {isSaving ? 'در حال ثبت...' : 'ثبت انتقال با سند دوبل'}
+              {isSaving ? 'در حال ثبت...' : 'ثبت انتقال با سند حسابداری'}
             </button>
           </div>
         </form>

@@ -85,3 +85,23 @@ export function currencySettingError(value: unknown): string | null {
     ? null
     : `واحد نمایش مبالغ فقط «ریال» یا «تومان» است (${RIAL_DISPLAY_UNITS.join(' یا ')}).`;
 }
+
+/**
+ * v10.0.95 (TD-1192): price list names (`pricing_strategies`, stored joined with «,») are checked before they are saved,
+ * by the settings form on each name and by the server on the stored list. A name with a Latin comma would be split into two
+ * lists, and two names that differ only in spaces or letter case would be two lists of one price; both are refused with a
+ * message that names them. Empty names are dropped. Before, «قیمت خرده‌فروشی, ویژه» was saved as two lists and a second
+ * «قیمت خرده‌فروشی» was saved as well.
+ */
+export function priceListNamesError(names: readonly string[]): string | null {
+  const seen = new Set<string>();
+  for (const raw of names) {
+    const name = String(raw ?? '').trim();
+    if (!name) continue;
+    if (name.includes(',')) return `نام فهرست قیمت «${name}» ویرگول لاتین «,» دارد؛ آن را بردارید یا از «،» استفاده کنید.`;
+    const key = name.toLowerCase();
+    if (seen.has(key)) return `فهرست قیمت «${name}» دو بار آمده است؛ نام هر فهرست قیمت یکتاست.`;
+    seen.add(key);
+  }
+  return null;
+}

@@ -17,6 +17,8 @@ export interface VoucherRowFacts {
   sourceKind?: string | null;
   sourceFiscalYear?: number | null;
   referenceNumber?: string | null;
+  /** v10.0.x (TD-1239): شماره سند برگشت فعال؛ سندی که برگشت خورده نه دوباره برگشت می‌خورد، نه اصلاح می‌شود، نه به پیش‌نویس برمی‌گردد */
+  reversedByVoucherNumber?: string | null;
 }
 
 /** v10.0.27 (TD-965): `canApprove` = دارنده `accounting.vouchers_approve`؛ بی آن بازگشت به پیش‌نویس پیشنهاد نمی‌شود */
@@ -24,12 +26,14 @@ export function voucherRowActions(v: VoucherRowFacts, access: { canApprove?: boo
   const canApprove = access.canApprove ?? true;
   const locked = Boolean(voucherSourceLabel(v.sourceKind)) || (v.sourceFiscalYear !== null && v.sourceFiscalYear !== undefined);
   const reversal = isReversalReference(v.referenceNumber);
+  // v10.0.x (TD-1239): سندی که برگشت فعال دارد و خود سند برگشت فقط با سند تازه تغییر می‌کنند (همان قاعده سرور)
+  const reversed = Boolean(v.reversedByVoucherNumber);
   const actions: VoucherRowAction[] = [];
   if (!locked) {
     if (v.status === 'draft') actions.push('edit', 'delete');
-    if (v.status === 'approved' && canApprove) actions.push('revert_to_draft');
-    if (!reversal && (v.status === 'approved' || v.status === 'permanent')) actions.push('reverse');
-    if (!reversal && v.status === 'approved') actions.push('correct');
+    if (!reversal && !reversed && v.status === 'approved' && canApprove) actions.push('revert_to_draft');
+    if (!reversal && !reversed && (v.status === 'approved' || v.status === 'permanent')) actions.push('reverse');
+    if (!reversal && !reversed && v.status === 'approved') actions.push('correct');
   }
   actions.push('workflow');
   return actions;
@@ -42,6 +46,13 @@ export function voucherLockNote(v: VoucherRowFacts): string | null {
   if (v.sourceFiscalYear !== null && v.sourceFiscalYear !== undefined) {
     const year = toPersianDigits(String(v.sourceFiscalYear));
     return `این سند را بستن سال مالی ${year} صادر کرده است و فقط با بازگشایی سال ${year} تغییر می‌کند.`;
+  }
+  // v10.0.x (TD-1239)
+  if (v.reversedByVoucherNumber) {
+    return `این سند با سند شماره ${toPersianDigits(String(v.reversedByVoucherNumber))} برگشت خورده است؛ برای ثبت دوباره، سند تازه بزنید.`;
+  }
+  if (isReversalReference(v.referenceNumber) && v.status !== 'draft') {
+    return 'این سند برگشت است و تغییر نمی‌کند؛ برای ثبت دوباره، سند تازه بزنید.';
   }
   return null;
 }
@@ -80,4 +91,17 @@ export function voucherConfirmTexts(kind: VoucherConfirmKind, v: VoucherRowFacts
         confirmText: 'بله، حذف شود',
       };
   }
+}
+
+/**
+ * v10.0.121 (TD-1120): کار اصلی ستون اقدام ردیف سند. نشان «قفل دفاتر» فقط برای سند دائم است؛ پیش‌تر هر سندی که دکمه
+ * تأیید یا قطعی‌سازی نداشت (پیش‌نویس یا تأییدشده برای کاربری بی آن مجوز) هم «قفل دفاتر» و «سند دائم» نشان می‌داد.
+ */
+export type VoucherPrimaryAction = 'approve' | 'finalize' | 'locked' | null;
+
+export function voucherPrimaryAction(status: string, access: { canApprove: boolean; canFinalize: boolean }): VoucherPrimaryAction {
+  if (status === 'permanent') return 'locked';
+  if (status === 'draft') return access.canApprove ? 'approve' : null;
+  if (status === 'approved') return access.canFinalize ? 'finalize' : null;
+  return null;
 }

@@ -5,7 +5,7 @@ import { syntheticTestUsername } from '../../lib/syntheticUsers.js';
 import { roleDisplayName } from '../../lib/users/roleDisplayName.js';
 import type { HealthCheckTestResult } from '../../types/accounting.types.js';
 
-export interface SyntheticUserRow { id: number; username: string; fullName: string | null; role: string; roleName?: string | null }
+export interface SyntheticUserRow { id: number; username: string; fullName: string | null; role: string | null; roleName?: string | null }
 
 /** بیشینه ردیف‌های فهرست‌شده در گزارش؛ شمار همیشه کامل است */
 const MAX_LISTED = 200;

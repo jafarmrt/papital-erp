@@ -103,13 +103,24 @@ const INBOX_TAB_ICONS: Readonly<Record<string, typeof FileText>> = {
 const APPROVAL_PRIORITY_BASE = 'px-2 py-0.5 rounded-md text-[10px] font-bold border';
 const approvalCritical: PillBadgeVariant = { label: 'اولویت بسیار بالا', className: `${APPROVAL_PRIORITY_BASE} bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200 dark:border-purple-800` };
 const approvalHigh: PillBadgeVariant = { label: 'اولویت بالا', className: `${APPROVAL_PRIORITY_BASE} bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300 border-rose-200 dark:border-rose-800` };
-const approvalLow: PillBadgeVariant = { label: 'اولویت عادی', className: `${APPROVAL_PRIORITY_BASE} bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700` };
+const approvalUrgent: PillBadgeVariant = { label: 'اولویت فوری', className: `${APPROVAL_PRIORITY_BASE} bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200 dark:border-purple-800` };
+const approvalNormal: PillBadgeVariant = { label: 'اولویت عادی', className: `${APPROVAL_PRIORITY_BASE} bg-sky-100 text-sky-800 dark:bg-sky-950/40 dark:text-sky-300 border-sky-200 dark:border-sky-800` };
+const approvalLow: PillBadgeVariant = { label: 'اولویت پایین', className: `${APPROVAL_PRIORITY_BASE} bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700` };
 const APPROVAL_PRIORITY_BADGES: PillBadgeVariants = {
   critical: approvalCritical, 'خیلی زیاد': approvalCritical,
   high: approvalHigh, 'بالا': approvalHigh, 'زیاد': approvalHigh,
   low: approvalLow, 'پایین': approvalLow, 'کم': approvalLow,
+  // v10.0.149 (TD-1178): the purchase requisition priorities (REQUISITION_PRIORITIES); «normal» showed as «متوسط»
+  urgent: approvalUrgent, 'فوری': approvalUrgent,
+  normal: approvalNormal, 'عادی': approvalNormal,
 };
 const APPROVAL_PRIORITY_FALLBACK: PillBadgeVariant = { label: 'اولویت متوسط', className: `${APPROVAL_PRIORITY_BASE} bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200 dark:border-amber-800` };
+
+/** The entity's own number (document number, requisition code); a bare numeric value gets Persian digits */
+function inboxEntityRef(refNumber: unknown, entityId: unknown): string {
+  const ref = String(refNumber ?? '').trim() || String(entityId ?? '').trim();
+  return /^\d+$/.test(ref) ? formatPersianNumber(Number(ref)) : ref;
+}
 
 function ApprovalPriorityBadge({ priority }: { priority?: string }) {
   return <PillBadge variants={APPROVAL_PRIORITY_BADGES} value={(priority || 'medium').toLowerCase()} fallback={APPROVAL_PRIORITY_FALLBACK} />;
@@ -415,7 +426,8 @@ export function ApprovalInboxPage() {
                       <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${typeMeta.color}`}>
                           <TypeIcon className="w-3.5 h-3.5" />
-                          <span>{typeMeta.label} #{formatPersianNumber(t.instance?.entityId)}</span>
+                          {/* v10.0.149 (TD-1178): the entity's own number from the row, never its database id */}
+                          <span>{typeMeta.label} {inboxEntityRef(t.refNumber, t.instance?.entityId)}</span>
                         </span>
 
                         <div className="flex items-center gap-1">

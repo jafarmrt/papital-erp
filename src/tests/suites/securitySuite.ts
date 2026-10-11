@@ -639,7 +639,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     const testUsername = 'sec009_test_' + Date.now();
     const testHash = bcrypt.hashSync('TempPassword123!', 10);
     
-    // Create test user
+    // Create test user (TD-962: its role must exist)
+    const { ensureTestRole } = await import('../fixtures/factories.js');
+    await ensureTestRole('user');
     const [createdUser] = await orm.insert(users).values({
       username: testUsername,
       password: testHash,
@@ -1188,6 +1190,8 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     const { users: metricsUsers } = await import('../../db/schema.js');
     const { eq: metricsEq } = await import('drizzle-orm');
     const metricsAdmin = await ensureAdminTestUser();
+    const { ensureTestRole: ensureMetricsRole } = await import('../fixtures/factories.js');
+    await ensureMetricsRole('personnel');
     const [metricsOperator] = await metricsOrm.insert(metricsUsers).values({ username: `p01_metrics_operator_${Date.now()}`, password: 'x', fullName: 'Metrics operator', role: 'personnel', avatarUrl: '' }).returning();
     const personnelToken = jwt.sign({ id: metricsOperator.id, username: metricsOperator.username, role: 'personnel', tokenVersion: metricsOperator.tokenVersion ?? 0 }, secret, { expiresIn: '1h' });
     const resC = await runMiddleware({
@@ -1397,6 +1401,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // بسته ۱۴ (از v9.0.33، TD-443 به بعد): دسترسی و یکپارچگی موتور گردش‌کار از مسیرهای واقعی
   const { runWorkflowAccessTests } = await import('../security/workflowAccessTests.js');
   results.push(...await runWorkflowAccessTests(shouldRunAccess));
+  // v10.0.120 (TD-1220): ارسال سند فروش به انبار فقط با سازنده آن و بازگشایی با documents.edit
+  const { runDocSubmitGuardTests } = await import('../security/docSubmitGuardTests.js');
+  results.push(...await runDocSubmitGuardTests(shouldRunAccess));
   // بسته ۱۴، PR ب (از v9.0.39، TD-446 به بعد): چرخه عمر فرایند و کارتابل
   const { runWorkflowLifecycleTests } = await import('../security/workflowLifecycleTests.js');
   results.push(...await runWorkflowLifecycleTests(shouldRunAccess));
@@ -1418,8 +1425,15 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   results.push(...await runAccessPackageTwoUserTests(shouldRunAccess));
   const { runAccessPackageTwoPageTests } = await import('../security/accessPackageTwoPageTests.js');
   results.push(...await runAccessPackageTwoPageTests(shouldRunAccess));
+  const { runRoleAuditTransactionTests } = await import('../security/roleAuditTransactionTests.js');
+  results.push(...await runRoleAuditTransactionTests(shouldRunAccess));
+  const { runRoleForeignKeyTests } = await import('../security/roleForeignKeyTests.js');
+  results.push(...await runRoleForeignKeyTests(shouldRunAccess));
   const { runAccessPackageTwoInstallTests } = await import('../security/accessPackageTwoInstallTests.js');
   results.push(...await runAccessPackageTwoInstallTests(shouldRunAccess));
+  // v10.0.76 (TD-1167): req.user carries fullName, the key routes read for the actor's name
+  const { runRequestUserFullNameTests } = await import('../security/requestUserFullNameTests.js');
+  results.push(...await runRequestUserFullNameTests(shouldRunAccess));
   // Package 1 second half (v9.0.429, TD-617): the boot leaves passwords alone, the one-off script locks non-bcrypt values
   const { runPlainPasswordLockTests } = await import('../security/plainPasswordLockTests.js');
   results.push(...await runPlainPasswordLockTests(shouldRunAccess));
@@ -1452,6 +1466,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // Phase 5 PR «ب» (from TD-904): paths that move stock ask the warehouse permission of the stock document
   const { runProcurementStockPermissionTests } = await import('../security/procurementStockPermissionTests.js');
   results.push(...await runProcurementStockPermissionTests(shouldRunAccess));
+  // Phase 3, lane L4 (TD-1172): the workflow widget shows only the current step's signatures
+  const { runWorkflowStepProgressTests } = await import('../security/workflowStepProgressTests.js');
+  results.push(...await runWorkflowStepProgressTests(shouldRunAccess));
 
   return results;
 }

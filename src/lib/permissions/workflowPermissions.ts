@@ -1,5 +1,5 @@
 /**
- * Workflow route keys (v10.0.37, TD-1150). Executing a step (`POST /workflow/tasks/:id/execute`, `/workflow/transition`)
+ * Workflow route keys (v10.0.187, TD-1150). Executing a step (`POST /workflow/tasks/:id/execute`, `/workflow/transition`)
  * needs one of these keys; the inbox (`/workflow/tasks/my-tasks`, `/tasks/stats`) also opens for `workflow.view`, but
  * lists a pending task only to a user who holds one of them, so a reader never gets a card whose decide button is 403.
  */

@@ -13,6 +13,7 @@ import { useHasPermission } from '../../../contexts/AuthContext';
 import { NO_VOUCHER_TREASURY_PERMISSION } from '../../../lib/noVoucherPermission';
 import { needsChosenContraAccount, type PersonnelPurpose } from '../../../lib/treasury/partyPurpose';
 import { PartyPurposeFields } from './PartyPurposeFields';
+import { readTreasuryVoucherPreview, type TreasuryVoucherPreview } from '../../../lib/treasury/treasuryVoucherPreview';
 import type { BankAccount, Customer, Personnel, FinancialAttachment } from '../../../types';
 
 interface TreasuryTransactionModalProps {
@@ -60,7 +61,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
   });
 
   const [isSaving, setIsSaving] = useState(false);
-  const [voucherPreview, setVoucherPreview] = useState<any>(null);
+  const [voucherPreview, setVoucherPreview] = useState<TreasuryVoucherPreview | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
   // TD-105: تاریخ پیش‌فرض از سرور (ساعت توافقی) — نه ساعت مرورگر کلاینت
@@ -108,7 +109,8 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
     const timer = setTimeout(async () => {
       setIsPreviewLoading(true);
       try {
-        const res = await fetchJson<{ success: boolean; data: any }>(
+        // v10.0.x (TD-1237): سرور خود پیش‌نمایش را می‌فرستد، نه { success, data }
+        const res = await fetchJson<unknown>(
           '/api/accounting/treasury/preview-voucher',
           {
             method: 'POST',
@@ -126,11 +128,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
             signal: controller.signal,
           }
         );
-        if (res?.success && res.data) {
-          setVoucherPreview(res.data);
-        } else {
-          setVoucherPreview(null);
-        }
+        setVoucherPreview(readTreasuryVoucherPreview(res));
       } catch (err: any) {
         if (err.name !== 'AbortError') {
           setVoucherPreview(null);
@@ -283,7 +281,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
             <div>
               <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                 <span>حساب بانکی / صندوق مرتبط *</span>
-                <HelpBadge text="حساب یا صندوقی که وجه از آن کسر یا به آن واریز می‌شود. برای صدور سند دوبل باید به حساب معین چارت متصل باشد." />
+                <HelpBadge text="حساب یا صندوقی که وجه از آن کسر یا به آن واریز می‌شود. برای صدور سند حسابداری باید به حساب معین چارت متصل باشد." />
               </label>
               <select
                 required
@@ -414,6 +412,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
               purpose={formData.purpose}
               contraAccountId={formData.contraAccountId}
               isReceipt={isReceipt}
+              settlementViaPayslipOnly
               onChange={patch => setFormData(prev => ({ ...prev, ...patch }))}
             />
 
@@ -476,8 +475,8 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                 className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
               />
               <label htmlFor="createVoucher" className="text-xs text-slate-700 dark:text-slate-300 font-medium cursor-pointer flex items-center gap-1.5">
-                <span>صدور خودکار سند حسابداری دوبل برای این تراکنش</span>
-                <HelpBadge text="با فعال بودن این گزینه، یک سند دوبل حسابداری متوازن با سرفصل بانک/صندوق و طرف‌حساب ایجاد می‌گردد. بدون سند فقط برای مانده‌های افتتاحیه است و در بررسی سلامت مالی فهرست می‌شود." />
+                <span>صدور خودکار سند حسابداری برای این تراکنش</span>
+                <HelpBadge text="با فعال بودن این گزینه، یک سند حسابداری متوازن با سرفصل بانک/صندوق و طرف‌حساب ایجاد می‌گردد. بدون سند فقط برای مانده‌های افتتاحیه است و در بررسی سلامت مالی فهرست می‌شود." />
               </label>
             </div>
             )}
@@ -498,7 +497,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[11px] font-black text-indigo-800 dark:text-indigo-300 flex items-center gap-1">
                     <ShieldCheck size={13} />
-                    پیش‌نمایش سند دوبل (همان چیزی که صادر می‌شود)
+                    پیش‌نمایش سند حسابداری (همان چیزی که صادر می‌شود)
                   </span>
                   {isPreviewLoading && <span className="text-[10px] text-slate-400">در حال محاسبه...</span>}
                 </div>
@@ -530,9 +529,9 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                 ) : !isPreviewLoading ? (
                   <p className="text-[10px] font-bold text-slate-400">برای مشاهده پیش‌نمایش، مبلغ را وارد کنید.</p>
                 ) : null}
-                {voucherPreview?.warnings?.length > 0 && (
+                {voucherPreview && voucherPreview.warnings.length > 0 && (
                   <div className="mt-2 space-y-1">
-                    {voucherPreview.warnings.map((w: string, i: number) => (
+                    {voucherPreview.warnings.map((w, i) => (
                       <p key={i} className="text-[10px] font-bold text-amber-700 dark:text-amber-300 leading-5">⚠️ {w}</p>
                     ))}
                   </div>
