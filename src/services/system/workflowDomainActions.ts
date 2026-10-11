@@ -34,6 +34,6 @@ export function registerWorkflowDomainActions(): void {
   // v10.0.237 / v10.0.238 (TD-912 / TD-913): voiding or editing a procurement order updates its requisition (not a workflow
   // action, but the same composition root: the documents package may not import procurement)
   registerLinkedOrderHooks(procurementOrderHooks);
-  // v10.0.249 (OBS-R2-02): the accounting, treasury and item cores start and close their entity workflows through this port
+  // v10.0.250 (OBS-R2-02): the accounting, treasury and item cores start and close their entity workflows through this port
   registerEntityWorkflowPort({ maybeStart: params => WorkflowEngineService.maybeStartWorkflow(params), terminateOpen: terminateOpenWorkflows });
 }

@@ -4,7 +4,7 @@ import { maybeStartEntityWorkflow, registerEntityWorkflowPort, terminateEntityWo
 import type { DbExecutor } from '../../db/drizzle';
 
 /**
- * v10.0.249 (OBS-R2-02, phase-2 decision t3 A): the accounting, treasury and item cores start and close their entity
+ * v10.0.250 (OBS-R2-02, phase-2 decision t3 A): the accounting, treasury and item cores start and close their entity
  * workflows through the port the composition root registers, never by importing the workflow engine (statically or with
  * a dynamic `import()`, which hid the bank account's dependency on the engine).
  */

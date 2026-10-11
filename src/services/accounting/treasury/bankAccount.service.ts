@@ -345,7 +345,7 @@ export class BankAccountService {
       // V2.0.0: سند افتتاحیه موجودی اولیه — DR معین بانک / CR سرمایه اولیه (4001)
       // ورکفلو شرطی: اگر تعریف workflow فعال برای «bank_account» باشد، سند پس از تأیید نهایی صادر می‌شود
       if (!initialBal.isZero()) {
-        // v10.0.249 (OBS-R2-02): through the workflow port of the composition root, no dynamic import of the engine
+        // v10.0.250 (OBS-R2-02): through the workflow port of the composition root, no dynamic import of the engine
         const wfInstance = await maybeStartEntityWorkflow({
           entityType: 'bank_account',
           entityId: String(inserted.id),
