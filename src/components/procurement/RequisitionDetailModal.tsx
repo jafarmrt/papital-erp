@@ -3,14 +3,16 @@ import { X, FileText, CheckCircle2, AlertTriangle, ShoppingCart, UserCheck, Chec
 import { toast } from 'react-hot-toast';
 import { PurchaseRequisition, ProcurementOrder } from '../../types';
 import { fetchJson } from '../../api';
-import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../utils';
+import { formatPersianNumber, formatPersianDate } from '../../utils';
 import { ConfirmWarehouseDeliveryModal } from './ConfirmWarehouseDeliveryModal';
 import { PillBadge } from '../common/PillBadge';
 import { useProcurementAccess } from '../../hooks/procurement/useProcurementAccess';
 import { canOrderRequisition, requisitionRowRemaining } from '../../lib/procurement/requisitionFields';
 import { bulkDeliveryPlan, linkedDocumentLabel, requisitionActionButtons, requisitionActionsWithoutInstance, requisitionStage } from '../../lib/procurement/requisitionActions';
+import { lineAmount, sumAmounts } from '../../lib/procurement/procurementNumbers';
 import { useRequisitionWorkflowActions } from '../../hooks/procurement/useRequisitionWorkflowActions';
 import { REQUISITION_PRIORITY_DETAIL_BADGES, REQUISITION_PRIORITY_DETAIL_FALLBACK, REQUISITION_STATUS_BADGES, REQUISITION_STATUS_FALLBACK } from './requisitionBadges';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 
 interface RequisitionDetailModalProps {
   isOpen: boolean;
@@ -36,6 +38,8 @@ export function RequisitionDetailModal({
   const [isSubmittingDelivery, setIsSubmittingDelivery] = useState(false);
   // v9.0.352 (TD-702، B10-15): هر دکمه با مجوز API خودش؛ پیش‌تر همه دکمه‌ها برای هر بیننده‌ای نشان داده می‌شد
   const access = useProcurementAccess();
+  // OBS-R2-39 (TD-992): مبلغ ریالی در واحد نمایش (ریال یا تومان)، نه «ریال» ثابت
+  const rial = useRialDisplay();
   // OBS-R2-38 (TD-992): دکمه‌های اقدام از اقدام‌های مجاز گام جاری گردش کار برای همین کاربر، نه از وضعیت درخواست
   const workflowActions = useRequisitionWorkflowActions(requisition?.id, String(requisition?.status || ''), isOpen && access.canRunWorkflowAction);
 
@@ -126,7 +130,7 @@ export function RequisitionDetailModal({
   };
 
   const items = Array.isArray(requisition.items) ? requisition.items : [];
-  const totalRequested = items.reduce((s, i) => s + (Number(i.requestedQty || 0) * Number(i.unitPriceEstimate || 0)), 0);
+  const totalRequested = sumAmounts(items, i => lineAmount(i.requestedQty, i.unitPriceEstimate));
 
   const statusStr = String(requisition.status || '');
   const stage = requisitionStage(statusStr);
@@ -267,7 +271,7 @@ export function RequisitionDetailModal({
             </div>
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
               <span className="text-slate-500 block mb-1">برآورد کل هزینه:</span>
-              <span className="font-mono font-black text-amber-700">{formatPersianPrice(requisition.totalEstimatedAmount || totalRequested)}</span>
+              <span className="font-mono font-black text-amber-700">{rial.amount(requisition.totalEstimatedAmount || totalRequested)}</span>
             </div>
           </div>
 
@@ -295,7 +299,7 @@ export function RequisitionDetailModal({
                     <th className="p-2.5 text-center">درخواستی</th>
                     <th className="p-2.5 text-center">سفارش‌شده</th>
                     <th className="p-2.5 text-center">مانده</th>
-                    <th className="p-2.5 text-center">برآورد واحد (ریال)</th>
+                    <th className="p-2.5 text-center">برآورد واحد ({rial.label})</th>
                     <th className="p-2.5 text-center">تامین‌کننده انتخابی</th>
                     <th className="p-2.5 text-center">اسناد صادره</th>
                   </tr>
@@ -325,7 +329,7 @@ export function RequisitionDetailModal({
                           )}
                         </td>
                         <td className="p-2.5 text-center font-mono text-slate-700">
-                          {formatPersianPrice(row.unitPriceEstimate || 0)}
+                          {rial.number(row.unitPriceEstimate || 0)}
                         </td>
                         <td className="p-2.5 text-center font-bold text-slate-800">
                           {row.targetSupplierName || '---'}
@@ -426,7 +430,7 @@ export function RequisitionDetailModal({
 
                       <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
                         <span className="font-mono font-bold text-xs text-slate-900 ml-2">
-                          {formatPersianPrice(order.totalAmount || 0)} ریال
+                          {rial.amount(order.totalAmount || 0)}
                         </span>
 
                         {isDelivered ? (

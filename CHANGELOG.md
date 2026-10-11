@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.0.269 — عدد و مبلغ دقیق در صفحه‌های تدارکات
+- v10.0.269 — جمع‌های تدارکات دقیق، کادر مقدار و قیمت درخواست خرید با ارقام فارسی و مبلغ‌ها در واحد نمایش ریال یا تومان (OBS-R2-39).
+
 ### v10.0.268 — پاک‌کننده لاگ پردازه: رمز در متن ساده هم پاک می‌شود
 - `sanitizeObject` در `src/middleware/logger.ts` کلید رمز را با قاعده پاک‌کننده سجل (`isSecretAuditKey`) می‌شناسد، پس `author` و `authority` دیگر پنهان نمی‌شوند و `apiKey` و `newPassword` پنهان می‌شوند؛ رمز نوشته‌شده در متن ساده (`password=…`، `?token=…`، `api_key: …`) هم پاک می‌شود (OBS-R1-03، TD-983).
 

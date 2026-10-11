@@ -3,6 +3,9 @@ import type { Item } from '../../types';
 import { formatPersianNumber, formatPersianPrice } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { currencyScale } from '../../lib/currencyScale';
+import { lineAmount, REQUISITION_QTY_SCALE } from '../../lib/procurement/procurementNumbers';
+import { RequisitionDecimalInput } from './RequisitionDecimalInput';
 
 /** یک ردیف فرم ثبت درخواست خرید */
 export interface NewRequisitionRow {
@@ -76,39 +79,33 @@ export function RequisitionItemRowEditor({ row, index, errors, onSelectItem, onC
         />
       </td>
       <td className="p-2.5 text-center">
-        <input
-          type="number"
-          min={0.001}
-          step="any"
-          aria-label={`مقدار درخواستی ردیف ${formatPersianNumber(index + 1)}`}
-          value={row.requestedQty === 0 ? '' : row.requestedQty}
-          onChange={e => onChange(row.id, 'requestedQty', e.target.value === '' ? 0 : Number(e.target.value))}
+        <RequisitionDecimalInput
+          value={row.requestedQty}
+          onChange={qty => onChange(row.id, 'requestedQty', qty)}
+          scale={REQUISITION_QTY_SCALE}
+          noun="مقدار"
+          ariaLabel={`مقدار درخواستی ردیف ${formatPersianNumber(index + 1)}`}
           placeholder="۱"
-          aria-invalid={Boolean(errorOf('requestedQty'))}
-          aria-describedby={errorOf('requestedQty') ? errorId('requestedQty') : undefined}
+          externalError={errorOf('requestedQty')}
+          errorId={errorId('requestedQty')}
           className={`w-20 text-center font-bold ${inputClass(Boolean(errorOf('requestedQty')))}`}
-          dir="ltr"
         />
-        <FieldError id={errorId('requestedQty')} message={errorOf('requestedQty')} />
       </td>
       <td className="p-2.5 text-center">
-        <input
-          type="number"
-          min={0}
-          step="any"
-          aria-label={`برآورد قیمت واحد ردیف ${formatPersianNumber(index + 1)}`}
-          value={row.unitPriceEstimate === 0 ? '' : row.unitPriceEstimate}
-          onChange={e => onChange(row.id, 'unitPriceEstimate', e.target.value === '' ? 0 : Number(e.target.value))}
+        <RequisitionDecimalInput
+          value={row.unitPriceEstimate}
+          onChange={price => onChange(row.id, 'unitPriceEstimate', price)}
+          scale={currencyScale('IRR')}
+          noun="برآورد قیمت"
+          ariaLabel={`برآورد قیمت واحد ردیف ${formatPersianNumber(index + 1)}`}
           placeholder="۰"
-          aria-invalid={Boolean(errorOf('unitPriceEstimate'))}
-          aria-describedby={errorOf('unitPriceEstimate') ? errorId('unitPriceEstimate') : undefined}
+          externalError={errorOf('unitPriceEstimate')}
+          errorId={errorId('unitPriceEstimate')}
           className={`w-28 text-center ${inputClass(Boolean(errorOf('unitPriceEstimate')))}`}
-          dir="ltr"
         />
-        <FieldError id={errorId('unitPriceEstimate')} message={errorOf('unitPriceEstimate')} />
       </td>
       <td className="p-2.5 text-center font-bold text-amber-700">
-        {formatPersianPrice(row.requestedQty * row.unitPriceEstimate)}
+        {formatPersianPrice(lineAmount(row.requestedQty, row.unitPriceEstimate))}
       </td>
       <td className="p-2.5 text-center">
         <button
