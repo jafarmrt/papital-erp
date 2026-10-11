@@ -4,7 +4,7 @@ import { brief, fixture } from './documentEntryTests.js';
 import { runReservationCases } from './stockReservationTests.js';
 
 /**
- * v10.0.264 (OBS-R1-47, TD-985): a document's project comes only from `documents.project_id`. Before, the remittance,
+ * v10.0.270 (OBS-R1-47, TD-985): a document's project comes only from `documents.project_id`. Before, the remittance,
  * waste and receipt vouchers read a project code out of the free-text notes («پروژه: <code>»), so a remittance
  * recorded without a project but noting a project code debited that project's work in progress (1402) although it
  * consumed no reservation and passed none of the project checks.
@@ -12,7 +12,7 @@ import { runReservationCases } from './stockReservationTests.js';
 export async function runProjectFromNotesTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   return runReservationCases(shouldRun, [
     ['reg_voucher_project_not_from_notes_obs_r1_47',
-      'v10.0.264: a remittance without a project whose notes name a project code debits the unassigned consumption account (6003), not that project\'s work in progress (OBS-R1-47)',
+      'v10.0.270: a remittance without a project whose notes name a project code debits the unassigned consumption account (6003), not that project\'s work in progress (OBS-R1-47)',
       ['obs-r1-47', 'td985', 'vouchers', 'projects', 'accounting'], projectFromNotesCase],
   ]);
 }

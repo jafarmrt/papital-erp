@@ -10614,6 +10614,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 3 PR b (v9.0.159 on): fiscal-year closing and reopening (TD-545 ...)
   const { runFiscalClosingTests } = await import('../regression/fiscalClosingTests.js');
   results.push(...await runFiscalClosingTests(shouldRun));
+  const { runClosingPartyDetailTests } = await import('../regression/closingPartyDetailTests.js');
+  results.push(...await runClosingPartyDetailTests(shouldRun));
   const { runFiscalYearOrderTests } = await import('../regression/fiscalYearOrderTests.js');
   results.push(...await runFiscalYearOrderTests(shouldRun));
   const { runManualVoucherCurrencyTests } = await import('../regression/manualVoucherCurrencyTests.js');

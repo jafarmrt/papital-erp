@@ -570,7 +570,7 @@ export class VoucherSyncService {
         matchedProjectName = p.title || p.projectCode;
       }
     }
-    // v10.0.264 (OBS-R1-47): the project comes only from documents.project_id; a project code in the notes was read before
+    // v10.0.270 (OBS-R1-47): the project comes only from documents.project_id; a project code in the notes was read before
 
     // V10-1.1 & V5.0.17: fallback تاریخ ۱۰ کاراکتری ایمن
     const docDate = doc.date ? String(doc.date).slice(0, 10) : await businessTodayIsoDate();
@@ -799,7 +799,7 @@ export class VoucherSyncService {
         matchedProjectName = p.title || p.projectCode;
       }
     }
-    // v10.0.264 (OBS-R1-47): the project comes only from documents.project_id; a project code in the notes was read before
+    // v10.0.270 (OBS-R1-47): the project comes only from documents.project_id; a project code in the notes was read before
 
     let voucherType: JournalVoucher['voucherType'] = 'general';
     let voucherDescription = '';
