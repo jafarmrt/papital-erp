@@ -8,6 +8,9 @@
 const persianDigits = (value: string | number): string => String(value).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
 
 /** قفل تدریجی نام کاربری و نشانی، یا قفل کل حساب؛ برای نام کاربری موجود و ناموجود یکسان */
+/** v10.0.211 (OBS-R2-09): the 503 of a login whose lock state cannot be read from the database (fail closed) */
+export const LOGIN_STATE_UNREADABLE_MESSAGE = 'ورود هم‌اکنون ممکن نیست؛ پایگاه‌داده پاسخ نمی‌دهد. چند لحظه بعد دوباره تلاش کنید.';
+
 export function usernameLockoutMessage(minutes: number): string {
   return `ورود با این نام کاربری از این دستگاه به دلیل تلاش‌های ناموفق پیاپی موقتاً بسته است؛ ${persianDigits(minutes)} دقیقه دیگر دوباره تلاش کنید.`;
 }
