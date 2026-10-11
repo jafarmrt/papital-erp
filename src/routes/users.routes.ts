@@ -15,6 +15,7 @@ import { createUser, deleteUser, restoreUser, updateOwnProfile, updateUser } fro
 import { workflowsRequiringRole } from '../services/workflow/transitionRoles.js';
 import { roleDisplayName } from '../lib/users/roleDisplayName.js';
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE } from '../lib/auth/passwordPolicy.js';
+import { NotFoundError, UnauthorizedError } from '../errors/customErrors.js';
 
 const router = Router();
 router.use(authenticateToken); // Protect all user routes
@@ -56,7 +57,7 @@ export { PERMISSION_CATALOG };
 // Get current user's active permissions array
 router.get('/users/my-permissions', asyncHandler(async (req, res) => {
   const user = req.user;
-  if (!user) return res.status(401).json({ error: 'غیر مجاز' });
+  if (!user) throw new UnauthorizedError('غیر مجاز');
 
   const [roleRecord] = await orm.select().from(roles).where(eq(roles.code, user.role));
   // v9.0.149 (TD-894): مدیر سیستم هم نام ذخیره‌شده نقشش را می‌گیرد تا نوار بالا و نمایه برچسبی از روی کد نسازند.
@@ -79,9 +80,9 @@ router.get('/users/my-permissions', asyncHandler(async (req, res) => {
 // Profile endpoints (Any authenticated user can manage their profile)
 router.get('/users/profile', asyncHandler(async (req, res) => {
   const userId = req.user?.id;
-  if (!userId) return res.status(401).json({ error: 'غیر مجاز' });
+  if (!userId) throw new UnauthorizedError('غیر مجاز');
   const [u] = await orm.select().from(users).where(eq(users.id, userId));
-  if (!u) return res.status(404).json({ error: 'کاربر یافت نشد' });
+  if (!u) throw new NotFoundError('کاربر یافت نشد', undefined, 'USER_NOT_FOUND');
   const { password: _, ...userInfo } = u;
   res.json({
     ...userInfo,
@@ -92,7 +93,7 @@ router.get('/users/profile', asyncHandler(async (req, res) => {
 
 router.put('/users/profile', validate(updateProfileSchema), asyncHandler(async (req, res) => {
   const userId = req.user?.id;
-  if (!userId) return res.status(401).json({ error: 'غیر مجاز' });
+  if (!userId) throw new UnauthorizedError('غیر مجاز');
   const { user: updatedUser, passwordChanged } = await updateOwnProfile(req, userId, req.body);
 
   // v9.0.218 (TD-531): نسخه توکن بالا رفت و نشست‌های دیگر کاربر باطل‌اند؛ همین نشست با توکن تازه ادامه می‌یابد، وگرنه
