@@ -10745,6 +10745,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 8 PR E (v9.0.335+): the data of a document (treasury rows by permission)
   const { runDocumentDataTests } = await import('../regression/documentDataTests.js');
   results.push(...await runDocumentDataTests(shouldRun));
+  // Series 10 phase 3 L2 (TD-1136): the manual invoice form's service charge through POST and PUT /documents
+  const { runInvoiceServiceChargeTests } = await import('../regression/invoiceServiceChargeTests.js');
+  results.push(...await runInvoiceServiceChargeTests(shouldRun));
 
   // Package 13 PR B (v9.0.249+): reading daily work logs (list, statistics, timestamps)
   const { runDailyLogReadTests } = await import('../regression/dailyLogReadTests.js');

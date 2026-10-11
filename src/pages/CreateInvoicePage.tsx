@@ -19,6 +19,8 @@ import { useInvoiceBuyer } from '../hooks/invoices/useInvoiceBuyer';
 import { useInvoiceSave } from '../hooks/invoices/useInvoiceSave';
 import { getSellableStock } from '../lib/stockAvailability';
 import { computeInvoiceTotals } from '../lib/invoiceTotals';
+import { serviceChargeInputOf } from '../lib/invoices/serviceChargeInput';
+import { InvoiceServiceChargeField } from '../components/invoices/create/InvoiceServiceChargeField';
 import { currencyChangeError, lineDiscountError, pricesForCurrency } from '../lib/invoices/invoiceLine';
 import { printLineAmounts } from '../lib/invoices/invoicePrintTotals';
 import { amountDecimalsOf } from '../lib/invoices/invoiceListDocuments';
@@ -72,6 +74,9 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
   // VAT & Tax states
   const [applyVat, setApplyVat] = useState(false);
   const [vatRate, setVatRate] = useState<number>(10);
+  // v10.0.250 (TD-1136): هزینه ارسال و خدمات فاکتور دستی (`serviceChargeAmount`)
+  const [serviceChargeText, setServiceChargeText] = useState('');
+  const serviceCharge = serviceChargeInputOf(serviceChargeText);
 
   const [selectedItem, setSelectedItem] = useState('');
   const [selectedItemObj, setSelectedItemObj] = useState<Item | null>(null);
@@ -105,6 +110,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     notes,
     applyVat,
     vatRate,
+    serviceChargeText,
     docItems,
     // v8.0.111 (TD-388): پیوند پرونده CRM با پیش‌نویس نگه داشته می‌شود
     crmLeadId
@@ -134,6 +140,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       if (loaded.notes) setNotes(loaded.notes);
       if (typeof loaded.applyVat === 'boolean') setApplyVat(loaded.applyVat);
       if (loaded.vatRate) setVatRate(loaded.vatRate);
+      if (typeof loaded.serviceChargeText === 'string') setServiceChargeText(loaded.serviceChargeText);
       if (Number(loaded.crmLeadId) > 0) setCrmLeadId(Number(loaded.crmLeadId));
       if (Array.isArray(loaded.docItems) && loaded.docItems.length > 0) {
         setDocItems(loaded.docItems);
@@ -170,6 +177,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       setExchangeRate(form.exchangeRate);
       setApplyVat(form.vatPercent > 0);
       if (form.vatPercent > 0) setVatRate(form.vatPercent);
+      setServiceChargeText(form.serviceChargeAmount > 0 ? String(form.serviceChargeAmount) : '');
       if (form.docItems) {
         const located = invoiceLineLocations(form.docItems, warehouses.map(w => w.code));
         if (located.header) setLocation(located.header);
@@ -212,6 +220,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     setExchangeRate(0);
     setApplyVat(false);
     setVatRate(10);
+    setServiceChargeText('');
     setDocItems([]);
     setSelectedItem('');
     setSelectedItemObj(null);
@@ -339,6 +348,10 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       toast.error(rateError);
       return;
     }
+    if (serviceCharge.error) {
+      toast.error(serviceCharge.error);
+      return;
+    }
 
     // v9.0.304 (TD-801): ویرایش پیش‌فاکتور آن را قطعی نمی‌کند (سرور وضعیت «نهایی» را در ویرایش نمی‌پذیرد)؛ قطعی شدن از گردش
     // کار تأیید آن است. پیش‌تر گزینه انتخاب‌پذیر بود و به پیام نادرست «موجودی کافی نیست» با موجودی صفر ردیف بارشده می‌رسید
@@ -393,6 +406,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       crmLeadId: !editingDocId && crmLeadId ? Number(crmLeadId) : undefined,
       // v8.0.104 (TD-381): فقط درصد؛ مبلغ مالیات را سرور با همان قاعده جمع‌های فرم حساب می‌کند
       vatPercent: applyVat ? vatRate : 0,
+      serviceChargeAmount: serviceCharge.amount,
       ...(editingDocId && editingVersion ? { version: editingVersion } : {}),
       items: docItems.map(d => ({ itemId: d.item.id, quantity: d.quantity, unit_price: d.unitPrice, discount: d.discount, location: lineLocationOf(d, location) }))
     };
@@ -408,7 +422,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
   };
 
   // v7.0.76 (P3-6): Decimal و همان قاعده مالیات سرور (قبلاً ضرب و جمع اعشاری جاوااسکریپت)
-  const { gross: totalSum, discount: totalDiscount, vatAmount, payable: finalPrice } = computeInvoiceTotals(docItems, applyVat ? vatRate : 0, currency);
+  const { gross: totalSum, discount: totalDiscount, vatAmount, serviceCharge: serviceChargeTotal, payable: finalPrice } = computeInvoiceTotals(docItems, applyVat ? vatRate : 0, currency, serviceCharge.error ? 0 : serviceCharge.amount);
   // v8.0.106 (TD-383): مبالغ فاکتور ارزی با دو رقم اعشار، همان مقدار ذخیره‌شده (پیش‌تر ۲۰۰٫۵ دلار «۲۰۱»)
   const amountDecimals = amountDecimalsOf(currency);
 
@@ -729,6 +743,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                     </div>
                   )}
                 </div>
+                <InvoiceServiceChargeField value={serviceChargeText} onChange={setServiceChargeText} error={serviceCharge.error} currency={currency} />
 
                 <div className="flex flex-wrap items-center justify-end gap-6">
                   <div className="text-center font-medium text-slate-500 text-xs">
@@ -743,6 +758,12 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                     <div className="text-center font-medium text-slate-500 text-xs">
                       ارزش افزوده ({formatPersianNumber(vatRate)}٪): 
                       <span className="text-amber-700 font-bold block mt-0.5 text-base">{formatPersianPrice(vatAmount, undefined, amountDecimals)}</span>
+                    </div>
+                  )}
+                  {serviceChargeTotal > 0 && (
+                    <div className="text-center font-medium text-slate-500 text-xs">
+                      ارسال و خدمات:
+                      <span className="text-slate-800 font-bold block mt-0.5 text-base">{formatPersianPrice(serviceChargeTotal, undefined, amountDecimals)}</span>
                     </div>
                   )}
                   <div className="text-center font-medium text-indigo-700 bg-indigo-50 border border-indigo-100 px-4 py-2 rounded-lg text-xs">

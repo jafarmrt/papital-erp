@@ -14,6 +14,8 @@ export interface InvoiceTotals {
   /** پایه مالیات؛ منفی به صفر گرد می‌شود */
   net: number;
   vatAmount: number;
+  /** v10.0.250 (TD-1136): هزینه ارسال و خدمات (`documents.service_charge_amount`) */
+  serviceCharge: number;
   payable: number;
 }
 
@@ -22,8 +24,11 @@ export interface InvoiceTotals {
  * `resolveDocumentVat` در src/services/documents/documentVat.ts): مبلغ مالیات = گرد(خالص × درصد ÷ ۱۰۰) به ریال.
  * پیش‌تر فرم آن را با ضرب اعشاری جاوااسکریپت می‌ساخت؛ از v8.0.104 (TD-381) فرم فقط درصد را می‌فرستد و سرور مبلغ را حساب می‌کند.
  * v8.0.105 (TD-382): مالیات به کوچک‌ترین واحد ارز سند گرد می‌شود (ریال بی‌اعشار، ارز خارجی سِنت)، همان قاعده سرور.
+ * v10.0.250 (TD-1136): مبلغ قابل پرداخت = خالص + مالیات + هزینه ارسال و خدمات، همان `computeDocumentAmounts` سرور.
  */
-export function computeInvoiceTotals(lines: readonly InvoiceTotalsLine[] | null | undefined, vatPercent: number, currency = 'IRR'): InvoiceTotals {
+export function computeInvoiceTotals(
+  lines: readonly InvoiceTotalsLine[] | null | undefined, vatPercent: number, currency = 'IRR', serviceCharge: DecimalValue = 0,
+): InvoiceTotals {
   const safeLines = Array.isArray(lines) ? lines : [];
   let gross = fin(0);
   let discount = fin(0);
@@ -34,11 +39,13 @@ export function computeInvoiceTotals(lines: readonly InvoiceTotalsLine[] | null 
   const rawNet = gross.round(4).subtract(discount.round(4));
   const net = rawNet.isNegative() ? fin(0) : rawNet.round(4);
   const vat = vatPercent > 0 ? net.multiply(vatPercent).divide(100, 12).round(currencyScale(currency)) : fin(0);
+  const service = fin(serviceCharge ?? 0);
   return {
     gross: gross.round(4).toNumber(),
     discount: discount.round(4).toNumber(),
     net: net.toNumber(),
     vatAmount: vat.toNumber(),
-    payable: net.add(vat).toNumber(),
+    serviceCharge: service.toNumber(),
+    payable: net.add(vat).add(service).toNumber(),
   };
 }
