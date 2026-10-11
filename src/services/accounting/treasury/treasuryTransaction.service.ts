@@ -9,11 +9,12 @@ import { needsChosenContraAccount, normalizePartyPurpose, requireChoosableContra
 import { isSalarySettlementPayment, SALARY_SETTLEMENT_VIA_PAYSLIP_MESSAGE } from '../../../lib/treasury/partyPurpose.js';
 import { assertWithinDocumentRemaining, lockSettlementDocument } from './documentRemaining.js';
 import { assertAdvanceVoidKeepsBalance, isAdvancePayment, lockAdvancePersonnel } from './advanceVoidGuard.js';
-import { assertTreasuryDocumentLink, documentPartyOfTreasuryLink, resolveTreasuryPartyName } from './treasuryLinks.js';
+import { assertPersonnelPartyId, assertTreasuryDocumentLink, documentPartyOfTreasuryLink, resolveTreasuryPartyName } from './treasuryLinks.js';
 import { validateLockOrder, LockHierarchyLevel } from '../../../lib/lockOrder.js';
 import { domainEventBus } from '../../events/domainEventBus.js';
 import { DomainEventType } from '../../events/domainEvents.js';
 import { OutboxService } from '../../events/outboxService.js';
+import { auditTreasuryTransactionCreated, auditTreasuryTransactionVoided, auditTreasuryTransfer, type TreasuryAuditActor } from './treasuryAudit.js';
 import { fin, type DecimalValue } from '../../../lib/financialDecimal.js';
 import { money, moneyOr } from '../../../lib/money.js';
 import type { TreasuryTransaction, Account } from '../../../types.js';
@@ -45,7 +46,7 @@ export class TreasuryTransactionService {
 
   /**
    * V1.8.0: انتخاب طرف حساب متقابل — منطق مشترک بین ثبت و پیش‌نمایش سند
-   * purpose برای پرسنل: 'settlement' (تسویه حقوق → 3201) | 'advance' (مساعده → 1301)
+   * purpose برای پرسنل: 'settlement' (تسویه حقوق → 3201) | 'advance' (مساعده → 1301) | 'deductions' (واریز کسورات → 3205)
    * v9.0.82 (TD-507، ت۴ الف): «متفرقه» و «سایر» پرسنل سرفصلی را می‌گیرند که کاربر انتخاب کرده است (`contraAccountId`)؛
    * پیش‌تر «متفرقه» به دریافتنی تجاری و «سایر» به حقوق پرداختنی می‌رفت.
    */
@@ -54,14 +55,14 @@ export class TreasuryTransactionService {
     purpose: string | null | undefined,
     tx?: DbExecutor,
     contraAccountId?: number | null
-  ): Promise<{ account: Account | null; fallbackGeneralId: number | null; conceptLabel: string }> {
+  ): Promise<{ account: Account | null; conceptLabel: string }> {
     let account: Account | null = null;
     let conceptLabel = '';
 
     if (needsChosenContraAccount(partyType, purpose)) {
-      if (!contraAccountId) return { account: null, fallbackGeneralId: null, conceptLabel: 'سرفصل طرف مقابل' };
+      if (!contraAccountId) return { account: null, conceptLabel: 'سرفصل طرف مقابل' };
       account = await requireChoosableContraAccount(tx, contraAccountId);
-      return { account, fallbackGeneralId: null, conceptLabel: account.name };
+      return { account, conceptLabel: account.name };
     }
 
     if (partyType === 'customer') {
@@ -74,6 +75,10 @@ export class TreasuryTransactionService {
       if (purpose === 'advance') {
         account = await AccountMappingService.getEmployeeAdvanceAccount(tx);
         conceptLabel = 'مساعده و وام پرسنل';
+      } else if (purpose === 'deductions') {
+        // v10.0.257 (TD-952، ت۵ الف): واریز کسورات فیش با تفصیلی پرسنل، همان حسابی که فیش بستانکار می‌کند
+        account = await AccountMappingService.getEmployeeDeductionsPayableAccount(tx);
+        conceptLabel = 'سایر کسورات حقوق پرداختنی';
       } else {
         account = await AccountMappingService.getWagesPayableAccount(tx);
         conceptLabel = 'حقوق و دستمزد پرداختنی';
@@ -84,21 +89,9 @@ export class TreasuryTransactionService {
       conceptLabel = 'حساب‌های دریافتنی/پرداختنی';
     }
 
-    // Fallback به معین عمومی (مثل 12 برای 1201) اگر تفصیلی یافت نشد
-    let fallbackGeneralId: number | null = null;
-    if (!account) {
-      const allAccs = await orm.select().from(accounts).where(eq(accounts.isDeleted, 0));
-      const code = purpose === 'advance' && partyType === 'personnel'
-        ? (await AccountMappingService.getMappings(tx)).employeeAdvanceAccountCode
-        : (partyType === 'customer' ? (await AccountMappingService.getMappings(tx)).tradeReceivablesAccountCode
-          : partyType === 'supplier' ? (await AccountMappingService.getMappings(tx)).tradePayablesAccountCode
-            : partyType === 'personnel' ? (await AccountMappingService.getMappings(tx)).wagesPayableAccountCode : '');
-      const generalCode = code.slice(0, 2);
-      const general = allAccs.find(a => a.code === generalCode);
-      fallbackGeneralId = general?.id || null;
-    }
-
-    return { account, fallbackGeneralId, conceptLabel };
+    // v10.0.262 (OWN-03، OBS-R2-04): نبود حساب نگاشت هرگز به حساب کل (دو رقم اول کد) نمی‌رود (قاعده TD-550)؛ پیش‌تر
+    // ردیف طرف مقابل روی حساب کل می‌نشست و آن را با اتصال دوم استخر درون تراکنش می‌خواند. ثبت با سند رد می‌شود.
+    return { account, conceptLabel };
   }
 
   /**
@@ -142,9 +135,9 @@ export class TreasuryTransactionService {
     } catch (err) {
       if (!(err instanceof ValidationError)) throw err;
       warnings.push(err.message);
-      contra = { account: null, fallbackGeneralId: null, conceptLabel: 'سرفصل طرف مقابل' };
+      contra = { account: null, conceptLabel: 'سرفصل طرف مقابل' };
     }
-    const contraAccountId = contra?.account?.id || contra?.fallbackGeneralId || null;
+    const contraAccountId = contra?.account?.id || null;
     if (!contraAccountId && needsChosenContraAccount(data.partyType || 'other', data.purpose)) {
       warnings.push('سرفصل طرف مقابل را انتخاب کنید؛ تا انتخاب نشود سند صادر نمی‌شود.');
     } else if (!contraAccountId) {
@@ -221,10 +214,12 @@ export class TreasuryTransactionService {
     /** v8.0.118 (TD-409): کاربر مجوز «ثبت خزانه و چک بدون سند حسابداری» را دارد (روت می‌سنجد، نه بدنه درخواست) */
     allowNoVoucher?: boolean;
     attachments?: unknown[];
-    // V1.8.0: انگیزه پرداخت به پرسنل — 'settlement' (تسویه حقوق) | 'advance' (مساعده) | 'other' (v9.0.82)
+    // V1.8.0: انگیزه پرداخت به پرسنل — 'settlement' (تسویه حقوق) | 'advance' (مساعده) | 'deductions' (واریز کسورات، v10.0.257) | 'other' (v9.0.82)
     purpose?: string;
     /** v9.0.82 (TD-507): سرفصل طرف مقابلی که کاربر برای «متفرقه» و «سایر» پرسنل انتخاب کرده است */
     contraAccountId?: number | null;
+    /** v10.0.262 (TD-934): ممیزی ثبت با `tx` همین ثبت */
+    audit?: TreasuryAuditActor;
   }): Promise<TreasuryTransaction> {
     const amount = Number(data.amount) || 0;
     if (amount <= 0) throw new ValidationError('مبلغ تراکنش باید بزرگتر از صفر باشد');
@@ -270,6 +265,7 @@ export class TreasuryTransactionService {
       const txCurrency = data.currency || bank.currency || 'IRR';
       // v9.0.83 (TD-501، B04-05): شناسه طرف حساب در جدول همان نوع، و سند پیوسته فعال، هم‌سو و با همان طرف حساب؛
       // v9.0.460 (TD-908): و با همان ارز ردیف، مانند «وصل دوباره»
+      assertPersonnelPartyId(partyType, partyId);
       const partyCurrentName = await resolveTreasuryPartyName(txEngine, partyType, partyId);
       if (data.documentId) {
         await assertTreasuryDocumentLink(txEngine, {
@@ -307,7 +303,7 @@ export class TreasuryTransactionService {
 
         // V1.8.0: طرف حساب متقابل از منطق مشترک (مپینگ + purpose)
         const contra = await this.resolveContraAccount(partyType, party.purpose, txEngine, party.contraAccountId);
-        const contraAccountId = contra?.account?.id || contra?.fallbackGeneralId || null;
+        const contraAccountId = contra?.account?.id || null;
 
         if (!contraAccountId) {
           throw new NotFoundError('حساب معین طرف حساب در چارت حساب‌ها یافت نشد (آن را از تنظیمات ← تنظیمات حسابداری پیکربندی کنید)');
@@ -403,7 +399,7 @@ export class TreasuryTransactionService {
       );
       await OutboxService.saveToOutbox(txEngine, treasuryEvent);
 
-      return {
+      const created = {
         ...tx,
         amount: tx.amount.toNumber(), // قرارداد API: مبلغ عدد (P2-6)
         exchangeRate: tx.exchangeRate?.toNumber() ?? null,
@@ -413,6 +409,8 @@ export class TreasuryTransactionService {
         status: tx.status as TreasuryTransaction['status'],
         bankAccountTitle: bank.title,
       } as TreasuryTransaction;
+      await auditTreasuryTransactionCreated(txEngine, data.audit, created, { ...created });
+      return created;
     });
   }
 
@@ -427,6 +425,8 @@ export class TreasuryTransactionService {
     reason: string;
     userId?: number;
     username?: string;
+    /** v10.0.262 (TD-934): ممیزی ابطال با `tx` همین ابطال */
+    audit?: TreasuryAuditActor;
   }): Promise<TreasuryTransaction> {
     const reason = (params.reason || '').trim();
     if (!reason) throw new ValidationError('دلیل ابطال الزامی است');
@@ -510,7 +510,9 @@ export class TreasuryTransactionService {
           side.id === original.id ? '' : ` (طرف دیگر انتقال ${original.transactionNumber})`, params);
         if (side.id === original.id) originalReversal = reversal;
       }
-      return originalReversal as TreasuryTransaction;
+      const reversal = originalReversal as TreasuryTransaction;
+      await auditTreasuryTransactionVoided(txEngine, params.audit, original, { id: reversal.id, transactionNumber: reversal.transactionNumber, voucherId: reversal.voucherId ?? null }, reason);
+      return reversal;
     });
   }
 
@@ -653,6 +655,8 @@ export class TreasuryTransactionService {
     allowNoVoucher?: boolean;
     /** v8.0.20 (TD-274): نرخ تسعیر انتقال ارزی (ریال برای هر واحد) */
     exchangeRate?: number;
+    /** v10.0.262 (TD-934): ممیزی انتقال با `tx` همین انتقال */
+    audit?: TreasuryAuditActor;
   }): Promise<{ payment: TreasuryTransaction; receipt: TreasuryTransaction; voucherId: number | null }> {
     const amount = Number(data.amount) || 0;
     if (amount <= 0) throw new ValidationError('مبلغ انتقال باید بزرگتر از صفر باشد');
@@ -803,6 +807,10 @@ export class TreasuryTransactionService {
 
       // قرارداد API: مبلغ عدد (P2-6)
       const asDto = (t: typeof payTx) => ({ ...t, amount: t.amount.toNumber(), exchangeRate: t.exchangeRate?.toNumber() ?? null }) as unknown as TreasuryTransaction;
+      await auditTreasuryTransfer(txEngine, data.audit, {
+        paymentId: payTx.id, receiptId: recTx.id, voucherId, amount,
+        fromBankAccountId: data.fromBankAccountId, toBankAccountId: data.toBankAccountId,
+      });
       return { payment: asDto(payTx), receipt: asDto(recTx), voucherId };
     });
   }

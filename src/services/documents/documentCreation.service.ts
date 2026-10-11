@@ -22,7 +22,8 @@ import { editLinkedOrder, lockLinkedRequisition } from './linkedOrderHooks.js';
 import { isAutoRefNumber } from '../../lib/documents/documentRefRules.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { DocumentStockEngine } from './documentStockEngine.service.js';
-import { resolveDocumentVat, parseVatInput, VAT_DOC_TYPES } from './documentVat.js';
+import { resolveDocumentVat, parseVatInput } from './documentVat.js';
+import { resolveServiceCharge } from './documentServiceCharge.js';
 import { assertLineDiscountsWithinAmount } from './lineDiscount.js';
 import { resolveDocumentExchangeRate, stockUnitPriceInIrr } from './documentExchangeRate.js';
 import { netLineUnitPrice } from './purchaseLineCost.js';
@@ -258,6 +259,7 @@ export class DocumentCreationService {
         exchangeRate: docExchangeRate,
         vatPercent: docVat.vatPercent,
         vatAmount: docVat.vatAmount,
+        serviceChargeAmount: money(resolveServiceCharge(existingDoc.type, body.serviceChargeAmount, existingDoc.serviceChargeAmount)),
         attachments: storedAttachments,
         version: newVer
       }).where(and(eq(documents.id, id), eq(documents.version, existingDoc.version)))
@@ -371,16 +373,8 @@ export class DocumentCreationService {
       throw new ValidationError('فاکتور مرجع فقط برای سند برگشت از فروش قابل ثبت است.');
     }
 
-    // v7.0.103 (TD-191): هزینه ارسال و کارمزد فقط روی فاکتور فروش، نامنفی
-    const serviceChargeAmount = fin(body.serviceChargeAmount ?? 0);
-    if (!serviceChargeAmount.isZero()) {
-      if (!VAT_DOC_TYPES.has(docType)) {
-        throw new ValidationError('هزینه ارسال و خدمات فقط روی فاکتور فروش ثبت می‌شود.');
-      }
-      if (serviceChargeAmount.isNegative()) {
-        throw new ValidationError(`هزینه ارسال و خدمات نمی‌تواند منفی باشد (مقدار دریافتی: ${serviceChargeAmount.toString()}).`);
-      }
-    }
+    // v7.0.103 (TD-191) / v10.0.260 (TD-1136): هزینه ارسال و کارمزد فقط روی فاکتور فروش، نامنفی
+    const serviceChargeAmount = resolveServiceCharge(docType, body.serviceChargeAmount);
 
     // v8.0.103 (TD-380): تخفیف هر ردیف حداکثر برابر مبلغ همان ردیف
     assertLineDiscountsWithinAmount(docLines);

@@ -78,6 +78,10 @@ export function ReorderItemRow({ item, theme, isSelected, onToggle, onAction, on
         {Number(item.in_transit_qty) > 0 ? `${formatPersianNumber(Number(item.in_transit_qty))} ${item.unit}` : '-'}
       </td>
 
+      <td className="p-3 text-center font-mono text-slate-600">
+        {Number(item.requested_qty) > 0 ? `${formatPersianNumber(Number(item.requested_qty))} ${item.unit}` : '-'}
+      </td>
+
       <td className="p-3 text-center font-mono font-bold text-slate-700">
         {formatPersianNumber(item.reorder_point)} {item.unit}
       </td>

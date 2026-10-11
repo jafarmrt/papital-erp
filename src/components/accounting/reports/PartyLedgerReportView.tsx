@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import type { PartyOption } from '../../../types';
 import { usePartiesQuery, usePartyLedgerReport, type PartyLedgerParams } from '../../../hooks/accounting/usePartyProjectReportQueries';
 import { JalaliDateInput } from '../../common/JalaliDateInput';
+import { PartyTemporaryRowsPanel } from './PartyTemporaryRowsPanel';
 
 type PartyTypeFilter = 'all' | 'customer' | 'supplier' | 'personnel';
 type CurrencyFilter = 'all' | 'IRR' | 'USD' | 'EUR' | 'AED' | 'GBP';
@@ -757,6 +758,8 @@ export function PartyLedgerReportView({
                 </tfoot>
               </table>
             </div>
+
+            <PartyTemporaryRowsPanel rows={reportData.temporaryRows} formatAmount={v => formatPersianPrice(v, reportData.currency || 'IRR')} />
 
             {/* Official Signatures Block for Print */}
             <div className="grid grid-cols-2 gap-8 pt-8 border-t border-slate-200 dark:border-slate-700 mt-6 text-center text-xs">

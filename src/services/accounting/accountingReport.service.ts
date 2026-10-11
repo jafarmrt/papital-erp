@@ -22,27 +22,12 @@ import { isAllCurrenciesView, voucherItemCurrencyCondition, voucherItemCurrencyS
 import { exactDetailedNameCondition, partyDetailedRowsCondition, personnelDetailedRowsCondition, type PartyDetailedFilter } from './partyDetailedRows.js';
 import type { BalanceSheetReport, IncomeStatementReport, StatementRow } from '../../lib/accounting/financialStatements.js';
 import { accountSubtreeCondition } from './accountSubtree.js';
+import { foreignOrigin, permanentAccountCondition, readPartyTemporaryRows } from './partyTemporaryRows.js';
 import { yearEndClosingCutoff, yearEndClosingVoucherSql } from './yearEndClosingVouchers.js';
 import { accountCardHasFilter, type AccountCardReport } from '../../lib/accounting/accountCard.js';
 import { JOURNAL_BOOK_MAX_PAGE_SIZE, JOURNAL_BOOK_PAGE_SIZE, type JournalBookReport, type JournalBookRow } from '../../lib/accounting/journalBook.js';
 import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { currentDetailNames, detailDisplayName, isManualReferenceModule, itemOfOpeningRow, openingVoucherItems, trialBalanceDetailKey, type DetailRef, type StableRef } from './trialBalanceDetail.js';
-
-/** v8.0.16 (TD-260): ارز، مبلغ و نرخ اصلی ردیف ارزی که در نمای همه ارزها به ریال تبدیل شده است */
-function foreignOrigin(allCurrencies: boolean, row: {
-  rowCurrency: string;
-  originalDebit: DecimalValue | null;
-  originalCredit: DecimalValue | null;
-  exchangeRate: DecimalValue | null;
-}): ForeignAmountOrigin {
-  if (!allCurrencies || row.rowCurrency === 'IRR') return {};
-  return {
-    originalCurrency: row.rowCurrency,
-    originalDebit: fin(row.originalDebit).toNumber(),
-    originalCredit: fin(row.originalCredit).toNumber(),
-    exchangeRate: fin(row.exchangeRate ?? 1).toNumber(),
-  };
-}
 
 /** ردیف گزارش خلاصه گردش پروژه (GET /accounting/reports/project-summary) */
 export interface ProjectSummaryReportRow {
@@ -672,6 +657,8 @@ export class AccountingReportService {
     if (currencyCondition) periodConditions.push(currencyCondition);
     const debitAmount = voucherItemReportAmountSql(journalVoucherItems.debit, params.currency);
     const creditAmount = voucherItemReportAmountSql(journalVoucherItems.credit, params.currency);
+    // v10.0.257 (TD-915 / TD-924، ت۵ الف): کارت طرف حساب مانده را فقط روی حساب‌های دائم می‌گیرد؛ ردیف موقت جدا می‌آید
+    const partyPermanent = params.party ? permanentAccountCondition() : undefined;
 
     const rawRows = await orm.select({
       voucherId: journalVouchers.id,
@@ -694,7 +681,7 @@ export class AccountingReportService {
     .from(journalVoucherItems)
     .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
     .innerJoin(accounts, eq(accounts.id, journalVoucherItems.accountId))
-    .where(and(...periodConditions))
+    .where(and(...periodConditions, partyPermanent))
     .orderBy(asc(journalVouchers.date), asc(journalVouchers.voucherNumber), asc(journalVoucherItems.rowOrder));
 
     // V2.0.0: مانده ابتدای دوره — تجمیع اسناد قبل از startDate (با همان فیلترهای حساب/تفصیلی)
@@ -711,7 +698,7 @@ export class AccountingReportService {
       if (params.detailedType && params.detailedType !== 'all') priorConds.push(eq(journalVoucherItems.detailedType, params.detailedType));
       if (params.detailedId) priorConds.push(eq(journalVoucherItems.detailedId, params.detailedId));
       if (params.detailedName) priorConds.push(like(journalVoucherItems.detailedName, containsLikePattern(params.detailedName.trim())));
-      if (params.party) priorConds.push(partyDetailedRowsCondition(params.party));
+      if (params.party) priorConds.push(partyDetailedRowsCondition(params.party), partyPermanent);
       priorConds.push(currencyCondition);
       if (params.startDate) priorConds.push(lt(journalVouchers.date, params.startDate));
 
@@ -795,6 +782,11 @@ export class AccountingReportService {
       totalCredit: totalCreditDec.toNumber(),
       finalBalance: runningDec.toNumber(),
       currency: reportCurrency,
+      ...(params.party ? {
+        temporaryRows: await readPartyTemporaryRows({
+          periodConditions: periodConditions.filter((c): c is SQL => c !== undefined), debitAmount, creditAmount, reportCurrency, allCurrencies,
+        }),
+      } : {}),
     };
   }
 
@@ -986,7 +978,8 @@ export class AccountingReportService {
       const [prior] = await orm.select({ balance: sql<string>`COALESCE(SUM(${debitAmount} - ${creditAmount}), 0)::text` })
       .from(journalVoucherItems)
       .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
-      .where(and(...priorConditions));
+      .innerJoin(accounts, eq(accounts.id, journalVoucherItems.accountId))
+      .where(and(...priorConditions, permanentAccountCondition()));
       openingDec = fin(prior?.balance).round(4);
     }
     const openingBalance = openingDec.toNumber();
@@ -1023,7 +1016,7 @@ export class AccountingReportService {
     .from(journalVoucherItems)
     .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
     .innerJoin(accounts, eq(accounts.id, journalVoucherItems.accountId))
-    .where(and(...periodConditions))
+    .where(and(...periodConditions, permanentAccountCondition()))
     .orderBy(asc(journalVouchers.date), asc(journalVouchers.voucherNumber), asc(journalVoucherItems.rowOrder));
 
     let runningDec = openingDec;
@@ -1108,6 +1101,8 @@ export class AccountingReportService {
       startDate: params.startDate || null,
       endDate: params.endDate || null,
       items,
+      // v10.0.257 (TD-915 / TD-924، ت۵ الف): مانده و گردش بالا فقط حساب‌های دائم؛ ردیف موقت طرف حساب جدا
+      temporaryRows: await readPartyTemporaryRows({ periodConditions, debitAmount, creditAmount, reportCurrency, allCurrencies }),
     };
   }
 
