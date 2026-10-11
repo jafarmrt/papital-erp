@@ -1,3 +1,4 @@
+import { wooOrderVatPercent } from './wooOrderVat.js';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { documents, items, woocommerceOrderLogs } from '../../db/schema.js';
@@ -8,6 +9,7 @@ import { businessTodayIsoDate, systemNowUtcIso } from '../../lib/businessClock.j
 import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
 import { logger } from '../../middleware/logger.js';
+import { logActivity } from '../../lib/auditLogger.js';
 import { resolveWooOrderCustomer, type WooOrderBuyer } from './wooOrderCustomer.js';
 import { currencyScale, exactLineSplit } from './exactLineTotal.js';
 import { allocateFeeDiscount } from './feeDiscount.js';
@@ -437,10 +439,23 @@ export class WooOrderSyncService {
           notes: notesTag(wcOrderId),
           currency,
           vatAmount: orderVat.toNumber(),
+          // v10.0.231 (TD-936): درصد مالیات از خود سفارش، وقتی همان مالیات را می‌سازد
+          vatPercent: wooOrderVatPercent(docLines, orderVat, currency),
           serviceChargeAmount: serviceCharge.toNumber(),
           items: docLines,
           location: targetLoc,
           externalTx: tx,
+        });
+        // v10.0.41 (TD-929، P5-S-05): ردیف ممیزی ثبت فاکتور با سند ذخیره‌شده، با همین تراکنش (همان ردیف `POST /documents`، TD-785)
+        const stored = await DocumentService.documentAuditSnapshot(tx, newDocId);
+        await logActivity({
+          tx,
+          username: WC_BOT_USER,
+          action: 'CREATE',
+          entity: 'فاکتور فروش',
+          entityId: newDocId,
+          description: `ثبت فاکتور فروش شماره "${stored?.refNumber ?? nextRef}" از سفارش ووکامرس #${wcOrderId}`,
+          details: { after: stored, wcOrderId, ...DocumentService.documentLineSummary(stored) },
         });
 
         await tx.update(woocommerceOrderLogs).set({

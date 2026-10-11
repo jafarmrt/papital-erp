@@ -3,7 +3,7 @@ import path from 'node:path';
 import request from 'supertest';
 import { and, eq, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { journalVouchers, roles, workflowDefinitions, workflowStates, workflowTransitions } from '../../db/schema.js';
+import { journalVouchers, roles, users, workflowDefinitions, workflowStates, workflowTransitions } from '../../db/schema.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { WorkflowEngineService } from '../../services/workflow/workflowEngineService.js';
 import { upgradeLegacySeedGuards } from '../../services/workflow/seedGuardUpgrade.js';
@@ -187,6 +187,21 @@ export async function runVoucherApprovalDutiesTests(shouldRun: ShouldRun): Promi
       expect(h.filter(k => k === 'accounting.vouchers_approve').length === 1, `holder permissions ${JSON.stringify(h)}`);
       expect(!(await perms(other.id)).includes('accounting.vouchers_approve'), 'a role without accounting.vouchers got the key');
       return 'holder got the key exactly once, other role untouched';
+    }));
+  }
+
+  if (shouldRun('reg_voucher_maker_full_name_td_1230', 'td-1230', 'maker_name')) {
+    await runCase(results, 'reg_voucher_maker_full_name_td_1230', 'TD-1230: the voucher list and detail carry the maker full name', () => inFiscalSandbox(async () => {
+      const maker = await clientWith(RECORD);
+      const [user] = await orm.select({ fullName: users.fullName }).from(users).where(eq(users.id, maker.userId));
+      const draft = await manualDraft(maker, { description: `Maker name ${maker.userId}` });
+      const detail = await maker.get(`/api/accounting/vouchers/${draft.id}`);
+      expect(detail.status === 200, `detail returned ${brief(detail)}`);
+      expect(detail.body.createdByName === user.fullName, `detail createdByName ${JSON.stringify(detail.body.createdByName)}`);
+      const list = await maker.get(`/api/accounting/vouchers?page=1&limit=20&search=${encodeURIComponent(`Maker name ${maker.userId}`)}`);
+      const row = (list.body?.data ?? []).find((v: { id: number }) => v.id === draft.id);
+      expect(row?.createdByName === user.fullName, `list createdByName ${JSON.stringify(row?.createdByName)} (${brief(list)})`);
+      return 'list and detail name the maker by full name';
     }));
   }
 

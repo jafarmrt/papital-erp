@@ -1,6 +1,7 @@
 import type { DbExecutor } from '../db/drizzle.js';
 import type { DecimalValue } from '../lib/financialDecimal.js';
-import type { DocumentAuditChange, DocumentVoidAudit } from './documents/documentAudit.js';
+import { documentAuditSnapshot, documentLineSummary, type DocumentAuditChange, type DocumentVoidAudit } from './documents/documentAudit.js';
+import type { StockReversalResult } from './documents/documentStockEngine.service.js';
 import { 
   DocumentRefNumberService, 
   DocumentStockEngine, 
@@ -42,7 +43,7 @@ export {
  * Unified Facade for Document operations.
  * Binds and delegates to specialized sub-services:
  * - DocumentRefNumberService: Atomic reference numbering and peeking
- * - DocumentStockEngine: Inventory stock movements, reversals, and ledger reconciliation
+ * - DocumentStockEngine: Inventory stock movements and reversals
  * - DocumentCreationService: Creation, updating, and note management
  * - DocumentLifecycleService: Strict 4-step finalization and cascade soft-deletion
  * - DocumentQueryService: Document retrieval, pagination, and settlement calculation
@@ -102,6 +103,10 @@ export class DocumentService {
     return DocumentQueryService.getDocuments(typeOrFilter);
   }
 
+  /** v10.0.41 (TD-929): the stored document for an audit row of another package (WooCommerce invoice) */
+  static documentAuditSnapshot = documentAuditSnapshot;
+  static documentLineSummary = documentLineSummary;
+
   /**
    * Retrieves a document by its ID, with its associated items.
    */
@@ -114,13 +119,6 @@ export class DocumentService {
    */
   static async getInvoiceSettlementStatus(documentId: number) {
     return DocumentQueryService.getInvoiceSettlementStatus(documentId);
-  }
-
-  /**
-   * Retrieves a document by its ID or reference number (refNumber).
-   */
-  static async getDocumentByIdOrRef(idOrRef: string | number): Promise<FormattedDocument | null> {
-    return DocumentQueryService.getDocumentByIdOrRef(idOrRef);
   }
 
   /**
@@ -157,7 +155,7 @@ export class DocumentService {
       unitPrice: number;
       location: string;
     }
-  ): Promise<void> {
+  ): Promise<StockReversalResult> {
     return DocumentStockEngine.applyStockReversal(tx, params);
   }
 
@@ -178,15 +176,5 @@ export class DocumentService {
    */
   static async deleteDocument(id: number, user?: string, externalTx?: DbExecutor, audit?: DocumentVoidAudit): Promise<void> {
     return DocumentLifecycleService.deleteDocument(id, user, externalTx, audit);
-  }
-
-  /**
-   * Reconciles and rebuilds inventory stocks directly from the transaction ledger (Event Sourcing).
-   */
-  static async reconcileAndRebuildStock(targetItemId?: number): Promise<{
-    reconciledCount: number;
-    discrepanciesFixed: number;
-  }> {
-    return DocumentStockEngine.reconcileAndRebuildStock(targetItemId);
   }
 }

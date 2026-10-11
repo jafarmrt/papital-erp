@@ -14,6 +14,7 @@ import { isProjectOpenForAllocation } from '../../lib/projects/projectStatus';
 import { ErrorStateView } from '../common/ErrorStateView';
 import { SearchableSelect } from '../SearchableSelect';
 import { useProjectPermissions } from '../../hooks/useProjectPermissions';
+import { allocationStatusLabel } from '../../lib/projects/allocationLabels';
 
 interface ProjectBomAllocationsTabProps {
   user?: any;
@@ -198,7 +199,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
       'واحد': a.unit,
       'انبار مبداء': a.sourceLocation,
       'شناسه تراکنش کاردکس': a.sourceTransactionId || '-',
-      'وضعیت': a.status === 'allocated' ? 'در جریان تولید' : (a.status === 'consumed' ? 'مصرف شده' : 'آزاد شده'),
+      'وضعیت': allocationStatusLabel(a.status),
       'تخصیص‌دهنده': a.username,
       'تاریخ تخصیص': a.allocatedAt ? formatPersianDate(a.allocatedAt) : '-',
       'توضیحات': a.notes || ''

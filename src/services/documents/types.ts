@@ -19,6 +19,8 @@ export interface GetDocumentsFilter {
   party?: { id: number; legacyName: string | null };
   /** v9.0.6 (TD-417): چند نوع سند با هم (مثلاً نوع‌های فروش پرونده مشتری) */
   types?: string[];
+  /** v10.0.103 (TD-1197): چند وضعیت با هم */
+  statuses?: string[];
 }
 
 export interface DocumentLineItemInput {
@@ -107,7 +109,7 @@ export interface UpdateDocumentInput {
   /** v7.0.63 (TD-198): نرخ تسعیر سند غیرریالی */
   exchangeRate?: number | string | null;
   exchange_rate?: number | string | null;
-  /** v10.0.40 (TD-913): دلیل سفارش بیش از درخواست، برای ویرایش سفارش تدارکات */
+  /** v10.0.238 (TD-913): دلیل سفارش بیش از درخواست، برای ویرایش سفارش تدارکات */
   overOrderReason?: string;
   /** v9.0.323 (TD-776): پرونده فروش سند (`null` یا رشته خالی: قطع پیوند)؛ درون تراکنش ویرایش و زیر قفل پرونده */
   crmLeadId?: number | string | null;
@@ -164,6 +166,8 @@ export interface FormattedDocument {
   destinationCode?: string;
   destinationLocation?: string;
   version?: number | null;
+  /** v10.0.103 (TD-1197): پیش‌نویسی که آخرین گردش کارش رد شده است */
+  workflowRejected?: boolean;
   isDeleted?: number | null;
   projectId?: number | null;
   project_id?: number | null;
@@ -187,6 +191,8 @@ export interface FormattedDocument {
   totalDiscount: number;
   grossAmount: number;
   paidAmount?: number;
+  /** v10.0.106 (TD-909): جمع مرجوعی‌های قطعی فاکتور که از مانده کم شده است */
+  returnedAmount?: number;
   remainingAmount?: number;
   settlementStatus?: 'unpaid' | 'partially_paid' | 'fully_paid';
   settlements?: Array<{

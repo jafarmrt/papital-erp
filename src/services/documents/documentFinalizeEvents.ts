@@ -8,7 +8,7 @@ const PURCHASE_TYPES = new Set(['receipt', 'production_receipt', 'purchase']);
 
 /**
  * رویداد نهایی‌سازی سند در outbox همان تراکنش: فاکتور و پیش‌فاکتور فروش `InvoiceApproved` و سند خرید `PurchaseApproved`،
- * هر دو با مبلغ قابل پرداخت سند نهایی‌شده (v9.0.407، TD-713) و شماره نهایی آن. از `finalizeDocument` جدا شد (v10.0.38) تا
+ * هر دو با مبلغ قابل پرداخت سند نهایی‌شده (v9.0.407، TD-713) و شماره نهایی آن. از `finalizeDocument` جدا شد (v10.0.236) تا
  * پرونده چرخه سند در سقف اندازه بماند؛ رفتار همان است.
  */
 export async function recordFinalizeEvent(tx: DbExecutor, doc: {

@@ -60,6 +60,7 @@ router.post('/requisitions', authorizePermission('procurement.create', 'projects
   const created = await ProcurementService.createRequisition(req.body, {
     id: req.user!.id,
     username: req.user!.username,
+    fullName: req.user!.full_name,
     role: req.user!.role
   });
 
@@ -141,6 +142,7 @@ router.post('/requisitions/:id/convert-to-orders', authorizePermission('procurem
   }, {
     id: req.user!.id,
     username: req.user!.username,
+    fullName: req.user!.full_name,
     role: req.user!.role,
     permissions: req.user!.permissions || []
   });
@@ -161,7 +163,8 @@ router.post('/consolidate', authorizePermission('procurement.manage'), idempoten
 
   const result = await ProcurementService.consolidateRequisitions(requisitionIds, title, {
     id: req.user!.id,
-    username: req.user!.username
+    username: req.user!.username,
+    fullName: req.user!.full_name
   });
 
   res.status(201).json({

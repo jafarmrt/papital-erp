@@ -2,6 +2,7 @@ import { useHasPermission } from '../contexts/AuthContext';
 import {
   PIECEWORK_LOG_PERMISSION,
   PIECEWORK_PAY_PERMISSION,
+  PIECEWORK_PAYROLL_APPROVE_PERMISSION,
   PIECEWORK_PAYROLL_PERMISSION,
   PIECEWORK_TASKS_PERMISSION,
 } from '../lib/permissions/pieceworkPermissions';
@@ -16,8 +17,10 @@ export function usePieceworkPermissions() {
     canManageTasks: useHasPermission(PIECEWORK_TASKS_PERMISSION),
     /** ثبت، ویرایش و حذف کارکرد آزاد */
     canLog: useHasPermission(PIECEWORK_LOG_PERMISSION),
-    /** صدور، تأیید، ثبت سند و ابطال فیش */
+    /** صدور فیش پیش‌نویس، ثبت سند و ابطال فیش */
     canIssuePayroll: useHasPermission(PIECEWORK_PAYROLL_PERMISSION),
+    /** v10.0.193 (TD-1083): تأیید فیش و بازگرداندن فیش تأییدشده بی پرداخت به پیش‌نویس */
+    canApprovePayroll: useHasPermission(PIECEWORK_PAYROLL_APPROVE_PERMISSION),
     /** ثبت و ابطال پرداخت فیش */
     canPay: useHasPermission(PIECEWORK_PAY_PERMISSION),
   };

@@ -13,8 +13,13 @@ export interface ProcurementAccess {
   canManage: boolean;
   /** صدور سفارش خرید از درخواست (`POST /requisitions/:id/convert-to-orders`) */
   canOrder: boolean;
-  /** اقدام گردش کار درخواست (`POST /requisitions/:id/workflow-action`)؛ تأیید هنگام صدور سفارش هم همین را می‌خواهد (TD-689) */
+  /**
+   * تأیید، رد و لغو درخواست (`POST /requisitions/:id/workflow-action`)؛ تأیید هنگام صدور سفارش هم همین را می‌خواهد (TD-689).
+   * از v10.0.48 (TD-1126) فقط `procurement.approve`، گارد این سه اقدام در گردش کار (OBS-R2-36)
+   */
   canApprove: boolean;
+  /** بازگشایی درخواست ردشده: گارد مسیر (`procurement.approve` / `procurement.manage`) و گارد گام (`procurement.create`) */
+  canReopen: boolean;
   /**
    * تحویل سفارش به انبار (`POST /orders/:id/deliver`)؛ از v9.0.455 (TD-904، ت۳ الف) افزون بر مجوز تدارکات، مجوز ثبت قطعی
    * سند رسید («ثبت ورود کالا») را هم می‌خواهد که سرویس تحویل می‌سنجد
@@ -33,7 +38,8 @@ export function useProcurementAccess(): ProcurementAccess {
     canCreate: create || editProjects,
     canManage: manage,
     canOrder: order,
-    canApprove: approve || manage,
+    canApprove: approve,
+    canReopen: (approve || manage) && create,
     canDeliver: (order || manage) && receiveIntoStock,
   };
 }

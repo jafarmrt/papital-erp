@@ -3,7 +3,7 @@ import { orm } from '../../db/drizzle.js';
 import { crmLeads } from '../../db/schema.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { createHarness, type Harness, type ShouldRun } from '../security/workflowTestHarness.js';
-import { brief, fixture } from './documentEntryTests.js';
+import { brief, docVersion, fixture } from './documentEntryTests.js';
 import { createTestWarehouse } from '../fixtures/factories.js';
 import { DocumentService } from '../../services/document.service.js';
 
@@ -30,6 +30,9 @@ export async function runDocumentIntegrityTests(shouldRun: ShouldRun): Promise<T
     ['reg_document_ref_number_rules_td_783',
       'v9.0.327: a sales document number comes only from the server series (manual 422), a taken warehouse number is 409 instead of a silent swap, a manual number does not move the series, and the audit log keeps the stored number (TD-783)',
       ['td783', 'documents', 'ref_number', 'package8'], documentRefNumberRulesCase],
+    ['reg_document_read_by_id_only_td_990',
+      'v10.0.50: GET /documents/:id reads only a positive whole id: a voided id is 404 even when another document carries that number, and a number is 400 pointing to by-ref instead of an unfiltered lookup across types, years and voided rows (TD-990, OBS-R1-93)',
+      ['td990', 'documents', 'by_id', 'package8'], documentReadByIdOnlyCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -85,11 +88,11 @@ async function documentLeadLinkInEditCase(h: Harness, wrong: string[]): Promise<
   const before = await docRow(p2Id);
 
   // 1) a lead that already has another proforma: 422 before any write
-  const taken = await h.put(`/api/documents/${p2Id}`, { notes: 'P8D taken', crmLeadId: leadA });
+  const taken = await h.put(`/api/documents/${p2Id}`, { version: await docVersion(h, p2Id), notes: 'P8D taken', crmLeadId: leadA });
   if (taken.status !== 422 || codeOf(taken) !== 'CRM_LEAD_HAS_PROFORMA') wrong.push(`linking proforma 2 to lead A (proforma 1) answered ${brief(taken)}, expected 422 CRM_LEAD_HAS_PROFORMA`);
 
   // 2) a lead that does not exist: 422 before any write (was 409 after the notes and version were saved)
-  const missing = await h.put(`/api/documents/${p2Id}`, { notes: 'P8D missing', crmLeadId: 99_999_999 });
+  const missing = await h.put(`/api/documents/${p2Id}`, { version: await docVersion(h, p2Id), notes: 'P8D missing', crmLeadId: 99_999_999 });
   if (missing.status !== 422 || codeOf(missing) !== 'CRM_LEAD_NOT_FOUND') wrong.push(`linking a missing lead answered ${brief(missing)}, expected 422 CRM_LEAD_NOT_FOUND`);
   const afterRefusals = await docRow(p2Id);
   if (afterRefusals.crm_lead_id !== null || afterRefusals.notes !== before.notes || Number(afterRefusals.version) !== Number(before.version)) {
@@ -98,7 +101,7 @@ async function documentLeadLinkInEditCase(h: Harness, wrong: string[]): Promise<
   if (await leadOf(leadA) !== `1/${p1Id}`) wrong.push(`lead A is ${await leadOf(leadA)} after the refused link, expected 1/${p1Id}`);
 
   // 3) a free lead: linked and marked in the same edit
-  const linked = await h.put(`/api/documents/${p2Id}`, { notes: 'P8D linked', crmLeadId: leadB });
+  const linked = await h.put(`/api/documents/${p2Id}`, { version: await docVersion(h, p2Id), notes: 'P8D linked', crmLeadId: leadB });
   const afterLink = await docRow(p2Id);
   if (linked.status !== 200 || Number(afterLink.crm_lead_id) !== leadB || await leadOf(leadB) !== `1/${p2Id}`) {
     wrong.push(`linking the free lead B answered ${brief(linked)} with document lead ${afterLink.crm_lead_id} and lead B ${await leadOf(leadB)}, expected 200, ${leadB} and 1/${p2Id}`);
@@ -107,7 +110,7 @@ async function documentLeadLinkInEditCase(h: Harness, wrong: string[]): Promise<
   if (Number(quotes[0]?.n) !== 1) wrong.push(`lead B has ${quotes[0]?.n} proforma activities after the link, expected 1`);
 
   // 4) unlinking releases the lead for a new proforma
-  const unlinked = await h.put(`/api/documents/${p2Id}`, { crmLeadId: null });
+  const unlinked = await h.put(`/api/documents/${p2Id}`, { version: await docVersion(h, p2Id), crmLeadId: null });
   const afterUnlink = await docRow(p2Id);
   if (unlinked.status !== 200 || afterUnlink.crm_lead_id !== null || await leadOf(leadB) !== '0/null') {
     wrong.push(`unlinking answered ${brief(unlinked)} with document lead ${afterUnlink.crm_lead_id} and lead B ${await leadOf(leadB)}, expected 200, null and 0/null`);
@@ -266,8 +269,8 @@ async function documentRefNumberRulesCase(h: Harness, wrong: string[]): Promise<
     wrong.push(`the create log says ${JSON.stringify(log?.description)} with ${JSON.stringify(after ?? null)}, expected the stored number ${invoiceRef} and status draft`);
   }
   // editing keeps the invoice number: the same number passes, another is 422
-  const same = await h.put(`/api/documents/${docIdOf(invoice)}`, { refNumber: invoiceRef, notes: 'P8D same number' });
-  const other = await h.put(`/api/documents/${docIdOf(invoice)}`, { refNumber: '900000', notes: 'P8D other number' });
+  const same = await h.put(`/api/documents/${docIdOf(invoice)}`, { version: await docVersion(h, docIdOf(invoice)), refNumber: invoiceRef, notes: 'P8D same number' });
+  const other = await h.put(`/api/documents/${docIdOf(invoice)}`, { version: await docVersion(h, docIdOf(invoice)), refNumber: '900000', notes: 'P8D other number' });
   if (same.status !== 200 || other.status !== 422 || codeOf(other) !== 'DOCUMENT_REF_SERVER_SERIES' || await storedRef(docIdOf(invoice)) !== invoiceRef) {
     wrong.push(`editing the invoice number answered ${brief(same)} (same) and ${brief(other)} (other) leaving ${await storedRef(docIdOf(invoice))}, expected 200, 422 DOCUMENT_REF_SERVER_SERIES and ${invoiceRef}`);
   }
@@ -280,7 +283,7 @@ async function documentRefNumberRulesCase(h: Harness, wrong: string[]): Promise<
   if (second.status !== 409 || codeOf(second) !== 'DOCUMENT_REF_TAKEN') wrong.push(`a second receipt with ${manual} answered ${brief(second)}, expected 409 DOCUMENT_REF_TAKEN`);
   // editing another receipt to that number: the same 409 with its own code (was: a generic duplicate error)
   const third = await h.post('/api/documents', f.doc('receipt', 'draft', lines));
-  const moved = await h.put(`/api/documents/${docIdOf(third)}`, { refNumber: manual });
+  const moved = await h.put(`/api/documents/${docIdOf(third)}`, { version: await docVersion(h, docIdOf(third)), refNumber: manual });
   if (moved.status !== 409 || codeOf(moved) !== 'DOCUMENT_REF_TAKEN') wrong.push(`editing a receipt to the taken number answered ${brief(moved)}, expected 409 DOCUMENT_REF_TAKEN`);
 
   // 3) a manual number ahead of the series does not move it, and the series skips it
@@ -297,4 +300,39 @@ async function documentRefNumberRulesCase(h: Harness, wrong: string[]): Promise<
   }
 
   return `invoice and return with a manual number 422 DOCUMENT_REF_SERVER_SERIES; invoice ${invoiceRef} from the series, logged with that number; receipt ${manual} twice 409 DOCUMENT_REF_TAKEN; manual ${receiptNext + 1} and 900000 leave the series at ${receiptNext}, which then skips ${receiptNext + 1}`;
+}
+
+/** OBS-R1-93 (TD-990): GET /documents/:id fell back to a reference number lookup with no type, year or voided filter */
+async function documentReadByIdOnlyCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const item = await f.item(20, 1_000);
+  const lines = [{ itemId: item, quantity: 1, unit_price: 5_000, location: f.wh }];
+  const voided = await h.post('/api/documents', f.doc('invoice', 'draft', lines));
+  const other = await h.post('/api/documents', f.doc('invoice', 'final', lines));
+  const receipt = await h.post('/api/documents', f.doc('receipt', 'final', lines));
+  if (voided.status !== 200 || other.status !== 200 || receipt.status !== 200) throw new Error(`setup: ${brief(voided)}, ${brief(other)}, ${brief(receipt)}`);
+  const voidedId = docIdOf(voided);
+  const voidRes = await h.del(`/api/documents/${voidedId}`);
+  if (voidRes.status !== 200) throw new Error(`setup void: ${brief(voidRes)}`);
+  const idOf = (res: { body?: unknown }) => Number((res.body as { id?: unknown })?.id);
+
+  // 1) a live document read by its id
+  const live = await h.get(`/api/documents/${docIdOf(other)}`);
+  if (live.status !== 200 || idOf(live) !== docIdOf(other)) wrong.push(`reading invoice ${docIdOf(other)} by id answered ${brief(live)}, expected 200 with it`);
+  // 2) a voided id is 404, even when another document carries that number (was: 200 with the other document)
+  await h.q(`UPDATE documents SET ref_number = $1 WHERE id = $2`, [String(voidedId), docIdOf(other)]);
+  const gone = await h.get(`/api/documents/${voidedId}`);
+  if (gone.status !== 404) wrong.push(`reading voided document ${voidedId} answered ${brief(gone)} (id ${idOf(gone)}), expected 404 instead of invoice ${docIdOf(other)} with that number`);
+  // 3) a number shared by two types is not read here (was: 200 with one of them); by-ref names the type
+  const ref = `P8R-${h.tag}`;
+  await h.q(`UPDATE documents SET ref_number = $1 WHERE id = ANY($2::int[])`, [ref, [docIdOf(other), docIdOf(receipt)]]);
+  const byNumber = await h.get(`/api/documents/${encodeURIComponent(ref)}`);
+  if (byNumber.status !== 400) wrong.push(`reading by the number ${ref} of an invoice and a receipt answered ${brief(byNumber)} (id ${idOf(byNumber)}), expected 400`);
+  const byRef = await h.get(`/api/documents/by-ref/${encodeURIComponent(ref)}?type=receipt`);
+  if (byRef.status !== 200 || idOf(byRef) !== docIdOf(receipt)) wrong.push(`by-ref of the receipt answered ${brief(byRef)}, expected receipt ${docIdOf(receipt)}`);
+  for (const bad of ['0', '12abc', '-3']) {
+    const res = await h.get(`/api/documents/${bad}`);
+    if (res.status !== 400) wrong.push(`reading document "${bad}" answered ${brief(res)}, expected 400`);
+  }
+  return `id ${docIdOf(other)} 200; voided id ${voidedId} 404 though another invoice has that number; the number ${ref} 400 and by-ref finds the receipt; 0, 12abc and -3 are 400`;
 }

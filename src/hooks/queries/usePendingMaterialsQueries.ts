@@ -1,23 +1,25 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { PendingMaterial, Category } from '../../types';
 import { toast } from 'react-hot-toast';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { invalidateDomain, invalidatePreset } from '../../lib/queryInvalidation';
 import type { PendingMaterialForm } from '../../lib/pendingMaterials/pendingMaterialForm';
+import { pendingMaterialListUrl, type PendingMaterialListFilters, type PendingMaterialPage } from '../../lib/pendingMaterials/pendingMaterialList';
 
-export function usePendingMaterialsQuery() {
-  return useQuery<{ items: PendingMaterial[]; categories: Category[] }>({
-    queryKey: QUERY_KEYS.pendingMaterials.list(),
+/** v10.0.171 (OBS-R1-90): one page of the queue from the server, with its status counts; categories for the filter */
+export function usePendingMaterialsQuery(filters: PendingMaterialListFilters) {
+  return useQuery<{ page: PendingMaterialPage<PendingMaterial>; categories: Category[] }>({
+    queryKey: [...QUERY_KEYS.pendingMaterials.list(), filters],
     queryFn: async () => {
-      const [matRes, catRes] = await Promise.all([
-        fetchJson('/pending-materials'),
+      const [page, catRes] = await Promise.all([
+        fetchJson<PendingMaterialPage<PendingMaterial>>(pendingMaterialListUrl(filters)),
         fetchJson('/categories?type=raw_material'),
       ]);
-      const items = Array.isArray(matRes?.data) ? matRes.data : (Array.isArray(matRes) ? matRes : []);
       const categories = Array.isArray(catRes?.data) ? catRes.data : (Array.isArray(catRes) ? catRes : []);
-      return { items, categories };
+      return { page: { ...page, data: Array.isArray(page?.data) ? page.data : [] }, categories };
     },
+    placeholderData: keepPreviousData,
     staleTime: 1000 * 30,
   });
 }

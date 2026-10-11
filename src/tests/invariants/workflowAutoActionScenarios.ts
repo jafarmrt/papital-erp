@@ -91,7 +91,7 @@ export async function checkRefusedReceiveLeavesNoTrace(): Promise<string[]> {
   const reqId = await requisition([[x.id, 10], [y.id, 5]]);
   await ProcurementService.executeWorkflowAction(reqId, 'approve_request', ADMIN);
   const [orderA, orderB] = await draftOrders(reqId, [[[x.id, 10]], [[y.id, 5]]]);
-  // v10.0.38 (TD-914): an order is received on the receipt day, so an old order date no longer refuses it; the second order's
+  // v10.0.236 (TD-914): an order is received on the receipt day, so an old order date no longer refuses it; the second order's
   // line at price 0 for an item without a weighted average cost does (INCOMING_LINE_WITHOUT_COST, TD-906), after the first order
   await pool.query('UPDATE document_items SET unit_price = 0 WHERE document_id = $1', [orderB]);
 

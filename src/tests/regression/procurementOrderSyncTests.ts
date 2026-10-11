@@ -12,16 +12,16 @@ export async function runProcurementOrderSyncTests(shouldRun: ShouldRun): Promis
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (h: Harness, wrong: string[]) => Promise<string>]> = [
     ['reg_procurement_order_group_no_currency_td_941',
-      'v10.0.37: convert-to-orders refuses an order group currency or a line discount with 400 instead of dropping it into an IRR order without discount (TD-941)',
+      'v10.0.235: convert-to-orders refuses an order group currency or a line discount with 400 instead of dropping it into an IRR order without discount (TD-941)',
       ['td941', 'procurement', 'contract', 'package10'], noCurrencyCase],
     ['reg_procurement_delivery_on_delivery_day_td_914',
-      'v10.0.38: a delivered procurement order takes the delivery day for its document and Kardex rows, so a movement of the item after the conversion does not block it as backdated (TD-914)',
+      'v10.0.236: a delivered procurement order takes the delivery day for its document and Kardex rows, so a movement of the item after the conversion does not block it as backdated (TD-914)',
       ['td914', 'procurement', 'delivery', 'date', 'package10'], deliveryDayCase],
     ['reg_procurement_void_rebuilds_requisition_td_912',
-      'v10.0.39: voiding a delivered order rebuilds the ordered and received quantities of its requisition from the live documents, so the requisition can be ordered again (TD-912)',
+      'v10.0.237: voiding a delivered order rebuilds the ordered and received quantities of its requisition from the live documents, so the requisition can be ordered again (TD-912)',
       ['td912', 'procurement', 'void', 'package10'], voidRebuildCase],
     ['reg_procurement_order_edit_over_order_reason_td_913',
-      'v10.0.40: editing a linked order beyond the requisition needs the over-order reason, which is recorded on the requisition row and the order notes (TD-913)',
+      'v10.0.238: editing a linked order beyond the requisition needs the over-order reason, which is recorded on the requisition row and the order notes (TD-913)',
       ['td913', 'procurement', 'edit', 'package10'], editReasonCase],
   ];
   for (const [id, name, tags, run] of cases) {

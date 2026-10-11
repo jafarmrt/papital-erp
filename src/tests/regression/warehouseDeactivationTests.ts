@@ -3,6 +3,7 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { activityLogs, items, roles, users, warehouses } from '../../db/schema.js';
+import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 
 /**
  * Package 6 (inventory and Kardex), TD-490 / B06-11 (decision t5 «الف»): deactivating a warehouse checked «no stock»
@@ -125,7 +126,7 @@ export async function runWarehouseDeactivationTests(shouldRun: (id: string, ...e
     if (itemIds.length > 0) await orm.update(items).set({ isDeleted: 1 }).where(inArray(items.id, itemIds)).catch(() => undefined);
     if (warehouseIds.length > 0) await orm.update(warehouses).set({ isActive: 0 }).where(inArray(warehouses.id, warehouseIds)).catch(() => undefined);
     if (userIds.length > 0) await orm.update(users).set({ isDeleted: 1 }).where(inArray(users.id, userIds)).catch(() => undefined);
-    if (roleIds.length > 0) await orm.delete(roles).where(inArray(roles.id, roleIds)).catch(() => undefined);
+    if (roleIds.length > 0) await deleteTestRoles(inArray(roles.id, roleIds)).catch(() => undefined);
   }
   return results;
 }

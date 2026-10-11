@@ -34,7 +34,7 @@ export function encryptSecret(plain: string): string {
   const key = resolveKey();
   if (!key) {
     throw new AppError(
-      `کلید رمزنگاری تنظیم نشده است؛ مدیر سیستم باید ERP_SECRETS_KEY (حداقل ${SECRETS_KEY_MIN_LENGTH} نویسه) را در تنظیمات محیط سرور قرار دهد`,
+      `کلید رمزنگاری تنظیم نشده است؛ مدیر سامانه باید ERP_SECRETS_KEY (حداقل ${SECRETS_KEY_MIN_LENGTH} نویسه) را در تنظیمات محیط سرور قرار دهد`,
       503,
       'SECRETS_KEY_MISSING'
     );

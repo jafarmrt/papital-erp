@@ -76,24 +76,8 @@ export function Sidebar({
     return 'main';
   });
 
-  // کلید میانبر سراسری برای باز کردن و فوکوس روی سرچ منو (Ctrl + K یا /)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        if (isCollapsed) {
-          onToggleCollapse();
-        }
-        setTimeout(() => {
-          searchInputRef.current?.focus();
-          searchInputRef.current?.select();
-        }, 100);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isCollapsed, onToggleCollapse]);
+  // TD-1154: Ctrl+K belongs to the global search of the top bar only; the menu search had its own handler and took
+  // the focus back 100 ms later
 
   // بررسی فعال بودن یک آیتم منو
   const isItemActive = (itemPath: string) => {
@@ -347,7 +331,7 @@ export function Sidebar({
           </div>
         )}
 
-        {/* لیست گروه‌ها */}
+        {/* فهرست گروه‌ها */}
         {filteredGroups.map((group, idx) => {
           const visibleItems = group.items.filter(item => item.visible);
           if (visibleItems.length === 0) return null;

@@ -1,6 +1,6 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { createHarness, type Harness, type ShouldRun } from '../security/workflowTestHarness.js';
-import { brief, fixture } from './documentEntryTests.js';
+import { brief, docVersion, fixture } from './documentEntryTests.js';
 
 /**
  * Package 8 (documents and invoices), PR E: the data of a document (who reads its treasury rows, its party by id). Through the real
@@ -169,7 +169,7 @@ async function documentPartyByIdCase(h: Harness, wrong: string[]): Promise<strin
   if (Number((await partyOf(ret))?.party_id) !== party.id) wrong.push(`the return stored party ${JSON.stringify(await partyOf(ret))}, expected the invoice's ${party.id}`);
 
   // 4) an edit moves the draft to another party by id; its name becomes that party's name
-  const edited = await h.put(`/api/documents/${draft}`, { partyId: other.id });
+  const edited = await h.put(`/api/documents/${draft}`, { version: await docVersion(h, draft), partyId: other.id });
   const afterEdit = await partyOf(draft);
   if (edited.status !== 200 || Number(afterEdit?.party_id) !== other.id || afterEdit?.buyer_name !== other.name) {
     wrong.push(`moving the draft to party ${other.id} answered ${brief(edited)} and stored ${JSON.stringify(afterEdit)}, expected the party and its name`);
@@ -251,7 +251,7 @@ async function documentAuditTrailCase(h: Harness, wrong: string[]): Promise<stri
   if (event?.buyer !== buyer) wrong.push(`the InvoiceCreated event carries the buyer ${JSON.stringify(event?.buyer ?? null)}, expected ${buyer}`);
 
   // 2) edit: one UPDATE row with the stored document before and after and the changed field
-  const edited = await h.put(`/api/documents/${docId}`, { notes: 'P8 audit second note' });
+  const edited = await h.put(`/api/documents/${docId}`, { version: await docVersion(h, docId), notes: 'P8 audit second note' });
   if (edited.status !== 200) throw new Error(`setup: edit ${brief(edited)}`);
   rows = await auditRows(docId);
   const editRow = rows.filter(r => r.action === 'UPDATE').at(-1);

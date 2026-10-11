@@ -32,6 +32,10 @@ export interface PersonnelFormData {
   monthlySalary: string;
   jobTitle: string;
   education: string;
+  startDate: string;
+  // v10.0.210 (TD-1087): «مشمول بیمه» و «مشمول مالیات حقوق»
+  isInsuranceCovered: boolean;
+  isTaxCovered: boolean;
   endDate: string;
   terminationReason: string;
   specializedSkills: string;
@@ -63,6 +67,9 @@ const INITIAL_FORM_DATA: PersonnelFormData = {
   monthlySalary: '',
   jobTitle: '',
   education: '',
+  startDate: '',
+  isInsuranceCovered: false,
+  isTaxCovered: false,
   endDate: '',
   terminationReason: '',
   specializedSkills: '',
@@ -150,6 +157,9 @@ export function usePersonnel() {
       monthlySalary: p.monthlySalary != null && p.monthlySalary !== '' ? String(p.monthlySalary) : '',
       jobTitle: p.jobTitle || '',
       education: p.education || '',
+      startDate: p.startDate || '',
+      isInsuranceCovered: Number(p.isInsuranceCovered ?? 0) === 1,
+      isTaxCovered: Number(p.isTaxCovered ?? 0) === 1,
       endDate: p.endDate || '',
       terminationReason: p.terminationReason || '',
       specializedSkills: p.specializedSkills || '',

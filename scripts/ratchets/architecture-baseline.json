@@ -1,10 +1,8 @@
 {
   "routeWrites": {
-    "src/routes/auth.routes.ts": 4,
     "src/routes/crm.routes.ts": 10,
     "src/routes/notifications.routes.ts": 3,
-    "src/routes/personnel.routes.ts": 5,
-    "src/routes/users.routes.ts": 8
+    "src/routes/personnel.routes.ts": 5
   },
   "ormFallback": {
     "src/lib/auditLogger.ts": 2,
@@ -35,7 +33,6 @@
     "src/services/inventory/futureStockMovements.ts": 1,
     "src/services/inventory/itemOpening.service.ts": 1,
     "src/services/inventory/itemOpeningValue.ts": 1,
-    "src/services/inventory/negativeStockPolicy.service.ts": 3,
     "src/services/inventory/reservedWarehouseCode.ts": 1,
     "src/services/inventory/transferDocumentLocations.ts": 1,
     "src/services/items/itemCatalog.service.ts": 1,
@@ -80,13 +77,13 @@
     "src/routes/attachments.routes.ts": 1,
     "src/routes/auth.routes.ts": 4,
     "src/routes/customers.routes.ts": 1,
-    "src/routes/events.routes.ts": 10,
+    "src/routes/events.routes.ts": 8,
     "src/routes/media.routes.ts": 1,
     "src/routes/personnel.routes.ts": 4,
     "src/routes/piecework.routes.ts": 3,
     "src/routes/projects.routes.ts": 8,
     "src/routes/transfers.routes.ts": 1,
-    "src/routes/users.routes.ts": 26,
+    "src/routes/users.routes.ts": 4,
     "src/routes/woocommerce.routes.ts": 9,
     "src/routes/workflow.routes.ts": 3
   },
@@ -104,6 +101,30 @@
     "src/services/piecework/taskCode.ts": 1,
     "src/services/system/bootData.ts": 2,
     "src/services/system/dataExport.service.ts": 1
+  },
+  "auditWithoutTx": {
+    "src/routes/accounting/accounts.routes.ts": 6,
+    "src/routes/accounting/fiscal.routes.ts": 1,
+    "src/routes/accounting/treasury.routes.ts": 8,
+    "src/routes/accounting/voucherSync.routes.ts": 1,
+    "src/routes/accounting/vouchers.routes.ts": 9,
+    "src/routes/auth.routes.ts": 4,
+    "src/routes/crm.routes.ts": 1,
+    "src/routes/customers.routes.ts": 5,
+    "src/routes/events.routes.ts": 6,
+    "src/routes/inventory.routes.ts": 8,
+    "src/routes/items.crud.routes.ts": 1,
+    "src/routes/items.import.routes.ts": 1,
+    "src/routes/personnel.routes.ts": 3,
+    "src/routes/piecework.routes.ts": 11,
+    "src/routes/projects.routes.ts": 2,
+    "src/routes/system.routes.ts": 3,
+    "src/routes/warehouses.routes.ts": 2,
+    "src/services/attachments/attachmentOrphanCleanup.service.ts": 1,
+    "src/services/attachments/attachmentStorage.service.ts": 1,
+    "src/services/events/actionHandlerService.ts": 2,
+    "src/services/events/domainEventHandlers.ts": 1,
+    "src/services/events/eventActionEngineService.ts": 1
   },
   "packageBoundary": {
     "src/db/seed.ts": 4,

@@ -13,12 +13,15 @@ import { validate, paramsIdSchema, numericIdString, decimalInput, storageDatePar
 import { idempotency } from '../middleware/idempotency.js';
 import { canAccessSensitivePayrollData, sanitizePayrollRecord } from '../lib/piiMasker.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
-import { PIECEWORK_LOG_PERMISSION, PIECEWORK_PAY_PERMISSION, PIECEWORK_PAYROLL_PERMISSION, PIECEWORK_TASKS_PERMISSION } from '../lib/permissions/pieceworkPermissions.js';
+import { PIECEWORK_LOG_PERMISSION, PIECEWORK_PAY_PERMISSION, PIECEWORK_PAYROLL_APPROVE_PERMISSION, PIECEWORK_PAYROLL_PERMISSION, PIECEWORK_TASKS_PERMISSION } from '../lib/permissions/pieceworkPermissions.js';
 import { ForbiddenError } from '../errors/customErrors.js';
 import { fin } from '../lib/financialDecimal.js';
 import { parseWorkQuantity } from '../lib/piecework/workQuantity.js';
 import { WORK_LOG_PAGE_SIZE } from '../lib/piecework/workLogList.js';
 import { parsePagination } from '../lib/pagination.js';
+import { PREPAYMENT_REASON_MAX } from '../lib/payroll/payrollPeriod.js';
+import { STATUTORY_OVERRIDE_REASON_MAX } from '../lib/payroll/statutoryDeductions.js';
+import { editDraftPayroll } from '../services/piecework/payrollDraftEdit.js';
 import { pageWorkLogs, workLogSummary } from '../services/piecework/workLogList.js';
 
 const router = Router();
@@ -164,6 +167,13 @@ const listPieceworkLogsSchema = z.object({
 
 type ListPieceworkLogsQuery = z.infer<typeof listPieceworkLogsSchema>['query'];
 
+const statutoryFields = {
+  employeeInsurance: nonNegativeAmount('بیمه سهم کارگر').optional(),
+  employerInsurance: nonNegativeAmount('بیمه سهم کارفرما').optional(),
+  incomeTax: nonNegativeAmount('مالیات حقوق').optional(),
+  statutoryOverrideReason: z.string().max(STATUTORY_OVERRIDE_REASON_MAX, 'شرح تغییر بیمه و مالیات حداکثر ۵۰۰ نویسه است').optional(),
+};
+
 const generatePieceworkPayrollSchema = z.object({
   body: z.object({
     personnelId: z.union([z.number(), z.string()]),
@@ -178,6 +188,11 @@ const generatePieceworkPayrollSchema = z.object({
     deductionsDescription: z.string().max(500, 'شرح سایر کسورات حداکثر ۵۰۰ نویسه است').optional(),
     advanceDeduction: nonNegativeAmount('کسر مساعده').optional(),
     notes: z.string().optional(),
+    // v10.0.199 (TD-1085): فیش پیش‌پرداخت دوره آینده با دلیل الزامی (سرویس، ۴۲۲)
+    isPrepayment: z.boolean().optional(),
+    prepaymentReason: z.string().max(PREPAYMENT_REASON_MAX, 'دلیل فیش پیش‌پرداخت حداکثر ۵۰۰ نویسه است').optional(),
+    // v10.0.210 (TD-1087): کسورات قانونی؛ نفرستاده = پیشنهاد سرور، مبلغ دیگر با شرح (سرویس، ۴۲۲)
+    ...statutoryFields,
   })
 });
 
@@ -729,7 +744,8 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], requirePerm
   try {
     const currentUserId = req.user?.id;
     const currentUsername = req.user?.username || 'سیستم';
-    const { personnelId, startDate, endDate, title, bonuses, totalBonuses, deductions, totalDeductions, deductionsDescription, advanceDeduction: reqAdvanceDeduction, notes } = req.body;
+    const { personnelId, startDate, endDate, title, bonuses, totalBonuses, deductions, totalDeductions, deductionsDescription, advanceDeduction: reqAdvanceDeduction, notes, isPrepayment, prepaymentReason,
+      employeeInsurance, employerInsurance, incomeTax, statutoryOverrideReason } = req.body;
 
     const result = await PieceworkPayrollService.generatePayroll({
       personnelId,
@@ -743,6 +759,12 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], requirePerm
       deductionsDescription,
       advanceDeduction: reqAdvanceDeduction,
       notes,
+      isPrepayment,
+      prepaymentReason,
+      employeeInsurance,
+      employerInsurance,
+      incomeTax,
+      statutoryOverrideReason,
       userId: currentUserId,
       username: currentUsername,
       // v9.0.285 (TD-810): ردیف ممیزی با جزئیات و IP در تراکنش صدور نوشته می‌شود
@@ -757,6 +779,8 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], requirePerm
 
     res.status(201).json({
       ...payroll,
+      statutoryWarning: result.statutoryWarning ?? null,
+      eidiWarning: result.eidiWarning ?? null,
       voucherId: voucher ? voucher.id : null,
       voucherNumber: voucher ? voucher.voucherNumber : null,
       isVoucherSynced: !!voucher
@@ -768,10 +792,19 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], requirePerm
 }));
 
 // PUT /api/piecework/payrolls/:id/status - Update status or mark as paid
-router.put('/piecework/payrolls/:id/status', requirePermission(PIECEWORK_PAYROLL_PERMISSION), validate(updatePieceworkPayrollStatusSchema), asyncHandler(async (req, res) => {
+// v10.0.193 (TD-1083، طرح حقوق ت۱ الف): تغییر وضعیت (تأیید و بازگشت به پیش‌نویس) «تأیید فیش حقوق» را می‌خواهد و یادداشت
+// تنها «محاسبه و صدور فیش حقوقی» را؛ پیش‌تر صادرکننده با همان کلید صدور، فیش خودش را تأیید هم می‌کرد.
+router.put('/piecework/payrolls/:id/status', requirePermission(PIECEWORK_PAYROLL_PERMISSION, PIECEWORK_PAYROLL_APPROVE_PERMISSION), validate(updatePieceworkPayrollStatusSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { status, notes } = req.body;
+    const changesStatus = status !== undefined && String(status).trim() !== '';
+    if (changesStatus && !(await can(req.user, PIECEWORK_PAYROLL_APPROVE_PERMISSION))) {
+      throw new ForbiddenError('تأیید فیش یا بازگرداندن آن به پیش‌نویس مجوز «تأیید فیش حقوق» را می‌خواهد.', undefined, 'PAYROLL_APPROVE_PERMISSION_REQUIRED');
+    }
+    if (!changesStatus && !(await can(req.user, PIECEWORK_PAYROLL_PERMISSION))) {
+      throw new ForbiddenError('ویرایش یادداشت فیش مجوز «محاسبه و صدور فیش حقوقی» را می‌خواهد.', undefined, 'PAYROLL_PERMISSION_REQUIRED');
+    }
 
     const currentUserId = req.user?.id;
     const currentUsername = req.user?.username || 'سیستم';
@@ -798,6 +831,30 @@ router.put('/piecework/payrolls/:id/status', requirePermission(PIECEWORK_PAYROLL
     logger.error({ message: 'Error updating payroll status', error: err });
     throw err;
   }
+}));
+
+// v10.0.200 (TD-1242، طرح حقوق §۳.۱ بند ۳): ویرایش فیش پیش‌نویس (عنوان، پاداش، کسورات و شرحش، کسر مساعده) و ساخت دوباره سند پیش‌نویس آن
+const editDraftPayrollSchema = z.object({
+  params: paramsIdSchema.shape.params,
+  body: z.object({
+    title: z.string().max(300, 'عنوان فیش حداکثر ۳۰۰ نویسه است').optional(),
+    bonuses: nonNegativeAmount('پاداش').optional(),
+    deductions: nonNegativeAmount('کسورات').optional(),
+    deductionsDescription: z.string().max(500, 'شرح سایر کسورات حداکثر ۵۰۰ نویسه است').optional(),
+    advanceDeduction: nonNegativeAmount('کسر مساعده').optional(),
+    // v10.0.210 (TD-1087): کسورات قانونی فیش پیش‌نویس با همان قاعده صدور
+    ...statutoryFields,
+  }).strict(),
+});
+
+router.put('/piecework/payrolls/:id', requirePermission(PIECEWORK_PAYROLL_PERMISSION), validate(editDraftPayrollSchema), asyncHandler(async (req, res) => {
+  const { payroll, voucher, statutoryWarning } = await editDraftPayroll(Number(req.params.id), {
+    ...req.body,
+    userId: req.user?.id,
+    username: req.user?.username || 'سیستم',
+    req,
+  });
+  res.json({ ...payroll, voucherId: voucher?.id ?? null, voucherNumber: voucher?.voucherNumber ?? null, statutoryWarning });
 }));
 
 // POST /api/piecework/payrolls/:id/register-payment — V10-4.4: مسیر یگانه پرداخت حقوق

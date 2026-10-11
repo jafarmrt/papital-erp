@@ -6,6 +6,7 @@ import { ConflictError, NotFoundError } from '../../../errors/customErrors.js';
 import { logActivity } from '../../../lib/auditLogger.js';
 import { LockHierarchyLevel, validateLockOrder } from '../../../lib/lockOrder.js';
 import { assertTreasuryDocumentLink, resolveTreasuryPartyName } from './treasuryLinks.js';
+import { assertWithinDocumentRemaining, lockSettlementDocument } from './documentRemaining.js';
 
 /**
  * v9.0.272 (TD-779، تصمیم ت۴ «الف» بسته ۸): دریافت یا پرداخت ثبت‌شده خزانه از سندش جدا («علی‌الحساب») یا به سند فعال
@@ -50,6 +51,8 @@ export async function relinkTreasuryDocument(params: {
     if (!before) throw new NotFoundError('تراکنش خزانه یافت نشد');
 
     if (params.documentId !== null) {
+      // v10.0.59 (TD-938): سند پیش از قفل `FOR SHARE` همان سند و جمع تسویه‌اش قفل می‌شود
+      await lockSettlementDocument(tx, params.documentId);
       const partyName = await resolveTreasuryPartyName(tx, before.partyType || 'other', before.partyId);
       await assertTreasuryDocumentLink(tx, {
         type: before.type === 'payment' ? 'payment' : 'receipt',
@@ -76,6 +79,8 @@ export async function relinkTreasuryDocument(params: {
     if (previousDocumentId === params.documentId) {
       return { id: row.id, documentId: previousDocumentId, previousDocumentId, changed: false };
     }
+    // v10.0.59 (TD-938، ت۸ الف): ردیف به سندی وصل نمی‌شود که مانده‌اش کمتر از مبلغ آن است
+    if (params.documentId !== null) await assertWithinDocumentRemaining(tx, { documentId: params.documentId, amount: row.amount.toString() });
 
     await tx.update(treasuryTransactions)
       .set({ documentId: params.documentId, version: (row.version ?? 1) + 1, updatedAt: sql`now()` })

@@ -3,6 +3,7 @@ import { PrintModal } from '../common/PrintModal';
 import type { JournalVoucher } from '../../types';
 import { voucherTypeLabel } from '../../lib/accounting/voucherTypes';
 import { voucherPrintAmounts, type VoucherPrintRowAmounts } from '../../lib/accounting/voucherPrintAmounts';
+import { voucherMakerName } from '../../lib/accounting/voucherListViewer';
 
 interface VoucherPrintModalProps {
   voucher: JournalVoucher | null;
@@ -147,7 +148,7 @@ export function VoucherPrintModal({
         <div className="grid grid-cols-4 gap-4 text-center text-xs pt-4 border-t border-slate-300">
           <div className="border border-slate-200 rounded p-3 h-24 flex flex-col justify-between">
             <span className="font-bold text-slate-600">تنظیم‌کننده</span>
-            <span className="text-[10px] text-slate-400">{voucher.createdByUsername || 'کاربر'}</span>
+            <span className="text-[10px] text-slate-400">{voucherMakerName(voucher)}</span>
           </div>
           <div className="border border-slate-200 rounded p-3 h-24 flex flex-col justify-between">
             <span className="font-bold text-slate-600">حسابدار</span>

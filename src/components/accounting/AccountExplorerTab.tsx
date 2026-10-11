@@ -114,6 +114,8 @@ export function AccountExplorerTab({
   ]);
   const { ledger, loading: isLoadingTransactions, hasFilter: hasLedgerFilter } = useExplorerLedgerQuery(ledgerParams);
   const transactions: VoucherItemRow[] = ledger.items;
+  // v10.0.x (TD-1240): ردیف «مانده ابتدای دوره» سند ندارد؛ شماره ردیف‌ها پس از آن از ۱ آغاز می‌شود
+  const openingRows = transactions.filter(t => t.isOpening).length;
   const summaryStats = useMemo(() => ({
     totalDebit: ledger.totalDebit,
     totalCredit: ledger.totalCredit,
@@ -166,9 +168,9 @@ export function AccountExplorerTab({
     if (!transactions.length) return;
     const headers = ["شماره سند", "تاریخ", "کد حساب", "نام حساب", "تفصیلی", "شرح ردیف", "بدهکار (ریال)", "بستانکار (ریال)", "مانده (ریال)"];
     const rows = transactions.map(t => [
-      t.voucherNumber,
+      t.isOpening ? '' : t.voucherNumber,
       formatPersianDate(t.date, { englishDigits: true }),
-      t.accountCode,
+      t.isOpening ? '' : t.accountCode,
       t.accountName,
       t.detailedName || '-',
       `"${(t.description || '').replace(/"/g, '""')}"`,
@@ -653,16 +655,16 @@ export function AccountExplorerTab({
                 </tr>
               ) : (
                 transactions.map((item, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/40 transition">
-                    <td className="py-3 px-3 text-center font-mono text-slate-400">{formatPersianNumber(idx + 1)}</td>
+                  <tr key={idx} className={`hover:bg-slate-50/80 dark:hover:bg-slate-700/40 transition ${item.isOpening ? 'bg-indigo-50/40 dark:bg-indigo-900/20 font-bold' : ''}`}>
+                    <td className="py-3 px-3 text-center font-mono text-slate-400">{item.isOpening ? '—' : formatPersianNumber(idx + 1 - openingRows)}</td>
                     <td className="py-3 px-3 text-center font-mono font-bold text-indigo-600 dark:text-indigo-400">
-                      {formatPersianNumber(item.voucherNumber)}
+                      {item.isOpening ? '—' : formatPersianNumber(item.voucherNumber)}
                     </td>
                     <td className="py-3 px-3 text-center font-mono text-slate-600 dark:text-slate-400">
                       {formatPersianDate(item.date)}
                     </td>
                     <td className="py-3 px-3 font-medium">
-                      <span className="font-mono text-[11px] text-slate-500 ml-1">[{item.accountCode}]</span>
+                      {item.accountCode && <span className="font-mono text-[11px] text-slate-500 ml-1">[{item.accountCode}]</span>}
                       <span>{item.accountName}</span>
                     </td>
                     <td className="py-3 px-3">
@@ -693,13 +695,13 @@ export function AccountExplorerTab({
                       </span>
                     </td>
                     <td className="py-3 px-3 text-center no-print">
-                      <button
+                      {!item.isOpening && item.voucherId > 0 && <button
                         onClick={() => handleOpenVoucherModal(item.voucherId)}
                         title="مشاهده کامل سند حسابداری"
                         className="p-1.5 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg transition cursor-pointer"
                       >
                         <Eye size={15} />
-                      </button>
+                      </button>}
                     </td>
                   </tr>
                 ))

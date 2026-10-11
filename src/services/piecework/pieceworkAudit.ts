@@ -58,6 +58,19 @@ export function payrollSnapshot(row: PayrollRow): Snapshot {
     netPayable: text(row.netPayable),
     paidAmount: text(row.paidAmount),
     notes: row.notes ?? '',
+    // v10.0.199 (TD-1085): فیش پیش‌پرداخت و دلیلش در ممیزی
+    isPrepayment: row.isPrepayment ?? 0,
+    prepaymentReason: row.prepaymentReason ?? '',
+    // v10.0.210 (TD-1087): کسورات قانونی و شرح تغییر مبلغ پیشنهادی
+    employeeInsurance: text(row.employeeInsurance),
+    employerInsurance: text(row.employerInsurance),
+    incomeTax: text(row.incomeTax),
+    statutoryOverrideReason: row.statutoryOverrideReason ?? '',
+    // v10.0.222 (TD-1089): سهم عیدی فیش، یا عیدی فیش عیدی و بخش انباشته آن
+    eidiAmount: text(row.eidiAmount),
+    eidiFromAccrual: text(row.eidiFromAccrual),
+    eidiYear: row.eidiYear ?? null,
+    isEidi: row.isEidi ?? 0,
   };
 }
 
@@ -122,7 +135,9 @@ export async function auditWorkLogDeleted(tx: DbExecutor, row: WorkLogRow, actor
 }
 
 export async function auditPayrollIssued(
-  tx: DbExecutor, row: PayrollRow, info: { personnelName: string; logIds: number[]; voucher: { id: number; voucherNumber: number } | null }, actor: AuditActor,
+  tx: DbExecutor, row: PayrollRow,
+  info: { personnelName: string; logIds: number[]; voucher: { id: number; voucherNumber: number } | null; statutory?: Record<string, unknown>; eidi?: Record<string, unknown> },
+  actor: AuditActor,
 ): Promise<void> {
   await logActivity({
     tx,
@@ -130,13 +145,18 @@ export async function auditPayrollIssued(
     action: 'CREATE',
     entity: PAYROLL_AUDIT_ENTITY,
     entityId: row.id,
-    description: `صدور فیش حقوقی ${row.payrollNumber} برای ${info.personnelName} با خالص ${amount(row.netPayable)} (سند حسابداری: ${info.voucher ? toPersianDigits(info.voucher.voucherNumber) : 'بدون سند'})`,
-    details: { after: payrollSnapshot(row), workLogIds: info.logIds, voucherId: info.voucher?.id ?? null, voucherNumber: info.voucher?.voucherNumber ?? null },
+    description: `صدور ${row.isEidi === 1 ? `فیش عیدی ${row.payrollNumber} (سال ${toPersianDigits(row.eidiYear ?? '')})` : row.isPrepayment === 1 ? `فیش پیش‌پرداخت ${row.payrollNumber} (دلیل: ${row.prepaymentReason})` : `فیش حقوقی ${row.payrollNumber}`} برای ${info.personnelName} با خالص ${amount(row.netPayable)} (سند حسابداری: ${info.voucher ? toPersianDigits(info.voucher.voucherNumber) : 'بدون سند'})`,
+    details: {
+      after: payrollSnapshot(row), workLogIds: info.logIds, voucherId: info.voucher?.id ?? null, voucherNumber: info.voucher?.voucherNumber ?? null,
+      ...(info.statutory ? { statutory: info.statutory } : {}),
+      ...(info.eidi ? { eidi: info.eidi } : {}),
+    },
   });
 }
 
 export async function auditPayrollUpdated(
   tx: DbExecutor, before: PayrollRow, after: PayrollRow, voucher: { id: number; voucherNumber: number } | null, actor: AuditActor,
+  statutory?: Record<string, unknown>,
 ): Promise<void> {
   const diff = changedFields(payrollSnapshot(before), payrollSnapshot(after));
   if (Object.keys(diff.changes).length === 0) return;
@@ -149,8 +169,11 @@ export async function auditPayrollUpdated(
     entityId: after.id,
     description: statusChanged
       ? `تغییر وضعیت فیش حقوقی ${after.payrollNumber} از «${payrollStatusLabel(before.status)}» به «${payrollStatusLabel(after.status)}»`
-      : `ویرایش یادداشت فیش حقوقی ${after.payrollNumber}`,
-    details: { ...diff, voucherId: voucher?.id ?? null, voucherNumber: voucher?.voucherNumber ?? null },
+      : Object.keys(diff.changes).every(key => key === 'notes')
+        ? `ویرایش یادداشت فیش حقوقی ${after.payrollNumber}`
+        // v10.0.200 (TD-1242): ویرایش مبلغ‌های فیش پیش‌نویس و سند دوباره‌ساخته
+        : `ویرایش فیش پیش‌نویس ${after.payrollNumber} با خالص ${amount(after.netPayable)}`,
+    details: { ...diff, voucherId: voucher?.id ?? null, voucherNumber: voucher?.voucherNumber ?? null, ...(statutory ? { statutory } : {}) },
   });
 }
 

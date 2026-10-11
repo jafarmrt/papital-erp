@@ -1,11 +1,13 @@
 import React, { useState, useRef, useMemo } from 'react';
 import toast from 'react-hot-toast';
+import { itemImportOutcome } from '../../lib/items/itemImportOutcome';
 import { fetchJson } from '../../api';
 import { formatPersianNumber, errorMessageOf } from '../../utils';
 import { Category, Item } from '../../types';
 import { PreviewRow, ImportResult } from './types';
 import { validateExcelRows, ParsedExcelItem } from './excelImportValidation';
 import { exportCompleteExcel, downloadExcelTemplate } from './excelExportHelpers';
+import { importFailureMessage } from './importFailureMessage';
 
 export function useUnifiedExcelImport({
   typeFilter = '',
@@ -29,6 +31,8 @@ export function useUnifiedExcelImport({
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // v10.0.220 (OBS-R1-78): دریافت داده‌های پایه با بستن پنجره یا انتخاب پرونده تازه لغو می‌شود
+  const metadataAbortRef = useRef<AbortController | null>(null);
 
   const filteredPreviewRows = useMemo(() => {
     return previewRows.filter(r => {
@@ -46,6 +50,9 @@ export function useUnifiedExcelImport({
   }, [previewRows, filterMode, searchQuery]);
 
   const handleResetModal = () => {
+    metadataAbortRef.current?.abort();
+    metadataAbortRef.current = null;
+    setIsLoadingMetadata(false);
     setStep('upload');
     setPreviewRows([]);
     setImportResult(null);
@@ -82,12 +89,17 @@ export function useUnifiedExcelImport({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    metadataAbortRef.current?.abort();
+    const controller = new AbortController();
+    metadataAbortRef.current = controller;
+    const { signal } = controller;
     setIsLoadingMetadata(true);
     try {
       const [catsRes, itemsRes] = await Promise.all([
-        fetchJson('/categories'),
-        fetchJson('/items?limit=0')
+        fetchJson('/categories', { signal }),
+        fetchJson('/items?limit=0', { signal })
       ]);
+      if (signal.aborted) return;
 
       const loadedCats: Category[] = Array.isArray(catsRes) ? catsRes : (catsRes?.data && Array.isArray(catsRes.data) ? catsRes.data : []);
       const loadedItems: Item[] = Array.isArray(itemsRes) ? itemsRes : (itemsRes?.data && Array.isArray(itemsRes.data) ? itemsRes.data : []);
@@ -95,7 +107,14 @@ export function useUnifiedExcelImport({
       setExistingItems(loadedItems);
 
       const reader = new FileReader();
+      // v10.0.220 (OBS-R1-78): پرونده‌ای که خوانده نشود پیام می‌دهد و پنجره در حال بارگذاری نمی‌ماند
+      reader.onerror = () => {
+        if (signal.aborted) return;
+        toast.error('پرونده اکسل خوانده نشد؛ دوباره انتخابش کنید.');
+        setIsLoadingMetadata(false);
+      };
       reader.onload = async (evt) => {
+        if (signal.aborted) return;
         try {
           const xlsx = await import('xlsx');
           const bstr = evt.target?.result;
@@ -121,7 +140,7 @@ export function useUnifiedExcelImport({
           const validated = validateExcelRows(parsedList, loadedCats, loadedItems, typeFilter);
           setPreviewRows(validated);
           setStep('preview');
-          toast.success(`${validated.length} ردیف آماده بررسی و ثبت است.`);
+          toast.success(`${formatPersianNumber(validated.length)} ردیف آماده بررسی و ثبت است.`);
         } catch (err) {
           toast.error('خطا در خواندن فایل اکسل: ' + errorMessageOf(err));
         } finally {
@@ -131,7 +150,8 @@ export function useUnifiedExcelImport({
 
       reader.readAsBinaryString(file);
     } catch (err) {
-      toast.error('خطا در دریافت اطلاعات پایه سیستم: ' + errorMessageOf(err));
+      if (signal.aborted) return;
+      toast.error('خطا در دریافت اطلاعات پایه سامانه: ' + errorMessageOf(err));
       setIsLoadingMetadata(false);
     }
   };
@@ -152,26 +172,6 @@ export function useUnifiedExcelImport({
 
       return validateExcelRows(updated, categories, existingItems, typeFilter);
     });
-  };
-
-  const handleFixRowPrefix = (index: number) => {
-    setPreviewRows(prev => {
-      const updated = prev.map(r => {
-        if (r.index === index && r.expectedPrefix) {
-          let newCode = r.code;
-          if (!newCode) {
-            newCode = `${r.expectedPrefix}101`;
-          } else if (!newCode.toLowerCase().startsWith(r.expectedPrefix.toLowerCase())) {
-            newCode = `${r.expectedPrefix}${newCode}`;
-          }
-          return { ...r, raw: { ...r.raw, 'کد کالا': newCode }, code: newCode };
-        }
-        return r;
-      });
-
-      return validateExcelRows(updated, categories, existingItems, typeFilter);
-    });
-    toast.success('پیشوند کد اصلاح شد.');
   };
 
   const handleAutoFixAllPrefixes = () => {
@@ -221,15 +221,23 @@ export function useUnifiedExcelImport({
       });
 
       if (res && res.success) {
-        setImportResult({
+        const result = {
           createdCount: res.createdCount || 0,
           updatedCount: res.updatedCount || 0,
           pricesCount: res.pricesCount || 0,
-          errors: res.errors || []
-        });
+          errors: Array.isArray(res.errors) ? res.errors : []
+        };
+        setImportResult(result);
         setStep('result');
-        toast.success('ورود داده‌های اکسل با موفقیت انجام شد!');
+        // v10.0.82 (TD-1139): a row error is never reported as a plain success
+        const outcome = itemImportOutcome(result);
+        if (outcome.tone === 'success') toast.success(outcome.message);
+        else if (outcome.tone === 'error') toast.error(outcome.message);
+        else toast(outcome.message, { icon: '⚠️' });
         onSuccess();
+      } else {
+        // v10.0.220 (OBS-R1-78): پاسخ ناموفق بی‌پیام نمی‌ماند
+        toast.error(importFailureMessage(res));
       }
     } catch (err) {
       toast.error('خطا در ورود اطلاعات: ' + (errorMessageOf(err) || 'خطای غیرمنتظره'));
@@ -263,7 +271,6 @@ export function useUnifiedExcelImport({
     handleDownloadTemplate,
     handleFileChange,
     handleCellEdit,
-    handleFixRowPrefix,
     handleAutoFixAllPrefixes,
     handleConfirmImport
   };
