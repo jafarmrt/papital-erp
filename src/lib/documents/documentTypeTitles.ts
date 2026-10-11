@@ -16,7 +16,7 @@ export function documentTypeTitle(docType: string | null | undefined, fallback =
 }
 
 /**
- * v10.0.243 (TD-1208، یافته B-08): متن ثبت‌شده ردیف‌های تخصیص و آزادسازی مواد پروژه («BOM» دارد) نام فارسی می‌گیرد؛
+ * v10.0.246 (TD-1208، یافته B-08): متن ثبت‌شده ردیف‌های تخصیص و آزادسازی مواد پروژه («BOM» دارد) نام فارسی می‌گیرد؛
  * متن ذخیره‌شده عوض نمی‌شود، چون سرور و آزمون‌ها ردیف‌ها را با آن پیدا می‌کنند.
  */
 const KARDEX_STORED_TYPE_LABELS: Readonly<Record<string, string>> = Object.freeze({
@@ -40,7 +40,7 @@ export const KARDEX_OPENING_LABEL = 'موجودی افتتاحیه';
 /**
  * v10.0.61 (TD-1131): نوع سند یک ردیف کاردکس برای نمایش؛ کد نوع (`remittance`، `audit`) نام فارسی‌اش را می‌گیرد،
  * متن فارسی ثبت‌شده ردیف‌های قدیمی همان‌طور می‌ماند، و کد لاتین ناشناخته «سند» خوانده می‌شود، هرگز خود کد.
- * v10.0.243 (TD-1208): ردیف موجودی اولیه کالا (`audit` با مرجع موجودی اولیه) «موجودی افتتاحیه» است، نه «سند انبارگردانی».
+ * v10.0.246 (TD-1208): ردیف موجودی اولیه کالا (`audit` با مرجع موجودی اولیه) «موجودی افتتاحیه» است، نه «سند انبارگردانی».
  */
 export function kardexDocumentTypeLabel(docType: string | null | undefined, docRef?: string | null): string {
   const raw = String(docType ?? '').trim();
