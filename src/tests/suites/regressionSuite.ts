@@ -10967,5 +10967,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runEventsLedgerTests } = await import('../regression/eventsLedgerTests.js');
   results.push(...await runEventsLedgerTests(shouldRun));
 
+  // Phase 3 lane L1, package A4 (v10.0.248): project reports, cash and bank per currency, account mapping read
+  const { runAccountingP2ReportTests } = await import('../regression/accountingP2ReportTests.js');
+  results.push(...await runAccountingP2ReportTests(shouldRun));
+
   return results;
 }

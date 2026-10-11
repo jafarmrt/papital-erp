@@ -2,9 +2,8 @@ import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { appSettings } from '../../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { ChartOfAccountsService } from './chartOfAccounts.service.js';
-import { logger } from '../../middleware/logger.js';
 import type { Account } from '../../types.js';
-import { ValidationError } from '../../errors/customErrors.js';
+import { AppError, ValidationError } from '../../errors/customErrors.js';
 import { toLatinDigits } from '../../lib/numericInput.js';
 import { POSTING_ACCOUNT_LEVELS, postingAccountsOf, postingRefusal, postingRefusalText } from '../../lib/accounting/postingAccount.js';
 import {
@@ -56,22 +55,36 @@ export function accountMappingIssues(entries: Array<[AccountMappingKey, string]>
 const SETTINGS_KEY = 'accounting_account_mappings';
 const DISABLED_KEY = 'accounting_mappings_disabled';
 
+/** v10.0.248 (TD-968): a stored mapping that is not valid JSON reads as undefined, then refused by the caller (422, so the user sees why) */
+function parseStoredSetting(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+}
+
+function unreadableMappingError(what: string): AppError {
+  return new AppError(
+    `${what} در تنظیمات خوانا نیست؛ سند خودکار صادر نمی‌شود. نگاشت حساب‌ها را در بخش حسابداری دوباره ذخیره کنید.`,
+    422,
+    'ACCOUNT_MAPPING_UNREADABLE',
+  );
+}
+
 export class AccountMappingService {
   /**
    * Get all conceptual account mapping configurations
    */
   static async getMappings(tx?: DbExecutor): Promise<ConceptualAccountMappingConfig> {
-    try {
-      const executor = tx || orm;
-      const [setting] = await executor.select().from(appSettings).where(eq(appSettings.key, SETTINGS_KEY));
-      if (setting && setting.value) {
-        const parsed = JSON.parse(setting.value);
-        return { ...DEFAULT_ACCOUNT_MAPPINGS, ...parsed };
-      }
-    } catch (e) {
-      logger.warn({ message: 'Could not read custom account mappings, using defaults', error: e });
-    }
-    return { ...DEFAULT_ACCOUNT_MAPPINGS };
+    // v10.0.248 (TD-968): a database error or an unreadable stored value is never replaced with the defaults,
+    // which would post automatic vouchers to accounts the accountant did not choose
+    const executor = tx || orm;
+    const [setting] = await executor.select().from(appSettings).where(eq(appSettings.key, SETTINGS_KEY));
+    if (!setting?.value) return { ...DEFAULT_ACCOUNT_MAPPINGS };
+    const parsed = parseStoredSetting(setting.value);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw unreadableMappingError('نگاشت حساب‌ها');
+    return { ...DEFAULT_ACCOUNT_MAPPINGS, ...(parsed as Partial<ConceptualAccountMappingConfig>) };
   }
 
   /**
@@ -131,17 +144,12 @@ export class AccountMappingService {
    * V1.7.0: لیست مفاهیم غیرفعال (سفارشی‌سازی خاموش → کدینگ پیش‌فرض)
    */
   static async getDisabledMappings(tx?: DbExecutor): Promise<string[]> {
-    try {
-      const executor = tx || orm;
-      const [setting] = await executor.select().from(appSettings).where(eq(appSettings.key, DISABLED_KEY));
-      if (setting?.value) {
-        const parsed = JSON.parse(setting.value);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch (e) {
-      logger.warn({ message: 'Could not read disabled mappings, using empty list', error: e });
-    }
-    return [];
+    const executor = tx || orm;
+    const [setting] = await executor.select().from(appSettings).where(eq(appSettings.key, DISABLED_KEY));
+    if (!setting?.value) return [];
+    const parsed = parseStoredSetting(setting.value);
+    if (!Array.isArray(parsed)) throw unreadableMappingError('فهرست مفهوم‌های خاموش نگاشت حساب‌ها');
+    return parsed.map(String);
   }
 
   static async setDisabledMappings(list: string[], tx?: DbExecutor): Promise<string[]> {

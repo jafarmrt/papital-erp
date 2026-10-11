@@ -18,7 +18,7 @@ import type {
   ForeignAmountOrigin,
   PartyOption
 } from '../../types.js';
-import { isAllCurrenciesView, voucherItemCurrencyCondition, voucherItemCurrencySql, voucherItemRateSql, voucherItemReportAmountSql } from './voucherItemAmount.js';
+import { isAllCurrenciesView, voucherItemCurrencyCondition, voucherItemCurrencySql, voucherItemRateSql, voucherItemReportAmountSql, reportedVoucherStatusSql } from './voucherItemAmount.js';
 import { exactDetailedNameCondition, partyDetailedRowsCondition, personnelDetailedRowsCondition, type PartyDetailedFilter } from './partyDetailedRows.js';
 import type { BalanceSheetReport, IncomeStatementReport, StatementRow } from '../../lib/accounting/financialStatements.js';
 import { accountSubtreeCondition } from './accountSubtree.js';
@@ -66,6 +66,23 @@ export interface ProjectDetailReportRow {
   debit: number;
   credit: number;
   runningBalance: number;
+}
+
+/**
+ * v10.0.248 (TD-967): treasury balances summed per currency (empty = IRR), rials first, then by currency code. A balance in
+ * one currency is never added to another.
+ */
+export function cashAndBankTotalsByCurrency(
+  banks: Array<{ currency?: string | null; currentBalance?: DecimalValue | null }>,
+): Array<{ currency: string; amount: number }> {
+  const totals = new Map<string, FinancialDecimal>();
+  for (const b of banks) {
+    const currency = String(b.currency || '').trim().toUpperCase() || 'IRR';
+    totals.set(currency, (totals.get(currency) ?? fin(0)).add(b.currentBalance ?? 0));
+  }
+  return [...totals.entries()]
+    .sort(([a], [b]) => (a === 'IRR' ? -1 : b === 'IRR' ? 1 : a.localeCompare(b)))
+    .map(([currency, amount]) => ({ currency, amount: amount.toNumber() }));
 }
 
 export class AccountingReportService {
@@ -1243,8 +1260,10 @@ export class AccountingReportService {
    */
   static async getFinancialOverviewStats(): Promise<FinancialSummaryStats> {
     // v7.0.71 (P2-6 بخش ۳): جمع‌ها با Decimal و جمع چک‌ها در SQL
-    const banks = await TreasuryService.getBankAccounts();
-    const totalCashAndBank = FinancialMath.sum(banks.map(b => b.currentBalance));
+    // v10.0.248 (TD-967): each treasury account's balance is in its own currency, so the card is summed per currency and
+    // `totalCashAndBank` is the rial accounts only; before, 1,000 USD and 50,000,000 rials made «50,001,000».
+    const cashAndBankByCurrency = cashAndBankTotalsByCurrency(await TreasuryService.getBankAccounts());
+    const totalCashAndBank = fin(cashAndBankByCurrency.find(c => c.currency === 'IRR')?.amount ?? 0);
 
     const trial = await this.getTrialBalance({ level: 'general' });
 
@@ -1283,6 +1302,7 @@ export class AccountingReportService {
 
     return {
       totalCashAndBank: totalCashAndBank.toNumber(),
+      cashAndBankByCurrency,
       totalReceivables: totalReceivables.toNumber(),
       totalPayables: totalPayables.toNumber(),
       totalChequesInCollection: fin(chequeSums?.inCollection).toNumber(),
@@ -1403,19 +1423,24 @@ export class AccountingReportService {
    * v7.0.127 (TD-247): جمع‌ها در SQL به صورت متن و مانده با Decimal (AGENTS.md §1.8)؛ خروجی API عدد است.
    */
   static async getProjectSummaryReport(): Promise<ProjectSummaryReportRow[]> {
+    // v10.0.248 (TD-966): only approved and permanent vouchers, like the other reports, and each row in rials by the TD-260
+    // rule (a foreign row at its own rate); before, drafts were counted and 2 USD were added to rials as 2.
+    const debit = voucherItemReportAmountSql(journalVoucherItems.debit);
+    const credit = voucherItemReportAmountSql(journalVoucherItems.credit);
     const result = await orm.execute(sql`
-      SELECT jvi.detailed_id AS project_id,
+      SELECT ${journalVoucherItems.detailedId} AS project_id,
              MAX(pp.project_code) AS project_code,
              MAX(pp.title) AS project_title,
-             COUNT(jvi.id)::int AS entries_count,
-             COALESCE(SUM(jvi.debit), 0)::text AS total_debit,
-             COALESCE(SUM(jvi.credit), 0)::text AS total_credit
-      FROM journal_voucher_items jvi
-      INNER JOIN journal_vouchers jv ON jv.id = jvi.voucher_id AND jv.is_deleted = 0
-      LEFT JOIN production_projects pp ON pp.id = jvi.detailed_id
-      -- v8.0.15 (TD-270): ردیف حذف نرم‌شده سند (همگام‌سازی دوباره پیش‌نویس) شمرده نمی‌شود
-      WHERE jvi.detailed_type = 'project' AND jvi.is_deleted = 0
-      GROUP BY jvi.detailed_id
+             COUNT(${journalVoucherItems.id})::int AS entries_count,
+             COALESCE(SUM(${debit}), 0)::text AS total_debit,
+             COALESCE(SUM(${credit}), 0)::text AS total_credit
+      FROM ${journalVoucherItems}
+      INNER JOIN ${journalVouchers} ON ${journalVouchers.id} = ${journalVoucherItems.voucherId} AND ${journalVouchers.isDeleted} = 0
+        AND ${reportedVoucherStatusSql}
+      LEFT JOIN production_projects pp ON pp.id = ${journalVoucherItems.detailedId}
+      -- v8.0.15 (TD-270): a soft-deleted voucher row (a re-synced draft) is not counted
+      WHERE ${journalVoucherItems.detailedType} = 'project' AND ${journalVoucherItems.isDeleted} = 0
+      GROUP BY ${journalVoucherItems.detailedId}
       ORDER BY MAX(pp.created_at) DESC NULLS LAST
     `);
 
@@ -1447,21 +1472,26 @@ export class AccountingReportService {
    * v7.0.127 (TD-247): تراز جاری با Decimal جمع می‌شود، نه `+=` اعداد جاوااسکریپت (AGENTS.md §1.8).
    */
   static async getProjectDetailReport(projectId: number): Promise<ProjectDetailReportRow[]> {
+    // v10.0.248 (TD-966): the same statuses and rial amounts as the project summary, so the running balance ends on its balance
+    const debit = voucherItemReportAmountSql(journalVoucherItems.debit);
+    const credit = voucherItemReportAmountSql(journalVoucherItems.credit);
     const result = await orm.execute(sql`
-      SELECT jvi.id AS line_id,
-             jv.voucher_number AS voucher_number,
-             jv.date AS voucher_date,
-             jv.description AS voucher_description,
+      SELECT ${journalVoucherItems.id} AS line_id,
+             ${journalVouchers.voucherNumber} AS voucher_number,
+             ${journalVouchers.date} AS voucher_date,
+             ${journalVouchers.description} AS voucher_description,
              COALESCE(a.code, '') AS account_code,
              COALESCE(a.name, '') AS account_name,
-             jvi.description AS line_description,
-             jvi.debit::text AS debit,
-             jvi.credit::text AS credit
-      FROM journal_voucher_items jvi
-      INNER JOIN journal_vouchers jv ON jv.id = jvi.voucher_id AND jv.is_deleted = 0
-      LEFT JOIN accounts a ON a.id = jvi.account_id
-      WHERE jvi.detailed_type = 'project' AND jvi.detailed_id = ${projectId} AND jvi.is_deleted = 0
-      ORDER BY jv.date ASC, jv.id ASC, jvi.id ASC
+             ${journalVoucherItems.description} AS line_description,
+             (${debit})::text AS debit,
+             (${credit})::text AS credit
+      FROM ${journalVoucherItems}
+      INNER JOIN ${journalVouchers} ON ${journalVouchers.id} = ${journalVoucherItems.voucherId} AND ${journalVouchers.isDeleted} = 0
+        AND ${reportedVoucherStatusSql}
+      LEFT JOIN accounts a ON a.id = ${journalVoucherItems.accountId}
+      WHERE ${journalVoucherItems.detailedType} = 'project' AND ${journalVoucherItems.detailedId} = ${projectId}
+        AND ${journalVoucherItems.isDeleted} = 0
+      ORDER BY ${journalVouchers.date} ASC, ${journalVouchers.id} ASC, ${journalVoucherItems.id} ASC
     `);
 
     const rows = (result.rows || []) as Array<{
