@@ -7,7 +7,7 @@ import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../.
 import { ConfirmWarehouseDeliveryModal } from './ConfirmWarehouseDeliveryModal';
 import { PillBadge } from '../common/PillBadge';
 import { useProcurementAccess } from '../../hooks/procurement/useProcurementAccess';
-import { canOrderRequisition } from '../../lib/procurement/requisitionFields';
+import { canOrderRequisition, requisitionRowRemaining } from '../../lib/procurement/requisitionFields';
 import { REQUISITION_PRIORITY_DETAIL_BADGES, REQUISITION_PRIORITY_DETAIL_FALLBACK, REQUISITION_STATUS_BADGES, REQUISITION_STATUS_FALLBACK } from './requisitionBadges';
 
 interface RequisitionDetailModalProps {
@@ -291,7 +291,8 @@ export function RequisitionDetailModal({
                   {items.map((row, idx) => {
                     const reqQty = Number(row.requestedQty || 0);
                     const ordQty = Number(row.orderedQty || 0);
-                    const remQty = Math.max(0, reqQty - ordQty);
+                    // v10.0.252 (OBS-R2-37): مانده سرور؛ ردیف بسته‌شده «تکمیل»
+                    const remQty = requisitionRowRemaining(row);
 
                     return (
                       <tr key={row.id || idx} className="hover:bg-slate-50/50">
