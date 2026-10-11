@@ -20,7 +20,7 @@ describe('ci_images_from_mirror_td_1169', () => {
         images.push(`${file}: ${match[1]}`);
       }
     }
-    expect(images.length).toBeGreaterThan(0);
+    // v10.0.191 (TD-1260): the database jobs start the runner's own PostgreSQL, so a workflow may hold no image at all
     expect(images.filter((line) => !line.split(': ')[1].startsWith(MIRROR))).toEqual([]);
   });
 
