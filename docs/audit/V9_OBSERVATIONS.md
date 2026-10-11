@@ -134,7 +134,7 @@
 | OBS-R1-37 | دسترس‌پذیری مودال‌های بسته ۲ | مودال‌های کاربر، نقش و سجل `aria-label`، Escape و نگه داشتن فوکوس ندارند. | بله: `UserFormModal`، `RoleFormModal`، `ActivityLogsPage` و `AuditPrintModal` Modal مشترک را به کار نمی‌برند و هیچ `aria-label` ندارند. `UserProfileModal` فقط یکی دارد. | مشاهده | خیر | — | P02.md:311 (O23)؛ obs_reviews_p01_p08.md | باز |
 | OBS-R1-38 | `signal` و `useMutation` در هوک‌های کاربر و سجل | تابع‌های کوئری کاربر و سجل `signal` نمی‌گیرند، و نوشتن‌ها بیرون از React Query‌اند. | بله: `useUserQueries.ts:10,23,36` و `useActivityLogQueries`؛ فرم‌ها `fetchJson` خام می‌زنند. | مشاهده | خیر | — | P02.md:314-315 (O24)؛ obs_reviews_p01_p08.md | باز |
 | OBS-R1-41 | کلید جدا برای حذف طرف حساب | کلید `customers.delete` وجود ندارد و حذف طرف حساب با `customers.manage` است، در حالی که `crm.delete` هست. | بله: `permissionCatalog.ts:78-79,121`. | مشاهده | بله: کلید جدا برای حذف طرف حساب؟ | — | P02_PERMISSION_MODEL.md:105 (§۲.۷)؛ obs_reviews_p01_p08.md | باز |
-| OBS-R2-09 | بررسی قفل ورود در خطای پایگاه‌داده باز می‌گذارد | `loginSecurity.service.ts:119,158` در خطای پایگاه‌داده «قفل نیست» برمی‌گرداند (fail-open) و قفل حافظه‌ای را هم دور می‌زند. | بله. خواندن | مشاهده | خیر | — | A02-17؛ obs_reviews_p09_p16.md | باز |
+| OBS-R2-09 | بررسی قفل ورود در خطای پایگاه‌داده باز می‌گذارد | `loginSecurity.service.ts:119,158` در خطای پایگاه‌داده «قفل نیست» برمی‌گرداند (fail-open) و قفل حافظه‌ای را هم دور می‌زند. | بله. خواندن | مشاهده | خیر | — | A02-17؛ obs_reviews_p09_p16.md | ✅ v10.0.210 |
 
 ### ۲.۳. بسته ۳ — حسابداری و هسته پول (۱۲ مورد، TD-985)
 

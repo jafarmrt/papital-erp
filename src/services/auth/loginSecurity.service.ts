@@ -5,7 +5,7 @@ import { orm } from '../../db/drizzle.js';
 import { users } from '../../db/schema.js';
 import { logger } from '../../middleware/logger.js';
 import { AppError } from '../../errors/customErrors.js';
-import { passwordChangeLockoutMessage, usernameLockoutMessage } from '../../lib/auth/loginLockout.js';
+import { LOGIN_STATE_UNREADABLE_MESSAGE, passwordChangeLockoutMessage, usernameLockoutMessage } from '../../lib/auth/loginLockout.js';
 
 /**
  * v7.0.28 (TD-186 / audit P1-5) — Login hardening
@@ -139,25 +139,28 @@ export function passwordChangeLockedError(minutes: number): AppError {
  * ACCOUNT_LOCKOUT_THRESHOLD failures. An unknown username behaves exactly like an existing one.
  */
 export async function checkAccountLockout(username: string, ip: string): Promise<{ isLocked: boolean; remainingMinutes?: number }> {
+  let until = activeMemoryLock(pairFailures, pairKey(username, ip));
+  let accountUntil: number;
   try {
-    let until = activeMemoryLock(pairFailures, pairKey(username, ip));
     const [u] = await orm.select({ lockedUntil: users.lockedUntil }).from(users).where(eq(users.username, username)).limit(1);
-    const accountUntil = u
+    accountUntil = u
       ? (u.lockedUntil ? new Date(u.lockedUntil).getTime() : 0)
       : activeMemoryLock(phantomAccountFailures, usernameKey(username));
-    if (accountUntil > Date.now()) until = Math.max(until, accountUntil);
-    return until > Date.now() ? { isLocked: true, remainingMinutes: remainingMinutes(until) } : { isLocked: false };
   } catch (err) {
+    // v10.0.211 (OBS-R2-09): fail closed. The pair lock held in memory still answers; otherwise the login is refused
+    // with a 503 instead of «not locked», which skipped both the account lock and the in-memory pair lock.
     const errMsg = err instanceof Error ? err.message : String(err);
     logger.error(`[Account Lockout Check Error] ${errMsg}`);
-    return { isLocked: false };
+    if (until > Date.now()) return { isLocked: true, remainingMinutes: remainingMinutes(until) };
+    throw new AppError(LOGIN_STATE_UNREADABLE_MESSAGE, 503, 'LOGIN_STATE_UNREADABLE');
   }
+  if (accountUntil > Date.now()) until = Math.max(until, accountUntil);
+  return until > Date.now() ? { isLocked: true, remainingMinutes: remainingMinutes(until) } : { isLocked: false };
 }
 
 export async function recordFailedAttempt(username: string, ip: string): Promise<{ locked: boolean; remainingAttempts: number; remainingMinutes?: number }> {
+  const pair = bumpMemoryCounter(pairFailures, pairKey(username, ip), LOCKOUT_THRESHOLD);
   try {
-    const pair = bumpMemoryCounter(pairFailures, pairKey(username, ip), LOCKOUT_THRESHOLD);
-
     const account = await orm.transaction(async (tx) => {
       const [u] = await tx
         .select({ id: users.id, failedLoginCount: users.failedLoginCount, lockedUntil: users.lockedUntil, lastFailedLoginAt: users.lastFailedLoginAt })
@@ -189,7 +192,10 @@ export async function recordFailedAttempt(username: string, ip: string): Promise
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     logger.error(`[Record Failed Attempt Error] ${errMsg}`);
-    return { locked: false, remainingAttempts: 0 };
+    // v10.0.211 (OBS-R2-09): the (username + IP) failure is counted in memory before the database; its lock still applies
+    return pair.lockMinutes > 0
+      ? { locked: true, remainingAttempts: 0, remainingMinutes: pair.lockMinutes }
+      : { locked: false, remainingAttempts: Math.max(0, LOCKOUT_THRESHOLD - pair.count) };
   }
 }
 
