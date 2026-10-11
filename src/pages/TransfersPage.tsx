@@ -14,9 +14,12 @@ import { DocPrintModal } from '../components/print/DocPrintModal';
 import { SafeImage } from '../components/SafeImage';
 import { useTransfersQuery, useSaveTransferMutation, useDeleteTransferMutation, TransferItem } from '../hooks/queries';
 import { TRANSFER_CODE_PAGE_SIZE } from '../lib/transfers/transferCodeList';
+import { useTransferDesignAccess } from '../hooks/inventoryAudit/useStockActionAccess';
 
 export default function TransfersPage({ user }: { user?: User }) {
   const saveMutation = useSaveTransferMutation();
+  // v10.0.249 (TD-1130): ساخت و ویرایش با کلیدهای `POST /transfers`، حذف با `products.delete`
+  const designAccess = useTransferDesignAccess();
   const deleteMutation = useDeleteTransferMutation();
 
   const [search, setSearch] = useState<string>('');
@@ -218,6 +221,7 @@ export default function TransfersPage({ user }: { user?: User }) {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {designAccess.canSave && (
             <button
               onClick={openCreateModal}
               className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-md shadow-emerald-600/30 active:scale-95 cursor-pointer"
@@ -225,6 +229,7 @@ export default function TransfersPage({ user }: { user?: User }) {
               <Plus size={16} />
               ثبت طرح ترنسفر جدید
             </button>
+            )}
             <button
               onClick={loadTransfers}
               className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-md shadow-blue-600/30 active:scale-95 cursor-pointer"
@@ -346,6 +351,7 @@ export default function TransfersPage({ user }: { user?: User }) {
             می‌توانید مستقیماً یک طرح ترنسفر جدید ایجاد کنید یا از کدگذاری خودکار محصولات استفاده نمایید.
           </p>
           <div className="flex items-center justify-center gap-2 pt-2">
+            {designAccess.canSave && (
             <button
               onClick={openCreateModal}
               className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-xs cursor-pointer"
@@ -353,6 +359,7 @@ export default function TransfersPage({ user }: { user?: User }) {
               <Plus size={15} />
               ثبت طرح ترنسفر جدید
             </button>
+            )}
             {search && (
               <button
                 onClick={() => setSearch('')}
@@ -428,6 +435,7 @@ export default function TransfersPage({ user }: { user?: User }) {
                     <div className="text-center p-6 text-slate-400 space-y-2">
                       <ImageIcon size={32} className="mx-auto opacity-40 text-slate-400" />
                       <p className="text-[11px] font-medium">تصویر ترنسفر بارگذاری نشده است</p>
+                      {designAccess.canSave && (
                       <button
                         onClick={() => openEditModal(item)}
                         className="text-[11px] bg-white text-blue-600 border border-blue-200 px-3 py-1 rounded-xl font-bold hover:bg-blue-50 transition-colors shadow-2xs inline-flex items-center gap-1"
@@ -435,6 +443,7 @@ export default function TransfersPage({ user }: { user?: User }) {
                         <Upload size={12} />
                         بارگذاری تصویر
                       </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -842,7 +851,7 @@ export default function TransfersPage({ user }: { user?: User }) {
               {/* Modal Actions */}
               <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0 gap-2">
                 <div>
-                  {selectedTransfer && (
+                  {selectedTransfer && designAccess.canDelete && (
                     <button
                       type="button"
                       onClick={handleDeleteTransferImage}
@@ -862,6 +871,7 @@ export default function TransfersPage({ user }: { user?: User }) {
                   >
                     انصراف
                   </button>
+                  {designAccess.canSave && (
                   <button
                     type="submit"
                     disabled={isSaving}
@@ -870,6 +880,7 @@ export default function TransfersPage({ user }: { user?: User }) {
                     {isSaving ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} />}
                     {selectedTransfer ? 'ذخیره تغییرات' : 'ثبت ترنسفر جدید'}
                   </button>
+                  )}
                 </div>
               </div>
             </form>
