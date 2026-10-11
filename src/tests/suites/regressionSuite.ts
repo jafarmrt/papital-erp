@@ -10784,6 +10784,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runWebhookSsrfEchoTests(shouldRun));
   const { runWebhookErrorContractTests } = await import('../regression/webhookErrorContractTests.js');
   results.push(...await runWebhookErrorContractTests(shouldRun));
+  const { runEventsErrorContractTests } = await import('../regression/eventsErrorContractTests.js');
+  results.push(...await runEventsErrorContractTests(shouldRun));
   const { runWebhookRuleSeedTests } = await import('../regression/webhookRuleSeedTests.js');
   results.push(...await runWebhookRuleSeedTests(shouldRun));
   const { runWebhookSecretEditTests } = await import('../regression/webhookSecretEditTests.js');
@@ -10980,7 +10982,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runTreasuryChequeA5Tests } = await import('../regression/treasuryChequeA5Tests.js');
   results.push(...await runTreasuryChequeA5Tests(shouldRun));
 
-  // Phase 3 lane L1, package A6 (v10.0.255): party balances on permanent accounts only, deductions remitted per personnel
+  // Phase 3 lane L1, package A6 (v10.0.257): party balances on permanent accounts only, deductions remitted per personnel
   const { runPartyPermanentA6Tests } = await import('../regression/partyPermanentA6Tests.js');
   results.push(...await runPartyPermanentA6Tests(shouldRun));
 

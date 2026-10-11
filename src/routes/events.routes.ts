@@ -15,7 +15,7 @@ import { logActivity } from '../lib/auditLogger.js';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { z } from 'zod';
 import { createActionRuleSchema, createWebhookSchema, dlqDismissSchema, dlqPayloadSchema, dlqReplayBatchSchema, dlqReplaySchema, outboxProcessSchema, ruleDraftSchema, simulateDomainEventSchema, simulateReplaySchema, testStoredRuleSchema, updateActionRuleSchema, updateWebhookSchema } from './events.schemas.js';
-import { NotFoundError } from '../errors/customErrors.js';
+import { BadRequestError, NotFoundError } from '../errors/customErrors.js';
 import { isEnteredSecret } from '../lib/secrets/maskedSecret.js';
 import { actionRuleView, webhookSubscriptionView } from '../services/events/integrationSecrets.js';
 import { assertWebhookSecretsReadable } from '../services/events/webhookSecretStorage.js';
@@ -176,7 +176,7 @@ router.get(['/action-rules/:id', '/rules/:id'], authorizePermission('events.view
   const rule = await EventActionEngineService.getRuleById(id);
 
   if (!rule) {
-    return res.status(404).json({ success: false, message: 'قانون مورد نظر یافت نشد.' });
+    throw new NotFoundError('قانون مورد نظر یافت نشد.', undefined, 'EVENT_RULE_NOT_FOUND');
   }
 
   res.json({
@@ -189,10 +189,7 @@ router.post(['/action-rules', '/rules'], authorizePermission('events.manage'), v
   const { name, description, eventType, conditions, conditionsJson, actionType, actionConfigJson, actions, isActive } = req.body;
 
   if (!name || !eventType) {
-    return res.status(400).json({
-      success: false,
-      message: 'نام و نوع رویداد الزامی می‌باشد.'
-    });
+    throw new BadRequestError('نام و نوع رویداد الزامی می‌باشد.');
   }
 
   const firstAction = Array.isArray(actions) && actions.length > 0 ? actions[0] : null;
@@ -374,7 +371,7 @@ router.post('/dlq/:id/replay', authorizePermission('events.manage'), validate(dl
 router.post('/dlq/replay-batch', authorizePermission('events.manage'), validate(dlqReplayBatchSchema), asyncHandler(async (req, res) => {
   const { ids } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) {
-    return res.status(400).json({ success: false, message: 'لیست شناسه‌های بازپخش الزامی است.' });
+    throw new BadRequestError('لیست شناسه‌های بازپخش الزامی است.');
   }
 
   const userId = req.user?.id;
@@ -453,7 +450,7 @@ router.get(['/event-sourcing/aggregates', '/timeline/aggregates'], authorizePerm
   const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
 
   if (!type) {
-    return res.status(400).json({ success: false, message: 'پارامتر نوع موجودیت (type) الزامی است.' });
+    throw new BadRequestError('پارامتر نوع موجودیت (type) الزامی است.');
   }
 
   const aggregates = await EventSourcingReplayService.searchAggregates(type, search, limit);
@@ -469,7 +466,7 @@ router.get(['/event-sourcing/timeline', '/timeline'], authorizePermission('event
   const id = ((req.query.id as string) || (req.query.aggregateId as string) || '').trim();
 
   if (!type || !id) {
-    return res.status(400).json({ success: false, message: 'پارامترهای type و id الزامی هستند.' });
+    throw new BadRequestError('پارامترهای type و id الزامی هستند.');
   }
 
   // v9.0.431 (TD-711): audit rows only for holders of the audit log permission, computed here, never read from the request
@@ -529,7 +526,7 @@ router.get('/webhooks/:id', authorizePermission('events.view'), validate(paramsI
   const sub = await WebhookSubscriptionService.getSubscriptionById(id);
 
   if (!sub) {
-    return res.status(404).json({ success: false, message: 'اشتراک وب‌هوک یافت نشد.' });
+    throw new NotFoundError('اشتراک وب‌هوک یافت نشد.', undefined, 'WEBHOOK_NOT_FOUND');
   }
 
   res.json({
@@ -544,10 +541,7 @@ router.post('/webhooks', authorizePermission('events.manage'), validate(createWe
   const { name, targetUrl, eventPatterns, secretKey, customHeaders, retryLimit, timeoutMs, timeoutSeconds } = req.body;
 
   if (!name || !targetUrl || !eventPatterns || !Array.isArray(eventPatterns)) {
-    return res.status(400).json({
-      success: false,
-      message: 'نام، آدرس مقصد و الگوهای رویداد الزامی هستند.'
-    });
+    throw new BadRequestError('نام، آدرس مقصد و الگوهای رویداد الزامی هستند.');
   }
 
   const newSub = await WebhookSubscriptionService.createSubscription(
@@ -645,7 +639,7 @@ router.post('/webhooks/ping', authorizePermission('events.manage'), validate(web
   }
   const url = (targetUrl || stored?.targetUrl || '').trim();
   if (!url) {
-    return res.status(400).json({ success: false, message: 'آدرس مقصد برای ارسال پینگ آزمایشی الزامی است.' });
+    throw new BadRequestError('آدرس مقصد برای ارسال پینگ آزمایشی الزامی است.');
   }
   const keySource = isEnteredSecret(secretKey) ? 'entered' : stored ? 'stored' : 'temporary';
   const signingKey = keySource === 'entered' ? String(secretKey).trim()

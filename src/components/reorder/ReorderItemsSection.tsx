@@ -110,6 +110,7 @@ export function ReorderItemsSection({
                 <th className="p-3">دسته‌بندی</th>
                 <th className="p-3 text-center">موجودی آزاد</th>
                 <th className="p-3 text-center">در راه</th>
+                <th className="p-3 text-center">درخواست باز</th>
                 <th className="p-3 text-center">نقطه سفارش</th>
                 <th className="p-3 text-center">{theme.deficitHeader}</th>
                 <th className="p-3 text-center">{theme.costHeader}</th>

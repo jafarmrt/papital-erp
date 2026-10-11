@@ -12,7 +12,7 @@ import { createBank } from './treasuryPartyTests.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 
 /**
- * Series 10 phase 3 lane L1, package A6 (v10.0.255, decision t5 option A of the phase 5 review): a party's statement,
+ * Series 10 phase 3 lane L1, package A6 (v10.0.257, decision t5 option A of the phase 5 review): a party's statement,
  * account card and delete guard count permanent accounts only and show temporary rows apart, and a payslip's other
  * deductions (3205) are remitted by a treasury payment with the personnel detail. Each test is red on the version before
  * its fix.
@@ -70,7 +70,7 @@ export async function runPartyPermanentA6Tests(shouldRun: ShouldRun): Promise<Te
 
   const supplierId = 'reg_party_balance_permanent_accounts_td_915';
   if (shouldRun(supplierId, 'td915', 'party', 'ledger', 'a6')) {
-    await runCase(results, supplierId, 'v10.0.255: a supplier paid in full has a zero statement, card and delete-guard balance; the donated goods income row is shown apart (TD-915)', async () => {
+    await runCase(results, supplierId, 'v10.0.257: a supplier paid in full has a zero statement, card and delete-guard balance; the donated goods income row is shown apart (TD-915)', async () => {
       const problems: string[] = [];
       const name = `ERP-TEST-MARKER A6 supplier ${tagOf()}`;
       const [supplier] = await orm.insert(customers).values({ name, partyType: 'supplier' }).returning();
@@ -109,7 +109,7 @@ export async function runPartyPermanentA6Tests(shouldRun: ShouldRun): Promise<Te
 
   const personnelId = 'reg_personnel_statement_and_deductions_payment_td_924_952';
   if (shouldRun(personnelId, 'td924', 'td952', 'party', 'ledger', 'payroll', 'treasury', 'a6')) {
-    await runCase(results, personnelId, 'v10.0.255: a paid payslip leaves only its deductions on the personnel statement, and a «deductions» treasury payment with the personnel detail clears them (TD-924 / TD-952)', async () => {
+    await runCase(results, personnelId, 'v10.0.257: a paid payslip leaves only its deductions on the personnel statement, and a «deductions» treasury payment with the personnel detail clears them (TD-924 / TD-952)', async () => {
       const problems: string[] = [];
       const fullName = `ERP-TEST-MARKER A6 worker ${tagOf()}`;
       const [worker] = await orm.insert(personnel).values({ fullName }).returning();

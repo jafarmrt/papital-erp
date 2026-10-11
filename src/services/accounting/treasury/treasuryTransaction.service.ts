@@ -75,7 +75,7 @@ export class TreasuryTransactionService {
         account = await AccountMappingService.getEmployeeAdvanceAccount(tx);
         conceptLabel = 'مساعده و وام پرسنل';
       } else if (purpose === 'deductions') {
-        // v10.0.255 (TD-952، ت۵ الف): واریز کسورات فیش با تفصیلی پرسنل، همان حسابی که فیش بستانکار می‌کند
+        // v10.0.257 (TD-952، ت۵ الف): واریز کسورات فیش با تفصیلی پرسنل، همان حسابی که فیش بستانکار می‌کند
         account = await AccountMappingService.getEmployeeDeductionsPayableAccount(tx);
         conceptLabel = 'سایر کسورات حقوق پرداختنی';
       } else {
@@ -227,7 +227,7 @@ export class TreasuryTransactionService {
     /** v8.0.118 (TD-409): کاربر مجوز «ثبت خزانه و چک بدون سند حسابداری» را دارد (روت می‌سنجد، نه بدنه درخواست) */
     allowNoVoucher?: boolean;
     attachments?: unknown[];
-    // V1.8.0: انگیزه پرداخت به پرسنل — 'settlement' (تسویه حقوق) | 'advance' (مساعده) | 'deductions' (واریز کسورات، v10.0.255) | 'other' (v9.0.82)
+    // V1.8.0: انگیزه پرداخت به پرسنل — 'settlement' (تسویه حقوق) | 'advance' (مساعده) | 'deductions' (واریز کسورات، v10.0.257) | 'other' (v9.0.82)
     purpose?: string;
     /** v9.0.82 (TD-507): سرفصل طرف مقابلی که کاربر برای «متفرقه» و «سایر» پرسنل انتخاب کرده است */
     contraAccountId?: number | null;

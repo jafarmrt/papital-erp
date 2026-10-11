@@ -12,7 +12,7 @@ interface PartyTemporaryRowsPanelProps {
 }
 
 /**
- * v10.0.255 (TD-915 / TD-924، تصمیم ت۵ الف): ردیف‌های حساب موقت طرف حساب (درآمد، هزینه، بهای تمام‌شده) زیر صورت‌حساب و
+ * v10.0.257 (TD-915 / TD-924، تصمیم ت۵ الف): ردیف‌های حساب موقت طرف حساب (درآمد، هزینه، بهای تمام‌شده) زیر صورت‌حساب و
  * کارت حساب، جدا از ردیف‌های مانده؛ در مانده و جمع گردش بالا شمرده نمی‌شوند.
  */
 export const PartyTemporaryRowsPanel: React.FC<PartyTemporaryRowsPanelProps> = ({ rows, formatAmount }) => {

@@ -7,7 +7,7 @@ import type { ForeignAmountOrigin } from '../../types.js';
 import { voucherItemCurrencySql } from './voucherItemAmount.js';
 
 /**
- * v10.0.255 (TD-915 / TD-924، تصمیم ت۵ الف): شرط حساب دائم و موقت روی ردیف سند (پرس‌وجو باید `accounts` را join کرده
+ * v10.0.257 (TD-915 / TD-924، تصمیم ت۵ الف): شرط حساب دائم و موقت روی ردیف سند (پرس‌وجو باید `accounts` را join کرده
  * باشد)، و ردیف‌های موقت طرف حساب که صورت‌حساب و کارت حساب او جدا و بیرون از مانده نشان می‌دهند.
  */
 export function permanentAccountCondition(): SQL {

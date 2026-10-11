@@ -7,7 +7,7 @@ import { PERSONNEL_PURPOSES, personnelPurposeLabel } from '../../lib/treasury/pa
 
 const DEDUCTIONS_LABEL = 'واریز کسورات حقوق';
 
-describe('v10.0.255 party temporary rows and the deductions purpose (TD-915 / TD-924 / TD-952)', () => {
+describe('v10.0.257 party temporary rows and the deductions purpose (TD-915 / TD-924 / TD-952)', () => {
   it('treats revenue, expense and cost of sales as temporary accounts only', () => {
     expect(['revenue', 'expense', 'cost_of_sales'].every(isTemporaryAccountType)).toBe(true);
     expect(['asset', 'liability', 'equity', '', null].some(isTemporaryAccountType)).toBe(false);

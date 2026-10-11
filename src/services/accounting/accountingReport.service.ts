@@ -657,7 +657,7 @@ export class AccountingReportService {
     if (currencyCondition) periodConditions.push(currencyCondition);
     const debitAmount = voucherItemReportAmountSql(journalVoucherItems.debit, params.currency);
     const creditAmount = voucherItemReportAmountSql(journalVoucherItems.credit, params.currency);
-    // v10.0.255 (TD-915 / TD-924، ت۵ الف): کارت طرف حساب مانده را فقط روی حساب‌های دائم می‌گیرد؛ ردیف موقت جدا می‌آید
+    // v10.0.257 (TD-915 / TD-924، ت۵ الف): کارت طرف حساب مانده را فقط روی حساب‌های دائم می‌گیرد؛ ردیف موقت جدا می‌آید
     const partyPermanent = params.party ? permanentAccountCondition() : undefined;
 
     const rawRows = await orm.select({
@@ -1101,7 +1101,7 @@ export class AccountingReportService {
       startDate: params.startDate || null,
       endDate: params.endDate || null,
       items,
-      // v10.0.255 (TD-915 / TD-924، ت۵ الف): مانده و گردش بالا فقط حساب‌های دائم؛ ردیف موقت طرف حساب جدا
+      // v10.0.257 (TD-915 / TD-924، ت۵ الف): مانده و گردش بالا فقط حساب‌های دائم؛ ردیف موقت طرف حساب جدا
       temporaryRows: await readPartyTemporaryRows({ periodConditions, debitAmount, creditAmount, reportCurrency, allCurrencies }),
     };
   }

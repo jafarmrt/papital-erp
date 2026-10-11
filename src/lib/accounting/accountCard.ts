@@ -34,7 +34,7 @@ export interface AccountCardReport {
   finalBalance: number;
   /** v8.0.16 (TD-260): ارز مبالغ گزارش — IRR در نمای همه ارزها، وگرنه همان ارز انتخاب‌شده */
   currency: string;
-  /** v10.0.255 (TD-915 / TD-924): فقط کارت یک طرف حساب؛ ردیف‌های حساب موقت او بیرون از مانده */
+  /** v10.0.257 (TD-915 / TD-924): فقط کارت یک طرف حساب؛ ردیف‌های حساب موقت او بیرون از مانده */
   temporaryRows?: PartyTemporaryRows;
 }
 

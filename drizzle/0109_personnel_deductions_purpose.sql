@@ -1,4 +1,4 @@
--- Drizzle Migration 0109: personnel purpose «deductions» on treasury rows and cheques (v10.0.255, TD-952 / P5-W08)
+-- Drizzle Migration 0109: personnel purpose «deductions» on treasury rows and cheques (v10.0.257, TD-952 / P5-W08)
 --
 -- A payslip credits «other payroll deductions payable» (3205) with the personnel detail, but no treasury purpose debited
 -- 3205 with that detail, so a personnel stayed in credit after the deductions were remitted and could not be deleted.
