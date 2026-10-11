@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.0.234 — v10.0.234 — four roadmap items deferred to the next plan
+- Documentation only: D-04 (WooCommerce auto-sync), D-07 (per-device sessions), O-04 (nightly check on a backup copy) and O-06 (operations docs) move out of the series 10 plan into a «deferred to the next plan» section of `V10_MASTER_ROADMAP.md`, at the product owner's request.
+
 ### v10.0.233 — قفل ورود در خطای پایگاه‌داده بسته می‌ماند
 - اگر پایگاه‌داده هنگام ورود پاسخ ندهد، بررسی قفل ورود پاسخ ۵۰۳ می‌دهد و قفل نام کاربری و نشانی همچنان اعمال می‌شود (OBS-R2-09، TD-984).
 
