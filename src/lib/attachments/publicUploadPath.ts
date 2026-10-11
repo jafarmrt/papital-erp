@@ -1,5 +1,5 @@
 /**
- * v10.0.259 (OBS-R1-04): which `/uploads` paths are served without a session. Only image files (the company logo,
+ * v10.0.261 (OBS-R1-04): which `/uploads` paths are served without a session. Only image files (the company logo,
  * catalog and product photos are all stored with an image extension by `uploadBase64ToStorage`) and the public
  * asset folders; a file whose name merely contains «logo» or «favicon» is no longer public.
  */

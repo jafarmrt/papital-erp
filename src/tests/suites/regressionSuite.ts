@@ -10746,6 +10746,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 8 PR E (v9.0.335+): the data of a document (treasury rows by permission)
   const { runDocumentDataTests } = await import('../regression/documentDataTests.js');
   results.push(...await runDocumentDataTests(shouldRun));
+  // Series 10 phase 3 L2 (TD-1136): the manual invoice form's service charge through POST and PUT /documents
+  const { runInvoiceServiceChargeTests } = await import('../regression/invoiceServiceChargeTests.js');
+  results.push(...await runInvoiceServiceChargeTests(shouldRun));
 
   // Package 13 PR B (v9.0.249+): reading daily work logs (list, statistics, timestamps)
   const { runDailyLogReadTests } = await import('../regression/dailyLogReadTests.js');
@@ -10987,6 +10990,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Phase 3 lane L1, package A6 (v10.0.257): party balances on permanent accounts only, deductions remitted per personnel
   const { runPartyPermanentA6Tests } = await import('../regression/partyPermanentA6Tests.js');
   results.push(...await runPartyPermanentA6Tests(shouldRun));
+
+  // Phase 3 lane L1, package A7 (v10.0.259): payroll payment void event and audit, «my payslips» paid amount, personnel id on treasury rows
+  const { runPayrollHygieneA7Tests } = await import('../regression/payrollHygieneA7Tests.js');
+  results.push(...await runPayrollHygieneA7Tests(shouldRun));
 
   return results;
 }

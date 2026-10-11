@@ -19,7 +19,7 @@ import { assertNoVoucherAllowed } from './noVoucherTreasury.js';
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
 import { requireChequeBankAccount } from './bankLinks.js';
 import { normalizePartyPurpose, requireChoosableContraAccount } from './partyContraAccount.js';
-import { resolveTreasuryPartyName } from './treasuryLinks.js';
+import { assertPersonnelPartyId, resolveTreasuryPartyName } from './treasuryLinks.js';
 import { chequePartyPosting, requireChequePartyAccount, resolveChequePartyAccountId } from './chequePartyAccount.js';
 import { activeChequeVoucherIds, auditChequeDelete, auditChequeStatusChange, type ChequeAuditActor } from './chequeAudit.js';
 
@@ -211,6 +211,7 @@ export class ChequeLifecycleService {
       const chequeBankAccountId = await requireChequeBankAccount(txEngine, data.bankAccountId);
       if (party.contraAccountId) await requireChoosableContraAccount(txEngine, party.contraAccountId);
       // شناسه طرف حساب در جدول همان نوع (B04-05)
+      assertPersonnelPartyId(partyType, data.partyId);
       await resolveTreasuryPartyName(txEngine, partyType, data.partyId);
       const partyAccountId = await resolveChequePartyAccountId(txEngine, partyType, party.purpose, party.contraAccountId);
       // v8.0.19 (TD-271): ابتدا چک ثبت می‌شود تا سند ثبت آن با source_cheque_id به همین چک پیوند بخورد

@@ -4,15 +4,15 @@ import request from 'supertest';
 import { TestCaseResult, makeTestCase } from '../types.js';
 
 /**
- * OBS-R1-04, v10.0.259: `/uploads` serves without a session only image files and the public asset folders. On
- * v10.0.258 any file whose name contained «logo» or «favicon» (a text or HTML file too) was served to anyone.
+ * OBS-R1-04, v10.0.261: `/uploads` serves without a session only image files and the public asset folders. On
+ * v10.0.260 any file whose name contained «logo» or «favicon» (a text or HTML file too) was served to anyone.
  */
 export async function runPublicUploadPathTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
   const id = 'reg_public_upload_path_obs_r1_04';
   if (!shouldRun(id, 'obs-r1-04', 'uploads', 'logo', 'package1')) return results;
 
-  const name = 'v10.0.259: /uploads serves only images without a session, not any file named logo (OBS-R1-04)';
+  const name = 'v10.0.261: /uploads serves only images without a session, not any file named logo (OBS-R1-04)';
   const tStart = Date.now();
   const dir = path.join(process.cwd(), 'public', 'uploads');
   const stamp = String(Date.now());

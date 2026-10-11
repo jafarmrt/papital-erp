@@ -9,7 +9,7 @@ import { needsChosenContraAccount, normalizePartyPurpose, requireChoosableContra
 import { isSalarySettlementPayment, SALARY_SETTLEMENT_VIA_PAYSLIP_MESSAGE } from '../../../lib/treasury/partyPurpose.js';
 import { assertWithinDocumentRemaining, lockSettlementDocument } from './documentRemaining.js';
 import { assertAdvanceVoidKeepsBalance, isAdvancePayment, lockAdvancePersonnel } from './advanceVoidGuard.js';
-import { assertTreasuryDocumentLink, documentPartyOfTreasuryLink, resolveTreasuryPartyName } from './treasuryLinks.js';
+import { assertPersonnelPartyId, assertTreasuryDocumentLink, documentPartyOfTreasuryLink, resolveTreasuryPartyName } from './treasuryLinks.js';
 import { validateLockOrder, LockHierarchyLevel } from '../../../lib/lockOrder.js';
 import { domainEventBus } from '../../events/domainEventBus.js';
 import { DomainEventType } from '../../events/domainEvents.js';
@@ -276,6 +276,7 @@ export class TreasuryTransactionService {
       const txCurrency = data.currency || bank.currency || 'IRR';
       // v9.0.83 (TD-501، B04-05): شناسه طرف حساب در جدول همان نوع، و سند پیوسته فعال، هم‌سو و با همان طرف حساب؛
       // v9.0.460 (TD-908): و با همان ارز ردیف، مانند «وصل دوباره»
+      assertPersonnelPartyId(partyType, partyId);
       const partyCurrentName = await resolveTreasuryPartyName(txEngine, partyType, partyId);
       if (data.documentId) {
         await assertTreasuryDocumentLink(txEngine, {

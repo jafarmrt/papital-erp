@@ -1,5 +1,6 @@
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { assertPayrollDutyNotByIssuer } from '../piecework/payrollDuties.js';
+import { auditPayrollPaymentRegistered } from '../piecework/pieceworkAudit.js';
 import {
   bankAccounts,
   treasuryTransactions,
@@ -37,6 +38,8 @@ export interface RegisterPayrollPaymentInput {
   notes?: string;
   userId?: number;
   username?: string;
+  /** v10.0.259 (TD-950): درخواست، برای کاربر و IP ردیف ممیزی */
+  req?: unknown;
 }
 
 export interface RegisterPayrollPaymentResult {
@@ -341,6 +344,12 @@ export class PayrollPaymentService {
         paymentMethod: input.method || 'bank_transfer',
         paymentReference: input.paymentReference?.trim() || payroll.paymentReference
       };
+
+      // v10.0.259 (TD-950): ممیزی پرداخت در همین تراکنش، با کاربر و IP و مبلغ؛ پیش‌تر مسیر پس از commit و بی مبلغ می‌نوشت
+      await auditPayrollPaymentRegistered(tx, updatedPayroll, {
+        transactionId: tr.id, transactionNumber: txNum, amount: payAmount.toString(), paidBefore: String(payroll.paidAmount ?? 0),
+        voucherId: voucher?.id ?? null, voucherNumber: voucher?.voucherNumber ?? null,
+      }, { req: input.req, userId: input.userId, username: input.username });
 
       return {
         payroll: updatedPayroll,
