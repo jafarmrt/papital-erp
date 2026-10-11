@@ -9,6 +9,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { UnauthorizedError } from '../errors/customErrors.js';
 import { logger } from '../middleware/logger.js';
 import { generateCrmDueReminders } from '../services/notifications/crmDueReminders.js';
+import { dismissNotification, markAllNotificationsRead, markNotificationRead } from '../services/notifications/notificationInbox.service.js';
 import { withUtcTimestampKeys } from '../lib/serverTimestamp.js';
 import { NOTIFICATION_TIMESTAMP_KEYS } from '../services/events/eventTimestamps.js';
 
@@ -84,10 +85,7 @@ router.put('/notifications/:id/read', validate(notifParamSchema), asyncHandler(a
   if (!userId) throw new UnauthorizedError('احراز هویت انجام نشده است');
   const notifId = Number(req.params.id);
 
-  await orm
-    .update(notifications)
-    .set({ isRead: 1 })
-    .where(and(eq(notifications.id, notifId), eq(notifications.userId, userId)));
+  await markNotificationRead(userId, notifId);
 
   res.json({ success: true });
 }));
@@ -97,10 +95,7 @@ router.put('/notifications/read-all', asyncHandler(async (req, res) => {
   const userId = req.user?.id;
   if (!userId) throw new UnauthorizedError('احراز هویت انجام نشده است');
 
-  await orm
-    .update(notifications)
-    .set({ isRead: 1 })
-    .where(eq(notifications.userId, userId));
+  await markAllNotificationsRead(userId);
 
   res.json({ success: true });
 }));
@@ -112,10 +107,7 @@ router.delete('/notifications/:id', validate(notifParamSchema), asyncHandler(asy
   if (!userId) throw new UnauthorizedError('احراز هویت انجام نشده است');
   const notifId = Number(req.params.id);
 
-  await orm
-    .update(notifications)
-    .set({ dismissedAt: sql`now()` })
-    .where(and(eq(notifications.id, notifId), eq(notifications.userId, userId), isNull(notifications.dismissedAt)));
+  await dismissNotification(userId, notifId);
 
   res.json({ success: true });
 }));
