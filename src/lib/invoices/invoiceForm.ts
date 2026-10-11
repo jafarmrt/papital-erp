@@ -55,6 +55,9 @@ export interface InvoiceDocumentDetails {
   exchange_rate?: number | string | null;
   vatPercent?: number | string | null;
   vat_percent?: number | string | null;
+  /** v10.0.260 (TD-1136): هزینه ارسال و خدمات سند */
+  serviceChargeAmount?: number | string | null;
+  service_charge_amount?: number | string | null;
   crmLeadId?: number | null;
   /** v9.0.336 (TD-778): طرف حساب سند با شناسه */
   partyId?: number | null;
@@ -174,6 +177,8 @@ export interface InvoiceFormValues extends BuyerFields {
   currency: string;
   exchangeRate: number;
   vatPercent: number;
+  /** v10.0.260 (TD-1136): هزینه ارسال و خدمات ذخیره‌شده سند */
+  serviceChargeAmount: number;
   /** پرونده فروشی که خود سند به آن وصل است (نه پرونده‌ای که فرم پیش‌تر از آن باز شده بود) */
   crmLeadId: number | null;
   /** v9.0.336 (TD-778): طرف حساب ذخیره‌شده سند؛ انتخابگر خریدار با آن پر می‌شود، نه با تطبیق نام */
@@ -198,6 +203,7 @@ export function invoiceFormFromDocument(doc: InvoiceDocumentDetails, fallbackRef
     exchangeRate: Number(doc.exchangeRate ?? doc.exchange_rate ?? 0) || 0,
     // v7.0.32 (TD-197): بازیابی مالیات ساختاریافته پیش‌فاکتور در حالت ویرایش
     vatPercent: Number(doc.vatPercent ?? doc.vat_percent ?? 0) || 0,
+    serviceChargeAmount: Number(doc.serviceChargeAmount ?? doc.service_charge_amount ?? 0) || 0,
     crmLeadId: Number(doc.crmLeadId) > 0 ? Number(doc.crmLeadId) : null,
     partyId: Number(doc.partyId) > 0 ? Number(doc.partyId) : null,
     version: Number(doc.version) > 0 ? Number(doc.version) : null,

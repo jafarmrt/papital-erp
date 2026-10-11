@@ -17,7 +17,8 @@ import { boundaryState } from './packageBoundary';
  *  - ormFallback (decision t4 B, OBS-R2-03): an optional transaction replaced by the pool, `x || orm`, `x ?? orm`
  *    and `= orm` (a bare `orm`, never a query builder `orm.select()`);
  *  - routeErrorResponses (decision t5 A, OBS-R2-05): a hand-written error answer `res.status(4xx|5xx)` in `src/routes/**`
- *    instead of throwing an AppError for `errorHandler`;
+ *    instead of throwing an AppError for `errorHandler`, also `res.status(cond ? 400 : 500)` (v10.0.253);
+ *  - noopCatches (decision t5 A, OBS-R2-05, v10.0.253): `catch (err) { throw err; }`, a catch that only rethrows its own error;
  *  - serviceGenericErrors (decision t5 A): `throw new Error(` in `src/services/**` instead of an AppError subclass;
  *  - packageBoundary (decision t3 A, OBS-R2-02): server imports against the package direction of
  *    scripts/ratchets/PACKAGE_MAP.txt (scripts/ratchets/packageBoundary.ts); a server file the map does not cover is refused;
@@ -28,7 +29,7 @@ import { boundaryState } from './packageBoundary';
 
 export const BASELINE_FILE = 'scripts/ratchets/architecture-baseline.json';
 
-export const METRICS = ['routeWrites', 'ormFallback', 'routeErrorResponses', 'serviceGenericErrors', 'auditWithoutTx', 'packageBoundary'] as const;
+export const METRICS = ['routeWrites', 'ormFallback', 'routeErrorResponses', 'serviceGenericErrors', 'noopCatches', 'auditWithoutTx', 'packageBoundary'] as const;
 export type Metric = (typeof METRICS)[number];
 export type ArchitectureBaseline = Record<Metric, Record<string, number>> & { unmappedServerFiles?: string[] };
 
@@ -37,6 +38,7 @@ const METRIC_ADVICE: Record<Metric, string> = {
   ormFallback: 'take the caller\'s tx instead of falling back to the pool (decision t4 B)',
   routeErrorResponses: 'throw an AppError subclass and let errorHandler answer (decision t5 A)',
   serviceGenericErrors: 'throw an AppError subclass (decision t5 A)',
+  noopCatches: 'remove the try / catch: asyncHandler already passes the error to errorHandler (decision t5 A)',
   auditWithoutTx: 'pass the write\'s own tx to logActivity so the audit row commits or rolls back with the change (TD-963)',
   packageBoundary: 'import only towards a lower layer, or go through an event or the composition root (decision t3 A)',
 };
@@ -74,6 +76,21 @@ function schemaImports(sf: ts.SourceFile): Set<string> {
 
 const isOrm = (n: ts.Node) => ts.isIdentifier(n) && n.text === 'orm';
 
+/** An error status: a numeric literal of 400 or more, or a conditional with such a literal in a branch. */
+function isErrorStatus(n: ts.Expression): boolean {
+  if (ts.isParenthesizedExpression(n)) return isErrorStatus(n.expression);
+  if (ts.isNumericLiteral(n)) return Number(n.text) >= 400;
+  return ts.isConditionalExpression(n) && (isErrorStatus(n.whenTrue) || isErrorStatus(n.whenFalse));
+}
+
+/** `catch (err) { throw err; }`: the catch clause only rethrows its own error. */
+function isNoopCatch(n: ts.CatchClause): boolean {
+  const name = n.variableDeclaration?.name;
+  const only = n.block.statements.length === 1 ? n.block.statements[0] : undefined;
+  return !!name && ts.isIdentifier(name) && !!only && ts.isThrowStatement(only) && !!only.expression
+    && ts.isIdentifier(only.expression) && only.expression.text === name.text;
+}
+
 /** A `logActivity(...)` call whose argument is not an object literal naming `tx` (a spread may carry it, so it counts as named). */
 function isAuditWithoutTx(n: ts.CallExpression): boolean {
   const callee = n.expression;
@@ -90,7 +107,7 @@ export type SourceMetric = Exclude<Metric, 'packageBoundary'>;
 
 export function countSource(file: string, source: string): Record<SourceMetric, number> {
   const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
-  const counts: Record<SourceMetric, number> = { routeWrites: 0, ormFallback: 0, routeErrorResponses: 0, serviceGenericErrors: 0, auditWithoutTx: 0 };
+  const counts: Record<SourceMetric, number> = { routeWrites: 0, ormFallback: 0, routeErrorResponses: 0, serviceGenericErrors: 0, noopCatches: 0, auditWithoutTx: 0 };
   const tables = isRoute(file) ? schemaImports(sf) : new Set<string>();
   const isTable = (n: ts.Expression) => (ts.isIdentifier(n) && tables.has(n.text))
     || (ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.expression) && tables.has(`${n.expression.text}.*`));
@@ -98,10 +115,11 @@ export function countSource(file: string, source: string): Record<SourceMetric, 
     if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression)) {
       const method = n.expression.name.text;
       if (isRoute(file) && ['insert', 'update', 'delete'].includes(method) && n.arguments.length === 1 && isTable(n.arguments[0])) counts.routeWrites++;
-      if (isRoute(file) && method === 'status' && n.arguments.length === 1 && ts.isNumericLiteral(n.arguments[0])
-        && Number(n.arguments[0].text) >= 400 && ts.isIdentifier(n.expression.expression) && n.expression.expression.text === 'res') counts.routeErrorResponses++;
+      if (isRoute(file) && method === 'status' && n.arguments.length === 1 && isErrorStatus(n.arguments[0])
+        && ts.isIdentifier(n.expression.expression) && n.expression.expression.text === 'res') counts.routeErrorResponses++;
     }
     if (ts.isCallExpression(n) && isAuditWithoutTx(n)) counts.auditWithoutTx++;
+    if (ts.isCatchClause(n) && isNoopCatch(n)) counts.noopCatches++;
     if (ts.isBinaryExpression(n) && isOrm(n.right)
       && [ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.EqualsToken].includes(n.operatorToken.kind)) counts.ormFallback++;
     if ((ts.isVariableDeclaration(n) || ts.isParameter(n)) && n.initializer && isOrm(n.initializer)) counts.ormFallback++;

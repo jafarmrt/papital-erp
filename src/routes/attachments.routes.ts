@@ -5,7 +5,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { userHasRoleOrPermission, requireSystemAdmin } from '../middleware/authorize.js';
 import { validate } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { AppError, NotFoundError } from '../errors/customErrors.js';
+import { AppError, ForbiddenError, NotFoundError } from '../errors/customErrors.js';
 import { logger } from '../middleware/logger.js';
 import { errorMessageOf } from '../utils.js';
 import { RECORD_READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
@@ -65,7 +65,7 @@ router.get('/attachments/:id', validate(attachmentIdSchema), asyncHandler(async 
   }
   const required = RECORD_READ_PERMISSIONS[row.entityType];
   if (required && !(await userHasRoleOrPermission(req.user, ...required))) {
-    return res.status(403).json({ error: 'دسترسی غیرمجاز به این پیوست' });
+    throw new ForbiddenError('دسترسی غیرمجاز به این پیوست', undefined, 'ATTACHMENT_FORBIDDEN');
   }
 
   // v9.0.254 (TD-627, finding B13-02): the file is opened before any header is sent, so a missing, unreadable or

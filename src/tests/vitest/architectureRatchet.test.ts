@@ -53,6 +53,19 @@ describe('architecture_ratchet: phase-2 decisions may only shrink their debt', (
     expect(countSource('src/lib/x.ts', service).serviceGenericErrors).toBe(0);
   });
 
+  it('counts a conditional error status and a catch that only rethrows (v10.0.253, OBS-R2-05)', () => {
+    const route = `res.status(bad ? 400 : 500).json(x); res.status(ok ? 200 : 201).json(x);`;
+    expect(countSource('src/routes/x.routes.ts', route).routeErrorResponses).toBe(1);
+    const source = `
+      try { a(); } catch (err) { throw err; }
+      try { b(); } catch (e) { log(e); throw e; }
+      try { c(); } catch (err) { throw other; }
+      try { d(); } catch { throw new Error('x'); }
+    `;
+    expect(countSource('src/services/x.ts', source).noopCatches).toBe(1);
+    expect(countSource('src/routes/x.routes.ts', source).noopCatches).toBe(1);
+  });
+
   it('counts an audit row written without the change\'s own transaction (TD-963)', () => {
     const source = `
       await logActivity({ userId, action: 'CREATE', entity: 'x' });
@@ -68,7 +81,7 @@ describe('architecture_ratchet: phase-2 decisions may only shrink their debt', (
   });
 
   it('refuses a grown count and reports a lowered one', () => {
-    const empty = { routeWrites: {}, ormFallback: {}, routeErrorResponses: {}, serviceGenericErrors: {}, auditWithoutTx: {}, packageBoundary: {} };
+    const empty = { routeWrites: {}, ormFallback: {}, routeErrorResponses: {}, serviceGenericErrors: {}, noopCatches: {}, auditWithoutTx: {}, packageBoundary: {} };
     const baseline: ArchitectureBaseline = { ...empty, routeWrites: { 'a.ts': 2, 'b.ts': 1 } };
     const report = compareWithBaseline({ ...empty, routeWrites: { 'a.ts': 3, 'c.ts': 1 } }, baseline);
     expect(report.errors).toEqual([
