@@ -327,10 +327,7 @@ export function useSettings() {
     const daysError = movementDaysError({
       fast_moving_days: fastMovingDays, slow_moving_days: slowMovingDays, dead_stock_days: deadStockDays
     });
-    if (daysError) {
-      toast.error(daysError);
-      return;
-    }
+    if (daysError) return void toast.error(daysError);
     // v10.0.95 (TD-1192): نام فهرست قیمت بی ویرگول لاتین و یکتا، با همان قاعده کارساز
     const priceListError = priceListNamesError(pricingStrategies, { allowLatinComma: true });
     if (priceListError) return void toast.error(priceListError);
