@@ -113,6 +113,20 @@ const BODY_PARSER_ERRORS: Record<string, { message: string; statusCode: number; 
   'request.size.invalid': { message: 'اندازه بدنه درخواست با سرآیند آن نمی‌خواند.', statusCode: 400, code: 'INVALID_BODY_SIZE' },
 };
 
+/**
+ * v10.0.x (OBS-R1-05): PostgreSQL concurrency and time-limit errors are transient; the user is told to
+ * try again instead of seeing «خطای داخلی سرور». Deadlock (40P01), serialization failure (40001) and
+ * lock not available (55P03) are 409; a statement cancelled by its time limit (57014) is 503.
+ */
+export const DB_RETRY_MESSAGE = 'این عملیات با کار هم‌زمان دیگری برخورد کرد و انجام نشد؛ چند لحظه بعد دوباره تلاش کنید.';
+export const DB_TIMEOUT_MESSAGE = 'پایگاه‌داده در زمان مجاز پاسخ نداد و این عملیات انجام نشد؛ چند لحظه بعد دوباره تلاش کنید.';
+const PG_TRANSIENT_ERRORS: Record<string, { message: string; statusCode: number; code: string }> = {
+  '40P01': { message: DB_RETRY_MESSAGE, statusCode: 409, code: 'DB_DEADLOCK_RETRY' },
+  '40001': { message: DB_RETRY_MESSAGE, statusCode: 409, code: 'DB_SERIALIZATION_RETRY' },
+  '55P03': { message: DB_RETRY_MESSAGE, statusCode: 409, code: 'DB_LOCK_NOT_AVAILABLE' },
+  '57014': { message: DB_TIMEOUT_MESSAGE, statusCode: 503, code: 'DB_STATEMENT_TIMEOUT' },
+};
+
 export function normalizeError(err: unknown): NormalizedError {
   if (err instanceof AppError) {
     return {
@@ -205,6 +219,10 @@ export function normalizeError(err: unknown): NormalizedError {
         code: 'CHECK_VIOLATION',
         stack: typeof errObj.stack === 'string' ? errObj.stack : undefined,
       };
+    }
+    const transient = typeof code === 'string' ? PG_TRANSIENT_ERRORS[code] : undefined;
+    if (transient) {
+      return { ...transient, stack: typeof errObj.stack === 'string' ? errObj.stack : undefined };
     }
     if (code === '23502') {
       return {
