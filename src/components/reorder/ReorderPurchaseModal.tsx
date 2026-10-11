@@ -9,7 +9,7 @@ import { useReorderSuppliersQuery } from '../../hooks/reorderAlerts/useReorderAl
 import { useReorderPurchaseSubmit, type ReorderPurchaseVariables } from '../../hooks/reorderAlerts/useReorderAlertsMutations';
 import { receiptNeedsDonatedConfirmation, reorderPurchaseReceiptPayload, reorderReceiptPriceError } from '../../lib/reorderAlerts/reorderPurchaseReceipt';
 import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
-import { ReorderOrderFields, type ReorderDocStatus as DocStatus, type ReorderPriority as Priority } from './ReorderOrderFields';
+import { ReorderOrderFields, type ReorderPriority as Priority } from './ReorderOrderFields';
 
 export type { ReorderModalItem } from '../../lib/reorderAlerts/reorderItems';
 
@@ -33,7 +33,8 @@ export function ReorderPurchaseModal({
   // v9.0.403 (TD-830): ISO, shown with JalaliDateInput
   const [requiredDate, setRequiredDate] = useState(() => getTodayIsoDate());
   const [supplierName, setSupplierName] = useState('');
-  const [docStatus, setDocStatus] = useState<DocStatus>('draft');
+  // v10.0.248 (TD-1133): صدور مستقیم فقط رسید قطعی است
+  const docStatus = 'final' as const;
   // v9.0.403 (TD-830): '' = the first active warehouse, which is the default warehouse (lowest id)
   const [targetWarehouse, setTargetWarehouse] = useState('');
   const [donatedConfirmed, setDonatedConfirmed] = useState(false);
@@ -150,10 +151,7 @@ export function ReorderPurchaseModal({
         if (variables.target === 'requisition') {
           toast.success(res.message || 'درخواست خرید با موفقیت در سیستم تدارکات ثبت شد.');
         } else {
-          toast.success(variables.payload.status === 'final'
-            ? 'رسید قطعی ورود کالا به انبار با موفقیت صادر و موجودی افزایش یافت.'
-            : 'پیش‌نویس سفارش خرید با موفقیت در اسناد انبار ثبت گردید.'
-          );
+          toast.success('رسید قطعی ورود کالا به انبار با موفقیت صادر و موجودی افزایش یافت.');
         }
         onSuccess();
         onClose();
@@ -234,7 +232,7 @@ export function ReorderPurchaseModal({
                   <span className="text-xs font-bold text-slate-900">صدور مستقیم سند انبار / خرید</span>
                 </div>
                 <p className="text-[11px] text-slate-500 mt-1 mr-6">
-                  ثبت مستقیم پیش‌نویس سفارش خرید یا رسید قطعی ورود به انبار به نام تامین‌کننده مشخص
+                  ثبت مستقیم رسید قطعی ورود به انبار برای کالایی که همین حالا رسیده، به نام تامین‌کننده مشخص
                 </p>
               </button>
             </div>
@@ -250,8 +248,6 @@ export function ReorderPurchaseModal({
             supplierName={supplierName}
             onSupplierChange={setSupplierName}
             supplierOptions={supplierOptions}
-            docStatus={docStatus}
-            onDocStatusChange={setDocStatus}
             warehouses={warehouses}
             warehouseCode={warehouseCode}
             onWarehouseChange={setTargetWarehouse}

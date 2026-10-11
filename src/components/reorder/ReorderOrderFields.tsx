@@ -1,9 +1,9 @@
 import { SearchableSelect } from '../SearchableSelect';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import type { WarehouseItem } from '../../hooks/queries/useSettingsQueries';
+import { REORDER_DIRECT_DOCUMENT_HINT, REORDER_DIRECT_DOCUMENT_LABEL } from '../../lib/reorderAlerts/reorderPurchaseReceipt';
 
 export type ReorderPriority = 'urgent' | 'high' | 'normal' | 'low';
-export type ReorderDocStatus = 'draft' | 'final';
 
 interface ReorderOrderFieldsProps {
   orderTarget: 'requisition' | 'direct_document';
@@ -14,8 +14,6 @@ interface ReorderOrderFieldsProps {
   supplierName: string;
   onSupplierChange: (value: string) => void;
   supplierOptions: Array<{ value: string; label: string }>;
-  docStatus: ReorderDocStatus;
-  onDocStatusChange: (value: ReorderDocStatus) => void;
   warehouses: WarehouseItem[];
   warehouseCode: string;
   onWarehouseChange: (code: string) => void;
@@ -73,12 +71,11 @@ export function ReorderOrderFields(props: ReorderOrderFieldsProps) {
             />
           </div>
 
+          {/* v10.0.248 (TD-1133): پیش‌نویس رسیدی بود که هیچ صفحه‌ای قطعی‌اش نمی‌کرد؛ سفارش به تأمین‌کننده با «ثبت سفارش خرید» است */}
           <div>
-            <label className="block font-bold text-slate-700 mb-1">نوع و وضعیت سند:</label>
-            <select value={props.docStatus} onChange={e => props.onDocStatusChange(e.target.value as ReorderDocStatus)} className={`${FIELD} font-bold`}>
-              <option value="draft">پیش‌نویس سفارش خرید (عدم تغییر موجودی)</option>
-              <option value="final">رسید قطعی ورود کالا به انبار (افزایش آنی موجودی)</option>
-            </select>
+            <span className="block font-bold text-slate-700 mb-1">نوع و وضعیت سند:</span>
+            <p className="font-bold text-slate-800">{REORDER_DIRECT_DOCUMENT_LABEL}</p>
+            <p className="text-[11px] text-slate-500 mt-1">{REORDER_DIRECT_DOCUMENT_HINT}</p>
           </div>
 
           <div className="sm:col-span-2">
