@@ -25,6 +25,8 @@ export default function DailyLogsPage({ user }: DailyLogsPageProps) {
   const { focusedLog, closeFocusedLog } = useDailyLogFocus();
   // گزارش تجمیعی مدیریت فقط با مجوز daily_logs.manage_all (مدیر سیستم همه مجوزها را دارد؛ v9.0.231، TD-626)
   const canViewSummary = useHasPermission('daily_logs.manage_all');
+  // TD-1156: the create buttons follow the key of POST /daily-logs
+  const canCreate = useHasPermission('daily_logs.create');
 
   // اگر تب تجمیعی فعال بود ولی دسترسی وجود نداشت، به تب همه برگرد
   useEffect(() => {
@@ -55,7 +57,7 @@ export default function DailyLogsPage({ user }: DailyLogsPageProps) {
         user={user}
         stats={dl.stats}
         onPrint={dl.handlePrintLogs}
-        onOpenCreateModal={dl.handleOpenCreateModal}
+        onOpenCreateModal={canCreate ? dl.handleOpenCreateModal : undefined}
       />
 
       {/* Tabs & Search Filter Bar */}
@@ -200,7 +202,7 @@ export default function DailyLogsPage({ user }: DailyLogsPageProps) {
           limit={dl.limit}
           user={user}
           systemUsers={dl.systemUsers}
-          onOpenCreateModal={dl.handleOpenCreateModal}
+          onOpenCreateModal={canCreate ? dl.handleOpenCreateModal : undefined}
           onOpenEditModal={dl.handleOpenEditModal}
           onDeleteLog={dl.handleDeleteLog}
           onOpenReviewModal={dl.handleOpenReviewModal}

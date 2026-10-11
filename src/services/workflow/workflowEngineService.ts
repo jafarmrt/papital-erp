@@ -46,6 +46,7 @@ export class WorkflowEngineService {
   static getWorkflowDefinitions = WorkflowDefinitionService.getDefinitions.bind(WorkflowDefinitionService);
   static getDefinitionById = WorkflowDefinitionService.getDefinitionById.bind(WorkflowDefinitionService);
   static getDefinitionByCode = WorkflowDefinitionService.getDefinitionByCode.bind(WorkflowDefinitionService);
+  static hasActiveDefinition = WorkflowDefinitionService.hasActiveDefinition.bind(WorkflowDefinitionService);
   static getWorkflowDefinitionDetail = WorkflowDefinitionService.getDefinitionById.bind(WorkflowDefinitionService);
   static createDefinition = WorkflowDefinitionService.createDefinition.bind(WorkflowDefinitionService);
   static updateDefinition = WorkflowDefinitionService.updateDefinition.bind(WorkflowDefinitionService);

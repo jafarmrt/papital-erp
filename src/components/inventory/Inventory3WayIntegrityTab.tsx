@@ -45,7 +45,7 @@ export function Inventory3WayIntegrityTab({
           </div>
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-2xl font-black text-slate-900 font-mono">
-              {integrityReport?.summary?.healthScorePercentage ?? 100}٪
+              {formatPersianNumber(integrityReport?.summary?.healthScorePercentage ?? 100)}٪
             </span>
             <span className="text-xs text-slate-500 font-medium">انطباق ریاضی</span>
           </div>
@@ -66,7 +66,7 @@ export function Inventory3WayIntegrityTab({
         {/* Total Items & Synchronized */}
         <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 text-xs">
-            <span>اقلام کاتالوگ انبار</span>
+            <span>کالاهای انبار</span>
             <Layers className="text-slate-600" size={18} />
           </div>
           <div className="mt-3 flex items-baseline gap-2">
@@ -133,7 +133,7 @@ export function Inventory3WayIntegrityTab({
             <span className="text-sm">توزیع موجودی در انبارها و انطباق با کاردکس</span>
           </div>
           <span className="text-slate-400 text-xs">
-            تعداد انبارهای فعال: {integrityReport?.warehouses?.length || 0}
+            تعداد انبارهای فعال: {formatPersianNumber(integrityReport?.warehouses?.length || 0)}
           </span>
         </div>
 
@@ -199,7 +199,7 @@ export function Inventory3WayIntegrityTab({
           <button
             onClick={() => onOpenRebuildModal()}
             className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
-            title="همگام‌سازی و بازسازی کاتالوگ بر مبنای کاردکس"
+            title="همگام‌سازی و بازسازی موجودی کالاها بر مبنای کاردکس"
           >
             <RotateCcw size={15} />
             <span>بازسازی موجودی از کاردکس</span>

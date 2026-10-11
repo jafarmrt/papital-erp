@@ -2,17 +2,22 @@ import React from 'react';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { formatPersianNumber } from '../../utils';
 import { ImportResult } from './types';
+import { itemImportOutcome } from '../../lib/items/itemImportOutcome';
 
 interface ExcelResultStepProps {
   importResult: ImportResult;
 }
 
 export const ExcelResultStep: React.FC<ExcelResultStepProps> = ({ importResult }) => {
+  // v10.0.82 (TD-1139): the header says what happened, not «success» whatever the row errors
+  const outcome = itemImportOutcome(importResult);
   return (
     <div className="border rounded-2xl p-6 bg-slate-50 space-y-4 animate-in fade-in">
-      <div className="flex items-center gap-2 font-bold text-slate-800 text-base border-b pb-3">
-        <CheckCircle2 size={22} className="text-emerald-600" />
-        نتیجه نهایی پردازش اکسل و ثبت در پایگاه‌داده:
+      <div className="flex items-center gap-2 font-bold text-slate-800 text-base border-b pb-3" data-tone={outcome.tone}>
+        {outcome.tone === 'success'
+          ? <CheckCircle2 size={22} className="text-emerald-600" />
+          : <AlertCircle size={22} className={outcome.tone === 'error' ? 'text-red-600' : 'text-amber-600'} />}
+        {outcome.message}
       </div>
 
       <div className="grid grid-cols-3 gap-4 text-center">

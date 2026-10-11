@@ -384,7 +384,13 @@ export class ChequeLifecycleService {
         existing = chq;
         bankRecord = bank;
       } else {
+        // v10.0.196 (TD-1217): حساب بانکی تازه پیش از چک قفل می‌شود (همان ترتیب «وصول»: بانک ← چک). پیش‌تر چک اول قفل می‌شد و
+        // نوشتن حساب بانکی قفل کلید خارجی بانک را می‌خواست، در حالی که «وصول» هم‌زمان بانک را گرفته و منتظر چک بود: بن‌بست.
+        const nextBankId = Number(data.bankAccountId) > 0
+          ? await requireChequeBankAccount(txEngine, data.bankAccountId)
+          : null;
         validateLockOrder([
+          ...(nextBankId ? [{ name: 'bankAccount', hierarchyLevel: LockHierarchyLevel.BANK_ACCOUNTS }] : []),
           { name: 'cheque', hierarchyLevel: LockHierarchyLevel.CHEQUES },
         ]);
         const [chq] = await txEngine.select().from(cheques).where(and(eq(cheques.id, id), eq(cheques.isDeleted, 0))).for('update'); // v8.0.69 (TD-322)

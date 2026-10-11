@@ -23,7 +23,7 @@ const row = (id: number, status: string) => ({
 
 const renderPage = (rows: unknown[]) => {
   fetchJson.mockImplementation((url: string) => {
-    if (url.startsWith('/pending-materials')) return Promise.resolve(rows);
+    if (url.startsWith('/pending-materials')) return Promise.resolve({ data: rows, total: rows.length, page: 1, limit: 50, statusCounts: { pending: rows.length, approved: 0, rejected: 0 } });
     if (url.startsWith('/categories')) return Promise.resolve([{ id: 1, name: 'سنگ' }]);
     return Promise.resolve({});
   });

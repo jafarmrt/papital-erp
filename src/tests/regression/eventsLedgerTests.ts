@@ -19,7 +19,7 @@ export async function runEventsLedgerTests(shouldRun: (id: string, ...extra: str
 
   const idEcho = 'reg_webhook_echo_production_obs_r2_80';
   if (shouldRun(idEcho, 'obs-r2-80', 'events', 'package15')) {
-    const name = 'v10.0.28: the webhook echo simulator is 404 in production (OBS-R2-80)';
+    const name = 'v10.0.223: the webhook echo simulator is 404 in production (OBS-R2-80)';
     const tStart = Date.now();
     try {
       let outcome = 'answered';
@@ -47,7 +47,7 @@ export async function runEventsLedgerTests(shouldRun: (id: string, ...extra: str
 
   const idAlias = 'reg_events_dead_alias_routes_obs_r2_79';
   if (shouldRun(idAlias, 'obs-r2-79', 'events', 'package15')) {
-    const name = 'v10.0.29: the events routes register no alias shadowed by an /:id route (OBS-R2-79)';
+    const name = 'v10.0.224: the events routes register no alias shadowed by an /:id route (OBS-R2-79)';
     const tStart = Date.now();
     try {
       const { getTestApp } = await import('../fixtures/httpTestHelper.js');
@@ -64,7 +64,7 @@ export async function runEventsLedgerTests(shouldRun: (id: string, ...extra: str
 
   const idReplay = 'reg_replay_wildcard_rules_obs_r2_84';
   if (shouldRun(idReplay, 'obs-r2-84', 'events', 'package15')) {
-    const name = 'v10.0.30: the dry-run replay evaluates the rules of every event type (OBS-R2-84)';
+    const name = 'v10.0.225: the dry-run replay evaluates the rules of every event type (OBS-R2-84)';
     const tStart = Date.now();
     let ruleId: number | null = null;
     try {

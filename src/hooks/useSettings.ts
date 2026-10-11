@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { fetchJson } from '../api';
+import { mutationSucceeded } from '../lib/settings/mutationSucceeded';
 import { toast } from 'react-hot-toast';
 import { normalizeRialDisplayUnit } from '../lib/rialDisplay';
-import { movementDaysError } from '../lib/settings/settingValues';
+import { movementDaysError, priceListNamesError } from '../lib/settings/settingValues';
 import { wcTestConnectionBody } from '../lib/woocommerce/wcConnectionTest';
 import { stockSyncOutcome } from '../lib/woocommerce/stockSyncOutcome';
 import { errorMessageOf } from '../utils/formatters';
@@ -22,6 +23,7 @@ import {
   WarehouseItem
 } from './queries/useSettingsQueries';
 import { settingsKeys } from '../lib/queryKeys';
+import { readPricingStrategies, serializePricingStrategies } from '../lib/items/pricingStrategies';
 
 /** مقدار ماسک کلیدهای محرمانه در پاسخ GET /settings برای غیرادمین (هم‌راستا با systemSettings.service.ts) */
 const MASKED_SETTING_VALUE = '********';
@@ -90,10 +92,10 @@ export function useSettings() {
   const [clearMode, setClearMode] = useState<'transactions' | 'all'>('transactions');
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
-  const [activeTab, setActiveTab] = useState<'general' | 'accounting' | 'chart_of_accounts' | 'categories' | 'warehouses' | 'pricing' | 'projects' | 'inventory_control' | 'task_titles' | 'health' | 'system_config' | 'system' | 'woocommerce' | 'inventory_integrity'>(() => {
+  const [activeTab, setActiveTab] = useState<'general' | 'accounting' | 'chart_of_accounts' | 'categories' | 'warehouses' | 'pricing' | 'projects' | 'inventory_control' | 'task_titles' | 'payroll_rates' | 'health' | 'system_config' | 'system' | 'woocommerce'>(() => {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
-    if (tabParam && ['general', 'accounting', 'chart_of_accounts', 'categories', 'warehouses', 'pricing', 'projects', 'inventory_control', 'task_titles', 'health', 'system_config', 'system', 'woocommerce', 'inventory_integrity'].includes(tabParam)) {
+    if (tabParam && ['general', 'accounting', 'chart_of_accounts', 'categories', 'warehouses', 'pricing', 'projects', 'inventory_control', 'task_titles', 'payroll_rates', 'health', 'system_config', 'system', 'woocommerce'].includes(tabParam)) {
       return tabParam as any;
     }
     return 'general';
@@ -103,7 +105,7 @@ export function useSettings() {
     const handlePopState = () => {
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get('tab');
-      if (tabParam && ['general', 'accounting', 'chart_of_accounts', 'categories', 'warehouses', 'pricing', 'projects', 'inventory_control', 'task_titles', 'health', 'system_config', 'system', 'woocommerce', 'inventory_integrity'].includes(tabParam)) {
+      if (tabParam && ['general', 'accounting', 'chart_of_accounts', 'categories', 'warehouses', 'pricing', 'projects', 'inventory_control', 'task_titles', 'payroll_rates', 'health', 'system_config', 'system', 'woocommerce'].includes(tabParam)) {
         setActiveTab(tabParam as any);
       }
     };
@@ -146,7 +148,9 @@ export function useSettings() {
     if (deadDaysSetting) setDeadStockDays(deadDaysSetting.value);
 
     const strategies = data.find((s) => s.key === 'pricing_strategies');
-    if (strategies) setPricingStrategies(strategies.value.split(',').filter(Boolean));
+    // v10.0.201 (OBS-R1-71): آرایه JSON (مقدار کهنه با کاما هم خوانده می‌شود)
+    const readStrategies = strategies ? readPricingStrategies(strategies.value) : null;
+    if (readStrategies && 'titles' in readStrategies) setPricingStrategies(readStrategies.titles);
 
     const compName = data.find((s) => s.key === 'company_name');
     if (compName) setCompanyName(compName.value);
@@ -216,7 +220,7 @@ export function useSettings() {
     loadWcList('/woocommerce/order-logs', setWcOrderLogs, setWcOrderLogsError, signal);
   };
 
-  // v10.0.32 (OBS-PR-17): فهرست‌های ووکامرس را خود زبانه ووکامرس هنگام باز شدن می‌خواند، نه هر زبانه تنظیمات برای هر کاربر
+  // v10.0.227 (OBS-PR-17): فهرست‌های ووکامرس را خود زبانه ووکامرس هنگام باز شدن می‌خواند، نه هر زبانه تنظیمات برای هر کاربر
 
   const handleSyncAllStocks = async () => {
     setIsSyncingAllStocks(true);
@@ -300,7 +304,7 @@ export function useSettings() {
         { key: 'fast_moving_days', value: fastMovingDays },
         { key: 'slow_moving_days', value: slowMovingDays },
         { key: 'dead_stock_days', value: deadStockDays },
-        { key: 'pricing_strategies', value: pricingStrategies.filter((s: string) => s.trim() !== '').join(',') },
+        { key: 'pricing_strategies', value: serializePricingStrategies(pricingStrategies) },
         { key: 'company_name', value: companyName },
         { key: 'company_phone', value: companyPhone },
         { key: 'company_address', value: companyAddress },
@@ -319,10 +323,10 @@ export function useSettings() {
     const daysError = movementDaysError({
       fast_moving_days: fastMovingDays, slow_moving_days: slowMovingDays, dead_stock_days: deadStockDays
     });
-    if (daysError) {
-      toast.error(daysError);
-      return;
-    }
+    if (daysError) return void toast.error(daysError);
+    // v10.0.95 (TD-1192): نام فهرست قیمت بی ویرگول لاتین و یکتا، با همان قاعده کارساز
+    const priceListError = priceListNamesError(pricingStrategies, { allowLatinComma: true });
+    if (priceListError) return void toast.error(priceListError);
     const changedSettings = candidateSettings.filter(
       (item) => item.value !== MASKED_SETTING_VALUE && (!serverValues.has(item.key) || serverValues.get(item.key) !== item.value)
     );
@@ -330,15 +334,15 @@ export function useSettings() {
       toast.success('تغییری برای ذخیره وجود ندارد');
       return;
     }
-    await saveSettingsMutation.mutateAsync({ settings: changedSettings });
+    if (!(await mutationSucceeded(saveSettingsMutation.mutateAsync({ settings: changedSettings })))) return;
   };
 
   const handleCatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await saveCategoryMutation.mutateAsync({
+    if (!(await mutationSucceeded(saveCategoryMutation.mutateAsync({
       id: editingCatId,
       data: catForm
-    });
+    })))) return;
     setShowCatModal(false);
     setEditingCatId(null);
     setCatForm({ name: '', prefix: '', type: 'raw_material', defaultUnit: 'عدد' });
@@ -349,20 +353,20 @@ export function useSettings() {
   };
 
   const executeCatDelete = async () => {
-    await deleteCategoryMutation.mutateAsync(confirmState.catId);
+    if (!(await mutationSucceeded(deleteCategoryMutation.mutateAsync(confirmState.catId)))) return;
     setConfirmState({ isOpen: false, catId: 0 });
   };
 
   const handleResetDefaultCategories = async () => {
-    await resetCategoriesMutation.mutateAsync();
+    if (!(await mutationSucceeded(resetCategoriesMutation.mutateAsync()))) return;
   };
 
   const handleWhSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await saveWarehouseMutation.mutateAsync({
+    if (!(await mutationSucceeded(saveWarehouseMutation.mutateAsync({
       id: editingWhId,
       data: whForm
-    });
+    })))) return;
     setShowWhModal(false);
     setEditingWhId(null);
     setWhForm({ name: '', code: '' });
@@ -373,7 +377,7 @@ export function useSettings() {
   };
 
   const executeWhDelete = async () => {
-    await deleteWarehouseMutation.mutateAsync(whConfirmState.whId);
+    if (!(await mutationSucceeded(deleteWarehouseMutation.mutateAsync(whConfirmState.whId)))) return;
     setWhConfirmState({ isOpen: false, whId: 0 });
   };
 

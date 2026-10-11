@@ -1,12 +1,12 @@
 import { Router } from 'express';
-import { sql, eq, and, desc, inArray } from 'drizzle-orm';
+import { sql, eq, and, inArray } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { items, transactions, documentItems } from '../db/schema.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema } from '../middleware/validate.js';
-import { itemCreateUpdateSchema, itemUpdateSchema } from './items.schemas.js';
+import { consumeNextItemCodeSchema, itemCreateUpdateSchema, itemUpdateSchema } from './items.schemas.js';
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
 import { MAX_PAGE_LIMIT, parsePickListLimit } from '../lib/pagination.js';
 import { ItemsService } from '../services/items.service.js';
@@ -16,7 +16,8 @@ import { ItemCatalogService } from '../services/items/itemCatalog.service.js';
 import { resolveWarehouseCode } from '../services/inventory/warehouseResolver.js';
 import { ItemWarehouseStockService } from '../services/inventory/itemWarehouseStock.service.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
-import { itemListConditions, listItemPicks } from '../services/items/itemPickList.js';
+import { itemListConditions, itemListOrder, itemListStats, listItemPicks } from '../services/items/itemPickList.js';
+import { parseItemListSort } from '../lib/items/itemListSort.js';
 import { listReorderAlerts } from '../services/items/reorderAlerts.service.js';
 
 const router = Router();
@@ -59,9 +60,11 @@ router.get('/items', authorizePermission(...READ_PERMISSIONS.items), asyncHandle
     const search = req.query.search as string;
     const isExport = req.query.export === 'true';
 
-    const whereClause = itemListConditions(type, search);
+    const whereClause = itemListConditions(type, search, { withCategory: true });
+    // v10.0.218 (OBS-R1-74): مرتب‌سازی در پایگاه‌داده روی همه کالاهای پالایش
+    const sort = parseItemListSort(req.query.sort, req.query.direction);
 
-    let query = orm.select().from(items).where(whereClause).orderBy(desc(items.id)).$dynamic();
+    let query = orm.select().from(items).where(whereClause).orderBy(...itemListOrder(sort)).$dynamic();
 
     if (!isExport && limit > 0) {
       query = query.limit(limit).offset(offset);
@@ -160,6 +163,7 @@ router.get('/items', authorizePermission(...READ_PERMISSIONS.items), asyncHandle
     res.json({
       data: mapped,
       total,
+      stats: await itemListStats(whereClause),
       page,
       limit,
       totalPages: limit > 0 ? Math.ceil(total / limit) : 1
@@ -318,16 +322,17 @@ router.get('/items/next-code', authorizePermission(...READ_PERMISSIONS.items), a
   res.json(result);
 }));
 
-router.post('/items/next-code', authorizePermission('products.create', 'products.edit'), asyncHandler(async (req, res) => {
-  const { type, year, prefix, transfer } = req.body || {};
-  const result = await ItemCatalogService.consumeNextItemCode({ type, year, prefix, transfer });
-  await logActivity({
+router.post('/items/next-code', authorizePermission('products.create', 'products.edit'), validate(consumeNextItemCodeSchema), asyncHandler(async (req, res) => {
+  const { type, year, prefix, transfer } = req.body;
+  // v10.0.35 (TD-979): the body is read through Zod and the audit row is written in the counter's transaction
+  const result = await ItemCatalogService.consumeNextItemCode({ type, year, prefix, transfer }, (reserved, tx) => logActivity({
     req,
+    tx,
     action: 'CREATE',
     entity: 'کد کالا',
-    description: `تخصیص بی‌تداخل شماره سری بعدی کد «${result.code}» (نوع: ${result.type})`,
-    details: { reserved: result }
-  });
+    description: `تخصیص بی‌تداخل شماره سری بعدی کد «${reserved.code}» (نوع: ${reserved.type})`,
+    details: { reserved }
+  }).then(() => undefined));
   res.json(result);
 }));
 

@@ -81,7 +81,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
   access = FULL_ACCESS,
 }) => {
   const [copiedWebhook, setCopiedWebhook] = useState(false);
-  // v10.0.32 (OBS-PR-17): فهرست سفارش‌ها و گزارش ووکامرس فقط وقتی این زبانه باز می‌شود خوانده می‌شوند
+  // v10.0.227 (OBS-PR-17): فهرست سفارش‌ها و گزارش ووکامرس فقط وقتی این زبانه باز می‌شود خوانده می‌شوند
   const loadListsRef = useRef(loadSyncedWcOrders);
   loadListsRef.current = loadSyncedWcOrders;
   useEffect(() => {

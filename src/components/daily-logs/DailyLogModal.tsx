@@ -9,6 +9,7 @@ import { SimpleUserOption } from '../../hooks/useDailyLogs';
 import { formatPersianNumber, getTodayJalaliDate, extractDateString } from '../../utils';
 import { MentionTextarea } from '../MentionTextarea';
 import { workTimeError } from '../../lib/dailyLogs/workHours';
+import { TimeOfDayInput } from './TimeOfDayInput';
 import { DAILY_LOG_CONTENT_MAX, DAILY_LOG_TAG_MAX, DAILY_LOG_TITLE_MAX } from '../../lib/dailyLogs/dailyLogLimits';
 import { type DailyLogVisibility, visibilityNotifiesMentions } from '../../lib/dailyLogs/dailyLogVisibility';
 
@@ -183,26 +184,8 @@ export function DailyLogModal({
             )}
 
             <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-[10px] font-semibold text-slate-500 mb-0.5">ساعت شروع</label>
-                <input
-                  type="time"
-                  value={formStartTime}
-                  onChange={(e) => setFormStartTime(e.target.value)}
-                  className="w-full px-2.5 py-1 border border-slate-200 rounded-lg text-xs bg-white text-center font-bold"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-semibold text-slate-500 mb-0.5">ساعت پایان</label>
-                <input
-                  type="time"
-                  value={formEndTime}
-                  onChange={(e) => setFormEndTime(e.target.value)}
-                  className="w-full px-2.5 py-1 border border-slate-200 rounded-lg text-xs bg-white text-center font-bold"
-                  required
-                />
-              </div>
+              <TimeOfDayInput label="ساعت شروع" value={formStartTime} onChange={setFormStartTime} />
+              <TimeOfDayInput label="ساعت پایان" value={formEndTime} onChange={setFormEndTime} />
             </div>
           </div>
 

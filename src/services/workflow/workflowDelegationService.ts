@@ -116,7 +116,7 @@ export class WorkflowDelegationService {
     const [toUser] = await orm.select().from(users).where(eq(users.id, params.toUserId));
 
     if (!fromUser || !toUser || fromUser.isDeleted === 1 || toUser.isDeleted === 1) {
-      throw new NotFoundError('کاربر تفویض‌کننده یا دریافت‌کننده در سیستم یافت نشد');
+      throw new NotFoundError('کاربر تفویض‌کننده یا دریافت‌کننده در سامانه یافت نشد');
     }
 
     const scope = (params.scope || 'ALL').trim();
@@ -130,31 +130,36 @@ export class WorkflowDelegationService {
       }
     }
 
-    const [inserted] = await orm.insert(workflowDelegations).values({
-      fromUserId: params.fromUserId,
-      toUserId: params.toUserId,
-      scope,
-      startDate,
-      endDate,
-      reason: params.reason || '',
-      isActive: 1
-    }).returning();
-
-    await logActivity({
-      userId: params.createdByUserId || params.fromUserId,
-      username: params.createdByName || fromUser.username,
-      action: 'CREATE',
-      entity: 'تفویض اختیار ورکفلو',
-      entityId: inserted.id,
-      description: `تفویض اختیار از کاربر «${fromUser.fullName || fromUser.username}» به کاربر «${toUser.fullName || toUser.username}» با حوزه ${scope} ثبت شد.`,
-      details: {
+    // TD-963 (بخش ۲): تفویض و ردیف ممیزی آن در یک تراکنش ثبت می‌شوند؛ پیش‌تر ردیف ممیزی بیرون از نوشتن تفویض بود
+    const inserted = await orm.transaction(async (tx) => {
+      const [row] = await tx.insert(workflowDelegations).values({
         fromUserId: params.fromUserId,
         toUserId: params.toUserId,
         scope,
-        startDate: params.startDate,
-        endDate: params.endDate,
-        reason: params.reason
-      }
+        startDate,
+        endDate,
+        reason: params.reason || '',
+        isActive: 1
+      }).returning();
+
+      await logActivity({
+        userId: params.createdByUserId || params.fromUserId,
+        username: params.createdByName || fromUser.username,
+        action: 'CREATE',
+        entity: 'تفویض اختیار ورکفلو',
+        entityId: row.id,
+        description: `تفویض اختیار از کاربر «${fromUser.fullName || fromUser.username}» به کاربر «${toUser.fullName || toUser.username}» با حوزه ${scope} ثبت شد.`,
+        details: {
+          fromUserId: params.fromUserId,
+          toUserId: params.toUserId,
+          scope,
+          startDate: params.startDate,
+          endDate: params.endDate,
+          reason: params.reason
+        },
+        tx
+      });
+      return row;
     });
 
     return inserted;
@@ -222,7 +227,7 @@ export class WorkflowDelegationService {
       // v8.0.98 (TD-378): تفویض را فقط تفویض‌کننده یا ادمین لغو می‌کند؛ پیش‌تر خود جانشین هم آن را لغو می‌کرد
       const isAdmin = isSystemAdminRole(params.userRole);
       if (!isAdmin && delegation.fromUserId !== params.userId) {
-        throw new ForbiddenError('فقط تفویض‌کننده یا مدیر سیستم می‌تواند این تفویض اختیار را لغو کند', undefined, 'WF_DELEGATION_REVOKE_FORBIDDEN');
+        throw new ForbiddenError('فقط تفویض‌کننده یا مدیر سامانه می‌تواند این تفویض اختیار را لغو کند', undefined, 'WF_DELEGATION_REVOKE_FORBIDDEN');
       }
 
       await tx.update(workflowDelegations)

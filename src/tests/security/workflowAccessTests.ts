@@ -154,7 +154,7 @@ export async function runWorkflowAccessTests(shouldRun: ShouldRun): Promise<Test
       // ۰) تعریف پیش‌فرض به حالت seed پیشین برمی‌گردد و به‌روزرسانی نصب موجود اجرا می‌شود
       const [docDef] = await h.q(`SELECT id, version FROM workflow_definitions WHERE code = 'DOC_APPROVAL_WORKFLOW'`);
       const legacyGuards = `UPDATE workflow_transitions SET required_role = CASE WHEN action_key = 'direct_approve' THEN 'admin' ELSE '' END,
-        required_permission = CASE WHEN action_key = 'direct_approve' THEN 'workflow.approve' ELSE '' END WHERE workflow_definition_id = $1`;
+        required_permission = CASE WHEN action_key = 'direct_approve' THEN 'workflow.approve' ELSE '' END, is_initiator_only = 0 WHERE workflow_definition_id = $1`;
       await h.q(legacyGuards, [docDef?.id]);
       await h.q(`UPDATE workflow_transitions SET title = title || ' (ویرایش)' WHERE workflow_definition_id = $1 AND action_key = 'approve_accounting'`, [docDef?.id]);
       await WorkflowDefinitionService.seedDefaultWorkflows();
@@ -183,7 +183,10 @@ export async function runWorkflowAccessTests(shouldRun: ShouldRun): Promise<Test
       // ۲) خزانه‌دار: گام انبار ۴۰۳؛ در گردش کار ویرایش‌شده بی نگهبان هم قطعی‌سازی مجوز سند را می‌خواهد (ت۳)
       const treasurer = await h.sessionWith('treasurer');
       const draftA = await draftSalesDocument(h);
-      const treasurerWalk = await h.walk(await startDoc('DOC_APPROVAL_WORKFLOW', draftA), ['submit_to_warehouse', 'approve_warehouse'], treasurer);
+      // v10.0.120 (TD-1220): ارسال به انبار فقط با سازنده (این‌جا مدیر سیستم که فرایند را آغاز کرده)
+      const instanceA = await startDoc('DOC_APPROVAL_WORKFLOW', draftA);
+      await h.walk(instanceA, ['submit_to_warehouse'], h.admin);
+      const treasurerWalk = [0, ...await h.walk(instanceA, ['approve_warehouse'], treasurer)];
       if (treasurerWalk[1] !== 403) wrong.push(`The treasurer passed the warehouse step with ${treasurerWalk.join(',')}`);
       const { definition: open } = await createTestWorkflow({ definition: { entityType: 'document', code: `WF445_${h.tag}` } });
       const draftB = await draftSalesDocument(h);
@@ -197,7 +200,7 @@ export async function runWorkflowAccessTests(shouldRun: ShouldRun): Promise<Test
       const cfo = await h.sessionWith('cfo_accountant');
       const draftC = await draftSalesDocument(h);
       const instanceC = await startDoc('DOC_APPROVAL_WORKFLOW', draftC);
-      const okWalk = [...await h.walk(instanceC, ['submit_to_warehouse', 'approve_warehouse'], keeper), ...await h.walk(instanceC, ['approve_accounting'], cfo)];
+      const okWalk = [...await h.walk(instanceC, ['submit_to_warehouse'], h.admin), ...await h.walk(instanceC, ['approve_warehouse'], keeper), ...await h.walk(instanceC, ['approve_accounting'], cfo)];
       if (okWalk.join(',') !== '200,200,200') wrong.push(`The warehouse keeper and CFO path returned ${okWalk.join(',')}`);
       const finalC = await docStatus(draftC);
       if (finalC?.status !== 'final') wrong.push(`The document after finance approval is ${JSON.stringify(finalC)}`);

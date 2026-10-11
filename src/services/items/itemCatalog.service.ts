@@ -216,37 +216,45 @@ export class ItemCatalogService {
    * V10-2.1: تخصیص اتمیک شماره سری بعدی — الگوی قفل سطر شمارنده + UPSERT RETURNING
    * (مشابه DocumentService.getNextRef؛ ورودی‌ها فقط فیلدهای غیرتناقض‌آمیز، بدون raw SQL bind)
    */
-  static async consumeNextItemCode(input: NextItemCodeInput): Promise<NextItemCodeResult> {
+  static async consumeNextItemCode(
+    input: NextItemCodeInput,
+    onReserved?: (result: NextItemCodeResult, tx: DbLike) => Promise<void>
+  ): Promise<NextItemCodeResult> {
     const itemType = input.type === 'raw_material' ? 'raw_material' : 'product';
 
     // نرمال‌سازی بیرون از tx تا خطاهای validation قبل از باز کردن تراکنش پرتاب شوند
+    // v10.0.35 (TD-979، OBS-R1-73): ردیف ممیزی فراخواننده (`onReserved`) در همان تراکنش شمارنده نوشته می‌شود
     if (itemType === 'product') {
       const ctx = ItemCatalogService.resolveProductContext(input);
-      const nextNum = await orm.transaction(async (tx: DbLike) =>
-        ItemCatalogService.consumeCounterRow(tx, itemType, ctx.counterKey, () =>
+      return orm.transaction(async (tx: DbLike) => {
+        const nextNum = await ItemCatalogService.consumeCounterRow(tx, itemType, ctx.counterKey, () =>
           ItemCatalogService.getMaxExistingSerial(tx, itemType, { base: ctx.base })
-        )
-      );
-      return {
-        type: itemType,
-        code: ItemCatalogService.assembleCode(itemType, ctx, nextNum),
-        serial: String(nextNum).padStart(ctx.pad, '0'),
-        year: ctx.year, catPrefix: ctx.catPrefix, transfer: ctx.transfer
-      };
+        );
+        const result: NextItemCodeResult = {
+          type: itemType,
+          code: ItemCatalogService.assembleCode(itemType, ctx, nextNum),
+          serial: String(nextNum).padStart(ctx.pad, '0'),
+          year: ctx.year, catPrefix: ctx.catPrefix, transfer: ctx.transfer
+        };
+        if (onReserved) await onReserved(result, tx);
+        return result;
+      });
     }
 
     const rawCtx = ItemCatalogService.resolveRawContext(input);
-    const nextNumRaw = await orm.transaction(async (tx: DbLike) =>
-      ItemCatalogService.consumeCounterRow(tx, itemType, rawCtx.counterKey, () =>
+    return orm.transaction(async (tx: DbLike) => {
+      const nextNumRaw = await ItemCatalogService.consumeCounterRow(tx, itemType, rawCtx.counterKey, () =>
         ItemCatalogService.getMaxExistingSerial(tx, itemType, { prefix: rawCtx.prefix })
-      )
-    );
-    return {
-      type: itemType,
-      code: ItemCatalogService.assembleCode(itemType, rawCtx, nextNumRaw),
-      serial: String(nextNumRaw).padStart(rawCtx.pad, '0'),
-      prefix: rawCtx.prefix
-    };
+      );
+      const result: NextItemCodeResult = {
+        type: itemType,
+        code: ItemCatalogService.assembleCode(itemType, rawCtx, nextNumRaw),
+        serial: String(nextNumRaw).padStart(rawCtx.pad, '0'),
+        prefix: rawCtx.prefix
+      };
+      if (onReserved) await onReserved(result, tx);
+      return result;
+    });
   }
 
   private static async consumeCounterRow(

@@ -26,20 +26,30 @@ export async function runPendingMaterialTests(shouldRun: ShouldRun): Promise<Tes
     ['reg_pending_material_workflow_td_826',
       'v9.0.398: a request starts the active pending-material workflow, its approve and reject steps review the request, a direct review closes the workflow and the project must exist (TD-826)',
       ['td826', 'pending_materials', 'workflow', 'package7'], workflowCase],
+    ['reg_pending_material_category_code_td_1202',
+      'v10.0.143: an approved raw-material request takes a raw-material category and a code in the raw-material pattern with that category\'s prefix (TD-1202)',
+      ['td1202', 'pending_materials', 'package7'], categoryCodeCase],
   ]);
 }
 
 const briefBody = (res: { status: number; body?: unknown }) => `${res.status} ${JSON.stringify(res.body ?? null).slice(0, 200)}`;
 
 /** A pending request written straight to the table (the queue had no sender before TD-826) */
-export async function pendingRow(h: Harness, fields: { code?: string; wac?: number } = {}): Promise<number> {
+export async function pendingRow(h: Harness, fields: { code?: string; wac?: number; category?: string } = {}): Promise<number> {
+  // since v10.0.143 (TD-1202) an approval checks the code pattern and the prefix of a live category; the default category
+  // names no live category, so a unique code in the raw-material pattern is enough
   const [row] = await h.q(
     `INSERT INTO pending_materials (code, name, unit, category, type, requested_by, status, reorder_point, weighted_average_cost, is_deleted)
-     VALUES ($1, $2, 'عدد', 'سنگ', 'raw_material', 'test', 'pending', 0, $3, 0) RETURNING id`,
-    [fields.code ?? `PM-${h.tag}-${Math.random().toString(36).slice(2, 7)}`, `ERP-TEST-MARKER ماده ${h.tag} ${Math.random().toString(36).slice(2, 7)}`, fields.wac ?? 1000],
+     VALUES ($1, $2, 'عدد', $4, 'raw_material', 'test', 'pending', 0, $3, 0) RETURNING id`,
+    [fields.code ?? rawCode(), `ERP-TEST-MARKER ماده ${h.tag} ${Math.random().toString(36).slice(2, 7)}`, fields.wac ?? 1000, fields.category ?? TEST_CATEGORY],
   );
   return Number(row.id);
 }
+
+/** a category name no live category holds */
+const TEST_CATEGORY = 'ERP-TEST-MARKER دسته آزمون';
+/** a unique code in the raw-material pattern (letters, then a dash and two or three digits) */
+const rawCode = (serial = 101) => `PM${Math.random().toString(36).slice(2, 8).toUpperCase().replace(/[^A-Z0-9]/g, '')}-${serial}`;
 
 /** B07-08 (TD-824): the page sent weighted_average_cost / reorder_point, the route read only camelCase and dropped the rest */
 async function approveBodyCase(h: Harness, wrong: string[]): Promise<string> {
@@ -102,7 +112,7 @@ async function submitRulesCase(h: Harness, wrong: string[]): Promise<string> {
 
 /** B07-09 (c): an approved request was rejected (item kept) and approved again into a second item; a reviewed one deleted */
 async function reviewOnceCase(h: Harness, wrong: string[]): Promise<string> {
-  const id = await pendingRow(h, { code: `PM825-${h.tag}-${randomTail()}` });
+  const id = await pendingRow(h, { code: rawCode() });
   const ok = await h.put(`/api/pending-materials/${id}/approve`, {});
   const itemId = Number((ok.body as { item?: { id?: unknown } })?.item?.id);
   if (ok.status !== 200 || !itemId) {
@@ -113,7 +123,7 @@ async function reviewOnceCase(h: Harness, wrong: string[]): Promise<string> {
   if (Number(linked?.item_id) !== itemId) wrong.push(`the request links item ${String(linked?.item_id)}, expected ${itemId}`);
 
   const reject = await h.put(`/api/pending-materials/${id}/reject`, { rejectionReason: 'دوباره' });
-  const again = await h.put(`/api/pending-materials/${id}/approve`, { code: `PM825-${h.tag}-B${randomTail()}` });
+  const again = await h.put(`/api/pending-materials/${id}/approve`, { code: rawCode(102) });
   const edit = await h.put(`/api/pending-materials/${id}`, { name: `ERP-TEST-MARKER ${h.tag} ویرایش` });
   const remove = await h.del(`/api/pending-materials/${id}`);
   for (const [label, res] of [['reject', reject], ['second approval', again], ['edit', edit], ['delete', remove]] as const) {
@@ -122,7 +132,7 @@ async function reviewOnceCase(h: Harness, wrong: string[]): Promise<string> {
   const [after] = await h.q('SELECT status, is_deleted FROM pending_materials WHERE id = $1', [id]);
   if (after?.status !== 'approved' || Number(after?.is_deleted) !== 0) wrong.push(`the approved request is now ${String(after?.status)} / deleted ${String(after?.is_deleted)}`);
 
-  const rejectedId = await pendingRow(h, { code: `PM825-${h.tag}-${randomTail()}` });
+  const rejectedId = await pendingRow(h, { code: rawCode() });
   const firstReject = await h.put(`/api/pending-materials/${rejectedId}/reject`, {});
   const approveRejected = await h.put(`/api/pending-materials/${rejectedId}/approve`, {});
   if (firstReject.status !== 200 || approveRejected.status !== 409) {
@@ -144,17 +154,18 @@ async function reviewOnceCase(h: Harness, wrong: string[]): Promise<string> {
  * gives its own code and name.
  */
 async function concurrentApprovalCase(h: Harness, wrong: string[]): Promise<string> {
-  const code = `PM825-${h.tag}-${randomTail()}`;
-  const id = await pendingRow(h, { code });
-  const results = await Promise.all(['A', 'B'].map(side =>
-    h.put(`/api/pending-materials/${id}/approve`, { code: `${code}-${side}`, name: `ERP-TEST-MARKER ${code} ${side}` })));
+  const base = rawCode().replace(/-\d+$/, '');
+  const codes = { A: `${base}-201`, B: `${base}-202` };
+  const id = await pendingRow(h, { code: `${base}-200` });
+  const results = await Promise.all((['A', 'B'] as const).map(side =>
+    h.put(`/api/pending-materials/${id}/approve`, { code: codes[side], name: `ERP-TEST-MARKER ${base} ${side}` })));
   const statuses = results.map(r => r.status).sort();
   if (statuses.join('/') !== '200/409') wrong.push(`two concurrent approvals answered ${results.map(briefBody).join(' and ')}, expected 200 and 409`);
-  const made = await h.q('SELECT id, code FROM items WHERE code IN ($1, $2) AND is_deleted = 0', [`${code}-A`, `${code}-B`]);
+  const made = await h.q('SELECT id, code FROM items WHERE code IN ($1, $2) AND is_deleted = 0', [codes.A, codes.B]);
   if (made.length !== 1) wrong.push(`the request made ${made.length} items, expected 1`);
 
   // the code of whichever approval won the race, in another letter case
-  const otherCase = await pendingRow(h, { code: String(made[0]?.code ?? `${code}-A`).toLowerCase() });
+  const otherCase = await pendingRow(h, { code: String(made[0]?.code ?? codes.A).toLowerCase() });
   const clash = await h.put(`/api/pending-materials/${otherCase}/approve`, {});
   if (clash.status !== 409) wrong.push(`a code differing only in letter case answered ${briefBody(clash)}, expected 409`);
   return `concurrent ${statuses.join('/')}; items ${made.length}; other case ${clash.status}`;
@@ -194,7 +205,7 @@ async function workflowCase(h: Harness, wrong: string[]): Promise<string> {
       `SELECT id, status FROM workflow_instances WHERE entity_type = 'pending_material' AND entity_id = $1 ORDER BY id DESC LIMIT 1`, [String(id)]))[0];
     const reviewer = await wfUser('admin', ['pending_materials.approve']);
 
-    const viaWorkflow = createdId(await send(`PM826-${h.tag}-${randomTail()}`));
+    const viaWorkflow = createdId(await send(rawCode()));
     const started = viaWorkflow ? await instanceOf(viaWorkflow) : undefined;
     if (!started) wrong.push(`a request with an active pending-material workflow started no instance (request ${viaWorkflow})`);
     else {
@@ -203,7 +214,7 @@ async function workflowCase(h: Harness, wrong: string[]): Promise<string> {
       if (row?.status !== 'approved' || !Number(row?.item_id)) wrong.push(`after the approve step the request is ${String(row?.status)} with item ${String(row?.item_id)}, expected approved with its item`);
     }
 
-    const rejected = createdId(await send(`PM826-${h.tag}-${randomTail()}`));
+    const rejected = createdId(await send(rawCode()));
     const rejectInstance = rejected ? await instanceOf(rejected) : undefined;
     if (rejectInstance) {
       await transit(Number(rejectInstance.id), transitionOf('reject'), reviewer).catch((err: unknown) => wrong.push(`the reject step failed: ${String(err)}`));
@@ -211,7 +222,7 @@ async function workflowCase(h: Harness, wrong: string[]): Promise<string> {
       if (row?.status !== 'rejected' || row?.item_id !== null) wrong.push(`after the reject step the request is ${String(row?.status)} with item ${String(row?.item_id)}, expected rejected without an item`);
     }
 
-    const direct = createdId(await send(`PM826-${h.tag}-${randomTail()}`));
+    const direct = createdId(await send(rawCode()));
     const approved = direct ? await h.put(`/api/pending-materials/${direct}/approve`, {}) : { status: 0 };
     const closed = direct ? await instanceOf(direct) : undefined;
     if (approved.status !== 200 || closed?.status !== 'TERMINATED') {
@@ -224,5 +235,44 @@ async function workflowCase(h: Harness, wrong: string[]): Promise<string> {
   } finally {
     await h.q('UPDATE workflow_definitions SET is_active = 0 WHERE id = $1', [definitionId]);
     if (others.length) await h.q('UPDATE workflow_definitions SET is_active = 1 WHERE id = ANY($1::int[])', [others.map(r => Number(r.id))]);
+  }
+}
+
+/**
+ * TD-1202 (roles-b finding 8, roles-c finding 16): the approval accepted any code («XYZ-9») and a product category,
+ * and the item was created with them. Now a product category is 422 `PENDING_MATERIAL_CATEGORY_INVALID`, a code
+ * outside the raw-material pattern or without its category's prefix is 422 `PENDING_MATERIAL_CODE_FORMAT`, nothing is
+ * created, and a code with the prefix is approved.
+ */
+async function categoryCodeCase(h: Harness, wrong: string[]): Promise<string> {
+  const prefix = `ZQ${Math.random().toString(36).slice(2, 6).toUpperCase().replace(/[^A-Z]/g, 'K')}`;
+  const rawName = `ERP-TEST-MARKER مواد ${prefix}`;
+  const productName = `ERP-TEST-MARKER محصول ${prefix}`;
+  await h.q(`INSERT INTO categories (name, prefix, type, default_unit, is_deleted) VALUES ($1, $2, 'raw_material', 'عدد', 0), ($3, 'N', 'product', 'عدد', 0)`,
+    [rawName, prefix, productName]);
+  try {
+    const itemsBefore = Number((await h.q('SELECT count(*)::int AS n FROM items'))[0]?.n);
+    const refusals: Array<[string, Record<string, unknown>, string]> = [
+      ['code XYZ-9', { code: 'XYZ-9', category: rawName }, 'PENDING_MATERIAL_CODE_FORMAT'],
+      ['code of another prefix', { code: 'B-H-101', category: rawName }, 'PENDING_MATERIAL_CODE_FORMAT'],
+      ['product category', { code: `${prefix}-101`, category: productName }, 'PENDING_MATERIAL_CATEGORY_INVALID'],
+    ];
+    const id = await pendingRow(h, { category: rawName, code: '' });
+    const seen: string[] = [];
+    for (const [label, body, code] of refusals) {
+      const res = await h.put(`/api/pending-materials/${id}/approve`, body);
+      const got = (res.body as { code?: string } | undefined)?.code;
+      seen.push(`${label} ${res.status}`);
+      if (res.status !== 422 || got !== code) wrong.push(`${label} answered ${briefBody(res)}, expected 422 ${code}`);
+    }
+    const itemsAfter = Number((await h.q('SELECT count(*)::int AS n FROM items'))[0]?.n);
+    if (itemsAfter !== itemsBefore) wrong.push(`the refused approvals created ${itemsAfter - itemsBefore} items`);
+    const [still] = await h.q('SELECT status FROM pending_materials WHERE id = $1', [id]);
+    if (still?.status !== 'pending') wrong.push(`after the refusals the request is ${String(still?.status)}, expected pending`);
+    const ok = await h.put(`/api/pending-materials/${id}/approve`, { code: `${prefix.toLowerCase()}-101`, category: rawName });
+    if (ok.status !== 200) wrong.push(`a code with the category prefix answered ${briefBody(ok)}, expected 200`);
+    return `${seen.join('; ')}; prefix code ${ok.status}`;
+  } finally {
+    await h.q('UPDATE categories SET is_deleted = 1 WHERE name IN ($1, $2)', [rawName, productName]);
   }
 }

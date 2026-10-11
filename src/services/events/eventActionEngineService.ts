@@ -501,7 +501,7 @@ export class EventActionEngineService {
         // v9.0.357 (TD-715): the echo simulator answers only in test / development (TD-704), so only there is its rule seeded
         ...(isEchoSimulatorEnvironment() ? [{
           name: 'وب‌هوک تایید فاکتور فروش (شبیه‌ساز یکپارچگی)',
-          // v10.0.31 (OBS-R2-88): واژه‌نامه رویدادها («کارساز»، «خودکارسازی»)
+          // v10.0.226 (OBS-R2-88): واژه‌نامه رویدادها («کارساز»، «خودکارسازی»)
           description: 'ارسال وب‌هوک به کارساز بیرونی یا خودکارسازی سازمانی هنگام تأیید نهایی فاکتور فروش',
           eventType: DomainEventType.INVOICE_APPROVED,
           conditionsJson: [
@@ -567,7 +567,7 @@ export class EventActionEngineService {
       conditions.push(eq(eventActionRules.isActive, filter.isActive ? 1 : 0));
     }
     if (filter?.eventType) {
-      // v10.0.30 (OBS-R2-84): قانون «همه رویدادها» (`*`) هم برای هر نوع رویداد اجرا می‌شود، همان قاعده موتور
+      // v10.0.225 (OBS-R2-84): قانون «همه رویدادها» (`*`) هم برای هر نوع رویداد اجرا می‌شود، همان قاعده موتور
       conditions.push(filter.includeWildcard
         ? sql`(${eventActionRules.eventType} = ${filter.eventType} OR ${eventActionRules.eventType} = '*')`
         : eq(eventActionRules.eventType, filter.eventType));

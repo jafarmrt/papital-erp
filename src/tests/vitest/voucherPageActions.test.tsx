@@ -38,9 +38,18 @@ describe('voucher row menu follows the server rules (TD-568, B03-26)', () => {
     expect(voucherRowActions({ status: 'approved' })).toEqual(['revert_to_draft', 'reverse', 'correct', 'workflow']);
     // permanent: no correction (the server refuses to correct a permanent voucher)
     expect(voucherRowActions({ status: 'permanent' })).toEqual(['reverse', 'workflow']);
-    // a reversal is neither reversed nor corrected again
-    expect(voucherRowActions({ status: 'approved', referenceNumber: 'REV-V31' })).toEqual(['revert_to_draft', 'workflow']);
+    // a reversal is neither reversed, corrected nor put back to draft (TD-1239)
+    expect(voucherRowActions({ status: 'approved', referenceNumber: 'REV-V31' })).toEqual(['workflow']);
     expect(voucherRowActions({ status: 'permanent', referenceNumber: 'VOID-REPOST-V31' })).toEqual(['workflow']);
+  });
+
+  it('a reversed voucher offers no second reversal, correction or revert, and says why (TD-1239)', () => {
+    for (const status of ['approved', 'permanent']) {
+      expect(voucherRowActions({ status, reversedByVoucherNumber: '57' })).toEqual(['workflow']);
+    }
+    expect(voucherLockNote({ status: 'approved', reversedByVoucherNumber: '57' })).toContain('سند شماره ۵۷ برگشت خورده است');
+    expect(voucherLockNote({ status: 'approved', referenceNumber: 'REV-V31' })).toContain('سند برگشت است');
+    expect(voucherLockNote({ status: 'approved' })).toBeNull();
   });
 
   it('locks the vouchers of a source or of a fiscal-year closing and says why', () => {

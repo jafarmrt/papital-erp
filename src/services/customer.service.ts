@@ -1,6 +1,7 @@
 import { eq, and, asc, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { customers } from '../db/schema.js';
+import { systemNowUtcIso } from '../lib/businessClock.js';
 import { checkOccVersion, nextVersion, OptimisticLockError } from '../lib/occHelper.js';
 import { parsePartyTypeCell } from '../lib/customers/partyTypeCell.js';
 import { NotFoundError } from '../errors/customErrors.js';
@@ -40,8 +41,11 @@ export interface CreateCustomerInput {
   contacts?: ContactPerson[];
 }
 
-/** v8.0.122 (TD-403): ویرایش همیشه نسخه رکوردی را که از آن ساخته شده همراه دارد (version یا expectedVersion) */
-export type UpdateCustomerInput = CreateCustomerInput & ({ version: number; expectedVersion?: number } | { version?: number; expectedVersion: number });
+/**
+ * v8.0.122 (TD-403): ویرایش همیشه نسخه رکوردی را که از آن ساخته شده همراه دارد (version یا expectedVersion).
+ * v10.0.33 (TD-975): هر فیلدی که در بدنه نیست مقدار کنونی‌اش را نگه می‌دارد.
+ */
+export type UpdateCustomerInput = Partial<CreateCustomerInput> & ({ version: number; expectedVersion?: number } | { version?: number; expectedVersion: number });
 
 export interface BulkImportRowInput {
   id?: number | string;
@@ -125,7 +129,7 @@ export class CustomerService {
     // v9.0.7 (TD-419): تلفن با کلید تطبیق (همان شماره با نگارش دیگر تکراری است)
     await assertCustomerPhoneAvailable(phone, executor);
 
-    const createdAt = new Date().toISOString();
+    const createdAt = systemNowUtcIso();
     const [created] = await guardCustomerName(() => executor
       .insert(customers)
       .values({
@@ -172,18 +176,23 @@ export class CustomerService {
     const expectedVersion = Number(data.expectedVersion ?? data.version);
     checkOccVersion(prevCust, { entityType: 'Customer', entityId: customerId, expectedVersion });
 
-    const name = data.name.trim();
-    let contactName = data.contactName?.trim() || '';
-    let phone = data.phone?.trim() || '';
-    const partyType = data.partyType || 'customer';
-    const supplierCategory = data.supplierCategory?.trim() || '';
-    const bankInfo = data.bankInfo || {};
-    const country = data.country?.trim() || 'ایران';
-    const province = data.province?.trim() || '';
-    const city = data.city?.trim() || '';
-    const address = data.address?.trim() || '';
-    const notes = data.notes?.trim() || '';
-    const contacts = data.contacts || [];
+    // v10.0.33 (TD-975): فیلد نفرستاده مقدار کنونی را نگه می‌دارد (پیش‌تر پیش‌فرض‌های Zod آن را خالی می‌کردند)
+    const keep = (sent: string | undefined, current: string | null): string => (sent === undefined ? (current ?? '') : sent.trim());
+    const name = data.name === undefined ? prevCust.name : data.name.trim();
+    let contactName = keep(data.contactName, prevCust.contactName);
+    let phone = keep(data.phone, prevCust.phone);
+    const partyType = data.partyType ?? ((prevCust.partyType as CreateCustomerInput['partyType']) || 'customer');
+    const supplierCategory = keep(data.supplierCategory, prevCust.supplierCategory);
+    // اطلاعات بانکی فرستاده‌شده روی مقدار کنونی ادغام می‌شود؛ کلید نفرستاده همان می‌ماند
+    const bankInfo = data.bankInfo === undefined
+      ? (prevCust.bankInfo ?? {})
+      : { ...((prevCust.bankInfo as BankInfo | null) ?? {}), ...data.bankInfo };
+    const country = keep(data.country, prevCust.country) || 'ایران';
+    const province = keep(data.province, prevCust.province);
+    const city = keep(data.city, prevCust.city);
+    const address = keep(data.address, prevCust.address);
+    const notes = keep(data.notes, prevCust.notes);
+    const contacts = data.contacts ?? ((prevCust.contacts as ContactPerson[] | null) ?? []);
 
     const activeContacts = (contacts as ContactPerson[]).filter((c) => c.name?.trim() || c.phone?.trim());
     if (activeContacts.length > 0) {
@@ -407,7 +416,7 @@ export class CustomerService {
               supplierCategory,
               bankInfo,
               contacts: contactName || phone ? [{ id: '1', name: contactName, role: 'رابط اصلی', phone, isPrimary: true }] : [],
-              createdAt: new Date().toISOString(),
+              createdAt: systemNowUtcIso(),
               isDeleted: 0,
               version: 1
             })

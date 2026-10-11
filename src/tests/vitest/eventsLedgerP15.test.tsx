@@ -8,7 +8,7 @@ import { fetchJson } from '../../api';
 import { useSettings } from '../../hooks/useSettings';
 import { WooCommerceTab } from '../../components/settings/WooCommerceTab';
 
-// v10.0.31..v10.0.32: package 15 ledger (TD-997) browser side
+// v10.0.226..v10.0.227: package 15 ledger (TD-997) browser side
 vi.mock('../../api', async () => {
   const actual = await vi.importActual<typeof import('../../api')>('../../api');
   return { ...actual, fetchJson: vi.fn() };

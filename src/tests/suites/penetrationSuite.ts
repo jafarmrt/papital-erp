@@ -2,7 +2,7 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { getTestApp, getAdminSession, ensureAdminTestUser, cleanupHttpTestUsers, AdminSession, TestApp } from '../fixtures/httpTestHelper.js';
-import { TEST_PASSWORD, TEST_PASSWORD_HASH } from '../fixtures/factories.js';
+import { TEST_PASSWORD, TEST_PASSWORD_HASH, ensureTestRole } from '../fixtures/factories.js';
 import { orm } from '../../db/drizzle.js';
 import { users } from '../../db/schema.js';
 import { sql, eq } from 'drizzle-orm';
@@ -295,6 +295,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
     'Pentest: rotating X-Forwarded-For does not bypass the login brute-force lock',
     async () => {
       const rlProbeUser = `pen_rl_probe_${Date.now()}`;
+      await ensureTestRole('operator');
       await orm.insert(users).values({
         username: rlProbeUser,
         password: TEST_PASSWORD_HASH,
@@ -388,6 +389,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
     async () => {
       const { resetLoginRateLimiter } = await import('../../app.js');
       const okUser = `pen_rl_ok_${Date.now()}`;
+      await ensureTestRole('operator');
       await orm.insert(users).values({
         username: okUser,
         password: TEST_PASSWORD_HASH,
@@ -457,6 +459,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         await upsert('wc_consumer_secret', 'cs_real_secret_value');
         await upsert('company_name', 'Test Company Before');
         await upsert('wc_store_url', 'https://shop.example.com');
+        await ensureTestRole('manager');
         await orm.insert(users).values({ username: managerUser, password: TEST_PASSWORD_HASH, fullName: 'مدیر آزمون', role: 'manager', avatarUrl: '' });
         const { invalidateSettingsCache } = await import('../../lib/memoryCache.js');
         invalidateSettingsCache();
@@ -530,6 +533,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
     async () => {
       const probeUser = `pen_tok_${Date.now()}`;
       const previousFlag = process.env.EXPOSE_TOKEN_IN_BODY;
+      await ensureTestRole('operator');
       await orm.insert(users).values({ username: probeUser, password: TEST_PASSWORD_HASH, fullName: 'پروب توکن', role: 'operator', avatarUrl: '' });
       try {
         delete process.env.EXPOSE_TOKEN_IN_BODY;
@@ -565,6 +569,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
       const { resetPhantomLockouts } = await import('../../services/auth/loginSecurity.service.js');
       const realUser = `pen_uni_${Date.now()}`;
       const ghostUser = `pen_uni_ghost_${Date.now()}`;
+      await ensureTestRole('operator');
       await orm.insert(users).values({ username: realUser, password: TEST_PASSWORD_HASH, fullName: 'پروب پاسخ یکسان', role: 'operator', avatarUrl: '' });
       resetLoginRateLimiter();
       try {
@@ -615,6 +620,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
       await orm.insert(appSettings).values({ key: secretKey, value: probeSecret }).onConflictDoUpdate({ target: appSettings.key, set: { value: probeSecret } });
       const [probePersonnel] = await orm.insert(personnel).values({ fullName: 'پروب خروجی داده', nobitexPassword: probeNobitex }).returning({ id: personnel.id });
       const operatorUser = `pen_exp_${Date.now()}`;
+      await ensureTestRole('operator');
       await orm.insert(users).values({ username: operatorUser, password: TEST_PASSWORD_HASH, fullName: 'اپراتور خروجی', role: 'operator', avatarUrl: '' });
       try {
         const adminSession = await getAdminSession();

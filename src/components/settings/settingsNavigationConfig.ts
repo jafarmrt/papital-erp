@@ -9,7 +9,6 @@ import {
   FolderTree, 
   Tags, 
   ShoppingBag, 
-  ShieldCheck, 
   Activity,
   LucideIcon
 } from 'lucide-react';
@@ -59,7 +58,7 @@ export const SETTINGS_GROUPS: SettingCategoryGroup[] = [
   {
     id: 'finance',
     title: 'مالی و حسابداری',
-    description: 'سرفصل‌های پیش‌فرض، اسناد دوبل و درخت سلسله‌مراتبی حساب‌ها',
+    description: 'سرفصل‌های پیش‌فرض، اسناد حسابداری و درخت سلسله‌مراتبی حساب‌ها',
     icon: Landmark,
     colorClass: 'text-emerald-600 bg-emerald-50 border-emerald-200',
     tabs: [
@@ -76,6 +75,14 @@ export const SETTINGS_GROUPS: SettingCategoryGroup[] = [
         shortDesc: 'درخت ۴ سطحی گروه، کل، معین و تفصیلی حسابداری ایران',
         icon: FolderTree,
         keywords: ['کدینگ', 'درخت حساب', 'گروه', 'کل', 'معین', 'تفصیلی', 'حساب', 'دفتر']
+      },
+      {
+        // v10.0.210 (TD-1087، طرح حقوق ت۴ الف): نرخ‌های سالانه بیمه و مالیات حقوق
+        id: 'payroll_rates',
+        label: 'نرخ‌های بیمه و مالیات حقوق',
+        shortDesc: 'درصد بیمه سهم کارگر و کارفرما، سقف دستمزد مشمول بیمه، پله‌های مالیات و روش عیدی هر سال',
+        icon: Landmark,
+        keywords: ['بیمه', 'مالیات', 'حقوق', 'فیش', 'تأمین اجتماعی', 'پله مالیات', 'نرخ', 'عیدی', 'پاداش سالانه']
       }
     ]
   },
@@ -101,16 +108,9 @@ export const SETTINGS_GROUPS: SettingCategoryGroup[] = [
         keywords: ['انبار', 'محل نگهداری', 'کد انبار', 'انبارها', 'سوله', 'موجودی انبار']
       },
       {
-        id: 'inventory_integrity',
-        label: 'سیاست کنترل موجودی منفی',
-        shortDesc: 'قوانین یکپارچگی انبار، جلوگیری از کسری و قفل صدور کالا',
-        icon: ShieldCheck,
-        keywords: ['موجودی منفی', 'کنترل موجودی', 'قفل', 'انبارگردانی', 'یکپارچگی', 'کسری', 'عدم موجودی']
-      },
-      {
         id: 'inventory_control',
         label: 'الگوی کنترل موجودی و خرید',
-        shortDesc: 'بخش‌ها و سرفصل‌های کنترل موجودی و لیست اقلام در آستانه خرید',
+        shortDesc: 'بخش‌ها و سرفصل‌های کنترل موجودی و فهرست اقلام در آستانه خرید',
         icon: ShoppingBag,
         keywords: ['کنترل موجودی', 'لیست خرید', 'آستانه سفارش', 'الگو', 'خرید', 'تامین']
       }

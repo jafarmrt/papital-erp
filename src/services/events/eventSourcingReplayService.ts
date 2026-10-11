@@ -333,7 +333,7 @@ export class EventSourcingReplayService {
       payload: params.payload || {},
       metadata: {
         timestamp: nowIso,
-        // v10.0.30 (OBS-R2-84): کاربر ناشناس «سامانه» است، نه کاربر شماره ۱
+        // v10.0.225 (OBS-R2-84): کاربر ناشناس «سامانه» است، نه کاربر شماره ۱
         userId: params.userId,
         userName: params.userName || 'سامانه',
         isSimulation: dryRun,

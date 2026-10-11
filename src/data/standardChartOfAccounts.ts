@@ -79,7 +79,11 @@ export const STANDARD_CHART_OF_ACCOUNTS: InitialAccountItem[] = [
   { code: '3203', name: 'مالیات و عوارض پرداختنی', level: 'subsidiary', parentCode: '32', accountType: 'liability', nature: 'credit', isSystem: 1 },
   { code: '3204', name: 'بیمه پرداختنی', level: 'subsidiary', parentCode: '32', accountType: 'liability', nature: 'credit', isSystem: 1 },
   // v9.0.286 (TD-554، B03-12، تصمیم ت۶ الف): بیمه و مالیات سهم کارکنان که از فیش کسر می‌شود؛ پیش‌تر به ۳۲۰۲ پیش‌دریافت مشتری می‌رفت
-  { code: '3205', name: 'کسورات حقوق پرداختنی (بیمه و مالیات سهم کارکنان)', level: 'subsidiary', parentCode: '32', accountType: 'liability', nature: 'credit', isSystem: 1 },
+  // v10.0.210 (TD-1087، طرح حقوق §۳.۳): بیمه سهم کارگر و کارفرما به ۳۲۰۴ و مالیات حقوق به ۳۲۰۶ می‌رود؛ ۳۲۰۵ فقط «سایر کسورات»
+  { code: '3205', name: 'سایر کسورات حقوق پرداختنی', level: 'subsidiary', parentCode: '32', accountType: 'liability', nature: 'credit', isSystem: 1 },
+  { code: '3206', name: 'مالیات حقوق پرداختنی', level: 'subsidiary', parentCode: '32', accountType: 'liability', nature: 'credit', isSystem: 1 },
+  // v10.0.222 (TD-1089، طرح حقوق §۳.۸): عیدی انباشته فیش‌ها تا «فیش عیدی»
+  { code: '3207', name: 'عیدی پرداختنی', level: 'subsidiary', parentCode: '32', accountType: 'liability', nature: 'credit', isSystem: 1 },
 
   // ==========================================
   // گروه ۴: بدهی‌های بلندمدت و حقوق صاحبان سهام (Equity & Long-term)
@@ -144,4 +148,8 @@ export const STANDARD_CHART_OF_ACCOUNTS: InitialAccountItem[] = [
   { code: '7011', name: 'هزینه تعمیرات و نگهداری ابزار و تجهیزات', level: 'subsidiary', parentCode: '70', accountType: 'expense', nature: 'debit', isSystem: 1 },
   // v8.0.3 (TD-255، تصمیم مالک محصول): کسری (بدهکار) و اضافی (بستانکار) انبارگردانی و اصلاح موجودی از اکسل
   { code: '7012', name: 'کسری و اضافات انبار', level: 'subsidiary', parentCode: '70', accountType: 'expense', nature: 'both', isSystem: 1 },
+  // v10.0.210 (TD-1087، طرح حقوق §۳.۳): سهم کارفرمای بیمه فیش حقوق (همراه بیمه بیکاری)
+  { code: '7013', name: 'هزینه بیمه سهم کارفرما', level: 'subsidiary', parentCode: '70', accountType: 'expense', nature: 'debit', isSystem: 1 },
+  // v10.0.222 (TD-1089، طرح حقوق §۳.۸): سهم عیدی هر فیش و عیدی سالانه
+  { code: '7014', name: 'هزینه عیدی و پاداش', level: 'subsidiary', parentCode: '70', accountType: 'expense', nature: 'debit', isSystem: 1 },
 ];

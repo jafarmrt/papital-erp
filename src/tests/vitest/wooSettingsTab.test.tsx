@@ -149,7 +149,7 @@ describe('TD-730 WooCommerce order lists show a load error instead of «no order
       return undefined;
     });
     const { result } = renderHook(() => useSettings(), { wrapper });
-    // v10.0.32 (OBS-PR-17): the tab loads the lists when it opens; the hook alone reads none
+    // v10.0.227 (OBS-PR-17): the tab loads the lists when it opens; the hook alone reads none
     act(() => { result.current.loadSyncedWcOrders(); });
     await waitFor(() => expect(result.current.wcOrderLogsError).toBe(forbidden));
     await waitFor(() => expect(result.current.syncedWcOrdersError).toBe(serverFailure));
@@ -163,7 +163,7 @@ describe('TD-730 WooCommerce order lists show a load error instead of «no order
       ? [{ id: 1, wcOrderId: '77', status: 'processed', buyerName: 'خریدار', erpDocumentId: 9, errorMessage: 'طرف حساب تازه «علی (۰۹۳۵)» ساخته شد' }]
       : undefined));
     const { result } = renderHook(() => useSettings(), { wrapper });
-    // v10.0.32 (OBS-PR-17): the tab loads the lists when it opens; the hook alone reads none
+    // v10.0.227 (OBS-PR-17): the tab loads the lists when it opens; the hook alone reads none
     act(() => { result.current.loadSyncedWcOrders(); });
     await waitFor(() => expect(result.current.wcOrderLogs).toHaveLength(1));
     expect(result.current.wcOrderLogsError).toBe('');
@@ -178,7 +178,7 @@ describe('TD-733 the WooCommerce order log headers name what the rows show', () 
       ? [{ id: 1, wcOrderId: '77', status: 'processed', buyerName: 'خریدار', erpDocumentId: 9, errorMessage: '' }]
       : undefined));
     const { result } = renderHook(() => useSettings(), { wrapper });
-    // v10.0.32 (OBS-PR-17): the tab loads the lists when it opens; the hook alone reads none
+    // v10.0.227 (OBS-PR-17): the tab loads the lists when it opens; the hook alone reads none
     act(() => { result.current.loadSyncedWcOrders(); });
     await waitFor(() => expect(result.current.wcOrderLogs).toHaveLength(1));
     renderTab(result.current);

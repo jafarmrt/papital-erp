@@ -26,7 +26,14 @@ export const ACCOUNT_MAPPING_CONCEPTS = [
   { key: 'tradePayablesAccountCode', label: 'حساب‌های پرداختنی تجاری', description: 'طرف حساب خرید، پرداخت وجه به تأمین‌کننده و چک پرداختی', defaultCode: '3001', accountTypes: LIABILITY },
   { key: 'wagesPayableAccountCode', label: 'حقوق و دستمزد پرداختنی', description: 'فیش حقوق، پرداخت حقوق و دریافت وجه از پرسنل', defaultCode: '3201', accountTypes: LIABILITY },
   // v9.0.286 (TD-554، تصمیم ت۶ الف): پیش‌فرض ۳۲۰۵؛ پیش‌تر ۳۲۰۲ «پیش‌دریافت‌ها از مشتریان» بود
-  { key: 'employeeDeductionsPayableAccountCode', label: 'کسورات حقوق پرداختنی', description: 'بیمه و مالیات سهم کارکنان در فیش حقوق', defaultCode: '3205', accountTypes: LIABILITY },
+  { key: 'employeeDeductionsPayableAccountCode', label: 'سایر کسورات حقوق پرداختنی', description: '«سایر کسورات» فیش حقوق، مانند قسط وام و جریمه', defaultCode: '3205', accountTypes: LIABILITY },
+  // v10.0.210 (TD-1087، طرح حقوق §۳.۳ بند ۴): بیمه سهم کارگر و کارفرما، مالیات حقوق و هزینه سهم کارفرما
+  { key: 'insurancePayableAccountCode', label: 'بیمه پرداختنی', description: 'بیمه سهم کارگر و سهم کارفرما در فیش حقوق، تا پرداخت به تأمین اجتماعی', defaultCode: '3204', accountTypes: LIABILITY },
+  { key: 'payrollTaxPayableAccountCode', label: 'مالیات حقوق پرداختنی', description: 'مالیات حقوق کسرشده در فیش، تا پرداخت به امور مالیاتی', defaultCode: '3206', accountTypes: LIABILITY },
+  { key: 'employerInsuranceExpenseAccountCode', label: 'هزینه بیمه سهم کارفرما', description: 'سهم کارفرمای بیمه در فیش حقوق', defaultCode: '7013', accountTypes: EXPENSE },
+  // v10.0.222 (TD-1089، طرح حقوق §۳.۸): سهم عیدی فیش‌ها و فیش عیدی
+  { key: 'eidiPayableAccountCode', label: 'عیدی پرداختنی', description: 'سهم عیدی انباشته فیش‌های حقوق، تا پرداخت با «فیش عیدی»', defaultCode: '3207', accountTypes: LIABILITY },
+  { key: 'eidiExpenseAccountCode', label: 'هزینه عیدی و پاداش', description: 'سهم عیدی هر فیش حقوق و عیدی سالانه‌ای که انباشته نشده است', defaultCode: '7014', accountTypes: EXPENSE },
   { key: 'chequeReceivableAccountCode', label: 'اسناد دریافتنی نزد صندوق', description: 'ثبت چک دریافتی و بازگشت آن از جریان وصول', defaultCode: '1101', accountTypes: ASSET },
   { key: 'chequeInCollectionAccountCode', label: 'اسناد در جریان وصول', description: 'فرستادن چک به بانک برای وصول، تا پاس یا برگشت', defaultCode: '1102', accountTypes: ASSET },
   { key: 'chequeProtestAccountCode', label: 'اسناد واخواستی', description: 'برگشت چک دریافتی', defaultCode: '1103', accountTypes: ASSET },
@@ -43,6 +50,8 @@ export const ACCOUNT_MAPPING_CONCEPTS = [
   { key: 'donatedGoodsIncomeAccountCode', label: 'درآمد کالای اهدایی', description: 'کالای رایگان رسید و فاکتور خرید که به میانگین موزون بها وارد انبار می‌شود', defaultCode: '5204', accountTypes: REVENUE },
   { key: 'costOfGoodsSoldCode', label: 'بهای تمام‌شده کالای فروش‌رفته', description: 'بهای تمام‌شده فروش و برگشت از فروش', defaultCode: '6001', accountTypes: EXPENSE },
   { key: 'wasteExpenseAccountCode', label: 'ضایعات و افت کیفی', description: 'سند خودکار ضایعات انبار به بهای کاردکس', defaultCode: '6004', accountTypes: EXPENSE },
+  // v10.0.175 (TD-948، تصمیم ت۴ ب فاز ۵): حواله بی پروژه دیگر به کالای در جریان ساخت (۱۴۰۲) نمی‌رود
+  { key: 'unassignedConsumptionAccountCode', label: 'مصرف مواد بی پروژه', description: 'حواله خروج از انبار که به هیچ پروژه‌ای پیوند ندارد', defaultCode: '6003', accountTypes: EXPENSE },
   { key: 'directProductionWagesAccountCode', label: 'دستمزد مستقیم تولید', description: 'کارکرد قطعه‌کاری در فیش حقوق', defaultCode: '6002', accountTypes: EXPENSE },
   { key: 'fixedSalaryExpenseAccountCode', label: 'هزینه حقوق ثابت', description: 'بخش حقوق ثابت فیش حقوق', defaultCode: '6003', accountTypes: EXPENSE },
   { key: 'summaryProfitLossCode', label: 'خلاصه سود و زیان', description: 'بستن حساب‌های موقت در پایان سال مالی', defaultCode: '4301', accountTypes: EQUITY },
