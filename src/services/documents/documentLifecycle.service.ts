@@ -452,8 +452,7 @@ export class DocumentLifecycleService {
               // برمی‌گردد تا WAC مثل قبل بی‌تغییر بماند
               unitPrice: docDirection === 'out' ? 0
                 : (fin(doc.exchangeRate).isPositive() ? stockUnitPriceInIrr(item.unitPrice ?? 0, doc.currency, doc.exchangeRate) : (item.unitPrice ?? 0)),
-              location: targetLoc, ...reversalEvent
-            }));
+              location: targetLoc, ...reversalEvent }));
           }
         }
 
