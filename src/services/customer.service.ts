@@ -1,6 +1,7 @@
 import { eq, and, asc, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { customers } from '../db/schema.js';
+import { systemNowUtcIso } from '../lib/businessClock.js';
 import { checkOccVersion, nextVersion, OptimisticLockError } from '../lib/occHelper.js';
 import { parsePartyTypeCell } from '../lib/customers/partyTypeCell.js';
 import { NotFoundError } from '../errors/customErrors.js';
@@ -128,7 +129,7 @@ export class CustomerService {
     // v9.0.7 (TD-419): تلفن با کلید تطبیق (همان شماره با نگارش دیگر تکراری است)
     await assertCustomerPhoneAvailable(phone, executor);
 
-    const createdAt = new Date().toISOString();
+    const createdAt = systemNowUtcIso();
     const [created] = await guardCustomerName(() => executor
       .insert(customers)
       .values({
@@ -415,7 +416,7 @@ export class CustomerService {
               supplierCategory,
               bankInfo,
               contacts: contactName || phone ? [{ id: '1', name: contactName, role: 'رابط اصلی', phone, isPrimary: true }] : [],
-              createdAt: new Date().toISOString(),
+              createdAt: systemNowUtcIso(),
               isDeleted: 0,
               version: 1
             })

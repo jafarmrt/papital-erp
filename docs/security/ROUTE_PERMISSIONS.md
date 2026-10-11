@@ -107,7 +107,7 @@
 | GET | `/api/crm/leads` | crm.view \| customers.view \| customers.manage |
 | POST | `/api/crm/leads` | crm.manage |
 | DELETE | `/api/crm/leads/:id` | crm.delete |
-| GET | `/api/crm/leads/:id` | crm.view |
+| GET | `/api/crm/leads/:id` | crm.view \| customers.view \| customers.manage |
 | PUT | `/api/crm/leads/:id` | crm.manage |
 | POST | `/api/crm/leads/:id/convert-to-customer` | crm.manage |
 | GET | `/api/crm/stats` | crm.view \| customers.view \| customers.manage |

@@ -10577,6 +10577,15 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 9 (v10.0.34, TD-976): CRM activity mentions are live user ids and notify only CRM readers
   const { runCrmActivityMentionTests } = await import('../regression/crmActivityMentionTests.js');
   results.push(...await runCrmActivityMentionTests(shouldRun));
+  // v10.0.176 (TD-932): linking a document to a sales lead needs crm.manage and never reopens a closed lead
+  const { runLeadProformaLinkGuardTests } = await import('../regression/leadProformaLinkGuardTests.js');
+  results.push(...await runLeadProformaLinkGuardTests(shouldRun));
+  // v10.0.178 (OBS-R2-29): a sales lead detail opens for the same keys as the lead list
+  const { runCrmLeadDetailReadTests } = await import('../regression/crmLeadDetailReadTests.js');
+  results.push(...await runCrmLeadDetailReadTests(shouldRun));
+  // v10.0.179 (OBS-R2-33): lead edit and conversion audit rows; a converted lost lead stays lost
+  const { runCrmLeadEditAuditTests } = await import('../regression/crmLeadEditAuditTests.js');
+  results.push(...await runCrmLeadEditAuditTests(shouldRun));
   // بسته ۹ (v9.0.18، TD-427): اعتبارسنجی ورودی پرونده فروش
   const { runCrmLeadInputTests } = await import('../regression/crmLeadInputTests.js');
   results.push(...await runCrmLeadInputTests(shouldRun));

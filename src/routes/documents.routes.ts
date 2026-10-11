@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission, can, userHasRoleOrPermission } from '../middleware/authorize.js';
 import { permissionDefinition } from '../lib/permissions/permissionCatalog.js';
-import { SALES_FINALIZE_PERMISSION } from '../lib/permissions/documentPermissions.js';
+import { CRM_LEAD_LINK_PERMISSION, SALES_FINALIZE_PERMISSION } from '../lib/permissions/documentPermissions.js';
 import { findFinalDocumentIdByRef } from '../services/documents/documentRefLookup.js';
 import { documentAuditDetails, documentAuditSnapshot, documentLineSummary } from '../services/documents/documentAudit.js';
 import { proformaStockWarnings } from '../services/documents/documentSellableGate.js';
@@ -288,6 +288,13 @@ router.get('/documents/next-ref', authorizePermission(...READ_PERMISSIONS.docume
 const docTypeTitles = DOCUMENT_TYPE_TITLES;
 
 /** v9.0.125 (TD-541 / TD-771): کاربر مجوز این کار را دارد، وگرنه ۴۰۳ با نام فارسی مجوز */
+/** v10.0.176 (TD-932، تصمیم ت۱۴): پیوند یا قطع پیوند سند با پرونده فروش فقط با مجوز مدیریت پرونده‌ها، پیش از هر نوشتن */
+async function assertMayLinkLead(user: AuthUserPayload | undefined, crmLeadId: unknown): Promise<void> {
+  const permission = CRM_LEAD_LINK_PERMISSION;
+  if (crmLeadId === undefined || await can(user, permission)) return;
+  throw new ForbiddenError(`پیوند سند با پرونده فروش مجوز «${permissionDefinition(permission)?.title ?? permission}» را می‌خواهد.`, { permission }, 'CRM_LEAD_LINK_FORBIDDEN');
+}
+
 async function assertMayRecordDocument(user: AuthUserPayload | undefined, permission: string, action: string): Promise<void> {
   if (await can(user, permission)) return;
   throw new ForbiddenError(`${action} مجوز «${permissionDefinition(permission)?.title ?? permission}» را می‌خواهد.`, { permission }, 'DOCUMENT_PERMISSION_REQUIRED');
@@ -324,6 +331,7 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
     }
   }
 
+  if (targetLeadId) await assertMayLinkLead(req.user, targetLeadId);
   const isProforma = req.body.status === 'proforma' || req.body.docType === 'proforma';
 
   // V6 Sub-phase 2.4 (TD-139): اعتبارسنجی سقف رزرو کالا اکنون به شکل متمرکز و اتمیک با قفل سطری درون DocumentService.createDocument انجام می‌گیرد.
@@ -501,6 +509,7 @@ router.put('/documents/:id/finalize', authorizePermission('documents.finalize', 
 
 router.put('/documents/:id', authorizePermission('documents.edit'), validate(documentUpdateSchema), asyncHandler(async (req, res) => {
   const docId = Number(req.params.id);
+  await assertMayLinkLead(req.user, req.body.crmLeadId);
   // v9.0.323 (TD-776): پیوند پرونده فروش (`crmLeadId`، null = قطع) درون تراکنش ویرایش و زیر قفل پرونده؛ پیش‌تر پس از commit
   // ویرایش، بی قفل و بی قاعده «یک پیش‌فاکتور برای هر پرونده» نوشته می‌شد
   // v9.0.337 (TD-785): ویرایش و ردیف ممیزی‌اش در یک تراکنش، با سند پیش (زیر قفل ردیف) و پس از ویرایش از پایگاه‌داده؛
