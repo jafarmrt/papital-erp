@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.0.265 — تاریخ سند فیش عیدی دیگر در آینده نیست
+- سند فیش حقوق تاریخ زودترِ پایان دوره و امروز را می‌گیرد (`payrollVoucherDate` در `voucherSync.service.ts`)، پس فیش عیدی میان‌سال سند آینده‌دار ندارد (TD-1244).
+
 ### v10.0.264 — پنهان ماندن رمز نوبیتکس پرسنل در فرم و جزئیات
 - فرم و پنجره جزئیات پرسنل رمز نوبیتکس را پنهان نشان می‌دهند و فقط با «نمایش رمز» آشکار می‌کنند (`src/components/personnel/NobitexPasswordFields.tsx`)؛ وضعیت بی‌استفاده `showNobitexPass` حذف شد (OBS-R2-54 از TD-994).
 
