@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { sanitizeObject } from '../../middleware/logger';
 
 /**
- * OBS-R1-03 (TD-983), v10.0.264: the process log scrubber recognises a secret key like the audit scrubber does
+ * OBS-R1-03 (TD-983), v10.0.268: the process log scrubber recognises a secret key like the audit scrubber does
  * (`isSecretAuditKey`), so «author» or «authority» are no longer hidden, and it also scrubs secrets written as plain
  * text (`password=…`, `token: …`), which only the JSON form `"password": "…"` used to be.
  */

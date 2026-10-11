@@ -34,7 +34,7 @@ const JSON_SECRET = new RegExp(String.raw`"(${SECRET_WORD})"\s*:\s*"[^"]*"`, 'gi
 const TEXT_SECRET = new RegExp(String.raw`\b(${SECRET_WORD})(\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s&,;"']+)`, 'gi');
 
 /**
- * v10.0.264 (OBS-R1-03): a secret is scrubbed in a JSON body (`"newPassword": "…"`) and in plain text (`password=…`,
+ * v10.0.268 (OBS-R1-03): a secret is scrubbed in a JSON body (`"newPassword": "…"`) and in plain text (`password=…`,
  * `?token=…`, `api_key: …`), not only the JSON form of a few fixed names.
  */
 function sanitizeString(s: string): string {
@@ -45,7 +45,7 @@ function sanitizeString(s: string): string {
 }
 
 /**
- * v10.0.264 (OBS-R1-03): a key is secret by the audit scrubber's rule (`isSecretAuditKey`: password, secret, token,
+ * v10.0.268 (OBS-R1-03): a key is secret by the audit scrubber's rule (`isSecretAuditKey`: password, secret, token,
  * apiKey, cookie, jwt, authorization … in any spelling) or names a card number or CVV; «author» and «authority» are kept.
  */
 function isSecretLogKey(key: string): boolean {
