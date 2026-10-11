@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.0.262 — ممیزی خزانه درون همان ثبت و حذف جایگزین حساب کل
+- هشت مسیر خزانه دیگر ممیزی پس از commit نمی‌نویسند: سرویس‌ها ممیزی را با `tx` و `req` در `src/services/accounting/treasury/treasuryAudit.ts` می‌نویسند؛ `resolveContraAccount` در نبود حساب نگاشت حساب کل برنمی‌گرداند و اتصال دوم استخر نمی‌گیرد؛ `excludedContraAccountIds` نگاشت‌ها را یکی‌یکی می‌خواند (TD-934، OWN-01، OWN-03، نیمه خزانه OBS-R2-04).
+
 ### v10.0.261 — استثنای عمومی `/uploads` فقط برای تصویرها
 - `/uploads` بی نشست فقط فایل تصویری و پوشه‌های عمومی را سرو می‌کند (`isPublicUploadPath` در `src/lib/attachments/publicUploadPath.ts`)؛ فایلی که فقط نامش «logo» یا «favicon» دارد دیگر عمومی نیست (OBS-R1-04، TD-983).
 
