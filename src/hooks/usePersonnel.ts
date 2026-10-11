@@ -32,6 +32,7 @@ export interface PersonnelFormData {
   monthlySalary: string;
   jobTitle: string;
   education: string;
+  startDate: string;
   endDate: string;
   terminationReason: string;
   specializedSkills: string;
@@ -63,6 +64,7 @@ const INITIAL_FORM_DATA: PersonnelFormData = {
   monthlySalary: '',
   jobTitle: '',
   education: '',
+  startDate: '',
   endDate: '',
   terminationReason: '',
   specializedSkills: '',
@@ -150,6 +152,7 @@ export function usePersonnel() {
       monthlySalary: p.monthlySalary != null && p.monthlySalary !== '' ? String(p.monthlySalary) : '',
       jobTitle: p.jobTitle || '',
       education: p.education || '',
+      startDate: p.startDate || '',
       endDate: p.endDate || '',
       terminationReason: p.terminationReason || '',
       specializedSkills: p.specializedSkills || '',

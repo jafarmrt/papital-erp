@@ -24,6 +24,8 @@ export const personnel = pgTable('personnel', {
   monthlySalary: moneyNumeric('monthly_salary').default(sql`0`),
   jobTitle: text('job_title').default(''),
   education: text('education').default(''),
+  // v10.0.183 (TD-1086، طرح حقوق §۳.۴): «آغاز همکاری» میلادی ISO؛ حقوق ثابت از این روز آغاز می‌شود (خالی = رفتار پیشین)
+  startDate: text('start_date').default(''),
   endDate: text('end_date').default(''),
   terminationReason: text('termination_reason').default(''),
   specializedSkills: text('specialized_skills').default(''),
@@ -150,6 +152,9 @@ export const pieceworkPayrolls = pgTable('piecework_payrolls', {
   attachments: jsonb('attachments').$type<FinancialAttachment[]>().default([]),
   // v8.0.30 (TD-284): سهم حقوق ثابت به تفکیک ماه شمسی (مهاجرت 0048)؛ فیش پیشین آرایه خالی دارد
   fixedSalaryMonths: jsonb('fixed_salary_months').$type<FixedSalaryMonthShare[]>().notNull().default([]),
+  // v10.0.183 (TD-1085، طرح حقوق §۳.۴): فیش پیش‌پرداخت (دوره‌ای که پایانش پس از امروز است) و دلیل الزامی آن
+  isPrepayment: integer('is_prepayment').notNull().default(0),
+  prepaymentReason: text('prepayment_reason').notNull().default(''),
   createdById: integer('created_by_id').references(() => users.id),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),

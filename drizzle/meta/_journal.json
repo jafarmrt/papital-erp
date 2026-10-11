@@ -715,6 +715,13 @@
       "when": 1794300000000,
       "tag": "0101_payroll_approve_permission",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1794400000000,
+      "tag": "0102_payroll_prepayment_and_service_start",
+      "breakpoints": true
     }
   ]
 }

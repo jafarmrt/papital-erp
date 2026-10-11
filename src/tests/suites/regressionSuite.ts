@@ -6728,8 +6728,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const [{ n: covered }] = (await orm.execute(sql`
         SELECT count(*)::int AS n FROM pg_constraint pc JOIN pg_class rel ON rel.oid = pc.conrelid
         WHERE rel.relnamespace = current_schema()::regnamespace AND pc.conname LIKE 'chk%datefmt' AND pc.convalidated`) as unknown as { rows: Array<{ n: number }> }).rows;
-      // v7.0.82 (TD-231): ۲۴ قید مهاجرت 0028 و ۳ قید مهاجرت 0030
-      if (covered !== 27) violations.push(`number of validated date format constraints: ${covered} (expected 27)`);
+      // v7.0.82 (TD-231): ۲۴ قید مهاجرت 0028 و ۳ قید مهاجرت 0030؛ v10.0.183 (TD-1086): ۱ قید مهاجرت 0102 (personnel.start_date)
+      if (covered !== 28) violations.push(`number of validated date format constraints: ${covered} (expected 28)`);
       if (missingRows.length > 0) violations.push(`without a valid format constraint: ${missingRows.map(r => `${r.table_name}.${r.column_name}`).join(', ')}`);
 
       const ROLLBACK = new Error('ROLLBACK_P3_15');
@@ -10908,6 +10908,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runDocumentVoidReasonTests(shouldRun));
   const { runPayrollApprovalDutiesTests } = await import('../regression/payrollApprovalDutiesTests.js');
   results.push(...await runPayrollApprovalDutiesTests(shouldRun));
+  const { runPayrollPrepaymentStartTests } = await import('../regression/payrollPrepaymentStartTests.js');
+  results.push(...await runPayrollPrepaymentStartTests(shouldRun));
   const { runPurchaseWorkflowGuardTests } = await import('../regression/purchaseWorkflowGuardTests.js');
   results.push(...await runPurchaseWorkflowGuardTests(shouldRun));
   // Lane L1 guide findings (v10.0.123+): move a treasury row to another document

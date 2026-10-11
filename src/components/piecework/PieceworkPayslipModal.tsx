@@ -5,6 +5,7 @@ import { formatQuantityOrTime, formatPersianDate, formatPersianNumber } from '..
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 import { PayrollPaymentModal } from './PayrollPaymentModal';
+import { PrepaymentNotice } from './PayrollPrepaymentField';
 import { isPayablePayrollStatus } from '../../lib/payroll/payrollPayable';
 import { payrollStatusLabel } from '../../lib/payroll/payrollStatusLabels';
 import { payslipFixedSalaryRows } from '../../lib/payroll/payslipFixedSalaryRows';
@@ -145,6 +146,7 @@ export function PieceworkPayslipModal({
             </div>
           </div>
 
+          <PrepaymentNotice payroll={viewingPayroll} />
           {/* Personnel Info Box */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs">
             <div>

@@ -19,6 +19,7 @@ import { fin } from '../lib/financialDecimal.js';
 import { parseWorkQuantity } from '../lib/piecework/workQuantity.js';
 import { WORK_LOG_PAGE_SIZE } from '../lib/piecework/workLogList.js';
 import { parsePagination } from '../lib/pagination.js';
+import { PREPAYMENT_REASON_MAX } from '../lib/payroll/payrollPeriod.js';
 import { pageWorkLogs, workLogSummary } from '../services/piecework/workLogList.js';
 
 const router = Router();
@@ -178,6 +179,9 @@ const generatePieceworkPayrollSchema = z.object({
     deductionsDescription: z.string().max(500, 'شرح سایر کسورات حداکثر ۵۰۰ نویسه است').optional(),
     advanceDeduction: nonNegativeAmount('کسر مساعده').optional(),
     notes: z.string().optional(),
+    // v10.0.183 (TD-1085): فیش پیش‌پرداخت دوره آینده با دلیل الزامی (سرویس، ۴۲۲)
+    isPrepayment: z.boolean().optional(),
+    prepaymentReason: z.string().max(PREPAYMENT_REASON_MAX, 'دلیل فیش پیش‌پرداخت حداکثر ۵۰۰ نویسه است').optional(),
   })
 });
 
@@ -729,7 +733,7 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], requirePerm
   try {
     const currentUserId = req.user?.id;
     const currentUsername = req.user?.username || 'سیستم';
-    const { personnelId, startDate, endDate, title, bonuses, totalBonuses, deductions, totalDeductions, deductionsDescription, advanceDeduction: reqAdvanceDeduction, notes } = req.body;
+    const { personnelId, startDate, endDate, title, bonuses, totalBonuses, deductions, totalDeductions, deductionsDescription, advanceDeduction: reqAdvanceDeduction, notes, isPrepayment, prepaymentReason } = req.body;
 
     const result = await PieceworkPayrollService.generatePayroll({
       personnelId,
@@ -743,6 +747,8 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], requirePerm
       deductionsDescription,
       advanceDeduction: reqAdvanceDeduction,
       notes,
+      isPrepayment,
+      prepaymentReason,
       userId: currentUserId,
       username: currentUsername,
       // v9.0.285 (TD-810): ردیف ممیزی با جزئیات و IP در تراکنش صدور نوشته می‌شود

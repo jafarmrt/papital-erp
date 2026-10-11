@@ -30,6 +30,7 @@ interface PersonnelPreviewRow {
   employmentStatus?: string;
   nationality?: string;
   birthDate: string;
+  startDate: string;
   education: string;
   cardNumber: string;
   accountNumber: string;
@@ -139,6 +140,7 @@ export function PersonnelExcelModal({
         'وضعیت همکاری': 'فعال',
         'جنسیت': 'مرد',
         'تاریخ تولد': '1370/05/12',
+        'تاریخ آغاز همکاری': '1402/01/15',
         'تحصیلات': 'کارشناسی مهندسی صنایع',
         'شماره شبا': 'IR120120000000001234567890',
         'شماره کارت': '6037991812345678',
@@ -161,6 +163,7 @@ export function PersonnelExcelModal({
         'وضعیت همکاری': 'فعال',
         'جنسیت': 'زن',
         'تاریخ تولد': '1375/08/20',
+        'تاریخ آغاز همکاری': '',
         'تحصیلات': 'کارشناسی ارشد متالورژی',
         'شماره شبا': '',
         'شماره کارت': '5892101234567890',
@@ -233,6 +236,8 @@ export function PersonnelExcelModal({
           const nationality = parseNationalityCell(getField(row, ['ملیت', 'تابعیت', 'nationality']));
 
           const birthDate = getField(row, ['تاریخ تولد', 'تولد', 'birthdate', 'birth_date', 'dob']);
+          // v10.0.183 (TD-1086): خانه خالی یعنی بی تغییر
+          const startDate = getField(row, ['تاریخ آغاز همکاری', 'آغاز همکاری', 'تاریخ شروع همکاری', 'startdate', 'start_date']);
           const education = getField(row, ['تحصیلات', 'مدرک', 'مدرک تحصیلی', 'education', 'degree']);
           const cardNumber = getField(row, ['شماره کارت', 'شمارهکارت', 'کارت', 'cardnumber', 'card_number', 'card']);
           const accountNumber = getField(row, ['شماره حساب', 'شمارهحساب', 'حساب', 'accountnumber', 'account_number', 'account']);
@@ -281,6 +286,7 @@ export function PersonnelExcelModal({
             employmentStatus,
             nationality,
             birthDate,
+            startDate,
             education,
             cardNumber,
             accountNumber,
@@ -353,6 +359,7 @@ export function PersonnelExcelModal({
         employmentStatus: r.employmentStatus,
         nationality: r.nationality,
         birthDate: r.birthDate,
+        startDate: r.startDate,
         education: r.education,
         cardNumber: r.cardNumber,
         accountNumber: r.accountNumber,

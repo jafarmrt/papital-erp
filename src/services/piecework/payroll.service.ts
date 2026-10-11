@@ -8,7 +8,7 @@ import { VoucherService } from '../accounting/voucher.service.js';
 import { VoucherSyncService } from '../accounting/voucherSync.service.js';
 import { PayrollPaymentService } from '../accounting/payrollPayment.service.js';
 import { computeFixedSalaryShares, describeFixedSalaryShares, priorFixedGrantsOf, type FixedSalaryMonthShare } from '../../lib/payroll/fixedSalaryProration.js';
-import { fixedSalaryPeriodEnd, payrollPeriodFutureError, serviceEndOf } from '../../lib/payroll/payrollPeriod.js';
+import { fixedSalaryPeriodEnd, fixedSalaryPeriodStart, payrollPrepaymentError, serviceEndOf, serviceStartOf } from '../../lib/payroll/payrollPeriod.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
 import { isLegacyPayrollVoucher, payrollVouchersWhere } from '../accounting/payrollVoucherLink.js';
@@ -46,6 +46,9 @@ export interface GeneratePayrollInput {
   deductionsDescription?: string;
   advanceDeduction?: AmountInput;
   notes?: string;
+  /** فیش پیش‌پرداخت: دوره‌ای که پایانش پس از امروز است، فقط حقوق ثابت، با دلیل الزامی (TD-1085) */
+  isPrepayment?: boolean;
+  prepaymentReason?: string;
   userId?: number;
   username: string;
   /** درخواست Express برای IP ردیف ممیزی (TD-810) */
@@ -76,8 +79,11 @@ export class PieceworkPayrollService {
     }
     // v9.0.268 (TD-808، تصمیم ت۴ الف): فیش دوره‌ای که هنوز تمام نشده صادر نمی‌شود. پیش‌تر فیش آذر در مهر صادر و تأیید شد و
     // حقوق ثابت ماه‌های آینده پیشاپیش هزینه و بدهی شد.
-    const futureError = payrollPeriodFutureError(eDate, await businessTodayIsoDate());
-    if (futureError) throw new ValidationError(futureError, undefined, 'PAYROLL_PERIOD_IN_FUTURE');
+    // v10.0.183 (TD-1085، طرح حقوق §۳.۴): دوره آینده فقط با «فیش پیش‌پرداخت» و دلیل الزامی پذیرفته می‌شود
+    const isPrepayment = input.isPrepayment === true;
+    const prepaymentReason = isPrepayment ? String(input.prepaymentReason ?? '').trim() : '';
+    const periodRefusal = payrollPrepaymentError(eDate, await businessTodayIsoDate(), { isPrepayment, prepaymentReason });
+    if (periodRefusal) throw new ValidationError(periodRefusal.message, undefined, periodRefusal.code);
 
     const totBonusesFin = fin(bonuses !== undefined ? bonuses : (totalBonuses !== undefined ? totalBonuses : 0));
     const totDeductionsFin = fin(deductions !== undefined ? deductions : (totalDeductions !== undefined ? totalDeductions : 0));
@@ -129,7 +135,8 @@ export class PieceworkPayrollService {
         ))
         .for('update');
 
-      const eligibleLogs = allPersonnelLogs.filter(log => {
+      // v10.0.183 (TD-1085): فیش پیش‌پرداخت فقط حقوق ثابت را دربر می‌گیرد؛ کارکردهای دوره در فیش بعدی می‌آیند
+      const eligibleLogs = isPrepayment ? [] : allPersonnelLogs.filter(log => {
         const d = toStorageDate(log.date);
         return !!d && d >= sDate && d <= eDate;
       });
@@ -146,6 +153,16 @@ export class PieceworkPayrollService {
       // v9.0.268 (TD-808، تصمیم ت۴ الف): حقوق ثابت فقط تا تاریخ پایان همکاری (serviceEndOf)؛ دوره پس از آن بی حقوق ثابت
       const serviceEnd = serviceEndOf(pInfo);
       const fixedEnd = fixedSalaryPeriodEnd(sDate, eDate, serviceEnd);
+      // v10.0.183 (TD-1086، طرح حقوق §۳.۴): حقوق ثابت از «آغاز همکاری» پرسنل؛ ماه نخست روزشمار
+      const serviceStart = serviceStartOf(pInfo);
+      const fixedStart = fixedEnd === null ? null : fixedSalaryPeriodStart(sDate, fixedEnd, serviceStart);
+      if (isPrepayment && (!fixedIncluded || !fin(pInfo.monthlySalary || 0).greaterThan(0))) {
+        throw new ValidationError(
+          `فیش پیش‌پرداخت فقط حقوق ثابت را می‌پردازد و ${pInfo.fullName} حقوق ثابت ماهانه ندارد.`,
+          undefined,
+          'PAYROLL_PREPAYMENT_FIXED_SALARY_ONLY'
+        );
+      }
       if (fixedIncluded && fin(pInfo.monthlySalary || 0).greaterThan(0) && serviceEnd.kind === 'unknown') {
         throw new ValidationError(
           `${pInfo.fullName} «قطع همکاری» است ولی تاریخ پایان همکاری معتبری ندارد؛ پیش از صدور فیش با حقوق ثابت، تاریخ پایان همکاری را در پرونده پرسنل ثبت کنید.`,
@@ -153,7 +170,7 @@ export class PieceworkPayrollService {
           'PAYROLL_SERVICE_END_DATE_REQUIRED'
         );
       }
-      if (fixedIncluded && fin(pInfo.monthlySalary || 0).greaterThan(0) && fixedEnd !== null) {
+      if (fixedIncluded && fin(pInfo.monthlySalary || 0).greaterThan(0) && fixedEnd !== null && fixedStart !== null) {
         const priorFixedPayrolls = await tx.select({
           startDate: pieceworkPayrolls.startDate,
           totalFixedAmount: pieceworkPayrolls.totalFixedAmount,
@@ -166,11 +183,12 @@ export class PieceworkPayrollService {
         ))
         .for('update');
 
-        const shares = computeFixedSalaryShares(pInfo.monthlySalary, sDate, fixedEnd, priorFixedPayrolls.flatMap(priorFixedGrantsOf));
+        const shares = computeFixedSalaryShares(pInfo.monthlySalary, fixedStart, fixedEnd, priorFixedPayrolls.flatMap(priorFixedGrantsOf));
         fixedPortionFin = shares.total;
         fixedSalaryMonths = shares.months;
         fixedDedupNote = [
           describeFixedSalaryShares(shares.months, pInfo.monthlySalary),
+          fixedStart > sDate ? `حقوق ثابت از آغاز همکاری (${toPersianDigits(isoToJalaliDate(fixedStart))})` : '',
           fixedEnd < eDate ? `حقوق ثابت تا پایان همکاری (${toPersianDigits(isoToJalaliDate(fixedEnd))})` : '',
         ].filter(Boolean).join(' — ');
       }
@@ -178,6 +196,12 @@ export class PieceworkPayrollService {
       if (eligibleLogs.length === 0 && fixedPortionFin.lessThanOrEqual(0)) {
         if (fixedIncluded && serviceEnd.kind === 'ended' && fixedEnd === null) {
           return { status: 400, error: `همکاری ${pInfo.fullName} در ${toPersianDigits(isoToJalaliDate(serviceEnd.endIso))} پایان یافته است؛ این بازه حقوق ثابت ندارد و کارکرد معوقی هم در آن نیست.` };
+        }
+        if (fixedIncluded && serviceStart && fixedEnd !== null && fixedStart === null) {
+          return { status: 400, error: `همکاری ${pInfo.fullName} در ${toPersianDigits(isoToJalaliDate(serviceStart))} آغاز می‌شود؛ این بازه حقوق ثابت ندارد و کارکرد معوقی هم در آن نیست.` };
+        }
+        if (isPrepayment) {
+          return { status: 400, error: `حقوق ثابت این بازه پیش‌تر در فیش‌های دیگر ${pInfo.fullName} داده شده است؛ فیش پیش‌پرداخت مبلغی ندارد.` };
         }
         return { status: 400, error: 'هیچ کارکرد معوقی در این بازه زمانی برای پرسنل انتخاب‌شده پیدا نشد.' };
       }
@@ -224,7 +248,7 @@ export class PieceworkPayrollService {
       const payrollNumber = `PAY-${seq}`;
 
       const defaultTitle = title && String(title).trim() ? String(title).trim() : `فیش کارکرد ${pInfo.fullName} (${isoToJalaliDate(sDate)} تا ${isoToJalaliDate(eDate)})`;
-      const finalNotes = [notes ? String(notes).trim() : '', fixedDedupNote].filter(Boolean).join(' | ');
+      const finalNotes = [isPrepayment ? `فیش پیش‌پرداخت: ${prepaymentReason}` : '', notes ? String(notes).trim() : '', fixedDedupNote].filter(Boolean).join(' | ');
 
       // 5. Insert payroll record
       const [newPayroll] = await tx.insert(pieceworkPayrolls).values({
@@ -244,6 +268,8 @@ export class PieceworkPayrollService {
         // v10.0.182 (TD-1083، OBS-R2-48، طرح حقوق ت۱ الف): فیش پیش‌نویس صادر می‌شود و دارنده «تأیید فیش حقوق» جدا تأییدش
         // می‌کند. پیش‌تر هنگام صدور «تأییدشده» بود و میان صدور و پرداخت گام تأییدی نبود.
         status: 'draft',
+        isPrepayment: isPrepayment ? 1 : 0,
+        prepaymentReason,
         notes: finalNotes,
         createdById: currentUserId,
         isDeleted: 0
