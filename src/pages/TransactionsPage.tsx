@@ -189,7 +189,7 @@ export default function TransactionsPage() {
                   </td>
                   <td className="p-3">
                     <div className="font-bold text-slate-800">{formatPersianCode(t.document_ref || '-')}</div>
-                    <div className="text-xs text-slate-500">{kardexDocumentTypeLabel(t.document_type)}</div>
+                    <div className="text-xs text-slate-500">{kardexDocumentTypeLabel(t.document_type, t.document_ref)}</div>
                   </td>
                   <td className="p-3 text-center">
                     {t.item_id && (

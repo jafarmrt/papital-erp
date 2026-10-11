@@ -15,6 +15,7 @@ import { ErrorStateView } from '../common/ErrorStateView';
 import { SearchableSelect } from '../SearchableSelect';
 import { useProjectPermissions } from '../../hooks/useProjectPermissions';
 import { allocationStatusLabel } from '../../lib/projects/allocationLabels';
+import { warehouseLabel } from '../../lib/inventory/warehouseLabel';
 
 interface ProjectBomAllocationsTabProps {
   user?: any;
@@ -197,7 +198,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
       'نام کالای اولیه': a.itemName,
       'مقدار تخصیص': a.quantity,
       'واحد': a.unit,
-      'انبار مبداء': a.sourceLocation,
+      'انبار مبداء': warehouseLabel(a.sourceLocation, warehousesList),
       'شناسه تراکنش کاردکس': a.sourceTransactionId || '-',
       'وضعیت': allocationStatusLabel(a.status),
       'تخصیص‌دهنده': a.username,
@@ -415,7 +416,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
                     <td className="py-3 px-3 text-center">
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-slate-100 text-slate-700 font-medium">
                         <Warehouse size={12} />
-                        {alloc.sourceLocation || 'انبار پیش‌فرض'}
+                        {warehouseLabel(alloc.sourceLocation, warehousesList)}
                       </span>
                     </td>
                     <td className="py-3 px-3 text-center">
@@ -542,7 +543,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
                   </div>
                   <div>
                     <span className="text-slate-400">انبار مبداء: </span>
-                    <span className="font-bold text-slate-800">{selectedAllocForTrace.sourceLocation}</span>
+                    <span className="font-bold text-slate-800">{warehouseLabel(selectedAllocForTrace.sourceLocation, warehousesList)}</span>
                   </div>
                   <div>
                     <span className="text-slate-400">تاریخ تخصیص: </span>
@@ -595,7 +596,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
             </div>
 
             <p className="text-xs text-slate-600 leading-relaxed">
-              با این اقدام، مقدار <strong className="text-slate-900">{formatPersianNumber(releaseTarget.quantity)} {releaseTarget.unit}</strong> از کالای <strong className="text-slate-900">{releaseTarget.itemName}</strong> به موجودی انبار <strong className="text-slate-900">{releaseTarget.sourceLocation}</strong> عودت داده شده و سند ورود اصلاحی در کاردکس ثبت خواهد شد.
+              با این اقدام، مقدار <strong className="text-slate-900">{formatPersianNumber(releaseTarget.quantity)} {releaseTarget.unit}</strong> از کالای <strong className="text-slate-900">{releaseTarget.itemName}</strong> به موجودی انبار <strong className="text-slate-900">{warehouseLabel(releaseTarget.sourceLocation, warehousesList)}</strong> عودت داده شده و سند ورود اصلاحی در کاردکس ثبت خواهد شد.
             </p>
 
             <div className="space-y-1.5">

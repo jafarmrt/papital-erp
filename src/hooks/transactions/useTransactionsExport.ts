@@ -4,6 +4,7 @@ import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
 import { EXPORT_FAILED_MESSAGE, TRANSACTIONS_EXPORT_FILE } from '../../lib/inventoryAudit/exportFileNames';
 import { formatPersianDate } from '../../utils';
+import { kardexDocumentTypeLabel } from '../../lib/documents/documentTypeTitles';
 import type { Transaction } from '../../types';
 
 /**
@@ -44,7 +45,7 @@ async function exportTransactions(filters: TransactionsExportFilters): Promise<v
     'مقدار': t.quantity,
     'واحد': t.item_unit,
     'کد پیگیری/سند': t.document_ref,
-    'نوع سند': t.document_type
+    'نوع سند': kardexDocumentTypeLabel(t.document_type, t.document_ref)
   })));
   const wb = xlsx.utils.book_new();
   xlsx.utils.book_append_sheet(wb, ws, 'تراکنش‌ها');
