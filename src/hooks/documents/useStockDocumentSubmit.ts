@@ -80,7 +80,7 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
       return;
     }
 
-    // v10.0.248 (TD-1133): ردیف بهای صفر رسید و خرید فقط با تأیید «کالای اهدایی» ثبت می‌شود
+    // v10.0.249 (TD-1133): ردیف بهای صفر رسید و خرید فقط با تأیید «کالای اهدایی» ثبت می‌شود
     if (actionType === 'in') {
       const zeroPrice = receiptZeroPriceCheck(docType, docItems.map(d => ({
         name: d.item.name, unitPrice: d.unitPrice, weightedAverageCost: d.item.weightedAverageCost ?? d.item.weighted_average_cost,

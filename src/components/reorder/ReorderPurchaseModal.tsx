@@ -33,7 +33,7 @@ export function ReorderPurchaseModal({
   // v9.0.403 (TD-830): ISO, shown with JalaliDateInput
   const [requiredDate, setRequiredDate] = useState(() => getTodayIsoDate());
   const [supplierName, setSupplierName] = useState('');
-  // v10.0.248 (TD-1133): صدور مستقیم فقط رسید قطعی است
+  // v10.0.249 (TD-1133): صدور مستقیم فقط رسید قطعی است
   const docStatus = 'final' as const;
   // v9.0.403 (TD-830): '' = the first active warehouse, which is the default warehouse (lowest id)
   const [targetWarehouse, setTargetWarehouse] = useState('');

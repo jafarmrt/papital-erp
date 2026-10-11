@@ -10,7 +10,7 @@ import type { StockDocumentForm } from '../../hooks/documents/useStockDocumentFo
 import type { StockDocumentReferenceData } from '../../hooks/documents/useStockDocumentReferenceData';
 import type { Item, User } from '../../types';
 
-// v10.0.248 (TD-1133, role guide): the stock page records a zero-price receipt or purchase line only after the user
+// v10.0.249 (TD-1133, role guide): the stock page records a zero-price receipt or purchase line only after the user
 // confirms donated goods (as the reorder alert has done since TD-830), and the reorder alert's direct document is only a
 // final receipt: its draft option made a receipt no page could finalize, which stayed "in transit" for good.
 const fetchJson = vi.fn();

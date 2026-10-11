@@ -10821,6 +10821,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runCrmDueReminderTests(shouldRun));
   const { runNotificationDismissTests } = await import('../regression/notificationDismissTests.js');
   results.push(...await runNotificationDismissTests(shouldRun));
+  const { runNotificationReadScopeTests } = await import('../regression/notificationReadScopeTests.js');
+  results.push(...await runNotificationReadScopeTests(shouldRun));
   const { runEventTimestampUtcTests } = await import('../regression/eventTimestampUtcTests.js');
   results.push(...await runEventTimestampUtcTests(shouldRun));
   const { runRuleActiveStateTests } = await import('../regression/ruleActiveStateTests.js');

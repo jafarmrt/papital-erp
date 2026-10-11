@@ -71,7 +71,7 @@ export function ReorderOrderFields(props: ReorderOrderFieldsProps) {
             />
           </div>
 
-          {/* v10.0.248 (TD-1133): پیش‌نویس رسیدی بود که هیچ صفحه‌ای قطعی‌اش نمی‌کرد؛ سفارش به تأمین‌کننده با «ثبت سفارش خرید» است */}
+          {/* v10.0.249 (TD-1133): پیش‌نویس رسیدی بود که هیچ صفحه‌ای قطعی‌اش نمی‌کرد؛ سفارش به تأمین‌کننده با «ثبت سفارش خرید» است */}
           <div>
             <span className="block font-bold text-slate-700 mb-1">نوع و وضعیت سند:</span>
             <p className="font-bold text-slate-800">{REORDER_DIRECT_DOCUMENT_LABEL}</p>
