@@ -29,7 +29,7 @@ export type ReorderAlertRow = Record<string, unknown> & {
   reserved_qty: number;
   free_stock: number;
   in_transit_qty: number;
-  /** v10.0.250 (TD-1134): unordered quantity on open purchase requisitions; shown only */
+  /** v10.0.255 (TD-1134): unordered quantity on open purchase requisitions; shown only */
   requested_qty: number;
   reorder_point: number;
   deficit: number;

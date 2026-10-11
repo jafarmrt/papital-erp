@@ -1,7 +1,7 @@
 import { formatPersianNumber } from '../../utils';
 
 /**
- * v10.0.250 (TD-1134): پرسش پنجره سفارش هشدار نقطه سفارش، وقتی کالایی از درخواست تازه هنوز در درخواست خرید باز و
+ * v10.0.255 (TD-1134): پرسش پنجره سفارش هشدار نقطه سفارش، وقتی کالایی از درخواست تازه هنوز در درخواست خرید باز و
  * سفارش‌نشده است (`requested_qty` پاسخ هشدار)؛ بی چنین کالایی null.
  */
 export function openRequisitionQuestion(items: ReadonlyArray<{ name: string; unit?: string; requested_qty?: number }>): string | null {

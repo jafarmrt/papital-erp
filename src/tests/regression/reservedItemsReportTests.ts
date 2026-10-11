@@ -19,7 +19,7 @@ export async function runReservedItemsReportTests(shouldRun: ShouldRun): Promise
       'v9.0.404: the reorder alert compares free stock (stock minus reservations) with the reorder point and shows open purchases as in transit only (TD-843)',
       ['td843', 'reservation', 'reorder', 'package7'], reorderFreeStockCase],
     ['reg_reorder_alert_open_requisitions_td_1134',
-      'v10.0.250: the reorder alert shows the unordered quantity of open purchase requisitions, leaving out closed rows and rejected or deleted requisitions (TD-1134)',
+      'v10.0.255: the reorder alert shows the unordered quantity of open purchase requisitions, leaving out closed rows and rejected or deleted requisitions (TD-1134)',
       ['td1134', 'reorder', 'procurement', 'package7'], reorderOpenRequisitionsCase],
   ]);
 }

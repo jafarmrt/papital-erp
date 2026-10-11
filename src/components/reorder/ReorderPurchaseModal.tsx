@@ -148,7 +148,7 @@ export function ReorderPurchaseModal({
       };
     }
 
-    // v10.0.250 (TD-1134): a second request for an item already on an open requisition is sent only after a confirmation
+    // v10.0.255 (TD-1134): a second request for an item already on an open requisition is sent only after a confirmation
     const question = variables.target === 'requisition' ? openRequisitionQuestion(items) : null;
     if (!question) { send(variables); return; }
     void confirmAction({ title: 'درخواست خرید باز', message: question, confirmText: 'بله، درخواست تازه ثبت شود' })

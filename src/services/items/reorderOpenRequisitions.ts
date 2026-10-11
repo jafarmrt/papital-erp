@@ -3,7 +3,7 @@ import type { DbExecutor } from '../../db/drizzle.js';
 import { purchaseRequisitions } from '../../db/schema.js';
 
 /**
- * v10.0.250 (TD-1134): مقدار هر کالا در درخواست‌های خرید باز (هنوز سفارش‌نشده)، که هشدار نقطه سفارش در ستون «درخواست
+ * v10.0.255 (TD-1134): مقدار هر کالا در درخواست‌های خرید باز (هنوز سفارش‌نشده)، که هشدار نقطه سفارش در ستون «درخواست
  * باز» نشان می‌دهد و پنجره سفارش پیش از ثبت درخواست تکراری درباره‌اش می‌پرسد. پیش‌تر هشدار فقط اسناد خرید باز («در راه»)
  * را می‌دید و درخواست دوم همان کالا بی‌هشدار ساخته می‌شد. بخش سفارش‌شده ردیف در «در راه» است، پس دوبار شمرده نمی‌شود.
  */
@@ -38,7 +38,7 @@ export function openRequestedQuantities(rows: readonly RequisitionRowQty[], item
   return totals;
 }
 
-/** v10.0.250 (TD-1134): unordered quantity of each item on live purchase requisitions that are not closed */
+/** v10.0.255 (TD-1134): unordered quantity of each item on live purchase requisitions that are not closed */
 export async function openRequisitionQuantities(executor: DbExecutor, itemIds: number[]): Promise<Map<number, number>> {
   if (itemIds.length === 0) return new Map();
   const requisitions = await executor

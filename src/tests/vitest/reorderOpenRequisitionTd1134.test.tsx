@@ -30,7 +30,7 @@ const sendRequest = (item: ReorderModalItem) => {
   fireEvent.click(screen.getByText('ثبت و ارسال درخواست خرید'));
 };
 
-// v10.0.250 (TD-1134): a reorder request ignored the open purchase requisitions of the same item
+// v10.0.255 (TD-1134): a reorder request ignored the open purchase requisitions of the same item
 describe('open purchase requisitions on the reorder alert (TD-1134)', () => {
   it('counts only the unordered part of rows that are not closed', () => {
     expect(unorderedRowQty({ requestedQty: 4, orderedQty: 0 })).toBe(4);

@@ -1,4 +1,4 @@
-import { terminateOpenWorkflows } from '../../workflow/workflowTermination.js';
+import { maybeStartEntityWorkflow, terminateEntityWorkflows } from '../../system/entityWorkflowPort.js';
 import { orm, type DbExecutor } from '../../../db/drizzle.js';
 import { accounts, bankAccounts, cheques, treasuryTransactions, journalVouchers, journalVoucherItems } from '../../../db/schema.js';
 import { eq, asc, and, or, ne, inArray, sql } from 'drizzle-orm';
@@ -12,7 +12,7 @@ import { fin } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
 import { assertNoPendingOpeningApproval, voidBankOpeningVouchers } from './bankOpeningVoucher.js';
 import { requireBankLedgerAccount } from './bankLinks.js';
-import { assertBankCurrencyChangeAllowed, requireTreasuryCurrency } from './bankAccountCurrency.js';
+import { assertBankCurrencyChangeAllowed, assertBankLedgerChangeAllowed, requireTreasuryCurrency } from './bankAccountCurrency.js';
 import { assignTreasuryAccountCode, peekNextTreasuryAccountCode, type TreasuryAccountType } from './bankAccountCode.js';
 
 /** گزارش تطبیق مانده حساب‌های خزانه با دفاتر (sync-reconcile و reconciliation-report) */
@@ -345,8 +345,8 @@ export class BankAccountService {
       // V2.0.0: سند افتتاحیه موجودی اولیه — DR معین بانک / CR سرمایه اولیه (4001)
       // ورکفلو شرطی: اگر تعریف workflow فعال برای «bank_account» باشد، سند پس از تأیید نهایی صادر می‌شود
       if (!initialBal.isZero()) {
-        const { WorkflowEngineService } = await import('../../workflow/workflowEngineService.js');
-        const wfInstance = await WorkflowEngineService.maybeStartWorkflow({
+        // v10.0.250 (OBS-R2-02): through the workflow port of the composition root, no dynamic import of the engine
+        const wfInstance = await maybeStartEntityWorkflow({
           entityType: 'bank_account',
           entityId: String(inserted.id),
           userId: data.userId,
@@ -496,9 +496,10 @@ export class BankAccountService {
       const newCurrency = data.currency !== undefined ? requireTreasuryCurrency(data.currency) : undefined;
       if (newCurrency) await assertBankCurrencyChangeAllowed(tx, existing, newCurrency);
       // v9.0.100 (TD-510): سرفصل تازه معین فعال زیر کل ۱۰ باشد (سرفصل بی‌تغییر حساب‌های قدیمی دوباره سنجیده نمی‌شود)
-      const ledgerAccountId = data.accountId !== undefined && (data.accountId || null) !== (existing.accountId || null)
-        ? await requireBankLedgerAccount(tx, data.accountId)
-        : undefined;
+      // v10.0.254 (TD-969): سرفصل معین پس از نخستین گردش ثابت است (422 `BANK_ACCOUNT_LEDGER_LOCKED`)
+      const ledgerChanges = data.accountId !== undefined && (data.accountId || null) !== (existing.accountId || null);
+      if (ledgerChanges) await assertBankLedgerChangeAllowed(tx, existing, data.accountId || null);
+      const ledgerAccountId = ledgerChanges ? await requireBankLedgerAccount(tx, data.accountId) : undefined;
       const newCode = data.code?.trim();
       if (newCode && newCode.toLowerCase() !== String(existing.code || '').trim().toLowerCase()) {
         await assignTreasuryAccountCode(tx, (data.type || existing.type) as TreasuryAccountType, newCode, id);
@@ -642,7 +643,7 @@ export class BankAccountService {
       await voidBankOpeningVouchers(tx, existing, user);
       await tx.update(bankAccounts).set({ isDeleted: 1 }).where(eq(bankAccounts.id, id));
       // v9.0.40 (TD-447، ت۵): فرایند در جریان حساب حذف‌شده در همان تراکنش بسته می‌شود
-      await terminateOpenWorkflows(tx, {
+      await terminateEntityWorkflows(tx, {
         entityType: 'bank_account', entityId: id, actionKey: 'terminate', actionTitle: 'بستن فرایند با حذف حساب خزانه', comment: 'حذف حساب خزانه',
       });
       return { success: true };
