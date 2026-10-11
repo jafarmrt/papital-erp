@@ -3,6 +3,8 @@ import { X, RefreshCw, ArrowDownRight, ArrowUpRight, Download, Search, Layers, S
 import * as xlsx from 'xlsx';
 import { formatPersianNumber, formatPersianDate, errorMessageOf } from '../utils';
 import { kardexDocumentTypeLabel } from '../lib/documents/documentTypeTitles';
+import { warehouseLabel } from '../lib/inventory/warehouseLabel';
+import { useWarehousesQuery } from '../hooks/queries/useSettingsQueries';
 import { useRialDisplay } from '../hooks/useAppCurrency';
 import { useItemKardexQuery } from '../hooks/queries/useTransactionQueries';
 import { runningKardexEntryLabel, type RunningKardexEntry } from '../lib/transactions/runningKardex';
@@ -19,6 +21,7 @@ const NO_ENTRIES: RunningKardexEntry[] = [];
 
 export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningKardexModalProps) {
   const rial = useRialDisplay();
+  const { data: warehouses = [] } = useWarehousesQuery();
   const [search, setSearch] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [filterType, setFilterType] = useState<'all' | 'in' | 'out'>('all');
@@ -39,7 +42,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
         const s = search.trim().toLowerCase();
         const matchRef = String(entry.documentRef || '').toLowerCase().includes(s);
         const matchNotes = String(entry.notes || '').toLowerCase().includes(s);
-        const matchDocType = (String(entry.documentType || '').toLowerCase().includes(s) || kardexDocumentTypeLabel(entry.documentType).includes(s));
+        const matchDocType = (String(entry.documentType || '').toLowerCase().includes(s) || kardexDocumentTypeLabel(entry.documentType, entry.documentRef).includes(s));
         const matchUser = String(entry.createdBy || '').toLowerCase().includes(s);
         if (!matchRef && !matchNotes && !matchDocType && !matchUser) return false;
       }
@@ -66,13 +69,13 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
         'واحد': data.item?.unit || '',
         'قیمت واحد (ریال)': e.unitPrice,
         'مبلغ کل (ریال)': e.totalAmount,
-        'انبار / موقعیت': e.location,
+        'انبار / موقعیت': warehouseLabel(e.location, warehouses),
         'مانده در این انبار': e.runningLocationStock,
         'مانده کل موجودی': e.runningGlobalStock ?? e.runningBalance,
         'میانگین موزون بها (ریال)': e.runningWac,
         'ارزش کل مانده (ریال)': e.runningTotalValue,
         'شماره سند/عطف': e.documentRef,
-        'نوع سند': kardexDocumentTypeLabel(e.documentType),
+        'نوع سند': kardexDocumentTypeLabel(e.documentType, e.documentRef),
         'وضعیت': runningKardexEntryLabel(e),
         'توضیحات': e.notes,
         'کاربر': e.createdBy
@@ -255,7 +258,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                       >
                         <option value="all">تمام انبارها</option>
                         {uniqueLocations.map(loc => (
-                          <option key={loc} value={loc}>{loc}</option>
+                          <option key={loc} value={loc}>{warehouseLabel(loc, warehouses)}</option>
                         ))}
                       </select>
                     </div>
@@ -325,7 +328,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                             </td>
                             <td className="p-3 text-center">
                               <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-mono text-[11px]">
-                                {entry.location || 'اصلی'}
+                                {warehouseLabel(entry.location, warehouses)}
                               </span>
                             </td>
                             <td className="p-3 text-center font-mono font-medium text-slate-700">
@@ -342,7 +345,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                             </td>
                             <td className="p-3">
                               <div className="font-mono text-slate-800 font-medium">{entry.documentRef || '-'}</div>
-                              <div className="text-[10px] text-slate-400">{kardexDocumentTypeLabel(entry.documentType)}</div>
+                              <div className="text-[10px] text-slate-400">{kardexDocumentTypeLabel(entry.documentType, entry.documentRef)}</div>
                               {label && <span className="inline-block mt-0.5 bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-bold">{label}</span>}
                             </td>
                             <td className="p-3">

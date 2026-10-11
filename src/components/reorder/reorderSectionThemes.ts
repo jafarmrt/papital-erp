@@ -66,7 +66,7 @@ export const MATERIALS_THEME: ReorderSectionTheme = {
   checkedIcon: 'text-amber-600',
   nameHeader: 'نام ماده اولیه',
   deficitHeader: 'میزان کسری',
-  costHeader: 'میانگین بهای خرید',
+  costHeader: 'میانگین موزون بها',
   valueHeader: 'برآورد ارزش کسری',
   actionHeader: 'عملیات تامین',
   rowHover: 'hover:bg-amber-50/30',
