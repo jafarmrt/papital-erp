@@ -45,7 +45,7 @@ export class TreasuryTransactionService {
 
   /**
    * V1.8.0: انتخاب طرف حساب متقابل — منطق مشترک بین ثبت و پیش‌نمایش سند
-   * purpose برای پرسنل: 'settlement' (تسویه حقوق → 3201) | 'advance' (مساعده → 1301)
+   * purpose برای پرسنل: 'settlement' (تسویه حقوق → 3201) | 'advance' (مساعده → 1301) | 'deductions' (واریز کسورات → 3205)
    * v9.0.82 (TD-507، ت۴ الف): «متفرقه» و «سایر» پرسنل سرفصلی را می‌گیرند که کاربر انتخاب کرده است (`contraAccountId`)؛
    * پیش‌تر «متفرقه» به دریافتنی تجاری و «سایر» به حقوق پرداختنی می‌رفت.
    */
@@ -74,6 +74,10 @@ export class TreasuryTransactionService {
       if (purpose === 'advance') {
         account = await AccountMappingService.getEmployeeAdvanceAccount(tx);
         conceptLabel = 'مساعده و وام پرسنل';
+      } else if (purpose === 'deductions') {
+        // v10.0.255 (TD-952، ت۵ الف): واریز کسورات فیش با تفصیلی پرسنل، همان حسابی که فیش بستانکار می‌کند
+        account = await AccountMappingService.getEmployeeDeductionsPayableAccount(tx);
+        conceptLabel = 'سایر کسورات حقوق پرداختنی';
       } else {
         account = await AccountMappingService.getWagesPayableAccount(tx);
         conceptLabel = 'حقوق و دستمزد پرداختنی';
@@ -90,6 +94,8 @@ export class TreasuryTransactionService {
       const allAccs = await orm.select().from(accounts).where(eq(accounts.isDeleted, 0));
       const code = purpose === 'advance' && partyType === 'personnel'
         ? (await AccountMappingService.getMappings(tx)).employeeAdvanceAccountCode
+        : purpose === 'deductions' && partyType === 'personnel'
+        ? (await AccountMappingService.getMappings(tx)).employeeDeductionsPayableAccountCode
         : (partyType === 'customer' ? (await AccountMappingService.getMappings(tx)).tradeReceivablesAccountCode
           : partyType === 'supplier' ? (await AccountMappingService.getMappings(tx)).tradePayablesAccountCode
             : partyType === 'personnel' ? (await AccountMappingService.getMappings(tx)).wagesPayableAccountCode : '');
@@ -221,7 +227,7 @@ export class TreasuryTransactionService {
     /** v8.0.118 (TD-409): کاربر مجوز «ثبت خزانه و چک بدون سند حسابداری» را دارد (روت می‌سنجد، نه بدنه درخواست) */
     allowNoVoucher?: boolean;
     attachments?: unknown[];
-    // V1.8.0: انگیزه پرداخت به پرسنل — 'settlement' (تسویه حقوق) | 'advance' (مساعده) | 'other' (v9.0.82)
+    // V1.8.0: انگیزه پرداخت به پرسنل — 'settlement' (تسویه حقوق) | 'advance' (مساعده) | 'deductions' (واریز کسورات، v10.0.255) | 'other' (v9.0.82)
     purpose?: string;
     /** v9.0.82 (TD-507): سرفصل طرف مقابلی که کاربر برای «متفرقه» و «سایر» پرسنل انتخاب کرده است */
     contraAccountId?: number | null;

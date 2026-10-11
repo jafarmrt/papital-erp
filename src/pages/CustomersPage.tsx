@@ -13,6 +13,8 @@ import { useCRMData } from '../hooks/useCRMData';
 import { useCustomersQuery, useSaveCustomerMutation, useDeleteCustomerMutation } from '../hooks/queries';
 import { customerSaveBody } from '../lib/customers/customerVersion';
 import { customerAccountCardUrl } from '../lib/customers/customerAccountCard';
+import { partyTemporaryRowsOf } from '../lib/accounting/partyTemporaryRows';
+import { PartyTemporaryRowsPanel } from '../components/accounting/reports/PartyTemporaryRowsPanel';
 import { useQueryClient } from '@tanstack/react-query';
 import { QUERY_KEYS } from '../lib/queryKeys';
 import { formatPersianPhone, normalizePhoneNumber, validateIranianPhoneNumber, formatPersianDate, formatPersianNumber } from '../utils';
@@ -672,7 +674,7 @@ export default function CustomersPage({ user }: { user: User }) {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
                   <span>در حال محاسبه تراز و بارگذاری اسناد حسابداری...</span>
                 </div>
-              ) : ledgerData && ledgerData.items && ledgerData.items.length > 0 ? (
+              ) : ledgerData && ((ledgerData.items?.length ?? 0) > 0 || partyTemporaryRowsOf(ledgerData).length > 0) ? (
                 <>
                   {/* Balance Summary Header Cards */}
                   <div className="grid grid-cols-3 gap-3">
@@ -735,6 +737,7 @@ export default function CustomersPage({ user }: { user: User }) {
                       </tbody>
                     </table>
                   </div>
+                  <PartyTemporaryRowsPanel rows={ledgerData.temporaryRows} formatAmount={rial.number} />
                 </>
               ) : (
                 <div className="p-10 text-center text-slate-500 border border-dashed border-slate-200 rounded-xl">

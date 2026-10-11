@@ -412,6 +412,8 @@ export interface DetailedPartyLedgerResult {
   startDate?: string | null;
   endDate?: string | null;
   items: DetailedPartyLedgerItem[];
+  /** v10.0.255 (TD-915 / TD-924، ت۵ الف): ردیف‌های حساب موقت طرف حساب؛ در مانده و جمع گردش بالا نیستند */
+  temporaryRows?: import('../lib/accounting/partyTemporaryRows').PartyTemporaryRows;
 }
 
 export interface FinancialSummaryStats {

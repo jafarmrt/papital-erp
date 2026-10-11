@@ -1,10 +1,11 @@
-import { and, asc, eq, inArray, isNull, notInArray, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { accounts, journalVoucherItems, journalVouchers, personnel, pieceworkLogs, pieceworkPayrolls } from '../../db/schema.js';
 import { ConflictError } from '../../errors/customErrors.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { VOUCHER_BALANCE_TOLERANCE } from '../../lib/voucherBalance.js';
 import { formatPersianPrice, toPersianDigits } from '../../utils/persianNumber.js';
+import { permanentAccountCondition } from '../accounting/partyTemporaryRows.js';
 import { voucherItemCurrencySql } from '../accounting/voucherItemAmount.js';
 import { workLogFreeOfLivePayroll } from '../piecework/workLogPayrollLink.js';
 
@@ -18,7 +19,6 @@ import { workLogFreeOfLivePayroll } from '../piecework/workLogPayrollLink.js';
 
 /** فیش زنده‌ای که هنوز گام بعدی دارد (پیش‌نویس، تأییدشده، پرداخت بخشی)؛ فیش پرداخت‌شده یا حذف‌شده مانع نیست */
 export const OPEN_PAYROLL_STATUSES = ['draft', 'approved', 'partially_paid'] as const;
-const TEMPORARY_ACCOUNT_TYPES = ['revenue', 'expense', 'cost_of_sales'];
 const LISTED = 5;
 
 type Personnel = typeof personnel.$inferSelect;
@@ -64,7 +64,7 @@ export async function findPersonnelDeleteBlockers(person: Personnel, db: DbExecu
     .innerJoin(accounts, eq(accounts.id, journalVoucherItems.accountId))
     .where(and(
       eq(journalVouchers.isDeleted, 0), eq(journalVoucherItems.isDeleted, 0), inArray(journalVouchers.status, ['approved', 'permanent']),
-      notInArray(accounts.accountType, TEMPORARY_ACCOUNT_TYPES), rows,
+      permanentAccountCondition(), rows,
     ))
     .groupBy(voucherItemCurrencySql);
   const balances = balanceRows

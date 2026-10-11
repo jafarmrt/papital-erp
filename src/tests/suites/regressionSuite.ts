@@ -10980,5 +10980,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runTreasuryChequeA5Tests } = await import('../regression/treasuryChequeA5Tests.js');
   results.push(...await runTreasuryChequeA5Tests(shouldRun));
 
+  // Phase 3 lane L1, package A6 (v10.0.255): party balances on permanent accounts only, deductions remitted per personnel
+  const { runPartyPermanentA6Tests } = await import('../regression/partyPermanentA6Tests.js');
+  results.push(...await runPartyPermanentA6Tests(shouldRun));
+
   return results;
 }
