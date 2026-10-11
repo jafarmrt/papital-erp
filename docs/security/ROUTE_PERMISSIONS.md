@@ -290,7 +290,7 @@
 | GET | `/api/piecework/payrolls/:id/payments` | piecework.payroll \| piecework.pay \| personnel.manage \| accounting.treasury |
 | POST | `/api/piecework/payrolls/:id/payments/:transactionId/void` | piecework.pay |
 | POST | `/api/piecework/payrolls/:id/register-payment` | piecework.pay |
-| PUT | `/api/piecework/payrolls/:id/status` | piecework.payroll |
+| PUT | `/api/piecework/payrolls/:id/status` | piecework.payroll \| piecework.payroll_approve |
 | POST | `/api/piecework/payrolls/:id/sync-voucher` | piecework.payroll |
 | POST | `/api/piecework/payrolls/generate` | piecework.payroll |
 | GET | `/api/piecework/payrolls/mine` | login-only |

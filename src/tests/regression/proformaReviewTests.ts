@@ -220,7 +220,7 @@ export async function runProformaReviewTests(shouldRun: ShouldRun): Promise<Test
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], () => Promise<string>]> = [
     ['reg_proforma_reject_to_draft_td_1137', 'v10.0.85: a rejected sales proforma returns to draft and stops reserving (TD-1137)', ['td1137'], rejectedProformaToDraft],
-    ['reg_proforma_resend_reserves_td_1204', 'v10.0.191: a rejected proforma resent for review is a proforma again and reserves (TD-1204)', ['td1204'], resentProformaReservesAgain],
+    ['reg_proforma_resend_reserves_td_1204', 'v10.0.195: a rejected proforma resent for review is a proforma again and reserves (TD-1204)', ['td1204'], resentProformaReservesAgain],
     ['reg_document_locked_in_review_td_1138', 'v10.0.86: a document in a workflow review step is not edited (TD-1138)', ['td1138'], documentLockedInReview],
     ['reg_shortage_warehouse_name_td_1199', 'v10.0.114: a stock shortage names the warehouse by its name, not its code (TD-1199)', ['td1199'], shortageNamesWarehouse],
     ['reg_proforma_stock_warning_td_1138', 'v10.0.86: a saved proforma above the sellable stock gets a warning per item (TD-1138)', ['td1138'], proformaStockWarning],
