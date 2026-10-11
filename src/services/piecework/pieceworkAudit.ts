@@ -58,6 +58,9 @@ export function payrollSnapshot(row: PayrollRow): Snapshot {
     netPayable: text(row.netPayable),
     paidAmount: text(row.paidAmount),
     notes: row.notes ?? '',
+    // v10.0.199 (TD-1085): فیش پیش‌پرداخت و دلیلش در ممیزی
+    isPrepayment: row.isPrepayment ?? 0,
+    prepaymentReason: row.prepaymentReason ?? '',
   };
 }
 
@@ -130,7 +133,7 @@ export async function auditPayrollIssued(
     action: 'CREATE',
     entity: PAYROLL_AUDIT_ENTITY,
     entityId: row.id,
-    description: `صدور فیش حقوقی ${row.payrollNumber} برای ${info.personnelName} با خالص ${amount(row.netPayable)} (سند حسابداری: ${info.voucher ? toPersianDigits(info.voucher.voucherNumber) : 'بدون سند'})`,
+    description: `صدور ${row.isPrepayment === 1 ? `فیش پیش‌پرداخت ${row.payrollNumber} (دلیل: ${row.prepaymentReason})` : `فیش حقوقی ${row.payrollNumber}`} برای ${info.personnelName} با خالص ${amount(row.netPayable)} (سند حسابداری: ${info.voucher ? toPersianDigits(info.voucher.voucherNumber) : 'بدون سند'})`,
     details: { after: payrollSnapshot(row), workLogIds: info.logIds, voucherId: info.voucher?.id ?? null, voucherNumber: info.voucher?.voucherNumber ?? null },
   });
 }
@@ -149,7 +152,10 @@ export async function auditPayrollUpdated(
     entityId: after.id,
     description: statusChanged
       ? `تغییر وضعیت فیش حقوقی ${after.payrollNumber} از «${payrollStatusLabel(before.status)}» به «${payrollStatusLabel(after.status)}»`
-      : `ویرایش یادداشت فیش حقوقی ${after.payrollNumber}`,
+      : Object.keys(diff.changes).every(key => key === 'notes')
+        ? `ویرایش یادداشت فیش حقوقی ${after.payrollNumber}`
+        // v10.0.200 (TD-1242): ویرایش مبلغ‌های فیش پیش‌نویس و سند دوباره‌ساخته
+        : `ویرایش فیش پیش‌نویس ${after.payrollNumber} با خالص ${amount(after.netPayable)}`,
     details: { ...diff, voucherId: voucher?.id ?? null, voucherNumber: voucher?.voucherNumber ?? null },
   });
 }

@@ -16,6 +16,7 @@ import { User } from '../../types';
 import { PersonnelFormData } from '../../hooks/usePersonnel';
 import { extractDateString, getIranianBankFromCard, getIranianBankFromSheba, isoToJalaliDate } from '../../utils';
 import { NationalIdInput, IranianPhoneInput, BankCardInput, ShebaInput } from '../common';
+import { JalaliDateInput } from '../common/JalaliDateInput';
 
 interface PersonnelFormModalProps {
   isOpen: boolean;
@@ -318,6 +319,18 @@ export function PersonnelFormModal({
                   onChange={(e) => setFormData((prev) => ({ ...prev, referralSource: e.target.value }))}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
                 />
+              </div>
+
+              <div>
+                {/* v10.0.199 (TD-1086): حقوق ثابت از این روز آغاز می‌شود؛ ماه نخست روزشمار */}
+                <label className="block text-xs font-bold text-slate-700 mb-1">تاریخ آغاز همکاری</label>
+                <JalaliDateInput
+                  value={formData.startDate}
+                  onChange={(iso) => setFormData((prev) => ({ ...prev, startDate: iso }))}
+                  placeholder="انتخاب تاریخ آغاز همکاری"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 font-mono"
+                />
+                <p className="mt-1 text-[10px] text-slate-500">حقوق ثابت از این روز داده می‌شود؛ خالی یعنی از آغاز دوره هر فیش.</p>
               </div>
 
               <div>
