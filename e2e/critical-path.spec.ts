@@ -33,7 +33,7 @@ test('login, issue a final sales invoice and see its journal voucher', async ({ 
   await page.getByRole('button', { name: 'ثبت و صدور فاکتور' }).click();
   const response = await created;
   expect(response.status()).toBe(200);
-  await expect(page.getByText('فاکتور و سند حسابداری دوبل آن با موفقیت ثبت شدند')).toBeVisible();
+  await expect(page.getByText('فاکتور و سند حسابداری آن با موفقیت ثبت شدند')).toBeVisible();
   await expect(page.getByText('صورتحساب فروش کالا و خدمات')).toBeVisible();
 
   // ۳. سند حسابداری همان فاکتور در فهرست اسناد دوبل

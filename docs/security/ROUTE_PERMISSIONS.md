@@ -63,6 +63,7 @@
 | GET | `/api/accounting/treasury` | accounting.treasury \| accounting.reports \| accounting.view |
 | POST | `/api/accounting/treasury` | accounting.treasury |
 | PUT | `/api/accounting/treasury/:id/document` | accounting.treasury |
+| GET | `/api/accounting/treasury/:id/document-options` | accounting.treasury |
 | POST | `/api/accounting/treasury/:id/void` | accounting.treasury |
 | GET | `/api/accounting/treasury/contra-accounts` | accounting.treasury \| accounting.cheques |
 | POST | `/api/accounting/treasury/preview-voucher` | accounting.treasury |
@@ -135,6 +136,7 @@
 | GET | `/api/documents/:id` | documents.view \| documents.create \| documents.edit \| workflow.view \| audit.view |
 | PUT | `/api/documents/:id` | documents.edit |
 | PUT | `/api/documents/:id/finalize` | documents.finalize \| warehouse.in \| warehouse.out |
+| GET | `/api/documents/:id/line-stock` | documents.view \| documents.create \| documents.edit \| workflow.view \| audit.view |
 | PUT | `/api/documents/:id/notes` | documents.edit |
 | GET | `/api/documents/audit-items` | audit.view |
 | GET | `/api/documents/by-ref/:ref` | documents.view \| documents.create \| documents.edit \| workflow.view \| audit.view |
@@ -212,8 +214,6 @@
 | GET | `/api/inventory/integrity-audit` | warehouse.view \| inventory.reconcile \| audit.view |
 | GET | `/api/inventory/item-kardex/:itemId` | warehouse.view |
 | POST | `/api/inventory/kardex-initial-backfill` | inventory.reconcile |
-| GET | `/api/inventory/negative-stock-policy` | warehouse.view \| inventory.reconcile \| audit.view |
-| PUT | `/api/inventory/negative-stock-policy` | inventory.reconcile |
 | POST | `/api/inventory/rebuild-from-ledger` | inventory.reconcile |
 | GET | `/api/inventory/report` | warehouse.view \| inventory.reconcile \| audit.view |
 | GET | `/api/inventory/reserved-items` | products.view \| reports.view \| warehouse.view \| warehouse.in \| documents.view \| documents.create |

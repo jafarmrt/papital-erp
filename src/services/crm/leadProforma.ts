@@ -11,13 +11,13 @@ import { crmTodayActivityDates } from '../../lib/storageDate.js';
 
 type Lead = typeof crmLeads.$inferSelect;
 
-/** v10.0.35 (TD-932): پرونده بسته («فروش موفق» یا «از دست رفته»، در مرحله یا وضعیت) */
+/** v10.0.176 (TD-932): پرونده بسته («فروش موفق» یا «از دست رفته»، در مرحله یا وضعیت) */
 export function isClosedLead(lead: Pick<Lead, 'stage' | 'status'>): boolean {
   return ['won', 'lost'].includes(String(lead.stage)) || ['won', 'lost'].includes(String(lead.status));
 }
 
 /**
- * v10.0.35 (TD-932، تصمیم ت۱۴): پیش‌فاکتور به پرونده بسته وصل نمی‌شود، چون پیوند پرونده را به «پیش‌فاکتور و پیشنهاد»
+ * v10.0.176 (TD-932، تصمیم ت۱۴): پیش‌فاکتور به پرونده بسته وصل نمی‌شود، چون پیوند پرونده را به «پیش‌فاکتور و پیشنهاد»
  * برمی‌گرداند؛ پیش‌تر پرونده «فروش موفق» یا «از دست رفته» با یک پیش‌فاکتور دوباره باز می‌شد.
  */
 function assertLeadOpenForProforma(lead: Lead): void {

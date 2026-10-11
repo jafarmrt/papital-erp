@@ -3,7 +3,7 @@ import { Edit3, GitBranch, X } from 'lucide-react';
 import { cn, formatPersianCode, formatPersianDate, formatPersianNumber } from '../../../utils';
 import { WorkflowStepperWidget } from '../../workflow/WorkflowStepperWidget';
 import type { InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
-import { openProformasPageCount } from '../../../lib/invoices/openProformas';
+import { openProformaBadge, openProformasPageCount } from '../../../lib/invoices/openProformas';
 
 /**
  * صفحه صدور فاکتور: جدول «پیش فاکتورهای باز» و پنجره گردش‌کار پیش‌فاکتور — منتقل‌شده بدون تغییر از CreateInvoicePage.
@@ -42,7 +42,14 @@ export function OpenProformasPanel({ proformas, total, page, onPageChange, editi
               <tbody className="divide-y text-sm">
                 {proformas.map((p, pIdx) => (
                   <tr key={`proforma-${p.id || pIdx}-${pIdx}`} className={cn("hover:bg-slate-50", editingDocId === p.id && "bg-amber-50/60 font-bold")}>
-                    <td className="p-3 font-mono font-bold">{p.ref_number}</td>
+                    <td className="p-3 font-mono font-bold">
+                      {p.ref_number}
+                      {openProformaBadge(p) && (
+                        <span className={cn('mr-2 px-2 py-0.5 rounded-md text-[11px] font-sans', p.workflowRejected ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-slate-100 text-slate-600 border border-slate-200')}>
+                          {openProformaBadge(p)}
+                        </span>
+                      )}
+                    </td>
                     <td className="p-3 font-mono">{formatPersianDate(p.date)}</td>
                     <td className="p-3">{p.buyer_name || '-'}</td>
                     <td className="p-3 text-center">

@@ -14,7 +14,7 @@ export async function runLeadProformaLinkGuardTests(shouldRun: (id: string, ...e
   const id = 'reg_lead_proforma_link_guard_td_932';
   if (!shouldRun(id, 'td932', 'crm', 'proforma', 'documents', 'package9')) return results;
 
-  const name = 'v10.0.35: a document is linked to a sales lead only with crm.manage (403, nothing written), and a proforma never links to or reopens a won or lost lead (422 CRM_LEAD_CLOSED) on create or edit (TD-932)';
+  const name = 'v10.0.176: a document is linked to a sales lead only with crm.manage (403, nothing written), and a proforma never links to or reopens a won or lost lead (422 CRM_LEAD_CLOSED) on create or edit (TD-932)';
   const tStart = Date.now();
   const tag = `TD932-${String(Date.now()).slice(-6)}`;
   const leadIds: number[] = [];

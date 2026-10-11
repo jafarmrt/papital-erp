@@ -330,7 +330,7 @@ router.get('/crm/leads', authorizePermission('crm.view', 'customers.view', 'cust
 }));
 
 // GET /api/crm/leads/:id - Single lead detail with activities
-// v10.0.37 (OBS-R2-29): همان مجوزهای فهرست پرونده‌ها؛ پیش‌تر فقط `crm.view` و خواننده مشتریان کشوی پرونده را ۴۰۳ می‌گرفت
+// v10.0.178 (OBS-R2-29): همان مجوزهای فهرست پرونده‌ها؛ پیش‌تر فقط `crm.view` و خواننده مشتریان کشوی پرونده را ۴۰۳ می‌گرفت
 router.get('/crm/leads/:id', authorizePermission('crm.view', 'customers.view', 'customers.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const [lead] = await orm.select().from(crmLeads).where(and(eq(crmLeads.id, id), eq(crmLeads.isDeleted, 0)));
@@ -468,7 +468,7 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
   const currentUser = req.user;
   const authorName = currentUser?.full_name || currentUser?.username || 'فروشنده';
 
-  // v10.0.38 (OBS-R2-33): ویرایش زیر قفل ردیف پرونده و در یک تراکنش با یادداشت تغییر مرحله و ردیف ممیزی پیش و پس؛
+  // v10.0.179 (OBS-R2-33): ویرایش زیر قفل ردیف پرونده و در یک تراکنش با یادداشت تغییر مرحله و ردیف ممیزی پیش و پس؛
   // پیش‌تر بی قفل و تراکنش، و ممیزی بی پیش و پس
   const { existing, updated } = await orm.transaction(async (tx) => {
   const [existing] = await tx.select().from(crmLeads).where(and(eq(crmLeads.id, id), eq(crmLeads.isDeleted, 0))).for('update');
@@ -603,7 +603,7 @@ router.post('/crm/leads/:id/convert-to-customer', authorizePermission('crm.manag
   const currentUser = req.user;
   const authorName = currentUser?.full_name || currentUser?.username || 'فروشنده';
 
-  // v10.0.38 (OBS-R2-33): تبدیل زیر قفل ردیف پرونده و در یک تراکنش با یادداشت و ردیف ممیزی پیش و پس؛ پرونده بسته
+  // v10.0.179 (OBS-R2-33): تبدیل زیر قفل ردیف پرونده و در یک تراکنش با یادداشت و ردیف ممیزی پیش و پس؛ پرونده بسته
   // («موفق» یا «از دست رفته») مرحله و وضعیتش را نگه می‌دارد. پیش‌تر پرونده از دست رفته به «پیش‌فاکتور و پیشنهاد» برمی‌گشت
   // و تبدیل ممیزی نداشت
   const { updated, resolvedCustomerId } = await orm.transaction(async (tx) => {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { ShieldCheck, AlertTriangle } from 'lucide-react';
 import { rialDisplayOf } from '../../../lib/rialDisplay';
+import { formatPersianNumber } from '../../../utils';
 
 interface TreasuryHealthBannerProps {
   totalLedgerBalance: number;
@@ -47,8 +48,8 @@ export const TreasuryHealthBanner: React.FC<TreasuryHealthBannerProps> = React.m
             <div className="flex items-center gap-2">
               <h4 className="text-sm font-bold text-slate-900 dark:text-white">
                 {isHealthy
-                  ? 'وضعیت سلامت ریالی: انطباق ۱۰۰٪ کامل خزانه‌داری با دفاتر اسناد دوبل'
-                  : `هشدار مغایرت ریالی: ${discrepantAccountsCount} حساب نیازمند بررسی و تطبیق`}
+                  ? 'وضعیت سلامت ریالی: انطباق ۱۰۰٪ کامل خزانه‌داری با دفاتر حسابداری'
+                  : `هشدار مغایرت ریالی: ${formatPersianNumber(discrepantAccountsCount)} حساب نیازمند بررسی و تطبیق`}
               </h4>
               <span
                 className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
@@ -57,20 +58,20 @@ export const TreasuryHealthBanner: React.FC<TreasuryHealthBannerProps> = React.m
                     : 'bg-amber-200/60 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300'
                 }`}
               >
-                {syncedAccountsCount} از {totalAccountsCount} حساب کاملاً همگام
+                {formatPersianNumber(syncedAccountsCount)} از {formatPersianNumber(totalAccountsCount)} حساب کاملاً همگام
               </span>
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
               {isHealthy
-                ? 'تمامی مانده‌های صندوق‌ها و بانک‌ها مستقیماً با مجموع گردش اسناد دوبل تاییدشده تراز هستند.'
-                : 'مغایرت ممکن است به دلیل عدم ثبت سند دوبل برای برخی دریافت/پرداخت‌ها یا مانده اولیه ثبت‌نشده در سند افتتاحیه باشد.'}
+                ? 'تمامی مانده‌های صندوق‌ها و بانک‌ها مستقیماً با مجموع گردش اسناد حسابداری تاییدشده تراز هستند.'
+                : 'مغایرت معمولاً از این‌هاست: سند حسابداری دریافت یا پرداخت هنوز پیش‌نویس است و تا تأیید در دفاتر شمرده نمی‌شود؛ تراکنشی بی سند حسابداری ثبت شده؛ یا مانده اولیه در سند افتتاحیه نیامده است.'}
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-4 text-xs font-mono">
           <div className="bg-white/80 dark:bg-slate-800/80 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700">
-            <span className="text-slate-400 block text-[10px]">مجموع مانده دفاتر دوبل:</span>
+            <span className="text-slate-400 block text-[10px]">مجموع مانده دفاتر حسابداری:</span>
             <span className="font-bold text-slate-800 dark:text-slate-200">
               {rial.amount(totalLedgerBalance)}
             </span>

@@ -6,6 +6,7 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm, pool } from '../../db/drizzle.js';
 import { activityLogs, dailyWorkLogs, notifications, productionProjects, roles, users } from '../../db/schema.js';
 import { invalidateRoleCache } from '../../lib/memoryCache.js';
+import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 
 type ShouldRun = (id: string, ...extra: string[]) => boolean;
 
@@ -104,7 +105,7 @@ export async function makeCtx(): Promise<Ctx> {
         await orm.delete(dailyWorkLogs).where(inArray(dailyWorkLogs.id, logIds)).catch(() => undefined);
       }
       if (userIds.length > 0) await orm.update(users).set({ isDeleted: 1 }).where(inArray(users.id, userIds)).catch(() => undefined);
-      if (roleIds.length > 0) await orm.delete(roles).where(inArray(roles.id, roleIds)).catch(() => undefined);
+      if (roleIds.length > 0) await deleteTestRoles(inArray(roles.id, roleIds)).catch(() => undefined);
     },
   };
   return ctx;
@@ -174,15 +175,16 @@ async function privateMentionCase(ctx: Ctx): Promise<string> {
   const notified = async () => (await orm.select().from(notifications).where(eq(notifications.userId, reader.id))).length;
   const body = { start_time: '08:00', end_time: '16:00', work_mode: 'onsite', content: 'p13 mention', mentions: [reader.id] };
 
-  for (const visibility of ['private', 'managers']) {
+  // v10.0.137 (TD-1225): logs of one author on one day take separate times
+  for (const [visibility, start_time, end_time] of [['private', '08:00', '10:00'], ['managers', '10:00', '12:00']]) {
     const before = await notified();
-    const res = await ctx.send(author, 'post', '/api/daily-logs', { ...body, title: `p13 ${visibility} title`, visibility });
+    const res = await ctx.send(author, 'post', '/api/daily-logs', { ...body, title: `p13 ${visibility} title`, visibility, start_time, end_time });
     if (res.status !== 200) wrong.push(`${visibility} log answered ${res.status}`);
     const after = await notified();
     if (after !== before) wrong.push(`${visibility} log notified the mentioned reader (${after - before})`);
   }
   const before = await notified();
-  const res = await ctx.send(author, 'post', '/api/daily-logs', { ...body, title: 'p13 mentioned title', visibility: 'mentioned_only' });
+  const res = await ctx.send(author, 'post', '/api/daily-logs', { ...body, title: 'p13 mentioned title', visibility: 'mentioned_only', start_time: '12:00', end_time: '14:00' });
   if (res.status !== 200) wrong.push(`mentioned_only log answered ${res.status}`);
   if (await notified() !== before + 1) wrong.push('mentioned_only log did not notify the mentioned reader');
   if (wrong.length > 0) throw new Error(wrong.join('; '));

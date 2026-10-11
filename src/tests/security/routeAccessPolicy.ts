@@ -6,6 +6,7 @@ import { roles, users, dailyWorkLogs, pendingMaterials, personnel, pieceworkTask
 import { money } from '../../lib/money.js';
 import { buildRouteGuardTable, formatGuards, type RouteGuardRow } from '../../lib/routeGuardTable.js';
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
+import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 
 /**
  * حوزه H نقشه راه V8 — امنیت و دسترسی. جدول «مسیر ← مجوز» از خود روترها ساخته و با سیاست زیر سنجیده می‌شود،
@@ -124,6 +125,12 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       const violations = routeAccessPolicyViolations(rows, catalogKeys);
       if (violations.length > 0) throw new Error(`${violations.length} violations: ${violations.join(' | ')}`);
       return `${rows.length} مسیر بی‌تخلف`;
+    }),
+    record('sec_writer_routes_validated_td_979', 'v10.0.35: every writer route reads its input through Zod; only reviewed body-less routes are listed (TD-979)', 'real_code', async () => {
+      const { writerRouteValidationViolations, WRITER_ROUTES_WITHOUT_BODY } = await import('./writerRouteValidation.js');
+      const violations = writerRouteValidationViolations(buildRouteGuardTable(app));
+      if (violations.length > 0) throw new Error(`${violations.length} writer routes without Zod: ${violations.join(' | ')}`);
+      return `${WRITER_ROUTES_WITHOUT_BODY.size} body-less routes listed`;
     }),
     record('sec_view_permission_cannot_mutate_td_298', 'area H: a view permission does not open BOM material allocation or workflow start (TD-298)', 'real_database', async () => {
       const viewer = await userWith(['warehouse.view', 'projects.view', 'workflow.view', 'products.view']);
@@ -405,7 +412,7 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
     }
   } finally {
     if (createdUserIds.length > 0) await orm.delete(users).where(inArray(users.id, createdUserIds)).catch(() => undefined);
-    if (createdRoleIds.length > 0) await orm.delete(roles).where(inArray(roles.id, createdRoleIds)).catch(() => undefined);
+    if (createdRoleIds.length > 0) await deleteTestRoles(inArray(roles.id, createdRoleIds)).catch(() => undefined);
   }
   return results;
 }

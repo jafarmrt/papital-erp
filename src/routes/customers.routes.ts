@@ -8,6 +8,7 @@ import { authorizePermission } from '../middleware/authorize.js';
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString, storageDateParam } from '../middleware/validate.js';
+import { customerBulkImportSchema } from './importRows.schemas.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { parsePagination, parsePickListLimit } from '../lib/pagination.js';
 import { CustomerService } from '../services/customer.service.js';
@@ -273,7 +274,7 @@ router.get('/customers/:id/documents', authorizePermission(...READ_PERMISSIONS.p
 }));
 
 // POST /api/customers/bulk-import - Bulk import and update counterparties from Excel
-router.post('/customers/bulk-import', authorizePermission('customers.manage'), asyncHandler(async (req, res) => {
+router.post('/customers/bulk-import', authorizePermission('customers.manage'), validate(customerBulkImportSchema), asyncHandler(async (req, res) => {
   const { rows = [], updateIfExists = true } = req.body;
 
   if (!Array.isArray(rows) || rows.length === 0) {
