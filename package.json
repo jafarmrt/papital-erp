@@ -1,7 +1,7 @@
 {
   "name": "workshop-erp-crm",
   "private": true,
-  "version": "10.0.261",
+  "version": "10.0.262",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -97,7 +97,7 @@
     "supertest": "^7.2.2",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
-    "typescript": "~5.8.2",
+    "typescript": "~6.0.3",
     "typescript-eslint": "^8.71.0",
     "vite": "^6.2.3",
     "vite-plugin-pwa": "1.3.0",
