@@ -569,16 +569,8 @@ export class VoucherSyncService {
       if (p) {
         matchedProjectName = p.title || p.projectCode;
       }
-    } else if (doc.notes) {
-      const matchProj = String(doc.notes).match(/پروژه\s*[:#]?\s*([A-Za-z0-9-_]+)/i);
-      if (matchProj && matchProj[1]) {
-        const [p] = await executor.select().from(productionProjects).where(and(eq(productionProjects.projectCode, matchProj[1].trim()), eq(productionProjects.isDeleted, 0)));
-        if (p) {
-          matchedProjectId = p.id;
-          matchedProjectName = p.title || p.projectCode;
-        }
-      }
     }
+    // v10.0.270 (OBS-R1-47): the project comes only from documents.project_id; a project code in the notes was read before
 
     // V10-1.1 & V5.0.17: fallback تاریخ ۱۰ کاراکتری ایمن
     const docDate = doc.date ? String(doc.date).slice(0, 10) : await businessTodayIsoDate();
@@ -806,16 +798,8 @@ export class VoucherSyncService {
       if (p) {
         matchedProjectName = p.title || p.projectCode;
       }
-    } else if (doc.notes) {
-      const matchProj = String(doc.notes).match(/پروژه\s*[:#]?\s*([A-Za-z0-9-_]+)/i);
-      if (matchProj && matchProj[1]) {
-        const [p] = await executor.select().from(productionProjects).where(and(eq(productionProjects.projectCode, matchProj[1].trim()), eq(productionProjects.isDeleted, 0)));
-        if (p) {
-          matchedProjectId = p.id;
-          matchedProjectName = p.title || p.projectCode;
-        }
-      }
     }
+    // v10.0.270 (OBS-R1-47): the project comes only from documents.project_id; a project code in the notes was read before
 
     let voucherType: JournalVoucher['voucherType'] = 'general';
     let voucherDescription = '';
@@ -1435,7 +1419,9 @@ export class VoucherSyncService {
 
     const createdVoucher = await VoucherService.createJournalVoucher({
       // V3.0.7 (TD-062): فال‌بک تاریخ از ساعت توافقی کسب‌وکار (نه UTC خام)
-      date: pay.endDate || await businessTodayIsoDate(),
+      // v10.0.273: the earlier of the period end and today, so an eidi or prepayment payslip issued before its period ends
+      // is never dated in the future
+      date: await payrollVoucherDate(pay.endDate),
       voucherType: 'payroll',
       status: 'draft',
       description: `ثبت هزینه و محاسبه حقوق و کارمزد ${pay.title} - پرسنل: ${pers?.fullName || 'پرسنل'} (${pay.payrollNumber})`,
@@ -1543,4 +1529,11 @@ export class VoucherSyncService {
     logger.info({ message: `[VoucherSync] Missing document vouchers: checked=${outcome.result.checked} created=${outcome.result.created} failed=${outcome.result.failed} review=${outcome.result.skippedForReview}` });
     return outcome.result;
   }
+}
+
+/** v10.0.273: a payslip voucher's date is the earlier of its period end and the business today (no period end: today) */
+async function payrollVoucherDate(endDate: string | null | undefined): Promise<string> {
+  const today = await businessTodayIsoDate();
+  const end = endDate ? String(endDate).slice(0, 10) : '';
+  return end && end < today ? end : today;
 }

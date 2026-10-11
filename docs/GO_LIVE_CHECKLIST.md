@@ -75,7 +75,7 @@ The installer performs: system deps (Node 22, PostgreSQL 16) → source → DB +
 | # | Action | Detail |
 |---|--------|--------|
 | 3.1 | Read setup token | `grep '^ERP_SETUP_TOKEN' .env` |
-| 3.2 | Run wizard over **HTTPS** | `https://erp.yourdomain.ir/setup?token=<ERP_SETUP_TOKEN>` → create chief-admin account + company settings. **Complete this before exposing the app to users.** |
+| 3.2 | Run wizard over **HTTPS** | `https://erp.yourdomain.ir/setup`, type `ERP_SETUP_TOKEN` into the form (never in the address) → create chief-admin account + company settings. **Complete this before exposing the app to users.** |
 | 3.3 | **Rotate the setup token immediately after setup** | `ERP_SETUP_TOKEN=$(openssl rand -hex 24)` → update `.env` → `sudo systemctl restart papital-erp` |
 | 3.4 | Login test through the public domain | Browser: HTTPS login succeeds; cookie `auth_token` present, `Secure` + `HttpOnly` flags set (DevTools → Application → Cookies) |
 

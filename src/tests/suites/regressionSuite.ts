@@ -10614,6 +10614,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 3 PR b (v9.0.159 on): fiscal-year closing and reopening (TD-545 ...)
   const { runFiscalClosingTests } = await import('../regression/fiscalClosingTests.js');
   results.push(...await runFiscalClosingTests(shouldRun));
+  const { runClosingPartyDetailTests } = await import('../regression/closingPartyDetailTests.js');
+  results.push(...await runClosingPartyDetailTests(shouldRun));
   const { runFiscalYearOrderTests } = await import('../regression/fiscalYearOrderTests.js');
   results.push(...await runFiscalYearOrderTests(shouldRun));
   const { runManualVoucherCurrencyTests } = await import('../regression/manualVoucherCurrencyTests.js');
@@ -10871,6 +10873,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runProjectEventTests(shouldRun));
   const { runProjectWipCostTests } = await import('../regression/projectWipCostTests.js');
   results.push(...await runProjectWipCostTests(shouldRun));
+  const { runProjectFromNotesTests } = await import('../regression/projectFromNotesTests.js');
+  results.push(...await runProjectFromNotesTests(shouldRun));
   const { runProjectClosedWorkTests } = await import('../regression/projectClosedWorkTests.js');
   results.push(...await runProjectClosedWorkTests(shouldRun));
   // Series 10 phase 3 lane L3 (v10.0.63+): gaps of the project screens (TD-1140..TD-1144)
@@ -10943,6 +10947,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runPayrollStatutoryTests(shouldRun));
   const { runPayrollEidiTests } = await import('../regression/payrollEidiTests.js');
   results.push(...await runPayrollEidiTests(shouldRun));
+  const { runPayrollVoucherDateTests } = await import('../regression/payrollVoucherDateTests.js');
+  results.push(...await runPayrollVoucherDateTests(shouldRun));
   const { runPurchaseWorkflowGuardTests } = await import('../regression/purchaseWorkflowGuardTests.js');
   results.push(...await runPurchaseWorkflowGuardTests(shouldRun));
   // Lane L1 guide findings (v10.0.123+): move a treasury row to another document
@@ -10994,6 +11000,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Phase 3 lane L1, package A7 (v10.0.259): payroll payment void event and audit, «my payslips» paid amount, personnel id on treasury rows
   const { runPayrollHygieneA7Tests } = await import('../regression/payrollHygieneA7Tests.js');
   results.push(...await runPayrollHygieneA7Tests(shouldRun));
+  // Phase 3 lane L1, package A8 (v10.0.262): treasury audit inside the write's transaction, no general account fallback
+  const { runTreasuryAuditA8Tests } = await import('../regression/treasuryAuditA8Tests.js');
+  results.push(...await runTreasuryAuditA8Tests(shouldRun));
 
   return results;
 }
