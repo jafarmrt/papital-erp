@@ -1,11 +1,11 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { documentItems, documents, projectBomAllocations } from '../../db/schema.js';
-import { PROJECT_ISSUE_DOCUMENT_TYPES } from '../../lib/projects/projectIssueTypes.js';
+import { PROJECT_ISSUE_DOCUMENT_TYPES } from '../../lib/transactions/projectIssueTypes.js';
 
 
 /**
- * v10.0.31 (TD-945، تصمیم ت۱۰ فاز ۵): مقدار هر کالا که تاکنون به پروژه داده شده، به واحد کالا: سطرهای زنده حواله و ضایعات
+ * v10.0.206 (TD-945، تصمیم ت۱۰ فاز ۵): مقدار هر کالا که تاکنون به پروژه داده شده، به واحد کالا: سطرهای زنده حواله و ضایعات
  * قطعی پروژه به‌علاوه تخصیص مواد باز یا مصرف‌شده. ثبت نهایی دوباره پروژه (پس از برداشتن ثبت نهایی) فقط نیاز باقی‌مانده را
  * رزرو می‌کند؛ پیش‌تر کل نیاز دوباره رزرو می‌شد و کالای صادرشده دوبار از موجودی آزاد کم می‌شد.
  */

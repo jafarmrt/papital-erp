@@ -7,7 +7,7 @@
 
 export type DataExportGroup =
   | 'people' | 'inventory' | 'documents' | 'customers' | 'dailyLogs' | 'projects' | 'procurement'
-  | 'accounting' | 'payroll' | 'workflow' | 'attachments' | 'settings';
+  | 'accounting' | 'payroll' | 'workflow' | 'attachments' | 'media' | 'settings';
 
 export const DATA_EXPORT_GROUP_LABELS: Readonly<Record<DataExportGroup, string>> = {
   people: 'کاربران، نقش‌ها و پرسنل',
@@ -21,6 +21,7 @@ export const DATA_EXPORT_GROUP_LABELS: Readonly<Record<DataExportGroup, string>>
   payroll: 'کارمزدی: کارها، نرخ‌ها، کارکردها و فیش‌ها',
   workflow: 'گردش کار و قاعده‌های رویداد',
   attachments: 'فهرست پیوست‌ها (بی خود فایل‌ها)',
+  media: 'فهرست کتابخانه تصاویر و فیلم‌ها (بی خود فایل‌ها)',
   settings: 'تنظیمات (بی کلیدهای محرمانه)',
 };
 
@@ -75,6 +76,8 @@ export const DATA_EXPORT_TABLES: ReadonlyArray<{ table: string; group: DataExpor
   { table: 'workflow_delegations', group: 'workflow' },
   { table: 'event_action_rules', group: 'workflow' },
   { table: 'file_attachments', group: 'attachments' },
+  { table: 'media_sections', group: 'media' },
+  { table: 'media_assets', group: 'media' },
   { table: 'app_settings', group: 'settings' },
 ];
 

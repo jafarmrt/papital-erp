@@ -326,7 +326,7 @@ export class ProjectService {
       if (!existing) {
         throw new NotFoundError('پروژه یافت نشد');
       }
-      // v10.0.24 (TD-922): سند زنده یا مانده ۱۴۰۲ هم حذف را رد می‌کند
+      // v10.0.172 (TD-922): سند زنده یا مانده ۱۴۰۲ هم حذف را رد می‌کند
       await assertProjectDeletable(tx, existing);
 
       await tx.update(productionProjects).set({ isDeleted: 1 }).where(eq(productionProjects.id, id));

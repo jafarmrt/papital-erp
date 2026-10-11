@@ -838,7 +838,7 @@ export class VoucherSyncService {
       const productCostNum = outCost.finished.round(4);
       const totalCost = fin(rawMatCostNum).add(productCostNum).round(4);
       if (!totalCost.isPositive()) return null;
-      // v10.0.27 (TD-948، تصمیم ت۴ ب فاز ۵): فقط حواله پروژه به کالای در جریان ساخت (۱۴۰۲) می‌رود؛ حواله بی پروژه هزینه
+      // v10.0.175 (TD-948، تصمیم ت۴ ب فاز ۵): فقط حواله پروژه به کالای در جریان ساخت (۱۴۰۲) می‌رود؛ حواله بی پروژه هزینه
       // «مصرف مواد بی پروژه» است. پیش‌تر بدهکار ۱۴۰۲ با تفصیلی «other» می‌ساخت که هیچ رسید تولیدی بستانکارش نمی‌کرد.
       const debitAcc = matchedProjectId
         ? wipAcc
@@ -1406,7 +1406,7 @@ export class VoucherSyncService {
     }, tx);
 
     if (!createdVoucher && isStrict) {
-      throw new ValidationError(`ثبت سند دوبل حسابداری برای فیش ${pay.payrollNumber} ناموفق بود.`);
+      throw new ValidationError(`ثبت سند حسابداری دوطرفه برای فیش ${pay.payrollNumber} ناموفق بود.`);
     }
 
     return createdVoucher;

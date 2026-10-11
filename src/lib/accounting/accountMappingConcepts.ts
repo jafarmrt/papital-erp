@@ -43,7 +43,7 @@ export const ACCOUNT_MAPPING_CONCEPTS = [
   { key: 'donatedGoodsIncomeAccountCode', label: 'درآمد کالای اهدایی', description: 'کالای رایگان رسید و فاکتور خرید که به میانگین موزون بها وارد انبار می‌شود', defaultCode: '5204', accountTypes: REVENUE },
   { key: 'costOfGoodsSoldCode', label: 'بهای تمام‌شده کالای فروش‌رفته', description: 'بهای تمام‌شده فروش و برگشت از فروش', defaultCode: '6001', accountTypes: EXPENSE },
   { key: 'wasteExpenseAccountCode', label: 'ضایعات و افت کیفی', description: 'سند خودکار ضایعات انبار به بهای کاردکس', defaultCode: '6004', accountTypes: EXPENSE },
-  // v10.0.27 (TD-948، تصمیم ت۴ ب فاز ۵): حواله بی پروژه دیگر به کالای در جریان ساخت (۱۴۰۲) نمی‌رود
+  // v10.0.175 (TD-948، تصمیم ت۴ ب فاز ۵): حواله بی پروژه دیگر به کالای در جریان ساخت (۱۴۰۲) نمی‌رود
   { key: 'unassignedConsumptionAccountCode', label: 'مصرف مواد بی پروژه', description: 'حواله خروج از انبار که به هیچ پروژه‌ای پیوند ندارد', defaultCode: '6003', accountTypes: EXPENSE },
   { key: 'directProductionWagesAccountCode', label: 'دستمزد مستقیم تولید', description: 'کارکرد قطعه‌کاری در فیش حقوق', defaultCode: '6002', accountTypes: EXPENSE },
   { key: 'fixedSalaryExpenseAccountCode', label: 'هزینه حقوق ثابت', description: 'بخش حقوق ثابت فیش حقوق', defaultCode: '6003', accountTypes: EXPENSE },

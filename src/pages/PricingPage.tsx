@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { UnsavedPriceEditsBar } from '../components/pricing/UnsavedPriceEditsBar';
 import { fetchJson } from '../api';
 import { toast } from 'react-hot-toast';
 import { Item, ItemPrice } from '../types';
@@ -13,7 +14,8 @@ import {
   formatPersianDateTime, 
   getStrategyCanonicalKey,
   formatStrategyDisplayTitle,
-  cleanDecimalString
+  cleanDecimalString,
+  errorMessageOf,
 } from '../utils';
 import { useSearch } from '../SearchContext';
 import { useHasPermission } from '../contexts/AuthContext';
@@ -26,6 +28,7 @@ import { buildQuickPriceUpdates } from '../lib/items/quickPriceImport';
 import { priceSaveUpdates, type PriceFieldEdit } from '../lib/items/priceInput';
 import { ITEM_WAC_COLUMN, priceExportCells } from '../lib/items/excelPriceColumns';
 import { priceMarginPercent } from '../lib/items/priceMargin';
+import { readPricingStrategies } from '../lib/items/pricingStrategies';
 
 export default function PricingPage() {
   // v9.0.209 (O14): ورود سریع، فیلدهای قیمت و ذخیره فقط با مجوز مسیرهای ذخیره قیمت سرور، نه نقش «viewer»
@@ -98,26 +101,12 @@ export default function PricingPage() {
     queryKey: [...QUERY_KEYS.settings.list(), 'pricing-strategies'],
     queryFn: async () => {
       const settings = await fetchJson('/settings');
-      let strats: string[] = [];
-      if (Array.isArray(settings)) {
-        const st = settings.find((s: any) => s.key === 'pricing_strategies');
-        if (st && st.value) {
-          if (st.value.trim().startsWith('[')) {
-            try {
-              const parsed = JSON.parse(st.value);
-              if (Array.isArray(parsed)) {
-                strats = parsed.map((s: any) => formatStrategyDisplayTitle(String(s))).filter(Boolean);
-              }
-            } catch (e) {
-              console.error('Failed to parse pricing_strategies JSON setting:', e);
-            }
-          }
-          if (strats.length === 0) {
-            strats = st.value.split(',').map((s: string) => formatStrategyDisplayTitle(s)).filter(Boolean);
-          }
-        }
-      }
-      return strats.length > 0 ? strats : ['فروشگاه', 'مصرف‌کننده', 'عمده'];
+      // v10.0.201 (OBS-R1-71 / OBS-R1-72): همان خواننده سرور؛ تنظیم ناخوانا خطاست، نه فهرست پیش‌فرض
+      const st = Array.isArray(settings) ? settings.find((s: { key?: string }) => s.key === 'pricing_strategies') : undefined;
+      const read = readPricingStrategies(st?.value);
+      if ('error' in read) throw new Error(read.error);
+      const strats = read.titles.map(formatStrategyDisplayTitle).filter(Boolean);
+      return strats;
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
@@ -127,7 +116,7 @@ export default function PricingPage() {
   const items = itemsQuery.data ?? [];
   const categories = categoriesQuery.data ?? [];
   const prices = pricesQuery.data ?? {};
-  const strategies = strategiesQuery.data ?? ['فروشگاه', 'مصرف‌کننده', 'عمده'];
+  const strategies = strategiesQuery.data ?? [];
 
   const loadData = async () => {
     await Promise.all([
@@ -447,6 +436,11 @@ export default function PricingPage() {
 
   return (
     <div className="flex flex-col h-full bg-slate-50/50 space-y-6 p-4 md:p-6 max-w-[1700px] mx-auto text-right font-farsi">
+      {strategiesQuery.isError && (
+        <div role="alert" className="p-3.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs">
+          {errorMessageOf(strategiesQuery.error) || 'فهرست‌های قیمت خوانده نشد.'}
+        </div>
+      )}
       {/* Top Header Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-6 shadow-lg relative overflow-hidden shrink-0">
         <div className="absolute top-0 left-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -678,33 +672,14 @@ export default function PricingPage() {
         )}
       </div>
 
-      {/* Sticky Bottom Bar for Unsaved Edits */}
-      {canEditPrices && totalLocalEditsCount > 0 && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl z-40 flex items-center gap-4 border border-slate-700 animate-in slide-in-from-bottom duration-200">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
-            <span className="text-xs font-bold">
-              تعداد {formatPersianNumber(totalLocalEditsCount)} فیلد قیمت ویرایش شده و ذخیره‌نشده است.
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setLocalEdits({})}
-              className="text-xs text-slate-400 hover:text-white px-2 py-1 rounded-lg cursor-pointer"
-            >
-              انصراف
-            </button>
-            <button
-              onClick={handleSaveAllLocalEdits}
-              disabled={isSavingAll}
-              className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-extrabold px-4 py-2 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-            >
-              {isSavingAll ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
-              ذخیره یکجای تمام تغییرات
-            </button>
-          </div>
-        </div>
+      {/* v10.0.142 (TD-1201): نوار تغییرات ذخیره‌نشده در جریان صفحه، نه روی کارت‌ها */}
+      {canEditPrices && (
+        <UnsavedPriceEditsBar
+          count={totalLocalEditsCount}
+          isSaving={isSavingAll}
+          onCancel={() => setLocalEdits({})}
+          onSaveAll={handleSaveAllLocalEdits}
+        />
       )}
 
       {/* V9 Phase 5.2: مودال تاریخچه قیمت استخراج‌شده */}

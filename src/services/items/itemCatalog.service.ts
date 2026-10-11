@@ -19,8 +19,10 @@ import { startsWithLikePattern } from '../../lib/sqlLike.js';
 import { money } from '../../lib/money.js';
 import { ITEM_WAC_COLUMN, priceExportCells } from '../../lib/items/excelPriceColumns.js';
 import { ITEM_REORDER_POINT_COLUMN } from '../../lib/items/itemExcelColumns.js';
+import { PRODUCT_CARD_COLUMNS } from '../../lib/media/productCard.js';
 import type { ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
 import { EXCEL_WAC_TOLERANCE, importItemsFromExcel, type ItemImportActor, type ItemImportResult } from './itemExcelImport.js';
+import { newItemProductCard, productCardValues } from '../media/productCardWrite.js';
 
 // V10-2.1: تایپ کلاینت اتصال DB برای تراکنش‌های داخلی
 type DbLike = DbExecutor;
@@ -64,6 +66,12 @@ export interface ItemWriteBody {
   weight?: string | number | null;
   material?: string;
   size?: string;
+  /** v10.0.25 (N-05): the media library product card; a missing key keeps the stored value */
+  collections?: unknown;
+  design_year?: unknown;
+  transfer_code?: unknown;
+  product_description?: unknown;
+  technical_notes?: unknown;
   /** v9.0.171 (TD-654): نسخه کالایی که فرم ویرایش از آن ساخته شده است؛ ویرایش بی آن رد می‌شود */
   version?: number | string;
 }
@@ -208,37 +216,45 @@ export class ItemCatalogService {
    * V10-2.1: تخصیص اتمیک شماره سری بعدی — الگوی قفل سطر شمارنده + UPSERT RETURNING
    * (مشابه DocumentService.getNextRef؛ ورودی‌ها فقط فیلدهای غیرتناقض‌آمیز، بدون raw SQL bind)
    */
-  static async consumeNextItemCode(input: NextItemCodeInput): Promise<NextItemCodeResult> {
+  static async consumeNextItemCode(
+    input: NextItemCodeInput,
+    onReserved?: (result: NextItemCodeResult, tx: DbLike) => Promise<void>
+  ): Promise<NextItemCodeResult> {
     const itemType = input.type === 'raw_material' ? 'raw_material' : 'product';
 
     // نرمال‌سازی بیرون از tx تا خطاهای validation قبل از باز کردن تراکنش پرتاب شوند
+    // v10.0.35 (TD-979، OBS-R1-73): ردیف ممیزی فراخواننده (`onReserved`) در همان تراکنش شمارنده نوشته می‌شود
     if (itemType === 'product') {
       const ctx = ItemCatalogService.resolveProductContext(input);
-      const nextNum = await orm.transaction(async (tx: DbLike) =>
-        ItemCatalogService.consumeCounterRow(tx, itemType, ctx.counterKey, () =>
+      return orm.transaction(async (tx: DbLike) => {
+        const nextNum = await ItemCatalogService.consumeCounterRow(tx, itemType, ctx.counterKey, () =>
           ItemCatalogService.getMaxExistingSerial(tx, itemType, { base: ctx.base })
-        )
-      );
-      return {
-        type: itemType,
-        code: ItemCatalogService.assembleCode(itemType, ctx, nextNum),
-        serial: String(nextNum).padStart(ctx.pad, '0'),
-        year: ctx.year, catPrefix: ctx.catPrefix, transfer: ctx.transfer
-      };
+        );
+        const result: NextItemCodeResult = {
+          type: itemType,
+          code: ItemCatalogService.assembleCode(itemType, ctx, nextNum),
+          serial: String(nextNum).padStart(ctx.pad, '0'),
+          year: ctx.year, catPrefix: ctx.catPrefix, transfer: ctx.transfer
+        };
+        if (onReserved) await onReserved(result, tx);
+        return result;
+      });
     }
 
     const rawCtx = ItemCatalogService.resolveRawContext(input);
-    const nextNumRaw = await orm.transaction(async (tx: DbLike) =>
-      ItemCatalogService.consumeCounterRow(tx, itemType, rawCtx.counterKey, () =>
+    return orm.transaction(async (tx: DbLike) => {
+      const nextNumRaw = await ItemCatalogService.consumeCounterRow(tx, itemType, rawCtx.counterKey, () =>
         ItemCatalogService.getMaxExistingSerial(tx, itemType, { prefix: rawCtx.prefix })
-      )
-    );
-    return {
-      type: itemType,
-      code: ItemCatalogService.assembleCode(itemType, rawCtx, nextNumRaw),
-      serial: String(nextNumRaw).padStart(rawCtx.pad, '0'),
-      prefix: rawCtx.prefix
-    };
+      );
+      const result: NextItemCodeResult = {
+        type: itemType,
+        code: ItemCatalogService.assembleCode(itemType, rawCtx, nextNumRaw),
+        serial: String(nextNumRaw).padStart(rawCtx.pad, '0'),
+        prefix: rawCtx.prefix
+      };
+      if (onReserved) await onReserved(result, tx);
+      return result;
+    });
   }
 
   private static async consumeCounterRow(
@@ -391,6 +407,12 @@ export class ItemCatalogService {
       row['سایز'] = it.size || '';
       row['وزن'] = it.weight ? Number(it.weight) : '';
       row['جنس'] = it.material || '';
+      // v10.0.25 (N-05): product card of the media library
+      row[PRODUCT_CARD_COLUMNS.collections] = (it.collections ?? []).join('، ');
+      row[PRODUCT_CARD_COLUMNS.designYear] = it.designYear ?? '';
+      row[PRODUCT_CARD_COLUMNS.transferCode] = it.transferCode || '';
+      row[PRODUCT_CARD_COLUMNS.productDescription] = it.productDescription || '';
+      row[PRODUCT_CARD_COLUMNS.technicalNotes] = it.technicalNotes || '';
 
       return row;
     });
@@ -517,6 +539,7 @@ export class ItemCatalogService {
         weight: weight ? Number(weight) : null,
         material: material || null,
         size: size || null,
+        ...newItemProductCard(type || 'product', code, body),
         isDeleted: 0
       }).returning());
       await advanceItemCodeCounter(tx, inserted.type, inserted.code);
@@ -684,6 +707,7 @@ export class ItemCatalogService {
         weight: keep(weight, prevItem.weight, v => (v ? Number(v) : null)),
         material: keep(material, prevItem.material, v => (v ? String(v) : null)),
         size: keep(size, prevItem.size, v => (v ? String(v) : null)),
+        ...productCardValues(body),
         version: nextVersion(prevItem.version)
       };
 

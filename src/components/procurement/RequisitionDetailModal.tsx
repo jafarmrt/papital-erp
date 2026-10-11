@@ -563,7 +563,7 @@ export function RequisitionDetailModal({
                     <Ban className="w-4 h-4 text-rose-600 shrink-0" />
                     این درخواست خرید رد شده یا لغو گردیده است.
                   </div>
-                  {access.canApprove && <button
+                  {access.canReopen && <button
                     type="button"
                     disabled={isActing}
                     onClick={() => handleWorkflowAction('reopen')}

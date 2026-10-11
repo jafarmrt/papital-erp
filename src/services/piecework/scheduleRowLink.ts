@@ -17,7 +17,7 @@ export interface ScheduledEntry {
   taskId: number;
   projectId: number | null;
   scheduleRef: ScheduleRowRef | null;
-  /** مقدار کارکرد (عدد یا ساعت به عدد)؛ v10.0.29 (TD-955) با مقدار ردیف برنامه سنجیده می‌شود */
+  /** مقدار کارکرد (عدد یا ساعت به عدد)؛ v10.0.185 (TD-955) با مقدار ردیف برنامه سنجیده می‌شود */
   quantity?: number;
 }
 
@@ -58,7 +58,7 @@ export async function assertScheduleRowsFree(tx: DbExecutor, entries: readonly S
     if (Number(row.assignedPersonnelId) !== entry.personnelId || Number(row.taskId) !== entry.taskId) {
       throw new ValidationError(`پرسنل یا عنوان کار ${rowName(ref)} با کارکرد ارسالی یکی نیست؛ برنامه را ذخیره کنید و دوباره ثبت کنید.`, { scheduleRef: ref }, 'PIECEWORK_SCHEDULE_ROW_MISMATCH');
     }
-    // v10.0.29 (TD-955، تصمیم ت۱۰ فاز ۵): کارکرد ردیف برنامه بیش از مقدار همان ردیف نیست؛ پیش‌تر ۵۰۰ برای ردیف ۲۰ پذیرفته می‌شد
+    // v10.0.185 (TD-955، تصمیم ت۱۰ فاز ۵): کارکرد ردیف برنامه بیش از مقدار همان ردیف نیست؛ پیش‌تر ۵۰۰ برای ردیف ۲۰ پذیرفته می‌شد
     const planned = Number(row.quantity);
     if (entry.quantity !== undefined && Number.isFinite(planned) && planned > 0 && entry.quantity > planned + 1e-9) {
       throw new ValidationError(

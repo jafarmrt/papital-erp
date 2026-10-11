@@ -30,7 +30,8 @@ import {
   Workflow,
   Zap,
   Compass,
-  Calculator
+  Calculator,
+  Images
 } from 'lucide-react';
 import { User } from '../../types';
 import { canOpenPage } from '../../lib/permissions/pageAccess';
@@ -81,6 +82,7 @@ export function getMenuGroups(
         { name: 'هشدار نقطه سفارش', path: '/reorder-alerts', icon: AlertTriangle, visible: open('/reorder-alerts') },
         { name: 'قیمت‌گذاری اقلام', path: '/pricing', icon: DollarSign, visible: open('/pricing') },
         { name: 'گالری تصویری', path: '/gallery', icon: Image, visible: open('/gallery') },
+        { name: 'کتابخانه تصاویر و فیلم‌ها', path: '/media-library', icon: Images, visible: open('/media-library') },
         { name: 'انبارگردانی دوره‌ای', path: '/audit', icon: ClipboardList, visible: open('/audit') },
       ]
     },
@@ -134,14 +136,14 @@ export function getMenuGroups(
     },
     {
       id: 'accounting',
-      title: 'مالی و حسابداری دوبل',
+      title: 'مالی و حسابداری',
       groupIcon: Landmark,
       items: [
         { name: 'پیشخوان مالی', path: '/accounting/dashboard', icon: LayoutDashboard, visible: open('/accounting/dashboard') },
         { name: 'مرور حساب‌ها (درخت و کاردکس)', path: '/accounting/explorer', icon: Layers, visible: open('/accounting/explorer') },
-        { name: 'اسناد دوبل حسابداری', path: '/accounting/vouchers', icon: FileText, visible: open('/accounting/vouchers') },
+        { name: 'اسناد حسابداری', path: '/accounting/vouchers', icon: FileText, visible: open('/accounting/vouchers') },
         { name: 'خزانه‌داری و حساب‌های بانکی', path: '/accounting/treasury', icon: Building2, visible: open('/accounting/treasury') },
-        { name: 'لیست اسناد و فاکتورها', path: '/invoices', icon: ClipboardList, visible: open('/invoices') },
+        { name: 'فهرست اسناد و فاکتورها', path: '/invoices', icon: ClipboardList, visible: open('/invoices') },
         { name: 'مدیریت چک‌های صیادی', path: '/accounting/cheques', icon: CreditCard, visible: open('/accounting/cheques') },
         { name: 'صورت‌ها و گزارش‌های مالی', path: '/accounting/reports', icon: BarChart3, visible: open('/accounting/reports') },
         { name: 'بستن سال مالی', path: '/accounting/fiscal-closing', icon: Lock, visible: open('/accounting/fiscal-closing') },

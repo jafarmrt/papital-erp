@@ -8,8 +8,9 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { readSettingValue, revealSettingSecrets, sealSettingValue } from './settingSecrets.js';
 import { invalidateSettingsCache, appSettingsCache } from '../../lib/memoryCache.js';
 import {
-  MOVEMENT_DAY_KEYS, currencySettingError, isMovementDayKey, movementDaysError, readMovementDays
+  MOVEMENT_DAY_KEYS, currencySettingError, priceListNamesError, isMovementDayKey, movementDaysError, readMovementDays
 } from '../../lib/settings/settingValues.js';
+import { pricingStrategiesSettingError } from '../../lib/items/pricingStrategies.js';
 
 /**
  * v7.0.26 (TD-184 / audit P1-3) — ذخیره امن تنظیمات سیستم با مجوز سطح کلید
@@ -88,6 +89,17 @@ async function validateSettingValue(key: string, value: string): Promise<void> {
     const error = currencySettingError(value);
     if (error) throw new ValidationError(error, { key, value }, 'SETTING_CURRENCY_INVALID');
   }
+  // v10.0.201 (OBS-R1-71): فهرست‌های قیمت آرایه JSON از عنوان‌هاست، نه متن جداشده با کاما؛
+  // v10.0.95 (TD-1192): نام‌های فهرست قیمت یکتا (بی‌توجه به فاصله و بزرگی حروف)
+  if (key === 'pricing_strategies') {
+    const isJson = value.trim().startsWith('[');
+    const legacyNamesError = isJson ? null : priceListNamesError(value.split(','));
+    if (legacyNamesError) throw new ValidationError(legacyNamesError, { key }, 'SETTING_PRICE_LIST_NAMES_INVALID');
+    const error = pricingStrategiesSettingError(value);
+    if (error) throw new ValidationError(error, { key }, 'SETTING_PRICING_STRATEGIES_INVALID');
+    const namesError = priceListNamesError(JSON.parse(value) as string[], { allowLatinComma: true });
+    if (namesError) throw new ValidationError(namesError, { key }, 'SETTING_PRICE_LIST_NAMES_INVALID');
+  }
   if (key === 'wc_shop_warehouse' && value.trim() !== '') {
     const [wh] = await orm.select({ id: warehouses.id }).from(warehouses)
       .where(and(eq(warehouses.code, value.trim()), eq(warehouses.isActive, 1)));
@@ -106,7 +118,7 @@ async function validateSettingValue(key: string, value: string): Promise<void> {
 async function assertKeyPermission(key: string, actor: SettingsActor): Promise<void> {
   if (ADMIN_ONLY_SETTING_KEYS.has(key)) {
     if (actor.role !== SYSTEM_ADMIN_ROLE) {
-      throw new ForbiddenError(`تغییر تنظیم «${key}» (کلیدهای محرمانه یکپارچه‌سازی و فلگ‌های سیستمی) فقط برای مدیر سیستم مجاز است.`);
+      throw new ForbiddenError(`تغییر تنظیم «${key}» (کلیدهای محرمانه یکپارچه‌سازی و پرچم‌های سامانه) فقط برای مدیر سامانه مجاز است.`);
     }
     return;
   }

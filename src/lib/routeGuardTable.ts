@@ -1,6 +1,7 @@
 import type { Express } from 'express';
 import { GUARD_ENTRIES } from '../middleware/authorize.js';
 import { AUTHENTICATES } from '../middleware/auth.js';
+import { VALIDATES } from '../middleware/validate.js';
 
 /**
  * جدول «مسیر ← مجوز» از خود روترهای Express (حوزه H نقشه راه V8).
@@ -14,6 +15,10 @@ export interface RouteGuardRow {
   path: string;
   authenticated: boolean;
   guards: string[][];
+  /** v10.0.35 (TD-979): خود route میدل‌ور `validate` دارد */
+  validated: boolean;
+  /** v10.0.35 (TD-979): اسکیمای `validate` آن کلید `body` دارد */
+  validatesBody: boolean;
 }
 
 interface ExpressLayer {
@@ -43,6 +48,13 @@ function mountPathOf(layer: ExpressLayer): string {
   return match[1].replace(/\\\//g, '/');
 }
 
+function validationOf(stack: ExpressLayer[]): { validated: boolean; validatesBody: boolean } {
+  const marks = stack
+    .map(layer => (typeof layer.handle === 'function' ? (layer.handle as unknown as Record<string, unknown>)[VALIDATES] : undefined))
+    .filter((mark): mark is { body: boolean } => typeof mark === 'object' && mark !== null);
+  return { validated: marks.length > 0, validatesBody: marks.some(mark => mark.body) };
+}
+
 function applyMiddleware(chain: Chain, handle: unknown): Chain {
   if (typeof handle === 'function' && (handle as unknown as Record<string, unknown>)[AUTHENTICATES] === true) return { ...chain, authenticated: true };
   const entries = guardEntriesOf(handle);
@@ -57,11 +69,12 @@ function walk(stack: ExpressLayer[], prefix: string, inherited: Chain, rows: Rou
     if (layer.route) {
       let routeChain = chain;
       for (const handlerLayer of layer.route.stack) routeChain = applyMiddleware(routeChain, handlerLayer.handle);
+      const validation = validationOf(layer.route.stack);
       const paths = Array.isArray(layer.route.path) ? layer.route.path : [layer.route.path];
       for (const method of Object.keys(layer.route.methods)) {
         if (method === '_all') continue;
         for (const p of paths) {
-          rows.push({ method: method.toUpperCase(), path: `${prefix}${p}`, authenticated: routeChain.authenticated, guards: routeChain.guards });
+          rows.push({ method: method.toUpperCase(), path: `${prefix}${p}`, authenticated: routeChain.authenticated, guards: routeChain.guards, ...validation });
         }
       }
       continue;

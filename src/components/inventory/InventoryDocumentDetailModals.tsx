@@ -125,7 +125,7 @@ export function AuditDocumentDetailModal({ doc, loading, onClose }: DetailModalP
                   <th className="p-3 text-slate-600">ردیف</th>
                   <th className="p-3 text-slate-600">کد کالا</th>
                   <th className="p-3 text-slate-600">نام کالا</th>
-                  <th className="p-3 text-center text-slate-600">موجودی سیستم</th>
+                  <th className="p-3 text-center text-slate-600">موجودی دفتری</th>
                   <th className="p-3 text-center text-slate-600">موجودی فیزیکی</th>
                   <th className="p-3 text-center text-slate-600">مغایرت</th>
                 </tr>

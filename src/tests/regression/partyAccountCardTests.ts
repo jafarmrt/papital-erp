@@ -3,6 +3,7 @@ import { inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { customers, roles, users } from '../../db/schema.js';
+import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 
 /**
  * بسته ۹ (مشتریان و CRM) — یافته‌های سرور در مسیرهای واقعی Express؛ هر آزمون روی کد پیشین قرمز است.
@@ -134,7 +135,7 @@ export async function runPartyAccountCardTests(shouldRun: (id: string, ...extra:
     }));
   } finally {
     if (createdUserIds.length > 0) await orm.delete(users).where(inArray(users.id, createdUserIds)).catch(() => undefined);
-    if (createdRoleIds.length > 0) await orm.delete(roles).where(inArray(roles.id, createdRoleIds)).catch(() => undefined);
+    if (createdRoleIds.length > 0) await deleteTestRoles(inArray(roles.id, createdRoleIds)).catch(() => undefined);
     // طرف حساب‌ها حذف نرم می‌شوند؛ سندهای فروش و ردیف‌های حسابداری آن‌ها مثل بقیه آزمون‌ها در اسکیمای آزمون می‌مانند
     if (createdCustomerIds.length > 0) await orm.update(customers).set({ isDeleted: 1 }).where(inArray(customers.id, createdCustomerIds)).catch(() => undefined);
   }

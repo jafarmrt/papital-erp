@@ -3,6 +3,7 @@ import path from 'path';
 import { SYSTEM_UPDATES, ACTIVE_CHANGELOG, CLOSED_CHANGELOG_SERIES } from '../src/data/changelogs/index.js';
 import { findCompactRuleViolations } from '../src/data/changelogs/compactRule.js';
 import { findChangelogSeriesViolations } from '../src/data/changelogs/seriesGuard.js';
+import { findDebtRegistryViolations, findMissingNpmScripts, npmScriptDocs } from './governance/releaseGuards.js';
 
 /**
  * TD-111 (v7.0.0) — گیت همگام‌سازی جامع نسخه (fail-fast)
@@ -77,6 +78,22 @@ function main(): void {
   const compactViolations = findCompactRuleViolations(ACTIVE_CHANGELOG.updates);
   if (compactViolations.length > 0) {
     fail(`The changelog ${ACTIVE_CHANGELOG.file} breaks the short entry rule (src/data/changelogs/compactRule.ts):\n   - ${compactViolations.slice(0, 15).join('\n   - ')}`);
+  }
+
+  // 5) v10.0.22 (TD-981): no debt row is both active and archived or listed twice (parallel merges brought them back)
+  const debtViolations = findDebtRegistryViolations(
+    fs.readFileSync(path.resolve(process.cwd(), 'TECH_DEBT.md'), 'utf-8'),
+    fs.readFileSync(path.resolve(process.cwd(), 'TECH_DEBT_ARCHIVE.md'), 'utf-8')
+  );
+  if (debtViolations.length > 0) {
+    fail(`The debt registry is inconsistent (archived rows win; remove them from TECH_DEBT.md):\n   - ${debtViolations.slice(0, 15).join('\n   - ')}`);
+  }
+
+  // 6) v10.0.24 (OT-A-03): every npm script the documents, CI and shell scripts name still exists (a merge once dropped one)
+  const pkgScripts = (JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as { scripts?: Record<string, string> }).scripts ?? {};
+  const missingScripts = findMissingNpmScripts(npmScriptDocs(process.cwd()), pkgScripts);
+  if (missingScripts.length > 0) {
+    fail(`package.json lost npm scripts that are still in use (restore them):\n   - ${missingScripts.slice(0, 15).join('\n   - ')}`);
   }
 
   console.log(`✅ Version Sync OK (TD-111): package.json == SYSTEM_UPDATES[0] == k8s (image + APP_VERSION) == README == v${pkgVersion}`);

@@ -51,6 +51,16 @@ export const ROW_ADVISORY_LOCK_NAMESPACES = {
    * فرایند در جریان نسازد
    */
   WORKFLOW_ENTITY_START: 91009,
+  /**
+   * v10.0.21 (N-05): one file content of the media library; transaction lock keyed by hashtext(sha256), so two uploads of
+   * the same file at once make one row and the second gets the duplicate answer
+   */
+  MEDIA_FILE_CONTENT: 91050,
+  /**
+   * v10.0.137 (TD-1225): the daily logs of one author on one work day; transaction lock keyed by hashtext(user:date), so
+   * two logs saved at once never overlap in time
+   */
+  DAILY_LOG_AUTHOR_DAY: 91060,
 } as const;
 
 export type AdvisoryLockOutcome<T> = { acquired: true; result: T } | { acquired: false };

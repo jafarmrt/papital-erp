@@ -116,7 +116,7 @@ export class WorkflowDelegationService {
     const [toUser] = await orm.select().from(users).where(eq(users.id, params.toUserId));
 
     if (!fromUser || !toUser || fromUser.isDeleted === 1 || toUser.isDeleted === 1) {
-      throw new NotFoundError('کاربر تفویض‌کننده یا دریافت‌کننده در سیستم یافت نشد');
+      throw new NotFoundError('کاربر تفویض‌کننده یا دریافت‌کننده در سامانه یافت نشد');
     }
 
     const scope = (params.scope || 'ALL').trim();
@@ -222,7 +222,7 @@ export class WorkflowDelegationService {
       // v8.0.98 (TD-378): تفویض را فقط تفویض‌کننده یا ادمین لغو می‌کند؛ پیش‌تر خود جانشین هم آن را لغو می‌کرد
       const isAdmin = isSystemAdminRole(params.userRole);
       if (!isAdmin && delegation.fromUserId !== params.userId) {
-        throw new ForbiddenError('فقط تفویض‌کننده یا مدیر سیستم می‌تواند این تفویض اختیار را لغو کند', undefined, 'WF_DELEGATION_REVOKE_FORBIDDEN');
+        throw new ForbiddenError('فقط تفویض‌کننده یا مدیر سامانه می‌تواند این تفویض اختیار را لغو کند', undefined, 'WF_DELEGATION_REVOKE_FORBIDDEN');
       }
 
       await tx.update(workflowDelegations)

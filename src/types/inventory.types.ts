@@ -26,6 +26,12 @@ export interface Item {
   can_set_opening_balance?: boolean;
   /** v9.0.171 (TD-654): نسخه رکورد برای قفل خوش‌بینانه ویرایش */
   version?: number;
+  /** v10.0.25 (N-05): کارت محصول کتابخانه تصاویر */
+  collections?: string[];
+  designYear?: number | null;
+  transferCode?: string | null;
+  productDescription?: string | null;
+  technicalNotes?: string | null;
 }
 
 export interface PendingMaterial {

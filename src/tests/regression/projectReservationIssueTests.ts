@@ -11,13 +11,13 @@ import { createProject, globalSection, reservedOf, runReservationCases, storedRe
 export async function runProjectReservationIssueTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   return runReservationCases(shouldRun, [
     ['reg_project_refinalize_reserves_remaining_need_td_945',
-      'v10.0.31: finalizing a project again reserves its need minus what its remittances and allocations already issued, never the whole need (TD-945)',
+      'v10.0.206: finalizing a project again reserves its need minus what its remittances and allocations already issued, never the whole need (TD-945)',
       ['td945', 'p5-m12', 'projects', 'reservation', 'package11'], refinalizeCase],
     ['reg_sales_invoice_keeps_project_reservation_td_947',
-      'v10.0.32: a final sales invoice with a projectId neither consumes the project\'s reservation nor sells it (400 INSUFFICIENT_STOCK beyond free stock); a remittance of the project still consumes it (TD-947)',
+      'v10.0.207: a final sales invoice with a projectId neither consumes the project\'s reservation nor sells it (400 INSUFFICIENT_STOCK beyond free stock); a remittance of the project still consumes it (TD-947)',
       ['td947', 'p5-m14', 'projects', 'reservation', 'documents', 'package8', 'package11'], salesInvoiceCase],
     ['reg_project_procurement_order_carries_project_td_946',
-      'v10.0.33: the procurement order of a project requisition is linked to the project (documents.project_id); an order of a requisition without a project has none (TD-946)',
+      'v10.0.208: the procurement order of a project requisition is linked to the project (documents.project_id); an order of a requisition without a project has none (TD-946)',
       ['td946', 'p5-m13', 'projects', 'procurement', 'package10', 'package11'], procurementOrderCase],
   ]);
 }

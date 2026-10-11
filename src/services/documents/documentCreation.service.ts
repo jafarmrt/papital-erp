@@ -1,5 +1,5 @@
 import { eq, and, inArray } from 'drizzle-orm';
-import { assertProjectNotCancelled } from '../projects/projectCancelledGuard.js';
+import { assertProjectNotCancelled } from '../accounting/projectCancelledGuard.js';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { documents, documentItems, items, productionProjects } from '../../db/schema.js';
 import { resolveJalaliFiscalYear } from '../../lib/businessClock.js';
@@ -37,7 +37,8 @@ import { money } from '../../lib/money.js';
 import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { assertDocumentStatus, assertRecordableDocument, stockDirectionOf } from './documentRecordRule.js';
 import { assertOutflowWithinSellable } from './documentSellableGate.js';
-import { consumesProjectReservation } from '../../lib/projects/projectIssueTypes.js';
+import { consumesProjectReservation } from '../../lib/transactions/projectIssueTypes.js';
+import { assertDocumentNotInReview } from './documentReviewLock.js';
 import { assertReturnPartyOfInvoice, parseDocumentPartyId, resolveDocumentParty, returnInvoicePartyId } from './documentParty.js';
 import { documentAuditSnapshot, type DocumentAuditChange } from './documentAudit.js';
 
@@ -115,6 +116,8 @@ export class DocumentCreationService {
       if (existingDoc.status === 'final') {
         throw new ValidationError('امکان ویرایش مستقیم سند نهایی‌شده وجود ندارد.');
       }
+      // v10.0.86 (TD-1138، ت۱۳): سندی که در گام بازبینی گردش کار است تا پایان بازبینی ویرایش نمی‌شود
+      await assertDocumentNotInReview(tx, id);
       const before = await documentAuditSnapshot(tx, id);
 
       if (status === 'final') {
@@ -123,6 +126,7 @@ export class DocumentCreationService {
         );
       }
 
+      // v10.0.108 (TD-972): مسیر ویرایش (`PUT /documents/:id`) بدون نسخه ۴۰۰ می‌دهد؛ نسخه کهنه اینجا ۴۰۹ می‌گیرد
       if (body.expectedVersion !== undefined || body.version !== undefined) {
         checkOccVersion(existingDoc, {
           entityType: 'Document',
@@ -389,7 +393,7 @@ export class DocumentCreationService {
         if (!projExists) {
           throw new NotFoundError(`پروژه با شناسه ${finalProjectId} یافت نشد.`);
         }
-        // v10.0.28 (TD-921): سند تازه روی پروژه لغوشده ثبت نمی‌شود
+        // v10.0.184 (TD-921): سند تازه روی پروژه لغوشده ثبت نمی‌شود
         await assertProjectNotCancelled(tx, finalProjectId, 'سند');
       }
       // v7.0.21 (TD-178 / audit P0-2): شماره عطف و سال مالی پارتیشن شماره‌گذاری؛ از v9.0.80 (TD-489) در
@@ -567,7 +571,7 @@ export class DocumentCreationService {
           await assertOutflowWithinSellable(tx, lines, {
             docLocation,
             excludeDocumentId: body.excludeDocumentId ? Number(body.excludeDocumentId) : null,
-            // v10.0.32 (TD-947): رزرو پروژه فقط برای حواله و ضایعات همان پروژه آزاد است، نه فاکتور فروش
+            // v10.0.207 (TD-947): رزرو پروژه فقط برای حواله و ضایعات همان پروژه آزاد است، نه فاکتور فروش
             projectId: consumesProjectReservation(docType) ? finalProjectId : null,
           });
         }
@@ -660,7 +664,7 @@ export class DocumentCreationService {
         );
         await OutboxService.saveToOutbox(tx, invEvent);
       } else if (docType === 'receipt' || docType === 'purchase') {
-        // v10.0.22 (TD-942): a production receipt (project delivery) is not a purchase and publishes no purchase event with an
+        // v10.0.29 (TD-942): a production receipt (project delivery) is not a purchase and publishes no purchase event with an
         // empty supplier; its stock entry is published as StockReceived by the stock engine
         const purchEvent = domainEventBus.createEvent<PurchaseEventPayload>(
           isApproved ? DomainEventType.PURCHASE_APPROVED : DomainEventType.PURCHASE_CREATED,

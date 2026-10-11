@@ -17,6 +17,7 @@ export interface Personnel {
   monthlySalary?: number | string | null;
   jobTitle?: string;
   education?: string;
+  startDate?: string;
   endDate?: string;
   terminationReason?: string;
   specializedSkills?: string;
@@ -141,6 +142,10 @@ export interface PieceworkPayroll {
   notes?: string;
   items?: PieceworkLog[];
   createdAt?: string;
+  /** v10.0.193 (TD-1084): صادرکننده فیش؛ او فیش را تأیید و پرداخت نمی‌کند */
+  createdById?: number | null;
+  isPrepayment?: number | null;
+  prepaymentReason?: string | null;
   voucherId?: number | null;
   voucherNumber?: number | string | null;
   voucherStatus?: string | null;

@@ -1,5 +1,5 @@
 /**
- * مسیرهای صدور خودکار سند دوبل: صدور اسناد معوق اسناد نهایی فاقد سند و وضعیت پوشش اتوماسیون
+ * مسیرهای صدور خودکار سند حسابداری: صدور اسناد معوق اسناد نهایی فاقد سند و وضعیت پوشش اتوماسیون
  * (VoucherSyncService، AGENTS.md §11 / TD-193). authenticateToken در src/routes/accounting.routes.ts پیش از این روتر اعمال می‌شود.
  */
 import { Router } from 'express';
@@ -12,7 +12,7 @@ import { getAutomationStatus } from '../../services/accounting/automationStatus.
 
 const router = Router();
 
-// اقدام سریع: صدور اسناد دوبل فقط برای اسناد نهایی فاقد سند (v7.0.31 / TD-193 / audit P1-8)
+// اقدام سریع: صدور اسناد حسابداری فقط برای اسناد نهایی فاقد سند (v7.0.31 / TD-193 / audit P1-8)
 // هیچ سند حسابداری موجودی بازنویسی نمی‌شود؛ قفل مشورتی تضمین می‌کند در کل خوشه فقط یک اجرا فعال باشد.
 router.post('/accounting/quick-fix/sync-all-vouchers', authorizePermission('accounting.vouchers'), asyncHandler(async (req, res) => {
   const summary = await AccountingService.syncMissingDocumentVouchers({
@@ -29,7 +29,7 @@ router.post('/accounting/quick-fix/sync-all-vouchers', authorizePermission('acco
     action: 'CREATE',
     entity: 'journal_voucher',
     entityId: 'QUICK_FIX_SYNC_MISSING',
-    description: `صدور اسناد دوبل برای اسناد نهایی فاقد سند: ${summary.created} سند صادر شد، ${summary.failed} ناموفق، ${summary.skippedForReview} نیازمند بررسی`,
+    description: `صدور اسناد حسابداری برای اسناد نهایی فاقد سند: ${summary.created} سند صادر شد، ${summary.failed} ناموفق، ${summary.skippedForReview} نیازمند بررسی`,
     details: { checked: summary.checked, created: summary.created, failed: summary.failed, skippedForReview: summary.skippedForReview, reviewDocumentIds: summary.reviewDocumentIds, errors: summary.errors },
     ipAddress: req.ip || '',
   });

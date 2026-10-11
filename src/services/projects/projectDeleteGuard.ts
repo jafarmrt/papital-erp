@@ -5,12 +5,12 @@ import { ConflictError } from '../../errors/customErrors.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { formatPersianPrice, toPersianDigits } from '../../utils/persianNumber.js';
 import { assertNoOpenAllocations } from './projectOpenAllocations.js';
-import { projectWipBalances } from './projectWipBalance.js';
+import { projectWipBalances } from '../accounting/projectWipBalance.js';
 
 const LISTED = 5;
 
 /**
- * v10.0.24 (TD-922، تصمیم ت۴ ب فاز ۵): پروژه‌ای که تخصیص باز (TD-412)، سند زنده (هر نوع و وضعیت) یا مانده کالای در
+ * v10.0.172 (TD-922، تصمیم ت۴ ب فاز ۵): پروژه‌ای که تخصیص باز (TD-412)، سند زنده (هر نوع و وضعیت) یا مانده کالای در
  * جریان ساخت (۱۴۰۲) دارد حذف نمی‌شود. پیش‌تر نگهبان فقط تخصیص باز را می‌دید و مانده ۱۴۰۲ روی پروژه حذف‌شده می‌ماند.
  * زیر قفل ردیف پروژه صدا زده می‌شود.
  */

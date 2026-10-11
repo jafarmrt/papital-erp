@@ -7,7 +7,9 @@
 export const PIECEWORK_TASKS_PERMISSION = 'piecework.manage_tasks';
 /** ثبت، ویرایش و حذف کارکرد آزاد */
 export const PIECEWORK_LOG_PERMISSION = 'piecework.log';
-/** صدور، تغییر وضعیت، ثبت سند و ابطال فیش */
+/** صدور فیش پیش‌نویس، ثبت سند و ابطال فیش */
 export const PIECEWORK_PAYROLL_PERMISSION = 'piecework.payroll';
+/** v10.0.193 (TD-1083): تأیید فیش پیش‌نویس و بازگرداندن فیش تأییدشده بی پرداخت به پیش‌نویس */
+export const PIECEWORK_PAYROLL_APPROVE_PERMISSION = 'piecework.payroll_approve';
 /** ثبت پرداخت فیش و ابطال پرداخت */
 export const PIECEWORK_PAY_PERMISSION = 'piecework.pay';

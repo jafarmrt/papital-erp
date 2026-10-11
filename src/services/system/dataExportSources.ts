@@ -11,6 +11,7 @@ import {
   purchaseRequisitions, fileAttachments, eventActionRules,
   workflowDefinitions, workflowDefinitionVersions, workflowStates, workflowTransitions, workflowInstances,
   workflowHistoryLogs, workflowTasks, workflowPendingApprovals, workflowDelegations,
+  mediaSections, mediaAssets,
 } from '../../db/schema.js';
 import { SENSITIVE_SETTING_PATTERN } from '../settings/systemSettings.service.js';
 
@@ -105,6 +106,8 @@ export const DATA_EXPORT_TABLE_SOURCES: Readonly<Record<string, TableSpecSource>
   event_action_rules: { table: eventActionRules, key: ['id'] },
   // Attachment metadata only; the files stay in the attachment directory (backup.sh archives them)
   file_attachments: { table: fileAttachments, key: ['id'] },
+  media_sections: { table: mediaSections, key: ['id'] },
+  media_assets: { table: mediaAssets, key: ['id'] },
   // Settings WITHOUT secrets (WooCommerce keys, webhook secrets, tokens)
   app_settings: { table: appSettings, key: ['key'], keep: row => !SENSITIVE_SETTING_PATTERN.test(String(row.key)) },
 };

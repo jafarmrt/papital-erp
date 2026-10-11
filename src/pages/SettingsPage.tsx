@@ -16,7 +16,6 @@ import { InventoryControlPresetTab } from '../components/settings/InventoryContr
 import { TaskTitlesSettingsTab } from '../components/settings/TaskTitlesSettingsTab';
 import { SystemOperationsTab, ClearDataModal } from '../components/settings/SystemOperationsTab';
 import { WooCommerceTab } from '../components/settings/WooCommerceTab';
-import { NegativeStockPolicySettingsTab } from '../components/settings/NegativeStockPolicySettingsTab';
 import { AccountingSettingsTab } from '../components/settings/AccountingSettingsTab';
 import { ChartOfAccountsSettingsTab } from '../components/settings/ChartOfAccountsSettingsTab';
 import { 
@@ -171,10 +170,6 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
 
         {activeTab === 'chart_of_accounts' && (
           <ChartOfAccountsSettingsTab />
-        )}
-
-        {activeTab === 'inventory_integrity' && (
-          <NegativeStockPolicySettingsTab />
         )}
 
         {activeTab === 'categories' && (

@@ -275,7 +275,7 @@ export class PieceworkService {
       // v9.0.282 (TD-736): نخست ردیف پروژه‌های ردیف‌های برنامه FOR UPDATE، سپس والدها FOR SHARE
       const schedules = await lockScheduleProjects(tx, entries);
       const names = await assertWorkLogParentsLive(tx, entries);
-      // v10.0.30 (TD-956): no log after the personnel's service end
+      // v10.0.186 (TD-956): no log after the personnel's service end
       await assertWorkLogsWithinService(tx, entries);
       await assertScheduleRowsFree(tx, entries, schedules);
       const insertedIds: number[] = [];
@@ -712,7 +712,7 @@ export class PieceworkService {
       const existing = await lockEditableWorkLog(tx, id, 'کارکردی که در فیش حقوقی درج شده قابل تغییر نیست');
 
       const isoDate = data.date !== undefined ? requireStorageDate(data.date, 'تاریخ کارکرد') || existing.date : existing.date;
-      // v10.0.30 (TD-956): a log is not moved past the personnel's service end
+      // v10.0.186 (TD-956): a log is not moved past the personnel's service end
       if (isoDate !== existing.date) await assertWorkLogsWithinService(tx, [{ personnelId: existing.personnelId, isoDate }]);
       // v9.0.280 (TD-812): مقدار بزرگ‌تر از صفر، نرخ نامنفی و پروژه زنده، مانند ثبت کارکرد
       const newQty = data.quantity !== undefined ? workLogQuantity(data.quantity, '') : existing.quantity;

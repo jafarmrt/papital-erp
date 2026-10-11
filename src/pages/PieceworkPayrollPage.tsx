@@ -87,6 +87,10 @@ export function PieceworkPayrollPage() {
     setPayrollDeductionsDescription,
     payrollNotes,
     setPayrollNotes,
+    payrollIsPrepayment,
+    setPayrollIsPrepayment,
+    payrollPrepaymentReason,
+    setPayrollPrepaymentReason,
     payrollFixedIncluded,
     payrollFixedRemainingHint,
     payrollAdvanceDeduction,
@@ -308,6 +312,7 @@ export function PieceworkPayrollPage() {
         fixedRemainingHint={payrollFixedRemainingHint}
         advanceDeduction={payrollAdvanceDeduction}
         setAdvanceDeduction={setPayrollAdvanceDeduction}
+        prepayment={{ isPrepayment: payrollIsPrepayment, setIsPrepayment: setPayrollIsPrepayment, reason: payrollPrepaymentReason, setReason: setPayrollPrepaymentReason }}
         isSaving={isSavingPayroll}
       />
 

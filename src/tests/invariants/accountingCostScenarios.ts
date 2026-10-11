@@ -104,7 +104,7 @@ export async function checkOutflowVoucherAtKardexCost(wh: string): Promise<strin
     await VoucherSyncService.syncWarehouseDocumentVoucher(docId, { username: 'inv' });
   }
   const remNet = await voucherNetByCode(remittance);
-  // v10.0.27 (TD-948): a remittance without a project is unassigned consumption (6003), not work in progress
+  // v10.0.175 (TD-948): a remittance without a project is unassigned consumption (6003), not work in progress
   const expectRem: Array<[string, string]> = [['6003', '7000'], ['1401', '-2000'], ['1403', '-5000']];
   for (const [code, expected] of expectRem) {
     if (remNet.get(code) !== expected) problems.push(`Remittance after re-sync: ${code} = ${remNet.get(code) ?? '0'}, expected ${expected} (Kardex cost)`);
@@ -183,7 +183,7 @@ export async function checkHealthLedgerExcludesWorkInProgress(wh: string): Promi
   const before = await metricsOf();
   const material = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
   const receipt = await receive(material.id, 10, 1000, wh, '2026-06-20');
-  // v10.0.27 (TD-948): only a project remittance moves work in progress
+  // v10.0.175 (TD-948): only a project remittance moves work in progress
   const { project } = await ProjectService.createProject({ title: `Health WIP ${tag()}`, quantity: 1, products: [] } as unknown as Parameters<typeof ProjectService.createProject>[0]);
   const remittance = await outflow('remittance', material.id, 4, wh, '2026-06-21', project.id);
   const drafted = await metricsOf();

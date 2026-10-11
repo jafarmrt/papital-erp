@@ -17,13 +17,13 @@ import { runReservationCases } from './stockReservationTests.js';
 export async function runProjectClosedWorkTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   return runReservationCases(shouldRun, [
     ['reg_cancelled_project_refuses_documents_and_logs_td_921',
-      'v10.0.28: a final remittance, the finalize of a draft remittance and a work log on a cancelled project are refused with 422 PROJECT_CANCELLED; an open project still takes them (TD-921)',
+      'v10.0.184: a final remittance, the finalize of a draft remittance and a work log on a cancelled project are refused with 422 PROJECT_CANCELLED; an open project still takes them (TD-921)',
       ['td921', 'p5-m06', 'projects', 'documents', 'piecework', 'package11'], cancelledProjectCase],
     ['reg_schedule_log_within_row_quantity_td_955',
-      'v10.0.29: a work log from a workshop schedule row may not exceed the row quantity (422 PIECEWORK_SCHEDULE_ROW_QUANTITY_EXCEEDED); the row quantity itself is saved (TD-955)',
+      'v10.0.185: a work log from a workshop schedule row may not exceed the row quantity (422 PIECEWORK_SCHEDULE_ROW_QUANTITY_EXCEEDED); the row quantity itself is saved (TD-955)',
       ['td955', 'p5-w11', 'projects', 'piecework', 'schedule', 'package11'], scheduleQuantityCase],
     ['reg_work_log_within_service_td_956',
-      'v10.0.30: a work log after the personnel\'s service end, a log moved past it, or a log of a terminated personnel without an end date is refused (422 PIECEWORK_LOG_AFTER_SERVICE_END); a log on the end day is saved (TD-956)',
+      'v10.0.186: a work log after the personnel\'s service end, a log moved past it, or a log of a terminated personnel without an end date is refused (422 PIECEWORK_LOG_AFTER_SERVICE_END); a log on the end day is saved (TD-956)',
       ['td956', 'p5-w12', 'piecework', 'personnel', 'package12'], serviceEndCase],
   ]);
 }

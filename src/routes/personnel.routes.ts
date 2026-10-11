@@ -9,6 +9,7 @@ import { logActivity } from '../lib/auditLogger.js';
 import { personnelAuditChanges, personnelAuditSnapshot } from '../services/personnel/personnelAudit.js';
 import { logger } from '../middleware/logger.js';
 import { z } from 'zod';
+import { personnelBulkImportSchema } from './importRows.schemas.js';
 import { validate, paramsIdSchema, numericIdString, decimalInput } from '../middleware/validate.js';
 import { normalizePhoneNumber, normalizeNationalId, isoToJalaliDate } from '../utils.js';
 import { requireStorageDate } from '../lib/storageDate.js';
@@ -49,6 +50,7 @@ const PERSONNEL_DETAIL_COLUMNS = {
   monthlySalary: personnel.monthlySalary,
   jobTitle: personnel.jobTitle,
   education: personnel.education,
+  startDate: personnel.startDate,
   endDate: personnel.endDate,
   terminationReason: personnel.terminationReason,
   specializedSkills: personnel.specializedSkills,
@@ -124,6 +126,8 @@ const personnelBodySchema = z.object({
   monthlySalary: monthlySalaryInput.optional(),
   jobTitle: z.string().optional(),
   education: z.string().optional(),
+  // v10.0.199 (TD-1086): «آغاز همکاری»؛ حقوق ثابت از این روز آغاز می‌شود
+  startDate: z.string().optional(),
   endDate: z.string().optional(),
   terminationReason: z.string().optional(),
   specializedSkills: z.string().optional(),
@@ -177,6 +181,7 @@ router.get('/personnel/export', authorizePermission('personnel.manage'), asyncHa
         monthlySalary: personnel.monthlySalary,
         jobTitle: personnel.jobTitle,
         education: personnel.education,
+        startDate: personnel.startDate,
         specializedSkills: personnel.specializedSkills,
         otherSkills: personnel.otherSkills,
         referralSource: personnel.referralSource,
@@ -203,6 +208,7 @@ router.get('/personnel/export', authorizePermission('personnel.manage'), asyncHa
       'وضعیت همکاری': p.employmentStatus || 'فعال',
       'جنسیت': p.gender || 'مرد',
       'تاریخ تولد': isoToJalaliDate(p.birthDate) || p.birthDate || '',
+      'تاریخ آغاز همکاری': isoToJalaliDate(p.startDate) || p.startDate || '',
       'تحصیلات': p.education || '',
       'شماره شبا': p.shebaNumber || '',
       'شماره کارت': p.cardNumber || '',
@@ -223,7 +229,7 @@ router.get('/personnel/export', authorizePermission('personnel.manage'), asyncHa
 }));
 
 // POST /api/personnel/bulk-import - Bulk import personnel from Excel
-router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), asyncHandler(async (req, res) => {
+router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), validate(personnelBulkImportSchema), asyncHandler(async (req, res) => {
   try {
     const { rows = [], updateIfExists = true } = req.body;
 
@@ -287,6 +293,8 @@ router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), a
         const employmentStatus = parseEmploymentStatusCell(item.employmentStatus);
         // v7.0.135 (TD-232): تاریخ تولد میلادی ISO ذخیره می‌شود؛ تاریخ نامعتبر خطای همان ردیف است
         const birthDate = requireStorageDate(String(item.birthDate || '').trim(), 'تاریخ تولد');
+        // v10.0.199 (TD-1086): خانه خالی «تاریخ آغاز همکاری» یعنی بی تغییر
+        const startDate = requireStorageDate(String(item.startDate || '').trim(), 'تاریخ آغاز همکاری');
         const nationality = parseNationalityCell(item.nationality);
         const education = String(item.education || '').trim();
         const cardNumber = String(item.cardNumber || '').trim();
@@ -316,6 +324,7 @@ router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), a
                 gender: gender ?? existing.gender,
                 employmentStatus: employmentStatus ?? existing.employmentStatus,
                 birthDate: birthDate || existing.birthDate,
+                startDate: startDate || existing.startDate,
                 nationality: nationality ?? existing.nationality,
                 education: education || existing.education,
                 cardNumber: cardNumber || existing.cardNumber,
@@ -361,6 +370,7 @@ router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), a
               personnelCode,
               gender: gender ?? PERSONNEL_IMPORT_DEFAULTS.gender,
               birthDate,
+              startDate,
               nationality: nationality ?? PERSONNEL_IMPORT_DEFAULTS.nationality,
               nationalId,
               phone,
@@ -491,6 +501,7 @@ router.post('/personnel', authorizePermission('personnel.manage'), validate(crea
       monthlySalary,
       jobTitle = '',
       education = '',
+      startDate = '',
       endDate = '',
       terminationReason = '',
       specializedSkills = '',
@@ -535,6 +546,7 @@ router.post('/personnel', authorizePermission('personnel.manage'), validate(crea
           monthlySalary: money(monthlySalary ?? 0),
           jobTitle: jobTitle.trim(),
           education: education.trim(),
+          startDate: requireStorageDate(startDate, 'تاریخ آغاز همکاری'),
           endDate: requireStorageDate(endDate, 'تاریخ پایان همکاری'),
           terminationReason,
           specializedSkills,
@@ -608,6 +620,7 @@ router.put('/personnel/:id', authorizePermission('personnel.manage'), validate(u
       monthlySalary = existing.monthlySalary,
       jobTitle = existing.jobTitle,
       education = existing.education,
+      startDate = existing.startDate,
       endDate = existing.endDate,
       terminationReason = existing.terminationReason,
       specializedSkills = existing.specializedSkills,
@@ -655,6 +668,7 @@ router.put('/personnel/:id', authorizePermission('personnel.manage'), validate(u
           monthlySalary: money(monthlySalary ?? 0),
           jobTitle: jobTitle ? jobTitle.trim() : '',
           education: education ? education.trim() : '',
+          startDate: requireStorageDate(startDate, 'تاریخ آغاز همکاری'),
           endDate: requireStorageDate(endDate, 'تاریخ پایان همکاری'),
           terminationReason: terminationReason || '',
           specializedSkills: specializedSkills || '',

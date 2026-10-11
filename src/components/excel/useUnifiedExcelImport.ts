@@ -1,5 +1,6 @@
 import React, { useState, useRef, useMemo } from 'react';
 import toast from 'react-hot-toast';
+import { itemImportOutcome } from '../../lib/items/itemImportOutcome';
 import { fetchJson } from '../../api';
 import { formatPersianNumber, errorMessageOf } from '../../utils';
 import { Category, Item } from '../../types';
@@ -121,7 +122,7 @@ export function useUnifiedExcelImport({
           const validated = validateExcelRows(parsedList, loadedCats, loadedItems, typeFilter);
           setPreviewRows(validated);
           setStep('preview');
-          toast.success(`${validated.length} ردیف آماده بررسی و ثبت است.`);
+          toast.success(`${formatPersianNumber(validated.length)} ردیف آماده بررسی و ثبت است.`);
         } catch (err) {
           toast.error('خطا در خواندن فایل اکسل: ' + errorMessageOf(err));
         } finally {
@@ -152,26 +153,6 @@ export function useUnifiedExcelImport({
 
       return validateExcelRows(updated, categories, existingItems, typeFilter);
     });
-  };
-
-  const handleFixRowPrefix = (index: number) => {
-    setPreviewRows(prev => {
-      const updated = prev.map(r => {
-        if (r.index === index && r.expectedPrefix) {
-          let newCode = r.code;
-          if (!newCode) {
-            newCode = `${r.expectedPrefix}101`;
-          } else if (!newCode.toLowerCase().startsWith(r.expectedPrefix.toLowerCase())) {
-            newCode = `${r.expectedPrefix}${newCode}`;
-          }
-          return { ...r, raw: { ...r.raw, 'کد کالا': newCode }, code: newCode };
-        }
-        return r;
-      });
-
-      return validateExcelRows(updated, categories, existingItems, typeFilter);
-    });
-    toast.success('پیشوند کد اصلاح شد.');
   };
 
   const handleAutoFixAllPrefixes = () => {
@@ -221,14 +202,19 @@ export function useUnifiedExcelImport({
       });
 
       if (res && res.success) {
-        setImportResult({
+        const result = {
           createdCount: res.createdCount || 0,
           updatedCount: res.updatedCount || 0,
           pricesCount: res.pricesCount || 0,
-          errors: res.errors || []
-        });
+          errors: Array.isArray(res.errors) ? res.errors : []
+        };
+        setImportResult(result);
         setStep('result');
-        toast.success('ورود داده‌های اکسل با موفقیت انجام شد!');
+        // v10.0.82 (TD-1139): a row error is never reported as a plain success
+        const outcome = itemImportOutcome(result);
+        if (outcome.tone === 'success') toast.success(outcome.message);
+        else if (outcome.tone === 'error') toast.error(outcome.message);
+        else toast(outcome.message, { icon: '⚠️' });
         onSuccess();
       }
     } catch (err) {
@@ -263,7 +249,6 @@ export function useUnifiedExcelImport({
     handleDownloadTemplate,
     handleFileChange,
     handleCellEdit,
-    handleFixRowPrefix,
     handleAutoFixAllPrefixes,
     handleConfirmImport
   };
