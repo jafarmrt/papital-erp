@@ -49,7 +49,7 @@ interface RowProps {
   onDelete: () => void;
 }
 
-/** v10.0.27 (N-05 PR 3): one section in the manager's window; «محصولات» is fixed but may be moved */
+/** v10.0.247 (N-05 PR 3): one section in the manager's window; «محصولات» is fixed but may be moved */
 export function MediaSectionRow({ section, isFirst, isLast, busy, onMove, onSave, onDelete }: RowProps) {
   const [editing, setEditing] = useState(false);
   const fixed = section.kind === 'products';

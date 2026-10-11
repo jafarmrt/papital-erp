@@ -5,7 +5,7 @@ import {
   EMPTY_SECTION_QUERY, mediaSectionQueryFrom, mediaSectionQueryParams, movedIds, sectionIdFrom, type MediaSection,
 } from '../../lib/media/mediaSectionsApi';
 
-// v10.0.27 (N-05 PR 3): the media library's sections. The section manager is offered only to media.manage and sends the
+// v10.0.247 (N-05 PR 3): the media library's sections. The section manager is offered only to media.manage and sends the
 // bodies the section routes take; a custom section and its search conditions live in the page address.
 
 let granted = new Set<string>();

@@ -3,7 +3,7 @@ import { MEDIA_SHOT_TYPES, type MediaKind, type MediaShotType } from './mediaRul
 import type { MediaAssetView } from './mediaApi';
 
 /**
- * v10.0.27 (N-05 PR 3): sections of the media library («محصولات» and the sections a manager adds), the files of a custom
+ * v10.0.247 (N-05 PR 3): sections of the media library («محصولات» and the sections a manager adds), the files of a custom
  * section with their search conditions in the page address, tags, and the manager's order, cover and item-picture actions.
  */
 

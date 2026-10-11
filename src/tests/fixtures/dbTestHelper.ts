@@ -7,6 +7,7 @@ import {
 import { sql, ilike, eq, and } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 import { TEST_MARKER } from './testMarker.js';
+import { deleteTestRoles } from './roleCleanup.js';
 
 /**
  * TD-107 (v4.0.31) — مارکر محوری به‌جای واژگان عمومی
@@ -300,7 +301,7 @@ export async function cleanupAllTestFixtures(): Promise<void> {
     await orm.execute(sql`DELETE FROM idempotency_keys`);
     await orm.execute(sql`DELETE FROM event_action_logs`);
     await orm.execute(sql`DELETE FROM activity_logs WHERE action ILIKE 'TEST%' OR details::text ILIKE '%E2E%' OR details::text ILIKE ${MARKER_PAT}`);
-    await orm.delete(roles).where(and(ilike(roles.code, 'ROLE_%'), eq(roles.isSystem, 0)));
+    await deleteTestRoles(and(ilike(roles.code, 'ROLE_%'), eq(roles.isSystem, 0)));
     await orm.delete(warehouses).where(ilike(warehouses.code, 'WH_%'));
   } catch (err: any) {
     logger.warn(`[TestDbHelper] Error cleaning system event & log fixtures: ${err.message}`);

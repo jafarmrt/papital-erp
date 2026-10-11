@@ -19,7 +19,7 @@ interface Props {
   onCountChanged: () => void;
 }
 
-/** v10.0.27 (N-05 PR 3): the files of one custom section: search conditions, gallery with paging and the upload box */
+/** v10.0.247 (N-05 PR 3): the files of one custom section: search conditions, gallery with paging and the upload box */
 export function MediaSectionView({ section, query, rights, onQuery, onCountChanged }: Props) {
   const [result, setResult] = useState<MediaAssetPage | null>(null);
   const [tags, setTags] = useState<string[]>([]);

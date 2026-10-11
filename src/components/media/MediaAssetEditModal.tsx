@@ -16,7 +16,7 @@ interface Props {
 
 const inputClass = 'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500';
 
-/** Title, description, shot type and (v10.0.27, N-05 PR 3) tags of one file */
+/** Title, description, shot type and (v10.0.247, N-05 PR 3) tags of one file */
 export function MediaAssetEditModal({ asset, onClose, onSaved }: Props) {
   const [title, setTitle] = useState(asset.title ?? '');
   const [description, setDescription] = useState(asset.description ?? '');

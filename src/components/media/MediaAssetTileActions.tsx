@@ -29,7 +29,7 @@ interface Props {
 
 const actionClass = 'inline-flex items-center gap-1 px-2 h-7 rounded-md text-[11px] font-bold border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40';
 
-/** v10.0.27 (N-05 PR 3): order, cover, replacement and item-picture buttons of a gallery tile */
+/** v10.0.247 (N-05 PR 3): order, cover, replacement and item-picture buttons of a gallery tile */
 export function MediaAssetTileActions({ asset, flags, busy, onMove, onCover, onReplace, onItemImage }: Props) {
   const name = asset.title || asset.originalName;
   return (

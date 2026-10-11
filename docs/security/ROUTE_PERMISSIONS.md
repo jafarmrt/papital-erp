@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 400
+تعداد مسیرها: 409
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -63,6 +63,7 @@
 | GET | `/api/accounting/treasury` | accounting.treasury \| accounting.reports \| accounting.view |
 | POST | `/api/accounting/treasury` | accounting.treasury |
 | PUT | `/api/accounting/treasury/:id/document` | accounting.treasury |
+| GET | `/api/accounting/treasury/:id/document-options` | accounting.treasury |
 | POST | `/api/accounting/treasury/:id/void` | accounting.treasury |
 | GET | `/api/accounting/treasury/contra-accounts` | accounting.treasury \| accounting.cheques |
 | POST | `/api/accounting/treasury/preview-voucher` | accounting.treasury |
@@ -74,11 +75,11 @@
 | GET | `/api/accounting/vouchers/:id` | accounting.vouchers \| accounting.reports \| accounting.view |
 | PUT | `/api/accounting/vouchers/:id` | accounting.vouchers |
 | POST | `/api/accounting/vouchers/:id/correct` | accounting.vouchers |
-| POST | `/api/accounting/vouchers/:id/finalize` | accounting.vouchers |
+| POST | `/api/accounting/vouchers/:id/finalize` | accounting.vouchers_approve |
 | POST | `/api/accounting/vouchers/:id/reverse` | accounting.vouchers |
-| PUT | `/api/accounting/vouchers/:id/status` | accounting.vouchers |
-| POST | `/api/accounting/vouchers/batch-approve` | accounting.vouchers |
-| POST | `/api/accounting/vouchers/batch-finalize` | accounting.vouchers |
+| PUT | `/api/accounting/vouchers/:id/status` | accounting.vouchers_approve |
+| POST | `/api/accounting/vouchers/batch-approve` | accounting.vouchers_approve |
+| POST | `/api/accounting/vouchers/batch-finalize` | accounting.vouchers_approve |
 | GET | `/api/activity-logs` | audit_logs.view |
 | GET | `/api/activity-logs/filters` | audit_logs.view |
 | GET | `/api/activity-logs/integrity` | audit_logs.view |
@@ -106,7 +107,7 @@
 | GET | `/api/crm/leads` | crm.view \| customers.view \| customers.manage |
 | POST | `/api/crm/leads` | crm.manage |
 | DELETE | `/api/crm/leads/:id` | crm.delete |
-| GET | `/api/crm/leads/:id` | crm.view |
+| GET | `/api/crm/leads/:id` | crm.view \| customers.view \| customers.manage |
 | PUT | `/api/crm/leads/:id` | crm.manage |
 | POST | `/api/crm/leads/:id/convert-to-customer` | crm.manage |
 | GET | `/api/crm/stats` | crm.view \| customers.view \| customers.manage |
@@ -135,6 +136,7 @@
 | GET | `/api/documents/:id` | documents.view \| documents.create \| documents.edit \| workflow.view \| audit.view |
 | PUT | `/api/documents/:id` | documents.edit |
 | PUT | `/api/documents/:id/finalize` | documents.finalize \| warehouse.in \| warehouse.out |
+| GET | `/api/documents/:id/line-stock` | documents.view \| documents.create \| documents.edit \| workflow.view \| audit.view |
 | PUT | `/api/documents/:id/notes` | documents.edit |
 | GET | `/api/documents/audit-items` | audit.view |
 | GET | `/api/documents/by-ref/:ref` | documents.view \| documents.create \| documents.edit \| workflow.view \| audit.view |
@@ -152,7 +154,6 @@
 | PUT | `/api/events/action-rules/:id` | events.manage |
 | POST | `/api/events/action-rules/:id/test` | events.manage |
 | POST | `/api/events/action-rules/:id/toggle` | events.manage |
-| GET | `/api/events/action-rules/logs` | events.view |
 | GET | `/api/events/action-rules/stats` | events.view |
 | POST | `/api/events/action-rules/test-draft` | events.manage |
 | GET | `/api/events/dlq` | events.view |
@@ -193,7 +194,6 @@
 | PUT | `/api/events/webhooks/:id` | events.manage |
 | POST | `/api/events/webhooks/:id/rotate-secret` | events.manage |
 | POST | `/api/events/webhooks/:id/toggle` | events.manage |
-| GET | `/api/events/webhooks/deliveries` | events.view |
 | GET | `/api/events/webhooks/deliveries/list` | events.view |
 | POST | `/api/events/webhooks/ping` | events.manage |
 | GET | `/api/events/webhooks/stats` | events.view |
@@ -212,8 +212,6 @@
 | GET | `/api/inventory/integrity-audit` | warehouse.view \| inventory.reconcile \| audit.view |
 | GET | `/api/inventory/item-kardex/:itemId` | warehouse.view |
 | POST | `/api/inventory/kardex-initial-backfill` | inventory.reconcile |
-| GET | `/api/inventory/negative-stock-policy` | warehouse.view \| inventory.reconcile \| audit.view |
-| PUT | `/api/inventory/negative-stock-policy` | inventory.reconcile |
 | POST | `/api/inventory/rebuild-from-ledger` | inventory.reconcile |
 | GET | `/api/inventory/report` | warehouse.view \| inventory.reconcile \| audit.view |
 | GET | `/api/inventory/reserved-items` | products.view \| reports.view \| warehouse.view \| warehouse.in \| documents.view \| documents.create |
@@ -233,6 +231,7 @@
 | GET | `/api/items/options` | products.view \| documents.view \| documents.create \| documents.finalize \| warehouse.view \| warehouse.in \| warehouse.out \| audit.view \| projects.view \| crm.view \| procurement.view |
 | GET | `/api/items/prices/all` | products.view \| products.edit_price |
 | POST | `/api/items/prices/batch-update` | products.edit_price |
+| GET | `/api/items/pricing-page` | products.view \| products.edit_price |
 | GET | `/api/items/reorder-alerts` | products.view \| warehouse.view |
 | GET | `/api/items/unified-export` | products.view |
 | POST | `/api/items/unified-import` | products.create \| products.edit |
@@ -287,6 +286,10 @@
 | POST | `/api/piecework/categories` | piecework.manage_tasks |
 | DELETE | `/api/piecework/categories/:id` | piecework.manage_tasks |
 | PUT | `/api/piecework/categories/:id` | piecework.manage_tasks |
+| POST | `/api/piecework/eidi-payslips` | piecework.payroll |
+| GET | `/api/piecework/eidi-preview` | piecework.payroll \| piecework.pay \| personnel.manage \| accounting.treasury |
+| GET | `/api/piecework/eidi-rates` | payroll.rates_manage \| piecework.payroll \| piecework.pay \| personnel.manage \| accounting.treasury |
+| PUT | `/api/piecework/eidi-rates/:year` | payroll.rates_manage |
 | GET | `/api/piecework/logs` | piecework.view \| piecework.log \| personnel.manage \| projects.view |
 | POST | `/api/piecework/logs` | piecework.log |
 | DELETE | `/api/piecework/logs/:id` | piecework.log |
@@ -296,10 +299,11 @@
 | POST | `/api/piecework/payrolls` | piecework.payroll |
 | DELETE | `/api/piecework/payrolls/:id` | piecework.payroll |
 | GET | `/api/piecework/payrolls/:id` | piecework.payroll \| piecework.pay \| personnel.manage \| accounting.treasury |
+| PUT | `/api/piecework/payrolls/:id` | piecework.payroll |
 | GET | `/api/piecework/payrolls/:id/payments` | piecework.payroll \| piecework.pay \| personnel.manage \| accounting.treasury |
 | POST | `/api/piecework/payrolls/:id/payments/:transactionId/void` | piecework.pay |
 | POST | `/api/piecework/payrolls/:id/register-payment` | piecework.pay |
-| PUT | `/api/piecework/payrolls/:id/status` | piecework.payroll |
+| PUT | `/api/piecework/payrolls/:id/status` | piecework.payroll \| piecework.payroll_approve |
 | POST | `/api/piecework/payrolls/:id/sync-voucher` | piecework.payroll |
 | POST | `/api/piecework/payrolls/generate` | piecework.payroll |
 | GET | `/api/piecework/payrolls/mine` | login-only |
@@ -308,6 +312,11 @@
 | GET | `/api/piecework/personnel/:id/advance-balance` | piecework.payroll \| piecework.pay \| personnel.manage \| accounting.treasury |
 | POST | `/api/piecework/rates` | piecework.manage_tasks |
 | GET | `/api/piecework/rates/:personnelId` | piecework.view \| piecework.log \| piecework.manage_tasks \| piecework.payroll \| piecework.pay \| personnel.manage \| accounting.treasury |
+| GET | `/api/piecework/reports/eidi` | piecework.payroll \| piecework.pay \| personnel.manage \| accounting.treasury |
+| GET | `/api/piecework/reports/statutory` | piecework.payroll \| piecework.pay \| personnel.manage \| accounting.treasury |
+| GET | `/api/piecework/statutory-preview` | piecework.payroll \| piecework.pay \| personnel.manage \| accounting.treasury |
+| GET | `/api/piecework/statutory-rates` | payroll.rates_manage \| piecework.payroll \| piecework.pay \| personnel.manage \| accounting.treasury |
+| PUT | `/api/piecework/statutory-rates/:year` | payroll.rates_manage |
 | GET | `/api/piecework/tasks` | piecework.view \| piecework.log \| piecework.manage_tasks \| projects.view \| settings.manage \| personnel.manage |
 | POST | `/api/piecework/tasks` | piecework.manage_tasks |
 | GET | `/api/piecework/tasks-history` | piecework.view \| piecework.log \| piecework.manage_tasks \| projects.view \| settings.manage \| personnel.manage |

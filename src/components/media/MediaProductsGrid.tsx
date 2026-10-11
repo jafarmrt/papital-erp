@@ -13,7 +13,7 @@ interface Props {
   onQuery: (next: MediaProductQuery) => void;
 }
 
-/** v10.0.25 (N-05 PR 2), moved out of the page in v10.0.27 (N-05 PR 3): the product grid of the «محصولات» section */
+/** v10.0.25 (N-05 PR 2), moved out of the page in v10.0.247 (N-05 PR 3): the product grid of the «محصولات» section */
 export function MediaProductsGrid({ query, onQuery }: Props) {
   const [result, setResult] = useState<MediaProductPage | null>(null);
   const [options, setOptions] = useState<MediaProductFilterOptions | null>(null);

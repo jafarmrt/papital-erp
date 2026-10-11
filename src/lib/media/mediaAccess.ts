@@ -6,7 +6,7 @@
 export const MEDIA_UPLOAD_KEYS = ['media.upload', 'media.manage'] as const;
 export const MEDIA_MANAGE_KEY = 'media.manage';
 export const MEDIA_INFO_EDIT_KEYS = ['media.manage', 'products.edit'] as const;
-/** v10.0.27 (N-05 PR 3): `POST /media/assets/:id/item-image` copies a product image into the item's picture */
+/** v10.0.247 (N-05 PR 3): `POST /media/assets/:id/item-image` copies a product image into the item's picture */
 export const MEDIA_ITEM_IMAGE_KEYS = ['media.manage', 'products.edit'] as const;
 
 export interface MediaViewerRights {

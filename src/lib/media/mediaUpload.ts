@@ -185,7 +185,7 @@ export function uploadVideoPoster(assetId: number, poster: VideoPoster): Promise
 }
 
 /**
- * v10.0.27 (N-05 PR 3): replaces a file with a better version of the same kind (`PUT /media/assets/:id/content`, raw
+ * v10.0.247 (N-05 PR 3): replaces a file with a better version of the same kind (`PUT /media/assets/:id/content`, raw
  * body like an upload); title, description, tags, order and cover are kept by the server.
  */
 export function replaceMediaFileContent(assetId: number, file: File, type: string, onProgress?: (fraction: number) => void): Promise<UploadAnswer> {

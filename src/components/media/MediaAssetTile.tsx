@@ -15,7 +15,7 @@ interface Props {
   onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;
-  /** v10.0.27 (N-05 PR 3): order, cover, replacement and item-picture buttons */
+  /** v10.0.247 (N-05 PR 3): order, cover, replacement and item-picture buttons */
   extraActions?: ReactNode;
 }
 

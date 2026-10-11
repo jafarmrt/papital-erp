@@ -17,7 +17,7 @@ interface Props {
   rights: MediaViewerRights;
   onChanged: (asset: MediaAssetView) => void;
   onDeleted: (id: number) => void;
-  /** v10.0.27 (N-05 PR 3): the section (and product) the files belong to, for the order and cover routes */
+  /** v10.0.247 (N-05 PR 3): the section (and product) the files belong to, for the order and cover routes */
   sectionId: number;
   itemId: number | null;
   /** the answer of an order or cover change: every live file of the section (or product) */

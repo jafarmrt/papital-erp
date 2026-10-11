@@ -1,4 +1,5 @@
 import { terminateOpenWorkflows } from '../workflow/workflowTermination.js';
+import { assertProjectNotCancelled } from '../accounting/projectCancelledGuard.js';
 import { eq, and, inArray, isNull } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { documents, documentItems, items, transactions, journalVouchers, productionProjects } from '../../db/schema.js';
@@ -13,12 +14,9 @@ import { resolveReturnVatFromInvoice } from './salesReturnVat.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
-import { domainEventBus } from '../events/domainEventBus.js';
-import { DomainEventType, type InvoiceEventPayload, type PurchaseEventPayload } from '../events/domainEvents.js';
-import { documentEventAmounts } from './documentEventAmount.js';
-import { OutboxService } from '../events/outboxService.js';
 import { VoucherSyncService } from '../accounting/voucherSync.service.js';
 import { VoucherService } from '../accounting/voucher.service.js';
+import { postVoidResidueVoucher, type VoidResidueLine } from '../accounting/voidResidueVoucher.js';
 import { resolveWarehouseCode } from '../inventory/warehouseResolver.js';
 import { LockHierarchyLevel, sortIdsForLocking, withOrderedLocks } from '../../lib/lockOrder.js';
 import { logger } from '../../middleware/logger.js';
@@ -27,12 +25,18 @@ import { DocumentStockEngine } from './documentStockEngine.service.js';
 import { money } from '../../lib/money.js';
 import { releaseReservationsForDocument, restoreReservationsForDocument } from './projectReservationRelease.js';
 import { assertVoidKeepsStockHistory } from '../inventory/voidStockHistory.js';
-import { assertVoidHasNoReturns, assertVoidHasNoTreasuryRows } from './voidDependents.js';
+import { assertVoidHasNoReturns, assertVoidHasNoTreasuryRows, recordVoidEvents } from './voidDependents.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
-import { proformaInvoiceTarget } from './proformaInvoice.js';
+import { finalizeDayTarget, proformaInvoiceTarget } from './proformaInvoice.js';
+import { recordFinalizeEvent } from './documentFinalizeEvents.js';
+import { lockLinkedRequisition, voidLinkedOrder } from './linkedOrderHooks.js';
 import { assertNotProjectDelivery, stockDirectionOf } from './documentRecordRule.js';
 import { assertOutflowWithinSellable } from './documentSellableGate.js';
+import { consumesProjectReservation } from '../../lib/transactions/projectIssueTypes.js';
 import { documentAuditSnapshot, type DocumentAuditChange, type DocumentAuditSnapshot, type DocumentVoidAudit } from './documentAudit.js';
+import { assertNameNotOtherKind } from './documentParty.js';
+import { lockRequisitionOfOrder, releaseVoidedProcurementOrder } from './procurementOrderVoid.js';
+import { documentVoidVoucherReason } from '../../lib/documents/documentTypeName.js';
 
 export class DocumentLifecycleService {
   /**
@@ -49,7 +53,7 @@ export class DocumentLifecycleService {
     id: number,
     user?: string,
     externalTx?: DbExecutor,
-    options?: { strict?: boolean; vatAmount?: number; vatPercent?: number; exchangeRate?: number; allowBackdate?: boolean }
+    options?: { strict?: boolean; vatAmount?: number; vatPercent?: number; exchangeRate?: number; allowBackdate?: boolean; atFinalizeDay?: boolean }
   ): Promise<DocumentAuditChange | null> {
     const isStrict = options?.strict !== false;
     // v9.0.337 (TD-785): سند پیش از نهایی‌سازی (زیر قفل) و پس از آن برای ردیف ممیزی؛ `null` اگر سند از پیش قطعی بود
@@ -58,11 +62,7 @@ export class DocumentLifecycleService {
     const execute = async (tx: DbExecutor): Promise<DocumentAuditChange | null> => {
       // Step 1: Pre-flight lookup & validation without holding locks
       const [docPeek] = await tx.select({
-        id: documents.id,
-        status: documents.status,
-        type: documents.type,
-        refNumber: documents.refNumber,
-        projectId: documents.projectId,
+        id: documents.id, status: documents.status, type: documents.type, refNumber: documents.refNumber, projectId: documents.projectId,
       }).from(documents)
         .where(and(eq(documents.id, id), eq(documents.isDeleted, 0)));
 
@@ -129,16 +129,23 @@ export class DocumentLifecycleService {
             logger.info({ message: `[DocumentLifecycleService.finalizeDocument] Document #${id} already finalized — skipping (concurrent call prevention)`, documentId: id });
             return;
           }
+          // v10.0.184 (TD-921): پیش‌نویس روی پروژه‌ای که پس از آن لغو شد نهایی نمی‌شود
+          if (doc.projectId) await assertProjectNotCancelled(tx, Number(doc.projectId), 'سند');
           auditBefore = await documentAuditSnapshot(tx, id);
 
           const docLines = await tx.select().from(documentItems)
             .where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
 
           const targetType = doc.type === 'proforma' ? 'invoice' : doc.type;
+          // v10.0.98 (TD-1194): پیش‌نویس بی شناسه طرف حساب با نام طرف حسابی از نوع دیگر نهایی نمی‌شود
+          if (!doc.partyId) await assertNameNotOtherKind(tx, targetType, doc.buyerName);
           // v8.0.51 / v8.0.119 (TD-317 / TD-410، تصمیم مالک محصول): فاکتورِ حاصل از پیش‌فاکتور شماره بعدی سری فاکتور و
           // تاریخ روز نهایی‌سازی را می‌گیرد؛ شماره و تاریخ پیش‌فاکتور در یادداشت می‌ماند (proformaInvoice.ts)
-          const isProformaToInvoice = doc.type === 'proforma';
-          const proformaTarget = isProformaToInvoice ? await proformaInvoiceTarget(doc, tx) : null;
+          // v10.0.107 (TD-910، تصمیم ت۷ الف): هر سند در وضعیت پیش‌فاکتور، چه نوع `proforma` چه `invoice` (پیش‌فاکتوری که دارنده
+          // documents.finalize ثبت کرده)، همین قاعده را دارد؛ پیش‌تر نوع `invoice` تاریخ و شماره پیش‌فاکتور را نگه می‌داشت
+          const isProformaToInvoice = doc.type === 'proforma' || (doc.type === 'invoice' && doc.status === 'proforma');
+          // v10.0.236 (TD-914، تصمیم ت۹ الف): سفارش تدارکات روز تحویل را می‌گیرد (`atFinalizeDay`)، مانند پیش‌فاکتور
+          const proformaTarget = isProformaToInvoice ? await proformaInvoiceTarget(doc, tx) : (options?.atFinalizeDay ? await finalizeDayTarget(doc, tx) : null);
           const finalDate = proformaTarget?.date ?? doc.date;
           const finalRefNumber = proformaTarget?.refNumber ?? doc.refNumber;
           // v8.0.10 (TD-267): سند خرید (purchase) هم ورودی است، همان قاعده ثبت سند (documentCreation)
@@ -147,9 +154,9 @@ export class DocumentLifecycleService {
           // Pre-flight stock availability & reservation check for exit documents (TD-118). v9.0.239 (TD-775): جمع مقدار هر
           // (کالا، انبار)، موجودی و رزرو یک‌جا و fail-closed، همان تابع ثبت سند (documentSellableGate.ts)
           if (inOut === 'out') {
+            // v10.0.207 (TD-947): رزرو پروژه فقط برای حواله و ضایعات همان پروژه آزاد است، نه فاکتور فروش
             await assertOutflowWithinSellable(tx, docLines, {
-              excludeDocumentId: id,
-              projectId: doc.projectId ? Number(doc.projectId) : null,
+              excludeDocumentId: id, projectId: doc.projectId && consumesProjectReservation(targetType) ? Number(doc.projectId) : null,
             });
           }
 
@@ -206,7 +213,7 @@ export class DocumentLifecycleService {
           }
 
           // v7.0.102 (TD-233): کسر رزرو پروژه حواله خروج در همان تراکنش نهایی‌سازی؛ خطا نهایی‌سازی را برمی‌گرداند
-          if (inOut === 'out' && doc.projectId) {
+          if (inOut === 'out' && doc.projectId && consumesProjectReservation(targetType)) {
             await releaseReservationsForDocument(tx, Number(doc.projectId), id, docLines, user || doc.user || undefined);
           }
 
@@ -230,7 +237,7 @@ export class DocumentLifecycleService {
           await tx.update(documents).set({ 
             status: 'final',
             type: targetType,
-            ...(isProformaToInvoice ? {
+            ...(proformaTarget ? {
               date: finalDate,
               refNumber: finalRefNumber,
               refFiscalYear: resolveJalaliFiscalYear(finalDate),
@@ -246,43 +253,8 @@ export class DocumentLifecycleService {
           const isPurchase = ['receipt', 'production_receipt', 'purchase'].includes(targetType);
           const safeUser = user || doc.user || 'system';
 
-          if (isSales) {
-            const invEvent = domainEventBus.createEvent<InvoiceEventPayload>(
-              DomainEventType.INVOICE_APPROVED,
-              'Document',
-              String(id),
-              {
-                documentId: id,
-                refNumber: finalRefNumber,
-                docType: targetType,
-                // v9.0.407 (TD-713): the payable amount of the finalized document (the event used to carry no amount)
-                ...await documentEventAmounts(tx, id),
-                buyerName: doc.buyerName || '',
-                currency: doc.currency || 'IRR',
-                itemCount: docLines.length,
-                status: 'final'
-              },
-              { userName: safeUser }
-            );
-            await OutboxService.saveToOutbox(tx, invEvent);
-          } else if (isPurchase) {
-            const purchEvent = domainEventBus.createEvent<PurchaseEventPayload>(
-              DomainEventType.PURCHASE_APPROVED,
-              'Document',
-              String(id),
-              {
-                documentId: id,
-                refNumber: doc.refNumber,
-                ...await documentEventAmounts(tx, id),
-                supplierName: doc.buyerName || '',
-                currency: doc.currency || 'IRR',
-                itemCount: docLines.length,
-                status: 'final'
-              },
-              { userName: safeUser }
-            );
-            await OutboxService.saveToOutbox(tx, purchEvent);
-          }
+          // v9.0.407 (TD-713): رویداد نهایی‌سازی با مبلغ قابل پرداخت و شماره نهایی سند (documentFinalizeEvents.ts)
+          await recordFinalizeEvent(tx, { id, type: targetType, refNumber: finalRefNumber, buyerName: doc.buyerName, currency: doc.currency, itemCount: docLines.length, user: safeUser });
 
           // Step 4: Auto-generate double-entry accounting voucher (Rule DB-008, Strict Mode)
           if (isSales) {
@@ -316,9 +288,11 @@ export class DocumentLifecycleService {
    */
   static async deleteDocument(id: number, user?: string, externalTx?: DbExecutor, audit?: DocumentVoidAudit): Promise<void> {
     const execute = async (tx: DbExecutor): Promise<void> => {
-      const [peek] = await tx.select({ projectId: documents.projectId }).from(documents)
+      const [peek] = await tx.select({ projectId: documents.projectId, procurementRequisitionId: documents.procurementRequisitionId }).from(documents)
         .where(and(eq(documents.id, id), eq(documents.isDeleted, 0)));
       if (!peek) return;
+      // v10.0.99 (TD-1195): درخواست خرید سفارش پیش از کالاها و سند، همان ترتیب تحویل سفارش
+      await lockRequisitionOfOrder(tx, peek.procurementRequisitionId);
 
       // v8.0.67 (TD-320): قفل‌ها به همان ترتیب نهایی‌سازی — کالاها (یک‌جا، به ترتیب شناسه) ← پروژه ← سند — و پیش از درج
       // ردیف کاردکس معکوس. پیش‌تر سند اول قفل می‌شد، ردیف معکوس درج می‌شد و کالاها به ترتیب ردیف‌های کاردکس قفل می‌شدند؛
@@ -327,6 +301,8 @@ export class DocumentLifecycleService {
         .where(and(eq(transactions.documentId, id), eq(transactions.isDeleted, 0)));
       const lineItems = await tx.select({ itemId: documentItems.itemId }).from(documentItems)
         .where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
+      // v10.0.237 (TD-912): درخواست خرید سفارش پیش از کالاها قفل می‌شود (همان ترتیب تحویل) و پس از ابطال به‌روز می‌شود
+      const orderRequisitionId = await lockLinkedRequisition(tx, id);
       await lockStockItems(tx, [...kardexItems, ...lineItems].map(r => r.itemId));
       // v7.0.105 (TD-237): پروژه پیش از سند قفل می‌شود (سلسله‌مراتب PRODUCTION → DOCUMENTS)، چون رزرو کسرشده حواله نهایی
       // در همین تراکنش برمی‌گردد؛ از v8.0.67 بی‌توجه به وضعیت پیش از قفل، چون نهایی‌سازی هم‌زمان می‌تواند آن را نهایی کند
@@ -352,6 +328,8 @@ export class DocumentLifecycleService {
       const auditBefore = await documentAuditSnapshot(tx, id);
 
       const deletedByUser = user || doc.user || 'system';
+      // v10.0.229 (TD-931): رویداد ابطال فاکتور فروش با مبلغ‌های پیش از ابطال، و نوع و شماره سند برای گردش‌های معکوس
+      const reversalEvent = await recordVoidEvents(tx, doc, deletedByUser);
       // V10-1.1: زمان حذف/برگشت‌ها از ساعت توافقی (بدون Z تا مقایسه لغوی ستون date سازگار بماند)
       const nowIso = await businessNowIsoDateTime();
 
@@ -359,19 +337,14 @@ export class DocumentLifecycleService {
       const docLines = await tx.select().from(documentItems).where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
 
       // 1. Soft-delete document with deletedAt & deletedBy
-      await tx.update(documents).set({
-        isDeleted: 1,
-        deletedAt: nowIso,
-        deletedBy: deletedByUser,
-      }).where(eq(documents.id, id));
+      await tx.update(documents).set({ isDeleted: 1, deletedAt: nowIso, deletedBy: deletedByUser }).where(eq(documents.id, id));
 
       // v9.0.40 (TD-447، ت۵): فرایند تأیید در جریان سند در همان تراکنش ابطال بسته می‌شود (سند پیش از نمونه قفل شده است)
       await terminateOpenWorkflows(tx, { entityType: 'document', entityId: id, actionKey: 'terminate', actionTitle: 'بستن فرایند با ابطال سند', comment: 'ابطال سند', userName: deletedByUser });
 
       // 2. Cascade soft-delete document_items
-      await tx.update(documentItems).set({
-        isDeleted: 1,
-      }).where(eq(documentItems.documentId, id));
+      await tx.update(documentItems).set({ isDeleted: 1 }).where(eq(documentItems.documentId, id));
+      await releaseVoidedProcurementOrder(tx, { ...doc, lineItemIds: docLines.map(l => l.itemId) }, deletedByUser);
 
       // 3. Cascade soft-delete transactions + ثبت تراکنش‌های معکوس مطابق الگوی DB-009
       const originalTxs = await tx.select().from(transactions)
@@ -379,9 +352,7 @@ export class DocumentLifecycleService {
       // ردیف کاردکسی که پس از خواندن بالا (پیش از قفل سند) ثبت شده باشد هم پیش از درج معکوس قفل می‌شود (بی‌اثر اگر قفل باشد)
       await lockStockItems(tx, originalTxs.map(t => t.itemId));
 
-      await tx.update(transactions).set({
-        isDeleted: 1,
-      }).where(eq(transactions.documentId, doc.id));
+      await tx.update(transactions).set({ isDeleted: 1 }).where(eq(transactions.documentId, doc.id));
 
       // v9.0.110 (TD-482): a reversal of a row without a warehouse names the warehouse its stock comes back to (the
       // default one, as in step 4), never the ledger alias 'default' that a warehouse code could also be
@@ -413,6 +384,8 @@ export class DocumentLifecycleService {
       // (پیش‌تر فقط کاردکس معکوس می‌شد و موجودی انبار با کاردکس ناهمخوان می‌ماند)
       if (doc.status === 'final' || (doc.type === 'audit' && originalTxs.length > 0)) {
         const defaultWh = await resolveWarehouseCode(tx, '');
+        // v10.0.84 (TD-1147): what each reversal leaves in the inventory accounts with no stock behind it
+        const residues: VoidResidueLine[] = [];
 
         // C-01 & F3: موجودی انبار منحصراً بر اساس گردش واقعی تراکنش‌های ثبت‌شده (originalTxs) معکوس می‌شود؛
         // در اسناد انبارگردانی فقط انحراف (variance) ثبت شده بود و نباید کل physical_stock برگشت داده شود.
@@ -421,22 +394,22 @@ export class DocumentLifecycleService {
             const origQty = Number(orig.quantity) || 0;
             if (origQty > 0) {
               const targetLoc = (orig.location || '').trim() || defaultWh;
-              await DocumentStockEngine.applyStockReversal(tx, {
+              residues.push(await DocumentStockEngine.applyStockReversal(tx, {
                 itemId: orig.itemId,
                 quantity: origQty,
                 originalDirection: orig.type as 'in' | 'out',
                 unitPrice: orig.unitPrice ?? 0,
                 location: targetLoc,
                 // v9.0.80 (TD-489): حواله انتقال بین انبارها فقط مقدار را جابه‌جا کرده بود؛ ابطالش هم WAC را تغییر نمی‌دهد
-                quantityOnly: orig.documentType === 'transfer',
-              });
+                quantityOnly: orig.documentType === 'transfer', ...reversalEvent,
+              }));
             }
           }
         } else if (doc.type !== 'audit') {
           const docDirection: 'in' | 'out' = (doc.type === 'receipt' || doc.type === 'production_receipt' || doc.type === 'return') ? 'in' : 'out';
           for (const item of docLines) {
             const targetLoc = (item.location || '').trim() || defaultWh;
-            await DocumentStockEngine.applyStockReversal(tx, {
+            residues.push(await DocumentStockEngine.applyStockReversal(tx, {
               itemId: item.itemId,
               quantity: item.quantity,
               originalDirection: docDirection,
@@ -445,8 +418,7 @@ export class DocumentLifecycleService {
               // برمی‌گردد تا WAC مثل قبل بی‌تغییر بماند
               unitPrice: docDirection === 'out' ? 0
                 : (fin(doc.exchangeRate).isPositive() ? stockUnitPriceInIrr(item.unitPrice ?? 0, doc.currency, doc.exchangeRate) : (item.unitPrice ?? 0)),
-              location: targetLoc
-            });
+              location: targetLoc, ...reversalEvent }));
           }
         }
 
@@ -485,11 +457,15 @@ export class DocumentLifecycleService {
           await VoucherService.voidSourceVoucher({
             voucherId: lv.id,
             date: await businessTodayIsoDate(),
-            reason: `حذف سند انبار شماره ${doc.refNumber || id} (${doc.type || ''})`,
+            reason: documentVoidVoucherReason(doc.type, doc.refNumber || String(id)), // TD-1241: the type's Persian name, never its code
             username: deletedByUser,
             externalTx: tx,
           });
         }
+        // v10.0.84 (TD-1147, ت۱۵ الف): the value left behind goes to «کسری و اضافات انبار» as a draft voucher
+        await postVoidResidueVoucher({
+          documentId: id, refNumber: doc.refNumber || String(id), date: await businessTodayIsoDate(), username: deletedByUser,
+        }, residues, tx);
       }
 
       // 5. Audit log — v8.0.77 (TD-324): در همان تراکنش (پیش‌تر اتصال دوم استخر و ردیف ممیزی ماندگار حتی با برگشت ابطال)
@@ -513,6 +489,7 @@ export class DocumentLifecycleService {
           deletedBy: deletedByUser
         }
       });
+      await voidLinkedOrder(tx, { documentId: id, requisitionId: orderRequisitionId, user: deletedByUser });
     };
 
     if (externalTx) {

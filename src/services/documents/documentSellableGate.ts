@@ -1,6 +1,9 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
-import { items } from '../../db/schema.js';
+import { documentItems, documents, items, warehouses } from '../../db/schema.js';
+import { isReservingDocument } from '../../lib/documents/reservingDocuments.js';
+import { documentStockDirection } from '../../lib/documents/documentDirection.js';
+import type { DocumentLineStock } from '../../lib/documents/documentLineStock.js';
 import { fin, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { InsufficientStockError, NotFoundError } from '../../errors/customErrors.js';
 import { formatPersianNumber } from '../../utils/persianNumber.js';
@@ -40,6 +43,8 @@ interface Shortage {
   code: string;
   name: string;
   location: string;
+  /** v10.0.114 (TD-1199): نام انبار برای پیام؛ کد انبار در `location` می‌ماند */
+  locationName: string;
   requested: number;
   sellable: number;
   locationStock: number;
@@ -50,7 +55,12 @@ interface Shortage {
 
 const fa = (n: number) => formatPersianNumber(n, 4);
 
-export async function assertOutflowWithinSellable(tx: DbExecutor, lines: OutflowLine[], ctx: OutflowContext = {}): Promise<void> {
+interface ShortageReport {
+  shortages: Shortage[];
+  units: Map<number, string>;
+}
+
+async function findSellableShortages(tx: DbExecutor, lines: OutflowLine[], ctx: OutflowContext): Promise<ShortageReport> {
   const resolveWh = await createWarehouseResolver(tx);
   const requested = new Map<string, { itemId: number; location: string; qty: FinancialDecimal }>();
   for (const line of lines) {
@@ -63,7 +73,7 @@ export async function assertOutflowWithinSellable(tx: DbExecutor, lines: Outflow
     const prev = requested.get(key);
     requested.set(key, { itemId, location, qty: prev ? prev.qty.add(qty) : qty });
   }
-  if (requested.size === 0) return;
+  if (requested.size === 0) return { shortages: [], units: new Map() };
 
   const itemIds = Array.from(new Set(Array.from(requested.values(), r => r.itemId))).sort((a, b) => a - b);
   const itemRows = await tx
@@ -93,16 +103,119 @@ export async function assertOutflowWithinSellable(tx: DbExecutor, lines: Outflow
         .filter(r => !(r.sourceType === 'proforma' && ctx.excludeDocumentId && Number(r.sourceId) === ctx.excludeDocumentId))
         .filter(r => !(r.sourceType === 'project' && ctx.projectId && Number(r.sourceId) === ctx.projectId))
         .map(r => `«${r.sourceRef || r.sourceTitle}» (${fa(Number(r.reservedQty) || 0)})`);
-      shortages.push({ itemId, code: row.code, name: row.name, location, requested: qty.toNumber(), holders, ...info });
+      shortages.push({ itemId, code: row.code, name: row.name, location, locationName: location, requested: qty.toNumber(), holders, ...info });
     }
   }
+  if (shortages.length > 0) {
+    const names = new Map((await tx.select({ code: warehouses.code, name: warehouses.name }).from(warehouses))
+      .map(w => [w.code, w.name] as const));
+    for (const s of shortages) s.locationName = names.get(s.location)?.trim() || s.location;
+  }
+  return { shortages, units };
+}
+
+export async function assertOutflowWithinSellable(tx: DbExecutor, lines: OutflowLine[], ctx: OutflowContext = {}): Promise<void> {
+  const { shortages, units } = await findSellableShortages(tx, lines, ctx);
   if (shortages.length === 0) return;
 
   const sentences = shortages.map(s => {
     const unit = units.get(s.itemId) ?? 'عدد';
-    return `امکان خروج بیش از ${fa(s.sellable)} ${unit} برای کالا «${s.name}» (${s.code}) از انبار «${s.location}» وجود ندارد؛ `
+    return `امکان خروج بیش از ${fa(s.sellable)} ${unit} برای کالا «${s.name}» (${s.code}) از انبار «${s.locationName}» وجود ندارد؛ `
       + `این سند ${fa(s.requested)} ${unit} می‌خواهد. موجودی انبار: ${fa(s.locationStock)}، رزرو سایر مصارف: ${fa(s.reservedForOthers)}`
       + `${s.holders.length > 0 ? ` (${s.holders.join('، ')})` : ''}، قابل فروش: ${fa(s.sellable)}.`;
   });
   throw new InsufficientStockError(sentences.join(' '), { shortages });
+}
+
+/**
+ * v10.0.86 (TD-1138، تصمیم مالک محصول ت۱۴ «هشدار»): پیش‌فاکتور فروش ذخیره‌شده با همان قاعده قابل فروش سنجیده می‌شود، ولی
+ * کمبود ذخیره را رد نمی‌کند: هر کالایی که بیش از قابل فروش انبارش خواسته شده یک جمله هشدار می‌گیرد و پاسخ ثبت و ویرایش آن
+ * را به فرم می‌رساند. رزرو خود همین پیش‌فاکتور از رزرو دیگران کم می‌شود. سند دیگری (پیش‌نویس، قطعی، خرید) هشداری ندارد.
+ * پیش‌تر پیش‌فاکتور بی هیچ سنجشی ذخیره می‌شد و کمبود فقط هنگام قطعی شدن دیده می‌شد.
+ */
+export async function proformaStockWarnings(tx: DbExecutor, documentId: number): Promise<string[]> {
+  const [doc] = await tx.select({ type: documents.type, status: documents.status }).from(documents)
+    .where(and(eq(documents.id, documentId), eq(documents.isDeleted, 0)));
+  if (!doc || !isReservingDocument(doc.type, doc.status)) return [];
+  const lines = await tx.select({ itemId: documentItems.itemId, quantity: documentItems.quantity, location: documentItems.location })
+    .from(documentItems)
+    .where(and(eq(documentItems.documentId, documentId), eq(documentItems.isDeleted, 0)));
+  const { shortages, units } = await findSellableShortages(tx, lines, { excludeDocumentId: documentId });
+  return shortages.map(s => {
+    const unit = units.get(s.itemId) ?? 'عدد';
+    return `کالای «${s.name}» (${s.code}) در انبار «${s.locationName}»: این پیش‌فاکتور ${fa(s.requested)} ${unit} می‌خواهد و قابل فروش `
+      + `${fa(s.sellable)} ${unit} است (موجودی انبار: ${fa(s.locationStock)}، رزرو سایر مصارف: ${fa(s.reservedForOthers)}`
+      + `${s.holders.length > 0 ? `؛ ${s.holders.join('، ')}` : ''}).`;
+  });
+}
+
+/**
+ * TD-1204 (product-owner decision t19 «خودکار»): a sales proforma that a rejection turned into a draft (TD-1137) becomes a
+ * proforma again when it is resent for review, so it reserves its lines again. The resend is refused when a line asks
+ * more than the sellable stock, with one sentence per item; the document's own lines are never counted against it.
+ */
+export async function assertProformaResendWithinSellable(tx: DbExecutor, documentId: number): Promise<void> {
+  const lines = await tx.select({ itemId: documentItems.itemId, quantity: documentItems.quantity, location: documentItems.location })
+    .from(documentItems)
+    .where(and(eq(documentItems.documentId, documentId), eq(documentItems.isDeleted, 0)));
+  const { shortages, units } = await findSellableShortages(tx, lines, { excludeDocumentId: documentId });
+  if (shortages.length === 0) return;
+  const sentences = shortages.map(s => {
+    const unit = units.get(s.itemId) ?? 'عدد';
+    return `کالای «${s.name}» (${s.code}) در انبار «${s.locationName}»: این پیش‌فاکتور ${fa(s.requested)} ${unit} می‌خواهد و قابل فروش `
+      + `${fa(s.sellable)} ${unit} است (موجودی انبار: ${fa(s.locationStock)}، رزرو سایر مصارف: ${fa(s.reservedForOthers)}`
+      + `${s.holders.length > 0 ? `؛ ${s.holders.join('، ')}` : ''}).`;
+  });
+  throw new InsufficientStockError(
+    `پیش‌فاکتور دوباره ارسال نشد، چون موجودی برای رزرو دوباره آن کافی نیست. ${sentences.join(' ')} مقدار را کم کنید یا پس از تأمین موجودی دوباره بفرستید.`,
+    { shortages },
+  );
+}
+
+/**
+ * v10.0.151 (TD-1175, fresh-eyes guide finding B8 / roles-b R2 #4): what the warehouse approver needs to decide on an
+ * outgoing document. Each (item, warehouse) of its live lines with the quantity asked, the warehouse stock, the
+ * reservations of others and the sellable quantity, by the sellable gate's rule (`computeSellable`; the document's own
+ * proforma reservation and its project's reservation are not counted against it). Read only; an incoming document has
+ * none. The task window showed only names and quantities, so the keeper approved without seeing the source warehouse.
+ */
+export async function documentLineStock(tx: DbExecutor, documentId: number): Promise<DocumentLineStock[]> {
+  const [doc] = await tx.select({ type: documents.type, projectId: documents.projectId }).from(documents)
+    .where(and(eq(documents.id, documentId), eq(documents.isDeleted, 0)));
+  if (!doc || documentStockDirection(doc.type) !== 'out') return [];
+  const lines = await tx.select({ itemId: documentItems.itemId, quantity: documentItems.quantity, location: documentItems.location })
+    .from(documentItems)
+    .where(and(eq(documentItems.documentId, documentId), eq(documentItems.isDeleted, 0)));
+
+  const resolveWh = await createWarehouseResolver(tx);
+  const requested = new Map<string, { itemId: number; location: string; qty: FinancialDecimal }>();
+  for (const line of lines) {
+    const itemId = Number(line.itemId);
+    const qty = fin((line.quantity ?? 0) as DecimalValue);
+    if (!Number.isInteger(itemId) || itemId <= 0 || !qty.isPositive()) continue;
+    const location = resolveWh(line.location ? String(line.location).trim() : '');
+    const key = `${itemId}|${location}`;
+    const prev = requested.get(key);
+    requested.set(key, { itemId, location, qty: prev ? prev.qty.add(qty) : qty });
+  }
+  if (requested.size === 0) return [];
+
+  const itemIds = Array.from(new Set(Array.from(requested.values(), r => r.itemId))).sort((a, b) => a - b);
+  const codes = Array.from(new Set(Array.from(requested.values(), r => r.location)));
+  const [stocks, report, whRows] = await Promise.all([
+    ItemWarehouseStockService.getStocksForItems(tx, itemIds),
+    ItemStockReservationService.getReservedStockDetails(tx, true, { itemIds }),
+    tx.select({ code: warehouses.code, name: warehouses.name }).from(warehouses).where(inArray(warehouses.code, codes)),
+  ]);
+  const summaryById = new Map(report.itemSummaries.map(s => [Number(s.itemId), s]));
+  const nameByCode = new Map(whRows.map(w => [w.code, w.name]));
+
+  return Array.from(requested.values(), ({ itemId, location, qty }) => {
+    const info = ItemStockReservationService.computeSellable(summaryById.get(itemId), stocks.get(itemId)?.byCode ?? {}, {
+      location,
+      excludeDocumentId: documentId,
+      projectId: doc.projectId ?? null,
+    });
+    return { itemId, location, warehouseName: nameByCode.get(location) ?? location, requested: qty.toNumber(), ...info };
+  });
 }

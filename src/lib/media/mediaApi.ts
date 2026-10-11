@@ -30,7 +30,7 @@ export interface MediaAssetView {
   createdAt: string | null;
   version: number;
   warnings: MediaWarning[];
-  /** v10.0.27 (N-05 PR 3): free tags of the file, read with `normalizeMediaTags` */
+  /** v10.0.247 (N-05 PR 3): free tags of the file, read with `normalizeMediaTags` */
   tags: string[];
 }
 

@@ -10,25 +10,25 @@ import { runReservationCases } from './stockReservationTests.js';
 import { createTestItem } from '../fixtures/factories.js';
 
 /**
- * Series 10, N-05 PR 3 (v10.0.27+): the other sections of the media library, file tags, the order and cover of a
+ * Series 10, N-05 PR 3 (v10.0.247+): the other sections of the media library, file tags, the order and cover of a
  * product's files, replacing a file's content and using a library image as the item's picture.
  */
 export async function runMediaArrangeTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   return runReservationCases(shouldRun, [
     ['reg_media_sections_n05',
-      'v10.0.27: media.manage creates, renames, reorders and deletes sections; the products section is fixed, a title is unique and a section with files is kept (N-05)',
+      'v10.0.247: media.manage creates, renames, reorders and deletes sections; the products section is fixed, a title is unique and a section with files is kept (N-05)',
       ['n05', 'media', 'permissions'], sectionsCase],
     ['reg_media_tags_n05',
-      'v10.0.27: file tags are normalized and capped, filter and search the list and are listed per section (N-05)',
+      'v10.0.247: file tags are normalized and capped, filter and search the list and are listed per section (N-05)',
       ['n05', 'media'], tagsCase],
     ['reg_media_order_cover_n05',
-      'v10.0.27: a product files order is set as a whole and one image is its cover; a video or a non-product file is never a cover (N-05)',
+      'v10.0.247: a product files order is set as a whole and one image is its cover; a video or a non-product file is never a cover (N-05)',
       ['n05', 'media', 'permissions'], orderCoverCase],
     ['reg_media_replace_n05',
-      'v10.0.27: replacing a file keeps its card, order and cover, keeps the old original on disk and refuses the same content, a duplicate or another kind (N-05)',
+      'v10.0.247: replacing a file keeps its card, order and cover, keeps the old original on disk and refuses the same content, a duplicate or another kind (N-05)',
       ['n05', 'media', 'permissions'], replaceCase],
     ['reg_media_item_image_n05',
-      'v10.0.27: a product image becomes the item picture at the item version, with copied files and an item audit row (N-05)',
+      'v10.0.247: a product image becomes the item picture at the item version, with copied files and an item audit row (N-05)',
       ['n05', 'media', 'items', 'permissions'], itemImageCase],
   ]);
 }

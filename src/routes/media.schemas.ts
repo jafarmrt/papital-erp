@@ -52,7 +52,7 @@ export const mediaUpdateSchema = z.object({
     description: z.string().max(5000, 'توضیح حداکثر ۵۰۰۰ نویسه است').optional(),
     shotType: shotType.optional(),
     sortOrder: z.number().int().min(0).max(100000).optional(),
-    // v10.0.27 (N-05 PR 3): read by `normalizeMediaTags` (422 MEDIA_TAGS_INVALID beyond its limits)
+    // v10.0.247 (N-05 PR 3): read by `normalizeMediaTags` (422 MEDIA_TAGS_INVALID beyond its limits)
     tags: z.array(z.string().max(200)).max(100).optional(),
   }).strict(),
 });
@@ -102,7 +102,7 @@ export const mediaZipSchema = z.object({
 
 const idList = (label: string) => z.array(z.number().int().positive(`${label} نامعتبر است`)).min(1, `${label} لازم است`).max(2000);
 
-/** v10.0.27 (N-05 PR 3): the sections of the library and the arranging of its files */
+/** v10.0.247 (N-05 PR 3): the sections of the library and the arranging of its files */
 export const mediaTagsSchema = z.object({
   query: z.object({ sectionId: positiveId('بخش').optional() }).strict(),
 });

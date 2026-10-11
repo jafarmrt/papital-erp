@@ -95,6 +95,7 @@ const REORDER_LABELS: Record<keyof InventoryReorderAlertPayload, string> = {
   itemCode: 'کد کالا',
   itemName: 'نام کالا',
   currentStock: 'موجودی فعلی',
+  freeStock: 'موجودی آزاد',
   reorderPoint: 'نقطه سفارش',
   warehouseLocation: 'انبار',
   alertMessage: 'متن هشدار',
@@ -121,6 +122,7 @@ const WOO_VOIDED_LABELS: Record<string, string> = {
 const PAYLOAD_LABELS_BY_EVENT: Record<string, Record<string, string>> = {
   InvoiceCreated: INVOICE_LABELS,
   InvoiceApproved: INVOICE_LABELS,
+  InvoiceVoided: INVOICE_LABELS,
   PurchaseCreated: PURCHASE_LABELS,
   PurchaseApproved: PURCHASE_LABELS,
   StockReceived: STOCK_LABELS,

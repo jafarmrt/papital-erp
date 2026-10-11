@@ -1,6 +1,6 @@
 /**
- * v10.0.27 (N-05 PR 3): the tags of a media library file. Shared by the server (`PUT /media/assets/:id`) and the browser
- * edit form, so both read a tag list the same way; migration 0098 holds the same count limit as a CHECK constraint.
+ * v10.0.247 (N-05 PR 3): the tags of a media library file. Shared by the server (`PUT /media/assets/:id`) and the browser
+ * edit form, so both read a tag list the same way; migration 0107 holds the same count limit as a CHECK constraint.
  */
 export const MEDIA_TAG_LIMITS = {
   tags: 20,

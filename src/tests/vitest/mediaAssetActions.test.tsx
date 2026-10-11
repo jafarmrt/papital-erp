@@ -6,7 +6,7 @@ import type { MediaAssetView, MediaProductDetail } from '../../lib/media/mediaAp
 import { MEDIA_TAG_TEXT } from '../../lib/media/mediaTags';
 import { orderAfterMove } from '../../components/media/useMediaGalleryActions';
 
-// v10.0.27 (N-05 PR 3): a product gallery shows the cover and order buttons only to media.manage, «replace with a better
+// v10.0.247 (N-05 PR 3): a product gallery shows the cover and order buttons only to media.manage, «replace with a better
 // version» by the file's change rule and «use as the item picture» to media.manage or products.edit, each sending the body
 // its route takes; the edit form sends normalized tags and shows the tag error under the field.
 

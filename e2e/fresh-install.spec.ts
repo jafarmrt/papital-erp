@@ -10,6 +10,8 @@ import { ROLE_TEMPLATES } from '../src/lib/permissions/roleTemplates';
  * کار روزمره مدیر روی همین نصب را مسیر حیاتی (`critical-path.spec.ts`) می‌آزماید.
  */
 const BASE_URL = `http://localhost:${Number(process.env.E2E_PORT || 3100)}`;
+/** The role code field's Persian placeholder (v10.0.118, TD-1183). */
+const ROLE_CODE_PLACEHOLDER = 'مثلاً warehouse_assistant';
 const template = ROLE_TEMPLATES.find(t => t.code === 'treasurer')!;
 let createdRoleId: number | null = null;
 
@@ -44,7 +46,7 @@ test('a fresh install has only the system admin role, and a role made from a tem
   await page.getByRole('button', { name: /ماتریس نقش‌ها و مجوزها/ }).click();
   await page.getByRole('button', { name: 'ساخت نقش از الگو' }).click();
   await page.getByRole('button', { name: new RegExp(template.name) }).click();
-  await expect(page.getByPlaceholder('e.g. warehouse_assistant')).toHaveValue(template.code);
+  await expect(page.getByPlaceholder(ROLE_CODE_PLACEHOLDER)).toHaveValue(template.code);
 
   const saved = page.waitForResponse(r => r.url().endsWith('/api/roles') && r.request().method() === 'POST');
   await page.getByRole('button', { name: 'ذخیره نقش و مجوزها' }).click();

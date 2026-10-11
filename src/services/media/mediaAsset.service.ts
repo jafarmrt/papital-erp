@@ -166,7 +166,7 @@ export interface MediaSectionView {
   assetCount: number;
 }
 
-/** Live sections in display order with the number of their live files (v10.0.27, N-05 PR 3) */
+/** Live sections in display order with the number of their live files (v10.0.247, N-05 PR 3) */
 export async function listLiveSections(db: DbExecutor): Promise<MediaSectionView[]> {
   const rows = await db.select({
     id: mediaSections.id, kind: mediaSections.kind, title: mediaSections.title, description: mediaSections.description,
@@ -189,7 +189,7 @@ export const MediaAssetService = {
     return listLiveSections(orm);
   },
 
-  /** v10.0.27 (N-05 PR 3): the tags of live files, of one section or all, each once (letter case ignored) */
+  /** v10.0.247 (N-05 PR 3): the tags of live files, of one section or all, each once (letter case ignored) */
   async listTags(sectionId?: number): Promise<string[]> {
     const sectionCondition = sectionId ? sql`AND ${mediaAssets.sectionId} = ${sectionId}` : sql``;
     const result = await orm.execute(sql`

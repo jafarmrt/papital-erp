@@ -45,7 +45,7 @@ export const WORKFLOW_CHECKS: Array<[string, string, () => Promise<string[]>, st
     checkWorkflowDocumentAmountInRials, 'A 110-dollar invoice was evaluated as 55 million rials; a rial invoice as 1,150,000 without the deleted line; a document without a rate passed no amount condition'],
   ['wf_td_405_requisition_step_not_rewritten', 'v8.0.124: a purchase requisition action does not rewrite the workflow step from the requisition status and a received requisition accepts no action (TD-405)',
     checkRequisitionStepNotRewritten, 'Every step change was recorded in the history and the approval came before the receipt; an action on the received requisition got 409 and its step was untouched'],
-  ['wf_td_415_refused_receive_leaves_no_trace', 'v9.0.2: a refused "receive goods" (order left in a closed fiscal year) leaves no item, Kardex, journal voucher or status change (TD-415)',
+  ['wf_td_415_refused_receive_leaves_no_trace', 'v9.0.2: a refused "receive goods" (an order line without cost) leaves no item, Kardex, journal voucher or status change (TD-415)',
     checkRefusedReceiveLeavesNoTrace, 'The action was refused; both orders draft, stock and Kardex zero, no journal voucher; the requisition and the step stayed "ordered"'],
   ['wf_td_415_transition_effects_follow_commit', 'v9.0.2: a rolled-back transition leaves no effect outside and a committed transition is published only once and only from the outbox (TD-415)',
     checkTransitionEffectsFollowCommit, 'The rolled-back transition left no status, log, outbox row or publication; the committed transition had one outbox row and one log and was not published in-process'],

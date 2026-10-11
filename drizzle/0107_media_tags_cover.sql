@@ -1,4 +1,4 @@
--- Drizzle Migration 0098: tags and the single cover of the media library (v10.0.27, N-05 PR 3)
+-- Drizzle Migration 0107: tags and the single cover of the media library (v10.0.247, N-05 PR 3)
 --
 -- Adds a tag list to media_assets (at most 20 tags, the limit of src/lib/media/mediaTags.ts) with a gin index for the tag
 -- filter, and makes the cover of a product unique: one live file per item may carry is_cover = 1. No code wrote is_cover

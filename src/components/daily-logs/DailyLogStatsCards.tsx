@@ -6,7 +6,8 @@ interface DailyLogStatsCardsProps {
   user: User;
   stats: any;
   onPrint: () => void;
-  onOpenCreateModal: () => void;
+  /** TD-1156: given only to holders of daily_logs.create; without it the create button is not shown */
+  onOpenCreateModal?: () => void;
 }
 
 export function DailyLogStatsCards({
@@ -39,13 +40,15 @@ export function DailyLogStatsCards({
             <Printer className="w-4 h-4" />
             چاپ خروجی
           </button>
-          <button
-            onClick={onOpenCreateModal}
-            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-md hover:shadow-lg flex items-center gap-1.5 active:scale-95 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            ثبت گزارش کار جدید
-          </button>
+          {onOpenCreateModal && (
+            <button
+              onClick={onOpenCreateModal}
+              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-md hover:shadow-lg flex items-center gap-1.5 active:scale-95 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              ثبت گزارش کار جدید
+            </button>
+          )}
         </div>
       </div>
 

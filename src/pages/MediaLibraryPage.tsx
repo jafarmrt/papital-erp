@@ -18,7 +18,7 @@ export const MEDIA_LIBRARY_TITLE = 'کتابخانه تصاویر و فیلم‌
 export const SECTION_NOT_FOUND_TEXT = 'این بخش یافت نشد؛ شاید حذف شده باشد.';
 
 /**
- * v10.0.25 (N-05 PR 2): the media library; v10.0.27 (N-05 PR 3) adds its sections. «محصولات» shows the product grid,
+ * v10.0.25 (N-05 PR 2): the media library; v10.0.247 (N-05 PR 3) adds its sections. «محصولات» shows the product grid,
  * a custom section its files. The chosen section and its search conditions live in the page address (`?section=`).
  */
 export default function MediaLibraryPage({ user }: { user?: User | null }) {

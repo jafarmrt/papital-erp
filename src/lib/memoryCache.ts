@@ -26,10 +26,12 @@ export class MemoryCache<T = any> {
   }
 
   set(key: string, value: T, ttlMs?: number): void {
-    if (this.cache.size >= this.maxEntries) {
-      // LRU/FIFO eviction: delete oldest inserted key
-      const firstKey = this.cache.keys().next().value;
-      if (firstKey) this.cache.delete(firstKey);
+    // v10.0.x (OBS-R1-10): replacing a key never evicts another one, and the oldest key is evicted even when it is ''.
+    // Deleting first moves a replaced key to the end of the insertion (FIFO) order.
+    const replacing = this.cache.delete(key);
+    if (!replacing && this.cache.size >= this.maxEntries) {
+      const oldest = this.cache.keys().next();
+      if (!oldest.done) this.cache.delete(oldest.value);
     }
 
     const effectiveTtl = ttlMs !== undefined ? ttlMs : this.defaultTtlMs;

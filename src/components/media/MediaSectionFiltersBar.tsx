@@ -13,7 +13,7 @@ export const SECTION_SEARCH_LABEL = 'جست‌وجوی عنوان، توضیح �
 
 const selectClass = 'h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500';
 
-/** v10.0.27 (N-05 PR 3): search conditions of a custom section's files; each change goes to the server through the page address */
+/** v10.0.247 (N-05 PR 3): search conditions of a custom section's files; each change goes to the server through the page address */
 export function MediaSectionFiltersBar({ query, tags, onChange }: Props) {
   const [searchText, setSearchText] = useState(query.search);
 

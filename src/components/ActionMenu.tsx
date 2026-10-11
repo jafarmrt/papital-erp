@@ -1,6 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { MoreVertical, LucideIcon } from 'lucide-react';
 import { useClickOutside } from '../hooks/useClickOutside';
+import { actionMenuPosition } from '../lib/ui/actionMenuPosition';
 
 export interface ActionMenuItem {
   label: string;
@@ -26,9 +28,23 @@ export function ActionMenu({
   title = 'عملیات بیشتر'
 }: ActionMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [panelStyle, setPanelStyle] = useState<CSSProperties>({});
   const menuRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
-  useClickOutside([menuRef], () => setIsOpen(false), isOpen);
+  useClickOutside([menuRef, panelRef], () => setIsOpen(false), isOpen);
+
+  // v10.0.x (TD-1238): منو در لایه رویی صفحه باز می‌شود تا جدولِ overflow آن را نبُرد؛ با پیمایش یا تغییر اندازه بسته می‌شود
+  useEffect(() => {
+    if (!isOpen) return;
+    const close = () => setIsOpen(false);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -53,6 +69,12 @@ export function ActionMenu({
         type="button"
         onClick={(e) => {
           e.stopPropagation();
+          if (!isOpen && menuRef.current) {
+            setPanelStyle(actionMenuPosition(menuRef.current.getBoundingClientRect(), items.length, align, {
+              width: window.innerWidth,
+              height: window.innerHeight,
+            }));
+          }
           setIsOpen((prev) => !prev);
         }}
         title={title}
@@ -65,11 +87,12 @@ export function ActionMenu({
         <TriggerIcon className="w-4 h-4" />
       </button>
 
-      {isOpen && (
+      {isOpen && createPortal(
         <div
-          className={`absolute z-50 mt-1 w-44 rounded-xl bg-white dark:bg-slate-800 shadow-xl border border-slate-200/80 dark:border-slate-700/80 py-1 focus:outline-none backdrop-blur-md animate-in fade-in zoom-in-95 duration-100 ${
-            align === 'right' ? 'right-0 origin-top-right' : 'left-0 origin-top-left'
-          }`}
+          ref={panelRef}
+          role="menu"
+          style={panelStyle}
+          className="fixed z-[70] w-44 rounded-xl bg-white dark:bg-slate-800 shadow-xl border border-slate-200/80 dark:border-slate-700/80 py-1 focus:outline-none backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
           onClick={(e) => e.stopPropagation()}
         >
           {items.map((item, idx) => {
@@ -100,7 +123,8 @@ export function ActionMenu({
               </button>
             );
           })}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

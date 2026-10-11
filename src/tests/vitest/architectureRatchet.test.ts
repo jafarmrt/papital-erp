@@ -2,7 +2,7 @@
 /**
  * Series 10 roadmap §4 (phase-2 decisions t2 to t5): the architecture ratchet in
  * scripts/ratchets/architectureRatchet.ts counts route writes, pool fallbacks of an optional transaction, hand-written
- * route error answers, generic service errors and server imports against the package direction per file, against scripts/ratchets/architecture-baseline.json; no file
+ * route error answers, generic service errors, audit rows written without the change's transaction (TD-963) and server imports against the package direction per file, against scripts/ratchets/architecture-baseline.json; no file
  * may gain one and the baseline may only shrink.
  */
 import fs from 'fs';
@@ -53,8 +53,22 @@ describe('architecture_ratchet: phase-2 decisions may only shrink their debt', (
     expect(countSource('src/lib/x.ts', service).serviceGenericErrors).toBe(0);
   });
 
+  it('counts an audit row written without the change\'s own transaction (TD-963)', () => {
+    const source = `
+      await logActivity({ userId, action: 'CREATE', entity: 'x' });
+      await logActivity(entry);
+      await audit.logActivity({ req, action: 'UPDATE' });
+      await logActivity({ tx, action: 'CREATE' });
+      await logActivity({ tx: trx, action: 'CREATE' });
+      await logActivity({ ...base, action: 'DELETE' });
+      const label = 'logActivity({ action })';
+    `;
+    expect(countSource('src/routes/x.routes.ts', source).auditWithoutTx).toBe(3);
+    expect(countSource('src/services/x.service.ts', source).auditWithoutTx).toBe(3);
+  });
+
   it('refuses a grown count and reports a lowered one', () => {
-    const empty = { routeWrites: {}, ormFallback: {}, routeErrorResponses: {}, serviceGenericErrors: {}, packageBoundary: {} };
+    const empty = { routeWrites: {}, ormFallback: {}, routeErrorResponses: {}, serviceGenericErrors: {}, auditWithoutTx: {}, packageBoundary: {} };
     const baseline: ArchitectureBaseline = { ...empty, routeWrites: { 'a.ts': 2, 'b.ts': 1 } };
     const report = compareWithBaseline({ ...empty, routeWrites: { 'a.ts': 3, 'c.ts': 1 } }, baseline);
     expect(report.errors).toEqual([
@@ -69,7 +83,8 @@ describe('architecture_ratchet: phase-2 decisions may only shrink their debt', (
     const report = compareWithBaseline(currentState(), baseline);
     expect(report.errors).toEqual([]);
     expect(report.stale).toEqual([]);
-  });
+    // Parses every production file; a loaded CI runner needs more than the 5 s default.
+  }, 30_000);
 });
 
 describe('package_boundary_ratchet: server imports follow the package direction (decision t3 A)', () => {

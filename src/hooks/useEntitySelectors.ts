@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '../api';
 import type { Customer } from '../types';
 import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
+import { supplierNameOptions } from '../lib/documents/documentPartyKind';
 
 export interface EntitySelectOption<T = string | number> {
   value: T;
@@ -82,14 +83,7 @@ export function useCustomerSelectOptions(config: CustomerSelectOptionsConfig = {
 export function useSupplierSelectOptions() {
   const { customers, isLoading, isFetching, error, refetch } = useCustomerSelectOptions();
 
-  const options = useMemo(() => {
-    if (!Array.isArray(customers)) return [];
-    return customers.map((s) => ({
-      value: s.name,
-      label: `${s.partyType === 'supplier' ? '🏭 تامین‌کننده' : s.partyType === 'customer' ? '👤 مشتری' : '🤝 طرف‌حساب'}: ${s.name} ${s.supplierCategory ? `(${s.supplierCategory})` : ''} ${s.phone ? `- ${s.phone}` : ''}`.trim(),
-      _raw: s,
-    }));
-  }, [customers]);
+  const options = useMemo(() => supplierNameOptions(Array.isArray(customers) ? customers : []), [customers]);
 
   return {
     options,

@@ -113,7 +113,7 @@ export async function deleteCategory(req: Request, id: number): Promise<void> {
     const [hasItems] = await tx.select({ id: items.id }).from(items)
       .where(and(itemCategoryCondition(cat.name), eq(items.isDeleted, 0))).limit(1);
     if (hasItems) {
-      throw new ValidationError('امکان حذف این دسته بندی وجود ندارد؛ زیرا کالاهای فعال در سیستم به آن ارجاع داده‌اند.');
+      throw new ValidationError('امکان حذف این دسته بندی وجود ندارد؛ زیرا کالاهای فعال در سامانه به آن ارجاع داده‌اند.');
     }
     await tx.update(categories).set({ isDeleted: 1 }).where(eq(categories.id, id));
     await logActivity({

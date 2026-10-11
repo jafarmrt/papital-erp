@@ -1,19 +1,20 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Item } from '../types';
 import { useHasPermission } from '../contexts/AuthContext';
 import { Search, Plus, FileSpreadsheet, CheckSquare, Package, Box, AlertTriangle, Layers, Tag } from 'lucide-react';
 import { useSearch } from '../SearchContext';
 import { cn, formatPersianNumber } from '../utils';
+import { parseItemListSort, type ItemListSort } from '../lib/items/itemListSort';
 import ConfirmModal from '../components/ConfirmModal';
 import ImagePreviewModal from '../components/items/ImagePreviewModal';
-import ImportErrorsModal from '../components/items/ImportErrorsModal';
 import ItemsTable from '../components/items/ItemsTable';
 import ItemFormModal from '../components/items/ItemFormModal';
 
 const UnifiedExcelModal = lazy(() => import('../components/UnifiedExcelModal'));
 import {
   useItemsQuery,
+  useItemChangeRefresh,
   useCategoriesQuery,
   useWarehousesQuery,
   useArchiveItemMutation,
@@ -42,12 +43,10 @@ export default function ItemsPage() {
     setEditingItem(null);
     setSearchParams(nextType === 'raw_material' ? { type: nextType } : {});
   };
-  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
-  const [importErrors, setImportErrors] = useState<any[]>([]);
+  const [sortConfig, setSortConfig] = useState<ItemListSort | null>(null);
 
   const [showModal, setShowModal] = useState(false);
   const [showExcelModal, setShowExcelModal] = useState(false);
-  const [importProgress] = useState<{ current: number; total: number } | null>(null);
   const [syncingItemId, setSyncingItemId] = useState<number | null>(null);
   const [confirmState, setConfirmState] = useState<{ isOpen: boolean; itemId: number }>({ isOpen: false, itemId: 0 });
 
@@ -55,7 +54,8 @@ export default function ItemsPage() {
   const [editingItem, setEditingItem] = useState<Item | null>(null);
 
   // React Query Hooks (V4 Phase 6.2 U-1: اتصال به debouncedSearchQuery برای حذف بار شبکه غیرضروری)
-  const { data: itemsResponse, isLoading: loading, refetch: loadItems } = useItemsQuery(type, page, 50, debouncedSearchQuery);
+  const { data: itemsResponse, isLoading: loading } = useItemsQuery(type, page, 50, debouncedSearchQuery, sortConfig);
+  const refreshAfterItemChange = useItemChangeRefresh();
   const { data: allCategories = [] } = useCategoriesQuery(type);
   const { data: warehouses = [] } = useWarehousesQuery();
 
@@ -71,36 +71,13 @@ export default function ItemsPage() {
     setPage(1);
   }, [debouncedSearchQuery]);
 
-  const sortedItems = React.useMemo(() => {
-    let sortableItems = [...items];
-    if (sortConfig !== null) {
-      sortableItems.sort((a: any, b: any) => {
-        let aVal = a[sortConfig.key];
-        let bVal = b[sortConfig.key];
-        
-        if (sortConfig.key === 'current_stock') {
-           aVal = a.current_stock;
-           bVal = b.current_stock;
-        }
-        
-        if (aVal < bVal) {
-          return sortConfig.direction === 'asc' ? -1 : 1;
-        }
-        if (aVal > bVal) {
-          return sortConfig.direction === 'asc' ? 1 : -1;
-        }
-        return 0;
-      });
-    }
-    return sortableItems;
-  }, [items, sortConfig]);
-
+  // v10.0.218 (OBS-R1-74): ستون و جهت به سرور می‌رود و همه کالاهای پالایش مرتب می‌شوند، نه فقط صفحه جاری
   const requestSort = (key: string) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
+    const direction = sortConfig && sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc';
+    const next = parseItemListSort(key, direction);
+    if (!next) return;
+    setSortConfig(next);
+    setPage(1);
   };
 
   const executeArchive = async () => {
@@ -128,30 +105,11 @@ export default function ItemsPage() {
     setShowModal(true);
   };
 
-  // Calculate stats
-  const safeItemsList = Array.isArray(items) ? items : [];
-  const lowStockCount = safeItemsList.filter(i => (i.reorder_point || 0) > 0 && i.current_stock <= (i.reorder_point || 0)).length;
+  const lowStockCount = itemsResponse?.stats?.lowStock ?? 0;
 
   return (
     <div className="space-y-6">
       <ImagePreviewModal imageUrl={viewImage} onClose={() => setViewImage(null)} />
-
-      {importProgress && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md border border-slate-100">
-            <h3 className="font-bold text-lg mb-4 text-center text-slate-800">در حال ورود اطلاعات...</h3>
-            <div className="w-full bg-slate-100 rounded-full h-4 mb-2 overflow-hidden border border-slate-200">
-              <div 
-                className="bg-blue-600 h-4 rounded-full transition-all duration-300 ease-out"
-                style={{ width: `${Math.round((importProgress.current / importProgress.total) * 100)}%` }}
-              ></div>
-            </div>
-            <p className="text-center text-sm text-slate-600 font-medium font-mono" dir="ltr">
-              {importProgress.current} / {importProgress.total}
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* Hero Header Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-6 shadow-lg relative overflow-hidden">
@@ -273,12 +231,12 @@ export default function ItemsPage() {
           </div>
 
           <div className="text-xs font-bold text-slate-500 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-2xs">
-            نمایش {formatPersianNumber(sortedItems.length)} از {formatPersianNumber(totalItems || items.length)} قلم
+            نمایش {formatPersianNumber(items.length)} از {formatPersianNumber(totalItems || items.length)} قلم
           </div>
         </div>
 
         <ItemsTable
-          sortedItems={sortedItems}
+          sortedItems={items}
           warehouses={warehouses}
           sortConfig={sortConfig}
           requestSort={requestSort}
@@ -302,7 +260,7 @@ export default function ItemsPage() {
         editingItem={editingItem}
         allCategories={allCategories}
         warehouses={warehouses}
-        onSuccess={loadItems}
+        onSuccess={refreshAfterItemChange}
       />
 
       <ConfirmModal 
@@ -315,20 +273,12 @@ export default function ItemsPage() {
         cancelText="انصراف"
       />
 
-      <ImportErrorsModal
-        importErrors={importErrors}
-        setImportErrors={setImportErrors}
-        allCategories={allCategories}
-        type={type}
-        onSuccessRefresh={loadItems}
-      />
-
       {showExcelModal && (
         <Suspense fallback={null}>
           <UnifiedExcelModal
             isOpen={showExcelModal}
             onClose={() => setShowExcelModal(false)}
-            onSuccess={loadItems}
+            onSuccess={refreshAfterItemChange}
             typeFilter={type}
             title={`مدیریت اکسل ${entityLabel} و قیمت‌گذاری‌ها`}
           />

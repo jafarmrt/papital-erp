@@ -20,7 +20,7 @@ interface Props {
   onReload: () => void;
 }
 
-/** v10.0.27 (N-05 PR 3): add, rename, delete and order the library's sections (media.manage) */
+/** v10.0.247 (N-05 PR 3): add, rename, delete and order the library's sections (media.manage) */
 export function MediaSectionsModal({ sections, onClose, onReplace, onReload }: Props) {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

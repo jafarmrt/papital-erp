@@ -3,7 +3,7 @@ import { isAbortError } from '../../api';
 import { mediaErrorMessage } from '../../lib/media/mediaApi';
 import { listMediaSections, type MediaSection } from '../../lib/media/mediaSectionsApi';
 
-/** v10.0.27 (N-05 PR 3): the sections of the media library in their stored order, reloaded after a change */
+/** v10.0.247 (N-05 PR 3): the sections of the media library in their stored order, reloaded after a change */
 export function useMediaSections() {
   const [sections, setSections] = useState<MediaSection[] | null>(null);
   const [error, setError] = useState<string | null>(null);

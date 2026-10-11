@@ -9,7 +9,7 @@ import { listLiveSections, MEDIA_AUDIT_ENTITY, type MediaActor, type MediaSectio
 const AUDIT_ENTITY: 'کتابخانه تصاویر' = MEDIA_AUDIT_ENTITY;
 
 /**
- * v10.0.27 (N-05 PR 3): the sections of the media library besides «محصولات» (approved plan, section 2). A section is
+ * v10.0.247 (N-05 PR 3): the sections of the media library besides «محصولات» (approved plan, section 2). A section is
  * created, renamed, reordered and deleted by a holder of `media.manage`; the system section «محصولات» is never renamed
  * or deleted, only moved. A live title is unique (letter case and surrounding spaces ignored, `uq_media_sections_title_active`);
  * a section that still holds a live file is not deleted. Every change writes its audit row with `tx`.

@@ -24,7 +24,7 @@ const AUDIT_ENTITY: 'کتابخانه تصاویر' = MEDIA_AUDIT_ENTITY;
 const ITEM_ENTITY: 'کالا' = ITEM_AUDIT_ENTITY;
 
 /**
- * v10.0.27 (N-05 PR 3): arranging the files of the media library — their order, the cover of a product, replacing a
+ * v10.0.247 (N-05 PR 3): arranging the files of the media library — their order, the cover of a product, replacing a
  * file with a better version and using a product image as the item's picture. Each change runs in one transaction with
  * its audit row (`tx`).
  */

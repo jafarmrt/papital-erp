@@ -691,8 +691,71 @@
     {
       "idx": 98,
       "version": "7",
-      "when": 1794000002000,
-      "tag": "0098_media_tags_cover",
+      "when": 1794100000000,
+      "tag": "0098_voucher_approve_permission",
+      "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1794200000000,
+      "tag": "0099_workflow_transition_initiator_only",
+      "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "7",
+      "when": 1794210000000,
+      "tag": "0100_user_role_foreign_key",
+      "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1794300000000,
+      "tag": "0101_payroll_approve_permission",
+      "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1794310000000,
+      "tag": "0102_activity_log_trace_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1794400000000,
+      "tag": "0103_payroll_prepayment_and_service_start",
+      "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "7",
+      "when": 1794500000000,
+      "tag": "0104_payroll_statutory_deductions",
+      "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1794600000000,
+      "tag": "0105_payroll_eidi",
+      "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1794700000000,
+      "tag": "0106_payroll_eidi_tax_free",
+      "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1794710000000,
+      "tag": "0107_media_tags_cover",
       "breakpoints": true
     }
   ]

@@ -60,7 +60,7 @@ router.get('/media/sections', authenticateToken, requirePermission(MEDIA_VIEW_PE
   res.json({ data: await MediaAssetService.listSections() });
 }));
 
-// v10.0.27 (N-05 PR 3): sections are created, renamed, reordered and deleted with media.manage; the order route comes
+// v10.0.247 (N-05 PR 3): sections are created, renamed, reordered and deleted with media.manage; the order route comes
 // before `/:id` so its path is not read as an id
 router.post('/media/sections', authenticateToken, requirePermission(MEDIA_MANAGE_PERMISSION), validate(mediaSectionCreateSchema), asyncHandler(async (req: Request, res: Response) => {
   res.status(201).json({ success: true, data: await MediaSectionService.create(req.body, await actorOf(req)) });
@@ -129,7 +129,7 @@ router.post('/media/assets', authenticateToken, requirePermission(MEDIA_UPLOAD_P
   res.status(201).json({ success: true, data: result.asset, warnings: result.warnings });
 }));
 
-// v10.0.27 (N-05 PR 3): the order of a section's (or one product's) files, before `/media/assets/:id`
+// v10.0.247 (N-05 PR 3): the order of a section's (or one product's) files, before `/media/assets/:id`
 router.put('/media/assets/order', authenticateToken, requirePermission(MEDIA_MANAGE_PERMISSION), validate(mediaAssetOrderSchema), asyncHandler(async (req: Request, res: Response) => {
   res.json({ success: true, data: await MediaArrangeService.reorder(req.body, await actorOf(req)) });
 }));

@@ -12,7 +12,7 @@ interface Props {
   onManage: () => void;
 }
 
-/** v10.0.27 (N-05 PR 3): the sections of the library as chips with their file counts, and the manager's button */
+/** v10.0.247 (N-05 PR 3): the sections of the library as chips with their file counts, and the manager's button */
 export function MediaSectionTabs({ sections, activeId, canManage, onSelect, onManage }: Props) {
   return (
     <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="بخش‌های کتابخانه">

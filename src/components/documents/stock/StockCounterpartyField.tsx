@@ -1,7 +1,10 @@
 import { Users } from 'lucide-react';
 import { Customer, Personnel } from '../../../types';
 import { SearchableSelect } from '../../SearchableSelect';
+import { personnelById, personnelDisplayName } from '../../../lib/documents/stockDocumentParties';
 import type { StockDocumentForm } from '../../../hooks/documents/useStockDocumentForm';
+import { partyFitsDocument } from '../../../lib/documents/documentPartyKind';
+import { stockInLabels } from '../../../lib/documents/stockInLabels';
 
 interface StockCounterpartyFieldProps {
   form: StockDocumentForm;
@@ -14,14 +17,16 @@ interface StockCounterpartyFieldProps {
  * استخراج‌شده از DocumentsPage.
  */
 export function StockCounterpartyField({ form, personnelList, suppliersList }: StockCounterpartyFieldProps) {
-  const { actionType, buyerName, setBuyerName, selectedSupplierObj, setSelectedSupplierObj, selectedPersonnelObj } = form;
+  const { actionType, docType, buyerName, setBuyerName, selectedSupplierObj, setSelectedSupplierObj, selectedPersonnelObj, setReceiverPersonnelId } = form;
+  // v10.0.44 (TD-939): رسید و خرید فقط تأمین‌کننده، برگشت از فروش فقط مشتری (یا «هر دو»)؛ همان قاعده سرور
+  const partyOptions = (Array.isArray(suppliersList) ? suppliersList : []).filter(s => partyFitsDocument(docType, s.partyType));
 
   return (
     <div>
       <label className="block text-xs font-bold mb-1.5 text-slate-700 flex items-center justify-between">
         <span className="flex items-center gap-1">
           <Users size={13} className="text-slate-500" />
-          <span>{actionType === 'in' ? 'تامین‌کننده / فروشنده کالا' : 'گیرنده حواله (پرسنل کارگاه)'}</span>
+          <span>{actionType === 'in' ? stockInLabels(docType).party : 'گیرنده حواله (پرسنل کارگاه)'}</span>
         </span>
         {actionType === 'in' && selectedSupplierObj && (
           <span className="text-[10px] font-normal text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
@@ -37,17 +42,22 @@ export function StockCounterpartyField({ form, personnelList, suppliersList }: S
       {actionType === 'out' ? (
         personnelList.length > 0 ? (
           <SearchableSelect
-            value={buyerName}
-            onChange={(val) => setBuyerName(val)}
+            value={selectedPersonnelObj ? String(selectedPersonnelObj.id) : ''}
+            onChange={(val) => {
+              // v10.0.215 (OBS-R1-99): انتخاب با شناسه پرسنل؛ نام او در سند ثبت می‌شود
+              const picked = personnelById(personnelList, val ? Number(val) : null);
+              setReceiverPersonnelId(picked ? Number(picked.id) : null);
+              setBuyerName(picked ? personnelDisplayName(picked) : '');
+            }}
             placeholder="جستجو و انتخاب پرسنل کارگاه..."
             maxResults={100}
-            options={personnelList.map((p, idx) => {
-              const name = p.fullName || `${p.firstName || ''} ${p.lastName || ''}`.trim() || 'پرسنل';
+            options={personnelList.map((p) => {
+              const name = personnelDisplayName(p);
               const code = p.personnelCode ? `[کد: ${p.personnelCode}]` : '';
               const title = p.jobTitle ? `- ${p.jobTitle}` : '';
               const status = p.employmentStatus && p.employmentStatus !== 'فعال' ? `(${p.employmentStatus})` : '';
               return {
-                value: name,
+                value: String(p.id),
                 label: `👤 ${name} ${code} ${title} ${status}`.trim().replace(/\s+/g, ' ')
               };
             })}
@@ -68,12 +78,11 @@ export function StockCounterpartyField({ form, personnelList, suppliersList }: S
             value={buyerName}
             onChange={(val) => {
               setBuyerName(val);
-              const list = Array.isArray(suppliersList) ? suppliersList : [];
-              const found = list.find(s => s.name.trim().toLowerCase() === val.trim().toLowerCase());
+              const found = partyOptions.find(s => s.name.trim().toLowerCase() === val.trim().toLowerCase());
               setSelectedSupplierObj(found || null);
             }}
             placeholder="انتخاب طرف‌حساب..."
-            options={(Array.isArray(suppliersList) ? suppliersList : []).map((s) => ({
+            options={partyOptions.map((s) => ({
               value: s.name,
               label: `${s.name}${s.supplierCategory ? ` (${s.supplierCategory})` : ''}${s.phone ? ` - ${s.phone}` : ''}`
             }))}

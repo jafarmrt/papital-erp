@@ -45,7 +45,7 @@ function server(withDraft: boolean) {
     const method = init?.method ?? 'GET';
     if (url === '/warehouses') return Promise.resolve(warehouses);
     if (url === '/customers/options') return Promise.resolve({ data: [] });
-    if (url.startsWith('/documents?status=proforma')) return Promise.resolve({ data: openProformas, total: openProformas.length, page: 1, limit: 20 });
+    if (url.startsWith('/documents?statuses=proforma,draft')) return Promise.resolve({ data: openProformas, total: openProformas.length, page: 1, limit: 20 });
     if (url === '/documents/next-ref?type=invoice') return Promise.resolve({ nextRef: 'INV-1001' });
     if (url === '/documents/next-ref?type=proforma') return Promise.resolve({ nextRef: 'PF-77' });
     if (url === '/documents/next-ref?type=receipt') return Promise.resolve({ nextRef: 'RC-77' });
@@ -73,7 +73,7 @@ function renderPage(state?: Record<string, unknown>) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[state ? { pathname: '/remittances', state } : '/remittances']}>
+      <MemoryRouter initialEntries={[state ? { pathname: '/invoices/create', state } : '/invoices/create']}>
         <CreateInvoicePage user={admin} />
         <RouterStateProbe />
       </MemoryRouter>

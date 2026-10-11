@@ -24,6 +24,7 @@ export interface WorkflowTransition {
   requiredRole?: string;
   requiredPermission?: string;
   isInitiatorExcluded?: number;
+  isInitiatorOnly?: number;
   approvalRuleType?: string;
   kValue?: number;
   autoActionKey?: string;
@@ -74,6 +75,8 @@ export interface WorkflowHistoryLog {
 
 export interface WorkflowInstanceData {
   instance: WorkflowInstance | null;
+  /** v10.0.65 (TD-1142): without an instance, whether an active definition exists for the entity type */
+  startable?: boolean;
   definition?: {
     id: number;
     code: string;
@@ -283,6 +286,9 @@ export function useTaskStatsQuery() {
   });
 }
 
+/** v10.0.133 (TD-1224) */
+export const TASK_ALREADY_DONE_MESSAGE = 'این کار را کاربر دیگری پیش‌تر انجام داده است؛ کارتابل تازه شد.';
+
 export function useExecuteTaskMutation() {
   const queryClient = useQueryClient();
 
@@ -293,9 +299,14 @@ export function useExecuteTaskMutation() {
         body: JSON.stringify(payload)
       });
     },
-    onSuccess: (res: { message?: string; data?: { task?: { status?: string } } }) => {
+    onSuccess: (res: { message?: string; data?: { code?: string; task?: { status?: string } } }) => {
       void invalidatePreset(queryClient, 'workflowChange');
       void queryClient.invalidateQueries({ queryKey: ['workflow', 'tasks'] });
+      // v10.0.133 (TD-1224): کاری که دیگری پیش‌تر انجام داده، کار این کاربر نیست؛ پیام سبز «کار انجام شد» نمی‌گیرد
+      if (res?.data?.code === 'WF_TASK_ALREADY_COMPLETED') {
+        toast(TASK_ALREADY_DONE_MESSAGE, { icon: 'ℹ️' });
+        return;
+      }
       // v8.0.91 (TD-371): امضای ناقص حدنصاب کار را باز می‌گذارد؛ پیام سرور شمار امضاها را می‌گوید
       toast.success(res?.data?.task?.status === 'pending' && res.message ? res.message : 'کار انجام شد.');
     },

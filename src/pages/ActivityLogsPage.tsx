@@ -284,7 +284,7 @@ export default function ActivityLogsPage() {
           <div className="md:col-span-4 relative">
             <input
               type="text"
-              placeholder="جستجو در شرح لاگ، نام کاربر یا نام بخش..."
+              placeholder="جستجو در شرح رویداد، نام کاربر یا نام بخش..."
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               className="w-full pl-9 pr-4 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -505,7 +505,7 @@ export default function ActivityLogsPage() {
                   <ShieldAlert className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 text-base">جزئیات و ممیزی لاگ امنیتی #{selectedLog.id}</h3>
+                  <h3 className="font-bold text-slate-900 text-base">جزئیات رویداد امنیتی #{selectedLog.id}</h3>
                   <p className="text-xs text-slate-500">{formatPersianDateTime(selectedLog.timestamp)}</p>
                 </div>
               </div>

@@ -38,7 +38,7 @@ export function orderAfterMove(ordered: MediaAssetView[], asset: MediaAssetView,
   return ordered.map(a => (a.shotType === asset.shotType ? next[k++] : a.id));
 }
 
-/** v10.0.27 (N-05 PR 3): order, cover, replacement and item-picture actions of a gallery's files */
+/** v10.0.247 (N-05 PR 3): order, cover, replacement and item-picture actions of a gallery's files */
 export function useMediaGalleryActions({ ordered, sectionId, itemId, onListReplaced, onChanged, itemImage }: MediaGalleryActionsInput) {
   const [busyId, setBusyId] = useState<number | null>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);

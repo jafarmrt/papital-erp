@@ -3,6 +3,7 @@ import { inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { crmActivities, crmLeads, customers, roles, users } from '../../db/schema.js';
+import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 
 /**
  * بسته ۹ (مشتریان و CRM) — اطلاعات بانکی طرف حساب فقط برای دارندگان customers.view، customers.manage و accounting.*
@@ -121,7 +122,7 @@ export async function runPartyBankInfoScopeTests(shouldRun: (id: string, ...extr
     }
     if (customerIds.length > 0) await orm.delete(customers).where(inArray(customers.id, customerIds)).catch(() => undefined);
     if (userIds.length > 0) await orm.delete(users).where(inArray(users.id, userIds)).catch(() => undefined);
-    if (roleIds.length > 0) await orm.delete(roles).where(inArray(roles.id, roleIds)).catch(() => undefined);
+    if (roleIds.length > 0) await deleteTestRoles(inArray(roles.id, roleIds)).catch(() => undefined);
   }
   return results;
 }

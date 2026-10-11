@@ -3,6 +3,7 @@ import { orm } from '../../db/drizzle.js';
 import { roles } from '../../db/schema.js';
 import { TestCaseResult } from '../types.js';
 import { runCase, type Harness, type ShouldRun } from './workflowTestHarness.js';
+import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 
 /**
  * بسته ۲ (مدل مجوز)، M3 — اطلاعات بانکی پرسنل و فیش فقط با مجوز (TD-882)، از مسیرهای واقعی Express با ورود واقعی.
@@ -46,7 +47,7 @@ export async function runAccessPackageTwoSensitiveTests(shouldRun: ShouldRun): P
         try {
           if (!await cardSeenBy(await h.sessionWith(code))) wrong.push('personnel.view_sensitive did not show the card number');
         } finally {
-          await orm.delete(roles).where(eq(roles.code, code));
+          await deleteTestRoles(eq(roles.code, code));
         }
       }
 

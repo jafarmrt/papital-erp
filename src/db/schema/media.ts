@@ -33,9 +33,9 @@ export const mediaAssets = pgTable('media_assets', {
   title: text('title').notNull().default(''),
   description: text('description').notNull().default(''),
   sortOrder: integer('sort_order').notNull().default(0),
-  /** v10.0.27 (N-05 PR 3, migration 0098): at most one live file per item is its cover (`uq_media_assets_cover_item`) */
+  /** v10.0.247 (N-05 PR 3, migration 0107): at most one live file per item is its cover (`uq_media_assets_cover_item`) */
   isCover: integer('is_cover').notNull().default(0),
-  /** v10.0.27 (migration 0098): the file's tags, at most 20 (`normalizeMediaTags` in src/lib/media/mediaTags.ts) */
+  /** v10.0.247 (migration 0107): the file's tags, at most 20 (`normalizeMediaTags` in src/lib/media/mediaTags.ts) */
   tags: text('tags').array().notNull().default(sql`'{}'::text[]`),
   originalName: text('original_name').notNull().default(''),
   mimeType: text('mime_type').notNull(),

@@ -16,7 +16,7 @@ export { NO_VOUCHER_TREASURY_PERMISSION } from '../../../lib/noVoucherPermission
 
 export function assertNoVoucherAllowed(createVoucher: boolean | undefined, allowNoVoucher: boolean | undefined, label: string): void {
   if (createVoucher === false && allowNoVoucher !== true) {
-    throw new ForbiddenError(`ثبت ${label} بدون سند حسابداری فقط با مجوز «ثبت خزانه و چک بدون سند حسابداری» ممکن است؛ سند حسابداری را صادر کنید یا از مدیر سیستم این مجوز را بخواهید.`);
+    throw new ForbiddenError(`ثبت ${label} بدون سند حسابداری فقط با مجوز «ثبت خزانه و چک بدون سند حسابداری» ممکن است؛ سند حسابداری را صادر کنید یا از مدیر سامانه این مجوز را بخواهید.`);
   }
 }
 

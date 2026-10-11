@@ -4,6 +4,8 @@ import { items, productionProjects, documents, documentItems } from '../../db/sc
 import { checkOccVersion, nextVersion, OptimisticLockError } from '../../lib/occHelper.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
+import { serverTimestampToUtcIso } from '../../lib/serverTimestamp.js';
+import { ValidationError } from '../../errors/customErrors.js';
 
 import { fin } from '../../lib/financialDecimal.js';
 import { RESERVING_DOCUMENT_STATUS, RESERVING_DOCUMENT_TYPES } from '../../lib/documents/reservingDocuments.js';
@@ -548,7 +550,8 @@ export class ItemStockReservationService {
         reservedQty: qty,
         unitCost: cost.toNumber(),
         totalCost: cost.multiply(qty).toNumber(),
-        date: line.date || new Date().toISOString()
+        // v10.0.169 (OBS-R1-88): تاریخ خود سند (ستون اجباری)؛ هرگز ساعت کارساز به جای آن
+        date: line.date
       });
     }
 
@@ -581,7 +584,8 @@ export class ItemStockReservationService {
         reservedQty: row.qty,
         unitCost: cost.toNumber(),
         totalCost: cost.multiply(row.qty).toNumber(),
-        date: row.createdAt || new Date().toISOString()
+        // v10.0.169 (OBS-R1-88): زمان ثبت پروژه زمان کارساز به UTC است و با Z می‌رود؛ بی آن خالی («-»)، نه اکنون
+        date: serverTimestampToUtcIso(row.createdAt) ?? ''
       });
     }
 
@@ -702,7 +706,9 @@ export class ItemStockReservationService {
     ctx: SellableStockContext
   ): { locationStock: number; reservedForOthers: number; sellable: number } {
     const rawStocks = (stocks || summary?.stocks || {}) as Record<string, number>;
-    const locKey = ctx.location ? ctx.location.trim() : 'main';
+    // v10.0.170 (OBS-R1-89): انبار پیش‌فرض را فراخوان با TD-203 پیدا می‌کند؛ بی محل، «main» حدس زده نمی‌شود
+    const locKey = ctx.location ? ctx.location.trim() : '';
+    if (!locKey) throw new ValidationError('انبار برای محاسبه موجودی قابل فروش مشخص نیست.', undefined, 'SELLABLE_LOCATION_REQUIRED');
     const locationStock = fin(rawStocks[locKey] || 0).toNumber();
     const total = Object.values(rawStocks).reduce((s, v) => fin(s).add(Number(v) || 0).toNumber(), 0);
     const reservedForOthers = (summary?.reservations || [])

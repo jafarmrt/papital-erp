@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { FileText, Plus, Printer, ChevronDown, ChevronRight, CheckCircle2, Clock, Lock, ShieldCheck, FileCheck, MoreVertical, CheckSquare, GitFork, X } from 'lucide-react';
+import { FileText, Plus, Printer, ChevronDown, ChevronRight, CheckCircle2, Clock, Lock, FileCheck, MoreVertical, CheckSquare, GitFork, X } from 'lucide-react';
 import { formatPersianNumber, formatPersianDate } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import type { JournalVoucher, Account, Customer, Personnel, FinancialAttachment } from '../../types';
@@ -18,7 +18,10 @@ import { EMPTY_VOUCHER_STATUS_COUNTS, VOUCHER_PAGE_SIZE, type VoucherListFilters
 import { voucherTypeLabel } from '../../lib/accounting/voucherTypes';
 import { voucherConfirmTexts, type VoucherRowAction } from '../../lib/accounting/voucherRowActions';
 import { VoucherRowMenu } from './vouchers/VoucherRowMenu';
+import { VoucherPrimaryActionCell } from './vouchers/VoucherPrimaryActionCell';
 import { voucherSourceLabel } from '../../lib/accounting/voucherSource';
+import { isViewerVoucherMaker, voucherMakerName, voucherReferenceText } from '../../lib/accounting/voucherListViewer';
+import { useViewerIdentity } from '../../contexts/AuthContext';
 
 interface JournalVouchersTabProps {
   accounts?: Account[];
@@ -56,6 +59,7 @@ export function JournalVouchersTab({
   onBatchApproveVouchers,
 }: JournalVouchersTabProps) {
   const rial = useRialDisplay();
+  const viewer = useViewerIdentity();
   // v9.0.115 (TD-565): صفحه، جست‌وجو، نوع، وضعیت و تاریخ به سرور می‌روند و شمارنده‌ها و `total` از سرورند؛
   // پیش‌تر صفحه فقط ۲۰ سند آخر را داشت و همه صافی‌ها و شمارنده‌ها روی همان ۲۰ کار می‌کردند
   const [filters, setFilters] = useState<VoucherListFilters>({ status: 'all', voucherType: 'all', search: '', startDate: '', endDate: '' });
@@ -433,7 +437,7 @@ export function JournalVouchersTab({
                           </div>
                           {voucher.referenceNumber && (
                             <div className="text-[10px] text-slate-400 mt-0.5">
-                              ارجاع: {voucher.referenceModule} ({voucher.referenceNumber})
+                              ارجاع: {voucherReferenceText(voucher.referenceModule, voucher.referenceNumber)}
                             </div>
                           )}
                         </td>
@@ -443,7 +447,7 @@ export function JournalVouchersTab({
                         </td>
 
                         <td className="py-3 px-3 text-center text-slate-500 dark:text-slate-400">
-                          {voucher.createdByUsername || 'کاربر'}
+                          {voucherMakerName(voucher)}
                         </td>
 
                         {/* Decluttered Actions Column (قانون طلایی ۱: خلوت‌سازی دکمه‌ها و منوی کشویی) */}
@@ -459,33 +463,12 @@ export function JournalVouchersTab({
                             </button>
 
                             {/* اقدام متنی اصلی */}
-                            {voucher.status === 'draft' && onApproveVoucher ? (
-                              <button
-                                onClick={() => handleApprove(voucher)}
-                                title="تایید حسابداری سند و انتقال به دفاتر رسمی"
-                                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-900/60 rounded-lg border border-blue-200 dark:border-blue-800 transition cursor-pointer shadow-xs"
-                              >
-                                <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
-                                <span>تایید سند</span>
-                              </button>
-                            ) : voucher.status === 'approved' && onFinalizeVoucher ? (
-                              <button
-                                onClick={() => handleFinalize(voucher)}
-                                title="قطعی‌سازی و قفل سند در دفاتر رسمی"
-                                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/60 rounded-lg border border-emerald-200 dark:border-emerald-800 transition cursor-pointer shadow-xs"
-                              >
-                                <Lock className="w-3.5 h-3.5 text-emerald-600" />
-                                <span>قطعی‌سازی</span>
-                              </button>
-                            ) : (
-                              <span 
-                                title="سند دائم در دفاتر کل قفل است و تغییر مستقیم نمی‌پذیرد"
-                                className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50/60 dark:bg-emerald-950/30 rounded-lg border border-emerald-200/60 dark:border-emerald-800/60"
-                              >
-                                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                                <span>قفل دفاتر</span>
-                              </span>
-                            )}
+                            <VoucherPrimaryActionCell
+                              status={voucher.status}
+                              makerOfVoucher={isViewerVoucherMaker(voucher, viewer)}
+                              onApprove={onApproveVoucher ? () => handleApprove(voucher) : undefined}
+                              onFinalize={onFinalizeVoucher ? () => handleFinalize(voucher) : undefined}
+                            />
 
                             {/* منوی عملیات تکمیلی («...») */}
                             <div className="relative voucher-action-menu-container">
@@ -501,7 +484,7 @@ export function JournalVouchersTab({
                               </button>
 
                               {openMenuVoucherId === voucher.id && (
-                                <VoucherRowMenu voucher={voucher} onAction={handleRowAction} />
+                                <VoucherRowMenu voucher={voucher} onAction={handleRowAction} canApprove={Boolean(onSetVoucherStatus)} />
                               )}
                             </div>
                           </div>

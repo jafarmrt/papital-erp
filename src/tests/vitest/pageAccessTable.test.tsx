@@ -48,7 +48,7 @@ describe('one page-access table for menu, routes, shortcuts and settings tabs (T
     const routes = [...source.matchAll(/<Route path="([^"]+)" element=\{\s*(<ProtectedRoute page="([^"]+)")?/g)];
     const routed = new Set<string>();
     for (const [, routePath, guarded, page] of routes) {
-      if (routePath === '/materials') continue; // redirect
+      if (routePath === '/materials' || routePath === '/remittances') continue; // redirects
       const expected = routePath === '/accounting/:tab' ? '/accounting' : routePath;
       expect(PAGE_ACCESS, `route ${routePath} has no page-access row`).toHaveProperty([expected]);
       const rule = PAGE_ACCESS[expected as keyof typeof PAGE_ACCESS];
@@ -67,7 +67,9 @@ describe('one page-access table for menu, routes, shortcuts and settings tabs (T
 
   it('offers a dashboard shortcut exactly when its page opens', () => {
     for (const permissions of SINGLE_KEY_VIEWERS) {
-      const expected = ALL_SHORTCUTS.filter(s => canOpenPage(s.path, { permissions })).map(s => s.id);
+      // TD-1223: a shortcut that records something also needs its create key
+      const expected = ALL_SHORTCUTS.filter(s => canOpenPage(s.path, { permissions })
+        && (!s.requiresAnyOf || s.requiresAnyOf.some(k => permissions.includes(k)))).map(s => s.id);
       expect(accessibleShortcutsFor({ permissions }).map(s => s.id), `[${permissions.join(',')}]`).toEqual(expected);
     }
     for (const s of ALL_SHORTCUTS) expect(PAGE_ACCESS, `shortcut ${s.path}`).toHaveProperty([s.path.split('?')[0]]);
