@@ -30,7 +30,7 @@ export function AuditConfirmSummaryModal({ summary, nextRef, selectedLocation, n
             <strong className="text-slate-800 text-base font-mono">{formatPersianNumber(summary.counted)}</strong>
           </div>
           <div className="p-3 rounded-xl border border-emerald-200 bg-emerald-50">
-            <span className="block text-emerald-700">منطبق با سیستم</span>
+            <span className="block text-emerald-700">منطبق با موجودی دفتری</span>
             <strong className="text-emerald-800 text-base font-mono">{formatPersianNumber(summary.matched)}</strong>
           </div>
           <div className={`p-3 rounded-xl border ${summary.surplus > 0 ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50'}`}>

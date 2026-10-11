@@ -69,7 +69,7 @@ export const batchPriceUpdateSchema = z.object({
   })
 });
 
-// v10.0.33 (OBS-R1-79): یک صفحه از کالاهای صفحه قیمت‌گذاری با قیمت‌ها و فهرست‌های قیمت
+// v10.0.219 (OBS-R1-79): یک صفحه از کالاهای صفحه قیمت‌گذاری با قیمت‌ها و فهرست‌های قیمت
 const pricingPageSchema = z.object({
   query: z.object({
     type: z.enum(['product', 'raw_material']),

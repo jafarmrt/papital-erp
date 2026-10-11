@@ -16,8 +16,9 @@ import {
 import { toast as hotToast } from 'react-hot-toast';
 import { parseQuantityOrTime, formatPersianPrice, errorMessageOf, toStorageDate, getTodayIsoDate } from '../utils';
 import { computeFixedSalaryShares, priorFixedGrantsOf } from '../lib/payroll/fixedSalaryProration';
-import { fixedSalaryPeriodEnd, payrollPeriodFutureError, serviceEndOf } from '../lib/payroll/payrollPeriod';
+import { fixedSalaryPeriodEnd, fixedSalaryPeriodStart, payrollPrepaymentError, serviceEndOf, serviceStartOf } from '../lib/payroll/payrollPeriod';
 import { refreshSuggestedRates, submittedRate, suggestedRate } from '../lib/payroll/workLogRate';
+import { EMPTY_STATUTORY_ENTRY, statutoryPayloadOf, type PayrollStatutoryEntry } from '../lib/payroll/statutoryForm';
 import {
   exportPieceworkTasksToExcel,
   downloadPieceworkTemplate
@@ -115,6 +116,11 @@ export function usePiecework() {
   // V1.9.0: کسر از مساعده/وام پرسنلی — بستانکار حساب مساعده در سند تسویه
   const [payrollAdvanceDeduction, setPayrollAdvanceDeduction] = useState<number>(0);
   const [payrollNotes, setPayrollNotes] = useState<string>('');
+  // v10.0.199 (TD-1085): فیش پیش‌پرداخت دوره آینده، فقط حقوق ثابت، با دلیل الزامی
+  const [payrollIsPrepayment, setPayrollIsPrepayment] = useState<boolean>(false);
+  const [payrollPrepaymentReason, setPayrollPrepaymentReason] = useState<string>('');
+  // v10.0.210 (TD-1087): بیمه و مالیات نوشته‌شده؛ کادر خالی یعنی پیشنهاد سرور
+  const [payrollStatutory, setPayrollStatutory] = useState<PayrollStatutoryEntry>(EMPTY_STATUTORY_ENTRY);
   const [isSavingPayroll, setIsSavingPayroll] = useState<boolean>(false);
 
   // Modal 4: View Payslip
@@ -542,6 +548,9 @@ export function usePiecework() {
     setPayrollDeductions(0);
     setPayrollDeductionsDescription('');
     setPayrollNotes('');
+    setPayrollIsPrepayment(false);
+    setPayrollPrepaymentReason('');
+    setPayrollStatutory(EMPTY_STATUTORY_ENTRY);
     setIsPayrollModalOpen(true);
   };
 
@@ -563,8 +572,11 @@ export function usePiecework() {
     // v9.0.268 (TD-808): حقوق ثابت فقط تا پایان همکاری — همان قاعده سرور
     const fixedEnd = fixedSalaryPeriodEnd(startIso, endIso, serviceEndOf(selectedPayrollPerson));
     if (fixedEnd === null) return null;
+    // v10.0.199 (TD-1086): حقوق ثابت از «آغاز همکاری» — همان قاعده سرور
+    const fixedStart = fixedSalaryPeriodStart(startIso, fixedEnd, serviceStartOf(selectedPayrollPerson));
+    if (fixedStart === null) return null;
     const personPayrolls = (Array.isArray(payrollsList) ? payrollsList : []).filter(pr => Number(pr.personnelId) === Number(payrollPersonnelId));
-    return computeFixedSalaryShares(selectedPayrollPerson.monthlySalary, startIso, fixedEnd, personPayrolls.flatMap(priorFixedGrantsOf));
+    return computeFixedSalaryShares(selectedPayrollPerson.monthlySalary, fixedStart, fixedEnd, personPayrolls.flatMap(priorFixedGrantsOf));
   }, [payrollFixedIncluded, selectedPayrollPerson, payrollsList, payrollPersonnelId, payrollStartDate, payrollEndDate]);
 
   const payrollFixedRemainingHint = useMemo<string | null>(() => {
@@ -576,6 +588,12 @@ export function usePiecework() {
     return `سهم حقوق ثابت این فیش ${formatPersianPrice(payrollFixedShares.total.toNumber())} است — ${parts.join('، ')}.`;
   }, [payrollFixedShares]);
 
+  // v10.0.210 (TD-1087): ناخالص فیش برای پیشنهاد بیمه و مالیات — کارکرد (جز پیش‌پرداخت) + سهم حقوق ثابت + پاداش، همان جمع سرور
+  const payrollStatutoryGross = useMemo(() => {
+    const piecework = payrollIsPrepayment ? 0 : payrollPreviewLogs.reduce((sum, l) => sum + Number(l.totalAmount || 0), 0);
+    return piecework + (payrollFixedShares?.total.toNumber() ?? 0) + Number(payrollBonuses || 0);
+  }, [payrollIsPrepayment, payrollPreviewLogs, payrollFixedShares, payrollBonuses]);
+
   const handleGeneratePayroll = async (e: FormEvent) => {
     e.preventDefault();
     if (isSavingPayroll) return;
@@ -584,16 +602,16 @@ export function usePiecework() {
       hotToast.error('پرسنل و بازه تاریخی الزامی هستند');
       return;
     }
-    // v9.0.268 (TD-808): فیش دوره‌ای که هنوز تمام نشده صادر نمی‌شود — همان پیام سرور
-    const futureError = payrollPeriodFutureError(toStorageDate(payrollEndDate) || '', getTodayIsoDate());
-    if (futureError) {
-      hotToast.error(futureError);
+    // v9.0.268 (TD-808)، v10.0.199 (TD-1085): دوره آینده فقط با «فیش پیش‌پرداخت» و دلیل — همان قاعده و پیام سرور
+    const periodRefusal = payrollPrepaymentError(toStorageDate(payrollEndDate) || '', getTodayIsoDate(), { isPrepayment: payrollIsPrepayment, prepaymentReason: payrollPrepaymentReason });
+    if (periodRefusal) {
+      hotToast.error(periodRefusal.message);
       return;
     }
 
     // V10-4.4: برای پرسنل با حقوق ثابت/ترکیبی، صدور فیش بدون ردیف کارکرد نیز مجاز است
     // v8.0.30 (TD-284): سهم ثابت هر ماه شمسیِ بازه به نسبت روزها — مطابق منطق سمت سرور
-    if (payrollPreviewLogs.length === 0 && !(payrollFixedShares?.total.isPositive() ?? false)) {
+    if ((payrollIsPrepayment || payrollPreviewLogs.length === 0) && !(payrollFixedShares?.total.isPositive() ?? false)) {
       hotToast.error(payrollFixedShares && payrollFixedShares.months.length > 0
         ? 'سهم حقوق ثابت این بازه قبلاً در فیش دیگری محاسبه شده و کارکرد کارمزدی معوقی هم در این بازه وجود ندارد'
         : 'هیچ کارکرد تسویه‌نشده‌ای در این بازه یافت نشد');
@@ -613,7 +631,10 @@ export function usePiecework() {
         totalDeductions: payrollDeductions || 0,
         deductionsDescription: payrollDeductions > 0 ? payrollDeductionsDescription.trim() : undefined,
         advanceDeduction: payrollAdvanceDeduction || 0,
-        notes: payrollNotes || undefined
+        notes: payrollNotes || undefined,
+        isPrepayment: payrollIsPrepayment || undefined,
+        prepaymentReason: payrollIsPrepayment ? payrollPrepaymentReason.trim() : undefined,
+        ...statutoryPayloadOf(payrollStatutory)
       };
 
       const res = await fetchJson('/piecework/payrolls', {
@@ -622,7 +643,8 @@ export function usePiecework() {
         body: JSON.stringify(payload)
       });
 
-      hotToast.success(`فیش حقوقی با موفقیت با شماره ${res.payrollNumber || ''} صادر شد`);
+      hotToast.success(`فیش حقوقی شماره ${res.payrollNumber || ''} پیش‌نویس صادر شد؛ پرداخت آن پس از تأیید کاربر دیگری است.`);
+      if (res.statutoryWarning) hotToast(res.statutoryWarning, { icon: '⚠️' });
       setIsPayrollModalOpen(false);
       reloadAll();
       setActiveTab('payrolls');
@@ -649,7 +671,7 @@ export function usePiecework() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })
       });
-      hotToast.success('وضعیت پرداخت به‌روزرسانی شد');
+      hotToast.success(status === 'approved' ? 'فیش تأیید شد و آماده پرداخت است.' : 'فیش به پیش‌نویس برگشت.');
       if (viewingPayroll && viewingPayroll.id === id) {
         setViewingPayroll(prev => prev ? { ...prev, status } : null);
       }
@@ -758,6 +780,13 @@ export function usePiecework() {
     setPayrollDeductionsDescription,
     payrollNotes,
     setPayrollNotes,
+    payrollIsPrepayment,
+    payrollStatutory,
+    setPayrollStatutory,
+    payrollStatutoryGross,
+    setPayrollIsPrepayment,
+    payrollPrepaymentReason,
+    setPayrollPrepaymentReason,
     payrollFixedIncluded,
     payrollFixedRemainingHint,
     payrollAdvanceDeduction,

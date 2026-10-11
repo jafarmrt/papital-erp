@@ -43,7 +43,7 @@ async function openAttachmentFile(absolutePath: string): Promise<{ handle: fs.pr
   } catch (err) {
     if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') throw new NotFoundError('فایل پیوست روی دیسک یافت نشد');
     logger.error(`[attachments] cannot open ${absolutePath}: ${errorMessageOf(err)}`);
-    throw new AppError('فایل پیوست خوانده نشد؛ به مدیر سیستم خبر دهید', 500, 'ATTACHMENT_READ_FAILED');
+    throw new AppError('فایل پیوست خوانده نشد؛ به مدیر سامانه خبر دهید', 500, 'ATTACHMENT_READ_FAILED');
   }
   const stat = await handle.stat().catch(() => null);
   if (!stat || !stat.isFile()) {

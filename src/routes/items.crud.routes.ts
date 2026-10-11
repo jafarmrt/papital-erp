@@ -6,7 +6,7 @@ import { authorizePermission } from '../middleware/authorize.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema } from '../middleware/validate.js';
-import { itemCreateUpdateSchema, itemUpdateSchema } from './items.schemas.js';
+import { consumeNextItemCodeSchema, itemCreateUpdateSchema, itemUpdateSchema } from './items.schemas.js';
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
 import { MAX_PAGE_LIMIT, parsePickListLimit } from '../lib/pagination.js';
 import { ItemsService } from '../services/items.service.js';
@@ -61,7 +61,7 @@ router.get('/items', authorizePermission(...READ_PERMISSIONS.items), asyncHandle
     const isExport = req.query.export === 'true';
 
     const whereClause = itemListConditions(type, search, { withCategory: true });
-    // v10.0.32 (OBS-R1-74): مرتب‌سازی در پایگاه‌داده روی همه کالاهای پالایش
+    // v10.0.218 (OBS-R1-74): مرتب‌سازی در پایگاه‌داده روی همه کالاهای پالایش
     const sort = parseItemListSort(req.query.sort, req.query.direction);
 
     let query = orm.select().from(items).where(whereClause).orderBy(...itemListOrder(sort)).$dynamic();
@@ -322,16 +322,17 @@ router.get('/items/next-code', authorizePermission(...READ_PERMISSIONS.items), a
   res.json(result);
 }));
 
-router.post('/items/next-code', authorizePermission('products.create', 'products.edit'), asyncHandler(async (req, res) => {
-  const { type, year, prefix, transfer } = req.body || {};
-  const result = await ItemCatalogService.consumeNextItemCode({ type, year, prefix, transfer });
-  await logActivity({
+router.post('/items/next-code', authorizePermission('products.create', 'products.edit'), validate(consumeNextItemCodeSchema), asyncHandler(async (req, res) => {
+  const { type, year, prefix, transfer } = req.body;
+  // v10.0.35 (TD-979): the body is read through Zod and the audit row is written in the counter's transaction
+  const result = await ItemCatalogService.consumeNextItemCode({ type, year, prefix, transfer }, (reserved, tx) => logActivity({
     req,
+    tx,
     action: 'CREATE',
     entity: 'کد کالا',
-    description: `تخصیص بی‌تداخل شماره سری بعدی کد «${result.code}» (نوع: ${result.type})`,
-    details: { reserved: result }
-  });
+    description: `تخصیص بی‌تداخل شماره سری بعدی کد «${reserved.code}» (نوع: ${reserved.type})`,
+    details: { reserved }
+  }).then(() => undefined));
   res.json(result);
 }));
 

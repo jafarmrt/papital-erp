@@ -2,7 +2,7 @@ import { orm } from '../../db/drizzle.js';
 import { items, warehouses, transactions } from '../../db/schema.js';
 import { eq, and, sql, asc, inArray } from 'drizzle-orm';
 import { fin, FinancialMath } from '../../lib/financialDecimal.js';
-import { NegativeStockPolicyService } from './negativeStockPolicy.service.js';
+import { NEGATIVE_STOCK_POLICY } from './negativeStockPolicy.service.js';
 import { ItemWarehouseStockService } from './itemWarehouseStock.service.js';
 import { replayKardexWac, wacDiffersFromReplay, type KardexReplayRow } from './kardexReplay.js';
 
@@ -277,7 +277,6 @@ export class StockReconciliationService {
 
     const totalCount = activeItems.length;
     const healthScore = totalCount > 0 ? Math.round((healthyCount / totalCount) * 100) : 100;
-    const currentPolicy = await NegativeStockPolicyService.getPolicy();
 
     return {
       summary: {
@@ -294,7 +293,7 @@ export class StockReconciliationService {
         totalScalarStockValue,
         totalKardexStockValue,
         totalInventoryValuationStored: totalScalarStockValue,
-        policy: currentPolicy,
+        policy: NEGATIVE_STOCK_POLICY,
       },
       audits,
       warehouses: warehouseSummaries,

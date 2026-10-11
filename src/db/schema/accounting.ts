@@ -63,6 +63,8 @@ export const journalVouchers = pgTable('journal_vouchers', {
   createdById: integer('created_by_id').references(() => users.id),
   createdByUsername: text('created_by_username').default(''),
   approvedById: integer('approved_by_id').references(() => users.id),
+  // v10.0.21 (TD-965): who last edited the voucher; the maker (creator or last editor) of a manual voucher does not approve it (migration 0096)
+  updatedById: integer('updated_by_id').references(() => users.id),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   version: integer('version').notNull().default(1),
   isDeleted: integer('is_deleted').default(0),
@@ -90,6 +92,7 @@ export const journalVouchers = pgTable('journal_vouchers', {
   // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_journal_vouchers_approved_by_id: index('idx_journal_vouchers_approved_by_id').on(table.approvedById).where(sql`${table.approvedById} IS NOT NULL`),
   idx_journal_vouchers_created_by_id: index('idx_journal_vouchers_created_by_id').on(table.createdById).where(sql`${table.createdById} IS NOT NULL`),
+  idx_journal_vouchers_updated_by_id: index('idx_journal_vouchers_updated_by_id').on(table.updatedById).where(sql`${table.updatedById} IS NOT NULL`),
   idx_journal_vouchers_source_document_id: index('idx_journal_vouchers_source_document_id').on(table.sourceDocumentId).where(sql`${table.sourceDocumentId} IS NOT NULL`),
   idx_journal_vouchers_source_payroll_id: index('idx_journal_vouchers_source_payroll_id').on(table.sourcePayrollId).where(sql`${table.sourcePayrollId} IS NOT NULL`),
 }));

@@ -13,6 +13,7 @@ import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { NotFoundError } from '../../errors/customErrors.js';
 import { voucherAuditChanges, voucherAuditSnapshot } from '../../services/accounting/accountingAudit.js';
 import { batchFinalizeMessage } from '../../lib/accounting/voucherBatch.js';
+import { toPersianDigits } from '../../utils/persianNumber.js';
 import {
   type ValidatedQuery,
   vouchersQuerySchema,
@@ -78,7 +79,7 @@ router.put('/accounting/vouchers/:id', authorizePermission('accounting.vouchers'
   const { version, ...changes } = req.body;
   // v9.0.295 (TD-555، B03-13): پیش از ویرایش خوانده می‌شود؛ ویرایش با نسخه خوانده‌شده فقط همین حالت را تغییر می‌دهد (نسخه دیگر ۴۰۹)
   const before = await AccountingService.getJournalVoucherById(id);
-  const voucher = await AccountingService.updateJournalVoucher(id, { ...changes, manualEntry: true, expectedVersion: version }); // v9.0.190 (TD-551)
+  const voucher = await AccountingService.updateJournalVoucher(id, { ...changes, manualEntry: true, expectedVersion: version, userId: req.user?.id }); // v9.0.190 (TD-551)
   await logActivity({
     userId: req.user?.id,
     username: req.user?.username || 'system',
@@ -178,7 +179,7 @@ router.post('/accounting/vouchers/:id/correct', authorizePermission('accounting.
 // هیچ فراخوانی frontend ندارند؛ سرویس AccountingService.repostVoucher برای تست باقی است.
 
 // Finalize Voucher Route (قطعی‌سازی و تبدیل به دائم)
-router.post('/accounting/vouchers/:id/finalize', authorizePermission('accounting.vouchers'), idempotency({ scope: 'accounting_voucher' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.post('/accounting/vouchers/:id/finalize', authorizePermission('accounting.vouchers_approve'), idempotency({ scope: 'accounting_voucher' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const finalized = await AccountingService.finalizeJournalVoucher(
     id,
@@ -201,7 +202,7 @@ router.post('/accounting/vouchers/:id/finalize', authorizePermission('accounting
   res.json({ message: `سند شماره #${finalized.voucherNumber} با موفقیت قطعی و دائم شد.`, voucher: finalized });
 }));
 
-router.post('/accounting/vouchers/batch-finalize', authorizePermission('accounting.vouchers'), validate(batchFinalizeVouchersSchema), asyncHandler(async (req, res) => {
+router.post('/accounting/vouchers/batch-finalize', authorizePermission('accounting.vouchers_approve'), validate(batchFinalizeVouchersSchema), asyncHandler(async (req, res) => {
   const { ids } = req.body;
   const result = await AccountingService.finalizeJournalVouchers(
     ids,
@@ -225,7 +226,7 @@ router.post('/accounting/vouchers/batch-finalize', authorizePermission('accounti
   res.json({ message: batchFinalizeMessage(result), ...result });
 }));
 
-router.post('/accounting/vouchers/batch-approve', authorizePermission('accounting.vouchers'), validate(batchApproveVouchersSchema), asyncHandler(async (req, res) => {
+router.post('/accounting/vouchers/batch-approve', authorizePermission('accounting.vouchers_approve'), validate(batchApproveVouchersSchema), asyncHandler(async (req, res) => {
   const { ids } = req.body;
   const result = await AccountingService.approveJournalVouchers(
     ids,
@@ -241,14 +242,18 @@ router.post('/accounting/vouchers/batch-approve', authorizePermission('accountin
     entity: 'journal_voucher',
     entityId: ids.join(','),
     description: `تایید حسابداری گروهی ${result.approvedCount} سند پیش‌نویس`,
-    details: { ids, count: result.approvedCount },
+    // v10.0.21 (TD-965): سندهایی که ثبت‌کننده‌شان تأیید نمی‌کند جدا و با دلیل
+    details: { ids, count: result.approvedCount, refused: result.refused },
     ipAddress: extractClientIp(req),
   });
 
-  res.json({ message: `${result.approvedCount} سند پیش‌نویس با موفقیت تایید حسابداری شدند.`, ...result });
+  const refusedNote = result.refused.length > 0
+    ? `؛ ${toPersianDigits(String(result.refused.length))} سند تأیید نشد: ${result.refused.slice(0, 3).map(r => r.reason).join('، ')}`
+    : '';
+  res.json({ message: `${toPersianDigits(String(result.approvedCount))} سند پیش‌نویس تأیید حسابداری شد${refusedNote}.`, ...result });
 }));
 
-router.put('/accounting/vouchers/:id/status', authorizePermission('accounting.vouchers'), validate(setVoucherStatusSchema), asyncHandler(async (req, res) => {
+router.put('/accounting/vouchers/:id/status', authorizePermission('accounting.vouchers_approve'), validate(setVoucherStatusSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const { status, reason } = req.body;
 

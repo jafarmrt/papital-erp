@@ -14,7 +14,7 @@ export interface ItemsResponse {
   total: number;
   page: number;
   totalPages: number;
-  /** v10.0.32 (OBS-R1-74): آمار روی همه کالاهای پالایش */
+  /** v10.0.218 (OBS-R1-74): آمار روی همه کالاهای پالایش */
   stats: ItemListStats;
 }
 
@@ -47,7 +47,7 @@ export function useItemsQuery(
       if (search && search.trim()) {
         query.append('search', search.trim());
       }
-      // v10.0.32 (OBS-R1-74): مرتب‌سازی در سرور روی همه کالاها
+      // v10.0.218 (OBS-R1-74): مرتب‌سازی در سرور روی همه کالاها
       if (sort) {
         query.append('sort', sort.key);
         query.append('direction', sort.direction);
@@ -114,7 +114,7 @@ export function useSyncItemMutation() {
   });
 }
 
-/** v10.0.30 (OBS-R1-75): پس از ذخیره کالا یا ورود اکسل همه کش‌های کالا و قیمت باطل می‌شوند، نه فقط صفحه جاری */
+/** v10.0.204 (OBS-R1-75): پس از ذخیره کالا یا ورود اکسل همه کش‌های کالا و قیمت باطل می‌شوند، نه فقط صفحه جاری */
 export function useItemChangeRefresh(): () => void {
   const queryClient = useQueryClient();
   return useCallback(() => { void invalidatePreset(queryClient, 'itemChange'); }, [queryClient]);

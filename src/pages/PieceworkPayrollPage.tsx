@@ -13,9 +13,14 @@ import { PieceworkPayrollModal } from '../components/piecework/PieceworkPayrollM
 import { PieceworkPayslipModal } from '../components/piecework/PieceworkPayslipModal';
 import { PieceworkExcelModal } from '../components/piecework/PieceworkExcelModal';
 import { PieceworkRateHistoryModal } from '../components/piecework/PieceworkRateHistoryModal';
+import { PayrollStatutoryFields } from '../components/piecework/PayrollStatutoryFields';
+import { toStorageDate } from '../utils';
 
 export function PieceworkPayrollPage() {
   const {
+    payrollStatutory,
+    setPayrollStatutory,
+    payrollStatutoryGross,
     activeTab,
     setActiveTab,
     tasksList,
@@ -87,6 +92,10 @@ export function PieceworkPayrollPage() {
     setPayrollDeductionsDescription,
     payrollNotes,
     setPayrollNotes,
+    payrollIsPrepayment,
+    setPayrollIsPrepayment,
+    payrollPrepaymentReason,
+    setPayrollPrepaymentReason,
     payrollFixedIncluded,
     payrollFixedRemainingHint,
     payrollAdvanceDeduction,
@@ -308,7 +317,10 @@ export function PieceworkPayrollPage() {
         fixedRemainingHint={payrollFixedRemainingHint}
         advanceDeduction={payrollAdvanceDeduction}
         setAdvanceDeduction={setPayrollAdvanceDeduction}
+        prepayment={{ isPrepayment: payrollIsPrepayment, setIsPrepayment: setPayrollIsPrepayment, reason: payrollPrepaymentReason, setReason: setPayrollPrepaymentReason }}
         isSaving={isSavingPayroll}
+        statutoryFields={<PayrollStatutoryFields personnelId={payrollPersonnelId} startDate={toStorageDate(payrollStartDate) || ''} endDate={toStorageDate(payrollEndDate) || ''}
+          gross={payrollStatutoryGross} entry={payrollStatutory} onChange={setPayrollStatutory} />}
       />
 
       {/* MODAL 4: VIEW PAYSLIP & PRINT */}

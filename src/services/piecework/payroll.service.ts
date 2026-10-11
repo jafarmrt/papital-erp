@@ -8,7 +8,7 @@ import { VoucherService } from '../accounting/voucher.service.js';
 import { VoucherSyncService } from '../accounting/voucherSync.service.js';
 import { PayrollPaymentService } from '../accounting/payrollPayment.service.js';
 import { computeFixedSalaryShares, describeFixedSalaryShares, priorFixedGrantsOf, type FixedSalaryMonthShare } from '../../lib/payroll/fixedSalaryProration.js';
-import { fixedSalaryPeriodEnd, payrollPeriodFutureError, serviceEndOf } from '../../lib/payroll/payrollPeriod.js';
+import { fixedSalaryPeriodEnd, fixedSalaryPeriodStart, payrollPrepaymentError, serviceEndOf, serviceStartOf } from '../../lib/payroll/payrollPeriod.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
 import { isLegacyPayrollVoucher, payrollVouchersWhere } from '../accounting/payrollVoucherLink.js';
@@ -17,6 +17,8 @@ import { money } from '../../lib/money.js';
 import { workLogFreeOfLivePayroll } from './workLogPayrollLink.js';
 import { auditPayrollDeleted, auditPayrollIssued, auditPayrollUpdated } from './pieceworkAudit.js';
 import { payrollStatusLabel } from '../../lib/payroll/payrollStatusLabels.js';
+import { assertPayrollDutyNotByIssuer } from './payrollDuties.js';
+import { resolvePayrollStatutory, statutoryAuditInfo, statutoryPayrollColumns, type StatutoryEntryInput } from './payrollStatutory.js';
 
 /**
  * چرخه عمر فیش حقوقی پرکیسی: صدور، تغییر وضعیت، همگام‌سازی سند و ابطال.
@@ -32,7 +34,7 @@ type AmountInput = number | string;
  */
 const MANUAL_PAYROLL_STATUSES = new Set(['draft', 'approved']);
 
-export interface GeneratePayrollInput {
+export interface GeneratePayrollInput extends StatutoryEntryInput {
   personnelId: AmountInput;
   startDate: string;
   endDate: string;
@@ -45,6 +47,9 @@ export interface GeneratePayrollInput {
   deductionsDescription?: string;
   advanceDeduction?: AmountInput;
   notes?: string;
+  /** فیش پیش‌پرداخت: دوره‌ای که پایانش پس از امروز است، فقط حقوق ثابت، با دلیل الزامی (TD-1085) */
+  isPrepayment?: boolean;
+  prepaymentReason?: string;
   userId?: number;
   username: string;
   /** درخواست Express برای IP ردیف ممیزی (TD-810) */
@@ -75,8 +80,11 @@ export class PieceworkPayrollService {
     }
     // v9.0.268 (TD-808، تصمیم ت۴ الف): فیش دوره‌ای که هنوز تمام نشده صادر نمی‌شود. پیش‌تر فیش آذر در مهر صادر و تأیید شد و
     // حقوق ثابت ماه‌های آینده پیشاپیش هزینه و بدهی شد.
-    const futureError = payrollPeriodFutureError(eDate, await businessTodayIsoDate());
-    if (futureError) throw new ValidationError(futureError, undefined, 'PAYROLL_PERIOD_IN_FUTURE');
+    // v10.0.199 (TD-1085، طرح حقوق §۳.۴): دوره آینده فقط با «فیش پیش‌پرداخت» و دلیل الزامی پذیرفته می‌شود
+    const isPrepayment = input.isPrepayment === true;
+    const prepaymentReason = isPrepayment ? String(input.prepaymentReason ?? '').trim() : '';
+    const periodRefusal = payrollPrepaymentError(eDate, await businessTodayIsoDate(), { isPrepayment, prepaymentReason });
+    if (periodRefusal) throw new ValidationError(periodRefusal.message, undefined, periodRefusal.code);
 
     const totBonusesFin = fin(bonuses !== undefined ? bonuses : (totalBonuses !== undefined ? totalBonuses : 0));
     const totDeductionsFin = fin(deductions !== undefined ? deductions : (totalDeductions !== undefined ? totalDeductions : 0));
@@ -128,7 +136,8 @@ export class PieceworkPayrollService {
         ))
         .for('update');
 
-      const eligibleLogs = allPersonnelLogs.filter(log => {
+      // v10.0.199 (TD-1085): فیش پیش‌پرداخت فقط حقوق ثابت را دربر می‌گیرد؛ کارکردهای دوره در فیش بعدی می‌آیند
+      const eligibleLogs = isPrepayment ? [] : allPersonnelLogs.filter(log => {
         const d = toStorageDate(log.date);
         return !!d && d >= sDate && d <= eDate;
       });
@@ -145,6 +154,16 @@ export class PieceworkPayrollService {
       // v9.0.268 (TD-808، تصمیم ت۴ الف): حقوق ثابت فقط تا تاریخ پایان همکاری (serviceEndOf)؛ دوره پس از آن بی حقوق ثابت
       const serviceEnd = serviceEndOf(pInfo);
       const fixedEnd = fixedSalaryPeriodEnd(sDate, eDate, serviceEnd);
+      // v10.0.199 (TD-1086، طرح حقوق §۳.۴): حقوق ثابت از «آغاز همکاری» پرسنل؛ ماه نخست روزشمار
+      const serviceStart = serviceStartOf(pInfo);
+      const fixedStart = fixedEnd === null ? null : fixedSalaryPeriodStart(sDate, fixedEnd, serviceStart);
+      if (isPrepayment && (!fixedIncluded || !fin(pInfo.monthlySalary || 0).greaterThan(0))) {
+        throw new ValidationError(
+          `فیش پیش‌پرداخت فقط حقوق ثابت را می‌پردازد و ${pInfo.fullName} حقوق ثابت ماهانه ندارد.`,
+          undefined,
+          'PAYROLL_PREPAYMENT_FIXED_SALARY_ONLY'
+        );
+      }
       if (fixedIncluded && fin(pInfo.monthlySalary || 0).greaterThan(0) && serviceEnd.kind === 'unknown') {
         throw new ValidationError(
           `${pInfo.fullName} «قطع همکاری» است ولی تاریخ پایان همکاری معتبری ندارد؛ پیش از صدور فیش با حقوق ثابت، تاریخ پایان همکاری را در پرونده پرسنل ثبت کنید.`,
@@ -152,7 +171,7 @@ export class PieceworkPayrollService {
           'PAYROLL_SERVICE_END_DATE_REQUIRED'
         );
       }
-      if (fixedIncluded && fin(pInfo.monthlySalary || 0).greaterThan(0) && fixedEnd !== null) {
+      if (fixedIncluded && fin(pInfo.monthlySalary || 0).greaterThan(0) && fixedEnd !== null && fixedStart !== null) {
         const priorFixedPayrolls = await tx.select({
           startDate: pieceworkPayrolls.startDate,
           totalFixedAmount: pieceworkPayrolls.totalFixedAmount,
@@ -165,11 +184,12 @@ export class PieceworkPayrollService {
         ))
         .for('update');
 
-        const shares = computeFixedSalaryShares(pInfo.monthlySalary, sDate, fixedEnd, priorFixedPayrolls.flatMap(priorFixedGrantsOf));
+        const shares = computeFixedSalaryShares(pInfo.monthlySalary, fixedStart, fixedEnd, priorFixedPayrolls.flatMap(priorFixedGrantsOf));
         fixedPortionFin = shares.total;
         fixedSalaryMonths = shares.months;
         fixedDedupNote = [
           describeFixedSalaryShares(shares.months, pInfo.monthlySalary),
+          fixedStart > sDate ? `حقوق ثابت از آغاز همکاری (${toPersianDigits(isoToJalaliDate(fixedStart))})` : '',
           fixedEnd < eDate ? `حقوق ثابت تا پایان همکاری (${toPersianDigits(isoToJalaliDate(fixedEnd))})` : '',
         ].filter(Boolean).join(' — ');
       }
@@ -177,6 +197,12 @@ export class PieceworkPayrollService {
       if (eligibleLogs.length === 0 && fixedPortionFin.lessThanOrEqual(0)) {
         if (fixedIncluded && serviceEnd.kind === 'ended' && fixedEnd === null) {
           return { status: 400, error: `همکاری ${pInfo.fullName} در ${toPersianDigits(isoToJalaliDate(serviceEnd.endIso))} پایان یافته است؛ این بازه حقوق ثابت ندارد و کارکرد معوقی هم در آن نیست.` };
+        }
+        if (fixedIncluded && serviceStart && fixedEnd !== null && fixedStart === null) {
+          return { status: 400, error: `همکاری ${pInfo.fullName} در ${toPersianDigits(isoToJalaliDate(serviceStart))} آغاز می‌شود؛ این بازه حقوق ثابت ندارد و کارکرد معوقی هم در آن نیست.` };
+        }
+        if (isPrepayment) {
+          return { status: 400, error: `حقوق ثابت این بازه پیش‌تر در فیش‌های دیگر ${pInfo.fullName} داده شده است؛ فیش پیش‌پرداخت مبلغی ندارد.` };
         }
         return { status: 400, error: 'هیچ کارکرد معوقی در این بازه زمانی برای پرسنل انتخاب‌شده پیدا نشد.' };
       }
@@ -199,15 +225,15 @@ export class PieceworkPayrollService {
         }
       }
 
-      const netFin = pieceworkTotalFin
-        .add(fixedPortionFin)
-        .add(totBonusesFin)
-        .subtract(totDeductionsFin)
-        .subtract(advanceDeductionFin)
-        .round(4);
+      // v10.0.210 (TD-1087، طرح حقوق §۳.۳): بیمه سهم کارگر و مالیات حقوق از خالص کم می‌شوند؛ سهم کارفرما هزینه کارفرماست
+      const statutory = await resolvePayrollStatutory(tx, { person: pInfo, startIso: sDate, endIso: eDate, gross: pieceworkTotalFin.add(fixedPortionFin).add(totBonusesFin),
+        entered: { employeeInsurance: input.employeeInsurance, employerInsurance: input.employerInsurance, incomeTax: input.incomeTax }, overrideReason: input.statutoryOverrideReason });
+
+      const netFin = pieceworkTotalFin.add(fixedPortionFin).add(totBonusesFin).subtract(statutory.amounts.employeeInsurance)
+        .subtract(statutory.amounts.incomeTax).subtract(totDeductionsFin).subtract(advanceDeductionFin).round(4);
 
       if (netFin.isNegative()) {
-        return { status: 400, error: 'جمع کسورات و کسر مساعده از اجزای فیش بیشتر است — مقادیر را اصلاح کنید.' };
+        return { status: 400, error: 'جمع بیمه، مالیات، کسورات و کسر مساعده از اجزای فیش بیشتر است — مقادیر را اصلاح کنید.' };
       }
 
       const pieceworkTotal = money(pieceworkTotalFin.round(4));
@@ -223,7 +249,7 @@ export class PieceworkPayrollService {
       const payrollNumber = `PAY-${seq}`;
 
       const defaultTitle = title && String(title).trim() ? String(title).trim() : `فیش کارکرد ${pInfo.fullName} (${isoToJalaliDate(sDate)} تا ${isoToJalaliDate(eDate)})`;
-      const finalNotes = [notes ? String(notes).trim() : '', fixedDedupNote].filter(Boolean).join(' | ');
+      const finalNotes = [isPrepayment ? `فیش پیش‌پرداخت: ${prepaymentReason}` : '', notes ? String(notes).trim() : '', fixedDedupNote].filter(Boolean).join(' | ');
 
       // 5. Insert payroll record
       const [newPayroll] = await tx.insert(pieceworkPayrolls).values({
@@ -240,7 +266,12 @@ export class PieceworkPayrollService {
         advanceDeduction,
         netPayable: net,
         fixedSalaryMonths,
-        status: 'approved',
+        // v10.0.193 (TD-1083، OBS-R2-48، طرح حقوق ت۱ الف): فیش پیش‌نویس صادر می‌شود و دارنده «تأیید فیش حقوق» جدا تأییدش
+        // می‌کند. پیش‌تر هنگام صدور «تأییدشده» بود و میان صدور و پرداخت گام تأییدی نبود.
+        status: 'draft',
+        isPrepayment: isPrepayment ? 1 : 0,
+        prepaymentReason,
+        ...statutoryPayrollColumns(statutory),
         notes: finalNotes,
         createdById: currentUserId,
         isDeleted: 0
@@ -250,7 +281,7 @@ export class PieceworkPayrollService {
       const logIds = eligibleLogs.map(l => l.id);
       if (logIds.length > 0) {
         await tx.update(pieceworkLogs)
-          .set({ payrollId: newPayroll.id, status: 'approved' })
+          .set({ payrollId: newPayroll.id, status: 'draft' })
           .where(and(
             inArray(pieceworkLogs.id, logIds),
             unlinkedOrOrphan
@@ -267,13 +298,13 @@ export class PieceworkPayrollService {
         { strict: true }
       );
       // v9.0.285 (TD-810): ردیف ممیزی صدور با عکس فیش، کارکردها و سند، در همان تراکنش
-      await auditPayrollIssued(tx, newPayroll, { personnelName: pInfo.fullName, logIds, voucher: autoVoucher }, { req: input.req, userId: currentUserId, username: currentUsername });
+      await auditPayrollIssued(tx, newPayroll, { personnelName: pInfo.fullName, logIds, voucher: autoVoucher, statutory: statutoryAuditInfo(statutory) }, { req: input.req, userId: currentUserId, username: currentUsername });
 
       return {
         status: 201,
         payroll: newPayroll,
         personnelName: pInfo.fullName,
-        voucher: autoVoucher
+        voucher: autoVoucher, statutoryWarning: statutory.warning
       };
     });
   }
@@ -310,6 +341,10 @@ export class PieceworkPayrollService {
       // v8.0.28 (TD-281): وضعیت فیشی که پرداخت دارد دستی عوض نمی‌شود (برگرداندنش به «approved» حذف آن را با پرداخت باقی‌مانده ممکن می‌کرد)
       if (targetStatus && (['paid', 'partially_paid'].includes(pay.status || '') || fin(pay.paidAmount ?? 0).isPositive())) {
         throw new ConflictError(`فیش ${pay.payrollNumber} پرداخت ثبت‌شده دارد؛ وضعیت آن فقط از مسیر پرداخت تغییر می‌کند.`);
+      }
+      // v10.0.193 (TD-1084، طرح حقوق ت۲ و ت۳ الف): صادرکننده فیش آن را تأیید نمی‌کند؛ مدیر سیستم مستثناست
+      if (targetStatus === 'approved' && pay.status === 'draft') {
+        await assertPayrollDutyNotByIssuer(tx, pay, currentUserId, 'approve');
       }
 
       const updates: Partial<typeof pieceworkPayrolls.$inferInsert> = {};

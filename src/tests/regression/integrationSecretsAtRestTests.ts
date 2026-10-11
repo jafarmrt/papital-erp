@@ -9,6 +9,7 @@ import { orm } from '../../db/drizzle.js';
 import { appSettings, roles, users, webhookDeliveries, webhookSubscriptions } from '../../db/schema.js';
 import { decryptSecret, isEncryptedSecret } from '../../lib/secretBox.js';
 import { invalidateSettingsCache } from '../../lib/memoryCache.js';
+import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 
 /**
  * Package 15 (events and integrations), TD-898 (observation 11, decision t7 a): the WooCommerce consumer key and secret,
@@ -223,7 +224,7 @@ export async function runIntegrationSecretsAtRestTests(shouldRun: (id: string, .
       await orm.delete(webhookSubscriptions).where(inArray(webhookSubscriptions.id, ids)).catch(() => undefined);
     }
     if (userIds.length > 0) await orm.update(users).set({ isDeleted: 1 }).where(inArray(users.id, userIds)).catch(() => undefined);
-    if (roleIds.length > 0) await orm.delete(roles).where(inArray(roles.id, roleIds)).catch(() => undefined);
+    if (roleIds.length > 0) await deleteTestRoles(inArray(roles.id, roleIds)).catch(() => undefined);
   }
   return results;
 }

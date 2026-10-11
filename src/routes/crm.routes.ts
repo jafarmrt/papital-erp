@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { eq, desc, and, ilike, sql, gte, lte, or } from 'drizzle-orm';
-import { orm } from '../db/drizzle.js';
+import { orm, type DbExecutor } from '../db/drizzle.js';
 import { crmLeads, crmActivities, customers, users, notifications, personnel } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission } from '../middleware/authorize.js';
@@ -20,8 +20,11 @@ import { linkCustomerForLead, notesWithPartyDifferences } from '../services/crm/
 import { getCrmStats } from '../services/crm/crmStats.js';
 import { listFollowups, liveLeadActivityCondition, type FollowupStatus } from '../services/crm/crmFollowups.js';
 import { deleteLead } from '../services/crm/crmLeadDelete.js';
+import { leadAuditDetails } from '../services/crm/crmLeadAudit.js';
+import { isClosedLead } from '../services/crm/leadProforma.js';
 import { setFollowupCompleted } from '../services/crm/crmFollowupStatus.js';
 import { resolveActivityParents } from '../services/crm/crmActivityParents.js';
+import { notifyActivityMentions, resolveActivityMentions } from '../services/crm/crmActivityMentions.js';
 import { CRM_LEAD_CURRENCIES, CRM_LEAD_STAGES, CRM_LEAD_STATUSES, isLeadProbability, normalizeLeadCurrency } from '../lib/crm/leadFields.js';
 import { leadCustomerCondition } from '../services/crm/crmLeadCustomerFilter.js';
 import { canSeePartyBankInfo, withoutBankInfo } from '../services/customers/partyBankInfoAccess.js';
@@ -99,7 +102,9 @@ const createCrmActivitySchema = z.object({
     nextFollowUpTask: z.string().optional(),
     assignedTo: z.string().optional(),
     assignedPersonnelId: z.union([z.number(), z.string(), z.null()]).optional(),
-    mentions: z.array(z.any()).optional(),
+    // v10.0.34 (TD-976): the mentioned users are positive user ids, checked against live users in the service
+    mentions: z.array(z.coerce.number().int('شناسه کاربر اشاره‌شده باید عدد صحیح باشد').positive('شناسه کاربر اشاره‌شده باید مثبت باشد'))
+      .max(100, 'اقدام حداکثر ۱۰۰ اشاره دارد').optional(),
   })
 });
 
@@ -114,7 +119,7 @@ const followupActionSchema = z.object({
 });
 
 // V10-4.1: resolve مسئول از پرسنل — id معتبر => snapshot نام؛ نام بدون id => best-effort اتصال
-async function resolveAssignee(input: { name?: string | null; personnelId?: number | string | null }): Promise<{ name: string; id: number | null }> {
+async function resolveAssignee(input: { name?: string | null; personnelId?: number | string | null }, db: DbExecutor): Promise<{ name: string; id: number | null }> {
   const nameStr = String(input.name ?? '').trim();
 
   if (input.personnelId !== undefined && input.personnelId !== null && String(input.personnelId).trim() !== '') {
@@ -122,7 +127,7 @@ async function resolveAssignee(input: { name?: string | null; personnelId?: numb
     if (Number.isNaN(pid) || pid <= 0) {
       throw new BadRequestError('شناسه فروشنده/مسئول نامعتبر است');
     }
-    const [p] = await orm.select({ id: personnel.id, fullName: personnel.fullName }).from(personnel).where(eq(personnel.id, pid));
+    const [p] = await db.select({ id: personnel.id, fullName: personnel.fullName }).from(personnel).where(eq(personnel.id, pid));
     if (!p) {
       throw new NotFoundError('پرسنل انتخاب‌شده یافت نشد');
     }
@@ -130,7 +135,7 @@ async function resolveAssignee(input: { name?: string | null; personnelId?: numb
   }
 
   if (nameStr) {
-    const [p] = await orm.select({ id: personnel.id, fullName: personnel.fullName })
+    const [p] = await db.select({ id: personnel.id, fullName: personnel.fullName })
       .from(personnel)
       .where(and(eq(personnel.isDeleted, 0), sql`lower(btrim(${personnel.fullName})) = lower(btrim(${String(nameStr)}))`));
     return { name: nameStr, id: p ? p.id : null };
@@ -325,7 +330,8 @@ router.get('/crm/leads', authorizePermission('crm.view', 'customers.view', 'cust
 }));
 
 // GET /api/crm/leads/:id - Single lead detail with activities
-router.get('/crm/leads/:id', authorizePermission('crm.view'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+// v10.0.178 (OBS-R2-29): همان مجوزهای فهرست پرونده‌ها؛ پیش‌تر فقط `crm.view` و خواننده مشتریان کشوی پرونده را ۴۰۳ می‌گرفت
+router.get('/crm/leads/:id', authorizePermission('crm.view', 'customers.view', 'customers.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const [lead] = await orm.select().from(crmLeads).where(and(eq(crmLeads.id, id), eq(crmLeads.isDeleted, 0)));
   if (!lead) {
@@ -395,7 +401,7 @@ router.post('/crm/leads', authorizePermission('crm.manage'), validate(createCrmL
   const authorName = currentUser?.full_name || currentUser?.username || 'فروشنده';
 
   // V10-4.1: فروشنده مسئول = پرسنل (id) + snapshot نام
-  const assignee = await resolveAssignee({ name: assignedTo, personnelId: assignedPersonnelId });
+  const assignee = await resolveAssignee({ name: assignedTo, personnelId: assignedPersonnelId }, orm);
 
   // v9.0.5 (TD-418): پیوند به طرف حساب یا ساخت طرف حساب تازه؛ طرف حساب موجود عوض نمی‌شود و اختلاف به یادداشت می‌رود
   const party = await linkCustomerForLead({ customerId, customerName, phone, company, title });
@@ -462,7 +468,10 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
   const currentUser = req.user;
   const authorName = currentUser?.full_name || currentUser?.username || 'فروشنده';
 
-  const [existing] = await orm.select().from(crmLeads).where(and(eq(crmLeads.id, id), eq(crmLeads.isDeleted, 0)));
+  // v10.0.179 (OBS-R2-33): ویرایش زیر قفل ردیف پرونده و در یک تراکنش با یادداشت تغییر مرحله و ردیف ممیزی پیش و پس؛
+  // پیش‌تر بی قفل و تراکنش، و ممیزی بی پیش و پس
+  const { existing, updated } = await orm.transaction(async (tx) => {
+  const [existing] = await tx.select().from(crmLeads).where(and(eq(crmLeads.id, id), eq(crmLeads.isDeleted, 0))).for('update');
   if (!existing) {
     throw new NotFoundError('فرصت فروش یافت نشد');
   }
@@ -494,7 +503,7 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
     ? await resolveAssignee({
         name: assignedTo !== undefined ? assignedTo : existing.assignedTo,
         personnelId: assignedPersonnelId !== undefined ? assignedPersonnelId : null
-      })
+      }, tx)
     : null;
 
   const targetCustId = customerId !== undefined ? customerId : existing.customerId;
@@ -509,7 +518,7 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
     phone: targetPhone,
     company: targetCompany,
     title: targetTitle,
-  });
+  }, tx);
 
   const nowIso = systemNowUtcIso();
   
@@ -525,7 +534,7 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
   else if (stage === 'lost') newStatus = 'lost';
   else if (stage && stage !== 'won' && stage !== 'lost') newStatus = 'active';
 
-  const [updated] = await orm.update(crmLeads).set({
+  const [updated] = await tx.update(crmLeads).set({
     title: title !== undefined ? title.trim() : existing.title,
     customerId: party.customerId,
     customerName: customerName !== undefined ? customerName : existing.customerName,
@@ -545,10 +554,6 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
     updatedAt: nowIso
   }).where(eq(crmLeads.id, id)).returning();
 
-  if (stage === 'won' && existing.stage !== 'won') {
-    await notifySalesOnWonLead(updated, authorName, currentUser?.id);
-  }
-
   // Log stage change activity if stage changed
   if (stage && stage !== existing.stage) {
     const stageLabels: Record<string, string> = {
@@ -558,7 +563,7 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
       won: 'موفق (بسته شد)',
       lost: 'ناموفق (انصراف)'
     };
-    await orm.insert(crmActivities).values({
+    await tx.insert(crmActivities).values({
       leadId: id,
       customerId: updated.customerId,
       type: 'task',
@@ -572,15 +577,22 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
   }
 
   await logActivity({
-    userId: currentUser?.id,
-    username: currentUser?.username || 'user',
+    req,
+    tx,
     userFullName: authorName,
     action: 'UPDATE',
     entity: 'فرصت فروش CRM',
     entityId: String(id),
     description: `ویرایش فرصت فروش "${updated.title}"`,
-    ipAddress: req.ip || ''
+    details: leadAuditDetails(existing, updated),
   });
+  return { existing, updated };
+  });
+
+  if (updated.stage === 'won' && existing.stage !== 'won') {
+    await notifySalesOnWonLead(updated, authorName, currentUser?.id);
+  }
+
 
   res.json(formatLead(updated));
 }));
@@ -591,52 +603,64 @@ router.post('/crm/leads/:id/convert-to-customer', authorizePermission('crm.manag
   const currentUser = req.user;
   const authorName = currentUser?.full_name || currentUser?.username || 'فروشنده';
 
-  const [lead] = await orm.select().from(crmLeads).where(and(eq(crmLeads.id, id), eq(crmLeads.isDeleted, 0)));
-  if (!lead) {
-    throw new NotFoundError('پرونده فروش یافت نشد');
-  }
+  // v10.0.179 (OBS-R2-33): تبدیل زیر قفل ردیف پرونده و در یک تراکنش با یادداشت و ردیف ممیزی پیش و پس؛ پرونده بسته
+  // («موفق» یا «از دست رفته») مرحله و وضعیتش را نگه می‌دارد. پیش‌تر پرونده از دست رفته به «پیش‌فاکتور و پیشنهاد» برمی‌گشت
+  // و تبدیل ممیزی نداشت
+  const { updated, resolvedCustomerId } = await orm.transaction(async (tx) => {
+    const [lead] = await tx.select().from(crmLeads).where(and(eq(crmLeads.id, id), eq(crmLeads.isDeleted, 0))).for('update');
+    if (!lead) {
+      throw new NotFoundError('پرونده فروش یافت نشد');
+    }
 
-  // پیوند پرونده به طرف حساب یا ساخت طرف حساب تازه (v9.0.5، TD-418: طرف حساب موجود عوض نمی‌شود)
-  const party = await linkCustomerForLead({
-    customerId: lead.customerId,
-    customerName: lead.customerName,
-    phone: lead.phone,
-    company: lead.company,
-    title: lead.title,
+    // پیوند پرونده به طرف حساب یا ساخت طرف حساب تازه (v9.0.5، TD-418: طرف حساب موجود عوض نمی‌شود)
+    const party = await linkCustomerForLead({
+      customerId: lead.customerId,
+      customerName: lead.customerName,
+      phone: lead.phone,
+      company: lead.company,
+      title: lead.title,
+    }, tx);
+
+    const nowIso = systemNowUtcIso();
+    const keepState = isClosedLead(lead);
+    const [updated] = await tx.update(crmLeads).set({
+      customerId: party.customerId,
+      notes: notesWithPartyDifferences(lead.notes, party.differences),
+      stage: keepState ? lead.stage : 'proposal',
+      status: keepState ? lead.status : 'active',
+      updatedAt: nowIso
+    }).where(eq(crmLeads.id, id)).returning();
+
+    await tx.insert(crmActivities).values({
+      leadId: id,
+      customerId: party.customerId,
+      type: 'task',
+      title: 'تبدیل پرونده فروش به مشتری و صدور پیش‌فاکتور',
+      description: `پرونده فروش "${lead.title}" توسط ${authorName} به مشتری رسمی تبدیل شد و جهت صدور پیش‌فاکتور هدایت شد.`,
+      loggedBy: authorName,
+      ...(await crmTodayActivityDates()),
+      createdAt: nowIso,
+      isDeleted: 0
+    });
+    await logActivity({
+      req,
+      tx,
+      userFullName: authorName,
+      action: 'UPDATE',
+      entity: 'فرصت فروش CRM',
+      entityId: String(id),
+      description: `تبدیل پرونده فروش "${lead.title}" به مشتری`,
+      details: { operation: 'convert_to_customer', ...leadAuditDetails(lead, updated) },
+    });
+    return { updated, resolvedCustomerId: party.customerId };
   });
-  const resolvedCustomerId = party.customerId;
 
-  const nowIso = systemNowUtcIso();
-  // V10-4.3: قانون نرم — تبدیل به مشتری هرگز وضعیت «موفق» را از بین نمی‌برد (بدون تقدم اجباری proposal/active)
-  const preserveWonState = lead.stage === 'won' || lead.status === 'won';
-  const [updated] = await orm.update(crmLeads).set({
-    customerId: resolvedCustomerId,
-    notes: notesWithPartyDifferences(lead.notes, party.differences),
-    stage: preserveWonState ? lead.stage : 'proposal',
-    status: preserveWonState ? lead.status : 'active',
-    updatedAt: nowIso
-  }).where(eq(crmLeads.id, id)).returning();
-
-  // Fetch customer details if exists
   // v9.0.21 (TD-433، ت۶): اطلاعات بانکی طرف حساب فقط برای customers.view / customers.manage / accounting.*
   let customerObj: typeof customers.$inferSelect | Omit<typeof customers.$inferSelect, 'bankInfo'> | null = null;
   if (resolvedCustomerId) {
     const [c] = await orm.select().from(customers).where(eq(customers.id, resolvedCustomerId));
     customerObj = c ? ((await canSeePartyBankInfo(req.user)) ? c : withoutBankInfo(c)) : null;
   }
-
-  // Log activity
-  await orm.insert(crmActivities).values({
-    leadId: id,
-    customerId: resolvedCustomerId,
-    type: 'task',
-    title: 'تبدیل پرونده فروش به مشتری و صدور پیش‌فاکتور',
-    description: `پرونده فروش "${lead.title}" توسط ${authorName} به مشتری رسمی تبدیل شد و جهت صدور پیش‌فاکتور هدایت شد.`,
-    loggedBy: authorName,
-    ...(await crmTodayActivityDates()),
-    createdAt: nowIso,
-    isDeleted: 0
-  });
 
   res.json({
     message: 'پرونده فروش به مشتری رسمی تبدیل شد',
@@ -795,128 +819,85 @@ router.post('/crm/activities', authorizePermission('crm.manage'), validate(creat
   const taskAssignee = await resolveAssignee({
     name: assignedTo || authorName,
     personnelId: assignedPersonnelId
-  });
-  const mentionsList = Array.isArray(mentions) ? mentions : [];
+  }, orm);
   // v9.0.17 (TD-426): پرونده و طرف حساب ناموجود یا حذف‌شده با ۴۲۲ رد می‌شوند (`resolveActivityParents`)
-  const parents = await resolveActivityParents(orm, { leadId, customerId });
+  // v10.0.34 (TD-976): ثبت اقدام، اعلان‌ها، زمان پرونده و ممیزی در یک تراکنش؛ اشاره فقط شناسه کاربر زنده است و اعلان آن
+  // فقط به اشاره‌شده‌ای می‌رود که اقدام‌های ارتباط با مشتری را می‌خواند (`notifyActivityMentions`)
+  const newAct = await orm.transaction(async (tx) => {
+    const parents = await resolveActivityParents(tx, { leadId, customerId });
+    const mentionIds = await resolveActivityMentions(tx, mentions);
 
-  const [newAct] = await orm.insert(crmActivities).values({
-    leadId: parents.leadId,
-    customerId: parents.customerId,
-    type: type || 'call',
-    title: title.trim(),
-    description: description || '',
-    result: result || '',
-    loggedBy: authorName,
-    assignedTo: taskAssignee.name,
-    assignedPersonnelId: taskAssignee.id,
-    mentions: mentionsList,
-    activityDate: actDateIso,
-    activityDateIso: actDateIso,
-    nextFollowUpDate: nextFollowIso,
-    nextFollowUpDateIso: nextFollowIso,
-    nextFollowUpTask: nextFollowUpTask || '',
-    isFollowUpCompleted: 0,
-    createdAt: nowIso,
-    isDeleted: 0
-  }).returning();
+    const [act] = await tx.insert(crmActivities).values({
+      leadId: parents.leadId,
+      customerId: parents.customerId,
+      type: type || 'call',
+      title: title.trim(),
+      description: description || '',
+      result: result || '',
+      loggedBy: authorName,
+      assignedTo: taskAssignee.name,
+      assignedPersonnelId: taskAssignee.id,
+      mentions: mentionIds,
+      activityDate: actDateIso,
+      activityDateIso: actDateIso,
+      nextFollowUpDate: nextFollowIso,
+      nextFollowUpDateIso: nextFollowIso,
+      nextFollowUpTask: nextFollowUpTask || '',
+      isFollowUpCompleted: 0,
+      createdAt: nowIso,
+      isDeleted: 0
+    }).returning();
 
-  // Send notifications to mentioned users
-  try {
-    const targetUserIds = new Set<number>();
-    if (Array.isArray(mentions)) {
-      for (const item of mentions) {
-        if (typeof item === 'number' && item > 0) targetUserIds.add(item);
-        else if (typeof item === 'string' && item.trim()) {
-          const [u] = await orm.select({ id: users.id }).from(users).where(
-            or(eq(users.username, item.trim()), eq(users.fullName, item.trim()))
-          );
-          if (u) targetUserIds.add(u.id);
-        }
-      }
-    }
+    await notifyActivityMentions(tx, { id: act.id, title: act.title, mentions: mentionIds }, { id: currentUser?.id, name: authorName });
 
-    // Check description for @mentions as well
-    if (description) {
-      // v9.0.76 (TD-521): همه کاربران حذف‌نشده، با پیشوند آزمون یا بی آن
-      const allSysUsers = await orm.select({ id: users.id, username: users.username, fullName: users.fullName })
-        .from(users)
-        .where(eq(users.isDeleted, 0));
-      for (const u of allSysUsers) {
-        if (u.username && description.includes(`@${u.username}`)) targetUserIds.add(u.id);
-        if (u.fullName && description.includes(`@${u.fullName}`)) targetUserIds.add(u.id);
-      }
-    }
-
-    for (const targetId of targetUserIds) {
-      if (targetId !== currentUser?.id) {
-        await orm.insert(notifications).values({
-          userId: targetId,
-          senderId: currentUser?.id,
-          senderName: authorName,
-          type: 'mention',
-          title: 'اشاره به شما در اقدام ارتباط با مشتری',
-          message: `${authorName} در اقدام «${title}» به شما اشاره کرد.`,
-          link: `/crm?activityId=${newAct.id}`,
-          isRead: 0
-        });
-      }
-    }
-  } catch (notifErr) {
-    logger.error({ message: 'Error sending CRM mention notifications', error: notifErr });
-  }
-
-  // Send notification for task/follow-up assignment
-  if (nextFollowUpTask || nextFollowUpDate) {
-    try {
-      // V10-4.1: اولویت اطلاع‌رسانی با لینک personnel.userId، سپس تطابق نام
+    // Notification for the follow-up assignee (linked personnel user first, then the exact name)
+    if (nextFollowUpTask || nextFollowUpDate) {
       let targetUserId: number | null | undefined = null;
-      if (newAct.assignedPersonnelId) {
-        const [pRow] = await orm.select({ userId: personnel.userId })
+      if (act.assignedPersonnelId) {
+        const [pRow] = await tx.select({ userId: personnel.userId })
           .from(personnel)
-          .where(eq(personnel.id, Number(newAct.assignedPersonnelId)));
+          .where(eq(personnel.id, Number(act.assignedPersonnelId)));
         targetUserId = pRow?.userId ?? null;
       }
       if (!targetUserId && taskAssignee.name) {
-        const [assignedUser] = await orm.select().from(users).where(
-          or(eq(users.fullName, taskAssignee.name), eq(users.username, taskAssignee.name))
+        const [assignedUser] = await tx.select({ id: users.id }).from(users).where(
+          and(eq(users.isDeleted, 0), or(eq(users.fullName, taskAssignee.name), eq(users.username, taskAssignee.name)))
         );
         targetUserId = assignedUser?.id ?? null;
       }
       const notifUserId = targetUserId || currentUser?.id;
       if (notifUserId) {
-        await orm.insert(notifications).values({
+        await tx.insert(notifications).values({
           userId: notifUserId,
           senderId: currentUser?.id,
           senderName: authorName,
           type: 'task',
           title: 'پیگیری تازه ارتباط با مشتری',
           message: `${authorName} پیگیری تازه‌ای برای شما ثبت کرد: "${nextFollowUpTask || title}" (تاریخ سررسید: ${toPersianDigits(isoToJalaliDate(nextFollowIso || actDateIso))})`,
-          link: `/crm?activityId=${newAct.id}`,
+          link: `/crm?activityId=${act.id}`,
           isRead: 0
         });
       }
-    } catch (taskNotifErr) {
-      logger.error({ message: 'Error sending task assignment notification', error: taskNotifErr });
     }
-  }
 
-  // Update lead's updatedAt timestamp
-  if (parents.leadId) {
-    await orm.update(crmLeads)
-      .set({ updatedAt: nowIso })
-      .where(eq(crmLeads.id, parents.leadId));
-  }
+    if (parents.leadId) {
+      await tx.update(crmLeads)
+        .set({ updatedAt: nowIso })
+        .where(eq(crmLeads.id, parents.leadId));
+    }
 
-  await logActivity({
-    userId: currentUser?.id,
-    username: currentUser?.username || 'user',
-    userFullName: authorName,
-    action: 'CREATE',
-    entity: 'اقدام و تماس CRM',
-    entityId: String(newAct.id),
-    description: `ثبت ${type === 'call' ? 'تماس' : 'اقدام'} "${title}"`,
-    ipAddress: req.ip || ''
+    await logActivity({
+      userId: currentUser?.id,
+      username: currentUser?.username || 'user',
+      userFullName: authorName,
+      action: 'CREATE',
+      entity: 'اقدام و تماس CRM',
+      entityId: String(act.id),
+      description: `ثبت ${type === 'call' ? 'تماس' : 'اقدام'} "${title}"`,
+      ipAddress: req.ip || '',
+      tx,
+    });
+    return act;
   });
 
   res.status(201).json(formatActivity(newAct));

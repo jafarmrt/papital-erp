@@ -58,7 +58,7 @@ export class ItemPricingService {
    * v9.0.175 (TD-660): درون تراکنش با همان `tx` خوانده می‌شود (AGENTS §19).
    */
   static async getPricingStrategies(executor: DbExecutor = orm): Promise<string[]> {
-    // v10.0.27 (OBS-R1-72): خطای خواندن یا مقدار ناخوانا دیگر بلعیده نمی‌شود و به فهرست پیش‌فرض نمی‌رسد
+    // v10.0.201 (OBS-R1-72): خطای خواندن یا مقدار ناخوانا دیگر بلعیده نمی‌شود و به فهرست پیش‌فرض نمی‌رسد
     const [row] = await executor.select().from(appSettings).where(eq(appSettings.key, 'pricing_strategies'));
     const read = readPricingStrategies(row?.value);
     if ('error' in read) throw new ConflictError(read.error, undefined, 'PRICING_STRATEGIES_UNREADABLE');

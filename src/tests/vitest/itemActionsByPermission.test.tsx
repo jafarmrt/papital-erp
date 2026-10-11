@@ -40,7 +40,7 @@ function pricingPage(price: number, currency: string) {
 
 function apiResponse(url: string): unknown {
   if (url.startsWith('/items?')) return { data: [item], total: 1, page: 1, totalPages: 1 };
-  // v10.0.33 (OBS-R1-79): صفحه قیمت‌گذاری یک صفحه از کالاها را با قیمت‌ها و فهرست‌های قیمت از سرور می‌خواند
+  // v10.0.219 (OBS-R1-79): صفحه قیمت‌گذاری یک صفحه از کالاها را با قیمت‌ها و فهرست‌های قیمت از سرور می‌خواند
   if (url.startsWith('/items/pricing-page?')) return pricingPage(2000000, 'IRR');
   if (url === '/settings') return [{ key: 'pricing_strategies', value: 'عمده' }];
   if (url === '/categories') return [{ id: 1, name: 'گردنبند', prefix: 'N', type: 'product', defaultUnit: 'عدد' }];

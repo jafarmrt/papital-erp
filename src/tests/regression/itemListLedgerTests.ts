@@ -7,7 +7,7 @@ import { money } from '../../lib/money.js';
 
 /**
  * Phase 3 lane L2, package 5 ledger part 2 (TD-987). OBS-R1-74: the item list sorts, counts the low-stock card and
- * searches the category on the server over every filtered item (v10.0.31 sorted and counted only the current page and
+ * searches the category on the server over every filtered item (v10.0.217 sorted and counted only the current page and
  * searched name and code only). OBS-R1-79: the pricing page reads one page of items with their prices and the price
  * lists from `GET /items/pricing-page`, filtered by price completeness on the server (the route did not exist).
  */
@@ -33,7 +33,7 @@ export async function runItemListLedgerTests(shouldRun: (id: string, ...extra: s
 
   const idList = 'reg_items_list_server_sort_obs_r1_74';
   if (shouldRun(idList, 'obs-r1-74', 'items', 'package5')) {
-    const name = 'v10.0.32: the item list sorts, counts low stock and searches the category on the server (OBS-R1-74)';
+    const name = 'v10.0.218: the item list sorts, counts low stock and searches the category on the server (OBS-R1-74)';
     const tStart = Date.now();
     const token = `RL74${Date.now().toString(36).toUpperCase()}`;
     let ids: number[] = [];
@@ -65,7 +65,7 @@ export async function runItemListLedgerTests(shouldRun: (id: string, ...extra: s
 
   const idPricing = 'reg_pricing_page_server_obs_r1_79';
   if (shouldRun(idPricing, 'obs-r1-79', 'pricing', 'package5')) {
-    const name = 'v10.0.33: the pricing page reads one page of items with their prices from the server (OBS-R1-79)';
+    const name = 'v10.0.219: the pricing page reads one page of items with their prices from the server (OBS-R1-79)';
     const tStart = Date.now();
     const token = `RP79${Date.now().toString(36).toUpperCase()}`;
     let ids: number[] = [];

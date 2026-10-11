@@ -14,8 +14,8 @@ import { invariantProblems, itemState, receive, watermarks } from './scenarioHel
  */
 
 const ADMIN = { username: 'inv', role: 'admin', permissions: [] as string[] };
-/** کاربری بی مجوز «ثبت سند انبار با تاریخ گذشته» (warehouse.backdate) */
-const CLERK = { username: 'inv-clerk', role: 'procurement_officer', permissions: [] as string[] };
+/** کاربری بی مجوز «ثبت سند انبار با تاریخ گذشته» (warehouse.backdate); v10.0.91 (TD-1181): انباردار کالای خرید را تحویل می‌گیرد (تصمیم ت۱) */
+const CLERK = { username: 'inv-clerk', role: 'warehouse_keeper', permissions: [] as string[] };
 
 async function requisition(itemId: number, quantity: number): Promise<number> {
   const res = await pool.query<{ code: string; name: string }>('SELECT code, name FROM items WHERE id = $1', [itemId]);
@@ -38,6 +38,8 @@ async function order(requisitionId: number, itemId: number, quantity: number, wh
 const NOT_ORDERED_HINT = 'ابتدا سفارش خرید با تأمین‌کننده و قیمت صادر کنید';
 /** Part of the refusal of a requisition that was already received */
 const ALREADY_RECEIVED = 'قبلاً دریافت';
+/** v10.0.91 (TD-1181): the refusal for a missing entity permission, which must not stand in for the backdate refusal */
+const RECEIVE_PERMISSION_REFUSAL = 'را می‌خواهد';
 
 const receiveItems = (requisitionId: number, user: typeof ADMIN = ADMIN) =>
   ProcurementService.executeWorkflowAction(requisitionId, 'receive_items', user);
@@ -148,6 +150,7 @@ export async function checkRequisitionReceivedOnce(wh: string): Promise<string[]
   await receive(backItem, 1, 1000, wh, await businessTodayIsoDate());
   const refused = await rejection(() => receiveItems(back, CLERK));
   if (refused === null) problems.push('receiving items with an order that was not finalized was accepted');
+  else if (refused.includes(RECEIVE_PERMISSION_REFUSAL)) problems.push(`the clerk was refused for lacking warehouse.in, not for the backdate: ${refused}`);
   const { status } = await requisitionRow(back);
   if (status === 'received') problems.push('a requisition whose order was not finalized stayed "received"');
   const { stock } = await itemState(backItem);

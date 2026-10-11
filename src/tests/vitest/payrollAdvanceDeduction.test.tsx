@@ -20,7 +20,7 @@ const renderModal = (advanceDeduction: number) => render(
     payrollPreviewLogs={[]} allowNoLogs advanceDeduction={advanceDeduction} setAdvanceDeduction={noop}
   />
 );
-const submitButton = () => screen.getByText('تایید و صدور فیش حقوقی').closest('button') as HTMLButtonElement;
+const submitButton = () => screen.getByText('صدور فیش حقوقی پیش‌نویس').closest('button') as HTMLButtonElement;
 
 // v8.0.29 (TD-282، تصمیم مالک محصول — گزینه الف): کسر مساعده بیش از مانده مساعده پرسنل پذیرفته نمی‌شود
 describe('payroll advance deduction (TD-282)', () => {

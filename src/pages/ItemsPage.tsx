@@ -71,7 +71,7 @@ export default function ItemsPage() {
     setPage(1);
   }, [debouncedSearchQuery]);
 
-  // v10.0.32 (OBS-R1-74): ستون و جهت به سرور می‌رود و همه کالاهای پالایش مرتب می‌شوند، نه فقط صفحه جاری
+  // v10.0.218 (OBS-R1-74): ستون و جهت به سرور می‌رود و همه کالاهای پالایش مرتب می‌شوند، نه فقط صفحه جاری
   const requestSort = (key: string) => {
     const direction = sortConfig && sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc';
     const next = parseItemListSort(key, direction);

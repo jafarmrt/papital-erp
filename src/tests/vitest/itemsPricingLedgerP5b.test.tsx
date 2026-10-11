@@ -5,7 +5,7 @@ import { cleanup, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
-// v10.0.32..v10.0.34: package 5 ledger part 2 (item list, pricing page, Excel import)
+// v10.0.218..v10.0.220: package 5 ledger part 2 (item list, pricing page, Excel import)
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
 

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useMemo } from 'react';
 import toast from 'react-hot-toast';
+import { itemImportOutcome } from '../../lib/items/itemImportOutcome';
 import { fetchJson } from '../../api';
 import { formatPersianNumber, errorMessageOf } from '../../utils';
 import { Category, Item } from '../../types';
@@ -30,7 +31,7 @@ export function useUnifiedExcelImport({
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // v10.0.34 (OBS-R1-78): دریافت داده‌های پایه با بستن پنجره یا انتخاب پرونده تازه لغو می‌شود
+  // v10.0.220 (OBS-R1-78): دریافت داده‌های پایه با بستن پنجره یا انتخاب پرونده تازه لغو می‌شود
   const metadataAbortRef = useRef<AbortController | null>(null);
 
   const filteredPreviewRows = useMemo(() => {
@@ -106,7 +107,7 @@ export function useUnifiedExcelImport({
       setExistingItems(loadedItems);
 
       const reader = new FileReader();
-      // v10.0.34 (OBS-R1-78): پرونده‌ای که خوانده نشود پیام می‌دهد و پنجره در حال بارگذاری نمی‌ماند
+      // v10.0.220 (OBS-R1-78): پرونده‌ای که خوانده نشود پیام می‌دهد و پنجره در حال بارگذاری نمی‌ماند
       reader.onerror = () => {
         if (signal.aborted) return;
         toast.error('پرونده اکسل خوانده نشد؛ دوباره انتخابش کنید.');
@@ -220,17 +221,22 @@ export function useUnifiedExcelImport({
       });
 
       if (res && res.success) {
-        setImportResult({
+        const result = {
           createdCount: res.createdCount || 0,
           updatedCount: res.updatedCount || 0,
           pricesCount: res.pricesCount || 0,
-          errors: res.errors || []
-        });
+          errors: Array.isArray(res.errors) ? res.errors : []
+        };
+        setImportResult(result);
         setStep('result');
-        toast.success('ورود داده‌های اکسل با موفقیت انجام شد!');
+        // v10.0.82 (TD-1139): a row error is never reported as a plain success
+        const outcome = itemImportOutcome(result);
+        if (outcome.tone === 'success') toast.success(outcome.message);
+        else if (outcome.tone === 'error') toast.error(outcome.message);
+        else toast(outcome.message, { icon: '⚠️' });
         onSuccess();
       } else {
-        // v10.0.34 (OBS-R1-78): پاسخ ناموفق بی‌پیام نمی‌ماند
+        // v10.0.220 (OBS-R1-78): پاسخ ناموفق بی‌پیام نمی‌ماند
         toast.error(importFailureMessage(res));
       }
     } catch (err) {

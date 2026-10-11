@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, lazy, Suspense } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { UnsavedPriceEditsBar } from '../components/pricing/UnsavedPriceEditsBar';
 import { fetchJson } from '../api';
 import { toast } from 'react-hot-toast';
 import { Item } from '../types';
@@ -21,7 +22,7 @@ import { useHasPermission } from '../contexts/AuthContext';
 import { QUERY_KEYS } from '../lib/queryKeys';
 import PriceHistoryModal from '../components/pricing/PriceHistoryModal';
 import { PricingGridView, PricingTableView } from '../components/pricing/PricingViews';
-// v10.0.33 (OBS-R1-79): کتابخانه اکسل و پنجره جامع اکسل فقط هنگام نیاز بارگذاری می‌شوند
+// v10.0.219 (OBS-R1-79): کتابخانه اکسل و پنجره جامع اکسل فقط هنگام نیاز بارگذاری می‌شوند
 const UnifiedExcelModal = lazy(() => import('../components/UnifiedExcelModal'));
 import { buildQuickPriceUpdates } from '../lib/items/quickPriceImport';
 import { priceSaveUpdates, type PriceFieldEdit } from '../lib/items/priceInput';
@@ -61,7 +62,7 @@ export default function PricingPage() {
   const [savingId, setSavingId] = useState<number | null>(null);
   const [isSavingAll, setIsSavingAll] = useState<boolean>(false);
 
-  // v10.0.33 (OBS-R1-79): یک صفحه از کالاها با قیمت‌ها و فهرست‌های قیمتشان از سرور؛ پالایش، شمارش و صفحه‌بندی در سرور
+  // v10.0.219 (OBS-R1-79): یک صفحه از کالاها با قیمت‌ها و فهرست‌های قیمتشان از سرور؛ پالایش، شمارش و صفحه‌بندی در سرور
   const pageQueryInput: PricingPageQuery = {
     type: tab, search: debouncedSearchQuery, category: selectedCategory, priceFilter, page: currentPage, limit: PRICING_PAGE_SIZE,
   };
@@ -290,7 +291,7 @@ export default function PricingPage() {
     if (!file) return;
 
     const reader = new FileReader();
-    // v10.0.34 (OBS-R1-78): پرونده‌ای که خوانده نشود پیام می‌دهد
+    // v10.0.220 (OBS-R1-78): پرونده‌ای که خوانده نشود پیام می‌دهد
     reader.onerror = () => {
       toast.error('پرونده اکسل خوانده نشد؛ دوباره انتخابش کنید.');
       if (e.target) e.target.value = '';
@@ -343,7 +344,7 @@ export default function PricingPage() {
     reader.readAsBinaryString(file);
   };
 
-  // v10.0.34 (OBS-R1-78): تاریخچه قیمت کالای پیشین با باز شدن کالای دیگر یا بستن پنجره لغو می‌شود و پاسخ دیررس نمی‌نشیند
+  // v10.0.220 (OBS-R1-78): تاریخچه قیمت کالای پیشین با باز شدن کالای دیگر یا بستن پنجره لغو می‌شود و پاسخ دیررس نمی‌نشیند
   const historyAbortRef = useRef<AbortController | null>(null);
   useEffect(() => () => historyAbortRef.current?.abort(), []);
   const handleOpenHistory = async (item: Item) => {
@@ -636,33 +637,14 @@ export default function PricingPage() {
         )}
       </div>
 
-      {/* Sticky Bottom Bar for Unsaved Edits */}
-      {canEditPrices && totalLocalEditsCount > 0 && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl z-40 flex items-center gap-4 border border-slate-700 animate-in slide-in-from-bottom duration-200">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
-            <span className="text-xs font-bold">
-              تعداد {formatPersianNumber(totalLocalEditsCount)} فیلد قیمت ویرایش شده و ذخیره‌نشده است.
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setLocalEdits({})}
-              className="text-xs text-slate-400 hover:text-white px-2 py-1 rounded-lg cursor-pointer"
-            >
-              انصراف
-            </button>
-            <button
-              onClick={handleSaveAllLocalEdits}
-              disabled={isSavingAll}
-              className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-extrabold px-4 py-2 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-            >
-              {isSavingAll ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
-              ذخیره یکجای تمام تغییرات
-            </button>
-          </div>
-        </div>
+      {/* v10.0.142 (TD-1201): نوار تغییرات ذخیره‌نشده در جریان صفحه، نه روی کارت‌ها */}
+      {canEditPrices && (
+        <UnsavedPriceEditsBar
+          count={totalLocalEditsCount}
+          isSaving={isSavingAll}
+          onCancel={() => setLocalEdits({})}
+          onSaveAll={handleSaveAllLocalEdits}
+        />
       )}
 
       {/* V9 Phase 5.2: مودال تاریخچه قیمت استخراج‌شده */}

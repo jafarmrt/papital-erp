@@ -7,6 +7,7 @@ import { formatPersianNumber } from '../../utils';
 import { Customer } from '../../types';
 import { excelRowVersion } from '../../lib/customers/customerVersion';
 import { parsePartyTypeCell, partyTypeCellLabel, type PartyType } from '../../lib/customers/partyTypeCell';
+import { bankNumberCell, phoneCellText } from '../../lib/customers/customerExcelCells';
 
 interface CustomerExcelModalProps {
   isOpen: boolean;
@@ -85,6 +86,17 @@ export function CustomerExcelModal({
       }
     }
     return '';
+  };
+
+  // The cell value as Excel stored it (number or text), for the phone and bank number cells (TD-974)
+  const getRawField = (row: Record<string, unknown>, aliases: string[]): unknown => {
+    const rowKeys = Object.keys(row);
+    for (const alias of aliases) {
+      const normAlias = normalizeKey(alias);
+      const key = rowKeys.find(k => normalizeKey(k) === normAlias);
+      if (key !== undefined) return row[key];
+    }
+    return undefined;
   };
 
   // Download complete export
@@ -221,7 +233,8 @@ export function CustomerExcelModal({
           const version = excelRowVersion(getField(row, ['نسخه', 'version']));
           const name = getField(row, ['نام طرف حساب', 'نام', 'طرف حساب', 'نام مشتری', 'نام تامین کننده', 'نام شرکت', 'عنوان', 'name']);
           const contactName = getField(row, ['شخص رابط', 'مدیر', 'نام رابط', 'رابط', 'contact', 'contactname']);
-          const phone = getField(row, ['شماره تماس', 'تلفن', 'موبایل', 'تلفن همراه', 'phone', 'mobile']);
+          // v10.0.32 (TD-974): a numeric phone cell gets its leading zero back
+          const phone = phoneCellText(getRawField(row, ['شماره تماس', 'تلفن', 'موبایل', 'تلفن همراه', 'phone', 'mobile']));
 
           const partyType = parsePartyTypeCell(getField(row, ['نوع طرف حساب', 'نوع', 'نقش', 'نوع شخص', 'partytype', 'type']));
 
@@ -230,12 +243,16 @@ export function CustomerExcelModal({
           const city = getField(row, ['شهر', 'city']);
           const address = getField(row, ['آدرس کامل', 'آدرس', 'نشانی', 'address']);
           const bankName = getField(row, ['نام بانک', 'بانک', 'bank', 'bankname']);
-          const accountNumber = getField(row, ['شماره حساب', 'حساب', 'accountnumber']);
-          const cardNumber = getField(row, ['شماره کارت', 'کارت', 'cardnumber']);
-          const shaba = getField(row, ['شماره شبا', 'شبا', 'sheba', 'shaba']);
+          // v10.0.32 (TD-974): a bank number Excel stored as a number longer than 15 digits has lost digits: row error
+          const accountCell = bankNumberCell(getRawField(row, ['شماره حساب', 'حساب', 'accountnumber']), 'شماره حساب');
+          const cardCell = bankNumberCell(getRawField(row, ['شماره کارت', 'کارت', 'cardnumber']), 'شماره کارت');
+          const shabaCell = bankNumberCell(getRawField(row, ['شماره شبا', 'شبا', 'sheba', 'shaba']), 'شماره شبا');
+          const accountNumber = accountCell.text;
+          const cardNumber = cardCell.text;
+          const shaba = shabaCell.text;
           const notes = getField(row, ['یادداشت', 'توضیحات', 'notes', 'description']);
 
-          const issues: string[] = [];
+          const issues: string[] = [accountCell, cardCell, shabaCell].flatMap(c => (c.issue ? [c.issue] : []));
           if (!name) {
             issues.push('نام طرف حساب الزامی است و خالی می‌باشد.');
           }

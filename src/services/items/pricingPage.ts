@@ -10,7 +10,7 @@ import { ItemPricingService } from './itemPricing.service.js';
 import { itemListConditions } from './itemPickList.js';
 
 /**
- * v10.0.33 (OBS-R1-79): یک صفحه از کالاهای صفحه قیمت‌گذاری با قیمت‌های فعال همان کالاها. پالایش «قیمت کامل / ناقص»
+ * v10.0.219 (OBS-R1-79): یک صفحه از کالاهای صفحه قیمت‌گذاری با قیمت‌های فعال همان کالاها. پالایش «قیمت کامل / ناقص»
  * قیمت‌های ذخیره‌شده را با همان قاعده `filterActivePrices` می‌سنجد؛ بی آن پالایش، شمارش و صفحه‌بندی در پایگاه‌داده است.
  */
 const ITEM_FIELDS = {

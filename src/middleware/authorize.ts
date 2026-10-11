@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import { rolePermissionsCache } from '../lib/memoryCache.js';
 import { asyncHandler } from './asyncHandler.js';
 import { isCatalogPermission, SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog.js';
+import { permissionRequiredMessage } from '../lib/permissions/permissionMessages.js';
 
 async function getCachedRoleData(roleCode: string) {
   return rolePermissionsCache.getOrSet(roleCode, async () => {
@@ -100,7 +101,7 @@ export const requirePermission = (...permissionKeys: string[]) => {
         return next();
       }
 
-      return res.status(403).json({ error: `شما مجوز لازم (${permissionKeys.join(' یا ')}) برای انجام این کار را ندارید` });
+      return res.status(403).json({ error: permissionRequiredMessage(permissionKeys), permissions: permissionKeys });
     } catch (err) {
       return res.status(500).json({ error: 'خطا در بررسی مجوز دسترسی' });
     }

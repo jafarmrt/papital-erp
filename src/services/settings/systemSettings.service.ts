@@ -8,7 +8,7 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { readSettingValue, revealSettingSecrets, sealSettingValue } from './settingSecrets.js';
 import { invalidateSettingsCache, appSettingsCache } from '../../lib/memoryCache.js';
 import {
-  MOVEMENT_DAY_KEYS, currencySettingError, isMovementDayKey, movementDaysError, readMovementDays
+  MOVEMENT_DAY_KEYS, currencySettingError, priceListNamesError, isMovementDayKey, movementDaysError, readMovementDays
 } from '../../lib/settings/settingValues.js';
 import { pricingStrategiesSettingError } from '../../lib/items/pricingStrategies.js';
 
@@ -89,10 +89,16 @@ async function validateSettingValue(key: string, value: string): Promise<void> {
     const error = currencySettingError(value);
     if (error) throw new ValidationError(error, { key, value }, 'SETTING_CURRENCY_INVALID');
   }
-  // v10.0.27 (OBS-R1-71): فهرست‌های قیمت آرایه JSON از عنوان‌هاست، نه متن جداشده با کاما
+  // v10.0.201 (OBS-R1-71): فهرست‌های قیمت آرایه JSON از عنوان‌هاست، نه متن جداشده با کاما؛
+  // v10.0.95 (TD-1192): نام‌های فهرست قیمت یکتا (بی‌توجه به فاصله و بزرگی حروف)
   if (key === 'pricing_strategies') {
+    const isJson = value.trim().startsWith('[');
+    const legacyNamesError = isJson ? null : priceListNamesError(value.split(','));
+    if (legacyNamesError) throw new ValidationError(legacyNamesError, { key }, 'SETTING_PRICE_LIST_NAMES_INVALID');
     const error = pricingStrategiesSettingError(value);
     if (error) throw new ValidationError(error, { key }, 'SETTING_PRICING_STRATEGIES_INVALID');
+    const namesError = priceListNamesError(JSON.parse(value) as string[], { allowLatinComma: true });
+    if (namesError) throw new ValidationError(namesError, { key }, 'SETTING_PRICE_LIST_NAMES_INVALID');
   }
   if (key === 'wc_shop_warehouse' && value.trim() !== '') {
     const [wh] = await orm.select({ id: warehouses.id }).from(warehouses)
@@ -112,7 +118,7 @@ async function validateSettingValue(key: string, value: string): Promise<void> {
 async function assertKeyPermission(key: string, actor: SettingsActor): Promise<void> {
   if (ADMIN_ONLY_SETTING_KEYS.has(key)) {
     if (actor.role !== SYSTEM_ADMIN_ROLE) {
-      throw new ForbiddenError(`تغییر تنظیم «${key}» (کلیدهای محرمانه یکپارچه‌سازی و فلگ‌های سیستمی) فقط برای مدیر سیستم مجاز است.`);
+      throw new ForbiddenError(`تغییر تنظیم «${key}» (کلیدهای محرمانه یکپارچه‌سازی و پرچم‌های سامانه) فقط برای مدیر سامانه مجاز است.`);
     }
     return;
   }
@@ -203,6 +209,26 @@ export class SystemSettingsService {
         await tx.insert(appSettings).values({ key: change.key, value: change.stored })
           .onConflictDoUpdate({ target: appSettings.key, set: { value: change.stored } });
       }
+      // TD-963 (بخش ۲): ردیف ممیزی با همان تراکنش نوشتن گزینه‌ها ثبت می‌شود
+      if (changes.length > 0) {
+        await logActivity({
+          tx,
+          userId: actor.id,
+          username: actor.username || 'سیستم',
+          userFullName: actor.fullName || '',
+          action: 'SETTING_CHANGE',
+          entity: 'تنظیمات سیستم',
+          description: `تغییر ${changes.length} گزینه از تنظیمات سیستم: ${changes.map(c => c.key).join('، ')}`,
+          details: {
+            changes: changes.map(c => ({
+              setting: c.key,
+              previousValue: redactForAudit(c.key, c.before),
+              newValue: redactForAudit(c.key, c.after),
+            })),
+            ignoredMaskedKeys,
+          },
+        });
+      }
     });
 
     if (changes.length > 0) {
@@ -210,23 +236,6 @@ export class SystemSettingsService {
       const { invalidateTimezoneCache, warmDisplayTimezone } = await import('../../lib/businessClock.js');
       invalidateTimezoneCache();
       await warmDisplayTimezone(); // v8.0.77 (TD-324): بیرون از تراکنش، تا خواندن بعدی درون تراکنشی منتظر اتصال دوم نماند
-
-      await logActivity({
-        userId: actor.id,
-        username: actor.username || 'سیستم',
-        userFullName: actor.fullName || '',
-        action: 'SETTING_CHANGE',
-        entity: 'تنظیمات سیستم',
-        description: `تغییر ${changes.length} گزینه از تنظیمات سیستم: ${changes.map(c => c.key).join('، ')}`,
-        details: {
-          changes: changes.map(c => ({
-            setting: c.key,
-            previousValue: redactForAudit(c.key, c.before),
-            newValue: redactForAudit(c.key, c.after),
-          })),
-          ignoredMaskedKeys,
-        },
-      });
     }
 
     return { changedKeys: changes.map(c => c.key), ignoredMaskedKeys };

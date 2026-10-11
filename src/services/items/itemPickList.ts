@@ -22,7 +22,7 @@ export function itemListConditions(
   if (type === 'product' || type === 'raw_material') conditions.push(eq(items.type, type));
   if (search) {
     const pattern = containsLikePattern(search);
-    // v10.0.32 (OBS-R1-74): فهرست کامل در دسته‌بندی هم جست‌وجو می‌کند، همان که جعبه جست‌وجوی صفحه کالاها می‌گوید
+    // v10.0.218 (OBS-R1-74): فهرست کامل در دسته‌بندی هم جست‌وجو می‌کند، همان که جعبه جست‌وجوی صفحه کالاها می‌گوید
     const fields = [ilike(items.name, pattern), ilike(items.code, pattern)];
     if (options.withCategory) fields.push(ilike(items.category, pattern));
     conditions.push(or(...fields) as SQL);
@@ -39,14 +39,14 @@ const SORT_COLUMNS = {
   current_stock: items.currentStock,
 } as const;
 
-/** v10.0.32 (OBS-R1-74): ترتیب فهرست کامل؛ بی ستون تازه‌ترین کالا، و شناسه برای ترتیب پایدار میان صفحه‌ها */
+/** v10.0.218 (OBS-R1-74): ترتیب فهرست کامل؛ بی ستون تازه‌ترین کالا، و شناسه برای ترتیب پایدار میان صفحه‌ها */
 export function itemListOrder(sort: ItemListSort | null): SQL[] {
   if (!sort) return [desc(items.id)];
   const column = SORT_COLUMNS[sort.key];
   return [sort.direction === 'desc' ? desc(column) : asc(column), desc(items.id)];
 }
 
-/** v10.0.32 (OBS-R1-74): آمار روی همه کالاهای پالایش، نه فقط ردیف‌های صفحه */
+/** v10.0.218 (OBS-R1-74): آمار روی همه کالاهای پالایش، نه فقط ردیف‌های صفحه */
 export async function itemListStats(where: SQL): Promise<ItemListStats> {
   const [row] = await orm.select({ lowStock: sql<number>`count(*)`.mapWith(Number) })
     .from(items)

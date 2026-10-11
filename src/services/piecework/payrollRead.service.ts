@@ -38,6 +38,12 @@ const payrollAmountColumns = {
   totalDeductions: pieceworkPayrolls.totalDeductions,
   // v9.0.329 (TD-861): شرح «سایر کسورات» برای فیش چاپی
   deductionsDescription: pieceworkPayrolls.deductionsDescription,
+  // v10.0.210 (TD-1087): کسورات قانونی برای فیش چاپی و فرم ویرایش پیش‌نویس
+  employeeInsurance: pieceworkPayrolls.employeeInsurance,
+  employerInsurance: pieceworkPayrolls.employerInsurance,
+  incomeTax: pieceworkPayrolls.incomeTax,
+  statutoryOverrideReason: pieceworkPayrolls.statutoryOverrideReason,
+  isStatutorySplit: pieceworkPayrolls.isStatutorySplit,
   netPayable: pieceworkPayrolls.netPayable,
 };
 
@@ -48,6 +54,11 @@ const payrollPaymentColumns = {
   paymentReference: pieceworkPayrolls.paymentReference,
   notes: pieceworkPayrolls.notes,
   createdAt: pieceworkPayrolls.createdAt,
+  // v10.0.193 (TD-1084): صادرکننده فیش، تا صفحه دکمه تأیید و پرداخت او را با دلیل غیرفعال کند
+  createdById: pieceworkPayrolls.createdById,
+  // v10.0.199 (TD-1085): فیش پیش‌پرداخت و دلیلش در فهرست و چاپ
+  isPrepayment: pieceworkPayrolls.isPrepayment,
+  prepaymentReason: pieceworkPayrolls.prepaymentReason,
 };
 
 /** ستون‌های ریز کارکرد فیش (پس از id و payrollId). */
