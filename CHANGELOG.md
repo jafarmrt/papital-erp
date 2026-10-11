@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.0.271 — رمز راه‌اندازی فقط در فرم، نه در نشانی
+- `SetupPage` رمز راه‌اندازی را دیگر از `?token=` / `?setupToken=` نمی‌خواند و آن را از نوار نشانی پاک می‌کند (`removeSetupTokenFromAddress`)؛ `install.sh`، README و چک‌لیست راه‌اندازی نشانی `/setup` بی رمز را می‌دهند (OBS-R1-13، TD-983).
+
 ### v10.0.270 — پروژه سند حسابداری فقط از پروژه خود سند
 - `VoucherSyncService` پروژه رسید، حواله و ضایعات را فقط از `documents.project_id` می‌گیرد و دیگر کد پروژه را با الگوی متنی از یادداشت نمی‌خواند (OBS-R1-47 از TD-985).
 
