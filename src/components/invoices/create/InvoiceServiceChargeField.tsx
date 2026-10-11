@@ -8,7 +8,7 @@ interface InvoiceServiceChargeFieldProps {
   currency: string;
 }
 
-/** v10.0.251 (TD-1136): کادر «هزینه ارسال و خدمات» فاکتور دستی؛ همان `serviceChargeAmount` که سفارش ووکامرس دارد */
+/** v10.0.260 (TD-1136): کادر «هزینه ارسال و خدمات» فاکتور دستی؛ همان `serviceChargeAmount` که سفارش ووکامرس دارد */
 export const InvoiceServiceChargeField: React.FC<InvoiceServiceChargeFieldProps> = ({ value, onChange, error, currency }) => (
   <div className="flex flex-col gap-1 bg-white p-2.5 rounded-lg border shadow-xs">
     <label className="flex items-center gap-2 text-xs font-bold text-slate-700">

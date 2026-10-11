@@ -1,6 +1,7 @@
 import dns from 'dns';
 import { promisify } from 'util';
 import net from 'net';
+import { ValidationError } from '../errors/customErrors.js';
 
 const dnsResolve4 = promisify(dns.resolve4);
 const dnsLookup = promisify(dns.lookup);
@@ -240,6 +241,11 @@ export function isLocalEchoTarget(parsed: URL, env: NodeJS.ProcessEnv = process.
   return parsed.pathname === LOCAL_ECHO_PATH;
 }
 
+/** v10.0.253 (OBS-R2-05): the code of every refusal of `assertSafeExternalUrl` (422, Persian message for the user). */
+export const UNSAFE_TARGET_URL_CODE = 'UNSAFE_TARGET_URL';
+
+const unsafeTarget = (message: string, reason: string) => new ValidationError(message, { reason }, UNSAFE_TARGET_URL_CODE);
+
 /**
  * Validates a target URL against SSRF vulnerabilities (SEC-010 / S-2 / TD-089).
  * Normalizes hostnames, strips brackets, resolves DNS, and blocks private IPs,
@@ -250,17 +256,17 @@ export async function assertSafeExternalUrl(url: string, options?: { allowLocalE
   try {
     parsed = new URL(url);
   } catch {
-    throw new Error(`Invalid URL: ${url}`);
+    throw unsafeTarget(`نشانی «${url}» معتبر نیست.`, 'invalid_url');
   }
   
   // 1. Protocol check: only http and https allowed
   if (!['http:', 'https:'].includes(parsed.protocol)) {
-    throw new Error(`Disallowed protocol: ${parsed.protocol}. Only http and https are permitted.`);
+    throw unsafeTarget('فقط نشانی‌های http و https پذیرفته می‌شوند.', 'protocol');
   }
 
   // 2. Port check: disallow common internal services / database ports
   if (parsed.port && DISALLOWED_PORTS.includes(parsed.port)) {
-    throw new Error(`Disallowed port: ${parsed.port} is restricted to prevent SSRF against internal databases/services`);
+    throw unsafeTarget(`درگاه ${parsed.port} برای جلوگیری از دسترسی به خدمات داخلی بسته است.`, 'port');
   }
 
   const hostname = parsed.hostname.toLowerCase();
@@ -274,7 +280,7 @@ export async function assertSafeExternalUrl(url: string, options?: { allowLocalE
 
   // 3. Direct hostname check for raw IP or reserved names (e.g. 169.254.169.254, 127.0.0.1, [::1], [::ffff:169.254.169.254], localhost)
   if (isPrivateOrReservedIp(cleanHostname)) {
-    throw new Error(`SSRF blocked: ${hostname} is a private or reserved network address`);
+    throw unsafeTarget(`نشانی «${hostname}» داخلی یا رزروشده است و برای امنیت پذیرفته نمی‌شود.`, 'private_address');
   }
 
   // 4. DNS resolution to catch domains resolving to private/internal IPs
@@ -297,18 +303,18 @@ export async function assertSafeExternalUrl(url: string, options?: { allowLocalE
           if (cleanHostname.includes('example.com') || cleanHostname.includes('webhook.site')) {
             return;
           }
-          throw new Error(`DNS resolution failed for hostname: ${hostname}`);
+          throw unsafeTarget(`نام «${hostname}» پیدا نشد؛ نشانی را بررسی کنید.`, 'dns_failed');
         }
       }
 
       for (const ip of addresses) {
         if (isPrivateOrReservedIp(ip)) {
-          throw new Error(`SSRF blocked: ${hostname} resolves to private/reserved IP ${ip}`);
+          throw unsafeTarget(`نام «${hostname}» به نشانی داخلی ${ip} می‌رسد و برای امنیت پذیرفته نمی‌شود.`, 'private_resolution');
         }
       }
     }
-  } catch (err: any) {
-    if (err.message && err.message.startsWith('SSRF blocked:')) {
+  } catch (err: unknown) {
+    if (err instanceof ValidationError && (err.details as { reason?: string } | undefined)?.reason === 'private_resolution') {
       throw err;
     }
     if (cleanHostname.includes('example.com') || cleanHostname.includes('webhook.site')) {

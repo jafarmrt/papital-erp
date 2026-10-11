@@ -32,7 +32,7 @@ import { ExchangeRateField, exchangeRateError } from '../components/documents/Ex
 import { useHasPermission } from '../contexts/AuthContext';
 import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog';
 import { SALES_FINALIZE_PERMISSION } from '../lib/permissions/documentPermissions';
-import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
+import { ITEM_PICK_WITH_RESERVED_URL } from '../lib/permissions/pickLists';
 import { documentPartyPickListUrl } from '../lib/documents/documentPartyKind';
 
 // Print styles are added globally or inline
@@ -74,7 +74,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
   // VAT & Tax states
   const [applyVat, setApplyVat] = useState(false);
   const [vatRate, setVatRate] = useState<number>(10);
-  // v10.0.251 (TD-1136): هزینه ارسال و خدمات فاکتور دستی (`serviceChargeAmount`)
+  // v10.0.260 (TD-1136): هزینه ارسال و خدمات فاکتور دستی (`serviceChargeAmount`)
   const [serviceChargeText, setServiceChargeText] = useState('');
   const serviceCharge = serviceChargeInputOf(serviceChargeText);
 
@@ -623,7 +623,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                 <SearchableSelect
                   key={`item-select-${location}-${status}`}
                   className="w-full shadow-sm rounded"
-                  fetchUrl={PICK_LIST_URLS.items}
+                  fetchUrl={ITEM_PICK_WITH_RESERVED_URL}
                   mapResultToOption={(it: Item) => {
                     const { loc, total, reserved, sellable } = getSellableStock(it, location);
                     const whName = warehouses.find(w => w.code === location)?.name || location || 'انبار انتخابی';

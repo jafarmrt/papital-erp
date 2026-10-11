@@ -29,6 +29,7 @@ import {
 import { useAuditSheet } from '../hooks/inventoryAudit/useAuditSheet';
 import { invalidateAfterStockAdjustment } from '../hooks/inventoryAudit/useInventoryAuditSave';
 import { useTransferVoid } from '../hooks/inventoryAudit/useTransferVoid';
+import { useInventoryAuditActionAccess } from '../hooks/inventoryAudit/useStockActionAccess';
 import { exportIntegrityExcel, filterIntegrityItems } from '../lib/inventoryAudit/integrityReport';
 
 const NO_WAREHOUSES: WarehouseItem[] = [];
@@ -42,6 +43,7 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
   // Navigation
   const [activeTab, setActiveTab] = useState<InventoryAuditTab>('new_audit');
   const canSeeAllocations = useCanSeeBomAllocations();
+  const access = useInventoryAuditActionAccess();
 
   // Modal States
   const [showTransferModal, setShowTransferModal] = useState(false);
@@ -88,11 +90,11 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         discrepancyItems={data.integrityReport?.summary?.discrepancyItems}
-        onOpenRebuild={() => {
+        onOpenRebuild={access.canRebuild ? () => {
           setRebuildTargetItemId(undefined);
           setShowRebuildModal(true);
-        }}
-        onOpenTransfer={() => setShowTransferModal(true)}
+        } : undefined}
+        onOpenTransfer={access.canTransfer ? () => setShowTransferModal(true) : undefined}
       />
 
       {/* TAB CONTENT */}
@@ -106,11 +108,11 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
           setIntegrityDiscrepancyOnly={setIntegrityDiscrepancyOnly}
           filteredIntegrityItems={filteredIntegrityItems}
           loadIntegrityReport={data.refreshIntegrity}
-          onOpenRebuildModal={(itemId) => {
+          onOpenRebuildModal={access.canRebuild ? (itemId) => {
             setRebuildTargetItemId(itemId);
             setShowRebuildModal(true);
-          }}
-          onOpenKardexModal={(itemId) => setKardexItemId(itemId)}
+          } : undefined}
+          onOpenKardexModal={access.canOpenKardex ? (itemId) => setKardexItemId(itemId) : undefined}
           onExportExcel={() => exportIntegrityExcel(data.integrityReport)}
         />
       )}
@@ -160,8 +162,8 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
           transfersLoading={data.transfersLoading}
           transfers={data.transfers}
           handleViewTransfer={setViewTransferId}
-          onOpenTransferModal={() => setShowTransferModal(true)}
-          onVoidTransfer={(t) => { void transferVoid.voidTransfer(t); }}
+          onOpenTransferModal={access.canTransfer ? () => setShowTransferModal(true) : undefined}
+          onVoidTransfer={access.canVoidTransfer ? (t) => { void transferVoid.voidTransfer(t); } : undefined}
           voidingId={transferVoid.voidingId}
           pager={data.transfersPager}
         />

@@ -19,12 +19,12 @@ export async function runInvoiceServiceChargeTests(shouldRun: ShouldRun): Promis
     const details = await serviceChargeEntryCase(h, wrong);
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
-      id, name: 'v10.0.251: POST and PUT /documents record the service charge of a manual sales document, read Persian digits, keep it when not sent and refuse a negative one or one on another type (TD-1136)',
+      id, name: 'v10.0.260: POST and PUT /documents record the service charge of a manual sales document, read Persian digits, keep it when not sent and refuse a negative one or one on another type (TD-1136)',
       layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart, details,
     }));
   } catch (err) {
     results.push(makeTestCase({
-      id, name: 'v10.0.251: manual invoice service charge (TD-1136)', layer: 'regression', executionType: 'real_database',
+      id, name: 'v10.0.260: manual invoice service charge (TD-1136)', layer: 'regression', executionType: 'real_database',
       passed: false, durationMs: Date.now() - tStart, error: err instanceof Error ? err.message : String(err),
     }));
   } finally {

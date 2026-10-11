@@ -18,8 +18,9 @@ interface InventoryAuditHeaderProps {
   activeTab: InventoryAuditTab;
   onTabChange: (tab: InventoryAuditTab) => void;
   discrepancyItems: number | undefined;
-  onOpenRebuild: () => void;
-  onOpenTransfer: () => void;
+  /** v10.0.249 (TD-1130): بی مجوز `inventory.reconcile` / `warehouse.transfer` داده نمی‌شود و دکمه نیست */
+  onOpenRebuild?: () => void;
+  onOpenTransfer?: () => void;
 }
 
 /** v9.0.415 (TD-760): زبانه تخصیص مواد فقط برای کسی که API آن (`GET /inventory/allocations`) را می‌خواند */
@@ -46,6 +47,7 @@ export function InventoryAuditHeader({ activeTab, onTabChange, discrepancyItems,
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {onOpenRebuild && (
           <button
             onClick={onOpenRebuild}
             className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm"
@@ -54,7 +56,9 @@ export function InventoryAuditHeader({ activeTab, onTabChange, discrepancyItems,
             <RotateCcw size={15} />
             <span>بازسازی موجودی از روی کاردکس</span>
           </button>
+          )}
 
+          {onOpenTransfer && (
           <button
             onClick={onOpenTransfer}
             className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm"
@@ -62,6 +66,7 @@ export function InventoryAuditHeader({ activeTab, onTabChange, discrepancyItems,
             <ArrowLeftRight size={15} />
             <span>ثبت حواله انتقال انبار</span>
           </button>
+          )}
         </div>
       </div>
 

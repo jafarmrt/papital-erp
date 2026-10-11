@@ -872,21 +872,9 @@ router.post('/piecework/payrolls/:id/register-payment', requirePermission(PIECEW
       paymentReference,
       notes,
       userId: req.user?.id,
-      username: req.user?.username || 'سیستم'
-    });
-
-    await logActivity({
-      userId: req.user?.id,
       username: req.user?.username || 'سیستم',
-      action: 'CREATE',
-      entity: 'پرداخت حقوق',
-      entityId: id,
-      description: `ثبت پرداخت خزانه‌ای فیش ${result.payroll.payrollNumber} با تراکنش ${result.transactionNumber} (سند تسویه: ${result.voucherNumber ?? '—'})`,
-      details: {
-        payrollId: id,
-        transactionNumber: result.transactionNumber,
-        voucherId: result.voucherId
-      }
+      // v10.0.259 (TD-950): ممیزی پرداخت در تراکنش سرویس، با کاربر و IP
+      req,
     });
 
     res.json({
@@ -910,17 +898,9 @@ router.post('/piecework/payrolls/:id/payments/:transactionId/void', requirePermi
     transactionId: Number(req.params.transactionId),
     reason: String(req.body.reason),
     userId: req.user?.id,
-    username: req.user?.username || 'سیستم'
-  });
-
-  await logActivity({
-    userId: req.user?.id,
     username: req.user?.username || 'سیستم',
-    action: 'DELETE',
-    entity: 'پرداخت حقوق',
-    entityId: id,
-    description: `ابطال پرداخت ${result.transactionNumber} فیش ${result.payroll.payrollNumber} (تراکنش معکوس ${result.reversalTransactionNumber})`,
-    details: { payrollId: id, transactionId: Number(req.params.transactionId), reason: req.body.reason, reversalVoucherId: result.reversalVoucherId }
+    // v10.0.259 (TD-950): ممیزی ابطال در تراکنش سرویس، با کاربر و IP و مبلغ
+    req,
   });
 
   res.json({

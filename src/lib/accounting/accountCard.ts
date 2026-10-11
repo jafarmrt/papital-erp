@@ -1,4 +1,5 @@
 import type { ForeignAmountOrigin } from '../../types/accounting.types';
+import type { PartyTemporaryRows } from './partyTemporaryRows';
 
 /**
  * v9.0.118 (TD-574، B03-32): قرارداد مشترک سرور و مرورگر برای کارت حساب (`GET /accounting/reports/ledger`).
@@ -33,6 +34,8 @@ export interface AccountCardReport {
   finalBalance: number;
   /** v8.0.16 (TD-260): ارز مبالغ گزارش — IRR در نمای همه ارزها، وگرنه همان ارز انتخاب‌شده */
   currency: string;
+  /** v10.0.257 (TD-915 / TD-924): فقط کارت یک طرف حساب؛ ردیف‌های حساب موقت او بیرون از مانده */
+  temporaryRows?: PartyTemporaryRows;
 }
 
 /** ردیف‌های امن کارت (پاسخ ناقص آرایه نمی‌دهد) */

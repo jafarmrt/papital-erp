@@ -18,6 +18,7 @@ import { useChequeReconciliationReport } from '../../hooks/accounting/useChequeQ
 import { copyToClipboard } from '../../utils/clipboard';
 import { CHEQUE_STATUS_LABELS, CHEQUE_TRANSITIONS, chequeHasNextStep, chequeStatusLabel } from '../../lib/treasury/chequeTransitions';
 import { needsChosenContraAccount, type PersonnelPurpose } from '../../lib/treasury/partyPurpose';
+import { personnelPartyName } from '../../lib/treasury/personnelPartyName';
 import { PartyPurposeFields } from './treasury/PartyPurposeFields';
 
 interface ChequesTabProps {
@@ -872,12 +873,12 @@ export function ChequesTab({
                         value={String(newFormData.partyId || '')}
                         onChange={(val) => {
                           const p = safePersonnelList.find(x => x.id === Number(val));
-                          setNewFormData({ ...newFormData, partyId: p ? p.id : null, partyName: p ? `${p.firstName} ${p.lastName}`.trim() : '' });
+                          setNewFormData({ ...newFormData, partyId: p ? p.id : null, partyName: p ? personnelPartyName(p) : '' });
                         }}
                         placeholder="جستجو و انتخاب پرسنل..."
                         options={safePersonnelList.map(p => ({
                           value: String(p.id),
-                          label: `${p.firstName} ${p.lastName}`.trim()
+                          label: personnelPartyName(p)
                         }))}
                       />
                     ) : (

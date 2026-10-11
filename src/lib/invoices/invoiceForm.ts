@@ -55,7 +55,7 @@ export interface InvoiceDocumentDetails {
   exchange_rate?: number | string | null;
   vatPercent?: number | string | null;
   vat_percent?: number | string | null;
-  /** v10.0.251 (TD-1136): هزینه ارسال و خدمات سند */
+  /** v10.0.260 (TD-1136): هزینه ارسال و خدمات سند */
   serviceChargeAmount?: number | string | null;
   service_charge_amount?: number | string | null;
   crmLeadId?: number | null;
@@ -177,7 +177,7 @@ export interface InvoiceFormValues extends BuyerFields {
   currency: string;
   exchangeRate: number;
   vatPercent: number;
-  /** v10.0.251 (TD-1136): هزینه ارسال و خدمات ذخیره‌شده سند */
+  /** v10.0.260 (TD-1136): هزینه ارسال و خدمات ذخیره‌شده سند */
   serviceChargeAmount: number;
   /** پرونده فروشی که خود سند به آن وصل است (نه پرونده‌ای که فرم پیش‌تر از آن باز شده بود) */
   crmLeadId: number | null;
