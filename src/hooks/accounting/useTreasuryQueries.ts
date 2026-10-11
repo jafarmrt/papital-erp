@@ -100,7 +100,7 @@ export function useBankTreasuryTransactionsQuery(bankAccountId: number | null) {
   });
 }
 
-/** v10.0.252 (TD-971): چک‌های وصول‌شده حساب، نامزد تطبیق صورت‌حساب */
+/** v10.0.254 (TD-971): چک‌های وصول‌شده حساب، نامزد تطبیق صورت‌حساب */
 export function useBankReconcileChequesQuery(bankAccountId: number | null) {
   return useQuery<ReconcilableCheque[]>({
     queryKey: [...QUERY_KEYS.accounting.treasury(), 'reconcile-cheques', bankAccountId],
@@ -130,7 +130,7 @@ export function useContraAccountsQuery(enabled: boolean) {
 export interface ReconcileVariables {
   bankAccountId: number;
   txIds: number[];
-  /** v10.0.252 (TD-971): چک‌های وصول‌شده همین حساب */
+  /** v10.0.254 (TD-971): چک‌های وصول‌شده همین حساب */
   chequeIds?: number[];
   batch: string;
   reconciled: boolean;

@@ -231,7 +231,7 @@ router.post('/accounting/treasury/transfer', authorizePermission('accounting.tre
   res.status(201).json(result);
 }));
 
-// v10.0.252 (TD-971): چک‌های وصول‌شده حساب، نامزد تطبیق صورت‌حساب در کنار تراکنش‌های خزانه
+// v10.0.254 (TD-971): چک‌های وصول‌شده حساب، نامزد تطبیق صورت‌حساب در کنار تراکنش‌های خزانه
 router.get('/accounting/treasury/reconcile-cheques', authorizePermission('accounting.treasury'), validate(reconcileChequesQuerySchema), asyncHandler(async (req, res) => {
   res.json(await listReconcilableCheques(Number(req.query.bankAccountId)));
 }));

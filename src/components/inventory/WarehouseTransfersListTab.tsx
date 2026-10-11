@@ -7,9 +7,10 @@ interface WarehouseTransfersListTabProps {
   transfersLoading: boolean;
   transfers: any[];
   handleViewTransfer: (docId: number) => void;
-  onOpenTransferModal: () => void;
+  /** v10.0.249 (TD-1130): بی مجوز `warehouse.transfer` / `documents.delete` داده نمی‌شوند و دکمه نیست */
+  onOpenTransferModal?: () => void;
   /** v9.0.80 (TD-489): ابطال حواله با مسیر ابطال اسناد */
-  onVoidTransfer: (transfer: { id: number; refNumber?: string }) => void;
+  onVoidTransfer?: (transfer: { id: number; refNumber?: string }) => void;
   voidingId: number | null;
   /** v9.0.339 (TD-787): صفحه جاری حواله‌ها (۵۰ سند در هر صفحه) */
   pager?: Pager;
@@ -32,12 +33,14 @@ export function WarehouseTransfersListTab({
           <ArrowLeftRight className="text-blue-600" size={18} />
           <h3 className="font-bold text-slate-800 text-sm">سوابق حواله‌های جابه‌جایی و انتقال بین انبارها</h3>
         </div>
+        {onOpenTransferModal && (
         <button
           onClick={onOpenTransferModal}
           className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
         >
           ثبت حواله انتقال جدید
         </button>
+        )}
       </div>
 
       <div className="overflow-x-auto">
@@ -85,6 +88,7 @@ export function WarehouseTransfersListTab({
                       <Eye size={14} />
                       <span>مشاهده</span>
                     </button>
+                    {onVoidTransfer && (
                     <button
                       onClick={() => onVoidTransfer({ id: t.id, refNumber: t.refNumber })}
                       disabled={voidingId !== null}
@@ -93,6 +97,7 @@ export function WarehouseTransfersListTab({
                       <Ban size={14} />
                       <span>{voidingId === t.id ? 'در حال ابطال...' : 'ابطال'}</span>
                     </button>
+                    )}
                   </td>
                 </tr>
               ))

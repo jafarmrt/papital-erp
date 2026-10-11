@@ -496,7 +496,7 @@ export class BankAccountService {
       const newCurrency = data.currency !== undefined ? requireTreasuryCurrency(data.currency) : undefined;
       if (newCurrency) await assertBankCurrencyChangeAllowed(tx, existing, newCurrency);
       // v9.0.100 (TD-510): سرفصل تازه معین فعال زیر کل ۱۰ باشد (سرفصل بی‌تغییر حساب‌های قدیمی دوباره سنجیده نمی‌شود)
-      // v10.0.252 (TD-969): سرفصل معین پس از نخستین گردش ثابت است (422 `BANK_ACCOUNT_LEDGER_LOCKED`)
+      // v10.0.254 (TD-969): سرفصل معین پس از نخستین گردش ثابت است (422 `BANK_ACCOUNT_LEDGER_LOCKED`)
       const ledgerChanges = data.accountId !== undefined && (data.accountId || null) !== (existing.accountId || null);
       if (ledgerChanges) await assertBankLedgerChangeAllowed(tx, existing, data.accountId || null);
       const ledgerAccountId = ledgerChanges ? await requireBankLedgerAccount(tx, data.accountId) : undefined;

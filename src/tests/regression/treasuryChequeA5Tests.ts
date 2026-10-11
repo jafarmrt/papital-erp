@@ -10,7 +10,7 @@ import { createBank } from './treasuryPartyTests.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 
 /**
- * Series 10 phase 3 lane L1, package A5 (v10.0.252): cheque steps without a mapped account, cleared cheques in bank
+ * Series 10 phase 3 lane L1, package A5 (v10.0.254): cheque steps without a mapped account, cleared cheques in bank
  * statement reconciliation and the bank account's ledger heading after its first movement. Each test is red on the version
  * before its fix.
  */
@@ -89,7 +89,7 @@ export async function runTreasuryChequeA5Tests(shouldRun: ShouldRun): Promise<Te
 
   const mappingId = 'reg_cheque_step_needs_mapped_account_td_970';
   if (shouldRun(mappingId, 'td970', 'cheque', 'treasury', 'a5')) {
-    await runCase(results, mappingId, 'v10.0.252: a cheque step whose voucher has no mapped account is refused and changes neither status nor bank balance (TD-970)', async () => {
+    await runCase(results, mappingId, 'v10.0.254: a cheque step whose voucher has no mapped account is refused and changes neither status nor bank balance (TD-970)', async () => {
       const problems: string[] = [];
       const bank = await createBank('A5 cheque mapping');
       const clearing = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'received', chequeNumber: `A5C${tagOf()}`, amount: 500000, partyName: 'A5 mapping customer' });
@@ -118,7 +118,7 @@ export async function runTreasuryChequeA5Tests(shouldRun: ShouldRun): Promise<Te
 
   const reconcileId = 'reg_cleared_cheque_in_bank_reconciliation_td_971';
   if (shouldRun(reconcileId, 'td971', 'cheque', 'reconcile', 'treasury', 'a5')) {
-    await runCase(results, reconcileId, 'v10.0.252: a cleared cheque is a bank statement reconciliation candidate and is marked reconciled like a treasury row (TD-971)', async () => {
+    await runCase(results, reconcileId, 'v10.0.254: a cleared cheque is a bank statement reconciliation candidate and is marked reconciled like a treasury row (TD-971)', async () => {
       const problems: string[] = [];
       const api = await adminClient();
       const bank = await createBank('A5 reconcile');
@@ -147,7 +147,7 @@ export async function runTreasuryChequeA5Tests(shouldRun: ShouldRun): Promise<Te
 
   const ledgerId = 'reg_bank_ledger_locked_after_movement_td_969';
   if (shouldRun(ledgerId, 'td969', 'bank', 'ledger', 'treasury', 'a5')) {
-    await runCase(results, ledgerId, 'v10.0.252: a bank account keeps its ledger heading after its first movement; one without movement may change it (TD-969)', async () => {
+    await runCase(results, ledgerId, 'v10.0.254: a bank account keeps its ledger heading after its first movement; one without movement may change it (TD-969)', async () => {
       const problems: string[] = [];
       const api = await adminClient();
       const used = await createBank('A5 used bank');

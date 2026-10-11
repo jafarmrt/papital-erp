@@ -16,7 +16,7 @@ export type MatchQuality = 'tracking' | 'amount_date' | 'amount_only' | 'none';
 
 export interface ReconcileMatchedRow extends StatementRow {
   matchedTxId: number | null;
-  /** v10.0.252 (TD-971): ردیف تطبیق‌یافته تراکنش خزانه است یا چک وصول‌شده */
+  /** v10.0.254 (TD-971): ردیف تطبیق‌یافته تراکنش خزانه است یا چک وصول‌شده */
   matchedSource?: CandidateSource;
   matchedTxNumber?: string;
   matchedTxDate?: string;
@@ -30,7 +30,7 @@ export type CandidateSource = 'treasury' | 'cheque';
 
 export interface TreasuryTxCandidate {
   id: number;
-  /** v10.0.252 (TD-971): خالی یعنی تراکنش خزانه */
+  /** v10.0.254 (TD-971): خالی یعنی تراکنش خزانه */
   source?: CandidateSource;
   transactionNumber: string;
   date: string;
@@ -248,7 +248,7 @@ export function matchStatementWithTransactions(
   statementRows: StatementRow[],
   transactions: TreasuryTxCandidate[]
 ): ReconcileMatchedRow[] {
-  // v10.0.252 (TD-971): شناسه چک و تراکنش خزانه از دو جدول است، پس کلید نامزد منبع را هم دارد
+  // v10.0.254 (TD-971): شناسه چک و تراکنش خزانه از دو جدول است، پس کلید نامزد منبع را هم دارد
   const usedTxIds = new Set<string>();
   const keyOf = (t: TreasuryTxCandidate) => `${t.source ?? 'treasury'}:${t.id}`;
 
@@ -343,7 +343,7 @@ export function matchStatementWithTransactions(
   });
 }
 
-/** v10.0.252 (TD-971): شناسه‌های ردیف‌های تازه تطبیق‌یافته، جدا برای تراکنش خزانه و چک */
+/** v10.0.254 (TD-971): شناسه‌های ردیف‌های تازه تطبیق‌یافته، جدا برای تراکنش خزانه و چک */
 export function newMatchedIdsBySource(rows: ReconcileMatchedRow[]): { txIds: number[]; chequeIds: number[] } {
   const fresh = rows.filter(r => r.matchedTxId !== null && !r.alreadyReconciled);
   return {

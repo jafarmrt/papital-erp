@@ -43,7 +43,7 @@ export function assertChequeTransition(current: string, next: ChequeStatus): voi
 }
 
 /**
- * v10.0.252 (TD-970، OBS-R1-59): گام چکی که سند می‌خواهد بی حساب نگاشت‌شده رد می‌شود. پیش‌تر نبود حساب اسناد دریافتنی،
+ * v10.0.254 (TD-970، OBS-R1-59): گام چکی که سند می‌خواهد بی حساب نگاشت‌شده رد می‌شود. پیش‌تر نبود حساب اسناد دریافتنی،
  * در جریان وصول یا پرداختنی فقط سند را جا می‌انداخت، در حالی که وضعیت چک و مانده بانک تغییر می‌کرد.
  */
 function requireChequeAccounts(chequeNumber: string, step: string, ...required: unknown[]): true {

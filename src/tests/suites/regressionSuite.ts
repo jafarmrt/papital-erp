@@ -6729,7 +6729,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         SELECT count(*)::int AS n FROM pg_constraint pc JOIN pg_class rel ON rel.oid = pc.conrelid
         WHERE rel.relnamespace = current_schema()::regnamespace AND pc.conname LIKE 'chk%datefmt' AND pc.convalidated`) as unknown as { rows: Array<{ n: number }> }).rows;
       // v7.0.82 (TD-231): ۲۴ قید مهاجرت 0028 و ۳ قید مهاجرت 0030؛ v10.0.199 (TD-1086): ۱ قید مهاجرت 0103 (personnel.start_date)؛
-      // v10.0.252 (TD-971): ۱ قید مهاجرت 0108 (cheques.reconciled_at)
+      // v10.0.254 (TD-971): ۱ قید مهاجرت 0108 (cheques.reconciled_at)
       if (covered !== 29) violations.push(`number of validated date format constraints: ${covered} (expected 29)`);
       if (missingRows.length > 0) violations.push(`without a valid format constraint: ${missingRows.map(r => `${r.table_name}.${r.column_name}`).join(', ')}`);
 
@@ -10782,6 +10782,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 15 PR b (v9.0.356+): webhook secrets and SSRF
   const { runWebhookSsrfEchoTests } = await import('../regression/webhookSsrfEchoTests.js');
   results.push(...await runWebhookSsrfEchoTests(shouldRun));
+  const { runWebhookErrorContractTests } = await import('../regression/webhookErrorContractTests.js');
+  results.push(...await runWebhookErrorContractTests(shouldRun));
   const { runWebhookRuleSeedTests } = await import('../regression/webhookRuleSeedTests.js');
   results.push(...await runWebhookRuleSeedTests(shouldRun));
   const { runWebhookSecretEditTests } = await import('../regression/webhookSecretEditTests.js');
@@ -10974,7 +10976,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runAccountingP2ReportTests } = await import('../regression/accountingP2ReportTests.js');
   results.push(...await runAccountingP2ReportTests(shouldRun));
 
-  // Phase 3 lane L1, package A5 (v10.0.252): cheque steps without a mapped account, cleared cheques in reconciliation, bank heading lock
+  // Phase 3 lane L1, package A5 (v10.0.254): cheque steps without a mapped account, cleared cheques in reconciliation, bank heading lock
   const { runTreasuryChequeA5Tests } = await import('../regression/treasuryChequeA5Tests.js');
   results.push(...await runTreasuryChequeA5Tests(shouldRun));
 

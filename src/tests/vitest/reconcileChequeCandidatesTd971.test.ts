@@ -6,7 +6,7 @@ import {
   type TreasuryTxCandidate,
 } from '../../components/accounting/reconciliation/bankStatementMatcher';
 
-/** v10.0.252 (TD-971): a cleared cheque is matched as its own candidate, never mixed up with a treasury row of the same id */
+/** v10.0.254 (TD-971): a cleared cheque is matched as its own candidate, never mixed up with a treasury row of the same id */
 describe('bank statement matcher with cleared cheques (TD-971)', () => {
   const statement: StatementRow[] = [
     { rowNo: 1, date: '2026-04-02', amount: 700000, type: 'receipt', description: 'cheque', tracking: '' },

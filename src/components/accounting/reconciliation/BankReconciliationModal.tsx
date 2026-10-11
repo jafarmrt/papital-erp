@@ -51,7 +51,7 @@ export function BankReconciliationModal({
 
   // تراکنش‌های حساب انتخابی؛ v9.0.102 (TD-509): فقط همین حساب از سرور خوانده می‌شود، نه کل فهرست خزانه
   const accountTxQuery = useBankTreasuryTransactionsQuery(selectedAccountId ? Number(selectedAccountId) : null);
-  // v10.0.252 (TD-971): چک وصول‌شده در مانده خزانه حساب است، پس نامزد تطبیق هم هست
+  // v10.0.254 (TD-971): چک وصول‌شده در مانده خزانه حساب است، پس نامزد تطبیق هم هست
   const accountChequesQuery = useBankReconcileChequesQuery(selectedAccountId ? Number(selectedAccountId) : null);
   const accountTxs = useMemo<TreasuryTxCandidate[]>(() => {
     const rows = Array.isArray(accountTxQuery.data) ? accountTxQuery.data : [];

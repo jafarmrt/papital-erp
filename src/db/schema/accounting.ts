@@ -222,7 +222,7 @@ export const cheques = pgTable('cheques', {
   description: text('description').default(''),
   statusHistory: jsonb('status_history').default([]),
   attachments: jsonb('attachments').$type<FinancialAttachment[]>().default([]),
-  // v10.0.252 (TD-971، migration 0108): چک وصول‌شده در تطبیق صورت‌حساب بانک، مانند ردیف خزانه
+  // v10.0.254 (TD-971، migration 0108): چک وصول‌شده در تطبیق صورت‌حساب بانک، مانند ردیف خزانه
   reconciled: integer('reconciled').default(0),
   reconciledAt: text('reconciled_at').default(''),
   reconciledBatch: text('reconciled_batch').default(''),

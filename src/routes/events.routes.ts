@@ -15,8 +15,7 @@ import { logActivity } from '../lib/auditLogger.js';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { z } from 'zod';
 import { createActionRuleSchema, createWebhookSchema, dlqDismissSchema, dlqPayloadSchema, dlqReplayBatchSchema, dlqReplaySchema, outboxProcessSchema, ruleDraftSchema, simulateDomainEventSchema, simulateReplaySchema, testStoredRuleSchema, updateActionRuleSchema, updateWebhookSchema } from './events.schemas.js';
-import { errorMessageOf } from '../utils.js';
-import { AppError, NotFoundError } from '../errors/customErrors.js';
+import { NotFoundError } from '../errors/customErrors.js';
 import { isEnteredSecret } from '../lib/secrets/maskedSecret.js';
 import { actionRuleView, webhookSubscriptionView } from '../services/events/integrationSecrets.js';
 import { assertWebhookSecretsReadable } from '../services/events/webhookSecretStorage.js';
@@ -57,21 +56,17 @@ router.use(utcTimestampResponses(EVENT_TIMESTAMP_KEYS, EVENT_OPAQUE_KEYS));
 // =========================================================================
 
 router.get('/domain-events', authorizePermission('events.view'), asyncHandler(async (req, res) => {
-  try {
-    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
-    const filter = req.query.filter as string | undefined;
+  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+  const filter = req.query.filter as string | undefined;
 
-    const recentEvents = domainEventBus.getRecentEvents(limit, filter);
-    const stats = domainEventBus.getEventStats();
+  const recentEvents = domainEventBus.getRecentEvents(limit, filter);
+  const stats = domainEventBus.getEventStats();
 
-    res.json({
-      success: true,
-      stats,
-      events: recentEvents
-    });
-  } catch (error) {
-    throw error;
-  }
+  res.json({
+    success: true,
+    stats,
+    events: recentEvents
+  });
 }));
 
 // v9.0.430 (TD-708, decision t5 a): the simulation publishes nothing; it only shows which rules and webhooks the event reaches
@@ -86,86 +81,66 @@ router.post('/domain-events/simulate', authorizePermission('events.manage'), val
 // =========================================================================
 
 router.get('/outbox/stats', authorizePermission('events.view'), asyncHandler(async (req, res) => {
-  try {
-    const stats = await OutboxService.getOutboxStats();
-    res.json({
-      success: true,
-      stats
-    });
-  } catch (error) {
-    throw error;
-  }
+  const stats = await OutboxService.getOutboxStats();
+  res.json({
+    success: true,
+    stats
+  });
 }));
 
 router.get('/outbox', authorizePermission('events.view'), asyncHandler(async (req, res) => {
-  try {
-    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
-    const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
-    const offset = (page - 1) * limit;
-    const status = req.query.status as string | undefined;
-    const eventType = req.query.eventType as string | undefined;
+  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+  const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
+  const offset = (page - 1) * limit;
+  const status = req.query.status as string | undefined;
+  const eventType = req.query.eventType as string | undefined;
 
-    const result = await OutboxService.getOutboxEvents({
-      limit,
-      offset,
-      status,
-      eventType
-    });
+  const result = await OutboxService.getOutboxEvents({
+    limit,
+    offset,
+    status,
+    eventType
+  });
 
-    res.json({
-      success: true,
-      ...result
-    });
-  } catch (error) {
-    throw error;
-  }
+  res.json({
+    success: true,
+    ...result
+  });
 }));
 
 router.post(['/outbox/process-now', '/outbox/process'], authorizePermission('events.manage'), validate(outboxProcessSchema), asyncHandler(async (req, res) => {
-  try {
-    const batchSize = req.body.batchSize ?? 25;
-    const result = await OutboxService.processPendingBatch(batchSize);
+  const batchSize = req.body.batchSize ?? 25;
+  const result = await OutboxService.processPendingBatch(batchSize);
 
-    res.json({
-      success: true,
-      message: `پردازش دسته خروجی انجام شد: ${result.processed} پردازش‌شده (${result.succeeded} موفق، ${result.failed} ناموفق)`,
-      result
-    });
-  } catch (error) {
-    throw error;
-  }
+  res.json({
+    success: true,
+    message: `پردازش دسته خروجی انجام شد: ${result.processed} پردازش‌شده (${result.succeeded} موفق، ${result.failed} ناموفق)`,
+    result
+  });
 }));
 
 router.post('/outbox/retry-failed', authorizePermission('events.manage'), asyncHandler(async (req, res) => {
-  try {
-    // v9.0.432 (TD-716): the DLQ rows of the retried events are resolved in the same transaction
-    const result = await retryFailedOutboxEvents({ userId: req.user?.id });
+  // v9.0.432 (TD-716): the DLQ rows of the retried events are resolved in the same transaction
+  const result = await retryFailedOutboxEvents({ userId: req.user?.id });
 
-    res.json({
-      success: true,
-      ...result,
-      message: result.skippedBusy.length > 0
-        ? `${result.retried.toLocaleString('fa-IR')} رویداد ناموفق دوباره در صف قرار گرفت؛ ${result.skippedBusy.length.toLocaleString('fa-IR')} رویداد که هم‌اکنون از صف خطا بازپخش می‌شود کنار ماند.`
-        : `${result.retried.toLocaleString('fa-IR')} رویداد ناموفق دوباره در صف قرار گرفت.`
-    });
-  } catch (error) {
-    throw error;
-  }
+  res.json({
+    success: true,
+    ...result,
+    message: result.skippedBusy.length > 0
+      ? `${result.retried.toLocaleString('fa-IR')} رویداد ناموفق دوباره در صف قرار گرفت؛ ${result.skippedBusy.length.toLocaleString('fa-IR')} رویداد که هم‌اکنون از صف خطا بازپخش می‌شود کنار ماند.`
+      : `${result.retried.toLocaleString('fa-IR')} رویداد ناموفق دوباره در صف قرار گرفت.`
+  });
 }));
 
 router.post('/outbox/:eventId/retry', authorizePermission('events.manage'), validate(eventIdParamSchema), asyncHandler(async (req, res) => {
-  try {
-    const { eventId } = req.params;
-    // v9.0.432 (TD-716): only a failed event (else 409), and its DLQ row is resolved in the same transaction
-    await retryFailedOutboxEvents({ eventId, userId: req.user?.id });
+  const { eventId } = req.params;
+  // v9.0.432 (TD-716): only a failed event (else 409), and its DLQ row is resolved in the same transaction
+  await retryFailedOutboxEvents({ eventId, userId: req.user?.id });
 
-    res.json({
-      success: true,
-      message: `رویداد ${eventId} برای ارسال مجدد آماده شد.`
-    });
-  } catch (error) {
-    throw error;
-  }
+  res.json({
+    success: true,
+    message: `رویداد ${eventId} برای ارسال مجدد آماده شد.`
+  });
 }));
 
 // =========================================================================
@@ -173,137 +148,113 @@ router.post('/outbox/:eventId/retry', authorizePermission('events.manage'), vali
 // =========================================================================
 
 router.get(['/action-rules/stats', '/rules/stats'], authorizePermission('events.view'), asyncHandler(async (req, res) => {
-  try {
-    const stats = await EventActionEngineService.getStats();
-    res.json({
-      success: true,
-      stats
-    });
-  } catch (error) {
-    throw error;
-  }
+  const stats = await EventActionEngineService.getStats();
+  res.json({
+    success: true,
+    stats
+  });
 }));
 
 router.get(['/action-rules', '/rules'], authorizePermission('events.view'), asyncHandler(async (req, res) => {
-  try {
-    const isActive = req.query.isActive !== undefined ? req.query.isActive === 'true' || req.query.isActive === '1' : undefined;
-    const eventType = req.query.eventType as string | undefined;
+  const isActive = req.query.isActive !== undefined ? req.query.isActive === 'true' || req.query.isActive === '1' : undefined;
+  const eventType = req.query.eventType as string | undefined;
 
-    const rules = await EventActionEngineService.getRules({
-      isActive,
-      eventType
-    });
+  const rules = await EventActionEngineService.getRules({
+    isActive,
+    eventType
+  });
 
-    res.json({
-      success: true,
-      // v9.0.360 (TD-710): the rule token and header values never reach a reader (events.view), admin included
-      data: (Array.isArray(rules) ? rules : []).map(actionRuleView)
-    });
-  } catch (error) {
-    throw error;
-  }
+  res.json({
+    success: true,
+    // v9.0.360 (TD-710): the rule token and header values never reach a reader (events.view), admin included
+    data: (Array.isArray(rules) ? rules : []).map(actionRuleView)
+  });
 }));
 
 router.get(['/action-rules/:id', '/rules/:id'], authorizePermission('events.view'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    const rule = await EventActionEngineService.getRuleById(id);
+  const id = parseInt(req.params.id, 10);
+  const rule = await EventActionEngineService.getRuleById(id);
 
-    if (!rule) {
-      return res.status(404).json({ success: false, message: 'قانون مورد نظر یافت نشد.' });
-    }
-
-    res.json({
-      success: true,
-      data: actionRuleView(rule)
-    });
-  } catch (error) {
-    throw error;
+  if (!rule) {
+    return res.status(404).json({ success: false, message: 'قانون مورد نظر یافت نشد.' });
   }
+
+  res.json({
+    success: true,
+    data: actionRuleView(rule)
+  });
 }));
 
 router.post(['/action-rules', '/rules'], authorizePermission('events.manage'), validate(createActionRuleSchema), asyncHandler(async (req, res) => {
-  try {
-    const { name, description, eventType, conditions, conditionsJson, actionType, actionConfigJson, actions, isActive } = req.body;
+  const { name, description, eventType, conditions, conditionsJson, actionType, actionConfigJson, actions, isActive } = req.body;
 
-    if (!name || !eventType) {
-      return res.status(400).json({
-        success: false,
-        message: 'نام و نوع رویداد الزامی می‌باشد.'
-      });
-    }
-
-    const firstAction = Array.isArray(actions) && actions.length > 0 ? actions[0] : null;
-
-    const newRule = await EventActionEngineService.createRule(
-      {
-        name,
-        description,
-        eventType,
-        conditionsJson: conditionsJson || conditions || [],
-        actionType: actionType || (firstAction?.type || 'in_app_notification'),
-        actionConfigJson: actionConfigJson || (firstAction?.config || {}),
-        isActive: isActive !== undefined ? Number(isActive) : 1
-      },
-      req.user?.id
-    );
-
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username,
-      userFullName: req.user?.full_name || '',
-      action: 'CREATE',
-      entity: `قانون واکنش خودکار: ${name}`,
-      description: `ایجاد قانون جدید '${name}' برای رویداد '${eventType}'`
+  if (!name || !eventType) {
+    return res.status(400).json({
+      success: false,
+      message: 'نام و نوع رویداد الزامی می‌باشد.'
     });
-
-    res.status(201).json({
-      success: true,
-      message: 'قانون اکشن خودکار با موفقیت ثبت گردید.',
-      data: actionRuleView(newRule)
-    });
-  } catch (error) {
-    throw error;
   }
+
+  const firstAction = Array.isArray(actions) && actions.length > 0 ? actions[0] : null;
+
+  const newRule = await EventActionEngineService.createRule(
+    {
+      name,
+      description,
+      eventType,
+      conditionsJson: conditionsJson || conditions || [],
+      actionType: actionType || (firstAction?.type || 'in_app_notification'),
+      actionConfigJson: actionConfigJson || (firstAction?.config || {}),
+      isActive: isActive !== undefined ? Number(isActive) : 1
+    },
+    req.user?.id
+  );
+
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username,
+    userFullName: req.user?.full_name || '',
+    action: 'CREATE',
+    entity: `قانون واکنش خودکار: ${name}`,
+    description: `ایجاد قانون جدید '${name}' برای رویداد '${eventType}'`
+  });
+
+  res.status(201).json({
+    success: true,
+    message: 'قانون اکشن خودکار با موفقیت ثبت گردید.',
+    data: actionRuleView(newRule)
+  });
 }));
 
 router.put(['/action-rules/:id', '/rules/:id'], authorizePermission('events.manage'), validate(updateActionRuleSchema), asyncHandler(async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    const updatedRule = await EventActionEngineService.updateRule(id, req.body);
+  const id = parseInt(req.params.id, 10);
+  const updatedRule = await EventActionEngineService.updateRule(id, req.body);
 
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username,
-      userFullName: req.user?.full_name || '',
-      action: 'UPDATE',
-      entity: `قانون واکنش خودکار #${id}`,
-      description: `ویرایش تنظیمات قانون شناسه #${id}`
-    });
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username,
+    userFullName: req.user?.full_name || '',
+    action: 'UPDATE',
+    entity: `قانون واکنش خودکار #${id}`,
+    description: `ویرایش تنظیمات قانون شناسه #${id}`
+  });
 
-    res.json({
-      success: true,
-      message: 'قانون اکشن با موفقیت به‌روزرسانی شد.',
-      data: updatedRule ? actionRuleView(updatedRule) : updatedRule
-    });
-  } catch (error) {
-    throw error;
-  }
+  res.json({
+    success: true,
+    message: 'قانون اکشن با موفقیت به‌روزرسانی شد.',
+    data: updatedRule ? actionRuleView(updatedRule) : updatedRule
+  });
 }));
 
 router.delete(['/action-rules/:id', '/rules/:id'], authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    // v9.0.445 (TD-611): the service writes the audit row in the delete transaction
-    await EventActionEngineService.deleteRule(id, { req });
+  const id = parseInt(req.params.id, 10);
+  // v9.0.445 (TD-611): the service writes the audit row in the delete transaction
+  await EventActionEngineService.deleteRule(id, { req });
 
-    res.json({
-      success: true,
-      message: 'قانون با موفقیت حذف گردید.'
-    });
-  } catch (error) {
-    throw error;
-  }
+  res.json({
+    success: true,
+    message: 'قانون با موفقیت حذف گردید.'
+  });
 }));
 
 // v9.0.438 (TD-729): the body names the target state ({ active }); a repeat changes nothing
@@ -343,29 +294,25 @@ router.post('/action-rules/test-draft', authorizePermission('events.manage'), va
 
 // v10.0.224 (OBS-R2-79): نام دوم `/action-rules/logs` زیر `/action-rules/:id` می‌ماند و هرگز پاسخ نمی‌داد؛ برداشته شد
 router.get('/action-logs', authorizePermission('events.view'), asyncHandler(async (req, res) => {
-  try {
-    const ruleId = req.query.ruleId ? parseInt(req.query.ruleId as string, 10) : undefined;
-    const status = req.query.status as string | undefined;
-    const eventType = req.query.eventType as string | undefined;
-    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
-    const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
-    const offset = (page - 1) * limit;
+  const ruleId = req.query.ruleId ? parseInt(req.query.ruleId as string, 10) : undefined;
+  const status = req.query.status as string | undefined;
+  const eventType = req.query.eventType as string | undefined;
+  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+  const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
+  const offset = (page - 1) * limit;
 
-    const logsResult = await EventActionEngineService.getLogs({
-      ruleId,
-      status,
-      eventType,
-      limit,
-      offset
-    });
+  const logsResult = await EventActionEngineService.getLogs({
+    ruleId,
+    status,
+    eventType,
+    limit,
+    offset
+  });
 
-    res.json({
-      success: true,
-      ...logsResult
-    });
-  } catch (error) {
-    throw error;
-  }
+  res.json({
+    success: true,
+    ...logsResult
+  });
 }));
 
 // =========================================================================
@@ -373,147 +320,119 @@ router.get('/action-logs', authorizePermission('events.view'), asyncHandler(asyn
 // =========================================================================
 
 router.get('/dlq/stats', authorizePermission('events.view'), asyncHandler(async (req, res) => {
-  try {
-    const stats = await DeadLetterQueueService.getStats();
-    res.json({
-      success: true,
-      stats
-    });
-  } catch (error) {
-    throw error;
-  }
+  const stats = await DeadLetterQueueService.getStats();
+  res.json({
+    success: true,
+    stats
+  });
 }));
 
 router.get('/dlq', authorizePermission('events.view'), asyncHandler(async (req, res) => {
-  try {
-    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
-    const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
-    const offset = (page - 1) * limit;
-    const status = req.query.status as string | undefined;
-    const eventType = req.query.eventType as string | undefined;
-    const source = req.query.source as string | undefined;
-    const search = req.query.search as string | undefined;
+  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+  const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
+  const offset = (page - 1) * limit;
+  const status = req.query.status as string | undefined;
+  const eventType = req.query.eventType as string | undefined;
+  const source = req.query.source as string | undefined;
+  const search = req.query.search as string | undefined;
 
-    const result = await DeadLetterQueueService.getEvents({
-      limit,
-      offset,
-      status,
-      eventType,
-      source,
-      search
-    });
+  const result = await DeadLetterQueueService.getEvents({
+    limit,
+    offset,
+    status,
+    eventType,
+    source,
+    search
+  });
 
-    res.json({
-      success: true,
-      ...result
-    });
-  } catch (error) {
-    throw error;
-  }
+  res.json({
+    success: true,
+    ...result
+  });
 }));
 
 router.post('/dlq/:id/replay', authorizePermission('events.manage'), validate(dlqReplaySchema), asyncHandler(async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    const { payload, adjustedPayload } = req.body;
-    const finalPayload = payload || adjustedPayload;
-    const userId = req.user?.id;
+  const id = parseInt(req.params.id, 10);
+  const { payload, adjustedPayload } = req.body;
+  const finalPayload = payload || adjustedPayload;
+  const userId = req.user?.id;
 
-    const result = await DeadLetterQueueService.replayEvent(id, finalPayload, userId);
+  const result = await DeadLetterQueueService.replayEvent(id, finalPayload, userId);
 
-    await logActivity({
-      userId,
-      username: req.user?.username,
-      userFullName: req.user?.full_name || '',
-      action: 'UPDATE',
-      entity: `صف خطاهای قرنطینه #${id}`,
-      description: `بازپخش دستی رویداد قرنطینه شناسه #${id}`
-    });
+  await logActivity({
+    userId,
+    username: req.user?.username,
+    userFullName: req.user?.full_name || '',
+    action: 'UPDATE',
+    entity: `صف خطاهای قرنطینه #${id}`,
+    description: `بازپخش دستی رویداد قرنطینه شناسه #${id}`
+  });
 
-    res.json(result);
-  } catch (error) {
-    throw error;
-  }
+  res.json(result);
 }));
 
 router.post('/dlq/replay-batch', authorizePermission('events.manage'), validate(dlqReplayBatchSchema), asyncHandler(async (req, res) => {
-  try {
-    const { ids } = req.body;
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ success: false, message: 'لیست شناسه‌های بازپخش الزامی است.' });
-    }
-
-    const userId = req.user?.id;
-    const result = await DeadLetterQueueService.replayBatch(ids, userId);
-
-    await logActivity({
-      userId,
-      username: req.user?.username,
-      userFullName: req.user?.full_name || '',
-      action: 'UPDATE',
-      entity: 'صف خطاهای قرنطینه (DLQ)',
-      description: `بازپخش گروهی ${result.succeeded} از ${result.total} رویداد قرنطینه`
-    });
-
-    res.json({
-      success: true,
-      message: `بازپخش گروهی انجام شد: ${result.succeeded} موفق، ${result.failed} ناموفق`,
-      ...result
-    });
-  } catch (error) {
-    throw error;
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ success: false, message: 'لیست شناسه‌های بازپخش الزامی است.' });
   }
+
+  const userId = req.user?.id;
+  const result = await DeadLetterQueueService.replayBatch(ids, userId);
+
+  await logActivity({
+    userId,
+    username: req.user?.username,
+    userFullName: req.user?.full_name || '',
+    action: 'UPDATE',
+    entity: 'صف خطاهای قرنطینه (DLQ)',
+    description: `بازپخش گروهی ${result.succeeded} از ${result.total} رویداد قرنطینه`
+  });
+
+  res.json({
+    success: true,
+    message: `بازپخش گروهی انجام شد: ${result.succeeded} موفق، ${result.failed} ناموفق`,
+    ...result
+  });
 }));
 
 router.post('/dlq/:id/dismiss', authorizePermission('events.manage'), validate(dlqDismissSchema), asyncHandler(async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    const { notes } = req.body;
-    const userId = req.user?.id;
+  const id = parseInt(req.params.id, 10);
+  const { notes } = req.body;
+  const userId = req.user?.id;
 
-    const item = await DeadLetterQueueService.dismissEvent(id, userId, notes ?? undefined);
+  const item = await DeadLetterQueueService.dismissEvent(id, userId, notes ?? undefined);
 
-    res.json({
-      success: true,
-      message: 'رویداد با موفقیت از صف اخطارها رد شد.',
-      event: item
-    });
-  } catch (error) {
-    throw error;
-  }
+  res.json({
+    success: true,
+    message: 'رویداد با موفقیت از صف اخطارها رد شد.',
+    event: item
+  });
 }));
 
 router.put('/dlq/:id/payload', authorizePermission('events.manage'), validate(dlqPayloadSchema), asyncHandler(async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    const { payload } = req.body;
-    const userId = req.user?.id;
+  const id = parseInt(req.params.id, 10);
+  const { payload } = req.body;
+  const userId = req.user?.id;
 
-    // v9.0.432 (TD-716): under the row lock, never for a replayed row, audited with the request
-    const updated = await DeadLetterQueueService.editPayload(id, payload, { userId, req });
+  // v9.0.432 (TD-716): under the row lock, never for a replayed row, audited with the request
+  const updated = await DeadLetterQueueService.editPayload(id, payload, { userId, req });
 
-    res.json({
-      success: true,
-      message: 'بدنه داده رویداد قرنطینه اصلاح گردید.',
-      event: updated
-    });
-  } catch (error) {
-    throw error;
-  }
+  res.json({
+    success: true,
+    message: 'بدنه داده رویداد قرنطینه اصلاح گردید.',
+    event: updated
+  });
 }));
 
 router.post('/dlq/purge', authorizePermission('events.manage'), asyncHandler(async (req, res) => {
-  try {
-    const result = await DeadLetterQueueService.purgeResolved();
+  const result = await DeadLetterQueueService.purgeResolved();
 
-    res.json({
-      success: true,
-      message: `تعداد ${result.purgedCount} رکورد بازپخش‌شده یا ردشده پاکسازی گردید.`,
-      ...result
-    });
-  } catch (error) {
-    throw error;
-  }
+  res.json({
+    success: true,
+    message: `تعداد ${result.purgedCount} رکورد بازپخش‌شده یا ردشده پاکسازی گردید.`,
+    ...result
+  });
 }));
 
 // =========================================================================
@@ -521,81 +440,65 @@ router.post('/dlq/purge', authorizePermission('events.manage'), asyncHandler(asy
 // =========================================================================
 
 router.get(['/event-sourcing/types', '/timeline/types'], authorizePermission('events.view'), asyncHandler(async (req, res) => {
-  try {
-    const types = await EventSourcingReplayService.getAggregateTypes();
-    res.json({
-      success: true,
-      types
-    });
-  } catch (error) {
-    throw error;
-  }
+  const types = await EventSourcingReplayService.getAggregateTypes();
+  res.json({
+    success: true,
+    types
+  });
 }));
 
 router.get(['/event-sourcing/aggregates', '/timeline/aggregates'], authorizePermission('events.view'), asyncHandler(async (req, res) => {
-  try {
-    const type = ((req.query.type as string) || (req.query.aggregateType as string) || '').trim();
-    const search = (req.query.search as string) || '';
-    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
+  const type = ((req.query.type as string) || (req.query.aggregateType as string) || '').trim();
+  const search = (req.query.search as string) || '';
+  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
 
-    if (!type) {
-      return res.status(400).json({ success: false, message: 'پارامتر نوع موجودیت (type) الزامی است.' });
-    }
-
-    const aggregates = await EventSourcingReplayService.searchAggregates(type, search, limit);
-
-    res.json({
-      success: true,
-      data: aggregates
-    });
-  } catch (error) {
-    throw error;
+  if (!type) {
+    return res.status(400).json({ success: false, message: 'پارامتر نوع موجودیت (type) الزامی است.' });
   }
+
+  const aggregates = await EventSourcingReplayService.searchAggregates(type, search, limit);
+
+  res.json({
+    success: true,
+    data: aggregates
+  });
 }));
 
 router.get(['/event-sourcing/timeline', '/timeline'], authorizePermission('events.view'), asyncHandler(async (req, res) => {
-  try {
-    const type = ((req.query.type as string) || (req.query.aggregateType as string) || '').trim();
-    const id = ((req.query.id as string) || (req.query.aggregateId as string) || '').trim();
+  const type = ((req.query.type as string) || (req.query.aggregateType as string) || '').trim();
+  const id = ((req.query.id as string) || (req.query.aggregateId as string) || '').trim();
 
-    if (!type || !id) {
-      return res.status(400).json({ success: false, message: 'پارامترهای type و id الزامی هستند.' });
-    }
-
-    // v9.0.431 (TD-711): audit rows only for holders of the audit log permission, computed here, never read from the request
-    const auditIncluded = await can(req.user, 'audit_logs.view');
-    const timeline = await EventSourcingReplayService.getAggregateTimeline(type, id, { includeAudit: auditIncluded });
-
-    res.json({
-      success: true,
-      data: timeline,
-      timeline,
-      auditIncluded
-    });
-  } catch (error) {
-    throw error;
+  if (!type || !id) {
+    return res.status(400).json({ success: false, message: 'پارامترهای type و id الزامی هستند.' });
   }
+
+  // v9.0.431 (TD-711): audit rows only for holders of the audit log permission, computed here, never read from the request
+  const auditIncluded = await can(req.user, 'audit_logs.view');
+  const timeline = await EventSourcingReplayService.getAggregateTimeline(type, id, { includeAudit: auditIncluded });
+
+  res.json({
+    success: true,
+    data: timeline,
+    timeline,
+    auditIncluded
+  });
 }));
 
 router.post(['/event-sourcing/simulate-replay', '/timeline/simulate-replay'], authorizePermission('events.manage'), validate(simulateReplaySchema), asyncHandler(async (req, res) => {
-  try {
-    const { event, eventId, eventType, aggregateType, aggregateId, payload, dryRun } = req.body;
+  const { event, eventId, eventType, aggregateType, aggregateId, payload, dryRun } = req.body;
 
-    const simulationResult = await EventSourcingReplayService.simulateEventReplay({
-      eventId: eventId || (event?.eventId),
-      eventType: eventType || (event?.eventType) || 'SimulatedEvent',
-      aggregateType: aggregateType || (event?.aggregateType) || 'document',
-      aggregateId: String(aggregateId || (event?.aggregateId) || '1'),
-      payload: payload || (event?.payload) || {},
-      dryRun,
-      userId: req.user?.id,
-      userName: req.user?.username
-    });
+  const simulationResult = await EventSourcingReplayService.simulateEventReplay({
+    eventId: eventId || (event?.eventId),
+    eventType: eventType || (event?.eventType) || 'SimulatedEvent',
+    aggregateType: aggregateType || (event?.aggregateType) || 'document',
+    aggregateId: String(aggregateId || (event?.aggregateId) || '1'),
+    payload: payload || (event?.payload) || {},
+    dryRun,
+    userId: req.user?.id,
+    userName: req.user?.username
+  });
 
-    res.json(simulationResult);
-  } catch (error) {
-    throw error;
-  }
+  res.json(simulationResult);
 }));
 
 // =========================================================================
@@ -606,149 +509,111 @@ router.post(['/event-sourcing/simulate-replay', '/timeline/simulate-replay'], au
 // user and the system admin too (`webhookSubscriptionView`); the key is shown once, by create and rotate-secret only.
 
 router.get('/webhooks/stats', authorizePermission('events.view'), asyncHandler(async (req, res) => {
-  try {
-    const stats = await WebhookSubscriptionService.getStats();
-    res.json({
-      success: true,
-      stats
-    });
-  } catch (error) {
-    throw error;
-  }
+  const stats = await WebhookSubscriptionService.getStats();
+  res.json({
+    success: true,
+    stats
+  });
 }));
 
 router.get('/webhooks', authorizePermission('events.view'), asyncHandler(async (req, res) => {
-  try {
-    const subs = await WebhookSubscriptionService.getSubscriptions();
-    res.json({
-      success: true,
-      data: (Array.isArray(subs) ? subs : []).map(s => webhookSubscriptionView(s))
-    });
-  } catch (error) {
-    throw error;
-  }
+  const subs = await WebhookSubscriptionService.getSubscriptions();
+  res.json({
+    success: true,
+    data: (Array.isArray(subs) ? subs : []).map(s => webhookSubscriptionView(s))
+  });
 }));
 
 router.get('/webhooks/:id', authorizePermission('events.view'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    const sub = await WebhookSubscriptionService.getSubscriptionById(id);
+  const id = parseInt(req.params.id, 10);
+  const sub = await WebhookSubscriptionService.getSubscriptionById(id);
 
-    if (!sub) {
-      return res.status(404).json({ success: false, message: 'اشتراک وب‌هوک یافت نشد.' });
-    }
-
-    res.json({
-      success: true,
-      data: webhookSubscriptionView(sub)
-    });
-  } catch (error) {
-    throw error;
+  if (!sub) {
+    return res.status(404).json({ success: false, message: 'اشتراک وب‌هوک یافت نشد.' });
   }
+
+  res.json({
+    success: true,
+    data: webhookSubscriptionView(sub)
+  });
 }));
 
+// v10.0.253 (OBS-R2-05): create and edit leave every error to errorHandler; a 500 used to answer with the raw error text
+// and an unsafe address with the guard's English sentence
 router.post('/webhooks', authorizePermission('events.manage'), validate(createWebhookSchema), asyncHandler(async (req, res) => {
-  try {
-    const { name, targetUrl, eventPatterns, secretKey, customHeaders, retryLimit, timeoutMs, timeoutSeconds } = req.body;
+  const { name, targetUrl, eventPatterns, secretKey, customHeaders, retryLimit, timeoutMs, timeoutSeconds } = req.body;
 
-    if (!name || !targetUrl || !eventPatterns || !Array.isArray(eventPatterns)) {
-      return res.status(400).json({
-        success: false,
-        message: 'نام، آدرس مقصد و الگوهای رویداد الزامی هستند.'
-      });
-    }
-
-    const newSub = await WebhookSubscriptionService.createSubscription(
-      {
-        name,
-        targetUrl,
-        eventPatterns,
-        // V3.0.7 (TD-057): default ضعیف Math.random حذف شد — سرویس در نبود کلید
-        // خودش secret امن CSPRNG (generateSecretKey) تولید می‌کند.
-        secretKey: secretKey?.trim() || undefined,
-        customHeaders: customHeaders || {},
-        retryLimit: retryLimit || 3,
-        // v9.0.359 (TD-720): the form's timeoutMs (legacy timeoutSeconds), checked by the service; it used to become 10 s
-        timeoutMs,
-        timeoutSeconds
-      },
-      req.user?.id
-    );
-
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username,
-      userFullName: req.user?.full_name || '',
-      action: 'CREATE',
-      entity: `اشتراک وب‌هوک: ${name}`,
-      description: `ثبت اشتراک وب‌هوک به آدرس ${targetUrl}`
-    });
-
-    res.status(201).json({
-      success: true,
-      message: 'اشتراک وب‌هوک با موفقیت ایجاد شد. کلید امضا را همین حالا کپی کنید؛ دیگر نشان داده نمی‌شود.',
-      data: webhookSubscriptionView(newSub, { revealSecret: true })
-    });
-  } catch (error) {
-    if (error instanceof AppError) throw error;
-    const isClientError = errorMessageOf(error)?.includes('SSRF') || errorMessageOf(error)?.includes('Disallowed') || errorMessageOf(error)?.includes('Invalid URL');
-    res.status(isClientError ? 400 : 500).json({
+  if (!name || !targetUrl || !eventPatterns || !Array.isArray(eventPatterns)) {
+    return res.status(400).json({
       success: false,
-      message: isClientError ? errorMessageOf(error) : 'خطا در ایجاد وب‌هوک',
-      error: errorMessageOf(error)
+      message: 'نام، آدرس مقصد و الگوهای رویداد الزامی هستند.'
     });
   }
+
+  const newSub = await WebhookSubscriptionService.createSubscription(
+    {
+      name,
+      targetUrl,
+      eventPatterns,
+      // V3.0.7 (TD-057): default ضعیف Math.random حذف شد — سرویس در نبود کلید
+      // خودش secret امن CSPRNG (generateSecretKey) تولید می‌کند.
+      secretKey: secretKey?.trim() || undefined,
+      customHeaders: customHeaders || {},
+      retryLimit: retryLimit || 3,
+      // v9.0.359 (TD-720): the form's timeoutMs (legacy timeoutSeconds), checked by the service; it used to become 10 s
+      timeoutMs,
+      timeoutSeconds
+    },
+    req.user?.id
+  );
+
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username,
+    userFullName: req.user?.full_name || '',
+    action: 'CREATE',
+    entity: `اشتراک وب‌هوک: ${name}`,
+    description: `ثبت اشتراک وب‌هوک به آدرس ${targetUrl}`
+  });
+
+  res.status(201).json({
+    success: true,
+    message: 'اشتراک وب‌هوک با موفقیت ایجاد شد. کلید امضا را همین حالا کپی کنید؛ دیگر نشان داده نمی‌شود.',
+    data: webhookSubscriptionView(newSub, { revealSecret: true })
+  });
 }));
 
 router.put('/webhooks/:id', authorizePermission('events.manage'), validate(updateWebhookSchema), asyncHandler(async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    const updated = await WebhookSubscriptionService.updateSubscription(id, req.body);
+  const id = parseInt(req.params.id, 10);
+  const updated = await WebhookSubscriptionService.updateSubscription(id, req.body);
 
-    res.json({
-      success: true,
-      message: 'اشتراک وب‌هوک با موفقیت ویرایش شد.',
-      data: webhookSubscriptionView(updated)
-    });
-  } catch (error) {
-    if (error instanceof AppError) throw error;
-    const isClientError = errorMessageOf(error)?.includes('SSRF') || errorMessageOf(error)?.includes('Disallowed') || errorMessageOf(error)?.includes('Invalid URL');
-    res.status(isClientError ? 400 : 500).json({
-      success: false,
-      message: isClientError ? errorMessageOf(error) : 'خطا در ویرایش وب‌هوک',
-      error: errorMessageOf(error)
-    });
-  }
+  res.json({
+    success: true,
+    message: 'اشتراک وب‌هوک با موفقیت ویرایش شد.',
+    data: webhookSubscriptionView(updated)
+  });
 }));
 
 router.delete('/webhooks/:id', authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    // v9.0.445 (TD-611): one transaction with its deliveries, queued jobs and audit row
-    await WebhookSubscriptionService.deleteSubscription(id, { req });
+  const id = parseInt(req.params.id, 10);
+  // v9.0.445 (TD-611): one transaction with its deliveries, queued jobs and audit row
+  await WebhookSubscriptionService.deleteSubscription(id, { req });
 
-    res.json({
-      success: true,
-      message: 'اشتراک وب‌هوک با موفقیت حذف گردید.'
-    });
-  } catch (error) {
-    throw error;
-  }
+  res.json({
+    success: true,
+    message: 'اشتراک وب‌هوک با موفقیت حذف گردید.'
+  });
 }));
 
 router.post('/webhooks/:id/toggle', authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    const updated = await WebhookSubscriptionService.toggleSubscription(id);
+  const id = parseInt(req.params.id, 10);
+  const updated = await WebhookSubscriptionService.toggleSubscription(id);
 
-    res.json({
-      success: true,
-      message: `وضعیت وب‌هوک به ${updated.isActive ? 'فعال' : 'غیرفعال'} تغییر یافت.`,
-      data: webhookSubscriptionView(updated)
-    });
-  } catch (error) {
-    throw error;
-  }
+  res.json({
+    success: true,
+    message: `وضعیت وب‌هوک به ${updated.isActive ? 'فعال' : 'غیرفعال'} تغییر یافت.`,
+    data: webhookSubscriptionView(updated)
+  });
 }));
 
 router.post('/webhooks/:id/rotate-secret', authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
@@ -803,25 +668,21 @@ router.post('/webhooks/ping', authorizePermission('events.manage'), validate(web
 
 // v10.0.224 (OBS-R2-79): نام دوم `/webhooks/deliveries` زیر `/webhooks/:id` می‌ماند و هرگز پاسخ نمی‌داد؛ برداشته شد
 router.get('/webhooks/deliveries/list', authorizePermission('events.view'), asyncHandler(async (req, res) => {
-  try {
-    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
-    const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
-    const offset = (page - 1) * limit;
-    const subscriptionId = req.query.subscriptionId ? parseInt(req.query.subscriptionId as string, 10) : undefined;
+  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+  const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
+  const offset = (page - 1) * limit;
+  const subscriptionId = req.query.subscriptionId ? parseInt(req.query.subscriptionId as string, 10) : undefined;
 
-    const result = await WebhookSubscriptionService.getDeliveries({
-      limit,
-      offset,
-      subscriptionId
-    });
+  const result = await WebhookSubscriptionService.getDeliveries({
+    limit,
+    offset,
+    subscriptionId
+  });
 
-    res.json({
-      success: true,
-      ...result
-    });
-  } catch (error) {
-    throw error;
-  }
+  res.json({
+    success: true,
+    ...result
+  });
 }));
 
 // Public Webhook Simulator Echo Endpoint

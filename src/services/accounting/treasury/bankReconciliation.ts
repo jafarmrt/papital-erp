@@ -9,7 +9,7 @@ import { logActivity } from '../../../lib/auditLogger.js';
 export interface ReconcileParams {
   bankAccountId: number;
   txIds: number[];
-  /** v10.0.252 (TD-971): چک‌های وصول‌شده همین حساب */
+  /** v10.0.254 (TD-971): چک‌های وصول‌شده همین حساب */
   chequeIds?: number[];
   batch: string;
   reconciled: boolean;
@@ -49,7 +49,7 @@ function clearingDate(history: unknown, dueDate: string | null): string {
 }
 
 /**
- * v10.0.252 (TD-971، OBS-R1-66): چک وصول‌شده در مانده خزانه حساب بانکی شمرده می‌شود (TD-276) و در صورت‌حساب بانک ردیف
+ * v10.0.254 (TD-971، OBS-R1-66): چک وصول‌شده در مانده خزانه حساب بانکی شمرده می‌شود (TD-276) و در صورت‌حساب بانک ردیف
  * دارد، پس در تطبیق صورت‌حساب نامزد است. پیش‌تر پنجره تطبیق فقط تراکنش خزانه را می‌خواند و ردیف چک همیشه مغایرت بود.
  */
 export async function listReconcilableCheques(bankAccountId: number): Promise<ReconcilableCheque[]> {
