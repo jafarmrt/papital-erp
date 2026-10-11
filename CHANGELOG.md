@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.0.256 — پاسخ‌های خطای مسیرهای رویداد، کاربر و پیوست از errorHandler می‌گذرد
+- ۱۳ پاسخ خطای دست‌ساز در `events.routes.ts`، `users.routes.ts` و `attachments.routes.ts` به `BadRequestError` / `NotFoundError` / `UnauthorizedError` / `ForbiddenError` با کد رفت و با `code` و `traceId` یکدست پاسخ داده می‌شود؛ `routeErrorResponses` از ۴۷ به ۳۴ رسید (بخش دوم OBS-R2-05، TD-983).
+
 ### v10.0.255 — درخواست خرید باز در هشدار نقطه سفارش
 - v10.0.255 — هشدار نقطه سفارش درخواست‌های خرید باز را در ستون «درخواست باز» نشان می‌دهد و پیش از درخواست تکراری می‌پرسد (TD-1134).
 

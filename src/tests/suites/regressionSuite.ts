@@ -10784,6 +10784,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runWebhookSsrfEchoTests(shouldRun));
   const { runWebhookErrorContractTests } = await import('../regression/webhookErrorContractTests.js');
   results.push(...await runWebhookErrorContractTests(shouldRun));
+  const { runEventsErrorContractTests } = await import('../regression/eventsErrorContractTests.js');
+  results.push(...await runEventsErrorContractTests(shouldRun));
   const { runWebhookRuleSeedTests } = await import('../regression/webhookRuleSeedTests.js');
   results.push(...await runWebhookRuleSeedTests(shouldRun));
   const { runWebhookSecretEditTests } = await import('../regression/webhookSecretEditTests.js');
