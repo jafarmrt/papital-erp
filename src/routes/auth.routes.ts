@@ -9,7 +9,7 @@ import { validate } from '../middleware/validate.js';
 import { logActivity, extractClientIp } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { UnauthorizedError, ValidationError } from '../errors/customErrors.js';
+import { AppError, UnauthorizedError, ValidationError } from '../errors/customErrors.js';
 import { safeCompareTokens } from '../lib/timingSafeCompare.js';
 import { revokeUserSessions, runInitialSetup } from '../services/auth/initialSetup.service.js';
 import {
@@ -27,7 +27,7 @@ import { roleDisplayName } from '../lib/users/roleDisplayName.js';
 import { normalizeRialDisplayUnit } from '../lib/rialDisplay.js';
 import {
   SETUP_USERNAME_MIN_LENGTH, SETUP_USERNAME_TOO_SHORT_MESSAGE, SETUP_COMPANY_NAME_REQUIRED_MESSAGE,
-  SETUP_TOKEN_NOT_CONFIGURED_MESSAGE, SETUP_DEFAULT_PASSWORD_MESSAGE,
+  SETUP_TOKEN_NOT_CONFIGURED_MESSAGE, SETUP_DEFAULT_PASSWORD_MESSAGE, SETUP_STATE_UNREADABLE_MESSAGE,
 } from '../lib/auth/setupRules.js';
 
 const router = Router();
@@ -46,18 +46,17 @@ const loginSchema = z.object({
 // Login
 router.get('/check-setup', asyncHandler(async (req, res) => {
   const { sql, inArray } = await import('drizzle-orm');
-  let count = 0;
+  let count: number;
   try {
     const result = await orm.select({ count: sql<number>`count(*)` })
       .from(users)
       .where(notSyntheticTestUsername(users.username));
     count = Number(result[0]?.count || 0);
   } catch (dbErr) {
-    // V3.0.7 (TD-065): مسیر عمومی هرگز seed اجرا نمی‌کند — قبلاً خطای DB از یک
-    // endpoint بدون احراز هویت به نوشتن در دیتابیس تبدیل می‌شد. خطا گزارش و
-    // به‌عنوان «راه‌اندازی نشده» پاسخ داده می‌شود؛ seed فقط از startup/مسیر مدیریتی.
+    // V3.0.7 (TD-065): the public route never runs the seed. v10.0.210 (OBS-R1-14): a database error is a 503, never
+    // «not set up», which used to open the setup wizard on an installed system whose database was briefly unreachable.
     logger.error(`[check-setup] Database error: ${dbErr instanceof Error ? dbErr.message : String(dbErr)}`);
-    count = 0;
+    throw new AppError(SETUP_STATE_UNREADABLE_MESSAGE, 503, 'SETUP_STATE_UNREADABLE');
   }
   
   let companyName = '';
