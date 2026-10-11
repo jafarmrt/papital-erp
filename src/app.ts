@@ -1,5 +1,6 @@
 import express from 'express';
 import { ATTACHMENT_BODY_LIMIT, DEFAULT_BODY_LIMIT, acceptsAttachmentBody } from './lib/attachments/attachmentBodyLimit.js';
+import { isPublicUploadPath } from './lib/attachments/publicUploadPath.js';
 import 'express-async-errors';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -375,15 +376,7 @@ export async function createApp(): Promise<express.Express> {
       return res.status(404).end();
     }
     // Public assets and media images (catalog items, transfers, logos, product photos)
-    const isImageFile = /\.(jpg|jpeg|png|webp|gif|svg|ico)$/i.test(p);
-    if (
-      isImageFile ||
-      p.endsWith('.ico') ||
-      p.includes('logo') ||
-      p.includes('favicon') ||
-      p.startsWith('/public/') ||
-      p.startsWith('/branding/')
-    ) {
+    if (isPublicUploadPath(p)) {
       return uploadsStatic(req, res, next);
     }
     // All other uploads (e.g. documents, invoices, attachments) require authentication
