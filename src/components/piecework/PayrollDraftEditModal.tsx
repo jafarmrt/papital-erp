@@ -5,11 +5,18 @@ import { fetchJson } from '../../api';
 import { PieceworkPayroll } from '../../types';
 import { errorMessageOf, formatCurrencyLabel } from '../../utils';
 import { PayrollDeductionsField, deductionsNeedDescription } from './PayrollDeductionsField';
+import { PayrollStatutoryFields } from './PayrollStatutoryFields';
+import { EMPTY_STATUTORY_ENTRY, statutoryPayloadOf, type PayrollStatutoryEntry } from '../../lib/payroll/statutoryForm';
+
+/** v10.0.201 (TD-1087): فیشی که بیمه یا مالیاتش با شرح تغییر کرده، همان مبلغ‌ها و شرح را در فرم نشان می‌دهد */
+const storedStatutoryEntry = (p: PieceworkPayroll): PayrollStatutoryEntry => (p.statutoryOverrideReason
+  ? { employeeInsurance: String(p.employeeInsurance ?? ''), employerInsurance: String(p.employerInsurance ?? ''), incomeTax: String(p.incomeTax ?? ''), reason: p.statutoryOverrideReason }
+  : EMPTY_STATUTORY_ENTRY);
 
 const nonNegative = (raw: string): number => Math.max(0, Number(raw) || 0);
 
 /**
- * v10.0.200 (TD-1242، طرح حقوق §۳.۱ بند ۳): ویرایش فیش پیش‌نویس — عنوان، پاداش، سایر کسورات و شرحش، کسر مساعده. سرور خالص
+ * v10.0.200 (TD-1242، طرح حقوق §۳.۱ بند ۳): ویرایش فیش پیش‌نویس — عنوان، پاداش، بیمه و مالیات (v10.0.201)، سایر کسورات و شرحش، کسر مساعده. سرور خالص
  * را دوباره حساب و سند پیش‌نویس فیش را از نو می‌سازد؛ فیش تأییدشده یا با سند تأییدشده را با پیام خودش رد می‌کند.
  */
 export function PayrollDraftEditModal({ payroll, onClose, onSaved }: { payroll: PieceworkPayroll | null; onClose: () => void; onSaved: () => void }) {
@@ -18,6 +25,7 @@ export function PayrollDraftEditModal({ payroll, onClose, onSaved }: { payroll: 
   const [deductions, setDeductions] = useState(0);
   const [description, setDescription] = useState('');
   const [advance, setAdvance] = useState(0);
+  const [statutory, setStatutory] = useState<PayrollStatutoryEntry>(EMPTY_STATUTORY_ENTRY);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -27,6 +35,7 @@ export function PayrollDraftEditModal({ payroll, onClose, onSaved }: { payroll: 
     setDeductions(Number(payroll.totalDeductions || 0));
     setDescription(payroll.deductionsDescription || '');
     setAdvance(Number(payroll.advanceDeduction || 0));
+    setStatutory(storedStatutoryEntry(payroll));
   }, [payroll]);
 
   if (!payroll) return null;
@@ -37,12 +46,13 @@ export function PayrollDraftEditModal({ payroll, onClose, onSaved }: { payroll: 
     if (isSaving) return;
     setIsSaving(true);
     try {
-      await fetchJson(`/piecework/payrolls/${payroll.id}`, {
+      const res = await fetchJson(`/piecework/payrolls/${payroll.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, bonuses, deductions, deductionsDescription: deductions > 0 ? description.trim() : '', advanceDeduction: advance }),
-      });
+        body: JSON.stringify({ title, bonuses, deductions, deductionsDescription: deductions > 0 ? description.trim() : '', advanceDeduction: advance, ...statutoryPayloadOf(statutory) }),
+      }) as { statutoryWarning?: string | null };
       toast.success(`فیش ${payroll.payrollNumber} ویرایش شد و سند پیش‌نویس آن دوباره ساخته شد.`);
+      if (res?.statutoryWarning) toast(res.statutoryWarning, { icon: '⚠️' });
       onSaved();
       onClose();
     } catch (err) {
@@ -72,6 +82,8 @@ export function PayrollDraftEditModal({ payroll, onClose, onSaved }: { payroll: 
               <label htmlFor="draft-payroll-bonuses" className="block text-xs font-bold text-slate-700 mb-1">{`پاداش / مزایا (${inputCurLbl})`}</label>
               <input id="draft-payroll-bonuses" type="number" min="0" value={bonuses} onChange={(e) => setBonuses(nonNegative(e.target.value))} className={fieldClass} />
             </div>
+            <PayrollStatutoryFields personnelId={payroll.personnelId} startDate={payroll.startDate} endDate={payroll.endDate}
+              gross={Number(payroll.totalPieceworkAmount || 0) + Number(payroll.totalFixedAmount || 0) + bonuses} entry={statutory} onChange={setStatutory} />
             <PayrollDeductionsField amount={deductions} onAmountChange={setDeductions} description={description} onDescriptionChange={setDescription} currencyLabel={inputCurLbl} />
             <div>
               <label htmlFor="draft-payroll-advance" className="block text-xs font-bold text-slate-700 mb-1">{`کسر مساعده (${inputCurLbl})`}</label>

@@ -9,7 +9,7 @@ type PersonnelRow = typeof personnel.$inferSelect;
 
 const AUDITED_KEYS = [
   'firstName', 'lastName', 'fullName', 'personnelCode', 'userId', 'gender', 'birthDate', 'nationality', 'nationalId', 'phone',
-  'employmentStatus', 'salaryType', 'monthlySalary', 'jobTitle', 'education', 'startDate', 'endDate', 'terminationReason', 'specializedSkills',
+  'employmentStatus', 'salaryType', 'monthlySalary', 'jobTitle', 'education', 'startDate', 'isInsuranceCovered', 'isTaxCovered', 'endDate', 'terminationReason', 'specializedSkills',
   'otherSkills', 'referralSource', 'cardNumber', 'accountNumber', 'shebaNumber', 'bankName', 'nobitexUsername', 'address', 'notes',
 ] as const satisfies ReadonlyArray<keyof PersonnelRow>;
 

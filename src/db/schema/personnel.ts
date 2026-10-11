@@ -2,6 +2,7 @@ import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, uniqu
 import { sql } from 'drizzle-orm';
 import type { FinancialAttachment } from '../../types';
 import type { FixedSalaryMonthShare } from '../../lib/payroll/fixedSalaryProration';
+import type { TaxBracket } from '../../lib/payroll/statutoryDeductions';
 import { users } from './auth';
 import { registerColumnRef, baseRelations } from './baseRelations';
 import { moneyNumeric } from './moneyColumn';
@@ -26,6 +27,9 @@ export const personnel = pgTable('personnel', {
   education: text('education').default(''),
   // v10.0.199 (TD-1086، طرح حقوق §۳.۴): «آغاز همکاری» میلادی ISO؛ حقوق ثابت از این روز آغاز می‌شود (خالی = رفتار پیشین)
   startDate: text('start_date').default(''),
+  // v10.0.201 (TD-1087، طرح حقوق ت۵ الف): «مشمول بیمه» و «مشمول مالیات حقوق»؛ پرسنل موجود خاموش (مهاجرت 0104)
+  isInsuranceCovered: integer('is_insurance_covered').notNull().default(0),
+  isTaxCovered: integer('is_tax_covered').notNull().default(0),
   endDate: text('end_date').default(''),
   terminationReason: text('termination_reason').default(''),
   specializedSkills: text('specialized_skills').default(''),
@@ -155,6 +159,13 @@ export const pieceworkPayrolls = pgTable('piecework_payrolls', {
   // v10.0.199 (TD-1085، طرح حقوق §۳.۴): فیش پیش‌پرداخت (دوره‌ای که پایانش پس از امروز است) و دلیل الزامی آن
   isPrepayment: integer('is_prepayment').notNull().default(0),
   prepaymentReason: text('prepayment_reason').notNull().default(''),
+  // v10.0.201 (TD-1087، طرح حقوق §۳.۳): کسورات قانونی فیش؛ سهم کارفرما هزینه کارفرماست و از خالص کم نمی‌شود. شرح، وقتی
+  // مبلغی با پیشنهاد سرور فرق دارد؛ is_statutory_split برای فیش‌های پیش از این نسخه صفر است (مهاجرت 0104)
+  employeeInsurance: moneyNumeric('employee_insurance').notNull().default(sql`0`),
+  employerInsurance: moneyNumeric('employer_insurance').notNull().default(sql`0`),
+  incomeTax: moneyNumeric('income_tax').notNull().default(sql`0`),
+  statutoryOverrideReason: text('statutory_override_reason').notNull().default(''),
+  isStatutorySplit: integer('is_statutory_split').notNull().default(1),
   createdById: integer('created_by_id').references(() => users.id),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),
@@ -167,6 +178,25 @@ export const pieceworkPayrolls = pgTable('piecework_payrolls', {
   idx_piecework_payrolls_created_by_id: index('idx_piecework_payrolls_created_by_id').on(table.createdById).where(sql`${table.createdById} IS NOT NULL`),
 }));
 registerColumnRef('pieceworkPayrolls.id', () => pieceworkPayrolls.id);
+
+/**
+ * v10.0.201 (TD-1087، طرح حقوق §۳.۳ بند ۱، تصمیم ت۴ الف): نرخ‌های بیمه و مالیات حقوق هر سال جلالی که دارنده
+ * `payroll.rates_manage` وارد می‌کند (مهاجرت 0104)؛ پله‌های مالیات ماهانه‌اند (`TaxBracket` در statutoryDeductions.ts).
+ */
+export const payrollStatutoryRates = pgTable('payroll_statutory_rates', {
+  id: serial('id').primaryKey(),
+  jalaliYear: integer('jalali_year').notNull(),
+  employeeInsurancePercent: numeric('employee_insurance_percent', { precision: 7, scale: 4 }).notNull().default('0'),
+  employerInsurancePercent: numeric('employer_insurance_percent', { precision: 7, scale: 4 }).notNull().default('0'),
+  insuranceWageCap: moneyNumeric('insurance_wage_cap').notNull().default(sql`0`),
+  taxBrackets: jsonb('tax_brackets').$type<TaxBracket[]>().notNull().default([]),
+  isInsuranceDeductedFromTax: integer('is_insurance_deducted_from_tax').notNull().default(0),
+  version: integer('version').notNull().default(1),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
+}, (table) => ({
+  uq_payroll_statutory_rates_year: uniqueIndex('uq_payroll_statutory_rates_year').on(table.jalaliYear),
+}));
 
 export const pieceworkLogs = pgTable('piecework_logs', {
   id: serial('id').primaryKey(),

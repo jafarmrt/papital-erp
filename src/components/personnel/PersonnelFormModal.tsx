@@ -16,6 +16,7 @@ import { User } from '../../types';
 import { PersonnelFormData } from '../../hooks/usePersonnel';
 import { extractDateString, getIranianBankFromCard, getIranianBankFromSheba, isoToJalaliDate } from '../../utils';
 import { NationalIdInput, IranianPhoneInput, BankCardInput, ShebaInput } from '../common';
+import { PersonnelStatutoryFlags } from './PersonnelStatutoryFlags';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 
 interface PersonnelFormModalProps {
@@ -332,6 +333,12 @@ export function PersonnelFormModal({
                 />
                 <p className="mt-1 text-[10px] text-slate-500">حقوق ثابت از این روز داده می‌شود؛ خالی یعنی از آغاز دوره هر فیش.</p>
               </div>
+
+              <PersonnelStatutoryFlags
+                insurance={formData.isInsuranceCovered}
+                tax={formData.isTaxCovered}
+                onChange={(flags) => setFormData((prev) => ({ ...prev, ...flags }))}
+              />
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">تاریخ پایان کار با پاپیتال</label>

@@ -37,6 +37,8 @@ export const SETTINGS_TAB_ACCESS = {
   projects: { gate: anyOf('settings.manage'), api: ['GET /api/settings', 'POST /api/settings', 'GET /api/piecework/tasks'] },
   // v9.0.320 (TD-805): زبانه عناوین و دسته‌های کاری همان کلید نوشتن آن‌ها را می‌پرسد
   task_titles: { gate: anyOf('piecework.manage_tasks'), api: ['GET /api/piecework/tasks', 'POST /api/piecework/tasks'] },
+  // v10.0.201 (TD-1087، طرح حقوق ت۴ الف): نرخ‌های سالانه بیمه و مالیات حقوق
+  payroll_rates: { gate: anyOf('payroll.rates_manage'), api: ['GET /api/piecework/statutory-rates', 'PUT /api/piecework/statutory-rates/:year'] },
   woocommerce: { gate: anyOf('woocommerce.view'), api: ['GET /api/woocommerce/synced-orders', 'GET /api/woocommerce/order-logs'] },
   health: { gate: 'system_admin', api: ['GET /api/system/health'] },
   system_config: { gate: 'system_admin', api: [] },

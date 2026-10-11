@@ -3,6 +3,7 @@ import { orm } from '../../db/drizzle.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { formatPersianPrice, toPersianDigits } from '../../utils/persianNumber.js';
 import type { HealthCheckTestResult } from '../../types.js';
+import { AccountMappingService } from './accountMapping.service.js';
 
 /**
  * v9.0.286 (TD-554، B03-12، تصمیم ت۶ الف): تا v9.0.274 کسورات فیش حقوق (بیمه و مالیات سهم کارکنان) به نگاشت پیش‌فرض
@@ -71,5 +72,74 @@ export function buildPayslipDeductionsHealthTest(entries: PayslipDeductionsInPre
         : 'کسورات فیش حقوق در ۳۲۰۲ (TD-554).',
     })),
     metrics: { payrollDeductionsInCustomerPrepayments: entries.length },
+  };
+}
+
+/**
+ * v10.0.202 (TD-1088، طرح حقوق §۳.۳ بند ۷): تا v10.0.200 بیمه و مالیات سهم کارکنان در «سایر کسورات» فیش و حساب ۳۲۰۵
+ * می‌آمد؛ از v10.0.201 بیمه به ۳۲۰۴ و مالیات به ۳۲۰۶ می‌رود و ۳۲۰۵ فقط «سایر کسورات» است. فیش‌های پیشین
+ * (`is_statutory_split = 0`) جابه‌جا نمی‌شوند. این بررسی مانده ۳۲۰۵ هر پرسنل را بی ردیف‌های سند فیش‌های تازه فهرست می‌کند،
+ * تا حسابدار با سند اصلاحی (بدهکار ۳۲۰۵، بستانکار ۳۲۰۴ یا ۳۲۰۶ با همان تفصیلی) جابه‌جایش کند.
+ */
+export interface LegacyPayslipDeductions {
+  personnelId: number;
+  personnelName: string;
+  /** مانده بستانکار حساب «سایر کسورات حقوق پرداختنی» بی ردیف فیش‌های تازه (ریال) */
+  balance: string;
+  /** شماره فیش‌های پیشین با کسورات */
+  payrollNumbers: string[];
+}
+
+export async function findLegacyPayslipDeductions(): Promise<LegacyPayslipDeductions[]> {
+  const deductionsAccount = await AccountMappingService.getEmployeeDeductionsPayableAccount();
+  if (!deductionsAccount) return [];
+  const res = await orm.execute(sql`
+    WITH legacy AS (
+      SELECT p.personnel_id, array_agg(p.payroll_number ORDER BY p.id) AS numbers
+        FROM piecework_payrolls p
+       WHERE p.is_deleted = 0 AND p.is_statutory_split = 0 AND COALESCE(p.total_deductions, 0) > 0
+       GROUP BY p.personnel_id
+    )
+    SELECT l.personnel_id, COALESCE(NULLIF(btrim(pe.full_name), ''), '') AS personnel_name, l.numbers,
+           COALESCE((SELECT SUM(i.credit - i.debit) FROM journal_voucher_items i
+                       JOIN journal_vouchers v ON v.id = i.voucher_id AND v.is_deleted = 0
+                       LEFT JOIN piecework_payrolls np ON np.id = v.source_payroll_id
+                      WHERE i.is_deleted = 0 AND i.account_id = ${deductionsAccount.id}
+                        AND i.detailed_type = 'personnel' AND i.detailed_id = l.personnel_id
+                        AND COALESCE(np.is_statutory_split, 0) = 0), 0)::text AS balance
+      FROM legacy l
+      LEFT JOIN personnel pe ON pe.id = l.personnel_id
+     ORDER BY l.personnel_id
+     LIMIT 200`);
+  return (res.rows as Array<Record<string, unknown>>)
+    .map(r => ({
+      personnelId: Number(r.personnel_id),
+      personnelName: String(r.personnel_name ?? ''),
+      balance: fin(String(r.balance ?? '0')).toString(),
+      payrollNumbers: Array.isArray(r.numbers) ? r.numbers.map(String) : [],
+    }))
+    .filter(e => fin(e.balance).isPositive());
+}
+
+export function buildLegacyPayslipDeductionsHealthTest(entries: LegacyPayslipDeductions[]): HealthCheckTestResult {
+  return {
+    id: 'payroll_deductions_before_statutory_split',
+    category: 'accounts',
+    title: 'کسورات فیش‌های پیش از جداسازی بیمه و مالیات',
+    description: 'از v10.0.201 بیمه سهم کارگر و کارفرما به «بیمه پرداختنی» (۳۲۰۴) و مالیات حقوق به «مالیات حقوق پرداختنی» (۳۲۰۶) می‌رود و «سایر کسورات حقوق پرداختنی» (۳۲۰۵) فقط وام، جریمه و مانند آن است. کسورات فیش‌های پیشین خودکار جابه‌جا نمی‌شود',
+    status: entries.length > 0 ? 'warning' : 'healthy',
+    scoreImpact: 0,
+    count: entries.length,
+    message: entries.length === 0
+      ? 'کسورات فیش‌های پیشین در «سایر کسورات حقوق پرداختنی» مانده‌ای ندارد.'
+      : `کسورات فیش‌های پیشین ${toPersianDigits(String(entries.length))} نفر از پرسنل در ۳۲۰۵ مانده است. سهم بیمه و مالیات آن را با سند اصلاحی (بدهکار ۳۲۰۵ و بستانکار ۳۲۰۴ یا ۳۲۰۶ با تفصیلی همان پرسنل) جابه‌جا کنید.`,
+    items: entries.map(e => ({
+      id: e.personnelId,
+      code: String(e.personnelId),
+      title: e.personnelName || 'پرسنل',
+      subtitle: `مانده ۳۲۰۵: ${formatPersianPrice(e.balance, 'IRR', 4)}`,
+      details: `فیش ${e.payrollNumbers.slice(0, 10).map(n => toPersianDigits(n)).join('، ')} (TD-1088).`,
+    })),
+    metrics: { payrollDeductionsBeforeStatutorySplit: entries.length },
   };
 }

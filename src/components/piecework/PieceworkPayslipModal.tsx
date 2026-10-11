@@ -6,6 +6,7 @@ import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 import { PayrollPaymentModal } from './PayrollPaymentModal';
 import { PrepaymentNotice } from './PayrollPrepaymentField';
+import { PayslipStatutoryRows } from './PayslipStatutoryRows';
 import { isPayablePayrollStatus } from '../../lib/payroll/payrollPayable';
 import { payrollStatusLabel } from '../../lib/payroll/payrollStatusLabels';
 import { payslipFixedSalaryRows } from '../../lib/payroll/payslipFixedSalaryRows';
@@ -247,6 +248,7 @@ export function PieceworkPayslipModal({
                 <span>سایر کسورات{viewingPayroll.deductionsDescription ? ` (${viewingPayroll.deductionsDescription})` : ''}:</span>
                 <span className="font-mono">-{rial.amount(viewingPayroll.totalDeductions || 0)}</span>
               </div>
+              <PayslipStatutoryRows payroll={viewingPayroll} />
               {/* V1.9.0: کسر از مساعده/وام پرسنلی */}
               {(Number(viewingPayroll.advanceDeduction) || 0) > 0 && (
                 <div className="flex justify-between font-bold text-indigo-700">

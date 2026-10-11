@@ -13,7 +13,8 @@ import { READ_PERMISSIONS } from '../../lib/recordReadPermissions.js';
 export const PERSONNEL_DOSSIER_PERMISSIONS = ['personnel.view', 'personnel.manage'] as const;
 
 export const PERSONNEL_PICK_KEYS = ['id', 'firstName', 'lastName', 'fullName', 'personnelCode', 'jobTitle', 'employmentStatus', 'userId', 'version'] as const;
-export const PERSONNEL_SALARY_KEYS = ['salaryType', 'monthlySalary'] as const;
+// v10.0.201 (TD-1087): مشمول بیمه و مالیات هم از دامنه مبالغ فیش است (فرم صدور فیش آن را می‌خواند)
+export const PERSONNEL_SALARY_KEYS = ['salaryType', 'monthlySalary', 'isInsuranceCovered', 'isTaxCovered'] as const;
 
 export interface PersonnelReadScope {
   dossier: boolean;

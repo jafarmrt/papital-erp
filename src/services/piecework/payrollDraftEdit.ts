@@ -10,6 +10,7 @@ import { payrollVouchersWhere } from '../accounting/payrollVoucherLink.js';
 import { VoucherService } from '../accounting/voucher.service.js';
 import { VoucherSyncService } from '../accounting/voucherSync.service.js';
 import { auditPayrollUpdated } from './pieceworkAudit.js';
+import { resolvePayrollStatutory, statutoryAuditInfo, statutoryPayrollColumns } from './payrollStatutory.js';
 
 type AmountInput = number | string;
 
@@ -20,6 +21,11 @@ export interface EditDraftPayrollInput {
   /** شرح «سایر کسورات»؛ با کسورات بالای صفر الزامی (TD-861) */
   deductionsDescription?: string;
   advanceDeduction?: AmountInput;
+  /** v10.0.201 (TD-1087): کسورات قانونی؛ نفرستاده = مبلغ ذخیره‌شده اگر پیش‌تر با شرح تغییر کرده، وگرنه پیشنهاد سرور */
+  employeeInsurance?: AmountInput;
+  employerInsurance?: AmountInput;
+  incomeTax?: AmountInput;
+  statutoryOverrideReason?: string;
   userId?: number;
   username: string;
   req?: unknown;
@@ -39,7 +45,7 @@ export async function editDraftPayroll(id: number, input: EditDraftPayrollInput)
       .where(and(eq(pieceworkPayrolls.id, id), eq(pieceworkPayrolls.isDeleted, 0)));
     if (!head) throw new NotFoundError('فیش حقوقی یافت نشد');
     // ترتیب قفل همان صدور فیش: پرسنل، سپس فیش
-    const [person] = await tx.select({ fullName: personnel.fullName }).from(personnel).where(eq(personnel.id, head.personnelId)).for('update');
+    const [person] = await tx.select({ fullName: personnel.fullName, isInsuranceCovered: personnel.isInsuranceCovered, isTaxCovered: personnel.isTaxCovered }).from(personnel).where(eq(personnel.id, head.personnelId)).for('update');
     const [before] = await tx.select().from(pieceworkPayrolls)
       .where(and(eq(pieceworkPayrolls.id, id), eq(pieceworkPayrolls.isDeleted, 0))).for('update');
     if (!before) throw new NotFoundError('فیش حقوقی یافت نشد');
@@ -66,9 +72,25 @@ export async function editDraftPayroll(id: number, input: EditDraftPayrollInput)
         throw new ValidationError(`کسر مساعده (${faAmount(advance.toString())} ریال) از مانده مساعده تسویه‌نشده ${person?.fullName ?? ''} (${faAmount(ceiling.toString())} ریال) بیشتر است.`, undefined, 'PAYROLL_ADVANCE_EXCEEDS_BALANCE');
       }
     }
-    const net = fin(before.totalPieceworkAmount ?? 0).add(before.totalFixedAmount ?? 0).add(bonuses).subtract(deductions).subtract(advance).round(4);
+    // v10.0.201 (TD-1087): کسورات قانونی با ناخالص تازه؛ مبلغی که پیش‌تر با شرح تغییر کرده می‌ماند مگر دوباره فرستاده شود
+    const gross = fin(before.totalPieceworkAmount ?? 0).add(before.totalFixedAmount ?? 0).add(bonuses);
+    const keptOverride = (before.statutoryOverrideReason ?? '').trim() !== '';
+    const statutory = await resolvePayrollStatutory(tx, {
+      person: person ?? {},
+      startIso: before.startDate,
+      endIso: before.endDate,
+      gross,
+      entered: {
+        employeeInsurance: input.employeeInsurance ?? (keptOverride ? before.employeeInsurance.toString() : undefined),
+        employerInsurance: input.employerInsurance ?? (keptOverride ? before.employerInsurance.toString() : undefined),
+        incomeTax: input.incomeTax ?? (keptOverride ? before.incomeTax.toString() : undefined),
+      },
+      overrideReason: input.statutoryOverrideReason ?? before.statutoryOverrideReason ?? '',
+    });
+    const net = gross.subtract(statutory.amounts.employeeInsurance).subtract(statutory.amounts.incomeTax)
+      .subtract(deductions).subtract(advance).round(4);
     if (net.isNegative()) {
-      throw new ValidationError('جمع کسورات و کسر مساعده از اجزای فیش بیشتر است؛ مقادیر را اصلاح کنید.', undefined, 'PAYROLL_NET_NEGATIVE');
+      throw new ValidationError('جمع بیمه، مالیات، کسورات و کسر مساعده از اجزای فیش بیشتر است؛ مقادیر را اصلاح کنید.', undefined, 'PAYROLL_NET_NEGATIVE');
     }
 
     // سند فیش پیش‌نویس با همان تراکنش کنار می‌رود و از روی فیش ویرایش‌شده دوباره ساخته می‌شود
@@ -86,6 +108,7 @@ export async function editDraftPayroll(id: number, input: EditDraftPayrollInput)
       totalDeductions: money(deductions.round(4)),
       deductionsDescription: description,
       advanceDeduction: money(advance.round(4)),
+      ...statutoryPayrollColumns(statutory),
       netPayable: money(net),
     }).where(eq(pieceworkPayrolls.id, id)).returning();
 
@@ -93,7 +116,8 @@ export async function editDraftPayroll(id: number, input: EditDraftPayrollInput)
       await VoucherService.voidSourceVoucher({ voucherId: v.id, reason: `ویرایش فیش پیش‌نویس ${before.payrollNumber}`, userId: input.userId, username: input.username, externalTx: tx });
     }
     const voucher = await VoucherSyncService.autoCreateVoucherForPayroll(id, input.userId, input.username, tx, { strict: true });
-    await auditPayrollUpdated(tx, before, after, voucher, { req: input.req, userId: input.userId, username: input.username });
-    return { payroll: after, voucher };
+    await auditPayrollUpdated(tx, before, after, voucher, { req: input.req, userId: input.userId, username: input.username },
+      statutoryAuditInfo(statutory));
+    return { payroll: after, voucher, statutoryWarning: statutory.warning };
   });
 }
