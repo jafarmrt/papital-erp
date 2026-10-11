@@ -380,9 +380,17 @@ export const transferSchema = z.object({
 export const reconcileSchema = z.object({
   body: z.object({
     bankAccountId: z.coerce.number().int().positive('شناسه حساب بانکی الزامی است'),
-    txIds: z.array(z.coerce.number().int().positive('شناسه تراکنش نامعتبر است')).min(1, 'حداقل یک تراکنش باید انتخاب شود').max(2000),
+    txIds: z.array(z.coerce.number().int().positive('شناسه تراکنش نامعتبر است')).max(2000).optional().default([]),
+    // v10.0.254 (TD-971): چک‌های وصول‌شده همین حساب
+    chequeIds: z.array(z.coerce.number().int().positive('شناسه چک نامعتبر است')).max(2000).optional().default([]),
     batch: z.string().optional().default(''),
     reconciled: z.boolean({ message: 'وضعیت آشتی‌سنجی باید بولی باشد' }),
+  }).refine(b => b.txIds.length + b.chequeIds.length > 0, { message: 'حداقل یک تراکنش یا چک باید انتخاب شود', path: ['txIds'] })
+});
+
+export const reconcileChequesQuerySchema = z.object({
+  query: z.object({
+    bankAccountId: z.coerce.number().int().positive('شناسه حساب بانکی الزامی است'),
   })
 });
 
