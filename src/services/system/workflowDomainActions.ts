@@ -8,6 +8,8 @@ import { ItemStockReservationService } from '../items/itemStockReservation.servi
 import { registerItemOpeningWorkflowAction } from '../inventory/itemOpeningWorkflowAction.js';
 import { registerPendingMaterialWorkflowAction } from '../inventory/pendingMaterialWorkflowAction.js';
 import { registerRequisitionWorkflowAction } from '../procurement/requisitionWorkflowAction.js';
+import { procurementOrderHooks } from '../procurement/requisitionOrderSync.js';
+import { registerLinkedOrderHooks } from '../documents/linkedOrderHooks.js';
 
 /**
  * v9.0.2 (TD-415): ریشه ترکیب اقدام‌های پس از انتقال گردش‌کار. server.ts هنگام راه‌اندازی و bootstrapTestMasterData برای
@@ -26,4 +28,7 @@ export function registerWorkflowDomainActions(): void {
   registerReservedStocksReader(itemIds => ItemStockReservationService.getReservedStocksMap({ itemIds }));
   // v10.0.59 (TD-938): a linked receipt or payment is capped at the document's remaining amount, read through this root
   registerDocumentRemainingReader(readDocumentPayableAndSettled);
+  // v10.0.237 / v10.0.238 (TD-912 / TD-913): voiding or editing a procurement order updates its requisition (not a workflow
+  // action, but the same composition root: the documents package may not import procurement)
+  registerLinkedOrderHooks(procurementOrderHooks);
 }

@@ -5,6 +5,7 @@ import { join, relative } from 'node:path';
 import { DocItemsTable } from '../../components/documents/DocItemsTable';
 import { reservationSourceLabel } from '../../hooks/documents/stockDocumentItemActions';
 import type { Item } from '../../types';
+import { STOCK_VOUCHER_DRAFT_NOTE } from '../../lib/documents/stockInLabels';
 
 // v9.0.346 (TD-803, finding B08-34): Persian text of the sales and stock document UI has no transliteration from the
 // review table, no English word, numbers inside messages in Persian digits, and the receipt summary says what the page does
@@ -92,7 +93,7 @@ describe('sales and stock document UI wording (TD-803)', () => {
         onRemove={() => undefined}
       />,
     );
-    expect(screen.getByText('موجودی با ثبت نهایی به‌روزرسانی می‌شود؛ سند حسابداری تا تأیید حسابدار پیش‌نویس است.')).toBeTruthy();
+    expect(screen.getByText(`موجودی با ثبت نهایی به‌روزرسانی می‌شود؛ ${STOCK_VOUCHER_DRAFT_NOTE}`)).toBeTruthy();
     expect(screen.getByText('موجودی: ۱۲ عدد')).toBeTruthy();
     expect(screen.getByText('مبلغ کل ردیف (دلار)')).toBeTruthy();
     expect(screen.queryByText(/ورکفلو|مدیر مالی/)).toBeNull();

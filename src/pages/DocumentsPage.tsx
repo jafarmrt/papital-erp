@@ -16,6 +16,7 @@ import { useStockDocumentSubmit } from '../hooks/documents/useStockDocumentSubmi
 import { createStockDocumentItemActions } from '../hooks/documents/stockDocumentItemActions';
 import { useStockPageAccess } from '../hooks/documents/useStockPageAccess';
 import { stockPageBlockedReason, stockPageNoAccessNotice, stockPageTypeOptions } from '../lib/documents/stockDocumentAccess';
+import { stockInLabels } from '../lib/documents/stockInLabels';
 
 /**
  * فرم «ورود و خروج به انبار» (رسید و حواله). TD-080 (بخش ۳): فقط ترکیب بخش‌ها؛ لیست‌های مرجع،
@@ -116,6 +117,7 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
             onUpdateItemPrice={actions.handleUpdateItemPrice}
             onRemove={actions.handleRemove}
             priceLocked={form.returnTermsLocked}
+            docType={docType}
             canEditItem={form.canCreateOrEditItem}
             onEditItem={(item) => {
               form.setModalItemToEdit(item);
@@ -128,7 +130,7 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
             <FinancialAttachmentUploader
               attachments={form.attachments}
               onChange={form.setAttachments}
-              title={actionType === 'in' ? 'الصاق تصویر فاکتور خرید، پیش‌فاکتور و بارنامه' : 'الصاق تصویر حواله امضا شده و رسید تحویل کالا'}
+              title={actionType === 'in' ? stockInLabels(docType).attachmentsTitle : 'الصاق تصویر حواله امضا شده و رسید تحویل کالا'}
               description="امکان الصاق چندین تصویر و فایل اسناد با فشرده‌سازی خودکار هوشمند تا ۳۰۰ کیلوبایت برای هر فایل"
             />
           </div>
@@ -141,6 +143,7 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
             disabled={docItems.length === 0 || blockedReason !== null || form.isSaving}
             isSaving={form.isSaving}
             blockedReason={blockedReason}
+            docType={docType}
           />
         </form>
       </div>
