@@ -17,8 +17,8 @@ import { boundaryState } from './packageBoundary';
  *  - ormFallback (decision t4 B, OBS-R2-03): an optional transaction replaced by the pool, `x || orm`, `x ?? orm`
  *    and `= orm` (a bare `orm`, never a query builder `orm.select()`);
  *  - routeErrorResponses (decision t5 A, OBS-R2-05): a hand-written error answer `res.status(4xx|5xx)` in `src/routes/**`
- *    instead of throwing an AppError for `errorHandler`, also `res.status(cond ? 400 : 500)` (v10.0.251);
- *  - noopCatches (decision t5 A, OBS-R2-05, v10.0.251): `catch (err) { throw err; }`, a catch that only rethrows its own error;
+ *    instead of throwing an AppError for `errorHandler`, also `res.status(cond ? 400 : 500)` (v10.0.253);
+ *  - noopCatches (decision t5 A, OBS-R2-05, v10.0.253): `catch (err) { throw err; }`, a catch that only rethrows its own error;
  *  - serviceGenericErrors (decision t5 A): `throw new Error(` in `src/services/**` instead of an AppError subclass;
  *  - packageBoundary (decision t3 A, OBS-R2-02): server imports against the package direction of
  *    scripts/ratchets/PACKAGE_MAP.txt (scripts/ratchets/packageBoundary.ts); a server file the map does not cover is refused;

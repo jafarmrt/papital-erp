@@ -241,7 +241,7 @@ export function isLocalEchoTarget(parsed: URL, env: NodeJS.ProcessEnv = process.
   return parsed.pathname === LOCAL_ECHO_PATH;
 }
 
-/** v10.0.251 (OBS-R2-05): the code of every refusal of `assertSafeExternalUrl` (422, Persian message for the user). */
+/** v10.0.253 (OBS-R2-05): the code of every refusal of `assertSafeExternalUrl` (422, Persian message for the user). */
 export const UNSAFE_TARGET_URL_CODE = 'UNSAFE_TARGET_URL';
 
 const unsafeTarget = (message: string, reason: string) => new ValidationError(message, { reason }, UNSAFE_TARGET_URL_CODE);

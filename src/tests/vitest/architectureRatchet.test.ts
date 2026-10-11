@@ -53,7 +53,7 @@ describe('architecture_ratchet: phase-2 decisions may only shrink their debt', (
     expect(countSource('src/lib/x.ts', service).serviceGenericErrors).toBe(0);
   });
 
-  it('counts a conditional error status and a catch that only rethrows (v10.0.251, OBS-R2-05)', () => {
+  it('counts a conditional error status and a catch that only rethrows (v10.0.253, OBS-R2-05)', () => {
     const route = `res.status(bad ? 400 : 500).json(x); res.status(ok ? 200 : 201).json(x);`;
     expect(countSource('src/routes/x.routes.ts', route).routeErrorResponses).toBe(1);
     const source = `

@@ -6,7 +6,7 @@ const PRIVATE_ADDRESS_REFUSAL = 'داخلی یا رزروشده';
 const PROTOCOL_REFUSAL = 'فقط نشانی‌های http و https';
 
 /**
- * OBS-R2-05 (decision t5 A), v10.0.251: creating or editing a webhook subscription leaves every error to errorHandler.
+ * OBS-R2-05 (decision t5 A), v10.0.253: creating or editing a webhook subscription leaves every error to errorHandler.
  * An unsafe target address is a 422 `UNSAFE_TARGET_URL` with a Persian message, the answer's `error` is that same message, and a
  * missing subscription is a 404 `WEBHOOK_NOT_FOUND`. On v10.0.250 the route caught the guard's error itself: an unsafe address was a 400 with the English
  * `SSRF blocked: ...` sentence plus an `error` field, any other failure a 500 that echoed the raw error text,
@@ -17,7 +17,7 @@ export async function runWebhookErrorContractTests(shouldRun: (id: string, ...ex
   const id = 'reg_webhook_error_contract_obs_r2_05';
   if (!shouldRun(id, 'obs-r2-05', 'webhook', 'ssrf', 'errors', 'package15')) return results;
 
-  const name = 'v10.0.251: an unsafe webhook address is a Persian 422 UNSAFE_TARGET_URL through errorHandler, never raw error text (OBS-R2-05)';
+  const name = 'v10.0.253: an unsafe webhook address is a Persian 422 UNSAFE_TARGET_URL through errorHandler, never raw error text (OBS-R2-05)';
   const tStart = Date.now();
   const { createHarness } = await import('../security/workflowTestHarness.js');
   const h = await createHarness();

@@ -2,7 +2,7 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { TestCaseResult, makeTestCase } from '../types.js';
 
-/** The guard's Persian refusal of a private or reserved address (v10.0.251, OBS-R2-05; before, the English `SSRF blocked`). */
+/** The guard's Persian refusal of a private or reserved address (v10.0.253, OBS-R2-05; before, the English `SSRF blocked`). */
 const PRIVATE_ADDRESS_REFUSAL = 'داخلی یا رزروشده';
 
 /**

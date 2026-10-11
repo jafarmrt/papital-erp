@@ -538,7 +538,7 @@ router.get('/webhooks/:id', authorizePermission('events.view'), validate(paramsI
   });
 }));
 
-// v10.0.251 (OBS-R2-05): create and edit leave every error to errorHandler; a 500 used to answer with the raw error text
+// v10.0.253 (OBS-R2-05): create and edit leave every error to errorHandler; a 500 used to answer with the raw error text
 // and an unsafe address with the guard's English sentence
 router.post('/webhooks', authorizePermission('events.manage'), validate(createWebhookSchema), asyncHandler(async (req, res) => {
   const { name, targetUrl, eventPatterns, secretKey, customHeaders, retryLimit, timeoutMs, timeoutSeconds } = req.body;

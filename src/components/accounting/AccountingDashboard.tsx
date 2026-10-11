@@ -2,6 +2,7 @@ import { ArrowUpRight, ArrowDownLeft, Wallet, Building2, CreditCard, FileText, T
 import { formatPersianPrice, formatPersianNumber, formatPersianDate, toPersianDigits } from '../../utils';
 import type { FinancialSummaryStats, JournalVoucher, Cheque } from '../../types';
 import { voucherMakerName } from '../../lib/accounting/voucherListViewer';
+import { CashBankTotals } from './CashBankTotals';
 
 interface AccountingDashboardProps {
   stats: FinancialSummaryStats | null;
@@ -104,10 +105,7 @@ export function AccountingDashboard({
               <Building2 className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-xl font-black text-slate-900 dark:text-white">
-            {formatPersianPrice(stats?.totalCashAndBank || 0)}
-          </div>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">مجموع صندوق‌ها و حساب‌های بانکی</p>
+          <CashBankTotals total={stats?.totalCashAndBank} byCurrency={stats?.cashAndBankByCurrency} />
         </div>
 
         {/* Receivables */}
