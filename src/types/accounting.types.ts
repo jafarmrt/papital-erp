@@ -415,9 +415,9 @@ export interface DetailedPartyLedgerResult {
 }
 
 export interface FinancialSummaryStats {
-  /** v10.0.248 (TD-967): the rial treasury accounts only */
+  /** v10.0.251 (TD-967): the rial treasury accounts only */
   totalCashAndBank: number;
-  /** v10.0.248 (TD-967): every treasury balance summed in its own currency, rials first */
+  /** v10.0.251 (TD-967): every treasury balance summed in its own currency, rials first */
   cashAndBankByCurrency?: Array<{ currency: string; amount: number }>;
   totalReceivables: number;
   totalPayables: number;

@@ -55,7 +55,7 @@ export function accountMappingIssues(entries: Array<[AccountMappingKey, string]>
 const SETTINGS_KEY = 'accounting_account_mappings';
 const DISABLED_KEY = 'accounting_mappings_disabled';
 
-/** v10.0.248 (TD-968): a stored mapping that is not valid JSON reads as undefined, then refused by the caller (422, so the user sees why) */
+/** v10.0.251 (TD-968): a stored mapping that is not valid JSON reads as undefined, then refused by the caller (422, so the user sees why) */
 function parseStoredSetting(value: string): unknown {
   try {
     return JSON.parse(value);
@@ -77,7 +77,7 @@ export class AccountMappingService {
    * Get all conceptual account mapping configurations
    */
   static async getMappings(tx?: DbExecutor): Promise<ConceptualAccountMappingConfig> {
-    // v10.0.248 (TD-968): a database error or an unreadable stored value is never replaced with the defaults,
+    // v10.0.251 (TD-968): a database error or an unreadable stored value is never replaced with the defaults,
     // which would post automatic vouchers to accounts the accountant did not choose
     const executor = tx || orm;
     const [setting] = await executor.select().from(appSettings).where(eq(appSettings.key, SETTINGS_KEY));

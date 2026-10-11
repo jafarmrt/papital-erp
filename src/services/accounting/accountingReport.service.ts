@@ -69,7 +69,7 @@ export interface ProjectDetailReportRow {
 }
 
 /**
- * v10.0.248 (TD-967): treasury balances summed per currency (empty = IRR), rials first, then by currency code. A balance in
+ * v10.0.251 (TD-967): treasury balances summed per currency (empty = IRR), rials first, then by currency code. A balance in
  * one currency is never added to another.
  */
 export function cashAndBankTotalsByCurrency(
@@ -1260,7 +1260,7 @@ export class AccountingReportService {
    */
   static async getFinancialOverviewStats(): Promise<FinancialSummaryStats> {
     // v7.0.71 (P2-6 بخش ۳): جمع‌ها با Decimal و جمع چک‌ها در SQL
-    // v10.0.248 (TD-967): each treasury account's balance is in its own currency, so the card is summed per currency and
+    // v10.0.251 (TD-967): each treasury account's balance is in its own currency, so the card is summed per currency and
     // `totalCashAndBank` is the rial accounts only; before, 1,000 USD and 50,000,000 rials made «50,001,000».
     const cashAndBankByCurrency = cashAndBankTotalsByCurrency(await TreasuryService.getBankAccounts());
     const totalCashAndBank = fin(cashAndBankByCurrency.find(c => c.currency === 'IRR')?.amount ?? 0);
@@ -1423,7 +1423,7 @@ export class AccountingReportService {
    * v7.0.127 (TD-247): جمع‌ها در SQL به صورت متن و مانده با Decimal (AGENTS.md §1.8)؛ خروجی API عدد است.
    */
   static async getProjectSummaryReport(): Promise<ProjectSummaryReportRow[]> {
-    // v10.0.248 (TD-966): only approved and permanent vouchers, like the other reports, and each row in rials by the TD-260
+    // v10.0.251 (TD-966): only approved and permanent vouchers, like the other reports, and each row in rials by the TD-260
     // rule (a foreign row at its own rate); before, drafts were counted and 2 USD were added to rials as 2.
     const debit = voucherItemReportAmountSql(journalVoucherItems.debit);
     const credit = voucherItemReportAmountSql(journalVoucherItems.credit);
@@ -1472,7 +1472,7 @@ export class AccountingReportService {
    * v7.0.127 (TD-247): تراز جاری با Decimal جمع می‌شود، نه `+=` اعداد جاوااسکریپت (AGENTS.md §1.8).
    */
   static async getProjectDetailReport(projectId: number): Promise<ProjectDetailReportRow[]> {
-    // v10.0.248 (TD-966): the same statuses and rial amounts as the project summary, so the running balance ends on its balance
+    // v10.0.251 (TD-966): the same statuses and rial amounts as the project summary, so the running balance ends on its balance
     const debit = voucherItemReportAmountSql(journalVoucherItems.debit);
     const credit = voucherItemReportAmountSql(journalVoucherItems.credit);
     const result = await orm.execute(sql`

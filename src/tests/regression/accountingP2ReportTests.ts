@@ -8,7 +8,7 @@ import { AccountMappingService } from '../../services/accounting/accountMapping.
 import { TestCaseResult, makeTestCase } from '../types.js';
 
 /**
- * Series 10 phase 3 lane L1, package A4 (v10.0.248): project reports, the cash-and-bank card and the account mapping read.
+ * Series 10 phase 3 lane L1, package A4 (v10.0.251): project reports, the cash-and-bank card and the account mapping read.
  * Each test is red on the version before its fix.
  */
 
@@ -69,7 +69,7 @@ export async function runAccountingP2ReportTests(shouldRun: ShouldRun): Promise<
 
   const projectId = 'reg_project_report_status_and_currency_td_966';
   if (shouldRun(projectId, 'td966', 'project', 'accounting', 'a4')) {
-    await runCase(results, projectId, 'v10.0.248: the project summary and detail count approved and permanent vouchers only and a foreign row in rials at its own rate (TD-966)', async () => {
+    await runCase(results, projectId, 'v10.0.251: the project summary and detail count approved and permanent vouchers only and a foreign row in rials at its own rate (TD-966)', async () => {
       const problems: string[] = [];
       const tag = tagOf();
       const today = await businessTodayIsoDate();
@@ -99,7 +99,7 @@ export async function runAccountingP2ReportTests(shouldRun: ShouldRun): Promise<
 
   const cashId = 'reg_cash_and_bank_per_currency_td_967';
   if (shouldRun(cashId, 'td967', 'treasury', 'dashboard', 'accounting', 'a4')) {
-    await runCase(results, cashId, 'v10.0.248: the accounting dashboard sums cash and bank per currency and its rial total holds no foreign balance (TD-967)', async () => {
+    await runCase(results, cashId, 'v10.0.251: the accounting dashboard sums cash and bank per currency and its rial total holds no foreign balance (TD-967)', async () => {
       const problems: string[] = [];
       const tag = tagOf();
       const before = await AccountingReportService.getFinancialOverviewStats();
@@ -120,7 +120,7 @@ export async function runAccountingP2ReportTests(shouldRun: ShouldRun): Promise<
 
   const mappingId = 'reg_account_mapping_unreadable_refused_td_968';
   if (shouldRun(mappingId, 'td968', 'mapping', 'accounting', 'a4')) {
-    await runCase(results, mappingId, 'v10.0.248: an unreadable stored account mapping is refused with ACCOUNT_MAPPING_UNREADABLE, never replaced with the defaults (TD-968)', async () => {
+    await runCase(results, mappingId, 'v10.0.251: an unreadable stored account mapping is refused with ACCOUNT_MAPPING_UNREADABLE, never replaced with the defaults (TD-968)', async () => {
       const problems: string[] = [];
       const keys = ['accounting_account_mappings', 'accounting_mappings_disabled'];
       const saved = await orm.select().from(appSettings).where(sql`${appSettings.key} IN ('accounting_account_mappings', 'accounting_mappings_disabled')`);

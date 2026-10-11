@@ -10821,6 +10821,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runCrmDueReminderTests(shouldRun));
   const { runNotificationDismissTests } = await import('../regression/notificationDismissTests.js');
   results.push(...await runNotificationDismissTests(shouldRun));
+  const { runNotificationReadScopeTests } = await import('../regression/notificationReadScopeTests.js');
+  results.push(...await runNotificationReadScopeTests(shouldRun));
   const { runEventTimestampUtcTests } = await import('../regression/eventTimestampUtcTests.js');
   results.push(...await runEventTimestampUtcTests(shouldRun));
   const { runRuleActiveStateTests } = await import('../regression/ruleActiveStateTests.js');
@@ -10967,7 +10969,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runEventsLedgerTests } = await import('../regression/eventsLedgerTests.js');
   results.push(...await runEventsLedgerTests(shouldRun));
 
-  // Phase 3 lane L1, package A4 (v10.0.248): project reports, cash and bank per currency, account mapping read
+  // Phase 3 lane L1, package A4 (v10.0.251): project reports, cash and bank per currency, account mapping read
   const { runAccountingP2ReportTests } = await import('../regression/accountingP2ReportTests.js');
   results.push(...await runAccountingP2ReportTests(shouldRun));
 

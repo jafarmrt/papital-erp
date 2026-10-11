@@ -1,7 +1,7 @@
 import { formatPersianPrice } from '../../utils';
 
 /**
- * v10.0.248 (TD-967): the «موجودی نقد و بانک‌ها» card body. Its main number is the rial accounts only and each other
+ * v10.0.251 (TD-967): the «موجودی نقد و بانک‌ها» card body. Its main number is the rial accounts only and each other
  * currency's balance is listed apart in its own currency, so no amount of another currency is added to rials.
  */
 export function CashBankTotals({ total, byCurrency }: { total?: number; byCurrency?: Array<{ currency: string; amount: number }> }) {

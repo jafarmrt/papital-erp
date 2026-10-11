@@ -32,5 +32,5 @@ export function voucherItemCurrencyCondition(currency?: string | null): SQL | un
 }
 
 
-/** v10.0.248 (TD-966): the voucher statuses a report counts, as the trial balance does: approved and permanent, never drafts */
+/** v10.0.251 (TD-966): the voucher statuses a report counts, as the trial balance does: approved and permanent, never drafts */
 export const reportedVoucherStatusSql = sql`${journalVouchers.status} IN ('approved', 'permanent')`;
