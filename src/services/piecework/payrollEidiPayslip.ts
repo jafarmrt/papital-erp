@@ -4,15 +4,13 @@ import { pieceworkPayrolls, type personnel } from '../../db/schema.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import { fin, type DecimalValue } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
-import { daysInclusive, eidiFromAccrual, suggestEidiPayslip, suggestEidiTax, EIDI_OVERRIDE_REASON_MAX, type EidiPayslipSuggestion, type EidiTaxSuggestion } from '../../lib/payroll/eidi.js';
-import type { TaxBracket } from '../../lib/payroll/statutoryDeductions.js';
+import { daysInclusive, eidiFromAccrual, suggestEidiPayslip, EIDI_OVERRIDE_REASON_MAX, type EidiPayslipSuggestion } from '../../lib/payroll/eidi.js';
 import { serviceEndOf, serviceStartOf } from '../../lib/payroll/payrollPeriod.js';
 import { isoToJalaliDate, jalaliYearBounds } from '../../utils/calendarDate.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
 import { VoucherSyncService } from '../accounting/voucherSync.service.js';
 import { auditPayrollIssued } from './pieceworkAudit.js';
 import { eidiPersonnel, eidiRatesOf, eidiRatesOfYear, eidiYearTotals, type EidiYearTotals } from './payrollEidi.js';
-import { statutoryRatesOfYear } from './payrollStatutory.js';
 
 /**
  * v10.0.222 (TD-1089، طرح حقوق §۳.۸، ت۱۵ الف): «فیش عیدی» عیدی یک سال یک پرسنل را می‌پردازد: پایان سال، یا پیش از آن برای
@@ -56,15 +54,6 @@ export interface EidiPayslipPreview {
   suggestion: EidiPayslipSuggestion;
   /** فیش‌های عادی پیش‌نویس سال با سهم عیدی که هنوز در عیدی انباشته شمرده نمی‌شوند */
   draftWarning: string | null;
-  /** ت۲۱: داده مالیات مازاد بر سقف معافیت، تا فرم مالیات مبلغ دستی را با همان قاعده حساب کند */
-  tax: EidiTaxInput & { suggestion: EidiTaxSuggestion; warning: string | null };
-}
-
-interface EidiTaxInput {
-  earlierIssued: string;
-  exemptCap: string;
-  brackets: TaxBracket[] | null;
-  taxCovered: boolean;
 }
 
 async function previewWith(db: DbExecutor, person: PersonnelRow, year: number): Promise<EidiPayslipPreview> {
@@ -83,21 +72,10 @@ async function previewWith(db: DbExecutor, person: PersonnelRow, year: number): 
     workedDays: period.workedDays,
     yearDays: period.yearDays,
   });
-  const statutory = await statutoryRatesOfYear(year, db);
-  const taxInput: EidiTaxInput = {
-    earlierIssued: totals.issuedTotal,
-    exemptCap: fin(rates.taxExemptCap).toString(),
-    brackets: statutory ? statutory.taxBrackets : null,
-    taxCovered: person.isTaxCovered === 1,
-  };
-  const taxSuggestion = suggestEidiTax({ ...taxInput, amount: suggestion.amount });
-  const taxWarning = taxInput.taxCovered && !statutory
-    ? `نرخ مالیات حقوق سال ${toPersianDigits(year)} ثبت نشده است؛ مالیات مازاد عیدی بر سقف معافیت صفر حساب می‌شود.`
-    : null;
   const draftWarning = totals.draftPayslips > 0
     ? `${toPersianDigits(totals.draftPayslips)} فیش پیش‌نویس این سال سهم عیدی دارد که تا تأیید فیش در عیدی انباشته شمرده نمی‌شود.`
     : null;
-  return { personnelId: person.id, fullName: person.fullName, jalaliYear: year, period, totals, suggestion, draftWarning, tax: { ...taxInput, suggestion: taxSuggestion, warning: taxWarning } };
+  return { personnelId: person.id, fullName: person.fullName, jalaliYear: year, period, totals, suggestion, draftWarning };
 }
 
 export async function previewEidiPayslip(personnelId: number, year: number): Promise<EidiPayslipPreview> {
@@ -109,8 +87,6 @@ export interface IssueEidiPayslipInput {
   personnelId: number;
   year: number;
   amount?: DecimalValue;
-  /** مالیات مازاد عیدی؛ خالی یعنی مالیات پیشنهادی (ت۲۱) */
-  incomeTax?: DecimalValue;
   overrideReason?: string;
   notes?: string;
   userId?: number;
@@ -124,31 +100,20 @@ export async function issueEidiPayslip(input: IssueEidiPayslipInput) {
     const person = await eidiPersonnel(tx, input.personnelId, true);
     const preview = await previewWith(tx, person, input.year);
     const suggested = preview.suggestion.amount;
-    const enteredOf = (v: DecimalValue | undefined) => (v === undefined || v === null || String(v).trim() === '' ? null : fin(v).round(0));
-    const amount = enteredOf(input.amount) ?? fin(suggested);
+    const entered = input.amount === undefined || input.amount === null || String(input.amount).trim() === '' ? null : fin(input.amount).round(0);
+    const amount = entered ?? fin(suggested);
     if (amount.isNegative()) throw new ValidationError('مبلغ عیدی نمی‌تواند منفی باشد.', undefined, 'PAYROLL_NEGATIVE_COMPONENT');
     const reason = String(input.overrideReason ?? '').trim().slice(0, EIDI_OVERRIDE_REASON_MAX);
-    // ت۲۱: مالیات مازاد بر سقف معافیت از مبلغ نهایی فیش (پیشنهادی یا دستی)
-    const taxSuggestion = suggestEidiTax({ ...preview.tax, amount: amount.toString() });
-    const incomeTax = enteredOf(input.incomeTax) ?? fin(taxSuggestion.incomeTax);
-    if (incomeTax.isNegative()) throw new ValidationError('مالیات عیدی نمی‌تواند منفی باشد.', undefined, 'PAYROLL_NEGATIVE_COMPONENT');
-    const amountOverridden = amount.subtract(suggested).abs().greaterThanOrEqual(1);
-    const taxOverridden = incomeTax.subtract(taxSuggestion.incomeTax).abs().greaterThanOrEqual(1);
-    const overridden = amountOverridden || taxOverridden;
+    const overridden = amount.subtract(suggested).abs().greaterThanOrEqual(1);
     if (overridden && !reason) {
       throw new ValidationError(
-        amountOverridden
-          ? `مبلغ عیدی با مبلغ محاسبه‌شده (${toPersianDigits(fin(suggested).toNumber().toLocaleString('fa-IR'))} ریال) فرق دارد؛ شرح تغییر را بنویسید.`
-          : `مالیات عیدی با مالیات محاسبه‌شده (${toPersianDigits(fin(taxSuggestion.incomeTax).toNumber().toLocaleString('fa-IR'))} ریال) فرق دارد؛ شرح تغییر را بنویسید.`,
-        { suggestion: preview.suggestion, taxSuggestion },
+        `مبلغ عیدی با مبلغ محاسبه‌شده (${toPersianDigits(fin(suggested).toNumber().toLocaleString('fa-IR'))} ریال) فرق دارد؛ شرح تغییر را بنویسید.`,
+        { suggestion: preview.suggestion },
         'PAYROLL_EIDI_OVERRIDE_REASON_REQUIRED',
       );
     }
     if (!amount.isPositive()) {
       throw new ValidationError(`عیدی سال ${toPersianDigits(input.year)} برای ${person.fullName} مبلغی ندارد که پرداخت شود.`, undefined, 'PAYROLL_EIDI_AMOUNT_ZERO');
-    }
-    if (incomeTax.greaterThan(amount)) {
-      throw new ValidationError('مالیات عیدی از مبلغ عیدی بیشتر است.', undefined, 'PAYROLL_NEGATIVE_COMPONENT');
     }
     const fromAccrual = eidiFromAccrual(amount.toString(), preview.suggestion.remainingAccrual);
     const seqResult = await tx.execute(sql`SELECT nextval('piecework_payroll_number_seq') AS num`);
@@ -156,7 +121,7 @@ export async function issueEidiPayslip(input: IssueEidiPayslipInput) {
     const { startIso, endIso } = preview.period;
     const notes = [
       `فیش عیدی سال ${input.year}`,
-      overridden ? `${amountOverridden ? 'مبلغ' : 'مالیات'} دستی: ${reason}` : '',
+      overridden ? `مبلغ دستی: ${reason}` : '',
       input.notes ? String(input.notes).trim() : '',
     ].filter(Boolean).join(' | ');
     const [row] = await tx.insert(pieceworkPayrolls).values({
@@ -170,8 +135,7 @@ export async function issueEidiPayslip(input: IssueEidiPayslipInput) {
       totalBonuses: money(0),
       totalDeductions: money(0),
       advanceDeduction: money(0),
-      incomeTax: money(incomeTax.toString()),
-      netPayable: money(amount.subtract(incomeTax).toString()),
+      netPayable: money(amount.toString()),
       status: 'draft',
       isEidi: 1,
       eidiYear: input.year,
@@ -187,8 +151,8 @@ export async function issueEidiPayslip(input: IssueEidiPayslipInput) {
       personnelName: person.fullName,
       logIds: [],
       voucher,
-      eidi: { jalaliYear: input.year, suggestion: preview.suggestion, entered: amount.toString(), fromAccrual, tax: { ...taxSuggestion, entered: incomeTax.toString() }, overrideReason: overridden ? reason : '' },
+      eidi: { jalaliYear: input.year, suggestion: preview.suggestion, entered: amount.toString(), fromAccrual, overrideReason: overridden ? reason : '' },
     }, { req: input.req, userId: input.userId, username: input.username });
-    return { payroll: row, personnelName: person.fullName, voucher, taxWarning: preview.tax.warning };
+    return { payroll: row, personnelName: person.fullName, voucher };
   });
 }
