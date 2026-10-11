@@ -9,7 +9,7 @@ vi.mock('../../hooks/useAppCurrency', async () => {
   return { useAppCurrency: () => 'IRR', useRialDisplay: () => rialDisplayOf('IRR') };
 });
 
-import { daysInclusive, eidiEntitlement, eidiFromAccrual, eidiRatesError, payslipEidiShare, suggestEidiPayslip, suggestEidiTax, type EidiRates } from '../../lib/payroll/eidi';
+import { daysInclusive, eidiEntitlement, eidiFromAccrual, eidiRatesError, payslipEidiShare, suggestEidiPayslip, type EidiRates } from '../../lib/payroll/eidi';
 import { eidiReportFileName, eidiReportSheetRows, type EidiReport } from '../../lib/payroll/eidiReport';
 import { PayslipEidiRows } from '../../components/piecework/PayslipEidiRows';
 import { PayrollEidiRatesSection } from '../../components/settings/PayrollEidiRatesSection';
@@ -17,7 +17,7 @@ import type { PieceworkPayroll } from '../../types';
 
 afterEach(() => { cleanup(); calls.length = 0; answers.current = () => ({}); });
 
-const PERCENT: EidiRates = { jalaliYear: 1405, method: 'percent_of_work', percent: '15', yearlyCap: '5000000', laborDays: '0', laborCapDays: '0', minDailyWage: '0', fixedAmount: '0', taxExemptCap: '0' };
+const PERCENT: EidiRates = { jalaliYear: 1405, method: 'percent_of_work', percent: '15', yearlyCap: '5000000', laborDays: '0', laborCapDays: '0', minDailyWage: '0', fixedAmount: '0' };
 const LABOR: EidiRates = { ...PERCENT, method: 'labor_law', percent: '0', yearlyCap: '0', laborDays: '60', laborCapDays: '90', minDailyWage: '1000000' };
 
 // v10.0.222 (TD-1089, payroll duties plan §3.8): yearly eidi rules
@@ -45,16 +45,6 @@ describe('eidi rule (TD-1089)', () => {
     expect(eidiFromAccrual(500_000, s.remainingAccrual)).toBe('500000');
     const labor = suggestEidiPayslip({ rates: LABOR, accruedApproved: 0, issuedFromAccrual: 0, issuedTotal: 10_000_000, monthlySalary: 30_000_000, workedDays: 365, yearDays: 365 });
     expect(labor.amount).toBe('50000000');
-  });
-
-  it('taxes only the eidi above the yearly exempt cap, across earlier eidi payslips (t21)', () => {
-    const brackets = [{ from: '0', to: '10000000', rate: '0' }, { from: '10000000', to: null, rate: '10' }];
-    const base = { exemptCap: '40000000', brackets, taxCovered: true };
-    expect(suggestEidiTax({ ...base, amount: '60000000', earlierIssued: '0' })).toEqual({ taxableExcess: '20000000', incomeTax: '1000000' });
-    expect(suggestEidiTax({ ...base, amount: '30000000', earlierIssued: '0' })).toEqual({ taxableExcess: '0', incomeTax: '0' });
-    expect(suggestEidiTax({ ...base, amount: '30000000', earlierIssued: '30000000' }).taxableExcess).toBe('20000000');
-    expect(suggestEidiTax({ ...base, amount: '60000000', earlierIssued: '0', taxCovered: false }).incomeTax).toBe('0');
-    expect(suggestEidiTax({ ...base, amount: '60000000', earlierIssued: '0', brackets: null }).incomeTax).toBe('0');
   });
 
   it('refuses incomplete rates for each method', () => {
@@ -102,11 +92,10 @@ describe('eidi screens (TD-1089)', () => {
     fireEvent.change(screen.getByLabelText('روزهای مزد عیدی'), { target: { value: '۶۰' } });
     fireEvent.change(screen.getByLabelText('روزهای سقف به حداقل مزد'), { target: { value: '90' } });
     fireEvent.change(screen.getByLabelText('حداقل مزد روزانه سال (ریال)'), { target: { value: '1000000' } });
-    fireEvent.change(screen.getByLabelText('سقف معافیت مالیاتی عیدی هر نفر در سال (ریال)'), { target: { value: '۴۰۰۰۰۰۰۰' } });
     fireEvent.click(screen.getByRole('button', { name: /ذخیره روش عیدی سال/ }));
     await waitFor(() => expect(calls.some(c => c.options?.method === 'PUT')).toBe(true));
     const put = calls.find(c => c.options?.method === 'PUT');
     expect(put?.url).toMatch(/^\/piecework\/eidi-rates\/\d{4}$/);
-    expect(JSON.parse(put?.options?.body ?? '{}')).toMatchObject({ method: 'labor_law', laborDays: '60', laborCapDays: '90', minDailyWage: '1000000', taxExemptCap: '40000000' });
+    expect(JSON.parse(put?.options?.body ?? '{}')).toMatchObject({ method: 'labor_law', laborDays: '60', laborCapDays: '90', minDailyWage: '1000000' });
   });
 });

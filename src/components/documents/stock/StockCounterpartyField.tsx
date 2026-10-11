@@ -4,6 +4,7 @@ import { SearchableSelect } from '../../SearchableSelect';
 import { personnelById, personnelDisplayName } from '../../../lib/documents/stockDocumentParties';
 import type { StockDocumentForm } from '../../../hooks/documents/useStockDocumentForm';
 import { partyFitsDocument } from '../../../lib/documents/documentPartyKind';
+import { stockInLabels } from '../../../lib/documents/stockInLabels';
 
 interface StockCounterpartyFieldProps {
   form: StockDocumentForm;
@@ -25,7 +26,7 @@ export function StockCounterpartyField({ form, personnelList, suppliersList }: S
       <label className="block text-xs font-bold mb-1.5 text-slate-700 flex items-center justify-between">
         <span className="flex items-center gap-1">
           <Users size={13} className="text-slate-500" />
-          <span>{actionType === 'in' ? 'تامین‌کننده / فروشنده کالا' : 'گیرنده حواله (پرسنل کارگاه)'}</span>
+          <span>{actionType === 'in' ? stockInLabels(docType).party : 'گیرنده حواله (پرسنل کارگاه)'}</span>
         </span>
         {actionType === 'in' && selectedSupplierObj && (
           <span className="text-[10px] font-normal text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">

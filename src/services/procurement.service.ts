@@ -636,7 +636,8 @@ export class ProcurementService {
       const req = toRequisitionDto(locked);
       // v8.0.71 (TD-326): درخواستِ دریافت‌شده یا ردشده دوباره سفارش داده نمی‌شود؛ پیش‌تر سفارش و تحویل درخواستی که «دریافت
       // کالا» همه‌اش را وارد انبار کرده بود، کالا را دو بار وارد انبار می‌کرد
-      if (RECEIVED_REQUISITION_STATUSES.has(req.status)) {
+      // v10.0.237 (TD-912): درخواستی که ابطال سفارش تحویل‌شده‌اش ردیفی را باز کرده دوباره سفارش داده می‌شود
+      if (RECEIVED_REQUISITION_STATUSES.has(req.status) && (req.items || []).every(isSettledRequisitionRow)) {
         throw new ConflictError(`درخواست خرید ${req.code} قبلاً دریافت شده است و دوباره سفارش داده نمی‌شود.`);
       }
       if (CLOSED_REQUISITION_STATUSES.has(req.status)) {
@@ -644,7 +645,8 @@ export class ProcurementService {
       }
       assertRequisitionNotConsolidated(req);
       // v9.0.315 (TD-689، ت۱): سفارش فقط از گام «تأییدشده»؛ دارنده حق تأیید نخست تأیید را به نام خودش اجرا می‌کند
-      await ensureRequisitionApproved(tx, req, user, {
+      // درخواست دریافت‌شده‌ای که ابطال ردیفی را باز کرده (TD-912) گام گردش‌کارش پایان یافته است و تأیید دوباره نمی‌خواهد
+      if (!RECEIVED_REQUISITION_STATUSES.has(req.status)) await ensureRequisitionApproved(tx, req, user, {
         mayApprove,
         comment: 'تأیید هنگام صدور سفارش خرید',
         snapshotData: { id: req.id, code: req.code, totalAmount: Number(req.totalEstimatedAmount || 0), priority: req.priority, status: req.status },
@@ -913,7 +915,8 @@ export class ProcurementService {
         });
       }
 
-      const finalized = await DocumentService.finalizeDocument(documentId, user.username || 'کارشناس تدارکات', tx, { allowBackdate });
+      // v10.0.236 (TD-914، تصمیم ت۹ الف): ورود کالا و سند به تاریخ روز تحویل، نه روز تبدیل به سفارش
+      const finalized = await DocumentService.finalizeDocument(documentId, user.username || 'کارشناس تدارکات', tx, { allowBackdate, atFinalizeDay: true });
 
       const docLines = await tx.select({ itemId: documentItems.itemId, quantity: documentItems.quantity }).from(documentItems)
         .where(and(eq(documentItems.documentId, documentId), eq(documentItems.isDeleted, 0)));
