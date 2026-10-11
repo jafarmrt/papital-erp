@@ -14,7 +14,7 @@ export const PICK_LIST_URLS = {
   projects: '/projects/options',
 } as const;
 
-/** v10.0.250 (TD-1135): فهرست انتخاب کالای فاکتور فروش، با رزرو هر کالا (`ITEM_RESERVED_FIELDS`) */
+/** v10.0.251 (TD-1135): فهرست انتخاب کالای فاکتور فروش، با رزرو هر کالا (`ITEM_RESERVED_FIELDS`) */
 export const ITEM_PICK_WITH_RESERVED_URL = `${PICK_LIST_URLS.items}?reserved=1`;
 
 /**
@@ -63,7 +63,7 @@ export const ITEM_PICK_FIELDS = [
 /** میانگین بهای کالا (بهای تمام‌شده) فقط برای دارندگان `products.view`؛ فرم‌های دیگر قیمت پیش‌فرض را خالی می‌گذارند */
 export const ITEM_COST_FIELDS = ['weightedAverageCost', 'weighted_average_cost'] as const;
 
-/** v10.0.250 (TD-1135): رزرو کل هر کالا (پیش‌فاکتور فروش و پروژه)، فقط وقتی فهرست با `reserved=1` خوانده شود */
+/** v10.0.251 (TD-1135): رزرو کل هر کالا (پیش‌فاکتور فروش و پروژه)، فقط وقتی فهرست با `reserved=1` خوانده شود */
 export const ITEM_RESERVED_FIELDS = ['reservedStock', 'reserved_stock'] as const;
 
 /** کلید موجودی یک انبار در ردیف کالا */

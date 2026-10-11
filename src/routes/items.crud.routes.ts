@@ -45,7 +45,7 @@ const itemPickListValidation = z.object({
 router.get('/items/options', authorizePermission(...READ_PERMISSIONS.itemOptions), validate(itemPickListValidation), asyncHandler(async (req, res) => {
   const query = req.query as { type?: string; search?: string; limit?: string; reserved?: string };
   const picks = await listItemPicks(req.user, { type: query.type, search: query.search, limit: parsePickListLimit(query.limit) });
-  // v10.0.250 (TD-1135): the sales invoice picker asks `reserved=1` for each item's reserved quantity; a reservation read
+  // v10.0.251 (TD-1135): the sales invoice picker asks `reserved=1` for each item's reserved quantity; a reservation read
   // error refuses this request only (TD-821), the other forms never read reservations
   if (query.reserved === '1' && picks.length > 0) {
     const reservedMap = await ItemsService.getReservedStocksMap({ itemIds: picks.map(p => p.id) });

@@ -19,7 +19,7 @@ export async function runReservedItemsReportTests(shouldRun: ShouldRun): Promise
       'v9.0.404: the reorder alert compares free stock (stock minus reservations) with the reorder point and shows open purchases as in transit only (TD-843)',
       ['td843', 'reservation', 'reorder', 'package7'], reorderFreeStockCase],
     ['reg_item_options_reserved_td_1135',
-      'v10.0.250: the item pick list carries each item reserved quantity only when the sales invoice asks reserved=1 (TD-1135)',
+      'v10.0.251: the item pick list carries each item reserved quantity only when the sales invoice asks reserved=1 (TD-1135)',
       ['td1135', 'reservation', 'pick', 'package8'], itemOptionsReservedCase],
   ]);
 }
