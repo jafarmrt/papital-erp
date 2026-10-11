@@ -7,8 +7,7 @@ import { toPersianDigits } from '../../utils/persianNumber';
 import { normalizeDecimalString, toLatinDigits } from '../../lib/numericInput';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { useOnlineStatus } from '../../lib/pwa/useOnlineStatus';
-import { EIDI_METHOD_LABELS, EIDI_OVERRIDE_REASON_MAX, suggestEidiTax, type EidiPayslipSuggestion, type EidiTaxSuggestion } from '../../lib/payroll/eidi';
-import type { TaxBracket } from '../../lib/payroll/statutoryDeductions';
+import { EIDI_METHOD_LABELS, EIDI_OVERRIDE_REASON_MAX, type EidiPayslipSuggestion } from '../../lib/payroll/eidi';
 import { SearchableSelect } from '../SearchableSelect';
 
 /**
@@ -21,7 +20,6 @@ interface Preview {
   period: { startIso: string; endIso: string; workedDays: number };
   suggestion: EidiPayslipSuggestion;
   draftWarning: string | null;
-  tax: { earlierIssued: string; exemptCap: string; brackets: TaxBracket[] | null; taxCovered: boolean; suggestion: EidiTaxSuggestion; warning: string | null };
 }
 
 interface Props {
@@ -39,7 +37,6 @@ export function PayrollEidiModal({ personnelSelectOptions, onClose, onIssued }: 
   const [preview, setPreview] = useState<Preview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
-  const [tax, setTax] = useState('');
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -58,13 +55,7 @@ export function PayrollEidiModal({ personnelSelectOptions, onClose, onIssued }: 
   const suggested = preview?.suggestion.amount ?? '0';
   const overridden = entered !== '' && Math.abs(Number(entered) - Number(suggested)) >= 1;
   const finalAmount = entered !== '' ? Number(entered) : Number(suggested);
-  // ت۲۱: مالیات مازاد بر سقف معافیت با همان قاعده سرور، روی مبلغ نهایی
-  const taxSuggested = preview ? suggestEidiTax({ ...preview.tax, amount: String(finalAmount) }).incomeTax : '0';
-  const enteredTax = normalizeDecimalString(tax);
-  const taxOverridden = enteredTax !== '' && Math.abs(Number(enteredTax) - Number(taxSuggested)) >= 1;
-  const finalTax = enteredTax !== '' ? Number(enteredTax) : Number(taxSuggested);
-  const needsReason = overridden || taxOverridden;
-  const blocked = !preview || finalAmount <= 0 || finalTax > finalAmount || (needsReason && !reason.trim()) || saving || !online;
+  const blocked = !preview || finalAmount <= 0 || (overridden && !reason.trim()) || saving || !online;
 
   const submit = async () => {
     if (blocked) return;
@@ -73,12 +64,7 @@ export function PayrollEidiModal({ personnelSelectOptions, onClose, onIssued }: 
       const res = await fetchJson('/piecework/eidi-payslips', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          personnelId: Number(personnelId), year,
-          ...(overridden ? { amount: entered } : {}),
-          ...(taxOverridden ? { incomeTax: enteredTax } : {}),
-          ...(needsReason ? { overrideReason: reason.trim() } : {}),
-        }),
+        body: JSON.stringify({ personnelId: Number(personnelId), year, ...(overridden ? { amount: entered, overrideReason: reason.trim() } : {}) }),
       }) as { payrollNumber?: string };
       toast.success(`فیش عیدی ${res.payrollNumber ?? ''} پیش‌نویس صادر شد؛ پرداخت آن پس از تأیید کاربر دیگری است.`);
       onIssued();
@@ -113,16 +99,12 @@ export function PayrollEidiModal({ personnelSelectOptions, onClose, onIssued }: 
                 ? <p>{`عیدی انباشته پرداخت‌نشده: ${rial.amount(Number(s.remainingAccrual))}`}</p>
                 : <p>{`حق عیدی سال: ${rial.amount(Number(s.entitlement))}`}</p>}
               <p className="text-emerald-700">{`مبلغ پیشنهادی: ${rial.amount(Number(s.amount))}`}</p>
-              <p>{`مالیات مازاد بر سقف معافیت: ${rial.amount(Number(taxSuggested))} — خالص فیش: ${rial.amount(finalAmount - finalTax)}`}</p>
-              {preview.tax.warning && <p className="text-amber-700">{preview.tax.warning}</p>}
               {preview.draftWarning && <p className="text-amber-700">{preview.draftWarning}</p>}
             </div>
           )}
           <label className="block font-bold text-slate-700" htmlFor="eidi-amount">مبلغ عیدی (خالی یعنی مبلغ پیشنهادی)</label>
           <input id="eidi-amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold" />
-          <label className="block font-bold text-slate-700" htmlFor="eidi-tax">مالیات عیدی (خالی یعنی مالیات محاسبه‌شده)</label>
-          <input id="eidi-tax" inputMode="decimal" value={tax} onChange={(e) => setTax(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold" />
-          {needsReason && (
+          {overridden && (
             <>
               <label className="block font-bold text-slate-700" htmlFor="eidi-reason">شرح مبلغ دستی *</label>
               <input id="eidi-reason" value={reason} maxLength={EIDI_OVERRIDE_REASON_MAX} onChange={(e) => setReason(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold" />
