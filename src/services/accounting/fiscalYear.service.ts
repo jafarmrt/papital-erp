@@ -520,7 +520,7 @@ export class FiscalYearService {
 
       // VOUCHER 3: سند اختتامیه حساب‌های دائمی (ترازنامه‌ای)
       // V6.0.3 (TD-141): ارسال tx جهت خواندن مانده‌های به‌روزرسانی شده سود انباشته داخل همین تراکنش
-      // v10.0.264 (OBS-R1-45): one row per detail (party, project, bank, …) of each account, not one «other» row per account
+      // v10.0.267 (OBS-R1-45): one row per detail (party, project, bank, …) of each account, not one «other» row per account
       const postTrial = await AccountingReportService.getTrialBalance({
         level: 'detailed',
         endDate: normClosingDate,

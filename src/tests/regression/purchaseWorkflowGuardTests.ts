@@ -27,6 +27,7 @@ async function clientWith(permissions: string[]) {
   const s = await loginTestUserWithSession(app, user.username);
   return {
     userId: user.id,
+    get: (url: string) => request(app).get(url).set('Cookie', s.cookie),
     post: (url: string, body: unknown) => request(app).post(url).set('Cookie', s.cookie).set('x-csrf-token', s.csrfToken).send(body as object),
   };
 }
@@ -106,6 +107,33 @@ export async function runPurchaseWorkflowGuardTests(shouldRun: ShouldRun): Promi
       expect(other.status === 200, `another approver returned ${brief(other)}`);
       expect(await stepOf(id) === 'ordered', 'approval by another user did not reach the ordered step');
       return 'creator refused with WF_INITIATOR_EXCLUDED; another holder of procurement.approve approved';
+    }));
+  }
+
+  if (shouldRun('reg_requisition_workflow_actions_obs_r2_38', 'obs-r2-38', 'workflow', 'procurement')) {
+    await runCase(results, 'reg_requisition_workflow_actions_obs_r2_38', 'OBS-R2-38: the requisition window reads the actions this user may run in the current step; the creator is not offered the approval', () => inFiscalSandbox(async () => {
+      await WorkflowEngineService.seedDefaultWorkflows();
+      const keys = ['procurement.view', 'procurement.create', 'procurement.approve'];
+      const maker = await clientWith(keys);
+      const checker = await clientWith(keys);
+      const reader = await clientWith(['procurement.view']);
+      const created = await maker.post('/api/procurement/requisitions', {
+        title: 'Duties test actions', priority: 'normal',
+        items: [{ itemName: 'Duties test service', unit: 'عدد', requestedQty: 1, unitPriceEstimate: 1000 }],
+      });
+      expect(created.status === 201, `requisition create returned ${brief(created)}`);
+      const id = Number(created.body?.data?.id);
+      const keysOf = (res: request.Response) => (Array.isArray(res.body?.data?.actions) ? res.body.data.actions : []).map((a: { actionKey: string }) => a.actionKey).sort().join(',');
+
+      const own = await maker.get(`/api/procurement/requisitions/${id}/workflow-actions`);
+      expect(own.status === 200 && own.body?.data?.hasInstance === true, `creator read returned ${brief(own)}`);
+      expect(keysOf(own) === 'reject_request', `creator is offered ${keysOf(own)}`);
+      const other = await checker.get(`/api/procurement/requisitions/${id}/workflow-actions`);
+      expect(keysOf(other) === 'approve_request,reject_request', `another approver is offered ${keysOf(other)}`);
+      // a reader without workflow keys reads the list too (the window asks it), and is offered nothing
+      const plain = await reader.get(`/api/procurement/requisitions/${id}/workflow-actions`);
+      expect(plain.status === 200 && keysOf(plain) === '', `reader returned ${brief(plain)}`);
+      return 'creator offered reject only; another approver approve and reject; a plain reader nothing';
     }));
   }
 

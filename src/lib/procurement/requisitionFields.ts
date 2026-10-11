@@ -92,11 +92,23 @@ export function canOrderRequisition(
   if (OPEN_REQUISITION_STATUSES.has(status)) return access.canApprove;
   // v10.0.244 (TD-1207): درخواست دریافت‌شده‌ای که ابطال سفارش تحویل‌شده ردیفش را باز کرده (TD-912) همان قاعده سرور را دارد
   if (status !== 'ordered' && !REORDERABLE_RECEIVED_STATUSES.has(status)) return false;
-  return (Array.isArray(req.items) ? req.items : []).some(row => {
-    if (row.closed) return false;
-    const remaining = row.remainingQty ?? Math.max(0, Number(row.requestedQty || 0) - Number(row.orderedQty || 0));
-    return Number(remaining) > 0;
-  });
+  return (Array.isArray(req.items) ? req.items : []).some(row => requisitionRowRemaining(row) > 0);
+}
+
+/**
+ * v10.0.252 (OBS-R2-37): مانده سفارش‌نشده یک ردیف درخواست، همان عدد سرور: ردیف بسته‌شده صفر، وگرنه `remainingQty` که سرور
+ * با هر سفارش، ابطال و بستن ردیف می‌نویسد، و فقط برای ردیف بی آن درخواستی منهای سفارش‌شده. پیش‌تر جزئیات درخواست مانده را
+ * همیشه از درخواستی منهای سفارش‌شده می‌ساخت و ردیف بسته‌شده را باز نشان می‌داد.
+ */
+export function requisitionRowRemaining(row: {
+  requestedQty?: number | string | null; orderedQty?: number | string | null; remainingQty?: number | string | null; closed?: boolean;
+}): number {
+  if (row.closed) return 0;
+  const stored = row.remainingQty;
+  const remaining = stored !== undefined && stored !== null && stored !== ''
+    ? Number(stored)
+    : Number(row.requestedQty || 0) - Number(row.orderedQty || 0);
+  return Number.isFinite(remaining) && remaining > 0 ? remaining : 0;
 }
 
 /**

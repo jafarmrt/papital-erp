@@ -8,7 +8,7 @@ import { TestCaseResult } from '../types.js';
 import { accountIdsByCode, amountOf, assertNoProblems, inFiscalSandbox, runCase, type ShouldRun } from './fiscalClosingTests.js';
 
 /**
- * v10.0.264 (OBS-R1-45, TD-985): the closing and opening vouchers of a fiscal year keep each balance's detail.
+ * v10.0.267 (OBS-R1-45, TD-985): the closing and opening vouchers of a fiscal year keep each balance's detail.
  * Before, they posted one row per subsidiary account with detail «other», so a customer's receivable of the closed
  * year vanished from its account card in the new year and the level-4 trial balance of the last day showed a separate
  * negative «other» row against every party.
@@ -18,7 +18,7 @@ export async function runClosingPartyDetailTests(shouldRun: ShouldRun): Promise<
   const id = 'reg_closing_vouchers_keep_party_detail_obs_r1_45';
   if (!shouldRun(id, 'obs-r1-45', 'td985', 'fiscal', 'closing', 'accounting')) return results;
 
-  await runCase(results, id, 'v10.0.264: the closing and opening vouchers carry one row per party detail (type and id) of each balance-sheet account, so each party starts the new year with its own balance (OBS-R1-45)', async () => inFiscalSandbox(async () => {
+  await runCase(results, id, 'v10.0.267: the closing and opening vouchers carry one row per party detail (type and id) of each balance-sheet account, so each party starts the new year with its own balance (OBS-R1-45)', async () => inFiscalSandbox(async () => {
     const problems: string[] = [];
     const year = 1395;
     const acc = await accountIdsByCode('1001', '1201', '3001', '4001', '5001');

@@ -66,7 +66,7 @@ describe('procurement order fields (TD-701)', () => {
     fetchJson.mockResolvedValue({ success: true, data: [serverOrder] });
     render(<RequisitionDetailModal isOpen requisition={requisition} onClose={() => undefined} onRefresh={() => undefined} onOpenSplitOrder={() => undefined} />);
     await waitFor(() => expect(screen.queryAllByText(/تامین الماس/).length).toBeGreaterThan(0));
-    expect(screen.queryByText(/R-1405-0009/)).not.toBeNull();
+    expect(screen.queryAllByText(/R-1405-0009/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/۱۴۰۵\/۰۷\/۱۴/)).not.toBeNull();
   });
 });
@@ -145,7 +145,8 @@ describe('procurement desk sections and buttons (TD-702)', () => {
     unmount();
     granted.add('procurement.approve');
     render(<RequisitionDetailModal isOpen requisition={pending} onClose={() => undefined} onRefresh={() => undefined} onOpenSplitOrder={() => undefined} />);
-    expect(screen.queryByText('رد درخواست خرید')).not.toBeNull();
+    // OBS-R2-38: the buttons come from the step's actions the server allows, read after the window opens
+    expect(await screen.findByText('رد درخواست خرید')).not.toBeNull();
   });
 });
 
