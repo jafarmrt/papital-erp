@@ -3,8 +3,8 @@ import type { DbExecutor } from '../../db/drizzle.js';
 import { journalVoucherItems, journalVouchers } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { VOUCHER_BALANCE_TOLERANCE } from '../../lib/voucherBalance.js';
-import { AccountMappingService } from '../accounting/accountMapping.service.js';
-import { voucherItemReportAmountSql } from '../accounting/voucherItemAmount.js';
+import { AccountMappingService } from './accountMapping.service.js';
+import { voucherItemReportAmountSql } from './voucherItemAmount.js';
 
 /**
  * v10.0.172 (TD-922 / TD-919، تصمیم ت۴ ب فاز ۵): مانده کالای در جریان ساخت (۱۴۰۲، مفهوم `workInProgressCode`) هر پروژه

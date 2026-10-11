@@ -39,7 +39,7 @@ import {
 } from '../projects/projectReservationHealth.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
-import { buildClosedProjectWipHealthTest, findClosedProjectWipBalances } from '../projects/projectWipHealth.js';
+import { buildClosedProjectWipHealthTest, findClosedProjectWipBalances } from './projectWipHealth.js';
 import { buildProjectStageHealthTest, buildProjectValueHealthTest, findProjectFreeTextValues, findProjectStageIntegrity } from '../projects/projectStageHealth.js';
 import { PROJECT_PRIORITIES, PROJECT_STATUSES, STAGE_STATUSES } from '../../lib/projects/projectStatus.js';
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
@@ -1267,7 +1267,7 @@ export class FinancialHealthService {
     overallScore += dueReminderTest.scoreImpact;
     tests.push(dueReminderTest);
     // آزمون ۵۲: v10.0.173 (TD-919، ت۴ ب) مانده ۱۴۰۲ پروژه تکمیل‌شده، لغوشده یا حذف‌شده (فقط فهرست)
-    const closedProjectWipTest = buildClosedProjectWipHealthTest(await findClosedProjectWipBalances());
+    const closedProjectWipTest = buildClosedProjectWipHealthTest(await findClosedProjectWipBalances(orm));
     overallScore += closedProjectWipTest.scoreImpact;
     tests.push(closedProjectWipTest);
 

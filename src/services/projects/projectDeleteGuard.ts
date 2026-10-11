@@ -5,7 +5,7 @@ import { ConflictError } from '../../errors/customErrors.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { formatPersianPrice, toPersianDigits } from '../../utils/persianNumber.js';
 import { assertNoOpenAllocations } from './projectOpenAllocations.js';
-import { projectWipBalances } from './projectWipBalance.js';
+import { projectWipBalances } from '../accounting/projectWipBalance.js';
 
 const LISTED = 5;
 

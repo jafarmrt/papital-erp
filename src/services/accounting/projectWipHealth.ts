@@ -1,5 +1,5 @@
 import { inArray } from 'drizzle-orm';
-import { orm, type DbExecutor } from '../../db/drizzle.js';
+import type { DbExecutor } from '../../db/drizzle.js';
 import { productionProjects } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import type { HealthCheckTestResult } from '../../types.js';
@@ -22,7 +22,7 @@ export interface ClosedProjectWip {
   balance: string;
 }
 
-export async function findClosedProjectWipBalances(db: DbExecutor = orm): Promise<ClosedProjectWip[]> {
+export async function findClosedProjectWipBalances(db: DbExecutor): Promise<ClosedProjectWip[]> {
   const balances = await projectWipBalances(db);
   if (balances.size === 0) return [];
   const projects = await db.select({ id: productionProjects.id, projectCode: productionProjects.projectCode, title: productionProjects.title, status: productionProjects.status, isDeleted: productionProjects.isDeleted })
