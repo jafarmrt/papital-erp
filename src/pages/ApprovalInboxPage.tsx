@@ -22,10 +22,13 @@ import {
   User,
   Banknote,
   Layers,
+  ShoppingCart,
+  BookOpen,
+  Landmark,
 } from 'lucide-react';
 import { formatPersianDate, formatPersianPrice, formatPersianNumber } from '../utils';
 import { useApprovalTaskEntity } from '../hooks/useApprovalTaskEntity';
-import { workflowEntityTypeLabel } from '../lib/workflow/workflowEntityLabels';
+import { INBOX_ENTITY_TABS, workflowEntityTypeLabel } from '../lib/workflow/workflowEntityLabels';
 // V9 Phase 5.2: مودال‌های مودولار کارتابل — استخراج از بدنه صفحه (FE-003)
 import TaskExecuteModal, { type ApprovalRejectOption } from '../components/approval/TaskExecuteModal';
 import PrintDocModal from '../components/approval/PrintDocModal';
@@ -86,6 +89,17 @@ interface TaskItem {
 
 
 // v7.0.86 (TD-108): نشان اولویت کارتابل؛ برچسب‌های فارسی هم پذیرفته می‌شوند
+/** TD-1151: icon of each inbox entity tab (`INBOX_ENTITY_TABS`) */
+const INBOX_TAB_ICONS: Readonly<Record<string, typeof FileText>> = {
+  all: Inbox,
+  document: FileText,
+  purchase_requisition: ShoppingCart,
+  journal_voucher: BookOpen,
+  pending_material: Package,
+  item: Layers,
+  bank_account: Landmark,
+};
+
 const APPROVAL_PRIORITY_BASE = 'px-2 py-0.5 rounded-md text-[10px] font-bold border';
 const approvalCritical: PillBadgeVariant = { label: 'اولویت بسیار بالا', className: `${APPROVAL_PRIORITY_BASE} bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200 dark:border-purple-800` };
 const approvalHigh: PillBadgeVariant = { label: 'اولویت بالا', className: `${APPROVAL_PRIORITY_BASE} bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300 border-rose-200 dark:border-rose-800` };
@@ -335,13 +349,8 @@ export function ApprovalInboxPage() {
 
         {/* Sub Category Tabs */}
         <div className="flex items-center gap-1 overflow-x-auto w-full mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
-          {[
-            { id: 'all', label: 'همه موجودیت‌ها', icon: Inbox },
-            { id: 'document', label: 'اسناد و فاکتورها', icon: FileText },
-            { id: 'project', label: 'پروژه‌ها', icon: FolderKanban },
-            { id: 'pending_material', label: 'مواد اولیه معلق', icon: Package }
-          ].map((tab) => {
-            const Icon = tab.icon;
+          {INBOX_ENTITY_TABS.map((tab) => {
+            const Icon = INBOX_TAB_ICONS[tab.id] ?? FileText;
             const isActive = activeTab === tab.id;
             return (
               <button

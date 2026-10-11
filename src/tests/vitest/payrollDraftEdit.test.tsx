@@ -25,7 +25,7 @@ const payslip = (id: number, status: PieceworkPayroll['status']): PieceworkPayro
   totalPieceworkAmount: 1000000, totalBonuses: 0, totalDeductions: 0, netPayable: 1000000, paidAmount: 0, status, createdById: 9,
 });
 
-// v10.0.184 (TD-1242, payroll duties plan §3.1 item 3): a draft payslip is edited from the list with the issue key
+// v10.0.200 (TD-1242, payroll duties plan §3.1 item 3): a draft payslip is edited from the list with the issue key
 describe('editing a draft payslip (TD-1242)', () => {
   it('offers the edit only on a draft, only to the issue key holder, and sends the amounts', async () => {
     const onReload = vi.fn();

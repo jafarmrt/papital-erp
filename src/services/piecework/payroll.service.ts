@@ -79,7 +79,7 @@ export class PieceworkPayrollService {
     }
     // v9.0.268 (TD-808، تصمیم ت۴ الف): فیش دوره‌ای که هنوز تمام نشده صادر نمی‌شود. پیش‌تر فیش آذر در مهر صادر و تأیید شد و
     // حقوق ثابت ماه‌های آینده پیشاپیش هزینه و بدهی شد.
-    // v10.0.183 (TD-1085، طرح حقوق §۳.۴): دوره آینده فقط با «فیش پیش‌پرداخت» و دلیل الزامی پذیرفته می‌شود
+    // v10.0.199 (TD-1085، طرح حقوق §۳.۴): دوره آینده فقط با «فیش پیش‌پرداخت» و دلیل الزامی پذیرفته می‌شود
     const isPrepayment = input.isPrepayment === true;
     const prepaymentReason = isPrepayment ? String(input.prepaymentReason ?? '').trim() : '';
     const periodRefusal = payrollPrepaymentError(eDate, await businessTodayIsoDate(), { isPrepayment, prepaymentReason });
@@ -135,7 +135,7 @@ export class PieceworkPayrollService {
         ))
         .for('update');
 
-      // v10.0.183 (TD-1085): فیش پیش‌پرداخت فقط حقوق ثابت را دربر می‌گیرد؛ کارکردهای دوره در فیش بعدی می‌آیند
+      // v10.0.199 (TD-1085): فیش پیش‌پرداخت فقط حقوق ثابت را دربر می‌گیرد؛ کارکردهای دوره در فیش بعدی می‌آیند
       const eligibleLogs = isPrepayment ? [] : allPersonnelLogs.filter(log => {
         const d = toStorageDate(log.date);
         return !!d && d >= sDate && d <= eDate;
@@ -153,7 +153,7 @@ export class PieceworkPayrollService {
       // v9.0.268 (TD-808، تصمیم ت۴ الف): حقوق ثابت فقط تا تاریخ پایان همکاری (serviceEndOf)؛ دوره پس از آن بی حقوق ثابت
       const serviceEnd = serviceEndOf(pInfo);
       const fixedEnd = fixedSalaryPeriodEnd(sDate, eDate, serviceEnd);
-      // v10.0.183 (TD-1086، طرح حقوق §۳.۴): حقوق ثابت از «آغاز همکاری» پرسنل؛ ماه نخست روزشمار
+      // v10.0.199 (TD-1086، طرح حقوق §۳.۴): حقوق ثابت از «آغاز همکاری» پرسنل؛ ماه نخست روزشمار
       const serviceStart = serviceStartOf(pInfo);
       const fixedStart = fixedEnd === null ? null : fixedSalaryPeriodStart(sDate, fixedEnd, serviceStart);
       if (isPrepayment && (!fixedIncluded || !fin(pInfo.monthlySalary || 0).greaterThan(0))) {
@@ -265,7 +265,7 @@ export class PieceworkPayrollService {
         advanceDeduction,
         netPayable: net,
         fixedSalaryMonths,
-        // v10.0.182 (TD-1083، OBS-R2-48، طرح حقوق ت۱ الف): فیش پیش‌نویس صادر می‌شود و دارنده «تأیید فیش حقوق» جدا تأییدش
+        // v10.0.193 (TD-1083، OBS-R2-48، طرح حقوق ت۱ الف): فیش پیش‌نویس صادر می‌شود و دارنده «تأیید فیش حقوق» جدا تأییدش
         // می‌کند. پیش‌تر هنگام صدور «تأییدشده» بود و میان صدور و پرداخت گام تأییدی نبود.
         status: 'draft',
         isPrepayment: isPrepayment ? 1 : 0,
@@ -340,7 +340,7 @@ export class PieceworkPayrollService {
       if (targetStatus && (['paid', 'partially_paid'].includes(pay.status || '') || fin(pay.paidAmount ?? 0).isPositive())) {
         throw new ConflictError(`فیش ${pay.payrollNumber} پرداخت ثبت‌شده دارد؛ وضعیت آن فقط از مسیر پرداخت تغییر می‌کند.`);
       }
-      // v10.0.182 (TD-1084، طرح حقوق ت۲ و ت۳ الف): صادرکننده فیش آن را تأیید نمی‌کند؛ مدیر سیستم مستثناست
+      // v10.0.193 (TD-1084، طرح حقوق ت۲ و ت۳ الف): صادرکننده فیش آن را تأیید نمی‌کند؛ مدیر سیستم مستثناست
       if (targetStatus === 'approved' && pay.status === 'draft') {
         await assertPayrollDutyNotByIssuer(tx, pay, currentUserId, 'approve');
       }

@@ -61,12 +61,14 @@ function renderApp() {
 
 const pathOf = (url: string) => url.split('?')[0];
 const passwordInputs = () => Array.from(document.querySelectorAll('input[type="password"]')) as HTMLInputElement[];
-const passwordFormShown = () => waitFor(() => expect(passwordInputs()).toHaveLength(3));
 /**
- * TD-1189: after the change the application loads its shell (lazy chunks) and closes the form; on a busy
- * runner that took longer than `waitFor`'s default 1 s, so the wait follows the real steps with its own limit.
+ * TD-1189 / TD-1250: every step of these tests (the first render, the password change request, closing the form,
+ * the application shell with its lazy chunks) can take longer than `waitFor`'s default 1 s on a busy runner, so
+ * each wait follows the real step with its own limit.
  */
 const APP_OPEN_TIMEOUT_MS = 10_000;
+const waitForStep = (check: () => void) => waitFor(check, { timeout: APP_OPEN_TIMEOUT_MS });
+const passwordFormShown = () => waitForStep(() => expect(passwordInputs()).toHaveLength(3));
 
 async function changePasswordAndOpenApp(profileDelayMs = 0) {
   meUser = temporaryUser;
@@ -78,9 +80,9 @@ async function changePasswordAndOpenApp(profileDelayMs = 0) {
   fireEvent.change(next, { target: { value: 'N3w-passw0rd' } });
   fireEvent.change(confirm, { target: { value: 'N3w-passw0rd' } });
   fireEvent.submit(next.closest('form')!);
-  await waitFor(() => expect(calls.some(c => c.url === '/api/users/profile' && c.method === 'PUT')).toBe(true));
-  await waitFor(() => expect(passwordInputs()).toHaveLength(0), { timeout: APP_OPEN_TIMEOUT_MS });
-  await waitFor(() => expect(document.querySelector('aside')).not.toBeNull(), { timeout: APP_OPEN_TIMEOUT_MS });
+  await waitForStep(() => expect(calls.some(c => c.url === '/api/users/profile' && c.method === 'PUT')).toBe(true));
+  await waitForStep(() => expect(passwordInputs()).toHaveLength(0));
+  await waitForStep(() => expect(document.querySelector('aside')).not.toBeNull());
 }
 
 afterEach(() => {
@@ -116,7 +118,7 @@ describe('temporary password (TD-523)', () => {
     expect(screen.getByText('کلمه عبور شما موقت است')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'خروج' }));
-    await waitFor(() => expect(calls.some(c => c.url === '/api/auth/logout' && c.method === 'POST')).toBe(true));
+    await waitForStep(() => expect(calls.some(c => c.url === '/api/auth/logout' && c.method === 'POST')).toBe(true));
   });
 
   it('after the password change the application opens', async () => {
@@ -133,7 +135,7 @@ describe('temporary password (TD-523)', () => {
     let auth: ReturnType<typeof useAuth> | null = null;
     function Grab() { auth = useAuth(); return null; }
     render(<QueryClientProvider client={appQueryClient}><AuthProvider><Grab /></AuthProvider></QueryClientProvider>);
-    await waitFor(() => expect(auth!.user?.username).toBe('ali'));
+    await waitForStep(() => expect(auth!.user?.username).toBe('ali'));
     expect(mustChangePassword(auth!.user)).toBe(false);
     await act(async () => { await fetchJson('/documents').catch(() => undefined); });
     expect(mustChangePassword(auth!.user)).toBe(true);

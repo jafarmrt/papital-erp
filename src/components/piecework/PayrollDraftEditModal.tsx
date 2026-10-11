@@ -9,7 +9,7 @@ import { PayrollDeductionsField, deductionsNeedDescription } from './PayrollDedu
 const nonNegative = (raw: string): number => Math.max(0, Number(raw) || 0);
 
 /**
- * v10.0.184 (TD-1242، طرح حقوق §۳.۱ بند ۳): ویرایش فیش پیش‌نویس — عنوان، پاداش، سایر کسورات و شرحش، کسر مساعده. سرور خالص
+ * v10.0.200 (TD-1242، طرح حقوق §۳.۱ بند ۳): ویرایش فیش پیش‌نویس — عنوان، پاداش، سایر کسورات و شرحش، کسر مساعده. سرور خالص
  * را دوباره حساب و سند پیش‌نویس فیش را از نو می‌سازد؛ فیش تأییدشده یا با سند تأییدشده را با پیام خودش رد می‌کند.
  */
 export function PayrollDraftEditModal({ payroll, onClose, onSaved }: { payroll: PieceworkPayroll | null; onClose: () => void; onSaved: () => void }) {

@@ -1,6 +1,6 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
-import { documents } from '../../db/schema.js';
+import { activityLogs, documents } from '../../db/schema.js';
 import {
   registerWorkflowTransitionAction, workflowEntityNumericId,
   type WorkflowActionEntity, type WorkflowActionTarget, type WorkflowTransitionEvent,
@@ -11,6 +11,10 @@ import { DocumentLifecycleService } from './documentLifecycle.service.js';
 import { documentAuditDetails, documentAuditSnapshot } from './documentAudit.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { RESERVING_DOCUMENT_STATUS } from '../../lib/documents/reservingDocuments.js';
+import { assertProformaResendWithinSellable } from './documentSellableGate.js';
+
+/** audit operation of `returnRejectedProformaToDraft`, read back by the resend (TD-1204) */
+const REJECT_TO_DRAFT_OPERATION = 'WORKFLOW_REJECT_TO_DRAFT';
 
 /**
  * v9.0.2 (TD-415): تأیید نهایی گردش‌کار سند (گام «approved» یا اقدام خودکار POST_INVOICE) سند را در همان تراکنش انتقال
@@ -64,12 +68,52 @@ export async function returnRejectedProformaToDraft(tx: DbExecutor, event: Workf
     entity: 'اسناد انبار / پیش‌فاکتور',
     entityId: documentId,
     description: `پیش‌فاکتور شماره "${doc.refNumber ?? documentId}" با رد گردش کار پیش‌نویس شد`,
-    details: { ...documentAuditDetails(before, after), operation: 'WORKFLOW_REJECT_TO_DRAFT', workflowInstanceId: event.instanceId },
+    details: { ...documentAuditDetails(before, after), operation: REJECT_TO_DRAFT_OPERATION, workflowInstanceId: event.instanceId },
+  });
+}
+
+/**
+ * TD-1204 (product-owner decision t19 «خودکار»): a proforma that a rejection of this same workflow instance turned into a
+ * draft (`returnRejectedProformaToDraft`) becomes a proforma again in the transaction of the transition that sends it on
+ * from the initial step, so it reserves again during the second review. A line above the sellable stock refuses the
+ * resend (`assertProformaResendWithinSellable`). A direct approval finalizes as before; a draft that was never a proforma
+ * stays a draft. The version goes up and the audit row holds the document before and after. Before, the resent document
+ * stayed a draft through the second review and reserved nothing until it was invoiced.
+ */
+export async function resendRejectedProformaAsProforma(tx: DbExecutor, event: WorkflowTransitionEvent): Promise<void> {
+  if (event.fromStateKey !== 'draft') return;
+  if (['draft', 'rejected', 'approved'].includes(event.toStateKey) || event.autoActionKey === 'POST_INVOICE') return;
+  const documentId = workflowEntityNumericId(event.entityId);
+  if (documentId === undefined) return;
+  const [doc] = await tx.select({ status: documents.status, version: documents.version, refNumber: documents.refNumber })
+    .from(documents).where(and(eq(documents.id, documentId), eq(documents.isDeleted, 0))).for('update');
+  if (!doc || doc.status !== 'draft') return;
+  const [rejected] = await tx.select({ id: activityLogs.id }).from(activityLogs).where(and(
+    eq(activityLogs.entityId, String(documentId)),
+    sql`${activityLogs.details}->>'operation' = ${REJECT_TO_DRAFT_OPERATION}`,
+    sql`${activityLogs.details}->>'workflowInstanceId' = ${String(event.instanceId)}`,
+  )).limit(1);
+  if (!rejected) return;
+  await assertProformaResendWithinSellable(tx, documentId);
+  const before = await documentAuditSnapshot(tx, documentId);
+  await tx.update(documents).set({ status: RESERVING_DOCUMENT_STATUS, version: Number(doc.version ?? 1) + 1 })
+    .where(eq(documents.id, documentId));
+  const after = await documentAuditSnapshot(tx, documentId);
+  await logActivity({
+    tx,
+    userId: event.performedBy,
+    username: event.performedByName || 'ارسال دوباره گردش کار',
+    action: 'UPDATE',
+    entity: 'اسناد انبار / پیش‌فاکتور',
+    entityId: documentId,
+    description: `پیش‌فاکتور شماره "${doc.refNumber ?? documentId}" با ارسال دوباره برای بررسی دوباره پیش‌فاکتور شد و کالایش رزرو شد`,
+    details: { ...documentAuditDetails(before, after), operation: 'WORKFLOW_RESEND_TO_PROFORMA', workflowInstanceId: event.instanceId },
   });
 }
 
 async function runDocumentTransition(tx: DbExecutor, event: WorkflowTransitionEvent): Promise<void> {
   await returnRejectedProformaToDraft(tx, event);
+  await resendRejectedProformaAsProforma(tx, event);
   await finalizeApprovedDocument(tx, event);
 }
 

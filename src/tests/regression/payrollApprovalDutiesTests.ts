@@ -38,7 +38,7 @@ export async function runPayrollApprovalDutiesTests(shouldRun: ShouldRun): Promi
 
   const draftId = 'reg_payroll_issued_as_draft_td_1083';
   if (shouldRun(draftId, 'td1083', 'payroll', 'approve', 'permission', 'duties')) {
-    await runCase(results, draftId, 'v10.0.182: a payslip is issued as a draft with its work logs; only piecework.payroll_approve approves it or puts it back to draft, and a draft is not paid (TD-1083)', async () => inFiscalSandbox(async () => {
+    await runCase(results, draftId, 'v10.0.193: a payslip is issued as a draft with its work logs; only piecework.payroll_approve approves it or puts it back to draft, and a draft is not paid (TD-1083)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const issuer = await sandboxClientWith([VIEW, ISSUE]);
       const approver = await sandboxClientWith([VIEW, APPROVE]);
@@ -80,7 +80,7 @@ export async function runPayrollApprovalDutiesTests(shouldRun: ShouldRun): Promi
 
   const dutiesId = 'reg_payroll_issuer_cannot_approve_or_pay_td_1084';
   if (shouldRun(dutiesId, 'td1084', 'payroll', 'approve', 'pay', 'duties')) {
-    await runCase(results, dutiesId, 'v10.0.182: the issuer of a payslip neither approves it nor pays it nor voids its payment (403 PAYROLL_ISSUER_CANNOT_APPROVE / PAYROLL_ISSUER_CANNOT_PAY); another user does; the system admin is exempt (TD-1084)', async () => inFiscalSandbox(async () => {
+    await runCase(results, dutiesId, 'v10.0.193: the issuer of a payslip neither approves it nor pays it nor voids its payment (403 PAYROLL_ISSUER_CANNOT_APPROVE / PAYROLL_ISSUER_CANNOT_PAY); another user does; the system admin is exempt (TD-1084)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const all = [VIEW, ISSUE, APPROVE, PAY];
       const issuer = await sandboxClientWith(all);
@@ -129,7 +129,7 @@ export async function runPayrollApprovalDutiesTests(shouldRun: ShouldRun): Promi
 
   const migrationId = 'reg_payroll_approve_migration_td_1083';
   if (shouldRun(migrationId, 'td1083', 'payroll', 'approve', 'migration', 'duties')) {
-    await runCase(results, migrationId, 'v10.0.182: migration 0101 gives piecework.payroll_approve to every role holding piecework.payroll and logs each change; other roles are untouched (TD-1083)', async () => {
+    await runCase(results, migrationId, 'v10.0.193: migration 0101 gives piecework.payroll_approve to every role holding piecework.payroll and logs each change; other roles are untouched (TD-1083)', async () => {
       const problems: string[] = [];
       const tag = String(Date.now()).slice(-7);
       const codes = { issuer: `td1083_iss_${tag}`, both: `td1083_both_${tag}`, plain: `td1083_plain_${tag}` };

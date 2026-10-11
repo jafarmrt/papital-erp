@@ -58,7 +58,7 @@ export function payrollSnapshot(row: PayrollRow): Snapshot {
     netPayable: text(row.netPayable),
     paidAmount: text(row.paidAmount),
     notes: row.notes ?? '',
-    // v10.0.183 (TD-1085): فیش پیش‌پرداخت و دلیلش در ممیزی
+    // v10.0.199 (TD-1085): فیش پیش‌پرداخت و دلیلش در ممیزی
     isPrepayment: row.isPrepayment ?? 0,
     prepaymentReason: row.prepaymentReason ?? '',
   };
@@ -154,7 +154,7 @@ export async function auditPayrollUpdated(
       ? `تغییر وضعیت فیش حقوقی ${after.payrollNumber} از «${payrollStatusLabel(before.status)}» به «${payrollStatusLabel(after.status)}»`
       : Object.keys(diff.changes).every(key => key === 'notes')
         ? `ویرایش یادداشت فیش حقوقی ${after.payrollNumber}`
-        // v10.0.184 (TD-1242): ویرایش مبلغ‌های فیش پیش‌نویس و سند دوباره‌ساخته
+        // v10.0.200 (TD-1242): ویرایش مبلغ‌های فیش پیش‌نویس و سند دوباره‌ساخته
         : `ویرایش فیش پیش‌نویس ${after.payrollNumber} با خالص ${amount(after.netPayable)}`,
     details: { ...diff, voucherId: voucher?.id ?? null, voucherNumber: voucher?.voucherNumber ?? null },
   });

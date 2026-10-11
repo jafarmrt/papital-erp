@@ -69,7 +69,7 @@ export async function fundedBank(): Promise<number> {
 }
 
 /**
- * v10.0.182 (TD-1083): a payslip is issued as a draft and paid only once approved; the payment scenarios issue and
+ * v10.0.193 (TD-1083): a payslip is issued as a draft and paid only once approved; the payment scenarios issue and
  * approve it (as the system, so no issuer rule applies). The draft itself is covered by reg_payroll_issued_as_draft_td_1083.
  */
 export async function issueApproved(input: GeneratePayrollInput) {

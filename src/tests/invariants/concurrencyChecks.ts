@@ -1,6 +1,6 @@
 import { checkMixedStockPathsNoDeadlock, checkVoidKardexOrderMatchesLive, checkVoidsOfSharedItemNoDeadlock } from './concurrencyScenarios.js';
 import { checkReversalLifecycle, checkVoucherReversedOnce } from './voucherConcurrencyScenarios.js';
-import { checkBankSyncFromTransactions, checkDeletedChequeFrozen, checkTransferVoidedTogether } from './treasuryConcurrencyScenarios.js';
+import { checkBankSyncFromTransactions, checkChequeStatusBankLockOrder, checkDeletedChequeFrozen, checkTransferVoidedTogether } from './treasuryConcurrencyScenarios.js';
 import { checkRequisitionReceivedOnce } from './procurementConcurrencyScenarios.js';
 import { checkProjectDeliveryCapped } from './projectConcurrencyScenarios.js';
 import { checkDlqReplayedOnce } from './eventConcurrencyScenarios.js';
@@ -23,6 +23,8 @@ export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<
     () => checkVoucherReversedOnce(), 'of three concurrent reversals one was accepted and the second sequential reversal was refused; each voucher has one active reversal voucher'],
   ['inv_td_322_deleted_cheque_frozen', 'v8.0.69: a deleted cheque is not cleared or deleted again, and of a concurrent delete and clear only one is accepted (TD-322)',
     () => checkDeletedChequeFrozen(), 'clearing and deleting a deleted cheque again gave "not found"; in three rounds of concurrent delete and clear only one was accepted and the bank balance stayed correct'],
+  ['inv_td_1217_cheque_status_bank_lock_order', 'v10.0.196: sending a cheque to collection with a bank account and clearing the same cheque concurrently do not deadlock; the bank is locked before the cheque on every status change (TD-1217)',
+    () => checkChequeStatusBankLockOrder(), 'in three rounds both changes ran in turn without deadlock and the cheque was cleared once into the bank'],
   ['inv_td_323_reversal_lifecycle', 'v8.0.70: a draft voucher is not reversed or corrected, and a voucher with an active reversal voucher does not go back to draft and is not deleted (TD-323)',
     checkReversalLifecycle, 'draft void and correction refused; the manual voucher and the voided invoice voucher did not go back to draft and were not deleted'],
   ['inv_td_326_requisition_received_once', 'v8.0.71: "receive goods" of a purchase requisition brings the goods into the warehouse only once: concurrent with conversion to orders, before it, twice concurrently, and with a partial order or an order that was not finalized (TD-326)',

@@ -13,8 +13,8 @@ import { q } from './projectStageIntegrityTests.js';
 /**
  * Payroll duties plan PR 3 (D-02 parts 3 and 4, §3.4): a prepayment payslip for a period ending after today, with a
  * required reason and fixed salary only, and the personnel service start date where fixed salary begins. Real Express
- * routes on PostgreSQL in an isolated schema; each case is red on v10.0.182. A draft payslip is edited in place with its
- * draft voucher rebuilt (§3.1 item 3), red on v10.0.183.
+ * routes on PostgreSQL in an isolated schema; each case is red on v10.0.198. A draft payslip is edited in place with its
+ * draft voucher rebuilt (§3.1 item 3), red on v10.0.199.
  */
 
 type Res = { status: number; body?: unknown };
@@ -48,7 +48,7 @@ export async function runPayrollPrepaymentStartTests(shouldRun: ShouldRun): Prom
 
   const prepaymentId = 'reg_payroll_prepayment_with_reason_td_1085';
   if (shouldRun(prepaymentId, 'td1085', 'payroll', 'payslip', 'prepayment', 'duties')) {
-    await runCase(results, prepaymentId, 'v10.0.183: a payslip for a period ending after today is issued only as a prepayment with a reason, pays fixed salary only and leaves the period\'s work logs free; a prepayment of a past period or of a worker without fixed salary is refused (TD-1085)', async () => inFiscalSandbox(async () => {
+    await runCase(results, prepaymentId, 'v10.0.199: a payslip for a period ending after today is issued only as a prepayment with a reason, pays fixed salary only and leaves the period\'s work logs free; a prepayment of a past period or of a worker without fixed salary is refused (TD-1085)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const next = await nextJalaliMonth();
@@ -91,7 +91,7 @@ export async function runPayrollPrepaymentStartTests(shouldRun: ShouldRun): Prom
 
   const startId = 'reg_payroll_fixed_salary_service_start_td_1086';
   if (shouldRun(startId, 'td1086', 'payroll', 'payslip', 'fixed', 'personnel', 'duties')) {
-    await runCase(results, startId, 'v10.0.183: fixed salary starts on the personnel service start date, the first month pro rata by days, and none before it; the personnel form stores the start date in ISO and refuses an invalid one (TD-1086)', async () => inFiscalSandbox(async () => {
+    await runCase(results, startId, 'v10.0.199: fixed salary starts on the personnel service start date, the first month pro rata by days, and none before it; the personnel form stores the start date in ISO and refuses an invalid one (TD-1086)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const fixedOf = (res: Res) => String(field(res, 'totalFixedAmount') ?? '-');
@@ -125,7 +125,7 @@ export async function runPayrollPrepaymentStartTests(shouldRun: ShouldRun): Prom
 
   const editId = 'reg_payroll_draft_edit_td_1242';
   if (shouldRun(editId, 'td1242', 'payroll', 'payslip', 'draft', 'duties')) {
-    await runCase(results, editId, 'v10.0.184: a draft payslip is edited (bonuses, deductions with their description, advance deduction) with piecework.payroll and its draft voucher is rebuilt; an approved payslip or one whose voucher is approved is not edited (TD-1242)', async () => inFiscalSandbox(async () => {
+    await runCase(results, editId, 'v10.0.200: a draft payslip is edited (bonuses, deductions with their description, advance deduction) with piecework.payroll and its draft voucher is rebuilt; an approved payslip or one whose voucher is approved is not edited (TD-1242)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const issuer = await sandboxClientWith(['piecework.view', 'piecework.payroll']);
       const approver = await sandboxClientWith(['piecework.view', 'piecework.payroll_approve']);

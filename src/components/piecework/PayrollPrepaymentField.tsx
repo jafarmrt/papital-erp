@@ -13,7 +13,7 @@ export function prepaymentNeedsReason(prepayment: PayrollPrepaymentState | undef
 }
 
 /**
- * v10.0.183 (TD-1085، طرح حقوق §۳.۴): فیش دوره‌ای که پایانش پس از امروز است فقط با تیک «فیش پیش‌پرداخت» و دلیل صادر
+ * v10.0.199 (TD-1085، طرح حقوق §۳.۴): فیش دوره‌ای که پایانش پس از امروز است فقط با تیک «فیش پیش‌پرداخت» و دلیل صادر
  * می‌شود؛ پیش‌پرداخت فقط حقوق ثابت را دربر می‌گیرد و کارکردهای دوره در فیش بعدی می‌آیند (همان قاعده سرور).
  */
 export function PayrollPrepaymentField({ prepayment, hasFixedSalary }: { prepayment: PayrollPrepaymentState; hasFixedSalary: boolean }) {
@@ -51,7 +51,7 @@ export function PayrollPrepaymentField({ prepayment, hasFixedSalary }: { prepaym
   );
 }
 
-/** v10.0.183 (TD-1085): فیش پیش‌پرداخت در نمایش و چاپ فیش با دلیلش دیده می‌شود */
+/** v10.0.199 (TD-1085): فیش پیش‌پرداخت در نمایش و چاپ فیش با دلیلش دیده می‌شود */
 export function PrepaymentNotice({ payroll }: { payroll: { isPrepayment?: number | null; prepaymentReason?: string | null } }) {
   if (payroll.isPrepayment !== 1) return null;
   return (

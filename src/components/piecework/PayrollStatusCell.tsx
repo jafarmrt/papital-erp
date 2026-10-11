@@ -16,7 +16,7 @@ interface PayrollStatusCellProps {
 }
 
 /**
- * The payment-state cell of one payslip row. v10.0.182 (TD-1083 / TD-1084): a draft is approved with «تأیید فیش حقوق»,
+ * The payment-state cell of one payslip row. v10.0.193 (TD-1083 / TD-1084): a draft is approved with «تأیید فیش حقوق»,
  * and the issuer of a payslip sees approve and pay disabled with the reason (the server refuses them too).
  */
 export function PayrollStatusCell({ payroll, paidAmount, remainingAmount, onApprove, onOpenPayment }: PayrollStatusCellProps) {

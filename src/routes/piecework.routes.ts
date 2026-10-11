@@ -180,7 +180,7 @@ const generatePieceworkPayrollSchema = z.object({
     deductionsDescription: z.string().max(500, 'شرح سایر کسورات حداکثر ۵۰۰ نویسه است').optional(),
     advanceDeduction: nonNegativeAmount('کسر مساعده').optional(),
     notes: z.string().optional(),
-    // v10.0.183 (TD-1085): فیش پیش‌پرداخت دوره آینده با دلیل الزامی (سرویس، ۴۲۲)
+    // v10.0.199 (TD-1085): فیش پیش‌پرداخت دوره آینده با دلیل الزامی (سرویس، ۴۲۲)
     isPrepayment: z.boolean().optional(),
     prepaymentReason: z.string().max(PREPAYMENT_REASON_MAX, 'دلیل فیش پیش‌پرداخت حداکثر ۵۰۰ نویسه است').optional(),
   })
@@ -775,7 +775,7 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], requirePerm
 }));
 
 // PUT /api/piecework/payrolls/:id/status - Update status or mark as paid
-// v10.0.182 (TD-1083، طرح حقوق ت۱ الف): تغییر وضعیت (تأیید و بازگشت به پیش‌نویس) «تأیید فیش حقوق» را می‌خواهد و یادداشت
+// v10.0.193 (TD-1083، طرح حقوق ت۱ الف): تغییر وضعیت (تأیید و بازگشت به پیش‌نویس) «تأیید فیش حقوق» را می‌خواهد و یادداشت
 // تنها «محاسبه و صدور فیش حقوقی» را؛ پیش‌تر صادرکننده با همان کلید صدور، فیش خودش را تأیید هم می‌کرد.
 router.put('/piecework/payrolls/:id/status', requirePermission(PIECEWORK_PAYROLL_PERMISSION, PIECEWORK_PAYROLL_APPROVE_PERMISSION), validate(updatePieceworkPayrollStatusSchema), asyncHandler(async (req, res) => {
   try {
@@ -816,7 +816,7 @@ router.put('/piecework/payrolls/:id/status', requirePermission(PIECEWORK_PAYROLL
   }
 }));
 
-// v10.0.184 (TD-1242، طرح حقوق §۳.۱ بند ۳): ویرایش فیش پیش‌نویس (عنوان، پاداش، کسورات و شرحش، کسر مساعده) و ساخت دوباره سند پیش‌نویس آن
+// v10.0.200 (TD-1242، طرح حقوق §۳.۱ بند ۳): ویرایش فیش پیش‌نویس (عنوان، پاداش، کسورات و شرحش، کسر مساعده) و ساخت دوباره سند پیش‌نویس آن
 const editDraftPayrollSchema = z.object({
   params: paramsIdSchema.shape.params,
   body: z.object({

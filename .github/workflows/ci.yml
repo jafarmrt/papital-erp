@@ -1,5 +1,9 @@
 # .github/workflows/ci.yml — Papital ERP GitHub Actions CI/CD Pipeline (v7.0.19 / TD-172: lockfile + Node 22 + blocking audit gate)
 # Multi-stage CI: lint-and-typecheck (+version-sync) → database-integration-tests → coverage-soft-gate (non-blocking) + e2e-critical-path (Playwright) → client-server-build → docker-build-gate
+# v10.0.192 (product-owner decision t20): the check jobs (lint, database tests, coverage, e2e, build, docker build) all start
+# at once and none waits for another, so a PR result comes after the longest job instead of after the sum of the chain;
+# every job still has to pass. Only the image push (docker-publish) and the staging deploy wait for all of them.
+# The database jobs start the runner's own PostgreSQL 16 (scripts/ci-start-postgres.sh), no image pull.
 # TD-471: actions on their Node 24 majors (v7) and runners pinned to ubuntu-24.04 (ubuntu-latest moves to Ubuntu 26 on 2026-10-19);
 # raise the pin deliberately in its own change after checking the PostgreSQL service, Playwright and Docker steps.
 #
@@ -74,24 +78,9 @@ jobs:
 
   test:
     name: Database & Domain Test Suites
-    needs: lint-and-typecheck
     runs-on: ubuntu-24.04
     # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
     timeout-minutes: 40
-    services:
-      postgres:
-        image: public.ecr.aws/docker/library/postgres:16-alpine
-        env:
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: erp_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v7
@@ -104,6 +93,10 @@ jobs:
 
       - name: Install Dependencies
         run: npm ci
+
+      # v10.0.192: the runner's own PostgreSQL 16, no service container pulled from a registry
+      - name: Start PostgreSQL 16 (runner)
+        run: bash scripts/ci-start-postgres.sh erp_test
 
       - name: PostgreSQL 16 client tools (v8.0.84, backup/restore tests run scripts/backup.sh and restore.sh)
         run: |
@@ -132,27 +125,13 @@ jobs:
           echo "- **Outcome:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Ref:** \`${{ github.ref }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Database Engine:** PostgreSQL 16 Service Container" >> $GITHUB_STEP_SUMMARY
+          echo "- **Database Engine:** PostgreSQL 16 of the runner (scripts/ci-start-postgres.sh)" >> $GITHUB_STEP_SUMMARY
 
   coverage-gate:
     name: Code Coverage Hard Gate (TD-129)
-    needs: lint-and-typecheck
     runs-on: ubuntu-24.04
     # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
     timeout-minutes: 45
-    services:
-      postgres:
-        image: public.ecr.aws/docker/library/postgres:16-alpine
-        env:
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: erp_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v7
@@ -165,6 +144,10 @@ jobs:
 
       - name: Install Dependencies
         run: npm ci
+
+      # v10.0.192: the runner's own PostgreSQL 16, no service container pulled from a registry
+      - name: Start PostgreSQL 16 (runner)
+        run: bash scripts/ci-start-postgres.sh erp_test
 
       - name: PostgreSQL 16 client tools (v8.0.84, backup/restore tests run scripts/backup.sh and restore.sh)
         run: |
@@ -216,7 +199,6 @@ jobs:
 
   build:
     name: Client & Server Production Build
-    needs: [test, coverage-gate, e2e]
     runs-on: ubuntu-24.04
     # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
     timeout-minutes: 20
@@ -246,24 +228,9 @@ jobs:
 
   e2e:
     name: End-to-End Critical Path (Playwright, v7.0.77 / audit P3-7)
-    needs: lint-and-typecheck
     runs-on: ubuntu-24.04
     # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
     timeout-minutes: 20
-    services:
-      postgres:
-        image: public.ecr.aws/docker/library/postgres:16-alpine
-        env:
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: erp_e2e
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v7
@@ -276,6 +243,10 @@ jobs:
 
       - name: Install Dependencies
         run: npm ci
+
+      # v10.0.192: the runner's own PostgreSQL 16, no service container pulled from a registry
+      - name: Start PostgreSQL 16 (runner)
+        run: bash scripts/ci-start-postgres.sh erp_e2e
 
       - name: Build Application (production bundle served to the browser)
         run: npm run build
@@ -323,7 +294,6 @@ jobs:
 
   docker-gate:
     name: Docker Container Build Verification
-    needs: build
     runs-on: ubuntu-24.04
     # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
     timeout-minutes: 20
@@ -355,6 +325,22 @@ jobs:
             console.log('All ' + mods.length + ' runtime modules resolvable');
           "
 
+  # v10.0.192: the image is pushed only after every check job passed (the build check above no longer waits for them)
+  docker-publish:
+    name: Push Container Image
+    needs: [lint-and-typecheck, test, coverage-gate, e2e, build, docker-gate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v7
+
+      - name: Resolve Application Version
+        run: |
+          APP_VERSION=$(node -p "require('./package.json').version")
+          echo "IMAGE_TAG=v${APP_VERSION}" >> $GITHUB_ENV
+
       - name: Push Container Image (Conditional on Registry Secrets)
         # v7.0.19 (TD-172): کانتکست secrets در شرط if مجاز نیست و کل workflow را نامعتبر می‌کرد؛
         # بررسی وجود اعتبارنامه‌ها به داخل اسکریپت منتقل شد.
@@ -367,13 +353,15 @@ jobs:
             echo "Registry credentials not configured — skipping image push."
             exit 0
           fi
+          docker build -t papital-erp:${IMAGE_TAG} .
           echo "${REGISTRY_TOKEN}" | docker login "$REGISTRY" -u "$REGISTRY_USER" --password-stdin
           docker tag papital-erp:${IMAGE_TAG} "${REGISTRY}/erp:${IMAGE_TAG}"
           docker push "${REGISTRY}/erp:${IMAGE_TAG}"
 
   deploy-staging:
     name: Deploy to Staging Environment
-    needs: build
+    # v10.0.192: build no longer waits for the tests, so the deploy waits for every check job itself
+    needs: [lint-and-typecheck, test, coverage-gate, e2e, build]
     runs-on: ubuntu-24.04
     # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
     timeout-minutes: 10

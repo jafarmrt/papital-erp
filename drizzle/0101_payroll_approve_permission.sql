@@ -1,8 +1,8 @@
--- Drizzle Migration 0101: approving a payslip is its own permission (v10.0.182 / TD-1083, OBS-R2-48,
+-- Drizzle Migration 0101: approving a payslip is its own permission (v10.0.193 / TD-1083, OBS-R2-48,
 -- payroll duties plan decision t1 «الف», segregation of duties D-02 / D-14)
 --
 -- Until v10.0.181 a payslip was approved the moment it was issued, and piecework.payroll alone issued it and changed its
--- status. From v10.0.182 a payslip is issued as a draft and the new key piecework.payroll_approve approves it (and puts an
+-- status. From v10.0.193 a payslip is issued as a draft and the new key piecework.payroll_approve approves it (and puts an
 -- unpaid approved payslip back to draft). So that no role loses anything on the day of release, every role holding
 -- piecework.payroll gets piecework.payroll_approve; the system admin separates them in role management. The system admin
 -- role is skipped (its permissions are computed). Every changed role gets one activity_logs row with the permissions

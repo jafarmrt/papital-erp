@@ -74,6 +74,68 @@ async function rejectedProformaToDraft(): Promise<string> {
   });
 }
 
+/** TD-1204 (decision t19 «خودکار»): resending a proforma that the rejection turned into a draft makes it a proforma again */
+async function resentProformaReservesAgain(): Promise<string> {
+  const { runWorkflowTransitionAction } = await import('../../services/workflow/workflowTransitionActions.js');
+  const { isReservingDocument } = await import('../../lib/documents/reservingDocuments.js');
+  const transition = (documentId: number, instanceId: number, fromStateKey: string, toStateKey: string, actionKey: string) => ({
+    instanceId, entityType: 'document', entityId: String(documentId), workflowCode: 'DOC_APPROVAL_WORKFLOW',
+    fromStateKey, toStateKey, actionKey, autoActionKey: '', performedBy: undefined, performedByName: 'td1204 user', allowBackdate: false,
+  });
+  return inRolledBackTx(async (tx) => {
+    const instanceId = 900000 + (Date.now() % 90000);
+    const { document } = await salesProforma(tx, 10, 2);
+    await runWorkflowTransitionAction(tx, transition(document.id, instanceId, 'warehouse_review', 'rejected', 'reject'));
+    await runWorkflowTransitionAction(tx, transition(document.id, instanceId, 'rejected', 'draft', 'reopen'));
+    const [reopened] = await tx.select({ status: documents.status }).from(documents).where(eq(documents.id, document.id));
+    if (reopened.status !== 'draft') throw new Error(`a reopened rejected proforma is "${reopened.status}", expected draft`);
+    await runWorkflowTransitionAction(tx, transition(document.id, instanceId, 'draft', 'warehouse_review', 'submit_to_warehouse'));
+    const [stored] = await tx.select({ type: documents.type, status: documents.status, version: documents.version })
+      .from(documents).where(eq(documents.id, document.id));
+    if (stored.status !== 'proforma') throw new Error(`a resent rejected proforma stays "${stored.status}", expected proforma`);
+    if (!isReservingDocument(stored.type, stored.status)) throw new Error('a resent proforma does not reserve');
+    if (Number(stored.version) !== 3) throw new Error(`version is ${stored.version}, expected 3`);
+    const rows = await tx.select({ details: activityLogs.details }).from(activityLogs).where(eq(activityLogs.entityId, String(document.id)));
+    const audit = rows.find(r => (r.details as { operation?: string } | null)?.operation === 'WORKFLOW_RESEND_TO_PROFORMA');
+    const details = audit?.details as { before?: { status?: string }; after?: { status?: string } } | undefined;
+    if (details?.before?.status !== 'draft' || details?.after?.status !== 'proforma') throw new Error('no audit row of the resend');
+
+    // a draft that was never a proforma, or rejected in another instance, stays a draft when it is sent
+    const { document: plainDraft } = await salesProforma(tx, 10, 1, 'draft');
+    await runWorkflowTransitionAction(tx, transition(plainDraft.id, instanceId, 'draft', 'warehouse_review', 'submit_to_warehouse'));
+    const { document: otherRun } = await salesProforma(tx, 10, 1);
+    await runWorkflowTransitionAction(tx, transition(otherRun.id, instanceId + 1, 'warehouse_review', 'rejected', 'reject'));
+    await runWorkflowTransitionAction(tx, transition(otherRun.id, instanceId + 2, 'draft', 'warehouse_review', 'submit_to_warehouse'));
+    for (const id of [plainDraft.id, otherRun.id]) {
+      const [row] = await tx.select({ status: documents.status }).from(documents).where(eq(documents.id, id));
+      if (row.status !== 'draft') throw new Error(`document ${id} became "${row.status}" on a send, expected draft`);
+    }
+
+    // the stock was sold meanwhile: the resend is refused and the document stays a draft
+    const short = await salesProforma(tx, 3, 3);
+    await runWorkflowTransitionAction(tx, transition(short.document.id, instanceId + 3, 'warehouse_review', 'rejected', 'reject'));
+    const { createTestDocument } = await import('../fixtures/factories.js');
+    const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
+    const { getDefaultWarehouseCode } = await import('../../services/inventory/warehouseResolver.js');
+    const def = await getDefaultWarehouseCode(tx) ?? '';
+    await createTestDocument({ type: 'invoice', status: 'proforma', date: await businessTodayIsoDate() },
+      [{ itemId: short.item.id, quantity: 2, unitPrice: 9000, location: def }], tx);
+    let code = '';
+    try {
+      await tx.transaction(async (sp) => {
+        await runWorkflowTransitionAction(sp, transition(short.document.id, instanceId + 3, 'draft', 'warehouse_review', 'submit_to_warehouse'));
+      });
+    } catch (err) {
+      code = String((err as { code?: unknown }).code ?? '');
+      if (!String((err as Error).message).includes(short.item.code)) throw new Error('the refused resend does not name the item');
+    }
+    if (code !== 'INSUFFICIENT_STOCK') throw new Error(`a resend above the sellable stock was accepted (code "${code}")`);
+    const [kept] = await tx.select({ status: documents.status }).from(documents).where(eq(documents.id, short.document.id));
+    if (kept.status !== 'draft') throw new Error(`a refused resend left the document "${kept.status}"`);
+    return 'resent rejected proforma: proforma, version 3, audited; plain draft and other run stay drafts; short resend refused';
+  });
+}
+
 /** TD-1138 (decision 13): a document in a review step of its workflow is not edited; the initial step stays editable */
 async function documentLockedInReview(): Promise<string> {
   const { DocumentService } = await import('../../services/document.service.js');
@@ -158,6 +220,7 @@ export async function runProformaReviewTests(shouldRun: ShouldRun): Promise<Test
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], () => Promise<string>]> = [
     ['reg_proforma_reject_to_draft_td_1137', 'v10.0.85: a rejected sales proforma returns to draft and stops reserving (TD-1137)', ['td1137'], rejectedProformaToDraft],
+    ['reg_proforma_resend_reserves_td_1204', 'v10.0.195: a rejected proforma resent for review is a proforma again and reserves (TD-1204)', ['td1204'], resentProformaReservesAgain],
     ['reg_document_locked_in_review_td_1138', 'v10.0.86: a document in a workflow review step is not edited (TD-1138)', ['td1138'], documentLockedInReview],
     ['reg_shortage_warehouse_name_td_1199', 'v10.0.114: a stock shortage names the warehouse by its name, not its code (TD-1199)', ['td1199'], shortageNamesWarehouse],
     ['reg_proforma_stock_warning_td_1138', 'v10.0.86: a saved proforma above the sellable stock gets a warning per item (TD-1138)', ['td1138'], proformaStockWarning],

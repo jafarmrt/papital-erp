@@ -236,7 +236,7 @@ export function PersonnelExcelModal({
           const nationality = parseNationalityCell(getField(row, ['ملیت', 'تابعیت', 'nationality']));
 
           const birthDate = getField(row, ['تاریخ تولد', 'تولد', 'birthdate', 'birth_date', 'dob']);
-          // v10.0.183 (TD-1086): خانه خالی یعنی بی تغییر
+          // v10.0.199 (TD-1086): خانه خالی یعنی بی تغییر
           const startDate = getField(row, ['تاریخ آغاز همکاری', 'آغاز همکاری', 'تاریخ شروع همکاری', 'startdate', 'start_date']);
           const education = getField(row, ['تحصیلات', 'مدرک', 'مدرک تحصیلی', 'education', 'degree']);
           const cardNumber = getField(row, ['شماره کارت', 'شمارهکارت', 'کارت', 'cardnumber', 'card_number', 'card']);

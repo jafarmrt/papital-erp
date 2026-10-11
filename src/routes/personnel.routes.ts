@@ -126,7 +126,7 @@ const personnelBodySchema = z.object({
   monthlySalary: monthlySalaryInput.optional(),
   jobTitle: z.string().optional(),
   education: z.string().optional(),
-  // v10.0.183 (TD-1086): «آغاز همکاری»؛ حقوق ثابت از این روز آغاز می‌شود
+  // v10.0.199 (TD-1086): «آغاز همکاری»؛ حقوق ثابت از این روز آغاز می‌شود
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   terminationReason: z.string().optional(),
@@ -293,7 +293,7 @@ router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), v
         const employmentStatus = parseEmploymentStatusCell(item.employmentStatus);
         // v7.0.135 (TD-232): تاریخ تولد میلادی ISO ذخیره می‌شود؛ تاریخ نامعتبر خطای همان ردیف است
         const birthDate = requireStorageDate(String(item.birthDate || '').trim(), 'تاریخ تولد');
-        // v10.0.183 (TD-1086): خانه خالی «تاریخ آغاز همکاری» یعنی بی تغییر
+        // v10.0.199 (TD-1086): خانه خالی «تاریخ آغاز همکاری» یعنی بی تغییر
         const startDate = requireStorageDate(String(item.startDate || '').trim(), 'تاریخ آغاز همکاری');
         const nationality = parseNationalityCell(item.nationality);
         const education = String(item.education || '').trim();

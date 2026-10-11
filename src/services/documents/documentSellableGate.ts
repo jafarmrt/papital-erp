@@ -150,6 +150,29 @@ export async function proformaStockWarnings(tx: DbExecutor, documentId: number):
 }
 
 /**
+ * TD-1204 (product-owner decision t19 «خودکار»): a sales proforma that a rejection turned into a draft (TD-1137) becomes a
+ * proforma again when it is resent for review, so it reserves its lines again. The resend is refused when a line asks
+ * more than the sellable stock, with one sentence per item; the document's own lines are never counted against it.
+ */
+export async function assertProformaResendWithinSellable(tx: DbExecutor, documentId: number): Promise<void> {
+  const lines = await tx.select({ itemId: documentItems.itemId, quantity: documentItems.quantity, location: documentItems.location })
+    .from(documentItems)
+    .where(and(eq(documentItems.documentId, documentId), eq(documentItems.isDeleted, 0)));
+  const { shortages, units } = await findSellableShortages(tx, lines, { excludeDocumentId: documentId });
+  if (shortages.length === 0) return;
+  const sentences = shortages.map(s => {
+    const unit = units.get(s.itemId) ?? 'عدد';
+    return `کالای «${s.name}» (${s.code}) در انبار «${s.locationName}»: این پیش‌فاکتور ${fa(s.requested)} ${unit} می‌خواهد و قابل فروش `
+      + `${fa(s.sellable)} ${unit} است (موجودی انبار: ${fa(s.locationStock)}، رزرو سایر مصارف: ${fa(s.reservedForOthers)}`
+      + `${s.holders.length > 0 ? `؛ ${s.holders.join('، ')}` : ''}).`;
+  });
+  throw new InsufficientStockError(
+    `پیش‌فاکتور دوباره ارسال نشد، چون موجودی برای رزرو دوباره آن کافی نیست. ${sentences.join(' ')} مقدار را کم کنید یا پس از تأمین موجودی دوباره بفرستید.`,
+    { shortages },
+  );
+}
+
+/**
  * v10.0.151 (TD-1175, fresh-eyes guide finding B8 / roles-b R2 #4): what the warehouse approver needs to decide on an
  * outgoing document. Each (item, warehouse) of its live lines with the quantity asked, the warehouse stock, the
  * reservations of others and the sellable quantity, by the sellable gate's rule (`computeSellable`; the document's own

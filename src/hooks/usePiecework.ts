@@ -115,7 +115,7 @@ export function usePiecework() {
   // V1.9.0: کسر از مساعده/وام پرسنلی — بستانکار حساب مساعده در سند تسویه
   const [payrollAdvanceDeduction, setPayrollAdvanceDeduction] = useState<number>(0);
   const [payrollNotes, setPayrollNotes] = useState<string>('');
-  // v10.0.183 (TD-1085): فیش پیش‌پرداخت دوره آینده، فقط حقوق ثابت، با دلیل الزامی
+  // v10.0.199 (TD-1085): فیش پیش‌پرداخت دوره آینده، فقط حقوق ثابت، با دلیل الزامی
   const [payrollIsPrepayment, setPayrollIsPrepayment] = useState<boolean>(false);
   const [payrollPrepaymentReason, setPayrollPrepaymentReason] = useState<string>('');
   const [isSavingPayroll, setIsSavingPayroll] = useState<boolean>(false);
@@ -568,7 +568,7 @@ export function usePiecework() {
     // v9.0.268 (TD-808): حقوق ثابت فقط تا پایان همکاری — همان قاعده سرور
     const fixedEnd = fixedSalaryPeriodEnd(startIso, endIso, serviceEndOf(selectedPayrollPerson));
     if (fixedEnd === null) return null;
-    // v10.0.183 (TD-1086): حقوق ثابت از «آغاز همکاری» — همان قاعده سرور
+    // v10.0.199 (TD-1086): حقوق ثابت از «آغاز همکاری» — همان قاعده سرور
     const fixedStart = fixedSalaryPeriodStart(startIso, fixedEnd, serviceStartOf(selectedPayrollPerson));
     if (fixedStart === null) return null;
     const personPayrolls = (Array.isArray(payrollsList) ? payrollsList : []).filter(pr => Number(pr.personnelId) === Number(payrollPersonnelId));
@@ -592,7 +592,7 @@ export function usePiecework() {
       hotToast.error('پرسنل و بازه تاریخی الزامی هستند');
       return;
     }
-    // v9.0.268 (TD-808)، v10.0.183 (TD-1085): دوره آینده فقط با «فیش پیش‌پرداخت» و دلیل — همان قاعده و پیام سرور
+    // v9.0.268 (TD-808)، v10.0.199 (TD-1085): دوره آینده فقط با «فیش پیش‌پرداخت» و دلیل — همان قاعده و پیام سرور
     const periodRefusal = payrollPrepaymentError(toStorageDate(payrollEndDate) || '', getTodayIsoDate(), { isPrepayment: payrollIsPrepayment, prepaymentReason: payrollPrepaymentReason });
     if (periodRefusal) {
       hotToast.error(periodRefusal.message);

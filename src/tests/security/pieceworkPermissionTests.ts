@@ -82,7 +82,7 @@ export async function runPieceworkPermissionTests(shouldRun: ShouldRun): Promise
         await only('delete work log', 'del', `/api/piecework/logs/${Number(spare.body?.insertedIds?.[0])}`, {}, 'log', ['personnel', 'tasks', 'payroll']);
 
         // payroll: piecework.payroll issues a draft, syncs and deletes; piecework.payroll_approve approves and puts back to
-        // draft (v10.0.182, TD-1083); piecework.pay pays and voids
+        // draft (v10.0.193, TD-1083); piecework.pay pays and voids
         const issued = await only('issue payroll', 'post', '/api/piecework/payrolls',
           { personnelId: worker, startDate: '2026-04-01', endDate: '2026-04-30' }, 'payroll', ['personnel', 'pay', 'log']);
         const payrollId = Number(issued.body?.id);

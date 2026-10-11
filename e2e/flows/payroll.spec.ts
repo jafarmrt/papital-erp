@@ -153,7 +153,7 @@ test('issue a payslip from work logs, approve it and pay it from a bank account'
     `SELECT count(*)::text AS n FROM piecework_logs WHERE payroll_id = $1 AND is_deleted = 0`, [payroll.id]);
   expect(Number(linked[0].n), 'work logs linked to the payslip').toBe(QUANTITIES.length);
 
-  // 2. v10.0.182 (TD-1083): the payslip is issued as a draft and approved in the browser. The system admin is exempt
+  // 2. v10.0.193 (TD-1083): the payslip is issued as a draft and approved in the browser. The system admin is exempt
   // from the rule that the issuer does not approve or pay (TD-1084).
   expect(payroll.status, 'issued payslip status').toBe('draft');
   const row = page.locator('tr', { hasText: setup.personnelName });

@@ -34,7 +34,7 @@ export function PieceworkPayrollsTab({
   const [syncingId, setSyncingId] = useState<number | null>(null);
   // V10-4.4: پرداخت فقط از مودال خزانه‌ای
   const [paymentTarget, setPaymentTarget] = useState<PieceworkPayroll | null>(null);
-  // v10.0.184 (TD-1242): ویرایش فیش پیش‌نویس
+  // v10.0.200 (TD-1242): ویرایش فیش پیش‌نویس
   const [editTarget, setEditTarget] = useState<PieceworkPayroll | null>(null);
 
   const handleSyncVoucher = async (payrollId: number) => {

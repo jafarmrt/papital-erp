@@ -187,5 +187,36 @@ export async function runAccessPackageTwoPasswordTests(shouldRun: ShouldRun): Pr
     });
   }
 
+  if (shouldRun('sec_profile_password_change_locked_td_961', 'security', 'td961', 'password', 'package2')) {
+    await runCase(results, {
+      id: 'sec_profile_password_change_locked_td_961',
+      name: 'v10.0.21: wrong current passwords lock the profile password change progressively (TD-961)',
+      details: 'OBS-R1-29: PUT /users/profile compared the current password without any attempt limit (only the general limiter of 10,000 requests a minute); now the fifth wrong current password locks the change for one minute with 429 PASSWORD_CHANGE_LOCKED, the right password is refused while locked, and another user is not affected',
+    }, async (h, wrong) => {
+      const { resetPhantomLockouts } = await import('../../services/auth/loginSecurity.service.js');
+      const member = await h.sessionWith(['documents.view']);
+      const other = await h.sessionWith(['documents.view']);
+      try {
+        const statuses: number[] = [];
+        for (let i = 0; i < 5; i++) {
+          statuses.push((await h.put('/api/users/profile', { current_password: `wrong-${i}-pass`, new_password: 'N3w-passw0rd' }, member)).status);
+        }
+        if (statuses.slice(0, 4).some(s => s !== 400)) wrong.push(`the first four wrong current passwords returned ${statuses.slice(0, 4).join(', ')}, not 400`);
+        if (statuses[4] !== 429) wrong.push(`the fifth wrong current password returned ${statuses[4]}, not 429`);
+        const right = await h.put('/api/users/profile', { current_password: TEST_PASSWORD, new_password: 'N3w-passw0rd' }, member);
+        const details = (right.body as { code?: unknown; details?: { locked?: unknown; remainingMinutes?: unknown } } | undefined);
+        if (right.status !== 429 || details?.code !== 'PASSWORD_CHANGE_LOCKED') {
+          wrong.push(`the right current password while locked returned ${right.status} ${String(details?.code ?? '')}, not 429 PASSWORD_CHANGE_LOCKED`);
+        } else if (details?.details?.locked !== true || Number(details?.details?.remainingMinutes) < 1) {
+          wrong.push('the lock answer does not carry locked and remainingMinutes');
+        }
+        const otherChange = await h.put('/api/users/profile', { current_password: TEST_PASSWORD, new_password: 'N3w-passw0rd' }, other);
+        if (otherChange.status !== 200) wrong.push(`another user's password change returned ${otherChange.status}`);
+      } finally {
+        resetPhantomLockouts();
+      }
+    });
+  }
+
   return results;
 }

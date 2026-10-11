@@ -39,7 +39,7 @@ interface PieceworkPayrollModalProps {
   // V1.3.2: هشدار سهم باقی‌مانده حقوق ثابت ماه انتخابی
   fixedRemainingHint?: string | null;
   isSaving?: boolean;
-  // v10.0.183 (TD-1085): فیش پیش‌پرداخت دوره آینده با دلیل
+  // v10.0.199 (TD-1085): فیش پیش‌پرداخت دوره آینده با دلیل
   prepayment?: PayrollPrepaymentState;
 }
 

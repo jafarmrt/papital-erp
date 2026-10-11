@@ -59,7 +59,7 @@ describe('payroll buttons follow their API keys (TD-805)', () => {
     expect(screen.getByTitle('حذف کارکرد')).toBeTruthy();
   });
 
-  // v10.0.182 (TD-1083): approving moved to its own key, piecework.payroll_approve
+  // v10.0.193 (TD-1083): approving moved to its own key, piecework.payroll_approve
   it('issue, voucher and void need piecework.payroll; approve piecework.payroll_approve; payment piecework.pay', () => {
     grant({ canPay: true });
     renderPayrolls();

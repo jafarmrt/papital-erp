@@ -423,7 +423,7 @@ export async function runPieceworkEntryTests(shouldRun: ShouldRun): Promise<Test
       const payrollId = Number(issued.body?.id);
       if (issued.status !== 201 || !payrollId) problems.push(`issuing the payslip answered ${issued.status} ${brief(issued.body)}`);
       if (payrollId) {
-        // v10.0.182 (TD-1083): a payslip is issued as a draft, so the status change approves it
+        // v10.0.193 (TD-1083): a payslip is issued as a draft, so the status change approves it
         const toApproved = await admin.put(`/api/piecework/payrolls/${payrollId}/status`, { status: 'approved' });
         if (toApproved.status !== 200) problems.push(`approving the payslip answered ${toApproved.status}`);
         const del = await admin.del(`/api/piecework/payrolls/${payrollId}`);
