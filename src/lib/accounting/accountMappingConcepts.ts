@@ -26,7 +26,11 @@ export const ACCOUNT_MAPPING_CONCEPTS = [
   { key: 'tradePayablesAccountCode', label: 'حساب‌های پرداختنی تجاری', description: 'طرف حساب خرید، پرداخت وجه به تأمین‌کننده و چک پرداختی', defaultCode: '3001', accountTypes: LIABILITY },
   { key: 'wagesPayableAccountCode', label: 'حقوق و دستمزد پرداختنی', description: 'فیش حقوق، پرداخت حقوق و دریافت وجه از پرسنل', defaultCode: '3201', accountTypes: LIABILITY },
   // v9.0.286 (TD-554، تصمیم ت۶ الف): پیش‌فرض ۳۲۰۵؛ پیش‌تر ۳۲۰۲ «پیش‌دریافت‌ها از مشتریان» بود
-  { key: 'employeeDeductionsPayableAccountCode', label: 'کسورات حقوق پرداختنی', description: 'بیمه و مالیات سهم کارکنان در فیش حقوق', defaultCode: '3205', accountTypes: LIABILITY },
+  { key: 'employeeDeductionsPayableAccountCode', label: 'سایر کسورات حقوق پرداختنی', description: '«سایر کسورات» فیش حقوق، مانند قسط وام و جریمه', defaultCode: '3205', accountTypes: LIABILITY },
+  // v10.0.210 (TD-1087، طرح حقوق §۳.۳ بند ۴): بیمه سهم کارگر و کارفرما، مالیات حقوق و هزینه سهم کارفرما
+  { key: 'insurancePayableAccountCode', label: 'بیمه پرداختنی', description: 'بیمه سهم کارگر و سهم کارفرما در فیش حقوق، تا پرداخت به تأمین اجتماعی', defaultCode: '3204', accountTypes: LIABILITY },
+  { key: 'payrollTaxPayableAccountCode', label: 'مالیات حقوق پرداختنی', description: 'مالیات حقوق کسرشده در فیش، تا پرداخت به امور مالیاتی', defaultCode: '3206', accountTypes: LIABILITY },
+  { key: 'employerInsuranceExpenseAccountCode', label: 'هزینه بیمه سهم کارفرما', description: 'سهم کارفرمای بیمه در فیش حقوق', defaultCode: '7013', accountTypes: EXPENSE },
   { key: 'chequeReceivableAccountCode', label: 'اسناد دریافتنی نزد صندوق', description: 'ثبت چک دریافتی و بازگشت آن از جریان وصول', defaultCode: '1101', accountTypes: ASSET },
   { key: 'chequeInCollectionAccountCode', label: 'اسناد در جریان وصول', description: 'فرستادن چک به بانک برای وصول، تا پاس یا برگشت', defaultCode: '1102', accountTypes: ASSET },
   { key: 'chequeProtestAccountCode', label: 'اسناد واخواستی', description: 'برگشت چک دریافتی', defaultCode: '1103', accountTypes: ASSET },

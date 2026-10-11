@@ -13,3 +13,5 @@ export const PIECEWORK_PAYROLL_PERMISSION = 'piecework.payroll';
 export const PIECEWORK_PAYROLL_APPROVE_PERMISSION = 'piecework.payroll_approve';
 /** ثبت پرداخت فیش و ابطال پرداخت */
 export const PIECEWORK_PAY_PERMISSION = 'piecework.pay';
+/** v10.0.210 (TD-1087، طرح حقوق ت۴ الف): نرخ‌های سالانه بیمه و مالیات حقوق */
+export const PAYROLL_RATES_PERMISSION = 'payroll.rates_manage';

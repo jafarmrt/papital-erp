@@ -25,7 +25,7 @@ import {
   toEnglishDigits 
 } from '../../utils';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
-import { accountCurrencyOf, defaultSettlementAccountId, settlementAccountsFor } from '../../lib/invoices/settlementAccounts';
+import { accountCurrencyOf, defaultSettlementAccountId, settlementAccountsFor, halfRemainingAmount } from '../../lib/invoices/settlementAccounts';
 import { settlementDefaultDescription } from '../../lib/invoices/settlementDescription';
 
 interface BankAccount {
@@ -209,7 +209,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
   };
 
   const handleSetHalfRemaining = () => {
-    setAmountStr(String(Math.round(remainingAmount / 2)));
+    setAmountStr(halfRemainingAmount(remainingAmount, currency));
   };
 
   return (

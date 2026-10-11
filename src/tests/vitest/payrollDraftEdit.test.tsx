@@ -42,9 +42,9 @@ describe('editing a draft payslip (TD-1242)', () => {
     expect(save.disabled).toBe(false);
     fireEvent.click(save);
     await waitFor(() => expect(onReload).toHaveBeenCalled());
-    expect(calls[0].url).toBe('/piecework/payrolls/1');
-    expect(calls[0].options?.method).toBe('PUT');
-    expect(JSON.parse(calls[0].options?.body ?? '{}')).toEqual({ title: 'فیش', bonuses: 250000, deductions: 40000, deductionsDescription: 'قسط وام', advanceDeduction: 0 });
+    const put = calls.find(c => c.options?.method === 'PUT');
+    expect(put?.url).toBe('/piecework/payrolls/1');
+    expect(JSON.parse(put?.options?.body ?? '{}')).toEqual({ title: 'فیش', bonuses: 250000, deductions: 40000, deductionsDescription: 'قسط وام', advanceDeduction: 0 });
   });
 
   it('hides the edit without the issue key', () => {

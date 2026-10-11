@@ -65,8 +65,8 @@ export default function CRMPage({ user }: { user: any }) {
       void crm.loadAllData();
 
       // Navigate to create invoice page with pre-filled buyer details
-      // v10.0.177 (OBS-R2-30): نشانی خریدار فقط از مشتری، نه یادداشت پرونده
-      void navigate('/remittances', { state: leadProformaState(lead, res.customer) });
+      // v10.0.177 (OBS-R2-30): نشانی خریدار فقط از مشتری، نه یادداشت پرونده؛ v10.0.213 (OBS-R1-102): فرم فاکتور فروش
+      void navigate('/invoices/create', { state: leadProformaState(lead, res.customer) });
     } catch (err: any) {
       toast.dismiss('convert-lead');
       toast.error(err.message || 'خطا در تبدیل پرونده فروش به مشتری');

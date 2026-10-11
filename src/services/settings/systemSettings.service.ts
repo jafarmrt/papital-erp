@@ -209,6 +209,26 @@ export class SystemSettingsService {
         await tx.insert(appSettings).values({ key: change.key, value: change.stored })
           .onConflictDoUpdate({ target: appSettings.key, set: { value: change.stored } });
       }
+      // TD-963 (بخش ۲): ردیف ممیزی با همان تراکنش نوشتن گزینه‌ها ثبت می‌شود
+      if (changes.length > 0) {
+        await logActivity({
+          tx,
+          userId: actor.id,
+          username: actor.username || 'سیستم',
+          userFullName: actor.fullName || '',
+          action: 'SETTING_CHANGE',
+          entity: 'تنظیمات سیستم',
+          description: `تغییر ${changes.length} گزینه از تنظیمات سیستم: ${changes.map(c => c.key).join('، ')}`,
+          details: {
+            changes: changes.map(c => ({
+              setting: c.key,
+              previousValue: redactForAudit(c.key, c.before),
+              newValue: redactForAudit(c.key, c.after),
+            })),
+            ignoredMaskedKeys,
+          },
+        });
+      }
     });
 
     if (changes.length > 0) {
@@ -216,23 +236,6 @@ export class SystemSettingsService {
       const { invalidateTimezoneCache, warmDisplayTimezone } = await import('../../lib/businessClock.js');
       invalidateTimezoneCache();
       await warmDisplayTimezone(); // v8.0.77 (TD-324): بیرون از تراکنش، تا خواندن بعدی درون تراکنشی منتظر اتصال دوم نماند
-
-      await logActivity({
-        userId: actor.id,
-        username: actor.username || 'سیستم',
-        userFullName: actor.fullName || '',
-        action: 'SETTING_CHANGE',
-        entity: 'تنظیمات سیستم',
-        description: `تغییر ${changes.length} گزینه از تنظیمات سیستم: ${changes.map(c => c.key).join('، ')}`,
-        details: {
-          changes: changes.map(c => ({
-            setting: c.key,
-            previousValue: redactForAudit(c.key, c.before),
-            newValue: redactForAudit(c.key, c.after),
-          })),
-          ignoredMaskedKeys,
-        },
-      });
     }
 
     return { changedKeys: changes.map(c => c.key), ignoredMaskedKeys };

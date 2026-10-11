@@ -130,31 +130,36 @@ export class WorkflowDelegationService {
       }
     }
 
-    const [inserted] = await orm.insert(workflowDelegations).values({
-      fromUserId: params.fromUserId,
-      toUserId: params.toUserId,
-      scope,
-      startDate,
-      endDate,
-      reason: params.reason || '',
-      isActive: 1
-    }).returning();
-
-    await logActivity({
-      userId: params.createdByUserId || params.fromUserId,
-      username: params.createdByName || fromUser.username,
-      action: 'CREATE',
-      entity: 'تفویض اختیار ورکفلو',
-      entityId: inserted.id,
-      description: `تفویض اختیار از کاربر «${fromUser.fullName || fromUser.username}» به کاربر «${toUser.fullName || toUser.username}» با حوزه ${scope} ثبت شد.`,
-      details: {
+    // TD-963 (بخش ۲): تفویض و ردیف ممیزی آن در یک تراکنش ثبت می‌شوند؛ پیش‌تر ردیف ممیزی بیرون از نوشتن تفویض بود
+    const inserted = await orm.transaction(async (tx) => {
+      const [row] = await tx.insert(workflowDelegations).values({
         fromUserId: params.fromUserId,
         toUserId: params.toUserId,
         scope,
-        startDate: params.startDate,
-        endDate: params.endDate,
-        reason: params.reason
-      }
+        startDate,
+        endDate,
+        reason: params.reason || '',
+        isActive: 1
+      }).returning();
+
+      await logActivity({
+        userId: params.createdByUserId || params.fromUserId,
+        username: params.createdByName || fromUser.username,
+        action: 'CREATE',
+        entity: 'تفویض اختیار ورکفلو',
+        entityId: row.id,
+        description: `تفویض اختیار از کاربر «${fromUser.fullName || fromUser.username}» به کاربر «${toUser.fullName || toUser.username}» با حوزه ${scope} ثبت شد.`,
+        details: {
+          fromUserId: params.fromUserId,
+          toUserId: params.toUserId,
+          scope,
+          startDate: params.startDate,
+          endDate: params.endDate,
+          reason: params.reason
+        },
+        tx
+      });
+      return row;
     });
 
     return inserted;
