@@ -1267,7 +1267,7 @@ export class VoucherSyncService {
     const pieceworkAmount = fin(pay.totalPieceworkAmount);
     const bonuses = fin(pay.totalBonuses);
     const fixedAmount = fin(pay.totalFixedAmount);
-    // v10.0.212 (TD-1089): ناخالص «فیش عیدی» مبلغ عیدی آن است
+    // v10.0.222 (TD-1089): ناخالص «فیش عیدی» مبلغ عیدی آن است
     const grossAmount = pieceworkAmount.add(bonuses).add(fixedAmount).add(eidiPayslipGross(pay));
     const netPayable = fin(pay.netPayable);
     // v9.0.266 (TD-804، تصمیم ت۱ الف): سندی که با خالص فیش نمی‌خواند ساخته نمی‌شود و فیش با خالص مثبت بی‌صدا بی سند نمی‌ماند.
@@ -1356,7 +1356,7 @@ export class VoucherSyncService {
     if ((employeeInsurance.isPositive() && !insuranceAcc) || (employerInsurance.isPositive() && (!insuranceAcc || !employerExpenseAcc)) || (incomeTax.isPositive() && !taxAcc)) {
       return null;
     }
-    // v10.0.212 (TD-1089، طرح حقوق §۳.۸): سهم عیدی فیش عادی و پرداخت عیدی فیش عیدی
+    // v10.0.222 (TD-1089، طرح حقوق §۳.۸): سهم عیدی فیش عادی و پرداخت عیدی فیش عیدی
     const eidi = await payrollEidiVoucherRows(pay, pers?.fullName || 'پرسنل', tx);
     if (eidi.missing) {
       return refuse(`حساب «${eidi.missing}» (نگاشت حساب‌ها) برای ثبت عیدی فیش ${pay.payrollNumber} یافت نشد.`, 'PAYROLL_EIDI_ACCOUNT_MISSING');

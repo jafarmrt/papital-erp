@@ -14,7 +14,7 @@ import { rows } from './ledgerRows.js';
  * - v10.0.210 (TD-1087): the net equals gross − employee insurance − income tax − other deductions − advance, and the
  *   voucher credits insurance payable (mapped 3204) with the employee plus the employer share, debits the employer
  *   insurance expense (mapped 7013) with the employer share and credits payroll tax payable (mapped 3206) with the tax.
- * - v10.0.212 (TD-1089): an eidi payslip's gross is its eidi amount; a regular payslip's voucher credits eidi payable
+ * - v10.0.222 (TD-1089): an eidi payslip's gross is its eidi amount; a regular payslip's voucher credits eidi payable
  *   (mapped 3207) with its eidi share and an eidi payslip's voucher debits it with the part taken from the accrual.
  */
 export async function checkPayrollInvariants(payrollIdAfter: number | undefined): Promise<InvariantViolation[]> {

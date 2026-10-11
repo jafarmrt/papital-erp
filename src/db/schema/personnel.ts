@@ -166,7 +166,7 @@ export const pieceworkPayrolls = pgTable('piecework_payrolls', {
   incomeTax: moneyNumeric('income_tax').notNull().default(sql`0`),
   statutoryOverrideReason: text('statutory_override_reason').notNull().default(''),
   isStatutorySplit: integer('is_statutory_split').notNull().default(1),
-  // v10.0.212 (TD-1089، طرح حقوق §۳.۸، ت۱۴ تا ت۱۶ الف): فیش عادی سهم عیدی خود را نگه می‌دارد (سال = سال جلالی پایان دوره)؛
+  // v10.0.222 (TD-1089، طرح حقوق §۳.۸، ت۱۴ تا ت۱۶ الف): فیش عادی سهم عیدی خود را نگه می‌دارد (سال = سال جلالی پایان دوره)؛
   // «فیش عیدی» (is_eidi) عیدی یک سال را می‌پردازد و eidi_from_accrual بخشی است که از «عیدی پرداختنی» انباشته برداشته می‌شود
   eidiAmount: moneyNumeric('eidi_amount').notNull().default(sql`0`),
   eidiFromAccrual: moneyNumeric('eidi_from_accrual').notNull().default(sql`0`),
@@ -206,7 +206,7 @@ export const payrollStatutoryRates = pgTable('payroll_statutory_rates', {
 }));
 
 /**
- * v10.0.212 (TD-1089، طرح حقوق §۳.۸، ت۱۴ الف): روش و نرخ عیدی هر سال جلالی (مهاجرت 0105) که دارنده `payroll.rates_manage`
+ * v10.0.222 (TD-1089، طرح حقوق §۳.۸، ت۱۴ الف): روش و نرخ عیدی هر سال جلالی (مهاجرت 0105) که دارنده `payroll.rates_manage`
  * وارد می‌کند؛ قاعده‌ها در `src/lib/payroll/eidi.ts`.
  */
 export const payrollEidiRates = pgTable('payroll_eidi_rates', {

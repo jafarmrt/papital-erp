@@ -8,7 +8,7 @@ import { normalizeDecimalString, toLatinDigits } from '../../lib/numericInput';
 import { EIDI_METHODS, EIDI_METHOD_LABELS, eidiRatesError, type EidiMethod } from '../../lib/payroll/eidi';
 
 /**
- * v10.0.212 (TD-1089، طرح حقوق §۳.۸، ت۱۴ تا ت۱۶ الف): روش و نرخ عیدی هر سال جلالی، کنار نرخ‌های بیمه و مالیات. هیچ نرخ
+ * v10.0.222 (TD-1089، طرح حقوق §۳.۸، ت۱۴ تا ت۱۶ الف): روش و نرخ عیدی هر سال جلالی، کنار نرخ‌های بیمه و مالیات. هیچ نرخ
  * پیش‌فرضی نیست؛ ذخیره `payroll.rates_manage` می‌خواهد.
  */
 

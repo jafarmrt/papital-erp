@@ -20,7 +20,7 @@ afterEach(() => { cleanup(); calls.length = 0; answers.current = () => ({}); });
 const PERCENT: EidiRates = { jalaliYear: 1405, method: 'percent_of_work', percent: '15', yearlyCap: '5000000', laborDays: '0', laborCapDays: '0', minDailyWage: '0', fixedAmount: '0', taxExemptCap: '0' };
 const LABOR: EidiRates = { ...PERCENT, method: 'labor_law', percent: '0', yearlyCap: '0', laborDays: '60', laborCapDays: '90', minDailyWage: '1000000' };
 
-// v10.0.212 (TD-1089, payroll duties plan §3.8): yearly eidi rules
+// v10.0.222 (TD-1089, payroll duties plan §3.8): yearly eidi rules
 describe('eidi rule (TD-1089)', () => {
   it('takes the percent of a payslip up to what is left of the yearly cap', () => {
     expect(payslipEidiShare({ base: 20_000_000, rates: PERCENT, otherShares: 0 })).toBe('3000000');

@@ -66,7 +66,7 @@ router.get('/piecework/reports/statutory', authorizePermission(...READ_PERMISSIO
   res.json(await payrollStatutoryReport(Number(req.query.year), Number(req.query.month)));
 }));
 
-// v10.0.212 (TD-1089): نرخ عیدی، فیش عیدی و گزارش «عیدی سال» (همان بخش حقوق، بی خط تازه در app.ts)
+// v10.0.222 (TD-1089): نرخ عیدی، فیش عیدی و گزارش «عیدی سال» (همان بخش حقوق، بی خط تازه در app.ts)
 router.use(payrollEidiRoutes);
 
 export default router;

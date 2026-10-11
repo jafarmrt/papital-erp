@@ -9,7 +9,7 @@ import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { eidiMethodLabel, eidiReportFileName, eidiReportSheetRows, type EidiReport } from '../../lib/payroll/eidiReport';
 
 /**
- * v10.0.212 (TD-1089، طرح حقوق §۳.۸): گزارش «عیدی سال» — حق عیدی، سهم فیش‌های پیش‌نویس، سقف، فیش عیدی صادرشده، پرداخت‌شده
+ * v10.0.222 (TD-1089، طرح حقوق §۳.۸): گزارش «عیدی سال» — حق عیدی، سهم فیش‌های پیش‌نویس، سقف، فیش عیدی صادرشده، پرداخت‌شده
  * و مانده هر پرسنل، با خروجی اکسل.
  */
 export function PayrollEidiReportModal({ onClose }: { onClose: () => void }) {

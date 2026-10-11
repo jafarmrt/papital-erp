@@ -31,7 +31,7 @@ export const ACCOUNT_MAPPING_CONCEPTS = [
   { key: 'insurancePayableAccountCode', label: 'بیمه پرداختنی', description: 'بیمه سهم کارگر و سهم کارفرما در فیش حقوق، تا پرداخت به تأمین اجتماعی', defaultCode: '3204', accountTypes: LIABILITY },
   { key: 'payrollTaxPayableAccountCode', label: 'مالیات حقوق پرداختنی', description: 'مالیات حقوق کسرشده در فیش، تا پرداخت به امور مالیاتی', defaultCode: '3206', accountTypes: LIABILITY },
   { key: 'employerInsuranceExpenseAccountCode', label: 'هزینه بیمه سهم کارفرما', description: 'سهم کارفرمای بیمه در فیش حقوق', defaultCode: '7013', accountTypes: EXPENSE },
-  // v10.0.212 (TD-1089، طرح حقوق §۳.۸): سهم عیدی فیش‌ها و فیش عیدی
+  // v10.0.222 (TD-1089، طرح حقوق §۳.۸): سهم عیدی فیش‌ها و فیش عیدی
   { key: 'eidiPayableAccountCode', label: 'عیدی پرداختنی', description: 'سهم عیدی انباشته فیش‌های حقوق، تا پرداخت با «فیش عیدی»', defaultCode: '3207', accountTypes: LIABILITY },
   { key: 'eidiExpenseAccountCode', label: 'هزینه عیدی و پاداش', description: 'سهم عیدی هر فیش حقوق و عیدی سالانه‌ای که انباشته نشده است', defaultCode: '7014', accountTypes: EXPENSE },
   { key: 'chequeReceivableAccountCode', label: 'اسناد دریافتنی نزد صندوق', description: 'ثبت چک دریافتی و بازگشت آن از جریان وصول', defaultCode: '1101', accountTypes: ASSET },

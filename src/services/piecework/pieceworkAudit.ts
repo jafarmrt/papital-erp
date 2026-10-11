@@ -66,7 +66,7 @@ export function payrollSnapshot(row: PayrollRow): Snapshot {
     employerInsurance: text(row.employerInsurance),
     incomeTax: text(row.incomeTax),
     statutoryOverrideReason: row.statutoryOverrideReason ?? '',
-    // v10.0.212 (TD-1089): سهم عیدی فیش، یا عیدی فیش عیدی و بخش انباشته آن
+    // v10.0.222 (TD-1089): سهم عیدی فیش، یا عیدی فیش عیدی و بخش انباشته آن
     eidiAmount: text(row.eidiAmount),
     eidiFromAccrual: text(row.eidiFromAccrual),
     eidiYear: row.eidiYear ?? null,

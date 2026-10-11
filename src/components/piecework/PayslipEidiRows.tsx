@@ -3,7 +3,7 @@ import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { toPersianDigits } from '../../utils/persianNumber';
 
 /**
- * v10.0.212 (TD-1089، طرح حقوق §۳.۸): فیش چاپی سهم عیدی همین فیش و جمع عیدی انباشته سال را برای آگاهی کارگر نشان می‌دهد؛
+ * v10.0.222 (TD-1089، طرح حقوق §۳.۸): فیش چاپی سهم عیدی همین فیش و جمع عیدی انباشته سال را برای آگاهی کارگر نشان می‌دهد؛
  * سهم عیدی از خالص کم نمی‌شود. فیش عیدی مبلغ عیدی سال را نشان می‌دهد.
  */
 export function PayslipEidiRows({ payroll }: { payroll: PieceworkPayroll }) {

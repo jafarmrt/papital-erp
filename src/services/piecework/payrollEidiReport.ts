@@ -9,7 +9,7 @@ import { jalaliYearBounds } from '../../utils/calendarDate.js';
 import { eidiRatesOf, eidiRatesOfYear } from './payrollEidi.js';
 
 /**
- * v10.0.212 (TD-1089، طرح حقوق §۳.۸): گزارش «عیدی سال». جمع فیش‌های هر پرسنل در SQL است (§1.8)؛ در روش‌های «قانون کار» و
+ * v10.0.222 (TD-1089، طرح حقوق §۳.۸): گزارش «عیدی سال». جمع فیش‌های هر پرسنل در SQL است (§1.8)؛ در روش‌های «قانون کار» و
  * «مبلغ ثابت» پرسنلی هم که همکاری‌اش با سال هم‌پوشانی دارد ولی فیشی ندارد آمده است.
  */
 export async function payrollEidiReport(jalaliYear: number): Promise<EidiReport> {

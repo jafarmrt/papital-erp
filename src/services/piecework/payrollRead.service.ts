@@ -44,7 +44,7 @@ const payrollAmountColumns = {
   incomeTax: pieceworkPayrolls.incomeTax,
   statutoryOverrideReason: pieceworkPayrolls.statutoryOverrideReason,
   isStatutorySplit: pieceworkPayrolls.isStatutorySplit,
-  // v10.0.212 (TD-1089): سهم عیدی فیش یا عیدی فیش عیدی، و جمع سهم تأییدشده همان سال برای فیش چاپی
+  // v10.0.222 (TD-1089): سهم عیدی فیش یا عیدی فیش عیدی، و جمع سهم تأییدشده همان سال برای فیش چاپی
   eidiAmount: pieceworkPayrolls.eidiAmount,
   eidiFromAccrual: pieceworkPayrolls.eidiFromAccrual,
   eidiYear: pieceworkPayrolls.eidiYear,

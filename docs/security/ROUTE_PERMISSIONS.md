@@ -233,6 +233,7 @@
 | GET | `/api/items/options` | products.view \| documents.view \| documents.create \| documents.finalize \| warehouse.view \| warehouse.in \| warehouse.out \| audit.view \| projects.view \| crm.view \| procurement.view |
 | GET | `/api/items/prices/all` | products.view \| products.edit_price |
 | POST | `/api/items/prices/batch-update` | products.edit_price |
+| GET | `/api/items/pricing-page` | products.view \| products.edit_price |
 | GET | `/api/items/reorder-alerts` | products.view \| warehouse.view |
 | GET | `/api/items/unified-export` | products.view |
 | POST | `/api/items/unified-import` | products.create \| products.edit |

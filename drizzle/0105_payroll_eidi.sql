@@ -1,4 +1,4 @@
--- Drizzle Migration 0105: yearly eidi and bonus on payslips (v10.0.212 / TD-1089, payroll duties plan §3.8)
+-- Drizzle Migration 0105: yearly eidi and bonus on payslips (v10.0.222 / TD-1089, payroll duties plan §3.8)
 --
 -- Product-owner decisions t14 to t16 (option a): the accountant enters, for each Jalali year, how eidi is computed
 -- (payroll_eidi_rates: a percent of each payslip's work up to a yearly cap, the labor-law rule, or a fixed amount). There

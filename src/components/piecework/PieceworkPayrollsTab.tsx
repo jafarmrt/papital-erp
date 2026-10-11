@@ -20,7 +20,7 @@ interface PieceworkPayrollsTabProps {
   onUpdateStatus: (id: number, status: 'draft' | 'approved' | 'paid') => void;
   onDeletePayroll: (id: number) => void;
   onReload?: () => void;
-  /** v10.0.212 (TD-1089): پرسنل برای فیش عیدی */
+  /** v10.0.222 (TD-1089): پرسنل برای فیش عیدی */
   personnelSelectOptions?: { value: string; label: string }[];
 }
 
@@ -44,7 +44,7 @@ export function PieceworkPayrollsTab({
   const [editTarget, setEditTarget] = useState<PieceworkPayroll | null>(null);
   // v10.0.211 (TD-1088): فهرست ماهانه بیمه و مالیات
   const [isReportOpen, setIsReportOpen] = useState(false);
-  // v10.0.212 (TD-1089): فیش عیدی و گزارش «عیدی سال»
+  // v10.0.222 (TD-1089): فیش عیدی و گزارش «عیدی سال»
   const [eidiOpen, setEidiOpen] = useState<'issue' | 'report' | null>(null);
 
   const handleSyncVoucher = async (payrollId: number) => {

@@ -37,7 +37,7 @@ export async function runPayrollEidiTests(shouldRun: ShouldRun): Promise<TestCas
 
   const ratesId = 'reg_payroll_eidi_rates_td_1089';
   if (shouldRun(ratesId, 'td1089', 'payroll', 'eidi', 'rates', 'duties')) {
-    await runCase(results, ratesId, 'v10.0.212: yearly eidi rates are saved only with payroll.rates_manage, refused when incomplete or stale, and audited (TD-1089)', async () => inFiscalSandbox(async () => {
+    await runCase(results, ratesId, 'v10.0.222: yearly eidi rates are saved only with payroll.rates_manage, refused when incomplete or stale, and audited (TD-1089)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const reader = await sandboxClientWith(['piecework.view', 'piecework.payroll']);
       const manager = await sandboxClientWith(['piecework.view', 'payroll.rates_manage']);
@@ -68,7 +68,7 @@ export async function runPayrollEidiTests(shouldRun: ShouldRun): Promise<TestCas
 
   const shareId = 'reg_payroll_eidi_share_td_1089';
   if (shouldRun(shareId, 'td1089', 'payroll', 'eidi', 'payslip', 'voucher', 'duties')) {
-    await runCase(results, shareId, 'v10.0.212: each payslip accrues 15 % of its work and fixed salary as eidi up to the year cap, on 7014 / 3207, without touching its net; a year without eidi rates warns (TD-1089)', async () => inFiscalSandbox(async () => {
+    await runCase(results, shareId, 'v10.0.222: each payslip accrues 15 % of its work and fixed salary as eidi up to the year cap, on 7014 / 3207, without touching its net; a year without eidi rates warns (TD-1089)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const task = await newTask();
@@ -113,7 +113,7 @@ export async function runPayrollEidiTests(shouldRun: ShouldRun): Promise<TestCas
 
   const payslipId = 'reg_payroll_eidi_payslip_td_1089';
   if (shouldRun(payslipId, 'td1089', 'payroll', 'eidi', 'payslip', 'report', 'duties')) {
-    await runCase(results, payslipId, 'v10.0.212: the eidi payslip pays the approved accrual from 3207, takes another amount only with a reason (posted to 7014), is not edited, keeps its paid-out share, and the yearly report sums it (TD-1089)', async () => inFiscalSandbox(async () => {
+    await runCase(results, payslipId, 'v10.0.222: the eidi payslip pays the approved accrual from 3207, takes another amount only with a reason (posted to 7014), is not edited, keeps its paid-out share, and the yearly report sums it (TD-1089)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       await admin.put('/api/piecework/eidi-rates/1405', PERCENT_1405);
@@ -169,7 +169,7 @@ export async function runPayrollEidiTests(shouldRun: ShouldRun): Promise<TestCas
 
   const laborId = 'reg_payroll_eidi_labor_law_td_1089';
   if (shouldRun(laborId, 'td1089', 'payroll', 'eidi', 'labor', 'duties')) {
-    await runCase(results, laborId, 'v10.0.212: under the labor-law method payslips accrue nothing and the eidi payslip pays 60 days of wage, capped at 90 minimum days, for the days worked in the year, all on 7014 (TD-1089)', async () => inFiscalSandbox(async () => {
+    await runCase(results, laborId, 'v10.0.222: under the labor-law method payslips accrue nothing and the eidi payslip pays 60 days of wage, capped at 90 minimum days, for the days worked in the year, all on 7014 (TD-1089)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const saved = await admin.put('/api/piecework/eidi-rates/1405', { method: 'labor_law', laborDays: '60', laborCapDays: '90', minDailyWage: '1000000' });
@@ -196,7 +196,7 @@ export async function runPayrollEidiTests(shouldRun: ShouldRun): Promise<TestCas
 
   const taxId = 'reg_payroll_eidi_tax_td_1089';
   if (shouldRun(taxId, 'td1089', 'payroll', 'eidi', 'tax', 'duties')) {
-    await runCase(results, taxId, 'v10.0.212: eidi above the yearly tax-exempt cap is taxed at the year\'s payroll tax brackets, posted to 3206 and taken from net; another tax needs a reason (TD-1089, t21)', async () => inFiscalSandbox(async () => {
+    await runCase(results, taxId, 'v10.0.222: eidi above the yearly tax-exempt cap is taxed at the year\'s payroll tax brackets, posted to 3206 and taken from net; another tax needs a reason (TD-1089, t21)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const statutory = await admin.put('/api/piecework/statutory-rates/1405', {

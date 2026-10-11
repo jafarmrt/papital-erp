@@ -13,7 +13,7 @@ import { issueEidiPayslip, previewEidiPayslip } from '../services/piecework/payr
 import { payrollEidiReport } from '../services/piecework/payrollEidiReport.js';
 
 /**
- * v10.0.212 (TD-1089، طرح حقوق §۳.۸، ت۱۴ تا ت۱۶ الف): روش و نرخ عیدی هر سال (نوشتن با `payroll.rates_manage`)، پیش‌نمایش و
+ * v10.0.222 (TD-1089، طرح حقوق §۳.۸، ت۱۴ تا ت۱۶ الف): روش و نرخ عیدی هر سال (نوشتن با `payroll.rates_manage`)، پیش‌نمایش و
  * صدور «فیش عیدی» (`piecework.payroll`) و گزارش «عیدی سال» (خوانندگان فیش).
  */
 const router = Router();

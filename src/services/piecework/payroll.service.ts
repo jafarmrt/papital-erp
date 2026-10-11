@@ -237,7 +237,7 @@ export class PieceworkPayrollService {
         return { status: 400, error: 'جمع بیمه، مالیات، کسورات و کسر مساعده از اجزای فیش بیشتر است — مقادیر را اصلاح کنید.' };
       }
 
-      // v10.0.212 (TD-1089، طرح حقوق §۳.۸، ت۱۴ الف): سهم عیدی از کارکرد و حقوق ثابت، بی پاداش و کسورات؛ از خالص کم نمی‌شود
+      // v10.0.222 (TD-1089، طرح حقوق §۳.۸، ت۱۴ الف): سهم عیدی از کارکرد و حقوق ثابت، بی پاداش و کسورات؛ از خالص کم نمی‌شود
       const eidi = await resolvePayslipEidiShare(tx, { personnelId: pId, endIso: eDate, base: pieceworkTotalFin.add(fixedPortionFin) });
 
       const pieceworkTotal = money(pieceworkTotalFin.round(4));
@@ -334,7 +334,7 @@ export class PieceworkPayrollService {
     const currentUsername = input.username;
 
     return orm.transaction(async (tx) => {
-      // v10.0.212 (TD-1089): ترتیب قفل صدور فیش، پرسنل سپس فیش، تا جمع عیدی سال میان بررسی و نوشتن عوض نشود
+      // v10.0.222 (TD-1089): ترتیب قفل صدور فیش، پرسنل سپس فیش، تا جمع عیدی سال میان بررسی و نوشتن عوض نشود
       await lockPayrollPersonnel(tx, id);
       const [pay] = await tx.select().from(pieceworkPayrolls).where(and(eq(pieceworkPayrolls.id, id), eq(pieceworkPayrolls.isDeleted, 0))).for('update');
       if (!pay) {
@@ -474,7 +474,7 @@ export class PieceworkPayrollService {
         if (!alreadyReversed) linkedVouchers.push(v);
       }
 
-      // v10.0.212 (TD-1089): سهم عیدی پرداخت‌شده در فیش عیدی آزاد نمی‌شود
+      // v10.0.222 (TD-1089): سهم عیدی پرداخت‌شده در فیش عیدی آزاد نمی‌شود
       await assertEidiShareNotSettled(tx, pay);
       const permanentVoucher = linkedVouchers.find(v => v.status === 'permanent');
       if (permanentVoucher) {
