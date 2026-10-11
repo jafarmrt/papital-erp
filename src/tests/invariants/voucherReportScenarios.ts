@@ -70,6 +70,8 @@ export async function checkReportsIgnoreDeletedVoucherItems(wh: string): Promise
     items: [{ itemId: product.id, quantity: 5, unitPrice: 200000, location: wh }],
   });
   await VoucherSyncService.syncPurchaseInvoiceVoucher(production, { strict: true });
+  // v10.0.251 (TD-966): گزارش پروژه فقط سند تأییدشده و دائمی را می‌شمارد؛ سند همگام‌شده پس از تأیید سنجیده می‌شود
+  await VoucherService.approveJournalVouchers(await activeVoucherIds(production), undefined, 'inv');
   const summary = (await AccountingReportService.getProjectSummaryReport()).find(r => r.projectId === project.id);
   if (!summary || !fin(summary.totalCredit).equals(1000000) || summary.entriesCount !== 1) {
     problems.push(`project summary report: credit ${summary?.totalCredit ?? '-'} in ${summary?.entriesCount ?? 0} rows, expected 1,000,000 in one row`);
