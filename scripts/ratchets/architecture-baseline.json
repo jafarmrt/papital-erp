@@ -1,7 +1,6 @@
 {
   "routeWrites": {
     "src/routes/crm.routes.ts": 10,
-    "src/routes/notifications.routes.ts": 3,
     "src/routes/personnel.routes.ts": 5
   },
   "ormFallback": {
@@ -146,14 +145,14 @@
     "src/services/accounting/accountingReport.service.ts": 1,
     "src/services/accounting/financialHealth.service.ts": 29,
     "src/services/accounting/index.ts": 1,
-    "src/services/accounting/treasury/bankAccount.service.ts": 4,
+    "src/services/accounting/treasury/bankAccount.service.ts": 2,
     "src/services/accounting/treasury/bankAccountWorkflowAction.ts": 1,
     "src/services/accounting/treasury/bankOpeningVoucher.ts": 1,
     "src/services/accounting/treasury/chequeLifecycle.service.ts": 4,
     "src/services/accounting/treasury/chequePartyAccount.ts": 1,
     "src/services/accounting/treasury/partyContraAccount.ts": 1,
     "src/services/accounting/treasury/treasuryTransaction.service.ts": 3,
-    "src/services/accounting/voucher.service.ts": 2,
+    "src/services/accounting/voucher.service.ts": 1,
     "src/services/accounting/voucherSync.service.ts": 3,
     "src/services/accounting/voucherWorkflowAction.ts": 1,
     "src/services/customer.service.ts": 1,
@@ -171,7 +170,7 @@
     "src/services/inventory/pendingMaterialWorkflowAction.ts": 2,
     "src/services/inventory/projectBomAllocation.service.ts": 3,
     "src/services/items.service.ts": 1,
-    "src/services/items/itemCatalog.service.ts": 6,
+    "src/services/items/itemCatalog.service.ts": 4,
     "src/services/items/itemCategory.service.ts": 1,
     "src/services/items/itemExcelAudit.ts": 1,
     "src/services/items/itemExcelImport.ts": 4,

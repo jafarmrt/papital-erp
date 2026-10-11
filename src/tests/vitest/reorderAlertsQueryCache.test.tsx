@@ -148,8 +148,7 @@ describe('ReorderAlertsPage — React Query cache', () => {
     fireEvent.click(await screen.findByText('صدور مستقیم سند انبار / خرید'));
     fireEvent.click(screen.getByText('-- انتخاب یا جستجوی طرف‌حساب --'));
     fireEvent.click(await screen.findByText(/نقره‌سازان/));
-    fireEvent.change(screen.getByDisplayValue('پیش‌نویس سفارش خرید (عدم تغییر موجودی)'), { target: { value: 'final' } });
-    fireEvent.click(screen.getByRole('button', { name: /ثبت سند خرید انبار/ }));
+      fireEvent.click(screen.getByRole('button', { name: /ثبت سند خرید انبار/ }));
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith('رسید قطعی ورود کالا به انبار با موفقیت صادر و موجودی افزایش یافت.'));
     expect(bodyOf('/documents', 'POST')).toMatchObject({
       // v8.0.110 (TD-387): قرارداد POST /documents — شماره خودکار، ورود کالا، تأمین‌کننده در buyer_name، فی در unit_price

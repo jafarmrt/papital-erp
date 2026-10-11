@@ -9,6 +9,8 @@ import { invalidatePreset } from '../../lib/queryInvalidation';
 import { refNumberToSend } from '../../lib/documents/documentRefRules';
 import { selectedPartyId } from '../../lib/documents/partySelection';
 import { STOCK_VOUCHER_DRAFT_NOTE } from '../../lib/documents/stockInLabels';
+import { receiptZeroPriceCheck } from '../../lib/documents/receiptZeroPrice';
+import { confirmAction } from '../../components/ConfirmDialogHost';
 import type { StockDocumentForm } from './useStockDocumentForm';
 import type { StockDocumentReferenceData } from './useStockDocumentReferenceData';
 
@@ -76,6 +78,18 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
     if (rateError) {
       toast.error(rateError);
       return;
+    }
+
+    // v10.0.249 (TD-1133): ردیف بهای صفر رسید و خرید فقط با تأیید «کالای اهدایی» ثبت می‌شود
+    if (actionType === 'in') {
+      const zeroPrice = receiptZeroPriceCheck(docType, docItems.map(d => ({
+        name: d.item.name, unitPrice: d.unitPrice, weightedAverageCost: d.item.weightedAverageCost ?? d.item.weighted_average_cost,
+      })));
+      if (zeroPrice.error) {
+        toast.error(zeroPrice.error);
+        return;
+      }
+      if (zeroPrice.confirmMessage && !(await confirmAction({ title: 'کالای اهدایی', message: zeroPrice.confirmMessage, confirmText: 'بله، کالای اهدایی است' }))) return;
     }
 
     setIsSaving(true);
