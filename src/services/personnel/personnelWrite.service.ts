@@ -3,7 +3,7 @@ import type { DbExecutor } from '../../db/drizzle.js';
 import { personnel } from '../../db/schema.js';
 
 /**
- * v10.0.263 (TD-960, OBS-R2-01): the personnel table is written only here, never from `personnel.routes.ts`. The route
+ * v10.0.265 (TD-960, OBS-R2-01): the personnel table is written only here, never from `personnel.routes.ts`. The route
  * keeps its checks, locks, transactions and audit rows and passes its own executor (`tx` inside a transaction).
  */
 export type PersonnelRow = typeof personnel.$inferSelect;
