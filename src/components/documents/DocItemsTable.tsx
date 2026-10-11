@@ -1,6 +1,7 @@
 import { Lock, AlertTriangle, Trash2, Package, ShoppingCart, Edit3 } from 'lucide-react';
 import { formatCurrencyLabel, formatPersianNumber, formatPersianPrice } from '../../utils';
 import { Item } from '../../types';
+import { STOCK_VOUCHER_DRAFT_NOTE, stockInLabels } from '../../lib/documents/stockInLabels';
 
 export interface DocItemRow {
   item: Item;
@@ -26,6 +27,8 @@ interface DocItemsTableProps {
   canEditItem?: boolean;
   /** v9.0.273 (TD-788): قیمت برگشتِ دارای فاکتور مرجع قیمت خالص همان فاکتور است و ویرایش نمی‌شود */
   priceLocked?: boolean;
+  /** v10.0.239 (TD-1205): نوع سند ورودی؛ برگشت از فروش برچسب مشتری و قیمت فروش می‌گیرد */
+  docType?: string;
 }
 
 /**
@@ -43,14 +46,16 @@ export function DocItemsTable({
   onRemove,
   onEditItem,
   canEditItem = false,
-  priceLocked = false
+  priceLocked = false,
+  docType
 }: DocItemsTableProps) {
+  const labels = stockInLabels(docType);
   if (docItems.length === 0) {
     return (
       <div className="p-8 text-center bg-slate-50 border border-dashed border-slate-200 rounded-2xl space-y-2">
         <Package className="w-8 h-8 text-slate-400 mx-auto" />
         <p className="text-xs font-bold text-slate-600">هنوز هیچ کالایی به جدول اقلام این سند اضافه نشده است.</p>
-        <p className="text-[11px] text-slate-400">کالاهای مورد نظر را از کادر بالا جستجو کرده، تعداد و قیمت خرید را وارد نموده و دکمه افزودن را فشار دهید.</p>
+        <p className="text-[11px] text-slate-400">{labels.emptyHint}</p>
       </div>
     );
   }
@@ -67,7 +72,7 @@ export function DocItemsTable({
               <th className="p-3 text-center">تعداد / مقدار سند</th>
               {actionType === 'in' && (
                 <>
-                  <th className="p-3 text-center">قیمت خرید واحد (فی)</th>
+                  <th className="p-3 text-center">{labels.unitPrice}</th>
                   <th className="p-3 text-center">مبلغ کل ردیف ({formatCurrencyLabel(currencyLabel)})</th>
                 </>
               )}
@@ -209,17 +214,18 @@ export function DocItemsTable({
               <ShoppingCart size={20} />
             </div>
             <div>
-              <h4 className="font-bold text-emerald-950 text-sm">خلاصه رسید خرید مواد اولیه و کالا</h4>
+              <h4 className="font-bold text-emerald-950 text-sm">{labels.summaryTitle}</h4>
               <p className="text-xs text-emerald-700">
                 {/* v9.0.346 (TD-803، یافته B08-34): صفحه رسید را نهایی ثبت می‌کند و موجودی در همان درخواست تغییر می‌کند */}
-                موجودی با ثبت نهایی به‌روزرسانی می‌شود؛ سند حسابداری تا تأیید حسابدار پیش‌نویس است.
+                {/* v10.0.240 (TD-1206): تأییدکننده با مجوز نام برده می‌شود، نه با نقش «حسابدار» */}
+                موجودی با ثبت نهایی به‌روزرسانی می‌شود؛ {STOCK_VOUCHER_DRAFT_NOTE}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-4 self-end sm:self-auto bg-white px-4 py-2.5 rounded-xl border border-emerald-300 shadow-2xs">
             <div className="text-right">
-              <span className="text-[11px] text-slate-500 block font-medium">مجموع کل ارزش فاکتور خرید:</span>
+              <span className="text-[11px] text-slate-500 block font-medium">{labels.totalLabel}</span>
               <strong className="text-base font-black text-emerald-900 font-mono">
                 {formatPersianPrice(totalSum, currencyLabel)}
               </strong>

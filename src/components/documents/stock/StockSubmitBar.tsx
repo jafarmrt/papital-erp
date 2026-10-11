@@ -1,5 +1,6 @@
 import { CheckCircle2, RefreshCw } from 'lucide-react';
 import { formatPersianNumber } from '../../../utils';
+import { stockInLabels } from '../../../lib/documents/stockInLabels';
 
 interface StockSubmitBarProps {
   actionType: 'in' | 'out';
@@ -9,10 +10,12 @@ interface StockSubmitBarProps {
   isSaving: boolean;
   /** v9.0.241 (TD-791): چرا کاربر این نوع سند را ثبت نمی‌کند (مجوز لازم)؛ null یعنی ثبت‌شدنی است */
   blockedReason?: string | null;
+  /** v10.0.239 (TD-1205): نوع سند؛ دکمه برگشت از فروش «سند برگشت از فروش» صادر می‌کند، نه رسید خرید */
+  docType?: string;
 }
 
 /** TD-080 (بخش ۳): نوار خلاصه و دکمه ثبت نهایی سند انبار — استخراج‌شده از DocumentsPage */
-export function StockSubmitBar({ actionType, itemCount, totalQuantitySum, disabled, isSaving, blockedReason = null }: StockSubmitBarProps) {
+export function StockSubmitBar({ actionType, itemCount, totalQuantitySum, disabled, isSaving, blockedReason = null, docType }: StockSubmitBarProps) {
   return (
     <div className="border-t border-slate-200 pt-5 flex items-center justify-between">
       <div className="text-xs text-slate-500 flex items-center gap-3">
@@ -35,7 +38,7 @@ export function StockSubmitBar({ actionType, itemCount, totalQuantitySum, disabl
           <>
             <CheckCircle2 size={18} />
             <span>
-              {actionType === 'in' ? 'ثبت نهایی و صدور سند رسید خرید' : 'ثبت نهایی و صدور حواله خروج'}
+              {actionType === 'in' ? stockInLabels(docType).submit : 'ثبت نهایی و صدور حواله خروج'}
             </span>
           </>
         )}
