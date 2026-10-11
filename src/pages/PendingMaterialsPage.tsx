@@ -71,9 +71,9 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
   };
 
   // Statistics (under the category and search filters, from the server)
-  const pendingCount = listPage?.statusCounts.pending ?? 0;
-  const approvedCount = listPage?.statusCounts.approved ?? 0;
-  const rejectedCount = listPage?.statusCounts.rejected ?? 0;
+  const pendingCount = listPage?.statusCounts?.pending ?? 0;
+  const approvedCount = listPage?.statusCounts?.approved ?? 0;
+  const rejectedCount = listPage?.statusCounts?.rejected ?? 0;
   const filteredItems = Array.isArray(listPage?.data) ? listPage.data : [];
 
   // Open Approval Modal
