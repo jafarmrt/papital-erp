@@ -1,7 +1,7 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
 
 /**
- * OBS-R2-05 (decision t5 A), part 2, v10.0.254: the events routes answer their own refusals through errorHandler, so
+ * OBS-R2-05 (decision t5 A), part 2, v10.0.256: the events routes answer their own refusals through errorHandler, so
  * every error carries the uniform schema (`code`, `traceId`, `message` and `error`). On v10.0.253 eight of them were
  * hand-written `res.status(4xx).json({ success: false, message })` answers without a code or trace id.
  */
@@ -10,7 +10,7 @@ export async function runEventsErrorContractTests(shouldRun: (id: string, ...ext
   const id = 'reg_events_error_contract_obs_r2_05';
   if (!shouldRun(id, 'obs-r2-05', 'events', 'errors', 'package15')) return results;
 
-  const name = 'v10.0.254: events route refusals carry the uniform error schema with code and trace id (OBS-R2-05)';
+  const name = 'v10.0.256: events route refusals carry the uniform error schema with code and trace id (OBS-R2-05)';
   const tStart = Date.now();
   const { createHarness } = await import('../security/workflowTestHarness.js');
   const h = await createHarness();
