@@ -92,10 +92,10 @@ export function useSettings() {
   const [clearMode, setClearMode] = useState<'transactions' | 'all'>('transactions');
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
-  const [activeTab, setActiveTab] = useState<'general' | 'accounting' | 'chart_of_accounts' | 'categories' | 'warehouses' | 'pricing' | 'projects' | 'inventory_control' | 'task_titles' | 'health' | 'system_config' | 'system' | 'woocommerce'>(() => {
+  const [activeTab, setActiveTab] = useState<'general' | 'accounting' | 'chart_of_accounts' | 'categories' | 'warehouses' | 'pricing' | 'projects' | 'inventory_control' | 'task_titles' | 'payroll_rates' | 'health' | 'system_config' | 'system' | 'woocommerce'>(() => {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
-    if (tabParam && ['general', 'accounting', 'chart_of_accounts', 'categories', 'warehouses', 'pricing', 'projects', 'inventory_control', 'task_titles', 'health', 'system_config', 'system', 'woocommerce'].includes(tabParam)) {
+    if (tabParam && ['general', 'accounting', 'chart_of_accounts', 'categories', 'warehouses', 'pricing', 'projects', 'inventory_control', 'task_titles', 'payroll_rates', 'health', 'system_config', 'system', 'woocommerce'].includes(tabParam)) {
       return tabParam as any;
     }
     return 'general';
@@ -105,7 +105,7 @@ export function useSettings() {
     const handlePopState = () => {
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get('tab');
-      if (tabParam && ['general', 'accounting', 'chart_of_accounts', 'categories', 'warehouses', 'pricing', 'projects', 'inventory_control', 'task_titles', 'health', 'system_config', 'system', 'woocommerce'].includes(tabParam)) {
+      if (tabParam && ['general', 'accounting', 'chart_of_accounts', 'categories', 'warehouses', 'pricing', 'projects', 'inventory_control', 'task_titles', 'payroll_rates', 'health', 'system_config', 'system', 'woocommerce'].includes(tabParam)) {
         setActiveTab(tabParam as any);
       }
     };
@@ -220,11 +220,7 @@ export function useSettings() {
     loadWcList('/woocommerce/order-logs', setWcOrderLogs, setWcOrderLogsError, signal);
   };
 
-  useEffect(() => {
-    const controller = new AbortController();
-    loadSyncedWcOrders(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // v10.0.227 (OBS-PR-17): فهرست‌های ووکامرس را خود زبانه ووکامرس هنگام باز شدن می‌خواند، نه هر زبانه تنظیمات برای هر کاربر
 
   const handleSyncAllStocks = async () => {
     setIsSyncingAllStocks(true);

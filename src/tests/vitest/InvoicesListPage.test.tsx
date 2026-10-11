@@ -89,7 +89,7 @@ describe('InvoicesListPage — invoices list (TD-080 part 3 characterization)', 
     renderPage();
     expect(screen.getByText('فهرست اسناد، فاکتورها و رسیدهای انبار')).toBeTruthy();
     expect(await screen.findByText('INV-۱۰۰۱')).toBeTruthy();
-    expect(fetchJson).toHaveBeenCalledWith('/documents?page=1&limit=50');
+    expect(fetchJson).toHaveBeenCalledWith('/documents?page=1&limit=50', { signal: expect.any(AbortSignal) });
 
     // KPI cards: totals grouped by currency
     expect(screen.getByText('۱ فاکتور فروش نهایی')).toBeTruthy();
@@ -123,7 +123,7 @@ describe('InvoicesListPage — invoices list (TD-080 part 3 characterization)', 
     await screen.findByText('INV-۱۰۰۱');
     expect(screen.queryByText('پاک کردن شرط‌های جستجو')).toBeNull();
     fireEvent.change(screen.getByDisplayValue('همه انواع سند (خرید، فروش، انبار)'), { target: { value: 'invoice' } });
-    await waitFor(() => expect(fetchJson).toHaveBeenCalledWith('/documents?type=invoice&page=1&limit=50'));
+    await waitFor(() => expect(fetchJson).toHaveBeenCalledWith('/documents?type=invoice&page=1&limit=50', { signal: expect.any(AbortSignal) }));
     fireEvent.click(screen.getByText('پاک کردن شرط‌های جستجو'));
     expect(screen.queryByText('پاک کردن شرط‌های جستجو')).toBeNull();
     expect(screen.getByDisplayValue('همه انواع سند (خرید، فروش، انبار)')).toBeTruthy();

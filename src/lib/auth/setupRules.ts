@@ -19,7 +19,7 @@ export const SETUP_TOKEN_NOT_CONFIGURED_MESSAGE =
 /** v9.0.393 (TD-621، B01-41): گام ۱ جادوگر بی رمز راه‌اندازی پیش نمی‌رود */
 export const SETUP_TOKEN_REQUIRED_MESSAGE = 'رمز راه‌اندازی را وارد کنید.';
 
-/** v10.0.210 (OBS-R1-14): `/check-setup` answers this 503 when the database cannot be read, never «not set up» */
+/** v10.0.228 (OBS-R1-14): `/check-setup` answers this 503 when the database cannot be read, never «not set up» */
 export const SETUP_STATE_UNREADABLE_MESSAGE = 'وضعیت راه‌اندازی سامانه خوانده نشد؛ پایگاه‌داده پاسخ نمی‌دهد. چند لحظه بعد دوباره تلاش کنید.';
 
 export const SETUP_ALREADY_DONE_MESSAGE = 'سامانه پیش‌تر راه‌اندازی شده است.';

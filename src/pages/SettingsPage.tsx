@@ -6,7 +6,6 @@ import { cn } from '../utils';
 import SystemHealthDiagnostic from '../components/SystemHealthDiagnostic';
 import { SystemConfigTab } from '../components/settings/SystemConfigTab';
 import { useSettings } from '../hooks/useSettings';
-import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog';
 import { GeneralSettingsTab } from '../components/settings/GeneralSettingsTab';
 import { CategoriesTab, CategoryModal } from '../components/settings/CategoriesTab';
 import { WarehousesTab, WarehouseModal } from '../components/settings/WarehousesTab';
@@ -14,6 +13,8 @@ import { PricingStrategiesTab } from '../components/settings/PricingStrategiesTa
 import { WorkflowPresetsTab } from '../components/settings/WorkflowPresetsTab';
 import { InventoryControlPresetTab } from '../components/settings/InventoryControlPresetTab';
 import { TaskTitlesSettingsTab } from '../components/settings/TaskTitlesSettingsTab';
+import { PayrollStatutoryRatesTab } from '../components/settings/PayrollStatutoryRatesTab';
+import { PayrollEidiRatesSection } from '../components/settings/PayrollEidiRatesSection';
 import { SystemOperationsTab, ClearDataModal } from '../components/settings/SystemOperationsTab';
 import { WooCommerceTab } from '../components/settings/WooCommerceTab';
 import { AccountingSettingsTab } from '../components/settings/AccountingSettingsTab';
@@ -209,7 +210,7 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
               s.setShowWhModal(true);
             }}
             onDeleteWarehouse={s.handleWhDelete}
-            canReactivate={currentUser.role === SYSTEM_ADMIN_ROLE}
+            canReactivate={isSystemAdmin}
           />
         )}
 
@@ -224,6 +225,13 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
 
         {activeTab === 'task_titles' && (
           <TaskTitlesSettingsTab />
+        )}
+
+        {activeTab === 'payroll_rates' && (
+          <>
+            <PayrollStatutoryRatesTab />
+            <PayrollEidiRatesSection />
+          </>
         )}
 
         {activeTab === 'projects' && (

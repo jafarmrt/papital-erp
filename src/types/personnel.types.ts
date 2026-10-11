@@ -18,6 +18,9 @@ export interface Personnel {
   jobTitle?: string;
   education?: string;
   startDate?: string;
+  // v10.0.210 (TD-1087): «مشمول بیمه» و «مشمول مالیات حقوق» (۰ / ۱)
+  isInsuranceCovered?: number;
+  isTaxCovered?: number;
   endDate?: string;
   terminationReason?: string;
   specializedSkills?: string;
@@ -130,6 +133,18 @@ export interface PieceworkPayroll {
   totalDeductions: number;
   // v9.0.329 (TD-861): شرح «سایر کسورات»
   deductionsDescription?: string;
+  // v10.0.210 (TD-1087): کسورات قانونی؛ بیمه سهم کارفرما هزینه کارفرماست و از خالص کم نمی‌شود
+  employeeInsurance?: number | string;
+  employerInsurance?: number | string;
+  incomeTax?: number | string;
+  statutoryOverrideReason?: string | null;
+  isStatutorySplit?: number;
+  // v10.0.222 (TD-1089): سهم عیدی فیش عادی، یا عیدی و بخش انباشته فیش عیدی؛ جمع سهم تأییدشده سال
+  eidiAmount?: number | string;
+  eidiFromAccrual?: number | string;
+  eidiYear?: number | null;
+  isEidi?: number;
+  eidiYearAccrued?: number | string;
   netPayable: number;
   // V4.0.33: پرداخت چندمرحله‌ای حقوق
   paidAmount?: number;

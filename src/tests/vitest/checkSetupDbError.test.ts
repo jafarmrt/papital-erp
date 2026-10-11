@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * v10.0.210 (OBS-R1-14): `/check-setup` turned any database error into `isSetup: false`, so the login page of an
+ * v10.0.228 (OBS-R1-14): `/check-setup` turned any database error into `isSetup: false`, so the login page of an
  * installed system opened the setup wizard while its database was briefly unreachable. It now answers a 503.
  */
 import { describe, expect, it, vi } from 'vitest';

@@ -53,7 +53,7 @@ router.get('/check-setup', asyncHandler(async (req, res) => {
       .where(notSyntheticTestUsername(users.username));
     count = Number(result[0]?.count || 0);
   } catch (dbErr) {
-    // V3.0.7 (TD-065): the public route never runs the seed. v10.0.210 (OBS-R1-14): a database error is a 503, never
+    // V3.0.7 (TD-065): the public route never runs the seed. v10.0.228 (OBS-R1-14): a database error is a 503, never
     // «not set up», which used to open the setup wizard on an installed system whose database was briefly unreachable.
     logger.error(`[check-setup] Database error: ${dbErr instanceof Error ? dbErr.message : String(dbErr)}`);
     throw new AppError(SETUP_STATE_UNREADABLE_MESSAGE, 503, 'SETUP_STATE_UNREADABLE');
