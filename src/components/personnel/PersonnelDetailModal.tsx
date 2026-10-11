@@ -116,6 +116,12 @@ export function PersonnelDetailModal({
                 <span className="font-bold text-slate-800">{personnel.referralSource || '---'}</span>
               </div>
               <div>
+                <span className="text-[10px] text-slate-500 block">تاریخ آغاز همکاری:</span>
+                <span className="font-bold font-mono text-slate-800">
+                  {personnel.startDate ? formatPersianDate(personnel.startDate) : '---'}
+                </span>
+              </div>
+              <div>
                 <span className="text-[10px] text-slate-500 block">تاریخ پایان همکاری:</span>
                 <span className="font-bold font-mono text-slate-800">
                   {personnel.endDate ? formatPersianDate(personnel.endDate) : '---'}

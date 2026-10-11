@@ -122,7 +122,7 @@ export function useUnifiedExcelImport({
           const validated = validateExcelRows(parsedList, loadedCats, loadedItems, typeFilter);
           setPreviewRows(validated);
           setStep('preview');
-          toast.success(`${validated.length} ردیف آماده بررسی و ثبت است.`);
+          toast.success(`${formatPersianNumber(validated.length)} ردیف آماده بررسی و ثبت است.`);
         } catch (err) {
           toast.error('خطا در خواندن فایل اکسل: ' + errorMessageOf(err));
         } finally {
@@ -153,26 +153,6 @@ export function useUnifiedExcelImport({
 
       return validateExcelRows(updated, categories, existingItems, typeFilter);
     });
-  };
-
-  const handleFixRowPrefix = (index: number) => {
-    setPreviewRows(prev => {
-      const updated = prev.map(r => {
-        if (r.index === index && r.expectedPrefix) {
-          let newCode = r.code;
-          if (!newCode) {
-            newCode = `${r.expectedPrefix}101`;
-          } else if (!newCode.toLowerCase().startsWith(r.expectedPrefix.toLowerCase())) {
-            newCode = `${r.expectedPrefix}${newCode}`;
-          }
-          return { ...r, raw: { ...r.raw, 'کد کالا': newCode }, code: newCode };
-        }
-        return r;
-      });
-
-      return validateExcelRows(updated, categories, existingItems, typeFilter);
-    });
-    toast.success('پیشوند کد اصلاح شد.');
   };
 
   const handleAutoFixAllPrefixes = () => {
@@ -269,7 +249,6 @@ export function useUnifiedExcelImport({
     handleDownloadTemplate,
     handleFileChange,
     handleCellEdit,
-    handleFixRowPrefix,
     handleAutoFixAllPrefixes,
     handleConfirmImport
   };

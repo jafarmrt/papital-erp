@@ -6728,8 +6728,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const [{ n: covered }] = (await orm.execute(sql`
         SELECT count(*)::int AS n FROM pg_constraint pc JOIN pg_class rel ON rel.oid = pc.conrelid
         WHERE rel.relnamespace = current_schema()::regnamespace AND pc.conname LIKE 'chk%datefmt' AND pc.convalidated`) as unknown as { rows: Array<{ n: number }> }).rows;
-      // v7.0.82 (TD-231): ۲۴ قید مهاجرت 0028 و ۳ قید مهاجرت 0030
-      if (covered !== 27) violations.push(`number of validated date format constraints: ${covered} (expected 27)`);
+      // v7.0.82 (TD-231): ۲۴ قید مهاجرت 0028 و ۳ قید مهاجرت 0030؛ v10.0.199 (TD-1086): ۱ قید مهاجرت 0103 (personnel.start_date)
+      if (covered !== 28) violations.push(`number of validated date format constraints: ${covered} (expected 28)`);
       if (missingRows.length > 0) violations.push(`without a valid format constraint: ${missingRows.map(r => `${r.table_name}.${r.column_name}`).join(', ')}`);
 
       const ROLLBACK = new Error('ROLLBACK_P3_15');
@@ -10860,6 +10860,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10 phase 3 lane L3 (v10.0.63+): gaps of the project screens (TD-1140..TD-1144)
   const { runProjectScreenGapsTests } = await import('../regression/projectScreenGapsTests.js');
   results.push(...await runProjectScreenGapsTests(shouldRun));
+  const { runProjectReservationIssueTests } = await import('../regression/projectReservationIssueTests.js');
+  results.push(...await runProjectReservationIssueTests(shouldRun));
 
   // Package 1 second half PR 1 (v9.0.386+): data export, system health page, factory reset, setup wizard
   const { runDataExportTests } = await import('../regression/dataExportTests.js');
@@ -10896,6 +10898,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runTreasuryPayrollPhase5Tests } = await import('../regression/treasuryPayrollPhase5Tests.js');
   results.push(...await runTreasuryPayrollPhase5Tests(shouldRun));
 
+  // Phase 3 lane L2 (v10.0.201+): package 5 ledger, items and pricing (TD-987)
+  const { runItemPricingLedgerTests } = await import('../regression/itemPricingLedgerTests.js');
+  results.push(...await runItemPricingLedgerTests(shouldRun));
   // Phase 3 lane L2 (v10.0.182+): package 6 ledger, transfer codes (TD-988)
   const { runTransferCodeLedgerTests } = await import('../regression/transferCodeLedgerTests.js');
   results.push(...await runTransferCodeLedgerTests(shouldRun));
@@ -10913,6 +10918,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runDocumentVoidReasonTests(shouldRun));
   const { runPayrollApprovalDutiesTests } = await import('../regression/payrollApprovalDutiesTests.js');
   results.push(...await runPayrollApprovalDutiesTests(shouldRun));
+  const { runPayrollPrepaymentStartTests } = await import('../regression/payrollPrepaymentStartTests.js');
+  results.push(...await runPayrollPrepaymentStartTests(shouldRun));
   const { runPurchaseWorkflowGuardTests } = await import('../regression/purchaseWorkflowGuardTests.js');
   results.push(...await runPurchaseWorkflowGuardTests(shouldRun));
   // Lane L1 guide findings (v10.0.123+): move a treasury row to another document
