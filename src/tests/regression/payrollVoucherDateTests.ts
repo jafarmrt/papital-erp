@@ -6,7 +6,7 @@ import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase, sandboxAdmi
 import { q } from './projectStageIntegrityTests.js';
 
 /**
- * v10.0.265 (L1, work map W1:337): a payslip voucher is dated the earlier of the payslip's period end and its issue day.
+ * v10.0.273 (L1, work map W1:337): a payslip voucher is dated the earlier of the payslip's period end and its issue day.
  * Before, an eidi payslip issued during the year (period to the year's last day) got a voucher dated in the future, so
  * its payment, dated today, emptied «عیدی پرداختنی» below zero and the expense was missing from every report up to the
  * year's end.
@@ -18,7 +18,7 @@ export async function runPayrollVoucherDateTests(shouldRun: ShouldRun): Promise<
   const results: TestCaseResult[] = [];
   const id = 'reg_eidi_payslip_voucher_not_future_td_1244';
   if (!shouldRun(id, 'td1244', 'td1089', 'payroll', 'eidi', 'voucher', 'date')) return results;
-  await runCase(results, id, 'v10.0.265: an eidi payslip issued before the year ends gets a voucher dated its issue day, never a future day; its period still ends on the year\'s last day', async () => inFiscalSandbox(async () => {
+  await runCase(results, id, 'v10.0.273: an eidi payslip issued before the year ends gets a voucher dated its issue day, never a future day; its period still ends on the year\'s last day', async () => inFiscalSandbox(async () => {
     const problems: string[] = [];
     const admin = await sandboxAdminClient();
     const today = await businessTodayIsoDate();

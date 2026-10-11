@@ -11,6 +11,7 @@ import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { OverOrderWarning, type OverOrderedItem } from './OverOrderWarning';
 import { requisitionRowRemaining } from '../../lib/procurement/requisitionFields';
 import { overOrdersFromError } from '../../lib/procurement/overOrderError';
+import { lineAmount, sumAmounts } from '../../lib/procurement/procurementNumbers';
 
 interface SplitOrderModalProps {
   isOpen: boolean;
@@ -134,10 +135,7 @@ export function SplitOrderModal({
 
   // Real-time calculation: total allocated across all packages for each requisition item
   const getAllocatedQty = (reqItemId: string) => {
-    return packages.reduce((sum, pkg) => {
-      const found = pkg.items.find(i => i.reqItemId === reqItemId);
-      return sum + (found ? Number(found.quantity || 0) : 0);
-    }, 0);
+    return sumAmounts(packages, pkg => pkg.items.find(i => i.reqItemId === reqItemId)?.quantity ?? 0);
   };
 
   // Real-time calculation: live remaining for requisition item after deducting all package allocations
@@ -384,13 +382,11 @@ export function SplitOrderModal({
     }
   };
 
-  const grandTotal = packages.reduce((sum, p) => 
-    sum + p.items.reduce((itemSum, i) => itemSum + (i.quantity * i.unitPrice), 0), 0
-  );
+  const grandTotal = sumAmounts(packages, p => sumAmounts(p.items, i => lineAmount(i.quantity, i.unitPrice)));
 
   return (
     <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-farsi">
-      <div className="bg-white rounded-2xl max-w-5xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 animate-fadeIn">
+      <div className="bg-white rounded-2xl max-w-5xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 animate-fadeIn">
         {/* Modal Header */}
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80 rounded-t-2xl">
           <div className="flex items-center gap-3">
@@ -554,7 +550,7 @@ export function SplitOrderModal({
 
             {/* List of Split Packages */}
             {packages.map((pkg) => {
-              const packageTotal = pkg.items.reduce((sum, it) => sum + (it.quantity * it.unitPrice), 0);
+              const packageTotal = sumAmounts(pkg.items, it => lineAmount(it.quantity, it.unitPrice));
 
               return (
                 <div 
@@ -753,7 +749,7 @@ export function SplitOrderModal({
                                   />
                                 </td>
                                 <td className="p-2 text-center font-mono font-black text-amber-800">
-                                  {formatPersianPrice(it.quantity * it.unitPrice)}
+                                  {formatPersianPrice(lineAmount(it.quantity, it.unitPrice))}
                                 </td>
                                 <td className="p-2 text-center">
                                   <button

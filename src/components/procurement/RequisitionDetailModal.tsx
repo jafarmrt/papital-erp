@@ -1,14 +1,20 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useMemo, useState } from 'react';
 import { X, FileText, CheckCircle2, AlertTriangle, ShoppingCart, UserCheck, Check, Ban, Loader2, PackageCheck, Truck, Layers } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { PurchaseRequisition, ProcurementOrder } from '../../types';
 import { fetchJson } from '../../api';
-import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../utils';
+import { formatPersianNumber, formatPersianDate } from '../../utils';
 import { ConfirmWarehouseDeliveryModal } from './ConfirmWarehouseDeliveryModal';
 import { PillBadge } from '../common/PillBadge';
 import { useProcurementAccess } from '../../hooks/procurement/useProcurementAccess';
 import { canOrderRequisition, requisitionRowRemaining } from '../../lib/procurement/requisitionFields';
+import { bulkDeliveryPlan, linkedDocumentLabel, requisitionActionButtons, requisitionActionsWithoutInstance, requisitionStage } from '../../lib/procurement/requisitionActions';
+import { lineAmount, sumAmounts } from '../../lib/procurement/procurementNumbers';
+import { useProcurementPage } from '../../hooks/procurement/useProcurementPage';
+import { PROCUREMENT_LIST_MAX_LIMIT } from '../../lib/procurement/procurementLists';
+import { useRequisitionWorkflowActions } from '../../hooks/procurement/useRequisitionWorkflowActions';
 import { REQUISITION_PRIORITY_DETAIL_BADGES, REQUISITION_PRIORITY_DETAIL_FALLBACK, REQUISITION_STATUS_BADGES, REQUISITION_STATUS_FALLBACK } from './requisitionBadges';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 
 interface RequisitionDetailModalProps {
   isOpen: boolean;
@@ -27,35 +33,24 @@ export function RequisitionDetailModal({
 }: RequisitionDetailModalProps) {
   const [comment, setComment] = useState('');
   const [isActing, setIsActing] = useState(false);
-  const [linkedOrders, setLinkedOrders] = useState<ProcurementOrder[]>([]);
-  const [isLoadingOrders, setIsLoadingOrders] = useState(false);
-  const [deliveringOrderId] = useState<number | null>(null);
+  const [ordersVersion, setOrdersVersion] = useState(0);
   const [deliveryModalOrder, setDeliveryModalOrder] = useState<ProcurementOrder | null>(null);
   const [bulkDeliveryOrders, setBulkDeliveryOrders] = useState<ProcurementOrder[] | null>(null);
   const [isSubmittingDelivery, setIsSubmittingDelivery] = useState(false);
   // v9.0.352 (TD-702، B10-15): هر دکمه با مجوز API خودش؛ پیش‌تر همه دکمه‌ها برای هر بیننده‌ای نشان داده می‌شد
   const access = useProcurementAccess();
+  // OBS-R2-39 (TD-992): مبلغ ریالی در واحد نمایش (ریال یا تومان)، نه «ریال» ثابت
+  const rial = useRialDisplay();
+  // OBS-R2-38 (TD-992): دکمه‌های اقدام از اقدام‌های مجاز گام جاری گردش کار برای همین کاربر، نه از وضعیت درخواست
+  const workflowActions = useRequisitionWorkflowActions(requisition?.id, String(requisition?.status || ''), isOpen && access.canRunWorkflowAction);
 
-  const loadLinkedOrders = useCallback(async () => {
-    if (!requisition?.id) return;
-    setIsLoadingOrders(true);
-    try {
-      const res = await fetchJson<{ success: boolean; data: ProcurementOrder[] }>(`/api/procurement/orders?requisitionId=${requisition.id}`);
-      if (res?.data) {
-        setLinkedOrders(res.data);
-      }
-    } catch {
-      // ignore
-    } finally {
-      setIsLoadingOrders(false);
-    }
-  }, [requisition?.id]);
-
-  useEffect(() => {
-    if (isOpen) {
-      void loadLinkedOrders();
-    }
-  }, [isOpen, loadLinkedOrders]);
+  // OBS-R2-40 (TD-992): سفارش‌های درخواست با درخواست لغوپذیر خوانده می‌شوند و خطای خواندن نشان داده می‌شود؛ پیش‌تر خطا
+  // بلعیده می‌شد و پنجره «هنوز فاکتور خریدی … صادر نشده است» نشان می‌داد
+  const ordersQuery = useMemo(() => ({ requisitionId: requisition?.id, limit: PROCUREMENT_LIST_MAX_LIMIT }), [requisition?.id]);
+  const ordersPage = useProcurementPage<ProcurementOrder>(isOpen && requisition?.id ? '/api/procurement/orders' : null, ordersQuery, ordersVersion);
+  const linkedOrders = ordersPage.rows;
+  const isLoadingOrders = ordersPage.isLoading;
+  const loadLinkedOrders = () => setOrdersVersion(v => v + 1);
 
   if (!isOpen) return null;
 
@@ -64,14 +59,15 @@ export function RequisitionDetailModal({
     setBulkDeliveryOrders(null);
   };
 
+  // OBS-R2-38: بی سفارش باز، پیام؛ پیش‌تر وقتی همه سفارش‌ها تحویل شده بودند دکمه هیچ کاری نمی‌کرد
   const handleOpenDeliverBulkModal = () => {
-    const draftOrders = linkedOrders.filter(o => o.status !== 'final');
-    if (draftOrders.length === 0 && linkedOrders.length === 0) {
-      toast.error('ابتدا باید با کلیک بر روی دکمه «تفکیک تامین‌کننده و صدور فاکتور»، فاکتور خرید صادر شود.');
+    const plan = bulkDeliveryPlan(linkedOrders);
+    if ('error' in plan) {
+      toast.error(plan.error);
       return;
     }
     setDeliveryModalOrder(null);
-    setBulkDeliveryOrders(draftOrders);
+    setBulkDeliveryOrders(plan.orders);
   };
 
   const handleConfirmDelivery = async () => {
@@ -91,7 +87,7 @@ export function RequisitionDetailModal({
         });
         toast.success(res.message || 'فاکتور خرید با موفقیت به انبار تحویل و رسید قطعی صادر شد.');
         setDeliveryModalOrder(null);
-        await loadLinkedOrders();
+        loadLinkedOrders();
         onRefresh();
       }
     } catch (err: any) {
@@ -122,19 +118,28 @@ export function RequisitionDetailModal({
   };
 
   const items = Array.isArray(requisition.items) ? requisition.items : [];
-  const totalRequested = items.reduce((s, i) => s + (Number(i.requestedQty || 0) * Number(i.unitPriceEstimate || 0)), 0);
+  const totalRequested = sumAmounts(items, i => lineAmount(i.requestedQty, i.unitPriceEstimate));
 
   const statusStr = String(requisition.status || '');
-  const isPendingStage = statusStr === 'pending' || statusStr === 'under_review' || statusStr === 'manager_approval';
-  const isOrderedStage = statusStr === 'ordered' || statusStr === 'approved';
-  const isReceivedStage = statusStr === 'received' || statusStr === 'completed';
-  const isRejectedStage = statusStr === 'rejected' || statusStr === 'cancelled';
-  const isConsolidated = statusStr === 'consolidated';
+  const stage = requisitionStage(statusStr);
+  const isPendingStage = stage === 'approval';
+  const isOrderedStage = stage === 'ordered';
+  const isReceivedStage = stage === 'received';
+  const isRejectedStage = stage === 'rejected';
+  const isConsolidated = stage === 'consolidated';
   const canOrderThis = canOrderRequisition(requisition, access);
+  // درخواست دریافت‌شده یا تجمیع‌شده اقدامی نمی‌گیرد (سرور رد می‌کند)
+  const actionButtons = !access.canRunWorkflowAction || isReceivedStage || isConsolidated || workflowActions.status !== 'ready'
+    ? []
+    : workflowActions.data.hasInstance
+      ? requisitionActionButtons(workflowActions.data.actions)
+      : requisitionActionsWithoutInstance(statusStr, access.canApprove);
+  // تحویل در جریان همان سفارشی است که پنجره تأییدش باز است
+  const deliveringOrderId = isSubmittingDelivery ? deliveryModalOrder?.id ?? null : null;
 
   return (
     <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-farsi">
-      <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 animate-fadeIn">
+      <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 animate-fadeIn">
         {/* Header */}
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80 rounded-t-2xl">
           <div className="flex items-center gap-3">
@@ -254,7 +259,7 @@ export function RequisitionDetailModal({
             </div>
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
               <span className="text-slate-500 block mb-1">برآورد کل هزینه:</span>
-              <span className="font-mono font-black text-amber-700">{formatPersianPrice(requisition.totalEstimatedAmount || totalRequested)}</span>
+              <span className="font-mono font-black text-amber-700">{rial.amount(requisition.totalEstimatedAmount || totalRequested)}</span>
             </div>
           </div>
 
@@ -282,7 +287,7 @@ export function RequisitionDetailModal({
                     <th className="p-2.5 text-center">درخواستی</th>
                     <th className="p-2.5 text-center">سفارش‌شده</th>
                     <th className="p-2.5 text-center">مانده</th>
-                    <th className="p-2.5 text-center">برآورد واحد (ریال)</th>
+                    <th className="p-2.5 text-center">برآورد واحد ({rial.label})</th>
                     <th className="p-2.5 text-center">تامین‌کننده انتخابی</th>
                     <th className="p-2.5 text-center">اسناد صادره</th>
                   </tr>
@@ -312,7 +317,7 @@ export function RequisitionDetailModal({
                           )}
                         </td>
                         <td className="p-2.5 text-center font-mono text-slate-700">
-                          {formatPersianPrice(row.unitPriceEstimate || 0)}
+                          {rial.number(row.unitPriceEstimate || 0)}
                         </td>
                         <td className="p-2.5 text-center font-bold text-slate-800">
                           {row.targetSupplierName || '---'}
@@ -322,7 +327,7 @@ export function RequisitionDetailModal({
                             <div className="flex items-center justify-center gap-1">
                               {row.linkedDocumentIds.map(docId => (
                                 <span key={docId} className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded text-[10px] font-mono border border-blue-200">
-                                  سند #{docId}
+                                  {linkedDocumentLabel(docId, linkedOrders, formatPersianNumber)}
                                 </span>
                               ))}
                             </div>
@@ -350,7 +355,17 @@ export function RequisitionDetailModal({
               <span className="text-[11px] text-slate-500">تفکیک فاکتور خرید بر اساس هر تامین‌کننده</span>
             </div>
 
-            {isLoadingOrders ? (
+            {ordersPage.error ? (
+              <div role="alert" className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center justify-between gap-2 text-xs text-rose-900">
+                <span className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  {`سفارش‌های خرید این درخواست خوانده نشد: ${ordersPage.error}`}
+                </span>
+                <button type="button" onClick={loadLinkedOrders} className="px-3 py-1.5 bg-white border border-rose-300 hover:bg-rose-100 text-rose-800 font-bold rounded-lg cursor-pointer shrink-0">
+                  تلاش دوباره
+                </button>
+              </div>
+            ) : isLoadingOrders ? (
               <div className="p-4 flex items-center justify-center gap-2 text-xs text-slate-500">
                 <Loader2 className="w-4 h-4 animate-spin text-sky-600" />
                 در حال بارگذاری اطلاعات فاکتورهای متناظر...
@@ -413,7 +428,7 @@ export function RequisitionDetailModal({
 
                       <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
                         <span className="font-mono font-bold text-xs text-slate-900 ml-2">
-                          {formatPersianPrice(order.totalAmount || 0)} ریال
+                          {rial.amount(order.totalAmount || 0)}
                         </span>
 
                         {isDelivered ? (
@@ -467,39 +482,38 @@ export function RequisitionDetailModal({
 
             {/* Transition Buttons */}
             <div className="flex flex-wrap items-center gap-2 pt-2">
-              {/* If pending / under_review / manager_approval (Stage 1) */}
-              {isPendingStage && (
-                <>
-                  {access.canApprove && <button
-                    type="button"
-                    disabled={isActing}
-                    onClick={() => handleWorkflowAction('approve_request')}
-                    className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50"
-                  >
-                    <Check className="w-4 h-4" />
-                    تایید و صدور دستور خرید
-                  </button>}
-
-                  {canOrderThis && <button
-                    type="button"
-                    onClick={() => onOpenSplitOrder(requisition)}
-                    className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
-                  >
-                    <ShoppingCart className="w-4 h-4" />
-                    تفکیک تامین‌کننده و صدور پیش‌فاکتور
-                  </button>}
-
-                  {access.canApprove && <button
-                    type="button"
-                    disabled={isActing}
-                    onClick={() => handleWorkflowAction('reject_request')}
-                    className="px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl flex items-center gap-1.5 border border-rose-200 transition-all cursor-pointer mr-auto disabled:opacity-50"
-                  >
-                    <Ban className="w-4 h-4" />
-                    رد درخواست خرید
-                  </button>}
-                </>
+              {workflowActions.status === 'loading' && access.canRunWorkflowAction && !isReceivedStage && !isConsolidated && (
+                <span className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  در حال خواندن اقدام‌های گردش کار...
+                </span>
               )}
+              {workflowActions.status === 'error' && access.canRunWorkflowAction && (
+                <span className="text-[11px] text-rose-700 font-bold">{workflowActions.message}</span>
+              )}
+              {actionButtons.map(action => (
+                <button
+                  key={action.actionKey}
+                  type="button"
+                  disabled={isActing}
+                  onClick={() => handleWorkflowAction(action.actionKey)}
+                  className={action.tone === 'reject'
+                    ? 'px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl flex items-center gap-1.5 border border-rose-200 transition-all cursor-pointer disabled:opacity-50'
+                    : 'px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50'}
+                >
+                  {action.tone === 'reject' ? <Ban className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+                  {action.label}
+                </button>
+              ))}
+
+              {isPendingStage && canOrderThis && <button
+                type="button"
+                onClick={() => onOpenSplitOrder(requisition)}
+                className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+              >
+                <ShoppingCart className="w-4 h-4" />
+                تفکیک تأمین‌کننده و صدور سفارش خرید
+              </button>}
 
               {/* If ordered (Stage 2) */}
               {isOrderedStage && (
@@ -525,16 +539,6 @@ export function RequisitionDetailModal({
                   >
                     <FileText className="w-4 h-4" />
                     مشاهده / ثبت فاکتور تامین‌کننده
-                  </button>}
-
-                  {access.canApprove && <button
-                    type="button"
-                    disabled={isActing}
-                    onClick={() => handleWorkflowAction('cancel_order')}
-                    className="px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl flex items-center gap-1.5 border border-rose-200 transition-all cursor-pointer mr-auto disabled:opacity-50"
-                  >
-                    <Ban className="w-4 h-4" />
-                    لغو / رد سفارش خرید
                   </button>}
                 </>
               )}
@@ -564,14 +568,6 @@ export function RequisitionDetailModal({
                     <Ban className="w-4 h-4 text-rose-600 shrink-0" />
                     این درخواست خرید رد شده یا لغو گردیده است.
                   </div>
-                  {access.canReopen && <button
-                    type="button"
-                    disabled={isActing}
-                    onClick={() => handleWorkflowAction('reopen')}
-                    className="px-3 py-1.5 bg-white border border-rose-300 hover:bg-rose-100 text-rose-800 text-xs font-bold rounded-lg transition-all cursor-pointer"
-                  >
-                    بازگشایی و بررسی مجدد
-                  </button>}
                 </div>
               )}
             </div>
@@ -581,7 +577,7 @@ export function RequisitionDetailModal({
         {/* Footer */}
         <div className="p-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/50 rounded-b-2xl">
           <span className="text-xs text-slate-500">
-            شناسه داخلی: #{requisition.id} | آخرین به‌روزرسانی: {requisition.updatedAt ? new Date(requisition.updatedAt).toLocaleDateString('fa-IR') : '---'}
+            شناسه داخلی: #{requisition.id} | آخرین به‌روزرسانی: {requisition.updatedAt ? formatPersianDate(requisition.updatedAt) : '---'}
           </span>
           <button
             type="button"
