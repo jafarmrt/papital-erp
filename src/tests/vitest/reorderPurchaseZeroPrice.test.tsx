@@ -46,7 +46,6 @@ function openDirectFinal(item: ReorderModalItem) {
   render(<ReorderPurchaseModal isOpen onClose={vi.fn()} onSuccess={vi.fn()} selectedItems={[item]} />);
   fireEvent.click(screen.getByText('صدور مستقیم سند انبار / خرید'));
   fireEvent.change(screen.getByLabelText('supplier'), { target: { value: 'تأمین‌کننده الف' } });
-  fireEvent.change(screen.getByDisplayValue('پیش‌نویس سفارش خرید (عدم تغییر موجودی)'), { target: { value: 'final' } });
 }
 const submit = () => fireEvent.click(screen.getByText('ثبت سند خرید انبار'));
 const sentPayload = () => (mutate.mock.calls[0][0] as { payload: Record<string, unknown> }).payload;
