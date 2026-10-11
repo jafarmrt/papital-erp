@@ -1,5 +1,6 @@
 import { Briefcase, Award, Wallet, X, Edit2, Phone, Calendar } from 'lucide-react';
 import { Personnel } from '../../types';
+import { NobitexPasswordValue } from './NobitexPasswordFields';
 import { formatPersianCode, formatPersianPhone, formatPersianNationalId, formatPersianDate } from '../../utils';
 
 interface PersonnelDetailModalProps {
@@ -187,14 +188,7 @@ export function PersonnelDetailModal({
                   </span>
                 </div>
               )}
-              {personnel.nobitexPassword && (
-                <div>
-                  <span className="text-[10px] text-slate-500 block">رمز عبور نوبیتکس:</span>
-                  <span className="font-bold font-mono text-slate-800 mt-0.5 block select-all">
-                    {personnel.nobitexPassword}
-                  </span>
-                </div>
-              )}
+              {personnel.nobitexPassword && <NobitexPasswordValue value={personnel.nobitexPassword} />}
             </div>
           </div>
 
