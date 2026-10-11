@@ -10,6 +10,9 @@ import { registerPendingMaterialWorkflowAction } from '../inventory/pendingMater
 import { registerRequisitionWorkflowAction } from '../procurement/requisitionWorkflowAction.js';
 import { procurementOrderHooks } from '../procurement/requisitionOrderSync.js';
 import { registerLinkedOrderHooks } from '../documents/linkedOrderHooks.js';
+import { registerEntityWorkflowPort } from './entityWorkflowPort.js';
+import { WorkflowEngineService } from '../workflow/workflowEngineService.js';
+import { terminateOpenWorkflows } from '../workflow/workflowTermination.js';
 
 /**
  * v9.0.2 (TD-415): ریشه ترکیب اقدام‌های پس از انتقال گردش‌کار. server.ts هنگام راه‌اندازی و bootstrapTestMasterData برای
@@ -31,4 +34,6 @@ export function registerWorkflowDomainActions(): void {
   // v10.0.237 / v10.0.238 (TD-912 / TD-913): voiding or editing a procurement order updates its requisition (not a workflow
   // action, but the same composition root: the documents package may not import procurement)
   registerLinkedOrderHooks(procurementOrderHooks);
+  // v10.0.249 (OBS-R2-02): the accounting, treasury and item cores start and close their entity workflows through this port
+  registerEntityWorkflowPort({ maybeStart: params => WorkflowEngineService.maybeStartWorkflow(params), terminateOpen: terminateOpenWorkflows });
 }
