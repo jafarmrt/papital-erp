@@ -2,7 +2,7 @@ import { PieceworkPayroll } from '../../types';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 
 /**
- * v10.0.201 (TD-1087، طرح حقوق §۳.۳ بند ۵): فیش چاپی هر کسر قانونی را جدا نشان می‌دهد؛ بیمه سهم کارفرما هزینه کارفرماست
+ * v10.0.210 (TD-1087، طرح حقوق §۳.۳ بند ۵): فیش چاپی هر کسر قانونی را جدا نشان می‌دهد؛ بیمه سهم کارفرما هزینه کارفرماست
  * و فقط برای آگاهی کارگر چاپ می‌شود، از خالص کم نمی‌شود. فیش پیش از این نسخه این ردیف‌ها را ندارد.
  */
 export function PayslipStatutoryRows({ payroll }: { payroll: PieceworkPayroll }) {

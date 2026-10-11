@@ -225,7 +225,7 @@ export class PieceworkPayrollService {
         }
       }
 
-      // v10.0.201 (TD-1087، طرح حقوق §۳.۳): بیمه سهم کارگر و مالیات حقوق از خالص کم می‌شوند؛ سهم کارفرما هزینه کارفرماست
+      // v10.0.210 (TD-1087، طرح حقوق §۳.۳): بیمه سهم کارگر و مالیات حقوق از خالص کم می‌شوند؛ سهم کارفرما هزینه کارفرماست
       const statutory = await resolvePayrollStatutory(tx, { person: pInfo, startIso: sDate, endIso: eDate, gross: pieceworkTotalFin.add(fixedPortionFin).add(totBonusesFin),
         entered: { employeeInsurance: input.employeeInsurance, employerInsurance: input.employerInsurance, incomeTax: input.incomeTax }, overrideReason: input.statutoryOverrideReason });
 

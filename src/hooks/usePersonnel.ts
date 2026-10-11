@@ -33,7 +33,7 @@ export interface PersonnelFormData {
   jobTitle: string;
   education: string;
   startDate: string;
-  // v10.0.201 (TD-1087): «مشمول بیمه» و «مشمول مالیات حقوق»
+  // v10.0.210 (TD-1087): «مشمول بیمه» و «مشمول مالیات حقوق»
   isInsuranceCovered: boolean;
   isTaxCovered: boolean;
   endDate: string;

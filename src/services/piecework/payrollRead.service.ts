@@ -38,7 +38,7 @@ const payrollAmountColumns = {
   totalDeductions: pieceworkPayrolls.totalDeductions,
   // v9.0.329 (TD-861): شرح «سایر کسورات» برای فیش چاپی
   deductionsDescription: pieceworkPayrolls.deductionsDescription,
-  // v10.0.201 (TD-1087): کسورات قانونی برای فیش چاپی و فرم ویرایش پیش‌نویس
+  // v10.0.210 (TD-1087): کسورات قانونی برای فیش چاپی و فرم ویرایش پیش‌نویس
   employeeInsurance: pieceworkPayrolls.employeeInsurance,
   employerInsurance: pieceworkPayrolls.employerInsurance,
   incomeTax: pieceworkPayrolls.incomeTax,

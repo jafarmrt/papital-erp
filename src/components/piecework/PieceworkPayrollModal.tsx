@@ -41,7 +41,7 @@ interface PieceworkPayrollModalProps {
   isSaving?: boolean;
   // v10.0.199 (TD-1085): فیش پیش‌پرداخت دوره آینده با دلیل
   prepayment?: PayrollPrepaymentState;
-  /** v10.0.201 (TD-1087): کادرهای بیمه و مالیات (`PayrollStatutoryFields`) */
+  /** v10.0.210 (TD-1087): کادرهای بیمه و مالیات (`PayrollStatutoryFields`) */
   statutoryFields?: ReactNode;
 }
 

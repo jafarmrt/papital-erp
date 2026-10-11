@@ -8,7 +8,7 @@ import { PayrollDeductionsField, deductionsNeedDescription } from './PayrollDedu
 import { PayrollStatutoryFields } from './PayrollStatutoryFields';
 import { EMPTY_STATUTORY_ENTRY, statutoryPayloadOf, type PayrollStatutoryEntry } from '../../lib/payroll/statutoryForm';
 
-/** v10.0.201 (TD-1087): فیشی که بیمه یا مالیاتش با شرح تغییر کرده، همان مبلغ‌ها و شرح را در فرم نشان می‌دهد */
+/** v10.0.210 (TD-1087): فیشی که بیمه یا مالیاتش با شرح تغییر کرده، همان مبلغ‌ها و شرح را در فرم نشان می‌دهد */
 const storedStatutoryEntry = (p: PieceworkPayroll): PayrollStatutoryEntry => (p.statutoryOverrideReason
   ? { employeeInsurance: String(p.employeeInsurance ?? ''), employerInsurance: String(p.employerInsurance ?? ''), incomeTax: String(p.incomeTax ?? ''), reason: p.statutoryOverrideReason }
   : EMPTY_STATUTORY_ENTRY);
@@ -16,7 +16,7 @@ const storedStatutoryEntry = (p: PieceworkPayroll): PayrollStatutoryEntry => (p.
 const nonNegative = (raw: string): number => Math.max(0, Number(raw) || 0);
 
 /**
- * v10.0.200 (TD-1242، طرح حقوق §۳.۱ بند ۳): ویرایش فیش پیش‌نویس — عنوان، پاداش، بیمه و مالیات (v10.0.201)، سایر کسورات و شرحش، کسر مساعده. سرور خالص
+ * v10.0.200 (TD-1242، طرح حقوق §۳.۱ بند ۳): ویرایش فیش پیش‌نویس — عنوان، پاداش، بیمه و مالیات (v10.0.210)، سایر کسورات و شرحش، کسر مساعده. سرور خالص
  * را دوباره حساب و سند پیش‌نویس فیش را از نو می‌سازد؛ فیش تأییدشده یا با سند تأییدشده را با پیام خودش رد می‌کند.
  */
 export function PayrollDraftEditModal({ payroll, onClose, onSaved }: { payroll: PieceworkPayroll | null; onClose: () => void; onSaved: () => void }) {

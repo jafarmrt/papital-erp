@@ -51,7 +51,7 @@ const PERSONNEL_DETAIL_COLUMNS = {
   jobTitle: personnel.jobTitle,
   education: personnel.education,
   startDate: personnel.startDate,
-  // v10.0.201 (TD-1087): «مشمول بیمه» و «مشمول مالیات حقوق»
+  // v10.0.210 (TD-1087): «مشمول بیمه» و «مشمول مالیات حقوق»
   isInsuranceCovered: personnel.isInsuranceCovered,
   isTaxCovered: personnel.isTaxCovered,
   endDate: personnel.endDate,
@@ -131,7 +131,7 @@ const personnelBodySchema = z.object({
   education: z.string().optional(),
   // v10.0.199 (TD-1086): «آغاز همکاری»؛ حقوق ثابت از این روز آغاز می‌شود
   startDate: z.string().optional(),
-  // v10.0.201 (TD-1087، طرح حقوق ت۵ الف): کسورات قانونی فیش فقط برای پرسنل مشمول حساب می‌شود
+  // v10.0.210 (TD-1087، طرح حقوق ت۵ الف): کسورات قانونی فیش فقط برای پرسنل مشمول حساب می‌شود
   isInsuranceCovered: z.boolean().optional(),
   isTaxCovered: z.boolean().optional(),
   endDate: z.string().optional(),

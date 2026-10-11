@@ -34,6 +34,7 @@ import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { proformaInvoiceTarget } from './proformaInvoice.js';
 import { assertNotProjectDelivery, stockDirectionOf } from './documentRecordRule.js';
 import { assertOutflowWithinSellable } from './documentSellableGate.js';
+import { consumesProjectReservation } from '../../lib/transactions/projectIssueTypes.js';
 import { documentAuditSnapshot, type DocumentAuditChange, type DocumentAuditSnapshot, type DocumentVoidAudit } from './documentAudit.js';
 import { assertNameNotOtherKind } from './documentParty.js';
 import { lockRequisitionOfOrder, releaseVoidedProcurementOrder } from './procurementOrderVoid.js';
@@ -154,9 +155,9 @@ export class DocumentLifecycleService {
           // Pre-flight stock availability & reservation check for exit documents (TD-118). v9.0.239 (TD-775): جمع مقدار هر
           // (کالا، انبار)، موجودی و رزرو یک‌جا و fail-closed، همان تابع ثبت سند (documentSellableGate.ts)
           if (inOut === 'out') {
+            // v10.0.207 (TD-947): رزرو پروژه فقط برای حواله و ضایعات همان پروژه آزاد است، نه فاکتور فروش
             await assertOutflowWithinSellable(tx, docLines, {
-              excludeDocumentId: id,
-              projectId: doc.projectId ? Number(doc.projectId) : null,
+              excludeDocumentId: id, projectId: doc.projectId && consumesProjectReservation(targetType) ? Number(doc.projectId) : null,
             });
           }
 
@@ -213,7 +214,7 @@ export class DocumentLifecycleService {
           }
 
           // v7.0.102 (TD-233): کسر رزرو پروژه حواله خروج در همان تراکنش نهایی‌سازی؛ خطا نهایی‌سازی را برمی‌گرداند
-          if (inOut === 'out' && doc.projectId) {
+          if (inOut === 'out' && doc.projectId && consumesProjectReservation(targetType)) {
             await releaseReservationsForDocument(tx, Number(doc.projectId), id, docLines, user || doc.user || undefined);
           }
 

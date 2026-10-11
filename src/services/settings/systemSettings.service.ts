@@ -10,6 +10,7 @@ import { invalidateSettingsCache, appSettingsCache } from '../../lib/memoryCache
 import {
   MOVEMENT_DAY_KEYS, currencySettingError, priceListNamesError, isMovementDayKey, movementDaysError, readMovementDays
 } from '../../lib/settings/settingValues.js';
+import { pricingStrategiesSettingError } from '../../lib/items/pricingStrategies.js';
 
 /**
  * v7.0.26 (TD-184 / audit P1-3) — ذخیره امن تنظیمات سیستم با مجوز سطح کلید
@@ -88,10 +89,16 @@ async function validateSettingValue(key: string, value: string): Promise<void> {
     const error = currencySettingError(value);
     if (error) throw new ValidationError(error, { key, value }, 'SETTING_CURRENCY_INVALID');
   }
-  // v10.0.95 (TD-1192): نام‌های فهرست قیمت یکتا
+  // v10.0.201 (OBS-R1-71): فهرست‌های قیمت آرایه JSON از عنوان‌هاست، نه متن جداشده با کاما؛
+  // v10.0.95 (TD-1192): نام‌های فهرست قیمت یکتا (بی‌توجه به فاصله و بزرگی حروف)
   if (key === 'pricing_strategies') {
-    const error = priceListNamesError(value.split(','));
-    if (error) throw new ValidationError(error, { key }, 'SETTING_PRICE_LIST_NAMES_INVALID');
+    const isJson = value.trim().startsWith('[');
+    const legacyNamesError = isJson ? null : priceListNamesError(value.split(','));
+    if (legacyNamesError) throw new ValidationError(legacyNamesError, { key }, 'SETTING_PRICE_LIST_NAMES_INVALID');
+    const error = pricingStrategiesSettingError(value);
+    if (error) throw new ValidationError(error, { key }, 'SETTING_PRICING_STRATEGIES_INVALID');
+    const namesError = priceListNamesError(JSON.parse(value) as string[], { allowLatinComma: true });
+    if (namesError) throw new ValidationError(namesError, { key }, 'SETTING_PRICE_LIST_NAMES_INVALID');
   }
   if (key === 'wc_shop_warehouse' && value.trim() !== '') {
     const [wh] = await orm.select({ id: warehouses.id }).from(warehouses)
@@ -202,6 +209,26 @@ export class SystemSettingsService {
         await tx.insert(appSettings).values({ key: change.key, value: change.stored })
           .onConflictDoUpdate({ target: appSettings.key, set: { value: change.stored } });
       }
+      // TD-963 (بخش ۲): ردیف ممیزی با همان تراکنش نوشتن گزینه‌ها ثبت می‌شود
+      if (changes.length > 0) {
+        await logActivity({
+          tx,
+          userId: actor.id,
+          username: actor.username || 'سیستم',
+          userFullName: actor.fullName || '',
+          action: 'SETTING_CHANGE',
+          entity: 'تنظیمات سیستم',
+          description: `تغییر ${changes.length} گزینه از تنظیمات سیستم: ${changes.map(c => c.key).join('، ')}`,
+          details: {
+            changes: changes.map(c => ({
+              setting: c.key,
+              previousValue: redactForAudit(c.key, c.before),
+              newValue: redactForAudit(c.key, c.after),
+            })),
+            ignoredMaskedKeys,
+          },
+        });
+      }
     });
 
     if (changes.length > 0) {
@@ -209,23 +236,6 @@ export class SystemSettingsService {
       const { invalidateTimezoneCache, warmDisplayTimezone } = await import('../../lib/businessClock.js');
       invalidateTimezoneCache();
       await warmDisplayTimezone(); // v8.0.77 (TD-324): بیرون از تراکنش، تا خواندن بعدی درون تراکنشی منتظر اتصال دوم نماند
-
-      await logActivity({
-        userId: actor.id,
-        username: actor.username || 'سیستم',
-        userFullName: actor.fullName || '',
-        action: 'SETTING_CHANGE',
-        entity: 'تنظیمات سیستم',
-        description: `تغییر ${changes.length} گزینه از تنظیمات سیستم: ${changes.map(c => c.key).join('، ')}`,
-        details: {
-          changes: changes.map(c => ({
-            setting: c.key,
-            previousValue: redactForAudit(c.key, c.before),
-            newValue: redactForAudit(c.key, c.after),
-          })),
-          ignoredMaskedKeys,
-        },
-      });
     }
 
     return { changedKeys: changes.map(c => c.key), ignoredMaskedKeys };

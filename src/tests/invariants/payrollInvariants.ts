@@ -11,7 +11,7 @@ import { rows } from './ledgerRows.js';
  * - a payslip with a positive net has a live voucher (linked by `source_payroll_id`);
  * - its voucher credits «wages payable» (mapped 3201) with exactly the net, and the advance (mapped 1301) and other
  *   deductions (mapped 3205 since v9.0.286, TD-554) accounts with exactly the advance deduction and the other deductions;
- * - v10.0.201 (TD-1087): the net equals gross − employee insurance − income tax − other deductions − advance, and the
+ * - v10.0.210 (TD-1087): the net equals gross − employee insurance − income tax − other deductions − advance, and the
  *   voucher credits insurance payable (mapped 3204) with the employee plus the employer share, debits the employer
  *   insurance expense (mapped 7013) with the employer share and credits payroll tax payable (mapped 3206) with the tax.
  */

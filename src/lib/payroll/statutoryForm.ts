@@ -2,7 +2,7 @@ import { DECIMAL_PATTERN, normalizeDecimalString } from '../numericInput.js';
 import { STATUTORY_OVERRIDE_REASON_MAX, statutoryOverridden, type StatutoryAmounts } from './statutoryDeductions.js';
 
 /**
- * v10.0.201 (TD-1087، طرح حقوق §۳.۳، تصمیم ت۶ الف): کسورات قانونی فرم صدور و ویرایش فیش. کادر خالی یعنی پیشنهاد سرور؛
+ * v10.0.210 (TD-1087، طرح حقوق §۳.۳، تصمیم ت۶ الف): کسورات قانونی فرم صدور و ویرایش فیش. کادر خالی یعنی پیشنهاد سرور؛
  * فرم فقط مبلغی را می‌فرستد که کاربر نوشته، تا سرور پیشنهاد را روی ناخالص واقعی فیش حساب کند. مبلغ دیگر شرح می‌خواهد.
  */
 export interface PayrollStatutoryEntry {

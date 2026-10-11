@@ -1332,7 +1332,7 @@ export class VoucherSyncService {
     const otherDeductions = nonNegative(pay.totalDeductions);
     let allocatedCredits = fin(0);
 
-    // v10.0.201 (TD-1087، طرح حقوق §۳.۳ بند ۴): بیمه سهم کارگر و کارفرما بستانکار «بیمه پرداختنی» (۳۲۰۴)، سهم کارفرما با
+    // v10.0.210 (TD-1087، طرح حقوق §۳.۳ بند ۴): بیمه سهم کارگر و کارفرما بستانکار «بیمه پرداختنی» (۳۲۰۴)، سهم کارفرما با
     // بدهکار «هزینه بیمه سهم کارفرما» (۷۰۱۳) که از خالص کم نمی‌شود، و مالیات حقوق بستانکار «مالیات حقوق پرداختنی» (۳۲۰۶)
     const employeeInsurance = nonNegative(pay.employeeInsurance);
     const employerInsurance = nonNegative(pay.employerInsurance);

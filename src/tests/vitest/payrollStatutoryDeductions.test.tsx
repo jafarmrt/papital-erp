@@ -27,7 +27,7 @@ const RATES: StatutoryRates = {
 const FARVARDIN = { startIso: '2026-03-21', endIso: '2026-04-20' };
 const BOTH = { insurance: true, tax: true };
 
-// v10.0.201 (TD-1087, payroll duties plan §3.3): statutory deductions from the year's rates
+// v10.0.210 (TD-1087, payroll duties plan §3.3): statutory deductions from the year's rates
 describe('statutory deduction rule (TD-1087)', () => {
   it('computes employee and employer insurance and bracket tax for a whole month', () => {
     const s = suggestStatutoryDeductions({ gross: 20_000_000, ...FARVARDIN, rates: RATES, coverage: BOTH });
@@ -135,7 +135,7 @@ describe('rates settings tab (TD-1087)', () => {
   });
 });
 
-// v10.0.202 (TD-1088): the monthly insurance and tax list
+// v10.0.211 (TD-1088): the monthly insurance and tax list
 describe('monthly statutory report (TD-1088)', () => {
   it('builds Excel rows with a total row and a Persian file name', () => {
     const report: StatutoryReport = {

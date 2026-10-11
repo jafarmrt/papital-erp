@@ -481,7 +481,8 @@ export class WorkflowTaskService {
         entity: 'وظیفه فرآیند کاری',
         entityId: task.id,
         description: `وظیفه شماره #${task.id} به کاربر #${params.toUserId} تفویض شد. دلیل: ${params.reason || 'نامشخص'}`,
-        details: { taskId: task.id, fromUserId: params.fromUserId, toUserId: params.toUserId, reason: params.reason }
+        details: { taskId: task.id, fromUserId: params.fromUserId, toUserId: params.toUserId, reason: params.reason },
+        tx
       });
 
       return {

@@ -52,7 +52,7 @@ export async function runPayrollStatutoryTests(shouldRun: ShouldRun): Promise<Te
 
   const ratesId = 'reg_payroll_statutory_rates_td_1087';
   if (shouldRun(ratesId, 'td1087', 'payroll', 'statutory', 'rates', 'duties')) {
-    await runCase(results, ratesId, 'v10.0.201: yearly insurance and payroll tax rates are saved only with payroll.rates_manage, refused when invalid or stale, and audited (TD-1087)', async () => inFiscalSandbox(async () => {
+    await runCase(results, ratesId, 'v10.0.210: yearly insurance and payroll tax rates are saved only with payroll.rates_manage, refused when invalid or stale, and audited (TD-1087)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const reader = await sandboxClientWith(['piecework.view', 'piecework.payroll']);
       const manager = await sandboxClientWith(['piecework.view', 'payroll.rates_manage']);
@@ -82,7 +82,7 @@ export async function runPayrollStatutoryTests(shouldRun: ShouldRun): Promise<Te
 
   const issueId = 'reg_payroll_statutory_issue_td_1087';
   if (shouldRun(issueId, 'td1087', 'payroll', 'statutory', 'payslip', 'voucher', 'duties')) {
-    await runCase(results, issueId, 'v10.0.201: a covered worker\'s payslip takes employee and employer insurance and income tax from the year\'s rates, nets the employee share and the tax, posts them on 3204 / 7013 / 3206, needs a reason to differ, and a year without rates warns (TD-1087)', async () => inFiscalSandbox(async () => {
+    await runCase(results, issueId, 'v10.0.210: a covered worker\'s payslip takes employee and employer insurance and income tax from the year\'s rates, nets the employee share and the tax, posts them on 3204 / 7013 / 3206, needs a reason to differ, and a year without rates warns (TD-1087)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const task = await newTask();
@@ -148,7 +148,7 @@ export async function runPayrollStatutoryTests(shouldRun: ShouldRun): Promise<Te
 
   const editId = 'reg_payroll_statutory_draft_edit_td_1087';
   if (shouldRun(editId, 'td1087', 'payroll', 'statutory', 'draft', 'duties')) {
-    await runCase(results, editId, 'v10.0.201: editing a draft payslip recomputes its statutory deductions on the new gross and rebuilds the voucher, and I10 catches a net that ignores them (TD-1087)', async () => inFiscalSandbox(async () => {
+    await runCase(results, editId, 'v10.0.210: editing a draft payslip recomputes its statutory deductions on the new gross and rebuilds the voucher, and I10 catches a net that ignores them (TD-1087)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       await admin.put('/api/piecework/statutory-rates/1405', RATES_1405);
@@ -178,7 +178,7 @@ export async function runPayrollStatutoryTests(shouldRun: ShouldRun): Promise<Te
 
   const reportId = 'reg_payroll_statutory_report_td_1088';
   if (shouldRun(reportId, 'td1088', 'payroll', 'statutory', 'report', 'health', 'duties')) {
-    await runCase(results, reportId, 'v10.0.202: the monthly insurance and tax list sums approved payslips per personnel, leaves drafts out and counts them; payslips issued before the split with deductions left on 3205 are listed by the health check (TD-1088)', async () => inFiscalSandbox(async () => {
+    await runCase(results, reportId, 'v10.0.211: the monthly insurance and tax list sums approved payslips per personnel, leaves drafts out and counts them; payslips issued before the split with deductions left on 3205 are listed by the health check (TD-1088)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       await admin.put('/api/piecework/statutory-rates/1405', RATES_1405);

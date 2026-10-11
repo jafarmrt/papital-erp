@@ -20,13 +20,15 @@ import { boundaryState } from './packageBoundary';
  *    instead of throwing an AppError for `errorHandler`;
  *  - serviceGenericErrors (decision t5 A): `throw new Error(` in `src/services/**` instead of an AppError subclass;
  *  - packageBoundary (decision t3 A, OBS-R2-02): server imports against the package direction of
- *    scripts/ratchets/PACKAGE_MAP.txt (scripts/ratchets/packageBoundary.ts); a server file the map does not cover is refused.
+ *    scripts/ratchets/PACKAGE_MAP.txt (scripts/ratchets/packageBoundary.ts); a server file the map does not cover is refused;
+ *  - auditWithoutTx (TD-963 part 2, OBS-R2-07): a `logActivity(...)` call whose argument names no `tx`, so the audit row
+ *    is written on its own pool connection after the change committed, and a failed insert never refuses the change.
  * Terminal output is English (AGENTS.md, owner rule t9).
  */
 
 export const BASELINE_FILE = 'scripts/ratchets/architecture-baseline.json';
 
-export const METRICS = ['routeWrites', 'ormFallback', 'routeErrorResponses', 'serviceGenericErrors', 'packageBoundary'] as const;
+export const METRICS = ['routeWrites', 'ormFallback', 'routeErrorResponses', 'serviceGenericErrors', 'auditWithoutTx', 'packageBoundary'] as const;
 export type Metric = (typeof METRICS)[number];
 export type ArchitectureBaseline = Record<Metric, Record<string, number>> & { unmappedServerFiles?: string[] };
 
@@ -35,6 +37,7 @@ const METRIC_ADVICE: Record<Metric, string> = {
   ormFallback: 'take the caller\'s tx instead of falling back to the pool (decision t4 B)',
   routeErrorResponses: 'throw an AppError subclass and let errorHandler answer (decision t5 A)',
   serviceGenericErrors: 'throw an AppError subclass (decision t5 A)',
+  auditWithoutTx: 'pass the write\'s own tx to logActivity so the audit row commits or rolls back with the change (TD-963)',
   packageBoundary: 'import only towards a lower layer, or go through an event or the composition root (decision t3 A)',
 };
 
@@ -71,12 +74,23 @@ function schemaImports(sf: ts.SourceFile): Set<string> {
 
 const isOrm = (n: ts.Node) => ts.isIdentifier(n) && n.text === 'orm';
 
+/** A `logActivity(...)` call whose argument is not an object literal naming `tx` (a spread may carry it, so it counts as named). */
+function isAuditWithoutTx(n: ts.CallExpression): boolean {
+  const callee = n.expression;
+  const name = ts.isIdentifier(callee) ? callee.text : ts.isPropertyAccessExpression(callee) ? callee.name.text : '';
+  if (name !== 'logActivity') return false;
+  const arg = n.arguments[0];
+  if (!arg || !ts.isObjectLiteralExpression(arg)) return true;
+  return !arg.properties.some(p => ts.isSpreadAssignment(p)
+    || ((ts.isPropertyAssignment(p) || ts.isShorthandPropertyAssignment(p)) && ts.isIdentifier(p.name) && p.name.text === 'tx'));
+}
+
 /** Counts of every metric in one source file. */
 export type SourceMetric = Exclude<Metric, 'packageBoundary'>;
 
 export function countSource(file: string, source: string): Record<SourceMetric, number> {
   const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
-  const counts: Record<SourceMetric, number> = { routeWrites: 0, ormFallback: 0, routeErrorResponses: 0, serviceGenericErrors: 0 };
+  const counts: Record<SourceMetric, number> = { routeWrites: 0, ormFallback: 0, routeErrorResponses: 0, serviceGenericErrors: 0, auditWithoutTx: 0 };
   const tables = isRoute(file) ? schemaImports(sf) : new Set<string>();
   const isTable = (n: ts.Expression) => (ts.isIdentifier(n) && tables.has(n.text))
     || (ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.expression) && tables.has(`${n.expression.text}.*`));
@@ -87,6 +101,7 @@ export function countSource(file: string, source: string): Record<SourceMetric, 
       if (isRoute(file) && method === 'status' && n.arguments.length === 1 && ts.isNumericLiteral(n.arguments[0])
         && Number(n.arguments[0].text) >= 400 && ts.isIdentifier(n.expression.expression) && n.expression.expression.text === 'res') counts.routeErrorResponses++;
     }
+    if (ts.isCallExpression(n) && isAuditWithoutTx(n)) counts.auditWithoutTx++;
     if (ts.isBinaryExpression(n) && isOrm(n.right)
       && [ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.EqualsToken].includes(n.operatorToken.kind)) counts.ormFallback++;
     if ((ts.isVariableDeclaration(n) || ts.isParameter(n)) && n.initializer && isOrm(n.initializer)) counts.ormFallback++;

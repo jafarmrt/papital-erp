@@ -91,14 +91,15 @@ export function currencySettingError(value: unknown): string | null {
  * by the settings form on each name and by the server on the stored list. A name with a Latin comma would be split into two
  * lists, and two names that differ only in spaces or letter case would be two lists of one price; both are refused with a
  * message that names them. Empty names are dropped. Before, «قیمت خرده‌فروشی, ویژه» was saved as two lists and a second
- * «قیمت خرده‌فروشی» was saved as well.
+ * «قیمت خرده‌فروشی» was saved as well. Since price lists are stored as a JSON array (OBS-R1-71) a Latin comma no longer
+ * splits a name, so the stored JSON list is checked with `allowLatinComma`.
  */
-export function priceListNamesError(names: readonly string[]): string | null {
+export function priceListNamesError(names: readonly string[], options: { allowLatinComma?: boolean } = {}): string | null {
   const seen = new Set<string>();
   for (const raw of names) {
     const name = String(raw ?? '').trim();
     if (!name) continue;
-    if (name.includes(',')) return `نام فهرست قیمت «${name}» ویرگول لاتین «,» دارد؛ آن را بردارید یا از «،» استفاده کنید.`;
+    if (!options.allowLatinComma && name.includes(',')) return `نام فهرست قیمت «${name}» ویرگول لاتین «,» دارد؛ آن را بردارید یا از «،» استفاده کنید.`;
     const key = name.toLowerCase();
     if (seen.has(key)) return `فهرست قیمت «${name}» دو بار آمده است؛ نام هر فهرست قیمت یکتاست.`;
     seen.add(key);

@@ -61,7 +61,7 @@ export function payrollSnapshot(row: PayrollRow): Snapshot {
     // v10.0.199 (TD-1085): فیش پیش‌پرداخت و دلیلش در ممیزی
     isPrepayment: row.isPrepayment ?? 0,
     prepaymentReason: row.prepaymentReason ?? '',
-    // v10.0.201 (TD-1087): کسورات قانونی و شرح تغییر مبلغ پیشنهادی
+    // v10.0.210 (TD-1087): کسورات قانونی و شرح تغییر مبلغ پیشنهادی
     employeeInsurance: text(row.employeeInsurance),
     employerInsurance: text(row.employerInsurance),
     incomeTax: text(row.incomeTax),

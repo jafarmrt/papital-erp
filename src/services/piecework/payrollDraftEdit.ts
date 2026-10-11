@@ -21,7 +21,7 @@ export interface EditDraftPayrollInput {
   /** شرح «سایر کسورات»؛ با کسورات بالای صفر الزامی (TD-861) */
   deductionsDescription?: string;
   advanceDeduction?: AmountInput;
-  /** v10.0.201 (TD-1087): کسورات قانونی؛ نفرستاده = مبلغ ذخیره‌شده اگر پیش‌تر با شرح تغییر کرده، وگرنه پیشنهاد سرور */
+  /** v10.0.210 (TD-1087): کسورات قانونی؛ نفرستاده = مبلغ ذخیره‌شده اگر پیش‌تر با شرح تغییر کرده، وگرنه پیشنهاد سرور */
   employeeInsurance?: AmountInput;
   employerInsurance?: AmountInput;
   incomeTax?: AmountInput;
@@ -72,7 +72,7 @@ export async function editDraftPayroll(id: number, input: EditDraftPayrollInput)
         throw new ValidationError(`کسر مساعده (${faAmount(advance.toString())} ریال) از مانده مساعده تسویه‌نشده ${person?.fullName ?? ''} (${faAmount(ceiling.toString())} ریال) بیشتر است.`, undefined, 'PAYROLL_ADVANCE_EXCEEDS_BALANCE');
       }
     }
-    // v10.0.201 (TD-1087): کسورات قانونی با ناخالص تازه؛ مبلغی که پیش‌تر با شرح تغییر کرده می‌ماند مگر دوباره فرستاده شود
+    // v10.0.210 (TD-1087): کسورات قانونی با ناخالص تازه؛ مبلغی که پیش‌تر با شرح تغییر کرده می‌ماند مگر دوباره فرستاده شود
     const gross = fin(before.totalPieceworkAmount ?? 0).add(before.totalFixedAmount ?? 0).add(bonuses);
     const keptOverride = (before.statutoryOverrideReason ?? '').trim() !== '';
     const statutory = await resolvePayrollStatutory(tx, {

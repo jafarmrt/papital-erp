@@ -294,17 +294,17 @@ export class AccountMappingService {
     return this.resolveAccount('employeeDeductionsPayableAccountCode', tx);
   }
 
-  /** v10.0.201 (TD-1087): بیمه پرداختنی (سهم کارگر و کارفرما)؛ پیش‌فرض ۳۲۰۴ */
+  /** v10.0.210 (TD-1087): بیمه پرداختنی (سهم کارگر و کارفرما)؛ پیش‌فرض ۳۲۰۴ */
   static async getInsurancePayableAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('insurancePayableAccountCode', tx);
   }
 
-  /** v10.0.201 (TD-1087): مالیات حقوق پرداختنی؛ پیش‌فرض ۳۲۰۶ (۳۲۰۳ حساب مالیات بر ارزش افزوده است) */
+  /** v10.0.210 (TD-1087): مالیات حقوق پرداختنی؛ پیش‌فرض ۳۲۰۶ (۳۲۰۳ حساب مالیات بر ارزش افزوده است) */
   static async getPayrollTaxPayableAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('payrollTaxPayableAccountCode', tx);
   }
 
-  /** v10.0.201 (TD-1087): هزینه بیمه سهم کارفرما؛ پیش‌فرض ۷۰۱۳ */
+  /** v10.0.210 (TD-1087): هزینه بیمه سهم کارفرما؛ پیش‌فرض ۷۰۱۳ */
   static async getEmployerInsuranceExpenseAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('employerInsuranceExpenseAccountCode', tx);
   }

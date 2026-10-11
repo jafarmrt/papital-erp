@@ -119,7 +119,7 @@ export function usePiecework() {
   // v10.0.199 (TD-1085): فیش پیش‌پرداخت دوره آینده، فقط حقوق ثابت، با دلیل الزامی
   const [payrollIsPrepayment, setPayrollIsPrepayment] = useState<boolean>(false);
   const [payrollPrepaymentReason, setPayrollPrepaymentReason] = useState<string>('');
-  // v10.0.201 (TD-1087): بیمه و مالیات نوشته‌شده؛ کادر خالی یعنی پیشنهاد سرور
+  // v10.0.210 (TD-1087): بیمه و مالیات نوشته‌شده؛ کادر خالی یعنی پیشنهاد سرور
   const [payrollStatutory, setPayrollStatutory] = useState<PayrollStatutoryEntry>(EMPTY_STATUTORY_ENTRY);
   const [isSavingPayroll, setIsSavingPayroll] = useState<boolean>(false);
 
@@ -588,7 +588,7 @@ export function usePiecework() {
     return `سهم حقوق ثابت این فیش ${formatPersianPrice(payrollFixedShares.total.toNumber())} است — ${parts.join('، ')}.`;
   }, [payrollFixedShares]);
 
-  // v10.0.201 (TD-1087): ناخالص فیش برای پیشنهاد بیمه و مالیات — کارکرد (جز پیش‌پرداخت) + سهم حقوق ثابت + پاداش، همان جمع سرور
+  // v10.0.210 (TD-1087): ناخالص فیش برای پیشنهاد بیمه و مالیات — کارکرد (جز پیش‌پرداخت) + سهم حقوق ثابت + پاداش، همان جمع سرور
   const payrollStatutoryGross = useMemo(() => {
     const piecework = payrollIsPrepayment ? 0 : payrollPreviewLogs.reduce((sum, l) => sum + Number(l.totalAmount || 0), 0);
     return piecework + (payrollFixedShares?.total.toNumber() ?? 0) + Number(payrollBonuses || 0);

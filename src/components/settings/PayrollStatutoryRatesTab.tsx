@@ -8,7 +8,7 @@ import { normalizeDecimalString, toLatinDigits } from '../../lib/numericInput';
 import { statutoryRatesError, type TaxBracket } from '../../lib/payroll/statutoryDeductions';
 
 /**
- * v10.0.201 (TD-1087، طرح حقوق §۳.۳ بند ۱، تصمیم ت۴ الف): «نرخ‌های بیمه و مالیات حقوق» هر سال جلالی. حسابدار اعداد را از
+ * v10.0.210 (TD-1087، طرح حقوق §۳.۳ بند ۱، تصمیم ت۴ الف): «نرخ‌های بیمه و مالیات حقوق» هر سال جلالی. حسابدار اعداد را از
  * بخشنامه تأمین اجتماعی و قانون بودجه همان سال وارد می‌کند؛ هیچ نرخ پیش‌فرضی نیست. ذخیره `payroll.rates_manage` می‌خواهد.
  */
 

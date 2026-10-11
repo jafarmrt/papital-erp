@@ -18,7 +18,7 @@ export interface Personnel {
   jobTitle?: string;
   education?: string;
   startDate?: string;
-  // v10.0.201 (TD-1087): «مشمول بیمه» و «مشمول مالیات حقوق» (۰ / ۱)
+  // v10.0.210 (TD-1087): «مشمول بیمه» و «مشمول مالیات حقوق» (۰ / ۱)
   isInsuranceCovered?: number;
   isTaxCovered?: number;
   endDate?: string;
@@ -133,7 +133,7 @@ export interface PieceworkPayroll {
   totalDeductions: number;
   // v9.0.329 (TD-861): شرح «سایر کسورات»
   deductionsDescription?: string;
-  // v10.0.201 (TD-1087): کسورات قانونی؛ بیمه سهم کارفرما هزینه کارفرماست و از خالص کم نمی‌شود
+  // v10.0.210 (TD-1087): کسورات قانونی؛ بیمه سهم کارفرما هزینه کارفرماست و از خالص کم نمی‌شود
   employeeInsurance?: number | string;
   employerInsurance?: number | string;
   incomeTax?: number | string;

@@ -10,8 +10,8 @@ import { listStatutoryRates, previewPayrollStatutory, saveStatutoryRates } from 
 import { payrollStatutoryReport } from '../services/piecework/payrollStatutoryReport.js';
 
 /**
- * v10.0.201 (TD-1087، طرح حقوق §۳.۳، تصمیم ت۴ الف): نرخ‌های سالانه بیمه و مالیات حقوق (نوشتن با `payroll.rates_manage`)
- * و پیش‌نمایش کسورات قانونی فرم صدور فیش؛ v10.0.202 (TD-1088، ت۷ الف): «فهرست بیمه و مالیات» ماهانه.
+ * v10.0.210 (TD-1087، طرح حقوق §۳.۳، تصمیم ت۴ الف): نرخ‌های سالانه بیمه و مالیات حقوق (نوشتن با `payroll.rates_manage`)
+ * و پیش‌نمایش کسورات قانونی فرم صدور فیش؛ v10.0.211 (TD-1088، ت۷ الف): «فهرست بیمه و مالیات» ماهانه.
  */
 const router = Router();
 router.use(authenticateToken);

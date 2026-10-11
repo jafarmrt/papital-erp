@@ -191,7 +191,7 @@ const generatePieceworkPayrollSchema = z.object({
     // v10.0.199 (TD-1085): فیش پیش‌پرداخت دوره آینده با دلیل الزامی (سرویس، ۴۲۲)
     isPrepayment: z.boolean().optional(),
     prepaymentReason: z.string().max(PREPAYMENT_REASON_MAX, 'دلیل فیش پیش‌پرداخت حداکثر ۵۰۰ نویسه است').optional(),
-    // v10.0.201 (TD-1087): کسورات قانونی؛ نفرستاده = پیشنهاد سرور، مبلغ دیگر با شرح (سرویس، ۴۲۲)
+    // v10.0.210 (TD-1087): کسورات قانونی؛ نفرستاده = پیشنهاد سرور، مبلغ دیگر با شرح (سرویس، ۴۲۲)
     ...statutoryFields,
   })
 });
@@ -841,7 +841,7 @@ const editDraftPayrollSchema = z.object({
     deductions: nonNegativeAmount('کسورات').optional(),
     deductionsDescription: z.string().max(500, 'شرح سایر کسورات حداکثر ۵۰۰ نویسه است').optional(),
     advanceDeduction: nonNegativeAmount('کسر مساعده').optional(),
-    // v10.0.201 (TD-1087): کسورات قانونی فیش پیش‌نویس با همان قاعده صدور
+    // v10.0.210 (TD-1087): کسورات قانونی فیش پیش‌نویس با همان قاعده صدور
     ...statutoryFields,
   }).strict(),
 });

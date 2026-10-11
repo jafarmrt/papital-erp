@@ -1,4 +1,4 @@
--- Drizzle Migration 0104: statutory payslip deductions (v10.0.201 / TD-1087, OBS-R2-49, payroll duties plan §3.3)
+-- Drizzle Migration 0104: statutory payslip deductions (v10.0.210 / TD-1087, OBS-R2-49, payroll duties plan §3.3)
 --
 -- Product-owner decisions t4 to t7 (option a, 18 Mehr 1405): the employee and employer social insurance shares and the
 -- payroll income tax are computed on a payslip from the rates the accountant enters for each Jalali year

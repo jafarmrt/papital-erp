@@ -27,7 +27,7 @@ export const personnel = pgTable('personnel', {
   education: text('education').default(''),
   // v10.0.199 (TD-1086، طرح حقوق §۳.۴): «آغاز همکاری» میلادی ISO؛ حقوق ثابت از این روز آغاز می‌شود (خالی = رفتار پیشین)
   startDate: text('start_date').default(''),
-  // v10.0.201 (TD-1087، طرح حقوق ت۵ الف): «مشمول بیمه» و «مشمول مالیات حقوق»؛ پرسنل موجود خاموش (مهاجرت 0104)
+  // v10.0.210 (TD-1087، طرح حقوق ت۵ الف): «مشمول بیمه» و «مشمول مالیات حقوق»؛ پرسنل موجود خاموش (مهاجرت 0104)
   isInsuranceCovered: integer('is_insurance_covered').notNull().default(0),
   isTaxCovered: integer('is_tax_covered').notNull().default(0),
   endDate: text('end_date').default(''),
@@ -159,7 +159,7 @@ export const pieceworkPayrolls = pgTable('piecework_payrolls', {
   // v10.0.199 (TD-1085، طرح حقوق §۳.۴): فیش پیش‌پرداخت (دوره‌ای که پایانش پس از امروز است) و دلیل الزامی آن
   isPrepayment: integer('is_prepayment').notNull().default(0),
   prepaymentReason: text('prepayment_reason').notNull().default(''),
-  // v10.0.201 (TD-1087، طرح حقوق §۳.۳): کسورات قانونی فیش؛ سهم کارفرما هزینه کارفرماست و از خالص کم نمی‌شود. شرح، وقتی
+  // v10.0.210 (TD-1087، طرح حقوق §۳.۳): کسورات قانونی فیش؛ سهم کارفرما هزینه کارفرماست و از خالص کم نمی‌شود. شرح، وقتی
   // مبلغی با پیشنهاد سرور فرق دارد؛ is_statutory_split برای فیش‌های پیش از این نسخه صفر است (مهاجرت 0104)
   employeeInsurance: moneyNumeric('employee_insurance').notNull().default(sql`0`),
   employerInsurance: moneyNumeric('employer_insurance').notNull().default(sql`0`),
@@ -180,7 +180,7 @@ export const pieceworkPayrolls = pgTable('piecework_payrolls', {
 registerColumnRef('pieceworkPayrolls.id', () => pieceworkPayrolls.id);
 
 /**
- * v10.0.201 (TD-1087، طرح حقوق §۳.۳ بند ۱، تصمیم ت۴ الف): نرخ‌های بیمه و مالیات حقوق هر سال جلالی که دارنده
+ * v10.0.210 (TD-1087، طرح حقوق §۳.۳ بند ۱، تصمیم ت۴ الف): نرخ‌های بیمه و مالیات حقوق هر سال جلالی که دارنده
  * `payroll.rates_manage` وارد می‌کند (مهاجرت 0104)؛ پله‌های مالیات ماهانه‌اند (`TaxBracket` در statutoryDeductions.ts).
  */
 export const payrollStatutoryRates = pgTable('payroll_statutory_rates', {
