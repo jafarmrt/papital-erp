@@ -73,11 +73,11 @@ export async function checkInitiatorExcludedStep(): Promise<string[]> {
   const [task] = await tasksOf(instanceId);
   if (task && (await refusalStatus(() => runTask(task.id, initiator))) === null) problems.push('the initiator ran the step task from the inbox');
   if (task && (await refusalStatus(() => runTask(task.id, deputy))) === null) problems.push('the deputy of the initiator ran the step task in their name');
-  const inbox = await WorkflowTaskService.getMyTasks({ userId: initiator.id, userRole: initiator.role });
+  const inbox = await WorkflowTaskService.getMyTasks({ userId: initiator.id, userRole: initiator.role, userPermissions: initiator.permissions });
   if (inbox.data.some(t => t.instanceId === instanceId)) problems.push('the step task appeared in the inbox of the initiator');
   const offered = await WorkflowTransitionExecutor.getAvailableTransitions(instanceId, wf.stateId.draft, initiator.role, initiator.id, undefined, undefined, undefined, initiator.permissions);
   if (offered.length > 0) problems.push('the "initiator does not approve" step was offered to the initiator');
-  const colleagueInbox = await WorkflowTaskService.getMyTasks({ userId: colleague.id, userRole: colleague.role });
+  const colleagueInbox = await WorkflowTaskService.getMyTasks({ userId: colleague.id, userRole: colleague.role, userPermissions: colleague.permissions });
   if (!colleagueInbox.data.some(t => t.instanceId === instanceId)) problems.push('the step task did not appear in the inbox of a colleague with the same role');
   if (await refusalStatus(() => transit(instanceId, wf.transitionId.approve, colleague)) !== null) problems.push('a colleague with the same role did not run the step');
   if ((await instanceRow(instanceId)).status !== 'COMPLETED') problems.push('the workflow did not finish with the signature of the colleague');

@@ -13,6 +13,7 @@ import { MY_TASK_FILTERS } from '../services/workflow/workflowTaskService.js';
 import { withUtcTimestamps } from '../services/workflow/workflowTimestamps.js';
 import { isSystemAdminRole } from '../lib/permissions/permissionCatalog.js';
 import { canvasPositionsSchema, createDelegationSchema, executeTaskSchema, executeTransitionSchema, saveDefinitionSchema } from './workflowRouteSchemas.js';
+import { WORKFLOW_EXECUTE_PERMISSIONS, WORKFLOW_INBOX_PERMISSIONS } from '../lib/permissions/workflowPermissions.js';
 
 const entityParamSchema = z.object({
   params: z.object({
@@ -65,7 +66,7 @@ router.use((_req, res, next) => {
  * GET /api/workflow/tasks/my-tasks
  * Get task inbox for current user (workflow_tasks model with delegation support)
  */
-router.get('/tasks/my-tasks', authorizePermission('workflow.view', 'workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), validate(myTasksQuerySchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.get('/tasks/my-tasks', authorizePermission(...WORKFLOW_INBOX_PERMISSIONS), validate(myTasksQuerySchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const userId = req.user?.id;
   if (!userId) {
     return res.status(401).json({ error: 'کاربر معتبر نیست' });
@@ -85,7 +86,7 @@ router.get('/tasks/my-tasks', authorizePermission('workflow.view', 'workflow.app
  * GET /api/workflow/tasks/stats
  * Get summary stats for user's tasks
  */
-router.get('/tasks/stats', authorizePermission('workflow.view', 'workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.get('/tasks/stats', authorizePermission(...WORKFLOW_INBOX_PERMISSIONS), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const userId = req.user?.id;
     const userRole = req.user?.role || '';
@@ -111,12 +112,12 @@ router.get('/tasks/stats', authorizePermission('workflow.view', 'workflow.approv
  * POST /api/workflow/tasks/:taskId/execute
  * Execute a workflow task directly by task ID
  */
-router.post('/tasks/:taskId/execute', authorizePermission('workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), validate(executeTaskSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.post('/tasks/:taskId/execute', authorizePermission(...WORKFLOW_EXECUTE_PERMISSIONS), validate(executeTaskSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const taskId = Number(req.params.taskId);
     const { comment, snapshotData, action, transitionId } = req.body;
     const userId = req.user?.id;
-    const userName = req.user?.fullName || req.user?.username || '';
+    const userName = req.user?.full_name || req.user?.username || '';
     const userRole = req.user?.role || '';
     const userPermissions = req.user?.permissions || [];
 
@@ -196,7 +197,7 @@ router.post('/start', authorizePermission('workflow.execute', 'workflow.manage',
       entityType,
       entityId,
       userId: req.user?.id,
-      userName: req.user?.fullName || req.user?.username
+      userName: req.user?.full_name || req.user?.username
     });
 
     res.json({ success: true, data: instanceData });
@@ -211,7 +212,7 @@ router.post('/start', authorizePermission('workflow.execute', 'workflow.manage',
  * POST /api/workflow/transition
  * Execute a workflow transition
  */
-router.post('/transition', authorizePermission('workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), validate(executeTransitionSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.post('/transition', authorizePermission(...WORKFLOW_EXECUTE_PERMISSIONS), validate(executeTransitionSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const { instanceId, transitionId, comment, snapshotData } = req.body as z.infer<typeof executeTransitionSchema>['body'];
 
@@ -219,7 +220,7 @@ router.post('/transition', authorizePermission('workflow.approve', 'workflow.exe
       instanceId,
       transitionId,
       userId: req.user?.id,
-      userName: req.user?.fullName || req.user?.username,
+      userName: req.user?.full_name || req.user?.username,
       userRole: req.user?.role,
       userPermissions: req.user?.permissions || [],
       comment: comment ?? undefined,
@@ -372,7 +373,7 @@ router.get('/delegations', authorizePermission('workflow.view', 'workflow.manage
 router.post('/delegations', authorizePermission('workflow.approve', 'workflow.manage', 'workflow.admin'), validate(createDelegationSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const userId = req.user?.id || 0;
-    const userName = req.user?.username || 'کاربر';
+    const userName = req.user?.full_name || req.user?.username || 'کاربر';
     const userRole = req.user?.role || 'user';
 
     const { fromUserId, toUserId, scope, startDate, endDate, reason } = req.body as z.infer<typeof createDelegationSchema>['body'];
@@ -408,7 +409,7 @@ router.post('/delegations/:id/revoke', authorizePermission('workflow.approve', '
     const id = Number(req.params.id);
     const userId = req.user?.id || 0;
     const userRole = req.user?.role || 'user';
-    const userName = req.user?.username || 'کاربر';
+    const userName = req.user?.full_name || req.user?.username || 'کاربر';
 
     const result = await WorkflowEngineService.revokeDelegation({
       id,
