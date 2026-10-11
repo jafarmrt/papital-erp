@@ -152,7 +152,10 @@ export async function auditPayrollUpdated(
     entityId: after.id,
     description: statusChanged
       ? `تغییر وضعیت فیش حقوقی ${after.payrollNumber} از «${payrollStatusLabel(before.status)}» به «${payrollStatusLabel(after.status)}»`
-      : `ویرایش یادداشت فیش حقوقی ${after.payrollNumber}`,
+      : Object.keys(diff.changes).every(key => key === 'notes')
+        ? `ویرایش یادداشت فیش حقوقی ${after.payrollNumber}`
+        // v10.0.184 (TD-1242): ویرایش مبلغ‌های فیش پیش‌نویس و سند دوباره‌ساخته
+        : `ویرایش فیش پیش‌نویس ${after.payrollNumber} با خالص ${amount(after.netPayable)}`,
     details: { ...diff, voucherId: voucher?.id ?? null, voucherNumber: voucher?.voucherNumber ?? null },
   });
 }

@@ -20,6 +20,7 @@ import { parseWorkQuantity } from '../lib/piecework/workQuantity.js';
 import { WORK_LOG_PAGE_SIZE } from '../lib/piecework/workLogList.js';
 import { parsePagination } from '../lib/pagination.js';
 import { PREPAYMENT_REASON_MAX } from '../lib/payroll/payrollPeriod.js';
+import { editDraftPayroll } from '../services/piecework/payrollDraftEdit.js';
 import { pageWorkLogs, workLogSummary } from '../services/piecework/workLogList.js';
 
 const router = Router();
@@ -813,6 +814,28 @@ router.put('/piecework/payrolls/:id/status', requirePermission(PIECEWORK_PAYROLL
     logger.error({ message: 'Error updating payroll status', error: err });
     throw err;
   }
+}));
+
+// v10.0.184 (TD-1242، طرح حقوق §۳.۱ بند ۳): ویرایش فیش پیش‌نویس (عنوان، پاداش، کسورات و شرحش، کسر مساعده) و ساخت دوباره سند پیش‌نویس آن
+const editDraftPayrollSchema = z.object({
+  params: paramsIdSchema.shape.params,
+  body: z.object({
+    title: z.string().max(300, 'عنوان فیش حداکثر ۳۰۰ نویسه است').optional(),
+    bonuses: nonNegativeAmount('پاداش').optional(),
+    deductions: nonNegativeAmount('کسورات').optional(),
+    deductionsDescription: z.string().max(500, 'شرح سایر کسورات حداکثر ۵۰۰ نویسه است').optional(),
+    advanceDeduction: nonNegativeAmount('کسر مساعده').optional(),
+  }).strict(),
+});
+
+router.put('/piecework/payrolls/:id', requirePermission(PIECEWORK_PAYROLL_PERMISSION), validate(editDraftPayrollSchema), asyncHandler(async (req, res) => {
+  const { payroll, voucher } = await editDraftPayroll(Number(req.params.id), {
+    ...req.body,
+    userId: req.user?.id,
+    username: req.user?.username || 'سیستم',
+    req,
+  });
+  res.json({ ...payroll, voucherId: voucher?.id ?? null, voucherNumber: voucher?.voucherNumber ?? null });
 }));
 
 // POST /api/piecework/payrolls/:id/register-payment — V10-4.4: مسیر یگانه پرداخت حقوق

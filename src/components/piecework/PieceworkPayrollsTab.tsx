@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
-import { Plus, Printer, Trash2, BookOpen, RefreshCw, Wallet, Info } from 'lucide-react';
+import { Plus, Printer, Trash2, BookOpen, RefreshCw, Wallet, Info, Pencil } from 'lucide-react';
 import { PieceworkPayroll } from '../../types';
 import { formatPersianDate } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
@@ -8,6 +8,7 @@ import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 import { fetchJson } from '../../api';
 import { PayrollPaymentModal } from './PayrollPaymentModal';
 import { PayrollStatusCell, StatusChip } from './PayrollStatusCell';
+import { PayrollDraftEditModal } from './PayrollDraftEditModal';
 
 interface PieceworkPayrollsTabProps {
   payrollsList: PieceworkPayroll[];
@@ -33,6 +34,8 @@ export function PieceworkPayrollsTab({
   const [syncingId, setSyncingId] = useState<number | null>(null);
   // V10-4.4: پرداخت فقط از مودال خزانه‌ای
   const [paymentTarget, setPaymentTarget] = useState<PieceworkPayroll | null>(null);
+  // v10.0.184 (TD-1242): ویرایش فیش پیش‌نویس
+  const [editTarget, setEditTarget] = useState<PieceworkPayroll | null>(null);
 
   const handleSyncVoucher = async (payrollId: number) => {
     try {
@@ -176,6 +179,11 @@ export function PieceworkPayrollsTab({
                           >
                             <Printer size={16} />
                           </button>
+                          {canIssuePayroll && payroll.status === 'draft' && (
+                            <button onClick={() => setEditTarget(payroll)} title="ویرایش فیش پیش‌نویس" aria-label="ویرایش فیش پیش‌نویس" className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg cursor-pointer">
+                              <Pencil size={16} />
+                            </button>
+                          )}
                           {canIssuePayroll && (
                             <button
                               onClick={() => onDeletePayroll(payroll.id)}
@@ -233,6 +241,7 @@ export function PieceworkPayrollsTab({
         onClose={() => setPaymentTarget(null)}
         onPaid={() => onReload?.()}
       />
+      <PayrollDraftEditModal payroll={editTarget} onClose={() => setEditTarget(null)} onSaved={() => onReload?.()} />
     </div>
   );
 }

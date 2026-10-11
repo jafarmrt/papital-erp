@@ -7,13 +7,14 @@ import { jalaliMonthDays } from '../../lib/payroll/fixedSalaryProration.js';
 import { isoToJalaliDate, toStorageDate } from '../../utils/calendarDate.js';
 import { addLog, newTask, newWorker, payrollCount } from '../invariants/payrollScenarios.js';
 import { TestCaseResult } from '../types.js';
-import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase, sandboxAdminClient } from './fiscalClosingTests.js';
+import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase, sandboxAdminClient, sandboxClientWith } from './fiscalClosingTests.js';
 import { q } from './projectStageIntegrityTests.js';
 
 /**
  * Payroll duties plan PR 3 (D-02 parts 3 and 4, §3.4): a prepayment payslip for a period ending after today, with a
  * required reason and fixed salary only, and the personnel service start date where fixed salary begins. Real Express
- * routes on PostgreSQL in an isolated schema; each case is red on v10.0.182.
+ * routes on PostgreSQL in an isolated schema; each case is red on v10.0.182. A draft payslip is edited in place with its
+ * draft voucher rebuilt (§3.1 item 3), red on v10.0.183.
  */
 
 type Res = { status: number; body?: unknown };
@@ -119,6 +120,54 @@ export async function runPayrollPrepaymentStartTests(shouldRun: ShouldRun): Prom
 
       assertNoProblems(problems);
       return 'Fixed salary 6,000,000 for 6 of 31 days of the hiring month; none for a period before the start date; the form stores the start date in ISO and refuses 1404/12/30.';
+    }));
+  }
+
+  const editId = 'reg_payroll_draft_edit_td_1242';
+  if (shouldRun(editId, 'td1242', 'payroll', 'payslip', 'draft', 'duties')) {
+    await runCase(results, editId, 'v10.0.184: a draft payslip is edited (bonuses, deductions with their description, advance deduction) with piecework.payroll and its draft voucher is rebuilt; an approved payslip or one whose voucher is approved is not edited (TD-1242)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const issuer = await sandboxClientWith(['piecework.view', 'piecework.payroll']);
+      const approver = await sandboxClientWith(['piecework.view', 'piecework.payroll_approve']);
+      const worker = await newWorker('TD-1242 worker');
+      await addLog(worker, await newTask(), '2026-04-08', 1_000_000);
+      const issued = await issuer.post('/api/piecework/payrolls/generate', { personnelId: worker, startDate: '2026-04-01', endDate: '2026-04-30' });
+      const payrollId = Number(field(issued, 'id'));
+      if (issued.status !== 201 || !payrollId) throw new Error(`setup: payslip ${brief(issued)}`);
+      const liveVouchers = () => q('SELECT id FROM journal_vouchers WHERE source_payroll_id = $1 AND is_deleted = 0', [payrollId]);
+      const [firstVoucher] = await liveVouchers();
+
+      const edited = await issuer.put(`/api/piecework/payrolls/${payrollId}`, { bonuses: '200000', deductions: 100_000, deductionsDescription: 'TD-1242 loan' });
+      if (edited.status !== 200 || !fin(String(field(edited, 'netPayable'))).equals(1_100_000)) problems.push(`editing the draft answered ${brief(edited)}, expected 200 with net 1,100,000`);
+      const vouchers = await liveVouchers();
+      if (vouchers.length !== 1 || vouchers[0]?.id === firstVoucher?.id) problems.push(`after the edit the payslip has vouchers ${JSON.stringify(vouchers)}, expected one new voucher in place of ${String(firstVoucher?.id)}`);
+      else {
+        const [sum] = await q('SELECT sum(debit)::text AS d, sum(credit)::text AS c FROM journal_voucher_items WHERE voucher_id = $1 AND is_deleted = 0', [vouchers[0].id]);
+        if (!fin(String(sum?.d)).equals(1_200_000) || !fin(String(sum?.c)).equals(1_200_000)) problems.push(`the rebuilt voucher is ${String(sum?.d)} / ${String(sum?.c)}, expected 1,200,000 on both sides`);
+      }
+      const [audit] = await q("SELECT description FROM activity_logs WHERE entity_id = $1 AND action = 'UPDATE' ORDER BY id DESC LIMIT 1", [String(payrollId)]);
+      if (!String(audit?.description ?? '').includes('ویرایش فیش پیش‌نویس')) problems.push(`the edit audit row reads «${String(audit?.description)}»`);
+
+      const noDescription = await issuer.put(`/api/piecework/payrolls/${payrollId}`, { deductions: 50_000, deductionsDescription: ' ' });
+      if (noDescription.status !== 422 || codeOf(noDescription) !== 'PAYROLL_DEDUCTIONS_DESCRIPTION_REQUIRED') problems.push(`deductions without a description answered ${brief(noDescription)}, expected 422`);
+      const unknownField = await issuer.put(`/api/piecework/payrolls/${payrollId}`, { netPayable: 1 });
+      if (unknownField.status !== 400) problems.push(`an edit of the net itself answered ${brief(unknownField)}, expected 400`);
+      const byApprover = await approver.put(`/api/piecework/payrolls/${payrollId}`, { bonuses: 1 });
+      if (byApprover.status !== 403) problems.push(`an edit with the approve key alone answered ${brief(byApprover)}, expected 403`);
+
+      const approved = await approver.put(`/api/piecework/payrolls/${payrollId}/status`, { status: 'approved' });
+      if (approved.status !== 200) problems.push(`setup: approving answered ${brief(approved)}`);
+      const afterApproval = await issuer.put(`/api/piecework/payrolls/${payrollId}`, { bonuses: 0 });
+      if (afterApproval.status !== 409 || codeOf(afterApproval) !== 'PAYROLL_NOT_DRAFT') problems.push(`editing the approved payslip answered ${brief(afterApproval)}, expected 409 PAYROLL_NOT_DRAFT`);
+      await approver.put(`/api/piecework/payrolls/${payrollId}/status`, { status: 'draft' });
+      await q("UPDATE journal_vouchers SET status = 'approved' WHERE source_payroll_id = $1 AND is_deleted = 0", [payrollId]);
+      const approvedVoucher = await issuer.put(`/api/piecework/payrolls/${payrollId}`, { bonuses: 0 });
+      if (approvedVoucher.status !== 409 || codeOf(approvedVoucher) !== 'PAYROLL_VOUCHER_NOT_DRAFT') problems.push(`editing a draft payslip with an approved voucher answered ${brief(approvedVoucher)}, expected 409 PAYROLL_VOUCHER_NOT_DRAFT`);
+      const [kept] = await q('SELECT total_bonuses::text AS b FROM piecework_payrolls WHERE id = $1', [payrollId]);
+      if (!fin(String(kept?.b)).equals(200_000)) problems.push(`a refused edit changed the bonuses to ${String(kept?.b)}`);
+
+      assertNoProblems(problems);
+      return 'The draft edited to net 1,100,000 with its voucher rebuilt at 1,200,000 and an audit row; a missing description 422, an unknown field 400, the approve key alone 403; an approved payslip 409 and a draft with an approved voucher 409, nothing changed.';
     }));
   }
 
