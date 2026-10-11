@@ -84,12 +84,6 @@ function bracketTax(base: FinancialDecimal, brackets: TaxBracket[], fraction: Fi
   return tax;
 }
 
-/** مالیات پله‌ای یک ماه کامل، گرد به ریال (مالیات مازاد عیدی بر سقف معافیت، TD-1089) */
-export function monthlyBracketTax(base: DecimalValue, brackets: TaxBracket[]): FinancialDecimal {
-  const b = fin(base ?? 0);
-  return b.isPositive() ? bracketTax(b, brackets, fin(1)).round(0) : fin(0);
-}
-
 /**
  * کسورات قانونی پیشنهادی فیشی با ناخالص `gross` در دوره [startIso, endIso]. پرسنلی که مشمول بیمه یا مالیات نیست برای همان
  * بخش صفر می‌گیرد؛ بی نرخ (`rates` تهی) همه صفرند.

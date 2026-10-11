@@ -1,5 +1,4 @@
 import { fin, type DecimalValue, type FinancialDecimal } from '../financialDecimal.js';
-import { monthlyBracketTax, type TaxBracket } from './statutoryDeductions.js';
 
 /**
  * v10.0.222 (TD-1089، طرح حقوق §۳.۸، تصمیم‌های ت۱۴ تا ت۱۶ الف): عیدی و پاداش سالانه. روش و نرخ هر سال جلالی را دارنده
@@ -42,8 +41,6 @@ export interface EidiRates {
   minDailyWage: DecimalValue;
   /** مبلغ سال (روش مبلغ ثابت، ریال) */
   fixedAmount: DecimalValue;
-  /** سقف معافیت مالیاتی عیدی هر پرسنل در سال (ریال)؛ مازاد بر آن مالیات دارد (ت۲۱) */
-  taxExemptCap: DecimalValue;
 }
 
 export const isEidiMethod = (v: unknown): v is EidiMethod => (EIDI_METHODS as readonly string[]).includes(String(v));
@@ -52,7 +49,7 @@ export const isEidiMethod = (v: unknown): v is EidiMethod => (EIDI_METHODS as re
 export function eidiRatesError(r: EidiRates): string | null {
   if (!Number.isInteger(r.jalaliYear) || r.jalaliYear < 1390 || r.jalaliYear > 1500) return 'سال جلالی نرخ عیدی معتبر نیست.';
   if (!isEidiMethod(r.method)) return 'روش محاسبه عیدی را انتخاب کنید.';
-  const nonNegative = [r.percent, r.yearlyCap, r.laborDays, r.laborCapDays, r.minDailyWage, r.fixedAmount, r.taxExemptCap].every(v => !fin(v ?? 0).isNegative());
+  const nonNegative = [r.percent, r.yearlyCap, r.laborDays, r.laborCapDays, r.minDailyWage, r.fixedAmount].every(v => !fin(v ?? 0).isNegative());
   if (!nonNegative) return 'رقم‌های عیدی نمی‌توانند منفی باشند.';
   if (r.method === 'percent_of_work') {
     const p = fin(r.percent ?? 0);
@@ -148,32 +145,4 @@ export function eidiFromAccrual(amount: DecimalValue, remainingAccrual: DecimalV
   const r = fin(remainingAccrual ?? 0);
   if (!a.isPositive() || !r.isPositive()) return '0';
   return (a.greaterThan(r) ? r : a).round(4).toString();
-}
-
-export interface EidiTaxSuggestion {
-  /** مازاد عیدی این فیش بر سقف معافیت سال (ریال) */
-  taxableExcess: string;
-  /** مالیات پیشنهادی مازاد (ریال) */
-  incomeTax: string;
-}
-
-/**
- * v10.0.222 (TD-1089، ت۲۱): مالیات «فیش عیدی». عیدی تا سقف معافیت سال معاف است؛ سقف برای جمع فیش‌های عیدی یک پرسنل در
- * یک سال است، پس مازاد این فیش = بیشینه(۰، پیشین + این − سقف) − بیشینه(۰، پیشین − سقف). مالیات مازاد با پله‌های ماهانه
- * مالیات حقوق همان سال، برای یک ماه کامل، حساب می‌شود؛ پرسنل نامشمول مالیات حقوق یا سال بی نرخ مالیات صفر می‌گیرد.
- */
-export function suggestEidiTax(input: {
-  amount: DecimalValue;
-  earlierIssued: DecimalValue;
-  exemptCap: DecimalValue;
-  brackets: TaxBracket[] | null;
-  taxCovered: boolean;
-}): EidiTaxSuggestion {
-  const cap = fin(input.exemptCap ?? 0);
-  const earlier = fin(input.earlierIssued ?? 0);
-  const over = (v: FinancialDecimal) => { const d = v.subtract(cap); return d.isPositive() ? d : fin(0); };
-  const amount = fin(input.amount ?? 0);
-  const excess = amount.isPositive() ? over(earlier.add(amount)).subtract(over(earlier)) : fin(0);
-  const incomeTax = input.taxCovered && input.brackets ? monthlyBracketTax(excess, input.brackets) : fin(0);
-  return { taxableExcess: excess.round(0).toString(), incomeTax: incomeTax.toString() };
 }
