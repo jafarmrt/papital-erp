@@ -5,6 +5,10 @@ import { BULK_DELIVERY_ALL_DELIVERED, bulkDeliveryPlan, linkedDocumentLabel, req
 import { REQUISITION_STATUS_BADGES } from '../../components/procurement/requisitionBadges';
 
 const fetchJson = vi.fn();
+vi.mock('../../hooks/useAppCurrency', async () => {
+  const { rialDisplayOf } = await vi.importActual<typeof import('../../lib/rialDisplay')>('../../lib/rialDisplay');
+  return { useAppCurrency: () => 'IRR', useRialDisplay: () => rialDisplayOf('IRR') };
+});
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
 const toastError = vi.fn();
 vi.mock('react-hot-toast', () => ({ toast: { error: (m: string) => toastError(m), success: () => undefined } }));

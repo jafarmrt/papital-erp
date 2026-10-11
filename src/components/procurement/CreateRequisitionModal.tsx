@@ -10,6 +10,7 @@ import {
   REQUISITION_PRIORITIES, REQUISITION_PRIORITY_LABELS, requisitionFormErrors, type RequisitionPriority,
 } from '../../lib/procurement/requisitionFields';
 import { FieldError, RequisitionItemRowEditor, type NewRequisitionRow } from './RequisitionItemRowEditor';
+import { lineAmount, sumAmounts } from '../../lib/procurement/procurementNumbers';
 
 interface CreateRequisitionModalProps {
   isOpen: boolean;
@@ -124,7 +125,7 @@ export function CreateRequisitionModal({
     }
   };
 
-  const totalEstimate = items.reduce((s, i) => s + (i.requestedQty * i.unitPriceEstimate), 0);
+  const totalEstimate = sumAmounts(items, i => lineAmount(i.requestedQty, i.unitPriceEstimate));
 
   return (
     <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-farsi">

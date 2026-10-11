@@ -1,10 +1,11 @@
 import { Building2, Check, Eye, ShoppingCart, Trash2 } from 'lucide-react';
 import type { PurchaseRequisition } from '../../types';
-import { formatPersianDate, formatPersianNumber, formatPersianPrice } from '../../utils';
+import { formatPersianDate, formatPersianNumber } from '../../utils';
 import { PillBadge } from '../common/PillBadge';
 import { REQUISITION_PRIORITY_BADGES, REQUISITION_PRIORITY_FALLBACK, REQUISITION_STATUS_BADGES, REQUISITION_STATUS_FALLBACK } from './requisitionBadges';
 import { canConsolidateRequisition, canDeleteRequisition, canOrderRequisition } from '../../lib/procurement/requisitionFields';
 import type { ProcurementAccess } from '../../hooks/procurement/useProcurementAccess';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 
 interface RequisitionRowProps {
   req: PurchaseRequisition;
@@ -19,6 +20,8 @@ interface RequisitionRowProps {
 
 /** یک ردیف فهرست درخواست‌های میز تدارکات */
 export function RequisitionRow({ req, access, isSelected, onToggleSelect, onView, onSplit, onDelete, onShowOrders }: RequisitionRowProps) {
+  // OBS-R2-39 (TD-992): مبلغ ریالی در واحد نمایش (ریال یا تومان)، نه «ریال» ثابت
+  const rial = useRialDisplay();
   const itemsCount = Array.isArray(req.items) ? req.items.length : 0;
   // v9.0.353 (TD-697): شمار سفارش‌ها از سرور (SQL)؛ پیش‌تر از سفارش‌های بارگذاری‌شده در مرورگر شمرده می‌شد
   const ordersCount = req.ordersCount ?? 0;
@@ -71,7 +74,7 @@ export function RequisitionRow({ req, access, isSelected, onToggleSelect, onView
       </td>
 
       <td className="p-3 text-center font-black text-amber-800">
-        {formatPersianPrice(req.totalEstimatedAmount || 0)}
+        {rial.number(req.totalEstimatedAmount || 0)}
       </td>
 
       <td className="p-3 text-center">

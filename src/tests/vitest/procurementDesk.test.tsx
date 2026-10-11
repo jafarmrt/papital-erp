@@ -6,6 +6,10 @@ import { PROCUREMENT_RECEIVE_PERMISSION } from '../../lib/permissions/procuremen
 import { documentTypeRecordPermission } from '../../lib/permissions/documentPermissions';
 
 const fetchJson = vi.fn();
+vi.mock('../../hooks/useAppCurrency', async () => {
+  const { rialDisplayOf } = await vi.importActual<typeof import('../../lib/rialDisplay')>('../../lib/rialDisplay');
+  return { useAppCurrency: () => 'IRR', useRialDisplay: () => rialDisplayOf('IRR') };
+});
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
 vi.mock('react-hot-toast', () => ({ toast: { error: () => undefined, success: () => undefined } }));
 const granted = new Set<string>();
