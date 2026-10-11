@@ -5,7 +5,7 @@ import { PersonnelFormModal } from '../../components/personnel/PersonnelFormModa
 import type { PersonnelFormData } from '../../hooks/usePersonnel';
 import type { Personnel } from '../../types';
 
-// v10.0.263 (OBS-R2-54, TD-994): the personnel Nobitex password is hidden in the form and the detail view
+// v10.0.264 (OBS-R2-54, TD-994): the personnel Nobitex password is hidden in the form and the detail view
 // and appears only after the reveal button; before, the form used type=text and the detail printed it
 
 const SECRET = 'Nobitex-Secret-42';
