@@ -20,6 +20,7 @@ import { parseWorkQuantity } from '../lib/piecework/workQuantity.js';
 import { WORK_LOG_PAGE_SIZE } from '../lib/piecework/workLogList.js';
 import { parsePagination } from '../lib/pagination.js';
 import { PREPAYMENT_REASON_MAX } from '../lib/payroll/payrollPeriod.js';
+import { STATUTORY_OVERRIDE_REASON_MAX } from '../lib/payroll/statutoryDeductions.js';
 import { editDraftPayroll } from '../services/piecework/payrollDraftEdit.js';
 import { pageWorkLogs, workLogSummary } from '../services/piecework/workLogList.js';
 
@@ -166,6 +167,13 @@ const listPieceworkLogsSchema = z.object({
 
 type ListPieceworkLogsQuery = z.infer<typeof listPieceworkLogsSchema>['query'];
 
+const statutoryFields = {
+  employeeInsurance: nonNegativeAmount('بیمه سهم کارگر').optional(),
+  employerInsurance: nonNegativeAmount('بیمه سهم کارفرما').optional(),
+  incomeTax: nonNegativeAmount('مالیات حقوق').optional(),
+  statutoryOverrideReason: z.string().max(STATUTORY_OVERRIDE_REASON_MAX, 'شرح تغییر بیمه و مالیات حداکثر ۵۰۰ نویسه است').optional(),
+};
+
 const generatePieceworkPayrollSchema = z.object({
   body: z.object({
     personnelId: z.union([z.number(), z.string()]),
@@ -183,6 +191,8 @@ const generatePieceworkPayrollSchema = z.object({
     // v10.0.199 (TD-1085): فیش پیش‌پرداخت دوره آینده با دلیل الزامی (سرویس، ۴۲۲)
     isPrepayment: z.boolean().optional(),
     prepaymentReason: z.string().max(PREPAYMENT_REASON_MAX, 'دلیل فیش پیش‌پرداخت حداکثر ۵۰۰ نویسه است').optional(),
+    // v10.0.210 (TD-1087): کسورات قانونی؛ نفرستاده = پیشنهاد سرور، مبلغ دیگر با شرح (سرویس، ۴۲۲)
+    ...statutoryFields,
   })
 });
 
@@ -734,7 +744,8 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], requirePerm
   try {
     const currentUserId = req.user?.id;
     const currentUsername = req.user?.username || 'سیستم';
-    const { personnelId, startDate, endDate, title, bonuses, totalBonuses, deductions, totalDeductions, deductionsDescription, advanceDeduction: reqAdvanceDeduction, notes, isPrepayment, prepaymentReason } = req.body;
+    const { personnelId, startDate, endDate, title, bonuses, totalBonuses, deductions, totalDeductions, deductionsDescription, advanceDeduction: reqAdvanceDeduction, notes, isPrepayment, prepaymentReason,
+      employeeInsurance, employerInsurance, incomeTax, statutoryOverrideReason } = req.body;
 
     const result = await PieceworkPayrollService.generatePayroll({
       personnelId,
@@ -750,6 +761,10 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], requirePerm
       notes,
       isPrepayment,
       prepaymentReason,
+      employeeInsurance,
+      employerInsurance,
+      incomeTax,
+      statutoryOverrideReason,
       userId: currentUserId,
       username: currentUsername,
       // v9.0.285 (TD-810): ردیف ممیزی با جزئیات و IP در تراکنش صدور نوشته می‌شود
@@ -764,6 +779,7 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], requirePerm
 
     res.status(201).json({
       ...payroll,
+      statutoryWarning: result.statutoryWarning ?? null,
       voucherId: voucher ? voucher.id : null,
       voucherNumber: voucher ? voucher.voucherNumber : null,
       isVoucherSynced: !!voucher
@@ -825,17 +841,19 @@ const editDraftPayrollSchema = z.object({
     deductions: nonNegativeAmount('کسورات').optional(),
     deductionsDescription: z.string().max(500, 'شرح سایر کسورات حداکثر ۵۰۰ نویسه است').optional(),
     advanceDeduction: nonNegativeAmount('کسر مساعده').optional(),
+    // v10.0.210 (TD-1087): کسورات قانونی فیش پیش‌نویس با همان قاعده صدور
+    ...statutoryFields,
   }).strict(),
 });
 
 router.put('/piecework/payrolls/:id', requirePermission(PIECEWORK_PAYROLL_PERMISSION), validate(editDraftPayrollSchema), asyncHandler(async (req, res) => {
-  const { payroll, voucher } = await editDraftPayroll(Number(req.params.id), {
+  const { payroll, voucher, statutoryWarning } = await editDraftPayroll(Number(req.params.id), {
     ...req.body,
     userId: req.user?.id,
     username: req.user?.username || 'سیستم',
     req,
   });
-  res.json({ ...payroll, voucherId: voucher?.id ?? null, voucherNumber: voucher?.voucherNumber ?? null });
+  res.json({ ...payroll, voucherId: voucher?.id ?? null, voucherNumber: voucher?.voucherNumber ?? null, statutoryWarning });
 }));
 
 // POST /api/piecework/payrolls/:id/register-payment — V10-4.4: مسیر یگانه پرداخت حقوق

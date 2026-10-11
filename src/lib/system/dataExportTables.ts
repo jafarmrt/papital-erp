@@ -65,6 +65,7 @@ export const DATA_EXPORT_TABLES: ReadonlyArray<{ table: string; group: DataExpor
   { table: 'piecework_task_rate_history', group: 'payroll' },
   { table: 'piecework_logs', group: 'payroll' },
   { table: 'piecework_payrolls', group: 'payroll' },
+  { table: 'payroll_statutory_rates', group: 'payroll' },
   { table: 'workflow_definitions', group: 'workflow' },
   { table: 'workflow_definition_versions', group: 'workflow' },
   { table: 'workflow_states', group: 'workflow' },

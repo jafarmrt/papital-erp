@@ -37,6 +37,8 @@ export const SETTINGS_TAB_ACCESS = {
   projects: { gate: anyOf('settings.manage'), api: ['GET /api/settings', 'POST /api/settings', 'GET /api/piecework/tasks'] },
   // v9.0.320 (TD-805): زبانه عناوین و دسته‌های کاری همان کلید نوشتن آن‌ها را می‌پرسد
   task_titles: { gate: anyOf('piecework.manage_tasks'), api: ['GET /api/piecework/tasks', 'POST /api/piecework/tasks'] },
+  // v10.0.210 (TD-1087، طرح حقوق ت۴ الف): نرخ‌های سالانه بیمه و مالیات حقوق
+  payroll_rates: { gate: anyOf('payroll.rates_manage'), api: ['GET /api/piecework/statutory-rates', 'PUT /api/piecework/statutory-rates/:year'] },
   woocommerce: { gate: anyOf('woocommerce.view'), api: ['GET /api/woocommerce/synced-orders', 'GET /api/woocommerce/order-logs'] },
   health: { gate: 'system_admin', api: ['GET /api/system/health'] },
   system_config: { gate: 'system_admin', api: [] },
@@ -82,7 +84,6 @@ export const PAGE_ACCESS = {
   '/crm': { gate: anyOf('crm.view'), api: ['GET /api/crm/leads', 'GET /api/items/options', 'GET /api/customers/:id/documents'] },
   '/customers': { gate: anyOf('customers.view'), api: ['GET /api/customers', 'GET /api/customers/:id/documents'] },
   '/invoices/create': { gate: anyOf('documents.create'), api: DOCUMENT_ENTRY },
-  '/remittances': { gate: anyOf('documents.create'), api: DOCUMENT_ENTRY },
   '/projects': { gate: anyOf('projects.view'), api: ['GET /api/projects', 'GET /api/items/options'] },
   '/project-inventory': { gate: anyOf('projects.view', 'warehouse.view'), api: ['GET /api/projects/options', 'GET /api/projects/:id', 'GET /api/items/options'] },
   '/procurement': { gate: anyOf('procurement.view', 'projects.view'), api: ['GET /api/procurement/inbox/summary', 'GET /api/procurement/requisitions', 'GET /api/procurement/orders', 'GET /api/items/options'] },
