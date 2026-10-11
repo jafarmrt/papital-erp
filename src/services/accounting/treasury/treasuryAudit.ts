@@ -99,12 +99,14 @@ export async function auditBankAccountChange(
   before: Record<string, unknown> | null,
   after: Record<string, unknown> | null,
 ): Promise<void> {
+  // پویش کنش‌های ممیزی (Vitest auditActionLabels) نوع لفظی اعلام‌شده را می‌خواند، نه پارامتر را
+  const auditAction: 'CREATE' | 'UPDATE' | 'DELETE' = action;
   const verb = action === 'CREATE' ? 'تعریف حساب بانکی/صندوق جدید' : action === 'UPDATE' ? 'ویرایش حساب بانکی/صندوق' : 'حذف حساب بانکی/صندوق';
   await logActivity({
     tx,
     req: actor?.req,
     userFullName: actor?.userFullName,
-    action,
+    action: auditAction,
     entity: 'bank_account',
     entityId: String(id),
     description: `${verb}: ${title}`,
