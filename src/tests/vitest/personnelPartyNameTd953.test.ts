@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { personnelPartyName } from '../../lib/treasury/personnelPartyName';
 
 /**
- * v10.0.258 (TD-953): personnel imported from Excel with only a full name have empty first and last names; the treasury
+ * v10.0.259 (TD-953): personnel imported from Excel with only a full name have empty first and last names; the treasury
  * and cheque forms built the party name from those two and sent an empty name (400 from the server).
  */
 const FULL_NAME = 'رضا کریمی';

@@ -873,7 +873,7 @@ router.post('/piecework/payrolls/:id/register-payment', requirePermission(PIECEW
       notes,
       userId: req.user?.id,
       username: req.user?.username || 'سیستم',
-      // v10.0.258 (TD-950): ممیزی پرداخت در تراکنش سرویس، با کاربر و IP
+      // v10.0.259 (TD-950): ممیزی پرداخت در تراکنش سرویس، با کاربر و IP
       req,
     });
 
@@ -899,7 +899,7 @@ router.post('/piecework/payrolls/:id/payments/:transactionId/void', requirePermi
     reason: String(req.body.reason),
     userId: req.user?.id,
     username: req.user?.username || 'سیستم',
-    // v10.0.258 (TD-950): ممیزی ابطال در تراکنش سرویس، با کاربر و IP و مبلغ
+    // v10.0.259 (TD-950): ممیزی ابطال در تراکنش سرویس، با کاربر و IP و مبلغ
     req,
   });
 

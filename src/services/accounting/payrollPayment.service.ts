@@ -38,7 +38,7 @@ export interface RegisterPayrollPaymentInput {
   notes?: string;
   userId?: number;
   username?: string;
-  /** v10.0.258 (TD-950): درخواست، برای کاربر و IP ردیف ممیزی */
+  /** v10.0.259 (TD-950): درخواست، برای کاربر و IP ردیف ممیزی */
   req?: unknown;
 }
 
@@ -345,7 +345,7 @@ export class PayrollPaymentService {
         paymentReference: input.paymentReference?.trim() || payroll.paymentReference
       };
 
-      // v10.0.258 (TD-950): ممیزی پرداخت در همین تراکنش، با کاربر و IP و مبلغ؛ پیش‌تر مسیر پس از commit و بی مبلغ می‌نوشت
+      // v10.0.259 (TD-950): ممیزی پرداخت در همین تراکنش، با کاربر و IP و مبلغ؛ پیش‌تر مسیر پس از commit و بی مبلغ می‌نوشت
       await auditPayrollPaymentRegistered(tx, updatedPayroll, {
         transactionId: tr.id, transactionNumber: txNum, amount: payAmount.toString(), paidBefore: String(payroll.paidAmount ?? 0),
         voucherId: voucher?.id ?? null, voucherNumber: voucher?.voucherNumber ?? null,

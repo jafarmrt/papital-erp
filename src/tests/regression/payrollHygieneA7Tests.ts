@@ -8,7 +8,7 @@ import { addLog, fundedBank, issueApproved, newTask, newWorker } from '../invari
 import { TestCaseResult, makeTestCase } from '../types.js';
 
 /**
- * Series 10 phase 3 lane L1, package A7 (v10.0.258): payroll payment hygiene from the phase 5 review. Voiding a payslip
+ * Series 10 phase 3 lane L1, package A7 (v10.0.259): payroll payment hygiene from the phase 5 review. Voiding a payslip
  * payment writes its reversal event, payment and void audit rows are written in the payment transaction with the user,
  * address and amount, «my payslips» carries the paid amount, and a personnel treasury row or cheque needs the personnel
  * id. Each test is red on the version before its fix.
@@ -62,7 +62,7 @@ export async function runPayrollHygieneA7Tests(shouldRun: ShouldRun): Promise<Te
 
   const eventId = 'reg_payroll_payment_void_event_and_audit_td_949_950';
   if (shouldRun(eventId, 'td949', 'td950', 'payroll', 'treasury', 'audit', 'outbox', 'a7')) {
-    await runCase(results, eventId, 'v10.0.258: voiding a payslip payment writes the reversal row\'s treasury event, and the payment and its void each write one audit row in their transaction with the amount and the client address (TD-949 / TD-950)', async () => {
+    await runCase(results, eventId, 'v10.0.259: voiding a payslip payment writes the reversal row\'s treasury event, and the payment and its void each write one audit row in their transaction with the amount and the client address (TD-949 / TD-950)', async () => {
       const problems: string[] = [];
       const { payrollId, bankId } = await approvedPayslip('void event');
       const api = await adminClient();
@@ -100,7 +100,7 @@ export async function runPayrollHygieneA7Tests(shouldRun: ShouldRun): Promise<Te
 
   const mineId = 'reg_my_payslips_paid_amount_td_951';
   if (shouldRun(mineId, 'td951', 'payroll', 'payslip', 'a7')) {
-    await runCase(results, mineId, 'v10.0.258: «my payslips» carries the payslip\'s paid amount, so its remaining amount matches the manager page (TD-951)', async () => {
+    await runCase(results, mineId, 'v10.0.259: «my payslips» carries the payslip\'s paid amount, so its remaining amount matches the manager page (TD-951)', async () => {
       const { payrollId, bankId, workerId } = await approvedPayslip('mine');
       const user = await createTestUser({ username: `a7_mine_${tagOf()}` });
       await orm.update(personnel).set({ userId: user.id }).where(eq(personnel.id, workerId));
@@ -117,7 +117,7 @@ export async function runPayrollHygieneA7Tests(shouldRun: ShouldRun): Promise<Te
 
   const personnelId = 'reg_personnel_treasury_requires_id_td_954';
   if (shouldRun(personnelId, 'td954', 'treasury', 'cheque', 'personnel', 'a7')) {
-    await runCase(results, personnelId, 'v10.0.258: a treasury payment or a cheque for personnel without the personnel id is refused with 422 TREASURY_PERSONNEL_REQUIRED and writes nothing (TD-954)', async () => {
+    await runCase(results, personnelId, 'v10.0.259: a treasury payment or a cheque for personnel without the personnel id is refused with 422 TREASURY_PERSONNEL_REQUIRED and writes nothing (TD-954)', async () => {
       const problems: string[] = [];
       const bankId = await fundedBank();
       const api = await adminClient();

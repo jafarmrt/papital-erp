@@ -20,7 +20,7 @@ export interface VoidPayrollPaymentInput {
   reason: string;
   userId?: number;
   username?: string;
-  /** v10.0.258 (TD-950): درخواست، برای کاربر و IP ردیف ممیزی */
+  /** v10.0.259 (TD-950): درخواست، برای کاربر و IP ردیف ممیزی */
   req?: unknown;
 }
 
@@ -119,7 +119,7 @@ export class PayrollPaymentVoidService {
         createdById: input.userId || null,
       }).returning({ id: treasuryTransactions.id });
       await tx.update(treasuryTransactions).set({ status: 'voided', updatedAt: sql`now()` }).where(eq(treasuryTransactions.id, payment.id));
-      // v10.0.258 (TD-949): تراکنش معکوس، مانند ابطال خزانه عادی، رویداد خود را در همین تراکنش در صف ارسال می‌نویسد
+      // v10.0.259 (TD-949): تراکنش معکوس، مانند ابطال خزانه عادی، رویداد خود را در همین تراکنش در صف ارسال می‌نویسد
       await OutboxService.saveToOutbox(tx, domainEventBus.createEvent(
         DomainEventType.TREASURY_TRANSACTION_APPROVED,
         'Treasury',
@@ -152,7 +152,7 @@ export class PayrollPaymentVoidService {
       }).where(eq(pieceworkPayrolls.id, payroll.id)).returning();
       await tx.update(pieceworkLogs).set({ status: 'approved' })
         .where(and(eq(pieceworkLogs.payrollId, payroll.id), eq(pieceworkLogs.status, 'paid')));
-      // v10.0.258 (TD-950): ممیزی ابطال در همین تراکنش، با کاربر و IP و مبلغ
+      // v10.0.259 (TD-950): ممیزی ابطال در همین تراکنش، با کاربر و IP و مبلغ
       await auditPayrollPaymentVoided(tx, updated, {
         transactionId: payment.id, transactionNumber: payment.transactionNumber, reversalTransactionNumber: reversalNumber,
         amount: amount.toString(), reason, reversalVoucherId, paidBefore: String(payroll.paidAmount ?? 0),

@@ -193,7 +193,7 @@ export async function auditPayrollDeleted(
 }
 
 /**
- * v10.0.258 (TD-950، P5-W06): پرداخت فیش و ابطال آن ممیزی خود را در تراکنش پرداخت می‌نویسند، با کاربر و IP (`req`)، مبلغ
+ * v10.0.259 (TD-950، P5-W06): پرداخت فیش و ابطال آن ممیزی خود را در تراکنش پرداخت می‌نویسند، با کاربر و IP (`req`)، مبلغ
  * و پرداخت‌شده فیش پیش و پس از آن. پیش‌تر مسیر پس از commit، بی `tx` و `req` و مبلغ می‌نوشت.
  */
 export async function auditPayrollPaymentRegistered(
