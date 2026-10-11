@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.0.251 — خطای ساخت و ویرایش وب‌هوک از errorHandler می‌گذرد
+- نشانی ناامن وب‌هوک ۴۲۲ `UNSAFE_TARGET_URL` با پیام فارسی است و پاسخ ۵۰۰ دیگر متن خام خطا را برنمی‌گرداند؛ اشتراک ناموجود ۴۰۴ `WEBHOOK_NOT_FOUND`؛ ۳۵ catch بی‌اثر events و users حذف شد و ratchet `noopCatches` (۲۴ مانده) و شمارش `res.status(شرط ? ۴۰۰ : ۵۰۰)` افزوده شد (بخش نخست OBS-R2-05، TD-983).
+
 ### v10.0.250 — بسته‌های هسته گردش کار را از درگاه ریشه ترکیب آغاز می‌کنند و می‌بندند
 - حساب خزانه، سند حسابداری و کالا گردش کار خود را از `entityWorkflowPort.ts` آغاز می‌کنند یا می‌بندند و دیگر موتور گردش کار را import نمی‌کنند؛ `import()` پویای حساب خزانه حذف شد و `packageBoundary` از ۱۳۸ به ۱۳۳ رسید (OBS-R2-02، TD-983).
 

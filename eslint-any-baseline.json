@@ -134,7 +134,6 @@
   "src/lib/piiMasker.ts": 2,
   "src/lib/queryClient.ts": 2,
   "src/lib/requestContext.ts": 4,
-  "src/lib/ssrfGuard.ts": 1,
   "src/middleware/auth.ts": 6,
   "src/middleware/logger.ts": 11,
   "src/middleware/validate.ts": 6,

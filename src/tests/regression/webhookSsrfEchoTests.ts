@@ -2,6 +2,9 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { TestCaseResult, makeTestCase } from '../types.js';
 
+/** The guard's Persian refusal of a private or reserved address (v10.0.251, OBS-R2-05; before, the English `SSRF blocked`). */
+const PRIVATE_ADDRESS_REFUSAL = 'داخلی یا رزروشده';
+
 /**
  * Package 15 (events and integrations), TD-704 / B15-02 (decision t4 a): the webhook connection test never follows a
  * redirect, and the SSRF guard's echo-simulator exception holds only in test / development, on this server's own port and
@@ -45,7 +48,7 @@ export async function runWebhookSsrfEchoTests(shouldRun: (id: string, ...extra: 
 
     // 2. another loopback port with "/webhook-echo" in its path: blocked by the guard
     const anyPort = await WebhookSubscriptionService.pingTest(`http://127.0.0.1:${internalPort}/internal-secret/webhook-echo`, 'whsec_td704');
-    if (anyPort.success || String(anyPort.responseBody).includes('TOP-SECRET') || internalHits.length > 0 || !/SSRF blocked/.test(anyPort.message)) {
+    if (anyPort.success || String(anyPort.responseBody).includes('TOP-SECRET') || internalHits.length > 0 || !anyPort.message.includes(PRIVATE_ADDRESS_REFUSAL)) {
       wrong.push(`other loopback port: success ${anyPort.success}, message ${anyPort.message}, internal hits ${internalHits.length}`);
     }
 

@@ -10781,6 +10781,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 15 PR b (v9.0.356+): webhook secrets and SSRF
   const { runWebhookSsrfEchoTests } = await import('../regression/webhookSsrfEchoTests.js');
   results.push(...await runWebhookSsrfEchoTests(shouldRun));
+  const { runWebhookErrorContractTests } = await import('../regression/webhookErrorContractTests.js');
+  results.push(...await runWebhookErrorContractTests(shouldRun));
   const { runWebhookRuleSeedTests } = await import('../regression/webhookRuleSeedTests.js');
   results.push(...await runWebhookRuleSeedTests(shouldRun));
   const { runWebhookSecretEditTests } = await import('../regression/webhookSecretEditTests.js');
