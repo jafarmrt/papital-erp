@@ -569,16 +569,8 @@ export class VoucherSyncService {
       if (p) {
         matchedProjectName = p.title || p.projectCode;
       }
-    } else if (doc.notes) {
-      const matchProj = String(doc.notes).match(/پروژه\s*[:#]?\s*([A-Za-z0-9-_]+)/i);
-      if (matchProj && matchProj[1]) {
-        const [p] = await executor.select().from(productionProjects).where(and(eq(productionProjects.projectCode, matchProj[1].trim()), eq(productionProjects.isDeleted, 0)));
-        if (p) {
-          matchedProjectId = p.id;
-          matchedProjectName = p.title || p.projectCode;
-        }
-      }
     }
+    // v10.0.264 (OBS-R1-47): the project comes only from documents.project_id; a project code in the notes was read before
 
     // V10-1.1 & V5.0.17: fallback تاریخ ۱۰ کاراکتری ایمن
     const docDate = doc.date ? String(doc.date).slice(0, 10) : await businessTodayIsoDate();
@@ -806,16 +798,8 @@ export class VoucherSyncService {
       if (p) {
         matchedProjectName = p.title || p.projectCode;
       }
-    } else if (doc.notes) {
-      const matchProj = String(doc.notes).match(/پروژه\s*[:#]?\s*([A-Za-z0-9-_]+)/i);
-      if (matchProj && matchProj[1]) {
-        const [p] = await executor.select().from(productionProjects).where(and(eq(productionProjects.projectCode, matchProj[1].trim()), eq(productionProjects.isDeleted, 0)));
-        if (p) {
-          matchedProjectId = p.id;
-          matchedProjectName = p.title || p.projectCode;
-        }
-      }
     }
+    // v10.0.264 (OBS-R1-47): the project comes only from documents.project_id; a project code in the notes was read before
 
     let voucherType: JournalVoucher['voucherType'] = 'general';
     let voucherDescription = '';
