@@ -423,17 +423,18 @@ export async function runPieceworkEntryTests(shouldRun: ShouldRun): Promise<Test
       const payrollId = Number(issued.body?.id);
       if (issued.status !== 201 || !payrollId) problems.push(`issuing the payslip answered ${issued.status} ${brief(issued.body)}`);
       if (payrollId) {
-        const toDraft = await admin.put(`/api/piecework/payrolls/${payrollId}/status`, { status: 'draft' });
-        if (toDraft.status !== 200) problems.push(`moving the payslip to draft answered ${toDraft.status}`);
+        // v10.0.193 (TD-1083): a payslip is issued as a draft, so the status change approves it
+        const toApproved = await admin.put(`/api/piecework/payrolls/${payrollId}/status`, { status: 'approved' });
+        if (toApproved.status !== 200) problems.push(`approving the payslip answered ${toApproved.status}`);
         const del = await admin.del(`/api/piecework/payrolls/${payrollId}`);
         if (del.status !== 200) problems.push(`deleting the payslip answered ${del.status} ${brief(del.body)}`);
         const rows = await auditsOf('payroll', payrollId);
         const [created, updated, deleted] = ['CREATE', 'UPDATE', 'DELETE'].map(a => rows.find(r => r.action === a));
-        if (!created || !fin(String(field(created, 'after', 'netPayable'))).equals(800_000) || field(created, 'after', 'status') !== 'تأییدشده' || !created.ip_address) {
+        if (!created || !fin(String(field(created, 'after', 'netPayable'))).equals(800_000) || field(created, 'after', 'status') !== 'پیش‌نویس' || !created.ip_address) {
           problems.push(`the payslip issue row is ${brief(created ?? null)}`);
         }
         const statusChange = (updated?.details?.changes as Record<string, { before?: unknown; after?: unknown }> | undefined)?.status;
-        if (!updated || statusChange?.before !== 'تأییدشده' || statusChange?.after !== 'پیش‌نویس' || /draft|approved/.test(updated.description) || !updated.ip_address) {
+        if (!updated || statusChange?.before !== 'پیش‌نویس' || statusChange?.after !== 'تأییدشده' || /draft|approved/.test(updated.description) || !updated.ip_address) {
           problems.push(`the payslip status row is ${brief(updated ?? null)}, expected Persian statuses and no status code`);
         }
         if (!deleted || field(deleted, 'before', 'payrollNumber') === undefined || !Array.isArray(deleted.details?.freedWorkLogIds) || (deleted.details.freedWorkLogIds as unknown[]).length !== 1 || !deleted.ip_address) {
