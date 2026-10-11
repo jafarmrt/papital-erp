@@ -1,6 +1,6 @@
 import { checkMixedStockPathsNoDeadlock, checkVoidKardexOrderMatchesLive, checkVoidsOfSharedItemNoDeadlock } from './concurrencyScenarios.js';
 import { checkReversalLifecycle, checkVoucherReversedOnce } from './voucherConcurrencyScenarios.js';
-import { checkBankSyncFromTransactions, checkDeletedChequeFrozen, checkTransferVoidedTogether } from './treasuryConcurrencyScenarios.js';
+import { checkBankSyncFromTransactions, checkChequeStatusBankLockOrder, checkDeletedChequeFrozen, checkTransferVoidedTogether } from './treasuryConcurrencyScenarios.js';
 import { checkRequisitionReceivedOnce } from './procurementConcurrencyScenarios.js';
 import { checkProjectDeliveryCapped } from './projectConcurrencyScenarios.js';
 import { checkDlqReplayedOnce } from './eventConcurrencyScenarios.js';
@@ -9,6 +9,7 @@ import { checkNoSecondConnectionInTransactions } from './poolScenarios.js';
 import { checkBankAccountMaintenanceLocked } from './bankAccountScenarios.js';
 import { checkIdempotencyKeyContract } from './idempotencyScenarios.js';
 import { checkProjectCodesAtomic } from './projectCodeScenarios.js';
+import { checkAllocationAndRemittanceShareStock, checkConcurrentSettlements, checkDeliveryAndReceiveShareItem, checkSimulatorWithConcurrentUsers } from './crossPathConcurrencyScenarios.js';
 
 /** آزمون‌های سخت‌گیرانه حوزه J در جدول سوئیت business_invariants: [شناسه، نام، بررسی، شرح موفقیت] */
 export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
@@ -22,6 +23,8 @@ export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<
     () => checkVoucherReversedOnce(), 'of three concurrent reversals one was accepted and the second sequential reversal was refused; each voucher has one active reversal voucher'],
   ['inv_td_322_deleted_cheque_frozen', 'v8.0.69: a deleted cheque is not cleared or deleted again, and of a concurrent delete and clear only one is accepted (TD-322)',
     () => checkDeletedChequeFrozen(), 'clearing and deleting a deleted cheque again gave "not found"; in three rounds of concurrent delete and clear only one was accepted and the bank balance stayed correct'],
+  ['inv_td_1217_cheque_status_bank_lock_order', 'v10.0.196: sending a cheque to collection with a bank account and clearing the same cheque concurrently do not deadlock; the bank is locked before the cheque on every status change (TD-1217)',
+    () => checkChequeStatusBankLockOrder(), 'in three rounds both changes ran in turn without deadlock and the cheque was cleared once into the bank'],
   ['inv_td_323_reversal_lifecycle', 'v8.0.70: a draft voucher is not reversed or corrected, and a voucher with an active reversal voucher does not go back to draft and is not deleted (TD-323)',
     checkReversalLifecycle, 'draft void and correction refused; the manual voucher and the voided invoice voucher did not go back to draft and were not deleted'],
   ['inv_td_326_requisition_received_once', 'v8.0.71: "receive goods" of a purchase requisition brings the goods into the warehouse only once: concurrent with conversion to orders, before it, twice concurrently, and with a partial order or an order that was not finalized (TD-326)',
@@ -44,4 +47,13 @@ export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<
     () => checkIdempotencyKeyContract(), 'the refused payment ran after the deposit; the repeated key with another body and path was refused; the long request ran once'],
   ['inv_td_350_project_code_atomic', 'v8.0.80: the automatic project code comes from the atomic year counter; concurrent projects get unique codes and a concurrent manual code or a taken next number gives no uniqueness error (TD-350)',
     () => checkProjectCodesAtomic(), 'five concurrent projects got five unique codes; the concurrent manual code got a suffix; the taken number was skipped'],
+  // v10.0.36 (I-03): races between two different paths over the same rows
+  ['inv_i03_delivery_and_receive_share_item', 'v10.0.36: a project delivery and a purchase requisition receive of the same item at the same moment are both recorded, without deadlock, and the weighted average cost holds both entries (I-03)',
+    checkDeliveryAndReceiveShareItem, 'both entries recorded; stock 9 and WAC 200,000; invariants hold'],
+  ['inv_i03_allocation_and_remittance_share_stock', 'v10.0.36: a material allocation and a remittance drawing on the same stock at the same moment never both leave it, and a project allocates its own reserved stock while a remittance is refused (I-03)',
+    checkAllocationAndRemittanceShareStock, 'one of allocation and remittance accepted over 10 units; the reserved units went to the project only; invariants hold'],
+  ['inv_i03_concurrent_settlements', 'v10.0.36: two receipts settling one invoice through two banks at the same moment are both recorded, and of a receipt and the invoice void exactly one wins (I-03)',
+    checkConcurrentSettlements, 'both receipts recorded in their banks; one of receipt and void accepted; invariants hold'],
+  ['inv_i03_simulator_concurrent_users', 'v10.0.36: the business-year simulator with twelve concurrent users runs 144 operations in rounds without a deadlock or a non-business error and keeps every invariant (I-03)',
+    () => checkSimulatorWithConcurrentUsers(), '144 operations in 12 rounds of 12; no deadlock, no unexpected error, no violation'],
 ];

@@ -145,7 +145,9 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
       // v9.0.320 (TD-805، B12P-02، تصمیم ت۲ الف): هر کار حقوق کلید هم‌نام خودش را می‌پرسد؛ «مدیریت کامل پرسنل» فقط پرونده پرسنل است
       { key: 'piecework.manage_tasks', title: 'مدیریت عناوین کاری و نرخ‌های پایه', description: 'تعریف، ویرایش، حذف و بازیابی عناوین کاری و دسته‌بندی‌ها، بارگذاری اکسل عناوین، نرخ پایه و نرخ اختصاصی هر پرسنل؛ نرخ دستی در فرم کارکرد', requires: ['piecework.view'] },
       { key: 'piecework.log', title: 'ثبت و ویرایش کارکرد پرسنل', description: 'ثبت، ویرایش و حذف کارکردی که هنوز در فیشی نیامده، و تخصیص آن به پروژه', requires: ['piecework.view'] },
-      { key: 'piecework.payroll', title: 'محاسبه و صدور فیش حقوقی', description: 'صدور فیش با کسر مساعده، تأیید و تغییر وضعیت، ثبت سند حسابداری و ابطال فیش', requires: ['piecework.view'] },
+      { key: 'piecework.payroll', title: 'محاسبه و صدور فیش حقوقی', description: 'صدور فیش پیش‌نویس با کسر مساعده، ثبت سند حسابداری و ابطال فیش', requires: ['piecework.view'] },
+      // v10.0.193 (TD-1083، طرح حقوق ت۱ الف): تأیید جدا از صدور؛ مهاجرت 0101 آن را به هر نقش دارای piecework.payroll داد
+      { key: 'piecework.payroll_approve', title: 'تأیید فیش حقوق', description: 'تأیید فیش پیش‌نویس و بازگرداندن فیش تأییدشده بی پرداخت به پیش‌نویس؛ صادرکننده فیش آن را تأیید و پرداخت نمی‌کند', requires: ['piecework.view'] },
       { key: 'piecework.pay', title: 'پرداخت و ابطال پرداخت فیش', description: 'ثبت پرداخت خزانه‌ای فیش تأییدشده و ابطال پرداخت آن', requires: ['piecework.view'] },
       // v9.0.126 (TD-882): پیش‌تر بیرون از کاتالوگ بود و کد نقش «مدیر» جای آن را می‌گرفت
       { key: 'payroll.view_sensitive', title: 'مشاهده اطلاعات بانکی فیش‌ها', description: 'شماره کارت، شبا و نام کاربری نوبیتکس فیش‌های حقوق بدون پوشش', requires: ['piecework.view'] },
@@ -173,7 +175,7 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
   {
     category: 'حسابداری، اسناد مالی و خزانه‌داری',
     permissions: [
-      { key: 'accounting.view', title: 'مشاهده اسناد و دفاتر حسابداری', description: 'دسترسی به اسناد دوبل، دفتر روزنامه، کل، معین و گزارش‌ها' },
+      { key: 'accounting.view', title: 'مشاهده اسناد و دفاتر حسابداری', description: 'دسترسی به اسناد حسابداری، دفتر روزنامه، کل، معین و گزارش‌ها' },
       { key: 'accounting.vouchers', title: 'صدور و ویرایش اسناد حسابداری', description: 'ثبت، ویرایش و حذف پیش‌نویس، سند برگشتی و سند اصلاحی', requires: ['accounting.view'] },
       // v10.0.27 (TD-965، طرح حقوق ت۹): تأیید جدا از ثبت؛ مهاجرت 0098 آن را به هر نقش دارای accounting.vouchers داد
       { key: 'accounting.vouchers_approve', title: 'تأیید و قطعی کردن سند حسابداری', description: 'تأیید سند پیش‌نویس، بازگرداندن سند تأییدشده به پیش‌نویس و قطعی کردن سند؛ ثبت‌کننده سند دستی آن را تأیید نمی‌کند', requires: ['accounting.vouchers'] },

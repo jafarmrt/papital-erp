@@ -218,6 +218,7 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
               canRecordVoucher={hasPerm('accounting.vouchers')}
               canRecordTreasury={hasPerm('accounting.treasury')}
               canRecordCheque={hasPerm('accounting.cheques')}
+              canOpenReports={hasPerm('accounting.reports')}
             />
           )}
 

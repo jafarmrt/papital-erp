@@ -63,6 +63,7 @@
 | GET | `/api/accounting/treasury` | accounting.treasury \| accounting.reports \| accounting.view |
 | POST | `/api/accounting/treasury` | accounting.treasury |
 | PUT | `/api/accounting/treasury/:id/document` | accounting.treasury |
+| GET | `/api/accounting/treasury/:id/document-options` | accounting.treasury |
 | POST | `/api/accounting/treasury/:id/void` | accounting.treasury |
 | GET | `/api/accounting/treasury/contra-accounts` | accounting.treasury \| accounting.cheques |
 | POST | `/api/accounting/treasury/preview-voucher` | accounting.treasury |
@@ -106,7 +107,7 @@
 | GET | `/api/crm/leads` | crm.view \| customers.view \| customers.manage |
 | POST | `/api/crm/leads` | crm.manage |
 | DELETE | `/api/crm/leads/:id` | crm.delete |
-| GET | `/api/crm/leads/:id` | crm.view |
+| GET | `/api/crm/leads/:id` | crm.view \| customers.view \| customers.manage |
 | PUT | `/api/crm/leads/:id` | crm.manage |
 | POST | `/api/crm/leads/:id/convert-to-customer` | crm.manage |
 | GET | `/api/crm/stats` | crm.view \| customers.view \| customers.manage |
@@ -135,6 +136,7 @@
 | GET | `/api/documents/:id` | documents.view \| documents.create \| documents.edit \| workflow.view \| audit.view |
 | PUT | `/api/documents/:id` | documents.edit |
 | PUT | `/api/documents/:id/finalize` | documents.finalize \| warehouse.in \| warehouse.out |
+| GET | `/api/documents/:id/line-stock` | documents.view \| documents.create \| documents.edit \| workflow.view \| audit.view |
 | PUT | `/api/documents/:id/notes` | documents.edit |
 | GET | `/api/documents/audit-items` | audit.view |
 | GET | `/api/documents/by-ref/:ref` | documents.view \| documents.create \| documents.edit \| workflow.view \| audit.view |
@@ -212,8 +214,6 @@
 | GET | `/api/inventory/integrity-audit` | warehouse.view \| inventory.reconcile \| audit.view |
 | GET | `/api/inventory/item-kardex/:itemId` | warehouse.view |
 | POST | `/api/inventory/kardex-initial-backfill` | inventory.reconcile |
-| GET | `/api/inventory/negative-stock-policy` | warehouse.view \| inventory.reconcile \| audit.view |
-| PUT | `/api/inventory/negative-stock-policy` | inventory.reconcile |
 | POST | `/api/inventory/rebuild-from-ledger` | inventory.reconcile |
 | GET | `/api/inventory/report` | warehouse.view \| inventory.reconcile \| audit.view |
 | GET | `/api/inventory/reserved-items` | products.view \| reports.view \| warehouse.view \| warehouse.in \| documents.view \| documents.create |
@@ -290,7 +290,7 @@
 | GET | `/api/piecework/payrolls/:id/payments` | piecework.payroll \| piecework.pay \| personnel.manage \| accounting.treasury |
 | POST | `/api/piecework/payrolls/:id/payments/:transactionId/void` | piecework.pay |
 | POST | `/api/piecework/payrolls/:id/register-payment` | piecework.pay |
-| PUT | `/api/piecework/payrolls/:id/status` | piecework.payroll |
+| PUT | `/api/piecework/payrolls/:id/status` | piecework.payroll \| piecework.payroll_approve |
 | POST | `/api/piecework/payrolls/:id/sync-voucher` | piecework.payroll |
 | POST | `/api/piecework/payrolls/generate` | piecework.payroll |
 | GET | `/api/piecework/payrolls/mine` | login-only |

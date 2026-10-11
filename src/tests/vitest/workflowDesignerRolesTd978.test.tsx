@@ -3,7 +3,7 @@ import { cleanup, render, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WorkflowDesignerCanvas } from '../../components/workflow/WorkflowDesignerCanvas';
 
-// v10.0.28 (TD-978): the workflow designer reads the role list from `GET /api/roles`, the route that exists,
+// v10.0.197 (TD-978): the workflow designer reads the role list from `GET /api/roles`, the route that exists,
 // never from `/users/roles` (which `/users/:id` answers), so its role picker is filled even on a fresh page.
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));

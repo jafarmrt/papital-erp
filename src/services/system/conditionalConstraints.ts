@@ -201,6 +201,14 @@ export const CONDITIONAL_CONSTRAINT_RULES: readonly ConditionalConstraintRule[] 
     parent: 'users', onDelete: 'NO ACTION', migration: '0098',
     label: 'آخرین ویرایشگر سند حسابداری', blockerUnit: 'ردیف با کاربر ناموجود',
   }),
+  // v10.0.164 (TD-962): a user's role code points to its role; 0100 validates it only when no user names a missing role
+  {
+    name: 'fk_users_role', kind: 'foreign_key', table: 'users', migration: '0100',
+    label: 'پیوند نقش کاربر به جدول نقش‌ها', blockerUnit: 'کاربر با نقش ناموجود',
+    blockerCount: 'SELECT COUNT(*)::int AS n FROM users u WHERE u.role IS NOT NULL AND NOT EXISTS (SELECT 1 FROM roles r WHERE r.code = u.role)',
+    addedNotValid: true,
+    create: 'ALTER TABLE users ADD CONSTRAINT fk_users_role FOREIGN KEY (role) REFERENCES roles(code) ON UPDATE CASCADE NOT VALID',
+  },
   // v9.0.446 (TD-902): user columns (users are only soft-deleted); the workflow engine's user columns stay without a key
   ...USER_FOREIGN_KEYS.map(([table, column, label]) => notValidForeignKey({
     name: `fk_${table}_${column}`, table, column, parent: 'users', onDelete: table === 'form_drafts' ? 'CASCADE' : 'NO ACTION',

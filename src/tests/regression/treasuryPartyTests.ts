@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { accounts, cheques, journalVoucherItems, journalVouchers, personnel, treasuryTransactions } from '../../db/schema.js';
+import { money } from '../../lib/money.js';
 
 /**
  * Package 4 (treasury and cheques), PR «ب» party accounts: real Express routes on PostgreSQL. Each test is red on the
@@ -176,8 +177,8 @@ export async function runTreasuryPartyTests(shouldRun: ShouldRun): Promise<TestC
       const customerA = await createTestCustomer({ name: `ERP-TEST-MARKER p04 customer A ${tagOf()}` });
       const customerB = await createTestCustomer({ name: `ERP-TEST-MARKER p04 customer B ${tagOf()}` });
       const supplier = await createTestCustomer({ name: `ERP-TEST-MARKER p04 supplier ${tagOf()}`, partyType: 'supplier' });
-      const { document: invoiceB } = await createTestDocument({ type: 'invoice', buyerName: customerB.name });
-      const { document: purchase } = await createTestDocument({ type: 'purchase', buyerName: supplier.name });
+      const { document: invoiceB } = await createTestDocument({ type: 'invoice', buyerName: customerB.name, serviceChargeAmount: money(5_000_000) });
+      const { document: purchase } = await createTestDocument({ type: 'purchase', buyerName: supplier.name, serviceChargeAmount: money(5_000_000) });
       const { document: voidedB } = await createTestDocument({ type: 'invoice', buyerName: customerB.name, isDeleted: 1 });
       const base = { method: 'bank_transfer', bankAccountId: bank.id, date: '2026-04-01' };
       const asB = { partyType: 'customer', partyId: customerB.id, partyName: customerB.name };

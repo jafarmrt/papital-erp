@@ -3,6 +3,7 @@ import { TestCaseResult } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { roles, users } from '../../db/schema.js';
 import { runCase, type ShouldRun } from './workflowTestHarness.js';
+import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 
 /**
  * بسته ۲ (احراز هویت، دسترسی و سجل) — آزمون‌های امنیتی از مسیرهای واقعی Express با ورود واقعی (کوکی و CSRF).
@@ -10,7 +11,7 @@ import { runCase, type ShouldRun } from './workflowTestHarness.js';
  */
 
 /** کلیدهایی که پس از مهاجرت 0062 (v9.0.107) به کاتالوگ آمدند */
-const KEYS_ADDED_AFTER_0062: ReadonlySet<string> = new Set(['documents.finalize', 'personnel.view_sensitive', 'payroll.view_sensitive', 'accounting.fiscal_reopen', 'piecework.pay', 'pending_materials.create', 'media.view', 'media.upload', 'media.manage', 'accounting.vouchers_approve']);
+const KEYS_ADDED_AFTER_0062: ReadonlySet<string> = new Set(['documents.finalize', 'personnel.view_sensitive', 'payroll.view_sensitive', 'accounting.fiscal_reopen', 'piecework.pay', 'pending_materials.create', 'media.view', 'media.upload', 'media.manage', 'accounting.vouchers_approve', 'piecework.payroll_approve']);
 
 export async function runAccessPackageTwoTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
@@ -94,7 +95,7 @@ export async function runAccessPackageTwoTests(shouldRun: ShouldRun): Promise<Te
         if (health.status !== 'warning' || !health.items?.some(i => i.code === legacy)) wrong.push(`the synthetic_test_users health check does not report ${legacy}`);
       } finally {
         if (created.length > 0) await orm.delete(users).where(inArray(users.username, created));
-        await orm.delete(roles).where(eq(roles.id, role.id));
+        await deleteTestRoles(eq(roles.id, role.id));
       }
     });
   }
@@ -175,7 +176,7 @@ export async function runAccessPackageTwoTests(shouldRun: ShouldRun): Promise<Te
         const editKey = (Array.isArray(catalog.body) ? catalog.body : []).flatMap((g: { permissions: Array<{ key: string; requires?: string[] }> }) => g.permissions).find((p: { key: string }) => p.key === 'documents.edit');
         if (!same(editKey?.requires, ['documents.view'])) wrong.push('GET /api/permissions does not say documents.edit requires documents.view');
       } finally {
-        if (ids.length > 0) await orm.delete(roles).where(inArray(roles.id, ids));
+        if (ids.length > 0) await deleteTestRoles(inArray(roles.id, ids));
       }
     });
   }
@@ -263,7 +264,7 @@ export async function runAccessPackageTwoTests(shouldRun: ShouldRun): Promise<Te
         const list = await h.get('/api/customers', s);
         if (list.status !== 403) wrong.push(`a role holding only «*» listed customers with ${list.status}, not 403`);
       } finally {
-        await orm.delete(roles).where(eq(roles.id, star.id));
+        await deleteTestRoles(eq(roles.id, star.id));
       }
       const everything = await h.sessionWith([...PERMISSION_KEYS]);
       const health = await h.get('/api/system/health', everything);

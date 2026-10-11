@@ -29,6 +29,7 @@ export async function runPieceworkPermissionTests(shouldRun: ShouldRun): Promise
         tasks: await h.sessionWith(['piecework.view', 'piecework.manage_tasks']),
         log: await h.sessionWith(['piecework.view', 'piecework.log']),
         payroll: await h.sessionWith(['piecework.view', 'piecework.payroll']),
+        approve: await h.sessionWith(['piecework.view', 'piecework.payroll_approve']),
         pay: await h.sessionWith(['piecework.view', 'piecework.pay']),
       };
       type Who = keyof typeof sessions;
@@ -80,13 +81,15 @@ export async function runPieceworkPermissionTests(shouldRun: ShouldRun): Promise
         const spare = await h.post('/api/piecework/logs', { items: [{ ...item, quantity: 1 }] }, sessions.log);
         await only('delete work log', 'del', `/api/piecework/logs/${Number(spare.body?.insertedIds?.[0])}`, {}, 'log', ['personnel', 'tasks', 'payroll']);
 
-        // payroll: piecework.payroll issues, re-statuses, syncs and deletes; piecework.pay pays and voids
+        // payroll: piecework.payroll issues a draft, syncs and deletes; piecework.payroll_approve approves and puts back to
+        // draft (v10.0.193, TD-1083); piecework.pay pays and voids
         const issued = await only('issue payroll', 'post', '/api/piecework/payrolls',
           { personnelId: worker, startDate: '2026-04-01', endDate: '2026-04-30' }, 'payroll', ['personnel', 'pay', 'log']);
         const payrollId = Number(issued.body?.id);
         if (!(payrollId > 0)) return;
-        await only('payroll back to draft', 'put', `/api/piecework/payrolls/${payrollId}/status`, { status: 'draft' }, 'payroll', ['personnel', 'pay']);
-        await only('approve payroll', 'put', `/api/piecework/payrolls/${payrollId}/status`, { status: 'approved' }, 'payroll', ['personnel', 'pay']);
+        await only('approve payroll', 'put', `/api/piecework/payrolls/${payrollId}/status`, { status: 'approved' }, 'approve', ['personnel', 'pay', 'payroll']);
+        await only('payroll back to draft', 'put', `/api/piecework/payrolls/${payrollId}/status`, { status: 'draft' }, 'approve', ['personnel', 'pay', 'payroll']);
+        await only('approve payroll again', 'put', `/api/piecework/payrolls/${payrollId}/status`, { status: 'approved' }, 'approve', ['personnel', 'pay', 'payroll']);
         const sync = await h.post(`/api/piecework/payrolls/${payrollId}/sync-voucher`, {}, sessions.personnel);
         if (sync.status !== 403) wrong.push(`payroll voucher sync: personnel got ${sync.status}, not 403`);
 

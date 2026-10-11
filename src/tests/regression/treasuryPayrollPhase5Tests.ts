@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { accounts, customers } from '../../db/schema.js';
+import { accounts, customers, documents } from '../../db/schema.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { getDefaultWarehouseCode } from '../../services/inventory/warehouseResolver.js';
 import { isoToJalaliDate } from '../../utils/calendarDate.js';
@@ -169,7 +169,10 @@ export async function runTreasuryPayrollPhase5Tests(shouldRun: ShouldRun): Promi
 
       // 4) a sales document whose party is a supplier record: the receipt keeps the name rule instead of being refused
       const supplierBuyer = await createTestCustomer({ name: `TD-907 supplier buyer ${tagOf()}`, partyType: 'supplier' });
-      const mixedId = await createDoc({ docType: 'invoice', status: 'final', partyId: supplierBuyer.id, buyer_name: supplierBuyer.name, items: [{ itemId: item.id, quantity: 1, unit_price: 300_000 }] }, 'invoice of a supplier record');
+      // since v10.0.44 (TD-939) and v10.0.98 (TD-1194) a new sales document refuses a supplier-only party by id or by name,
+      // so this legacy row gets its party id and buyer name directly
+      const mixedId = await createDoc({ docType: 'invoice', status: 'final', buyer_name: `TD-907 legacy buyer ${tagOf()}`, items: [{ itemId: item.id, quantity: 1, unit_price: 300_000 }] }, 'invoice of a supplier record');
+      await orm.update(documents).set({ partyId: supplierBuyer.id, buyerName: supplierBuyer.name }).where(eq(documents.id, mixedId));
       const mixed = await settle('receipt', mixedId, supplierBuyer.name, 300_000);
       if (mixed.status !== 201) problems.push(`settling an invoice whose party is a supplier record answered ${brief(mixed)}, expected 201 by the name rule`);
 
@@ -252,6 +255,9 @@ export async function runTreasuryPayrollPhase5Tests(shouldRun: ShouldRun): Promi
       const issued = await api.post('/api/piecework/payrolls/generate', { personnelId: worker, startDate: '2026-04-01', endDate: '2026-04-30' });
       const payrollId = Number((issued.body as { id?: unknown } | undefined)?.id);
       if ((issued.status !== 200 && issued.status !== 201) || !payrollId) throw new Error(`setup: payslip ${brief(issued)}`);
+      // v10.0.193 (TD-1083): issued as a draft, paid once approved
+      const approved = await api.put(`/api/piecework/payrolls/${payrollId}/status`, { status: 'approved' });
+      if (approved.status !== 200) throw new Error(`setup: approving the payslip ${brief(approved)}`);
       const bankId = await fundedBank(api, 'IRR', 5_000_000);
       const pay = (body: Record<string, unknown>) => api.post(`/api/piecework/payrolls/${payrollId}/register-payment`, { bankAccountId: bankId, method: 'bank_transfer', ...body });
       const snapshot = async () => JSON.stringify({

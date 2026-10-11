@@ -65,7 +65,8 @@ describe('approvals inbox on a phone (D-11)', () => {
 
   it('does not send the decision while the phone is offline', () => {
     renderModal();
-    const submit = screen.getByRole<HTMLButtonElement>('button', { name: /تایید و ثبت نهایی وظیفه/ });
+    // v10.0.150 (TD-1177): the submit button names the task's own action
+    const submit = screen.getByRole<HTMLButtonElement>('button', { name: /ثبت «تأیید پیش‌فاکتور»/ });
     expect(submit.disabled).toBe(false);
     act(() => { window.dispatchEvent(new Event('offline')); });
     expect(submit.disabled).toBe(true);

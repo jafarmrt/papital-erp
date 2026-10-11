@@ -100,6 +100,8 @@ export interface JournalVoucher {
   sourceFiscalYear?: number | null;
   /** v9.0.294 (TD-552، ت۸): منشأ سند خودکار (یا منشأ سندی که این سند برگشت آن است)؛ null برای سند دستی */
   sourceKind?: VoucherSourceKind | null;
+  /** v10.0.x (TD-1239): شماره سند برگشت فعال این سند (ابطال یا ابطال برای بازثبت)؛ null وقتی برگشت نخورده است */
+  reversedByVoucherNumber?: string | null;
   /** v9.0.295 (TD-555): نسخه سند برای ویرایش هم‌زمان (۴۰۹ OCC_CONFLICT) */
   version?: number;
   currency?: string | null;
@@ -107,6 +109,10 @@ export interface JournalVoucher {
   created_by_id?: number | null;
   createdByUsername?: string | null;
   created_by_username?: string | null;
+  /** TD-1230: the maker's full name (`users.full_name`), shown in the voucher list */
+  createdByName?: string | null;
+  /** TD-1231: the last editor of a manual voucher (maker-checker, TD-965) */
+  updatedById?: number | null;
   approvedById?: number | null;
   approved_by_id?: number | null;
   isDeleted?: number | null;
