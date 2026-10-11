@@ -15,4 +15,8 @@ describe('priceListNamesError (TD-1192)', () => {
     expect(priceListNamesError([RETAIL, ` ${RETAIL} `])).toContain(RETAIL);
     expect(priceListNamesError(['Retail', 'retail'])).not.toBeNull();
   });
+  it('accepts a Latin comma in a name of the JSON list, still refusing a repeat (OBS-R1-71)', () => {
+    expect(priceListNamesError([`${RETAIL}, ویژه`, 'عمده'], { allowLatinComma: true })).toBeNull();
+    expect(priceListNamesError(['Retail', 'retail'], { allowLatinComma: true })).not.toBeNull();
+  });
 });
