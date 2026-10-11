@@ -55,7 +55,7 @@ describe('OBS-PR-17 the WooCommerce lists load only with the WooCommerce tab', (
 });
 
 describe('OBS-R2-88 the simulator rule follows the events glossary', () => {
-  it('has no «اتوماسیون» or «سرور بیرونی»', () => {
+  it('has no retired automation or external-server words', () => {
     const engine = readFileSync(resolve(ROOT, 'services/events/eventActionEngineService.ts'), 'utf8');
     expect(engine).not.toContain('اتوماسیون');
     expect(engine).not.toContain('سرور بیرونی');
