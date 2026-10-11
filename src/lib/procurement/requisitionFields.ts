@@ -90,7 +90,7 @@ export function canOrderRequisition(
   if (!access.canOrder) return false;
   const status = String(req.status);
   if (OPEN_REQUISITION_STATUSES.has(status)) return access.canApprove;
-  // v10.0.239 (TD-1207): درخواست دریافت‌شده‌ای که ابطال سفارش تحویل‌شده ردیفش را باز کرده (TD-912) همان قاعده سرور را دارد
+  // v10.0.244 (TD-1207): درخواست دریافت‌شده‌ای که ابطال سفارش تحویل‌شده ردیفش را باز کرده (TD-912) همان قاعده سرور را دارد
   if (status !== 'ordered' && !REORDERABLE_RECEIVED_STATUSES.has(status)) return false;
   return (Array.isArray(req.items) ? req.items : []).some(row => {
     if (row.closed) return false;

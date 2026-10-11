@@ -226,7 +226,8 @@ export function errorLogEntry(
     traceId,
     userId: req.user?.id,
     method: req.method,
-    url: req.url,
+    // v10.0.x (OBS-R1-02): the log files get the path only, like the access log; a query string may carry a token or search text
+    url: route,
     statusCode: normalized.statusCode,
     code: normalized.code,
     userMessage: normalized.message,

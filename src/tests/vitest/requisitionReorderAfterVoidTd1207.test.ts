@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { canOrderRequisition, REORDERABLE_RECEIVED_STATUSES } from '../../lib/procurement/requisitionFields';
 import { RECEIVED_REQUISITION_STATUSES } from '../../services/procurement/requisitionReceiveAction';
 
-// v10.0.239 (TD-1207): voiding a delivered order reopens the requisition row (TD-912) and the server takes a new order,
+// v10.0.244 (TD-1207): voiding a delivered order reopens the requisition row (TD-912) and the server takes a new order,
 // but the requisition stays received and the order button showed only for an ordered requisition
 
 const orderer = { canOrder: true, canApprove: false };
