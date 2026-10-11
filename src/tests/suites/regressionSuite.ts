@@ -10737,6 +10737,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runSalesDocumentTests(shouldRun));
   const { runSalesBalanceTests } = await import('../regression/salesBalanceTests.js');
   results.push(...await runSalesBalanceTests(shouldRun));
+  const { runSalesEventsTests } = await import('../regression/salesEventsTests.js');
+  results.push(...await runSalesEventsTests(shouldRun));
   // Package 8 PR D (v9.0.323+): lead link of a document edit, stock count lines, production receipts, return lookup, numbers
   const { runDocumentIntegrityTests } = await import('../regression/documentIntegrityTests.js');
   results.push(...await runDocumentIntegrityTests(shouldRun));
@@ -10920,6 +10922,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runPayrollApprovalDutiesTests(shouldRun));
   const { runPayrollPrepaymentStartTests } = await import('../regression/payrollPrepaymentStartTests.js');
   results.push(...await runPayrollPrepaymentStartTests(shouldRun));
+  const { runPayrollStatutoryTests } = await import('../regression/payrollStatutoryTests.js');
+  results.push(...await runPayrollStatutoryTests(shouldRun));
+  const { runPayrollEidiTests } = await import('../regression/payrollEidiTests.js');
+  results.push(...await runPayrollEidiTests(shouldRun));
   const { runPurchaseWorkflowGuardTests } = await import('../regression/purchaseWorkflowGuardTests.js');
   results.push(...await runPurchaseWorkflowGuardTests(shouldRun));
   // Lane L1 guide findings (v10.0.123+): move a treasury row to another document
@@ -10949,6 +10955,12 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // TD-1197: a rejected proforma stays in the open proformas box of the invoice page
   const { runOpenProformasTests } = await import('../regression/openProformasTests.js');
   results.push(...await runOpenProformasTests(shouldRun));
+  const { runItemListLedgerTests } = await import('../regression/itemListLedgerTests.js');
+  results.push(...await runItemListLedgerTests(shouldRun));
+
+  // Phase 3 lane L2 (v10.0.224+): package 15 ledger, events and integrations (TD-997)
+  const { runEventsLedgerTests } = await import('../regression/eventsLedgerTests.js');
+  results.push(...await runEventsLedgerTests(shouldRun));
 
   return results;
 }

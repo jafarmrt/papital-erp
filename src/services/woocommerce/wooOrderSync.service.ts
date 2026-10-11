@@ -1,3 +1,4 @@
+import { wooOrderVatPercent } from './wooOrderVat.js';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { documents, items, woocommerceOrderLogs } from '../../db/schema.js';
@@ -438,6 +439,8 @@ export class WooOrderSyncService {
           notes: notesTag(wcOrderId),
           currency,
           vatAmount: orderVat.toNumber(),
+          // v10.0.231 (TD-936): درصد مالیات از خود سفارش، وقتی همان مالیات را می‌سازد
+          vatPercent: wooOrderVatPercent(docLines, orderVat, currency),
           serviceChargeAmount: serviceCharge.toNumber(),
           items: docLines,
           location: targetLoc,

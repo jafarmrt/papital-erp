@@ -38,6 +38,20 @@ const payrollAmountColumns = {
   totalDeductions: pieceworkPayrolls.totalDeductions,
   // v9.0.329 (TD-861): شرح «سایر کسورات» برای فیش چاپی
   deductionsDescription: pieceworkPayrolls.deductionsDescription,
+  // v10.0.210 (TD-1087): کسورات قانونی برای فیش چاپی و فرم ویرایش پیش‌نویس
+  employeeInsurance: pieceworkPayrolls.employeeInsurance,
+  employerInsurance: pieceworkPayrolls.employerInsurance,
+  incomeTax: pieceworkPayrolls.incomeTax,
+  statutoryOverrideReason: pieceworkPayrolls.statutoryOverrideReason,
+  isStatutorySplit: pieceworkPayrolls.isStatutorySplit,
+  // v10.0.222 (TD-1089): سهم عیدی فیش یا عیدی فیش عیدی، و جمع سهم تأییدشده همان سال برای فیش چاپی
+  eidiAmount: pieceworkPayrolls.eidiAmount,
+  eidiFromAccrual: pieceworkPayrolls.eidiFromAccrual,
+  eidiYear: pieceworkPayrolls.eidiYear,
+  isEidi: pieceworkPayrolls.isEidi,
+  eidiYearAccrued: sql<string>`(SELECT COALESCE(SUM(x.eidi_amount), 0)::text FROM piecework_payrolls x
+    WHERE x.is_deleted = 0 AND x.is_eidi = 0 AND x.status <> 'draft'
+      AND x.personnel_id = ${pieceworkPayrolls.personnelId} AND x.eidi_year = ${pieceworkPayrolls.eidiYear})`,
   netPayable: pieceworkPayrolls.netPayable,
 };
 

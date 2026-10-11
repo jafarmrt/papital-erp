@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
-import { Plus, Printer, Trash2, BookOpen, RefreshCw, Wallet, Info, Pencil } from 'lucide-react';
+import { Plus, Printer, Trash2, BookOpen, RefreshCw, Wallet, Info, Pencil, FileSpreadsheet, Gift } from 'lucide-react';
 import { PieceworkPayroll } from '../../types';
 import { formatPersianDate } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
@@ -9,6 +9,9 @@ import { fetchJson } from '../../api';
 import { PayrollPaymentModal } from './PayrollPaymentModal';
 import { PayrollStatusCell, StatusChip } from './PayrollStatusCell';
 import { PayrollDraftEditModal } from './PayrollDraftEditModal';
+import { PayrollStatutoryReportModal } from './PayrollStatutoryReportModal';
+import { PayrollEidiModal } from './PayrollEidiModal';
+import { PayrollEidiReportModal } from './PayrollEidiReportModal';
 
 interface PieceworkPayrollsTabProps {
   payrollsList: PieceworkPayroll[];
@@ -17,6 +20,8 @@ interface PieceworkPayrollsTabProps {
   onUpdateStatus: (id: number, status: 'draft' | 'approved' | 'paid') => void;
   onDeletePayroll: (id: number) => void;
   onReload?: () => void;
+  /** v10.0.222 (TD-1089): پرسنل برای فیش عیدی */
+  personnelSelectOptions?: { value: string; label: string }[];
 }
 
 export function PieceworkPayrollsTab({
@@ -25,7 +30,8 @@ export function PieceworkPayrollsTab({
   onViewPayslip,
   onUpdateStatus,
   onDeletePayroll,
-  onReload
+  onReload,
+  personnelSelectOptions = []
 }: PieceworkPayrollsTabProps) {
   const rial = useRialDisplay();
   const curLbl = rial.label;
@@ -36,6 +42,10 @@ export function PieceworkPayrollsTab({
   const [paymentTarget, setPaymentTarget] = useState<PieceworkPayroll | null>(null);
   // v10.0.200 (TD-1242): ویرایش فیش پیش‌نویس
   const [editTarget, setEditTarget] = useState<PieceworkPayroll | null>(null);
+  // v10.0.211 (TD-1088): فهرست ماهانه بیمه و مالیات
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  // v10.0.222 (TD-1089): فیش عیدی و گزارش «عیدی سال»
+  const [eidiOpen, setEidiOpen] = useState<'issue' | 'report' | null>(null);
 
   const handleSyncVoucher = async (payrollId: number) => {
     try {
@@ -65,6 +75,24 @@ export function PieceworkPayrollsTab({
           </p>
         </div>
 
+        <div className="flex flex-wrap gap-2 shrink-0">
+        <button type="button" onClick={() => setIsReportOpen(true)}
+          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer">
+          <FileSpreadsheet size={16} />
+          <span>فهرست بیمه و مالیات</span>
+        </button>
+        <button type="button" onClick={() => setEidiOpen('report')}
+          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer">
+          <FileSpreadsheet size={16} />
+          <span>عیدی سال</span>
+        </button>
+        {canIssuePayroll && (
+          <button type="button" onClick={() => setEidiOpen('issue')}
+            className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer">
+            <Gift size={16} />
+            <span>صدور فیش عیدی</span>
+          </button>
+        )}
         {canIssuePayroll && (
           <button
             onClick={onOpenPayrollModal}
@@ -74,7 +102,11 @@ export function PieceworkPayrollsTab({
             <span>صدور فیش حقوقی جدید</span>
           </button>
         )}
+        </div>
       </div>
+      {isReportOpen && <PayrollStatutoryReportModal onClose={() => setIsReportOpen(false)} />}
+      {eidiOpen === 'report' && <PayrollEidiReportModal onClose={() => setEidiOpen(null)} />}
+      {eidiOpen === 'issue' && <PayrollEidiModal personnelSelectOptions={personnelSelectOptions} onClose={() => setEidiOpen(null)} onIssued={() => onReload?.()} />}
 
       {/* Payrolls Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">

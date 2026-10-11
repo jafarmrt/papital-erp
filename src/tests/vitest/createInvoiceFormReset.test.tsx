@@ -73,7 +73,7 @@ function renderPage(state?: Record<string, unknown>) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[state ? { pathname: '/remittances', state } : '/remittances']}>
+      <MemoryRouter initialEntries={[state ? { pathname: '/invoices/create', state } : '/invoices/create']}>
         <CreateInvoicePage user={admin} />
         <RouterStateProbe />
       </MemoryRouter>

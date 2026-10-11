@@ -18,6 +18,7 @@ import { parseQuantityOrTime, formatPersianPrice, errorMessageOf, toStorageDate,
 import { computeFixedSalaryShares, priorFixedGrantsOf } from '../lib/payroll/fixedSalaryProration';
 import { fixedSalaryPeriodEnd, fixedSalaryPeriodStart, payrollPrepaymentError, serviceEndOf, serviceStartOf } from '../lib/payroll/payrollPeriod';
 import { refreshSuggestedRates, submittedRate, suggestedRate } from '../lib/payroll/workLogRate';
+import { EMPTY_STATUTORY_ENTRY, statutoryPayloadOf, type PayrollStatutoryEntry } from '../lib/payroll/statutoryForm';
 import {
   exportPieceworkTasksToExcel,
   downloadPieceworkTemplate
@@ -118,6 +119,8 @@ export function usePiecework() {
   // v10.0.199 (TD-1085): فیش پیش‌پرداخت دوره آینده، فقط حقوق ثابت، با دلیل الزامی
   const [payrollIsPrepayment, setPayrollIsPrepayment] = useState<boolean>(false);
   const [payrollPrepaymentReason, setPayrollPrepaymentReason] = useState<string>('');
+  // v10.0.210 (TD-1087): بیمه و مالیات نوشته‌شده؛ کادر خالی یعنی پیشنهاد سرور
+  const [payrollStatutory, setPayrollStatutory] = useState<PayrollStatutoryEntry>(EMPTY_STATUTORY_ENTRY);
   const [isSavingPayroll, setIsSavingPayroll] = useState<boolean>(false);
 
   // Modal 4: View Payslip
@@ -547,6 +550,7 @@ export function usePiecework() {
     setPayrollNotes('');
     setPayrollIsPrepayment(false);
     setPayrollPrepaymentReason('');
+    setPayrollStatutory(EMPTY_STATUTORY_ENTRY);
     setIsPayrollModalOpen(true);
   };
 
@@ -583,6 +587,12 @@ export function usePiecework() {
     const parts = payrollFixedShares.months.map(m => `${m.month}: ${m.days} از ${m.monthDays} روز (${formatPersianPrice(Number(m.amount))})`);
     return `سهم حقوق ثابت این فیش ${formatPersianPrice(payrollFixedShares.total.toNumber())} است — ${parts.join('، ')}.`;
   }, [payrollFixedShares]);
+
+  // v10.0.210 (TD-1087): ناخالص فیش برای پیشنهاد بیمه و مالیات — کارکرد (جز پیش‌پرداخت) + سهم حقوق ثابت + پاداش، همان جمع سرور
+  const payrollStatutoryGross = useMemo(() => {
+    const piecework = payrollIsPrepayment ? 0 : payrollPreviewLogs.reduce((sum, l) => sum + Number(l.totalAmount || 0), 0);
+    return piecework + (payrollFixedShares?.total.toNumber() ?? 0) + Number(payrollBonuses || 0);
+  }, [payrollIsPrepayment, payrollPreviewLogs, payrollFixedShares, payrollBonuses]);
 
   const handleGeneratePayroll = async (e: FormEvent) => {
     e.preventDefault();
@@ -623,7 +633,8 @@ export function usePiecework() {
         advanceDeduction: payrollAdvanceDeduction || 0,
         notes: payrollNotes || undefined,
         isPrepayment: payrollIsPrepayment || undefined,
-        prepaymentReason: payrollIsPrepayment ? payrollPrepaymentReason.trim() : undefined
+        prepaymentReason: payrollIsPrepayment ? payrollPrepaymentReason.trim() : undefined,
+        ...statutoryPayloadOf(payrollStatutory)
       };
 
       const res = await fetchJson('/piecework/payrolls', {
@@ -633,6 +644,8 @@ export function usePiecework() {
       });
 
       hotToast.success(`فیش حقوقی شماره ${res.payrollNumber || ''} پیش‌نویس صادر شد؛ پرداخت آن پس از تأیید کاربر دیگری است.`);
+      if (res.statutoryWarning) hotToast(res.statutoryWarning, { icon: '⚠️' });
+      if (res.eidiWarning) hotToast(res.eidiWarning, { icon: '⚠️' });
       setIsPayrollModalOpen(false);
       reloadAll();
       setActiveTab('payrolls');
@@ -769,6 +782,9 @@ export function usePiecework() {
     payrollNotes,
     setPayrollNotes,
     payrollIsPrepayment,
+    payrollStatutory,
+    setPayrollStatutory,
+    payrollStatutoryGross,
     setPayrollIsPrepayment,
     payrollPrepaymentReason,
     setPayrollPrepaymentReason,

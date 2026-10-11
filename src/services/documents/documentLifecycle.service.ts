@@ -29,7 +29,7 @@ import { DocumentStockEngine } from './documentStockEngine.service.js';
 import { money } from '../../lib/money.js';
 import { releaseReservationsForDocument, restoreReservationsForDocument } from './projectReservationRelease.js';
 import { assertVoidKeepsStockHistory } from '../inventory/voidStockHistory.js';
-import { assertVoidHasNoReturns, assertVoidHasNoTreasuryRows } from './voidDependents.js';
+import { assertVoidHasNoReturns, assertVoidHasNoTreasuryRows, recordVoidEvents } from './voidDependents.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { proformaInvoiceTarget } from './proformaInvoice.js';
 import { assertNotProjectDelivery, stockDirectionOf } from './documentRecordRule.js';
@@ -362,6 +362,8 @@ export class DocumentLifecycleService {
       const auditBefore = await documentAuditSnapshot(tx, id);
 
       const deletedByUser = user || doc.user || 'system';
+      // v10.0.229 (TD-931): رویداد ابطال فاکتور فروش با مبلغ‌های پیش از ابطال، و نوع و شماره سند برای گردش‌های معکوس
+      const reversalEvent = await recordVoidEvents(tx, doc, deletedByUser);
       // V10-1.1: زمان حذف/برگشت‌ها از ساعت توافقی (بدون Z تا مقایسه لغوی ستون date سازگار بماند)
       const nowIso = await businessNowIsoDateTime();
 
@@ -433,7 +435,7 @@ export class DocumentLifecycleService {
                 unitPrice: orig.unitPrice ?? 0,
                 location: targetLoc,
                 // v9.0.80 (TD-489): حواله انتقال بین انبارها فقط مقدار را جابه‌جا کرده بود؛ ابطالش هم WAC را تغییر نمی‌دهد
-                quantityOnly: orig.documentType === 'transfer',
+                quantityOnly: orig.documentType === 'transfer', ...reversalEvent,
               }));
             }
           }
@@ -450,8 +452,7 @@ export class DocumentLifecycleService {
               // برمی‌گردد تا WAC مثل قبل بی‌تغییر بماند
               unitPrice: docDirection === 'out' ? 0
                 : (fin(doc.exchangeRate).isPositive() ? stockUnitPriceInIrr(item.unitPrice ?? 0, doc.currency, doc.exchangeRate) : (item.unitPrice ?? 0)),
-              location: targetLoc
-            }));
+              location: targetLoc, ...reversalEvent }));
           }
         }
 
