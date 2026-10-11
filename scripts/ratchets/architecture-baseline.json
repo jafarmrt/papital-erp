@@ -119,7 +119,6 @@
     "src/routes/piecework.routes.ts": 11,
     "src/routes/projects.routes.ts": 2,
     "src/routes/system.routes.ts": 3,
-    "src/routes/users.routes.ts": 3,
     "src/routes/warehouses.routes.ts": 2,
     "src/services/attachments/attachmentOrphanCleanup.service.ts": 1,
     "src/services/attachments/attachmentStorage.service.ts": 1,
