@@ -10873,6 +10873,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runProjectEventTests(shouldRun));
   const { runProjectWipCostTests } = await import('../regression/projectWipCostTests.js');
   results.push(...await runProjectWipCostTests(shouldRun));
+  const { runProjectFromNotesTests } = await import('../regression/projectFromNotesTests.js');
+  results.push(...await runProjectFromNotesTests(shouldRun));
   const { runProjectClosedWorkTests } = await import('../regression/projectClosedWorkTests.js');
   results.push(...await runProjectClosedWorkTests(shouldRun));
   // Series 10 phase 3 lane L3 (v10.0.63+): gaps of the project screens (TD-1140..TD-1144)
