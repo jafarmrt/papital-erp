@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.0.263 — نوشتن‌های مسیر پرسنل به لایه سرویس رفت (TD-960)
+- پنج نوشتن مستقیم `personnel.routes.ts` به `src/services/personnel/personnelWrite.service.ts` رفت؛ `routeWrites` از ۱۵ به ۱۰ رسید و هدف «صفر در بسته‌های مالی، ≤ ۲۰ در کل» برآورده شد (OBS-R2-01، TD-960).
+
 ### v10.0.262 — ممیزی خزانه درون همان ثبت و حذف جایگزین حساب کل
 - هشت مسیر خزانه دیگر ممیزی پس از commit نمی‌نویسند: سرویس‌ها ممیزی را با `tx` و `req` در `src/services/accounting/treasury/treasuryAudit.ts` می‌نویسند؛ `resolveContraAccount` در نبود حساب نگاشت حساب کل برنمی‌گرداند و اتصال دوم استخر نمی‌گیرد؛ `excludedContraAccountIds` نگاشت‌ها را یکی‌یکی می‌خواند (TD-934، OWN-01، OWN-03، نیمه خزانه OBS-R2-04).
 
