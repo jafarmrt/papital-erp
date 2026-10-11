@@ -10,7 +10,7 @@ import { auditWorkLogCreated, auditWorkLogDeleted, auditWorkLogUpdated, type Aud
 import { activePersonnelRate, savePersonnelRate, type PersonnelRateInput, type RateActor } from './piecework/personnelRate.js';
 import { assertScheduleRowsFree, linkScheduleRows, lockProjectsOfLogMove, lockScheduleProjects, unlinkScheduleRow } from './piecework/scheduleRowLink.js';
 import type { ScheduleRowRef } from '../lib/projects/scheduleWorkLog.js';
-import { assertWorkLogParentsLive, normalizeWorkLogEntries, workLogId, workLogManualRate, workLogQuantity, type WorkLogEntryInput } from './piecework/workLogEntry.js';
+import { assertWorkLogParentsLive, assertWorkLogsWithinService, normalizeWorkLogEntries, workLogId, workLogManualRate, workLogQuantity, type WorkLogEntryInput } from './piecework/workLogEntry.js';
 import {
   allocatePieceworkTaskCode,
   assertPieceworkTaskCodeAvailable,
@@ -275,6 +275,8 @@ export class PieceworkService {
       // v9.0.282 (TD-736): نخست ردیف پروژه‌های ردیف‌های برنامه FOR UPDATE، سپس والدها FOR SHARE
       const schedules = await lockScheduleProjects(tx, entries);
       const names = await assertWorkLogParentsLive(tx, entries);
+      // v10.0.186 (TD-956): no log after the personnel's service end
+      await assertWorkLogsWithinService(tx, entries);
       await assertScheduleRowsFree(tx, entries, schedules);
       const insertedIds: number[] = [];
       const links: Array<{ projectId: number; ref: ScheduleRowRef; logId: number }> = [];
@@ -710,6 +712,8 @@ export class PieceworkService {
       const existing = await lockEditableWorkLog(tx, id, 'کارکردی که در فیش حقوقی درج شده قابل تغییر نیست');
 
       const isoDate = data.date !== undefined ? requireStorageDate(data.date, 'تاریخ کارکرد') || existing.date : existing.date;
+      // v10.0.186 (TD-956): a log is not moved past the personnel's service end
+      if (isoDate !== existing.date) await assertWorkLogsWithinService(tx, [{ personnelId: existing.personnelId, isoDate }]);
       // v9.0.280 (TD-812): مقدار بزرگ‌تر از صفر، نرخ نامنفی و پروژه زنده، مانند ثبت کارکرد
       const newQty = data.quantity !== undefined ? workLogQuantity(data.quantity, '') : existing.quantity;
       const manualRate = data.unitRate !== undefined ? workLogManualRate(data.unitRate, '') : undefined;

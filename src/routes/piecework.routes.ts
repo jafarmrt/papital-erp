@@ -768,7 +768,7 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], requirePerm
 }));
 
 // PUT /api/piecework/payrolls/:id/status - Update status or mark as paid
-// v10.0.182 (TD-1083، طرح حقوق ت۱ الف): تغییر وضعیت (تأیید و بازگشت به پیش‌نویس) «تأیید فیش حقوق» را می‌خواهد و یادداشت
+// v10.0.193 (TD-1083، طرح حقوق ت۱ الف): تغییر وضعیت (تأیید و بازگشت به پیش‌نویس) «تأیید فیش حقوق» را می‌خواهد و یادداشت
 // تنها «محاسبه و صدور فیش حقوقی» را؛ پیش‌تر صادرکننده با همان کلید صدور، فیش خودش را تأیید هم می‌کرد.
 router.put('/piecework/payrolls/:id/status', requirePermission(PIECEWORK_PAYROLL_PERMISSION, PIECEWORK_PAYROLL_APPROVE_PERMISSION), validate(updatePieceworkPayrollStatusSchema), asyncHandler(async (req, res) => {
   try {

@@ -1,4 +1,5 @@
 import { eq, and, inArray } from 'drizzle-orm';
+import { assertProjectNotCancelled } from '../accounting/projectCancelledGuard.js';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { documents, documentItems, items, productionProjects } from '../../db/schema.js';
 import { resolveJalaliFiscalYear } from '../../lib/businessClock.js';
@@ -391,6 +392,8 @@ export class DocumentCreationService {
         if (!projExists) {
           throw new NotFoundError(`پروژه با شناسه ${finalProjectId} یافت نشد.`);
         }
+        // v10.0.184 (TD-921): سند تازه روی پروژه لغوشده ثبت نمی‌شود
+        await assertProjectNotCancelled(tx, finalProjectId, 'سند');
       }
       // v7.0.21 (TD-178 / audit P0-2): شماره عطف و سال مالی پارتیشن شماره‌گذاری؛ از v9.0.80 (TD-489) در
       // DocumentRefNumberService.assignDocumentRefNumber، مشترک با حواله انتقال بین انبارها

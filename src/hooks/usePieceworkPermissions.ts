@@ -19,7 +19,7 @@ export function usePieceworkPermissions() {
     canLog: useHasPermission(PIECEWORK_LOG_PERMISSION),
     /** صدور فیش پیش‌نویس، ثبت سند و ابطال فیش */
     canIssuePayroll: useHasPermission(PIECEWORK_PAYROLL_PERMISSION),
-    /** v10.0.182 (TD-1083): تأیید فیش و بازگرداندن فیش تأییدشده بی پرداخت به پیش‌نویس */
+    /** v10.0.193 (TD-1083): تأیید فیش و بازگرداندن فیش تأییدشده بی پرداخت به پیش‌نویس */
     canApprovePayroll: useHasPermission(PIECEWORK_PAYROLL_APPROVE_PERMISSION),
     /** ثبت و ابطال پرداخت فیش */
     canPay: useHasPermission(PIECEWORK_PAY_PERMISSION),

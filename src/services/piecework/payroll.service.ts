@@ -241,7 +241,7 @@ export class PieceworkPayrollService {
         advanceDeduction,
         netPayable: net,
         fixedSalaryMonths,
-        // v10.0.182 (TD-1083، OBS-R2-48، طرح حقوق ت۱ الف): فیش پیش‌نویس صادر می‌شود و دارنده «تأیید فیش حقوق» جدا تأییدش
+        // v10.0.193 (TD-1083، OBS-R2-48، طرح حقوق ت۱ الف): فیش پیش‌نویس صادر می‌شود و دارنده «تأیید فیش حقوق» جدا تأییدش
         // می‌کند. پیش‌تر هنگام صدور «تأییدشده» بود و میان صدور و پرداخت گام تأییدی نبود.
         status: 'draft',
         notes: finalNotes,
@@ -314,7 +314,7 @@ export class PieceworkPayrollService {
       if (targetStatus && (['paid', 'partially_paid'].includes(pay.status || '') || fin(pay.paidAmount ?? 0).isPositive())) {
         throw new ConflictError(`فیش ${pay.payrollNumber} پرداخت ثبت‌شده دارد؛ وضعیت آن فقط از مسیر پرداخت تغییر می‌کند.`);
       }
-      // v10.0.182 (TD-1084، طرح حقوق ت۲ و ت۳ الف): صادرکننده فیش آن را تأیید نمی‌کند؛ مدیر سیستم مستثناست
+      // v10.0.193 (TD-1084، طرح حقوق ت۲ و ت۳ الف): صادرکننده فیش آن را تأیید نمی‌کند؛ مدیر سیستم مستثناست
       if (targetStatus === 'approved' && pay.status === 'draft') {
         await assertPayrollDutyNotByIssuer(tx, pay, currentUserId, 'approve');
       }

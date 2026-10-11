@@ -10855,6 +10855,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runProjectEventTests(shouldRun));
   const { runProjectWipCostTests } = await import('../regression/projectWipCostTests.js');
   results.push(...await runProjectWipCostTests(shouldRun));
+  const { runProjectClosedWorkTests } = await import('../regression/projectClosedWorkTests.js');
+  results.push(...await runProjectClosedWorkTests(shouldRun));
   // Series 10 phase 3 lane L3 (v10.0.63+): gaps of the project screens (TD-1140..TD-1144)
   const { runProjectScreenGapsTests } = await import('../regression/projectScreenGapsTests.js');
   results.push(...await runProjectScreenGapsTests(shouldRun));
@@ -10894,6 +10896,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runTreasuryPayrollPhase5Tests } = await import('../regression/treasuryPayrollPhase5Tests.js');
   results.push(...await runTreasuryPayrollPhase5Tests(shouldRun));
 
+  // Phase 3 lane L2 (v10.0.182+): package 6 ledger, transfer codes (TD-988)
+  const { runTransferCodeLedgerTests } = await import('../regression/transferCodeLedgerTests.js');
+  results.push(...await runTransferCodeLedgerTests(shouldRun));
   // Phase 3 lane L2 (v10.0.169+): package 7 ledger observations (TD-989)
   const { runInventoryPlanningLedgerTests } = await import('../regression/inventoryPlanningLedgerTests.js');
   results.push(...await runInventoryPlanningLedgerTests(shouldRun));

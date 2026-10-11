@@ -30,7 +30,7 @@ const payslip = (id: number, status: PieceworkPayroll['status'], createdById: nu
 });
 const button = (text: string) => screen.getByText(text).closest('button') as HTMLButtonElement;
 
-// v10.0.182 (TD-1083 / TD-1084, payroll duties plan t2 / t3 «الف»): the issuer sees approve and pay disabled with the reason
+// v10.0.193 (TD-1083 / TD-1084, payroll duties plan t2 / t3 «الف»): the issuer sees approve and pay disabled with the reason
 describe('the issuer of a payslip neither approves nor pays it (TD-1084)', () => {
   it('the shared rule spares other users, the system admin and a payslip without an issuer', () => {
     const own = { createdById: 9 };

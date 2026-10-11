@@ -14,6 +14,7 @@ import { snapshotTransitionsOf } from './workflowSnapshot.js';
 import { isSystemAdminRole } from '../../lib/permissions/permissionCatalog.js';
 import { completedByUserCondition, completedTasksOf, inboxEntityFields } from './workflowInboxRows.js';
 import { NotFoundError, ConflictError, ValidationError, ForbiddenError } from '../../errors/customErrors.js';
+import { holdsWorkflowExecuteKey } from '../../lib/permissions/workflowPermissions.js';
 
 /** v9.0.34 (TD-444): کاربر کارتابل و مجوزهایی که موتور برای او و تفویض‌کنندگانش می‌خواند */
 interface TaskSigner {
@@ -127,6 +128,9 @@ export class WorkflowTaskService {
   private static async pendingTasksOf(userId: number, userRole: string, userPermissions?: string[]): Promise<PendingTaskMatch[]> {
     const isAdmin = isSystemAdminRole(userRole);
     const signer = await WorkflowTaskService.signerContext(orm, userId, userRole, userPermissions);
+    // TD-1150: a reader without a key that runs a step (route guard of `/tasks/:id/execute`) gets no task card, so the
+    // inbox never offers a decide button that answers 403
+    if (!isAdmin && !holdsWorkflowExecuteKey(signer.permissions)) return [];
     const allTasks = await orm.select({
       task: workflowTasks,
       instance: workflowInstances,

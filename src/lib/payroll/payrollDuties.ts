@@ -1,5 +1,5 @@
 /**
- * v10.0.182 (TD-1083 / TD-1084, OBS-R2-48, payroll duties plan decisions t1 to t3 «الف»): a payslip is issued as a draft
+ * v10.0.193 (TD-1083 / TD-1084, OBS-R2-48, payroll duties plan decisions t1 to t3 «الف»): a payslip is issued as a draft
  * and approved separately with `piecework.payroll_approve`; the user who issued a payslip neither approves it nor pays it
  * (nor voids its payment). The system admin is exempt, and the audit row names who acted. One rule for the server
  * (`src/services/piecework/payrollDuties.ts`) and the payroll screens, which show the button disabled with the reason.

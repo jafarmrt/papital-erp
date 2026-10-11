@@ -49,7 +49,7 @@ export function PieceworkPayslipModal({
   const companyName = useCompanyName();
   const viewer = useViewerIdentity();
   if (!viewingPayroll) return null;
-  // v10.0.182 (TD-1083 / TD-1084): تأیید با «تأیید فیش حقوق»؛ صادرکننده تأیید و پرداخت نمی‌کند و دلیل را می‌بیند
+  // v10.0.193 (TD-1083 / TD-1084): تأیید با «تأیید فیش حقوق»؛ صادرکننده تأیید و پرداخت نمی‌کند و دلیل را می‌بیند
   const approveRefusal = payrollIssuerDutyRefusal(viewingPayroll, viewer, 'approve');
   const payRefusal = payrollIssuerDutyRefusal(viewingPayroll, viewer, 'pay');
   const canReturnToDraft = viewingPayroll.status === 'approved' && !(Number(viewingPayroll.paidAmount ?? 0) > 0);
