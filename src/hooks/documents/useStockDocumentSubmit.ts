@@ -8,6 +8,7 @@ import { exchangeRateError } from '../../components/documents/ExchangeRateField'
 import { invalidatePreset } from '../../lib/queryInvalidation';
 import { refNumberToSend } from '../../lib/documents/documentRefRules';
 import { selectedPartyId } from '../../lib/documents/partySelection';
+import { STOCK_VOUCHER_DRAFT_NOTE } from '../../lib/documents/stockInLabels';
 import type { StockDocumentForm } from './useStockDocumentForm';
 import type { StockDocumentReferenceData } from './useStockDocumentReferenceData';
 
@@ -130,7 +131,7 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
         }
       } else {
         if (actionType === 'in' && docType === 'receipt') {
-          toast.success('رسید خرید ثبت و موجودی انبار به‌روزرسانی شد؛ سند حسابداری تا تأیید حسابدار پیش‌نویس است.');
+          toast.success(`رسید خرید ثبت و موجودی انبار به‌روزرسانی شد؛ ${STOCK_VOUCHER_DRAFT_NOTE}`);
         } else {
           toast.success('سند با موفقیت در سامانه ثبت شد.');
         }
