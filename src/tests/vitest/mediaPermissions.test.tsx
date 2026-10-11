@@ -38,7 +38,7 @@ function asset(id: number, createdBy: string, extra: Partial<MediaAssetView> = {
     id, sectionId: 1, itemId: 7, kind: 'image', shotType: 'white_background', title: `file ${id}`, description: '', sortOrder: id,
     isCover: false, originalName: `f${id}.jpg`, mimeType: 'image/jpeg', sizeBytes: 2_000_000, width: 2000, height: 2000,
     durationSeconds: null, isLowQuality: false, hasLight: true, hasThumb: true, lightFailed: false, createdBy, createdAt: null,
-    version: 1, warnings: [], ...extra,
+    version: 1, warnings: [], tags: [], ...extra,
   };
 }
 

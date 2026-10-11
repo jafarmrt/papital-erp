@@ -750,6 +750,13 @@
       "when": 1794700000000,
       "tag": "0106_payroll_eidi_tax_free",
       "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1794710000000,
+      "tag": "0107_media_tags_cover",
+      "breakpoints": true
     }
   ]
 }
