@@ -81,8 +81,12 @@ export async function runLeadProformaLinkGuardTests(shouldRun: (id: string, ...e
     // 4) editing a proforma: linking a lost lead is 422 for the admin and any link is 403 for the seller
     if (Number.isInteger(plainId) && plainId > 0) {
       const lost = await newLead('lost-edit', 'lost', 'lost');
-      const put = (session: { cookie: string; csrfToken: string }, crmLeadId: unknown) => request(app).put(`/api/documents/${plainId}`)
-        .set('Cookie', session.cookie).set('x-csrf-token', session.csrfToken).send({ crmLeadId });
+      // the edit sends the document's current version, which PUT /documents/:id requires since TD-972
+      const put = async (session: { cookie: string; csrfToken: string }, crmLeadId: unknown) => {
+        const [doc] = await orm.select({ version: documents.version }).from(documents).where(eq(documents.id, plainId));
+        return request(app).put(`/api/documents/${plainId}`)
+          .set('Cookie', session.cookie).set('x-csrf-token', session.csrfToken).send({ version: doc.version, crmLeadId });
+      };
       const closedEdit = await put(admin, lost);
       if (closedEdit.status !== 422 || closedEdit.body?.code !== 'CRM_LEAD_CLOSED') wrong.push(`edit link to a lost lead answered ${closedEdit.status} ${closedEdit.body?.code}`);
       if (await leadState(lost) !== 'lost/lost/0') wrong.push(`the lost lead became ${await leadState(lost)} after the edit`);
