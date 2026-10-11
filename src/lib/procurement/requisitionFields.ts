@@ -80,6 +80,9 @@ interface OrderableRowLike extends RequisitionRowLike {
  * تأییدشده (`ordered`) که ردیف باز با مانده دارد برای دارنده `procurement.order`، و درخواست پیش از تأیید فقط وقتی کاربر
  * حق تأیید هم دارد (سرور نخست انتقال تأیید را به نام او اجرا می‌کند).
  */
+/** وضعیت‌های دریافت‌شده درخواست (`RECEIVED_REQUISITION_STATUSES` سرور)؛ با ردیف باز دوباره سفارش داده می‌شوند */
+export const REORDERABLE_RECEIVED_STATUSES: ReadonlySet<string> = new Set(['received', 'completed']);
+
 export function canOrderRequisition(
   req: { status?: string | null; items?: OrderableRowLike[] | null },
   access: { canOrder: boolean; canApprove: boolean },
@@ -87,7 +90,8 @@ export function canOrderRequisition(
   if (!access.canOrder) return false;
   const status = String(req.status);
   if (OPEN_REQUISITION_STATUSES.has(status)) return access.canApprove;
-  if (status !== 'ordered') return false;
+  // v10.0.244 (TD-1207): درخواست دریافت‌شده‌ای که ابطال سفارش تحویل‌شده ردیفش را باز کرده (TD-912) همان قاعده سرور را دارد
+  if (status !== 'ordered' && !REORDERABLE_RECEIVED_STATUSES.has(status)) return false;
   return (Array.isArray(req.items) ? req.items : []).some(row => {
     if (row.closed) return false;
     const remaining = row.remainingQty ?? Math.max(0, Number(row.requestedQty || 0) - Number(row.orderedQty || 0));
