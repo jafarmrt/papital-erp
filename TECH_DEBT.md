@@ -49,12 +49,13 @@
 | TD-1130 | انبار و کاردکس، بسته ۶؛ راهنمای نقش‌ها | P2 — دکمه‌ها و مسیرها با مجوزهای ناهمسان: کاردکس کالا (`GET /inventory/item-kardex/:itemId`) فقط `warehouse.view` می‌خواهد ولی صفحه گردش کالا با `accounting.view` و برگه یکپارچگی `/audit` با `audit.view` آن را باز می‌کند و ۴۰۳ می‌گیرد (و کاردکس بها نشان می‌دهد، که `audit.view` کلید خواندن بها نیست)؛ «ثبت حواله انتقال انبار»، «ابطال» انتقال و «بازسازی موجودی» در `/audit` بی `warehouse.transfer` / `documents.delete` / `inventory.reconcile` نشان داده می‌شوند؛ ساخت، ویرایش و حذف طرح ترنسفر در `/transfers` بی `products.create` / `products.edit` / `products.delete` | `inventory.routes.ts:356`، `TransactionsPage.tsx:194`، `Inventory3WayIntegrityTab.tsx:358`، `InventoryAuditHeader.tsx:57`، `WarehouseTransfersListTab.tsx:88`، `TransfersPage.tsx:235,364,446,540` | open |
 | TD-1134 | هشدار سفارش، بسته ۷؛ راهنمای نقش‌ها | P3 — درخواست خرید از صفحه هشدار سفارش درخواست خرید باز همان کالا را نمی‌بیند و درخواست تکراری می‌سازد؛ «در راه» فقط اسناد خرید باز را می‌شمارد | `reorderAlerts.service.ts:16-51`؛ `ReorderPurchaseModal.tsx:107` | open |
 | TD-1135 | فروش، بسته ۸؛ راهنمای نقش‌ها | P3 — ستون «رزرو» گزینش کالای فاکتور فروش همیشه ۰ است، چون `GET /items/options` رزرو نمی‌فرستد (ثبت سند را دروازه فروش‌پذیر کارساز نگه می‌دارد) | `itemPickList.ts:56-66`؛ `CreateInvoicePage.tsx:604` | open |
+| TD-1209 | فروش، بسته ۸؛ راهنمای نقش‌ها | P3 — هنگام ویرایش پیش‌فاکتور باز، ستون «رزرو» فهرست انتخاب کالای فاکتور فروش رزرو خود همین پیش‌فاکتور را هم می‌شمارد و «قابل فروش» کمتر از مقدار آزاد برای این سند نشان داده می‌شود، در حالی که دروازه قابل فروش سرور (`assertOutflowWithinSellable` با `excludeDocumentId`) آن را کنار می‌گذارد. از خواندن کد؛ پیش از رفع با آزمون اثبات شود | `items.crud.routes.ts:50`، `CreateInvoicePage.tsx:612`؛ `documentSellableGate.ts:103` | open |
 
 ---
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۳۳ ردیف
+- **فعال:** ۳۴ ردیف
 - **آرشیو شده (resolved):** ۹۹۴ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
