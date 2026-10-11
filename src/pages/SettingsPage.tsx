@@ -14,6 +14,7 @@ import { WorkflowPresetsTab } from '../components/settings/WorkflowPresetsTab';
 import { InventoryControlPresetTab } from '../components/settings/InventoryControlPresetTab';
 import { TaskTitlesSettingsTab } from '../components/settings/TaskTitlesSettingsTab';
 import { PayrollStatutoryRatesTab } from '../components/settings/PayrollStatutoryRatesTab';
+import { PayrollEidiRatesSection } from '../components/settings/PayrollEidiRatesSection';
 import { SystemOperationsTab, ClearDataModal } from '../components/settings/SystemOperationsTab';
 import { WooCommerceTab } from '../components/settings/WooCommerceTab';
 import { AccountingSettingsTab } from '../components/settings/AccountingSettingsTab';
@@ -227,7 +228,10 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
         )}
 
         {activeTab === 'payroll_rates' && (
-          <PayrollStatutoryRatesTab />
+          <>
+            <PayrollStatutoryRatesTab />
+            <PayrollEidiRatesSection />
+          </>
         )}
 
         {activeTab === 'projects' && (

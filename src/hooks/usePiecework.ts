@@ -645,6 +645,7 @@ export function usePiecework() {
 
       hotToast.success(`فیش حقوقی شماره ${res.payrollNumber || ''} پیش‌نویس صادر شد؛ پرداخت آن پس از تأیید کاربر دیگری است.`);
       if (res.statutoryWarning) hotToast(res.statutoryWarning, { icon: '⚠️' });
+      if (res.eidiWarning) hotToast(res.eidiWarning, { icon: '⚠️' });
       setIsPayrollModalOpen(false);
       reloadAll();
       setActiveTab('payrolls');

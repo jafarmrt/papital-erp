@@ -243,6 +243,7 @@ export function PieceworkPayrollPage() {
           onUpdateStatus={handleUpdatePayrollStatus}
           onDeletePayroll={handleDeletePayroll}
           onReload={loadData}
+          personnelSelectOptions={personnelSelectOptions}
         />
       )}
 

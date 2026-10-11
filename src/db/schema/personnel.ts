@@ -166,6 +166,12 @@ export const pieceworkPayrolls = pgTable('piecework_payrolls', {
   incomeTax: moneyNumeric('income_tax').notNull().default(sql`0`),
   statutoryOverrideReason: text('statutory_override_reason').notNull().default(''),
   isStatutorySplit: integer('is_statutory_split').notNull().default(1),
+  // v10.0.222 (TD-1089، طرح حقوق §۳.۸، ت۱۴ تا ت۱۶ الف): فیش عادی سهم عیدی خود را نگه می‌دارد (سال = سال جلالی پایان دوره)؛
+  // «فیش عیدی» (is_eidi) عیدی یک سال را می‌پردازد و eidi_from_accrual بخشی است که از «عیدی پرداختنی» انباشته برداشته می‌شود
+  eidiAmount: moneyNumeric('eidi_amount').notNull().default(sql`0`),
+  eidiFromAccrual: moneyNumeric('eidi_from_accrual').notNull().default(sql`0`),
+  eidiYear: integer('eidi_year'),
+  isEidi: integer('is_eidi').notNull().default(0),
   createdById: integer('created_by_id').references(() => users.id),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),
@@ -176,6 +182,7 @@ export const pieceworkPayrolls = pgTable('piecework_payrolls', {
   idx_ppay_deleted: index('idx_ppay_deleted').on(table.isDeleted),
   // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_piecework_payrolls_created_by_id: index('idx_piecework_payrolls_created_by_id').on(table.createdById).where(sql`${table.createdById} IS NOT NULL`),
+  idx_ppay_eidi_year: index('idx_ppay_eidi_year').on(table.personnelId, table.eidiYear).where(sql`${table.eidiYear} IS NOT NULL`),
 }));
 registerColumnRef('pieceworkPayrolls.id', () => pieceworkPayrolls.id);
 
@@ -196,6 +203,28 @@ export const payrollStatutoryRates = pgTable('payroll_statutory_rates', {
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
 }, (table) => ({
   uq_payroll_statutory_rates_year: uniqueIndex('uq_payroll_statutory_rates_year').on(table.jalaliYear),
+}));
+
+/**
+ * v10.0.222 (TD-1089، طرح حقوق §۳.۸، ت۱۴ الف): روش و نرخ عیدی هر سال جلالی (مهاجرت 0105) که دارنده `payroll.rates_manage`
+ * وارد می‌کند؛ قاعده‌ها در `src/lib/payroll/eidi.ts`.
+ */
+export const payrollEidiRates = pgTable('payroll_eidi_rates', {
+  id: serial('id').primaryKey(),
+  jalaliYear: integer('jalali_year').notNull(),
+  method: text('method').notNull().default('percent_of_work'),
+  percent: numeric('percent', { precision: 7, scale: 4 }).notNull().default('0'),
+  yearlyCap: moneyNumeric('yearly_cap').notNull().default(sql`0`),
+  laborDays: numeric('labor_days', { precision: 7, scale: 2 }).notNull().default('0'),
+  laborCapDays: numeric('labor_cap_days', { precision: 7, scale: 2 }).notNull().default('0'),
+  minDailyWage: moneyNumeric('min_daily_wage').notNull().default(sql`0`),
+  fixedAmount: moneyNumeric('fixed_amount').notNull().default(sql`0`),
+  taxExemptCap: moneyNumeric('tax_exempt_cap').notNull().default(sql`0`),
+  version: integer('version').notNull().default(1),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
+}, (table) => ({
+  uq_payroll_eidi_rates_year: uniqueIndex('uq_payroll_eidi_rates_year').on(table.jalaliYear),
 }));
 
 export const pieceworkLogs = pgTable('piecework_logs', {

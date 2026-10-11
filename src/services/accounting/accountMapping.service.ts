@@ -309,6 +309,16 @@ export class AccountMappingService {
     return this.resolveAccount('employerInsuranceExpenseAccountCode', tx);
   }
 
+  /** v10.0.222 (TD-1089): عیدی پرداختنی؛ پیش‌فرض ۳۲۰۷ */
+  static async getEidiPayableAccount(tx?: DbExecutor): Promise<Account | null> {
+    return this.resolveAccount('eidiPayableAccountCode', tx);
+  }
+
+  /** v10.0.222 (TD-1089): هزینه عیدی و پاداش؛ پیش‌فرض ۷۰۱۴ */
+  static async getEidiExpenseAccount(tx?: DbExecutor): Promise<Account | null> {
+    return this.resolveAccount('eidiExpenseAccountCode', tx);
+  }
+
   /**
    * V2.0.0: حساب سرمایه اولیه — طرف حساب اسناد افتتاحیه (موجودی اولیه خزانه/انبار)
    */
