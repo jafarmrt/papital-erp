@@ -5,7 +5,8 @@
  * نمی‌سازد.
  */
 
-export type StorageLocationKind = 'attachments' | 'images';
+/** v10.0.248 (N-05 PR 4): `media` is the media library directory (`MEDIA_DIR`) */
+export type StorageLocationKind = 'attachments' | 'images' | 'media';
 
 export interface StorageLocationHealth {
   kind: StorageLocationKind;
@@ -24,6 +25,7 @@ export interface StorageHealth {
 export const STORAGE_LOCATION_LABELS: Readonly<Record<StorageLocationKind, string>> = {
   attachments: 'پیوست‌ها',
   images: 'تصویرها',
+  media: 'کتابخانه تصاویر',
 };
 
 export const STORAGE_LOCATION_MESSAGES: Readonly<Record<StorageLocationKind, { ok: string; error: string }>> = {
@@ -35,9 +37,13 @@ export const STORAGE_LOCATION_MESSAGES: Readonly<Record<StorageLocationKind, { o
     ok: 'پوشه تصویرها قابل نوشتن است.',
     error: 'پوشه تصویرها قابل نوشتن نیست؛ تصویر و نشان‌واره تازه ذخیره نمی‌شود. جزئیات در گزارش خطاهای کارساز ثبت شده است.',
   },
+  media: {
+    ok: 'پوشه کتابخانه تصاویر قابل نوشتن است.',
+    error: 'پوشه کتابخانه تصاویر قابل نوشتن نیست؛ عکس و فیلم تازه بارگذاری نمی‌شود. جزئیات در گزارش خطاهای کارساز ثبت شده است.',
+  },
 };
 
 export const STORAGE_SUMMARY_MESSAGES = {
-  ok: 'پوشه‌های پیوست‌ها و تصویرها قابل نوشتن‌اند.',
+  ok: 'پوشه‌های پیوست‌ها، تصویرها و کتابخانه تصاویر قابل نوشتن‌اند.',
   error: 'دست‌کم یک پوشه ذخیره‌سازی قابل نوشتن نیست.',
 } as const;

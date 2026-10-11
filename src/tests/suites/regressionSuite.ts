@@ -10881,6 +10881,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10 N-05 PR 3 (v10.0.247+): sections, tags, order, cover, replace and the item picture of the media library
   const { runMediaArrangeTests } = await import('../regression/mediaArrangeTests.js');
   results.push(...await runMediaArrangeTests(shouldRun));
+  // Series 10 N-05 PR 4 (v10.0.248): the light rebuild command and the media library card of the health page
+  const { runMediaOpsTests } = await import('../regression/mediaOpsTests.js');
+  results.push(...await runMediaOpsTests(shouldRun));
 
   // Package 1 second half PR 1 (v9.0.386+): data export, system health page, factory reset, setup wizard
   const { runDataExportTests } = await import('../regression/dataExportTests.js');
