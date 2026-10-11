@@ -61,6 +61,11 @@ export function payrollSnapshot(row: PayrollRow): Snapshot {
     // v10.0.199 (TD-1085): فیش پیش‌پرداخت و دلیلش در ممیزی
     isPrepayment: row.isPrepayment ?? 0,
     prepaymentReason: row.prepaymentReason ?? '',
+    // v10.0.210 (TD-1087): کسورات قانونی و شرح تغییر مبلغ پیشنهادی
+    employeeInsurance: text(row.employeeInsurance),
+    employerInsurance: text(row.employerInsurance),
+    incomeTax: text(row.incomeTax),
+    statutoryOverrideReason: row.statutoryOverrideReason ?? '',
   };
 }
 
@@ -125,7 +130,9 @@ export async function auditWorkLogDeleted(tx: DbExecutor, row: WorkLogRow, actor
 }
 
 export async function auditPayrollIssued(
-  tx: DbExecutor, row: PayrollRow, info: { personnelName: string; logIds: number[]; voucher: { id: number; voucherNumber: number } | null }, actor: AuditActor,
+  tx: DbExecutor, row: PayrollRow,
+  info: { personnelName: string; logIds: number[]; voucher: { id: number; voucherNumber: number } | null; statutory?: Record<string, unknown> },
+  actor: AuditActor,
 ): Promise<void> {
   await logActivity({
     tx,
@@ -134,12 +141,16 @@ export async function auditPayrollIssued(
     entity: PAYROLL_AUDIT_ENTITY,
     entityId: row.id,
     description: `صدور ${row.isPrepayment === 1 ? `فیش پیش‌پرداخت ${row.payrollNumber} (دلیل: ${row.prepaymentReason})` : `فیش حقوقی ${row.payrollNumber}`} برای ${info.personnelName} با خالص ${amount(row.netPayable)} (سند حسابداری: ${info.voucher ? toPersianDigits(info.voucher.voucherNumber) : 'بدون سند'})`,
-    details: { after: payrollSnapshot(row), workLogIds: info.logIds, voucherId: info.voucher?.id ?? null, voucherNumber: info.voucher?.voucherNumber ?? null },
+    details: {
+      after: payrollSnapshot(row), workLogIds: info.logIds, voucherId: info.voucher?.id ?? null, voucherNumber: info.voucher?.voucherNumber ?? null,
+      ...(info.statutory ? { statutory: info.statutory } : {}),
+    },
   });
 }
 
 export async function auditPayrollUpdated(
   tx: DbExecutor, before: PayrollRow, after: PayrollRow, voucher: { id: number; voucherNumber: number } | null, actor: AuditActor,
+  statutory?: Record<string, unknown>,
 ): Promise<void> {
   const diff = changedFields(payrollSnapshot(before), payrollSnapshot(after));
   if (Object.keys(diff.changes).length === 0) return;
@@ -156,7 +167,7 @@ export async function auditPayrollUpdated(
         ? `ویرایش یادداشت فیش حقوقی ${after.payrollNumber}`
         // v10.0.200 (TD-1242): ویرایش مبلغ‌های فیش پیش‌نویس و سند دوباره‌ساخته
         : `ویرایش فیش پیش‌نویس ${after.payrollNumber} با خالص ${amount(after.netPayable)}`,
-    details: { ...diff, voucherId: voucher?.id ?? null, voucherNumber: voucher?.voucherNumber ?? null },
+    details: { ...diff, voucherId: voucher?.id ?? null, voucherNumber: voucher?.voucherNumber ?? null, ...(statutory ? { statutory } : {}) },
   });
 }
 

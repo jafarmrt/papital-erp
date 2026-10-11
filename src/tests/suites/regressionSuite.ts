@@ -10920,6 +10920,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runPayrollApprovalDutiesTests(shouldRun));
   const { runPayrollPrepaymentStartTests } = await import('../regression/payrollPrepaymentStartTests.js');
   results.push(...await runPayrollPrepaymentStartTests(shouldRun));
+  const { runPayrollStatutoryTests } = await import('../regression/payrollStatutoryTests.js');
+  results.push(...await runPayrollStatutoryTests(shouldRun));
   const { runPurchaseWorkflowGuardTests } = await import('../regression/purchaseWorkflowGuardTests.js');
   results.push(...await runPurchaseWorkflowGuardTests(shouldRun));
   // Lane L1 guide findings (v10.0.123+): move a treasury row to another document

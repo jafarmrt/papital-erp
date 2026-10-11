@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, ReactNode, useEffect, useState } from 'react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
@@ -41,6 +41,8 @@ interface PieceworkPayrollModalProps {
   isSaving?: boolean;
   // v10.0.199 (TD-1085): فیش پیش‌پرداخت دوره آینده با دلیل
   prepayment?: PayrollPrepaymentState;
+  /** v10.0.210 (TD-1087): کادرهای بیمه و مالیات (`PayrollStatutoryFields`) */
+  statutoryFields?: ReactNode;
 }
 
 /** v9.0.266 (TD-804، تصمیم ت۱ الف): پاداش، کسورات و کسر مساعده منفی نمی‌شوند (سرور هم رد می‌کند) */
@@ -71,7 +73,8 @@ export function PieceworkPayrollModal({
   advanceDeduction = 0,
   setAdvanceDeduction,
   isSaving = false,
-  prepayment
+  prepayment,
+  statutoryFields
 }: PieceworkPayrollModalProps) {
   const rial = useRialDisplay();
   // ورودی مبلغ همیشه به ریال است (مبلغ ذخیره‌شده)
@@ -248,6 +251,7 @@ export function PieceworkPayrollModal({
             )}
           </div>
 
+          {statutoryFields}
           {prepayment && <PayrollPrepaymentField prepayment={prepayment} hasFixedSalary={allowNoLogs} />}
 
           <div>

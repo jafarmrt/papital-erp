@@ -18,6 +18,7 @@ import { workLogFreeOfLivePayroll } from './workLogPayrollLink.js';
 import { auditPayrollDeleted, auditPayrollIssued, auditPayrollUpdated } from './pieceworkAudit.js';
 import { payrollStatusLabel } from '../../lib/payroll/payrollStatusLabels.js';
 import { assertPayrollDutyNotByIssuer } from './payrollDuties.js';
+import { resolvePayrollStatutory, statutoryAuditInfo, statutoryPayrollColumns, type StatutoryEntryInput } from './payrollStatutory.js';
 
 /**
  * چرخه عمر فیش حقوقی پرکیسی: صدور، تغییر وضعیت، همگام‌سازی سند و ابطال.
@@ -33,7 +34,7 @@ type AmountInput = number | string;
  */
 const MANUAL_PAYROLL_STATUSES = new Set(['draft', 'approved']);
 
-export interface GeneratePayrollInput {
+export interface GeneratePayrollInput extends StatutoryEntryInput {
   personnelId: AmountInput;
   startDate: string;
   endDate: string;
@@ -224,15 +225,15 @@ export class PieceworkPayrollService {
         }
       }
 
-      const netFin = pieceworkTotalFin
-        .add(fixedPortionFin)
-        .add(totBonusesFin)
-        .subtract(totDeductionsFin)
-        .subtract(advanceDeductionFin)
-        .round(4);
+      // v10.0.210 (TD-1087، طرح حقوق §۳.۳): بیمه سهم کارگر و مالیات حقوق از خالص کم می‌شوند؛ سهم کارفرما هزینه کارفرماست
+      const statutory = await resolvePayrollStatutory(tx, { person: pInfo, startIso: sDate, endIso: eDate, gross: pieceworkTotalFin.add(fixedPortionFin).add(totBonusesFin),
+        entered: { employeeInsurance: input.employeeInsurance, employerInsurance: input.employerInsurance, incomeTax: input.incomeTax }, overrideReason: input.statutoryOverrideReason });
+
+      const netFin = pieceworkTotalFin.add(fixedPortionFin).add(totBonusesFin).subtract(statutory.amounts.employeeInsurance)
+        .subtract(statutory.amounts.incomeTax).subtract(totDeductionsFin).subtract(advanceDeductionFin).round(4);
 
       if (netFin.isNegative()) {
-        return { status: 400, error: 'جمع کسورات و کسر مساعده از اجزای فیش بیشتر است — مقادیر را اصلاح کنید.' };
+        return { status: 400, error: 'جمع بیمه، مالیات، کسورات و کسر مساعده از اجزای فیش بیشتر است — مقادیر را اصلاح کنید.' };
       }
 
       const pieceworkTotal = money(pieceworkTotalFin.round(4));
@@ -270,6 +271,7 @@ export class PieceworkPayrollService {
         status: 'draft',
         isPrepayment: isPrepayment ? 1 : 0,
         prepaymentReason,
+        ...statutoryPayrollColumns(statutory),
         notes: finalNotes,
         createdById: currentUserId,
         isDeleted: 0
@@ -296,13 +298,13 @@ export class PieceworkPayrollService {
         { strict: true }
       );
       // v9.0.285 (TD-810): ردیف ممیزی صدور با عکس فیش، کارکردها و سند، در همان تراکنش
-      await auditPayrollIssued(tx, newPayroll, { personnelName: pInfo.fullName, logIds, voucher: autoVoucher }, { req: input.req, userId: currentUserId, username: currentUsername });
+      await auditPayrollIssued(tx, newPayroll, { personnelName: pInfo.fullName, logIds, voucher: autoVoucher, statutory: statutoryAuditInfo(statutory) }, { req: input.req, userId: currentUserId, username: currentUsername });
 
       return {
         status: 201,
         payroll: newPayroll,
         personnelName: pInfo.fullName,
-        voucher: autoVoucher
+        voucher: autoVoucher, statutoryWarning: statutory.warning
       };
     });
   }

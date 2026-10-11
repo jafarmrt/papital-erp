@@ -26,7 +26,7 @@ import { kardexInCostByItem } from './productionReceiptCost.js';
 import { documentOutflowCost } from './outflowVoucherCost.js';
 import { balancedCostRows, irrToForeignAmount, rateForRial, rowExchangeRate } from './foreignCostRow.js';
 import { ValidationError, NotFoundError } from '../../errors/customErrors.js';
-import type { JournalVoucher } from '../../types.js';
+import type { Account, JournalVoucher } from '../../types.js';
 import { isoToJalaliDate } from '../../utils/calendarDate.js';
 
 /** انواع اسنادی که VoucherSync برایشان سند حسابداری خودکار صادر می‌کند */
@@ -1275,7 +1275,8 @@ export class VoucherSyncService {
       if (isStrict) throw new ValidationError(message, undefined, code);
       return null;
     };
-    if (bonuses.isNegative() || fin(pay.totalDeductions).isNegative() || fin(pay.advanceDeduction).isNegative()) {
+    if (bonuses.isNegative() || fin(pay.totalDeductions).isNegative() || fin(pay.advanceDeduction).isNegative()
+      || fin(pay.employeeInsurance).isNegative() || fin(pay.employerInsurance).isNegative() || fin(pay.incomeTax).isNegative()) {
       return refuse(`فیش ${pay.payrollNumber} پاداش، کسورات یا کسر مساعده منفی دارد و سند آن با خالص فیش نمی‌خواند؛ این فیش را باطل و دوباره صادر کنید.`, 'PAYROLL_NEGATIVE_COMPONENT');
     }
     if (!grossAmount.isPositive()) {
@@ -1330,6 +1331,41 @@ export class VoucherSyncService {
     const advanceDeduction = nonNegative(pay.advanceDeduction);
     const otherDeductions = nonNegative(pay.totalDeductions);
     let allocatedCredits = fin(0);
+
+    // v10.0.210 (TD-1087، طرح حقوق §۳.۳ بند ۴): بیمه سهم کارگر و کارفرما بستانکار «بیمه پرداختنی» (۳۲۰۴)، سهم کارفرما با
+    // بدهکار «هزینه بیمه سهم کارفرما» (۷۰۱۳) که از خالص کم نمی‌شود، و مالیات حقوق بستانکار «مالیات حقوق پرداختنی» (۳۲۰۶)
+    const employeeInsurance = nonNegative(pay.employeeInsurance);
+    const employerInsurance = nonNegative(pay.employerInsurance);
+    const incomeTax = nonNegative(pay.incomeTax);
+    const personRow = (accountId: number, debit: DecimalValue, credit: DecimalValue, description: string) => items.push({
+      accountId, detailedType: 'personnel', detailedId: pay.personnelId, detailedName: pers?.fullName || 'پرسنل', debit, credit, currency: 'IRR', description,
+    });
+    const statutoryAccount = async (needed: boolean, find: () => Promise<Account | null>, label: string) => {
+      if (!needed) return null;
+      const acc = await find();
+      if (!acc) {
+        refuse(`حساب «${label}» (نگاشت حساب‌ها) برای ثبت کسورات قانونی فیش ${pay.payrollNumber} یافت نشد.`, 'PAYROLL_STATUTORY_ACCOUNT_MISSING');
+      }
+      return acc;
+    };
+    const insuranceAcc = await statutoryAccount(employeeInsurance.isPositive() || employerInsurance.isPositive(), () => AccountMappingService.getInsurancePayableAccount(tx), 'بیمه پرداختنی');
+    const employerExpenseAcc = await statutoryAccount(employerInsurance.isPositive(), () => AccountMappingService.getEmployerInsuranceExpenseAccount(tx), 'هزینه بیمه سهم کارفرما');
+    const taxAcc = await statutoryAccount(incomeTax.isPositive(), () => AccountMappingService.getPayrollTaxPayableAccount(tx), 'مالیات حقوق پرداختنی');
+    if ((employeeInsurance.isPositive() && !insuranceAcc) || (employerInsurance.isPositive() && (!insuranceAcc || !employerExpenseAcc)) || (incomeTax.isPositive() && !taxAcc)) {
+      return null;
+    }
+    if (employerInsurance.isPositive() && insuranceAcc && employerExpenseAcc) {
+      personRow(employerExpenseAcc.id, employerInsurance, 0, `بیمه سهم کارفرما فیش ${pay.payrollNumber}`);
+      personRow(insuranceAcc.id, 0, employerInsurance, `بیمه سهم کارفرما فیش ${pay.payrollNumber} (${pers?.fullName || 'پرسنل'})`);
+    }
+    if (employeeInsurance.isPositive() && insuranceAcc) {
+      personRow(insuranceAcc.id, 0, employeeInsurance, `بیمه سهم کارگر فیش ${pay.payrollNumber} (${pers?.fullName || 'پرسنل'})`);
+      allocatedCredits = allocatedCredits.add(employeeInsurance);
+    }
+    if (incomeTax.isPositive() && taxAcc) {
+      personRow(taxAcc.id, 0, incomeTax, `مالیات حقوق فیش ${pay.payrollNumber} (${pers?.fullName || 'پرسنل'})`);
+      allocatedCredits = allocatedCredits.add(incomeTax);
+    }
 
     if (advanceDeduction.isPositive()) {
       const advanceAcc = await AccountMappingService.getEmployeeAdvanceAccount(tx);

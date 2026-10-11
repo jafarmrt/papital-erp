@@ -150,6 +150,8 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
       { key: 'piecework.payroll_approve', title: 'تأیید فیش حقوق', description: 'تأیید فیش پیش‌نویس و بازگرداندن فیش تأییدشده بی پرداخت به پیش‌نویس؛ صادرکننده فیش آن را تأیید و پرداخت نمی‌کند', requires: ['piecework.view'] },
       { key: 'piecework.pay', title: 'پرداخت و ابطال پرداخت فیش', description: 'ثبت پرداخت خزانه‌ای فیش تأییدشده و ابطال پرداخت آن', requires: ['piecework.view'] },
       // v9.0.126 (TD-882): پیش‌تر بیرون از کاتالوگ بود و کد نقش «مدیر» جای آن را می‌گرفت
+      // v10.0.210 (TD-1087، طرح حقوق ت۴ الف): نرخ‌های سالانه بیمه و مالیات حقوق؛ روز انتشار به هیچ نقشی داده نمی‌شود
+      { key: 'payroll.rates_manage', title: 'نرخ‌های بیمه و مالیات حقوق', description: 'ورود و ویرایش درصدهای بیمه سهم کارگر و کارفرما، سقف دستمزد مشمول بیمه و پله‌های مالیات حقوق هر سال', requires: ['piecework.view'] },
       { key: 'payroll.view_sensitive', title: 'مشاهده اطلاعات بانکی فیش‌ها', description: 'شماره کارت، شبا و نام کاربری نوبیتکس فیش‌های حقوق بدون پوشش', requires: ['piecework.view'] },
     ]
   },
