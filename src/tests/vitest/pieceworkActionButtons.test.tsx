@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 
-const keys = { canManageTasks: false, canLog: false, canIssuePayroll: false, canPay: false };
+const keys = { canManageTasks: false, canLog: false, canIssuePayroll: false, canApprovePayroll: false, canPay: false };
 vi.mock('../../hooks/usePieceworkPermissions', () => ({ usePieceworkPermissions: () => keys }));
 vi.mock('../../api', () => ({ fetchJson: vi.fn(async () => []) }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
@@ -15,7 +15,7 @@ import { PieceworkPayrollsTab } from '../../components/piecework/PieceworkPayrol
 import { PieceworkRatesTab } from '../../components/piecework/PieceworkRatesTab';
 import type { PieceworkLog, PieceworkPayroll, PieceworkTask } from '../../types';
 
-const grant = (granted: Partial<typeof keys>) => Object.assign(keys, { canManageTasks: false, canLog: false, canIssuePayroll: false, canPay: false }, granted);
+const grant = (granted: Partial<typeof keys>) => Object.assign(keys, { canManageTasks: false, canLog: false, canIssuePayroll: false, canApprovePayroll: false, canPay: false }, granted);
 afterEach(() => cleanup());
 
 const noop = () => undefined;
@@ -59,7 +59,8 @@ describe('payroll buttons follow their API keys (TD-805)', () => {
     expect(screen.getByTitle('حذف کارکرد')).toBeTruthy();
   });
 
-  it('issue, approve, voucher and void need piecework.payroll; payment needs piecework.pay', () => {
+  // v10.0.182 (TD-1083): approving moved to its own key, piecework.payroll_approve
+  it('issue, voucher and void need piecework.payroll; approve piecework.payroll_approve; payment piecework.pay', () => {
     grant({ canPay: true });
     renderPayrolls();
     expect(screen.queryByText('صدور فیش حقوقی جدید')).toBeNull();
@@ -71,11 +72,18 @@ describe('payroll buttons follow their API keys (TD-805)', () => {
     grant({ canIssuePayroll: true });
     renderPayrolls();
     expect(screen.getByText('صدور فیش حقوقی جدید')).toBeTruthy();
-    expect(screen.getByText('تأیید فیش')).toBeTruthy();
+    expect(screen.queryByText('تأیید فیش')).toBeNull();
+    expect(screen.getByText('پیش‌نویس')).toBeTruthy();
     expect(screen.getByText('ثبت سند حسابداری')).toBeTruthy();
     expect(screen.getAllByTitle('ابطال فیش').length).toBe(2);
     expect(screen.queryByText('ثبت پرداخت')).toBeNull();
     expect(screen.getByText('تأییدشده')).toBeTruthy();
+    cleanup();
+    grant({ canApprovePayroll: true });
+    renderPayrolls();
+    expect(screen.getByText('تأیید فیش')).toBeTruthy();
+    expect(screen.queryByText('صدور فیش حقوقی جدید')).toBeNull();
+    expect(screen.queryByTitle('ابطال فیش')).toBeNull();
   });
 
   it('a custom rate is saved only with piecework.manage_tasks', () => {

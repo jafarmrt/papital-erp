@@ -255,6 +255,9 @@ export async function runTreasuryPayrollPhase5Tests(shouldRun: ShouldRun): Promi
       const issued = await api.post('/api/piecework/payrolls/generate', { personnelId: worker, startDate: '2026-04-01', endDate: '2026-04-30' });
       const payrollId = Number((issued.body as { id?: unknown } | undefined)?.id);
       if ((issued.status !== 200 && issued.status !== 201) || !payrollId) throw new Error(`setup: payslip ${brief(issued)}`);
+      // v10.0.182 (TD-1083): issued as a draft, paid once approved
+      const approved = await api.put(`/api/piecework/payrolls/${payrollId}/status`, { status: 'approved' });
+      if (approved.status !== 200) throw new Error(`setup: approving the payslip ${brief(approved)}`);
       const bankId = await fundedBank(api, 'IRR', 5_000_000);
       const pay = (body: Record<string, unknown>) => api.post(`/api/piecework/payrolls/${payrollId}/register-payment`, { bankAccountId: bankId, method: 'bank_transfer', ...body });
       const snapshot = async () => JSON.stringify({

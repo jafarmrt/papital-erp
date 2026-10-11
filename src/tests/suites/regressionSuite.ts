@@ -10906,6 +10906,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // TD-1241: a voided document's reversal names its type in Persian
   const { runDocumentVoidReasonTests } = await import('../regression/documentVoidReasonTests.js');
   results.push(...await runDocumentVoidReasonTests(shouldRun));
+  const { runPayrollApprovalDutiesTests } = await import('../regression/payrollApprovalDutiesTests.js');
+  results.push(...await runPayrollApprovalDutiesTests(shouldRun));
   const { runPurchaseWorkflowGuardTests } = await import('../regression/purchaseWorkflowGuardTests.js');
   results.push(...await runPurchaseWorkflowGuardTests(shouldRun));
   // Lane L1 guide findings (v10.0.123+): move a treasury row to another document

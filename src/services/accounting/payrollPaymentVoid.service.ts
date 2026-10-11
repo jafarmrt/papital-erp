@@ -1,4 +1,5 @@
 import { and, eq, sql } from 'drizzle-orm';
+import { assertPayrollDutyNotByIssuer } from '../piecework/payrollDuties.js';
 import { orm } from '../../db/drizzle.js';
 import { bankAccounts, pieceworkLogs, pieceworkPayrolls, treasuryTransactions } from '../../db/schema.js';
 import { VoucherService } from './voucher.service.js';
@@ -65,6 +66,8 @@ export class PayrollPaymentVoidService {
       const [payroll] = await tx.select().from(pieceworkPayrolls)
         .where(and(eq(pieceworkPayrolls.id, input.payrollId), eq(pieceworkPayrolls.isDeleted, 0)));
       if (!payroll) throw new NotFoundError('فیش حقوقی یافت نشد');
+      // v10.0.182 (TD-1084): صادرکننده فیش پرداخت آن را ابطال هم نمی‌کند؛ مدیر سیستم مستثناست
+      await assertPayrollDutyNotByIssuer(tx, payroll, input.userId, 'pay');
       const [bank] = await tx.select().from(bankAccounts).where(eq(bankAccounts.id, payment.bankAccountId ?? 0));
       if (!bank) throw new NotFoundError('حساب بانکی پرداخت یافت نشد');
 

@@ -116,6 +116,8 @@ export function createFinanceOperations(random: SimRandom, world: FinanceWorld, 
     const issued = await PieceworkPayrollService.generatePayroll({ personnelId: ids.workerId, startDate: isoDay(payrollFrom), endDate: isoDay(day), username: 'sim' });
     if (!issued.payroll) return { detail: `skip:payroll-${issued.status}`, tags: [] };
     payrollFrom = day + 1;
+    // v10.0.182 (TD-1083): a payslip is issued as a draft and paid only once approved
+    await PieceworkPayrollService.updatePayrollStatus(issued.payroll.id, { status: 'approved', username: 'sim' });
     const net = Number(issued.payroll.netPayable ?? 0);
     const partial = chance(0.4);
     const paid = await PayrollPaymentService.registerPayrollPayment({

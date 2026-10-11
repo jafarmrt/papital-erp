@@ -8,7 +8,7 @@ import { PayrollPaymentVoidService } from '../../services/accounting/payrollPaym
 import { VoucherService } from '../../services/accounting/voucher.service.js';
 import { BankAccountService } from '../../services/accounting/treasury/bankAccount.service.js';
 import { TreasuryTransactionService } from '../../services/accounting/treasury/treasuryTransaction.service.js';
-import { PieceworkPayrollService } from '../../services/piecework/payroll.service.js';
+import { PieceworkPayrollService, type GeneratePayrollInput } from '../../services/piecework/payroll.service.js';
 import { getErrorMessage } from '../../utils/formatters.js';
 import { miscContraAccountId } from '../fixtures/treasuryParty.js';
 
@@ -68,8 +68,18 @@ export async function fundedBank(): Promise<number> {
   return bank.id;
 }
 
+/**
+ * v10.0.182 (TD-1083): a payslip is issued as a draft and paid only once approved; the payment scenarios issue and
+ * approve it (as the system, so no issuer rule applies). The draft itself is covered by reg_payroll_issued_as_draft_td_1083.
+ */
+export async function issueApproved(input: GeneratePayrollInput) {
+  const issued = await PieceworkPayrollService.generatePayroll(input);
+  if (issued.payroll) await PieceworkPayrollService.updatePayrollStatus(issued.payroll.id, { status: 'approved', username: input.username || 'inv' });
+  return issued;
+}
+
 async function generate(personnelId: number, extra: Record<string, unknown> = {}) {
-  return PieceworkPayrollService.generatePayroll({ personnelId, ...PERIOD, ...extra });
+  return issueApproved({ personnelId, ...PERIOD, ...extra });
 }
 
 export async function refusalOf(fn: () => Promise<unknown>): Promise<string | null> {
@@ -180,7 +190,7 @@ export async function checkAdvanceDeductionWithinBalance(): Promise<string[]> {
 export async function checkFixedSalaryProratedByMonth(): Promise<string[]> {
   const problems: string[] = [];
   const salary = { salaryType: 'monthly_fixed', monthlySalary: 10000000 };
-  const issue = (personnelId: number, startDate: string, endDate: string) => PieceworkPayrollService.generatePayroll({ personnelId, startDate, endDate, username: 'inv' });
+  const issue = (personnelId: number, startDate: string, endDate: string) => issueApproved({ personnelId, startDate, endDate, username: 'inv' });
   const fixedOf = (r: Awaited<ReturnType<typeof issue>>) => (r.payroll ? fin(r.payroll.totalFixedAmount).toString() : `رد: ${r.error}`);
 
   // الف) ۱۴۰۵/۰۱/۰۱ تا ۱۴۰۵/۰۲/۳۱ ← دو ماه
@@ -313,7 +323,7 @@ export async function probePayrollPaymentNotVoidable(): Promise<boolean> {
 export async function probeFixedSalaryOneMonthPerPayroll(): Promise<boolean> {
   const worker = await newWorker('کارمند کاوش حقوق ثابت', { salaryType: 'monthly_fixed', monthlySalary: 10000000 });
   // ۱۴۰۵/۰۱/۰۱ تا ۱۴۰۵/۰۲/۳۱ (دو ماه شمسی)
-  const twoMonths = await PieceworkPayrollService.generatePayroll({ personnelId: worker, startDate: '2026-03-21', endDate: '2026-05-21', username: 'inv' });
+  const twoMonths = await issueApproved({ personnelId: worker, startDate: '2026-03-21', endDate: '2026-05-21', username: 'inv' });
   return Boolean(twoMonths.payroll) && fin(twoMonths.payroll!.totalFixedAmount).equals(10000000);
 }
 

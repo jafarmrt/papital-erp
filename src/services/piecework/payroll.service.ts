@@ -17,6 +17,7 @@ import { money } from '../../lib/money.js';
 import { workLogFreeOfLivePayroll } from './workLogPayrollLink.js';
 import { auditPayrollDeleted, auditPayrollIssued, auditPayrollUpdated } from './pieceworkAudit.js';
 import { payrollStatusLabel } from '../../lib/payroll/payrollStatusLabels.js';
+import { assertPayrollDutyNotByIssuer } from './payrollDuties.js';
 
 /**
  * چرخه عمر فیش حقوقی پرکیسی: صدور، تغییر وضعیت، همگام‌سازی سند و ابطال.
@@ -240,7 +241,9 @@ export class PieceworkPayrollService {
         advanceDeduction,
         netPayable: net,
         fixedSalaryMonths,
-        status: 'approved',
+        // v10.0.182 (TD-1083، OBS-R2-48، طرح حقوق ت۱ الف): فیش پیش‌نویس صادر می‌شود و دارنده «تأیید فیش حقوق» جدا تأییدش
+        // می‌کند. پیش‌تر هنگام صدور «تأییدشده» بود و میان صدور و پرداخت گام تأییدی نبود.
+        status: 'draft',
         notes: finalNotes,
         createdById: currentUserId,
         isDeleted: 0
@@ -250,7 +253,7 @@ export class PieceworkPayrollService {
       const logIds = eligibleLogs.map(l => l.id);
       if (logIds.length > 0) {
         await tx.update(pieceworkLogs)
-          .set({ payrollId: newPayroll.id, status: 'approved' })
+          .set({ payrollId: newPayroll.id, status: 'draft' })
           .where(and(
             inArray(pieceworkLogs.id, logIds),
             unlinkedOrOrphan
@@ -310,6 +313,10 @@ export class PieceworkPayrollService {
       // v8.0.28 (TD-281): وضعیت فیشی که پرداخت دارد دستی عوض نمی‌شود (برگرداندنش به «approved» حذف آن را با پرداخت باقی‌مانده ممکن می‌کرد)
       if (targetStatus && (['paid', 'partially_paid'].includes(pay.status || '') || fin(pay.paidAmount ?? 0).isPositive())) {
         throw new ConflictError(`فیش ${pay.payrollNumber} پرداخت ثبت‌شده دارد؛ وضعیت آن فقط از مسیر پرداخت تغییر می‌کند.`);
+      }
+      // v10.0.182 (TD-1084، طرح حقوق ت۲ و ت۳ الف): صادرکننده فیش آن را تأیید نمی‌کند؛ مدیر سیستم مستثناست
+      if (targetStatus === 'approved' && pay.status === 'draft') {
+        await assertPayrollDutyNotByIssuer(tx, pay, currentUserId, 'approve');
       }
 
       const updates: Partial<typeof pieceworkPayrolls.$inferInsert> = {};

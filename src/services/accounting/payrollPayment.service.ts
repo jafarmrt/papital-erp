@@ -1,4 +1,5 @@
 import { orm, type DbExecutor } from '../../db/drizzle.js';
+import { assertPayrollDutyNotByIssuer } from '../piecework/payrollDuties.js';
 import {
   bankAccounts,
   treasuryTransactions,
@@ -154,6 +155,8 @@ export class PayrollPaymentService {
       if (!isPayablePayrollStatus(payroll.status)) {
         throw new ConflictError(`وضعیت فعلی فیش (${payroll.status}) اجازه ثبت پرداخت ندارد.`);
       }
+      // v10.0.182 (TD-1084، طرح حقوق ت۲ و ت۳ الف): صادرکننده فیش آن را پرداخت نمی‌کند؛ مدیر سیستم مستثناست
+      await assertPayrollDutyNotByIssuer(tx, payroll, input.userId, 'pay');
 
       // v9.0.266 (TD-804): فیش بی سند حسابداری زنده پرداخت نمی‌شود. پیش‌تر پرداخت آن ۳۲۰۱ را بدهکار و بانک را بستانکار
       // می‌کرد بی آنکه هزینه یا بدهی حقوقی در دفتر باشد. فیش قدیمی بی سند ابتدا با «همگام‌سازی سند» سند می‌گیرد.
