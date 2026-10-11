@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# v10.0.191: starts the PostgreSQL 16 server that ships with the GitHub ubuntu-24.04 runner image for the database,
+# v10.0.192: starts the PostgreSQL 16 server that ships with the GitHub ubuntu-24.04 runner image for the database,
 # coverage and e2e jobs of .github/workflows/ci.yml, instead of a service container pulled from a registry
 # (an anonymous pull was refused with "toomanyrequests" and failed a job before any test ran).
 # The role, password and database match the former service container: postgres / test / <database>.

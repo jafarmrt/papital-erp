@@ -18,7 +18,7 @@ test('login, issue a final sales invoice and see its journal voucher', async ({ 
 
   // ۲. صدور فاکتور فروش نهایی: ۲ عدد × ۷۵۰٬۰۰۰ ریال
   await page.goto('/invoices/create');
-  // v10.0.191 (TD-1260): type into the picker's own search box; keyboard.type right after the click could send the
+  // v10.0.192 (TD-1260): type into the picker's own search box; keyboard.type right after the click could send the
   // first key before the box mounted and searched a broken name
   await page.getByRole('button', { name: /جهت انتخاب خریدار/ }).click();
   await page.getByPlaceholder('جستجو...', { exact: true }).fill(customerName);

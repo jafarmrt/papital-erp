@@ -1,6 +1,6 @@
 # .github/workflows/ci.yml — Papital ERP GitHub Actions CI/CD Pipeline (v7.0.19 / TD-172: lockfile + Node 22 + blocking audit gate)
 # Multi-stage CI: lint-and-typecheck (+version-sync) → database-integration-tests → coverage-soft-gate (non-blocking) + e2e-critical-path (Playwright) → client-server-build → docker-build-gate
-# v10.0.191 (product-owner decision t20): the check jobs (lint, database tests, coverage, e2e, build, docker build) all start
+# v10.0.192 (product-owner decision t20): the check jobs (lint, database tests, coverage, e2e, build, docker build) all start
 # at once and none waits for another, so a PR result comes after the longest job instead of after the sum of the chain;
 # every job still has to pass. Only the image push (docker-publish) and the staging deploy wait for all of them.
 # The database jobs start the runner's own PostgreSQL 16 (scripts/ci-start-postgres.sh), no image pull.
@@ -94,7 +94,7 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      # v10.0.191: the runner's own PostgreSQL 16, no service container pulled from a registry
+      # v10.0.192: the runner's own PostgreSQL 16, no service container pulled from a registry
       - name: Start PostgreSQL 16 (runner)
         run: bash scripts/ci-start-postgres.sh erp_test
 
@@ -125,7 +125,7 @@ jobs:
           echo "- **Outcome:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Ref:** \`${{ github.ref }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Database Engine:** PostgreSQL 16 Service Container" >> $GITHUB_STEP_SUMMARY
+          echo "- **Database Engine:** PostgreSQL 16 of the runner (scripts/ci-start-postgres.sh)" >> $GITHUB_STEP_SUMMARY
 
   coverage-gate:
     name: Code Coverage Hard Gate (TD-129)
@@ -145,7 +145,7 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      # v10.0.191: the runner's own PostgreSQL 16, no service container pulled from a registry
+      # v10.0.192: the runner's own PostgreSQL 16, no service container pulled from a registry
       - name: Start PostgreSQL 16 (runner)
         run: bash scripts/ci-start-postgres.sh erp_test
 
@@ -244,7 +244,7 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      # v10.0.191: the runner's own PostgreSQL 16, no service container pulled from a registry
+      # v10.0.192: the runner's own PostgreSQL 16, no service container pulled from a registry
       - name: Start PostgreSQL 16 (runner)
         run: bash scripts/ci-start-postgres.sh erp_e2e
 
@@ -325,7 +325,7 @@ jobs:
             console.log('All ' + mods.length + ' runtime modules resolvable');
           "
 
-  # v10.0.191: the image is pushed only after every check job passed (the build check above no longer waits for them)
+  # v10.0.192: the image is pushed only after every check job passed (the build check above no longer waits for them)
   docker-publish:
     name: Push Container Image
     needs: [lint-and-typecheck, test, coverage-gate, e2e, build, docker-gate]
@@ -360,7 +360,7 @@ jobs:
 
   deploy-staging:
     name: Deploy to Staging Environment
-    # v10.0.191: build no longer waits for the tests, so the deploy waits for every check job itself
+    # v10.0.192: build no longer waits for the tests, so the deploy waits for every check job itself
     needs: [lint-and-typecheck, test, coverage-gate, e2e, build]
     runs-on: ubuntu-24.04
     # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default

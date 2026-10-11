@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * v10.0.191 (TD-1260, product-owner decision t20): the CI check jobs start at once. A PR result used to wait for the
+ * v10.0.192 (TD-1260, product-owner decision t20): the CI check jobs start at once. A PR result used to wait for the
  * sum of a chain (lint, then the database tests, then build, then the Docker build, about 17 minutes); now it waits
  * for the longest job only. Every job still runs and has to pass: only the image push and the staging deploy wait,
  * and they wait for every check job. The database jobs start the runner's own PostgreSQL 16 instead of pulling an
