@@ -5,8 +5,8 @@ import { StockSubmitBar } from '../../components/documents/stock/StockSubmitBar'
 import { STOCK_VOUCHER_DRAFT_NOTE, stockInLabels } from '../../lib/documents/stockInLabels';
 import type { Item } from '../../types';
 
-// v10.0.239 (TD-1205, finding B-04): a sales return on the stock page is labelled as a return (customer, sale price,
-// return summary and button), never as a purchase receipt; v10.0.240 (TD-1206, finding B-06): the voucher note names
+// v10.0.241 (TD-1205, finding B-04): a sales return on the stock page is labelled as a return (customer, sale price,
+// return summary and button), never as a purchase receipt; v10.0.242 (TD-1206, finding B-06): the voucher note names
 // the approving permission, never the accountant role
 
 const PURCHASE_SUBMIT = 'ثبت نهایی و صدور سند رسید خرید';
