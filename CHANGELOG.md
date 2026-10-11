@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.0.264 — پاک‌کننده لاگ پردازه: رمز در متن ساده هم پاک می‌شود
+- `sanitizeObject` در `src/middleware/logger.ts` کلید رمز را با قاعده پاک‌کننده سجل (`isSecretAuditKey`) می‌شناسد، پس `author` و `authority` دیگر پنهان نمی‌شوند و `apiKey` و `newPassword` پنهان می‌شوند؛ رمز نوشته‌شده در متن ساده (`password=…`، `?token=…`، `api_key: …`) هم پاک می‌شود (OBS-R1-03، TD-983).
+
 ### v10.0.262 — ممیزی خزانه درون همان ثبت و حذف جایگزین حساب کل
 - هشت مسیر خزانه دیگر ممیزی پس از commit نمی‌نویسند: سرویس‌ها ممیزی را با `tx` و `req` در `src/services/accounting/treasury/treasuryAudit.ts` می‌نویسند؛ `resolveContraAccount` در نبود حساب نگاشت حساب کل برنمی‌گرداند و اتصال دوم استخر نمی‌گیرد؛ `excludedContraAccountIds` نگاشت‌ها را یکی‌یکی می‌خواند (TD-934، OWN-01، OWN-03، نیمه خزانه OBS-R2-04).
 

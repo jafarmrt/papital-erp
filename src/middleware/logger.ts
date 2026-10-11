@@ -6,6 +6,7 @@ import DailyRotateFile from 'winston-daily-rotate-file';
 import { getRequestContext, acceptedTraceId } from '../lib/requestContext.js';
 import { FinancialDecimal } from '../lib/financialDecimal.js';
 import { PERSIAN_TEXT, terminalLine } from '../lib/terminalText.js';
+import { isSecretAuditKey } from '../lib/audit/auditSanitizer.js';
 
 const { combine, timestamp, printf, colorize } = winston.format;
 
@@ -27,10 +28,28 @@ function looksLikeJWT(s: string): boolean {
   return /^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]*$/.test(s) && s.length > 50;
 }
 
+/** A word naming a secret inside a longer key or parameter name (`newPassword`, `consumer_secret`, `api-key`) */
+const SECRET_WORD = String.raw`[A-Za-z0-9_-]*(?:password|passwd|secret|token|api[_-]?key|pwd)[A-Za-z0-9_-]*`;
+const JSON_SECRET = new RegExp(String.raw`"(${SECRET_WORD})"\s*:\s*"[^"]*"`, 'gi');
+const TEXT_SECRET = new RegExp(String.raw`\b(${SECRET_WORD})(\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s&,;"']+)`, 'gi');
+
+/**
+ * v10.0.264 (OBS-R1-03): a secret is scrubbed in a JSON body (`"newPassword": "…"`) and in plain text (`password=…`,
+ * `?token=…`, `api_key: …`), not only the JSON form of a few fixed names.
+ */
 function sanitizeString(s: string): string {
   return s
     .replace(/Bearer\s+[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*/gi, 'Bearer [PROTECTED_JWT]')
-    .replace(/"(password|new_password|current_password|pass|secret|token)":\s*"[^"]*"/gi, '"$1": "[REDACTED]"');
+    .replace(JSON_SECRET, '"$1": "[REDACTED]"')
+    .replace(TEXT_SECRET, '$1$2[REDACTED]');
+}
+
+/**
+ * v10.0.264 (OBS-R1-03): a key is secret by the audit scrubber's rule (`isSecretAuditKey`: password, secret, token,
+ * apiKey, cookie, jwt, authorization … in any spelling) or names a card number or CVV; «author» and «authority» are kept.
+ */
+function isSecretLogKey(key: string): boolean {
+  return isSecretAuditKey(key) || /^auth$|credit.?card|cvv/i.test(key);
 }
 
 /** Deeper levels are cut; a log entry never needs more and a deep object cannot exhaust the stack */
@@ -60,7 +79,7 @@ export function sanitizeObject(obj: any, ancestors: WeakSet<object> = new WeakSe
     const sanitized: any = {};
     for (const key of Reflect.ownKeys(obj)) {
       const value = (obj as any)[key];
-      if (typeof key === 'string' && /password|secret|token|auth|credit.?card|cvv/i.test(key)) {
+      if (typeof key === 'string' && isSecretLogKey(key)) {
         sanitized[key] = '[REDACTED]';
       } else if (typeof value === 'string' && looksLikeJWT(value)) {
         sanitized[key] = '[JWT_REDACTED]';
