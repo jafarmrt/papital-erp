@@ -10951,6 +10951,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // TD-1197: a rejected proforma stays in the open proformas box of the invoice page
   const { runOpenProformasTests } = await import('../regression/openProformasTests.js');
   results.push(...await runOpenProformasTests(shouldRun));
+  const { runItemListLedgerTests } = await import('../regression/itemListLedgerTests.js');
+  results.push(...await runItemListLedgerTests(shouldRun));
 
   return results;
 }
