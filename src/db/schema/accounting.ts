@@ -222,6 +222,10 @@ export const cheques = pgTable('cheques', {
   description: text('description').default(''),
   statusHistory: jsonb('status_history').default([]),
   attachments: jsonb('attachments').$type<FinancialAttachment[]>().default([]),
+  // v10.0.254 (TD-971، migration 0108): چک وصول‌شده در تطبیق صورت‌حساب بانک، مانند ردیف خزانه
+  reconciled: integer('reconciled').default(0),
+  reconciledAt: text('reconciled_at').default(''),
+  reconciledBatch: text('reconciled_batch').default(''),
   createdById: integer('created_by_id').references(() => users.id),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   version: integer('version').notNull().default(1),
@@ -265,7 +269,7 @@ export const treasuryTransactions = pgTable('treasury_transactions', {
   payrollId: integer('payroll_id').references(baseRelations.pieceworkPayrollsId),
   // V1.4.0: ابطال با سند معکوس (DB-009) — تراکنش معکوس به اصل اشاره می‌کند
   reversalOfId: integer('reversal_of_id'),
-  // v9.0.82 (TD-507، ت۴ الف): هدف دریافت و پرداخت پرسنل ('settlement' | 'advance' | 'other'، مهاجرت 0060) و سرفصل طرف
+  // v9.0.82 (TD-507، ت۴ الف): هدف دریافت و پرداخت پرسنل ('settlement' | 'advance' | 'deductions' | 'other'، مهاجرت‌های 0060 و 0109) و سرفصل طرف
   // مقابلی که کاربر برای «متفرقه» و «سایر» انتخاب کرده است
   purpose: text('purpose'),
   contraAccountId: integer('contra_account_id').references(() => accounts.id),

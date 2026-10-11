@@ -14,6 +14,9 @@ export const PICK_LIST_URLS = {
   projects: '/projects/options',
 } as const;
 
+/** v10.0.258 (TD-1135): فهرست انتخاب کالای فاکتور فروش، با رزرو هر کالا (`ITEM_RESERVED_FIELDS`) */
+export const ITEM_PICK_WITH_RESERVED_URL = `${PICK_LIST_URLS.items}?reserved=1`;
+
 /**
  * فیلدهای فهرست انتخاب طرف حساب: کارت تماس (برای پر کردن خریدار فاکتور، نمایش در پرونده فروش و انتخاب تأمین‌کننده)، بی
  * یادداشت داخلی و نسخه رکورد. اطلاعات بانکی جدا و فقط با قاعده TD-433 (`canSeePartyBankInfo`) می‌آید.
@@ -60,6 +63,9 @@ export const ITEM_PICK_FIELDS = [
 /** میانگین بهای کالا (بهای تمام‌شده) فقط برای دارندگان `products.view`؛ فرم‌های دیگر قیمت پیش‌فرض را خالی می‌گذارند */
 export const ITEM_COST_FIELDS = ['weightedAverageCost', 'weighted_average_cost'] as const;
 
+/** v10.0.258 (TD-1135): رزرو کل هر کالا (پیش‌فاکتور فروش و پروژه)، فقط وقتی فهرست با `reserved=1` خوانده شود */
+export const ITEM_RESERVED_FIELDS = ['reservedStock', 'reserved_stock'] as const;
+
 /** کلید موجودی یک انبار در ردیف کالا */
 export const ITEM_WAREHOUSE_STOCK_FIELD = /^stock_.+$/;
 
@@ -83,6 +89,9 @@ export interface ItemPick {
   /** فقط برای دارندگان products.view */
   weightedAverageCost?: number;
   weighted_average_cost?: number;
+  /** فقط با `reserved=1` */
+  reservedStock?: number;
+  reserved_stock?: number;
   [warehouseStock: `stock_${string}`]: number;
 }
 

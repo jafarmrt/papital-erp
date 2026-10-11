@@ -1,13 +1,15 @@
 /**
  * v9.0.82 (TD-507، تصمیم مالک محصول ت۴ الف): هدف دریافت و پرداخت پرسنل و قاعده «سرفصل طرف مقابل را کاربر انتخاب می‌کند»؛
- * سرور و فرم خزانه همین را می‌خوانند.
+ * سرور و فرم خزانه همین را می‌خوانند. v10.0.257 (TD-952، ت۵ الف): «واریز کسورات حقوق» سایر کسورات فیش (۳۲۰۵) را با
+ * تفصیلی همان پرسنل بدهکار می‌کند تا پس از واریز، مانده او صفر شود.
  */
-export const PERSONNEL_PURPOSES = ['settlement', 'advance', 'other'] as const;
+export const PERSONNEL_PURPOSES = ['settlement', 'advance', 'deductions', 'other'] as const;
 export type PersonnelPurpose = typeof PERSONNEL_PURPOSES[number];
 
 export const PERSONNEL_PURPOSE_LABELS: Record<PersonnelPurpose, string> = {
   settlement: 'تسویه حقوق',
   advance: 'مساعده و وام',
+  deductions: 'واریز کسورات حقوق',
   other: 'سایر',
 };
 

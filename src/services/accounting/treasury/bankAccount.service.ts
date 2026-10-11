@@ -12,8 +12,9 @@ import { fin } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
 import { assertNoPendingOpeningApproval, voidBankOpeningVouchers } from './bankOpeningVoucher.js';
 import { requireBankLedgerAccount } from './bankLinks.js';
-import { assertBankCurrencyChangeAllowed, requireTreasuryCurrency } from './bankAccountCurrency.js';
+import { assertBankCurrencyChangeAllowed, assertBankLedgerChangeAllowed, requireTreasuryCurrency } from './bankAccountCurrency.js';
 import { assignTreasuryAccountCode, peekNextTreasuryAccountCode, type TreasuryAccountType } from './bankAccountCode.js';
+import { auditBankAccountChange, auditBankBalanceSync, type TreasuryAuditActor } from './treasuryAudit.js';
 
 /** گزارش تطبیق مانده حساب‌های خزانه با دفاتر (sync-reconcile و reconciliation-report) */
 export interface BankReconciliationReport {
@@ -221,7 +222,7 @@ export class BankAccountService {
    * پیش‌تر بیرون از تراکنش و بی‌قفل، مانده جاری با مانده دفتر کل (بی اسناد پیش‌نویس) بازنویسی می‌شد: پرداخت پیش‌نویس
    * ۳۰۰ مانده ۷۰۰ را ۱۰۰۰ می‌کرد و پرداخت هم‌زمان گم می‌شد.
    */
-  static async recalculateAndSyncBankBalances(): Promise<BankReconciliationReport> {
+  static async recalculateAndSyncBankBalances(audit?: TreasuryAuditActor): Promise<BankReconciliationReport> {
     return await orm.transaction(async (tx) => {
       await tx.select({ id: bankAccounts.id }).from(bankAccounts)
         .where(eq(bankAccounts.isDeleted, 0))
@@ -234,7 +235,10 @@ export class BankAccountService {
           currentBalance: money(bank.treasuryBalance)
         }).where(eq(bankAccounts.id, bank.row.id));
       }
-      return this.summarizeReconciliation(computed);
+      const report = this.summarizeReconciliation(computed);
+      // v10.0.262 (TD-934): ممیزی همگام‌سازی با `tx` همین همگام‌سازی
+      await auditBankBalanceSync(tx, audit, report);
+      return report;
     });
   }
 
@@ -308,6 +312,8 @@ export class BankAccountService {
     userId?: number;
     username?: string;
     strict?: boolean;
+    /** v10.0.262 (TD-934): ممیزی تعریف حساب با `tx` همین تعریف */
+    audit?: TreasuryAuditActor;
   }, externalTx?: DbExecutor): Promise<BankAccount> {
     const initialBal = money(data.initialBalance);
     const isStrict = data.strict !== false;
@@ -363,10 +369,12 @@ export class BankAccountService {
         }
       }
 
-      return {
+      const created = {
         ...inserted,
         type: inserted.type as BankAccount['type'],
       } as BankAccount;
+      await auditBankAccountChange(tx, data.audit, 'CREATE', created.id, created.title, null, { ...created });
+      return created;
     };
 
     if (externalTx) {
@@ -478,6 +486,8 @@ export class BankAccountService {
     userId?: number;
     username?: string;
     strict?: boolean;
+    /** v10.0.262 (TD-934): ممیزی ویرایش با قبل (زیر قفل ردیف) و بعد، با `tx` همین ویرایش */
+    audit?: TreasuryAuditActor;
   }>, externalTx?: DbExecutor): Promise<BankAccount> {
     const isStrict = data.strict !== false;
 
@@ -496,9 +506,10 @@ export class BankAccountService {
       const newCurrency = data.currency !== undefined ? requireTreasuryCurrency(data.currency) : undefined;
       if (newCurrency) await assertBankCurrencyChangeAllowed(tx, existing, newCurrency);
       // v9.0.100 (TD-510): سرفصل تازه معین فعال زیر کل ۱۰ باشد (سرفصل بی‌تغییر حساب‌های قدیمی دوباره سنجیده نمی‌شود)
-      const ledgerAccountId = data.accountId !== undefined && (data.accountId || null) !== (existing.accountId || null)
-        ? await requireBankLedgerAccount(tx, data.accountId)
-        : undefined;
+      // v10.0.254 (TD-969): سرفصل معین پس از نخستین گردش ثابت است (422 `BANK_ACCOUNT_LEDGER_LOCKED`)
+      const ledgerChanges = data.accountId !== undefined && (data.accountId || null) !== (existing.accountId || null);
+      if (ledgerChanges) await assertBankLedgerChangeAllowed(tx, existing, data.accountId || null);
+      const ledgerAccountId = ledgerChanges ? await requireBankLedgerAccount(tx, data.accountId) : undefined;
       const newCode = data.code?.trim();
       if (newCode && newCode.toLowerCase() !== String(existing.code || '').trim().toLowerCase()) {
         await assignTreasuryAccountCode(tx, (data.type || existing.type) as TreasuryAccountType, newCode, id);
@@ -604,10 +615,12 @@ export class BankAccountService {
         }
       }
 
-      return {
+      const after = {
         ...updated,
         type: updated.type as BankAccount['type'],
       } as BankAccount;
+      await auditBankAccountChange(tx, data.audit, 'UPDATE', id, after.title, { ...existing }, { ...after });
+      return after;
     };
 
     if (externalTx) {
@@ -621,9 +634,9 @@ export class BankAccountService {
    * چک‌های حساب زیر همین قفل شمرده می‌شوند. پیش‌تر حذف بی‌قفل بود و حساب در میانه ثبت دریافت با تراکنش فعال حذف می‌شد،
    * و حسابی که چک وصول‌شده یا صادرشده داشت هم حذف می‌شد.
    */
-  static async deleteBankAccount(id: number, user?: { userId?: number; username?: string }): Promise<{ success: boolean }> {
+  static async deleteBankAccount(id: number, user?: { userId?: number; username?: string; audit?: TreasuryAuditActor }): Promise<{ success: boolean }> {
     return orm.transaction(async (tx) => {
-      const [existing] = await tx.select({ id: bankAccounts.id, code: bankAccounts.code, title: bankAccounts.title }).from(bankAccounts)
+      const [existing] = await tx.select().from(bankAccounts)
         .where(and(eq(bankAccounts.id, id), eq(bankAccounts.isDeleted, 0)))
         .for('update');
       if (!existing) throw new NotFoundError('حساب بانکی یا صندوق یافت نشد');
@@ -645,6 +658,8 @@ export class BankAccountService {
       await terminateEntityWorkflows(tx, {
         entityType: 'bank_account', entityId: id, actionKey: 'terminate', actionTitle: 'بستن فرایند با حذف حساب خزانه', comment: 'حذف حساب خزانه',
       });
+      // v10.0.262 (TD-934): ممیزی حذف با ردیف پیش از حذف، با `tx` همین حذف
+      await auditBankAccountChange(tx, user?.audit, 'DELETE', id, existing.title, { ...existing }, null);
       return { success: true };
     });
   }

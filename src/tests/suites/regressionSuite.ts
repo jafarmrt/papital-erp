@@ -6728,8 +6728,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const [{ n: covered }] = (await orm.execute(sql`
         SELECT count(*)::int AS n FROM pg_constraint pc JOIN pg_class rel ON rel.oid = pc.conrelid
         WHERE rel.relnamespace = current_schema()::regnamespace AND pc.conname LIKE 'chk%datefmt' AND pc.convalidated`) as unknown as { rows: Array<{ n: number }> }).rows;
-      // v7.0.82 (TD-231): ۲۴ قید مهاجرت 0028 و ۳ قید مهاجرت 0030؛ v10.0.199 (TD-1086): ۱ قید مهاجرت 0103 (personnel.start_date)
-      if (covered !== 28) violations.push(`number of validated date format constraints: ${covered} (expected 28)`);
+      // v7.0.82 (TD-231): ۲۴ قید مهاجرت 0028 و ۳ قید مهاجرت 0030؛ v10.0.199 (TD-1086): ۱ قید مهاجرت 0103 (personnel.start_date)؛
+      // v10.0.254 (TD-971): ۱ قید مهاجرت 0108 (cheques.reconciled_at)
+      if (covered !== 29) violations.push(`number of validated date format constraints: ${covered} (expected 29)`);
       if (missingRows.length > 0) violations.push(`without a valid format constraint: ${missingRows.map(r => `${r.table_name}.${r.column_name}`).join(', ')}`);
 
       const ROLLBACK = new Error('ROLLBACK_P3_15');
@@ -10613,6 +10614,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 3 PR b (v9.0.159 on): fiscal-year closing and reopening (TD-545 ...)
   const { runFiscalClosingTests } = await import('../regression/fiscalClosingTests.js');
   results.push(...await runFiscalClosingTests(shouldRun));
+  const { runClosingPartyDetailTests } = await import('../regression/closingPartyDetailTests.js');
+  results.push(...await runClosingPartyDetailTests(shouldRun));
   const { runFiscalYearOrderTests } = await import('../regression/fiscalYearOrderTests.js');
   results.push(...await runFiscalYearOrderTests(shouldRun));
   const { runManualVoucherCurrencyTests } = await import('../regression/manualVoucherCurrencyTests.js');
@@ -10745,6 +10748,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 8 PR E (v9.0.335+): the data of a document (treasury rows by permission)
   const { runDocumentDataTests } = await import('../regression/documentDataTests.js');
   results.push(...await runDocumentDataTests(shouldRun));
+  // Series 10 phase 3 L2 (TD-1136): the manual invoice form's service charge through POST and PUT /documents
+  const { runInvoiceServiceChargeTests } = await import('../regression/invoiceServiceChargeTests.js');
+  results.push(...await runInvoiceServiceChargeTests(shouldRun));
 
   // Package 13 PR B (v9.0.249+): reading daily work logs (list, statistics, timestamps)
   const { runDailyLogReadTests } = await import('../regression/dailyLogReadTests.js');
@@ -10781,6 +10787,12 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 15 PR b (v9.0.356+): webhook secrets and SSRF
   const { runWebhookSsrfEchoTests } = await import('../regression/webhookSsrfEchoTests.js');
   results.push(...await runWebhookSsrfEchoTests(shouldRun));
+  const { runWebhookErrorContractTests } = await import('../regression/webhookErrorContractTests.js');
+  results.push(...await runWebhookErrorContractTests(shouldRun));
+  const { runEventsErrorContractTests } = await import('../regression/eventsErrorContractTests.js');
+  results.push(...await runEventsErrorContractTests(shouldRun));
+  const { runPublicUploadPathTests } = await import('../regression/publicUploadPathTests.js');
+  results.push(...await runPublicUploadPathTests(shouldRun));
   const { runWebhookRuleSeedTests } = await import('../regression/webhookRuleSeedTests.js');
   results.push(...await runWebhookRuleSeedTests(shouldRun));
   const { runWebhookSecretEditTests } = await import('../regression/webhookSecretEditTests.js');
@@ -10972,6 +10984,21 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Phase 3 lane L1, package A4 (v10.0.251): project reports, cash and bank per currency, account mapping read
   const { runAccountingP2ReportTests } = await import('../regression/accountingP2ReportTests.js');
   results.push(...await runAccountingP2ReportTests(shouldRun));
+
+  // Phase 3 lane L1, package A5 (v10.0.254): cheque steps without a mapped account, cleared cheques in reconciliation, bank heading lock
+  const { runTreasuryChequeA5Tests } = await import('../regression/treasuryChequeA5Tests.js');
+  results.push(...await runTreasuryChequeA5Tests(shouldRun));
+
+  // Phase 3 lane L1, package A6 (v10.0.257): party balances on permanent accounts only, deductions remitted per personnel
+  const { runPartyPermanentA6Tests } = await import('../regression/partyPermanentA6Tests.js');
+  results.push(...await runPartyPermanentA6Tests(shouldRun));
+
+  // Phase 3 lane L1, package A7 (v10.0.259): payroll payment void event and audit, «my payslips» paid amount, personnel id on treasury rows
+  const { runPayrollHygieneA7Tests } = await import('../regression/payrollHygieneA7Tests.js');
+  results.push(...await runPayrollHygieneA7Tests(shouldRun));
+  // Phase 3 lane L1, package A8 (v10.0.262): treasury audit inside the write's transaction, no general account fallback
+  const { runTreasuryAuditA8Tests } = await import('../regression/treasuryAuditA8Tests.js');
+  results.push(...await runTreasuryAuditA8Tests(shouldRun));
 
   return results;
 }

@@ -333,6 +333,10 @@ export interface TrialBalanceRow {
   preClosingCredit?: number;
   closingDebit?: number;
   closingCredit?: number;
+  /** Detail of a level-4 row (v10.0.267, OBS-R1-45): its type, entity id and display name, read by the fiscal-year closing */
+  detailedType?: string;
+  detailedId?: number | null;
+  detailedName?: string;
 }
 
 export interface TrialBalanceReport {
@@ -412,6 +416,8 @@ export interface DetailedPartyLedgerResult {
   startDate?: string | null;
   endDate?: string | null;
   items: DetailedPartyLedgerItem[];
+  /** v10.0.257 (TD-915 / TD-924، ت۵ الف): ردیف‌های حساب موقت طرف حساب؛ در مانده و جمع گردش بالا نیستند */
+  temporaryRows?: import('../lib/accounting/partyTemporaryRows').PartyTemporaryRows;
 }
 
 export interface FinancialSummaryStats {
