@@ -1419,7 +1419,9 @@ export class VoucherSyncService {
 
     const createdVoucher = await VoucherService.createJournalVoucher({
       // V3.0.7 (TD-062): فال‌بک تاریخ از ساعت توافقی کسب‌وکار (نه UTC خام)
-      date: pay.endDate || await businessTodayIsoDate(),
+      // v10.0.273: the earlier of the period end and today, so an eidi or prepayment payslip issued before its period ends
+      // is never dated in the future
+      date: await payrollVoucherDate(pay.endDate),
       voucherType: 'payroll',
       status: 'draft',
       description: `ثبت هزینه و محاسبه حقوق و کارمزد ${pay.title} - پرسنل: ${pers?.fullName || 'پرسنل'} (${pay.payrollNumber})`,
@@ -1527,4 +1529,11 @@ export class VoucherSyncService {
     logger.info({ message: `[VoucherSync] Missing document vouchers: checked=${outcome.result.checked} created=${outcome.result.created} failed=${outcome.result.failed} review=${outcome.result.skippedForReview}` });
     return outcome.result;
   }
+}
+
+/** v10.0.273: a payslip voucher's date is the earlier of its period end and the business today (no period end: today) */
+async function payrollVoucherDate(endDate: string | null | undefined): Promise<string> {
+  const today = await businessTodayIsoDate();
+  const end = endDate ? String(endDate).slice(0, 10) : '';
+  return end && end < today ? end : today;
 }
