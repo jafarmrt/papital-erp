@@ -20,6 +20,7 @@ import { ITEM_COST_READ_PERMISSIONS, RESERVATION_BUYER_READ_PERMISSIONS, reserve
 import { allocationsForCostAccess } from '../lib/inventory/projectMaterialCost.js';
 import type { AuthUserPayload } from '../types.js';
 import { actorDisplayName } from '../lib/auth/actorDisplayName.js';
+import { ITEM_KARDEX_READ_PERMISSIONS } from '../lib/permissions/stockActionPermissions.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -352,7 +353,7 @@ router.post(
 // GET /api/inventory/item-kardex/:itemId
 router.get(
   '/item-kardex/:itemId',
-  authorizePermission('warehouse.view'),
+  authorizePermission(...ITEM_KARDEX_READ_PERMISSIONS),
   validate(paramsItemIdSchema),
   asyncHandler(async (req, res) => {
     const itemId = parseInt(req.params.itemId, 10);
