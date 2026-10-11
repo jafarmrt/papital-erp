@@ -17,11 +17,12 @@ import {
   roundToOneDecimal,
   withProcurementStatus
 } from '../components/project/projectInventoryUtils';
-import { errorMessageOf, formatPersianNumber, toPersianDigits } from '../utils';
+import { errorMessageOf, toPersianDigits } from '../utils';
 import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 import { useProjectVersion } from './useProjectVersion';
 import { directConversionRate } from '../lib/projects/unitConversion';
 import { storedReservationShortages } from '../lib/projects/projectReservationState';
+import { finalizeReservationOutcome, reservationShortageMessage } from '../lib/projects/reservationOutcome';
 import type { ReservationShortage } from '../lib/projects/projectReservation';
 import { hasPresetShapedSections, projectSectionsFromPreset, type MaterialStockLookup } from '../lib/projects/inventoryControlSections';
 import { findProjectItemMatch } from '../lib/projects/projectItemMatch';
@@ -260,25 +261,40 @@ export function useProjectInventory(
     setSections(updated);
   };
 
+  // v10.0.105 (TD-1212): updates read the latest sections (functional update), so several fields set one after another
+  // all survive; before, each call copied the same stale sections and only the last field (convertedQty) was kept
+  const updatePerItemFields = (secIdx: number, prodId: string, itemId: string, patch: Record<string, unknown>) => {
+    setSections(prev => {
+      const updated = [...prev];
+      const sec = { ...updated[secIdx] };
+      const perRes = { ...(sec.perItemResults || {}) };
+      const prodRes = { ...(perRes[prodId] || {}) };
+      prodRes[itemId] = { ...(prodRes[itemId] || { itemId, status: 'available' }), ...patch } as any;
+      perRes[prodId] = prodRes;
+      sec.perItemResults = perRes;
+      updated[secIdx] = sec;
+      return updated;
+    });
+  };
+
   const handleUpdatePerItemResult = (
     secIdx: number,
     prodId: string,
     itemId: string,
     field: string,
     value: any
-  ) => {
-    const updated = [...sections];
-    const sec = { ...updated[secIdx] };
-    const perRes = { ...(sec.perItemResults || {}) };
-    const prodRes = { ...(perRes[prodId] || {}) };
-    const itemRes = { ...(prodRes[itemId] || { itemId, status: 'available' }) } as any;
+  ) => updatePerItemFields(secIdx, prodId, itemId, { [field]: value });
 
-    itemRes[field] = value;
-    prodRes[itemId] = itemRes;
-    perRes[prodId] = prodRes;
-    sec.perItemResults = perRes;
-    updated[secIdx] = sec;
-    setSections(updated);
+  const updateGlobalItemFields = (secIdx: number, gIdx: number, patch: Record<string, unknown>) => {
+    setSections(prev => {
+      const updated = [...prev];
+      const sec = { ...updated[secIdx] };
+      const gItems = [...(sec.globalItems || [])];
+      gItems[gIdx] = { ...gItems[gIdx], ...patch };
+      sec.globalItems = gItems;
+      updated[secIdx] = sec;
+      return updated;
+    });
   };
 
   const handleUpdateGlobalItem = (
@@ -286,16 +302,7 @@ export function useProjectInventory(
     gIdx: number,
     field: string,
     value: any
-  ) => {
-    const updated = [...sections];
-    const sec = { ...updated[secIdx] };
-    const gItems = [...(sec.globalItems || [])];
-
-    gItems[gIdx] = { ...gItems[gIdx], [field]: value };
-    sec.globalItems = gItems;
-    updated[secIdx] = sec;
-    setSections(updated);
-  };
+  ) => updateGlobalItemFields(secIdx, gIdx, { [field]: value });
 
   const handleOpenAddMaterialModal = (secIdx: number, prodId?: string) => {
     setMaterialModalSectionIdx(secIdx);
@@ -593,15 +600,9 @@ export function useProjectInventory(
       finalRate = directConversionRate(originalQty, directConvertedQty);
     }
 
-    if (prodId) {
-      handleUpdatePerItemResult(secIdx, prodId, itemId, 'convertedUnit', targetUnit);
-      handleUpdatePerItemResult(secIdx, prodId, itemId, 'conversionRate', finalRate);
-      handleUpdatePerItemResult(secIdx, prodId, itemId, 'convertedQty', finalConvertedQty);
-    } else if (gIdx !== undefined) {
-      handleUpdateGlobalItem(secIdx, gIdx, 'convertedUnit', targetUnit);
-      handleUpdateGlobalItem(secIdx, gIdx, 'conversionRate', finalRate);
-      handleUpdateGlobalItem(secIdx, gIdx, 'convertedQty', finalConvertedQty);
-    }
+    const conversion = { convertedUnit: targetUnit, conversionRate: finalRate, convertedQty: finalConvertedQty };
+    if (prodId) updatePerItemFields(secIdx, prodId, itemId, conversion);
+    else if (gIdx !== undefined) updateGlobalItemFields(secIdx, gIdx, conversion);
 
     setIsUnitConversionModalOpen(false);
     toast.success(`ضریب تبدیل واحد ثبت شد: ${toPersianDigits(originalQty)} ${conversionTarget.originalUnit} ➔ ${toPersianDigits(finalConvertedQty)} ${targetUnit}`);
@@ -655,13 +656,16 @@ export function useProjectInventory(
       projectVersion.remember(saved);
       setIsFinalized(true);
       setFinalizedAt(saved?.inventory_control?.finalizedAt);
-      setReservedItems(savedReservedItems(saved));
+      const reserved = savedReservedItems(saved);
+      setReservedItems(reserved);
       const shortages = storedReservationShortages(saved?.inventory_control);
       setReservationShortages(shortages);
-      toast.success('کنترل موجودی ثبت نهایی شد و اقلام در انبار رزرو شدند.');
-      if (shortages.length > 0) {
-        toast(`${formatPersianNumber(shortages.length)} کالا کمتر از نیاز رزرو شد، چون بقیه موجودی را دیگران رزرو کرده‌اند؛ فهرست کمبود در «فهرست خرید» آمده است.`, { icon: '⚠️' });
-      }
+      // v10.0.116 (TD-1149): the message follows what the server reserved, not the button that was pressed
+      const outcome = finalizeReservationOutcome(reserved, shortages);
+      if (outcome.kind === 'success') toast.success(outcome.message);
+      else toast(outcome.message, { icon: '⚠️' });
+      const shortageMessage = reserved.length > 0 ? reservationShortageMessage(shortages) : null;
+      if (shortageMessage) toast(shortageMessage, { icon: '⚠️' });
       if (onUpdate) onUpdate();
     } catch (err) {
       console.error('Error finalizing inventory reservation:', err);

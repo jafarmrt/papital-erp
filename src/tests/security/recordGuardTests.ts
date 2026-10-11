@@ -3,6 +3,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { customers, dailyWorkLogs, roles, users } from '../../db/schema.js';
+import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 
 /**
  * مشاهده‌های ممیزی حوزه H (TD-403، TD-406) روی مسیرهای واقعی Express: هر آزمون روی کد پیشین قرمز است.
@@ -118,7 +119,7 @@ export async function runRecordGuardTests(shouldRun: (id: string, ...extra: stri
     }
   } finally {
     if (createdUserIds.length > 0) await orm.delete(users).where(inArray(users.id, createdUserIds)).catch(() => undefined);
-    if (createdRoleIds.length > 0) await orm.delete(roles).where(inArray(roles.id, createdRoleIds)).catch(() => undefined);
+    if (createdRoleIds.length > 0) await deleteTestRoles(inArray(roles.id, createdRoleIds)).catch(() => undefined);
   }
   return results;
 }

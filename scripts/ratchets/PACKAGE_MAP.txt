@@ -182,6 +182,7 @@ G  scripts/check-version-sync.ts
 6  src/routes/transfers.routes.ts
 6  src/services/inventory/**
 6  src/services/transfer.service.ts
+6  src/services/transfers/**
 6  src/services/warehouse.service.ts
 6  src/pages/InventoryStatusPage.tsx
 6  src/pages/TransactionsPage.tsx
@@ -205,6 +206,7 @@ G  scripts/check-version-sync.ts
 # ───────── ۷ برنامه‌ریزی موجودی ─────────
 7  src/routes/pendingMaterials.routes.ts
 7  src/services/pendingMaterials.service.ts
+7  src/services/pendingMaterialCode.ts
 7  src/pages/ReorderAlertsPage.tsx
 7  src/pages/ReservedItemsReportPage.tsx
 7  src/pages/PendingMaterialsPage.tsx
@@ -374,6 +376,8 @@ G  scripts/check-version-sync.ts
 7  src/routes/pendingMaterials.schemas.ts
 10 src/routes/procurement.schemas.ts
 14 src/routes/workflowRouteSchemas.ts
+15 src/routes/events.schemas.ts
+1  src/routes/importRows.schemas.ts
 9  src/services/crm/**
 9  src/services/customers/**
 13 src/services/dailyLogs/**

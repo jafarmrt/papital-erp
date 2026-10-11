@@ -110,7 +110,7 @@ export function useSyncItemMutation() {
   });
 }
 
-/** v10.0.30 (OBS-R1-75): پس از ذخیره کالا یا ورود اکسل همه کش‌های کالا و قیمت باطل می‌شوند، نه فقط صفحه جاری */
+/** v10.0.204 (OBS-R1-75): پس از ذخیره کالا یا ورود اکسل همه کش‌های کالا و قیمت باطل می‌شوند، نه فقط صفحه جاری */
 export function useItemChangeRefresh(): () => void {
   const queryClient = useQueryClient();
   return useCallback(() => { void invalidatePreset(queryClient, 'itemChange'); }, [queryClient]);

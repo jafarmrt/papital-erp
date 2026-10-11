@@ -28,7 +28,7 @@ export async function runItemPricingLedgerTests(shouldRun: (id: string, ...extra
 
   const idJson = 'reg_price_lists_json_obs_r1_71';
   if (shouldRun(idJson, 'obs-r1-71', 'pricing', 'package5')) {
-    const name = 'v10.0.27: price lists are saved as a JSON array and a comma-joined value is refused (OBS-R1-71)';
+    const name = 'v10.0.201: price lists are saved as a JSON array and a comma-joined value is refused (OBS-R1-71)';
     const tStart = Date.now();
     const previous = await storedValue();
     try {
@@ -58,7 +58,7 @@ export async function runItemPricingLedgerTests(shouldRun: (id: string, ...extra
 
   const idRead = 'reg_price_lists_read_error_obs_r1_72';
   if (shouldRun(idRead, 'obs-r1-72', 'pricing', 'package5')) {
-    const name = 'v10.0.28: an unreadable price list setting is an error, never the default lists (OBS-R1-72)';
+    const name = 'v10.0.202: an unreadable price list setting is an error, never the default lists (OBS-R1-72)';
     const tStart = Date.now();
     const previous = await storedValue();
     try {

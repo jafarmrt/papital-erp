@@ -10,6 +10,7 @@ import { getErrorMessage } from '../../utils/formatters.js';
 import { isoToJalaliDate, toStorageDate } from '../../utils/calendarDate.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { createTestItem } from '../fixtures/factories.js';
+import { toPersianDigits } from '../../utils/persianNumber.js';
 
 /**
  * v8.0.47 — سناریوهای سخت‌گیرانه مرز تاریخ (حوزه I نقشه راه V8) برای سوئیت business_invariants.
@@ -178,7 +179,7 @@ export async function checkProformaTakesInvoiceNumber(wh: string): Promise<strin
   if (after?.ref_number !== String(Number(invoice?.refNumber) + 1)) {
     problems.push(`resulting invoice got number ${after?.ref_number}; expected the next number of the invoice series (${Number(invoice?.refNumber) + 1})`);
   }
-  if (!String(after?.notes ?? '').includes(`پیش‌فاکتور شماره ${proforma?.refNumber}`)) problems.push('proforma number did not appear in the invoice notes');
+  if (!String(after?.notes ?? '').includes(`پیش‌فاکتور شماره ${toPersianDigits(proforma?.refNumber)}`)) problems.push('proforma number did not appear in the invoice notes');
   const kardex = await pool.query<{ document_ref: string }>(
     `SELECT DISTINCT document_ref FROM transactions WHERE document_id = $1 AND is_deleted = 0`, [proformaId]);
   if (kardex.rows.some(r => r.document_ref !== after?.ref_number)) problems.push(`Kardex rows carry number ${kardex.rows.map(r => r.document_ref).join(', ')}`);
@@ -219,7 +220,7 @@ export async function checkProformaInvoiceTakesFinalizeDate(wh: string): Promise
   if (row?.k !== invoiceDay) problems.push(`Kardex row date ${row?.k}, expected ${invoiceDay}`);
   if (row?.v !== invoiceDay) problems.push(`invoice journal voucher date ${row?.v ?? 'missing'}, expected ${invoiceDay}`);
   const notes = String(row?.notes ?? '');
-  if (!notes.includes(`پیش‌فاکتور شماره ${proforma?.refNumber}`) || !notes.includes('1398/03/12')) {
+  if (!notes.includes(`پیش‌فاکتور شماره ${toPersianDigits(proforma?.refNumber)}`) || !notes.includes(toPersianDigits('1398/03/12'))) {
     problems.push(`invoice notes lack the proforma number and date (1398/03/12): "${notes.slice(0, 120)}"`);
   }
   return problems;

@@ -75,7 +75,7 @@ export function useServerDraft<T extends Record<string, any>>(
       }
 
       setIsSavingDraft(true);
-      setDraftStatusText('در حال ذخیره پیش‌نویس در سرور...');
+      setDraftStatusText('در حال ذخیره پیش‌نویس در سامانه...');
 
       try {
         await fetchJson('/drafts', {
@@ -90,7 +90,7 @@ export function useServerDraft<T extends Record<string, any>>(
 
         lastPayloadStringRef.current = payloadString;
         setLastSavedTime(new Date());
-        setDraftStatusText('پیش‌نویس در سرور ذخیره شد');
+        setDraftStatusText('پیش‌نویس در سامانه ذخیره شد');
         setTimeout(() => setDraftStatusText(''), 4000);
       } catch (err: any) {
         setDraftStatusText('خطا در ذخیره پیش‌نویس');
@@ -114,7 +114,7 @@ export function useServerDraft<T extends Record<string, any>>(
       setServerDraftData(null);
       setDraftUpdatedAt(null);
       lastPayloadStringRef.current = '';
-      setDraftStatusText('پیش‌نویس سرور حذف شد');
+      setDraftStatusText('پیش‌نویس سامانه حذف شد');
       setTimeout(() => setDraftStatusText(''), 3000);
     } catch (err) {
       console.error('Error discarding server draft:', err);
@@ -128,7 +128,7 @@ export function useServerDraft<T extends Record<string, any>>(
       // v8.0.111 (TD-388): همان پیش‌نویس بازیابی‌شده بی‌تغییر دوباره ذخیره نمی‌شود
       lastPayloadStringRef.current = JSON.stringify(serverDraftData);
       setHasServerDraft(false);
-      toast.success('پیش‌نویس سرور با موفقیت بازیابی شد');
+      toast.success('پیش‌نویس سامانه با موفقیت بازیابی شد');
     }
   }, [serverDraftData, draftUpdatedAt, onDraftLoaded]);
 

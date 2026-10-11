@@ -48,6 +48,11 @@ const payrollPaymentColumns = {
   paymentReference: pieceworkPayrolls.paymentReference,
   notes: pieceworkPayrolls.notes,
   createdAt: pieceworkPayrolls.createdAt,
+  // v10.0.193 (TD-1084): صادرکننده فیش، تا صفحه دکمه تأیید و پرداخت او را با دلیل غیرفعال کند
+  createdById: pieceworkPayrolls.createdById,
+  // v10.0.199 (TD-1085): فیش پیش‌پرداخت و دلیلش در فهرست و چاپ
+  isPrepayment: pieceworkPayrolls.isPrepayment,
+  prepaymentReason: pieceworkPayrolls.prepaymentReason,
 };
 
 /** ستون‌های ریز کارکرد فیش (پس از id و payrollId). */

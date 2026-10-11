@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { UnsavedPriceEditsBar } from '../components/pricing/UnsavedPriceEditsBar';
 import { fetchJson } from '../api';
 import { toast } from 'react-hot-toast';
 import { Item, ItemPrice } from '../types';
@@ -100,7 +101,7 @@ export default function PricingPage() {
     queryKey: [...QUERY_KEYS.settings.list(), 'pricing-strategies'],
     queryFn: async () => {
       const settings = await fetchJson('/settings');
-      // v10.0.27 (OBS-R1-71 / OBS-R1-72): همان خواننده سرور؛ تنظیم ناخوانا خطاست، نه فهرست پیش‌فرض
+      // v10.0.201 (OBS-R1-71 / OBS-R1-72): همان خواننده سرور؛ تنظیم ناخوانا خطاست، نه فهرست پیش‌فرض
       const st = Array.isArray(settings) ? settings.find((s: { key?: string }) => s.key === 'pricing_strategies') : undefined;
       const read = readPricingStrategies(st?.value);
       if ('error' in read) throw new Error(read.error);
@@ -671,33 +672,14 @@ export default function PricingPage() {
         )}
       </div>
 
-      {/* Sticky Bottom Bar for Unsaved Edits */}
-      {canEditPrices && totalLocalEditsCount > 0 && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl z-40 flex items-center gap-4 border border-slate-700 animate-in slide-in-from-bottom duration-200">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
-            <span className="text-xs font-bold">
-              تعداد {formatPersianNumber(totalLocalEditsCount)} فیلد قیمت ویرایش شده و ذخیره‌نشده است.
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setLocalEdits({})}
-              className="text-xs text-slate-400 hover:text-white px-2 py-1 rounded-lg cursor-pointer"
-            >
-              انصراف
-            </button>
-            <button
-              onClick={handleSaveAllLocalEdits}
-              disabled={isSavingAll}
-              className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-extrabold px-4 py-2 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-            >
-              {isSavingAll ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
-              ذخیره یکجای تمام تغییرات
-            </button>
-          </div>
-        </div>
+      {/* v10.0.142 (TD-1201): نوار تغییرات ذخیره‌نشده در جریان صفحه، نه روی کارت‌ها */}
+      {canEditPrices && (
+        <UnsavedPriceEditsBar
+          count={totalLocalEditsCount}
+          isSaving={isSavingAll}
+          onCancel={() => setLocalEdits({})}
+          onSaveAll={handleSaveAllLocalEdits}
+        />
       )}
 
       {/* V9 Phase 5.2: مودال تاریخچه قیمت استخراج‌شده */}

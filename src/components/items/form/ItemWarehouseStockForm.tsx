@@ -48,7 +48,7 @@ export const ItemWarehouseStockForm: React.FC<ItemWarehouseStockFormProps> = ({
                   value={form.stocks[w.code] ?? ''}
                   onChange={e => {
                     const val = parseCleanNumber(e.target.value, 0);
-                    // v10.0.29 (OBS-R1-77): فقط کلید کد انبار؛ پیش‌تر شناسه انبار هم کلید می‌شد و جمع موجودی دو برابر می‌شد
+                    // v10.0.203 (OBS-R1-77): فقط کلید کد انبار؛ پیش‌تر شناسه انبار هم کلید می‌شد و جمع موجودی دو برابر می‌شد
                     setForm({
                       ...form,
                       stocks: { ...form.stocks, [w.code]: val }

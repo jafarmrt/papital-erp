@@ -9,6 +9,7 @@ import { formatPersianNumber, extractDateString, formatCurrencyLabel, formatPers
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { fetchJson } from '../../api';
 import { PayrollDeductionsField, deductionsNeedDescription } from './PayrollDeductionsField';
+import { PayrollPrepaymentField, prepaymentNeedsReason, type PayrollPrepaymentState } from './PayrollPrepaymentField';
 
 interface PieceworkPayrollModalProps {
   isOpen: boolean;
@@ -38,6 +39,8 @@ interface PieceworkPayrollModalProps {
   // V1.3.2: هشدار سهم باقی‌مانده حقوق ثابت ماه انتخابی
   fixedRemainingHint?: string | null;
   isSaving?: boolean;
+  // v10.0.199 (TD-1085): فیش پیش‌پرداخت دوره آینده با دلیل
+  prepayment?: PayrollPrepaymentState;
 }
 
 /** v9.0.266 (TD-804، تصمیم ت۱ الف): پاداش، کسورات و کسر مساعده منفی نمی‌شوند (سرور هم رد می‌کند) */
@@ -67,7 +70,8 @@ export function PieceworkPayrollModal({
   fixedRemainingHint = null,
   advanceDeduction = 0,
   setAdvanceDeduction,
-  isSaving = false
+  isSaving = false,
+  prepayment
 }: PieceworkPayrollModalProps) {
   const rial = useRialDisplay();
   // ورودی مبلغ همیشه به ریال است (مبلغ ذخیره‌شده)
@@ -244,6 +248,8 @@ export function PieceworkPayrollModal({
             )}
           </div>
 
+          {prepayment && <PayrollPrepaymentField prepayment={prepayment} hasFixedSalary={allowNoLogs} />}
+
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">توضیحات فیش</label>
             <input
@@ -268,6 +274,7 @@ export function PieceworkPayrollModal({
               type="submit"
               // V10-4.4: برای پرسنل حقوق ثابت/ترکیبی، خالی بودن لیست کارکرد مانع صدور نیست
               disabled={(payrollPreviewLogs.length === 0 && !allowNoLogs) || advanceExceedsBalance
+                || prepaymentNeedsReason(prepayment) || (!!prepayment?.isPrepayment && !allowNoLogs)
                 || deductionsNeedDescription(payrollDeductions, payrollDeductionsDescription) || isSaving}
               className="px-5 py-2 bg-emerald-600 text-white rounded-xl font-bold text-xs hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-md shadow-emerald-600/20 flex items-center gap-1.5"
             >
@@ -277,7 +284,7 @@ export function PieceworkPayrollModal({
                   <span>در حال صدور فیش...</span>
                 </>
               ) : (
-                <span>تایید و صدور فیش حقوقی</span>
+                <span>صدور فیش حقوقی پیش‌نویس</span>
               )}
             </button>
           </div>

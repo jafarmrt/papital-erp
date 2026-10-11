@@ -33,7 +33,6 @@ export const SETTINGS_TAB_ACCESS = {
   chart_of_accounts: { gate: anyOf('accounting.coa'), api: ['GET /api/accounting/accounts/tree', 'POST /api/accounting/accounts'] },
   categories: { gate: anyOf('products.create', 'products.edit'), api: ['GET /api/categories', 'POST /api/categories'] },
   warehouses: { gate: anyOf('warehouse.manage'), api: ['GET /api/warehouses', 'POST /api/warehouses'] },
-  inventory_integrity: { gate: anyOf('inventory.reconcile'), api: ['GET /api/inventory/negative-stock-policy', 'PUT /api/inventory/negative-stock-policy'] },
   inventory_control: { gate: anyOf('settings.manage'), api: ['GET /api/settings', 'POST /api/settings'] },
   projects: { gate: anyOf('settings.manage'), api: ['GET /api/settings', 'POST /api/settings', 'GET /api/piecework/tasks'] },
   // v9.0.320 (TD-805): زبانه عناوین و دسته‌های کاری همان کلید نوشتن آن‌ها را می‌پرسد

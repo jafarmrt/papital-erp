@@ -69,7 +69,8 @@ describe('architecture_ratchet: phase-2 decisions may only shrink their debt', (
     const report = compareWithBaseline(currentState(), baseline);
     expect(report.errors).toEqual([]);
     expect(report.stale).toEqual([]);
-  });
+    // Parses every production file; a loaded CI runner needs more than the 5 s default.
+  }, 30_000);
 });
 
 describe('package_boundary_ratchet: server imports follow the package direction (decision t3 A)', () => {

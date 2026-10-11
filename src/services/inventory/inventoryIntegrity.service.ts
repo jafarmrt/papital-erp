@@ -13,12 +13,7 @@ import {
 } from './kardexWacRecalculator.service.js';
 import { InventoryStockRepairService } from './inventoryStockRepair.service.js';
 import { buildItemRunningKardex } from './runningKardex.service.js';
-import {
-  NegativeStockPolicyService,
-  type NegativeStockPolicyType,
-  type NegativeStockCheckResult,
-  type NegativeStockViolationItem
-} from './negativeStockPolicy.service.js';
+import type { NegativeStockPolicyType } from './negativeStockPolicy.service.js';
 import {
   ProjectBomAllocationService,
   type BomAllocationItemInput,
@@ -35,8 +30,6 @@ export type {
   RunningKardexEntry,
   RunningKardexResponse,
   NegativeStockPolicyType,
-  NegativeStockCheckResult,
-  NegativeStockViolationItem,
   BomAllocationItemInput,
   BomReceiptAllocationInput,
   ProjectBomAllocationRecord,
@@ -108,29 +101,6 @@ export class InventoryIntegrityService {
   }
 
   /**
-   * Negative Stock Policy controls
-   */
-  static async getNegativeStockPolicy(): Promise<NegativeStockPolicyType> {
-    return NegativeStockPolicyService.getPolicy();
-  }
-
-  static async setNegativeStockPolicy(policy: NegativeStockPolicyType): Promise<void> {
-    return NegativeStockPolicyService.setPolicy(policy);
-  }
-
-  static async checkStockDeduction(params: {
-    itemId: number;
-    location?: string;
-    requestedQty: number;
-  }): Promise<NegativeStockCheckResult> {
-    return NegativeStockPolicyService.checkStockDeduction(params);
-  }
-
-  static async getNegativeStockViolations(): Promise<NegativeStockViolationItem[]> {
-    return NegativeStockPolicyService.getNegativeStockViolations();
-  }
-
-  /**
    * Project BOM Allocations with source transaction traceability
    */
   static async allocateMaterialsForProject(params: {
@@ -159,10 +129,6 @@ export class InventoryIntegrityService {
 
   static async releaseAllocation(allocationId: number, opts?: { reason?: string; userId?: number; username?: string; externalTx?: DbExecutor }) {
     return ProjectBomAllocationService.releaseAllocation(allocationId, opts);
-  }
-
-  static async getProjectAllocations(projectId: number) {
-    return ProjectBomAllocationService.getProjectAllocations(projectId);
   }
 
   static async getAllAllocations(params?: {

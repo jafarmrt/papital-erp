@@ -1,4 +1,5 @@
-import { sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
+import { journalVouchers } from '../../db/schema.js';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { ConflictError } from '../../errors/customErrors.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
@@ -69,4 +70,31 @@ export async function assertVoucherWithoutSource(
     ? `سند شماره «${number}» برگشت سندی است که ${label} صادر کرده و از اسناد حسابداری ${action}؛ اثر ${label} فقط از خود آن تغییر می‌کند.`
     : `سند شماره «${number}» را ${label} صادر کرده است و از اسناد حسابداری ${action}؛ برای تغییر آن، ${label} را ابطال و در صورت نیاز دوباره ثبت کنید.`;
   throw new ConflictError(message, { voucherId: voucher.id, sourceKind: kind }, 'VOUCHER_HAS_SOURCE');
+}
+
+/**
+ * v10.0.x (TD-1239): سند برگشت فعال هر سند (ابطال `REV-V…` یا ابطال برای بازثبت `VOID-REPOST-V…`، همان قاعده
+ * `findActiveReversal`)؛ کلید شناسه سند اصلی و مقدار شماره سند برگشت. منوی ردیف سند با آن برگشت و اصلاح دوباره را پیشنهاد نمی‌دهد.
+ */
+export async function voucherActiveReversals(
+  executor: DbExecutor,
+  vouchers: Array<{ id: number; voucherNumber: string | number }>,
+): Promise<Map<number, string>> {
+  const byId = new Map(vouchers.filter(v => Number.isInteger(v.id) && v.id > 0).map(v => [v.id, String(v.voucherNumber)]));
+  const found = new Map<number, string>();
+  if (byId.size === 0) return found;
+  const rows = await executor.select({
+    referenceId: journalVouchers.referenceId,
+    referenceNumber: journalVouchers.referenceNumber,
+    voucherNumber: journalVouchers.voucherNumber,
+  }).from(journalVouchers)
+    .where(and(inArray(journalVouchers.referenceId, Array.from(byId.keys())), eq(journalVouchers.isDeleted, 0)));
+  for (const row of rows) {
+    const number = row.referenceId === null ? undefined : byId.get(row.referenceId);
+    if (number === undefined || row.referenceId === null || found.has(row.referenceId)) continue;
+    if (row.referenceNumber === `REV-V${number}` || row.referenceNumber === `VOID-REPOST-V${number}`) {
+      found.set(row.referenceId, String(row.voucherNumber));
+    }
+  }
+  return found;
 }

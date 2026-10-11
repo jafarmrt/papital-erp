@@ -28,7 +28,7 @@ function server() {
   fetchJson.mockImplementation((url: string, init?: Init) => {
     const method = init?.method ?? 'GET';
     if (url === '/warehouses') return Promise.resolve([{ id: 1, name: 'انبار مرکزی', code: 'WH1', is_active: 1 }]);
-    if (url.startsWith('/documents?status=proforma')) return Promise.resolve({ data: [], total: 0, page: 1, limit: 20 });
+    if (url.startsWith('/documents?statuses=proforma,draft')) return Promise.resolve({ data: [], total: 0, page: 1, limit: 20 });
     if (url === '/documents/next-ref?type=invoice') return Promise.resolve({ nextRef: 'INV-1001' });
     if (url.startsWith('/drafts/invoice') && method === 'GET') {
       return Promise.resolve({ draft: { payload: draft, isDeleted: 0, updatedAt: '2026-10-03T08:00:00Z' } });

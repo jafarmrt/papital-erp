@@ -1,11 +1,12 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { dailyWorkLogs, notifications, productionProjects, users } from '../../db/schema.js';
 import { computeAuditDiff, logActivity } from '../../lib/auditLogger.js';
 import { requireStorageDate } from '../../lib/storageDate.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { DEFAULT_DAILY_LOG_VISIBILITY, idList, mentionNotifies } from '../../lib/dailyLogs/dailyLogVisibility.js';
-import { workHoursBetween, workTimeError } from '../../lib/dailyLogs/workHours.js';
+import { minutesOfDay, timeOfDayLabel, workHoursBetween, workTimeError } from '../../lib/dailyLogs/workHours.js';
+import { ROW_ADVISORY_LOCK_NAMESPACES } from '../../lib/advisoryLock.js';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import type { AuthUserPayload } from '../../types.js';
 import type { DailyLogBody, DailyLogUpdateBody } from '../../routes/dailyLogs.schemas.js';
@@ -32,6 +33,37 @@ function requireWorkHours(startTime: string, endTime: string): number {
   const error = workTimeError(startTime, endTime);
   if (error) throw new ValidationError(error, { startTime, endTime }, 'DAILY_LOG_WORK_TIME_INVALID');
   return workHoursBetween(startTime, endTime)!;
+}
+
+/**
+ * v10.0.137 (TD-1225, finding B12 of the fresh-eyes guide test): two live logs of one author on one work day never
+ * overlap in time (one may start where the other ends), so a day never holds more than 24 hours. Checked under the
+ * author-day transaction lock; a legacy log without valid times is not compared.
+ */
+async function assertNoTimeOverlap(tx: Tx, userId: number, date: string, startTime: string, endTime: string, exceptId?: number): Promise<void> {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(${ROW_ADVISORY_LOCK_NAMESPACES.DAILY_LOG_AUTHOR_DAY}::int, hashtext(${`${userId}:${date}`}::text))`);
+  const start = minutesOfDay(startTime)!;
+  const end = minutesOfDay(endTime)!;
+  const sameDay = await tx.select({ id: dailyWorkLogs.id, title: dailyWorkLogs.title, startTime: dailyWorkLogs.startTime, endTime: dailyWorkLogs.endTime })
+    .from(dailyWorkLogs)
+    .where(and(
+      eq(dailyWorkLogs.userId, userId),
+      eq(dailyWorkLogs.date, date),
+      eq(dailyWorkLogs.isDeleted, 0),
+      ...(exceptId !== undefined ? [ne(dailyWorkLogs.id, exceptId)] : []),
+    ));
+  const clash = sameDay.find((log) => {
+    const s = minutesOfDay(log.startTime ?? '');
+    const e = minutesOfDay(log.endTime ?? '');
+    return s !== null && e !== null && s < end && start < e;
+  });
+  if (clash) {
+    throw new ValidationError(
+      `این بازه با گزارش «${clash.title}» (${timeOfDayLabel(clash.startTime)} تا ${timeOfDayLabel(clash.endTime)}) در همان روز هم‌پوشانی دارد`,
+      { overlapsLogId: clash.id },
+      'DAILY_LOG_TIME_OVERLAP',
+    );
+  }
 }
 
 const actorName = (actor: AuthUserPayload) => actor.full_name || actor.fullName || actor.username;
@@ -111,6 +143,7 @@ export async function createDailyLog(actor: AuthUserPayload, body: DailyLogBody)
   const name = actorName(actor);
 
   return orm.transaction(async (tx) => {
+    await assertNoTimeOverlap(tx, actor.id, date, startTime, endTime);
     const mentions = await resolveUserIds(tx, body.mentions, 'کاربر اشاره‌شده');
     const allowedUsers = await resolveUserIds(tx, body.allowed_users, 'کاربر مجاز');
     const project = await resolveProject(tx, body.project_id);
@@ -163,6 +196,12 @@ export async function updateDailyLog(actor: AuthUserPayload, logId: number, body
       ? await resolveProject(tx, body.project_id)
       : { projectId: existing.projectId, projectName: existing.projectName ?? '' };
     const date = (body.date ? requireStorageDate(body.date, 'تاریخ کارکرد') : '') || existing.date;
+    const timeChanged = body.start_time !== undefined || body.end_time !== undefined;
+    const workHours = timeChanged ? requireWorkHours(startTime, endTime) : existing.workHours;
+    // an edit that keeps the day and the times is not compared, so a legacy overlapping log stays editable
+    if (timeChanged || date !== existing.date) {
+      if (workTimeError(startTime, endTime) === null) await assertNoTimeOverlap(tx, existing.userId, date, startTime, endTime, logId);
+    }
 
     const [updated] = await tx.update(dailyWorkLogs).set({
       date,
@@ -170,7 +209,7 @@ export async function updateDailyLog(actor: AuthUserPayload, logId: number, body
       startTime,
       endTime,
       // an edit that leaves both times keeps the stored hours, so a legacy log stays editable
-      workHours: body.start_time !== undefined || body.end_time !== undefined ? requireWorkHours(startTime, endTime) : existing.workHours,
+      workHours,
       workMode: body.work_mode || existing.workMode,
       title: body.title || existing.title,
       content: body.content || existing.content,

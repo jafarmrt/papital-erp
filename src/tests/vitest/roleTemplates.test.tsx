@@ -17,6 +17,8 @@ vi.mock('react-hot-toast', () => {
   return { toast: t, default: t };
 });
 
+// v10.0.117 (TD-1183): the role code field's Persian placeholder
+const ROLE_CODE_PLACEHOLDER = 'مثلاً warehouse_assistant';
 const treasurer = ROLE_TEMPLATES.find(t => t.code === 'treasurer')!;
 const existing: Role = { id: 21, name: 'خزانه‌دار قدیمی', code: 'treasurer', description: '', permissions: ['accounting.view'], isSystem: 0 };
 const admin: User = { id: 1, username: 'root', full_name: 'مدیر سیستم', role: 'admin' };
@@ -72,7 +74,7 @@ describe('role templates (TD-526)', () => {
     fireEvent.click(screen.getByText(treasurer.name).closest('button')!);
 
     expect((screen.getByPlaceholderText(/کمک انباردار/) as HTMLInputElement).value).toBe(treasurer.name);
-    expect((screen.getByPlaceholderText('e.g. warehouse_assistant') as HTMLInputElement).value).toBe('treasurer_2');
+    expect((screen.getByPlaceholderText(ROLE_CODE_PLACEHOLDER) as HTMLInputElement).value).toBe('treasurer_2');
     fireEvent.submit(screen.getByPlaceholderText(/کمک انباردار/).closest('form')!);
 
     await waitFor(() => expect(fetchJson.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true));
