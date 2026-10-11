@@ -33,7 +33,6 @@ export const SETTINGS_TAB_ACCESS = {
   chart_of_accounts: { gate: anyOf('accounting.coa'), api: ['GET /api/accounting/accounts/tree', 'POST /api/accounting/accounts'] },
   categories: { gate: anyOf('products.create', 'products.edit'), api: ['GET /api/categories', 'POST /api/categories'] },
   warehouses: { gate: anyOf('warehouse.manage'), api: ['GET /api/warehouses', 'POST /api/warehouses'] },
-  inventory_integrity: { gate: anyOf('inventory.reconcile'), api: ['GET /api/inventory/negative-stock-policy', 'PUT /api/inventory/negative-stock-policy'] },
   inventory_control: { gate: anyOf('settings.manage'), api: ['GET /api/settings', 'POST /api/settings'] },
   projects: { gate: anyOf('settings.manage'), api: ['GET /api/settings', 'POST /api/settings', 'GET /api/piecework/tasks'] },
   // v9.0.320 (TD-805): زبانه عناوین و دسته‌های کاری همان کلید نوشتن آن‌ها را می‌پرسد
@@ -70,6 +69,9 @@ export const PAGE_ACCESS = {
   '/inventory-status': { gate: anyOf('reports.view', 'warehouse.view'), api: ['GET /api/stats', 'GET /api/dashboard-bi-stats'] },
   '/products': { gate: anyOf('products.view'), api: ['GET /api/items'] },
   '/gallery': { gate: anyOf('products.view'), api: ['GET /api/items'] },
+  // v10.0.25 (N-05 PR 2): کتابخانه تصاویر و فیلم‌ها و نمای یک محصول آن
+  '/media-library': { gate: anyOf('media.view'), api: ['GET /api/media/products', 'GET /api/media/products/filters'] },
+  '/media-library/products/:itemId': { gate: anyOf('media.view'), api: ['GET /api/media/products/:itemId'] },
   // v9.0.277 (TD-668 باقی‌مانده، B16-04 با بسته ۸ TD-791): صفحه را کسی باز می‌کند که یکی از نوع‌های آن را ثبت می‌کند
   '/receipts': { gate: anyOf('warehouse.in', 'warehouse.out', 'documents.finalize'), api: ['GET /api/documents/next-ref', 'GET /api/customers/options', 'GET /api/items/options', 'GET /api/projects/options', 'POST /api/documents'] },
   '/pending-materials': { gate: anyOf('pending_materials.view', 'products.view'), api: ['GET /api/pending-materials'] },

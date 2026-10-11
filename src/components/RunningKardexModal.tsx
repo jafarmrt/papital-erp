@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { X, RefreshCw, ArrowDownRight, ArrowUpRight, Download, Search, Layers, ShieldCheck } from 'lucide-react';
 import * as xlsx from 'xlsx';
 import { formatPersianNumber, formatPersianDate, errorMessageOf } from '../utils';
+import { kardexDocumentTypeLabel } from '../lib/documents/documentTypeTitles';
 import { useRialDisplay } from '../hooks/useAppCurrency';
 import { useItemKardexQuery } from '../hooks/queries/useTransactionQueries';
 import { runningKardexEntryLabel, type RunningKardexEntry } from '../lib/transactions/runningKardex';
@@ -38,7 +39,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
         const s = search.trim().toLowerCase();
         const matchRef = String(entry.documentRef || '').toLowerCase().includes(s);
         const matchNotes = String(entry.notes || '').toLowerCase().includes(s);
-        const matchDocType = String(entry.documentType || '').toLowerCase().includes(s);
+        const matchDocType = (String(entry.documentType || '').toLowerCase().includes(s) || kardexDocumentTypeLabel(entry.documentType).includes(s));
         const matchUser = String(entry.createdBy || '').toLowerCase().includes(s);
         if (!matchRef && !matchNotes && !matchDocType && !matchUser) return false;
       }
@@ -71,7 +72,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
         'میانگین موزون بها (ریال)': e.runningWac,
         'ارزش کل مانده (ریال)': e.runningTotalValue,
         'شماره سند/عطف': e.documentRef,
-        'نوع سند': e.documentType,
+        'نوع سند': kardexDocumentTypeLabel(e.documentType),
         'وضعیت': runningKardexEntryLabel(e),
         'توضیحات': e.notes,
         'کاربر': e.createdBy
@@ -341,7 +342,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                             </td>
                             <td className="p-3">
                               <div className="font-mono text-slate-800 font-medium">{entry.documentRef || '-'}</div>
-                              <div className="text-[10px] text-slate-400">{entry.documentType || ''}</div>
+                              <div className="text-[10px] text-slate-400">{kardexDocumentTypeLabel(entry.documentType)}</div>
                               {label && <span className="inline-block mt-0.5 bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-bold">{label}</span>}
                             </td>
                             <td className="p-3">

@@ -18,6 +18,7 @@ export default function Dashboard() {
 
   // v9.0.262 (TD-639): daily logs only for holders of daily_logs.view, with the dashboard's own requests
   const canViewDailyLogs = useHasPermission('daily_logs.view');
+  const canCreateDailyLogs = useHasPermission('daily_logs.create');
   const {
     logs: dailyLogs,
     mentionedLogs,
@@ -152,6 +153,7 @@ export default function Dashboard() {
               logs={mentionedLogs}
               stats={dailyStats}
               loading={logsLoading}
+              canCreate={canCreateDailyLogs}
             />
           )}
         </div>

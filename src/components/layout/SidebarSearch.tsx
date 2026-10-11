@@ -22,7 +22,7 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
           type="text"
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
-          placeholder="جستجوی فهرست... (Ctrl+K)"
+          placeholder="جستجوی فهرست..."
           className="w-full bg-slate-800/90 text-slate-100 placeholder:text-slate-500 text-[11px] rounded-xl pl-7 pr-7 py-1.5 border border-slate-750 focus:border-blue-500 focus:bg-slate-800 focus:outline-none transition-all shadow-inner"
         />
         <Search
@@ -38,11 +38,7 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
           >
             <X size={13} />
           </button>
-        ) : (
-          <kbd className="absolute left-2 hidden xl:inline-flex items-center gap-0.5 px-1 py-0.2 text-[9px] font-mono text-slate-500 bg-slate-900/80 rounded border border-slate-700/60 pointer-events-none">
-            Ctrl+K
-          </kbd>
-        )}
+        ) : null}
       </div>
 
       {query.trim() && (

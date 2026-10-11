@@ -31,8 +31,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
       'personnel.view', 'personnel.manage', 'piecework.view', 'piecework.manage_tasks', 'piecework.log', 'piecework.payroll',
       'piecework.pay', 'personnel.view_sensitive', 'payroll.view_sensitive', 'pending_materials.view', 'pending_materials.create', 'pending_materials.approve', 'pending_materials.delete', 'procurement.view',
       'procurement.create', 'procurement.manage', 'procurement.order', 'procurement.approve', 'accounting.view', 'accounting.vouchers',
-      'accounting.coa', 'accounting.treasury', 'accounting.cheques', 'accounting.reports', 'woocommerce.view', 'woocommerce.manage',
-      'audit_logs.view', 'settings.manage',
+      'accounting.vouchers_approve', 'accounting.coa', 'accounting.treasury', 'accounting.cheques', 'accounting.reports', 'woocommerce.view', 'woocommerce.manage',
+      'audit_logs.view', 'settings.manage', 'media.view', 'media.upload', 'media.manage',
     ],
   },
   {
@@ -40,7 +40,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     name: 'مدیر ارشد مالی',
     description: 'دسترسی کامل به کدینگ حساب‌ها، اسناد دوبل، خزانه‌داری، چک‌های صیادی، صورت‌های مالی، قیمت‌گذاری و حقوق پرسنل',
     permissions: [
-      'accounting.view', 'accounting.vouchers', 'accounting.coa', 'accounting.treasury', 'accounting.cheques', 'accounting.reports',
+      'accounting.view', 'accounting.vouchers', 'accounting.vouchers_approve', 'accounting.coa', 'accounting.treasury', 'accounting.cheques', 'accounting.reports',
       'products.view', 'products.edit_price', 'documents.view', 'documents.create', 'documents.edit', 'documents.delete',
       'documents.finalize', 'customers.view', 'customers.manage', 'workflow.view', 'workflow.approve', 'events.view',
       'personnel.view', 'piecework.view', 'piecework.payroll', 'daily_logs.view', 'daily_logs.create', 'reports.view',
@@ -56,6 +56,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
       'warehouse.transfer', 'inventory.reconcile', 'documents.view', 'documents.edit', 'documents.finalize', 'audit.view',
       'audit.create', 'audit.apply', 'pending_materials.view', 'pending_materials.create', 'pending_materials.approve', 'workflow.view', 'workflow.approve',
       'workflow.execute', 'customers.view', 'projects.view', 'projects.edit', 'daily_logs.view', 'daily_logs.create',
+      'media.view', 'media.upload', 'procurement.view', 'procurement.manage',
     ],
   },
   {
@@ -77,7 +78,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
       'products.view', 'products.create', 'products.edit', 'warehouse.view', 'warehouse.in', 'warehouse.out',
       'projects.view', 'projects.create', 'projects.edit', 'projects.delete', 'workflow.view', 'workflow.approve',
       'workflow.execute', 'personnel.view', 'piecework.view', 'piecework.log', 'piecework.manage_tasks', 'pending_materials.view',
-      'pending_materials.create', 'pending_materials.approve', 'daily_logs.view', 'daily_logs.create', 'daily_logs.manage_all', 'reports.view',
+      'pending_materials.create', 'daily_logs.view', 'daily_logs.create', 'daily_logs.manage_all', 'reports.view',
     ],
   },
   {
@@ -96,7 +97,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     permissions: [
       'products.view', 'warehouse.view', 'documents.view', 'documents.create', 'documents.edit', 'customers.view',
       'customers.manage', 'workflow.view', 'workflow.approve', 'crm.view', 'crm.manage', 'reports.view',
-      'projects.view', 'daily_logs.view', 'daily_logs.create',
+      'projects.view', 'daily_logs.view', 'daily_logs.create', 'media.view',
     ],
   },
   {
@@ -131,7 +132,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     description: 'مدیریت درخواست‌های خرید پروژه‌ها و انبار، استعلام قیمت، تفکیک اقلام، انتخاب تأمین‌کننده و صدور سفارش خرید',
     permissions: [
       'procurement.view', 'procurement.create', 'procurement.manage', 'procurement.order', 'procurement.approve', 'products.view',
-      'products.edit_price', 'warehouse.view', 'warehouse.in', 'documents.view', 'documents.create', 'documents.edit',
+      'products.edit_price', 'warehouse.view', 'documents.view', 'documents.create', 'documents.edit',
       'customers.view', 'customers.manage', 'projects.view', 'workflow.view', 'workflow.approve', 'daily_logs.view',
       'daily_logs.create',
     ],
@@ -142,7 +143,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     description: 'مدیریت مشتریان، پرونده‌های فروش، پیش‌فاکتورها و مشاهده سفارش‌های فروشگاه اینترنتی',
     permissions: [
       'crm.view', 'crm.manage', 'customers.view', 'customers.manage', 'documents.view', 'documents.create',
-      'woocommerce.view',
+      'documents.edit', 'woocommerce.view', 'media.view', 'workflow.view', 'workflow.execute', 'daily_logs.view',
+      'daily_logs.create',
     ],
   },
   {
@@ -150,7 +152,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     name: 'متصدی ثبت کارکرد کارگاه',
     description: 'ثبت کارکرد کارمزدی پرسنل و گزارش کار روزانه کارگاه',
     permissions: [
-      'piecework.view', 'piecework.log', 'daily_logs.view', 'daily_logs.create',
+      'piecework.view', 'piecework.log', 'projects.view', 'daily_logs.view', 'daily_logs.create',
     ],
   },
 ];

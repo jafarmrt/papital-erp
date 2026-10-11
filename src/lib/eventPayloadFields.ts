@@ -95,6 +95,7 @@ const REORDER_LABELS: Record<keyof InventoryReorderAlertPayload, string> = {
   itemCode: 'کد کالا',
   itemName: 'نام کالا',
   currentStock: 'موجودی فعلی',
+  freeStock: 'موجودی آزاد',
   reorderPoint: 'نقطه سفارش',
   warehouseLocation: 'انبار',
   alertMessage: 'متن هشدار',

@@ -2,7 +2,7 @@ import { logger } from '../../middleware/logger.js';
 import { errorMessageOf } from '../../utils.js';
 
 /**
- * v10.0.25 (TD-958, OBS-R1-01): the background startup of `server.ts` as separate steps. An essential step (the
+ * v10.0.180 (TD-958, OBS-R1-01): the background startup of `server.ts` as separate steps. An essential step (the
  * migrations) that still fails after its attempts stops the process, as before; a non-essential step (base data,
  * default engines, the display time zone cache) that still fails is recorded and the server starts without it, so one
  * failing extra no longer takes the whole system down. The steps left out are listed by `/health/ready` and

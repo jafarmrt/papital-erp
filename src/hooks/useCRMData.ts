@@ -10,6 +10,8 @@ import type { CrmStats } from '../lib/crm/leadCurrencyTotals';
 import { CRM_FOLLOWUPS_QUERY_KEY } from '../lib/crm/crmFollowupsQuery';
 import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 import { useHasPermission } from '../contexts/AuthContext';
+import { activityPayload } from '../lib/crm/activityPayload';
+import { useLeadDrawerActivities } from './useLeadDrawerActivities';
 
 export const STAGES = [
   { key: 'lead', title: 'مخاطب اولیه', color: 'bg-slate-100 border-slate-300 text-slate-700', badge: 'bg-slate-200 text-slate-800' },
@@ -49,7 +51,7 @@ export function useCRMData(user: any) {
   const [selectedLeadForActivity, setSelectedLeadForActivity] = useState<CRMLead | null>(null);
 
   const [selectedLeadDrawer, setSelectedLeadDrawer] = useState<CRMLead | null>(null);
-  const [drawerActivities, setDrawerActivities] = useState<CRMActivity[]>([]);
+  const { drawerActivities, loadDrawerActivities } = useLeadDrawerActivities();
 
   // Followup completion result modal state
   const [isFollowupResultModalOpen, setIsFollowupResultModalOpen] = useState<boolean>(false);
@@ -380,11 +382,8 @@ export function useCRMData(user: any) {
 
     setIsSavingActivity(true);
     try {
-      const payload = {
-        ...activityForm,
-        leadId: selectedLeadForActivity?.id || null,
-        customerId: selectedLeadForActivity?.customerId || null
-      };
+      // v10.0.31 (TD-973): an activity without a lead keeps the party the form was opened for
+      const payload = activityPayload(activityForm, selectedLeadForActivity);
 
       await fetchJson('/crm/activities', {
         method: 'POST',
@@ -407,17 +406,7 @@ export function useCRMData(user: any) {
 
   const openLeadDrawer = async (lead: CRMLead) => {
     setSelectedLeadDrawer(lead);
-    try {
-      const res = await fetchJson(`/crm/leads/${lead.id}`);
-      // V3.0.7 (TD-066): Array Safety Guard (قاعده #2 AGENTS)
-      if (Array.isArray(res?.activities)) {
-        setDrawerActivities(res.activities);
-      } else if (res?.activities && typeof res.activities === 'object') {
-        setDrawerActivities([]);
-      }
-    } catch (err) {
-      console.error('Error fetching lead drawer detail:', err);
-    }
+    await loadDrawerActivities(lead.id);
   };
 
   const reopeningFollowupIds = useRef(new Set<number>());

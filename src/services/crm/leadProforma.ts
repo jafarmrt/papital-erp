@@ -11,6 +11,20 @@ import { crmTodayActivityDates } from '../../lib/storageDate.js';
 
 type Lead = typeof crmLeads.$inferSelect;
 
+/** v10.0.176 (TD-932): پرونده بسته («فروش موفق» یا «از دست رفته»، در مرحله یا وضعیت) */
+export function isClosedLead(lead: Pick<Lead, 'stage' | 'status'>): boolean {
+  return ['won', 'lost'].includes(String(lead.stage)) || ['won', 'lost'].includes(String(lead.status));
+}
+
+/**
+ * v10.0.176 (TD-932، تصمیم ت۱۴): پیش‌فاکتور به پرونده بسته وصل نمی‌شود، چون پیوند پرونده را به «پیش‌فاکتور و پیشنهاد»
+ * برمی‌گرداند؛ پیش‌تر پرونده «فروش موفق» یا «از دست رفته» با یک پیش‌فاکتور دوباره باز می‌شد.
+ */
+function assertLeadOpenForProforma(lead: Lead): void {
+  if (!isClosedLead(lead)) return;
+  throw new ValidationError(`پرونده فروش «${lead.title}» بسته است و پیش‌فاکتور به آن وصل نمی‌شود؛ برای فروش تازه پرونده تازه بسازید.`, { leadId: lead.id }, 'CRM_LEAD_CLOSED');
+}
+
 /**
  * v9.0.13 (TD-424): پیش از ثبت پیش‌فاکتور پرونده، درون تراکنش سند، ردیف پرونده قفل و «یک پیش‌فاکتور برای هر پرونده» زیر
  * همان قفل سنجیده می‌شود. پیش‌تر بررسی بیرون از تراکنش و بی قفل بود و علامت‌گذاری پس از commit سند: سه پیش‌فاکتور هم‌زمان
@@ -23,6 +37,7 @@ export async function lockLeadForNewProforma(tx: DbExecutor, leadId: number): Pr
   if (lead && lead.hasProforma === 1) {
     throw new ValidationError(`برای پرونده فروش «${lead.title}» قبلاً پیش‌فاکتور صادر شده است. هر پرونده فروش تنها مجاز به داشتن یک پیش‌فاکتور می‌باشد.`);
   }
+  if (lead) assertLeadOpenForProforma(lead);
   return lead ?? null;
 }
 
@@ -147,6 +162,7 @@ export async function lockLeadsForDocumentLink(
   if (target && isProforma && target.hasProforma === 1 && target.proformaId !== docId) {
     throw new ValidationError(`برای پرونده فروش «${target.title}» قبلاً پیش‌فاکتور صادر شده است. هر پرونده فروش تنها مجاز به داشتن یک پیش‌فاکتور می‌باشد.`, undefined, 'CRM_LEAD_HAS_PROFORMA');
   }
+  if (target && isProforma && target.proformaId !== docId) assertLeadOpenForProforma(target);
   return { target, linked: rows.filter(lead => lead.hasProforma === 1 && lead.proformaId === docId) };
 }
 

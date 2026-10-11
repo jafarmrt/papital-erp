@@ -41,6 +41,7 @@ import { seedFixtureItemStocks } from '../fixtures/factories.js';
 import { ItemWarehouseStockService } from '../../services/inventory/itemWarehouseStock.service.js';
 import type { CreateDocumentInput } from '../../services/documents/types.js';
 import { miscContraAccountId } from '../fixtures/treasuryParty.js';
+import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 
 export async function runRegressionTests(filter?: string): Promise<TestCaseResult[]> {
   const normalizedFilter = filter?.toLowerCase().replace(/[-_]/g, "").trim();
@@ -107,7 +108,6 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   try {
     const {
       transferStockSchema,
-      negativeStockPolicySchema,
       projectAllocateSchema,
       allocationsQuerySchema
     } = await import('../../routes/inventory.routes.js');
@@ -160,26 +160,6 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
     if (!negativeQtyThrew) {
       throw new Error('transfer schema must reject negative or zero quantities.');
-    }
-
-    // Case 4: اعتبارسنجی سیاست موجودی منفی (فقط forbidden, warning, allowed)
-    const validPolicy = await negativeStockPolicySchema.parseAsync({
-      body: { policy: 'forbidden' }
-    });
-    if (validPolicy.body.policy !== 'forbidden') {
-      throw new Error('negative stock policy schema must accept a valid value.');
-    }
-
-    let invalidPolicyThrew = false;
-    try {
-      await negativeStockPolicySchema.parseAsync({
-        body: { policy: 'unlimited_dangerous' }
-      });
-    } catch {
-      invalidPolicyThrew = true;
-    }
-    if (!invalidPolicyThrew) {
-      throw new Error('negative stock policy schema must reject unknown values.');
     }
 
     // Case 5: اعتبارسنجی تخصیص به پروژه و ممانعت از آرایه خالی اقلام
@@ -4651,7 +4631,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     } finally {
       if (createdRoleIds.length > 0) {
         const { roles } = await import('../../db/schema.js');
-        await orm.delete(roles).where(inArray(roles.id, createdRoleIds));
+        await deleteTestRoles(inArray(roles.id, createdRoleIds));
       }
     }
   }
@@ -4850,7 +4830,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     } finally {
       if (createdRoleIds.length > 0) {
         const { roles } = await import('../../db/schema.js');
-        await orm.delete(roles).where(inArray(roles.id, createdRoleIds));
+        await deleteTestRoles(inArray(roles.id, createdRoleIds));
       }
     }
   }
@@ -4951,7 +4931,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         anonymous: (await request(app).get(pngItem.url)).status,
         publicUploads: (await request(app).get(`/uploads/.attachments/${pngRow.storagePath}`)).status,
       };
-      await orm.delete(roles).where(inArray(roles.id, [noPermRole.id, accountingRole.id]));
+      await deleteTestRoles(inArray(roles.id, [noPermRole.id, accountingRole.id]));
       if (statuses.noPermission !== 403 || statuses.accounting !== 200 || statuses.anonymous !== 401 || statuses.publicUploads !== 404) {
         throw new Error(`attachment download access control is wrong: ${JSON.stringify(statuses)}`);
       }
@@ -5187,7 +5167,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const attTreasurer = await status(treasurer, stored.url);
       if (attLogger !== 403) wrong.push(`document attachment for the report-entry user: ${attLogger} (expected 403)`);
       if (attTreasurer !== 200) wrong.push(`document attachment for a holder of documents.view: ${attTreasurer} (expected 200)`);
-      await orm.delete(roles).where(inArray(roles.id, createdRoleIds));
+      await deleteTestRoles(inArray(roles.id, createdRoleIds));
       createdRoleIds.length = 0;
 
       if (wrong.length > 0) {
@@ -5217,7 +5197,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     } finally {
       if (createdRoleIds.length > 0) {
         const { roles } = await import('../../db/schema.js');
-        await orm.delete(roles).where(inArray(roles.id, createdRoleIds));
+        await deleteTestRoles(inArray(roles.id, createdRoleIds));
       }
       if (previousAttachmentsDir === undefined) delete process.env.ATTACHMENTS_DIR;
       else process.env.ATTACHMENTS_DIR = previousAttachmentsDir;
@@ -5673,7 +5653,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       // 3. Verify PendingMaterialsService submission and approval into official items
       const pendingMat = await PendingMaterialsService.submitPendingMaterial({
         name: `ماده خام تست معماری ${now}`,
-        code: `PM-ARCH-${now}`,
+        code: `PM-ARCH-${now}-101`,
         category: 'سنگ و نگین',
         unit: 'قیراط',
         reorderPoint: 10,
@@ -5688,7 +5668,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const { officialItem } = await PendingMaterialsService.approvePendingMaterial(pendingMat.id);
       createdItemIds.push(officialItem.id);
 
-      if (!officialItem.id || officialItem.code !== `PM-ARCH-${now}`) {
+      if (!officialItem.id || officialItem.code !== `PM-ARCH-${now}-101`) {
         throw new Error('Approving and converting a raw material into an official item through PendingMaterialsService failed.');
       }
 
@@ -8672,6 +8652,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const violations: string[] = [];
       // v9.0.128 (TD-542): نقش گام باید تعریف شده باشد
       await orm.insert(roles).values({ code: role, name: `نقش آزمون مهلت ${suffix}`, permissions: [] });
+      await orm.insert(roles).values({ code: `reg_other_${suffix}`, name: `نقش دیگر آزمون مهلت ${suffix}`, permissions: [] });
       for (const [name, userRole] of [['a', role], ['b', role], ['other', `reg_other_${suffix}`]] as const) {
         const [u] = await orm.insert(users).values({
           username: `reg_sla_${name}_${suffix}`, password: 'x', fullName: `کاربر آزمون مهلت ${name}`, role: userRole,
@@ -8747,7 +8728,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         await orm.delete(workflowDefinitions).where(eq(workflowDefinitions.id, defId));
       }
       if (userIds.length > 0) await orm.delete(users).where(inArray(users.id, userIds));
-      await orm.delete(roles).where(eq(roles.code, role));
+      await deleteTestRoles(eq(roles.code, role));
     }
   }
 
@@ -8877,7 +8858,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         await orm.delete(workflowDefinitions).where(eq(workflowDefinitions.id, defId));
       }
       if (userId) await orm.delete(users).where(eq(users.id, userId));
-      await orm.delete(roles).where(eq(roles.code, role));
+      await deleteTestRoles(eq(roles.code, role));
     }
   }
 
@@ -10590,6 +10571,21 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // بسته ۹ (v9.0.17، TD-426): اقدام CRM با پرونده یا طرف حساب ناموجود رد می‌شود
   const { runCrmActivityParentsTests } = await import('../regression/crmActivityParentsTests.js');
   results.push(...await runCrmActivityParentsTests(shouldRun));
+  // Package 9 (v10.0.33, TD-975): a partial party edit keeps the fields it does not send
+  const { runCustomerPartialEditTests } = await import('../regression/customerPartialEditTests.js');
+  results.push(...await runCustomerPartialEditTests(shouldRun));
+  // Package 9 (v10.0.34, TD-976): CRM activity mentions are live user ids and notify only CRM readers
+  const { runCrmActivityMentionTests } = await import('../regression/crmActivityMentionTests.js');
+  results.push(...await runCrmActivityMentionTests(shouldRun));
+  // v10.0.176 (TD-932): linking a document to a sales lead needs crm.manage and never reopens a closed lead
+  const { runLeadProformaLinkGuardTests } = await import('../regression/leadProformaLinkGuardTests.js');
+  results.push(...await runLeadProformaLinkGuardTests(shouldRun));
+  // v10.0.178 (OBS-R2-29): a sales lead detail opens for the same keys as the lead list
+  const { runCrmLeadDetailReadTests } = await import('../regression/crmLeadDetailReadTests.js');
+  results.push(...await runCrmLeadDetailReadTests(shouldRun));
+  // v10.0.179 (OBS-R2-33): lead edit and conversion audit rows; a converted lost lead stays lost
+  const { runCrmLeadEditAuditTests } = await import('../regression/crmLeadEditAuditTests.js');
+  results.push(...await runCrmLeadEditAuditTests(shouldRun));
   // بسته ۹ (v9.0.18، TD-427): اعتبارسنجی ورودی پرونده فروش
   const { runCrmLeadInputTests } = await import('../regression/crmLeadInputTests.js');
   results.push(...await runCrmLeadInputTests(shouldRun));
@@ -10624,6 +10620,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 3 PR e: the chart of accounts and the account mapping (TD-546 ...)
   const { runChartOfAccountsTests } = await import('../regression/chartOfAccountsTests.js');
   results.push(...await runChartOfAccountsTests(shouldRun));
+  const { runTrialBalanceDetailTests } = await import('../regression/trialBalanceDetailTests.js');
+  results.push(...await runTrialBalanceDetailTests(shouldRun));
   // Package 1 PR d: conditional migration constraints listed and built by hand (TD-589)
   const { runConditionalConstraintTests } = await import('../regression/conditionalConstraintTests.js');
   results.push(...await runConditionalConstraintTests(shouldRun));
@@ -10737,6 +10735,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 8 PR B (v9.0.270+): zero-price invoices, voids with dependents, sales return VAT and amounts
   const { runSalesDocumentTests } = await import('../regression/salesDocumentTests.js');
   results.push(...await runSalesDocumentTests(shouldRun));
+  const { runSalesBalanceTests } = await import('../regression/salesBalanceTests.js');
+  results.push(...await runSalesBalanceTests(shouldRun));
   // Package 8 PR D (v9.0.323+): lead link of a document edit, stock count lines, production receipts, return lookup, numbers
   const { runDocumentIntegrityTests } = await import('../regression/documentIntegrityTests.js');
   results.push(...await runDocumentIntegrityTests(shouldRun));
@@ -10755,6 +10755,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 13 PR D (v9.0.259+): work time and work mode of a daily log
   const { runDailyLogWorkTimeTests } = await import('../regression/dailyLogWorkTimeTests.js');
   results.push(...await runDailyLogWorkTimeTests(shouldRun));
+  const { runDocumentLineStockTests } = await import('../regression/documentLineStockTests.js');
+  results.push(...await runDocumentLineStockTests(shouldRun));
 
   // Package 16 PR d (v9.0.305+): drafts routes and expiry
   const { runFormDraftRouteErrorsTests } = await import('../regression/formDraftRouteErrorsTests.js');
@@ -10845,6 +10847,17 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10 N-05 PR 1 (v10.0.21+): the media library infrastructure
   const { runMediaLibraryTests } = await import('../regression/mediaLibraryTests.js');
   results.push(...await runMediaLibraryTests(shouldRun));
+  // Series 10 N-05 PR 2 (v10.0.25+): product card, product grid and zip download of the media library
+  const { runMediaProductTests } = await import('../regression/mediaProductTests.js');
+  results.push(...await runMediaProductTests(shouldRun));
+  // Series 10 phase 3 lane L3 (v10.0.29+): the events of the project stock paths
+  const { runProjectEventTests } = await import('../regression/projectEventTests.js');
+  results.push(...await runProjectEventTests(shouldRun));
+  const { runProjectWipCostTests } = await import('../regression/projectWipCostTests.js');
+  results.push(...await runProjectWipCostTests(shouldRun));
+  // Series 10 phase 3 lane L3 (v10.0.63+): gaps of the project screens (TD-1140..TD-1144)
+  const { runProjectScreenGapsTests } = await import('../regression/projectScreenGapsTests.js');
+  results.push(...await runProjectScreenGapsTests(shouldRun));
 
   // Package 1 second half PR 1 (v9.0.386+): data export, system health page, factory reset, setup wizard
   const { runDataExportTests } = await import('../regression/dataExportTests.js');
@@ -10853,9 +10866,11 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runSystemHealthTests(shouldRun));
   const { runFactoryResetTests } = await import('../regression/factoryResetTests.js');
   results.push(...await runFactoryResetTests(shouldRun));
-  // v10.0.25 (TD-959): the seed names its failed sections
+  // v10.0.180 (TD-959): the seed names its failed sections
   const { runSeedSectionTests } = await import('../regression/seedSectionTests.js');
   results.push(...await runSeedSectionTests(shouldRun));
+  const { runInitialSetupTests } = await import('../regression/initialSetupTests.js');
+  results.push(...await runInitialSetupTests(shouldRun));
 
   // Package 1 second half PR 3 (v9.0.444+): foreign keys of the schema and the database
   const { runForeignKeyPolicyTests } = await import('../regression/foreignKeyPolicyTests.js');
@@ -10878,6 +10893,45 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Phase 5 PR «ج» (v9.0.459+): treasury rows linked to documents and payroll payment dates
   const { runTreasuryPayrollPhase5Tests } = await import('../regression/treasuryPayrollPhase5Tests.js');
   results.push(...await runTreasuryPayrollPhase5Tests(shouldRun));
+
+  // Phase 3 lane L2 (v10.0.169+): package 7 ledger observations (TD-989)
+  const { runInventoryPlanningLedgerTests } = await import('../regression/inventoryPlanningLedgerTests.js');
+  results.push(...await runInventoryPlanningLedgerTests(shouldRun));
+  // Payroll duties plan PR 1 (v10.0.21+): voucher approval permission and maker-checker
+  const { runVoucherApprovalDutiesTests } = await import('../regression/voucherApprovalDutiesTests.js');
+  results.push(...await runVoucherApprovalDutiesTests(shouldRun));
+  // TD-1239: a reversed voucher names its reversal; a reversal voucher stays out of draft
+  const { runVoucherReversalLockTests } = await import('../regression/voucherReversalLockTests.js');
+  results.push(...await runVoucherReversalLockTests(shouldRun));
+  const { runPurchaseWorkflowGuardTests } = await import('../regression/purchaseWorkflowGuardTests.js');
+  results.push(...await runPurchaseWorkflowGuardTests(shouldRun));
+  // Lane L1 guide findings (v10.0.123+): move a treasury row to another document
+  const { runTreasuryRelinkOptionsTests } = await import('../regression/treasuryRelinkOptionsTests.js');
+  results.push(...await runTreasuryRelinkOptionsTests(shouldRun));
+  const { runAccountingGuideFindingsTests } = await import('../regression/accountingGuideFindingsTests.js');
+  results.push(...await runAccountingGuideFindingsTests(shouldRun));
+
+  // Series 10 phase 3 lane L2 (v10.0.35+): writer routes read their bodies through Zod
+  const { runWriterRouteZodTests } = await import('../regression/writerRouteZodTests.js');
+  results.push(...await runWriterRouteZodTests(shouldRun));
+  // TD-1132: records name the user by full name
+  const { runActorDisplayNameTests } = await import('../regression/actorDisplayNameTests.js');
+  results.push(...await runActorDisplayNameTests(shouldRun));
+
+  // Series 10 phase 3 lane L2, package B4 (v10.0.41+): document audit rows, stock event cost, reorder monitor, purchase party, requisition workflow
+  const { runDocumentAuditEventTests } = await import('../regression/documentAuditEventTests.js');
+  results.push(...await runDocumentAuditEventTests(shouldRun));
+  // TD-1137 / TD-1138: a rejected proforma returns to draft, review locks edits, proforma stock warning
+  const { runProformaReviewTests } = await import('../regression/proformaReviewTests.js');
+  results.push(...await runProformaReviewTests(shouldRun));
+  // TD-1190..TD-1193: app bugs found by the fresh-eyes guide test
+  const { runGuideTestFixTests } = await import('../regression/guideTestFixTests.js');
+  results.push(...await runGuideTestFixTests(shouldRun));
+  const { runRolesBGuideFixTests } = await import('../regression/rolesBGuideFixTests.js');
+  results.push(...await runRolesBGuideFixTests(shouldRun));
+  // TD-1197: a rejected proforma stays in the open proformas box of the invoice page
+  const { runOpenProformasTests } = await import('../regression/openProformasTests.js');
+  results.push(...await runOpenProformasTests(shouldRun));
 
   return results;
 }
