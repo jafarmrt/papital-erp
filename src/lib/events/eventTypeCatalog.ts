@@ -14,8 +14,9 @@ export interface EventTypeOption {
 }
 
 export const PUBLISHED_EVENT_TYPES: readonly EventTypeOption[] = [
-  { value: 'InvoiceCreated', label: 'ثبت پیش‌نویس یا پیش‌فاکتور فروش', category: 'فروش' },
+  { value: 'InvoiceCreated', label: 'ثبت فاکتور یا پیش‌فاکتور فروش', category: 'فروش' },
   { value: 'InvoiceApproved', label: 'صدور قطعی فاکتور فروش', category: 'فروش' },
+  { value: 'InvoiceVoided', label: 'ابطال فاکتور یا پیش‌فاکتور فروش', category: 'فروش' },
   { value: 'PurchaseCreated', label: 'ثبت پیش‌نویس سند خرید یا رسید', category: 'خرید' },
   { value: 'PurchaseApproved', label: 'قطعی شدن سند خرید یا رسید', category: 'خرید' },
   { value: 'StockReceived', label: 'ورود کالا به انبار', category: 'انبار' },

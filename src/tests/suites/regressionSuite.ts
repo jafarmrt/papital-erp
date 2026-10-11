@@ -10737,6 +10737,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runSalesDocumentTests(shouldRun));
   const { runSalesBalanceTests } = await import('../regression/salesBalanceTests.js');
   results.push(...await runSalesBalanceTests(shouldRun));
+  const { runSalesEventsTests } = await import('../regression/salesEventsTests.js');
+  results.push(...await runSalesEventsTests(shouldRun));
   // Package 8 PR D (v9.0.323+): lead link of a document edit, stock count lines, production receipts, return lookup, numbers
   const { runDocumentIntegrityTests } = await import('../regression/documentIntegrityTests.js');
   results.push(...await runDocumentIntegrityTests(shouldRun));

@@ -40,6 +40,10 @@ export interface ApplyStockReversalParams {
   location: string;
   /** v9.0.80 (TD-489): ردیف حواله انتقال بین انبارها فقط مقدار را برمی‌گرداند و WAC را تغییر نمی‌دهد (مثل ثبت آن) */
   quantityOnly?: boolean;
+  /** v10.0.229 (TD-931): نوع و شماره سند و کاربر ابطال برای رویداد گردش معکوس */
+  documentType?: string;
+  documentRef?: string;
+  user?: string;
 }
 
 /**
@@ -226,7 +230,7 @@ export class DocumentStockEngine {
     const { itemId, quantity: qty, originalDirection, unitPrice, location: targetLoc, quantityOnly } = params;
 
     const [itemData] = await tx
-      .select({ weightedAverageCost: items.weightedAverageCost, version: items.version, type: items.type })
+      .select({ weightedAverageCost: items.weightedAverageCost, version: items.version, type: items.type, code: items.code, name: items.name })
       .from(items)
       .where(eq(items.id, itemId))
       .for('no key update'); // v8.0.67 (TD-320): هم‌حالت lockStockItems، بی ارتقای قفل
@@ -279,6 +283,30 @@ export class DocumentStockEngine {
         version: nextVersion(itemData.version)
       })
       .where(eq(items.id, itemId));
+
+    // v10.0.229 (TD-931، تصمیم ت۱۱): گردش معکوس ابطال هم رویداد ورود یا خروج کالا را در outbox همان تراکنش می‌نویسد، پس جمع
+    // رویدادهای کالا با موجودی می‌خواند؛ ابطال حواله انتقال (فقط مقدار) مانند ثبت آن رویدادی ندارد
+    if (!quantityOnly) {
+      await OutboxService.saveToOutbox(tx, domainEventBus.createEvent(
+        revMovement === 'in' ? DomainEventType.STOCK_RECEIVED : DomainEventType.STOCK_ISSUED,
+        'Item',
+        String(itemId),
+        {
+          itemId,
+          itemCode: itemData.code,
+          itemName: itemData.name,
+          movementType: revMovement,
+          quantity: qty,
+          unitPrice: fin(unitPrice).toNumber(),
+          warehouseLocation: whInfo.code,
+          previousStock: oldTotalStock,
+          newStock: newTotalStock,
+          referenceDocType: params.documentType,
+          referenceDocNumber: params.documentRef,
+        },
+        { userName: params.user },
+      ));
+    }
     return { itemType: itemData.type ?? null, residue };
   }
 }
