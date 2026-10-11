@@ -8,7 +8,7 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { readSettingValue, revealSettingSecrets, sealSettingValue } from './settingSecrets.js';
 import { invalidateSettingsCache, appSettingsCache } from '../../lib/memoryCache.js';
 import {
-  MOVEMENT_DAY_KEYS, currencySettingError, isMovementDayKey, movementDaysError, readMovementDays
+  MOVEMENT_DAY_KEYS, currencySettingError, priceListNamesError, isMovementDayKey, movementDaysError, readMovementDays
 } from '../../lib/settings/settingValues.js';
 
 /**
@@ -88,6 +88,11 @@ async function validateSettingValue(key: string, value: string): Promise<void> {
     const error = currencySettingError(value);
     if (error) throw new ValidationError(error, { key, value }, 'SETTING_CURRENCY_INVALID');
   }
+  // v10.0.95 (TD-1192): نام‌های فهرست قیمت یکتا
+  if (key === 'pricing_strategies') {
+    const error = priceListNamesError(value.split(','));
+    if (error) throw new ValidationError(error, { key }, 'SETTING_PRICE_LIST_NAMES_INVALID');
+  }
   if (key === 'wc_shop_warehouse' && value.trim() !== '') {
     const [wh] = await orm.select({ id: warehouses.id }).from(warehouses)
       .where(and(eq(warehouses.code, value.trim()), eq(warehouses.isActive, 1)));
@@ -106,7 +111,7 @@ async function validateSettingValue(key: string, value: string): Promise<void> {
 async function assertKeyPermission(key: string, actor: SettingsActor): Promise<void> {
   if (ADMIN_ONLY_SETTING_KEYS.has(key)) {
     if (actor.role !== SYSTEM_ADMIN_ROLE) {
-      throw new ForbiddenError(`تغییر تنظیم «${key}» (کلیدهای محرمانه یکپارچه‌سازی و فلگ‌های سیستمی) فقط برای مدیر سیستم مجاز است.`);
+      throw new ForbiddenError(`تغییر تنظیم «${key}» (کلیدهای محرمانه یکپارچه‌سازی و پرچم‌های سامانه) فقط برای مدیر سامانه مجاز است.`);
     }
     return;
   }

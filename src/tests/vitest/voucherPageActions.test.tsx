@@ -38,9 +38,18 @@ describe('voucher row menu follows the server rules (TD-568, B03-26)', () => {
     expect(voucherRowActions({ status: 'approved' })).toEqual(['revert_to_draft', 'reverse', 'correct', 'workflow']);
     // permanent: no correction (the server refuses to correct a permanent voucher)
     expect(voucherRowActions({ status: 'permanent' })).toEqual(['reverse', 'workflow']);
-    // a reversal is neither reversed nor corrected again
-    expect(voucherRowActions({ status: 'approved', referenceNumber: 'REV-V31' })).toEqual(['revert_to_draft', 'workflow']);
+    // a reversal is neither reversed, corrected nor put back to draft (TD-1239)
+    expect(voucherRowActions({ status: 'approved', referenceNumber: 'REV-V31' })).toEqual(['workflow']);
     expect(voucherRowActions({ status: 'permanent', referenceNumber: 'VOID-REPOST-V31' })).toEqual(['workflow']);
+  });
+
+  it('a reversed voucher offers no second reversal, correction or revert, and says why (TD-1239)', () => {
+    for (const status of ['approved', 'permanent']) {
+      expect(voucherRowActions({ status, reversedByVoucherNumber: '57' })).toEqual(['workflow']);
+    }
+    expect(voucherLockNote({ status: 'approved', reversedByVoucherNumber: '57' })).toContain('سند شماره ۵۷ برگشت خورده است');
+    expect(voucherLockNote({ status: 'approved', referenceNumber: 'REV-V31' })).toContain('سند برگشت است');
+    expect(voucherLockNote({ status: 'approved' })).toBeNull();
   });
 
   it('locks the vouchers of a source or of a fiscal-year closing and says why', () => {
@@ -60,6 +69,13 @@ describe('voucher row menu follows the server rules (TD-568, B03-26)', () => {
     expect(labels).toEqual(['بازگشت به پیش‌نویس', 'صدور سند برگشتی (ابطال سند)', 'صدور سند اصلاحی جایگزین', 'گردش کار تأیید سند']);
     fireEvent.click(screen.getByText('صدور سند برگشتی (ابطال سند)'));
     expect(onAction).toHaveBeenCalledWith('reverse', expect.objectContaining({ id: 5 }));
+  });
+
+  it('offers back to draft only to a holder of the approve key (TD-965)', () => {
+    expect(voucherRowActions({ status: 'approved' }, { canApprove: false })).toEqual(['reverse', 'correct', 'workflow']);
+    expect(voucherRowActions({ status: 'approved' }, { canApprove: true })).toEqual(['revert_to_draft', 'reverse', 'correct', 'workflow']);
+    render(<VoucherRowMenu voucher={voucher({ status: 'approved' })} onAction={vi.fn()} canApprove={false} />);
+    expect(screen.getAllByRole('menuitem').map(b => b.textContent)).not.toContain('بازگشت به پیش‌نویس');
   });
 
   it('shows only the lock note and the workflow for an invoice voucher', () => {

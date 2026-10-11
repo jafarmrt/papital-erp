@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Cheque } from '../../types';
+import { toPersianDigits } from '../../utils';
 
 vi.mock('../../hooks/accounting/useChequeQueries', () => ({ useChequeReconciliationReport: () => ({ data: [], loading: false }) }));
 vi.mock('../../hooks/useAppCurrency', async () => {
@@ -36,10 +37,10 @@ function renderTab() {
 }
 
 function openMenuItem(label: string) {
-  const row = screen.getAllByText('100009')[0].closest('tr');
+  const row = screen.getAllByText(toPersianDigits('100009'))[0].closest('tr');
   if (!row) throw new Error('no cheque row');
   fireEvent.click(row.querySelector('button[title="عملیات بیشتر"]') as HTMLButtonElement);
-  const item = Array.from(row.querySelectorAll('div.absolute button')).find(b => (b.textContent ?? '').trim() === label);
+  const item = Array.from(document.querySelectorAll('[role="menu"] button')).find(b => (b.textContent ?? '').trim() === label);
   if (!item) throw new Error(`no menu item ${label}`);
   fireEvent.click(item);
 }

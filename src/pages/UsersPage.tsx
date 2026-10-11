@@ -24,6 +24,7 @@ import { QUERY_KEYS } from '../lib/queryKeys';
 import { formatPersianNumber } from '../utils';
 import { isSystemAdminRole } from '../lib/permissions/permissionCatalog';
 import { canGrantPermission, grantorPermissionsOf, type GrantorPermissions } from '../lib/permissions/grantBoundary';
+import { DELETE_USER_CONFIRM_MESSAGE } from '../lib/users/userRestore';
 
 interface UsersPageProps {
   currentUser: User;
@@ -275,7 +276,7 @@ export default function UsersPage({ currentUser, userPermissions }: UsersPagePro
       {/* CONFIRM DELETE USER */}
       <ConfirmModal
         isOpen={confirmUserState.isOpen}
-        message="آیا از حذف این کاربر اطمینان دارید؟ این عملیات غیر قابل بازگشت است."
+        message={DELETE_USER_CONFIRM_MESSAGE}
         onConfirm={executeDeleteUser}
         onCancel={() => setConfirmUserState({ isOpen: false, userId: 0 })}
       />

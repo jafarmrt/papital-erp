@@ -53,3 +53,46 @@ export const mediaUpdateSchema = z.object({
     sortOrder: z.number().int().min(0).max(100000).optional(),
   }).strict(),
 });
+
+/** v10.0.25 (N-05 PR 2): the product grid of the library; every condition is applied in SQL */
+export const mediaProductListSchema = z.object({
+  query: z.object({
+    search: z.string().max(200).optional(),
+    collection: z.string().max(60).optional(),
+    designYear: z.string().regex(/^\d{4}$/, 'سال طراحی باید چهاررقمی باشد').transform(Number).optional(),
+    transferCode: z.string().max(30).optional(),
+    category: z.string().max(100).optional(),
+    withoutImages: z.enum(['1', 'true']).optional(),
+    withoutWhiteBackground: z.enum(['1', 'true']).optional(),
+    lowQuality: z.enum(['1', 'true']).optional(),
+    page: positiveId('صفحه').optional(),
+    limit: positiveId('اندازه صفحه').refine(n => n <= 100, 'اندازه صفحه حداکثر ۱۰۰ است').optional(),
+  }).strict(),
+});
+
+export const mediaProductParamsSchema = z.object({
+  params: z.object({ itemId: numericIdString }).passthrough(),
+});
+
+/** The product card; a key not sent keeps its value, the values are read by `productCardValues` (422 when invalid) */
+export const mediaProductInfoSchema = z.object({
+  params: z.object({ itemId: numericIdString }).passthrough(),
+  body: z.object({
+    version: z.number().int().positive('نسخه محصول لازم است'),
+    collections: z.array(z.string()).max(100).optional(),
+    designYear: z.union([z.number(), z.string()]).nullable().optional(),
+    transferCode: z.string().nullable().optional(),
+    productDescription: z.string().nullable().optional(),
+    technicalNotes: z.string().nullable().optional(),
+  }).strict(),
+});
+
+/** A read, so a GET (a POST guarded by a view key alone breaks the route policy, TD-298): `ids=1,2,3` */
+export const mediaZipSchema = z.object({
+  query: z.object({
+    ids: z.string().regex(/^[1-9]\d*(,[1-9]\d*)*$/, 'فهرست فایل‌ها نامعتبر است')
+      .transform(v => v.split(',').map(Number))
+      .refine(ids => ids.length <= 500, 'حداکثر ۵۰۰ فایل در یک بار'),
+    variant: z.enum(['original', 'light']).default('original'),
+  }).strict(),
+});

@@ -333,7 +333,7 @@ export class ChartOfAccountsService {
       const structural = (['level', 'parentId', 'accountType', 'nature'] as const).filter(field => field in updateData);
       if (existing.isSystem === 1 && (structural.length > 0 || 'isActive' in updateData)) {
         throw new ConflictError(
-          `حساب «${existing.name}» (کد ${toPersianDigits(existing.code)}) حساب سیستمی است و فقط نام و توضیح آن عوض می‌شود.`,
+          `حساب «${existing.name}» (کد ${toPersianDigits(existing.code)}) حساب سامانه است و فقط نام و توضیح آن عوض می‌شود.`,
           { fields: [...structural, ...('isActive' in updateData ? ['isActive'] : [])] },
           'ACCOUNT_IS_SYSTEM',
         );
@@ -412,7 +412,7 @@ export class ChartOfAccountsService {
         throw new NotFoundError('حساب مورد نظر یافت نشد.', undefined, 'ACCOUNT_NOT_FOUND');
       }
       if (existing.isSystem === 1) {
-        throw new ConflictError('حساب‌های سیستمی و پیش‌فرض قابل حذف نیستند.', undefined, 'ACCOUNT_IS_SYSTEM');
+        throw new ConflictError('حساب‌های سامانه و پیش‌فرض قابل حذف نیستند.', undefined, 'ACCOUNT_IS_SYSTEM');
       }
 
       const children = await tx.select({ id: accounts.id }).from(accounts)

@@ -3,6 +3,7 @@ import { X, Layers, Check, Loader2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { PurchaseRequisition } from '../../types';
 import { fetchJson } from '../../api';
+import { formatPersianNumber } from '../../utils';
 
 interface ConsolidateRequisitionsModalProps {
   isOpen: boolean;
@@ -77,7 +78,7 @@ export function ConsolidateRequisitionsModal({
         <form onSubmit={handleSubmit} className="p-5 space-y-4 text-xs">
           <div>
             <label className="block font-bold text-slate-700 mb-1">
-              درخواست‌های انتخابی جهت تجمیع ({selectedRequisitions.length} مورد):
+              درخواست‌های انتخابی جهت تجمیع ({formatPersianNumber(selectedRequisitions.length)} مورد):
             </label>
             <div className="flex flex-wrap gap-1.5 p-3 bg-slate-50 border border-slate-200 rounded-xl">
               {selectedRequisitions.map(r => (

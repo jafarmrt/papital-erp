@@ -9,7 +9,7 @@ vi.mock('../../hooks/useAppCurrency', async () => {
 vi.mock('../../hooks/useCompanyName', () => ({ useCompanyName: () => '' }));
 // v9.0.320 (TD-805): the payroll buttons follow their keys; this test grants all of them
 vi.mock('../../hooks/usePieceworkPermissions', () => ({
-  usePieceworkPermissions: () => ({ canManageTasks: true, canLog: true, canIssuePayroll: true, canPay: true }),
+  usePieceworkPermissions: () => ({ canManageTasks: true, canLog: true, canIssuePayroll: true, canApprovePayroll: true, canPay: true }),
 }));
 
 import { PieceworkPayrollsTab } from '../../components/piecework/PieceworkPayrollsTab';

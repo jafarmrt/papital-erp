@@ -48,6 +48,8 @@ const payrollPaymentColumns = {
   paymentReference: pieceworkPayrolls.paymentReference,
   notes: pieceworkPayrolls.notes,
   createdAt: pieceworkPayrolls.createdAt,
+  // v10.0.193 (TD-1084): صادرکننده فیش، تا صفحه دکمه تأیید و پرداخت او را با دلیل غیرفعال کند
+  createdById: pieceworkPayrolls.createdById,
 };
 
 /** ستون‌های ریز کارکرد فیش (پس از id و payrollId). */

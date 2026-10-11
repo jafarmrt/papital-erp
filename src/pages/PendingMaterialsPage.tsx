@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useDeferredValue, useEffect, useState } from 'react';
+import { PENDING_MATERIAL_PAGE_SIZE, type PendingMaterialStatusFilter } from '../lib/pendingMaterials/pendingMaterialList';
+import { ProcurementPager } from '../components/procurement/ProcurementPager';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { PendingMaterial, User } from '../types';
 import { formatPersianNumber } from '../utils';
@@ -28,16 +30,23 @@ import { WorkflowStepperWidget } from '../components/workflow/WorkflowStepperWid
 import { MaterialNameField, MaterialUnitSelect, MaterialNumberField, MaterialAttributeFields } from '../components/project/materialFormFields';
 import { EMPTY_PENDING_MATERIAL_FORM, pendingMaterialFormOf, type PendingMaterialForm } from '../lib/pendingMaterials/pendingMaterialForm';
 import { useHasPermission } from '../contexts/AuthContext';
+import { materialCodeExample, materialUnitOptions, pendingMaterialCodeError, rawMaterialCategories } from '../lib/pendingMaterials/materialRequestRules';
 
-const COMMON_UNITS = [
-  'عدد', 'برگ', 'کیلوگرم', 'گرم', 'متر', 'سانتی‌متر', 'مترمربع', 'لیتر', 'میلی‌لیتر',
-  'بسته', 'رول', 'کارتن', 'جفت', 'قوطی', 'طاقه', 'کلاف', 'ست'
-];
 
 export default function PendingMaterialsPage({ user }: { user: User }) {
-  const { data, isLoading: loading, refetch } = usePendingMaterialsQuery();
-  const items = data?.items || [];
-  const categories = data?.categories || [];
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<PendingMaterialStatusFilter>('pending');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [page, setPage] = useState(1);
+  const search = useDeferredValue(searchQuery);
+  // v10.0.171 (OBS-R1-90): the server filters, counts and pages; the page never loads the whole queue
+  const { data, isLoading: loading, isFetching, refetch } = usePendingMaterialsQuery({
+    status: statusFilter, category: categoryFilter, search, page, limit: PENDING_MATERIAL_PAGE_SIZE,
+  });
+  const listPage = data?.page;
+  // v10.0.143 (TD-1202): only raw-material categories, the units of the request form and the code rule of the server
+  const categories = rawMaterialCategories(data?.categories || []);
+  useEffect(() => { setPage(1); }, [statusFilter, categoryFilter, search]);
 
   const approveMutation = useApprovePendingMaterialMutation();
   const rejectMutation = useRejectPendingMaterialMutation();
@@ -46,10 +55,6 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
   // v9.0.397 (TD-825): each button by the permission its route asks; a reviewed request is only viewed
   const canReview = useHasPermission('pending_materials.approve');
   const canDelete = useHasPermission('pending_materials.delete');
-
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
   // Modal states for Approval / Editing
   const [selectedItem, setSelectedItem] = useState<PendingMaterial | null>(null);
@@ -65,25 +70,11 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
     void refetch();
   };
 
-  // Statistics
-  const safeItems = Array.isArray(items) ? items : [];
-  const pendingCount = safeItems.filter(i => i.status === 'pending').length;
-  const approvedCount = safeItems.filter(i => i.status === 'approved').length;
-  const rejectedCount = safeItems.filter(i => i.status === 'rejected').length;
-
-  // Filtered Items
-  const filteredItems = safeItems.filter(item => {
-    if (statusFilter !== 'all' && item.status !== statusFilter) return false;
-    if (categoryFilter !== 'all' && item.category !== categoryFilter) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
-      const matchName = item.name.toLowerCase().includes(q);
-      const matchCode = item.code.toLowerCase().includes(q);
-      const matchProj = (item.projectTitle || item.project_title || '').toLowerCase().includes(q);
-      if (!matchName && !matchCode && !matchProj) return false;
-    }
-    return true;
-  });
+  // Statistics (under the category and search filters, from the server)
+  const pendingCount = listPage?.statusCounts?.pending ?? 0;
+  const approvedCount = listPage?.statusCounts?.approved ?? 0;
+  const rejectedCount = listPage?.statusCounts?.rejected ?? 0;
+  const filteredItems = Array.isArray(listPage?.data) ? listPage.data : [];
 
   // Open Approval Modal
   const handleOpenApproveModal = (item: PendingMaterial) => {
@@ -104,9 +95,12 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
   };
 
   // Submit Approval
+  const approveCategory = categories.find(c => c.name === approveForm.category);
+  const approveCodeError = pendingMaterialCodeError(approveForm.code, approveCategory);
+
   const handleConfirmApproval = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedItem) return;
+    if (!selectedItem || approveCodeError) return;
     
     approveMutation.mutate({ id: selectedItem.id, payload: approveForm }, {
       onSuccess: () => {
@@ -274,7 +268,7 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              همه ({formatPersianNumber(items.length)})
+              همه ({formatPersianNumber(pendingCount + approvedCount + rejectedCount)})
             </button>
           </div>
 
@@ -465,6 +459,15 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
             </table>
           </div>
         )}
+        <ProcurementPager
+          page={page}
+          pageSize={PENDING_MATERIAL_PAGE_SIZE}
+          total={listPage?.total ?? 0}
+          shown={filteredItems.length}
+          isLoading={isFetching}
+          onPageChange={setPage}
+          noun="درخواست"
+        />
       </div>
 
       {/* Approve / Review Modal */}
@@ -557,12 +560,17 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
                     required
                     value={approveForm.code}
                     onChange={(e) => setApproveForm({ ...approveForm, code: e.target.value })}
+                    placeholder={materialCodeExample(approveCategory?.prefix)}
+                    aria-invalid={!!approveCodeError}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-800 focus:ring-2 focus:ring-amber-500 focus:outline-none"
                   />
+                  {approveCodeError
+                    ? <p role="alert" className="text-[11px] font-bold text-rose-600">{approveCodeError}</p>
+                    : <p className="text-[11px] text-slate-500">پیشوند دسته و شماره دو یا سه‌رقمی، مانند {materialCodeExample(approveCategory?.prefix)}</p>}
                 </div>
 
                 <MaterialNameField label="عنوان کامل ماده اولیه *" value={approveForm.name} onChange={(v) => setApproveForm({ ...approveForm, name: v })} />
-                <MaterialUnitSelect value={approveForm.unit} onChange={(v) => setApproveForm({ ...approveForm, unit: v })} units={COMMON_UNITS} />
+                <MaterialUnitSelect value={approveForm.unit} onChange={(v) => setApproveForm({ ...approveForm, unit: v })} units={materialUnitOptions(approveForm.unit)} />
                 <MaterialNumberField label="نقطه سفارش اولیه" value={approveForm.reorderPoint} onChange={(v) => setApproveForm({ ...approveForm, reorderPoint: v })} />
                 <MaterialNumberField label="قیمت / هزینه واحد تخمینی" value={approveForm.weightedAverageCost} onChange={(v) => setApproveForm({ ...approveForm, weightedAverageCost: v })} />
                 <MaterialAttributeFields
@@ -598,7 +606,7 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
 
                   <button
                     type="submit"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || !!approveCodeError}
                     className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
                   >
                     <Check className="w-4 h-4" />

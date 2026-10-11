@@ -622,7 +622,7 @@ export function usePiecework() {
         body: JSON.stringify(payload)
       });
 
-      hotToast.success(`فیش حقوقی با موفقیت با شماره ${res.payrollNumber || ''} صادر شد`);
+      hotToast.success(`فیش حقوقی شماره ${res.payrollNumber || ''} پیش‌نویس صادر شد؛ پرداخت آن پس از تأیید کاربر دیگری است.`);
       setIsPayrollModalOpen(false);
       reloadAll();
       setActiveTab('payrolls');
@@ -649,7 +649,7 @@ export function usePiecework() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })
       });
-      hotToast.success('وضعیت پرداخت به‌روزرسانی شد');
+      hotToast.success(status === 'approved' ? 'فیش تأیید شد و آماده پرداخت است.' : 'فیش به پیش‌نویس برگشت.');
       if (viewingPayroll && viewingPayroll.id === id) {
         setViewingPayroll(prev => prev ? { ...prev, status } : null);
       }

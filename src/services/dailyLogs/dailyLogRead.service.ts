@@ -200,7 +200,7 @@ export async function dailyLogSummary(q: SummaryQuery) {
     userId: id, username, userFullName: fullName || username, role, avatarUrl,
     totalHours: 0, logsCount: 0, onsiteCount: 0, remoteCount: 0, otherCount: 0, dates: new Set(), logs: [],
   });
-  for (const u of userRows) byUser.set(u.id, entry(u.id, u.username, u.fullName || '', u.role, u.avatarUrl || undefined));
+  for (const u of userRows) byUser.set(u.id, entry(u.id, u.username, u.fullName || '', u.role ?? '', u.avatarUrl || undefined));
 
   let totalTeamHours = 0;
   const allDates = new Set<string>();

@@ -4,6 +4,7 @@ import { Item } from '../../../types';
 import { fetchJson } from '../../../api';
 import { getTodayJalaliDate, parseCleanNumber, errorMessageOf } from '../../../utils';
 import { ItemFormData, ItemFormModalProps } from './types';
+import { EMPTY_PRODUCT_CARD, productCardFormOf, productCardPayload } from '../../../lib/media/productCardForm';
 import {
   parseItemStocks,
   parseMultiValue,
@@ -48,7 +49,8 @@ export function useItemForm({
     material: '',
     weight: '',
     size: '',
-    stocks: {}
+    stocks: {},
+    card: EMPTY_PRODUCT_CARD
   });
 
   // V10-2.1: سال طراحی از تاریخ جلالی امروز (حذف هاردکد ۱۴۰۳)
@@ -80,7 +82,8 @@ export function useItemForm({
         material: item.material || '',
         weight: item.weight ? String(item.weight) : '',
         size: item.size || '',
-        stocks: parseItemStocks((item as any).stocks)
+        stocks: parseItemStocks((item as any).stocks),
+        card: productCardFormOf(item)
       });
 
       if (item.type === 'product' && item.code) {
@@ -117,7 +120,8 @@ export function useItemForm({
         material: '',
         weight: '',
         size: '',
-        stocks: {}
+        stocks: {},
+        card: EMPTY_PRODUCT_CARD
       });
 
       if (defaultType === 'product') {
@@ -233,8 +237,10 @@ export function useItemForm({
         calculatedStock = Object.values(form.stocks).reduce((acc: number, val: any) => acc + (Number(val) || 0), 0);
       }
 
+      const { card, ...formFields } = form;
       const payload: Partial<Item> & Record<string, any> = {
-        ...form,
+        ...formFields,
+        ...productCardPayload(card),
         code: finalCode,
         current_stock: calculatedStock,
         stocks: form.stocks,

@@ -8,11 +8,12 @@ import { PayrollPaymentService } from '../services/accounting/payrollPayment.ser
 import { PayrollPaymentVoidService } from '../services/accounting/payrollPaymentVoid.service.js';
 import { PieceworkService, PieceworkReadService, PayrollReadService, PieceworkPayrollService } from '../services/piecework.service.js';
 import { z } from 'zod';
+import { pieceworkCategoryParamSchema, pieceworkTaskImportSchema } from './importRows.schemas.js';
 import { validate, paramsIdSchema, numericIdString, decimalInput, storageDateParam } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { canAccessSensitivePayrollData, sanitizePayrollRecord } from '../lib/piiMasker.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
-import { PIECEWORK_LOG_PERMISSION, PIECEWORK_PAY_PERMISSION, PIECEWORK_PAYROLL_PERMISSION, PIECEWORK_TASKS_PERMISSION } from '../lib/permissions/pieceworkPermissions.js';
+import { PIECEWORK_LOG_PERMISSION, PIECEWORK_PAY_PERMISSION, PIECEWORK_PAYROLL_APPROVE_PERMISSION, PIECEWORK_PAYROLL_PERMISSION, PIECEWORK_TASKS_PERMISSION } from '../lib/permissions/pieceworkPermissions.js';
 import { ForbiddenError } from '../errors/customErrors.js';
 import { fin } from '../lib/financialDecimal.js';
 import { parseWorkQuantity } from '../lib/piecework/workQuantity.js';
@@ -300,7 +301,7 @@ router.post('/piecework/tasks', requirePermission(PIECEWORK_TASKS_PERMISSION), v
 }));
 
 // POST /api/piecework/tasks/import-excel - Bulk import piecework tasks
-router.post('/piecework/tasks/import-excel', requirePermission(PIECEWORK_TASKS_PERMISSION), asyncHandler(async (req, res) => {
+router.post('/piecework/tasks/import-excel', requirePermission(PIECEWORK_TASKS_PERMISSION), validate(pieceworkTaskImportSchema), asyncHandler(async (req, res) => {
   try {
     const { rows, mode = 'upsert' } = req.body;
     if (!Array.isArray(rows) || rows.length === 0) {
@@ -513,7 +514,7 @@ router.put('/piecework/categories/:id', requirePermission(PIECEWORK_TASKS_PERMIS
 }));
 
 // DELETE /api/piecework/categories/:id
-router.delete('/piecework/categories/:id', requirePermission(PIECEWORK_TASKS_PERMISSION), asyncHandler(async (req, res) => {
+router.delete('/piecework/categories/:id', requirePermission(PIECEWORK_TASKS_PERMISSION), validate(pieceworkCategoryParamSchema), asyncHandler(async (req, res) => {
   try {
     const rawId = req.params.id;
     const result = await PieceworkService.deleteCategory(rawId);
@@ -767,10 +768,19 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], requirePerm
 }));
 
 // PUT /api/piecework/payrolls/:id/status - Update status or mark as paid
-router.put('/piecework/payrolls/:id/status', requirePermission(PIECEWORK_PAYROLL_PERMISSION), validate(updatePieceworkPayrollStatusSchema), asyncHandler(async (req, res) => {
+// v10.0.193 (TD-1083، طرح حقوق ت۱ الف): تغییر وضعیت (تأیید و بازگشت به پیش‌نویس) «تأیید فیش حقوق» را می‌خواهد و یادداشت
+// تنها «محاسبه و صدور فیش حقوقی» را؛ پیش‌تر صادرکننده با همان کلید صدور، فیش خودش را تأیید هم می‌کرد.
+router.put('/piecework/payrolls/:id/status', requirePermission(PIECEWORK_PAYROLL_PERMISSION, PIECEWORK_PAYROLL_APPROVE_PERMISSION), validate(updatePieceworkPayrollStatusSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { status, notes } = req.body;
+    const changesStatus = status !== undefined && String(status).trim() !== '';
+    if (changesStatus && !(await can(req.user, PIECEWORK_PAYROLL_APPROVE_PERMISSION))) {
+      throw new ForbiddenError('تأیید فیش یا بازگرداندن آن به پیش‌نویس مجوز «تأیید فیش حقوق» را می‌خواهد.', undefined, 'PAYROLL_APPROVE_PERMISSION_REQUIRED');
+    }
+    if (!changesStatus && !(await can(req.user, PIECEWORK_PAYROLL_PERMISSION))) {
+      throw new ForbiddenError('ویرایش یادداشت فیش مجوز «محاسبه و صدور فیش حقوقی» را می‌خواهد.', undefined, 'PAYROLL_PERMISSION_REQUIRED');
+    }
 
     const currentUserId = req.user?.id;
     const currentUsername = req.user?.username || 'سیستم';

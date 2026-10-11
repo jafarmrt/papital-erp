@@ -9,6 +9,8 @@ import { isPayablePayrollStatus } from '../../lib/payroll/payrollPayable';
 import { payrollStatusLabel } from '../../lib/payroll/payrollStatusLabels';
 import { payslipFixedSalaryRows } from '../../lib/payroll/payslipFixedSalaryRows';
 import { useCompanyName } from '../../hooks/useCompanyName';
+import { useViewerIdentity } from '../../contexts/AuthContext';
+import { payrollIssuerDutyRefusal } from '../../lib/payroll/payrollDuties';
 
 type PaymentTarget = NonNullable<ComponentProps<typeof PayrollPaymentModal>['payroll']>;
 
@@ -42,10 +44,15 @@ export function PieceworkPayslipModal({
   const curLbl = rial.label;
   // V10-4.4: مودال پرداخت خزانه‌ای
   const [paymentTarget, setPaymentTarget] = useState<PaymentTarget | null>(null);
-  // v9.0.320 (TD-805): تأیید و ابطال فیش با «محاسبه و صدور فیش حقوقی»، پرداخت با «پرداخت و ابطال پرداخت فیش»
-  const { canIssuePayroll, canPay } = usePieceworkPermissions();
+  // v9.0.320 (TD-805): ابطال فیش با «محاسبه و صدور فیش حقوقی»، پرداخت با «پرداخت و ابطال پرداخت فیش»
+  const { canIssuePayroll, canApprovePayroll, canPay } = usePieceworkPermissions();
   const companyName = useCompanyName();
+  const viewer = useViewerIdentity();
   if (!viewingPayroll) return null;
+  // v10.0.193 (TD-1083 / TD-1084): تأیید با «تأیید فیش حقوق»؛ صادرکننده تأیید و پرداخت نمی‌کند و دلیل را می‌بیند
+  const approveRefusal = payrollIssuerDutyRefusal(viewingPayroll, viewer, 'approve');
+  const payRefusal = payrollIssuerDutyRefusal(viewingPayroll, viewer, 'pay');
+  const canReturnToDraft = viewingPayroll.status === 'approved' && !(Number(viewingPayroll.paidAmount ?? 0) > 0);
   const fixedRows = payslipFixedSalaryRows(viewingPayroll);
 
   return (
@@ -59,12 +66,22 @@ export function PieceworkPayslipModal({
           </div>
           <div className="flex items-center gap-2">
             {/* v9.0.269 (TD-816): فیش پیش‌نویس پرداخت نمی‌شود؛ نخست تأیید می‌شود */}
-            {!readOnly && canIssuePayroll && viewingPayroll.status === 'draft' && (
+            {!readOnly && canApprovePayroll && viewingPayroll.status === 'draft' && (
               <button
                 onClick={() => onUpdateStatus(viewingPayroll.id, 'approved')}
-                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold cursor-pointer"
+                disabled={!!approveRefusal}
+                title={approveRefusal ?? undefined}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 تأیید فیش
+              </button>
+            )}
+            {!readOnly && canApprovePayroll && canReturnToDraft && (
+              <button
+                onClick={() => onUpdateStatus(viewingPayroll.id, 'draft')}
+                className="px-3 py-1.5 bg-slate-600 hover:bg-slate-700 text-white rounded-xl text-xs font-bold cursor-pointer"
+              >
+                بازگشت به پیش‌نویس
               </button>
             )}
             {!readOnly && canPay && isPayablePayrollStatus(viewingPayroll.status) && (
@@ -80,7 +97,9 @@ export function PieceworkPayslipModal({
                     status: viewingPayroll.status
                   });
                 }}
-                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer"
+                disabled={!!payRefusal}
+                title={payRefusal ?? undefined}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 ثبت پرداخت (از خزانه)
               </button>

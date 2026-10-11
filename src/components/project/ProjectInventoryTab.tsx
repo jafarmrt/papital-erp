@@ -289,7 +289,7 @@ export function ProjectInventoryTab({
               handleOpenChangeMaterialModal={handleOpenChangeMaterialModal}
               handleOpenUnitConversionModal={handleOpenUnitConversionModal}
               handleRemoveItemFromSection={handleRemoveItemFromSection}
-              handleOpenAddMaterialModal={handleOpenAddMaterialModal}
+              handleOpenAddMaterialModal={canEdit ? handleOpenAddMaterialModal : undefined}
             />
           </div>
 
@@ -297,12 +297,12 @@ export function ProjectInventoryTab({
           <GlobalInventoryControlSection
             sections={sections}
             warehouseItems={warehouseItems}
-            handleOpenAddMaterialModal={handleOpenAddMaterialModal}
+            handleOpenAddMaterialModal={canEdit ? handleOpenAddMaterialModal : undefined}
             handleOpenChangeMaterialModal={handleOpenChangeMaterialModal}
             handleOpenUnitConversionModal={handleOpenUnitConversionModal}
             handleRemoveItemFromSection={handleRemoveItemFromSection}
             handleUpdateGlobalItem={handleUpdateGlobalItem}
-            handleAddNewSectionOnTheFly={handleAddNewSectionOnTheFly}
+            handleAddNewSectionOnTheFly={canEdit ? handleAddNewSectionOnTheFly : undefined}
             handleRemoveSectionOnTheFly={handleRemoveSectionOnTheFly}
             handleUpdateSectionDescription={handleUpdateSectionDescription}
             handlePurchaseSection={canRequestPurchase ? handlePurchaseSection : undefined}

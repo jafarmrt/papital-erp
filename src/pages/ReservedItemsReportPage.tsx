@@ -335,7 +335,7 @@ export default function ReservedItemsReportPage() {
         <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-100">
           <div className="flex items-center gap-2 text-xs text-slate-500 font-bold">
             <Filter size={14} />
-            <span>فیلترها:</span>
+            <span>شرط‌های جست‌وجو:</span>
           </div>
 
           {/* Source Filter */}
@@ -370,7 +370,7 @@ export default function ReservedItemsReportPage() {
               }}
               className="text-xs text-rose-600 hover:text-rose-700 font-bold underline cursor-pointer mr-auto"
             >
-              پاکسازی فیلترها
+              پاک کردن شرط‌ها
             </button>
           )}
         </div>
@@ -405,7 +405,7 @@ export default function ReservedItemsReportPage() {
                 {filteredItemSummaries.length === 0 ? (
                   <tr>
                     <td colSpan={columnCount} className="p-8 text-center text-slate-400">
-                      هیچ کالای رزرو شده‌ای متناسب با فیلترهای انتخابی یافت نشد.
+                      هیچ کالای رزرو شده‌ای متناسب با شرط‌های انتخابی یافت نشد.
                     </td>
                   </tr>
                 ) : (
@@ -562,7 +562,7 @@ export default function ReservedItemsReportPage() {
                 {filteredLedgerEntries.length === 0 ? (
                   <tr>
                     <td colSpan={columnCount} className="p-8 text-center text-slate-400">
-                      هیچ پرونده رزروی متناسب با فیلترها یافت نشد.
+                      هیچ پرونده رزروی متناسب با شرط‌ها یافت نشد.
                     </td>
                   </tr>
                 ) : (

@@ -8,7 +8,13 @@ import { errorMessageOf } from '../utils/index.js';
 import { MEDIA_MAX_BYTES, MEDIA_POSTER_MAX_BYTES, type MediaShotType, type MediaVariant } from '../lib/media/mediaRules.js';
 import { MediaAssetService, type MediaActor } from '../services/media/mediaAsset.service.js';
 import { mediaTooLarge } from '../services/media/mediaStorage.js';
-import { mediaFileSchema, mediaListSchema, mediaPosterSchema, mediaUpdateSchema, mediaUploadSchema } from './media.schemas.js';
+import { MediaProductService } from '../services/media/mediaProducts.service.js';
+import { planMediaZip, writeMediaZip } from '../services/media/mediaZip.js';
+import { businessTodayIsoDate } from '../lib/businessClock.js';
+import {
+  mediaFileSchema, mediaListSchema, mediaPosterSchema, mediaProductInfoSchema, mediaProductListSchema, mediaProductParamsSchema,
+  mediaUpdateSchema, mediaUploadSchema, mediaZipSchema,
+} from './media.schemas.js';
 
 /**
  * v10.0.21 (N-05): the media library. Files are uploaded as the raw request body (not base64 JSON, which caps at 14 MB),
@@ -20,6 +26,8 @@ const router = Router();
 export const MEDIA_VIEW_PERMISSION = 'media.view';
 export const MEDIA_UPLOAD_PERMISSION = 'media.upload';
 export const MEDIA_MANAGE_PERMISSION = 'media.manage';
+/** v10.0.25 (N-05 PR 2): the product card is item data, so the item editor's key opens it too */
+export const MEDIA_PRODUCT_INFO_PERMISSIONS = [MEDIA_MANAGE_PERMISSION, 'products.edit'] as const;
 
 async function actorOf(req: Request): Promise<MediaActor> {
   return {
@@ -113,6 +121,55 @@ router.delete('/media/assets/:id', authenticateToken, requirePermission(MEDIA_UP
 
 router.post('/media/assets/:id/rebuild-light', authenticateToken, requirePermission(MEDIA_MANAGE_PERMISSION), validate(paramsIdSchema), asyncHandler(async (req: Request, res: Response) => {
   res.json({ success: true, data: await MediaAssetService.rebuildLight(Number(req.params.id)) });
+}));
+
+router.get('/media/products', authenticateToken, requirePermission(MEDIA_VIEW_PERMISSION), validate(mediaProductListSchema), asyncHandler(async (req: Request, res: Response) => {
+  const q = req.query as unknown as {
+    search?: string; collection?: string; designYear?: number; transferCode?: string; category?: string;
+    withoutImages?: string; withoutWhiteBackground?: string; lowQuality?: string; page?: number; limit?: number;
+  };
+  res.json(await MediaProductService.list({
+    search: q.search, collection: q.collection, designYear: q.designYear, transferCode: q.transferCode, category: q.category,
+    withoutImages: q.withoutImages !== undefined, withoutWhiteBackground: q.withoutWhiteBackground !== undefined,
+    lowQuality: q.lowQuality !== undefined, page: q.page ?? 1, limit: q.limit ?? 24,
+  }));
+}));
+
+router.get('/media/products/filters', authenticateToken, requirePermission(MEDIA_VIEW_PERMISSION), asyncHandler(async (_req: Request, res: Response) => {
+  res.json(await MediaProductService.filters());
+}));
+
+router.get('/media/products/:itemId', authenticateToken, requirePermission(MEDIA_VIEW_PERMISSION), validate(mediaProductParamsSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json(await MediaProductService.detail(Number(req.params.itemId)));
+}));
+
+router.put('/media/products/:itemId/info', authenticateToken, requirePermission(...MEDIA_PRODUCT_INFO_PERMISSIONS), validate(mediaProductInfoSchema), asyncHandler(async (req: Request, res: Response) => {
+  const b = req.body as {
+    version: number; collections?: string[]; designYear?: number | string | null; transferCode?: string | null;
+    productDescription?: string | null; technicalNotes?: string | null;
+  };
+  const data = await MediaProductService.updateInfo(Number(req.params.itemId), {
+    version: b.version, collections: b.collections, design_year: b.designYear, transfer_code: b.transferCode,
+    product_description: b.productDescription, technical_notes: b.technicalNotes,
+  }, { req, userId: req.user?.id, username: req.user?.username ?? '' });
+  res.json({ success: true, data });
+}));
+
+router.get('/media/zip', authenticateToken, requirePermission(MEDIA_VIEW_PERMISSION), validate(mediaZipSchema), asyncHandler(async (req: Request, res: Response) => {
+  const q = req.query as unknown as { ids: number[]; variant: 'original' | 'light' };
+  const entries = await planMediaZip(q.ids, q.variant);
+  const fileName = `papital-media-${await businessTodayIsoDate()}.zip`;
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  try {
+    await writeMediaZip(res, entries);
+  } catch (err) {
+    logger.error(`[media] zip of ${entries.length} files stopped before it was finished: ${errorMessageOf(err)}`);
+    // once the stream has started there is no status code left; closing the connection shows the browser a broken download
+    if (!res.headersSent) throw err;
+    res.destroy();
+  }
 }));
 
 export default router;

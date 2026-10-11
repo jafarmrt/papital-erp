@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { fetchJson } from '../api';
+import { mutationSucceeded } from '../lib/settings/mutationSucceeded';
 import { toast } from 'react-hot-toast';
 import { normalizeRialDisplayUnit } from '../lib/rialDisplay';
-import { movementDaysError } from '../lib/settings/settingValues';
+import { movementDaysError, priceListNamesError } from '../lib/settings/settingValues';
 import { wcTestConnectionBody } from '../lib/woocommerce/wcConnectionTest';
 import { stockSyncOutcome } from '../lib/woocommerce/stockSyncOutcome';
 import { errorMessageOf } from '../utils/formatters';
@@ -90,10 +91,10 @@ export function useSettings() {
   const [clearMode, setClearMode] = useState<'transactions' | 'all'>('transactions');
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
-  const [activeTab, setActiveTab] = useState<'general' | 'accounting' | 'chart_of_accounts' | 'categories' | 'warehouses' | 'pricing' | 'projects' | 'inventory_control' | 'task_titles' | 'health' | 'system_config' | 'system' | 'woocommerce' | 'inventory_integrity'>(() => {
+  const [activeTab, setActiveTab] = useState<'general' | 'accounting' | 'chart_of_accounts' | 'categories' | 'warehouses' | 'pricing' | 'projects' | 'inventory_control' | 'task_titles' | 'health' | 'system_config' | 'system' | 'woocommerce'>(() => {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
-    if (tabParam && ['general', 'accounting', 'chart_of_accounts', 'categories', 'warehouses', 'pricing', 'projects', 'inventory_control', 'task_titles', 'health', 'system_config', 'system', 'woocommerce', 'inventory_integrity'].includes(tabParam)) {
+    if (tabParam && ['general', 'accounting', 'chart_of_accounts', 'categories', 'warehouses', 'pricing', 'projects', 'inventory_control', 'task_titles', 'health', 'system_config', 'system', 'woocommerce'].includes(tabParam)) {
       return tabParam as any;
     }
     return 'general';
@@ -103,7 +104,7 @@ export function useSettings() {
     const handlePopState = () => {
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get('tab');
-      if (tabParam && ['general', 'accounting', 'chart_of_accounts', 'categories', 'warehouses', 'pricing', 'projects', 'inventory_control', 'task_titles', 'health', 'system_config', 'system', 'woocommerce', 'inventory_integrity'].includes(tabParam)) {
+      if (tabParam && ['general', 'accounting', 'chart_of_accounts', 'categories', 'warehouses', 'pricing', 'projects', 'inventory_control', 'task_titles', 'health', 'system_config', 'system', 'woocommerce'].includes(tabParam)) {
         setActiveTab(tabParam as any);
       }
     };
@@ -327,6 +328,9 @@ export function useSettings() {
       toast.error(daysError);
       return;
     }
+    // v10.0.95 (TD-1192): نام فهرست قیمت بی ویرگول لاتین و یکتا، با همان قاعده کارساز
+    const priceListError = priceListNamesError(pricingStrategies);
+    if (priceListError) return void toast.error(priceListError);
     const changedSettings = candidateSettings.filter(
       (item) => item.value !== MASKED_SETTING_VALUE && (!serverValues.has(item.key) || serverValues.get(item.key) !== item.value)
     );
@@ -334,15 +338,15 @@ export function useSettings() {
       toast.success('تغییری برای ذخیره وجود ندارد');
       return;
     }
-    await saveSettingsMutation.mutateAsync({ settings: changedSettings });
+    if (!(await mutationSucceeded(saveSettingsMutation.mutateAsync({ settings: changedSettings })))) return;
   };
 
   const handleCatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await saveCategoryMutation.mutateAsync({
+    if (!(await mutationSucceeded(saveCategoryMutation.mutateAsync({
       id: editingCatId,
       data: catForm
-    });
+    })))) return;
     setShowCatModal(false);
     setEditingCatId(null);
     setCatForm({ name: '', prefix: '', type: 'raw_material', defaultUnit: 'عدد' });
@@ -353,20 +357,20 @@ export function useSettings() {
   };
 
   const executeCatDelete = async () => {
-    await deleteCategoryMutation.mutateAsync(confirmState.catId);
+    if (!(await mutationSucceeded(deleteCategoryMutation.mutateAsync(confirmState.catId)))) return;
     setConfirmState({ isOpen: false, catId: 0 });
   };
 
   const handleResetDefaultCategories = async () => {
-    await resetCategoriesMutation.mutateAsync();
+    if (!(await mutationSucceeded(resetCategoriesMutation.mutateAsync()))) return;
   };
 
   const handleWhSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await saveWarehouseMutation.mutateAsync({
+    if (!(await mutationSucceeded(saveWarehouseMutation.mutateAsync({
       id: editingWhId,
       data: whForm
-    });
+    })))) return;
     setShowWhModal(false);
     setEditingWhId(null);
     setWhForm({ name: '', code: '' });
@@ -377,7 +381,7 @@ export function useSettings() {
   };
 
   const executeWhDelete = async () => {
-    await deleteWarehouseMutation.mutateAsync(whConfirmState.whId);
+    if (!(await mutationSucceeded(deleteWarehouseMutation.mutateAsync(whConfirmState.whId)))) return;
     setWhConfirmState({ isOpen: false, whId: 0 });
   };
 

@@ -84,11 +84,11 @@ export async function checkDelegateActsForDelegatorRole(): Promise<string[]> {
   const instanceId = await startWf(wf);
   const [task] = await tasksOf(instanceId);
 
-  const inbox = await WorkflowTaskService.getMyTasks({ userId: deputy.id, userRole: deputy.role });
+  const inbox = await WorkflowTaskService.getMyTasks({ userId: deputy.id, userRole: deputy.role, userPermissions: deputy.permissions });
   const seen = inbox.data.find(t => t.id === task.id);
   if (!seen) problems.push('A task of the delegator role was not visible in the deputy inbox');
   else if (seen.delegationInfo?.delegatedFromUserId !== owner.id) problems.push('The deputy inbox did not show whose delegation the task comes from');
-  const stats = await WorkflowTaskService.getTaskStats({ userId: deputy.id, userRole: deputy.role });
+  const stats = await WorkflowTaskService.getTaskStats({ userId: deputy.id, userRole: deputy.role, userPermissions: deputy.permissions });
   if (stats.pendingCount < 1) problems.push('The deputy task count did not count the delegated task');
 
   const error = await refusal(() => runTask(task.id, deputy));

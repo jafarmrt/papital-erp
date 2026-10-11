@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
+import { projectStatusLabel } from '../lib/projects/projectStatus';
 import { useNavigate } from 'react-router-dom';
 import { Search, X, Package, Box, UsersRound, ClipboardList, Layers, ArrowLeft, Loader2 } from 'lucide-react';
 import { useSearch } from '../SearchContext';
 import { fetchJson } from '../api';
 import { SafeImage } from './SafeImage';
 import { formatPersianNumber, formatPersianDate } from '../utils';
+import { globalSearchTarget, type GlobalSearchHit } from '../lib/search/globalSearchTarget';
 
 interface SearchResultItems {
   id: number;
@@ -134,9 +136,12 @@ export default function GlobalHeaderSearch() {
     (Array.isArray(results?.documents) ? results.documents.length : 0) +
     (Array.isArray(results?.projects) ? results.projects.length : 0);
 
-  const handleSelectResult = (path: string) => {
+  // TD-1155: the result opens its list searched by its own key (the shared search the list pages read)
+  const handleSelectResult = (hit: GlobalSearchHit) => {
+    const target = globalSearchTarget(hit);
     setIsOpen(false);
-    void navigate(path);
+    setSearchQuery(target.search);
+    void navigate(target.path);
   };
 
   return (
@@ -202,11 +207,10 @@ export default function GlobalHeaderSearch() {
                 </div>
                 <div className="space-y-1 mt-1">
                   {results.items.map(item => {
-                    const targetPath = item.type === 'raw_material' ? '/products?type=raw_material' : '/products';
                     return (
                       <button
                         key={`item-${item.id}`}
-                        onClick={() => handleSelectResult(targetPath)}
+                        onClick={() => handleSelectResult({ kind: 'item', code: item.code || '', type: item.type })}
                         className="w-full text-right p-2 hover:bg-blue-50/70 rounded-xl transition-colors flex items-center justify-between group"
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
@@ -249,7 +253,7 @@ export default function GlobalHeaderSearch() {
                   {results.customers.map(cust => (
                     <button
                       key={`cust-${cust.id}`}
-                      onClick={() => handleSelectResult('/customers')}
+                      onClick={() => handleSelectResult({ kind: 'customer', name: cust.name || '' })}
                       className="w-full text-right p-2 hover:bg-emerald-50/70 rounded-xl transition-colors flex items-center justify-between group"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -281,7 +285,7 @@ export default function GlobalHeaderSearch() {
                   {results.documents.map(doc => (
                     <button
                       key={`doc-${doc.id}`}
-                      onClick={() => handleSelectResult('/invoices')}
+                      onClick={() => handleSelectResult({ kind: 'document', refNumber: doc.ref_number || '' })}
                       className="w-full text-right p-2 hover:bg-purple-50/70 rounded-xl transition-colors flex items-center justify-between group"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -315,7 +319,7 @@ export default function GlobalHeaderSearch() {
                   {results.projects.map(proj => (
                     <button
                       key={`proj-${proj.id}`}
-                      onClick={() => handleSelectResult('/projects')}
+                      onClick={() => handleSelectResult({ kind: 'project', code: proj.project_code || '' })}
                       className="w-full text-right p-2 hover:bg-amber-50/70 rounded-xl transition-colors flex items-center justify-between group"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -327,7 +331,7 @@ export default function GlobalHeaderSearch() {
                             [{proj.project_code}] {proj.title}
                           </p>
                           <p className="text-[10px] text-slate-400 truncate">
-                            مشتری: {proj.customer_name || 'عام'} • وضعیت: {proj.status}
+                            مشتری: {proj.customer_name || 'عام'} • وضعیت: {projectStatusLabel(proj.status)}
                           </p>
                         </div>
                       </div>
