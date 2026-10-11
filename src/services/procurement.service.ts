@@ -566,24 +566,25 @@ export class ProcurementService {
 
       // وضعیت و ردیف‌ها را اقدام پس از انتقال (applyRequisitionTransition) در همین تراکنش نوشته است
       const [updatedReq] = await tx.select().from(purchaseRequisitions).where(eq(purchaseRequisitions.id, req.id));
-      return { req, updatedReq, mappedStatus: updatedReq.status, transitionTitle };
+      // TD-963 (بخش ۲): ردیف ممیزی اقدام با همان تراکنش نوشته می‌شود
+      await logActivity({
+        tx,
+        userId: user.id,
+        username: user.username || 'سیستم',
+        action: 'UPDATE',
+        entity: 'درخواست خرید',
+        entityId: req.id,
+        description: `اقدام گردش کار «${transitionTitle}» روی درخواست خرید ${req.code}`,
+        details: {
+          actionKey,
+          fromStatus: req.status,
+          toStatus: updatedReq.status,
+          comment
+        }
+      });
+      return { updatedReq, mappedStatus: updatedReq.status };
     });
-    const { req, updatedReq, mappedStatus, transitionTitle } = outcome;
-
-    await logActivity({
-      userId: user.id,
-      username: user.username || 'سیستم',
-      action: 'UPDATE',
-      entity: 'درخواست خرید',
-      entityId: req.id,
-      description: `اقدام گردش کار «${transitionTitle}» روی درخواست خرید ${req.code}`,
-      details: {
-        actionKey,
-        fromStatus: req.status,
-        toStatus: mappedStatus,
-        comment
-      }
-    });
+    const { updatedReq, mappedStatus } = outcome;
 
     const statusTitleMap: Record<string, string> = {
       pending: 'در انتظار بررسی و تایید',

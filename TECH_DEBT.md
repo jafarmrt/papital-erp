@@ -38,7 +38,6 @@
 | TD-953 | پرسنل و خزانه، بسته ۱۲ (۴)؛ فاز ۵ | P3 (P5-W09) — پرسنل واردشده از اکسل نام و نام خانوادگی خالی دارد؛ فرم خزانه و چک ۴۰۰ «نام طرف حساب الزامی است» می‌گیرد | personnel.routes.ts:259-268، TreasuryTransactionModal.tsx:387, 392، ChequesTab.tsx:875, 880 | open |
 | TD-954 | خزانه و حقوق، بسته‌های ۴ و ۱۲؛ فاز ۵ | P3 (P5-W10) — ردیف خزانه پرسنل بی `partyId` پذیرفته می‌شود: مانده مساعده ۰ ولی صورت‌حساب ۲٬۰۰۰٬۰۰۰، پس کسر مساعده در فیش ۴۰۰ می‌گیرد | treasuryLinks.ts:30-32، payrollPayment.service.ts:60-100 | open |
 | TD-960 | زیرساخت داده، بسته ۱ (۲، ۹، ۱۲)؛ فاز ۵ | P2 (OBS-R2-01) — ۳۱ نوشتن مستقیم در route مانده است: crm ۱۱، users ۸، personnel ۵ (بسته مالی ۱۲)، auth ۴ (`/setup` بی تراکنش) و notifications ۳؛ هدف V9 (۰ مالی، ≤ ۲۰ کل) برآورده نشد (تصمیم ت۲ ب فاز ۲ گرفته شده)؛ از v10.0.26 ratchet کاهشی `routeWrites` در `npm run ratchet:architecture` جلوی نوشتن تازه را می‌گیرد و ردیف با رسیدن به هدف بسته می‌شود. دفتر مشاهده `docs/audit/V9_OBSERVATIONS.md` §۱ | crm.routes.ts، users.routes.ts، personnel.routes.ts، auth.routes.ts، notifications.routes.ts | open |
-| TD-963 | سجل ممیزی، بسته ۲ (همه)؛ فاز ۵ | P2 (OBS-R2-07) — حدود ۱۰۰ از ۱۷۰ فراخوان `logActivity` بی `tx` و پس از commit اجرا می‌شوند؛ `activity_logs` شناسه پیگیری ندارد؛ حذف کد ترنسفر مستقیم درج می‌کند و `catch {}` دارد (نمونه‌های خزانه، تولید و حقوق در TD-934، TD-943 و TD-950). شناسه پیگیری و حذف ترنسفر در v10.0.198 رفع شد (`activity_logs.trace_id`، مهاجرت 0102)؛ مانده: فراخوان‌های بی `tx` و ratchet آن‌ها. دفتر مشاهده `docs/audit/V9_OBSERVATIONS.md` §۱ | src/lib/auditLogger.ts، transfers.routes.ts | open |
 | TD-966 | حسابداری، بسته ۳؛ فاز ۵ | P2 (OBS-R1-46) — گزارش پروژه سندهای پیش‌نویس را می‌شمارد و ارزها را خام جمع می‌زند (قاعده ارز TD-260). مشاهده؛ پیش از رفع اثبات شود. دفتر مشاهده `docs/audit/V9_OBSERVATIONS.md` §۱ | accountingReport.service.ts:1391-1405 | open |
 | TD-967 | حسابداری، بسته ۳؛ فاز ۵ | P2 (OBS-R1-50) — «نقد و بانک» پیشخوان حسابداری مانده همه ارزها را با هم جمع می‌زند. مشاهده؛ پیش از رفع اثبات شود. دفتر مشاهده `docs/audit/V9_OBSERVATIONS.md` §۱ | accountingReport.service.ts:1232-1233 | open |
 | TD-968 | حسابداری، بسته ۳؛ فاز ۵ | P2 (OBS-R2-08) — خطای خواندن نگاشت حساب بلعیده می‌شود و سند خودکار بی‌صدا به حساب پیش‌فرض می‌رود. مشاهده؛ پیش از رفع اثبات شود. دفتر مشاهده `docs/audit/V9_OBSERVATIONS.md` §۱ | accountMapping.service.ts:71, 141 | open |
@@ -70,8 +69,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۴۹ ردیف
-- **آرشیو شده (resolved):** ۹۶۷ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۴۸ ردیف
+- **آرشیو شده (resolved):** ۹۶۸ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
