@@ -10860,6 +10860,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10 phase 3 lane L3 (v10.0.63+): gaps of the project screens (TD-1140..TD-1144)
   const { runProjectScreenGapsTests } = await import('../regression/projectScreenGapsTests.js');
   results.push(...await runProjectScreenGapsTests(shouldRun));
+  const { runProjectReservationIssueTests } = await import('../regression/projectReservationIssueTests.js');
+  results.push(...await runProjectReservationIssueTests(shouldRun));
 
   // Package 1 second half PR 1 (v9.0.386+): data export, system health page, factory reset, setup wizard
   const { runDataExportTests } = await import('../regression/dataExportTests.js');
