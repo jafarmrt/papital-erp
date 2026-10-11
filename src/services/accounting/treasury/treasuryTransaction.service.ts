@@ -89,7 +89,7 @@ export class TreasuryTransactionService {
       conceptLabel = 'حساب‌های دریافتنی/پرداختنی';
     }
 
-    // v10.0.260 (OWN-03، OBS-R2-04): نبود حساب نگاشت هرگز به حساب کل (دو رقم اول کد) نمی‌رود (قاعده TD-550)؛ پیش‌تر
+    // v10.0.262 (OWN-03، OBS-R2-04): نبود حساب نگاشت هرگز به حساب کل (دو رقم اول کد) نمی‌رود (قاعده TD-550)؛ پیش‌تر
     // ردیف طرف مقابل روی حساب کل می‌نشست و آن را با اتصال دوم استخر درون تراکنش می‌خواند. ثبت با سند رد می‌شود.
     return { account, conceptLabel };
   }
@@ -218,7 +218,7 @@ export class TreasuryTransactionService {
     purpose?: string;
     /** v9.0.82 (TD-507): سرفصل طرف مقابلی که کاربر برای «متفرقه» و «سایر» پرسنل انتخاب کرده است */
     contraAccountId?: number | null;
-    /** v10.0.260 (TD-934): ممیزی ثبت با `tx` همین ثبت */
+    /** v10.0.262 (TD-934): ممیزی ثبت با `tx` همین ثبت */
     audit?: TreasuryAuditActor;
   }): Promise<TreasuryTransaction> {
     const amount = Number(data.amount) || 0;
@@ -425,7 +425,7 @@ export class TreasuryTransactionService {
     reason: string;
     userId?: number;
     username?: string;
-    /** v10.0.260 (TD-934): ممیزی ابطال با `tx` همین ابطال */
+    /** v10.0.262 (TD-934): ممیزی ابطال با `tx` همین ابطال */
     audit?: TreasuryAuditActor;
   }): Promise<TreasuryTransaction> {
     const reason = (params.reason || '').trim();
@@ -655,7 +655,7 @@ export class TreasuryTransactionService {
     allowNoVoucher?: boolean;
     /** v8.0.20 (TD-274): نرخ تسعیر انتقال ارزی (ریال برای هر واحد) */
     exchangeRate?: number;
-    /** v10.0.260 (TD-934): ممیزی انتقال با `tx` همین انتقال */
+    /** v10.0.262 (TD-934): ممیزی انتقال با `tx` همین انتقال */
     audit?: TreasuryAuditActor;
   }): Promise<{ payment: TreasuryTransaction; receipt: TreasuryTransaction; voucherId: number | null }> {
     const amount = Number(data.amount) || 0;

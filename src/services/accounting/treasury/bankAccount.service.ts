@@ -236,7 +236,7 @@ export class BankAccountService {
         }).where(eq(bankAccounts.id, bank.row.id));
       }
       const report = this.summarizeReconciliation(computed);
-      // v10.0.260 (TD-934): ممیزی همگام‌سازی با `tx` همین همگام‌سازی
+      // v10.0.262 (TD-934): ممیزی همگام‌سازی با `tx` همین همگام‌سازی
       await auditBankBalanceSync(tx, audit, report);
       return report;
     });
@@ -312,7 +312,7 @@ export class BankAccountService {
     userId?: number;
     username?: string;
     strict?: boolean;
-    /** v10.0.260 (TD-934): ممیزی تعریف حساب با `tx` همین تعریف */
+    /** v10.0.262 (TD-934): ممیزی تعریف حساب با `tx` همین تعریف */
     audit?: TreasuryAuditActor;
   }, externalTx?: DbExecutor): Promise<BankAccount> {
     const initialBal = money(data.initialBalance);
@@ -486,7 +486,7 @@ export class BankAccountService {
     userId?: number;
     username?: string;
     strict?: boolean;
-    /** v10.0.260 (TD-934): ممیزی ویرایش با قبل (زیر قفل ردیف) و بعد، با `tx` همین ویرایش */
+    /** v10.0.262 (TD-934): ممیزی ویرایش با قبل (زیر قفل ردیف) و بعد، با `tx` همین ویرایش */
     audit?: TreasuryAuditActor;
   }>, externalTx?: DbExecutor): Promise<BankAccount> {
     const isStrict = data.strict !== false;
@@ -658,7 +658,7 @@ export class BankAccountService {
       await terminateEntityWorkflows(tx, {
         entityType: 'bank_account', entityId: id, actionKey: 'terminate', actionTitle: 'بستن فرایند با حذف حساب خزانه', comment: 'حذف حساب خزانه',
       });
-      // v10.0.260 (TD-934): ممیزی حذف با ردیف پیش از حذف، با `tx` همین حذف
+      // v10.0.262 (TD-934): ممیزی حذف با ردیف پیش از حذف، با `tx` همین حذف
       await auditBankAccountChange(tx, user?.audit, 'DELETE', id, existing.title, { ...existing }, null);
       return { success: true };
     });

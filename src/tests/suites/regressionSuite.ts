@@ -10746,6 +10746,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 8 PR E (v9.0.335+): the data of a document (treasury rows by permission)
   const { runDocumentDataTests } = await import('../regression/documentDataTests.js');
   results.push(...await runDocumentDataTests(shouldRun));
+  // Series 10 phase 3 L2 (TD-1136): the manual invoice form's service charge through POST and PUT /documents
+  const { runInvoiceServiceChargeTests } = await import('../regression/invoiceServiceChargeTests.js');
+  results.push(...await runInvoiceServiceChargeTests(shouldRun));
 
   // Package 13 PR B (v9.0.249+): reading daily work logs (list, statistics, timestamps)
   const { runDailyLogReadTests } = await import('../regression/dailyLogReadTests.js');
@@ -10786,6 +10789,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runWebhookErrorContractTests(shouldRun));
   const { runEventsErrorContractTests } = await import('../regression/eventsErrorContractTests.js');
   results.push(...await runEventsErrorContractTests(shouldRun));
+  const { runPublicUploadPathTests } = await import('../regression/publicUploadPathTests.js');
+  results.push(...await runPublicUploadPathTests(shouldRun));
   const { runWebhookRuleSeedTests } = await import('../regression/webhookRuleSeedTests.js');
   results.push(...await runWebhookRuleSeedTests(shouldRun));
   const { runWebhookSecretEditTests } = await import('../regression/webhookSecretEditTests.js');
@@ -10989,7 +10994,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Phase 3 lane L1, package A7 (v10.0.259): payroll payment void event and audit, «my payslips» paid amount, personnel id on treasury rows
   const { runPayrollHygieneA7Tests } = await import('../regression/payrollHygieneA7Tests.js');
   results.push(...await runPayrollHygieneA7Tests(shouldRun));
-  // Phase 3 lane L1, package A8 (v10.0.260): treasury audit inside the write's transaction, no general account fallback
+  // Phase 3 lane L1, package A8 (v10.0.262): treasury audit inside the write's transaction, no general account fallback
   const { runTreasuryAuditA8Tests } = await import('../regression/treasuryAuditA8Tests.js');
   results.push(...await runTreasuryAuditA8Tests(shouldRun));
 

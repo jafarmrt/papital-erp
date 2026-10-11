@@ -22,7 +22,7 @@ export type { PersonnelPurpose };
  */
 async function excludedContraAccountIds(tx?: DbExecutor): Promise<Set<number>> {
   const executor = tx || orm;
-  // v10.0.260 (OWN-01): روی اتصال تراکنش یک پرس‌وجو در هر لحظه؛ `Promise.all` دوازده خواندن را هم‌زمان روی همان کلاینت
+  // v10.0.262 (OWN-01): روی اتصال تراکنش یک پرس‌وجو در هر لحظه؛ `Promise.all` دوازده خواندن را هم‌زمان روی همان کلاینت
   // می‌فرستاد که pg 8 فقط هشدار می‌دهد و pg 9 رد می‌کند.
   const resolvers = [
     AccountMappingService.getTradeReceivablesAccount,

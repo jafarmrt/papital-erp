@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * v10.0.260 (OWN-01): the treasury contra-account check read twelve mapped accounts with `Promise.all` on one transaction,
+ * v10.0.262 (OWN-01): the treasury contra-account check read twelve mapped accounts with `Promise.all` on one transaction,
  * so pg sent several queries on the same client at once (pg 8 warns "client is already executing a query", pg 9 refuses).
  * The reads now run one after the other: at most one mapped-account read is in flight at any moment.
  */

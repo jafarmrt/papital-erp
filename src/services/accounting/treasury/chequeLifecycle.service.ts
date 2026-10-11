@@ -175,7 +175,7 @@ export class ChequeLifecycleService {
     /** v9.0.84 (TD-497): هدف چک پرسنل و سرفصل طرف مقابل «متفرقه» و «سایر» (همان قاعده فرم خزانه، TD-507) */
     purpose?: string;
     contraAccountId?: number | null;
-    /** v10.0.260 (TD-934): ممیزی ثبت چک با `tx` همین ثبت */
+    /** v10.0.262 (TD-934): ممیزی ثبت چک با `tx` همین ثبت */
     audit?: ChequeAuditActor;
   }): Promise<Cheque> {
     const amount = Number(data.amount) || 0;

@@ -8,7 +8,7 @@ export type TreasuryAuditActor = ChequeAuditActor;
 const faAmount = (amount: unknown): string => Number(amount ?? 0).toLocaleString('fa-IR');
 
 /**
- * v10.0.260 (TD-934، OBS-R1-63): ممیزی ثبت‌های خزانه با `tx` همان ثبت نوشته می‌شود؛ پیش‌تر هشت روت خزانه پس از commit و
+ * v10.0.262 (TD-934، OBS-R1-63): ممیزی ثبت‌های خزانه با `tx` همان ثبت نوشته می‌شود؛ پیش‌تر هشت روت خزانه پس از commit و
  * بیرون از تراکنش ممیزی می‌نوشتند، پس خطای درج ممیزی ثبت را بی ردپا می‌گذاشت (TD-324). شرح‌ها و نام موجودیت‌ها همان پیشین‌اند.
  */
 export async function auditTreasuryTransactionCreated(

@@ -11,7 +11,7 @@ import { fundedBank } from '../invariants/payrollScenarios.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 
 /**
- * Series 10 phase 3 lane L1, package A8 (v10.0.260): treasury audit rows are written with the write's own transaction
+ * Series 10 phase 3 lane L1, package A8 (v10.0.262): treasury audit rows are written with the write's own transaction
  * (TD-934, OBS-R1-63), so a refused audit row leaves no treasury write behind; and a missing mapped account never sends a
  * treasury or cheque party row to the general account (OWN-03, OBS-R2-04). Each test is red on the version before its fix.
  */
@@ -75,7 +75,7 @@ export async function runTreasuryAuditA8Tests(shouldRun: ShouldRun): Promise<Tes
 
   const auditId = 'reg_treasury_audit_in_write_tx_td_934';
   if (shouldRun(auditId, 'td934', 'treasury', 'cheque', 'bank', 'audit', 'a8')) {
-    await runCase(results, auditId, 'v10.0.260: a treasury receipt, transfer, void, cheque, bank account create / edit / delete and the bank balance sync write their audit row in their own transaction, so a refused audit row leaves nothing written (TD-934)', async () => {
+    await runCase(results, auditId, 'v10.0.262: a treasury receipt, transfer, void, cheque, bank account create / edit / delete and the bank balance sync write their audit row in their own transaction, so a refused audit row leaves nothing written (TD-934)', async () => {
       const problems: string[] = [];
       const api = await adminClient();
       const bankA = await fundedBank();
@@ -154,7 +154,7 @@ export async function runTreasuryAuditA8Tests(shouldRun: ShouldRun): Promise<Tes
 
   const fallbackId = 'reg_treasury_party_account_no_general_fallback_own_03';
   if (shouldRun(fallbackId, 'own03', 'obsr204', 'treasury', 'cheque', 'mapping', 'a8')) {
-    await runCase(results, fallbackId, 'v10.0.260: with the trade receivables account and its default missing, a treasury or cheque party row gets no account instead of the general account (OWN-03, OBS-R2-04)', async () => {
+    await runCase(results, fallbackId, 'v10.0.262: with the trade receivables account and its default missing, a treasury or cheque party row gets no account instead of the general account (OWN-03, OBS-R2-04)', async () => {
       let found: number | null | undefined;
       let generalId: number | undefined;
       await orm.transaction(async (tx) => {

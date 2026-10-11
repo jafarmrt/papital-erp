@@ -52,7 +52,7 @@ router.get('/accounting/bank-accounts/options', authorizePermission(...READ_PERM
 
 // Dynamic Bank & Ledger Synchronization and Reconciliation
 const syncBanksHandler = asyncHandler(async (req, res) => {
-  // v10.0.260 (TD-934): ممیزی درون تراکنش هر ثبت خزانه نوشته می‌شود
+  // v10.0.262 (TD-934): ممیزی درون تراکنش هر ثبت خزانه نوشته می‌شود
   const report = await AccountingService.recalculateAndSyncBankBalances({ req, userFullName: req.user?.fullName });
   res.json({ message: 'مانده حساب‌های بانکی از تراکنش‌ها ساخته شد؛ اختلاف با دفتر کل در گزارش آمده است', report });
 });
