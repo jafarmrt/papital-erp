@@ -31,3 +31,6 @@ export function voucherItemCurrencyCondition(currency?: string | null): SQL | un
   return isAllCurrenciesView(currency) ? undefined : sql`${voucherItemCurrencySql} = ${String(currency).toUpperCase()}`;
 }
 
+
+/** v10.0.251 (TD-966): the voucher statuses a report counts, as the trial balance does: approved and permanent, never drafts */
+export const reportedVoucherStatusSql = sql`${journalVouchers.status} IN ('approved', 'permanent')`;

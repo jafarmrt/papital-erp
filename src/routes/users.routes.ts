@@ -15,6 +15,7 @@ import { createUser, deleteUser, restoreUser, updateOwnProfile, updateUser } fro
 import { workflowsRequiringRole } from '../services/workflow/transitionRoles.js';
 import { roleDisplayName } from '../lib/users/roleDisplayName.js';
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE } from '../lib/auth/passwordPolicy.js';
+import { NotFoundError, UnauthorizedError } from '../errors/customErrors.js';
 
 const router = Router();
 router.use(authenticateToken); // Protect all user routes
@@ -55,80 +56,68 @@ export { PERMISSION_CATALOG };
 
 // Get current user's active permissions array
 router.get('/users/my-permissions', asyncHandler(async (req, res) => {
-  try {
-    const user = req.user;
-    if (!user) return res.status(401).json({ error: 'غیر مجاز' });
+  const user = req.user;
+  if (!user) throw new UnauthorizedError('غیر مجاز');
 
-    const [roleRecord] = await orm.select().from(roles).where(eq(roles.code, user.role));
-    // v9.0.149 (TD-894): مدیر سیستم هم نام ذخیره‌شده نقشش را می‌گیرد تا نوار بالا و نمایه برچسبی از روی کد نسازند.
-    if (isSystemAdminRole(user.role)) {
-      return res.json({ role: user.role, roleName: roleRecord?.name || 'مدیر سیستم', permissions: [...PERMISSION_KEYS], isAdmin: true });
-    }
-
-    if (!roleRecord) {
-      return res.json({ role: user.role, roleName: user.role, permissions: [], isAdmin: false });
-    }
-
-    res.json({
-      role: roleRecord.code,
-      roleName: roleRecord.name,
-      permissions: Array.isArray(roleRecord.permissions) ? roleRecord.permissions : [],
-      isAdmin: false
-    });
-  } catch (err) {
-    throw err;
+  const [roleRecord] = await orm.select().from(roles).where(eq(roles.code, user.role));
+  // v9.0.149 (TD-894): مدیر سیستم هم نام ذخیره‌شده نقشش را می‌گیرد تا نوار بالا و نمایه برچسبی از روی کد نسازند.
+  if (isSystemAdminRole(user.role)) {
+    return res.json({ role: user.role, roleName: roleRecord?.name || 'مدیر سیستم', permissions: [...PERMISSION_KEYS], isAdmin: true });
   }
+
+  if (!roleRecord) {
+    return res.json({ role: user.role, roleName: user.role, permissions: [], isAdmin: false });
+  }
+
+  res.json({
+    role: roleRecord.code,
+    roleName: roleRecord.name,
+    permissions: Array.isArray(roleRecord.permissions) ? roleRecord.permissions : [],
+    isAdmin: false
+  });
 }));
 
 // Profile endpoints (Any authenticated user can manage their profile)
 router.get('/users/profile', asyncHandler(async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) return res.status(401).json({ error: 'غیر مجاز' });
-    const [u] = await orm.select().from(users).where(eq(users.id, userId));
-    if (!u) return res.status(404).json({ error: 'کاربر یافت نشد' });
-    const { password: _, ...userInfo } = u;
-    res.json({
-      ...userInfo,
-      full_name: u.fullName,
-      avatar_url: u.avatarUrl || ''
-    });
-  } catch (err) {
-    throw err;
-  }
+  const userId = req.user?.id;
+  if (!userId) throw new UnauthorizedError('غیر مجاز');
+  const [u] = await orm.select().from(users).where(eq(users.id, userId));
+  if (!u) throw new NotFoundError('کاربر یافت نشد', undefined, 'USER_NOT_FOUND');
+  const { password: _, ...userInfo } = u;
+  res.json({
+    ...userInfo,
+    full_name: u.fullName,
+    avatar_url: u.avatarUrl || ''
+  });
 }));
 
 router.put('/users/profile', validate(updateProfileSchema), asyncHandler(async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) return res.status(401).json({ error: 'غیر مجاز' });
-    const { user: updatedUser, passwordChanged } = await updateOwnProfile(req, userId, req.body);
+  const userId = req.user?.id;
+  if (!userId) throw new UnauthorizedError('غیر مجاز');
+  const { user: updatedUser, passwordChanged } = await updateOwnProfile(req, userId, req.body);
 
-    // v9.0.218 (TD-531): نسخه توکن بالا رفت و نشست‌های دیگر کاربر باطل‌اند؛ همین نشست با توکن تازه ادامه می‌یابد، وگرنه
-    // پس از پیام موفقیت، درخواست بعدی ۴۰۱ می‌گرفت
-    let session: { token: string; csrfToken: string } | null = null;
-    if (passwordChanged) {
-      const csrfToken = req.user?.csrfToken || generateCsrfToken();
-      const token = generateToken({ id: updatedUser.id, username: updatedUser.username, role: updatedUser.role ?? '', csrfToken, tokenVersion: updatedUser.tokenVersion || 0 });
-      res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
-      session = { token, csrfToken };
-    }
-
-    const { password: _, ...userInfo } = updatedUser;
-    res.json({
-      success: true,
-      user: {
-        ...userInfo,
-        full_name: updatedUser.fullName,
-        avatar_url: updatedUser.avatarUrl || '',
-        mustResetPassword: Boolean(updatedUser.mustResetPassword),
-        must_reset_password: Boolean(updatedUser.mustResetPassword)
-      },
-      ...(session ? { csrfToken: session.csrfToken, ...(shouldExposeTokenInBody() ? { token: session.token } : {}) } : {})
-    });
-  } catch (err) {
-    throw err;
+  // v9.0.218 (TD-531): نسخه توکن بالا رفت و نشست‌های دیگر کاربر باطل‌اند؛ همین نشست با توکن تازه ادامه می‌یابد، وگرنه
+  // پس از پیام موفقیت، درخواست بعدی ۴۰۱ می‌گرفت
+  let session: { token: string; csrfToken: string } | null = null;
+  if (passwordChanged) {
+    const csrfToken = req.user?.csrfToken || generateCsrfToken();
+    const token = generateToken({ id: updatedUser.id, username: updatedUser.username, role: updatedUser.role ?? '', csrfToken, tokenVersion: updatedUser.tokenVersion || 0 });
+    res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
+    session = { token, csrfToken };
   }
+
+  const { password: _, ...userInfo } = updatedUser;
+  res.json({
+    success: true,
+    user: {
+      ...userInfo,
+      full_name: updatedUser.fullName,
+      avatar_url: updatedUser.avatarUrl || '',
+      mustResetPassword: Boolean(updatedUser.mustResetPassword),
+      must_reset_password: Boolean(updatedUser.mustResetPassword)
+    },
+    ...(session ? { csrfToken: session.csrfToken, ...(shouldExposeTokenInBody() ? { token: session.token } : {}) } : {})
+  });
 }));
 
 // Permissions catalog route
@@ -138,13 +127,9 @@ router.get('/permissions', authorizePermission(...READ_PERMISSIONS.permissionCat
 
 // ROLES MANAGEMENT ROUTES
 router.get('/roles', authorizePermission(...READ_PERMISSIONS.userDirectory), asyncHandler(async (req, res) => {
-  try {
-    const allRoles = await orm.select().from(roles).orderBy(roles.id);
-    // v9.0.136 (TD-886، قاعده ۳ مدل مجوز): «مدیر سیستم» همیشه همه مجوزها را دارد؛ فهرست آن محاسبه می‌شود، نه خوانده
-    res.json(allRoles.map(r => (isSystemAdminRole(r.code) ? { ...r, permissions: [...PERMISSION_KEYS] } : r)));
-  } catch (err) {
-    throw err;
-  }
+  const allRoles = await orm.select().from(roles).orderBy(roles.id);
+  // v9.0.136 (TD-886، قاعده ۳ مدل مجوز): «مدیر سیستم» همیشه همه مجوزها را دارد؛ فهرست آن محاسبه می‌شود، نه خوانده
+  res.json(allRoles.map(r => (isSystemAdminRole(r.code) ? { ...r, permissions: [...PERMISSION_KEYS] } : r)));
 }));
 
 router.post('/roles', authorizePermission('roles.manage'), validate(createRoleSchema), asyncHandler(async (req, res) => {
@@ -233,31 +218,27 @@ router.get('/users/list-simple', asyncHandler(async (req, res) => {
 }));
 
 router.get('/users', authorizePermission(...READ_PERMISSIONS.userDirectory), asyncHandler(async (req, res) => {
-  try {
-    const allUsers = await orm.select({
-      id: users.id,
-      username: users.username,
-      fullName: users.fullName,
-      role: users.role,
-      avatarUrl: users.avatarUrl
-    })
-    .from(users)
-    .where(eq(users.isDeleted, 0))
-    .orderBy(desc(users.id));
-    
-    const mapped = allUsers.map(u => ({
-      id: u.id,
-      username: u.username,
-      full_name: u.fullName || u.username,
-      fullName: u.fullName || u.username,
-      role: u.role,
-      avatar_url: u.avatarUrl || '',
-      avatarUrl: u.avatarUrl || ''
-    }));
-    res.json(mapped);
-  } catch (err) {
-    throw err;
-  }
+  const allUsers = await orm.select({
+    id: users.id,
+    username: users.username,
+    fullName: users.fullName,
+    role: users.role,
+    avatarUrl: users.avatarUrl
+  })
+  .from(users)
+  .where(eq(users.isDeleted, 0))
+  .orderBy(desc(users.id));
+  
+  const mapped = allUsers.map(u => ({
+    id: u.id,
+    username: u.username,
+    full_name: u.fullName || u.username,
+    fullName: u.fullName || u.username,
+    role: u.role,
+    avatar_url: u.avatarUrl || '',
+    avatarUrl: u.avatarUrl || ''
+  }));
+  res.json(mapped);
 }));
 
 router.post('/users', authorizePermission('users.manage'), validate(userCreateSchema), asyncHandler(async (req, res) => {

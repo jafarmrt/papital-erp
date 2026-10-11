@@ -19,8 +19,11 @@ export async function runReservedItemsReportTests(shouldRun: ShouldRun): Promise
       'v9.0.404: the reorder alert compares free stock (stock minus reservations) with the reorder point and shows open purchases as in transit only (TD-843)',
       ['td843', 'reservation', 'reorder', 'package7'], reorderFreeStockCase],
     ['reg_item_options_reserved_td_1135',
-      'v10.0.251: the item pick list carries each item reserved quantity only when the sales invoice asks reserved=1 (TD-1135)',
+      'v10.0.258: the item pick list carries each item reserved quantity only when the sales invoice asks reserved=1 (TD-1135)',
       ['td1135', 'reservation', 'pick', 'package8'], itemOptionsReservedCase],
+    ['reg_reorder_alert_open_requisitions_td_1134',
+      'v10.0.255: the reorder alert shows the unordered quantity of open purchase requisitions, leaving out closed rows and rejected or deleted requisitions (TD-1134)',
+      ['td1134', 'reorder', 'procurement', 'package7'], reorderOpenRequisitionsCase],
   ]);
 }
 
@@ -188,4 +191,41 @@ async function itemOptionsReservedCase(h: Harness, wrong: string[]): Promise<str
   }
   if ('reserved_stock' in plain || 'reservedStock' in plain) wrong.push('the plain pick list carries a reservation');
   return `reserved=1: ${String(withReserved.reserved_stock)}; plain: ${'reserved_stock' in plain ? 'reserved' : 'none'}`;
+}
+
+/**
+ * TD-1134: D (stock 1, reorder point 5) is on a pending requisition with 4 unordered and 3 requested / 1 ordered, on an
+ * ordered requisition fully ordered and in a closed row, on a rejected requisition and on a deleted one. The alert shows
+ * 6 requested (4 + 2); before the fix it had no such field and a second request for D was made without a word.
+ */
+async function reorderOpenRequisitionsCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const d = await f.item(1);
+  await h.q('UPDATE items SET reorder_point = 5 WHERE id = $1', [d]);
+  const tag = `TEST-TD1134-${Date.now()}`;
+  const row = (requestedQty: number, orderedQty: number, closed = false) => ({ itemId: d, itemName: 'D', unit: 'عدد', requestedQty, orderedQty, closed });
+  const requisitions: Array<[string, number, unknown[]]> = [
+    ['pending', 0, [row(4, 0), row(3, 1)]],
+    ['ordered', 0, [row(5, 5), row(9, 0, true)]],
+    ['rejected', 0, [row(7, 0)]],
+    ['pending', 1, [row(8, 0)]],
+  ];
+  const ids: number[] = [];
+  for (const [index, [status, isDeleted, items]] of requisitions.entries()) {
+    const inserted = await h.q(
+      'INSERT INTO purchase_requisitions (code, title, status, items, is_deleted) VALUES ($1, $2, $3, $4::jsonb, $5) RETURNING id',
+      [`${tag}-${index}`, 'TD-1134', status, JSON.stringify(items), isDeleted],
+    );
+    ids.push(Number(inserted[0]?.id));
+  }
+  try {
+    const res = await h.get('/api/items/reorder-alerts');
+    const alert = (Array.isArray(res.body) ? (res.body as AlertRow[]) : []).find(r => Number(r.id) === d);
+    if (res.status !== 200 || !alert) throw new Error(`the alerts answered ${brief(res)} without D`);
+    if (Number(alert.requested_qty) !== 6) wrong.push(`D: requested_qty ${String(alert.requested_qty)}, expected 6`);
+    if (Number(alert.in_transit_qty) !== 0) wrong.push(`D: in_transit_qty ${String(alert.in_transit_qty)}, expected 0`);
+    return `D: requested ${String(alert.requested_qty)}, in transit ${String(alert.in_transit_qty)}`;
+  } finally {
+    await h.q('UPDATE purchase_requisitions SET is_deleted = 1 WHERE id = ANY($1::int[])', [ids]);
+  }
 }

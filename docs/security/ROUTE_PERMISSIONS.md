@@ -210,7 +210,7 @@
 | POST | `/api/inventory/allocations/allocate` | warehouse.out |
 | POST | `/api/inventory/correct-wac` | inventory.wac_correct |
 | GET | `/api/inventory/integrity-audit` | warehouse.view \| inventory.reconcile \| audit.view |
-| GET | `/api/inventory/item-kardex/:itemId` | warehouse.view |
+| GET | `/api/inventory/item-kardex/:itemId` | warehouse.view \| accounting.view |
 | POST | `/api/inventory/kardex-initial-backfill` | inventory.reconcile |
 | POST | `/api/inventory/rebuild-from-ledger` | inventory.reconcile |
 | GET | `/api/inventory/report` | warehouse.view \| inventory.reconcile \| audit.view |

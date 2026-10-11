@@ -412,10 +412,15 @@ export interface DetailedPartyLedgerResult {
   startDate?: string | null;
   endDate?: string | null;
   items: DetailedPartyLedgerItem[];
+  /** v10.0.257 (TD-915 / TD-924، ت۵ الف): ردیف‌های حساب موقت طرف حساب؛ در مانده و جمع گردش بالا نیستند */
+  temporaryRows?: import('../lib/accounting/partyTemporaryRows').PartyTemporaryRows;
 }
 
 export interface FinancialSummaryStats {
+  /** v10.0.251 (TD-967): the rial treasury accounts only */
   totalCashAndBank: number;
+  /** v10.0.251 (TD-967): every treasury balance summed in its own currency, rials first */
+  cashAndBankByCurrency?: Array<{ currency: string; amount: number }>;
   totalReceivables: number;
   totalPayables: number;
   totalChequesInCollection: number;

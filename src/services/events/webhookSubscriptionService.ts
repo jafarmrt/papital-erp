@@ -197,7 +197,7 @@ export class WebhookSubscriptionService {
   static async updateSubscription(id: number, data: Partial<CreateWebhookSubDTO>) {
     const current = await this.getSubscriptionById(id);
     if (!current) {
-      throw new Error(`اشتراک وب‌هوک با شناسه ${id} یافت نشد.`);
+      throw new NotFoundError(`اشتراک وب‌هوک با شناسه ${id} یافت نشد.`, undefined, 'WEBHOOK_NOT_FOUND');
     }
 
     const timeoutMs = webhookTimeoutOf(data);
@@ -254,7 +254,7 @@ export class WebhookSubscriptionService {
   static async toggleSubscription(id: number) {
     const current = await this.getSubscriptionById(id);
     if (!current) {
-      throw new Error(`اشتراک با شناسه ${id} یافت نشد.`);
+      throw new NotFoundError(`اشتراک وب‌هوک با شناسه ${id} یافت نشد.`, undefined, 'WEBHOOK_NOT_FOUND');
     }
 
     const newActiveState = current.isActive === 1 ? 0 : 1;

@@ -55,7 +55,7 @@ export interface BankAndTreasuryTabProps {
   onCreateTreasuryTransaction: (data: any) => Promise<void>;
   onVoidTreasuryTransaction: (id: number, reason: string) => Promise<void>;
   onCreateTreasuryTransfer: (data: any) => Promise<void>;
-  onReconcileTransactions?: (bankAccountId: number, txIds: number[], batch: string, reconciled: boolean) => Promise<void>;
+  onReconcileTransactions?: (bankAccountId: number, txIds: number[], batch: string, reconciled: boolean, chequeIds?: number[]) => Promise<void>;
 }
 
 export function BankAndTreasuryTab({
