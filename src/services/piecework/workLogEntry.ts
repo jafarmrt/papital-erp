@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
-import { assertProjectNotCancelled } from '../projects/projectCancelledGuard.js';
+import { assertProjectNotCancelled } from '../accounting/projectCancelledGuard.js';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { personnel, pieceworkTasks, productionProjects } from '../../db/schema.js';
 import { ValidationError } from '../../errors/customErrors.js';

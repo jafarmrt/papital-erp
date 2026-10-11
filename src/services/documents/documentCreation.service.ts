@@ -1,5 +1,5 @@
 import { eq, and, inArray } from 'drizzle-orm';
-import { assertProjectNotCancelled } from '../projects/projectCancelledGuard.js';
+import { assertProjectNotCancelled } from '../accounting/projectCancelledGuard.js';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { documents, documentItems, items, productionProjects } from '../../db/schema.js';
 import { resolveJalaliFiscalYear } from '../../lib/businessClock.js';

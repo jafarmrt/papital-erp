@@ -1,5 +1,5 @@
 import { terminateOpenWorkflows } from '../workflow/workflowTermination.js';
-import { assertProjectNotCancelled } from '../projects/projectCancelledGuard.js';
+import { assertProjectNotCancelled } from '../accounting/projectCancelledGuard.js';
 import { eq, and, inArray, isNull } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { documents, documentItems, items, transactions, journalVouchers, productionProjects } from '../../db/schema.js';
