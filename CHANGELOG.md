@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.0.257 — مانده طرف حساب فقط روی حساب‌های دائم و «واریز کسورات حقوق»
+- صورت‌حساب طرف حساب، کارت حساب و نگهبان حذف مانده را فقط روی حساب‌های دائم می‌گیرند و ردیف موقت را جدا (`temporaryRows`) نشان می‌دهند؛ هدف پرسنل `deductions` پرداخت را به سایر کسورات حقوق پرداختنی (۳۲۰۵) با تفصیلی پرسنل می‌برد (مهاجرت ۰۱۰۹؛ TD-915، TD-924، TD-952).
+
 ### v10.0.256 — پاسخ‌های خطای مسیرهای رویداد، کاربر و پیوست از errorHandler می‌گذرد
 - ۱۳ پاسخ خطای دست‌ساز در `events.routes.ts`، `users.routes.ts` و `attachments.routes.ts` به `BadRequestError` / `NotFoundError` / `UnauthorizedError` / `ForbiddenError` با کد رفت و با `code` و `traceId` یکدست پاسخ داده می‌شود؛ `routeErrorResponses` از ۴۷ به ۳۴ رسید (بخش دوم OBS-R2-05، TD-983).
 

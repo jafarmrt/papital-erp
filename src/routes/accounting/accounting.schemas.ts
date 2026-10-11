@@ -9,6 +9,7 @@ import { DEFAULT_ACCOUNT_MAPPINGS, type ConceptualAccountMappingConfig } from '.
 import { decimalInput, latinDigitsString, storageDateParam } from '../../middleware/validate.js';
 import { TREASURY_CURRENCIES, normalizeTreasuryCurrency } from '../../lib/treasury/treasuryCurrency.js';
 import { VOUCHER_DETAILED_TYPES } from '../../lib/accounting/voucherDetailedTypes.js';
+import { PERSONNEL_PURPOSES } from '../../lib/treasury/partyPurpose.js';
 import { isReservedVoucherReference, MANUAL_CLOSING_TYPE_MESSAGE, RESERVED_REFERENCE_MESSAGE } from '../../lib/accounting/manualVoucherRules.js';
 import { ACCOUNT_CODE_FORMAT_MESSAGE, ACCOUNT_CODE_PATTERN } from '../../lib/accounting/accountCode.js';
 
@@ -337,7 +338,7 @@ export const createTreasuryTxSchema = z.object({
     description: z.string().optional(),
     createVoucher: z.boolean().optional(),
     attachments: z.array(z.any()).optional(),
-    purpose: z.enum(['settlement', 'advance', 'other']).optional(),
+    purpose: z.enum(PERSONNEL_PURPOSES).optional(),
     // v9.0.82 (TD-507): سرفصل طرف مقابل «متفرقه» و «سایر» پرسنل
     contraAccountId: z.coerce.number().int().positive().nullable().optional(),
   })
@@ -458,7 +459,7 @@ export const createChequeSchema = z.object({
     createVoucher: z.boolean().optional(),
     attachments: z.array(z.any()).optional(),
     // v9.0.84 (TD-497): هدف چک پرسنل و سرفصل طرف مقابل «متفرقه» و «سایر»
-    purpose: z.enum(['settlement', 'advance', 'other']).optional(),
+    purpose: z.enum(PERSONNEL_PURPOSES).optional(),
     contraAccountId: z.coerce.number().int().positive().nullable().optional(),
   })
 });
