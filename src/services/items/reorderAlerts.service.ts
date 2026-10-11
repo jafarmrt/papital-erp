@@ -5,6 +5,7 @@ import { fin } from '../../lib/financialDecimal.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
 import { ItemStockReservationService } from './itemStockReservation.service.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
+import { openRequisitionQuantities } from './reorderOpenRequisitions.js';
 
 /**
  * v9.0.404 (TD-843، تصمیم ت۷ «الف» بسته ۷): هشدار نقطه سفارش «موجودی آزاد» = موجودی کل − رزروها (پیش‌فاکتور فروش و پروژه
@@ -28,6 +29,8 @@ export type ReorderAlertRow = Record<string, unknown> & {
   reserved_qty: number;
   free_stock: number;
   in_transit_qty: number;
+  /** v10.0.250 (TD-1134): unordered quantity on open purchase requisitions; shown only */
+  requested_qty: number;
   reorder_point: number;
   deficit: number;
 };
@@ -62,9 +65,10 @@ export async function listReorderAlerts(filters: ReorderAlertFilters, executor: 
   }
   const candidates = await executor.select().from(items).where(and(...conditions)).orderBy(asc(items.id));
   const ids = candidates.map(it => it.id);
-  const [reserved, inTransit, stockMap] = await Promise.all([
+  const [reserved, inTransit, requested, stockMap] = await Promise.all([
     ItemStockReservationService.getReservedStocksMap({ itemIds: ids }),
     inTransitQuantities(executor, ids),
+    openRequisitionQuantities(executor, ids),
     ItemWarehouseStockService.getStocksForItems(executor, ids),
   ]);
 
@@ -86,6 +90,7 @@ export async function listReorderAlerts(filters: ReorderAlertFilters, executor: 
       reserved_qty: reservedQty,
       free_stock: free.toNumber(),
       in_transit_qty: inTransit.get(it.id) ?? 0,
+      requested_qty: requested.get(it.id) ?? 0,
       reorder_point: reorderPoint,
       weighted_average_cost: wac,
       deficit: deficitQty,

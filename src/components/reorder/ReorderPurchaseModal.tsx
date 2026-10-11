@@ -10,6 +10,8 @@ import { useReorderPurchaseSubmit, type ReorderPurchaseVariables } from '../../h
 import { receiptNeedsDonatedConfirmation, reorderPurchaseReceiptPayload, reorderReceiptPriceError } from '../../lib/reorderAlerts/reorderPurchaseReceipt';
 import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
 import { ReorderOrderFields, type ReorderPriority as Priority } from './ReorderOrderFields';
+import { confirmAction } from '../ConfirmDialogHost';
+import { openRequisitionQuestion } from '../../lib/reorderAlerts/openRequisitionQuestion';
 
 export type { ReorderModalItem } from '../../lib/reorderAlerts/reorderItems';
 
@@ -146,6 +148,14 @@ export function ReorderPurchaseModal({
       };
     }
 
+    // v10.0.250 (TD-1134): a second request for an item already on an open requisition is sent only after a confirmation
+    const question = variables.target === 'requisition' ? openRequisitionQuestion(items) : null;
+    if (!question) { send(variables); return; }
+    void confirmAction({ title: 'درخواست خرید باز', message: question, confirmText: 'بله، درخواست تازه ثبت شود' })
+      .then(ok => { if (ok) send(variables); });
+  };
+
+  const send = (variables: ReorderPurchaseVariables) => {
     purchaseSubmit.mutate(variables, {
       onSuccess: (res) => {
         if (variables.target === 'requisition') {
