@@ -23,8 +23,8 @@ export const WRITER_ROUTES_WITHOUT_BODY = new Set([
   'POST /api/events/webhooks/:id/rotate-secret', 'POST /api/events/webhooks/:id/toggle',
   'POST /api/inventory/allocations/:id/consume',
   'POST /api/inventory/kardex-initial-backfill',
-  // بدنه خود پرونده است (جریان خام، نه JSON)؛ پرسمان با `mediaUploadSchema` / `mediaPosterSchema` سنجیده می‌شود
-  'POST /api/media/assets', 'PUT /api/media/assets/:id/poster',
+  // بدنه خود پرونده است (جریان خام، نه JSON)؛ پرسمان با `mediaUploadSchema` / `mediaPosterSchema` / `mediaReplaceSchema` سنجیده می‌شود
+  'POST /api/media/assets', 'PUT /api/media/assets/:id/poster', 'PUT /api/media/assets/:id/content',
   'POST /api/media/assets/:id/rebuild-light',
   'POST /api/piecework/payrolls/:id/sync-voucher',
   'POST /api/piecework/tasks/:id/restore',
