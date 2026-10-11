@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { fetchJson } from '../api';
 import { User } from '../types';
 import { Shield, Building2, User as UserIcon, Lock, KeyRound, CheckCircle2, ArrowRight, ArrowLeft, Upload, Image as ImageIcon, Phone, MapPin, DollarSign, Eye, EyeOff } from 'lucide-react';
@@ -14,6 +14,20 @@ interface SetupPageProps {
   onLogin: (user: User, token: string) => void;
 }
 
+const ADDRESS_TOKEN_PARAMS = ['token', 'setupToken'];
+
+/** Removes a setup token sent as `?token=` / `?setupToken=` from the address bar, so it stays out of the browser history */
+function removeSetupTokenFromAddress(): void {
+  try {
+    const url = new URL(window.location.href);
+    if (!ADDRESS_TOKEN_PARAMS.some(p => url.searchParams.has(p))) return;
+    for (const p of ADDRESS_TOKEN_PARAMS) url.searchParams.delete(p);
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+  } catch {
+    // an address that cannot be read leaves nothing to remove
+  }
+}
+
 export default function SetupPage({ onLogin }: SetupPageProps) {
   const [step, setStep] = useState<1 | 2>(1);
   const [isSaving, setIsSaving] = useState(false);
@@ -22,14 +36,9 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
   const [tokenError, setTokenError] = useState('');
 
   // Step 1: Admin Account State & Setup Security Token (SEC-012)
-  const [setupToken, setSetupToken] = useState(() => {
-    try {
-      const params = new URLSearchParams(window.location.search);
-      return params.get('token') || params.get('setupToken') || '';
-    } catch {
-      return '';
-    }
-  });
+  // v10.0.265 (OBS-R1-13): the token is typed into the form only; one sent in the address is removed from it
+  const [setupToken, setSetupToken] = useState('');
+  useEffect(() => { removeSetupTokenFromAddress(); }, []);
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');
