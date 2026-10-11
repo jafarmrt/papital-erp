@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.0.268 — پاک‌کننده لاگ پردازه: رمز در متن ساده هم پاک می‌شود
+- `sanitizeObject` در `src/middleware/logger.ts` کلید رمز را با قاعده پاک‌کننده سجل (`isSecretAuditKey`) می‌شناسد، پس `author` و `authority` دیگر پنهان نمی‌شوند و `apiKey` و `newPassword` پنهان می‌شوند؛ رمز نوشته‌شده در متن ساده (`password=…`، `?token=…`، `api_key: …`) هم پاک می‌شود (OBS-R1-03، TD-983).
+
 ### v10.0.267 — حفظ تفصیلی طرف حساب در سند اختتامیه و افتتاحیه
 - سند اختتامیه و افتتاحیه مانده‌ها را از تراز سطح تفصیلی می‌گیرند و برای هر طرف، پروژه یا حساب بانکی نوع و شناسه تفصیلی را نگه می‌دارند (`closingRowDetail` در `src/services/accounting/closingRowDetail.ts`؛ OBS-R1-45 از TD-985).
 
