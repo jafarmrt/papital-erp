@@ -715,6 +715,13 @@
       "when": 1794300000000,
       "tag": "0101_payroll_approve_permission",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1794310000000,
+      "tag": "0102_activity_log_trace_id",
+      "breakpoints": true
     }
   ]
 }
