@@ -189,11 +189,11 @@
 | شناسه | عنوان | شرح | شاهد روی `8e107ef` | نوع | تصمیم مالک | هم‌پوشان | منبع | وضعیت |
 |---|---|---|---|---|---|---|---|---|
 | OBS-R1-80 | قفل `FOR NO KEY UPDATE` به ترتیب شناسه در ابزارهای نگهداری | ابزارهای نگهداری کاردکس (ثبت موجودی اولیه، بازمحاسبه WAC، آشتی) قفل `FOR UPDATE` می‌گیرند، backfill بی ORDER BY و در یک تراکنش. | بله: `kardexBackfill.service.ts:48-58`؛ `kardexWacRecalculator.service.ts:100`؛ `warehouseStockReconciliation.service.ts:301`. | مشاهده | خیر | — | P06.md:406-410 (§۳.۱-۱ و ۲)؛ obs_reviews_p01_p08.md | ✅ v10.0.157 |
-| OBS-R1-82 | خواندن محدود و صفحه‌بندی کدهای ترنسفر | `GET /transfers` همه کدها و همه محصولات را بی محدودیت می‌خواند. | بله: `transfers.routes.ts:53-71`. | مشاهده | خیر | — | P06.md:415-418 (§۳.۱-۷)؛ obs_reviews_p01_p08.md | باز |
+| OBS-R1-82 | خواندن محدود و صفحه‌بندی کدهای ترنسفر | `GET /transfers` همه کدها و همه محصولات را بی محدودیت می‌خواند. | بله: `transfers.routes.ts:53-71`. | مشاهده | خیر | — | P06.md:415-418 (§۳.۱-۷)؛ obs_reviews_p01_p08.md | ✅ v10.0.182 |
 | OBS-R1-83 | حذف لایه‌های بی‌اثر سیاست موجودی منفی | سرویس، route و زبانه سیاست موجودی منفی برای سیاستی ثابت بی‌اثرند، و `getPolicy` یک `catch {}` دارد. | بله: `negativeStockPolicy.service.ts:65`؛ `inventory.routes.ts:372-382`؛ `NegativeStockPolicySettingsTab`. | مشاهده | خیر | — | P06.md:419-422 (§۳.۱-۸)؛ obs_reviews_p01_p08.md | ✅ v10.0.160 |
 | OBS-R1-84 | حذف کد مرده موتور موجودی | `reconcileAndRebuildStock` و `getProjectAllocations` کد مرده‌اند. | بله: `documentStockEngine:273`، `document.service:186` و `inventoryIntegrity:164`. | مشاهده | خیر | — | P06.md:423-425 (§۳.۱-۹)؛ obs_reviews_p01_p08.md | ✅ v10.0.159 |
 | OBS-R1-85 | `decimalInput` برای مقدار انتقال | مقدار انتقال با `z.coerce.number()` خوانده می‌شود، نه با `decimalInput`. | بله: `inventory.routes.ts:54`. | مشاهده | خیر | — | P06.md:427 (§۳.۱-۱۱)؛ obs_reviews_p01_p08.md | ✅ v10.0.158 |
-| OBS-R1-86 | انتخابگر کالای انتقال با جست‌وجوی سرور | انتخابگر کالای انتقال فهرست کامل را می‌گیرد، نه `SearchableSelect` با جست‌وجوی سرور. | بله: `WarehouseTransferModal.tsx:48,199`. | مشاهده | خیر | — | P06.md:437 (§۳.۲-۱۵)؛ obs_reviews_p01_p08.md | باز |
+| OBS-R1-86 | انتخابگر کالای انتقال با جست‌وجوی سرور | انتخابگر کالای انتقال فهرست کامل را می‌گیرد، نه `SearchableSelect` با جست‌وجوی سرور. | بله: `WarehouseTransferModal.tsx:48,199`. | مشاهده | خیر | — | P06.md:437 (§۳.۲-۱۵)؛ obs_reviews_p01_p08.md | ✅ v10.0.183 |
 
 ### ۲.۷. بسته ۷ — برنامه‌ریزی موجودی (۴ مورد، TD-989)
 
