@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.0.265 — نوشتن‌های مسیر پرسنل به لایه سرویس رفت (TD-960)
+- پنج نوشتن مستقیم `personnel.routes.ts` به `src/services/personnel/personnelWrite.service.ts` رفت؛ `routeWrites` از ۱۵ به ۱۰ رسید و هدف «صفر در بسته‌های مالی، ≤ ۲۰ در کل» برآورده شد (OBS-R2-01، TD-960).
+
 ### v10.0.264 — پنهان ماندن رمز نوبیتکس پرسنل در فرم و جزئیات
 - فرم و پنجره جزئیات پرسنل رمز نوبیتکس را پنهان نشان می‌دهند و فقط با «نمایش رمز» آشکار می‌کنند (`src/components/personnel/NobitexPasswordFields.tsx`)؛ وضعیت بی‌استفاده `showNobitexPass` حذف شد (OBS-R2-54 از TD-994).
 
