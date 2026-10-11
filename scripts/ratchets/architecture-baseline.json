@@ -109,7 +109,6 @@
   "auditWithoutTx": {
     "src/routes/accounting/accounts.routes.ts": 6,
     "src/routes/accounting/fiscal.routes.ts": 1,
-    "src/routes/accounting/treasury.routes.ts": 8,
     "src/routes/accounting/voucherSync.routes.ts": 1,
     "src/routes/accounting/vouchers.routes.ts": 9,
     "src/routes/auth.routes.ts": 4,

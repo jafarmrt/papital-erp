@@ -22,6 +22,7 @@ import { normalizePartyPurpose, requireChoosableContraAccount } from './partyCon
 import { assertPersonnelPartyId, resolveTreasuryPartyName } from './treasuryLinks.js';
 import { chequePartyPosting, requireChequePartyAccount, resolveChequePartyAccountId } from './chequePartyAccount.js';
 import { activeChequeVoucherIds, auditChequeDelete, auditChequeStatusChange, type ChequeAuditActor } from './chequeAudit.js';
+import { auditChequeCreated } from './treasuryAudit.js';
 
 // v9.0.69: جدول انتقال وضعیت چک در `src/lib/treasury/chequeTransitions.ts` است و مرورگر هم همان را می‌خواند
 export { CHEQUE_TRANSITIONS };
@@ -174,6 +175,8 @@ export class ChequeLifecycleService {
     /** v9.0.84 (TD-497): هدف چک پرسنل و سرفصل طرف مقابل «متفرقه» و «سایر» (همان قاعده فرم خزانه، TD-507) */
     purpose?: string;
     contraAccountId?: number | null;
+    /** v10.0.260 (TD-934): ممیزی ثبت چک با `tx` همین ثبت */
+    audit?: ChequeAuditActor;
   }): Promise<Cheque> {
     const amount = Number(data.amount) || 0;
     if (amount <= 0) throw new ValidationError('مبلغ چک باید بزرگتر از صفر باشد');
@@ -326,17 +329,19 @@ export class ChequeLifecycleService {
 
       // v7.0.56 (audit P2-9): فایل پیوست‌ها روی دیسک؛ ستون attachments فقط فراداده
       row.attachments = await AttachmentStorageService.attachToNewRecord(txEngine, 'cheque', row.id, data.attachments, data.username);
-      return row;
+      const created = {
+        ...row,
+        amount: row.amount.toNumber(), // قرارداد API: مبلغ عدد (P2-6)
+        type: row.type as Cheque['type'],
+        status: row.status as Cheque['status'],
+        partyType: (row.partyType || 'customer') as Cheque['partyType'],
+        statusHistory: initialHistory,
+      } as Cheque;
+      await auditChequeCreated(txEngine, data.audit, created, { ...created });
+      return created;
     });
 
-    return {
-      ...inserted,
-      amount: inserted.amount.toNumber(), // قرارداد API: مبلغ عدد (P2-6)
-      type: inserted.type as Cheque['type'],
-      status: inserted.status as Cheque['status'],
-      partyType: (inserted.partyType || 'customer') as Cheque['partyType'],
-      statusHistory: initialHistory,
-    } as Cheque;
+    return inserted;
   }
 
   static async updateChequeStatus(id: number, data: {

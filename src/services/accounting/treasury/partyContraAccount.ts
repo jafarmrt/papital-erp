@@ -22,20 +22,24 @@ export type { PersonnelPurpose };
  */
 async function excludedContraAccountIds(tx?: DbExecutor): Promise<Set<number>> {
   const executor = tx || orm;
-  const mapped = await Promise.all([
-    AccountMappingService.getTradeReceivablesAccount(tx),
-    AccountMappingService.getTradePayablesAccount(tx),
-    AccountMappingService.getWagesPayableAccount(tx),
-    AccountMappingService.getChequeReceivableAccount(tx),
-    AccountMappingService.getChequeInCollectionAccount(tx),
-    AccountMappingService.getChequeProtestAccount(tx),
-    AccountMappingService.getChequePayableAccount(tx),
-    AccountMappingService.getInventoryRawMaterialsAccount(tx),
-    AccountMappingService.getWorkInProgressAccount(tx),
-    AccountMappingService.getInventoryFinishedGoodsAccount(tx),
-    AccountMappingService.getSummaryProfitLossAccount(tx),
-    AccountMappingService.getClosingBalanceAccount(tx),
-  ]);
+  // v10.0.260 (OWN-01): روی اتصال تراکنش یک پرس‌وجو در هر لحظه؛ `Promise.all` دوازده خواندن را هم‌زمان روی همان کلاینت
+  // می‌فرستاد که pg 8 فقط هشدار می‌دهد و pg 9 رد می‌کند.
+  const resolvers = [
+    AccountMappingService.getTradeReceivablesAccount,
+    AccountMappingService.getTradePayablesAccount,
+    AccountMappingService.getWagesPayableAccount,
+    AccountMappingService.getChequeReceivableAccount,
+    AccountMappingService.getChequeInCollectionAccount,
+    AccountMappingService.getChequeProtestAccount,
+    AccountMappingService.getChequePayableAccount,
+    AccountMappingService.getInventoryRawMaterialsAccount,
+    AccountMappingService.getWorkInProgressAccount,
+    AccountMappingService.getInventoryFinishedGoodsAccount,
+    AccountMappingService.getSummaryProfitLossAccount,
+    AccountMappingService.getClosingBalanceAccount,
+  ];
+  const mapped: Array<Account | null> = [];
+  for (const resolve of resolvers) mapped.push(await resolve.call(AccountMappingService, tx));
   const ids = new Set<number>(mapped.filter((a): a is Account => a !== null).map(a => a.id));
   const banks = await executor.select({ accountId: bankAccounts.accountId }).from(bankAccounts)
     .where(and(eq(bankAccounts.isDeleted, 0), sql`${bankAccounts.accountId} IS NOT NULL`));

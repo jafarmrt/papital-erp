@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.0.260 — v10.0.260 — ممیزی خزانه درون همان ثبت و حذف جایگزین حساب کل
+- هشت مسیر خزانه دیگر ممیزی پس از commit نمی‌نویسند: سرویس‌ها ممیزی را با `tx` و `req` در `src/services/accounting/treasury/treasuryAudit.ts` می‌نویسند؛ `resolveContraAccount` در نبود حساب نگاشت حساب کل برنمی‌گرداند و اتصال دوم استخر نمی‌گیرد؛ `excludedContraAccountIds` نگاشت‌ها را یکی‌یکی می‌خواند (TD-934، OWN-01، OWN-03، نیمه خزانه OBS-R2-04).
+
 ### v10.0.259 — ابطال پرداخت فیش، ممیزی پرداخت، «فیش‌های من» و طرف حساب پرسنل در خزانه
 - ابطال پرداخت فیش رویداد `TreasuryTransactionApproved` تراکنش معکوس را در صف ارسال می‌نویسد؛ پرداخت و ابطال آن ممیزی «پرداخت حقوق» را با `tx`، `req` و مبلغ می‌نویسند؛ `/payrolls/mine` کلید `paidAmount` دارد؛ فرم خزانه و چک نام کامل پرسنل را می‌خوانند و ردیف خزانه یا چک پرسنل بی شناسه ۴۲۲ `TREASURY_PERSONNEL_REQUIRED` می‌گیرد (TD-949، TD-950، TD-951، TD-953، TD-954).
 
