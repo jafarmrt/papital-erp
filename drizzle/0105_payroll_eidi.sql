@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS payroll_eidi_rates (
   labor_cap_days numeric(7, 2) NOT NULL DEFAULT 0,
   min_daily_wage numeric(18, 4) NOT NULL DEFAULT 0,
   fixed_amount numeric(18, 4) NOT NULL DEFAULT 0,
+  tax_exempt_cap numeric(18, 4) NOT NULL DEFAULT 0,
   version integer NOT NULL DEFAULT 1,
   created_at timestamp DEFAULT now(),
   updated_at timestamp DEFAULT now(),

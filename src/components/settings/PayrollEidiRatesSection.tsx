@@ -21,13 +21,14 @@ interface EidiRatesView {
   laborCapDays: string;
   minDailyWage: string;
   fixedAmount: string;
+  taxExemptCap: string;
   version: number;
 }
 
-type NumberKey = 'percent' | 'yearlyCap' | 'laborDays' | 'laborCapDays' | 'minDailyWage' | 'fixedAmount';
+type NumberKey = 'percent' | 'yearlyCap' | 'laborDays' | 'laborCapDays' | 'minDailyWage' | 'fixedAmount' | 'taxExemptCap';
 type FormState = Record<NumberKey, string> & { method: EidiMethod; version?: number };
 
-const EMPTY_FORM: FormState = { method: 'percent_of_work', percent: '', yearlyCap: '', laborDays: '', laborCapDays: '', minDailyWage: '', fixedAmount: '' };
+const EMPTY_FORM: FormState = { method: 'percent_of_work', percent: '', yearlyCap: '', laborDays: '', laborCapDays: '', minDailyWage: '', fixedAmount: '', taxExemptCap: '' };
 const inputClass = 'w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono';
 const clean = (v: string) => normalizeDecimalString(v) || '0';
 
@@ -84,6 +85,7 @@ export function PayrollEidiRatesSection() {
     laborCapDays: clean(form.laborCapDays),
     minDailyWage: clean(form.minDailyWage),
     fixedAmount: clean(form.fixedAmount),
+    taxExemptCap: clean(form.taxExemptCap),
     ...(form.version !== undefined ? { version: form.version } : {}),
   };
   const formError = eidiRatesError({ jalaliYear: year, ...body });
@@ -130,6 +132,11 @@ export function PayrollEidiRatesSection() {
             <input id={`eidi-${f.key}`} inputMode="decimal" value={form[f.key]} onChange={(e) => setForm(p => ({ ...p, [f.key]: e.target.value }))} className={inputClass} />
           </div>
         ))}
+        <div>
+          <label className="block text-xs font-bold text-slate-700 mb-1" htmlFor="eidi-taxExemptCap">سقف معافیت مالیاتی عیدی هر نفر در سال (ریال)</label>
+          <input id="eidi-taxExemptCap" inputMode="decimal" value={form.taxExemptCap} onChange={(e) => setForm(p => ({ ...p, taxExemptCap: e.target.value }))} className={inputClass} />
+          <p className="text-[11px] text-slate-500 mt-1">مازاد عیدی بر این سقف برای پرسنل مشمول مالیات با پله‌های مالیات حقوق همان سال مالیات می‌گیرد.</p>
+        </div>
       </div>
       {formError && <p className="text-[11px] font-bold text-rose-700">{formError}</p>}
       <div className="flex justify-end">

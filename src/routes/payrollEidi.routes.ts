@@ -31,6 +31,7 @@ const saveRatesSchema = z.object({
     laborCapDays: decimalInput('روزهای سقف عیدی').optional(),
     minDailyWage: decimalInput('حداقل مزد روزانه').optional(),
     fixedAmount: decimalInput('مبلغ عیدی سال').optional(),
+    taxExemptCap: decimalInput('سقف معافیت مالیاتی عیدی').optional(),
     version: z.number().int().positive().optional(),
   }).strict(),
 });
@@ -44,6 +45,7 @@ const issueSchema = z.object({
     personnelId: z.number().int().positive('پرسنل را انتخاب کنید'),
     year: z.number().int().min(1390).max(1500),
     amount: decimalInput('مبلغ عیدی').optional(),
+    incomeTax: decimalInput('مالیات عیدی').optional(),
     overrideReason: z.string().max(EIDI_OVERRIDE_REASON_MAX).optional(),
     notes: z.string().max(2000).optional(),
   }).strict(),
@@ -66,8 +68,8 @@ router.get('/piecework/eidi-preview', authorizePermission(...READ_PERMISSIONS.pa
 
 router.post('/piecework/eidi-payslips', requirePermission(PIECEWORK_PAYROLL_PERMISSION), idempotency({ scope: 'payroll' }), validate(issueSchema), asyncHandler(async (req, res) => {
   const body = req.body as z.infer<typeof issueSchema>['body'];
-  const { payroll, voucher } = await issueEidiPayslip({ ...body, userId: req.user?.id, username: req.user?.username || 'سیستم', req });
-  res.status(201).json({ ...payroll, voucherId: voucher?.id ?? null, voucherNumber: voucher?.voucherNumber ?? null });
+  const { payroll, voucher, taxWarning } = await issueEidiPayslip({ ...body, userId: req.user?.id, username: req.user?.username || 'سیستم', req });
+  res.status(201).json({ ...payroll, voucherId: voucher?.id ?? null, voucherNumber: voucher?.voucherNumber ?? null, taxWarning });
 }));
 
 router.get('/piecework/reports/eidi', authorizePermission(...READ_PERMISSIONS.payrolls), validate(reportSchema), asyncHandler(async (req, res) => {

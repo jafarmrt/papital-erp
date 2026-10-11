@@ -219,6 +219,7 @@ export const payrollEidiRates = pgTable('payroll_eidi_rates', {
   laborCapDays: numeric('labor_cap_days', { precision: 7, scale: 2 }).notNull().default('0'),
   minDailyWage: moneyNumeric('min_daily_wage').notNull().default(sql`0`),
   fixedAmount: moneyNumeric('fixed_amount').notNull().default(sql`0`),
+  taxExemptCap: moneyNumeric('tax_exempt_cap').notNull().default(sql`0`),
   version: integer('version').notNull().default(1),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),

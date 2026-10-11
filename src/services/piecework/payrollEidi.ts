@@ -27,6 +27,7 @@ export interface EidiRatesView {
   laborCapDays: string;
   minDailyWage: string;
   fixedAmount: string;
+  taxExemptCap: string;
   version: number;
 }
 
@@ -40,6 +41,7 @@ function viewOf(row: RatesRow): EidiRatesView {
     laborCapDays: fin(row.laborCapDays).toString(),
     minDailyWage: fin(row.minDailyWage).toString(),
     fixedAmount: fin(row.fixedAmount).toString(),
+    taxExemptCap: fin(row.taxExemptCap).toString(),
     version: row.version,
   };
 }
@@ -65,6 +67,7 @@ export interface SaveEidiRatesInput {
   laborCapDays?: DecimalValue;
   minDailyWage?: DecimalValue;
   fixedAmount?: DecimalValue;
+  taxExemptCap?: DecimalValue;
   /** نسخه نرخ موجود همان سال؛ برای سال تازه خالی */
   version?: number;
   req?: unknown;
@@ -83,6 +86,7 @@ export async function saveEidiRates(input: SaveEidiRatesInput): Promise<EidiRate
     laborCapDays: decimalText(input.laborCapDays),
     minDailyWage: decimalText(input.minDailyWage),
     fixedAmount: decimalText(input.fixedAmount),
+    taxExemptCap: decimalText(input.taxExemptCap),
   };
   const refusal = eidiRatesError(rates);
   if (refusal) throw new ValidationError(refusal, undefined, 'PAYROLL_EIDI_RATES_INVALID');
@@ -95,6 +99,7 @@ export async function saveEidiRates(input: SaveEidiRatesInput): Promise<EidiRate
     laborCapDays: String(rates.laborCapDays),
     minDailyWage: money(String(rates.minDailyWage)),
     fixedAmount: money(String(rates.fixedAmount)),
+    taxExemptCap: money(String(rates.taxExemptCap)),
   };
   return orm.transaction(async (tx) => {
     const [before] = await tx.select().from(payrollEidiRates).where(eq(payrollEidiRates.jalaliYear, rates.jalaliYear)).for('update');

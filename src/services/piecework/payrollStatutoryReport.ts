@@ -9,7 +9,8 @@ import { jalaliToGregorian } from '../../utils/dateUtils.js';
 /**
  * v10.0.211 (TD-1088، طرح حقوق §۳.۳ بند ۶، تصمیم ت۷ الف): «فهرست بیمه و مالیات» یک ماه جلالی، برای پر کردن لیست بیمه و
  * فهرست مالیات: جمع هر پرسنل روی فیش‌های زنده تأییدشده یا پرداخت‌شده‌ای که پایان دوره‌شان در آن ماه است. فیش پیش‌نویس
- * شمرده نمی‌شود و فقط تعدادش گزارش می‌شود. جمع‌ها در SQL است (§1.8).
+ * شمرده نمی‌شود و فقط تعدادش گزارش می‌شود. جمع‌ها در SQL است (§1.8). v10.0.212 (TD-1089، ت۲۱): فیش عیدی با مالیات مازاد بر
+ * سقف معافیت هم با مبلغ عیدی‌اش در ناخالص و مالیاتش در فهرست می‌آید؛ فیش عیدی بی مالیات نمی‌آید.
  */
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -24,13 +25,14 @@ export async function payrollStatutoryReport(jalaliYear: number, jalaliMonth: nu
   const res = await orm.execute(sql`
     SELECT pe.id AS personnel_id, pe.full_name, COALESCE(pe.personnel_code, '') AS personnel_code, COALESCE(pe.national_id, '') AS national_id,
            COUNT(*)::int AS payslips,
-           SUM(COALESCE(p.total_piecework_amount, 0) + COALESCE(p.total_fixed_amount, 0) + COALESCE(p.total_bonuses, 0))::text AS gross,
+           SUM(COALESCE(p.total_piecework_amount, 0) + COALESCE(p.total_fixed_amount, 0) + COALESCE(p.total_bonuses, 0)
+               + CASE WHEN p.is_eidi = 1 THEN p.eidi_amount ELSE 0 END)::text AS gross,
            SUM(p.employee_insurance)::text AS employee_insurance,
            SUM(p.employer_insurance)::text AS employer_insurance,
            SUM(p.income_tax)::text AS income_tax
       FROM piecework_payrolls p
       JOIN personnel pe ON pe.id = p.personnel_id
-     WHERE p.is_deleted = 0 AND p.is_eidi = 0 AND p.status IN ('approved', 'partially_paid', 'paid')
+     WHERE p.is_deleted = 0 AND (p.is_eidi = 0 OR p.income_tax > 0) AND p.status IN ('approved', 'partially_paid', 'paid')
        AND p.end_date >= ${from} AND p.end_date <= ${to}
      GROUP BY pe.id, pe.full_name, pe.personnel_code, pe.national_id
      ORDER BY pe.full_name, pe.id`);
@@ -47,7 +49,7 @@ export async function payrollStatutoryReport(jalaliYear: number, jalaliMonth: nu
   }));
   const drafts = await orm.execute(sql`
     SELECT COUNT(*)::int AS n FROM piecework_payrolls p
-     WHERE p.is_deleted = 0 AND p.is_eidi = 0 AND p.status = 'draft' AND p.end_date >= ${from} AND p.end_date <= ${to}`);
+     WHERE p.is_deleted = 0 AND (p.is_eidi = 0 OR p.income_tax > 0) AND p.status = 'draft' AND p.end_date >= ${from} AND p.end_date <= ${to}`);
   const sum = (key: 'gross' | 'employeeInsurance' | 'employerInsurance' | 'incomeTax') => rows.reduce((t, r) => t.add(r[key]), fin(0)).toString();
   return {
     jalaliYear,

@@ -194,5 +194,44 @@ export async function runPayrollEidiTests(shouldRun: ShouldRun): Promise<TestCas
     }));
   }
 
+  const taxId = 'reg_payroll_eidi_tax_td_1089';
+  if (shouldRun(taxId, 'td1089', 'payroll', 'eidi', 'tax', 'duties')) {
+    await runCase(results, taxId, 'v10.0.212: eidi above the yearly tax-exempt cap is taxed at the year\'s payroll tax brackets, posted to 3206 and taken from net; another tax needs a reason (TD-1089, t21)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      const statutory = await admin.put('/api/piecework/statutory-rates/1405', {
+        employeeInsurancePercent: '7', employerInsurancePercent: '23',
+        taxBrackets: [{ from: '0', to: '10000000', rate: '0' }, { from: '10000000', to: null, rate: '10' }],
+      });
+      const saved = await admin.put('/api/piecework/eidi-rates/1405', { method: 'fixed_amount', fixedAmount: '60000000', taxExemptCap: '40000000' });
+      if (statutory.status !== 200 || saved.status !== 200 || String(field(saved, 'taxExemptCap')) !== '40000000') throw new Error(`setup: ${brief(statutory)} / ${brief(saved)}`);
+      const worker = await newWorker('TD-1089 eidi tax');
+      await orm.update(personnel).set({ isTaxCovered: 1 }).where(eq(personnel.id, worker));
+
+      // excess 20,000,000 over the cap: 0 % on the first 10,000,000 and 10 % on the rest
+      const preview = await admin.get(`/api/piecework/eidi-preview?personnelId=${worker}&year=1405`);
+      const taxPreview = field(preview, 'tax') as { suggestion?: { taxableExcess?: string; incomeTax?: string } } | undefined;
+      if (preview.status !== 200 || taxPreview?.suggestion?.taxableExcess !== '20000000' || taxPreview?.suggestion?.incomeTax !== '1000000') problems.push(`the preview answered ${brief(preview)}, expected excess 20,000,000 and tax 1,000,000`);
+      const noReason = await admin.post('/api/piecework/eidi-payslips', { personnelId: worker, year: 1405, incomeTax: '0' });
+      if (noReason.status !== 422 || codeOf(noReason) !== 'PAYROLL_EIDI_OVERRIDE_REASON_REQUIRED') problems.push(`a tax of 0 without a reason answered ${brief(noReason)}, expected 422`);
+      const issued = await admin.post('/api/piecework/eidi-payslips', { personnelId: worker, year: 1405 });
+      const id = Number(field(issued, 'id'));
+      const [row] = await q('SELECT net_payable::text AS net, income_tax::text AS tax FROM piecework_payrolls WHERE id = $1', [id]);
+      if (issued.status !== 201 || !fin(String(row?.net)).equals(59_000_000) || !fin(String(row?.tax)).equals(1_000_000)) problems.push(`the eidi payslip answered ${brief(issued)} and stored ${JSON.stringify(row)}, expected net 59,000,000 and tax 1,000,000`);
+      const posted = { tax: await personNet('3206', worker), wages: await personNet('3201', worker), expense: await personNet('7014', worker) };
+      if (!fin(posted.tax).equals(-1_000_000) || !fin(posted.wages).equals(-59_000_000) || !fin(posted.expense).equals(60_000_000)) problems.push(`the voucher posted ${JSON.stringify(posted)}`);
+
+      const exempt = await newWorker('TD-1089 eidi not tax covered');
+      const free = await admin.post('/api/piecework/eidi-payslips', { personnelId: exempt, year: 1405 });
+      const [freeRow] = await q('SELECT net_payable::text AS net, income_tax::text AS tax FROM piecework_payrolls WHERE id = $1', [Number(field(free, 'id'))]);
+      if (free.status !== 201 || !fin(String(freeRow?.tax)).isZero() || !fin(String(freeRow?.net)).equals(60_000_000)) problems.push(`a personnel not covered by payroll tax answered ${brief(free)} and stored ${JSON.stringify(freeRow)}`);
+
+      const violations = await checkPayrollInvariants(0);
+      if (violations.length) problems.push(`I10: ${JSON.stringify(violations).slice(0, 300)}`);
+      assertNoProblems(problems);
+      return 'Excess 20,000,000 over the 40,000,000 cap taxed 1,000,000 on 3206, net 59,000,000; tax 0 without a reason 422; a personnel not covered pays no tax; I10 clean.';
+    }));
+  }
+
   return results;
 }
