@@ -16,6 +16,8 @@ export type MatchQuality = 'tracking' | 'amount_date' | 'amount_only' | 'none';
 
 export interface ReconcileMatchedRow extends StatementRow {
   matchedTxId: number | null;
+  /** v10.0.252 (TD-971): ردیف تطبیق‌یافته تراکنش خزانه است یا چک وصول‌شده */
+  matchedSource?: CandidateSource;
   matchedTxNumber?: string;
   matchedTxDate?: string;
   matchedTxParty?: string;
@@ -24,8 +26,12 @@ export interface ReconcileMatchedRow extends StatementRow {
   dateDiffDays?: number;
 }
 
+export type CandidateSource = 'treasury' | 'cheque';
+
 export interface TreasuryTxCandidate {
   id: number;
+  /** v10.0.252 (TD-971): خالی یعنی تراکنش خزانه */
+  source?: CandidateSource;
   transactionNumber: string;
   date: string;
   type: 'receipt' | 'payment';
@@ -242,7 +248,9 @@ export function matchStatementWithTransactions(
   statementRows: StatementRow[],
   transactions: TreasuryTxCandidate[]
 ): ReconcileMatchedRow[] {
-  const usedTxIds = new Set<number>();
+  // v10.0.252 (TD-971): شناسه چک و تراکنش خزانه از دو جدول است، پس کلید نامزد منبع را هم دارد
+  const usedTxIds = new Set<string>();
+  const keyOf = (t: TreasuryTxCandidate) => `${t.source ?? 'treasury'}:${t.id}`;
 
   // فیلتر تراکنش‌های فعال و معتبر
   const activeTxs = transactions.filter(t => 
@@ -258,7 +266,7 @@ export function matchStatementWithTransactions(
     // نامزدهای هم‌جهت (واریز به واریز، برداشت به برداشت)
     const sameTypeCandidates = activeTxs.filter(t => 
       t.type === row.type && 
-      !usedTxIds.has(t.id)
+      !usedTxIds.has(keyOf(t))
     );
 
     // ۱. سطح اول: تطبیق بر اساس شماره پیگیری/ارجاع دقیق (اگر حداقل ۴ رقم معتبر داشته باشد)
@@ -309,12 +317,13 @@ export function matchStatementWithTransactions(
 
     // در صورت یافتن تطبیق، شناسه تراکنش را ذخیره می‌کنیم تا به سطر دیگری اختصاص داده نشود
     if (matchedTx) {
-      usedTxIds.add(matchedTx.id);
+      usedTxIds.add(keyOf(matchedTx));
       const isAlreadyReconciled = Boolean(matchedTx.reconciled === 1 || matchedTx.reconciled === true);
 
       return {
         ...row,
         matchedTxId: matchedTx.id,
+        matchedSource: matchedTx.source ?? 'treasury',
         matchedTxNumber: matchedTx.transactionNumber,
         matchedTxDate: matchedTx.date,
         matchedTxParty: matchedTx.partyName || 'طرف‌حساب مشخص‌نشده',
@@ -332,4 +341,13 @@ export function matchStatementWithTransactions(
       alreadyReconciled: false,
     };
   });
+}
+
+/** v10.0.252 (TD-971): شناسه‌های ردیف‌های تازه تطبیق‌یافته، جدا برای تراکنش خزانه و چک */
+export function newMatchedIdsBySource(rows: ReconcileMatchedRow[]): { txIds: number[]; chequeIds: number[] } {
+  const fresh = rows.filter(r => r.matchedTxId !== null && !r.alreadyReconciled);
+  return {
+    txIds: fresh.filter(r => (r.matchedSource ?? 'treasury') === 'treasury').map(r => r.matchedTxId as number),
+    chequeIds: fresh.filter(r => r.matchedSource === 'cheque').map(r => r.matchedTxId as number),
+  };
 }

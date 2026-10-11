@@ -4,10 +4,11 @@ import toast from 'react-hot-toast';
 import { BankAccount } from '../../../types';
 import { formatPersianNumber, formatPersianPrice, formatPersianDate } from '../../../utils';
 import { confirmAction } from '../../ConfirmDialogHost';
-import { useBankTreasuryTransactionsQuery } from '../../../hooks/accounting/useTreasuryQueries';
+import { useBankReconcileChequesQuery, useBankTreasuryTransactionsQuery } from '../../../hooks/accounting/useTreasuryQueries';
 import { 
   parseBankStatementBuffer, 
   matchStatementWithTransactions, 
+  newMatchedIdsBySource,
   ReconcileMatchedRow,
   TreasuryTxCandidate 
 } from './bankStatementMatcher';
@@ -17,7 +18,7 @@ interface BankReconciliationModalProps {
   onClose: () => void;
   bankAccounts: BankAccount[];
   initialBankAccountId?: number | string;
-  onReconcileTransactions?: (bankAccountId: number, txIds: number[], batch: string, reconciled: boolean) => Promise<void>;
+  onReconcileTransactions?: (bankAccountId: number, txIds: number[], batch: string, reconciled: boolean, chequeIds?: number[]) => Promise<void>;
 }
 
 export function BankReconciliationModal({
@@ -50,13 +51,19 @@ export function BankReconciliationModal({
 
   // تراکنش‌های حساب انتخابی؛ v9.0.102 (TD-509): فقط همین حساب از سرور خوانده می‌شود، نه کل فهرست خزانه
   const accountTxQuery = useBankTreasuryTransactionsQuery(selectedAccountId ? Number(selectedAccountId) : null);
+  // v10.0.252 (TD-971): چک وصول‌شده در مانده خزانه حساب است، پس نامزد تطبیق هم هست
+  const accountChequesQuery = useBankReconcileChequesQuery(selectedAccountId ? Number(selectedAccountId) : null);
   const accountTxs = useMemo<TreasuryTxCandidate[]>(() => {
     const rows = Array.isArray(accountTxQuery.data) ? accountTxQuery.data : [];
-    return rows.filter(t =>
-      t.bankAccountId === Number(selectedAccountId) &&
-      t.status !== 'voided'
-    );
-  }, [accountTxQuery.data, selectedAccountId]);
+    const chequeRows = Array.isArray(accountChequesQuery.data) ? accountChequesQuery.data : [];
+    return [
+      ...rows.filter(t => t.bankAccountId === Number(selectedAccountId) && t.status !== 'voided'),
+      ...chequeRows.map(c => ({
+        id: c.id, source: 'cheque' as const, transactionNumber: `چک ${c.chequeNumber}`, date: c.date, type: c.type,
+        amount: c.amount, partyName: c.partyName, reconciled: c.reconciled,
+      })),
+    ];
+  }, [accountTxQuery.data, accountChequesQuery.data, selectedAccountId]);
 
   // پردازش فایل اکسل صورت‌حساب
   const processFile = async (file: File) => {
@@ -151,6 +158,7 @@ export function BankReconciliationModal({
       unmatchedCount: unmatchedRows.length,
       newMatchedCount: newMatchedRows.length,
       newMatchedTxIds: newMatchedRows.map(r => r.matchedTxId as number),
+      newMatchedBySource: newMatchedIdsBySource(reconcileRows),
       totalDepositAmount,
       totalWithdrawalAmount,
       matchPercentage,
@@ -199,19 +207,15 @@ export function BankReconciliationModal({
     setIsCommitting(true);
     try {
       const batchCode = `reconcile-${Date.now()}`;
-      await onReconcileTransactions(Number(selectedAccountId), metrics.newMatchedTxIds, batchCode, true);
+      const { txIds, chequeIds } = metrics.newMatchedBySource;
+      await onReconcileTransactions(Number(selectedAccountId), txIds, batchCode, true, chequeIds);
       
       toast.success(
         `${formatPersianNumber(metrics.newMatchedTxIds.length)} تراکنش با موفقیت در دفاتر به‌عنوان تطبیق‌یافته ثبت شدند.`
       );
       
       // به‌روزرسانی وضعیت ردیف‌ها
-      setReconcileRows(prev => prev.map(r => {
-        if (r.matchedTxId && metrics.newMatchedTxIds.includes(r.matchedTxId)) {
-          return { ...r, alreadyReconciled: true };
-        }
-        return r;
-      }));
+      setReconcileRows(prev => prev.map(r => (r.matchedTxId !== null ? { ...r, alreadyReconciled: true } : r)));
     } catch (err: any) {
       console.error('Error committing reconciliation:', err);
       toast.error(err?.message || 'خطا در ثبت تطبیق تراکنش‌ها در سرور');

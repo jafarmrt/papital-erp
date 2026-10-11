@@ -6728,8 +6728,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const [{ n: covered }] = (await orm.execute(sql`
         SELECT count(*)::int AS n FROM pg_constraint pc JOIN pg_class rel ON rel.oid = pc.conrelid
         WHERE rel.relnamespace = current_schema()::regnamespace AND pc.conname LIKE 'chk%datefmt' AND pc.convalidated`) as unknown as { rows: Array<{ n: number }> }).rows;
-      // v7.0.82 (TD-231): ۲۴ قید مهاجرت 0028 و ۳ قید مهاجرت 0030؛ v10.0.199 (TD-1086): ۱ قید مهاجرت 0103 (personnel.start_date)
-      if (covered !== 28) violations.push(`number of validated date format constraints: ${covered} (expected 28)`);
+      // v7.0.82 (TD-231): ۲۴ قید مهاجرت 0028 و ۳ قید مهاجرت 0030؛ v10.0.199 (TD-1086): ۱ قید مهاجرت 0103 (personnel.start_date)؛
+      // v10.0.252 (TD-971): ۱ قید مهاجرت 0108 (cheques.reconciled_at)
+      if (covered !== 29) violations.push(`number of validated date format constraints: ${covered} (expected 29)`);
       if (missingRows.length > 0) violations.push(`without a valid format constraint: ${missingRows.map(r => `${r.table_name}.${r.column_name}`).join(', ')}`);
 
       const ROLLBACK = new Error('ROLLBACK_P3_15');
@@ -10972,6 +10973,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Phase 3 lane L1, package A4 (v10.0.251): project reports, cash and bank per currency, account mapping read
   const { runAccountingP2ReportTests } = await import('../regression/accountingP2ReportTests.js');
   results.push(...await runAccountingP2ReportTests(shouldRun));
+
+  // Phase 3 lane L1, package A5 (v10.0.252): cheque steps without a mapped account, cleared cheques in reconciliation, bank heading lock
+  const { runTreasuryChequeA5Tests } = await import('../regression/treasuryChequeA5Tests.js');
+  results.push(...await runTreasuryChequeA5Tests(shouldRun));
 
   return results;
 }

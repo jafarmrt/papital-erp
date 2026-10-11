@@ -30,6 +30,18 @@ export async function assertBankCurrencyChangeAllowed(
 ): Promise<void> {
   const current = (bank.currency || 'IRR').toUpperCase();
   if (current === nextCurrency) return;
+  const reasons = await bankMovementReasons(tx, bank);
+  if (reasons.length > 0) {
+    throw new ValidationError(
+      `ارز این حساب (${formatCurrencyLabel(current)}) پس از نخستین گردش ثابت است و به ${formatCurrencyLabel(nextCurrency)} تغییر نمی‌کند؛ حساب ${reasons.join('، ')} دارد. برای ارز دیگر حساب تازه بسازید.`,
+      { current, requested: nextCurrency },
+      'BANK_ACCOUNT_CURRENCY_LOCKED',
+    );
+  }
+}
+
+/** گردش‌هایی که حساب خزانه را پس از خود ثابت می‌کنند: تراکنش خزانه (حتی باطل‌شده)، چک ثبت‌شده و مانده اول دوره */
+async function bankMovementReasons(tx: DbExecutor, bank: { id: number; initialBalance: DecimalValue }): Promise<string[]> {
   const reasons: string[] = [];
   const [txCount] = await tx.select({ n: sql<number>`count(*)::int` }).from(treasuryTransactions)
     .where(eq(treasuryTransactions.bankAccountId, bank.id));
@@ -38,11 +50,26 @@ export async function assertBankCurrencyChangeAllowed(
     .where(and(eq(cheques.bankAccountId, bank.id), eq(cheques.isDeleted, 0)));
   if (Number(chequeCount?.n) > 0) reasons.push(`${Number(chequeCount.n)} چک`);
   if (!fin(bank.initialBalance).isZero()) reasons.push('مانده اول دوره');
+  return reasons;
+}
+
+/**
+ * v10.0.252 (TD-969، OBS-R1-58، تصمیم مالک محصول ۱۷ مهر): سرفصل معین حساب خزانه پس از نخستین گردش ثابت است، مانند ارز
+ * آن. پیش‌تر تغییر سرفصل حسابی که تراکنش داشت پذیرفته می‌شد و مانده دفتر روی سرفصل پیشین می‌ماند، پس تراز و تطبیق بانک
+ * از هم جدا می‌شدند. حسابی که هنوز سرفصل ندارد سرفصل می‌گیرد. زیر قفل ردیف بانک صدا زده می‌شود.
+ */
+export async function assertBankLedgerChangeAllowed(
+  tx: DbExecutor,
+  bank: { id: number; accountId: number | null; initialBalance: DecimalValue },
+  nextAccountId: number | null,
+): Promise<void> {
+  if (!bank.accountId || bank.accountId === nextAccountId) return;
+  const reasons = await bankMovementReasons(tx, bank);
   if (reasons.length > 0) {
     throw new ValidationError(
-      `ارز این حساب (${formatCurrencyLabel(current)}) پس از نخستین گردش ثابت است و به ${formatCurrencyLabel(nextCurrency)} تغییر نمی‌کند؛ حساب ${reasons.join('، ')} دارد. برای ارز دیگر حساب تازه بسازید.`,
-      { current, requested: nextCurrency },
-      'BANK_ACCOUNT_CURRENCY_LOCKED',
+      `سرفصل معین این حساب پس از نخستین گردش ثابت است؛ حساب ${reasons.join('، ')} دارد و مانده دفتر آن روی سرفصل کنونی است. برای سرفصل دیگر حساب تازه بسازید.`,
+      { current: bank.accountId, requested: nextAccountId },
+      'BANK_ACCOUNT_LEDGER_LOCKED',
     );
   }
 }

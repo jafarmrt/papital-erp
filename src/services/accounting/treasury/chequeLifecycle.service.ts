@@ -42,6 +42,20 @@ export function assertChequeTransition(current: string, next: ChequeStatus): voi
   }
 }
 
+/**
+ * v10.0.252 (TD-970، OBS-R1-59): گام چکی که سند می‌خواهد بی حساب نگاشت‌شده رد می‌شود. پیش‌تر نبود حساب اسناد دریافتنی،
+ * در جریان وصول یا پرداختنی فقط سند را جا می‌انداخت، در حالی که وضعیت چک و مانده بانک تغییر می‌کرد.
+ */
+function requireChequeAccounts(chequeNumber: string, step: string, ...required: unknown[]): true {
+  if (required.some(acc => !acc)) {
+    throw new ValidationError(
+      `حساب لازم برای ثبت سند «${step}» چک ${chequeNumber} در نگاشت حساب‌ها یافت نشد؛ نگاشت اسناد دریافتنی، در جریان وصول و پرداختنی را بررسی کنید.`,
+      undefined, 'CHEQUE_ACCOUNT_MAPPING_MISSING',
+    );
+  }
+  return true;
+}
+
 export class ChequeLifecycleService {
   static async getCheques(params: {
     // v7.0.110 (TD-240): «all» یعنی بدون فیلتر نوع یا وضعیت
@@ -445,7 +459,7 @@ export class ChequeLifecycleService {
             ? ((await AccountMappingService.getChequeReceivableAccount(txEngine)) || (await AccountMappingService.getChequeInCollectionAccount(txEngine)))
             : ((await AccountMappingService.getChequeInCollectionAccount(txEngine)) || (await AccountMappingService.getChequeReceivableAccount(txEngine)));
 
-          if (creditAcc) {
+          if (requireChequeAccounts(existing.chequeNumber, 'وصول', creditAcc) && creditAcc) {
             await VoucherService.createJournalVoucher({
               date: voucherIsoDate,
               voucherType: 'treasury',
@@ -481,7 +495,7 @@ export class ChequeLifecycleService {
           }
         } else if (existing.type === 'paid' && bank.accountId) {
           const payableChequeAcc = await AccountMappingService.getChequePayableAccount(txEngine);
-          if (payableChequeAcc) {
+          if (requireChequeAccounts(existing.chequeNumber, 'پاس شدن', payableChequeAcc) && payableChequeAcc) {
             await VoucherService.createJournalVoucher({
               date: voucherIsoDate,
               voucherType: 'treasury',
@@ -517,7 +531,7 @@ export class ChequeLifecycleService {
       } else if (data.status === 'in_collection' && existing.type === 'received') {
         const inTreasuryAcc = await AccountMappingService.getChequeReceivableAccount(txEngine);
         const inCollectionAcc = await AccountMappingService.getChequeInCollectionAccount(txEngine);
-        if (inTreasuryAcc && inCollectionAcc) {
+        if (requireChequeAccounts(existing.chequeNumber, 'ارسال به وصول', inTreasuryAcc, inCollectionAcc) && inTreasuryAcc && inCollectionAcc) {
           await VoucherService.createJournalVoucher({
             date: voucherIsoDate,
             voucherType: 'treasury',
@@ -559,7 +573,7 @@ export class ChequeLifecycleService {
           ? ((await AccountMappingService.getChequeReceivableAccount(txEngine)) || (await AccountMappingService.getChequeInCollectionAccount(txEngine)))
           : ((await AccountMappingService.getChequeInCollectionAccount(txEngine)) || (await AccountMappingService.getChequeReceivableAccount(txEngine)));
 
-        if (bouncedAccId && posting && creditAcc && existing.type === 'received') {
+        if (existing.type === 'received' && requireChequeAccounts(existing.chequeNumber, 'برگشت', bouncedAccId, posting, creditAcc) && bouncedAccId && posting && creditAcc) {
           await VoucherService.createJournalVoucher({
             date: voucherIsoDate,
             voucherType: 'adjustment',
@@ -670,7 +684,7 @@ export class ChequeLifecycleService {
         const inTreasuryAcc = (await AccountMappingService.getChequeReceivableAccount(txEngine))
           || (await AccountMappingService.getChequeInCollectionAccount(txEngine));
 
-        if (tradePayablesAcc && inTreasuryAcc) {
+        if (requireChequeAccounts(existing.chequeNumber, 'خرج', tradePayablesAcc, inTreasuryAcc) && tradePayablesAcc && inTreasuryAcc) {
           const transferee = transfereeName || 'طرف حساب واگذاری';
           await VoucherService.createJournalVoucher({
             date: voucherIsoDate,

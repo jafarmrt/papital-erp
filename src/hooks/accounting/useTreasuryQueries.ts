@@ -8,6 +8,7 @@ import { ACCOUNTING_LIST_QUERY_OPTIONS, fetchAccountingList, silentMutationError
 import { invalidateAfterReconciliation, invalidateAfterTreasuryChange } from './accountingInvalidation';
 import { useOnDemandReport, type OnDemandReportSpec } from './useOnDemandReport';
 import type { TreasuryRelinkOption } from '../../lib/treasury/treasuryRelink';
+import type { ReconcilableCheque } from '../../lib/treasury/reconcilableCheque';
 
 /**
  * خزانه‌داری: حساب‌های بانکی و تراکنش‌های خزانه با useQuery؛ حساب بانکی، دریافت/پرداخت، ابطال، انتقال بین‌بانکی،
@@ -99,6 +100,16 @@ export function useBankTreasuryTransactionsQuery(bankAccountId: number | null) {
   });
 }
 
+/** v10.0.252 (TD-971): چک‌های وصول‌شده حساب، نامزد تطبیق صورت‌حساب */
+export function useBankReconcileChequesQuery(bankAccountId: number | null) {
+  return useQuery<ReconcilableCheque[]>({
+    queryKey: [...QUERY_KEYS.accounting.treasury(), 'reconcile-cheques', bankAccountId],
+    queryFn: ({ signal }) => fetchAccountingList<ReconcilableCheque>(`/accounting/treasury/reconcile-cheques?bankAccountId=${bankAccountId}`, signal, 'bank reconcile cheques'),
+    ...ACCOUNTING_LIST_QUERY_OPTIONS,
+    enabled: bankAccountId !== null,
+  });
+}
+
 /** v9.0.82 (TD-507): سرفصل‌های مجاز طرف مقابل «متفرقه» و «سایر» پرسنل؛ فقط وقتی فرم آن را لازم دارد خوانده می‌شود */
 export interface ContraAccountOption {
   id: number;
@@ -119,6 +130,8 @@ export function useContraAccountsQuery(enabled: boolean) {
 export interface ReconcileVariables {
   bankAccountId: number;
   txIds: number[];
+  /** v10.0.252 (TD-971): چک‌های وصول‌شده همین حساب */
+  chequeIds?: number[];
   batch: string;
   reconciled: boolean;
 }
@@ -175,9 +188,9 @@ export function useTreasuryMutations() {
 
   // V1.6.0: ثبت گروهی آشتی‌سنجی بانکی
   const reconcileTransactions = useMutation<unknown, unknown, ReconcileVariables>({
-    mutationFn: ({ bankAccountId, txIds, batch, reconciled }) => fetchJson('/accounting/treasury/reconcile', {
+    mutationFn: ({ bankAccountId, txIds, chequeIds, batch, reconciled }) => fetchJson('/accounting/treasury/reconcile', {
       method: 'POST',
-      body: JSON.stringify({ bankAccountId, txIds, batch, reconciled }),
+      body: JSON.stringify({ bankAccountId, txIds, chequeIds: chequeIds ?? [], batch, reconciled }),
     }),
     onSuccess: () => { void invalidateAfterReconciliation(queryClient); },
     onError: silentMutationError,

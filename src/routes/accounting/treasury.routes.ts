@@ -11,6 +11,7 @@ import { getBankAccountOptions } from '../../services/accounting/treasury/bankAc
 import { relinkTreasuryDocument } from '../../services/accounting/treasury/treasuryDocumentRelink.js';
 import { listTreasuryRelinkOptions } from '../../services/accounting/treasury/treasuryRelinkOptions.js';
 import { choosableContraAccounts } from '../../services/accounting/treasury/partyContraAccount.js';
+import { listReconcilableCheques } from '../../services/accounting/treasury/bankReconciliation.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { validate, paramsIdSchema } from '../../middleware/validate.js';
 import { idempotency } from '../../middleware/idempotency.js';
@@ -24,6 +25,7 @@ import {
   previewTreasurySchema,
   transferSchema,
   reconcileSchema,
+  reconcileChequesQuerySchema,
   voidTreasuryTxSchema,
   relinkTreasuryDocumentSchema,
   treasuryRelinkOptionsSchema,
@@ -229,12 +231,18 @@ router.post('/accounting/treasury/transfer', authorizePermission('accounting.tre
   res.status(201).json(result);
 }));
 
+// v10.0.252 (TD-971): چک‌های وصول‌شده حساب، نامزد تطبیق صورت‌حساب در کنار تراکنش‌های خزانه
+router.get('/accounting/treasury/reconcile-cheques', authorizePermission('accounting.treasury'), validate(reconcileChequesQuerySchema), asyncHandler(async (req, res) => {
+  res.json(await listReconcilableCheques(Number(req.query.bankAccountId)));
+}));
+
 router.post('/accounting/treasury/reconcile', authorizePermission('accounting.treasury'), validate(reconcileSchema), asyncHandler(async (req, res) => {
-  const { bankAccountId, txIds, batch, reconciled } = req.body;
+  const { bankAccountId, txIds, chequeIds, batch, reconciled } = req.body;
   // v9.0.103 (TD-511): ممیزی فقط ردیف‌های تغییرکرده، درون همان تراکنش
   const result = await AccountingService.reconcileTransactions({
     bankAccountId,
     txIds,
+    chequeIds,
     batch: batch || `stmt-${Date.now()}`,
     reconciled,
     req,
