@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.0.261 — استثنای عمومی `/uploads` فقط برای تصویرها
+- `/uploads` بی نشست فقط فایل تصویری و پوشه‌های عمومی را سرو می‌کند (`isPublicUploadPath` در `src/lib/attachments/publicUploadPath.ts`)؛ فایلی که فقط نامش «logo» یا «favicon» دارد دیگر عمومی نیست (OBS-R1-04، TD-983).
+
 ### v10.0.260 — هزینه ارسال و خدمات در فرم فاکتور فروش
 - v10.0.260 — فرم فاکتور فروش کادر «هزینه ارسال و خدمات» دارد که در جمع قابل پرداخت می‌آید و با سند ذخیره می‌شود (TD-1136).
 
