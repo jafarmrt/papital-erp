@@ -3,6 +3,7 @@ import { useItemForm } from './form/useItemForm';
 import { ItemBasicForm } from './form/ItemBasicForm';
 import { ItemWarehouseStockForm } from './form/ItemWarehouseStockForm';
 import { ItemSpecificationsForm } from './form/ItemSpecificationsForm';
+import { ItemProductCardForm } from './form/ItemProductCardForm';
 
 export function ItemFormModal(props: ItemFormModalProps) {
   const { isOpen, onClose, warehouses } = props;
@@ -98,6 +99,8 @@ export function ItemFormModal(props: ItemFormModalProps) {
               formatMultiValue={formatMultiValue}
               onImageChange={handleImageChange}
             />
+
+            {form.type === 'product' && <ItemProductCardForm form={form} setForm={setForm} isNew={!item} />}
           </div>
 
           {/* Footer */}

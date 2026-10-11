@@ -32,6 +32,8 @@ export interface ExplorerLedgerRow {
   debit: number;
   credit: number;
   runningBalance: number;
+  /** v10.0.x (TD-1240): ردیف «مانده ابتدای دوره» که سرور می‌فرستد؛ سند، شماره و کد حساب ندارد */
+  isOpening?: boolean;
 }
 
 export interface ExplorerLedgerData {
