@@ -708,6 +708,13 @@
       "when": 1794210000000,
       "tag": "0100_user_role_foreign_key",
       "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1794300000000,
+      "tag": "0101_payroll_approve_permission",
+      "breakpoints": true
     }
   ]
 }

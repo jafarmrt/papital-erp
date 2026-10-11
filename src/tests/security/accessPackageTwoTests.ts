@@ -11,7 +11,7 @@ import { deleteTestRoles } from '../fixtures/roleCleanup.js';
  */
 
 /** کلیدهایی که پس از مهاجرت 0062 (v9.0.107) به کاتالوگ آمدند */
-const KEYS_ADDED_AFTER_0062: ReadonlySet<string> = new Set(['documents.finalize', 'personnel.view_sensitive', 'payroll.view_sensitive', 'accounting.fiscal_reopen', 'piecework.pay', 'pending_materials.create', 'media.view', 'media.upload', 'media.manage', 'accounting.vouchers_approve']);
+const KEYS_ADDED_AFTER_0062: ReadonlySet<string> = new Set(['documents.finalize', 'personnel.view_sensitive', 'payroll.view_sensitive', 'accounting.fiscal_reopen', 'piecework.pay', 'pending_materials.create', 'media.view', 'media.upload', 'media.manage', 'accounting.vouchers_approve', 'piecework.payroll_approve']);
 
 export async function runAccessPackageTwoTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];

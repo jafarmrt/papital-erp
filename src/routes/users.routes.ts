@@ -24,6 +24,7 @@ import { isSyntheticTestUsername, SYNTHETIC_USERNAME_REFUSED } from '../lib/synt
 import { USERNAME_OF_DELETED_USER, deletedUsernameMessage } from '../lib/users/userRestore.js';
 import { roleDisplayName } from '../lib/users/roleDisplayName.js';
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE } from '../lib/auth/passwordPolicy.js';
+import { passwordChangeLockMinutes, passwordChangeLockedError, recordPasswordChangeFailure, resetPasswordChangeFailures, verifyPasswordConstantWork } from '../services/auth/loginSecurity.service.js';
 
 const router = Router();
 router.use(authenticateToken); // Protect all user routes
@@ -150,11 +151,16 @@ router.put('/users/profile', validate(updateProfileSchema), asyncHandler(async (
       if (!current_password) {
         return res.status(400).json({ error: 'جهت تغییر کلمه عبور، وارد کردن کلمه عبور فعلی الزامی است' });
       }
-      const isBcrypt = u.password && (u.password.startsWith('$2a$') || u.password.startsWith('$2b$') || u.password.startsWith('$2y$'));
-      const isMatch = isBcrypt ? await bcrypt.compare(current_password, u.password) : false;
+      // v10.0.191 (TD-961): wrong current passwords lock the change progressively, like the login pair
+      const lockedFor = passwordChangeLockMinutes(userId);
+      if (lockedFor !== null) throw passwordChangeLockedError(lockedFor);
+      const isMatch = await verifyPasswordConstantWork(current_password, u.password);
       if (!isMatch) {
+        const lockMinutes = recordPasswordChangeFailure(userId);
+        if (lockMinutes > 0) throw passwordChangeLockedError(lockMinutes);
         return res.status(400).json({ error: 'کلمه عبور فعلی اشتباه است' });
       }
+      resetPasswordChangeFailures(userId);
       const salt = await bcrypt.genSalt(10);
       updateData.password = await bcrypt.hash(new_password, salt);
       updateData.mustResetPassword = 0;

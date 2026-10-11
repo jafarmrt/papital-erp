@@ -384,7 +384,7 @@ export class ChequeLifecycleService {
         existing = chq;
         bankRecord = bank;
       } else {
-        // v10.0.191 (TD-1217): حساب بانکی تازه پیش از چک قفل می‌شود (همان ترتیب «وصول»: بانک ← چک). پیش‌تر چک اول قفل می‌شد و
+        // v10.0.196 (TD-1217): حساب بانکی تازه پیش از چک قفل می‌شود (همان ترتیب «وصول»: بانک ← چک). پیش‌تر چک اول قفل می‌شد و
         // نوشتن حساب بانکی قفل کلید خارجی بانک را می‌خواست، در حالی که «وصول» هم‌زمان بانک را گرفته و منتظر چک بود: بن‌بست.
         const nextBankId = Number(data.bankAccountId) > 0
           ? await requireChequeBankAccount(txEngine, data.bankAccountId)
