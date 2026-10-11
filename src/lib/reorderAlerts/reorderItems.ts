@@ -19,6 +19,8 @@ export interface ReorderItem {
   free_stock?: number;
   /** v9.0.404 (TD-843): on open purchase documents (draft or proforma); shown only */
   in_transit_qty?: number;
+  /** v10.0.255 (TD-1134): unordered quantity on open purchase requisitions; shown only */
+  requested_qty?: number;
   reorder_point: number;
   weighted_average_cost: number;
   deficit: number;
@@ -43,6 +45,8 @@ export interface ReorderModalItem {
   type: 'product' | 'raw_material';
   orderQty: number;
   unitPrice: number;
+  /** v10.0.255 (TD-1134): already on open purchase requisitions */
+  requested_qty?: number;
 }
 
 /** ردیف محصول پیش‌فرض مودال تعریف پروژه تولید */
@@ -136,7 +140,8 @@ export function toPurchaseModalItem(item: ReorderItem): ReorderModalItem {
     weighted_average_cost: item.weighted_average_cost,
     type: item.type,
     orderQty: item.deficit,
-    unitPrice: item.weighted_average_cost
+    unitPrice: item.weighted_average_cost,
+    requested_qty: item.requested_qty ?? 0,
   };
 }
 
