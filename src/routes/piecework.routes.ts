@@ -780,6 +780,7 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], requirePerm
     res.status(201).json({
       ...payroll,
       statutoryWarning: result.statutoryWarning ?? null,
+      eidiWarning: result.eidiWarning ?? null,
       voucherId: voucher ? voucher.id : null,
       voucherNumber: voucher ? voucher.voucherNumber : null,
       isVoucherSynced: !!voucher

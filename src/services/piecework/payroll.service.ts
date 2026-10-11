@@ -19,6 +19,7 @@ import { auditPayrollDeleted, auditPayrollIssued, auditPayrollUpdated } from './
 import { payrollStatusLabel } from '../../lib/payroll/payrollStatusLabels.js';
 import { assertPayrollDutyNotByIssuer } from './payrollDuties.js';
 import { resolvePayrollStatutory, statutoryAuditInfo, statutoryPayrollColumns, type StatutoryEntryInput } from './payrollStatutory.js';
+import { assertEidiShareNotSettled, lockPayrollPersonnel, payslipEidiColumns, resolvePayslipEidiShare } from './payrollEidi.js';
 
 /**
  * چرخه عمر فیش حقوقی پرکیسی: صدور، تغییر وضعیت، همگام‌سازی سند و ابطال.
@@ -236,6 +237,9 @@ export class PieceworkPayrollService {
         return { status: 400, error: 'جمع بیمه، مالیات، کسورات و کسر مساعده از اجزای فیش بیشتر است — مقادیر را اصلاح کنید.' };
       }
 
+      // v10.0.212 (TD-1089، طرح حقوق §۳.۸، ت۱۴ الف): سهم عیدی از کارکرد و حقوق ثابت، بی پاداش و کسورات؛ از خالص کم نمی‌شود
+      const eidi = await resolvePayslipEidiShare(tx, { personnelId: pId, endIso: eDate, base: pieceworkTotalFin.add(fixedPortionFin) });
+
       const pieceworkTotal = money(pieceworkTotalFin.round(4));
       const fixedPortion = money(fixedPortionFin.round(4));
       const totBonuses = money(totBonusesFin.round(4));
@@ -272,6 +276,7 @@ export class PieceworkPayrollService {
         isPrepayment: isPrepayment ? 1 : 0,
         prepaymentReason,
         ...statutoryPayrollColumns(statutory),
+        ...payslipEidiColumns(eidi),
         notes: finalNotes,
         createdById: currentUserId,
         isDeleted: 0
@@ -298,14 +303,9 @@ export class PieceworkPayrollService {
         { strict: true }
       );
       // v9.0.285 (TD-810): ردیف ممیزی صدور با عکس فیش، کارکردها و سند، در همان تراکنش
-      await auditPayrollIssued(tx, newPayroll, { personnelName: pInfo.fullName, logIds, voucher: autoVoucher, statutory: statutoryAuditInfo(statutory) }, { req: input.req, userId: currentUserId, username: currentUsername });
+      await auditPayrollIssued(tx, newPayroll, { personnelName: pInfo.fullName, logIds, voucher: autoVoucher, statutory: statutoryAuditInfo(statutory), eidi: { jalaliYear: eidi.jalaliYear, share: eidi.share, warning: eidi.warning } }, { req: input.req, userId: currentUserId, username: currentUsername });
 
-      return {
-        status: 201,
-        payroll: newPayroll,
-        personnelName: pInfo.fullName,
-        voucher: autoVoucher, statutoryWarning: statutory.warning
-      };
+      return { status: 201, payroll: newPayroll, personnelName: pInfo.fullName, voucher: autoVoucher, statutoryWarning: statutory.warning, eidiWarning: eidi.warning };
     });
   }
 
@@ -334,10 +334,13 @@ export class PieceworkPayrollService {
     const currentUsername = input.username;
 
     return orm.transaction(async (tx) => {
+      // v10.0.212 (TD-1089): ترتیب قفل صدور فیش، پرسنل سپس فیش، تا جمع عیدی سال میان بررسی و نوشتن عوض نشود
+      await lockPayrollPersonnel(tx, id);
       const [pay] = await tx.select().from(pieceworkPayrolls).where(and(eq(pieceworkPayrolls.id, id), eq(pieceworkPayrolls.isDeleted, 0))).for('update');
       if (!pay) {
         return { status: 404, error: 'فیش حقوقی یافت نشد' };
       }
+      if (targetStatus === 'draft' && pay.status !== 'draft') await assertEidiShareNotSettled(tx, pay);
       // v8.0.28 (TD-281): وضعیت فیشی که پرداخت دارد دستی عوض نمی‌شود (برگرداندنش به «approved» حذف آن را با پرداخت باقی‌مانده ممکن می‌کرد)
       if (targetStatus && (['paid', 'partially_paid'].includes(pay.status || '') || fin(pay.paidAmount ?? 0).isPositive())) {
         throw new ConflictError(`فیش ${pay.payrollNumber} پرداخت ثبت‌شده دارد؛ وضعیت آن فقط از مسیر پرداخت تغییر می‌کند.`);
@@ -425,6 +428,7 @@ export class PieceworkPayrollService {
     const reason = options?.reason || `ابطال و حذف فیش حقوقی`;
 
     const executeDelete = async (tx: DbExecutor) => {
+      await lockPayrollPersonnel(tx, payrollId);
       const [pay] = await tx
         .select()
         .from(pieceworkPayrolls)
@@ -470,6 +474,8 @@ export class PieceworkPayrollService {
         if (!alreadyReversed) linkedVouchers.push(v);
       }
 
+      // v10.0.212 (TD-1089): سهم عیدی پرداخت‌شده در فیش عیدی آزاد نمی‌شود
+      await assertEidiShareNotSettled(tx, pay);
       const permanentVoucher = linkedVouchers.find(v => v.status === 'permanent');
       if (permanentVoucher) {
         throw new BadRequestError(

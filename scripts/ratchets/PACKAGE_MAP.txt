@@ -278,6 +278,7 @@ G  scripts/check-version-sync.ts
 12 src/routes/personnel.routes.ts
 12 src/routes/piecework.routes.ts
 12 src/routes/payrollStatutory.routes.ts
+12 src/routes/payrollEidi.routes.ts
 12 src/services/piecework.service.ts
 12 src/services/piecework/**
 12 src/pages/PersonnelPage.tsx

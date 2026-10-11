@@ -8,6 +8,7 @@ import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { PAYROLL_RATES_PERMISSION } from '../lib/permissions/pieceworkPermissions.js';
 import { listStatutoryRates, previewPayrollStatutory, saveStatutoryRates } from '../services/piecework/payrollStatutory.js';
 import { payrollStatutoryReport } from '../services/piecework/payrollStatutoryReport.js';
+import payrollEidiRoutes from './payrollEidi.routes.js';
 
 /**
  * v10.0.210 (TD-1087، طرح حقوق §۳.۳، تصمیم ت۴ الف): نرخ‌های سالانه بیمه و مالیات حقوق (نوشتن با `payroll.rates_manage`)
@@ -64,5 +65,8 @@ router.get('/piecework/statutory-preview', authorizePermission(...READ_PERMISSIO
 router.get('/piecework/reports/statutory', authorizePermission(...READ_PERMISSIONS.payrolls), validate(reportSchema), asyncHandler(async (req, res) => {
   res.json(await payrollStatutoryReport(Number(req.query.year), Number(req.query.month)));
 }));
+
+// v10.0.212 (TD-1089): نرخ عیدی، فیش عیدی و گزارش «عیدی سال» (همان بخش حقوق، بی خط تازه در app.ts)
+router.use(payrollEidiRoutes);
 
 export default router;

@@ -30,7 +30,7 @@ export async function payrollStatutoryReport(jalaliYear: number, jalaliMonth: nu
            SUM(p.income_tax)::text AS income_tax
       FROM piecework_payrolls p
       JOIN personnel pe ON pe.id = p.personnel_id
-     WHERE p.is_deleted = 0 AND p.status IN ('approved', 'partially_paid', 'paid')
+     WHERE p.is_deleted = 0 AND p.is_eidi = 0 AND p.status IN ('approved', 'partially_paid', 'paid')
        AND p.end_date >= ${from} AND p.end_date <= ${to}
      GROUP BY pe.id, pe.full_name, pe.personnel_code, pe.national_id
      ORDER BY pe.full_name, pe.id`);
@@ -47,7 +47,7 @@ export async function payrollStatutoryReport(jalaliYear: number, jalaliMonth: nu
   }));
   const drafts = await orm.execute(sql`
     SELECT COUNT(*)::int AS n FROM piecework_payrolls p
-     WHERE p.is_deleted = 0 AND p.status = 'draft' AND p.end_date >= ${from} AND p.end_date <= ${to}`);
+     WHERE p.is_deleted = 0 AND p.is_eidi = 0 AND p.status = 'draft' AND p.end_date >= ${from} AND p.end_date <= ${to}`);
   const sum = (key: 'gross' | 'employeeInsurance' | 'employerInsurance' | 'incomeTax') => rows.reduce((t, r) => t.add(r[key]), fin(0)).toString();
   return {
     jalaliYear,

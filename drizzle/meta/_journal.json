@@ -736,6 +736,13 @@
       "when": 1794500000000,
       "tag": "0104_payroll_statutory_deductions",
       "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1794600000000,
+      "tag": "0105_payroll_eidi",
+      "breakpoints": true
     }
   ]
 }

@@ -16,6 +16,7 @@ import { ChartOfAccountsService } from './chartOfAccounts.service.js';
 import { VoucherService } from './voucher.service.js';
 import { payrollVouchersWhere, pickPayrollVoucher } from './payrollVoucherLink.js';
 import { AccountMappingService } from './accountMapping.service.js';
+import { eidiPayslipGross, payrollEidiVoucherRows } from './payrollEidiVoucherRows.js';
 import { logger } from '../../middleware/logger.js';
 import { fin, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
@@ -1266,7 +1267,8 @@ export class VoucherSyncService {
     const pieceworkAmount = fin(pay.totalPieceworkAmount);
     const bonuses = fin(pay.totalBonuses);
     const fixedAmount = fin(pay.totalFixedAmount);
-    const grossAmount = pieceworkAmount.add(bonuses).add(fixedAmount);
+    // v10.0.212 (TD-1089): ناخالص «فیش عیدی» مبلغ عیدی آن است
+    const grossAmount = pieceworkAmount.add(bonuses).add(fixedAmount).add(eidiPayslipGross(pay));
     const netPayable = fin(pay.netPayable);
     // v9.0.266 (TD-804، تصمیم ت۱ الف): سندی که با خالص فیش نمی‌خواند ساخته نمی‌شود و فیش با خالص مثبت بی‌صدا بی سند نمی‌ماند.
     // پیش‌تر کسورات منفی صفر گرفته می‌شد (بستانکار ۳۲۰۱ کمتر از خالص) و با ناخالص صفر `null` برمی‌گشت، حتی در حالت strict.
@@ -1354,6 +1356,12 @@ export class VoucherSyncService {
     if ((employeeInsurance.isPositive() && !insuranceAcc) || (employerInsurance.isPositive() && (!insuranceAcc || !employerExpenseAcc)) || (incomeTax.isPositive() && !taxAcc)) {
       return null;
     }
+    // v10.0.212 (TD-1089، طرح حقوق §۳.۸): سهم عیدی فیش عادی و پرداخت عیدی فیش عیدی
+    const eidi = await payrollEidiVoucherRows(pay, pers?.fullName || 'پرسنل', tx);
+    if (eidi.missing) {
+      return refuse(`حساب «${eidi.missing}» (نگاشت حساب‌ها) برای ثبت عیدی فیش ${pay.payrollNumber} یافت نشد.`, 'PAYROLL_EIDI_ACCOUNT_MISSING');
+    }
+    for (const row of eidi.rows) personRow(row.accountId, row.debit, row.credit, row.description);
     if (employerInsurance.isPositive() && insuranceAcc && employerExpenseAcc) {
       personRow(employerExpenseAcc.id, employerInsurance, 0, `بیمه سهم کارفرما فیش ${pay.payrollNumber}`);
       personRow(insuranceAcc.id, 0, employerInsurance, `بیمه سهم کارفرما فیش ${pay.payrollNumber} (${pers?.fullName || 'پرسنل'})`);

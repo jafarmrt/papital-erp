@@ -82,6 +82,8 @@ export const STANDARD_CHART_OF_ACCOUNTS: InitialAccountItem[] = [
   // v10.0.210 (TD-1087، طرح حقوق §۳.۳): بیمه سهم کارگر و کارفرما به ۳۲۰۴ و مالیات حقوق به ۳۲۰۶ می‌رود؛ ۳۲۰۵ فقط «سایر کسورات»
   { code: '3205', name: 'سایر کسورات حقوق پرداختنی', level: 'subsidiary', parentCode: '32', accountType: 'liability', nature: 'credit', isSystem: 1 },
   { code: '3206', name: 'مالیات حقوق پرداختنی', level: 'subsidiary', parentCode: '32', accountType: 'liability', nature: 'credit', isSystem: 1 },
+  // v10.0.212 (TD-1089، طرح حقوق §۳.۸): عیدی انباشته فیش‌ها تا «فیش عیدی»
+  { code: '3207', name: 'عیدی پرداختنی', level: 'subsidiary', parentCode: '32', accountType: 'liability', nature: 'credit', isSystem: 1 },
 
   // ==========================================
   // گروه ۴: بدهی‌های بلندمدت و حقوق صاحبان سهام (Equity & Long-term)
@@ -148,4 +150,6 @@ export const STANDARD_CHART_OF_ACCOUNTS: InitialAccountItem[] = [
   { code: '7012', name: 'کسری و اضافات انبار', level: 'subsidiary', parentCode: '70', accountType: 'expense', nature: 'both', isSystem: 1 },
   // v10.0.210 (TD-1087، طرح حقوق §۳.۳): سهم کارفرمای بیمه فیش حقوق (همراه بیمه بیکاری)
   { code: '7013', name: 'هزینه بیمه سهم کارفرما', level: 'subsidiary', parentCode: '70', accountType: 'expense', nature: 'debit', isSystem: 1 },
+  // v10.0.212 (TD-1089، طرح حقوق §۳.۸): سهم عیدی هر فیش و عیدی سالانه
+  { code: '7014', name: 'هزینه عیدی و پاداش', level: 'subsidiary', parentCode: '70', accountType: 'expense', nature: 'debit', isSystem: 1 },
 ];

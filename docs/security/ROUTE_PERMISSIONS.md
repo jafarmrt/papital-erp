@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 396
+تعداد مسیرها: 401
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -278,6 +278,10 @@
 | POST | `/api/piecework/categories` | piecework.manage_tasks |
 | DELETE | `/api/piecework/categories/:id` | piecework.manage_tasks |
 | PUT | `/api/piecework/categories/:id` | piecework.manage_tasks |
+| POST | `/api/piecework/eidi-payslips` | piecework.payroll |
+| GET | `/api/piecework/eidi-preview` | piecework.payroll \| piecework.pay \| personnel.manage \| accounting.treasury |
+| GET | `/api/piecework/eidi-rates` | payroll.rates_manage \| piecework.payroll \| piecework.pay \| personnel.manage \| accounting.treasury |
+| PUT | `/api/piecework/eidi-rates/:year` | payroll.rates_manage |
 | GET | `/api/piecework/logs` | piecework.view \| piecework.log \| personnel.manage \| projects.view |
 | POST | `/api/piecework/logs` | piecework.log |
 | DELETE | `/api/piecework/logs/:id` | piecework.log |
@@ -300,6 +304,7 @@
 | GET | `/api/piecework/personnel/:id/advance-balance` | piecework.payroll \| piecework.pay \| personnel.manage \| accounting.treasury |
 | POST | `/api/piecework/rates` | piecework.manage_tasks |
 | GET | `/api/piecework/rates/:personnelId` | piecework.view \| piecework.log \| piecework.manage_tasks \| piecework.payroll \| piecework.pay \| personnel.manage \| accounting.treasury |
+| GET | `/api/piecework/reports/eidi` | piecework.payroll \| piecework.pay \| personnel.manage \| accounting.treasury |
 | GET | `/api/piecework/reports/statutory` | piecework.payroll \| piecework.pay \| personnel.manage \| accounting.treasury |
 | GET | `/api/piecework/statutory-preview` | piecework.payroll \| piecework.pay \| personnel.manage \| accounting.treasury |
 | GET | `/api/piecework/statutory-rates` | payroll.rates_manage \| piecework.payroll \| piecework.pay \| personnel.manage \| accounting.treasury |

@@ -49,6 +49,10 @@ export async function editDraftPayroll(id: number, input: EditDraftPayrollInput)
     const [before] = await tx.select().from(pieceworkPayrolls)
       .where(and(eq(pieceworkPayrolls.id, id), eq(pieceworkPayrolls.isDeleted, 0))).for('update');
     if (!before) throw new NotFoundError('فیش حقوقی یافت نشد');
+    // v10.0.212 (TD-1089): فیش عیدی ویرایش نمی‌شود؛ باطل و دوباره صادر می‌شود
+    if (before.isEidi === 1) {
+      throw new ConflictError(`فیش ${before.payrollNumber} فیش عیدی است و ویرایش نمی‌شود؛ آن را باطل و دوباره صادر کنید.`, undefined, 'PAYROLL_EIDI_NOT_EDITABLE');
+    }
     if (before.status !== 'draft') {
       throw new ConflictError(`فیش ${before.payrollNumber} پیش‌نویس نیست؛ برای ویرایش، دارنده «تأیید فیش حقوق» نخست آن را به پیش‌نویس برگرداند.`, undefined, 'PAYROLL_NOT_DRAFT');
     }

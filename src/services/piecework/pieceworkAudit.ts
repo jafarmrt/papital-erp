@@ -66,6 +66,11 @@ export function payrollSnapshot(row: PayrollRow): Snapshot {
     employerInsurance: text(row.employerInsurance),
     incomeTax: text(row.incomeTax),
     statutoryOverrideReason: row.statutoryOverrideReason ?? '',
+    // v10.0.212 (TD-1089): سهم عیدی فیش، یا عیدی فیش عیدی و بخش انباشته آن
+    eidiAmount: text(row.eidiAmount),
+    eidiFromAccrual: text(row.eidiFromAccrual),
+    eidiYear: row.eidiYear ?? null,
+    isEidi: row.isEidi ?? 0,
   };
 }
 
@@ -131,7 +136,7 @@ export async function auditWorkLogDeleted(tx: DbExecutor, row: WorkLogRow, actor
 
 export async function auditPayrollIssued(
   tx: DbExecutor, row: PayrollRow,
-  info: { personnelName: string; logIds: number[]; voucher: { id: number; voucherNumber: number } | null; statutory?: Record<string, unknown> },
+  info: { personnelName: string; logIds: number[]; voucher: { id: number; voucherNumber: number } | null; statutory?: Record<string, unknown>; eidi?: Record<string, unknown> },
   actor: AuditActor,
 ): Promise<void> {
   await logActivity({
@@ -140,10 +145,11 @@ export async function auditPayrollIssued(
     action: 'CREATE',
     entity: PAYROLL_AUDIT_ENTITY,
     entityId: row.id,
-    description: `صدور ${row.isPrepayment === 1 ? `فیش پیش‌پرداخت ${row.payrollNumber} (دلیل: ${row.prepaymentReason})` : `فیش حقوقی ${row.payrollNumber}`} برای ${info.personnelName} با خالص ${amount(row.netPayable)} (سند حسابداری: ${info.voucher ? toPersianDigits(info.voucher.voucherNumber) : 'بدون سند'})`,
+    description: `صدور ${row.isEidi === 1 ? `فیش عیدی ${row.payrollNumber} (سال ${toPersianDigits(row.eidiYear ?? '')})` : row.isPrepayment === 1 ? `فیش پیش‌پرداخت ${row.payrollNumber} (دلیل: ${row.prepaymentReason})` : `فیش حقوقی ${row.payrollNumber}`} برای ${info.personnelName} با خالص ${amount(row.netPayable)} (سند حسابداری: ${info.voucher ? toPersianDigits(info.voucher.voucherNumber) : 'بدون سند'})`,
     details: {
       after: payrollSnapshot(row), workLogIds: info.logIds, voucherId: info.voucher?.id ?? null, voucherNumber: info.voucher?.voucherNumber ?? null,
       ...(info.statutory ? { statutory: info.statutory } : {}),
+      ...(info.eidi ? { eidi: info.eidi } : {}),
     },
   });
 }

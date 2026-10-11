@@ -139,6 +139,12 @@ export interface PieceworkPayroll {
   incomeTax?: number | string;
   statutoryOverrideReason?: string | null;
   isStatutorySplit?: number;
+  // v10.0.212 (TD-1089): سهم عیدی فیش عادی، یا عیدی و بخش انباشته فیش عیدی؛ جمع سهم تأییدشده سال
+  eidiAmount?: number | string;
+  eidiFromAccrual?: number | string;
+  eidiYear?: number | null;
+  isEidi?: number;
+  eidiYearAccrued?: number | string;
   netPayable: number;
   // V4.0.33: پرداخت چندمرحله‌ای حقوق
   paidAmount?: number;
