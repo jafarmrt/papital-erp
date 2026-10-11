@@ -344,7 +344,7 @@ export class AccountMappingService {
   }
 
   /**
-   * v10.0.27 (TD-948): بدهکار حواله‌ای که پروژه ندارد (پیش‌فرض ۶۰۰۳ سربار ساخت و هزینه‌های کارگاه)
+   * v10.0.175 (TD-948): بدهکار حواله‌ای که پروژه ندارد (پیش‌فرض ۶۰۰۳ سربار ساخت و هزینه‌های کارگاه)
    */
   static async getUnassignedConsumptionAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('unassignedConsumptionAccountCode', tx);

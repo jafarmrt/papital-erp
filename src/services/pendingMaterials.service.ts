@@ -1,4 +1,4 @@
-import { eq, and } from 'drizzle-orm';
+import { eq, and, or, desc, ilike, sql, type SQL } from 'drizzle-orm';
 import type { Request } from 'express';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { pendingMaterials, items, productionProjects } from '../db/schema.js';
@@ -7,8 +7,14 @@ import { moneyOr } from '../lib/money.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { isDataUrl, uploadBase64ToStorage } from '../lib/storage.js';
 import { ItemCatalogService } from './items/itemCatalog.service.js';
+import { assertApprovableMaterial } from './pendingMaterialCode.js';
 import { WorkflowEngineService } from './workflow/workflowEngineService.js';
 import { terminateOpenWorkflows } from './workflow/workflowTermination.js';
+import { containsLikePattern } from '../lib/sqlLike.js';
+import {
+  PENDING_MATERIAL_MAX_PAGE_SIZE, PENDING_MATERIAL_PAGE_SIZE, PENDING_MATERIAL_STATUSES,
+  type PendingMaterialListFilters, type PendingMaterialPage, type PendingMaterialStatus,
+} from '../lib/pendingMaterials/pendingMaterialList.js';
 
 export interface CreatePendingMaterialInput {
   name: string;
@@ -159,6 +165,41 @@ async function requestProject(tx: DbExecutor, projectId: number | string | null 
 const inTransaction = <T>(externalTx: DbExecutor | undefined, work: (tx: DbExecutor) => Promise<T>): Promise<T> =>
   externalTx ? work(externalTx) : orm.transaction(work);
 
+/** A list row, with the snake_case aliases the page and older screens still read */
+export function pendingMaterialListRow(r: PendingMaterialRow) {
+  return {
+    id: r.id,
+    code: r.code,
+    name: r.name,
+    unit: r.unit,
+    category: r.category,
+    type: r.type,
+    projectId: r.projectId,
+    project_id: r.projectId,
+    projectTitle: r.projectTitle,
+    project_title: r.projectTitle,
+    requestedBy: r.requestedBy,
+    requested_by: r.requestedBy,
+    status: r.status,
+    reorderPoint: r.reorderPoint,
+    reorder_point: r.reorderPoint,
+    weightedAverageCost: r.weightedAverageCost,
+    weighted_average_cost: r.weightedAverageCost,
+    color: r.color,
+    weight: r.weight,
+    material: r.material,
+    size: r.size,
+    image: r.image,
+    thumbnail: r.thumbnail,
+    rejectionReason: r.rejectionReason,
+    rejection_reason: r.rejectionReason,
+    itemId: r.itemId,
+    createdAt: r.createdAt,
+    created_at: r.createdAt,
+  };
+}
+export type PendingMaterialListRow = ReturnType<typeof pendingMaterialListRow>;
+
 export class PendingMaterialsService {
   /**
    * Retrieves pending material by ID
@@ -169,6 +210,42 @@ export class PendingMaterialsService {
       .from(pendingMaterials)
       .where(and(eq(pendingMaterials.id, id), eq(pendingMaterials.isDeleted, 0)));
     return row || null;
+  }
+
+  /**
+   * v10.0.171 (OBS-R1-90): one page of the queue, filtered, counted and paged in SQL; `statusCounts` counts every status
+   * under the category and search filters, so the status cards stay right whatever status is shown.
+   */
+  static async listRequests(filters: PendingMaterialListFilters): Promise<PendingMaterialPage<PendingMaterialListRow>> {
+    const page = Math.max(1, filters.page ?? 1);
+    const limit = Math.min(PENDING_MATERIAL_MAX_PAGE_SIZE, Math.max(1, filters.limit ?? PENDING_MATERIAL_PAGE_SIZE));
+    const shared: SQL[] = [eq(pendingMaterials.isDeleted, 0)];
+    const category = filters.category?.trim();
+    if (category && category !== 'all') shared.push(eq(pendingMaterials.category, category));
+    const search = filters.search?.trim();
+    if (search) {
+      const pattern = containsLikePattern(search);
+      shared.push(or(
+        ilike(pendingMaterials.name, pattern),
+        ilike(pendingMaterials.code, pattern),
+        ilike(pendingMaterials.projectTitle, pattern),
+      )!);
+    }
+    const status = filters.status && filters.status !== 'all' ? filters.status : null;
+    const where = and(...shared, status ? eq(pendingMaterials.status, status) : undefined);
+
+    const [rows, [{ total }], counted] = await Promise.all([
+      orm.select().from(pendingMaterials).where(where)
+        .orderBy(desc(pendingMaterials.id)).limit(limit).offset((page - 1) * limit),
+      orm.select({ total: sql<number>`count(*)::int` }).from(pendingMaterials).where(where),
+      orm.select({ status: pendingMaterials.status, n: sql<number>`count(*)::int` })
+        .from(pendingMaterials).where(and(...shared)).groupBy(pendingMaterials.status),
+    ]);
+    const statusCounts = Object.fromEntries(PENDING_MATERIAL_STATUSES.map(st => [st, 0])) as Record<PendingMaterialStatus, number>;
+    for (const c of counted) {
+      if (c.status && (PENDING_MATERIAL_STATUSES as readonly string[]).includes(c.status)) statusCounts[c.status as PendingMaterialStatus] = Number(c.n);
+    }
+    return { data: rows.map(pendingMaterialListRow), total: Number(total), page, limit, statusCounts };
   }
 
   /**
@@ -249,6 +326,7 @@ export class PendingMaterialsService {
       const name = (overrides.name || existing.name).trim();
       const unit = (overrides.unit || existing.unit).trim();
       const category = (overrides.category || existing.category || 'عمومی').trim();
+      await assertApprovableMaterial(tx, code, category);
 
       const { item } = await ItemCatalogService.createItem({
         type: 'raw_material',

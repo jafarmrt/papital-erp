@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { Cheque } from '../../types';
+import { toPersianDigits } from '../../utils';
 
 vi.mock('../../hooks/accounting/useChequeQueries', () => ({ useChequeReconciliationReport: () => ({ data: [], loading: false }) }));
 vi.mock('../../hooks/useAppCurrency', async () => {
@@ -18,10 +19,10 @@ const cheque = (id: number, chequeNumber: string, status: Cheque['status']): Che
 } as Cheque);
 
 const menuOf = (chequeNumber: string): string[] => {
-  const row = screen.getAllByText(chequeNumber)[0].closest('tr');
+  const row = screen.getAllByText(toPersianDigits(chequeNumber))[0].closest('tr');
   if (!row) throw new Error(`no row for cheque ${chequeNumber}`);
   fireEvent.click(row.querySelector('button[title="عملیات بیشتر"]') as HTMLButtonElement);
-  const labels = Array.from(row.querySelectorAll('div.absolute button')).map(b => (b.textContent ?? '').trim());
+  const labels = Array.from(document.querySelectorAll('[role="menu"] button')).map(b => (b.textContent ?? '').trim());
   fireEvent.keyDown(document, { key: 'Escape' });
   return labels;
 };

@@ -7,7 +7,7 @@ import { AccountMappingService } from '../accounting/accountMapping.service.js';
 import { voucherItemReportAmountSql } from '../accounting/voucherItemAmount.js';
 
 /**
- * v10.0.24 (TD-922 / TD-919، تصمیم ت۴ ب فاز ۵): مانده کالای در جریان ساخت (۱۴۰۲، مفهوم `workInProgressCode`) هر پروژه
+ * v10.0.172 (TD-922 / TD-919، تصمیم ت۴ ب فاز ۵): مانده کالای در جریان ساخت (۱۴۰۲، مفهوم `workInProgressCode`) هر پروژه
  * به ریال: ردیف‌های زنده اسناد زنده با تفصیلی پروژه، هر وضعیتی (پیش‌نویس هم)، ردیف ارزی به نرخ خود ردیف (TD-260).
  * بدهکار مثبت است؛ پروژه‌ای که مانده‌اش زیر رواداری تراز است در نتیجه نمی‌آید.
  */

@@ -11,13 +11,13 @@ import { runReservationCases } from './stockReservationTests.js';
 export async function runProjectWipCostTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   return runReservationCases(shouldRun, [
     ['reg_project_delete_refused_with_wip_or_documents_td_922',
-      'v10.0.24: a project with a live document or a work-in-progress balance is not deleted (409 PROJECT_HAS_LEDGER_ITEMS); once the document is voided it is (TD-922)',
+      'v10.0.172: a project with a live document or a work-in-progress balance is not deleted (409 PROJECT_HAS_LEDGER_ITEMS); once the document is voided it is (TD-922)',
       ['td922', 'p5-m07', 'projects', 'delete', 'package11'], deleteGuardCase],
     ['reg_closed_project_wip_listed_td_919',
-      'v10.0.25: the financial health check lists the work-in-progress balance of a completed or deleted project and not of an open one (TD-919)',
+      'v10.0.173: the financial health check lists the work-in-progress balance of a completed or deleted project and not of an open one (TD-919)',
       ['td919', 'p5-m03', 'projects', 'health', 'package11'], closedProjectWipCase],
     ['reg_remittance_without_project_not_wip_td_948',
-      'v10.0.27: a remittance without a project debits the unassigned consumption account (6003), never work in progress; a project remittance still debits 1402 with the project detail (TD-948)',
+      'v10.0.175: a remittance without a project debits the unassigned consumption account (6003), never work in progress; a project remittance still debits 1402 with the project detail (TD-948)',
       ['td948', 'p5-m15', 'projects', 'vouchers', 'package11'], remittanceWithoutProjectCase],
   ]);
 }

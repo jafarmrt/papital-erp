@@ -8,7 +8,7 @@ const fetchJson = vi.fn(async (url: string, _opts?: { method?: string; body?: st
   return {};
 });
 vi.mock('../../api', () => ({ fetchJson: (url: string, opts?: { method?: string; body?: string }) => fetchJson(url, opts) }));
-vi.mock('../../hooks/queries/useSettingsQueries', () => ({ useWarehousesQuery: () => ({ data: [{ id: 1, code: 'WH1', name: 'test warehouse' }] }) }));
+vi.mock('../../hooks/queries/useSettingsQueries', () => ({ useSettingsQuery: () => ({ data: [] }), useWarehousesQuery: () => ({ data: [{ id: 1, code: 'WH1', name: 'test warehouse' }] }) }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('../../hooks/useProjectPermissions', () => ({
   useProjectPermissions: () => ({
@@ -37,7 +37,7 @@ const deliveryCalls = () => fetchJson.mock.calls.filter(([url]) => url.endsWith(
 const sentLine = (call = 0) => JSON.parse(deliveryCalls()[call][1]?.body ?? '{}').itemsToAdd[0];
 const inputAfter = async (label: string) => (await screen.findByText(label)).parentElement?.querySelector('input') as HTMLInputElement;
 
-// v10.0.21 (TD-977): the browser's cached average cost is never sent as an entered price, and no quantity is invented
+// v10.0.28 (TD-977): the browser's cached average cost is never sent as an entered price, and no quantity is invented
 describe('project stock entry price and quantity (TD-977)', () => {
   it('sends no unit price when the user typed none, so the server uses the current average cost', async () => {
     render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />);
@@ -67,7 +67,7 @@ describe('project stock entry price and quantity (TD-977)', () => {
   });
 });
 
-// v10.0.26 (TD-920, decision t4 b of phase 5): labour is a period expense, so the delivery price is materials only
+// v10.0.174 (TD-920, decision t4 b of phase 5): labour is a period expense, so the delivery price is materials only
 describe('project stock entry says the unit price is materials only (TD-920)', () => {
   it('shows the materials-only note above the delivery lines', async () => {
     render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />);

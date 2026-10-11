@@ -76,7 +76,7 @@ export class FactoryResetService {
         ip: actor.ip
       });
       throw new ForbiddenError(
-        'عملیات حذف کل داده‌های سیستم در محیط پروداکشن یا بدون فعال‌سازی صریح متغیر ALLOW_DANGEROUS_DATA_PURGE اکیداً مسدود است (مطابق قانون بنیادین RULE 09).'
+        'عملیات حذف کل داده‌های سامانه در محیط پروداکشن یا بدون فعال‌سازی صریح متغیر ALLOW_DANGEROUS_DATA_PURGE اکیداً مسدود است (مطابق قانون بنیادین RULE 09).'
       );
     }
   }

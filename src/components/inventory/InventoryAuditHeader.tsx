@@ -2,6 +2,7 @@ import { ShieldCheck, RotateCcw, ArrowLeftRight, ClipboardCheck, Layers, Boxes, 
 import type { InventoryAuditTab } from '../../hooks/inventoryAudit/useInventoryAuditQueries';
 import { useHasAnyPermission } from '../../contexts/AuthContext';
 import { READ_PERMISSIONS } from '../../lib/recordReadPermissions';
+import { BOM_ALLOCATIONS_TAB_LABEL } from '../../lib/projects/allocationLabels';
 
 /** سربرگ صفحه انبارگردانی: عنوان، دکمه‌های بازسازی موجودی و حواله انتقال، و زبانه‌ها */
 
@@ -10,7 +11,7 @@ const TABS: Array<{ id: InventoryAuditTab; label: string; icon: LucideIcon }> = 
   { id: 'new_audit', label: 'شمارش و ثبت انبارگردانی', icon: ClipboardCheck },
   { id: 'reports', label: 'سوابق دوره‌ها', icon: Layers },
   { id: 'transfers', label: 'حواله‌های انتقال', icon: ArrowLeftRight },
-  { id: 'bom_allocations', label: 'تخصیص مواد به پروژه‌ها', icon: Boxes },
+  { id: 'bom_allocations', label: BOM_ALLOCATIONS_TAB_LABEL, icon: Boxes },
 ];
 
 interface InventoryAuditHeaderProps {

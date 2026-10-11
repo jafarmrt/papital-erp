@@ -13,6 +13,7 @@ const MIN_ACTION_MAJOR: Record<string, number> = {
   'actions/checkout': 7,
   'actions/setup-node': 7,
   'actions/upload-artifact': 7,
+  'actions/cache': 5,
 };
 
 const git = (cwd: string, ...args: string[]) =>

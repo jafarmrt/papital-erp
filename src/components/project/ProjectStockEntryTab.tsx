@@ -8,6 +8,7 @@ import { toPersianDigits, errorMessageOf } from '../../utils';
 import { ProjectOverDeliveryPrompt, overDeliveriesOf, type ProjectOverDeliveryView } from './ProjectOverDeliveryPrompt';
 import { useProjectPermissions } from '../../hooks/useProjectPermissions';
 import { DELIVERY_MATERIALS_ONLY_NOTE } from '../../lib/projects/deliveryCost';
+import { ProjectMaterialCostNote } from './ProjectMaterialCostNote';
 
 interface ProjectStockEntryTabProps {
   project: ProductionProject;
@@ -118,7 +119,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
   }, [project]);
 
   // Initial produced quantities & optional unit cost overrides
-  // v10.0.21 (TD-977): مقدار پیش‌فرض همان مقدار برنامه است؛ بی برنامه خالی می‌ماند و هیچ عدد ساختگی (۱۰۰) فرستاده نمی‌شود
+  // v10.0.28 (TD-977): مقدار پیش‌فرض همان مقدار برنامه است؛ بی برنامه خالی می‌ماند و هیچ عدد ساختگی (۱۰۰) فرستاده نمی‌شود
   const [producedQuantities, setProducedQuantities] = useState<Record<string, number>>(() => {
     const init: Record<string, number> = {};
     products.forEach(p => {
@@ -127,7 +128,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
     return init;
   });
 
-  // v10.0.21 (TD-977): بهای واحد فقط وقتی فرستاده می‌شود که کاربر آن را وارد کند؛ میانگین موزون کش‌شده مرورگر فقط راهنمای خانه است
+  // v10.0.28 (TD-977): بهای واحد فقط وقتی فرستاده می‌شود که کاربر آن را وارد کند؛ میانگین موزون کش‌شده مرورگر فقط راهنمای خانه است
   // و کارساز بی بهای واردشده میانگین موزون جاری کالا را زیر قفل برمی‌دارد
   const [unitCosts, setUnitCosts] = useState<Record<string, number>>({});
 
@@ -360,7 +361,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
               <p className="text-[11px] text-slate-500 mt-0.5">
                 پس از اتمام تولید، محصولات را مستقیماً وارد موجودی انبار مقصد کنید. میانگین موزون بهای تمام‌شده و سوابق کاردکس به شکل خودکار ثبت می‌شوند.
               </p>
-              {/* v10.0.26 (TD-920، تصمیم ت۴ ب فاز ۵): دستمزد در فیش حقوق هزینه دوره است و دوباره در بهای تحویل نمی‌آید */}
+              {/* v10.0.174 (TD-920، تصمیم ت۴ ب فاز ۵): دستمزد در فیش حقوق هزینه دوره است و دوباره در بهای تحویل نمی‌آید */}
               <p data-testid="delivery-materials-only" className="text-[11px] text-amber-800 font-semibold mt-1">
                 {DELIVERY_MATERIALS_ONLY_NOTE}
               </p>
@@ -469,6 +470,8 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
             </div>
           </div>
         </div>
+
+        {canDeliver && <ProjectMaterialCostNote projectId={project.id} singleProductQuantity={products.length === 1 && Number(products[0].quantity) > 0 ? Number(products[0].quantity) : null} />}
 
         {/* Quick Stats & Controls Bar */}
         <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">

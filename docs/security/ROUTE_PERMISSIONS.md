@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 377
+تعداد مسیرها: 391
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -63,6 +63,7 @@
 | GET | `/api/accounting/treasury` | accounting.treasury \| accounting.reports \| accounting.view |
 | POST | `/api/accounting/treasury` | accounting.treasury |
 | PUT | `/api/accounting/treasury/:id/document` | accounting.treasury |
+| GET | `/api/accounting/treasury/:id/document-options` | accounting.treasury |
 | POST | `/api/accounting/treasury/:id/void` | accounting.treasury |
 | GET | `/api/accounting/treasury/contra-accounts` | accounting.treasury \| accounting.cheques |
 | POST | `/api/accounting/treasury/preview-voucher` | accounting.treasury |
@@ -74,11 +75,11 @@
 | GET | `/api/accounting/vouchers/:id` | accounting.vouchers \| accounting.reports \| accounting.view |
 | PUT | `/api/accounting/vouchers/:id` | accounting.vouchers |
 | POST | `/api/accounting/vouchers/:id/correct` | accounting.vouchers |
-| POST | `/api/accounting/vouchers/:id/finalize` | accounting.vouchers |
+| POST | `/api/accounting/vouchers/:id/finalize` | accounting.vouchers_approve |
 | POST | `/api/accounting/vouchers/:id/reverse` | accounting.vouchers |
-| PUT | `/api/accounting/vouchers/:id/status` | accounting.vouchers |
-| POST | `/api/accounting/vouchers/batch-approve` | accounting.vouchers |
-| POST | `/api/accounting/vouchers/batch-finalize` | accounting.vouchers |
+| PUT | `/api/accounting/vouchers/:id/status` | accounting.vouchers_approve |
+| POST | `/api/accounting/vouchers/batch-approve` | accounting.vouchers_approve |
+| POST | `/api/accounting/vouchers/batch-finalize` | accounting.vouchers_approve |
 | GET | `/api/activity-logs` | audit_logs.view |
 | GET | `/api/activity-logs/filters` | audit_logs.view |
 | GET | `/api/activity-logs/integrity` | audit_logs.view |
@@ -135,6 +136,7 @@
 | GET | `/api/documents/:id` | documents.view \| documents.create \| documents.edit \| workflow.view \| audit.view |
 | PUT | `/api/documents/:id` | documents.edit |
 | PUT | `/api/documents/:id/finalize` | documents.finalize \| warehouse.in \| warehouse.out |
+| GET | `/api/documents/:id/line-stock` | documents.view \| documents.create \| documents.edit \| workflow.view \| audit.view |
 | PUT | `/api/documents/:id/notes` | documents.edit |
 | GET | `/api/documents/audit-items` | audit.view |
 | GET | `/api/documents/by-ref/:ref` | documents.view \| documents.create \| documents.edit \| workflow.view \| audit.view |
@@ -212,8 +214,6 @@
 | GET | `/api/inventory/integrity-audit` | warehouse.view \| inventory.reconcile \| audit.view |
 | GET | `/api/inventory/item-kardex/:itemId` | warehouse.view |
 | POST | `/api/inventory/kardex-initial-backfill` | inventory.reconcile |
-| GET | `/api/inventory/negative-stock-policy` | warehouse.view \| inventory.reconcile \| audit.view |
-| PUT | `/api/inventory/negative-stock-policy` | inventory.reconcile |
 | POST | `/api/inventory/rebuild-from-ledger` | inventory.reconcile |
 | GET | `/api/inventory/report` | warehouse.view \| inventory.reconcile \| audit.view |
 | GET | `/api/inventory/reserved-items` | products.view \| reports.view \| warehouse.view \| warehouse.in \| documents.view \| documents.create |
@@ -240,6 +240,20 @@
 | POST | `/api/login` | public |
 | POST | `/api/logout` | public |
 | GET | `/api/me` | login-only |
+| GET | `/api/media/assets` | media.view |
+| POST | `/api/media/assets` | media.upload |
+| DELETE | `/api/media/assets/:id` | media.upload \| media.manage |
+| GET | `/api/media/assets/:id` | media.view |
+| PUT | `/api/media/assets/:id` | media.upload \| media.manage |
+| GET | `/api/media/assets/:id/file` | media.view |
+| PUT | `/api/media/assets/:id/poster` | media.upload \| media.manage |
+| POST | `/api/media/assets/:id/rebuild-light` | media.manage |
+| GET | `/api/media/products` | media.view |
+| GET | `/api/media/products/:itemId` | media.view |
+| PUT | `/api/media/products/:itemId/info` | media.manage \| products.edit |
+| GET | `/api/media/products/filters` | media.view |
+| GET | `/api/media/sections` | media.view |
+| GET | `/api/media/zip` | media.view |
 | GET | `/api/metrics` | public |
 | GET | `/api/notifications` | login-only |
 | DELETE | `/api/notifications/:id` | login-only |

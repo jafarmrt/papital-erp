@@ -69,8 +69,26 @@ export const createParamsIdSchema = (paramName: string = 'id', label: string = '
 export const paramsItemIdSchema = createParamsIdSchema('id', 'شناسه کالا');
 export const paramsPersonnelIdSchema = createParamsIdSchema('id', 'شناسه پرسنل');
 
+/**
+ * v10.0.35 (TD-979): نشان میدل‌ور اعتبارسنجی؛ جدول مسیرها (`buildRouteGuardTable`) با آن می‌فهمد کدام route نویسنده
+ * ورودی‌اش را با Zod می‌خواند.
+ */
+export const VALIDATES = '__erpRouteValidates';
+
+/** آیا اسکیمای درخواست کلید `body` دارد (ZodObject، شاید پیچیده در effects یا passthrough) */
+function schemaReadsBody(schema: ZodSchema): boolean {
+  let current: unknown = schema;
+  for (let depth = 0; depth < 5 && current; depth += 1) {
+    const def = (current as { _def?: { schema?: unknown; innerType?: unknown; in?: unknown } })._def;
+    const shape = (current as { shape?: Record<string, unknown> }).shape;
+    if (shape && typeof shape === 'object') return 'body' in shape;
+    current = def?.schema ?? def?.innerType ?? def?.in;
+  }
+  return false;
+}
+
 export const validate = (schema: ZodSchema) => {
-  return asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  return Object.assign(asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     try {
       // v9.0.78 (TD-529): پیام هر issue بی پیام اسکیما از نقشه فارسی ساخته می‌شود
       const parsed = await schema.parseAsync({
@@ -113,5 +131,5 @@ export const validate = (schema: ZodSchema) => {
       }
       next(error);
     }
-  });
+  }), { [VALIDATES]: { body: schemaReadsBody(schema) } });
 };

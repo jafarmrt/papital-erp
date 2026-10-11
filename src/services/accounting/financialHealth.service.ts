@@ -43,6 +43,8 @@ import { buildClosedProjectWipHealthTest, findClosedProjectWipBalances } from '.
 import { buildProjectStageHealthTest, buildProjectValueHealthTest, findProjectFreeTextValues, findProjectStageIntegrity } from '../projects/projectStageHealth.js';
 import { PROJECT_PRIORITIES, PROJECT_STATUSES, STAGE_STATUSES } from '../../lib/projects/projectStatus.js';
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
+import { buildUnguardedPurchaseActionHealthTest, findUnguardedPurchaseActions } from './unguardedPurchaseActionHealth.js';
+import { buildUnguardedDocumentStepHealthTest, findUnguardedDocumentSteps } from './unguardedDocumentStepHealth.js';
 import { buildWorkflowRoleReviewHealthTest, findWorkflowRoleReviews } from '../workflow/workflowRoleReview.js';
 import { buildRetiredRuleActionHealthTest, findRetiredActionRules } from '../events/retiredRuleActionHealth.js';
 import { buildUnpublishedRuleEventHealthTest, findRulesWithUnpublishedEvent } from '../events/unpublishedRuleEventHealth.js';
@@ -1126,6 +1128,16 @@ export class FinancialHealthService {
     overallScore += unguardedApprovalTest.scoreImpact;
     tests.push(unguardedApprovalTest);
 
+    // آزمون ۱۷ج: v10.0.120 (TD-1220) اقدام دیگر بی نقش و بی مجوز در گردش کار فعال اسناد (ارسال به انبار، بازگشایی)
+    const unguardedDocumentStepTest = buildUnguardedDocumentStepHealthTest(await findUnguardedDocumentSteps(orm));
+    overallScore += unguardedDocumentStepTest.scoreImpact;
+    tests.push(unguardedDocumentStepTest);
+
+    // آزمون ۱۷الف: v10.0.37 (OBS-R2-36) اقدام بی نقش و بی مجوز در گردش کار فعال درخواست خرید
+    const unguardedPurchaseTest = buildUnguardedPurchaseActionHealthTest(await findUnguardedPurchaseActions(orm));
+    overallScore += unguardedPurchaseTest.scoreImpact;
+    tests.push(unguardedPurchaseTest);
+
     // آزمون ۱۷ب: v9.0.128 (TD-542) گام‌های گردش کاری که مهاجرت 0065 برای بازبینی نقش فهرست کرد
     const workflowRoleReviewTest = buildWorkflowRoleReviewHealthTest(await findWorkflowRoleReviews());
     overallScore += workflowRoleReviewTest.scoreImpact;
@@ -1254,7 +1266,7 @@ export class FinancialHealthService {
     const dueReminderTest = buildDueReminderHealthTest(duplicateDueReminders, dueReminderIndexPresent);
     overallScore += dueReminderTest.scoreImpact;
     tests.push(dueReminderTest);
-    // آزمون ۵۲: v10.0.25 (TD-919، ت۴ ب) مانده ۱۴۰۲ پروژه تکمیل‌شده، لغوشده یا حذف‌شده (فقط فهرست)
+    // آزمون ۵۲: v10.0.173 (TD-919، ت۴ ب) مانده ۱۴۰۲ پروژه تکمیل‌شده، لغوشده یا حذف‌شده (فقط فهرست)
     const closedProjectWipTest = buildClosedProjectWipHealthTest(await findClosedProjectWipBalances());
     overallScore += closedProjectWipTest.scoreImpact;
     tests.push(closedProjectWipTest);

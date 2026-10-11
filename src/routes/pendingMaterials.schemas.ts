@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { decimalInput, numericIdString } from '../middleware/validate.js';
 import { fin } from '../lib/financialDecimal.js';
 import { isDataUrl } from '../lib/storage.js';
+import { PENDING_MATERIAL_MAX_PAGE_SIZE, PENDING_MATERIAL_STATUSES } from '../lib/pendingMaterials/pendingMaterialList.js';
 
 /**
  * v9.0.397 (TD-825، یافته B07-09): عددهای درخواست با `decimalInput` خوانده می‌شوند (ارقام فارسی پذیرفته، متن ۴۰۰ و منفی
@@ -83,4 +84,15 @@ export const updatePendingMaterialSchema = z.object({
   params: z.object({
     id: numericIdString
   })
+});
+
+/** v10.0.171 (OBS-R1-90): پرسمان فهرست صف؛ وضعیت، دسته، جست‌وجو و صفحه در SQL اعمال می‌شوند */
+export const listPendingMaterialsSchema = z.object({
+  query: z.object({
+    status: z.enum(['all', ...PENDING_MATERIAL_STATUSES]).optional(),
+    category: z.string().trim().max(200).optional(),
+    search: z.string().trim().max(200).optional(),
+    page: z.coerce.number().int().min(1).optional(),
+    limit: z.coerce.number().int().min(1).max(PENDING_MATERIAL_MAX_PAGE_SIZE).optional(),
+  }),
 });
