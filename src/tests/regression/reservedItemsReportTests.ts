@@ -18,6 +18,9 @@ export async function runReservedItemsReportTests(shouldRun: ShouldRun): Promise
     ['reg_reorder_alert_free_stock_td_843',
       'v9.0.404: the reorder alert compares free stock (stock minus reservations) with the reorder point and shows open purchases as in transit only (TD-843)',
       ['td843', 'reservation', 'reorder', 'package7'], reorderFreeStockCase],
+    ['reg_item_options_reserved_td_1135',
+      'v10.0.250: the item pick list carries each item reserved quantity only when the sales invoice asks reserved=1 (TD-1135)',
+      ['td1135', 'reservation', 'pick', 'package8'], itemOptionsReservedCase],
   ]);
 }
 
@@ -162,4 +165,27 @@ async function reorderFreeStockCase(h: Harness, wrong: string[]): Promise<string
   } finally {
     await h.q('UPDATE production_projects SET is_deleted = 1 WHERE id = $1', [projectId]);
   }
+}
+
+/**
+ * TD-1135: E 10 in stock with 3 reserved by a sales proforma. `GET /items/options?reserved=1` (the sales invoice picker)
+ * carries 3 as reserved_stock; the plain pick list of the other forms carries no reservation. Before the fix the picker
+ * had no reservation and showed «رزرو: ۰».
+ */
+async function itemOptionsReservedCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const e = await f.item(10);
+  const res = await postDoc(h, f, 'invoice', 'proforma', e, 3);
+  if (res.status !== 200) throw new Error(`setup: the proforma answered ${brief(res)}`);
+  const [code] = await h.q('SELECT code FROM items WHERE id = $1', [e]);
+  const search = `search=${encodeURIComponent(String(code?.code))}`;
+  const rowOf = (body: unknown) => ((body as { data?: AlertRow[] })?.data ?? []).find(r => Number(r.id) === e);
+  const withReserved = rowOf((await h.get(`/api/items/options?${search}&reserved=1`)).body);
+  const plain = rowOf((await h.get(`/api/items/options?${search}`)).body);
+  if (!withReserved || !plain) throw new Error('the pick list has no E');
+  if (Number(withReserved.reserved_stock) !== 3 || Number(withReserved.reservedStock) !== 3) {
+    wrong.push(`reserved=1: reserved_stock ${String(withReserved.reserved_stock)}, expected 3`);
+  }
+  if ('reserved_stock' in plain || 'reservedStock' in plain) wrong.push('the plain pick list carries a reservation');
+  return `reserved=1: ${String(withReserved.reserved_stock)}; plain: ${'reserved_stock' in plain ? 'reserved' : 'none'}`;
 }

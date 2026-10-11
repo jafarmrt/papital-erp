@@ -37,13 +37,25 @@ const itemPickListValidation = z.object({
     type: z.enum(['product', 'raw_material', 'all']).optional(),
     search: z.string().max(200).optional(),
     limit: z.union([z.string(), z.number()]).optional(),
+    reserved: z.enum(['1']).optional(),
   }).optional(),
 });
 
 // v9.0.138 (TD-888، تصمیم ت۱۰ الف): فهرست انتخاب کالا برای فرم‌های بخش‌های دیگر؛ فهرست کامل پایین فقط با مجوز بخش کالا
 router.get('/items/options', authorizePermission(...READ_PERMISSIONS.itemOptions), validate(itemPickListValidation), asyncHandler(async (req, res) => {
-  const query = req.query as { type?: string; search?: string; limit?: string };
-  res.json({ success: true, data: await listItemPicks(req.user, { type: query.type, search: query.search, limit: parsePickListLimit(query.limit) }) });
+  const query = req.query as { type?: string; search?: string; limit?: string; reserved?: string };
+  const picks = await listItemPicks(req.user, { type: query.type, search: query.search, limit: parsePickListLimit(query.limit) });
+  // v10.0.250 (TD-1135): the sales invoice picker asks `reserved=1` for each item's reserved quantity; a reservation read
+  // error refuses this request only (TD-821), the other forms never read reservations
+  if (query.reserved === '1' && picks.length > 0) {
+    const reservedMap = await ItemsService.getReservedStocksMap({ itemIds: picks.map(p => p.id) });
+    for (const pick of picks) {
+      const reserved = Number(reservedMap[String(pick.id)]?.totalReserved || 0);
+      pick.reservedStock = reserved;
+      pick.reserved_stock = reserved;
+    }
+  }
+  res.json({ success: true, data: picks });
 }));
 
 // GET /items
