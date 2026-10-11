@@ -20,6 +20,8 @@ export interface ProcurementAccess {
   canApprove: boolean;
   /** بازگشایی درخواست ردشده: گارد مسیر (`procurement.approve` / `procurement.manage`) و گارد گام (`procurement.create`) */
   canReopen: boolean;
+  /** گارد مسیر اقدام گردش کار درخواست (`POST /requisitions/:id/workflow-action`)؛ دکمه‌ها از اقدام‌های مجاز گام می‌آیند (OBS-R2-38) */
+  canRunWorkflowAction: boolean;
   /**
    * تحویل سفارش به انبار (`POST /orders/:id/deliver`)؛ از v9.0.455 (TD-904، ت۳ الف) افزون بر مجوز تدارکات، مجوز ثبت قطعی
    * سند رسید («ثبت ورود کالا») را هم می‌خواهد که سرویس تحویل می‌سنجد
@@ -40,6 +42,7 @@ export function useProcurementAccess(): ProcurementAccess {
     canOrder: order,
     canApprove: approve,
     canReopen: (approve || manage) && create,
+    canRunWorkflowAction: approve || manage,
     canDeliver: (order || manage) && receiveIntoStock,
   };
 }
