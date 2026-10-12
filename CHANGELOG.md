@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.0.274 — نسخه ۱۰.۰ زودتر بسته می‌شود و چند کار به ۱۰.۱ می‌رود
+- Documentation only: D-03, D-06, D-15, D-16, N-01, N-02, N-03, N-05 part 4, I-04, I-07 and most P3 ledger work move to 10.1 in a new «منتقل به نسخه ۱۰.۱» section of `V10_MASTER_ROADMAP.md`, at the product owner's request (decision t23).
+
 ### v10.0.273 — تاریخ سند فیش عیدی دیگر در آینده نیست
 - سند فیش حقوق تاریخ زودترِ پایان دوره و امروز را می‌گیرد (`payrollVoucherDate` در `voucherSync.service.ts`)، پس فیش عیدی میان‌سال سند آینده‌دار ندارد (TD-1244).
 
