@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.1.0 — آغاز نسخه ۱۰.۱
+- Documentation only: version 10.1 starts at the product owner's decision t25; `V10_MASTER_ROADMAP.md` gets the section «برنامه آغاز نسخه ۱۰.۱» with the merge order (#238, #241, #236), the work-package rules and the new item N-06 (production receipt without a project).
+
 ### v10.0.274 — نسخه ۱۰.۰ زودتر بسته می‌شود و چند کار به ۱۰.۱ می‌رود
 - Documentation only: D-03, D-06, D-15, D-16, N-01, N-02, N-03, N-05 part 4, I-04, I-07 and most P3 ledger work move to 10.1 in a new «منتقل به نسخه ۱۰.۱» section of `V10_MASTER_ROADMAP.md`, at the product owner's request (decision t23).
 
