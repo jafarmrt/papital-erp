@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.1.1 — خط مبنای کارایی
+- I-04: `npm run perf:baseline` times the main page APIs on simulator-sized data in an isolated test schema against p95 targets (300 / 800 / 2,000 ms); `docs/PERFORMANCE_BASELINE.md` holds the first measurement and the optional manual steps to turn on `pg_stat_statements` on the production server.
+
 ### v10.1.0 — آغاز نسخه ۱۰.۱
 - Documentation only: version 10.1 starts at the product owner's decision t25; `V10_MASTER_ROADMAP.md` gets the section «برنامه آغاز نسخه ۱۰.۱» with the merge order (#238, #241, #236), the work-package rules and the new item N-06 (production receipt without a project).
 

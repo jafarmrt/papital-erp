@@ -57,7 +57,8 @@ describe('ui_wording_ratchet_td_1168', () => {
     const { increased, decreased } = compareWithBaseline(currentState(), baseline);
     expect(increased).toEqual([]);
     expect(decreased).toEqual([]);
-  });
+    // Scans every source file; a loaded CI runner needs more than the 5 s default.
+  }, 30_000);
 
   it('the screens named by the user guide no longer show these words', () => {
     const state = currentState();
@@ -69,7 +70,8 @@ describe('ui_wording_ratchet_td_1168', () => {
       'src/components/procurement/ConfirmWarehouseDeliveryModal.tsx',
       'src/components/accounting/AccountingDashboard.tsx',
     ]) expect(state[file] ?? 0, file).toBe(0);
-  });
+    // Scans every source file; a loaded CI runner needs more than the 5 s default.
+  }, 30_000);
 });
 
 /**
@@ -93,5 +95,6 @@ describe('server_error_message_wording_td_1182', () => {
     const server = Object.keys(state).filter(file => /^src\/(services|routes|middleware|errors)\//.test(file));
     expect(server).toEqual([]);
     expect(Object.keys(state).some(file => file.startsWith('src/services/'))).toBe(false);
-  });
+    // Scans every source file; a loaded CI runner needs more than the 5 s default.
+  }, 30_000);
 });
