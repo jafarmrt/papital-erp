@@ -43,7 +43,7 @@ describe('global search result target (TD-1155)', () => {
     const input = screen.getByPlaceholderText(/جستجوی سراسری/);
     fireEvent.focus(input);
     fireEvent.change(input, { target: { value: 'گردن' } });
-    const result = await screen.findByText('گردنبند ماه', {}, { timeout: 2000 });
+    const result = await screen.findByText('گردنبند ماه');
     fireEvent.click(result);
     await waitFor(() => expect(screen.getByTestId('probe').textContent).toBe('/products|N-0042'));
   });

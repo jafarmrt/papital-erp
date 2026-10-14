@@ -21,7 +21,7 @@ describe('warehouse transfer item picker (OBS-R1-86)', () => {
       return { data: [] };
     });
     render(<WarehouseTransferModal isOpen onClose={() => undefined} onSuccess={() => undefined} />);
-    await waitFor(() => expect(fetchJson.mock.calls.some(([url]) => String(url).startsWith('/items/options'))).toBe(true), { timeout: 3000 });
+    await waitFor(() => expect(fetchJson.mock.calls.some(([url]) => String(url).startsWith('/items/options'))).toBe(true));
     const itemCalls = fetchJson.mock.calls.map(([url]) => String(url)).filter(url => url.startsWith('/items/options'));
     for (const url of itemCalls) {
       const params = new URLSearchParams(url.split('?')[1] ?? '');
