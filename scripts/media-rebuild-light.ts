@@ -4,7 +4,7 @@ import { MediaLightRebuildService } from '../src/services/media/mediaLightRebuil
 import { terminalLine } from '../src/lib/terminalText.js';
 
 /**
- * v10.0.248 (N-05 PR 4): makes the light versions and thumbnails of the media library's images again.
+ * v10.1.2 (N-05 PR 4): makes the light versions and thumbnails of the media library's images again.
  *   npm run media:rebuild-light                  preview: lists the images whose light version is missing or failed
  *   npm run media:rebuild-light -- --apply       builds them
  *   npm run media:rebuild-light -- --all --apply builds every live image again (after a change of the light size)

@@ -12,7 +12,7 @@ import { MEDIA_AUDIT_ENTITY } from './mediaAsset.service.js';
 const AUDIT_ENTITY: 'کتابخانه تصاویر' = MEDIA_AUDIT_ENTITY;
 
 /**
- * v10.0.248 (N-05 PR 4): the command that makes the light versions and thumbnails of the library's images again
+ * v10.1.2 (N-05 PR 4): the command that makes the light versions and thumbnails of the library's images again
  * (`npm run media:rebuild-light`). By default it takes the images whose light version is missing, failed or gone from
  * disk; `all` takes every live image (after a change of the light size or quality). Each distinct content is built once
  * and written to every live row holding it. A preview by default; one run at a time (session advisory lock); the

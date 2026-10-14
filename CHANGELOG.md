@@ -20,8 +20,53 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
-### v10.0.262 — کتابخانه تصاویر در صفحه سلامت و فرمان ساخت دوباره نسخه‌های سبک
+### v10.1.2 — کتابخانه تصاویر در صفحه سلامت و فرمان ساخت دوباره نسخه‌های سبک
 - صفحه سلامت کارت کتابخانه تصاویر را دارد (شمار پرونده‌ها، حجم اصل و نسخه‌های سبک، فضای آزاد دیسک، عکس‌های بی نسخه سبک) و پوشه کتابخانه را هم در ذخیره‌سازی می‌سنجد؛ `npm run media:rebuild-light` نسخه‌های سبک ناقص را دوباره می‌سازد؛ راهنمای بهره‌برداری `docs/MEDIA_LIBRARY_OPS.md` (N-05 بخش ۴).
+
+### v10.1.1 — خط مبنای کارایی
+- I-04: `npm run perf:baseline` times the main page APIs on simulator-sized data in an isolated test schema against p95 targets (300 / 800 / 2,000 ms); `docs/PERFORMANCE_BASELINE.md` holds the first measurement and the optional manual steps to turn on `pg_stat_statements` on the production server.
+
+### v10.1.0 — آغاز نسخه ۱۰.۱
+- Documentation only: version 10.1 starts at the product owner's decision t25; `V10_MASTER_ROADMAP.md` gets the section «برنامه آغاز نسخه ۱۰.۱» with the merge order (#238, #241, #236), the work-package rules and the new item N-06 (production receipt without a project).
+
+### v10.0.274 — نسخه ۱۰.۰ زودتر بسته می‌شود و چند کار به ۱۰.۱ می‌رود
+- Documentation only: D-03, D-06, D-15, D-16, N-01, N-02, N-03, N-05 part 4, I-04, I-07 and most P3 ledger work move to 10.1 in a new «منتقل به نسخه ۱۰.۱» section of `V10_MASTER_ROADMAP.md`, at the product owner's request (decision t23).
+
+### v10.0.273 — تاریخ سند فیش عیدی دیگر در آینده نیست
+- سند فیش حقوق تاریخ زودترِ پایان دوره و امروز را می‌گیرد (`payrollVoucherDate` در `voucherSync.service.ts`)، پس فیش عیدی میان‌سال سند آینده‌دار ندارد (TD-1244).
+
+### v10.0.272 — خطای خواندن سفارش‌ها در جزئیات درخواست خرید
+- v10.0.272 — جزئیات درخواست خرید خطای خواندن سفارش‌ها را با «تلاش دوباره» نشان می‌دهد، تاریخ به‌روزرسانی شمسی است و پنجره‌های تدارکات حداکثر ۹۰٪ بلندی صفحه‌اند (OBS-R2-40).
+
+### v10.0.271 — رمز راه‌اندازی فقط در فرم، نه در نشانی
+- `SetupPage` رمز راه‌اندازی را دیگر از `?token=` / `?setupToken=` نمی‌خواند و آن را از نوار نشانی پاک می‌کند (`removeSetupTokenFromAddress`)؛ `install.sh`، README و چک‌لیست راه‌اندازی نشانی `/setup` بی رمز را می‌دهند (OBS-R1-13، TD-983).
+
+### v10.0.270 — پروژه سند حسابداری فقط از پروژه خود سند
+- `VoucherSyncService` پروژه رسید، حواله و ضایعات را فقط از `documents.project_id` می‌گیرد و دیگر کد پروژه را با الگوی متنی از یادداشت نمی‌خواند (OBS-R1-47 از TD-985).
+
+### v10.0.269 — عدد و مبلغ دقیق در صفحه‌های تدارکات
+- v10.0.269 — جمع‌های تدارکات دقیق، کادر مقدار و قیمت درخواست خرید با ارقام فارسی و مبلغ‌ها در واحد نمایش ریال یا تومان (OBS-R2-39).
+
+### v10.0.268 — پاک‌کننده لاگ پردازه: رمز در متن ساده هم پاک می‌شود
+- `sanitizeObject` در `src/middleware/logger.ts` کلید رمز را با قاعده پاک‌کننده سجل (`isSecretAuditKey`) می‌شناسد، پس `author` و `authority` دیگر پنهان نمی‌شوند و `apiKey` و `newPassword` پنهان می‌شوند؛ رمز نوشته‌شده در متن ساده (`password=…`، `?token=…`، `api_key: …`) هم پاک می‌شود (OBS-R1-03، TD-983).
+
+### v10.0.267 — حفظ تفصیلی طرف حساب در سند اختتامیه و افتتاحیه
+- سند اختتامیه و افتتاحیه مانده‌ها را از تراز سطح تفصیلی می‌گیرند و برای هر طرف، پروژه یا حساب بانکی نوع و شناسه تفصیلی را نگه می‌دارند (`closingRowDetail` در `src/services/accounting/closingRowDetail.ts`؛ OBS-R1-45 از TD-985).
+
+### v10.0.266 — دکمه‌های درخواست خرید از اقدام‌های مجاز گردش کار
+- v10.0.266 — دکمه‌های جزئیات درخواست خرید از اقدام‌های مجاز گام جاری گردش کار برای همان کاربر ساخته می‌شوند؛ سفارش پیوسته با شماره عطف و تحویل گروهی بی سفارش باز با پیام (OBS-R2-38).
+
+### v10.0.265 — نوشتن‌های مسیر پرسنل به لایه سرویس رفت (TD-960)
+- پنج نوشتن مستقیم `personnel.routes.ts` به `src/services/personnel/personnelWrite.service.ts` رفت؛ `routeWrites` از ۱۵ به ۱۰ رسید و هدف «صفر در بسته‌های مالی، ≤ ۲۰ در کل» برآورده شد (OBS-R2-01، TD-960).
+
+### v10.0.264 — پنهان ماندن رمز نوبیتکس پرسنل در فرم و جزئیات
+- فرم و پنجره جزئیات پرسنل رمز نوبیتکس را پنهان نشان می‌دهند و فقط با «نمایش رمز» آشکار می‌کنند (`src/components/personnel/NobitexPasswordFields.tsx`)؛ وضعیت بی‌استفاده `showNobitexPass` حذف شد (OBS-R2-54 از TD-994).
+
+### v10.0.263 — مانده درست در جزئیات درخواست خرید و دلیل سفارش اضافه
+- v10.0.263 — مانده جزئیات درخواست خرید همان مانده کارساز است و فرم تفکیک سفارش پس از ۴۲۲ سفارش اضافه کادر دلیل را باز می‌کند (OBS-R2-37).
+
+### v10.0.262 — ممیزی خزانه درون همان ثبت و حذف جایگزین حساب کل
+- هشت مسیر خزانه دیگر ممیزی پس از commit نمی‌نویسند: سرویس‌ها ممیزی را با `tx` و `req` در `src/services/accounting/treasury/treasuryAudit.ts` می‌نویسند؛ `resolveContraAccount` در نبود حساب نگاشت حساب کل برنمی‌گرداند و اتصال دوم استخر نمی‌گیرد؛ `excludedContraAccountIds` نگاشت‌ها را یکی‌یکی می‌خواند (TD-934، OWN-01، OWN-03، نیمه خزانه OBS-R2-04).
 
 ### v10.0.261 — استثنای عمومی `/uploads` فقط برای تصویرها
 - `/uploads` بی نشست فقط فایل تصویری و پوشه‌های عمومی را سرو می‌کند (`isPublicUploadPath` در `src/lib/attachments/publicUploadPath.ts`)؛ فایلی که فقط نامش «logo» یا «favicon» دارد دیگر عمومی نیست (OBS-R1-04، TD-983).

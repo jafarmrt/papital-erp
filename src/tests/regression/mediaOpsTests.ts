@@ -10,16 +10,16 @@ import { runReservationCases } from './stockReservationTests.js';
 import { createTestItem } from '../fixtures/factories.js';
 
 /**
- * Series 10, N-05 PR 4 (v10.0.248): operating the media library: the command that rebuilds light versions and the media
+ * Series 10, N-05 PR 4 (v10.1.2): operating the media library: the command that rebuilds light versions and the media
  * library card of the health page.
  */
 export async function runMediaOpsTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   return runReservationCases(shouldRun, [
     ['reg_media_light_rebuild_n05',
-      'v10.0.248: the light rebuild previews by default, rebuilds missing or failed light versions once per content for every row holding it, and audits the run (N-05)',
+      'v10.1.2: the light rebuild previews by default, rebuilds missing or failed light versions once per content for every row holding it, and audits the run (N-05)',
       ['n05', 'media'], lightRebuildCase],
     ['reg_media_health_n05',
-      'v10.0.248: the health page shows the media library directory, the size of its files, the images without a light version and the free disk space (N-05)',
+      'v10.1.2: the health page shows the media library directory, the size of its files, the images without a light version and the free disk space (N-05)',
       ['n05', 'media', 'health'], healthCase],
   ]);
 }

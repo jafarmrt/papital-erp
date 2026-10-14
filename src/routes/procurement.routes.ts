@@ -6,6 +6,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { validate, paramsIdSchema } from '../middleware/validate.js';
 import { ProcurementService } from '../services/procurement.service.js';
+import { requisitionWorkflowActions } from '../services/procurement/requisitionWorkflowActions.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import {
   consolidateRequisitionsSchema, convertToOrdersSchema, createRequisitionSchema, listProcurementOrdersSchema, listRequisitionsSchema,
@@ -49,6 +50,17 @@ router.get('/requisitions/:id', authorizePermission(...READ_PERMISSIONS.purchase
   const id = Number(req.params.id);
   const requisition = await ProcurementService.getRequisitionById(id);
   res.json({ success: true, data: requisition });
+}));
+
+/**
+ * GET /api/procurement/requisitions/:id/workflow-actions
+ * OBS-R2-38 (TD-992): the actions this user may run in the requisition's current workflow step (detail window buttons)
+ */
+router.get('/requisitions/:id/workflow-actions', authorizePermission(...READ_PERMISSIONS.purchaseRequisitions), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+  const data = await requisitionWorkflowActions(Number(req.params.id), {
+    id: req.user?.id, role: req.user?.role, permissions: req.user?.permissions,
+  });
+  res.json({ success: true, data });
 }));
 
 /**

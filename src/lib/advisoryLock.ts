@@ -38,7 +38,7 @@ export const ADVISORY_LOCK_KEYS = {
   FORM_DRAFT_CLEANUP: 91031,
   /** v9.0.427 (TD-589): ساختن دستی قیدهای شرطی جاافتاده مهاجرت‌ها؛ یک اجرا در هر زمان (قفل تراکنشی) */
   CONDITIONAL_CONSTRAINTS: 91040,
-  /** v10.0.248 (N-05 PR 4): rebuilding the light versions of the media library (`npm run media:rebuild-light`); one run at a time */
+  /** v10.1.2 (N-05 PR 4): rebuilding the light versions of the media library (`npm run media:rebuild-light`); one run at a time */
   MEDIA_LIGHT_REBUILD: 91041,
 } as const;
 

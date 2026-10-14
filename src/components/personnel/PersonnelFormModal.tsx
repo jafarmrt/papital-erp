@@ -18,6 +18,7 @@ import { extractDateString, getIranianBankFromCard, getIranianBankFromSheba, iso
 import { NationalIdInput, IranianPhoneInput, BankCardInput, ShebaInput } from '../common';
 import { PersonnelStatutoryFlags } from './PersonnelStatutoryFlags';
 import { JalaliDateInput } from '../common/JalaliDateInput';
+import { NobitexPasswordInput } from './NobitexPasswordFields';
 
 interface PersonnelFormModalProps {
   isOpen: boolean;
@@ -485,20 +486,10 @@ export function PersonnelFormModal({
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">رمز عبور نوبیتکس (رشته متنی)</label>
-                <input
-                  type="text"
-                  name="personnel_nobitex_password_field"
-                  autoComplete="off"
-                  data-lpignore="true"
-                  data-1p-ignore="true"
-                  placeholder="رمز عبور نوبیتکس پرسنل"
-                  value={formData.nobitexPassword}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, nobitexPassword: e.target.value }))}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 font-mono"
-                />
-              </div>
+              <NobitexPasswordInput
+                value={formData.nobitexPassword}
+                onChange={(nobitexPassword) => setFormData((prev) => ({ ...prev, nobitexPassword }))}
+              />
             </div>
           </div>
 

@@ -190,7 +190,7 @@ export class SystemHealthService {
     return { outbox, accounting, workflow };
   }
 
-  /** 4. Media library: size of its files, light versions to rebuild and free disk space (v10.0.248, N-05 PR 4) */
+  /** 4. Media library: size of its files, light versions to rebuild and free disk space (v10.1.2, N-05 PR 4) */
   static async checkMediaLibrary(): Promise<MediaLibraryHealth> {
     return readMediaLibraryHealth();
   }

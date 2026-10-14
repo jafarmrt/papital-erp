@@ -10,6 +10,7 @@ import {
   REQUISITION_PRIORITIES, REQUISITION_PRIORITY_LABELS, requisitionFormErrors, type RequisitionPriority,
 } from '../../lib/procurement/requisitionFields';
 import { FieldError, RequisitionItemRowEditor, type NewRequisitionRow } from './RequisitionItemRowEditor';
+import { lineAmount, sumAmounts } from '../../lib/procurement/procurementNumbers';
 
 interface CreateRequisitionModalProps {
   isOpen: boolean;
@@ -124,11 +125,11 @@ export function CreateRequisitionModal({
     }
   };
 
-  const totalEstimate = items.reduce((s, i) => s + (i.requestedQty * i.unitPriceEstimate), 0);
+  const totalEstimate = sumAmounts(items, i => lineAmount(i.requestedQty, i.unitPriceEstimate));
 
   return (
     <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-farsi">
-      <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 animate-fadeIn">
+      <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 animate-fadeIn">
         {/* Header */}
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80 rounded-t-2xl">
           <div className="flex items-center gap-3">

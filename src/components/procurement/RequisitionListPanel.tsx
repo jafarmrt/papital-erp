@@ -7,6 +7,7 @@ import type { ProcurementAccess } from '../../hooks/procurement/useProcurementAc
 import type { ProcurementPageState } from '../../hooks/procurement/useProcurementPage';
 import { ProcurementPager } from './ProcurementPager';
 import { RequisitionRow } from './RequisitionRow';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 
 export interface RequisitionListFilters {
   status: RequisitionStatusFilter;
@@ -38,6 +39,8 @@ interface RequisitionListPanelProps {
 export function RequisitionListPanel({
   list, filters, pageSize, onFiltersChange, access, selectedIds, onToggleSelect, onSelectAll, onView, onSplit, onDelete, onShowOrders, onRetry,
 }: RequisitionListPanelProps) {
+  // OBS-R2-39 (TD-992): مبلغ ریالی در واحد نمایش (ریال یا تومان)، نه «ریال» ثابت
+  const rial = useRialDisplay();
   const rows = Array.isArray(list.rows) ? list.rows : [];
   return (
     <>
@@ -138,7 +141,7 @@ export function RequisitionListPanel({
                   <th className="p-3">عنوان و پروژه</th>
                   <th className="p-3 text-center">اقلام</th>
                   <th className="p-3 text-center">تاریخ نیاز</th>
-                  <th className="p-3 text-center">برآورد مبلغ</th>
+                  <th className="p-3 text-center">برآورد مبلغ ({rial.label})</th>
                   <th className="p-3 text-center">وضعیت گردش کار</th>
                   <th className="p-3 text-center">فاکتورهای خرید مرتبط</th>
                   <th className="p-3 text-center">عملیات تدارکات</th>

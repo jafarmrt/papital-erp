@@ -1,7 +1,7 @@
 {
   "name": "workshop-erp-crm",
   "private": true,
-  "version": "10.0.262",
+  "version": "10.1.2",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -16,6 +16,7 @@
     "test:vitest": "vitest run",
     "test:e2e": "playwright test",
     "simulate:year": "tsx scripts/simulate-business-year.ts",
+    "perf:baseline": "tsx scripts/perf-baseline.ts",
     "attachments:migrate": "tsx scripts/migrate-attachments.ts",
     "attachments:cleanup": "tsx scripts/cleanup-attachments.ts",
     "media:rebuild-light": "tsx scripts/media-rebuild-light.ts",

@@ -6,7 +6,7 @@ import {
   type MediaLibraryHealth,
 } from '../../lib/system/mediaLibraryHealth';
 
-// v10.0.248 (N-05 PR 4): the health page shows the media library: its files, their size, free disk space and the
+// v10.1.2 (N-05 PR 4): the health page shows the media library: its files, their size, free disk space and the
 // images whose light version must be rebuilt. Before, the page had no media library card at all.
 
 afterEach(cleanup);

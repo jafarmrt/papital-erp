@@ -31,7 +31,7 @@ export async function resolveChequePartyAccountId(
   contraAccountId: number | null,
 ): Promise<number | null> {
   const contra = await TreasuryTransactionService.resolveContraAccount(partyType, purpose, tx, contraAccountId);
-  return contra.account?.id ?? contra.fallbackGeneralId ?? null;
+  return contra.account?.id ?? null;
 }
 
 /**

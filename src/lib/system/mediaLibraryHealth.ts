@@ -1,7 +1,7 @@
 import { formatPersianNumber } from '../../utils/persianNumber';
 
 /**
- * v10.0.248 (N-05 PR 4): contract of the media library card on the health page, shared by the server
+ * v10.1.2 (N-05 PR 4): contract of the media library card on the health page, shared by the server
  * (`SystemHealthService.checkMediaLibrary`) and the card (`MediaLibraryHealthCard`). Sizes are of the live files' contents,
  * each content counted once, since rows holding the same file share one copy on disk. Free space is of the disk holding
  * the library directory. A failed read is `unknown` with null figures, never zeros.
