@@ -333,6 +333,10 @@ export interface TrialBalanceRow {
   preClosingCredit?: number;
   closingDebit?: number;
   closingCredit?: number;
+  /** Detail of a level-4 row (v10.0.267, OBS-R1-45): its type, entity id and display name, read by the fiscal-year closing */
+  detailedType?: string;
+  detailedId?: number | null;
+  detailedName?: string;
 }
 
 export interface TrialBalanceReport {

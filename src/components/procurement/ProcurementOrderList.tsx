@@ -1,8 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { PackageCheck, Clock, CheckCircle2, Building2, Search, Truck, FileText, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { ProcurementOrder } from '../../types';
-import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../utils';
+import { formatPersianNumber, formatPersianDate } from '../../utils';
 import { ProcurementPager } from './ProcurementPager';
+import { sumAmounts } from '../../lib/procurement/procurementNumbers';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 
 interface ProcurementOrderListProps {
   /** v9.0.353 (TD-697): یک صفحه از سفارش‌های همین زبانه، فیلترشده در سرور */
@@ -37,12 +39,14 @@ export function ProcurementOrderList({
   onViewRequisition,
   type
 }: ProcurementOrderListProps) {
+  // OBS-R2-39 (TD-992): مبلغ ریالی در واحد نمایش (ریال یا تومان)، نه «ریال» ثابت
+  const rial = useRialDisplay();
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
   const searchTerm = search;
   const filteredOrders = useMemo(() => (Array.isArray(orders) ? orders : []), [orders]);
 
   const totalAmount = useMemo(() => {
-    return filteredOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    return sumAmounts(filteredOrders, o => o.totalAmount);
   }, [filteredOrders]);
 
   return (
@@ -90,7 +94,7 @@ export function ProcurementOrderList({
             تعداد اسناد: <span className="text-slate-900 font-mono font-black">{formatPersianNumber(total)}</span>
           </div>
           <div>
-            مجموع مبلغ این صفحه: <span className="text-amber-800 font-mono font-black text-sm">{formatPersianPrice(totalAmount)}</span>
+            مجموع مبلغ این صفحه: <span className="text-amber-800 font-mono font-black text-sm">{rial.amount(totalAmount)}</span>
           </div>
         </div>
       </div>
@@ -124,7 +128,7 @@ export function ProcurementOrderList({
                   <th className="p-3">درخواست خرید مرجع</th>
                   <th className="p-3">پروژه و انبار مقصد</th>
                   <th className="p-3 text-center">اقلام سفارش</th>
-                  <th className="p-3 text-center">مبلغ کل فاکتور</th>
+                  <th className="p-3 text-center">مبلغ کل فاکتور ({rial.label})</th>
                   <th className="p-3 text-center">وضعیت تحویل</th>
                   <th className="p-3 text-center">عملیات انبار</th>
                 </tr>
@@ -200,7 +204,7 @@ export function ProcurementOrderList({
                         </td>
 
                         <td className="p-3 text-center font-mono font-black text-amber-800">
-                          {formatPersianPrice(order.totalAmount)}
+                          {rial.number(order.totalAmount)}
                         </td>
 
                         <td className="p-3 text-center">
@@ -258,8 +262,8 @@ export function ProcurementOrderList({
                                       <th className="p-2">نام و کد کالا</th>
                                       <th className="p-2 text-center">تعداد / مقدار</th>
                                       <th className="p-2 text-center">واحد</th>
-                                      <th className="p-2 text-center">قیمت واحد (ریال)</th>
-                                      <th className="p-2 text-center">مبلغ کل (ریال)</th>
+                                      <th className="p-2 text-center">قیمت واحد ({rial.label})</th>
+                                      <th className="p-2 text-center">مبلغ کل ({rial.label})</th>
                                       <th className="p-2 text-center">انبار تحویل‌گیرنده</th>
                                     </tr>
                                   </thead>
@@ -278,10 +282,10 @@ export function ProcurementOrderList({
                                         </td>
                                         <td className="p-2 text-center text-slate-600">{line.unit}</td>
                                         <td className="p-2 text-center font-mono text-slate-700">
-                                          {formatPersianPrice(line.unitPrice)}
+                                          {rial.number(line.unitPrice)}
                                         </td>
                                         <td className="p-2 text-center font-mono font-black text-amber-800">
-                                          {formatPersianPrice(line.totalPrice)}
+                                          {rial.number(line.totalPrice)}
                                         </td>
                                         <td className="p-2 text-center text-slate-600">{line.locationName || line.location}</td>
                                       </tr>

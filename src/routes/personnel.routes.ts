@@ -21,6 +21,7 @@ import { OptimisticLockError, checkOccVersion, nextVersion } from '../lib/occHel
 import { fin } from '../lib/financialDecimal.js';
 import { PERSONNEL_IMPORT_DEFAULTS, parseEmploymentStatusCell, parseGenderCell, parseNationalityCell } from '../lib/personnel/personnelImportCells.js';
 import { assertPersonnelDeletable } from '../services/personnel/personnelDeleteGuard.js';
+import { insertPersonnel, softDeletePersonnel, updatePersonnelAtVersion } from '../services/personnel/personnelWrite.service.js';
 import { requirePersonnelNationalId } from '../services/personnel/personnelNationalId.js';
 import { paddedNationalIdNotice, readImportedNationalId } from '../lib/personnel/nationalIdCell.js';
 import { assertPersonnelCodeAvailable, guardPersonnelCode, isPersonnelCodeUniqueViolation, personnelCodeKey, personnelCodeTakenMessage } from '../services/personnel/personnelCode.js';
@@ -318,9 +319,7 @@ router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), v
 
         if (existing) {
           if (updateIfExists) {
-            const [updated] = await orm
-              .update(personnel)
-              .set({
+            const updated = await updatePersonnelAtVersion(orm, existing.id, existing.version, {
                 firstName: firstName || existing.firstName,
                 lastName: lastName || existing.lastName,
                 fullName: fullName || existing.fullName,
@@ -344,9 +343,7 @@ router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), v
                 notes: notes || existing.notes,
                 updatedAt: nowIso,
                 version: nextVersion(existing.version)
-              })
-              .where(and(eq(personnel.id, existing.id), eq(personnel.version, existing.version), eq(personnel.isDeleted, 0)))
-              .returning();
+              });
             // v9.0.30 (TD-442): پرسنلی که از خواندن فهرست تا این ردیف ویرایش یا حذف شده بازنویسی نمی‌شود
             if (!updated) throw new Error(`پرسنل «${existing.fullName}» هم‌زمان ویرایش یا حذف شده است؛ این ردیف به‌روز نشد.`);
 
@@ -367,9 +364,7 @@ router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), v
             });
           }
         } else {
-          const [newRecord] = await orm
-            .insert(personnel)
-            .values({
+          const newRecord = await insertPersonnel(orm, {
               firstName,
               lastName,
               fullName,
@@ -394,8 +389,7 @@ router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), v
               notes,
               createdAt: nowIso,
               updatedAt: nowIso
-            })
-            .returning();
+            });
 
           await logActivity({
             req, action: 'CREATE', entity: 'پرسنل', entityId: newRecord.id,
@@ -536,9 +530,7 @@ router.post('/personnel', authorizePermission('personnel.manage'), validate(crea
     const inserted = await guardPersonnelCode(personnelCode, () => guardPersonnelUserLink(() => orm.transaction(async (tx) => {
       await assertPersonnelCodeAvailable(personnelCode, tx);
       const linkedUserId = await resolvePersonnelUserLink(tx, userId);
-      const [row] = await tx
-        .insert(personnel)
-        .values({
+      const row = await insertPersonnel(tx, {
           firstName: firstName.trim(),
           lastName: lastName.trim(),
           fullName: computedFullName,
@@ -572,8 +564,7 @@ router.post('/personnel', authorizePermission('personnel.manage'), validate(crea
           notes: notes.trim(),
           createdAt: nowIso,
           updatedAt: nowIso
-        })
-        .returning();
+        });
 
       await logActivity({
         userId: req.user?.id,
@@ -661,9 +652,7 @@ router.put('/personnel/:id', authorizePermission('personnel.manage'), validate(u
       if (codeChanged) await assertPersonnelCodeAvailable(personnelCode ?? '', tx, id);
       const requestedUserId = parsePersonnelUserId(userId);
       const linkedUserId = requestedUserId === existing.userId ? requestedUserId : await resolvePersonnelUserLink(tx, requestedUserId, id);
-      const [updated] = await tx
-        .update(personnel)
-        .set({
+      const updated = await updatePersonnelAtVersion(tx, id, existing.version, {
           firstName: firstName ? firstName.trim() : '',
           lastName: lastName ? lastName.trim() : '',
           fullName: computedFullName,
@@ -698,9 +687,7 @@ router.put('/personnel/:id', authorizePermission('personnel.manage'), validate(u
           notes: notes ? notes.trim() : '',
           updatedAt: nowIso,
           version: nextVersion(existing.version)
-        })
-        .where(and(eq(personnel.id, id), eq(personnel.version, existing.version), eq(personnel.isDeleted, 0)))
-        .returning();
+        });
       if (!updated) throw new OptimisticLockError({ entityType: 'Personnel', entityId: id, expectedVersion });
 
       await logActivity({
@@ -739,13 +726,7 @@ router.delete('/personnel/:id', authorizePermission('personnel.manage'), validat
 
     await assertPersonnelDeletable(existing, tx);
 
-    await tx
-      .update(personnel)
-      .set({
-        isDeleted: 1,
-        updatedAt: new Date().toISOString()
-      })
-      .where(eq(personnel.id, id));
+    await softDeletePersonnel(tx, id, new Date().toISOString());
 
     await logActivity({
       userId: req.user?.id,
