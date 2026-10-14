@@ -25,6 +25,10 @@ const HA = String.fromCodePoint(0x647, 0x627);
 const YEH = String.fromCodePoint(0x6cc);
 const ZWNJ = '‌';
 
+// currentState() reads and parses every source file; three tests use it, so the tree is scanned once per file run
+let scanned: Baseline | undefined;
+const repoState = (): Baseline => (scanned ??= currentState());
+
 describe('ui_wording_ratchet_td_1168', () => {
   it('counts string literals, template parts and JSX text, never comments', () => {
     const source = [
@@ -54,14 +58,13 @@ describe('ui_wording_ratchet_td_1168', () => {
 
   it('the source tree matches the committed baseline exactly', () => {
     const baseline = JSON.parse(fs.readFileSync(path.join(process.cwd(), BASELINE_FILE), 'utf8')) as Baseline;
-    const { increased, decreased } = compareWithBaseline(currentState(), baseline);
+    const { increased, decreased } = compareWithBaseline(repoState(), baseline);
     expect(increased).toEqual([]);
     expect(decreased).toEqual([]);
-    // Scans every source file; a loaded CI runner needs more than the 5 s default.
-  }, 30_000);
+  });
 
   it('the screens named by the user guide no longer show these words', () => {
-    const state = currentState();
+    const state = repoState();
     for (const file of [
       'src/components/inventory/AuditConfirmSummaryModal.tsx',
       'src/components/InventoryRebuildModal.tsx',
@@ -70,8 +73,7 @@ describe('ui_wording_ratchet_td_1168', () => {
       'src/components/procurement/ConfirmWarehouseDeliveryModal.tsx',
       'src/components/accounting/AccountingDashboard.tsx',
     ]) expect(state[file] ?? 0, file).toBe(0);
-    // Scans every source file; a loaded CI runner needs more than the 5 s default.
-  }, 30_000);
+  });
 });
 
 /**
@@ -91,10 +93,9 @@ describe('server_error_message_wording_td_1182', () => {
   });
 
   it('the server error messages hold none of these words', () => {
-    const state = currentState();
+    const state = repoState();
     const server = Object.keys(state).filter(file => /^src\/(services|routes|middleware|errors)\//.test(file));
     expect(server).toEqual([]);
     expect(Object.keys(state).some(file => file.startsWith('src/services/'))).toBe(false);
-    // Scans every source file; a loaded CI runner needs more than the 5 s default.
-  }, 30_000);
+  });
 });
