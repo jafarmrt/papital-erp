@@ -416,14 +416,14 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
           </div>
 
           <div className="flex items-center gap-1">
-            <button
+            <button aria-label="صفحه قبل"
               onClick={() => setTxPage(p => Math.max(1, p - 1))}
               disabled={txPage === 1}
               className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 cursor-pointer"
             >
               <ChevronRight size={15} />
             </button>
-            <button
+            <button aria-label="صفحه بعد"
               onClick={() => setTxPage(p => Math.min(totalPages, p + 1))}
               disabled={txPage === totalPages}
               className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 cursor-pointer"

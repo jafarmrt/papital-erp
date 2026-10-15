@@ -441,7 +441,7 @@ export function PersonnelExcelModal({
             </div>
           </div>
 
-          <button
+          <button aria-label="بستن"
             onClick={handleClose}
             className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
           >

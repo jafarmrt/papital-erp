@@ -700,7 +700,7 @@ export function ChequesTab({
                   </p>
                 </div>
               </div>
-              <button
+              <button aria-label="بستن"
                 type="button"
                 onClick={() => setIsNewModalOpen(false)}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700 transition"
@@ -1083,7 +1083,7 @@ export function ChequesTab({
               <h3 className="font-bold text-slate-900 dark:text-white text-base">
                 سجل و تاریخچه گردش چک {toPersianDigits(historyModalCheque.chequeNumber)}
               </h3>
-              <button
+              <button aria-label="بستن"
                 onClick={() => setHistoryModalCheque(null)}
                 className="p-1 text-slate-400 hover:text-slate-600 rounded"
               >

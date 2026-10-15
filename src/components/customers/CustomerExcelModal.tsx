@@ -447,7 +447,7 @@ export function CustomerExcelModal({
               <p className="text-xs text-slate-500 mt-0.5">دریافت خروجی جامع یا به‌روزرسانی و ثبت انبوه اطلاعات طرفین حساب</p>
             </div>
           </div>
-          <button
+          <button aria-label="بستن"
             type="button"
             onClick={onClose}
             className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-xl transition-colors cursor-pointer"

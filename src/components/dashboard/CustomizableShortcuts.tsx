@@ -335,7 +335,7 @@ export function CustomizableShortcuts({ user, userPermissions }: CustomizableSho
                   بخش‌های مورد نظرتان را برای دسترسی فوری انتخاب کنید (بر اساس مجوزهای شما):
                 </p>
               </div>
-              <button
+              <button aria-label="بستن"
                 onClick={() => setIsCustomizeOpen(false)}
                 className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl"
               >

@@ -727,7 +727,7 @@ export function AccountExplorerTab({
                   </p>
                 </div>
               </div>
-              <button
+              <button aria-label="بستن"
                 onClick={() => setSelectedVoucherModal(null)}
                 className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
               >

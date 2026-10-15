@@ -122,7 +122,7 @@ export function PieceworkPayslipModal({
                 ابطال فیش
               </button>
             )}
-            <button onClick={onClose} className="p-1.5 hover:bg-slate-700 rounded-full text-slate-300 cursor-pointer">
+            <button aria-label="بستن" onClick={onClose} className="p-1.5 hover:bg-slate-700 rounded-full text-slate-300 cursor-pointer">
               <X className="w-5 h-5" />
             </button>
           </div>

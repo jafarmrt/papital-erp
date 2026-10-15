@@ -318,6 +318,8 @@ export function CRMLeadDrawer({
                           پیگیری بعدی ({formatPersianDate(act.nextFollowUpDate)}): {act.nextFollowUpTask || 'تماس پیگیری'}
                         </span>
                         <button
+                          aria-label={act.isFollowUpCompleted ? 'برداشتن علامت انجام پیگیری' : 'علامت انجام پیگیری'}
+                          aria-pressed={Boolean(act.isFollowUpCompleted)}
                           onClick={() => onToggleFollowup(act)}
                           className={`p-1 rounded-md cursor-pointer ${
                             act.isFollowUpCompleted ? 'bg-emerald-200 text-emerald-800' : 'bg-amber-200 text-amber-800'

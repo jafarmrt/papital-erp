@@ -392,7 +392,7 @@ export function TaskTitlesSettingsTab() {
               <h3 className="font-bold text-slate-800 text-base">
                 {editingTask ? 'ویرایش عنوان کاری' : 'افزودن عنوان کاری جدید'}
               </h3>
-              <button
+              <button aria-label="بستن"
                 onClick={() => setIsTaskModalOpen(false)}
                 className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
               >
@@ -520,7 +520,7 @@ export function TaskTitlesSettingsTab() {
               <h3 className="font-bold text-slate-800 text-base">
                 {editingCat ? 'ویرایش دسته‌بندی کاری' : 'تعریف دسته‌بندی کاری جدید'}
               </h3>
-              <button
+              <button aria-label="بستن"
                 onClick={() => setIsCatModalOpen(false)}
                 className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
               >

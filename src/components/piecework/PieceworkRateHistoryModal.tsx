@@ -176,7 +176,7 @@ export const PieceworkRateHistoryModal: React.FC<PieceworkRateHistoryModalProps>
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
-            <button
+            <button aria-label="بستن"
               onClick={onClose}
               className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition"
             >

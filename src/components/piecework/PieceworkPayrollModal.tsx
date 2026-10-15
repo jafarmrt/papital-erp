@@ -117,7 +117,7 @@ export function PieceworkPayrollModal({
             <FileText className="w-4 h-4 text-emerald-600" />
             <span>صدور فیش حقوقی کارکرد پرسنل</span>
           </h2>
-          <button onClick={onClose} className="p-1.5 hover:bg-slate-200 text-slate-500 rounded-full cursor-pointer">
+          <button aria-label="بستن" onClick={onClose} className="p-1.5 hover:bg-slate-200 text-slate-500 rounded-full cursor-pointer">
             <X className="w-4 h-4" />
           </button>
         </div>

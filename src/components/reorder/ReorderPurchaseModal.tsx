@@ -194,7 +194,7 @@ export function ReorderPurchaseModal({
               </p>
             </div>
           </div>
-          <button
+          <button aria-label="بستن"
             type="button"
             onClick={onClose}
             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"

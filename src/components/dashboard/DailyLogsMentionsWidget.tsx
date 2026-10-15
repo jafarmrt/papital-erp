@@ -124,7 +124,7 @@ export function DailyLogsMentionsWidget({
           />
           <Search size={13} className="absolute right-2.5 top-2.5 text-slate-400" />
           {searchQuery && (
-            <button
+            <button aria-label="پاک کردن جست‌وجو"
               onClick={() => setSearchQuery('')}
               className="absolute left-2.5 top-2 text-slate-400 hover:text-slate-600"
             >

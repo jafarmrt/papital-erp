@@ -150,7 +150,7 @@ export default function DailyLogsPage({ user }: DailyLogsPageProps) {
               className="w-full pr-9 pl-4 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-hidden focus:border-blue-500 transition-all"
             />
             {dl.searchQuery && (
-              <button
+              <button aria-label="پاک کردن جست‌وجو"
                 onClick={() => dl.setSearchQuery('')}
                 className="absolute left-3 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
               >

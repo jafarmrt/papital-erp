@@ -60,7 +60,7 @@ export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, total, o
               <Printer className="w-4 h-4" />
               ارسال به چاپگر / ذخیره PDF
             </button>
-            <button
+            <button aria-label="بستن"
               onClick={onClose}
               className="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center transition-colors"
             >

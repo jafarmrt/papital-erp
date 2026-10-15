@@ -251,7 +251,7 @@ export function BankReconciliationModal({
             </div>
           </div>
           
-          <button
+          <button aria-label="بستن"
             onClick={onClose}
             className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer"
           >

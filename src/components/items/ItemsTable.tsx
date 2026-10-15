@@ -265,7 +265,7 @@ export function ItemsTable({
         </span>
         {totalPages > 1 && (
           <div className="flex items-center gap-1.5">
-            <button 
+            <button aria-label="صفحه قبل" 
               disabled={page === 1}
               onClick={() => onPageChange(page - 1)}
               className="p-1.5 border border-slate-300/80 rounded-xl bg-white hover:bg-slate-100 disabled:opacity-40 text-slate-600 cursor-pointer transition-all shadow-2xs"
@@ -275,7 +275,7 @@ export function ItemsTable({
             <span className="text-xs font-bold px-2 text-slate-700">
               صفحه {formatPersianNumber(page)} از {formatPersianNumber(totalPages)}
             </span>
-            <button 
+            <button aria-label="صفحه بعد" 
               disabled={page === totalPages}
               onClick={() => onPageChange(page + 1)}
               className="p-1.5 border border-slate-300/80 rounded-xl bg-white hover:bg-slate-100 disabled:opacity-40 text-slate-600 cursor-pointer transition-all shadow-2xs"

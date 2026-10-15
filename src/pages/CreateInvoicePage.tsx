@@ -709,7 +709,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                       <td className="p-3 text-center text-rose-600">{d.discount > 0 ? formatPersianPrice(d.discount, undefined, amountDecimals) : '-'}</td>
                       <td className="p-3 text-center font-bold text-indigo-700">{formatPersianPrice(rowFinal, undefined, amountDecimals)}</td>
                       <td className="p-3 text-center">
-                        <button type="button" onClick={() => handleRemove(i)} className="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded transition-colors inline-block">
+                        <button aria-label="حذف ردیف" type="button" onClick={() => handleRemove(i)} className="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded transition-colors inline-block">
                           <Trash2 size={16} />
                         </button>
                       </td>

@@ -38,7 +38,7 @@ export function PricingStrategiesTab({
                 className="flex-1 border border-slate-300 rounded-lg px-3 py-2 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                 placeholder="نام سیاست قیمتی..."
               />
-              <button
+              <button aria-label="حذف فهرست قیمت"
                 type="button"
                 onClick={() => {
                   const newStr = pricingStrategies.filter((_, i) => i !== idx);

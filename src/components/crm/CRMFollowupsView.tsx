@@ -237,7 +237,7 @@ export function CRMFollowupsView({
             </span>
 
             <div className="flex items-center gap-1">
-              <button
+              <button aria-label="صفحه قبل"
                 disabled={currentActPage === 1}
                 onClick={() => setActPage((p) => Math.max(1, p - 1))}
                 className="p-1.5 border rounded-lg bg-white hover:bg-slate-100 disabled:opacity-40 text-slate-700 cursor-pointer"
@@ -247,7 +247,7 @@ export function CRMFollowupsView({
               <span className="px-3 font-bold text-slate-800">
                 صفحه {formatPersianNumber(currentActPage)} از {formatPersianNumber(actTotalPages)}
               </span>
-              <button
+              <button aria-label="صفحه بعد"
                 disabled={currentActPage === actTotalPages}
                 onClick={() => setActPage((p) => Math.min(actTotalPages, p + 1))}
                 className="p-1.5 border rounded-lg bg-white hover:bg-slate-100 disabled:opacity-40 text-slate-700 cursor-pointer"
