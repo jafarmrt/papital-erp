@@ -30,7 +30,7 @@ import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { finalizeDayTarget, proformaInvoiceTarget } from './proformaInvoice.js';
 import { recordFinalizeEvent } from './documentFinalizeEvents.js';
 import { lockLinkedRequisition, voidLinkedOrder } from './linkedOrderHooks.js';
-import { assertNotProjectDelivery, stockDirectionOf } from './documentRecordRule.js';
+import { assertProductionReceiptNotFinalized, stockDirectionOf } from './documentRecordRule.js';
 import { assertOutflowWithinSellable } from './documentSellableGate.js';
 import { consumesProjectReservation } from '../../lib/transactions/projectIssueTypes.js';
 import { documentAuditSnapshot, type DocumentAuditChange, type DocumentAuditSnapshot, type DocumentVoidAudit } from './documentAudit.js';
@@ -76,8 +76,8 @@ export class DocumentLifecycleService {
       if (docPeek.type === 'audit') {
         throw new ValidationError(`سند انبارگردانی «${docPeek.refNumber || id}» نهایی‌سازی نمی‌شود؛ انبارگردانی هنگام ثبت اعمال شده است. برای اصلاح، آن را ابطال و دوباره ثبت کنید.`);
       }
-      // v9.0.325 (TD-780، تصمیم ت۷ الف): رسید تولید پیش‌نویس (از پیش از این نسخه) قطعی نمی‌شود؛ تحویل فقط از مسیر پروژه
-      assertNotProjectDelivery(docPeek.type, docPeek.refNumber || String(id));
+      // v9.0.325 (TD-780) / v10.1.6 (N-06): رسید تولید پیش‌نویس (از پیش از v9.0.325) قطعی نمی‌شود؛ رسید تولید فقط قطعی ثبت می‌شود
+      assertProductionReceiptNotFinalized(docPeek.type, docPeek.refNumber || String(id));
 
       // Pre-flight: verify line items existence and validity
       const rawLines = await tx.select({

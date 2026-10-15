@@ -110,7 +110,7 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
           <DocItemsTable
             docItems={docItems}
             actionType={actionType}
-            currencyLabel={form.currency}
+            currencyLabel={docType === 'production_receipt' ? 'IRR' : form.currency}
             totalSum={form.totalSum}
             getItemReservationSummary={form.getItemReservationSummary}
             onUpdateItemQty={actions.handleUpdateItemQty}

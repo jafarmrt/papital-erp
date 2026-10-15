@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission, can, userHasRoleOrPermission } from '../middleware/authorize.js';
 import { permissionDefinition } from '../lib/permissions/permissionCatalog.js';
-import { CRM_LEAD_LINK_PERMISSION, SALES_FINALIZE_PERMISSION } from '../lib/permissions/documentPermissions.js';
+import { CRM_LEAD_LINK_PERMISSION, PRODUCTION_RECEIPT_PERMISSION, SALES_FINALIZE_PERMISSION } from '../lib/permissions/documentPermissions.js';
 import { findFinalDocumentIdByRef } from '../services/documents/documentRefLookup.js';
 import { documentAuditDetails, documentAuditSnapshot, documentLineSummary } from '../services/documents/documentAudit.js';
 import { proformaStockWarnings } from '../services/documents/documentSellableGate.js';
@@ -307,12 +307,12 @@ async function assertMayRecordDocument(user: AuthUserPayload | undefined, permis
 
 // v9.0.125 (TD-541 / TD-771، تصمیم ت۱ بسته ۸): مجوز هر سند از جدول «نوع سند و وضعیت ← مجوز» (documentPermissions.ts)
 // خوانده می‌شود. پیش‌تر هر نقشی جز چهار کد ثابت «کاربر فروش» بود: سند قطعی نمی‌زد و پیش‌نویسش پیش‌فاکتور می‌شد
-router.post('/documents', authorizePermission('documents.create', 'documents.finalize', 'warehouse.in', 'warehouse.out', 'audit.apply'), idempotency({ scope: 'documents' }), validate(documentCreateSchema), asyncHandler(async (req, res) => {
+router.post('/documents', authorizePermission('documents.create', 'documents.finalize', 'warehouse.in', 'warehouse.out', 'audit.apply', PRODUCTION_RECEIPT_PERMISSION), idempotency({ scope: 'documents' }), validate(documentCreateSchema), asyncHandler(async (req, res) => {
   const requestedType = String(req.body.docType);
   // v9.0.238 (TD-770): جهت گردش از نوع سند؛ `inOut` ناسازگار پیش از سنجش مجوز ۴۲۲ می‌گیرد
   assertRecordableDocument(requestedType, req.body.inOut);
-  // v9.0.325 (TD-780، تصمیم ت۷ الف): رسید تولید فقط از «ورود به انبار» پروژه
-  assertNotProjectDelivery(requestedType);
+  // v9.0.325 (TD-780، تصمیم ت۷ الف): رسید تولید پروژه فقط از «ورود به انبار» پروژه؛ بی پروژه از v10.1.6 (N-06) همین‌جا
+  assertNotProjectDelivery(requestedType, req.body.projectId);
   // v9.0.327 (TD-783، تصمیم ت۹ الف): شماره فاکتور فروش و برگشت فقط از سری سرور
   assertManualRefAllowed(requestedType, req.body.refNumber);
   const recordStatus = createdDocumentStatus(requestedType, req.body.status);

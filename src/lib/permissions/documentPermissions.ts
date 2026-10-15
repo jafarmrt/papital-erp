@@ -8,6 +8,7 @@
  *   نهایی‌سازی با «قطعی کردن سند فروش».
  * - سند انبار به جهت گردش کالا: ورود با «ثبت ورود کالا»، خروج با «ثبت خروج کالا»، در هر وضعیت.
  * - انبارگردانی: «اعمال و تسویه مغایرت».
+ * - رسید تولید بی پروژه: «ثبت تولید بدون پروژه» (v10.1.6، N-06).
  *
  * این فایل به چیزی از سرور یا مرورگر وابسته نیست.
  */
@@ -35,6 +36,13 @@ export const STOCK_BACKDATE_PERMISSION = 'warehouse.backdate';
  */
 export const CRM_LEAD_LINK_PERMISSION = 'crm.manage';
 
+/**
+ * v10.1.6 (N-06، TD-1262، تصمیم ت۲۶): رسید تولید بی پروژه (صفحه «ورود و خروج انبار») ارزش به انبار می‌افزاید و هزینه
+ * «مصرف مواد بی پروژه» را بستانکار می‌کند، پس مجوز جدای خود را دارد که `warehouse.in` را لازم دارد. رسید تولید پروژه از
+ * «ورود به انبار» پروژه با مجوزهای خودش (`PROJECT_STOCK_IN_PERMISSIONS`) ثبت می‌شود و از این جدول نمی‌گذرد.
+ */
+export const PRODUCTION_RECEIPT_PERMISSION = 'warehouse.production_receipt';
+
 export function isSalesDocumentType(docType: string): boolean {
   return SALES_DOCUMENT_TYPES.has(docType);
 }
@@ -43,6 +51,7 @@ export function isSalesDocumentType(docType: string): boolean {
 export function documentRecordPermission(docType: string, status: DocumentRecordStatus, direction: DocumentStockDirection): string {
   if (isSalesDocumentType(docType)) return status === 'final' ? SALES_FINALIZE_PERMISSION : 'documents.create';
   if (docType === 'audit') return 'audit.apply';
+  if (docType === 'production_receipt') return PRODUCTION_RECEIPT_PERMISSION;
   return direction === 'in' ? 'warehouse.in' : 'warehouse.out';
 }
 

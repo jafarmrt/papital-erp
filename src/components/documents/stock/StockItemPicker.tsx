@@ -4,6 +4,7 @@ import { formatCurrencyLabel, formatPersianNumber, formatPersianPrice } from '..
 import { SearchableSelect } from '../../SearchableSelect';
 import type { StockDocumentForm } from '../../../hooks/documents/useStockDocumentForm';
 import { PICK_LIST_URLS } from '../../../lib/permissions/pickLists';
+import { stockInLabels } from '../../../lib/documents/stockInLabels';
 
 interface StockItemPickerProps {
   form: StockDocumentForm;
@@ -18,9 +19,11 @@ interface StockItemPickerProps {
  */
 export function StockItemPicker({ form, onItemSelect, onAddItem, onCreateItem }: StockItemPickerProps) {
   const {
-    actionType, canCreateOrEditItem, getItemReservationSummary, currency, selectedItem,
+    actionType, docType, canCreateOrEditItem, getItemReservationSummary, currency, selectedItem,
     quantity, setQuantity, unitPrice, setUnitPrice, selectedItemObj,
   } = form;
+  // v10.1.6 (N-06): رسید تولید بی پروژه فقط محصول نهایی می‌گیرد و بهای واحدش بهای مواد به ریال است
+  const production = docType === 'production_receipt';
 
   return (
     <div className="border-t border-slate-200 pt-5 space-y-4">
@@ -56,7 +59,7 @@ export function StockItemPicker({ form, onItemSelect, onAddItem, onCreateItem }:
             </div>
             <SearchableSelect
               className="w-full shadow-2xs rounded-xl"
-              fetchUrl={PICK_LIST_URLS.items}
+              fetchUrl={production ? `${PICK_LIST_URLS.items}?type=product` : PICK_LIST_URLS.items}
               mapResultToOption={(it: Item) => {
                 const { totalReservedQty, reservedForOtherProjects, reservedForSelectedProject, locationStock, maxAllowedForExit } = getItemReservationSummary(it);
 
@@ -111,7 +114,7 @@ export function StockItemPicker({ form, onItemSelect, onAddItem, onCreateItem }:
           {actionType === 'in' && (
             <div className="md:col-span-3">
               <label className="block text-xs font-bold mb-1.5 text-slate-700">
-                قیمت خرید واحد (فی - {formatCurrencyLabel(currency)})
+                {production ? `${stockInLabels(docType).unitPrice} (${formatCurrencyLabel('IRR')})` : `قیمت خرید واحد (فی - ${formatCurrencyLabel(currency)})`}
               </label>
               <input 
                 type="number" 
@@ -119,7 +122,7 @@ export function StockItemPicker({ form, onItemSelect, onAddItem, onCreateItem }:
                 step="any" 
                 value={unitPrice} 
                 onChange={e => setUnitPrice(e.target.value ? Number(e.target.value) : '')} 
-                placeholder="مثال: 100000"
+                placeholder={production ? 'خالی: میانگین موزون بها' : 'مثال: 100000'}
                 className="w-full border border-slate-200 bg-white rounded-xl text-sm px-3 py-2 text-left font-mono font-bold focus:outline-none focus:ring-2 focus:ring-blue-500" 
                 dir="ltr" 
               />

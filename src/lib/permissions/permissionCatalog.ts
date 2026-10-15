@@ -52,6 +52,8 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
       { key: 'warehouse.view', title: 'مشاهده انبارها', description: 'مشاهده لیست انبارها و موجودی تفکیکی' },
       { key: 'warehouse.manage', title: 'تعریف و ویرایش انبارها', description: 'افزودن، ویرایش و حذف انبارها', requires: ['warehouse.view'] },
       { key: 'warehouse.in', title: 'ثبت ورود کالا (رسید)', description: 'افزایش موجودی و ثبت رسیدهای ورودی', requires: ['warehouse.view'] },
+      // v10.1.6 (N-06، TD-1262، تصمیم ت۲۶): ورود محصول ساخته‌شده بی پروژه با سند حسابداری در برابر هزینه؛ پیش‌فرض به هیچ نقشی داده نمی‌شود
+      { key: 'warehouse.production_receipt', title: 'ثبت تولید بدون پروژه', description: 'ورود محصول ساخته‌شده بی پروژه به انبار از صفحه «ورود و خروج انبار»، با سند حسابداری در برابر «مصرف مواد بی پروژه»', requires: ['warehouse.in'] },
       { key: 'warehouse.out', title: 'ثبت خروج کالا (حواله)', description: 'کاهش موجودی و ثبت حواله‌های خروجی', requires: ['warehouse.view'] },
       { key: 'warehouse.transfer', title: 'جابجایی بین انبارها', description: 'انتقال کالا از یک انبار به انبار دیگر', requires: ['warehouse.view'] },
       // v8.0.4 (TD-257، تصمیم مالک محصول): استثنای قاعده تاریخ سند انبار؛ پیش‌فرض به هیچ نقشی داده نمی‌شود

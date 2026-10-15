@@ -20,6 +20,8 @@ export function StockCounterpartyField({ form, personnelList, suppliersList }: S
   const { actionType, docType, buyerName, setBuyerName, selectedSupplierObj, setSelectedSupplierObj, selectedPersonnelObj, setReceiverPersonnelId } = form;
   // v10.0.44 (TD-939): رسید و خرید فقط تأمین‌کننده، برگشت از فروش فقط مشتری (یا «هر دو»)؛ همان قاعده سرور
   const partyOptions = (Array.isArray(suppliersList) ? suppliersList : []).filter(s => partyFitsDocument(docType, s.partyType));
+  // v10.1.6 (N-06): رسید تولید بی پروژه طرف حساب ندارد
+  if (docType === 'production_receipt') return null;
 
   return (
     <div>
