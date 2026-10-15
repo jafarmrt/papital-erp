@@ -252,7 +252,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
             </div>
           )}
 
-          {/* v10.1.14 (D-06 part C, TD-1265): the system admin closes a record that cannot move on; a closed one says so */}
+          {/* v10.1.15 (D-06 part C, TD-1265): the system admin closes a record that cannot move on; a closed one says so */}
           <WorkflowInstanceTerminate instance={instance} entityType={entityType} entityId={entityId} history={history} onDone={onStateChange} />
 
           {/* Available Actions Bar */}

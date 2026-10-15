@@ -6,7 +6,9 @@ import { can, requirePermission } from '../middleware/authorize.js';
 import { numericIdString, storageDateParam, validate } from '../middleware/validate.js';
 import { businessTodayIsoDate } from '../lib/businessClock.js';
 import { ITEM_COST_READ_PERMISSIONS } from '../lib/inventory/reservedItemsReport.js';
-import { AGING_REPORT_PERMISSION, LEDGER_CHECK_PERMISSIONS, SALES_REPORT_PERMISSION } from '../lib/permissions/reportPermissions.js';
+import {
+  AGING_REPORT_PERMISSION, LEDGER_CHECK_PERMISSIONS, SALES_REPORT_PERMISSION, VAT_REPORT_PERMISSION,
+} from '../lib/permissions/reportPermissions.js';
 import {
   AGING_KINDS, AGING_REPORT_DEFAULT_LIMIT, AGING_REPORT_EXPORT_LIMIT, AGING_REPORT_MAX_LIMIT, AGING_SORTS,
 } from '../lib/reports/agingReport.js';
@@ -14,13 +16,18 @@ import { REPORT_COMPARE_MODES, REPORT_PERIOD_UNITS, presetRange } from '../lib/r
 import {
   SALES_CHANNELS, SALES_DIMENSIONS, SALES_REPORT_DEFAULT_LIMIT, SALES_REPORT_EXPORT_LIMIT, SALES_REPORT_MAX_LIMIT,
 } from '../lib/reports/salesReport.js';
+import {
+  VAT_DIFFERENCE_PAGE_LIMIT, VAT_LIST_FILTERS, VAT_REPORT_DEFAULT_LIMIT, VAT_REPORT_EXPORT_LIMIT, VAT_REPORT_MAX_LIMIT,
+} from '../lib/reports/vatReport.js';
 import { agingReport } from '../services/reports/agingReport.service.js';
 import { salesReport } from '../services/reports/salesReport.service.js';
+import { vatReport } from '../services/reports/vatReport.service.js';
 
 /**
  * v10.1.8 (D-03، طرح گزارش‌های مدیریتی §۵، تصمیم ت۲): API صفحه «گزارش‌های مدیریتی». گزارش فروش با کلید `reports.sales`؛
  * بها و سود ناخالص فقط برای خواننده بهای کالا (ت۳) و سطر هم‌خوانی با دفتر کل فقط برای خواننده گزارش‌های دفتر.
  * v10.1.10: «سن مطالبات و بدهی‌ها» با کلید `accounting.reports` (ت۲).
+ * v10.1.14: «مالیات بر ارزش افزوده» با همان کلید (ت۲)، پیش‌فرض از آغاز فصل جاری تا امروز (ت۱۲).
  */
 const router = Router();
 router.use(authenticateToken);
@@ -110,6 +117,34 @@ router.get('/reports/aging', requirePermission(AGING_REPORT_PERMISSION), validat
     page: exportAll ? 1 : Number(query.page ?? 1),
     limit: exportAll ? AGING_REPORT_EXPORT_LIMIT : Math.min(Number(query.limit ?? AGING_REPORT_DEFAULT_LIMIT), AGING_REPORT_MAX_LIMIT),
   });
+  res.json(report);
+}));
+
+const vatQuerySchema = z.object({
+  query: z.object({
+    from: storageDateParam,
+    to: storageDateParam,
+    list: z.enum(VAT_LIST_FILTERS).optional(),
+    page: pageNumber.optional(),
+    limit: pageNumber.optional(),
+    export: z.enum(['true', 'false']).optional(),
+  }).strict(),
+});
+
+type VatQuery = z.infer<typeof vatQuerySchema>['query'];
+
+router.get('/reports/vat', requirePermission(VAT_REPORT_PERMISSION), validate(vatQuerySchema), asyncHandler(async (req, res) => {
+  const query = req.query as unknown as VatQuery;
+  const today = await businessTodayIsoDate();
+  const thisQuarter = presetRange('this_quarter', today);
+  const exportAll = query.export === 'true';
+  const report = await vatReport({
+    from: query.from ?? thisQuarter?.from ?? today,
+    to: query.to ?? today,
+    list: query.list ?? 'all',
+    page: exportAll ? 1 : Number(query.page ?? 1),
+    limit: exportAll ? VAT_REPORT_EXPORT_LIMIT : Math.min(Number(query.limit ?? VAT_REPORT_DEFAULT_LIMIT), VAT_REPORT_MAX_LIMIT),
+  }, { differenceLimit: exportAll ? VAT_REPORT_EXPORT_LIMIT : VAT_DIFFERENCE_PAGE_LIMIT });
   res.json(report);
 }));
 

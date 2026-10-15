@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
 /**
- * v10.1.14 (D-06 part C, TD-1268 / TD-1265): «تفویض کارهایم» in the approval inbox for the holders of the delegation keys,
+ * v10.1.15 (D-06 part C, TD-1268 / TD-1265): «تفویض کارهایم» in the approval inbox for the holders of the delegation keys,
  * reading the simple user list and the scope endpoint, with «تفویض‌های من» (revoke only what the user gave); and the
  * system admin's «بستن فرایند» of a running record with a required reason, never offered for a purchase requisition.
  * Red on v10.1.11, where neither component existed.

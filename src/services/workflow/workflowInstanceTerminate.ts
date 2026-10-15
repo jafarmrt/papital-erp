@@ -13,7 +13,7 @@ export const ADMIN_TERMINATE_ACTION_KEY = 'terminate';
 export const ADMIN_TERMINATE_ACTION_TITLE = 'بستن فرایند به دست مدیر';
 
 /**
- * v10.1.14 (D-06 part C, TD-1265): the system admin closes a running record that cannot move on, with a required reason.
+ * v10.1.15 (D-06 part C, TD-1265): the system admin closes a running record that cannot move on, with a required reason.
  * In one transaction under the instance row lock: the instance `TERMINATED`, pending tasks canceled, one `terminate`
  * history row with the reason, and the audit row written with the same `tx`. The record itself is not changed; only
  * record types whose work goes on without the workflow are closed (`workflowTerminateRefusal`). Only the instance row is

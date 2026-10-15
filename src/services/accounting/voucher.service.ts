@@ -1222,7 +1222,7 @@ export class VoucherService {
     }
 
     await assertNotApprovedByMaker(tx, existing, status, userId); // v10.0.27 (TD-965)
-    // v10.1.14 (D-06 part C): a deputy approving in the maker's name is the maker approving
+    // v10.1.15 (D-06 part C): a deputy approving in the maker's name is the maker approving
     if (actingForUserId && actingForUserId !== userId) await assertNotApprovedByMaker(tx, existing, status, actingForUserId);
     await this.checkFiscalPeriodOpen(existing.date, tx);
 
