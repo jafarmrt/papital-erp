@@ -11,7 +11,7 @@ export interface DialogLayerProps {
 }
 
 /**
- * Keyboard and screen-reader behaviour of a hand-built window (v10.1.28, TD-1277, Vibe Farsi
+ * Keyboard and screen-reader behaviour of a hand-built window (v10.1.29, TD-1277, Vibe Farsi
  * package 3b). Rendered as the first child of the `role="dialog"` overlay: Esc closes the topmost
  * window, and a window without `aria-label` / `aria-labelledby` is named by its first heading.
  */

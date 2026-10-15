@@ -1,5 +1,5 @@
 /**
- * Esc closes only the topmost open window (v10.1.28, TD-1277, Vibe Farsi package 3b).
+ * Esc closes only the topmost open window (v10.1.29, TD-1277, Vibe Farsi package 3b).
  *
  * Every window registers its close action here while it is open; one `keydown` listener on
  * `window` closes the last one registered. A control that handles Esc itself (an open menu, a

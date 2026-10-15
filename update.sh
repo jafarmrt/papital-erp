@@ -128,6 +128,12 @@ else
   SUDO=""
 fi
 
+# v10.1.28: the app is built and tested on Node.js 24; an older Node still runs it, but say so once
+NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
+if [ "$NODE_MAJOR" -lt 24 ]; then
+  warn "Node.js $(node -v 2>/dev/null || echo 'not found') is older than 24; install Node.js 24 (see install.sh) before the next update."
+fi
+
 # ---------- 1) Pre-update database backup ----------
 PREVIOUS_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || true)"
 PRE_DEPLOY_DUMP=""
