@@ -214,6 +214,10 @@ export const QUERY_KEYS = {
     sales: (params: Record<string, unknown> | object) => ['reports', 'sales', params] as const,
     aging: (params: Record<string, unknown> | object) => ['reports', 'aging', params] as const,
     vat: (params: Record<string, unknown> | object) => ['reports', 'vat', params] as const,
+    // v10.1.15 (D-03 بخش ۴): نمودارهای فروش، گزارش خرید و ابزارک فروش پیشخوان
+    salesCharts: (params: Record<string, unknown> | object) => ['reports', 'sales-charts', params] as const,
+    purchases: (params: Record<string, unknown> | object) => ['reports', 'purchases', params] as const,
+    dashboardSummary: ['reports', 'dashboard-summary'] as const,
   },
 
   // Domain Events & Outbox

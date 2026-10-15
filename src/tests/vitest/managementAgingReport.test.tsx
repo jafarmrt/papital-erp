@@ -28,6 +28,10 @@ vi.mock('../../lib/reports/reportWorkbook', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/reports/reportWorkbook')>()),
   downloadReportWorkbook: (...args: unknown[]) => downloadReportWorkbook(...args),
 }));
+// v10.1.15: jsdom بوم ندارد؛ نمودار بازه‌های سن با یک عنوان ساده جایگزین می‌شود
+vi.mock('../../components/reports/charts/ReportBarChart', () => ({
+  ReportBarChart: ({ title }: { title: string }) => <div data-testid="report-bar-chart">{title}</div>,
+}));
 vi.mock('react-hot-toast', () => { const toast = { error: vi.fn(), success: vi.fn() }; return { default: toast, toast }; });
 
 import ManagementReportsPage from '../../pages/ManagementReportsPage';

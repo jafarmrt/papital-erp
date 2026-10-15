@@ -7,7 +7,8 @@ import { numericIdString, storageDateParam, validate } from '../middleware/valid
 import { businessTodayIsoDate } from '../lib/businessClock.js';
 import { ITEM_COST_READ_PERMISSIONS } from '../lib/inventory/reservedItemsReport.js';
 import {
-  AGING_REPORT_PERMISSION, LEDGER_CHECK_PERMISSIONS, SALES_REPORT_PERMISSION, VAT_REPORT_PERMISSION,
+  AGING_REPORT_PERMISSION, DASHBOARD_SALES_WIDGET_PERMISSIONS, LEDGER_CHECK_PERMISSIONS, PURCHASE_REPORT_PERMISSION,
+  SALES_REPORT_PERMISSION, VAT_REPORT_PERMISSION,
 } from '../lib/permissions/reportPermissions.js';
 import {
   AGING_KINDS, AGING_REPORT_DEFAULT_LIMIT, AGING_REPORT_EXPORT_LIMIT, AGING_REPORT_MAX_LIMIT, AGING_SORTS,
@@ -19,7 +20,12 @@ import {
 import {
   VAT_DIFFERENCE_PAGE_LIMIT, VAT_LIST_FILTERS, VAT_REPORT_DEFAULT_LIMIT, VAT_REPORT_EXPORT_LIMIT, VAT_REPORT_MAX_LIMIT,
 } from '../lib/reports/vatReport.js';
+import {
+  PURCHASE_DIMENSIONS, PURCHASE_REPORT_DEFAULT_LIMIT, PURCHASE_REPORT_EXPORT_LIMIT, PURCHASE_REPORT_MAX_LIMIT,
+} from '../lib/reports/purchaseReport.js';
 import { agingReport } from '../services/reports/agingReport.service.js';
+import { purchaseReport } from '../services/reports/purchaseReport.service.js';
+import { dashboardReceivablesSummary, dashboardSalesSummary, salesChartSeries } from '../services/reports/salesCharts.service.js';
 import { salesReport } from '../services/reports/salesReport.service.js';
 import { vatReport } from '../services/reports/vatReport.service.js';
 
@@ -28,6 +34,8 @@ import { vatReport } from '../services/reports/vatReport.service.js';
  * بها و سود ناخالص فقط برای خواننده بهای کالا (ت۳) و سطر هم‌خوانی با دفتر کل فقط برای خواننده گزارش‌های دفتر.
  * v10.1.10: «سن مطالبات و بدهی‌ها» با کلید `accounting.reports` (ت۲).
  * v10.1.14: «مالیات بر ارزش افزوده» با همان کلید (ت۲)، پیش‌فرض از آغاز فصل جاری تا امروز (ت۱۲).
+ * v10.1.15: نمودارهای فروش (ت۱۶) با `reports.sales`، «گزارش خرید» با کلید تازه `reports.purchases` (ت۱۵) و ابزارک فروش
+ * پیشخوان (ت۱۴) که هر بخشش را فقط به دارنده کلید همان بخش می‌دهد.
  */
 const router = Router();
 router.use(authenticateToken);
@@ -146,6 +154,88 @@ router.get('/reports/vat', requirePermission(VAT_REPORT_PERMISSION), validate(va
     limit: exportAll ? VAT_REPORT_EXPORT_LIMIT : Math.min(Number(query.limit ?? VAT_REPORT_DEFAULT_LIMIT), VAT_REPORT_MAX_LIMIT),
   }, { differenceLimit: exportAll ? VAT_REPORT_EXPORT_LIMIT : VAT_DIFFERENCE_PAGE_LIMIT });
   res.json(report);
+}));
+
+const salesChartsQuerySchema = z.object({
+  query: z.object({
+    from: storageDateParam,
+    to: storageDateParam,
+    currency: reportCurrency.optional(),
+    partyId: numericIdString.optional(),
+    itemId: numericIdString.optional(),
+    projectId: numericIdString.optional(),
+    category: z.string().max(200).optional(),
+    channel: z.enum(SALES_CHANNELS).optional(),
+  }).strict(),
+});
+
+type SalesChartsQuery = z.infer<typeof salesChartsQuerySchema>['query'];
+
+router.get('/reports/sales/charts', requirePermission(SALES_REPORT_PERMISSION), validate(salesChartsQuerySchema), asyncHandler(async (req, res) => {
+  const query = req.query as unknown as SalesChartsQuery;
+  const today = await businessTodayIsoDate();
+  const optionalId = (value: string | undefined) => (value ? Number(value) : null);
+  res.json(await salesChartSeries({
+    from: query.from ?? presetRange('this_month', today)?.from ?? today,
+    to: query.to ?? today,
+    currency: normalizeCurrency(query.currency),
+    partyId: optionalId(query.partyId),
+    itemId: optionalId(query.itemId),
+    projectId: optionalId(query.projectId),
+    category: query.category === undefined ? null : query.category,
+    channel: query.channel ?? null,
+  }));
+}));
+
+const purchaseDimension = z.enum(PURCHASE_DIMENSIONS);
+
+const purchaseQuerySchema = z.object({
+  query: z.object({
+    from: storageDateParam,
+    to: storageDateParam,
+    groupBy: purchaseDimension.optional(),
+    thenBy: z.union([purchaseDimension, z.literal('')]).optional(),
+    period: z.enum(REPORT_PERIOD_UNITS).optional(),
+    currency: reportCurrency.optional(),
+    partyId: numericIdString.optional(),
+    itemId: numericIdString.optional(),
+    category: z.string().max(200).optional(),
+    compare: z.enum(REPORT_COMPARE_MODES).optional(),
+    page: pageNumber.optional(),
+    limit: pageNumber.optional(),
+    export: z.enum(['true', 'false']).optional(),
+  }).strict(),
+});
+
+type PurchaseQuery = z.infer<typeof purchaseQuerySchema>['query'];
+
+router.get('/reports/purchases', requirePermission(PURCHASE_REPORT_PERMISSION), validate(purchaseQuerySchema), asyncHandler(async (req, res) => {
+  const query = req.query as unknown as PurchaseQuery;
+  const today = await businessTodayIsoDate();
+  const exportAll = query.export === 'true';
+  res.json(await purchaseReport({
+    from: query.from ?? presetRange('this_month', today)?.from ?? today,
+    to: query.to ?? today,
+    groupBy: query.groupBy ?? 'supplier',
+    thenBy: query.thenBy || null,
+    period: query.period ?? 'month',
+    currency: normalizeCurrency(query.currency),
+    partyId: query.partyId ? Number(query.partyId) : null,
+    itemId: query.itemId ? Number(query.itemId) : null,
+    category: query.category === undefined ? null : query.category,
+    compare: query.compare ?? 'none',
+    page: exportAll ? 1 : Number(query.page ?? 1),
+    limit: exportAll ? PURCHASE_REPORT_EXPORT_LIMIT : Math.min(Number(query.limit ?? PURCHASE_REPORT_DEFAULT_LIMIT), PURCHASE_REPORT_MAX_LIMIT),
+  }));
+}));
+
+router.get('/reports/dashboard-summary', requirePermission(...DASHBOARD_SALES_WIDGET_PERMISSIONS), asyncHandler(async (req, res) => {
+  const today = await businessTodayIsoDate();
+  const [sales, receivables] = await Promise.all([
+    can(req.user, SALES_REPORT_PERMISSION).then(ok => (ok ? dashboardSalesSummary(today) : null)),
+    can(req.user, AGING_REPORT_PERMISSION).then(ok => (ok ? dashboardReceivablesSummary(today) : null)),
+  ]);
+  res.json({ sales, receivables });
 }));
 
 export default router;
