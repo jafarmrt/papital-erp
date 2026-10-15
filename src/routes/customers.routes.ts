@@ -17,6 +17,8 @@ import { getCustomerSalesDocuments } from '../services/customers/customerDocumen
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { partyRowsForUser } from '../services/customers/partyBankInfoAccess.js';
 import { customerListConditions, listCustomerPicks } from '../services/customers/customerPickList.js';
+import { customerTagNames, setCustomerTags, tagsByCustomer } from '../services/customers/customerTags.service.js';
+import { CUSTOMER_TAGS_PER_PARTY_MAX } from '../lib/customers/customerTags.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -73,6 +75,14 @@ const contactChannelFields = {
   website: z.string().max(500).optional(),
   email: z.string().max(500).optional(),
   instagram: z.string().max(500).optional(),
+  // v10.1.20 (N-02 بخش ۳): برچسب‌های طرف حساب؛ نفرستاده یعنی بی تغییر، [] یعنی بی برچسب
+  tagIds: z.array(z.coerce.number().int('شناسه برچسب باید عدد صحیح باشد').positive('شناسه برچسب باید مثبت باشد'))
+    .max(CUSTOMER_TAGS_PER_PARTY_MAX, 'یک طرف حساب حداکثر ۲۰ برچسب دارد').optional(),
+};
+
+const customersListTagParam = (raw: unknown): number | undefined => {
+  const id = Number(raw);
+  return Number.isInteger(id) && id > 0 ? id : undefined;
 };
 
 const bankInfoSchema = z.object({
@@ -170,7 +180,7 @@ router.get('/customers', authorizePermission(...READ_PERMISSIONS.customers), asy
   const partyTypeFilter = (req.query.partyType || req.query.type) as string;
   const isExport = req.query.export === 'true';
 
-  const conditions = customerListConditions(search, partyTypeFilter);
+  const conditions = customerListConditions(search, partyTypeFilter, customersListTagParam(req.query.tagId));
 
   let query = orm.select().from(customers).where(conditions);
   query = query.orderBy(customers.name) as any;
@@ -180,7 +190,10 @@ router.get('/customers', authorizePermission(...READ_PERMISSIONS.customers), asy
   }
 
   // v9.0.21 (TD-433، ت۶): اطلاعات بانکی فقط برای customers.view / customers.manage / accounting.*
-  const allCustomers = await partyRowsForUser(req.user, await query);
+  const rows = await partyRowsForUser(req.user, await query);
+  // v10.1.20 (N-02 بخش ۳): برچسب‌های زنده هر سطر
+  const tags = await tagsByCustomer(rows.map((r) => r.id), orm);
+  const allCustomers = rows.map((r) => ({ ...r, tags: tags.get(r.id) ?? [] }));
 
   if (isExport) {
     return res.json(allCustomers);
@@ -338,33 +351,40 @@ router.post('/customers', authorizePermission('customers.manage'), validate(crea
   const supplierCategory = req.body.supplierCategory ?? req.body.supplier_category;
   const bankInfo = req.body.bankInfo ?? req.body.bank_info;
 
-  const created = await CustomerService.createCustomer({
-    name,
-    contactName,
-    country,
-    province,
-    city,
-    phone,
-    address,
-    notes,
-    partyType,
-    supplierCategory,
-    bankInfo,
-    contacts,
-    website: req.body.website,
-    email: req.body.email,
-    instagram: req.body.instagram,
-  });
+  const tagIds: number[] | undefined = req.body.tagIds;
+  // v10.1.20 (N-02 بخش ۳): طرف حساب، برچسب‌هایش و ردیف ممیزی در یک تراکنش
+  const created = await orm.transaction(async (tx) => {
+    const row = await CustomerService.createCustomer({
+      name,
+      contactName,
+      country,
+      province,
+      city,
+      phone,
+      address,
+      notes,
+      partyType,
+      supplierCategory,
+      bankInfo,
+      contacts,
+      website: req.body.website,
+      email: req.body.email,
+      instagram: req.body.instagram,
+    }, tx);
+    const tagNames = tagIds === undefined ? [] : (await setCustomerTags(tx, row.id, tagIds, req.user?.id ?? null)).after;
 
-  await logActivity({
-    req,
-    action: 'CREATE',
-    entity: partyType === 'supplier' ? 'تامین‌کننده' : 'طرف حساب',
-    entityId: created.id,
-    description: `تعریف طرف حساب جدید (${partyType === 'supplier' ? 'تامین‌کننده' : partyType === 'both' ? 'مشتری و تامین‌کننده' : 'مشتری'}) "${created.name}" (تلفن: ${created.phone || 'ثبت نشده'})`,
-    details: {
-      after: created
-    }
+    await logActivity({
+      req,
+      tx,
+      action: 'CREATE',
+      entity: partyType === 'supplier' ? 'تامین‌کننده' : 'طرف حساب',
+      entityId: row.id,
+      description: `تعریف طرف حساب جدید (${partyType === 'supplier' ? 'تامین‌کننده' : partyType === 'both' ? 'مشتری و تامین‌کننده' : 'مشتری'}) "${row.name}" (تلفن: ${row.phone || 'ثبت نشده'})`,
+      details: {
+        after: { ...row, tags: tagNames }
+      }
+    });
+    return row;
   });
 
   res.json(created);
@@ -380,40 +400,49 @@ router.put('/customers/:id', authorizePermission('customers.manage'), validate(u
   const supplierCategory = req.body.supplierCategory ?? req.body.supplier_category;
   const bankInfo = req.body.bankInfo ?? req.body.bank_info;
 
-  const { previous: prevCust, current: currentCust } = await CustomerService.updateCustomer(customerId, {
-    name,
-    contactName,
-    country,
-    province,
-    city,
-    phone,
-    address,
-    notes,
-    partyType,
-    supplierCategory,
-    bankInfo,
-    contacts,
-    website: req.body.website,
-    email: req.body.email,
-    instagram: req.body.instagram,
-    version: req.body.version,
-    expectedVersion: req.body.expectedVersion
-  });
+  const tagIds: number[] | undefined = req.body.tagIds;
+  // v10.1.20 (N-02 بخش ۳): ویرایش، برچسب‌ها و ردیف ممیزی در یک تراکنش
+  await orm.transaction(async (tx) => {
+    const { previous: prevCust, current: currentCust } = await CustomerService.updateCustomer(customerId, {
+      name,
+      contactName,
+      country,
+      province,
+      city,
+      phone,
+      address,
+      notes,
+      partyType,
+      supplierCategory,
+      bankInfo,
+      contacts,
+      website: req.body.website,
+      email: req.body.email,
+      instagram: req.body.instagram,
+      version: req.body.version,
+      expectedVersion: req.body.expectedVersion
+    }, tx);
+    // برچسب‌ها پس از قفل ردیف طرف حساب (درون updateCustomer) خوانده و نوشته می‌شوند
+    const { before: beforeTags, after: afterTags } = tagIds === undefined
+      ? await customerTagNames(tx, customerId).then((names) => ({ before: names, after: names }))
+      : await setCustomerTags(tx, customerId, tagIds, req.user?.id ?? null);
 
-  const { diff, hasChanges } = computeAuditDiff(prevCust, currentCust);
+    const { diff, hasChanges } = computeAuditDiff({ ...prevCust, tags: beforeTags }, { ...currentCust, tags: afterTags });
 
-  await logActivity({
-    req,
-    action: 'UPDATE',
-    entity: currentCust.partyType === 'supplier' ? 'تامین‌کننده' : 'طرف حساب',
-    entityId: customerId,
-    description: `ویرایش اطلاعات طرف حساب "${currentCust.name}"`,
-    details: {
-      before: prevCust,
-      after: currentCust,
-      changes: diff,
-      hasChanges
-    }
+    await logActivity({
+      req,
+      tx,
+      action: 'UPDATE',
+      entity: currentCust.partyType === 'supplier' ? 'تامین‌کننده' : 'طرف حساب',
+      entityId: customerId,
+      description: `ویرایش اطلاعات طرف حساب "${currentCust.name}"`,
+      details: {
+        before: { ...prevCust, tags: beforeTags },
+        after: { ...currentCust, tags: afterTags },
+        changes: diff,
+        hasChanges
+      }
+    });
   });
 
   res.json({ success: true });

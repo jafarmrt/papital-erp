@@ -40,6 +40,8 @@ export interface Customer {
   website?: string;
   email?: string;
   instagram?: string;
+  /** v10.1.20 (N-02 بخش ۳): برچسب‌های زنده طرف حساب (فهرست طرف حساب‌ها) */
+  tags?: Array<{ id: number; name: string; color: string }>;
   currency?: string;
   /** نسخه قفل خوش‌بینانه؛ فرم ویرایش همان را برمی‌گرداند (TD-403) */
   version?: number;

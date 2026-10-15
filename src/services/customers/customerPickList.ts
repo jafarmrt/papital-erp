@@ -1,6 +1,7 @@
 import { and, asc, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { customers } from '../../db/schema.js';
+import { customerHasTagCondition } from './customerTags.service.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
 import type { CustomerPick } from '../../lib/permissions/pickLists.js';
 import { canSeePartyBankInfo } from './partyBankInfoAccess.js';
@@ -13,7 +14,7 @@ import { canSeePartyBankInfo } from './partyBankInfoAccess.js';
  */
 
 /** شرط جست‌وجو و نوع طرف حساب، مشترک فهرست کامل و فهرست انتخاب */
-export function customerListConditions(search: string | undefined, partyType: string | undefined): SQL {
+export function customerListConditions(search: string | undefined, partyType: string | undefined, tagId?: number): SQL {
   const conditions: SQL[] = [eq(customers.isDeleted, 0)];
   if (search) {
     const pattern = containsLikePattern(search);
@@ -36,6 +37,8 @@ export function customerListConditions(search: string | undefined, partyType: st
   } else if (partyType === 'both') {
     conditions.push(eq(customers.partyType, 'both'));
   }
+  // v10.1.20 (N-02 بخش ۳): پالایش با برچسب زنده طرف حساب
+  if (tagId !== undefined) conditions.push(customerHasTagCondition(tagId));
   return and(...conditions) as SQL;
 }
 

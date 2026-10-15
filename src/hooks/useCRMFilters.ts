@@ -16,6 +16,8 @@ export function buildLeadQueryParams(filters: {
   filterStage?: string;
   /** شناسه طرف حساب (v9.0.15، TD-429) */
   filterCustomer?: string;
+  /** شناسه برچسب طرف حساب (v10.1.20، N-02 بخش ۳) */
+  filterTag?: string;
 }): URLSearchParams {
   const params = new URLSearchParams();
   if (filters.searchTerm) params.append('search', filters.searchTerm);
@@ -23,6 +25,7 @@ export function buildLeadQueryParams(filters: {
   if (filters.filterStage) params.append('stage', filters.filterStage);
   // v9.0.15 (TD-429): مشتری با شناسه طرف حساب؛ پیش‌تر نام طرف حساب با نام رابط پرونده سنجیده می‌شد
   if (filters.filterCustomer) params.append('customerId', filters.filterCustomer);
+  if (filters.filterTag) params.append('tagId', filters.filterTag);
   return params;
 }
 
@@ -38,6 +41,7 @@ export function useCRMFilters() {
   const [filterSeller, setFilterSeller] = useState<string>('');
   const [filterStage, setFilterStage] = useState<string>('');
   const [filterCustomer, setFilterCustomer] = useState<string>('');
+  const [filterTag, setFilterTag] = useState<string>('');
 
   const [datePreset, setDatePreset] = useState<CrmDatePreset>('1m');
   const [fromDate, setFromDate] = useState<string>(getPastJalaliDate(30));
@@ -69,6 +73,8 @@ export function useCRMFilters() {
     setFilterStage,
     filterCustomer,
     setFilterCustomer,
+    filterTag,
+    setFilterTag,
     datePreset,
     setDatePreset,
     fromDate,

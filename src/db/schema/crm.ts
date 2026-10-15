@@ -35,6 +35,33 @@ export const customers = pgTable('customers', {
 }));
 registerColumnRef('customers.id', () => customers.id);
 
+// v10.1.20 (N-02 بخش ۳، ت۱۳ طرح ارتباط با مشتری، migration 0114): برچسب‌های طرف حساب؛ قاعده در src/lib/customers/customerTags.ts
+export const customerTags = pgTable('customer_tags', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  color: text('color').notNull().default('slate'),
+  createdById: integer('created_by_id').references(() => users.id),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+  version: integer('version').notNull().default(1),
+  isDeleted: integer('is_deleted').notNull().default(0),
+}, (table) => ({
+  uq_customer_tags_name_active: uniqueIndex('uq_customer_tags_name_active').on(sql`lower(btrim(${table.name}))`).where(sql`${table.isDeleted} = 0`),
+  idx_customer_tags_created_by: index('idx_customer_tags_created_by').on(table.createdById).where(sql`${table.createdById} IS NOT NULL`),
+}));
+
+export const customerTagLinks = pgTable('customer_tag_links', {
+  id: serial('id').primaryKey(),
+  customerId: integer('customer_id').notNull().references(() => customers.id),
+  tagId: integer('tag_id').notNull().references(() => customerTags.id),
+  createdById: integer('created_by_id').references(() => users.id),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+}, (table) => ({
+  uq_customer_tag_links_customer_tag: uniqueIndex('uq_customer_tag_links_customer_tag').on(table.customerId, table.tagId),
+  idx_customer_tag_links_tag: index('idx_customer_tag_links_tag').on(table.tagId),
+  idx_customer_tag_links_created_by: index('idx_customer_tag_links_created_by').on(table.createdById).where(sql`${table.createdById} IS NOT NULL`),
+}));
+
 export const crmLeads = pgTable('crm_leads', {
   id: serial('id').primaryKey(),
   title: text('title').notNull(),

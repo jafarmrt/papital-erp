@@ -4,7 +4,7 @@ import { orm } from '../../db/drizzle.js';
 import {
   transactions, documentItems, documents, items,
   warehouses, itemPrices, customers, activityLogs, productionProjects, categories,
-  projectStages, projectProductStageProgress, dailyWorkLogs, transfers, notifications, crmLeads, crmActivities, crmLeadStageHistory,
+  projectStages, projectProductStageProgress, dailyWorkLogs, transfers, notifications, crmLeads, crmActivities, crmLeadStageHistory, customerTagLinks, customerTags,
   users, personnel, taskCategories, pieceworkTasks, pieceworkPersonnelRates, pieceworkTaskRateHistory,
   pieceworkLogs, pieceworkPayrolls, pendingMaterials, accounts, journalVouchers,
   journalVoucherItems, itemOpeningVoucherItems, bankAccounts, cheques, treasuryTransactions, accountingSettings,
@@ -213,6 +213,9 @@ export class FactoryResetService {
       // v10.1.18 (N-02 part 2): the stage history references crm_leads (migration 0113)
       await wipe('crm_lead_stage_history', crmLeadStageHistory);
       await wipe('crm_leads', crmLeads);
+      // v10.1.20 (N-02 part 3): customer tags reference customers and users (migration 0114)
+      await wipe('customer_tag_links', customerTagLinks);
+      await wipe('customer_tags', customerTags);
 
       // 7. HR, Piecework & Payroll Records (Must be deleted AFTER CRM and projects)
       await wipe('piecework_payrolls', pieceworkPayrolls);

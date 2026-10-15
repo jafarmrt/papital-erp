@@ -49,6 +49,8 @@ export const READ_PERMISSIONS = {
     'accounting.cheques', 'reports.sales', 'reports.purchases',
   ],
   customersExport: ['customers.view'],
+  /** v10.1.20 (N-02 بخش ۳): فهرست برچسب‌های طرف حساب؛ صفحه طرف حساب‌ها و پالایش پرونده‌های فروش */
+  customerTags: ['customers.view', 'customers.manage', 'crm.view'],
   /** کارت حساب و مانده طرف حساب (همان مجوزهای کارت حساب گزارش‌های مالی؛ v9.0.4، TD-416) */
   partyAccountCard: ['accounting.reports', 'accounting.view', 'customers.view', 'customers.manage'],
   /**
