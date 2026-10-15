@@ -275,7 +275,7 @@ export default function WarehouseTransferModal({
                   </select>
                   {fromLocation && selectedItem && (
                     <div className="mt-1 text-[11px] text-slate-500 font-medium">
-                      موجودی قابل انتقال در مبدا: <span className="font-bold text-slate-800 font-mono">{availableSourceStock} {selectedItem.unit}</span>
+                      موجودی قابل انتقال در مبدا: <span className="font-bold text-slate-800 font-mono">{formatPersianNumber(availableSourceStock)} {selectedItem.unit}</span>
                     </div>
                   )}
                 </div>

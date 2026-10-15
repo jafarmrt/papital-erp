@@ -310,7 +310,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                         const label = runningKardexEntryLabel(entry);
                         return (
                           <tr key={entry.transactionId || idx} className={`hover:bg-slate-50/60 transition-colors ${entry.isVoided ? 'text-slate-400 bg-slate-50' : ''}`}>
-                            <td className="p-3 text-slate-400 font-mono">{idx + 1}</td>
+                            <td className="p-3 text-slate-400 font-mono">{formatPersianNumber(idx + 1)}</td>
                             <td className="p-3 text-slate-700 font-mono">{formatPersianDate(entry.date)}</td>
                             <td className="p-3">
                               {isIn ? (

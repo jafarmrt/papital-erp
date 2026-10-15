@@ -286,7 +286,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
                 کد: {def?.code}
               </span>
               <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded">
-                نسخه v{def?.version || 1}
+                نسخه {formatPersianNumber(def?.version || 1)}
               </span>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">

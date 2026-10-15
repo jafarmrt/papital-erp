@@ -3,7 +3,7 @@ import { Edit3, Trash2, Clock, Check, FileText, Search, Package, Copy, Building2
 import { CRMLead, CRMActivity, Item } from '../../types';
 import { getActivityTypeBadge } from './CRMFollowupsView';
 import { ActivityRowActions } from './ActivityRowActions';
-import { formatPersianNumber, formatPersianPhone, formatPersianDate } from '../../utils';
+import { formatPersianNumber, formatPersianPhone, formatPersianDate, formatPersianCode } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
@@ -85,7 +85,7 @@ export function CRMLeadDrawer({
         <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3 shrink-0">
           <div>
             <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] font-black rounded-md">
-              پرونده فروش #{selectedLeadDrawer.id}
+              پرونده فروش #{formatPersianCode(selectedLeadDrawer.id)}
             </span>
             <h3 className="font-black text-base text-slate-900 mt-1">{selectedLeadDrawer.title}</h3>
           </div>

@@ -651,7 +651,7 @@ export function NewVoucherModal({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                  ردیف‌های سند ({items.length} سطر)
+                  ردیف‌های سند ({formatPersianNumber(items.length)} سطر)
                 </h4>
                 {!isBalanced && (
                   <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">

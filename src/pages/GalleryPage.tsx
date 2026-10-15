@@ -178,7 +178,7 @@ export default function GalleryPage({ user }: { user: User }) {
               قبلی
             </button>
             <span className="text-sm font-bold mx-2">
-              صفحه {currentPage} از {totalPages}
+              صفحه {formatPersianNumber(currentPage)} از {formatPersianNumber(totalPages)}
             </span>
             <button 
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}

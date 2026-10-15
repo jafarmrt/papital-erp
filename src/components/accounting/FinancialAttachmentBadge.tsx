@@ -3,6 +3,7 @@ import { Paperclip, Image as ImageIcon } from 'lucide-react';
 import { FinancialAttachment } from '../../types';
 import { FinancialAttachmentViewerModal } from './FinancialAttachmentViewerModal';
 import { AttachmentImage } from '../attachments/AttachmentImage';
+import { formatPersianNumber } from '../../utils';
 
 interface Props {
   attachments?: FinancialAttachment[] | null;
@@ -42,10 +43,10 @@ export const FinancialAttachmentBadge: React.FC<Props> = ({ attachments, compact
             ? 'px-1.5 py-0.5 text-[10px] bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
             : 'px-2 py-1 text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 shadow-xs'
         }`}
-        title={`${displayCount} سند ضمیمه شده - کلیک برای مشاهده`}
+        title={`${formatPersianNumber(displayCount)} سند ضمیمه شده - کلیک برای مشاهده`}
       >
         <Paperclip size={compact ? 11 : 13} className="text-blue-600" />
-        <span>{displayCount} ضمیمه</span>
+        <span>{formatPersianNumber(displayCount)} ضمیمه</span>
       </button>
 
       {/* Multiple attachments picker popup */}
@@ -61,7 +62,7 @@ export const FinancialAttachmentBadge: React.FC<Props> = ({ attachments, compact
             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
               <h4 className="font-bold text-sm text-slate-800 flex items-center gap-2">
                 <Paperclip size={16} className="text-blue-600" />
-                <span>اسناد و ضمائم ثبت ({safeList.length})</span>
+                <span>اسناد و ضمائم ثبت ({formatPersianNumber(safeList.length)})</span>
               </h4>
               <button 
                 type="button"

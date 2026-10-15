@@ -3,7 +3,7 @@ import { X, FileText, CheckCircle2, AlertTriangle, ShoppingCart, UserCheck, Chec
 import { toast } from 'react-hot-toast';
 import { PurchaseRequisition, ProcurementOrder } from '../../types';
 import { fetchJson } from '../../api';
-import { formatPersianNumber, formatPersianDate } from '../../utils';
+import { formatPersianNumber, formatPersianDate, formatPersianCode } from '../../utils';
 import { ConfirmWarehouseDeliveryModal } from './ConfirmWarehouseDeliveryModal';
 import { PillBadge } from '../common/PillBadge';
 import { useProcurementAccess } from '../../hooks/procurement/useProcurementAccess';
@@ -301,7 +301,7 @@ export function RequisitionDetailModal({
 
                     return (
                       <tr key={row.id || idx} className="hover:bg-slate-50/50">
-                        <td className="p-2.5 text-center font-mono text-slate-400">{idx + 1}</td>
+                        <td className="p-2.5 text-center font-mono text-slate-400">{formatPersianNumber(idx + 1)}</td>
                         <td className="p-2.5">
                           <div className="font-bold text-slate-900">{row.itemName}</div>
                           <div className="text-[11px] text-slate-500 font-mono">{row.itemCode || 'فاقد کد'}</div>
@@ -577,7 +577,7 @@ export function RequisitionDetailModal({
         {/* Footer */}
         <div className="p-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/50 rounded-b-2xl">
           <span className="text-xs text-slate-500">
-            شناسه داخلی: #{requisition.id} | آخرین به‌روزرسانی: {requisition.updatedAt ? formatPersianDate(requisition.updatedAt) : '---'}
+            شناسه داخلی: #{formatPersianCode(requisition.id)} | آخرین به‌روزرسانی: {requisition.updatedAt ? formatPersianDate(requisition.updatedAt) : '---'}
           </span>
           <button
             type="button"

@@ -9,7 +9,7 @@ import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 import { ActivityLog } from '../types';
-import { formatPersianNumber, formatPersianDateTime, extractDateString, errorMessageOf } from '../utils';
+import { formatPersianNumber, formatPersianDateTime, extractDateString, errorMessageOf, formatPersianCode } from '../utils';
 import { useSearch } from '../SearchContext';
 import toast from 'react-hot-toast';
 import {
@@ -416,7 +416,7 @@ export default function ActivityLogsPage() {
                 logs.map((log) => (
                   <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="py-3.5 px-4 font-mono text-slate-400 text-2xs">
-                      #{log.id}
+                      #{formatPersianCode(log.id)}
                     </td>
                     <td className="py-3.5 px-4 font-medium text-slate-700 whitespace-nowrap">
                       {formatPersianDateTime(log.timestamp)}
@@ -505,7 +505,7 @@ export default function ActivityLogsPage() {
                   <ShieldAlert className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 text-base">جزئیات رویداد امنیتی #{selectedLog.id}</h3>
+                  <h3 className="font-bold text-slate-900 text-base">جزئیات رویداد امنیتی #{formatPersianCode(selectedLog.id)}</h3>
                   <p className="text-xs text-slate-500">{formatPersianDateTime(selectedLog.timestamp)}</p>
                 </div>
               </div>

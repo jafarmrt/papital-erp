@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, History, TrendingUp, TrendingDown, Clock, User, Search, FileSpreadsheet, RotateCcw, CheckCircle2, Trash2, Filter, RefreshCw } from 'lucide-react';
 import { PieceworkTask, PieceworkTaskRateHistory } from '../../types';
-import { formatPersianPrice, isoToJalaliDate, formatPersianDate, toEnglishDigits } from '../../utils';
+import { formatPersianPrice, isoToJalaliDate, formatPersianDate, toEnglishDigits, formatPersianNumber } from '../../utils';
 import { fetchJson } from '../../api';
 import { toast as hotToast } from 'react-hot-toast';
 
@@ -309,7 +309,7 @@ export const PieceworkRateHistoryModal: React.FC<PieceworkRateHistoryModalProps>
                               ) : (
                                 <TrendingDown className="w-3 h-3" />
                               )}
-                              <span>{pctChange > 0 ? `+${pctChange}%` : `${pctChange}%`}</span>
+                              <span dir="ltr">{pctChange > 0 ? '+' : ''}{formatPersianNumber(pctChange)}٪</span>
                               <span className="text-[10px] opacity-75">
                                 ({formatPersianPrice(diffAmount)})
                               </span>
@@ -343,7 +343,7 @@ export const PieceworkRateHistoryModal: React.FC<PieceworkRateHistoryModalProps>
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-3.5 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/80">
           <span className="text-xs text-gray-500 dark:text-gray-400">
-            تعداد رکوردهای ثبت‌شده: <strong className="text-gray-800 dark:text-gray-200 font-mono">{filteredHistory.length}</strong> مورد
+            تعداد رکوردهای ثبت‌شده: <strong className="text-gray-800 dark:text-gray-200 font-mono">{formatPersianNumber(filteredHistory.length)}</strong> مورد
           </span>
           <button
             type="button"

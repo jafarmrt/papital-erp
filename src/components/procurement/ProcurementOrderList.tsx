@@ -270,7 +270,7 @@ export function ProcurementOrderList({
                                   <tbody className="divide-y divide-slate-100">
                                     {order.items.map((line, lIdx) => (
                                       <tr key={line.id || lIdx}>
-                                        <td className="p-2 text-center font-mono text-slate-400">{lIdx + 1}</td>
+                                        <td className="p-2 text-center font-mono text-slate-400">{formatPersianNumber(lIdx + 1)}</td>
                                         <td className="p-2 font-bold text-slate-900">
                                           {line.itemName}
                                           {line.itemCode && (

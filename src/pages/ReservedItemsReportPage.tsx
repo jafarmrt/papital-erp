@@ -304,7 +304,7 @@ export default function ReservedItemsReportPage() {
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              خلاصه تجمیعی به تفکیک کالا ({filteredItemSummaries.length})
+              خلاصه تجمیعی به تفکیک کالا ({formatPersianNumber(filteredItemSummaries.length)})
             </button>
             <button
               onClick={() => setActiveTab('ledger')}
@@ -314,7 +314,7 @@ export default function ReservedItemsReportPage() {
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              دفتر ریز پرونده‌های رزرو ({filteredLedgerEntries.length})
+              دفتر ریز پرونده‌های رزرو ({formatPersianNumber(filteredLedgerEntries.length)})
             </button>
           </div>
 

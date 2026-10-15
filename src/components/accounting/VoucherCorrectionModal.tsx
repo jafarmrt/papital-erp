@@ -348,7 +348,7 @@ export function VoucherCorrectionModal({
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {items.map((item, idx) => (
                     <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
-                      <td className="py-2 px-2 text-center text-slate-400 font-mono">{idx + 1}</td>
+                      <td className="py-2 px-2 text-center text-slate-400 font-mono">{formatPersianNumber(idx + 1)}</td>
                       <td className="py-2 px-2">
                         <div className="space-y-1.5">
                           <AccountSearchSelect

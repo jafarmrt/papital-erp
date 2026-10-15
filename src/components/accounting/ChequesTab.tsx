@@ -534,7 +534,7 @@ export function ChequesTab({
 
                   return (
                     <tr key={c.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition">
-                      <td className="py-3 px-3 text-center text-slate-400 font-bold">{idx + 1}</td>
+                      <td className="py-3 px-3 text-center text-slate-400 font-bold">{formatPersianNumber(idx + 1)}</td>
 
                       <td className="py-3 px-3 text-center">
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
