@@ -18,8 +18,8 @@ export async function runVatReportTests(shouldRun: ShouldRun): Promise<TestCaseR
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (h: Harness, wrong: string[], keep: DateKeeper) => Promise<string>]> = [
     ['reg_vat_report_documents_d03',
-      'v10.1.14: the VAT report sums final sales invoices and returns of the period by VAT percent, a foreign invoice at its own rate, leaves out a voided invoice, a proforma and a foreign invoice without a rate, and lists the documents to check (D-03)',
-      ['d03', 'reports', 'vat', 'return', 'currency'], vatDocumentsCase],
+      'v10.1.14: the VAT report sums final sales invoices and returns of the period by VAT percent, a foreign invoice at its own rate, leaves out a voided invoice, a proforma and a foreign invoice without a rate, and lists the documents to check (D-03); since v10.1.16 an invoice without VAT is not a warning (TD-1269)',
+      ['d03', 'td1269', 'reports', 'vat', 'return', 'currency', 'optional'], vatDocumentsCase],
     ['reg_vat_report_ledger_d03',
       'v10.1.14: the VAT report reads the mapped VAT account by source with the draft share and names the documents and vouchers that make its difference with the sales documents (D-03)',
       ['d03', 'reports', 'vat', 'ledger', 'treasury'], vatLedgerCase],
@@ -198,7 +198,8 @@ async function vatDocumentsCase(h: Harness, wrong: string[], keep: DateKeeper): 
   expectEqual(wrong, 'unknown percent', `${r.rates[3]?.percent}/${r.rates[3]?.salesVat}`, 'null/20000');
   const t = r.totals;
   expectEqual(wrong, 'totals', `${t.invoiceCount}/${t.salesBase}/${t.salesVat}/${t.returnCount}/${t.returnVat}/${t.netVat}`, '5/9700000/885000/1/90000/795000');
-  expectEqual(wrong, 'warnings', JSON.stringify(r.warnings), JSON.stringify({ unconverted: 1, rate_mismatch: 1, rate_missing: 1, no_vat: 1 }));
+  // v10.1.16 (TD-1269): VAT is optional per invoice, so an invoice without VAT is not a warning
+  expectEqual(wrong, 'warnings', JSON.stringify(r.warnings), JSON.stringify({ unconverted: 1, rate_mismatch: 1, rate_missing: 1 }));
 
   // 2) the document list
   expectEqual(wrong, 'listed documents', r.total, 7);
@@ -210,10 +211,10 @@ async function vatDocumentsCase(h: Harness, wrong: string[], keep: DateKeeper): 
   const lost = docRow(r, unconverted);
   expectEqual(wrong, 'unconverted row', `${lost?.warning}/${lost?.net}/${lost?.vat}/${lost?.vatOwn}`, 'unconverted/null/null/2');
   expectEqual(wrong, 'return row', `${docRow(r, back)?.kind}/${docRow(r, back)?.vat}/${docRow(r, back)?.warning}`, 'return/90000/null');
-  expectEqual(wrong, 'no VAT row', docRow(r, noVat)?.warning, 'no_vat');
+  expectEqual(wrong, 'no VAT row', `${docRow(r, noVat)?.warning}/${docRow(r, noVat)?.vat}`, 'null/0');
   expectEqual(wrong, 'no percent row', docRow(r, noPercent)?.warning, 'rate_missing');
   const flagged = await vat(h, `from=${day}&to=${day}&list=warnings`);
-  expectEqual(wrong, 'warning list', flagged.documents.map(d => d.id).sort((x, y) => x - y).join(','), [noVat, mismatch, noPercent, unconverted].sort((x, y) => x - y).join(','));
+  expectEqual(wrong, 'warning list', flagged.documents.map(d => d.id).sort((x, y) => x - y).join(','), [mismatch, noPercent, unconverted].sort((x, y) => x - y).join(','));
   const paged = await vat(h, `from=${day}&to=${day}&limit=2`);
   expectEqual(wrong, 'first page', `${paged.documents.length}/${paged.total}`, '2/7');
   const pastEnd = await vat(h, `from=${day}&to=${day}&limit=2&page=9`);

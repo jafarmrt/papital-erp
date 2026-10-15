@@ -139,7 +139,7 @@ describe('rates settings tab (TD-1087)', () => {
 describe('monthly statutory report (TD-1088)', () => {
   it('builds Excel rows with a total row and a Persian file name', () => {
     const report: StatutoryReport = {
-      jalaliYear: 1405, jalaliMonth: 7, from: '', to: '', draftPayslips: 0,
+      jalaliYear: 1405, jalaliMonth: 7, from: '', to: '', draftPayslips: 0, withoutStatutory: { personnel: 0, payslips: 0 },
       rows: [{ personnelId: 1, fullName: 'الف', personnelCode: 'P1', nationalId: '0012345678', payslips: 2, gross: '1000', employeeInsurance: '70', employerInsurance: '230', incomeTax: '10' }],
       totals: { gross: '1000', employeeInsurance: '70', employerInsurance: '230', incomeTax: '10' },
     };

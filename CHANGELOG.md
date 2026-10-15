@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.1.16 — بیمه، مالیات حقوق و مالیات بر ارزش افزوده اختیاری می‌ماند
+- Insurance, payroll tax and VAT stay optional per person and per document: the monthly insurance and tax list keeps only personnel with insurance or tax and counts the rest, and the VAT report no longer flags an invoice without VAT. Tests: reg_payroll_statutory_report_optional_td_1269, reg_vat_report_documents_d03, Vitest optionalStatutoryVatTd1269.
+
 ### v10.1.15 — وب‌سایت، ایمیل و اینستاگرام طرف حساب (N-02 بخش ۱)
 - Party website, e-mail and Instagram with one validation rule (migration 0112), call / WhatsApp / mail links, Excel columns; the intro and updates page is removed and the version comes from /api/health. Test: reg_customer_contact_channels_n02, Vitest customerContactChannels.
 

@@ -112,7 +112,7 @@ export function VatDocumentSummary({ report, money }: { report: VatReport; money
       )}
       <p className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 rounded-xl px-4 py-2 border border-slate-200/70 dark:border-slate-700/70">
         <Info className="w-3.5 h-3.5 text-slate-400 shrink-0" aria-hidden />
-        مالیات خرید (اعتبار مالیاتی) در برنامه ثبت نمی‌شود و این گزارش فقط مالیات فروش را دارد. این گزارش کمک حسابدار است و فرم اظهارنامه نیست.
+        مالیات خرید (اعتبار مالیاتی) در برنامه ثبت نمی‌شود و این گزارش فقط مالیات فروش را دارد. مالیات هر فاکتور اختیاری است و فاکتور بی مالیات در ردیف «بی مالیات» می‌آید، بی هشدار. این گزارش کمک حسابدار است و فرم اظهارنامه نیست.
       </p>
     </section>
   );

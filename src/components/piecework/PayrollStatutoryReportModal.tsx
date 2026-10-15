@@ -6,11 +6,12 @@ import { errorMessageOf, getTodayJalaliDate } from '../../utils';
 import { toPersianDigits } from '../../utils/persianNumber';
 import { toLatinDigits } from '../../lib/numericInput';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
-import { statutoryReportFileName, statutoryReportSheetRows, type StatutoryReport } from '../../lib/payroll/statutoryReport';
+import { statutoryReportFileName, statutoryReportSheetRows, statutoryReportWithoutNote, type StatutoryReport } from '../../lib/payroll/statutoryReport';
 
 /**
  * v10.0.211 (TD-1088، طرح حقوق §۳.۳ بند ۶، تصمیم ت۷ الف): «فهرست بیمه و مالیات» یک ماه جلالی — جمع حقوق، بیمه سهم کارگر
- * و کارفرما و مالیات فیش‌های تأییدشده هر پرسنل، با خروجی اکسل برای ارسال دستی به تأمین اجتماعی و سامانه مالیات.
+ * و کارفرما و مالیات فیش‌های تأییدشده هر پرسنل، با خروجی اکسل برای ارسال دستی به تأمین اجتماعی و سامانه مالیات. از v10.1.16
+ * (TD-1269) پرسنل بی بیمه و مالیات در فهرست نمی‌آید و فقط شمارش آن نشان داده می‌شود.
  */
 const MONTHS = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
 
@@ -71,7 +72,10 @@ export function PayrollStatutoryReportModal({ onClose }: { onClose: () => void }
           {report && report.draftPayslips > 0 && (
             <p className="text-[11px] text-amber-700 font-bold">{`${toPersianDigits(String(report.draftPayslips))} فیش پیش‌نویس این ماه هنوز تأیید نشده و در فهرست نیامده است.`}</p>
           )}
-          {report && report.rows.length === 0 && <p className="text-xs text-slate-500 font-bold">در این ماه فیش تأییدشده‌ای با پایان دوره در آن نیست.</p>}
+          {report && statutoryReportWithoutNote(report) && (
+            <p className="text-[11px] text-slate-600 font-bold" data-testid="statutory-report-without">{statutoryReportWithoutNote(report)}</p>
+          )}
+          {report && report.rows.length === 0 && <p className="text-xs text-slate-500 font-bold">در این ماه فیش تأییدشده‌ای با بیمه یا مالیات حقوق نیست.</p>}
           {report && report.rows.length > 0 && (
             <table className="w-full text-right border border-slate-200 rounded-xl overflow-hidden">
               <thead className="bg-slate-50">
@@ -99,7 +103,7 @@ export function PayrollStatutoryReportModal({ onClose }: { onClose: () => void }
               </tbody>
             </table>
           )}
-          <p className="text-[10px] text-slate-500 font-bold leading-5">فقط فیش‌های تأییدشده و پرداخت‌شده‌ای که پایان دوره آن‌ها در همین ماه است. خروجی اکسل مبلغ‌ها را به ریال دارد.</p>
+          <p className="text-[10px] text-slate-500 font-bold leading-5">فقط فیش‌های تأییدشده و پرداخت‌شده‌ای که پایان دوره آن‌ها در همین ماه است، و فقط پرسنلی که بیمه یا مالیات حقوق دارند. خروجی اکسل مبلغ‌ها را به ریال دارد.</p>
         </div>
       </div>
     </div>

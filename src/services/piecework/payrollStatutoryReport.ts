@@ -10,7 +10,14 @@ import { jalaliToGregorian } from '../../utils/dateUtils.js';
  * v10.0.211 (TD-1088، طرح حقوق §۳.۳ بند ۶، تصمیم ت۷ الف): «فهرست بیمه و مالیات» یک ماه جلالی، برای پر کردن لیست بیمه و
  * فهرست مالیات: جمع هر پرسنل روی فیش‌های زنده تأییدشده یا پرداخت‌شده‌ای که پایان دوره‌شان در آن ماه است. فیش پیش‌نویس
  * شمرده نمی‌شود و فقط تعدادش گزارش می‌شود. جمع‌ها در SQL است (§1.8).
+ *
+ * v10.1.16 (TD-1269، قاعده مالک محصول: بیمه و مالیات اختیاری است): فقط پرسنلی که در فیش‌های آن ماه بیمه یا مالیات حقوق
+ * دارند در فهرست و خروجی اکسل می‌آیند؛ پرسنل بی بیمه و مالیات (مشمول نیست یا مبلغش صفر شده) فقط شمرده می‌شود تا حقوق او
+ * به لیست بیمه نرود.
  */
+
+/** بیمه سهم کارگر و کارفرما و مالیات حقوق یک فیش */
+const STATUTORY_SUM = sql.raw('COALESCE(p.employee_insurance, 0) + COALESCE(p.employer_insurance, 0) + COALESCE(p.income_tax, 0)');
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const isoOf = ([y, m, d]: [number, number, number]) => `${y}-${pad(m)}-${pad(d)}`;
@@ -33,6 +40,7 @@ export async function payrollStatutoryReport(jalaliYear: number, jalaliMonth: nu
      WHERE p.is_deleted = 0 AND p.is_eidi = 0 AND p.status IN ('approved', 'partially_paid', 'paid')
        AND p.end_date >= ${from} AND p.end_date <= ${to}
      GROUP BY pe.id, pe.full_name, pe.personnel_code, pe.national_id
+    HAVING SUM(${STATUTORY_SUM}) > 0
      ORDER BY pe.full_name, pe.id`);
   const rows: StatutoryReportRow[] = (res.rows as Array<Record<string, unknown>>).map(r => ({
     personnelId: Number(r.personnel_id),
@@ -45,6 +53,15 @@ export async function payrollStatutoryReport(jalaliYear: number, jalaliMonth: nu
     employerInsurance: fin(String(r.employer_insurance ?? '0')).toString(),
     incomeTax: fin(String(r.income_tax ?? '0')).toString(),
   }));
+  const without = await orm.execute(sql`
+    SELECT COUNT(*)::int AS personnel, COALESCE(SUM(w.payslips), 0)::int AS payslips
+      FROM (SELECT p.personnel_id, COUNT(*) AS payslips
+              FROM piecework_payrolls p
+             WHERE p.is_deleted = 0 AND p.is_eidi = 0 AND p.status IN ('approved', 'partially_paid', 'paid')
+               AND p.end_date >= ${from} AND p.end_date <= ${to}
+             GROUP BY p.personnel_id
+            HAVING SUM(${STATUTORY_SUM}) = 0) w`);
+  const withoutRow = (without.rows as Array<{ personnel?: unknown; payslips?: unknown }>)[0];
   const drafts = await orm.execute(sql`
     SELECT COUNT(*)::int AS n FROM piecework_payrolls p
      WHERE p.is_deleted = 0 AND p.is_eidi = 0 AND p.status = 'draft' AND p.end_date >= ${from} AND p.end_date <= ${to}`);
@@ -57,5 +74,6 @@ export async function payrollStatutoryReport(jalaliYear: number, jalaliMonth: nu
     rows,
     totals: { gross: sum('gross'), employeeInsurance: sum('employeeInsurance'), employerInsurance: sum('employerInsurance'), incomeTax: sum('incomeTax') },
     draftPayslips: Number((drafts.rows as Array<{ n?: unknown }>)[0]?.n ?? 0),
+    withoutStatutory: { personnel: Number(withoutRow?.personnel ?? 0), payslips: Number(withoutRow?.payslips ?? 0) },
   };
 }

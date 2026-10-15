@@ -216,5 +216,50 @@ export async function runPayrollStatutoryTests(shouldRun: ShouldRun): Promise<Te
     }));
   }
 
+  const optionalId = 'reg_payroll_statutory_report_optional_td_1269';
+  if (shouldRun(optionalId, 'td1269', 'payroll', 'statutory', 'report', 'optional')) {
+    await runCase(results, optionalId, 'v10.1.16: insurance and payroll tax are optional per person, so the monthly list leaves out approved payslips without them (not covered, or zeroed with a reason) and only counts them; the payslip and its voucher post nothing to 3204 or 3206 (TD-1269)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      await admin.put('/api/piecework/statutory-rates/1405', RATES_1405);
+      const task = await newTask();
+      const issueApproved = async (worker: number, amount: number, extra: Record<string, unknown> = {}) => {
+        await addLog(worker, task, LOG_DATE, amount);
+        const issued = await admin.post('/api/piecework/payrolls/generate', { personnelId: worker, ...MONTH, ...extra });
+        const id = Number(field(issued, 'id'));
+        if (issued.status !== 201 || !id) throw new Error(`setup: payslip ${brief(issued)}`);
+        const approve = await admin.put(`/api/piecework/payrolls/${id}/status`, { status: 'approved' });
+        if (approve.status !== 200) throw new Error(`setup: approve ${brief(approve)}`);
+        return id;
+      };
+      const insured = await coveredWorker('TD-1269 insured');
+      await issueApproved(insured, 20_000_000);
+      const informal = await newWorker('TD-1269 informal');
+      const informalPayslip = await issueApproved(informal, 8_000_000);
+      const zeroed = await coveredWorker('TD-1269 zeroed this month');
+      await issueApproved(zeroed, 6_000_000, { employeeInsurance: '0', employerInsurance: '0', incomeTax: '0', statutoryOverrideReason: 'TD-1269 informal this month' });
+
+      const row = await payslip(informalPayslip);
+      if (!fin(String(row.ee)).isZero() || !fin(String(row.er)).isZero() || !fin(String(row.tax)).isZero() || !fin(String(row.net)).equals(8_000_000)) {
+        problems.push(`the informal payslip stored ${String(row.ee)} / ${String(row.er)} / ${String(row.tax)}, net ${String(row.net)}`);
+      }
+      for (const code of ['3204', '3206']) {
+        const net = await personNet(code, informal);
+        if (!fin(net).isZero()) problems.push(`the informal worker has ${net} on ${code}, expected nothing`);
+      }
+
+      const report = await admin.get('/api/piecework/reports/statutory?year=1405&month=1');
+      const rows = (field(report, 'rows') as Array<{ personnelId: number }> | undefined) ?? [];
+      const listed = rows.map(r => r.personnelId);
+      if (report.status !== 200 || !listed.includes(insured)) problems.push(`the report answered ${brief(report)}, expected the insured worker`);
+      if (listed.includes(informal) || listed.includes(zeroed)) problems.push(`the report lists ${JSON.stringify(listed)}, expected no worker without insurance or tax`);
+      const without = field(report, 'withoutStatutory') as { personnel?: number; payslips?: number } | undefined;
+      if (Number(without?.personnel) !== 2 || Number(without?.payslips) !== 2) problems.push(`the report counts ${JSON.stringify(without ?? null)} without insurance and tax, expected 2 personnel with 2 payslips`);
+
+      assertNoProblems(problems);
+      return 'An uncovered worker gets a payslip with no insurance or tax and nothing on 3204 / 3206; the monthly list shows only the insured worker and counts 2 personnel with 2 payslips left out.';
+    }));
+  }
+
   return results;
 }
