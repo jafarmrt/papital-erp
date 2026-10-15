@@ -128,7 +128,7 @@ else
   SUDO=""
 fi
 
-# v10.1.24: the app is built and tested on Node.js 24; an older Node still runs it, but say so once
+# v10.1.25: the app is built and tested on Node.js 24; an older Node still runs it, but say so once
 NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
 if [ "$NODE_MAJOR" -lt 24 ]; then
   warn "Node.js $(node -v 2>/dev/null || echo 'not found') is older than 24; install Node.js 24 (see install.sh) before the next update."

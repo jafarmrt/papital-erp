@@ -156,3 +156,17 @@ export async function listFollowups(filter: FollowupFilter) {
     openCount: await countWhere(and(openFollowupCondition(), ...scope) as SQL),
   };
 }
+
+/**
+ * v10.1.24 (N-02 بخش ۳): نزدیک‌ترین سررسید پیگیری باز هر پرونده (`openFollowupCondition`)، برای کارت قیف فروش. یک پرس‌وجو
+ * برای پرونده‌های همان صفحه؛ پرونده بی پیگیری باز در نتیجه نیست.
+ */
+export async function nextFollowupDatesByLead(leadIds: ReadonlyArray<number>): Promise<Map<number, string>> {
+  if (leadIds.length === 0) return new Map();
+  const rows = await orm
+    .select({ leadId: crmActivities.leadId, next: sql<string>`min(${crmActivities.nextFollowUpDate})` })
+    .from(crmActivities)
+    .where(and(openFollowupCondition(), inArray(crmActivities.leadId, [...leadIds])))
+    .groupBy(crmActivities.leadId);
+  return new Map(rows.filter((r) => r.leadId !== null && r.next).map((r) => [Number(r.leadId), String(r.next)]));
+}

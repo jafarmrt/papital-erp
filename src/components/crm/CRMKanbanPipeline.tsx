@@ -1,165 +1,127 @@
-import { Plus, PhoneCall, Edit3, Trash2, FileText } from 'lucide-react';
-import { CRMLead } from '../../types';
+import { useState } from 'react';
+import { Plus } from 'lucide-react';
+import type { CRMLead } from '../../types';
 import { STAGES } from '../../hooks/useCRMData';
-import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel } from '../../utils';
+import { formatPersianNumber, getTodayIsoDate } from '../../utils';
+import { sumByCurrency } from '../../lib/crm/leadCurrencyTotals';
+import { PIPELINE_COLUMN_WIDTH_PX, PIPELINE_DRAG_TYPE, draggedLeadId, leadsOfStage, stageAfterDrop } from '../../lib/crm/pipelineBoard';
+import { usePhoneWidth } from '../../lib/pwa/usePhoneWidth';
+import { CurrencyTotalsLines } from './CurrencyTotals';
+import { CRMPipelineCard, type PipelineCardActions } from './CRMPipelineCard';
 
-interface CRMKanbanPipelineProps {
+interface CRMKanbanPipelineProps extends PipelineCardActions {
   leads: CRMLead[];
-  onOpenLeadDrawer: (lead: CRMLead) => void;
-  onOpenActivityModal: (lead: CRMLead) => void;
-  onOpenLeadModal: (lead?: CRMLead) => void;
-  /** v9.0.148 (TD-893): فقط برای دارنده `crm.delete`؛ بی آن دکمه حذف نیست */
-  onDeleteLead?: (leadId: number) => void;
-  onStageChange: (leadId: number, newStage: string) => void;
-  onConvertToInvoice?: (lead: CRMLead) => void;
 }
 
-export function CRMKanbanPipeline({
-  leads,
-  onOpenLeadDrawer,
-  onOpenActivityModal,
-  onOpenLeadModal,
-  onDeleteLead,
-  onStageChange,
-  onConvertToInvoice
-}: CRMKanbanPipelineProps) {
+type Stage = (typeof STAGES)[number];
+
+interface StageColumnProps extends PipelineCardActions {
+  stage: Stage;
+  leads: CRMLead[];
+  allLeads: CRMLead[];
+  todayIso: string;
+  phone: boolean;
+}
+
+function StageColumn({ stage, leads, allLeads, todayIso, phone, ...actions }: StageColumnProps) {
+  const [dropping, setDropping] = useState(false);
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5 overflow-x-auto pb-4 custom-scrollbar">
-      {STAGES.map((stage) => {
-        const stageLeads = leads.filter((l) => l.stage === stage.key);
-        // V9 Phase 3: جمع ارزش هر مرحله به تفکیک ارز (رفع جمع mixed-currency)
-        const stageTotals: Record<string, number> = {};
-        for (const l of stageLeads) {
-          const cur = String(l.currency || 'IRR');
-          stageTotals[cur] = (stageTotals[cur] || 0) + (l.estimatedValue || 0);
-        }
-
-        return (
-          <div
-            key={stage.key}
-            className={`rounded-2xl border ${stage.color} p-3.5 flex flex-col min-w-[260px] max-w-sm h-[calc(100vh-320px)] min-h-[520px] shadow-2xs`}
-          >
-            {/* Column Header */}
-            <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200/60">
-              <div className="flex items-center gap-1.5">
-                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${stage.badge}`}>
-                  {formatPersianNumber(stageLeads.length)}
-                </span>
-                <h3 className="font-extrabold text-xs text-slate-800">{stage.title}</h3>
-              </div>
-
-              <button
-                onClick={() => onOpenLeadModal()}
-                className="p-1 hover:bg-white/60 rounded-lg text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
-                title="افزودن پرونده"
-              >
-                <Plus size={14} />
-              </button>
-            </div>
-
-            {/* Total stage value */}
-            <div className="text-[10px] text-slate-500 font-bold mb-3 px-1 flex items-center justify-between">
-              <span>مجموع ارزش:</span>
-              <span className="text-slate-900 font-black text-left">
-                {Object.entries(stageTotals).map(([cur, val]) => (
-                  <div key={cur}>
-                    {formatPersianPrice(val)} {formatCurrencyLabel(cur)}
-                  </div>
-                ))}
-              </span>
-            </div>
-
-            {/* Cards list */}
-            <div className="flex-1 overflow-y-auto space-y-2.5 custom-scrollbar pr-0.5">
-              {stageLeads.length === 0 ? (
-                <div className="h-24 border border-dashed border-slate-300/80 rounded-xl flex items-center justify-center text-[11px] text-slate-400 font-medium">
-                  خالی
-                </div>
-              ) : (
-                stageLeads.map((lead) => (
-                  <div
-                    key={lead.id}
-                    className="bg-white rounded-xl border border-slate-200/90 p-3 shadow-2xs hover:shadow-md transition-all space-y-2 group relative"
-                  >
-                    <div className="flex items-start justify-between gap-1">
-                      <h4
-                        onClick={() => onOpenLeadDrawer(lead)}
-                        className="font-bold text-xs text-slate-900 hover:text-blue-600 cursor-pointer line-clamp-2 leading-relaxed"
-                      >
-                        {lead.title}
-                      </h4>
-                    </div>
-
-                    <div className="text-[11px] text-slate-600 font-medium flex items-center justify-between">
-                      <span className="truncate max-w-[130px]" title={lead.customerName || lead.company}>
-                        👤 {lead.customerName || lead.company || 'بدون نام'}
-                      </span>
-                      {lead.phone && <span className="text-[10px] text-slate-400 dir-ltr">{lead.phone}</span>}
-                    </div>
-
-                    <div className="p-1.5 bg-slate-50 rounded-lg border border-slate-100 flex items-center justify-between text-[11px]">
-                      <span className="font-black text-slate-900">
-                        {formatPersianPrice(lead.estimatedValue, lead.currency)} 
-                      </span>
-                      <span className="font-bold text-blue-600 text-[10px]">{formatPersianNumber(lead.probability)}٪ احتمال</span>
-                    </div>
-
-                    {/* Quick stage selector and action buttons */}
-                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1 text-[10px]">
-                      <select
-                        value={lead.stage}
-                        onChange={(e) => onStageChange(lead.id, e.target.value)}
-                        className="bg-slate-100 text-slate-700 font-bold rounded-lg px-1.5 py-0.5 outline-none border-none text-[10px] cursor-pointer"
-                      >
-                        {STAGES.map((s) => (
-                          <option key={s.key} value={s.key}>
-                            {s.title}
-                          </option>
-                        ))}
-                      </select>
-
-                      <div className="flex items-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity">
-                        {onConvertToInvoice && lead.stage === 'proposal' && (
-                          <button
-                            onClick={() => onConvertToInvoice(lead)}
-                            className="p-1 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors cursor-pointer"
-                            title="تبدیل به مشتری و صدور پیش‌فاکتور"
-                          >
-                            <FileText size={13} />
-                          </button>
-                        )}
-                        <button
-                          onClick={() => onOpenActivityModal(lead)}
-                          className="p-1 text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer"
-                          title="ثبت تماس"
-                        >
-                          <PhoneCall size={13} />
-                        </button>
-                        <button
-                          onClick={() => onOpenLeadModal(lead)}
-                          className="p-1 text-amber-600 hover:bg-amber-50 rounded-md transition-colors cursor-pointer"
-                          title="ویرایش"
-                        >
-                          <Edit3 size={13} />
-                        </button>
-                        {onDeleteLead && (
-                          <button
-                            onClick={() => onDeleteLead(lead.id)}
-                            className="p-1 text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
-                            title="حذف"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+    <section
+      data-pipeline-stage={stage.key}
+      aria-label={stage.title}
+      style={phone ? undefined : { width: PIPELINE_COLUMN_WIDTH_PX }}
+      onDragOver={(e) => {
+        if (phone || !e.dataTransfer.types.includes(PIPELINE_DRAG_TYPE)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        setDropping(true);
+      }}
+      onDragLeave={() => setDropping(false)}
+      onDrop={(e) => {
+        setDropping(false);
+        const leadId = draggedLeadId(e.dataTransfer.getData(PIPELINE_DRAG_TYPE));
+        if (leadId === null) return;
+        e.preventDefault();
+        const target = stageAfterDrop(allLeads, leadId, stage.key);
+        if (target) actions.onStageChange(leadId, target);
+      }}
+      className={`rounded-2xl border ${stage.color} p-3 flex flex-col shrink-0 ${phone ? 'w-full min-h-[60vh]' : 'h-[calc(100vh-320px)] min-h-[520px]'} ${
+        dropping ? 'ring-2 ring-blue-400' : ''
+      }`}
+    >
+      <header className="pb-2 mb-2 border-b border-slate-200/60 space-y-1">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${stage.badge}`}>{formatPersianNumber(leads.length)}</span>
+            <h3 className="font-extrabold text-xs text-slate-800 truncate">{stage.title}</h3>
           </div>
-        );
-      })}
+          <button
+            type="button"
+            onClick={() => actions.onOpenLeadModal()}
+            className="p-1 hover:bg-white/60 rounded-lg text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+            title="افزودن پرونده"
+          >
+            <Plus size={14} />
+          </button>
+        </div>
+        <CurrencyTotalsLines totals={sumByCurrency(leads)} className="text-[10px] font-black text-slate-900" labelClassName="text-[10px] font-normal" />
+      </header>
+
+      <div className="flex-1 overflow-y-auto space-y-2 custom-scrollbar pe-0.5">
+        {leads.length === 0 ? (
+          <div className="h-20 border border-dashed border-slate-300/80 rounded-xl flex items-center justify-center text-[11px] text-slate-400 font-medium">
+            {phone ? 'خالی' : 'خالی؛ کارت را اینجا رها کنید'}
+          </div>
+        ) : (
+          leads.map((lead) => <CRMPipelineCard key={lead.id} lead={lead} todayIso={todayIso} draggable={!phone} {...actions} />)
+        )}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * قیف فروش. v10.1.24 (N-02 بخش ۳، TD-1272): ستون‌ها پهنای ثابت دارند و قیف افقی پیمایش می‌شود (پیش‌تر ستون‌ها روی هم
+ * می‌افتادند)، کارت بین مرحله‌ها کشیده و رها می‌شود (ت۹) و روی گوشی هر مرحله یک زبانه است (ت۱۰). رها کردن همان
+ * `onStageChange` فهرست کشویی را صدا می‌زند، پس «فروش موفق» بی پیش‌فاکتور و «ناموفق» بی دلیل همان‌جا رد یا پرسیده می‌شوند.
+ */
+export function CRMKanbanPipeline({ leads, ...actions }: CRMKanbanPipelineProps) {
+  const phone = usePhoneWidth();
+  const [phoneStage, setPhoneStage] = useState<string>(STAGES[0].key);
+  const todayIso = getTodayIsoDate();
+
+  if (phone) {
+    const stage = STAGES.find((s) => s.key === phoneStage) ?? STAGES[0];
+    return (
+      <div className="space-y-3">
+        <div role="tablist" aria-label="مرحله‌های قیف" className="flex gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
+          {STAGES.map((s) => (
+            <button
+              key={s.key}
+              type="button"
+              role="tab"
+              data-pipeline-tab={s.key}
+              aria-selected={s.key === stage.key}
+              onClick={() => setPhoneStage(s.key)}
+              className={`min-h-[44px] shrink-0 px-3 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer ${
+                s.key === stage.key ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              {s.title}
+              <span className="text-[10px]">{formatPersianNumber(leadsOfStage(leads, s.key).length)}</span>
+            </button>
+          ))}
+        </div>
+        <StageColumn stage={stage} leads={leadsOfStage(leads, stage.key)} allLeads={leads} todayIso={todayIso} phone {...actions} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex gap-3 overflow-x-auto pb-4 custom-scrollbar">
+      {STAGES.map((stage) => (
+        <StageColumn key={stage.key} stage={stage} leads={leadsOfStage(leads, stage.key)} allLeads={leads} todayIso={todayIso} phone={false} {...actions} />
+      ))}
     </div>
   );
 }

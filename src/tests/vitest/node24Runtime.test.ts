@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 /**
- * v10.1.24 (I-07, product-owner decision ت۳۲): the app is built, tested and shipped on Node.js 24 LTS. CI, the
+ * v10.1.25 (I-07, product-owner decision ت۳۲): the app is built, tested and shipped on Node.js 24 LTS. CI, the
  * Docker image, the installer, `.nvmrc` and `engines` name the same major, so no place keeps building on Node 22.
  */
 const read = (path: string) => readFileSync(path, 'utf8');
