@@ -18,7 +18,7 @@ afterEach(cleanup);
 describe('global search project status (TD-1170)', () => {
   it('shows the Persian status label', async () => {
     render(<SearchProvider><MemoryRouter><GlobalHeaderSearch /></MemoryRouter></SearchProvider>);
-    const input = screen.getByPlaceholderText(/جستجوی سراسری/);
+    const input = screen.getByPlaceholderText(/جست‌وجوی سراسری/);
     fireEvent.focus(input);
     fireEvent.change(input, { target: { value: 'گردن' } });
     const line = await screen.findByText(/وضعیت:/);

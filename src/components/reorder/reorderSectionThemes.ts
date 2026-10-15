@@ -88,7 +88,7 @@ export const PRODUCTS_THEME: ReorderSectionTheme = {
   title: 'محصولات کارگاهی در آستانه سفارش (نیازمند تولید)',
   countBadge: 'bg-indigo-100 text-indigo-950',
   countSuffix: 'محصول کسری',
-  description: 'محصولات در کارگاه تولید می‌شوند؛ جهت جبران کسری، برای آن‌ها پروژه تولید تعریف نمایید (فاقد سفارش خرید)',
+  description: 'محصولات در کارگاه تولید می‌شوند؛ جهت جبران کسری، برای آن‌ها پروژه تولید تعریف کنید (فاقد سفارش خرید)',
   costLabel: 'ارزش تخمینی محصولات:',
   costValue: 'text-indigo-800',
   batchButton: 'bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white',

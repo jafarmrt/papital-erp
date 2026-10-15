@@ -324,7 +324,7 @@ export const csrfProtection = (req: Request, res: Response, next: NextFunction) 
     if (!expectedCsrfToken) {
       return res.status(403).json({
         error: 'CSRF token invalid',
-        message: 'نشست شما قدیمی است و فاقد توکن امنیتی CSRF می‌باشد. لطفاً از سامانه خارج شده و مجدداً وارد شوید.'
+        message: 'نشست شما قدیمی است و فاقد توکن امنیتی CSRF است. لطفاً از سامانه خارج شده و مجدداً وارد شوید.'
       });
     }
 

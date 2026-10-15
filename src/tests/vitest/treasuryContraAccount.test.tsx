@@ -39,7 +39,7 @@ describe('treasury form asks the counter account (TD-507)', () => {
     fireEvent.submit(container.querySelector('form') as HTMLFormElement);
     await waitFor(() => expect(onSave).not.toHaveBeenCalled());
 
-    const input = screen.getByPlaceholderText('جستجو و انتخاب سرفصل معین...');
+    const input = screen.getByPlaceholderText('جست‌وجو و انتخاب سرفصل معین...');
     fireEvent.focus(input);
     fireEvent.click(await screen.findByText(/هزینه اجاره کارگاه و دفتر/));
     fireEvent.submit(container.querySelector('form') as HTMLFormElement);

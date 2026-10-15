@@ -174,7 +174,7 @@ export default function ProjectInventoryPage({ user }: { user?: User }) {
         <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-500 space-y-3">
           <Box className="w-12 h-12 text-slate-300 mx-auto" />
           <p className="font-bold text-slate-700">هیچ پروژه‌ای انتخاب نشده است.</p>
-          <p className="text-xs text-slate-500">لطفاً از منوی بالای صفحه یک پروژه تولیدی انتخاب نمایید.</p>
+          <p className="text-xs text-slate-500">لطفاً از منوی بالای صفحه یک پروژه تولیدی انتخاب کنید.</p>
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">

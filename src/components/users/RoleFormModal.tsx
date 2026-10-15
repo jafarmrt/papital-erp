@@ -275,7 +275,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
                   type="text"
                   value={permSearch}
                   onChange={(e) => setPermSearch(e.target.value)}
-                  placeholder="جستجوی کلید یا عنوان مجوز..."
+                  placeholder="جست‌وجوی کلید یا عنوان مجوز..."
                   className="w-full pr-8 pl-3 py-1 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
@@ -338,7 +338,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
             )}
             {filteredCatalog.length === 0 ? (
               <div className="text-center py-10 text-slate-400 text-xs">
-                هیچ مجوزی مطابق با عبارت جستجویافته پیدا نشد.
+                هیچ مجوزی مطابق با عبارت جست‌وجویافته پیدا نشد.
               </div>
             ) : (
               filteredCatalog.map((cat, idx) => {

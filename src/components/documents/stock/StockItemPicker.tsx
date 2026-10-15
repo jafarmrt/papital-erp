@@ -46,7 +46,7 @@ export function StockItemPicker({ form, onItemSelect, onAddItem, onCreateItem }:
         <div data-decimal-scope="" className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
           <div className={actionType === 'in' ? "md:col-span-5 w-full" : "md:col-span-8 w-full"}>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-bold text-slate-700">جستجو و انتخاب کالا / ماده اولیه</label>
+              <label className="text-xs font-bold text-slate-700">جست‌وجو و انتخاب کالا / ماده اولیه</label>
               {canCreateOrEditItem && (
                 <button
                   type="button"

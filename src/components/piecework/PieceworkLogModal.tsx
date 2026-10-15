@@ -122,7 +122,7 @@ export function PieceworkLogModal({
                     options={projectSelectOptions}
                     value={editingLog.projectId ? String(editingLog.projectId) : ''}
                     onChange={(val) => setEditingLog(prev => prev ? { ...prev, projectId: val ? Number(val) : null } : null)}
-                    placeholder="جستجو و انتخاب پروژه تولیدی (اختیاری)..."
+                    placeholder="جست‌وجو و انتخاب پروژه تولیدی (اختیاری)..."
                     maxResults={50}
                     className="w-full text-xs font-bold"
                   />
@@ -173,7 +173,7 @@ export function PieceworkLogModal({
                       options={personnelSelectOptions}
                       value={selectedPersonnelForLog ? String(selectedPersonnelForLog) : ''}
                       onChange={(val) => setSelectedPersonnelForLog(val ? Number(val) : '')}
-                      placeholder="جستجو و انتخاب پرسنل..."
+                      placeholder="جست‌وجو و انتخاب پرسنل..."
                       maxResults={50}
                       className="w-full text-xs font-bold"
                     />
@@ -245,7 +245,7 @@ export function PieceworkLogModal({
                               options={taskSelectOptions}
                               value={row.taskId ? String(row.taskId) : ''}
                               onChange={(val) => onTaskChangeInRow(idx, val ? Number(val) : '')}
-                              placeholder="جستجو و انتخاب عنوان کاری..."
+                              placeholder="جست‌وجو و انتخاب عنوان کاری..."
                               maxResults={100}
                               className="w-full text-xs font-bold"
                             />

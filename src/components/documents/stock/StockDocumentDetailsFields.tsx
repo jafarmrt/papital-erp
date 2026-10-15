@@ -134,7 +134,7 @@ export function StockDocumentDetailsFields({ form, currentUser, warehouses, proj
                 onClick={() => void handleFetchReturnInvoice()} 
                 className="bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 px-3 rounded-xl text-xs font-bold whitespace-nowrap transition-colors"
               >
-                جستجو
+                جست‌وجو
               </button>
             </div>
             <ReturnInvoiceYearChoices candidates={returnInvoiceCandidates} onChoose={year => void handleFetchReturnInvoice(year)} />

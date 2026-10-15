@@ -44,7 +44,7 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (warehouses.length === 0) {
-      toast.error('هیچ انباری در سامانه تعریف نشده است. لطفاً ابتدا از بخش تنظیمات > انبارها، حداقل یک انبار تعریف نمایید.');
+      toast.error('هیچ انباری در سامانه تعریف نشده است. لطفاً ابتدا از بخش تنظیمات > انبارها، حداقل یک انبار تعریف کنید.');
       return;
     }
     if (docItems.length === 0) {

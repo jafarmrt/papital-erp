@@ -213,7 +213,7 @@ export default function WarehouseTransferModal({
                   value={selectedItemId || ''}
                   valueLabel={selectedItem ? transferItemOption(selectedItem).label : undefined}
                   onChange={(val, raw) => setSelectedItem(Number(val) && raw ? raw as TransferPickItem : null)}
-                  placeholder="جستجو و انتخاب کالا..."
+                  placeholder="جست‌وجو و انتخاب کالا..."
                 />
               </div>
 

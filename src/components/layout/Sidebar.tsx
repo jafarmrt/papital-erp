@@ -225,7 +225,7 @@ export function Sidebar({
               </div>
             )}
             <div className="flex flex-col min-w-0">
-              <h1 className="text-xs font-bold tracking-tight text-white truncate" title={companyName || 'سامانه جامع ERP پاپیتال'}>
+              <h1 className="text-xs font-bold text-white truncate" title={companyName || 'سامانه جامع ERP پاپیتال'}>
                 {companyName || 'سامانه جامع ERP پاپیتال'}
               </h1>
               <span className="text-[9px] text-slate-400">سامانه یکپارچه مدیریت کارگاه و ERP</span>
@@ -391,7 +391,7 @@ export function Sidebar({
                     "w-3.5 h-3.5 shrink-0 transition-transform group-hover:scale-110",
                     hasActiveItem ? "text-blue-400" : "text-slate-500 group-hover:text-slate-300"
                   )} />
-                  <span className="truncate text-[11px] font-bold tracking-tight">{group.title}</span>
+                  <span className="truncate text-[11px] font-bold">{group.title}</span>
                   
                   {!isGroupOpen && hasActiveItem && (
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" title="صفحه فعال در این دسته قرار دارد" />

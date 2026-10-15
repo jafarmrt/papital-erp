@@ -275,7 +275,7 @@ export function CustomerExcelModal({
             website: website || undefined, email: email || undefined, instagram: instagram || undefined,
           })));
           if (!name) {
-            issues.push('نام طرف حساب الزامی است و خالی می‌باشد.');
+            issues.push('نام طرف حساب الزامی است و خالی مانده است.');
           }
 
           if (name && seenNamesInBatch.has(name.toLowerCase())) {
@@ -622,7 +622,7 @@ export function CustomerExcelModal({
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="جستجو در سطرهای پیش‌نمایش..."
+                    placeholder="جست‌وجو در سطرهای پیش‌نمایش..."
                     className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-hidden"
                   />
                   <Search size={14} className="absolute left-2.5 top-2.5 text-slate-400" />

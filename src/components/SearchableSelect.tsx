@@ -229,7 +229,7 @@ export function SearchableSelect({
               autoFocus
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="جستجو..."
+              placeholder="جست‌وجو..."
               className="w-full bg-transparent text-xs font-bold text-slate-800 focus:outline-none"
             />
             {loading && <Loader2 size={14} className="text-blue-500 animate-spin shrink-0 ml-1" />}
@@ -268,12 +268,12 @@ export function SearchableSelect({
               ))
             ) : (
               <li className="px-3 py-3 text-slate-400 text-center font-medium">
-                {loading ? 'در حال جستجو...' : 'موردی یافت نشد'}
+                {loading ? 'در حال جست‌وجو...' : 'موردی یافت نشد'}
               </li>
             )}
             {displayOptions.length > 0 && propOptions.length > limit && (
               <li className="px-3 py-1.5 text-[10px] font-medium text-slate-400 bg-slate-50 border-t border-slate-100 text-center select-none">
-                برای مشاهده موارد بیشتر عبارت مورد نظر را جستجو کنید
+                برای مشاهده موارد بیشتر عبارت مورد نظر را جست‌وجو کنید
               </li>
             )}
           </ul>

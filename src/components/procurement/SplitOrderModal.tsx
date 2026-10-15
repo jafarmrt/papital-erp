@@ -601,7 +601,7 @@ export function SplitOrderModal({
                       <SearchableSelect
                         value={pkg.supplierName}
                         onChange={(val) => handleUpdatePackageField(pkg.id, 'supplierName', val)}
-                        placeholder="-- جستجو یا انتخاب از طرفین حساب --"
+                        placeholder="-- جست‌وجو یا انتخاب از طرفین حساب --"
                         options={supplierOptions}
                         className="w-full"
                       />

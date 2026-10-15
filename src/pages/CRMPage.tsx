@@ -51,7 +51,7 @@ export default function CRMPage({ user }: { user: any }) {
 
   const handleConvertToInvoice = async (lead: CRMLead) => {
     if (Number(lead.hasProforma) === 1) {
-      toast.error('برای این پرونده فروش قبلاً پیش‌فاکتور صادر شده است. هر پرونده فروش تنها مجاز به داشتن یک پیش‌فاکتور می‌باشد.');
+      toast.error('برای این پرونده فروش قبلاً پیش‌فاکتور صادر شده است. هر پرونده فروش تنها مجاز به داشتن یک پیش‌فاکتور است.');
       return;
     }
 
@@ -210,7 +210,7 @@ export default function CRMPage({ user }: { user: any }) {
             <div className="relative flex-1 sm:w-64">
               <input
                 type="text"
-                placeholder="جستجو در عنوان، مشتری، شماره..."
+                placeholder="جست‌وجو در عنوان، مشتری، شماره..."
                 value={crm.searchTerm}
                 onChange={(e) => crm.setSearchTerm(e.target.value)}
                 className="w-full pr-9 pl-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500 focus:bg-white transition-all"

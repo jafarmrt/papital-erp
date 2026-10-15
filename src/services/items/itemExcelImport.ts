@@ -91,7 +91,7 @@ async function importRow(ctx: ImportContext, row: Row, rowNum: number): Promise<
   const stock = readRowStock(row, ctx.whs);
 
   if (!code) {
-    push('کد کالا نامعتبر است (خالی می‌باشد).');
+    push('کد کالا نامعتبر است (خالی مانده است).');
     return;
   }
   const cellError = fields.cellError ?? stock.cellError;

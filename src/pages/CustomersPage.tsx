@@ -436,7 +436,7 @@ export default function CustomersPage({ user }: { user: User }) {
           <Search className="absolute right-3 top-2.5 text-slate-400" size={16} />
           <input 
             type="text" 
-            placeholder="جستجو نام حساب، رسته تامین، رابط، تلفن..."
+            placeholder="جست‌وجو نام حساب، رسته تامین، رابط، تلفن..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-3 pr-10 py-1.5 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white text-slate-800"

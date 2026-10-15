@@ -101,7 +101,7 @@ describe('stock document form residuals (TD-234)', () => {
     await screen.findByDisplayValue('RC-1001');
     fireEvent.change(screen.getByDisplayValue('رسید خرید مواد اولیه / کالا (فاکتور خرید)'), { target: { value: 'return' } });
     fireEvent.change(screen.getByPlaceholderText('مثال: 1005'), { target: { value: RETURN_REF } });
-    fireEvent.click(screen.getByText('جستجو'));
+    fireEvent.click(screen.getByText('جست‌وجو'));
     expect(await screen.findByText('گردنبند نقره')).toBeTruthy();
 
     // v9.0.273 (TD-788): ارز و نرخ برگشت از فاکتور مرجع می‌آید (پیش‌تر کاربر آن را در فرم انتخاب می‌کرد)

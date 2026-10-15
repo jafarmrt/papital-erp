@@ -19,7 +19,7 @@ export function InvoiceListFilters({ query }: { query: InvoiceListQueryState }) 
         <Search className="absolute right-3 top-2.5 text-slate-400" size={16} />
         <input 
           type="text" 
-          placeholder="جستجوی شماره سند، خریدار، تامین‌کننده، کالا..."
+          placeholder="جست‌وجوی شماره سند، خریدار، تامین‌کننده، کالا..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full pl-3 pr-10 py-1.5 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white font-medium"
@@ -85,7 +85,7 @@ export function InvoiceListFilters({ query }: { query: InvoiceListQueryState }) 
             onClick={clearFilters}
             className="text-xs text-rose-600 hover:text-rose-800 font-bold px-2.5 py-1.5 bg-rose-50 rounded-xl border border-rose-200 cursor-pointer transition-colors"
           >
-            پاک کردن شرط‌های جستجو
+            پاک کردن شرط‌های جست‌وجو
           </button>
         )}
       </div>

@@ -159,7 +159,7 @@ const listPieceworkLogsSchema = z.object({
     status: z.string().trim().max(30).optional(),
     startDate: storageDateParam,
     endDate: storageDateParam,
-    search: z.string().max(100, 'عبارت جستجو حداکثر ۱۰۰ نویسه است').optional(),
+    search: z.string().max(100, 'عبارت جست‌وجو حداکثر ۱۰۰ نویسه است').optional(),
     page: z.string().regex(/^[1-9]\d*$/, 'شماره صفحه باید عدد صحیح مثبت باشد').optional(),
     limit: z.string().regex(/^[1-9]\d*$/, 'اندازه صفحه باید عدد صحیح مثبت باشد').optional(),
   }).passthrough(),

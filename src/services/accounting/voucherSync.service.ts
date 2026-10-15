@@ -164,7 +164,7 @@ export class VoucherSyncService {
       ].filter(Boolean).join('، ');
       logger.warn({ message: `Standard customer or revenue accounts not found for invoice auto voucher: ${missingAccounts}` });
       if (isStrict) {
-        throw new ValidationError(`سرفصل‌های حسابداری متناظر برای صدور سند فاکتور فروش شماره «${doc.refNumber}» یافت نشد (${missingAccounts}) — لطفاً از تنظیمات حسابداری پیکربندی نمایید.`);
+        throw new ValidationError(`سرفصل‌های حسابداری متناظر برای صدور سند فاکتور فروش شماره «${doc.refNumber}» یافت نشد (${missingAccounts}) — لطفاً از تنظیمات حسابداری پیکربندی کنید.`);
       }
       return null;
     }
@@ -696,7 +696,7 @@ export class VoucherSyncService {
 
     if (voucherItems.length === 0) {
       if (isStrict) {
-        throw new ValidationError(`سرفصل‌های حسابداری متناظر برای اقلام سند شماره «${doc.refNumber}» یافت نشد — لطفاً سرفصل‌های مواد و کالا را در کدینگ بررسی نمایید.`);
+        throw new ValidationError(`سرفصل‌های حسابداری متناظر برای اقلام سند شماره «${doc.refNumber}» یافت نشد — لطفاً سرفصل‌های مواد و کالا را در کدینگ بررسی کنید.`);
       }
       return null;
     }

@@ -8,6 +8,14 @@ import { HelpBadge } from '../../common/HelpBadge';
 import { fetchJson } from '../../../api';
 import type { BankAccount } from '../../../types';
 
+/** خطای فرم انتقال وجه، که زیر فرم نشان داده می‌شود (نه پنجره alert مرورگر) */
+export function transferFormError(form: { fromBankAccountId: number | null; toBankAccountId: number | null; amount: number }): string {
+  if (!form.fromBankAccountId || !form.toBankAccountId) return 'لطفاً حساب‌های مبدأ و مقصد را انتخاب کنید.';
+  if (form.fromBankAccountId === form.toBankAccountId) return 'حساب مبدأ و مقصد نمی‌توانند یکسان باشند.';
+  if (!(form.amount > 0)) return 'مبلغ انتقال باید بزرگ‌تر از صفر باشد.';
+  return '';
+}
+
 interface TreasuryTransferModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -33,6 +41,7 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
     description: '',
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [formError, setFormError] = useState('');
 
   // TD-105: تاریخ پیش‌فرض از سرور (ساعت توافقی) — نه ساعت مرورگر کلاینت
   useEffect(() => {
@@ -64,28 +73,25 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
         trackingNumber: '',
         description: '',
       });
+      setFormError('');
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const updateForm = (change: (prev: typeof formData) => typeof formData) => {
+    setFormData(change);
+    setFormError('');
+  };
 
   const safeBankAccounts = Array.isArray(bankAccounts) ? bankAccounts : [];
   const selectedFrom = safeBankAccounts.find(b => b.id === formData.fromBankAccountId);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.fromBankAccountId || !formData.toBankAccountId) {
-      alert('لطفاً حساب‌های مبدأ و مقصد را انتخاب کنید.');
-      return;
-    }
-    if (formData.fromBankAccountId === formData.toBankAccountId) {
-      alert('حساب مبدأ و مقصد نمی‌توانند یکسان باشند.');
-      return;
-    }
-    if (formData.amount <= 0) {
-      alert('مبلغ انتقال باید بزرگ‌تر از صفر باشد.');
-      return;
-    }
+    const error = transferFormError(formData);
+    setFormError(error);
+    if (error) return;
 
     setIsSaving(true);
     try {
@@ -123,7 +129,7 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
             <select
               required
               value={formData.fromBankAccountId || ''}
-              onChange={e => setFormData(p => ({ ...p, fromBankAccountId: Number(e.target.value) || null }))}
+              onChange={e => updateForm(p => ({ ...p, fromBankAccountId: Number(e.target.value) || null }))}
               className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
             >
               <option value="">انتخاب مبدأ...</option>
@@ -143,7 +149,7 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
             <select
               required
               value={formData.toBankAccountId || ''}
-              onChange={e => setFormData(p => ({ ...p, toBankAccountId: Number(e.target.value) || null }))}
+              onChange={e => updateForm(p => ({ ...p, toBankAccountId: Number(e.target.value) || null }))}
               className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
             >
               <option value="">انتخاب مقصد...</option>
@@ -165,7 +171,7 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
                 min={1}
                 value={formData.amount}
                 currency={selectedFrom?.currency || 'IRR'}
-                onChange={val => setFormData(p => ({ ...p, amount: val }))}
+                onChange={val => updateForm(p => ({ ...p, amount: val }))}
                 placeholder="1000000"
                 showWordsBadge={true}
                 showTomanEquivalent={true}
@@ -175,7 +181,7 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">تاریخ *</label>
               <JalaliDateInput
                 value={formData.date}
-                onChange={iso => setFormData(p => ({ ...p, date: iso }))}
+                onChange={iso => updateForm(p => ({ ...p, date: iso }))}
                 calendarPosition="bottom-right"
                 className="w-full px-3 py-2 text-xs text-center bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
                 containerClassName="w-full"
@@ -188,7 +194,7 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
             <input
               type="text"
               value={formData.trackingNumber}
-              onChange={e => setFormData(p => ({ ...p, trackingNumber: e.target.value }))}
+              onChange={e => updateForm(p => ({ ...p, trackingNumber: e.target.value }))}
               className="w-full px-3 py-2 text-xs font-mono bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
               placeholder="اختیاری"
             />
@@ -199,11 +205,15 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
             <input
               type="text"
               value={formData.description}
-              onChange={e => setFormData(p => ({ ...p, description: e.target.value }))}
+              onChange={e => updateForm(p => ({ ...p, description: e.target.value }))}
               className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
               placeholder="پیش‌فرض: انتقال وجه از ... به ..."
             />
           </div>
+
+          {formError && (
+            <p role="alert" className="text-[11px] font-bold text-rose-600 dark:text-rose-400">{formError}</p>
+          )}
 
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
             <button

@@ -21,10 +21,10 @@ test('login, issue a final sales invoice and see its journal voucher', async ({ 
   // v10.0.192 (TD-1260): type into the picker's own search box; keyboard.type right after the click could send the
   // first key before the box mounted and searched a broken name
   await page.getByRole('button', { name: /جهت انتخاب خریدار/ }).click();
-  await page.getByPlaceholder('جستجو...', { exact: true }).fill(customerName);
+  await page.getByPlaceholder('جست‌وجو...', { exact: true }).fill(customerName);
   await page.locator('li', { hasText: customerName }).first().click();
   await page.getByRole('button', { name: 'انتخاب کالا / ماده اولیه' }).click();
-  await page.getByPlaceholder('جستجو...', { exact: true }).fill(itemCode);
+  await page.getByPlaceholder('جست‌وجو...', { exact: true }).fill(itemCode);
   await page.locator('li', { hasText: itemCode }).first().click();
   // v10.1.22 (TD-1273): number fields are text fields with the decimal keypad, found by their label
   await page.getByLabel('تعداد', { exact: true }).fill('2');

@@ -177,7 +177,7 @@ export function Inventory3WayIntegrityTab({
             <Search className="absolute right-3 top-2.5 text-slate-400" size={16} />
             <input
               type="text"
-              placeholder="جستجو بر اساس نام، کد یا دسته‌بندی کالا..."
+              placeholder="جست‌وجو بر اساس نام، کد یا دسته‌بندی کالا..."
               value={integritySearch}
               onChange={(e) => setIntegritySearch(e.target.value)}
               className="w-full pl-3 pr-9 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500"

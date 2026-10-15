@@ -25,7 +25,7 @@ export function DailyLogStatsCards({
             <Clock className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-lg font-black text-slate-900 tracking-tight">گزارش کار روزانه و فعالیت‌ها</h1>
+            <h1 className="text-lg font-black text-slate-900">گزارش کار روزانه و فعالیت‌ها</h1>
             <p className="text-xs text-slate-500 mt-0.5">
               ثبت سریع کارکرد روزانه، اشاره به همکاران، تقویم هجری شمسی و سطح دسترسی محرمانه
             </p>
