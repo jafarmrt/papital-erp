@@ -7,12 +7,16 @@
 import fs from 'fs';
 import path from 'path';
 import ts from 'typescript';
-import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { countFileSites } from '../../../scripts/ui-wording-ratchet';
 import { TreasuryVoidModal } from '../../components/accounting/treasury/TreasuryVoidModal';
-import { transferFormError } from '../../components/accounting/treasury/TreasuryTransferModal';
-import type { TreasuryTransaction } from '../../types';
+import { TreasuryTransferModal, transferFormError } from '../../components/accounting/treasury/TreasuryTransferModal';
+import type { BankAccount, TreasuryTransaction } from '../../types';
+
+afterEach(cleanup);
+
+vi.mock('../../api', () => ({ fetchJson: vi.fn(async () => ({ success: true, data: { today: '2026-10-15' } })) }));
 
 const ROOTS = ['src/pages', 'src/components', 'src/hooks', 'src/contexts'];
 const PERSIAN = /[؀-ۿ]/;
@@ -108,5 +112,32 @@ describe('vibe_farsi_wording_td_1275', () => {
     expect(alertSpy).not.toHaveBeenCalled();
     expect(onConfirm).not.toHaveBeenCalled();
     alertSpy.mockRestore();
+  });
+
+  it('the void window forgets an earlier missing-reason message when another transaction is opened', () => {
+    const onConfirm = vi.fn(async () => undefined);
+    const first = { id: 7, transactionNumber: 'TR-7', amount: 1000, bankAccountTitle: 'صندوق' } as unknown as TreasuryTransaction;
+    const second = { id: 8, transactionNumber: 'TR-8', amount: 2000, bankAccountTitle: 'صندوق' } as unknown as TreasuryTransaction;
+    const view = render(<TreasuryVoidModal target={first} onClose={() => undefined} onConfirm={onConfirm} />);
+    fireEvent.click(screen.getByRole('button', { name: /ابطال/ }));
+    expect(screen.queryByRole('alert')).not.toBeNull();
+    view.rerender(<TreasuryVoidModal target={second} onClose={() => undefined} onConfirm={onConfirm} />);
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('the transfer form clears its message as soon as a field changes', () => {
+    const accounts = [
+      { id: 1, title: 'بانک یک', currency: 'IRR', currentBalance: 0 },
+      { id: 2, title: 'بانک دو', currency: 'IRR', currentBalance: 0 },
+    ] as unknown as BankAccount[];
+    const onSave = vi.fn(async () => undefined);
+    const { container } = render(
+      <TreasuryTransferModal isOpen onClose={() => undefined} bankAccounts={accounts} appCurrency="IRR" onSave={onSave} />,
+    );
+    fireEvent.submit(container.querySelector('form') as HTMLFormElement);
+    expect(screen.getByRole('alert').textContent).toBe('لطفاً حساب‌های مبدأ و مقصد را انتخاب کنید.');
+    fireEvent.change(container.querySelectorAll('select')[0], { target: { value: '1' } });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(onSave).not.toHaveBeenCalled();
   });
 });

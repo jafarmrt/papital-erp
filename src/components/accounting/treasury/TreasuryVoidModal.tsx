@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { formatPersianPrice } from '../../../utils';
 import type { TreasuryTransaction } from '../../../types';
@@ -20,6 +20,11 @@ export const TreasuryVoidModal: React.FC<TreasuryVoidModalProps> = ({
   const [voidReason, setVoidReason] = useState('');
   const [isVoiding, setIsVoiding] = useState(false);
   const [reasonError, setReasonError] = useState('');
+
+  useEffect(() => {
+    setVoidReason('');
+    setReasonError('');
+  }, [target?.id]);
 
   if (!target) return null;
 
@@ -74,7 +79,7 @@ export const TreasuryVoidModal: React.FC<TreasuryVoidModalProps> = ({
         <div className="flex justify-end gap-2 mt-4">
           <button
             type="button"
-            onClick={() => { setVoidReason(''); onClose(); }}
+            onClick={() => { setVoidReason(''); setReasonError(''); onClose(); }}
             disabled={isVoiding}
             className="px-4 py-2 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer disabled:opacity-50"
           >
