@@ -3,6 +3,9 @@ import { createHarness, type Harness, type ShouldRun } from '../security/workflo
 import { brief, fixture } from './documentEntryTests.js';
 import type { SalesReport, SalesReportRow } from '../../lib/reports/salesReport.js';
 
+/** the online channel's label as the report shows it */
+const ONLINE_CHANNEL_LABEL = 'فروشگاه برخط';
+
 /**
  * Series 10.1, D-03 PR1 (reports plan §2, owner decisions t2 to t6): the sales report of the management reports page.
  * Through the real Express routes with real sessions; every case is red on the code before the report (404).
@@ -122,7 +125,7 @@ async function salesTotalsCase(h: Harness, wrong: string[]): Promise<string> {
   const byChannel = await report(h, `${base}&groupBy=channel`);
   expectEqual(wrong, 'online channel', rowOf(byChannel, 'online')?.netAfterReturns, 5_000_000);
   expectEqual(wrong, 'direct channel', rowOf(byChannel, 'direct')?.netAfterReturns, 2_700_000);
-  expectEqual(wrong, 'online label', rowOf(byChannel, 'online')?.group.label, 'فروشگاه برخط');
+  expectEqual(wrong, 'online label', rowOf(byChannel, 'online')?.group.label, ONLINE_CHANNEL_LABEL);
   const byPeriod = await report(h, `${base}&groupBy=period&period=quarter`);
   expectEqual(wrong, 'one quarter row', byPeriod.rows.length, 1);
   expectEqual(wrong, 'quarter net', byPeriod.rows[0]?.netAfterReturns, 7_700_000);
