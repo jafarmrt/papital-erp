@@ -11,7 +11,7 @@ import {
   users,
   roles
 } from '../../db/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, asc, desc, sql } from 'drizzle-orm';
 import { NotFoundError, ConflictError, ForbiddenError, ValidationError } from '../../errors/customErrors';
 import { domainEventBus } from '../events/domainEventBus';
 import { DomainEventType, AggregateType } from '../events/domainEvents';
@@ -405,12 +405,13 @@ export class WorkflowTransitionExecutor {
         [def] = await tx.select().from(workflowDefinitions).where(and(
           eq(workflowDefinitions.entityType, params.entityType),
           eq(workflowDefinitions.isActive, 1)
-        ));
+        )).orderBy(asc(workflowDefinitions.id)).limit(1);
       }
 
       // v9.0.46 (TD-453، ت۸): شروع فرایند seed اجرا نمی‌کند؛ تعریف‌های پیش‌فرض هنگام راه‌اندازی ساخته می‌شوند
+      // v10.1.7 (TD-1229): a start without code or id takes the record type's one active definition (D-06)
       if (!def) {
-        throw new NotFoundError(`هیچ فرآیند کاری فعال برای موجودیت '${params.entityType}' پیدا نشد.`);
+        throw new NotFoundError(`هیچ گردش کار فعالی برای «${workflowEntityTypeLabel(params.entityType)}» نیست؛ گردش کار آن را در «طراحی گردش کار» فعال کنید.`, undefined, 'WF_NO_ACTIVE_DEFINITION');
       }
 
       // v9.0.33 (TD-443): فرایند فقط با تعریف فعالِ همان نوع موجودیت و روی موجودیت موجود شروع می‌شود. پیش‌تر هر کد

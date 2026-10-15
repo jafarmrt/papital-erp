@@ -63,6 +63,11 @@ export const ROW_ADVISORY_LOCK_NAMESPACES = {
    * two logs saved at once never overlap in time
    */
   DAILY_LOG_AUTHOR_DAY: 91060,
+  /**
+   * v10.1.7 (TD-1229, D-06): the workflow definitions of one record type; transaction lock keyed by hashtext(entity type),
+   * so activating, deactivating or saving two definitions of one type at once never leaves two active ones
+   */
+  WORKFLOW_DEFINITION_TYPE: 91070,
 } as const;
 
 export type AdvisoryLockOutcome<T> = { acquired: true; result: T } | { acquired: false };

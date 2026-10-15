@@ -65,7 +65,6 @@ export async function requisitionFlow(
   let instanceId = req.workflowInstanceId;
   if (!instanceId) {
     const started = await WorkflowTransitionExecutor.startInstance({
-      workflowCode: 'PURCHASE_REQUISITION_WORKFLOW',
       entityType: 'purchase_requisition',
       entityId: String(req.id),
       userId: user.id,

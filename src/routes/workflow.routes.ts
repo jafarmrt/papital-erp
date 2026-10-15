@@ -12,8 +12,8 @@ import { z } from 'zod';
 import { MY_TASK_FILTERS } from '../services/workflow/workflowTaskService.js';
 import { withUtcTimestamps } from '../services/workflow/workflowTimestamps.js';
 import { isSystemAdminRole } from '../lib/permissions/permissionCatalog.js';
-import { canvasPositionsSchema, createDelegationSchema, executeTaskSchema, executeTransitionSchema, saveDefinitionSchema } from './workflowRouteSchemas.js';
-import { WORKFLOW_EXECUTE_PERMISSIONS, WORKFLOW_INBOX_PERMISSIONS } from '../lib/permissions/workflowPermissions.js';
+import { activateDefinitionSchema, canvasPositionsSchema, definitionSwitchSchema, createDelegationSchema, executeTaskSchema, executeTransitionSchema, saveDefinitionSchema } from './workflowRouteSchemas.js';
+import { WORKFLOW_EXECUTE_PERMISSIONS, WORKFLOW_INBOX_PERMISSIONS, WORKFLOW_SWITCH_PERMISSION } from '../lib/permissions/workflowPermissions.js';
 
 const entityParamSchema = z.object({
   params: z.object({
@@ -306,13 +306,39 @@ router.get('/definitions/:id/versions/:version', authorizePermission('workflow.m
 router.post('/definitions', authorizePermission('workflow.manage', 'workflow.admin'), validate(saveDefinitionSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const payload = req.body as z.infer<typeof saveDefinitionSchema>['body'];
-    const saved = await WorkflowEngineService.saveWorkflowDefinition({ ...payload, userId: req.user?.id });
+    const saved = await WorkflowEngineService.saveWorkflowDefinition({ ...payload, userId: req.user?.id }, req);
     res.json({ success: true, data: saved });
   } catch (err: unknown) {
     const errMsg = getErrorMessage(err);
     logger.error(`[Workflow Route POST /definitions] Error: ${errMsg}`);
     throw err;
   }
+}));
+
+/**
+ * v10.1.7 (TD-1229, D-06 part A, decision ت۴): turning a definition on or off and archiving it need `workflow.admin`;
+ * `workflow.manage` designs but does not switch. Activating a definition whose record type has another active one is
+ * 409 WF_ACTIVE_DEFINITION_EXISTS until the page resends it with `replaceActive` after the user's confirmation.
+ */
+router.post('/definitions/:id/activate', authorizePermission(WORKFLOW_SWITCH_PERMISSION), validate(activateDefinitionSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const { replaceActive } = req.body as z.infer<typeof activateDefinitionSchema>['body'];
+  const result = await WorkflowEngineService.setDefinitionActive({ id: Number(req.params.id), active: true, replaceActive, req });
+  res.json({ success: true, data: result });
+}));
+
+router.post('/definitions/:id/deactivate', authorizePermission(WORKFLOW_SWITCH_PERMISSION), validate(definitionSwitchSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const result = await WorkflowEngineService.setDefinitionActive({ id: Number(req.params.id), active: false, req });
+  res.json({ success: true, data: result });
+}));
+
+router.post('/definitions/:id/archive', authorizePermission(WORKFLOW_SWITCH_PERMISSION), validate(definitionSwitchSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const result = await WorkflowEngineService.setDefinitionArchived({ id: Number(req.params.id), archived: true, req });
+  res.json({ success: true, data: result });
+}));
+
+router.post('/definitions/:id/restore', authorizePermission(WORKFLOW_SWITCH_PERMISSION), validate(definitionSwitchSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const result = await WorkflowEngineService.setDefinitionArchived({ id: Number(req.params.id), archived: false, req });
+  res.json({ success: true, data: result });
 }));
 
 /**
