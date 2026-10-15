@@ -151,9 +151,9 @@ describe('CreateInvoicePage — cancelling an edit puts every field back to its 
     expect(await screen.findByDisplayValue('INV-1001')).toBeTruthy();
 
     fireEvent.click(screen.getByText('-- جهت انتخاب خریدار، کلیک کرده یا نام/تلفن وی را تایپ کنید --'));
-    fireEvent.click(await screen.findByText(/👤 مشتری نقدی/, {}, { timeout: 2000 }));
+    fireEvent.click(await screen.findByText(/👤 مشتری نقدی/));
     fireEvent.click(screen.getByText('انتخاب کالا / ماده اولیه'));
-    fireEvent.click(await screen.findByText(/^P-3 - گردنبند نقره/, {}, { timeout: 2000 }));
+    fireEvent.click(await screen.findByText(/^P-3 - گردنبند نقره/));
     const inputOf = (label: string) => screen.getByText(label).parentElement!.querySelector('input') as HTMLInputElement;
     fireEvent.change(inputOf('تعداد'), { target: { value: '2' } });
     fireEvent.change(inputOf('مبلغ واحد (ریال)'), { target: { value: '1000000' } });

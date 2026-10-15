@@ -3,7 +3,7 @@ import { formatPersianNumber } from '../../utils/persianNumber';
 import { MEDIA_REBUILD_LIGHT_COMMAND, formatByteSize, type MediaLibraryHealth } from '../../lib/system/mediaLibraryHealth';
 
 /**
- * v10.1.2 (N-05 PR 4): کارت کتابخانه تصاویر در صفحه سلامت؛ شمار پرونده‌ها، حجم اصل و نسخه‌های سبک، فضای آزاد دیسک و
+ * v10.1.3 (N-05 PR 4): کارت کتابخانه تصاویر در صفحه سلامت؛ شمار پرونده‌ها، حجم اصل و نسخه‌های سبک، فضای آزاد دیسک و
  * تصویرهایی که نسخه سبکشان باید دوباره ساخته شود. پاسخ ناخوانده «نامعلوم» نشان داده می‌شود، نه صفر.
  */
 export function MediaLibraryHealthCard({ media }: { media?: MediaLibraryHealth }) {

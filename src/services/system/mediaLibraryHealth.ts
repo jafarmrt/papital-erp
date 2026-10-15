@@ -13,7 +13,7 @@ import { errorMessageOf } from '../../utils.js';
 export type { MediaLibraryHealth };
 
 /**
- * v10.1.2 (N-05 PR 4): the media library card of the health page. Counts and sizes come from the live rows in one
+ * v10.1.3 (N-05 PR 4): the media library card of the health page. Counts and sizes come from the live rows in one
  * query (each content once: rows holding the same file share one copy on disk); free space from `statfs` of the library
  * directory, or of its nearest existing parent before the first upload. Nothing is created or written.
  */

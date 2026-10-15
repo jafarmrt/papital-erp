@@ -73,6 +73,5 @@ describe('repository state (TD-881)', () => {
     const { errors, stale } = compareWithBaseline(currentState(), baseline);
     expect(errors).toEqual([]);
     expect(stale, 'run `npm run ratchet:permissions -- --update` and commit the lower baseline').toEqual([]);
-    // Scans every source file; a loaded CI runner needs more than the 5 s default.
-  }, 30_000);
+  });
 });

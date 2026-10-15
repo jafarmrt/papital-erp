@@ -15,5 +15,13 @@ export default defineConfig({
     environment: 'jsdom',
     globals: false,
     restoreMocks: true,
+    // One jsdom per worker instead of one per file (41% of the run); each file still gets its own context, and unlike
+    // vmThreads a forked worker honours process.env.TZ (processTimezone, notificationRelativeTime)
+    pool: 'vmForks',
+    // Repo-scanning ratchets and heavy page tests run slowly on a loaded two-core CI runner; the 5 s defaults flaked there.
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
+    // Testing Library's findBy* / waitFor wait 5 s instead of 1 s (see the setup file)
+    setupFiles: ['src/tests/vitest/setup/testingLibrary.ts'],
   },
 });

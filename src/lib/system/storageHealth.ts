@@ -5,7 +5,7 @@
  * نمی‌سازد.
  */
 
-/** v10.1.2 (N-05 PR 4): `media` is the media library directory (`MEDIA_DIR`) */
+/** v10.1.3 (N-05 PR 4): `media` is the media library directory (`MEDIA_DIR`) */
 export type StorageLocationKind = 'attachments' | 'images' | 'media';
 
 export interface StorageLocationHealth {

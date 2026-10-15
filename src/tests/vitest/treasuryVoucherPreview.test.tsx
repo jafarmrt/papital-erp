@@ -42,7 +42,7 @@ describe('treasury voucher preview reads the server answer (TD-1237)', () => {
     fireEvent.change(amount, { target: { value: '2500000' } });
     fireEvent.blur(amount);
 
-    await waitFor(() => expect(screen.getByText(/حساب‌های دریافتنی تجاری/)).toBeTruthy(), { timeout: 3000 });
+    await waitFor(() => expect(screen.getByText(/حساب‌های دریافتنی تجاری/)).toBeTruthy());
     expect(screen.getByText('مشتری نمونه')).toBeTruthy();
     expect(screen.getByText(/هشدار نمونه پیش‌نمایش/)).toBeTruthy();
   });

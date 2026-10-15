@@ -21,7 +21,7 @@ describe('global search project status (TD-1170)', () => {
     const input = screen.getByPlaceholderText(/جستجوی سراسری/);
     fireEvent.focus(input);
     fireEvent.change(input, { target: { value: 'گردن' } });
-    const line = await screen.findByText(/وضعیت:/, {}, { timeout: 2000 });
+    const line = await screen.findByText(/وضعیت:/);
     expect(line.textContent).not.toContain('planned');
     expect(line.textContent).toContain('وضعیت: برنامه‌ریزی');
   });

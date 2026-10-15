@@ -127,7 +127,7 @@ describe('temporary password (TD-523)', () => {
 
   it('after the password change the application opens even when it takes longer than a second (TD-1189)', async () => {
     await changePasswordAndOpenApp(1500);
-  }, 20_000);
+  });
 
   it('a PASSWORD_RESET_REQUIRED answer from the server switches the session to the password form', async () => {
     meUser = { id: 5, username: 'ali', full_name: 'علی رضایی', role: 'accountant' };
