@@ -45,6 +45,7 @@ import eventsRoutes from './routes/events.routes.js';
 import draftsRoutes from './routes/drafts.routes.js';
 import procurementRoutes from './routes/procurement.routes.js';
 import attachmentsRoutes from './routes/attachments.routes.js';
+import reportsRoutes from './routes/reports.routes.js';
 import { authenticateToken, getJwtSecret, csrfProtection, shouldExposeTokenInBody } from './middleware/auth.js';
 import { sessionEndpointOriginGuard } from './middleware/sessionOrigin.js';
 import { startupGate, isStarting, isStartupComplete } from './middleware/startupGate.js';
@@ -359,6 +360,7 @@ export async function createApp(): Promise<express.Express> {
   app.use('/api', pieceworkRoutes);
   app.use('/api', pendingMaterialsRoutes);
   app.use('/api', accountingRoutes);
+  app.use('/api', reportsRoutes);
   app.use('/api/workflow', workflowRoutes);
   app.use('/api/inventory', inventoryRoutes);
   app.use('/api/events', eventsRoutes);

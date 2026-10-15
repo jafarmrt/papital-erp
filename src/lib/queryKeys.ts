@@ -208,6 +208,12 @@ export const QUERY_KEYS = {
     byItem: (itemId?: number | null) => ['prices', 'by-item', itemId ?? 'none'] as const,
   },
 
+  // v10.1.7 (D-03): گزارش‌های مدیریتی؛ پارامترهای هر گزارش بخشی از کلیدند
+  reports: {
+    all: ['reports'] as const,
+    sales: (params: Record<string, unknown> | object) => ['reports', 'sales', params] as const,
+  },
+
   // Domain Events & Outbox
   events: {
     all: ['events'] as const,

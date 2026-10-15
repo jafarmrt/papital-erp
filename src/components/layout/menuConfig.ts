@@ -130,6 +130,7 @@ export function getMenuGroups(
       title: 'گزارش‌ها و نظارت',
       groupIcon: History,
       items: [
+        { name: 'گزارش‌های مدیریتی', path: '/management-reports', icon: BarChart3, visible: open('/management-reports') },
         { name: 'گزارش اقلام رزروی', path: '/reserved-items', icon: Lock, visible: open('/reserved-items') },
         { name: 'گزارش تراکنش‌ها', path: '/transactions', icon: History, visible: open('/transactions') },
       ]
