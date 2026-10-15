@@ -12,6 +12,7 @@ import { getDefaultWarehouseCode } from '../inventory/warehouseResolver.js';
 import { checkOccVersion, nextVersion, OptimisticLockError } from '../../lib/occHelper.js';
 import { advanceItemCodeCounter } from './itemCodeCounter.js';
 import { assertItemCodeAvailable, assertItemNameAvailable, guardItemIdentity } from './itemIdentity.js';
+import { assertCodeUnchangedByEdit } from './itemCodeChange.js';
 import { ItemOpeningService, itemIdsWithOpeningVoucher } from '../inventory/itemOpening.service.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { startsWithLikePattern } from '../../lib/sqlLike.js';
@@ -614,8 +615,8 @@ export class ItemCatalogService {
       }
       checkOccVersion(prevItem, { entityType: 'Item', entityId: itemId, expectedVersion });
 
-      // v9.0.170 (TD-653): کد و نام با کلید ایندکس‌های یکتا، جز خود کالا
-      if (code && code !== prevItem.code) await assertItemCodeAvailable(tx, code, itemId);
+      // v10.1.9 (D-15, TD-1264): the code changes only through POST /items/:id/change-code (422 ITEM_CODE_CHANGE_SEPARATE)
+      assertCodeUnchangedByEdit(code, prevItem.code);
       if (name && name !== prevItem.name) await assertItemNameAvailable(tx, name, itemId);
 
       let imageUrl: string | undefined = undefined;
@@ -698,7 +699,7 @@ export class ItemCatalogService {
       // v9.0.171 (TD-654): فیلدی که در بدنه نیامده مقدار فعلی کالا را نگه می‌دارد؛ رشته خالی یعنی پاک کردن آن
       const keep = <T>(value: unknown, current: T, write: (v: unknown) => T): T => (value === undefined ? current : write(value));
       const updateData: Partial<typeof items.$inferInsert> = {
-        name, code, unit,
+        name, unit,
         category: keep(category, prevItem.category, v => String(v || '')),
         reorderPoint: keep(reorder_point, prevItem.reorderPoint, v => Number(v || 0)),
         weightedAverageCost: effectiveWac,
@@ -718,7 +719,6 @@ export class ItemCatalogService {
       let [updatedItem] = await guardItemIdentity(name ?? prevItem.name, () => tx.update(items).set(updateData)
         .where(and(eq(items.id, itemId), eq(items.version, prevItem.version))).returning());
       if (!updatedItem) throw new OptimisticLockError({ entityType: 'Item', entityId: itemId, expectedVersion });
-      if (code && code !== prevItem.code) await advanceItemCodeCounter(tx, updatedItem.type, updatedItem.code);
 
       if (canSetOpening && computedStock > 0) {
         // v7.0.45 (audit P2-1): موجودی افتتاحیه از موتور مرکزی گردش انبار (کاردکس + جدول موجودی انبارها + کش)

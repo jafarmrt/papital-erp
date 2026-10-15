@@ -9,7 +9,8 @@ describe('reserved quantity in the sales invoice item picker (TD-1135)', () => {
   it('reads the pick list with reserved=1', () => {
     expect(ITEM_PICK_WITH_RESERVED_URL).toBe(`${PICK_LIST_URLS.items}?reserved=1`);
     const page = fs.readFileSync(path.resolve(__dirname, '../../pages/CreateInvoicePage.tsx'), 'utf8');
-    expect(page).toContain('fetchUrl={ITEM_PICK_WITH_RESERVED_URL}');
+    // v10.1.9 (TD-1209): the URL comes from itemPickWithReservedUrl, which adds the edited proforma to leave out
+    expect(page).toContain('fetchUrl={itemPickWithReservedUrl(editingDocId)}');
     expect(page).not.toContain('fetchUrl={PICK_LIST_URLS.items}');
   });
 
