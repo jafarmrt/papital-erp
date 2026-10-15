@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { adminApi, dataOf, signIn, uniqueSuffix, type AdminApi, type Json } from './support/flowKit';
 
 /**
- * v10.1.23 (N-02 part 3, TD-1272): the sales pipeline board. Its five stage columns sat in a grid whose cells were narrower
+ * v10.1.24 (N-02 part 3, TD-1272): the sales pipeline board. Its five stage columns sat in a grid whose cells were narrower
  * than the columns' 260 px minimum, so each column ran over its neighbour on a laptop. The board now has fixed-width columns
  * with horizontal scrolling, one stage tab per column on a phone, and cards that are dragged between stages.
  */

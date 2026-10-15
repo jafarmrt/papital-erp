@@ -168,7 +168,7 @@ function formatLead(l: (Partial<typeof crmLeads.$inferSelect> & Record<string, u
   };
 }
 
-/** v10.1.23 (N-02 بخش ۳): پرونده‌های فهرست با نزدیک‌ترین سررسید پیگیری باز هر یک (`nextFollowUpDate`، کارت قیف) */
+/** v10.1.24 (N-02 بخش ۳): پرونده‌های فهرست با نزدیک‌ترین سررسید پیگیری باز هر یک (`nextFollowUpDate`، کارت قیف) */
 async function withNextFollowups(leads: Array<typeof crmLeads.$inferSelect>) {
   const next = await nextFollowupDatesByLead(leads.map((l) => l.id));
   return leads.map((l) => ({ ...formatLead(l), nextFollowUpDate: next.get(l.id) ?? null }));
