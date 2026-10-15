@@ -40,15 +40,20 @@ async function leadStage(kit: AdminApi, leadId: number): Promise<string> {
   return String(dataOf<Json>(await kit.get(`/api/crm/leads/${leadId}`)).stage);
 }
 
+/** The test lead, kept out of the hook body so its Persian data is not read as a test name (terminal-English ratchet) */
+async function createLead(api: AdminApi): Promise<number> {
+  const lead = dataOf<Json>(await api.send('post', '/api/crm/leads', {
+    title: `پرونده قیف آزمون ${uniqueSuffix()}`, customerName: `مشتری قیف ${uniqueSuffix()}`, stage: 'lead', estimatedValue: 5_000_000,
+  }));
+  return Number(lead.id);
+}
+
 let kit: AdminApi;
 let leadId: number;
 
 test.beforeAll(async () => {
   kit = await adminApi();
-  const lead = dataOf<Json>(await kit.send('post', '/api/crm/leads', {
-    title: `پرونده قیف آزمون ${uniqueSuffix()}`, customerName: `مشتری قیف ${uniqueSuffix()}`, stage: 'lead', estimatedValue: 5_000_000,
-  }));
-  leadId = Number(lead.id);
+  leadId = await createLead(kit);
 });
 
 test.afterAll(async () => {
