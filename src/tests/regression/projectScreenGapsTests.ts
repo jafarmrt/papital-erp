@@ -17,7 +17,7 @@ export async function runProjectScreenGapsTests(shouldRun: ShouldRun): Promise<T
       'v10.0.64: consuming or releasing an allocation that is no longer open says its status in Persian, never the status code (TD-1144)',
       ['td1144', 'projects', 'allocation', 'package11'], allocationStatusRefusalCase],
     ['reg_project_workflow_widget_startable_td_1142',
-      'v10.0.65: a project workflow is read only with the project read keys (TD-1142); v10.1.10: without an instance the widget is told nothing to start, since only the server starts a workflow (TD-1263)',
+      'v10.0.65: a project workflow is read only with the project read keys (TD-1142); v10.1.11: without an instance the widget is told nothing to start, since only the server starts a workflow (TD-1263)',
       ['td1142', 'projects', 'workflow', 'package11'], projectWorkflowStartableCase],
   ]);
 }
@@ -65,7 +65,7 @@ async function projectWorkflowStartableCase(h: Harness, wrong: string[]): Promis
   const res = await h.post('/api/projects', { title: `P3 workflow ${h.tag} ${Math.floor(Math.random() * 1e6)}`, products: [] });
   if (res.status !== 201) throw new Error(`setup: project create answered ${brief(res)}`);
   const projectId = Number((res.body as { id?: unknown }).id);
-  // v10.1.10 (TD-1263, OWN-04): the browser never starts a workflow, so the answer carries no `startable` hint any more
+  // v10.1.11 (TD-1263, OWN-04): the browser never starts a workflow, so the answer carries no `startable` hint any more
   const read = await h.get(`/api/workflow/instance/project/${projectId}`);
   const body = read.body as { instance?: unknown; startable?: unknown };
   if (read.status !== 200 || body.instance !== null || 'startable' in (body ?? {})) wrong.push(`the project widget read answered ${brief(read)}, expected no instance and no start hint`);

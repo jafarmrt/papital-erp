@@ -65,7 +65,7 @@ describe('WorkflowStepperWidget (TD-085)', () => {
     expect(screen.getByText('ارز برابر IRR باشد')).toBeTruthy();
   });
 
-  // v10.1.10 (TD-1263, OWN-04): only the server starts a workflow, in its record's create transaction
+  // v10.1.11 (TD-1263, OWN-04): only the server starts a workflow, in its record's create transaction
   it('shows nothing and offers no start when the document has no workflow', async () => {
     fetchJson.mockResolvedValue({ instance: null });
     const { container } = renderWidget();

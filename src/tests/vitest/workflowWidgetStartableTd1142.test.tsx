@@ -29,7 +29,7 @@ describe('workflow widget without a definition to start (TD-1142)', () => {
     expect(container.textContent).toBe('');
   });
 
-  // v10.1.10 (TD-1263, OWN-04, decision ت۷): the browser never starts a workflow, even when an active definition exists
+  // v10.1.11 (TD-1263, OWN-04, decision ت۷): the browser never starts a workflow, even when an active definition exists
   it('offers no start even when an active definition exists', async () => {
     fetchJson.mockResolvedValue({ instance: null, startable: true });
     const { container } = renderWidget();

@@ -25,7 +25,7 @@ export interface Harness {
   sessionWith(roleOrPermissions: string | string[]): Promise<Session & { userId: number; role: string }>;
   q(text: string, params?: unknown[]): Promise<Row[]>;
   /**
-   * v10.1.10 (TD-1263, OWN-04): starts a workflow the way a record's create transaction does (the engine, in the name of
+   * v10.1.11 (TD-1263, OWN-04): starts a workflow the way a record's create transaction does (the engine, in the name of
    * the session's user); `POST /workflow/start` is gone. The answer has the old route's shape: 200 with `data`, or the
    * error's status.
    */

@@ -22,7 +22,7 @@ async function freeTemplateCode(base: string): Promise<{ code: string; copy: num
 }
 
 /**
- * v10.1.10 (TD-1263, D-06 part B, decisions ت۴ / ت۵): «ساخت از الگو» makes an inactive definition from a ready-made
+ * v10.1.11 (TD-1263, D-06 part B, decisions ت۴ / ت۵): «ساخت از الگو» makes an inactive definition from a ready-made
  * template; the design save writes its version and audit row (with the template id) in one transaction. The new
  * definition never changes an existing one and never starts records until the user turns it on (part A).
  */

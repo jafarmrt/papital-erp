@@ -10743,6 +10743,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10.1 D-03 PR1 (v10.1.8): the sales report of the management reports page
   const { runSalesReportTests } = await import('../regression/salesReportTests.js');
   results.push(...await runSalesReportTests(shouldRun));
+  // Series 10.1 D-03 PR2 (v10.1.10): the receivables and payables aging tab
+  const { runAgingReportTests } = await import('../regression/agingReportTests.js');
+  results.push(...await runAgingReportTests(shouldRun));
   const { runSalesEventsTests } = await import('../regression/salesEventsTests.js');
   results.push(...await runSalesEventsTests(shouldRun));
   // Package 8 PR D (v9.0.323+): lead link of a document edit, stock count lines, production receipts, return lookup, numbers
@@ -10939,7 +10942,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Payroll duties plan PR 1 (v10.0.21+): voucher approval permission and maker-checker
   const { runVoucherApprovalDutiesTests } = await import('../regression/voucherApprovalDutiesTests.js');
   results.push(...await runVoucherApprovalDutiesTests(shouldRun));
-  // v10.1.10 (TD-1263, D-06 part B): a manual voucher enters its workflow on create; the page waits for the workflow
+  // v10.1.11 (TD-1263, D-06 part B): a manual voucher enters its workflow on create; the page waits for the workflow
   const { runVoucherWorkflowStartTests } = await import('../regression/voucherWorkflowStartTests.js');
   results.push(...await runVoucherWorkflowStartTests(shouldRun));
   // TD-1239: a reversed voucher names its reversal; a reversal voucher stays out of draft

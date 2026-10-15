@@ -10,7 +10,7 @@ import { PURCHASE_REQUISITION_WORKFLOW_TEMPLATE } from '../../lib/workflow/workf
  */
 export const PURCHASE_REQUISITION_WORKFLOW_CODE = 'PURCHASE_REQUISITION_WORKFLOW';
 
-/** v10.1.10 (TD-1263): read from the purchase requisition template, so the seed, its upgrade and «ساخت از الگو» share one list */
+/** v10.1.11 (TD-1263): read from the purchase requisition template, so the seed, its upgrade and «ساخت از الگو» share one list */
 export const PURCHASE_REQUISITION_STEP_GUARDS: ReadonlyArray<SeedStepGuard> = PURCHASE_REQUISITION_WORKFLOW_TEMPLATE.transitions.map(t => ({ ...t }));
 
 /** seed پیش از v10.0.37: هیچ اقدامی نقش و مجوز نداشت */

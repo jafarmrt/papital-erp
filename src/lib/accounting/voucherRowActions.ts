@@ -19,7 +19,7 @@ export interface VoucherRowFacts {
   referenceNumber?: string | null;
   /** v10.0.x (TD-1239): شماره سند برگشت فعال؛ سندی که برگشت خورده نه دوباره برگشت می‌خورد، نه اصلاح می‌شود، نه به پیش‌نویس برمی‌گردد */
   reversedByVoucherNumber?: string | null;
-  /** v10.1.10 (TD-1263): the voucher's workflow is running, so its status moves only through the workflow steps */
+  /** v10.1.11 (TD-1263): the voucher's workflow is running, so its status moves only through the workflow steps */
   inWorkflow?: boolean;
 }
 
@@ -101,7 +101,7 @@ export function voucherConfirmTexts(kind: VoucherConfirmKind, v: VoucherRowFacts
  */
 export type VoucherPrimaryAction = 'approve' | 'finalize' | 'locked' | 'in_workflow' | null;
 
-/** v10.1.10 (TD-1263): a draft or approved voucher whose workflow runs is approved and finalized only in its workflow */
+/** v10.1.11 (TD-1263): a draft or approved voucher whose workflow runs is approved and finalized only in its workflow */
 export function voucherPrimaryAction(status: string, access: { canApprove: boolean; canFinalize: boolean }, inWorkflow = false): VoucherPrimaryAction {
   if (status === 'permanent') return 'locked';
   if (inWorkflow && (status === 'draft' || status === 'approved')) return 'in_workflow';

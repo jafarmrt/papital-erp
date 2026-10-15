@@ -52,9 +52,9 @@ export interface SaveWorkflowDefinitionPayload {
   isActive?: number;
   /** کاربر ذخیره‌کننده (ثبت در نسخه) */
   userId?: number;
-  /** v10.1.10 (TD-1263, D-06 part B): a new definition made from a template is saved inactive, whatever its record type has */
+  /** v10.1.11 (TD-1263, D-06 part B): a new definition made from a template is saved inactive, whatever its record type has */
   startInactive?: boolean;
-  /** v10.1.10 (TD-1263): the template a new definition was made from, for its audit row */
+  /** v10.1.11 (TD-1263): the template a new definition was made from, for its audit row */
   fromTemplate?: string;
   states?: Array<{
     id?: number | string;

@@ -23,7 +23,7 @@ function renderModal(onCreated = vi.fn()) {
   return onCreated;
 }
 
-// v10.1.10 (TD-1263, D-06 part B, decisions ت۴ / ت۵): four ready-made templates, guarded by permissions only
+// v10.1.11 (TD-1263, D-06 part B, decisions ت۴ / ت۵): four ready-made templates, guarded by permissions only
 describe('workflow templates (TD-1263)', () => {
   it('has the four templates, each with one start step and only catalog permission guards', () => {
     expect(WORKFLOW_TEMPLATES.map(t => t.entityType)).toEqual(['item', 'bank_account', 'purchase_requisition', 'journal_voucher']);
@@ -59,7 +59,7 @@ describe('workflow templates (TD-1263)', () => {
   });
 });
 
-// v10.1.10 (TD-1263, decision ت۶): a voucher in its workflow is approved there, not from the voucher page
+// v10.1.11 (TD-1263, decision ت۶): a voucher in its workflow is approved there, not from the voucher page
 describe('voucher in its workflow (TD-1263)', () => {
   it('offers the workflow instead of approve, finalize and revert', () => {
     expect(voucherPrimaryAction('draft', { canApprove: true, canFinalize: true }, true)).toBe('in_workflow');

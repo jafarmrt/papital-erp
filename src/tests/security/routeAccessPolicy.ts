@@ -136,7 +136,7 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       const viewer = await userWith(['warehouse.view', 'projects.view', 'workflow.view', 'products.view']);
       const allocate = await send(viewer.session, 'post', '/api/inventory/allocations/allocate', { projectId: 999999999, allocations: [{ itemId: 999999999, quantity: 1 }] });
       const start = await send(viewer.session, 'post', '/api/workflow/start', { workflowCode: 'DOC_APPROVAL_WORKFLOW', entityType: 'document', entityId: 999999999 });
-      // v10.1.10 (TD-1263, OWN-04): the browser start route is gone; a workflow starts only in its record's transaction
+      // v10.1.11 (TD-1263, OWN-04): the browser start route is gone; a workflow starts only in its record's transaction
       const wrong = [[allocate.status, 'allocate', 403], [start.status, 'workflow/start', 404]].filter(([st, , want]) => st !== want);
       if (wrong.length > 0) throw new Error(`a view-only holder was not refused: ${wrong.map(([st, n, want]) => `${n} ${st} (expected ${want})`).join(', ')}`);
       return 'allocate 403, workflow start route gone (404)';

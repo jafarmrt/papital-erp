@@ -7,6 +7,7 @@ import { canOpenPage } from '../lib/permissions/pageAccess';
 import { MANAGEMENT_REPORT_TABS, managementReportPath, type ManagementReportTabId } from '../lib/reports/managementReportTabs';
 
 const SalesReportTab = lazy(() => import('../components/reports/sales/SalesReportTab').then(m => ({ default: m.SalesReportTab })));
+const AgingReportTab = lazy(() => import('../components/reports/aging/AgingReportTab').then(m => ({ default: m.AgingReportTab })));
 
 /**
  * v10.1.8 (D-03، طرح گزارش‌های مدیریتی §۵): صفحه «گزارش‌های مدیریتی». فقط زبانه‌هایی دیده می‌شوند که کاربر کلید رابطشان
@@ -14,6 +15,7 @@ const SalesReportTab = lazy(() => import('../components/reports/sales/SalesRepor
  */
 const TAB_CONTENT: Record<ManagementReportTabId, ComponentType> = {
   sales: SalesReportTab,
+  aging: AgingReportTab,
 };
 
 export default function ManagementReportsPage() {

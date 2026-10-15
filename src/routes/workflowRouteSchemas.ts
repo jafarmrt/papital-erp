@@ -117,7 +117,7 @@ export const definitionSwitchSchema = z.object({
   body: z.object({}).strict(),
 });
 
-/** v10.1.10 (TD-1263, D-06 part B): «ساخت از الگو» names one of the ready-made templates */
+/** v10.1.11 (TD-1263, D-06 part B): «ساخت از الگو» names one of the ready-made templates */
 export const definitionFromTemplateSchema = z.object({
   body: z.object({
     templateId: z.enum(WORKFLOW_TEMPLATE_IDS, { error: 'الگوی گردش کار را از فهرست الگوها انتخاب کنید' }),
