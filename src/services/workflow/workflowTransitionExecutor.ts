@@ -834,6 +834,7 @@ export class WorkflowTransitionExecutor {
         autoActionKey: transition.autoActionKey || '',
         performedBy: params.userId,
         performedByName: params.userName,
+        actingForUserId: actingFor?.fromUserId,
         allowBackdate,
       });
 
