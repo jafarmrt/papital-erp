@@ -4,6 +4,7 @@ import { crmActivities, crmLeads, documents } from '../../db/schema.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { crmTodayActivityDates } from '../../lib/storageDate.js';
+import { recordLeadStageChange } from './crmLeadStageHistory.js';
 
 /**
  * پیوند پرونده فروش و پیش‌فاکتور آن («فروش موفق» فقط پس از پیش‌فاکتور، TD-309).
@@ -53,6 +54,10 @@ export async function markLeadProforma(tx: DbExecutor, lead: Lead, docId: number
     status: 'active',
     updatedAt: nowIso,
   }).where(eq(crmLeads.id, lead.id));
+  // v10.1.16 (N-02 بخش ۲): رفتن به «پیش‌فاکتور و پیشنهاد» در تاریخچه مرحله
+  await recordLeadStageChange(tx, {
+    leadId: lead.id, fromStage: lead.stage, toStage: 'proposal', assignedPersonnelId: lead.assignedPersonnelId, actor: { name: actorName },
+  });
   await tx.insert(crmActivities).values({
     leadId: lead.id,
     customerId: lead.customerId,
@@ -97,6 +102,11 @@ export async function releaseLeadOfVoidedDocument(
     ...(reopenedFromWon ? { stage: 'proposal', status: 'active' } : {}),
     updatedAt: nowIso,
   }).where(eq(crmLeads.id, lead.id));
+  if (reopenedFromWon) {
+    await recordLeadStageChange(tx, {
+      leadId: lead.id, fromStage: lead.stage, toStage: 'proposal', assignedPersonnelId: lead.assignedPersonnelId, actor: { name: actorName },
+    });
+  }
 
   const ref = doc.refNumber || String(doc.id);
   await tx.insert(crmActivities).values({

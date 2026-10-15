@@ -10578,6 +10578,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // N-02 part 1 (v10.1.15): party website, e-mail and Instagram checked, normalized, kept on partial edits and imported
   const { runCustomerContactChannelsTests } = await import('../regression/customerContactChannelsTests.js');
   results.push(...await runCustomerContactChannelsTests(shouldRun));
+  const { runCrmActivityEditFunnelTests } = await import('../regression/crmActivityEditFunnelTests.js');
+  results.push(...await runCrmActivityEditFunnelTests(shouldRun));
   // Package 9 (v10.0.34, TD-976): CRM activity mentions are live user ids and notify only CRM readers
   const { runCrmActivityMentionTests } = await import('../regression/crmActivityMentionTests.js');
   results.push(...await runCrmActivityMentionTests(shouldRun));

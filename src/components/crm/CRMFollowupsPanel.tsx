@@ -6,6 +6,7 @@ import { useDebounce } from '../../hooks/useDebounce';
 import { useCrmFollowups } from '../../hooks/useCrmFollowups';
 import type { FollowupStatusFilter } from '../../lib/crm/crmFollowupsQuery';
 import { CRMFollowupCard } from './CRMFollowupCard';
+import { useHasPermission } from '../../contexts/AuthContext';
 
 interface PersonnelOption {
   id: number | string;
@@ -16,6 +17,9 @@ interface CRMFollowupsPanelProps {
   leads?: CRMLead[];
   onToggleFollowup: (act: CRMActivity) => void;
   personnelList?: PersonnelOption[];
+  /** v10.1.16 (N-02 بخش ۲): ویرایش و حذف اقدام از کارت پیگیری */
+  onEditActivity?: (act: CRMActivity) => void;
+  onDeleteActivity?: (act: CRMActivity) => void;
 }
 
 const PAGE_SIZE = 12;
@@ -25,9 +29,11 @@ const PAGE_SIZE = 12;
  * صفحه در سرور اعمال می‌شوند. پیش‌تر از فهرست اقدام‌های ۳۰ روز اخیر (سقف ۲۰۰ ردیف) فیلتر می‌شد و پیگیری معوقِ اقدام
  * قدیمی‌تر دیده نمی‌شد.
  */
-export function CRMFollowupsPanel({ leads = [], onToggleFollowup, personnelList = [] }: CRMFollowupsPanelProps) {
+export function CRMFollowupsPanel({ leads = [], onToggleFollowup, personnelList = [], onEditActivity, onDeleteActivity }: CRMFollowupsPanelProps) {
   const [status, setStatus] = useState<FollowupStatusFilter>('pending');
-  const [seller, setSeller] = useState<string>('all');
+  // v10.1.16 (N-02 بخش ۲، ت۳، OBS-R2-27): پیش‌فرض «پیگیری‌های من»؛ «همه» و یک فروشنده فقط برای دارنده crm.manage
+  const canSeeAll = useHasPermission('crm.manage');
+  const [seller, setSeller] = useState<string>('mine');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const debouncedSearch = useDebounce(search);
@@ -44,7 +50,7 @@ export function CRMFollowupsPanel({ leads = [], onToggleFollowup, personnelList 
           <Clock className="w-6 h-6 text-amber-600 shrink-0" />
           <div>
             <h4 className="font-bold text-xs text-amber-900">
-              لیست کارهای پیگیری و تماس‌های معوقه ({formatPersianNumber(total)} مورد)
+              {seller === 'mine' ? 'پیگیری‌های من' : 'پیگیری‌ها و تماس‌های معوق'} ({formatPersianNumber(total)} مورد)
             </h4>
             <p className="text-[11px] text-amber-700 mt-0.5">
               همه پیگیری‌ها و یادآوری‌ها همراه با تاریخ سررسید. پس از تماس، دکمه «تکمیل پیگیری» را جهت ثبت نتیجه فشار دهید.
@@ -98,7 +104,7 @@ export function CRMFollowupsPanel({ leads = [], onToggleFollowup, personnelList 
           </button>
 
           {/* Seller / Assignee filter — V10-4.1: منبع پرسنل */}
-          {personnelList.length > 0 && (
+          {canSeeAll && (
             <select
               value={seller}
               onChange={(e) => {
@@ -107,6 +113,7 @@ export function CRMFollowupsPanel({ leads = [], onToggleFollowup, personnelList 
               }}
               className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-amber-500 cursor-pointer"
             >
+              <option value="mine">پیگیری‌های من</option>
               <option value="all">همه مسئولان پیگیری</option>
               {personnelList.map((p) => (
                 <option key={p.id} value={String(p.id)}>
@@ -142,7 +149,7 @@ export function CRMFollowupsPanel({ leads = [], onToggleFollowup, personnelList 
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {followups.map((act) => (
-            <CRMFollowupCard key={act.id} act={act} leads={leads} onToggleFollowup={onToggleFollowup} />
+            <CRMFollowupCard key={act.id} act={act} leads={leads} onToggleFollowup={onToggleFollowup} onEditActivity={onEditActivity} onDeleteActivity={onDeleteActivity} />
           ))}
         </div>
       )}

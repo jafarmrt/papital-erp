@@ -55,7 +55,8 @@ export async function runCrmFollowupsTests(shouldRun: (id: string, ...extra: str
 
     const wrong: string[] = [];
     const idsOf = (body: FollowupBody) => (Array.isArray(body.data) ? body.data.map(r => r.id) : []);
-    const search = `search=${encodeURIComponent(tag)}`;
+    // v10.1.16 (N-02 part 2): the list defaults to the user's own follow-ups; a crm.manage holder (the admin here) asks for all
+    const search = `search=${encodeURIComponent(tag)}&scope=all`;
 
     const due = await get(`/api/crm/followups?status=pending&due=due&${search}`);
     if (due.status !== 200) throw new Error(`/api/crm/followups returned ${due.status} (the open follow-ups route is missing)`);

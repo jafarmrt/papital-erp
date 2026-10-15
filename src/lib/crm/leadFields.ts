@@ -24,3 +24,35 @@ export function normalizeLeadCurrency(value: unknown): unknown {
 export function isLeadProbability(value: string): boolean {
   return /^\d+$/.test(value) && Number(value) <= 100;
 }
+
+/**
+ * v10.1.16 (N-02 بخش ۲، تصمیم ت۶ طرح ارتباط با مشتری): دلیل از دست رفتن پرونده فروش، الزامی هنگام رفتن به «از دست رفته»؛
+ * «سایر» شرح می‌خواهد. همان فهرست قید `chk_crm_leads_lost_reason` (migration 0113).
+ */
+export const CRM_LOST_REASONS = ['price', 'quality', 'delivery', 'competitor', 'no_response', 'other'] as const;
+export type CrmLostReason = typeof CRM_LOST_REASONS[number];
+
+export const CRM_LOST_REASON_LABELS: Record<CrmLostReason, string> = {
+  price: 'قیمت',
+  quality: 'کیفیت یا طرح',
+  delivery: 'زمان تحویل',
+  competitor: 'خرید از رقیب',
+  no_response: 'بی‌پاسخ ماندن مشتری',
+  other: 'سایر',
+};
+
+/** بیشینه طول شرح دلیل «سایر» */
+export const CRM_LOST_REASON_NOTE_MAX = 500;
+
+export function isLostReason(value: unknown): value is CrmLostReason {
+  return typeof value === 'string' && (CRM_LOST_REASONS as readonly string[]).includes(value);
+}
+
+/** پیام خطای دلیل از دست رفتن، یا null وقتی درست است */
+export function lostReasonError(reason: unknown, note: unknown): string | null {
+  if (!isLostReason(reason)) return 'دلیل از دست رفتن پرونده را از فهرست انتخاب کنید.';
+  const text = String(note ?? '').trim();
+  if (reason === 'other' && !text) return 'برای دلیل «سایر» شرح کوتاهی بنویسید.';
+  if (text.length > CRM_LOST_REASON_NOTE_MAX) return 'شرح دلیل از دست رفتن بیش از اندازه بلند است.';
+  return null;
+}

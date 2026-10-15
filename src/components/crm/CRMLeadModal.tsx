@@ -8,6 +8,7 @@ import { SearchableSelect } from '../SearchableSelect';
 import { STAGES, SOURCES } from '../../hooks/useCRMData';
 import { formatPersianPrice, formatCurrencyLabel, getFutureJalaliDate, extractDateString, isoToJalaliDate } from '../../utils';
 import { IranianPhoneInput } from '../common';
+import { LostReasonFields } from './LostReasonFields';
 
 interface CRMLeadModalProps {
   isLeadModalOpen: boolean;
@@ -250,6 +251,17 @@ export function CRMLeadModal({
                 ))}
               </select>
             </div>
+
+            {/* v10.1.16 (N-02 بخش ۲، ت۶): دلیل از دست رفتن */}
+            {leadForm.stage === 'lost' && (
+              <div className="md:col-span-2">
+                <LostReasonFields
+                  reason={leadForm.lostReason || ''}
+                  note={leadForm.lostReasonNote || ''}
+                  onChange={({ reason, note }) => setLeadForm({ ...leadForm, lostReason: reason, lostReasonNote: note })}
+                />
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">

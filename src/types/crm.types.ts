@@ -54,6 +54,9 @@ export interface CRMLead {
   company?: string;
   source?: string;
   stage: string;
+  // v10.1.16 (N-02 بخش ۲): دلیل از دست رفتن از `CRM_LOST_REASONS`
+  lostReason?: string;
+  lostReasonNote?: string;
   estimatedValue: number;
   currency: string;
   probability: number;
@@ -99,6 +102,11 @@ export interface CRMActivity {
   isFollowUpCompleted: number;
   created_at?: string;
   createdAt?: string;
+  mentions?: number[];
+  // v10.1.16 (N-02 بخش ۲): نسخه برای ویرایش و آخرین ویرایشگر
+  version?: number;
+  updatedAt?: string | null;
+  updatedBy?: string;
 }
 
 export interface PartyOption {

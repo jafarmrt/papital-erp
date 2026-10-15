@@ -3,6 +3,7 @@ import { PhoneCall, Plus, Check, Video, MessageSquare, Mail, FileText, Search, C
 import { CRMActivity, CRMLead } from '../../types';
 import { formatPersianNumber, formatPersianDate } from '../../utils';
 import { CRMFollowupsPanel } from './CRMFollowupsPanel';
+import { ActivityRowActions } from './ActivityRowActions';
 
 interface CRMFollowupsViewProps {
   activeTab: 'activities' | 'followups';
@@ -10,6 +11,9 @@ interface CRMFollowupsViewProps {
   leads?: CRMLead[];
   onOpenActivityModal: () => void;
   onToggleFollowup: (act: CRMActivity) => void;
+  /** v10.1.16 (N-02 بخش ۲): ویرایش و حذف اقدام */
+  onEditActivity?: (act: CRMActivity) => void;
+  onDeleteActivity?: (act: CRMActivity) => void;
   // V10-4.1: منبع مسئول تسک = پرسنل فعال
   personnelList?: any[];
 }
@@ -39,6 +43,8 @@ export function CRMFollowupsView({
   leads = [],
   onOpenActivityModal,
   onToggleFollowup,
+  onEditActivity,
+  onDeleteActivity,
   // V10-4.1: منبع مسئول تسک = پرسنل
   personnelList = []
 }: CRMFollowupsViewProps) {
@@ -154,12 +160,13 @@ export function CRMFollowupsView({
                 <th className="p-3">ثبت‌کننده</th>
                 <th className="p-3">تاریخ انجام</th>
                 <th className="p-3">پیگیری بعدی</th>
+                <th className="p-3 w-16"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-800">
               {paginatedActivities.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-400">
+                  <td colSpan={9} className="p-8 text-center text-slate-400">
                     {actSearch || actTypeFilter !== 'all'
                       ? 'هیچ اقدمی با این فیلتر یا عبارت جستجو یافت نشد.'
                       : 'هنوز هیچ تماسی یا اقدامی ثبت نشده است.'}
@@ -211,6 +218,9 @@ export function CRMFollowupsView({
                           <span className="text-slate-400">-</span>
                         )}
                       </td>
+                      <td className="p-3">
+                        <ActivityRowActions activity={act} onEdit={onEditActivity} onDelete={onDeleteActivity} />
+                      </td>
                     </tr>
                   );
                 })
@@ -252,7 +262,7 @@ export function CRMFollowupsView({
   }
 
   // v9.0.14 (TD-428): زبانه پیگیری‌ها از سرور (`CRMFollowupsPanel`)
-  return <CRMFollowupsPanel leads={leads} onToggleFollowup={onToggleFollowup} personnelList={personnelList} />;
+  return <CRMFollowupsPanel leads={leads} onToggleFollowup={onToggleFollowup} personnelList={personnelList} onEditActivity={onEditActivity} onDeleteActivity={onDeleteActivity} />;
 }
 
 export default CRMFollowupsView;

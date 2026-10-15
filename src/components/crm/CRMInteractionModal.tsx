@@ -18,6 +18,8 @@ interface CRMInteractionModalProps {
   setActivityForm: React.Dispatch<React.SetStateAction<any>>;
   isSavingActivity: boolean;
   onSaveActivity: (e: React.FormEvent) => void;
+  /** v10.1.16 (N-02 بخش ۲): پنجره اقدامی را ویرایش می‌کند؛ پرونده و طرف حساب اقدام عوض نمی‌شوند */
+  isEditingActivity?: boolean;
   // V10-4.1: مسئول تسک = پرسنل فعال؛ کاربران فقط برای منشن
   personnelList: any[];
   mentionUsers: any[];
@@ -44,6 +46,7 @@ export function CRMInteractionModal({
   setActivityForm,
   isSavingActivity,
   onSaveActivity,
+  isEditingActivity = false,
   personnelList,
   mentionUsers,
   currentUser,
@@ -65,7 +68,7 @@ export function CRMInteractionModal({
             <div className="p-5 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
               <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
                 <PhoneCall className="text-blue-600" size={20} />
-                ثبت تماس / اقدام انجام‌شده
+                {isEditingActivity ? 'ویرایش اقدام' : 'ثبت تماس / اقدام انجام‌شده'}
               </h3>
               <button
                 onClick={onCloseActivityModal}
@@ -78,7 +81,14 @@ export function CRMInteractionModal({
             <form onSubmit={onSaveActivity} className="flex-1 flex flex-col overflow-hidden">
               <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {/* Connected Lead Picker / Info */}
-              {selectedLeadForActivity ? (
+              {isEditingActivity ? (
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-bold" data-testid="activity-edit-parent">
+                  {selectedLeadForActivity
+                    ? `مربوط به پرونده: ${selectedLeadForActivity.title}`
+                    : `مربوط به مشتری: ${activityForm?.customerName || 'بی پرونده'}`}
+                  <span className="block text-[11px] font-normal text-slate-500 mt-0.5">پرونده و مشتری اقدام در ویرایش عوض نمی‌شوند.</span>
+                </div>
+              ) : selectedLeadForActivity ? (
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 font-bold flex items-center justify-between">
                   <span>مربوط به پرونده: {selectedLeadForActivity.title} ({selectedLeadForActivity.customerName || 'مشتری'})</span>
                   <button
@@ -302,7 +312,7 @@ export function CRMInteractionModal({
                   disabled={isSavingActivity}
                   className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-600/30 disabled:opacity-50 cursor-pointer"
                 >
-                  {isSavingActivity ? 'در حال ثبت...' : 'ثبت اقدام و ذخیره'}
+                  {isSavingActivity ? 'در حال ثبت...' : (isEditingActivity ? 'ذخیره تغییرات' : 'ثبت اقدام و ذخیره')}
                 </button>
               </div>
             </form>

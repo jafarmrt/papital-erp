@@ -1,6 +1,7 @@
 import { pgTable, text, serial, integer, jsonb, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { registerColumnRef, baseRelations } from './baseRelations';
+import { users } from './auth';
 import { moneyNumeric } from './moneyColumn';
 
 export const customers = pgTable('customers', {
@@ -52,6 +53,9 @@ export const crmLeads = pgTable('crm_leads', {
   expectedCloseDate: text('expected_close_date').default(''),
   notes: text('notes').default(''),
   status: text('status').default('active'), // 'active', 'won', 'lost', 'archived'
+  // v10.1.16 (N-02 بخش ۲، migration 0113): دلیل از دست رفتن از فهرست `CRM_LOST_REASONS` و شرح «سایر»
+  lostReason: text('lost_reason').default(''),
+  lostReasonNote: text('lost_reason_note').default(''),
   contacts: jsonb('contacts').default([]),
   hasProforma: integer('has_proforma').default(0),
   // V3.1.29: Loose reference without circular FK constraint — documents.crmLeadId is the single source of truth for the relationship
@@ -91,6 +95,10 @@ export const crmActivities = pgTable('crm_activities', {
   nextFollowUpTask: text('next_followup_task').default(''),
   isFollowUpCompleted: integer('is_followup_completed').default(0),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  // v10.1.16 (N-02 بخش ۲، migration 0113): ویرایش با نسخه (قفل خوش‌بینانه) و نام آخرین ویرایشگر
+  version: integer('version').notNull().default(1),
+  updatedAt: timestamp('updated_at', { mode: 'string' }),
+  updatedBy: text('updated_by').default(''),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
   idx_crm_act_lead: index('idx_crm_act_lead').on(table.leadId),
@@ -101,6 +109,27 @@ export const crmActivities = pgTable('crm_activities', {
   idx_crm_act_deleted: index('idx_crm_act_deleted').on(table.isDeleted),
   // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_crm_activities_assigned_personnel_id: index('idx_crm_activities_assigned_personnel_id').on(table.assignedPersonnelId).where(sql`${table.assignedPersonnelId} IS NOT NULL`),
+}));
+
+/**
+ * v10.1.16 (N-02 بخش ۲، migration 0113): هر تغییر مرحله پرونده فروش (چه کسی، کی، از کدام مرحله به کدام، و فروشنده پرونده
+ * در آن لحظه)؛ گزارش قیف از همین جدول ساخته می‌شود. تغییرهای پیش از این نسخه ثبت نشده‌اند.
+ */
+export const crmLeadStageHistory = pgTable('crm_lead_stage_history', {
+  id: serial('id').primaryKey(),
+  leadId: integer('lead_id').notNull().references(() => crmLeads.id),
+  fromStage: text('from_stage'),
+  toStage: text('to_stage').notNull(),
+  lostReason: text('lost_reason').notNull().default(''),
+  assignedPersonnelId: integer('assigned_personnel_id').references(baseRelations.personnelId),
+  changedById: integer('changed_by_id').references(() => users.id),
+  changedByName: text('changed_by_name').notNull().default(''),
+  changedAt: timestamp('changed_at', { mode: 'string' }).notNull().defaultNow(),
+}, (table) => ({
+  idx_crm_lead_stage_history_lead: index('idx_crm_lead_stage_history_lead').on(table.leadId, table.changedAt),
+  idx_crm_lead_stage_history_changed_at: index('idx_crm_lead_stage_history_changed_at').on(table.changedAt),
+  idx_crm_lead_stage_history_personnel: index('idx_crm_lead_stage_history_personnel').on(table.assignedPersonnelId).where(sql`${table.assignedPersonnelId} IS NOT NULL`),
+  idx_crm_lead_stage_history_user: index('idx_crm_lead_stage_history_user').on(table.changedById).where(sql`${table.changedById} IS NOT NULL`),
 }));
 
 export const transfers = pgTable('transfers', {
