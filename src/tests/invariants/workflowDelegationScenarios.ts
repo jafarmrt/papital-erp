@@ -109,10 +109,12 @@ export async function checkDelegateActsForDelegatorRole(): Promise<string[]> {
   const other = await wfUser(`wfg_deputy_${uniqueTag()}`);
   // TD-467: حوزه باید کد گردش کار تعریف‌شده باشد؛ گردش کار دیگری برای همین ساخته می‌شود
   const otherWf = await defineWorkflow({ states: [{ key: 'draft', type: 'initial' }, { key: 'done', type: 'terminal' }], transitions: [{ from: 'draft', to: 'done', action: 'approve' }] });
-  await delegate(owner, other, otherWf.code);
+  // v10.1.14 (TD-1268, decision ت۹): one delegator has one deputy per workflow in a window, so these two delegations are the
+  // colleague's (same role); the revoked one is given and revoked first, then the one scoped to another workflow
   const revokedDeputy = await wfUser(`wfg_deputy_${uniqueTag()}`);
-  const revokedId = await delegate(owner, revokedDeputy);
-  await WorkflowDelegationService.revokeDelegation({ id: revokedId, userId: owner.id, userRole: owner.role });
+  const revokedId = await delegate(colleague, revokedDeputy);
+  await WorkflowDelegationService.revokeDelegation({ id: revokedId, userId: colleague.id, userRole: colleague.role });
+  await delegate(colleague, other, otherWf.code);
   const second = await startWf(wf);
   const [secondTask] = await tasksOf(second);
   if (!(await refusal(() => runTask(secondTask.id, other)))) problems.push('A delegation scoped to another workflow allowed running the task');

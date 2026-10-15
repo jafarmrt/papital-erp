@@ -117,9 +117,15 @@ export async function runWorkflowInboxTests(shouldRun: ShouldRun): Promise<TestC
       details: 'scopes invoice, transfer and project (offered by the old form, matching no workflow) get 422 and are not stored; ALL and an existing workflow code (any case) are stored',
     }, async (h, wrong) => {
       const deputy = await h.sessionWith(['workflow.view', 'workflow.approve']);
-      const start = new Date(Date.now() - 3600_000).toISOString();
-      const end = new Date(Date.now() + 86_400_000).toISOString();
-      const create = (scope: string) => h.post('/api/workflow/delegations', { toUserId: deputy.userId, scope, startDate: start, endDate: end, reason: `td467 ${scope}` });
+      // v10.1.14 (TD-1268, decision ت۹): one delegator has one deputy per workflow in a window, so each stored scope gets its own
+      // window, far from other tests' delegations of the same admin
+      let slot = 0;
+      const create = (scope: string) => {
+        const base = Date.UTC(2033, 0, 1) + (slot++) * 2 * 86_400_000;
+        return h.post('/api/workflow/delegations', {
+          toUserId: deputy.userId, scope, startDate: new Date(base).toISOString(), endDate: new Date(base + 86_400_000).toISOString(), reason: `td467 ${scope}`,
+        });
+      };
       try {
         for (const scope of ['invoice', 'transfer', 'project', 'NO_SUCH_WORKFLOW']) {
           const res = await create(scope);
