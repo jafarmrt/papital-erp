@@ -7,6 +7,7 @@ import { useOnlineStatus } from '../../lib/pwa/useOnlineStatus';
 import { OFFLINE_SUBMIT_TITLE, PHONE_SHEET_FOOTER_SAFE_AREA, PHONE_SHEET_OVERLAY, PHONE_SHEET_PANEL, PHONE_TAP_TARGET } from '../../lib/pwa/phoneLayout';
 import { PurchaseRequisition } from '../../types';
 import { FREE_TEXT_RECEIVE_HINT, isRequisitionReceiveTask, taskApproveLabel, taskApproveSubmitLabel } from '../../lib/workflow/taskActionLabel';
+import { formatPersianCode } from '../../utils';
 
 export type ApprovalTaskAction = 'approve' | 'reject';
 export interface ApprovalRejectOption { id: number; title: string }
@@ -96,7 +97,7 @@ export function TaskExecuteModal({
           <div className="text-xs bg-indigo-50/70 dark:bg-indigo-950/40 p-3 rounded-xl border border-indigo-100 dark:border-indigo-900/50 flex flex-wrap items-center justify-between gap-2">
             <div>
               <span className="text-gray-500 dark:text-gray-400">شناسه وظیفه: </span>
-              <span className="font-mono font-bold text-gray-800 dark:text-gray-200">#{selectedTask.id}</span>
+              <span className="font-mono font-bold text-gray-800 dark:text-gray-200">#{formatPersianCode(selectedTask.id)}</span>
               <span className="mx-2 text-gray-300 dark:text-gray-600">|</span>
               <span className="text-gray-500 dark:text-gray-400">موضوع: </span>
               <span className="font-bold text-indigo-700 dark:text-indigo-300">

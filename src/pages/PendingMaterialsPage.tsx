@@ -3,7 +3,7 @@ import { PENDING_MATERIAL_PAGE_SIZE, type PendingMaterialStatusFilter } from '..
 import { ProcurementPager } from '../components/procurement/ProcurementPager';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { PendingMaterial, User } from '../types';
-import { formatPersianNumber } from '../utils';
+import { formatPersianNumber, formatPersianCode } from '../utils';
 import {
   Clock,
   CheckCircle2,
@@ -340,7 +340,7 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
                         isPending ? 'bg-amber-50/20' : ''
                       }`}
                     >
-                      <td className="p-3.5 text-center font-bold text-slate-400">{index + 1}</td>
+                      <td className="p-3.5 text-center font-bold text-slate-400">{formatPersianNumber(index + 1)}</td>
                       <td className="p-3.5 font-bold text-slate-900">
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
@@ -495,7 +495,7 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
               <WorkflowStepperWidget
                 entityType="pending_material"
                 entityId={selectedItem.id}
-                title={`چرخه گردش کار ماده اولیه معلق شماره ${selectedItem.id}`}
+                title={`چرخه گردش کار ماده اولیه معلق شماره ${formatPersianCode(selectedItem.id)}`}
                 onStateChange={loadData}
               />
 

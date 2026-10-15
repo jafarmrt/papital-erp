@@ -1,5 +1,5 @@
 import { FolderKanban } from 'lucide-react';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianNumber, formatPersianCode } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 
 import type { WorkLogProjectCost } from '../../lib/piecework/workLogList';
@@ -46,7 +46,7 @@ export function PieceworkProjectCostsTab({
                   <div>
                     <h4 className="text-xs font-black text-slate-900">{item.title}</h4>
                     <span className="text-[10px] text-slate-400 font-normal">
-                      {item.projectId ? `شناسه پروژه: ${item.projectId}` : 'هزینه‌های جاری کارگاه'}
+                      {item.projectId ? `شناسه پروژه: ${formatPersianCode(item.projectId)}` : 'هزینه‌های جاری کارگاه'}
                     </span>
                   </div>
                 </div>

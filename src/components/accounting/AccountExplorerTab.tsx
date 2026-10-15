@@ -756,7 +756,7 @@ export function AccountExplorerTab({
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-700 text-slate-800 dark:text-slate-200">
                     {selectedVoucherModal.items?.map((it, idx) => (
                       <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-700/40">
-                        <td className="p-2.5 text-center font-mono text-slate-400">{idx + 1}</td>
+                        <td className="p-2.5 text-center font-mono text-slate-400">{formatPersianNumber(idx + 1)}</td>
                         <td className="p-2.5 font-medium">
                           <span className="font-mono text-[11px] text-indigo-600 ml-1">[{it.accountCode}]</span>
                           <span>{it.accountName}</span>

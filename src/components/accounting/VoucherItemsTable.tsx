@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Scale, ArrowRightLeft, Trash2 } from 'lucide-react';
-import { formatPersianPrice, formatCurrencyLabel } from '../../utils';
+import { formatPersianPrice, formatCurrencyLabel, formatPersianNumber } from '../../utils';
 import { AccountSearchSelect } from './AccountSearchSelect';
 import { VoucherRowCurrencyCell } from './VoucherCurrencyInputs';
 import { voucherFormBalance, voucherRowCurrencyRate, type VoucherHeaderCurrency } from '../../lib/accounting/voucherFormCurrency';
@@ -104,7 +104,7 @@ export function VoucherItemsTable({
                 >
                   {/* Row Index */}
                   <td className="py-2 px-3 text-center font-bold text-slate-400">
-                    {idx + 1}
+                    {formatPersianNumber(idx + 1)}
                   </td>
 
                   {/* Quick Account Selector */}

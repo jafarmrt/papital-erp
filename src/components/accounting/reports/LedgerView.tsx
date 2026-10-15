@@ -1,4 +1,4 @@
-import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianDate, formatPersianCode } from '../../../utils';
 import type { Account, AccountLedgerReport } from '../../../types';
 import { accountCardRows } from '../../../lib/accounting/accountCard';
 
@@ -106,7 +106,7 @@ export function LedgerView({
                         {formatPersianDate(item.date)}
                       </td>
                       <td className="py-2 px-3 text-center border-l border-slate-200 dark:border-slate-700 font-mono font-bold text-indigo-600">
-                        {item.voucherNumber ? `#${item.voucherNumber}` : '—'}
+                        {item.voucherNumber ? `#${formatPersianCode(item.voucherNumber)}` : '—'}
                       </td>
                       <td className="py-2 px-4 border-l border-slate-200 dark:border-slate-700">
                         {item.description}

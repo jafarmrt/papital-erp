@@ -515,7 +515,7 @@ export function JournalVouchersTab({
                                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                                   {(Array.isArray(voucher.items) ? voucher.items : []).map((item, idx) => (
                                     <tr key={item.id || idx}>
-                                      <td className="py-1.5 px-2 text-center text-slate-400">{idx + 1}</td>
+                                      <td className="py-1.5 px-2 text-center text-slate-400">{formatPersianNumber(idx + 1)}</td>
                                       <td className="py-1.5 px-2 text-center font-mono font-bold">{item.accountCode || '-'}</td>
                                       <td className="py-1.5 px-2 font-medium">
                                         {item.accountName}
@@ -540,7 +540,7 @@ export function JournalVouchersTab({
                                 <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
                                   <div className="flex items-center justify-between mb-2">
                                     <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                                      تصاویر فاکتور و اسناد مثبته پیوست ({voucher.attachments.length} فایل):
+                                      تصاویر فاکتور و اسناد مثبته پیوست ({formatPersianNumber(voucher.attachments.length)} فایل):
                                     </span>
                                     <button
                                       type="button"

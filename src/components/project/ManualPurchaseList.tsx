@@ -169,7 +169,7 @@ export function ManualPurchaseList({
                 <tbody className="divide-y divide-purple-100">
                   {effectiveReservedItems.map((rItem: any, idx: number) => (
                     <tr key={idx} className="hover:bg-purple-50/50">
-                      <td className="p-2.5 text-center font-bold text-slate-500">{idx + 1}</td>
+                      <td className="p-2.5 text-center font-bold text-slate-500">{formatPersianNumber(idx + 1)}</td>
                       <td className="p-2.5 font-mono font-bold text-purple-900">{rItem.itemCode || '---'}</td>
                       <td className="p-2.5 font-bold text-slate-900">{rItem.itemName}</td>
                       <td className="p-2.5 text-center font-mono font-bold text-emerald-800">
@@ -229,7 +229,7 @@ export function ManualPurchaseList({
             <tbody className="divide-y divide-slate-200 bg-white">
               {purchaseList.map((item, idx) => (
                 <tr key={item.id || idx} className={`hover:bg-slate-50 ${item.id.startsWith('manual_') ? 'bg-amber-50/30' : ''}`}>
-                  <td className="p-3 font-bold text-slate-500 text-center">{idx + 1}</td>
+                  <td className="p-3 font-bold text-slate-500 text-center">{formatPersianNumber(idx + 1)}</td>
                   <td className="p-3">
                     <span className={`px-2 py-0.5 font-bold rounded-md text-[11px] ${
                       item.id.startsWith('manual_') 

@@ -1,5 +1,5 @@
 import { AlertTriangle } from 'lucide-react';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianNumber, formatPersianCode } from '../../utils';
 
 /** کالایی که سرور تحویلش را بیش از مقدار برنامه‌ریزی‌شده پروژه می‌داند (OVER_DELIVERY_REASON_REQUIRED) */
 export interface ProjectOverDeliveryView {
@@ -42,7 +42,7 @@ export function ProjectOverDeliveryPrompt({ items, reason, onReasonChange, onCon
       <ul className="list-disc pr-5 space-y-1 text-rose-900">
         {items.map(it => (
           <li key={it.itemId}>
-            «{it.itemName || it.itemId}»: {formatPersianNumber(it.excess)} {it.unit} بیش از برنامه (برنامه {formatPersianNumber(it.planned)}، تحویل‌شده {formatPersianNumber(it.delivered)})
+            «{it.itemName || formatPersianCode(it.itemId)}»: {formatPersianNumber(it.excess)} {it.unit} بیش از برنامه (برنامه {formatPersianNumber(it.planned)}، تحویل‌شده {formatPersianNumber(it.delivered)})
           </li>
         ))}
       </ul>

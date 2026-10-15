@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { History, ChevronDown, ChevronUp } from 'lucide-react';
 import { fetchJson } from '../../api';
-import { formatPersianPrice, formatPersianNumber, formatPersianDate, errorMessageOf } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianDate, errorMessageOf, formatPersianCode } from '../../utils';
 import type { TreasuryTransaction } from '../../types';
 import { TreasuryVoidModal } from '../accounting/treasury/TreasuryVoidModal';
 
@@ -77,7 +77,7 @@ export function PayrollPaymentHistory({ payrollId, payments, loading, initiallyO
                   {p.trackingNumber ? ` — کد: ${p.trackingNumber}` : ''}
                 </div>
                 <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                  {formatPersianDate(p.date)} • سند #{p.transactionNumber || p.id}
+                  {formatPersianDate(p.date)} • سند #{p.transactionNumber || formatPersianCode(p.id)}
                 </div>
               </div>
               <div className="flex items-center gap-2">

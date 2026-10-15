@@ -11,7 +11,7 @@ import {
   FolderMinus, 
   Search
 } from 'lucide-react';
-import { cn } from '../../utils';
+import { cn, formatPersianNumber } from '../../utils';
 import { fetchJson } from '../../api';
 import { User } from '../../types';
 import { getMenuGroups, MenuItem } from './menuConfig';
@@ -400,7 +400,7 @@ export function Sidebar({
 
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span className="px-1.5 py-0.2 text-[9px] font-semibold rounded-full bg-slate-800 text-slate-400 border border-slate-700/50">
-                    {visibleItems.length}
+                    {formatPersianNumber(visibleItems.length)}
                   </span>
                   <ChevronDown className={cn(
                     "w-3.5 h-3.5 text-slate-500 transition-transform duration-200",

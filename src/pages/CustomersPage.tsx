@@ -449,7 +449,7 @@ export default function CustomersPage({ user }: { user: User }) {
 
               return (
                 <tr key={c.id} className="hover:bg-blue-50/20 transition-colors">
-                  <td className="p-3 text-slate-400 text-center font-mono">{((page - 1) * 50) + idx + 1}</td>
+                  <td className="p-3 text-slate-400 text-center font-mono">{formatPersianNumber(((page - 1) * 50) + idx + 1)}</td>
                   
                   {/* Name and Quick Details */}
                   <td className="p-3 font-bold text-slate-800 text-right">
@@ -529,7 +529,7 @@ export default function CustomersPage({ user }: { user: User }) {
                         ))}
                         {contactsList.length > 2 && (
                           <span className="text-[10px] text-slate-400 font-mono">
-                            + {contactsList.length - 2} رابط دیگر
+                            + {formatPersianNumber(contactsList.length - 2)} رابط دیگر
                           </span>
                         )}
                       </div>
@@ -638,7 +638,7 @@ export default function CustomersPage({ user }: { user: User }) {
               <ChevronRight size={15} />
             </button>
             <span className="text-xs font-bold px-2 text-slate-700">
-              صفحه {page} از {totalPages}
+              صفحه {formatPersianNumber(page)} از {formatPersianNumber(totalPages)}
             </span>
             <button 
               disabled={page === totalPages}
@@ -749,7 +749,7 @@ export default function CustomersPage({ user }: { user: User }) {
                       <tbody className="divide-y divide-slate-100 font-mono">
                         {ledgerData.items.map((row: any, i: number) => (
                           <tr key={i} className="hover:bg-slate-50">
-                            <td className="p-2.5 text-center text-slate-400">{i + 1}</td>
+                            <td className="p-2.5 text-center text-slate-400">{formatPersianNumber(i + 1)}</td>
                             <td className="p-2.5 text-center text-slate-700">{formatPersianDate(row.date)}</td>
                             <td className="p-2.5 text-center font-bold text-blue-700">#{row.voucherNumber}</td>
                             <td className="p-2.5 text-right font-sans text-slate-800">{row.itemDescription || row.description}</td>
