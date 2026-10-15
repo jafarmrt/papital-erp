@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.1.13 — وب‌سایت، ایمیل و اینستاگرام طرف حساب (N-02 بخش ۱)
+- Party website, e-mail and Instagram with one validation rule (migration 0112), call / WhatsApp / mail links, Excel columns; the intro and updates page is removed and the version comes from /api/health. Test: reg_customer_contact_channels_n02, Vitest customerContactChannels.
+
 ### v10.1.12 — سجل رسید تولید پروژه، پالایه سریع‌تر گزارش رویدادها و دو ابزار آزمون
 - رسید تولید تحویل پروژه در «سجل تغییرات» ردیف «ساخت» با نام ثبت‌کننده می‌گیرد و ردیف‌های تحویل، تخصیص، مصرف و آزادسازی مواد با همان تراکنش نوشته می‌شوند (TD-943)؛ فهرست‌های پالایه گزارش رویدادها با شاخص خوانده می‌شوند (TD-1267)؛ راه‌اندازی آزمون منتظر قفل seed می‌ماند و خواندن کاتالوگ در آزمون‌ها به اسکیمای جاری محدود است (TD-1266).
 

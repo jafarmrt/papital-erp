@@ -21,6 +21,9 @@ import { formatPersianPhone, normalizePhoneNumber, validateIranianPhoneNumber, f
 import { useRialDisplay } from '../hooks/useAppCurrency';
 import { useHasPermission } from '../contexts/AuthContext';
 import { blankContactPerson } from '../lib/customers/contactPerson';
+import { emailError } from '../lib/customers/contactChannels';
+import { customerChannelFormError } from '../components/customers/CustomerChannelFields';
+import { CustomerChannelLinks, PhoneLinks } from '../components/customers/ContactLinks';
 
 export default function CustomersPage({ user }: { user: User }) {
   const rial = useRialDisplay();
@@ -112,7 +115,10 @@ export default function CustomersPage({ user }: { user: User }) {
       accountNumber: '',
       shaba: '',
       cardNumber: ''
-    }
+    },
+    website: '',
+    email: '',
+    instagram: ''
   });
 
   const [contacts, setContacts] = useState<FormContactPerson[]>([
@@ -171,8 +177,15 @@ export default function CustomersPage({ user }: { user: User }) {
       }
     }
     
+    // v10.1.13 (N-02 بخش ۱): راه ارتباط نادرست پیش از فرستادن گفته می‌شود (همان قاعده کارساز)
+    const channelError = customerChannelFormError(form) || contacts.map(c => emailError(c.email)).find(Boolean);
+    if (channelError) {
+      toast.error(channelError);
+      return;
+    }
+
     const activeContacts = contacts
-      .filter(c => c.name.trim() || c.phone.trim())
+      .filter(c => c.name.trim() || c.phone.trim() || c.email.trim())
       .map(c => ({ ...c, phone: normalizePhoneNumber(c.phone) }));
 
     const finalPayload = {
@@ -185,7 +198,10 @@ export default function CustomersPage({ user }: { user: User }) {
       partyType: form.partyType,
       supplierCategory: form.partyType !== 'customer' ? form.supplierCategory : '',
       bankInfo: form.bankInfo,
-      contacts: activeContacts
+      contacts: activeContacts,
+      website: form.website,
+      email: form.email,
+      instagram: form.instagram
     };
 
     saveMutation.mutate({ id: editingId, payload: customerSaveBody(finalPayload, editingId, editingVersion) }, {
@@ -213,7 +229,10 @@ export default function CustomersPage({ user }: { user: User }) {
         accountNumber: '',
         shaba: '',
         cardNumber: ''
-      }
+      },
+      website: '',
+      email: '',
+      instagram: ''
     });
     setContacts([blankContactPerson(Date.now().toString(), true)]);
   };
@@ -236,7 +255,10 @@ export default function CustomersPage({ user }: { user: User }) {
         accountNumber: rawBank.accountNumber || '',
         shaba: rawBank.shaba || '',
         cardNumber: rawBank.cardNumber || ''
-      }
+      },
+      website: c.website || '',
+      email: c.email || '',
+      instagram: c.instagram || ''
     });
 
     if (c.contacts && Array.isArray(c.contacts) && c.contacts.length > 0) {
@@ -245,6 +267,7 @@ export default function CustomersPage({ user }: { user: User }) {
         name: contact.name || '',
         role: contact.role || '',
         phone: contact.phone || '',
+        email: contact.email || '',
         isPrimary: contact.isPrimary ?? (idx === 0)
       })));
     } else {
@@ -253,6 +276,7 @@ export default function CustomersPage({ user }: { user: User }) {
         name: c.contactName || '',
         role: '',
         phone: c.phone || '',
+        email: c.email || '',
         isPrimary: true
       }]);
     }
@@ -462,6 +486,7 @@ export default function CustomersPage({ user }: { user: User }) {
                             {sCat}
                           </span>
                         )}
+                        <CustomerChannelLinks website={c.website} email={c.email} instagram={c.instagram} />
                       </div>
                     </div>
                   </td>
@@ -518,15 +543,16 @@ export default function CustomersPage({ user }: { user: User }) {
                     {hasContacts ? (
                       <div className="flex flex-col gap-1 font-mono">
                         {contactsList.slice(0, 2).map((contact, i) => (
-                          <div key={i} className="flex items-center gap-1 text-[11px]">
+                          <div key={i} className="flex flex-wrap items-center gap-1 text-[11px]">
                             <Phone size={11} className="text-slate-400 shrink-0" />
                             <span dir="ltr" className="text-slate-800 font-semibold">{contact.phone ? formatPersianPhone(contact.phone) : '-'}</span>
+                            <PhoneLinks phone={contact.phone} />
                           </div>
                         ))}
                       </div>
                     ) : (
                       <span dir="ltr" className="font-mono text-slate-800 text-[11px]">
-                        {c.phone ? c.phone.split(',').map((p, i) => <span key={i} className="block">{formatPersianPhone(p.trim())}</span>) : '-'}
+                        {c.phone ? c.phone.split(',').map((p, i) => <span key={i} className="flex flex-wrap items-center gap-1">{formatPersianPhone(p.trim())} <PhoneLinks phone={p} /></span>) : '-'}
                       </span>
                     )}
                   </td>

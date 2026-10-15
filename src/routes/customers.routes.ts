@@ -39,11 +39,12 @@ interface ContactPerson {
   name?: string;
   role?: string;
   phone?: string;
+  email?: string;
   isPrimary?: boolean;
 }
 
 function sanitizeCustomerPayload<T extends Record<string, unknown>>(body: T): T {
-  const fields = ['name', 'contactName', 'address', 'notes', 'city', 'province', 'country', 'phone'];
+  const fields = ['name', 'contactName', 'address', 'notes', 'city', 'province', 'country', 'phone', 'website', 'email', 'instagram'];
   const sanitized: Record<string, unknown> = { ...body };
   for (const f of fields) {
     if (typeof sanitized[f] === 'string') sanitized[f] = sanitizeCustomerText(sanitized[f]);
@@ -63,8 +64,16 @@ const contactPersonSchema = z.object({
   name: z.string().max(100).optional().default(''),
   role: z.string().max(100).optional().default(''),
   phone: z.string().max(200).optional().default(''),
+  email: z.string().max(200).optional(),
   isPrimary: z.boolean().optional().default(false),
 });
+
+/** v10.1.13 (N-02 بخش ۱): راه‌های ارتباط؛ قالب را سرویس با قاعده مشترک می‌سنجد (۴۲۲) */
+const contactChannelFields = {
+  website: z.string().max(500).optional(),
+  email: z.string().max(500).optional(),
+  instagram: z.string().max(500).optional(),
+};
 
 const bankInfoSchema = z.object({
   bankName: z.string().max(100).optional().default(''),
@@ -89,6 +98,7 @@ const customerSchema = z.object({
   bankInfo: bankInfoSchema,
   bank_info: bankInfoSchema,
   contacts: z.array(contactPersonSchema).optional().default([]),
+  ...contactChannelFields,
 });
 
 const createCustomerValidation = z.object({
@@ -108,6 +118,7 @@ const contactPersonPatchSchema = z.object({
   name: z.string().max(100).optional().default(''),
   role: z.string().max(100).optional().default(''),
   phone: z.string().max(200).optional().default(''),
+  email: z.string().max(200).optional(),
   isPrimary: z.boolean().optional().default(false),
 });
 const bankInfoPatchSchema = z.object({
@@ -132,6 +143,7 @@ const customerPatchSchema = z.object({
   bankInfo: bankInfoPatchSchema,
   bank_info: bankInfoPatchSchema,
   contacts: z.array(contactPersonPatchSchema).optional(),
+  ...contactChannelFields,
 });
 
 /**
@@ -239,6 +251,9 @@ router.get('/customers/export-excel', authorizePermission(...READ_PERMISSIONS.cu
       'شماره حساب': bank.accountNumber || '',
       'شماره کارت': bank.cardNumber || '',
       'شماره شبا': bank.shaba || '',
+      'وب‌سایت': c.website || '',
+      'ایمیل': c.email || '',
+      'اینستاگرام': c.instagram || '',
       'یادداشت': c.notes || ''
     };
   });
@@ -335,7 +350,10 @@ router.post('/customers', authorizePermission('customers.manage'), validate(crea
     partyType,
     supplierCategory,
     bankInfo,
-    contacts
+    contacts,
+    website: req.body.website,
+    email: req.body.email,
+    instagram: req.body.instagram,
   });
 
   await logActivity({
@@ -375,6 +393,9 @@ router.put('/customers/:id', authorizePermission('customers.manage'), validate(u
     supplierCategory,
     bankInfo,
     contacts,
+    website: req.body.website,
+    email: req.body.email,
+    instagram: req.body.instagram,
     version: req.body.version,
     expectedVersion: req.body.expectedVersion
   });

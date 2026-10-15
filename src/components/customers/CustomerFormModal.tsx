@@ -2,6 +2,8 @@ import React from 'react';
 import { Users, Building2, Truck, UserPlus, UserCheck, Trash2, Plus, CreditCard, X } from 'lucide-react';
 import { IranianPhoneInput, BankCardInput, ShebaInput } from '../common';
 import { getIranianBankFromCard, getIranianBankFromSheba } from '../../utils';
+import { emailError } from '../../lib/customers/contactChannels';
+import { CustomerChannelFields } from './CustomerChannelFields';
 
 export const IRAN_PROVINCES = [
   'آذربایجان شرقی', 'آذربایجان غربی', 'اردبیل', 'اصفهان', 'البرز', 'ایلام',
@@ -39,6 +41,8 @@ export interface FormContactPerson {
   name: string;
   role: string;
   phone: string;
+  /** v10.1.13 (N-02، ت۲) */
+  email: string;
   isPrimary: boolean;
 }
 
@@ -57,6 +61,10 @@ export interface CustomerPartyForm {
     shaba: string;
     cardNumber: string;
   };
+  /** v10.1.13 (N-02 بخش ۱) */
+  website: string;
+  email: string;
+  instagram: string;
 }
 
 interface CustomerFormModalProps {
@@ -225,6 +233,11 @@ export function CustomerFormModal({
               </div>
             </div>
 
+            <CustomerChannelFields
+              value={{ website: form.website, email: form.email, instagram: form.instagram }}
+              onChange={channels => setForm(prev => ({ ...prev, ...channels }))}
+            />
+
             {/* Section 2: Connected Contacts / Persons */}
             <div className="space-y-3 bg-slate-50/50 p-4 rounded-xl border border-slate-200">
               <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
@@ -271,7 +284,7 @@ export function CustomerFormModal({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                       <div>
                         <label className="block text-[10px] font-medium mb-1 text-slate-600">نام رابط</label>
                         <input 
@@ -308,6 +321,21 @@ export function CustomerFormModal({
                           label="شماره تماس"
                           inputClassName="rounded-lg px-2.5 py-1.5 text-xs"
                         />
+                      </div>
+
+                      <div>
+                        <label htmlFor={`contact-email-${contact.id}`} className="block text-[10px] font-medium mb-1 text-slate-600">ایمیل رابط</label>
+                        <input
+                          id={`contact-email-${contact.id}`}
+                          type="email"
+                          dir="ltr"
+                          value={contact.email}
+                          onChange={e => updateContactPerson(contact.id, 'email', e.target.value)}
+                          placeholder="name@example.com"
+                          aria-invalid={emailError(contact.email) ? true : undefined}
+                          className={`w-full border rounded-lg px-2.5 py-1.5 text-xs bg-white focus:ring-2 focus:ring-blue-500 outline-none text-left ${emailError(contact.email) ? 'border-rose-400' : 'border-slate-200'}`}
+                        />
+                        {emailError(contact.email) && <p className="mt-1 text-[10px] text-rose-600" role="alert">{emailError(contact.email)}</p>}
                       </div>
                     </div>
                   </div>

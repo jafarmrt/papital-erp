@@ -4,7 +4,8 @@ import { customers } from '../db/schema.js';
 import { systemNowUtcIso } from '../lib/businessClock.js';
 import { checkOccVersion, nextVersion, OptimisticLockError } from '../lib/occHelper.js';
 import { parsePartyTypeCell } from '../lib/customers/partyTypeCell.js';
-import { NotFoundError } from '../errors/customErrors.js';
+import { NotFoundError, ValidationError } from '../errors/customErrors.js';
+import { contactChannelErrors, emailError, normalizeContactChannels, normalizeEmail, type ContactChannelsInput } from '../lib/customers/contactChannels.js';
 import { phoneMatchKey } from './woocommerce/phoneMatchKey.js';
 import {
   assertCustomerNameAvailable, assertCustomerPhoneAvailable, customerNameKey, guardCustomerName, isCustomerNameUniqueViolation, CUSTOMER_NAME_TAKEN_MESSAGE,
@@ -16,6 +17,8 @@ export interface ContactPerson {
   name?: string;
   role?: string;
   phone?: string;
+  /** v10.1.13 (N-02، ت۲): ایمیل هر فرد رابط */
+  email?: string;
   isPrimary?: boolean;
 }
 
@@ -39,6 +42,29 @@ export interface CreateCustomerInput {
   supplierCategory?: string;
   bankInfo?: BankInfo;
   contacts?: ContactPerson[];
+  /** v10.1.13 (N-02 بخش ۱): راه‌های ارتباط طرف حساب */
+  website?: string;
+  email?: string;
+  instagram?: string;
+}
+
+/**
+ * v10.1.13 (N-02 بخش ۱): وب‌سایت، ایمیل و اینستاگرام فرستاده‌شده و ایمیل هر فرد رابط با یک قاعده سنجیده و پاک می‌شوند؛
+ * نادرست ۴۲۲ `CUSTOMER_CONTACT_CHANNEL_INVALID` با پیام هر فیلد است، پیش از هر نوشتن.
+ */
+export function resolveContactChannels(input: ContactChannelsInput, contacts: ContactPerson[] | undefined): {
+  channels: ReturnType<typeof normalizeContactChannels>;
+  contacts: ContactPerson[] | undefined;
+} {
+  const errors: string[] = Object.values(contactChannelErrors(input));
+  const cleanContacts = contacts?.map((c) => {
+    if (c.email === undefined) return c;
+    const error = emailError(c.email);
+    if (error) errors.push(`${c.name?.trim() || 'فرد رابط'}: ${error}`);
+    return { ...c, email: normalizeEmail(c.email) };
+  });
+  if (errors.length) throw new ValidationError(errors.join(' '), { errors }, 'CUSTOMER_CONTACT_CHANNEL_INVALID');
+  return { channels: normalizeContactChannels(input), contacts: cleanContacts };
 }
 
 /**
@@ -66,6 +92,10 @@ export interface BulkImportRowInput {
   shaba?: string;
   cardNumber?: string;
   bankInfo?: BankInfo;
+  /** v10.1.13 (N-02 بخش ۱): سلول خالی یعنی «بی تغییر» برای رکورد موجود */
+  website?: string;
+  email?: string;
+  instagram?: string;
 }
 
 export interface BulkImportResult {
@@ -108,10 +138,11 @@ export class CustomerService {
     const city = data.city?.trim() || '';
     const address = data.address?.trim() || '';
     const notes = data.notes?.trim() || '';
-    const contacts = data.contacts || [];
+    const resolved = resolveContactChannels({ website: data.website ?? '', email: data.email ?? '', instagram: data.instagram ?? '' }, data.contacts);
+    const contacts = resolved.contacts || [];
 
     // Auto-derive contactName and phone from contacts if available
-    const activeContacts = (contacts as ContactPerson[]).filter((c) => c.name?.trim() || c.phone?.trim());
+    const activeContacts = (contacts as ContactPerson[]).filter((c) => c.name?.trim() || c.phone?.trim() || c.email?.trim());
     if (activeContacts.length > 0) {
       const primary = activeContacts.find((c) => c.isPrimary) || activeContacts[0];
       if (!contactName) {
@@ -145,6 +176,7 @@ export class CustomerService {
         supplierCategory,
         bankInfo,
         contacts: activeContacts,
+        ...resolved.channels,
         createdAt,
         isDeleted: 0,
         version: 1
@@ -192,9 +224,11 @@ export class CustomerService {
     const city = keep(data.city, prevCust.city);
     const address = keep(data.address, prevCust.address);
     const notes = keep(data.notes, prevCust.notes);
-    const contacts = data.contacts ?? ((prevCust.contacts as ContactPerson[] | null) ?? []);
+    // v10.1.13 (N-02 بخش ۱): راه ارتباط نفرستاده مقدار کنونی را نگه می‌دارد (قاعده TD-975)
+    const resolved = resolveContactChannels({ website: data.website, email: data.email, instagram: data.instagram }, data.contacts);
+    const contacts = resolved.contacts ?? ((prevCust.contacts as ContactPerson[] | null) ?? []);
 
-    const activeContacts = (contacts as ContactPerson[]).filter((c) => c.name?.trim() || c.phone?.trim());
+    const activeContacts = (contacts as ContactPerson[]).filter((c) => c.name?.trim() || c.phone?.trim() || c.email?.trim());
     if (activeContacts.length > 0) {
       const primary = activeContacts.find((c) => c.isPrimary) || activeContacts[0];
       if (!contactName) {
@@ -225,6 +259,7 @@ export class CustomerService {
       supplierCategory,
       bankInfo,
       contacts: activeContacts,
+      ...resolved.channels,
       version: nextVersion(prevCust.version)
     };
 
@@ -334,6 +369,19 @@ export class CustomerService {
           cardNumber: String(item.cardNumber || item.bankInfo?.cardNumber || '').trim(),
         };
 
+        // v10.1.13 (N-02 بخش ۱): راه ارتباط نادرست کل ردیف را رد می‌کند؛ سلول خالی یعنی «بی تغییر»
+        const cellChannels: ContactChannelsInput = {};
+        for (const key of ['website', 'email', 'instagram'] as const) {
+          const cell = String(item[key] ?? '').trim();
+          if (cell) cellChannels[key] = cell;
+        }
+        const channelErrors = Object.values(contactChannelErrors(cellChannels));
+        if (channelErrors.length) {
+          errors.push({ row: rowIndex, name, message: channelErrors.join(' ') });
+          continue;
+        }
+        const channels = normalizeContactChannels(cellChannels);
+
         // Match existing counterparty
         let matchedCust: typeof customers.$inferSelect | undefined;
         if (id && idMap.has(id)) {
@@ -377,6 +425,7 @@ export class CustomerService {
                 ...(bankInfo.shaba ? { shaba: bankInfo.shaba } : {}),
                 ...(bankInfo.cardNumber ? { cardNumber: bankInfo.cardNumber } : {}),
               },
+              ...channels,
               version: nextVersion(matchedCust.version)
             };
 
@@ -416,6 +465,7 @@ export class CustomerService {
               supplierCategory,
               bankInfo,
               contacts: contactName || phone ? [{ id: '1', name: contactName, role: 'رابط اصلی', phone, isPrimary: true }] : [],
+              ...channels,
               createdAt: systemNowUtcIso(),
               isDeleted: 0,
               version: 1

@@ -7,7 +7,6 @@ import {
   FileInput,
   History,
   Users,
-  FileCode2,
   Settings,
   ClipboardList,
   Image,
@@ -160,7 +159,6 @@ export function getMenuGroups(
         { name: 'مدیریت کاربران و نقش‌ها', path: '/users', icon: Users, visible: open('/users') },
         { name: 'تنظیمات سامانه', path: '/settings', icon: Settings, visible: open('/settings') },
         { name: 'سجل تغییرات', path: '/activity-logs', icon: ShieldAlert, visible: open('/activity-logs') },
-        { name: 'معرفی و به‌روزرسانی‌ها', path: '/changelog', icon: FileCode2, visible: open('/changelog') },
       ]
     }
   ];

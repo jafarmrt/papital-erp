@@ -74,7 +74,6 @@ const AccountingPage = lazyWithRetry(() => import('../pages/AccountingPage'));
 const ApprovalInboxPage = lazyWithRetry(() => import('../pages/ApprovalInboxPage'));
 const WorkflowManagementPage = lazyWithRetry(() => import('../pages/WorkflowManagementPage'));
 const DomainEventsPage = lazyWithRetry(() => import('../pages/DomainEventsPage'));
-const ChangelogPage = lazyWithRetry(() => import('../pages/ChangelogPage'));
 const ItemsPage = lazyWithRetry(() => import('../pages/ItemsPage'));
 
 export interface AppRoutesProps {
@@ -268,11 +267,6 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
         <Route path="/domain-events" element={
           <ProtectedRoute page="/domain-events" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <DomainEventsPage />
-          </ProtectedRoute>
-        } />
-        <Route path="/changelog" element={
-          <ProtectedRoute page="/changelog" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
-            <ChangelogPage />
           </ProtectedRoute>
         } />
       </Routes>
