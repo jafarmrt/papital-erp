@@ -1,3 +1,7 @@
+import { eq } from 'drizzle-orm';
+import { orm } from '../../db/drizzle.js';
+import { workflowTransitions } from '../../db/schema.js';
+import { liveActionStableKey, mergeWorkflowActionRows, publishedWorkflowActions } from '../../services/accounting/publishedWorkflowActions.js';
 import { TestCaseResult } from '../types.js';
 import { runCase, type Harness, type Row, type ShouldRun } from './workflowTestHarness.js';
 import { dropDefinitions } from './workflowDefinitionSwitchTests.js';
@@ -178,6 +182,37 @@ export async function runWorkflowVersionPublishTests(shouldRun: ShouldRun): Prom
         await save(h, { ...design(code, type, false), id });
         const del = await h.del(`/api/roles/${Number(role?.id)}`);
         if (del.status !== 409 || del.body?.code !== 'ROLE_USED_BY_WORKFLOW') wrong.push(`deleting a role of the published version returned ${del.status} ${String(del.body?.code)}, not 409 ROLE_USED_BY_WORKFLOW`);
+      } finally {
+        await dropDefinitions(h, ids);
+      }
+    });
+  }
+
+  if (shouldRun('sec_workflow_health_draft_once_td_1270', 'security', 'td1270', 'd-06', 'workflow')) {
+    await runCase(results, {
+      id: 'sec_workflow_health_draft_once_td_1270',
+      name: 'v10.1.20: an unguarded action unchanged between a draft and the published version is listed once by the workflow health checks (TD-1270)',
+      details: 'workflow published with an unguarded action; saved again unchanged as a draft (new ids); the step tables and the published version give the same stable key and the merge keeps one row',
+    }, async (h, wrong) => {
+      const type = `wfho_${h.tag}`;
+      const code = `WFHO_${h.tag}`;
+      const ids: number[] = [];
+      try {
+        const id = await save(h, design(code, type, false));
+        ids.push(id);
+        await save(h, { ...design(code, type, false), id });
+        const live = (await orm.select({ transitionId: workflowTransitions.id, stableKey: liveActionStableKey })
+          .from(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, id)))
+          .map(r => ({ definitionId: id, transitionId: Number(r.transitionId), stableKey: String(r.stableKey) }));
+        const published = (await publishedWorkflowActions(orm, type)).filter(a => a.definitionId === id)
+          .map(a => ({ definitionId: a.definitionId, transitionId: a.transitionId, stableKey: a.stableKey }));
+        if (live.length !== 1 || published.length !== 1) wrong.push(`expected one action on each side, got ${live.length} live and ${published.length} published`);
+        if (live[0]?.transitionId === published[0]?.transitionId) wrong.push('the draft kept the published action id, so the test proves nothing');
+        if (live[0]?.stableKey !== 'draft>done>approve' || published[0]?.stableKey !== 'draft>done>approve') {
+          wrong.push(`stable keys differ: live ${String(live[0]?.stableKey)}, published ${String(published[0]?.stableKey)}`);
+        }
+        const merged = mergeWorkflowActionRows(live, published);
+        if (merged.length !== 1) wrong.push(`the merge listed the unchanged action ${merged.length} times, not once`);
       } finally {
         await dropDefinitions(h, ids);
       }

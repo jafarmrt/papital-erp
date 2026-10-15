@@ -3,7 +3,7 @@ import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { workflowDefinitions, workflowStates, workflowTransitions } from '../../db/schema.js';
 import type { HealthCheckTestResult } from '../../types.js';
 import { publishedVersionOf, recordDefinitionVersion } from './workflowSnapshot.js';
-import { isUnguardedAction, mergeWorkflowActionRows, publishedWorkflowActions } from '../accounting/publishedWorkflowActions.js';
+import { isUnguardedAction, liveActionStableKey, mergeWorkflowActionRows, publishedWorkflowActions } from '../accounting/publishedWorkflowActions.js';
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
 import type { SeedGuardUpgrade, SeedStepGuard } from './seedGuardUpgrade.js';
 
@@ -134,6 +134,7 @@ export async function findUnguardedDocumentApprovals(db: DbExecutor = orm): Prom
     title: workflowDefinitions.title,
     transitionId: workflowTransitions.id,
     transitionTitle: workflowTransitions.title,
+    stableKey: liveActionStableKey,
   })
     .from(workflowTransitions)
     .innerJoin(workflowDefinitions, eq(workflowDefinitions.id, workflowTransitions.workflowDefinitionId))
@@ -149,7 +150,7 @@ export async function findUnguardedDocumentApprovals(db: DbExecutor = orm): Prom
   // v10.1.20 (TD-1270): the published version runs new records while the step tables hold a draft
   const published = (await publishedWorkflowActions(db, 'document'))
     .filter(a => isUnguardedAction(a) && (a.toStateKey === 'approved' || a.autoActionKey === 'POST_INVOICE'))
-    .map(a => ({ definitionId: a.definitionId, code: a.code, title: a.title, transitionId: a.transitionId, transitionTitle: a.transitionTitle }));
+    .map(a => ({ definitionId: a.definitionId, code: a.code, title: a.title, transitionId: a.transitionId, transitionTitle: a.transitionTitle, stableKey: a.stableKey }));
   return mergeWorkflowActionRows(rows.map(r => ({ ...r, title: r.title ?? '', transitionTitle: r.transitionTitle ?? '' })), published);
 }
 
