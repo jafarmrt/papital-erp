@@ -12,6 +12,8 @@ import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 import { useHasPermission } from '../contexts/AuthContext';
 import { activityPayload } from '../lib/crm/activityPayload';
 import { useLeadDrawerActivities } from './useLeadDrawerActivities';
+import { activityEditForm, activityEditPayload } from '../lib/crm/activityEdit';
+import { lostReasonError } from '../lib/crm/leadFields';
 
 export const STAGES = [
   { key: 'lead', title: 'مخاطب اولیه', color: 'bg-slate-100 border-slate-300 text-slate-700', badge: 'bg-slate-200 text-slate-800' },
@@ -28,7 +30,7 @@ export function useCRMData(user: any) {
   // v9.0.148 (TD-893): دکمه حذف پرونده فروش با همان مجوز API حذف (`crm.delete`)، نه با کد نقش
   const canDeleteLead = useHasPermission('crm.delete');
 
-  const [activeTab, setActiveTab] = useState<'kanban' | 'list' | 'activities' | 'followups'>('kanban');
+  const [activeTab, setActiveTab] = useState<'kanban' | 'list' | 'activities' | 'followups' | 'funnel'>('kanban');
   const [stats, setStats] = useState<Partial<CrmStats>>({});
   const [leads, setLeads] = useState<CRMLead[]>([]);
   const [activities, setActivities] = useState<CRMActivity[]>([]);
@@ -78,7 +80,9 @@ export function useCRMData(user: any) {
     assignedTo: currentLoggedInUser,
     assignedPersonnelId: null as number | null,
     expectedCloseDate: getFutureJalaliDate(30),
-    notes: ''
+    notes: '',
+    lostReason: '',
+    lostReasonNote: ''
   });
 
   const [activityForm, setActivityForm] = useState({
@@ -98,6 +102,9 @@ export function useCRMData(user: any) {
 
   const [isSavingLead, setIsSavingLead] = useState<boolean>(false);
   const [isSavingActivity, setIsSavingActivity] = useState<boolean>(false);
+  // v10.1.18 (N-02 بخش ۲): اقدامی که پنجره اقدام ویرایشش می‌کند، و پرونده‌ای که برای رفتن به «از دست رفته» دلیل می‌خواهد
+  const [editingActivity, setEditingActivity] = useState<CRMActivity | null>(null);
+  const [lostPromptLeadId, setLostPromptLeadId] = useState<number | null>(null);
 
   const queryClient = useQueryClient();
   const loadAllData = useCallback(async (signal?: AbortSignal) => {
@@ -226,7 +233,9 @@ export function useCRMData(user: any) {
         assignedPersonnelId: defaultSellerId,
         // v7.0.132 (TD-232): تاریخ ذخیره‌شده میلادی ISO است؛ فرم شمسی می‌گیرد
         expectedCloseDate: isoToJalaliDate(lead.expectedCloseDate) || getFutureJalaliDate(30),
-        notes: lead.notes || ''
+        notes: lead.notes || '',
+        lostReason: lead.lostReason || '',
+        lostReasonNote: lead.lostReasonNote || ''
       });
     } else {
       setEditingLead(null);
@@ -245,7 +254,9 @@ export function useCRMData(user: any) {
         assignedTo: defaultSellerName,
         assignedPersonnelId: defaultSellerId,
         expectedCloseDate: getFutureJalaliDate(30),
-        notes: ''
+        notes: '',
+        lostReason: '',
+        lostReasonNote: ''
       });
     }
     setIsLeadModalOpen(true);
@@ -263,10 +274,22 @@ export function useCRMData(user: any) {
       return;
     }
 
+    // v10.1.18 (N-02 بخش ۲، ت۶): رفتن به «از دست رفته» دلیل از فهرست می‌خواهد؛ دلیل فقط با همین مرحله فرستاده می‌شود
+    const { lostReason, lostReasonNote, ...leadFields } = leadForm;
+    const enteringLost = leadForm.stage === 'lost' && editingLead?.stage !== 'lost';
+    if (leadForm.stage === 'lost' && (enteringLost || lostReason)) {
+      const lostError = lostReasonError(lostReason, lostReasonNote);
+      if (lostError) {
+        toast.error(lostError);
+        return;
+      }
+    }
+
     setIsSavingLead(true);
     try {
       const payload = {
-        ...leadForm,
+        ...leadFields,
+        ...(leadForm.stage === 'lost' && lostReason ? { lostReason, lostReasonNote } : {}),
         estimatedValue: Number(leadForm.estimatedValue || 0),
         probability: Number(leadForm.probability || 50),
         contacts: Array.isArray(leadForm.contacts) ? leadForm.contacts : []
@@ -301,8 +324,12 @@ export function useCRMData(user: any) {
     }
   };
 
-  const handleStageChange = async (leadId: number, newStage: string) => {
+  const handleStageChange = async (leadId: number, newStage: string, lost?: { lostReason: string; lostReasonNote: string }) => {
     const targetLead = leads.find((l) => l.id === leadId);
+    if (newStage === 'lost' && !lost && targetLead?.stage !== 'lost') {
+      setLostPromptLeadId(leadId);
+      return;
+    }
     if (newStage === 'won' && (!targetLead || Number(targetLead.hasProforma) !== 1)) {
       toast.error('امکان انتقال پرونده فروش به مرحله "موفق بسته شد" وجود ندارد. ابتدا باید برای این پرونده فروش، پیش‌فاکتور صادر و ثبت کنید.');
       return;
@@ -311,8 +338,9 @@ export function useCRMData(user: any) {
     try {
       await fetchJson(`/crm/leads/${leadId}`, {
         method: 'PUT',
-        body: JSON.stringify({ stage: newStage })
+        body: JSON.stringify({ stage: newStage, ...(lost ?? {}) })
       });
+      setLostPromptLeadId(null);
       if (newStage === 'won') {
         toast.success('🎉 عالی بود! معامله با موفقیت بسته شد. همزمان اعلان ثبت پیش‌فاکتور به واحد انبار ارسال گردید.', { duration: 6000 });
       } else if (newStage === 'lost') {
@@ -339,7 +367,32 @@ export function useCRMData(user: any) {
     }
   };
 
+  // v10.1.18 (N-02 بخش ۲، ت۱ و ت۲): ویرایش در همان پنجره اقدام با نسخه اقدام، و حذف پس از تأیید
+  const openEditActivity = (act: CRMActivity) => {
+    setEditingActivity(act);
+    setSelectedLeadForActivity(leads.find((l) => l.id === act.leadId) || null);
+    setActivityForm({ ...activityEditForm(act), customerName: act.customerName || '', customerId: act.customerId ?? null });
+    setIsActivityModalOpen(true);
+  };
+
+  const refreshAfterActivityChange = () => {
+    void loadAllData();
+    if (selectedLeadDrawer) void openLeadDrawer(selectedLeadDrawer);
+  };
+
+  const handleDeleteActivity = async (act: CRMActivity) => {
+    if (!(await confirmAction({ title: 'حذف اقدام', message: `اقدام «${act.title}» حذف شود؟ از فهرست‌ها و یادآوری‌ها بیرون می‌رود.` }))) return;
+    try {
+      await fetchJson(`/crm/activities/${act.id}`, { method: 'DELETE' });
+      toast.success('اقدام حذف شد');
+      refreshAfterActivityChange();
+    } catch (err) {
+      toast.error(errorMessageOf(err) || 'خطا در حذف اقدام');
+    }
+  };
+
   const openActivityModal = (lead?: CRMLead, defaultType: string = 'call', defaultCustName?: string, defaultCustId?: number) => {
+    setEditingActivity(null);
     setSelectedLeadForActivity(lead || null);
 
     let defaultTitle = 'تماس تلفنی جدید';
@@ -383,6 +436,17 @@ export function useCRMData(user: any) {
     setIsSavingActivity(true);
     try {
       // v10.0.31 (TD-973): an activity without a lead keeps the party the form was opened for
+      if (editingActivity) {
+        await fetchJson(`/crm/activities/${editingActivity.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(activityEditPayload(activityForm, Number(editingActivity.version ?? 1)))
+        });
+        toast.success('اقدام ویرایش شد');
+        setIsActivityModalOpen(false);
+        setEditingActivity(null);
+        refreshAfterActivityChange();
+        return;
+      }
       const payload = activityPayload(activityForm, selectedLeadForActivity);
 
       await fetchJson('/crm/activities', {
@@ -513,6 +577,11 @@ export function useCRMData(user: any) {
     isSavingActivity,
     openActivityModal,
     handleSaveActivity,
+    editingActivity,
+    openEditActivity,
+    handleDeleteActivity,
+    lostPromptLeadId,
+    setLostPromptLeadId,
     selectedLeadDrawer,
     setSelectedLeadDrawer,
     drawerActivities,

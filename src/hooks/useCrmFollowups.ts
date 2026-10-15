@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '../api';
 import { CRM_FOLLOWUPS_QUERY_KEY, followupsUrl, toFollowupPage, type FollowupPage, type FollowupQuery } from '../lib/crm/crmFollowupsQuery';
 
-const EMPTY: Omit<FollowupPage, 'page' | 'limit'> = { data: [], total: 0, totalPages: 1, dueCount: 0, openCount: 0 };
+const EMPTY: Omit<FollowupPage, 'page' | 'limit'> = { data: [], total: 0, totalPages: 1, dueCount: 0, openCount: 0, scope: 'mine' };
 
 /**
  * v9.0.14 (TD-428): پیگیری‌ها از `GET /crm/followups`؛ پس از هر ثبت یا تکمیل اقدام، `useCRMData` کلید

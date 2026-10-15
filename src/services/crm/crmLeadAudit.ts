@@ -10,6 +10,7 @@ type Lead = typeof crmLeads.$inferSelect;
 const AUDITED_LEAD_FIELDS = [
   'title', 'customerId', 'customerName', 'phone', 'company', 'contacts', 'source', 'stage', 'status', 'estimatedValue',
   'currency', 'probability', 'assignedTo', 'assignedPersonnelId', 'expectedCloseDate', 'notes', 'hasProforma', 'proformaId',
+  'lostReason', 'lostReasonNote',
 ] as const satisfies readonly (keyof Lead)[];
 
 export type LeadAuditSnapshot = Partial<Record<typeof AUDITED_LEAD_FIELDS[number], unknown>>;
