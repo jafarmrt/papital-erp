@@ -114,7 +114,7 @@
     "src/routes/crm.routes.ts": 1,
     "src/routes/customers.routes.ts": 5,
     "src/routes/events.routes.ts": 6,
-    "src/routes/inventory.routes.ts": 8,
+    "src/routes/inventory.routes.ts": 5,
     "src/routes/items.crud.routes.ts": 1,
     "src/routes/items.import.routes.ts": 1,
     "src/routes/personnel.routes.ts": 3,

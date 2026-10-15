@@ -598,18 +598,9 @@ router.post('/projects/:id/add-to-inventory', authorizePermission(...PROJECT_EDI
       markCompleted,
       currentUser,
       userId: req.user?.id,
-      overDeliveryReason
-    });
-
-    await logActivity({
-      userId: req.user?.id,
-      username: currentUser,
-      userFullName: req.user?.full_name || currentUser,
-      action: 'UPDATE',
-      entity: 'پروژه تولید',
-      entityId: String(id),
-      description: `افزایش موجودی انبار بابت تحویل ${toPersianDigits(result.addedCount)} قلم محصول از پروژه ${result.projectCode}${result.refNumber ? ` با رسید تولید ${result.refNumber}` : ''}${result.overDeliveries.length > 0 ? ` (تحویل بیش از برنامه با دلیل: ${overDeliveryReason})` : ''}`,
-      ...(result.overDeliveries.length > 0 ? { details: { overDeliveries: result.overDeliveries, overDeliveryReason } } : {})
+      overDeliveryReason,
+      // TD-943: the production receipt's CREATE row and the project row are written with the delivery's transaction
+      auditReq: req
     });
 
     res.json({

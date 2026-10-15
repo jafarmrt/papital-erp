@@ -9,7 +9,7 @@ import { money } from '../lib/money.js';
 import { AccountingService } from '../services/accounting.service.js';
 import { WorkflowDefinitionService } from '../services/workflow/workflowDefinitionService.js';
 import { logger } from '../middleware/logger.js';
-import { withAdvisoryLock, ADVISORY_LOCK_KEYS } from '../lib/advisoryLock.js';
+import { withAdvisoryLock, withAdvisoryLockWaiting, ADVISORY_LOCK_KEYS } from '../lib/advisoryLock.js';
 
 /**
  * Executes system seed with PostgreSQL Advisory Lock (89345) to ensure multi-instance safety.
@@ -19,8 +19,10 @@ import { withAdvisoryLock, ADVISORY_LOCK_KEYS } from '../lib/advisoryLock.js';
 /** v10.0.180 (TD-959): `failedSections` names every base data section that failed; `success` is false when one did. */
 export interface SeedResult { success: boolean; message: string; failedSections: string[] }
 
-export async function runSeedWithLock(): Promise<SeedResult> {
+export async function runSeedWithLock(options: { waitForLock?: boolean } = {}): Promise<SeedResult> {
   try {
+    // TD-1265: the test bootstrap waits for the lock; skipping left an isolated test schema without base data
+    if (options.waitForLock) return await withAdvisoryLockWaiting(ADVISORY_LOCK_KEYS.SEED, () => runSeed());
     const outcome = await withAdvisoryLock(ADVISORY_LOCK_KEYS.SEED, () => runSeed());
     if (!outcome.acquired) {
       logger.info('[Seed] Another instance is seeding — skipping');

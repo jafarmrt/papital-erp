@@ -405,16 +405,9 @@ router.post(
       projectId: Number(projectId),
       allocations,
       userId: user?.id,
-      username: actorDisplayName(user, 'مدیر سیستم')
-    });
-
-    await logActivity({
-      req,
-      action: 'CREATE',
-      entity: 'تخصیص مواد BOM پروژه',
-      entityId: String(projectId),
-      description: `تخصیص ${result.allocatedCount} قلم مواد اولیه به پروژه شناسه ${projectId}`,
-      details: result
+      username: actorDisplayName(user, 'مدیر سیستم'),
+      // TD-943: the audit row is written with the allocation's own transaction
+      auditReq: req
     });
 
     res.json({
@@ -440,16 +433,8 @@ router.post(
     const user: AuthUserPayload | undefined = req.user;
     const updated = await InventoryIntegrityService.consumeAllocation(id, {
       userId: user?.id,
-      username: actorDisplayName(user)
-    });
-
-    await logActivity({
-      req,
-      action: 'UPDATE',
-      entity: 'تخصیص مواد BOM پروژه',
-      entityId: String(id),
-      description: `مصرف قطعی تخصیص شماره ${id} برای پروژه ${updated.projectCode} (کالا: ${updated.itemName})`,
-      details: updated
+      username: actorDisplayName(user),
+      auditReq: req
     });
 
     res.json({
@@ -479,16 +464,8 @@ router.post(
     const updated = await InventoryIntegrityService.releaseAllocation(id, {
       reason,
       userId: user?.id,
-      username: actorDisplayName(user)
-    });
-
-    await logActivity({
-      req,
-      action: 'UPDATE',
-      entity: 'آزادسازی تخصیص BOM',
-      entityId: String(id),
-      description: `آزادسازی و عودت ${updated.quantity} واحد از کالا ${updated.itemName} به انبار ${updated.sourceLocation} بابت پروژه ${updated.projectCode}`,
-      details: updated
+      username: actorDisplayName(user),
+      auditReq: req
     });
 
     res.json({
