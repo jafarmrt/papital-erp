@@ -109,6 +109,7 @@ export class InventoryIntegrityService {
     userId?: number;
     username?: string;
     externalTx?: DbExecutor;
+    auditReq?: unknown;
   }) {
     return ProjectBomAllocationService.allocateMaterialsForProject(params);
   }
@@ -119,15 +120,16 @@ export class InventoryIntegrityService {
     userId?: number;
     username?: string;
     externalTx?: DbExecutor;
+    auditReq?: unknown;
   }) {
     return ProjectBomAllocationService.allocateReceiptItemsForProjectBom(params);
   }
 
-  static async consumeAllocation(allocationId: number, opts?: { userId?: number; username?: string; externalTx?: DbExecutor }) {
+  static async consumeAllocation(allocationId: number, opts?: { userId?: number; username?: string; externalTx?: DbExecutor; auditReq?: unknown }) {
     return ProjectBomAllocationService.consumeAllocation(allocationId, opts);
   }
 
-  static async releaseAllocation(allocationId: number, opts?: { reason?: string; userId?: number; username?: string; externalTx?: DbExecutor }) {
+  static async releaseAllocation(allocationId: number, opts?: { reason?: string; userId?: number; username?: string; externalTx?: DbExecutor; auditReq?: unknown }) {
     return ProjectBomAllocationService.releaseAllocation(allocationId, opts);
   }
 

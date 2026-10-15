@@ -49,7 +49,7 @@ export async function findWorkflowReferenceGaps(db: DbExecutor = orm): Promise<W
   const present = new Map<string, boolean>();
   const constraints = rowsOf(await db.execute(sql`
     SELECT c.conname, c.convalidated FROM pg_constraint c
-    WHERE c.contype = 'f' AND c.conrelid IN (${sql.join(WORKFLOW_FOREIGN_KEYS.map(fk => sql`to_regclass(${fk.table})`), sql`, `)})
+    WHERE c.connamespace = current_schema()::regnamespace AND c.contype = 'f' AND c.conrelid IN (${sql.join(WORKFLOW_FOREIGN_KEYS.map(fk => sql`to_regclass(${fk.table})`), sql`, `)})
   `));
   for (const r of constraints) present.set(String(r.conname), Boolean(r.convalidated));
 

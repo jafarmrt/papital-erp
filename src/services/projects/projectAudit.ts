@@ -166,3 +166,29 @@ export async function logMatrixStatusChange(
     },
   });
 }
+
+/**
+ * TD-943 (P5-M10, OBS-R2-07): the project row of a delivery («ورود به انبار»), written with the delivery's own `tx`
+ * (the production receipt's CREATE row is `logDocumentCreated`); before, the route wrote it after the commit.
+ */
+export async function logProjectDelivery(
+  tx: DbExecutor,
+  actor: ProjectActor,
+  project: Pick<ProjectRow, 'id' | 'projectCode'>,
+  delivery: { documentId: number | null; refNumber: string | null; addedCount: number; overDeliveries: unknown[]; overDeliveryReason: string },
+): Promise<void> {
+  const over = delivery.overDeliveries.length > 0;
+  await logActivity({
+    tx,
+    ...actorFields(actor),
+    action: 'UPDATE',
+    entity: PROJECT_AUDIT_ENTITY,
+    entityId: String(project.id),
+    description: `افزایش موجودی انبار بابت تحویل ${toPersianDigits(delivery.addedCount)} قلم محصول از پروژه ${project.projectCode}${delivery.refNumber ? ` با رسید تولید ${delivery.refNumber}` : ''}${over ? ` (تحویل بیش از برنامه با دلیل: ${delivery.overDeliveryReason})` : ''}`,
+    details: {
+      documentId: delivery.documentId,
+      refNumber: delivery.refNumber,
+      ...(over ? { overDeliveries: delivery.overDeliveries, overDeliveryReason: delivery.overDeliveryReason } : {}),
+    },
+  });
+}
