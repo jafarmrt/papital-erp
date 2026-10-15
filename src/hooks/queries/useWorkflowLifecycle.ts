@@ -11,7 +11,7 @@ export interface WorkflowDefinitionSummary {
   entityType: string;
   description?: string | null;
   version?: number | null;
-  /** v10.1.19 (TD-1270): the version new records start with; `version` above it is an unpublished draft */
+  /** v10.1.20 (TD-1270): the version new records start with; `version` above it is an unpublished draft */
   publishedVersion?: number | null;
   isActive?: number | null;
   isArchived?: number | null;
@@ -42,7 +42,7 @@ export function useWorkflowLifecycleMutation() {
   });
 }
 
-/** v10.1.19 (TD-1270, D-06 part D): a definition's unpublished draft and what it changes against the published version */
+/** v10.1.20 (TD-1270, D-06 part D): a definition's unpublished draft and what it changes against the published version */
 export interface WorkflowDraftState {
   definitionId: number;
   publishedVersion: number;

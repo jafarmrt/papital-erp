@@ -72,7 +72,7 @@ export async function workflowsRequiringRole(db: DbExecutor, roleCode: string): 
                   WHERE lower(btrim(coalesce(t ->> 'requiredRole', ''))) = ${code})`,
     ))
     .orderBy(asc(workflowDefinitions.id));
-  // v10.1.19 (TD-1270): the published version runs new records even when the step tables hold a draft without the role
+  // v10.1.20 (TD-1270): the published version runs new records even when the step tables hold a draft without the role
   const published = await db.selectDistinct({ title: workflowDefinitions.title, id: workflowDefinitions.id })
     .from(workflowDefinitionVersions)
     .innerJoin(workflowDefinitions, eq(workflowDefinitions.id, workflowDefinitionVersions.definitionId))

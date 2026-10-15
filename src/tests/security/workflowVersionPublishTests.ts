@@ -3,7 +3,7 @@ import { runCase, type Harness, type Row, type ShouldRun } from './workflowTestH
 import { dropDefinitions } from './workflowDefinitionSwitchTests.js';
 
 /**
- * v10.1.19 (TD-1270, D-06 part D, decisions ت۴ / ت۱۰): a design save of an existing workflow is a draft that new records
+ * v10.1.20 (TD-1270, D-06 part D, decisions ت۴ / ت۱۰): a design save of an existing workflow is a draft that new records
  * do not see; `workflow.admin` publishes it or reverts to an earlier version, which is published as a new version. Running
  * records keep their own version. All through the real Express routes.
  */
@@ -54,7 +54,7 @@ export async function runWorkflowVersionPublishTests(shouldRun: ShouldRun): Prom
   if (shouldRun('sec_workflow_draft_publish_td_1270', 'security', 'td1270', 'd-06', 'workflow')) {
     await runCase(results, {
       id: 'sec_workflow_draft_publish_td_1270',
-      name: 'v10.1.19: a design save of an existing workflow is a draft new records do not see until workflow.admin publishes it; the draft and its changes are listed; a stale or missing draft is refused (TD-1270)',
+      name: 'v10.1.20: a design save of an existing workflow is a draft new records do not see until workflow.admin publishes it; the draft and its changes are listed; a stale or missing draft is refused (TD-1270)',
       details: 'new workflow published at once; edit saved as draft v2 (published stays 1); record started meanwhile runs v1; GET draft lists the added step and action; workflow.manage 403; stale draftVersion 409 WF_DRAFT_CHANGED; publish 200 with an audit row, v1 retired; next record runs v2; publish again 409 WF_NO_DRAFT',
     }, async (h, wrong) => {
       const type = `wfdp_${h.tag}`;
@@ -116,7 +116,7 @@ export async function runWorkflowVersionPublishTests(shouldRun: ShouldRun): Prom
   if (shouldRun('sec_workflow_revert_version_td_1270', 'security', 'td1270', 'd-06', 'workflow')) {
     await runCase(results, {
       id: 'sec_workflow_revert_version_td_1270',
-      name: 'v10.1.19: workflow.admin reverts a workflow to an earlier version, published as a new version that sets the waiting draft aside; history is kept; the current version, a missing one and workflow.manage are refused (TD-1270)',
+      name: 'v10.1.20: workflow.admin reverts a workflow to an earlier version, published as a new version that sets the waiting draft aside; history is kept; the current version, a missing one and workflow.manage are refused (TD-1270)',
       details: 'v1 two steps, v2 three steps published, v3 draft; revert to 1 gives v4 published, v3 retired, step tables back to two steps, an audit row naming version 1; next record runs v4; revert to the published v4 409; v99 404; workflow.manage 403',
     }, async (h, wrong) => {
       const type = `wfrv_${h.tag}`;
@@ -163,7 +163,7 @@ export async function runWorkflowVersionPublishTests(shouldRun: ShouldRun): Prom
   if (shouldRun('sec_workflow_published_role_kept_td_1270', 'security', 'td1270', 'd-06', 'workflow')) {
     await runCase(results, {
       id: 'sec_workflow_published_role_kept_td_1270',
-      name: 'v10.1.19: a role the published version asks is not deleted while a draft without it waits (TD-1270)',
+      name: 'v10.1.20: a role the published version asks is not deleted while a draft without it waits (TD-1270)',
       details: 'workflow published with a step role; a draft drops it; DELETE /roles/:id is 409 ROLE_USED_BY_WORKFLOW',
     }, async (h, wrong) => {
       const type = `wfrl_${h.tag}`;

@@ -20,8 +20,11 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
-### v10.1.19 — پیش‌نویس، انتشار و برگرداندن نسخه گردش کار (D-06 بخش د)
+### v10.1.20 — پیش‌نویس، انتشار و برگرداندن نسخه گردش کار (D-06 بخش د)
 - ذخیره دوباره طرح گردش کار پیش‌نویس است و پرونده‌های تازه تا انتشار آن با نسخه منتشرشده آغاز می‌شوند؛ «تاریخچه نسخه‌ها» تفاوت پیش‌نویس را نشان می‌دهد و دارنده «مدیریت ارشد و همگام‌سازی فرآیندها» آن را منتشر می‌کند یا به نسخه پیشین برمی‌گرداند (TD-1270، مهاجرت 0114).
+
+### v10.1.19 — بیمه، مالیات حقوق و مالیات بر ارزش افزوده اختیاری می‌ماند
+- Insurance, payroll tax and VAT stay optional per person and per document: the monthly insurance and tax list keeps only personnel with insurance or tax and counts the rest, and the VAT report no longer flags an invoice without VAT. Tests: reg_payroll_statutory_report_optional_td_1269, reg_vat_report_documents_d03, Vitest optionalStatutoryVatTd1269.
 
 ### v10.1.18 — ویرایش اقدام، دلیل از دست رفتن و گزارش قیف (N-02 بخش ۲)
 - CRM activity edit and soft delete (crm.manage, OCC version), required lost reason, lead stage history (migration 0113) and the funnel report GET /crm/reports/funnel, my follow-ups scope. Tests: reg_crm_activity_edit_delete_n02, reg_crm_lost_reason_stage_history_n02, reg_crm_my_followups_n02, reg_crm_funnel_report_n02, Vitest crmActivitiesFunnelN02.

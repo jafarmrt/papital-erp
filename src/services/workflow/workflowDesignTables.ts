@@ -48,7 +48,7 @@ export interface DesignTransitionInput {
 }
 
 /**
- * Replaces a definition's step and action rows with a design (new ids). v10.1.19 (TD-1270): shared by the design save and
+ * Replaces a definition's step and action rows with a design (new ids). v10.1.20 (TD-1270): shared by the design save and
  * the revert to an earlier version, whose snapshot steps carry their old ids and its actions point to them.
  */
 export async function writeDesignTables(
