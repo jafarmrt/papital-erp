@@ -7,3 +7,5 @@ export const SALES_REPORT_PERMISSION = 'reports.sales';
 export const LEDGER_CHECK_PERMISSIONS = ['accounting.reports', 'accounting.view'] as const;
 /** زبانه «سن مطالبات و بدهی‌ها» و `GET /reports/aging` (v10.1.10، ت۲): همان کلید گزارش‌های حسابداری */
 export const AGING_REPORT_PERMISSION = 'accounting.reports';
+/** زبانه «مالیات بر ارزش افزوده» و `GET /reports/vat` (v10.1.11، ت۲): همان کلید گزارش‌های حسابداری */
+export const VAT_REPORT_PERMISSION = 'accounting.reports';

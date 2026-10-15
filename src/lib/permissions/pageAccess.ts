@@ -70,6 +70,8 @@ const MANAGEMENT_REPORT_TABS = {
   },
   /** v10.1.10: سن مطالبات و بدهی‌ها با کلید گزارش‌های حسابداری (ت۲) */
   '/management-reports/aging': { gate: anyOf('accounting.reports'), api: ['GET /api/reports/aging', 'GET /api/customers/options'] },
+  /** v10.1.11: مالیات بر ارزش افزوده با همان کلید (ت۲) */
+  '/management-reports/vat': { gate: anyOf('accounting.reports'), api: ['GET /api/reports/vat'] },
 } as const satisfies Record<string, PageAccessRule>;
 
 const MANAGEMENT_REPORT_KEYS = [...new Set(Object.values(MANAGEMENT_REPORT_TABS).flatMap(r => r.gate.anyOf))];
