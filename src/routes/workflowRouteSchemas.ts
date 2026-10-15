@@ -125,12 +125,12 @@ export const definitionFromTemplateSchema = z.object({
   }).strict(),
 });
 
-/** v10.1.12 (D-06 part C, OBS-R2-73): «تفویض‌های من» asks only the user's own delegations with `mine=1` */
+/** v10.1.13 (D-06 part C, OBS-R2-73): «تفویض‌های من» asks only the user's own delegations with `mine=1` */
 export const delegationListSchema = z.object({
   query: z.object({ mine: z.enum(['0', '1']).optional() }).strict(),
 });
 
-/** v10.1.12 (D-06 part C, TD-1265): the system admin closes a running record with a required reason */
+/** v10.1.13 (D-06 part C, TD-1265): the system admin closes a running record with a required reason */
 export const terminateInstanceSchema = z.object({
   params: z.object({ id: numericIdString }),
   body: z.object({

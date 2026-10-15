@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
 /**
- * v10.1.12 (D-06 part C, TD-1268 / TD-1265): «تفویض کارهایم» in the approval inbox for the holders of the delegation keys,
+ * v10.1.13 (D-06 part C, TD-1268 / TD-1265): «تفویض کارهایم» in the approval inbox for the holders of the delegation keys,
  * reading the simple user list and the scope endpoint, with «تفویض‌های من» (revoke only what the user gave); and the
  * system admin's «بستن فرایند» of a running record with a required reason, never offered for a purchase requisition.
  * Red on v10.1.11, where neither component existed.
@@ -48,7 +48,7 @@ function routeInbox() {
   });
 }
 
-describe('TD-1268 «تفویض کارهایم» in the approval inbox', () => {
+describe('TD-1268 the inbox delegation window', () => {
   it('is hidden without a delegation key', () => {
     held = new Set(['workflow.view']);
     routeInbox();
@@ -95,7 +95,7 @@ describe('TD-1268 «تفویض کارهایم» in the approval inbox', () => {
   });
 });
 
-describe('TD-1265 «بستن فرایند» of a running record', () => {
+describe('TD-1265 closing a running record by hand', () => {
   const history = [{ id: 1, instanceId: 5, actionKey: 'terminate', comment: 'گام امضاکننده ندارد', createdAt: '2026-10-15T10:00:00Z' }];
 
   it('is offered only to the workflow switch key and not for a purchase requisition', () => {

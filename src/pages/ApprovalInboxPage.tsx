@@ -248,7 +248,7 @@ export function ApprovalInboxPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
-          {/* v10.1.12 (D-06 part C, OBS-R2-73): an approver gives a deputy from the inbox */}
+          {/* v10.1.13 (D-06 part C, OBS-R2-73): an approver gives a deputy from the inbox */}
           <MyDelegationsButton />
           <button
             onClick={handleRefreshAll}

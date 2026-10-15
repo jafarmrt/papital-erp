@@ -29,7 +29,7 @@ const definitions = [
 function routeDelegations(delegations: unknown[] = []) {
   fetchJson.mockImplementation((url: string) => {
     if (url === '/workflow/delegations') return Promise.resolve({ success: true, data: delegations });
-    // v10.1.12 (TD-1268, OBS-R2-73): the form reads the scopes endpoint and the simple user list, never `/users`
+    // v10.1.13 (TD-1268, OBS-R2-73): the form reads the scopes endpoint and the simple user list, never `/users`
     if (url === '/workflow/delegation-scopes') return Promise.resolve({ success: true, data: definitions });
     if (url === '/users/list-simple') return Promise.resolve([{ id: 2, username: 'deputy', full_name: 'جانشین' }]);
     return Promise.resolve({});

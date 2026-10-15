@@ -17,7 +17,7 @@ export function WorkflowDelegationTab() {
   // v8.0.98 (TD-378): فقط تفویض‌کننده یا مدیر سیستم تفویض را لغو می‌کند
   const canRevoke = (fromUserId: number) => userPermissions.isAdmin || user?.id === fromUserId;
 
-  // TD-470: the scope is shown by its workflow title (from the server since v10.1.12), never by its code
+  // TD-470: the scope is shown by its workflow title (from the server since v10.1.13), never by its code
   const scopeLabel = (item: { scope: string; scopeTitle?: string | null }) => delegationScopeLabel(item.scope, item.scopeTitle);
 
   // Local state
