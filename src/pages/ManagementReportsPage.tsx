@@ -9,6 +9,7 @@ import { MANAGEMENT_REPORT_TABS, managementReportPath, type ManagementReportTabI
 const SalesReportTab = lazy(() => import('../components/reports/sales/SalesReportTab').then(m => ({ default: m.SalesReportTab })));
 const AgingReportTab = lazy(() => import('../components/reports/aging/AgingReportTab').then(m => ({ default: m.AgingReportTab })));
 const VatReportTab = lazy(() => import('../components/reports/vat/VatReportTab').then(m => ({ default: m.VatReportTab })));
+const PurchaseReportTab = lazy(() => import('../components/reports/purchases/PurchaseReportTab').then(m => ({ default: m.PurchaseReportTab })));
 
 /**
  * v10.1.8 (D-03، طرح گزارش‌های مدیریتی §۵): صفحه «گزارش‌های مدیریتی». فقط زبانه‌هایی دیده می‌شوند که کاربر کلید رابطشان
@@ -18,6 +19,7 @@ const TAB_CONTENT: Record<ManagementReportTabId, ComponentType> = {
   sales: SalesReportTab,
   aging: AgingReportTab,
   vat: VatReportTab,
+  purchases: PurchaseReportTab,
 };
 
 export default function ManagementReportsPage() {

@@ -66,12 +66,18 @@ const ACCOUNTING_KEYS = [...new Set(Object.values(ACCOUNTING_TABS).flatMap(r => 
 const MANAGEMENT_REPORT_TABS = {
   '/management-reports/sales': {
     gate: anyOf('reports.sales'),
-    api: ['GET /api/reports/sales', 'GET /api/customers/options', 'GET /api/items/options', 'GET /api/projects/options', 'GET /api/categories'],
+    // v10.1.15: نمودار روند فروش و سهم دسته‌ها (ت۱۶)
+    api: ['GET /api/reports/sales', 'GET /api/reports/sales/charts', 'GET /api/customers/options', 'GET /api/items/options', 'GET /api/projects/options', 'GET /api/categories'],
   },
   /** v10.1.10: سن مطالبات و بدهی‌ها با کلید گزارش‌های حسابداری (ت۲) */
   '/management-reports/aging': { gate: anyOf('accounting.reports'), api: ['GET /api/reports/aging', 'GET /api/customers/options'] },
   /** v10.1.14: مالیات بر ارزش افزوده با همان کلید (ت۲) */
   '/management-reports/vat': { gate: anyOf('accounting.reports'), api: ['GET /api/reports/vat'] },
+  /** v10.1.15: خرید به تفکیک تأمین‌کننده و کالا با کلید تازه `reports.purchases` (ت۱۵) */
+  '/management-reports/purchases': {
+    gate: anyOf('reports.purchases'),
+    api: ['GET /api/reports/purchases', 'GET /api/customers/options', 'GET /api/items/options', 'GET /api/categories'],
+  },
 } as const satisfies Record<string, PageAccessRule>;
 
 const MANAGEMENT_REPORT_KEYS = [...new Set(Object.values(MANAGEMENT_REPORT_TABS).flatMap(r => r.gate.anyOf))];

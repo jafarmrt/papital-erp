@@ -205,7 +205,7 @@ pre code,
 }
 
 
-/* v10.1.17 (TD-1271, vibefarsi forms rule): on an iPhone Safari zooms the page when a field under 16px gets focus.
+/* v10.1.18 (TD-1271, vibefarsi forms rule): on an iPhone Safari zooms the page when a field under 16px gets focus.
    Only iOS devices match the @supports test; the phone width matches the app's md breakpoint (usePhoneWidth). */
 @supports (-webkit-touch-callout: none) {
   @media (max-width: 767px) {

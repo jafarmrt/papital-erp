@@ -16,6 +16,7 @@ vi.mock('../../contexts/AuthContext', () => ({
     logout: () => undefined,
   }),
   useHasPermission: (key: string) => granted.has(key),
+  useHasAnyPermission: (keys: readonly string[]) => keys.some(key => granted.has(key)),
   useIsSystemAdmin: () => false,
 }));
 vi.mock('../../api', async (original) => ({
@@ -65,5 +66,21 @@ describe('dashboard sales data (TD-674)', () => {
     await waitFor(() => expect(requested.some(url => url.startsWith('/crm/activities'))).toBe(true));
     expect(requested.some(url => url.startsWith('/crm/leads'))).toBe(true);
     expect(requested.filter(url => PAGE_ONLY.test(url))).toEqual([]);
+  });
+});
+
+// v10.1.15 (D-03 بخش ۴، ت۱۴): ابزارک فروش و مطالبات پیشخوان فقط برای دارنده یکی از کلیدهای گزارشش
+describe('dashboard sales widget (D-03)', () => {
+  it('asks no sales summary without reports.sales or accounting.reports', async () => {
+    granted.add('warehouse.view');
+    renderDashboard();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(requested.filter(url => url.startsWith('/reports/'))).toEqual([]);
+  });
+
+  it('reads the sales summary with reports.sales', async () => {
+    granted.add('reports.sales');
+    renderDashboard();
+    await waitFor(() => expect(requested).toContain('/reports/dashboard-summary'));
   });
 });

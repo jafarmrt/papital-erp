@@ -511,7 +511,7 @@ export function getIranianPhoneOperatorInfo(phone: string | null | undefined): I
       operatorName = 'تالیا';
     }
 
-    // v10.1.17 (TD-1271، قاعده iran-validation در vibefarsi): اپراتور فقط نشانه است، نه شرط؛ پیش‌شماره‌ای که در جدول نیست
+    // v10.1.18 (TD-1271، قاعده iran-validation در vibefarsi): اپراتور فقط نشانه است، نه شرط؛ پیش‌شماره‌ای که در جدول نیست
     // (مانند ۰۹۰۰، ۰۹۳۱ و ۰۹۳۴) شماره را نامعتبر نمی‌کند. پیش‌تر شماره ۱۱ رقمی درست با پیش‌شماره ناآشنا قرمز می‌شد.
     const isFullLength = clean.length === 11;
     return {
