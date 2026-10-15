@@ -3,7 +3,7 @@ import type { PeriodBucket, ReportRange } from '../../lib/reports/reportPeriods.
 import type { SalesDimension, SalesReportFilters } from '../../lib/reports/salesReport.js';
 
 /**
- * v10.1.7 (D-03، طرح گزارش‌های مدیریتی §۲): بخش‌های SQL گزارش فروش. هر پرسش از `salesFactsCte` آغاز می‌شود: یک ردیف برای
+ * v10.1.8 (D-03، طرح گزارش‌های مدیریتی §۲): بخش‌های SQL گزارش فروش. هر پرسش از `salesFactsCte` آغاز می‌شود: یک ردیف برای
  * هر (سند، کالا)، با مبلغ‌ها به ارز نما و بهای کاردکس همان سند.
  *
  * - سند: فاکتور فروش (و پیش‌فاکتور قطعی‌شده قدیمی با نوع proforma، همان که سند حسابداری فروش می‌گیرد) و برگشت از فروش،

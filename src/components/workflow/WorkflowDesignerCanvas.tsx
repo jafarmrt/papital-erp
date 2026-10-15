@@ -9,6 +9,7 @@ import { useRolesQuery } from '../../hooks/queries/useUserQueries';
 import { toast } from 'react-hot-toast';
 import { formatPersianNumber } from '../../utils/persianNumber';
 import { WorkflowEdgeGuardFields } from './WorkflowEdgeGuardFields';
+import { WorkflowEntityTypeField } from './WorkflowEntityTypeField';
 import { designStepOrder, nextDesignStepOrder, renameDesignStateKey, workflowDesignErrors } from '../../lib/workflow/workflowDesignRules';
 
 interface WorkflowDesignerCanvasProps {
@@ -291,6 +292,12 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               طراحی گام‌ها و اقدام‌ها، شرط‌ها، مهلت انجام و نقش‌های تأییدکننده
             </p>
+            <WorkflowEntityTypeField
+              value={defEntityType || def?.entityType || ''}
+              onChange={setDefEntityType}
+              isActive={def?.isActive}
+              startedCount={detailData?.startedInstanceCount}
+            />
           </div>
         </div>
 

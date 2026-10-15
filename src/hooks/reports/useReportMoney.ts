@@ -3,7 +3,7 @@ import { useRialDisplay } from '../useAppCurrency';
 import { formatCurrencyLabel, formatPersianPrice } from '../../utils';
 
 /**
- * v10.1.7 (D-03، تصمیم ت۴): نمایش مبلغ گزارش‌های مدیریتی. نمای «همه ارزها» و نمای ریال در واحد نمایش مبالغ ریالی
+ * v10.1.8 (D-03، تصمیم ت۴): نمایش مبلغ گزارش‌های مدیریتی. نمای «همه ارزها» و نمای ریال در واحد نمایش مبالغ ریالی
  * (ریال یا تومان، TD-667) است و نمای یک ارز خارجی با همان ارز و دو رقم اعشار.
  */
 export interface ReportMoney {

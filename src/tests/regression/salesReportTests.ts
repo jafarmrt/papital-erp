@@ -14,13 +14,13 @@ export async function runSalesReportTests(shouldRun: ShouldRun): Promise<TestCas
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (h: Harness, wrong: string[]) => Promise<string>]> = [
     ['reg_sales_report_totals_d03',
-      'v10.1.7: the sales report counts final invoices at their own date less final returns at theirs, a foreign invoice at its own rate, never a voided invoice or a proforma, with Kardex cost and every breakdown (D-03)',
+      'v10.1.8: the sales report counts final invoices at their own date less final returns at theirs, a foreign invoice at its own rate, never a voided invoice or a proforma, with Kardex cost and every breakdown (D-03)',
       ['d03', 'reports', 'sales', 'return', 'currency'], salesTotalsCase],
     ['reg_sales_report_access_d03',
-      'v10.1.7: GET /reports/sales needs reports.sales; cost and gross profit only for item cost readers, the ledger line only for ledger readers, and invalid ranges are refused (D-03)',
+      'v10.1.8: GET /reports/sales needs reports.sales; cost and gross profit only for item cost readers, the ledger line only for ledger readers, and invalid ranges are refused (D-03)',
       ['d03', 'reports', 'sales', 'permission'], salesAccessCase],
     ['reg_sales_report_ledger_check_d03',
-      'v10.1.7: the ledger line of the sales report moves with an invoice and its return like the report, and a manual voucher on the sales revenue account shows as the difference (D-03)',
+      'v10.1.8: the ledger line of the sales report moves with an invoice and its return like the report, and a manual voucher on the sales revenue account shows as the difference (D-03)',
       ['d03', 'reports', 'sales', 'ledger'], salesLedgerCase],
   ];
   for (const [id, name, tags, run] of cases) {

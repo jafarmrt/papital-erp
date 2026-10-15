@@ -1457,6 +1457,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // Phase 3 lane L4 (TD-1150, TD-1152, TD-1153): inbox gate, permission name, signer name
   const { runWorkflowInboxGateTests } = await import('../security/workflowInboxGateTests.js');
   results.push(...await runWorkflowInboxGateTests(shouldRunAccess));
+  // Series 10.1, lane L4 (TD-1229, D-06 part A): turning workflows on and off, one active per record type
+  const { runWorkflowDefinitionSwitchTests } = await import('../security/workflowDefinitionSwitchTests.js');
+  results.push(...await runWorkflowDefinitionSwitchTests(shouldRunAccess));
   // Package 12 payroll, PR «ج» (from TD-805): each payroll action asks the key of its own name
   const { runPieceworkPermissionTests } = await import('../security/pieceworkPermissionTests.js');
   results.push(...await runPieceworkPermissionTests(shouldRunAccess));

@@ -4,7 +4,7 @@ import { QUERY_KEYS } from '../../lib/queryKeys';
 import { salesReportSearch, type SalesReport, type SalesReportParams } from '../../lib/reports/salesReport';
 
 /**
- * v10.1.7 (D-03): گزارش فروش زبانه «فروش» صفحه «گزارش‌های مدیریتی» (`GET /reports/sales`). جمع‌ها و صفحه‌بندی در
+ * v10.1.8 (D-03): گزارش فروش زبانه «فروش» صفحه «گزارش‌های مدیریتی» (`GET /reports/sales`). جمع‌ها و صفحه‌بندی در
  * کارساز است؛ با تغییر پالایه صفحه قبلی تا رسیدن پاسخ تازه می‌ماند. گزارش پس از نیم دقیقه کهنه شمرده می‌شود تا با
  * بازگشت به زبانه فاکتورهای تازه را نشان دهد.
  */

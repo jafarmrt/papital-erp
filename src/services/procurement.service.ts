@@ -225,7 +225,6 @@ export class ProcurementService {
     // طرح ناسالم) ثبت درخواست را رد می‌کند، همان قاعده TD-451. پیش‌تر خطا فقط در گزارش کارساز می‌آمد و درخواست بی گردش کار
     // ساخته می‌شد: در کارتابل هیچ تأییدکننده‌ای نمی‌آمد و فقط هنگام سفارش یا تحویل گردش کار می‌گرفت.
     const wfInstance = await WorkflowTransitionExecutor.startInstance({
-      workflowCode: 'PURCHASE_REQUISITION_WORKFLOW',
       entityType: 'purchase_requisition',
       entityId: String(inserted.id),
       userId: user.id,
@@ -457,8 +456,7 @@ export class ProcurementService {
       if (!req.workflowInstanceId) {
         // Lazy start workflow instance if not present
         const instance = await WorkflowTransitionExecutor.startInstance({
-          workflowCode: 'PURCHASE_REQUISITION_WORKFLOW',
-          entityType: 'purchase_requisition',
+              entityType: 'purchase_requisition',
           entityId: String(req.id),
           userId: user.id,
           userName: user.username,

@@ -170,6 +170,7 @@ export async function runWorkflowDesignerTests(shouldRun: ShouldRun): Promise<Te
       details: 'saving {field, op} instead of operator, or [null], is refused; with an invalid rule in the instance snapshot the action on a 5,000 rial document is refused (not 200) and the stepper widget with [null] answers 200 with the action closed (not 500)',
     }, async (h, wrong) => {
       const codes: string[] = [];
+      let replacedDefinition: number | null = null;
       try {
         const twoSteps = [validStates[0], validStates[2]];
         for (const [label, rule] of [['op instead of operator', { field: 'amount', op: 'lt', value: 1000 }], ['null condition', [null]]] as const) {
@@ -191,6 +192,9 @@ export async function runWorkflowDesignerTests(shouldRun: ShouldRun): Promise<Te
           transitions: [{ fromStateKey: 'draft', toStateKey: 'done', actionKey: 'ok', title: 'تأیید' }],
         });
         const definitionId = Number(saved?.definition.id);
+        // v10.1.7 (TD-1229): a second document workflow is saved inactive; it takes the type only for this check
+        const { setWorkflowDefinitionActive } = await import('../../services/workflow/workflowDefinitionLifecycle.js');
+        replacedDefinition = (await setWorkflowDefinitionActive({ id: definitionId, active: true, replaceActive: true })).replaced?.id ?? null;
         const withStoredRule = async (rule: unknown): Promise<{ docId: number; instanceId: number; transitionId: number }> => {
           const docId = await draftSalesDocument(h);
           const inst = await WorkflowTransitionExecutor.startInstance({ workflowDefinitionId: definitionId, entityType: 'document', entityId: String(docId) });
@@ -211,6 +215,7 @@ export async function runWorkflowDesignerTests(shouldRun: ShouldRun): Promise<Te
       } finally {
         await h.q(`DELETE FROM workflow_instances WHERE workflow_definition_id IN (SELECT id FROM workflow_definitions WHERE code = ANY($1::text[]))`, [codes]);
         for (const c of codes) await dropDefinition(h, c);
+        if (replacedDefinition) await h.q(`UPDATE workflow_definitions SET is_active = 1 WHERE id = $1`, [replacedDefinition]);
       }
     });
   }
@@ -306,11 +311,13 @@ export async function runWorkflowDesignerTests(shouldRun: ShouldRun): Promise<Te
         if (Number((await stepOf(ids[1]))?.position_x) === 777) wrong.push('another workflow step was moved');
 
         const own = await stepOf(ids[0]);
+        // v10.1.7 (TD-1229): the design save writes its own audit row; the move adds exactly one more
+        const logsBefore = (await h.q(`SELECT id FROM activity_logs WHERE entity = 'طرح گردش کار' AND entity_id = $1`, [String(ids[0])])).length;
         const moved = await h.post('/api/workflow/positions', { definitionId: ids[0], positions: [{ id: Number(own?.id), positionX: 333, positionY: 222 }] });
         if (moved.status !== 200) wrong.push(`moving an own step returned ${moved.status}`);
         if (Number((await stepOf(ids[0]))?.position_x) !== 333) wrong.push('own workflow step was not moved');
         const logs = await h.q(`SELECT id FROM activity_logs WHERE entity = 'طرح گردش کار' AND entity_id = $1`, [String(ids[0])]);
-        if (logs.length !== 1) wrong.push(`moving a step wrote ${logs.length} activity logs, not 1`);
+        if (logs.length - logsBefore !== 1) wrong.push(`moving a step wrote ${logs.length - logsBefore} activity logs, not 1`);
       } finally {
         for (const code of [...codes, badCode]) await dropDefinition(h, code);
       }

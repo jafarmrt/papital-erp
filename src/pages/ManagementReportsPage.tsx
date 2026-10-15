@@ -9,7 +9,7 @@ import { MANAGEMENT_REPORT_TABS, managementReportPath, type ManagementReportTabI
 const SalesReportTab = lazy(() => import('../components/reports/sales/SalesReportTab').then(m => ({ default: m.SalesReportTab })));
 
 /**
- * v10.1.7 (D-03، طرح گزارش‌های مدیریتی §۵): صفحه «گزارش‌های مدیریتی». فقط زبانه‌هایی دیده می‌شوند که کاربر کلید رابطشان
+ * v10.1.8 (D-03، طرح گزارش‌های مدیریتی §۵): صفحه «گزارش‌های مدیریتی». فقط زبانه‌هایی دیده می‌شوند که کاربر کلید رابطشان
  * را دارد؛ نشانی زبانه‌ای که کاربر نمی‌بیند به نخستین زبانه مجاز می‌رود.
  */
 const TAB_CONTENT: Record<ManagementReportTabId, ComponentType> = {

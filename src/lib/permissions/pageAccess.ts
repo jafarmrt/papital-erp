@@ -62,7 +62,7 @@ const ACCOUNTING_TABS = {
 
 const ACCOUNTING_KEYS = [...new Set(Object.values(ACCOUNTING_TABS).flatMap(r => r.gate.anyOf))];
 
-/** v10.1.7 (D-03، طرح گزارش‌های مدیریتی §۵، ت۲): زبانه‌های «گزارش‌های مدیریتی»، هر کدام با کلید API خودش و فهرست‌های انتخاب پالایه‌ها */
+/** v10.1.8 (D-03، طرح گزارش‌های مدیریتی §۵، ت۲): زبانه‌های «گزارش‌های مدیریتی»، هر کدام با کلید API خودش و فهرست‌های انتخاب پالایه‌ها */
 const MANAGEMENT_REPORT_TABS = {
   '/management-reports/sales': {
     gate: anyOf('reports.sales'),

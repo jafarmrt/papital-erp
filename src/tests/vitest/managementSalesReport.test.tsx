@@ -42,7 +42,7 @@ const iso = (jalali: string) => toStorageDate(jalali) as string;
 const jalali = (range: ReportRange | null) => (range ? [isoToJalaliDate(range.from), isoToJalaliDate(range.to)] : null);
 const TODAY = iso('1405/08/14');
 
-// v10.1.7 (D-03، طرح گزارش‌های مدیریتی §۵): دوره‌های شمسی، میان‌برهای بازه و بازه مقایسه گزارش‌های مدیریتی
+// v10.1.8 (D-03، طرح گزارش‌های مدیریتی §۵): دوره‌های شمسی، میان‌برهای بازه و بازه مقایسه گزارش‌های مدیریتی
 describe('management report periods (D-03)', () => {
   it('builds the range shortcuts in the Jalali calendar, this period up to today', () => {
     expect(jalali(presetRange('this_month', TODAY))).toEqual(['1405/08/01', '1405/08/14']);

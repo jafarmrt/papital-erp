@@ -174,6 +174,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
   const t3Start = Date.now();
   try {
     const wf = await createTestWorkflow({
+      definition: { isActive: 0 },
       states: [
         { key: 'draft', title: 'پیش‌نویس', type: 'initial' },
         { key: 'approved', title: 'تایید شده', type: 'terminal' }
