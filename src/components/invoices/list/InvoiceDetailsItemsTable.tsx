@@ -1,4 +1,4 @@
-import { formatPersianNumber, formatPersianPrice } from '../../../utils';
+import { formatPersianNumber, formatPersianPrice, formatPersianCode } from '../../../utils';
 import { addLineQuantity, amountDecimalsOf, type InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
 
 /** TD-080 (بخش ۳): جدول ریز اقلام سند در مودال جزئیات */
@@ -37,7 +37,7 @@ export function InvoiceDetailsItemsTable({ selectedDocDetails }: { selectedDocDe
                 <tr key={it.id || idx} className="hover:bg-slate-50">
                   <td className="p-2.5 text-center font-mono text-slate-400">{formatPersianNumber(idx + 1)}</td>
                   <td className="p-2.5 font-mono text-[11px] text-slate-700" dir="ltr">{formatPersianNumber(it.code || '-')}</td>
-                  <td className="p-2.5 font-bold text-slate-800">{it.name || `کالای کد ${it.item_id}`}</td>
+                  <td className="p-2.5 font-bold text-slate-800">{it.name || `کالای کد ${formatPersianCode(it.item_id)}`}</td>
                   <td className="p-2.5 text-center font-mono font-bold text-slate-800">{formatPersianNumber(qty)}</td>
                   <td className="p-2.5 text-center text-slate-600">{it.unit || 'عدد'}</td>
                   <td className="p-2.5 text-left font-mono font-medium">{formatPersianPrice(price, undefined, decimals)}</td>

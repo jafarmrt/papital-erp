@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { DailyWorkLog, User } from '../../types';
 import { SimpleUserOption } from '../../hooks/useDailyLogs';
-import { formatPersianNumber, formatPersianDate, formatPersianDateTime } from '../../utils';
+import { formatPersianNumber, formatPersianDate, formatPersianDateTime, formatPersianCode } from '../../utils';
 import { useHasPermission } from '../../contexts/AuthContext';
 import { workModeLabel } from '../../lib/dailyLogs/workMode';
 import { timeOfDayLabel } from '../../lib/dailyLogs/workHours';
@@ -149,7 +149,7 @@ export function DailyLogsList({
                     {getVisibilityBadge(log.visibility)}
                   </div>
                   <p className="text-[10px] text-slate-400 mt-0.5">
-                    کد کاربری: #{log.userId || log.user_id}
+                    کد کاربری: #{formatPersianCode(log.userId || log.user_id)}
                   </p>
                 </div>
               </div>

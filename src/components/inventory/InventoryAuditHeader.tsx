@@ -3,6 +3,7 @@ import type { InventoryAuditTab } from '../../hooks/inventoryAudit/useInventoryA
 import { useHasAnyPermission } from '../../contexts/AuthContext';
 import { READ_PERMISSIONS } from '../../lib/recordReadPermissions';
 import { BOM_ALLOCATIONS_TAB_LABEL } from '../../lib/projects/allocationLabels';
+import { formatPersianNumber } from '../../utils';
 
 /** سربرگ صفحه انبارگردانی: عنوان، دکمه‌های بازسازی موجودی و حواله انتقال، و زبانه‌ها */
 
@@ -86,7 +87,7 @@ export function InventoryAuditHeader({ activeTab, onTabChange, discrepancyItems,
             <span>{label}</span>
             {id === 'integrity' && (discrepancyItems ?? 0) > 0 && (
               <span className="bg-rose-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
-                {discrepancyItems}
+                {formatPersianNumber(discrepancyItems)}
               </span>
             )}
           </button>

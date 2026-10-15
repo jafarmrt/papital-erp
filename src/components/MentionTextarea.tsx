@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, KeyboardEvent, ChangeEvent } from 'react';
 import { AtSign, UserCheck } from 'lucide-react';
 import { detectMentionedUserIds, mentionDisplayName, sameIdSet } from '../lib/mentions/mentionDetection';
+import { formatPersianNumber } from '../utils';
 
 export interface MentionUser {
   id: number;
@@ -193,7 +194,7 @@ export function MentionTextarea({
           </span>
           {mentions.length > 0 && (
             <span className="font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
-              {mentions.length} اشاره
+              {formatPersianNumber(mentions.length)} اشاره
             </span>
           )}
         </div>
@@ -211,7 +212,7 @@ export function MentionTextarea({
               اشاره به همکاران (کلید Enter یا کلیک جهت درج):
             </span>
             <span className="text-[9px] text-slate-300 font-normal">
-              {filteredUsers.length} همکار یافت شد
+              {formatPersianNumber(filteredUsers.length)} همکار یافت شد
             </span>
           </div>
 

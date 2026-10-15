@@ -489,7 +489,7 @@ export function SplitOrderModal({
 
                     return (
                       <tr key={item.id} className="hover:bg-slate-50/70">
-                        <td className="p-2.5 text-center font-mono text-slate-400">{idx + 1}</td>
+                        <td className="p-2.5 text-center font-mono text-slate-400">{formatPersianNumber(idx + 1)}</td>
                         <td className="p-2.5">
                           <span className="font-bold text-slate-900 block">{item.itemName}</span>
                           <span className="text-[11px] text-slate-400 font-mono">{item.itemCode || 'فاقد کد'}</span>
@@ -721,7 +721,7 @@ export function SplitOrderModal({
                           <tbody className="divide-y divide-slate-100">
                             {pkg.items.map((it, itIdx) => (
                               <tr key={it.reqItemId} className="hover:bg-slate-50">
-                                <td className="p-2 text-center font-mono text-slate-400">{itIdx + 1}</td>
+                                <td className="p-2 text-center font-mono text-slate-400">{formatPersianNumber(itIdx + 1)}</td>
                                 <td className="p-2">
                                   <span className="font-bold text-slate-900 block">{it.itemName}</span>
                                   <span className="text-[11px] text-slate-400 font-mono">{it.itemCode}</span>
