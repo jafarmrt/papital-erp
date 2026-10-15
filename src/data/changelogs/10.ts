@@ -8,6 +8,18 @@ import { AIUpdateLog } from './types';
  */
 export const v10Updates: AIUpdateLog[] = [
   {
+    version: 'v10.1.23',
+    date: '۲۳ مهر ۱۴۰۵',
+    title: 'زنجیره esbuild ابزار drizzle-kit بی هشدار امنیتی',
+    summary: 'ابزار ساخت جدول‌های پایگاه‌داده (drizzle-kit) روی آخرین نسخه پایدار ماند و نسخه کهنه esbuild زیر آن کنار رفت؛ بررسی امنیتی بسته‌ها دیگر هشداری نمی‌دهد. برنامه و سرور تغییری نمی‌بینند.',
+    changes: [
+      'esbuild زیر drizzle-kit همان نسخه esbuild پروژه است و مهاجرت‌های پیشین دست نخورده‌اند'
+    ],
+    fixes: [
+      'چهار هشدار متوسط esbuild در بررسی امنیتی بسته‌ها برطرف شد'
+    ]
+  },
+  {
     version: 'v10.1.22',
     date: '۲۳ مهر ۱۴۰۵',
     title: 'کادرهای عدد با ارقام فارسی و ممیز «٫»',

@@ -82,7 +82,7 @@
 
 | شناسه | عنوان | شرح | شاهد روی `8e107ef` | نوع | تصمیم مالک | هم‌پوشان | منبع | وضعیت |
 |---|---|---|---|---|---|---|---|---|
-| OBS-PR-01 | هشدار متوسط esbuild در زنجیره drizzle-kit بی تصمیم و بی ردیف مانده است | چهار هشدار متوسط esbuild از راه drizzle-kit باز مانده است. گیت CI فقط High و Critical را می‌گیرد. | بله. `npm audit`: ۴ هشدار moderate (esbuild GHSA-67mh-4wv8-2f99 ← `@esbuild-kit/core-utils` ← `@esbuild-kit/esm-loader` ← `drizzle-kit`). `esbuild@0.18.20` زیر `node_modules/@esbuild-kit/core-utils`. `scripts/audit-gate.ts`: `BLOCKING_SEVERITIES = high, critical` | اثبات‌شده | بله: drizzle-kit ارتقا یابد یا ریسک هشدار پذیرفته شود؟ | — | PR ‎#18، بند «Still outstanding and out of scope»؛ obs_prs.md | باز |
+| OBS-PR-01 | هشدار متوسط esbuild در زنجیره drizzle-kit بی تصمیم و بی ردیف مانده است | چهار هشدار متوسط esbuild از راه drizzle-kit باز مانده است. گیت CI فقط High و Critical را می‌گیرد. | بله. `npm audit`: ۴ هشدار moderate (esbuild GHSA-67mh-4wv8-2f99 ← `@esbuild-kit/core-utils` ← `@esbuild-kit/esm-loader` ← `drizzle-kit`). `esbuild@0.18.20` زیر `node_modules/@esbuild-kit/core-utils`. `scripts/audit-gate.ts`: `BLOCKING_SEVERITIES = high, critical` | اثبات‌شده | بله: drizzle-kit ارتقا یابد یا ریسک هشدار پذیرفته شود؟ | — | PR ‎#18، بند «Still outstanding and out of scope»؛ obs_prs.md | ✅ v10.1.23 |
 | OBS-PR-09 | راز ساده‌مانده و گذرواژه غیر bcrypt پس از ارتقا در هیچ بررسی سلامتی دیده نمی‌شود | دو فرمان یک‌باره پس از ارتقا باید دستی اجرا شوند: `npm run secrets:encrypt -- --apply` و `npm run users:lock-plain-passwords`. هیچ بررسی سلامت یا فهرست استقراری نشان نمی‌دهد که اجرا شده‌اند. | بله. `financialHealth.service.ts` هیچ بررسی برای راز ساده‌مانده یا گذرواژه غیر bcrypt ندارد. grep در `update.sh`، `scripts/go-live-verify.sh` و `docs/GO_LIVE_CHECKLIST.md` هیچ‌کدام از دو فرمان را پیدا نکرد. | مشاهده | خیر | — | PR ‎#83، «Production note for TD-898». PR ‎#95، «Production notes»؛ obs_prs.md | باز |
 | OBS-PR-10 | قفل مهاجرت بی سقف زمانی است و راه‌اندازی را بی‌پایان نگه می‌دارد | قفل مهاجرت ۹۱۰۰۸ سقف زمانی ندارد. اگر قفل در دست دیگری بماند، راه‌اندازی بی‌پایان منتظر می‌ماند. | بله. `src/db/migrator.ts:147` مقدار `statement_timeout` را از `MIGRATION_STATEMENT_TIMEOUT` می‌گیرد (پیش‌فرض ۰، `:108`). `:149` `pg_advisory_lock` بی `lock_timeout` است. | مشاهده | خیر | OBS-R1-07 | PR ‎#54، متن B01 («قفل ۹۱۰۰۸ مهاجرت هم سقف زمانی ندارد (مشاهده DB-15-4)»)؛ obs_prs.md | باز |
 | OBS-R1-02 | حذف query string از لاگ فایل خطا | `errorHandler` نشانی کامل را با query string در لاگ فایل می‌نویسد. | بله: `logger.ts:242` `url: req.url`. خط ترمینال query ندارد، ولی لاگ فایل دارد. | مشاهده | خیر | — | P01.md:538 (§۳.۱-۲)؛ obs_reviews_p01_p08.md | ✅ v10.0.243 |
@@ -381,7 +381,7 @@
 | OT-A-05 | ۳ | P2 | بازرس سلامت روی سرور اجرا و سندهای پیش‌نویس تأیید شوند؟ |
 | OBS-R1-58 | ۴ | P2 | سرفصل حساب بانکی پس از گردش قفل شود؟ |
 | OBS-R1-96 | ۸ | P2 | نسخه در ویرایش سند اجباری شود (مثل TD-403)؟ |
-| OBS-PR-01 | ۱ | P3 | drizzle-kit ارتقا یابد یا ریسک هشدار پذیرفته شود؟ |
+| OBS-PR-01 | ۱ | P3 | drizzle-kit ارتقا یابد یا ریسک هشدار پذیرفته شود؟  تصمیم: ارتقا (I-07، مهر ۱۴۰۵)؛ ✅ v10.1.23 |
 | OBS-R1-15 | ۱ | P3 | k8s نگه داشته شود یا «پشتیبانی‌نشده» اعلام شود؟ |
 | OBS-R1-16 | ۱ | P3 | نصب لینوکسی سخت‌تر شود؟ |
 | OBS-R1-19 | ۱ | P3 | آستانه پوشش در CI اعمال شود؟ |
