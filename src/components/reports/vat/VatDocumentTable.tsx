@@ -1,7 +1,7 @@
 import { ReportPager } from '../ReportPager';
 import type { ReportMoney } from '../../../hooks/reports/useReportMoney';
 import {
-  VAT_DOCUMENT_KIND_LABELS, VAT_LIST_FILTERS, VAT_LIST_FILTER_LABELS, VAT_WARNING_LABELS, vatCurrencyText, vatRateLabel,
+  VAT_DOCUMENT_KIND_LABELS, VAT_LIST_FILTERS, VAT_LIST_FILTER_LABELS, VAT_WARNING_LABELS, vatCurrencyText, vatDocumentRateLabel,
   type VatDocumentRow, type VatListFilter, type VatReport,
 } from '../../../lib/reports/vatReport';
 import { formatPersianDate, formatPersianNumber, formatPersianPrice, toPersianDigits } from '../../../utils';
@@ -93,7 +93,7 @@ export function VatDocumentTable({ report, money, onList, onPage }: VatDocumentT
                   <td className={`${TD} font-sans`}>{row.party ?? '—'}</td>
                   <td className={`${TD} font-sans text-[11px]`}>{vatCurrencyText(row)}</td>
                   <td className={TD}>{money.format(row.net)}<OwnAmount row={row} value={row.netOwn} /></td>
-                  <td className={`${TD} font-sans`}>{vatRateLabel(row.percent)}</td>
+                  <td className={`${TD} font-sans`}>{vatDocumentRateLabel(row)}</td>
                   <td className={`${TD} font-black`}>{money.format(row.vat)}<OwnAmount row={row} value={row.vatOwn} /></td>
                   <td className={`${TD} whitespace-normal min-w-[10rem]`}><WarningCell row={row} /></td>
                 </tr>

@@ -1,7 +1,7 @@
 import { reportFileName, type ReportCell, type ReportSheet } from './reportExport.js';
 import {
   VAT_DIFFERENCE_KIND_LABELS, VAT_DOCUMENT_KIND_LABELS, VAT_LEDGER_SOURCES, VAT_LEDGER_SOURCE_LABELS, VAT_REPORT_TITLE,
-  VAT_WARNINGS, VAT_WARNING_LABELS, vatCurrencyText, vatDay, vatDocumentTitle, vatRateLabel, vatReportMeta, vatVoucherList,
+  VAT_WARNINGS, VAT_WARNING_LABELS, vatCurrencyText, vatDay, vatDocumentRateLabel, vatDocumentTitle, vatRateLabel, vatReportMeta, vatVoucherList,
   type VatAmounts, type VatReport,
 } from './vatReport.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
@@ -102,7 +102,7 @@ function documentsSheet(report: VatReport): ReportSheet {
       d.party ?? '',
       vatCurrencyText(d),
       cell(d.net),
-      vatRateLabel(d.percent),
+      vatDocumentRateLabel(d),
       cell(d.vat),
       d.warning ? VAT_WARNING_LABELS[d.warning] : '',
     ]),
