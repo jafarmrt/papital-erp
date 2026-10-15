@@ -3,13 +3,14 @@ import { JalaliDateInput } from '../common/JalaliDateInput';
 import {
   REPORT_RANGE_PRESETS, REPORT_RANGE_PRESET_LABELS, presetRange, type ReportRange, type ReportRangePreset,
 } from '../../lib/reports/reportPeriods';
+import { REPORT_DATE_INPUT_CLASS } from './reportFieldClasses';
 
 /**
  * v10.1.8 (D-03، طرح گزارش‌های مدیریتی §۵): بازه گزارش‌های مدیریتی با تقویم شمسی و میان‌برهای «این ماه، ماه قبل، این
  * فصل، فصل قبل، امسال، سال قبل». تاریخ‌ها ISO‌اند؛ خالی کردن یک سر بازه پذیرفته نمی‌شود چون هر گزارش بازه کامل دارد.
  */
 
-const INPUT_CLASS = 'w-28 px-2 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white font-mono text-center outline-none focus:ring-2 focus:ring-indigo-500';
+const INPUT_CLASS = REPORT_DATE_INPUT_CLASS;
 
 interface ReportRangeFieldsProps {
   range: ReportRange;

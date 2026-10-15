@@ -6,22 +6,29 @@ import { can, requirePermission } from '../middleware/authorize.js';
 import { numericIdString, storageDateParam, validate } from '../middleware/validate.js';
 import { businessTodayIsoDate } from '../lib/businessClock.js';
 import { ITEM_COST_READ_PERMISSIONS } from '../lib/inventory/reservedItemsReport.js';
-import { LEDGER_CHECK_PERMISSIONS, SALES_REPORT_PERMISSION } from '../lib/permissions/reportPermissions.js';
+import { AGING_REPORT_PERMISSION, LEDGER_CHECK_PERMISSIONS, SALES_REPORT_PERMISSION } from '../lib/permissions/reportPermissions.js';
+import {
+  AGING_KINDS, AGING_REPORT_DEFAULT_LIMIT, AGING_REPORT_EXPORT_LIMIT, AGING_REPORT_MAX_LIMIT, AGING_SORTS,
+} from '../lib/reports/agingReport.js';
 import { REPORT_COMPARE_MODES, REPORT_PERIOD_UNITS, presetRange } from '../lib/reports/reportPeriods.js';
 import {
   SALES_CHANNELS, SALES_DIMENSIONS, SALES_REPORT_DEFAULT_LIMIT, SALES_REPORT_EXPORT_LIMIT, SALES_REPORT_MAX_LIMIT,
 } from '../lib/reports/salesReport.js';
+import { agingReport } from '../services/reports/agingReport.service.js';
 import { salesReport } from '../services/reports/salesReport.service.js';
 
 /**
  * v10.1.8 (D-03، طرح گزارش‌های مدیریتی §۵، تصمیم ت۲): API صفحه «گزارش‌های مدیریتی». گزارش فروش با کلید `reports.sales`؛
  * بها و سود ناخالص فقط برای خواننده بهای کالا (ت۳) و سطر هم‌خوانی با دفتر کل فقط برای خواننده گزارش‌های دفتر.
+ * v10.1.10: «سن مطالبات و بدهی‌ها» با کلید `accounting.reports` (ت۲).
  */
 const router = Router();
 router.use(authenticateToken);
 
 const dimension = z.enum(SALES_DIMENSIONS);
 const pageNumber = z.string().regex(/^[1-9]\d{0,5}$/, 'شماره صفحه عدد صحیح مثبت است');
+const reportCurrency = z.string().regex(/^(all|[A-Za-z]{3,5})$/, 'ارز گزارش «all» یا کد ارز است');
+const normalizeCurrency = (value: string | undefined) => (value ? (value.toLowerCase() === 'all' ? 'all' : value.toUpperCase()) : 'all');
 
 const salesQuerySchema = z.object({
   query: z.object({
@@ -30,7 +37,7 @@ const salesQuerySchema = z.object({
     groupBy: dimension.optional(),
     thenBy: z.union([dimension, z.literal('')]).optional(),
     period: z.enum(REPORT_PERIOD_UNITS).optional(),
-    currency: z.string().regex(/^(all|[A-Za-z]{3,5})$/, 'ارز گزارش «all» یا کد ارز است').optional(),
+    currency: reportCurrency.optional(),
     partyId: numericIdString.optional(),
     itemId: numericIdString.optional(),
     projectId: numericIdString.optional(),
@@ -58,7 +65,7 @@ router.get('/reports/sales', requirePermission(SALES_REPORT_PERMISSION), validat
     groupBy: query.groupBy ?? 'item',
     thenBy: query.thenBy || null,
     period: query.period ?? 'month',
-    currency: query.currency ? (query.currency.toLowerCase() === 'all' ? 'all' : query.currency.toUpperCase()) : 'all',
+    currency: normalizeCurrency(query.currency),
     partyId: optionalId(query.partyId),
     itemId: optionalId(query.itemId),
     projectId: optionalId(query.projectId),
@@ -70,6 +77,38 @@ router.get('/reports/sales', requirePermission(SALES_REPORT_PERMISSION), validat
   }, {
     cost: await can(req.user, ...ITEM_COST_READ_PERMISSIONS),
     ledger: await can(req.user, ...LEDGER_CHECK_PERMISSIONS),
+  });
+  res.json(report);
+}));
+
+const agingQuerySchema = z.object({
+  query: z.object({
+    kind: z.enum(AGING_KINDS).optional(),
+    asOf: storageDateParam,
+    currency: reportCurrency.optional(),
+    approvedOnly: z.enum(['true', 'false']).optional(),
+    partyId: numericIdString.optional(),
+    sort: z.enum(AGING_SORTS).optional(),
+    page: pageNumber.optional(),
+    limit: pageNumber.optional(),
+    export: z.enum(['true', 'false']).optional(),
+  }).strict(),
+});
+
+type AgingQuery = z.infer<typeof agingQuerySchema>['query'];
+
+router.get('/reports/aging', requirePermission(AGING_REPORT_PERMISSION), validate(agingQuerySchema), asyncHandler(async (req, res) => {
+  const query = req.query as unknown as AgingQuery;
+  const exportAll = query.export === 'true';
+  const report = await agingReport({
+    kind: query.kind ?? 'receivable',
+    asOf: query.asOf ?? await businessTodayIsoDate(),
+    currency: normalizeCurrency(query.currency),
+    approvedOnly: query.approvedOnly === 'true',
+    partyId: query.partyId ? Number(query.partyId) : null,
+    sort: query.sort ?? 'balance',
+    page: exportAll ? 1 : Number(query.page ?? 1),
+    limit: exportAll ? AGING_REPORT_EXPORT_LIMIT : Math.min(Number(query.limit ?? AGING_REPORT_DEFAULT_LIMIT), AGING_REPORT_MAX_LIMIT),
   });
   res.json(report);
 }));
