@@ -5,6 +5,7 @@ import { FinancialAmountInput } from '../../common/FinancialAmountInput';
 import { HelpBadge } from '../../common/HelpBadge';
 import { parseCleanNumber } from '../../../utils';
 import { ItemFormData } from './types';
+import { DecimalInput } from '../../common/DecimalInput';
 
 interface ItemWarehouseStockFormProps {
   warehouses?: WarehouseItem[];
@@ -41,13 +42,12 @@ export const ItemWarehouseStockForm: React.FC<ItemWarehouseStockFormProps> = ({
                 <label className="block text-2xs font-medium text-slate-600 mb-1 truncate">
                   {w.name}
                 </label>
-                <input
-                  type="number"
+                <DecimalInput
                   min="0"
                   step="any"
                   value={form.stocks[w.code] ?? ''}
-                  onChange={e => {
-                    const val = parseCleanNumber(e.target.value, 0);
+                  onValueChange={(v) => {
+                    const val = parseCleanNumber(v, 0);
                     // v10.0.203 (OBS-R1-77): فقط کلید کد انبار؛ پیش‌تر شناسه انبار هم کلید می‌شد و جمع موجودی دو برابر می‌شد
                     setForm({
                       ...form,
@@ -70,12 +70,11 @@ export const ItemWarehouseStockForm: React.FC<ItemWarehouseStockFormProps> = ({
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">موجودی کل اولیه</label>
-            <input
-              type="number"
+            <DecimalInput
               min="0"
               step="any"
               value={form.current_stock}
-              onChange={e => setForm({ ...form, current_stock: parseCleanNumber(e.target.value, 0) })}
+              onValueChange={(v) => setForm({ ...form, current_stock: parseCleanNumber(v, 0) })}
               className="w-full border border-slate-300/80 rounded-xl px-3 py-2 text-left font-mono text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500"
               dir="ltr"
             />

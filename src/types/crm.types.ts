@@ -69,7 +69,7 @@ export interface CRMLead {
   contacts?: ContactPerson[];
   hasProforma?: number;
   proformaId?: number | null;
-  /** v10.1.22 (N-02 بخش ۳): نزدیک‌ترین سررسید پیگیری باز پرونده (ISO)، از فهرست پرونده‌ها */
+  /** v10.1.23 (N-02 بخش ۳): نزدیک‌ترین سررسید پیگیری باز پرونده (ISO)، از فهرست پرونده‌ها */
   nextFollowUpDate?: string | null;
   createdAt?: string;
   updatedAt?: string;

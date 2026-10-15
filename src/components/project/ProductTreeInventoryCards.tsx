@@ -9,6 +9,7 @@ import { COMMON_UNITS } from './projectInventoryUtils';
 import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
 import { formatPersianNumber, toPersianDigits } from '../../utils';
 import { MaterialNameCell, CurrentStockCell, ProcurementStatusCell, NotesCell, type OpenUnitConversionModalHandler } from './inventoryRowCells';
+import { DecimalInput } from '../common/DecimalInput';
 
 interface ProductTreeInventoryCardsProps {
   products: ProjectProductItem[];
@@ -401,12 +402,11 @@ export function ProductTreeInventoryCards({
                                           <td className="p-2.5 text-center border-l border-slate-100 align-middle min-w-[140px]">
                                             <div className="flex flex-col items-center gap-1">
                                               <div className="flex items-center justify-center gap-1">
-                                                <input
-                                                  type="number"
+                                                <DecimalInput
                                                   min="0"
                                                   step="any"
                                                   value={mat.requiredQty !== undefined ? mat.requiredQty : 1}
-                                                  onChange={(e) => handleUpdatePerItemResult(originalIdx, prod.id, mat.itemId, 'requiredQty', e.target.value)}
+                                                  onValueChange={(v) => handleUpdatePerItemResult(originalIdx, prod.id, mat.itemId, 'requiredQty', v)}
                                                   className="w-16 text-center font-mono font-bold bg-white border border-slate-300 rounded-lg py-1 text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none"
                                                   title="مقدار مورد نیاز برای این محصول (مستقل از تعداد سفارش)"
                                                 />

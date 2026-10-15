@@ -10,6 +10,7 @@ import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { fetchJson } from '../../api';
 import { PayrollDeductionsField, deductionsNeedDescription } from './PayrollDeductionsField';
 import { PayrollPrepaymentField, prepaymentNeedsReason, type PayrollPrepaymentState } from './PayrollPrepaymentField';
+import { DecimalInput } from '../common/DecimalInput';
 
 interface PieceworkPayrollModalProps {
   isOpen: boolean;
@@ -194,11 +195,10 @@ export function PieceworkPayrollModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">{`پاداش / اضافه کار (${inputCurLbl})`}</label>
-              <input
-                type="number"
+              <DecimalInput
                 min="0"
                 value={payrollBonuses}
-                onChange={(e) => setPayrollBonuses(nonNegativeInput(e.target.value))}
+                onValueChange={(v) => setPayrollBonuses(nonNegativeInput(v))}
                 className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono"
               />
             </div>
@@ -221,11 +221,10 @@ export function PieceworkPayrollModal({
                 </button>
               )}
             </div>
-            <input
-              type="number"
+            <DecimalInput
               min="0"
               value={advanceDeduction || ''}
-              onChange={(e) => setAdvanceDeduction?.(nonNegativeInput(e.target.value))}
+              onValueChange={(v) => setAdvanceDeduction?.(nonNegativeInput(v))}
               placeholder="مبلغی که از مساعده قبلی پرسنل کسر می‌شود"
               className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono"
             />

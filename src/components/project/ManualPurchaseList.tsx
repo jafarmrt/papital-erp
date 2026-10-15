@@ -7,6 +7,7 @@ import { CreatePurchaseOrderModal } from './CreatePurchaseOrderModal';
 import { ReservationShortageList } from './ReservationShortageList';
 import type { ReservationShortage } from '../../lib/projects/projectReservation';
 import { useProjectPermissions } from '../../hooks/useProjectPermissions';
+import { DecimalInput } from '../common/DecimalInput';
 
 interface ManualPurchaseListProps {
   project: ProductionProject;
@@ -272,12 +273,11 @@ export function ManualPurchaseList({
                     {item.id.startsWith('manual_') ? (
                       <>
                         <div className="flex items-center justify-center gap-1 print:hidden">
-                          <input
-                            type="number"
+                          <DecimalInput
                             min="0.001"
                             step="any"
                             value={item.totalRequiredQty}
-                            onChange={(e) => handleUpdateManualPurchaseItem(item.id, 'totalRequiredQty', Number(e.target.value))}
+                            onValueChange={(v) => handleUpdateManualPurchaseItem(item.id, 'totalRequiredQty', Number(v))}
                             className="w-16 px-2 py-1 bg-amber-50/70 border border-amber-300 rounded-lg text-center font-mono font-bold text-xs text-slate-900 focus:ring-2 focus:ring-amber-500 focus:outline-none"
                           />
                           <select

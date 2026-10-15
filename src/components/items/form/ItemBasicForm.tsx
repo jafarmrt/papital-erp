@@ -3,6 +3,7 @@ import { Item, Category } from '../../../types';
 import { ItemFormData } from './types';
 import { RefreshCw, CheckCircle2 } from 'lucide-react';
 import { parseCleanNumber } from '../../../utils';
+import { DecimalInput } from '../../common/DecimalInput';
 
 interface ItemBasicFormProps {
   form: ItemFormData;
@@ -265,12 +266,11 @@ export const ItemBasicForm: React.FC<ItemBasicFormProps> = ({
         </div>
         <div>
           <label className="block text-xs font-bold text-slate-700 mb-1">حد آستانه سفارش (هشدار)</label>
-          <input
-            type="number"
+          <DecimalInput
             min="0"
             step="any"
             value={form.reorder_point}
-            onChange={e => setForm({ ...form, reorder_point: parseCleanNumber(e.target.value, 0) })}
+            onValueChange={(v) => setForm({ ...form, reorder_point: parseCleanNumber(v, 0) })}
             className="w-full border border-slate-300/80 rounded-xl px-3 py-2 text-left font-mono text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500"
             dir="ltr"
             placeholder="۱۰"

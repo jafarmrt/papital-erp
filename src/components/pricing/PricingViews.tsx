@@ -3,6 +3,7 @@ import { History, RefreshCw, Save } from 'lucide-react';
 import { cn, formatPersianPrice, formatPersianNumber } from '../../utils';
 import { Item } from '../../types';
 import { COST_CURRENCY, markupPrice } from '../../lib/items/priceMargin';
+import { DecimalInput } from '../common/DecimalInput';
 
 interface PricingViewsShared {
   items: Item[];
@@ -82,15 +83,14 @@ export function PricingGridView(props: PricingViewsShared) {
                     <div className="flex items-center gap-2">
                       <div className="w-24 shrink-0 text-xs font-bold text-slate-700 truncate" title={cleanTitle}>{cleanTitle}</div>
                       <div className="flex-1 flex items-center gap-1.5 relative">
-                        <input
-                          type="number"
+                        <DecimalInput
                           min="0"
                           step="any"
                           dir="ltr"
                           placeholder="مبلغ"
                           disabled={!canEditPrices}
                           value={fieldVal.price}
-                          onChange={(e) => handlePriceChange(item.id, cleanTitle, e.target.value, fieldVal.currency)}
+                          onValueChange={(v) => handlePriceChange(item.id, cleanTitle, v, fieldVal.currency)}
                           className={cn(
                             "w-full border rounded-xl text-xs px-2.5 py-1.5 font-mono text-left focus:outline-none focus:ring-1 focus:ring-blue-500",
                             isFieldEditing ? "border-amber-400 bg-amber-50/40" : "border-slate-200 bg-white"
@@ -206,15 +206,14 @@ export function PricingTableView(props: PricingViewsShared) {
                     <td key={st} className="p-3 align-top min-w-[180px]">
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-1">
-                          <input
-                            type="number"
+                          <DecimalInput
                             min="0"
                             step="any"
                             dir="ltr"
                             placeholder="مبلغ"
                             disabled={!canEditPrices}
                             value={fieldVal.price}
-                            onChange={(e) => handlePriceChange(item.id, cleanTitle, e.target.value, fieldVal.currency)}
+                            onValueChange={(v) => handlePriceChange(item.id, cleanTitle, v, fieldVal.currency)}
                             className={cn(
                               "w-full border rounded-xl text-xs px-2 py-1.5 font-mono text-left focus:outline-none focus:ring-1 focus:ring-blue-500",
                               isFieldEditing ? "border-amber-400 bg-amber-50/40" : "border-slate-200 bg-white"

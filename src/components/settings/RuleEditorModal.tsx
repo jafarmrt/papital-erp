@@ -8,6 +8,7 @@ import { EventFieldChips } from './EventFieldChips';
 import { isRetiredRuleActionType, retiredRuleActionMessage, type RuleActionType, type StoredRuleActionType } from '../../lib/events/ruleActionTypes';
 import { ALL_EVENTS_LABEL, ALL_EVENTS_PATTERN, eventTypeLabel, isSubscribableEventPattern, publishedEventTypesByCategory } from '../../lib/events/eventTypeCatalog';
 import { checkRuleConditionValue } from '../../lib/events/ruleConditionValue';
+import { DecimalInput } from '../common/DecimalInput';
 
 export interface RuleCondition {
   field: string;
@@ -480,12 +481,11 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
                       <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
                         مهلت زمانی (میلی‌ثانیه)
                       </label>
-                      <input
-                        type="number"
+                      <DecimalInput
                         value={formData.actionConfigJson?.timeoutMs || 5000}
-                        onChange={(e) => setFormData(prev => ({
+                        onValueChange={(v) => setFormData(prev => ({
                           ...prev,
-                          actionConfigJson: { ...prev.actionConfigJson, timeoutMs: parseInt(e.target.value, 10) || 5000 }
+                          actionConfigJson: { ...prev.actionConfigJson, timeoutMs: parseInt(v, 10) || 5000 }
                         }))}
                         className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white"
                       />

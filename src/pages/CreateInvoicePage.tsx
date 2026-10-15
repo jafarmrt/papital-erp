@@ -34,6 +34,7 @@ import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog';
 import { SALES_FINALIZE_PERMISSION } from '../lib/permissions/documentPermissions';
 import { itemPickWithReservedUrl } from '../lib/permissions/pickLists';
 import { documentPartyPickListUrl } from '../lib/documents/documentPartyKind';
+import { DecimalInput, refuseInvalidDecimalInputs } from '../components/common/DecimalInput';
 
 // Print styles are added globally or inline
 export default function CreateInvoicePage({ user: currentUser }: { user: User }) {
@@ -617,7 +618,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
 
           <div className="border-t pt-4">
             <h3 className="text-sm font-bold mb-3 text-slate-800">اقلام فاکتور</h3>
-            <div className="flex flex-wrap gap-3 items-end bg-slate-50 p-3 rounded-lg border">
+            <div data-decimal-scope="" className="flex flex-wrap gap-3 items-end bg-slate-50 p-3 rounded-lg border">
               <div className="flex-1 min-w-[200px]">
                 <label className="block text-xs mb-1 text-slate-500">انتخاب کالا</label>
                 <SearchableSelect
@@ -658,18 +659,18 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                 </select>
               </div>
               <div className="w-24">
-                <label className="block text-xs mb-1 text-slate-500">تعداد</label>
-                <input type="number" min="0" step="any" value={quantity} onChange={e => setQuantity(e.target.value ? Number(e.target.value) : '')} className="w-full shadow-sm border rounded text-sm px-3 py-1.5 text-center focus:outline-none focus:ring-1 focus:ring-blue-500" dir="ltr" />
+                <label htmlFor="invoice-line-quantity" className="block text-xs mb-1 text-slate-500">تعداد</label>
+                <DecimalInput id="invoice-line-quantity" min="0" step="any" value={quantity} onValueChange={(v) => setQuantity(v ? Number(v) : '')} className="w-full shadow-sm border rounded text-sm px-3 py-1.5 text-center focus:outline-none focus:ring-1 focus:ring-blue-500" dir="ltr" />
               </div>
               <div className="w-32">
-                <label className="block text-xs mb-1 text-slate-500">مبلغ واحد ({formatCurrencyLabel(currency)})</label>
-                <input type="number" min="0" value={unitPrice} onChange={e => setUnitPrice(e.target.value ? Number(e.target.value) : '')} className="w-full border shadow-sm rounded text-sm px-3 py-1.5 text-center focus:outline-none focus:ring-1 focus:ring-blue-500" dir="ltr" />
+                <label htmlFor="invoice-line-unit-price" className="block text-xs mb-1 text-slate-500">مبلغ واحد ({formatCurrencyLabel(currency)})</label>
+                <DecimalInput id="invoice-line-unit-price" min="0" value={unitPrice} onValueChange={(v) => setUnitPrice(v ? Number(v) : '')} className="w-full border shadow-sm rounded text-sm px-3 py-1.5 text-center focus:outline-none focus:ring-1 focus:ring-blue-500" dir="ltr" />
               </div>
               <div className="w-32">
-                <label className="block text-xs mb-1 text-slate-500">تخفیف کلی ردیف ({formatCurrencyLabel(currency)})</label>
-                <input type="number" min="0" value={discount} onChange={e => setDiscount(e.target.value ? Number(e.target.value) : '')} className="w-full border shadow-sm rounded text-sm px-3 py-1.5 text-center focus:outline-none focus:ring-1 focus:ring-blue-500" dir="ltr" />
+                <label htmlFor="invoice-line-discount" className="block text-xs mb-1 text-slate-500">تخفیف کلی ردیف ({formatCurrencyLabel(currency)})</label>
+                <DecimalInput id="invoice-line-discount" min="0" value={discount} onValueChange={(v) => setDiscount(v ? Number(v) : '')} className="w-full border shadow-sm rounded text-sm px-3 py-1.5 text-center focus:outline-none focus:ring-1 focus:ring-blue-500" dir="ltr" />
               </div>
-              <button type="button" onClick={handleAddItem} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded flex items-center gap-1 text-sm h-[34px] transition-colors shadow-sm">
+              <button type="button" onClick={(e) => { if (!refuseInvalidDecimalInputs(e.currentTarget)) handleAddItem(); }} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded flex items-center gap-1 text-sm h-[34px] transition-colors shadow-sm">
                 <Plus size={16} /> افزودن به فهرست
               </button>
             </div>
@@ -730,12 +731,11 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                   {applyVat && (
                     <div className="flex items-center gap-1.5 border-r pr-3 mr-1">
                       <span className="text-xs text-slate-500">نرخ:</span>
-                      <input 
-                        type="number" 
+                      <DecimalInput 
                         min="0" 
                         max="100" 
                         value={vatRate} 
-                        onChange={e => setVatRate(Number(e.target.value) || 0)} 
+                        onValueChange={(v) => setVatRate(Number(v) || 0)} 
                         className="w-14 border rounded px-2 py-1 text-center text-xs font-bold bg-slate-50 focus:bg-white" 
                         dir="ltr" 
                       />

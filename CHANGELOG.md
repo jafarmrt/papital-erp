@@ -20,8 +20,11 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
-### v10.1.22 — قیف فروش کشیدنی و ستون‌های جدا (N-02 بخش ۳)
+### v10.1.23 — قیف فروش کشیدنی و ستون‌های جدا (N-02 بخش ۳)
 - Sales pipeline board: fixed 280 px columns in a horizontally scrolling row (they overlapped in a grid narrower than their minimum, TD-1272), compact card with a ⋯ menu and the nearest open follow-up (lead list nextFollowUpDate), HTML drag and drop through the stage change handler, one stage tab per column on a phone. Tests: e2e/crm-pipeline.spec.ts, reg_crm_lead_next_followup_td_1272, Vitest crmPipelineBoardTd1272.
+
+### v10.1.22 — کادرهای عدد با ارقام فارسی و ممیز «٫»
+- کادرهای عدد فرم‌ها ارقام فارسی و ممیز «٫» را می‌خوانند و صفحه‌کلید عددی گوشی را باز می‌کنند؛ پیش‌تر «۱۲۵» خالی و «12٫5» ده برابر خوانده می‌شد.
 
 ### v10.1.21 — پیش‌نویس، انتشار و برگرداندن نسخه گردش کار (D-06 بخش د)
 - ذخیره دوباره طرح گردش کار پیش‌نویس است و پرونده‌های تازه تا انتشار آن با نسخه منتشرشده آغاز می‌شوند؛ «تاریخچه نسخه‌ها» تفاوت پیش‌نویس را نشان می‌دهد و دارنده «مدیریت ارشد و همگام‌سازی فرآیندها» آن را منتشر می‌کند یا به نسخه پیشین برمی‌گرداند (TD-1270، مهاجرت 0114).

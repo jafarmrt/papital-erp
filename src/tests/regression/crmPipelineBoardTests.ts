@@ -7,12 +7,12 @@ type ShouldRun = (id: string, ...extra: string[]) => boolean;
 type Harness = Awaited<ReturnType<typeof import('../security/workflowTestHarness.js')['createHarness']>>;
 
 /**
- * N-02 part 3 (v10.1.22, TD-1272): the pipeline card shows each lead's nearest open follow-up, which the lead list now
+ * N-02 part 3 (v10.1.23, TD-1272): the pipeline card shows each lead's nearest open follow-up, which the lead list now
  * carries as `nextFollowUpDate`. Red on v10.1.18, whose lead list had no such field.
  */
 export async function runCrmPipelineBoardTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const id = 'reg_crm_lead_next_followup_td_1272';
-  const name = 'v10.1.22: the lead list carries each lead\'s nearest open follow-up; completed and deleted ones do not count (TD-1272)';
+  const name = 'v10.1.23: the lead list carries each lead\'s nearest open follow-up; completed and deleted ones do not count (TD-1272)';
   if (!shouldRun(id, 'n02', 'crm', 'td-1272')) return [];
 
   const { createHarness } = await import('../security/workflowTestHarness.js');
