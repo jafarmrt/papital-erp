@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 
-/** v10.1.5 (TD-1229, D-06 part A): one workflow definition as the definitions list sends it */
+/** v10.1.6 (TD-1229, D-06 part A): one workflow definition as the definitions list sends it */
 export interface WorkflowDefinitionSummary {
   id: number;
   code: string;

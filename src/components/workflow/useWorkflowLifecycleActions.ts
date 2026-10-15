@@ -6,7 +6,7 @@ import { RUNNING_INSTANCES_CONTINUE, workflowDeactivationEffect, workflowDeactiv
 import { useWorkflowLifecycleMutation, type WorkflowDefinitionSummary } from '../../hooks/queries/useWorkflowLifecycle';
 
 /**
- * v10.1.5 (TD-1229, D-06 part A): the confirmations of turning a workflow on and off. Turning one off says what
+ * v10.1.6 (TD-1229, D-06 part A): the confirmations of turning a workflow on and off. Turning one off says what
  * changes for users; activating one whose record type has another active workflow asks before replacing it (ت۲).
  */
 export function useWorkflowLifecycleActions() {

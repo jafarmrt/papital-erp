@@ -193,7 +193,7 @@ export async function runWorkflowAccessTests(shouldRun: ShouldRun): Promise<Test
       const openWalk = await h.walk(await startDoc(open.code, draftB), ['submit', 'approve'], treasurer);
       if (openWalk[0] !== 200 || openWalk[1] !== 403) wrong.push(`The treasurer got ${openWalk.join(',')} in the unguarded workflow, not 200,403`);
       if ((await docStatus(draftB))?.status !== 'draft') wrong.push(`The treasurer document became ${JSON.stringify(await docStatus(draftB))}`);
-      // v10.1.5 (TD-1229): one active workflow per record type; the seed document workflow takes its type back
+      // v10.1.6 (TD-1229): one active workflow per record type; the seed document workflow takes its type back
       await restoreOpen();
 
       // ۳) مسیر درست: انباردار گام انبار، مدیر مالی گام مالی؛ سند قطعی می‌شود

@@ -51,7 +51,7 @@ export class WorkflowEngineService {
   static saveWorkflowDefinition = WorkflowDefinitionService.saveWorkflowDefinition.bind(WorkflowDefinitionService);
   static updateCanvasPositions = WorkflowDefinitionService.updateCanvasPositions.bind(WorkflowDefinitionService);
   static seedDefaultWorkflows = WorkflowDefinitionService.seedDefaultWorkflows.bind(WorkflowDefinitionService);
-  // v10.1.5 (TD-1229, D-06): turn a definition on or off, archive or restore it
+  // v10.1.6 (TD-1229, D-06): turn a definition on or off, archive or restore it
   static setDefinitionActive = setWorkflowDefinitionActive;
   static setDefinitionArchived = setWorkflowDefinitionArchived;
 

@@ -10,7 +10,7 @@ import { workflowEntityTypeLabel } from '../../lib/workflow/workflowEntityLabels
 import { workflowDeactivationRefusal } from '../../lib/workflow/workflowLifecycle.js';
 
 /**
- * v10.1.5 (TD-1229, D-06 part A, OBS-R2-65): a workflow definition is turned on, off, archived and restored here, each
+ * v10.1.6 (TD-1229, D-06 part A, OBS-R2-65): a workflow definition is turned on, off, archived and restored here, each
  * in one transaction under the record type lock and the definition row lock, with its audit row written with the same
  * `tx`. At most one definition of a record type is active (partial unique index uq_workflow_definitions_active_entity_type,
  * migration 0110); running records keep their own version snapshot whatever happens to the definition (decision ت۱).

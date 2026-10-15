@@ -12,13 +12,13 @@ export const workflowDefinitions = pgTable('workflow_definitions', {
   entityType: text('entity_type').notNull(),
   version: integer('version').default(1),
   isActive: integer('is_active').default(1),
-  // v10.1.5 (TD-1229, D-06): an archived definition is inactive and listed only under «بایگانی» (migration 0110)
+  // v10.1.6 (TD-1229, D-06): an archived definition is inactive and listed only under «بایگانی» (migration 0110)
   isArchived: integer('is_archived').notNull().default(0),
   description: text('description').default(''),
   dslJson: jsonb('dsl_json').default({}),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
 }, (table) => ({
-  // v10.1.5 (TD-1229): one active definition per record type; built by migration 0110 only on data without duplicates
+  // v10.1.6 (TD-1229): one active definition per record type; built by migration 0110 only on data without duplicates
   uq_workflow_definitions_active_entity_type: uniqueIndex('uq_workflow_definitions_active_entity_type').on(table.entityType).where(sql`${table.isActive} = 1`),
 }));
 

@@ -9,7 +9,8 @@ import { TestCaseResult, makeTestCase } from '../types.js';
  * for a date range. On v9.0.385 the route answered `application/json` named `.json` with `activityLogs` always inside.
  */
 export async function runDataExportTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
-  return [...await runStreamedZipTest(shouldRun), ...await runDataExportCoverageTest(shouldRun)];
+  const { runDataExportSecretsTest } = await import('./dataExportSecretsTests.js');
+  return [...await runStreamedZipTest(shouldRun), ...await runDataExportCoverageTest(shouldRun), ...await runDataExportSecretsTest(shouldRun)];
 }
 
 async function runStreamedZipTest(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {

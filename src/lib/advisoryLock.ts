@@ -64,7 +64,7 @@ export const ROW_ADVISORY_LOCK_NAMESPACES = {
    */
   DAILY_LOG_AUTHOR_DAY: 91060,
   /**
-   * v10.1.5 (TD-1229, D-06): the workflow definitions of one record type; transaction lock keyed by hashtext(entity type),
+   * v10.1.6 (TD-1229, D-06): the workflow definitions of one record type; transaction lock keyed by hashtext(entity type),
    * so activating, deactivating or saving two definitions of one type at once never leaves two active ones
    */
   WORKFLOW_DEFINITION_TYPE: 91070,

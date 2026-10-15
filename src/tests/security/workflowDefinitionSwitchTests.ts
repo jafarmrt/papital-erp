@@ -2,7 +2,7 @@ import { TestCaseResult } from '../types.js';
 import { runCase, type Harness, type Row, type ShouldRun } from './workflowTestHarness.js';
 
 /**
- * v10.1.5 (TD-1229, D-06 part A): a workflow definition is turned on and off, archived and restored from the workflow
+ * v10.1.6 (TD-1229, D-06 part A): a workflow definition is turned on and off, archived and restored from the workflow
  * page; at most one definition of a record type is active, a new one is active only when its type has none (decision
  * ت۲۷), the record type changes only while inactive and never used, and the purchase requisition workflow is never left
  * off. All through the real Express routes.
@@ -48,7 +48,7 @@ export async function runWorkflowDefinitionSwitchTests(shouldRun: ShouldRun): Pr
   if (shouldRun('sec_workflow_definition_switch_td_1229', 'security', 'td1229', 'd-06', 'workflow')) {
     await runCase(results, {
       id: 'sec_workflow_definition_switch_td_1229',
-      name: 'v10.1.5: one active workflow per record type; a workflow is turned on (replacing the active one only when asked), off, archived and restored, each with an audit row; workflow.manage cannot switch (TD-1229)',
+      name: 'v10.1.6: one active workflow per record type; a workflow is turned on (replacing the active one only when asked), off, archived and restored, each with an audit row; workflow.manage cannot switch (TD-1229)',
       details: 'second workflow of a type is saved inactive; activate without replaceActive 409 naming the active one, with it 200 and the old one off; archive an active one 409; off, archive, activate archived 409, restore inactive; workflow.manage 403, workflow.admin 200; a second active row is refused by the unique index',
     }, async (h, wrong) => {
       const type = `wfsw_${h.tag}`;
@@ -113,7 +113,7 @@ export async function runWorkflowDefinitionSwitchTests(shouldRun: ShouldRun): Pr
   if (shouldRun('sec_workflow_entity_type_lock_td_1229', 'security', 'td1229', 'obs-pr-15', 'obs-r2-64', 'workflow')) {
     await runCase(results, {
       id: 'sec_workflow_entity_type_lock_td_1229',
-      name: 'v10.1.5: the designer save changes the record type only of an inactive workflow no record entered, and writes an audit row with before and after (TD-1229, OBS-PR-15, OBS-R2-64)',
+      name: 'v10.1.6: the designer save changes the record type only of an inactive workflow no record entered, and writes an audit row with before and after (TD-1229, OBS-PR-15, OBS-R2-64)',
       details: 'type change of an active workflow 422 WF_ENTITY_TYPE_LOCKED; of an inactive unused one 200 and stored; of an inactive one with a started record 422; each save writes one audit row',
     }, async (h, wrong) => {
       const typeA = `wfst_${h.tag}`;
@@ -156,7 +156,7 @@ export async function runWorkflowDefinitionSwitchTests(shouldRun: ShouldRun): Pr
   if (shouldRun('sec_workflow_requisition_by_type_td_1229', 'security', 'td1229', 'workflow', 'procurement')) {
     await runCase(results, {
       id: 'sec_workflow_requisition_by_type_td_1229',
-      name: 'v10.1.5: the purchase requisition workflow is never turned off; a new requisition starts with the active requisition workflow, not a fixed code (TD-1229)',
+      name: 'v10.1.6: the purchase requisition workflow is never turned off; a new requisition starts with the active requisition workflow, not a fixed code (TD-1229)',
       details: 'deactivating the requisition workflow 409 WF_REQUIRED_WORKFLOW; a copy activated in its place starts the next requisition; the seed workflow takes the type back',
     }, async (h, wrong) => {
       const [seed] = await h.q(`SELECT id FROM workflow_definitions WHERE entity_type = 'purchase_requisition' AND is_active = 1`);
@@ -205,7 +205,7 @@ export async function runWorkflowDefinitionSwitchTests(shouldRun: ShouldRun): Pr
   if (shouldRun('sec_workflow_active_definition_health_td_1229', 'security', 'td1229', 'workflow', 'health')) {
     await runCase(results, {
       id: 'sec_workflow_active_definition_health_td_1229',
-      name: 'v10.1.5: migration 0110 builds the one-active-workflow index and the health check lists record types with two active workflows (TD-1229)',
+      name: 'v10.1.6: migration 0110 builds the one-active-workflow index and the health check lists record types with two active workflows (TD-1229)',
       details: 'the index exists in the test schema and the check is healthy; with the index dropped inside a rolled-back transaction and two active workflows of one type the check warns and names both',
     }, async (h, wrong) => {
       const { buildActiveDefinitionHealthTest, findDuplicateActiveDefinitions, hasActiveDefinitionUniqueIndex } = await import('../../services/accounting/workflowActiveDefinitionHealth.js');

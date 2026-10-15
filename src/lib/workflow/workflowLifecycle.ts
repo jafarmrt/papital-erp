@@ -1,5 +1,5 @@
 /**
- * v10.1.5 (TD-1229, D-06 part A): rules of turning a workflow definition on and off, shared by the server and the
+ * v10.1.6 (TD-1229, D-06 part A): rules of turning a workflow definition on and off, shared by the server and the
  * workflow page, so the confirmation shows the same consequence the server applies.
  */
 

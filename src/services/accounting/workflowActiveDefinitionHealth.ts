@@ -5,7 +5,7 @@ import type { HealthCheckTestResult } from '../../types.js';
 import { workflowEntityTypeLabel } from '../../lib/workflow/workflowEntityLabels.js';
 
 /**
- * v10.1.5 (TD-1229, D-06 part A): at most one active workflow definition per record type. Migration 0110 builds the
+ * v10.1.6 (TD-1229, D-06 part A): at most one active workflow definition per record type. Migration 0110 builds the
  * partial unique index only on data without duplicates; earlier duplicates are never turned off automatically and are
  * only listed here, so the admin deactivates the extra one (before, an automatic start silently took the oldest).
  */

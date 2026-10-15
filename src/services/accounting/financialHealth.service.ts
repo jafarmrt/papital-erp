@@ -1150,7 +1150,7 @@ export class FinancialHealthService {
     overallScore += openInstanceTest.scoreImpact;
     tests.push(openInstanceTest);
 
-    // آزمون ۱۸الف: v10.1.5 (TD-1229) یک گردش کار فعال برای هر نوع پرونده (مهاجرت 0110)
+    // آزمون ۱۸الف: v10.1.6 (TD-1229) یک گردش کار فعال برای هر نوع پرونده (مهاجرت 0110)
     const [duplicateActiveDefinitions, activeDefinitionIndexPresent] = await Promise.all([findDuplicateActiveDefinitions(orm), hasActiveDefinitionUniqueIndex(orm)]);
     const activeDefinitionTest = buildActiveDefinitionHealthTest(duplicateActiveDefinitions, activeDefinitionIndexPresent);
     overallScore += activeDefinitionTest.scoreImpact;

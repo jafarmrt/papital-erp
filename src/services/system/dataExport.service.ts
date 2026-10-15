@@ -9,6 +9,7 @@ import { BUILD_INFO } from '../../lib/version.js';
 import { businessNowIsoDateTime, businessTodayIsoDate, getDisplayTimezone, systemNowUtcIso } from '../../lib/businessClock.js';
 import { zonedDayRangeUtc } from '../../lib/serverTimestamp.js';
 import { ZipStreamWriter } from '../../lib/zipStream.js';
+import { scrubExportRow } from '../../lib/system/exportSecretScrub.js';
 
 /**
  * v7.0.29 (TD-188 / audit P1-6) — Safe business-data export (NOT a restorable backup)
@@ -23,6 +24,9 @@ import { ZipStreamWriter } from '../../lib/zipStream.js';
  *
  * v9.0.387 (TD-624): جدول‌ها از فهرست یگانه `DATA_EXPORT_TABLES` می‌آیند (پروژه و تخصیص، کارمزدی، دوره مالی، گردش کار،
  * قاعده رویداد و فراداده پیوست افزوده شدند) و جدول‌های کنارگذاشته با دلیل در `manifest.json` نوشته می‌شوند.
+ *
+ * v10.1.5 (TD-1251): هر ردیف پیش از نوشتن از `scrubExportRow` می‌گذرد، پس توکن قانون وب‌هوک، مقدار سرآیندها و هر
+ * کلید هم‌شکل رمز یا توکن در JSON پوشیده («********») است.
  */
 
 export const DATA_EXPORT_FORMAT = 'papital-erp/data-export@3';
@@ -50,6 +54,7 @@ export interface DataExportManifest {
 const EXCLUDED_FIELDS = [
   'users.password', 'users.failedLoginCount', 'users.lockedUntil', 'users.lastFailedLoginAt', 'users.tokenVersion',
   'users.mustResetPassword', 'personnel.nobitexPassword', 'app_settings (secret keys)',
+  'secret-like fields at any depth, e.g. event_action_rules.actionConfigJson.secretToken and header values (masked as ********)',
 ];
 
 const NOTICE = 'این فایل خروجی داده‌های کسب‌وکاری برای گزارش و بایگانی است و نسخه پشتیبان قابل بازگردانی نیست. '
@@ -85,7 +90,7 @@ async function* tableChunks(spec: ExportTableSpec, batchSize: number, counter: {
       .orderBy(...keyColumns.map(c => asc(c)))
       .limit(batchSize) as Row[];
     if (rows.length === 0) return;
-    const kept = spec.keep ? rows.filter(spec.keep) : rows;
+    const kept = (spec.keep ? rows.filter(spec.keep) : rows).map(scrubExportRow);
     counter.rows += kept.length;
     if (kept.length) yield `${kept.map(r => JSON.stringify(r)).join('\n')}\n`;
     if (rows.length < batchSize) return;

@@ -11,7 +11,7 @@ interface Props {
 }
 
 /**
- * v10.1.5 (TD-1229, OBS-PR-15, decision ت۲۷): the record type of a workflow in the designer. Only an inactive workflow
+ * v10.1.6 (TD-1229, OBS-PR-15, decision ت۲۷): the record type of a workflow in the designer. Only an inactive workflow
  * that no record ever entered takes another type (the server's rule); otherwise the field is locked and says why.
  */
 export const WorkflowEntityTypeField: React.FC<Props> = ({ value, onChange, isActive, startedCount }) => {

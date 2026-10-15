@@ -13,7 +13,7 @@ export function holdsWorkflowExecuteKey(permissions: readonly string[]): boolean
 }
 
 /**
- * v10.1.5 (TD-1229, D-06 part A, decision ت۴): turning a workflow definition on or off and archiving it; turning off an
+ * v10.1.6 (TD-1229, D-06 part A, decision ت۴): turning a workflow definition on or off and archiving it; turning off an
  * approval is sensitive, so `workflow.manage` designs but does not switch.
  */
 export const WORKFLOW_SWITCH_PERMISSION = 'workflow.admin';

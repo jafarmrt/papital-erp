@@ -1,4 +1,4 @@
--- Drizzle Migration 0110: archive flag and one active workflow definition per record type (v10.1.5, TD-1229, D-06 part A)
+-- Drizzle Migration 0110: archive flag and one active workflow definition per record type (v10.1.6, TD-1229, D-06 part A)
 --
 -- A workflow definition could not be turned off: every definition was created active and no route changed is_active,
 -- so an item or bank account workflow, once made, sent every opening voucher to approval for good (OBS-R2-65). The new

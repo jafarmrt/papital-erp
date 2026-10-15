@@ -184,7 +184,7 @@ export async function runAccessPackageTwoWorkflowTests(shouldRun: ShouldRun): Pr
         const tag = String(Date.now()).slice(-7);
         const [branchRole] = await q(`INSERT INTO roles (name, code, permissions, is_system) VALUES ($1, $2, '["accounting.vouchers","workflow.approve"]'::jsonb, 0) RETURNING id, code`, [`حسابدار شعبه ${tag}`, `td542_branch_${tag}`]);
         const [plainRole] = await q(`INSERT INTO roles (name, code, permissions, is_system) VALUES ($1, $2, '["workflow.approve"]'::jsonb, 0) RETURNING id, code`, [`تأییدکننده ${tag}`, `td542_plain_${tag}`]);
-        // v10.1.5 (TD-1229): one active workflow per record type; the earlier test ones step aside inside this rolled-back transaction
+        // v10.1.6 (TD-1229): one active workflow per record type; the earlier test ones step aside inside this rolled-back transaction
         await q(`UPDATE workflow_definitions SET is_active = 0 WHERE entity_type = 'test_document' AND is_active = 1`);
         const [def] = await q(`INSERT INTO workflow_definitions (code, title, entity_type, version, is_active) VALUES ($1, $2, 'test_document', 1, 1) RETURNING id`, [`TD542_MIG_${tag}`, `گردش کار مهاجرت ۵۴۲ ${tag}`]);
         const defId = Number(def.id);
