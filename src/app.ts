@@ -22,6 +22,7 @@ import usersRoutes from './routes/users.routes.js';
 import systemRoutes from './routes/system.routes.js';
 import itemsRoutes from './routes/items.routes.js';
 import customersRoutes from './routes/customers.routes.js';
+import customerTagsRoutes from './routes/customerTags.routes.js';
 import categoriesRoutes from './routes/categories.routes.js';
 import warehousesRoutes from './routes/warehouses.routes.js';
 import transactionsRoutes from './routes/transactions.routes.js';
@@ -343,6 +344,7 @@ export async function createApp(): Promise<express.Express> {
   app.use('/api', usersRoutes);
   app.use('/api', systemRoutes);
   app.use('/api', itemsRoutes);
+  app.use('/api', customerTagsRoutes);
   app.use('/api', customersRoutes);
   app.use('/api', categoriesRoutes);
   app.use('/api', warehousesRoutes);
