@@ -61,7 +61,7 @@ if [ "$LOCAL_MODE" -eq 0 ]; then
 fi
 
 # ---------- 2) System dependencies ----------
-log "[1/7] Installing system dependencies (curl, git, OpenSSL, PostgreSQL, Node.js 22)..."
+log "[1/7] Installing system dependencies (curl, git, OpenSSL, PostgreSQL, Node.js 24)..."
 
 $SUDO apt-get update -y
 # v10.0.4 (TD-957): rclone copies the daily backup off the server (scripts/backup-offsite.sh)
@@ -82,11 +82,11 @@ else
 fi
 $SUDO systemctl enable --now postgresql
 
-# Node.js 22 LTS via NodeSource
-if ! command -v node >/dev/null 2>&1 || [ "$(node -p 'process.versions.node.split(".")[0]')" -lt 20 ]; then
-  log "Installing Node.js 22 LTS..."
+# Node.js 24 LTS via NodeSource (v10.1.28: an older Node is upgraded too)
+if ! command -v node >/dev/null 2>&1 || [ "$(node -p 'process.versions.node.split(".")[0]')" -lt 24 ]; then
+  log "Installing Node.js 24 LTS..."
   # NOTE: no `-E` here — with empty $SUDO (root) bash would try to run a command named "-E"
-  curl -fsSL https://deb.nodesource.com/setup_22.x | $SUDO bash -
+  curl -fsSL https://deb.nodesource.com/setup_24.x | $SUDO bash -
   $SUDO apt-get install -y nodejs
 fi
 success "System dependencies installed (node $(node -v), $(psql --version | head -1))"
