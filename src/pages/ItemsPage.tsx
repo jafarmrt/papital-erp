@@ -9,6 +9,7 @@ import { parseItemListSort, type ItemListSort } from '../lib/items/itemListSort'
 import ConfirmModal from '../components/ConfirmModal';
 import ImagePreviewModal from '../components/items/ImagePreviewModal';
 import ItemsTable from '../components/items/ItemsTable';
+import { ItemCodeChangeModal } from '../components/items/ItemCodeChangeModal';
 import ItemFormModal from '../components/items/ItemFormModal';
 
 const UnifiedExcelModal = lazy(() => import('../components/UnifiedExcelModal'));
@@ -27,6 +28,7 @@ export default function ItemsPage() {
   const canEdit = useHasPermission('products.edit');
   const canDelete = useHasPermission('products.delete');
   const canSyncShop = useHasPermission('woocommerce.manage');
+  const canChangeCode = useHasPermission('products.change_code');
   const { searchQuery: search, debouncedSearchQuery, setSearchQuery: setSearch } = useSearch();
   const [page, setPage] = useState(1);
 
@@ -52,6 +54,7 @@ export default function ItemsPage() {
 
   const [viewImage, setViewImage] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
+  const [codeChangeItem, setCodeChangeItem] = useState<Item | null>(null);
 
   // React Query Hooks (V4 Phase 6.2 U-1: اتصال به debouncedSearchQuery برای حذف بار شبکه غیرضروری)
   const { data: itemsResponse, isLoading: loading } = useItemsQuery(type, page, 50, debouncedSearchQuery, sortConfig);
@@ -245,6 +248,7 @@ export default function ItemsPage() {
           onEditItem={canEdit ? handleEdit : undefined}
           onArchiveItem={canDelete ? (itemId) => setConfirmState({ isOpen: true, itemId }) : undefined}
           onSyncItem={canSyncShop ? handleSyncItem : undefined}
+          onChangeCode={canChangeCode ? setCodeChangeItem : undefined}
           syncingItemId={syncingItemId}
           page={page}
           totalPages={totalPages}
@@ -262,6 +266,10 @@ export default function ItemsPage() {
         warehouses={warehouses}
         onSuccess={refreshAfterItemChange}
       />
+
+      {codeChangeItem && (
+        <ItemCodeChangeModal item={codeChangeItem} onClose={() => setCodeChangeItem(null)} onChanged={refreshAfterItemChange} />
+      )}
 
       <ConfirmModal 
         isOpen={confirmState.isOpen}

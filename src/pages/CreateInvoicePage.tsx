@@ -32,7 +32,7 @@ import { ExchangeRateField, exchangeRateError } from '../components/documents/Ex
 import { useHasPermission } from '../contexts/AuthContext';
 import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog';
 import { SALES_FINALIZE_PERMISSION } from '../lib/permissions/documentPermissions';
-import { ITEM_PICK_WITH_RESERVED_URL } from '../lib/permissions/pickLists';
+import { itemPickWithReservedUrl } from '../lib/permissions/pickLists';
 import { documentPartyPickListUrl } from '../lib/documents/documentPartyKind';
 
 // Print styles are added globally or inline
@@ -621,9 +621,9 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
               <div className="flex-1 min-w-[200px]">
                 <label className="block text-xs mb-1 text-slate-500">انتخاب کالا</label>
                 <SearchableSelect
-                  key={`item-select-${location}-${status}`}
+                  key={`item-select-${location}-${status}-${editingDocId ?? 'new'}`}
                   className="w-full shadow-sm rounded"
-                  fetchUrl={ITEM_PICK_WITH_RESERVED_URL}
+                  fetchUrl={itemPickWithReservedUrl(editingDocId)}
                   mapResultToOption={(it: Item) => {
                     const { loc, total, reserved, sellable } = getSellableStock(it, location);
                     const whName = warehouses.find(w => w.code === location)?.name || location || 'انبار انتخابی';

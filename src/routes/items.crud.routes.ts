@@ -5,8 +5,8 @@ import { items, transactions, documentItems } from '../db/schema.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { z } from 'zod';
-import { validate, paramsIdSchema } from '../middleware/validate.js';
-import { consumeNextItemCodeSchema, itemCreateUpdateSchema, itemUpdateSchema } from './items.schemas.js';
+import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
+import { consumeNextItemCodeSchema, itemCodeChangeSchema, itemCreateUpdateSchema, itemUpdateSchema } from './items.schemas.js';
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
 import { MAX_PAGE_LIMIT, parsePickListLimit } from '../lib/pagination.js';
 import { ItemsService } from '../services/items.service.js';
@@ -19,6 +19,7 @@ import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { itemListConditions, itemListOrder, itemListStats, listItemPicks } from '../services/items/itemPickList.js';
 import { parseItemListSort } from '../lib/items/itemListSort.js';
 import { listReorderAlerts } from '../services/items/reorderAlerts.service.js';
+import { changeItemCode, listItemCodeHistory } from '../services/items/itemCodeChange.js';
 
 const router = Router();
 
@@ -38,17 +39,20 @@ const itemPickListValidation = z.object({
     search: z.string().max(200).optional(),
     limit: z.union([z.string(), z.number()]).optional(),
     reserved: z.enum(['1']).optional(),
+    // v10.1.9 (TD-1209): the open proforma being edited; its own reservation is not counted
+    excludeDocumentId: numericIdString.optional(),
   }).optional(),
 });
 
 // v9.0.138 (TD-888، تصمیم ت۱۰ الف): فهرست انتخاب کالا برای فرم‌های بخش‌های دیگر؛ فهرست کامل پایین فقط با مجوز بخش کالا
 router.get('/items/options', authorizePermission(...READ_PERMISSIONS.itemOptions), validate(itemPickListValidation), asyncHandler(async (req, res) => {
-  const query = req.query as { type?: string; search?: string; limit?: string; reserved?: string };
+  const query = req.query as { type?: string; search?: string; limit?: string; reserved?: string; excludeDocumentId?: string };
   const picks = await listItemPicks(req.user, { type: query.type, search: query.search, limit: parsePickListLimit(query.limit) });
   // v10.0.258 (TD-1135): the sales invoice picker asks `reserved=1` for each item's reserved quantity; a reservation read
   // error refuses this request only (TD-821), the other forms never read reservations
   if (query.reserved === '1' && picks.length > 0) {
-    const reservedMap = await ItemsService.getReservedStocksMap({ itemIds: picks.map(p => p.id) });
+    const excludeDocumentId = query.excludeDocumentId ? Number(query.excludeDocumentId) : null;
+    const reservedMap = await ItemsService.getReservedStocksMap({ itemIds: picks.map(p => p.id) }, { excludeDocumentId });
     for (const pick of picks) {
       const reserved = Number(reservedMap[String(pick.id)]?.totalReserved || 0);
       pick.reservedStock = reserved;
@@ -287,6 +291,20 @@ router.put('/items/:id', authorizePermission('products.edit'), validate(itemUpda
     return result;
   });
   res.json({ success: true, version: result.item.version, opening_voucher_id: result.openingVoucherId });
+}));
+
+// v10.1.9 (D-15, TD-1264): the code (WooCommerce SKU) changes only here, with its own permission, reason and history
+router.post('/items/:id/change-code', authorizePermission('products.change_code'), validate(itemCodeChangeSchema), asyncHandler(async (req, res) => {
+  const itemId = Number(req.params.id);
+  const { code, reason, version } = req.body as { code: string; reason: string; version: number };
+  const { item, previousCode } = await orm.transaction(tx => changeItemCode(tx, itemId, { code, reason, version }, {
+    id: req.user?.id, username: req.user?.username, fullName: req.user?.fullName,
+  }, req));
+  res.json({ success: true, code: item.code, previousCode, version: item.version });
+}));
+
+router.get('/items/:id/code-history', authorizePermission(...READ_PERMISSIONS.items), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+  res.json({ success: true, data: await listItemCodeHistory(orm, Number(req.params.id)) });
 }));
 
 // DELETE /items/:id
