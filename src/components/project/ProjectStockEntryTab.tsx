@@ -9,6 +9,7 @@ import { ProjectOverDeliveryPrompt, overDeliveriesOf, type ProjectOverDeliveryVi
 import { useProjectPermissions } from '../../hooks/useProjectPermissions';
 import { DELIVERY_MATERIALS_ONLY_NOTE } from '../../lib/projects/deliveryCost';
 import { ProjectMaterialCostNote } from './ProjectMaterialCostNote';
+import { DecimalInput } from '../common/DecimalInput';
 
 interface ProjectStockEntryTabProps {
   project: ProductionProject;
@@ -645,11 +646,10 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
                   {/* Delivered Quantity */}
                   <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200">
                     <span className="text-slate-600 font-semibold text-[11px]">تعداد تحویلی:</span>
-                    <input
-                      type="number"
+                    <DecimalInput
                       min="1"
                       value={producedQuantities[p.id] ? producedQuantities[p.id] : ''}
-                      onChange={(e) => handleQtyChange(p.id, Number(e.target.value) || 0)}
+                      onValueChange={(v) => handleQtyChange(p.id, Number(v) || 0)}
                       className="w-20 px-1.5 py-1 bg-white border border-slate-300 rounded-lg text-center font-mono font-bold text-xs focus:ring-2 focus:ring-amber-400 focus:outline-none"
                     />
                     <span className="text-slate-500 font-semibold text-[11px]">{p.unit || 'عدد'}</span>
@@ -659,13 +659,12 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
                   <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200" title="بهای تمام‌شده هر واحد جهت محاسبه مجدد میانگین موزون در انبار">
                     <DollarSign className="w-3.5 h-3.5 text-slate-400" />
                     <span className="text-slate-600 font-semibold text-[11px]">بهای واحد:</span>
-                    <input
-                      type="number"
+                    <DecimalInput
                       min="0"
                       step="any"
                       placeholder={defaultWac > 0 ? `میانگین موزون بها: ${toPersianDigits(defaultWac)}` : 'میانگین موزون بها'}
                       value={enteredCost !== undefined && enteredCost > 0 ? enteredCost : ''}
-                      onChange={(e) => handleCostChange(p.id, Number(e.target.value) || 0)}
+                      onValueChange={(v) => handleCostChange(p.id, Number(v) || 0)}
                       className="w-24 px-1.5 py-1 bg-white border border-slate-300 rounded-lg text-center font-mono font-bold text-xs focus:ring-2 focus:ring-amber-400 focus:outline-none placeholder:text-slate-400"
                     />
                     <span className="text-slate-400 text-[10px]">ریال</span>

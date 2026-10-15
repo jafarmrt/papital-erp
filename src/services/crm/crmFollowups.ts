@@ -158,7 +158,7 @@ export async function listFollowups(filter: FollowupFilter) {
 }
 
 /**
- * v10.1.22 (N-02 بخش ۳): نزدیک‌ترین سررسید پیگیری باز هر پرونده (`openFollowupCondition`)، برای کارت قیف فروش. یک پرس‌وجو
+ * v10.1.24 (N-02 بخش ۳): نزدیک‌ترین سررسید پیگیری باز هر پرونده (`openFollowupCondition`)، برای کارت قیف فروش. یک پرس‌وجو
  * برای پرونده‌های همان صفحه؛ پرونده بی پیگیری باز در نتیجه نیست.
  */
 export async function nextFollowupDatesByLead(leadIds: ReadonlyArray<number>): Promise<Map<number, string>> {

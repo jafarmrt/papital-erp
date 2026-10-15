@@ -4,6 +4,7 @@ import { SearchableSelect } from '../SearchableSelect';
 import { Item } from '../../types';
 import { formatPersianNumber, toPersianDigits } from '../../utils';
 import { ProductRow } from './types';
+import { DecimalInput } from '../common/DecimalInput';
 
 interface ProjectProductsFormProps {
   productsList: ProductRow[];
@@ -182,14 +183,13 @@ function ProductQuantityInput({ value, onChange }: { value: number; onChange: (q
     setText(current => (Number(current) === Number(value) ? current : String(value ?? '')));
   }, [value]);
   return (
-    <input
-      type="number"
+    <DecimalInput
       min="1"
       required
       value={text}
-      onChange={(e) => {
-        setText(e.target.value);
-        const parsed = Number(e.target.value);
+      onValueChange={(v) => {
+        setText(v);
+        const parsed = Number(v);
         onChange(Number.isFinite(parsed) ? parsed : 0);
       }}
       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-mono"

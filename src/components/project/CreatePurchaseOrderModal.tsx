@@ -15,6 +15,7 @@ import { ProjectDirectOrderFields } from './ProjectDirectOrderFields';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
 import { SearchableSelect } from '../SearchableSelect';
+import { DecimalInput } from '../common/DecimalInput';
 
 interface CreatePurchaseOrderModalProps {
   isOpen: boolean;
@@ -430,12 +431,11 @@ export function CreatePurchaseOrderModal({
                         </td>
                         <td className="p-2.5 text-center">
                           <div className="flex items-center justify-center gap-1">
-                            <input
-                              type="number"
+                            <DecimalInput
                               min="0.1"
                               step="any"
                               value={row.quantity}
-                              onChange={e => handleUpdateRow(idx, 'quantity', Number(e.target.value))}
+                              onValueChange={(v) => handleUpdateRow(idx, 'quantity', Number(v))}
                               className="w-20 p-1 border border-slate-300 rounded text-center font-mono font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
                             />
                             <span className="text-slate-600">{row.unit}</span>

@@ -38,7 +38,7 @@ afterEach(() => {
   setPhone(false);
 });
 
-// v10.1.22 (N-02 part 3, TD-1272): the pipeline board's columns never overlap, cards are dragged between stages, a phone
+// v10.1.24 (N-02 part 3, TD-1272): the pipeline board's columns never overlap, cards are dragged between stages, a phone
 // shows one stage per tab. Before, the columns sat in a five-column grid narrower than their 260 px minimum.
 describe('CRM pipeline board (TD-1272)', () => {
   it('decides a drop only for a known card moving to another stage', () => {

@@ -1,3 +1,5 @@
+import { DecimalInput } from '../common/DecimalInput';
+
 /**
  * v9.0.329 (TD-861، تصمیم ت۵ الف): کادر «سایر کسورات» فرم صدور فیش. پیش‌تر برچسب «(بیمه/مالیات...)» داشت، در حالی که سامانه
  * بیمه و مالیات حساب نمی‌کند، و مبلغ بی هیچ توضیحی به حساب ۳۲۰۲ می‌رفت. اکنون کسورات بالای صفر شرح می‌خواهد (سرور هم ۴۲۲ می‌دهد)
@@ -20,12 +22,11 @@ export function PayrollDeductionsField({ amount, onAmountChange, description, on
   return (
     <div>
       <label htmlFor="payroll-deductions" className="block text-xs font-bold text-slate-700 mb-1">{`سایر کسورات (${currencyLabel})`}</label>
-      <input
+      <DecimalInput
         id="payroll-deductions"
-        type="number"
         min="0"
         value={amount}
-        onChange={(e) => onAmountChange(Math.max(0, Number(e.target.value) || 0))}
+        onValueChange={(v) => onAmountChange(Math.max(0, Number(v) || 0))}
         className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono"
       />
       {(amount || 0) > 0 && (

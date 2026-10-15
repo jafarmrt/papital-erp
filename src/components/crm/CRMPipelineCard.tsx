@@ -25,7 +25,7 @@ interface CRMPipelineCardProps extends PipelineCardActions {
 }
 
 /**
- * v10.1.22 (N-02 بخش ۳): کارت جمع‌وجور قیف فروش: عنوان، مشتری، ارزش با ارز، مسئول و پیگیری بعدی (سرخ اگر گذشته باشد).
+ * v10.1.24 (N-02 بخش ۳): کارت جمع‌وجور قیف فروش: عنوان، مشتری، ارزش با ارز، مسئول و پیگیری بعدی (سرخ اگر گذشته باشد).
  * دکمه‌ها در منوی «⋯» هستند و فهرست کشویی مرحله کنار کشیدن و رها کردن می‌ماند.
  */
 export function CRMPipelineCard({ lead, todayIso, draggable, ...actions }: CRMPipelineCardProps) {
