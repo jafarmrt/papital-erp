@@ -49,7 +49,7 @@ cd /opt/papital-erp && sudo bash install.sh
 sudo REPO_URL=https://<TOKEN>@github.com/jafarmrt/papital-erp.git bash install.sh
 ```
 
-The installer performs: system deps (Node 22, PostgreSQL 16) → source → DB + `.env` generation (`chmod 600`) → `npm ci` → `npm run build` → systemd unit (`papital-erp`, Restart=always) → health probe.
+The installer performs: system deps (Node 24, PostgreSQL 16) → source → DB + `.env` generation (`chmod 600`) → `npm ci` → `npm run build` → systemd unit (`papital-erp`, Restart=always) → health probe.
 
 **Post-install verification — do each one explicitly:**
 

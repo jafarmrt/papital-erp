@@ -45,7 +45,7 @@ cd /opt/papital-erp
 sudo bash install.sh
 ```
 
-اسکریپت نصب خودکار: نصب Node.js 22 + PostgreSQL → ساخت دیتابیس و کاربر با رمز تصادفی → ساخت `.env` (شامل `JWT_SECRET` و `ERP_SETUP_TOKEN`) → `npm ci` + build → ثبت سرویس systemd → health-check.
+اسکریپت نصب خودکار: نصب Node.js 24 + PostgreSQL → ساخت دیتابیس و کاربر با رمز تصادفی → ساخت `.env` (شامل `JWT_SECRET` و `ERP_SETUP_TOKEN`) → `npm ci` + build → ثبت سرویس systemd → health-check.
 
 خروجی موفق:
 ```
