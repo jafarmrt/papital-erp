@@ -20,7 +20,7 @@ export async function runDocSubmitGuardTests(shouldRun: ShouldRun): Promise<Test
       const { findUnguardedDocumentSteps } = await import('../../services/accounting/unguardedDocumentStepHealth.js');
       const { orm } = await import('../../db/drizzle.js');
       const startDoc = async (docId: number, s: Session) => {
-        const res = await h.post('/api/workflow/start', { workflowCode: 'DOC_APPROVAL_WORKFLOW', entityType: 'document', entityId: docId }, s);
+        const res = await h.start({ workflowCode: 'DOC_APPROVAL_WORKFLOW', entityType: 'document', entityId: docId }, s);
         const id = Number(res.body?.data?.id);
         if (!(id > 0)) throw new Error(`Starting the document workflow on ${docId}: ${res.status} ${JSON.stringify(res.body).slice(0, 160)}`);
         return id;

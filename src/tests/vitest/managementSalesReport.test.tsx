@@ -176,7 +176,7 @@ function routeFetch(report: SalesReport) {
 
 describe('management reports page (D-03)', () => {
   it('has a page-access row for every tab, opened by the key of its own API', () => {
-    // v10.1.10 / v10.1.11: سن مطالبات و بدهی‌ها و مالیات بر ارزش افزوده با کلید گزارش‌های حسابداری (ت۲)
+    // v10.1.10 / v10.1.12: سن مطالبات و بدهی‌ها و مالیات بر ارزش افزوده با کلید گزارش‌های حسابداری (ت۲)
     const tabKeys: Record<string, string> = { sales: 'reports.sales', aging: 'accounting.reports', vat: 'accounting.reports' };
     for (const tab of MANAGEMENT_REPORT_TABS) {
       expect(canOpenPage(managementReportPath(tab.id), { permissions: [tabKeys[tab.id]] })).toBe(true);

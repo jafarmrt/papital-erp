@@ -112,7 +112,6 @@ export function OpenProformasPanel({ proformas, total, page, onPageChange, editi
               <WorkflowStepperWidget
                 entityType="document"
                 entityId={workflowModalDoc.id}
-                workflowCode="DOC_APPROVAL_WORKFLOW"
                 title="اقدام‌های گردش کار"
                 onStateChange={onWorkflowStateChange}
               />

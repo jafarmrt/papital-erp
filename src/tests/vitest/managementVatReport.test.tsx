@@ -93,7 +93,7 @@ function sampleReport(over: Partial<VatReport> = {}): VatReport {
   };
 }
 
-// v10.1.11 (D-03، طرح گزارش‌های مدیریتی §۴): قرارداد «مالیات بر ارزش افزوده» و خروجی اکسل آن
+// v10.1.12 (D-03، طرح گزارش‌های مدیریتی §۴): قرارداد «مالیات بر ارزش افزوده» و خروجی اکسل آن
 describe('VAT report contract (D-03)', () => {
   it('labels percents, vouchers and currencies in Persian', () => {
     expect(vatRateLabel(10)).toBe('۱۰٪');

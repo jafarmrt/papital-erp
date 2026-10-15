@@ -10,7 +10,7 @@ import { AccountMappingService } from '../accounting/accountMapping.service.js';
 import { vatDifferencesSql, vatDocumentsSql, vatLedgerSummarySql, vatRatesSql, vatWarningsSql } from './vatReportQuery.js';
 
 /**
- * v10.1.11 (D-03، طرح گزارش‌های مدیریتی §۴، تصمیم‌های ت۱۲ و ت۱۳): «مالیات بر ارزش افزوده». جمع‌ها، صفحه‌بندی و فهرست
+ * v10.1.12 (D-03، طرح گزارش‌های مدیریتی §۴، تصمیم‌های ت۱۲ و ت۱۳): «مالیات بر ارزش افزوده». جمع‌ها، صفحه‌بندی و فهرست
  * تفاوت‌ها در پایگاه‌داده است (§۶.۱)؛ قاعده شمردن در `vatReportQuery.ts`. گزارش فقط می‌خواند و چیزی نمی‌نویسد.
  */
 

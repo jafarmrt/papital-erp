@@ -4,7 +4,7 @@ import { QUERY_KEYS } from '../../lib/queryKeys';
 import { vatReportSearch, type VatReport, type VatReportParams } from '../../lib/reports/vatReport';
 
 /**
- * v10.1.11 (D-03): زبانه «مالیات بر ارزش افزوده» صفحه «گزارش‌های مدیریتی» (`GET /reports/vat`). جمع‌ها، هم‌خوانی و
+ * v10.1.12 (D-03): زبانه «مالیات بر ارزش افزوده» صفحه «گزارش‌های مدیریتی» (`GET /reports/vat`). جمع‌ها، هم‌خوانی و
  * صفحه‌بندی در کارساز است؛ با تغییر پالایه صفحه قبلی تا رسیدن پاسخ تازه می‌ماند و پس از نیم دقیقه کهنه شمرده می‌شود.
  */
 

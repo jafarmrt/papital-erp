@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { numericIdString } from '../middleware/validate.js';
 import { WORKFLOW_APPROVAL_RULE_TYPES, WORKFLOW_STATE_TYPES } from '../lib/workflow/workflowDesignRules.js';
+import { WORKFLOW_TEMPLATE_IDS } from '../lib/workflow/workflowTemplates.js';
 
 /**
  * v9.0.50 (TD-459، B14-17): بدنه routeهای نوشتنی گردش کار. پیش‌تر `/transition`، `/definitions`، `/positions` و
@@ -114,4 +115,11 @@ export const activateDefinitionSchema = z.object({
 export const definitionSwitchSchema = z.object({
   params: z.object({ id: numericIdString }),
   body: z.object({}).strict(),
+});
+
+/** v10.1.11 (TD-1263, D-06 part B): «ساخت از الگو» names one of the ready-made templates */
+export const definitionFromTemplateSchema = z.object({
+  body: z.object({
+    templateId: z.enum(WORKFLOW_TEMPLATE_IDS, { error: 'الگوی گردش کار را از فهرست الگوها انتخاب کنید' }),
+  }).strict(),
 });
