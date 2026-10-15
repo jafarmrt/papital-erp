@@ -18,7 +18,7 @@ import { containsLikePattern } from '../lib/sqlLike.js';
 import { money } from '../lib/money.js';
 import { linkCustomerForLead, notesWithPartyDifferences } from '../services/crm/crmCustomerLink.js';
 import { getCrmStats } from '../services/crm/crmStats.js';
-import { listFollowups, liveLeadActivityCondition, type FollowupStatus } from '../services/crm/crmFollowups.js';
+import { listFollowups, liveLeadActivityCondition, nextFollowupDatesByLead, type FollowupStatus } from '../services/crm/crmFollowups.js';
 import { deleteLead } from '../services/crm/crmLeadDelete.js';
 import { leadAuditDetails } from '../services/crm/crmLeadAudit.js';
 import { isClosedLead } from '../services/crm/leadProforma.js';
@@ -168,6 +168,12 @@ function formatLead(l: (Partial<typeof crmLeads.$inferSelect> & Record<string, u
   };
 }
 
+/** v10.1.24 (N-02 بخش ۳): پرونده‌های فهرست با نزدیک‌ترین سررسید پیگیری باز هر یک (`nextFollowUpDate`، کارت قیف) */
+async function withNextFollowups(leads: Array<typeof crmLeads.$inferSelect>) {
+  const next = await nextFollowupDatesByLead(leads.map((l) => l.id));
+  return leads.map((l) => ({ ...formatLead(l), nextFollowUpDate: next.get(l.id) ?? null }));
+}
+
 function formatActivity(act: (Partial<typeof crmActivities.$inferSelect> & Record<string, unknown>) | null | undefined) {
   if (!act) return null;
   const leadTitle = act.leadTitle || (act.lead && typeof act.lead === 'object' && 'title' in act.lead ? (act.lead as { title: string }).title : '');
@@ -297,7 +303,7 @@ router.get('/crm/leads', authorizePermission('crm.view', 'customers.view', 'cust
       .offset(offset);
 
     return res.json({
-      data: leads.map(formatLead),
+      data: await withNextFollowups(leads),
       total,
       page: currentPage,
       limit: pageLimit,
@@ -312,7 +318,7 @@ router.get('/crm/leads', authorizePermission('crm.view', 'customers.view', 'cust
     .orderBy(desc(crmLeads.updatedAt), desc(crmLeads.id))
     .limit(safeLimit);
 
-  res.json(leads.map(formatLead));
+  res.json(await withNextFollowups(leads));
 }));
 
 // GET /api/crm/leads/:id - Single lead detail with activities
