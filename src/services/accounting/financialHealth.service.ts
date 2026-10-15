@@ -38,6 +38,7 @@ import {
   buildOverReservedHealthTest, buildProjectReservationHealthTest, findOverReservedItems, findProjectReservationIssues,
 } from '../projects/projectReservationHealth.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
+import { buildActiveDefinitionHealthTest, findDuplicateActiveDefinitions, hasActiveDefinitionUniqueIndex } from './workflowActiveDefinitionHealth.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
 import { buildClosedProjectWipHealthTest, findClosedProjectWipBalances } from './projectWipHealth.js';
 import { buildProjectStageHealthTest, buildProjectValueHealthTest, findProjectFreeTextValues, findProjectStageIntegrity } from '../projects/projectStageHealth.js';
@@ -1148,6 +1149,12 @@ export class FinancialHealthService {
     const openInstanceTest = buildOpenInstanceHealthTest(duplicateOpenInstances, openInstanceIndexPresent);
     overallScore += openInstanceTest.scoreImpact;
     tests.push(openInstanceTest);
+
+    // آزمون ۱۸الف: v10.1.7 (TD-1229) یک گردش کار فعال برای هر نوع پرونده (مهاجرت 0110)
+    const [duplicateActiveDefinitions, activeDefinitionIndexPresent] = await Promise.all([findDuplicateActiveDefinitions(orm), hasActiveDefinitionUniqueIndex(orm)]);
+    const activeDefinitionTest = buildActiveDefinitionHealthTest(duplicateActiveDefinitions, activeDefinitionIndexPresent);
+    overallScore += activeDefinitionTest.scoreImpact;
+    tests.push(activeDefinitionTest);
 
     // آزمون ۱۹: v9.0.51 (TD-461) کلیدهای خارجی گردش کار و یکتایی شماره نسخه تعریف (مهاجرت 0059)
     const workflowReferenceTest = buildWorkflowReferenceHealthTest(await findWorkflowReferenceGaps());

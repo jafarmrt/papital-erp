@@ -36,3 +36,12 @@ export const INBOX_ENTITY_TABS: ReadonlyArray<{ id: string; label: string }> = [
   { id: 'item', label: 'کالا' },
   { id: 'bank_account', label: 'حساب بانکی' },
 ];
+
+/**
+ * v10.1.7 (TD-1229, D-06, OBS-PR-15): the record types a workflow definition may be made for — the types the server
+ * starts a workflow on and runs a domain action for — each with its Persian name; the designer and the definition form
+ * offer only these.
+ */
+export const WORKFLOW_ENTITY_TYPES: ReadonlyArray<{ id: string; label: string }> = INBOX_ENTITY_TABS
+  .filter(tab => tab.id !== 'all')
+  .map(tab => ({ id: tab.id, label: workflowEntityTypeLabel(tab.id) }));

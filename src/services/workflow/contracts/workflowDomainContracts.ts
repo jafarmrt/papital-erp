@@ -27,21 +27,6 @@ export type WorkflowPermission =
 // 1. WORKFLOW DEFINITION CONTRACT
 // ============================================================================
 
-export interface CreateWorkflowDefinitionInput {
-  code: string;
-  title: string;
-  entityType: WorkflowEntityType;
-  description?: string;
-  dslJson?: Record<string, unknown>;
-}
-
-export interface UpdateWorkflowDefinitionInput {
-  title?: string;
-  description?: string;
-  isActive?: number;
-  dslJson?: Record<string, unknown>;
-}
-
 export interface WorkflowDefinitionDTO {
   id: number;
   code: string;
@@ -66,17 +51,6 @@ export interface IWorkflowDefinitionService {
    */
   getDefinitionById(id: number): Promise<WorkflowDefinitionDTO | null>;
   getDefinitionByCode(code: string): Promise<WorkflowDefinitionDTO | null>;
-
-  /**
-   * Creates a new workflow definition with initial version 1.
-   * Invariant: 'code' must be globally unique.
-   */
-  createDefinition(input: CreateWorkflowDefinitionInput): Promise<WorkflowDefinitionDTO>;
-
-  /**
-   * Updates an existing workflow definition.
-   */
-  updateDefinition(id: number, input: UpdateWorkflowDefinitionInput): Promise<WorkflowDefinitionDTO>;
 }
 
 // ============================================================================
@@ -360,35 +334,7 @@ export interface IWorkflowSlaEvaluator {
 }
 
 // ============================================================================
-// 10. WORKFLOW EVENT PUBLISHER CONTRACT
-// ============================================================================
-
-export interface WorkflowEventPayload {
-  instanceId: number;
-  workflowCode: string;
-  entityType: string;
-  entityId: string;
-  fromStateKey: string;
-  toStateKey: string;
-  actionKey: string;
-  actionTitle: string;
-  performedBy?: number;
-  performedByName?: string;
-  comment?: string;
-}
-
-export interface IWorkflowEventPublisher {
-  /**
-   * Emits workflow transition events to local listeners and publishes to the domain event bus.
-   * Invariant: Every completed mutation MUST publish a corresponding domain event atomically or via Outbox.
-   */
-  publishTransitionCompleted(payload: WorkflowEventPayload): Promise<void>;
-  publishWorkflowCompleted(payload: WorkflowEventPayload): Promise<void>;
-  publishWorkflowRejected(payload: WorkflowEventPayload): Promise<void>;
-}
-
-// ============================================================================
-// 11. UNIFIED WORKFLOW ENGINE FACADE CONTRACT
+// 10. UNIFIED WORKFLOW ENGINE FACADE CONTRACT
 // ============================================================================
 
 export interface IWorkflowEngineFacade extends 
@@ -399,7 +345,6 @@ export interface IWorkflowEngineFacade extends
   IWorkflowApprovalRules,
   IWorkflowTaskService,
   IWorkflowDelegationService,
-  IWorkflowSlaEvaluator,
-  IWorkflowEventPublisher {
+  IWorkflowSlaEvaluator {
     // Unifies all sub-services for 100% backwards compatibility in Express routes & API handlers.
 }

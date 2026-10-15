@@ -86,7 +86,7 @@ export async function runAccessPackageTwoDocumentTests(shouldRun: ShouldRun): Pr
       if (keeperInvoice.status !== 200) wrong.push(`the seed warehouse keeper recorded a final invoice with ${keeperInvoice.status}`);
 
       // 5) workflow approval step: documents.edit with warehouse.in and warehouse.out no longer finalizes a sales document
-      const { definition: open } = await createTestWorkflow({ definition: { entityType: 'document', code: `WF541_${h.tag}` } });
+      const { definition: open, restore: restoreOpen } = await createTestWorkflow({ definition: { entityType: 'document', code: `WF541_${h.tag}` } });
       try {
         const docId = await draftSalesDocument(h);
         const start = await h.post('/api/workflow/start', { workflowCode: open.code, entityType: 'document', entityId: docId });
@@ -101,7 +101,7 @@ export async function runAccessPackageTwoDocumentTests(shouldRun: ShouldRun): Pr
         if (okWalk.join(',') !== '200') wrong.push(`documents.finalize walked the approval step with ${okWalk.join(',')}, not 200`);
         if ((await stored(docId))?.status !== 'final') wrong.push('the approval step with documents.finalize did not finalize the document');
       } finally {
-        await h.q(`UPDATE workflow_definitions SET is_active = 0 WHERE id = $1`, [open.id]);
+        await restoreOpen();
       }
     });
   }

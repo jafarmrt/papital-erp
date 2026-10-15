@@ -1,4 +1,4 @@
--- Drizzle Migration 0110: item code history (v10.1.7 / TD-1264, D-15)
+-- Drizzle Migration 0111: item code history (v10.1.7 / TD-1264, D-15)
 --
 -- An item's code is the WooCommerce SKU, so a code changed through the item form made the next website order carrying
 -- the old SKU fail as a whole. From this version the code changes only through its own operation
