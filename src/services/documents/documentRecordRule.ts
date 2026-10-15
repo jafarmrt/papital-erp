@@ -74,17 +74,30 @@ export function assertManualRefAllowed(docType: string, requested: unknown): voi
 }
 
 /**
- * v9.0.325 (TD-780، یافته B08-11، تصمیم ت۷ «الف» بسته ۸): رسید تولید فقط از «ورود به انبار» پروژه ثبت می‌شود
+ * v9.0.325 (TD-780، یافته B08-11، تصمیم ت۷ «الف» بسته ۸): رسید تولید پروژه فقط از «ورود به انبار» همان پروژه ثبت می‌شود
  * (`ProjectService.addProjectToInventory`، TD-285)، جایی که پروژه، سقف مقدار برنامه با دلیل (TD-327) و بهای تحویل سنجیده
- * می‌شود. `POST /documents` و نهایی‌سازی رسید تولید پیش‌نویس آن را ۴۲۲ می‌دهند؛ پیش‌تر از این مسیر رسید تولید بی پروژه،
- * فراتر از برنامه و روی پروژه لغوشده ثبت می‌شد و کالای در جریان ساخت بی پروژه بستانکار می‌شد.
+ * می‌شود؛ `POST /documents` رسید تولیدی را که پروژه دارد ۴۲۲ می‌دهد. v10.1.6 (N-06، TD-1262، تصمیم ت۲۶): رسید تولید بی
+ * پروژه دوباره از همین مسیر ثبت می‌شود، با قاعده‌های `assertStandaloneProductionReceipt` و مجوز «ثبت تولید بدون پروژه».
  */
-export function assertNotProjectDelivery(docType: string, refNumber?: string | null): void {
+export function assertNotProjectDelivery(docType: string, projectId: unknown): void {
+  if (docType !== 'production_receipt' || projectId === undefined || projectId === null || String(projectId).trim() === '') return;
+  throw new ValidationError(
+    'رسید تولید پروژه فقط از «ورود به انبار» همان پروژه ثبت می‌شود تا پروژه، سقف مقدار برنامه و بهای تحویل سنجیده شود؛ برای تولید بی پروژه، پروژه را خالی بگذارید.',
+    { docType, projectId },
+    'PRODUCTION_RECEIPT_PROJECT_ONLY',
+  );
+}
+
+/**
+ * v10.1.6 (N-06، TD-1262): رسید تولید پیش‌نویس (ثبت‌شده پیش از v9.0.325) قطعی نمی‌شود. رسید تولید پروژه فقط از «ورود به انبار»
+ * پروژه و رسید تولید بی پروژه فقط به‌صورت قطعی ثبت می‌شود، پس پیش‌نویس تازه‌ای هم ساخته نمی‌شود.
+ */
+export function assertProductionReceiptNotFinalized(docType: string, refNumber: string): void {
   if (docType !== 'production_receipt') return;
   throw new ValidationError(
-    `${refNumber ? `رسید تولید «${refNumber}» قطعی نمی‌شود؛ ` : ''}رسید تولید فقط از «ورود به انبار» همان پروژه ثبت می‌شود تا پروژه، سقف مقدار برنامه و بهای تحویل سنجیده شود.`,
+    `رسید تولید پیش‌نویس «${refNumber}» قطعی نمی‌شود؛ آن را ابطال و دوباره ثبت کنید: رسید تولید پروژه از «ورود به انبار» همان پروژه و رسید تولید بی پروژه به‌صورت قطعی از «ورود و خروج انبار».`,
     { docType },
-    'PRODUCTION_RECEIPT_PROJECT_ONLY',
+    'PRODUCTION_RECEIPT_FINAL_ONLY',
   );
 }
 

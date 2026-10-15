@@ -12,6 +12,7 @@ import { StockCounterpartyField } from './StockCounterpartyField';
 import { STOCK_PAGE_DOC_TYPE_LABELS } from '../../../lib/documents/stockDocumentAccess';
 import { ReturnInvoiceYearChoices } from './ReturnInvoiceYearChoices';
 import { isServerSeriesDocumentType } from '../../../lib/documents/documentRefRules';
+import { PRODUCTION_RECEIPT_NOTE } from '../../../lib/documents/stockInLabels';
 
 interface StockDocumentDetailsFieldsProps {
   form: StockDocumentForm;
@@ -74,7 +75,8 @@ export function StockDocumentDetailsFields({ form, currentUser, warehouses, proj
           />
         </div>
 
-        {actionType === 'in' && (
+        {/* v10.1.6 (N-06): رسید تولید بی پروژه فقط ریالی است */}
+        {actionType === 'in' && docType !== 'production_receipt' && (
           <div>
             <label className="block text-xs font-bold mb-1.5 text-slate-700">واحد پول (ارز سند)</label>
             <select 
@@ -202,6 +204,12 @@ export function StockDocumentDetailsFields({ form, currentUser, warehouses, proj
           />
         </div>
       </div>
+
+      {docType === 'production_receipt' && (
+        <p role="note" className="text-xs text-teal-900 bg-teal-50 border border-teal-200 rounded-xl px-4 py-2.5 leading-6">
+          {PRODUCTION_RECEIPT_NOTE}
+        </p>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>

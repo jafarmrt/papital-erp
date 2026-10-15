@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 409
+تعداد مسیرها: 411
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -68,6 +68,7 @@
 | GET | `/api/accounting/treasury/contra-accounts` | accounting.treasury \| accounting.cheques |
 | POST | `/api/accounting/treasury/preview-voucher` | accounting.treasury |
 | POST | `/api/accounting/treasury/reconcile` | accounting.treasury |
+| GET | `/api/accounting/treasury/reconcile-cheques` | accounting.treasury |
 | POST | `/api/accounting/treasury/transfer` | accounting.treasury |
 | GET | `/api/accounting/vouchers` | accounting.vouchers \| accounting.reports \| accounting.view |
 | POST | `/api/accounting/vouchers` | accounting.vouchers |
@@ -131,7 +132,7 @@
 | GET | `/api/daily-logs/summary-report` | daily_logs.manage_all |
 | GET | `/api/dashboard-bi-stats` | reports.view \| warehouse.view |
 | GET | `/api/documents` | documents.view \| documents.create \| documents.edit \| audit.view |
-| POST | `/api/documents` | documents.create \| documents.finalize \| warehouse.in \| warehouse.out \| audit.apply |
+| POST | `/api/documents` | documents.create \| documents.finalize \| warehouse.in \| warehouse.out \| audit.apply \| warehouse.production_receipt |
 | DELETE | `/api/documents/:id` | documents.delete |
 | GET | `/api/documents/:id` | documents.view \| documents.create \| documents.edit \| workflow.view \| audit.view |
 | PUT | `/api/documents/:id` | documents.edit |
@@ -338,6 +339,7 @@
 | PUT | `/api/procurement/requisitions/:id` | procurement.manage |
 | POST | `/api/procurement/requisitions/:id/convert-to-orders` | procurement.order |
 | POST | `/api/procurement/requisitions/:id/workflow-action` | procurement.approve \| procurement.manage |
+| GET | `/api/procurement/requisitions/:id/workflow-actions` | procurement.view \| projects.view |
 | GET | `/api/projects` | projects.view |
 | POST | `/api/projects` | projects.create |
 | DELETE | `/api/projects/:id` | projects.delete |

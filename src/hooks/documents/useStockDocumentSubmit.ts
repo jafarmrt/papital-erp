@@ -73,7 +73,9 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
     }
 
     // v7.0.63 (TD-198): ارز فقط برای سند ورود انتخاب می‌شود؛ سند ارزی بدون نرخ تسعیر ثبت نمی‌شود
-    const docCurrency = actionType === 'in' ? currency : 'IRR';
+    // v10.1.6 (N-06): رسید تولید بی پروژه فقط ریالی و بی طرف حساب
+    const production = docType === 'production_receipt';
+    const docCurrency = actionType === 'in' && !production ? currency : 'IRR';
     const rateError = exchangeRateError(docCurrency, exchangeRate);
     if (rateError) {
       toast.error(rateError);
@@ -116,8 +118,8 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
           user: currentUser.full_name || currentUser.username,
           location,
           // v9.0.336 (TD-778): طرف حساب ورود با شناسه انتخابگر؛ برگشت با فاکتور مرجع طرف حساب فاکتور را از سرور می‌گیرد
-          partyId: actionType === 'in' && returnInvoiceId === null ? selectedPartyId(selectedSupplierObj?.id) : undefined,
-          buyer_name: buyerName,
+          partyId: actionType === 'in' && !production && returnInvoiceId === null ? selectedPartyId(selectedSupplierObj?.id) : undefined,
+          buyer_name: production ? '' : buyerName,
           notes: finalNotes,
           inOut: actionType,
           currency: docCurrency,
@@ -146,6 +148,8 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
       } else {
         if (actionType === 'in' && docType === 'receipt') {
           toast.success(`رسید خرید ثبت و موجودی انبار به‌روزرسانی شد؛ ${STOCK_VOUCHER_DRAFT_NOTE}`);
+        } else if (production) {
+          toast.success(`رسید تولید ثبت و موجودی انبار به‌روزرسانی شد؛ ${STOCK_VOUCHER_DRAFT_NOTE}`);
         } else {
           toast.success('سند با موفقیت در سامانه ثبت شد.');
         }

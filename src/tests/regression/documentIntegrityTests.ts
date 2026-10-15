@@ -22,7 +22,7 @@ export async function runDocumentIntegrityTests(shouldRun: ShouldRun): Promise<T
       'v9.0.324: a stock count line without a count or a repeated (item, warehouse) line is 422 before any movement, and the document view keys each variance by item and warehouse (TD-777)',
       ['td777', 'documents', 'audit', 'stock_count', 'package8'], stockCountLinesCase],
     ['reg_production_receipt_project_only_td_780',
-      'v9.0.325: a production receipt is recorded only through the project delivery: POST /documents and finalizing a draft production receipt are 422 and move nothing, the project path still issues it (TD-780)',
+      'v9.0.325 / v10.1.6: a production receipt naming a project is recorded only through the project delivery: POST /documents with a project (422 PRODUCTION_RECEIPT_PROJECT_ONLY), a draft and finalizing a draft (422 PRODUCTION_RECEIPT_FINAL_ONLY) move nothing, the project path still issues it (TD-780, N-06)',
       ['td780', 'documents', 'production_receipt', 'projects', 'package8'], productionReceiptProjectOnlyCase],
     ['reg_document_by_ref_fiscal_year_td_782',
       'v9.0.326: GET /documents/by-ref finds only an active final document of the type, by fiscal year when given; a number in two years is 409 with the years, a draft is 404 (TD-782)',
@@ -158,7 +158,11 @@ async function stockCountLinesCase(h: Harness, wrong: string[]): Promise<string>
   return `a line without a count is 422 AUDIT_COUNT_MISSING and a repeated (item, ${f.wh}) line 422 AUDIT_DUPLICATE_LINE, leaving stock 10 with no movement; item C counted 10 in ${f.wh} and 1 in ${second.code} shows variance/book ${expected.join(', ')}`;
 }
 
-/** B08-11 (TD-780): a production receipt from POST /documents skipped the project, its planned quantity and its status */
+/**
+ * B08-11 (TD-780): a production receipt from POST /documents skipped the project, its planned quantity and its status.
+ * v10.1.6 (N-06, decision t26): a final production receipt without a project is recorded there again (its own case in
+ * productionWithoutProjectTests.ts); one naming a project still goes only through the project delivery.
+ */
 async function productionReceiptProjectOnlyCase(h: Harness, wrong: string[]): Promise<string> {
   const f = await fixture(h);
   const product = await f.item(0, 0);
@@ -171,35 +175,39 @@ async function productionReceiptProjectOnlyCase(h: Harness, wrong: string[]): Pr
   };
   const receipts = async () => Number((await h.q(`SELECT count(*)::int AS n FROM documents WHERE type = 'production_receipt' AND is_deleted = 0 AND id IN (SELECT document_id FROM document_items WHERE item_id = $1)`, [product]))[0]?.n);
 
-  // 1) POST /documents: final without a project, final on a cancelled project, a draft: all 422, nothing recorded
+  // 1) POST /documents: final on a cancelled or a running project (PROJECT_ONLY), a draft without a project (FINAL_ONLY):
+  // all 422, nothing recorded
   const cancelled = await insertProject('cancelled');
-  const attempts: Array<[string, Record<string, unknown>]> = [
-    ['final without a project', f.doc('production_receipt', 'final', lines(5))],
-    ['final of 7 on a cancelled project planned for 1', f.doc('production_receipt', 'final', lines(7), { projectId: cancelled })],
-    ['draft', f.doc('production_receipt', 'draft', lines(5))],
+  const running = await insertProject('in_progress');
+  const attempts: Array<[string, Record<string, unknown>, string]> = [
+    ['final of 7 on a cancelled project planned for 1', f.doc('production_receipt', 'final', lines(7), { projectId: cancelled }), 'PRODUCTION_RECEIPT_PROJECT_ONLY'],
+    ['final of 5 on a running project planned for 1', f.doc('production_receipt', 'final', lines(5), { projectId: running }), 'PRODUCTION_RECEIPT_PROJECT_ONLY'],
+    ['draft without a project', f.doc('production_receipt', 'draft', lines(5)), 'PRODUCTION_RECEIPT_FINAL_ONLY'],
   ];
-  for (const [label, body] of attempts) {
+  for (const [label, body, code] of attempts) {
     const res = await h.post('/api/documents', body);
-    if (res.status !== 422 || codeOf(res) !== 'PRODUCTION_RECEIPT_PROJECT_ONLY') wrong.push(`a production receipt (${label}) answered ${brief(res)}, expected 422 PRODUCTION_RECEIPT_PROJECT_ONLY`);
+    if (res.status !== 422 || codeOf(res) !== code) wrong.push(`a production receipt (${label}) answered ${brief(res)}, expected 422 ${code}`);
   }
   if (await f.stock(product) !== 0 || await receipts() !== 0) wrong.push(`after the refused receipts the product has stock ${await f.stock(product)} and ${await receipts()} production receipts, expected 0 and 0`);
 
   // 2) a draft production receipt recorded before this version is not finalized
-  const legacyDraft = await DocumentService.createDocument({ docType: 'production_receipt', status: 'draft', date: f.today, user: 'p8d', location: f.wh, items: lines(5) } as never);
+  // (no path records such a draft any more, so a draft receipt is stored and its type set the way an old row holds it)
+  const legacyDraft = await DocumentService.createDocument({ docType: 'receipt', status: 'draft', date: f.today, user: 'p8d', location: f.wh, items: lines(5) } as never);
+  await h.q(`UPDATE documents SET type = 'production_receipt' WHERE id = $1`, [legacyDraft]);
   const finalized = await h.put(`/api/documents/${legacyDraft}/finalize`, {});
-  if (finalized.status !== 422 || codeOf(finalized) !== 'PRODUCTION_RECEIPT_PROJECT_ONLY') wrong.push(`finalizing a legacy draft production receipt answered ${brief(finalized)}, expected 422 PRODUCTION_RECEIPT_PROJECT_ONLY`);
+  if (finalized.status !== 422 || codeOf(finalized) !== 'PRODUCTION_RECEIPT_FINAL_ONLY') wrong.push(`finalizing a legacy draft production receipt answered ${brief(finalized)}, expected 422 PRODUCTION_RECEIPT_FINAL_ONLY`);
   const [draftRow] = await h.q(`SELECT status FROM documents WHERE id = $1`, [legacyDraft]);
   if (draftRow?.status !== 'draft' || await f.stock(product) !== 0) wrong.push(`the legacy draft is ${draftRow?.status} with product stock ${await f.stock(product)}, expected draft and 0`);
 
   // 3) the project delivery still issues its production receipt
-  const project = await insertProject('in_progress');
+  const project = running;
   const delivered = await h.post(`/api/projects/${project}/add-to-inventory`, { itemsToAdd: [{ itemId: product, quantity: 1, unitPrice: 200_000, location: f.wh }] });
   const [issued] = await h.q(`SELECT type, status FROM documents WHERE project_id = $1 AND is_deleted = 0`, [project]);
   if (delivered.status !== 200 || issued?.type !== 'production_receipt' || issued?.status !== 'final' || await f.stock(product) !== 1) {
     wrong.push(`the project delivery answered ${brief(delivered)} with document ${JSON.stringify(issued ?? null)} and stock ${await f.stock(product)}, expected 200, a final production receipt and 1`);
   }
 
-  return 'POST /documents refuses a production receipt (final, on a cancelled project, draft) with 422 PRODUCTION_RECEIPT_PROJECT_ONLY and finalizing a legacy draft is refused the same way, leaving stock 0; the project delivery issues a final production receipt and stock 1';
+  return 'POST /documents refuses a production receipt on a cancelled or running project with 422 PRODUCTION_RECEIPT_PROJECT_ONLY and a draft with 422 PRODUCTION_RECEIPT_FINAL_ONLY, finalizing a legacy draft is refused with PRODUCTION_RECEIPT_FINAL_ONLY, leaving stock 0; the project delivery issues a final production receipt and stock 1';
 }
 
 /** B08-13 (TD-782): by-ref loaded every document of the type and always returned the current year's one */
