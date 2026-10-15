@@ -20,6 +20,7 @@ import { PURCHASE_REQUISITION_GUARD_UPGRADE, PURCHASE_REQUISITION_STEP_GUARDS } 
 import { resolveTransitionRoles, storedTransitionRole } from './transitionRoles.js';
 import { activeDefinitionsOfType, lockWorkflowEntityTypes, startedInstanceCount } from './workflowDefinitionLifecycle.js';
 import { workflowEntityTypeChangeRefusal } from '../../lib/workflow/workflowLifecycle.js';
+import { JOURNAL_VOUCHER_WORKFLOW_TEMPLATE, PURCHASE_REQUISITION_WORKFLOW_TEMPLATE } from '../../lib/workflow/workflowTemplates.js';
 import type { WorkflowDefinitionDTO } from './contracts/workflowDomainContracts.js';
 
 export type WorkflowDefinitionWithStats = (typeof workflowDefinitions.$inferSelect) & {
@@ -51,6 +52,10 @@ export interface SaveWorkflowDefinitionPayload {
   isActive?: number;
   /** کاربر ذخیره‌کننده (ثبت در نسخه) */
   userId?: number;
+  /** v10.1.11 (TD-1263, D-06 part B): a new definition made from a template is saved inactive, whatever its record type has */
+  startInactive?: boolean;
+  /** v10.1.11 (TD-1263): the template a new definition was made from, for its audit row */
+  fromTemplate?: string;
   states?: Array<{
     id?: number | string;
     code?: string;
@@ -115,16 +120,6 @@ function assertSavableWorkflowDesign(payload: SaveWorkflowDefinitionPayload): vo
 }
 
 export class WorkflowDefinitionService {
-  /**
-   * v10.0.65 (TD-1142): whether an entity type has an active definition, so the widget offers «آغاز گردش کار» only when a
-   * start can succeed (the project window showed it for PROJECT_WORKFLOW, which no install has).
-   */
-  static async hasActiveDefinition(entityType: string): Promise<boolean> {
-    const [row] = await orm.select({ id: workflowDefinitions.id }).from(workflowDefinitions)
-      .where(and(eq(workflowDefinitions.entityType, entityType), eq(workflowDefinitions.isActive, 1))).limit(1);
-    return Boolean(row);
-  }
-
   /**
    * List workflow definitions with optional filters
    */
@@ -243,7 +238,7 @@ export class WorkflowDefinitionService {
         if (duplicate) {
           throw new ConflictError(`کد فرآیند کاری '${payload.code}' قبلاً ثبت شده است`, undefined, 'WF_DEF_CODE_EXISTS');
         }
-        isActive = (await activeDefinitionsOfType(tx, payload.entityType)).length === 0 ? 1 : 0;
+        isActive = !payload.startInactive && (await activeDefinitionsOfType(tx, payload.entityType)).length === 0 ? 1 : 0;
         const [created] = await tx.insert(workflowDefinitions).values({
           code: payload.code,
           title: payload.title,
@@ -359,7 +354,7 @@ export class WorkflowDefinitionService {
       await logActivity({
         tx, req, userId: payload.userId, action: before ? 'UPDATE' : 'CREATE', entity: 'طرح گردش کار', entityId: finalDefId,
         description: before ? `ذخیره طرح گردش کار «${payload.title}» (نسخه ${version})` : `ساخت گردش کار «${payload.title}»${isActive ? '' : ' (غیرفعال)'}`,
-        details: { code: payload.code, version, before, after },
+        details: { code: payload.code, version, before, after, ...(payload.fromTemplate ? { fromTemplate: payload.fromTemplate } : {}) },
       });
       return finalDefId;
     });
@@ -495,54 +490,13 @@ export class WorkflowDefinitionService {
       // Seed PURCHASE_REQUISITION_WORKFLOW (سیستم ساده‌سازی شده ۳ مرحله‌ای خرید و تدارکات کارگاه)
       if (await missing('PURCHASE_REQUISITION_WORKFLOW')) {
         await this.saveWorkflowDefinition({
-          code: 'PURCHASE_REQUISITION_WORKFLOW',
-          title: 'گردش کار تدارکات و خرید کارگاه (بررسی و تایید -> در حال خرید -> تحویل انبار)',
-          entityType: 'purchase_requisition',
-          description: 'فرآیند ساده‌سازی شده خرید و تدارکات کارگاه شامل ۳ گام عملیاتی: ۱. در انتظار بررسی و تایید، ۲. تایید شده (در حال خرید)، ۳. خرید و تحویل انبار شده',
+          code: PURCHASE_REQUISITION_WORKFLOW_TEMPLATE.code,
+          title: PURCHASE_REQUISITION_WORKFLOW_TEMPLATE.title,
+          entityType: PURCHASE_REQUISITION_WORKFLOW_TEMPLATE.entityType,
+          description: PURCHASE_REQUISITION_WORKFLOW_TEMPLATE.description,
           version: 2,
           isActive: 1,
-          states: [
-            {
-              stateKey: 'pending',
-              title: 'در انتظار بررسی و تایید',
-              stateType: 'initial',
-              color: 'amber',
-              stepOrder: 1,
-              slaHours: 24,
-              positionX: 100,
-              positionY: 160
-            },
-            {
-              stateKey: 'ordered',
-              title: 'تایید شده (در حال خرید)',
-              stateType: 'normal',
-              color: 'sky',
-              stepOrder: 2,
-              slaHours: 48,
-              positionX: 450,
-              positionY: 160
-            },
-            {
-              stateKey: 'received',
-              title: 'خرید و تحویل انبار شده (تکمیل)',
-              stateType: 'terminal',
-              color: 'emerald',
-              stepOrder: 3,
-              slaHours: 24,
-              positionX: 800,
-              positionY: 160
-            },
-            {
-              stateKey: 'rejected',
-              title: 'رد شده / لغو',
-              stateType: 'terminal',
-              color: 'rose',
-              stepOrder: 4,
-              slaHours: 24,
-              positionX: 450,
-              positionY: 340
-            }
-          ],
+          states: PURCHASE_REQUISITION_WORKFLOW_TEMPLATE.states.map(st => ({ ...st })),
           // v10.0.23 (OBS-R2-36): نگهبان گام‌ها از PURCHASE_REQUISITION_STEP_GUARDS
           transitions: PURCHASE_REQUISITION_STEP_GUARDS.map(g => ({ ...g }))
         });
@@ -554,54 +508,13 @@ export class WorkflowDefinitionService {
       // Seed JOURNAL_VOUCHER_WORKFLOW (گردش‌کار تایید و ثبت اسناد حسابداری کارگاه)
       if (await missing('JOURNAL_VOUCHER_WORKFLOW')) {
         await this.saveWorkflowDefinition({
-          code: 'JOURNAL_VOUCHER_WORKFLOW',
-          title: 'گردش کار تایید اسناد حسابداری کارگاه (پیش‌نویس -> تایید و ثبت دفاتر -> قطعی‌سازی)',
-          entityType: 'journal_voucher',
-          description: 'فرآیند سبک و متناسب کارگاه جهت تایید اسناد حسابداری: ثبت پیش‌نویس توسط کاربران/سیستم -> بررسی و تایید واحد حسابداری -> قطعی‌سازی دفاتر رسمی',
+          code: JOURNAL_VOUCHER_WORKFLOW_TEMPLATE.code,
+          title: JOURNAL_VOUCHER_WORKFLOW_TEMPLATE.title,
+          entityType: JOURNAL_VOUCHER_WORKFLOW_TEMPLATE.entityType,
+          description: JOURNAL_VOUCHER_WORKFLOW_TEMPLATE.description,
           version: 1,
           isActive: 1,
-          states: [
-            {
-              stateKey: 'draft',
-              title: 'پیش‌نویس سند',
-              stateType: 'initial',
-              color: 'slate',
-              stepOrder: 1,
-              slaHours: 24,
-              positionX: 100,
-              positionY: 160
-            },
-            {
-              stateKey: 'approved',
-              title: 'تایید و ثبت دفاتر رسمی',
-              stateType: 'intermediate',
-              color: 'blue',
-              stepOrder: 2,
-              slaHours: 48,
-              positionX: 450,
-              positionY: 160
-            },
-            {
-              stateKey: 'permanent',
-              title: 'قطعی و قفل دفاتر',
-              stateType: 'terminal',
-              color: 'emerald',
-              stepOrder: 3,
-              slaHours: 72,
-              positionX: 800,
-              positionY: 160
-            },
-            {
-              stateKey: 'rejected',
-              title: 'رد شده / نیازمند بازبینی',
-              stateType: 'intermediate',
-              color: 'rose',
-              stepOrder: 4,
-              slaHours: 24,
-              positionX: 450,
-              positionY: 340
-            }
-          ],
+          states: JOURNAL_VOUCHER_WORKFLOW_TEMPLATE.states.map(st => ({ ...st })),
           // v10.0.27 (TD-965): نگهبان گام‌ها از JOURNAL_VOUCHER_STEP_GUARDS (تأیید با accounting.vouchers_approve)
           transitions: JOURNAL_VOUCHER_STEP_GUARDS.map(g => ({ ...g }))
         });

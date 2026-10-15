@@ -10942,6 +10942,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Payroll duties plan PR 1 (v10.0.21+): voucher approval permission and maker-checker
   const { runVoucherApprovalDutiesTests } = await import('../regression/voucherApprovalDutiesTests.js');
   results.push(...await runVoucherApprovalDutiesTests(shouldRun));
+  // v10.1.11 (TD-1263, D-06 part B): a manual voucher enters its workflow on create; the page waits for the workflow
+  const { runVoucherWorkflowStartTests } = await import('../regression/voucherWorkflowStartTests.js');
+  results.push(...await runVoucherWorkflowStartTests(shouldRun));
   // TD-1239: a reversed voucher names its reversal; a reversal voucher stays out of draft
   const { runVoucherReversalLockTests } = await import('../regression/voucherReversalLockTests.js');
   results.push(...await runVoucherReversalLockTests(shouldRun));

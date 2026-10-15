@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { useWorkflowInstanceQuery, useStartWorkflowMutation, useExecuteTransitionMutation, WorkflowTransition } from '../../hooks/queries';
+import { useWorkflowInstanceQuery, useExecuteTransitionMutation, WorkflowTransition } from '../../hooks/queries';
 import { 
   CheckCircle2, 
   Clock, 
   XCircle, 
-  Play, 
   Send, 
   ShieldCheck, 
   History, 
@@ -30,7 +29,6 @@ const STEP_STATUS_VIEW: Record<Exclude<StepperStepStatus, 'current'>, { label: s
 interface WorkflowStepperWidgetProps {
   entityType: string;
   entityId: string | number;
-  workflowCode: string;
   title?: string;
   onStateChange?: () => void;
 }
@@ -38,12 +36,10 @@ interface WorkflowStepperWidgetProps {
 export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
   entityType,
   entityId,
-  workflowCode,
   title = 'گردش کار و تأییدها',
   onStateChange
 }) => {
   const { data: wfData, isLoading, error: readError } = useWorkflowInstanceQuery(entityType, entityId);
-  const startWorkflowMutation = useStartWorkflowMutation();
   const executeTransitionMutation = useExecuteTransitionMutation();
 
   const [selectedTransition, setSelectedTransition] = useState<WorkflowTransition | null>(null);
@@ -73,20 +69,14 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
   }
 
   const instance = wfData?.instance;
-  // v10.0.65 (TD-1142): no instance and no active definition → nothing to start, so the widget is not shown
-  if (!instance && wfData?.startable === false) return null;
+  // v10.1.11 (TD-1263, OWN-04, decision ت۷): a workflow starts only on the server, in its record's create transaction;
+  // without an instance the widget shows nothing (before, it offered «آغاز گردش کار» through `POST /workflow/start`)
+  if (!instance) return null;
   const currentState = wfData?.currentState;
   const allStates = wfData?.allStates || [];
   const availableTransitions = wfData?.availableTransitions || [];
   const blockedTransitions = wfData?.blockedTransitions || [];
   const history = wfData?.history || [];
-
-  const handleStartWorkflow = () => {
-    startWorkflowMutation.mutate(
-      { workflowCode, entityType, entityId },
-      { onSuccess: () => onStateChange?.() }
-    );
-  };
 
   const handleExecuteAction = () => {
     if (!instance || !selectedTransition) return;
@@ -161,24 +151,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
         )}
       </div>
 
-      {/* Body: Case 1 - No Workflow Started */}
-      {!instance ? (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg border border-dashed border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-            <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
-            <span>چرخه گردش کار برای این سند فعال نشده است.</span>
-          </div>
-          <button
-            onClick={handleStartWorkflow}
-            disabled={startWorkflowMutation.isPending}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg transition-colors shadow-sm disabled:opacity-50"
-          >
-            <Play className="w-3.5 h-3.5" />
-            <span>{startWorkflowMutation.isPending ? 'در حال فعال‌سازی...' : 'آغاز گردش کار'}</span>
-          </button>
-        </div>
-      ) : (
-        /* Case 2 - Active Workflow Stepper & Actions */
+      {/* Active Workflow Stepper & Actions */}
         <div>
           {/* Stepper Graph Visualizer */}
           <div className="mb-4">
@@ -442,7 +415,6 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
             </div>
           )}
         </div>
-      )}
     </div>
   );
 };

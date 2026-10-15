@@ -19,6 +19,8 @@ export interface VoucherRowFacts {
   referenceNumber?: string | null;
   /** v10.0.x (TD-1239): شماره سند برگشت فعال؛ سندی که برگشت خورده نه دوباره برگشت می‌خورد، نه اصلاح می‌شود، نه به پیش‌نویس برمی‌گردد */
   reversedByVoucherNumber?: string | null;
+  /** v10.1.11 (TD-1263): the voucher's workflow is running, so its status moves only through the workflow steps */
+  inWorkflow?: boolean;
 }
 
 /** v10.0.27 (TD-965): `canApprove` = دارنده `accounting.vouchers_approve`؛ بی آن بازگشت به پیش‌نویس پیشنهاد نمی‌شود */
@@ -31,7 +33,7 @@ export function voucherRowActions(v: VoucherRowFacts, access: { canApprove?: boo
   const actions: VoucherRowAction[] = [];
   if (!locked) {
     if (v.status === 'draft') actions.push('edit', 'delete');
-    if (!reversal && !reversed && v.status === 'approved' && canApprove) actions.push('revert_to_draft');
+    if (!reversal && !reversed && !v.inWorkflow && v.status === 'approved' && canApprove) actions.push('revert_to_draft');
     if (!reversal && !reversed && (v.status === 'approved' || v.status === 'permanent')) actions.push('reverse');
     if (!reversal && !reversed && v.status === 'approved') actions.push('correct');
   }
@@ -97,10 +99,12 @@ export function voucherConfirmTexts(kind: VoucherConfirmKind, v: VoucherRowFacts
  * v10.0.121 (TD-1120): کار اصلی ستون اقدام ردیف سند. نشان «قفل دفاتر» فقط برای سند دائم است؛ پیش‌تر هر سندی که دکمه
  * تأیید یا قطعی‌سازی نداشت (پیش‌نویس یا تأییدشده برای کاربری بی آن مجوز) هم «قفل دفاتر» و «سند دائم» نشان می‌داد.
  */
-export type VoucherPrimaryAction = 'approve' | 'finalize' | 'locked' | null;
+export type VoucherPrimaryAction = 'approve' | 'finalize' | 'locked' | 'in_workflow' | null;
 
-export function voucherPrimaryAction(status: string, access: { canApprove: boolean; canFinalize: boolean }): VoucherPrimaryAction {
+/** v10.1.11 (TD-1263): a draft or approved voucher whose workflow runs is approved and finalized only in its workflow */
+export function voucherPrimaryAction(status: string, access: { canApprove: boolean; canFinalize: boolean }, inWorkflow = false): VoucherPrimaryAction {
   if (status === 'permanent') return 'locked';
+  if (inWorkflow && (status === 'draft' || status === 'approved')) return 'in_workflow';
   if (status === 'draft') return access.canApprove ? 'approve' : null;
   if (status === 'approved') return access.canFinalize ? 'finalize' : null;
   return null;

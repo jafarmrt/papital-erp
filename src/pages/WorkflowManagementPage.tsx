@@ -1,97 +1,31 @@
 import React, { useState } from 'react';
-import { Workflow, Plus, Clock, Layers, X, UserCheck } from 'lucide-react';
-import { useWorkflowDefinitionsQuery, useSaveWorkflowDefinitionMutation } from '../hooks/queries/useWorkflowQueries';
+import { Workflow, Clock, Layers, UserCheck } from 'lucide-react';
+import { useWorkflowDefinitionsQuery } from '../hooks/queries/useWorkflowQueries';
 import { WorkflowDesignerCanvas } from '../components/workflow/WorkflowDesignerCanvas';
 import { WorkflowSlaAnalyticsTab } from '../components/workflow/WorkflowSlaAnalyticsTab';
 import { WorkflowDelegationTab } from '../components/workflow/WorkflowDelegationTab';
 import { WorkflowVersionHistoryModal } from '../components/workflow/WorkflowVersionHistoryModal';
 import { WorkflowDefinitionList } from '../components/workflow/WorkflowDefinitionList';
-import { NEW_WORKFLOW_SAVED_INACTIVE } from '../lib/workflow/workflowLifecycle';
-import { toast } from 'react-hot-toast';
+import { WorkflowCreateModal } from '../components/workflow/WorkflowCreateModal';
 
 export const WorkflowManagementPage: React.FC = () => {
   const { data: definitions, isLoading, refetch } = useWorkflowDefinitionsQuery();
-  const saveMutation = useSaveWorkflowDefinitionMutation();
 
   const [activeTab, setActiveTab] = useState<'list' | 'designer' | 'sla' | 'delegations'>('list');
   const [selectedDefinitionId, setSelectedDefinitionId] = useState<number | null>(null);
   const [historyDefinition, setHistoryDefinition] = useState<{ id: number; title: string } | null>(null);
 
-  // New Template Modal state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
-  const [newCode, setNewCode] = useState('');
-  const [newEntityType, setNewEntityType] = useState('document');
-  const [newDescription, setNewDescription] = useState('');
 
   const handleEditDefinition = (id: number) => {
     setSelectedDefinitionId(id);
     setActiveTab('designer');
   };
 
-  const handleCreateNewDefinitionSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle.trim() || !newCode.trim()) {
-      toast.error('عنوان و کد الگوی گردش کار را وارد کنید.');
-      return;
-    }
-
-    try {
-      const result = await saveMutation.mutateAsync({
-        title: newTitle.trim(),
-        code: newCode.trim().toUpperCase().replace(/\s+/g, '_'),
-        entityType: newEntityType,
-        description: newDescription.trim(),
-        version: 1,
-        states: [
-          {
-            stateKey: 'draft',
-            title: 'پیش‌نویس اولیه',
-            stateType: 'initial',
-            color: 'gray',
-            stepOrder: 1,
-            slaHours: 24,
-            positionX: 100,
-            positionY: 180
-          },
-          {
-            stateKey: 'approved',
-            title: 'تأیید نهایی',
-            stateType: 'terminal',
-            color: 'emerald',
-            stepOrder: 2,
-            slaHours: 24,
-            positionX: 500,
-            positionY: 180
-          }
-        ],
-        transitions: [
-          {
-            fromStateKey: 'draft',
-            toStateKey: 'approved',
-            actionKey: 'approve',
-            title: 'تأیید و تکمیل',
-            requiredRole: '',
-            approvalRuleType: 'SINGLE'
-          }
-        ]
-      });
-
-      // v10.1.7 (TD-1229, decision ت۲۷): a new workflow is active only when its record type has none
-      if (Number(result?.data?.isActive) !== 1) toast(NEW_WORKFLOW_SAVED_INACTIVE, { duration: 8000 });
-      setIsCreateModalOpen(false);
-      setNewTitle('');
-      setNewCode('');
-      setNewDescription('');
-
-      if (result?.data?.id) {
-        setSelectedDefinitionId(result.data.id);
-        setActiveTab('designer');
-      }
-      void refetch();
-    } catch (err: any) {
-      toast.error(err.message || 'الگوی جدید ساخته نشد؛ دوباره تلاش کنید.');
-    }
+  const handleCreated = (id: number) => {
+    setIsCreateModalOpen(false);
+    handleEditDefinition(id);
+    void refetch();
   };
 
   return (
@@ -188,101 +122,8 @@ export const WorkflowManagementPage: React.FC = () => {
         />
       )}
 
-      {/* Create Workflow Definition Modal */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 w-full max-w-lg shadow-xl overflow-hidden">
-            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-              <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
-                <Plus className="w-4 h-4 text-indigo-600" />
-                <span>تعریف الگوی جدید گردش کار</span>
-              </h3>
-              <button 
-                onClick={() => setIsCreateModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateNewDefinitionSubmit} className="p-5 space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  عنوان گردش کار <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="مثلاً: چرخه خرید و سفارش‌گذاری مواد اولیه"
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    کد یکتا (کد سیستمی) <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="PURCHASE_WF"
-                    value={newCode}
-                    onChange={(e) => setNewCode(e.target.value)}
-                    className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    نوع موجودیت مربوطه
-                  </label>
-                  <select
-                    value={newEntityType}
-                    onChange={(e) => setNewEntityType(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option value="document">فاکتورها و اسناد</option>
-                    <option value="project">پروژه‌ها و سفارش‌ها</option>
-                    <option value="raw_material">مواد اولیه و اقلام انبار</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  توضیحات الگوی فرآیند
-                </label>
-                <textarea
-                  rows={3}
-                  placeholder="توضیح کوتاه درباره هدف این گردش کار و گام‌های تأیید آن..."
-                  value={newDescription}
-                  onChange={(e) => setNewDescription(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
-                <button
-                  type="button"
-                  onClick={() => setIsCreateModalOpen(false)}
-                  className="px-4 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl"
-                >
-                  انصراف
-                </button>
-                <button
-                  type="submit"
-                  disabled={saveMutation.isPending}
-                  className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition-colors"
-                >
-                  {saveMutation.isPending ? 'در حال ایجاد...' : 'ایجاد و ورود به طراح بوم'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <WorkflowCreateModal onClose={() => setIsCreateModalOpen(false)} onCreated={handleCreated} />
       )}
     </div>
   );
