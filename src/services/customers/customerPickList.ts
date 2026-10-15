@@ -22,7 +22,7 @@ export function customerListConditions(search: string | undefined, partyType: st
       ilike(customers.phone, pattern),
       ilike(customers.contactName, pattern),
       ilike(customers.supplierCategory, pattern),
-      // v10.1.13 (N-02 بخش ۱): وب‌سایت، ایمیل و اینستاگرام هم جست‌وجو می‌شوند (ایمیل افراد رابط در contacts است)
+      // v10.1.15 (N-02 بخش ۱): وب‌سایت، ایمیل و اینستاگرام هم جست‌وجو می‌شوند (ایمیل افراد رابط در contacts است)
       ilike(customers.website, pattern),
       ilike(customers.email, pattern),
       ilike(customers.instagram, pattern),

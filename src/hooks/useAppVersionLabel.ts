@@ -3,7 +3,7 @@ import { fetchJson } from '../api';
 import { appVersionLabel } from '../lib/system/appVersionLabel';
 
 /**
- * v10.1.13: شماره نسخه برنامه («نسخه ۱۰.۱.۱۳») از `GET /api/health`، برای پای منو و صفحه ورود. پیش‌تر صفحه ورود همه
+ * v10.1.15: شماره نسخه برنامه («نسخه ۱۰.۱.۱۳») از `GET /api/health`، برای پای منو و صفحه ورود. پیش‌تر صفحه ورود همه
  * یادداشت‌های نسخه را در بسته مرورگر می‌خواند تا فقط شماره آخرین نسخه را نشان دهد.
  */
 export function useAppVersionLabel(): string {

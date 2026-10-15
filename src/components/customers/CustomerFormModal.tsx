@@ -41,7 +41,7 @@ export interface FormContactPerson {
   name: string;
   role: string;
   phone: string;
-  /** v10.1.13 (N-02، ت۲) */
+  /** v10.1.15 (N-02، ت۲) */
   email: string;
   isPrimary: boolean;
 }
@@ -61,7 +61,7 @@ export interface CustomerPartyForm {
     shaba: string;
     cardNumber: string;
   };
-  /** v10.1.13 (N-02 بخش ۱) */
+  /** v10.1.15 (N-02 بخش ۱) */
   website: string;
   email: string;
   instagram: string;

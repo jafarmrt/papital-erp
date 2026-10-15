@@ -2,7 +2,7 @@ import { Phone, MessageCircle, Mail, Globe, Instagram } from 'lucide-react';
 import { instagramUrl, mailtoLink, normalizeWebsite, telLink, websiteError, whatsappLink } from '../../lib/customers/contactChannels';
 
 /**
- * v10.1.13 (N-02 بخش ۱، ت۳): پیوندهای یک‌کلیکی کنار تلفن («تماس» و «واتس‌اپ»)، ایمیل («نامه»)، وب‌سایت و اینستاگرام
+ * v10.1.15 (N-02 بخش ۱، ت۳): پیوندهای یک‌کلیکی کنار تلفن («تماس» و «واتس‌اپ»)، ایمیل («نامه»)، وب‌سایت و اینستاگرام
  * («صفحه»). پیوندی که مقدارش خالی یا نادرست است نشان داده نمی‌شود.
  */
 

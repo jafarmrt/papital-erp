@@ -38,7 +38,7 @@ interface CounterpartyPreviewRow {
   accountNumber: string;
   cardNumber: string;
   shaba: string;
-  /** v10.1.13 (N-02 بخش ۱): خالی یعنی «بی تغییر» برای رکورد موجود */
+  /** v10.1.15 (N-02 بخش ۱): خالی یعنی «بی تغییر» برای رکورد موجود */
   website: string;
   email: string;
   instagram: string;
@@ -270,7 +270,7 @@ export function CustomerExcelModal({
           const instagram = getField(row, ['اینستاگرام', 'instagram']);
 
           const issues: string[] = [accountCell, cardCell, shabaCell].flatMap(c => (c.issue ? [c.issue] : []));
-          // v10.1.13 (N-02 بخش ۱): همان قاعده کارساز؛ خانه خالی سنجیده نمی‌شود
+          // v10.1.15 (N-02 بخش ۱): همان قاعده کارساز؛ خانه خالی سنجیده نمی‌شود
           issues.push(...Object.values(contactChannelErrors({
             website: website || undefined, email: email || undefined, instagram: instagram || undefined,
           })));

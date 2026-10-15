@@ -17,7 +17,7 @@ export interface ContactPerson {
   name?: string;
   role?: string;
   phone?: string;
-  /** v10.1.13 (N-02، ت۲): ایمیل هر فرد رابط */
+  /** v10.1.15 (N-02، ت۲): ایمیل هر فرد رابط */
   email?: string;
   isPrimary?: boolean;
 }
@@ -42,14 +42,14 @@ export interface CreateCustomerInput {
   supplierCategory?: string;
   bankInfo?: BankInfo;
   contacts?: ContactPerson[];
-  /** v10.1.13 (N-02 بخش ۱): راه‌های ارتباط طرف حساب */
+  /** v10.1.15 (N-02 بخش ۱): راه‌های ارتباط طرف حساب */
   website?: string;
   email?: string;
   instagram?: string;
 }
 
 /**
- * v10.1.13 (N-02 بخش ۱): وب‌سایت، ایمیل و اینستاگرام فرستاده‌شده و ایمیل هر فرد رابط با یک قاعده سنجیده و پاک می‌شوند؛
+ * v10.1.15 (N-02 بخش ۱): وب‌سایت، ایمیل و اینستاگرام فرستاده‌شده و ایمیل هر فرد رابط با یک قاعده سنجیده و پاک می‌شوند؛
  * نادرست ۴۲۲ `CUSTOMER_CONTACT_CHANNEL_INVALID` با پیام هر فیلد است، پیش از هر نوشتن.
  */
 export function resolveContactChannels(input: ContactChannelsInput, contacts: ContactPerson[] | undefined): {
@@ -92,7 +92,7 @@ export interface BulkImportRowInput {
   shaba?: string;
   cardNumber?: string;
   bankInfo?: BankInfo;
-  /** v10.1.13 (N-02 بخش ۱): سلول خالی یعنی «بی تغییر» برای رکورد موجود */
+  /** v10.1.15 (N-02 بخش ۱): سلول خالی یعنی «بی تغییر» برای رکورد موجود */
   website?: string;
   email?: string;
   instagram?: string;
@@ -224,7 +224,7 @@ export class CustomerService {
     const city = keep(data.city, prevCust.city);
     const address = keep(data.address, prevCust.address);
     const notes = keep(data.notes, prevCust.notes);
-    // v10.1.13 (N-02 بخش ۱): راه ارتباط نفرستاده مقدار کنونی را نگه می‌دارد (قاعده TD-975)
+    // v10.1.15 (N-02 بخش ۱): راه ارتباط نفرستاده مقدار کنونی را نگه می‌دارد (قاعده TD-975)
     const resolved = resolveContactChannels({ website: data.website, email: data.email, instagram: data.instagram }, data.contacts);
     const contacts = resolved.contacts ?? ((prevCust.contacts as ContactPerson[] | null) ?? []);
 
@@ -369,7 +369,7 @@ export class CustomerService {
           cardNumber: String(item.cardNumber || item.bankInfo?.cardNumber || '').trim(),
         };
 
-        // v10.1.13 (N-02 بخش ۱): راه ارتباط نادرست کل ردیف را رد می‌کند؛ سلول خالی یعنی «بی تغییر»
+        // v10.1.15 (N-02 بخش ۱): راه ارتباط نادرست کل ردیف را رد می‌کند؛ سلول خالی یعنی «بی تغییر»
         const cellChannels: ContactChannelsInput = {};
         for (const key of ['website', 'email', 'instagram'] as const) {
           const cell = String(item[key] ?? '').trim();

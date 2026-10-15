@@ -5,7 +5,7 @@ import { orm } from '../../db/drizzle.js';
 import { customers } from '../../db/schema.js';
 
 /**
- * N-02 part 1 (v10.1.13): a party's website, e-mail and Instagram username (and each contact person's e-mail) are
+ * N-02 part 1 (v10.1.15): a party's website, e-mail and Instagram username (and each contact person's e-mail) are
  * checked and normalized by one rule on create, edit and Excel import. A wrong value is 422
  * `CUSTOMER_CONTACT_CHANNEL_INVALID` before any write (an import row error), a field not sent keeps its value, an empty
  * import cell leaves it unchanged, and the customer list search reads them. Red on v10.1.12, which had no such columns.
@@ -15,7 +15,7 @@ export async function runCustomerContactChannelsTests(shouldRun: (id: string, ..
   const id = 'reg_customer_contact_channels_n02';
   if (!shouldRun(id, 'n02', 'customers', 'crm')) return results;
 
-  const name = 'v10.1.13: party website, e-mail and Instagram are validated, normalized, kept on partial edits and imported from Excel (N-02)';
+  const name = 'v10.1.15: party website, e-mail and Instagram are validated, normalized, kept on partial edits and imported from Excel (N-02)';
   const tStart = Date.now();
   const created: number[] = [];
   const stamp = Date.now();

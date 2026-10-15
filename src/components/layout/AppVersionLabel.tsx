@@ -1,6 +1,6 @@
 import { useAppVersionLabel } from '../../hooks/useAppVersionLabel';
 
-/** شماره نسخه برنامه در پای منو (جانشین صفحه «معرفی و به‌روزرسانی‌ها»، v10.1.13) */
+/** شماره نسخه برنامه در پای منو (جانشین صفحه «معرفی و به‌روزرسانی‌ها»، v10.1.15) */
 export function AppVersionLabel({ compact }: { compact?: boolean }) {
   const label = useAppVersionLabel();
   if (!label || compact) return null;

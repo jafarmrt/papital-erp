@@ -68,7 +68,7 @@ const contactPersonSchema = z.object({
   isPrimary: z.boolean().optional().default(false),
 });
 
-/** v10.1.13 (N-02 بخش ۱): راه‌های ارتباط؛ قالب را سرویس با قاعده مشترک می‌سنجد (۴۲۲) */
+/** v10.1.15 (N-02 بخش ۱): راه‌های ارتباط؛ قالب را سرویس با قاعده مشترک می‌سنجد (۴۲۲) */
 const contactChannelFields = {
   website: z.string().max(500).optional(),
   email: z.string().max(500).optional(),

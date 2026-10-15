@@ -213,6 +213,7 @@ export const QUERY_KEYS = {
     all: ['reports'] as const,
     sales: (params: Record<string, unknown> | object) => ['reports', 'sales', params] as const,
     aging: (params: Record<string, unknown> | object) => ['reports', 'aging', params] as const,
+    vat: (params: Record<string, unknown> | object) => ['reports', 'vat', params] as const,
   },
 
   // Domain Events & Outbox

@@ -177,7 +177,7 @@ export default function CustomersPage({ user }: { user: User }) {
       }
     }
     
-    // v10.1.13 (N-02 بخش ۱): راه ارتباط نادرست پیش از فرستادن گفته می‌شود (همان قاعده کارساز)
+    // v10.1.15 (N-02 بخش ۱): راه ارتباط نادرست پیش از فرستادن گفته می‌شود (همان قاعده کارساز)
     const channelError = customerChannelFormError(form) || contacts.map(c => emailError(c.email)).find(Boolean);
     if (channelError) {
       toast.error(channelError);

@@ -10575,7 +10575,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 9 (v10.0.33, TD-975): a partial party edit keeps the fields it does not send
   const { runCustomerPartialEditTests } = await import('../regression/customerPartialEditTests.js');
   results.push(...await runCustomerPartialEditTests(shouldRun));
-  // N-02 part 1 (v10.1.13): party website, e-mail and Instagram checked, normalized, kept on partial edits and imported
+  // N-02 part 1 (v10.1.15): party website, e-mail and Instagram checked, normalized, kept on partial edits and imported
   const { runCustomerContactChannelsTests } = await import('../regression/customerContactChannelsTests.js');
   results.push(...await runCustomerContactChannelsTests(shouldRun));
   // Package 9 (v10.0.34, TD-976): CRM activity mentions are live user ids and notify only CRM readers
@@ -10749,6 +10749,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10.1 D-03 PR2 (v10.1.10): the receivables and payables aging tab
   const { runAgingReportTests } = await import('../regression/agingReportTests.js');
   results.push(...await runAgingReportTests(shouldRun));
+  // Series 10.1 D-03 PR3 (v10.1.14): the VAT tab
+  const { runVatReportTests } = await import('../regression/vatReportTests.js');
+  results.push(...await runVatReportTests(shouldRun));
   const { runSalesEventsTests } = await import('../regression/salesEventsTests.js');
   results.push(...await runSalesEventsTests(shouldRun));
   // Package 8 PR D (v9.0.323+): lead link of a document edit, stock count lines, production receipts, return lookup, numbers

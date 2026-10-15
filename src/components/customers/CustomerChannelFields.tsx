@@ -15,7 +15,7 @@ interface CustomerChannelFieldsProps {
 const INPUT_CLASS = 'w-full border rounded-lg px-2.5 py-1.5 text-xs bg-white focus:ring-2 focus:ring-blue-500 outline-none text-left';
 
 /**
- * v10.1.13 (N-02 بخش ۱): بخش «راه‌های ارتباط برخط» فرم طرف حساب. خطای هر فیلد با همان قاعده کارساز زیر خودش دیده
+ * v10.1.15 (N-02 بخش ۱): بخش «راه‌های ارتباط برخط» فرم طرف حساب. خطای هر فیلد با همان قاعده کارساز زیر خودش دیده
  * می‌شود؛ وب‌سایت بی `https://` و اینستاگرام با «@» یا نشانی کامل صفحه هم پذیرفته است.
  */
 export function CustomerChannelFields({ value, onChange }: CustomerChannelFieldsProps) {

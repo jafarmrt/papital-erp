@@ -1,4 +1,4 @@
--- Drizzle Migration 0112: customer contact channels (v10.1.13, N-02 part 1)
+-- Drizzle Migration 0112: customer contact channels (v10.1.15, N-02 part 1)
 --
 -- A party gets its website, e-mail and Instagram username, each a plain text column with an empty default. Values are
 -- normalized and checked by the application (src/lib/customers/contactChannels.ts); no existing row is rewritten.
