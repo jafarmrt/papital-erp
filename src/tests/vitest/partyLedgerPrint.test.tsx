@@ -82,3 +82,18 @@ describe('party statement print header and reload (TD-572)', () => {
     expect(lastLedgerQuery().get('startDate')).toBe('2026-09-23');
   });
 });
+
+// v10.1.10 (D-03 part 2): the aging report links each party to its statement by id and type; customer and personnel ids come
+// from different tables, so the statement opens the customer, never a personnel record with the same id.
+describe('party statement opened from the aging report (D-03)', () => {
+  it('opens the customer or supplier with that id, not the personnel with the same id', async () => {
+    fetchJson.mockImplementation(async (url: string) => (url.startsWith('/accounting/reports/parties')
+      ? { data: [{ id: 7, name: 'پرسنل هفت', partyType: 'personnel' }, party] }
+      : ledgerFor(url)));
+    renderView(<PartyLedgerReportView initialPartyId={7} initialPartyType="supplier" />);
+    await screen.findByText('صورت‌حساب مالی طرف‌حساب');
+    await waitFor(() => expect(ledgerUrls()).toHaveLength(1));
+    expect(lastLedgerQuery().get('partyType')).toBe('customer');
+    expect(lastLedgerQuery().get('partyName')).toBe('سارا احمدی');
+  });
+});

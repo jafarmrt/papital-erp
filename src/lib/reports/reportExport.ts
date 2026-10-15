@@ -1,4 +1,4 @@
-import { rangeFileTag, rangeLabel, type ReportRange } from './reportPeriods.js';
+import { dayFileTag, rangeFileTag, rangeLabel, type ReportRange } from './reportPeriods.js';
 
 /**
  * v10.1.8 (D-03، طرح گزارش‌های مدیریتی §۵): ابزار خروجی مشترک زبانه‌های «گزارش‌های مدیریتی». هر زبانه گزارشش را به یک
@@ -17,6 +17,8 @@ export interface ReportSheet {
   columns: string[];
   rows: ReportCell[][];
   totals?: ReportCell[];
+  /** v10.1.10: سطرهای زیر ردیف جمع (مثلاً سهم هر بازه سن) */
+  footer?: ReportCell[][];
 }
 
 const MAX_SHEET_NAME = 31;
@@ -30,6 +32,7 @@ export function reportSheetAoa(sheet: ReportSheet): ReportCell[][] {
     sheet.columns,
     ...sheet.rows,
     ...(sheet.totals ? [sheet.totals] : []),
+    ...(sheet.footer ?? []),
   ];
 }
 
@@ -41,6 +44,11 @@ export function reportSheetName(name: string): string {
 /** «گزارش-فروش-۱۴۰۵-۰۸.xlsx» از عنوان گزارش و بازه آن */
 export function reportFileName(title: string, range: ReportRange): string {
   return `${title.trim().replace(/\s+/g, '-')}-${rangeFileTag(range)}.xlsx`;
+}
+
+/** v10.1.10: گزارشی که یک «تاریخ گزارش» دارد نه بازه: «سن-مطالبات-۱۴۰۵-۰۷-۲۳.xlsx» */
+export function reportDayFileName(title: string, iso: string): string {
+  return `${title.trim().replace(/\s+/g, '-')}-${dayFileTag(iso)}.xlsx`;
 }
 
 /** سطر مشخصات «بازه گزارش» */

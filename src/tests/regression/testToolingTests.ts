@@ -21,12 +21,12 @@ export async function runTestToolingTests(shouldRun: ShouldRun): Promise<TestCas
   const results: TestCaseResult[] = [];
   const seedId = 'reg_test_bootstrap_waits_for_seed_lock_td_1265';
   if (shouldRun(seedId, 'td1265', 'seed', 'tooling', 'simulator')) {
-    await runCase(results, seedId, 'v10.1.10: the test bootstrap waits for the seed lock held by another process instead of skipping the seed of its schema; the server boot still skips (TD-1265)',
+    await runCase(results, seedId, 'v10.1.11: the test bootstrap waits for the seed lock held by another process instead of skipping the seed of its schema; the server boot still skips (TD-1265)',
       seedLockCase);
   }
   const filterId = 'reg_activity_log_filter_lists_td_1266';
   if (shouldRun(filterId, 'td1266', 'activity-log', 'performance', 'i04')) {
-    await runCase(results, filterId, 'v10.1.10: the activity log filter lists are the distinct non-empty users, actions and sections of the log, read by index (TD-1266)',
+    await runCase(results, filterId, 'v10.1.11: the activity log filter lists are the distinct non-empty users, actions and sections of the log, read by index (TD-1266)',
       filterListsCase);
   }
   return results;

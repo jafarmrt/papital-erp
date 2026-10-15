@@ -14,7 +14,7 @@ import { createProject, runReservationCases } from './stockReservationTests.js';
 export async function runProjectAuditTxTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   return runReservationCases(shouldRun, [
     ['reg_project_delivery_audit_in_tx_td_943',
-      'v10.1.10: a project delivery writes the production receipt CREATE row and the project row, and an allocation, its consumption and its release their rows, with their own transaction (TD-943)',
+      'v10.1.11: a project delivery writes the production receipt CREATE row and the project row, and an allocation, its consumption and its release their rows, with their own transaction (TD-943)',
       ['td943', 'projects', 'allocation', 'audit', 'phase5'], deliveryAndAllocationAuditCase],
   ]);
 }

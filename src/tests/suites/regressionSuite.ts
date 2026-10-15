@@ -10743,6 +10743,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10.1 D-03 PR1 (v10.1.8): the sales report of the management reports page
   const { runSalesReportTests } = await import('../regression/salesReportTests.js');
   results.push(...await runSalesReportTests(shouldRun));
+  // Series 10.1 D-03 PR2 (v10.1.10): the receivables and payables aging tab
+  const { runAgingReportTests } = await import('../regression/agingReportTests.js');
+  results.push(...await runAgingReportTests(shouldRun));
   const { runSalesEventsTests } = await import('../regression/salesEventsTests.js');
   results.push(...await runSalesEventsTests(shouldRun));
   // Package 8 PR D (v9.0.323+): lead link of a document edit, stock count lines, production receipts, return lookup, numbers
@@ -10902,10 +10905,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v10.0.180 (TD-959): the seed names its failed sections
   const { runSeedSectionTests } = await import('../regression/seedSectionTests.js');
   results.push(...await runSeedSectionTests(shouldRun));
-  // v10.1.10 (TD-1265 / TD-1266): the test bootstrap waits for the seed lock; the activity log filter lists by index
+  // v10.1.11 (TD-1265 / TD-1266): the test bootstrap waits for the seed lock; the activity log filter lists by index
   const { runTestToolingTests } = await import('../regression/testToolingTests.js');
   results.push(...await runTestToolingTests(shouldRun));
-  // v10.1.10 (TD-943): project delivery and material allocation audit rows with their own transaction
+  // v10.1.11 (TD-943): project delivery and material allocation audit rows with their own transaction
   const { runProjectAuditTxTests } = await import('../regression/projectAuditTxTests.js');
   results.push(...await runProjectAuditTxTests(shouldRun));
   const { runInitialSetupTests } = await import('../regression/initialSetupTests.js');
