@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { numericIdString } from '../middleware/validate.js';
 import { WORKFLOW_APPROVAL_RULE_TYPES, WORKFLOW_STATE_TYPES } from '../lib/workflow/workflowDesignRules.js';
 import { WORKFLOW_TEMPLATE_IDS } from '../lib/workflow/workflowTemplates.js';
+import { WORKFLOW_TERMINATE_REASON_MIN } from '../lib/workflow/workflowLifecycle.js';
 
 /**
  * v9.0.50 (TD-459، B14-17): بدنه routeهای نوشتنی گردش کار. پیش‌تر `/transition`، `/definitions`، `/positions` و
@@ -121,5 +122,19 @@ export const definitionSwitchSchema = z.object({
 export const definitionFromTemplateSchema = z.object({
   body: z.object({
     templateId: z.enum(WORKFLOW_TEMPLATE_IDS, { error: 'الگوی گردش کار را از فهرست الگوها انتخاب کنید' }),
+  }).strict(),
+});
+
+/** v10.1.16 (D-06 part C, OBS-R2-73): «تفویض‌های من» asks only the user's own delegations with `mine=1` */
+export const delegationListSchema = z.object({
+  query: z.object({ mine: z.enum(['0', '1']).optional() }).strict(),
+});
+
+/** v10.1.16 (D-06 part C, TD-1265): the system admin closes a running record with a required reason */
+export const terminateInstanceSchema = z.object({
+  params: z.object({ id: numericIdString }),
+  body: z.object({
+    reason: z.string({ error: 'دلیل بستن فرایند را بنویسید.' }).trim()
+      .min(WORKFLOW_TERMINATE_REASON_MIN, 'دلیل بستن فرایند را بنویسید.').max(1000),
   }).strict(),
 });

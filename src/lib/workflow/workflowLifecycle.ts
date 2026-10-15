@@ -40,3 +40,38 @@ export function workflowEntityTypeChangeRefusal(definition: { isActive?: number 
   if (Number(definition.isActive ?? 0) === 1) return 'نوع پرونده گردش کار فعال عوض نمی‌شود؛ نخست آن را غیرفعال کنید.';
   return null;
 }
+
+/**
+ * v10.1.16 (D-06 part C, TD-1265): the system admin's «بستن فرایند» of a running record that cannot move on (a step no one
+ * may sign). Only record types whose work goes on without the workflow are closed this way: a sales proforma or draft is
+ * finalized or voided from its own page, a manual voucher is approved from the voucher page, a raw material request from
+ * its queue. Every other type depends on its workflow and is refused with what to do instead.
+ */
+export const WORKFLOW_TERMINABLE_ENTITY_TYPES: readonly string[] = ['document', 'journal_voucher', 'voucher', 'pending_material'];
+
+const TERMINATE_REFUSALS: Readonly<Record<string, string>> = {
+  purchase_requisition: 'درخواست خرید بی گردش کار نه سفارش می‌شود نه دریافت؛ فرایند آن بسته نمی‌شود. اگر درخواست کنار گذاشتنی است، خود درخواست را حذف کنید.',
+  item: 'سند افتتاحیه کالا فقط با تأیید این گردش کار صادر می‌شود؛ بستن فرایند، کالا را بی سند افتتاحیه می‌گذارد. اگر کالا کنار گذاشتنی است، خود کالا را حذف کنید.',
+  bank_account: 'سند افتتاحیه حساب بانکی فقط با تأیید این گردش کار صادر می‌شود؛ بستن فرایند، حساب را بی سند افتتاحیه می‌گذارد. اگر حساب کنار گذاشتنی است، خود حساب را حذف کنید.',
+};
+
+/** Refusal of closing a running record of this type by hand, or null when it may be closed. */
+export function workflowTerminateRefusal(entityType: string): string | null {
+  if (WORKFLOW_TERMINABLE_ENTITY_TYPES.includes(entityType)) return null;
+  return TERMINATE_REFUSALS[entityType] ?? 'فرایند این نوع پرونده با دست بسته نمی‌شود.';
+}
+
+/** What happens after closing, shown in the confirmation (Persian, one sentence). */
+const TERMINATE_EFFECTS: Readonly<Record<string, string>> = {
+  document: 'سند از گردش کار بیرون می‌آید و از صفحه خودش قطعی، ویرایش یا باطل می‌شود.',
+  journal_voucher: 'سند حسابداری از گردش کار بیرون می‌آید و دارنده مجوز تأیید سند آن را از صفحه اسناد حسابداری تأیید می‌کند.',
+  voucher: 'سند حسابداری از گردش کار بیرون می‌آید و دارنده مجوز تأیید سند آن را از صفحه اسناد حسابداری تأیید می‌کند.',
+  pending_material: 'درخواست از گردش کار بیرون می‌آید و از صفحه «مواد اولیه در انتظار تأیید» تأیید یا رد می‌شود.',
+};
+
+export function workflowTerminateEffect(entityType: string): string {
+  return TERMINATE_EFFECTS[entityType] ?? 'پرونده از گردش کار بیرون می‌آید.';
+}
+
+/** Shortest reason accepted for closing a running record by hand (characters, trimmed). */
+export const WORKFLOW_TERMINATE_REASON_MIN = 5;
