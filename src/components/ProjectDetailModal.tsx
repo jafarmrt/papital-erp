@@ -3,7 +3,7 @@ import { X, Check, Calendar, User, Package, Users, Layers, CheckCircle2, Edit3, 
 import { ProductionProject, ProjectStage, Item } from '../types';
 import { fetchJson } from '../api';
 import toast from 'react-hot-toast';
-import { toPersianDigits, formatPersianNumber, errorMessageOf, toStorageDate, formatPersianDate } from '../utils';
+import { toPersianDigits, formatPersianNumber, errorMessageOf, toStorageDate, formatPersianDate, formatPersianCode } from '../utils';
 import { JalaliDateInput } from './common/JalaliDateInput';
 import { storedReservationShortages } from '../lib/projects/projectReservationState';
 import { FinancialAttachmentUploader } from './accounting/FinancialAttachmentUploader';
@@ -509,7 +509,7 @@ export default function ProjectDetailModal({
                     <WorkflowStepperWidget
                       entityType="project"
                       entityId={project.id}
-                      title={`چرخه و تاییدات پروژه شماره ${project.project_code || project.id}`}
+                      title={`چرخه و تاییدات پروژه شماره ${project.project_code || formatPersianCode(project.id)}`}
                       onStateChange={loadProjectData}
                     />
                   )}
@@ -560,7 +560,7 @@ export default function ProjectDetailModal({
                         <tbody className="divide-y divide-slate-100">
                           {productsList.map((p, idx) => (
                             <tr key={p.id || idx} className="hover:bg-slate-50">
-                              <td className="p-2.5 font-bold text-slate-400">{idx + 1}</td>
+                              <td className="p-2.5 font-bold text-slate-400">{formatPersianNumber(idx + 1)}</td>
                               <td className="p-2.5 font-bold text-slate-900">
                                 {p.item_name} {p.item_code && <span className="font-mono text-slate-500 text-[11px]">[{p.item_code}]</span>}
                               </td>

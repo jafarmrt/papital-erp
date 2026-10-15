@@ -506,7 +506,7 @@ export default function ProjectsPage() {
                         }`}
                       >
                         <div className="flex items-center justify-between text-[11px] font-bold">
-                          <span>{idx + 1}. {stg.title}</span>
+                          <span>{formatPersianNumber(idx + 1)}. {stg.title}</span>
                           <span>{formatPersianNumber(stg.progress_percent || 0)}٪</span>
                         </div>
                         <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden mt-1.5">

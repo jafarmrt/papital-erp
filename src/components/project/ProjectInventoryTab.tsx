@@ -249,7 +249,7 @@ export function ProjectInventoryTab({
               <span className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-bold ${
                 activeMainTab === 'purchase' ? 'bg-slate-950 text-amber-400' : 'bg-rose-500 text-white'
               }`}>
-                {purchaseList.length}
+                {formatPersianNumber(purchaseList.length)}
               </span>
             )}
           </button>

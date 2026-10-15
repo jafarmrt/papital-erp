@@ -1,4 +1,4 @@
-# .github/workflows/ci.yml — Papital ERP GitHub Actions CI/CD Pipeline (v7.0.19 / TD-172: lockfile + Node 22 + blocking audit gate; Node 24 since v10.1.25)
+# .github/workflows/ci.yml — Papital ERP GitHub Actions CI/CD Pipeline (v7.0.19 / TD-172: lockfile + Node 22 + blocking audit gate; Node 24 since v10.1.26)
 # Multi-stage CI: lint-and-typecheck (+version-sync) → database-integration-tests → coverage-soft-gate (non-blocking) + e2e-critical-path (Playwright) → client-server-build → docker-build-gate
 # v10.0.192 (product-owner decision t20): the check jobs (lint, database tests, coverage, e2e, build, docker build) all start
 # at once and none waits for another, so a PR result comes after the longest job instead of after the sum of the chain;

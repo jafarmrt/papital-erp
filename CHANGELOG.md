@@ -20,8 +20,11 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
-### v10.1.25 — برنامه روی Node.js 24 (I-07)
+### v10.1.26 — برنامه روی Node.js 24 (I-07)
 - آزمون‌های خودکار، تصویر Docker و نصب‌کننده روی Node.js 24 LTS رفتند و `engines` و `.nvmrc` همان را می‌گویند؛ `install.sh` Node کهنه‌تر را هم ارتقا می‌دهد و `update.sh` با Node کهنه‌تر از ۲۴ یک هشدار چاپ می‌کند. پیش از این به‌روزرسانی، Node 24 روی سرور به دست مالک نصب می‌شود (تصمیم ت۳۲).
+
+### v10.1.25 — عدد صفحه‌ها با رقم فارسی
+- شمارنده‌ها، شماره صفحه و ردیف، اختلاف شمارش، درصدها و شناسه‌ها با رقم فارسی نشان داده می‌شوند و یک شمارنده نوع‌محور جلوی عدد لاتین تازه را می‌گیرد.
 
 ### v10.1.24 — قیف فروش کشیدنی و ستون‌های جدا (N-02 بخش ۳)
 - Sales pipeline board: fixed 280 px columns in a horizontally scrolling row (they overlapped in a grid narrower than their minimum, TD-1272), compact card with a ⋯ menu and the nearest open follow-up (lead list nextFollowUpDate), HTML drag and drop through the stage change handler, one stage tab per column on a phone. Tests: e2e/crm-pipeline.spec.ts, reg_crm_lead_next_followup_td_1272, Vitest crmPipelineBoardTd1272.

@@ -125,7 +125,7 @@ export function GlobalInventoryControlSection({
                 <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200">
                   <div className="flex items-center gap-2.5">
                     <span className="w-6 h-6 rounded-lg bg-slate-900 text-amber-400 flex items-center justify-center font-mono text-xs font-bold">
-                      {originalIdx + 1}
+                      {formatPersianNumber(originalIdx + 1)}
                     </span>
                     <div>
                       <div className="flex items-center gap-2">

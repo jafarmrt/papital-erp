@@ -3,6 +3,7 @@ import { confirmAction } from '../ConfirmDialogHost';
 import { Plus, Trash2, Save, RefreshCw, ShoppingBag, HelpCircle, ArrowUp, ArrowDown } from 'lucide-react';
 import { DEFAULT_INVENTORY_CONTROL_SECTIONS, InventoryControlPresetSection } from '../../constants/inventoryControlPresets';
 import toast from 'react-hot-toast';
+import { formatPersianNumber } from '../../utils';
 
 interface InventoryControlPresetTabProps {
   sections: InventoryControlPresetSection[];
@@ -116,7 +117,7 @@ export function InventoryControlPresetTab({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2 flex-1">
                 <span className="w-6 h-6 rounded-full bg-slate-800 text-white font-bold text-xs flex items-center justify-center shrink-0">
-                  {secIdx + 1}
+                  {formatPersianNumber(secIdx + 1)}
                 </span>
                 <input
                   type="text"

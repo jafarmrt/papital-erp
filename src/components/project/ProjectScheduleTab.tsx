@@ -6,7 +6,7 @@ import {
 } from '../../types';
 import { fetchJson } from '../../api';
 import { DEFAULT_WORKFLOW_PRESETS, WorkflowPreset, StageTaskTemplate } from '../../constants/presets';
-import { errorMessageOf, formatPersianDate, getTodayIsoDate, toPersianDigits, toStorageDate } from '../../utils';
+import { errorMessageOf, formatPersianDate, getTodayIsoDate, toPersianDigits, toStorageDate, formatPersianCode, formatPersianNumber } from '../../utils';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { SearchableSelect } from '../SearchableSelect';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
@@ -631,7 +631,7 @@ export default function ProjectScheduleTab({
               <div className="p-3 bg-slate-100 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-6 rounded-lg bg-slate-900 text-amber-400 font-bold flex items-center justify-center text-xs">
-                    {stg.stage_order || stg.id}
+                    {formatPersianCode(stg.stage_order || stg.id)}
                   </div>
                   <h4 className="font-bold text-slate-900 text-xs">{stg.title}</h4>
                   <span className="text-[11px] text-slate-500 font-semibold bg-white px-2 py-0.5 rounded-md border border-slate-200">
@@ -700,7 +700,7 @@ export default function ProjectScheduleTab({
                             </span>
                           )}
                           <span className="text-[11px] text-slate-500 font-mono">
-                            ({p.quantity} {p.unit})
+                            ({formatPersianNumber(p.quantity)} {p.unit})
                           </span>
                         </div>
 
@@ -974,7 +974,7 @@ export default function ProjectScheduleTab({
                       <td className="p-2 text-slate-700">
                         {log.taskTitle || log.task_title || log.taskCode || log.notes || 'کارکرد کارمزدی'}
                       </td>
-                      <td className="p-2 text-center font-mono font-bold text-slate-800">{qty}</td>
+                      <td className="p-2 text-center font-mono font-bold text-slate-800">{formatPersianNumber(qty)}</td>
                       <td className="p-2 text-center font-mono text-slate-600">{rial.amount(rate)}</td>
                       <td className="p-2 text-center font-mono font-bold text-emerald-700">
                         {rial.amount(qty * rate)}

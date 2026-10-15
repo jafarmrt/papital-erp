@@ -1,7 +1,7 @@
 import React from 'react';
 import { Users, Building2, Truck, UserPlus, UserCheck, Trash2, Plus, CreditCard, X } from 'lucide-react';
 import { IranianPhoneInput, BankCardInput, ShebaInput } from '../common';
-import { getIranianBankFromCard, getIranianBankFromSheba } from '../../utils';
+import { getIranianBankFromCard, getIranianBankFromSheba, formatPersianNumber } from '../../utils';
 import { emailError } from '../../lib/customers/contactChannels';
 import { CustomerChannelFields } from './CustomerChannelFields';
 
@@ -253,7 +253,7 @@ export function CustomerFormModal({
                   <div key={contact.id} className="p-3 bg-white border border-slate-200 rounded-xl space-y-2.5 relative">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
-                        رابط {index + 1}
+                        رابط {formatPersianNumber(index + 1)}
                         {contact.isPrimary && (
                           <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[9px] px-1.5 py-0.2 rounded-full font-bold flex items-center gap-0.5">
                             <UserCheck size={10} /> رابط اصلی

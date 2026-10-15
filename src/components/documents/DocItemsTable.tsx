@@ -88,7 +88,7 @@ export function DocItemsTable({
 
               return (
                 <tr key={i} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="p-3 text-center font-bold text-slate-400">{i + 1}</td>
+                  <td className="p-3 text-center font-bold text-slate-400">{formatPersianNumber(i + 1)}</td>
                   <td className="p-3 font-mono font-bold text-blue-900">{d.item.code}</td>
                   <td className="p-3 font-bold text-slate-900">
                     <div className="flex items-center gap-2.5">
