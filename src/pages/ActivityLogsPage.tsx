@@ -25,6 +25,7 @@ import { exportAuditLogsToExcel } from '../components/audit/auditExportUtils';
 import { parseUserAgent } from '../utils/userAgentParser';
 import { permissionDefinition } from '../lib/permissions/permissionCatalog';
 import { auditActionLabel, auditActionOptions } from '../lib/audit/auditActionLabels';
+import { DialogLayer } from '../components/common/DialogLayer';
 
 /** v9.0.214 (TD-537): خطای خواندن سجل، با پیام فارسی ۴۰۳ به‌جای «هیچ رکوردی یافت نشد» */
 function logsLoadErrorMessage(error: unknown): string {
@@ -497,7 +498,8 @@ export default function ActivityLogsPage() {
 
       {/* Details Modal with Diff Viewer & Device Analysis */}
       {selectedLog && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <DialogLayer onClose={() => setSelectedLog(null)} />
           <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden relative">
             <div className="flex items-center justify-between border-b border-slate-100 p-5 bg-slate-50/50">
               <div className="flex items-center gap-3">

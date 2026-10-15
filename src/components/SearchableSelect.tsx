@@ -25,7 +25,7 @@ interface SearchableSelectProps {
   maxResults?: number;
   /** v9.0.309 (TD-680): برچسب مقدار ازپیش‌انتخاب‌شده‌ای که هنوز در نتایج `fetchUrl` نیامده است (مثلاً نام خریدار) */
   valueLabel?: string;
-  /** Id of the opening button, so a `<label htmlFor>` names it; the chosen value is its description (v10.1.30, TD-1278). */
+  /** Id of the opening button, so a `<label htmlFor>` names it; the chosen value is its description (v10.1.31, TD-1278). */
   id?: string;
 }
 

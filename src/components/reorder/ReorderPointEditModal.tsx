@@ -2,6 +2,7 @@ import React, { useState, useId } from 'react';
 import { formatPersianNumber } from '../../utils';
 import type { ReorderItem } from '../../lib/reorderAlerts/reorderItems';
 import { DecimalInput } from '../common/DecimalInput';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface ReorderPointEditModalProps {
   item: ReorderItem;
@@ -22,7 +23,8 @@ export function ReorderPointEditModal({ item, saving, onCancel, onSave }: Reorde
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+      <DialogLayer onClose={onCancel} disabled={saving} />
       <div className="bg-white rounded-2xl max-w-md w-full shadow-xl space-y-4 max-h-[85vh] overflow-y-auto p-6">
         <h3 className="font-bold text-slate-800 text-base">ویرایش نقطه سفارش کالا</h3>
         <p className="text-xs text-slate-500">

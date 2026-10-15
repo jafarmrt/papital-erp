@@ -15,6 +15,7 @@ import { SafeImage } from '../components/SafeImage';
 import { useTransfersQuery, useSaveTransferMutation, useDeleteTransferMutation, TransferItem } from '../hooks/queries';
 import { TRANSFER_CODE_PAGE_SIZE } from '../lib/transfers/transferCodeList';
 import { useTransferDesignAccess } from '../hooks/inventoryAudit/useStockActionAccess';
+import { DialogLayer } from '../components/common/DialogLayer';
 
 export default function TransfersPage({ user }: { user?: User }) {
   const fieldId = useId();
@@ -65,17 +66,6 @@ export default function TransfersPage({ user }: { user?: User }) {
   const loadTransfers = () => {
     void refetch();
   };
-
-  // Close lightbox on Escape key
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setLightboxData(null);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
 
   // Reset page to 1 on filter or search change
   useEffect(() => {
@@ -648,7 +638,8 @@ export default function TransfersPage({ user }: { user?: User }) {
 
       {/* Edit & Detail Modal */}
       {isEditModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-3 sm:p-4">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-3 sm:p-4">
+          <DialogLayer onClose={() => setIsEditModalOpen(false)} disabled={isSaving} />
           <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
             {/* Modal Header */}
             <div className="px-5 py-3.5 bg-slate-900 text-white flex justify-between items-center shrink-0">
@@ -894,10 +885,11 @@ export default function TransfersPage({ user }: { user?: User }) {
 
       {/* Modern Accessible Lightbox Modal */}
       {lightboxData && (
-        <div 
+        <div role="dialog" aria-modal="true" 
           className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center z-50 p-4 sm:p-6 animate-in fade-in duration-200"
           onClick={() => setLightboxData(null)}
         >
+          <DialogLayer onClose={() => setLightboxData(null)} />
           <div 
             className="relative max-w-4xl w-full bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col"
             onClick={e => e.stopPropagation()}

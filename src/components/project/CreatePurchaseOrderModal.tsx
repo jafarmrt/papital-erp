@@ -16,6 +16,7 @@ import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
 import { SearchableSelect } from '../SearchableSelect';
 import { DecimalInput } from '../common/DecimalInput';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface CreatePurchaseOrderModalProps {
   isOpen: boolean;
@@ -224,7 +225,8 @@ export function CreatePurchaseOrderModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-farsi">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-farsi">
+      <DialogLayer onClose={onClose} disabled={isSubmitting} />
       <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 animate-fadeIn">
         {/* Modal Header */}
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70 rounded-t-2xl">

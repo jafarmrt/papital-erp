@@ -11,6 +11,7 @@ import { fetchJson } from '../../api';
 import { PayrollDeductionsField, deductionsNeedDescription } from './PayrollDeductionsField';
 import { PayrollPrepaymentField, prepaymentNeedsReason, type PayrollPrepaymentState } from './PayrollPrepaymentField';
 import { DecimalInput } from '../common/DecimalInput';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface PieceworkPayrollModalProps {
   isOpen: boolean;
@@ -111,7 +112,8 @@ export function PieceworkPayrollModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+      <DialogLayer onClose={onClose} disabled={isSaving} />
       <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
         <div className="p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
           <h2 className="text-sm font-black text-slate-900 flex items-center gap-2">

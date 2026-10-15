@@ -7,6 +7,7 @@ import { FinancialAmountInput } from '../../common/FinancialAmountInput';
 import { HelpBadge } from '../../common/HelpBadge';
 import { fetchJson } from '../../../api';
 import type { BankAccount } from '../../../types';
+import { DialogLayer } from '../../common/DialogLayer';
 
 /** خطای فرم انتقال وجه، که زیر فرم نشان داده می‌شود (نه پنجره alert مرورگر) */
 export function transferFormError(form: { fromBankAccountId: number | null; toBankAccountId: number | null; amount: number }): string {
@@ -106,7 +107,8 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <DialogLayer onClose={onClose} disabled={isSaving} />
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold text-slate-900 dark:text-white text-base flex items-center gap-2">

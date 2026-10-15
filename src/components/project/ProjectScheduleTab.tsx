@@ -19,6 +19,7 @@ import {
 } from '../../lib/projects/scheduleWorkLog';
 import toast from 'react-hot-toast';
 import { DecimalInput } from '../common/DecimalInput';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface ProjectScheduleTabProps {
   project: ProductionProject;
@@ -994,7 +995,8 @@ export default function ProjectScheduleTab({
 
       {/* RICH PERSONNEL SELECTION MODAL */}
       {pickingTarget && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <DialogLayer onClose={() => setPickingTarget(null)} />
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh]">
             {/* Modal Header */}
             <div className="p-4 bg-slate-900 text-white flex items-center justify-between">

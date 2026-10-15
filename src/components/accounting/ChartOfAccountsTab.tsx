@@ -8,6 +8,7 @@ import { ACCOUNT_CODE_FORMAT_MESSAGE, isValidAccountCode, normalizeAccountCode }
 import { accountActiveConfirmText, accountDeleteConfirmText } from '../../lib/accounting/accountDeleteText';
 import { AccountActiveToggle, InactiveAccountBadge } from './AccountActiveToggle';
 import { useIsSystemAdmin } from '../../contexts/AuthContext';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface ChartOfAccountsTabProps {
   accounts: Account[];
@@ -518,7 +519,8 @@ export function ChartOfAccountsTab({
 
       {/* Create / Edit Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <DialogLayer onClose={() => setIsModalOpen(false)} disabled={isSaving} />
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95 duration-200 max-h-[85vh] overflow-y-auto p-6">
             <h3 className="font-bold text-slate-900 dark:text-white text-base mb-4">
               {editingAccount ? `ویرایش حساب: ${editingAccount.name}` : 'تعریف حساب جدید در کدینگ'}

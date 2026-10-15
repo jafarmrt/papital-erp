@@ -6,6 +6,7 @@ import { InvoiceDetailsInfoCards } from './InvoiceDetailsInfoCards';
 import { InvoiceDetailsItemsTable } from './InvoiceDetailsItemsTable';
 import { InvoiceDetailsTotals } from './InvoiceDetailsTotals';
 import { InvoiceDetailsSettlementCard } from './InvoiceDetailsSettlementCard';
+import { DialogLayer } from '../../common/DialogLayer';
 
 interface InvoiceDetailsModalProps {
   selectedDocDetails: InvoiceListDocument;
@@ -20,7 +21,8 @@ interface InvoiceDetailsModalProps {
 /** TD-080 (بخش ۳): مودال سریع جزئیات سند (طرف حساب، گردش‌کار، ریز اقلام، جمع‌ها و تسویه) */
 export function InvoiceDetailsModal({ selectedDocDetails, setSelectedDocDetails, setSettlementDoc, printFromDetails, loadData, canSettle }: InvoiceDetailsModalProps) {
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+      <DialogLayer onClose={() => setSelectedDocDetails(null)} />
       <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         {/* Modal Header */}
         <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/90">

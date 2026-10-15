@@ -8,6 +8,7 @@ import { SearchableSelect } from '../SearchableSelect';
 import { useExplorerLedgerQuery, type ExplorerLedgerParams, type ExplorerLedgerRow } from '../../hooks/accounting/useAccountExplorerQueries';
 import { useVoucherDetailLoader } from '../../hooks/accounting/useVoucherQueries';
 import type { Account, Customer, Personnel, BankAccount, JournalVoucher } from '../../types';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface AccountExplorerTabProps {
   accounts: Account[];
@@ -713,7 +714,8 @@ export function AccountExplorerTab({
 
       {/* Drill-down Voucher Detail Modal */}
       {selectedVoucherModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 font-farsi text-right">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 font-farsi text-right">
+          <DialogLayer onClose={() => setSelectedVoucherModal(null)} />
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95 duration-150">
             <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 flex items-center justify-between">
               <div className="flex items-center gap-2.5">

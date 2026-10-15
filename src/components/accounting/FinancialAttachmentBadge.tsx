@@ -4,6 +4,7 @@ import { FinancialAttachment } from '../../types';
 import { FinancialAttachmentViewerModal } from './FinancialAttachmentViewerModal';
 import { AttachmentImage } from '../attachments/AttachmentImage';
 import { formatPersianNumber } from '../../utils';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface Props {
   attachments?: FinancialAttachment[] | null;
@@ -51,10 +52,11 @@ export const FinancialAttachmentBadge: React.FC<Props> = ({ attachments, compact
 
       {/* Multiple attachments picker popup */}
       {showPicker && (
-        <div 
+        <div role="dialog" aria-modal="true" 
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in"
           onClick={() => setShowPicker(false)}
         >
+          <DialogLayer onClose={() => setShowPicker(false)} />
           <div 
             className="bg-white rounded-2xl shadow-xl max-w-md w-full p-4 border border-slate-200 space-y-3"
             onClick={(e) => e.stopPropagation()}

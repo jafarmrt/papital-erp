@@ -9,6 +9,7 @@ import { OFFLINE_SUBMIT_TITLE, PHONE_SHEET_FOOTER_SAFE_AREA, PHONE_SHEET_OVERLAY
 import { PurchaseRequisition } from '../../types';
 import { FREE_TEXT_RECEIVE_HINT, isRequisitionReceiveTask, taskApproveLabel, taskApproveSubmitLabel } from '../../lib/workflow/taskActionLabel';
 import { formatPersianCode } from '../../utils';
+import { DialogLayer } from '../common/DialogLayer';
 
 export type ApprovalTaskAction = 'approve' | 'reject';
 export interface ApprovalRejectOption { id: number; title: string }
@@ -78,6 +79,7 @@ export function TaskExecuteModal({
     <div className={PHONE_SHEET_OVERLAY}>
       <div role="dialog" aria-modal="true" aria-label={`بررسی و تعیین تکلیف: «${selectedTask.title}»`}
         className={`${PHONE_SHEET_PANEL} bg-white dark:bg-gray-800 sm:max-w-3xl p-4 sm:p-6 sm:border border-gray-200 dark:border-gray-700 shadow-2xl animate-scaleUp`}>
+        <DialogLayer onClose={onClose} disabled={isExecuting} />
         <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100 dark:border-gray-700">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />

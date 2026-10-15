@@ -2,6 +2,7 @@ import { useId } from 'react';
 import { MessageSquare, X, Send } from 'lucide-react';
 import { DailyWorkLog } from '../../types';
 import { DAILY_LOG_MANAGER_NOTES_MAX } from '../../lib/dailyLogs/dailyLogLimits';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface DailyLogReviewModalProps {
   reviewModalLog: DailyWorkLog | null;
@@ -28,7 +29,8 @@ export function DailyLogReviewModal({
   if (!reviewModalLog) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 font-farsi text-right">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 font-farsi text-right">
+      <DialogLayer onClose={onClose} />
       <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden text-right max-h-[85vh] flex flex-col">
         <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
           <div className="flex items-center gap-2">

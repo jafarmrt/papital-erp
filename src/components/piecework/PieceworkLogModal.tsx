@@ -11,6 +11,7 @@ import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { useOnlineStatus } from '../../lib/pwa/useOnlineStatus';
 import { OFFLINE_SUBMIT_TITLE, PHONE_SHEET_FOOTER_SAFE_AREA, PHONE_SHEET_OVERLAY, PHONE_SHEET_PANEL, PHONE_TAP_TARGET } from '../../lib/pwa/phoneLayout';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface PieceworkLogModalProps {
   isOpen: boolean;
@@ -75,6 +76,7 @@ export function PieceworkLogModal({
     <div className={PHONE_SHEET_OVERLAY}>
       {/* v10.0.20 (D-11): روی گوشی تمام‌صفحه؛ سرصفحه و دکمه‌ها ثابت و میانه پنجره پیمایش می‌شود */}
       <div role="dialog" aria-modal="true" aria-label={title} className={`${PHONE_SHEET_PANEL} bg-white sm:border border-slate-200 shadow-2xl sm:max-w-3xl overflow-hidden animate-in fade-in zoom-in duration-200`}>
+        <DialogLayer onClose={onClose} disabled={isSaving} />
         {/* Header */}
         <div className="shrink-0 p-4 sm:p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
           <h2 className="text-sm font-black text-slate-900 flex items-center gap-2">

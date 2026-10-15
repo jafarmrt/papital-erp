@@ -7,6 +7,7 @@ import { JalaliDateInput } from './common/JalaliDateInput';
 import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 import { refNumberToSend } from '../lib/documents/documentRefRules';
 import { DecimalInput } from './common/DecimalInput';
+import { DialogLayer } from './common/DialogLayer';
 
 interface WarehouseTransferModalProps {
   isOpen: boolean;
@@ -154,7 +155,8 @@ export default function WarehouseTransferModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in" style={{ direction: 'rtl' }}>
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in" style={{ direction: 'rtl' }}>
+      <DialogLayer onClose={onClose} disabled={submitting} />
       <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-200">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b bg-gradient-to-l from-slate-50 to-white">

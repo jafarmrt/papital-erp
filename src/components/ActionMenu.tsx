@@ -49,6 +49,8 @@ export function ActionMenu({
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
+        // the open menu takes Esc, so the window around it stays open
+        event.preventDefault();
         setIsOpen(false);
       }
     }

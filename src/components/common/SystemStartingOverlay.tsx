@@ -13,6 +13,7 @@ export function SystemStartingOverlay() {
   return (
     <div
       role="alertdialog"
+      aria-modal="true"
       aria-live="polite"
       aria-label="سامانه در حال به‌روزرسانی است"
       dir="rtl"

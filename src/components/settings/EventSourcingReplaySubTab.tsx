@@ -4,6 +4,7 @@ import { formatPersianDate, errorMessageOf, formatPersianNumber } from '../../ut
 import { fetchJson } from '../../api';
 import { useHasPermission } from '../../contexts/AuthContext';
 import { useDebounce } from '../../hooks/useDebounce';
+import { DialogLayer } from '../common/DialogLayer';
 
 /** v9.0.440 (TD-731): the aggregate search waits this long after the last keystroke before it asks the server. */
 export const AGGREGATE_SEARCH_DELAY_MS = 350;
@@ -428,7 +429,13 @@ export function EventSourcingReplaySubTab() {
 
       {/* Simulation / Replay Modal */}
       {selectedEventForReplay && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <DialogLayer
+            onClose={() => {
+              setSelectedEventForReplay(null);
+              setSimulationResult(null);
+            }}
+          />
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-2xl w-full shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div>

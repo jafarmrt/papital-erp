@@ -2,6 +2,7 @@ import React, { useEffect, useState, useId } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { formatPersianPrice } from '../../../utils';
 import type { TreasuryTransaction } from '../../../types';
+import { DialogLayer } from '../../common/DialogLayer';
 
 interface TreasuryVoidModalProps {
   target: TreasuryTransaction | null;
@@ -47,7 +48,8 @@ export const TreasuryVoidModal: React.FC<TreasuryVoidModalProps> = ({
   };
 
   return (
-    <div className={`fixed inset-0 ${zIndexClassName} flex items-center justify-center bg-black/50 p-4`}>
+    <div role="dialog" aria-modal="true" className={`fixed inset-0 ${zIndexClassName} flex items-center justify-center bg-black/50 p-4`}>
+      <DialogLayer onClose={() => { setVoidReason(''); setReasonError(''); onClose(); }} disabled={isVoiding} />
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700">
         <h3 className="font-bold text-rose-700 dark:text-rose-300 text-base mb-1 flex items-center gap-2">
           <AlertTriangle size={18} />

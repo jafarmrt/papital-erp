@@ -9,6 +9,7 @@ import {
   FACTORY_RESET_CONFIRM_WORD, FACTORY_RESET_ERASED, FACTORY_RESET_KEPT, FACTORY_RESET_RESTORED, isFactoryResetConfirmed,
 } from '../../lib/system/factoryReset';
 import { ConditionalConstraintsCard } from './ConditionalConstraintsCard';
+import { DialogLayer } from '../common/DialogLayer';
 
 /** v9.0.212 (TD-522، تصمیم ت۴ الف): بخش‌هایی که پاک‌سازی سجلشان را پاک می‌کند، از همان فهرست سرور */
 const PURGEABLE_SECTIONS_TEXT = Object.values(PURGEABLE_AUDIT_ENTITY_LABELS).join('، ');
@@ -164,7 +165,8 @@ export function SystemOperationsTab({ onOpenClearModal }: SystemOperationsTabPro
 
       {/* Modal confirmation for purge */}
       {showPurgeModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 font-farsi text-right">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 font-farsi text-right">
+          <DialogLayer onClose={() => setShowPurgeModal(false)} disabled={isPurging} />
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
             <div className="px-6 py-4 border-b border-slate-100 bg-indigo-50 text-indigo-900 flex items-center gap-2.5">
               <ShieldCheck size={20} className="text-indigo-600 shrink-0" />
@@ -231,7 +233,8 @@ export function ClearDataModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 font-farsi text-right">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 font-farsi text-right">
+      <DialogLayer onClose={onClose} disabled={isSaving} />
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-red-400 animate-in fade-in zoom-in-95 duration-150 max-h-[85vh] flex flex-col">
         <div className="px-6 py-4 border-b border-red-200 bg-red-50 text-red-700 flex items-center gap-2.5">
           <AlertTriangle size={22} className="shrink-0 text-red-600" />

@@ -24,6 +24,7 @@ import { blankContactPerson } from '../lib/customers/contactPerson';
 import { emailError } from '../lib/customers/contactChannels';
 import { customerChannelFormError } from '../components/customers/CustomerChannelFields';
 import { CustomerChannelLinks, PhoneLinks } from '../components/customers/ContactLinks';
+import { DialogLayer } from '../components/common/DialogLayer';
 import { CustomerTagChips, CustomerTagFilter } from '../components/customers/CustomerTags';
 import { CustomerTagsWindow } from '../components/customers/CustomerTagsWindow';
 import { useCustomerTagsQuery } from '../hooks/queries/useCustomerTagQueries';
@@ -697,7 +698,8 @@ export default function CustomersPage({ user }: { user: User }) {
 
       {/* Ledger / Account Card Modal */}
       {selectedLedgerCustomer && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-[85] p-4">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-[85] p-4">
+          <DialogLayer onClose={() => setSelectedLedgerCustomer(null)} />
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-200">
             <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center shrink-0 bg-slate-50/80">
               <div className="flex items-center gap-2.5">

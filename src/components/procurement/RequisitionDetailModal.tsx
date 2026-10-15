@@ -15,6 +15,7 @@ import { PROCUREMENT_LIST_MAX_LIMIT } from '../../lib/procurement/procurementLis
 import { useRequisitionWorkflowActions } from '../../hooks/procurement/useRequisitionWorkflowActions';
 import { REQUISITION_PRIORITY_DETAIL_BADGES, REQUISITION_PRIORITY_DETAIL_FALLBACK, REQUISITION_STATUS_BADGES, REQUISITION_STATUS_FALLBACK } from './requisitionBadges';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface RequisitionDetailModalProps {
   isOpen: boolean;
@@ -139,7 +140,8 @@ export function RequisitionDetailModal({
   const deliveringOrderId = isSubmittingDelivery ? deliveryModalOrder?.id ?? null : null;
 
   return (
-    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-farsi">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-farsi">
+      <DialogLayer onClose={onClose} />
       <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 animate-fadeIn">
         {/* Header */}
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80 rounded-t-2xl">

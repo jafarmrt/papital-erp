@@ -9,6 +9,7 @@ import { rawMaterialCategories } from '../../lib/pendingMaterials/materialReques
 import { MaterialNameField, MaterialUnitSelect, MaterialNumberField, MaterialAttributeFields } from './materialFormFields';
 import { useHasPermission } from '../../contexts/AuthContext';
 import type { CustomMaterialForm } from '../../lib/pendingMaterials/customMaterialRequest';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface AddMaterialModalProps {
   isOpen: boolean;
@@ -55,7 +56,8 @@ export function AddMaterialModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto font-farsi">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto font-farsi">
+      <DialogLayer onClose={onClose} />
       <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-2xl overflow-hidden animate-fadeIn">
         {/* Modal Header */}
         <div className="bg-slate-900 text-white p-4 flex items-center justify-between">

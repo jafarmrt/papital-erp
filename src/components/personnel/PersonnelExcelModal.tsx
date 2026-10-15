@@ -7,6 +7,7 @@ import { formatPersianNumber, formatPersianPhone, formatPersianNationalId, norma
 import { paddedNationalIdNotice, readImportedNationalId } from '../../lib/personnel/nationalIdCell';
 import { Personnel } from '../../types';
 import { PERSONNEL_IMPORT_DEFAULTS, parseEmploymentStatusCell, parseGenderCell, parseNationalityCell, personnelCellLabel } from '../../lib/personnel/personnelImportCells';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface PersonnelExcelModalProps {
   isOpen: boolean;
@@ -417,10 +418,11 @@ export function PersonnelExcelModal({
   if (!isOpen) return null;
 
   return (
-    <div
+    <div role="dialog" aria-modal="true"
       id="personnel-excel-modal"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs font-farsi dir-rtl animate-in fade-in duration-200"
     >
+      <DialogLayer onClose={handleClose} disabled={isImporting} />
       <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
         {/* Modal Header */}
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-l from-slate-50 to-white">

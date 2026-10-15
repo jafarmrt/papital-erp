@@ -11,6 +11,7 @@ import { formatPersianNumber } from '../../utils/persianNumber';
 import { WorkflowEdgeGuardFields } from './WorkflowEdgeGuardFields';
 import { WorkflowEntityTypeField } from './WorkflowEntityTypeField';
 import { designStepOrder, nextDesignStepOrder, renameDesignStateKey, workflowDesignErrors } from '../../lib/workflow/workflowDesignRules';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface WorkflowDesignerCanvasProps {
   definitionId: number;
@@ -674,7 +675,8 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
 
       {/* Add Transition Modal */}
       {showAddTransitionModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <DialogLayer onClose={() => setShowAddTransitionModal(false)} />
           <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-5 space-y-4 shadow-xl border border-gray-200 dark:border-gray-700">
             <h3 className="font-bold text-gray-900 dark:text-white text-base">افزودن اقدام جدید</h3>
             

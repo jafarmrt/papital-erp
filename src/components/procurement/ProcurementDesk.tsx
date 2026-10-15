@@ -17,6 +17,7 @@ import { useProcurementDeskData } from '../../hooks/procurement/useProcurementDe
 import { useProcurementAccess } from '../../hooks/procurement/useProcurementAccess';
 import { useProcurementPage } from '../../hooks/procurement/useProcurementPage';
 import { useDebounce } from '../../hooks/useDebounce';
+import { DialogLayer } from '../common/DialogLayer';
 
 /** شمار خلاصه، یا «—» وقتی خلاصه بارگذاری نشد */
 const countText = (n: number | undefined): string => (n === undefined ? '—' : formatPersianNumber(n));
@@ -430,7 +431,8 @@ export function ProcurementDesk() {
 
       {/* Delete Requisition Confirmation Modal */}
       {requisitionToDelete && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-farsi animate-fadeIn">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-farsi animate-fadeIn">
+          <DialogLayer onClose={() => setRequisitionToDelete(null)} disabled={isDeletingRequisition} />
           <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-slate-200 space-y-4">
             <div className="flex items-center gap-3 text-rose-600">
               <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center font-bold">

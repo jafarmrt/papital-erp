@@ -8,6 +8,7 @@ import { PayrollDeductionsField, deductionsNeedDescription } from './PayrollDedu
 import { PayrollStatutoryFields } from './PayrollStatutoryFields';
 import { EMPTY_STATUTORY_ENTRY, statutoryPayloadOf, type PayrollStatutoryEntry } from '../../lib/payroll/statutoryForm';
 import { DecimalInput } from '../common/DecimalInput';
+import { DialogLayer } from '../common/DialogLayer';
 
 /** v10.0.210 (TD-1087): فیشی که بیمه یا مالیاتش با شرح تغییر کرده، همان مبلغ‌ها و شرح را در فرم نشان می‌دهد */
 const storedStatutoryEntry = (p: PieceworkPayroll): PayrollStatutoryEntry => (p.statutoryOverrideReason
@@ -65,7 +66,8 @@ export function PayrollDraftEditModal({ payroll, onClose, onSaved }: { payroll: 
 
   const fieldClass = 'w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono';
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+      <DialogLayer onClose={onClose} disabled={isSaving} />
       <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
         <div className="p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
           <h2 className="text-sm font-black text-slate-900">{`ویرایش فیش پیش‌نویس ${payroll.payrollNumber}`}</h2>

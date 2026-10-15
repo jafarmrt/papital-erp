@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef } from 'react';
+import { useDialogEscape } from '../../lib/a11y/dialogEscapeStack';
 import { X } from 'lucide-react';
 
 export type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | 'full';
@@ -65,29 +66,17 @@ export function Modal({
 }: ModalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (closeOnEscape && e.key === 'Escape') {
-        e.stopPropagation();
-        onClose();
-      }
-    },
-    [closeOnEscape, onClose]
-  );
+  useDialogEscape(onClose, isOpen, !closeOnEscape);
 
   useEffect(() => {
     if (!isOpen) return;
-
     // Prevent background body scrolling when modal is active
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', handleKeyDown);
-
     return () => {
       document.body.style.overflow = originalOverflow;
-      window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, handleKeyDown]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

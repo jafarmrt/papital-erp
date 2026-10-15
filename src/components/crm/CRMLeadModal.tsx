@@ -10,6 +10,7 @@ import { formatPersianPrice, formatCurrencyLabel, getFutureJalaliDate, extractDa
 import { IranianPhoneInput } from '../common';
 import { DecimalInput } from '../common/DecimalInput';
 import { LostReasonFields } from './LostReasonFields';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface CRMLeadModalProps {
   isLeadModalOpen: boolean;
@@ -46,7 +47,8 @@ export function CRMLeadModal({
   if (!isLeadModalOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+      <DialogLayer onClose={onCloseLeadModal} />
       <div className="bg-white rounded-2xl max-w-2xl w-full shadow-xl border border-slate-200 max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95">
         <div className="p-5 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
           <h3 className="font-black text-base text-slate-900 flex items-center gap-2">

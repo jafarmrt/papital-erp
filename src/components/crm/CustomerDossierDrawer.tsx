@@ -15,6 +15,7 @@ import { CurrencyTotalsLines } from './CurrencyTotals';
 import { CustomerChannelLinks, EmailLink, PhoneLinks } from '../customers/ContactLinks';
 import { splitPhones } from '../../lib/customers/contactChannels';
 import toast from 'react-hot-toast';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface CustomerDossierDrawerProps {
   customer: Customer | null;
@@ -130,7 +131,8 @@ export function CustomerDossierDrawer({
   const totalCredit = financialReport?.totalCredit ?? financialReport?.creditTurnover ?? 0;
 
   return (
-    <div className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-xs flex justify-end">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-xs flex justify-end">
+      <DialogLayer onClose={onClose} />
       <div className="bg-white w-full md:w-[65%] lg:w-[65%] max-w-[65vw] h-full shadow-2xl flex flex-col p-6 overflow-y-auto custom-scrollbar animate-in slide-in-from-left duration-200 text-right font-farsi">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4 shrink-0">

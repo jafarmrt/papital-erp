@@ -22,6 +22,7 @@ import { VoucherPrimaryActionCell } from './vouchers/VoucherPrimaryActionCell';
 import { voucherSourceLabel } from '../../lib/accounting/voucherSource';
 import { isViewerVoucherMaker, voucherMakerName, voucherReferenceText } from '../../lib/accounting/voucherListViewer';
 import { useViewerIdentity } from '../../contexts/AuthContext';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface JournalVouchersTabProps {
   accounts?: Account[];
@@ -629,10 +630,11 @@ export function JournalVouchersTab({
 
       {/* مدال تعاملی چرخه تاییدات و گردش‌کار سند حسابداری */}
       {workflowTargetVoucher && (
-        <div 
+        <div role="dialog" aria-modal="true" 
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in"
           onClick={() => setWorkflowTargetVoucher(null)}
         >
+          <DialogLayer onClose={() => setWorkflowTargetVoucher(null)} />
           <div 
             className="bg-white dark:bg-slate-900 rounded-2xl max-w-2xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in zoom-in-95"
             onClick={(e) => e.stopPropagation()}

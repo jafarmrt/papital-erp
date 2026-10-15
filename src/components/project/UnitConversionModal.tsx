@@ -3,6 +3,7 @@ import { Scale, X } from 'lucide-react';
 import { COMMON_UNITS, roundToOneDecimal } from './projectInventoryUtils';
 import { toPersianDigits, formatPersianNumber } from '../../utils';
 import { DecimalInput } from '../common/DecimalInput';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface UnitConversionModalProps {
   isOpen: boolean;
@@ -47,7 +48,8 @@ export function UnitConversionModal({
   if (!isOpen || !conversionTarget) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+      <DialogLayer onClose={onClose} />
       <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-lg overflow-hidden animate-fadeIn">
         <div className="bg-amber-500 text-slate-950 p-4 flex items-center justify-between">
           <div className="flex items-center gap-2">

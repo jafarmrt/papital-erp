@@ -12,6 +12,7 @@ import {
   ReconcileMatchedRow,
   TreasuryTxCandidate 
 } from './bankStatementMatcher';
+import { DialogLayer } from '../../common/DialogLayer';
 
 interface BankReconciliationModalProps {
   isOpen: boolean;
@@ -228,7 +229,8 @@ export function BankReconciliationModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-5 overflow-y-auto">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-5 overflow-y-auto">
+      <DialogLayer onClose={onClose} />
       <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-5xl flex flex-col max-h-[92vh] overflow-hidden animate-in fade-in-50 zoom-in-95 duration-200">
         
         {/* Header */}

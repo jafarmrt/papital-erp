@@ -10,6 +10,7 @@ import { formatPersianNumber, extractDateString, formatPersianDate, toPersianDig
 import { summaryYearOptions } from '../../lib/dailyLogs/summaryYears';
 import { workModeLabel } from '../../lib/dailyLogs/workMode';
 import { SimpleUserOption } from '../../hooks/useDailyLogs';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface DailyLogSummaryViewProps {
   summaryMode: 'daily' | 'monthly';
@@ -349,7 +350,8 @@ export function DailyLogSummaryView({
 
       {/* SELECTED USER DETAILED LOGS MODAL */}
       {selectedUserLogsModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <DialogLayer onClose={() => setSelectedUserLogsModal(null)} />
           <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden text-right flex flex-col max-h-[85vh]">
             <div className="p-4 bg-indigo-900 text-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">

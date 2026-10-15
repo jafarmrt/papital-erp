@@ -4,6 +4,7 @@ import { IranianPhoneInput, BankCardInput, ShebaInput } from '../common';
 import { getIranianBankFromCard, getIranianBankFromSheba, formatPersianNumber } from '../../utils';
 import { emailError } from '../../lib/customers/contactChannels';
 import { CustomerChannelFields } from './CustomerChannelFields';
+import { DialogLayer } from '../common/DialogLayer';
 import { CustomerTagPicker } from './CustomerTags';
 import type { CustomerTag } from '../../lib/customers/customerTags';
 
@@ -111,7 +112,8 @@ export function CustomerFormModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-[80] p-4">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-[80] p-4">
+      <DialogLayer onClose={onClose} disabled={isSaving} />
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-200">
         <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center shrink-0 bg-slate-50/80">
           <div className="flex items-center gap-2.5">

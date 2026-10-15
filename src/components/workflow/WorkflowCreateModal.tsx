@@ -7,6 +7,7 @@ import { WORKFLOW_ENTITY_TYPES, workflowEntityTypeLabel } from '../../lib/workfl
 import { TEMPLATE_DEFINITION_SAVED_INACTIVE, WORKFLOW_TEMPLATES, type WorkflowTemplateId } from '../../lib/workflow/workflowTemplates';
 import { toPersianDigits } from '../../utils/persianNumber';
 import { getErrorMessage } from '../../utils';
+import { DialogLayer } from '../common/DialogLayer';
 
 type CreateMode = 'template' | 'blank';
 
@@ -96,7 +97,8 @@ export function WorkflowCreateModal({ onClose, onCreated }: { onClose: () => voi
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-      <div role="dialog" aria-label="گردش کار تازه" className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 w-full max-w-lg shadow-xl overflow-hidden flex flex-col max-h-[85vh]">
+      <div aria-modal="true" role="dialog" aria-label="گردش کار تازه" className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 w-full max-w-lg shadow-xl overflow-hidden flex flex-col max-h-[85vh]">
+        <DialogLayer onClose={onClose} disabled={isSaving} />
         <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
           <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
             <Plus className="w-4 h-4 text-indigo-600" />

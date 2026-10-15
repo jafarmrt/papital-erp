@@ -11,6 +11,7 @@ import {
 } from '../../lib/procurement/requisitionFields';
 import { FieldError, RequisitionItemRowEditor, type NewRequisitionRow } from './RequisitionItemRowEditor';
 import { lineAmount, sumAmounts } from '../../lib/procurement/procurementNumbers';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface CreateRequisitionModalProps {
   isOpen: boolean;
@@ -128,7 +129,8 @@ export function CreateRequisitionModal({
   const totalEstimate = sumAmounts(items, i => lineAmount(i.requestedQty, i.unitPriceEstimate));
 
   return (
-    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-farsi">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-farsi">
+      <DialogLayer onClose={onClose} disabled={isSubmitting} />
       <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 animate-fadeIn">
         {/* Header */}
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80 rounded-t-2xl">

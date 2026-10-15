@@ -19,6 +19,7 @@ import {
 } from '../../lib/permissions/permissionCatalog';
 import { canGrantPermission, type GrantorPermissions } from '../../lib/permissions/grantBoundary';
 import type { RoleDraft } from '../../lib/permissions/roleTemplates';
+import { DialogLayer } from '../common/DialogLayer';
 
 /** عنوان فارسی یک کلید مجوز از کاتالوگ مشترک، وگرنه خود کلید */
 const permissionTitle = (key: string) => permissionDefinition(key)?.title ?? key;
@@ -200,7 +201,8 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <DialogLayer onClose={onClose} disabled={isSaving} />
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         <div className="px-6 py-4 border-b flex justify-between items-center bg-slate-50">
           <div className="flex items-center gap-2">
