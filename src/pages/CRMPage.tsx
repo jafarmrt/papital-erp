@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, Calendar, Briefcase, PhoneCall, Clock, Building2 } from 'lucide-react';
+import { Search, Filter, Calendar, Briefcase, PhoneCall, Clock, Building2, TrendingUp } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { fetchJson } from '../api';
 import { CRMLead, Customer } from '../types';
@@ -16,6 +16,8 @@ import { CRMLeadModal } from '../components/crm/CRMLeadModal';
 import { CRMLeadDrawer } from '../components/crm/CRMLeadDrawer';
 import { JalaliDateInput } from '../components/common/JalaliDateInput';
 import { leadProformaState } from '../lib/crm/leadProformaState';
+import { CRMFunnelReport } from '../components/crm/CRMFunnelReport';
+import { LostReasonDialog } from '../components/crm/LostReasonFields';
 
 export default function CRMPage({ user }: { user: any }) {
   const crm = useCRMData(user);
@@ -188,6 +190,16 @@ export default function CRMPage({ user }: { user: any }) {
               {/* v9.0.14 (TD-428): شمار پیگیری‌های باز از سرور، بی بازه تاریخ اقدام */}
               پیگیری‌های من ({formatPersianNumber(crm.stats.openFollowupsCount ?? 0)})
             </button>
+
+            <button
+              onClick={() => crm.setActiveTab('funnel')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                crm.activeTab === 'funnel' ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30' : 'bg-indigo-50 text-indigo-800 hover:bg-indigo-100'
+              }`}
+            >
+              <TrendingUp size={15} />
+              گزارش قیف
+            </button>
           </div>
 
           {/* Search and Filters */}
@@ -291,9 +303,13 @@ export default function CRMPage({ user }: { user: any }) {
             activities={crm.activities}
             onOpenActivityModal={() => crm.openActivityModal()}
             onToggleFollowup={crm.handleToggleFollowup}
+            onEditActivity={crm.openEditActivity}
+            onDeleteActivity={crm.handleDeleteActivity}
             personnelList={crm.personnelList}
           />
         )}
+
+        {crm.activeTab === 'funnel' && <CRMFunnelReport personnelList={crm.personnelList} />}
       </div>
 
       {/* Modal 1 & 2: Activity Log & Followup Completion */}
@@ -324,9 +340,19 @@ export default function CRMPage({ user }: { user: any }) {
         onOpenLeadModal={crm.openLeadModal}
         onDeleteLead={deleteLead}
         onToggleFollowup={crm.handleToggleFollowup}
+        onEditActivity={crm.openEditActivity}
+        onDeleteActivity={crm.handleDeleteActivity}
         onConvertToInvoice={handleConvertToInvoice}
         onOpenCustomerDossier={handleOpenCustomerDossierByName}
       />
+
+      {crm.lostPromptLeadId !== null && (
+        <LostReasonDialog
+          leadTitle={crm.leads.find((l) => l.id === crm.lostPromptLeadId)?.title ?? ''}
+          onCancel={() => crm.setLostPromptLeadId(null)}
+          onConfirm={(lost) => crm.handleStageChange(crm.lostPromptLeadId as number, 'lost', lost)}
+        />
+      )}
 
       {/* Drawer: Full Customer Dossier */}
       <CrmCustomerDossierHost

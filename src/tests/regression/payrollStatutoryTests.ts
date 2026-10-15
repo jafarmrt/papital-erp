@@ -218,7 +218,7 @@ export async function runPayrollStatutoryTests(shouldRun: ShouldRun): Promise<Te
 
   const optionalId = 'reg_payroll_statutory_report_optional_td_1269';
   if (shouldRun(optionalId, 'td1269', 'payroll', 'statutory', 'report', 'optional')) {
-    await runCase(results, optionalId, 'v10.1.18: insurance and payroll tax are optional per person, so the monthly list leaves out approved payslips without them (not covered, or zeroed with a reason) and only counts them; the payslip and its voucher post nothing to 3204 or 3206 (TD-1269)', async () => inFiscalSandbox(async () => {
+    await runCase(results, optionalId, 'v10.1.19: insurance and payroll tax are optional per person, so the monthly list leaves out approved payslips without them (not covered, or zeroed with a reason) and only counts them; the payslip and its voucher post nothing to 3204 or 3206 (TD-1269)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       await admin.put('/api/piecework/statutory-rates/1405', RATES_1405);

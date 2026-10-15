@@ -1,9 +1,9 @@
-import { and, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { and, eq, type SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { crmActivities, notifications, personnel, users } from '../../db/schema.js';
+import { crmActivities, notifications, users } from '../../db/schema.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { isoToJalaliDate, toPersianDigits } from '../../utils.js';
-import { dueFollowupCondition } from '../crm/crmFollowups.js';
+import { dueFollowupCondition, ownFollowupCondition } from '../crm/crmFollowups.js';
 
 /**
  * v9.0.433 (TD-709، B15-07): پیگیری سررسیدشده‌ای که زنگ اعلان به یک کاربر یادآوری می‌کند فقط پیگیری خود اوست: مسئولی که
@@ -12,14 +12,9 @@ import { dueFollowupCondition } from '../crm/crmFollowups.js';
  * پیگیری و نام مشتری می‌گرفت.
  */
 export async function ownDueFollowupCondition(userId: number, todayIso: string): Promise<SQL | null> {
-  const [user] = await orm.select({ fullName: users.fullName, username: users.username }).from(users).where(eq(users.id, userId));
+  const [user] = await orm.select({ id: users.id }).from(users).where(eq(users.id, userId));
   if (!user) return null;
-  const names = [...new Set([(user.fullName ?? '').trim(), (user.username ?? '').trim()].filter(Boolean))];
-  const linkedPersonnel = orm.select({ id: personnel.id }).from(personnel).where(and(eq(personnel.userId, userId), eq(personnel.isDeleted, 0)));
-  const byPersonnel = inArray(crmActivities.assignedPersonnelId, linkedPersonnel);
-  const legacyAssignee = sql<string>`btrim(COALESCE(NULLIF(btrim(${crmActivities.assignedTo}), ''), ${crmActivities.loggedBy}, ''))`;
-  const byExactName = names.length > 0 ? and(isNull(crmActivities.assignedPersonnelId), inArray(legacyAssignee, names)) : undefined;
-  return and(dueFollowupCondition(todayIso), byExactName ? or(byPersonnel, byExactName) : byPersonnel) as SQL;
+  return and(dueFollowupCondition(todayIso), await ownFollowupCondition(userId)) as SQL;
 }
 
 export async function generateCrmDueReminders(userId: number): Promise<void> {

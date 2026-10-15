@@ -20,6 +20,7 @@ export function CrmInteractionModalHost({ crm, currentUser }: { crm: CrmState; c
       setActivityForm={crm.setActivityForm}
       isSavingActivity={crm.isSavingActivity}
       onSaveActivity={crm.handleSaveActivity}
+      isEditingActivity={crm.editingActivity !== null}
       personnelList={crm.personnelList}
       mentionUsers={crm.mentionUsers}
       currentUser={currentUser}

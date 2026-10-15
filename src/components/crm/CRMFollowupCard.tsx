@@ -1,15 +1,18 @@
 import { Calendar, Check, User, Briefcase, UserCheck } from 'lucide-react';
 import type { CRMActivity, CRMLead } from '../../types';
 import { formatPersianDate } from '../../utils';
+import { ActivityRowActions } from './ActivityRowActions';
 
 interface CRMFollowupCardProps {
   act: CRMActivity;
   leads?: CRMLead[];
   onToggleFollowup: (act: CRMActivity) => void;
+  onEditActivity?: (act: CRMActivity) => void;
+  onDeleteActivity?: (act: CRMActivity) => void;
 }
 
 /** کارت یک پیگیری (از v9.0.14 جدا از `CRMFollowupsView`) */
-export function CRMFollowupCard({ act, leads = [], onToggleFollowup }: CRMFollowupCardProps) {
+export function CRMFollowupCard({ act, leads = [], onToggleFollowup, onEditActivity, onDeleteActivity }: CRMFollowupCardProps) {
   const leadObj = leads.find((l) => l.id === act.leadId);
   const displayCustomerName = act.customerName || leadObj?.customerName || leadObj?.company || '';
   const displayLeadTitle = act.leadTitle || leadObj?.title || act.title;
@@ -72,7 +75,10 @@ export function CRMFollowupCard({ act, leads = [], onToggleFollowup }: CRMFollow
       )}
 
       <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-500">
-        <span>ثبت: {act.loggedBy || 'فروشنده'}</span>
+        <span className="inline-flex items-center gap-1.5">
+          ثبت: {act.loggedBy || 'فروشنده'}
+          <ActivityRowActions activity={act} onEdit={onEditActivity} onDelete={onDeleteActivity} />
+        </span>
         {act.assignedTo && (
           <span className="font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 flex items-center gap-1">
             <UserCheck size={11} />

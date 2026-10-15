@@ -13,7 +13,7 @@ import { statutoryReportSheetRows, statutoryReportWithoutNote, type StatutoryRep
 import { PayrollStatutoryReportModal } from '../../components/piecework/PayrollStatutoryReportModal';
 
 /**
- * v10.1.18 (TD-1269, owner rule of 15 Oct 2026: insurance, payroll tax and VAT are supported but never required, per
+ * v10.1.19 (TD-1269, owner rule of 15 Oct 2026: insurance, payroll tax and VAT are supported but never required, per
  * person and per document): the VAT report does not warn about an invoice without VAT, and the monthly insurance and tax
  * list leaves out personnel without insurance or payroll tax and only counts them.
  */
