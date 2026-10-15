@@ -5,7 +5,7 @@ import { accountSubtreeCondition } from '../accounting/accountSubtree.js';
 import { voucherItemCurrencyCondition, voucherItemReportAmountSql } from '../accounting/voucherItemAmount.js';
 
 /**
- * v10.1.9 (D-03، طرح گزارش‌های مدیریتی §۳): بخش‌های SQL «سن مطالبات و بدهی‌ها». هر پرسش از `agingRowsCte` آغاز می‌شود:
+ * v10.1.10 (D-03، طرح گزارش‌های مدیریتی §۳): بخش‌های SQL «سن مطالبات و بدهی‌ها». هر پرسش از `agingRowsCte` آغاز می‌شود:
  * یک ردیف برای هر طرف حساب با مانده، بازه‌های سن، پیش‌دریافت یا پیش‌پرداخت، سهم پیش‌نویس و چک‌های وصول‌نشده.
  *
  * - ردیف‌ها: ردیف زنده سند زنده روی حساب گزارش و زیرحساب‌هایش، به تاریخ سند تا «تاریخ گزارش». اسناد بستن سال و افتتاحیه

@@ -66,7 +66,7 @@ export function PartyLedgerReportView({
     if (appliedInitialParty.current === initialKey) return;
     appliedInitialParty.current = initialKey;
     if (initialPartyId || initialPartyName) {
-      // v10.1.9 (D-03): شناسه مشتری و تأمین‌کننده از جدول طرف حساب‌هاست و شناسه پرسنل از جدول دیگر؛ پیوند «صورت‌حساب»
+      // v10.1.10 (D-03): شناسه مشتری و تأمین‌کننده از جدول طرف حساب‌هاست و شناسه پرسنل از جدول دیگر؛ پیوند «صورت‌حساب»
       // گزارش سن مطالبات با نوع طرف حساب می‌آید تا پرسنل هم‌شناسه به جای مشتری باز نشود
       const sameTable = (p: PartyOption) => (initialPartyType === 'personnel'
         ? p.partyType === 'personnel'

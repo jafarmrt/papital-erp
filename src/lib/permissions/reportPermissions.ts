@@ -5,5 +5,5 @@
 export const SALES_REPORT_PERMISSION = 'reports.sales';
 /** سطر هم‌خوانی گزارش فروش با دفتر کل: همان کلیدهای گزارش‌های دفتر (TD-547) */
 export const LEDGER_CHECK_PERMISSIONS = ['accounting.reports', 'accounting.view'] as const;
-/** زبانه «سن مطالبات و بدهی‌ها» و `GET /reports/aging` (v10.1.9، ت۲): همان کلید گزارش‌های حسابداری */
+/** زبانه «سن مطالبات و بدهی‌ها» و `GET /reports/aging` (v10.1.10، ت۲): همان کلید گزارش‌های حسابداری */
 export const AGING_REPORT_PERMISSION = 'accounting.reports';

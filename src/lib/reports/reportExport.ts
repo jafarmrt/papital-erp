@@ -17,7 +17,7 @@ export interface ReportSheet {
   columns: string[];
   rows: ReportCell[][];
   totals?: ReportCell[];
-  /** v10.1.9: سطرهای زیر ردیف جمع (مثلاً سهم هر بازه سن) */
+  /** v10.1.10: سطرهای زیر ردیف جمع (مثلاً سهم هر بازه سن) */
   footer?: ReportCell[][];
 }
 
@@ -46,7 +46,7 @@ export function reportFileName(title: string, range: ReportRange): string {
   return `${title.trim().replace(/\s+/g, '-')}-${rangeFileTag(range)}.xlsx`;
 }
 
-/** v10.1.9: گزارشی که یک «تاریخ گزارش» دارد نه بازه: «سن-مطالبات-۱۴۰۵-۰۷-۲۳.xlsx» */
+/** v10.1.10: گزارشی که یک «تاریخ گزارش» دارد نه بازه: «سن-مطالبات-۱۴۰۵-۰۷-۲۳.xlsx» */
 export function reportDayFileName(title: string, iso: string): string {
   return `${title.trim().replace(/\s+/g, '-')}-${dayFileTag(iso)}.xlsx`;
 }

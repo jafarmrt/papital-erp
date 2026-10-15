@@ -20,7 +20,7 @@ import { salesReport } from '../services/reports/salesReport.service.js';
 /**
  * v10.1.8 (D-03، طرح گزارش‌های مدیریتی §۵، تصمیم ت۲): API صفحه «گزارش‌های مدیریتی». گزارش فروش با کلید `reports.sales`؛
  * بها و سود ناخالص فقط برای خواننده بهای کالا (ت۳) و سطر هم‌خوانی با دفتر کل فقط برای خواننده گزارش‌های دفتر.
- * v10.1.9: «سن مطالبات و بدهی‌ها» با کلید `accounting.reports` (ت۲).
+ * v10.1.10: «سن مطالبات و بدهی‌ها» با کلید `accounting.reports` (ت۲).
  */
 const router = Router();
 router.use(authenticateToken);

@@ -48,7 +48,7 @@ interface FinancialReportsTabProps {
   onFetchLedger: (accountId: number, startDate?: string, endDate?: string) => Promise<void>;
 }
 
-/** v10.1.9 (D-03): شناسه طرف حساب از نشانی («صورت‌حساب» گزارش سن مطالبات)؛ هر چیز جز عدد صحیح مثبت نادیده گرفته می‌شود */
+/** v10.1.10 (D-03): شناسه طرف حساب از نشانی («صورت‌حساب» گزارش سن مطالبات)؛ هر چیز جز عدد صحیح مثبت نادیده گرفته می‌شود */
 function positiveIdParam(value: string | null): number | undefined {
   const id = Number(value);
   return Number.isInteger(id) && id > 0 ? id : undefined;

@@ -12,13 +12,13 @@ export async function runAgingReportTests(shouldRun: ShouldRun): Promise<TestCas
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (h: Harness, wrong: string[]) => Promise<string>]> = [
     ['reg_aging_report_fifo_d03',
-      'v10.1.9: the aging report settles each party oldest first from the ledger, ages what is left by its voucher date, keeps drafts apart, skips closing runs and deleted vouchers and reads cheques, legacy names and currencies (D-03)',
+      'v10.1.10: the aging report settles each party oldest first from the ledger, ages what is left by its voucher date, keeps drafts apart, skips closing runs and deleted vouchers and reads cheques, legacy names and currencies (D-03)',
       ['d03', 'reports', 'aging', 'receivable', 'payable', 'currency', 'cheque'], agingFifoCase],
     ['reg_aging_report_ledger_match_d03',
-      'v10.1.9: after an invoice, a treasury receipt and a received cheque the aging balance of the customer equals its ledger balance, its drafts and its last settlement (D-03)',
+      'v10.1.10: after an invoice, a treasury receipt and a received cheque the aging balance of the customer equals its ledger balance, its drafts and its last settlement (D-03)',
       ['d03', 'reports', 'aging', 'ledger', 'treasury', 'cheque'], agingLedgerCase],
     ['reg_aging_report_access_d03',
-      'v10.1.9: GET /reports/aging needs accounting.reports and refuses an unknown or invalid query (D-03)',
+      'v10.1.10: GET /reports/aging needs accounting.reports and refuses an unknown or invalid query (D-03)',
       ['d03', 'reports', 'aging', 'permission'], agingAccessCase],
   ];
   for (const [id, name, tags, run] of cases) {

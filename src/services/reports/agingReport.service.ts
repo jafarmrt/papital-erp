@@ -10,7 +10,7 @@ import { AccountMappingService } from '../accounting/accountMapping.service.js';
 import { agingPageSql, agingTotalsSql, lastSettlementSql, type AgingScope } from './agingReportQuery.js';
 
 /**
- * v10.1.9 (D-03، طرح گزارش‌های مدیریتی §۳، تصمیم‌های ت۷ تا ت۱۱): «سن مطالبات و بدهی‌ها». مانده‌ها، بازه‌های سن، جمع‌ها و
+ * v10.1.10 (D-03، طرح گزارش‌های مدیریتی §۳، تصمیم‌های ت۷ تا ت۱۱): «سن مطالبات و بدهی‌ها». مانده‌ها، بازه‌های سن، جمع‌ها و
  * صفحه‌بندی در پایگاه‌داده است (§۶.۱)؛ قاعده شمردن در `agingReportQuery.ts`. گزارش فقط می‌خواند و چیزی نمی‌نویسد.
  */
 

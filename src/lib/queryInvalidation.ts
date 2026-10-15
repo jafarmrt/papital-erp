@@ -78,7 +78,7 @@ export const INVALIDATION_PRESETS = {
   ] as QueryDomain[],
 
   // v9.0.341 (TD-796): تسویه فاکتور: حساب‌های بانکی، خزانه و سند حسابداری، مانده و وضعیت سند، کارت حساب طرف حساب و پیشخوان
-  // v10.1.9 (D-03): سن مطالبات و بدهی‌ها (مانده و آخرین دریافت طرف حساب)
+  // v10.1.10 (D-03): سن مطالبات و بدهی‌ها (مانده و آخرین دریافت طرف حساب)
   settlementChange: ['documents', 'accounting', 'customers', 'dashboard', 'reports'] as QueryDomain[],
 } as const;
 

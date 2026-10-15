@@ -79,7 +79,7 @@ function sampleReport(over: Partial<AgingReport> = {}): AgingReport {
   };
 }
 
-// v10.1.9 (D-03، طرح گزارش‌های مدیریتی §۳): قرارداد «سن مطالبات و بدهی‌ها» و خروجی اکسل آن
+// v10.1.10 (D-03، طرح گزارش‌های مدیریتی §۳): قرارداد «سن مطالبات و بدهی‌ها» و خروجی اکسل آن
 describe('receivables and payables aging contract (D-03)', () => {
   it('gives each bucket its share of the aged balance to one decimal, and none without a balance', () => {
     expect(agingBucketPercents(amounts().buckets)).toEqual({ upTo30: 33.3, upTo60: 44.4, upTo90: 0, upTo180: 22.2, over180: 0 });

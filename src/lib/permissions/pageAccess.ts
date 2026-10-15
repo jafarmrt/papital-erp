@@ -68,7 +68,7 @@ const MANAGEMENT_REPORT_TABS = {
     gate: anyOf('reports.sales'),
     api: ['GET /api/reports/sales', 'GET /api/customers/options', 'GET /api/items/options', 'GET /api/projects/options', 'GET /api/categories'],
   },
-  /** v10.1.9: سن مطالبات و بدهی‌ها با کلید گزارش‌های حسابداری (ت۲) */
+  /** v10.1.10: سن مطالبات و بدهی‌ها با کلید گزارش‌های حسابداری (ت۲) */
   '/management-reports/aging': { gate: anyOf('accounting.reports'), api: ['GET /api/reports/aging', 'GET /api/customers/options'] },
 } as const satisfies Record<string, PageAccessRule>;
 
