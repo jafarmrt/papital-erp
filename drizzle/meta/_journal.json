@@ -792,6 +792,13 @@
       "when": 1795000000000,
       "tag": "0112_customer_contact_channels",
       "breakpoints": true
+    },
+    {
+      "idx": 113,
+      "version": "7",
+      "when": 1795001000000,
+      "tag": "0113_workflow_published_version",
+      "breakpoints": true
     }
   ]
 }

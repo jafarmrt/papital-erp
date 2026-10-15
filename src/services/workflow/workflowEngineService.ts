@@ -15,6 +15,7 @@ import { WorkflowDelegationService } from './workflowDelegationService.js';
 import { WorkflowQuorumService } from './workflowQuorumService.js';
 import { setWorkflowDefinitionActive, setWorkflowDefinitionArchived } from './workflowDefinitionLifecycle.js';
 import { makeDefinitionFromTemplate } from './workflowTemplateDefinition.js';
+import { getWorkflowDraftState, publishWorkflowDraft, revertWorkflowToVersion } from './workflowVersionPublish.js';
 import { workflowDefinitions, workflowInstances } from '../../db/schema.js';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { and, asc, eq } from 'drizzle-orm';
@@ -54,6 +55,10 @@ export class WorkflowEngineService {
   static seedDefaultWorkflows = WorkflowDefinitionService.seedDefaultWorkflows.bind(WorkflowDefinitionService);
   // v10.1.7 (TD-1229, D-06): turn a definition on or off, archive or restore it
   static setDefinitionActive = setWorkflowDefinitionActive;
+  /** v10.1.17 (TD-1270, D-06 part D): draft, publish and revert */
+  static getDraftState = getWorkflowDraftState;
+  static publishDraft = publishWorkflowDraft;
+  static revertToVersion = revertWorkflowToVersion;
   static setDefinitionArchived = setWorkflowDefinitionArchived;
 
   // --- Version History (read-only, TD-112) ---

@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 422
+تعداد مسیرها: 425
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -409,7 +409,10 @@
 | POST | `/api/workflow/definitions/:id/activate` | workflow.admin |
 | POST | `/api/workflow/definitions/:id/archive` | workflow.admin |
 | POST | `/api/workflow/definitions/:id/deactivate` | workflow.admin |
+| GET | `/api/workflow/definitions/:id/draft` | workflow.manage \| workflow.admin |
+| POST | `/api/workflow/definitions/:id/publish` | workflow.admin |
 | POST | `/api/workflow/definitions/:id/restore` | workflow.admin |
+| POST | `/api/workflow/definitions/:id/revert` | workflow.admin |
 | GET | `/api/workflow/definitions/:id/versions` | workflow.manage \| workflow.admin |
 | GET | `/api/workflow/definitions/:id/versions/:version` | workflow.manage \| workflow.admin |
 | POST | `/api/workflow/definitions/from-template` | workflow.manage \| workflow.admin |

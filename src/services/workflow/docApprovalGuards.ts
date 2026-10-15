@@ -2,7 +2,8 @@ import { and, asc, eq, or, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { workflowDefinitions, workflowStates, workflowTransitions } from '../../db/schema.js';
 import type { HealthCheckTestResult } from '../../types.js';
-import { recordDefinitionVersion } from './workflowSnapshot.js';
+import { publishedVersionOf, recordDefinitionVersion } from './workflowSnapshot.js';
+import { isUnguardedAction, mergeWorkflowActionRows, publishedWorkflowActions } from '../accounting/publishedWorkflowActions.js';
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
 import type { SeedGuardUpgrade, SeedStepGuard } from './seedGuardUpgrade.js';
 
@@ -72,6 +73,8 @@ export async function upgradeLegacyDocApprovalGuards(): Promise<boolean> {
     const [def] = await tx.select().from(workflowDefinitions)
       .where(eq(workflowDefinitions.code, DOC_APPROVAL_WORKFLOW_CODE)).for('update');
     if (!def) return false;
+    // v10.1.17 (TD-1270): a definition with an unpublished draft is an edited one; the upgrade publishes, so it waits
+    if (Number(def.version) !== publishedVersionOf(def)) return false;
     const states = await tx.select({ id: workflowStates.id, stateKey: workflowStates.stateKey })
       .from(workflowStates).where(eq(workflowStates.workflowDefinitionId, def.id));
     const keyOf = new Map(states.map(s => [s.id, s.stateKey]));
@@ -106,6 +109,7 @@ export async function upgradeLegacyDocApprovalGuards(): Promise<boolean> {
     await recordDefinitionVersion(tx, def.id, {
       title: def.title,
       description: 'مجوز گام‌های بررسی انبار، بررسی مالی و تأیید مستقیم',
+      status: 'published',
     });
     return true;
   });
@@ -142,7 +146,11 @@ export async function findUnguardedDocumentApprovals(db: DbExecutor = orm): Prom
       sql`btrim(coalesce(${workflowTransitions.requiredPermission}, '')) = ''`,
     ))
     .orderBy(asc(workflowDefinitions.id), asc(workflowTransitions.id));
-  return rows.map(r => ({ ...r, title: r.title ?? '', transitionTitle: r.transitionTitle ?? '' }));
+  // v10.1.17 (TD-1270): the published version runs new records while the step tables hold a draft
+  const published = (await publishedWorkflowActions(db, 'document'))
+    .filter(a => isUnguardedAction(a) && (a.toStateKey === 'approved' || a.autoActionKey === 'POST_INVOICE'))
+    .map(a => ({ definitionId: a.definitionId, code: a.code, title: a.title, transitionId: a.transitionId, transitionTitle: a.transitionTitle }));
+  return mergeWorkflowActionRows(rows.map(r => ({ ...r, title: r.title ?? '', transitionTitle: r.transitionTitle ?? '' })), published);
 }
 
 export function buildUnguardedDocumentApprovalHealthTest(rows: UnguardedDocumentApprovalRow[]): HealthCheckTestResult {

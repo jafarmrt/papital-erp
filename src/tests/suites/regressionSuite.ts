@@ -8211,8 +8211,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
-  // Test: v7.0.87 (TD-112): هر ذخیره تعریف ورکفلو یک نسخه کامل با شناسه‌های پایگاه‌داده ثبت می‌کند؛ فرایند تازه از آخرین نسخه
-  // و فرایند در جریان از نسخه خودش پیش می‌رود؛ روت‌های انتشار، بازگردانی، گلوگاه و انطباق حذف شده‌اند
+  // Test: v7.0.87 (TD-112): هر ذخیره تعریف ورکفلو یک نسخه کامل با شناسه‌های پایگاه‌داده ثبت می‌کند؛ فرایند تازه از نسخه
+  // منتشرشده (v10.1.17، TD-1270) و فرایند در جریان از نسخه خودش پیش می‌رود؛ روت‌های rollback، گلوگاه و انطباق حذف شده‌اند
   if (shouldRun('reg_workflow_versions_on_save_td_112', 'td112', 'workflow', 'version')) {
     const tStart = Date.now();
     const testName = 'v7.0.87: saving a workflow design records a new version with real ids and running instances do not get stuck; the history is read-only (TD-112)';
@@ -8274,9 +8274,15 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         violations.push('version 2 does not hold every state and transition with its database id');
       }
 
+      // v10.1.17 (TD-1270, decision ت۱۰): the edit is a draft; a new record runs the published version until it is published
       await WorkflowTransitionExecutor.startInstance({ workflowDefinitionId: defId, entityType, entityId: '2' });
-      const secondAvailable = await availableFor('2');
-      if (secondAvailable.length !== 2) violations.push(`new instance after the edit: ${secondAvailable.length} allowed actions (expected 2)`);
+      const draftAvailable = await availableFor('2');
+      if (draftAvailable.length !== 1) violations.push(`new instance while the edit is a draft: ${draftAvailable.length} allowed actions (expected 1)`);
+      const { publishWorkflowDraft } = await import('../../services/workflow/workflowVersionPublish.js');
+      await publishWorkflowDraft({ id: defId, draftVersion: 2 });
+      await WorkflowTransitionExecutor.startInstance({ workflowDefinitionId: defId, entityType, entityId: '3' });
+      const secondAvailable = await availableFor('3');
+      if (secondAvailable.length !== 2) violations.push(`new instance after publishing the edit: ${secondAvailable.length} allowed actions (expected 2)`);
 
       const firstAfter = await availableFor('1');
       if (firstAfter.length !== 1) {
@@ -8301,7 +8307,6 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (one.status !== 200 || one.body?.version !== 1) violations.push(`viewing version 1: HTTP ${one.status}`);
       for (const [method, url] of [
         ['post', `/api/workflow/definitions/${defId}/rollback`],
-        ['post', `/api/workflow/definitions/${defId}/publish`],
         ['get', '/api/workflow/analytics/bottlenecks'],
         ['get', '/api/workflow/analytics/compliance'],
       ] as const) {

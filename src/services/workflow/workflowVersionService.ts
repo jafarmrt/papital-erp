@@ -5,8 +5,8 @@ import { eq, and, desc } from 'drizzle-orm';
 import { WorkflowVersionDTO } from './contracts/workflowDomainContracts.js';
 
 /**
- * v7.0.87 (TD-112): تاریخچه نسخه‌های تعریف ورکفلو فقط‌خواندنی است. نسخه‌ها در هر ذخیره تعریف ثبت می‌شوند
- * (recordDefinitionVersion در workflowSnapshot.ts)؛ انتشار دستی و بازگردانی حذف شدند.
+ * v7.0.87 (TD-112): نسخه‌ها در هر ذخیره تعریف ثبت می‌شوند (recordDefinitionVersion در workflowSnapshot.ts). v10.1.17
+ * (TD-1270): each carries its status; publishing and reverting live in workflowVersionPublish.ts and never rewrite a version.
  */
 export class WorkflowVersionService {
   /**
@@ -25,7 +25,8 @@ export class WorkflowVersionService {
       title: v.title,
       description: v.description || '',
       dslJson: (v.dslJson as Record<string, unknown>) || {},
-      createdAt: v.createdAt || ''
+      createdAt: v.createdAt || '',
+      status: v.status,
     }));
   }
 
@@ -51,7 +52,8 @@ export class WorkflowVersionService {
       title: versionEntry.title,
       description: versionEntry.description || '',
       dslJson: (versionEntry.dslJson as Record<string, unknown>) || {},
-      createdAt: versionEntry.createdAt || ''
+      createdAt: versionEntry.createdAt || '',
+      status: versionEntry.status,
     };
   }
 }

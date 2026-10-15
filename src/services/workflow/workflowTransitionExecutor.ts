@@ -23,7 +23,7 @@ import { WorkflowQuorumService } from './workflowQuorumService';
 import { WorkflowDelegationService, type ActingDelegation } from './workflowDelegationService.js';
 import { ROW_ADVISORY_LOCK_NAMESPACES } from '../../lib/advisoryLock.js';
 import { lockWorkflowEntity, runWorkflowTransitionAction, workflowActionPermissions, workflowEntityExists } from './workflowTransitionActions.js';
-import { buildDefinitionSnapshot, isUsableSnapshot, snapshotTransitionsOf } from './workflowSnapshot.js';
+import { buildDefinitionSnapshot, isUsableSnapshot, publishedVersionOf, snapshotTransitionsOf } from './workflowSnapshot.js';
 import { describeUnmetWorkflowRule, describeWorkflowRule } from '../../lib/workflowRuleText.js';
 import { workflowEntityTypeLabel } from '../../lib/workflow/workflowEntityLabels.js';
 import type { RuleExpression } from '../ruleEngine.service.js';
@@ -442,7 +442,9 @@ export class WorkflowTransitionExecutor {
         throw new ConflictError(`این ${workflowEntityTypeLabel(params.entityType)} گردش کار در جریان دیگری دارد؛ نخست آن را به پایان برسانید.`, undefined, 'WF_INSTANCE_ALREADY_OPEN');
       }
 
-      const targetVersionNumber = params.definitionVersion || def.version || 1;
+      // v10.1.17 (TD-1270, D-06 part D): a new record starts with the published version, never an unpublished draft
+      const publishedVersion = publishedVersionOf(def);
+      const targetVersionNumber = params.definitionVersion || publishedVersion;
 
       // Query explicit published version snapshot from workflowDefinitionVersions
       const [versionSnapshotEntry] = await tx.select().from(workflowDefinitionVersions).where(and(
@@ -455,11 +457,16 @@ export class WorkflowTransitionExecutor {
 
       if (isUsableSnapshot(storedSnapshot)) {
         snapshotDsl = storedSnapshot;
+      } else if (targetVersionNumber !== (Number(def.version) || targetVersionNumber)) {
+        // the step tables hold another version (a draft); building the snapshot from them would start the draft
+        throw new ConflictError(`نسخه ${targetVersionNumber} گردش کار «${def.title}» تصویر قابل اجرا ندارد؛ پیش‌نویس را منتشر کنید یا به نسخه دیگری برگردانید.`, undefined, 'WF_PUBLISHED_VERSION_UNUSABLE');
       } else {
         // v7.0.87 (TD-112): بدون نسخه، یا نسخه قدیمی که payload خام طراح را (بدون شناسه پایگاه‌داده) نگه می‌داشت:
         // تصویر از جدول‌های جاری ساخته می‌شود؛ ردیف نسخه فقط وقتی نبود ثبت می‌شود (نسخه ثبت‌شده هرگز بازنویسی نمی‌شود)
         snapshotDsl = await buildDefinitionSnapshot(tx, def.id, targetVersionNumber);
         if (!versionSnapshotEntry) {
+          const [published] = await tx.select({ id: workflowDefinitionVersions.id }).from(workflowDefinitionVersions)
+            .where(and(eq(workflowDefinitionVersions.definitionId, def.id), eq(workflowDefinitionVersions.status, 'published')));
           await tx.insert(workflowDefinitionVersions).values({
             definitionId: def.id,
             version: targetVersionNumber,
@@ -467,7 +474,8 @@ export class WorkflowTransitionExecutor {
             description: `نسخه اولیه تولیدشده سیستمی (${targetVersionNumber})`,
             dslJson: snapshotDsl,
             createdBy: params.userId || null,
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            status: published ? 'retired' : 'published',
           });
         }
       }

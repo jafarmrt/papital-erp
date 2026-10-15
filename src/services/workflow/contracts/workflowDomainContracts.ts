@@ -65,6 +65,8 @@ export interface WorkflowVersionDTO {
   description: string;
   dslJson: Record<string, unknown>;
   createdAt: string;
+  /** v10.1.17 (TD-1270): draft, published or retired */
+  status: string;
 }
 
 export interface IWorkflowVersionService {
