@@ -2,6 +2,7 @@ import { DollarSign, Save } from 'lucide-react';
 import { PieceworkTask } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
 import { formatCurrencyLabel } from '../../utils';
+import { normalizeDecimalString } from '../../lib/numericInput';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 
@@ -89,9 +90,11 @@ export function PieceworkRatesTab({
                       </td>
                       <td className="p-3 text-center">
                         <input
-                          type="number"
-                          min="0"
-                          step="any"
+                          type="text"
+                          inputMode="decimal"
+                          dir="ltr"
+                          autoComplete="off"
+                          aria-label={`نرخ اختصاصی ${task.title}`}
                           defaultValue={currentVal}
                           key={`${task.id}-${currentVal}`}
                           id={`custom-rate-${task.id}`}
@@ -110,8 +113,9 @@ export function PieceworkRatesTab({
                             onClick={() => {
                               const input = document.getElementById(`custom-rate-${task.id}`) as HTMLInputElement;
                               if (input) {
-                                // v9.0.284 (TD-809): متن خام به سرور می‌رود تا خالی یا منفی رد شود، نه صفر
-                                onSaveCustomRate(task.id, input.value);
+                                // v9.0.284 (TD-809): متن خام به سرور می‌رود تا خالی یا منفی رد شود، نه صفر؛ v10.1.18 (TD-1273): با
+                                // ارقام لاتین، چون کادر عدد دیگر ارقام فارسی را دور نمی‌ریزد
+                                onSaveCustomRate(task.id, normalizeDecimalString(input.value));
                               }
                             }}
                             className="px-3 py-1 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer transition-all"

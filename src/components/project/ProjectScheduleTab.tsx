@@ -18,6 +18,7 @@ import {
   type ScheduleLogItem, type ScheduleRowRef
 } from '../../lib/projects/scheduleWorkLog';
 import toast from 'react-hot-toast';
+import { DecimalInput } from '../common/DecimalInput';
 
 interface ProjectScheduleTabProps {
   project: ProductionProject;
@@ -807,12 +808,11 @@ export default function ProjectScheduleTab({
 
                                   {/* Qty & Rate */}
                                   <div className="sm:col-span-2 flex items-center gap-1">
-                                    <input
-                                      type="number"
+                                    <DecimalInput
                                       min="1"
                                       disabled={!canEdit}
                                       value={task.quantity}
-                                      onChange={(e) => handleUpdateTask(stg.id, p.id, tIdx, 'quantity', Number(e.target.value) || 0)}
+                                      onValueChange={(v) => handleUpdateTask(stg.id, p.id, tIdx, 'quantity', Number(v) || 0)}
                                       placeholder="تعداد"
                                       className="w-full px-1.5 py-1 border border-slate-300 rounded text-center font-mono text-xs"
                                     />

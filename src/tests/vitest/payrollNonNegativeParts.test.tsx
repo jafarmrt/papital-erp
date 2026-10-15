@@ -31,7 +31,9 @@ const inputUnder = (label: RegExp) => screen.getByText(label).parentElement?.que
 
 // v9.0.266 (TD-804, decision t1 «الف»): bonuses, deductions and the advance deduction of a payslip are never negative
 describe('payslip parts are non-negative (TD-804)', () => {
-  it('turns a negative bonus, deduction or advance deduction into zero and marks the fields min 0', () => {
+  // v10.1.18 (TD-1273): the fields are text fields with the decimal keypad; a negative amount is refused under the
+  // field and never reaches the payslip, instead of the old min attribute and silent zero
+  it('refuses a negative bonus, deduction or advance deduction under the field and never passes it on', () => {
     const setters = renderModal();
     const fields: Array<[HTMLInputElement, ReturnType<typeof vi.fn>]> = [
       [inputUnder(/پاداش \/ اضافه کار/), setters.bonuses],
@@ -39,10 +41,10 @@ describe('payslip parts are non-negative (TD-804)', () => {
       [screen.getByPlaceholderText('مبلغی که از مساعده قبلی پرسنل کسر می‌شود') as HTMLInputElement, setters.advance],
     ];
     for (const [input, setter] of fields) {
-      expect(input.getAttribute('min')).toBe('0');
       fireEvent.change(input, { target: { value: '-5000' } });
-      expect(setter).toHaveBeenLastCalledWith(0);
-      fireEvent.change(input, { target: { value: '7000' } });
+      expect(input.getAttribute('aria-invalid')).toBe('true');
+      expect(setter.mock.calls.every(([v]) => v >= 0)).toBe(true);
+      fireEvent.change(input, { target: { value: '۷۰۰۰' } });
       expect(setter).toHaveBeenLastCalledWith(7000);
     }
   });

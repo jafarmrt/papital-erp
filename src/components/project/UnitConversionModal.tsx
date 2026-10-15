@@ -2,6 +2,7 @@ import React from 'react';
 import { Scale, X } from 'lucide-react';
 import { COMMON_UNITS, roundToOneDecimal } from './projectInventoryUtils';
 import { toPersianDigits } from '../../utils';
+import { DecimalInput } from '../common/DecimalInput';
 
 interface UnitConversionModalProps {
   isOpen: boolean;
@@ -90,16 +91,15 @@ export function UnitConversionModal({
           <div className="grid grid-cols-2 gap-3 pt-1">
             <div className="space-y-1">
               <label className="font-bold text-slate-700">هر {conversionForm.targetUnit} شامل چند {conversionTarget.originalUnit} است؟</label>
-              <input
-                type="number"
+              <DecimalInput
                 min="0.001"
                 step="any"
                 value={conversionForm.rate}
-                onChange={(e) => setConversionForm({
+                onValueChange={(v) => setConversionForm({
                   ...conversionForm,
                   mode: 'rate',
-                  rate: Number(e.target.value) || 1,
-                  directConvertedQty: Number(e.target.value) > 0 ? Math.ceil(conversionTarget.originalQty / Number(e.target.value)) : 1
+                  rate: Number(v) || 1,
+                  directConvertedQty: Number(v) > 0 ? Math.ceil(conversionTarget.originalQty / Number(v)) : 1
                 })}
                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono font-bold text-slate-900 focus:ring-2 focus:ring-amber-500 focus:outline-none"
               />

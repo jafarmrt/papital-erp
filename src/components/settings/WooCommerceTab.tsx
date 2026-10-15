@@ -7,6 +7,7 @@ import { ShopWarehouseSelect } from './ShopWarehouseSelect';
 import { WcListEmptyRow } from './WcListEmptyRow';
 import type { WarehouseItem } from '../../hooks/queries/useSettingsQueries';
 import { copyToClipboard } from '../../utils/clipboard';
+import { DecimalInput } from '../common/DecimalInput';
 
 interface WooCommerceTabProps {
   wcStoreUrl: string;
@@ -292,10 +293,9 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
             جهت دریافت دستی یک سفارش و صدور فاکتور فروش، شماره سفارش ووکامرس را وارد کنید:
           </p>
           <form onSubmit={handleSyncManualOrder} className="flex gap-2">
-            <input
-              type="number"
+            <DecimalInput
               value={manualOrderId}
-              onChange={(e) => setManualOrderId(e.target.value)}
+              onValueChange={(v) => setManualOrderId(v)}
               placeholder="شماره سفارش (مثلاً 1042)"
               className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-xs bg-white focus:ring-2 focus:ring-blue-500 outline-none"
             />

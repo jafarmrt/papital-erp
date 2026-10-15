@@ -19,6 +19,7 @@ import { NationalIdInput, IranianPhoneInput, BankCardInput, ShebaInput } from '.
 import { PersonnelStatutoryFlags } from './PersonnelStatutoryFlags';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { NobitexPasswordInput } from './NobitexPasswordFields';
+import { DecimalInput } from '../common/DecimalInput';
 
 interface PersonnelFormModalProps {
   isOpen: boolean;
@@ -296,13 +297,12 @@ export function PersonnelFormModal({
               {(formData.salaryType === 'monthly_fixed' || formData.salaryType === 'mixed') && (
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">مبلغ حقوق ماهانه (ریال)</label>
-                  <input
-                    type="number"
+                  <DecimalInput
                     min="0"
                     step="any"
                     placeholder="مثال: 30000000"
                     value={formData.monthlySalary}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, monthlySalary: e.target.value }))}
+                    onValueChange={(v) => setFormData((prev) => ({ ...prev, monthlySalary: v }))}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-left outline-none focus:border-blue-500"
                     dir="ltr"
                   />

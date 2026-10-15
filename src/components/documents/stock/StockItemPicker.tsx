@@ -5,6 +5,7 @@ import { SearchableSelect } from '../../SearchableSelect';
 import type { StockDocumentForm } from '../../../hooks/documents/useStockDocumentForm';
 import { PICK_LIST_URLS } from '../../../lib/permissions/pickLists';
 import { stockInLabels } from '../../../lib/documents/stockInLabels';
+import { DecimalInput } from '../../common/DecimalInput';
 
 interface StockItemPickerProps {
   form: StockDocumentForm;
@@ -99,12 +100,11 @@ export function StockItemPicker({ form, onItemSelect, onAddItem, onCreateItem }:
 
           <div className={actionType === 'in' ? "md:col-span-2" : "md:col-span-2"}>
             <label className="block text-xs font-bold mb-1.5 text-slate-700">تعداد / مقدار</label>
-            <input 
-              type="number" 
+            <DecimalInput 
               min="0" 
               step="any" 
               value={quantity} 
-              onChange={e => setQuantity(e.target.value ? Number(e.target.value) : '')} 
+              onValueChange={(v) => setQuantity(v ? Number(v) : '')} 
               placeholder="0"
               className="w-full border border-slate-200 bg-white rounded-xl text-sm px-3 py-2 text-center font-mono font-bold focus:outline-none focus:ring-2 focus:ring-blue-500" 
               dir="ltr" 
@@ -116,12 +116,11 @@ export function StockItemPicker({ form, onItemSelect, onAddItem, onCreateItem }:
               <label className="block text-xs font-bold mb-1.5 text-slate-700">
                 {production ? `${stockInLabels(docType).unitPrice} (${formatCurrencyLabel('IRR')})` : `قیمت خرید واحد (فی - ${formatCurrencyLabel(currency)})`}
               </label>
-              <input 
-                type="number" 
+              <DecimalInput 
                 min="0" 
                 step="any" 
                 value={unitPrice} 
-                onChange={e => setUnitPrice(e.target.value ? Number(e.target.value) : '')} 
+                onValueChange={(v) => setUnitPrice(v ? Number(v) : '')} 
                 placeholder={production ? 'خالی: میانگین موزون بها' : 'مثال: 100000'}
                 className="w-full border border-slate-200 bg-white rounded-xl text-sm px-3 py-2 text-left font-mono font-bold focus:outline-none focus:ring-2 focus:ring-blue-500" 
                 dir="ltr" 

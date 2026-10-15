@@ -2,6 +2,7 @@ import { Lock, AlertTriangle, Trash2, Package, ShoppingCart, Edit3 } from 'lucid
 import { formatCurrencyLabel, formatPersianNumber, formatPersianPrice } from '../../utils';
 import { Item } from '../../types';
 import { STOCK_VOUCHER_DRAFT_NOTE, stockInLabels } from '../../lib/documents/stockInLabels';
+import { DecimalInput } from '../common/DecimalInput';
 
 export interface DocItemRow {
   item: Item;
@@ -132,12 +133,11 @@ export function DocItemsTable({
                   </td>
                   <td className="p-3">
                     <div className="flex items-center justify-center gap-2">
-                      <input 
-                        type="number" 
+                      <DecimalInput 
                         min="0" 
                         step="any"
                         value={d.quantity} 
-                        onChange={(e) => onUpdateItemQty(i, Number(e.target.value))} 
+                        onValueChange={(v) => onUpdateItemQty(i, Number(v))} 
                         className="w-24 border border-slate-200 rounded-xl px-2.5 py-1 text-center font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" 
                         dir="ltr"
                       />
@@ -153,12 +153,11 @@ export function DocItemsTable({
                               {formatPersianPrice(d.unitPrice, currencyLabel, 4)}
                             </span>
                           ) : (
-                            <input 
-                              type="number" 
+                            <DecimalInput 
                               min="0" 
                               step="any"
                               value={d.unitPrice} 
-                              onChange={(e) => onUpdateItemPrice(i, Number(e.target.value))} 
+                              onValueChange={(v) => onUpdateItemPrice(i, Number(v))} 
                               className="w-32 border border-slate-200 rounded-xl px-2.5 py-1 text-left font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" 
                               dir="ltr"
                             />

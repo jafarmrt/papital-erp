@@ -26,9 +26,9 @@ test('login, issue a final sales invoice and see its journal voucher', async ({ 
   await page.getByRole('button', { name: 'انتخاب کالا / ماده اولیه' }).click();
   await page.getByPlaceholder('جستجو...', { exact: true }).fill(itemCode);
   await page.locator('li', { hasText: itemCode }).first().click();
-  const numbers = page.locator('input[type=number]');
-  await numbers.nth(0).fill('2');
-  await numbers.nth(1).fill('750000');
+  // v10.1.18 (TD-1273): number fields are text fields with the decimal keypad, found by their label
+  await page.getByLabel('تعداد', { exact: true }).fill('2');
+  await page.getByLabel(/^مبلغ واحد/).fill('750000');
   await page.getByRole('button', { name: 'افزودن به فهرست' }).click();
 
   const created = page.waitForResponse(r => r.url().endsWith('/api/documents') && r.request().method() === 'POST');

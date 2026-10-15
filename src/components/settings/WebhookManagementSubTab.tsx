@@ -8,6 +8,7 @@ import { useHasPermission } from '../../contexts/AuthContext';
 import { isEnteredSecret } from '../../lib/secrets/maskedSecret';
 import { WebhookSecretRevealPanel, type RevealedWebhookSecret } from './WebhookSecretRevealPanel';
 import { WEBHOOK_TIMEOUT_DEFAULT_MS, WEBHOOK_TIMEOUT_MAX_MS, WEBHOOK_TIMEOUT_MIN_MS } from '../../lib/events/webhookTimeout';
+import { DecimalInput } from '../common/DecimalInput';
 
 interface WebhookSubscription {
   id: number;
@@ -777,25 +778,23 @@ export function WebhookManagementSubTab() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1">
                   <label className="font-semibold text-slate-700 dark:text-slate-300">سقف تلاش مجدد:</label>
-                  <input
-                    type="number"
+                  <DecimalInput
                     min="1"
                     max="10"
                     value={formData.retryLimit}
-                    onChange={e => setFormData({ ...formData, retryLimit: parseInt(e.target.value, 10) || 3 })}
+                    onValueChange={(v) => setFormData({ ...formData, retryLimit: parseInt(v, 10) || 3 })}
                     className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200"
                   />
                 </div>
 
                 <div className="space-y-1">
                   <label className="font-semibold text-slate-700 dark:text-slate-300">مهلت پاسخ (میلی‌ثانیه):</label>
-                  <input
-                    type="number"
+                  <DecimalInput
                     min={WEBHOOK_TIMEOUT_MIN_MS}
                     max={WEBHOOK_TIMEOUT_MAX_MS}
                     step="500"
                     value={formData.timeoutMs}
-                    onChange={e => setFormData({ ...formData, timeoutMs: parseInt(e.target.value, 10) || WEBHOOK_TIMEOUT_DEFAULT_MS })}
+                    onValueChange={(v) => setFormData({ ...formData, timeoutMs: parseInt(v, 10) || WEBHOOK_TIMEOUT_DEFAULT_MS })}
                     className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200"
                   />
                 </div>

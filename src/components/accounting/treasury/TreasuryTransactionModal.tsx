@@ -16,6 +16,7 @@ import { PartyPurposeFields } from './PartyPurposeFields';
 import { readTreasuryVoucherPreview, type TreasuryVoucherPreview } from '../../../lib/treasury/treasuryVoucherPreview';
 import { personnelPartyName } from '../../../lib/treasury/personnelPartyName';
 import type { BankAccount, Customer, Personnel, FinancialAttachment } from '../../../types';
+import { DecimalInput } from '../../common/DecimalInput';
 
 interface TreasuryTransactionModalProps {
   isOpen: boolean;
@@ -310,13 +311,12 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                   <span>نرخ تسعیر {selectedBank?.currency} (ریال برای هر واحد) *</span>
                   <HelpBadge text="تراکنش حساب ارزی بدون نرخ تسعیر ثبت نمی‌شود؛ سند حسابداری با همین نرخ به ریال تسعیر می‌شود." />
                 </label>
-                <input
-                  type="number"
+                <DecimalInput
                   required
                   min={1}
                   step="any"
                   value={formData.exchangeRate || ''}
-                  onChange={e => setFormData({ ...formData, exchangeRate: Number(e.target.value) || 0 })}
+                  onValueChange={(v) => setFormData({ ...formData, exchangeRate: Number(v) || 0 })}
                   className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono"
                 />
               </div>

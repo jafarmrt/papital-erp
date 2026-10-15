@@ -8,6 +8,7 @@ import { SearchableSelect } from '../SearchableSelect';
 import { STAGES, SOURCES } from '../../hooks/useCRMData';
 import { formatPersianPrice, formatCurrencyLabel, getFutureJalaliDate, extractDateString, isoToJalaliDate } from '../../utils';
 import { IranianPhoneInput } from '../common';
+import { DecimalInput } from '../common/DecimalInput';
 
 interface CRMLeadModalProps {
   isLeadModalOpen: boolean;
@@ -275,12 +276,11 @@ export function CRMLeadModal({
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">احتمال موفقیت (٪)</label>
-              <input
-                type="number"
+              <DecimalInput
                 min="0"
                 max="100"
                 value={leadForm.probability}
-                onChange={(e) => setLeadForm({ ...leadForm, probability: parseInt(e.target.value) || 50 })}
+                onValueChange={(v) => setLeadForm({ ...leadForm, probability: parseInt(v) || 50 })}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500 focus:bg-white transition-all"
               />
             </div>
