@@ -9,7 +9,7 @@ import { runReservationCases } from './stockReservationTests.js';
 import { brief, fixture } from './documentEntryTests.js';
 
 /**
- * Series 10.1, lane L2 (v10.1.8): the item code changes only through its own operation (D-15, TD-1264), website orders
+ * Series 10.1, lane L2 (v10.1.9): the item code changes only through its own operation (D-15, TD-1264), website orders
  * and Excel files with an earlier code still find the item, and the sales invoice picker of an open proforma leaves out
  * that proforma's own reservation (TD-1209). Red on v10.1.6: PUT /items/:id changed the code, the change-code route and
  * the history table did not exist, an order with the old SKU failed, and the picker counted the proforma's reservation.
@@ -17,16 +17,16 @@ import { brief, fixture } from './documentEntryTests.js';
 export async function runItemCodeChangeTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   return runReservationCases(shouldRun, [
     ['reg_item_code_change_operation_d15',
-      'v10.1.8: the item code changes only through change-code with products.change_code and a reason; history and audit rows are written (D-15)',
+      'v10.1.9: the item code changes only through change-code with products.change_code and a reason; history and audit rows are written (D-15)',
       ['d15', 'td1263', 'item', 'code', 'permissions'], changeOperationCase],
     ['reg_woocommerce_order_old_code_d15',
-      'v10.1.8: a WooCommerce order line with an earlier code finds the item and the order log names the old code; a current code wins (D-15)',
+      'v10.1.9: a WooCommerce order line with an earlier code finds the item and the order log names the old code; a current code wins (D-15)',
       ['d15', 'td1263', 'woocommerce', 'item'], wooOldCodeCase],
     ['reg_item_excel_import_old_code_d15',
-      'v10.1.8: an Excel row with an item\'s earlier code edits that item instead of creating another one (D-15)',
+      'v10.1.9: an Excel row with an item\'s earlier code edits that item instead of creating another one (D-15)',
       ['d15', 'td1263', 'item', 'excel'], excelOldCodeCase],
     ['reg_invoice_picker_own_reservation_td_1209',
-      'v10.1.8: the sales invoice item picker of an open proforma leaves out that proforma\'s own reservation (TD-1209)',
+      'v10.1.9: the sales invoice item picker of an open proforma leaves out that proforma\'s own reservation (TD-1209)',
       ['td1209', 'reservation', 'proforma', 'items'], pickerOwnReservationCase],
   ]);
 }

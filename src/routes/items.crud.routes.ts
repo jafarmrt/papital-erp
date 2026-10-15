@@ -39,7 +39,7 @@ const itemPickListValidation = z.object({
     search: z.string().max(200).optional(),
     limit: z.union([z.string(), z.number()]).optional(),
     reserved: z.enum(['1']).optional(),
-    // v10.1.8 (TD-1209): the open proforma being edited; its own reservation is not counted
+    // v10.1.9 (TD-1209): the open proforma being edited; its own reservation is not counted
     excludeDocumentId: numericIdString.optional(),
   }).optional(),
 });
@@ -293,7 +293,7 @@ router.put('/items/:id', authorizePermission('products.edit'), validate(itemUpda
   res.json({ success: true, version: result.item.version, opening_voucher_id: result.openingVoucherId });
 }));
 
-// v10.1.8 (D-15, TD-1264): the code (WooCommerce SKU) changes only here, with its own permission, reason and history
+// v10.1.9 (D-15, TD-1264): the code (WooCommerce SKU) changes only here, with its own permission, reason and history
 router.post('/items/:id/change-code', authorizePermission('products.change_code'), validate(itemCodeChangeSchema), asyncHandler(async (req, res) => {
   const itemId = Number(req.params.id);
   const { code, reason, version } = req.body as { code: string; reason: string; version: number };

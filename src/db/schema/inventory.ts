@@ -202,7 +202,7 @@ export const pendingMaterials = pgTable('pending_materials', {
 }));
 
 /**
- * v10.1.8 (D-15, TD-1264, migration 0111): each change of an item's code through `POST /items/:id/change-code`, written in
+ * v10.1.9 (D-15, TD-1264, migration 0111): each change of an item's code through `POST /items/:id/change-code`, written in
  * the change's transaction. A WooCommerce order line whose SKU is no live item's current code finds its item here
  * (`resolveItemsByCode` in `src/services/items/itemCodeChange.ts`).
  */

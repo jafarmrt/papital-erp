@@ -74,7 +74,7 @@ export function linkedDocumentLabel(docId: number, orders: readonly { id: number
   return ref ? `سفارش ${ref}` : `سند ${formatNumber(docId)}`;
 }
 
-// v10.1.8: after approval the window's order button is «مشاهده / ثبت فاکتور تامین‌کننده» (the desk row's «تفکیک و صدور فاکتور»);
+// v10.1.9: after approval the window's order button is «مشاهده / ثبت فاکتور تامین‌کننده» (the desk row's «تفکیک و صدور فاکتور»);
 // «تفکیک تأمین‌کننده و صدور سفارش خرید» shows only before approval, while bulk delivery shows only after it
 export const BULK_DELIVERY_NO_ORDERS = 'هنوز سفارش خریدی برای این درخواست صادر نشده است؛ ابتدا با «مشاهده / ثبت فاکتور تامین‌کننده» در همین پنجره، یا «تفکیک و صدور فاکتور» در ردیف میز تدارکات، سفارش خرید صادر کنید.';
 export const BULK_DELIVERY_ALL_DELIVERED = 'همه سفارش‌های خرید این درخواست پیش‌تر تحویل انبار شده‌اند.';

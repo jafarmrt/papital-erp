@@ -36,7 +36,7 @@ afterEach(() => {
   toastFn.success.mockReset();
 });
 
-// v10.1.8 (D-15, TD-1264): the item code is the online shop's SKU and changes only through «تغییر کد»
+// v10.1.9 (D-15, TD-1264): the item code is the online shop's SKU and changes only through «تغییر کد»
 describe('item code change window (D-15)', () => {
   it('checks the new code and the reason before sending', () => {
     expect(itemCodeChangeError('NE-100', ' ', 'x')).toBe('کد تازه را بنویسید.');
@@ -93,7 +93,7 @@ describe('item code change window (D-15)', () => {
   });
 });
 
-// v10.1.8 (TD-1209): an open proforma being edited counted its own reservation in «رزرو» of its item picker
+// v10.1.9 (TD-1209): an open proforma being edited counted its own reservation in «رزرو» of its item picker
 describe('the edited proforma leaves out its own reservation (TD-1209)', () => {
   it('asks the pick list without the edited document', () => {
     expect(itemPickWithReservedUrl(null)).toBe(ITEM_PICK_WITH_RESERVED_URL);
@@ -103,7 +103,7 @@ describe('the edited proforma leaves out its own reservation (TD-1209)', () => {
   });
 });
 
-// v10.1.8: bulk delivery without an order named a button the window shows only before approval
+// v10.1.9: bulk delivery without an order named a button the window shows only before approval
 describe('bulk delivery without an order names the button the window shows', () => {
   it('points to the order button of an approved requisition', () => {
     expect(BULK_DELIVERY_NO_ORDERS).toContain('«مشاهده / ثبت فاکتور تامین‌کننده»');

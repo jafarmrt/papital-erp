@@ -615,7 +615,7 @@ export class ItemCatalogService {
       }
       checkOccVersion(prevItem, { entityType: 'Item', entityId: itemId, expectedVersion });
 
-      // v10.1.8 (D-15, TD-1264): the code changes only through POST /items/:id/change-code (422 ITEM_CODE_CHANGE_SEPARATE)
+      // v10.1.9 (D-15, TD-1264): the code changes only through POST /items/:id/change-code (422 ITEM_CODE_CHANGE_SEPARATE)
       assertCodeUnchangedByEdit(code, prevItem.code);
       if (name && name !== prevItem.name) await assertItemNameAvailable(tx, name, itemId);
 

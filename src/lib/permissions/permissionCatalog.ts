@@ -207,6 +207,7 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     permissions: [
       { key: 'reports.view', title: 'مشاهده گزارش‌ها و آمار', description: 'دسترسی به نمودارها، گزارش تراکنش‌ها و پیشخوان' },
       { key: 'audit_logs.view', title: 'مشاهده دفترچه سوابق تغییرات', description: 'مشاهده رویدادهای ثبت، ویرایش، حذف و فعالیت‌های همه کاربران سامانه' },
+      { key: 'reports.sales', title: 'مشاهده گزارش فروش', description: 'گزارش فروش به تفکیک کالا، مشتری، دسته، دوره، پروژه و کانال فروش در «گزارش‌های مدیریتی»؛ بها و سود ناخالص فقط برای دارنده مجوز دیدن بهای کالا' },
     ]
   },
   {

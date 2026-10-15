@@ -17,7 +17,7 @@ export const PICK_LIST_URLS = {
 /** v10.0.258 (TD-1135): فهرست انتخاب کالای فاکتور فروش، با رزرو هر کالا (`ITEM_RESERVED_FIELDS`) */
 export const ITEM_PICK_WITH_RESERVED_URL = `${PICK_LIST_URLS.items}?reserved=1`;
 
-/** v10.1.8 (TD-1209): the picker of an open proforma being edited leaves out that proforma's own reservation */
+/** v10.1.9 (TD-1209): the picker of an open proforma being edited leaves out that proforma's own reservation */
 export function itemPickWithReservedUrl(editingDocumentId: number | null | undefined): string {
   return Number.isInteger(editingDocumentId) && Number(editingDocumentId) > 0
     ? `${ITEM_PICK_WITH_RESERVED_URL}&excludeDocumentId=${editingDocumentId}`

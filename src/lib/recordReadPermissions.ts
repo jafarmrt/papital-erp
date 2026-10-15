@@ -34,7 +34,7 @@ export const READ_PERMISSIONS = {
    */
   projectOptions: [
     'projects.view', 'documents.view', 'documents.create', 'documents.finalize', 'warehouse.view', 'warehouse.in', 'warehouse.out',
-    'piecework.view', 'piecework.log', 'daily_logs.view', 'daily_logs.create', 'accounting.vouchers',
+    'piecework.view', 'piecework.log', 'daily_logs.view', 'daily_logs.create', 'accounting.vouchers', 'reports.sales',
   ],
   /** فهرست کامل طرف حساب‌ها (با یادداشت و نسخه رکورد) فقط با مجوز مشاهده همان بخش (v9.0.137، TD-887، ت۱۰ الف) */
   customers: ['customers.view'],
@@ -46,7 +46,7 @@ export const READ_PERMISSIONS = {
   customerOptions: [
     'customers.view', 'documents.view', 'documents.create', 'documents.finalize', 'warehouse.in', 'warehouse.out', 'warehouse.view', 'products.view', 'crm.view',
     'projects.view', 'procurement.view', 'accounting.view', 'accounting.reports', 'accounting.vouchers', 'accounting.treasury',
-    'accounting.cheques',
+    'accounting.cheques', 'reports.sales',
   ],
   customersExport: ['customers.view'],
   /** کارت حساب و مانده طرف حساب (همان مجوزهای کارت حساب گزارش‌های مالی؛ v9.0.4، TD-416) */
@@ -87,7 +87,7 @@ export const READ_PERMISSIONS = {
    */
   itemOptions: [
     'products.view', 'documents.view', 'documents.create', 'documents.finalize', 'warehouse.view', 'warehouse.in', 'warehouse.out',
-    'audit.view', 'projects.view', 'crm.view', 'procurement.view',
+    'audit.view', 'projects.view', 'crm.view', 'procurement.view', 'reports.sales',
   ],
   /** صفحه هشدار نقطه سفارش (همان کلیدهای صفحه در `PAGE_ACCESS`) */
   itemReorderAlerts: ['products.view', 'warehouse.view'],

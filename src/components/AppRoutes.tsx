@@ -58,6 +58,7 @@ const UsersPage = lazyWithRetry(() => import('../pages/UsersPage'));
 const ActivityLogsPage = lazyWithRetry(() => import('../pages/ActivityLogsPage'));
 const TransactionsPage = lazyWithRetry(() => import('../pages/TransactionsPage'));
 const ReservedItemsReportPage = lazyWithRetry(() => import('../pages/ReservedItemsReportPage'));
+const ManagementReportsPage = lazyWithRetry(() => import('../pages/ManagementReportsPage'));
 const ProjectsPage = lazyWithRetry(() => import('../pages/ProjectsPage'));
 const ProjectInventoryPage = lazyWithRetry(() => import('../pages/ProjectInventoryPage'));
 const ProcurementPage = lazyWithRetry(() => import('../pages/ProcurementPage'));
@@ -233,6 +234,16 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
           <Suspense fallback={<PageLoader />}>
             <MyPayslipsPage />
           </Suspense>
+        } />
+        <Route path="/management-reports" element={
+          <ProtectedRoute page="/management-reports" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+            <ManagementReportsPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/management-reports/:tab" element={
+          <ProtectedRoute page="/management-reports" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+            <ManagementReportsPage />
+          </ProtectedRoute>
         } />
         <Route path="/accounting" element={
           <ProtectedRoute page="/accounting" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>

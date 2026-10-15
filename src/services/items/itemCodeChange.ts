@@ -12,7 +12,7 @@ import { advanceItemCodeCounter } from './itemCodeCounter.js';
 import { assertItemCodeAvailable, guardItemIdentity } from './itemIdentity.js';
 
 /**
- * v10.1.8 (D-15, TD-1264, approved WooCommerce plan §3, answers q7 and q11): an item's code is the WooCommerce SKU, so it
+ * v10.1.9 (D-15, TD-1264, approved WooCommerce plan §3, answers q7 and q11): an item's code is the WooCommerce SKU, so it
  * changes only through this operation (permission `products.change_code`, a required reason), never through
  * `PUT /items/:id` (422 `ITEM_CODE_CHANGE_SEPARATE`). Each change writes an `item_code_history` row and an audit row in its
  * transaction; documents, Kardex, reservations and vouchers hold the item by id and keep pointing to it.

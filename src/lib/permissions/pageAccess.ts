@@ -62,6 +62,16 @@ const ACCOUNTING_TABS = {
 
 const ACCOUNTING_KEYS = [...new Set(Object.values(ACCOUNTING_TABS).flatMap(r => r.gate.anyOf))];
 
+/** v10.1.8 (D-03، طرح گزارش‌های مدیریتی §۵، ت۲): زبانه‌های «گزارش‌های مدیریتی»، هر کدام با کلید API خودش و فهرست‌های انتخاب پالایه‌ها */
+const MANAGEMENT_REPORT_TABS = {
+  '/management-reports/sales': {
+    gate: anyOf('reports.sales'),
+    api: ['GET /api/reports/sales', 'GET /api/customers/options', 'GET /api/items/options', 'GET /api/projects/options', 'GET /api/categories'],
+  },
+} as const satisfies Record<string, PageAccessRule>;
+
+const MANAGEMENT_REPORT_KEYS = [...new Set(Object.values(MANAGEMENT_REPORT_TABS).flatMap(r => r.gate.anyOf))];
+
 const DOCUMENT_ENTRY = ['GET /api/customers/options', 'GET /api/items/options', 'GET /api/items/:id/prices', 'GET /api/documents/next-ref', 'POST /api/documents'];
 
 export const PAGE_ACCESS = {
@@ -94,6 +104,8 @@ export const PAGE_ACCESS = {
   '/transactions': { gate: anyOf('warehouse.view', 'accounting.view'), api: ['GET /api/transactions'] },
   '/accounting': { gate: { anyOf: ACCOUNTING_KEYS }, api: [] },
   ...ACCOUNTING_TABS,
+  '/management-reports': { gate: { anyOf: MANAGEMENT_REPORT_KEYS }, api: [] },
+  ...MANAGEMENT_REPORT_TABS,
   '/invoices': { gate: anyOf('documents.view'), api: ['GET /api/documents'] },
   '/domain-events': { gate: anyOf('events.view'), api: ['GET /api/events/action-rules'] },
   '/workflow-designer': { gate: anyOf('workflow.manage', 'workflow.admin'), api: ['GET /api/workflow/definitions'] },

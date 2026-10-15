@@ -142,6 +142,8 @@ G  scripts/check-version-sync.ts
 3  src/routes/accounting/**
 3  src/services/accounting.service.ts
 3  src/services/accounting/**
+3  src/routes/reports.routes.ts
+3  src/services/reports/**
 3  src/components/accounting/**
 3  src/pages/AccountingPage.tsx
 3  src/hooks/accounting/**
