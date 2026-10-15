@@ -6,7 +6,7 @@ import { invalidatePreset } from '../../lib/queryInvalidation';
 import { errorMessageOf } from '../../utils';
 
 /**
- * v10.1.13 (D-06 part C, OBS-R2-73): what a delegation form reads without the design keys — the scopes of
+ * v10.1.14 (D-06 part C, OBS-R2-73): what a delegation form reads without the design keys — the scopes of
  * `/workflow/delegation-scopes` and the users of `/users/list-simple` (never the full user directory) — the user's own
  * delegations for «تفویض‌های من», and the system admin's «بستن فرایند» (TD-1265).
  */

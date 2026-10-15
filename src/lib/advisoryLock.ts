@@ -69,7 +69,7 @@ export const ROW_ADVISORY_LOCK_NAMESPACES = {
    */
   WORKFLOW_DEFINITION_TYPE: 91070,
   /**
-   * v10.1.13 (D-06 part C, OBS-R2-66): the delegations one user gives; transaction lock keyed by the delegator's id, so two
+   * v10.1.14 (D-06 part C, OBS-R2-66): the delegations one user gives; transaction lock keyed by the delegator's id, so two
    * delegations saved at once never give the same user two deputies for one workflow in one window
    */
   WORKFLOW_DELEGATION_FROM_USER: 91080,

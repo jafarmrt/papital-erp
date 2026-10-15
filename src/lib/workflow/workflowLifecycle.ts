@@ -42,7 +42,7 @@ export function workflowEntityTypeChangeRefusal(definition: { isActive?: number 
 }
 
 /**
- * v10.1.13 (D-06 part C, TD-1265): the system admin's «بستن فرایند» of a running record that cannot move on (a step no one
+ * v10.1.14 (D-06 part C, TD-1265): the system admin's «بستن فرایند» of a running record that cannot move on (a step no one
  * may sign). Only record types whose work goes on without the workflow are closed this way: a sales proforma or draft is
  * finalized or voided from its own page, a manual voucher is approved from the voucher page, a raw material request from
  * its queue. Every other type depends on its workflow and is refused with what to do instead.

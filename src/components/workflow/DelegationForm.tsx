@@ -11,7 +11,7 @@ const FIELD = 'w-full px-3 py-2 text-xs bg-gray-50 dark:bg-gray-700 border borde
 const LABEL = 'block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1';
 
 /**
- * v10.1.13 (D-06 part C, OBS-R2-73): the one delegation form, used by the workflow page's delegation tab and the inbox's
+ * v10.1.14 (D-06 part C, OBS-R2-73): the one delegation form, used by the workflow page's delegation tab and the inbox's
  * «تفویض کارهایم». The deputy comes from `/users/list-simple` (the user may not delegate to themself) and the scope from
  * `/workflow/delegation-scopes`, so an approver without the design keys can fill it; the server refuses an overlapping
  * delegation with its message (decision ت۹).

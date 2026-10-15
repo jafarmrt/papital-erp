@@ -9,7 +9,7 @@ import { OFFLINE_SUBMIT_TITLE, PHONE_TAP_TARGET } from '../../lib/pwa/phoneLayou
 import { useOnlineStatus } from '../../lib/pwa/useOnlineStatus';
 
 /**
- * v10.1.13 (D-06 part C, TD-1265): «بستن فرایند» of a running record that cannot move on, for the system-wide workflow key,
+ * v10.1.14 (D-06 part C, TD-1265): «بستن فرایند» of a running record that cannot move on, for the system-wide workflow key,
  * with a required reason; offered only for record types the server closes (`workflowTerminateRefusal`). A closed record
  * shows that it was closed and why.
  */

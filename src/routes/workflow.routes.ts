@@ -321,7 +321,7 @@ router.post('/definitions/:id/restore', authorizePermission(WORKFLOW_SWITCH_PERM
 
 /**
  * POST /api/workflow/instances/:id/terminate
- * v10.1.13 (D-06 part C, TD-1265): the system admin closes a running record that cannot move on, with a required reason;
+ * v10.1.14 (D-06 part C, TD-1265): the system admin closes a running record that cannot move on, with a required reason;
  * only record types whose work goes on without the workflow (`workflowTerminateRefusal`), else 409.
  */
 router.post('/instances/:id/terminate', authorizePermission(WORKFLOW_TERMINATE_PERMISSION), validate(terminateInstanceSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -390,7 +390,7 @@ router.get('/delegations', authorizePermission('workflow.view', ...WORKFLOW_DELE
 
 /**
  * GET /api/workflow/delegation-scopes
- * v10.1.13 (D-06 part C, OBS-R2-73): the scopes the delegation form offers (workflows not archived, code and title), so
+ * v10.1.14 (D-06 part C, OBS-R2-73): the scopes the delegation form offers (workflows not archived, code and title), so
  * the inbox's «تفویض کارهایم» works without the design keys of `/workflow/definitions`
  */
 router.get('/delegation-scopes', authorizePermission(...WORKFLOW_DELEGATE_PERMISSIONS), asyncHandler(async (_req: AuthenticatedRequest, res) => {

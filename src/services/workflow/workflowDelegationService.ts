@@ -36,7 +36,7 @@ async function delegationWindow(startDate: string, endDate: string): Promise<{ s
 const isAllScope = (scope: string | null | undefined): boolean => ['all', '*'].includes(String(scope ?? 'ALL').trim().toLowerCase());
 
 /**
- * v10.1.13 (D-06 part C, OBS-R2-66): a live (not revoked) delegation of the same delegator whose window meets the given one
+ * v10.1.14 (D-06 part C, OBS-R2-66): a live (not revoked) delegation of the same delegator whose window meets the given one
  * and whose scope meets it: «همه» meets every scope, otherwise the same workflow code.
  */
 export async function findOverlappingDelegation(
@@ -152,7 +152,7 @@ export class WorkflowDelegationService {
     const scope = (params.scope || 'ALL').trim();
     // TD-963 (بخش ۲): تفویض و ردیف ممیزی آن در یک تراکنش ثبت می‌شوند؛ پیش‌تر ردیف ممیزی بیرون از نوشتن تفویض بود
     const inserted = await orm.transaction(async (tx) => {
-      // v10.1.13 (D-06 part C, OBS-R2-66, decision ت۹): the delegations of one delegator are written one at a time, so the
+      // v10.1.14 (D-06 part C, OBS-R2-66, decision ت۹): the delegations of one delegator are written one at a time, so the
       // overlap check below sees a delegation saved at the same moment
       await tx.execute(sql`SELECT pg_advisory_xact_lock(${ROW_ADVISORY_LOCK_NAMESPACES.WORKFLOW_DELEGATION_FROM_USER}::int, ${params.fromUserId}::int)`);
 
@@ -172,7 +172,7 @@ export class WorkflowDelegationService {
         }
       }
 
-      // v10.1.13 (D-06 part C, OBS-R2-66, decision ت۹): one delegator has one deputy per workflow in any moment; a live
+      // v10.1.14 (D-06 part C, OBS-R2-66, decision ت۹): one delegator has one deputy per workflow in any moment; a live
       // delegation whose window and scope meet this one refuses it, naming the delegation to revoke first
       const overlap = await findOverlappingDelegation(tx, { fromUserId: params.fromUserId, scope, startDate, endDate });
       if (overlap) {
@@ -220,7 +220,7 @@ export class WorkflowDelegationService {
    * Get list of delegations for a user or admin
    */
   static async getDelegations(params: { userId: number; userRole?: string; mineOnly?: boolean }) {
-    // v10.1.13 (D-06 part C, OBS-R2-73): «تفویض‌های من» of the inbox asks only the user's own, the system admin included
+    // v10.1.14 (D-06 part C, OBS-R2-73): «تفویض‌های من» of the inbox asks only the user's own, the system admin included
     const isAdmin = isSystemAdminRole(params.userRole) && !params.mineOnly;
 
     let query = orm.select({
@@ -229,7 +229,7 @@ export class WorkflowDelegationService {
       fromUsername: sql<string>`fu.username`,
       toUserFullName: sql<string>`tu.full_name`,
       toUsername: sql<string>`tu.username`,
-      // v10.1.13 (D-06 part C): the scope's workflow title, so the inbox names it without the definition list
+      // v10.1.14 (D-06 part C): the scope's workflow title, so the inbox names it without the definition list
       scopeTitle: sql<string | null>`(SELECT d.title FROM workflow_definitions d WHERE lower(btrim(d.code)) = lower(btrim(${workflowDelegations.scope})) ORDER BY d.id LIMIT 1)`,
       // V3.0.9 (TD-055/BUG): ستون‌ها `timestamp WITHOUT time zone` هستند و نود
       // رشته‌های UTC ISO (با Z که PG نادیده می‌گیرد) را literal ذخیره می‌کند؛ بنابراین
@@ -270,7 +270,7 @@ export class WorkflowDelegationService {
   }
 
   /**
-   * v10.1.13 (D-06 part C, OBS-R2-73): the scopes a delegation form offers besides «همه»: the code and title of every
+   * v10.1.14 (D-06 part C, OBS-R2-73): the scopes a delegation form offers besides «همه»: the code and title of every
    * workflow not archived, so an approver picks a scope without the design permission the definition list asks.
    */
   static async listDelegationScopes(): Promise<Array<{ code: string; title: string }>> {
