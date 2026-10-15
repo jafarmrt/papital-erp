@@ -83,7 +83,7 @@ export default defineConfig(({ mode }) => {
             if (id.includes('/src/components/common/')) {
               return 'common-components';
             }
-            if (id.includes('/src/data/changelogs/') || id.includes('/src/data/appInfoAndChangelog')) {
+            if (id.includes('/src/data/changelogs/')) {
               return 'changelog-data';
             }
           },

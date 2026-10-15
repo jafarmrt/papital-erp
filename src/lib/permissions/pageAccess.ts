@@ -122,8 +122,6 @@ export const PAGE_ACCESS = {
   '/users': { gate: anyOf('users.manage', 'roles.manage'), api: ['GET /api/users', 'GET /api/roles', 'GET /api/permissions'] },
   '/settings': { gate: { anyOf: SETTINGS_PAGE_KEYS }, api: ['GET /api/settings'] },
   '/activity-logs': { gate: anyOf('audit_logs.view'), api: ['GET /api/activity-logs', 'GET /api/activity-logs/filters'] },
-  // صفحه ایستا: یادداشت‌های نسخه از خود بسته مرورگر خوانده می‌شود
-  '/changelog': { gate: anyOf('settings.manage'), api: [] },
 } as const satisfies Record<string, PageAccessRule>;
 
 export type PagePath = keyof typeof PAGE_ACCESS;

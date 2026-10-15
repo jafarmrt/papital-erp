@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.1.15 — وب‌سایت، ایمیل و اینستاگرام طرف حساب (N-02 بخش ۱)
+- Party website, e-mail and Instagram with one validation rule (migration 0112), call / WhatsApp / mail links, Excel columns; the intro and updates page is removed and the version comes from /api/health. Test: reg_customer_contact_channels_n02, Vitest customerContactChannels.
+
 ### v10.1.14 — گزارش‌های مدیریتی، بخش ۳: مالیات بر ارزش افزوده (D-03)
 - زبانه تازه «مالیات بر ارزش افزوده» با کلید `accounting.reports` و پیش‌فرض فصل جاری: مالیات فروش و برگشت از سندهای قطعی به تفکیک درصد، سند ارزی با نرخ خودش و هشدار سندهای بی مالیات، ناهمخوان یا بی نرخ؛ گردش حساب مالیات در دفتر کل به تفکیک منبع با سهم پیش‌نویس و فهرست سندهای سازنده تفاوت؛ خروجی اکسل و چاپ.
 

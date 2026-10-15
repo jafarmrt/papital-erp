@@ -8,6 +8,7 @@ import { Customer } from '../../types';
 import { excelRowVersion } from '../../lib/customers/customerVersion';
 import { parsePartyTypeCell, partyTypeCellLabel, type PartyType } from '../../lib/customers/partyTypeCell';
 import { bankNumberCell, phoneCellText } from '../../lib/customers/customerExcelCells';
+import { contactChannelErrors } from '../../lib/customers/contactChannels';
 
 interface CustomerExcelModalProps {
   isOpen: boolean;
@@ -37,6 +38,10 @@ interface CounterpartyPreviewRow {
   accountNumber: string;
   cardNumber: string;
   shaba: string;
+  /** v10.1.15 (N-02 بخش ۱): خالی یعنی «بی تغییر» برای رکورد موجود */
+  website: string;
+  email: string;
+  instagram: string;
   notes: string;
   isExistingMatch: boolean;
   matchType?: 'id' | 'name' | 'phone';
@@ -130,6 +135,9 @@ export function CustomerExcelModal({
         { wch: 18 }, // شماره حساب
         { wch: 20 }, // شماره کارت
         { wch: 26 }, // شماره شبا
+        { wch: 24 }, // وب‌سایت
+        { wch: 26 }, // ایمیل
+        { wch: 18 }, // اینستاگرام
         { wch: 25 }, // یادداشت
       ];
       ws['!cols'] = colWidths;
@@ -164,6 +172,9 @@ export function CustomerExcelModal({
         'شماره حساب': '1234567890',
         'شماره کارت': '6104337890123456',
         'شماره شبا': 'IR120120000000001234567890',
+        'وب‌سایت': 'ariannegin.ir',
+        'ایمیل': 'info@ariannegin.ir',
+        'اینستاگرام': 'ariannegin',
         'یادداشت': 'خریدار عمده زیورآلات فانتزی'
       },
       {
@@ -180,6 +191,9 @@ export function CustomerExcelModal({
         'شماره حساب': '987654321',
         'شماره کارت': '6219861012345678',
         'شماره شبا': 'IR560560000000009876543210',
+        'وب‌سایت': '',
+        'ایمیل': '',
+        'اینستاگرام': '',
         'یادداشت': 'تامین‌کننده اصلی سنگ‌های ژئود و مهره‌ها'
       }
     ];
@@ -188,7 +202,7 @@ export function CustomerExcelModal({
     ws['!cols'] = [
       { wch: 10 }, { wch: 28 }, { wch: 20 }, { wch: 16 }, { wch: 15 },
       { wch: 20 }, { wch: 12 }, { wch: 14 }, { wch: 35 }, { wch: 15 },
-      { wch: 18 }, { wch: 20 }, { wch: 26 }, { wch: 28 }
+      { wch: 18 }, { wch: 20 }, { wch: 26 }, { wch: 24 }, { wch: 26 }, { wch: 18 }, { wch: 28 }
     ];
 
     const wb = xlsx.utils.book_new();
@@ -251,8 +265,15 @@ export function CustomerExcelModal({
           const cardNumber = cardCell.text;
           const shaba = shabaCell.text;
           const notes = getField(row, ['یادداشت', 'توضیحات', 'notes', 'description']);
+          const website = getField(row, ['وب‌سایت', 'وبسایت', 'سایت', 'website']);
+          const email = getField(row, ['ایمیل', 'پست الکترونیک', 'email']);
+          const instagram = getField(row, ['اینستاگرام', 'instagram']);
 
           const issues: string[] = [accountCell, cardCell, shabaCell].flatMap(c => (c.issue ? [c.issue] : []));
+          // v10.1.15 (N-02 بخش ۱): همان قاعده کارساز؛ خانه خالی سنجیده نمی‌شود
+          issues.push(...Object.values(contactChannelErrors({
+            website: website || undefined, email: email || undefined, instagram: instagram || undefined,
+          })));
           if (!name) {
             issues.push('نام طرف حساب الزامی است و خالی می‌باشد.');
           }
@@ -294,6 +315,9 @@ export function CustomerExcelModal({
             accountNumber,
             cardNumber,
             shaba,
+            website,
+            email,
+            instagram,
             notes,
             isExistingMatch,
             matchType,
@@ -356,6 +380,9 @@ export function CustomerExcelModal({
         accountNumber: r.accountNumber,
         cardNumber: r.cardNumber,
         shaba: r.shaba,
+        website: r.website,
+        email: r.email,
+        instagram: r.instagram,
       }));
 
       const res = await fetchJson('/customers/bulk-import', {
