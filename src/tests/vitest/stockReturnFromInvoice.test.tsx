@@ -86,7 +86,7 @@ describe('a sales return from the stock page (TD-788)', () => {
     await screen.findByDisplayValue('RECEIPT-1');
     fireEvent.change(screen.getByDisplayValue('رسید خرید مواد اولیه / کالا (فاکتور خرید)'), { target: { value: 'return' } });
     fireEvent.change(screen.getByPlaceholderText('مثال: 1005'), { target: { value: 'INV-USD-1' } });
-    fireEvent.click(screen.getByText('جستجو'));
+    fireEvent.click(screen.getByText('جست‌وجو'));
     expect(await screen.findByText('گردنبند نقره')).toBeTruthy();
 
     const currency = screen.getByText('واحد پول (ارز سند)').parentElement!.querySelector('select') as HTMLSelectElement;
@@ -116,7 +116,7 @@ describe('the VAT of a sales return from the stock page (TD-774)', () => {
     await screen.findByDisplayValue('RECEIPT-1');
     fireEvent.change(screen.getByDisplayValue('رسید خرید مواد اولیه / کالا (فاکتور خرید)'), { target: { value: 'return' } });
     fireEvent.change(screen.getByPlaceholderText('مثال: 1005'), { target: { value: ref } });
-    fireEvent.click(screen.getByText('جستجو'));
+    fireEvent.click(screen.getByText('جست‌وجو'));
     expect(await screen.findByText('گوشواره میخی')).toBeTruthy();
   }
 

@@ -452,7 +452,7 @@ export function useProjectInventory(
     if (materialModalSectionIdx === null) return;
 
     if (!customMaterialForm.name || !customMaterialForm.category) {
-      toast.error('لطفاً عنوان و دسته‌بندی ماده اولیه را وارد نمایید.');
+      toast.error('لطفاً عنوان و دسته‌بندی ماده اولیه را وارد کنید.');
       return;
     }
 

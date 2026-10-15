@@ -90,7 +90,7 @@ export default function TransactionsPage() {
             <Search className="absolute right-3 top-2.5 text-slate-400" size={16} />
             <input 
               type="text" 
-              placeholder="جستجو کالا، کد، سند یا توضیحات..."
+              placeholder="جست‌وجو کالا، کد، سند یا توضیحات..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-3 pr-10 py-1.5 rounded border border-slate-300 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"

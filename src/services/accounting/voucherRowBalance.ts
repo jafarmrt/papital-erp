@@ -50,7 +50,7 @@ function unbalanced(debit: FinancialDecimal | number, credit: FinancialDecimal |
   const c = fin(credit);
   const unit = inRial ? ' (به ریال، هر ردیف ارزی با نرخ خودش)' : '';
   return new UnbalancedVoucherError(
-    `سند تراز نیست${unit}! جمع بدهکار: ${d.toDisplayString()} و جمع بستانکار: ${c.toDisplayString()} می‌باشد (اختلاف: ${d.subtract(c).abs().toDisplayString()})`,
+    `سند تراز نیست${unit}! جمع بدهکار: ${d.toDisplayString()} و جمع بستانکار: ${c.toDisplayString()} است (اختلاف: ${d.subtract(c).abs().toDisplayString()})`,
   );
 }
 

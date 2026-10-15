@@ -51,7 +51,7 @@ export function StockCounterpartyField({ form, personnelList, suppliersList }: S
               setReceiverPersonnelId(picked ? Number(picked.id) : null);
               setBuyerName(picked ? personnelDisplayName(picked) : '');
             }}
-            placeholder="جستجو و انتخاب پرسنل کارگاه..."
+            placeholder="جست‌وجو و انتخاب پرسنل کارگاه..."
             maxResults={100}
             options={personnelList.map((p) => {
               const name = personnelDisplayName(p);

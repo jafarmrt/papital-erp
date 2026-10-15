@@ -3,6 +3,7 @@ import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
 import { RefreshCw, Save, ShieldCheck, Info, Check } from 'lucide-react';
 import { AccountSearchSelect } from '../accounting/AccountSearchSelect';
+import { confirmAction } from '../ConfirmDialogHost';
 import type { Account } from '../../types';
 import { formatPersianNumber } from '../../utils';
 import { postingAccountsOf } from '../../lib/accounting/postingAccount';
@@ -71,7 +72,11 @@ export function AccountingSettingsTab({ currentUser, canSeedDefaults = true }: {
   };
 
   const handleSeedDefault = async () => {
-    const ok = window.confirm('کدینگ استاندارد حساب‌ها (گروه‌ها، معین و تفصیلی‌های پیش‌فرض) مستقر و همگام شود؟');
+    const ok = await confirmAction({
+      title: 'استقرار کدینگ پیش‌فرض',
+      message: 'کدینگ استاندارد حساب‌ها (گروه‌ها، معین و تفصیلی‌های پیش‌فرض) مستقر و همگام شود؟',
+      confirmText: 'بله، مستقر شود',
+    });
     if (!ok) return;
     setIsSeeding(true);
     try {

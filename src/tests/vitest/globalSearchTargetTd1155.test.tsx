@@ -40,7 +40,7 @@ describe('global search result target (TD-1155)', () => {
         </MemoryRouter>
       </SearchProvider>,
     );
-    const input = screen.getByPlaceholderText(/جستجوی سراسری/);
+    const input = screen.getByPlaceholderText(/جست‌وجوی سراسری/);
     fireEvent.focus(input);
     fireEvent.change(input, { target: { value: 'گردن' } });
     const result = await screen.findByText('گردنبند ماه');

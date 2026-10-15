@@ -72,7 +72,7 @@ async function searchReturnInvoice(ref: string): Promise<void> {
   await screen.findByDisplayValue('RECEIPT-1');
   fireEvent.change(screen.getByDisplayValue('رسید خرید مواد اولیه / کالا (فاکتور خرید)'), { target: { value: 'return' } });
   fireEvent.change(screen.getByPlaceholderText('مثال: 1005'), { target: { value: ref } });
-  fireEvent.click(screen.getByText('جستجو'));
+  fireEvent.click(screen.getByText('جست‌وجو'));
 }
 
 describe('the reference invoice of a sales return by fiscal year (TD-782)', () => {

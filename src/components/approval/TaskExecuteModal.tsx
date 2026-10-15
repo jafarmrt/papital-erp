@@ -197,7 +197,7 @@ export function TaskExecuteModal({
             <textarea
               value={comment}
               onChange={(e) => onCommentChange(e.target.value)}
-              placeholder={isRequisition ? "دستور خرید یا تامین‌کننده مدنظر و دلایل تایید/رد..." : "توضیحات تایید کالا، بررسی موجودی، یا دلیل رد را در اینجا درج نمایید..."}
+              placeholder={isRequisition ? "دستور خرید یا تامین‌کننده مدنظر و دلایل تایید/رد..." : "توضیحات تایید کالا، بررسی موجودی، یا دلیل رد را در اینجا درج کنید..."}
               className="w-full text-sm sm:text-xs p-2.5 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               rows={3}
             />

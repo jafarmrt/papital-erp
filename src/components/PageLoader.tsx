@@ -8,7 +8,7 @@ export function PageLoader({ message = 'در حال بارگذاری صفحه...
           <Loader2 className="w-6 h-6 text-amber-600 animate-spin" />
         </div>
       </div>
-      <p className="mt-4 text-xs font-medium text-slate-500 tracking-wide">{message}</p>
+      <p className="mt-4 text-xs font-medium text-slate-500">{message}</p>
     </div>
   );
 }

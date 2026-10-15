@@ -65,7 +65,7 @@ export function ReorderOrderFields(props: ReorderOrderFieldsProps) {
             <SearchableSelect
               value={props.supplierName}
               onChange={props.onSupplierChange}
-              placeholder="-- انتخاب یا جستجوی طرف‌حساب --"
+              placeholder="-- انتخاب یا جست‌وجوی طرف‌حساب --"
               options={props.supplierOptions}
               className="w-full"
             />

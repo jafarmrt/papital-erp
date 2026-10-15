@@ -122,7 +122,7 @@ export function WorkflowDelegationTab() {
           <Search className="w-4 h-4 absolute right-3 top-2.5 text-gray-400" />
           <input
             type="text"
-            placeholder="جستجو در نام، حوزه یا دلیل..."
+            placeholder="جست‌وجو در نام، حوزه یا دلیل..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pr-9 pl-3 py-1.5 text-xs bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-hidden focus:border-indigo-500 dark:text-white"

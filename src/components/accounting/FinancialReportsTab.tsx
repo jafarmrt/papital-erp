@@ -141,7 +141,7 @@ export function FinancialReportsTab({
 
   const handleApplyLedgerFilter = () => {
     if (!selectedLedgerAccountId) {
-      toast.error('لطفاً یک حساب برای مشاهده گردش انتخاب نمایید');
+      toast.error('لطفاً یک حساب برای مشاهده گردش انتخاب کنید');
       return;
     }
     void onFetchLedger(Number(selectedLedgerAccountId), startDate || undefined, endDate || undefined);

@@ -429,7 +429,7 @@ export class VoucherService {
       if (existing.status !== 'draft') {
         const statusLabel = existing.status === 'approved' ? 'تاییدشده' : existing.status === 'permanent' ? 'دائم و قطعی' : existing.status;
         throw new BusinessLogicError(
-          `اسناد با وضعیت «${statusLabel}» به دلیل رعایت الزامات تغییرناپذیری دفتر روزنامه قابل ویرایش مستقیم نیستند. برای اعمال هرگونه تغییر، منحصراً از فرایند استاندارد «صدور سند اصلاحی» یا «ابطال سند» استفاده نمایید.`
+          `اسناد با وضعیت «${statusLabel}» به دلیل رعایت الزامات تغییرناپذیری دفتر روزنامه قابل ویرایش مستقیم نیستند. برای اعمال هرگونه تغییر، منحصراً از فرایند استاندارد «صدور سند اصلاحی» یا «ابطال سند» استفاده کنید.`
         );
       }
 
@@ -505,10 +505,10 @@ export class VoucherService {
       await assertVoucherWithoutSource(tx, existing, 'حذف نمی‌شود'); // v9.0.294 (TD-552، ت۸)
       await this.assertNoActiveReversal(tx, existing, 'حذف نمی‌شود');
       if (existing.status === 'permanent') {
-        throw new BusinessLogicError('اسناد دائم و قطعی‌شده حسابداری قابل حذف مستقیم نیستند. برای بی‌اثر کردن سند، از گزینه «صدور سند برگشتی (ابطال سند)» استفاده نمایید.');
+        throw new BusinessLogicError('اسناد دائم و قطعی‌شده حسابداری قابل حذف مستقیم نیستند. برای بی‌اثر کردن سند، از گزینه «صدور سند برگشتی (ابطال سند)» استفاده کنید.');
       }
       if (existing.status === 'approved') {
-        throw new BusinessLogicError('اسناد تاییدشده حسابداری به دلیل اثرگذاری در دفاتر و گزارش‌ها قابل حذف مستقیم نیستند. برای حذف، ابتدا سند را به وضعیت «پیش‌نویس» برگردانید یا در صورت نیاز از «صدور سند برگشتی (ابطال سند)» استفاده نمایید.');
+        throw new BusinessLogicError('اسناد تاییدشده حسابداری به دلیل اثرگذاری در دفاتر و گزارش‌ها قابل حذف مستقیم نیستند. برای حذف، ابتدا سند را به وضعیت «پیش‌نویس» برگردانید یا در صورت نیاز از «صدور سند برگشتی (ابطال سند)» استفاده کنید.');
       }
 
       await this.checkFiscalPeriodOpen(existing.date, tx);

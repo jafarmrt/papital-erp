@@ -137,7 +137,7 @@ export default function InventoryStatusPage() {
       {error && (
         <ErrorStateView
           title="گزارش تحلیلی انبار دریافت نشد"
-          description="در واکشی اطلاعات آماری انبار مشکلی رخ داده است. برای تلاش مجدد روی دکمه زیر کلیک نمایید."
+          description="در واکشی اطلاعات آماری انبار مشکلی رخ داده است. برای تلاش مجدد روی دکمه زیر کلیک کنید."
           onRetry={loadData}
           compact
         />

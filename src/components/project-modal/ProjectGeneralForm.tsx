@@ -97,7 +97,7 @@ export const ProjectGeneralForm: React.FC<ProjectGeneralFormProps> = ({
             }))}
             value={selectedCustomerId ? String(selectedCustomerId) : ''}
             onChange={(val) => onCustomerSelect(val ? Number(val) : null)}
-            placeholder="جستجو و انتخاب مشتری..."
+            placeholder="جست‌وجو و انتخاب مشتری..."
             className="w-full"
           />
           {selectedCustomer && (
@@ -176,7 +176,7 @@ export const ProjectGeneralForm: React.FC<ProjectGeneralFormProps> = ({
               attachments={attachments}
               onChange={setAttachments}
               title="پیوست‌ها و فایل‌های سفارش مشتری (فایل اکسل سفارش، فاکتور، طرح یا تصویر نمونه)"
-              helperText="فایل‌های ارسالی مشتری نظیر فایل اکسل سفارش، پی‌دی‌اف، نمونه طرح یا فاکتور را اینجا ضمیمه نمایید."
+              helperText="فایل‌های ارسالی مشتری نظیر فایل اکسل سفارش، پی‌دی‌اف، نمونه طرح یا فاکتور را اینجا ضمیمه کنید."
               maxFiles={12}
             />
           </div>

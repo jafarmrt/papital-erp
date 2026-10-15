@@ -119,7 +119,7 @@ export function DailyLogsMentionsWidget({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="جستجو در متن گزارش، همکار یا پروژه..."
+            placeholder="جست‌وجو در متن گزارش، همکار یا پروژه..."
             className="w-full pl-8 pr-8 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 text-slate-700"
           />
           <Search size={13} className="absolute right-2.5 top-2.5 text-slate-400" />
