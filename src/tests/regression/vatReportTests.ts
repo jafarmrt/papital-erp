@@ -12,11 +12,11 @@ const TAX_OFFICE_NAME = 'اداره امور مالیاتی';
  * Series 10.1, D-03 PR3 (reports plan §4, owner decisions t12 and t13): the VAT report of the management reports page.
  * Through the real Express routes with real sessions; every case is red on the code before the report (404). The
  * documents and vouchers of a case are moved by SQL to days no other row of the shared test schema holds, so the
- * period figures are exact.
+ * period figures are exact, and put back after the case (`DateKeeper`).
  */
 export async function runVatReportTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
-  const cases: Array<[string, string, string[], (h: Harness, wrong: string[]) => Promise<string>]> = [
+  const cases: Array<[string, string, string[], (h: Harness, wrong: string[], keep: DateKeeper) => Promise<string>]> = [
     ['reg_vat_report_documents_d03',
       'v10.1.13: the VAT report sums final sales invoices and returns of the period by VAT percent, a foreign invoice at its own rate, leaves out a voided invoice, a proforma and a foreign invoice without a rate, and lists the documents to check (D-03)',
       ['d03', 'reports', 'vat', 'return', 'currency'], vatDocumentsCase],
@@ -33,8 +33,15 @@ export async function runVatReportTests(shouldRun: ShouldRun): Promise<TestCaseR
     let h: Harness | undefined;
     try {
       h = await createHarness();
+      const keep = await DateKeeper.start(h);
       const wrong: string[] = [];
-      const details = await run(h, wrong);
+      let details: string;
+      try {
+        details = await run(h, wrong, keep);
+      } finally {
+        await keep.restore();
+      }
+      await keep.assertNothingLeftEarly();
       if (wrong.length > 0) throw new Error(wrong.join('; '));
       results.push(makeTestCase({ id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart, details }));
     } catch (err) {
@@ -78,18 +85,74 @@ async function freeDay(h: Harness): Promise<string> {
   throw new Error('setup: no free day found');
 }
 
-async function moveDocuments(h: Harness, ids: number[], day: string): Promise<void> {
+/**
+ * What a case moved, put back after it: a voucher left in the 1990s holds Jalali 1375/1376 open, and the invariants
+ * suite then closes later years, which wait for every earlier year with a voucher (TD-544). Each row is recorded the
+ * first time a case touches it; the manual voucher a case adds is deleted.
+ */
+class DateKeeper {
+  private readonly documents = new Map<number, Record<string, unknown>>();
+  private readonly vouchers = new Map<number, Record<string, unknown>>();
+  private readonly added: number[] = [];
+
+  private constructor(private readonly h: Harness, private readonly voucherIdAfter: number, private readonly documentIdAfter: number) {}
+
+  static async start(h: Harness): Promise<DateKeeper> {
+    const [row] = await h.q(`SELECT (SELECT COALESCE(MAX(id), 0) FROM journal_vouchers) AS v, (SELECT COALESCE(MAX(id), 0) FROM documents) AS d`);
+    return new DateKeeper(h, Number(row?.v ?? 0), Number(row?.d ?? 0));
+  }
+
+  async keepDocuments(ids: number[]): Promise<void> {
+    const rows = await this.h.q(`SELECT id, date::text AS date, vat_amount, vat_percent, exchange_rate FROM documents WHERE id = ANY($1::int[])`, [ids]);
+    for (const row of rows) if (!this.documents.has(Number(row.id))) this.documents.set(Number(row.id), row);
+  }
+
+  async keepVouchers(column: 'id' | 'source_document_id', ids: number[]): Promise<void> {
+    const rows = await this.h.q(`SELECT id, date, status FROM journal_vouchers WHERE ${column} = ANY($1::int[])`, [ids]);
+    for (const row of rows) if (!this.vouchers.has(Number(row.id))) this.vouchers.set(Number(row.id), row);
+  }
+
+  addedVoucher(id: number): void {
+    this.added.push(id);
+  }
+
+  async restore(): Promise<void> {
+    for (const id of this.added) {
+      const res = await this.h.del(`/api/accounting/vouchers/${id}`);
+      if (res.status >= 300) throw new Error(`cleanup: deleting voucher ${id} ${brief(res)}`);
+    }
+    for (const [id, v] of this.vouchers) await this.h.q(`UPDATE journal_vouchers SET date = $2, status = $3 WHERE id = $1`, [id, v.date, v.status]);
+    for (const [id, d] of this.documents) {
+      await this.h.q(`UPDATE documents SET date = $2::timestamp, vat_amount = $3, vat_percent = $4, exchange_rate = $5 WHERE id = $1`,
+        [id, d.date, d.vat_amount, d.vat_percent, d.exchange_rate]);
+    }
+  }
+
+  /** no live voucher or document the case made stays before 2000 */
+  async assertNothingLeftEarly(): Promise<void> {
+    const [row] = await this.h.q(
+      `SELECT (SELECT COUNT(*) FROM journal_vouchers WHERE id > $1 AND is_deleted = 0 AND date < '2000-01-01')
+            + (SELECT COUNT(*) FROM documents WHERE id > $2 AND is_deleted = 0 AND date < '2000-01-01') AS n`,
+      [this.voucherIdAfter, this.documentIdAfter],
+    );
+    if (Number(row?.n ?? 0) > 0) throw new Error(`the case left ${String(row?.n)} live vouchers or documents before 2000`);
+  }
+}
+
+async function moveDocuments(h: Harness, keep: DateKeeper, ids: number[], day: string): Promise<void> {
+  await keep.keepDocuments(ids);
   await h.q(`UPDATE documents SET date = $2::date + time '10:00' WHERE id = ANY($1::int[])`, [ids, day]);
 }
 
-async function moveVouchersOf(h: Harness, ids: number[], day: string): Promise<void> {
+async function moveVouchersOf(h: Harness, keep: DateKeeper, ids: number[], day: string): Promise<void> {
+  await keep.keepVouchers('source_document_id', ids);
   await h.q(`UPDATE journal_vouchers SET date = $2 WHERE source_document_id = ANY($1::int[])`, [ids, day]);
 }
 
 const docRow = (r: VatReport, id: number): VatDocumentRow | undefined => r.documents.find(d => d.id === id);
 
 /** Seven final documents, a voided invoice and a proforma moved to one free day */
-async function vatDocumentsCase(h: Harness, wrong: string[]): Promise<string> {
+async function vatDocumentsCase(h: Harness, wrong: string[], keep: DateKeeper): Promise<string> {
   const f = await fixture(h);
   const a = await f.item(10, 400_000);
   const b = await f.item(10, 200_000);
@@ -112,13 +175,14 @@ async function vatDocumentsCase(h: Harness, wrong: string[]): Promise<string> {
   if (voidRes.status !== 200) throw new Error(`setup: voiding ${brief(voidRes)}`);
   const proforma = await made('proforma', await h.post('/api/documents', f.doc('invoice', 'proforma', [{ itemId: a, quantity: 1, unit_price: 900_000, location: f.wh }], { vatPercent: 10 })));
   // legacy states the report must flag: a VAT that is not its percent, a VAT without a percent, a foreign invoice without a rate
+  await keep.keepDocuments([mismatch, noPercent, unconverted]);
   await h.q(`UPDATE documents SET vat_amount = 55000 WHERE id = $1`, [mismatch]);
   await h.q(`UPDATE documents SET vat_percent = 0 WHERE id = $1`, [noPercent]);
   await h.q(`UPDATE documents SET exchange_rate = NULL WHERE id = $1`, [unconverted]);
   const day = await freeDay(h);
   const all = [one, back, euro, noVat, mismatch, noPercent, unconverted, voided, proforma];
-  await moveDocuments(h, all, day);
-  await moveVouchersOf(h, all, day);
+  await moveDocuments(h, keep, all, day);
+  await moveVouchersOf(h, keep, all, day);
 
   const r = await vat(h, `from=${day}&to=${day}`);
   // 1) by percent: 10% = invoice 1 (3,600,000 / 360,000) + the 55,000 invoice, less the return; 9% the EUR invoice in rials
@@ -172,7 +236,7 @@ async function vatDocumentsCase(h: Harness, wrong: string[]): Promise<string> {
 }
 
 /** One day D: an invoice in D, its voucher moved out; another invoice outside D with its voucher in D; a voided invoice reversed in D; a VAT payment and a manual voucher */
-async function vatLedgerCase(h: Harness, wrong: string[]): Promise<string> {
+async function vatLedgerCase(h: Harness, wrong: string[], keep: DateKeeper): Promise<string> {
   const f = await fixture(h);
   const day = await freeDay(h);
   const before = shiftDay(day, -1);
@@ -201,12 +265,13 @@ async function vatLedgerCase(h: Harness, wrong: string[]): Promise<string> {
   const [reversal] = await h.q(`SELECT id, voucher_number, status FROM journal_vouchers WHERE reference_id = $1 AND reference_number LIKE 'REV-V%' AND is_deleted = 0`, [original?.id]);
   if (!reversal) throw new Error('setup: the void posted no reversal voucher');
 
-  await moveDocuments(h, [earlier, voided], before);
-  await moveVouchersOf(h, [earlier, voided], before);
-  await moveDocuments(h, [matched, missing], day);
-  await moveVouchersOf(h, [matched, outside], day);
-  await moveDocuments(h, [outside], after);
-  await moveVouchersOf(h, [missing], after);
+  await moveDocuments(h, keep, [earlier, voided], before);
+  await moveVouchersOf(h, keep, [earlier, voided], before);
+  await moveDocuments(h, keep, [matched, missing], day);
+  await moveVouchersOf(h, keep, [matched, outside], day);
+  await moveDocuments(h, keep, [outside], after);
+  await moveVouchersOf(h, keep, [missing], after);
+  await keep.keepVouchers('id', [Number(reversal.id)]);
   await h.q(`UPDATE journal_vouchers SET date = $2 WHERE id = $1`, [reversal.id, day]);
 
   // a VAT payment to the tax office from a bank, and a manual draft voucher crediting the VAT account
@@ -219,12 +284,15 @@ async function vatLedgerCase(h: Harness, wrong: string[]): Promise<string> {
   if (funding.status !== 201) throw new Error(`setup: funding receipt ${brief(funding)}`);
   const payment = await h.post('/api/accounting/treasury', { ...treasury, type: 'payment', amount: 15_000, partyType: 'other', partyName: TAX_OFFICE_NAME, contraAccountId: vatAccount });
   if (payment.status !== 201) throw new Error(`setup: VAT payment ${brief(payment)}`);
-  await h.q(`UPDATE journal_vouchers SET date = $2, status = 'approved' WHERE id = $1`, [Number((payment.body as { voucherId?: unknown })?.voucherId), day]);
+  const paymentVoucher = Number((payment.body as { voucherId?: unknown })?.voucherId);
+  await keep.keepVouchers('id', [paymentVoucher]);
+  await h.q(`UPDATE journal_vouchers SET date = $2, status = 'approved' WHERE id = $1`, [paymentVoucher, day]);
   const manual = await h.post('/api/accounting/vouchers', {
     date: day, status: 'draft', description: `D03 manual VAT ${h.tag}`,
     items: [{ accountId: cash, debit: 7_000, credit: 0 }, { accountId: vatAccount, debit: 0, credit: 7_000 }],
   });
   if (manual.status !== 201) throw new Error(`setup: manual voucher ${brief(manual)}`);
+  keep.addedVoucher(Number((manual.body as { id?: unknown })?.id));
 
   const r = await vat(h, `from=${day}&to=${day}`);
   const ledger = r.ledger;
