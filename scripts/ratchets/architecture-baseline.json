@@ -111,7 +111,6 @@
     "src/routes/accounting/voucherSync.routes.ts": 1,
     "src/routes/accounting/vouchers.routes.ts": 9,
     "src/routes/auth.routes.ts": 4,
-    "src/routes/crm.routes.ts": 1,
     "src/routes/customers.routes.ts": 5,
     "src/routes/events.routes.ts": 6,
     "src/routes/inventory.routes.ts": 5,

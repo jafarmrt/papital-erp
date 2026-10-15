@@ -1,6 +1,6 @@
-import { and, asc, eq, ilike, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, ilike, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { crmActivities, crmLeads, customers, personnel } from '../../db/schema.js';
+import { crmActivities, crmLeads, customers, personnel, users } from '../../db/schema.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
 
@@ -17,6 +17,8 @@ export interface FollowupFilter {
   /** فقط سررسید امروز و معوق */
   dueOnly?: boolean;
   assignedPersonnelId?: number;
+  /** v10.1.18 (N-02 بخش ۲، ت۳): فقط پیگیری‌های این کاربر (`ownFollowupCondition`)؛ شمارنده‌ها هم همین دامنه را دارند */
+  ownerUserId?: number;
   search?: string;
   page: number;
   limit: number;
@@ -61,6 +63,22 @@ export async function countOpenFollowups(): Promise<number> {
   return countWhere(openFollowupCondition());
 }
 
+/**
+ * v9.0.433 (TD-709) و v10.1.18 (N-02 بخش ۲، ت۳): پیگیری «مال» یک کاربر: مسئولی که شناسه پرسنلش به همین کاربر پیوند دارد، و
+ * برای ردیف قدیمی بی شناسه، نام مسئول (یا ثبت‌کننده) بریده‌شده که دقیقاً نام کامل یا نام کاربری اوست؛ هرگز «شامل». کاربری
+ * که نیست هیچ پیگیری‌ای ندارد. یادآور سررسید و زبانه «پیگیری‌های من» همین شرط را دارند.
+ */
+export async function ownFollowupCondition(userId: number): Promise<SQL> {
+  const [user] = await orm.select({ fullName: users.fullName, username: users.username }).from(users).where(eq(users.id, userId));
+  if (!user) return sql`false`;
+  const names = [...new Set([(user.fullName ?? '').trim(), (user.username ?? '').trim()].filter(Boolean))];
+  const linkedPersonnel = orm.select({ id: personnel.id }).from(personnel).where(and(eq(personnel.userId, userId), eq(personnel.isDeleted, 0)));
+  const byPersonnel = inArray(crmActivities.assignedPersonnelId, linkedPersonnel);
+  const legacyAssignee = sql<string>`btrim(COALESCE(NULLIF(btrim(${crmActivities.assignedTo}), ''), ${crmActivities.loggedBy}, ''))`;
+  const byExactName = names.length > 0 ? and(isNull(crmActivities.assignedPersonnelId), inArray(legacyAssignee, names)) : undefined;
+  return (byExactName ? or(byPersonnel, byExactName) : byPersonnel) as SQL;
+}
+
 async function assigneeCondition(personnelId: number): Promise<SQL> {
   const [person] = await orm.select({ fullName: personnel.fullName }).from(personnel).where(eq(personnel.id, personnelId));
   const byId = eq(crmActivities.assignedPersonnelId, personnelId);
@@ -72,7 +90,10 @@ export async function listFollowups(filter: FollowupFilter) {
   const todayIso = await businessTodayIsoDate();
   const conditions: Array<SQL | undefined> = [eq(crmActivities.isDeleted, 0), hasFollowup, liveLeadActivityCondition(), statusCondition(filter.status ?? 'pending')];
   if (filter.dueOnly) conditions.push(sql`${crmActivities.nextFollowUpDate} <= ${todayIso}::text`);
-  if (filter.assignedPersonnelId) conditions.push(await assigneeCondition(filter.assignedPersonnelId));
+  const scope: Array<SQL | undefined> = [];
+  if (filter.assignedPersonnelId) scope.push(await assigneeCondition(filter.assignedPersonnelId));
+  if (filter.ownerUserId) scope.push(await ownFollowupCondition(filter.ownerUserId));
+  conditions.push(...scope);
   const q = filter.search?.trim();
   if (q) {
     const pattern = containsLikePattern(q);
@@ -109,6 +130,9 @@ export async function listFollowups(filter: FollowupFilter) {
     nextFollowUpTask: crmActivities.nextFollowUpTask,
     isFollowUpCompleted: crmActivities.isFollowUpCompleted,
     createdAt: crmActivities.createdAt,
+    version: crmActivities.version,
+    updatedAt: crmActivities.updatedAt,
+    updatedBy: crmActivities.updatedBy,
     isDeleted: crmActivities.isDeleted,
     leadTitle: crmLeads.title,
     leadCustomerName: crmLeads.customerName,
@@ -128,7 +152,7 @@ export async function listFollowups(filter: FollowupFilter) {
     page: filter.page,
     limit: filter.limit,
     totalPages: Math.max(1, Math.ceil(total / filter.limit)),
-    dueCount: await countWhere(dueFollowupCondition(todayIso)),
-    openCount: await countOpenFollowups(),
+    dueCount: await countWhere(and(dueFollowupCondition(todayIso), ...scope) as SQL),
+    openCount: await countWhere(and(openFollowupCondition(), ...scope) as SQL),
   };
 }

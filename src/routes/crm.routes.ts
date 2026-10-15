@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { eq, desc, and, ilike, sql, gte, lte, or } from 'drizzle-orm';
-import { orm, type DbExecutor } from '../db/drizzle.js';
+import { orm } from '../db/drizzle.js';
 import { crmLeads, crmActivities, customers, users, notifications, personnel } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { authorizePermission } from '../middleware/authorize.js';
+import { authorizePermission, can } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { parsePagination } from '../lib/pagination.js';
 import { isoToJalaliDate, toPersianDigits } from '../utils.js';
@@ -25,10 +25,15 @@ import { isClosedLead } from '../services/crm/leadProforma.js';
 import { setFollowupCompleted } from '../services/crm/crmFollowupStatus.js';
 import { resolveActivityParents } from '../services/crm/crmActivityParents.js';
 import { notifyActivityMentions, resolveActivityMentions } from '../services/crm/crmActivityMentions.js';
-import { CRM_LEAD_CURRENCIES, CRM_LEAD_STAGES, CRM_LEAD_STATUSES, isLeadProbability, normalizeLeadCurrency } from '../lib/crm/leadFields.js';
+import { CRM_LEAD_CURRENCIES, CRM_LEAD_STAGES, CRM_LEAD_STATUSES, CRM_LOST_REASONS, CRM_LOST_REASON_NOTE_MAX, isLeadProbability, normalizeLeadCurrency } from '../lib/crm/leadFields.js';
+import { recordLeadStageChange } from '../services/crm/crmLeadStageHistory.js';
+import { crmFunnelReport } from '../services/crm/crmFunnelReport.js';
+import { resolveLeadLostReason } from '../services/crm/crmLeadLostReason.js';
 import { leadCustomerCondition } from '../services/crm/crmLeadCustomerFilter.js';
 import { canSeePartyBankInfo, withoutBankInfo } from '../services/customers/partyBankInfoAccess.js';
 import { permissionHolderUserIds } from '../services/notifications/notificationRecipients.js';
+import { resolveAssignee } from '../services/crm/crmAssignee.js';
+import { activityAuditDetails, activityAuditSnapshot, softDeleteActivity, updateActivity } from '../services/crm/crmActivityEdit.js';
 
 const WON_LEAD_NOTIFY_PERMISSION = 'crm.manage';
 
@@ -44,6 +49,11 @@ const leadProbabilityInput = decimalInput('احتمال موفقیت')
 const leadStageInput = z.enum(CRM_LEAD_STAGES, { message: 'مرحله پرونده فروش نامعتبر است' });
 const leadStatusInput = z.enum(CRM_LEAD_STATUSES, { message: 'وضعیت پرونده فروش نامعتبر است' });
 const leadCurrencyInput = z.preprocess(normalizeLeadCurrency, z.enum(CRM_LEAD_CURRENCIES, { message: 'ارز پرونده فروش پشتیبانی نمی‌شود (ریال، دلار، یورو، درهم یا پوند)' }));
+// v10.1.18 (N-02 بخش ۲، ت۶): دلیل از دست رفتن از فهرست ثابت؛ الزامی بودنش را `resolveLeadLostReason` می‌سنجد
+const leadLostReasonFields = {
+  lostReason: z.enum(CRM_LOST_REASONS, { message: 'دلیل از دست رفتن پرونده نامعتبر است' }).optional(),
+  lostReasonNote: z.string().max(CRM_LOST_REASON_NOTE_MAX, 'شرح دلیل از دست رفتن بیش از اندازه بلند است').optional(),
+};
 
 const createCrmLeadSchema = z.object({
   body: z.object({
@@ -62,6 +72,7 @@ const createCrmLeadSchema = z.object({
     assignedPersonnelId: z.union([z.number(), z.string(), z.null()]).optional(),
     expectedCloseDate: z.string().optional(),
     notes: z.string().optional(),
+    ...leadLostReasonFields,
   })
 });
 
@@ -83,6 +94,7 @@ const updateCrmLeadSchema = z.object({
     expectedCloseDate: z.string().optional(),
     notes: z.string().optional(),
     status: leadStatusInput.optional(),
+    ...leadLostReasonFields,
   }),
   params: z.object({
     id: numericIdString
@@ -117,32 +129,6 @@ const followupActionSchema = z.object({
     id: numericIdString
   })
 });
-
-// V10-4.1: resolve مسئول از پرسنل — id معتبر => snapshot نام؛ نام بدون id => best-effort اتصال
-async function resolveAssignee(input: { name?: string | null; personnelId?: number | string | null }, db: DbExecutor): Promise<{ name: string; id: number | null }> {
-  const nameStr = String(input.name ?? '').trim();
-
-  if (input.personnelId !== undefined && input.personnelId !== null && String(input.personnelId).trim() !== '') {
-    const pid = Number(input.personnelId);
-    if (Number.isNaN(pid) || pid <= 0) {
-      throw new BadRequestError('شناسه فروشنده/مسئول نامعتبر است');
-    }
-    const [p] = await db.select({ id: personnel.id, fullName: personnel.fullName }).from(personnel).where(eq(personnel.id, pid));
-    if (!p) {
-      throw new NotFoundError('پرسنل انتخاب‌شده یافت نشد');
-    }
-    return { name: p.fullName, id: p.id };
-  }
-
-  if (nameStr) {
-    const [p] = await db.select({ id: personnel.id, fullName: personnel.fullName })
-      .from(personnel)
-      .where(and(eq(personnel.isDeleted, 0), sql`lower(btrim(${personnel.fullName})) = lower(btrim(${String(nameStr)}))`));
-    return { name: nameStr, id: p ? p.id : null };
-  }
-
-  return { name: '', id: null };
-}
 
 function formatLead(l: (Partial<typeof crmLeads.$inferSelect> & Record<string, unknown>) | null | undefined) {
   if (!l) return null;
@@ -390,6 +376,8 @@ router.post('/crm/leads', authorizePermission('crm.manage'), validate(createCrmL
     assignedPersonnelId,
     expectedCloseDate,
     notes,
+    lostReason,
+    lostReasonNote,
   } = req.body;
 
   // حوزه H (TD-309): پرونده تازه هنوز پیش‌فاکتور ندارد؛ «فروش موفق» فقط پس از صدور پیش‌فاکتور (همان قاعده ویرایش)
@@ -400,15 +388,21 @@ router.post('/crm/leads', authorizePermission('crm.manage'), validate(createCrmL
   const currentUser = req.user;
   const authorName = currentUser?.full_name || currentUser?.username || 'فروشنده';
 
+  const initialStage: string = stage || 'lead';
+  // v10.1.18 (N-02 بخش ۲، ت۶): پرونده‌ای که «از دست رفته» ساخته می‌شود دلیل می‌خواهد (۴۲۲ پیش از هر نوشتن)
+  const lost = resolveLeadLostReason({ targetStage: initialStage, existingStage: null, reason: lostReason, note: lostReasonNote });
+
+  // v10.1.18 (N-02 بخش ۲): ساخت پرونده، یادداشت آغاز، ردیف تاریخچه مرحله و ممیزی در یک تراکنش
+  const newLead = await orm.transaction(async (tx) => {
   // V10-4.1: فروشنده مسئول = پرسنل (id) + snapshot نام
-  const assignee = await resolveAssignee({ name: assignedTo, personnelId: assignedPersonnelId }, orm);
+  const assignee = await resolveAssignee({ name: assignedTo, personnelId: assignedPersonnelId }, tx);
 
   // v9.0.5 (TD-418): پیوند به طرف حساب یا ساخت طرف حساب تازه؛ طرف حساب موجود عوض نمی‌شود و اختلاف به یادداشت می‌رود
-  const party = await linkCustomerForLead({ customerId, customerName, phone, company, title });
+  const party = await linkCustomerForLead({ customerId, customerName, phone, company, title }, tx);
 
   const nowIso = systemNowUtcIso();
 
-  const [newLead] = await orm.insert(crmLeads).values({
+  const [newLead] = await tx.insert(crmLeads).values({
     title: title.trim(),
     customerId: party.customerId,
     customerName: customerName || '',
@@ -416,7 +410,8 @@ router.post('/crm/leads', authorizePermission('crm.manage'), validate(createCrmL
     company: company || '',
     contacts: Array.isArray(contacts) ? contacts : [],
     source: source || 'تماس تلفنی',
-    stage: stage || 'lead',
+    stage: initialStage,
+    ...lost,
     estimatedValue: money(estimatedValue || 0),
     currency: currency || 'IRR',
     probability: probability !== undefined ? Number(probability) : 50,
@@ -431,12 +426,13 @@ router.post('/crm/leads', authorizePermission('crm.manage'), validate(createCrmL
     isDeleted: 0
   }).returning();
 
-  if (stage === 'won') {
-    await notifySalesOnWonLead(newLead, authorName, currentUser?.id);
-  }
+  await recordLeadStageChange(tx, {
+    leadId: newLead.id, fromStage: null, toStage: initialStage, assignedPersonnelId: newLead.assignedPersonnelId,
+    lostReason: newLead.lostReason, actor: { id: currentUser?.id, name: authorName },
+  });
 
   // Log initial creation activity
-  await orm.insert(crmActivities).values({
+  await tx.insert(crmActivities).values({
     leadId: newLead.id,
     customerId: newLead.customerId,
     type: 'note',
@@ -456,7 +452,10 @@ router.post('/crm/leads', authorizePermission('crm.manage'), validate(createCrmL
     entity: 'فرصت فروش CRM',
     entityId: String(newLead.id),
     description: `ایجاد فرصت فروش "${newLead.title}" با ارزش ${newLead.estimatedValue}`,
-    ipAddress: req.ip || ''
+    ipAddress: req.ip || '',
+    tx,
+  });
+  return newLead;
   });
 
   res.status(201).json(formatLead(newLead));
@@ -492,7 +491,9 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
     assignedPersonnelId,
     expectedCloseDate,
     notes,
-    status
+    status,
+    lostReason,
+    lostReasonNote,
   } = req.body;
   // حوزه H (TD-309): وضعیت «won» بدون مرحله همان انتقال به «فروش موفق» است و از قاعده پیش‌فاکتور نمی‌گذرد
   const stage: string | undefined = requestedStage !== undefined ? requestedStage : (status === 'won' && existing.stage !== 'won' ? 'won' : undefined);
@@ -529,6 +530,13 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
     }
   }
 
+  // v10.1.18 (N-02 بخش ۲، ت۶): رفتن به «از دست رفته» دلیل می‌خواهد، بیرون آمدن از آن دلیل را پاک می‌کند
+  const targetStage = stage !== undefined ? stage : (existing.stage || 'lead');
+  const lost = resolveLeadLostReason({
+    targetStage, existingStage: existing.stage, existingReason: existing.lostReason, existingNote: existing.lostReasonNote,
+    reason: lostReason, note: lostReasonNote,
+  });
+
   let newStatus = status || existing.status;
   if (stage === 'won') newStatus = 'won';
   else if (stage === 'lost') newStatus = 'lost';
@@ -543,6 +551,7 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
     contacts: contacts !== undefined ? (Array.isArray(contacts) ? contacts : []) : existing.contacts,
     source: source !== undefined ? source : existing.source,
     stage: stage !== undefined ? stage : existing.stage,
+    ...lost,
     estimatedValue: estimatedValue !== undefined ? money(estimatedValue) : existing.estimatedValue,
     currency: currency !== undefined ? currency : existing.currency,
     probability: probability !== undefined ? Number(probability) : existing.probability,
@@ -556,6 +565,10 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
 
   // Log stage change activity if stage changed
   if (stage && stage !== existing.stage) {
+    await recordLeadStageChange(tx, {
+      leadId: id, fromStage: existing.stage, toStage: stage, assignedPersonnelId: updated.assignedPersonnelId,
+      lostReason: updated.lostReason, actor: { id: currentUser?.id, name: authorName },
+    });
     const stageLabels: Record<string, string> = {
       lead: 'مخاطب اولیه',
       qualified: 'ارزیابی و نیازسنجی',
@@ -631,6 +644,10 @@ router.post('/crm/leads/:id/convert-to-customer', authorizePermission('crm.manag
       updatedAt: nowIso
     }).where(eq(crmLeads.id, id)).returning();
 
+    await recordLeadStageChange(tx, {
+      leadId: id, fromStage: lead.stage, toStage: updated.stage || 'proposal', assignedPersonnelId: updated.assignedPersonnelId,
+      actor: { id: currentUser?.id, name: authorName },
+    });
     await tx.insert(crmActivities).values({
       leadId: id,
       customerId: party.customerId,
@@ -748,6 +765,9 @@ router.get('/crm/activities', authorizePermission('crm.view', 'customers.view', 
     nextFollowUpTask: crmActivities.nextFollowUpTask,
     isFollowUpCompleted: crmActivities.isFollowUpCompleted,
     createdAt: crmActivities.createdAt,
+    version: crmActivities.version,
+    updatedAt: crmActivities.updatedAt,
+    updatedBy: crmActivities.updatedBy,
     isDeleted: crmActivities.isDeleted,
     leadTitle: crmLeads.title,
     leadCustomerName: crmLeads.customerName,
@@ -769,6 +789,7 @@ const followupsQuerySchema = z.object({
   query: z.object({
     status: z.enum(['pending', 'completed', 'all']).optional(),
     due: z.enum(['all', 'due']).optional(),
+    scope: z.enum(['mine', 'all']).optional(),
     assignedPersonnelId: numericIdString.optional(),
     search: z.string().max(200).optional(),
     page: numericIdString.optional(),
@@ -780,15 +801,39 @@ router.get('/crm/followups', authorizePermission('crm.view', 'customers.view', '
   const q = req.query as Record<string, string | undefined>;
   const { page } = parsePagination(q, { page: 1, limit: 50 });
   const limit = Math.min(Math.max(Number(q.limit) || 50, 1), 200);
+  // v10.1.18 (N-02 بخش ۲، ت۳، OBS-R2-27): پیش‌فرض فقط پیگیری‌های خود کاربر؛ دارنده `crm.manage` با `scope=all` همه یا با
+  // `assignedPersonnelId` یک فروشنده را می‌بیند. دیگران همیشه فقط پیگیری‌های خودشان را می‌بینند.
+  const manager = await can(req.user, 'crm.manage');
+  const sellerId = manager && q.assignedPersonnelId ? Number(q.assignedPersonnelId) : undefined;
+  const mine = !manager || (q.scope !== 'all' && !sellerId);
   const { rows, ...meta } = await listFollowups({
     status: (q.status as FollowupStatus | undefined) ?? 'pending',
     dueOnly: q.due === 'due',
-    assignedPersonnelId: q.assignedPersonnelId ? Number(q.assignedPersonnelId) : undefined,
+    assignedPersonnelId: sellerId,
+    ownerUserId: mine ? Number(req.user?.id) || -1 : undefined,
     search: q.search,
     page,
     limit,
   });
-  res.json({ ...meta, data: rows.map(formatActivity) });
+  res.json({ ...meta, scope: mine ? 'mine' : 'all', data: rows.map(formatActivity) });
+}));
+
+// v10.1.18 (N-02 بخش ۲، ت۷): گزارش قیف فروش از تاریخچه مرحله، با بازه روز کسب‌وکار و فروشنده (`crmFunnelReport`)
+const funnelQuerySchema = z.object({
+  query: z.object({
+    fromDate: z.string().optional(),
+    toDate: z.string().optional(),
+    assignedPersonnelId: numericIdString.optional(),
+  }).passthrough(),
+}).passthrough();
+
+router.get('/crm/reports/funnel', authorizePermission('crm.view'), validate(funnelQuerySchema), asyncHandler(async (req, res) => {
+  const q = req.query as Record<string, string | undefined>;
+  res.json(await crmFunnelReport({
+    fromDate: optionalStorageDate(q.fromDate, 'از تاریخ') || undefined,
+    toDate: optionalStorageDate(q.toDate, 'تا تاریخ') || undefined,
+    assignedPersonnelId: q.assignedPersonnelId ? Number(q.assignedPersonnelId) : undefined,
+  }));
 }));
 
 // POST /api/crm/activities - Add call log/action
@@ -936,5 +981,67 @@ function followupStatusHandler(completed: boolean) {
 
 router.put('/crm/activities/:id/complete-followup', authorizePermission('crm.manage'), validate(followupActionSchema), followupStatusHandler(true));
 router.put('/crm/activities/:id/reopen-followup', authorizePermission('crm.manage'), validate(followupActionSchema), followupStatusHandler(false));
+
+// v10.1.18 (N-02 بخش ۲، ت۱ و ت۲): ویرایش و حذف نرم اقدام. فقط دارندگان `crm.manage` اقدام ثبت می‌کنند، پس «ثبت‌کننده یا
+// دارنده crm.manage» همان «دارنده crm.manage» است. ویرایش با نسخه رکورد (۴۰۹ وقتی کهنه است)، زیر قفل ردیف، با ممیزی پیش و
+// پس در همان تراکنش؛ اشاره تازه فقط به کاربر تازه اعلان می‌دهد (`updateActivity` / `softDeleteActivity`).
+const editCrmActivitySchema = z.object({
+  body: z.object({
+    version: z.coerce.number().int().positive('نسخه اقدام لازم است'),
+    type: z.string().max(50).optional(),
+    title: z.string().trim().min(1, 'عنوان اقدام یا تماس الزامی است').max(500).optional(),
+    description: z.string().max(20000).optional(),
+    result: z.string().max(2000).optional(),
+    activityDate: z.string().optional(),
+    nextFollowUpDate: z.string().optional(),
+    nextFollowUpTask: z.string().max(2000).optional(),
+    assignedTo: z.string().optional(),
+    assignedPersonnelId: z.union([z.number(), z.string(), z.null()]).optional(),
+    mentions: z.array(z.coerce.number().int('شناسه کاربر اشاره‌شده باید عدد صحیح باشد').positive('شناسه کاربر اشاره‌شده باید مثبت باشد'))
+      .max(100, 'اقدام حداکثر ۱۰۰ اشاره دارد').optional(),
+  }).strict(),
+  params: z.object({ id: numericIdString }),
+});
+
+router.put('/crm/activities/:id', authorizePermission('crm.manage'), validate(editCrmActivitySchema), asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const currentUser = req.user;
+  const actor = { id: currentUser?.id, name: currentUser?.full_name || currentUser?.username || 'فروشنده' };
+  const outcome = await orm.transaction(async (tx) => {
+    const change = await updateActivity(tx, id, req.body, actor);
+    await logActivity({
+      req,
+      tx,
+      userFullName: actor.name,
+      action: 'UPDATE',
+      entity: 'اقدام و تماس CRM',
+      entityId: String(id),
+      description: `ویرایش اقدام «${change.after.title}»`,
+      details: { ...activityAuditDetails(change.before, change.after), notifiedMentions: change.notified },
+    });
+    return change;
+  });
+  res.json(formatActivity(outcome.after));
+}));
+
+router.delete('/crm/activities/:id', authorizePermission('crm.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const currentUser = req.user;
+  const actor = { id: currentUser?.id, name: currentUser?.full_name || currentUser?.username || 'فروشنده' };
+  await orm.transaction(async (tx) => {
+    const { before } = await softDeleteActivity(tx, id, actor);
+    await logActivity({
+      req,
+      tx,
+      userFullName: actor.name,
+      action: 'DELETE',
+      entity: 'اقدام و تماس CRM',
+      entityId: String(id),
+      description: `حذف اقدام «${before.title}»`,
+      details: { before: activityAuditSnapshot(before) },
+    });
+  });
+  res.json({ message: 'اقدام حذف شد', id });
+}));
 
 export default router;

@@ -2,7 +2,8 @@ import { toPersianDigits } from '../../utils/persianNumber.js';
 
 /**
  * v10.0.211 (TD-1088، طرح حقوق §۳.۳ بند ۶، تصمیم ت۷ الف): قرارداد «فهرست بیمه و مالیات» ماهانه، مشترک سرور
- * (`GET /piecework/reports/statutory`) و پنجره گزارش با خروجی اکسل.
+ * (`GET /piecework/reports/statutory`) و پنجره گزارش با خروجی اکسل. از v10.1.19 (TD-1269) فقط پرسنل دارای بیمه یا مالیات
+ * حقوق در آن ماه در فهرست است.
  */
 
 export interface StatutoryReportRow {
@@ -25,6 +26,18 @@ export interface StatutoryReport {
   rows: StatutoryReportRow[];
   totals: { gross: string; employeeInsurance: string; employerInsurance: string; incomeTax: string };
   draftPayslips: number;
+  /**
+   * v10.1.19 (TD-1269): پرسنلی که فیش تأییدشده این ماه را دارد ولی بیمه و مالیات حقوق ندارد (مشمول نیست یا مبلغش صفر شده)؛
+   * در فهرست و اکسل نمی‌آید و فقط شمرده می‌شود
+   */
+  withoutStatutory: { personnel: number; payslips: number };
+}
+
+/** «۲ نفر با ۳ فیش …» یا تهی */
+export function statutoryReportWithoutNote(report: Pick<StatutoryReport, 'withoutStatutory'>): string | null {
+  const w = report.withoutStatutory;
+  if (!w || w.personnel <= 0) return null;
+  return `${toPersianDigits(String(w.personnel))} نفر با ${toPersianDigits(String(w.payslips))} فیش تأییدشده در این ماه بیمه و مالیات حقوق ندارند و در این فهرست و خروجی اکسل نیامده‌اند.`;
 }
 
 export const STATUTORY_REPORT_COLUMNS = ['نام پرسنل', 'کد پرسنلی', 'کد ملی', 'تعداد فیش', 'حقوق و مزایا (ریال)', 'بیمه سهم کارگر (ریال)', 'بیمه سهم کارفرما (ریال)', 'مالیات حقوق (ریال)'] as const;

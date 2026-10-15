@@ -1,4 +1,5 @@
 import { isoToJalaliDate } from '../../utils/calendarDate.js';
+import { fin } from '../financialDecimal.js';
 import { formatCurrencyLabel } from '../../utils/formatters.js';
 import { formatPersianNumber, toPersianDigits } from '../../utils/persianNumber.js';
 import { rangeLabel, type ReportRange } from './reportPeriods.js';
@@ -35,19 +36,18 @@ export type VatDocumentKind = 'sale' | 'return';
 export const VAT_DOCUMENT_KIND_LABELS: Record<VatDocumentKind, string> = { sale: 'فاکتور فروش', return: 'برگشت از فروش' };
 
 /**
- * هشدار یک سند:
- * - no_vat: فاکتور فروش ریالی با مبلغ خالص و بی مالیات (شاید فراموش شده باشد)
+ * هشدار یک سند (v10.1.19، TD-1269: فاکتور بی مالیات بر ارزش افزوده عادی است و هشدار ندارد، چون مالیات هر فاکتور اختیاری
+ * است؛ پیش‌تر «no_vat» هر فاکتور ریالی بی مالیات را هشدار می‌داد. این فاکتورها در ردیف «بی مالیات» جمع‌ها می‌آیند):
  * - rate_missing: فاکتور فروش با مالیات و بی درصد (مثل مالیات سفارش برخط که درصدی آن را نمی‌سازد، TD-936)
  * - rate_mismatch: فاکتور فروش که مالیاتش با درصد خودش از مبلغ خالص یکی نیست
  * - unconverted: سند ارزی بی نرخ تبدیل که در جمع‌ها نیامده
  */
-export const VAT_WARNINGS = ['unconverted', 'rate_mismatch', 'rate_missing', 'no_vat'] as const;
+export const VAT_WARNINGS = ['unconverted', 'rate_mismatch', 'rate_missing'] as const;
 export type VatWarning = typeof VAT_WARNINGS[number];
 export const VAT_WARNING_LABELS: Record<VatWarning, string> = {
   unconverted: 'سند ارزی بی نرخ تبدیل؛ در جمع‌ها نیامده',
   rate_mismatch: 'مالیات با درصد سند یکی نیست',
   rate_missing: 'مالیات دارد ولی درصد ندارد',
-  no_vat: 'فاکتور ریالی بی مالیات',
 };
 
 export const VAT_LEDGER_SOURCES = ['document', 'treasury', 'other'] as const;
@@ -212,9 +212,18 @@ export function vatReportSearch(params: Partial<VatReportParams> & { export?: bo
   return query.toString();
 }
 
-/** «۱۰٪»، «۷٫۵٪» یا «نامشخص» */
+/** برچسب ردیف درصد صفر: فاکتور و برگشت بی مالیات بر ارزش افزوده */
+export const VAT_NONE_LABEL = 'بی مالیات';
+
+/** «۱۰٪»، «۷٫۵٪»، «بی مالیات» (درصد صفر، v10.1.19) یا «نامشخص» */
 export function vatRateLabel(percent: number | null): string {
-  return percent === null ? 'نامشخص' : `${formatPersianNumber(percent, 2)}٪`;
+  if (percent === null) return 'نامشخص';
+  return percent === 0 ? VAT_NONE_LABEL : `${formatPersianNumber(percent, 2)}٪`;
+}
+
+/** درصد یک سند: سند با مالیات و بی درصد «نامشخص» است، نه «بی مالیات» */
+export function vatDocumentRateLabel(row: Pick<VatDocumentRow, 'percent' | 'vatOwn'>): string {
+  return vatRateLabel(row.percent === 0 && !fin(row.vatOwn).isZero() ? null : row.percent);
 }
 
 /** «فاکتور فروش ۱۲۳» */
@@ -244,6 +253,7 @@ export function vatReportMeta(report: Pick<VatReport, 'range' | 'ledger'>): Arra
   ];
   if (report.ledger) meta.push(['حساب دفتر کل', `${report.ledger.account.name} (${toPersianDigits(report.ledger.account.code)})`]);
   meta.push(['مالیات خرید', 'در برنامه ثبت نمی‌شود؛ این گزارش فقط مالیات فروش را دارد']);
+  meta.push(['فاکتور بی مالیات', 'مالیات بر ارزش افزوده هر فاکتور اختیاری است؛ فاکتور بی مالیات در ردیف «بی مالیات» می‌آید و هشدار ندارد']);
   return meta;
 }
 

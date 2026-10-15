@@ -62,7 +62,7 @@ function sampleReport(over: Partial<VatReport> = {}): VatReport {
       { ...amounts({ invoiceCount: 1, salesBase: '5000000', salesVat: '450000', returnCount: 0, returnBase: '0', returnVat: '0', netVat: '450000' }), key: '9', percent: 9 },
     ],
     totals: amounts({ invoiceCount: 3, salesBase: '9100000', salesVat: '865000', netVat: '775000' }),
-    warnings: { unconverted: 1, rate_mismatch: 1, rate_missing: 0, no_vat: 0 },
+    warnings: { unconverted: 1, rate_mismatch: 1, rate_missing: 0 },
     ledger: {
       account: { code: '3203', name: 'مالیات بر ارزش افزوده فروش' },
       opening: { total: '100000', draft: '0' },
