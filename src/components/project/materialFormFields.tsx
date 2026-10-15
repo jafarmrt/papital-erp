@@ -1,3 +1,5 @@
+import { DecimalInput } from '../common/DecimalInput';
+
 /**
  * v7.0.140: فیلدهای مشترک فرم ماده اولیه — پیش‌تر در مودال تأیید «مواد در انتظار» (PendingMaterialsPage) و
  * مودال ماده اولیه سفارشی پروژه (AddMaterialModal) تکرار شده بود. هر فرم state خودش را نگه می‌دارد.
@@ -35,12 +37,11 @@ export function MaterialNumberField({ label, value, onChange, bold = true }: { l
   return (
     <div className="space-y-1">
       <label className={LABEL}>{label}</label>
-      <input
-        type="number"
+      <DecimalInput
         min="0"
         step="any"
         value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
+        onValueChange={(v) => onChange(Number(v))}
         className={bold ? NUMBER_INPUT : 'w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono text-slate-800 focus:outline-none'}
       />
     </div>

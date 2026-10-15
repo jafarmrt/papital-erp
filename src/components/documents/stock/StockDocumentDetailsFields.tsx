@@ -13,6 +13,7 @@ import { STOCK_PAGE_DOC_TYPE_LABELS } from '../../../lib/documents/stockDocument
 import { ReturnInvoiceYearChoices } from './ReturnInvoiceYearChoices';
 import { isServerSeriesDocumentType } from '../../../lib/documents/documentRefRules';
 import { PRODUCTION_RECEIPT_NOTE } from '../../../lib/documents/stockInLabels';
+import { DecimalInput } from '../../common/DecimalInput';
 
 interface StockDocumentDetailsFieldsProps {
   form: StockDocumentForm;
@@ -147,13 +148,12 @@ export function StockDocumentDetailsFields({ form, currentUser, warehouses, proj
             ) : (
               <label className="block text-[11px] font-bold mt-2 text-slate-700">
                 درصد مالیات بر ارزش افزوده
-                <input
-                  type="number"
+                <DecimalInput
                   min="0"
                   max="100"
                   step="any"
                   value={returnVatPercent}
-                  onChange={e => setReturnVatPercent(e.target.value === '' ? '' : Number(e.target.value))}
+                  onValueChange={(v) => setReturnVatPercent(v === '' ? '' : Number(v))}
                   className="mt-1 w-full border border-slate-200 bg-slate-50/50 rounded-xl text-sm px-3 py-1.5 text-left font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
                   dir="ltr"
                 />

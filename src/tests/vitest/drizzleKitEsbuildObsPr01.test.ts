@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 /**
- * v10.1.22 (OBS-PR-01, ledger row TD-983): drizzle-kit 0.31 still lists `@esbuild-kit/esm-loader`, whose `core-utils` pinned
+ * v10.1.23 (OBS-PR-01, ledger row TD-983): drizzle-kit 0.31 still lists `@esbuild-kit/esm-loader`, whose `core-utils` pinned
  * esbuild 0.18 with the moderate advisory GHSA-67mh-4wv8-2f99. An npm override gives it the project's own esbuild,
  * so the lock file holds no esbuild older than 0.25 and `npm audit` reports nothing.
  */

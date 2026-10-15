@@ -13,6 +13,7 @@ import { voucherDetailedTypeFromStored, type VoucherDetailedType } from '../../l
 import toast from 'react-hot-toast';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { postingAccountsOf } from '../../lib/accounting/postingAccount';
+import { DecimalInput } from '../common/DecimalInput';
 
 interface VoucherCorrectionModalProps {
   isOpen: boolean;
@@ -383,12 +384,11 @@ export function VoucherCorrectionModal({
                         />
                       </td>
                       <td className="py-2 px-2">
-                        <input
-                          type="number"
+                        <DecimalInput
                           min="0"
                           value={item.debit || ''}
-                          onChange={(e) => {
-                            const val = Number(e.target.value) || 0;
+                          onValueChange={(v) => {
+                            const val = Number(v) || 0;
                             handleItemChange(idx, 'debit', val);
                             if (val > 0) handleItemChange(idx, 'credit', 0);
                           }}
@@ -397,12 +397,11 @@ export function VoucherCorrectionModal({
                         />
                       </td>
                       <td className="py-2 px-2">
-                        <input
-                          type="number"
+                        <DecimalInput
                           min="0"
                           value={item.credit || ''}
-                          onChange={(e) => {
-                            const val = Number(e.target.value) || 0;
+                          onValueChange={(v) => {
+                            const val = Number(v) || 0;
                             handleItemChange(idx, 'credit', val);
                             if (val > 0) handleItemChange(idx, 'debit', 0);
                           }}

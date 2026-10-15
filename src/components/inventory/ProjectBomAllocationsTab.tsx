@@ -16,6 +16,7 @@ import { SearchableSelect } from '../SearchableSelect';
 import { useProjectPermissions } from '../../hooks/useProjectPermissions';
 import { allocationStatusLabel } from '../../lib/projects/allocationLabels';
 import { warehouseLabel } from '../../lib/inventory/warehouseLabel';
+import { DecimalInput } from '../common/DecimalInput';
 
 interface ProjectBomAllocationsTabProps {
   user?: any;
@@ -686,12 +687,11 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
                 {/* Quantity */}
                 <div>
                   <label className="block text-slate-700 font-bold mb-1">مقدار تخصیص:</label>
-                  <input
-                    type="number"
+                  <DecimalInput
                     step="0.01"
                     min="0.01"
                     value={allocateQty}
-                    onChange={(e) => setAllocateQty(e.target.value)}
+                    onValueChange={(v) => setAllocateQty(v)}
                     className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-mono font-bold"
                   />
                 </div>

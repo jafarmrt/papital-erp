@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { formatPersianNumber } from '../../utils';
 import type { ReorderItem } from '../../lib/reorderAlerts/reorderItems';
+import { DecimalInput } from '../common/DecimalInput';
 
 interface ReorderPointEditModalProps {
   item: ReorderItem;
@@ -32,11 +33,10 @@ export function ReorderPointEditModal({ item, saving, onCancel, onSave }: Reorde
             <label className="block text-xs font-bold text-slate-700 mb-1">
               نقطه سفارش جدید (تعداد/مقدار به {item.unit}):
             </label>
-            <input
-              type="number"
+            <DecimalInput
               min="0"
               value={newReorderPoint}
-              onChange={(e) => setNewReorderPoint(e.target.value)}
+              onValueChange={(v) => setNewReorderPoint(v)}
               className="w-full p-2.5 border rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
             />
