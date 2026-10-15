@@ -1,7 +1,10 @@
 {
   "name": "workshop-erp-crm",
   "private": true,
-  "version": "10.1.23",
+  "version": "10.1.24",
+  "engines": {
+    "node": ">=24"
+  },
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -76,7 +79,7 @@
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/morgan": "^1.9.10",
-    "@types/node": "^22.14.0",
+    "@types/node": "^24.19.2",
     "@types/pg": "^8.20.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
