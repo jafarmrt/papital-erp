@@ -77,7 +77,7 @@ export const WorkflowManagementPage: React.FC = () => {
         ]
       });
 
-      // v10.1.6 (TD-1229, decision ت۲۷): a new workflow is active only when its record type has none
+      // v10.1.7 (TD-1229, decision ت۲۷): a new workflow is active only when its record type has none
       if (Number(result?.data?.isActive) !== 1) toast(NEW_WORKFLOW_SAVED_INACTIVE, { duration: 8000 });
       setIsCreateModalOpen(false);
       setNewTitle('');

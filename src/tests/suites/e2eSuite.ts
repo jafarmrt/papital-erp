@@ -203,7 +203,7 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
     });
 
     const user = await createTestUser({ role: 'admin' });
-    // v10.1.6 (TD-1229): the test definition takes the document type only for this start
+    // v10.1.7 (TD-1229): the test definition takes the document type only for this start
     const instance = await WorkflowTransitionExecutor.startInstance({
       workflowDefinitionId: wf.definition.id,
       entityType: 'document',

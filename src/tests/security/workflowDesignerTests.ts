@@ -192,7 +192,7 @@ export async function runWorkflowDesignerTests(shouldRun: ShouldRun): Promise<Te
           transitions: [{ fromStateKey: 'draft', toStateKey: 'done', actionKey: 'ok', title: 'تأیید' }],
         });
         const definitionId = Number(saved?.definition.id);
-        // v10.1.6 (TD-1229): a second document workflow is saved inactive; it takes the type only for this check
+        // v10.1.7 (TD-1229): a second document workflow is saved inactive; it takes the type only for this check
         const { setWorkflowDefinitionActive } = await import('../../services/workflow/workflowDefinitionLifecycle.js');
         replacedDefinition = (await setWorkflowDefinitionActive({ id: definitionId, active: true, replaceActive: true })).replaced?.id ?? null;
         const withStoredRule = async (rule: unknown): Promise<{ docId: number; instanceId: number; transitionId: number }> => {
@@ -311,7 +311,7 @@ export async function runWorkflowDesignerTests(shouldRun: ShouldRun): Promise<Te
         if (Number((await stepOf(ids[1]))?.position_x) === 777) wrong.push('another workflow step was moved');
 
         const own = await stepOf(ids[0]);
-        // v10.1.6 (TD-1229): the design save writes its own audit row; the move adds exactly one more
+        // v10.1.7 (TD-1229): the design save writes its own audit row; the move adds exactly one more
         const logsBefore = (await h.q(`SELECT id FROM activity_logs WHERE entity = 'طرح گردش کار' AND entity_id = $1`, [String(ids[0])])).length;
         const moved = await h.post('/api/workflow/positions', { definitionId: ids[0], positions: [{ id: Number(own?.id), positionX: 333, positionY: 222 }] });
         if (moved.status !== 200) wrong.push(`moving an own step returned ${moved.status}`);

@@ -180,6 +180,20 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
     setReturnVatPercent('');
   }, [actionType]);
 
+  // v10.1.6 (N-06، TD-1262): رسید تولید بی پروژه فقط محصول نهایی، ریالی و بی طرف حساب است؛ با رفتن به آن یا از آن،
+  // اقلام، طرف حساب و ارز سند پیشین پاک می‌شوند تا ماده اولیه یا بهای خرید به رسید تولید نرود
+  const isProductionReceipt = docType === 'production_receipt';
+  useEffect(() => {
+    setDocItems([]);
+    setBuyerName('');
+    setSelectedSupplierObj(null);
+    setUnitPrice('');
+    setSelectedItem('');
+    setSelectedItemObj(null);
+    setCurrency('IRR');
+    setExchangeRate(0);
+  }, [isProductionReceipt]);
+
   useEffect(() => {
     const controller = new AbortController();
     void fetchNextRef(controller.signal);

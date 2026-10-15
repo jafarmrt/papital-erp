@@ -38,7 +38,7 @@ export const INBOX_ENTITY_TABS: ReadonlyArray<{ id: string; label: string }> = [
 ];
 
 /**
- * v10.1.6 (TD-1229, D-06, OBS-PR-15): the record types a workflow definition may be made for — the types the server
+ * v10.1.7 (TD-1229, D-06, OBS-PR-15): the record types a workflow definition may be made for — the types the server
  * starts a workflow on and runs a domain action for — each with its Persian name; the designer and the definition form
  * offer only these.
  */

@@ -16,7 +16,7 @@ interface Props {
 }
 
 /**
- * v10.1.6 (TD-1229, D-06 part A): the workflow definitions of the workflow page. Archived definitions leave the main
+ * v10.1.7 (TD-1229, D-06 part A): the workflow definitions of the workflow page. Archived definitions leave the main
  * list and are shown only under «بایگانی»; the switch buttons follow `workflow.admin`, the key their routes ask.
  */
 export const WorkflowDefinitionList: React.FC<Props> = ({ definitions, isLoading, onCreate, onEdit, onHistory }) => {

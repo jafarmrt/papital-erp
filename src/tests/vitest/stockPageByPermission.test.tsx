@@ -118,16 +118,33 @@ describe('stock document page follows the record permission of each type, not th
   });
 });
 
-// v9.0.325 (TD-780، یافته B08-11، تصمیم ت۷ «الف» بسته ۸): محصول پروژه فقط از «ورود به انبار» همان پروژه وارد انبار می‌شود
-describe('stock document page never offers a production receipt (TD-780)', () => {
-  it('no permission set makes the stock page offer a production receipt', () => {
-    expect(Object.values(STOCK_PAGE_DOC_TYPES).flat()).not.toContain('production_receipt');
-    expect(stockPageAccess(() => true).types.in).toEqual(['receipt', 'return']);
+// v9.0.325 (TD-780، یافته B08-11، تصمیم ت۷ «الف» بسته ۸): محصول پروژه فقط از «ورود به انبار» همان پروژه وارد انبار می‌شود.
+// v10.1.6 (N-06، TD-1262، تصمیم ت۲۶): رسید تولید بی پروژه فقط به دارنده «ثبت تولید بدون پروژه» پیشنهاد می‌شود
+describe('stock document page offers a production receipt without a project only to holders of its own permission (TD-780 / N-06)', () => {
+  it('only warehouse.production_receipt adds the production receipt to the in side', () => {
+    expect(stockPageRecordPermission('production_receipt')).toBe('warehouse.production_receipt');
+    expect(stockPageAccess(() => true).types.in).toEqual(['receipt', 'production_receipt', 'return']);
+    expect(stockPageAccess(k => ['warehouse.in', 'warehouse.out', 'documents.finalize'].includes(k)).types.in).toEqual(['receipt', 'return']);
   });
 
-  it('a holder of every record permission sees only purchase receipts and sales returns on the in side', async () => {
+  it('a holder of every other record permission sees only purchase receipts and sales returns on the in side', async () => {
     renderPage('manager', ['warehouse.view', 'warehouse.in', 'warehouse.out', 'documents.view', 'documents.finalize']);
     await waitFor(() => expect(typeValues()).toEqual(['receipt', 'return']));
-    expect(screen.queryByText('رسید انبار تولید (تحویل محصولات ساخته‌شده)')).toBeNull();
+    expect(screen.queryByText('رسید تولید بی پروژه (محصول ساخته‌شده کارگاه)')).toBeNull();
+  });
+
+  it('a holder of the production permission gets a rial form without a party, picking finished products only, with the note', async () => {
+    renderPage('workshop', ['warehouse.view', 'warehouse.in', 'warehouse.production_receipt']);
+    await waitFor(() => expect(typeValues()).toEqual(['receipt', 'production_receipt']));
+    expect(screen.getByText('واحد پول (ارز سند)')).toBeTruthy();
+    expect(screen.getByText('تامین‌کننده / فروشنده کالا')).toBeTruthy();
+    fireEvent.change(typeSelect(), { target: { value: 'production_receipt' } });
+    await waitFor(() => expect(typeSelect().value).toBe('production_receipt'));
+    expect((await screen.findByRole('note')).textContent).toContain('«مصرف مواد بی پروژه»');
+    expect(screen.queryByText('واحد پول (ارز سند)')).toBeNull();
+    expect(screen.queryByText('تامین‌کننده / فروشنده کالا')).toBeNull();
+    await waitFor(() => expect(fetchJson).toHaveBeenCalledWith(expect.stringContaining('/items/options?type=product'), expect.anything()));
+    expect(screen.getByText(/^بهای مواد هر واحد \(/)).toBeTruthy();
+    expect(submitButton().textContent).toContain('ثبت نهایی و صدور سند رسید تولید');
   });
 });

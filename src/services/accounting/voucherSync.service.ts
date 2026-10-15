@@ -616,18 +616,38 @@ export class VoucherSyncService {
     }
 
     // Credit side
+    // v10.1.6 (N-06، TD-1262، تصمیم ت۲۶): رسید تولید پروژه کالای در جریان ساخت (۱۴۰۲) همان پروژه را بستانکار می‌کند؛
+    // رسید تولید بی پروژه «مصرف مواد بی پروژه» (نگاشت `unassignedConsumptionAccountCode`، پیش‌فرض ۶۰۰۳) را، همان حسابی که
+    // حواله مواد بی پروژه بدهکار کرده است (TD-948)، تا بهای مواد از هزینه به موجودی محصول برود. پیش‌تر ۱۴۰۲ بی پروژه بستانکار
+    // می‌شد، در حالی که مواد بی پروژه به ۶۰۰۳ می‌روند (TD-948).
+    const productionCreditAcc = !isProductionDoc
+      ? null
+      : matchedProjectId
+        ? wipAcc
+        : (await AccountMappingService.getUnassignedConsumptionAccount(tx)) || allAccs.find(a => a.code === '6003');
     if (isProductionDoc) {
-      if (wipAcc) {
+      if (productionCreditAcc && matchedProjectId) {
         voucherItems.push({
-          accountId: wipAcc.id,
-          detailedType: matchedProjectId ? 'project' : 'other',
-          detailedId: matchedProjectId || undefined,
+          accountId: productionCreditAcc.id,
+          detailedType: 'project',
+          detailedId: matchedProjectId,
           detailedName: matchedProjectName || (doc.buyerName || 'خط تولید / کالای در جریان ساخت'),
           debit: 0,
           credit: totalGross,
           currency: doc.currency || 'IRR',
           exchangeRate: totalGrossRate,
           description: `انتقال بهای تمام شده از کالای در جریان ساخت به انبار بابت رسید تولید شماره ${doc.refNumber}${matchedProjectName ? ` (پروژه: ${matchedProjectName})` : ''}`
+        });
+      } else if (productionCreditAcc) {
+        voucherItems.push({
+          accountId: productionCreditAcc.id,
+          detailedType: 'other',
+          detailedName: doc.buyerName || 'تولید بی پروژه',
+          debit: 0,
+          credit: totalGross,
+          currency: doc.currency || 'IRR',
+          exchangeRate: totalGrossRate,
+          description: `انتقال بهای مواد مصرفی بی پروژه به موجودی محصول بابت رسید تولید بی پروژه شماره ${doc.refNumber}`
         });
       }
     } else {
@@ -668,8 +688,10 @@ export class VoucherSyncService {
       }
     }
 
-    if (isProductionDoc && !wipAcc && isStrict) {
-      throw new ValidationError('سرفصل حسابداری کالای در جریان ساخت (1402) برای صدور سند رسید تولید یافت نشد.');
+    if (isProductionDoc && !productionCreditAcc && isStrict) {
+      throw new ValidationError(matchedProjectId
+        ? 'سرفصل حسابداری کالای در جریان ساخت (1402) برای صدور سند رسید تولید یافت نشد.'
+        : 'سرفصل حسابداری مصرف مواد بی پروژه (6003) برای صدور سند رسید تولید بی پروژه یافت نشد.');
     }
 
     if (voucherItems.length === 0) {
@@ -681,7 +703,7 @@ export class VoucherSyncService {
 
     const voucherType: JournalVoucher['voucherType'] = isProductionDoc ? 'general' : 'purchase';
     const voucherDesc = isProductionDoc 
-      ? `ثبت رسید تولید و تحویل محصول نهایی شماره ${doc.refNumber}${matchedProjectName ? ` - پروژه: ${matchedProjectName}` : ''}`
+      ? `ثبت رسید تولید و تحویل محصول نهایی شماره ${doc.refNumber}${matchedProjectName ? ` - پروژه: ${matchedProjectName}` : matchedProjectId ? '' : ' - بی پروژه'}`
       : `ثبت فاکتور خرید / رسید ورود شماره ${doc.refNumber} - تامین‌کننده: ${doc.buyerName || 'تامین‌کننده'}`;
 
     // v7.0.31 (TD-193 / P1-8): یافتن سند حسابداری فاکتور فقط از پیوند صریح source_document_id؛

@@ -316,7 +316,7 @@ router.post('/definitions', authorizePermission('workflow.manage', 'workflow.adm
 }));
 
 /**
- * v10.1.6 (TD-1229, D-06 part A, decision ت۴): turning a definition on or off and archiving it need `workflow.admin`;
+ * v10.1.7 (TD-1229, D-06 part A, decision ت۴): turning a definition on or off and archiving it need `workflow.admin`;
  * `workflow.manage` designs but does not switch. Activating a definition whose record type has another active one is
  * 409 WF_ACTIVE_DEFINITION_EXISTS until the page resends it with `replaceActive` after the user's confirmation.
  */

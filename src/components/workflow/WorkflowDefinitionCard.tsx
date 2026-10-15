@@ -32,7 +32,7 @@ function StatusBadge({ def }: { def: WorkflowDefinitionSummary }) {
     : <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">غیرفعال</span>;
 }
 
-/** v10.1.6 (TD-1229, D-06 part A): one workflow definition on the workflow page, with its state and switch buttons */
+/** v10.1.7 (TD-1229, D-06 part A): one workflow definition on the workflow page, with its state and switch buttons */
 export const WorkflowDefinitionCard: React.FC<Props> = ({ def, canSwitch, actions, onHistory, onEdit }) => {
   const archived = Number(def.isArchived) === 1;
   const active = Number(def.isActive) === 1;

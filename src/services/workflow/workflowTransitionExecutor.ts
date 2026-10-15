@@ -409,7 +409,7 @@ export class WorkflowTransitionExecutor {
       }
 
       // v9.0.46 (TD-453، ت۸): شروع فرایند seed اجرا نمی‌کند؛ تعریف‌های پیش‌فرض هنگام راه‌اندازی ساخته می‌شوند
-      // v10.1.6 (TD-1229): a start without code or id takes the record type's one active definition (D-06)
+      // v10.1.7 (TD-1229): a start without code or id takes the record type's one active definition (D-06)
       if (!def) {
         throw new NotFoundError(`هیچ گردش کار فعالی برای «${workflowEntityTypeLabel(params.entityType)}» نیست؛ گردش کار آن را در «طراحی گردش کار» فعال کنید.`, undefined, 'WF_NO_ACTIVE_DEFINITION');
       }

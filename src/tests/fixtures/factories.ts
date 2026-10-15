@@ -291,7 +291,7 @@ export async function createTestWorkflow(overrides: {
     ...overrides.definition
   };
 
-  // v10.1.6 (TD-1229): one active definition per record type (uq_workflow_definitions_active_entity_type); an active test
+  // v10.1.7 (TD-1229): one active definition per record type (uq_workflow_definitions_active_entity_type); an active test
   // definition takes over its type and `restore()` gives the type back to the definitions it turned off
   const displaced: number[] = [];
   if (Number(defData.isActive) === 1) {

@@ -8,20 +8,22 @@ import type { DocumentStockDirection } from './documentDirection';
  * «ثبت ورود کالا»، برگشت از فروش «قطعی کردن سند فروش»، حواله و ضایعات «ثبت خروج کالا». پیش‌تر دکمه ثبت فقط برای کد نقش
  * `viewer` غیرفعال بود و مدیر تولید دکمه فعال می‌دید و ۴۰۳ می‌گرفت.
  *
- * v9.0.325 (TD-780، یافته B08-11، تصمیم ت۷ «الف» بسته ۸): رسید تولید از این صفحه پیشنهاد نمی‌شود؛ محصول پروژه فقط از
- * «ورود به انبار» همان پروژه وارد انبار می‌شود (TD-285، سقف TD-327) و `POST /documents` آن را ۴۲۲ می‌دهد.
+ * v9.0.325 (TD-780، یافته B08-11، تصمیم ت۷ «الف» بسته ۸): محصول پروژه فقط از «ورود به انبار» همان پروژه وارد انبار می‌شود
+ * (TD-285، سقف TD-327). v10.1.6 (N-06، TD-1262، تصمیم ت۲۶): رسید تولید بی پروژه دوباره اینجا پیشنهاد می‌شود، فقط به دارنده
+ * «ثبت تولید بدون پروژه».
  *
  * این فایل به چیزی از سرور یا React وابسته نیست.
  */
 
 /** نوع‌های سند صفحه اسناد انبار در هر جهت، به ترتیب نمایش؛ همه قطعی ثبت می‌شوند */
 export const STOCK_PAGE_DOC_TYPES: Readonly<Record<DocumentStockDirection, readonly string[]>> = Object.freeze({
-  in: Object.freeze(['receipt', 'return']),
+  in: Object.freeze(['receipt', 'production_receipt', 'return']),
   out: Object.freeze(['remittance', 'waste']),
 });
 
 export const STOCK_PAGE_DOC_TYPE_LABELS: Readonly<Record<string, string>> = Object.freeze({
   receipt: 'رسید خرید مواد اولیه / کالا (فاکتور خرید)',
+  production_receipt: 'رسید تولید بی پروژه (محصول ساخته‌شده کارگاه)',
   return: 'برگشت از فروش / مرجوعی مشتری',
   remittance: 'حواله خروج مصرف (تولید / کارگاه)',
   waste: 'ضایعات و اسقاط',

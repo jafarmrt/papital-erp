@@ -173,7 +173,7 @@ export async function checkDocumentApprovalFinalizesInTransaction(): Promise<str
     states: [{ key: 'draft', title: 'پیش‌نویس', type: 'initial' }, { key: 'approved', title: 'تأییدشده', type: 'terminal' }],
     transitions: [{ fromKey: 'draft', toKey: 'approved', actionKey: 'approve_wf415', title: 'تأیید نهایی' }],
   });
-  // v10.1.6 (TD-1229): the test definition holds its record type only for this check
+  // v10.1.7 (TD-1229): the test definition holds its record type only for this check
   try {
     const approveDraft = async (quantity: number) => {
       const docId = await DocumentService.createDocument({
@@ -225,7 +225,7 @@ export async function checkVoucherApprovalRefusedWhenStatusCannotChange(): Promi
     states: [{ key: 'draft', title: 'پیش‌نویس', type: 'initial' }, { key: 'approved', title: 'تأییدشده', type: 'normal' }],
     transitions: [{ fromKey: 'draft', toKey: 'approved', actionKey: 'approve_wf415', title: 'تأیید سند' }],
   });
-  // v10.1.6 (TD-1229): the test definition holds its record type only for this check
+  // v10.1.7 (TD-1229): the test definition holds its record type only for this check
   try {
     const instance = await WorkflowTransitionExecutor.startInstance({
       workflowDefinitionId: wf.definition.id, entityType: 'journal_voucher', entityId: String(voucher.id), userId: user.id, userName: user.username,

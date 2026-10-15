@@ -32,11 +32,11 @@ export interface WorkflowDefinitionDetails {
   definition: typeof workflowDefinitions.$inferSelect;
   states: (typeof workflowStates.$inferSelect)[];
   transitions: (typeof workflowTransitions.$inferSelect)[];
-  /** v10.1.6 (TD-1229): records of any status started with this definition; the designer locks the record type then */
+  /** v10.1.7 (TD-1229): records of any status started with this definition; the designer locks the record type then */
   startedInstanceCount: number;
 }
 
-/** v10.1.6 (TD-1229, OBS-R2-64): what a design save changed, for its audit row */
+/** v10.1.7 (TD-1229, OBS-R2-64): what a design save changed, for its audit row */
 function designAuditSummary(d: { title: string; entityType: string; description?: string | null; isActive?: number | null }, stepKeys: string[], actionKeys: string[]) {
   return { title: d.title, entityType: d.entityType, description: d.description ?? '', isActive: Number(d.isActive ?? 0), steps: stepKeys, actions: actionKeys };
 }
@@ -236,7 +236,7 @@ export class WorkflowDefinitionService {
       let before: ReturnType<typeof designAuditSummary> | null = null;
       let isActive = 0;
       if (!finalDefId) {
-        // v10.1.6 (TD-1229): a new definition is active only when its record type has none (one active per type)
+        // v10.1.7 (TD-1229): a new definition is active only when its record type has none (one active per type)
         await lockWorkflowEntityTypes(tx, [payload.entityType]);
         const [duplicate] = await tx.select({ id: workflowDefinitions.id }).from(workflowDefinitions)
           .where(eq(workflowDefinitions.code, payload.code));
@@ -267,7 +267,7 @@ export class WorkflowDefinitionService {
           throw new NotFoundError('تعریف فرآیند کاری یافت نشد', undefined, 'WF_DEF_NOT_FOUND');
         }
         isActive = Number(existing.isActive ?? 0);
-        // v10.1.6 (TD-1229, OBS-PR-15): the designer asks the record type; only an inactive, never-used definition takes another
+        // v10.1.7 (TD-1229, OBS-PR-15): the designer asks the record type; only an inactive, never-used definition takes another
         if (payload.entityType !== existing.entityType) {
           const refusal = workflowEntityTypeChangeRefusal({ isActive, startedCount: await startedInstanceCount(tx, existing.id) });
           if (refusal) throw new ValidationError(refusal, undefined, 'WF_ENTITY_TYPE_LOCKED');
@@ -350,7 +350,7 @@ export class WorkflowDefinitionService {
         description: payload.id ? 'ذخیره تغییرات طرح فرآیند' : 'ایجاد فرآیند',
         userId: payload.userId,
       });
-      // v10.1.6 (TD-1229, OBS-R2-64): a design save writes its audit row with the same tx (before only positions did)
+      // v10.1.7 (TD-1229, OBS-R2-64): a design save writes its audit row with the same tx (before only positions did)
       const after = designAuditSummary(
         { title: payload.title, entityType: payload.entityType, description: payload.description ?? before?.description ?? '', isActive },
         (payload.states ?? []).map(st => String(st.stateKey || st.key || '')),

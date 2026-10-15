@@ -132,7 +132,7 @@
 | GET | `/api/daily-logs/summary-report` | daily_logs.manage_all |
 | GET | `/api/dashboard-bi-stats` | reports.view \| warehouse.view |
 | GET | `/api/documents` | documents.view \| documents.create \| documents.edit \| audit.view |
-| POST | `/api/documents` | documents.create \| documents.finalize \| warehouse.in \| warehouse.out \| audit.apply |
+| POST | `/api/documents` | documents.create \| documents.finalize \| warehouse.in \| warehouse.out \| audit.apply \| warehouse.production_receipt |
 | DELETE | `/api/documents/:id` | documents.delete |
 | GET | `/api/documents/:id` | documents.view \| documents.create \| documents.edit \| workflow.view \| audit.view |
 | PUT | `/api/documents/:id` | documents.edit |

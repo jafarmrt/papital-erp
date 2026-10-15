@@ -102,7 +102,7 @@ export const executeTaskSchema = z.object({
   }),
 });
 
-/** v10.1.6 (TD-1229): activation of a definition; `replaceActive` turns off the record type's other active definition */
+/** v10.1.7 (TD-1229): activation of a definition; `replaceActive` turns off the record type's other active definition */
 export const activateDefinitionSchema = z.object({
   params: z.object({ id: numericIdString }),
   body: z.object({
@@ -110,7 +110,7 @@ export const activateDefinitionSchema = z.object({
   }).strict(),
 });
 
-/** v10.1.6 (TD-1229): turning a definition off, archiving and restoring it take no body */
+/** v10.1.7 (TD-1229): turning a definition off, archiving and restoring it take no body */
 export const definitionSwitchSchema = z.object({
   params: z.object({ id: numericIdString }),
   body: z.object({}).strict(),
