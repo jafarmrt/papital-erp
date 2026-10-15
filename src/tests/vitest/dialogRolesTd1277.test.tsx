@@ -1,5 +1,5 @@
 /**
- * Hand-built windows have a role, a name and close on Esc, topmost first (v10.1.29, TD-1277).
+ * Hand-built windows have a role, a name and close on Esc, topmost first (v10.1.30, TD-1277).
  */
 import React, { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';

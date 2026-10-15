@@ -20,8 +20,11 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
-### v10.1.29 — پنجره‌ها با Esc بسته می‌شوند و برای صفحه‌خوان نام دارند
+### v10.1.30 — پنجره‌ها با Esc بسته می‌شوند و برای صفحه‌خوان نام دارند
 - حدود صد پنجره نقش و نام فارسی گرفتند و Esc فقط بالاترین پنجره را می‌بندد.
+
+### v10.1.29 — برچسب طرف حساب (N-02 بخش ۳)
+- Customer tags: customer_tags and customer_tag_links (migration 0115), tag routes under /customers/tags (customers.manage writes, unique live name, versioned edit, soft delete, audited with tx), tagIds saved with the party's own create and edit transaction, tagId filter on GET /customers and GET /crm/leads. Tests: reg_customer_tags_define_n02, reg_customer_tags_party_n02, reg_crm_leads_tag_filter_n02, Vitest customerTagsN02.
 
 ### v10.1.28 — برنامه روی Node.js 24 (I-07)
 - آزمون‌های خودکار، تصویر Docker و نصب‌کننده روی Node.js 24 LTS رفتند و `engines` و `.nvmrc` همان را می‌گویند؛ `install.sh` Node کهنه‌تر را هم ارتقا می‌دهد و `update.sh` با Node کهنه‌تر از ۲۴ یک هشدار چاپ می‌کند. پیش از این به‌روزرسانی، Node 24 روی سرور به دست مالک نصب می‌شود (تصمیم ت۳۲).
