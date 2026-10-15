@@ -9,7 +9,10 @@ export interface FollowupQuery {
   status: FollowupStatusFilter;
   /** فقط سررسید امروز و معوق */
   dueOnly?: boolean;
-  /** شناسه پرسنل مسئول؛ خالی یا «all» یعنی همه */
+  /**
+   * v10.1.18 (N-02 بخش ۲، ت۳): `mine` (پیش‌فرض) پیگیری‌های خود کاربر، `all` همه، و شناسه پرسنل یک فروشنده؛ دو گزینه آخر
+   * فقط برای دارنده `crm.manage`، و سرور برای دیگران همیشه پیگیری‌های خودشان را می‌فرستد.
+   */
   assignedPersonnelId?: string;
   search?: string;
   page: number;
@@ -26,6 +29,8 @@ export interface FollowupPage {
   dueCount: number;
   /** همه پیگیری‌های باز */
   openCount: number;
+  /** دامنه‌ای که سرور فرستاد */
+  scope: 'mine' | 'all';
 }
 
 export const CRM_FOLLOWUPS_QUERY_KEY = ['crm', 'followups'] as const;
@@ -33,7 +38,9 @@ export const CRM_FOLLOWUPS_QUERY_KEY = ['crm', 'followups'] as const;
 export function followupsUrl(q: FollowupQuery): string {
   const params = new URLSearchParams({ status: q.status, page: String(q.page), limit: String(q.limit) });
   if (q.dueOnly) params.set('due', 'due');
-  if (q.assignedPersonnelId && q.assignedPersonnelId !== 'all') params.set('assignedPersonnelId', q.assignedPersonnelId);
+  const who = q.assignedPersonnelId ?? 'mine';
+  if (who === 'all') params.set('scope', 'all');
+  else if (who !== 'mine' && who !== '') params.set('assignedPersonnelId', who);
   if (q.search?.trim()) params.set('search', q.search.trim());
   return `/crm/followups?${params.toString()}`;
 }
@@ -52,5 +59,6 @@ export function toFollowupPage(res: unknown, q: FollowupQuery): FollowupPage {
     totalPages: Math.max(1, count(body.totalPages)),
     dueCount: count(body.dueCount),
     openCount: count(body.openCount),
+    scope: body.scope === 'all' ? 'all' : 'mine',
   };
 }

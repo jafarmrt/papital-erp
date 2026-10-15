@@ -7,7 +7,7 @@ import { errorMessageOf } from '../../utils';
 import type { VersionDiffItem, WorkflowVersionDiff } from '../../lib/workflow/workflowVersionDiff';
 
 /**
- * v10.1.17 (TD-1270, D-06 part D): the unpublished draft of a workflow, what it changes against the published version and,
+ * v10.1.19 (TD-1270, D-06 part D): the unpublished draft of a workflow, what it changes against the published version and,
  * for the system admin (`workflow.admin`, decision ت۴), the button that publishes it. New records start with the
  * published version until then; running records keep their own version either way.
  */

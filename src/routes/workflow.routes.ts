@@ -268,14 +268,14 @@ router.get('/definitions/:id/versions/:version', authorizePermission('workflow.m
 }));
 
 /**
- * v10.1.17 (TD-1270, D-06 part D): a definition's unpublished draft and what it changes against the published version.
+ * v10.1.19 (TD-1270, D-06 part D): a definition's unpublished draft and what it changes against the published version.
  */
 router.get('/definitions/:id/draft', authorizePermission('workflow.manage', 'workflow.admin'), validate(paramsIdSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   res.json(await WorkflowEngineService.getDraftState(Number(req.params.id)));
 }));
 
 /**
- * v10.1.17 (TD-1270, decisions ت۴ / ت۱۰): publishing the draft and reverting to an earlier version change what new records
+ * v10.1.19 (TD-1270, decisions ت۴ / ت۱۰): publishing the draft and reverting to an earlier version change what new records
  * run, so they need `workflow.admin` like turning a workflow on; designing a draft stays `workflow.manage`.
  */
 router.post('/definitions/:id/publish', authorizePermission(WORKFLOW_SWITCH_PERMISSION), validate(publishDraftSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {

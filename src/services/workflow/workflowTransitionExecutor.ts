@@ -442,7 +442,7 @@ export class WorkflowTransitionExecutor {
         throw new ConflictError(`این ${workflowEntityTypeLabel(params.entityType)} گردش کار در جریان دیگری دارد؛ نخست آن را به پایان برسانید.`, undefined, 'WF_INSTANCE_ALREADY_OPEN');
       }
 
-      // v10.1.17 (TD-1270, D-06 part D): a new record starts with the published version, never an unpublished draft
+      // v10.1.19 (TD-1270, D-06 part D): a new record starts with the published version, never an unpublished draft
       const publishedVersion = publishedVersionOf(def);
       const targetVersionNumber = params.definitionVersion || publishedVersion;
 

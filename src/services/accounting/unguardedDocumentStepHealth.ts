@@ -38,7 +38,7 @@ export async function findUnguardedDocumentSteps(db: DbExecutor): Promise<Unguar
       sql`btrim(coalesce(${workflowTransitions.requiredPermission}, '')) = ''`,
     ))
     .orderBy(asc(workflowDefinitions.id), asc(workflowTransitions.id));
-  // v10.1.17 (TD-1270): the published version runs new records while the step tables hold a draft
+  // v10.1.19 (TD-1270): the published version runs new records while the step tables hold a draft
   const published = (await publishedWorkflowActions(db, 'document'))
     .filter(a => isUnguardedAction(a) && a.toStateKey !== 'approved' && a.autoActionKey !== 'POST_INVOICE')
     .map(a => ({ definitionId: a.definitionId, code: a.code, title: a.title, transitionId: a.transitionId, transitionTitle: a.transitionTitle }));

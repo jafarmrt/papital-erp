@@ -177,7 +177,7 @@ export interface WorkflowDefinitionVersion {
   title: string;
   description: string;
   createdAt: string;
-  /** v10.1.17 (TD-1270): draft, published or retired */
+  /** v10.1.19 (TD-1270): draft, published or retired */
   status?: WorkflowVersionStatus;
   dslJson: {
     states?: WorkflowVersionSnapshotState[];
@@ -212,7 +212,7 @@ export function useSaveWorkflowDefinitionMutation() {
     onSuccess: (_data, payload) => {
       // TD-469: پیشوند definitions جزئیات و نسخه‌ها را هم دربرمی‌گیرد (پیش‌تر کلید جزئیات ['workflow','definition',id] بود)
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workflow.definitions() });
-      // v10.1.17 (TD-1270): a save of an existing workflow is a draft that new records do not see until it is published
+      // v10.1.19 (TD-1270): a save of an existing workflow is a draft that new records do not see until it is published
       toast.success(payload?.id ? WORKFLOW_DRAFT_SAVED_MESSAGE : 'طرح گردش کار ذخیره شد.');
     },
     onError: (err: any) => {

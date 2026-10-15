@@ -1,5 +1,5 @@
 /**
- * v10.1.17 (TD-1270, D-06 part D): what an unpublished draft changes against the published version, shared by the server
+ * v10.1.19 (TD-1270, D-06 part D): what an unpublished draft changes against the published version, shared by the server
  * (`GET /workflow/definitions/:id/draft`) and the publish window. Steps are matched by their key and actions by their
  * source step, target step and action key, never by database id: every design save gives the rows new ids. Canvas
  * positions are layout only and are not compared.

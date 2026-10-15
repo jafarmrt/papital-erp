@@ -2,7 +2,7 @@ import request from 'supertest';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { roles, users, dailyWorkLogs, pendingMaterials, personnel, pieceworkTasks, pieceworkLogs, items, documents, accounts, journalVouchers, journalVoucherItems, crmLeads, crmActivities, productionProjects } from '../../db/schema.js';
+import { roles, users, dailyWorkLogs, pendingMaterials, personnel, pieceworkTasks, pieceworkLogs, items, documents, accounts, journalVouchers, journalVoucherItems, crmLeads, crmActivities, crmLeadStageHistory, productionProjects } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
 import { buildRouteGuardTable, formatGuards, type RouteGuardRow } from '../../lib/routeGuardTable.js';
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
@@ -357,6 +357,7 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       } finally {
         if (createdLeadIds.length > 0) {
           await orm.delete(crmActivities).where(inArray(crmActivities.leadId, createdLeadIds));
+          await orm.delete(crmLeadStageHistory).where(inArray(crmLeadStageHistory.leadId, createdLeadIds));
           await orm.delete(crmLeads).where(inArray(crmLeads.id, createdLeadIds));
         }
       }

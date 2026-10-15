@@ -15,7 +15,7 @@ import { resolveTransitionRoles } from './transitionRoles.js';
 import type { WorkflowSnapshotDsl } from './workflowTransitionExecutor.js';
 
 /**
- * v10.1.17 (TD-1270, D-06 part D, decision ت۱۰): a design save of an existing definition records a draft; new records start
+ * v10.1.19 (TD-1270, D-06 part D, decision ت۱۰): a design save of an existing definition records a draft; new records start
  * with the published version. The system admin (`workflow.admin`, decision ت۴) publishes the draft or reverts to an earlier
  * version, which is published as a new version: history is never rewritten. Both run in one transaction under the record
  * type lock and the definition row lock, with their audit row written with the same `tx`. Running records keep their own

@@ -11,7 +11,7 @@ export const workflowDefinitions = pgTable('workflow_definitions', {
   title: text('title').notNull(),
   entityType: text('entity_type').notNull(),
   version: integer('version').default(1),
-  // v10.1.17 (TD-1270, D-06 part D): the version new records start with; `version` is the latest saved (a draft when higher)
+  // v10.1.19 (TD-1270, D-06 part D): the version new records start with; `version` is the latest saved (a draft when higher)
   publishedVersion: integer('published_version'),
   isActive: integer('is_active').default(1),
   // v10.1.7 (TD-1229, D-06): an archived definition is inactive and listed only under «بایگانی» (migration 0110)
@@ -124,7 +124,7 @@ export const workflowDefinitionVersions = pgTable('workflow_definition_versions'
   dslJson: jsonb('dsl_json').default({}),
   createdBy: integer('created_by'),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
-  // v10.1.17 (TD-1270, D-06 part D): draft, published or retired (migration 0113); one published version per definition.
+  // v10.1.19 (TD-1270, D-06 part D): draft, published or retired (migration 0114); one published version per definition.
   // The code names every row's status; a row written without one never claims to be the published version.
   status: text('status').notNull().default('retired'),
 }, (table) => ({

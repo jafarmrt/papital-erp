@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Edit3, Trash2, Clock, Check, FileText, Search, Package, Copy, Building2 } from 'lucide-react';
 import { CRMLead, CRMActivity, Item } from '../../types';
 import { getActivityTypeBadge } from './CRMFollowupsView';
+import { ActivityRowActions } from './ActivityRowActions';
 import { formatPersianNumber, formatPersianPhone, formatPersianDate } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { fetchJson } from '../../api';
@@ -18,6 +19,9 @@ interface CRMLeadDrawerProps {
   /** v9.0.148 (TD-893): فقط برای دارنده `crm.delete`؛ بی آن دکمه حذف نیست */
   onDeleteLead?: (leadId: number) => void;
   onToggleFollowup: (act: CRMActivity) => void;
+  /** v10.1.18 (N-02 بخش ۲): ویرایش و حذف اقدام */
+  onEditActivity?: (act: CRMActivity) => void;
+  onDeleteActivity?: (act: CRMActivity) => void;
   onConvertToInvoice?: (lead: CRMLead) => void;
   onOpenCustomerDossier?: (customerName: string) => void;
 }
@@ -30,6 +34,8 @@ export function CRMLeadDrawer({
   onOpenLeadModal,
   onDeleteLead,
   onToggleFollowup,
+  onEditActivity,
+  onDeleteActivity,
   onConvertToInvoice,
   onOpenCustomerDossier
 }: CRMLeadDrawerProps) {
@@ -286,7 +292,10 @@ export function CRMLeadDrawer({
                         <Icon size={12} />
                         {badge.label}
                       </span>
-                      <span className="text-[10px] text-slate-400">{formatPersianDate(act.activityDate || act.createdAt)}</span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="text-[10px] text-slate-400">{formatPersianDate(act.activityDate || act.createdAt)}</span>
+                        <ActivityRowActions activity={act} onEdit={onEditActivity} onDelete={onDeleteActivity} />
+                      </span>
                     </div>
 
                     <h5 className="font-bold text-xs text-slate-900">{act.title}</h5>

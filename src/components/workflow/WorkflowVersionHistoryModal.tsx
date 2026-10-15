@@ -13,7 +13,7 @@ import { WorkflowDraftPanel } from './WorkflowDraftPanel';
 
 /**
  * v7.0.87 (TD-112): تاریخچه نسخه‌های یک الگوی ورکفلو؛ فرایندهای در جریان با نسخه‌ای که با آن شروع شده‌اند ادامه می‌دهند.
- * v10.1.17 (TD-1270, D-06 part D): each version shows its status; the draft panel lists what an unpublished draft changes
+ * v10.1.19 (TD-1270, D-06 part D): each version shows its status; the draft panel lists what an unpublished draft changes
  * and `workflow.admin` publishes it or reverts to an earlier version, which is published as a new version.
  */
 const STATE_TYPE_LABELS: Record<string, string> = { initial: 'شروع', terminal: 'پایان' };

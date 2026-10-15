@@ -236,7 +236,7 @@ export class WorkflowDefinitionService {
           tx.select({ actionKey: workflowTransitions.actionKey }).from(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, existing.id)),
         ]);
         before = designAuditSummary(existing, oldStates.map(r => r.stateKey), oldTransitions.map(r => r.actionKey));
-        // v10.1.17 (TD-1270): before the tables become a draft, the published design keeps its own usable snapshot
+        // v10.1.19 (TD-1270): before the tables become a draft, the published design keeps its own usable snapshot
         await ensurePublishedSnapshot(tx, existing.id, { title: existing.title, userId: payload.userId });
         await tx.update(workflowDefinitions).set({
           title: payload.title,
@@ -250,7 +250,7 @@ export class WorkflowDefinitionService {
         await writeDesignTables(tx, finalDefId, payload.states, payload.transitions, knownRoles);
       }
 
-      // v10.1.17 (TD-1270, decision ت۱۰): a new definition is published at once (it never sits without a published
+      // v10.1.19 (TD-1270, decision ت۱۰): a new definition is published at once (it never sits without a published
       // version); a save of an existing one is a draft that new records do not see until it is published
       const version = await recordDefinitionVersion(tx, finalDefId, {
         title: payload.title,
