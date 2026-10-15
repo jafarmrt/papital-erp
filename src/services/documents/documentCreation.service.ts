@@ -28,6 +28,7 @@ import { assertLineDiscountsWithinAmount } from './lineDiscount.js';
 import { resolveDocumentExchangeRate, stockUnitPriceInIrr } from './documentExchangeRate.js';
 import { netLineUnitPrice } from './purchaseLineCost.js';
 import { assertIncomingLinesHaveCost } from './incomingLineCost.js';
+import { assertStandaloneProductionReceipt } from './standaloneProductionReceipt.js';
 import { assertReturnWithinSold, parseReturnOfDocumentId, resolveSalesReturnUnitCosts } from './salesReturnCost.js';
 import { enforceReturnInvoiceTerms } from './salesReturnPrice.js';
 import { resolveReturnVatFromInvoice } from './salesReturnVat.js';
@@ -403,6 +404,8 @@ export class DocumentCreationService {
         // v10.0.184 (TD-921): سند تازه روی پروژه لغوشده ثبت نمی‌شود
         await assertProjectNotCancelled(tx, finalProjectId, 'سند');
       }
+      // v10.1.6 (N-06، TD-1262، تصمیم ت۲۶): رسید تولید بی پروژه فقط قطعی، ریالی و برای محصول نهایی
+      await assertStandaloneProductionReceipt(tx, { docType, projectId: finalProjectId, status: docStatus, currency: currency || 'IRR', lines: docLines });
       // v7.0.21 (TD-178 / audit P0-2): شماره عطف و سال مالی پارتیشن شماره‌گذاری؛ از v9.0.80 (TD-489) در
       // DocumentRefNumberService.assignDocumentRefNumber، مشترک با حواله انتقال بین انبارها
       const { refNumber: finalRefNumber, refFiscalYear } = await DocumentRefNumberService.assignDocumentRefNumber(

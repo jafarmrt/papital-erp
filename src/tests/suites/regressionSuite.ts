@@ -11007,5 +11007,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runTreasuryAuditA8Tests } = await import('../regression/treasuryAuditA8Tests.js');
   results.push(...await runTreasuryAuditA8Tests(shouldRun));
 
+  // v10.1.6 (N-06): production receipt without a project from the stock page
+  const { runProductionWithoutProjectTests } = await import('../regression/productionWithoutProjectTests.js');
+  results.push(...await runProductionWithoutProjectTests(shouldRun));
+
   return results;
 }

@@ -20,7 +20,7 @@ export function reservationSourceLabel(r: GlobalReservation): string {
 
 export function createStockDocumentItemActions(form: StockDocumentForm, itemsList: Item[]) {
   const {
-    actionType, docItems, setDocItems, selectedItem, setSelectedItem, selectedItemObj, setSelectedItemObj,
+    actionType, docType, docItems, setDocItems, selectedItem, setSelectedItem, selectedItemObj, setSelectedItemObj,
     quantity, setQuantity, unitPrice, setUnitPrice, selectedProjectId, selectedProjectReservedItems,
     getItemReservationSummary,
   } = form;
@@ -112,7 +112,8 @@ export function createStockDocumentItemActions(form: StockDocumentForm, itemsLis
     setSelectedItemObj(rawItem || null);
     if (rawItem) {
       if (actionType === 'in') {
-        const itemPurchasePrice = rawItem.purchase_price ? Number(rawItem.purchase_price) : 0;
+        // v10.1.6 (N-06): بهای خالی رسید تولید یعنی میانگین موزون بهای فعلی کالا، نه بهای خرید
+        const itemPurchasePrice = docType !== 'production_receipt' && rawItem.purchase_price ? Number(rawItem.purchase_price) : 0;
         setUnitPrice(itemPurchasePrice > 0 ? itemPurchasePrice : '');
       }
     } else {
