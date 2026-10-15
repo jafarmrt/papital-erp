@@ -115,7 +115,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
               </p>
             </div>
           </div>
-          <button 
+          <button aria-label="بستن" 
             onClick={onClose}
             className="p-2 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-xl transition-colors"
           >

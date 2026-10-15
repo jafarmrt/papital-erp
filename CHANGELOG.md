@@ -20,8 +20,11 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
-### v10.1.27 — برچسب طرف حساب (N-02 بخش ۳)
+### v10.1.28 — برچسب طرف حساب (N-02 بخش ۳)
 - Customer tags: customer_tags and customer_tag_links (migration 0115), tag routes under /customers/tags (customers.manage writes, unique live name, versioned edit, soft delete, audited with tx), tagIds saved with the party's own create and edit transaction, tagId filter on GET /customers and GET /crm/leads. Tests: reg_customer_tags_define_n02, reg_customer_tags_party_n02, reg_crm_leads_tag_filter_n02, Vitest customerTagsN02.
+
+### v10.1.27 — نام فارسی برای دکمه‌های فقط‌نماد
+- دکمه‌های بستن، صفحه قبل و بعد، حذف ردیف و پاک کردن جست‌وجو برای صفحه‌خوان نام فارسی دارند.
 
 ### v10.1.26 — واژه‌ها و پیام‌های رابط مطابق وایب فارسی
 - متن رابط «جست‌وجو»، «کنید» و «است» می‌گوید، عنوان‌های فارسی فاصله حروف ندارند و فرم‌های خزانه خطا را زیر فرم نشان می‌دهند، نه با پنجره مرورگر.

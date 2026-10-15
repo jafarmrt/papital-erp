@@ -57,7 +57,7 @@ export function PersonnelDetailModal({
               <Edit2 size={14} />
               <span>ویرایش</span>
             </button>
-            <button
+            <button aria-label="بستن"
               onClick={onClose}
               className="p-2 hover:bg-white/20 rounded-xl transition-all cursor-pointer"
             >

@@ -473,7 +473,7 @@ export function NewVoucherModal({
               <span className="hidden sm:inline">راهنمای کلیدها</span>
             </button>
 
-            <button
+            <button aria-label="بستن"
               onClick={onClose}
               className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition"
             >

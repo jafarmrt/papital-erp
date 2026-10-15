@@ -53,7 +53,7 @@ export function InvoiceDetailsModal({ selectedDocDetails, setSelectedDocDetails,
               <Printer size={15} />
               <span>چاپ فاکتور رسمی</span>
             </button>
-            <button
+            <button aria-label="بستن"
               onClick={() => setSelectedDocDetails(null)}
               className="p-1.5 rounded-xl hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
             >

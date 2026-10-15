@@ -21,7 +21,7 @@ export function InvoiceWorkflowModal({ workflowDoc, setWorkflowDoc, loadData }: 
               چرخه تاییدات و گردش‌کار سند شماره {formatPersianCode(workflowDoc.ref_number)}
             </h3>
           </div>
-          <button
+          <button aria-label="بستن"
             type="button"
             onClick={() => setWorkflowDoc(null)}
             className="p-1 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"

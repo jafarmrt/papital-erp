@@ -97,7 +97,7 @@ export function DailyLogModal({
               {editingLog ? 'ویرایش گزارش کار روزانه' : 'ثبت گزارش کار روزانه جدید'}
             </h2>
           </div>
-          <button
+          <button aria-label="بستن"
             onClick={onClose}
             className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
           >
@@ -301,7 +301,7 @@ export function DailyLogModal({
                 {formTags.map((t, idx) => (
                   <span key={idx} className="inline-flex items-center gap-1 text-[10px] bg-blue-50 text-blue-800 px-2 py-0.5 rounded-md border border-blue-200">
                     {t}
-                    <button type="button" onClick={() => onRemoveTag(t)} className="text-blue-500 hover:text-rose-600 cursor-pointer">
+                    <button aria-label="حذف برچسب" type="button" onClick={() => onRemoveTag(t)} className="text-blue-500 hover:text-rose-600 cursor-pointer">
                       <X className="w-3 h-3" />
                     </button>
                   </span>

@@ -357,7 +357,7 @@ export function DailyLogSummaryView({
                   </p>
                 </div>
               </div>
-              <button
+              <button aria-label="بستن"
                 onClick={() => setSelectedUserLogsModal(null)}
                 className="p-1 rounded-lg hover:bg-indigo-800 text-indigo-300 hover:text-white cursor-pointer"
               >

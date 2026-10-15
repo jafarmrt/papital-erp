@@ -181,7 +181,7 @@ export function AccountSearchSelect({
               <X className="w-3.5 h-3.5" />
             </button>
           )}
-          <button
+          <button aria-label="نمایش فهرست حساب‌ها"
             type="button"
             tabIndex={-1}
             onClick={() => {

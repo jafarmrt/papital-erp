@@ -297,7 +297,7 @@ export function PartyLedgerReportView({
                 </div>
                 <div className="flex items-center gap-1">
                   {selectedParty && (
-                    <button
+                    <button aria-label="پاک کردن انتخاب"
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();

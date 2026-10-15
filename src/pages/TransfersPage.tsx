@@ -659,7 +659,7 @@ export default function TransfersPage({ user }: { user?: User }) {
                   {selectedTransfer ? `مدیریت و تصویر ترنسفر کد ${selectedTransfer.code}` : 'ثبت طرح ترنسفر جدید'}
                 </h2>
               </div>
-              <button
+              <button aria-label="بستن"
                 type="button"
                 onClick={() => setIsEditModalOpen(false)}
                 className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"

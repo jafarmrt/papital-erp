@@ -40,7 +40,7 @@ export const CashFlowModal: React.FC<CashFlowModalProps> = ({
             <TrendingUp className="w-5 h-5 text-indigo-600" />
             گزارش جریان وجوه نقد (صورت گردش نقدینگی)
           </h3>
-          <button
+          <button aria-label="بستن"
             onClick={onClose}
             className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
           >
