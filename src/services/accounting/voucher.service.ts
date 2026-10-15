@@ -730,6 +730,9 @@ export class VoucherService {
         description: `برگشت ردیف ${item.rowOrder || idx + 1}: ${item.description || original.description}`,
       })));
 
+      // v10.1.10 (TD-1263): the reversed voucher leaves its workflow, so the page no longer shows it «در گردش کار»
+      await terminateVoucherWorkflows(tx, original.id, 'برگشت سند حسابداری', params.userId, params.username);
+
       return voucher.id;
     };
 
@@ -886,6 +889,9 @@ export class VoucherService {
         exchangeRate: moneyOr(item.exchangeRate, 1),
         description: item.description?.trim() || corrDesc,
       })));
+
+      // v10.1.10 (TD-1263): the corrected voucher leaves its workflow
+      await terminateVoucherWorkflows(tx, original.id, 'اصلاح سند حسابداری', params.userId, params.username);
 
       return {
         revId: revVoucher.id,

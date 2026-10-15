@@ -76,13 +76,33 @@ export async function runVoucherWorkflowStartTests(shouldRun: ShouldRun): Promis
       const revert = await admin.put(`/api/accounting/vouchers/${id}/status`, { status: 'draft' });
       expect(revert.status === 409 && revert.body?.code === 'VOUCHER_IN_WORKFLOW', `page revert to draft returned ${brief(revert)}`);
 
+      // reversing it, or correcting another one, closes its workflow
+      const reversed = await admin.post(`/api/accounting/vouchers/${id}/reverse`, { reason: 'Workflow close test' });
+      expect(reversed.status < 300, `reverse returned ${brief(reversed)}`);
+      expect((await voucherInstance(id))?.status === 'TERMINATED', `reversing left the workflow ${String((await voucherInstance(id))?.status)}`);
+      const afterReverse = await admin.get(`/api/accounting/vouchers/${id}`);
+      expect(afterReverse.body?.inWorkflow === false, `reversed voucher still shows in its workflow: ${brief(afterReverse)}`);
+      const second = await admin.post('/api/accounting/vouchers', {
+        date, description: 'Workflow correction test voucher',
+        items: [{ accountId: acc['7001'], debit: 700, credit: 0 }, { accountId: acc['1001'], debit: 0, credit: 700 }],
+      });
+      const secondId = Number(second.body?.id);
+      const secondInstance = await voucherInstance(secondId);
+      const secondStep = await admin.post('/api/workflow/transition', { instanceId: secondInstance?.id, transitionId: transitionId(secondInstance, 'approve_voucher') });
+      expect(secondStep.status === 200, `second workflow approve returned ${brief(secondStep)}`);
+      const corrected = await admin.post(`/api/accounting/vouchers/${secondId}/correct`, {
+        reason: 'Workflow close test', newItems: [{ accountId: acc['7001'], debit: 800, credit: 0 }, { accountId: acc['1001'], debit: 0, credit: 800 }],
+      });
+      expect(corrected.status < 300, `correct returned ${brief(corrected)}`);
+      expect((await voucherInstance(secondId))?.status === 'TERMINATED', `correcting left the workflow ${String((await voucherInstance(secondId))?.status)}`);
+
       // an automatic voucher (not manual) never starts one
       const automaticId = await VoucherService.createJournalVoucher({
         date, description: 'Automatic voucher', status: 'draft',
         items: [{ accountId: acc['7001'], debit: 500, credit: 0 }, { accountId: acc['1001'], debit: 0, credit: 500 }],
       } as Parameters<typeof VoucherService.createJournalVoucher>[0]);
       expect(!(await voucherInstance(Number(automaticId))), 'an automatic draft voucher started a workflow');
-      return 'manual draft starts the workflow; page approve, finalize, batch and revert refused while it runs; the workflow step approves';
+      return 'manual draft starts the workflow; page approve, finalize, batch and revert refused while it runs; the workflow step approves; reverse and correct close it';
     }));
   }
 
