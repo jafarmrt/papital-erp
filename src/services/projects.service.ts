@@ -15,7 +15,7 @@ import { hasMatrixProducts, matrixProducts } from '../lib/projects/progressMatri
 import { loadProjectProgressMatrix, productProgressView, progressMatrixStatus, type ProgressMatrixStatus } from './projects/projectProgressMatrix.js';
 import { actorName, lockLiveProject, stageCompletedAt, syncProjectFromMatrix, type ProjectActor, type ProjectStatusSyncResult, type SyncedStage } from './projects/projectStatusSync.js';
 import { logActivity } from '../lib/auditLogger.js';
-import { logProjectUpdate, logStageChange } from './projects/projectAudit.js';
+import { logProjectDelivery, logProjectUpdate, logStageChange } from './projects/projectAudit.js';
 import { MAX_STAGE_ORDER } from '../lib/projects/projectStatus.js';
 import { toPersianDigits } from '../utils/persianNumber.js';
 import { normalizeDecimalString } from '../lib/numericInput.js';
@@ -83,6 +83,8 @@ export interface AddProjectToInventoryInput {
   markCompleted?: boolean;
   currentUser?: string;
   userId?: number;
+  /** TD-943: the request, for the user and IP address of the audit rows written with the delivery's transaction */
+  auditReq?: unknown;
   /** v8.0.72 (TD-327): دلیل تحویل بیش از مقدار برنامه‌ریزی‌شده؛ بی آن تحویل اضافه رد می‌شود */
   overDeliveryReason?: string;
 }
@@ -421,7 +423,11 @@ export class ProjectService {
           notes: [`تحویل تولید پروژه ${projectLabel}`, ...lineNotes].join(' — '),
           items: lines,
           externalTx: tx,
-        }, { userId: input.userId });
+        }, {
+          userId: input.userId,
+          // TD-943: the receipt's CREATE row, with this transaction
+          createdAudit: { actor: { req: input.auditReq, userId: input.userId, username: currentUser }, note: `با تحویل پروژه ${projectLabel}`, details: { projectCode: proj.projectCode } },
+        });
         documentId = created.docId;
         const [doc] = await tx.select({ refNumber: documents.refNumber }).from(documents).where(eq(documents.id, documentId));
         refNumber = doc?.refNumber ?? null;
@@ -432,6 +438,9 @@ export class ProjectService {
         await tx.update(productionProjects).set({ status: 'completed', version: nextVersion(proj.version) }).where(eq(productionProjects.id, id));
       }
 
+      await logProjectDelivery(tx, { req: input.auditReq, userId: input.userId, username: currentUser }, proj, {
+        documentId, refNumber, addedCount: lines.length, overDeliveries, overDeliveryReason,
+      });
       return { addedCount: lines.length, projectCode: proj.projectCode, documentId, refNumber, overDeliveries };
     });
   }

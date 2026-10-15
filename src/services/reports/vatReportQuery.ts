@@ -7,7 +7,7 @@ import { accountSubtreeCondition } from '../accounting/accountSubtree.js';
 import { voucherItemReportAmountSql } from '../accounting/voucherItemAmount.js';
 
 /**
- * v10.1.12 (D-03، طرح گزارش‌های مدیریتی §۴): بخش‌های SQL «مالیات بر ارزش افزوده».
+ * v10.1.13 (D-03، طرح گزارش‌های مدیریتی §۴): بخش‌های SQL «مالیات بر ارزش افزوده».
  *
  * - سندها (`vatDocsCte`): فاکتور فروش (و پیش‌فاکتور قطعی‌شده قدیمی با نوع proforma، همان که سند حسابداری فروش می‌گیرد)
  *   و برگشت از فروش، قطعی و باطل‌نشده، به تاریخ خود سند؛ مبلغ خالص اقلام با قاعده مالیات سند (`computeNetAmount`:

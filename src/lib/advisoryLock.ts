@@ -92,10 +92,23 @@ export async function withRowAdvisoryLock<T>(namespace: number, rowId: number, f
   return withSessionAdvisoryLock('$1::int, $2::int', [namespace, rowId], fn);
 }
 
-async function withSessionAdvisoryLock<T>(keyArgs: string, keys: number[], fn: () => Promise<T>): Promise<AdvisoryLockOutcome<T>> {
+/**
+ * TD-1266: the same session lock, but waits for another holder to finish instead of giving up. For a caller whose work
+ * must run, not be skipped: the test bootstrap seeds its own isolated schema, while the lock key is shared by every
+ * schema of the database.
+ */
+export async function withAdvisoryLockWaiting<T>(key: number, fn: () => Promise<T>): Promise<T> {
+  const outcome = await withSessionAdvisoryLock('$1::bigint', [key], fn, true);
+  if (!outcome.acquired) throw new Error(`advisory lock ${key} was not acquired`);
+  return outcome.result;
+}
+
+async function withSessionAdvisoryLock<T>(keyArgs: string, keys: number[], fn: () => Promise<T>, wait = false): Promise<AdvisoryLockOutcome<T>> {
   const client = await pool.connect();
   try {
-    const res = await client.query(`SELECT pg_try_advisory_lock(${keyArgs}) AS acquired`, keys);
+    const res = wait
+      ? await client.query(`SELECT pg_advisory_lock(${keyArgs}), true AS acquired`, keys)
+      : await client.query(`SELECT pg_try_advisory_lock(${keyArgs}) AS acquired`, keys);
     if (!res.rows?.[0]?.acquired) {
       return { acquired: false };
     }

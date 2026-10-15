@@ -43,7 +43,7 @@ import { assertOutflowWithinSellable } from './documentSellableGate.js';
 import { consumesProjectReservation } from '../../lib/transactions/projectIssueTypes.js';
 import { assertDocumentNotInReview } from './documentReviewLock.js';
 import { assertReturnPartyOfInvoice, parseDocumentPartyId, resolveDocumentParty, returnInvoicePartyId } from './documentParty.js';
-import { documentAuditSnapshot, type DocumentAuditChange } from './documentAudit.js';
+import { documentAuditSnapshot, logDocumentCreated, type DocumentAuditActor, type DocumentAuditChange } from './documentAudit.js';
 
 type DocumentLineRow = typeof documentItems.$inferInsert;
 
@@ -330,7 +330,15 @@ export class DocumentCreationService {
    */
   static async createDocumentWithDetails(
     body: CreateDocumentInput,
-    actor: { userId?: number; allowBackdate?: boolean } = {}
+    actor: {
+      userId?: number;
+      allowBackdate?: boolean;
+      /**
+       * TD-943: a service that records the document inside its own transaction (the project delivery's production receipt)
+       * asks for the CREATE audit row here, written with the same `tx`; `POST /documents` writes its own row
+       */
+      createdAudit?: { actor: DocumentAuditActor & { req?: unknown }; note: string; details?: Record<string, unknown> };
+    } = {}
   ): Promise<{ docId: number; projectReservation: ProjectReservationRelease | null }> {
     const { 
       docType: rawDocType, type: rawType, refNumber, date, items: docLines, user, inOut,
@@ -723,6 +731,7 @@ export class DocumentCreationService {
         }
       }
 
+      if (actor.createdAudit) await logDocumentCreated(tx, actor.createdAudit.actor, docId, actor.createdAudit);
       return docId;
     };
 

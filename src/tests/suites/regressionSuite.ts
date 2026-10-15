@@ -821,7 +821,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     // 4. Verify check constraints exist in database
     const constraintCheck = (await orm.execute(sql`
       SELECT conname FROM pg_constraint
-      WHERE conname IN ('chk_documents_date_gregorian', 'chk_transactions_date_gregorian')
+      WHERE connamespace = current_schema()::regnamespace AND conname IN ('chk_documents_date_gregorian', 'chk_transactions_date_gregorian')
     `)).rows as any[];
 
     const foundConstraints = constraintCheck.map((c: any) => c.conname);
@@ -10746,7 +10746,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10.1 D-03 PR2 (v10.1.10): the receivables and payables aging tab
   const { runAgingReportTests } = await import('../regression/agingReportTests.js');
   results.push(...await runAgingReportTests(shouldRun));
-  // Series 10.1 D-03 PR3 (v10.1.12): the VAT tab
+  // Series 10.1 D-03 PR3 (v10.1.13): the VAT tab
   const { runVatReportTests } = await import('../regression/vatReportTests.js');
   results.push(...await runVatReportTests(shouldRun));
   const { runSalesEventsTests } = await import('../regression/salesEventsTests.js');
@@ -10908,6 +10908,12 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v10.0.180 (TD-959): the seed names its failed sections
   const { runSeedSectionTests } = await import('../regression/seedSectionTests.js');
   results.push(...await runSeedSectionTests(shouldRun));
+  // v10.1.12 (TD-1266 / TD-1267): the test bootstrap waits for the seed lock; the activity log filter lists by index
+  const { runTestToolingTests } = await import('../regression/testToolingTests.js');
+  results.push(...await runTestToolingTests(shouldRun));
+  // v10.1.12 (TD-943): project delivery and material allocation audit rows with their own transaction
+  const { runProjectAuditTxTests } = await import('../regression/projectAuditTxTests.js');
+  results.push(...await runProjectAuditTxTests(shouldRun));
   const { runInitialSetupTests } = await import('../regression/initialSetupTests.js');
   results.push(...await runInitialSetupTests(shouldRun));
 

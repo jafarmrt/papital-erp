@@ -1,8 +1,10 @@
 import { and, asc, eq } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { documentItems, documents } from '../../db/schema.js';
-import { computeAuditDiff } from '../../lib/auditLogger.js';
+import { computeAuditDiff, logActivity } from '../../lib/auditLogger.js';
 import { fin } from '../../lib/financialDecimal.js';
+import { DOCUMENT_TYPE_TITLES } from '../../lib/documents/documentTypeTitles.js';
+import { toPersianDigits } from '../../utils/persianNumber.js';
 
 /**
  * v9.0.337 (TD-785، یافته B08-16): ردیف ممیزی سند از خود پایگاه‌داده و درون همان تراکنش تغییر. پیش‌تر ثبت بدنه درخواست را
@@ -132,4 +134,33 @@ export function documentLineSummary(snapshot: DocumentAuditSnapshot | null): { t
     totalQty: lines.reduce((sum, line) => sum.add(line.quantity), fin(0)).toString(),
     hasDiscounts: lines.some(line => fin(line.discount).isPositive()),
   };
+}
+
+/**
+ * TD-943 (P5-M10): the CREATE row of a document another service records inside its own transaction (the production
+ * receipt of a project delivery), with the stored document as `POST /documents` writes it; before, such a receipt had no
+ * CREATE row and the activity log never showed who recorded it.
+ */
+export async function logDocumentCreated(
+  tx: DbExecutor,
+  actor: DocumentAuditActor & { req?: unknown },
+  documentId: number,
+  context: { note: string; details?: Record<string, unknown> },
+): Promise<void> {
+  const after = await documentAuditSnapshot(tx, documentId);
+  // the same title table as `POST /documents`, so the audit entity names stay classified (TD-522)
+  const title = DOCUMENT_TYPE_TITLES[after?.docType ?? ''] || 'سند انبار';
+  const summary = documentLineSummary(after);
+  await logActivity({
+    tx,
+    req: actor.req,
+    userId: actor.userId,
+    username: actor.username,
+    userFullName: actor.userFullName,
+    action: 'CREATE',
+    entity: title,
+    entityId: documentId,
+    description: `ثبت ${title} جدید به شماره "${after?.refNumber ?? ''}" (${toPersianDigits(summary.totalLines)} قلم کالا) ${context.note}`,
+    details: { after, ...summary, ...(context.details ?? {}) },
+  });
 }

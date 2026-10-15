@@ -147,12 +147,12 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
       orm.execute(sql`
         SELECT conname, contype 
         FROM pg_constraint 
-        WHERE conname IN ('chk_jv_debit_positive', 'chk_jv_credit_positive', 'chk_jvi_debit_positive', 'chk_doc_items_qty_positive')
+        WHERE connamespace = current_schema()::regnamespace AND conname IN ('chk_jv_debit_positive', 'chk_jv_credit_positive', 'chk_jvi_debit_positive', 'chk_doc_items_qty_positive')
       `),
       orm.execute(sql`
         SELECT indexname 
         FROM pg_indexes 
-        WHERE indexname IN ('idx_uniq_accounts_code_active', 'idx_uniq_bank_code_active', 'idx_uniq_doc_type_ref_active', 'idx_uniq_jv_number_active')
+        WHERE schemaname = current_schema() AND indexname IN ('idx_uniq_accounts_code_active', 'idx_uniq_bank_code_active', 'idx_uniq_doc_type_ref_active', 'idx_uniq_jv_number_active')
       `)
     ]);
 
@@ -253,7 +253,7 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
     const indexesRes = await orm.execute(sql`
       SELECT indexname 
       FROM pg_indexes 
-      WHERE indexname IN ('tx_item_date_id_active', 'tx_item_loc_active')
+      WHERE schemaname = current_schema() AND indexname IN ('tx_item_date_id_active', 'tx_item_loc_active')
     `);
     const idxCount = (indexesRes as any)?.rows?.length || 0;
     if (idxCount < 2) {
@@ -499,7 +499,7 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
     const indexCheck = await orm.execute(sql`
       SELECT indexname, indexdef 
       FROM pg_indexes 
-      WHERE tablename = 'transactions' 
+      WHERE schemaname = current_schema() AND tablename = 'transactions' 
         AND indexname IN ('tx_item_date_id_active', 'tx_item_loc_active', 'tx_item_active_date');
     `);
 
@@ -842,7 +842,7 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
         FROM pg_index i
         JOIN pg_class c ON c.oid = i.indrelid
         JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(i.indkey)
-        WHERE c.relname = ${t.table}::text AND i.indisunique AND i.indpred IS NULL
+        WHERE c.relnamespace = current_schema()::regnamespace AND c.relname = ${t.table}::text AND i.indisunique AND i.indpred IS NULL
         GROUP BY i.indexrelid`);
       const ok = (r.rows as Array<{ cols: string[] }>)
         .some(row => JSON.stringify(row.cols) === JSON.stringify([...t.columns].sort()));

@@ -89,7 +89,7 @@ export class DocumentService {
    */
   static async createDocumentWithDetails(
     body: CreateDocumentInput,
-    actor?: { userId?: number; allowBackdate?: boolean }
+    actor?: Parameters<typeof DocumentCreationService.createDocumentWithDetails>[1]
   ): ReturnType<typeof DocumentCreationService.createDocumentWithDetails> {
     return DocumentCreationService.createDocumentWithDetails(body, actor);
   }

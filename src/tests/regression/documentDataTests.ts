@@ -318,7 +318,7 @@ async function documentCheckConstraintsCase(h: Harness, wrong: string[]): Promis
   };
 
   // 1) the migrated schema: every constraint present and validated, one index on project_id
-  const constraints = await h.q(`SELECT conname, convalidated FROM pg_constraint WHERE conname = ANY($1::text[])`, [names]) as Array<{ conname: string; convalidated: boolean }>;
+  const constraints = await h.q(`SELECT conname, convalidated FROM pg_constraint WHERE connamespace = current_schema()::regnamespace AND conname = ANY($1::text[])`, [names]) as Array<{ conname: string; convalidated: boolean }>;
   for (const name of names) {
     const row = constraints.find(c => c.conname === name);
     if (!row?.convalidated) wrong.push(`constraint ${name} is ${row ? 'NOT VALID' : 'missing'}, expected validated`);
@@ -383,7 +383,7 @@ async function documentCheckConstraintsCase(h: Harness, wrong: string[]): Promis
       await tx.execute(sql`INSERT INTO documents (type, ref_number, date, status) VALUES ('receipt', ${`P8E-${h.tag}-legacy`}, now(), 'pending')`);
       await tx.execute(sql`INSERT INTO document_items (document_id, item_id, quantity, unit_price, discount, location) VALUES (${receiptId}, ${item}, 0, 1000, 0, ${f.wh})`);
       await tx.execute(sql.raw(fs.readFileSync(path.join(dir, file), 'utf8')));
-      const state = await tx.execute(sql`SELECT conname, convalidated FROM pg_constraint WHERE conname = ANY(${sql.param(names)}::text[])`);
+      const state = await tx.execute(sql`SELECT conname, convalidated FROM pg_constraint WHERE connamespace = current_schema()::regnamespace AND conname = ANY(${sql.param(names)}::text[])`);
       const rows = state.rows as Array<{ conname: string; convalidated: boolean }>;
       const status = rows.find(r => r.conname === 'chk_documents_status');
       if (status?.convalidated !== false) wrong.push(`chk_documents_status over a legacy row is ${JSON.stringify(status ?? null)}, expected NOT VALID`);

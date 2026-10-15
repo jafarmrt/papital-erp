@@ -148,7 +148,7 @@ async function uniqueCodeNameCase(ctx: Ctx): Promise<string> {
   });
   if (rename.status !== 409) throw new Error(`renaming an item to another item's name (with spaces) answered ${rename.status}, expected 409`);
 
-  const indexes = await q(`SELECT indexname FROM pg_indexes WHERE tablename = 'items' AND indexname IN ('uq_items_code_active', 'uq_items_name_active')`);
+  const indexes = await q(`SELECT indexname FROM pg_indexes WHERE schemaname = current_schema() AND tablename = 'items' AND indexname IN ('uq_items_code_active', 'uq_items_name_active')`);
   if (indexes.length !== 2) throw new Error(`unique indexes present: ${indexes.map(r => r.indexname).join(', ') || 'none'}`);
   const { buildItemIdentityHealthTest, findDuplicateItemIdentities, hasItemIdentityIndexes } = await import('../../services/items/itemIdentity.js');
   const health = buildItemIdentityHealthTest(await findDuplicateItemIdentities(), await hasItemIdentityIndexes());
