@@ -151,6 +151,7 @@ export const QUERY_KEYS = {
     definitions: () => ['workflow', 'definitions'] as const,
     definition: (id: number | undefined) => ['workflow', 'definitions', 'detail', id ?? 0] as const,
     definitionVersions: (id: number | undefined) => ['workflow', 'definitions', 'versions', id ?? 0] as const,
+    definitionDraft: (id: number | undefined) => ['workflow', 'definitions', 'draft', id ?? 0] as const,
   },
 
   // V9 Phase 5.1 — Documents & Invoices

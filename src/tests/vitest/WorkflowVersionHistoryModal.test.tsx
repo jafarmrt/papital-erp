@@ -57,7 +57,8 @@ describe('WorkflowVersionHistoryModal (TD-112)', () => {
     expect(screen.queryByText('رد شده (پایان)')).toBeNull();
   });
 
-  it('offers no publish or rollback action', async () => {
+  // TD-1270 (D-06 part D): publish and revert exist now, but only for workflow.admin; a reader without it gets neither
+  it('offers no publish or revert action without workflow.admin', async () => {
     fetchJson.mockResolvedValue(versions);
     renderModal();
     await screen.findByText('نسخه ۲');

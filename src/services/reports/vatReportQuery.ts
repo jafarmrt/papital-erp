@@ -64,7 +64,6 @@ function vatDocsCte(range: ReportRange): SQL {
            CASE WHEN NOT v.converted THEN 'unconverted'
                 WHEN v.expected_vat_own IS NOT NULL AND v.vat_own <> v.expected_vat_own THEN 'rate_mismatch'
                 WHEN v.kind = 'sale' AND v.percent = 0 AND v.vat_own <> 0 THEN 'rate_missing'
-                WHEN v.kind = 'sale' AND v.currency = 'IRR' AND v.vat_own = 0 AND v.net_own > 0 THEN 'no_vat'
            END AS warning
       FROM vat_docs v
   )`;

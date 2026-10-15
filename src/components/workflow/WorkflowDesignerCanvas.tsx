@@ -330,7 +330,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
             className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors shadow-sm disabled:opacity-50"
           >
             <Save className="w-4 h-4" />
-            <span>{saveMutation.isPending ? 'در حال ذخیره...' : 'ذخیره تغییرات الگو'}</span>
+            <span>{saveMutation.isPending ? 'در حال ذخیره...' : 'ذخیره پیش‌نویس'}</span>
           </button>
         </div>
       </div>
