@@ -124,6 +124,7 @@ export const NationalIdInput: React.FC<NationalIdInputProps> = ({
           name={name}
           type="text"
           inputMode="numeric"
+          aria-invalid={showFeedback && validation.status === 'invalid' ? true : undefined}
           autoComplete="off"
           disabled={disabled}
           autoFocus={autoFocus}
