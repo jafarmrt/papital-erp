@@ -151,7 +151,7 @@ export default function GlobalHeaderSearch() {
         <input 
           ref={inputRef}
           type="text" 
-          placeholder="جستجوی سراسری کالا، مشتری، فاکتور، پروژه... (Ctrl+K)" 
+          placeholder="جست‌وجوی سراسری کالا، مشتری، فاکتور، پروژه... (Ctrl+K)" 
           value={searchQuery}
           onFocus={() => setIsOpen(true)}
           onChange={e => {
@@ -169,7 +169,7 @@ export default function GlobalHeaderSearch() {
                 inputRef.current?.focus();
               }}
               className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200/60 transition-colors"
-              title="پاک کردن جستجو"
+              title="پاک کردن جست‌وجو"
             >
               <X size={15} />
             </button>
@@ -186,7 +186,7 @@ export default function GlobalHeaderSearch() {
         <div className="absolute top-full right-0 left-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50 max-h-[75vh] flex flex-col transition-all">
           <div className="p-3 bg-slate-50 border-b flex justify-between items-center text-xs text-slate-500">
             <span className="font-semibold flex items-center gap-1.5">
-              🔍 نتایج جستجوی سریع برای «{searchQuery}»
+              🔍 نتایج جست‌وجوی سریع برای «{searchQuery}»
             </span>
             {loading && <Loader2 className="animate-spin text-blue-600" size={15} />}
           </div>
@@ -194,14 +194,14 @@ export default function GlobalHeaderSearch() {
           <div className="overflow-y-auto p-2 space-y-3 custom-scrollbar flex-1">
             {!loading && totalResults === 0 && (
               <div className="p-8 text-center text-slate-400 text-xs font-medium">
-                هیچ موردی متناسب با جستجوی شما یافت نشد.
+                هیچ موردی متناسب با جست‌وجوی شما یافت نشد.
               </div>
             )}
 
             {/* Items */}
             {results.items.length > 0 && (
               <div>
-                <div className="px-2 py-1 text-[11px] font-bold text-slate-400 flex items-center gap-1 uppercase tracking-wider">
+                <div className="px-2 py-1 text-[11px] font-bold text-slate-400 flex items-center gap-1">
                   <Package size={13} className="text-blue-500" />
                   کالاها و مواد اولیه ({formatPersianNumber(results.items.length)})
                 </div>
@@ -245,7 +245,7 @@ export default function GlobalHeaderSearch() {
             {/* Customers */}
             {results.customers.length > 0 && (
               <div>
-                <div className="px-2 py-1 text-[11px] font-bold text-slate-400 flex items-center gap-1 uppercase tracking-wider border-t pt-2">
+                <div className="px-2 py-1 text-[11px] font-bold text-slate-400 flex items-center gap-1 border-t pt-2">
                   <UsersRound size={13} className="text-emerald-500" />
                   طرفین حساب ({formatPersianNumber(results.customers.length)})
                 </div>
@@ -277,7 +277,7 @@ export default function GlobalHeaderSearch() {
             {/* Invoices */}
             {results.documents.length > 0 && (
               <div>
-                <div className="px-2 py-1 text-[11px] font-bold text-slate-400 flex items-center gap-1 uppercase tracking-wider border-t pt-2">
+                <div className="px-2 py-1 text-[11px] font-bold text-slate-400 flex items-center gap-1 border-t pt-2">
                   <ClipboardList size={13} className="text-purple-500" />
                   اسناد و فاکتورها ({formatPersianNumber(results.documents.length)})
                 </div>
@@ -311,7 +311,7 @@ export default function GlobalHeaderSearch() {
             {/* Projects */}
             {results.projects.length > 0 && (
               <div>
-                <div className="px-2 py-1 text-[11px] font-bold text-slate-400 flex items-center gap-1 uppercase tracking-wider border-t pt-2">
+                <div className="px-2 py-1 text-[11px] font-bold text-slate-400 flex items-center gap-1 border-t pt-2">
                   <Layers size={13} className="text-amber-500" />
                   پروژه‌های تولید ({formatPersianNumber(results.projects.length)})
                 </div>

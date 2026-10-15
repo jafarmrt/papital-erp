@@ -22,7 +22,7 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
           type="text"
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
-          placeholder="جستجوی فهرست..."
+          placeholder="جست‌وجوی فهرست..."
           className="w-full bg-slate-800/90 text-slate-100 placeholder:text-slate-500 text-[11px] rounded-xl pl-7 pr-7 py-1.5 border border-slate-750 focus:border-blue-500 focus:bg-slate-800 focus:outline-none transition-all shadow-inner"
         />
         <Search
@@ -34,7 +34,7 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
             type="button"
             onClick={() => onQueryChange('')}
             className="absolute left-2 text-slate-400 hover:text-white p-0.5 rounded cursor-pointer transition-colors"
-            title="پاک کردن جستجو"
+            title="پاک کردن جست‌وجو"
           >
             <X size={13} />
           </button>
@@ -43,7 +43,7 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
 
       {query.trim() && (
         <div className="flex items-center justify-between px-1 mt-1 text-[10px] text-slate-400">
-          <span>نتایج جستجو:</span>
+          <span>نتایج جست‌وجو:</span>
           <span className="font-bold text-blue-400">
             {totalResultsCount} مورد
           </span>

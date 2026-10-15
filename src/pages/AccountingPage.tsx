@@ -192,7 +192,7 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
           resetKeys={[currentTab]}
           onReset={refreshAll}
           title="خطا در بارگذاری محتوای این بخش مالی"
-          description="در پردازش یا نمایش اطلاعات این بخش خطایی رخ داده است. می‌توانید با استفاده از دکمه زیر مجدداً تلاش نمایید."
+          description="در پردازش یا نمایش اطلاعات این بخش خطایی رخ داده است. می‌توانید با استفاده از دکمه زیر مجدداً تلاش کنید."
         >
           {/* Main Content Area */}
           <Suspense

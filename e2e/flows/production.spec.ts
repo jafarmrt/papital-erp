@@ -13,13 +13,13 @@ const ALLOCATION_TEXT = {
   tab: 'تخصیص مواد به پروژه‌ها',
   open: 'تخصیص مواد به پروژه',
   projectLabel: 'پروژه تولید مقصد',
-  search: 'جستجو...',
+  search: 'جست‌وجو...',
   submit: 'تأیید و ثبت تخصیص',
   inProgress: 'در جریان تولید',
 } as const;
 
 const DELIVERY_TEXT = {
-  projectSearch: 'جستجو (کد پروژه، مشتری، کالا)...',
+  projectSearch: 'جست‌وجو (کد پروژه، مشتری، کالا)...',
   tab: '۶. ورود به انبار',
   deliver: 'ورود به انبار',
   overTitle: 'تحویل بیش از مقدار برنامه‌ریزی‌شده پروژه',

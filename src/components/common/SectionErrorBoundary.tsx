@@ -88,7 +88,7 @@ export class SectionErrorBoundary extends Component<
       const description = isChunkLoadError
         ? 'نسخه جدیدی از این بخش در کارساز منتشر شده است. جهت بارگذاری کامل، لطفاً این بخش را بازنشانی فرمایید.'
         : (this.props.description ||
-           'پردازش داده‌های این بخش با مشکل مواجه شد. می‌توانید با فشردن دکمه زیر مجدداً تلاش نمایید.');
+           'پردازش داده‌های این بخش با مشکل مواجه شد. می‌توانید با فشردن دکمه زیر مجدداً تلاش کنید.');
 
       const onRetryAction = isChunkLoadError
         ? () => {

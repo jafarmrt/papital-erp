@@ -54,7 +54,7 @@ export function VoucherPrintModal({
             </div>
 
             <div className="w-2/4 text-center">
-              <h1 className="text-lg font-black tracking-tight">{companyName}</h1>
+              <h1 className="text-lg font-black">{companyName}</h1>
               <h2 className="text-base font-bold mt-1 text-slate-700">سند حسابداری</h2>
               <div className="text-[11px] text-slate-500 mt-0.5">نوع سند: {typeLabel}</div>
               {amounts.rate !== null && (

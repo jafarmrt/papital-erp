@@ -640,7 +640,7 @@ export function DeadLetterQueueSubTab() {
                   اصلاح داده رویداد #{toPersianDigits(editingItem.id)} ({editingItem.eventType})
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  مقادیر معیوب را اصلاح کنید و سپس رویداد را در گذرگاه دامنه‌ای بازپخش نمایید.
+                  مقادیر معیوب را اصلاح کنید و سپس رویداد را در گذرگاه دامنه‌ای بازپخش کنید.
                 </p>
               </div>
               <button onClick={() => setEditingItem(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">

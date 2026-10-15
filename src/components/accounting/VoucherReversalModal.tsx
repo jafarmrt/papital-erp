@@ -38,7 +38,7 @@ export function VoucherReversalModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reason.trim()) {
-      toast.error('لطفاً دلیل برگشت سند را وارد نمایید یا یکی از دلایل آماده را انتخاب کنید');
+      toast.error('لطفاً دلیل برگشت سند را وارد کنید یا یکی از دلایل آماده را انتخاب کنید');
       return;
     }
 

@@ -177,7 +177,7 @@ export default function ReservedItemsReportPage() {
             <Lock size={26} />
           </div>
           <div>
-            <h1 className="text-xl font-black text-slate-900 tracking-tight">گزارش اقلام رزروی انبار</h1>
+            <h1 className="text-xl font-black text-slate-900">گزارش اقلام رزروی انبار</h1>
             <p className="text-xs text-slate-500 mt-1">
               مدیریت و نظارت یکپارچه بر کالاهای رزرو شده در پیش‌فاکتورها و کنترل پروژه‌های فعال
             </p>
@@ -323,7 +323,7 @@ export default function ReservedItemsReportPage() {
             <Search size={16} className="absolute right-3.5 top-3 text-slate-400" />
             <input
               type="text"
-              placeholder="جستجو کالا، شماره پیش‌فاکتور یا پروژه..."
+              placeholder="جست‌وجو کالا، شماره پیش‌فاکتور یا پروژه..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pr-10 pl-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"

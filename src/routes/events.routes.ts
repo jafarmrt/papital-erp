@@ -189,7 +189,7 @@ router.post(['/action-rules', '/rules'], authorizePermission('events.manage'), v
   const { name, description, eventType, conditions, conditionsJson, actionType, actionConfigJson, actions, isActive } = req.body;
 
   if (!name || !eventType) {
-    throw new BadRequestError('نام و نوع رویداد الزامی می‌باشد.');
+    throw new BadRequestError('نام و نوع رویداد الزامی است.');
   }
 
   const firstAction = Array.isArray(actions) && actions.length > 0 ? actions[0] : null;

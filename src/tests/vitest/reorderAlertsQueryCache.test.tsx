@@ -146,7 +146,7 @@ describe('ReorderAlertsPage — React Query cache', () => {
     await screen.findByText('سیم نقره');
     fireEvent.click(screen.getByTitle('ثبت سفارش خرید برای این ماده اولیه'));
     fireEvent.click(await screen.findByText('صدور مستقیم سند انبار / خرید'));
-    fireEvent.click(screen.getByText('-- انتخاب یا جستجوی طرف‌حساب --'));
+    fireEvent.click(screen.getByText('-- انتخاب یا جست‌وجوی طرف‌حساب --'));
     fireEvent.click(await screen.findByText(/نقره‌سازان/));
       fireEvent.click(screen.getByRole('button', { name: /ثبت سند خرید انبار/ }));
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith('رسید قطعی ورود کالا به انبار با موفقیت صادر و موجودی افزایش یافت.'));

@@ -270,7 +270,7 @@ export function TaskTitlesSettingsTab() {
               <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
               <input
                 type="text"
-                placeholder="جستجوی کد یا عنوان..."
+                placeholder="جست‌وجوی کد یا عنوان..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pr-9 pl-3 py-1.5 border border-slate-300 rounded-xl text-xs bg-white focus:ring-2 focus:ring-blue-500/50 outline-none w-44 md:w-56"

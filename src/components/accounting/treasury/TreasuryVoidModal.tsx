@@ -19,12 +19,13 @@ export const TreasuryVoidModal: React.FC<TreasuryVoidModalProps> = ({
 }) => {
   const [voidReason, setVoidReason] = useState('');
   const [isVoiding, setIsVoiding] = useState(false);
+  const [reasonError, setReasonError] = useState('');
 
   if (!target) return null;
 
   const handleConfirm = async () => {
     if (!voidReason.trim()) {
-      alert('لطفاً دلیل ابطال تراکنش را وارد کنید.');
+      setReasonError('لطفاً دلیل ابطال تراکنش را وارد کنید.');
       return;
     }
     setIsVoiding(true);
@@ -57,12 +58,19 @@ export const TreasuryVoidModal: React.FC<TreasuryVoidModalProps> = ({
         </label>
         <textarea
           value={voidReason}
-          onChange={(e) => setVoidReason(e.target.value)}
+          onChange={(e) => { setVoidReason(e.target.value); setReasonError(''); }}
+          aria-invalid={reasonError ? true : undefined}
+          aria-describedby={reasonError ? 'treasury-void-reason-error' : undefined}
           rows={3}
           placeholder="مثال: اشتباه در مبلغ — ثبت مجدد با مبلغ صحیح"
           className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-xl text-xs bg-slate-50 dark:bg-slate-700 focus:outline-none focus:border-rose-400 resize-none"
           disabled={isVoiding}
         />
+        {reasonError && (
+          <p id="treasury-void-reason-error" role="alert" className="mt-1 text-[11px] font-bold text-rose-600 dark:text-rose-400">
+            {reasonError}
+          </p>
+        )}
         <div className="flex justify-end gap-2 mt-4">
           <button
             type="button"

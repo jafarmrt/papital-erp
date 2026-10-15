@@ -8,6 +8,14 @@ import { HelpBadge } from '../../common/HelpBadge';
 import { fetchJson } from '../../../api';
 import type { BankAccount } from '../../../types';
 
+/** خطای فرم انتقال وجه، که زیر فرم نشان داده می‌شود (نه پنجره alert مرورگر) */
+export function transferFormError(form: { fromBankAccountId: number | null; toBankAccountId: number | null; amount: number }): string {
+  if (!form.fromBankAccountId || !form.toBankAccountId) return 'لطفاً حساب‌های مبدأ و مقصد را انتخاب کنید.';
+  if (form.fromBankAccountId === form.toBankAccountId) return 'حساب مبدأ و مقصد نمی‌توانند یکسان باشند.';
+  if (!(form.amount > 0)) return 'مبلغ انتقال باید بزرگ‌تر از صفر باشد.';
+  return '';
+}
+
 interface TreasuryTransferModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -33,6 +41,7 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
     description: '',
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [formError, setFormError] = useState('');
 
   // TD-105: تاریخ پیش‌فرض از سرور (ساعت توافقی) — نه ساعت مرورگر کلاینت
   useEffect(() => {
@@ -64,6 +73,7 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
         trackingNumber: '',
         description: '',
       });
+      setFormError('');
     }
   }, [isOpen]);
 
@@ -74,18 +84,9 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.fromBankAccountId || !formData.toBankAccountId) {
-      alert('لطفاً حساب‌های مبدأ و مقصد را انتخاب کنید.');
-      return;
-    }
-    if (formData.fromBankAccountId === formData.toBankAccountId) {
-      alert('حساب مبدأ و مقصد نمی‌توانند یکسان باشند.');
-      return;
-    }
-    if (formData.amount <= 0) {
-      alert('مبلغ انتقال باید بزرگ‌تر از صفر باشد.');
-      return;
-    }
+    const error = transferFormError(formData);
+    setFormError(error);
+    if (error) return;
 
     setIsSaving(true);
     try {
@@ -204,6 +205,10 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
               placeholder="پیش‌فرض: انتقال وجه از ... به ..."
             />
           </div>
+
+          {formError && (
+            <p role="alert" className="text-[11px] font-bold text-rose-600 dark:text-rose-400">{formError}</p>
+          )}
 
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
             <button

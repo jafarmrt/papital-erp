@@ -539,7 +539,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="جستجو در محصولات (نام، کد انبار یا کد مشتری)..."
+              placeholder="جست‌وجو در محصولات (نام، کد انبار یا کد مشتری)..."
               className="w-full pl-3 pr-9 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-400 focus:bg-white focus:outline-none placeholder:text-slate-400"
             />
           </div>
@@ -575,7 +575,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
       <div className="space-y-2.5">
         {filteredProducts.length === 0 ? (
           <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-slate-400">
-            هیچ محصولی با معیارهای جستجوی فعلی یافت نشد.
+            هیچ محصولی با معیارهای جست‌وجوی فعلی یافت نشد.
           </div>
         ) : (
           filteredProducts.map((p, idx) => {

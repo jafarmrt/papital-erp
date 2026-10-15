@@ -184,7 +184,7 @@ export function CRMTasksWidget({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="جستجو در نام مشتری، عنوان یا اقدام بعدی..."
+            placeholder="جست‌وجو در نام مشتری، عنوان یا اقدام بعدی..."
             className="w-full pl-8 pr-8 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-1 focus:ring-rose-400 text-slate-700"
           />
           <Search size={13} className="absolute right-2.5 top-2.5 text-slate-400" />

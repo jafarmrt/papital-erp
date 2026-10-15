@@ -105,7 +105,7 @@ export function OpenProformasPanel({ proformas, total, page, onPageChange, editi
             <div className="p-4 sm:p-6 overflow-y-auto space-y-4 text-xs">
               <div className="bg-purple-50/70 border border-purple-200 rounded-2xl p-4 text-purple-900 leading-relaxed">
                 <p className="font-medium">
-                  از طریق گام‌های زیر می‌توانید پیش‌فاکتور را بررسی کرده و با دکمه <strong className="text-purple-950 font-black">«ارسال به انبار»</strong>، وضعیت گردش‌کار را جهت تایید موجودی و آماده‌سازی به کارتابل انباردار ارسال نمایید.
+                  از طریق گام‌های زیر می‌توانید پیش‌فاکتور را بررسی کرده و با دکمه <strong className="text-purple-950 font-black">«ارسال به انبار»</strong>، وضعیت گردش‌کار را جهت تایید موجودی و آماده‌سازی به کارتابل انباردار ارسال کنید.
                 </p>
               </div>
 

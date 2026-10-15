@@ -284,7 +284,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
             <Search className="absolute right-3 top-2.5 text-slate-400" size={16} />
             <input
               type="text"
-              placeholder="جستجو بر اساس کد پروژه، نام کالا یا کاربر..."
+              placeholder="جست‌وجو بر اساس کد پروژه، نام کالا یا کاربر..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-3 pr-9 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500"

@@ -65,7 +65,7 @@ export function RequisitionListPanel({
             <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
             <input
               type="text"
-              placeholder="جستجو در کد درخواست، عنوان، پروژه یا کالاهای درخواستی..."
+              placeholder="جست‌وجو در کد درخواست، عنوان، پروژه یا کالاهای درخواستی..."
               value={filters.search}
               onChange={e => onFiltersChange({ search: e.target.value, page: 1 })}
               className="w-full pl-3 pr-9 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none"

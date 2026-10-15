@@ -346,7 +346,7 @@ export function ApprovalInboxPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="جستجو بر اساس شماره یا عنوان..."
+              placeholder="جست‌وجو بر اساس شماره یا عنوان..."
               className="w-full pl-3 pr-9 py-2.5 sm:py-1.5 text-sm sm:text-xs rounded-lg border border-gray-200 dark:border-gray-700 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>

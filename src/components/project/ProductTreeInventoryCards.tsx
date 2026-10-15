@@ -80,7 +80,7 @@ export function ProductTreeInventoryCards({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="جستجو در نام یا کد محصول..."
+              placeholder="جست‌وجو در نام یا کد محصول..."
               className="pr-8 pl-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs w-48 sm:w-64 focus:ring-2 focus:ring-amber-400 focus:outline-none"
             />
           </div>

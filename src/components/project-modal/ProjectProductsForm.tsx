@@ -86,7 +86,7 @@ export const ProjectProductsForm: React.FC<ProjectProductsFormProps> = ({
                     }))}
                   value={product.item_id ? String(product.item_id) : ''}
                   onChange={(val) => onUpdateProductRow(idx, 'item_id', val ? Number(val) : null)}
-                  placeholder="جستجوی کالا بر اساس نام یا کد..."
+                  placeholder="جست‌وجوی کالا بر اساس نام یا کد..."
                   className="w-full"
                 />
               </div>

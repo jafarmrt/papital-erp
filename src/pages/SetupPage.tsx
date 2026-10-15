@@ -176,7 +176,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
             <div className="w-14 h-14 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg mb-3">
               <Shield size={28} />
             </div>
-            <h1 className="text-2xl font-bold tracking-tight">راه‌اندازی اولیه سامانه جامع مدیریت پاپیتال</h1>
+            <h1 className="text-2xl font-bold">راه‌اندازی اولیه سامانه جامع مدیریت پاپیتال</h1>
             <p className="text-slate-400 text-sm mt-1">پیکربندی حساب مدیر ارشد و اطلاعات کارگاه / سازمان</p>
           </div>
 

@@ -232,7 +232,7 @@ export function AccountingAuditChecklistView() {
                         اقدام سریع پیشنهادی: {toPersianDigits(unlinkedCount)} فاکتور نهایی بی سند حسابداری
                       </span>
                       <span className="text-[11px] text-slate-600 dark:text-slate-400 block mt-0.5">
-                        می‌توانید با یک کلیک تمام اسناد حسابداری معوق را به‌صورت خودکار صادر نمایید.
+                        می‌توانید با یک کلیک تمام اسناد حسابداری معوق را به‌صورت خودکار صادر کنید.
                       </span>
                     </div>
                   </div>

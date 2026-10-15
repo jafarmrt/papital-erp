@@ -152,7 +152,7 @@ export default function TransfersPage({ user }: { user?: User }) {
     e.preventDefault();
     const codeToSave = (selectedTransfer ? selectedTransfer.code : editCode).trim();
     if (!codeToSave) {
-      toast.error('لطفاً کد ترنسفر را وارد نمایید (مثال: 001 یا 002)');
+      toast.error('لطفاً کد ترنسفر را وارد کنید (مثال: 001 یا 002)');
       return;
     }
 
@@ -289,7 +289,7 @@ export default function TransfersPage({ user }: { user?: User }) {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="جستجو بر اساس کد ترنسفر، عنوان یا نام محصول..."
+            placeholder="جست‌وجو بر اساس کد ترنسفر، عنوان یا نام محصول..."
             className="w-full pl-3 pr-9 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
           />
         </div>
@@ -346,9 +346,9 @@ export default function TransfersPage({ user }: { user?: User }) {
       ) : paginatedTransfers.length === 0 ? (
         <div className="bg-white p-12 border rounded-2xl text-center space-y-4">
           <AlertCircle size={40} className="mx-auto text-slate-300" />
-          <h3 className="font-bold text-slate-700">هیچ کد ترنسفری مطابق با جستجوی شما یافت نشد.</h3>
+          <h3 className="font-bold text-slate-700">هیچ کد ترنسفری مطابق با جست‌وجوی شما یافت نشد.</h3>
           <p className="text-xs text-slate-400 max-w-md mx-auto">
-            می‌توانید مستقیماً یک طرح ترنسفر جدید ایجاد کنید یا از کدگذاری خودکار محصولات استفاده نمایید.
+            می‌توانید مستقیماً یک طرح ترنسفر جدید ایجاد کنید یا از کدگذاری خودکار محصولات استفاده کنید.
           </p>
           <div className="flex items-center justify-center gap-2 pt-2">
             {designAccess.canSave && (
@@ -365,7 +365,7 @@ export default function TransfersPage({ user }: { user?: User }) {
                 onClick={() => setSearch('')}
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
               >
-                پاک کردن جستجو
+                پاک کردن جست‌وجو
               </button>
             )}
           </div>
@@ -381,7 +381,7 @@ export default function TransfersPage({ user }: { user?: User }) {
                 {/* Header of Transfer Card */}
                 <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
                   <div className="flex items-center gap-2">
-                    <span className="bg-blue-600 text-white font-mono text-xs font-bold px-2.5 py-1 rounded-lg tracking-wider shadow-2xs">
+                    <span className="bg-blue-600 text-white font-mono text-xs font-bold px-2.5 py-1 rounded-lg shadow-2xs">
                       کد ترنسفر: {item.code}
                     </span>
                     <h3 className="font-bold text-slate-800 text-xs truncate max-w-[160px]" title={item.title}>

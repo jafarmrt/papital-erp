@@ -68,7 +68,7 @@ export function PieceworkLogsTab({
             <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="جستجو در کارکردها (پرسنل، عنوان کار، پروژه)..."
+              placeholder="جست‌وجو در کارکردها (پرسنل، عنوان کار، پروژه)..."
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
               className="w-full pl-3 pr-9 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500"

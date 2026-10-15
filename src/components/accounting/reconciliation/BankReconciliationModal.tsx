@@ -68,7 +68,7 @@ export function BankReconciliationModal({
   // پردازش فایل اکسل صورت‌حساب
   const processFile = async (file: File) => {
     if (!selectedAccountId) {
-      toast.error('لطفاً ابتدا حساب بانکی مورد نظر را انتخاب نمایید.');
+      toast.error('لطفاً ابتدا حساب بانکی مورد نظر را انتخاب کنید.');
       return;
     }
 
@@ -482,7 +482,7 @@ export function BankReconciliationModal({
                 <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="جستجو در شرح، پیگیری، طرف‌حساب..."
+                  placeholder="جست‌وجو در شرح، پیگیری، طرف‌حساب..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   className="w-full pr-8 pl-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-750 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-hidden"
@@ -641,7 +641,7 @@ export function BankReconciliationModal({
                 ۱. ابتدا حساب بانکی مورد نظر را از منوی بالا انتخاب کنید. <br />
                 ۲. خروجی اکسل گردش حساب را از سامانه اینترنت‌بانک خود دانلود نموده و در کادر بالا رها کنید. <br />
                 ۳. موتور سیستم به صورت خودکار واریزها، برداشت‌ها و شماره‌های پیگیری را شناسایی کرده و سطرهای متناظر در خزانه‌داری را پیدا می‌کند. <br />
-                ۴. اقلام منطبق را با ۱ کلیک تأیید و ثبت نمایید و موارد مغایرت را برای بررسی و صدور سند مشخص کنید.
+                ۴. اقلام منطبق را با ۱ کلیک تأیید و ثبت کنید و موارد مغایرت را برای بررسی و صدور سند مشخص کنید.
               </div>
             </div>
           )}

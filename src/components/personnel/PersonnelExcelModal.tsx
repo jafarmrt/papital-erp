@@ -463,7 +463,7 @@ export function PersonnelExcelModal({
                     <span>دانلود الگوی نمونه اکسل</span>
                   </div>
                   <p className="text-xs text-slate-600 leading-relaxed">
-                    فایل نمونه استاندارد شامل تمام ستون‌های مشخصات فردی، تماس، شغلی و بانکی را دریافت و تکمیل نمایید.
+                    فایل نمونه استاندارد شامل تمام ستون‌های مشخصات فردی، تماس، شغلی و بانکی را دریافت و تکمیل کنید.
                   </p>
                   <button
                     type="button"
@@ -576,7 +576,7 @@ export function PersonnelExcelModal({
                   <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="text"
-                    placeholder="جستجو در پیش‌نمایش بر اساس نام، کد پرسنلی، شماره یا شغل..."
+                    placeholder="جست‌وجو در پیش‌نمایش بر اساس نام، کد پرسنلی، شماره یا شغل..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full pl-3 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500"

@@ -218,7 +218,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                     <Search className="absolute right-3 top-2 text-slate-400" size={15} />
                     <input
                       type="text"
-                      placeholder="جستجو در عطف، توضیحات، کاربر..."
+                      placeholder="جست‌وجو در عطف، توضیحات، کاربر..."
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       className="w-full pl-3 pr-9 py-1.5 bg-white border border-slate-300 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-500"

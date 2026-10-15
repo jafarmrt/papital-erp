@@ -231,7 +231,7 @@ export default function ProjectsPage() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="جستجو (کد پروژه، مشتری، کالا)..."
+              placeholder="جست‌وجو (کد پروژه، مشتری، کالا)..."
               className="w-full pl-3 pr-9 py-2 border border-slate-200 rounded-xl bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none text-xs"
             />
           </div>
