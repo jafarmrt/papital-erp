@@ -117,7 +117,7 @@ export function DocumentDetailsPreview({ docDetails, isLoadingDoc }: DocumentDet
                 const stock = hasLineStock ? lineStockOf(docDetails.lineStock ?? [], it.item_id ?? it.itemId, it.location) : undefined;
                 return (
                   <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                    <td className="p-2 text-gray-400 font-mono">{idx + 1}</td>
+                    <td className="p-2 text-gray-400 font-mono">{formatPersianNumber(idx + 1)}</td>
                     <td className="p-2 font-medium text-gray-900 dark:text-gray-100">{it.item_name || it.itemName || it.code || 'کالا'}</td>
                     <td className="p-2 text-center font-mono font-bold text-indigo-600 dark:text-indigo-400">{formatPersianNumber(lineQty)} <span className="text-[10px] text-gray-400 font-normal">{it.unit || 'عدد'}</span></td>
                     {hasLineStock && <td className="p-2 text-gray-700 dark:text-gray-200">{stock?.warehouseName ?? '—'}</td>}

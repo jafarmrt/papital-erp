@@ -4,7 +4,7 @@ import persian_fa from "react-date-object/locales/persian_fa";
 import { Search, Plus, Edit2, Trash2, CheckCircle2, Clock, FolderKanban } from 'lucide-react';
 import { PieceworkLog } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
-import { formatQuantityOrTime, formatPersianDate, extractDateString } from '../../utils';
+import { formatQuantityOrTime, formatPersianDate, extractDateString, formatPersianCode } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 import { PieceworkLogsPagination, type PieceworkLogsPaginationState } from './PieceworkLogsPagination';
@@ -239,7 +239,7 @@ export function PieceworkLogsTab({
                         ) : (
                           <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md text-[10px] inline-flex items-center gap-1">
                             <CheckCircle2 size={12} />
-                            فیش #{log.payrollId}
+                            فیش #{formatPersianCode(log.payrollId)}
                           </span>
                         )}
                       </td>

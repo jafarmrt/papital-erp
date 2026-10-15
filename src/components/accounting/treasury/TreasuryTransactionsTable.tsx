@@ -15,7 +15,7 @@ import {
   ArrowUpRight,
   Unlink,
 } from 'lucide-react';
-import { formatPersianPrice, formatPersianDate, formatPersianNumber } from '../../../utils';
+import { formatPersianPrice, formatPersianDate, formatPersianNumber, formatPersianCode } from '../../../utils';
 import { isRialCurrency, rialDisplayOf } from '../../../lib/rialDisplay';
 import { JalaliDateInput } from '../../common/JalaliDateInput';
 import { treasuryMethodLabel, treasuryPartyTypeLabel } from '../../../lib/treasury/treasuryExport';
@@ -239,7 +239,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                     }`}
                   >
                     <td className="py-3 px-3 text-center text-slate-400 font-mono text-[11px]">
-                      {(txPage - 1) * pageSize + idx + 1}
+                      {formatPersianNumber((txPage - 1) * pageSize + idx + 1)}
                     </td>
 
                     {/* Receipt / Tx Number */}
@@ -319,7 +319,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                           className="inline-flex items-center gap-1 text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline mt-0.5 font-bold cursor-pointer"
                         >
                           <Paperclip size={10} />
-                          {tx.attachments.length} فایل پیوست
+                          {formatPersianNumber(tx.attachments.length)} فایل پیوست
                         </button>
                       )}
                     </td>
@@ -346,7 +346,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                     <td className="py-3 px-3 text-center">
                       {tx.voucherId ? (
                         <span className="inline-block px-2 py-0.5 text-[10px] font-mono font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 rounded border border-indigo-200 dark:border-indigo-800/50">
-                          سند #{tx.voucherId}
+                          سند #{formatPersianCode(tx.voucherId)}
                         </span>
                       ) : (
                         <span className="text-[10px] text-slate-400">—</span>
@@ -411,8 +411,8 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
       {totalPages > 1 && (
         <div className="p-3 sm:p-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs text-slate-500">
           <div>
-            صفحه <span className="font-bold text-slate-800 dark:text-slate-200">{txPage}</span> از{' '}
-            <span className="font-bold text-slate-800 dark:text-slate-200">{totalPages}</span>
+            صفحه <span className="font-bold text-slate-800 dark:text-slate-200">{formatPersianNumber(txPage)}</span> از{' '}
+            <span className="font-bold text-slate-800 dark:text-slate-200">{formatPersianNumber(totalPages)}</span>
           </div>
 
           <div className="flex items-center gap-1">

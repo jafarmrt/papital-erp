@@ -1,4 +1,4 @@
-import { formatPersianPrice, formatPersianNumber, formatPersianDate, financialAmountToPersianWords, formatCurrencyLabel } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianDate, financialAmountToPersianWords, formatCurrencyLabel, formatPersianCode } from '../../utils';
 import { PrintModal } from '../common/PrintModal';
 import type { JournalVoucher } from '../../types';
 import { voucherTypeLabel } from '../../lib/accounting/voucherTypes';
@@ -96,10 +96,10 @@ export function VoucherPrintModal({
             <tbody>
               {(voucher.items || []).map((item, idx) => (
                 <tr key={idx} className="border-b border-slate-200">
-                  <td className="border border-slate-300 p-2 text-center font-mono">{idx + 1}</td>
+                  <td className="border border-slate-300 p-2 text-center font-mono">{formatPersianNumber(idx + 1)}</td>
                   <td className="border border-slate-300 p-2 font-mono text-[11px] text-slate-600">
                     <div>{item.accountCode || '---'}</div>
-                    {item.detailedName && <div className="text-[10px] text-slate-400">شناسه: {item.detailedId || '---'}</div>}
+                    {item.detailedName && <div className="text-[10px] text-slate-400">شناسه: {formatPersianCode(item.detailedId) || '---'}</div>}
                   </td>
                   <td className="border border-slate-300 p-2">
                     <div className="font-bold text-slate-800">{item.accountName}</div>

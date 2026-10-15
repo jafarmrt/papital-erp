@@ -301,7 +301,7 @@ export function ReorderPurchaseModal({
                 <tbody className="divide-y divide-slate-100">
                   {items.map((it, idx) => (
                     <tr key={it.id} className="hover:bg-slate-50/60">
-                      <td className="p-2.5 text-center font-mono text-slate-400">{idx + 1}</td>
+                      <td className="p-2.5 text-center font-mono text-slate-400">{formatPersianNumber(idx + 1)}</td>
                       <td className="p-2.5">
                         <span className="font-bold text-slate-900 block">{it.name}</span>
                         <span className="text-[11px] font-mono text-slate-500">{it.code}</span>

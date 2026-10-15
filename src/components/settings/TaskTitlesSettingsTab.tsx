@@ -329,7 +329,7 @@ export function TaskTitlesSettingsTab() {
               ) : (
                 filteredTasks.map((task, idx) => (
                   <tr key={task.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-3.5 text-slate-400 font-mono">{idx + 1}</td>
+                    <td className="p-3.5 text-slate-400 font-mono">{formatPersianNumber(idx + 1)}</td>
                     <td className="p-3.5 font-mono text-slate-700 font-bold">{task.code}</td>
                     <td className="p-3.5 font-bold text-slate-900">{task.title}</td>
                     <td className="p-3.5">

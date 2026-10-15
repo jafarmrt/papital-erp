@@ -96,7 +96,7 @@ export function SettingsNavigationSidebar({
                 'text-[10px] px-1.5 py-0.2 rounded-full',
                 selectedGroupFilter === g.id ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-500'
               )}>
-                {g.tabs.length}
+                {formatPersianNumber(g.tabs.length)}
               </span>
             </button>
           ))}
@@ -135,7 +135,7 @@ export function SettingsNavigationSidebar({
                     </span>
                   </div>
                   <span className="text-[10px] text-slate-400 font-mono">
-                    {group.tabs.length}
+                    {formatPersianNumber(group.tabs.length)}
                   </span>
                 </div>
 

@@ -163,7 +163,7 @@ export default function CRMPage({ user }: { user: any }) {
               }`}
             >
               <Filter size={15} />
-              جدول پرونده‌های فروش ({crm.leads.length})
+              جدول پرونده‌های فروش ({formatPersianNumber(crm.leads.length)})
             </button>
 
             <button
@@ -175,7 +175,7 @@ export default function CRMPage({ user }: { user: any }) {
               }`}
             >
               <PhoneCall size={15} />
-              دفترچه تماس‌ها و اقدامات ({crm.activities.length})
+              دفترچه تماس‌ها و اقدامات ({formatPersianNumber(crm.activities.length)})
             </button>
 
             <button

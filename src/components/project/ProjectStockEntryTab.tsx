@@ -4,7 +4,7 @@ import { ProductionProject, ProjectProductItem, Item } from '../../types';
 import { fetchJson } from '../../api';
 import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
 import toast from 'react-hot-toast';
-import { toPersianDigits, errorMessageOf } from '../../utils';
+import { toPersianDigits, errorMessageOf, formatPersianNumber } from '../../utils';
 import { ProjectOverDeliveryPrompt, overDeliveriesOf, type ProjectOverDeliveryView } from './ProjectOverDeliveryPrompt';
 import { useProjectPermissions } from '../../hooks/useProjectPermissions';
 import { DELIVERY_MATERIALS_ONLY_NOTE } from '../../lib/projects/deliveryCost';
@@ -609,7 +609,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
                   </button>
 
                   <div className="w-8 h-8 rounded-xl bg-slate-900 text-amber-400 font-bold text-xs flex items-center justify-center shrink-0">
-                    {idx + 1}
+                    {formatPersianNumber(idx + 1)}
                   </div>
 
                   <div>

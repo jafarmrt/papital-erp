@@ -310,7 +310,7 @@ export function ProductTreeInventoryCards({
                             <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-slate-200/80">
                               <div className="flex items-center gap-2">
                                 <span className="w-5 h-5 rounded-full bg-slate-900 text-amber-400 flex items-center justify-center font-mono text-[10px] font-bold">
-                                  {originalIdx + 1}
+                                  {formatPersianNumber(originalIdx + 1)}
                                 </span>
                                 <span className="font-bold text-xs text-slate-800">{sec.title}</span>
                                 {sec.description && (

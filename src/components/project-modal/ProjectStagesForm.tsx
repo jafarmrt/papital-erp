@@ -2,7 +2,7 @@ import React from 'react';
 import { Workflow, Plus, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import { WorkflowPreset } from '../../constants/presets';
 import { ProjectStage } from './types';
-import { toPersianDigits } from '../../utils';
+import { toPersianDigits, formatPersianNumber } from '../../utils';
 
 interface ProjectStagesFormProps {
   stages: ProjectStage[];
@@ -70,7 +70,7 @@ export const ProjectStagesForm: React.FC<ProjectStagesFormProps> = ({
             className="flex items-center gap-2 bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs hover:border-slate-300 transition-all"
           >
             <div className="w-6 h-6 rounded-full bg-slate-100 text-slate-700 font-mono text-xs font-bold flex items-center justify-center shrink-0">
-              {idx + 1}
+              {formatPersianNumber(idx + 1)}
             </div>
 
             <input
@@ -78,7 +78,7 @@ export const ProjectStagesForm: React.FC<ProjectStagesFormProps> = ({
               required
               value={stage.title}
               onChange={(e) => onStageTitleChange(idx, e.target.value)}
-              placeholder={`عنوان مرحله ${idx + 1}`}
+              placeholder={`عنوان مرحله ${formatPersianNumber(idx + 1)}`}
               className="flex-1 bg-transparent border-0 text-xs font-bold text-slate-800 focus:ring-0 p-1"
             />
 

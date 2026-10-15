@@ -13,7 +13,7 @@ import {
   ChevronUp,
   Users
 } from 'lucide-react';
-import { formatPersianDate, formatPersianPrice } from '../../utils';
+import { formatPersianDate, formatPersianPrice, formatPersianNumber } from '../../utils';
 import { toPersianDigits } from '../../utils/persianNumber';
 import { WorkflowActionConditionList, WorkflowBlockedActions } from './WorkflowActionConditions';
 import { WorkflowInstanceTerminate } from './WorkflowInstanceTerminate';
@@ -179,7 +179,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
                           <span className="w-3.5 h-3.5 rounded-full bg-slate-300 dark:bg-slate-600 text-slate-700 dark:text-slate-200 flex items-center justify-center text-[9px] font-mono shrink-0">»</span>
                         ) : (
                           <span className="w-3.5 h-3.5 rounded-full border border-current flex items-center justify-center text-[10px] shrink-0">
-                            {idx + 1}
+                            {formatPersianNumber(idx + 1)}
                           </span>
                         )}
                         <span className="font-semibold">{st.title}</span>
