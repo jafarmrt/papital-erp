@@ -291,7 +291,7 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="جستجوی نام، کد یا پروژه..."
+                placeholder="جست‌وجوی نام، کد یا پروژه..."
                 className="w-full pr-9 pl-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-amber-500 focus:outline-none"
               />
             </div>

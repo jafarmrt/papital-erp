@@ -360,7 +360,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                       const c = customerList.find(x => String(x.id) === val) || safeCustomers.find(x => String(x.id) === val);
                       setFormData({ ...formData, partyId: c ? c.id : null, partyName: c ? c.name : '' });
                     }}
-                    placeholder="جستجو و انتخاب مشتری..."
+                    placeholder="جست‌وجو و انتخاب مشتری..."
                     maxResults={50}
                     className="w-full"
                   />
@@ -375,7 +375,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                       const s = actualSupplierList.find(x => String(x.id) === val) || safeCustomers.find(x => String(x.id) === val);
                       setFormData({ ...formData, partyId: s ? s.id : null, partyName: s ? s.name : '' });
                     }}
-                    placeholder="جستجو و انتخاب تامین‌کننده..."
+                    placeholder="جست‌وجو و انتخاب تامین‌کننده..."
                     maxResults={50}
                     className="w-full"
                   />
@@ -390,7 +390,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                       const p = safePersonnelList.find(x => String(x.id) === val);
                       setFormData({ ...formData, partyId: p ? p.id : null, partyName: p ? personnelPartyName(p) : '' });
                     }}
-                    placeholder="جستجو و انتخاب پرسنل..."
+                    placeholder="جست‌وجو و انتخاب پرسنل..."
                     maxResults={50}
                     className="w-full"
                   />

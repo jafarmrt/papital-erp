@@ -513,7 +513,7 @@ export default function PricingPage() {
             <Search className="absolute right-3 top-2.5 text-slate-400" size={15} />
             <input 
               type="text" 
-              placeholder="جستجو بر اساس نام یا کد..."
+              placeholder="جست‌وجو بر اساس نام یا کد..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-3 pr-9 py-1.5 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-slate-50 hover:bg-white"

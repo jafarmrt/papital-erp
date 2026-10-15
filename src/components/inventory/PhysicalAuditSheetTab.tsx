@@ -141,7 +141,7 @@ export function PhysicalAuditSheetTab({
               <Search className="absolute right-3 top-2.5 text-slate-400" size={16} />
               <input
                 type="text"
-                placeholder="جستجوی کد یا نام کالا..."
+                placeholder="جست‌وجوی کد یا نام کالا..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full min-h-11 sm:min-h-0 pl-3 pr-9 py-2 bg-slate-50 border border-slate-300 rounded-xl text-base sm:text-xs outline-none"

@@ -408,7 +408,7 @@ export function validateIranianNationalId(id: string | null | undefined): { isVa
   const remainder = sum % 11;
   const isChecksumValid = (remainder < 2 && check === remainder) || (remainder >= 2 && check === 11 - remainder);
   if (!isChecksumValid) {
-    return { isValid: false, error: 'رقم کنترلی کد ملی صحیح نمی‌باشد' };
+    return { isValid: false, error: 'رقم کنترلی کد ملی صحیح نیست' };
   }
   return { isValid: true };
 }

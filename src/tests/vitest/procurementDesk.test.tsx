@@ -226,7 +226,7 @@ describe('procurement desk pages and server filters (TD-697)', () => {
     await waitFor(() => expect(requestsTo('/api/procurement/requisitions').some(q => q.get('page') === '2')).toBe(true));
     screen.getByText('خرید و تحویل انبار شده (تکمیل)').click();
     await waitFor(() => expect(requestsTo('/api/procurement/requisitions').some(q => q.get('status') === 'received' && q.get('page') === '1')).toBe(true));
-    const search = screen.getByPlaceholderText(/جستجو در کد درخواست/);
+    const search = screen.getByPlaceholderText(/جست‌وجو در کد درخواست/);
     fireEvent.change(search, { target: { value: 'فیروزه' } });
     await waitFor(() => expect(requestsTo('/api/procurement/requisitions').some(q => q.get('search') === 'فیروزه')).toBe(true));
   });
@@ -269,7 +269,7 @@ describe('requisition item picker (TD-700)', () => {
     });
     render(<CreateRequisitionModal isOpen onClose={() => undefined} onSuccess={() => undefined} />);
     fireEvent.click(screen.getByText('جست‌وجو در فهرست کالا...'));
-    fireEvent.change(screen.getByPlaceholderText('جستجو...'), { target: { value: 'شصتم' } });
+    fireEvent.change(screen.getByPlaceholderText('جست‌وجو...'), { target: { value: 'شصتم' } });
     await waitFor(() => expect(screen.queryByText('مهره کریستالی شصتم (RM-60)')).not.toBeNull());
     fireEvent.click(screen.getByText('مهره کریستالی شصتم (RM-60)'));
     expect((screen.getByPlaceholderText('نام کالا') as HTMLInputElement).value).toBe('مهره کریستالی شصتم');

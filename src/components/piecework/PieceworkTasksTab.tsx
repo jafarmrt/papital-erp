@@ -57,7 +57,7 @@ export function PieceworkTasksTab({
             <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-gray-500" />
             <input
               type="text"
-              placeholder="جستجو در عناوین، کدها و دسته‌بندی کارها..."
+              placeholder="جست‌وجو در عناوین، کدها و دسته‌بندی کارها..."
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
               className="w-full pl-3 pr-9 py-2 bg-slate-50 dark:bg-gray-900/50 border border-slate-200 dark:border-gray-700 rounded-xl text-xs font-bold text-slate-800 dark:text-gray-100 outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"

@@ -431,7 +431,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="جستجو در نام، کد کالا یا کد مشتری..."
+                  placeholder="جست‌وجو در نام، کد کالا یا کد مشتری..."
                   className="w-full pl-3 pr-8 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-400 focus:outline-none placeholder:text-slate-400"
                 />
               </div>
@@ -566,7 +566,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
               {filteredProducts.length === 0 ? (
                 <tr>
                   <td colSpan={4 + baseStages.length + optionalStages.length + 1} className="py-8 text-center text-slate-400">
-                    هیچ محصولی با فیلتر جستجوی فعلی یافت نشد.
+                    هیچ محصولی با فیلتر جست‌وجوی فعلی یافت نشد.
                   </td>
                 </tr>
               ) : (

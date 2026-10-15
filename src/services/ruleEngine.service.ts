@@ -181,7 +181,7 @@ export class RuleEngineService {
       case 'like':
       case 'includes':
         passed = String(actualValue ?? '').toLowerCase().includes(String(targetValue ?? '').toLowerCase());
-        reason = passed ? `عبارت شامل ${targetValue} می‌باشد` : `عبارت شامل ${targetValue} نمی‌باشد`;
+        reason = passed ? `عبارت شامل ${targetValue} است` : `عبارت شامل ${targetValue} نیست`;
         break;
 
       case 'is_empty':

@@ -121,11 +121,11 @@ describe('InvoicesListPage — invoices list (TD-080 part 3 characterization)', 
   it('refetches with the type filter and clears the filters', async () => {
     renderPage();
     await screen.findByText('INV-۱۰۰۱');
-    expect(screen.queryByText('پاک کردن شرط‌های جستجو')).toBeNull();
+    expect(screen.queryByText('پاک کردن شرط‌های جست‌وجو')).toBeNull();
     fireEvent.change(screen.getByDisplayValue('همه انواع سند (خرید، فروش، انبار)'), { target: { value: 'invoice' } });
     await waitFor(() => expect(fetchJson).toHaveBeenCalledWith('/documents?type=invoice&page=1&limit=50', { signal: expect.any(AbortSignal) }));
-    fireEvent.click(screen.getByText('پاک کردن شرط‌های جستجو'));
-    expect(screen.queryByText('پاک کردن شرط‌های جستجو')).toBeNull();
+    fireEvent.click(screen.getByText('پاک کردن شرط‌های جست‌وجو'));
+    expect(screen.queryByText('پاک کردن شرط‌های جست‌وجو')).toBeNull();
     expect(screen.getByDisplayValue('همه انواع سند (خرید، فروش، انبار)')).toBeTruthy();
   });
 

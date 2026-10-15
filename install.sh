@@ -82,7 +82,7 @@ else
 fi
 $SUDO systemctl enable --now postgresql
 
-# Node.js 24 LTS via NodeSource (v10.1.26: an older Node is upgraded too)
+# Node.js 24 LTS via NodeSource (v10.1.27: an older Node is upgraded too)
 if ! command -v node >/dev/null 2>&1 || [ "$(node -p 'process.versions.node.split(".")[0]')" -lt 24 ]; then
   log "Installing Node.js 24 LTS..."
   # NOTE: no `-E` here — with empty $SUDO (root) bash would try to run a command named "-E"

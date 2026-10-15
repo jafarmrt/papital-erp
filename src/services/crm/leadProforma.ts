@@ -36,7 +36,7 @@ export async function lockLeadForNewProforma(tx: DbExecutor, leadId: number): Pr
     .where(and(eq(crmLeads.id, leadId), eq(crmLeads.isDeleted, 0)))
     .for('update');
   if (lead && lead.hasProforma === 1) {
-    throw new ValidationError(`برای پرونده فروش «${lead.title}» قبلاً پیش‌فاکتور صادر شده است. هر پرونده فروش تنها مجاز به داشتن یک پیش‌فاکتور می‌باشد.`);
+    throw new ValidationError(`برای پرونده فروش «${lead.title}» قبلاً پیش‌فاکتور صادر شده است. هر پرونده فروش تنها مجاز به داشتن یک پیش‌فاکتور است.`);
   }
   if (lead) assertLeadOpenForProforma(lead);
   return lead ?? null;
@@ -170,7 +170,7 @@ export async function lockLeadsForDocumentLink(
     throw new ValidationError(`پرونده فروش با شناسه ${targetId} یافت نشد یا حذف شده است.`, undefined, 'CRM_LEAD_NOT_FOUND');
   }
   if (target && isProforma && target.hasProforma === 1 && target.proformaId !== docId) {
-    throw new ValidationError(`برای پرونده فروش «${target.title}» قبلاً پیش‌فاکتور صادر شده است. هر پرونده فروش تنها مجاز به داشتن یک پیش‌فاکتور می‌باشد.`, undefined, 'CRM_LEAD_HAS_PROFORMA');
+    throw new ValidationError(`برای پرونده فروش «${target.title}» قبلاً پیش‌فاکتور صادر شده است. هر پرونده فروش تنها مجاز به داشتن یک پیش‌فاکتور است.`, undefined, 'CRM_LEAD_HAS_PROFORMA');
   }
   if (target && isProforma && target.proformaId !== docId) assertLeadOpenForProforma(target);
   return { target, linked: rows.filter(lead => lead.hasProforma === 1 && lead.proformaId === docId) };

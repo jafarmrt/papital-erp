@@ -445,7 +445,7 @@ export function ChequesTab({
             <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="جستجو در شماره چک، شناسه صیاد ۱۶ رقمی، طرف حساب یا بانک..."
+              placeholder="جست‌وجو در شماره چک، شناسه صیاد ۱۶ رقمی، طرف حساب یا بانک..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="w-full pr-9 pl-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
@@ -562,7 +562,7 @@ export function ChequesTab({
                           )}
                         </div>
                         {c.sayadNumber && (
-                          <div className="text-[10px] font-mono text-slate-400 tracking-wider mt-0.5">
+                          <div className="text-[10px] font-mono text-slate-400 mt-0.5">
                             صیاد: {toPersianDigits(c.sayadNumber)}
                           </div>
                         )}
@@ -849,7 +849,7 @@ export function ChequesTab({
                           const c = customerList.find(x => x.id === Number(val)) || safeCustomers.find(x => x.id === Number(val));
                           setNewFormData({ ...newFormData, partyId: c ? c.id : null, partyName: c ? c.name : '' });
                         }}
-                        placeholder="جستجو و انتخاب مشتری..."
+                        placeholder="جست‌وجو و انتخاب مشتری..."
                         options={customerList.map(c => ({
                           value: String(c.id),
                           label: `${c.name}${c.city ? ` (${c.city})` : ''}${c.phone ? ` - ${c.phone}` : ''}`
@@ -862,7 +862,7 @@ export function ChequesTab({
                           const s = supplierList.find(x => x.id === Number(val)) || safeCustomers.find(x => x.id === Number(val));
                           setNewFormData({ ...newFormData, partyId: s ? s.id : null, partyName: s ? s.name : '' });
                         }}
-                        placeholder="جستجو و انتخاب تأمین‌کننده..."
+                        placeholder="جست‌وجو و انتخاب تأمین‌کننده..."
                         options={supplierList.map(s => ({
                           value: String(s.id),
                           label: `${s.name}${s.supplierCategory ? ` [${s.supplierCategory}]` : ''}${s.city ? ` (${s.city})` : ''}${s.phone ? ` - ${s.phone}` : ''}`
@@ -875,7 +875,7 @@ export function ChequesTab({
                           const p = safePersonnelList.find(x => x.id === Number(val));
                           setNewFormData({ ...newFormData, partyId: p ? p.id : null, partyName: p ? personnelPartyName(p) : '' });
                         }}
-                        placeholder="جستجو و انتخاب پرسنل..."
+                        placeholder="جست‌وجو و انتخاب پرسنل..."
                         options={safePersonnelList.map(p => ({
                           value: String(p.id),
                           label: personnelPartyName(p)
@@ -1023,7 +1023,7 @@ export function ChequesTab({
                   <SearchableSelect
                     value={String(transfereePartyId || '')}
                     onChange={(val) => setTransfereePartyId(Number(val) || null)}
-                    placeholder="جستجو و انتخاب تأمین‌کننده..."
+                    placeholder="جست‌وجو و انتخاب تأمین‌کننده..."
                     options={supplierList.map(s => ({ value: String(s.id), label: `${s.name}${s.phone ? ` - ${s.phone}` : ''}` }))}
                   />
                 </div>

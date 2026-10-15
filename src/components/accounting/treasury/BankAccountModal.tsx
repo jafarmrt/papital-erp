@@ -252,10 +252,10 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
               filterFn={treasuryAccountFilter}
               placeholder={
                 formData.type === 'cash'
-                  ? 'جستجو در سرفصل‌های صندوق و نقد (کد ۱۰)...'
+                  ? 'جست‌وجو در سرفصل‌های صندوق و نقد (کد ۱۰)...'
                   : formData.type === 'pos'
-                  ? 'جستجو در سرفصل‌های پوز و کارتخوان (کد ۱۰)...'
-                  : 'جستجو در سرفصل‌های بانک‌های ریالی/ارزی (کد ۱۰)...'
+                  ? 'جست‌وجو در سرفصل‌های پوز و کارتخوان (کد ۱۰)...'
+                  : 'جست‌وجو در سرفصل‌های بانک‌های ریالی/ارزی (کد ۱۰)...'
               }
             />
             <p className="text-[10px] text-slate-400 mt-1">

@@ -87,7 +87,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
               type="text"
               value={userSearch}
               onChange={(e) => setUserSearch(e.target.value)}
-              placeholder="جستجو نام یا نام کاربری..."
+              placeholder="جست‌وجو نام یا نام کاربری..."
               className="w-full pr-9 pl-3 py-1.5 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -132,7 +132,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
             {filteredUsers.length === 0 ? (
               <tr>
                 <td colSpan={4} className="text-center py-10 text-slate-400 text-xs">
-                  هیچ کاربری با مشخصات جستجویافته یافت نشد.
+                  هیچ کاربری با مشخصات جست‌وجویافته یافت نشد.
                 </td>
               </tr>
             ) : (

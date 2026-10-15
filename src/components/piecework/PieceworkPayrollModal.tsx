@@ -129,7 +129,7 @@ export function PieceworkPayrollModal({
               options={personnelSelectOptions}
               value={payrollPersonnelId ? String(payrollPersonnelId) : ''}
               onChange={(val) => setPayrollPersonnelId(val ? Number(val) : '')}
-              placeholder="جستجو و انتخاب پرسنل..."
+              placeholder="جست‌وجو و انتخاب پرسنل..."
               maxResults={50}
               className="w-full text-xs font-bold"
             />
