@@ -29,6 +29,9 @@ describe('the payment form opened from a payslip takes its remainder (TD-814)', 
     fireEvent.click(screen.getByText('ثبت پرداخت (از خزانه)'));
     const amount = screen.getByPlaceholderText('مبلغ پرداختی...') as HTMLInputElement;
     expect(amount.value).toBe('400000');
-    expect(amount.max).toBe('400000');
+    // v10.1.20 (TD-1273): the amount field is a text field; its max shows as an error under it and blocks the form
+    fireEvent.change(amount, { target: { value: '500000' } });
+    expect(amount.validity.valid).toBe(false);
+    expect(screen.getByRole('alert').textContent).toContain('۴۰۰٬۰۰۰');
   });
 });

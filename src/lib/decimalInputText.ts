@@ -4,7 +4,7 @@
  * پنج می‌شد). کادر عدد متن است و اینجا خوانده می‌شود: ارقام فارسی و عربی، «٫» و جداکننده‌های هزارگان پذیرفته می‌شوند،
  * متن نامعتبر خطاست و هرگز صفر بی‌صدا نمی‌شود.
  */
-import { normalizeDecimalString } from './numericInput.js';
+import { normalizeDecimalString, toLatinDigits } from './numericInput.js';
 import { formatPersianNumber } from '../utils/persianNumber.js';
 
 export interface DecimalInputRules {
@@ -18,7 +18,7 @@ export interface DecimalInputRules {
 export type DecimalInputRead =
   /** متن لاتین (خالی برای کادر خالی) و خطای بازه یا اعشار، اگر باشد */
   | { kind: 'value'; text: string; rangeError?: string }
-  /** نیمه‌کاره مثل «-» یا «.»: هنوز نه مقدار است نه خطا */
+  /** نیمه‌کاره مثل «-» یا «.»: هنوز مقدار نیست؛ پیام آن تنها هنگام ارسال فرم دیده می‌شود */
   | { kind: 'partial' }
   | { kind: 'invalid'; error: string };
 
@@ -40,8 +40,25 @@ export function stepScale(step: number | string | undefined): number | undefined
   return fraction ? fraction.length : 0;
 }
 
+const GROUP_SEPARATOR = /[,٬،]/;
+const GROUPED_TEXT = /^-?\d{1,3}([,٬،]\d{3})+(\.\d*)?$/;
+const INVISIBLE = /[\s\u200c\u200e\u200f]/g;
+
+/**
+ * متن یکدست کادر: ارقام لاتین، ممیز «٫» یا «/» میان رقم‌ها (مثل «12/5») و جداکنندهٔ هزارگان فقط میان دسته‌های سه‌رقمی؛
+ * «12,5» عدد صد و بیست و پنج نمی‌شود و خطاست
+ */
+function canonicalText(raw: string): { text: string } | { error: string } {
+  const text = toLatinDigits(String(raw ?? '')).replace(/٫/g, '.').replace(INVISIBLE, '').replace(/(\d)\/(?=\d|$)/, '$1.');
+  if (!GROUP_SEPARATOR.test(text)) return { text };
+  if (!GROUPED_TEXT.test(text)) return { error: 'جداکنندهٔ هزارگان فقط میان دسته‌های سه‌رقمی می‌آید؛ برای ممیز «٫» یا «/» بزنید.' };
+  return { text: normalizeDecimalString(text) };
+}
+
 export function readDecimalInputText(raw: string, rules: DecimalInputRules = {}): DecimalInputRead {
-  const text = normalizeDecimalString(String(raw ?? ''));
+  const canonical = canonicalText(raw);
+  if ('error' in canonical) return { kind: 'invalid', error: canonical.error };
+  const { text } = canonical;
   if (text === '') return { kind: 'value', text: '' };
   if (PARTIAL_TEXT.test(text)) return { kind: 'partial' };
   if (!DECIMAL_TEXT.test(text)) return { kind: 'invalid', error: 'فقط رقم و ممیز پذیرفته می‌شود.' };
@@ -62,9 +79,13 @@ export function readDecimalInputText(raw: string, rules: DecimalInputRules = {})
   return rangeError ? { kind: 'value', text, rangeError } : { kind: 'value', text };
 }
 
+/** پیام مرورگر برای متن نیمه‌کاره هنگام ارسال فرم */
+export const PARTIAL_DECIMAL_MESSAGE = 'عدد را کامل بنویسید.';
+
 /** آیا متن کادر همان مقدار بیرونی را می‌گوید؟ (تا «12.» با رسیدن 12 از دست نرود) */
 export function decimalTextMatches(text: string, value: number | string | null | undefined): boolean {
-  const own = normalizeDecimalString(text);
+  const read = readDecimalInputText(text);
+  const own = read.kind === 'value' ? read.text : normalizeDecimalString(text);
   const outer = value === null || value === undefined ? '' : normalizeDecimalString(String(value));
   if (own === '' || outer === '') return own === outer;
   const a = Number(own);

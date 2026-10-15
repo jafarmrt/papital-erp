@@ -34,7 +34,7 @@ import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog';
 import { SALES_FINALIZE_PERMISSION } from '../lib/permissions/documentPermissions';
 import { itemPickWithReservedUrl } from '../lib/permissions/pickLists';
 import { documentPartyPickListUrl } from '../lib/documents/documentPartyKind';
-import { DecimalInput } from '../components/common/DecimalInput';
+import { DecimalInput, refuseInvalidDecimalInputs } from '../components/common/DecimalInput';
 
 // Print styles are added globally or inline
 export default function CreateInvoicePage({ user: currentUser }: { user: User }) {
@@ -618,7 +618,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
 
           <div className="border-t pt-4">
             <h3 className="text-sm font-bold mb-3 text-slate-800">اقلام فاکتور</h3>
-            <div className="flex flex-wrap gap-3 items-end bg-slate-50 p-3 rounded-lg border">
+            <div data-decimal-scope="" className="flex flex-wrap gap-3 items-end bg-slate-50 p-3 rounded-lg border">
               <div className="flex-1 min-w-[200px]">
                 <label className="block text-xs mb-1 text-slate-500">انتخاب کالا</label>
                 <SearchableSelect
@@ -670,7 +670,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                 <label htmlFor="invoice-line-discount" className="block text-xs mb-1 text-slate-500">تخفیف کلی ردیف ({formatCurrencyLabel(currency)})</label>
                 <DecimalInput id="invoice-line-discount" min="0" value={discount} onValueChange={(v) => setDiscount(v ? Number(v) : '')} className="w-full border shadow-sm rounded text-sm px-3 py-1.5 text-center focus:outline-none focus:ring-1 focus:ring-blue-500" dir="ltr" />
               </div>
-              <button type="button" onClick={handleAddItem} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded flex items-center gap-1 text-sm h-[34px] transition-colors shadow-sm">
+              <button type="button" onClick={(e) => { if (!refuseInvalidDecimalInputs(e.currentTarget)) handleAddItem(); }} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded flex items-center gap-1 text-sm h-[34px] transition-colors shadow-sm">
                 <Plus size={16} /> افزودن به فهرست
               </button>
             </div>
