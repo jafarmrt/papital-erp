@@ -118,7 +118,7 @@ export const definitionSwitchSchema = z.object({
   body: z.object({}).strict(),
 });
 
-/** v10.1.20 (TD-1270, D-06 part D): publishing names the draft version the admin looked at (409 when it changed) */
+/** v10.1.21 (TD-1270, D-06 part D): publishing names the draft version the admin looked at (409 when it changed) */
 export const publishDraftSchema = z.object({
   params: z.object({ id: numericIdString }),
   body: z.object({
@@ -126,7 +126,7 @@ export const publishDraftSchema = z.object({
   }).strict(),
 });
 
-/** v10.1.20 (TD-1270): reverting names the earlier version that is published again as a new version */
+/** v10.1.21 (TD-1270): reverting names the earlier version that is published again as a new version */
 export const revertVersionSchema = z.object({
   params: z.object({ id: numericIdString }),
   body: z.object({

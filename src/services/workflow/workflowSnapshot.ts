@@ -15,7 +15,7 @@ type DbClient = typeof orm | Parameters<Parameters<typeof orm.transaction>[0]>[0
  * v7.0.87 (TD-112): نسخه‌های تعریف ورکفلو.
  * هر ذخیره تعریف (طراح یا seed) یک ردیف workflow_definition_versions با تصویر کامل وضعیت‌ها و انتقال‌های همان لحظه
  * (با شناسه‌های پایگاه‌داده) ثبت می‌کند و workflow_definitions.version را جلو می‌برد. فرایند در جریان با تصویر نسخه خودش
- * ادامه می‌دهد. v10.1.20 (TD-1270, D-06 part D, decision ت۱۰): a save of an existing definition is a draft; new records
+ * ادامه می‌دهد. v10.1.21 (TD-1270, D-06 part D, decision ت۱۰): a save of an existing definition is a draft; new records
  * start with the published version (`published_version`) until it is published or another version is reverted to.
  */
 
@@ -84,7 +84,7 @@ export async function recordDefinitionVersion(
   const lastVersion = Math.max(Number(def?.version) || 0, Number(maxRow?.v) || 0);
   const version = lastVersion + 1;
   const snapshot = await buildDefinitionSnapshot(tx, definitionId, version);
-  // v10.1.20 (TD-1270): a new draft retires the older draft; publishing retires the older draft and published versions
+  // v10.1.21 (TD-1270): a new draft retires the older draft; publishing retires the older draft and published versions
   const superseded: WorkflowVersionStatus[] = options.status === 'published' ? ['draft', 'published'] : ['draft'];
   await tx.update(workflowDefinitionVersions).set({ status: 'retired' }).where(and(
     eq(workflowDefinitionVersions.definitionId, definitionId),
@@ -120,7 +120,7 @@ export async function storedVersionSnapshot(tx: DbClient, definitionId: number, 
 }
 
 /**
- * v10.1.20 (TD-1270): called by a draft save before it rewrites the step tables. While a definition has no draft its step
+ * v10.1.21 (TD-1270): called by a draft save before it rewrites the step tables. While a definition has no draft its step
  * tables are its published design; when the published version has no usable snapshot (a version 1 row from before
  * v7.0.87, or none) the tables are recorded first as a new published version, so new records never start with the draft.
  */

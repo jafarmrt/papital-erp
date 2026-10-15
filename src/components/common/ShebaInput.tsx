@@ -139,6 +139,7 @@ export const ShebaInput: React.FC<ShebaInputProps> = ({
         name={name}
         type="text"
         inputMode="numeric"
+        aria-invalid={numericDigits.length === 24 && !validation?.isValid ? true : undefined}
         dir="ltr"
         autoFocus={autoFocus}
         disabled={disabled}

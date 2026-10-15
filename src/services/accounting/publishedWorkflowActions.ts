@@ -3,7 +3,7 @@ import type { DbExecutor } from '../../db/drizzle.js';
 import { workflowTransitions } from '../../db/schema.js';
 
 /**
- * v10.1.20 (TD-1270, D-06 part D): the actions of the published version of each active definition of a record type, read
+ * v10.1.21 (TD-1270, D-06 part D): the actions of the published version of each active definition of a record type, read
  * from its stored snapshot. While a definition has an unpublished draft the step tables hold the draft, and new records
  * run the published version, so the workflow health checks read both. Reads only workflow tables, like those checks.
  */

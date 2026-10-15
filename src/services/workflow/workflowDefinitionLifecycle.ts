@@ -66,7 +66,7 @@ async function writeState(tx: DbExecutor, def: DefinitionRow, next: { isActive: 
 }
 
 /**
- * Design errors of a stored definition (the save rule), so only a valid design is turned on. v10.1.20 (TD-1270): the
+ * Design errors of a stored definition (the save rule), so only a valid design is turned on. v10.1.21 (TD-1270): the
  * published version is what new records run, so it is the one checked, and its record type must be the definition's.
  */
 async function storedDesignErrors(tx: DbExecutor, def: DefinitionRow): Promise<string[]> {

@@ -5,7 +5,7 @@ import { eq, and, desc } from 'drizzle-orm';
 import { WorkflowVersionDTO } from './contracts/workflowDomainContracts.js';
 
 /**
- * v7.0.87 (TD-112): نسخه‌ها در هر ذخیره تعریف ثبت می‌شوند (recordDefinitionVersion در workflowSnapshot.ts). v10.1.20
+ * v7.0.87 (TD-112): نسخه‌ها در هر ذخیره تعریف ثبت می‌شوند (recordDefinitionVersion در workflowSnapshot.ts). v10.1.21
  * (TD-1270): each carries its status; publishing and reverting live in workflowVersionPublish.ts and never rewrite a version.
  */
 export class WorkflowVersionService {

@@ -156,7 +156,7 @@ export async function runAccessPackageTwoWorkflowTests(shouldRun: ShouldRun): Pr
 
         const refused = await h.del(`/api/roles/${role.id}`);
         if (refused.status !== 409 || refused.body?.code !== 'ROLE_USED_BY_WORKFLOW') wrong.push(`deleting a role a workflow step needs returned ${refused.status} ${String(refused.body?.code)}, not 409 ROLE_USED_BY_WORKFLOW`);
-        // v10.1.20 (TD-1270): the step stops needing the role once a design without it is saved and published
+        // v10.1.21 (TD-1270): the step stops needing the role once a design without it is saved and published
         const [def] = await h.q(`SELECT id FROM workflow_definitions WHERE code = $1`, [codes[2]]);
         const draft = await h.post('/api/workflow/definitions', { ...design(codes[2], { requiredPermission: 'workflow.approve' }), id: Number(def?.id) });
         const publish = await h.post(`/api/workflow/definitions/${Number(def?.id)}/publish`, { draftVersion: Number(draft.body?.data?.definition?.version ?? draft.body?.data?.version) });

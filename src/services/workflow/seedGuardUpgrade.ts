@@ -44,7 +44,7 @@ export async function upgradeLegacySeedGuards(upgrade: SeedGuardUpgrade): Promis
     const [def] = await tx.select().from(workflowDefinitions)
       .where(eq(workflowDefinitions.code, upgrade.code)).for('update');
     if (!def) return false;
-    // v10.1.20 (TD-1270): a definition with an unpublished draft is an edited one; the upgrade publishes, so it waits
+    // v10.1.21 (TD-1270): a definition with an unpublished draft is an edited one; the upgrade publishes, so it waits
     if (Number(def.version) !== publishedVersionOf(def)) return false;
     const states = await tx.select({ id: workflowStates.id, stateKey: workflowStates.stateKey })
       .from(workflowStates).where(eq(workflowStates.workflowDefinitionId, def.id));

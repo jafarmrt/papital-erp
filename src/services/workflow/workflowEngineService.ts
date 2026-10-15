@@ -55,7 +55,7 @@ export class WorkflowEngineService {
   static seedDefaultWorkflows = WorkflowDefinitionService.seedDefaultWorkflows.bind(WorkflowDefinitionService);
   // v10.1.7 (TD-1229, D-06): turn a definition on or off, archive or restore it
   static setDefinitionActive = setWorkflowDefinitionActive;
-  /** v10.1.20 (TD-1270, D-06 part D): draft, publish and revert */
+  /** v10.1.21 (TD-1270, D-06 part D): draft, publish and revert */
   static getDraftState = getWorkflowDraftState;
   static publishDraft = publishWorkflowDraft;
   static revertToVersion = revertWorkflowToVersion;

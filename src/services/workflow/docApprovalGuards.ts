@@ -73,7 +73,7 @@ export async function upgradeLegacyDocApprovalGuards(): Promise<boolean> {
     const [def] = await tx.select().from(workflowDefinitions)
       .where(eq(workflowDefinitions.code, DOC_APPROVAL_WORKFLOW_CODE)).for('update');
     if (!def) return false;
-    // v10.1.20 (TD-1270): a definition with an unpublished draft is an edited one; the upgrade publishes, so it waits
+    // v10.1.21 (TD-1270): a definition with an unpublished draft is an edited one; the upgrade publishes, so it waits
     if (Number(def.version) !== publishedVersionOf(def)) return false;
     const states = await tx.select({ id: workflowStates.id, stateKey: workflowStates.stateKey })
       .from(workflowStates).where(eq(workflowStates.workflowDefinitionId, def.id));
@@ -147,7 +147,7 @@ export async function findUnguardedDocumentApprovals(db: DbExecutor = orm): Prom
       sql`btrim(coalesce(${workflowTransitions.requiredPermission}, '')) = ''`,
     ))
     .orderBy(asc(workflowDefinitions.id), asc(workflowTransitions.id));
-  // v10.1.20 (TD-1270): the published version runs new records while the step tables hold a draft
+  // v10.1.21 (TD-1270): the published version runs new records while the step tables hold a draft
   const published = (await publishedWorkflowActions(db, 'document'))
     .filter(a => isUnguardedAction(a) && (a.toStateKey === 'approved' || a.autoActionKey === 'POST_INVOICE'))
     .map(a => ({ definitionId: a.definitionId, code: a.code, title: a.title, transitionId: a.transitionId, transitionTitle: a.transitionTitle, stableKey: a.stableKey }));

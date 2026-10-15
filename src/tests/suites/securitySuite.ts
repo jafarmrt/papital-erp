@@ -1466,7 +1466,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // v10.1.16 (TD-1268, TD-1265, D-06 part C): delegation from the inbox, overlap refusal, closing a stuck record
   const { runWorkflowDelegationInboxTests } = await import('../security/workflowDelegationInboxTests.js');
   results.push(...await runWorkflowDelegationInboxTests(shouldRunAccess));
-  // v10.1.20 (TD-1270, D-06 part D): draft, publish and revert of workflow versions
+  // v10.1.21 (TD-1270, D-06 part D): draft, publish and revert of workflow versions
   const { runWorkflowVersionPublishTests } = await import('../security/workflowVersionPublishTests.js');
   results.push(...await runWorkflowVersionPublishTests(shouldRunAccess));
   // Package 12 payroll, PR «ج» (from TD-805): each payroll action asks the key of its own name
