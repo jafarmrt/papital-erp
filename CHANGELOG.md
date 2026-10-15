@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.1.19 — قیف فروش کشیدنی و ستون‌های جدا (N-02 بخش ۳)
+- Sales pipeline board: fixed 280 px columns in a horizontally scrolling row (they overlapped in a grid narrower than their minimum, TD-1272), compact card with a ⋯ menu and the nearest open follow-up (lead list nextFollowUpDate), HTML drag and drop through the stage change handler, one stage tab per column on a phone. Tests: e2e/crm-pipeline.spec.ts, reg_crm_lead_next_followup_td_1272, Vitest crmPipelineBoardTd1272.
+
 ### v10.1.18 — ویرایش اقدام، دلیل از دست رفتن و گزارش قیف (N-02 بخش ۲)
 - CRM activity edit and soft delete (crm.manage, OCC version), required lost reason, lead stage history (migration 0113) and the funnel report GET /crm/reports/funnel, my follow-ups scope. Tests: reg_crm_activity_edit_delete_n02, reg_crm_lost_reason_stage_history_n02, reg_crm_my_followups_n02, reg_crm_funnel_report_n02, Vitest crmActivitiesFunnelN02.
 
