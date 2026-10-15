@@ -4,6 +4,7 @@ import { AlertOctagon, RefreshCw, Search, Filter, RotateCcw, CheckCircle2, XCirc
 import { formatPersianDate, errorMessageOf, formatPersianNumber, toPersianDigits } from '../../utils';
 import { fetchJson } from '../../api';
 import { useHasPermission } from '../../contexts/AuthContext';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface DeadLetterItem {
   id: number;
@@ -631,7 +632,8 @@ export function DeadLetterQueueSubTab() {
 
       {/* Edit Payload Modal */}
       {editingItem && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <DialogLayer onClose={() => setEditingItem(null)} disabled={isSavingPayload} />
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full shadow-2xl space-y-4 p-6 max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div>

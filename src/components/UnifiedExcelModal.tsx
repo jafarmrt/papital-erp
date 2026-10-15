@@ -6,6 +6,7 @@ import { ExcelPreviewStep } from './excel/ExcelPreviewStep';
 import { ExcelResultStep } from './excel/ExcelResultStep';
 import { useHasPermission } from '../contexts/AuthContext';
 import { ITEM_IMPORT_PERMISSION_KEYS, itemImportPermissionNotices, type ItemImportPermissions } from '../lib/items/itemImportPermissions';
+import { DialogLayer } from './common/DialogLayer';
 
 export default function UnifiedExcelModal({
   isOpen,
@@ -59,7 +60,8 @@ export default function UnifiedExcelModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[80] flex items-center justify-center p-4">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[80] flex items-center justify-center p-4">
+      <DialogLayer onClose={handleClose} disabled={isImporting} />
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[92vh]">
         
         {/* Modal Header */}

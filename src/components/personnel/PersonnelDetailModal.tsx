@@ -2,6 +2,7 @@ import { Briefcase, Award, Wallet, X, Edit2, Phone, Calendar } from 'lucide-reac
 import { Personnel } from '../../types';
 import { NobitexPasswordValue } from './NobitexPasswordFields';
 import { formatPersianCode, formatPersianPhone, formatPersianNationalId, formatPersianDate } from '../../utils';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface PersonnelDetailModalProps {
   isOpen: boolean;
@@ -19,7 +20,8 @@ export function PersonnelDetailModal({
   if (!isOpen || !personnel) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+      <DialogLayer onClose={onClose} />
       <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-200 my-8 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Detail Header */}
         <div className="p-5 bg-slate-900 text-white flex items-center justify-between">

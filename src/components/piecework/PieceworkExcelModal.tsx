@@ -12,6 +12,7 @@ import {
 } from './pieceworkExcelUtils';
 import { fetchJson } from '../../api';
 import toast from 'react-hot-toast';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface PieceworkExcelModalProps {
   isOpen: boolean;
@@ -168,7 +169,8 @@ export function PieceworkExcelModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[90] flex items-center justify-center p-4">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[90] flex items-center justify-center p-4">
+      <DialogLayer onClose={onClose} disabled={isImporting} />
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh] border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
         
         {/* Header */}

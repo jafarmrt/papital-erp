@@ -9,6 +9,7 @@ import { PayrollPaymentHistory } from './PayrollPaymentHistory';
 import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { DecimalInput } from '../common/DecimalInput';
+import { DialogLayer } from '../common/DialogLayer';
 
 // V4.0.33: مودال واحد «پرداخت حقوق (کامل یا چندمرحله‌ای)»
 // ثبت فقط با انتخاب حساب خزانه/بانک تا تراکنش مالی + سند تسویه اتمیک صادر شود.
@@ -157,7 +158,8 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[90] flex items-center justify-center p-4">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[90] flex items-center justify-center p-4">
+      <DialogLayer onClose={onClose} disabled={isSaving} />
       <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
         <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50 shrink-0">
           <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">

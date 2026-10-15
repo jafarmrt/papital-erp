@@ -6,6 +6,7 @@ import { formatPersianNumber, formatCurrencyLabel, errorMessageOf } from '../../
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { toast } from 'react-hot-toast';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface TaskCategory {
   id: number | string;
@@ -386,7 +387,8 @@ export function TaskTitlesSettingsTab() {
 
       {/* TASK MODAL */}
       {isTaskModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <DialogLayer onClose={() => setIsTaskModalOpen(false)} />
           <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 max-h-[85vh] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4 p-6 pb-3">
               <h3 className="font-bold text-slate-800 text-base">
@@ -514,7 +516,8 @@ export function TaskTitlesSettingsTab() {
 
       {/* CATEGORY MODAL */}
       {isCatModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <DialogLayer onClose={() => setIsCatModalOpen(false)} />
           <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 max-h-[85vh] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4 p-6 pb-3">
               <h3 className="font-bold text-slate-800 text-base">

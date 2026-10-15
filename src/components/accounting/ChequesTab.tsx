@@ -20,6 +20,7 @@ import { CHEQUE_STATUS_LABELS, CHEQUE_TRANSITIONS, chequeHasNextStep, chequeStat
 import { needsChosenContraAccount, type PersonnelPurpose } from '../../lib/treasury/partyPurpose';
 import { personnelPartyName } from '../../lib/treasury/personnelPartyName';
 import { PartyPurposeFields } from './treasury/PartyPurposeFields';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface ChequesTabProps {
   cheques: Cheque[];
@@ -683,7 +684,8 @@ export function ChequesTab({
 
       {/* New Cheque Modal */}
       {isNewModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4 backdrop-blur-xs">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4 backdrop-blur-xs">
+          <DialogLayer onClose={() => setIsNewModalOpen(false)} disabled={isSaving} />
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-xl w-full border border-slate-200 dark:border-slate-700 max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             {/* Modal Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/80 shrink-0">
@@ -964,7 +966,8 @@ export function ChequesTab({
 
       {/* Change Status Workflow Modal */}
       {statusModalCheque && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <DialogLayer onClose={() => setStatusModalCheque(null)} disabled={isSaving} />
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
             <h3 className="font-bold text-slate-900 dark:text-white text-base mb-1">
               تغییر وضعیت چک شماره {toPersianDigits(statusModalCheque.chequeNumber)}
@@ -1077,7 +1080,8 @@ export function ChequesTab({
 
       {/* History Modal */}
       {historyModalCheque && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <DialogLayer onClose={() => setHistoryModalCheque(null)} />
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-slate-900 dark:text-white text-base">

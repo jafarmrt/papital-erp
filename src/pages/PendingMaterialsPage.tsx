@@ -31,6 +31,7 @@ import { MaterialNameField, MaterialUnitSelect, MaterialNumberField, MaterialAtt
 import { EMPTY_PENDING_MATERIAL_FORM, pendingMaterialFormOf, type PendingMaterialForm } from '../lib/pendingMaterials/pendingMaterialForm';
 import { useHasPermission } from '../contexts/AuthContext';
 import { materialCodeExample, materialUnitOptions, pendingMaterialCodeError, rawMaterialCategories } from '../lib/pendingMaterials/materialRequestRules';
+import { DialogLayer } from '../components/common/DialogLayer';
 
 
 export default function PendingMaterialsPage({ user }: { user: User }) {
@@ -472,7 +473,8 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
 
       {/* Approve / Review Modal */}
       {isApproveModalOpen && selectedItem && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <DialogLayer onClose={() => setIsApproveModalOpen(false)} disabled={isSubmitting} />
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-fadeIn my-auto">
             <div className="bg-slate-900 text-white p-4 shrink-0 flex items-center justify-between border-b border-slate-800">
               <div className="flex items-center gap-2">
@@ -621,7 +623,8 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
 
       {/* Reject Modal */}
       {isRejectModalOpen && selectedItem && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <DialogLayer onClose={() => setIsRejectModalOpen(false)} disabled={isSubmitting} />
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden animate-fadeIn">
             <div className="bg-rose-900 text-white p-4 flex items-center justify-between">
               <div className="flex items-center gap-2">

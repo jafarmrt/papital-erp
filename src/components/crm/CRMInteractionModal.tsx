@@ -6,6 +6,7 @@ import persian_fa from "react-date-object/locales/persian_fa";
 import { CRMLead, CRMActivity } from '../../types';
 import { getTodayJalaliDate, extractDateString, isoToJalaliDate, formatPersianDate } from '../../utils';
 import { MentionTextarea } from '../MentionTextarea';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface CRMInteractionModalProps {
   // Activity Modal Props
@@ -63,7 +64,8 @@ export function CRMInteractionModal({
     <>
       {/* Modal 1: Log Activity / Call */}
       {isActivityModalOpen && (
-        <div className="fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <DialogLayer onClose={onCloseActivityModal} />
           <div className="bg-white rounded-2xl max-w-lg w-full shadow-xl border border-slate-200 max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
               <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
@@ -322,7 +324,8 @@ export function CRMInteractionModal({
 
       {/* Modal 2: Followup Result Modal */}
       {isFollowupResultModalOpen && selectedFollowupAct && (
-        <div className="fixed inset-0 z-[90] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-[90] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <DialogLayer onClose={onCloseFollowupResultModal} />
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-black text-sm text-slate-900 flex items-center gap-2">

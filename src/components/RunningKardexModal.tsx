@@ -10,6 +10,7 @@ import { useItemKardexQuery } from '../hooks/queries/useTransactionQueries';
 import { runningKardexEntryLabel, type RunningKardexEntry } from '../lib/transactions/runningKardex';
 import { toast } from 'react-hot-toast';
 import { EXPORT_FAILED_MESSAGE, kardexExportFileName } from '../lib/inventoryAudit/exportFileNames';
+import { DialogLayer } from './common/DialogLayer';
 
 interface RunningKardexModalProps {
   itemId: number;
@@ -93,7 +94,8 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in" style={{ direction: 'rtl' }}>
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in" style={{ direction: 'rtl' }}>
+      <DialogLayer onClose={onClose} />
       <div className="w-full max-w-6xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-200">
         {/* Modal Header */}
         <div className="flex items-center justify-between p-5 border-b bg-gradient-to-l from-slate-50 to-white">

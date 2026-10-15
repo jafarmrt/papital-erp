@@ -12,6 +12,7 @@ import { OverOrderWarning, type OverOrderedItem } from './OverOrderWarning';
 import { requisitionRowRemaining } from '../../lib/procurement/requisitionFields';
 import { overOrdersFromError } from '../../lib/procurement/overOrderError';
 import { lineAmount, sumAmounts } from '../../lib/procurement/procurementNumbers';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface SplitOrderModalProps {
   isOpen: boolean;
@@ -385,7 +386,8 @@ export function SplitOrderModal({
   const grandTotal = sumAmounts(packages, p => sumAmounts(p.items, i => lineAmount(i.quantity, i.unitPrice)));
 
   return (
-    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-farsi">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-farsi">
+      <DialogLayer onClose={onClose} disabled={isSubmitting} />
       <div className="bg-white rounded-2xl max-w-5xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 animate-fadeIn">
         {/* Modal Header */}
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80 rounded-t-2xl">

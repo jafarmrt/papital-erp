@@ -4,6 +4,7 @@ import { ItemBasicForm } from './form/ItemBasicForm';
 import { ItemWarehouseStockForm } from './form/ItemWarehouseStockForm';
 import { ItemSpecificationsForm } from './form/ItemSpecificationsForm';
 import { ItemProductCardForm } from './form/ItemProductCardForm';
+import { DialogLayer } from '../common/DialogLayer';
 
 export function ItemFormModal(props: ItemFormModalProps) {
   const { isOpen, onClose, warehouses } = props;
@@ -40,7 +41,8 @@ export function ItemFormModal(props: ItemFormModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[80] animate-in fade-in">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[80] animate-in fade-in">
+      <DialogLayer onClose={onClose} disabled={isSaving} />
       <div className="bg-white rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         
         {/* Header */}

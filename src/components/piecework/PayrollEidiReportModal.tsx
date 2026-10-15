@@ -7,6 +7,7 @@ import { toPersianDigits } from '../../utils/persianNumber';
 import { toLatinDigits } from '../../lib/numericInput';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { eidiMethodLabel, eidiReportFileName, eidiReportSheetRows, type EidiReport } from '../../lib/payroll/eidiReport';
+import { DialogLayer } from '../common/DialogLayer';
 
 /**
  * v10.0.222 (TD-1089، طرح حقوق §۳.۸): گزارش «عیدی سال» — حق عیدی، سهم فیش‌های پیش‌نویس، سقف، فیش عیدی صادرشده، پرداخت‌شده
@@ -44,7 +45,8 @@ export function PayrollEidiReportModal({ onClose }: { onClose: () => void }) {
   const cell = 'px-3 py-2 text-xs font-bold text-slate-700';
   const money = (v: string | null) => (v === null ? '—' : rial.amount(Number(v)));
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+      <DialogLayer onClose={onClose} />
       <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
           <h2 className="text-sm font-black text-slate-900">عیدی سال</h2>

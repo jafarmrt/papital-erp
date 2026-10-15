@@ -9,6 +9,7 @@ import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { useOnlineStatus } from '../../lib/pwa/useOnlineStatus';
 import { EIDI_METHOD_LABELS, EIDI_OVERRIDE_REASON_MAX, type EidiPayslipSuggestion } from '../../lib/payroll/eidi';
 import { SearchableSelect } from '../SearchableSelect';
+import { DialogLayer } from '../common/DialogLayer';
 
 /**
  * v10.0.222 (TD-1089، طرح حقوق §۳.۸، ت۱۵ الف): صدور «فیش عیدی» پیش‌نویس یک پرسنل برای یک سال. مبلغ پیشنهادی را سرور
@@ -79,7 +80,8 @@ export function PayrollEidiModal({ personnelSelectOptions, onClose, onIssued }: 
   const years = [thisYear - 1, thisYear];
   const s = preview?.suggestion;
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+      <DialogLayer onClose={onClose} disabled={saving} />
       <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
         <div className="p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
           <h2 className="text-sm font-black text-slate-900 flex items-center gap-2"><Gift className="w-4 h-4 text-emerald-600" /> صدور فیش عیدی</h2>

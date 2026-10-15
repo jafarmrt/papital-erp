@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { useExecuteFiscalClosing, useFiscalClosingPreview, useFiscalClosingYears } from '../../hooks/accounting/useFiscalClosing';
 import { FiscalYearReopenPanel } from './FiscalYearReopenPanel';
 import { useHasPermission } from '../../contexts/AuthContext';
+import { DialogLayer } from '../common/DialogLayer';
 
 /** v9.0.228 (TD-567، B03-25): کلید API اجرای بستن سال (`POST /accounting/fiscal-closing/execute`) */
 export const FISCAL_CLOSE_PERMISSION = 'accounting.fiscal_close';
@@ -712,7 +713,8 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
 
       {/* Confirmation Modal */}
       {isConfirmModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <DialogLayer onClose={() => setIsConfirmModalOpen(false)} disabled={isExecuting} />
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full shadow-2xl space-y-5 animate-in zoom-in-95 duration-200 max-h-[85vh] overflow-y-auto p-6">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">

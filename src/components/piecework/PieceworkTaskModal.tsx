@@ -5,6 +5,7 @@ import { TaskFormData } from '../../hooks/usePiecework';
 import { formatCurrencyLabel } from '../../utils';
 import { fetchJson } from '../../api';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface PieceworkTaskModalProps {
   isOpen: boolean;
@@ -72,7 +73,8 @@ export function PieceworkTaskModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+      <DialogLayer onClose={onClose} disabled={isSaving} />
       <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200 max-h-[85vh] flex flex-col">
         <div className="p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
           <h2 className="text-sm font-black text-slate-900 flex items-center gap-2">

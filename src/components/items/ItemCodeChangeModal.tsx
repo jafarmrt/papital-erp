@@ -5,6 +5,7 @@ import { fetchJson } from '../../api';
 import { errorMessageOf, formatPersianDateTime } from '../../utils';
 import { ITEM_CODE_CHANGE_REASON_MAX, itemCodeChangeError } from '../../lib/items/itemCodeChange';
 import { PHONE_SHEET_OVERLAY, PHONE_TAP_TARGET } from '../../lib/pwa/phoneLayout';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface CodeHistoryRow {
   oldCode: string;
@@ -65,7 +66,8 @@ export function ItemCodeChangeModal({ item, onClose, onChanged }: ItemCodeChange
   };
 
   return (
-    <div className={PHONE_SHEET_OVERLAY} role="dialog" aria-label="تغییر کد کالا">
+    <div aria-modal="true" className={PHONE_SHEET_OVERLAY} role="dialog" aria-label="تغییر کد کالا">
+      <DialogLayer onClose={onClose} disabled={isSaving} />
       <form onSubmit={submit} className="bg-white w-full sm:max-w-md sm:rounded-2xl shadow-2xl flex flex-col max-h-full sm:max-h-[90vh]">
         <div className="p-4 border-b border-slate-200 bg-slate-50 shrink-0">
           <h2 className="text-sm font-bold text-slate-800">تغییر کد کالا</h2>

@@ -10,6 +10,7 @@ import { toPersianDigits } from '../../utils/persianNumber';
 import { errorMessageOf, formatPersianDateTime } from '../../utils';
 import { confirmAction } from '../ConfirmDialogHost';
 import { WorkflowDraftPanel } from './WorkflowDraftPanel';
+import { DialogLayer } from '../common/DialogLayer';
 
 /**
  * v7.0.87 (TD-112): تاریخچه نسخه‌های یک الگوی ورکفلو؛ فرایندهای در جریان با نسخه‌ای که با آن شروع شده‌اند ادامه می‌دهند.
@@ -99,7 +100,8 @@ export function WorkflowVersionHistoryModal({ definitionId, title, onClose }: {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4" role="dialog" aria-label="تاریخچه نسخه‌ها">
+    <div aria-modal="true" className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4" role="dialog" aria-label="تاریخچه نسخه‌ها">
+      <DialogLayer onClose={onClose} disabled={revert.isPending} />
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 w-full max-w-3xl shadow-xl flex flex-col max-h-[85vh]">
         <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between shrink-0">
           <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">

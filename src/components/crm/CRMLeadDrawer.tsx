@@ -9,6 +9,7 @@ import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
 import { copyToClipboard } from '../../utils/clipboard';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface CRMLeadDrawerProps {
   selectedLeadDrawer: CRMLead | null;
@@ -80,7 +81,8 @@ export function CRMLeadDrawer({
   });
 
   return (
-    <div className="fixed inset-0 z-[60] bg-slate-900/50 backdrop-blur-xs flex justify-end">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-[60] bg-slate-900/50 backdrop-blur-xs flex justify-end">
+      <DialogLayer onClose={onCloseDrawer} />
       <div className="bg-white w-full md:w-[60%] lg:w-[60%] max-w-[60vw] h-full shadow-2xl flex flex-col p-6 overflow-y-auto custom-scrollbar animate-in slide-in-from-left duration-200">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3 shrink-0">
           <div>

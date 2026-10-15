@@ -9,6 +9,7 @@ import { excelRowVersion } from '../../lib/customers/customerVersion';
 import { parsePartyTypeCell, partyTypeCellLabel, type PartyType } from '../../lib/customers/partyTypeCell';
 import { bankNumberCell, phoneCellText } from '../../lib/customers/customerExcelCells';
 import { contactChannelErrors } from '../../lib/customers/contactChannels';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface CustomerExcelModalProps {
   isOpen: boolean;
@@ -434,7 +435,8 @@ export function CustomerExcelModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+      <DialogLayer onClose={onClose} disabled={isImporting} />
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden text-right font-farsi">
         {/* Header */}
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70 shrink-0">

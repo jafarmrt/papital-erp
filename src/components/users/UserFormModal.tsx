@@ -8,6 +8,7 @@ import { roleWithinGrant, type GrantorPermissions } from '../../lib/permissions/
 import { USERNAME_OF_DELETED_USER, deletedUserOf, deletedUsernameMessage, type DeletedUserMatch } from '../../lib/users/userRestore';
 import { PASSWORD_LENGTH_HINT, passwordLengthError } from '../../lib/auth/passwordPolicy';
 import { FULL_NAME_MAX_LENGTH } from '../../lib/users/profileFields';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface UserFormModalProps {
   isOpen: boolean;
@@ -142,7 +143,8 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <DialogLayer onClose={onClose} disabled={isSaving} />
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col">
         <div className="px-6 py-4 border-b flex justify-between items-center bg-slate-50">
           <h3 className="font-bold text-slate-800">
