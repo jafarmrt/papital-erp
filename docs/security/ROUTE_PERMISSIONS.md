@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 415
+تعداد مسیرها: 416
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -121,7 +121,7 @@
 | GET | `/api/customers/:id/documents` | documents.view \| customers.view \| crm.view |
 | POST | `/api/customers/bulk-import` | customers.manage |
 | GET | `/api/customers/export-excel` | customers.view |
-| GET | `/api/customers/options` | customers.view \| documents.view \| documents.create \| documents.finalize \| warehouse.in \| warehouse.out \| warehouse.view \| products.view \| crm.view \| projects.view \| procurement.view \| accounting.view \| accounting.reports \| accounting.vouchers \| accounting.treasury \| accounting.cheques |
+| GET | `/api/customers/options` | customers.view \| documents.view \| documents.create \| documents.finalize \| warehouse.in \| warehouse.out \| warehouse.view \| products.view \| crm.view \| projects.view \| procurement.view \| accounting.view \| accounting.reports \| accounting.vouchers \| accounting.treasury \| accounting.cheques \| reports.sales |
 | GET | `/api/daily-logs` | daily_logs.view |
 | POST | `/api/daily-logs` | daily_logs.create |
 | DELETE | `/api/daily-logs/:id` | daily_logs.create |
@@ -229,7 +229,7 @@
 | GET | `/api/items/excel-template` | products.view \| products.edit_price |
 | GET | `/api/items/next-code` | products.view \| products.edit_price |
 | POST | `/api/items/next-code` | products.create \| products.edit |
-| GET | `/api/items/options` | products.view \| documents.view \| documents.create \| documents.finalize \| warehouse.view \| warehouse.in \| warehouse.out \| audit.view \| projects.view \| crm.view \| procurement.view |
+| GET | `/api/items/options` | products.view \| documents.view \| documents.create \| documents.finalize \| warehouse.view \| warehouse.in \| warehouse.out \| audit.view \| projects.view \| crm.view \| procurement.view \| reports.sales |
 | GET | `/api/items/prices/all` | products.view \| products.edit_price |
 | POST | `/api/items/prices/batch-update` | products.edit_price |
 | GET | `/api/items/pricing-page` | products.view \| products.edit_price |
@@ -351,8 +351,9 @@
 | POST | `/api/projects/:id/stages` | projects.edit |
 | DELETE | `/api/projects/:id/stages/:stageId` | projects.edit |
 | PUT | `/api/projects/:id/stages/:stageId` | projects.edit |
-| GET | `/api/projects/options` | projects.view \| documents.view \| documents.create \| documents.finalize \| warehouse.view \| warehouse.in \| warehouse.out \| piecework.view \| piecework.log \| daily_logs.view \| daily_logs.create \| accounting.vouchers |
+| GET | `/api/projects/options` | projects.view \| documents.view \| documents.create \| documents.finalize \| warehouse.view \| warehouse.in \| warehouse.out \| piecework.view \| piecework.log \| daily_logs.view \| daily_logs.create \| accounting.vouchers \| reports.sales |
 | GET | `/api/public-settings` | public |
+| GET | `/api/reports/sales` | reports.sales |
 | GET | `/api/roles` | users.manage \| roles.manage \| personnel.manage \| workflow.manage \| settings.manage |
 | POST | `/api/roles` | roles.manage |
 | DELETE | `/api/roles/:id` | roles.manage |

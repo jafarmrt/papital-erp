@@ -32,6 +32,8 @@ afterEach(() => {
   window.history.replaceState({}, '', '/');
 });
 
+const TABBED_PAGES = ['/accounting', '/management-reports'];
+
 describe('one page-access table for menu, routes, shortcuts and settings tabs (TD-668)', () => {
   it('shows each menu link exactly when its page opens, for every single catalog key', () => {
     for (const permissions of SINGLE_KEY_VIEWERS) {
@@ -49,7 +51,8 @@ describe('one page-access table for menu, routes, shortcuts and settings tabs (T
     const routed = new Set<string>();
     for (const [, routePath, guarded, page] of routes) {
       if (routePath === '/materials' || routePath === '/remittances') continue; // redirects
-      const expected = routePath === '/accounting/:tab' ? '/accounting' : routePath;
+      // a page with tabs routes `/<page>/:tab` under the page's own row; each tab has its own row (accounting, management reports)
+      const expected = TABBED_PAGES.find(p => routePath === `${p}/:tab`) ?? routePath;
       expect(PAGE_ACCESS, `route ${routePath} has no page-access row`).toHaveProperty([expected]);
       const rule = PAGE_ACCESS[expected as keyof typeof PAGE_ACCESS];
       if (rule.gate === 'login') {
@@ -60,7 +63,7 @@ describe('one page-access table for menu, routes, shortcuts and settings tabs (T
       routed.add(expected);
     }
     for (const page of Object.keys(PAGE_ACCESS)) {
-      if (page.startsWith('/accounting/')) continue; // /accounting/:tab
+      if (TABBED_PAGES.some(p => page.startsWith(`${p}/`))) continue; // /<page>/:tab
       expect(routed.has(page), `page ${page} has no route`).toBe(true);
     }
   });

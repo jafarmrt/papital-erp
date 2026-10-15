@@ -25,7 +25,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
       'products.view', 'products.create', 'products.edit', 'products.edit_price', 'products.delete', 'warehouse.view',
       'warehouse.in', 'warehouse.out', 'warehouse.transfer', 'inventory.reconcile', 'documents.view', 'documents.create',
       'documents.finalize', 'documents.edit', 'documents.delete', 'audit.view', 'audit.create', 'audit.apply',
-      'customers.view', 'customers.manage', 'crm.view', 'crm.manage', 'crm.delete', 'reports.view',
+      'customers.view', 'customers.manage', 'crm.view', 'crm.manage', 'crm.delete', 'reports.view', 'reports.sales',
       'projects.view', 'projects.create', 'projects.edit', 'projects.delete', 'workflow.view', 'workflow.approve',
       'workflow.manage', 'events.view', 'events.manage', 'daily_logs.view', 'daily_logs.create', 'daily_logs.manage_all',
       'personnel.view', 'personnel.manage', 'piecework.view', 'piecework.manage_tasks', 'piecework.log', 'piecework.payroll', 'piecework.payroll_approve',
@@ -44,7 +44,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
       'products.view', 'products.edit_price', 'documents.view', 'documents.create', 'documents.edit', 'documents.delete',
       'documents.finalize', 'customers.view', 'customers.manage', 'workflow.view', 'workflow.approve', 'events.view',
       'personnel.view', 'piecework.view', 'piecework.payroll', 'piecework.payroll_approve', 'daily_logs.view', 'daily_logs.create', 'reports.view',
-      'audit_logs.view',
+      'reports.sales', 'audit_logs.view',
     ],
   },
   {
@@ -96,7 +96,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     description: 'صدور فاکتور و پیش‌فاکتور فروش، ثبت مشتریان و مشاهده موجودی کالاها',
     permissions: [
       'products.view', 'warehouse.view', 'documents.view', 'documents.create', 'documents.edit', 'customers.view',
-      'customers.manage', 'workflow.view', 'workflow.approve', 'crm.view', 'crm.manage', 'reports.view',
+      'customers.manage', 'workflow.view', 'workflow.approve', 'crm.view', 'crm.manage', 'reports.view', 'reports.sales',
       'projects.view', 'daily_logs.view', 'daily_logs.create', 'media.view',
     ],
   },
