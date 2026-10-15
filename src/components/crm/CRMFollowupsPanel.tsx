@@ -17,7 +17,7 @@ interface CRMFollowupsPanelProps {
   leads?: CRMLead[];
   onToggleFollowup: (act: CRMActivity) => void;
   personnelList?: PersonnelOption[];
-  /** v10.1.17 (N-02 بخش ۲): ویرایش و حذف اقدام از کارت پیگیری */
+  /** v10.1.18 (N-02 بخش ۲): ویرایش و حذف اقدام از کارت پیگیری */
   onEditActivity?: (act: CRMActivity) => void;
   onDeleteActivity?: (act: CRMActivity) => void;
 }
@@ -31,7 +31,7 @@ const PAGE_SIZE = 12;
  */
 export function CRMFollowupsPanel({ leads = [], onToggleFollowup, personnelList = [], onEditActivity, onDeleteActivity }: CRMFollowupsPanelProps) {
   const [status, setStatus] = useState<FollowupStatusFilter>('pending');
-  // v10.1.17 (N-02 بخش ۲، ت۳، OBS-R2-27): پیش‌فرض «پیگیری‌های من»؛ «همه» و یک فروشنده فقط برای دارنده crm.manage
+  // v10.1.18 (N-02 بخش ۲، ت۳، OBS-R2-27): پیش‌فرض «پیگیری‌های من»؛ «همه» و یک فروشنده فقط برای دارنده crm.manage
   const canSeeAll = useHasPermission('crm.manage');
   const [seller, setSeller] = useState<string>('mine');
   const [search, setSearch] = useState('');

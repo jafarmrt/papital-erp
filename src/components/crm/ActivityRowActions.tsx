@@ -9,7 +9,7 @@ interface ActivityRowActionsProps {
 }
 
 /**
- * v10.1.17 (N-02 بخش ۲، ت۱ و ت۲): دکمه‌های «ویرایش» و «حذف» یک اقدام؛ فقط برای دارنده `crm.manage`، کلیدی که مسیرهای
+ * v10.1.18 (N-02 بخش ۲، ت۱ و ت۲): دکمه‌های «ویرایش» و «حذف» یک اقدام؛ فقط برای دارنده `crm.manage`، کلیدی که مسیرهای
  * `PUT` و `DELETE /crm/activities/:id` می‌خواهند.
  */
 export function ActivityRowActions({ activity, onEdit, onDelete }: ActivityRowActionsProps) {

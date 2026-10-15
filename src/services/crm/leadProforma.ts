@@ -54,7 +54,7 @@ export async function markLeadProforma(tx: DbExecutor, lead: Lead, docId: number
     status: 'active',
     updatedAt: nowIso,
   }).where(eq(crmLeads.id, lead.id));
-  // v10.1.17 (N-02 بخش ۲): رفتن به «پیش‌فاکتور و پیشنهاد» در تاریخچه مرحله
+  // v10.1.18 (N-02 بخش ۲): رفتن به «پیش‌فاکتور و پیشنهاد» در تاریخچه مرحله
   await recordLeadStageChange(tx, {
     leadId: lead.id, fromStage: lead.stage, toStage: 'proposal', assignedPersonnelId: lead.assignedPersonnelId, actor: { name: actorName },
   });

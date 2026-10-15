@@ -11,7 +11,7 @@ interface CRMFollowupsViewProps {
   leads?: CRMLead[];
   onOpenActivityModal: () => void;
   onToggleFollowup: (act: CRMActivity) => void;
-  /** v10.1.17 (N-02 بخش ۲): ویرایش و حذف اقدام */
+  /** v10.1.18 (N-02 بخش ۲): ویرایش و حذف اقدام */
   onEditActivity?: (act: CRMActivity) => void;
   onDeleteActivity?: (act: CRMActivity) => void;
   // V10-4.1: منبع مسئول تسک = پرسنل فعال

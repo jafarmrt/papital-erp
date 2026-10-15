@@ -26,7 +26,7 @@ export function isLeadProbability(value: string): boolean {
 }
 
 /**
- * v10.1.17 (N-02 بخش ۲، تصمیم ت۶ طرح ارتباط با مشتری): دلیل از دست رفتن پرونده فروش، الزامی هنگام رفتن به «از دست رفته»؛
+ * v10.1.18 (N-02 بخش ۲، تصمیم ت۶ طرح ارتباط با مشتری): دلیل از دست رفتن پرونده فروش، الزامی هنگام رفتن به «از دست رفته»؛
  * «سایر» شرح می‌خواهد. همان فهرست قید `chk_crm_leads_lost_reason` (migration 0113).
  */
 export const CRM_LOST_REASONS = ['price', 'quality', 'delivery', 'competitor', 'no_response', 'other'] as const;

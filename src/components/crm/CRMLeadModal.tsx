@@ -252,7 +252,7 @@ export function CRMLeadModal({
               </select>
             </div>
 
-            {/* v10.1.17 (N-02 بخش ۲، ت۶): دلیل از دست رفتن */}
+            {/* v10.1.18 (N-02 بخش ۲، ت۶): دلیل از دست رفتن */}
             {leadForm.stage === 'lost' && (
               <div className="md:col-span-2">
                 <LostReasonFields

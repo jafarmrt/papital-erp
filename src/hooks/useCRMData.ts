@@ -102,7 +102,7 @@ export function useCRMData(user: any) {
 
   const [isSavingLead, setIsSavingLead] = useState<boolean>(false);
   const [isSavingActivity, setIsSavingActivity] = useState<boolean>(false);
-  // v10.1.17 (N-02 بخش ۲): اقدامی که پنجره اقدام ویرایشش می‌کند، و پرونده‌ای که برای رفتن به «از دست رفته» دلیل می‌خواهد
+  // v10.1.18 (N-02 بخش ۲): اقدامی که پنجره اقدام ویرایشش می‌کند، و پرونده‌ای که برای رفتن به «از دست رفته» دلیل می‌خواهد
   const [editingActivity, setEditingActivity] = useState<CRMActivity | null>(null);
   const [lostPromptLeadId, setLostPromptLeadId] = useState<number | null>(null);
 
@@ -274,7 +274,7 @@ export function useCRMData(user: any) {
       return;
     }
 
-    // v10.1.17 (N-02 بخش ۲، ت۶): رفتن به «از دست رفته» دلیل از فهرست می‌خواهد؛ دلیل فقط با همین مرحله فرستاده می‌شود
+    // v10.1.18 (N-02 بخش ۲، ت۶): رفتن به «از دست رفته» دلیل از فهرست می‌خواهد؛ دلیل فقط با همین مرحله فرستاده می‌شود
     const { lostReason, lostReasonNote, ...leadFields } = leadForm;
     const enteringLost = leadForm.stage === 'lost' && editingLead?.stage !== 'lost';
     if (leadForm.stage === 'lost' && (enteringLost || lostReason)) {
@@ -367,7 +367,7 @@ export function useCRMData(user: any) {
     }
   };
 
-  // v10.1.17 (N-02 بخش ۲، ت۱ و ت۲): ویرایش در همان پنجره اقدام با نسخه اقدام، و حذف پس از تأیید
+  // v10.1.18 (N-02 بخش ۲، ت۱ و ت۲): ویرایش در همان پنجره اقدام با نسخه اقدام، و حذف پس از تأیید
   const openEditActivity = (act: CRMActivity) => {
     setEditingActivity(act);
     setSelectedLeadForActivity(leads.find((l) => l.id === act.leadId) || null);

@@ -30,7 +30,7 @@ const percent = (value: number | null) => (value === null ? '—' : `${formatPer
 const days = (value: number | null) => (value === null ? '—' : `${formatPersianNumber(value)} روز`);
 
 /**
- * v10.1.17 (N-02 بخش ۲، تصمیم ت۷): زبانه «گزارش قیف» صفحه ارتباط با مشتری از `GET /crm/reports/funnel`: برای هر مرحله
+ * v10.1.18 (N-02 بخش ۲، تصمیم ت۷): زبانه «گزارش قیف» صفحه ارتباط با مشتری از `GET /crm/reports/funnel`: برای هر مرحله
  * شمار ورود، پیشرفت به مرحله بعد، درصد پیشرفت و میانگین روزهای ماندن، و دلیل‌های از دست رفتن، در یک بازه و برای یک
  * فروشنده. تغییرهای مرحله پیش از این نسخه ثبت نشده‌اند و در گزارش نمی‌آیند.
  */
@@ -80,7 +80,7 @@ export function CRMFunnelReport({ personnelList = [] }: { personnelList?: Person
                 </div>
               </div>
             ))}
-            <p className="text-[10px] text-slate-400">تغییر مرحله‌های پیش از نسخه ۱۰.۱.۱۷ ثبت نشده‌اند و در این گزارش نیستند.</p>
+            <p className="text-[10px] text-slate-400">تغییر مرحله‌های پیش از نسخه ۱۰.۱.۱۸ ثبت نشده‌اند و در این گزارش نیستند.</p>
           </div>
           <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-2">
             <h4 className="font-bold text-xs text-slate-800 flex items-center gap-1.5">

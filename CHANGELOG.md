@@ -20,8 +20,11 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
-### v10.1.17 — ویرایش اقدام، دلیل از دست رفتن و گزارش قیف (N-02 بخش ۲)
+### v10.1.18 — ویرایش اقدام، دلیل از دست رفتن و گزارش قیف (N-02 بخش ۲)
 - CRM activity edit and soft delete (crm.manage, OCC version), required lost reason, lead stage history (migration 0113) and the funnel report GET /crm/reports/funnel, my follow-ups scope. Tests: reg_crm_activity_edit_delete_n02, reg_crm_lost_reason_stage_history_n02, reg_crm_my_followups_n02, reg_crm_funnel_report_n02, Vitest crmActivitiesFunnelN02.
+
+### v10.1.17 — گزارش‌های مدیریتی، بخش ۴: نمودارها، ابزارک فروش پیشخوان و گزارش خرید (D-03)
+- نمودار روند فروش و سهم دسته‌ها در زبانه فروش و نمودار بازه‌های سن در زبانه سن مطالبات با Chart.js در تکه جدای `vendor-charts` (۱۴۱ کیلوبایت، ۴۹ کیلوبایت فشرده) که فقط با باز شدن نمودار بار می‌شود؛ ابزارک «فروش و مطالبات» پیشخوان برای دارنده `reports.sales` یا `accounting.reports`؛ زبانه تازه «خرید» با کلید تازه `reports.purchases` (به هیچ نقشی داده نشده) به تفکیک تأمین‌کننده، کالا، دسته و دوره با میانگین بهای خرید، خروجی اکسل و چاپ.
 
 ### v10.1.16 — تفویض از کارتابل و بستن فرایند گیرکرده (D-06 بخش ج)
 - تأییدکننده از کارتابل با «تفویض کارهایم» جانشین می‌گذارد و «تفویض‌های من» را می‌بیند؛ فرم تفویض از فهرست ساده کاربران و حوزه‌های بی‌نیاز به مجوز طراحی می‌خواند (OBS-R2-73)؛ تفویض هم‌پوشان یک نفر برای یک گردش کار با ۴۰۹ رد می‌شود (OBS-R2-66، TD-1268)؛ مدیر سامانه فرایند در جریان سند فروش، سند حسابداری یا ماده اولیه را با دلیل الزامی می‌بندد (TD-1265، D-06 بخش ج).

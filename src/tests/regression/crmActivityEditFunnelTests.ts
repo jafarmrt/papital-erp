@@ -7,7 +7,7 @@ type ShouldRun = (id: string, ...extra: string[]) => boolean;
 type Harness = Awaited<ReturnType<typeof import('../security/workflowTestHarness.js')['createHarness']>>;
 
 /**
- * N-02 part 2 (v10.1.17), CRM plan decisions ت۱–ت۴, ت۶, ت۷: an activity is edited with its version and soft-deleted, both
+ * N-02 part 2 (v10.1.18), CRM plan decisions ت۱–ت۴, ت۶, ت۷: an activity is edited with its version and soft-deleted, both
  * by crm.manage holders and audited; a lead moved to «lost» needs a reason from the list; every stage change is recorded
  * in crm_lead_stage_history and the funnel report reads it; «my follow-ups» shows only the user's own unless a crm.manage
  * holder asks for all. All red on v10.1.15, which had no edit or delete route, no lost reason, no history and no scope.
@@ -15,10 +15,10 @@ type Harness = Awaited<ReturnType<typeof import('../security/workflowTestHarness
 export async function runCrmActivityEditFunnelTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
   const cases: Array<{ id: string; name: string; tags: string[]; run: (h: Harness, track: Track) => Promise<string> }> = [
-    { id: 'reg_crm_activity_edit_delete_n02', name: 'v10.1.17: a CRM activity is edited with its version (stale 409), new mentions only are notified, delete is soft and audited, crm.view cannot (N-02)', tags: ['n02', 'crm'], run: activityEditCase },
-    { id: 'reg_crm_lost_reason_stage_history_n02', name: 'v10.1.17: a lead moved to lost needs a listed reason, leaving lost clears it, and every stage change is recorded (N-02)', tags: ['n02', 'crm'], run: lostReasonCase },
-    { id: 'reg_crm_my_followups_n02', name: 'v10.1.17: «my follow-ups» lists only the user\'s own; only a crm.manage holder sees all or one seller (N-02, OBS-R2-27)', tags: ['n02', 'crm', 'followups'], run: myFollowupsCase },
-    { id: 'reg_crm_funnel_report_n02', name: 'v10.1.17: the funnel report counts entries, advances, average days and lost reasons from the stage history (N-02)', tags: ['n02', 'crm', 'funnel'], run: funnelCase },
+    { id: 'reg_crm_activity_edit_delete_n02', name: 'v10.1.18: a CRM activity is edited with its version (stale 409), new mentions only are notified, delete is soft and audited, crm.view cannot (N-02)', tags: ['n02', 'crm'], run: activityEditCase },
+    { id: 'reg_crm_lost_reason_stage_history_n02', name: 'v10.1.18: a lead moved to lost needs a listed reason, leaving lost clears it, and every stage change is recorded (N-02)', tags: ['n02', 'crm'], run: lostReasonCase },
+    { id: 'reg_crm_my_followups_n02', name: 'v10.1.18: «my follow-ups» lists only the user\'s own; only a crm.manage holder sees all or one seller (N-02, OBS-R2-27)', tags: ['n02', 'crm', 'followups'], run: myFollowupsCase },
+    { id: 'reg_crm_funnel_report_n02', name: 'v10.1.18: the funnel report counts entries, advances, average days and lost reasons from the stage history (N-02)', tags: ['n02', 'crm', 'funnel'], run: funnelCase },
   ];
   const selected = cases.filter(c => shouldRun(c.id, ...c.tags));
   if (selected.length === 0) return results;

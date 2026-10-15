@@ -1,4 +1,4 @@
--- Drizzle Migration 0113: CRM activity edit and delete, lost reason, lead stage history (v10.1.17, N-02 part 2)
+-- Drizzle Migration 0113: CRM activity edit and delete, lost reason, lead stage history (v10.1.18, N-02 part 2)
 --
 -- An activity is now edited through PUT /crm/activities/:id with its version (optimistic lock) and soft-deleted through
 -- DELETE /crm/activities/:id, both audited. A lead moved to «lost» carries one reason from a fixed list (and a note for

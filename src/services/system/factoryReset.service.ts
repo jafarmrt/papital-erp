@@ -210,7 +210,7 @@ export class FactoryResetService {
 
       // 6. CRM & Customer Relations (Must be deleted BEFORE personnel and customers)
       await wipe('crm_activities', crmActivities);
-      // v10.1.17 (N-02 part 2): the stage history references crm_leads (migration 0113)
+      // v10.1.18 (N-02 part 2): the stage history references crm_leads (migration 0113)
       await wipe('crm_lead_stage_history', crmLeadStageHistory);
       await wipe('crm_leads', crmLeads);
 

@@ -10578,7 +10578,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // N-02 part 1 (v10.1.15): party website, e-mail and Instagram checked, normalized, kept on partial edits and imported
   const { runCustomerContactChannelsTests } = await import('../regression/customerContactChannelsTests.js');
   results.push(...await runCustomerContactChannelsTests(shouldRun));
-  // N-02 part 2 (v10.1.17): activity edit and delete, lost reason, stage history, funnel report and my follow-ups
+  // N-02 part 2 (v10.1.18): activity edit and delete, lost reason, stage history, funnel report and my follow-ups
   const { runCrmActivityEditFunnelTests } = await import('../regression/crmActivityEditFunnelTests.js');
   results.push(...await runCrmActivityEditFunnelTests(shouldRun));
   // Package 9 (v10.0.34, TD-976): CRM activity mentions are live user ids and notify only CRM readers
@@ -10755,6 +10755,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10.1 D-03 PR3 (v10.1.14): the VAT tab
   const { runVatReportTests } = await import('../regression/vatReportTests.js');
   results.push(...await runVatReportTests(shouldRun));
+  // Series 10.1 D-03 PR4 (v10.1.15): the purchase report, the sales charts and the dashboard sales widget
+  const { runPurchaseReportTests } = await import('../regression/purchaseReportTests.js');
+  results.push(...await runPurchaseReportTests(shouldRun));
   const { runSalesEventsTests } = await import('../regression/salesEventsTests.js');
   results.push(...await runSalesEventsTests(shouldRun));
   // Package 8 PR D (v9.0.323+): lead link of a document edit, stock count lines, production receipts, return lookup, numbers

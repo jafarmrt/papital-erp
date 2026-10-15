@@ -53,7 +53,7 @@ export const crmLeads = pgTable('crm_leads', {
   expectedCloseDate: text('expected_close_date').default(''),
   notes: text('notes').default(''),
   status: text('status').default('active'), // 'active', 'won', 'lost', 'archived'
-  // v10.1.17 (N-02 بخش ۲، migration 0113): دلیل از دست رفتن از فهرست `CRM_LOST_REASONS` و شرح «سایر»
+  // v10.1.18 (N-02 بخش ۲، migration 0113): دلیل از دست رفتن از فهرست `CRM_LOST_REASONS` و شرح «سایر»
   lostReason: text('lost_reason').default(''),
   lostReasonNote: text('lost_reason_note').default(''),
   contacts: jsonb('contacts').default([]),
@@ -95,7 +95,7 @@ export const crmActivities = pgTable('crm_activities', {
   nextFollowUpTask: text('next_followup_task').default(''),
   isFollowUpCompleted: integer('is_followup_completed').default(0),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
-  // v10.1.17 (N-02 بخش ۲، migration 0113): ویرایش با نسخه (قفل خوش‌بینانه) و نام آخرین ویرایشگر
+  // v10.1.18 (N-02 بخش ۲، migration 0113): ویرایش با نسخه (قفل خوش‌بینانه) و نام آخرین ویرایشگر
   version: integer('version').notNull().default(1),
   updatedAt: timestamp('updated_at', { mode: 'string' }),
   updatedBy: text('updated_by').default(''),
@@ -112,7 +112,7 @@ export const crmActivities = pgTable('crm_activities', {
 }));
 
 /**
- * v10.1.17 (N-02 بخش ۲، migration 0113): هر تغییر مرحله پرونده فروش (چه کسی، کی، از کدام مرحله به کدام، و فروشنده پرونده
+ * v10.1.18 (N-02 بخش ۲، migration 0113): هر تغییر مرحله پرونده فروش (چه کسی، کی، از کدام مرحله به کدام، و فروشنده پرونده
  * در آن لحظه)؛ گزارش قیف از همین جدول ساخته می‌شود. تغییرهای پیش از این نسخه ثبت نشده‌اند.
  */
 export const crmLeadStageHistory = pgTable('crm_lead_stage_history', {
