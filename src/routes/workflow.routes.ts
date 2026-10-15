@@ -12,7 +12,7 @@ import { z } from 'zod';
 import { MY_TASK_FILTERS } from '../services/workflow/workflowTaskService.js';
 import { withUtcTimestamps } from '../services/workflow/workflowTimestamps.js';
 import { isSystemAdminRole } from '../lib/permissions/permissionCatalog.js';
-import { activateDefinitionSchema, canvasPositionsSchema, definitionFromTemplateSchema, definitionSwitchSchema, createDelegationSchema, delegationListSchema, executeTaskSchema, executeTransitionSchema, saveDefinitionSchema, terminateInstanceSchema } from './workflowRouteSchemas.js';
+import { activateDefinitionSchema, canvasPositionsSchema, publishDraftSchema, revertVersionSchema, definitionFromTemplateSchema, definitionSwitchSchema, createDelegationSchema, delegationListSchema, executeTaskSchema, executeTransitionSchema, saveDefinitionSchema, terminateInstanceSchema } from './workflowRouteSchemas.js';
 import { WORKFLOW_DELEGATE_PERMISSIONS, WORKFLOW_EXECUTE_PERMISSIONS, WORKFLOW_INBOX_PERMISSIONS, WORKFLOW_SWITCH_PERMISSION, WORKFLOW_TERMINATE_PERMISSION } from '../lib/permissions/workflowPermissions.js';
 import { terminateWorkflowInstance } from '../services/workflow/workflowInstanceTerminate.js';
 
@@ -265,6 +265,29 @@ router.get('/definitions/:id/versions/:version', authorizePermission('workflow.m
     logger.error(`[Workflow Route /definitions/:id/versions/:version] Error: ${errMsg}`);
     throw err;
   }
+}));
+
+/**
+ * v10.1.21 (TD-1270, D-06 part D): a definition's unpublished draft and what it changes against the published version.
+ */
+router.get('/definitions/:id/draft', authorizePermission('workflow.manage', 'workflow.admin'), validate(paramsIdSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  res.json(await WorkflowEngineService.getDraftState(Number(req.params.id)));
+}));
+
+/**
+ * v10.1.21 (TD-1270, decisions ت۴ / ت۱۰): publishing the draft and reverting to an earlier version change what new records
+ * run, so they need `workflow.admin` like turning a workflow on; designing a draft stays `workflow.manage`.
+ */
+router.post('/definitions/:id/publish', authorizePermission(WORKFLOW_SWITCH_PERMISSION), validate(publishDraftSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const { draftVersion } = req.body as z.infer<typeof publishDraftSchema>['body'];
+  const result = await WorkflowEngineService.publishDraft({ id: Number(req.params.id), draftVersion, userId: req.user?.id, req });
+  res.json({ success: true, data: result });
+}));
+
+router.post('/definitions/:id/revert', authorizePermission(WORKFLOW_SWITCH_PERMISSION), validate(revertVersionSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const { version } = req.body as z.infer<typeof revertVersionSchema>['body'];
+  const result = await WorkflowEngineService.revertToVersion({ id: Number(req.params.id), version, userId: req.user?.id, req });
+  res.json({ success: true, data: result });
 }));
 
 /**

@@ -12,12 +12,13 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { workflowDesignErrors } from '../../lib/workflow/workflowDesignRules.js';
 import { RuleEngineService, type RuleExpression } from '../ruleEngine.service.js';
-import { recordDefinitionVersion } from './workflowSnapshot.js';
+import { ensurePublishedSnapshot, recordDefinitionVersion } from './workflowSnapshot.js';
+import { writeDesignTables, type DesignStateInput, type DesignTransitionInput } from './workflowDesignTables.js';
 import { DOC_APPROVAL_STEP_GUARDS, DOC_APPROVAL_SUBMIT_GUARD_UPGRADE, upgradeLegacyDocApprovalGuards } from './docApprovalGuards.js';
 import { upgradeLegacySeedGuards } from './seedGuardUpgrade.js';
 import { JOURNAL_VOUCHER_GUARD_UPGRADE, JOURNAL_VOUCHER_STEP_GUARDS } from './voucherWorkflowGuards.js';
 import { PURCHASE_REQUISITION_GUARD_UPGRADE, PURCHASE_REQUISITION_STEP_GUARDS } from './purchaseWorkflowGuards.js';
-import { resolveTransitionRoles, storedTransitionRole } from './transitionRoles.js';
+import { resolveTransitionRoles } from './transitionRoles.js';
 import { activeDefinitionsOfType, lockWorkflowEntityTypes, startedInstanceCount } from './workflowDefinitionLifecycle.js';
 import { workflowEntityTypeChangeRefusal } from '../../lib/workflow/workflowLifecycle.js';
 import { JOURNAL_VOUCHER_WORKFLOW_TEMPLATE, PURCHASE_REQUISITION_WORKFLOW_TEMPLATE } from '../../lib/workflow/workflowTemplates.js';
@@ -56,45 +57,8 @@ export interface SaveWorkflowDefinitionPayload {
   startInactive?: boolean;
   /** v10.1.11 (TD-1263): the template a new definition was made from, for its audit row */
   fromTemplate?: string;
-  states?: Array<{
-    id?: number | string;
-    code?: string;
-    key?: string;
-    stateKey?: string;
-    title: string;
-    stateType?: string;
-    stepOrder?: number;
-    slaHours?: number;
-    color?: string;
-    positionX?: number;
-    positionY?: number;
-    x?: number;
-    y?: number;
-    [key: string]: unknown;
-  }>;
-  transitions?: Array<{
-    id?: number | string;
-    from?: string | number;
-    to?: string | number;
-    fromStateId?: number | string;
-    toStateId?: number | string;
-    fromStateKey?: string;
-    toStateKey?: string;
-    actionKey: string;
-    key?: string;
-    title?: string;
-    requiredRole?: string;
-    requiredPermission?: string;
-    ruleConditionsJson?: unknown;
-    approvalRuleType?: string;
-    parallelApprovalRule?: string;
-    kValue?: number;
-    autoActionKey?: string;
-    /** v8.0.102 (TD-392): آغازکننده فرایند این انتقال را اجرا نمی‌کند */
-    isInitiatorExcluded?: number | boolean;
-    isInitiatorOnly?: number | boolean;
-    [key: string]: unknown;
-  }>;
+  states?: DesignStateInput[];
+  transitions?: DesignTransitionInput[];
   [key: string]: unknown;
 }
 
@@ -272,6 +236,8 @@ export class WorkflowDefinitionService {
           tx.select({ actionKey: workflowTransitions.actionKey }).from(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, existing.id)),
         ]);
         before = designAuditSummary(existing, oldStates.map(r => r.stateKey), oldTransitions.map(r => r.actionKey));
+        // v10.1.21 (TD-1270): before the tables become a draft, the published design keeps its own usable snapshot
+        await ensurePublishedSnapshot(tx, existing.id, { title: existing.title, userId: payload.userId });
         await tx.update(workflowDefinitions).set({
           title: payload.title,
           entityType: payload.entityType,
@@ -281,69 +247,16 @@ export class WorkflowDefinitionService {
       }
 
       if (payload.states && Array.isArray(payload.states)) {
-        await tx.delete(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, finalDefId));
-        await tx.delete(workflowStates).where(eq(workflowStates.workflowDefinitionId, finalDefId));
-
-        const stateIdMap = new Map<number | string, number>();
-
-        for (const [index, st] of payload.states.entries()) {
-          const [insertedSt] = await tx.insert(workflowStates).values({
-            workflowDefinitionId: finalDefId,
-            stateKey: st.stateKey || st.key || 'state',
-            title: st.title || 'وضعیت',
-            stateType: st.stateType || 'normal',
-            color: st.color || 'gray',
-            // v9.0.47 (TD-454): گام بی ترتیب جای خودش در فهرست را می‌گیرد (پیش‌تر همه گام‌ها ترتیب ۱ می‌گرفتند)
-            stepOrder: Number.isInteger(st.stepOrder) && Number(st.stepOrder) > 0 ? Number(st.stepOrder) : index + 1,
-            slaHours: Number(st.slaHours) || 24,
-            positionX: Number(st.positionX) || Number(st.x) || 100,
-            positionY: Number(st.positionY) || Number(st.y) || 100
-          }).returning();
-
-          if (st.id !== undefined) {
-            stateIdMap.set(st.id, insertedSt.id);
-            stateIdMap.set(Number(st.id), insertedSt.id);
-            stateIdMap.set(String(st.id), insertedSt.id);
-          }
-          if (st.stateKey) stateIdMap.set(st.stateKey, insertedSt.id);
-          if (st.key) stateIdMap.set(st.key, insertedSt.id);
-        }
-
-        if (payload.transitions && Array.isArray(payload.transitions)) {
-          for (const tr of payload.transitions) {
-            const fromKey = tr.fromStateId ?? tr.fromStateKey ?? tr.from;
-            const toKey = tr.toStateId ?? tr.toStateKey ?? tr.to;
-
-            const fromId = fromKey !== undefined ? stateIdMap.get(fromKey) : undefined;
-            const toId = toKey !== undefined ? stateIdMap.get(toKey) : undefined;
-
-            // v9.0.45 (TD-452): اقدامی که مبدأ یا مقصدش پیدا نشود رد می‌شود، نه بی‌صدا حذف
-            if (!fromId || !toId) {
-              throw new ValidationError(`طرح گردش کار ذخیره نشد: گام مبدأ یا مقصد اقدام «${tr.title || tr.actionKey}» پیدا نشد.`);
-            }
-            await tx.insert(workflowTransitions).values({
-              workflowDefinitionId: finalDefId,
-              fromStateId: fromId,
-              toStateId: toId,
-              actionKey: tr.actionKey || tr.key || 'action',
-              title: tr.title || 'اقدام',
-              requiredRole: storedTransitionRole(tr.requiredRole, knownRoles),
-              requiredPermission: (tr.requiredPermission || '').trim(),
-              approvalRuleType: tr.approvalRuleType || tr.parallelApprovalRule || 'SINGLE',
-              kValue: Number(tr.kValue) || 1,
-              ruleConditionsJson: tr.ruleConditionsJson || [],
-              autoActionKey: tr.autoActionKey || '',
-              isInitiatorExcluded: tr.isInitiatorExcluded === true || Number(tr.isInitiatorExcluded) === 1 ? 1 : 0,
-              isInitiatorOnly: tr.isInitiatorOnly === true || Number(tr.isInitiatorOnly) === 1 ? 1 : 0
-            });
-          }
-        }
+        await writeDesignTables(tx, finalDefId, payload.states, payload.transitions, knownRoles);
       }
 
+      // v10.1.21 (TD-1270, decision ت۱۰): a new definition is published at once (it never sits without a published
+      // version); a save of an existing one is a draft that new records do not see until it is published
       const version = await recordDefinitionVersion(tx, finalDefId, {
         title: payload.title,
-        description: payload.id ? 'ذخیره تغییرات طرح فرآیند' : 'ایجاد فرآیند',
+        description: before ? 'پیش‌نویس طرح گردش کار' : 'ایجاد فرآیند',
         userId: payload.userId,
+        status: before ? 'draft' : 'published',
       });
       // v10.1.7 (TD-1229, OBS-R2-64): a design save writes its audit row with the same tx (before only positions did)
       const after = designAuditSummary(
@@ -353,8 +266,8 @@ export class WorkflowDefinitionService {
       );
       await logActivity({
         tx, req, userId: payload.userId, action: before ? 'UPDATE' : 'CREATE', entity: 'طرح گردش کار', entityId: finalDefId,
-        description: before ? `ذخیره طرح گردش کار «${payload.title}» (نسخه ${version})` : `ساخت گردش کار «${payload.title}»${isActive ? '' : ' (غیرفعال)'}`,
-        details: { code: payload.code, version, before, after, ...(payload.fromTemplate ? { fromTemplate: payload.fromTemplate } : {}) },
+        description: before ? `ذخیره پیش‌نویس طرح گردش کار «${payload.title}» (نسخه ${version}، منتشرنشده)` : `ساخت گردش کار «${payload.title}»${isActive ? '' : ' (غیرفعال)'}`,
+        details: { code: payload.code, version, status: before ? 'draft' : 'published', before, after, ...(payload.fromTemplate ? { fromTemplate: payload.fromTemplate } : {}) },
       });
       return finalDefId;
     });

@@ -1,7 +1,7 @@
 import { asc, eq } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { workflowDefinitions, workflowStates, workflowTransitions } from '../../db/schema.js';
-import { recordDefinitionVersion } from './workflowSnapshot.js';
+import { publishedVersionOf, recordDefinitionVersion } from './workflowSnapshot.js';
 import { logActivity } from '../../lib/auditLogger.js';
 
 /** نگهبان یک اقدام seed: from، to و کلید اقدام آن را می‌شناسند */
@@ -44,6 +44,8 @@ export async function upgradeLegacySeedGuards(upgrade: SeedGuardUpgrade): Promis
     const [def] = await tx.select().from(workflowDefinitions)
       .where(eq(workflowDefinitions.code, upgrade.code)).for('update');
     if (!def) return false;
+    // v10.1.21 (TD-1270): a definition with an unpublished draft is an edited one; the upgrade publishes, so it waits
+    if (Number(def.version) !== publishedVersionOf(def)) return false;
     const states = await tx.select({ id: workflowStates.id, stateKey: workflowStates.stateKey })
       .from(workflowStates).where(eq(workflowStates.workflowDefinitionId, def.id));
     const keyOf = new Map(states.map(s => [s.id, s.stateKey]));
@@ -79,7 +81,7 @@ export async function upgradeLegacySeedGuards(upgrade: SeedGuardUpgrade): Promis
         })
         .where(eq(workflowTransitions.id, t.id));
     }
-    const version = await recordDefinitionVersion(tx, def.id, { title: def.title, description: upgrade.versionDescription });
+    const version = await recordDefinitionVersion(tx, def.id, { title: def.title, description: upgrade.versionDescription, status: 'published' });
     await logActivity({
       tx, action: 'UPDATE', entity: 'طرح گردش کار', entityId: def.id,
       description: `ارتقای نگهبان گام‌های گردش کار پیش‌فرض «${def.title}»: ${upgrade.versionDescription}`,

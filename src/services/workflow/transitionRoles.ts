@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
-import { roles, workflowDefinitions, workflowInstances, workflowTransitions } from '../../db/schema.js';
+import { roles, workflowDefinitions, workflowDefinitionVersions, workflowInstances, workflowTransitions } from '../../db/schema.js';
 import { ValidationError } from '../../errors/customErrors.js';
 
 /**
@@ -19,8 +19,8 @@ export function isOpenTransitionRole(role: string | null | undefined): boolean {
 export const OPEN_WORKFLOW_INSTANCE_STATUSES = ['IN_PROGRESS', 'REJECTED'];
 
 interface DesignTransitionRole {
-  requiredRole?: string;
-  title?: string;
+  requiredRole?: string | null;
+  title?: string | null;
   actionKey?: string;
 }
 
@@ -52,7 +52,7 @@ export function storedTransitionRole(role: string | undefined, known: Map<string
 }
 
 /**
- * گردش‌کارهایی که اقدامی از آن‌ها این نقش را می‌خواهد: طرح جاری هر تعریف و تصویر فرایندهای پایان‌نیافته (عنوان‌ها
+ * گردش‌کارهایی که اقدامی از آن‌ها این نقش را می‌خواهد: طرح جاری هر تعریف، نسخه منتشرشده و تصویر فرایندهای پایان‌نیافته (عنوان‌ها
  * برای پیام). حذف چنین نقشی گام را بی امضاکننده می‌گذارد.
  */
 export async function workflowsRequiringRole(db: DbExecutor, roleCode: string): Promise<string[]> {
@@ -72,5 +72,16 @@ export async function workflowsRequiringRole(db: DbExecutor, roleCode: string): 
                   WHERE lower(btrim(coalesce(t ->> 'requiredRole', ''))) = ${code})`,
     ))
     .orderBy(asc(workflowDefinitions.id));
-  return [...new Set([...live, ...running].map(r => r.title || `#${r.id}`))];
+  // v10.1.21 (TD-1270): the published version runs new records even when the step tables hold a draft without the role
+  const published = await db.selectDistinct({ title: workflowDefinitions.title, id: workflowDefinitions.id })
+    .from(workflowDefinitionVersions)
+    .innerJoin(workflowDefinitions, eq(workflowDefinitions.id, workflowDefinitionVersions.definitionId))
+    .where(and(
+      eq(workflowDefinitionVersions.status, 'published'),
+      sql`jsonb_typeof(${workflowDefinitionVersions.dslJson} -> 'transitions') = 'array'`,
+      sql`EXISTS (SELECT 1 FROM jsonb_array_elements(${workflowDefinitionVersions.dslJson} -> 'transitions') t
+                  WHERE lower(btrim(coalesce(t ->> 'requiredRole', ''))) = ${code})`,
+    ))
+    .orderBy(asc(workflowDefinitions.id));
+  return [...new Set([...live, ...running, ...published].map(r => r.title || `#${r.id}`))];
 }

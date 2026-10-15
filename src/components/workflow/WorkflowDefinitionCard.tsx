@@ -2,6 +2,7 @@ import React from 'react';
 import { Archive, ArchiveRestore, Edit3, History, Power, PowerOff } from 'lucide-react';
 import { formatPersianNumber } from '../../utils/persianNumber';
 import { workflowEntityTypeLabel } from '../../lib/workflow/workflowEntityLabels';
+import { hasUnpublishedDraft } from '../../lib/workflow/workflowVersionDiff';
 import type { WorkflowDefinitionSummary } from '../../hooks/queries/useWorkflowLifecycle';
 
 interface LifecycleActions {
@@ -49,9 +50,16 @@ export const WorkflowDefinitionCard: React.FC<Props> = ({ def, canSwitch, action
           <h3 className="font-bold text-base text-gray-900 dark:text-white mt-1">{def.title}</h3>
           <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">نوع پرونده: {workflowEntityTypeLabel(def.entityType)}</p>
         </div>
-        <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded">
-          نسخه {formatPersianNumber(def.version ?? 1)}
-        </span>
+        <div className="flex flex-col items-end gap-1">
+          <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded">
+            نسخه منتشرشده {formatPersianNumber(def.publishedVersion ?? def.version ?? 1)}
+          </span>
+          {hasUnpublishedDraft(def) && (
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+              پیش‌نویس منتشرنشده (نسخه {formatPersianNumber(def.version ?? 0)})
+            </span>
+          )}
+        </div>
       </div>
 
       <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 min-h-[32px]">

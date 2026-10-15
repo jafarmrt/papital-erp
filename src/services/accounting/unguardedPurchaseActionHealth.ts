@@ -2,6 +2,7 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { workflowDefinitions, workflowTransitions } from '../../db/schema.js';
 import type { HealthCheckTestResult } from '../../types.js';
+import { isUnguardedAction, liveActionStableKey, mergeWorkflowActionRows, publishedWorkflowActions } from './publishedWorkflowActions.js';
 
 /**
  * v10.0.37 (OBS-R2-36): بررسی سلامت اقدام‌های بی نقش و بی مجوز گردش کار درخواست خرید. فقط جدول‌های گردش کار را می‌خواند
@@ -26,6 +27,7 @@ export async function findUnguardedPurchaseActions(db: DbExecutor): Promise<Ungu
     title: workflowDefinitions.title,
     transitionId: workflowTransitions.id,
     transitionTitle: workflowTransitions.title,
+    stableKey: liveActionStableKey,
   })
     .from(workflowTransitions)
     .innerJoin(workflowDefinitions, eq(workflowDefinitions.id, workflowTransitions.workflowDefinitionId))
@@ -36,7 +38,10 @@ export async function findUnguardedPurchaseActions(db: DbExecutor): Promise<Ungu
       sql`btrim(coalesce(${workflowTransitions.requiredPermission}, '')) = ''`,
     ))
     .orderBy(asc(workflowDefinitions.id), asc(workflowTransitions.id));
-  return rows.map(r => ({ ...r, title: r.title ?? '', transitionTitle: r.transitionTitle ?? '' }));
+  // v10.1.21 (TD-1270): the published version runs new records while the step tables hold a draft
+  const published = (await publishedWorkflowActions(db, 'purchase_requisition')).filter(isUnguardedAction)
+    .map(a => ({ definitionId: a.definitionId, code: a.code, title: a.title, transitionId: a.transitionId, transitionTitle: a.transitionTitle, stableKey: a.stableKey }));
+  return mergeWorkflowActionRows(rows.map(r => ({ ...r, title: r.title ?? '', transitionTitle: r.transitionTitle ?? '' })), published);
 }
 
 export function buildUnguardedPurchaseActionHealthTest(rows: UnguardedPurchaseActionRow[]): HealthCheckTestResult {
