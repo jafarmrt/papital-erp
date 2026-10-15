@@ -10,6 +10,7 @@ import {
   MEDIA_FORMAT_TEXT, MEDIA_LIGHT_LONG_SIDE, MEDIA_MAX_BYTES, MEDIA_THUMB_LONG_SIDE, MEDIA_TOO_LARGE_TEXT, MEDIA_TYPES,
   type MediaKind, type MediaVariant,
 } from '../../lib/media/mediaRules.js';
+import { getMediaRoot } from '../../lib/media/mediaRoot.js';
 
 /**
  * v10.0.21 (N-05): files of the media library on disk. The root is `MEDIA_DIR` (default `<app>/media-library`), never under
@@ -18,9 +19,7 @@ import {
  * and `tmp/` for uploads in progress. A file named by its content is written once and shared by every row holding it.
  */
 
-export function getMediaRoot(): string {
-  return path.resolve(process.env.MEDIA_DIR || path.join(process.cwd(), 'media-library'));
-}
+export { getMediaRoot };
 
 const SHA256 = /^[0-9a-f]{64}$/;
 const VARIANT_DIRS: Readonly<Record<MediaVariant, string>> = { original: 'originals', light: 'light', thumb: 'thumbs' };

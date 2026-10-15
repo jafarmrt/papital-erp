@@ -1,7 +1,7 @@
 {
   "name": "workshop-erp-crm",
   "private": true,
-  "version": "10.1.2",
+  "version": "10.1.3",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -19,6 +19,7 @@
     "perf:baseline": "tsx scripts/perf-baseline.ts",
     "attachments:migrate": "tsx scripts/migrate-attachments.ts",
     "attachments:cleanup": "tsx scripts/cleanup-attachments.ts",
+    "media:rebuild-light": "tsx scripts/media-rebuild-light.ts",
     "dates:report": "tsx scripts/date-calendar-report.ts",
     "secrets:encrypt": "tsx scripts/encrypt-personnel-secrets.ts",
     "users:lock-plain-passwords": "tsx scripts/lock-plain-passwords.ts",
