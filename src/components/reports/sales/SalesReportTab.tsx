@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { ErrorStateView } from '../../common/ErrorStateView';
 import { ReportActions } from '../ReportActions';
 import { ReportPrintHeader } from '../ReportPrintHeader';
+import { SalesCharts } from './SalesCharts';
 import { SalesReportFilters } from './SalesReportFilters';
 import { SalesReportTable } from './SalesReportTable';
 import { SalesSummary } from './SalesSummary';
@@ -20,6 +21,7 @@ import { getTodayIsoDate } from '../../../utils';
  * v10.1.8 (D-03، طرح گزارش‌های مدیریتی §۲): زبانه «فروش» صفحه «گزارش‌های مدیریتی». پالایه‌ها و تفکیک در حالت صفحه‌اند و
  * هر تغییر گزارش را از صفحه نخست می‌خواند؛ جمع‌ها، مقایسه، ده‌تایی‌ها و هم‌خوانی با دفتر کل از کارساز می‌آیند. خروجی
  * اکسل همه ردیف‌ها را (تا سقف خروجی) با همان پالایه‌ها می‌گیرد و چاپ همین صفحه با سربرگ است.
+ * v10.1.15: نمودار روند فروش و سهم دسته‌ها زیر کارت‌های جمع (ت۱۶).
  */
 
 export function SalesReportTab() {
@@ -66,6 +68,7 @@ export function SalesReportTab() {
         <>
           {error && <ErrorStateView compact title="به‌روزرسانی گزارش ناموفق بود" error={error instanceof Error ? error : String(error)} onRetry={() => void refetch()} />}
           <SalesSummary report={report} money={money} />
+          <SalesCharts params={params} money={money} />
           <SalesReportTable report={report} money={money} onPage={page => change({ page })} />
           <SalesTopLists topItems={report.topItems} topCustomers={report.topCustomers} money={money} />
         </>

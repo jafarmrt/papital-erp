@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth, useHasPermission } from '../contexts/AuthContext';
+import { useAuth, useHasAnyPermission, useHasPermission } from '../contexts/AuthContext';
 import { useDashboardCrm } from '../hooks/useDashboardCrm';
 import { useDashboardDailyLogs } from '../hooks/useDashboardDailyLogs';
 import { PersonalBanner } from '../components/dashboard/PersonalBanner';
@@ -9,6 +9,8 @@ import { InteractiveJalaliCalendar, CalendarEventItem } from '../components/dash
 import { CRMTasksWidget } from '../components/dashboard/CRMTasksWidget';
 import { useCrmFollowups } from '../hooks/useCrmFollowups';
 import { DailyLogsMentionsWidget } from '../components/dashboard/DailyLogsMentionsWidget';
+import { SalesSummaryWidget } from '../components/dashboard/SalesSummaryWidget';
+import { DASHBOARD_SALES_WIDGET_PERMISSIONS } from '../lib/permissions/reportPermissions';
 import { Warehouse, ArrowLeft, Sparkles } from 'lucide-react';
 import { isoToJalaliDate } from '../utils';
 
@@ -48,6 +50,9 @@ export default function Dashboard() {
     Array.isArray(userPermissions?.permissions) &&
       (userPermissions.permissions.includes('reports.view') || userPermissions.permissions.includes('warehouse.view'))
   );
+
+  // v10.1.15 (D-03 بخش ۴، ت۱۴): ابزارک فروش و مطالبات برای دارنده گزارش فروش یا گزارش سن
+  const canViewSalesWidget = useHasAnyPermission(DASHBOARD_SALES_WIDGET_PERMISSIONS);
 
   // Convert CRM activities and Daily Logs into Calendar Event items
   const calendarEvents = useMemo<CalendarEventItem[]>(() => {
@@ -160,6 +165,8 @@ export default function Dashboard() {
 
         {/* Left Column: Interactive Jalali Calendar & Secondary Panels (5 Cols on desktop) */}
         <div className="lg:col-span-5 space-y-6">
+          {canViewSalesWidget && <SalesSummaryWidget />}
+
           {/* Interactive Jalali Calendar */}
           <div className="min-h-[440px]">
             <InteractiveJalaliCalendar

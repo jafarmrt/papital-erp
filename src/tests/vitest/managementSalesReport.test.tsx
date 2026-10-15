@@ -14,6 +14,7 @@ import {
 } from '../../lib/reports/salesReport';
 import { canOpenPage } from '../../lib/permissions/pageAccess';
 import { MANAGEMENT_REPORT_TABS, managementReportPath } from '../../lib/reports/managementReportTabs';
+import type { SalesChartSeries } from '../../lib/reports/reportCharts';
 
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
@@ -31,6 +32,10 @@ const downloadReportWorkbook = vi.fn();
 vi.mock('../../lib/reports/reportWorkbook', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/reports/reportWorkbook')>()),
   downloadReportWorkbook: (...args: unknown[]) => downloadReportWorkbook(...args),
+}));
+// jsdom بوم ندارد؛ نمودار Chart.js با یک فهرست ساده جایگزین می‌شود
+vi.mock('../../components/reports/charts/ReportBarChart', () => ({
+  ReportBarChart: ({ title }: { title: string }) => <div data-testid="report-bar-chart">{title}</div>,
 }));
 vi.mock('react-hot-toast', () => { const toast = { error: vi.fn(), success: vi.fn() }; return { default: toast, toast }; });
 
@@ -166,8 +171,16 @@ function renderPage(path = '/management-reports/sales') {
   );
 }
 
+/** v10.1.15: سری نمودارهای زبانه فروش */
+const SAMPLE_CHARTS: SalesChartSeries = {
+  range: { from: TODAY, to: TODAY }, currency: 'all', period: 'month', total: '2700000',
+  trend: [{ key: '1405/08', label: 'آبان ۱۴۰۵', value: '2700000' }],
+  categories: [{ key: 'گردنبند', label: 'گردنبند', value: '2700000', percent: 100 }],
+};
+
 function routeFetch(report: SalesReport) {
   fetchJson.mockImplementation((url: string) => {
+    if (String(url).startsWith('/reports/sales/charts')) return Promise.resolve(SAMPLE_CHARTS);
     if (String(url).startsWith('/reports/sales')) return Promise.resolve(report);
     if (String(url).startsWith('/categories')) return Promise.resolve([{ name: 'گردنبند', type: 'product' }]);
     return Promise.resolve({ success: true, data: [] });
@@ -177,7 +190,7 @@ function routeFetch(report: SalesReport) {
 describe('management reports page (D-03)', () => {
   it('has a page-access row for every tab, opened by the key of its own API', () => {
     // v10.1.10 / v10.1.14: سن مطالبات و بدهی‌ها و مالیات بر ارزش افزوده با کلید گزارش‌های حسابداری (ت۲)
-    const tabKeys: Record<string, string> = { sales: 'reports.sales', aging: 'accounting.reports', vat: 'accounting.reports' };
+    const tabKeys: Record<string, string> = { sales: 'reports.sales', aging: 'accounting.reports', vat: 'accounting.reports', purchases: 'reports.purchases' };
     for (const tab of MANAGEMENT_REPORT_TABS) {
       expect(canOpenPage(managementReportPath(tab.id), { permissions: [tabKeys[tab.id]] })).toBe(true);
       expect(canOpenPage(managementReportPath(tab.id), { permissions: ['reports.view'] })).toBe(false);
