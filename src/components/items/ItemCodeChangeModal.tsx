@@ -21,7 +21,7 @@ interface ItemCodeChangeModalProps {
 }
 
 /**
- * v10.1.7 (D-15, TD-1264): «تغییر کد» of the item list, shown with `products.change_code`. The code is the online shop's
+ * v10.1.8 (D-15, TD-1264): «تغییر کد» of the item list, shown with `products.change_code`. The code is the online shop's
  * SKU: the window says the site's code is changed by hand, and lists the item's earlier codes.
  */
 export function ItemCodeChangeModal({ item, onClose, onChanged }: ItemCodeChangeModalProps) {

@@ -25,6 +25,9 @@ import type { Item } from '../../types';
 const ROOT = resolve(__dirname, '../..');
 const read = (path: string) => readFileSync(resolve(ROOT, path), 'utf8');
 
+/** the server's answer the window shows as is */
+const CODE_TAKEN_MESSAGE = 'این کد را کالای دیگری دارد.';
+
 const item = { id: 7, code: 'NE-100', name: 'گردنبند آزمون', version: 3, category: 'گردنبند', type: 'product' } as unknown as Item;
 
 afterEach(() => {
@@ -33,7 +36,7 @@ afterEach(() => {
   toastFn.success.mockReset();
 });
 
-// v10.1.7 (D-15, TD-1264): the item code is the online shop's SKU and changes only through «تغییر کد»
+// v10.1.8 (D-15, TD-1264): the item code is the online shop's SKU and changes only through «تغییر کد»
 describe('item code change window (D-15)', () => {
   it('checks the new code and the reason before sending', () => {
     expect(itemCodeChangeError('NE-100', ' ', 'x')).toBe('کد تازه را بنویسید.');
@@ -55,14 +58,14 @@ describe('item code change window (D-15)', () => {
   it('sends the item version and shows the server message', async () => {
     fetchJson.mockImplementation((url: string) => (url.endsWith('/code-history')
       ? Promise.resolve({ data: [{ oldCode: 'NE-090', newCode: 'NE-100', reason: 'یکسان‌سازی', username: 'مدیر', createdAt: '2026-10-01T08:00:00.000Z' }] })
-      : Promise.reject(new Error('این کد را کالای دیگری دارد.'))));
+      : Promise.reject(new Error(CODE_TAKEN_MESSAGE))));
     const onChanged = vi.fn();
     render(<ItemCodeChangeModal item={item} onClose={() => undefined} onChanged={onChanged} />);
     expect(await screen.findByText('NE-090 → NE-100')).not.toBeNull();
     fireEvent.change(screen.getByRole('textbox', { name: 'کد تازه' }), { target: { value: ' NE-200 ' } });
     fireEvent.change(screen.getByRole('textbox', { name: 'دلیل تغییر' }), { target: { value: 'کد تکراری' } });
     fireEvent.click(screen.getByRole('button', { name: 'تغییر کد' }));
-    expect((await screen.findByRole('alert')).textContent).toBe('این کد را کالای دیگری دارد.');
+    expect((await screen.findByRole('alert')).textContent).toBe(CODE_TAKEN_MESSAGE);
     const post = fetchJson.mock.calls.find(([url]) => url === '/items/7/change-code');
     expect(JSON.parse(String((post?.[1] as { body: string }).body))).toEqual({ code: 'NE-200', reason: 'کد تکراری', version: 3 });
     expect(onChanged).not.toHaveBeenCalled();
@@ -90,7 +93,7 @@ describe('item code change window (D-15)', () => {
   });
 });
 
-// v10.1.7 (TD-1209): an open proforma being edited counted its own reservation in «رزرو» of its item picker
+// v10.1.8 (TD-1209): an open proforma being edited counted its own reservation in «رزرو» of its item picker
 describe('the edited proforma leaves out its own reservation (TD-1209)', () => {
   it('asks the pick list without the edited document', () => {
     expect(itemPickWithReservedUrl(null)).toBe(ITEM_PICK_WITH_RESERVED_URL);
@@ -100,7 +103,7 @@ describe('the edited proforma leaves out its own reservation (TD-1209)', () => {
   });
 });
 
-// v10.1.7: bulk delivery without an order named a button the window shows only before approval
+// v10.1.8: bulk delivery without an order named a button the window shows only before approval
 describe('bulk delivery without an order names the button the window shows', () => {
   it('points to the order button of an approved requisition', () => {
     expect(BULK_DELIVERY_NO_ORDERS).toContain('«مشاهده / ثبت فاکتور تامین‌کننده»');

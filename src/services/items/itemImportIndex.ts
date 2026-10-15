@@ -14,7 +14,7 @@ const nameKey = (name: string) => name.trim().toLowerCase();
  */
 export class ImportItemIndex {
   private readonly byId = new Map<number, ItemRow>();
-  /** v10.1.7 (D-15, TD-1264): an earlier code (exact) → the item that held it, the latest change winning */
+  /** v10.1.8 (D-15, TD-1264): an earlier code (exact) → the item that held it, the latest change winning */
   private readonly byOldCode = new Map<string, number>();
 
   static async load(tx: DbExecutor, codes: string[], names: string[]): Promise<ImportItemIndex> {
@@ -45,7 +45,7 @@ export class ImportItemIndex {
   }
 
   /**
-   * کد دقیق، وگرنه تنها کالایی که کدش جز در بزرگی و کوچکی حروف برابر است؛ چند کالای هم‌حرف `ambiguous` است. v10.1.7 (D-15):
+   * کد دقیق، وگرنه تنها کالایی که کدش جز در بزرگی و کوچکی حروف برابر است؛ چند کالای هم‌حرف `ambiguous` است. v10.1.8 (D-15):
    * بی کالای فعلی، کالایی که پیش‌تر دقیقاً همین کد را داشته (فایل قدیمی پس از تغییر کد کالای تازه نمی‌سازد)
    */
   findByCode(code: string): { item: ItemRow | null; ambiguous: string[] } {

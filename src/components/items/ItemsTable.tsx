@@ -17,7 +17,7 @@ interface ItemsTableProps {
   onEditItem?: (item: Item) => void;
   onArchiveItem?: (itemId: number) => void;
   onSyncItem?: (itemId: number) => void;
-  /** v10.1.7 (D-15): «تغییر کد», only with `products.change_code` */
+  /** v10.1.8 (D-15): «تغییر کد», only with `products.change_code` */
   onChangeCode?: (item: Item) => void;
   syncingItemId?: number | null;
   page: number;

@@ -318,7 +318,7 @@ export class WooOrderSyncService {
 
         const { multiplier, currency } = resolveCurrency(wcOrder);
         const skus = [...new Set(lineItems.map(li => String(li.sku || '').trim()).filter(Boolean))];
-        // v10.1.7 (D-15, TD-1264): a SKU that is no live item's current code finds the item by an earlier code of it
+        // v10.1.8 (D-15, TD-1264): a SKU that is no live item's current code finds the item by an earlier code of it
         const itemBySku = await resolveItemsByCode(tx, skus);
         const oldCodeNotes: string[] = [];
 

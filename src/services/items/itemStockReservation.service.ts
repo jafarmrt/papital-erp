@@ -694,7 +694,7 @@ export class ItemStockReservationService {
     for (const summary of report.itemSummaries) {
       const itemId = Number(summary.itemId);
       if (!Number.isInteger(itemId) || itemId <= 0) continue;
-      // v10.1.7 (TD-1209): the sales invoice picker of an open proforma leaves out that proforma's own reservation
+      // v10.1.8 (TD-1209): the sales invoice picker of an open proforma leaves out that proforma's own reservation
       const reservations = othersReservations(summary.reservations, others);
       map[String(itemId)] = {
         totalReserved: reservations === summary.reservations

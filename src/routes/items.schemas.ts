@@ -92,7 +92,7 @@ export const consumeNextItemCodeSchema = z.object({
   }),
 });
 
-/** v10.1.7 (D-15, TD-1264): change an item's code; the new code, a required reason and the item's version */
+/** v10.1.8 (D-15, TD-1264): change an item's code; the new code, a required reason and the item's version */
 export const itemCodeChangeSchema = z.object({
   body: z.object({
     code: z.string().trim().min(1, 'کد تازه کالا را بنویسید').max(100, 'کد کالا بیش از اندازه بلند است'),
