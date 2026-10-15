@@ -16,3 +16,4 @@ export * from './useProjectQueries';
 export * from '../../lib/queryKeys';
 export * from '../../lib/queryInvalidation';
 
+export * from './useWorkflowDelegationQueries';

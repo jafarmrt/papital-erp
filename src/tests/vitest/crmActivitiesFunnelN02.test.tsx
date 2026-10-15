@@ -30,7 +30,7 @@ afterEach(() => {
   fetchJson.mockReset();
 });
 
-// v10.1.16 (N-02 part 2): activity edit and delete, lost reason, my follow-ups and the funnel report in the browser
+// v10.1.17 (N-02 part 2): activity edit and delete, lost reason, my follow-ups and the funnel report in the browser
 describe('CRM activities, lost reason and funnel (N-02 part 2)', () => {
   it('requires a listed lost reason and a note for «other»', () => {
     expect(lostReasonError('', '')).not.toBeNull();

@@ -78,6 +78,7 @@ export class WorkflowEngineService {
   static createDelegation = WorkflowDelegationService.createDelegation.bind(WorkflowDelegationService);
   static getDelegations = WorkflowDelegationService.getDelegations.bind(WorkflowDelegationService);
   static revokeDelegation = WorkflowDelegationService.revokeDelegation.bind(WorkflowDelegationService);
+  static listDelegationScopes = WorkflowDelegationService.listDelegationScopes.bind(WorkflowDelegationService);
 
   // --- Transition Execution Delegation ---
   static getAvailableTransitions = WorkflowTransitionExecutor.getAvailableTransitions.bind(WorkflowTransitionExecutor);

@@ -49,7 +49,7 @@ const leadProbabilityInput = decimalInput('احتمال موفقیت')
 const leadStageInput = z.enum(CRM_LEAD_STAGES, { message: 'مرحله پرونده فروش نامعتبر است' });
 const leadStatusInput = z.enum(CRM_LEAD_STATUSES, { message: 'وضعیت پرونده فروش نامعتبر است' });
 const leadCurrencyInput = z.preprocess(normalizeLeadCurrency, z.enum(CRM_LEAD_CURRENCIES, { message: 'ارز پرونده فروش پشتیبانی نمی‌شود (ریال، دلار، یورو، درهم یا پوند)' }));
-// v10.1.16 (N-02 بخش ۲، ت۶): دلیل از دست رفتن از فهرست ثابت؛ الزامی بودنش را `resolveLeadLostReason` می‌سنجد
+// v10.1.17 (N-02 بخش ۲، ت۶): دلیل از دست رفتن از فهرست ثابت؛ الزامی بودنش را `resolveLeadLostReason` می‌سنجد
 const leadLostReasonFields = {
   lostReason: z.enum(CRM_LOST_REASONS, { message: 'دلیل از دست رفتن پرونده نامعتبر است' }).optional(),
   lostReasonNote: z.string().max(CRM_LOST_REASON_NOTE_MAX, 'شرح دلیل از دست رفتن بیش از اندازه بلند است').optional(),
@@ -389,10 +389,10 @@ router.post('/crm/leads', authorizePermission('crm.manage'), validate(createCrmL
   const authorName = currentUser?.full_name || currentUser?.username || 'فروشنده';
 
   const initialStage: string = stage || 'lead';
-  // v10.1.16 (N-02 بخش ۲، ت۶): پرونده‌ای که «از دست رفته» ساخته می‌شود دلیل می‌خواهد (۴۲۲ پیش از هر نوشتن)
+  // v10.1.17 (N-02 بخش ۲، ت۶): پرونده‌ای که «از دست رفته» ساخته می‌شود دلیل می‌خواهد (۴۲۲ پیش از هر نوشتن)
   const lost = resolveLeadLostReason({ targetStage: initialStage, existingStage: null, reason: lostReason, note: lostReasonNote });
 
-  // v10.1.16 (N-02 بخش ۲): ساخت پرونده، یادداشت آغاز، ردیف تاریخچه مرحله و ممیزی در یک تراکنش
+  // v10.1.17 (N-02 بخش ۲): ساخت پرونده، یادداشت آغاز، ردیف تاریخچه مرحله و ممیزی در یک تراکنش
   const newLead = await orm.transaction(async (tx) => {
   // V10-4.1: فروشنده مسئول = پرسنل (id) + snapshot نام
   const assignee = await resolveAssignee({ name: assignedTo, personnelId: assignedPersonnelId }, tx);
@@ -530,7 +530,7 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
     }
   }
 
-  // v10.1.16 (N-02 بخش ۲، ت۶): رفتن به «از دست رفته» دلیل می‌خواهد، بیرون آمدن از آن دلیل را پاک می‌کند
+  // v10.1.17 (N-02 بخش ۲، ت۶): رفتن به «از دست رفته» دلیل می‌خواهد، بیرون آمدن از آن دلیل را پاک می‌کند
   const targetStage = stage !== undefined ? stage : (existing.stage || 'lead');
   const lost = resolveLeadLostReason({
     targetStage, existingStage: existing.stage, existingReason: existing.lostReason, existingNote: existing.lostReasonNote,
@@ -801,7 +801,7 @@ router.get('/crm/followups', authorizePermission('crm.view', 'customers.view', '
   const q = req.query as Record<string, string | undefined>;
   const { page } = parsePagination(q, { page: 1, limit: 50 });
   const limit = Math.min(Math.max(Number(q.limit) || 50, 1), 200);
-  // v10.1.16 (N-02 بخش ۲، ت۳، OBS-R2-27): پیش‌فرض فقط پیگیری‌های خود کاربر؛ دارنده `crm.manage` با `scope=all` همه یا با
+  // v10.1.17 (N-02 بخش ۲، ت۳، OBS-R2-27): پیش‌فرض فقط پیگیری‌های خود کاربر؛ دارنده `crm.manage` با `scope=all` همه یا با
   // `assignedPersonnelId` یک فروشنده را می‌بیند. دیگران همیشه فقط پیگیری‌های خودشان را می‌بینند.
   const manager = await can(req.user, 'crm.manage');
   const sellerId = manager && q.assignedPersonnelId ? Number(q.assignedPersonnelId) : undefined;
@@ -818,7 +818,7 @@ router.get('/crm/followups', authorizePermission('crm.view', 'customers.view', '
   res.json({ ...meta, scope: mine ? 'mine' : 'all', data: rows.map(formatActivity) });
 }));
 
-// v10.1.16 (N-02 بخش ۲، ت۷): گزارش قیف فروش از تاریخچه مرحله، با بازه روز کسب‌وکار و فروشنده (`crmFunnelReport`)
+// v10.1.17 (N-02 بخش ۲، ت۷): گزارش قیف فروش از تاریخچه مرحله، با بازه روز کسب‌وکار و فروشنده (`crmFunnelReport`)
 const funnelQuerySchema = z.object({
   query: z.object({
     fromDate: z.string().optional(),
@@ -982,7 +982,7 @@ function followupStatusHandler(completed: boolean) {
 router.put('/crm/activities/:id/complete-followup', authorizePermission('crm.manage'), validate(followupActionSchema), followupStatusHandler(true));
 router.put('/crm/activities/:id/reopen-followup', authorizePermission('crm.manage'), validate(followupActionSchema), followupStatusHandler(false));
 
-// v10.1.16 (N-02 بخش ۲، ت۱ و ت۲): ویرایش و حذف نرم اقدام. فقط دارندگان `crm.manage` اقدام ثبت می‌کنند، پس «ثبت‌کننده یا
+// v10.1.17 (N-02 بخش ۲، ت۱ و ت۲): ویرایش و حذف نرم اقدام. فقط دارندگان `crm.manage` اقدام ثبت می‌کنند، پس «ثبت‌کننده یا
 // دارنده crm.manage» همان «دارنده crm.manage» است. ویرایش با نسخه رکورد (۴۰۹ وقتی کهنه است)، زیر قفل ردیف، با ممیزی پیش و
 // پس در همان تراکنش؛ اشاره تازه فقط به کاربر تازه اعلان می‌دهد (`updateActivity` / `softDeleteActivity`).
 const editCrmActivitySchema = z.object({

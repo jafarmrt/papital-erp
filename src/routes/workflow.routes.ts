@@ -12,8 +12,9 @@ import { z } from 'zod';
 import { MY_TASK_FILTERS } from '../services/workflow/workflowTaskService.js';
 import { withUtcTimestamps } from '../services/workflow/workflowTimestamps.js';
 import { isSystemAdminRole } from '../lib/permissions/permissionCatalog.js';
-import { activateDefinitionSchema, canvasPositionsSchema, definitionFromTemplateSchema, definitionSwitchSchema, createDelegationSchema, executeTaskSchema, executeTransitionSchema, saveDefinitionSchema } from './workflowRouteSchemas.js';
-import { WORKFLOW_EXECUTE_PERMISSIONS, WORKFLOW_INBOX_PERMISSIONS, WORKFLOW_SWITCH_PERMISSION } from '../lib/permissions/workflowPermissions.js';
+import { activateDefinitionSchema, canvasPositionsSchema, definitionFromTemplateSchema, definitionSwitchSchema, createDelegationSchema, delegationListSchema, executeTaskSchema, executeTransitionSchema, saveDefinitionSchema, terminateInstanceSchema } from './workflowRouteSchemas.js';
+import { WORKFLOW_DELEGATE_PERMISSIONS, WORKFLOW_EXECUTE_PERMISSIONS, WORKFLOW_INBOX_PERMISSIONS, WORKFLOW_SWITCH_PERMISSION, WORKFLOW_TERMINATE_PERMISSION } from '../lib/permissions/workflowPermissions.js';
+import { terminateWorkflowInstance } from '../services/workflow/workflowInstanceTerminate.js';
 
 const entityParamSchema = z.object({
   params: z.object({
@@ -319,6 +320,23 @@ router.post('/definitions/:id/restore', authorizePermission(WORKFLOW_SWITCH_PERM
 }));
 
 /**
+ * POST /api/workflow/instances/:id/terminate
+ * v10.1.16 (D-06 part C, TD-1265): the system admin closes a running record that cannot move on, with a required reason;
+ * only record types whose work goes on without the workflow (`workflowTerminateRefusal`), else 409.
+ */
+router.post('/instances/:id/terminate', authorizePermission(WORKFLOW_TERMINATE_PERMISSION), validate(terminateInstanceSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const { reason } = req.body as z.infer<typeof terminateInstanceSchema>['body'];
+  const result = await terminateWorkflowInstance({
+    instanceId: Number(req.params.id),
+    reason,
+    userId: req.user?.id ?? null,
+    userName: req.user?.full_name || req.user?.username || null,
+    req,
+  });
+  res.json({ success: true, message: 'فرایند گردش کار بسته شد.', data: result });
+}));
+
+/**
  * POST /api/workflow/positions
  * Quick update canvas node positions from drag
  */
@@ -356,11 +374,12 @@ router.get('/analytics/sla', authorizePermission('workflow.manage', 'workflow.ad
  * GET /api/workflow/delegations
  * Get workflow delegations for current user or all (if admin)
  */
-router.get('/delegations', authorizePermission('workflow.view', 'workflow.manage', 'workflow.admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.get('/delegations', authorizePermission('workflow.view', ...WORKFLOW_DELEGATE_PERMISSIONS), validate(delegationListSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const userId = req.user?.id || 0;
     const userRole = req.user?.role || 'user';
-    const delegations = await WorkflowEngineService.getDelegations({ userId, userRole });
+    const mineOnly = req.query.mine === '1';
+    const delegations = await WorkflowEngineService.getDelegations({ userId, userRole, mineOnly });
     res.json({ success: true, data: delegations });
   } catch (err: unknown) {
     const errMsg = getErrorMessage(err);
@@ -370,10 +389,19 @@ router.get('/delegations', authorizePermission('workflow.view', 'workflow.manage
 }));
 
 /**
- * POST /api/workflow/delegations
- * Create a new workflow delegation
+ * GET /api/workflow/delegation-scopes
+ * v10.1.16 (D-06 part C, OBS-R2-73): the scopes the delegation form offers (workflows not archived, code and title), so
+ * the inbox's «تفویض کارهایم» works without the design keys of `/workflow/definitions`
  */
-router.post('/delegations', authorizePermission('workflow.approve', 'workflow.manage', 'workflow.admin'), validate(createDelegationSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.get('/delegation-scopes', authorizePermission(...WORKFLOW_DELEGATE_PERMISSIONS), asyncHandler(async (_req: AuthenticatedRequest, res) => {
+  res.json({ success: true, data: await WorkflowEngineService.listDelegationScopes() });
+}));
+
+/**
+ * POST /api/workflow/delegations
+ * Create a new workflow delegation; v10.1.12 (OBS-R2-66): an overlapping one of the same delegator is 409 WF_DELEGATION_OVERLAP
+ */
+router.post('/delegations', authorizePermission(...WORKFLOW_DELEGATE_PERMISSIONS), validate(createDelegationSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const userId = req.user?.id || 0;
     const userName = req.user?.full_name || req.user?.username || 'کاربر';
@@ -407,7 +435,7 @@ router.post('/delegations', authorizePermission('workflow.approve', 'workflow.ma
  * POST /api/workflow/delegations/:id/revoke
  * Revoke an active delegation
  */
-router.post('/delegations/:id/revoke', authorizePermission('workflow.approve', 'workflow.manage', 'workflow.admin'), validate(paramsIdSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.post('/delegations/:id/revoke', authorizePermission(...WORKFLOW_DELEGATE_PERMISSIONS), validate(paramsIdSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const id = Number(req.params.id);
     const userId = req.user?.id || 0;

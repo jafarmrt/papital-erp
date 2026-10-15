@@ -20,8 +20,11 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
-### v10.1.16 — ویرایش اقدام، دلیل از دست رفتن و گزارش قیف (N-02 بخش ۲)
+### v10.1.17 — ویرایش اقدام، دلیل از دست رفتن و گزارش قیف (N-02 بخش ۲)
 - CRM activity edit and soft delete (crm.manage, OCC version), required lost reason, lead stage history (migration 0113) and the funnel report GET /crm/reports/funnel, my follow-ups scope. Tests: reg_crm_activity_edit_delete_n02, reg_crm_lost_reason_stage_history_n02, reg_crm_my_followups_n02, reg_crm_funnel_report_n02, Vitest crmActivitiesFunnelN02.
+
+### v10.1.16 — تفویض از کارتابل و بستن فرایند گیرکرده (D-06 بخش ج)
+- تأییدکننده از کارتابل با «تفویض کارهایم» جانشین می‌گذارد و «تفویض‌های من» را می‌بیند؛ فرم تفویض از فهرست ساده کاربران و حوزه‌های بی‌نیاز به مجوز طراحی می‌خواند (OBS-R2-73)؛ تفویض هم‌پوشان یک نفر برای یک گردش کار با ۴۰۹ رد می‌شود (OBS-R2-66، TD-1268)؛ مدیر سامانه فرایند در جریان سند فروش، سند حسابداری یا ماده اولیه را با دلیل الزامی می‌بندد (TD-1265، D-06 بخش ج).
 
 ### v10.1.15 — وب‌سایت، ایمیل و اینستاگرام طرف حساب (N-02 بخش ۱)
 - Party website, e-mail and Instagram with one validation rule (migration 0112), call / WhatsApp / mail links, Excel columns; the intro and updates page is removed and the version comes from /api/health. Test: reg_customer_contact_channels_n02, Vitest customerContactChannels.

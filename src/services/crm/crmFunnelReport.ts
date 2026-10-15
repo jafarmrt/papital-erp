@@ -21,7 +21,7 @@ const stageRank = (column: string) => sql.raw(
 );
 
 /**
- * v10.1.16 (N-02 بخش ۲، ت۷): گزارش قیف از `crm_lead_stage_history` در SQL. بازه روز کسب‌وکار با `zonedDayRangeUtc` به بازه
+ * v10.1.17 (N-02 بخش ۲، ت۷): گزارش قیف از `crm_lead_stage_history` در SQL. بازه روز کسب‌وکار با `zonedDayRangeUtc` به بازه
  * UTC زمان تغییر برمی‌گردد؛ پرونده حذف‌شده شمرده نمی‌شود. قاعده‌ها در `src/lib/crm/funnelReport.ts`.
  */
 export async function crmFunnelReport(filter: FunnelFilter): Promise<FunnelReport> {

@@ -19,7 +19,7 @@ interface CRMLeadDrawerProps {
   /** v9.0.148 (TD-893): فقط برای دارنده `crm.delete`؛ بی آن دکمه حذف نیست */
   onDeleteLead?: (leadId: number) => void;
   onToggleFollowup: (act: CRMActivity) => void;
-  /** v10.1.16 (N-02 بخش ۲): ویرایش و حذف اقدام */
+  /** v10.1.17 (N-02 بخش ۲): ویرایش و حذف اقدام */
   onEditActivity?: (act: CRMActivity) => void;
   onDeleteActivity?: (act: CRMActivity) => void;
   onConvertToInvoice?: (lead: CRMLead) => void;

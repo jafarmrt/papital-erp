@@ -18,7 +18,7 @@ interface CRMInteractionModalProps {
   setActivityForm: React.Dispatch<React.SetStateAction<any>>;
   isSavingActivity: boolean;
   onSaveActivity: (e: React.FormEvent) => void;
-  /** v10.1.16 (N-02 بخش ۲): پنجره اقدامی را ویرایش می‌کند؛ پرونده و طرف حساب اقدام عوض نمی‌شوند */
+  /** v10.1.17 (N-02 بخش ۲): پنجره اقدامی را ویرایش می‌کند؛ پرونده و طرف حساب اقدام عوض نمی‌شوند */
   isEditingActivity?: boolean;
   // V10-4.1: مسئول تسک = پرسنل فعال؛ کاربران فقط برای منشن
   personnelList: any[];
