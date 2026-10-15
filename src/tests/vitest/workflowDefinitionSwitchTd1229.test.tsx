@@ -37,6 +37,8 @@ beforeEach(() => {
 const def = (over: Partial<WorkflowDefinitionSummary> = {}): WorkflowDefinitionSummary => ({
   id: 7, code: 'WF_X', title: 'گردش کار آزمون', entityType: 'document', version: 2, isActive: 1, isArchived: 0, ...over,
 });
+/** The server's 409 answer when the record type already has an active workflow */
+const ACTIVE_EXISTS_MESSAGE = 'گردش کار «قدیمی» برای «فاکتور و سند» فعال است؛ با فعال کردن این گردش کار، آن یکی غیرفعال می‌شود.';
 const noActions = { activate: vi.fn(), deactivate: vi.fn(), archive: vi.fn(), restore: vi.fn(), pending: false };
 
 const withQuery = (ui: React.ReactElement) => (
@@ -61,7 +63,7 @@ describe('workflow definition card (TD-1229)', () => {
 });
 
 describe('workflow definition list (TD-1229)', () => {
-  it('keeps archived workflows out of the main list and shows them under «بایگانی»', () => {
+  it('keeps archived workflows out of the main list and shows them under the archive toggle', () => {
     render(withQuery(<WorkflowDefinitionList isLoading={false} onCreate={vi.fn()} onEdit={vi.fn()} onHistory={vi.fn()}
       definitions={[def({ id: 1, title: 'گردش جاری' }), def({ id: 2, title: 'کنارگذاشته', isActive: 0, isArchived: 1 })]} />));
     expect(screen.getByText('گردش جاری')).toBeTruthy();
@@ -73,7 +75,7 @@ describe('workflow definition list (TD-1229)', () => {
 
   it('asks before replacing the active workflow of the type and then sends replaceActive', async () => {
     fetchJson
-      .mockRejectedValueOnce(new ApiError('گردش کار «قدیمی» برای «فاکتور و سند» فعال است؛ با فعال کردن این گردش کار، آن یکی غیرفعال می‌شود.', 'WF_ACTIVE_DEFINITION_EXISTS', 409))
+      .mockRejectedValueOnce(new ApiError(ACTIVE_EXISTS_MESSAGE, 'WF_ACTIVE_DEFINITION_EXISTS', 409))
       .mockResolvedValueOnce({ success: true, data: { changed: true, replaced: { id: 1, title: 'قدیمی' } } });
     render(withQuery(<WorkflowDefinitionList isLoading={false} onCreate={vi.fn()} onEdit={vi.fn()} onHistory={vi.fn()}
       definitions={[def({ id: 9, title: 'تازه', isActive: 0 })]} />));
