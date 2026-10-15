@@ -226,6 +226,7 @@ export async function cleanupAllTestFixtures(): Promise<void> {
   // با پیشوند Lead_ یا واژه آزمایشی/شرکت آزمایشی پوشش داده می‌شوند.
   try {
     await orm.execute(sql`DELETE FROM crm_activities WHERE lead_id IN (SELECT id FROM crm_leads WHERE title ILIKE ${MARKER_PAT} OR title ILIKE '%Lead_%' OR company ILIKE ${MARKER_PAT})`);
+    await orm.execute(sql`DELETE FROM crm_lead_stage_history WHERE lead_id IN (SELECT id FROM crm_leads WHERE title ILIKE ${MARKER_PAT} OR title ILIKE '%Lead_%' OR company ILIKE ${MARKER_PAT})`);
     await orm.execute(sql`DELETE FROM crm_leads WHERE title ILIKE ${MARKER_PAT} OR title ILIKE '%Lead_%' OR company ILIKE ${MARKER_PAT}`);
   } catch (err: any) {
     logger.warn(`[TestDbHelper] Error cleaning CRM fixtures: ${err.message}`);
