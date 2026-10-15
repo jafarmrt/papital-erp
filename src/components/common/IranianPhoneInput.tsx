@@ -75,6 +75,8 @@ export const IranianPhoneInput: React.FC<IranianPhoneInputProps> = ({
     return { status: 'invalid' as const, message: phoneInfo.error || 'پیش‌شماره نامعتبر است' };
   }, [cleanDigits, phoneInfo]);
 
+  // v10.1.20 (TD-1271): کادر سقف نویسه ندارد؛ maxLength=11 شماره چسبانده‌شده با +98 یا فاصله را پیش از پاک‌سازی می‌برید.
+  // خود این تابع شماره را به ۱۱ رقم می‌رساند.
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let raw = toEnglishDigits(e.target.value);
     // تصحیح پیشوندها در هنگام تایپ یا Paste
@@ -189,8 +191,8 @@ export const IranianPhoneInput: React.FC<IranianPhoneInputProps> = ({
           id={inputId}
           name={name}
           type="tel"
-          inputMode="numeric"
-          maxLength={11}
+          inputMode="tel"
+          aria-invalid={showFeedback && validationState.status === 'invalid' ? true : undefined}
           autoComplete="off"
           disabled={disabled}
           autoFocus={autoFocus}

@@ -105,6 +105,7 @@ export const BankCardInput: React.FC<BankCardInputProps> = ({
         name={name}
         type="text"
         inputMode="numeric"
+        aria-invalid={rawDigits.length === 16 && !validation?.isValid ? true : undefined}
         autoComplete="cc-number"
         dir="ltr"
         autoFocus={autoFocus}
