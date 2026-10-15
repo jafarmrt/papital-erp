@@ -86,7 +86,7 @@ export class InsufficientStockError extends AppError {
 }
 
 export class UnbalancedVoucherError extends AppError {
-  constructor(message = 'سند حسابداری موازنه نیست و مجموع بدهکار با بستانکار برابر نمی‌باشد', details?: unknown) {
+  constructor(message = 'سند حسابداری موازنه نیست و مجموع بدهکار با بستانکار برابر نیست', details?: unknown) {
     super(message, 422, 'ACCOUNTING_UNBALANCED', details);
   }
 }

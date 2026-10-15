@@ -341,7 +341,7 @@ export function CRMLeadDrawer({
               <Search className="absolute right-3 top-2.5 text-slate-400" size={16} />
               <input
                 type="text"
-                placeholder="جستجو کالا با کد، نام یا دسته‌بندی..."
+                placeholder="جست‌وجو کالا با کد، نام یا دسته‌بندی..."
                 value={stockSearchTerm}
                 onChange={(e) => setStockSearchTerm(e.target.value)}
                 className="w-full pr-9 pl-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500 focus:bg-white transition-all"

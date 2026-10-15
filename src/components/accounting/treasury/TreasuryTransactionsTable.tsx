@@ -119,7 +119,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
             <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
-              placeholder="جستجو در طرف حساب، شماره، شرح..."
+              placeholder="جست‌وجو در طرف حساب، شماره، شرح..."
               value={searchQuery}
               onChange={e => { setSearchQuery(e.target.value); setTxPage(1); }}
               className="w-full pr-9 pl-3 py-2 text-xs bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"

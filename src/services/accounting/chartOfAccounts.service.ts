@@ -385,7 +385,7 @@ export class ChartOfAccountsService {
       if (existing.parentId) {
         const [parent] = await tx.select().from(accounts).where(eq(accounts.id, existing.parentId));
         if (parent && parent.isDeleted === 1) {
-          throw new ConflictError('سرفصل والد این حساب حذف شده است. لطفاً ابتدا حساب والد را احیا نمایید.', undefined, 'ACCOUNT_PARENT_DELETED');
+          throw new ConflictError('سرفصل والد این حساب حذف شده است. لطفاً ابتدا حساب والد را احیا کنید.', undefined, 'ACCOUNT_PARENT_DELETED');
         }
       }
 

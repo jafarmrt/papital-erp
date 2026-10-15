@@ -285,7 +285,7 @@ export function NewVoucherModal({
         } else if (!isBalanced) {
           toast.error(balance.rowsWithoutRate.length > 0 ? `نرخ تبدیل ردیف ${rowsWithoutRateText} به ریال را وارد کنید` : `سند تراز نیست! اختلاف: ${formatPersianPrice(difference, balance.currency)}`);
         } else {
-          toast.error('لطفاً شرح سند را تکمیل نمایید');
+          toast.error('لطفاً شرح سند را تکمیل کنید');
         }
         return;
       }
@@ -726,7 +726,7 @@ export function NewVoucherModal({
               </div>
               <div>
                 <div className="text-xs font-bold">
-                  {isBalanced ? 'سند کاملاً تراز است و آماده ثبت نهایی می‌باشد' : 'سند حسابداری هنوز تراز نیست!'}
+                  {isBalanced ? 'سند کاملاً تراز است و آماده ثبت نهایی است' : 'سند حسابداری هنوز تراز نیست!'}
                 </div>
                 {!isBalanced && balance.rowsWithoutRate.length > 0 && (
                   <div className="text-[11px] opacity-90 mt-0.5">

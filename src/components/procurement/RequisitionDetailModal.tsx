@@ -547,7 +547,7 @@ export function RequisitionDetailModal({
               {isReceivedStage && (
                 <div className="w-full p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 font-bold flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  این سفارش با موفقیت خریداری و تحویل انبار شده است و گردش‌کار آن تکمیل می‌باشد.
+                  این سفارش با موفقیت خریداری و تحویل انبار شده است و گردش‌کار آن تکمیل است.
                 </div>
               )}
 

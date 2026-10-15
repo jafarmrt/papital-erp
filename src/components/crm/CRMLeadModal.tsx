@@ -99,7 +99,7 @@ export function CRMLeadModal({
                     setLeadForm({ ...leadForm, customerId: val });
                   }
                 }}
-                placeholder="جستجو و انتخاب مشتری..."
+                placeholder="جست‌وجو و انتخاب مشتری..."
                 maxResults={4}
               />
             </div>

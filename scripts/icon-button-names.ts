@@ -1,5 +1,5 @@
 /**
- * Icon-only buttons need a spoken name (v10.1.26, TD-1276, Vibe Farsi package 3b).
+ * Icon-only buttons need a spoken name (v10.1.27, TD-1276, Vibe Farsi package 3b).
  *
  * A `<button>` whose children are only icon components (no text, no expression, no image with
  * `alt`) and that has no `aria-label`, `aria-labelledby` or `title` reads as «دکمه» to a screen

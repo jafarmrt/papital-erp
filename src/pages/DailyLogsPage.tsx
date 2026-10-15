@@ -144,7 +144,7 @@ export default function DailyLogsPage({ user }: DailyLogsPageProps) {
             <Search className="w-4 h-4 absolute right-3 top-2.5 text-slate-400" />
             <input
               type="text"
-              placeholder="جستجو در عنوان، شرح فعالیت، نام همکار یا برچسب‌ها..."
+              placeholder="جست‌وجو در عنوان، شرح فعالیت، نام همکار یا برچسب‌ها..."
               value={dl.searchQuery}
               onChange={(e) => dl.setSearchQuery(e.target.value)}
               className="w-full pr-9 pl-4 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-hidden focus:border-blue-500 transition-all"

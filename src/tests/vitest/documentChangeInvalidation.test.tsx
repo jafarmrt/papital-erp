@@ -135,7 +135,7 @@ describe('lists refreshed after a document change (TD-796)', () => {
     );
     fireEvent.change(await screen.findByDisplayValue('رسید خرید مواد اولیه / کالا (فاکتور خرید)'), { target: { value: 'return' } });
     fireEvent.change(screen.getByPlaceholderText('مثال: 1005'), { target: { value: 'INV-1' } });
-    fireEvent.click(screen.getByText('جستجو'));
+    fireEvent.click(screen.getByText('جست‌وجو'));
     expect(await screen.findByText('گردنبند نقره')).toBeTruthy();
     const submit = screen.getAllByRole('button').find(b => b.textContent?.includes('ثبت نهایی'))!;
     await act(async () => { fireEvent.click(submit); });

@@ -212,7 +212,7 @@ export function PieceworkExcelModal({
                       <span>دانلود فایل الگوی خام</span>
                     </div>
                     <p className="text-xs text-blue-700 leading-relaxed font-medium">
-                      جهت ورود داده‌ها بدون خطا، می‌توانید فایل نمونه آماده اکسل با ستون‌های استاندارد را دانلود کرده و مقادیر خود را در آن وارد نمایید.
+                      جهت ورود داده‌ها بدون خطا، می‌توانید فایل نمونه آماده اکسل با ستون‌های استاندارد را دانلود کرده و مقادیر خود را در آن وارد کنید.
                     </p>
                   </div>
                   <button
@@ -383,7 +383,7 @@ export function PieceworkExcelModal({
               <div className="flex items-center justify-between gap-3">
                 <input
                   type="text"
-                  placeholder="جستجو در ردیف‌های پیش‌نمایش..."
+                  placeholder="جست‌وجو در ردیف‌های پیش‌نمایش..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full sm:w-72 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500"

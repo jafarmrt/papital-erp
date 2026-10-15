@@ -130,7 +130,7 @@ export function AddMaterialModal({
                   type="text"
                   value={warehouseSearchQuery}
                   onChange={(e) => setWarehouseSearchQuery(e.target.value)}
-                  placeholder="جستجوی نام، کد کالا یا دسته‌بندی در انبار..."
+                  placeholder="جست‌وجوی نام، کد کالا یا دسته‌بندی در انبار..."
                   className="w-full pr-9 pl-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-amber-500 focus:outline-none"
                 />
               </div>
@@ -144,7 +144,7 @@ export function AddMaterialModal({
                     onClick={() => setMaterialModalTab('custom')}
                     className="text-amber-600 font-bold hover:underline text-xs cursor-pointer"
                   >
-                    می‌توانید کالا را به عنوان ماده اولیه جدید ثبت نمایید
+                    می‌توانید کالا را به عنوان ماده اولیه جدید ثبت کنید
                   </button>
                 </div>
               ) : (

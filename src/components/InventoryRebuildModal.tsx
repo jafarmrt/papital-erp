@@ -31,7 +31,7 @@ export default function InventoryRebuildModal({
 
   const handleExecute = async () => {
     if (mode === 'single' && !selectedItemId) {
-      setErrorMsg('لطفاً کالای مورد نظر را انتخاب نمایید.');
+      setErrorMsg('لطفاً کالای مورد نظر را انتخاب کنید.');
       return;
     }
 
@@ -224,7 +224,7 @@ export default function InventoryRebuildModal({
                     }))}
                     value={selectedItemId || ''}
                     onChange={(val) => setSelectedItemId(Number(val) || null)}
-                    placeholder="جستجو و انتخاب کالا جهت تطبیق کاردکس..."
+                    placeholder="جست‌وجو و انتخاب کالا جهت تطبیق کاردکس..."
                   />
                 </div>
               )}

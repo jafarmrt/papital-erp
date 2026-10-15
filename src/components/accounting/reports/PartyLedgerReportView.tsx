@@ -589,7 +589,7 @@ export function PartyLedgerReportView({
                 </div>
                 <div>
                   <span className="text-xs font-bold opacity-80 block">وضعیت فعلی حساب در این تاریخ:</span>
-                  <span className="text-base font-black tracking-tight">{reportData.netStatusText}</span>
+                  <span className="text-base font-black">{reportData.netStatusText}</span>
                 </div>
               </div>
 

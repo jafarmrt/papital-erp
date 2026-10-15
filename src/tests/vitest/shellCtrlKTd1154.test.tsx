@@ -33,6 +33,6 @@ describe('Ctrl+K shortcut (TD-1154)', () => {
     fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
     await act(() => new Promise(resolve => setTimeout(resolve, 200)));
     const focused = document.activeElement as HTMLInputElement | null;
-    expect(focused?.getAttribute('placeholder') ?? '').toContain('جستجوی سراسری');
+    expect(focused?.getAttribute('placeholder') ?? '').toContain('جست‌وجوی سراسری');
   });
 });

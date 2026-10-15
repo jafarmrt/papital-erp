@@ -362,7 +362,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     }
 
     if (status === 'final' && warehouses.length === 0) {
-      toast.error('هیچ انباری در سامانه تعریف نشده است. لطفاً ابتدا از بخش تنظیمات > مدیریت انبارها، حداقل یک انبار تعریف نمایید.');
+      toast.error('هیچ انباری در سامانه تعریف نشده است. لطفاً ابتدا از بخش تنظیمات > مدیریت انبارها، حداقل یک انبار تعریف کنید.');
       return;
     }
 

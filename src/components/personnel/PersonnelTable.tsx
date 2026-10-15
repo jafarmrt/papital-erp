@@ -77,7 +77,7 @@ export function PersonnelTable({
           <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input
             type="text"
-            placeholder="جستجو بر اساس نام، کد پرسنلی، شماره تماس، شغل، کدملی، مهارت یا حساب..."
+            placeholder="جست‌وجو بر اساس نام، کد پرسنلی، شماره تماس، شغل، کدملی، مهارت یا حساب..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             className="w-full pl-20 pr-9 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:bg-white transition-all"
@@ -87,7 +87,7 @@ export function PersonnelTable({
               type="button"
               onClick={() => onSearchChange('')}
               className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200/60 transition-all cursor-pointer"
-              title="پاک کردن جستجو"
+              title="پاک کردن جست‌وجو"
             >
               <X size={14} />
             </button>
@@ -192,7 +192,7 @@ export function PersonnelTable({
                       </div>
                       <p className="text-sm font-bold text-slate-700">
                         {isFiltered
-                          ? 'هیچ پرسنلی با مشخصات جستجو یا فیلتر انتخابی پیدا نشد.'
+                          ? 'هیچ پرسنلی با مشخصات جست‌وجو یا فیلتر انتخابی پیدا نشد.'
                           : 'هیچ رکورد پرسنلی در سامانه ثبت نشده است.'}
                       </p>
                       {isFiltered && (
@@ -202,7 +202,7 @@ export function PersonnelTable({
                           className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
                         >
                           <RotateCcw size={14} />
-                          پاک کردن جستجو و فیلترها
+                          پاک کردن جست‌وجو و فیلترها
                         </button>
                       )}
                     </div>

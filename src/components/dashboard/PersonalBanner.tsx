@@ -156,7 +156,7 @@ export function PersonalBanner({ user }: PersonalBannerProps) {
             </span>
           </div>
 
-          <h1 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl font-black text-slate-800 flex items-center gap-2">
             سلام، {displayName} عزیز!
             <span className="text-xl animate-bounce">👋</span>
           </h1>

@@ -29,7 +29,7 @@ export function ReorderFiltersBar({
           <Search className="absolute right-3 top-2.5 text-slate-400" size={16} />
           <input
             type="text"
-            placeholder="جستجو کد، نام یا دسته‌بندی..."
+            placeholder="جست‌وجو کد، نام یا دسته‌بندی..."
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             className="w-full pr-9 pl-3 py-2 border rounded-xl text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"

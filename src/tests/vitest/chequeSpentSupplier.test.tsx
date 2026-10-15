@@ -46,7 +46,7 @@ describe('spending a cheque asks for a supplier (TD-498)', () => {
     fireEvent.submit(form);
     await waitFor(() => expect(onUpdateStatus).not.toHaveBeenCalled());
 
-    fireEvent.click(screen.getByText('جستجو و انتخاب تأمین‌کننده...'));
+    fireEvent.click(screen.getByText('جست‌وجو و انتخاب تأمین‌کننده...'));
     expect(screen.queryByText('مشتری فقط')).toBeNull();
     fireEvent.click(await screen.findByText('شرکت بازرگانی پارس'));
     fireEvent.submit(form);

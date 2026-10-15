@@ -148,7 +148,7 @@ export function createStockDocumentItemActions(form: StockDocumentForm, itemsLis
             .join('، ');
 
           toast.error(
-            `خطا: امکان خروج بیش از ${formatPersianNumber(maxAllowedForExit)} ${it.unit} وجود ندارد!\nتعداد ${formatPersianNumber(reservedForOtherProjects)} ${it.unit} برای سایر پروژه‌ها و پیش‌فاکتورها (${otherProjTitles}) رزرو شده است و قابل خروج نمی‌باشد.`
+            `خطا: امکان خروج بیش از ${formatPersianNumber(maxAllowedForExit)} ${it.unit} وجود ندارد!\nتعداد ${formatPersianNumber(reservedForOtherProjects)} ${it.unit} برای سایر پروژه‌ها و پیش‌فاکتورها (${otherProjTitles}) رزرو شده است و قابل خروج نیست.`
           );
         } else {
           toast.error(`موجودی کافی نیست! موجودی قابل خروج: ${formatPersianNumber(maxAllowedForExit)} ${it.unit}`);
@@ -193,7 +193,7 @@ export function createStockDocumentItemActions(form: StockDocumentForm, itemsLis
             `خطا: حداکثر سقف مجاز خروج این کالا ${formatPersianNumber(maxAllowedForExit)} ${dItem.item.unit} است. ${formatPersianNumber(reservedForOtherProjects)} ${dItem.item.unit} برای ${otherProjTitles} رزرو است.`
           );
         } else {
-          toast.error(`حداکثر موجودی قابل خروج ${formatPersianNumber(maxAllowedForExit)} ${dItem.item.unit} می‌باشد.`);
+          toast.error(`حداکثر موجودی قابل خروج ${formatPersianNumber(maxAllowedForExit)} ${dItem.item.unit} است.`);
         }
         return;
       }

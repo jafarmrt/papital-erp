@@ -34,7 +34,7 @@ export const ContraAccountField: React.FC<ContraAccountFieldProps> = ({ value, o
         accounts={options}
         value={value ?? ''}
         onChange={id => onChange(id === '' ? null : Number(id))}
-        placeholder={isLoading ? 'در حال بارگذاری سرفصل‌ها...' : 'جستجو و انتخاب سرفصل معین...'}
+        placeholder={isLoading ? 'در حال بارگذاری سرفصل‌ها...' : 'جست‌وجو و انتخاب سرفصل معین...'}
       />
     </div>
   );

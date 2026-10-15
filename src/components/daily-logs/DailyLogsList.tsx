@@ -107,7 +107,7 @@ export function DailyLogsList({
         <p className="font-bold text-slate-700 text-sm">هیچ گزارش کاری در این بخش یافت نشد</p>
         {onOpenCreateModal && (
           <>
-            <p className="text-slate-400">می‌توانید نخستین گزارش کار روزانه خود را ثبت نمایید</p>
+            <p className="text-slate-400">می‌توانید نخستین گزارش کار روزانه خود را ثبت کنید</p>
             <button
               onClick={onOpenCreateModal}
               className="mt-1 px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs shadow-sm hover:bg-blue-700 transition-colors cursor-pointer"

@@ -1002,7 +1002,7 @@ export default function ProjectScheduleTab({
                 <Users className="w-5 h-5 text-amber-400" />
                 <div>
                   <h3 className="font-bold text-sm text-white">انتخاب مسئول / مجری از لیست پرسنل</h3>
-                  <p className="text-[11px] text-slate-400">پرسنل مورد نظر را جهت تخصیص کارمزد انتخاب نمایید</p>
+                  <p className="text-[11px] text-slate-400">پرسنل مورد نظر را جهت تخصیص کارمزد انتخاب کنید</p>
                 </div>
               </div>
               <button aria-label="بستن"
@@ -1022,7 +1022,7 @@ export default function ProjectScheduleTab({
                   type="text"
                   value={personnelSearch}
                   onChange={(e) => setPersonnelSearch(e.target.value)}
-                  placeholder="جستجوی نام پرسنل، سمبل کاری، کد پرسنلی یا سمت..."
+                  placeholder="جست‌وجوی نام پرسنل، سمبل کاری، کد پرسنلی یا سمت..."
                   className="w-full pr-9 pl-3 py-1.5 text-xs border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 font-semibold"
                   autoFocus
                 />
@@ -1081,7 +1081,7 @@ export default function ProjectScheduleTab({
                 })
               ) : (
                 <div className="p-8 text-center text-slate-400 text-xs">
-                  هیچ پرسنلی با عبارت جستجو شده پیدا نشد.
+                  هیچ پرسنلی با عبارت جست‌وجو شده پیدا نشد.
                 </div>
               )}
             </div>

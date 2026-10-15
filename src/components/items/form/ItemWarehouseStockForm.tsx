@@ -66,7 +66,7 @@ export const ItemWarehouseStockForm: React.FC<ItemWarehouseStockFormProps> = ({
         <div className="space-y-3">
           <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-amber-800 text-xs flex items-start gap-2">
             <span className="font-bold">توجه:</span>
-            <span>هنوز هیچ انباری در سامانه تعریف نشده است. برای تفکیک مکان‌های نگهداری می‌توانید از بخش تنظیمات انبارها را ایجاد کنید، یا فعلاً موجودی کل اولیه را در کادر زیر وارد نمایید:</span>
+            <span>هنوز هیچ انباری در سامانه تعریف نشده است. برای تفکیک مکان‌های نگهداری می‌توانید از بخش تنظیمات انبارها را ایجاد کنید، یا فعلاً موجودی کل اولیه را در کادر زیر وارد کنید:</span>
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">موجودی کل اولیه</label>

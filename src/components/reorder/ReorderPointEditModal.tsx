@@ -41,7 +41,7 @@ export function ReorderPointEditModal({ item, saving, onCancel, onSave }: Reorde
               required
             />
             <p className="text-[10px] text-slate-400 mt-1">
-              موجودی فعلی این کالا در انبار: <span className="font-bold text-slate-700">{formatPersianNumber(item.current_stock)} {item.unit}</span> می‌باشد.
+              موجودی فعلی این کالا در انبار: <span className="font-bold text-slate-700">{formatPersianNumber(item.current_stock)} {item.unit}</span> است.
             </p>
           </div>
 

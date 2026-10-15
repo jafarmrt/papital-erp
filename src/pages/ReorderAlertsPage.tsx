@@ -85,7 +85,7 @@ export default function ReorderAlertsPage(_props: { user: User }) {
   const handleOpenPurchaseOrderBatch = () => {
     const selected = rawMaterialItems.filter(i => materialSelection.selectedIds.has(i.id));
     if (selected.length === 0) {
-      toast.error('لطفاً حداقل یک قلم ماده اولیه را با تیک زدن انتخاب نمایید.');
+      toast.error('لطفاً حداقل یک قلم ماده اولیه را با تیک زدن انتخاب کنید.');
       return;
     }
     setPurchaseModalItems(selected.map(toPurchaseModalItem));
@@ -102,7 +102,7 @@ export default function ReorderAlertsPage(_props: { user: User }) {
   const handleOpenProjectModalBatch = () => {
     const selected = productItems.filter(i => productSelection.selectedIds.has(i.id));
     if (selected.length === 0) {
-      toast.error('لطفاً حداقل یک محصول را با تیک زدن انتخاب نمایید.');
+      toast.error('لطفاً حداقل یک محصول را با تیک زدن انتخاب کنید.');
       return;
     }
     setProjectModalProducts(selected.map(toProjectProduct));
@@ -115,7 +115,7 @@ export default function ReorderAlertsPage(_props: { user: User }) {
 
     const val = Number(value);
     if (isNaN(val) || val < 0) {
-      toast.error('لطفاً عدد معتبری وارد نمایید.');
+      toast.error('لطفاً عدد معتبری وارد کنید.');
       return;
     }
 

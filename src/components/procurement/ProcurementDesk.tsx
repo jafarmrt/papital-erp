@@ -196,7 +196,7 @@ export function ProcurementDesk() {
               چرخه حیات و مرزهای سه‌گانه تدارکات و خرید
             </h2>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              جهت ورود به هر مرحله و مشاهده اسناد مربوطه، بر روی کارت گام مورد نظر کلیک نمایید
+              جهت ورود به هر مرحله و مشاهده اسناد مربوطه، بر روی کارت گام مورد نظر کلیک کنید
             </p>
           </div>
           <div className="flex items-center gap-1.5 text-[11px] font-bold bg-slate-100 text-slate-700 px-3 py-1 rounded-xl">

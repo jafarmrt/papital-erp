@@ -1,5 +1,5 @@
 /**
- * Every icon-only button has a spoken name (v10.1.26, TD-1276, Vibe Farsi package 3b).
+ * Every icon-only button has a spoken name (v10.1.27, TD-1276, Vibe Farsi package 3b).
  */
 import { describe, expect, it } from 'vitest';
 import { repositoryUnnamedIconButtons, unnamedIconButtonsOfSource } from '../../../scripts/icon-button-names';

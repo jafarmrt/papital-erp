@@ -72,7 +72,7 @@ export const ExcelPreviewStep: React.FC<ExcelPreviewStepProps> = ({
         <div className="flex items-center gap-2 flex-1 min-w-[240px]">
           <input
             type="text"
-            placeholder="جستجو در نام، کد یا دسته‌بندی..."
+            placeholder="جست‌وجو در نام، کد یا دسته‌بندی..."
             value={searchQuery}
             onChange={e => onSearchChange(e.target.value)}
             className="w-full text-xs px-3 py-2 border rounded-xl bg-white focus:outline-none focus:border-blue-500"

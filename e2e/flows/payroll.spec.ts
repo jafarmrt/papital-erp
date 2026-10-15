@@ -13,7 +13,7 @@ import {
 const TEXT = {
   payrollsTab: 'فیش‌های حقوقی و تسویه‌ها',
   newPayroll: 'صدور فیش حقوقی جدید',
-  pickPersonnel: 'جستجو و انتخاب پرسنل...',
+  pickPersonnel: 'جست‌وجو و انتخاب پرسنل...',
   startDate: 'انتخاب تاریخ شروع',
   endDate: 'انتخاب تاریخ پایان',
   issue: 'صدور فیش حقوقی پیش‌نویس',

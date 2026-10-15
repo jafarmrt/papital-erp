@@ -82,7 +82,7 @@ export function ProcurementOrderList({
           <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
           <input
             type="text"
-            placeholder="جستجو در شماره فاکتور، نام تامین‌کننده، کد درخواست خرید مرجع، پروژه یا اقلام..."
+            placeholder="جست‌وجو در شماره فاکتور، نام تامین‌کننده، کد درخواست خرید مرجع، پروژه یا اقلام..."
             value={searchTerm}
             onChange={e => onSearchChange(e.target.value)}
             className="w-full pl-3 pr-9 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
@@ -111,7 +111,7 @@ export function ProcurementOrderList({
           </div>
         ) : filteredOrders.length === 0 ? (
           <div className="p-12 text-center text-slate-400 text-xs">
-            {searchTerm ? 'هیچ سندی با عبارت جستجو یافت نشد.' : (
+            {searchTerm ? 'هیچ سندی با عبارت جست‌وجو یافت نشد.' : (
               type === 'active' 
                 ? 'هیچ فاکتور خریدی در انتظار تحویل به انبار وجود ندارد. از تب درخواست‌های خرید می‌توانید درخواست‌ها را تفکیک و به فاکتور خرید تبدیل کنید.'
                 : 'هنوز هیچ فاکتوری به انبار تحویل قطعی نشده است.'

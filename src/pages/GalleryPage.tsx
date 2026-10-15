@@ -109,7 +109,7 @@ export default function GalleryPage({ user }: { user: User }) {
             <Search className="absolute right-3 top-2.5 text-slate-400" size={16} />
             <input 
               type="text" 
-              placeholder="جستجو نام، کد یا دسته‌بندی..."
+              placeholder="جست‌وجو نام، کد یا دسته‌بندی..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-3 pr-10 py-1.5 rounded border text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"

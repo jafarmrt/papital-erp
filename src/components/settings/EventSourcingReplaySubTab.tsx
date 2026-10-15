@@ -265,7 +265,7 @@ export function EventSourcingReplaySubTab() {
               onChange={e => setSelectedAggregateId(e.target.value)}
               className="w-full text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
             >
-              <option value="">-- یک نمونه را انتخاب نمایید --</option>
+              <option value="">-- یک نمونه را انتخاب کنید --</option>
               {aggregateOptions.map(opt => (
                 <option key={opt.id} value={opt.id}>
                   {opt.title}

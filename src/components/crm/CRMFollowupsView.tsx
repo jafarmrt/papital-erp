@@ -135,7 +135,7 @@ export function CRMFollowupsView({
           <div className="relative w-full sm:w-64">
             <input
               type="text"
-              placeholder="جستجو در تماس‌ها و شرح مذاکرات..."
+              placeholder="جست‌وجو در تماس‌ها و شرح مذاکرات..."
               value={actSearch}
               onChange={(e) => {
                 setActSearch(e.target.value);
@@ -168,7 +168,7 @@ export function CRMFollowupsView({
                 <tr>
                   <td colSpan={9} className="p-8 text-center text-slate-400">
                     {actSearch || actTypeFilter !== 'all'
-                      ? 'هیچ اقدمی با این فیلتر یا عبارت جستجو یافت نشد.'
+                      ? 'هیچ اقدمی با این فیلتر یا عبارت جست‌وجو یافت نشد.'
                       : 'هنوز هیچ تماسی یا اقدامی ثبت نشده است.'}
                   </td>
                 </tr>
