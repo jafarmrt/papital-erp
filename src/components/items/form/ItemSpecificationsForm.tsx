@@ -1,5 +1,6 @@
 import React from 'react';
 import { ItemFormData, PREDEFINED_COLORS, PREDEFINED_MATERIALS } from './types';
+import { DecimalInput } from '../../common/DecimalInput';
 
 interface ItemSpecificationsFormProps {
   form: ItemFormData;
@@ -168,12 +169,11 @@ export const ItemSpecificationsForm: React.FC<ItemSpecificationsFormProps> = ({
           {/* Weight */}
           <div>
             <label className="block text-xs font-medium mb-1 text-slate-600">وزن (گرم)</label>
-            <input
-              type="number"
+            <DecimalInput
               min="0"
               step="any"
               value={form.weight || ''}
-              onChange={e => setForm({ ...form, weight: e.target.value })}
+              onValueChange={(v) => setForm({ ...form, weight: v })}
               className="w-full border border-slate-300/80 rounded-xl px-3 py-1.5 text-sm font-mono text-left bg-white outline-none focus:ring-1 focus:ring-blue-500"
               dir="ltr"
               placeholder="مثال: 5.5"

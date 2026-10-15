@@ -5,6 +5,7 @@ import { SearchableSelect } from '../../SearchableSelect';
 import type { StockDocumentForm } from '../../../hooks/documents/useStockDocumentForm';
 import { PICK_LIST_URLS } from '../../../lib/permissions/pickLists';
 import { stockInLabels } from '../../../lib/documents/stockInLabels';
+import { DecimalInput, refuseInvalidDecimalInputs } from '../../common/DecimalInput';
 
 interface StockItemPickerProps {
   form: StockDocumentForm;
@@ -42,7 +43,7 @@ export function StockItemPicker({ form, onItemSelect, onAddItem, onCreateItem }:
       </div>
 
       <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+        <div data-decimal-scope="" className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
           <div className={actionType === 'in' ? "md:col-span-5 w-full" : "md:col-span-8 w-full"}>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-bold text-slate-700">جستجو و انتخاب کالا / ماده اولیه</label>
@@ -99,12 +100,11 @@ export function StockItemPicker({ form, onItemSelect, onAddItem, onCreateItem }:
 
           <div className={actionType === 'in' ? "md:col-span-2" : "md:col-span-2"}>
             <label className="block text-xs font-bold mb-1.5 text-slate-700">تعداد / مقدار</label>
-            <input 
-              type="number" 
+            <DecimalInput 
               min="0" 
               step="any" 
               value={quantity} 
-              onChange={e => setQuantity(e.target.value ? Number(e.target.value) : '')} 
+              onValueChange={(v) => setQuantity(v ? Number(v) : '')} 
               placeholder="0"
               className="w-full border border-slate-200 bg-white rounded-xl text-sm px-3 py-2 text-center font-mono font-bold focus:outline-none focus:ring-2 focus:ring-blue-500" 
               dir="ltr" 
@@ -116,12 +116,11 @@ export function StockItemPicker({ form, onItemSelect, onAddItem, onCreateItem }:
               <label className="block text-xs font-bold mb-1.5 text-slate-700">
                 {production ? `${stockInLabels(docType).unitPrice} (${formatCurrencyLabel('IRR')})` : `قیمت خرید واحد (فی - ${formatCurrencyLabel(currency)})`}
               </label>
-              <input 
-                type="number" 
+              <DecimalInput 
                 min="0" 
                 step="any" 
                 value={unitPrice} 
-                onChange={e => setUnitPrice(e.target.value ? Number(e.target.value) : '')} 
+                onValueChange={(v) => setUnitPrice(v ? Number(v) : '')} 
                 placeholder={production ? 'خالی: میانگین موزون بها' : 'مثال: 100000'}
                 className="w-full border border-slate-200 bg-white rounded-xl text-sm px-3 py-2 text-left font-mono font-bold focus:outline-none focus:ring-2 focus:ring-blue-500" 
                 dir="ltr" 
@@ -132,7 +131,7 @@ export function StockItemPicker({ form, onItemSelect, onAddItem, onCreateItem }:
           <div className={actionType === 'in' ? "md:col-span-2" : "md:col-span-2"}>
             <button 
               type="button" 
-              onClick={onAddItem} 
+              onClick={(e) => { if (!refuseInvalidDecimalInputs(e.currentTarget)) onAddItem(); }} 
               className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-bold h-[38px] transition-all shadow-sm shrink-0 cursor-pointer"
             >
               <Plus size={18} /> افزودن به ردیف‌ها

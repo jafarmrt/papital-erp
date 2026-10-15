@@ -89,7 +89,7 @@ async function allocateInBrowser(page: Page): Promise<Json> {
   };
   await pick(0, projectCodeOf());
   await pick(1, String(setup.raw.code));
-  await form.locator('input[type=number]').fill(String(ALLOCATE_QTY));
+  await form.locator('input[inputmode=decimal]').fill(String(ALLOCATE_QTY));
   const posted = page.waitForResponse(r => r.url().endsWith('/api/inventory/allocations/allocate') && r.request().method() === 'POST');
   await form.getByRole('button', { name: ALLOCATION_TEXT.submit }).click();
   const response = await posted;
@@ -142,7 +142,7 @@ test('allocate raw material to a project and deliver its finished goods to stock
   await openDeliveryTab(page);
   const productCard = page.locator('div.flex', { hasText: String(setup.product.name) })
     .filter({ has: page.getByRole('button', { name: DELIVERY_TEXT.deliver, exact: true }) }).last();
-  const [qtyInput, costInput] = [productCard.locator('input[type=number]').nth(0), productCard.locator('input[type=number]').nth(1)];
+  const [qtyInput, costInput] = [productCard.locator('input[inputmode=decimal]').nth(0), productCard.locator('input[inputmode=decimal]').nth(1)];
   await qtyInput.fill(String(PLANNED_QTY + 1));
   await costInput.fill(String(PRODUCT_UNIT_COST));
   const deliver = async (): Promise<{ status: number; body: Json }> => {

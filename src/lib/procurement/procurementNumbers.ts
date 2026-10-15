@@ -4,7 +4,7 @@ import { normalizeDecimalString } from '../numericInput';
 /**
  * OBS-R2-39 (TD-992): عدد و مبلغ رابط تدارکات. مبلغ ردیف و جمع‌ها با FinancialDecimal حساب می‌شوند، نه با `*` و `+`
  * عدد جاوااسکریپت (۰٫۱ × ۳ = ۰٫۳۰۰۰۰۰۰۰۰۰۰۰۰۰۰۰۴)، و مقدار و برآورد قیمت فرم درخواست خرید متن خوانده می‌شوند، با
- * ارقام فارسی، نه `type="number"` که ارقام فارسی را دور می‌ریزد.
+ * ارقام فارسی، نه کادر `type=number` که ارقام فارسی را دور می‌ریزد.
  */
 
 const toDecimal = (value: DecimalValue | null | undefined) => {

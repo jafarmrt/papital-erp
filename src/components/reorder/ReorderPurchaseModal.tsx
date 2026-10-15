@@ -12,6 +12,7 @@ import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
 import { ReorderOrderFields, type ReorderPriority as Priority } from './ReorderOrderFields';
 import { confirmAction } from '../ConfirmDialogHost';
 import { openRequisitionQuestion } from '../../lib/reorderAlerts/openRequisitionQuestion';
+import { DecimalInput } from '../common/DecimalInput';
 
 export type { ReorderModalItem } from '../../lib/reorderAlerts/reorderItems';
 
@@ -315,11 +316,10 @@ export function ReorderPurchaseModal({
                         {formatPersianNumber(it.deficit)}
                       </td>
                       <td className="p-2.5 text-center">
-                        <input
-                          type="number"
+                        <DecimalInput
                           min={1}
                           value={it.orderQty}
-                          onChange={e => handleUpdateItemField(it.id, 'orderQty', Number(e.target.value))}
+                          onValueChange={(v) => handleUpdateItemField(it.id, 'orderQty', Number(v))}
                           className="w-20 p-1.5 bg-white border border-slate-300 rounded text-center font-mono font-bold text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none"
                         />
                       </td>

@@ -8,6 +8,7 @@ import { confirmAction } from '../ConfirmDialogHost';
 import { PayrollPaymentHistory } from './PayrollPaymentHistory';
 import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 import { JalaliDateInput } from '../common/JalaliDateInput';
+import { DecimalInput } from '../common/DecimalInput';
 
 // V4.0.33: مودال واحد «پرداخت حقوق (کامل یا چندمرحله‌ای)»
 // ثبت فقط با انتخاب حساب خزانه/بانک تا تراکنش مالی + سند تسویه اتمیک صادر شود.
@@ -223,12 +224,11 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
                       </button>
                     )}
                   </div>
-                  <input
-                    type="number"
+                  <DecimalInput
                     min="1"
                     max={remainingPayable}
                     value={payAmount || ''}
-                    onChange={(e) => setPayAmount(Number(e.target.value) || 0)}
+                    onValueChange={(v) => setPayAmount(Number(v) || 0)}
                     placeholder="مبلغ پرداختی..."
                     className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-mono font-bold text-slate-900 bg-white outline-none focus:ring-2 focus:ring-blue-500"
                   />

@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { compressTo300KB } from '../../utils/imageCompression';
 import { RIAL_DISPLAY_UNITS, RIAL_DISPLAY_UNIT_LABELS } from '../../lib/rialDisplay';
 import { DataExportCard } from './DataExportCard';
+import { DecimalInput } from '../common/DecimalInput';
 
 const TIMEZONE_OPTIONS = [
   'Asia/Tehran',
@@ -173,13 +174,12 @@ export function GeneralSettingsTab({
           </div>
           <div>
             <label className="block text-sm font-medium mb-1 text-slate-700">تند گردش (کمتر از چند روز)</label>
-            <input
-              type="number"
+            <DecimalInput
               min="1"
               max="3650"
               step="1"
               value={fastMovingDays}
-              onChange={(e) => setFastMovingDays(e.target.value)}
+              onValueChange={(v) => setFastMovingDays(v)}
               className="w-full border rounded-lg px-3 py-2 font-mono text-left bg-white border-slate-300 text-sm"
               dir="ltr"
             />
@@ -187,13 +187,12 @@ export function GeneralSettingsTab({
           </div>
           <div>
             <label className="block text-sm font-medium mb-1 text-slate-700">کند گردش (بیشتر از چند روز)</label>
-            <input
-              type="number"
+            <DecimalInput
               min="1"
               max="3650"
               step="1"
               value={slowMovingDays}
-              onChange={(e) => setSlowMovingDays(e.target.value)}
+              onValueChange={(v) => setSlowMovingDays(v)}
               className="w-full border rounded-lg px-3 py-2 font-mono text-left bg-white border-slate-300 text-sm"
               dir="ltr"
             />
@@ -201,13 +200,12 @@ export function GeneralSettingsTab({
           </div>
           <div>
             <label className="block text-sm font-medium mb-1 text-slate-700">کالای راکد (بیشتر از چند روز)</label>
-            <input
-              type="number"
+            <DecimalInput
               min="1"
               max="3650"
               step="1"
               value={deadStockDays}
-              onChange={(e) => setDeadStockDays(e.target.value)}
+              onValueChange={(v) => setDeadStockDays(v)}
               className="w-full border rounded-lg px-3 py-2 font-mono text-left bg-white border-slate-300 text-sm"
               dir="ltr"
             />
