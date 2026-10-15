@@ -1,7 +1,6 @@
 /**
  * Every form label names its field (v10.1.29, TD-1278, Vibe Farsi package 3b).
  */
-import React from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { labelGapsOfSource, repositoryLabelGaps } from '../../../scripts/label-links';
