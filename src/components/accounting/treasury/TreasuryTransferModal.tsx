@@ -112,7 +112,7 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
             <ArrowLeftRight className="w-5 h-5 text-amber-600" />
             انتقال وجه بین حساب‌ها و صندوق‌ها
           </h3>
-          <button
+          <button aria-label="بستن"
             onClick={onClose}
             className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
           >

@@ -117,7 +117,7 @@ export function CustomerFormModal({
               <p className="text-[11px] text-slate-400">ثبت اطلاعات تجاری، رسته فعالیت، شماره‌های تماس و حساب بانکی</p>
             </div>
           </div>
-          <button 
+          <button aria-label="بستن" 
             type="button" 
             onClick={onClose} 
             className="text-slate-400 hover:text-slate-600 rounded-lg p-1.5 hover:bg-slate-100 transition-colors"

@@ -250,7 +250,7 @@ describe('AccountingPage — reads are abortable and race-free', () => {
     const signal = signalOf(u => u.startsWith('/accounting/reports/cash-flow'));
     expect(signal).toBeInstanceOf(AbortSignal);
 
-    fireEvent.click(screen.getByRole('button', { name: 'بستن' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'بستن' })[0]);
 
     expect(signal?.aborted).toBe(true);
   });

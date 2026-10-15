@@ -162,7 +162,7 @@ export function CRMFollowupsPanel({ leads = [], onToggleFollowup, personnelList 
           </span>
 
           <div className="flex items-center gap-1">
-            <button
+            <button aria-label="صفحه قبل"
               disabled={currentPage === 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               className="p-1.5 border rounded-lg bg-slate-50 hover:bg-slate-100 disabled:opacity-40 text-slate-700 cursor-pointer"
@@ -172,7 +172,7 @@ export function CRMFollowupsPanel({ leads = [], onToggleFollowup, personnelList 
             <span className="px-3 font-bold text-slate-800">
               صفحه {formatPersianNumber(currentPage)} از {formatPersianNumber(totalPages)}
             </span>
-            <button
+            <button aria-label="صفحه بعد"
               disabled={currentPage === totalPages}
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               className="p-1.5 border rounded-lg bg-slate-50 hover:bg-slate-100 disabled:opacity-40 text-slate-700 cursor-pointer"

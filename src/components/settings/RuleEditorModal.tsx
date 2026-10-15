@@ -226,7 +226,7 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
               </p>
             </div>
           </div>
-          <button 
+          <button aria-label="بستن" 
             type="button"
             onClick={onClose}
             className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"

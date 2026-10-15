@@ -94,7 +94,7 @@ export function OpenProformasPanel({ proformas, total, page, onPageChange, editi
                   چرخه تاییدات و گردش‌کار پیش‌فاکتور {formatPersianCode(workflowModalDoc.ref_number)}
                 </h3>
               </div>
-              <button
+              <button aria-label="بستن"
                 type="button"
                 onClick={() => setWorkflowModalDoc(null)}
                 className="p-1 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"

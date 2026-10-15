@@ -221,7 +221,7 @@ export function VoucherCorrectionModal({
               </p>
             </div>
           </div>
-          <button
+          <button aria-label="بستن"
             onClick={onClose}
             className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg transition cursor-pointer"
           >
@@ -410,7 +410,7 @@ export function VoucherCorrectionModal({
                         />
                       </td>
                       <td className="py-2 px-2 text-center">
-                        <button
+                        <button aria-label="حذف ردیف"
                           type="button"
                           onClick={() => handleRemoveItem(idx)}
                           className="p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition cursor-pointer"

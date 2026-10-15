@@ -26,7 +26,7 @@ function DocumentDetailShell({ title, icon: Icon, maxWidthClass, loading, loadin
             <Icon className="text-blue-600" size={22} />
             <h3 className="font-bold text-slate-800 text-lg">{title}</h3>
           </div>
-          <button
+          <button aria-label="بستن"
             onClick={onClose}
             className="p-1.5 hover:bg-slate-200 text-slate-400 hover:text-slate-600 rounded-lg transition-colors"
           >

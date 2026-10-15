@@ -474,7 +474,7 @@ export default function ActivityLogsPage() {
           </span>
 
           <div className="flex items-center gap-1">
-            <button
+            <button aria-label="صفحه قبل"
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
               className="p-1.5 border border-slate-300 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
@@ -484,7 +484,7 @@ export default function ActivityLogsPage() {
             <span className="px-3 font-bold text-slate-700">
               {formatPersianNumber(page)} / {formatPersianNumber(totalPages)}
             </span>
-            <button
+            <button aria-label="صفحه بعد"
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
               disabled={page >= totalPages}
               className="p-1.5 border border-slate-300 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
@@ -509,7 +509,7 @@ export default function ActivityLogsPage() {
                   <p className="text-xs text-slate-500">{formatPersianDateTime(selectedLog.timestamp)}</p>
                 </div>
               </div>
-              <button
+              <button aria-label="بستن"
                 onClick={() => setSelectedLog(null)}
                 className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors"
               >

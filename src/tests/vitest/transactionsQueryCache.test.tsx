@@ -179,7 +179,7 @@ describe('TransactionsPage (Kardex) — React Query', () => {
     const signal = signalOf(KARDEX_URL);
     expect(signal).toBeInstanceOf(AbortSignal);
 
-    fireEvent.click(screen.getByRole('button', { name: 'بستن' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'بستن' })[0]);
     expect(signal?.aborted).toBe(true);
 
     fireEvent.click(screen.getByRole('button', { name: /کاردکس/ }));
