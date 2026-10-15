@@ -30,6 +30,7 @@ import { recordLeadStageChange } from '../services/crm/crmLeadStageHistory.js';
 import { crmFunnelReport } from '../services/crm/crmFunnelReport.js';
 import { resolveLeadLostReason } from '../services/crm/crmLeadLostReason.js';
 import { leadCustomerCondition } from '../services/crm/crmLeadCustomerFilter.js';
+import { leadCustomerHasTagCondition } from '../services/customers/customerTags.service.js';
 import { canSeePartyBankInfo, withoutBankInfo } from '../services/customers/partyBankInfoAccess.js';
 import { permissionHolderUserIds } from '../services/notifications/notificationRecipients.js';
 import { resolveAssignee } from '../services/crm/crmAssignee.js';
@@ -228,7 +229,7 @@ router.get('/crm/stats', authorizePermission('crm.view', 'customers.view', 'cust
 
 // GET /api/crm/leads - Get list of leads
 router.get('/crm/leads', authorizePermission('crm.view', 'customers.view', 'customers.manage'), asyncHandler(async (req, res) => {
-  const { stage, status, assignedTo, assignedPersonnelId, source, search, customerId, customerName, fromDate, toDate } = req.query;
+  const { stage, status, assignedTo, assignedPersonnelId, source, search, customerId, customerName, fromDate, toDate, tagId } = req.query;
   const page = req.query.page ? parseInt(req.query.page as string, 10) : undefined;
   const isPaginated = req.query.paginate === 'true' || page !== undefined;
 
@@ -239,6 +240,13 @@ router.get('/crm/leads', authorizePermission('crm.view', 'customers.view', 'cust
     conditions.push(await leadCustomerCondition(Number(customerId)));
   } else if (customerName && typeof customerName === 'string' && customerName.trim() !== '') {
     conditions.push(eq(crmLeads.customerName, customerName.trim()));
+  }
+
+  // v10.1.23 (N-02 بخش ۳): پرونده‌هایی که طرف حسابشان این برچسب را دارد
+  if (tagId !== undefined && tagId !== '' && tagId !== 'all') {
+    const tag = Number(tagId);
+    if (!Number.isInteger(tag) || tag <= 0) throw new BadRequestError('برچسب انتخاب‌شده نامعتبر است.');
+    conditions.push(leadCustomerHasTagCondition(crmLeads.customerId, tag));
   }
 
   if (stage && typeof stage === 'string' && stage.trim() !== '' && stage !== 'all') {

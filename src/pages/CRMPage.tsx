@@ -18,9 +18,12 @@ import { JalaliDateInput } from '../components/common/JalaliDateInput';
 import { leadProformaState } from '../lib/crm/leadProformaState';
 import { CRMFunnelReport } from '../components/crm/CRMFunnelReport';
 import { LostReasonDialog } from '../components/crm/LostReasonFields';
+import { CustomerTagFilter } from '../components/customers/CustomerTags';
+import { useCustomerTagsQuery } from '../hooks/queries/useCustomerTagQueries';
 
 export default function CRMPage({ user }: { user: any }) {
   const crm = useCRMData(user);
+  const { data: tagOptions = [] } = useCustomerTagsQuery();
   const deleteLead = crm.canDeleteLead ? crm.handleDeleteLead : undefined;
   const navigate = useNavigate();
   const [selectedCustomerDossier, setSelectedCustomerDossier] = useState<Customer | null>(null);
@@ -254,6 +257,14 @@ export default function CRMPage({ user }: { user: any }) {
                 </button>
               )}
             </div>
+
+            {/* v10.1.23 (N-02 بخش ۳): پرونده‌های طرف حساب‌های یک برچسب */}
+            <CustomerTagFilter
+              id="crm-tag-filter"
+              tags={tagOptions}
+              value={crm.filterTag ? Number(crm.filterTag) : null}
+              onChange={(tagId) => crm.setFilterTag(tagId === null ? '' : String(tagId))}
+            />
 
             <select
               value={crm.filterStage}

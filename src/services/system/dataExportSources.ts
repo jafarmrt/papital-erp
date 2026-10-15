@@ -3,7 +3,7 @@ import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
 import {
   users, personnel, customers, items, itemCodeHistory, categories, warehouses, itemPrices, itemWarehouseStocks,
   productionProjects, projectStages, projectProductStageProgress, projectBomAllocations, projectReservationReleases,
-  pendingMaterials, transfers, crmLeads, crmActivities, crmLeadStageHistory, dailyWorkLogs,
+  pendingMaterials, transfers, crmLeads, crmActivities, crmLeadStageHistory, customerTags, customerTagLinks, dailyWorkLogs,
   documents, documentItems, transactions, appSettings, roles,
   accounts, fiscalPeriods, journalVouchers, journalVoucherItems, itemOpeningVoucherItems,
   bankAccounts, cheques, treasuryTransactions, accountingSettings,
@@ -73,6 +73,8 @@ export const DATA_EXPORT_TABLE_SOURCES: Readonly<Record<string, TableSpecSource>
   crm_leads: { table: crmLeads, key: ['id'] },
   crm_activities: { table: crmActivities, key: ['id'] },
   crm_lead_stage_history: { table: crmLeadStageHistory, key: ['id'] },
+  customer_tags: { table: customerTags, key: ['id'] },
+  customer_tag_links: { table: customerTagLinks, key: ['id'] },
   daily_work_logs: { table: dailyWorkLogs, key: ['id'] },
   production_projects: { table: productionProjects, key: ['id'] },
   project_stages: { table: projectStages, key: ['id'] },

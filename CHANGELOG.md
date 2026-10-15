@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.1.23 — برچسب طرف حساب (N-02 بخش ۳)
+- Customer tags: customer_tags and customer_tag_links (migration 0115), tag routes under /customers/tags (customers.manage writes, unique live name, versioned edit, soft delete, audited with tx), tagIds saved with the party's own create and edit transaction, tagId filter on GET /customers and GET /crm/leads. Tests: reg_customer_tags_define_n02, reg_customer_tags_party_n02, reg_crm_leads_tag_filter_n02, Vitest customerTagsN02.
+
 ### v10.1.22 — قیف فروش کشیدنی و ستون‌های جدا (N-02 بخش ۳)
 - Sales pipeline board: fixed 280 px columns in a horizontally scrolling row (they overlapped in a grid narrower than their minimum, TD-1272), compact card with a ⋯ menu and the nearest open follow-up (lead list nextFollowUpDate), HTML drag and drop through the stage change handler, one stage tab per column on a phone. Tests: e2e/crm-pipeline.spec.ts, reg_crm_lead_next_followup_td_1272, Vitest crmPipelineBoardTd1272.
 
