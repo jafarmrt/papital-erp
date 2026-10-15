@@ -4,6 +4,8 @@ import { IranianPhoneInput, BankCardInput, ShebaInput } from '../common';
 import { getIranianBankFromCard, getIranianBankFromSheba } from '../../utils';
 import { emailError } from '../../lib/customers/contactChannels';
 import { CustomerChannelFields } from './CustomerChannelFields';
+import { CustomerTagPicker } from './CustomerTags';
+import type { CustomerTag } from '../../lib/customers/customerTags';
 
 export const IRAN_PROVINCES = [
   'آذربایجان شرقی', 'آذربایجان غربی', 'اردبیل', 'اصفهان', 'البرز', 'ایلام',
@@ -65,6 +67,8 @@ export interface CustomerPartyForm {
   website: string;
   email: string;
   instagram: string;
+  /** v10.1.23 (N-02 بخش ۳) */
+  tagIds: number[];
 }
 
 interface CustomerFormModalProps {
@@ -80,6 +84,8 @@ interface CustomerFormModalProps {
   setPrimaryContact: (id: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   isSaving: boolean;
+  /** برچسب‌های تعریف‌شده (`GET /customers/tags`) */
+  tagOptions?: ReadonlyArray<CustomerTag>;
 }
 
 /**
@@ -98,7 +104,8 @@ export function CustomerFormModal({
   updateContactPerson,
   setPrimaryContact,
   onSubmit,
-  isSaving
+  isSaving,
+  tagOptions = []
 }: CustomerFormModalProps) {
   if (!isOpen) return null;
 
@@ -236,6 +243,12 @@ export function CustomerFormModal({
             <CustomerChannelFields
               value={{ website: form.website, email: form.email, instagram: form.instagram }}
               onChange={channels => setForm(prev => ({ ...prev, ...channels }))}
+            />
+
+            <CustomerTagPicker
+              tags={tagOptions}
+              selected={form.tagIds}
+              onChange={tagIds => setForm(prev => ({ ...prev, tagIds }))}
             />
 
             {/* Section 2: Connected Contacts / Persons */}

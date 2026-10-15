@@ -43,7 +43,7 @@ export function useCRMData(user: any) {
 
   // V3.2.3 (TD-080 / Playbook Scenario 6): فیلترها به هوک اختصاصی useCRMFilters منتقل شدند
   const filters = useCRMFilters();
-  const { searchTerm, filterSeller, filterStage, filterCustomer, fromDate, toDate } = filters;
+  const { searchTerm, filterSeller, filterStage, filterCustomer, filterTag, fromDate, toDate } = filters;
 
   // Modals state
   const [isLeadModalOpen, setIsLeadModalOpen] = useState<boolean>(false);
@@ -123,7 +123,7 @@ export function useCRMData(user: any) {
       }
 
       // Build query
-      const params = buildLeadQueryParams({ searchTerm, filterSeller, filterStage, filterCustomer });
+      const params = buildLeadQueryParams({ searchTerm, filterSeller, filterStage, filterCustomer, filterTag });
 
       try {
         const leadsRes = await fetchJson(`/crm/leads?${params.toString()}`, { signal });
@@ -198,7 +198,7 @@ export function useCRMData(user: any) {
         setLoading(false);
       }
     }
-  }, [searchTerm, filterSeller, filterStage, filterCustomer, fromDate, toDate, queryClient]);
+  }, [searchTerm, filterSeller, filterStage, filterCustomer, filterTag, fromDate, toDate, queryClient]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -551,6 +551,8 @@ export function useCRMData(user: any) {
     setFilterStage: filters.setFilterStage,
     filterCustomer: filters.filterCustomer,
     setFilterCustomer: filters.setFilterCustomer,
+    filterTag: filters.filterTag,
+    setFilterTag: filters.setFilterTag,
     datePreset: filters.datePreset,
     setDatePreset: filters.setDatePreset,
     fromDate: filters.fromDate,

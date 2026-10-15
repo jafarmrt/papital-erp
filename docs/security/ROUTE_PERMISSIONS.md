@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 431
+تعداد مسیرها: 435
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -125,6 +125,10 @@
 | POST | `/api/customers/bulk-import` | customers.manage |
 | GET | `/api/customers/export-excel` | customers.view |
 | GET | `/api/customers/options` | customers.view \| documents.view \| documents.create \| documents.finalize \| warehouse.in \| warehouse.out \| warehouse.view \| products.view \| crm.view \| projects.view \| procurement.view \| accounting.view \| accounting.reports \| accounting.vouchers \| accounting.treasury \| accounting.cheques \| reports.sales \| reports.purchases |
+| GET | `/api/customers/tags` | customers.view \| customers.manage \| crm.view |
+| POST | `/api/customers/tags` | customers.manage |
+| DELETE | `/api/customers/tags/:id` | customers.manage |
+| PUT | `/api/customers/tags/:id` | customers.manage |
 | GET | `/api/daily-logs` | daily_logs.view |
 | POST | `/api/daily-logs` | daily_logs.create |
 | DELETE | `/api/daily-logs/:id` | daily_logs.create |
