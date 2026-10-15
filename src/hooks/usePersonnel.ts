@@ -111,7 +111,6 @@ export function usePersonnel() {
   const [editingVersion, setEditingVersion] = useState<number | undefined>(undefined);
   const [showDetailModal, setShowDetailModal] = useState<boolean>(false);
   const [selectedPersonnel, setSelectedPersonnel] = useState<Personnel | null>(null);
-  const [showNobitexPass, setShowNobitexPass] = useState<boolean>(false);
 
   // Form State
   const [formData, setFormData] = useState<PersonnelFormData>(INITIAL_FORM_DATA);
@@ -120,7 +119,6 @@ export function usePersonnel() {
     setFormData(INITIAL_FORM_DATA);
     setEditingId(null);
     setEditingVersion(undefined);
-    setShowNobitexPass(false);
   };
 
   const handleOpenAddModal = () => {
@@ -346,8 +344,6 @@ export function usePersonnel() {
     selectedPersonnel,
     setSelectedPersonnel,
     isSaving: saveMutation.isPending || deleteMutation.isPending,
-    showNobitexPass,
-    setShowNobitexPass,
     formData,
     setFormData,
     loadData,

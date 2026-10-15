@@ -6,10 +6,12 @@ import { toast } from 'react-hot-toast';
 import { SubsystemHealthCards } from './system/SubsystemHealthCards';
 import { EventQueueActions, type EventQueueAction } from './system/EventQueueActions';
 import { StorageHealthCard } from './system/StorageHealthCard';
+import { MediaLibraryHealthCard } from './system/MediaLibraryHealthCard';
 import { DatabaseHealthCard, RuntimeHealthCard, type DatabaseHealthView, type ServerRuntimeView } from './system/CoreHealthCards';
 import { IntegrityCheckPanel, type IntegrityReportView } from './system/IntegrityCheckPanel';
 import type { AccountingHealth, OutboxHealth, WorkflowHealth } from '../lib/system/subsystemHealth';
 import type { StorageHealth } from '../lib/system/storageHealth';
+import type { MediaLibraryHealth } from '../lib/system/mediaLibraryHealth';
 
 /**
  * صفحه سلامت سامانه (فقط مدیر سامانه). v9.0.388 تا v9.0.392 (TD-593، TD-619، TD-623، TD-622): هر بخش کارت خودش را دارد
@@ -21,6 +23,7 @@ interface HealthData {
   outbox?: OutboxHealth;
   accounting?: AccountingHealth;
   workflow?: WorkflowHealth;
+  mediaLibrary?: MediaLibraryHealth;
   server: ServerRuntimeView;
   checkTimestamp: string;
 }
@@ -138,6 +141,7 @@ export default function SystemHealthDiagnostic() {
           outboxActions={<EventQueueActions outbox={health.outbox} busy={fixingAction !== ''} onRun={handleExecuteFix} />}
         />
         <StorageHealthCard storage={health.storage} />
+        <MediaLibraryHealthCard media={health.mediaLibrary} />
         <RuntimeHealthCard server={health.server} />
       </div>
 

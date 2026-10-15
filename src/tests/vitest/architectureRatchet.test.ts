@@ -15,7 +15,11 @@ import {
   currentState,
   type ArchitectureBaseline,
 } from '../../../scripts/ratchets/architectureRatchet';
-import { boundaryState, importAllowed, importSpecifiers, packageOf, parsePackageMap } from '../../../scripts/ratchets/packageBoundary';
+import { importAllowed, importSpecifiers, packageOf, parsePackageMap } from '../../../scripts/ratchets/packageBoundary';
+
+// currentState() parses every production file; two tests read it, so the repository is scanned once per file run
+let scanned: ArchitectureBaseline | undefined;
+const repoState = (): ArchitectureBaseline => (scanned ??= currentState());
 
 describe('architecture_ratchet: phase-2 decisions may only shrink their debt', () => {
   it('counts Drizzle table writes in a route, not service calls, selects or comments', () => {
@@ -93,11 +97,10 @@ describe('architecture_ratchet: phase-2 decisions may only shrink their debt', (
 
   it('the repository matches the baseline exactly', () => {
     const baseline = JSON.parse(fs.readFileSync(path.join(process.cwd(), BASELINE_FILE), 'utf8')) as ArchitectureBaseline;
-    const report = compareWithBaseline(currentState(), baseline);
+    const report = compareWithBaseline(repoState(), baseline);
     expect(report.errors).toEqual([]);
     expect(report.stale).toEqual([]);
-    // Parses every production file; a loaded CI runner needs more than the 5 s default.
-  }, 30_000);
+  });
 });
 
 describe('package_boundary_ratchet: server imports follow the package direction (decision t3 A)', () => {
@@ -134,6 +137,7 @@ describe('package_boundary_ratchet: server imports follow the package direction 
   });
 
   it('the package map covers every server file', () => {
-    expect(boundaryState().unmappedServerFiles).toEqual([]);
+    // currentState() already ran boundaryState() over every server file; its unmapped files are kept only when there are any
+    expect(repoState().unmappedServerFiles ?? []).toEqual([]);
   });
 });

@@ -250,6 +250,7 @@ router.get('/system/health', requireSystemAdmin, asyncHandler(async (req, res) =
 
   // 3. Subsystem Health Checks (Outbox, DLQ, Vouchers, Workflow)
   const subsystems = await SystemHealthService.collectSubsystemMetrics();
+  const mediaLibrary = await SystemHealthService.checkMediaLibrary();
 
   // 4. Check HTTPS / SSL
   const forwardedProto = (req.headers['x-forwarded-proto'] as string) || '';
@@ -264,6 +265,7 @@ router.get('/system/health', requireSystemAdmin, asyncHandler(async (req, res) =
     outbox: subsystems.outbox,
     accounting: subsystems.accounting,
     workflow: subsystems.workflow,
+    mediaLibrary,
     network: {
       isHttps,
       protocol: req.protocol,

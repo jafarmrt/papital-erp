@@ -12,7 +12,6 @@ import { relinkTreasuryDocument } from '../../services/accounting/treasury/treas
 import { listTreasuryRelinkOptions } from '../../services/accounting/treasury/treasuryRelinkOptions.js';
 import { choosableContraAccounts } from '../../services/accounting/treasury/partyContraAccount.js';
 import { listReconcilableCheques } from '../../services/accounting/treasury/bankReconciliation.js';
-import { logActivity } from '../../lib/auditLogger.js';
 import { validate, paramsIdSchema } from '../../middleware/validate.js';
 import { idempotency } from '../../middleware/idempotency.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
@@ -53,18 +52,8 @@ router.get('/accounting/bank-accounts/options', authorizePermission(...READ_PERM
 
 // Dynamic Bank & Ledger Synchronization and Reconciliation
 const syncBanksHandler = asyncHandler(async (req, res) => {
-  const report = await AccountingService.recalculateAndSyncBankBalances();
-  await logActivity({
-    userId: req.user?.id,
-    username: req.user?.username || 'system',
-    userFullName: req.user?.fullName || '',
-    action: 'UPDATE',
-    entity: 'bank_reconciliation',
-    entityId: 'sync',
-    description: `همگام‌سازی مانده حساب‌های بانکی از تراکنش‌ها (${report.syncedCount} حساب هم‌خوان با دفتر کل، ${report.discrepantCount} اختلاف)`,
-    details: { report },
-    ipAddress: req.ip || '',
-  });
+  // v10.0.262 (TD-934): ممیزی درون تراکنش هر ثبت خزانه نوشته می‌شود
+  const report = await AccountingService.recalculateAndSyncBankBalances({ req, userFullName: req.user?.fullName });
   res.json({ message: 'مانده حساب‌های بانکی از تراکنش‌ها ساخته شد؛ اختلاف با دفتر کل در گزارش آمده است', report });
 });
 router.post('/accounting/banks/sync-reconcile', authorizePermission('accounting.treasury'), syncBanksHandler);
@@ -93,17 +82,7 @@ const createBankHandler = asyncHandler(async (req, res) => {
     shebaNumber: req.body.shebaNumber || req.body.shabaNumber,
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
-  });
-  await logActivity({
-    userId: req.user?.id,
-    username: req.user?.username || 'system',
-    userFullName: req.user?.fullName || '',
-    action: 'CREATE',
-    entity: 'bank_account',
-    entityId: String(bank.id),
-    description: `تعریف حساب بانکی/صندوق جدید: ${bank.title}`,
-    details: { bank },
-    ipAddress: req.ip || '',
+    audit: { req, userFullName: req.user?.fullName },
   });
   res.status(201).json(bank);
 });
@@ -112,24 +91,12 @@ router.post('/accounting/bank-accounts', authorizePermission('accounting.treasur
 
 const updateBankHandler = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  // V1.4.0: snapshot قبل برای audit
-  const before = (await AccountingService.getBankAccounts()).find((b) => b.id === id) || null;
   const updated = await AccountingService.updateBankAccount(id, {
     ...req.body,
     ...(req.body.shebaNumber || req.body.shabaNumber ? { shebaNumber: req.body.shebaNumber || req.body.shabaNumber } : {}),
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
-  });
-  await logActivity({
-    userId: req.user?.id,
-    username: req.user?.username || 'system',
-    userFullName: req.user?.fullName || '',
-    action: 'UPDATE',
-    entity: 'bank_account',
-    entityId: String(id),
-    description: `ویرایش حساب بانکی/صندوق: ${updated.title}`,
-    details: { before, after: updated },
-    ipAddress: req.ip || '',
+    audit: { req, userFullName: req.user?.fullName },
   });
   res.json(updated);
 });
@@ -138,18 +105,8 @@ router.put('/accounting/bank-accounts/:id', authorizePermission('accounting.trea
 
 const deleteBankHandler = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const before = (await AccountingService.getBankAccounts()).find((b) => b.id === id) || null;
-  const result = await AccountingService.deleteBankAccount(id, { userId: req.user?.id, username: req.user?.fullName || req.user?.username });
-  await logActivity({
-    userId: req.user?.id,
-    username: req.user?.username || 'system',
-    userFullName: req.user?.fullName || '',
-    action: 'DELETE',
-    entity: 'bank_account',
-    entityId: String(id),
-    description: `حذف حساب بانکی/صندوق: ${before?.title || id}`,
-    details: { before },
-    ipAddress: req.ip || '',
+  const result = await AccountingService.deleteBankAccount(id, {
+    userId: req.user?.id, username: req.user?.fullName || req.user?.username, audit: { req, userFullName: req.user?.fullName },
   });
   res.json(result);
 });
@@ -184,17 +141,7 @@ router.post('/accounting/treasury', authorizePermission('accounting.treasury'), 
     allowNoVoucher: await userHasRoleOrPermission(req.user, NO_VOUCHER_TREASURY_PERMISSION),
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
-  });
-  await logActivity({
-    userId: req.user?.id,
-    username: req.user?.username || 'system',
-    userFullName: req.user?.fullName || '',
-    action: 'CREATE',
-    entity: 'treasury_transaction',
-    entityId: String(tx.id),
-    description: `ثبت ${tx.type === 'receipt' ? 'دریافت' : 'پرداخت'} شماره ${tx.transactionNumber} به مبلغ ${tx.amount.toLocaleString('fa-IR')}`,
-    details: { tx },
-    ipAddress: req.ip || '',
+    audit: { req, userFullName: req.user?.fullName },
   });
   res.status(201).json(tx);
 }));
@@ -216,17 +163,7 @@ router.post('/accounting/treasury/transfer', authorizePermission('accounting.tre
     allowNoVoucher: await userHasRoleOrPermission(req.user, NO_VOUCHER_TREASURY_PERMISSION),
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
-  });
-  await logActivity({
-    userId: req.user?.id,
-    username: req.user?.username || 'system',
-    userFullName: req.user?.fullName || '',
-    action: 'CREATE',
-    entity: 'treasury_transfer',
-    entityId: `${result.payment.id}/${result.receipt.id}`,
-    description: `انتقال وجه ${Number(req.body.amount).toLocaleString('fa-IR')} بین حساب‌ها (سند ${result.voucherId || 'بدون سند'})`,
-    details: { paymentId: result.payment.id, receiptId: result.receipt.id, voucherId: result.voucherId },
-    ipAddress: req.ip || '',
+    audit: { req, userFullName: req.user?.fullName },
   });
   res.status(201).json(result);
 }));
@@ -257,17 +194,7 @@ router.post('/accounting/treasury/:id/void', authorizePermission('accounting.tre
     reason: req.body.reason,
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
-  });
-  await logActivity({
-    userId: req.user?.id,
-    username: req.user?.username || 'system',
-    userFullName: req.user?.fullName || '',
-    action: 'UPDATE',
-    entity: 'treasury_transaction',
-    entityId: String(id),
-    description: `ابطال تراکنش شناسه ${id} با سند معکوس ${reversal.transactionNumber} — دلیل: ${req.body.reason}`,
-    details: { voidedTxId: id, reversalTxId: reversal.id, reason: req.body.reason },
-    ipAddress: req.ip || '',
+    audit: { req, userFullName: req.user?.fullName },
   });
   res.json(reversal);
 }));
@@ -312,17 +239,7 @@ router.post('/accounting/cheques', authorizePermission('accounting.cheques'), id
     allowNoVoucher: await userHasRoleOrPermission(req.user, NO_VOUCHER_TREASURY_PERMISSION),
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
-  });
-  await logActivity({
-    userId: req.user?.id,
-    username: req.user?.username || 'system',
-    userFullName: req.user?.fullName || '',
-    action: 'CREATE',
-    entity: 'cheque',
-    entityId: String(chq.id),
-    description: `ثبت چک ${chq.type === 'received' ? 'دریافتی' : 'پرداختی'} شماره ${chq.chequeNumber} (مبلغ: ${chq.amount.toLocaleString('fa-IR')})`,
-    details: { chq },
-    ipAddress: req.ip || '',
+    audit: { req, userFullName: req.user?.fullName },
   });
   res.status(201).json(chq);
 }));

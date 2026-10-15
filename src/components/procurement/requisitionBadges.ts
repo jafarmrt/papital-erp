@@ -10,8 +10,13 @@ const rejected: PillBadgeVariant = { label: 'رد شده / لغو', className: `
 /** v9.0.349 (TD-694): درخواستی که در درخواست تجمیعی دیگری آمده و بسته است */
 const consolidated: PillBadgeVariant = { label: 'تجمیع‌شده', className: `${STATUS_BASE} bg-violet-100 text-violet-900`, icon: Layers, iconClassName: 'w-3.5 h-3.5 text-violet-600' };
 
+/** OBS-R2-38 (TD-992): گام‌های «بررسی تدارکات» و «تأیید مدیر» برچسب خودشان را دارند، نه «در انتظار بررسی و تایید» */
+const underReview: PillBadgeVariant = { ...pending, label: 'در بررسی تدارکات' };
+const managerApproval: PillBadgeVariant = { ...pending, label: 'در انتظار تأیید مدیر' };
+
+/** approved، completed و cancelled وضعیت درخواست‌های قدیمی است که سرور هنوز می‌خواند (requisitionStage) */
 export const REQUISITION_STATUS_BADGES: PillBadgeVariants = {
-  pending, under_review: pending, manager_approval: pending,
+  pending, under_review: underReview, manager_approval: managerApproval,
   ordered, approved: ordered,
   received, completed: received,
   rejected, cancelled: rejected,

@@ -16,6 +16,8 @@ import {
 } from '../../lib/system/storageHealth.js';
 import { getAttachmentsRoot } from '../attachments/attachmentStorage.service.js';
 import { getImageUploadsDir } from '../../lib/storage.js';
+import { getMediaRoot } from '../../lib/media/mediaRoot.js';
+import { readMediaLibraryHealth, type MediaLibraryHealth } from './mediaLibraryHealth.js';
 
 /**
  * V3.0.7 (TD-065): بررسی سلامت زیرساخت برای صفحه وضعیت سیستم (GET /system/health، فقط ادمین):
@@ -152,6 +154,7 @@ export class SystemHealthService {
     const locations = ([
       ['attachments', getAttachmentsRoot()],
       ['images', getImageUploadsDir()],
+      ['media', getMediaRoot()],
     ] as Array<[StorageLocationKind, string]>).map(([kind, dir]) => storageLocationHealth(kind, dir));
     const writable = locations.every(l => l.writable);
     return {
@@ -185,6 +188,11 @@ export class SystemHealthService {
     }, { activeInstances: null, overdueSlaTasks: null, status: 'unknown', message: SUBSYSTEM_UNKNOWN_MESSAGES.workflow });
 
     return { outbox, accounting, workflow };
+  }
+
+  /** 4. Media library: size of its files, light versions to rebuild and free disk space (v10.1.3, N-05 PR 4) */
+  static async checkMediaLibrary(): Promise<MediaLibraryHealth> {
+    return readMediaLibraryHealth();
   }
 
   /** 5. Memory & Runtime */

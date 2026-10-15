@@ -1,6 +1,8 @@
 import React from 'react';
 import { PackageCheck, Warehouse, FileText, CheckCircle2, X, Loader2, Building2 } from 'lucide-react';
-import { formatPersianNumber, formatPersianPrice, formatPersianDate } from '../../utils';
+import { formatPersianNumber, formatPersianDate } from '../../utils';
+import { sumAmounts } from '../../lib/procurement/procurementNumbers';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 
 /**
  * v9.0.351 (TD-701، B10-14): سفارش همان شکلی است که `GET /procurement/orders` برمی‌گرداند و تأمین‌کننده از `supplierName`
@@ -48,11 +50,13 @@ export const ConfirmWarehouseDeliveryModal: React.FC<ConfirmWarehouseDeliveryMod
   order,
   bulkOrders
 }) => {
+  // OBS-R2-39 (TD-992): مبلغ ریالی در واحد نمایش (ریال یا تومان)، نه «ریال» ثابت
+  const rial = useRialDisplay();
   if (!isOpen) return null;
 
   const isBulk = Array.isArray(bulkOrders) && bulkOrders.length > 0;
   const totalBulkAmount = isBulk 
-    ? bulkOrders.reduce((sum, o) => sum + Number(o.totalAmount || 0), 0)
+    ? sumAmounts(bulkOrders, o => o.totalAmount)
     : 0;
 
   return (
@@ -130,7 +134,7 @@ export const ConfirmWarehouseDeliveryModal: React.FC<ConfirmWarehouseDeliveryMod
                 <div>
                   <span className="text-slate-500 block">مبلغ کل فاکتور:</span>
                   <span className="font-bold font-mono text-amber-800 text-xs mt-0.5 block">
-                    {formatPersianPrice(order.totalAmount || 0)}
+                    {rial.amount(order.totalAmount || 0)}
                   </span>
                 </div>
               </div>
@@ -166,13 +170,13 @@ export const ConfirmWarehouseDeliveryModal: React.FC<ConfirmWarehouseDeliveryMod
                   <div key={bo.id} className="flex justify-between items-center py-0.5 border-b border-slate-50 last:border-0">
                     <span className="font-mono font-bold text-slate-800">{bo.refNumber}</span>
                     <span className="text-slate-600 truncate max-w-[140px]">{bo.supplierName}</span>
-                    <span className="font-mono font-black text-amber-800">{formatPersianPrice(bo.totalAmount || 0)}</span>
+                    <span className="font-mono font-black text-amber-800">{rial.amount(bo.totalAmount || 0)}</span>
                   </div>
                 ))}
               </div>
               <div className="flex justify-between items-center pt-1 font-bold text-xs text-slate-800">
                 <span>مجموع مبالغ:</span>
-                <span className="font-mono font-black text-amber-800">{formatPersianPrice(totalBulkAmount)}</span>
+                <span className="font-mono font-black text-amber-800">{rial.amount(totalBulkAmount)}</span>
               </div>
             </div>
           )}
