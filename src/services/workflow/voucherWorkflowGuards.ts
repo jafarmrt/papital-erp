@@ -8,7 +8,7 @@ import { JOURNAL_VOUCHER_WORKFLOW_TEMPLATE } from '../../lib/workflow/workflowTe
  */
 export const JOURNAL_VOUCHER_WORKFLOW_CODE = 'JOURNAL_VOUCHER_WORKFLOW';
 
-/** v10.1.8 (TD-1263): read from the journal voucher template, so the seed, its upgrade and «ساخت از الگو» share one list */
+/** v10.1.10 (TD-1263): read from the journal voucher template, so the seed, its upgrade and «ساخت از الگو» share one list */
 export const JOURNAL_VOUCHER_STEP_GUARDS: ReadonlyArray<SeedStepGuard> = JOURNAL_VOUCHER_WORKFLOW_TEMPLATE.transitions.map(t => ({ ...t }));
 
 /** seed پیش از v10.0.27 */

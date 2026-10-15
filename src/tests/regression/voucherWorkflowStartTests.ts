@@ -9,7 +9,7 @@ import { TestCaseResult } from '../types.js';
 import { type ShouldRun, accountIdsByCode, inFiscalSandbox, runCase, sandboxAdminClient } from './fiscalClosingTests.js';
 
 /**
- * v10.1.8 (TD-1263, D-06 part B, decision ت۶ «خودکار»): a manual draft voucher enters the active journal voucher workflow
+ * v10.1.10 (TD-1263, D-06 part B, decision ت۶ «خودکار»): a manual draft voucher enters the active journal voucher workflow
  * in its create transaction, and while that workflow runs the voucher page does not approve, finalize or revert it (409
  * VOUCHER_IN_WORKFLOW; a batch leaves it out with the reason); the workflow's own steps still do. Red on v10.1.7, where a
  * manual voucher started no workflow and the page changed its status freely.

@@ -172,7 +172,7 @@ router.get('/instance/:entityType/:entityId', authorizePermission(...WORKFLOW_WI
   }
 }));
 
-// v10.1.8 (TD-1263, OWN-04, decision ت۷): `POST /workflow/start` is removed; a workflow starts only on the server, in the
+// v10.1.10 (TD-1263, OWN-04, decision ت۷): `POST /workflow/start` is removed; a workflow starts only on the server, in the
 // create transaction of its record (TD-446)
 
 /**
@@ -283,7 +283,7 @@ router.post('/definitions', authorizePermission('workflow.manage', 'workflow.adm
 }));
 
 /**
- * v10.1.8 (TD-1263, D-06 part B): «ساخت از الگو» makes an inactive definition from a ready-made template; designing is
+ * v10.1.10 (TD-1263, D-06 part B): «ساخت از الگو» makes an inactive definition from a ready-made template; designing is
  * `workflow.manage`, turning it on stays `workflow.admin`.
  */
 router.post('/definitions/from-template', authorizePermission('workflow.manage', 'workflow.admin'), validate(definitionFromTemplateSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {

@@ -4,7 +4,7 @@ import { voucherPrimaryAction } from '../../../lib/accounting/voucherRowActions'
 /** v10.0.121 (TD-1120): دکمه اصلی ردیف سند؛ «قفل دفاتر» فقط برای سند دائم (استخراج‌شده از JournalVouchersTab) */
 export function VoucherPrimaryActionCell({ status, makerOfVoucher = false, inWorkflow = false, onApprove, onFinalize, onOpenWorkflow }: {
   status: string;
-  /** v10.1.8 (TD-1263): the voucher's workflow runs; approving and finalizing happen there, not on this page */
+  /** v10.1.10 (TD-1263): the voucher's workflow runs; approving and finalizing happen there, not on this page */
   inWorkflow?: boolean;
   onOpenWorkflow?: () => void;
   /** v10.0.27 (TD-965): the viewer made or last edited this manual draft, so another user approves it */

@@ -34,6 +34,7 @@ export const DATA_EXPORT_TABLES: ReadonlyArray<{ table: string; group: DataExpor
   { table: 'warehouses', group: 'inventory' },
   { table: 'items', group: 'inventory' },
   { table: 'item_prices', group: 'inventory' },
+  { table: 'item_code_history', group: 'inventory' },
   { table: 'item_warehouse_stocks', group: 'inventory' },
   { table: 'transactions', group: 'inventory' },
   { table: 'transfers', group: 'inventory' },

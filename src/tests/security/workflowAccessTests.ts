@@ -14,7 +14,7 @@ export async function runWorkflowAccessTests(shouldRun: ShouldRun): Promise<Test
     await runCase(results, {
       id: 'sec_workflow_start_entity_scope_td_443',
       name: 'v9.0.33: a workflow starts only with an active definition of the same entity type and on an existing entity; an instance whose definition is of another type does not run the domain action (TD-443)',
-      details: 'The document workflow on a journal voucher is 422 and the voucher stays draft; an unknown type or id is refused (the start route is gone since v10.1.8, TD-1263); a legacy mismatched instance is 409; a correct start on a document is 200',
+      details: 'The document workflow on a journal voucher is 422 and the voucher stays draft; an unknown type or id is refused (the start route is gone since v10.1.10, TD-1263); a legacy mismatched instance is 409; a correct start on a document is 200',
     }, async (h, wrong) => {
       const { createTestVoucher } = await import('../fixtures/factories.js');
       const { businessTodayIsoDate } = await import('../../lib/businessClock.js');

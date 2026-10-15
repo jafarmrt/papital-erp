@@ -27,7 +27,7 @@ function blankDesign() {
 }
 
 /**
- * v10.1.8 (TD-1229 / TD-1263, D-06 part B): the new definition window. «از الگو» makes an inactive definition from one
+ * v10.1.10 (TD-1229 / TD-1263, D-06 part B): the new definition window. «از الگو» makes an inactive definition from one
  * of the four ready-made templates (decisions ت۴ / ت۵); «طرح خالی» starts a two-step design. The record type comes only
  * from `WORKFLOW_ENTITY_TYPES` (OBS-R2-76), never a type no workflow starts on.
  */

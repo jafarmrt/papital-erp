@@ -5,7 +5,7 @@ import { dropDefinitions } from './workflowDefinitionSwitchTests.js';
 import { runCase, type ShouldRun } from './workflowTestHarness.js';
 
 /**
- * v10.1.8 (TD-1263, D-06 part B): «ساخت از الگو» makes an inactive definition from one of the four ready-made templates
+ * v10.1.10 (TD-1263, D-06 part B): «ساخت از الگو» makes an inactive definition from one of the four ready-made templates
  * (decisions ت۴ / ت۵), its actions guarded by catalog permission keys only; and a workflow starts only on the server,
  * in its record's create transaction (OWN-04, decision ت۷ «برداشتن»), so `POST /workflow/start` is gone. Red on
  * v10.1.7, where the template route did not exist and the browser could start any workflow on any record id.
@@ -19,7 +19,7 @@ export async function runWorkflowTemplateTests(shouldRun: ShouldRun): Promise<Te
   if (shouldRun('sec_workflow_templates_td_1263', 'security', 'td1263', 'd-06', 'workflow')) {
     await runCase(results, {
       id: 'sec_workflow_templates_td_1263',
-      name: 'v10.1.8: «ساخت از الگو» makes an inactive definition from each of the four templates, guarded by catalog permissions only, with an audit row; the active definitions stay as they are (TD-1263)',
+      name: 'v10.1.10: make-from-template makes an inactive definition from each of the four templates, guarded by catalog permissions only, with an audit row; the active definitions stay as they are (TD-1263)',
       details: 'workflow.view 403; unknown template 400; item, bank account, purchase requisition and journal voucher templates 201 and inactive with the template steps and actions, no role code; a second copy takes a new code; the seeded active definitions stay active',
     }, async (h, wrong) => {
       const ids: number[] = [];
@@ -71,7 +71,7 @@ export async function runWorkflowTemplateTests(shouldRun: ShouldRun): Promise<Te
   if (shouldRun('sec_workflow_start_route_removed_td_1263', 'security', 'td1263', 'own-04', 'workflow')) {
     await runCase(results, {
       id: 'sec_workflow_start_route_removed_td_1263',
-      name: 'v10.1.8: the browser cannot start a workflow; POST /workflow/start is gone and the instance read offers no start (TD-1263, OWN-04)',
+      name: 'v10.1.10: the browser cannot start a workflow; POST /workflow/start is gone and the instance read offers no start (TD-1263, OWN-04)',
       details: 'POST /api/workflow/start 404 for the system admin; GET /api/workflow/instance of a record without a workflow answers instance null with no startable flag',
     }, async (h, wrong) => {
       const start = await h.post('/api/workflow/start', { workflowCode: 'JOURNAL_VOUCHER_WORKFLOW', entityType: 'journal_voucher', entityId: '999999901' });

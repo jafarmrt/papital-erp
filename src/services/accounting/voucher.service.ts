@@ -176,7 +176,7 @@ export class VoucherService {
     const sourceKinds = await voucherSourceKinds(orm, voucherIds); // v9.0.294 (TD-552، ت۸)
     const reversals = await voucherActiveReversals(orm, rawList); // v10.0.x (TD-1239)
     const makerNames = await voucherMakerNames(orm, rawList.map(v => v.createdById)); // TD-1230
-    const inWorkflow = await vouchersInOpenWorkflow(orm, voucherIds); // v10.1.8 (TD-1263)
+    const inWorkflow = await vouchersInOpenWorkflow(orm, voucherIds); // v10.1.10 (TD-1263)
     const data: JournalVoucher[] = rawList.map(v => ({
       ...v,
       inWorkflow: inWorkflow.has(v.id),
@@ -233,7 +233,7 @@ export class VoucherService {
     const sourceKind = (await voucherSourceKinds(executor, [id])).get(id) ?? null; // v9.0.294 (TD-552، ت۸)
     const reversedByVoucherNumber = (await voucherActiveReversals(executor, [v])).get(id) ?? null; // v10.0.x (TD-1239)
     const makerNames = await voucherMakerNames(executor, [v.createdById]); // TD-1230
-    const inWorkflow = (await vouchersInOpenWorkflow(executor, [id])).has(id); // v10.1.8 (TD-1263)
+    const inWorkflow = (await vouchersInOpenWorkflow(executor, [id])).has(id); // v10.1.10 (TD-1263)
 
     return {
       ...v,
@@ -375,7 +375,7 @@ export class VoucherService {
         description: item.description?.trim() || data.description.trim(),
       })));
 
-      // v10.1.8 (TD-1263, D-06 part B, decision ت۶): a manual draft enters the active journal voucher workflow in its own
+      // v10.1.10 (TD-1263, D-06 part B, decision ت۶): a manual draft enters the active journal voucher workflow in its own
       // create transaction (before, only the browser's «آغاز گردش کار» started it); automatic vouchers never do
       if (data.manualEntry && voucher.status === 'draft') {
         await maybeStartEntityWorkflow({ entityType: 'journal_voucher', entityId: voucher.id, userId: data.userId, userName: data.username, tx });
@@ -1089,7 +1089,7 @@ export class VoucherService {
       if (!existing) throw new NotFoundError('سند حسابداری یافت نشد');
       if (existing.isDeleted === 1) throw new NotFoundError('سند حذف شده است');
       if (existing.status === 'permanent') return; // Already permanent
-      await assertVoucherNotInWorkflow(tx, existing); // v10.1.8 (TD-1263)
+      await assertVoucherNotInWorkflow(tx, existing); // v10.1.10 (TD-1263)
       await assertNotApprovedByMaker(tx, existing, 'permanent', userId); // v10.0.27 (TD-965)
 
       await this.checkFiscalPeriodOpen(existing.date, tx);
@@ -1122,7 +1122,7 @@ export class VoucherService {
     const refused: BatchFinalizeResult['refused'] = [];
 
     await orm.transaction(async (tx) => {
-      const inWorkflow = await vouchersInOpenWorkflow(tx, sortedIds); // v10.1.8 (TD-1263)
+      const inWorkflow = await vouchersInOpenWorkflow(tx, sortedIds); // v10.1.10 (TD-1263)
       for (const id of sortedIds) {
         const [existing] = await tx.select().from(journalVouchers).where(eq(journalVouchers.id, id)).for('update');
         if (!existing) { refused.push({ id, voucherNumber: null, reason: 'سند یافت نشد' }); continue; }
@@ -1159,7 +1159,7 @@ export class VoucherService {
     const refused: BatchFinalizeResult['refused'] = [];
 
     await orm.transaction(async (tx) => {
-      const inWorkflow = await vouchersInOpenWorkflow(tx, sortedIds); // v10.1.8 (TD-1263)
+      const inWorkflow = await vouchersInOpenWorkflow(tx, sortedIds); // v10.1.10 (TD-1263)
       for (const id of sortedIds) {
         const [existing] = await tx.select().from(journalVouchers).where(eq(journalVouchers.id, id)).for('update');
         if (existing && existing.isDeleted === 0 && existing.status === 'draft') {
@@ -1185,7 +1185,7 @@ export class VoucherService {
    */
   static async setVoucherStatus(id: number, status: 'draft' | 'approved' | 'permanent', userId?: number): Promise<JournalVoucher> {
     await orm.transaction(async (tx) => {
-      // v10.1.8 (TD-1263): the page path; a workflow step changes the status through applyVoucherStatus itself
+      // v10.1.10 (TD-1263): the page path; a workflow step changes the status through applyVoucherStatus itself
       const [existing] = await tx.select({ id: journalVouchers.id, voucherNumber: journalVouchers.voucherNumber }).from(journalVouchers)
         .where(and(eq(journalVouchers.id, id), eq(journalVouchers.isDeleted, 0))).for('update');
       if (existing) await assertVoucherNotInWorkflow(tx, existing);

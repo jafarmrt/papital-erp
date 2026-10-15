@@ -69,7 +69,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
   }
 
   const instance = wfData?.instance;
-  // v10.1.8 (TD-1263, OWN-04, decision ت۷): a workflow starts only on the server, in its record's create transaction;
+  // v10.1.10 (TD-1263, OWN-04, decision ت۷): a workflow starts only on the server, in its record's create transaction;
   // without an instance the widget shows nothing (before, it offered «آغاز گردش کار» through `POST /workflow/start`)
   if (!instance) return null;
   const currentState = wfData?.currentState;

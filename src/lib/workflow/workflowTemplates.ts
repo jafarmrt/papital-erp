@@ -1,5 +1,5 @@
 /**
- * v10.1.8 (TD-1263, D-06 part B, decision ت۵ «چهار»): ready-made workflow templates, shared by the server and the workflow
+ * v10.1.10 (TD-1263, D-06 part B, decision ت۵ «چهار»): ready-made workflow templates, shared by the server and the workflow
  * page. «ساخت از الگو» makes an inactive definition from one of them (`POST /workflow/definitions/from-template`); the
  * user reviews it in the designer and turns it on. Every action is guarded by a permission key, never a role code
  * (TD-542). The purchase requisition and journal voucher templates are the default workflows the boot seeds: their steps
