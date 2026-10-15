@@ -132,13 +132,14 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       if (violations.length > 0) throw new Error(`${violations.length} writer routes without Zod: ${violations.join(' | ')}`);
       return `${WRITER_ROUTES_WITHOUT_BODY.size} body-less routes listed`;
     }),
-    record('sec_view_permission_cannot_mutate_td_298', 'area H: a view permission does not open BOM material allocation or workflow start (TD-298)', 'real_database', async () => {
+    record('sec_view_permission_cannot_mutate_td_298', 'area H: a view permission does not open BOM material allocation, and the browser workflow start route is gone (TD-298, TD-1263)', 'real_database', async () => {
       const viewer = await userWith(['warehouse.view', 'projects.view', 'workflow.view', 'products.view']);
       const allocate = await send(viewer.session, 'post', '/api/inventory/allocations/allocate', { projectId: 999999999, allocations: [{ itemId: 999999999, quantity: 1 }] });
       const start = await send(viewer.session, 'post', '/api/workflow/start', { workflowCode: 'DOC_APPROVAL_WORKFLOW', entityType: 'document', entityId: 999999999 });
-      const wrong = [[allocate.status, 'allocate'], [start.status, 'workflow/start']].filter(([st]) => st !== 403);
-      if (wrong.length > 0) throw new Error(`a view-only holder was not refused: ${wrong.map(([st, n]) => `${n} ${st}`).join(', ')}`);
-      return 'both 403';
+      // v10.1.8 (TD-1263, OWN-04): the browser start route is gone; a workflow starts only in its record's transaction
+      const wrong = [[allocate.status, 'allocate', 403], [start.status, 'workflow/start', 404]].filter(([st, , want]) => st !== want);
+      if (wrong.length > 0) throw new Error(`a view-only holder was not refused: ${wrong.map(([st, n, want]) => `${n} ${st} (expected ${want})`).join(', ')}`);
+      return 'allocate 403, workflow start route gone (404)';
     }),
     record('sec_user_manager_cannot_grant_admin_td_299', 'area H: a users.manage holder does not grant the system admin role and does not change or delete an admin account (TD-299)', 'real_database', async () => {
       // از v9.0.129 (TD-520) مدیر کاربران فقط نقشی را می‌دهد که همه کلیدهایش را دارد

@@ -466,6 +466,8 @@ export function JournalVouchersTab({
                             <VoucherPrimaryActionCell
                               status={voucher.status}
                               makerOfVoucher={isViewerVoucherMaker(voucher, viewer)}
+                              inWorkflow={Boolean(voucher.inWorkflow)}
+                              onOpenWorkflow={() => setWorkflowTargetVoucher(voucher)}
                               onApprove={onApproveVoucher ? () => handleApprove(voucher) : undefined}
                               onFinalize={onFinalizeVoucher ? () => handleFinalize(voucher) : undefined}
                             />
@@ -664,7 +666,6 @@ export function JournalVouchersTab({
               <WorkflowStepperWidget
                 entityType="journal_voucher"
                 entityId={workflowTargetVoucher.id}
-                workflowCode="JOURNAL_VOUCHER_WORKFLOW"
                 title="مراحل تایید و گذار سند در کارگاه"
                 onStateChange={() => {
                   onRefresh();

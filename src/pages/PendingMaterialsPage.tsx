@@ -495,7 +495,6 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
               <WorkflowStepperWidget
                 entityType="pending_material"
                 entityId={selectedItem.id}
-                workflowCode="PENDING_MATERIAL_WORKFLOW"
                 title={`چرخه گردش کار ماده اولیه معلق شماره ${selectedItem.id}`}
                 onStateChange={loadData}
               />

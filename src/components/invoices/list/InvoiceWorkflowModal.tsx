@@ -52,7 +52,6 @@ export function InvoiceWorkflowModal({ workflowDoc, setWorkflowDoc, loadData }: 
           <WorkflowStepperWidget
             entityType="document"
             entityId={workflowDoc.id}
-            workflowCode="DOC_APPROVAL_WORKFLOW"
             title="اقدامات و گام‌های چرخه تایید"
             onStateChange={() => {
               loadData();

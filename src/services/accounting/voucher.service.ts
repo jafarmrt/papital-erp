@@ -1,4 +1,4 @@
-import { terminateEntityWorkflows } from '../system/entityWorkflowPort.js';
+import { maybeStartEntityWorkflow, terminateEntityWorkflows } from '../system/entityWorkflowPort.js';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { accounts, journalVouchers, journalVoucherItems } from '../../db/schema.js';
 import { eq, desc, asc, and, or, sql, ilike, inArray, gte, lte } from 'drizzle-orm';
@@ -24,6 +24,7 @@ import { assertManualApprovedCreateAllowed, assertNotApprovedByMaker, makerAppro
 import { checkOccVersion } from '../../lib/occHelper.js';
 import { voucherMakerNames } from './voucherMakerNames.js';
 import type { BatchFinalizeResult } from '../../lib/accounting/voucherBatch.js';
+import { assertVoucherNotInWorkflow, voucherInWorkflowMessage, vouchersInOpenWorkflow } from './voucherWorkflowLock.js';
 export { VOUCHER_BALANCE_TOLERANCE };
 
 /** v7.0.72 (audit P3-5): حداکثر ردیف در هر INSERT چندردیفی (۱۲ پارامتر در هر ردیف، زیر سقف ۶۵۵۳۵ پارامتر PostgreSQL) */
@@ -175,8 +176,10 @@ export class VoucherService {
     const sourceKinds = await voucherSourceKinds(orm, voucherIds); // v9.0.294 (TD-552، ت۸)
     const reversals = await voucherActiveReversals(orm, rawList); // v10.0.x (TD-1239)
     const makerNames = await voucherMakerNames(orm, rawList.map(v => v.createdById)); // TD-1230
+    const inWorkflow = await vouchersInOpenWorkflow(orm, voucherIds); // v10.1.8 (TD-1263)
     const data: JournalVoucher[] = rawList.map(v => ({
       ...v,
+      inWorkflow: inWorkflow.has(v.id),
       sourceKind: sourceKinds.get(v.id) ?? null,
       reversedByVoucherNumber: reversals.get(v.id) ?? null,
       createdByName: (v.createdById && makerNames.get(v.createdById)) || null,
@@ -230,9 +233,11 @@ export class VoucherService {
     const sourceKind = (await voucherSourceKinds(executor, [id])).get(id) ?? null; // v9.0.294 (TD-552، ت۸)
     const reversedByVoucherNumber = (await voucherActiveReversals(executor, [v])).get(id) ?? null; // v10.0.x (TD-1239)
     const makerNames = await voucherMakerNames(executor, [v.createdById]); // TD-1230
+    const inWorkflow = (await vouchersInOpenWorkflow(executor, [id])).has(id); // v10.1.8 (TD-1263)
 
     return {
       ...v,
+      inWorkflow,
       sourceKind,
       reversedByVoucherNumber,
       createdByName: (v.createdById && makerNames.get(v.createdById)) || null,
@@ -369,6 +374,12 @@ export class VoucherService {
         exchangeRate: moneyOr(item.exchangeRate, 1),
         description: item.description?.trim() || data.description.trim(),
       })));
+
+      // v10.1.8 (TD-1263, D-06 part B, decision ت۶): a manual draft enters the active journal voucher workflow in its own
+      // create transaction (before, only the browser's «آغاز گردش کار» started it); automatic vouchers never do
+      if (data.manualEntry && voucher.status === 'draft') {
+        await maybeStartEntityWorkflow({ entityType: 'journal_voucher', entityId: voucher.id, userId: data.userId, userName: data.username, tx });
+      }
 
       return voucher.id;
     };
@@ -1078,6 +1089,7 @@ export class VoucherService {
       if (!existing) throw new NotFoundError('سند حسابداری یافت نشد');
       if (existing.isDeleted === 1) throw new NotFoundError('سند حذف شده است');
       if (existing.status === 'permanent') return; // Already permanent
+      await assertVoucherNotInWorkflow(tx, existing); // v10.1.8 (TD-1263)
       await assertNotApprovedByMaker(tx, existing, 'permanent', userId); // v10.0.27 (TD-965)
 
       await this.checkFiscalPeriodOpen(existing.date, tx);
@@ -1110,12 +1122,14 @@ export class VoucherService {
     const refused: BatchFinalizeResult['refused'] = [];
 
     await orm.transaction(async (tx) => {
+      const inWorkflow = await vouchersInOpenWorkflow(tx, sortedIds); // v10.1.8 (TD-1263)
       for (const id of sortedIds) {
         const [existing] = await tx.select().from(journalVouchers).where(eq(journalVouchers.id, id)).for('update');
         if (!existing) { refused.push({ id, voucherNumber: null, reason: 'سند یافت نشد' }); continue; }
         const refuse = (reason: string) => refused.push({ id, voucherNumber: existing.voucherNumber, reason });
         if (existing.isDeleted !== 0) { refuse('سند حذف شده است'); continue; }
         if (existing.status === 'permanent') { refuse('سند پیش‌تر قطعی شده است'); continue; }
+        if (inWorkflow.has(id)) { refuse(voucherInWorkflowMessage(existing.voucherNumber)); continue; }
         const makerRefusal = await makerApprovalRefusal(tx, existing, 'permanent', userId); // v10.0.27 (TD-965)
         if (makerRefusal) { refuse(makerRefusal); continue; }
         if (await this.isPeriodClosed(existing.date, tx)) { refuse('سال مالی سند بسته است'); continue; }
@@ -1145,9 +1159,11 @@ export class VoucherService {
     const refused: BatchFinalizeResult['refused'] = [];
 
     await orm.transaction(async (tx) => {
+      const inWorkflow = await vouchersInOpenWorkflow(tx, sortedIds); // v10.1.8 (TD-1263)
       for (const id of sortedIds) {
         const [existing] = await tx.select().from(journalVouchers).where(eq(journalVouchers.id, id)).for('update');
         if (existing && existing.isDeleted === 0 && existing.status === 'draft') {
+          if (inWorkflow.has(id)) { refused.push({ id, voucherNumber: existing.voucherNumber, reason: voucherInWorkflowMessage(existing.voucherNumber) }); continue; }
           // v10.0.27 (TD-965): ثبت‌کننده سند دستی آن را تأیید نمی‌کند؛ سند او کنار گذاشته و با دلیل گزارش می‌شود
           const makerRefusal = await makerApprovalRefusal(tx, existing, 'approved', userId);
           if (makerRefusal) { refused.push({ id, voucherNumber: existing.voucherNumber, reason: makerRefusal }); continue; }
@@ -1168,7 +1184,13 @@ export class VoucherService {
    * Set Voucher Status (draft, approved, permanent)
    */
   static async setVoucherStatus(id: number, status: 'draft' | 'approved' | 'permanent', userId?: number): Promise<JournalVoucher> {
-    await orm.transaction(async (tx) => this.applyVoucherStatus(tx, id, status, userId));
+    await orm.transaction(async (tx) => {
+      // v10.1.8 (TD-1263): the page path; a workflow step changes the status through applyVoucherStatus itself
+      const [existing] = await tx.select({ id: journalVouchers.id, voucherNumber: journalVouchers.voucherNumber }).from(journalVouchers)
+        .where(and(eq(journalVouchers.id, id), eq(journalVouchers.isDeleted, 0))).for('update');
+      if (existing) await assertVoucherNotInWorkflow(tx, existing);
+      await this.applyVoucherStatus(tx, id, status, userId);
+    });
     return this.getJournalVoucherById(id);
   }
 

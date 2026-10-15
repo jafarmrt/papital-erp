@@ -24,6 +24,12 @@ export interface Harness {
   /** نشست کاربر تازه با نقش seed‌شده (کد) یا نقش تازه با این مجوزها */
   sessionWith(roleOrPermissions: string | string[]): Promise<Session & { userId: number; role: string }>;
   q(text: string, params?: unknown[]): Promise<Row[]>;
+  /**
+   * v10.1.8 (TD-1263, OWN-04): starts a workflow the way a record's create transaction does (the engine, in the name of
+   * the session's user); `POST /workflow/start` is gone. The answer has the old route's shape: 200 with `data`, or the
+   * error's status.
+   */
+  start(body: { workflowCode: string; entityType: string; entityId: string | number }, s?: Session): Promise<{ status: number; body: Row & { data?: Row } }>;
   /** گام‌های فرایند را با کلید اقدام، از گام جاری، با نشست داده‌شده می‌رود */
   walk(instanceId: number, actionKeys: string[], s: Session): Promise<number[]>;
   cleanup(): Promise<void>;
@@ -59,6 +65,18 @@ export async function createHarness(): Promise<Harness> {
     },
     async q(text, params = []) {
       return (await pool.query(text, params)).rows as Row[];
+    },
+    async start(body, s = admin) {
+      const { WorkflowTransitionExecutor } = await import('../../services/workflow/workflowTransitionExecutor.js');
+      let userId = (s as Session & { userId?: number }).userId;
+      if (userId === undefined) userId = Number((await h.q(`SELECT id FROM users WHERE username = 'pen_admin' AND is_deleted = 0`))[0]?.id) || undefined;
+      try {
+        const data = await WorkflowTransitionExecutor.startInstance({ ...body, entityId: String(body.entityId), userId, userName: 'test user' });
+        return { status: 200, body: { data: data as unknown as Row } };
+      } catch (err: unknown) {
+        const status = Number((err as { statusCode?: unknown }).statusCode) || 500;
+        return { status, body: { error: err instanceof Error ? err.message : String(err) } };
+      }
     },
     async walk(instanceId, actionKeys, s) {
       const statuses: number[] = [];

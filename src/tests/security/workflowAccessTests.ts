@@ -14,7 +14,7 @@ export async function runWorkflowAccessTests(shouldRun: ShouldRun): Promise<Test
     await runCase(results, {
       id: 'sec_workflow_start_entity_scope_td_443',
       name: 'v9.0.33: a workflow starts only with an active definition of the same entity type and on an existing entity; an instance whose definition is of another type does not run the domain action (TD-443)',
-      details: 'The document workflow on a journal voucher is 422 and the voucher stays draft; an unknown type or id and an object id are refused; a legacy mismatched instance is 409; a correct start on a document is 200',
+      details: 'The document workflow on a journal voucher is 422 and the voucher stays draft; an unknown type or id is refused (the start route is gone since v10.1.8, TD-1263); a legacy mismatched instance is 409; a correct start on a document is 200',
     }, async (h, wrong) => {
       const { createTestVoucher } = await import('../fixtures/factories.js');
       const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
@@ -22,7 +22,7 @@ export async function runWorkflowAccessTests(shouldRun: ShouldRun): Promise<Test
       const seller = await h.sessionWith('sales_manager');
 
       // ۱) گردش‌کار اسناد روی سند حسابداری: ۴۲۲؛ اگر شروع شد، رفتن گام‌ها نباید سند را تأیید کند
-      const start = await h.post('/api/workflow/start', { workflowCode: 'DOC_APPROVAL_WORKFLOW', entityType: 'journal_voucher', entityId: String(voucher.id) }, seller);
+      const start = await h.start({ workflowCode: 'DOC_APPROVAL_WORKFLOW', entityType: 'journal_voucher', entityId: String(voucher.id) }, seller);
       if (start.status !== 422) {
         wrong.push(`Starting DOC_APPROVAL_WORKFLOW on a journal voucher returned ${start.status}, not 422`);
         const instanceId = Number(start.body?.data?.id);
@@ -32,12 +32,10 @@ export async function runWorkflowAccessTests(shouldRun: ShouldRun): Promise<Test
       if (after?.status !== 'draft') wrong.push(`The journal voucher became ${String(after?.status)} after the forged start`);
 
       // ۲) ورودی نادرست
-      const unknownType = await h.post('/api/workflow/start', { workflowCode: 'DOC_APPROVAL_WORKFLOW', entityType: 'no_such_type', entityId: '999999999' });
+      const unknownType = await h.start({ workflowCode: 'DOC_APPROVAL_WORKFLOW', entityType: 'no_such_type', entityId: '999999999' });
       if (unknownType.status !== 422) wrong.push(`Unknown entity type returned ${unknownType.status}, not 422`);
-      const missingDoc = await h.post('/api/workflow/start', { workflowCode: 'DOC_APPROVAL_WORKFLOW', entityType: 'document', entityId: '999999999' });
+      const missingDoc = await h.start({ workflowCode: 'DOC_APPROVAL_WORKFLOW', entityType: 'document', entityId: '999999999' });
       if (missingDoc.status !== 404) wrong.push(`Missing document returned ${missingDoc.status}, not 404`);
-      const objectId = await h.post('/api/workflow/start', { workflowCode: 'DOC_APPROVAL_WORKFLOW', entityType: 'document', entityId: { a: 1 } });
-      if (objectId.status !== 400) wrong.push(`Object id returned ${objectId.status}, not 400`);
       const stored = await h.q(`SELECT count(*)::int AS n FROM workflow_instances WHERE entity_id IN ('999999999', '[object Object]')`);
       if (Number(stored[0]?.n) !== 0) wrong.push(`${String(stored[0]?.n)} workflow instances were created on a missing entity`);
 
@@ -59,7 +57,7 @@ export async function runWorkflowAccessTests(shouldRun: ShouldRun): Promise<Test
 
       // ۴) شروع درست: گردش‌کار اسناد روی سند پیش‌نویس موجود
       const docId = await draftSalesDocument(h);
-      const ok = await h.post('/api/workflow/start', { workflowCode: 'DOC_APPROVAL_WORKFLOW', entityType: 'document', entityId: docId });
+      const ok = await h.start({ workflowCode: 'DOC_APPROVAL_WORKFLOW', entityType: 'document', entityId: docId });
       if (ok.status !== 200 || !(Number(ok.body?.data?.id) > 0)) wrong.push(`Correct start on a document returned ${ok.status}: ${JSON.stringify(ok.body).slice(0, 160)}`);
     });
   }
@@ -80,7 +78,7 @@ export async function runWorkflowAccessTests(shouldRun: ShouldRun): Promise<Test
 
       // ۱) گردش‌کار سند حسابداری (گام‌ها با مجوز accounting.vouchers، از v9.0.128 بی نقش): مدیر مالی آن مجوز را دارد
       const { voucher } = await createTestVoucher({ status: 'draft', date: await businessTodayIsoDate(), totalDebit: 2000000, totalCredit: 2000000 } as never);
-      const started = await h.post('/api/workflow/start', { workflowCode: 'JOURNAL_VOUCHER_WORKFLOW', entityType: 'journal_voucher', entityId: voucher.id });
+      const started = await h.start({ workflowCode: 'JOURNAL_VOUCHER_WORKFLOW', entityType: 'journal_voucher', entityId: voucher.id });
       const voucherInstance = Number(started.body?.data?.id);
       if (!(voucherInstance > 0)) throw new Error(`Starting the journal voucher workflow returned ${started.status}: ${JSON.stringify(started.body).slice(0, 160)}`);
 
@@ -114,7 +112,7 @@ export async function runWorkflowAccessTests(shouldRun: ShouldRun): Promise<Test
       // مجوز مشاهده انبار نه. پیش‌تر همین را گام نقش «انباردار» با هم‌ارزی مجوز ثبت بخش می‌داد که حذف شد
       const { definition } = await createTestWorkflow({ definition: { entityType: 'test_document' } });
       await h.q(`UPDATE workflow_transitions SET required_role = '', required_permission = 'warehouse.out' WHERE workflow_definition_id = $1`, [definition.id]);
-      const docStart = await h.post('/api/workflow/start', { workflowCode: definition.code, entityType: 'test_document', entityId: `TD444-${h.tag}` });
+      const docStart = await h.start({ workflowCode: definition.code, entityType: 'test_document', entityId: `TD444-${h.tag}` });
       const docInstance = Number(docStart.body?.data?.id);
       if (!(docInstance > 0)) throw new Error(`Starting the test workflow returned ${docStart.status}`);
       const viewer = await h.sessionWith(['workflow.view', 'workflow.approve', 'warehouse.view']);
@@ -145,7 +143,7 @@ export async function runWorkflowAccessTests(shouldRun: ShouldRun): Promise<Test
       const { findUnguardedDocumentApprovals } = await import('../../services/workflow/docApprovalGuards.js');
       const docStatus = async (id: number) => (await h.q(`SELECT type, status FROM documents WHERE id = $1`, [id]))[0];
       const startDoc = async (code: string, docId: number, s: Session = h.admin) => {
-        const res = await h.post('/api/workflow/start', { workflowCode: code, entityType: 'document', entityId: docId }, s);
+        const res = await h.start({ workflowCode: code, entityType: 'document', entityId: docId }, s);
         const id = Number(res.body?.data?.id);
         if (!(id > 0)) throw new Error(`Starting ${code} on document ${docId}: ${res.status} ${JSON.stringify(res.body).slice(0, 160)}`);
         return id;
@@ -268,7 +266,7 @@ export async function runWorkflowAccessTests(shouldRun: ShouldRun): Promise<Test
     }, async (h, wrong) => {
       const docId = await draftSalesDocument(h);
       const starts = await Promise.all(Array.from({ length: 6 }, () =>
-        h.post('/api/workflow/start', { workflowCode: 'DOC_APPROVAL_WORKFLOW', entityType: 'document', entityId: docId })));
+        h.start({ workflowCode: 'DOC_APPROVAL_WORKFLOW', entityType: 'document', entityId: docId })));
       const statuses = starts.map(r => r.status);
       if (statuses.some(s => s !== 200)) wrong.push(`Concurrent starts returned ${statuses.join(',')}`);
       const open = await h.q(`SELECT id FROM workflow_instances WHERE entity_type = 'document' AND entity_id = $1 AND status = 'IN_PROGRESS'`, [String(docId)]);
@@ -301,7 +299,7 @@ export async function runWorkflowAccessTests(shouldRun: ShouldRun): Promise<Test
       const { createTestVoucher } = await import('../fixtures/factories.js');
       const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
       const { voucher } = await createTestVoucher({ status: 'draft', date: await businessTodayIsoDate(), totalDebit: 7777777, totalCredit: 7777777 } as never);
-      const started = await h.post('/api/workflow/start', { workflowCode: 'JOURNAL_VOUCHER_WORKFLOW', entityType: 'journal_voucher', entityId: voucher.id });
+      const started = await h.start({ workflowCode: 'JOURNAL_VOUCHER_WORKFLOW', entityType: 'journal_voucher', entityId: voucher.id });
       if (started.status !== 200) throw new Error(`Starting the journal voucher workflow returned ${started.status}`);
 
       const viewer = await h.sessionWith(['workflow.view']);

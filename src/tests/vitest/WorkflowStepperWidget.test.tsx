@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WorkflowStepperWidget } from '../../components/workflow/WorkflowStepperWidget';
 import { formatPersianPrice } from '../../utils';
@@ -33,7 +33,7 @@ function renderWidget() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <WorkflowStepperWidget entityType="document" entityId={9} workflowCode="DOC" />
+      <WorkflowStepperWidget entityType="document" entityId={9} />
     </QueryClientProvider>,
   );
 }
@@ -65,10 +65,14 @@ describe('WorkflowStepperWidget (TD-085)', () => {
     expect(screen.getByText('ارز برابر IRR باشد')).toBeTruthy();
   });
 
-  it('offers to start the workflow when the document has none', async () => {
+  // v10.1.8 (TD-1263, OWN-04): only the server starts a workflow, in its record's create transaction
+  it('shows nothing and offers no start when the document has no workflow', async () => {
     fetchJson.mockResolvedValue({ instance: null });
-    renderWidget();
-    expect(await screen.findByText('آغاز گردش کار')).toBeTruthy();
+    const { container } = renderWidget();
+    await waitFor(() => expect(fetchJson).toHaveBeenCalledWith('/workflow/instance/document/9'));
+    await waitFor(() => expect(container.querySelector('.animate-pulse')).toBeNull());
+    expect(screen.queryByText('آغاز گردش کار')).toBeNull();
+    expect(container.textContent).toBe('');
   });
 });
 

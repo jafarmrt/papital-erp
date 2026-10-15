@@ -75,8 +75,6 @@ export interface WorkflowHistoryLog {
 
 export interface WorkflowInstanceData {
   instance: WorkflowInstance | null;
-  /** v10.0.65 (TD-1142): without an instance, whether an active definition exists for the entity type */
-  startable?: boolean;
   definition?: {
     id: number;
     code: string;
@@ -101,29 +99,6 @@ export function useWorkflowInstanceQuery(entityType: string, entityId: string | 
       return fetchJson(`/workflow/instance/${entityType}/${entityId}`);
     },
     enabled: Boolean(entityId),
-  });
-}
-
-export function useStartWorkflowMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (payload: { workflowCode: string; entityType: string; entityId: string | number }) => {
-      return fetchJson('/workflow/start', {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
-    },
-    onSuccess: (_, variables) => {
-      void invalidatePreset(queryClient, 'workflowChange');
-      void queryClient.invalidateQueries({
-        queryKey: QUERY_KEYS.workflow.instance(variables.entityType, variables.entityId)
-      });
-      toast.success('گردش کار آغاز شد.');
-    },
-    onError: (err: any) => {
-      toast.error(err.message || 'گردش کار آغاز نشد؛ دوباره تلاش کنید.');
-    }
   });
 }
 
@@ -237,6 +212,20 @@ export function useSaveWorkflowDefinitionMutation() {
     onError: (err: any) => {
       toast.error(err.message || 'طرح گردش کار ذخیره نشد؛ دوباره تلاش کنید.');
     }
+  });
+}
+
+/** v10.1.8 (TD-1263): «ساخت از الگو» makes an inactive definition from a ready-made template; the caller shows the notice */
+export function useCreateWorkflowFromTemplateMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (templateId: string) => fetchJson('/workflow/definitions/from-template', {
+      method: 'POST',
+      body: JSON.stringify({ templateId }),
+    }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workflow.definitions() });
+    },
   });
 }
 

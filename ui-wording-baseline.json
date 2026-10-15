@@ -69,6 +69,5 @@
   "src/pages/MyPayslipsPage.tsx": 1,
   "src/pages/PendingMaterialsPage.tsx": 1,
   "src/pages/TransfersPage.tsx": 1,
-  "src/pages/UsersPage.tsx": 3,
-  "src/pages/WorkflowManagementPage.tsx": 1
+  "src/pages/UsersPage.tsx": 3
 }

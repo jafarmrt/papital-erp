@@ -1,4 +1,5 @@
 import type { SeedGuardUpgrade, SeedStepGuard } from './seedGuardUpgrade.js';
+import { PURCHASE_REQUISITION_WORKFLOW_TEMPLATE } from '../../lib/workflow/workflowTemplates.js';
 
 /**
  * v10.0.37 (OBS-R2-36 از TD-992، طرح حقوق و تفکیک وظایف ت۱۱ «الف»): نگهبان گام‌های گردش کار پیش‌فرض درخواست خرید.
@@ -9,13 +10,8 @@ import type { SeedGuardUpgrade, SeedStepGuard } from './seedGuardUpgrade.js';
  */
 export const PURCHASE_REQUISITION_WORKFLOW_CODE = 'PURCHASE_REQUISITION_WORKFLOW';
 
-export const PURCHASE_REQUISITION_STEP_GUARDS: ReadonlyArray<SeedStepGuard> = [
-  { from: 'pending', to: 'ordered', actionKey: 'approve_request', title: 'تایید و صدور دستور خرید', requiredRole: '', requiredPermission: 'procurement.approve', isInitiatorExcluded: true },
-  { from: 'ordered', to: 'received', actionKey: 'receive_items', title: 'تحویل و ورود به انبار', requiredRole: '', requiredPermission: 'warehouse.in' },
-  { from: 'pending', to: 'rejected', actionKey: 'reject_request', title: 'رد درخواست خرید', requiredRole: '', requiredPermission: 'procurement.approve' },
-  { from: 'ordered', to: 'rejected', actionKey: 'cancel_order', title: 'لغو یا رد سفارش', requiredRole: '', requiredPermission: 'procurement.approve' },
-  { from: 'rejected', to: 'pending', actionKey: 'reopen', title: 'بازگشایی و بررسی مجدد', requiredRole: '', requiredPermission: 'procurement.create' },
-];
+/** v10.1.8 (TD-1263): read from the purchase requisition template, so the seed, its upgrade and «ساخت از الگو» share one list */
+export const PURCHASE_REQUISITION_STEP_GUARDS: ReadonlyArray<SeedStepGuard> = PURCHASE_REQUISITION_WORKFLOW_TEMPLATE.transitions.map(t => ({ ...t }));
 
 /** seed پیش از v10.0.37: هیچ اقدامی نقش و مجوز نداشت */
 const LEGACY_PURCHASE_REQUISITION_STEP_GUARDS: ReadonlyArray<SeedStepGuard> = PURCHASE_REQUISITION_STEP_GUARDS.map(g => ({

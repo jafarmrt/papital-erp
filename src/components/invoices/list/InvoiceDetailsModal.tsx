@@ -72,7 +72,6 @@ export function InvoiceDetailsModal({ selectedDocDetails, setSelectedDocDetails,
             <WorkflowStepperWidget
               entityType="document"
               entityId={selectedDocDetails.id}
-              workflowCode="DOC_APPROVAL_WORKFLOW"
               title={`چرخه تاییدات و گردش‌کار سند شماره ${formatPersianCode(selectedDocDetails.ref_number)}`}
               onStateChange={() => {
                 loadData();

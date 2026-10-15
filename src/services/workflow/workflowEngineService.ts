@@ -14,6 +14,7 @@ import { WorkflowTaskService } from './workflowTaskService.js';
 import { WorkflowDelegationService } from './workflowDelegationService.js';
 import { WorkflowQuorumService } from './workflowQuorumService.js';
 import { setWorkflowDefinitionActive, setWorkflowDefinitionArchived } from './workflowDefinitionLifecycle.js';
+import { makeDefinitionFromTemplate } from './workflowTemplateDefinition.js';
 import { workflowDefinitions, workflowInstances } from '../../db/schema.js';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { and, asc, eq } from 'drizzle-orm';
@@ -46,9 +47,9 @@ export class WorkflowEngineService {
   static getWorkflowDefinitions = WorkflowDefinitionService.getDefinitions.bind(WorkflowDefinitionService);
   static getDefinitionById = WorkflowDefinitionService.getDefinitionById.bind(WorkflowDefinitionService);
   static getDefinitionByCode = WorkflowDefinitionService.getDefinitionByCode.bind(WorkflowDefinitionService);
-  static hasActiveDefinition = WorkflowDefinitionService.hasActiveDefinition.bind(WorkflowDefinitionService);
   static getWorkflowDefinitionDetail = WorkflowDefinitionService.getDefinitionById.bind(WorkflowDefinitionService);
   static saveWorkflowDefinition = WorkflowDefinitionService.saveWorkflowDefinition.bind(WorkflowDefinitionService);
+  static makeDefinitionFromTemplate = makeDefinitionFromTemplate;
   static updateCanvasPositions = WorkflowDefinitionService.updateCanvasPositions.bind(WorkflowDefinitionService);
   static seedDefaultWorkflows = WorkflowDefinitionService.seedDefaultWorkflows.bind(WorkflowDefinitionService);
   // v10.1.7 (TD-1229, D-06): turn a definition on or off, archive or restore it
@@ -82,7 +83,6 @@ export class WorkflowEngineService {
   static getAvailableTransitions = WorkflowTransitionExecutor.getAvailableTransitions.bind(WorkflowTransitionExecutor);
   static refreshPendingApprovals = WorkflowTransitionExecutor.refreshPendingApprovals.bind(WorkflowTransitionExecutor);
   static startInstance = WorkflowTransitionExecutor.startInstance.bind(WorkflowTransitionExecutor);
-  static startWorkflow = WorkflowTransitionExecutor.startInstance.bind(WorkflowTransitionExecutor); // Alias
   static executeTransition = WorkflowTransitionExecutor.executeTransition.bind(WorkflowTransitionExecutor);
   static checkCanTransition = WorkflowTransitionExecutor.checkCanTransition.bind(WorkflowTransitionExecutor);
   static getInstanceById = WorkflowTransitionExecutor.getInstanceById.bind(WorkflowTransitionExecutor);

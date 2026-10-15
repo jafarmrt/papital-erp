@@ -407,12 +407,12 @@
 | POST | `/api/workflow/definitions/:id/restore` | workflow.admin |
 | GET | `/api/workflow/definitions/:id/versions` | workflow.manage \| workflow.admin |
 | GET | `/api/workflow/definitions/:id/versions/:version` | workflow.manage \| workflow.admin |
+| POST | `/api/workflow/definitions/from-template` | workflow.manage \| workflow.admin |
 | GET | `/api/workflow/delegations` | workflow.view \| workflow.manage \| workflow.admin |
 | POST | `/api/workflow/delegations` | workflow.approve \| workflow.manage \| workflow.admin |
 | POST | `/api/workflow/delegations/:id/revoke` | workflow.approve \| workflow.manage \| workflow.admin |
 | GET | `/api/workflow/instance/:entityType/:entityId` | workflow.view \| workflow.approve \| workflow.execute \| workflow.manage \| workflow.admin |
 | POST | `/api/workflow/positions` | workflow.manage \| workflow.admin |
-| POST | `/api/workflow/start` | workflow.execute \| workflow.manage \| workflow.admin \| workflow.approve \| documents.create \| documents.edit |
 | POST | `/api/workflow/tasks/:taskId/execute` | workflow.approve \| workflow.execute \| workflow.manage \| workflow.admin |
 | GET | `/api/workflow/tasks/my-tasks` | workflow.view \| workflow.approve \| workflow.execute \| workflow.manage \| workflow.admin |
 | GET | `/api/workflow/tasks/stats` | workflow.view \| workflow.approve \| workflow.execute \| workflow.manage \| workflow.admin |

@@ -23,7 +23,7 @@ async function guardedInstance(h: Harness, label: string, role: string, permissi
   const { createTestWorkflow } = await import('../fixtures/factories.js');
   const { definition } = await createTestWorkflow({ definition: { entityType: 'test_document' } });
   await h.q(`UPDATE workflow_transitions SET required_role = $2, required_permission = $3 WHERE workflow_definition_id = $1`, [definition.id, role, permission]);
-  const started = await h.post('/api/workflow/start', { workflowCode: definition.code, entityType: 'test_document', entityId: `TD542-${label}-${h.tag}` });
+  const started = await h.start({ workflowCode: definition.code, entityType: 'test_document', entityId: `TD542-${label}-${h.tag}` });
   const instanceId = Number(started.body?.data?.id);
   if (!(instanceId > 0)) throw new Error(`starting the test workflow (${label}) returned ${started.status}: ${JSON.stringify(started.body).slice(0, 160)}`);
   return { instanceId, definitionId: definition.id, code: definition.code };
@@ -50,7 +50,7 @@ export async function runAccessPackageTwoWorkflowTests(shouldRun: ShouldRun): Pr
       }
       const branch = await h.sessionWith(['accounting.view', 'accounting.vouchers', 'accounting.vouchers_approve', 'workflow.view', 'workflow.approve', 'workflow.execute']);
       const { voucher } = await createTestVoucher({ status: 'draft', date: await businessTodayIsoDate(), totalDebit: 1500000, totalCredit: 1500000 } as never);
-      const started = await h.post('/api/workflow/start', { workflowCode: 'JOURNAL_VOUCHER_WORKFLOW', entityType: 'journal_voucher', entityId: voucher.id });
+      const started = await h.start({ workflowCode: 'JOURNAL_VOUCHER_WORKFLOW', entityType: 'journal_voucher', entityId: voucher.id });
       const voucherInstance = Number(started.body?.data?.id);
       if (!(voucherInstance > 0)) throw new Error(`starting the journal voucher workflow returned ${started.status}`);
       if ((await tasksOf(h, branch, voucherInstance)).length === 0) wrong.push('a custom role with accounting.vouchers_approve did not see the journal voucher task');

@@ -102,6 +102,8 @@ export interface JournalVoucher {
   sourceKind?: VoucherSourceKind | null;
   /** v10.0.x (TD-1239): شماره سند برگشت فعال این سند (ابطال یا ابطال برای بازثبت)؛ null وقتی برگشت نخورده است */
   reversedByVoucherNumber?: string | null;
+  /** v10.1.8 (TD-1263): the voucher's workflow is running; its status moves only through the workflow steps */
+  inWorkflow?: boolean;
   /** v9.0.295 (TD-555): نسخه سند برای ویرایش هم‌زمان (۴۰۹ OCC_CONFLICT) */
   version?: number;
   currency?: string | null;

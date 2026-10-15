@@ -89,7 +89,7 @@ export async function runAccessPackageTwoDocumentTests(shouldRun: ShouldRun): Pr
       const { definition: open, restore: restoreOpen } = await createTestWorkflow({ definition: { entityType: 'document', code: `WF541_${h.tag}` } });
       try {
         const docId = await draftSalesDocument(h);
-        const start = await h.post('/api/workflow/start', { workflowCode: open.code, entityType: 'document', entityId: docId });
+        const start = await h.start({ workflowCode: open.code, entityType: 'document', entityId: docId });
         const instanceId = Number(start.body?.data?.id);
         if (!(instanceId > 0)) throw new Error(`starting the test workflow returned ${start.status}`);
         const oldKeys = await h.sessionWith(['workflow.view', 'workflow.approve', 'workflow.execute', 'documents.view', 'documents.edit', 'warehouse.view', 'warehouse.in', 'warehouse.out']);

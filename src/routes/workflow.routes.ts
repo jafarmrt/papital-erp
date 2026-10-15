@@ -12,7 +12,7 @@ import { z } from 'zod';
 import { MY_TASK_FILTERS } from '../services/workflow/workflowTaskService.js';
 import { withUtcTimestamps } from '../services/workflow/workflowTimestamps.js';
 import { isSystemAdminRole } from '../lib/permissions/permissionCatalog.js';
-import { activateDefinitionSchema, canvasPositionsSchema, definitionSwitchSchema, createDelegationSchema, executeTaskSchema, executeTransitionSchema, saveDefinitionSchema } from './workflowRouteSchemas.js';
+import { activateDefinitionSchema, canvasPositionsSchema, definitionFromTemplateSchema, definitionSwitchSchema, createDelegationSchema, executeTaskSchema, executeTransitionSchema, saveDefinitionSchema } from './workflowRouteSchemas.js';
 import { WORKFLOW_EXECUTE_PERMISSIONS, WORKFLOW_INBOX_PERMISSIONS, WORKFLOW_SWITCH_PERMISSION } from '../lib/permissions/workflowPermissions.js';
 
 const entityParamSchema = z.object({
@@ -27,17 +27,6 @@ const definitionVersionParamSchema = z.object({
     id: numericIdString,
     version: numericIdString,
   })
-});
-
-/** v9.0.33 (TD-443): بدنه شروع فرایند؛ شناسه موجودیت عدد یا رشته کوتاه است، نه شیء */
-const workflowEntityIdInput = z.union([z.number().int().positive(), z.string().trim().min(1).max(64).regex(/^[A-Za-z0-9_.:-]+$/, 'شناسه موجودیت نامعتبر است')])
-  .transform((v) => String(v));
-const startWorkflowSchema = z.object({
-  body: z.object({
-    workflowCode: z.string().trim().min(1, 'کد گردش کار الزامی است').max(100),
-    entityType: z.string().trim().min(1, 'نوع موجودیت الزامی است').max(50).regex(/^[a-z][a-z0-9_]*$/, 'نوع موجودیت نامعتبر است'),
-    entityId: workflowEntityIdInput,
-  }),
 });
 
 /** v9.0.41 (TD-448، ت۶): زبانه، صفحه و اندازه صفحه کارتابل؛ مقدار ناشناخته ۴۰۰ (پیش‌تر هر رشته‌ای پذیرفته می‌شد) */
@@ -175,7 +164,7 @@ router.get('/instance/:entityType/:entityId', authorizePermission(...WORKFLOW_WI
     );
 
     // v10.0.65 (TD-1142): بی نمونه، `startable` می‌گوید آغاز گردش کار ممکن است (تعریف فعالی برای این نوع موجودیت هست)
-    res.json(instanceData || { instance: null, startable: await WorkflowEngineService.hasActiveDefinition(String(entityType)) });
+    res.json(instanceData || { instance: null });
   } catch (err: unknown) {
     const errMsg = getErrorMessage(err);
     logger.error(`[Workflow Route /instance] Error: ${errMsg}`);
@@ -183,30 +172,8 @@ router.get('/instance/:entityType/:entityId', authorizePermission(...WORKFLOW_WI
   }
 }));
 
-/**
- * POST /api/workflow/start
- * Start or attach a workflow instance to an entity
- */
-// حوزه H (TD-298): شروع فرآیند تغییر است؛ workflow.view (مشاهده) کافی نیست
-router.post('/start', authorizePermission('workflow.execute', 'workflow.manage', 'workflow.admin', 'workflow.approve', 'documents.create', 'documents.edit'), validate(startWorkflowSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
-  try {
-    const { workflowCode, entityType, entityId } = req.body as z.infer<typeof startWorkflowSchema>['body'];
-
-    const instanceData = await WorkflowEngineService.startWorkflow({
-      workflowCode,
-      entityType,
-      entityId,
-      userId: req.user?.id,
-      userName: req.user?.full_name || req.user?.username
-    });
-
-    res.json({ success: true, data: instanceData });
-  } catch (err: unknown) {
-    const errMsg = getErrorMessage(err);
-    logger.error(`[Workflow Route /start] Error: ${errMsg}`);
-    throw err;
-  }
-}));
+// v10.1.8 (TD-1263, OWN-04, decision ت۷): `POST /workflow/start` is removed; a workflow starts only on the server, in the
+// create transaction of its record (TD-446)
 
 /**
  * POST /api/workflow/transition
@@ -313,6 +280,16 @@ router.post('/definitions', authorizePermission('workflow.manage', 'workflow.adm
     logger.error(`[Workflow Route POST /definitions] Error: ${errMsg}`);
     throw err;
   }
+}));
+
+/**
+ * v10.1.8 (TD-1263, D-06 part B): «ساخت از الگو» makes an inactive definition from a ready-made template; designing is
+ * `workflow.manage`, turning it on stays `workflow.admin`.
+ */
+router.post('/definitions/from-template', authorizePermission('workflow.manage', 'workflow.admin'), validate(definitionFromTemplateSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const { templateId } = req.body as z.infer<typeof definitionFromTemplateSchema>['body'];
+  const saved = await WorkflowEngineService.makeDefinitionFromTemplate({ templateId, userId: req.user?.id, req });
+  res.status(201).json({ success: true, data: saved });
 }));
 
 /**
