@@ -17,7 +17,7 @@ interface JalaliDateInputProps {
   containerClassName?: string;
   calendarPosition?: string;
   disabled?: boolean;
-  /** Id of the text field, so a `<label htmlFor>` names it (v10.1.29, TD-1278). */
+  /** Id of the text field, so a `<label htmlFor>` names it (v10.1.30, TD-1278). */
   id?: string;
 }
 

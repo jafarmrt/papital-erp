@@ -1,5 +1,5 @@
 /**
- * Every form label names its field (v10.1.29, TD-1278, Vibe Farsi package 3b).
+ * Every form label names its field (v10.1.30, TD-1278, Vibe Farsi package 3b).
  *
  * A `<label>` followed by a field (the next element, or the only field inside it outside a list)
  * either wraps the field or points to it with `htmlFor`, and the field carries the same `id`; then a

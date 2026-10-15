@@ -11,6 +11,8 @@ export const QUERY_KEYS = {
     /** فهرست انتخاب طرف حساب‌ها (`GET /customers/options`، TD-887) */
     options: (params?: Record<string, unknown> | object) => ['customers', 'options', params ?? {}] as const,
     detail: (id: number) => ['customers', 'detail', id] as const,
+    /** v10.1.23 (N-02 بخش ۳): برچسب‌های طرف حساب (`GET /customers/tags`) */
+    tags: ['customers', 'tags'] as const,
   },
 
   // Inventory Items & Catalog

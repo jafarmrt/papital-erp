@@ -10589,6 +10589,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // N-02 part 3 (v10.1.24, TD-1272): the lead list carries each lead's nearest open follow-up for the pipeline card
   const { runCrmPipelineBoardTests } = await import('../regression/crmPipelineBoardTests.js');
   results.push(...await runCrmPipelineBoardTests(shouldRun));
+  // N-02 part 3 (v10.1.23): customer tags, the party tag filter and the sales file tag filter
+  const { runCustomerTagsTests } = await import('../regression/customerTagsTests.js');
+  results.push(...await runCustomerTagsTests(shouldRun));
   // Package 9 (v10.0.34, TD-976): CRM activity mentions are live user ids and notify only CRM readers
   const { runCrmActivityMentionTests } = await import('../regression/crmActivityMentionTests.js');
   results.push(...await runCrmActivityMentionTests(shouldRun));
