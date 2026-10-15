@@ -2,7 +2,7 @@ import { toPersianDigits } from '../../utils/persianNumber.js';
 
 /**
  * v10.0.211 (TD-1088، طرح حقوق §۳.۳ بند ۶، تصمیم ت۷ الف): قرارداد «فهرست بیمه و مالیات» ماهانه، مشترک سرور
- * (`GET /piecework/reports/statutory`) و پنجره گزارش با خروجی اکسل. از v10.1.16 (TD-1269) فقط پرسنل دارای بیمه یا مالیات
+ * (`GET /piecework/reports/statutory`) و پنجره گزارش با خروجی اکسل. از v10.1.18 (TD-1269) فقط پرسنل دارای بیمه یا مالیات
  * حقوق در آن ماه در فهرست است.
  */
 
@@ -27,7 +27,7 @@ export interface StatutoryReport {
   totals: { gross: string; employeeInsurance: string; employerInsurance: string; incomeTax: string };
   draftPayslips: number;
   /**
-   * v10.1.16 (TD-1269): پرسنلی که فیش تأییدشده این ماه را دارد ولی بیمه و مالیات حقوق ندارد (مشمول نیست یا مبلغش صفر شده)؛
+   * v10.1.18 (TD-1269): پرسنلی که فیش تأییدشده این ماه را دارد ولی بیمه و مالیات حقوق ندارد (مشمول نیست یا مبلغش صفر شده)؛
    * در فهرست و اکسل نمی‌آید و فقط شمرده می‌شود
    */
   withoutStatutory: { personnel: number; payslips: number };

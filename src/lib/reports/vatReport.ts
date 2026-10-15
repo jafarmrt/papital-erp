@@ -36,7 +36,7 @@ export type VatDocumentKind = 'sale' | 'return';
 export const VAT_DOCUMENT_KIND_LABELS: Record<VatDocumentKind, string> = { sale: 'فاکتور فروش', return: 'برگشت از فروش' };
 
 /**
- * هشدار یک سند (v10.1.16، TD-1269: فاکتور بی مالیات بر ارزش افزوده عادی است و هشدار ندارد، چون مالیات هر فاکتور اختیاری
+ * هشدار یک سند (v10.1.18، TD-1269: فاکتور بی مالیات بر ارزش افزوده عادی است و هشدار ندارد، چون مالیات هر فاکتور اختیاری
  * است؛ پیش‌تر «no_vat» هر فاکتور ریالی بی مالیات را هشدار می‌داد. این فاکتورها در ردیف «بی مالیات» جمع‌ها می‌آیند):
  * - rate_missing: فاکتور فروش با مالیات و بی درصد (مثل مالیات سفارش برخط که درصدی آن را نمی‌سازد، TD-936)
  * - rate_mismatch: فاکتور فروش که مالیاتش با درصد خودش از مبلغ خالص یکی نیست
@@ -215,7 +215,7 @@ export function vatReportSearch(params: Partial<VatReportParams> & { export?: bo
 /** برچسب ردیف درصد صفر: فاکتور و برگشت بی مالیات بر ارزش افزوده */
 export const VAT_NONE_LABEL = 'بی مالیات';
 
-/** «۱۰٪»، «۷٫۵٪»، «بی مالیات» (درصد صفر، v10.1.16) یا «نامشخص» */
+/** «۱۰٪»، «۷٫۵٪»، «بی مالیات» (درصد صفر، v10.1.18) یا «نامشخص» */
 export function vatRateLabel(percent: number | null): string {
   if (percent === null) return 'نامشخص';
   return percent === 0 ? VAT_NONE_LABEL : `${formatPersianNumber(percent, 2)}٪`;

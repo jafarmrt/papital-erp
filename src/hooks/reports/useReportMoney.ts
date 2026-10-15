@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useRialDisplay } from '../useAppCurrency';
+import { rialDisplayAmount } from '../../lib/rialDisplay';
 import { formatCurrencyLabel, formatPersianPrice } from '../../utils';
 
 /**
@@ -11,6 +12,8 @@ export interface ReportMoney {
   label: string;
   /** عدد فارسی بی برچسب؛ مقدار خالی «—» */
   format: (value: string | number | null | undefined) => string;
+  /** v10.1.15: مبلغ به عدد در واحد نمایش (ریال یا تومان، یا همان ارز) برای محور نمودار */
+  value: (value: string | number | null | undefined) => number;
 }
 
 export function useReportMoney(currency: string): ReportMoney {
@@ -22,6 +25,11 @@ export function useReportMoney(currency: string): ReportMoney {
       if (value === null || value === undefined || value === '') return '—';
       return isRial ? rial.number(value) : formatPersianPrice(value, undefined, 2);
     };
-    return { label, format };
+    const value = (v: string | number | null | undefined) => {
+      if (isRial) return rialDisplayAmount(v, rial.unit);
+      const n = Number(v ?? 0);
+      return Number.isFinite(n) ? n : 0;
+    };
+    return { label, format, value };
   }, [currency, rial]);
 }

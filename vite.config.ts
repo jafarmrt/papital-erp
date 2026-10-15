@@ -75,6 +75,10 @@ export default defineConfig(({ mode }) => {
               if (id.includes('lucide-react')) {
                 return 'vendor-icons';
               }
+              // v10.1.15 (D-03 بخش ۴، ت۱۶): کتابخانه نمودار فقط با نمودارهای «گزارش‌های مدیریتی» بار می‌شود
+              if (id.includes('/chart.js/') || id.includes('/@kurkle/color/')) {
+                return 'vendor-charts';
+              }
             }
             if (id.includes('/src/components/common/')) {
               return 'common-components';

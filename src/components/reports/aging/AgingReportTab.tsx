@@ -5,6 +5,7 @@ import { ReportActions } from '../ReportActions';
 import { ReportPrintHeader } from '../ReportPrintHeader';
 import { AgingReportFilters } from './AgingReportFilters';
 import { AgingReportTable } from './AgingReportTable';
+import { AgingBucketChart } from './AgingBucketChart';
 import { AgingSummary } from './AgingSummary';
 import { fetchAgingReportExport, useAgingReport } from '../../../hooks/reports/useAgingReport';
 import { useReportMoney } from '../../../hooks/reports/useReportMoney';
@@ -66,6 +67,7 @@ export function AgingReportTab() {
         <>
           {error && <ErrorStateView compact title="به‌روزرسانی گزارش ناموفق بود" error={error instanceof Error ? error : String(error)} onRetry={() => void refetch()} />}
           <AgingSummary report={report} money={money} />
+          <AgingBucketChart report={report} money={money} />
           <AgingReportTable report={report} money={money} onPage={page => change({ page })} />
         </>
       ) : null}

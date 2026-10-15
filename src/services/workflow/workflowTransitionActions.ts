@@ -22,6 +22,11 @@ export interface WorkflowTransitionEvent {
   autoActionKey: string;
   performedBy?: number;
   performedByName?: string;
+  /**
+   * v10.1.16 (D-06 part C): the delegator in whose name a deputy ran this transition (`resolveSigner`), so a domain rule
+   * about who may act (the voucher maker rule) also sees the person the deputy acts for; undefined when no delegation.
+   */
+  actingForUserId?: number;
   /** مجوز «ثبت گردش کالا با تاریخ گذشته» که فراخواننده برای همین کاربر سنجیده است (v8.0.4، TD-257)؛ پیش‌فرض نه */
   allowBackdate: boolean;
 }

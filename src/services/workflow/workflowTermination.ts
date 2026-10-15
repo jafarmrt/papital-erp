@@ -30,8 +30,19 @@ export async function terminateOpenWorkflows(tx: DbExecutor, params: TerminateWo
     ))
     .orderBy(asc(workflowInstances.id))
     .for('update');
-  if (open.length === 0) return [];
+  return closeWorkflowInstances(tx, open, params);
+}
 
+/**
+ * Closes the given running instances (already locked `FOR UPDATE` by the caller): instance `TERMINATED`, pending tasks
+ * `canceled`, pending approvals removed and one history row each at its current step. Returns their ids.
+ */
+export async function closeWorkflowInstances(
+  tx: DbExecutor,
+  open: ReadonlyArray<{ id: number; currentStateId: number | null; version: number | null }>,
+  params: Omit<TerminateWorkflowParams, 'entityType' | 'entityId'>,
+): Promise<number[]> {
+  if (open.length === 0) return [];
   const ids = open.map(i => i.id);
   const now = new Date().toISOString();
   await tx.delete(workflowPendingApprovals).where(inArray(workflowPendingApprovals.instanceId, ids));

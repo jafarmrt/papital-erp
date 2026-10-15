@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 420
+تعداد مسیرها: 425
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -121,7 +121,7 @@
 | GET | `/api/customers/:id/documents` | documents.view \| customers.view \| crm.view |
 | POST | `/api/customers/bulk-import` | customers.manage |
 | GET | `/api/customers/export-excel` | customers.view |
-| GET | `/api/customers/options` | customers.view \| documents.view \| documents.create \| documents.finalize \| warehouse.in \| warehouse.out \| warehouse.view \| products.view \| crm.view \| projects.view \| procurement.view \| accounting.view \| accounting.reports \| accounting.vouchers \| accounting.treasury \| accounting.cheques \| reports.sales |
+| GET | `/api/customers/options` | customers.view \| documents.view \| documents.create \| documents.finalize \| warehouse.in \| warehouse.out \| warehouse.view \| products.view \| crm.view \| projects.view \| procurement.view \| accounting.view \| accounting.reports \| accounting.vouchers \| accounting.treasury \| accounting.cheques \| reports.sales \| reports.purchases |
 | GET | `/api/daily-logs` | daily_logs.view |
 | POST | `/api/daily-logs` | daily_logs.create |
 | DELETE | `/api/daily-logs/:id` | daily_logs.create |
@@ -231,7 +231,7 @@
 | GET | `/api/items/excel-template` | products.view \| products.edit_price |
 | GET | `/api/items/next-code` | products.view \| products.edit_price |
 | POST | `/api/items/next-code` | products.create \| products.edit |
-| GET | `/api/items/options` | products.view \| documents.view \| documents.create \| documents.finalize \| warehouse.view \| warehouse.in \| warehouse.out \| audit.view \| projects.view \| crm.view \| procurement.view \| reports.sales |
+| GET | `/api/items/options` | products.view \| documents.view \| documents.create \| documents.finalize \| warehouse.view \| warehouse.in \| warehouse.out \| audit.view \| projects.view \| crm.view \| procurement.view \| reports.sales \| reports.purchases |
 | GET | `/api/items/prices/all` | products.view \| products.edit_price |
 | POST | `/api/items/prices/batch-update` | products.edit_price |
 | GET | `/api/items/pricing-page` | products.view \| products.edit_price |
@@ -356,7 +356,10 @@
 | GET | `/api/projects/options` | projects.view \| documents.view \| documents.create \| documents.finalize \| warehouse.view \| warehouse.in \| warehouse.out \| piecework.view \| piecework.log \| daily_logs.view \| daily_logs.create \| accounting.vouchers \| reports.sales |
 | GET | `/api/public-settings` | public |
 | GET | `/api/reports/aging` | accounting.reports |
+| GET | `/api/reports/dashboard-summary` | reports.sales \| accounting.reports |
+| GET | `/api/reports/purchases` | reports.purchases |
 | GET | `/api/reports/sales` | reports.sales |
+| GET | `/api/reports/sales/charts` | reports.sales |
 | GET | `/api/reports/vat` | accounting.reports |
 | GET | `/api/roles` | users.manage \| roles.manage \| personnel.manage \| workflow.manage \| settings.manage |
 | POST | `/api/roles` | roles.manage |
@@ -413,10 +416,12 @@
 | GET | `/api/workflow/definitions/:id/versions` | workflow.manage \| workflow.admin |
 | GET | `/api/workflow/definitions/:id/versions/:version` | workflow.manage \| workflow.admin |
 | POST | `/api/workflow/definitions/from-template` | workflow.manage \| workflow.admin |
-| GET | `/api/workflow/delegations` | workflow.view \| workflow.manage \| workflow.admin |
+| GET | `/api/workflow/delegation-scopes` | workflow.approve \| workflow.manage \| workflow.admin |
+| GET | `/api/workflow/delegations` | workflow.view \| workflow.approve \| workflow.manage \| workflow.admin |
 | POST | `/api/workflow/delegations` | workflow.approve \| workflow.manage \| workflow.admin |
 | POST | `/api/workflow/delegations/:id/revoke` | workflow.approve \| workflow.manage \| workflow.admin |
 | GET | `/api/workflow/instance/:entityType/:entityId` | workflow.view \| workflow.approve \| workflow.execute \| workflow.manage \| workflow.admin |
+| POST | `/api/workflow/instances/:id/terminate` | workflow.admin |
 | POST | `/api/workflow/positions` | workflow.manage \| workflow.admin |
 | POST | `/api/workflow/tasks/:taskId/execute` | workflow.approve \| workflow.execute \| workflow.manage \| workflow.admin |
 | GET | `/api/workflow/tasks/my-tasks` | workflow.view \| workflow.approve \| workflow.execute \| workflow.manage \| workflow.admin |

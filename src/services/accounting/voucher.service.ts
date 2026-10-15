@@ -1201,7 +1201,9 @@ export class VoucherService {
   }
 
   /** v9.0.2 (TD-415): تغییر وضعیت درون تراکنش فراخواننده (اقدام پس از انتقال گردش‌کار سند حسابداری) */
-  static async applyVoucherStatus(tx: DbExecutor, id: number, status: 'draft' | 'approved' | 'permanent', userId?: number): Promise<void> {
+  static async applyVoucherStatus(
+    tx: DbExecutor, id: number, status: 'draft' | 'approved' | 'permanent', userId?: number, actingForUserId?: number,
+  ): Promise<void> {
     const [existing] = await tx.select().from(journalVouchers).where(and(eq(journalVouchers.id, id), eq(journalVouchers.isDeleted, 0))).for('update');
     if (!existing) throw new NotFoundError('سند حسابداری یافت نشد');
     if (status === 'draft' && existing.status !== 'draft') {
@@ -1220,6 +1222,8 @@ export class VoucherService {
     }
 
     await assertNotApprovedByMaker(tx, existing, status, userId); // v10.0.27 (TD-965)
+    // v10.1.16 (D-06 part C): a deputy approving in the maker's name is the maker approving
+    if (actingForUserId && actingForUserId !== userId) await assertNotApprovedByMaker(tx, existing, status, actingForUserId);
     await this.checkFiscalPeriodOpen(existing.date, tx);
 
     if (status === 'permanent') {
