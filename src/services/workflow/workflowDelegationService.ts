@@ -6,7 +6,9 @@ import {
 } from '../../db/schema.js';
 import { eq, or, and, desc, sql, inArray, type SQL } from 'drizzle-orm';
 import { logActivity } from '../../lib/auditLogger.js';
-import { ForbiddenError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
+import { ROW_ADVISORY_LOCK_NAMESPACES } from '../../lib/advisoryLock.js';
+import { toPersianDigits } from '../../utils/persianNumber.js';
 import { getDisplayTimezone } from '../../lib/businessClock.js';
 import { zonedDayStartUtc } from '../../lib/serverTimestamp.js';
 import { isSystemAdminRole } from '../../lib/permissions/permissionCatalog.js';
@@ -29,6 +31,41 @@ async function delegationWindow(startDate: string, endDate: string): Promise<{ s
     startDate: DAY_ONLY.test(startDate) ? zonedDayStartUtc(startDate, tz) : startDate,
     endDate: DAY_ONLY.test(endDate) ? endOfDay(endDate) : endDate,
   };
+}
+
+const isAllScope = (scope: string | null | undefined): boolean => ['all', '*'].includes(String(scope ?? 'ALL').trim().toLowerCase());
+
+/**
+ * v10.1.12 (D-06 part C, OBS-R2-66): a live (not revoked) delegation of the same delegator whose window meets the given one
+ * and whose scope meets it: «همه» meets every scope, otherwise the same workflow code.
+ */
+export async function findOverlappingDelegation(
+  db: DbExecutor,
+  candidate: { fromUserId: number; scope: string; startDate: string; endDate: string },
+): Promise<{ id: number; toUserId: number; toName: string; scope: string; startDate: string; endDate: string } | null> {
+  const scopeKey = candidate.scope.trim().toLowerCase();
+  const [row] = await db.select({
+    id: workflowDelegations.id,
+    toUserId: workflowDelegations.toUserId,
+    toName: sql<string>`COALESCE(NULLIF(${users.fullName}, ''), ${users.username}, '')`,
+    scope: workflowDelegations.scope,
+    startDate: workflowDelegations.startDate,
+    endDate: workflowDelegations.endDate,
+  })
+    .from(workflowDelegations)
+    .leftJoin(users, eq(users.id, workflowDelegations.toUserId))
+    .where(and(
+      eq(workflowDelegations.fromUserId, candidate.fromUserId),
+      eq(workflowDelegations.isActive, 1),
+      sql`${workflowDelegations.startDate} <= ${candidate.endDate}::timestamp`,
+      sql`${workflowDelegations.endDate} >= ${candidate.startDate}::timestamp`,
+      isAllScope(scopeKey)
+        ? undefined
+        : sql`lower(btrim(COALESCE(${workflowDelegations.scope}, 'ALL'))) IN ('all', '*', ${scopeKey})`,
+    ))
+    .orderBy(workflowDelegations.id)
+    .limit(1);
+  return row ? { ...row, scope: row.scope || 'ALL' } : null;
 }
 
 /** v8.0.97 (TD-377): تفویض فعالی که کاربر به‌واسطه آن به جای تفویض‌کننده کار می‌کند */
@@ -112,26 +149,40 @@ export class WorkflowDelegationService {
       throw new ValidationError('تاریخ شروع تفویض نمی‌تواند بعد از تاریخ پایان باشد', undefined, 'WF_DELEGATION_INVALID_TIME');
     }
 
-    const [fromUser] = await orm.select().from(users).where(eq(users.id, params.fromUserId));
-    const [toUser] = await orm.select().from(users).where(eq(users.id, params.toUserId));
-
-    if (!fromUser || !toUser || fromUser.isDeleted === 1 || toUser.isDeleted === 1) {
-      throw new NotFoundError('کاربر تفویض‌کننده یا دریافت‌کننده در سامانه یافت نشد');
-    }
-
     const scope = (params.scope || 'ALL').trim();
-    // TD-467 (یافته B14-25، تصمیم ت۶ الف): حوزه «همه» یا کد یکی از گردش‌کارهای تعریف‌شده است؛ پیش‌تر هر متنی (مانند invoice،
-    // transfer یا project که فرم پیشنهاد می‌داد) ذخیره می‌شد و چون با هیچ گردش کاری جور نمی‌شد، تفویض اثری نداشت
-    if (!['all', '*'].includes(scope.toLowerCase())) {
-      const [definition] = await orm.select({ id: workflowDefinitions.id }).from(workflowDefinitions)
-        .where(sql`lower(btrim(${workflowDefinitions.code})) = ${scope.toLowerCase()}`).limit(1);
-      if (!definition) {
-        throw new ValidationError('حوزه تفویض باید «همه» یا یکی از گردش‌کارهای تعریف‌شده باشد؛ از فهرست حوزه انتخاب کنید.');
-      }
-    }
-
     // TD-963 (بخش ۲): تفویض و ردیف ممیزی آن در یک تراکنش ثبت می‌شوند؛ پیش‌تر ردیف ممیزی بیرون از نوشتن تفویض بود
     const inserted = await orm.transaction(async (tx) => {
+      // v10.1.12 (D-06 part C, OBS-R2-66, decision ت۹): the delegations of one delegator are written one at a time, so the
+      // overlap check below sees a delegation saved at the same moment
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${ROW_ADVISORY_LOCK_NAMESPACES.WORKFLOW_DELEGATION_FROM_USER}::int, ${params.fromUserId}::int)`);
+
+      const [fromUser] = await tx.select().from(users).where(eq(users.id, params.fromUserId));
+      const [toUser] = await tx.select().from(users).where(eq(users.id, params.toUserId));
+      if (!fromUser || !toUser || fromUser.isDeleted === 1 || toUser.isDeleted === 1) {
+        throw new NotFoundError('کاربر تفویض‌کننده یا دریافت‌کننده در سامانه یافت نشد');
+      }
+
+      // TD-467 (یافته B14-25، تصمیم ت۶ الف): حوزه «همه» یا کد یکی از گردش‌کارهای تعریف‌شده است؛ پیش‌تر هر متنی (مانند invoice،
+      // transfer یا project که فرم پیشنهاد می‌داد) ذخیره می‌شد و چون با هیچ گردش کاری جور نمی‌شد، تفویض اثری نداشت
+      if (!isAllScope(scope)) {
+        const [definition] = await tx.select({ id: workflowDefinitions.id }).from(workflowDefinitions)
+          .where(sql`lower(btrim(${workflowDefinitions.code})) = ${scope.toLowerCase()}`).limit(1);
+        if (!definition) {
+          throw new ValidationError('حوزه تفویض باید «همه» یا یکی از گردش‌کارهای تعریف‌شده باشد؛ از فهرست حوزه انتخاب کنید.');
+        }
+      }
+
+      // v10.1.12 (D-06 part C, OBS-R2-66, decision ت۹): one delegator has one deputy per workflow in any moment; a live
+      // delegation whose window and scope meet this one refuses it, naming the delegation to revoke first
+      const overlap = await findOverlappingDelegation(tx, { fromUserId: params.fromUserId, scope, startDate, endDate });
+      if (overlap) {
+        throw new ConflictError(
+          `در این بازه تفویض شماره ${toPersianDigits(overlap.id)} به «${overlap.toName}» برای همین گردش کار هست؛ یک نفر در یک بازه یک جانشین دارد. نخست آن تفویض را لغو کنید یا بازه دیگری انتخاب کنید.`,
+          { delegationId: overlap.id, toUserId: overlap.toUserId, scope: overlap.scope, startDate: overlap.startDate, endDate: overlap.endDate },
+          'WF_DELEGATION_OVERLAP',
+        );
+      }
+
       const [row] = await tx.insert(workflowDelegations).values({
         fromUserId: params.fromUserId,
         toUserId: params.toUserId,
@@ -168,8 +219,9 @@ export class WorkflowDelegationService {
   /**
    * Get list of delegations for a user or admin
    */
-  static async getDelegations(params: { userId: number; userRole?: string }) {
-    const isAdmin = isSystemAdminRole(params.userRole);
+  static async getDelegations(params: { userId: number; userRole?: string; mineOnly?: boolean }) {
+    // v10.1.12 (D-06 part C, OBS-R2-73): «تفویض‌های من» of the inbox asks only the user's own, the system admin included
+    const isAdmin = isSystemAdminRole(params.userRole) && !params.mineOnly;
 
     let query = orm.select({
       delegation: workflowDelegations,
@@ -177,6 +229,8 @@ export class WorkflowDelegationService {
       fromUsername: sql<string>`fu.username`,
       toUserFullName: sql<string>`tu.full_name`,
       toUsername: sql<string>`tu.username`,
+      // v10.1.12 (D-06 part C): the scope's workflow title, so the inbox names it without the definition list
+      scopeTitle: sql<string | null>`(SELECT d.title FROM workflow_definitions d WHERE lower(btrim(d.code)) = lower(btrim(${workflowDelegations.scope})) ORDER BY d.id LIMIT 1)`,
       // V3.0.9 (TD-055/BUG): ستون‌ها `timestamp WITHOUT time zone` هستند و نود
       // رشته‌های UTC ISO (با Z که PG نادیده می‌گیرد) را literal ذخیره می‌کند؛ بنابراین
       // مقایسه باید با «ساعت UTC» باشد نه now() با TZ سشن (تهران) که +۳:۳۰ انحراف می‌دهد.
@@ -209,9 +263,21 @@ export class WorkflowDelegationService {
         ...r.delegation,
         fromUserName: r.fromUserFullName || r.fromUsername || `کاربر #${r.delegation.fromUserId}`,
         toUserName: r.toUserFullName || r.toUsername || `کاربر #${r.delegation.toUserId}`,
+        scopeTitle: isAllScope(r.delegation.scope) ? null : (r.scopeTitle ?? null),
         status: r.delegation.isActive === 0 ? 'revoked' : (expired ? 'expired' : (activeNow ? 'active' : 'scheduled'))
       };
     });
+  }
+
+  /**
+   * v10.1.12 (D-06 part C, OBS-R2-73): the scopes a delegation form offers besides «همه»: the code and title of every
+   * workflow not archived, so an approver picks a scope without the design permission the definition list asks.
+   */
+  static async listDelegationScopes(): Promise<Array<{ code: string; title: string }>> {
+    return orm.select({ code: workflowDefinitions.code, title: workflowDefinitions.title })
+      .from(workflowDefinitions)
+      .where(sql`COALESCE(${workflowDefinitions.isArchived}, 0) = 0`)
+      .orderBy(workflowDefinitions.title, workflowDefinitions.id);
   }
 
   /**

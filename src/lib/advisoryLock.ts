@@ -68,6 +68,11 @@ export const ROW_ADVISORY_LOCK_NAMESPACES = {
    * so activating, deactivating or saving two definitions of one type at once never leaves two active ones
    */
   WORKFLOW_DEFINITION_TYPE: 91070,
+  /**
+   * v10.1.12 (D-06 part C, OBS-R2-66): the delegations one user gives; transaction lock keyed by the delegator's id, so two
+   * delegations saved at once never give the same user two deputies for one workflow in one window
+   */
+  WORKFLOW_DELEGATION_FROM_USER: 91080,
 } as const;
 
 export type AdvisoryLockOutcome<T> = { acquired: true; result: T } | { acquired: false };

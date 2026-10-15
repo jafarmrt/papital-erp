@@ -16,6 +16,7 @@ import {
 import { formatPersianDate, formatPersianPrice } from '../../utils';
 import { toPersianDigits } from '../../utils/persianNumber';
 import { WorkflowActionConditionList, WorkflowBlockedActions } from './WorkflowActionConditions';
+import { WorkflowInstanceTerminate } from './WorkflowInstanceTerminate';
 import { stepperStepStatus, workflowTakesActions, type StepperStepStatus } from '../../lib/workflow/stepperStepStatus';
 
 const STEP_STATUS_VIEW: Record<Exclude<StepperStepStatus, 'current'>, { label: string; className: string }> = {
@@ -250,6 +251,9 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
               })}
             </div>
           )}
+
+          {/* v10.1.12 (D-06 part C, TD-1265): the system admin closes a record that cannot move on; a closed one says so */}
+          <WorkflowInstanceTerminate instance={instance} entityType={entityType} entityId={entityId} history={history} onDone={onStateChange} />
 
           {/* Available Actions Bar */}
           {workflowTakesActions(instance.status) && (availableTransitions.length > 0 || blockedTransitions.length > 0) && (

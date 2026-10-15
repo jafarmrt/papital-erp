@@ -1,67 +1,29 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { 
   useDelegationsQuery, 
-  useCreateDelegationMutation, 
   useRevokeDelegationMutation,
-  useWorkflowDefinitionsQuery
 } from '../../hooks/queries/useWorkflowQueries';
-import { useQuery } from '@tanstack/react-query';
-import { fetchJson } from '../../api';
+import { delegationScopeLabel } from '../../hooks/queries/useWorkflowDelegationQueries';
 import { UserCheck, Plus, Search, Clock, CheckCircle2, XCircle, Trash2, Calendar, Layers, ArrowRightLeft } from 'lucide-react';
-import { toast } from 'react-hot-toast';
-import { toStorageDate, getTodayJalaliDate, getFutureJalaliDate, formatPersianDate, formatPersianNumber } from '../../utils';
-import { JalaliDateInput } from '../common/JalaliDateInput';
+import { formatPersianDate, formatPersianNumber } from '../../utils';
 import { useAuth } from '../../contexts/AuthContext';
-
-interface UserItem {
-  id: number;
-  username: string;
-  full_name?: string;
-  role?: string;
-}
+import { DelegationForm } from './DelegationForm';
 
 export function WorkflowDelegationTab() {
   const { data: delegations = [], isLoading } = useDelegationsQuery();
-  const { data: definitions = [] } = useWorkflowDefinitionsQuery();
-  const createMutation = useCreateDelegationMutation();
   const revokeMutation = useRevokeDelegationMutation();
   const { user, userPermissions } = useAuth();
   // v8.0.98 (TD-378): فقط تفویض‌کننده یا مدیر سیستم تفویض را لغو می‌کند
   const canRevoke = (fromUserId: number) => userPermissions.isAdmin || user?.id === fromUserId;
 
-  // Fetch users for selection
-  const { data: users = [] } = useQuery<UserItem[]>({
-    queryKey: ['users', 'list'],
-    queryFn: async () => {
-      const res = await fetchJson('/users');
-      return Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
-    },
-    staleTime: 60000
-  });
-
-  // TD-470: the scope is shown by its workflow title, never by its code
-  const scopeLabel = (scope: string) => {
-    if (['all', '*'].includes(String(scope).trim().toLowerCase())) return 'همه گردش‌کارها';
-    const def = definitions.find((d: { code?: string }) => String(d.code).trim().toLowerCase() === String(scope).trim().toLowerCase());
-    return def ? `گردش کار: ${def.title}` : 'گردش کار حذف‌شده';
-  };
+  // TD-470: the scope is shown by its workflow title (from the server since v10.1.12), never by its code
+  const scopeLabel = (item: { scope: string; scopeTitle?: string | null }) => delegationScopeLabel(item.scope, item.scopeTitle);
 
   // Local state
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'scheduled' | 'expired' | 'revoked'>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
-
-  // New Delegation Form State
-  // v7.0.136 (TD-232): امروز و هفته بعد در منطقه زمانی کسب‌وکار؛ انتخاب با تقویم شمسی، مقدار ISO
-  const today = toStorageDate(getTodayJalaliDate()) || '';
-  const nextWeek = toStorageDate(getFutureJalaliDate(7)) || '';
-
-  const [toUserId, setToUserId] = useState<number | ''>('');
-  const [scope, setScope] = useState('ALL');
-  const [startDate, setStartDate] = useState(today);
-  const [endDate, setEndDate] = useState(nextWeek);
-  const [reason, setReason] = useState('');
 
   // Filtering
   const filteredDelegations = delegations.filter((item: any) => {
@@ -79,38 +41,6 @@ export function WorkflowDelegationTab() {
   const scheduledCount = delegations.filter((d: any) => d.status === 'scheduled').length;
   const expiredCount = delegations.filter((d: any) => d.status === 'expired').length;
   const revokedCount = delegations.filter((d: any) => d.status === 'revoked').length;
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!toUserId) {
-      toast.error('کاربر جانشین را انتخاب کنید.');
-      return;
-    }
-    if (!startDate || !endDate) {
-      toast.error('تاریخ آغاز و پایان تفویض را انتخاب کنید.');
-      return;
-    }
-
-    try {
-      await createMutation.mutateAsync({
-        toUserId: Number(toUserId),
-        scope,
-        // TD-468 (یافته B14-26): روزهای انتخابی؛ سرور آغاز روز اول و پایان روز آخر را در منطقه زمانی توافقی می‌گیرد
-        startDate,
-        endDate,
-        reason
-      });
-      setIsModalOpen(false);
-      // Reset Form
-      setToUserId('');
-      setScope('ALL');
-      setStartDate(today);
-      setEndDate(nextWeek);
-      setReason('');
-    } catch (err) {
-      // Error handled in mutation toast
-    }
-  };
 
   const handleRevoke = async (id: number) => {
     if (await confirmAction({ title: 'لغو تفویض اختیار', message: 'آیا از لغو این تفویض اختیار اطمینان دارید؟' })) {
@@ -259,7 +189,7 @@ export function WorkflowDelegationTab() {
                       <td className="p-3.5">
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-mono bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
                           <Layers className="w-3 h-3 text-gray-400" />
-                          {scopeLabel(item.scope)}
+                          {scopeLabel(item)}
                         </span>
                       </td>
                       <td className="p-3.5 text-gray-600 dark:text-gray-300 text-[11px]">
@@ -332,100 +262,7 @@ export function WorkflowDelegationTab() {
               </button>
             </div>
 
-            <form onSubmit={handleCreate} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                  کاربر جانشین (دریافت‌کننده تفویض) <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  value={toUserId}
-                  onChange={(e) => setToUserId(e.target.value ? Number(e.target.value) : '')}
-                  required
-                  className="w-full px-3 py-2 text-xs bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl focus:outline-hidden focus:border-indigo-500 dark:text-white"
-                >
-                  <option value="">-- انتخاب کاربر جانشین --</option>
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.full_name || u.username}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                  حوزه تفویض
-                </label>
-                <select
-                  value={scope}
-                  onChange={(e) => setScope(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl focus:outline-hidden focus:border-indigo-500 dark:text-white"
-                >
-                  {/* TD-467 (یافته B14-25، تصمیم ت۶ الف): فقط «همه» و گردش‌کارهای تعریف‌شده؛ گزینه‌های فاکتور، حواله و پروژه با
-                      هیچ گردش کاری جور نمی‌شدند و تفویض اثری نداشت */}
-                  <option value="ALL">همه گردش‌کارها</option>
-                  {definitions.map((def: any) => (
-                    <option key={def.id} value={def.code}>
-                      گردش کار: {def.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                    تاریخ آغاز تفویض <span className="text-rose-500">*</span>
-                  </label>
-                  <JalaliDateInput
-                    value={startDate}
-                    onChange={setStartDate}
-                    className="w-full px-3 py-2 text-xs bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl focus:outline-hidden focus:border-indigo-500 dark:text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                    تاریخ پایان تفویض <span className="text-rose-500">*</span>
-                  </label>
-                  <JalaliDateInput
-                    value={endDate}
-                    onChange={setEndDate}
-                    className="w-full px-3 py-2 text-xs bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl focus:outline-hidden focus:border-indigo-500 dark:text-white"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                  علت تفویض / توضیحات
-                </label>
-                <textarea
-                  rows={3}
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  placeholder="مثال: مرخصی استحقاقی سالانه یا ماموریت کاری..."
-                  className="w-full px-3 py-2 text-xs bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl focus:outline-hidden focus:border-indigo-500 dark:text-white"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 border-t border-gray-100 dark:border-gray-700 pt-3">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors"
-                >
-                  انصراف
-                </button>
-                <button
-                  type="submit"
-                  disabled={createMutation.isPending}
-                  className="px-4 py-2 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-colors shadow-xs"
-                >
-                  {createMutation.isPending ? 'در حال ثبت...' : 'ثبت تفویض اختیار'}
-                </button>
-              </div>
-            </form>
+            <DelegationForm currentUserId={user?.id} onDone={() => setIsModalOpen(false)} onCancel={() => setIsModalOpen(false)} />
           </div>
         </div>
       )}

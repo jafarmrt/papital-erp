@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { formatPersianDate, formatPersianPrice, formatPersianNumber } from '../utils';
 import { useApprovalTaskEntity } from '../hooks/useApprovalTaskEntity';
+import { MyDelegationsButton } from '../components/workflow/MyDelegationsWindow';
 import { INBOX_ENTITY_TABS, workflowEntityTypeLabel } from '../lib/workflow/workflowEntityLabels';
 // V9 Phase 5.2: مودال‌های مودولار کارتابل — استخراج از بدنه صفحه (FE-003)
 import TaskExecuteModal, { type ApprovalRejectOption } from '../components/approval/TaskExecuteModal';
@@ -246,14 +247,18 @@ export function ApprovalInboxPage() {
           </div>
         </div>
 
-        <button
-          onClick={handleRefreshAll}
-          disabled={isFetching || isTasksLoading}
-          className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg transition-colors shadow-sm self-start md:self-auto"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isFetching || isTasksLoading ? 'animate-spin' : ''}`} />
-          <span>به‌روزرسانی کارتابل</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+          {/* v10.1.12 (D-06 part C, OBS-R2-73): an approver gives a deputy from the inbox */}
+          <MyDelegationsButton />
+          <button
+            onClick={handleRefreshAll}
+            disabled={isFetching || isTasksLoading}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg transition-colors shadow-sm"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isFetching || isTasksLoading ? 'animate-spin' : ''}`} />
+            <span>به‌روزرسانی کارتابل</span>
+          </button>
+        </div>
       </div>
 
       {/* Task Summary KPI Cards */}
