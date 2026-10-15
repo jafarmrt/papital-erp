@@ -10743,6 +10743,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10.1 D-03 PR1 (v10.1.8): the sales report of the management reports page
   const { runSalesReportTests } = await import('../regression/salesReportTests.js');
   results.push(...await runSalesReportTests(shouldRun));
+  // Series 10.1 D-03 PR2 (v10.1.9): the receivables and payables aging tab
+  const { runAgingReportTests } = await import('../regression/agingReportTests.js');
+  results.push(...await runAgingReportTests(shouldRun));
   const { runSalesEventsTests } = await import('../regression/salesEventsTests.js');
   results.push(...await runSalesEventsTests(shouldRun));
   // Package 8 PR D (v9.0.323+): lead link of a document edit, stock count lines, production receipts, return lookup, numbers

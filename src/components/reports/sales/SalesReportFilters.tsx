@@ -1,6 +1,6 @@
-import { X } from 'lucide-react';
-import { SearchableSelect } from '../../SearchableSelect';
+import { ReportPickField, pickLabelWithCode } from '../ReportPickField';
 import { ReportRangeFields } from '../ReportRangeFields';
+import { REPORT_LABEL_CLASS as LABEL_CLASS, REPORT_SELECT_CLASS as SELECT_CLASS } from '../reportFieldClasses';
 import { useCategoriesQuery } from '../../../hooks/queries/useSettingsQueries';
 import { PICK_LIST_URLS } from '../../../lib/permissions/pickLists';
 import { TREASURY_CURRENCIES } from '../../../lib/treasury/treasuryCurrency';
@@ -23,51 +23,6 @@ interface SalesReportFiltersProps {
   onChange: (patch: Partial<SalesReportParams>, labels?: Partial<SalesFilterLabels>) => void;
 }
 
-interface PickRow {
-  id?: number | string;
-  name?: string;
-  code?: string;
-  title?: string;
-  projectCode?: string;
-}
-
-const SELECT_CLASS = 'px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-800 dark:text-slate-100 font-bold outline-none focus:ring-2 focus:ring-indigo-500';
-const LABEL_CLASS = 'flex flex-col gap-1 text-[11px] font-bold text-slate-500 dark:text-slate-400';
-
-const withCode = (name: string | undefined, code: string | undefined) => (code ? `${name ?? ''} (${code})` : name ?? '');
-
-function PickField({ label, url, value, valueLabel, mapRow, onPick }: {
-  label: string;
-  url: string;
-  value: number | null | undefined;
-  valueLabel?: string;
-  mapRow: (row: PickRow) => { value: string | number; label: string };
-  onPick: (id: number | null, label?: string) => void;
-}) {
-  return (
-    <div className={LABEL_CLASS}>
-      <span>{label}</span>
-      <div className="flex items-center gap-1">
-        <SearchableSelect
-          value={value ?? ''}
-          valueLabel={valueLabel}
-          onChange={(v, raw: PickRow | undefined) => onPick(v ? Number(v) : null, raw ? mapRow(raw).label : undefined)}
-          placeholder="همه"
-          fetchUrl={url}
-          mapResultToOption={mapRow}
-          maxResults={30}
-          className="w-48"
-        />
-        {value ? (
-          <button type="button" onClick={() => onPick(null)} aria-label={`حذف ${label}`} className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer">
-            <X className="w-3.5 h-3.5" />
-          </button>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 export function SalesReportFilters({ params, labels, todayIso, onChange }: SalesReportFiltersProps) {
   const { data: categories = [] } = useCategoriesQuery();
   const categoryNames = Array.from(new Set(categories.map(c => (c?.name ?? '').trim()).filter(Boolean)));
@@ -84,20 +39,20 @@ export function SalesReportFilters({ params, labels, todayIso, onChange }: Sales
             {TREASURY_CURRENCIES.map(c => <option key={c} value={c}>{formatCurrencyLabel(c)}</option>)}
           </select>
         </label>
-        <PickField
+        <ReportPickField
           label="مشتری"
           url={`${PICK_LIST_URLS.customers}?partyType=customer`}
           value={params.partyId}
           valueLabel={labels.party}
-          mapRow={row => ({ value: Number(row.id), label: withCode(row.name, row.code) })}
+          mapRow={row => ({ value: Number(row.id), label: pickLabelWithCode(row.name, row.code) })}
           onPick={(partyId, party) => onChange({ partyId }, { party })}
         />
-        <PickField
+        <ReportPickField
           label="کالا"
           url={PICK_LIST_URLS.items}
           value={params.itemId}
           valueLabel={labels.item}
-          mapRow={row => ({ value: Number(row.id), label: withCode(row.name, row.code) })}
+          mapRow={row => ({ value: Number(row.id), label: pickLabelWithCode(row.name, row.code) })}
           onPick={(itemId, item) => onChange({ itemId }, { item })}
         />
         <label className={LABEL_CLASS}>
@@ -107,12 +62,12 @@ export function SalesReportFilters({ params, labels, todayIso, onChange }: Sales
             {categoryNames.map(name => <option key={name} value={name}>{name}</option>)}
           </select>
         </label>
-        <PickField
+        <ReportPickField
           label="پروژه"
           url={PICK_LIST_URLS.projects}
           value={params.projectId}
           valueLabel={labels.project}
-          mapRow={row => ({ value: Number(row.id), label: withCode(row.title, row.projectCode) })}
+          mapRow={row => ({ value: Number(row.id), label: pickLabelWithCode(row.title, row.projectCode) })}
           onPick={(projectId, project) => onChange({ projectId }, { project })}
         />
         <label className={LABEL_CLASS}>

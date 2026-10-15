@@ -1,9 +1,9 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { ReportMoney } from '../../../hooks/reports/useReportMoney';
 import {
   SALES_DIMENSION_LABELS, type SalesAmounts, type SalesGroup, type SalesReport,
 } from '../../../lib/reports/salesReport';
 import { formatPersianNumber } from '../../../utils';
+import { ReportPager } from '../ReportPager';
 import { percentText } from './SalesSummary';
 
 /**
@@ -33,7 +33,6 @@ function GroupCell({ group }: { group: SalesGroup | null }) {
 export function SalesReportTable({ report, money, onPage }: SalesReportTableProps) {
   const withQuantity = report.rows.some(r => r.quantity !== null) || report.totals.quantity !== null;
   const withPrevious = report.comparison !== null;
-  const lastPage = Math.max(1, Math.ceil(report.total / report.limit));
   const quantity = (value: string | null, unit?: string | null) => (value === null ? '—' : `${formatPersianNumber(value, 4)}${unit ? ` ${unit}` : ''}`);
 
   const amountCells = (a: SalesAmounts, unit?: string | null) => (
@@ -103,19 +102,7 @@ export function SalesReportTable({ report, money, onPage }: SalesReportTableProp
           )}
         </table>
       </div>
-      {report.total > report.limit && (
-        <div className="flex items-center justify-between px-4 py-2 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 no-print">
-          <span>{formatPersianNumber(report.total)} ردیف، صفحه {formatPersianNumber(report.page)} از {formatPersianNumber(lastPage)}</span>
-          <div className="flex items-center gap-1">
-            <button type="button" aria-label="صفحه قبل" disabled={report.page <= 1} onClick={() => onPage(report.page - 1)} className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-600 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed">
-              <ChevronRight className="w-4 h-4" />
-            </button>
-            <button type="button" aria-label="صفحه بعد" disabled={report.page >= lastPage} onClick={() => onPage(report.page + 1)} className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-600 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed">
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
+      <ReportPager total={report.total} page={report.page} limit={report.limit} onPage={onPage} />
     </div>
   );
 }

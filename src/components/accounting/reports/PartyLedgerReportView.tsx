@@ -66,8 +66,13 @@ export function PartyLedgerReportView({
     if (appliedInitialParty.current === initialKey) return;
     appliedInitialParty.current = initialKey;
     if (initialPartyId || initialPartyName) {
+      // v10.1.9 (D-03): شناسه مشتری و تأمین‌کننده از جدول طرف حساب‌هاست و شناسه پرسنل از جدول دیگر؛ پیوند «صورت‌حساب»
+      // گزارش سن مطالبات با نوع طرف حساب می‌آید تا پرسنل هم‌شناسه به جای مشتری باز نشود
+      const sameTable = (p: PartyOption) => (initialPartyType === 'personnel'
+        ? p.partyType === 'personnel'
+        : initialPartyType === 'customer' || initialPartyType === 'supplier' ? p.partyType !== 'personnel' : true);
       const found = parties.find(p =>
-        (initialPartyId && p.id === initialPartyId) ||
+        (initialPartyId && p.id === initialPartyId && sameTable(p)) ||
         (initialPartyName && p.name.trim().toLowerCase() === initialPartyName.trim().toLowerCase())
       );
       if (found) {

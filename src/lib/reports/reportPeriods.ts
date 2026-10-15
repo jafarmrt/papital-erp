@@ -201,8 +201,12 @@ export function rangeFileTag(range: ReportRange): string {
       return toPersianDigits(key.replace('/', '-'));
     }
   }
-  const dash = (iso: string) => toPersianDigits(isoToJalaliDate(iso).replace(/\//g, '-'));
-  return `${dash(range.from)}-تا-${dash(range.to)}`;
+  return `${dayFileTag(range.from)}-تا-${dayFileTag(range.to)}`;
+}
+
+/** یک روز در نام فایل خروجی: «۱۴۰۵-۰۸-۱۴» */
+export function dayFileTag(iso: string): string {
+  return toPersianDigits(isoToJalaliDate(iso).replace(/\//g, '-'));
 }
 
 /** درصد تغییر نسبت به دوره مقایسه با یک رقم اعشار؛ پایه صفر ← null */
