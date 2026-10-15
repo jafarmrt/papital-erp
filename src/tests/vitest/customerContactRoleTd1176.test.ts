@@ -8,7 +8,7 @@ const DEFAULT_ROLE = /role:\s*(?:activeTab|form\.partyType|rawPartyType|'[^']+'|
 
 describe('Customer contact role starts empty (TD-1176)', () => {
   it('builds a new contact without a role', () => {
-    expect(blankContactPerson('7', true)).toEqual({ id: '7', name: '', role: '', phone: '', isPrimary: true });
+    expect(blankContactPerson('7', true)).toEqual({ id: '7', name: '', role: '', phone: '', email: '', isPrimary: true });
   });
 
   it('never pre-fills the role of a contact on the customers page', () => {

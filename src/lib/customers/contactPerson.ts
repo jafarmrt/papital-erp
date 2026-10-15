@@ -3,6 +3,6 @@
  * only suggests roles (its list and placeholder); a pre-filled role was saved untouched
  * and the party's contact name became «name (مدیر خرید)».
  */
-export function blankContactPerson(id: string, isPrimary: boolean): { id: string; name: string; role: string; phone: string; isPrimary: boolean } {
-  return { id, name: '', role: '', phone: '', isPrimary };
+export function blankContactPerson(id: string, isPrimary: boolean): { id: string; name: string; role: string; phone: string; email: string; isPrimary: boolean } {
+  return { id, name: '', role: '', phone: '', email: '', isPrimary };
 }

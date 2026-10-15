@@ -17,6 +17,10 @@ export const customers = pgTable('customers', {
   supplierCategory: text('supplier_category').default(''), // category of supply e.g. سنگ، فلز، بسته‌بندی
   bankInfo: jsonb('bank_info').default({}), // { bankName, accountNumber, shaba, cardNumber }
   contacts: jsonb('contacts').default([]),
+  // v10.1.15 (N-02 بخش ۱، migration 0112): راه‌های ارتباط؛ قاعده در src/lib/customers/contactChannels.ts
+  website: text('website').default(''),
+  email: text('email').default(''),
+  instagram: text('instagram').default(''),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   version: integer('version').notNull().default(1),
   isDeleted: integer('is_deleted').default(0)

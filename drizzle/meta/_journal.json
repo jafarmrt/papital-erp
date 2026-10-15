@@ -785,6 +785,13 @@
       "when": 1794900000000,
       "tag": "0111_item_code_history",
       "breakpoints": true
+    },
+    {
+      "idx": 112,
+      "version": "7",
+      "when": 1795000000000,
+      "tag": "0112_customer_contact_channels",
+      "breakpoints": true
     }
   ]
 }

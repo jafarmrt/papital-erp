@@ -19,6 +19,7 @@ import { useAppFavicon } from '../../hooks/useAppFavicon';
 import { SidebarSearch } from './SidebarSearch';
 import { useSidebarFavorites } from './useSidebarFavorites';
 import { InstallAppButton } from '../pwa/InstallAppButton';
+import { AppVersionLabel } from './AppVersionLabel';
 
 export interface SidebarProps {
   user: User;
@@ -486,6 +487,7 @@ export function Sidebar({
           <LogOut size={16} className="shrink-0" />
           {!isCollapsed && <span className="truncate">خروج از حساب</span>}
         </button>
+        <AppVersionLabel compact={isCollapsed} />
       </div>
     </aside>
   );

@@ -22,7 +22,7 @@ export async function applyVoucherWorkflowStep(tx: DbExecutor, event: WorkflowTr
   if (!status) return;
   const voucherId = Number(event.entityId);
   if (!Number.isInteger(voucherId) || voucherId <= 0) return;
-  // v10.1.15 (D-06 part C): a deputy signing in the delegator's name is checked against the maker rule for both people,
+  // v10.1.16 (D-06 part C): a deputy signing in the delegator's name is checked against the maker rule for both people,
   // so a maker cannot get their own voucher approved by delegating its step to someone else
   await VoucherService.applyVoucherStatus(tx, voucherId, status, event.performedBy, event.actingForUserId);
 }

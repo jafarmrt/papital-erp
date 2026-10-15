@@ -12,6 +12,8 @@ import { customerDocumentsUrl, salesDocumentKindLabel } from '../../lib/customer
 import { documentStatusLabelOf } from '../../lib/invoices/invoiceListDocuments';
 import { sumByCurrency } from '../../lib/crm/leadCurrencyTotals';
 import { CurrencyTotalsLines } from './CurrencyTotals';
+import { CustomerChannelLinks, EmailLink, PhoneLinks } from '../customers/ContactLinks';
+import { splitPhones } from '../../lib/customers/contactChannels';
 import toast from 'react-hot-toast';
 
 interface CustomerDossierDrawerProps {
@@ -106,6 +108,7 @@ export function CustomerDossierDrawer({
           name: customer.contactName || 'رابط اصلی',
           role: 'رابط اصلی',
           phone: customer.phone || '',
+          email: '',
           isPrimary: true,
         },
       ];
@@ -631,7 +634,13 @@ export function CustomerDossierDrawer({
                   <span className="font-bold font-mono text-slate-800" dir="ltr">
                     {customer.phone ? formatPersianPhone(customer.phone) : '-'}
                   </span>
+                  {splitPhones(customer.phone).slice(0, 1).map(p => <div key={p} className="mt-1"><PhoneLinks phone={p} /></div>)}
                 </div>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px]">وب‌سایت، ایمیل و اینستاگرام:</span>
+                <CustomerChannelLinks website={customer.website} email={customer.email} instagram={customer.instagram} />
+                {!customer.website && !customer.email && !customer.instagram && <span className="text-slate-700">-</span>}
               </div>
               <div>
                 <span className="text-slate-400 block text-[10px]">آدرس کامل:</span>
@@ -667,6 +676,11 @@ export function CustomerDossierDrawer({
                       <span dir="ltr" className="font-mono font-bold text-slate-800">
                         {contact.phone ? formatPersianPhone(contact.phone) : '-'}
                       </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1">
+                      <PhoneLinks phone={contact.phone} />
+                      {contact.email && <span dir="ltr" className="text-[11px] text-slate-600">{contact.email}</span>}
+                      <EmailLink email={contact.email} />
                     </div>
                   </div>
                 ))}

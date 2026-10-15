@@ -72,7 +72,7 @@ function DelegationList({ title, rows, given, onRevoke, revoking }: {
 }
 
 /**
- * v10.1.15 (D-06 part C, OBS-R2-73): «تفویض کارهایم» of the approval inbox. An approver gives a deputy for a period
+ * v10.1.16 (D-06 part C, OBS-R2-73): «تفویض کارهایم» of the approval inbox. An approver gives a deputy for a period
  * (the server signs the deputy's actions in the delegator's name, TD-377) and sees «تفویض‌های من»: the delegations given,
  * with «لغو تفویض» for a live one, and those received. Shown by the keys of `POST /workflow/delegations`.
  */

@@ -11,8 +11,8 @@ const SHELL_UI = [
   'api.ts', 'components/ErrorBoundary.tsx', 'components/common/SectionErrorBoundary.tsx',
   'components/common/ModernPersianDropzone.tsx', 'components/layout/Sidebar.tsx', 'components/layout/SidebarSearch.tsx',
   'components/layout/TopBar.tsx', 'components/layout/menuConfig.ts', 'components/dashboard/CustomizableShortcuts.tsx',
-  'components/dashboard/InteractiveJalaliCalendar.tsx', 'pages/Dashboard.tsx', 'pages/ChangelogPage.tsx',
-  'data/appInfoAndChangelog.ts', 'components/settings/settingsNavigationConfig.ts', 'components/settings/SystemConfigTab.tsx',
+  'components/dashboard/InteractiveJalaliCalendar.tsx', 'pages/Dashboard.tsx',
+  'components/settings/settingsNavigationConfig.ts', 'components/settings/SystemConfigTab.tsx',
   'components/settings/GeneralSettingsTab.tsx', 'components/settings/DataExportCard.tsx', 'pages/SettingsPage.tsx', 'components/GlobalHeaderSearch.tsx', 'pages/SetupPage.tsx',
   // v10.0.16 / v10.0.17 (D-11): the installable app's banners, install guide and the phone bottom bar
   'components/pwa/PwaStatusBanners.tsx', 'components/pwa/InstallAppButton.tsx', 'components/layout/MobileBottomNav.tsx', 'components/layout/mobileNavItems.ts',

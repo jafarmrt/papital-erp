@@ -109,7 +109,7 @@ export async function checkDelegateActsForDelegatorRole(): Promise<string[]> {
   const other = await wfUser(`wfg_deputy_${uniqueTag()}`);
   // TD-467: حوزه باید کد گردش کار تعریف‌شده باشد؛ گردش کار دیگری برای همین ساخته می‌شود
   const otherWf = await defineWorkflow({ states: [{ key: 'draft', type: 'initial' }, { key: 'done', type: 'terminal' }], transitions: [{ from: 'draft', to: 'done', action: 'approve' }] });
-  // v10.1.15 (TD-1268, decision ت۹): one delegator has one deputy per workflow in a window, so these two delegations are the
+  // v10.1.16 (TD-1268, decision ت۹): one delegator has one deputy per workflow in a window, so these two delegations are the
   // colleague's (same role); the revoked one is given and revoked first, then the one scoped to another workflow
   const revokedDeputy = await wfUser(`wfg_deputy_${uniqueTag()}`);
   const revokedId = await delegate(colleague, revokedDeputy);

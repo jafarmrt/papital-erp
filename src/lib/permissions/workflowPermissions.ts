@@ -19,10 +19,10 @@ export function holdsWorkflowExecuteKey(permissions: readonly string[]): boolean
 export const WORKFLOW_SWITCH_PERMISSION = 'workflow.admin';
 
 /**
- * v10.1.15 (D-06 part C, OBS-R2-73): giving and revoking one's own delegation — the keys of `POST /workflow/delegations`;
+ * v10.1.16 (D-06 part C, OBS-R2-73): giving and revoking one's own delegation — the keys of `POST /workflow/delegations`;
  * the inbox shows «تفویض کارهایم» by them.
  */
 export const WORKFLOW_DELEGATE_PERMISSIONS = ['workflow.approve', 'workflow.manage', 'workflow.admin'] as const;
 
-/** v10.1.15 (D-06 part C, TD-1265): closing a running record by hand is the system-wide workflow switch key. */
+/** v10.1.16 (D-06 part C, TD-1265): closing a running record by hand is the system-wide workflow switch key. */
 export const WORKFLOW_TERMINATE_PERMISSION = WORKFLOW_SWITCH_PERMISSION;

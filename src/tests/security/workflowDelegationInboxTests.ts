@@ -2,7 +2,7 @@ import { TestCaseResult } from '../types.js';
 import { runCase, type Harness, type Row, type ShouldRun } from './workflowTestHarness.js';
 
 /**
- * v10.1.15 (D-06 part C, TD-1268 / TD-1265): an approver gives a deputy from the inbox and reads «تفویض‌های من» without the
+ * v10.1.16 (D-06 part C, TD-1268 / TD-1265): an approver gives a deputy from the inbox and reads «تفویض‌های من» without the
  * design keys; an overlapping delegation of the same delegator is refused (decision ت۹, OBS-R2-66); and the system admin
  * closes a running record that cannot move on, with a required reason. All through the real Express routes. Red on
  * v10.1.11, where an overlapping delegation was stored, `/workflow/delegation-scopes` and `?mine=1` did not exist, and
@@ -36,7 +36,7 @@ export async function runWorkflowDelegationInboxTests(shouldRun: ShouldRun): Pro
   if (shouldRun('sec_workflow_delegation_overlap_td_1268', 'security', 'td1268', 'd-06', 'workflow', 'delegation')) {
     await runCase(results, {
       id: 'sec_workflow_delegation_overlap_td_1268',
-      name: 'v10.1.15: one delegator has one deputy per workflow in any window; an overlapping delegation is 409 WF_DELEGATION_OVERLAP naming the existing one, two saved at once keep one (TD-1268, OBS-R2-66)',
+      name: 'v10.1.16: one delegator has one deputy per workflow in any window; an overlapping delegation is 409 WF_DELEGATION_OVERLAP naming the existing one, two saved at once keep one (TD-1268, OBS-R2-66)',
       details: 'ALL then ALL overlapping 409, a workflow scope inside ALL 409, a later window 200, two different workflow scopes over one window 200, after revoking the first the overlapping one 200; two concurrent saves of one window: one 200 and one 409; one audit row per delegation',
     }, async (h, wrong) => {
       const owner = await h.sessionWith(['workflow.approve']);
@@ -92,7 +92,7 @@ export async function runWorkflowDelegationInboxTests(shouldRun: ShouldRun): Pro
   if (shouldRun('sec_workflow_delegation_inbox_access_td_1268', 'security', 'td1268', 'd-06', 'workflow', 'delegation', 'inbox')) {
     await runCase(results, {
       id: 'sec_workflow_delegation_inbox_access_td_1268',
-      name: 'v10.1.15: an approver reads the delegation scopes and only their own delegations (given and received, with the scope title) from the inbox; a reader without the delegation keys gets 403 (TD-1268, OBS-R2-73)',
+      name: 'v10.1.16: an approver reads the delegation scopes and only their own delegations (given and received, with the scope title) from the inbox; a reader without the delegation keys gets 403 (TD-1268, OBS-R2-73)',
       details: 'workflow.approve: GET /workflow/delegation-scopes 200 with workflow titles and no archived workflow; GET /workflow/delegations?mine=1 lists the delegations the user gave and received and no one else\'s, the system admin\'s mine=1 too; workflow.view only: delegation-scopes 403; an unknown query key 400',
     }, async (h, wrong) => {
       const approver = await h.sessionWith(['workflow.approve']);
@@ -138,7 +138,7 @@ export async function runWorkflowDelegationInboxTests(shouldRun: ShouldRun): Pro
   if (shouldRun('sec_workflow_instance_terminate_td_1265', 'security', 'td1265', 'd-06', 'workflow', 'terminate')) {
     await runCase(results, {
       id: 'sec_workflow_instance_terminate_td_1265',
-      name: 'v10.1.15: the system admin closes a running record that cannot move on with a required reason, under the instance lock, with a terminate history row and an audit row; a purchase requisition is refused (TD-1265)',
+      name: 'v10.1.16: the system admin closes a running record that cannot move on with a required reason, under the instance lock, with a terminate history row and an audit row; a purchase requisition is refused (TD-1265)',
       details: 'workflow.manage 403; a short reason 400; a running journal voucher record 200: instance TERMINATED, pending tasks canceled, history row terminate with the reason, audit row; closing it again 409 WF_INSTANCE_NOT_RUNNING; a running purchase requisition 409 WF_INSTANCE_TERMINATE_REFUSED and still running',
     }, async (h, wrong) => {
       const instanceIds: number[] = [];

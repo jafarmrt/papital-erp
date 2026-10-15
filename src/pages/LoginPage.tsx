@@ -4,7 +4,7 @@ import { ApiError, fetchJson } from '../api';
 import { User } from '../types';
 import { Lock, User as UserIcon, Shield, AlertTriangle, ShieldAlert, Eye, EyeOff } from 'lucide-react';
 import SetupPage from './SetupPage';
-import { getLatestAppVersion } from '../data/appInfoAndChangelog';
+import { useAppVersionLabel } from '../hooks/useAppVersionLabel';
 import { formatLockoutCountdown, loginLockoutMinutes } from '../lib/auth/loginLockout';
 import { errorMessageOf } from '../utils';
 
@@ -13,6 +13,7 @@ export default function LoginPage({ onLogin }: { onLogin: (user: User, token: st
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isSetup, setIsSetup] = useState<boolean | null>(null);
+  const versionLabel = useAppVersionLabel();
   const [isSaving, setIsSaving] = useState(false);
   const [companyLogo, setCompanyLogo] = useState('');
   const [companyName, setCompanyName] = useState('');
@@ -186,10 +187,11 @@ export default function LoginPage({ onLogin }: { onLogin: (user: User, token: st
         </form>
       </div>
 
-      <div className="mt-4 text-center text-xs text-slate-400 select-none flex items-center justify-center gap-1.5" aria-label="شماره نسخه سامانه">
-        <span>نسخه</span>
-        <span dir="ltr" className="font-mono font-medium text-slate-500">{getLatestAppVersion()}</span>
-      </div>
+      {versionLabel && (
+        <div className="mt-4 text-center text-xs text-slate-400 select-none" aria-label="شماره نسخه سامانه">
+          {versionLabel}
+        </div>
+      )}
     </div>
   );
 }
