@@ -107,7 +107,7 @@ export class ActivityLogQueryService {
   }
 
   /**
-   * The filter lists of the activity log page. TD-1266 (I-04 follow-up): each list is read with a loose index scan over its
+   * The filter lists of the activity log page. TD-1267 (I-04 follow-up): each list is read with a loose index scan over its
    * own index (`activity_logs_username` / `_action` / `_entity`), one index probe per distinct value, so the answer stays
    * fast as the table grows; before, three `SELECT DISTINCT` read the whole table (p95 107 ms at 300,000 rows, the slowest
    * API of the baseline). A user's full name is read through the same index: the range form of the username condition with

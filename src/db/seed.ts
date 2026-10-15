@@ -21,7 +21,7 @@ export interface SeedResult { success: boolean; message: string; failedSections:
 
 export async function runSeedWithLock(options: { waitForLock?: boolean } = {}): Promise<SeedResult> {
   try {
-    // TD-1265: the test bootstrap waits for the lock; skipping left an isolated test schema without base data
+    // TD-1266: the test bootstrap waits for the lock; skipping left an isolated test schema without base data
     if (options.waitForLock) return await withAdvisoryLockWaiting(ADVISORY_LOCK_KEYS.SEED, () => runSeed());
     const outcome = await withAdvisoryLock(ADVISORY_LOCK_KEYS.SEED, () => runSeed());
     if (!outcome.acquired) {

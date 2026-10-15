@@ -1,10 +1,9 @@
 import { and, asc, eq } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { documentItems, documents } from '../../db/schema.js';
-import { computeAuditDiff } from '../../lib/auditLogger.js';
+import { computeAuditDiff, logActivity } from '../../lib/auditLogger.js';
 import { fin } from '../../lib/financialDecimal.js';
-import { logActivity } from '../../lib/auditLogger.js';
-import { documentTypeTitle } from '../../lib/documents/documentTypeTitles.js';
+import { DOCUMENT_TYPE_TITLES } from '../../lib/documents/documentTypeTitles.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
 
 /**
@@ -149,7 +148,8 @@ export async function logDocumentCreated(
   context: { note: string; details?: Record<string, unknown> },
 ): Promise<void> {
   const after = await documentAuditSnapshot(tx, documentId);
-  const title = documentTypeTitle(after?.docType);
+  // the same title table as `POST /documents`, so the audit entity names stay classified (TD-522)
+  const title = DOCUMENT_TYPE_TITLES[after?.docType ?? ''] || 'سند انبار';
   const summary = documentLineSummary(after);
   await logActivity({
     tx,

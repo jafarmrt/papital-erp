@@ -6,27 +6,27 @@ import { TestCaseResult } from '../types.js';
 import { type ShouldRun, runCase } from './fiscalClosingTests.js';
 
 /**
- * TD-1265 (10.0 closing test finding): the test bootstrap seeds its own isolated schema, but the seed lock is one key for
+ * TD-1266 (10.0 closing test finding): the test bootstrap seeds its own isolated schema, but the seed lock is one key for
  * the whole database. When another process held it (another test run or simulator seeding its own schema), the bootstrap
  * only tried the lock, skipped the seed and still answered success, so the schema had no chart of accounts:
  * `simulate:year --seeds=1,2,3` stopped on its bank with BANK_LEDGER_ACCOUNT_INVALID. Red on v10.1.9: the bootstrap
  * returned at once with the lock held elsewhere.
  *
- * TD-1266 (I-04 follow-up): the activity log filter lists are read with a loose index scan; the lists stay exactly the
+ * TD-1267 (I-04 follow-up): the activity log filter lists are read with a loose index scan; the lists stay exactly the
  * distinct non-empty values of the table.
  */
 const SEED_LOCK_HOLD_MS = 600;
 
 export async function runTestToolingTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
-  const seedId = 'reg_test_bootstrap_waits_for_seed_lock_td_1265';
-  if (shouldRun(seedId, 'td1265', 'seed', 'tooling', 'simulator')) {
-    await runCase(results, seedId, 'v10.1.11: the test bootstrap waits for the seed lock held by another process instead of skipping the seed of its schema; the server boot still skips (TD-1265)',
+  const seedId = 'reg_test_bootstrap_waits_for_seed_lock_td_1266';
+  if (shouldRun(seedId, 'td1266', 'seed', 'tooling', 'simulator')) {
+    await runCase(results, seedId, 'v10.1.11: the test bootstrap waits for the seed lock held by another process instead of skipping the seed of its schema; the server boot still skips (TD-1266)',
       seedLockCase);
   }
-  const filterId = 'reg_activity_log_filter_lists_td_1266';
-  if (shouldRun(filterId, 'td1266', 'activity-log', 'performance', 'i04')) {
-    await runCase(results, filterId, 'v10.1.11: the activity log filter lists are the distinct non-empty users, actions and sections of the log, read by index (TD-1266)',
+  const filterId = 'reg_activity_log_filter_lists_td_1267';
+  if (shouldRun(filterId, 'td1267', 'activity-log', 'performance', 'i04')) {
+    await runCase(results, filterId, 'v10.1.11: the activity log filter lists are the distinct non-empty users, actions and sections of the log, read by index (TD-1267)',
       filterListsCase);
   }
   return results;
@@ -64,12 +64,12 @@ async function seedLockCase(): Promise<string> {
 
 async function filterListsCase(): Promise<string> {
   const { ActivityLogQueryService } = await import('../../services/system/activityLogQuery.service.js');
-  const tag = `td1266-${Date.now()}`;
+  const tag = `td1267-${Date.now()}`;
   await orm.execute(sql`INSERT INTO activity_logs (username, user_full_name, action, entity, description) VALUES
-    (${`${tag}-a`}, '', ${`${tag}-ACT`}, ${`${tag}-sec1`}, 'td1266'),
-    (${`${tag}-a`}, ${`${tag} Full A`}, ${`${tag}-ACT`}, ${`${tag}-sec2`}, 'td1266'),
-    (${`${tag}-b`}, '', ${`${tag}-ACT2`}, ${`${tag}-sec2`}, 'td1266'),
-    ('', '', '', '', 'td1266')`);
+    (${`${tag}-a`}, '', ${`${tag}-ACT`}, ${`${tag}-sec1`}, 'td1267'),
+    (${`${tag}-a`}, ${`${tag} Full A`}, ${`${tag}-ACT`}, ${`${tag}-sec2`}, 'td1267'),
+    (${`${tag}-b`}, '', ${`${tag}-ACT2`}, ${`${tag}-sec2`}, 'td1267'),
+    ('', '', '', '', 'td1267')`);
   const options = await ActivityLogQueryService.getFilterOptions();
   const distinct = async (column: string) => ((await orm.execute(sql.raw(`SELECT DISTINCT ${column} AS v FROM activity_logs WHERE ${column} <> '' ORDER BY 1`))).rows as Array<{ v: string }>).map(r => String(r.v));
   const wrong: string[] = [];
@@ -82,7 +82,7 @@ async function filterListsCase(): Promise<string> {
   if (a?.fullName !== `${tag} Full A`) wrong.push(`user a has full name ${JSON.stringify(a?.fullName)}, expected its non-empty one`);
   if (b?.fullName !== '') wrong.push(`user b has full name ${JSON.stringify(b?.fullName)}, expected empty`);
   if (options.actions.includes('') || options.entities.includes('') || options.users.some(u => u.username === '')) wrong.push('an empty value is listed');
-  await orm.execute(sql`DELETE FROM activity_logs WHERE description = 'td1266'`);
+  await orm.execute(sql`DELETE FROM activity_logs WHERE description = 'td1267'`);
   if (wrong.length > 0) throw new Error(wrong.join('; '));
   return `${options.users.length} users, ${options.actions.length} actions and ${options.entities.length} sections, as in the table`;
 }

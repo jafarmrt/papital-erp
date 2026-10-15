@@ -10905,7 +10905,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v10.0.180 (TD-959): the seed names its failed sections
   const { runSeedSectionTests } = await import('../regression/seedSectionTests.js');
   results.push(...await runSeedSectionTests(shouldRun));
-  // v10.1.11 (TD-1265 / TD-1266): the test bootstrap waits for the seed lock; the activity log filter lists by index
+  // v10.1.11 (TD-1266 / TD-1267): the test bootstrap waits for the seed lock; the activity log filter lists by index
   const { runTestToolingTests } = await import('../regression/testToolingTests.js');
   results.push(...await runTestToolingTests(shouldRun));
   // v10.1.11 (TD-943): project delivery and material allocation audit rows with their own transaction

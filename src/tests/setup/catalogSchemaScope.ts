@@ -1,7 +1,7 @@
 import ts from 'typescript';
 
 /**
- * TD-1265 (10.0 closing test finding): a catalog read in TypeScript code (a test, a health check, a tool) restricts its own
+ * TD-1266 (10.0 closing test finding): a catalog read in TypeScript code (a test, a health check, a tool) restricts its own
  * schema, as a migration's check does (TD-610, `migrationSchemaQualification.ts`). The catalogs hold every schema of the
  * database, so a test that looked up `uq_items_code_active` or `chk_documents_status` by name alone counted the same name in
  * a stale `test_*` schema left in the local test database and failed (TD-653 and TD-786 tests in the 10.0 closing run).

@@ -93,7 +93,7 @@ export async function withRowAdvisoryLock<T>(namespace: number, rowId: number, f
 }
 
 /**
- * TD-1265: the same session lock, but waits for another holder to finish instead of giving up. For a caller whose work
+ * TD-1266: the same session lock, but waits for another holder to finish instead of giving up. For a caller whose work
  * must run, not be skipped: the test bootstrap seeds its own isolated schema, while the lock key is shared by every
  * schema of the database.
  */

@@ -3,7 +3,7 @@ import path from 'path';
 import { describe, expect, it } from 'vitest';
 import { unscopedCatalogReads } from '../setup/catalogSchemaScope';
 
-// TD-1265: a catalog read in the code restricts its own schema. The 10.0 closing run failed the TD-653 and TD-786 tests
+// TD-1266: a catalog read in the code restricts its own schema. The 10.0 closing run failed the TD-653 and TD-786 tests
 // locally: they looked up an index and a constraint by name alone and also counted the stale `test_*` schemas of the test
 // database.
 
