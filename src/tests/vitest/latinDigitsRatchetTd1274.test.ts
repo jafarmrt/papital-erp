@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * v10.1.23 (TD-1274, Vibe Farsi audit item 2): a number a screen shows is written in Persian digits. The ratchet in
+ * v10.1.24 (TD-1274, Vibe Farsi audit item 2): a number a screen shows is written in Persian digits. The ratchet in
  * scripts/latin-digits-ratchet.ts asks the TypeScript checker which shown values are numbers (JSX children, template
  * literals and text attributes) against latin-digits-baseline.json, which is empty: no page or component may show one.
  */

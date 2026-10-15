@@ -3,7 +3,7 @@ import path from 'path';
 import ts from 'typescript';
 
 /**
- * v10.1.23 (TD-1274, Vibe Farsi audit item 2): a number put straight on a screen shows Latin digits («صفحه 3 از 10»,
+ * v10.1.24 (TD-1274, Vibe Farsi audit item 2): a number put straight on a screen shows Latin digits («صفحه 3 از 10»,
  * «+12%», a count in a tab title), while the screens write numbers in Persian digits (AGENTS.md §6: `formatPersianNumber`,
  * and `formatPersianCode` for an id or a document number). This ratchet asks the TypeScript checker for the type of every
  * value a page or component shows, so it finds a number however it was computed, and counts per file:
