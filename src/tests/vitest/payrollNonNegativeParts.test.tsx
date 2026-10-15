@@ -31,7 +31,7 @@ const inputUnder = (label: RegExp) => screen.getByText(label).parentElement?.que
 
 // v9.0.266 (TD-804, decision t1 «الف»): bonuses, deductions and the advance deduction of a payslip are never negative
 describe('payslip parts are non-negative (TD-804)', () => {
-  // v10.1.21 (TD-1273): the fields are text fields with the decimal keypad; a negative amount is refused under the
+  // v10.1.22 (TD-1273): the fields are text fields with the decimal keypad; a negative amount is refused under the
   // field and never reaches the payslip, instead of the old min attribute and silent zero
   it('refuses a negative bonus, deduction or advance deduction under the field and never passes it on', () => {
     const setters = renderModal();

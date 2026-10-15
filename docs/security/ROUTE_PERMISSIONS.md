@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 425
+تعداد مسیرها: 431
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -102,6 +102,8 @@
 | GET | `/api/check-setup` | public |
 | GET | `/api/crm/activities` | crm.view \| customers.view \| customers.manage |
 | POST | `/api/crm/activities` | crm.manage |
+| DELETE | `/api/crm/activities/:id` | crm.manage |
+| PUT | `/api/crm/activities/:id` | crm.manage |
 | PUT | `/api/crm/activities/:id/complete-followup` | crm.manage |
 | PUT | `/api/crm/activities/:id/reopen-followup` | crm.manage |
 | GET | `/api/crm/followups` | crm.view \| customers.view \| customers.manage |
@@ -111,6 +113,7 @@
 | GET | `/api/crm/leads/:id` | crm.view \| customers.view \| customers.manage |
 | PUT | `/api/crm/leads/:id` | crm.manage |
 | POST | `/api/crm/leads/:id/convert-to-customer` | crm.manage |
+| GET | `/api/crm/reports/funnel` | crm.view |
 | GET | `/api/crm/stats` | crm.view \| customers.view \| customers.manage |
 | GET | `/api/csrf` | login-only |
 | GET | `/api/customers` | customers.view |
@@ -412,7 +415,10 @@
 | POST | `/api/workflow/definitions/:id/activate` | workflow.admin |
 | POST | `/api/workflow/definitions/:id/archive` | workflow.admin |
 | POST | `/api/workflow/definitions/:id/deactivate` | workflow.admin |
+| GET | `/api/workflow/definitions/:id/draft` | workflow.manage \| workflow.admin |
+| POST | `/api/workflow/definitions/:id/publish` | workflow.admin |
 | POST | `/api/workflow/definitions/:id/restore` | workflow.admin |
+| POST | `/api/workflow/definitions/:id/revert` | workflow.admin |
 | GET | `/api/workflow/definitions/:id/versions` | workflow.manage \| workflow.admin |
 | GET | `/api/workflow/definitions/:id/versions/:version` | workflow.manage \| workflow.admin |
 | POST | `/api/workflow/definitions/from-template` | workflow.manage \| workflow.admin |

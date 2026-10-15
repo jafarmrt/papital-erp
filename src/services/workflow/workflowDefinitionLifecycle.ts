@@ -1,13 +1,14 @@
 import { and, asc, eq, ne, sql } from 'drizzle-orm';
 import type { Request } from 'express';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
-import { workflowDefinitions, workflowInstances, workflowStates, workflowTransitions } from '../../db/schema.js';
+import { workflowDefinitions, workflowInstances } from '../../db/schema.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { ROW_ADVISORY_LOCK_NAMESPACES } from '../../lib/advisoryLock.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { workflowDesignErrors } from '../../lib/workflow/workflowDesignRules.js';
 import { workflowEntityTypeLabel } from '../../lib/workflow/workflowEntityLabels.js';
 import { workflowDeactivationRefusal } from '../../lib/workflow/workflowLifecycle.js';
+import { publishedDesignOf } from './workflowSnapshot.js';
 
 /**
  * v10.1.7 (TD-1229, D-06 part A, OBS-R2-65): a workflow definition is turned on, off, archived and restored here, each
@@ -47,7 +48,7 @@ export async function startedInstanceCount(db: DbExecutor, definitionId: number)
 
 const lifecycleState = (d: Pick<DefinitionRow, 'isActive' | 'isArchived'>) => ({ isActive: Number(d.isActive ?? 0), isArchived: Number(d.isArchived ?? 0) });
 
-async function lockDefinition(tx: DbExecutor, id: number): Promise<DefinitionRow> {
+export async function lockDefinition(tx: DbExecutor, id: number): Promise<DefinitionRow> {
   const [peek] = await tx.select({ entityType: workflowDefinitions.entityType }).from(workflowDefinitions).where(eq(workflowDefinitions.id, id));
   if (!peek) throw new NotFoundError('گردش کار یافت نشد.', undefined, 'WF_DEF_NOT_FOUND');
   await lockWorkflowEntityTypes(tx, [peek.entityType]);
@@ -64,17 +65,18 @@ async function writeState(tx: DbExecutor, def: DefinitionRow, next: { isActive: 
   });
 }
 
-/** Design errors of a stored definition (the save rule), so only a valid design is turned on. */
-async function storedDesignErrors(tx: DbExecutor, definitionId: number): Promise<string[]> {
-  const states = await tx.select({ id: workflowStates.id, stateKey: workflowStates.stateKey, title: workflowStates.title, stateType: workflowStates.stateType })
-    .from(workflowStates).where(eq(workflowStates.workflowDefinitionId, definitionId));
-  const transitions = await tx.select({
-    fromStateId: workflowTransitions.fromStateId, toStateId: workflowTransitions.toStateId, actionKey: workflowTransitions.actionKey,
-    title: workflowTransitions.title, approvalRuleType: workflowTransitions.approvalRuleType, kValue: workflowTransitions.kValue,
-    requiredPermission: workflowTransitions.requiredPermission, requiredRole: workflowTransitions.requiredRole,
-    isInitiatorOnly: workflowTransitions.isInitiatorOnly, isInitiatorExcluded: workflowTransitions.isInitiatorExcluded,
-  }).from(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, definitionId));
-  return workflowDesignErrors(states.map(s => ({ ...s, stateType: s.stateType ?? undefined })), transitions);
+/**
+ * Design errors of a stored definition (the save rule), so only a valid design is turned on. v10.1.21 (TD-1270): the
+ * published version is what new records run, so it is the one checked, and its record type must be the definition's.
+ */
+async function storedDesignErrors(tx: DbExecutor, def: DefinitionRow): Promise<string[]> {
+  const design = await publishedDesignOf(tx, def.id);
+  if (!design) return ['نسخه منتشرشده این گردش کار تصویر قابل اجرا ندارد؛ پیش‌نویس را منتشر کنید.'];
+  if (design.entityType && design.entityType !== def.entityType) {
+    return [`نسخه منتشرشده برای «${workflowEntityTypeLabel(design.entityType)}» است؛ پیش‌نویس با نوع پرونده تازه را منتشر کنید.`];
+  }
+  const states = (design.states ?? []).map(s => ({ id: s.id, stateKey: s.stateKey, title: s.title, stateType: s.stateType ?? undefined }));
+  return workflowDesignErrors(states, design.transitions ?? []);
 }
 
 export interface WorkflowActiveResult {
@@ -106,7 +108,7 @@ export async function setWorkflowDefinitionActive(params: { id: number; active: 
       throw new ConflictError(`گردش کار «${def.title}» بایگانی شده است؛ نخست آن را از بایگانی بازگردانید.`, undefined, 'WF_DEFINITION_ARCHIVED');
     }
     if (isActive) return { changed: false, definition: def };
-    const errors = await storedDesignErrors(tx, def.id);
+    const errors = await storedDesignErrors(tx, def);
     if (errors.length > 0) {
       throw new ValidationError(`گردش کار «${def.title}» فعال نشد: ${errors.join(' ')}`, { errors }, 'WF_DEFINITION_DESIGN_INVALID');
     }

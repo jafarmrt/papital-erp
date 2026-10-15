@@ -799,6 +799,13 @@
       "when": 1795100000000,
       "tag": "0113_crm_activity_edit_stage_history",
       "breakpoints": true
+    },
+    {
+      "idx": 114,
+      "version": "7",
+      "when": 1795110000000,
+      "tag": "0114_workflow_published_version",
+      "breakpoints": true
     }
   ]
 }
