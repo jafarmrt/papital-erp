@@ -33,7 +33,7 @@ async function saveDesign(h: Harness, body: Record<string, unknown>): Promise<{ 
   return { id, isActive: Number(def?.isActive) };
 }
 
-async function dropDefinitions(h: Harness, ids: number[]): Promise<void> {
+export async function dropDefinitions(h: Harness, ids: number[]): Promise<void> {
   if (ids.length === 0) return;
   await h.q(`DELETE FROM workflow_instances WHERE workflow_definition_id = ANY($1::int[])`, [ids]);
   await h.q(`DELETE FROM workflow_definition_versions WHERE definition_id = ANY($1::int[])`, [ids]);

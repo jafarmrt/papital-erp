@@ -509,7 +509,6 @@ export default function ProjectDetailModal({
                     <WorkflowStepperWidget
                       entityType="project"
                       entityId={project.id}
-                      workflowCode="PROJECT_WORKFLOW"
                       title={`چرخه و تاییدات پروژه شماره ${project.project_code || project.id}`}
                       onStateChange={loadProjectData}
                     />

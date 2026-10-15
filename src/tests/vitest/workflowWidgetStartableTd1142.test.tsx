@@ -13,7 +13,7 @@ function renderWidget() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <WorkflowStepperWidget entityType="project" entityId={7} workflowCode="PROJECT_WORKFLOW" title="گردش کار پروژه" />
+      <WorkflowStepperWidget entityType="project" entityId={7} title="گردش کار پروژه" />
     </QueryClientProvider>,
   );
 }
@@ -29,10 +29,14 @@ describe('workflow widget without a definition to start (TD-1142)', () => {
     expect(container.textContent).toBe('');
   });
 
-  it('still offers the start when an active definition exists', async () => {
+  // v10.1.11 (TD-1263, OWN-04, decision ت۷): the browser never starts a workflow, even when an active definition exists
+  it('offers no start even when an active definition exists', async () => {
     fetchJson.mockResolvedValue({ instance: null, startable: true });
-    renderWidget();
-    expect(await screen.findByText('آغاز گردش کار')).toBeTruthy();
+    const { container } = renderWidget();
+    await waitFor(() => expect(container.querySelector('.animate-pulse')).toBeNull());
+    await waitFor(() => expect(fetchJson).toHaveBeenCalled());
+    expect(screen.queryByText('آغاز گردش کار')).toBeNull();
+    expect(container.textContent).toBe('');
   });
 
   it('reads a project workflow only with the project read keys', () => {

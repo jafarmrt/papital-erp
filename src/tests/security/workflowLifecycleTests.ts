@@ -141,7 +141,7 @@ export async function runWorkflowLifecycleTests(shouldRun: ShouldRun): Promise<T
 
       // ۲) سند حسابداری پیش‌نویس با گردش کار ← حذف
       const { voucher } = await createTestVoucher({ status: 'draft', date: await businessTodayIsoDate(), totalDebit: 3000, totalCredit: 3000 } as never);
-      const started = await h.post('/api/workflow/start', { workflowCode: 'JOURNAL_VOUCHER_WORKFLOW', entityType: 'journal_voucher', entityId: voucher.id });
+      const started = await h.start({ workflowCode: 'JOURNAL_VOUCHER_WORKFLOW', entityType: 'journal_voucher', entityId: voucher.id });
       if (started.status !== 200) wrong.push(`Starting the journal voucher workflow returned ${started.status}`);
       const delVoucher = await h.del(`/api/accounting/vouchers/${voucher.id}`);
       if (delVoucher.status !== 200) wrong.push(`Deleting the journal voucher returned ${delVoucher.status}: ${JSON.stringify(delVoucher.body).slice(0, 160)}`);
@@ -211,7 +211,7 @@ export async function runWorkflowLifecycleTests(shouldRun: ShouldRun): Promise<T
       const deputy = await h.sessionWith(['workflow.view', 'workflow.approve']);
       const startVoucherWorkflow = async () => {
         const { voucher } = await createTestVoucher({ status: 'draft', date: today, totalDebit: 1000, totalCredit: 1000 } as never);
-        const res = await h.post('/api/workflow/start', { workflowCode: 'JOURNAL_VOUCHER_WORKFLOW', entityType: 'journal_voucher', entityId: voucher.id });
+        const res = await h.start({ workflowCode: 'JOURNAL_VOUCHER_WORKFLOW', entityType: 'journal_voucher', entityId: voucher.id });
         const id = Number(res.body?.data?.id);
         if (!(id > 0)) throw new Error(`Starting the journal voucher workflow returned ${res.status}`);
         return id;

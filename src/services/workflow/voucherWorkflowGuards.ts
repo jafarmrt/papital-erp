@@ -1,4 +1,5 @@
 import type { SeedGuardUpgrade, SeedStepGuard } from './seedGuardUpgrade.js';
+import { JOURNAL_VOUCHER_WORKFLOW_TEMPLATE } from '../../lib/workflow/workflowTemplates.js';
 
 /**
  * v10.0.27 (TD-965، طرح حقوق ت۹): نگهبان گام‌های گردش کار پیش‌فرض سند حسابداری. تأیید، قطعی کردن و برگرداندن سند
@@ -7,13 +8,8 @@ import type { SeedGuardUpgrade, SeedStepGuard } from './seedGuardUpgrade.js';
  */
 export const JOURNAL_VOUCHER_WORKFLOW_CODE = 'JOURNAL_VOUCHER_WORKFLOW';
 
-export const JOURNAL_VOUCHER_STEP_GUARDS: ReadonlyArray<SeedStepGuard> = [
-  { from: 'draft', to: 'approved', actionKey: 'approve_voucher', title: 'تایید حسابداری و ثبت در دفاتر', requiredRole: '', requiredPermission: 'accounting.vouchers_approve' },
-  { from: 'approved', to: 'permanent', actionKey: 'finalize_voucher', title: 'قطعی‌سازی و قفل سند', requiredRole: '', requiredPermission: 'accounting.vouchers_approve' },
-  { from: 'draft', to: 'rejected', actionKey: 'reject_voucher', title: 'رد پیش‌نویس جهت اصلاح', requiredRole: '', requiredPermission: 'accounting.vouchers' },
-  { from: 'approved', to: 'draft', actionKey: 'revert_to_draft', title: 'بازگشت به پیش‌نویس', requiredRole: '', requiredPermission: 'accounting.vouchers_approve' },
-  { from: 'rejected', to: 'draft', actionKey: 'reopen_voucher', title: 'بازگشایی و اصلاح سند', requiredRole: '', requiredPermission: '' },
-];
+/** v10.1.11 (TD-1263): read from the journal voucher template, so the seed, its upgrade and «ساخت از الگو» share one list */
+export const JOURNAL_VOUCHER_STEP_GUARDS: ReadonlyArray<SeedStepGuard> = JOURNAL_VOUCHER_WORKFLOW_TEMPLATE.transitions.map(t => ({ ...t }));
 
 /** seed پیش از v10.0.27 */
 const LEGACY_JOURNAL_VOUCHER_STEP_GUARDS: ReadonlyArray<SeedStepGuard> = JOURNAL_VOUCHER_STEP_GUARDS.map(g => ({

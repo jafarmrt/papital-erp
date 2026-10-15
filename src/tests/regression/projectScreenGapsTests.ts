@@ -17,7 +17,7 @@ export async function runProjectScreenGapsTests(shouldRun: ShouldRun): Promise<T
       'v10.0.64: consuming or releasing an allocation that is no longer open says its status in Persian, never the status code (TD-1144)',
       ['td1144', 'projects', 'allocation', 'package11'], allocationStatusRefusalCase],
     ['reg_project_workflow_widget_startable_td_1142',
-      'v10.0.65: the workflow widget learns there is no project workflow to start, and a project workflow is read only with the project read keys (TD-1142)',
+      'v10.0.65: a project workflow is read only with the project read keys (TD-1142); v10.1.11: without an instance the widget is told nothing to start, since only the server starts a workflow (TD-1263)',
       ['td1142', 'projects', 'workflow', 'package11'], projectWorkflowStartableCase],
   ]);
 }
@@ -65,19 +65,15 @@ async function projectWorkflowStartableCase(h: Harness, wrong: string[]): Promis
   const res = await h.post('/api/projects', { title: `P3 workflow ${h.tag} ${Math.floor(Math.random() * 1e6)}`, products: [] });
   if (res.status !== 201) throw new Error(`setup: project create answered ${brief(res)}`);
   const projectId = Number((res.body as { id?: unknown }).id);
-  const [def] = await h.q(`SELECT count(*)::int AS n FROM workflow_definitions WHERE entity_type = 'project' AND is_active = 1`);
-  const expected = Number(def?.n) > 0;
+  // v10.1.11 (TD-1263, OWN-04): the browser never starts a workflow, so the answer carries no `startable` hint any more
   const read = await h.get(`/api/workflow/instance/project/${projectId}`);
   const body = read.body as { instance?: unknown; startable?: unknown };
-  if (read.status !== 200 || body.instance !== null || body.startable !== expected) wrong.push(`the project widget read answered ${brief(read)}, expected no instance and startable ${expected}`);
+  if (read.status !== 200 || body.instance !== null || 'startable' in (body ?? {})) wrong.push(`the project widget read answered ${brief(read)}, expected no instance and no start hint`);
   const viewer = await h.sessionWith(['workflow.view']);
   const denied = await h.get(`/api/workflow/instance/project/${projectId}`, viewer);
   if (denied.status !== 403) wrong.push(`a workflow viewer without a project read key answered ${denied.status}, expected 403`);
-  // The pending raw material review window showed the same dead «آغاز گردش کار» box (role guide S2-08): it reads the same answer.
-  const [pm] = await h.q(`SELECT count(*)::int AS n FROM workflow_definitions WHERE entity_type = 'pending_material' AND is_active = 1`);
-  const pmExpected = Number(pm?.n) > 0;
   const pmRead = await h.get('/api/workflow/instance/pending_material/987654321');
-  const pmBody = pmRead.body as { instance?: unknown; startable?: unknown };
-  if (pmRead.status !== 200 || pmBody.instance !== null || pmBody.startable !== pmExpected) wrong.push(`the pending material widget read answered ${brief(pmRead)}, expected no instance and startable ${pmExpected}`);
-  return `no instance, startable ${expected} (pending material ${pmExpected}); a viewer without a project key is refused`;
+  const pmBody = pmRead.body as { instance?: unknown };
+  if (pmRead.status !== 200 || pmBody.instance !== null || 'startable' in (pmBody ?? {})) wrong.push(`the pending material widget read answered ${brief(pmRead)}, expected no instance and no start hint`);
+  return 'no instance and no start hint; a viewer without a project key is refused';
 }

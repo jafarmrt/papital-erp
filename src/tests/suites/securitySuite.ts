@@ -1460,6 +1460,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // Series 10.1, lane L4 (TD-1229, D-06 part A): turning workflows on and off, one active per record type
   const { runWorkflowDefinitionSwitchTests } = await import('../security/workflowDefinitionSwitchTests.js');
   results.push(...await runWorkflowDefinitionSwitchTests(shouldRunAccess));
+  // v10.1.11 (TD-1263, D-06 part B): workflow templates, and no workflow start from the browser
+  const { runWorkflowTemplateTests } = await import('../security/workflowTemplateTests.js');
+  results.push(...await runWorkflowTemplateTests(shouldRunAccess));
   // Package 12 payroll, PR «ج» (from TD-805): each payroll action asks the key of its own name
   const { runPieceworkPermissionTests } = await import('../security/pieceworkPermissionTests.js');
   results.push(...await runPieceworkPermissionTests(shouldRunAccess));

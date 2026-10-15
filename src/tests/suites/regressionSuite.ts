@@ -10905,10 +10905,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v10.0.180 (TD-959): the seed names its failed sections
   const { runSeedSectionTests } = await import('../regression/seedSectionTests.js');
   results.push(...await runSeedSectionTests(shouldRun));
-  // v10.1.11 (TD-1266 / TD-1267): the test bootstrap waits for the seed lock; the activity log filter lists by index
+  // v10.1.12 (TD-1266 / TD-1267): the test bootstrap waits for the seed lock; the activity log filter lists by index
   const { runTestToolingTests } = await import('../regression/testToolingTests.js');
   results.push(...await runTestToolingTests(shouldRun));
-  // v10.1.11 (TD-943): project delivery and material allocation audit rows with their own transaction
+  // v10.1.12 (TD-943): project delivery and material allocation audit rows with their own transaction
   const { runProjectAuditTxTests } = await import('../regression/projectAuditTxTests.js');
   results.push(...await runProjectAuditTxTests(shouldRun));
   const { runInitialSetupTests } = await import('../regression/initialSetupTests.js');
@@ -10948,6 +10948,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Payroll duties plan PR 1 (v10.0.21+): voucher approval permission and maker-checker
   const { runVoucherApprovalDutiesTests } = await import('../regression/voucherApprovalDutiesTests.js');
   results.push(...await runVoucherApprovalDutiesTests(shouldRun));
+  // v10.1.11 (TD-1263, D-06 part B): a manual voucher enters its workflow on create; the page waits for the workflow
+  const { runVoucherWorkflowStartTests } = await import('../regression/voucherWorkflowStartTests.js');
+  results.push(...await runVoucherWorkflowStartTests(shouldRun));
   // TD-1239: a reversed voucher names its reversal; a reversal voucher stays out of draft
   const { runVoucherReversalLockTests } = await import('../regression/voucherReversalLockTests.js');
   results.push(...await runVoucherReversalLockTests(shouldRun));

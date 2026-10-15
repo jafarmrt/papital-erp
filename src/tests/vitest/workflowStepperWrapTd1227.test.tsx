@@ -31,7 +31,7 @@ describe('workflow stepper layout (TD-1227)', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
-        <WorkflowStepperWidget entityType="document" entityId={9} workflowCode="DOC_APPROVAL_WORKFLOW" />
+        <WorkflowStepperWidget entityType="document" entityId={9} />
       </QueryClientProvider>,
     );
     const steps = (await screen.findByText('step 5')).closest('[data-stepper-steps]');
