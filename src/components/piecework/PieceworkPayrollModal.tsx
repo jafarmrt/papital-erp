@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useEffect, useState } from 'react';
+import { FormEvent, ReactNode, useEffect, useState, useId } from 'react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
@@ -77,6 +77,7 @@ export function PieceworkPayrollModal({
   prepayment,
   statutoryFields
 }: PieceworkPayrollModalProps) {
+  const fieldId = useId();
   const rial = useRialDisplay();
   // ورودی مبلغ همیشه به ریال است (مبلغ ذخیره‌شده)
   const inputCurLbl = formatCurrencyLabel('IRR');
@@ -124,8 +125,9 @@ export function PieceworkPayrollModal({
 
         <form onSubmit={onSubmit} className="p-6 space-y-4">
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">انتخاب پرسنل *</label>
+            <label htmlFor={`${fieldId}-payroll-personnel-id`} className="block text-xs font-bold text-slate-700 mb-1">انتخاب پرسنل *</label>
             <SearchableSelect
+              id={`${fieldId}-payroll-personnel-id`}
               options={personnelSelectOptions}
               value={payrollPersonnelId ? String(payrollPersonnelId) : ''}
               onChange={(val) => setPayrollPersonnelId(val ? Number(val) : '')}
@@ -137,8 +139,9 @@ export function PieceworkPayrollModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">از تاریخ *</label>
+              <label htmlFor={`${fieldId}-payroll-start-date`} className="block text-xs font-bold text-slate-700 mb-1">از تاریخ *</label>
               <DatePicker
+                id={`${fieldId}-payroll-start-date`}
                 value={payrollStartDate}
                 onChange={(dateObj: any) => {
                   setPayrollStartDate(extractDateString(dateObj));
@@ -152,8 +155,9 @@ export function PieceworkPayrollModal({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">تا تاریخ *</label>
+              <label htmlFor={`${fieldId}-payroll-end-date`} className="block text-xs font-bold text-slate-700 mb-1">تا تاریخ *</label>
               <DatePicker
+                id={`${fieldId}-payroll-end-date`}
                 value={payrollEndDate}
                 onChange={(dateObj: any) => {
                   setPayrollEndDate(extractDateString(dateObj));
@@ -194,8 +198,9 @@ export function PieceworkPayrollModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">{`پاداش / اضافه کار (${inputCurLbl})`}</label>
+              <label htmlFor={`${fieldId}-payroll-bonuses`} className="block text-xs font-bold text-slate-700 mb-1">{`پاداش / اضافه کار (${inputCurLbl})`}</label>
               <DecimalInput
+                id={`${fieldId}-payroll-bonuses`}
                 min="0"
                 value={payrollBonuses}
                 onValueChange={(v) => setPayrollBonuses(nonNegativeInput(v))}
@@ -254,8 +259,9 @@ export function PieceworkPayrollModal({
           {prepayment && <PayrollPrepaymentField prepayment={prepayment} hasFixedSalary={allowNoLogs} />}
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">توضیحات فیش</label>
+            <label htmlFor={`${fieldId}-payroll-notes`} className="block text-xs font-bold text-slate-700 mb-1">توضیحات فیش</label>
             <input
+              id={`${fieldId}-payroll-notes`}
               type="text"
               placeholder="توضیحات تکمیلی..."
               value={payrollNotes}

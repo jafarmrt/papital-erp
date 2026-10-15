@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
@@ -55,6 +56,7 @@ export function PieceworkLogsTab({
   onEditLog,
   onDeleteLog
 }: PieceworkLogsTabProps) {
+  const fieldId = useId();
   const rial = useRialDisplay();
   const curLbl = rial.label;
   // v9.0.320 (TD-805): ثبت، ویرایش و حذف کارکرد با «ثبت و ویرایش کارکرد پرسنل»
@@ -88,8 +90,9 @@ export function PieceworkLogsTab({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-2 border-t border-slate-100">
           <div>
-            <label className="block text-[11px] font-bold text-slate-500 mb-1">فیلتر پرسنل</label>
+            <label htmlFor={`${fieldId}-selected-personnel-filter`} className="block text-[11px] font-bold text-slate-500 mb-1">فیلتر پرسنل</label>
             <SearchableSelect
+              id={`${fieldId}-selected-personnel-filter`}
               options={[{ value: 'all', label: 'همه پرسنل' }, ...personnelSelectOptions]}
               value={String(selectedPersonnelFilter)}
               onChange={(val) => onPersonnelFilterChange(val)}
@@ -100,8 +103,9 @@ export function PieceworkLogsTab({
           </div>
 
           <div>
-            <label className="block text-[11px] font-bold text-slate-500 mb-1">فیلتر پروژه کارگاهی</label>
+            <label htmlFor={`${fieldId}-selected-project-filter`} className="block text-[11px] font-bold text-slate-500 mb-1">فیلتر پروژه کارگاهی</label>
             <SearchableSelect
+              id={`${fieldId}-selected-project-filter`}
               options={[
                 { value: 'all', label: 'همه پروژه‌ها (با و بدون پروژه)' },
                 { value: 'none', label: 'بدون پروژه کارگاهی (عمومی)' },
@@ -116,8 +120,9 @@ export function PieceworkLogsTab({
           </div>
 
           <div>
-            <label className="block text-[11px] font-bold text-slate-500 mb-1">از تاریخ</label>
+            <label htmlFor={`${fieldId}-start-date-filter`} className="block text-[11px] font-bold text-slate-500 mb-1">از تاریخ</label>
             <DatePicker
+              id={`${fieldId}-start-date-filter`}
               value={startDateFilter}
               onChange={(dateObj: any) => {
                 onStartDateChange(extractDateString(dateObj));
@@ -131,8 +136,9 @@ export function PieceworkLogsTab({
           </div>
 
           <div>
-            <label className="block text-[11px] font-bold text-slate-500 mb-1">تا تاریخ</label>
+            <label htmlFor={`${fieldId}-end-date-filter`} className="block text-[11px] font-bold text-slate-500 mb-1">تا تاریخ</label>
             <DatePicker
+              id={`${fieldId}-end-date-filter`}
               value={endDateFilter}
               onChange={(dateObj: any) => {
                 onEndDateChange(extractDateString(dateObj));

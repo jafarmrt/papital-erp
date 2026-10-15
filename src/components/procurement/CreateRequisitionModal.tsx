@@ -187,6 +187,7 @@ export function CreateRequisitionModal({
             <div>
               <label htmlFor="requisition-required-date" className="block font-bold text-slate-700 mb-1">تاریخ نیاز به کالا:</label>
               <JalaliDateInput
+                id="requisition-required-date"
                 value={requiredDate}
                 onChange={iso => { setRequiredDate(iso); clearError('requiredDate'); }}
                 placeholder="تاریخ نیاز"

@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { Lock, Building2, Calendar, UserCheck } from 'lucide-react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
@@ -31,6 +32,7 @@ interface StockDocumentDetailsFieldsProps {
  * تاریخ، صادرکننده، توضیحات) — استخراج‌شده از DocumentsPage.
  */
 export function StockDocumentDetailsFields({ form, currentUser, warehouses, projectsList, personnelList, suppliersList, typeOptions }: StockDocumentDetailsFieldsProps) {
+  const fieldId = useId();
   const {
     actionType, docType, setDocType, refNumber, setRefNumber, currency, setCurrency, exchangeRate, setExchangeRate,
     selectedProjectId, setSelectedProjectId, returnInvoiceRef, changeReturnInvoiceRef, returnInvoiceId, returnInvoiceCandidates,
@@ -49,8 +51,8 @@ export function StockDocumentDetailsFields({ form, currentUser, warehouses, proj
 
       <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4">
         <div>
-          <label className="block text-xs font-bold mb-1.5 text-slate-700">نوع سند</label>
-          <select 
+          <label htmlFor={`${fieldId}-doc-type`} className="block text-xs font-bold mb-1.5 text-slate-700">نوع سند</label>
+          <select id={`${fieldId}-doc-type`} 
             className="w-full border border-slate-200 bg-slate-50/50 rounded-xl text-sm px-3 py-2 font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
             value={docType} 
             onChange={e => setDocType(e.target.value)}
@@ -62,9 +64,9 @@ export function StockDocumentDetailsFields({ form, currentUser, warehouses, proj
         </div>
 
         <div>
-          <label className="block text-xs font-bold mb-1.5 text-slate-700">شماره سند / شماره عطف</label>
+          <label htmlFor={`${fieldId}-ref-number`} className="block text-xs font-bold mb-1.5 text-slate-700">شماره سند / شماره عطف</label>
           {/* v9.0.327 (TD-783، تصمیم ت۹ الف): شماره برگشت از فروش فقط از سری سرور است */}
-          <input 
+          <input id={`${fieldId}-ref-number`} 
             required 
             type="text" 
             value={refNumber} 
@@ -79,8 +81,8 @@ export function StockDocumentDetailsFields({ form, currentUser, warehouses, proj
         {/* v10.1.6 (N-06): رسید تولید بی پروژه فقط ریالی است */}
         {actionType === 'in' && docType !== 'production_receipt' && (
           <div>
-            <label className="block text-xs font-bold mb-1.5 text-slate-700">واحد پول (ارز سند)</label>
-            <select 
+            <label htmlFor={`${fieldId}-currency`} className="block text-xs font-bold mb-1.5 text-slate-700">واحد پول (ارز سند)</label>
+            <select id={`${fieldId}-currency`} 
               className="w-full border border-slate-200 bg-slate-50/50 rounded-xl text-sm px-3 py-2 font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
               value={currency} 
               onChange={e => setCurrency(e.target.value)}
@@ -98,11 +100,11 @@ export function StockDocumentDetailsFields({ form, currentUser, warehouses, proj
 
         {actionType === 'out' && (
           <div>
-            <label className="block text-xs font-bold mb-1.5 text-purple-950 flex items-center gap-1">
+            <label htmlFor={`${fieldId}-selected-project-id`} className="block text-xs font-bold mb-1.5 text-purple-950 flex items-center gap-1">
               <Lock size={13} className="text-purple-600" />
               <span>پروژه مربوطه (جهت خروج)</span>
             </label>
-            <select 
+            <select id={`${fieldId}-selected-project-id`} 
               className="w-full border border-purple-300 bg-purple-50/60 rounded-xl text-sm px-3 py-2 font-bold text-purple-950 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all" 
               value={selectedProjectId} 
               onChange={e => setSelectedProjectId(e.target.value)}
@@ -119,9 +121,9 @@ export function StockDocumentDetailsFields({ form, currentUser, warehouses, proj
 
         {docType === 'return' && (
           <div>
-            <label className="block text-xs font-bold mb-1.5 text-slate-700">شماره فاکتور مرجع</label>
+            <label htmlFor={`${fieldId}-return-invoice-ref`} className="block text-xs font-bold mb-1.5 text-slate-700">شماره فاکتور مرجع</label>
             <div className="flex gap-2">
-              <input 
+              <input id={`${fieldId}-return-invoice-ref`} 
                 type="text" 
                 value={returnInvoiceRef} 
                 onChange={e => changeReturnInvoiceRef(e.target.value)} 
@@ -189,11 +191,11 @@ export function StockDocumentDetailsFields({ form, currentUser, warehouses, proj
         </div>
 
         <div>
-          <label className="block text-xs font-bold mb-1.5 text-slate-700 flex items-center gap-1">
+          <label htmlFor={`${fieldId}-date`} className="block text-xs font-bold mb-1.5 text-slate-700 flex items-center gap-1">
             <Calendar size={13} className="text-slate-500" />
             <span>تاریخ سند</span>
           </label>
-          <DatePicker 
+          <DatePicker id={`${fieldId}-date`} 
             value={date} 
             onChange={(dateObj) => setDate(extractDateString(dateObj))} 
             calendar={persian} 
@@ -224,8 +226,8 @@ export function StockDocumentDetailsFields({ form, currentUser, warehouses, proj
         </div>
 
         <div className="md:col-span-2">
-          <label className="block text-xs font-bold mb-1.5 text-slate-700">توضیحات و ملاحظات</label>
-          <input 
+          <label htmlFor={`${fieldId}-notes`} className="block text-xs font-bold mb-1.5 text-slate-700">توضیحات و ملاحظات</label>
+          <input id={`${fieldId}-notes`} 
             type="text" 
             value={notes} 
             onChange={e => setNotes(e.target.value)} 

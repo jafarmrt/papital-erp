@@ -1,4 +1,4 @@
-import { FormEvent } from 'react';
+import { FormEvent, useId } from 'react';
 import { Clock, X, Building2, Laptop, AtSign, Lock } from 'lucide-react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
@@ -84,6 +84,7 @@ export function DailyLogModal({
   onToggleMentionUser,
   onSaveLog
 }: DailyLogModalProps) {
+  const fieldId = useId();
   if (!isModalOpen) return null;
 
   return (
@@ -109,10 +110,11 @@ export function DailyLogModal({
           {/* Row 1: Jalali Date Picker & Work Mode */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
+              <label htmlFor={`${fieldId}-form-date`} className="block text-xs font-bold text-slate-700 mb-1">
                 تاریخ (هجری شمسی) <span className="text-rose-500">*</span>
               </label>
               <DatePicker
+                id={`${fieldId}-form-date`}
                 value={formDate}
                 onChange={(dateObj: any) => {
                   setFormDate(extractDateString(dateObj));
@@ -238,10 +240,11 @@ export function DailyLogModal({
           {/* Row 5: Title & Project Link */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
+              <label htmlFor={`${fieldId}-form-title`} className="block text-xs font-bold text-slate-700 mb-1">
                 عنوان فعالیت <span className="text-rose-500">*</span>
               </label>
               <input
+                id={`${fieldId}-form-title`}
                 type="text"
                 placeholder="عنوان کار (مثلاً: برنامه‌نویسی انبار)"
                 value={formTitle}
@@ -253,10 +256,11 @@ export function DailyLogModal({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
+              <label htmlFor={`${fieldId}-form-project-id`} className="block text-xs font-bold text-slate-700 mb-1">
                 پروژه تولید مرتبط (اختیاری)
               </label>
               <select
+                id={`${fieldId}-form-project-id`}
                 value={formProjectId}
                 onChange={(e) => setFormProjectId(e.target.value)}
                 className="w-full px-3 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white"
@@ -312,10 +316,11 @@ export function DailyLogModal({
 
           {/* Row 7: Content / Detailed Work Description */}
           <div>
-            <label className="block text-xs font-bold text-slate-800 mb-1">
+            <label htmlFor={`${fieldId}-form-content`} className="block text-xs font-bold text-slate-800 mb-1">
               شرح کامل فعالیت‌های انجام‌شده <span className="text-rose-500">*</span>
             </label>
             <MentionTextarea
+              id={`${fieldId}-form-content`}
               rows={3}
               placeholder="شرح کارهای انجام‌شده، نتایج حاصله و پیگیری‌ها... (برای اشاره به همکاران @ را تایپ کنید)"
               value={formContent}

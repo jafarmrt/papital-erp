@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useId } from 'react';
 import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
 import { Role, PermissionCategory } from '../../types';
@@ -44,6 +44,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
   grantor = 'all',
   draft = null,
 }) => {
+  const fieldId = useId();
   const [roleForm, setRoleForm] = useState<{
     name: string;
     code: string;
@@ -223,10 +224,11 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
           <div className="p-5 border-b bg-slate-50/60 space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label htmlFor={`${fieldId}-name`} className="block text-xs font-semibold text-slate-700 mb-1">
                   عنوان نقش (فارسی)
                 </label>
                 <input
+                  id={`${fieldId}-name`}
                   required
                   type="text"
                   value={roleForm.name}
@@ -236,10 +238,11 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label htmlFor={`${fieldId}-code`} className="block text-xs font-semibold text-slate-700 mb-1">
                   کد نقش (شناسه انگلیسی)
                 </label>
                 <input
+                  id={`${fieldId}-code`}
                   required={!isEditing}
                   disabled={isEditing}
                   type="text"
@@ -252,10 +255,11 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
               </div>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label htmlFor={`${fieldId}-description`} className="block text-xs font-semibold text-slate-700 mb-1">
                 توضیحات شرح وظایف نقش
               </label>
               <input
+                id={`${fieldId}-description`}
                 type="text"
                 value={roleForm.description}
                 onChange={(e) => setRoleForm({ ...roleForm, description: e.target.value })}

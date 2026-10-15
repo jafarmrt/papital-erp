@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { 
   X, 
   CreditCard, 
@@ -84,6 +84,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
   onSuccess,
   document: doc
 }) => {
+  const fieldId = useId();
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | ''>('');
   const [amountStr, setAmountStr] = useState<string>('');
@@ -405,12 +406,13 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1">
+              <label htmlFor={`${fieldId}-date`} className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1">
                 <Calendar size={13} className="text-slate-400" />
                 <span>تاریخ تسویه</span>
                 <span className="text-rose-500">*</span>
               </label>
               <input
+                id={`${fieldId}-date`}
                 type="text"
                 value={toPersianDigits(date)}
                 onChange={(e) => setDate(toEnglishDigits(e.target.value))}
@@ -424,11 +426,12 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
           {/* Tracking Number & Description */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1">
+              <label htmlFor={`${fieldId}-tracking-number`} className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1">
                 <Hash size={13} className="text-slate-400" />
                 <span>شماره پیگیری / ارجاع (اختیاری)</span>
               </label>
               <input
+                id={`${fieldId}-tracking-number`}
                 type="text"
                 value={trackingNumber}
                 onChange={(e) => setTrackingNumber(e.target.value)}
@@ -438,8 +441,9 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">شرح پرداخت</label>
+              <label htmlFor={`${fieldId}-description`} className="block text-xs font-bold text-slate-700 mb-1.5">شرح پرداخت</label>
               <input
+                id={`${fieldId}-description`}
                 type="text"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}

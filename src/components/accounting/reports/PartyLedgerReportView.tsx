@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, useId } from 'react';
 import { Users, Search, Calendar, Printer, Download, RefreshCw, CheckCircle2, AlertCircle, User, Building, Briefcase, ChevronDown, X } from 'lucide-react';
 import { formatPersianPrice, formatPersianNumber, formatPersianDate, formatPersianCode, formatCurrencyLabel, toStorageDate, getTodayIsoDate, getTodayJalaliDate, getPastJalaliDate, isoToJalaliDate, jalaliMonthStart, jalaliYearBounds } from '../../../utils';
 import { TREASURY_CURRENCIES } from '../../../lib/treasury/treasuryCurrency';
@@ -24,6 +24,7 @@ export function PartyLedgerReportView({
   initialPartyType,
   initialPartyName
 }: PartyLedgerReportViewProps) {
+  const fieldId = useId();
   // Party selection states
   // فهرست طرف‌های حساب و صورت‌حساب با React Query (لغو درخواست با بسته شدن زیرتب، P3-8)
   const partiesQuery = usePartiesQuery();
@@ -266,7 +267,7 @@ export function PartyLedgerReportView({
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3 pt-3 border-t border-slate-100 dark:border-slate-700/60">
           {/* Party Search and Dropdown (6 cols) */}
           <div className="md:col-span-5 relative">
-            <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">
+            <label htmlFor={`${fieldId}-party-search-query`} className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">
               طرف‌حساب (مشتری، تامین‌کننده، پرسنل):
             </label>
             <div className="relative">
@@ -360,6 +361,7 @@ export function PartyLedgerReportView({
                   <div className="relative">
                     <Search className="w-3.5 h-3.5 absolute right-3 top-2.5 text-slate-400" />
                     <input
+                      id={`${fieldId}-party-search-query`}
                       type="text"
                       placeholder="جست‌وجوی نام یا شماره تماس..."
                       value={partySearchQuery}
@@ -483,10 +485,11 @@ export function PartyLedgerReportView({
 
           {/* Currency and Option (2 cols) */}
           <div className="md:col-span-2 space-y-1.5">
-            <label className="block text-xs font-bold text-slate-600 dark:text-slate-300">
+            <label htmlFor={`${fieldId}-currency`} className="block text-xs font-bold text-slate-600 dark:text-slate-300">
               واحد پولی:
             </label>
             <select
+              id={`${fieldId}-currency`}
               value={currency}
               onChange={e => setCurrency(e.target.value as CurrencyFilter)}
               className="w-full px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white"

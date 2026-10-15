@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { Plus, Edit2, Trash2, Building2 } from 'lucide-react';
 import { Warehouse } from '../../hooks/useSettings';
 import { InactiveWarehousesPanel } from './InactiveWarehousesPanel';
@@ -111,6 +111,7 @@ export function WarehouseModal({
   isSaving,
   onSubmit
 }: WarehouseModalProps) {
+  const fieldId = useId();
   if (!isOpen) return null;
 
   return (
@@ -123,8 +124,9 @@ export function WarehouseModal({
         </div>
         <form onSubmit={onSubmit} className="p-6 space-y-4 text-xs overflow-y-auto">
           <div>
-            <label className="block font-medium mb-1 text-slate-700">نام انبار</label>
+            <label htmlFor={`${fieldId}-name`} className="block font-medium mb-1 text-slate-700">نام انبار</label>
             <input
+              id={`${fieldId}-name`}
               required
               type="text"
               value={whForm.name}
@@ -133,8 +135,9 @@ export function WarehouseModal({
             />
           </div>
           <div>
-            <label className="block font-medium mb-1 text-slate-700">کد سیستم</label>
+            <label htmlFor={`${fieldId}-code`} className="block font-medium mb-1 text-slate-700">کد سیستم</label>
             <input
+              id={`${fieldId}-code`}
               required
               disabled={isEditing}
               type="text"

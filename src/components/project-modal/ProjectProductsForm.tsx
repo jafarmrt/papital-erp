@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useId } from 'react';
 import { Layers, Plus, Trash2, CheckCircle2 } from 'lucide-react';
 import { SearchableSelect } from '../SearchableSelect';
 import { Item } from '../../types';
@@ -23,6 +23,7 @@ export const ProjectProductsForm: React.FC<ProjectProductsFormProps> = ({
   onUpdateProductRow,
   onRemoveProductRow
 }) => {
+  const fieldId = useId();
   const optionalStages = getOptionalStageNames();
 
   return (
@@ -70,10 +71,11 @@ export const ProjectProductsForm: React.FC<ProjectProductsFormProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
               {/* Item selection */}
               <div className="sm:col-span-2">
-                <label className="block text-2xs font-bold text-slate-600 mb-1">
+                <label htmlFor={`${fieldId}-item_id-${idx}`} className="block text-2xs font-bold text-slate-600 mb-1">
                   انتخاب کالا / محصول از انبار <span className="text-red-500">*</span>
                 </label>
                 <SearchableSelect
+                  id={`${fieldId}-item_id-${idx}`}
                   options={activeItemsList
                     .filter((item) => {
                       // Allow currently selected item for this row, but filter out items selected in other rows
@@ -93,10 +95,11 @@ export const ProjectProductsForm: React.FC<ProjectProductsFormProps> = ({
 
               {/* Customer Code */}
               <div>
-                <label className="block text-2xs font-bold text-slate-600 mb-1">
+                <label htmlFor={`${fieldId}-customer_code-${idx}`} className="block text-2xs font-bold text-slate-600 mb-1">
                   کد اختصاصی مشتری / سفارش
                 </label>
                 <input
+                  id={`${fieldId}-customer_code-${idx}`}
                   type="text"
                   value={product.customer_code}
                   onChange={(e) => onUpdateProductRow(idx, 'customer_code', e.target.value)}
@@ -109,14 +112,15 @@ export const ProjectProductsForm: React.FC<ProjectProductsFormProps> = ({
               {/* Quantity and Unit */}
               <div className="flex gap-2">
                 <div className="flex-1">
-                  <label className="block text-2xs font-bold text-slate-600 mb-1">
+                  <label htmlFor={`${fieldId}-quantity-${idx}`} className="block text-2xs font-bold text-slate-600 mb-1">
                     تعداد / تیراژ <span className="text-red-500">*</span>
                   </label>
-                  <ProductQuantityInput value={product.quantity} onChange={(qty) => onUpdateProductRow(idx, 'quantity', qty)} />
+                  <ProductQuantityInput id={`${fieldId}-quantity-${idx}`} value={product.quantity} onChange={(qty) => onUpdateProductRow(idx, 'quantity', qty)} />
                 </div>
                 <div className="w-20">
-                  <label className="block text-2xs font-bold text-slate-600 mb-1">واحد</label>
+                  <label htmlFor={`${fieldId}-unit-${idx}`} className="block text-2xs font-bold text-slate-600 mb-1">واحد</label>
                   <input
+                    id={`${fieldId}-unit-${idx}`}
                     type="text"
                     value={product.unit}
                     onChange={(e) => onUpdateProductRow(idx, 'unit', e.target.value)}
@@ -177,13 +181,14 @@ export const ProjectProductsForm: React.FC<ProjectProductsFormProps> = ({
  * emptied field became 1 at once and typing «20» after it gave 120. Each change is passed on as a number, an empty
  * field as 0; the field is required with a minimum of 1, so the form is not sent empty or zero.
  */
-function ProductQuantityInput({ value, onChange }: { value: number; onChange: (quantity: number) => void }) {
+function ProductQuantityInput({ value, onChange, id }: { value: number; onChange: (quantity: number) => void; id?: string }) {
   const [text, setText] = useState<string>(String(value ?? ''));
   useEffect(() => {
     setText(current => (Number(current) === Number(value) ? current : String(value ?? '')));
   }, [value]);
   return (
     <DecimalInput
+      id={id}
       min="1"
       required
       value={text}

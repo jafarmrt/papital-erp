@@ -1,4 +1,4 @@
-import React, { FormEvent } from 'react';
+import React, { FormEvent, useId } from 'react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
@@ -62,6 +62,7 @@ export function PieceworkLogModal({
   isSaving = false,
   canSetRate = true
 }: PieceworkLogModalProps) {
+  const fieldId = useId();
   const rial = useRialDisplay();
   // ورودی نرخ همیشه به ریال است (مبلغ ذخیره‌شده)
   const inputCurLbl = formatCurrencyLabel('IRR');
@@ -93,8 +94,9 @@ export function PieceworkLogModal({
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">پرسنل</label>
+                    <label htmlFor={`${fieldId}-personnel-name`} className="block text-xs font-bold text-slate-700 mb-1">پرسنل</label>
                     <input
+                      id={`${fieldId}-personnel-name`}
                       type="text"
                       disabled
                       value={editingLog.personnelName || ''}
@@ -102,8 +104,9 @@ export function PieceworkLogModal({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">تاریخ</label>
+                    <label htmlFor={`${fieldId}-date`} className="block text-xs font-bold text-slate-700 mb-1">تاریخ</label>
                     <DatePicker
+                      id={`${fieldId}-date`}
                       value={isoToJalaliDate(editingLog.date) || editingLog.date}
                       onChange={(dateObj: any) => {
                         setEditingLog(prev => prev ? { ...prev, date: extractDateString(dateObj) } : null);
@@ -117,8 +120,9 @@ export function PieceworkLogModal({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">پروژه تولیدی مربوطه</label>
+                  <label htmlFor={`${fieldId}-project-id`} className="block text-xs font-bold text-slate-700 mb-1">پروژه تولیدی مربوطه</label>
                   <SearchableSelect
+                    id={`${fieldId}-project-id`}
                     options={projectSelectOptions}
                     value={editingLog.projectId ? String(editingLog.projectId) : ''}
                     onChange={(val) => setEditingLog(prev => prev ? { ...prev, projectId: val ? Number(val) : null } : null)}
@@ -149,8 +153,9 @@ export function PieceworkLogModal({
                     )}
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">{`نرخ واحد (${inputCurLbl})`}</label>
+                    <label htmlFor={`${fieldId}-unit-rate`} className="block text-xs font-bold text-slate-700 mb-1">{`نرخ واحد (${inputCurLbl})`}</label>
                     <FinancialAmountInput
+                      id={`${fieldId}-unit-rate`}
                       value={editingLog.unitRate}
                       onChange={(val) => setEditingLog(prev => prev ? { ...prev, unitRate: val } : null)}
                       currency="IRR"
@@ -168,8 +173,9 @@ export function PieceworkLogModal({
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">انتخاب پرسنل *</label>
+                    <label htmlFor={`${fieldId}-selected-personnel-for-log`} className="block text-xs font-bold text-slate-700 mb-1">انتخاب پرسنل *</label>
                     <SearchableSelect
+                      id={`${fieldId}-selected-personnel-for-log`}
                       options={personnelSelectOptions}
                       value={selectedPersonnelForLog ? String(selectedPersonnelForLog) : ''}
                       onChange={(val) => setSelectedPersonnelForLog(val ? Number(val) : '')}
@@ -180,8 +186,9 @@ export function PieceworkLogModal({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">تاریخ کارکرد *</label>
+                    <label htmlFor={`${fieldId}-log-date`} className="block text-xs font-bold text-slate-700 mb-1">تاریخ کارکرد *</label>
                     <DatePicker
+                      id={`${fieldId}-log-date`}
                       value={logDate}
                       onChange={(dateObj: any) => {
                         setLogDate(extractDateString(dateObj));
@@ -240,8 +247,9 @@ export function PieceworkLogModal({
                       return (
                         <div key={idx} className="flex flex-col sm:flex-row items-center gap-2 bg-slate-50/60 p-3 rounded-xl border border-slate-200/60">
                           <div className="flex-1 w-full sm:w-5/12">
-                            <label className="block text-[10px] font-bold text-slate-500 mb-1">عنوان کاری *</label>
+                            <label htmlFor={`${fieldId}-task-id-${idx}`} className="block text-[10px] font-bold text-slate-500 mb-1">عنوان کاری *</label>
                             <SearchableSelect
+                              id={`${fieldId}-task-id-${idx}`}
                               options={taskSelectOptions}
                               value={row.taskId ? String(row.taskId) : ''}
                               onChange={(val) => onTaskChangeInRow(idx, val ? Number(val) : '')}
@@ -252,8 +260,9 @@ export function PieceworkLogModal({
                           </div>
 
                           <div className="flex-1 w-full sm:w-4/12">
-                            <label className="block text-[10px] font-bold text-slate-500 mb-1">پروژه مربوطه</label>
+                            <label htmlFor={`${fieldId}-project-id-2-${idx}`} className="block text-[10px] font-bold text-slate-500 mb-1">پروژه مربوطه</label>
                             <SearchableSelect
+                              id={`${fieldId}-project-id-2-${idx}`}
                               options={projectSelectOptions}
                               value={row.projectId ? String(row.projectId) : ''}
                               onChange={(val) => {
@@ -292,8 +301,9 @@ export function PieceworkLogModal({
                           </div>
 
                           <div className="w-full sm:w-28">
-                            <label className="block text-[10px] font-bold text-slate-500 mb-1">{`نرخ واحد (${inputCurLbl})`}</label>
+                            <label htmlFor={`${fieldId}-unit-rate-2-${idx}`} className="block text-[10px] font-bold text-slate-500 mb-1">{`نرخ واحد (${inputCurLbl})`}</label>
                             <FinancialAmountInput
+                              id={`${fieldId}-unit-rate-2-${idx}`}
                               value={row.unitRate}
                               onChange={(val) => {
                                 const newRows = [...batchLogRows];

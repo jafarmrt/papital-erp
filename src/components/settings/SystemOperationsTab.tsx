@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { ShieldAlert, AlertTriangle, Trash2, CheckCircle2, RotateCcw, ShieldCheck, History, RefreshCw } from 'lucide-react';
 import { useAuditLogIntegrityQuery, useInvalidateActivityLogs } from '../../hooks/queries/useActivityLogQueries';
 import { fetchJson } from '../../api';
@@ -18,6 +18,7 @@ interface SystemOperationsTabProps {
 }
 
 export function SystemOperationsTab({ onOpenClearModal }: SystemOperationsTabProps) {
+  const fieldId = useId();
   const { data: integrity, isLoading: isCheckingIntegrity, refetch: refetchIntegrity } = useAuditLogIntegrityQuery();
   const invalidateActivityLogs = useInvalidateActivityLogs();
 
@@ -102,10 +103,11 @@ export function SystemOperationsTab({ onOpenClearModal }: SystemOperationsTabPro
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              <label htmlFor={`${fieldId}-retention-days`} className="block text-xs font-semibold text-slate-700 mb-1.5">
                 دوره نگه‌داشت جهت پاکسازی:
               </label>
               <select
+                id={`${fieldId}-retention-days`}
                 value={retentionDays}
                 onChange={(e) => setRetentionDays(Number(e.target.value))}
                 className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
@@ -225,6 +227,7 @@ export function ClearDataModal({
   isSaving,
   onConfirmClear
 }: ClearDataModalProps) {
+  const fieldId = useId();
   if (!isOpen) return null;
 
   return (
@@ -267,10 +270,11 @@ export function ClearDataModal({
           </div>
 
           <div className="pt-2 border-t border-slate-100">
-            <label className="block font-medium mb-1.5 text-slate-700">
+            <label htmlFor={`${fieldId}-delete-confirm-text`} className="block font-medium mb-1.5 text-slate-700">
               این کار برگشت‌پذیر نیست. برای ادامه، عبارت <span className="text-red-600 font-bold select-all bg-red-50 px-1.5 py-0.5 rounded border border-red-200">{FACTORY_RESET_CONFIRM_WORD}</span> را بنویسید:
             </label>
             <input
+              id={`${fieldId}-delete-confirm-text`}
               type="text"
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}

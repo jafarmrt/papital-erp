@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { fetchJson } from '../api';
 import { X, RefreshCw, ArrowLeftRight, Warehouse, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { SearchableSelect } from './SearchableSelect';
@@ -38,6 +38,7 @@ export default function WarehouseTransferModal({
   onClose,
   onSuccess
 }: WarehouseTransferModalProps) {
+  const fieldId = useId();
   // v10.0.183 (OBS-R1-86): کالا با جست‌وجوی سرور انتخاب می‌شود؛ فهرست کامل کالاها خوانده نمی‌شود
   const [selectedItem, setSelectedItem] = useState<TransferPickItem | null>(null);
   const [warehouses, setWarehouses] = useState<any[]>([]);
@@ -203,10 +204,11 @@ export default function WarehouseTransferModal({
             <>
               {/* Item Selection */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                <label htmlFor={`${fieldId}-selected-item-id`} className="block text-xs font-semibold text-slate-700 mb-1.5">
                   انتخاب کالا جهت انتقال <span className="text-rose-500">*</span>
                 </label>
                 <SearchableSelect
+                  id={`${fieldId}-selected-item-id`}
                   fetchUrl={PICK_LIST_URLS.items}
                   mapResultToOption={transferItemOption}
                   maxResults={20}
@@ -258,10 +260,11 @@ export default function WarehouseTransferModal({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* From Location */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  <label htmlFor={`${fieldId}-from-location`} className="block text-xs font-semibold text-slate-700 mb-1.5">
                     انبار مبدا (کاهش موجودی) <span className="text-rose-500">*</span>
                   </label>
                   <select
+                    id={`${fieldId}-from-location`}
                     value={fromLocation}
                     onChange={(e) => setFromLocation(e.target.value)}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
@@ -282,10 +285,11 @@ export default function WarehouseTransferModal({
 
                 {/* To Location */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  <label htmlFor={`${fieldId}-to-location`} className="block text-xs font-semibold text-slate-700 mb-1.5">
                     انبار مقصد (افزایش موجودی) <span className="text-rose-500">*</span>
                   </label>
                   <select
+                    id={`${fieldId}-to-location`}
                     value={toLocation}
                     onChange={(e) => setToLocation(e.target.value)}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
@@ -303,11 +307,12 @@ export default function WarehouseTransferModal({
               {/* Quantity, Date & Ref */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  <label htmlFor={`${fieldId}-quantity`} className="block text-xs font-semibold text-slate-700 mb-1.5">
                     تعداد / مقدار انتقال <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative">
                     <DecimalInput
+                      id={`${fieldId}-quantity`}
                       step="any"
                       min="0.001"
                       placeholder="۰"
@@ -324,10 +329,11 @@ export default function WarehouseTransferModal({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  <label htmlFor={`${fieldId}-ref-number`} className="block text-xs font-semibold text-slate-700 mb-1.5">
                     شماره حواله / عطف
                   </label>
                   <input
+                    id={`${fieldId}-ref-number`}
                     type="text"
                     value={refNumber}
                     onChange={(e) => setRefNumber(e.target.value)}
@@ -337,10 +343,11 @@ export default function WarehouseTransferModal({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  <label htmlFor={`${fieldId}-date`} className="block text-xs font-semibold text-slate-700 mb-1.5">
                     تاریخ انتقال
                   </label>
                   <JalaliDateInput
+                    id={`${fieldId}-date`}
                     value={date}
                     onChange={setDate}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500"
@@ -350,10 +357,11 @@ export default function WarehouseTransferModal({
 
               {/* Notes */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                <label htmlFor={`${fieldId}-notes`} className="block text-xs font-semibold text-slate-700 mb-1.5">
                   علت انتقال / توضیحات
                 </label>
                 <textarea
+                  id={`${fieldId}-notes`}
                   rows={2}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 import { useWorkflowInstanceQuery, useExecuteTransitionMutation, WorkflowTransition } from '../../hooks/queries';
 import { 
   CheckCircle2, 
@@ -40,6 +40,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
   title = 'گردش کار و تأییدها',
   onStateChange
 }) => {
+  const fieldId = useId();
   const { data: wfData, isLoading, error: readError } = useWorkflowInstanceQuery(entityType, entityId);
   const executeTransitionMutation = useExecuteTransitionMutation();
 
@@ -348,11 +349,12 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
               )}
 
               <div className="mb-3">
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1">
+                <label htmlFor={`${fieldId}-comment`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1">
                   <MessageSquare className="w-3 h-3 text-indigo-500" />
                   توضیحات / یادداشت مدیر (اختیاری):
                 </label>
                 <textarea
+                  id={`${fieldId}-comment`}
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
                   placeholder="دلیل تأیید، رد یا دستور بعدی را بنویسید..."

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useId } from 'react';
 import { X, FileText, CheckCircle2, AlertTriangle, ShoppingCart, UserCheck, Check, Ban, Loader2, PackageCheck, Truck, Layers } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { PurchaseRequisition, ProcurementOrder } from '../../types';
@@ -31,6 +31,7 @@ export function RequisitionDetailModal({
   onRefresh,
   onOpenSplitOrder
 }: RequisitionDetailModalProps) {
+  const fieldId = useId();
   const [comment, setComment] = useState('');
   const [isActing, setIsActing] = useState(false);
   const [ordersVersion, setOrdersVersion] = useState(0);
@@ -470,8 +471,9 @@ export function RequisitionDetailModal({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">یادداشت / دستور اقدام تدارکاتی:</label>
+              <label htmlFor={`${fieldId}-comment`} className="block text-xs font-bold text-slate-700 mb-1">یادداشت / دستور اقدام تدارکاتی:</label>
               <input
+                id={`${fieldId}-comment`}
                 type="text"
                 placeholder="مثلاً: استعلام قیمت از بازار انجام شد، قیمت توافقی به تایید رسید"
                 value={comment}

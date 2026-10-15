@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useId } from 'react';
 import { Search } from 'lucide-react';
 import { formatPersianNumber } from '../../utils';
 import toast from 'react-hot-toast';
@@ -67,6 +67,7 @@ export function PhysicalAuditSheetTab({
   handleApplyCurrentStockAsPhysical,
   handleSubmitAudit
 }: PhysicalAuditSheetTabProps) {
+  const fieldId = useId();
   const auditedCount = Object.keys(auditedItemsMap).length;
   // v10.0.19 (D-11): بی اتصال یا با شماری که عدد نیست، ثبت نهایی غیرفعال است
   const online = useOnlineStatus();
@@ -97,8 +98,9 @@ export function PhysicalAuditSheetTab({
       <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
           <div>
-            <label className="block text-slate-500 font-bold mb-1">شماره ارجاع / سند انبارگردانی:</label>
+            <label htmlFor={`${fieldId}-next-ref`} className="block text-slate-500 font-bold mb-1">شماره ارجاع / سند انبارگردانی:</label>
             <input
+              id={`${fieldId}-next-ref`}
               type="text"
               readOnly
               value={nextRef}
@@ -123,8 +125,9 @@ export function PhysicalAuditSheetTab({
           </div>
 
           <div className="sm:col-span-2">
-            <label className="block text-slate-500 font-bold mb-1">توضیحات و بابت انبارگردانی:</label>
+            <label htmlFor={`${fieldId}-notes`} className="block text-slate-500 font-bold mb-1">توضیحات و بابت انبارگردانی:</label>
             <input
+              id={`${fieldId}-notes`}
               type="text"
               placeholder="مثلاً: انبارگردانی پایان سال ۱۴۰۳ - تیم شمارش ۲"
               value={notes}

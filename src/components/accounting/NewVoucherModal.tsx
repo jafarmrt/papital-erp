@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useId } from 'react';
 import { Plus, CheckCircle2, AlertCircle, FileText, Save, X, Scale, Zap, Copy, Keyboard, Sparkles } from 'lucide-react';
 import { formatPersianPrice, formatPersianNumber, getTodayIsoDate, toStorageDate, errorMessageOf, toPersianDigits } from '../../utils';
 import type { Account, Customer, Personnel, JournalVoucher, FinancialAttachment } from '../../types';
@@ -36,6 +36,7 @@ export function NewVoucherModal({
   onSave,
   editingVoucher,
 }: NewVoucherModalProps) {
+  const fieldId = useId();
   const safeAccounts = Array.isArray(accounts) ? accounts : [];
   const safeCustomers = Array.isArray(customers) ? customers : [];
   const safePersonnelList = Array.isArray(personnelList) ? personnelList : [];
@@ -567,10 +568,11 @@ export function NewVoucherModal({
           {/* Top Form Header Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+              <label htmlFor={`${fieldId}-date`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                 تاریخ سند *
               </label>
               <JalaliDateInput
+                id={`${fieldId}-date`}
                 value={date}
                 onChange={setDate}
                 className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
@@ -579,10 +581,11 @@ export function NewVoucherModal({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+              <label htmlFor={`${fieldId}-voucher-type`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                 نوع سند
               </label>
               <select
+                id={`${fieldId}-voucher-type`}
                 value={voucherType}
                 onChange={e => setVoucherType(e.target.value)}
                 className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
@@ -597,10 +600,11 @@ export function NewVoucherModal({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+              <label htmlFor={`${fieldId}-manual-voucher-number`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                 شماره عطف دستی (اختیاری)
               </label>
               <input
+                id={`${fieldId}-manual-voucher-number`}
                 type="text"
                 value={manualVoucherNumber}
                 onChange={e => setManualVoucherNumber(e.target.value)}
@@ -616,11 +620,12 @@ export function NewVoucherModal({
             />
 
             <div className="sm:col-span-2 md:col-span-4">
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+              <label htmlFor={`${fieldId}-description`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                 شرح کلی سند حسابداری *
               </label>
               <div className="relative">
                 <input
+                  id={`${fieldId}-description`}
                   type="text"
                   required
                   value={description}

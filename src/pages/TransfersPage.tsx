@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useDeferredValue } from 'react';
+import React, { useState, useRef, useEffect, useDeferredValue, useId } from 'react';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { toast } from 'react-hot-toast';
 import { User } from '../types';
@@ -17,6 +17,7 @@ import { TRANSFER_CODE_PAGE_SIZE } from '../lib/transfers/transferCodeList';
 import { useTransferDesignAccess } from '../hooks/inventoryAudit/useStockActionAccess';
 
 export default function TransfersPage({ user }: { user?: User }) {
+  const fieldId = useId();
   const saveMutation = useSaveTransferMutation();
   // v10.0.249 (TD-1130): ساخت و ویرایش با کلیدهای `POST /transfers`، حذف با `products.delete`
   const designAccess = useTransferDesignAccess();
@@ -732,10 +733,11 @@ export default function TransfersPage({ user }: { user?: User }) {
                   {/* Form Fields */}
                   <div className="md:col-span-7 space-y-3">
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                      <label htmlFor={`${fieldId}-edit-code`} className="block text-xs font-bold text-slate-700 mb-1">
                         کد ترنسفر <span className="text-rose-500">*</span>
                       </label>
                       <input
+                        id={`${fieldId}-edit-code`}
                         type="text"
                         required
                         disabled={!!selectedTransfer}
@@ -751,8 +753,9 @@ export default function TransfersPage({ user }: { user?: User }) {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">عنوان / نام طرح ترنسفر</label>
+                      <label htmlFor={`${fieldId}-edit-title`} className="block text-xs font-bold text-slate-700 mb-1">عنوان / نام طرح ترنسفر</label>
                       <input
+                        id={`${fieldId}-edit-title`}
                         type="text"
                         value={editTitle}
                         onChange={(e) => setEditTitle(e.target.value)}
@@ -762,8 +765,9 @@ export default function TransfersPage({ user }: { user?: User }) {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">توضیحات و یادداشت فنی طرح</label>
+                      <label htmlFor={`${fieldId}-edit-notes`} className="block text-xs font-bold text-slate-700 mb-1">توضیحات و یادداشت فنی طرح</label>
                       <textarea
+                        id={`${fieldId}-edit-notes`}
                         rows={2}
                         value={editNotes}
                         onChange={(e) => setEditNotes(e.target.value)}

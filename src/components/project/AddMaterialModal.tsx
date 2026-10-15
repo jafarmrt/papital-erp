@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { 
   Database, X, Search, Plus, Filter, AlertCircle, Info, ArrowRight 
 } from 'lucide-react';
@@ -49,6 +49,7 @@ export function AddMaterialModal({
   handleCategoryChangeForCustom,
   handleAddCustomMaterial
 }: AddMaterialModalProps) {
+  const fieldId = useId();
   // v9.0.398 (TD-826): a new material is only a request to the warehouse queue, offered by the key its route asks
   const canRequestMaterial = useHasPermission('pending_materials.create');
   if (!isOpen) return null;
@@ -193,8 +194,9 @@ export function AddMaterialModal({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 text-xs">دسته‌بندی ماده اولیه *</label>
+                  <label htmlFor={`${fieldId}-category`} className="font-bold text-slate-700 text-xs">دسته‌بندی ماده اولیه *</label>
                   <select
+                    id={`${fieldId}-category`}
                     required
                     value={customMaterialForm.category}
                     onChange={(e) => handleCategoryChangeForCustom(e.target.value)}
@@ -208,7 +210,7 @@ export function AddMaterialModal({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 text-xs">کد کالا در انبار (خودکار / پیش‌فرض)</label>
+                  <label htmlFor={`${fieldId}-item-code`} className="font-bold text-slate-700 text-xs">کد کالا در انبار (خودکار / پیش‌فرض)</label>
                   <div className="flex w-full rounded-xl border border-slate-300 overflow-hidden bg-slate-50">
                     {codePrefix && (
                       <span className="inline-flex items-center px-3 border-l bg-slate-200 text-slate-700 font-mono text-xs font-bold">
@@ -216,6 +218,7 @@ export function AddMaterialModal({
                       </span>
                     )}
                     <input
+                      id={`${fieldId}-item-code`}
                       type="text"
                       value={customMaterialForm.itemCode}
                       onChange={(e) => setCustomMaterialForm({ ...customMaterialForm, itemCode: e.target.value })}

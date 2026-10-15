@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { MessageSquare, X, Send } from 'lucide-react';
 import { DailyWorkLog } from '../../types';
 import { DAILY_LOG_MANAGER_NOTES_MAX } from '../../lib/dailyLogs/dailyLogLimits';
@@ -23,6 +24,7 @@ export function DailyLogReviewModal({
   isSubmittingReview,
   onSaveReview,
 }: DailyLogReviewModalProps) {
+  const fieldId = useId();
   if (!reviewModalLog) return null;
 
   return (
@@ -48,10 +50,11 @@ export function DailyLogReviewModal({
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
+            <label htmlFor={`${fieldId}-review-notes`} className="block text-xs font-bold text-slate-700 mb-1">
               یادداشت و دستور مدیریتی:
             </label>
             <textarea
+              id={`${fieldId}-review-notes`}
               rows={3}
               placeholder="بازخورد، راهنمایی یا دستورات لازم را اینجا بنویسید..."
               value={reviewNotes}

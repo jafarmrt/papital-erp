@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useId } from 'react';
 import { RefreshCw, Sparkles, Filter } from 'lucide-react';
 import { AccountSearchSelect } from '../AccountSearchSelect';
 import { formatCurrencyLabel, getIranianBankFromCard, getIranianBankFromSheba } from '../../../utils';
@@ -24,6 +24,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
   accounts,
   onSave,
 }) => {
+  const fieldId = useId();
   const [formData, setFormData] = useState({
     code: '',
     title: '',
@@ -198,10 +199,11 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+              <label htmlFor={`${fieldId}-type`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                 نوع حساب
               </label>
               <select
+                id={`${fieldId}-type`}
                 value={formData.type}
                 onChange={e => handleTypeChange(e.target.value as any)}
                 className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
@@ -214,10 +216,11 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+            <label htmlFor={`${fieldId}-title`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
               عنوان حساب / صندوق *
             </label>
             <input
+              id={`${fieldId}-title`}
               type="text"
               required
               placeholder="مثال: حساب جاری ملت - کارگاه"
@@ -269,10 +272,11 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
             <>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  <label htmlFor={`${fieldId}-bank-name`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                     نام بانک
                   </label>
                   <input
+                    id={`${fieldId}-bank-name`}
                     type="text"
                     placeholder="ملت، ملی، سامان..."
                     value={formData.bankName}
@@ -281,10 +285,11 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  <label htmlFor={`${fieldId}-branch`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                     شعبه
                   </label>
                   <input
+                    id={`${fieldId}-branch`}
                     type="text"
                     placeholder="مثال: شعبه مرکزی"
                     value={formData.branch}
@@ -334,10 +339,11 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
 
           {/* v9.0.99 (TD-508، ت۵ الف): ارز حساب؛ پس از نخستین گردش ثابت است و سرور تغییرش را با پیام فارسی رد می‌کند */}
           <div>
-            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+            <label htmlFor={`${fieldId}-currency`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
               ارز حساب
             </label>
             <select
+              id={`${fieldId}-currency`}
               value={formData.currency}
               onChange={e => setFormData({ ...formData, currency: e.target.value })}
               className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"

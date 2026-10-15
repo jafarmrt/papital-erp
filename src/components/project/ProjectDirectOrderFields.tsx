@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { SearchableSelect } from '../SearchableSelect';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import type { WarehouseItem } from '../../hooks/queries/useSettingsQueries';
@@ -22,12 +23,14 @@ const fieldClass = 'w-full p-2 bg-white border border-slate-300 rounded-lg text-
  * بی گزینه رسید قطعی. شماره سفارش را سامانه می‌دهد و کالا با «تحویل به انبار» تدارکات وارد انبار می‌شود.
  */
 export function ProjectDirectOrderFields(props: ProjectDirectOrderFieldsProps) {
+  const fieldId = useId();
   const { supplierId, onSupplierChange, supplierOptions, warehouses, targetWarehouse, onWarehouseChange } = props;
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
       <div>
-        <label className="block font-bold text-slate-700 mb-1">تأمین‌کننده:</label>
+        <label htmlFor={`${fieldId}-supplier-id`} className="block font-bold text-slate-700 mb-1">تأمین‌کننده:</label>
         <SearchableSelect
+          id={`${fieldId}-supplier-id`}
           value={supplierId}
           onChange={(val) => onSupplierChange(val)}
           placeholder="-- انتخاب تأمین‌کننده --"
@@ -55,8 +58,9 @@ export function ProjectDirectOrderFields(props: ProjectDirectOrderFieldsProps) {
       </div>
 
       <div>
-        <label className="block font-bold text-slate-700 mb-1">تاریخ نیاز به کالا:</label>
+        <label htmlFor={`${fieldId}-required-date`} className="block font-bold text-slate-700 mb-1">تاریخ نیاز به کالا:</label>
         <JalaliDateInput
+          id={`${fieldId}-required-date`}
           value={props.requiredDate}
           onChange={props.onRequiredDateChange}
           placeholder="انتخاب تاریخ"
@@ -65,8 +69,9 @@ export function ProjectDirectOrderFields(props: ProjectDirectOrderFieldsProps) {
       </div>
 
       <div>
-        <label className="block font-bold text-slate-700 mb-1">یادداشت سفارش:</label>
+        <label htmlFor={`${fieldId}-notes`} className="block font-bold text-slate-700 mb-1">یادداشت سفارش:</label>
         <input
+          id={`${fieldId}-notes`}
           type="text"
           value={props.notes}
           onChange={e => props.onNotesChange(e.target.value)}

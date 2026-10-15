@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { Scale, X } from 'lucide-react';
 import { COMMON_UNITS, roundToOneDecimal } from './projectInventoryUtils';
 import { toPersianDigits, formatPersianNumber } from '../../utils';
@@ -43,6 +43,7 @@ export function UnitConversionModal({
   setConversionForm,
   handleApplyUnitConversion
 }: UnitConversionModalProps) {
+  const fieldId = useId();
   if (!isOpen || !conversionTarget) return null;
 
   return (
@@ -76,8 +77,9 @@ export function UnitConversionModal({
           </div>
 
           <div className="space-y-1">
-            <label className="font-bold text-slate-700">واحد جدید / انبار جهت تبدیل:</label>
+            <label htmlFor={`${fieldId}-target-unit`} className="font-bold text-slate-700">واحد جدید / انبار جهت تبدیل:</label>
             <select
+              id={`${fieldId}-target-unit`}
               value={conversionForm.targetUnit}
               onChange={(e) => setConversionForm({ ...conversionForm, targetUnit: e.target.value })}
               className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800 focus:outline-none"
@@ -90,8 +92,9 @@ export function UnitConversionModal({
 
           <div className="grid grid-cols-2 gap-3 pt-1">
             <div className="space-y-1">
-              <label className="font-bold text-slate-700">هر {conversionForm.targetUnit} شامل چند {conversionTarget.originalUnit} است؟</label>
+              <label htmlFor={`${fieldId}-rate`} className="font-bold text-slate-700">هر {conversionForm.targetUnit} شامل چند {conversionTarget.originalUnit} است؟</label>
               <DecimalInput
+                id={`${fieldId}-rate`}
                 min="0.001"
                 step="any"
                 value={conversionForm.rate}
@@ -116,8 +119,9 @@ export function UnitConversionModal({
           </div>
 
           <div className="space-y-1">
-            <label className="font-bold text-slate-700">توضیحات و فرمول تبدیل (اختیاری):</label>
+            <label htmlFor={`${fieldId}-notes`} className="font-bold text-slate-700">توضیحات و فرمول تبدیل (اختیاری):</label>
             <input
+              id={`${fieldId}-notes`}
               type="text"
               value={conversionForm.notes}
               onChange={(e) => setConversionForm({ ...conversionForm, notes: e.target.value })}

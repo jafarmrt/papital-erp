@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useId } from 'react';
 import { Plus, Trash2, CheckCircle2, AlertCircle, FileText, Calendar, Save, X, Scale, Sparkles, AlertTriangle, History } from 'lucide-react';
 import { formatPersianPrice, formatPersianNumber, getTodayIsoDate, errorMessageOf, toPersianDigits, formatCurrencyLabel } from '../../utils';
 import type { Account, Customer, Personnel, JournalVoucher } from '../../types';
@@ -54,6 +54,7 @@ export function VoucherCorrectionModal({
   personnelList,
   onCorrect,
 }: VoucherCorrectionModalProps) {
+  const fieldId = useId();
   const safeAccounts = Array.isArray(accounts) ? accounts : [];
   const safeCustomers = Array.isArray(customers) ? customers : [];
   const safePersonnelList = Array.isArray(personnelList) ? personnelList : [];
@@ -246,11 +247,12 @@ export function VoucherCorrectionModal({
           {/* Reason & Date */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+              <label htmlFor={`${fieldId}-date`} className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5 text-indigo-500" />
                 <span>تاریخ اصلاحیه</span>
               </label>
               <JalaliDateInput
+                id={`${fieldId}-date`}
                 value={date}
                 onChange={setDate}
                 className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
@@ -300,10 +302,11 @@ export function VoucherCorrectionModal({
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+            <label htmlFor={`${fieldId}-new-description`} className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
               شرح کلی سند جدید اصلاحی
             </label>
             <input
+              id={`${fieldId}-new-description`}
               type="text"
               value={newDescription}
               onChange={(e) => setNewDescription(e.target.value)}

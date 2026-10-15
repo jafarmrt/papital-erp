@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useId } from 'react';
 import { History, Play, RotateCcw, Search, CheckCircle2, AlertTriangle, FileText, Package, Users, Landmark, Layers, GitBranch, Clock, ShieldCheck, ChevronDown, ChevronUp, Sparkles, Zap } from 'lucide-react';
 import { formatPersianDate, errorMessageOf, formatPersianNumber } from '../../utils';
 import { fetchJson } from '../../api';
@@ -31,6 +31,7 @@ interface TimelineItem {
 }
 
 export function EventSourcingReplaySubTab() {
+  const fieldId = useId();
   // v9.0.435 (TD-722): the replay simulation route is guarded by events.manage
   const canManage = useHasPermission('events.manage');
   const [types, setTypes] = useState<AggregateTypeOption[]>([]);
@@ -245,9 +246,10 @@ export function EventSourcingReplaySubTab() {
         {/* Search and Specific Instance Dropdown */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-slate-800">
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">جست‌وجوی موجودیت:</label>
+            <label htmlFor={`${fieldId}-search-keyword`} className="text-xs font-semibold text-slate-700 dark:text-slate-300">جست‌وجوی موجودیت:</label>
             <div className="relative">
               <input
+                id={`${fieldId}-search-keyword`}
                 type="text"
                 placeholder="جست‌وجو با کد یا عنوان (مثال: فاکتور، کالا، مشتری)…"
                 value={searchKeyword}
@@ -259,8 +261,9 @@ export function EventSourcingReplaySubTab() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">انتخاب نمونه موجودیت:</label>
+            <label htmlFor={`${fieldId}-selected-aggregate-id`} className="text-xs font-semibold text-slate-700 dark:text-slate-300">انتخاب نمونه موجودیت:</label>
             <select
+              id={`${fieldId}-selected-aggregate-id`}
               value={selectedAggregateId}
               onChange={e => setSelectedAggregateId(e.target.value)}
               className="w-full text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"

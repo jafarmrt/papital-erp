@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useId } from 'react';
 import { FolderTree, ShoppingBag, Copy, Check, RefreshCw, Key, ShieldCheck, Database, FileText } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { formatPersianDateTime, formatPersianDate, formatPersianNumber } from '../../utils';
@@ -81,6 +81,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
   isSyncingAllStocks,
   access = FULL_ACCESS,
 }) => {
+  const fieldId = useId();
   const [copiedWebhook, setCopiedWebhook] = useState(false);
   // v10.0.227 (OBS-PR-17): فهرست سفارش‌ها و گزارش ووکامرس فقط وقتی این زبانه باز می‌شود خوانده می‌شوند
   const loadListsRef = useRef(loadSyncedWcOrders);
@@ -123,8 +124,9 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
         )}
         <fieldset disabled={!access.connection} className="grid md:grid-cols-2 gap-6 mb-6">
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium mb-1 text-slate-700">نشانی سایت</label>
+            <label htmlFor={`${fieldId}-wc-store-url`} className="block text-sm font-medium mb-1 text-slate-700">نشانی سایت</label>
             <input
+              id={`${fieldId}-wc-store-url`}
               type="url"
               value={wcStoreUrl}
               onChange={(e) => setWcStoreUrl(e.target.value)}
@@ -136,8 +138,9 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1 text-slate-700">کلید مشتری (Consumer Key)</label>
+            <label htmlFor={`${fieldId}-wc-consumer-key`} className="block text-sm font-medium mb-1 text-slate-700">کلید مشتری (Consumer Key)</label>
             <input
+              id={`${fieldId}-wc-consumer-key`}
               type="password"
               value={wcConsumerKey}
               onChange={(e) => setWcConsumerKey(e.target.value)}
@@ -148,8 +151,9 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1 text-slate-700">رمز مشتری (Consumer Secret)</label>
+            <label htmlFor={`${fieldId}-wc-consumer-secret`} className="block text-sm font-medium mb-1 text-slate-700">رمز مشتری (Consumer Secret)</label>
             <input
+              id={`${fieldId}-wc-consumer-secret`}
               type="password"
               value={wcConsumerSecret}
               onChange={(e) => setWcConsumerSecret(e.target.value)}
@@ -222,11 +226,12 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
 
         {/* HMAC Secret Config */}
         <fieldset disabled={!access.connection} className="bg-white/90 border border-blue-200 rounded-lg p-3 space-y-2">
-          <label className="block text-xs font-bold text-blue-950 flex items-center gap-1.5">
+          <label htmlFor={`${fieldId}-wc-webhook-secret`} className="block text-xs font-bold text-blue-950 flex items-center gap-1.5">
             <Key size={14} className="text-amber-600" />
             کلید محرمانه امضای وب‌هوک (Secret)
           </label>
           <input
+            id={`${fieldId}-wc-webhook-secret`}
             type="password"
             autoComplete="new-password"
             value={wcWebhookSecret}

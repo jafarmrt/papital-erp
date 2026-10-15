@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useId } from 'react';
 import { ArrowDownLeft, ArrowUpRight, X, ShieldCheck } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { SearchableSelect } from '../../SearchableSelect';
@@ -39,6 +39,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
   appCurrency,
   onSave,
 }) => {
+  const fieldId = useId();
   const rial = useMemo(() => rialDisplayOf(appCurrency), [appCurrency]);
   const canSkipVoucher = useHasPermission(NO_VOUCHER_TREASURY_PERMISSION);
   const [formData, setFormData] = useState({
@@ -251,10 +252,11 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
           <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                <label htmlFor={`${fieldId}-date`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                   تاریخ تراکنش *
                 </label>
                 <JalaliDateInput
+                  id={`${fieldId}-date`}
                   value={formData.date}
                   onChange={iso => setFormData({ ...formData, date: iso })}
                   calendarPosition="bottom-right"
@@ -264,11 +266,12 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
               </div>
 
               <div>
-                <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                <label htmlFor={`${fieldId}-method`} className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                   <span>روش پرداخت</span>
                   <HelpBadge text="روش جابجایی وجه: حواله بین‌بانکی، کارتخوان فروشگاهی یا نقد صندوق. چک از «مدیریت چک‌های صیادی» ثبت می‌شود." />
                 </label>
                 <select
+                  id={`${fieldId}-method`}
                   value={formData.method}
                   onChange={e => setFormData({ ...formData, method: e.target.value as any })}
                   className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
@@ -281,11 +284,12 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
             </div>
 
             <div>
-              <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+              <label htmlFor={`${fieldId}-bank-account-id`} className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                 <span>حساب بانکی / صندوق مرتبط *</span>
                 <HelpBadge text="حساب یا صندوقی که وجه از آن کسر یا به آن واریز می‌شود. برای صدور سند حسابداری باید به حساب معین چارت متصل باشد." />
               </label>
               <select
+                id={`${fieldId}-bank-account-id`}
                 required
                 value={formData.bankAccountId || ''}
                 onChange={e => setFormData({ ...formData, bankAccountId: Number(e.target.value) || null })}
@@ -307,11 +311,12 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
 
             {isForeignBank && (
               <div>
-                <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                <label htmlFor={`${fieldId}-exchange-rate`} className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                   <span>نرخ تسعیر {selectedBank?.currency} (ریال برای هر واحد) *</span>
                   <HelpBadge text="تراکنش حساب ارزی بدون نرخ تسعیر ثبت نمی‌شود؛ سند حسابداری با همین نرخ به ریال تسعیر می‌شود." />
                 </label>
                 <DecimalInput
+                  id={`${fieldId}-exchange-rate`}
                   required
                   min={1}
                   step="any"
@@ -324,10 +329,11 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                <label htmlFor={`${fieldId}-party-type`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                   طرف حساب
                 </label>
                 <select
+                  id={`${fieldId}-party-type`}
                   value={formData.partyType}
                   onChange={e => setFormData({
                     ...formData,
@@ -439,10 +445,11 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                <label htmlFor={`${fieldId}-tracking-number`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                   شماره پیگیری / ارجاع
                 </label>
                 <input
+                  id={`${fieldId}-tracking-number`}
                   type="text"
                   placeholder="کد پیگیری تراکنش..."
                   value={formData.trackingNumber}
@@ -453,10 +460,11 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+              <label htmlFor={`${fieldId}-description`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                 شرح و توضیحات
               </label>
               <input
+                id={`${fieldId}-description`}
                 type="text"
                 placeholder="بابت تسویه فاکتور / واریزی علی‌الحساب..."
                 value={formData.description}

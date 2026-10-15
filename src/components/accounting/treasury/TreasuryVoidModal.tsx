@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useId } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { formatPersianPrice } from '../../../utils';
 import type { TreasuryTransaction } from '../../../types';
@@ -17,6 +17,7 @@ export const TreasuryVoidModal: React.FC<TreasuryVoidModalProps> = ({
   onConfirm,
   zIndexClassName = 'z-50',
 }) => {
+  const fieldId = useId();
   const [voidReason, setVoidReason] = useState('');
   const [isVoiding, setIsVoiding] = useState(false);
   const [reasonError, setReasonError] = useState('');
@@ -58,10 +59,11 @@ export const TreasuryVoidModal: React.FC<TreasuryVoidModalProps> = ({
           با شماره سری جدید و سند معکوس حسابداری ثبت و مانده «{target.bankAccountTitle || '—'}» اصلاح خواهد شد.
           رکورد اصلی حذف نمی‌شود و با وضعیت «ابطال‌شده» در تاریخچه می‌ماند.
         </p>
-        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+        <label htmlFor={`${fieldId}-void-reason`} className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
           دلیل ابطال <span className="text-rose-500">*</span>
         </label>
         <textarea
+          id={`${fieldId}-void-reason`}
           value={voidReason}
           onChange={(e) => { setVoidReason(e.target.value); setReasonError(''); }}
           aria-invalid={reasonError ? true : undefined}

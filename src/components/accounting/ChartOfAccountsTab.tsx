@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useId } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { FolderTree, Plus, Search, ChevronRight, ChevronDown, Edit3, Trash2, RefreshCw } from 'lucide-react';
 import { formatPersianPrice, errorMessageOf } from '../../utils';
@@ -30,6 +30,7 @@ export function ChartOfAccountsTab({
   onDeleteAccount,
   onSeedStandardAccounts,
 }: ChartOfAccountsTabProps) {
+  const fieldId = useId();
   // v9.0.228 (TD-567، B03-25): استقرار کدینگ پیش‌فرض فقط برای مدیر سیستم (گارد `requireSystemAdmin`)؛ پیش‌تر مدیر، مدیر مالی و
   // حسابدار دکمه را می‌دیدند و ۴۰۳ می‌گرفتند
   const canSeedStandardAccounts = useIsSystemAdmin();
@@ -531,10 +532,11 @@ export function ChartOfAccountsTab({
               )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  <label htmlFor={`${fieldId}-code`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                     کد حساب *
                   </label>
                   <input
+                    id={`${fieldId}-code`}
                     type="text"
                     required
                     aria-label="کد حساب"
@@ -550,10 +552,11 @@ export function ChartOfAccountsTab({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  <label htmlFor={`${fieldId}-level`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                     سطح حساب *
                   </label>
                   <select
+                    id={`${fieldId}-level`}
                     value={formData.level}
                     disabled={!!editingAccount}
                     onChange={e => setFormData({ ...formData, level: e.target.value as AccountLevel })}
@@ -568,10 +571,11 @@ export function ChartOfAccountsTab({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                <label htmlFor={`${fieldId}-name`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                   عنوان حساب *
                 </label>
                 <input
+                  id={`${fieldId}-name`}
                   type="text"
                   required
                   value={formData.name}
@@ -583,10 +587,11 @@ export function ChartOfAccountsTab({
 
               {formData.level !== 'group' && (
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  <label htmlFor={`${fieldId}-parent-id`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                     حساب بالادست (والد)
                   </label>
                   <select
+                    id={`${fieldId}-parent-id`}
                     aria-label="حساب بالادست"
                     value={formData.parentId || ''}
                     disabled={systemLocked}
@@ -612,10 +617,11 @@ export function ChartOfAccountsTab({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  <label htmlFor={`${fieldId}-account-type`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                     نوع / طبقه‌بندی
                   </label>
                   <select
+                    id={`${fieldId}-account-type`}
                     aria-label="نوع حساب"
                     value={formData.accountType}
                     disabled={systemLocked}
@@ -632,10 +638,11 @@ export function ChartOfAccountsTab({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  <label htmlFor={`${fieldId}-nature`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                     ماهیت حساب
                   </label>
                   <select
+                    id={`${fieldId}-nature`}
                     aria-label="ماهیت حساب"
                     value={formData.nature}
                     disabled={systemLocked}
@@ -650,10 +657,11 @@ export function ChartOfAccountsTab({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                <label htmlFor={`${fieldId}-description`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                   توضیحات و یادداشت
                 </label>
                 <textarea
+                  id={`${fieldId}-description`}
                   rows={2}
                   value={formData.description}
                   onChange={e => setFormData({ ...formData, description: e.target.value })}

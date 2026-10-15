@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { Item, Category } from '../../../types';
 import { ItemFormData } from './types';
 import { RefreshCw, CheckCircle2 } from 'lucide-react';
@@ -54,14 +54,16 @@ export const ItemBasicForm: React.FC<ItemBasicFormProps> = ({
   productSerialReserved = false,
   rawSerialReserved = false
 }) => {
+  const fieldId = useId();
   return (
     <div className="space-y-4">
       {/* Name Input */}
       <div>
-        <label className="block text-xs font-bold text-slate-700 mb-1">
+        <label htmlFor={`${fieldId}-name`} className="block text-xs font-bold text-slate-700 mb-1">
           نام کالا / محصول <span className="text-red-500">*</span>
         </label>
         <input
+          id={`${fieldId}-name`}
           required
           type="text"
           value={form.name}
@@ -74,8 +76,9 @@ export const ItemBasicForm: React.FC<ItemBasicFormProps> = ({
       {/* Category & Type Selection */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1">دسته‌بندی</label>
+          <label htmlFor={`${fieldId}-category`} className="block text-xs font-bold text-slate-700 mb-1">دسته‌بندی</label>
           <select
+            id={`${fieldId}-category`}
             value={form.category}
             onChange={e => onCategoryChange(e.target.value)}
             className="w-full border border-slate-300/80 rounded-xl px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500"
@@ -91,8 +94,9 @@ export const ItemBasicForm: React.FC<ItemBasicFormProps> = ({
         </div>
 
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1">نوع کالا</label>
+          <label htmlFor={`${fieldId}-type`} className="block text-xs font-bold text-slate-700 mb-1">نوع کالا</label>
           <select
+            id={`${fieldId}-type`}
             disabled={!!item}
             value={form.type}
             onChange={e => {
@@ -254,8 +258,9 @@ export const ItemBasicForm: React.FC<ItemBasicFormProps> = ({
       {/* Unit & Reorder point */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1">واحد اندازه‌گیری</label>
+          <label htmlFor={`${fieldId}-unit`} className="block text-xs font-bold text-slate-700 mb-1">واحد اندازه‌گیری</label>
           <input
+            id={`${fieldId}-unit`}
             required
             type="text"
             placeholder="عدد، کیلوگرم، متر..."
@@ -265,8 +270,9 @@ export const ItemBasicForm: React.FC<ItemBasicFormProps> = ({
           />
         </div>
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1">حد آستانه سفارش (هشدار)</label>
+          <label htmlFor={`${fieldId}-reorder_point`} className="block text-xs font-bold text-slate-700 mb-1">حد آستانه سفارش (هشدار)</label>
           <DecimalInput
+            id={`${fieldId}-reorder_point`}
             min="0"
             step="any"
             value={form.reorder_point}

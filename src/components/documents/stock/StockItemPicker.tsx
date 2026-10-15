@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { Plus, Package } from 'lucide-react';
 import { Item } from '../../../types';
 import { formatCurrencyLabel, formatPersianNumber, formatPersianPrice } from '../../../utils';
@@ -19,6 +20,7 @@ interface StockItemPickerProps {
  * کالای انتخاب‌شده — استخراج‌شده از DocumentsPage.
  */
 export function StockItemPicker({ form, onItemSelect, onAddItem, onCreateItem }: StockItemPickerProps) {
+  const fieldId = useId();
   const {
     actionType, docType, canCreateOrEditItem, getItemReservationSummary, currency, selectedItem,
     quantity, setQuantity, unitPrice, setUnitPrice, selectedItemObj,
@@ -99,8 +101,8 @@ export function StockItemPicker({ form, onItemSelect, onAddItem, onCreateItem }:
           </div>
 
           <div className={actionType === 'in' ? "md:col-span-2" : "md:col-span-2"}>
-            <label className="block text-xs font-bold mb-1.5 text-slate-700">تعداد / مقدار</label>
-            <DecimalInput 
+            <label htmlFor={`${fieldId}-quantity`} className="block text-xs font-bold mb-1.5 text-slate-700">تعداد / مقدار</label>
+            <DecimalInput id={`${fieldId}-quantity`} 
               min="0" 
               step="any" 
               value={quantity} 
@@ -113,10 +115,10 @@ export function StockItemPicker({ form, onItemSelect, onAddItem, onCreateItem }:
 
           {actionType === 'in' && (
             <div className="md:col-span-3">
-              <label className="block text-xs font-bold mb-1.5 text-slate-700">
+              <label htmlFor={`${fieldId}-unit-price`} className="block text-xs font-bold mb-1.5 text-slate-700">
                 {production ? `${stockInLabels(docType).unitPrice} (${formatCurrencyLabel('IRR')})` : `قیمت خرید واحد (فی - ${formatCurrencyLabel(currency)})`}
               </label>
-              <DecimalInput 
+              <DecimalInput id={`${fieldId}-unit-price`} 
                 min="0" 
                 step="any" 
                 value={unitPrice} 

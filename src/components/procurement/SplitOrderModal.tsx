@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useId } from 'react';
 import { X, ShoppingBag, Plus, Trash2, CheckCircle2, Building2, FileText, AlertCircle, Loader2, ArrowDown, PackageCheck } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { PurchaseRequisition, PurchaseRequisitionItemRow } from '../../types';
@@ -56,6 +56,7 @@ export function SplitOrderModal({
   onClose,
   onSuccess
 }: SplitOrderModalProps) {
+  const fieldId = useId();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { options: supplierOptions } = useSupplierSelectOptions();
 
@@ -595,10 +596,11 @@ export function SplitOrderModal({
                   <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-white border-b border-slate-100 text-xs">
                     {/* Supplier Name with SearchableSelect */}
                     <div className="lg:col-span-2">
-                      <label className="block font-bold text-slate-700 mb-1">
+                      <label htmlFor={`${fieldId}-supplier-name-${pkg.id}`} className="block font-bold text-slate-700 mb-1">
                         نام تامین‌کننده / فروشنده <span className="text-rose-500">*</span>:
                       </label>
                       <SearchableSelect
+                        id={`${fieldId}-supplier-name-${pkg.id}`}
                         value={pkg.supplierName}
                         onChange={(val) => handleUpdatePackageField(pkg.id, 'supplierName', val)}
                         placeholder="-- جست‌وجو یا انتخاب از طرفین حساب --"
@@ -626,8 +628,9 @@ export function SplitOrderModal({
 
                     {/* Target Warehouse (Dynamic select) */}
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">انبار مقصد ورود کالا:</label>
+                      <label htmlFor={`${fieldId}-target-warehouse-${pkg.id}`} className="block font-bold text-slate-700 mb-1">انبار مقصد ورود کالا:</label>
                       <select
+                        id={`${fieldId}-target-warehouse-${pkg.id}`}
                         value={pkg.targetWarehouse}
                         onChange={e => handleUpdatePackageField(pkg.id, 'targetWarehouse', e.target.value)}
                         className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 font-bold focus:bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none cursor-pointer"
@@ -646,8 +649,9 @@ export function SplitOrderModal({
 
                     {/* Notes */}
                     <div className="sm:col-span-2 lg:col-span-4">
-                      <label className="block font-bold text-slate-700 mb-1">یادداشت و شرایط تحویل تامین‌کننده:</label>
+                      <label htmlFor={`${fieldId}-notes-${pkg.id}`} className="block font-bold text-slate-700 mb-1">یادداشت و شرایط تحویل تامین‌کننده:</label>
                       <input
+                        id={`${fieldId}-notes-${pkg.id}`}
                         type="text"
                         value={pkg.notes}
                         onChange={e => handleUpdatePackageField(pkg.id, 'notes', e.target.value)}
@@ -803,10 +807,11 @@ export function SplitOrderModal({
             {closeRequisition && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-slate-200 text-xs">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">
+                  <label htmlFor={`${fieldId}-closure-reason-type`} className="block font-bold text-slate-700 mb-1">
                     علت یا وضعیت نهایی پرونده:
                   </label>
                   <select
+                    id={`${fieldId}-closure-reason-type`}
                     value={closureReasonType}
                     onChange={e => setClosureReasonType(e.target.value)}
                     className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer"
@@ -819,10 +824,11 @@ export function SplitOrderModal({
                   </select>
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">
+                  <label htmlFor={`${fieldId}-closure-notes`} className="block font-bold text-slate-700 mb-1">
                     توضیحات تکمیلی مغایرت و تصمیم تدارکات:
                   </label>
                   <input
+                    id={`${fieldId}-closure-notes`}
                     type="text"
                     value={closureNotes}
                     onChange={e => setClosureNotes(e.target.value)}

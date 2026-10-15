@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useId } from 'react';
 import { ArrowLeftRight, X } from 'lucide-react';
 import { getTodayIsoDate } from '../../../utils';
 import { rialDisplayOf } from '../../../lib/rialDisplay';
@@ -31,6 +31,7 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
   appCurrency,
   onSave,
 }) => {
+  const fieldId = useId();
   const rial = useMemo(() => rialDisplayOf(appCurrency), [appCurrency]);
   const [formData, setFormData] = useState({
     fromBankAccountId: null as number | null,
@@ -122,11 +123,12 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+            <label htmlFor={`${fieldId}-from-bank-account-id`} className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
               <span>از حساب / صندوق (مبدأ) *</span>
               <HelpBadge text="حساب یا صندوقی که وجه از آن کسر می‌گردد (بستانکار می‌شود)." />
             </label>
             <select
+              id={`${fieldId}-from-bank-account-id`}
               required
               value={formData.fromBankAccountId || ''}
               onChange={e => updateForm(p => ({ ...p, fromBankAccountId: Number(e.target.value) || null }))}
@@ -142,11 +144,12 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
           </div>
 
           <div>
-            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+            <label htmlFor={`${fieldId}-to-bank-account-id`} className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
               <span>به حساب / صندوق (مقصد) *</span>
               <HelpBadge text="حساب یا صندوقی که وجه به آن اضافه می‌گردد (بدهکار می‌شود)." />
             </label>
             <select
+              id={`${fieldId}-to-bank-account-id`}
               required
               value={formData.toBankAccountId || ''}
               onChange={e => updateForm(p => ({ ...p, toBankAccountId: Number(e.target.value) || null }))}
@@ -178,8 +181,9 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">تاریخ *</label>
+              <label htmlFor={`${fieldId}-date`} className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">تاریخ *</label>
               <JalaliDateInput
+                id={`${fieldId}-date`}
                 value={formData.date}
                 onChange={iso => updateForm(p => ({ ...p, date: iso }))}
                 calendarPosition="bottom-right"
@@ -190,8 +194,9 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">شماره پیگیری</label>
+            <label htmlFor={`${fieldId}-tracking-number`} className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">شماره پیگیری</label>
             <input
+              id={`${fieldId}-tracking-number`}
               type="text"
               value={formData.trackingNumber}
               onChange={e => updateForm(p => ({ ...p, trackingNumber: e.target.value }))}
@@ -201,8 +206,9 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">توضیحات</label>
+            <label htmlFor={`${fieldId}-description`} className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">توضیحات</label>
             <input
+              id={`${fieldId}-description`}
               type="text"
               value={formData.description}
               onChange={e => updateForm(p => ({ ...p, description: e.target.value }))}

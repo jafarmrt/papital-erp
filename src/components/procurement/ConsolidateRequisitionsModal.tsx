@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 import { X, Layers, Check, Loader2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { PurchaseRequisition } from '../../types';
@@ -18,6 +18,7 @@ export function ConsolidateRequisitionsModal({
   onClose,
   onSuccess
 }: ConsolidateRequisitionsModalProps) {
+  const fieldId = useId();
   const [title, setTitle] = useState(
     () => `تجمیع درخواست‌های خرید (${selectedRequisitions.map(r => r.code).join('، ')})`
   );
@@ -90,8 +91,9 @@ export function ConsolidateRequisitionsModal({
           </div>
 
           <div>
-            <label className="block font-bold text-slate-700 mb-1">عنوان درخواست تجمیعی جدید:</label>
+            <label htmlFor={`${fieldId}-title`} className="block font-bold text-slate-700 mb-1">عنوان درخواست تجمیعی جدید:</label>
             <input
+              id={`${fieldId}-title`}
               type="text"
               value={title}
               onChange={e => setTitle(e.target.value)}
