@@ -21,6 +21,7 @@ import { releaseReservationsForAllocation, restoreReservationsForAllocation } fr
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { isProjectOpenForAllocation, projectStatusLabel } from '../../lib/projects/projectStatus.js';
 import { allocationStatusLabel } from '../../lib/projects/allocationLabels.js';
+import { logBomAllocation, logBomConsumption, logBomRelease } from './bomAllocationAudit.js';
 export interface BomAllocationItemInput {
   itemId: number;
   quantity: number;
@@ -306,6 +307,7 @@ export class ProjectBomAllocationService {
     userId?: number;
     username?: string;
     externalTx?: DbExecutor;
+    auditReq?: unknown;
   }): Promise<{
     allocatedCount: number;
     allocations: ProjectBomAllocationRecord[];
@@ -372,7 +374,9 @@ export class ProjectBomAllocationService {
         results.push(record);
       }
 
-      return { allocatedCount: results.length, allocations: results };
+      const result = { allocatedCount: results.length, allocations: results };
+      await logBomAllocation(txEngine, { req: params.auditReq, userId: params.userId, username: params.username }, project.id, result);
+      return result;
     });
   }
 
@@ -391,6 +395,8 @@ export class ProjectBomAllocationService {
     userId?: number;
     username?: string;
     externalTx?: DbExecutor;
+    /** TD-943: the request, for the user and IP address of the audit row written with this transaction */
+    auditReq?: unknown;
   }): Promise<{
     allocatedCount: number;
     allocations: ProjectBomAllocationRecord[];
@@ -438,7 +444,9 @@ export class ProjectBomAllocationService {
         results.push(record);
       }
 
-      return { allocatedCount: results.length, allocations: results };
+      const result = { allocatedCount: results.length, allocations: results };
+      await logBomAllocation(txEngine, { req: params.auditReq, userId: params.userId, username: params.username }, project.id, result);
+      return result;
     });
   }
 
@@ -447,7 +455,7 @@ export class ProjectBomAllocationService {
    */
   static async consumeAllocation(
     allocationId: number,
-    opts?: { userId?: number; username?: string; externalTx?: DbExecutor }
+    opts?: { userId?: number; username?: string; externalTx?: DbExecutor; auditReq?: unknown }
   ): Promise<ProjectBomAllocationRecord> {
     const executeConsume = async (txEngine: DbExecutor) => {
       const [alloc] = await txEngine
@@ -478,12 +486,14 @@ export class ProjectBomAllocationService {
         })
         .where(eq(projectBomAllocations.id, allocationId));
 
-      return {
+      const consumed = {
         ...alloc,
         quantity: fin(alloc.quantity).toNumber(),
         status: 'consumed',
         consumedAt,
       } as ProjectBomAllocationRecord;
+      await logBomConsumption(txEngine, { req: opts?.auditReq, userId: opts?.userId, username: opts?.username }, consumed);
+      return consumed;
     };
 
     if (opts?.externalTx) {
@@ -497,7 +507,7 @@ export class ProjectBomAllocationService {
    */
   static async releaseAllocation(
     allocationId: number,
-    opts?: { reason?: string; userId?: number; username?: string; externalTx?: DbExecutor }
+    opts?: { reason?: string; userId?: number; username?: string; externalTx?: DbExecutor; auditReq?: unknown }
   ): Promise<ProjectBomAllocationRecord> {
     const operatorName = opts?.username || 'سیستم';
     const reason = opts?.reason || 'آزادسازی تخصیص مواد اولیه پروژه';
@@ -585,12 +595,14 @@ export class ProjectBomAllocationService {
         })
         .where(eq(projectBomAllocations.id, allocationId));
 
-      return {
+      const released = {
         ...alloc,
         quantity: qty,
         status: 'released',
         releasedAt,
       } as ProjectBomAllocationRecord;
+      await logBomRelease(txEngine, { req: opts?.auditReq, userId: opts?.userId, username: opts?.username }, released);
+      return released;
     };
 
     if (opts?.externalTx) {

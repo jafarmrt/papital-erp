@@ -29,7 +29,10 @@ import { withRequiredPermissions } from '../../lib/permissions/permissionCatalog
  * step creates every template role whose code is missing, exactly as an admin would from the roles page.
  */
 export async function bootstrapTestMasterData(): Promise<void> {
-  const seedResult = await runSeedWithLock();
+  // TD-1266: the seed lock is shared by every schema of the database; a run that only tried it skipped the seed while
+  // another process (another test run or simulator) was seeding its own schema, and this schema then had no chart of
+  // accounts (the simulator stopped on its bank with BANK_LEDGER_ACCOUNT_INVALID). Waiting seeds this schema every time.
+  const seedResult = await runSeedWithLock({ waitForLock: true });
   if (!seedResult.success) {
     throw new Error(`[TestBootstrap] Master-data seed failed: ${seedResult.message}`);
   }

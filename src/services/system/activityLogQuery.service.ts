@@ -106,26 +106,45 @@ export class ActivityLogQueryService {
     return { data, count };
   }
 
-  /** مقادیر متمایز کاربر، عملیات و موجودیت برای فیلترهای صفحه تاریخچه ممیزی. */
+  /**
+   * The filter lists of the activity log page. TD-1267 (I-04 follow-up): each list is read with a loose index scan over its
+   * own index (`activity_logs_username` / `_action` / `_entity`), one index probe per distinct value, so the answer stays
+   * fast as the table grows; before, three `SELECT DISTINCT` read the whole table (p95 107 ms at 300,000 rows, the slowest
+   * API of the baseline). A user's full name is read through the same index: the range form of the username condition with
+   * `ORDER BY username` keeps the planner on the index, where an equality let it pick a whole-table scan for a rare user.
+   */
   static async getFilterOptions() {
-    const rawUsers = await orm.selectDistinct({ username: activityLogs.username, fullName: activityLogs.userFullName }).from(activityLogs);
-    const userMap = new Map<string, string>();
-    rawUsers.forEach(u => {
-      if (u.username) {
-        if (!userMap.has(u.username) || (u.fullName && !userMap.get(u.username))) {
-          userMap.set(u.username, u.fullName || '');
-        }
-      }
-    });
-    const userOptions = Array.from(userMap.entries()).map(([username, fullName]) => ({ username, fullName }));
-
-    const distinctActions = await orm.selectDistinct({ action: activityLogs.action }).from(activityLogs);
-    const distinctEntities = await orm.selectDistinct({ entity: activityLogs.entity }).from(activityLogs);
-
-    return {
-      users: userOptions,
-      actions: distinctActions.map(a => a.action).filter(Boolean),
-      entities: distinctEntities.map(e => e.entity).filter(Boolean)
-    };
+    const [userRows, actionRows, entityRows] = await Promise.all([
+      orm.execute(sql`
+        WITH RECURSIVE names(username) AS (
+          (SELECT username FROM activity_logs ORDER BY username LIMIT 1)
+          UNION ALL
+          SELECT (SELECT a.username FROM activity_logs a WHERE a.username > names.username ORDER BY a.username LIMIT 1)
+          FROM names WHERE names.username IS NOT NULL
+        )
+        SELECT names.username,
+          COALESCE((SELECT a.user_full_name FROM activity_logs a
+            WHERE a.username >= names.username AND a.username <= names.username AND a.user_full_name <> ''
+            ORDER BY a.username LIMIT 1), '') AS full_name
+        FROM names WHERE names.username IS NOT NULL AND names.username <> ''`),
+      distinctColumnValues(sql`action`),
+      distinctColumnValues(sql`entity`),
+    ]);
+    const users = (userRows.rows as Array<{ username: string; full_name: string }>)
+      .map(u => ({ username: String(u.username), fullName: String(u.full_name ?? '') }));
+    return { users, actions: actionRows, entities: entityRows };
   }
+
+}
+
+/** The distinct non-empty values of an indexed text column of `activity_logs`, by a loose index scan */
+async function distinctColumnValues(column: SQL): Promise<string[]> {
+  const res = await orm.execute(sql`
+    WITH RECURSIVE vals(v) AS (
+      (SELECT ${column} FROM activity_logs ORDER BY ${column} LIMIT 1)
+      UNION ALL
+      SELECT (SELECT ${column} FROM activity_logs WHERE ${column} > vals.v ORDER BY ${column} LIMIT 1) FROM vals WHERE vals.v IS NOT NULL
+    )
+    SELECT v FROM vals WHERE v IS NOT NULL AND v <> ''`);
+  return (res.rows as Array<{ v: string }>).map(r => String(r.v));
 }

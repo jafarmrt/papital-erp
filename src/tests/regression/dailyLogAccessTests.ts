@@ -282,7 +282,7 @@ async function publicVisibilityRemovedCase(ctx: Ctx): Promise<string> {
   if (recordedMap[legacyIds.public] !== 'public' || recordedMap[legacyIds.all] !== 'all' || !(legacyIds.empty in recordedMap) || privateId in recordedMap) {
     wrong.push(`recorded old values ${JSON.stringify(recordedMap)}`);
   }
-  const check = await pool.query(`SELECT convalidated FROM pg_constraint WHERE conname = 'chk_daily_work_logs_visibility'`);
+  const check = await pool.query(`SELECT convalidated FROM pg_constraint WHERE connamespace = current_schema()::regnamespace AND conname = 'chk_daily_work_logs_visibility'`);
   if (check.rows[0]?.convalidated !== true) wrong.push('the visibility CHECK is missing or not validated after the migration');
 
   if (wrong.length > 0) throw new Error(wrong.join('; '));
