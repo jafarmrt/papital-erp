@@ -652,7 +652,7 @@ export function JournalVouchersTab({
                   </p>
                 </div>
               </div>
-              <button
+              <button aria-label="بستن"
                 type="button"
                 onClick={() => setWorkflowTargetVoucher(null)}
                 className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"

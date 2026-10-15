@@ -238,7 +238,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
               </p>
             </div>
           </div>
-          <button
+          <button aria-label="بستن"
             type="button"
             onClick={onClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700 transition cursor-pointer"

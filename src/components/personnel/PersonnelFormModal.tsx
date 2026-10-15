@@ -65,7 +65,7 @@ export function PersonnelFormModal({
               </p>
             </div>
           </div>
-          <button
+          <button aria-label="بستن"
             onClick={onClose}
             className="p-1.5 hover:bg-white/20 rounded-xl transition-all cursor-pointer"
           >

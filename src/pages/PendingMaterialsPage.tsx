@@ -481,7 +481,7 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
                   {selectedItem.status === 'pending' ? 'بررسی، ویرایش و تأیید ثبت ماده اولیه در انبار' : 'مشاهده مشخصات ماده اولیه'}
                 </h3>
               </div>
-              <button
+              <button aria-label="بستن"
                 type="button"
                 onClick={() => setIsApproveModalOpen(false)}
                 className="p-1 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
@@ -628,7 +628,7 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
                 <XCircle className="w-5 h-5 text-rose-300" />
                 <h3 className="font-bold text-sm">رد درخواست ماده اولیه</h3>
               </div>
-              <button
+              <button aria-label="بستن"
                 type="button"
                 onClick={() => setIsRejectModalOpen(false)}
                 className="p-1 text-rose-300 hover:text-white rounded-lg transition-colors"

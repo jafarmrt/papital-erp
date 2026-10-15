@@ -630,7 +630,7 @@ export default function CustomersPage({ user }: { user: User }) {
         </span>
         {totalPages > 1 && (
           <div className="flex items-center gap-1.5">
-            <button 
+            <button aria-label="صفحه قبل" 
               disabled={page === 1}
               onClick={() => setPage(p => p - 1)}
               className="p-1.5 border border-slate-200 rounded-lg bg-white hover:bg-slate-100 disabled:opacity-40 text-slate-700 cursor-pointer"
@@ -640,7 +640,7 @@ export default function CustomersPage({ user }: { user: User }) {
             <span className="text-xs font-bold px-2 text-slate-700">
               صفحه {formatPersianNumber(page)} از {formatPersianNumber(totalPages)}
             </span>
-            <button 
+            <button aria-label="صفحه بعد" 
               disabled={page === totalPages}
               onClick={() => setPage(p => p + 1)}
               className="p-1.5 border border-slate-200 rounded-lg bg-white hover:bg-slate-100 disabled:opacity-40 text-slate-700 cursor-pointer"
@@ -685,7 +685,7 @@ export default function CustomersPage({ user }: { user: User }) {
                   </p>
                 </div>
               </div>
-              <button 
+              <button aria-label="بستن" 
                 type="button" 
                 onClick={() => setSelectedLedgerCustomer(null)} 
                 className="text-slate-400 hover:text-slate-600 rounded-lg p-1.5 hover:bg-slate-100 transition-colors"

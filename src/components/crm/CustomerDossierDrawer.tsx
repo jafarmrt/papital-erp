@@ -159,7 +159,7 @@ export function CustomerDossierDrawer({
                 ویرایش حساب
               </button>
             )}
-            <button
+            <button aria-label="بستن"
               onClick={onClose}
               className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
             >

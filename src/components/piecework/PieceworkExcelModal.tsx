@@ -186,7 +186,7 @@ export function PieceworkExcelModal({
               </p>
             </div>
           </div>
-          <button
+          <button aria-label="بستن"
             onClick={onClose}
             className="p-1.5 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition-colors cursor-pointer"
           >

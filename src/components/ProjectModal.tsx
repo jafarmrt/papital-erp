@@ -66,7 +66,7 @@ export default function ProjectModal(props: ProjectModalProps) {
               </p>
             </div>
           </div>
-          <button
+          <button aria-label="بستن"
             onClick={onClose}
             className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
           >

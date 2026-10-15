@@ -238,7 +238,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
               </p>
             </div>
           </div>
-          <button
+          <button aria-label="بستن"
             onClick={onClose}
             disabled={isSubmitting}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors"

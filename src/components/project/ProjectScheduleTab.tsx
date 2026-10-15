@@ -1005,7 +1005,7 @@ export default function ProjectScheduleTab({
                   <p className="text-[11px] text-slate-400">پرسنل مورد نظر را جهت تخصیص کارمزد انتخاب کنید</p>
                 </div>
               </div>
-              <button
+              <button aria-label="بستن"
                 type="button"
                 onClick={() => setPickingTarget(null)}
                 className="p-1.5 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl cursor-pointer transition-colors"

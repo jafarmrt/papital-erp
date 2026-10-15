@@ -77,7 +77,7 @@ export default function UnifiedExcelModal({
               </p>
             </div>
           </div>
-          <button 
+          <button aria-label="بستن" 
             onClick={handleClose} 
             className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
           >

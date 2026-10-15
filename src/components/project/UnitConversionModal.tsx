@@ -53,7 +53,7 @@ export function UnitConversionModal({
             <Scale className="w-5 h-5 text-slate-950" />
             <h3 className="font-bold text-sm">تبدیل واحد شمارش کالا (پروژه به انبار)</h3>
           </div>
-          <button
+          <button aria-label="بستن"
             type="button"
             onClick={onClose}
             className="p-1 hover:bg-amber-600 rounded-lg transition-colors cursor-pointer"

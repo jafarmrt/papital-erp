@@ -33,7 +33,7 @@ export function DailyLogReviewModal({
             <MessageSquare className="w-4 h-4 text-emerald-400" />
             <h3 className="font-bold text-sm">ثبت بازخورد مدیریتی</h3>
           </div>
-          <button
+          <button aria-label="بستن"
             onClick={onClose}
             className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white cursor-pointer"
           >
