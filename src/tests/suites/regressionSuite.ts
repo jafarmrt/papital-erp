@@ -9281,7 +9281,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     try {
       const { createTestWorkflow } = await import('../fixtures/factories.js');
       const { ProcurementService } = await import('../../services/procurement.service.js');
-      const wf = await createTestWorkflow({ definition: { entityType: 'purchase_requisition' } });
+      const wf = await createTestWorkflow({ definition: { entityType: 'purchase_requisition', isActive: 0 } });
       defIds.push(wf.definition.id);
       const violations: string[] = [];
       // تصویر نسخه ۱ قدیمی: payload خام طراح با کلید وضعیت و بدون شناسه پایگاه‌داده
@@ -10011,7 +10011,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
 
       // (ه) امضای چاپ سند: با دو نمونه گردش کار برای یک سند، جدیدترین (created_at، در زمان برابر بزرگ‌ترین شناسه)
       // — همان نمونه GET /workflow/instance — نه اولین ردیف بدون ORDER BY
-      const wf = await createTestWorkflow();
+      const wf = await createTestWorkflow({ definition: { isActive: 0 } });
       createdDefinitionIds.push(wf.definition.id);
       const approvedState = wf.states.approved;
       const addInstance = async (entityId: string, createdAt: string, signer: string) => {

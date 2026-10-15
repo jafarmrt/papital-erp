@@ -2,7 +2,7 @@ import { orm } from '../../db/drizzle.js';
 import { money } from '../../lib/money.js';
 import type { DecimalValue } from '../../lib/financialDecimal.js';
 import bcrypt from 'bcryptjs';
-import { eq, asc, sql } from 'drizzle-orm';
+import { and, eq, asc, inArray, sql } from 'drizzle-orm';
 import {
   users,
   roles,
@@ -291,6 +291,16 @@ export async function createTestWorkflow(overrides: {
     ...overrides.definition
   };
 
+  // v10.1.5 (TD-1229): one active definition per record type (uq_workflow_definitions_active_entity_type); an active test
+  // definition takes over its type and `restore()` gives the type back to the definitions it turned off
+  const displaced: number[] = [];
+  if (Number(defData.isActive) === 1) {
+    const others = await db.select({ id: workflowDefinitions.id }).from(workflowDefinitions)
+      .where(and(eq(workflowDefinitions.entityType, defData.entityType), eq(workflowDefinitions.isActive, 1)));
+    for (const o of others as Array<{ id: number }>) displaced.push(o.id);
+    if (displaced.length > 0) await db.update(workflowDefinitions).set({ isActive: 0 }).where(inArray(workflowDefinitions.id, displaced));
+  }
+
   const [insertedDef] = await db.insert(workflowDefinitions).values(defData).returning();
 
   // Create default states if not provided
@@ -340,10 +350,17 @@ export async function createTestWorkflow(overrides: {
     }
   }
 
+  /** Turns this definition off and the definitions it displaced back on */
+  const restore = async () => {
+    await db.update(workflowDefinitions).set({ isActive: 0 }).where(eq(workflowDefinitions.id, insertedDef.id));
+    if (displaced.length > 0) await db.update(workflowDefinitions).set({ isActive: 1 }).where(inArray(workflowDefinitions.id, displaced));
+  };
+
   return {
     definition: insertedDef,
     states: stateMap,
-    transitions: createdTransitions
+    transitions: createdTransitions,
+    restore
   };
 }
 

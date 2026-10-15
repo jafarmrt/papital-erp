@@ -188,12 +188,13 @@ export async function runWorkflowAccessTests(shouldRun: ShouldRun): Promise<Test
       await h.walk(instanceA, ['submit_to_warehouse'], h.admin);
       const treasurerWalk = [0, ...await h.walk(instanceA, ['approve_warehouse'], treasurer)];
       if (treasurerWalk[1] !== 403) wrong.push(`The treasurer passed the warehouse step with ${treasurerWalk.join(',')}`);
-      const { definition: open } = await createTestWorkflow({ definition: { entityType: 'document', code: `WF445_${h.tag}` } });
+      const { definition: open, restore: restoreOpen } = await createTestWorkflow({ definition: { entityType: 'document', code: `WF445_${h.tag}` } });
       const draftB = await draftSalesDocument(h);
       const openWalk = await h.walk(await startDoc(open.code, draftB), ['submit', 'approve'], treasurer);
       if (openWalk[0] !== 200 || openWalk[1] !== 403) wrong.push(`The treasurer got ${openWalk.join(',')} in the unguarded workflow, not 200,403`);
       if ((await docStatus(draftB))?.status !== 'draft') wrong.push(`The treasurer document became ${JSON.stringify(await docStatus(draftB))}`);
-      await h.q(`UPDATE workflow_definitions SET is_active = 0 WHERE id = $1`, [open.id]);
+      // v10.1.5 (TD-1229): one active workflow per record type; the seed document workflow takes its type back
+      await restoreOpen();
 
       // ۳) مسیر درست: انباردار گام انبار، مدیر مالی گام مالی؛ سند قطعی می‌شود
       const keeper = await h.sessionWith('warehouse_keeper');

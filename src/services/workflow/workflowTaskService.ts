@@ -449,48 +449,4 @@ export class WorkflowTaskService {
     if (rejects.length === 1) return rejects[0].id;
     throw new ValidationError(`این گام چند اقدام «رد» دارد (${rejects.map(t => t.title).join('، ')})؛ یکی را انتخاب کنید.`, undefined, 'WF_TASK_REJECT_AMBIGUOUS');
   }
-
-  /**
-   * Delegate a task explicitly to a target user
-   */
-  static async delegateTask(params: {
-    taskId: number;
-    fromUserId: number;
-    toUserId: number;
-    reason?: string;
-  }) {
-    return await orm.transaction(async (tx) => {
-      const [task] = await tx.select().from(workflowTasks).where(eq(workflowTasks.id, params.taskId)).for('update');
-      if (!task) {
-        throw new NotFoundError('وظیفه مورد نظر یافت نشد');
-      }
-      if (task.status !== 'pending') {
-        throw new ConflictError('فقط وظایف در انتظار امکان تفویض دارند');
-      }
-
-      await tx.update(workflowTasks)
-        .set({
-          status: 'delegated',
-          delegatedToUserId: params.toUserId
-        })
-        .where(eq(workflowTasks.id, task.id));
-
-      await logActivity({
-        userId: params.fromUserId,
-        action: 'UPDATE',
-        entity: 'وظیفه فرآیند کاری',
-        entityId: task.id,
-        description: `وظیفه شماره #${task.id} به کاربر #${params.toUserId} تفویض شد. دلیل: ${params.reason || 'نامشخص'}`,
-        details: { taskId: task.id, fromUserId: params.fromUserId, toUserId: params.toUserId, reason: params.reason },
-        tx
-      });
-
-      return {
-        success: true,
-        taskId: task.id,
-        delegatedToUserId: params.toUserId,
-        status: 'delegated'
-      };
-    });
-  }
 }

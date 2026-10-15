@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 409
+تعداد مسیرها: 415
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -68,6 +68,7 @@
 | GET | `/api/accounting/treasury/contra-accounts` | accounting.treasury \| accounting.cheques |
 | POST | `/api/accounting/treasury/preview-voucher` | accounting.treasury |
 | POST | `/api/accounting/treasury/reconcile` | accounting.treasury |
+| GET | `/api/accounting/treasury/reconcile-cheques` | accounting.treasury |
 | POST | `/api/accounting/treasury/transfer` | accounting.treasury |
 | GET | `/api/accounting/vouchers` | accounting.vouchers \| accounting.reports \| accounting.view |
 | POST | `/api/accounting/vouchers` | accounting.vouchers |
@@ -338,6 +339,7 @@
 | PUT | `/api/procurement/requisitions/:id` | procurement.manage |
 | POST | `/api/procurement/requisitions/:id/convert-to-orders` | procurement.order |
 | POST | `/api/procurement/requisitions/:id/workflow-action` | procurement.approve \| procurement.manage |
+| GET | `/api/procurement/requisitions/:id/workflow-actions` | procurement.view \| projects.view |
 | GET | `/api/projects` | projects.view |
 | POST | `/api/projects` | projects.create |
 | DELETE | `/api/projects/:id` | projects.delete |
@@ -399,6 +401,10 @@
 | GET | `/api/workflow/definitions` | workflow.manage \| workflow.admin |
 | POST | `/api/workflow/definitions` | workflow.manage \| workflow.admin |
 | GET | `/api/workflow/definitions/:id` | workflow.manage \| workflow.admin |
+| POST | `/api/workflow/definitions/:id/activate` | workflow.admin |
+| POST | `/api/workflow/definitions/:id/archive` | workflow.admin |
+| POST | `/api/workflow/definitions/:id/deactivate` | workflow.admin |
+| POST | `/api/workflow/definitions/:id/restore` | workflow.admin |
 | GET | `/api/workflow/definitions/:id/versions` | workflow.manage \| workflow.admin |
 | GET | `/api/workflow/definitions/:id/versions/:version` | workflow.manage \| workflow.admin |
 | GET | `/api/workflow/delegations` | workflow.view \| workflow.manage \| workflow.admin |

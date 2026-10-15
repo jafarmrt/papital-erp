@@ -18,11 +18,9 @@ import { upgradeLegacySeedGuards } from './seedGuardUpgrade.js';
 import { JOURNAL_VOUCHER_GUARD_UPGRADE, JOURNAL_VOUCHER_STEP_GUARDS } from './voucherWorkflowGuards.js';
 import { PURCHASE_REQUISITION_GUARD_UPGRADE, PURCHASE_REQUISITION_STEP_GUARDS } from './purchaseWorkflowGuards.js';
 import { resolveTransitionRoles, storedTransitionRole } from './transitionRoles.js';
-import { 
-  CreateWorkflowDefinitionInput, 
-  UpdateWorkflowDefinitionInput, 
-  WorkflowDefinitionDTO 
-} from './contracts/workflowDomainContracts.js';
+import { activeDefinitionsOfType, lockWorkflowEntityTypes, startedInstanceCount } from './workflowDefinitionLifecycle.js';
+import { workflowEntityTypeChangeRefusal } from '../../lib/workflow/workflowLifecycle.js';
+import type { WorkflowDefinitionDTO } from './contracts/workflowDomainContracts.js';
 
 export type WorkflowDefinitionWithStats = (typeof workflowDefinitions.$inferSelect) & {
   stateCount: number;
@@ -34,6 +32,13 @@ export interface WorkflowDefinitionDetails {
   definition: typeof workflowDefinitions.$inferSelect;
   states: (typeof workflowStates.$inferSelect)[];
   transitions: (typeof workflowTransitions.$inferSelect)[];
+  /** v10.1.5 (TD-1229): records of any status started with this definition; the designer locks the record type then */
+  startedInstanceCount: number;
+}
+
+/** v10.1.5 (TD-1229, OBS-R2-64): what a design save changed, for its audit row */
+function designAuditSummary(d: { title: string; entityType: string; description?: string | null; isActive?: number | null }, stepKeys: string[], actionKeys: string[]) {
+  return { title: d.title, entityType: d.entityType, description: d.description ?? '', isActive: Number(d.isActive ?? 0), steps: stepKeys, actions: actionKeys };
 }
 
 export interface SaveWorkflowDefinitionPayload {
@@ -205,7 +210,8 @@ export class WorkflowDefinitionService {
       definition: def,
       ...def,
       states,
-      transitions
+      transitions,
+      startedInstanceCount: await startedInstanceCount(orm, id),
     };
   }
 
@@ -218,87 +224,62 @@ export class WorkflowDefinitionService {
   }
 
   /**
-   * Create a new workflow definition with its initial version 1
-   */
-  static async createDefinition(input: CreateWorkflowDefinitionInput): Promise<WorkflowDefinitionDTO> {
-    return await orm.transaction(async (tx) => {
-      const existing = await tx.select().from(workflowDefinitions).where(eq(workflowDefinitions.code, input.code));
-      if (existing.length > 0) {
-        throw new ConflictError(`کد فرآیند کاری '${input.code}' قبلاً ثبت شده است`, undefined, 'WF_DEF_CODE_EXISTS');
-      }
-
-      const [def] = await tx.insert(workflowDefinitions).values({
-        code: input.code,
-        title: input.title,
-        entityType: input.entityType,
-        description: input.description || '',
-        version: 0,
-        isActive: 1,
-        dslJson: input.dslJson || {}
-      }).returning();
-
-      // v7.0.87 (TD-112): نسخه ۱ تصویر جدول‌هاست، نه payload خام
-      const version = await recordDefinitionVersion(tx, def.id, { title: def.title, description: def.description || 'ایجاد فرآیند' });
-      return { ...def, version } as WorkflowDefinitionDTO;
-    });
-  }
-
-  /**
-   * Update workflow definition
-   */
-  static async updateDefinition(id: number, input: UpdateWorkflowDefinitionInput): Promise<WorkflowDefinitionDTO> {
-    const [existing] = await orm.select().from(workflowDefinitions).where(eq(workflowDefinitions.id, id));
-    if (!existing) {
-      throw new NotFoundError('گردش کار یافت نشد.', undefined, 'WF_DEF_NOT_FOUND');
-    }
-
-    const [updated] = await orm.update(workflowDefinitions)
-      .set({
-        title: input.title !== undefined ? input.title : existing.title,
-        description: input.description !== undefined ? input.description : existing.description,
-        isActive: input.isActive !== undefined ? input.isActive : existing.isActive,
-        dslJson: input.dslJson !== undefined ? input.dslJson : existing.dslJson
-      })
-      .where(eq(workflowDefinitions.id, id))
-      .returning();
-
-    return updated as WorkflowDefinitionDTO;
-  }
-
-  /**
    * Save definition with states & transitions DSL structure
    */
-  static async saveWorkflowDefinition(payload: SaveWorkflowDefinitionPayload) {
+  static async saveWorkflowDefinition(payload: SaveWorkflowDefinitionPayload, req?: Request) {
     assertSavableWorkflowDesign(payload);
     // v7.0.87 (TD-112): تعریف، وضعیت‌ها، انتقال‌ها و نسخه تازه در یک تراکنش ذخیره می‌شوند
     const defId = await orm.transaction(async (tx) => {
       // v9.0.128 (TD-542): نقش هر اقدام باید در فهرست نقش‌ها باشد (۴۲۲)؛ کد ثبت‌شده نقش ذخیره می‌شود
       const knownRoles = await resolveTransitionRoles(tx, Array.isArray(payload.transitions) ? payload.transitions : []);
       let finalDefId = payload.id;
+      let before: ReturnType<typeof designAuditSummary> | null = null;
+      let isActive = 0;
       if (!finalDefId) {
+        // v10.1.5 (TD-1229): a new definition is active only when its record type has none (one active per type)
+        await lockWorkflowEntityTypes(tx, [payload.entityType]);
         const [duplicate] = await tx.select({ id: workflowDefinitions.id }).from(workflowDefinitions)
           .where(eq(workflowDefinitions.code, payload.code));
         if (duplicate) {
           throw new ConflictError(`کد فرآیند کاری '${payload.code}' قبلاً ثبت شده است`, undefined, 'WF_DEF_CODE_EXISTS');
         }
+        isActive = (await activeDefinitionsOfType(tx, payload.entityType)).length === 0 ? 1 : 0;
         const [created] = await tx.insert(workflowDefinitions).values({
           code: payload.code,
           title: payload.title,
           entityType: payload.entityType,
           description: payload.description || '',
           version: 0,
-          isActive: 1,
+          isActive,
           dslJson: payload
         }).returning();
         finalDefId = created.id;
       } else {
+        const [peek] = await tx.select({ entityType: workflowDefinitions.entityType }).from(workflowDefinitions)
+          .where(eq(workflowDefinitions.id, finalDefId));
+        if (!peek) {
+          throw new NotFoundError('تعریف فرآیند کاری یافت نشد', undefined, 'WF_DEF_NOT_FOUND');
+        }
+        await lockWorkflowEntityTypes(tx, [peek.entityType, payload.entityType]);
         const [existing] = await tx.select().from(workflowDefinitions)
           .where(eq(workflowDefinitions.id, finalDefId)).for('update');
         if (!existing) {
           throw new NotFoundError('تعریف فرآیند کاری یافت نشد', undefined, 'WF_DEF_NOT_FOUND');
         }
+        isActive = Number(existing.isActive ?? 0);
+        // v10.1.5 (TD-1229, OBS-PR-15): the designer asks the record type; only an inactive, never-used definition takes another
+        if (payload.entityType !== existing.entityType) {
+          const refusal = workflowEntityTypeChangeRefusal({ isActive, startedCount: await startedInstanceCount(tx, existing.id) });
+          if (refusal) throw new ValidationError(refusal, undefined, 'WF_ENTITY_TYPE_LOCKED');
+        }
+        const [oldStates, oldTransitions] = await Promise.all([
+          tx.select({ stateKey: workflowStates.stateKey }).from(workflowStates).where(eq(workflowStates.workflowDefinitionId, existing.id)),
+          tx.select({ actionKey: workflowTransitions.actionKey }).from(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, existing.id)),
+        ]);
+        before = designAuditSummary(existing, oldStates.map(r => r.stateKey), oldTransitions.map(r => r.actionKey));
         await tx.update(workflowDefinitions).set({
           title: payload.title,
+          entityType: payload.entityType,
           description: payload.description !== undefined ? payload.description : existing.description,
           dslJson: payload
         }).where(eq(workflowDefinitions.id, finalDefId));
@@ -364,10 +345,21 @@ export class WorkflowDefinitionService {
         }
       }
 
-      await recordDefinitionVersion(tx, finalDefId, {
+      const version = await recordDefinitionVersion(tx, finalDefId, {
         title: payload.title,
         description: payload.id ? 'ذخیره تغییرات طرح فرآیند' : 'ایجاد فرآیند',
         userId: payload.userId,
+      });
+      // v10.1.5 (TD-1229, OBS-R2-64): a design save writes its audit row with the same tx (before only positions did)
+      const after = designAuditSummary(
+        { title: payload.title, entityType: payload.entityType, description: payload.description ?? before?.description ?? '', isActive },
+        (payload.states ?? []).map(st => String(st.stateKey || st.key || '')),
+        (payload.transitions ?? []).map(tr => String(tr.actionKey || tr.key || '')),
+      );
+      await logActivity({
+        tx, req, userId: payload.userId, action: before ? 'UPDATE' : 'CREATE', entity: 'طرح گردش کار', entityId: finalDefId,
+        description: before ? `ذخیره طرح گردش کار «${payload.title}» (نسخه ${version})` : `ساخت گردش کار «${payload.title}»${isActive ? '' : ' (غیرفعال)'}`,
+        details: { code: payload.code, version, before, after },
       });
       return finalDefId;
     });
@@ -409,63 +401,6 @@ export class WorkflowDefinitionService {
       });
       return { success: true };
     });
-  }
-
-  /**
-   * Add new workflow state
-   */
-  static async addState(definitionId: number, data: {
-    stateKey: string;
-    title: string;
-    stateType: 'initial' | 'normal' | 'terminal';
-    slaHours?: number;
-    color?: string;
-    stepOrder?: number;
-    positionX?: number;
-    positionY?: number;
-  }) {
-    const [inserted] = await orm.insert(workflowStates).values({
-      workflowDefinitionId: definitionId,
-      stateKey: data.stateKey,
-      title: data.title,
-      stateType: data.stateType,
-      slaHours: data.slaHours || 24,
-      color: data.color || 'gray',
-      stepOrder: data.stepOrder || 1,
-      positionX: data.positionX || 100,
-      positionY: data.positionY || 100
-    }).returning();
-
-    return inserted;
-  }
-
-  /**
-   * Add new workflow transition
-   */
-  static async addTransition(data: {
-    workflowDefinitionId: number;
-    fromStateId: number;
-    toStateId: number;
-    actionKey: string;
-    title: string;
-    requiredRole?: string;
-    ruleConditionsJson?: unknown;
-    approvalRuleType?: string;
-    kValue?: number;
-  }) {
-    const [inserted] = await orm.insert(workflowTransitions).values({
-      workflowDefinitionId: data.workflowDefinitionId,
-      fromStateId: data.fromStateId,
-      toStateId: data.toStateId,
-      actionKey: data.actionKey,
-      title: data.title,
-      requiredRole: data.requiredRole || '',
-      ruleConditionsJson: data.ruleConditionsJson || [],
-      approvalRuleType: data.approvalRuleType || 'SINGLE',
-      kValue: data.kValue || 1
-    }).returning();
-
-    return inserted;
   }
 
   /**

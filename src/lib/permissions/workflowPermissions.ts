@@ -11,3 +11,9 @@ export const WORKFLOW_INBOX_PERMISSIONS = ['workflow.view', ...WORKFLOW_EXECUTE_
 export function holdsWorkflowExecuteKey(permissions: readonly string[]): boolean {
   return WORKFLOW_EXECUTE_PERMISSIONS.some(p => permissions.includes(p));
 }
+
+/**
+ * v10.1.5 (TD-1229, D-06 part A, decision ت۴): turning a workflow definition on or off and archiving it; turning off an
+ * approval is sensitive, so `workflow.manage` designs but does not switch.
+ */
+export const WORKFLOW_SWITCH_PERMISSION = 'workflow.admin';

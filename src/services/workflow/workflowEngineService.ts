@@ -12,8 +12,8 @@ import { WorkflowDefinitionService } from './workflowDefinitionService.js';
 import { WorkflowVersionService } from './workflowVersionService.js';
 import { WorkflowTaskService } from './workflowTaskService.js';
 import { WorkflowDelegationService } from './workflowDelegationService.js';
-import { WorkflowEventPublisher } from './workflowEventPublisher.js';
 import { WorkflowQuorumService } from './workflowQuorumService.js';
+import { setWorkflowDefinitionActive, setWorkflowDefinitionArchived } from './workflowDefinitionLifecycle.js';
 import { workflowDefinitions, workflowInstances } from '../../db/schema.js';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { and, asc, eq } from 'drizzle-orm';
@@ -27,7 +27,7 @@ export type {
 
 /**
  * WorkflowEngineService Facade
- * Provides a unified static interface delegating calls to 10 decoupled sub-services.
+ * Provides a unified static interface delegating calls to the decoupled workflow sub-services.
  * Guarantees 100% backward compatibility for routes, test suites, and internal caller modules.
  */
 export class WorkflowEngineService {
@@ -48,13 +48,12 @@ export class WorkflowEngineService {
   static getDefinitionByCode = WorkflowDefinitionService.getDefinitionByCode.bind(WorkflowDefinitionService);
   static hasActiveDefinition = WorkflowDefinitionService.hasActiveDefinition.bind(WorkflowDefinitionService);
   static getWorkflowDefinitionDetail = WorkflowDefinitionService.getDefinitionById.bind(WorkflowDefinitionService);
-  static createDefinition = WorkflowDefinitionService.createDefinition.bind(WorkflowDefinitionService);
-  static updateDefinition = WorkflowDefinitionService.updateDefinition.bind(WorkflowDefinitionService);
   static saveWorkflowDefinition = WorkflowDefinitionService.saveWorkflowDefinition.bind(WorkflowDefinitionService);
   static updateCanvasPositions = WorkflowDefinitionService.updateCanvasPositions.bind(WorkflowDefinitionService);
-  static addState = WorkflowDefinitionService.addState.bind(WorkflowDefinitionService);
-  static addTransition = WorkflowDefinitionService.addTransition.bind(WorkflowDefinitionService);
   static seedDefaultWorkflows = WorkflowDefinitionService.seedDefaultWorkflows.bind(WorkflowDefinitionService);
+  // v10.1.5 (TD-1229, D-06): turn a definition on or off, archive or restore it
+  static setDefinitionActive = setWorkflowDefinitionActive;
+  static setDefinitionArchived = setWorkflowDefinitionArchived;
 
   // --- Version History (read-only, TD-112) ---
   static getDefinitionVersions = WorkflowVersionService.getDefinitionVersions.bind(WorkflowVersionService);
@@ -70,7 +69,6 @@ export class WorkflowEngineService {
   static getTaskStats = WorkflowTaskService.getTaskStats.bind(WorkflowTaskService);
   static getTasksForInstance = WorkflowTaskService.getTasksForInstance.bind(WorkflowTaskService);
   static executeTaskById = WorkflowTaskService.executeTaskById.bind(WorkflowTaskService);
-  static delegateTask = WorkflowTaskService.delegateTask.bind(WorkflowTaskService);
   static processMultiSignApproval = WorkflowApprovalRules.processMultiSignApproval.bind(WorkflowApprovalRules);
   static evaluateAndAddSignature = WorkflowQuorumService.evaluateAndAddSignature.bind(WorkflowQuorumService);
   static getRequiredSignaturesCount = WorkflowQuorumService.getRequiredSignaturesCount.bind(WorkflowQuorumService);
@@ -90,11 +88,6 @@ export class WorkflowEngineService {
   static getInstanceById = WorkflowTransitionExecutor.getInstanceById.bind(WorkflowTransitionExecutor);
   static getInstanceByEntity = WorkflowTransitionExecutor.getInstanceByEntity.bind(WorkflowTransitionExecutor);
   static getWorkflowHistory = WorkflowTransitionExecutor.getWorkflowHistory.bind(WorkflowTransitionExecutor);
-
-  // --- Event Publishing Delegation ---
-  static publishTransitionCompleted = WorkflowEventPublisher.publishTransitionCompleted.bind(WorkflowEventPublisher);
-  static publishWorkflowCompleted = WorkflowEventPublisher.publishWorkflowCompleted.bind(WorkflowEventPublisher);
-  static publishWorkflowRejected = WorkflowEventPublisher.publishWorkflowRejected.bind(WorkflowEventPublisher);
 
   /**
    * V2.0.0: شروع شرطی workflow — اگر تعریف فعالی برای entityType وجود داشته باشد instance ساخته می‌شود؛ در غیر این صورت

@@ -1,22 +1,13 @@
 import React, { useState } from 'react';
-import { 
-  Workflow, 
-  Plus, 
-  Clock, 
-  Layers, 
-  Edit3, 
-  Boxes,
-  X,
-  UserCheck,
-  History
-} from 'lucide-react';
+import { Workflow, Plus, Clock, Layers, X, UserCheck } from 'lucide-react';
 import { useWorkflowDefinitionsQuery, useSaveWorkflowDefinitionMutation } from '../hooks/queries/useWorkflowQueries';
 import { WorkflowDesignerCanvas } from '../components/workflow/WorkflowDesignerCanvas';
 import { WorkflowSlaAnalyticsTab } from '../components/workflow/WorkflowSlaAnalyticsTab';
 import { WorkflowDelegationTab } from '../components/workflow/WorkflowDelegationTab';
 import { WorkflowVersionHistoryModal } from '../components/workflow/WorkflowVersionHistoryModal';
+import { WorkflowDefinitionList } from '../components/workflow/WorkflowDefinitionList';
+import { NEW_WORKFLOW_SAVED_INACTIVE } from '../lib/workflow/workflowLifecycle';
 import { toast } from 'react-hot-toast';
-import { formatPersianNumber } from '../utils/persianNumber';
 
 export const WorkflowManagementPage: React.FC = () => {
   const { data: definitions, isLoading, refetch } = useWorkflowDefinitionsQuery();
@@ -52,7 +43,6 @@ export const WorkflowManagementPage: React.FC = () => {
         entityType: newEntityType,
         description: newDescription.trim(),
         version: 1,
-        isActive: 1,
         states: [
           {
             stateKey: 'draft',
@@ -87,7 +77,8 @@ export const WorkflowManagementPage: React.FC = () => {
         ]
       });
 
-      toast.success('الگوی جدید ساخته شد.');
+      // v10.1.5 (TD-1229, decision ت۲۷): a new workflow is active only when its record type has none
+      if (Number(result?.data?.isActive) !== 1) toast(NEW_WORKFLOW_SAVED_INACTIVE, { duration: 8000 });
       setIsCreateModalOpen(false);
       setNewTitle('');
       setNewCode('');
@@ -163,87 +154,13 @@ export const WorkflowManagementPage: React.FC = () => {
 
       {/* Tab 1: List of Definitions */}
       {activeTab === 'list' && (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <h2 className="font-bold text-base text-gray-900 dark:text-white flex items-center gap-2">
-              <Boxes className="w-5 h-5 text-indigo-600" />
-              <span>فهرست الگوهای تعریف‌شده سیستم</span>
-            </h2>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setIsCreateModalOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors shadow-sm"
-              >
-                <Plus className="w-4 h-4" />
-                <span>تعریف الگوی جدید گردش کار</span>
-              </button>
-            </div>
-          </div>
-
-          {isLoading ? (
-            <div className="p-12 text-center text-gray-500">در حال دریافت الگوها...</div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {(definitions || []).map((def: any) => (
-                <div
-                  key={def.id}
-                  className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xs hover:border-indigo-300 dark:hover:border-indigo-700 transition-all space-y-4"
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <span className="text-[10px] font-mono bg-indigo-50 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 px-2 py-0.5 rounded font-bold">
-                        {def.code}
-                      </span>
-                      <h3 className="font-bold text-base text-gray-900 dark:text-white mt-1">
-                        {def.title}
-                      </h3>
-                    </div>
-                    <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded font-mono">
-                      v{def.version}
-                    </span>
-                  </div>
-
-                  <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 min-h-[32px]">
-                    {def.description || 'بدون توضیحات تکمیلی...'}
-                  </p>
-
-                  <div className="grid grid-cols-3 gap-2 text-center text-xs bg-gray-50 dark:bg-gray-700/40 p-2.5 rounded-xl border border-gray-100 dark:border-gray-700/60">
-                    <div>
-                      <span className="block text-gray-400 text-[10px]">گام‌ها</span>
-                      <span className="font-bold font-mono text-gray-800 dark:text-gray-200">{formatPersianNumber(def.stateCount ?? 0)}</span>
-                    </div>
-                    <div>
-                      <span className="block text-gray-400 text-[10px]">اقدام‌ها</span>
-                      <span className="font-bold font-mono text-gray-800 dark:text-gray-200">{formatPersianNumber(def.transitionCount ?? 0)}</span>
-                    </div>
-                    <div>
-                      <span className="block text-gray-400 text-[10px]">در جریان</span>
-                      <span className="font-bold font-mono text-indigo-600 dark:text-indigo-400">{formatPersianNumber(def.activeInstancesCount ?? 0)}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
-                    <button
-                      onClick={() => setHistoryDefinition({ id: def.id, title: def.title })}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                    >
-                      <History className="w-3.5 h-3.5" />
-                      <span>تاریخچه نسخه‌ها</span>
-                    </button>
-                    <button
-                      onClick={() => handleEditDefinition(def.id)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/70 rounded-lg transition-colors"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                      <span>طراحی گرافیکی روی بوم</span>
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <WorkflowDefinitionList
+          definitions={definitions || []}
+          isLoading={isLoading}
+          onCreate={() => setIsCreateModalOpen(true)}
+          onEdit={handleEditDefinition}
+          onHistory={setHistoryDefinition}
+        />
       )}
 
       {/* Tab 2: Visual Designer Canvas */}

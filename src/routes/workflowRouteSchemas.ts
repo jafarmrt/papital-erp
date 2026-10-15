@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { numericIdString } from '../middleware/validate.js';
 import { WORKFLOW_APPROVAL_RULE_TYPES, WORKFLOW_STATE_TYPES } from '../lib/workflow/workflowDesignRules.js';
 
 /**
@@ -99,4 +100,18 @@ export const executeTaskSchema = z.object({
     comment: z.string().max(4000).nullable().optional(),
     snapshotData: z.record(z.string().max(200), z.unknown()).nullable().optional(),
   }),
+});
+
+/** v10.1.5 (TD-1229): activation of a definition; `replaceActive` turns off the record type's other active definition */
+export const activateDefinitionSchema = z.object({
+  params: z.object({ id: numericIdString }),
+  body: z.object({
+    replaceActive: z.boolean({ error: 'گزینه جایگزینی باید درست یا نادرست باشد' }).optional(),
+  }).strict(),
+});
+
+/** v10.1.5 (TD-1229): turning a definition off, archiving and restoring it take no body */
+export const definitionSwitchSchema = z.object({
+  params: z.object({ id: numericIdString }),
+  body: z.object({}).strict(),
 });

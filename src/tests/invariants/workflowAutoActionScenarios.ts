@@ -173,36 +173,41 @@ export async function checkDocumentApprovalFinalizesInTransaction(): Promise<str
     states: [{ key: 'draft', title: 'پیش‌نویس', type: 'initial' }, { key: 'approved', title: 'تأییدشده', type: 'terminal' }],
     transitions: [{ fromKey: 'draft', toKey: 'approved', actionKey: 'approve_wf415', title: 'تأیید نهایی' }],
   });
-  const approveDraft = async (quantity: number) => {
-    const docId = await DocumentService.createDocument({
-      docType: 'invoice', inOut: 'out', status: 'draft', date: today, user: 'wf415', buyerName: 'مشتری آزمون اقدام خودکار',
-      items: [{ itemId: item.id, quantity, unitPrice: 250000, location: wh }],
-    });
-    const instance = await WorkflowTransitionExecutor.startInstance({
-      workflowDefinitionId: wf.definition.id, entityType: 'document', entityId: String(docId), userId: user.id, userName: user.username,
-    });
-    const error = await refusal(() => WorkflowTransitionExecutor.executeTransition({
-      instanceId: instance.id, transitionId: wf.transitions[0].id, userId: user.id, userName: user.username, userRole: 'admin', userPermissions: ['*'],
-    }));
-    return { docId, instanceId: instance.id, error };
-  };
-  const instanceStatus = async (id: number) => (await pool.query<{ status: string }>('SELECT status FROM workflow_instances WHERE id = $1', [id])).rows[0]?.status ?? '';
+  // v10.1.5 (TD-1229): the test definition holds its record type only for this check
+  try {
+    const approveDraft = async (quantity: number) => {
+      const docId = await DocumentService.createDocument({
+        docType: 'invoice', inOut: 'out', status: 'draft', date: today, user: 'wf415', buyerName: 'مشتری آزمون اقدام خودکار',
+        items: [{ itemId: item.id, quantity, unitPrice: 250000, location: wh }],
+      });
+      const instance = await WorkflowTransitionExecutor.startInstance({
+        workflowDefinitionId: wf.definition.id, entityType: 'document', entityId: String(docId), userId: user.id, userName: user.username,
+      });
+      const error = await refusal(() => WorkflowTransitionExecutor.executeTransition({
+        instanceId: instance.id, transitionId: wf.transitions[0].id, userId: user.id, userName: user.username, userRole: 'admin', userPermissions: ['*'],
+      }));
+      return { docId, instanceId: instance.id, error };
+    };
+    const instanceStatus = async (id: number) => (await pool.query<{ status: string }>('SELECT status FROM workflow_instances WHERE id = $1', [id])).rows[0]?.status ?? '';
 
-  const short = await approveDraft(5);
-  await settle();
-  if (!short.error) problems.push('Final approval of an invoice whose item stock is insufficient was accepted');
-  const shortInstance = await instanceStatus(short.instanceId);
-  if (shortInstance !== 'IN_PROGRESS') problems.push(`The workflow of the non-finalized invoice became "${shortInstance}"`);
-  if (await documentStatus(short.docId) !== 'draft') problems.push('The invoice whose approval was refused did not stay draft');
-  if ((await itemState(item.id)).stock !== 2) problems.push('Item stock changed after the refused approval');
+    const short = await approveDraft(5);
+    await settle();
+    if (!short.error) problems.push('Final approval of an invoice whose item stock is insufficient was accepted');
+    const shortInstance = await instanceStatus(short.instanceId);
+    if (shortInstance !== 'IN_PROGRESS') problems.push(`The workflow of the non-finalized invoice became "${shortInstance}"`);
+    if (await documentStatus(short.docId) !== 'draft') problems.push('The invoice whose approval was refused did not stay draft');
+    if ((await itemState(item.id)).stock !== 2) problems.push('Item stock changed after the refused approval');
 
-  const ok = await approveDraft(1);
-  if (ok.error) problems.push(`Final approval of an invoice with enough stock was refused: ${ok.error}`);
-  else {
-    // بی‌درنگ پس از پاسخ: قطعی‌سازی جزء همان تراکنش است، نه کاری که بعداً برسد
-    if (await documentStatus(ok.docId) !== 'final') problems.push('The invoice is not yet final in the final approval response');
-    if ((await itemState(item.id)).stock !== 1) problems.push('Item stock did not decrease in the final approval response');
-    if (await documentVouchers(ok.docId) !== 1) problems.push('The invoice has no journal voucher in the final approval response');
+    const ok = await approveDraft(1);
+    if (ok.error) problems.push(`Final approval of an invoice with enough stock was refused: ${ok.error}`);
+    else {
+      // بی‌درنگ پس از پاسخ: قطعی‌سازی جزء همان تراکنش است، نه کاری که بعداً برسد
+      if (await documentStatus(ok.docId) !== 'final') problems.push('The invoice is not yet final in the final approval response');
+      if ((await itemState(item.id)).stock !== 1) problems.push('Item stock did not decrease in the final approval response');
+      if (await documentVouchers(ok.docId) !== 1) problems.push('The invoice has no journal voucher in the final approval response');
+    }
+  } finally {
+    await wf.restore();
   }
   return problems;
 }
@@ -220,18 +225,23 @@ export async function checkVoucherApprovalRefusedWhenStatusCannotChange(): Promi
     states: [{ key: 'draft', title: 'پیش‌نویس', type: 'initial' }, { key: 'approved', title: 'تأییدشده', type: 'normal' }],
     transitions: [{ fromKey: 'draft', toKey: 'approved', actionKey: 'approve_wf415', title: 'تأیید سند' }],
   });
-  const instance = await WorkflowTransitionExecutor.startInstance({
-    workflowDefinitionId: wf.definition.id, entityType: 'journal_voucher', entityId: String(voucher.id), userId: user.id, userName: user.username,
-  });
-  const error = await refusal(() => WorkflowTransitionExecutor.executeTransition({
-    instanceId: instance.id, transitionId: wf.transitions[0].id, userId: user.id, userName: user.username, userRole: 'admin', userPermissions: ['*'],
-  }));
-  await settle();
-  if (!error) problems.push('Workflow approval of a permanent journal voucher was accepted');
-  const row = await pool.query<{ current_state_id: number }>('SELECT current_state_id FROM workflow_instances WHERE id = $1', [instance.id]);
-  if (row.rows[0]?.current_state_id !== wf.states.draft.id) problems.push('The workflow step of the permanent voucher moved after the refused approval');
-  const status = (await pool.query<{ status: string }>('SELECT status FROM journal_vouchers WHERE id = $1', [voucher.id])).rows[0]?.status;
-  if (status !== 'permanent') problems.push(`The permanent journal voucher became "${status}"`);
+  // v10.1.5 (TD-1229): the test definition holds its record type only for this check
+  try {
+    const instance = await WorkflowTransitionExecutor.startInstance({
+      workflowDefinitionId: wf.definition.id, entityType: 'journal_voucher', entityId: String(voucher.id), userId: user.id, userName: user.username,
+    });
+    const error = await refusal(() => WorkflowTransitionExecutor.executeTransition({
+      instanceId: instance.id, transitionId: wf.transitions[0].id, userId: user.id, userName: user.username, userRole: 'admin', userPermissions: ['*'],
+    }));
+    await settle();
+    if (!error) problems.push('Workflow approval of a permanent journal voucher was accepted');
+    const row = await pool.query<{ current_state_id: number }>('SELECT current_state_id FROM workflow_instances WHERE id = $1', [instance.id]);
+    if (row.rows[0]?.current_state_id !== wf.states.draft.id) problems.push('The workflow step of the permanent voucher moved after the refused approval');
+    const status = (await pool.query<{ status: string }>('SELECT status FROM journal_vouchers WHERE id = $1', [voucher.id])).rows[0]?.status;
+    if (status !== 'permanent') problems.push(`The permanent journal voucher became "${status}"`);
+  } finally {
+    await wf.restore();
+  }
   return problems;
 }
 
