@@ -18,13 +18,13 @@ export async function runVatReportTests(shouldRun: ShouldRun): Promise<TestCaseR
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (h: Harness, wrong: string[], keep: DateKeeper) => Promise<string>]> = [
     ['reg_vat_report_documents_d03',
-      'v10.1.13: the VAT report sums final sales invoices and returns of the period by VAT percent, a foreign invoice at its own rate, leaves out a voided invoice, a proforma and a foreign invoice without a rate, and lists the documents to check (D-03)',
+      'v10.1.14: the VAT report sums final sales invoices and returns of the period by VAT percent, a foreign invoice at its own rate, leaves out a voided invoice, a proforma and a foreign invoice without a rate, and lists the documents to check (D-03)',
       ['d03', 'reports', 'vat', 'return', 'currency'], vatDocumentsCase],
     ['reg_vat_report_ledger_d03',
-      'v10.1.13: the VAT report reads the mapped VAT account by source with the draft share and names the documents and vouchers that make its difference with the sales documents (D-03)',
+      'v10.1.14: the VAT report reads the mapped VAT account by source with the draft share and names the documents and vouchers that make its difference with the sales documents (D-03)',
       ['d03', 'reports', 'vat', 'ledger', 'treasury'], vatLedgerCase],
     ['reg_vat_report_access_d03',
-      'v10.1.13: GET /reports/vat needs accounting.reports, defaults to this quarter and refuses an invalid query (D-03)',
+      'v10.1.14: GET /reports/vat needs accounting.reports, defaults to this quarter and refuses an invalid query (D-03)',
       ['d03', 'reports', 'vat', 'permission'], vatAccessCase],
   ];
   for (const [id, name, tags, run] of cases) {

@@ -10746,7 +10746,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10.1 D-03 PR2 (v10.1.10): the receivables and payables aging tab
   const { runAgingReportTests } = await import('../regression/agingReportTests.js');
   results.push(...await runAgingReportTests(shouldRun));
-  // Series 10.1 D-03 PR3 (v10.1.13): the VAT tab
+  // Series 10.1 D-03 PR3 (v10.1.14): the VAT tab
   const { runVatReportTests } = await import('../regression/vatReportTests.js');
   results.push(...await runVatReportTests(shouldRun));
   const { runSalesEventsTests } = await import('../regression/salesEventsTests.js');
