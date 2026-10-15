@@ -113,7 +113,7 @@ export function PieceworkRatesTab({
                             onClick={() => {
                               const input = document.getElementById(`custom-rate-${task.id}`) as HTMLInputElement;
                               if (input) {
-                                // v9.0.284 (TD-809): متن خام به سرور می‌رود تا خالی یا منفی رد شود، نه صفر؛ v10.1.18 (TD-1273): با
+                                // v9.0.284 (TD-809): متن خام به سرور می‌رود تا خالی یا منفی رد شود، نه صفر؛ v10.1.20 (TD-1273): با
                                 // ارقام لاتین، چون کادر عدد دیگر ارقام فارسی را دور نمی‌ریزد
                                 onSaveCustomRate(task.id, normalizeDecimalString(input.value));
                               }

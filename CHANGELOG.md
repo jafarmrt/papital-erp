@@ -20,8 +20,14 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
-### v10.1.18 — کادرهای عدد با ارقام فارسی و ممیز «٫»
+### v10.1.20 — کادرهای عدد با ارقام فارسی و ممیز «٫»
 - کادرهای عدد فرم‌ها ارقام فارسی و ممیز «٫» را می‌خوانند و صفحه‌کلید عددی گوشی را باز می‌کنند؛ پیش‌تر «۱۲۵» خالی و «12٫5» ده برابر خوانده می‌شد.
+
+### v10.1.19 — بیمه، مالیات حقوق و مالیات بر ارزش افزوده اختیاری می‌ماند
+- Insurance, payroll tax and VAT stay optional per person and per document: the monthly insurance and tax list keeps only personnel with insurance or tax and counts the rest, and the VAT report no longer flags an invoice without VAT. Tests: reg_payroll_statutory_report_optional_td_1269, reg_vat_report_documents_d03, Vitest optionalStatutoryVatTd1269.
+
+### v10.1.18 — ویرایش اقدام، دلیل از دست رفتن و گزارش قیف (N-02 بخش ۲)
+- CRM activity edit and soft delete (crm.manage, OCC version), required lost reason, lead stage history (migration 0113) and the funnel report GET /crm/reports/funnel, my follow-ups scope. Tests: reg_crm_activity_edit_delete_n02, reg_crm_lost_reason_stage_history_n02, reg_crm_my_followups_n02, reg_crm_funnel_report_n02, Vitest crmActivitiesFunnelN02.
 
 ### v10.1.17 — گزارش‌های مدیریتی، بخش ۴: نمودارها، ابزارک فروش پیشخوان و گزارش خرید (D-03)
 - نمودار روند فروش و سهم دسته‌ها در زبانه فروش و نمودار بازه‌های سن در زبانه سن مطالبات با Chart.js در تکه جدای `vendor-charts` (۱۴۱ کیلوبایت، ۴۹ کیلوبایت فشرده) که فقط با باز شدن نمودار بار می‌شود؛ ابزارک «فروش و مطالبات» پیشخوان برای دارنده `reports.sales` یا `accounting.reports`؛ زبانه تازه «خرید» با کلید تازه `reports.purchases` (به هیچ نقشی داده نشده) به تفکیک تأمین‌کننده، کالا، دسته و دوره با میانگین بهای خرید، خروجی اکسل و چاپ.
