@@ -12,6 +12,7 @@ import { workTimeError } from '../../lib/dailyLogs/workHours';
 import { TimeOfDayInput } from './TimeOfDayInput';
 import { DAILY_LOG_CONTENT_MAX, DAILY_LOG_TAG_MAX, DAILY_LOG_TITLE_MAX } from '../../lib/dailyLogs/dailyLogLimits';
 import { type DailyLogVisibility, visibilityNotifiesMentions } from '../../lib/dailyLogs/dailyLogVisibility';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface DailyLogModalProps {
   isModalOpen: boolean;
@@ -87,7 +88,8 @@ export function DailyLogModal({
   if (!isModalOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 overflow-y-auto font-farsi text-right">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 overflow-y-auto font-farsi text-right">
+      <DialogLayer onClose={onClose} disabled={isSaving} />
       <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden text-right my-auto">
         {/* Modal Header */}
         <div className="px-4 py-3 bg-slate-900 text-white flex items-center justify-between">

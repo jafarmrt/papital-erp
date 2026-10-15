@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Printer } from 'lucide-react';
 import { formatPersianDate } from '../../utils';
+import { DialogLayer } from '../common/DialogLayer';
 
 // V10-3.2: مودال پیش‌نمایش چاپ یکدست (الگوی PieceworkPayslipModal)
 // chrome مودال با no-print حذف و فقط ناحیه doc-print-area چاپ می‌شود.
@@ -33,7 +34,8 @@ export function DocPrintModal({ isOpen, onClose, title, subtitle, meta = [], foo
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-[90] flex items-center justify-center p-4 overflow-y-auto">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-[90] flex items-center justify-center p-4 overflow-y-auto">
+      <DialogLayer onClose={onClose} />
       <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-3xl shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col max-h-[88vh]">
         {/* Modal Chrome — در چاپ حذف */}
         <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800 rounded-t-2xl no-print shrink-0">

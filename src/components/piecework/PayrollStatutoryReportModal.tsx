@@ -7,6 +7,7 @@ import { toPersianDigits } from '../../utils/persianNumber';
 import { toLatinDigits } from '../../lib/numericInput';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { statutoryReportFileName, statutoryReportSheetRows, statutoryReportWithoutNote, type StatutoryReport } from '../../lib/payroll/statutoryReport';
+import { DialogLayer } from '../common/DialogLayer';
 
 /**
  * v10.0.211 (TD-1088، طرح حقوق §۳.۳ بند ۶، تصمیم ت۷ الف): «فهرست بیمه و مالیات» یک ماه جلالی — جمع حقوق، بیمه سهم کارگر
@@ -49,7 +50,8 @@ export function PayrollStatutoryReportModal({ onClose }: { onClose: () => void }
   const years = [year - 1, year, year + 1].filter((y, i, a) => a.indexOf(y) === i);
   const cell = 'px-3 py-2 text-xs font-bold text-slate-700';
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+      <DialogLayer onClose={onClose} />
       <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
           <h2 className="text-sm font-black text-slate-900">فهرست بیمه و مالیات ماهانه</h2>

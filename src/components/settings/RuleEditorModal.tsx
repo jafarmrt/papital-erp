@@ -9,6 +9,7 @@ import { isRetiredRuleActionType, retiredRuleActionMessage, type RuleActionType,
 import { ALL_EVENTS_LABEL, ALL_EVENTS_PATTERN, eventTypeLabel, isSubscribableEventPattern, publishedEventTypesByCategory } from '../../lib/events/eventTypeCatalog';
 import { checkRuleConditionValue } from '../../lib/events/ruleConditionValue';
 import { DecimalInput } from '../common/DecimalInput';
+import { DialogLayer } from '../common/DialogLayer';
 
 export interface RuleCondition {
   field: string;
@@ -208,7 +209,8 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+      <DialogLayer onClose={onClose} disabled={isSaving} />
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden text-right">
         
         {/* Header */}

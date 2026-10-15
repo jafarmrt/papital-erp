@@ -10,6 +10,7 @@ import { OFFLINE_SUBMIT_TITLE, PHONE_SHEET_OVERLAY, PHONE_SHEET_PANEL, PHONE_TAP
 import { useOnlineStatus } from '../../lib/pwa/useOnlineStatus';
 import { formatPersianNumber } from '../../utils';
 import { confirmAction } from '../ConfirmDialogHost';
+import { DialogLayer } from '../common/DialogLayer';
 
 const INPUT = 'border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none';
 
@@ -116,7 +117,8 @@ function NewTagForm(): React.ReactElement {
 export function CustomerTagsWindow({ onClose }: { onClose: () => void }): React.ReactElement {
   const { data: tags = [], isLoading, isError } = useCustomerTagsQuery();
   return (
-    <div className={PHONE_SHEET_OVERLAY} role="dialog" aria-label="برچسب‌های طرف حساب">
+    <div className={PHONE_SHEET_OVERLAY} role="dialog" aria-modal="true" aria-label="برچسب‌های طرف حساب">
+      <DialogLayer onClose={onClose} />
       <div className={`${PHONE_SHEET_PANEL} bg-white max-w-2xl border border-slate-200 shadow-2xl overflow-hidden`}>
         <div className="px-5 py-3.5 border-b border-slate-200 flex justify-between items-center shrink-0 bg-slate-50/80">
           <h3 className="font-bold text-sm text-slate-800 flex items-center gap-2"><Tag size={16} className="text-blue-600" /> برچسب‌های طرف حساب</h3>

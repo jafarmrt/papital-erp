@@ -6,6 +6,7 @@ import { BankCardInput, ShebaInput, FinancialAmountInput } from '../../common';
 import { fetchJson } from '../../../api';
 import type { BankAccount, Account } from '../../../types';
 import { TREASURY_CURRENCIES } from '../../../lib/treasury/treasuryCurrency';
+import { DialogLayer } from '../../common/DialogLayer';
 
 interface BankAccountModalProps {
   isOpen: boolean;
@@ -153,7 +154,8 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <DialogLayer onClose={onClose} disabled={isSaving} />
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold text-slate-900 dark:text-white text-base">

@@ -4,6 +4,7 @@ import { formatPersianDateTime, formatPersianNumber, formatPersianDate } from '.
 import { parseUserAgent } from '../../utils/userAgentParser';
 import type { ActivityLogItem } from '../../hooks/queries/useActivityLogQueries';
 import { auditActionLabel } from '../../lib/audit/auditActionLabels';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface AuditPrintModalProps {
   logs: ActivityLogItem[];
@@ -39,7 +40,8 @@ export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, total, o
   }).format(new Date());
 
   return (
-    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+      <DialogLayer onClose={onClose} />
       <div className="bg-white rounded-2xl max-w-5xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-300 overflow-hidden doc-print-area">
         {/* Header - Non printable */}
         <div className="flex items-center justify-between border-b border-slate-200 p-4 bg-slate-50 print:hidden">

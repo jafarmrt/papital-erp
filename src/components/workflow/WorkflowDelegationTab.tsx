@@ -9,6 +9,7 @@ import { UserCheck, Plus, Search, Clock, CheckCircle2, XCircle, Trash2, Calendar
 import { formatPersianDate, formatPersianNumber } from '../../utils';
 import { useAuth } from '../../contexts/AuthContext';
 import { DelegationForm } from './DelegationForm';
+import { DialogLayer } from '../common/DialogLayer';
 
 export function WorkflowDelegationTab() {
   const { data: delegations = [], isLoading } = useDelegationsQuery();
@@ -247,7 +248,8 @@ export function WorkflowDelegationTab() {
 
       {/* Modal for Creating Delegation */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <DialogLayer onClose={() => setIsModalOpen(false)} />
           <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full shadow-xl border border-gray-200 dark:border-gray-700 space-y-5 animate-in fade-in zoom-in-95 max-h-[85vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-700 pb-3">
               <h3 className="font-bold text-base text-gray-900 dark:text-white flex items-center gap-2">
@@ -256,6 +258,7 @@ export function WorkflowDelegationTab() {
               </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
+                aria-label="بستن"
                 className="text-gray-400 hover:text-gray-600 text-lg leading-none"
               >
                 ×

@@ -17,6 +17,7 @@ import { readTreasuryVoucherPreview, type TreasuryVoucherPreview } from '../../.
 import { personnelPartyName } from '../../../lib/treasury/personnelPartyName';
 import type { BankAccount, Customer, Personnel, FinancialAttachment } from '../../../types';
 import { DecimalInput } from '../../common/DecimalInput';
+import { DialogLayer } from '../../common/DialogLayer';
 
 interface TreasuryTransactionModalProps {
   isOpen: boolean;
@@ -213,7 +214,8 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
   const inputCurrency = isForeignBank ? String(selectedBank?.currency).toUpperCase() : 'IRR';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4 backdrop-blur-xs">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4 backdrop-blur-xs">
+      <DialogLayer onClose={onClose} disabled={isSaving} />
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-xl w-full border border-slate-200 dark:border-slate-700 max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/80 shrink-0">

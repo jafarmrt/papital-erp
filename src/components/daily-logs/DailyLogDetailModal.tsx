@@ -2,6 +2,7 @@ import { X, Calendar as CalendarIcon, Clock, Tag, MessageSquare } from 'lucide-r
 import type { DailyWorkLog } from '../../types';
 import { formatPersianDate, formatPersianDateTime, formatPersianNumber } from '../../utils';
 import { workModeLabel } from '../../lib/dailyLogs/workMode';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface DailyLogDetailModalProps {
   log: DailyWorkLog | null;
@@ -17,7 +18,8 @@ export function DailyLogDetailModal({ log, onClose }: DailyLogDetailModalProps) 
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 font-farsi text-right">
-      <div role="dialog" aria-label={log.title} className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden max-h-[85vh] flex flex-col">
+      <div aria-modal="true" role="dialog" aria-label={log.title} className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden max-h-[85vh] flex flex-col">
+        <DialogLayer onClose={onClose} />
         <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
           <h3 className="font-bold text-sm truncate">{log.title}</h3>
           <button onClick={onClose} aria-label="بستن" className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white cursor-pointer">

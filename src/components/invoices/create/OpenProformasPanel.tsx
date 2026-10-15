@@ -4,6 +4,7 @@ import { cn, formatPersianCode, formatPersianDate, formatPersianNumber } from '.
 import { WorkflowStepperWidget } from '../../workflow/WorkflowStepperWidget';
 import type { InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
 import { openProformaBadge, openProformasPageCount } from '../../../lib/invoices/openProformas';
+import { DialogLayer } from '../../common/DialogLayer';
 
 /**
  * صفحه صدور فاکتور: جدول «پیش فاکتورهای باز» و پنجره گردش‌کار پیش‌فاکتور — منتقل‌شده بدون تغییر از CreateInvoicePage.
@@ -85,7 +86,8 @@ export function OpenProformasPanel({ proformas, total, page, onPageChange, editi
 
       {/* Workflow Stepper Action Modal */}
       {workflowModalDoc && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <DialogLayer onClose={() => setWorkflowModalDoc(null)} />
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 my-auto">
             <div className="bg-slate-900 text-white p-4 shrink-0 flex items-center justify-between border-b border-slate-800">
               <div className="flex items-center gap-2">

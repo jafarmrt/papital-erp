@@ -24,6 +24,7 @@ import { useProjectVersion } from '../hooks/useProjectVersion';
 import { useProjectPermissions } from '../hooks/useProjectPermissions';
 import { ProjectStatusActions } from './project/ProjectStatusActions';
 import { AddStageForm, DeleteStageButton } from './project/ProjectStageActions';
+import { DialogLayer } from './common/DialogLayer';
 
 interface ProjectDetailModalProps {
   projectId: number | null;
@@ -257,11 +258,12 @@ export default function ProjectDetailModal({
   const unit = project?.unit || 'عدد';
 
   return (
-    <div className={
+    <div role="dialog" aria-modal="true" className={
       isFullscreen
         ? "fixed inset-0 z-50 flex flex-col bg-slate-900/90 backdrop-blur-xs w-screen h-screen overflow-hidden animate-fadeIn"
         : "fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50 animate-fadeIn overflow-y-auto"
     }>
+      <DialogLayer onClose={onClose} />
       <div className={
         isFullscreen
           ? "w-full h-full flex flex-col overflow-hidden bg-white shadow-none border-none rounded-none"

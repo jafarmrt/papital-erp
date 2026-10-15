@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { formatPersianNumber } from '../../utils';
 import { MEDIA_SHOT_TYPE_LABELS } from '../../lib/media/mediaRules';
 import { mediaFileUrl, type MediaAssetView } from '../../lib/media/mediaApi';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface Props {
   assets: MediaAssetView[];
@@ -19,20 +20,20 @@ export function MediaLightbox({ assets, index, onIndex, onClose }: Props) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-      // right to left: the left arrow goes to the next file
-      else if (e.key === 'ArrowLeft') go(1);
+      // Esc is handled by DialogLayer; right to left: the left arrow goes to the next file
+      if (e.key === 'ArrowLeft') go(1);
       else if (e.key === 'ArrowRight') go(-1);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [go, onClose]);
+  }, [go]);
 
   if (!asset) return null;
   const src = asset.kind === 'image' && asset.hasLight ? mediaFileUrl(asset.id, 'light') : mediaFileUrl(asset.id, 'original');
 
   return (
     <div className="fixed inset-0 z-[80] bg-black/90 flex flex-col" role="dialog" aria-modal="true" aria-label="نمایش فایل" dir="rtl">
+      <DialogLayer onClose={onClose} />
       <div className="flex items-center justify-between p-3 text-white">
         <div className="text-sm">
           <span className="font-bold">{asset.title || asset.originalName}</span>

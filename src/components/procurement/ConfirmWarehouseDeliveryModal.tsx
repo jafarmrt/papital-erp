@@ -3,6 +3,7 @@ import { PackageCheck, Warehouse, FileText, CheckCircle2, X, Loader2, Building2 
 import { formatPersianNumber, formatPersianDate } from '../../utils';
 import { sumAmounts } from '../../lib/procurement/procurementNumbers';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
+import { DialogLayer } from '../common/DialogLayer';
 
 /**
  * v9.0.351 (TD-701، B10-14): سفارش همان شکلی است که `GET /procurement/orders` برمی‌گرداند و تأمین‌کننده از `supplierName`
@@ -66,6 +67,7 @@ export const ConfirmWarehouseDeliveryModal: React.FC<ConfirmWarehouseDeliveryMod
         role="dialog"
         aria-modal="true"
       >
+        <DialogLayer onClose={onClose} disabled={isSubmitting} />
         {/* Header */}
         <div className="p-4 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex items-center justify-between">
           <div className="flex items-center gap-2.5">

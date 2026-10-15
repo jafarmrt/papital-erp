@@ -16,6 +16,8 @@ import { useServerDraft } from '../../hooks/useServerDraft';
 import toast from 'react-hot-toast';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { postingAccountsOf } from '../../lib/accounting/postingAccount';
+import { DialogLayer } from '../common/DialogLayer';
+import { useDialogEscape } from '../../lib/a11y/dialogEscapeStack';
 
 interface NewVoucherModalProps {
   isOpen: boolean;
@@ -52,6 +54,8 @@ export function NewVoucherModal({
   const [attachments, setAttachments] = useState<FinancialAttachment[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+  // Esc closes the shortcuts panel before the voucher window
+  useDialogEscape(() => setShowShortcutsHelp(false), isOpen && showShortcutsHelp);
 
   // Active focused row for keyboard actions
   const [activeRowIndex, setActiveRowIndex] = useState<number>(0);
@@ -334,14 +338,6 @@ export function NewVoucherModal({
         }
         return;
       }
-
-      // Escape key to close shortcuts panel or close modal if handled
-      if (e.key === 'Escape') {
-        if (showShortcutsHelp) {
-          setShowShortcutsHelp(false);
-          e.stopPropagation();
-        }
-      }
     };
 
     window.addEventListener('keydown', handleGlobalKeyDown);
@@ -429,7 +425,8 @@ export function NewVoucherModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-2 sm:p-4">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-2 sm:p-4">
+      <DialogLayer onClose={onClose} disabled={isSaving} />
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-6xl w-full max-h-[94vh] flex flex-col border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-200">
         
         {/* Modal Header */}

@@ -4,6 +4,7 @@ import { useProjectForm } from './project-modal/useProjectForm';
 import { ProjectGeneralForm } from './project-modal/ProjectGeneralForm';
 import { ProjectProductsForm } from './project-modal/ProjectProductsForm';
 import { ProjectStagesForm } from './project-modal/ProjectStagesForm';
+import { DialogLayer } from './common/DialogLayer';
 
 export default function ProjectModal(props: ProjectModalProps) {
   const { isOpen, onClose, projectToEdit, onOpenStages } = props;
@@ -48,7 +49,8 @@ export default function ProjectModal(props: ProjectModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+      <DialogLayer onClose={onClose} disabled={saving} />
       <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         
         {/* Header */}

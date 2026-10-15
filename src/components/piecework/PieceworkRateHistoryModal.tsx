@@ -4,6 +4,7 @@ import { PieceworkTask, PieceworkTaskRateHistory } from '../../types';
 import { formatPersianPrice, isoToJalaliDate, formatPersianDate, toEnglishDigits, formatPersianNumber } from '../../utils';
 import { fetchJson } from '../../api';
 import { toast as hotToast } from 'react-hot-toast';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface PieceworkRateHistoryModalProps {
   isOpen: boolean;
@@ -126,13 +127,14 @@ export const PieceworkRateHistoryModal: React.FC<PieceworkRateHistoryModalProps>
   };
 
   return (
-    <div
+    <div role="dialog" aria-modal="true"
       id="rate-history-modal-overlay"
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
+      <DialogLayer onClose={() => onClose()} />
       <div
         id="rate-history-modal-container"
         className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden text-right"

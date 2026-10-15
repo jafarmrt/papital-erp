@@ -14,6 +14,7 @@ import { payslipFixedSalaryRows } from '../../lib/payroll/payslipFixedSalaryRows
 import { useCompanyName } from '../../hooks/useCompanyName';
 import { useViewerIdentity } from '../../contexts/AuthContext';
 import { payrollIssuerDutyRefusal } from '../../lib/payroll/payrollDuties';
+import { DialogLayer } from '../common/DialogLayer';
 
 type PaymentTarget = NonNullable<ComponentProps<typeof PayrollPaymentModal>['payroll']>;
 
@@ -59,7 +60,8 @@ export function PieceworkPayslipModal({
   const fixedRows = payslipFixedSalaryRows(viewingPayroll);
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+      <DialogLayer onClose={onClose} />
       <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-4xl overflow-hidden animate-in fade-in zoom-in duration-200 print:m-0 print:border-none print:shadow-none">
         {/* Action Header - Hidden on Print */}
         <div className="p-4 bg-slate-800 text-white flex items-center justify-between print:hidden">

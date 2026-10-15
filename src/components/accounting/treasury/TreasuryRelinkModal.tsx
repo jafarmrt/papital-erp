@@ -3,6 +3,7 @@ import { Link2 } from 'lucide-react';
 import { formatPersianDate, formatPersianPrice } from '../../../utils';
 import type { TreasuryTransaction } from '../../../types';
 import { useTreasuryRelinkOptionsQuery } from '../../../hooks/accounting/useTreasuryQueries';
+import { DialogLayer } from '../../common/DialogLayer';
 
 /**
  * v10.0.123 (TD-1122): «انتقال به سند دیگر». سرور از v9.0.272 (TD-779) انتقال دریافت یا پرداخت به سند فعال دیگر را
@@ -34,7 +35,8 @@ export const TreasuryRelinkModal: React.FC<{
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <DialogLayer onClose={close} disabled={saving} />
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] flex flex-col border border-slate-200 dark:border-slate-700">
         <div className="p-5 border-b border-slate-100 dark:border-slate-700">
           <h3 className="font-bold text-indigo-700 dark:text-indigo-300 text-base flex items-center gap-2">

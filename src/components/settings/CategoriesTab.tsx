@@ -4,6 +4,7 @@ import { FolderTree, Plus, Edit2, Trash2, RotateCcw } from 'lucide-react';
 import { Category } from '../../types';
 import { cn } from '../../utils';
 import { useHasPermission } from '../../contexts/AuthContext';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface CategoriesTabProps {
   categories: Category[];
@@ -146,7 +147,8 @@ export function CategoryModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 font-farsi text-right">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 font-farsi text-right">
+      <DialogLayer onClose={onClose} disabled={isSaving} />
       <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden max-h-[85vh] flex flex-col">
         <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center">
           <h3 className="font-bold text-base text-slate-800">

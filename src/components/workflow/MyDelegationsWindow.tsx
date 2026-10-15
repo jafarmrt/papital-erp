@@ -9,6 +9,7 @@ import { useOnlineStatus } from '../../lib/pwa/useOnlineStatus';
 import { formatPersianDate } from '../../utils';
 import { confirmAction } from '../ConfirmDialogHost';
 import { DelegationForm } from './DelegationForm';
+import { DialogLayer } from '../common/DialogLayer';
 
 const STATUS_LABELS: Record<DelegationRow['status'], string> = {
   active: 'فعال',
@@ -110,6 +111,7 @@ function MyDelegationsWindow({ onClose }: { onClose: () => void }): React.ReactE
 
   return (
     <div className={PHONE_SHEET_OVERLAY} role="dialog" aria-modal="true" aria-label="تفویض کارهایم">
+      <DialogLayer onClose={onClose} />
       <div className={`${PHONE_SHEET_PANEL} bg-white dark:bg-gray-800 shadow-xl border border-gray-200 dark:border-gray-700 sm:max-w-2xl`}>
         <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-700">
           <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">

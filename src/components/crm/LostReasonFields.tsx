@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { CRM_LOST_REASONS, CRM_LOST_REASON_LABELS, CRM_LOST_REASON_NOTE_MAX, lostReasonError } from '../../lib/crm/leadFields';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface LostReasonFieldsProps {
   reason: string;
@@ -59,6 +60,7 @@ export function LostReasonDialog({ leadTitle, onCancel, onConfirm }: LostReasonD
   };
   return (
     <div className="fixed inset-0 z-[90] bg-slate-900/60 flex items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" aria-modal="true" aria-label="دلیل از دست رفتن">
+      <DialogLayer onClose={onCancel} disabled={saving} />
       <form onSubmit={submit} className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl p-5 space-y-3 max-h-[90vh] overflow-y-auto">
         <h3 className="font-black text-sm text-slate-900">پرونده «{leadTitle}» از دست رفت؟</h3>
         <p className="text-[11px] text-slate-500">دلیل را انتخاب کنید؛ گزارش قیف دلیل‌ها را می‌شمارد.</p>

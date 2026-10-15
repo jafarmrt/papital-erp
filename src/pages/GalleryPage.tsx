@@ -6,6 +6,7 @@ import { Search, X, Image as ImageIcon } from 'lucide-react';
 import { cn, formatPersianNumber, formatPersianPrice } from '../utils';
 import { SafeImage } from '../components/SafeImage';
 import { useSearch } from '../SearchContext';
+import { DialogLayer } from '../components/common/DialogLayer';
 
 export default function GalleryPage({ user }: { user: User }) {
   const [items, setItems] = useState<Item[]>([]);
@@ -192,7 +193,8 @@ export default function GalleryPage({ user }: { user: User }) {
       </div>
 
       {lightboxImage && (
-        <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4 backdrop-blur-sm cursor-zoom-out" onClick={() => setLightboxImage(null)}>
+        <div role="dialog" aria-modal="true" aria-label="نمایش تصویر" className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4 backdrop-blur-sm cursor-zoom-out" onClick={() => setLightboxImage(null)}>
+          <DialogLayer onClose={() => setLightboxImage(null)} />
           <button aria-label="بستن" onClick={() => setLightboxImage(null)} className="absolute top-4 right-4 text-white/70 hover:text-white p-2 hover:bg-white/10 rounded-full transition-colors z-[110]">
              <X size={32} />
           </button>

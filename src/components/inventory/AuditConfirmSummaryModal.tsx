@@ -1,5 +1,6 @@
 import { formatPersianNumber } from '../../utils';
 import type { AuditSummary } from '../../lib/inventoryAudit/auditSheet';
+import { DialogLayer } from '../common/DialogLayer';
 
 /** V10-3.4: مودال خلاصه تایید پیش از ثبت نهایی انبارگردانی */
 
@@ -15,7 +16,8 @@ interface AuditConfirmSummaryModalProps {
 
 export function AuditConfirmSummaryModal({ summary, nextRef, selectedLocation, notes, submitting, onCancel, onConfirm }: AuditConfirmSummaryModalProps) {
   return (
-    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+      <DialogLayer onClose={onCancel} disabled={submitting} />
       <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 space-y-4 p-6 animate-in zoom-in-95 duration-150 max-h-[85vh] overflow-y-auto" dir="rtl">
         <div>
           <h3 className="text-base font-bold text-slate-900">تایید و ثبت نهایی انبارگردانی</h3>
