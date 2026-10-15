@@ -1,6 +1,7 @@
 import { pgTable, text, serial, numeric, integer, timestamp, index, varchar, primaryKey, check, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { registerColumnRef, baseRelations } from './baseRelations';
+import { users } from './auth';
 import { moneyNumeric } from './moneyColumn';
 
 export const categories = pgTable('categories', {
@@ -198,4 +199,24 @@ export const pendingMaterials = pgTable('pending_materials', {
   idx_pmat_code: index('idx_pmat_code').on(table.code),
   idx_pmat_deleted: index('idx_pmat_deleted').on(table.isDeleted),
   idx_pmat_project: index('idx_pmat_project').on(table.projectId),
+}));
+
+/**
+ * v10.1.7 (D-15, TD-1264, migration 0110): each change of an item's code through `POST /items/:id/change-code`, written in
+ * the change's transaction. A WooCommerce order line whose SKU is no live item's current code finds its item here
+ * (`resolveItemsByCode` in `src/services/items/itemCodeChange.ts`).
+ */
+export const itemCodeHistory = pgTable('item_code_history', {
+  id: serial('id').primaryKey(),
+  itemId: integer('item_id').notNull().references(() => items.id),
+  oldCode: text('old_code').notNull(),
+  newCode: text('new_code').notNull(),
+  reason: text('reason').notNull(),
+  userId: integer('user_id').references(() => users.id),
+  username: text('username').notNull().default(''),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+}, (table) => ({
+  idx_item_code_history_item: index('idx_item_code_history_item').on(table.itemId),
+  idx_item_code_history_user: index('idx_item_code_history_user').on(table.userId).where(sql`${table.userId} IS NOT NULL`),
+  idx_item_code_history_old_code: index('idx_item_code_history_old_code').on(table.oldCode),
 }));

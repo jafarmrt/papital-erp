@@ -238,6 +238,20 @@ function emptyReservationReport(): ReservedItemsFullReport {
   };
 }
 
+/** Whose reservation is not «another's»: the document being edited (a sales proforma) and the project being issued for */
+export interface OthersReservationContext {
+  excludeDocumentId?: number | null;
+  projectId?: number | null;
+}
+
+/** The reservations of others: one rule for the sellable gate and the sales invoice picker (TD-1209); the same array when none is left out */
+export function othersReservations<R extends { sourceType: string; sourceId: unknown }>(reservations: R[], ctx: OthersReservationContext): R[] {
+  if (!ctx.excludeDocumentId && !ctx.projectId) return reservations;
+  return reservations
+    .filter(r => !(r.sourceType === 'proforma' && ctx.excludeDocumentId && Number(r.sourceId) === ctx.excludeDocumentId))
+    .filter(r => !(r.sourceType === 'project' && ctx.projectId && Number(r.sourceId) === ctx.projectId));
+}
+
 export class ItemStockReservationService {
   /**
    * TD-081 (v4.0.31): مسیر رسمی و یگانه آزادسازی رزروهای پروژه هنگام حواله خروج.
@@ -673,16 +687,20 @@ export class ItemStockReservationService {
    * رزرو هر کالا (پیش‌فاکتور فروش و پروژه ثبت نهایی‌شده)، با شناسه کالا کلید خورده (v9.0.374، TD-822؛ پیش‌تر کد بزرگ‌شده).
    * v9.0.394 (TD-821): خطای خواندن رزرو به فراخواننده می‌رسد (فهرست کالا خطا می‌دهد، نه رزرو صفر).
    */
-  static async getReservedStocksMap(scope?: ReservationScope): Promise<Record<string, ReservedStockInfo>> {
+  static async getReservedStocksMap(scope?: ReservationScope, others: OthersReservationContext = {}): Promise<Record<string, ReservedStockInfo>> {
     const report = await ItemStockReservationService.getReservedStockDetails(undefined, true, scope);
     const map: Record<string, ReservedStockInfo> = {};
 
     for (const summary of report.itemSummaries) {
       const itemId = Number(summary.itemId);
       if (!Number.isInteger(itemId) || itemId <= 0) continue;
+      // v10.1.7 (TD-1209): the sales invoice picker of an open proforma leaves out that proforma's own reservation
+      const reservations = othersReservations(summary.reservations, others);
       map[String(itemId)] = {
-        totalReserved: summary.totalReservedQty,
-        reservations: summary.reservations.map(r => ({
+        totalReserved: reservations === summary.reservations
+          ? summary.totalReservedQty
+          : reservations.reduce((s, r) => fin(s).add(Number(r.reservedQty) || 0).toNumber(), 0),
+        reservations: reservations.map(r => ({
           projectId: r.sourceId,
           projectCode: r.sourceRef,
           projectTitle: r.sourceTitle,
@@ -711,9 +729,7 @@ export class ItemStockReservationService {
     if (!locKey) throw new ValidationError('انبار برای محاسبه موجودی قابل فروش مشخص نیست.', undefined, 'SELLABLE_LOCATION_REQUIRED');
     const locationStock = fin(rawStocks[locKey] || 0).toNumber();
     const total = Object.values(rawStocks).reduce((s, v) => fin(s).add(Number(v) || 0).toNumber(), 0);
-    const reservedForOthers = (summary?.reservations || [])
-      .filter(r => !(r.sourceType === 'proforma' && ctx.excludeDocumentId && Number(r.sourceId) === ctx.excludeDocumentId))
-      .filter(r => !(r.sourceType === 'project' && ctx.projectId && Number(r.sourceId) === ctx.projectId))
+    const reservedForOthers = othersReservations(summary?.reservations || [], ctx)
       .reduce((s, r) => fin(s).add(Number(r.reservedQty) || 0).toNumber(), 0);
     const availableFromTotal = Math.max(0, fin(total).subtract(reservedForOthers).toNumber());
     const sellable = Math.max(0, Math.min(locationStock, availableFromTotal));

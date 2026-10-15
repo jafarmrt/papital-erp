@@ -11010,6 +11010,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v10.1.6 (N-06): production receipt without a project from the stock page
   const { runProductionWithoutProjectTests } = await import('../regression/productionWithoutProjectTests.js');
   results.push(...await runProductionWithoutProjectTests(shouldRun));
+  const { runItemCodeChangeTests } = await import('../regression/itemCodeChangeTests.js');
+  results.push(...await runItemCodeChangeTests(shouldRun));
 
   return results;
 }

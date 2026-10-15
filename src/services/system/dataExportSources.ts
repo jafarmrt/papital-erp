@@ -1,7 +1,7 @@
 import { getTableColumns, type SQL } from 'drizzle-orm';
 import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
 import {
-  users, personnel, customers, items, categories, warehouses, itemPrices, itemWarehouseStocks,
+  users, personnel, customers, items, itemCodeHistory, categories, warehouses, itemPrices, itemWarehouseStocks,
   productionProjects, projectStages, projectProductStageProgress, projectBomAllocations, projectReservationReleases,
   pendingMaterials, transfers, crmLeads, crmActivities, dailyWorkLogs,
   documents, documentItems, transactions, appSettings, roles,
@@ -63,6 +63,7 @@ export const DATA_EXPORT_TABLE_SOURCES: Readonly<Record<string, TableSpecSource>
   warehouses: { table: warehouses, key: ['id'] },
   items: { table: items, key: ['id'] },
   item_prices: { table: itemPrices, key: ['id'] },
+  item_code_history: { table: itemCodeHistory, key: ['id'] },
   item_warehouse_stocks: { table: itemWarehouseStocks, key: ['id'] },
   transactions: { table: transactions, key: ['id'] },
   transfers: { table: transfers, key: ['id'] },

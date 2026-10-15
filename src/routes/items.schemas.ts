@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { decimalInput, numericIdString } from '../middleware/validate.js';
 import { fin } from '../lib/financialDecimal.js';
 import { normalizeDecimalString } from '../lib/numericInput.js';
+import { ITEM_CODE_CHANGE_REASON_MAX } from '../lib/items/itemCodeChange.js';
 
 /** بدنه ثبت و ویرایش کالا (مسیرهای `POST /items` و `PUT /items/:id`) */
 function itemBodyAliases(val: unknown): unknown {
@@ -89,4 +90,14 @@ export const consumeNextItemCodeSchema = z.object({
     prefix: z.string().max(40).optional(),
     transfer: z.string().max(60).optional(),
   }),
+});
+
+/** v10.1.7 (D-15, TD-1264): change an item's code; the new code, a required reason and the item's version */
+export const itemCodeChangeSchema = z.object({
+  body: z.object({
+    code: z.string().trim().min(1, 'کد تازه کالا را بنویسید').max(100, 'کد کالا بیش از اندازه بلند است'),
+    reason: z.string().trim().min(1, 'دلیل تغییر کد را بنویسید').max(ITEM_CODE_CHANGE_REASON_MAX, 'دلیل تغییر کد بیش از اندازه بلند است'),
+    version: itemVersion,
+  }).strict(),
+  params: z.object({ id: numericIdString }),
 });

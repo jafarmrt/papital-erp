@@ -1,7 +1,7 @@
 import { wooOrderVatPercent } from './wooOrderVat.js';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
-import { documents, items, woocommerceOrderLogs } from '../../db/schema.js';
+import { and, asc, eq, sql } from 'drizzle-orm';
+import { documents, woocommerceOrderLogs } from '../../db/schema.js';
 import { DocumentService } from '../document.service.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { OutboxService } from '../events/outboxService.js';
@@ -15,6 +15,8 @@ import { currencyScale, exactLineSplit } from './exactLineTotal.js';
 import { allocateFeeDiscount } from './feeDiscount.js';
 import { describeOrderChange } from './orderChange.js';
 import { resolveShopWarehouseCode } from './shopWarehouse.js';
+import { resolveItemsByCode } from '../items/itemCodeChange.js';
+import { oldCodeOrderNote } from '../../lib/items/itemCodeChange.js';
 
 /**
  * v7.0.30 (TD-190 / audit P1-2): پردازش سفارش‌های ووکامرس — منتقل‌شده از woocommerce.routes.ts (RULE 01).
@@ -316,16 +318,9 @@ export class WooOrderSyncService {
 
         const { multiplier, currency } = resolveCurrency(wcOrder);
         const skus = [...new Set(lineItems.map(li => String(li.sku || '').trim()).filter(Boolean))];
-        const erpItems = skus.length > 0
-          ? await tx.select({ id: items.id, code: items.code })
-            .from(items)
-            .where(and(eq(items.isDeleted, 0), inArray(items.code, skus)))
-            .orderBy(asc(items.id))
-          : [];
-        const itemBySku = new Map<string, number>();
-        for (const it of erpItems) {
-          if (it.code && !itemBySku.has(it.code)) itemBySku.set(it.code, it.id);
-        }
+        // v10.1.7 (D-15, TD-1264): a SKU that is no live item's current code finds the item by an earlier code of it
+        const itemBySku = await resolveItemsByCode(tx, skus);
+        const oldCodeNotes: string[] = [];
 
         // v8.0.44 (TD-293، تصمیم مالک محصول — گزینه الف): فاکتور از «انبار فروشگاه اینترنتی» کم می‌کند (تنظیم wc_shop_warehouse؛
         // بی‌تنظیم انبار پیش‌فرض)، همان انباری که همگام‌سازی موجودی قابل فروشش را به فروشگاه می‌فرستد
@@ -355,11 +350,13 @@ export class WooOrderSyncService {
             problems.push(`${label} (فاقد SKU)`);
             continue;
           }
-          const itemId = itemBySku.get(sku);
-          if (!itemId) {
+          const match = itemBySku.get(sku);
+          if (!match) {
             problems.push(`${label} (SKU: ${sku})`);
             continue;
           }
+          const itemId = match.itemId;
+          if (match.oldCode && !oldCodeNotes.includes(match.oldCode)) oldCodeNotes.push(match.oldCode);
           // v8.0.41 (TD-297): جمع ردیف دقیق می‌ماند؛ ردیف بخش‌ناپذیر دو سطر می‌شود (exactLineSplit)، نه فی با کسر ریال
           const parts = hasLineTotal
             ? exactLineSplit(fin(String(li.total).trim()).multiply(multiplier), qty, currencyScale(currency))
@@ -420,6 +417,7 @@ export class WooOrderSyncService {
         // تفصیلی همان مشتری بنشیند. v9.0.332 (TD-703، ت۱ الف): خریدار هم‌نام با تلفن دیگر طرف حساب متمایز می‌گیرد
         const orderCustomer = await resolveWooOrderCustomer(tx, wcOrderId, buyer, WC_BOT_USER);
         const invoiceBuyerName = orderCustomer.name;
+        const orderNote = [orderCustomer.note, oldCodeOrderNote(oldCodeNotes)].filter(Boolean).join(' ');
 
         const todayStr = await businessTodayIsoDate();
         const nextRef = await DocumentService.getNextRef('invoice', todayStr, tx);
@@ -464,7 +462,7 @@ export class WooOrderSyncService {
           buyerName: invoiceBuyerName,
           totalAmount: money(orderTotalNum),
           payload: wcOrder,
-          errorMessage: orderCustomer.note,
+          errorMessage: orderNote,
           updatedAt: systemNowUtcIso(),
         }).where(eq(woocommerceOrderLogs.id, log.id));
 
@@ -482,7 +480,7 @@ export class WooOrderSyncService {
           status: 'processed' as const,
           docId: newDocId,
           refNumber: nextRef,
-          message: `فاکتور فروش شماره ${nextRef} جهت سفارش ووکامرس #${wcOrderId} با موفقیت صادر گردید و موجودی انبار کسر شد.${orderCustomer.note ? ` ${orderCustomer.note}` : ''}`,
+          message: `فاکتور فروش شماره ${nextRef} جهت سفارش ووکامرس #${wcOrderId} با موفقیت صادر گردید و موجودی انبار کسر شد.${orderNote ? ` ${orderNote}` : ''}`,
         };
       });
     } catch (error) {

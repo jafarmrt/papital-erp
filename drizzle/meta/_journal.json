@@ -771,6 +771,13 @@
       "when": 1794806400000,
       "tag": "0109_personnel_deductions_purpose",
       "breakpoints": true
+    },
+    {
+      "idx": 110,
+      "version": "7",
+      "when": 1794900000000,
+      "tag": "0110_item_code_history",
+      "breakpoints": true
     }
   ]
 }

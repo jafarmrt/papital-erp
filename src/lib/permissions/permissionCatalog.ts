@@ -33,7 +33,8 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     permissions: [
       { key: 'products.view', title: 'مشاهده کالاها و موجودی', description: 'دسترسی به لیست کالاها، جزئیات و قیمت‌ها' },
       { key: 'products.create', title: 'تعریف کالای جدید', description: 'امکان اضافه کردن کالا و محصول جدید به انبار', requires: ['products.view'] },
-      { key: 'products.edit', title: 'ویرایش اطلاعات کالا', description: 'تغییر عنوان، کد، وزن، رنگ و تصویر کالاها', requires: ['products.view'] },
+      { key: 'products.edit', title: 'ویرایش اطلاعات کالا', description: 'تغییر عنوان، وزن، رنگ و تصویر کالاها', requires: ['products.view'] },
+      { key: 'products.change_code', title: 'تغییر کد کالا', description: 'تغییر کد کالای ثبت‌شده با دلیل، با سابقه کدهای قبلی؛ سفارش سایت با کد قدیم هم کالا را پیدا می‌کند', requires: ['products.edit'] },
       { key: 'products.edit_price', title: 'ویرایش قیمت‌ها', description: 'تغییر قیمت‌های خرید و فروش کالا', requires: ['products.view'] },
       { key: 'products.delete', title: 'حذف کالا', description: 'امکان حذف نرم کالا از سیستم', requires: ['products.view'] },
     ]

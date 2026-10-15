@@ -1,5 +1,5 @@
 import { Item } from '../../types';
-import { ChevronRight, ChevronLeft, Cloud, Edit2, Archive, Lock, CheckCircle2 } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Cloud, Edit2, Archive, Lock, CheckCircle2, Hash } from 'lucide-react';
 import { cn, formatPersianNumber, formatPersianPrice, parseMultiValue, formatMultiValue } from '../../utils';
 import { SafeImage } from '../SafeImage';
 import { ActionMenu } from '../ActionMenu';
@@ -17,6 +17,8 @@ interface ItemsTableProps {
   onEditItem?: (item: Item) => void;
   onArchiveItem?: (itemId: number) => void;
   onSyncItem?: (itemId: number) => void;
+  /** v10.1.7 (D-15): «تغییر کد», only with `products.change_code` */
+  onChangeCode?: (item: Item) => void;
   syncingItemId?: number | null;
   page: number;
   totalPages: number;
@@ -34,13 +36,14 @@ export function ItemsTable({
   onEditItem,
   onArchiveItem,
   onSyncItem,
+  onChangeCode,
   syncingItemId,
   page,
   totalPages,
   totalItems,
   onPageChange
 }: ItemsTableProps) {
-  const hasActions = Boolean(onEditItem || onArchiveItem || onSyncItem);
+  const hasActions = Boolean(onEditItem || onArchiveItem || onSyncItem || onChangeCode);
   return (
     <div className="flex-1 flex flex-col min-h-[300px] justify-between">
       <div className="overflow-auto relative flex-1">
@@ -218,10 +221,15 @@ export function ItemsTable({
                           <Edit2 size={12} />
                           ویرایش
                         </button>}
-                        {(onSyncItem || onArchiveItem) && <ActionMenu
+                        {(onSyncItem || onArchiveItem || onChangeCode) && <ActionMenu
                           align="left"
                           title="عملیات کالا"
                           items={[
+                            ...(onChangeCode ? [{
+                              label: 'تغییر کد',
+                              icon: Hash,
+                              onClick: () => onChangeCode(item),
+                            }] : []),
                             ...(onSyncItem ? [{
                               label: syncingItemId === item.id ? 'در حال همگام‌سازی...' : 'همگام‌سازی ووکامرس',
                               icon: Cloud,
