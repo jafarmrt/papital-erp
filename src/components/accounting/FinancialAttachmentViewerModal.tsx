@@ -202,7 +202,7 @@ export const FinancialAttachmentViewerModal: React.FC<Props> = ({
                   className={`relative shrink-0 w-12 h-12 rounded-lg overflow-hidden border-2 transition-all cursor-pointer ${
                     isSelected ? 'border-blue-500 ring-2 ring-blue-500/30' : 'border-slate-700 opacity-60 hover:opacity-100'
                   }`}
-                  title={att.title || att.name || `پیوست ${idx + 1}`}
+                  title={att.title || att.name || `پیوست ${formatPersianNumber(idx + 1)}`}
                 >
                   {isAttImage ? (
                     <AttachmentImage
@@ -232,7 +232,7 @@ export const FinancialAttachmentViewerModal: React.FC<Props> = ({
               </span>
             )}
             {currentAttachment.size && (
-              <span>حجم: {(currentAttachment.size / 1024).toFixed(1)} کیلوبایت</span>
+              <span>حجم: {formatPersianNumber(currentAttachment.size / 1024, 1)} کیلوبایت</span>
             )}
           </div>
           <button

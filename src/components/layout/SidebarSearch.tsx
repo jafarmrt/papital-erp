@@ -1,5 +1,6 @@
 import React from 'react';
 import { Search, X } from 'lucide-react';
+import { formatPersianNumber } from '../../utils';
 
 interface SidebarSearchProps {
   query: string;
@@ -45,7 +46,7 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
         <div className="flex items-center justify-between px-1 mt-1 text-[10px] text-slate-400">
           <span>نتایج جستجو:</span>
           <span className="font-bold text-blue-400">
-            {totalResultsCount} مورد
+            {formatPersianNumber(totalResultsCount)} مورد
           </span>
         </div>
       )}

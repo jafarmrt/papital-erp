@@ -64,7 +64,7 @@ export function GlobalReservationsPanel({ isOpen, onClose, reservations }: Globa
             <tbody className="divide-y divide-purple-100">
               {reservations.map((res, idx) => (
                 <tr key={idx} className="hover:bg-purple-50/50">
-                  <td className="p-2.5 text-center font-bold text-slate-500">{idx + 1}</td>
+                  <td className="p-2.5 text-center font-bold text-slate-500">{formatPersianNumber(idx + 1)}</td>
                   <td className="p-2.5 font-mono font-bold text-purple-900">{res.itemCode || '---'}</td>
                   <td className="p-2.5 font-bold text-slate-900">{res.itemName}</td>
                   <td className="p-2.5">

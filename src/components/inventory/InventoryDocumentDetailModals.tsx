@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { ArrowLeftRight, ClipboardCheck, Printer, RefreshCw, X, type LucideIcon } from 'lucide-react';
 import { TransferDocumentPrint } from './TransferDocumentPrint';
-import { formatPersianDate } from '../../utils';
+import { formatPersianDate, formatPersianNumber } from '../../utils';
 import type { InventoryDocumentDetail } from '../../hooks/inventoryAudit/useInventoryAuditQueries';
 
 /** مودال‌های جزئیات سند انبارگردانی و حواله انتقال صفحه انبارگردانی (قاب مشترک + محتوای هر سند) */
@@ -76,13 +76,13 @@ function VarianceBadge({ variance }: { variance: number }) {
   if (variance > 0) {
     return (
       <span className="text-xs bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full font-mono">
-        +{variance} اضافی
+        +{formatPersianNumber(variance)} اضافی
       </span>
     );
   }
   return (
     <span className="text-xs bg-rose-100 text-rose-800 font-bold px-2 py-0.5 rounded-full font-mono">
-      {variance} کسری
+      {formatPersianNumber(variance)} کسری
     </span>
   );
 }
@@ -135,7 +135,7 @@ export function AuditDocumentDetailModal({ doc, loading, onClose }: DetailModalP
                   const variance = Number(line.variance || (Number(line.quantity) - Number(line.system_stock || 0)));
                   return (
                     <tr key={idx} className="hover:bg-slate-50/50">
-                      <td className="p-3 text-slate-500">{idx + 1}</td>
+                      <td className="p-3 text-slate-500">{formatPersianNumber(idx + 1)}</td>
                       <td className="p-3 text-slate-600 font-mono">{line.code}</td>
                       <td className="p-3 text-slate-800 font-medium">{line.name}</td>
                       <td className="p-3 text-center text-slate-600 font-mono">{line.system_stock} {line.unit}</td>
@@ -218,7 +218,7 @@ export function TransferDocumentDetailModal({ doc, loading, onClose }: DetailMod
               <tbody className="divide-y divide-slate-100">
                 {doc.items?.map((line, idx) => (
                   <tr key={idx} className="hover:bg-slate-50/50">
-                    <td className="p-3 text-slate-500">{idx + 1}</td>
+                    <td className="p-3 text-slate-500">{formatPersianNumber(idx + 1)}</td>
                     <td className="p-3 text-slate-600 font-mono">{line.code}</td>
                     <td className="p-3 text-slate-800 font-bold">{line.name}</td>
                     <td className="p-3 text-center text-blue-900 font-mono font-bold">{line.quantity} {line.unit}</td>

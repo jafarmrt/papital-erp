@@ -1,7 +1,7 @@
 import React from 'react';
 import { Scale, X } from 'lucide-react';
 import { COMMON_UNITS, roundToOneDecimal } from './projectInventoryUtils';
-import { toPersianDigits } from '../../utils';
+import { toPersianDigits, formatPersianNumber } from '../../utils';
 import { DecimalInput } from '../common/DecimalInput';
 
 interface UnitConversionModalProps {
@@ -109,8 +109,8 @@ export function UnitConversionModal({
               <label className="font-bold text-slate-700">مقدار محاسبه شده به {conversionForm.targetUnit}:</label>
               <div className="p-2 bg-slate-100 rounded-xl font-mono font-bold text-amber-950 text-center text-sm border border-slate-200">
                 {conversionForm.mode === 'rate'
-                  ? roundToOneDecimal(conversionTarget.originalQty / Math.max(0.001, conversionForm.rate))
-                  : roundToOneDecimal(conversionForm.directConvertedQty)} {conversionForm.targetUnit}
+                  ? formatPersianNumber(roundToOneDecimal(conversionTarget.originalQty / Math.max(0.001, conversionForm.rate)))
+                  : formatPersianNumber(roundToOneDecimal(conversionForm.directConvertedQty))} {conversionForm.targetUnit}
               </div>
             </div>
           </div>

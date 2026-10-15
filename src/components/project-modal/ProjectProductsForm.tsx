@@ -51,7 +51,7 @@ export const ProjectProductsForm: React.FC<ProjectProductsFormProps> = ({
             <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
               <span className="text-xs font-black text-slate-700 flex items-center gap-1.5">
                 <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center text-2xs font-bold font-mono">
-                  {idx + 1}
+                  {formatPersianNumber(idx + 1)}
                 </span>
                 ردیف کالا {product.item_name ? `- ${product.item_name}` : ''}
               </span>

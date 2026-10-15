@@ -611,7 +611,7 @@ export function CustomerExcelModal({
                     <span>موارد دارای هشدار</span>
                     {summaryStats.withIssues > 0 && (
                       <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-700 text-[10px] flex items-center justify-center font-bold">
-                        {summaryStats.withIssues}
+                        {formatPersianNumber(summaryStats.withIssues)}
                       </span>
                     )}
                   </button>
@@ -751,7 +751,7 @@ export function CustomerExcelModal({
 
               {importResult.errors && importResult.errors.length > 0 && (
                 <div className="text-right max-w-md mx-auto p-4 bg-rose-50 border border-rose-200 rounded-xl text-xs space-y-1">
-                  <span className="font-bold text-rose-800 block mb-1">خطاهای پردازش ({importResult.errors.length}):</span>
+                  <span className="font-bold text-rose-800 block mb-1">خطاهای پردازش ({formatPersianNumber(importResult.errors.length)}):</span>
                   {importResult.errors.slice(0, 5).map((err, i) => (
                     <p key={`err-${i}`} className="text-rose-700 text-[11px]">
                       سطر {formatPersianNumber(err.row)}: {err.message}

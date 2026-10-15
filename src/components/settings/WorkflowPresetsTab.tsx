@@ -277,7 +277,7 @@ export function WorkflowPresetsTab({
                           <div key={sIdx} className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
                             <div className="flex items-center gap-2 text-xs">
                               <span className="w-6 h-6 rounded-lg bg-slate-900 text-amber-400 font-bold flex items-center justify-center shrink-0 text-[11px]">
-                                {sIdx + 1}
+                                {formatPersianNumber(sIdx + 1)}
                               </span>
                               <input
                                 type="text"
@@ -443,7 +443,7 @@ export function WorkflowPresetsTab({
                                       >
                                         <div className="flex items-center gap-2 flex-1 min-w-0">
                                           <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-800 font-bold flex items-center justify-center shrink-0 text-[10px]">
-                                            {dtIdx + 1}
+                                            {formatPersianNumber(dtIdx + 1)}
                                           </span>
                                           <div className="min-w-0">
                                             <div className="font-bold text-slate-800 truncate">{dt.taskTitle}</div>

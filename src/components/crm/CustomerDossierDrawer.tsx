@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Building2, Users, Briefcase, Plus, PhoneCall, FileText, X, Edit2, TrendingUp, Award, ExternalLink, BookOpen, ArrowDownLeft, ArrowUpRight, Scale } from 'lucide-react';
 import { Customer, CRMLead, CRMActivity } from '../../types';
-import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel, formatPersianDate, formatPersianPhone } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel, formatPersianDate, formatPersianPhone, formatPersianCode } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { isRialCurrency } from '../../lib/rialDisplay';
 import { STAGES } from '../../hooks/useCRMData';
@@ -143,7 +143,7 @@ export function CustomerDossierDrawer({
                 <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] font-black rounded-md">
                   پرونده جامع مشتری
                 </span>
-                <span className="text-xs text-slate-400 font-mono">کد #{customer.id}</span>
+                <span className="text-xs text-slate-400 font-mono">کد #{formatPersianCode(customer.id)}</span>
               </div>
               <h2 className="text-lg font-black text-slate-900 mt-0.5">{customer.name}</h2>
             </div>
@@ -241,7 +241,7 @@ export function CustomerDossierDrawer({
             }`}
           >
             <Briefcase size={14} />
-            خلاصه و فرصت‌های فروش ({customerLeads.length})
+            خلاصه و فرصت‌های فروش ({formatPersianNumber(customerLeads.length)})
           </button>
 
           <button
@@ -253,7 +253,7 @@ export function CustomerDossierDrawer({
             }`}
           >
             <PhoneCall size={14} />
-            سوابق تعاملات ({customerActivities.length})
+            سوابق تعاملات ({formatPersianNumber(customerActivities.length)})
           </button>
 
           <button
@@ -265,7 +265,7 @@ export function CustomerDossierDrawer({
             }`}
           >
             <FileText size={14} />
-            پیش‌فاکتورها و اسناد ({documents.length})
+            پیش‌فاکتورها و اسناد ({formatPersianNumber(documents.length)})
           </button>
 
           <button
@@ -289,7 +289,7 @@ export function CustomerDossierDrawer({
             }`}
           >
             <Users size={14} />
-            اشخاص رابط و آدرس ({contactsList.length})
+            اشخاص رابط و آدرس ({formatPersianNumber(contactsList.length)})
           </button>
         </div>
 
@@ -558,7 +558,7 @@ export function CustomerDossierDrawer({
                 {/* Ledger Entries Table */}
                 <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs">
                   <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 font-black text-xs text-slate-700">
-                    ریز گردش ردیف‌های اسناد حسابداری ({ledgerItems.length} ردیف)
+                    ریز گردش ردیف‌های اسناد حسابداری ({formatPersianNumber(ledgerItems.length)} ردیف)
                   </div>
                   <div className="overflow-x-auto max-h-[300px] overflow-y-auto custom-scrollbar">
                     <table className="w-full text-xs text-right border-collapse">
@@ -583,7 +583,7 @@ export function CustomerDossierDrawer({
                         ) : (
                           ledgerItems.map((entry: any, idx: number) => (
                             <tr key={entry.id || idx} className="hover:bg-slate-50/80 transition-colors">
-                              <td className="p-2.5 text-slate-400 font-mono text-[11px]">{idx + 1}</td>
+                              <td className="p-2.5 text-slate-400 font-mono text-[11px]">{formatPersianNumber(idx + 1)}</td>
                               <td className="p-2.5 font-mono text-blue-700 font-black">
                                 #{entry.voucherNumber || entry.voucherId}
                               </td>
@@ -657,7 +657,7 @@ export function CustomerDossierDrawer({
             <div className="space-y-2">
               <h4 className="font-black text-xs text-slate-800 flex items-center gap-1">
                 <Users size={14} className="text-blue-600" />
-                اشخاص رابط متصل به این حساب ({contactsList.length} نفر)
+                اشخاص رابط متصل به این حساب ({formatPersianNumber(contactsList.length)} نفر)
               </h4>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
