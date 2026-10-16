@@ -44,7 +44,10 @@ interface PersonnelPreviewRow {
   notes: string;
   isDuplicateInBatch: boolean;
   isDuplicateInDb: boolean;
+  /** Everything the preview says about the row: its errors and its notices */
   issues: string[];
+  /** OBS-R2-53: what makes the row unusable (no name, invalid national ID, a code repeated in the file); such a row is not sent */
+  errors: string[];
 }
 
 export function PersonnelExcelModal({
@@ -251,18 +254,19 @@ export function PersonnelExcelModal({
           const notes = getField(row, ['توضیحات', 'یادداشت', 'notes', 'description']);
 
           const issues: string[] = [];
+          const errors: string[] = [];
 
           if (!fullName) {
-            issues.push('نام یا نام خانوادگی خالی است.');
+            errors.push('نام یا نام خانوادگی خالی است.');
           }
-          if (importedNationalId.error) issues.push(importedNationalId.error);
+          if (importedNationalId.error) errors.push(importedNationalId.error);
           else if (importedNationalId.padded) issues.push(paddedNationalIdNotice(nationalId));
 
           let isDuplicateInBatch = false;
           if (personnelCode) {
             if (batchCodes.has(personnelCode)) {
               isDuplicateInBatch = true;
-              issues.push(`کد پرسنلی «${personnelCode}» در همین فایل تکرار شده است.`);
+              errors.push(`کد پرسنلی «${personnelCode}» در همین فایل تکرار شده است.`);
             } else {
               batchCodes.add(personnelCode);
             }
@@ -278,7 +282,8 @@ export function PersonnelExcelModal({
             raw: row,
             firstName,
             lastName,
-            fullName: fullName || '---',
+            // OBS-R2-53: an empty name stays empty (the row is not sent); «---» was sent and saved as the person's name
+            fullName,
             personnelCode,
             phone,
             nationalId,
@@ -300,7 +305,8 @@ export function PersonnelExcelModal({
             notes,
             isDuplicateInBatch,
             isDuplicateInDb,
-            issues
+            issues: [...errors, ...issues],
+            errors
           });
         });
 
@@ -342,13 +348,16 @@ export function PersonnelExcelModal({
     return previewRows.filter((r) => r.issues.length > 0).length;
   }, [previewRows]);
 
+  // OBS-R2-53: only rows without an error are sent; a row with one is listed in the preview and left out
+  const importableRows = useMemo(() => previewRows.filter((r) => r.errors.length === 0), [previewRows]);
+
   // Execute bulk import
   const handleConfirmImport = async () => {
-    if (previewRows.length === 0) return;
+    if (importableRows.length === 0) return;
 
     setIsImporting(true);
     try {
-      const payloadRows = previewRows.map((r) => ({
+      const payloadRows = importableRows.map((r) => ({
         firstName: r.firstName,
         lastName: r.lastName,
         fullName: r.fullName,
@@ -557,7 +566,7 @@ export function PersonnelExcelModal({
                   <div>
                     <span className="text-xs text-emerald-700 font-bold">آماده ثبت بدون خطا:</span>
                     <p className="text-lg font-black text-emerald-800">
-                      {formatPersianNumber(previewRows.length - totalIssuesCount)}
+                      {formatPersianNumber(importableRows.length)}
                     </p>
                   </div>
                   <CheckCircle2 size={24} className="text-emerald-500" />
@@ -653,7 +662,7 @@ export function PersonnelExcelModal({
                           <td className="p-3 font-mono font-bold text-blue-700">
                             {row.personnelCode || <span className="text-slate-300 font-normal">خودکار</span>}
                           </td>
-                          <td className="p-3 font-black text-slate-900">{row.fullName}</td>
+                          <td className="p-3 font-black text-slate-900">{row.fullName || <span className="text-slate-300 font-normal">بی نام</span>}</td>
                           <td className="p-3 text-slate-600">{row.jobTitle || '---'}</td>
                           <td className="p-3 font-mono text-slate-600">{row.phone ? formatPersianPhone(row.phone) : '---'}</td>
                           <td className="p-3 font-mono text-slate-600">{row.nationalId ? formatPersianNationalId(row.nationalId) : '---'}</td>
@@ -681,9 +690,9 @@ export function PersonnelExcelModal({
                                 {row.issues.map((iss, i) => (
                                   <span
                                     key={i}
-                                    className="flex items-center gap-1 text-amber-700 bg-amber-50 px-2 py-0.5 rounded text-[10px] font-medium"
+                                    className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${row.errors.includes(iss) ? 'text-rose-700 bg-rose-50' : 'text-amber-700 bg-amber-50'}`}
                                   >
-                                    <AlertTriangle size={12} className="shrink-0 text-amber-500" />
+                                    <AlertTriangle size={12} className={`shrink-0 ${row.errors.includes(iss) ? 'text-rose-500' : 'text-amber-500'}`} />
                                     {iss}
                                   </span>
                                 ))}
@@ -800,6 +809,11 @@ export function PersonnelExcelModal({
               </button>
 
               <div className="flex items-center gap-3">
+                {previewRows.length > importableRows.length && (
+                  <span className="text-[11px] font-bold text-rose-700">
+                    {formatPersianNumber(previewRows.length - importableRows.length)} ردیف دارای خطا ثبت نمی‌شود
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={handleClose}
@@ -810,11 +824,11 @@ export function PersonnelExcelModal({
                 <button
                   type="button"
                   onClick={handleConfirmImport}
-                  disabled={isImporting || previewRows.length === 0}
+                  disabled={isImporting || importableRows.length === 0}
                   className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   {isImporting ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                  <span>{isImporting ? 'در حال ثبت پرسنل...' : `تایید و ثبت نهایی (${formatPersianNumber(previewRows.length)} پرسنل)`}</span>
+                  <span>{isImporting ? 'در حال ثبت پرسنل...' : `تایید و ثبت نهایی (${formatPersianNumber(importableRows.length)} پرسنل)`}</span>
                 </button>
               </div>
             </>

@@ -547,6 +547,8 @@ export function usePiecework() {
     setPayrollBonuses(0);
     setPayrollDeductions(0);
     setPayrollDeductionsDescription('');
+    // OBS-R2-51: the previous payslip's advance deduction never carries over to the next one
+    setPayrollAdvanceDeduction(0);
     setPayrollNotes('');
     setPayrollIsPrepayment(false);
     setPayrollPrepaymentReason('');

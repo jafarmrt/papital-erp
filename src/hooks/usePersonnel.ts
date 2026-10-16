@@ -222,10 +222,13 @@ export function usePersonnel() {
       ...(editingId !== null ? { version: editingVersion } : {})
     };
 
-    await saveMutation.mutateAsync({
+    // OBS-R2-55: a refused save (the server's message is shown by the mutation's `onError`) keeps the form open with what was
+    // typed; the rejection no longer escapes the submit handler unhandled
+    const saved = await saveMutation.mutateAsync({
       id: editingId,
       payload
-    });
+    }).then(() => true, () => false);
+    if (!saved) return;
 
     setShowFormModal(false);
     resetForm();

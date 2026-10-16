@@ -14,6 +14,7 @@ import { toPersianDigits } from '../../utils/persianNumber.js';
 import { isLegacyPayrollVoucher, payrollVouchersWhere } from '../accounting/payrollVoucherLink.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
+import { payrollAmountText } from '../../lib/payroll/payrollCurrency.js';
 import { workLogFreeOfLivePayroll } from './workLogPayrollLink.js';
 import { auditPayrollDeleted, auditPayrollIssued, auditPayrollUpdated } from './pieceworkAudit.js';
 import { payrollStatusLabel } from '../../lib/payroll/payrollStatusLabels.js';
@@ -223,7 +224,7 @@ export class PieceworkPayrollService {
         if (advanceDeductionFin.greaterThan(outstandingAdvance)) {
           return {
             status: 400,
-            error: `کسر مساعده (${advanceDeductionFin.toNumber().toLocaleString('fa-IR')} ریال) از مانده مساعده تسویه‌نشده ${pInfo.fullName} (${fin(outstandingAdvance).toNumber().toLocaleString('fa-IR')} ریال) بیشتر است؛ حداکثر همان مانده کسر می‌شود.`,
+            error: `کسر مساعده (${payrollAmountText(advanceDeductionFin)}) از مانده مساعده تسویه‌نشده ${pInfo.fullName} (${payrollAmountText(outstandingAdvance)}) بیشتر است؛ حداکثر همان مانده کسر می‌شود.`,
           };
         }
       }

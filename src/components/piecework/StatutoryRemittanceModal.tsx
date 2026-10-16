@@ -18,7 +18,7 @@ import { toPersianDigits } from '../../utils/persianNumber';
 import {
   STATUTORY_REMITTANCE_METHODS, STATUTORY_REMITTANCE_NOTHING, STATUTORY_REMITTANCE_TEXT, hasStatutoryUnassignedPayments,
   statutoryRemittanceDescription, statutoryRemittanceDraftLines, statutoryRemittanceFormError, statutoryRemittancePayload,
-  statutoryRemittanceTotal,
+  statutoryRemittanceTotal, unassignedPaymentsOfError,
   type StatutoryRemittanceDraftLine, type StatutoryRemittanceKind, type StatutoryRemittanceMethod, type StatutoryRemittanceOptions,
 } from '../../lib/treasury/statutoryRemittance';
 import type { BankAccountOption } from '../../types';
@@ -107,6 +107,12 @@ export function StatutoryRemittanceModal({ kind, jalaliYear, jalaliMonth, onClos
       void invalidatePreset(queryClient, 'settlementChange');
       onClose();
     } catch (err) {
+      // the server names the payments without a personnel name it found: show those and ask «بررسی کردم» again
+      const named = unassignedPaymentsOfError(err);
+      if (named) {
+        setOptions(prev => (prev ? { ...prev, unassignedPayments: named } : prev));
+        setAcknowledged(false);
+      }
       setFormError(errorMessageOf(err));
     } finally {
       setSaving(false);

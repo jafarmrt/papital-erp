@@ -20,6 +20,7 @@ import { PersonnelStatutoryFlags } from './PersonnelStatutoryFlags';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { NobitexPasswordInput } from './NobitexPasswordFields';
 import { DecimalInput } from '../common/DecimalInput';
+import { SALARY_TYPES, SALARY_TYPE_LABELS, salaryTypeOf } from '../../lib/personnel/salaryType';
 import { DialogLayer } from '../common/DialogLayer';
 
 interface PersonnelFormModalProps {
@@ -293,13 +294,14 @@ export function PersonnelFormModal({
                 <label htmlFor={`${fieldId}-piecework`} className="block text-xs font-bold text-slate-700 mb-1">مدل حقوق</label>
                 <select
                   id={`${fieldId}-piecework`}
-                  value={formData.salaryType === 'monthly_fixed' || formData.salaryType === 'mixed' ? formData.salaryType : 'piecework'}
+                  value={salaryTypeOf(formData.salaryType)}
                   onChange={(e) => setFormData((prev) => ({ ...prev, salaryType: e.target.value }))}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
                 >
-                  <option value="piecework">کارمزدی — کارمزد بر اساس عناوین کاری</option>
-                  <option value="monthly_fixed">حقوق ثابت ماهانه — بدون کارمزد</option>
-                  <option value="mixed">ترکیبی — حقوق ثابت + کارمزد عناوین کاری</option>
+                  {/* OBS-R2-55: «تعیین‌نشده» is offered only while it is the stored value */}
+                  {SALARY_TYPES.filter(t => t !== 'none' || salaryTypeOf(formData.salaryType) === 'none').map(t => (
+                    <option key={t} value={t}>{SALARY_TYPE_LABELS[t]}</option>
+                  ))}
                 </select>
                 <p className="text-[10px] text-slate-500 mt-1 leading-5">
                   {formData.salaryType === 'monthly_fixed'

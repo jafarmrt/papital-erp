@@ -41,8 +41,10 @@ interface PersonnelTableProps {
   onStatusFilterChange: (status: string) => void;
   onResetFilters: () => void;
   onViewDetail: (p: Personnel) => void;
-  onEdit: (p: Personnel) => void;
-  onDelete: (p: Personnel) => void;
+  /** OBS-R2-55: left out for a reader without `personnel.manage`, so the menu offers no edit */
+  onEdit?: (p: Personnel) => void;
+  /** OBS-R2-55: left out for a reader without `personnel.manage`, so the menu offers no delete */
+  onDelete?: (p: Personnel) => void;
 }
 
 export function PersonnelTable({
@@ -284,11 +286,13 @@ export function PersonnelTable({
                           </button>
                           <ActionMenu
                             items={[
-                              {
-                                label: 'ویرایش مشخصات',
-                                icon: Edit2,
-                                onClick: () => onEdit(p),
-                              },
+                              ...(onEdit
+                                ? [{
+                                    label: 'ویرایش مشخصات',
+                                    icon: Edit2,
+                                    onClick: () => onEdit(p),
+                                  }]
+                                : []),
                               {
                                 label: 'مشاهده پرونده پرسنلی',
                                 icon: Eye,
@@ -323,12 +327,14 @@ export function PersonnelTable({
                                     },
                                   ]
                                 : []),
-                              {
-                                label: 'حذف پرسنل',
-                                icon: Trash2,
-                                variant: 'danger',
-                                onClick: () => onDelete(p),
-                              },
+                              ...(onDelete
+                                ? [{
+                                    label: 'حذف پرسنل',
+                                    icon: Trash2,
+                                    variant: 'danger' as const,
+                                    onClick: () => onDelete(p),
+                                  }]
+                                : []),
                             ]}
                             align="left"
                           />
