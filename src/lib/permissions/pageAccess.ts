@@ -89,6 +89,9 @@ const DOCUMENT_ENTRY = ['GET /api/customers/options', 'GET /api/items/options', 
 export const PAGE_ACCESS = {
   '/': { gate: 'login', api: [] },
   '/my-payslips': { gate: 'login', api: [] },
+  // v10.1.40 (N-01 part 3): the worker's cartable and the project manager's review page, one page with tabs
+  '/workshop': { gate: anyOf('workshop.self'), api: ['GET /api/workshop/my-tasks', 'GET /api/workshop/my-deliveries'] },
+  '/workshop/review': { gate: anyOf('workshop.review'), api: ['GET /api/workshop/review/reports'] },
   '/approval-inbox': { gate: anyOf('workflow.view', 'workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), api: ['GET /api/workflow/tasks/my-tasks', 'GET /api/workflow/tasks/stats'] },
   '/inventory-status': { gate: anyOf('reports.view', 'warehouse.view'), api: ['GET /api/stats', 'GET /api/dashboard-bi-stats'] },
   '/products': { gate: anyOf('products.view'), api: ['GET /api/items'] },

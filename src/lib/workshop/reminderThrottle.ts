@@ -2,17 +2,44 @@
  * v10.1.39 (N-01 part 2, TD-1284 review): the bell asks for notifications often and the workshop reminder scan reads every
  * open project, so the scan runs at most once an hour per user. The system is one process (§22), so an in-memory map is
  * enough.
+ * v10.1.40 (TD-1285, review of TD-1284): the hour starts only after a scan that succeeded, so a failed scan (a dropped
+ * connection, a timeout) is tried again on the next bell request instead of leaving the worker without a reminder for an
+ * hour. Two bell requests at once may both scan; the reminder's unique index still makes one notification. A failed scan
+ * waits `WORKSHOP_REMINDER_RETRY_MS` before the next try, so a scan that keeps failing does not run on every bell request.
  */
 export const WORKSHOP_REMINDER_SCAN_INTERVAL_MS = 60 * 60 * 1000;
+export const WORKSHOP_REMINDER_RETRY_MS = 5 * 60 * 1000;
 const lastScanAt = new Map<number, number>();
 
-/** Whether the user's reminder scan is due at `nowMs`; marks it as run when it is. */
-export function takeWorkshopReminderScan(userId: number, nowMs: number, runs: Map<number, number> = lastScanAt): boolean {
+/** Whether the user's reminder scan is due at `nowMs`. */
+export function isWorkshopReminderScanDue(userId: number, nowMs: number, runs: Map<number, number> = lastScanAt): boolean {
   const last = runs.get(userId);
-  if (last !== undefined && nowMs - last < WORKSHOP_REMINDER_SCAN_INTERVAL_MS) return false;
+  return last === undefined || nowMs - last >= WORKSHOP_REMINDER_SCAN_INTERVAL_MS;
+}
+
+/** Records a successful scan at `nowMs`, dropping entries older than the interval once the map grows. */
+export function markWorkshopReminderScan(userId: number, nowMs: number, runs: Map<number, number> = lastScanAt): void {
   if (runs.size > 1000) {
     for (const [id, at] of runs) if (nowMs - at >= WORKSHOP_REMINDER_SCAN_INTERVAL_MS) runs.delete(id);
   }
   runs.set(userId, nowMs);
-  return true;
+}
+
+/**
+ * Runs `scan` when it is due and marks the hour only after it resolved; a rejected scan is due again after
+ * `WORKSHOP_REMINDER_RETRY_MS` and its error goes on.
+ */
+export async function runThrottledReminderScan(
+  userId: number, nowMs: number, scan: () => Promise<number>, runs: Map<number, number> = lastScanAt,
+): Promise<number> {
+  if (!isWorkshopReminderScanDue(userId, nowMs, runs)) return 0;
+  let made: number;
+  try {
+    made = await scan();
+  } catch (err) {
+    markWorkshopReminderScan(userId, nowMs - WORKSHOP_REMINDER_SCAN_INTERVAL_MS + WORKSHOP_REMINDER_RETRY_MS, runs);
+    throw err;
+  }
+  markWorkshopReminderScan(userId, nowMs, runs);
+  return made;
 }

@@ -5,7 +5,7 @@ import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import {
   daysUntilDeadline, deadlineLabel, taskDeadlineIso, WORKSHOP_REMINDER_DUE_SOON, workshopReminderKind, workshopRowLink, workshopScheduleRows,
 } from '../../lib/workshop/workshopSchedule.js';
-import { takeWorkshopReminderScan } from '../../lib/workshop/reminderThrottle.js';
+import { runThrottledReminderScan } from '../../lib/workshop/reminderThrottle.js';
 
 /**
  * v10.1.39 (N-01 part 2, decision ت۸ الف of the mobile workshop plan): the notification bell reminds a workshop worker of
@@ -15,8 +15,7 @@ import { takeWorkshopReminderScan } from '../../lib/workshop/reminderThrottle.js
  */
 /** The bell's call: the reminder scan, at most once an hour per user, on the pool and never inside a transaction. */
 export async function generateWorkshopDueRemindersThrottled(userId: number, nowMs = Date.now()): Promise<number> {
-  if (!takeWorkshopReminderScan(userId, nowMs)) return 0;
-  return generateWorkshopDueReminders(userId);
+  return runThrottledReminderScan(userId, nowMs, () => generateWorkshopDueReminders(userId));
 }
 
 export async function generateWorkshopDueReminders(userId: number): Promise<number> {

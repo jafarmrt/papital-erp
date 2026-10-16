@@ -1,11 +1,13 @@
 import { ComponentType } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { CheckSquare, ClipboardList, LayoutDashboard, Menu, Wallet } from 'lucide-react';
+import { CheckSquare, ClipboardList, Hammer, LayoutDashboard, Menu, Wallet } from 'lucide-react';
 import { User } from '../../types';
 import { isMobileNavItemActive, MOBILE_MENU_LABEL, visibleMobileNavItems } from './mobileNavItems';
 
 const ICONS: Record<string, ComponentType<{ size?: number; className?: string }>> = {
   '/': LayoutDashboard,
+  '/workshop': Hammer,
+  '/workshop/review': Hammer,
   '/approval-inbox': CheckSquare,
   '/audit': ClipboardList,
   '/piecework': Wallet,

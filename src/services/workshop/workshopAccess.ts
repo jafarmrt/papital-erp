@@ -92,6 +92,12 @@ export async function liveUserIds(executor: DbExecutor, ids: readonly number[]):
   return rows.map(r => r.id);
 }
 
+/** The live user linked to a personnel, as a list for `notifyUsers` (empty when none). */
+export async function workerUserIds(executor: DbExecutor, personnelId: number): Promise<number[]> {
+  const [row] = await executor.select({ userId: personnel.userId }).from(personnel).where(eq(personnel.id, personnelId));
+  return liveUserIds(executor, row?.userId ? [row.userId] : []);
+}
+
 export interface WorkshopNotification {
   type: string;
   title: string;

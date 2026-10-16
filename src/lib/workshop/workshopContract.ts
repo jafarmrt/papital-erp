@@ -95,6 +95,8 @@ export interface WorkshopReviewItem {
   deadline: string | null;
   /** live work logs of the same worker, task and project recorded by hand (no schedule row); approval needs «بررسی کردم» */
   manualLogs: WorkshopManualLog[];
+  /** the viewer's own work (linked personnel or recorder), which the server refuses to approve or reject; system admin false */
+  isOwn: boolean;
 }
 
 /** A work log recorded outside the workshop schedule, which an approval might pay a second time. */
@@ -103,6 +105,17 @@ export interface WorkshopManualLog {
   /** ISO date */
   date: string;
   quantity: number;
+}
+
+/** The manual work logs a 409 `WORKSHOP_MANUAL_LOGS_EXIST` names in its details, or null when it names none. */
+export function manualLogsOfConflict(details: unknown): WorkshopManualLog[] | null {
+  const list = (details as { manualLogs?: unknown } | null | undefined)?.manualLogs;
+  if (!Array.isArray(list)) return null;
+  return list.filter((log): log is WorkshopManualLog =>
+    typeof log === 'object' && log !== null
+    && Number.isInteger((log as WorkshopManualLog).id)
+    && typeof (log as WorkshopManualLog).date === 'string'
+    && typeof (log as WorkshopManualLog).quantity === 'number');
 }
 
 /** After the last row of a product in a stage is approved: offer the progress matrix tick (decision ت۶ الف). */
