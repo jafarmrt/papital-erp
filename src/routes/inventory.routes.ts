@@ -99,6 +99,8 @@ export const bomAllocationItemSchema = z.object({
 export const projectAllocateSchema = z.object({
   body: z.object({
     projectId: z.coerce.number().int().positive('شناسه پروژه الزامی است'),
+    // v10.1.37 (N-01, TD-1283, decision ت۴ الف): the personnel who receives the materials (optional)
+    recipientPersonnelId: z.coerce.number().int().positive('شناسه تحویل‌گیرنده نامعتبر است').nullable().optional(),
     allocations: z.array(bomAllocationItemSchema).min(1, 'حداقل یک قلم کالا برای تخصیص به پروژه الزامی است')
   })
 });
@@ -399,11 +401,12 @@ router.post(
   idempotency({ scope: 'inventory' }),
   validate(projectAllocateSchema),
   asyncHandler(async (req, res) => {
-    const { projectId, allocations } = req.body;
+    const { projectId, allocations, recipientPersonnelId } = req.body;
     const user: AuthUserPayload | undefined = req.user;
     const result = await InventoryIntegrityService.allocateMaterialsForProject({
       projectId: Number(projectId),
       allocations,
+      recipientPersonnelId: recipientPersonnelId ?? null,
       userId: user?.id,
       username: actorDisplayName(user, 'مدیر سیستم'),
       // TD-943: the audit row is written with the allocation's own transaction

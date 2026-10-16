@@ -106,6 +106,7 @@ export class InventoryIntegrityService {
   static async allocateMaterialsForProject(params: {
     projectId: number;
     allocations: BomAllocationItemInput[];
+    recipientPersonnelId?: number | null;
     userId?: number;
     username?: string;
     externalTx?: DbExecutor;
@@ -117,6 +118,7 @@ export class InventoryIntegrityService {
   static async allocateReceiptItemsForProjectBom(params: {
     projectId: number;
     allocations: BomReceiptAllocationInput[];
+    recipientPersonnelId?: number | null;
     userId?: number;
     username?: string;
     externalTx?: DbExecutor;

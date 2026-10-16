@@ -1,3 +1,4 @@
+import type { ProjectManagerView } from '../lib/projects/projectManagers';
 import type { FinancialAttachment } from './accounting.types';
 
 export interface ProjectStage {
@@ -257,6 +258,8 @@ export interface ProductionProject {
   attachments?: FinancialAttachment[];
   /** v9.0.385 (TD-742): نسخه رکورد که `PUT /projects/:id` می‌خواهد */
   version?: number;
+  /** v10.1.37 (N-01, TD-1283): «مسئولان پروژه»، فقط در پرونده کامل پروژه */
+  managers?: ProjectManagerView[];
   // Joined or calculated fields
   item_image?: string;
   progress_percent?: number;

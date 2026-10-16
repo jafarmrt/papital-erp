@@ -32,7 +32,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
       'piecework.pay', 'personnel.view_sensitive', 'payroll.view_sensitive', 'pending_materials.view', 'pending_materials.create', 'pending_materials.approve', 'pending_materials.delete', 'procurement.view',
       'procurement.create', 'procurement.manage', 'procurement.order', 'procurement.approve', 'accounting.view', 'accounting.vouchers',
       'accounting.vouchers_approve', 'accounting.coa', 'accounting.treasury', 'accounting.cheques', 'accounting.reports', 'woocommerce.view', 'woocommerce.manage',
-      'audit_logs.view', 'settings.manage', 'media.view', 'media.upload', 'media.manage',
+      'audit_logs.view', 'settings.manage', 'media.view', 'media.upload', 'media.manage', 'workshop.review',
     ],
   },
   {
@@ -79,6 +79,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
       'projects.view', 'projects.create', 'projects.edit', 'projects.delete', 'workflow.view', 'workflow.approve',
       'workflow.execute', 'personnel.view', 'piecework.view', 'piecework.log', 'piecework.manage_tasks', 'pending_materials.view',
       'pending_materials.create', 'daily_logs.view', 'daily_logs.create', 'daily_logs.manage_all', 'reports.view',
+      'workshop.review',
     ],
   },
   {
@@ -153,6 +154,15 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     description: 'ثبت کارکرد کارمزدی پرسنل و گزارش کار روزانه کارگاه',
     permissions: [
       'piecework.view', 'piecework.log', 'projects.view', 'daily_logs.view', 'daily_logs.create',
+    ],
+  },
+  {
+    // v10.1.37 (N-01، TD-1283، تصمیم ت۱۱ الف طرح کارتابل کارگاه): کارتابل گوشی پرسنل کارگاه با ورود ۷ روزه
+    code: 'workshop_worker',
+    name: 'کارکن کارگاه',
+    description: 'کارتابل کارگاه روی گوشی: کارهای سپرده‌شده با مهلت، تأیید دریافت حواله و ثبت تعداد پایان کار؛ ورود ۷ روز می‌ماند',
+    permissions: [
+      'workshop.self', 'workshop.long_session',
     ],
   },
 ];

@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { eq } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { users, roles, appSettings } from '../db/schema.js';
-import { generateToken, generateCsrfToken, AUTH_COOKIE_NAME, getAuthCookieOptions, authenticateToken, getJwtSecret, JWT_VERIFY_OPTIONS, invalidateUserAuthCache, shouldExposeTokenInBody } from '../middleware/auth.js';
+import { generateToken, generateCsrfToken, AUTH_COOKIE_NAME, getAuthCookieOptions, sessionLifetimeOfRole, authenticateToken, getJwtSecret, JWT_VERIFY_OPTIONS, invalidateUserAuthCache, shouldExposeTokenInBody } from '../middleware/auth.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 import { logActivity, extractClientIp } from '../lib/auditLogger.js';
@@ -217,11 +217,13 @@ router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async
     await resetFailedAttempts(activeUser.id, { username: tUsername, ip: clientIp });
 
     const csrfToken = generateCsrfToken();
-    const token = generateToken({ id: activeUser.id, username: activeUser.username, role: activeUser.role ?? '', csrfToken, tokenVersion: activeUser.tokenVersion || 0 });
+    // v10.1.37 (N-01, TD-1283): seven days for a role holding workshop.long_session, else 24 hours
+    const lifetime = await sessionLifetimeOfRole(activeUser.role);
+    const token = generateToken({ id: activeUser.id, username: activeUser.username, role: activeUser.role ?? '', csrfToken, tokenVersion: activeUser.tokenVersion || 0 }, lifetime);
     const { password: _, ...userWithoutPassword } = activeUser;
 
     // Set secure HttpOnly cookie
-    res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
+    res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req, lifetime));
 
     // v9.0.224 (TD-540): سجل ورود نام نقش را هم نگه می‌دارد تا جزئیات رویداد کد نقش نشان ندهد
     const [roleRow] = await orm.select({ name: roles.name }).from(roles).where(eq(roles.code, activeUser.role ?? '')).limit(1);
@@ -382,14 +384,15 @@ const meHandler = asyncHandler(async (req, res) => {
   let csrfToken = req.user?.csrfToken || (req as unknown as { csrfToken?: string }).csrfToken;
   if (!csrfToken) {
     csrfToken = generateCsrfToken();
+    const lifetime = await sessionLifetimeOfRole(user.role);
     const token = generateToken({
       id: user.id,
       username: user.username,
       role: user.role ?? '',
       csrfToken,
       tokenVersion: user.tokenVersion || 0
-    });
-    res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
+    }, lifetime);
+    res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req, lifetime));
   }
 
   // V3.0.6 (BUG-08): توکن بازتولیدشده دیگر در بدنه پاسخ برگردانده نمی‌شود
@@ -423,14 +426,15 @@ const csrfHandler = asyncHandler(async (req, res) => {
     csrfToken = generateCsrfToken();
     const [user] = await orm.select().from(users).where(eq(users.id, userId)).limit(1);
     if (user && user.isDeleted !== 1) {
+      const lifetime = await sessionLifetimeOfRole(user.role);
       const token = generateToken({
         id: user.id,
         username: user.username,
         role: user.role ?? '',
         csrfToken,
         tokenVersion: user.tokenVersion || 0
-      });
-      res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
+      }, lifetime);
+      res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req, lifetime));
     }
   }
 

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { eq, desc } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { users, roles } from '../db/schema.js';
-import { authenticateToken, generateToken, generateCsrfToken, AUTH_COOKIE_NAME, getAuthCookieOptions, shouldExposeTokenInBody } from '../middleware/auth.js';
+import { authenticateToken, generateToken, generateCsrfToken, AUTH_COOKIE_NAME, getAuthCookieOptions, sessionLifetimeOfRole, shouldExposeTokenInBody } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { z } from 'zod';
@@ -101,8 +101,9 @@ router.put('/users/profile', validate(updateProfileSchema), asyncHandler(async (
   let session: { token: string; csrfToken: string } | null = null;
   if (passwordChanged) {
     const csrfToken = req.user?.csrfToken || generateCsrfToken();
-    const token = generateToken({ id: updatedUser.id, username: updatedUser.username, role: updatedUser.role ?? '', csrfToken, tokenVersion: updatedUser.tokenVersion || 0 });
-    res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
+    const lifetime = await sessionLifetimeOfRole(updatedUser.role);
+    const token = generateToken({ id: updatedUser.id, username: updatedUser.username, role: updatedUser.role ?? '', csrfToken, tokenVersion: updatedUser.tokenVersion || 0 }, lifetime);
+    res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req, lifetime));
     session = { token, csrfToken };
   }
 

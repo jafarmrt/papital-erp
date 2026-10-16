@@ -44,6 +44,7 @@ import { consumesProjectReservation } from '../../lib/transactions/projectIssueT
 import { assertDocumentNotInReview } from './documentReviewLock.js';
 import { assertReturnPartyOfInvoice, parseDocumentPartyId, resolveDocumentParty, returnInvoicePartyId } from './documentParty.js';
 import { documentAuditSnapshot, logDocumentCreated, type DocumentAuditActor, type DocumentAuditChange } from './documentAudit.js';
+import { assertLiveRecipient, documentRecipientInput } from './documentRecipient.js';
 
 type DocumentLineRow = typeof documentItems.$inferInsert;
 
@@ -390,6 +391,8 @@ export class DocumentCreationService {
 
     const finalBuyerName = buyerName || buyer_name || '';
     const requestedPartyId = parseDocumentPartyId(body.partyId);
+    // v10.1.37 (N-01, TD-1283, decision ت۴ الف): the remittance's recipient, who confirms it in the workshop cartable
+    const recipientPersonnelId = documentRecipientInput(docType, body.recipientPersonnelId);
     const finalBuyerCity = buyerCity || buyer_city || '';
     const finalBuyerPhone = buyerPhone || buyer_phone || '';
     const finalBuyerAddress = buyerAddress || buyer_address || '';
@@ -452,6 +455,7 @@ export class DocumentCreationService {
       if (returnOfDocumentId !== null && requestedPartyId !== undefined) {
         await assertReturnPartyOfInvoice(tx, returnOfDocumentId, party.partyId);
       }
+      await assertLiveRecipient(tx, recipientPersonnelId);
 
       const [insertedDoc] = await tx.insert(documents).values({
         type: docType,
@@ -461,6 +465,7 @@ export class DocumentCreationService {
         user,
         notes: finalNotes,
         partyId: party.partyId,
+        recipientPersonnelId,
         buyerName: party.buyerName,
         buyerCity: finalBuyerCity,
         buyerPhone: finalBuyerPhone,
