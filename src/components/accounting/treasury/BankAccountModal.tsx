@@ -4,9 +4,13 @@ import { AccountSearchSelect } from '../AccountSearchSelect';
 import { formatCurrencyLabel, getIranianBankFromCard, getIranianBankFromSheba } from '../../../utils';
 import { BankCardInput, ShebaInput, FinancialAmountInput } from '../../common';
 import { fetchJson } from '../../../api';
-import type { BankAccount, Account } from '../../../types';
+import type { BankAccount, BankAccountType, Account } from '../../../types';
 import { TREASURY_CURRENCIES } from '../../../lib/treasury/treasuryCurrency';
 import { DialogLayer } from '../../common/DialogLayer';
+import { PETTY_CASH_CURRENCY, PETTY_CASH_RIAL_ONLY_MESSAGE } from '../../../lib/treasury/pettyCash';
+
+/** v10.1.32 (D-16): سرفصل پیش‌فرض تنخواه‌گردان */
+const PETTY_CASH_LEDGER_CODE = '1006';
 
 interface BankAccountModalProps {
   isOpen: boolean;
@@ -29,7 +33,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
   const [formData, setFormData] = useState({
     code: '',
     title: '',
-    type: 'bank' as 'bank' | 'cash' | 'pos',
+    type: 'bank' as BankAccountType,
     bankName: '',
     branch: '',
     accountNumber: '',
@@ -47,7 +51,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
   const [showAllAccounts, setShowAllAccounts] = useState(false);
 
   // واکشی کد خودکار پیشنهادی برای حساب جدید بر اساس نوع
-  const fetchNextCode = useCallback(async (accountType: 'bank' | 'cash' | 'pos') => {
+  const fetchNextCode = useCallback(async (accountType: BankAccountType) => {
     try {
       setIsLoadingCode(true);
       const res = await fetchJson<{ code: string }>(`/accounting/banks/next-code?type=${accountType}`);
@@ -58,7 +62,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
       }
     } catch {
       // در صورت بروز خطا در شبکه، تولید کد محلی بر اساس پیشوند
-      const prefix = accountType === 'cash' ? 'CASH' : accountType === 'pos' ? 'POS' : 'BANK';
+      const prefix = accountType === 'cash' || accountType === 'petty_cash' ? 'CASH' : accountType === 'pos' ? 'POS' : 'BANK';
       setFormData(prev => ({ ...prev, code: `${prefix}-01` }));
       setAutoCodeGenerated(true);
     } finally {
@@ -104,8 +108,12 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
   }, [editingBank, isOpen, fetchNextCode]);
 
   // هر بار که کاربر نوع حساب را تغییر داد و در حالت ایجاد بود، کد جدید متناسب واکشی شود
-  const handleTypeChange = (newType: 'bank' | 'cash' | 'pos') => {
-    setFormData(prev => ({ ...prev, type: newType }));
+  // v10.1.32 (D-16): تنخواه‌گردان ریالی است و سرفصل ۱۰۰۶ را پیش‌فرض می‌گیرد
+  const handleTypeChange = (newType: BankAccountType) => {
+    const pettyLedger = (Array.isArray(accounts) ? accounts : []).find(a => String(a.code).trim() === PETTY_CASH_LEDGER_CODE);
+    setFormData(prev => newType === 'petty_cash'
+      ? { ...prev, type: newType, currency: PETTY_CASH_CURRENCY, accountId: prev.accountId ?? pettyLedger?.id ?? null }
+      : { ...prev, type: newType });
     if (!editingBank) {
       void fetchNextCode(newType);
     }
@@ -139,7 +147,9 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
       return true;
     }
 
-    if (formData.type === 'cash') {
+    if (formData.type === 'petty_cash') {
+      return c.startsWith(PETTY_CASH_LEDGER_CODE) || (c.startsWith('10') && acc.name.includes('تنخواه'));
+    } else if (formData.type === 'cash') {
       // سرفصل‌های صندوق و تنخواه‌گردان (1001، 1002، 1006) یا هر معینی زیر کل 10 که نام صندوق/نقد داشته باشد
       return c.startsWith('1001') || c.startsWith('1002') || c.startsWith('1006') || 
         (c.startsWith('10') && (acc.name.includes('صندوق') || acc.name.includes('نقد') || acc.name.includes('تنخواه')));
@@ -207,12 +217,13 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
               <select
                 id={`${fieldId}-type`}
                 value={formData.type}
-                onChange={e => handleTypeChange(e.target.value as any)}
+                onChange={e => handleTypeChange(e.target.value as BankAccountType)}
                 className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
               >
                 <option value="bank">حساب بانکی</option>
                 <option value="cash">صندوق نقد کارگاه</option>
                 <option value="pos">دستگاه کارتخوان (POS)</option>
+                <option value="petty_cash">تنخواه‌گردان</option>
               </select>
             </div>
           </div>
@@ -225,7 +236,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
               id={`${fieldId}-title`}
               type="text"
               required
-              placeholder="مثال: حساب جاری ملت - کارگاه"
+              placeholder={formData.type === 'petty_cash' ? 'مثال: تنخواه کارگاه - نام تنخواه‌دار' : 'مثال: حساب جاری ملت - کارگاه'}
               value={formData.title}
               onChange={e => setFormData({ ...formData, title: e.target.value })}
               className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
@@ -256,7 +267,9 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
               onChange={(val) => setFormData({ ...formData, accountId: val ? Number(val) : null })}
               filterFn={treasuryAccountFilter}
               placeholder={
-                formData.type === 'cash'
+                formData.type === 'petty_cash'
+                  ? 'جست‌وجو در سرفصل‌های تنخواه‌گردان (کد ۱۰۰۶)...'
+                  : formData.type === 'cash'
                   ? 'جست‌وجو در سرفصل‌های صندوق و نقد (کد ۱۰)...'
                   : formData.type === 'pos'
                   ? 'جست‌وجو در سرفصل‌های پوز و کارتخوان (کد ۱۰)...'
@@ -266,11 +279,11 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
             <p className="text-[10px] text-slate-400 mt-1">
               {showAllAccounts
                 ? 'در حال حاضر همه سرفصل‌های کدینگ نمایش داده می‌شوند.'
-                : `لیست به سرفصل‌های مرتبط با ${formData.type === 'cash' ? 'صندوق و نقد' : formData.type === 'pos' ? 'کارتخوان' : 'بانک'} (کل ۱۰) محدود شده است.`}
+                : `فهرست به سرفصل‌های مرتبط با ${formData.type === 'petty_cash' ? 'تنخواه‌گردان' : formData.type === 'cash' ? 'صندوق و نقد' : formData.type === 'pos' ? 'کارتخوان' : 'بانک'} (کل ۱۰) محدود شده است.`}
             </p>
           </div>
 
-          {formData.type !== 'cash' && (
+          {formData.type !== 'cash' && formData.type !== 'petty_cash' && (
             <>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -347,6 +360,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
             <select
               id={`${fieldId}-currency`}
               value={formData.currency}
+              disabled={formData.type === 'petty_cash'}
               onChange={e => setFormData({ ...formData, currency: e.target.value })}
               className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
             >
@@ -354,7 +368,9 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
                 <option key={code} value={code}>{formatCurrencyLabel(code)}</option>
               ))}
             </select>
-            {editingBank && (
+            {formData.type === 'petty_cash' ? (
+              <p className="text-[10px] text-slate-500 mt-1">{PETTY_CASH_RIAL_ONLY_MESSAGE}</p>
+            ) : editingBank && (
               <p className="text-[10px] text-slate-500 mt-1">ارز حساب پس از نخستین تراکنش، چک یا مانده اول دوره تغییر نمی‌کند.</p>
             )}
           </div>

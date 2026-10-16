@@ -53,6 +53,8 @@ interface TreasuryTransactionsTableProps {
   onDetachDocument?: (tx: TreasuryTransaction) => void;
   /** v10.0.123 (TD-1122): انتقال دریافت یا پرداخت به سند فعال دیگر همان طرف حساب */
   onRelinkDocument?: (tx: TreasuryTransaction) => void;
+  /** v10.1.32 (D-16): ردیف‌های صورت‌هزینه تنخواه */
+  onViewPettyCashLines?: (tx: TreasuryTransaction) => void;
 }
 
 export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps> = React.memo(({
@@ -83,6 +85,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
   onVoidTransaction,
   onDetachDocument,
   onRelinkDocument,
+  onViewPettyCashLines,
 }) => {
   const rial = useMemo(() => rialDisplayOf(appCurrency), [appCurrency]);
   const totalPages = Math.max(1, Math.ceil(totalFilteredCount / pageSize));
@@ -292,6 +295,15 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                         {tx.purpose && <span className="mr-1">({personnelPurposeLabel(tx.purpose)})</span>}
                         {tx.contraAccountName && <span className="mr-1">← {tx.contraAccountName}</span>}
                       </div>
+                      {onViewPettyCashLines && (tx.pettyCashLineCount ?? 0) > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => onViewPettyCashLines(tx)}
+                          className="mt-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300 hover:underline cursor-pointer"
+                        >
+                          {`ردیف‌های صورت‌هزینه (${formatPersianNumber(tx.pettyCashLineCount ?? 0)})`}
+                        </button>
+                      )}
                     </td>
 
                     {/* Method & Bank */}

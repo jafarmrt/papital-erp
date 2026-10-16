@@ -3,6 +3,7 @@
  * (TreasuryService، AGENTS.md §11). authenticateToken در src/routes/accounting.routes.ts پیش از این روتر اعمال می‌شود.
  */
 import { Router } from 'express';
+import type { z } from 'zod';
 import { authorizePermission, userHasRoleOrPermission } from '../../middleware/authorize.js';
 import { READ_PERMISSIONS, RECORD_READ_PERMISSIONS } from '../../lib/recordReadPermissions.js';
 import { AccountingService } from '../../services/accounting.service.js';
@@ -12,6 +13,7 @@ import { relinkTreasuryDocument } from '../../services/accounting/treasury/treas
 import { listTreasuryRelinkOptions } from '../../services/accounting/treasury/treasuryRelinkOptions.js';
 import { choosableContraAccounts } from '../../services/accounting/treasury/partyContraAccount.js';
 import { listReconcilableCheques } from '../../services/accounting/treasury/bankReconciliation.js';
+import { createPettyCashExpense, listPettyCashExpenseLines, pettyCashExpenseAccounts } from '../../services/accounting/treasury/pettyCashExpense.service.js';
 import { validate, paramsIdSchema } from '../../middleware/validate.js';
 import { idempotency } from '../../middleware/idempotency.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
@@ -33,6 +35,7 @@ import {
   updateChequeStatusSchema,
   nextBankCodeQuerySchema,
 } from './accounting.schemas.js';
+import { pettyCashExpenseSchema, pettyCashLinesSchema } from './pettyCash.schemas.js';
 
 const router = Router();
 
@@ -166,6 +169,30 @@ router.post('/accounting/treasury/transfer', authorizePermission('accounting.tre
     audit: { req, userFullName: req.user?.fullName },
   });
   res.status(201).json(result);
+}));
+
+// v10.1.32 (D-16، ت۳۰ «متغیر»): صورت‌هزینه تنخواه‌گردان؛ شارژ و برگشت وجه همان انتقال وجه است
+router.get('/accounting/treasury/petty-cash/expense-accounts', authorizePermission('accounting.treasury'), asyncHandler(async (_req, res) => {
+  res.json({ success: true, data: await pettyCashExpenseAccounts() });
+}));
+
+router.post('/accounting/treasury/petty-cash/:id/expenses', authorizePermission('accounting.treasury'), idempotency({ scope: 'treasury' }), validate(pettyCashExpenseSchema), asyncHandler(async (req, res) => {
+  const body = req.body as z.infer<typeof pettyCashExpenseSchema>['body'];
+  const result = await createPettyCashExpense({
+    fundId: Number(req.params.id),
+    date: body.date,
+    description: body.description,
+    lines: body.lines.map(line => ({ ...line, amount: line.amount ?? '' })),
+    attachments: body.attachments,
+    userId: req.user?.id,
+    username: req.user?.fullName || req.user?.username,
+    audit: { req, userFullName: req.user?.fullName },
+  });
+  res.status(201).json(result);
+}));
+
+router.get('/accounting/treasury/:id/petty-cash-lines', authorizePermission(...RECORD_READ_PERMISSIONS.treasury_transaction), validate(pettyCashLinesSchema), asyncHandler(async (req, res) => {
+  res.json({ success: true, data: await listPettyCashExpenseLines(Number(req.params.id)) });
 }));
 
 // v10.0.254 (TD-971): چک‌های وصول‌شده حساب، نامزد تطبیق صورت‌حساب در کنار تراکنش‌های خزانه

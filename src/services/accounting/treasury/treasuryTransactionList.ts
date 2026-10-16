@@ -80,6 +80,8 @@ function selectTransactions() {
     status: treasuryTransactions.status,
     attachments: treasuryTransactions.attachments,
     createdAt: treasuryTransactions.createdAt,
+    // v10.1.32 (D-16): a petty cash expense statement shows its lines from the table
+    pettyCashLineCount: sql<number>`(SELECT count(*)::int FROM petty_cash_expense_lines l WHERE l.treasury_transaction_id = ${treasuryTransactions.id})`,
   })
   .from(treasuryTransactions)
   .leftJoin(bankAccounts, eq(bankAccounts.id, treasuryTransactions.bankAccountId))
@@ -94,6 +96,7 @@ function toTreasuryTransactionDto(t: TransactionRow): TreasuryTransaction {
     ...t,
     amount: t.amount.toNumber(), // قرارداد API: مبلغ عدد (P2-6)
     exchangeRate: t.exchangeRate?.toNumber() ?? null,
+    pettyCashLineCount: Number(t.pettyCashLineCount) || 0,
     type: t.type as 'receipt' | 'payment',
     method: t.method as TreasuryTransaction['method'],
     partyType: t.partyType as TreasuryTransaction['partyType'],
