@@ -4,9 +4,11 @@
  * enough.
  * v10.1.40 (TD-1285, review of TD-1284): the hour starts only after a scan that succeeded, so a failed scan (a dropped
  * connection, a timeout) is tried again on the next bell request instead of leaving the worker without a reminder for an
- * hour. Two bell requests at once may both scan; the reminder's unique index still makes one notification.
+ * hour. Two bell requests at once may both scan; the reminder's unique index still makes one notification. A failed scan
+ * waits `WORKSHOP_REMINDER_RETRY_MS` before the next try, so a scan that keeps failing does not run on every bell request.
  */
 export const WORKSHOP_REMINDER_SCAN_INTERVAL_MS = 60 * 60 * 1000;
+export const WORKSHOP_REMINDER_RETRY_MS = 5 * 60 * 1000;
 const lastScanAt = new Map<number, number>();
 
 /** Whether the user's reminder scan is due at `nowMs`. */
@@ -23,12 +25,21 @@ export function markWorkshopReminderScan(userId: number, nowMs: number, runs: Ma
   runs.set(userId, nowMs);
 }
 
-/** Runs `scan` when it is due and marks it only after it resolved; a rejected scan stays due and its error goes on. */
+/**
+ * Runs `scan` when it is due and marks the hour only after it resolved; a rejected scan is due again after
+ * `WORKSHOP_REMINDER_RETRY_MS` and its error goes on.
+ */
 export async function runThrottledReminderScan(
   userId: number, nowMs: number, scan: () => Promise<number>, runs: Map<number, number> = lastScanAt,
 ): Promise<number> {
   if (!isWorkshopReminderScanDue(userId, nowMs, runs)) return 0;
-  const made = await scan();
+  let made: number;
+  try {
+    made = await scan();
+  } catch (err) {
+    markWorkshopReminderScan(userId, nowMs - WORKSHOP_REMINDER_SCAN_INTERVAL_MS + WORKSHOP_REMINDER_RETRY_MS, runs);
+    throw err;
+  }
   markWorkshopReminderScan(userId, nowMs, runs);
   return made;
 }

@@ -4,7 +4,7 @@ import { DecimalInput } from '../common/DecimalInput';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { WorkshopSheet } from './WorkshopSheet';
 import { useWorkshopMutation, workshopRequests } from '../../hooks/queries/useWorkshopQueries';
-import type { MatrixTickSuggestion, WorkshopReviewItem } from '../../lib/workshop/workshopContract';
+import { manualLogsOfConflict, type MatrixTickSuggestion, type WorkshopReviewItem } from '../../lib/workshop/workshopContract';
 import { WORKSHOP_ERRORS, WORKSHOP_NOTE_MAX } from '../../lib/workshop/workshopSchedule';
 import { workshopQuantityError } from '../../lib/workshop/workshopView';
 import { formatPersianDate, getTodayIsoDate } from '../../utils/dateUtils';
@@ -15,7 +15,8 @@ import { getErrorMessage } from '../../utils/formatters';
  * v10.1.40 (N-01 part 3): a project manager approves a report, with the quantity corrected when needed (decision ت۲ الف)
  * and the work log's date (default today), or rejects it with a reason. The server writes the work log at the rate the
  * workshop schedule uses; nothing here asks for insurance, payroll tax or VAT. Manual work logs of the same worker, task
- * and project are listed and the approval waits for «بررسی کردم», as the server asks (TD-1284 review).
+ * and project are listed and the approval waits for «بررسی کردم», as the server asks (TD-1284 review); when the server
+ * answers that the list changed meanwhile, the sheet shows the server's list and asks for «بررسی کردم» again.
  */
 export function WorkshopReviewSheet({ item, mode, onClose, onApproved }: {
   item: WorkshopReviewItem;
@@ -28,7 +29,7 @@ export function WorkshopReviewSheet({ item, mode, onClose, onApproved }: {
   const [note, setNote] = useState('');
   const [manualChecked, setManualChecked] = useState(false);
   const ids = useId();
-  const manualLogs = Array.isArray(item.manualLogs) ? item.manualLogs : [];
+  const [manualLogs, setManualLogs] = useState(() => (Array.isArray(item.manualLogs) ? item.manualLogs : []));
   const approve = useWorkshopMutation(workshopRequests.approveReport, { touchesWorkLogs: true });
   const reject = useWorkshopMutation(workshopRequests.rejectReport);
   const saving = approve.isPending || reject.isPending;
@@ -55,6 +56,12 @@ export function WorkshopReviewSheet({ item, mode, onClose, onApproved }: {
         onClose();
       }
     } catch (err) {
+      const answer = err as { code?: unknown; details?: unknown } | null;
+      const fresh = answer?.code === WORKSHOP_ERRORS.manualLogsExist.code ? manualLogsOfConflict(answer.details) : null;
+      if (fresh) {
+        setManualLogs(fresh);
+        setManualChecked(false);
+      }
       toast.error(getErrorMessage(err));
     }
   };

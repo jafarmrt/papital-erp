@@ -53,6 +53,9 @@ export function WorkshopReviewList({ items, emptyText = 'گزارشی در ان�
                 برای همین کار {formatPersianNumber((item.manualLogs ?? []).length)} کارکرد دستی ثبت شده است؛ پیش از تأیید بررسی کنید.
               </p>
             )}
+            {item.isOwn ? (
+              <p className="mt-3 text-xs text-gray-500">گزارش خودتان را نمی‌توانید تأیید یا رد کنید؛ مسئول دیگر پروژه آن را بررسی می‌کند.</p>
+            ) : (
             <div className="flex gap-2 mt-3">
               <button type="button" onClick={() => setOpen({ item, mode: 'approve' })}
                 className={`${PHONE_TAP_TARGET} flex-1 inline-flex items-center justify-center gap-1 rounded-xl px-3 py-2 text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700`}>
@@ -63,6 +66,7 @@ export function WorkshopReviewList({ items, emptyText = 'گزارشی در ان�
                 <X className="w-4 h-4" aria-hidden="true" /> رد
               </button>
             </div>
+            )}
           </li>
         ))}
       </ul>

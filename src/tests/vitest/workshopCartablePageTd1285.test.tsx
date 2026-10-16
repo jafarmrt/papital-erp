@@ -52,7 +52,7 @@ const reviewItem: WorkshopReviewItem = {
   report: { id: 31, status: 'submitted', quantity: 40, approvedQuantity: null, notes: 'تمام شد', reviewNote: '', version: 1, createdAt: '2026-10-14T09:00:00Z', reviewedAt: null },
   projectId: 7, projectCode: 'P-7', projectTitle: 'گردنبند پاییزه', stageId: 3, stageTitle: 'مونتاژ', productId: '11',
   productName: 'گردنبند ستاره', rowId: 'row-a', taskTitle: 'بستن قفل', plannedQuantity: 40, unit: 'عدد', personnelId: 2,
-  personnelName: 'مریم کارگر', deadline: '2026-10-20', manualLogs: [],
+  personnelName: 'مریم کارگر', deadline: '2026-10-20', manualLogs: [], isOwn: false,
 };
 let reviewAnswer: WorkshopReviewItem = reviewItem;
 
@@ -61,7 +61,7 @@ function answer(url: string, init?: { method?: string; body?: string }): unknown
   if (url === '/workshop/my-deliveries') return deliveriesAnswer;
   if (url === '/workshop/review/reports') return { data: [reviewAnswer] };
   if (url === '/workshop/projects/7/reports') {
-    return { pending: [reviewItem], stageProgress: [{ stageId: 3, plannedQuantity: 80, approvedQuantity: 40, percent: 50 }], canReview: projectCanReview };
+    return { pending: projectCanReview ? [reviewItem] : [], stageProgress: [{ stageId: 3, plannedQuantity: 80, approvedQuantity: 40, percent: 50 }], canReview: projectCanReview };
   }
   if (url === '/workshop/reports/31/approve') {
     return { reportId: 31, pieceworkLogId: 77, matrixTickSuggestion: { projectId: 7, stageId: 3, stageOrder: 2, stageTitle: 'مونتاژ', productId: '11', productName: 'گردنبند ستاره', itemId: 11 } };
@@ -245,6 +245,45 @@ describe('workshop cartable page (N-01 part 3)', () => {
     expect(body.acknowledgedManualLogIds).toEqual([88]);
   });
 
+  it('takes the server\'s new manual work logs after a 409 and asks for the acknowledgement again', async () => {
+    permissions.add('workshop.review');
+    reviewAnswer = { ...reviewItem, manualLogs: [{ id: 88, date: '2026-10-11', quantity: 12 }] };
+    let approveCalls = 0;
+    fetchJson.mockImplementation(async (url: string, init?: { method?: string; body?: string }) => {
+      if (url === '/workshop/reports/31/approve' && ++approveCalls === 1) {
+        throw Object.assign(new Error(WORKSHOP_ERRORS.manualLogsExist.message), {
+          code: WORKSHOP_ERRORS.manualLogsExist.code, status: 409,
+          details: { manualLogs: [{ id: 88, date: '2026-10-11', quantity: 12 }, { id: 95, date: '2026-10-13', quantity: 7 }] },
+        });
+      }
+      return answer(url, init);
+    });
+    renderAt('/workshop/review');
+    fireEvent.click(await screen.findByRole('button', { name: /^تأیید$/ }));
+    const sheet = screen.getByRole('dialog', { name: 'تأیید گزارش پایان کار' });
+    const approve = within(sheet).getByRole<HTMLButtonElement>('button', { name: 'تأیید و ثبت کارکرد' });
+    const ack = within(sheet).getByLabelText<HTMLInputElement>(/بررسی کردم/);
+    fireEvent.click(ack);
+    fireEvent.click(approve);
+    expect(await within(sheet).findByText(/کارکرد شماره ۹۵/)).toBeTruthy();
+    expect(ack.checked).toBe(false);
+    expect(approve.disabled).toBe(true);
+    fireEvent.click(ack);
+    fireEvent.click(approve);
+    await waitFor(() => expect(approveCalls).toBe(2));
+    const sent = fetchJson.mock.calls.filter(c => c[0] === '/workshop/reports/31/approve').map(c => JSON.parse((c[1] as { body: string }).body).acknowledgedManualLogIds);
+    expect(sent).toEqual([[88], [88, 95]]);
+  });
+
+  it('offers no approve or reject on the reviewer\'s own report and says why', async () => {
+    permissions.add('workshop.review');
+    reviewAnswer = { ...reviewItem, isOwn: true };
+    renderAt('/workshop/review');
+    expect(await screen.findByText(/گزارش خودتان را نمی‌توانید تأیید یا رد کنید/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^تأیید$/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^رد$/ })).toBeNull();
+  });
+
   it('does not offer the tick without projects.edit and asks a reason to reject', async () => {
     permissions.add('workshop.review');
     renderAt('/workshop/review');
@@ -270,13 +309,12 @@ describe('workshop reports in the project schedule (N-01 part 3)', () => {
     </QueryClientProvider>,
   );
 
-  it('shows each stage\'s approved share and only a count of waiting reports to a reader who does not review', async () => {
+  it('shows each stage\'s approved share and no review buttons to a reader who does not review', async () => {
     permissions.add('projects.view');
     renderPanel();
     const bar = await screen.findByRole('progressbar', { name: 'مونتاژ' });
     expect(bar.getAttribute('aria-valuenow')).toBe('50');
     expect(screen.getByText(/۴۰ از ۸۰ · ۵۰٪/)).toBeTruthy();
-    expect(screen.getByText('۱ گزارش در انتظار بررسی مسئولان این پروژه است.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^تأیید$/ })).toBeNull();
   });
 

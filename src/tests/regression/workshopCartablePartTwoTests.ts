@@ -119,6 +119,11 @@ async function reportReviewCase(h: Harness, wrong: string[]): Promise<string> {
   const ownApproval = await h.post(`/api/workshop/reports/${own.report?.id}/approve`, { version: own.report?.version }, selfManager.session);
   if (ownApproval.status !== 403 || codeOf(ownApproval) !== 'WORKSHOP_OWN_REPORT') wrong.push(`a manager approving their own report answered ${brief(ownApproval)}, expected 403 WORKSHOP_OWN_REPORT`);
   if ((await h.q(`SELECT 1 FROM piecework_logs WHERE personnel_id = $1 AND is_deleted = 0`, [selfManager.personnelId])).length !== 0) wrong.push('a refused own approval wrote a work log');
+  // the review list marks that report as the reviewer's own, so the page offers no button the server refuses
+  const ownList = ((await h.get(`/api/workshop/review/reports?projectId=${ownProject.projectId}`, selfManager.session)).body as { data?: Array<{ report: { id: number }; isOwn?: boolean }> }).data ?? [];
+  if (ownList.find(i => i.report.id === own.report?.id)?.isOwn !== true) wrong.push(`the own report is listed with isOwn ${JSON.stringify(ownList.find(i => i.report.id === own.report?.id)?.isOwn)}, expected true`);
+  const managerList = ((await h.get(`/api/workshop/review/reports?projectId=${projectId}`, manager)).body as { data?: Array<{ report: { id: number }; isOwn?: boolean }> }).data ?? [];
+  if (managerList.find(i => i.report.id === report.id)?.isOwn !== false) wrong.push('a worker\'s report is listed as the manager\'s own');
   const approved = await h.post(`/api/workshop/reports/${report.id}/approve`, { version: editedVersion }, manager);
   const approval = approved.body as { pieceworkLogId?: number; matrixTickSuggestion?: unknown };
   if (approved.status !== 200 || !approval.pieceworkLogId) wrong.push(`the manager's approval answered ${brief(approved)}, expected 200 with a work log`);

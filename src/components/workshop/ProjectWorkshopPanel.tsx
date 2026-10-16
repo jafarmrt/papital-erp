@@ -47,9 +47,7 @@ export function ProjectWorkshopPanel({ projectId, stages }: {
           ))}
         </ul>
       )}
-      {pending.length > 0 && (data.canReview
-        ? <WorkshopReviewList items={pending} />
-        : <p className="text-xs text-slate-600">{formatPersianNumber(pending.length)} گزارش در انتظار بررسی مسئولان این پروژه است.</p>)}
+      {pending.length > 0 && data.canReview && <WorkshopReviewList items={pending} />}
     </section>
   );
 }
