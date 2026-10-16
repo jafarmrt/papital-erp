@@ -135,7 +135,7 @@ export const documentCreateSchema = z.object({
     // v9.0.336 (TD-778): طرف حساب سند فروش و خرید از انتخابگر (شناسه `customers`)
     partyId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),
     projectId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),
-    // v10.1.35 (N-01, TD-1283): the remittance's recipient personnel (remittance only, checked in the service)
+    // v10.1.36 (N-01, TD-1283): the remittance's recipient personnel (remittance only, checked in the service)
     recipientPersonnelId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),
     // v7.0.81 (TD-230): فاکتور فروش اصلی سند برگشت از فروش
     returnOfDocumentId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),

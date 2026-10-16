@@ -824,8 +824,15 @@
     {
       "idx": 117,
       "version": "7",
+      "when": 1795310000000,
+      "tag": "0117_personnel_eidi_covered",
+      "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
       "when": 1795340000000,
-      "tag": "0117_workshop_cartable",
+      "tag": "0118_workshop_cartable",
       "breakpoints": true
     }
   ]

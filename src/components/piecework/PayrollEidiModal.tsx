@@ -7,7 +7,7 @@ import { toPersianDigits } from '../../utils/persianNumber';
 import { normalizeDecimalString, toLatinDigits } from '../../lib/numericInput';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { useOnlineStatus } from '../../lib/pwa/useOnlineStatus';
-import { EIDI_METHOD_LABELS, EIDI_OVERRIDE_REASON_MAX, type EidiPayslipSuggestion } from '../../lib/payroll/eidi';
+import { EIDI_METHOD_LABELS, EIDI_NOT_COVERED_NOTE, EIDI_OVERRIDE_REASON_MAX, type EidiPayslipSuggestion } from '../../lib/payroll/eidi';
 import { SearchableSelect } from '../SearchableSelect';
 import { DialogLayer } from '../common/DialogLayer';
 
@@ -20,6 +20,8 @@ interface Preview {
   fullName: string;
   period: { startIso: string; endIso: string; workedDays: number };
   suggestion: EidiPayslipSuggestion;
+  /** v10.1.35 (TD-1282): «مشمول عیدی» پرونده پرسنل */
+  eidiCovered?: boolean;
   draftWarning: string | null;
 }
 
@@ -97,6 +99,7 @@ export function PayrollEidiModal({ personnelSelectOptions, onClose, onIssued }: 
           {preview && s && (
             <div className="bg-slate-50 rounded-xl p-3 space-y-1 font-bold text-slate-700">
               <p>{`روش: ${EIDI_METHOD_LABELS[s.method]} — ${toPersianDigits(String(preview.period.workedDays))} روز همکاری در سال`}</p>
+              {preview.eidiCovered === false && <p className="text-amber-700">{EIDI_NOT_COVERED_NOTE}</p>}
               {s.entitlement === null
                 ? <p>{`عیدی انباشته پرداخت‌نشده: ${rial.amount(Number(s.remainingAccrual))}`}</p>
                 : <p>{`حق عیدی سال: ${rial.amount(Number(s.entitlement))}`}</p>}

@@ -4,7 +4,7 @@ import { managerUserIdsOf } from '../../lib/projects/projectManagers';
 import { parseRecipientPersonnelId } from '../../lib/workshop/recipient';
 import { PERMISSION_CATALOG } from '../../lib/permissions/permissionCatalog';
 
-/** v10.1.35 (N-01 part 1, TD-1283): the shared rules of the workshop cartable data. */
+/** v10.1.36 (N-01 part 1, TD-1283): the shared rules of the workshop cartable data. */
 describe('workshop cartable part 1 (N-01, TD-1283)', () => {
   it('gives seven days only to a non-admin role holding workshop.long_session', () => {
     expect(sessionLifetimeSeconds('worker', ['workshop.self', 'workshop.long_session'])).toBe(LONG_SESSION_SECONDS);

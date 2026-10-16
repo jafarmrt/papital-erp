@@ -8,7 +8,7 @@ import {
 } from '../../lib/workshop/recipient.js';
 
 /**
- * v10.1.35 (N-01, TD-1283, decision ت۴ الف): the recipient of a remittance (`documents.recipient_personnel_id`). Only a
+ * v10.1.36 (N-01, TD-1283, decision ت۴ الف): the recipient of a remittance (`documents.recipient_personnel_id`). Only a
  * remittance takes one (422 `RECIPIENT_REMITTANCE_ONLY`), and it is a live personnel who has not left, read `FOR SHARE`
  * in the document's transaction (else 422 `RECIPIENT_PERSONNEL_INVALID`). Nothing sent means none.
  */

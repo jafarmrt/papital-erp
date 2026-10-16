@@ -391,7 +391,7 @@ export class DocumentCreationService {
 
     const finalBuyerName = buyerName || buyer_name || '';
     const requestedPartyId = parseDocumentPartyId(body.partyId);
-    // v10.1.35 (N-01, TD-1283, decision ت۴ الف): the remittance's recipient, who confirms it in the workshop cartable
+    // v10.1.36 (N-01, TD-1283, decision ت۴ الف): the remittance's recipient, who confirms it in the workshop cartable
     const recipientPersonnelId = documentRecipientInput(docType, body.recipientPersonnelId);
     const finalBuyerCity = buyerCity || buyer_city || '';
     const finalBuyerPhone = buyerPhone || buyer_phone || '';

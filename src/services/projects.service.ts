@@ -46,9 +46,9 @@ export interface CreateProjectInput {
   customStages?: unknown[];
   attachments?: unknown[];
   createdBy?: string;
-  /** v10.1.35 (N-01, TD-1283): the user who records the project, written on its manager rows and their audit row */
+  /** v10.1.36 (N-01, TD-1283): the user who records the project, written on its manager rows and their audit row */
   createdById?: number;
-  /** v10.1.35 (N-01, TD-1283, decision ت۳ الف): «مسئولان پروژه»; missing = none */
+  /** v10.1.36 (N-01, TD-1283, decision ت۳ الف): «مسئولان پروژه»; missing = none */
   managerUserIds?: number[];
 }
 
@@ -74,7 +74,7 @@ export interface UpdateProjectInput {
   attachments?: unknown[];
   /** v9.0.385 (TD-742): نسخه‌ای که فرم از آن ساخته شده؛ مسیر `PUT /projects/:id` همیشه می‌فرستد */
   expectedVersion?: number;
-  /** v10.1.35 (N-01, TD-1283, decision ت۳ الف): «مسئولان پروژه»; missing = unchanged */
+  /** v10.1.36 (N-01, TD-1283, decision ت۳ الف): «مسئولان پروژه»; missing = unchanged */
   managerUserIds?: number[];
 }
 

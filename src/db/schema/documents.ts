@@ -27,7 +27,7 @@ export const documents = pgTable('documents', {
   notes: text('notes'),
   // v9.0.336 (TD-778، تصمیم ت۶ الف بسته ۸): طرف حساب سند فروش و خرید با شناسه (مهاجرت 0080)؛ نام خریدار فقط برای نمایش است
   partyId: integer('party_id').references(baseRelations.customersId),
-  // v10.1.35 (N-01، TD-1283، تصمیم ت۴ الف طرح کارتابل کارگاه): پرسنلی که حواله به دست او داده می‌شود (مهاجرت 0117)
+  // v10.1.36 (N-01، TD-1283، تصمیم ت۴ الف طرح کارتابل کارگاه): پرسنلی که حواله به دست او داده می‌شود (مهاجرت 0118)
   recipientPersonnelId: integer('recipient_personnel_id').references(baseRelations.personnelId),
   buyerName: text('buyer_name').default(''),
   buyerCity: text('buyer_city').default(''),

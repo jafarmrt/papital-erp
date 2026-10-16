@@ -1,4 +1,4 @@
--- Drizzle Migration 0117: data of the workshop cartable (v10.1.35, N-01 part 1, TD-1283)
+-- Drizzle Migration 0118: data of the workshop cartable (v10.1.36, N-01 part 1, TD-1283)
 --
 -- project_managers: the users answerable for a project (plan decision t3 A); they review the workers' task reports.
 -- documents.recipient_personnel_id and project_bom_allocations.recipient_personnel_id: the worker a remittance or a

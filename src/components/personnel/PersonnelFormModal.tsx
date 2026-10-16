@@ -357,6 +357,7 @@ export function PersonnelFormModal({
               <PersonnelStatutoryFlags
                 insurance={formData.isInsuranceCovered}
                 tax={formData.isTaxCovered}
+                eidi={formData.isEidiCovered}
                 onChange={(flags) => setFormData((prev) => ({ ...prev, ...flags }))}
               />
 

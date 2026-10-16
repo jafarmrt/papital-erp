@@ -53,7 +53,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
     }
   }, [warehousesList, selectedLocation]);
   const [allocateNotes, setAllocateNotes] = useState('');
-  // v10.1.35 (N-01, TD-1283): the personnel who receives the materials
+  // v10.1.36 (N-01, TD-1283): the personnel who receives the materials
   const [recipientPersonnelId, setRecipientPersonnelId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);

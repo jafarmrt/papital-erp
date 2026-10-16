@@ -36,7 +36,7 @@ export function useProjectForm({
   const [priority, setPriority] = useState<'low' | 'medium' | 'high' | 'urgent'>('medium');
   const [description, setDescription] = useState<string>('');
   const [attachments, setAttachments] = useState<FinancialAttachment[]>([]);
-  // v10.1.35 (N-01, TD-1283): «مسئولان پروژه» by user id
+  // v10.1.36 (N-01, TD-1283): «مسئولان پروژه» by user id
   const [managerIds, setManagerIds] = useState<number[]>([]);
 
   const [localCustomers, setLocalCustomers] = useState<Customer[]>([]);
