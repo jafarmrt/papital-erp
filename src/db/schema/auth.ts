@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, text, serial, integer, jsonb, timestamp, index, uniqueIndex, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, integer, jsonb, timestamp, index, type AnyPgColumn } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
@@ -64,25 +64,3 @@ export const migrationsLog = pgTable('migrations_log', {
 // (v4.0.29) جدول changelogs حذف شد — dual-storage زیان‌بار با منبع حقیقت واحد
 // (src/data/changelogs/*.ts) جایگزین شد؛ مهاجرت 0008 جدول را از DB برمی‌دارد.
 
-export const idempotencyKeys = pgTable('idempotency_keys', {
-  id: serial('id').primaryKey(),
-  key: text('key').notNull(),
-  scope: text('scope').notNull().default('global'), // 'documents', 'treasury', 'vouchers', 'cheques', 'payroll', 'transfers', etc.
-  status: text('status').notNull().default('processing'), // 'processing', 'completed', 'failed'
-  requestMethod: text('request_method'),
-  requestPath: text('request_path'),
-  requestPayload: jsonb('request_payload'),
-  responseStatus: integer('response_status'),
-  responseBody: jsonb('response_body'),
-  createdById: integer('created_by_id').references(() => users.id, { onDelete: 'set null' }),
-  lockedAt: timestamp('locked_at', { mode: 'string' }),
-  lockedUntil: timestamp('locked_until', { mode: 'string' }),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
-  completedAt: timestamp('completed_at', { mode: 'string' }),
-  expiresAt: timestamp('expires_at', { mode: 'string' })
-}, (table) => ({
-  idx_idempotency_key: index('idx_idempotency_key').on(table.key),
-  idx_idempotency_scope_status: index('idx_idempotency_scope_status').on(table.scope, table.status),
-  idx_idemp_created_by: index('idx_idemp_created_by').on(table.createdById),
-  idx_idemp_user_scope_key: uniqueIndex('idx_idemp_user_scope_key').on(table.createdById, table.scope, table.key),
-}));

@@ -11107,5 +11107,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runShellSweepTests } = await import('../regression/shellSweepTests.js');
   results.push(...await runShellSweepTests(shouldRun));
 
+  // closing sweep: events (reorder alert in the outbox)
+  const { runEventsSweepTests } = await import('../regression/eventsSweepTests.js');
+  results.push(...await runEventsSweepTests(shouldRun));
+
   return results;
 }

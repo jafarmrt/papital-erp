@@ -1,4 +1,5 @@
 import { domainEventBus } from './domainEventBus.js';
+import { OutboxService } from './outboxService.js';
 import { 
   DomainEventType, 
   BaseDomainEvent, 
@@ -34,6 +35,9 @@ export function registerReservedStocksReader(reader: ReservedStocksReader): void
  * همان `listReorderAlerts` صفحه هشدار، TD-843) با نقطه سفارش سنجیده می‌شود؛ پیش‌تر موجودی کل سنجیده می‌شد و کالایی که صفحه
  * هشدار «زیر نقطه سفارش» نشان می‌داد هشدار رویدادی نمی‌گرفت. خطای خواندن رزروها رویداد را برای تلاش دوباره برمی‌گرداند.
  */
+/** OBS-R2-17: the outbox id of the reorder alert a stock issue event raises (one alert per issue event) */
+export const reorderAlertEventId = (stockEventId: string) => `${stockEventId}_reorder`;
+
 export async function reorderAlertForIssue(payload: StockMovementEventPayload): Promise<InventoryReorderAlertPayload | null> {
   const { itemId, itemCode, itemName, warehouseLocation } = payload;
   const [item] = await orm.select({ reorderPoint: items.reorderPoint, currentStock: items.currentStock, isDeleted: items.isDeleted })
@@ -54,6 +58,29 @@ export async function reorderAlertForIssue(payload: StockMovementEventPayload): 
     warehouseLocation,
     alertMessage: `موجودی آزاد کالای ${itemName} (${itemCode}) به نقطه سفارش مجدد (${threshold.toNumber().toLocaleString('fa-IR')}) رسیده است.`,
   };
+}
+
+/**
+ * OBS-R2-17: the stock-issue reorder monitor. The alert goes to the outbox under an id derived from the stock event, so
+ * it is durable (a restart before the rules run loses nothing) and a retried stock handler records it once; before, it
+ * was published in process and lost on a crash. Returns the alert event id when an alert is due.
+ */
+export async function recordReorderAlertOfIssue(event: BaseDomainEvent<StockMovementEventPayload>): Promise<string | null> {
+  const alert = await reorderAlertForIssue(event.payload);
+  if (!alert) return null;
+  logger.warn(`[Inventory Alert] Item ${alert.itemCode} reached its reorder point (${alert.reorderPoint})`);
+  const alertEvent: BaseDomainEvent<InventoryReorderAlertPayload> = {
+    ...domainEventBus.createEvent<InventoryReorderAlertPayload>(
+      DomainEventType.INVENTORY_REORDER_ALERT,
+      'Item',
+      String(alert.itemId),
+      alert,
+      { correlationId: event.metadata?.correlationId || event.eventId, causationId: event.eventId },
+    ),
+    eventId: reorderAlertEventId(event.eventId),
+  };
+  await OutboxService.recordEventOnce(orm, alertEvent);
+  return alertEvent.eventId;
 }
 
 export function registerDomainEventHandlers(): void {
@@ -144,11 +171,7 @@ export function registerDomainEventHandlers(): void {
   // -------------------------------------------------------------
   domainEventBus.subscribe<StockMovementEventPayload>(DomainEventType.STOCK_ISSUED, async (event) => {
     try {
-      const alert = await reorderAlertForIssue(event.payload);
-      if (alert) {
-        logger.warn(`[Inventory Alert] Item ${alert.itemCode} reached its reorder point (${alert.reorderPoint})`);
-        await domainEventBus.publishEvent(DomainEventType.INVENTORY_REORDER_ALERT, 'Item', String(alert.itemId), alert, { correlationId: event.eventId });
-      }
+      await recordReorderAlertOfIssue(event);
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error(`[Inventory Reorder Check] Error checking reorderPoint: ${errMsg}`);

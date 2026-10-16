@@ -3,6 +3,8 @@
  * Enterprise ERP Domain Event Specifications
  */
 
+import { getRequestContext } from '../../lib/requestContext.js';
+
 export enum DomainEventType {
   // 1. Invoices & Sales
   INVOICE_CREATED = 'InvoiceCreated',
@@ -60,6 +62,8 @@ export interface DomainEventMetadata {
   isSimulation?: boolean;
   idempotencyKey?: string;
   replayedAt?: string;
+  /** OBS-R2-16: trace id of the request that recorded the event (`activity_logs.trace_id` of its audit rows) */
+  requestId?: string;
   [key: string]: unknown;
 }
 
@@ -246,6 +250,9 @@ export function createDomainEvent<T = unknown>(params: {
 }): BaseDomainEvent<T> {
   const now = params.occurredAt || new Date().toISOString();
   const eventId = params.eventId || `evt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  // OBS-R2-16: an event recorded during a request carries that request's trace and correlation ids, so its background
+  // handlers (outbox worker, delivery jobs) and the audit rows they write can be found from the request
+  const origin = getRequestContext();
 
   const event: BaseDomainEvent<T> = {
     eventId,
@@ -256,7 +263,8 @@ export function createDomainEvent<T = unknown>(params: {
     metadata: {
       timestamp: now,
       userName: params.metadata?.userName || 'سیستم ERP',
-      correlationId: params.metadata?.correlationId || eventId,
+      correlationId: params.metadata?.correlationId || origin?.correlationId || eventId,
+      ...(origin?.requestId ? { requestId: origin.requestId } : {}),
       ...params.metadata
     },
     occurredAt: now

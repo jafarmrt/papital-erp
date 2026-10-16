@@ -159,17 +159,3 @@ export const crmLeadStageHistory = pgTable('crm_lead_stage_history', {
   idx_crm_lead_stage_history_user: index('idx_crm_lead_stage_history_user').on(table.changedById).where(sql`${table.changedById} IS NOT NULL`),
 }));
 
-export const transfers = pgTable('transfers', {
-  id: serial('id').primaryKey(),
-  code: text('code').notNull().unique(), // e.g. "003", "001"
-  title: text('title').default(''),
-  image: text('image').default(''),
-  thumbnail: text('thumbnail').default(''),
-  notes: text('notes').default(''),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
-  isDeleted: integer('is_deleted').default(0),
-}, (table) => ({
-  idx_transfer_code: index('idx_transfer_code').on(table.code),
-  idx_transfer_deleted: index('idx_transfer_deleted').on(table.isDeleted),
-}));

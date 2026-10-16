@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 import { logger } from '../../middleware/logger.js';
+import { getRequestContext, requestContextStorage, type RequestContextStore } from '../../lib/requestContext.js';
 import { 
   BaseDomainEvent, 
   DomainEventType, 
@@ -109,6 +110,11 @@ class DomainEventBusEmitter extends EventEmitter {
     event: BaseDomainEvent<T>,
     alreadyCompleted: readonly string[] = []
   ): Promise<TrackedDispatchResult> {
+    // OBS-R2-16: the outbox worker has no request; its handlers run under the trace id of the request that recorded
+    // the event, so their audit rows and log lines carry it. A replay started from a request keeps that request's id.
+    if (!getRequestContext()) {
+      return requestContextStorage.run(eventRequestContext(event as BaseDomainEvent), () => this.dispatchTracked(event, alreadyCompleted));
+    }
     const validation = validateDomainEvent(event);
     if (!validation.valid) {
       throw new Error(`اعتبارسنجی قرارداد رویداد با خطا مواجه شد: ${validation.errors.join(' | ')}`);
@@ -210,3 +216,11 @@ class DomainEventBusEmitter extends EventEmitter {
 }
 
 export const domainEventBus = new DomainEventBusEmitter();
+
+/** OBS-R2-16: the request context a background dispatch of `event` runs under (its origin request's ids, else the event's) */
+export function eventRequestContext(event: BaseDomainEvent): RequestContextStore {
+  const metadata = (event.metadata ?? {}) as BaseDomainEvent['metadata'];
+  const requestId = typeof metadata.requestId === 'string' && metadata.requestId ? metadata.requestId : event.eventId;
+  const correlationId = typeof metadata.correlationId === 'string' && metadata.correlationId ? metadata.correlationId : requestId;
+  return { requestId, correlationId, userId: metadata.userId, username: metadata.userName, startTime: Date.now() };
+}
