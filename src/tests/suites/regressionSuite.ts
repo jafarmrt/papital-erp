@@ -11061,6 +11061,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v10.1.37 (N-01 part 1): workshop cartable data (long session, project managers, stock recipient)
   const { runWorkshopCartablePartOneTests } = await import('../regression/workshopCartablePartOneTests.js');
   results.push(...await runWorkshopCartablePartOneTests(shouldRun));
+  // v10.1.39 (N-01 part 2): workshop cartable server (reports, approval, deliveries, reminders)
+  const { runWorkshopCartablePartTwoTests } = await import('../regression/workshopCartablePartTwoTests.js');
+  results.push(...await runWorkshopCartablePartTwoTests(shouldRun));
 
   return results;
 }
