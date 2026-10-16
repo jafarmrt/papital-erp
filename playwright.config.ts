@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { FAKE_BOT_API_BASE } from './e2e/support/fakeBotApi';
 
 /**
  * v7.0.77 (audit P3-7): یک مسیر حیاتی سرتاسری در مرورگر — ورود، صدور فاکتور فروش، دیدن سند حسابداری آن.
@@ -26,20 +27,34 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1400, height: 1000 } } }],
-  webServer: {
-    command: 'node dist/server.cjs',
-    // startup (نه ready): ۲۰۰ فقط پس از پایان مهاجرت و seed پس‌زمینه
-    url: `${E2E_BASE_URL}/health/startup`,
-    timeout: 180_000,
-    reuseExistingServer: !process.env.CI,
-    stdout: 'ignore',
-    stderr: 'pipe',
-    env: {
-      NODE_ENV: 'production',
-      PORT: String(PORT),
-      DATABASE_URL: process.env.E2E_DATABASE_URL || '',
-      JWT_SECRET: process.env.E2E_JWT_SECRET || 'e2e-jwt-secret-at-least-32-characters-long-123',
-      ERP_SETUP_TOKEN: process.env.E2E_SETUP_TOKEN || 'e2e_setup_token_at_least_16_chars',
+  // v10.1.43 (messenger plan part 4): the fake Bale / Telegram Bot API first, then the server pointed at it (loopback only)
+  webServer: [
+    {
+      command: 'npx tsx e2e/support/fakeBotApi.ts',
+      url: `${FAKE_BOT_API_BASE}/health`,
+      timeout: 60_000,
+      reuseExistingServer: !process.env.CI,
+      stdout: 'ignore',
+      stderr: 'pipe',
     },
-  },
+    {
+      command: 'node dist/server.cjs',
+      // startup (نه ready): ۲۰۰ فقط پس از پایان مهاجرت و seed پس‌زمینه
+      url: `${E2E_BASE_URL}/health/startup`,
+      timeout: 180_000,
+      reuseExistingServer: !process.env.CI,
+      stdout: 'ignore',
+      stderr: 'pipe',
+      env: {
+        NODE_ENV: 'production',
+        PORT: String(PORT),
+        DATABASE_URL: process.env.E2E_DATABASE_URL || '',
+        JWT_SECRET: process.env.E2E_JWT_SECRET || 'e2e-jwt-secret-at-least-32-characters-long-123',
+        ERP_SETUP_TOKEN: process.env.E2E_SETUP_TOKEN || 'e2e_setup_token_at_least_16_chars',
+        ERP_SECRETS_KEY: process.env.E2E_SECRETS_KEY || 'e2e-secrets-key-at-least-32-characters-long-456',
+        ERP_MESSENGER_TEST_API_BASE: FAKE_BOT_API_BASE,
+        APP_URL: E2E_BASE_URL,
+      },
+    },
+  ],
 });

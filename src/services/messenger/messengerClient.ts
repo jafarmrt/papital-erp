@@ -43,8 +43,34 @@ export interface BotUpdate {
   };
 }
 
+/**
+ * v10.1.43 (messenger notifications plan part 4): the end-to-end test points both bots at a fake Bot API on the same
+ * machine through `ERP_MESSENGER_TEST_API_BASE`. It is read only when it is a plain `http` origin on a loopback host, so a
+ * token can never be sent to another machine through it; any other value is ignored and the real APIs are used.
+ */
+export const MESSENGER_TEST_API_BASE_ENV = 'ERP_MESSENGER_TEST_API_BASE';
+const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(['127.0.0.1', 'localhost', '[::1]']);
+
+export function loopbackTestApiBase(raw: string | undefined): string | null {
+  if (!raw) return null;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'http:' || !LOOPBACK_HOSTS.has(url.hostname)) return null;
+  if (url.username || url.password || url.search || url.hash || (url.pathname !== '/' && url.pathname !== '')) return null;
+  return url.origin;
+}
+
+export function botApiBase(messenger: Messenger, env: NodeJS.ProcessEnv = process.env): string {
+  const testBase = loopbackTestApiBase(env[MESSENGER_TEST_API_BASE_ENV]);
+  return testBase ? `${testBase}/${messenger}` : BOT_API_BASE[messenger];
+}
+
 function botUrl(messenger: Messenger, token: string, method: string): string {
-  return `${BOT_API_BASE[messenger]}/bot${token}/${method}`;
+  return `${botApiBase(messenger)}/bot${token}/${method}`;
 }
 
 /** A network error's name only: an undici error may carry the request address, which holds the token */
