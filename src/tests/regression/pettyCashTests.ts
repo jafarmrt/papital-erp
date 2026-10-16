@@ -9,21 +9,22 @@ const SELLER = 'لوازم‌التحریر مهر';
 /**
  * v10.1.32 (D-16, decision t30 «fluctuating»): a petty cash fund is a rial treasury account of type petty_cash on 1006.
  * Any amount is charged into it with the treasury transfer and the unused cash goes back the same way. An expense
- * statement is one treasury payment from the fund: its draft voucher debits each line's expense account (less the line's
- * optional VAT, which is part of the amount paid and goes to the purchase-VAT mapping account 1303) and credits the fund's
- * ledger account with the fund as detail. The fund balance drops by the total at once and never below zero, so a second
- * statement above what is left is refused while the first voucher is still a draft. The lines (account, amount, VAT,
- * optional description, seller and invoice number) are kept and listed. A line on a non-expense account, a VAT not below
- * its line, a fund that is not petty cash and a foreign petty cash fund are 422; voiding a statement drops its draft
+ * statement is one treasury payment from the fund: its draft voucher debits each line's expense account and credits the
+ * fund's ledger account with the fund as detail, the fund balance drops by the total and never below zero, and the lines
+ * (account, amount, optional description, seller and invoice number; no VAT) are kept and listed. A line on a non-expense
+ * account, an amount with more than four decimals, a fund that is not petty cash and a foreign petty cash fund are 422,
+ * while a legacy non-rial petty cash fund stays editable when neither its type nor its currency changes. The fund balance
+ * holds every earlier statement at once, so a second statement above what is left is refused while the first voucher is
+ * still a draft. Voiding the statement drops its draft
  * voucher and restores the balance, and the bank invariants (I15/I16) hold for the fund and the bank. Through the real
- * Express routes with a real session; red on the code before the change (the statement route did not exist, a USD petty
- * cash fund was accepted and a line took no VAT).
+ * Express routes with a real session; red on the code before the change (the statement route did not exist and a USD
+ * petty cash fund was accepted).
  */
 export async function runPettyCashTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
   const id = 'reg_petty_cash_fluctuating_d16';
   if (!shouldRun(id, 'd16', 'petty_cash', 'treasury', 'vouchers')) return results;
-  const name = 'v10.1.32: a rial petty cash fund on 1006 is charged and emptied by transfer, an expense statement posts a balanced draft voucher (expenses less optional VAT, VAT on 1303 / 1006 with the fund detail) and keeps its lines, a non-expense line, a VAT not below its line, a non-petty account, an amount above the balance (draft statements counted) and a foreign fund are 422, and voiding restores the balance (D-16)';
+  const name = 'v10.1.32: a rial petty cash fund on 1006 is charged and emptied by transfer, an expense statement posts a balanced draft voucher (expenses / 1006 with the fund detail) and keeps its lines, a non-expense line, a non-petty account, an amount above the balance (draft statements counted), an amount with over four decimals and a foreign fund are 422, a legacy non-rial fund stays editable, and voiding restores the balance (D-16)';
   const tStart = Date.now();
   let h: Harness | undefined;
   try {
@@ -76,8 +77,13 @@ async function pettyCashCase(h: Harness, wrong: string[]): Promise<string> {
   const usd = await h.post('/api/accounting/bank-accounts', { title: `تنخواه ارزی ${tag}`, type: 'petty_cash', currency: 'USD', accountId: pettyLedger });
   expect('USD petty cash create', `${usd.status} ${codeOf(usd)}`, '422 PETTY_CASH_RIAL_ONLY');
   const usdBank = await h.post('/api/accounting/bank-accounts', { title: `بانک ارزی ${tag}`, type: 'bank', currency: 'USD', accountId: Number(ledger.id) });
-  const toPetty = await h.put(`/api/accounting/bank-accounts/${Number((usdBank.body as Body).id)}`, { type: 'petty_cash' });
+  const usdBankId = Number((usdBank.body as Body).id);
+  const toPetty = await h.put(`/api/accounting/bank-accounts/${usdBankId}`, { type: 'petty_cash' });
   expect('USD bank turned into petty cash', `${toPetty.status} ${codeOf(toPetty)}`, '422 PETTY_CASH_RIAL_ONLY');
+  // a non-rial petty cash fund from before v10.1.32 is still edited when its type and currency stay as they are
+  await h.q(`UPDATE bank_accounts SET type = 'petty_cash' WHERE id = $1`, [usdBankId]);
+  const legacyEdit = await h.put(`/api/accounting/bank-accounts/${usdBankId}`, { title: `تنخواه ارزی قدیمی ${tag}`, type: 'petty_cash', currency: 'USD' });
+  expect('legacy USD petty cash title edit', legacyEdit.status, 200);
   const fundRes = await h.post('/api/accounting/bank-accounts', { title: `تنخواه کارگاه ${tag}`, type: 'petty_cash', accountId: pettyLedger });
   if (fundRes.status >= 300) throw new Error(`petty cash create returned ${fundRes.status}: ${JSON.stringify(fundRes.body)}`);
   const fundId = Number((fundRes.body as Body).id);
@@ -105,27 +111,23 @@ async function pettyCashCase(h: Harness, wrong: string[]): Promise<string> {
   expect('line on trade receivables', `${onReceivables.status} ${codeOf(onReceivables)}`, '422 PETTY_CASH_EXPENSE_ACCOUNT_INVALID');
   const tooMuch = await h.post(url, { lines: [{ accountId: expenseA, amount: 3_000_000 }, { accountId: expenseB, amount: 2_000_001 }] });
   expect('statement above the balance', `${tooMuch.status} ${codeOf(tooMuch)}`, '422 PETTY_CASH_INSUFFICIENT_BALANCE');
+  const tooPrecise = await h.post(url, { lines: [{ accountId: expenseA, amount: '0.00004' }] });
+  expect('amount with five decimals', `${tooPrecise.status} ${codeOf(tooPrecise)}`, '422 PETTY_CASH_LINES_INVALID');
   const empty = await h.post(url, { lines: [] });
   expect('statement without lines', empty.status, 400);
-  const unknownKey = await h.post(url, { lines: [{ accountId: expenseA, amount: 1000, vat: 90 }] });
-  expect('line with an unknown key', unknownKey.status, 400);
-  const vatAll = await h.post(url, { lines: [{ accountId: expenseA, amount: 1000, vatAmount: '۱٬۰۰۰' }] });
-  expect('VAT equal to its line', `${vatAll.status} ${codeOf(vatAll)}`, '422 PETTY_CASH_LINES_INVALID');
-  const vatNegative = await h.post(url, { lines: [{ accountId: expenseA, amount: 1000, vatAmount: -1 }] });
-  expect('negative VAT', vatNegative.status, 400);
+  const withVat = await h.post(url, { lines: [{ accountId: expenseA, amount: 1000, vatAmount: 90 }] });
+  expect('line with an unknown key', withVat.status, 400);
   const viewer = await h.sessionWith(['accounting.view']);
   const forbidden = await h.post(url, { lines: [{ accountId: expenseA, amount: 1000 }] }, viewer);
   expect('statement without accounting.treasury', forbidden.status, 403);
   expect('fund balance after refusals', await balance(fundId), '5000000');
 
-  // 5. a line without VAT or invoice data stays whole in its expense; a line's VAT moves to 1303; the voucher balances
-  const vatLedger = await accountId('1303');
-  if (!vatLedger) throw new Error('standard account 1303 is missing from the test chart of accounts');
+  // 5. a statement with no VAT or invoice data posts a balanced draft voucher and keeps its lines
   const statement = await h.post(url, {
     description: `خرج‌های هفته ${tag}`,
     lines: [
       { accountId: expenseA, amount: '۱٬۲۰۰٬۰۰۰', description: 'کرایه حمل' },
-      { accountId: expenseB, amount: 300_000, vatAmount: '۲۷٬۰۰۰', sellerName: SELLER, invoiceNumber: '۴۵۶' },
+      { accountId: expenseB, amount: 300_000, sellerName: SELLER, invoiceNumber: '۴۵۶' },
     ],
   });
   expect('statement status', statement.status, 201);
@@ -143,11 +145,11 @@ async function pettyCashCase(h: Harness, wrong: string[]): Promise<string> {
   );
   const shape = voucherRows.map(r => `${r.account_id}:${r.debit}/${r.credit}:${r.detailed_type}:${r.detailed_id ?? ''}:${r.status}`).join(' ');
   expect('statement voucher', shape,
-    `${expenseA}:1200000/0:none::draft ${expenseB}:273000/0:none::draft ${vatLedger}:27000/0:none::draft ${pettyLedger}:0/1500000:bank_account:${fundId}:draft`);
+    `${expenseA}:1200000/0:none::draft ${expenseB}:300000/0:none::draft ${pettyLedger}:0/1500000:bank_account:${fundId}:draft`);
   const lines = await h.get(`/api/accounting/treasury/${txId}/petty-cash-lines`);
   const lineData = ((lines.body as { data?: Array<Body> }).data ?? []);
-  expect('stored lines', lineData.map(l => `${l.lineNo}:${l.accountId}:${l.amount}:${l.vatAmount}:${l.sellerName}:${l.invoiceNumber}`).join(' '),
-    `1:${expenseA}:1200000:0:: 2:${expenseB}:300000:27000:${SELLER}:456`);
+  expect('stored lines', lineData.map(l => `${l.lineNo}:${l.accountId}:${l.amount}:${l.sellerName}:${l.invoiceNumber}`).join(' '),
+    `1:${expenseA}:1200000:: 2:${expenseB}:300000:${SELLER}:456`);
   const page = await h.get(`/api/accounting/treasury?bankAccountId=${fundId}&page=1&limit=20`);
   const listed = (((page.body as { data?: Array<Body> }).data) ?? []).find(r => Number(r.id) === txId);
   expect('line count in the treasury list', listed?.pettyCashLineCount, 2);

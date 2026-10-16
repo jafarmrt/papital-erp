@@ -13,6 +13,7 @@ import { money } from '../../../lib/money.js';
 import { assertNoPendingOpeningApproval, voidBankOpeningVouchers } from './bankOpeningVoucher.js';
 import { requireBankLedgerAccount } from './bankLinks.js';
 import { assertBankCurrencyChangeAllowed, assertBankLedgerChangeAllowed, assertPettyCashCurrency, requireTreasuryCurrency } from './bankAccountCurrency.js';
+import { normalizeTreasuryCurrency } from '../../../lib/treasury/treasuryCurrency.js';
 import { assignTreasuryAccountCode, peekNextTreasuryAccountCode, type TreasuryAccountType } from './bankAccountCode.js';
 import { auditBankAccountChange, auditBankBalanceSync, type TreasuryAuditActor } from './treasuryAudit.js';
 
@@ -507,8 +508,11 @@ export class BankAccountService {
       // v9.0.99 (TD-508، ت۵ الف): ارز ویرایش می‌شود تا نخستین گردش حساب؛ پس از آن 422 (پیش‌تر بی‌صدا نادیده گرفته می‌شد)
       const newCurrency = data.currency !== undefined ? requireTreasuryCurrency(data.currency) : undefined;
       if (newCurrency) await assertBankCurrencyChangeAllowed(tx, existing, newCurrency);
-      // v10.1.32 (D-16): تنخواه‌گردان فقط ریالی است، چه نوع عوض شود چه ارز
-      assertPettyCashCurrency(data.type || existing.type, newCurrency || existing.currency);
+      // v10.1.32 (D-16): تنخواه‌گردان فقط ریالی است، فقط وقتی نوع یا ارز عوض می‌شود سنجیده می‌شود تا حساب قدیمی
+      // غیرریالی از نوع تنخواه (که ارزش پس از نخستین گردش ثابت است) همچنان ویرایش شود
+      const typeChanges = Boolean(data.type) && data.type !== existing.type;
+      const currencyChanges = Boolean(newCurrency) && newCurrency !== normalizeTreasuryCurrency(existing.currency ?? '');
+      if (typeChanges || currencyChanges) assertPettyCashCurrency(data.type || existing.type, newCurrency || existing.currency);
       // v9.0.100 (TD-510): سرفصل تازه معین فعال زیر کل ۱۰ باشد (سرفصل بی‌تغییر حساب‌های قدیمی دوباره سنجیده نمی‌شود)
       // v10.0.254 (TD-969): سرفصل معین پس از نخستین گردش ثابت است (422 `BANK_ACCOUNT_LEDGER_LOCKED`)
       const ledgerChanges = data.accountId !== undefined && (data.accountId || null) !== (existing.accountId || null);

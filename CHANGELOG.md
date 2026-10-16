@@ -21,7 +21,7 @@ going forward.
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
 ### v10.1.32 — تنخواه‌گردان متغیر (D-16)
-- Petty cash (D-16, decision ت۳۰ fluctuating): treasury account type petty_cash, rial only (422 PETTY_CASH_RIAL_ONLY), ledger 1006 by default; charge and return through the treasury transfer; multi-line expense statement POST /accounting/treasury/petty-cash/:id/expenses (accounting.treasury, idempotent) with a draft treasury voucher (Dr each expense account, Cr the fund with its bank detail), lines in petty_cash_expense_lines (migration 0116), optional line VAT inside the amount posted to the purchase-VAT mapping account (new account 1303), never required. Tests: reg_petty_cash_fluctuating_d16, Vitest pettyCashD16.test.tsx
+- Petty cash (D-16, decision ت۳۰ fluctuating): treasury account type petty_cash, rial only (422 PETTY_CASH_RIAL_ONLY), ledger 1006 by default; charge and return through the treasury transfer; multi-line expense statement POST /accounting/treasury/petty-cash/:id/expenses (accounting.treasury, idempotent) with a draft treasury voucher (Dr each expense account, Cr the fund with its bank detail), lines in petty_cash_expense_lines (migration 0116), no VAT required. Tests: reg_petty_cash_fluctuating_d16, Vitest pettyCashD16.test.tsx
 
 ### v10.1.31 — برچسب هر کادر فرم به کادرش وصل است
 - صفحه‌خوان نام کادرها را از برچسبشان می‌خواند و کلیک روی برچسب کادر را فعال می‌کند.

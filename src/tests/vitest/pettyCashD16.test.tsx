@@ -25,9 +25,6 @@ import type { BankAccount } from '../../types';
 
 afterEach(() => { cleanup(); mutateAsync.mockClear(); });
 
-const AMOUNT_LABEL = 'مبلغ پرداخت‌شده (ریال) *';
-const VAT_LABEL = 'مالیات بر ارزش افزوده ردیف ۱';
-
 const fund = { id: 7, code: 'CASH-02', title: 'تنخواه کارگاه', type: 'petty_cash', currency: 'IRR', currentBalance: 1_000_000, accountId: 41 } as unknown as BankAccount;
 const bank = { id: 5, code: '1003-01', title: 'بانک آزمون', type: 'bank', currency: 'IRR', currentBalance: 10_000_000, accountId: 40 } as unknown as BankAccount;
 
@@ -46,15 +43,11 @@ describe('petty cash statement rule (D-16)', () => {
     expect(pettyCashStatementError([{ accountId: 76, amount: '0' }])).toContain('بزرگ‌تر از صفر');
     expect(pettyCashStatementError([{ accountId: 76, amount: 'abc' }])).toContain('بزرگ‌تر از صفر');
     expect(pettyCashStatementError([{ accountId: 76, amount: '۲۵۰٬۰۰۰' }])).toBe('');
-    expect(pettyCashStatementError([{ accountId: 76, amount: '۲۵۰٬۰۰۰', vatAmount: '' }])).toBe('');
-    expect(pettyCashStatementError([{ accountId: 76, amount: '۲۵۰٬۰۰۰', vatAmount: '0' }])).toBe('');
   });
 
-  it('an optional VAT is part of the line amount: below it, never negative or text', () => {
-    expect(pettyCashStatementError([{ accountId: 76, amount: '250000', vatAmount: '۲۲٬۹۳۶' }])).toBe('');
-    expect(pettyCashStatementError([{ accountId: 76, amount: '250000', vatAmount: '250000' }])).toContain('کمتر باشد');
-    expect(pettyCashStatementError([{ accountId: 76, amount: '250000', vatAmount: '-1' }])).toContain('صفر یا بیشتر');
-    expect(pettyCashStatementError([{ accountId: 76, amount: '250000', vatAmount: 'abc' }])).toContain('صفر یا بیشتر');
+  it('an amount with more than four decimals is refused before it rounds to zero', () => {
+    expect(pettyCashStatementError([{ accountId: 76, amount: '0.00004' }])).toContain('چهار رقم اعشار');
+    expect(pettyCashStatementError([{ accountId: 76, amount: '۱۲٫۵۰۰۱' }])).toBe('');
   });
 
   it('the total sums Persian-digit amounts and a statement above the balance is refused', () => {
@@ -64,12 +57,12 @@ describe('petty cash statement rule (D-16)', () => {
     expect(pettyCashStatementError(lines, 1_100_000)).toBe('');
   });
 
-  it('the request body leaves out empty texts and an empty VAT', () => {
+  it('the request body leaves out empty texts and carries no VAT field', () => {
     const line = { ...emptyPettyCashLine(1), accountId: 76, amount: '250000', sellerName: '  ' };
     const body = pettyCashExpensePayload({ date: '', description: ' ', lines: [line], attachments: [] });
     expect(body).toEqual({
       date: undefined, description: undefined, attachments: undefined,
-      lines: [{ accountId: 76, amount: '250000', vatAmount: undefined, description: undefined, sellerName: undefined, invoiceNumber: undefined }],
+      lines: [{ accountId: 76, amount: '250000', description: undefined, sellerName: undefined, invoiceNumber: undefined }],
     });
   });
 });
@@ -85,31 +78,21 @@ describe('petty cash statement window (D-16)', () => {
     const onClose = vi.fn();
     const { container } = render(<PettyCashExpenseModal fund={fund} appCurrency="IRR" onClose={onClose} />);
     pickExpenseAccount();
-    fireEvent.change(screen.getByLabelText(AMOUNT_LABEL), { target: { value: '۲۵۰٬۰۰۰' } });
+    fireEvent.change(screen.getByLabelText('مبلغ (ریال) *'), { target: { value: '۲۵۰٬۰۰۰' } });
     fireEvent.submit(container.ownerDocument.getElementById('petty-cash-expense-form') as HTMLFormElement);
 
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
     const { fundId, payload } = mutateAsync.mock.calls[0][0] as { fundId: number; payload: { lines: unknown[] } };
     expect(fundId).toBe(7);
-    expect(payload.lines).toEqual([{ accountId: 76, amount: '250000', vatAmount: undefined, description: undefined, sellerName: undefined, invoiceNumber: undefined }]);
+    expect(payload.lines).toEqual([{ accountId: 76, amount: '250000', description: undefined, sellerName: undefined, invoiceNumber: undefined }]);
+    expect(JSON.stringify(payload)).not.toMatch(/vat/i);
     await waitFor(() => expect(onClose).toHaveBeenCalled());
-  });
-
-  it('a line may carry its VAT, sent in Latin digits as part of the amount', async () => {
-    render(<PettyCashExpenseModal fund={fund} appCurrency="IRR" onClose={() => undefined} />);
-    pickExpenseAccount();
-    fireEvent.change(screen.getByLabelText(AMOUNT_LABEL), { target: { value: '۲۵۰٬۰۰۰' } });
-    fireEvent.change(screen.getByLabelText(VAT_LABEL), { target: { value: '۲۲٬۹۳۶' } });
-    fireEvent.submit(document.getElementById('petty-cash-expense-form') as HTMLFormElement);
-    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
-    const { payload } = mutateAsync.mock.calls[0][0] as { payload: { lines: Array<{ amount: string; vatAmount?: string }> } };
-    expect(payload.lines[0]).toMatchObject({ amount: '250000', vatAmount: '22936' });
   });
 
   it('a statement above the fund balance is shown under the form and not sent', async () => {
     render(<PettyCashExpenseModal fund={fund} appCurrency="IRR" onClose={() => undefined} />);
     pickExpenseAccount();
-    fireEvent.change(screen.getByLabelText(AMOUNT_LABEL), { target: { value: '1500000' } });
+    fireEvent.change(screen.getByLabelText('مبلغ (ریال) *'), { target: { value: '1500000' } });
     fireEvent.submit(document.getElementById('petty-cash-expense-form') as HTMLFormElement);
     expect((await screen.findByRole('alert')).textContent).toContain('از مانده تنخواه بیشتر');
     expect(mutateAsync).not.toHaveBeenCalled();

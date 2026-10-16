@@ -301,8 +301,7 @@ export const treasuryTransactions = pgTable('treasury_transactions', {
 
 /**
  * v10.1.32 (D-16, decision ت۳۰ «متغیر»): the lines of a petty cash expense statement (migration 0116). The statement is one
- * treasury payment from a petty cash fund; its voucher debits each line's expense account (less the line's optional VAT, which
- * goes to the purchase-VAT mapping account) and credits the fund.
+ * treasury payment from a petty cash fund; its voucher debits each line's expense account and credits the fund.
  */
 export const pettyCashExpenseLines = pgTable('petty_cash_expense_lines', {
   id: serial('id').primaryKey(),
@@ -310,7 +309,6 @@ export const pettyCashExpenseLines = pgTable('petty_cash_expense_lines', {
   lineNo: integer('line_no').notNull(),
   accountId: integer('account_id').notNull().references(() => accounts.id),
   amount: moneyNumeric('amount').notNull(),
-  vatAmount: moneyNumeric('vat_amount').notNull().default(sql`0`),
   description: text('description').notNull().default(''),
   sellerName: text('seller_name').notNull().default(''),
   invoiceNumber: text('invoice_number').notNull().default(''),

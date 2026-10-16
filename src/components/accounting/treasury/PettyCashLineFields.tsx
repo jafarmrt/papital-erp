@@ -19,8 +19,8 @@ interface PettyCashLineFieldsProps {
 const fieldClass = 'w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl';
 
 /**
- * v10.1.32 (D-16): یک ردیف صورت‌هزینه تنخواه. حساب هزینه و مبلغ پرداخت‌شده لازم‌اند؛ مالیات بر ارزش افزوده، شرح، فروشنده و
- * شماره فاکتور اختیاری‌اند. مالیات نوشته‌شده بخشی از همان مبلغ است و به حساب مالیات خرید می‌رود.
+ * v10.1.32 (D-16): یک ردیف صورت‌هزینه تنخواه. حساب هزینه و مبلغ لازم‌اند؛ شرح، فروشنده و شماره فاکتور اختیاری‌اند و
+ * مالیات بر ارزش افزوده ردیف جدایی ندارد (در مبلغ همان هزینه است).
  */
 export const PettyCashLineFields: React.FC<PettyCashLineFieldsProps> = ({
   line, lineNo, accounts, accountsLoading, canRemove, onChange, onRemove,
@@ -52,7 +52,7 @@ export const PettyCashLineFields: React.FC<PettyCashLineFieldsProps> = ({
         />
       </div>
       <div>
-        <label htmlFor={`petty-amount-${line.key}`} className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">مبلغ پرداخت‌شده (ریال) *</label>
+        <label htmlFor={`petty-amount-${line.key}`} className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">مبلغ (ریال) *</label>
         <DecimalInput
           id={`petty-amount-${line.key}`}
           value={line.amount}
@@ -71,15 +71,7 @@ export const PettyCashLineFields: React.FC<PettyCashLineFieldsProps> = ({
       className={fieldClass}
       placeholder="شرح هزینه (اختیاری)"
     />
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-      <DecimalInput
-        aria-label={`مالیات بر ارزش افزوده ردیف ${formatPersianNumber(lineNo)}`}
-        value={line.vatAmount}
-        min={0}
-        onValueChange={text => onChange({ vatAmount: text })}
-        className={fieldClass}
-        placeholder="مالیات بر ارزش افزوده (اختیاری)"
-      />
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
       <input
         type="text"
         aria-label={`فروشنده ردیف ${formatPersianNumber(lineNo)}`}

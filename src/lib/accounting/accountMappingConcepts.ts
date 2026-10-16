@@ -17,7 +17,6 @@ export interface AccountMappingConcept {
 const ASSET = ['asset'] as const;
 const LIABILITY = ['liability'] as const;
 const EQUITY = ['equity'] as const;
-const ASSET_OR_LIABILITY = ['asset', 'liability'] as const;
 const REVENUE = ['revenue'] as const;
 const EXPENSE = ['cost_of_sales', 'expense'] as const;
 const PROFIT_AND_LOSS = ['revenue', 'cost_of_sales', 'expense'] as const;
@@ -44,8 +43,6 @@ export const ACCOUNT_MAPPING_CONCEPTS = [
   { key: 'salesDiscountAccountCode', label: 'تخفیف فروش', description: 'تخفیف ردیف‌های فاکتور فروش', defaultCode: '5102', accountTypes: REVENUE },
   { key: 'serviceRevenueAccountCode', label: 'درآمد حمل و خدمات', description: 'هزینه ارسال و کارمزد فاکتور فروش', defaultCode: '5004', accountTypes: REVENUE },
   { key: 'salesVatPayableAccountCode', label: 'مالیات بر ارزش افزوده', description: 'بستانکار مالیات بر ارزش افزوده در سند فروش', defaultCode: '3203', accountTypes: LIABILITY },
-  // v10.1.32 (D-16): مالیات اختیاری ردیف صورت‌هزینه تنخواه؛ دارایی (اعتبار مالیاتی) یا بدهی (کم کردن از ۳۲۰۳) به انتخاب حسابدار
-  { key: 'purchaseVatAccountCode', label: 'مالیات بر ارزش افزوده خرید', description: 'مالیات ردیف صورت‌هزینه تنخواه که جدا نوشته شود', defaultCode: '1303', accountTypes: ASSET_OR_LIABILITY },
   { key: 'inventoryRawMaterialsCode', label: 'موجودی مواد اولیه', description: 'رسید و خرید مواد اولیه و حواله به تولید', defaultCode: '1401', accountTypes: ASSET },
   { key: 'workInProgressCode', label: 'کالای در جریان ساخت', description: 'تخصیص مواد به پروژه و رسید تولید', defaultCode: '1402', accountTypes: ASSET },
   { key: 'inventoryFinishedGoodsCode', label: 'موجودی کالای ساخته‌شده', description: 'رسید تولید و فروش کالای ساخته‌شده', defaultCode: '1403', accountTypes: ASSET },
