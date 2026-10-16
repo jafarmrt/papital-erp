@@ -4,7 +4,7 @@ import { PersonnelStatutoryFlags } from '../../components/personnel/PersonnelSta
 import { isEidiCovered, suggestEidiPayslip, type EidiRates } from '../../lib/payroll/eidi';
 
 /**
- * v10.1.32 (TD-1282, product-owner decision t34 A): eidi is optional per person like insurance and payroll tax. The
+ * v10.1.34 (TD-1282, product-owner decision t34 A): eidi is optional per person like insurance and payroll tax. The
  * personnel form has an «eidi covered» box, on by default; a person with it off has no yearly entitlement and the eidi
  * payslip suggests only the accrual recorded earlier.
  */

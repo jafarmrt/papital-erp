@@ -1,4 +1,4 @@
--- Drizzle Migration 0116: per-person eidi flag (v10.1.32, TD-1282, product-owner decision ت۳۴ الف)
+-- Drizzle Migration 0117: per-person eidi flag (v10.1.34, TD-1282, product-owner decision ت۳۴ الف)
 --
 -- personnel.is_eidi_covered says whether a regular payslip of the person accrues an eidi share and whether the yearly
 -- eidi entitlement applies to the person. The column is added with DEFAULT 1, so every existing person keeps today's

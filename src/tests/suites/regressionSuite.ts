@@ -11050,6 +11050,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runProductionWithoutProjectTests(shouldRun));
   const { runItemCodeChangeTests } = await import('../regression/itemCodeChangeTests.js');
   results.push(...await runItemCodeChangeTests(shouldRun));
+  // v10.1.32 (D-16): fluctuating petty cash fund and its expense statements
+  const { runPettyCashTests } = await import('../regression/pettyCashTests.js');
+  results.push(...await runPettyCashTests(shouldRun));
 
   return results;
 }

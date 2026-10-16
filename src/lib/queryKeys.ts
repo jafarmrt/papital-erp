@@ -105,6 +105,9 @@ export const QUERY_KEYS = {
     // v9.0.82 (TD-507): سرفصل‌های مجاز طرف مقابل «متفرقه» و «سایر» (زیر پیشوند خزانه، چون سرفصل بانک‌ها کنار می‌رود)
     contraAccounts: () => ['accounting', 'treasury', 'contra-accounts'] as const,
     treasuryRelinkOptions: (id: number) => ['accounting', 'treasury', 'relink-options', id] as const,
+    // v10.1.32 (D-16): حساب‌های هزینه صورت‌هزینه تنخواه و ردیف‌های یک صورت‌هزینه
+    pettyCashExpenseAccounts: () => ['accounting', 'treasury', 'petty-cash-expense-accounts'] as const,
+    pettyCashLines: (id: number) => ['accounting', 'treasury', 'petty-cash-lines', id] as const,
     // گزارش‌های مالی (تراز آزمایشی، دفتر کل، صورت‌ها، جریان نقد، ...): پارامترها بخشی از کلیدند
     reports: () => ['accounting', 'reports'] as const,
     report: (kind: string, params?: Record<string, unknown> | object) => ['accounting', 'reports', kind, params ?? {}] as const,

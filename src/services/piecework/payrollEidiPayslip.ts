@@ -52,7 +52,7 @@ export interface EidiPayslipPreview {
   period: EidiServicePeriod;
   totals: EidiYearTotals;
   suggestion: EidiPayslipSuggestion;
-  /** «مشمول عیدی» پرسنل (v10.1.32، TD-1282)؛ خاموش یعنی حق سال ندارد و فقط عیدی انباشته پیشین پیشنهاد می‌شود */
+  /** «مشمول عیدی» پرسنل (v10.1.34، TD-1282)؛ خاموش یعنی حق سال ندارد و فقط عیدی انباشته پیشین پیشنهاد می‌شود */
   eidiCovered: boolean;
   /** فیش‌های عادی پیش‌نویس سال با سهم عیدی که هنوز در عیدی انباشته شمرده نمی‌شوند */
   draftWarning: string | null;

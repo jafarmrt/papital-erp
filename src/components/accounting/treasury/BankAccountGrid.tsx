@@ -1,6 +1,6 @@
 import React from 'react';
 import { Plus } from 'lucide-react';
-import { BankAccountCard } from './BankAccountCard';
+import { BankAccountCard, type PettyCashAction } from './BankAccountCard';
 import type { BankAccount } from '../../../types';
 
 interface BankAccountGridProps {
@@ -11,6 +11,7 @@ interface BankAccountGridProps {
   onEdit: (bank: BankAccount) => void;
   onDelete: (id: number, title: string) => void;
   onReconcile: (bankId: number) => void;
+  onPettyCash?: (bank: BankAccount, action: PettyCashAction) => void;
   onNewAccount: () => void;
 }
 
@@ -22,6 +23,7 @@ export const BankAccountGrid: React.FC<BankAccountGridProps> = React.memo(({
   onEdit,
   onDelete,
   onReconcile,
+  onPettyCash,
   onNewAccount,
 }) => {
   return (
@@ -36,6 +38,7 @@ export const BankAccountGrid: React.FC<BankAccountGridProps> = React.memo(({
           onEdit={onEdit}
           onDelete={onDelete}
           onReconcile={onReconcile}
+          onPettyCash={onPettyCash}
         />
       ))}
 
@@ -49,7 +52,7 @@ export const BankAccountGrid: React.FC<BankAccountGridProps> = React.memo(({
           <Plus className="w-6 h-6 text-slate-400 group-hover:text-indigo-600" />
         </div>
         <span className="font-bold text-sm text-slate-600 dark:text-slate-300">تعریف حساب / صندوق جدید</span>
-        <span className="text-xs text-slate-400">بانک، صندوق نقد یا کارتخوان</span>
+        <span className="text-xs text-slate-400">بانک، صندوق نقد، کارتخوان یا تنخواه‌گردان</span>
       </button>
     </div>
   );
