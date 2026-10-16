@@ -1,4 +1,9 @@
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
+import { orm } from '../../db/drizzle.js';
+import { fin } from '../../lib/financialDecimal.js';
+import { DocumentService } from '../../services/document.service.js';
+import { ProjectBomAllocationService } from '../../services/inventory/projectBomAllocation.service.js';
+import { getDefaultWarehouseCode } from '../../services/inventory/warehouseResolver.js';
 import { createTestCustomer, createTestItem } from '../fixtures/factories.js';
 import { TestCaseResult } from '../types.js';
 import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase, sandboxAdminClient } from './fiscalClosingTests.js';
@@ -78,6 +83,48 @@ export async function runProjectSweepTests(shouldRun: ShouldRun): Promise<TestCa
       }
       assertNoProblems(problems);
       return 'live customer linked with its own name; unknown and deleted customers refused with 422; free-text name kept';
+    }));
+  }
+
+  const orphanId = 'reg_project_customer_orphan_link_obs_r2_43';
+  if (shouldRun(orphanId, 'obs-r2-43', 'projects', 'customer', 'orphan')) {
+    await runCase(results, orphanId, 'closing sweep: a legacy project whose customer row no longer exists is still edited, keeping its link and stored name (OBS-R2-43)', async () => inFiscalSandbox(async () => {
+      const api = await sandboxAdminClient();
+      const party = await createTestCustomer();
+      const res = await postProject(api, { customer_id: party.id, customer_name: party.name });
+      if (res.status !== 201) throw new Error(`creating the project answered ${res.status} ${brief(res.body)}`);
+      const project = res.body as { id: number };
+      // a legacy orphan: production keeps fk_production_projects_customer_id NOT VALID over such rows (migration 0092)
+      await q('ALTER TABLE production_projects DROP CONSTRAINT IF EXISTS fk_production_projects_customer_id');
+      await q('DELETE FROM customers WHERE id = $1', [party.id]);
+      await q('ALTER TABLE production_projects ADD CONSTRAINT fk_production_projects_customer_id FOREIGN KEY (customer_id) REFERENCES customers (id) NOT VALID');
+      const edit = await editProject(api, project.id, { customer_id: party.id, customer_name: 'Typed over', description: 'orphan link kept' });
+      const row = await projectRow(project.id);
+      assertNoProblems([
+        ...(edit.status === 200 ? [] : [`editing a project whose customer row is gone answered ${edit.status} ${brief(edit.body)}, expected 200`]),
+        ...(Number(row.customer_id) === party.id && row.customer_name === party.name ? [] : [`the edit stored ${brief(row)}, expected the same link and the stored name`]),
+      ]);
+      return 'the orphan link and its stored name were kept';
+    }));
+  }
+
+  const priceId = 'reg_project_allocation_unit_price_wac_obs_r2_46';
+  if (shouldRun(priceId, 'obs-r2-46', 'projects', 'allocation', 'price')) {
+    await runCase(results, priceId, 'closing sweep: a material allocation leaves stock at the exact weighted average cost of the item (OBS-R2-46)', async () => inFiscalSandbox(async () => {
+      const api = await sandboxAdminClient();
+      const wh = (await getDefaultWarehouseCode(orm)) ?? '';
+      const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
+      await DocumentService.createDocument({
+        docType: 'receipt', inOut: 'in', status: 'final', date: await businessTodayIsoDate(), user: 'inv',
+        items: [{ itemId: item.id, quantity: 3, unitPrice: 1234.5678, location: wh }],
+      });
+      const project = await newProject(api, { stages: ['برش'] });
+      const allocated = await ProjectBomAllocationService.allocateMaterialsForProject({ projectId: project.id, allocations: [{ itemId: item.id, quantity: 2, location: wh }], username: 'inv' });
+      const sourceId = allocated.allocations[0]?.sourceTransactionId ?? 0;
+      const [out] = await q('SELECT type, unit_price::text AS price FROM transactions WHERE id = $1', [sourceId]);
+      assertNoProblems(out?.type === 'out' && fin(String(out.price)).equals('1234.5678')
+        ? [] : [`the allocation's movement is ${brief(out)}, expected an out row at 1234.5678`]);
+      return 'the allocation left stock at 1234.5678';
     }));
   }
 

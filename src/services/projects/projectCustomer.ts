@@ -15,7 +15,8 @@ export const PROJECT_CUSTOMER_INVALID = 'PROJECT_CUSTOMER_INVALID';
 
 export interface ProjectCustomer {
   id: number;
-  name: string;
+  /** null: the project's own link whose party row is gone (a legacy orphan); the stored name is kept */
+  name: string | null;
 }
 
 /** Empty, null and zero mean «no customer»; anything else must be a positive whole id. */
@@ -32,7 +33,9 @@ function customerIdOf(value: unknown): number | null {
 
 /**
  * The party a project links to, or null for none. `currentCustomerId` is the project's stored link (edit only): that
- * party is accepted even when it was deleted later.
+ * party is accepted even when it was deleted later, and even when its row no longer exists at all (migration 0092 left
+ * `fk_production_projects_customer_id` NOT VALID over such legacy rows, and the edit form resends the stored id), in
+ * which case the name is null and the caller keeps the stored name.
  */
 export async function resolveProjectCustomer(
   executor: DbExecutor,
@@ -43,6 +46,7 @@ export async function resolveProjectCustomer(
   if (id === null) return null;
   const [row] = await executor.select({ id: customers.id, name: customers.name, isDeleted: customers.isDeleted })
     .from(customers).where(eq(customers.id, id)).for('share');
+  if (!row && id === currentCustomerId) return { id, name: null };
   const live = row !== undefined && (row.isDeleted ?? 0) === 0;
   if (!row || (!live && row.id !== currentCustomerId)) {
     throw new ValidationError(

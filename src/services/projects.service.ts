@@ -178,7 +178,7 @@ export class ProjectService {
       projectCode: finalCode,
       title: input.title.trim(),
       customerId: customer?.id ?? null,
-      customerName: customer ? customer.name : (input.customerName || ''),
+      customerName: customer?.name ?? (input.customerName || ''),
       itemId: validItemId,
       itemCode: input.itemCode || '',
       itemName: input.itemName || '',
@@ -268,10 +268,14 @@ export class ProjectService {
     if (input.customerId !== undefined) {
       const customer = await resolveProjectCustomer(executor, input.customerId, existing.customerId);
       updateData.customerId = customer?.id ?? null;
-      if (customer) updateData.customerName = customer.name;
-      else if (input.customerName !== undefined) updateData.customerName = input.customerName;
+      if (customer) {
+        if (customer.name !== null) updateData.customerName = customer.name;
+      } else if (input.customerName !== undefined) updateData.customerName = input.customerName;
     } else if (input.customerName !== undefined) {
-      updateData.customerName = (await linkedCustomerName(executor, existing.customerId)) ?? input.customerName;
+      // a linked project keeps its party's name; a link whose party row is gone keeps the stored name
+      const linkedName = existing.customerId ? await linkedCustomerName(executor, existing.customerId) : null;
+      if (linkedName !== null) updateData.customerName = linkedName;
+      else if (!existing.customerId) updateData.customerName = input.customerName;
     }
 
     if (input.itemId !== undefined) {
