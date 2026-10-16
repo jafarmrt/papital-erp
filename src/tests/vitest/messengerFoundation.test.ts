@@ -3,7 +3,7 @@ import { botStartLink, isStopCommand, parseLinkCode } from '../../lib/messenger/
 import { BOT_API_BASE, callBotApi, getBotUsername, sendBotMessage } from '../../services/messenger/messengerClient';
 
 /**
- * v10.1.37 (messenger notifications plan part 1): the link code a user sends to a staff bot is read in Latin, Persian or
+ * v10.1.38 (messenger notifications plan part 1): the link code a user sends to a staff bot is read in Latin, Persian or
  * Arabic digits, and the one bot API client sends to Bale (tapi.bale.ai) and Telegram with the same calls, never putting
  * the token in an error and marking a 403 as blocked.
  */

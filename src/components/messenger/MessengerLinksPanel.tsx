@@ -13,7 +13,7 @@ import { formatPersianCode, formatPersianNumber } from '../../utils/persianNumbe
 import { errorMessageOf } from '../../utils';
 
 /**
- * v10.1.37 (messenger notifications plan part 1, §2.2): the profile tab «پیام‌رسان». The user links their own Bale or
+ * v10.1.38 (messenger notifications plan part 1, §2.2): the profile tab «پیام‌رسان». The user links their own Bale or
  * Telegram account to the staff bot with a one-time code, sends a test message and ends the link; nobody else can link
  * them. While a code is shown the state is read again every five seconds, so the card turns «وصل» once the bot got it.
  */

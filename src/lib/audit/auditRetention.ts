@@ -46,7 +46,7 @@ export const CRITICAL_AUDIT_ENTITIES = [
   'طرح گردش کار',
   'وظیفه فرآیند کاری',
   'تفویض اختیار ورکفلو',
-  // v10.1.37: staff messenger bots and each user's link to them
+  // v10.1.38: staff messenger bots and each user's link to them
   'ربات پیام‌رسان',
   'اتصال پیام‌رسان',
   // حسابداری و خزانه

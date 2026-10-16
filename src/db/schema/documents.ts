@@ -27,6 +27,8 @@ export const documents = pgTable('documents', {
   notes: text('notes'),
   // v9.0.336 (TD-778، تصمیم ت۶ الف بسته ۸): طرف حساب سند فروش و خرید با شناسه (مهاجرت 0080)؛ نام خریدار فقط برای نمایش است
   partyId: integer('party_id').references(baseRelations.customersId),
+  // v10.1.37 (N-01، TD-1283، تصمیم ت۴ الف طرح کارتابل کارگاه): پرسنلی که حواله به دست او داده می‌شود (مهاجرت 0119)
+  recipientPersonnelId: integer('recipient_personnel_id').references(baseRelations.personnelId),
   buyerName: text('buyer_name').default(''),
   buyerCity: text('buyer_city').default(''),
   buyerPhone: text('buyer_phone').default(''),
@@ -61,6 +63,7 @@ export const documents = pgTable('documents', {
   idx_documents_party_id: index('idx_documents_party_id').on(table.partyId).where(sql`${table.partyId} IS NOT NULL`),
   // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_documents_crm_lead_id: index('idx_documents_crm_lead_id').on(table.crmLeadId).where(sql`${table.crmLeadId} IS NOT NULL`),
+  idx_documents_recipient_personnel_id: index('idx_documents_recipient_personnel_id').on(table.recipientPersonnelId).where(sql`${table.recipientPersonnelId} IS NOT NULL`),
 }));
 registerColumnRef('documents.id', () => documents.id);
 

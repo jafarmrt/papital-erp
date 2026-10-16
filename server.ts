@@ -81,7 +81,7 @@ async function startServer() {
     WorkflowSlaReminderService.start(60_000);
     // v9.0.306 (TD-676): daily soft cleanup of expired form drafts
     FormDraftService.startCleanup();
-    // v10.1.37 (messenger plan part 1): link codes and «/stop» sent to the staff bots
+    // v10.1.38 (messenger plan part 1): link codes and «/stop» sent to the staff bots
     MessengerUpdatePoller.start(5000);
     markStartupComplete();
   })().catch(err => {

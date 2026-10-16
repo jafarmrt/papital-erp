@@ -9,7 +9,7 @@ import { errorMessageOf } from '../../utils';
 import { confirmAction } from '../ConfirmDialogHost';
 
 /**
- * v10.1.37 (messenger notifications plan part 1, ت۱ الف): the settings tab «ربات‌های پیام‌رسان» of the system admin. The
+ * v10.1.38 (messenger notifications plan part 1, ت۱ الف): the settings tab «ربات‌های پیام‌رسان» of the system admin. The
  * token of each staff bot (made with the messenger's bot maker, separate from the server alert bots) is typed here, checked
  * by the server and stored encrypted; the field is always empty, because the server never sends the token back. Below,
  * who is linked to which messenger, without any chat id.

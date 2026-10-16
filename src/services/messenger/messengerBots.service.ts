@@ -10,7 +10,7 @@ import { MESSENGER_LABELS, MESSENGERS, type Messenger, type MessengerBotView } f
 import { getBotUsername } from './messengerClient.js';
 
 /**
- * v10.1.37 (messenger notifications plan part 1, product-owner decision ت۱ الف): the two staff bots. Only the system admin
+ * v10.1.38 (messenger notifications plan part 1, product-owner decision ت۱ الف): the two staff bots. Only the system admin
  * enters a bot's token, from the settings tab «ربات‌های پیام‌رسان»; the server checks it with the bot API (`getMe`), stores
  * it only through `encryptSecret` (AGENTS §5, `ERP_SECRETS_KEY`) and never sends it back, not even masked. Changing the
  * bot of a messenger closes that messenger's links (`bot_changed`): their chats belong to the old bot.

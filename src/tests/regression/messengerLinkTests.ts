@@ -10,7 +10,7 @@ import { TestCaseResult } from '../types.js';
 import { type ShouldRun, runCase } from './fiscalClosingTests.js';
 
 /**
- * v10.1.37 (messenger notifications plan part 1, product-owner decision ت۱ الف): the staff bots of Bale and Telegram. The
+ * v10.1.38 (messenger notifications plan part 1, product-owner decision ت۱ الف): the staff bots of Bale and Telegram. The
  * system admin sets a bot's token, which is stored only encrypted and never answered; a user links their own account with
  * a one-time code sent to the bot; «/stop», a blocked bot and a new link close a link with their reason. Real Express routes
  * on PostgreSQL in an isolated schema, the bot API replaced by a fake `fetch`; each case is red on v10.1.36, which has no
@@ -99,7 +99,7 @@ export async function runMessengerLinkTests(shouldRun: ShouldRun): Promise<TestC
 
   const flowId = 'reg_messenger_link_flow';
   if (shouldRun(flowId, 'messenger')) {
-    await runCase(results, flowId, 'v10.1.37: the system admin sets a staff bot (stored encrypted, never answered); a user links with a one-time code sent to the bot, the code works once, «/stop» closes the link and the profile says why', async () => inSandbox(() => withFakeBotApi(async (api) => {
+    await runCase(results, flowId, 'v10.1.38: the system admin sets a staff bot (stored encrypted, never answered); a user links with a one-time code sent to the bot, the code works once, «/stop» closes the link and the profile says why', async () => inSandbox(() => withFakeBotApi(async (api) => {
       const admin = await clientFor('admin');
       const refused = await admin.put('/api/messenger/bots/bale', { token: 'not-a-token' });
       if (refused.status !== 422 || codeOf(refused) !== 'MESSENGER_TOKEN_INVALID') throw new Error(`a refused token must be 422: ${brief(refused)}`);
@@ -149,7 +149,7 @@ export async function runMessengerLinkTests(shouldRun: ShouldRun): Promise<TestC
 
   const guardId = 'reg_messenger_bot_admin_only';
   if (shouldRun(guardId, 'messenger')) {
-    await runCase(results, guardId, 'v10.1.37: only the system admin reads or sets the staff bots and the list of linked users; settings.manage alone is 403', async () => inSandbox(() => withFakeBotApi(async () => {
+    await runCase(results, guardId, 'v10.1.38: only the system admin reads or sets the staff bots and the list of linked users; settings.manage alone is 403', async () => inSandbox(() => withFakeBotApi(async () => {
       const manager = await clientFor(['settings.manage']);
       for (const res of [await manager.get('/api/messenger/bots'), await manager.put('/api/messenger/bots/bale', { token: TOKEN }), await manager.get('/api/messenger/links')]) {
         if (res.status !== 403) throw new Error(`expected 403: ${brief(res)}`);
@@ -160,7 +160,7 @@ export async function runMessengerLinkTests(shouldRun: ShouldRun): Promise<TestC
 
   const blockedId = 'reg_messenger_link_closed_by_block_relink_and_bot_change';
   if (shouldRun(blockedId, 'messenger')) {
-    await runCase(results, blockedId, 'v10.1.37: a 403 on the test message closes the link as blocked; linking a chat to another user closes the first user\'s link; another bot closes every link of its messenger', async () => inSandbox(() => withFakeBotApi(async (api) => {
+    await runCase(results, blockedId, 'v10.1.38: a 403 on the test message closes the link as blocked; linking a chat to another user closes the first user\'s link; another bot closes every link of its messenger', async () => inSandbox(() => withFakeBotApi(async (api) => {
       const admin = await clientFor('admin');
       await admin.put('/api/messenger/bots/telegram', { token: TOKEN });
       const first = await clientFor([]);

@@ -10,7 +10,7 @@ import { listBotViews, saveBotToken } from '../services/messenger/messengerBots.
 import { issueLinkCode, listActiveLinksForAdmin, listMyLinks, sendTestMessage, unlinkMine } from '../services/messenger/messengerLinks.service.js';
 
 /**
- * v10.1.37 (messenger notifications plan part 1): the staff messenger bots. A user reads, makes and ends only their own
+ * v10.1.38 (messenger notifications plan part 1): the staff messenger bots. A user reads, makes and ends only their own
  * links (login only: `/messenger/links/mine` and `/messenger/links/:messenger/*`); the bots' tokens and the list of
  * linked users are for the system admin, and no answer ever carries a token or a chat id.
  */

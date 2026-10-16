@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import type { LinkCodeIssued, Messenger, MessengerBotView, MessengerLinkAdminRow, MyMessengerLink } from '../../lib/messenger/messengerLinks';
 
-/** v10.1.37 (messenger plan part 1): the user's own links to the staff bots and, for the system admin, the bots */
+/** v10.1.38 (messenger plan part 1): the user's own links to the staff bots and, for the system admin, the bots */
 const MESSENGER_KEYS = {
   mine: ['messenger', 'links', 'mine'] as const,
   bots: ['messenger', 'bots'] as const,

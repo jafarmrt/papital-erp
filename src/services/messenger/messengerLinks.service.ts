@@ -14,10 +14,10 @@ import { readBot } from './messengerBots.service.js';
 import { sendBotMessage } from './messengerClient.js';
 
 /**
- * v10.1.37 (messenger notifications plan part 1, §2.2): each user's link to the staff bots. A link is made only from the
+ * v10.1.38 (messenger notifications plan part 1, §2.2): each user's link to the staff bots. A link is made only from the
  * user's own profile: the profile asks for a one-time six-digit code (ten minutes, stored as a hash), the user sends it to
  * the bot, and the update poller (`messengerUpdatePoller.ts`) links that chat to the code's user. A user has at most one
- * active link per messenger and a chat at most one active user (partial unique indexes of migration 0119), so a new link
+ * active link per messenger and a chat at most one active user (partial unique indexes of migration 0120), so a new link
  * closes the older ones (`relinked`). «قطع اتصال» in the profile, «/stop» to the bot and a 403 from the bot (blocked)
  * each close the link with their reason, which the profile shows. Every link change has its audit row written with `tx`;
  * the chat id never leaves the server.

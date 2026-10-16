@@ -1,7 +1,7 @@
 import type { Messenger } from '../../lib/messenger/messengerLinks.js';
 
 /**
- * v10.1.37 (messenger notifications plan, part 1): the one client of the staff bots. Bale serves the same bot API as
+ * v10.1.38 (messenger notifications plan, part 1): the one client of the staff bots. Bale serves the same bot API as
  * Telegram at `tapi.bale.ai`, so one client sends to both. The token is part of the request address only: it is never
  * logged, never put in an error and never returned. Every call has a timeout and refuses a redirect.
  */

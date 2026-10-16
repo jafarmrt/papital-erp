@@ -155,7 +155,7 @@ export const SETTINGS_GROUPS: SettingCategoryGroup[] = [
         keywords: ['ووکامرس', 'فروشگاه', 'سایت', 'woocommerce', 'همگام‌سازی', 'وب‌هوک', 'سفارش برخط', 'سفارش آنلاین', 'اینترنت']
       },
       {
-        // v10.1.37 (messenger plan part 1, ت۱ الف): the staff bots of Bale and Telegram
+        // v10.1.38 (messenger plan part 1, ت۱ الف): the staff bots of Bale and Telegram
         id: 'messenger',
         label: 'ربات‌های پیام‌رسان',
         shortDesc: 'نشانه ربات‌های بله و تلگرام کارکنان و فهرست کاربران وصل',

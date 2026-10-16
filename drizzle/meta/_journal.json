@@ -838,8 +838,15 @@
     {
       "idx": 119,
       "version": "7",
+      "when": 1795390000000,
+      "tag": "0119_workshop_cartable",
+      "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "7",
       "when": 1795500000000,
-      "tag": "0119_messenger_links",
+      "tag": "0120_messenger_links",
       "breakpoints": true
     }
   ]

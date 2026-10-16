@@ -6,7 +6,7 @@ import { getBotUpdates, sendBotMessage, type BotUpdate } from './messengerClient
 import { closeChatLink, completeLinkFromChat } from './messengerLinks.service.js';
 
 /**
- * v10.1.37 (messenger notifications plan part 1, §2.2): reads what users send to the staff bots with `getUpdates` (no
+ * v10.1.38 (messenger notifications plan part 1, §2.2): reads what users send to the staff bots with `getUpdates` (no
  * address on the server has to be opened to the internet). One pass at a time under the session advisory lock
  * `MESSENGER_UPDATES`. Only private chats count: a six-digit code links the chat to the code's user, «/stop» closes the
  * chat's link, anything else gets the short help text. Wrong codes are limited per chat (five in ten minutes), so a code

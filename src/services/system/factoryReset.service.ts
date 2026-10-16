@@ -5,6 +5,7 @@ import {
   transactions, documentItems, documents, items,
   warehouses, itemPrices, customers, activityLogs, productionProjects, categories,
   projectStages, projectProductStageProgress, dailyWorkLogs, transfers, notifications, crmLeads, crmActivities, crmLeadStageHistory, customerTagLinks, customerTags,
+  stockReceiptConfirmations, workshopTaskReports, projectManagers,
   users, personnel, taskCategories, pieceworkTasks, pieceworkPersonnelRates, pieceworkTaskRateHistory,
   pieceworkLogs, pieceworkPayrolls, pendingMaterials, accounts, journalVouchers,
   journalVoucherItems, itemOpeningVoucherItems, bankAccounts, cheques, treasuryTransactions, pettyCashExpenseLines, accountingSettings,
@@ -177,6 +178,10 @@ export class FactoryResetService {
 
       // 4. Inventory Transactions & Documents (Must be deleted BEFORE productionProjects, items, customers and crmLeads:
       //    documents.project_id references production_projects without cascade)
+      // v10.1.37 (N-01): the workshop cartable references documents, allocations, piecework logs and projects (migration 0119)
+      await wipe('stock_receipt_confirmations', stockReceiptConfirmations);
+      await wipe('workshop_task_reports', workshopTaskReports);
+      await wipe('project_managers', projectManagers);
       await wipe('project_reservation_releases', projectReservationReleases);
       await wipe('ref_fiscal_year_corrections', refFiscalYearCorrections);
       await wipe('document_items', documentItems);

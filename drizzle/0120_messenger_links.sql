@@ -1,4 +1,4 @@
--- Drizzle Migration 0119: staff messenger bots, user links and link codes (v10.1.37, messenger notifications plan part 1,
+-- Drizzle Migration 0120: staff messenger bots, user links and link codes (v10.1.38, messenger notifications plan part 1,
 -- product-owner decision ت۱ الف)
 --
 -- messenger_bots holds the two staff bots (Bale and Telegram, separate from the server alert bots): the token, stored

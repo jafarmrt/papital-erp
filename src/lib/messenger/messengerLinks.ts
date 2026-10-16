@@ -1,7 +1,7 @@
 import { toLatinDigits } from '../numericInput.js';
 
 /**
- * v10.1.37 (messenger notifications plan, part 1): the shared contract of the staff messenger bots, used by the server
+ * v10.1.38 (messenger notifications plan, part 1): the shared contract of the staff messenger bots, used by the server
  * (`src/services/messenger/*`, `src/routes/messenger.routes.ts`) and the browser (profile «پیام‌رسان» tab, settings tab
  * «ربات‌های پیام‌رسان»). Two messengers, Bale and Telegram, each with its own staff bot (product-owner decision ت۱ الف).
  */

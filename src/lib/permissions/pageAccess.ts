@@ -43,7 +43,7 @@ export const SETTINGS_TAB_ACCESS = {
   health: { gate: 'system_admin', api: ['GET /api/system/health'] },
   system_config: { gate: 'system_admin', api: [] },
   system: { gate: 'system_admin', api: ['GET /api/system/conditional-constraints', 'POST /api/system/conditional-constraints/build'] },
-  // v10.1.37 (messenger plan part 1): the staff bots of Bale and Telegram
+  // v10.1.38 (messenger plan part 1): the staff bots of Bale and Telegram
   messenger: { gate: 'system_admin', api: ['GET /api/messenger/bots', 'PUT /api/messenger/bots/:messenger', 'GET /api/messenger/links'] },
 } as const satisfies Record<string, PageAccessRule>;
 

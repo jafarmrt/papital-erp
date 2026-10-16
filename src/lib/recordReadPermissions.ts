@@ -102,7 +102,9 @@ export const READ_PERMISSIONS = {
   itemSalePrices: ['products.view', 'products.edit_price', 'documents.create', 'documents.edit'],
   personnel: [
     'personnel.view', 'personnel.manage', 'piecework.view', 'projects.view', 'accounting.view', 'crm.view',
-    'documents.view', 'documents.create', 'warehouse.in'
+    'documents.view', 'documents.create', 'warehouse.in',
+    // v10.1.37 (N-01, TD-1283): the remittance and the material allocation pick their recipient («تحویل‌گیرنده»)
+    'warehouse.out'
   ],
   /**
    * کارکرد، تعرفه‌ها، عناوین و دسته‌های کارمزدی. `personnel.manage` پیش‌تر همین‌ها را می‌نوشت و فهرستی را که ذخیره می‌کرد

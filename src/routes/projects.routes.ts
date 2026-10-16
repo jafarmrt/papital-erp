@@ -21,6 +21,8 @@ import { MAX_STAGE_ORDER, PROJECT_PRIORITIES, PROJECT_STATUSES, STAGE_STATUSES }
 import { toPersianDigits } from '../utils/persianNumber.js';
 import { ValidationError } from '../errors/customErrors.js';
 import { PROJECT_VERSION_REQUIRED_MESSAGE } from '../lib/projects/projectVersion.js';
+import { MAX_PROJECT_MANAGERS } from '../lib/projects/projectManagers.js';
+import { readProjectManagers } from '../services/projects/projectManagers.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -58,6 +60,8 @@ const createProjectSchema = z.object({
     custom_stages: z.array(z.unknown()).optional(),
     customStages: z.array(z.unknown()).optional(),
     attachments: z.array(z.unknown()).optional(),
+    // v10.1.37 (N-01, TD-1283, decision ت۳ الف): «مسئولان پروژه» by user id
+    managerUserIds: z.array(z.coerce.number().int().positive('شناسه مسئول پروژه نامعتبر است')).max(MAX_PROJECT_MANAGERS).optional(),
   })
 });
 
@@ -90,6 +94,8 @@ const updateProjectSchema = z.object({
     custom_stages: z.array(z.unknown()).optional(),
     customStages: z.array(z.unknown()).optional(),
     attachments: z.array(z.unknown()).optional(),
+    // v10.1.37 (N-01, TD-1283, decision ت۳ الف): «مسئولان پروژه» by user id
+    managerUserIds: z.array(z.coerce.number().int().positive('شناسه مسئول پروژه نامعتبر است')).max(MAX_PROJECT_MANAGERS).optional(),
     // v9.0.384 (TD-740، تصمیم ت۲ الف): مراحل با ویرایش پروژه تغییر نمی‌کنند؛ فرستادن آن‌ها ۴۲۲ است، نه دور ریختن بی‌صدا
     initial_stages: z.unknown().optional(),
   }).refine(b => b.version !== undefined, { message: PROJECT_VERSION_REQUIRED_MESSAGE, path: ['version'] }),
@@ -474,7 +480,9 @@ router.get('/projects/:id', authorizePermission(...RECORD_READ_PERMISSIONS.produ
       itemThumbnail: projData.itemThumbnail
     });
 
-    res.json(formatted);
+    // v10.1.37 (N-01, TD-1283): «مسئولان پروژه» come with the project record
+    const managers = (await readProjectManagers(orm, [id])).get(id) ?? [];
+    res.json({ ...formatted, managers });
   } catch (err) {
     throw err;
   }
@@ -487,7 +495,7 @@ router.post('/projects', authorizePermission(...PROJECT_CREATE_PERMISSIONS), val
       title, customer_id, customer_name, item_id, item_code, item_name, 
       quantity, unit, start_date, end_date, priority, description, initial_stages,
       products, inventory_control, inventoryControl, stage_schedules, stageSchedules,
-      custom_stages, customStages, attachments, project_code
+      custom_stages, customStages, attachments, project_code, managerUserIds
     } = req.body;
 
     const currentUser = req.user?.username || 'سیستم';
@@ -512,7 +520,9 @@ router.post('/projects', authorizePermission(...PROJECT_CREATE_PERMISSIONS), val
       stageSchedules: stageSchedules || stage_schedules,
       customStages: customStages || custom_stages,
       attachments,
-      createdBy: currentUser
+      createdBy: currentUser,
+      createdById: req.user?.id,
+      managerUserIds,
     });
 
     await logActivity({
@@ -526,7 +536,8 @@ router.post('/projects', authorizePermission(...PROJECT_CREATE_PERMISSIONS), val
     });
 
     const formattedNew = formatProject(newProject, createdStages);
-    res.status(201).json(formattedNew);
+    const managers = (await readProjectManagers(orm, [newProject.id])).get(newProject.id) ?? [];
+    res.status(201).json({ ...formattedNew, managers });
   } catch (err) {
     throw err;
   }
@@ -548,7 +559,7 @@ router.put('/projects/:id', authorizePermission(...PROJECT_EDIT_PERMISSIONS), va
       title, customer_id, customer_name, item_id, item_code, item_name, 
       quantity, unit, start_date, end_date, status, priority, description,
       products, inventory_control, inventoryControl, stage_schedules, stageSchedules,
-      custom_stages, customStages, attachments, project_code, version
+      custom_stages, customStages, attachments, project_code, version, managerUserIds
     } = req.body;
 
     // v9.0.364 (TD-739): بررسی تکمیل با قاعده مشترک ماتریس درون تراکنش updateProject است
@@ -572,13 +583,15 @@ router.put('/projects/:id', authorizePermission(...PROJECT_EDIT_PERMISSIONS), va
       stageSchedules: stageSchedules ?? stage_schedules,
       customStages: customStages ?? custom_stages,
       attachments,
-      expectedVersion: version
+      expectedVersion: version,
+      managerUserIds,
     }, undefined, { req });
 
     const rawStages = await orm.select().from(projectStages).where(and(eq(projectStages.projectId, id), eq(projectStages.isDeleted, 0))).orderBy(asc(projectStages.stageOrder));
 
     // v9.0.383 (TD-757): ردیف ممیزی ویرایش با پیش و پس درون تراکنش updateProject نوشته می‌شود
-    res.json(formatProject(updated, rawStages));
+    const managers = (await readProjectManagers(orm, [id])).get(id) ?? [];
+    res.json({ ...formatProject(updated, rawStages), managers });
   } catch (err) {
     throw err;
   }

@@ -36,7 +36,7 @@ export const LOGIN_ONLY_ROUTES = new Set([
   'GET /api/piecework/payrolls/mine',
   'POST /api/drafts', 'GET /api/drafts/:entityType', 'GET /api/drafts', 'DELETE /api/drafts/:entityType', 'DELETE /api/drafts/id/:id',
   'GET /api/attachments/:id',
-  // v10.1.37 (messenger plan part 1): the user's own messenger links
+  // v10.1.38 (messenger plan part 1): the user's own messenger links
   'GET /api/messenger/links/mine', 'POST /api/messenger/links/:messenger/code', 'POST /api/messenger/links/:messenger/test',
   'DELETE /api/messenger/links/:messenger',
 ]);
@@ -55,7 +55,7 @@ export const SYSTEM_ADMIN_ONLY_ROUTES = new Set([
   'POST /api/warehouses/:id/reactivate',
   // v9.0.427 (TD-589، تصمیم ت۵ الف): فهرست و ساختن دستی قیدهای شرطی جاافتاده مهاجرت‌ها
   'GET /api/system/conditional-constraints', 'POST /api/system/conditional-constraints/build',
-  // v10.1.37 (messenger plan part 1, ت۱ الف): the staff bots' tokens and the list of linked users
+  // v10.1.38 (messenger plan part 1, ت۱ الف): the staff bots' tokens and the list of linked users
   'GET /api/messenger/bots', 'PUT /api/messenger/bots/:messenger', 'GET /api/messenger/links',
 ]);
 

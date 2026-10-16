@@ -10,6 +10,7 @@ import { refNumberToSend } from '../../lib/documents/documentRefRules';
 import { selectedPartyId } from '../../lib/documents/partySelection';
 import { STOCK_VOUCHER_DRAFT_NOTE } from '../../lib/documents/stockInLabels';
 import { receiptZeroPriceCheck } from '../../lib/documents/receiptZeroPrice';
+import { isRecipientCandidate } from '../../lib/workshop/recipient';
 import { confirmAction } from '../../components/ConfirmDialogHost';
 import type { StockDocumentForm } from './useStockDocumentForm';
 import type { StockDocumentReferenceData } from './useStockDocumentReferenceData';
@@ -30,7 +31,7 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
   const {
     actionType, docType, refNumber, suggestedRef, date, location, buyerName, currency, exchangeRate, returnInvoiceId, returnVatPercent, setReturnVatPercent,
     notes, docItems, selectedProjectId, selectedProjectObj, attachments, getItemReservationSummary, selectedSupplierObj,
-    setIsSaving, setDocItems, fetchNextRef, changeReturnInvoiceRef, setBuyerName, setReceiverPersonnelId,
+    setIsSaving, setDocItems, fetchNextRef, changeReturnInvoiceRef, setBuyerName, receiverPersonnelId, setReceiverPersonnelId, selectedPersonnelObj,
     setSelectedSupplierObj, setNotes, setUnitPrice, setQuantity, setSelectedProjectId,
     setSelectedProjectObj, setAttachments, setCurrency, setExchangeRate,
   } = form;
@@ -125,6 +126,9 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
           currency: docCurrency,
           exchangeRate: docCurrency !== 'IRR' ? exchangeRate : null,
           projectId: selectedProjectId ? Number(selectedProjectId) : undefined,
+          // v10.1.37 (N-01, TD-1283): the picked personnel receives the remittance and confirms it in the workshop cartable;
+          // a terminated personnel stays only the buyer name, as before
+          recipientPersonnelId: docType === 'remittance' && receiverPersonnelId && isRecipientCandidate(selectedPersonnelObj) ? receiverPersonnelId : undefined,
           returnOfDocumentId: docType === 'return' && returnInvoiceId !== null ? returnInvoiceId : undefined,
           // v9.0.274 (TD-774): مالیات برگشت با فاکتور مرجع را سرور از فاکتور می‌گیرد؛ بی فاکتور مرجع درصد کاربر
           vatPercent: docType === 'return' && returnInvoiceId === null && returnVatPercent !== '' ? Number(returnVatPercent) : undefined,

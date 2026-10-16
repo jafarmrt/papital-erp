@@ -4,6 +4,7 @@ import { useProjectForm } from './project-modal/useProjectForm';
 import { ProjectGeneralForm } from './project-modal/ProjectGeneralForm';
 import { ProjectProductsForm } from './project-modal/ProjectProductsForm';
 import { ProjectStagesForm } from './project-modal/ProjectStagesForm';
+import { ProjectManagersField } from './project-modal/ProjectManagersField';
 import { DialogLayer } from './common/DialogLayer';
 
 export default function ProjectModal(props: ProjectModalProps) {
@@ -26,6 +27,8 @@ export default function ProjectModal(props: ProjectModalProps) {
     setDescription,
     attachments,
     setAttachments,
+    managerIds,
+    setManagerIds,
     productsList,
     stages,
     preset,
@@ -97,6 +100,13 @@ export default function ProjectModal(props: ProjectModalProps) {
             onCustomerSelect={handleCustomerSelect}
             attachments={attachments}
             setAttachments={setAttachments}
+          />
+
+          <ProjectManagersField
+            managerIds={managerIds}
+            onChange={setManagerIds}
+            storedManagers={projectToEdit?.managers}
+            disabled={saving}
           />
 
           <ProjectProductsForm

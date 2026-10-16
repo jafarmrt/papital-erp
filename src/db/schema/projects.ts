@@ -100,6 +100,8 @@ export const projectBomAllocations = pgTable('project_bom_allocations', {
   userId: integer('user_id').references(() => users.id),
   username: text('username').default(''),
   notes: text('notes').default(''),
+  // v10.1.37 (N-01، TD-1283، تصمیم ت۴ الف): پرسنلی که مواد تخصیص‌یافته به دست او داده می‌شود (مهاجرت 0119)
+  recipientPersonnelId: integer('recipient_personnel_id').references(baseRelations.personnelId),
   allocatedAt: timestamp('allocated_at', { mode: 'string' }).defaultNow(),
   consumedAt: timestamp('consumed_at', { mode: 'string' }),
   releasedAt: timestamp('released_at', { mode: 'string' }),
@@ -111,6 +113,7 @@ export const projectBomAllocations = pgTable('project_bom_allocations', {
   idx_bom_alloc_src_tx: index('idx_bom_alloc_src_tx').on(table.sourceTransactionId),
   // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_project_bom_allocations_user_id: index('idx_project_bom_allocations_user_id').on(table.userId).where(sql`${table.userId} IS NOT NULL`),
+  idx_project_bom_allocations_recipient_personnel_id: index('idx_project_bom_allocations_recipient_personnel_id').on(table.recipientPersonnelId).where(sql`${table.recipientPersonnelId} IS NOT NULL`),
 }));
 registerColumnRef('projectBomAllocations.id', () => projectBomAllocations.id);
 

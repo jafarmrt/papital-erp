@@ -3,8 +3,8 @@ import { sql } from 'drizzle-orm';
 import { users } from './auth';
 
 /**
- * v10.1.37 (messenger notifications plan, part 1, product-owner decision ت۱ الف): the two staff bots (Bale and Telegram,
- * separate from the server alert bots), each user's link to them and the one-time link codes (migration 0119).
+ * v10.1.38 (messenger notifications plan, part 1, product-owner decision ت۱ الف): the two staff bots (Bale and Telegram,
+ * separate from the server alert bots), each user's link to them and the one-time link codes (migration 0120).
  * A bot's token is stored only with `encryptSecret` and never leaves the server; a user links only from their own
  * profile by sending a six-digit code to the bot, and each user has at most one active link per messenger and each chat
  * at most one active user.
