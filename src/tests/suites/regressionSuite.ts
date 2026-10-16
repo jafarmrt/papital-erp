@@ -10986,6 +10986,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runPayrollPrepaymentStartTests(shouldRun));
   const { runPayrollStatutoryTests } = await import('../regression/payrollStatutoryTests.js');
   results.push(...await runPayrollStatutoryTests(shouldRun));
+  const { runStatutoryRemittanceTests } = await import('../regression/statutoryRemittanceTests.js');
+  results.push(...await runStatutoryRemittanceTests(shouldRun));
   const { runPayrollEidiTests } = await import('../regression/payrollEidiTests.js');
   results.push(...await runPayrollEidiTests(shouldRun));
   const { runPayrollVoucherDateTests } = await import('../regression/payrollVoucherDateTests.js');
@@ -11053,7 +11055,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v10.1.32 (D-16): fluctuating petty cash fund and its expense statements
   const { runPettyCashTests } = await import('../regression/pettyCashTests.js');
   results.push(...await runPettyCashTests(shouldRun));
-  // v10.1.36 (N-01 part 1): workshop cartable data (long session, project managers, stock recipient)
+  // v10.1.37 (N-01 part 1): workshop cartable data (long session, project managers, stock recipient)
   const { runWorkshopCartablePartOneTests } = await import('../regression/workshopCartablePartOneTests.js');
   results.push(...await runWorkshopCartablePartOneTests(shouldRun));
 

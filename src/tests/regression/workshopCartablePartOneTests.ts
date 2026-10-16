@@ -8,7 +8,7 @@ import { ROLE_TEMPLATES } from '../../lib/permissions/roleTemplates.js';
 import { withRequiredPermissions } from '../../lib/permissions/permissionCatalog.js';
 
 /**
- * v10.1.36 (N-01 part 1, TD-1283, mobile workshop plan): the data of the workshop cartable.
+ * v10.1.37 (N-01 part 1, TD-1283, mobile workshop plan): the data of the workshop cartable.
  * - Decision ت۱۱ الف: a role holding workshop.long_session (template «کارکن کارگاه») logs in for seven days, any other
  *   role, the system admin included, for 24 hours (token and cookie alike).
  * - Decision ت۳ الف: «مسئولان پروژه» are saved with the project (create and edit), read with the project record and
@@ -22,13 +22,13 @@ export async function runWorkshopCartablePartOneTests(shouldRun: ShouldRun): Pro
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (h: Harness, wrong: string[]) => Promise<string>]> = [
     ['reg_workshop_long_session_n01',
-      'v10.1.36: a role with workshop.long_session logs in for seven days (token exp and cookie Max-Age), other roles and the system admin for 24 hours, and the workshop worker template holds both workshop keys (N-01, TD-1283)',
+      'v10.1.37: a role with workshop.long_session logs in for seven days (token exp and cookie Max-Age), other roles and the system admin for 24 hours, and the workshop worker template holds both workshop keys (N-01, TD-1283)',
       ['n01', 'workshop', 'auth', 'session'], longSessionCase],
     ['reg_project_managers_n01',
-      'v10.1.36: project managers are saved on project create and edit, returned with the project record and audited; a deleted or repeated user is 422 PROJECT_MANAGER_INVALID with nothing written (N-01, TD-1283)',
+      'v10.1.37: project managers are saved on project create and edit, returned with the project record and audited; a deleted or repeated user is 422 PROJECT_MANAGER_INVALID with nothing written (N-01, TD-1283)',
       ['n01', 'workshop', 'projects'], projectManagersCase],
     ['reg_stock_recipient_n01',
-      'v10.1.36: a remittance and a material allocation store their recipient personnel; a recipient on another document type is 422 RECIPIENT_REMITTANCE_ONLY and a deleted or terminated personnel 422 RECIPIENT_PERSONNEL_INVALID before any stock movement (N-01, TD-1283)',
+      'v10.1.37: a remittance and a material allocation store their recipient personnel; a recipient on another document type is 422 RECIPIENT_REMITTANCE_ONLY and a deleted or terminated personnel 422 RECIPIENT_PERSONNEL_INVALID before any stock movement (N-01, TD-1283)',
       ['n01', 'workshop', 'documents', 'allocations'], recipientCase],
   ];
   for (const [id, name, tags, run] of cases) {

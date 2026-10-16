@@ -217,7 +217,7 @@ router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async
     await resetFailedAttempts(activeUser.id, { username: tUsername, ip: clientIp });
 
     const csrfToken = generateCsrfToken();
-    // v10.1.36 (N-01, TD-1283): seven days for a role holding workshop.long_session, else 24 hours
+    // v10.1.37 (N-01, TD-1283): seven days for a role holding workshop.long_session, else 24 hours
     const lifetime = await sessionLifetimeOfRole(activeUser.role);
     const token = generateToken({ id: activeUser.id, username: activeUser.username, role: activeUser.role ?? '', csrfToken, tokenVersion: activeUser.tokenVersion || 0 }, lifetime);
     const { password: _, ...userWithoutPassword } = activeUser;

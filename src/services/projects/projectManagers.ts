@@ -8,7 +8,7 @@ import { toPersianDigits } from '../../utils/persianNumber.js';
 import type { ProjectActor } from './projectStatusSync.js';
 
 /**
- * v10.1.36 (N-01, TD-1283, decision ت۳ الف of the mobile workshop plan): «مسئولان پروژه», the users who review the
+ * v10.1.37 (N-01, TD-1283, decision ت۳ الف of the mobile workshop plan): «مسئولان پروژه», the users who review the
  * end-of-task reports of a project's personnel. Saved with the project (create and edit, in their transaction, after
  * the project row) and audited with the same `tx`; a missing, deleted or repeated user refuses the save with 422.
  */

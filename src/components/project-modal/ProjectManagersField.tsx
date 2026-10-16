@@ -15,7 +15,7 @@ interface ProjectManagersFieldProps {
 }
 
 /**
- * v10.1.36 (N-01, TD-1283, decision ت۳ الف of the mobile workshop plan): «مسئولان پروژه», the users who approve or
+ * v10.1.37 (N-01, TD-1283, decision ت۳ الف of the mobile workshop plan): «مسئولان پروژه», the users who approve or
  * reject the end-of-task reports of the project's personnel in the workshop cartable.
  */
 export const ProjectManagersField: React.FC<ProjectManagersFieldProps> = ({ managerIds, onChange, storedManagers = [], disabled }) => {

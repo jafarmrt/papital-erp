@@ -1,5 +1,5 @@
 /**
- * v10.1.36 (N-01, TD-1283, decision ت۳ الف of the mobile workshop plan): the contract of «مسئولان پروژه», shared by the
+ * v10.1.37 (N-01, TD-1283, decision ت۳ الف of the mobile workshop plan): the contract of «مسئولان پروژه», shared by the
  * project routes and the project form.
  */
 export const MAX_PROJECT_MANAGERS = 20;

@@ -87,7 +87,7 @@ export const getAuthCookieOptions = (req?: any, lifetimeSeconds: number = DEFAUL
 };
 
 /**
- * v10.1.36 (N-01, TD-1283, decision ت۱۱ الف): the lifetime of a new login, read from the role's stored permissions
+ * v10.1.37 (N-01, TD-1283, decision ت۱۱ الف): the lifetime of a new login, read from the role's stored permissions
  * (seven days with `workshop.long_session`, else 24 hours); the token and its cookie carry the same lifetime.
  */
 export async function sessionLifetimeOfRole(roleCode: string | null | undefined): Promise<number> {

@@ -20,8 +20,11 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
-### v10.1.36 — داده کارتابل کارگاه (N-01 بخش ۱، TD-1283)
-- Workshop cartable data (N-01 part 1, mobile workshop plan ت۳ / ت۴ / ت۱۱ الف): migration 0118 (project_managers, stock_receipt_confirmations, workshop_task_reports, recipient_personnel_id on documents and allocations, reminder dedup index); keys workshop.self / workshop.review / workshop.long_session and the «کارکن کارگاه» role template; seven-day login for workshop.long_session; project managers on project create and edit (422 PROJECT_MANAGER_INVALID); remittance and allocation recipient (422 RECIPIENT_REMITTANCE_ONLY / RECIPIENT_PERSONNEL_INVALID). Tests: reg_workshop_long_session_n01, reg_project_managers_n01, reg_stock_recipient_n01, Vitest workshopCartablePartOne.test.ts
+### v10.1.37 — داده کارتابل کارگاه (N-01 بخش ۱، TD-1283)
+- Workshop cartable data (N-01 part 1, mobile workshop plan ت۳ / ت۴ / ت۱۱ الف): migration 0119 (project_managers, stock_receipt_confirmations, workshop_task_reports, recipient_personnel_id on documents and allocations, reminder dedup index); keys workshop.self / workshop.review / workshop.long_session and the «کارکن کارگاه» role template; seven-day login for workshop.long_session; project managers on project create and edit (422 PROJECT_MANAGER_INVALID); remittance and allocation recipient (422 RECIPIENT_REMITTANCE_ONLY / RECIPIENT_PERSONNEL_INVALID). Tests: reg_workshop_long_session_n01, reg_project_managers_n01, reg_stock_recipient_n01, Vitest workshopCartablePartOne.test.ts
+
+### v10.1.36 — پرداخت یکجای ماهانه بیمه و مالیات حقوق با ردیف هر نفر
+- یک پرداخت خزانه برای بیمه یا مالیات حقوق کل فهرست یک ماه با ردیف بدهکار هر پرسنل به نام خودش، سقف مانده هر نفر، جریمه دیرکرد اختیاری و ابطال از جدول خزانه.
 
 ### v10.1.35 — عیدی هم برای هر نفر اختیاری شد
 - گزینه «مشمول عیدی» در پرونده پرسنل (پیش‌فرض روشن)؛ برای نفرِ نامشمول سهم عیدی، هشدار نرخ و حق عیدی سال حساب نمی‌شود.

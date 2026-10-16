@@ -11,7 +11,7 @@ interface RecipientPersonnelFieldProps {
 }
 
 /**
- * v10.1.36 (N-01, TD-1283, decision ت۴ الف of the mobile workshop plan): «تحویل‌گیرنده» of a material allocation, the
+ * v10.1.37 (N-01, TD-1283, decision ت۴ الف of the mobile workshop plan): «تحویل‌گیرنده» of a material allocation, the
  * personnel who receives the materials and confirms them in the workshop cartable. Personnel who left are not offered.
  */
 export function RecipientPersonnelField({ id, value, onChange, disabled }: RecipientPersonnelFieldProps) {

@@ -60,7 +60,7 @@ const createProjectSchema = z.object({
     custom_stages: z.array(z.unknown()).optional(),
     customStages: z.array(z.unknown()).optional(),
     attachments: z.array(z.unknown()).optional(),
-    // v10.1.36 (N-01, TD-1283, decision ت۳ الف): «مسئولان پروژه» by user id
+    // v10.1.37 (N-01, TD-1283, decision ت۳ الف): «مسئولان پروژه» by user id
     managerUserIds: z.array(z.coerce.number().int().positive('شناسه مسئول پروژه نامعتبر است')).max(MAX_PROJECT_MANAGERS).optional(),
   })
 });
@@ -94,7 +94,7 @@ const updateProjectSchema = z.object({
     custom_stages: z.array(z.unknown()).optional(),
     customStages: z.array(z.unknown()).optional(),
     attachments: z.array(z.unknown()).optional(),
-    // v10.1.36 (N-01, TD-1283, decision ت۳ الف): «مسئولان پروژه» by user id
+    // v10.1.37 (N-01, TD-1283, decision ت۳ الف): «مسئولان پروژه» by user id
     managerUserIds: z.array(z.coerce.number().int().positive('شناسه مسئول پروژه نامعتبر است')).max(MAX_PROJECT_MANAGERS).optional(),
     // v9.0.384 (TD-740، تصمیم ت۲ الف): مراحل با ویرایش پروژه تغییر نمی‌کنند؛ فرستادن آن‌ها ۴۲۲ است، نه دور ریختن بی‌صدا
     initial_stages: z.unknown().optional(),
@@ -480,7 +480,7 @@ router.get('/projects/:id', authorizePermission(...RECORD_READ_PERMISSIONS.produ
       itemThumbnail: projData.itemThumbnail
     });
 
-    // v10.1.36 (N-01, TD-1283): «مسئولان پروژه» come with the project record
+    // v10.1.37 (N-01, TD-1283): «مسئولان پروژه» come with the project record
     const managers = (await readProjectManagers(orm, [id])).get(id) ?? [];
     res.json({ ...formatted, managers });
   } catch (err) {

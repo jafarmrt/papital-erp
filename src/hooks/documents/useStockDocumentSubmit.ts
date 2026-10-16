@@ -125,7 +125,7 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
           currency: docCurrency,
           exchangeRate: docCurrency !== 'IRR' ? exchangeRate : null,
           projectId: selectedProjectId ? Number(selectedProjectId) : undefined,
-          // v10.1.36 (N-01, TD-1283): the picked personnel receives the remittance and confirms it in the workshop cartable
+          // v10.1.37 (N-01, TD-1283): the picked personnel receives the remittance and confirms it in the workshop cartable
           recipientPersonnelId: docType === 'remittance' && receiverPersonnelId ? receiverPersonnelId : undefined,
           returnOfDocumentId: docType === 'return' && returnInvoiceId !== null ? returnInvoiceId : undefined,
           // v9.0.274 (TD-774): مالیات برگشت با فاکتور مرجع را سرور از فاکتور می‌گیرد؛ بی فاکتور مرجع درصد کاربر

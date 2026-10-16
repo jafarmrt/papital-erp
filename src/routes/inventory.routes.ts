@@ -99,7 +99,7 @@ export const bomAllocationItemSchema = z.object({
 export const projectAllocateSchema = z.object({
   body: z.object({
     projectId: z.coerce.number().int().positive('شناسه پروژه الزامی است'),
-    // v10.1.36 (N-01, TD-1283, decision ت۴ الف): the personnel who receives the materials (optional)
+    // v10.1.37 (N-01, TD-1283, decision ت۴ الف): the personnel who receives the materials (optional)
     recipientPersonnelId: z.coerce.number().int().positive('شناسه تحویل‌گیرنده نامعتبر است').nullable().optional(),
     allocations: z.array(bomAllocationItemSchema).min(1, 'حداقل یک قلم کالا برای تخصیص به پروژه الزامی است')
   })

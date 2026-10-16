@@ -178,7 +178,7 @@ export class FactoryResetService {
 
       // 4. Inventory Transactions & Documents (Must be deleted BEFORE productionProjects, items, customers and crmLeads:
       //    documents.project_id references production_projects without cascade)
-      // v10.1.36 (N-01): the workshop cartable references documents, allocations, piecework logs and projects (migration 0118)
+      // v10.1.37 (N-01): the workshop cartable references documents, allocations, piecework logs and projects (migration 0119)
       await wipe('stock_receipt_confirmations', stockReceiptConfirmations);
       await wipe('workshop_task_reports', workshopTaskReports);
       await wipe('project_managers', projectManagers);

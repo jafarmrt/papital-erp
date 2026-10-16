@@ -58,7 +58,7 @@ export interface ProjectBomAllocationRecord {
   allocatedAt: string | null;
   consumedAt: string | null;
   releasedAt: string | null;
-  /** v10.1.36 (N-01, TD-1283): the personnel who receives the materials and confirms them in the workshop cartable */
+  /** v10.1.37 (N-01, TD-1283): the personnel who receives the materials and confirms them in the workshop cartable */
   recipientPersonnelId: number | null;
   /** v10.0.130 (TD-1210): بهای کاردکس خروج تخصیص به ریال (همان مبلغ سند ۱۴۰۲)؛ null وقتی حرکت منبع خروج نیست */
   cost?: number | null;
@@ -195,7 +195,7 @@ async function lockActiveItem(txEngine: DbExecutor, itemId: number): Promise<Ite
 }
 
 /**
- * v10.1.36 (N-01, TD-1283, decision ت۴ الف): the allocation's recipient is a live personnel who has not left, read
+ * v10.1.37 (N-01, TD-1283, decision ت۴ الف): the allocation's recipient is a live personnel who has not left, read
  * `FOR SHARE` in the allocation's transaction (else 422 `RECIPIENT_PERSONNEL_INVALID`); none when not sent.
  */
 async function liveAllocationRecipient(txEngine: DbExecutor, personnelId: number | null | undefined): Promise<number | null> {
@@ -324,7 +324,7 @@ export class ProjectBomAllocationService {
   static async allocateReceiptItemsForProjectBom(params: {
     projectId: number;
     allocations: BomReceiptAllocationInput[];
-    /** v10.1.36 (N-01, TD-1283): the personnel who receives the materials */
+    /** v10.1.37 (N-01, TD-1283): the personnel who receives the materials */
     recipientPersonnelId?: number | null;
     userId?: number;
     username?: string;
@@ -416,7 +416,7 @@ export class ProjectBomAllocationService {
   static async allocateMaterialsForProject(params: {
     projectId: number;
     allocations: BomAllocationItemInput[];
-    /** v10.1.36 (N-01, TD-1283): the personnel who receives the materials */
+    /** v10.1.37 (N-01, TD-1283): the personnel who receives the materials */
     recipientPersonnelId?: number | null;
     userId?: number;
     username?: string;

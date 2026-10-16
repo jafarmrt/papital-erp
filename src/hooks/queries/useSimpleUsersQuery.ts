@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 
 /**
- * v10.1.36 (N-01, TD-1283): the users a form picks from (`/users/list-simple`: id, user name, full name, role name),
+ * v10.1.37 (N-01, TD-1283): the users a form picks from (`/users/list-simple`: id, user name, full name, role name),
  * never the full user directory; the same cache as the delegation form.
  */
 export interface SimpleUser { id: number; username: string; full_name?: string; role_name?: string }

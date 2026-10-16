@@ -27,6 +27,7 @@ import {
 } from './chartOfAccountsHealth.js';
 import { buildAccountingIntegrityHealthTest, findAccountingIntegrityGaps } from './accountingConstraintHealth.js';
 import { buildLegacyPayslipDeductionsHealthTest, buildPayslipDeductionsHealthTest, findLegacyPayslipDeductions, findPayslipDeductionsInPrepayments } from './payrollDeductionHealth.js';
+import { buildStatutoryPaymentsHealthTest, findStatutoryPaymentsWithoutPersonnel } from './statutoryRemittanceHealth.js';
 import { buildCategoryIntegrityHealthTest, findCategoryIntegrityIssues, hasCategoryNameUniqueIndex } from '../items/itemCategoryIdentity.js';
 import { buildProcurementOrderLinkHealthTest, findUnresolvedProcurementOrderLinks } from '../procurement/procurementOrderLinks.js';
 import { buildConsolidationSourcesHealthTest, findOpenLegacyConsolidationSources } from '../procurement/consolidationSourceHealth.js';
@@ -1236,6 +1237,8 @@ export class FinancialHealthService {
     tests.push(buildPayslipDeductionsHealthTest(await findPayslipDeductionsInPrepayments()));
     // v10.0.211 (TD-1088): کسورات فیش‌های پیش از جداسازی بیمه و مالیات که هنوز در ۳۲۰۵ مانده است (فقط فهرست)
     tests.push(buildLegacyPayslipDeductionsHealthTest(await findLegacyPayslipDeductions()));
+    // v10.1.36 (TD-1243): پرداخت بیمه و مالیات حقوق بی تفصیلی پرسنل روی ۳۲۰۴ / ۳۲۰۶ (فقط فهرست، بی بازنویسی)
+    tests.push(buildStatutoryPaymentsHealthTest(await findStatutoryPaymentsWithoutPersonnel()));
     // آزمون ۴۰: v9.0.336 (TD-778) سند فروش و خرید با نام خریدار و بی شناسه طرف حساب (فقط فهرست، بی بازنویسی)
     tests.push(buildUnlinkedPartyDocumentHealthTest(await findUnlinkedPartyDocuments()));
     // آزمون ۴۱: v9.0.338 (TD-786) قید پایگاه‌داده سند و ردیف سند اعتبارسنجی‌نشده یا ردیف قدیمی ناسازگار (فقط فهرست)

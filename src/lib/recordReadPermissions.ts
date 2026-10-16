@@ -103,7 +103,7 @@ export const READ_PERMISSIONS = {
   personnel: [
     'personnel.view', 'personnel.manage', 'piecework.view', 'projects.view', 'accounting.view', 'crm.view',
     'documents.view', 'documents.create', 'warehouse.in',
-    // v10.1.36 (N-01, TD-1283): the remittance and the material allocation pick their recipient («تحویل‌گیرنده»)
+    // v10.1.37 (N-01, TD-1283): the remittance and the material allocation pick their recipient («تحویل‌گیرنده»)
     'warehouse.out'
   ],
   /**

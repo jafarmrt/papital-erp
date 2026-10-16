@@ -1,5 +1,5 @@
 /**
- * v10.1.36 (N-01, TD-1283, mobile workshop plan): the keys of the workshop cartable, read by its routes, the long
+ * v10.1.37 (N-01, TD-1283, mobile workshop plan): the keys of the workshop cartable, read by its routes, the long
  * session and the screens.
  * - `workshop.self`: a worker's own cartable (tasks, deliveries, receipt confirmation, end-of-task report).
  * - `workshop.review`: a project manager reviews the end-of-task reports of the projects they manage.
