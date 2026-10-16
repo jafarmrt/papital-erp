@@ -278,7 +278,7 @@ export class AttachmentStorageService {
     });
 
     if (!outcome.acquired) {
-      throw new ConflictError('انتقال پیوست‌ها هم‌اکنون در حال اجراست', 'ATTACHMENT_MIGRATION_RUNNING');
+      throw new ConflictError('انتقال پیوست‌ها هم‌اکنون در حال اجراست', undefined, 'ATTACHMENT_MIGRATION_RUNNING');
     }
 
     if (options.apply) {

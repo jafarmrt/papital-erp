@@ -5,6 +5,7 @@ import { money } from '../../lib/money.js';
 import { VoucherService } from '../../services/accounting/voucher.service.js';
 import { FiscalYearService } from '../../services/accounting/fiscalYear.service.js';
 import { FinancialHealthService } from '../../services/accounting/financialHealth.service.js';
+import { AccountingReportService } from '../../services/accounting/accountingReport.service.js';
 import { getErrorMessage } from '../../utils.js';
 import type { TestCaseResult } from '../types.js';
 import {
@@ -12,14 +13,14 @@ import {
 } from './fiscalClosingTests.js';
 
 /**
- * v10.1.45 closing sweep, accounting server observations of package 3: each test is red on v10.1.44.
+ * v10.1.46 closing sweep, accounting server observations of package 3: each test is red on v10.1.45.
  */
 export async function runAccountingSweepTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
 
   const toleranceId = 'reg_health_voucher_balance_tolerance_obs_r1_42';
   if (shouldRun(toleranceId, 'obs-r1-42', 'health', 'voucher', 'balance')) {
-    await runCase(results, toleranceId, 'v10.1.45: the financial health check lists a voucher off by 0.03, the same tolerance (0.01) every voucher path uses (OBS-R1-42)', async () => inFiscalSandbox(async () => {
+    await runCase(results, toleranceId, 'v10.1.46: the financial health check lists a voucher off by 0.03, the same tolerance (0.01) every voucher path uses (OBS-R1-42)', async () => inFiscalSandbox(async () => {
       const acc = await accountIdsByCode('1001', '4001');
       const voucherId = await postApproved('2016-04-10', acc['1001'], acc['4001'], 1_000_000, 'OBS-R1-42 voucher');
       // a legacy voucher whose credit row is 0.03 short (no service writes one today)
@@ -34,7 +35,7 @@ export async function runAccountingSweepTests(shouldRun: ShouldRun): Promise<Tes
 
   const limitId = 'reg_voucher_list_limit_obs_r1_43';
   if (shouldRun(limitId, 'obs-r1-43', 'voucher', 'list', 'limit')) {
-    await runCase(results, limitId, 'v10.1.45: the voucher list refuses a page larger than the 100 rows it reads with 400 (OBS-R1-43)', async () => inFiscalSandbox(async () => {
+    await runCase(results, limitId, 'v10.1.46: the voucher list refuses a page larger than the 100 rows it reads with 400 (OBS-R1-43)', async () => inFiscalSandbox(async () => {
       const admin = await sandboxAdminClient();
       const big = await admin.get('/api/accounting/vouchers?page=1&limit=101');
       const max = await admin.get('/api/accounting/vouchers?page=1&limit=100');
@@ -48,7 +49,7 @@ export async function runAccountingSweepTests(shouldRun: ShouldRun): Promise<Tes
 
   const closingId = 'reg_fiscal_closing_accounts_in_tx_obs_r1_48';
   if (shouldRun(closingId, 'obs-r1-48', 'fiscal', 'closing', 'account')) {
-    await runCase(results, closingId, 'v10.1.45: a refused fiscal-year closing leaves no summary profit and loss or retained earnings account behind (OBS-R1-48)', async () => inFiscalSandbox(async () => {
+    await runCase(results, closingId, 'v10.1.46: a refused fiscal-year closing leaves no summary profit and loss or retained earnings account behind (OBS-R1-48)', async () => inFiscalSandbox(async () => {
       const acc = await accountIdsByCode('1001', '4001');
       await postApproved('2016-04-10', acc['1001'], acc['4001'], 1_000_000, 'OBS-R1-48 capital');
       await VoucherService.createJournalVoucher({
@@ -64,15 +65,27 @@ export async function runAccountingSweepTests(shouldRun: ShouldRun): Promise<Tes
       try {
         await FiscalYearService.executeFiscalYearClosing({ year: 1395, createOpeningVoucher: true, username: 'reg' });
       } catch (err) {
-        refused = getErrorMessage(err);
+        refused = String((err as { code?: unknown }).code ?? getErrorMessage(err));
       }
       const made = await orm.select({ code: accounts.code }).from(accounts)
         .where(and(eq(accounts.isDeleted, 0), sql`${accounts.code} IN ('4301', '4201')`));
       assertNoProblems([
-        ...(refused ? [] : ['the closing with a draft voucher was not refused']),
+        ...(refused === 'FISCAL_YEAR_HAS_DRAFT_VOUCHERS' ? [] : [`the closing with a draft voucher answered ${refused || 'accepted'}, expected FISCAL_YEAR_HAS_DRAFT_VOUCHERS`]),
         ...(made.length === 0 ? [] : [`the refused closing left account(s) ${made.map(m => m.code).join(', ')}`]),
       ]);
       return 'the refused closing created no account';
+    }));
+  }
+
+  const ratiosId = 'reg_financial_ratios_decimal_values_obs_r1_53';
+  if (shouldRun(ratiosId, 'obs-r1-53', 'ratio', 'financial')) {
+    await runCase(results, ratiosId, 'v10.1.49: the net working capital of the financial ratios is an exact decimals: 0.3 - 0.1 = 0.2, not 0.19999999999999998 (OBS-R1-53)', async () => inFiscalSandbox(async () => {
+      const acc = await accountIdsByCode('1001', '4001', '3101', '7001');
+      await postApproved('2016-04-10', acc['1001'], acc['4001'], 0.3, 'OBS-R1-53 capital');
+      await postApproved('2016-04-11', acc['7001'], acc['3101'], 0.1, 'OBS-R1-53 expense');
+      const ratios = await AccountingReportService.getFinancialRatios({ asOfDate: '2016-12-31' });
+      assertNoProblems(Number(ratios.netWorkingCapital) === 0.2 ? [] : [`net working capital is ${String(ratios.netWorkingCapital)}, expected 0.2`]);
+      return 'net working capital 0.2';
     }));
   }
 

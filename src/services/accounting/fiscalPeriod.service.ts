@@ -92,7 +92,7 @@ export class FiscalPeriodService {
     if (row?.status === 'closed') {
       throw new ConflictError(
         `سال مالی ${year} قبلاً بسته شده است${row.closingVoucherId ? ` (سند اختتامیه شناسه ${row.closingVoucherId})` : ''}. بستن مجدد سال مجاز نیست.`,
-        'FISCAL_YEAR_ALREADY_CLOSED'
+        undefined, 'FISCAL_YEAR_ALREADY_CLOSED'
       );
     }
   }

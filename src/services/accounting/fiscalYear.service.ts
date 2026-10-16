@@ -331,7 +331,7 @@ export class FiscalYearService {
       if (!lockRows[0]?.acquired) {
         throw new ConflictError(
           `عملیات بستن سال مالی ${year} هم‌اکنون توسط دیگری در حال اجراست. لطفاً بعداً تلاش کنید.`,
-          'FISCAL_CLOSING_LOCKED'
+          undefined, 'FISCAL_CLOSING_LOCKED'
         );
       }
 
@@ -347,7 +347,7 @@ export class FiscalYearService {
       await assertEarlierYearsClosed(tx, year);
 
       // Conceptual Account Resolution (Subphase 9.2: Summary Profit/Loss and Retained Earnings)
-      // v10.1.45 (OBS-R1-48): read with this transaction after the year lock; a missing account is created in it too,
+      // v10.1.46 (OBS-R1-48): read with this transaction after the year lock; a missing account is created in it too,
       // so a refused closing (drafts, a lock, an error) leaves no new account behind
       const summaryProfitAcc = await AccountMappingService.getSummaryProfitLossAccount(tx)
         ?? await ChartOfAccountsService.createAccountInTx(tx, {
@@ -384,7 +384,8 @@ export class FiscalYearService {
         throw new ConflictError(
           `سال مالی ${year} ${draftCount} سند حسابداری پیش‌نویس دارد (${shown}${draftCount > 10 ? ' و …' : ''}). ` +
           'پیش از بستن سال، این اسناد را تأیید یا حذف کنید؛ سند پیش‌نویس در بستن حساب‌ها شمرده نمی‌شود و پس از بستن سال دیگر تأییدشدنی نیست.',
-          'FISCAL_YEAR_HAS_DRAFT_VOUCHERS'
+          // v10.1.49: the code is the third argument; before, it went into `details` and the answer said CONFLICT
+          { draftVoucherCount: draftCount }, 'FISCAL_YEAR_HAS_DRAFT_VOUCHERS'
         );
       }
       finalNetProfit = preview.netProfit;

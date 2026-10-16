@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
 
-// v10.1.45 closing sweep, OBS-R1-53 (server part): the financial ratios add and subtract amounts with FinancialMath,
+// v10.1.46 closing sweep, OBS-R1-53 (server part): the financial ratios add and subtract amounts with FinancialMath,
 // never with JS + / -, like every other report total (AGENTS §1.8)
 const src = fs.readFileSync(path.resolve(__dirname, '../../services/accounting/accountingReport.service.ts'), 'utf8');
 
