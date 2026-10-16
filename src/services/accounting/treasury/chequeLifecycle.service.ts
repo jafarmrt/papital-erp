@@ -6,7 +6,7 @@ import { AccountMappingService } from '../accountMapping.service.js';
 import { VoucherService } from '../voucher.service.js';
 import { validateLockOrder, LockHierarchyLevel, LockableResource } from '../../../lib/lockOrder.js';
 import type { Cheque, ChequeStatus } from '../../../types.js';
-import { CHEQUE_TRANSITIONS, chequeNextStatuses, chequeStatusLabel, chequeStepTakesBankAccount } from '../../../lib/treasury/chequeTransitions.js';
+import { CHEQUE_TRANSITIONS, chequeNextStatuses, chequeStatusLabel, chequeStepTakesBankAccount, isChequeClearingAccountType } from '../../../lib/treasury/chequeTransitions.js';
 import { NotFoundError, ValidationError, BusinessLogicError, ConflictError } from '../../../errors/customErrors.js';
 import { fin } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
@@ -232,7 +232,8 @@ export class ChequeLifecycleService {
     // در نبود کدینگ، خطای صریح (به‌جای skip بی‌صدای قبلی) تا چک بدون رد دفتری ثبت نشود.
     const inserted = await orm.transaction(async (txEngine) => {
       // v9.0.100 (TD-510): حساب بانکی چک فعال و موجود (قفل اشتراکی سطح ۱۰ پیش از درج چک، سطح ۲۰)
-      const chequeBankAccountId = await requireChequeBankAccount(txEngine, data.bankAccountId);
+      // v10.1.47 (ت۴۰): چک پرداختی فقط از حساب بانکی یا صندوق صادر می‌شود، چون از همان حساب وصول می‌شود
+      const chequeBankAccountId = await requireChequeBankAccount(txEngine, data.bankAccountId, { clearing: data.type === 'paid' });
       if (party.contraAccountId) await requireChoosableContraAccount(txEngine, party.contraAccountId);
       // شناسه طرف حساب در جدول همان نوع (B04-05)
       assertPersonnelPartyId(partyType, data.partyId);
@@ -383,12 +384,14 @@ export class ChequeLifecycleService {
       let targetBankId = data.bankAccountId;
       let chequeCurrency = 'IRR';
       if (data.status === 'passed') {
-        const [preCheck] = await txEngine.select({ bankAccountId: cheques.bankAccountId, currency: cheques.currency, type: cheques.type })
-          .from(cheques).where(eq(cheques.id, id));
+        const [preCheck] = await txEngine.select({
+          bankAccountId: cheques.bankAccountId, currency: cheques.currency, type: cheques.type, storedBankType: bankAccounts.type,
+        }).from(cheques).leftJoin(bankAccounts, eq(bankAccounts.id, cheques.bankAccountId)).where(eq(cheques.id, id));
         chequeCurrency = preCheck?.currency || 'IRR';
         // v10.1.47: چک پرداختی فقط از حسابی وصول می‌شود که از آن صادر شده؛ پیش‌تر حساب فرستاده‌شده برنده بود و سند وصول
-        // حساب بانکی دیگری را بستانکار می‌کرد. حساب دیگر 422 `CHEQUE_PAID_BANK_FIXED` است.
-        if (preCheck?.type === 'paid' && preCheck.bankAccountId) {
+        // حساب بانکی دیگری را بستانکار می‌کرد. حساب دیگر 422 `CHEQUE_PAID_BANK_FIXED` است. چک پرداختی قدیمی که از کارتخوان یا
+        // تنخواه‌گردان صادر شده (پیش از این نسخه پذیرفته می‌شد) حساب وصول خود را از حساب‌های بانکی و صندوق می‌گیرد، تا گیر نکند.
+        if (preCheck?.type === 'paid' && preCheck.bankAccountId && isChequeClearingAccountType(preCheck.storedBankType)) {
           if (targetBankId && Number(targetBankId) !== preCheck.bankAccountId) {
             throw new ValidationError(
               'چک پرداختی فقط از حساب بانکی صادرکننده‌اش وصول می‌شود؛ حساب دیگری انتخاب نکنید.',

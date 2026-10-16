@@ -172,5 +172,27 @@ export async function runTreasuryChequeSweepTests(shouldRun: ShouldRun): Promise
     });
   }
 
+  const legacyId = 'reg_cheque_paid_non_clearing_bank_t40';
+  if (shouldRun(legacyId, 'cheque', 'bank', 'clearing', 'pos', 'paid')) {
+    await runCase(results, legacyId, 'v10.1.47: a paid cheque is never drawn on a POS account, and one drawn on it earlier clears into a bank account (decision t40)', async () => {
+      const pos = await createBank('Sweep paid pos');
+      await orm.update(bankAccounts).set({ type: 'pos' }).where(eq(bankAccounts.id, pos.id));
+      const bank = await createBank('Sweep paid clearing bank');
+      await orm.update(bankAccounts).set({ currentBalance: money(1_000_000) }).where(eq(bankAccounts.id, bank.id));
+      const createCode = await codeOf(() => ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'paid', chequeNumber: `SWL${tagOf()}`, amount: 40000, partyName: 'Sweep legacy supplier', bankAccountId: pos.id }));
+
+      // a paid cheque drawn on a POS account before this release
+      const legacy = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'paid', chequeNumber: `SWL${tagOf()}`, amount: 40000, partyName: 'Sweep legacy supplier', bankAccountId: bank.id });
+      await orm.update(cheques).set({ bankAccountId: pos.id }).where(eq(cheques.id, legacy.id));
+      const clearCode = await codeOf(() => ChequeLifecycleService.updateChequeStatus(legacy.id, { status: 'passed', bankAccountId: bank.id, username: 'inv' }));
+      const after = await chequeRow(legacy.id);
+      assertNoProblems([
+        ...(createCode === 'CHEQUE_CLEARING_ACCOUNT_TYPE' ? [] : [`a paid cheque drawn on a POS account answered ${createCode}`]),
+        ...(clearCode === 'accepted' && after?.status === 'passed' && after.bankAccountId === bank.id ? [] : [`the legacy paid cheque answered ${clearCode}, now ${after?.status} on bank ${after?.bankAccountId}`]),
+      ]);
+      return 'a new paid cheque on a POS account is refused, a legacy one clears into a bank account';
+    });
+  }
+
   return results;
 }

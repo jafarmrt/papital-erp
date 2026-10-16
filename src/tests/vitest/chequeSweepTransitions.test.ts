@@ -50,5 +50,8 @@ describe('decision t40: a cheque clears only into a bank or cash account', () =>
     const tab = read('src/components/accounting/ChequesTab.tsx');
     expect(tab).toContain('clearingBankAccounts.map');
     expect(tab).toContain('paidBankFixed');
+    // a stored POS or petty cash account is never pre-filled (it is not in the list)
+    expect(tab).not.toContain('setTargetBankAccountId(c.bankAccountId');
+    expect(tab.match(/setTargetBankAccountId\(clearingBankIdOf\(c\.bankAccountId\)\)/g)?.length).toBe(2);
   });
 });

@@ -208,8 +208,14 @@ export function ChequesTab({
   };
 
   /** v10.1.47: چک پرداختی دارای حساب صادرکننده فقط از همان حساب وصول می‌شود */
-  const paidBankFixed = statusModalCheque?.type === 'paid' && Boolean(statusModalCheque.bankAccountId);
-  const paidIssuingBank = paidBankFixed ? safeBankAccounts.find(b => b.id === statusModalCheque?.bankAccountId) : undefined;
+  const storedChequeBank = statusModalCheque?.bankAccountId ? safeBankAccounts.find(b => b.id === statusModalCheque.bankAccountId) : undefined;
+  const paidBankFixed = statusModalCheque?.type === 'paid' && Boolean(storedChequeBank) && isChequeClearingAccountType(storedChequeBank?.type);
+  const paidIssuingBank = paidBankFixed ? storedChequeBank : undefined;
+  /** v10.1.47 (ت۴۰): حساب ثبت‌شده چک فقط وقتی پیش‌فرض است که بانک یا صندوق باشد */
+  const clearingBankIdOf = (bankAccountId: number | null | undefined): number | null => {
+    const bank = bankAccountId ? safeBankAccounts.find(b => b.id === bankAccountId) : undefined;
+    return bank && isChequeClearingAccountType(bank.type) ? bank.id : null;
+  };
 
   const handleUpdateStatusSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -614,7 +620,7 @@ export function ChequesTab({
                             // وضعیت هدف توسط useEffect بر اساس اولین گزینه مجاز ریست می‌شود
                             setStatusDescription('');
                             setStatusActionDate(getTodayIsoDate());
-                            setTargetBankAccountId(c.bankAccountId || null);
+                            setTargetBankAccountId(clearingBankIdOf(c.bankAccountId));
                           }}
                           className={`text-[10px] font-bold px-2.5 py-1 rounded-full border transition hover:opacity-80 ${statusInfo.badge}`}
                         >
@@ -641,7 +647,7 @@ export function ChequesTab({
                                   setStatusModalCheque(c);
                                   setStatusDescription('');
                                   setStatusActionDate(getTodayIsoDate());
-                                  setTargetBankAccountId(c.bankAccountId || null);
+                                  setTargetBankAccountId(clearingBankIdOf(c.bankAccountId));
                                 },
                               }] : []),
                               {
