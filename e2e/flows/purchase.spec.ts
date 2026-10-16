@@ -108,7 +108,8 @@ async function expectPurchaseRecorded(docId: number, supplierId: number, lines: 
 }
 
 async function pickOption(page: Page, pickerName: string, search: string): Promise<void> {
-  await page.getByRole('button', { name: pickerName }).click();
+  // v10.1.31 (TD-1278): a picker is named by its label; its placeholder is only the shown text
+  await page.locator('button', { hasText: pickerName }).click();
   await page.getByPlaceholder(UI.search).fill(search);
   await page.locator('li', { hasText: search }).first().click();
 }
