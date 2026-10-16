@@ -14,6 +14,7 @@ import { registerDomainEventHandlers } from './src/services/events/domainEventHa
 import { OutboxService } from './src/services/events/outboxService.js';
 import { IntegrationDeliveryService } from './src/services/events/integrationDelivery.service.js';
 import { WorkflowSlaReminderService } from './src/services/workflow/workflowSlaReminderService.js';
+import { MessengerUpdatePoller } from './src/services/messenger/messengerUpdatePoller.js';
 import { FormDraftService } from './src/services/drafts/formDraft.service.js';
 import { pool, getDatabaseMode } from './src/db/drizzle.js';
 import { decideProcessErrorAction, processErrorMessage } from './src/lib/processErrorPolicy.js';
@@ -80,6 +81,8 @@ async function startServer() {
     WorkflowSlaReminderService.start(60_000);
     // v9.0.306 (TD-676): daily soft cleanup of expired form drafts
     FormDraftService.startCleanup();
+    // v10.1.38 (messenger plan part 1): link codes and «/stop» sent to the staff bots
+    MessengerUpdatePoller.start(5000);
     markStartupComplete();
   })().catch(err => {
     logger.error('Unhandled error in background migration/seed runner:', err);
@@ -135,6 +138,7 @@ async function startServer() {
       IntegrationDeliveryService.stopWorker();
       WorkflowSlaReminderService.stop();
       FormDraftService.stopCleanup();
+      MessengerUpdatePoller.stop();
 
       if (pool && typeof pool.end === 'function') {
         pool.end().then(() => {

@@ -10,6 +10,7 @@ import {
   Tags, 
   ShoppingBag, 
   Activity,
+  MessageCircle,
   LucideIcon
 } from 'lucide-react';
 import { canOpenSettingsTab } from '../../lib/permissions/pageAccess';
@@ -152,6 +153,14 @@ export const SETTINGS_GROUPS: SettingCategoryGroup[] = [
         shortDesc: 'کلیدهای API، هوک‌ها، همگام‌سازی لحظه‌ای موجودی و سفارش‌ها',
         icon: Globe,
         keywords: ['ووکامرس', 'فروشگاه', 'سایت', 'woocommerce', 'همگام‌سازی', 'وب‌هوک', 'سفارش برخط', 'سفارش آنلاین', 'اینترنت']
+      },
+      {
+        // v10.1.38 (messenger plan part 1, ت۱ الف): the staff bots of Bale and Telegram
+        id: 'messenger',
+        label: 'ربات‌های پیام‌رسان',
+        shortDesc: 'نشانه ربات‌های بله و تلگرام کارکنان و فهرست کاربران وصل',
+        icon: MessageCircle,
+        keywords: ['پیام‌رسان', 'بله', 'تلگرام', 'ربات', 'اعلان', 'نشانه', 'telegram', 'bale']
       }
     ]
   },
