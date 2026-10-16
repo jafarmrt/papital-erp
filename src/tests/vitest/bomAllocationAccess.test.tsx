@@ -8,7 +8,11 @@ const fetchJson = vi.fn(async (url: string, _opts?: FetchOpts): Promise<unknown>
   if (url.startsWith('/inventory/allocations?')) return allocationsAnswer();
   return [];
 });
-vi.mock('../../api', () => ({ fetchJson: (url: string, opts?: FetchOpts) => fetchJson(url, opts) }));
+vi.mock('../../api', () => ({
+  fetchJson: (url: string, opts?: FetchOpts) => fetchJson(url, opts),
+  // OBS-R2-47: the tab aborts its effect requests and drops an aborted answer
+  isAbortError: (err: unknown) => (err as { name?: string } | null)?.name === 'AbortError',
+}));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('../../hooks/queries/useSettingsQueries', () => ({ useWarehousesQuery: () => ({ data: [{ id: 3, code: 'WH-A', name: 'انبار نخست' }] }) }));
 const granted = new Set<string>();

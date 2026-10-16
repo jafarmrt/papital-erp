@@ -3,7 +3,7 @@ import { confirmAction } from '../ConfirmDialogHost';
 import toast from 'react-hot-toast';
 import { Boxes, Plus, Search, RefreshCw, CheckCircle2, Clock, RotateCcw, User, Warehouse, FileText, AlertCircle, Download } from 'lucide-react';
 import * as xlsx from 'xlsx';
-import { fetchJson } from '../../api';
+import { fetchJson, isAbortError } from '../../api';
 import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
 import { useQueryClient } from '@tanstack/react-query';
 import { invalidateAfterStockAdjustment } from '../../hooks/inventoryAudit/useInventoryAuditSave';
@@ -67,46 +67,55 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
   const [releaseReason, setReleaseReason] = useState('تغییر در برنامه تولید یا لغو تخصیص');
   const [releasing, setReleasing] = useState(false);
 
-  const loadAllocations = useCallback(async () => {
+  // OBS-R2-47: the effect's request is aborted on cleanup (filter change, unmount) and a late answer is dropped
+  const loadAllocations = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const queryParams = new URLSearchParams();
       if (statusFilter !== 'all') queryParams.append('status', statusFilter);
       if (search) queryParams.append('search', search);
 
-      const res = await fetchJson(`/inventory/allocations?${queryParams.toString()}`);
+      const res = await fetchJson(`/inventory/allocations?${queryParams.toString()}`, { signal });
+      if (signal?.aborted) return;
       setAllocations(res?.allocations || []);
       setLoadError(null);
     } catch (err) {
+      if (isAbortError(err) || signal?.aborted) return;
       setAllocations([]);
       setLoadError(errorMessageOf(err) || 'خواندن تخصیص‌های مواد اولیه ممکن نشد.');
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [statusFilter, search]);
 
-  const loadMetadata = async () => {
+  const loadMetadata = async (signal?: AbortSignal) => {
     try {
       const [projRes, itemsRes] = await Promise.all([
-        fetchJson(PICK_LIST_URLS.projects),
-        fetchJson(`${PICK_LIST_URLS.items}?type=raw_material`)
+        fetchJson(PICK_LIST_URLS.projects, { signal }),
+        fetchJson(`${PICK_LIST_URLS.items}?type=raw_material`, { signal })
       ]);
+      if (signal?.aborted) return;
       const rawProjs = Array.isArray(projRes?.data) ? projRes.data : (Array.isArray(projRes) ? projRes : []);
       const rawItems = Array.isArray(itemsRes?.data) ? itemsRes.data : (Array.isArray(itemsRes) ? itemsRes : []);
       // v9.0.410 (TD-759، تصمیم ت۹ الف): پروژه لغوشده یا تکمیل‌شده مواد تازه نمی‌گیرد و پیشنهاد نمی‌شود
       setProjectsList(rawProjs.filter((p: { status?: string }) => isProjectOpenForAllocation(p.status)));
       setItemsList(rawItems);
     } catch (err) {
+      if (isAbortError(err) || signal?.aborted) return;
       console.error('Error loading metadata for allocation:', err);
     }
   };
 
   useEffect(() => {
-    void loadAllocations();
+    const controller = new AbortController();
+    void loadAllocations(controller.signal);
+    return () => controller.abort();
   }, [loadAllocations]);
 
   useEffect(() => {
-    void loadMetadata();
+    const controller = new AbortController();
+    void loadMetadata(controller.signal);
+    return () => controller.abort();
   }, []);
 
   const handleOpenAllocateModal = () => {
@@ -345,7 +354,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
           </button>
 
           <button
-            onClick={loadAllocations}
+            onClick={() => void loadAllocations()}
             className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors"
           >
             <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
@@ -392,7 +401,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
               ) : loadError ? (
                 <tr>
                   <td colSpan={9} className="py-4">
-                    <ErrorStateView compact title={`تخصیص‌های مواد اولیه خوانده نشد: ${loadError}`} onRetry={loadAllocations} />
+                    <ErrorStateView compact title={`تخصیص‌های مواد اولیه خوانده نشد: ${loadError}`} onRetry={() => void loadAllocations()} />
                   </td>
                 </tr>
               ) : allocations.length === 0 ? (

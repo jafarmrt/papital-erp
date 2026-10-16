@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useId } from 'react';
 import { Layers, Plus, Trash2, ArrowUp, ArrowDown, Archive, ArchiveRestore } from 'lucide-react';
 import { WorkflowPreset } from '../../constants/presets';
-import { fetchJson } from '../../api';
+import { fetchJson, isAbortError } from '../../api';
 import { errorMessageOf, formatPersianNumber, toPersianDigits } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { SearchableSelect } from '../SearchableSelect';
@@ -39,28 +39,28 @@ export function WorkflowPresetsTab({
   const [showArchived, setShowArchived] = useState<boolean>(false);
 
   // Load piecework tasks from payroll/piecework section
+  // OBS-R2-47: the request is aborted on unmount, not only ignored
   useEffect(() => {
-    let isMounted = true;
+    const controller = new AbortController();
     const loadTasks = async () => {
       setLoadingTasks(true);
       try {
-        const res = await fetchJson('/piecework/tasks');
+        const res = await fetchJson('/piecework/tasks', { signal: controller.signal });
         const data = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-        if (isMounted) {
+        if (!controller.signal.aborted) {
           setAvailableTasks(data);
         }
       } catch (err) {
+        if (isAbortError(err) || controller.signal.aborted) return;
         console.error('Failed to load piecework tasks:', err);
         // v9.0.422 (TD-766): فهرست خالی عناوین کارمزدی با شکست خواندن یکی نیست
-        if (isMounted) toast.error(errorMessageOf(err) || 'خطا در دریافت عناوین کارمزدی');
+        toast.error(errorMessageOf(err) || 'خطا در دریافت عناوین کارمزدی');
       } finally {
-        if (isMounted) setLoadingTasks(false);
+        if (!controller.signal.aborted) setLoadingTasks(false);
       }
     };
     void loadTasks();
-    return () => {
-      isMounted = false;
-    };
+    return () => controller.abort();
   }, []);
 
   // Safe preset list with legacy defaults filtered out

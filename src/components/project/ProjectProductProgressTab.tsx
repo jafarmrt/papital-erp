@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { RefreshCw, Layers, Package, CheckCircle2, Circle, Clock, Ban, Save, Info, Search, CheckSquare, Square, RotateCcw, Lock } from 'lucide-react';
-import { fetchJson } from '../../api';
+import { fetchJson, isAbortError } from '../../api';
 import toast from 'react-hot-toast';
-import { toPersianDigits } from '../../utils';
+import { errorMessageOf, toPersianDigits } from '../../utils';
 import { useProjectPermissions } from '../../hooks/useProjectPermissions';
 
 // V3.1.5 — تب «پیشرفت به تفکیک کد کالا» (ماتریسی SKU × مرحله + فیلتر، انتخاب ردیف و عملیات دسته‌ای)
@@ -71,26 +71,30 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
   // pending local edits: key `${itemId}|${stageOrder}` → newStatus
   const [dirty, setDirty] = useState<Map<string, ProductProgressRow['status']>>(new Map());
 
-  const load = useCallback(async () => {
+  // OBS-R2-47: the effect's request is aborted on cleanup (project change, unmount) and a late answer is dropped
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const res = await fetchJson(`/projects/${projectId}/product-progress`);
+      const res = await fetchJson(`/projects/${projectId}/product-progress`, { signal });
+      if (signal?.aborted) return;
       const payload = res?.data ?? res;
       if (payload && Array.isArray(payload.products)) {
         setData(payload);
       } else {
         toast.error('ساختار پاسخ پیشرفت نامعتبر است');
       }
-    } catch (err: any) {
-      if (err?.name === 'AbortError') return;
-      toast.error(err?.message || 'خطا در دریافت پیشرفت تفکیکی کد کالا');
+    } catch (err: unknown) {
+      if (isAbortError(err) || signal?.aborted) return;
+      toast.error(errorMessageOf(err) || 'خطا در دریافت پیشرفت تفکیکی کد کالا');
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [projectId]);
 
   useEffect(() => {
-    void load();
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
   }, [load]);
 
   const stages = data?.stages || [];

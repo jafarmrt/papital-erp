@@ -19,7 +19,7 @@ import { NotFoundError, ConflictError, ValidationError } from '../../errors/cust
 import { assertOutflowWithinSellable } from '../documents/documentSellableGate.js';
 import { releaseReservationsForAllocation, restoreReservationsForAllocation } from '../documents/projectReservationRelease.js';
 
-import { businessTodayIsoDate } from '../../lib/businessClock.js';
+import { businessTodayIsoDate, systemNowUtcIso } from '../../lib/businessClock.js';
 import { isProjectOpenForAllocation, projectStatusLabel } from '../../lib/projects/projectStatus.js';
 import { allocationStatusLabel } from '../../lib/projects/allocationLabels.js';
 import { logBomAllocation, logBomConsumption, logBomRelease } from './bomAllocationAudit.js';
@@ -207,9 +207,13 @@ async function liveAllocationRecipient(txEngine: DbExecutor, personnelId: number
   return row.id;
 }
 
-/** بهای واحد حرکت انبار تخصیص: میانگین موزون، وگرنه آخرین قیمت خرید */
-function allocationUnitPrice(item: ItemRow): number {
-  return Number(item.weightedAverageCost) || Number((item as { lastPurchasePrice?: number }).lastPurchasePrice) || 0;
+/**
+ * بهای واحد حرکت انبار تخصیص: میانگین موزون کالا، به‌صورت متن دهدهی. OBS-R2-46: پیش‌تر با `Number()` و جایگزین
+ * «آخرین قیمت خرید» (ستونی که جدول کالا ندارد) خوانده می‌شد. خروج همیشه به میانگین موزون در کاردکس ثبت می‌شود و
+ * کالای بی میانگین موزون خارج نمی‌شود (applyStockMovement)، پس بهای سند تخصیص همان بهای کاردکس حرکت خروج خودش است.
+ */
+function allocationUnitPrice(item: ItemRow): string {
+  return fin(item.weightedAverageCost ?? 0).toString();
 }
 
 /** ثبت ردیف تخصیص، رویداد outbox آن و خروجی API */
@@ -242,7 +246,7 @@ async function recordAllocation(txEngine: DbExecutor, params: {
       username: operator.name,
       notes: params.notes,
       recipientPersonnelId: params.recipientPersonnelId,
-      allocatedAt: new Date().toISOString(),
+      allocatedAt: systemNowUtcIso(),
     })
     .returning();
 
@@ -505,7 +509,7 @@ export class ProjectBomAllocationService {
         throw new ConflictError(`این تخصیص «${allocationStatusLabel(alloc.status)}» است و فقط تخصیص «${allocationStatusLabel('allocated')}» مصرف می‌شود.`, { status: alloc.status }, 'ALLOCATION_NOT_OPEN');
       }
 
-      const consumedAt = new Date().toISOString();
+      const consumedAt = systemNowUtcIso();
       await txEngine
         .update(projectBomAllocations)
         .set({
@@ -613,7 +617,7 @@ export class ProjectBomAllocationService {
       await restoreReservationsForAllocation(txEngine, alloc.id, operatorName, opts?.userId);
 
       // 3. Mark allocation as released
-      const releasedAt = new Date().toISOString();
+      const releasedAt = systemNowUtcIso();
       await txEngine
         .update(projectBomAllocations)
         .set({
