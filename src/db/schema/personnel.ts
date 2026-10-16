@@ -55,6 +55,10 @@ export const personnel = pgTable('personnel', {
   // را مهاجرت 0054 فقط روی داده بی کد تکراری می‌سازد (src/services/personnel/personnelCode.ts)؛ v9.0.448 (TD-613): اعلام‌شده تا اسکیما با پایگاه‌داده بخواند
   uq_personnel_code_active: uniqueIndex('uq_personnel_code_active').on(sql`lower(btrim(${table.personnelCode}))`)
     .where(sql`${table.isDeleted} = 0 AND btrim(${table.personnelCode}) <> ''`),
+  // OBS-R2-56 (ت۴۰): ایندکس یکتای جزئی uq_personnel_national_id_active روی btrim(national_id) پرسنل فعال با کد ملی غیرخالی را
+  // مهاجرت 0122 فقط روی داده بی کد ملی تکراری می‌سازد (src/services/personnel/personnelNationalIdUnique.ts)
+  uq_personnel_national_id_active: uniqueIndex('uq_personnel_national_id_active').on(sql`btrim(${table.nationalId})`)
+    .where(sql`${table.isDeleted} = 0 AND btrim(${table.nationalId}) <> ''`),
   idx_personnel_code: index('idx_personnel_code').on(table.personnelCode),
   idx_personnel_user: index('idx_personnel_user').on(table.userId),
   // v9.0.24 (TD-435): ایندکس یکتای جزئی uq_personnel_user_active روی user_id پرسنل فعال را مهاجرت 0053 فقط روی داده

@@ -11111,5 +11111,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runEventsSweepTests } = await import('../regression/eventsSweepTests.js');
   results.push(...await runEventsSweepTests(shouldRun));
 
+  // closing sweep: national ID unique among active personnel (OBS-R2-56, ت۴۰)
+  const { runPersonnelNationalIdTests } = await import('../regression/personnelNationalIdTests.js');
+  results.push(...await runPersonnelNationalIdTests(shouldRun));
+
   return results;
 }

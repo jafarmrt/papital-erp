@@ -178,6 +178,21 @@ export const CONDITIONAL_CONSTRAINT_RULES: readonly ConditionalConstraintRule[] 
     // مثل 0015: ایندکس قدیمی بی سال مالی فقط وقتی برداشته می‌شود که ایندکس تازه ساخته شده باشد
     afterCreate: (schema) => sql`DROP INDEX IF EXISTS ${sql.identifier(schema)}.uq_documents_type_ref_number_active`,
   },
+  // OBS-R2-56: the personnel code (0054) and national ID (0122) indexes are built only on data without duplicates
+  {
+    name: 'uq_personnel_code_active', kind: 'unique_index', table: 'personnel', migration: '0054',
+    label: 'یکتایی کد پرسنلی پرسنل فعال', blockerUnit: 'کد پرسنلی مشترک میان پرسنل فعال',
+    blockerCount: `SELECT COUNT(*)::int AS n FROM (SELECT lower(btrim(personnel_code)) FROM personnel
+      WHERE is_deleted = 0 AND btrim(personnel_code) <> '' GROUP BY lower(btrim(personnel_code)) HAVING COUNT(*) > 1) d`,
+    create: "CREATE UNIQUE INDEX uq_personnel_code_active ON personnel (lower(btrim(personnel_code))) WHERE is_deleted = 0 AND btrim(personnel_code) <> ''",
+  },
+  {
+    name: 'uq_personnel_national_id_active', kind: 'unique_index', table: 'personnel', migration: '0122',
+    label: 'یکتایی کد ملی پرسنل فعال', blockerUnit: 'کد ملی مشترک میان پرسنل فعال',
+    blockerCount: `SELECT COUNT(*)::int AS n FROM (SELECT btrim(national_id) FROM personnel
+      WHERE is_deleted = 0 AND btrim(national_id) <> '' GROUP BY btrim(national_id) HAVING COUNT(*) > 1) d`,
+    create: "CREATE UNIQUE INDEX uq_personnel_national_id_active ON personnel (btrim(national_id)) WHERE is_deleted = 0 AND btrim(national_id) <> ''",
+  },
   // v9.0.445 (TD-611): webhook deliveries and rule action logs, with the ON DELETE the Drizzle schema declares
   notValidForeignKey({
     name: 'fk_webhook_deliveries_subscription', table: 'webhook_deliveries', column: 'subscription_id',

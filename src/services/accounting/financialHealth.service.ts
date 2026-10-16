@@ -53,7 +53,7 @@ import { buildWorkflowRoleReviewHealthTest, findWorkflowRoleReviews } from '../w
 import { buildRetiredRuleActionHealthTest, findRetiredActionRules } from '../events/retiredRuleActionHealth.js';
 import { buildUnpublishedRuleEventHealthTest, findRulesWithUnpublishedEvent } from '../events/unpublishedRuleEventHealth.js';
 import { buildDueReminderHealthTest, findDuplicateDueReminders, hasDueReminderUniqueIndex } from '../notifications/notificationReminderHealth.js';
-import { buildPersonnelCodeHealthTest, findDuplicatePersonnelCodes, hasPersonnelCodeUniqueIndex } from '../personnel/personnelCode.js';
+import { buildPersonnelCodeHealthTest, buildPersonnelNationalIdHealthTest, findDuplicatePersonnelCodes, findDuplicatePersonnelNationalIds, hasPersonnelCodeUniqueIndex, hasPersonnelNationalIdUniqueIndex } from '../personnel/personnelCode.js';
 import { buildSyntheticUsersHealthTest, findActiveSyntheticUsers } from '../users/syntheticUserHealth.js';
 import { buildSecretsAtRestHealthTest, countSecretsAtRest } from '../system/secretsAtRestHealth.js';
 import { buildPersonnelUserLinkHealthTest, findDuplicatePersonnelUserLinks, hasPersonnelUserUniqueIndex } from '../personnel/personnelUserLink.js';
@@ -1127,6 +1127,12 @@ export class FinancialHealthService {
     const personnelCodeTest = buildPersonnelCodeHealthTest(duplicatePersonnelCodes, personnelCodeIndexPresent);
     overallScore += personnelCodeTest.scoreImpact;
     tests.push(personnelCodeTest);
+
+    // آزمون ۱۶ب: OBS-R2-56 (ت۴۰) یکتایی کد ملی پرسنل فعال (مهاجرت 0122)
+    const [duplicateNationalIds, nationalIdIndexPresent] = await Promise.all([findDuplicatePersonnelNationalIds(orm), hasPersonnelNationalIdUniqueIndex(orm)]);
+    const personnelNationalIdTest = buildPersonnelNationalIdHealthTest(duplicateNationalIds, nationalIdIndexPresent);
+    overallScore += personnelNationalIdTest.scoreImpact;
+    tests.push(personnelNationalIdTest);
 
     // آزمون ۱۷: v9.0.35 (TD-445) اقدام قطعی‌سازی بی نقش و بی مجوز در گردش کار فعال اسناد
     const unguardedApprovalTest = buildUnguardedDocumentApprovalHealthTest(await findUnguardedDocumentApprovals());

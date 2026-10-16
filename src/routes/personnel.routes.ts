@@ -26,6 +26,7 @@ import { insertPersonnel, softDeletePersonnel, updatePersonnelAtVersion } from '
 import { requirePersonnelNationalId } from '../services/personnel/personnelNationalId.js';
 import { paddedNationalIdNotice, readImportedNationalId } from '../lib/personnel/nationalIdCell.js';
 import { assertPersonnelCodeAvailable, guardPersonnelCode, isPersonnelCodeUniqueViolation, personnelCodeKey, personnelCodeTakenMessage } from '../services/personnel/personnelCode.js';
+import { assertPersonnelNationalIdAvailable, guardPersonnelNationalId, isPersonnelNationalIdUniqueViolation, personnelNationalIdKey, personnelNationalIdTakenMessage } from '../services/personnel/personnelNationalIdUnique.js';
 import { guardPersonnelUserLink, parsePersonnelUserId, resolvePersonnelUserLink } from '../services/personnel/personnelUserLink.js';
 import { matchesPersonnelSearch, personnelReadScope, scopePersonnelRow, withoutNobitexPassword } from '../services/personnel/personnelFieldScope.js';
 
@@ -331,6 +332,10 @@ router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), v
           });
         } else if (existing) {
           const updated = await orm.transaction(async (tx) => {
+            // OBS-R2-56 (ت۴۰): کد ملی تازه یا عوض‌شده میان پرسنل فعال یکتاست
+            if (nationalId && personnelNationalIdKey(nationalId) !== personnelNationalIdKey(existing.nationalId)) {
+              await assertPersonnelNationalIdAvailable(nationalId, tx, existing.id);
+            }
             const row = await updatePersonnelAtVersion(tx, existing.id, existing.version, {
                 firstName: firstName || existing.firstName,
                 lastName: lastName || existing.lastName,
@@ -371,6 +376,7 @@ router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), v
           updatedCount++;
         } else {
           const newRecord = await orm.transaction(async (tx) => {
+            await assertPersonnelNationalIdAvailable(nationalId, tx);
             const row = await insertPersonnel(tx, {
               firstName,
               lastName,
@@ -414,6 +420,8 @@ router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), v
           row: rowIndex,
           message: isPersonnelCodeUniqueViolation(rowErr)
             ? personnelCodeTakenMessage(String(item.personnelCode ?? ''))
+            : isPersonnelNationalIdUniqueViolation(rowErr)
+            ? personnelNationalIdTakenMessage(readImportedNationalId(item.nationalId).value)
             : rowErr instanceof Error ? rowErr.message : (typeof rowErr === 'string' ? rowErr : 'خطا در ثبت ردیف')
         });
       }
@@ -536,8 +544,11 @@ router.post('/personnel', authorizePermission('personnel.manage'), validate(crea
 
     // v9.0.24 (TD-435): کاربر متصل زیر قفل ردیف کاربر سنجیده می‌شود (ناموجود ۴۲۲، وصل به پرسنل فعال دیگر ۴۰۹)
     // v9.0.28 (TD-439): کد پرسنلی با کلید lower(btrim) میان پرسنل فعال یکتاست؛ نقض ایندکس 0054 همان پیام فارسی ۴۰۰ است
-    const inserted = await guardPersonnelCode(personnelCode, () => guardPersonnelUserLink(() => orm.transaction(async (tx) => {
+    // OBS-R2-56 (ت۴۰): کد ملی غیرخالی میان پرسنل فعال یکتاست (۴۰۹ PERSONNEL_NATIONAL_ID_TAKEN، ایندکس 0122)
+    const newNationalId = requirePersonnelNationalId(nationalId);
+    const inserted = await guardPersonnelNationalId(newNationalId, () => guardPersonnelCode(personnelCode, () => guardPersonnelUserLink(() => orm.transaction(async (tx) => {
       await assertPersonnelCodeAvailable(personnelCode, tx);
+      await assertPersonnelNationalIdAvailable(newNationalId, tx);
       const linkedUserId = await resolvePersonnelUserLink(tx, userId);
       const row = await insertPersonnel(tx, {
           firstName: firstName.trim(),
@@ -548,7 +559,7 @@ router.post('/personnel', authorizePermission('personnel.manage'), validate(crea
           gender,
           birthDate: requireStorageDate(birthDate, 'تاریخ تولد'),
           nationality,
-          nationalId: requirePersonnelNationalId(nationalId),
+          nationalId: newNationalId,
           phone: normalizePhoneNumber(phone),
           employmentStatus,
           salaryType: salaryType && ['none', 'piecework', 'monthly_fixed', 'mixed'].includes(String(salaryType)) ? String(salaryType) : 'none',
@@ -588,7 +599,7 @@ router.post('/personnel', authorizePermission('personnel.manage'), validate(crea
         tx
       });
       return row;
-    })));
+    }))));
 
     res.status(201).json(openPersonnelSecret(inserted));
   } catch (err) {
@@ -659,8 +670,11 @@ router.put('/personnel/:id', authorizePermission('personnel.manage'), validate(u
 
     // v9.0.24 (TD-435): پیوند تازه یا عوض‌شده کاربر زیر قفل ردیف کاربر سنجیده می‌شود؛ پیوند فعلی دست نمی‌خورد
     const codeChanged = personnelCodeKey(personnelCode) !== personnelCodeKey(existing.personnelCode);
-    await guardPersonnelCode(personnelCode ?? '', () => guardPersonnelUserLink(() => orm.transaction(async (tx) => {
+    const nextNationalId = requirePersonnelNationalId(nationalId, existing.nationalId);
+    const nationalIdChanged = personnelNationalIdKey(nextNationalId) !== personnelNationalIdKey(existing.nationalId);
+    await guardPersonnelNationalId(nextNationalId, () => guardPersonnelCode(personnelCode ?? '', () => guardPersonnelUserLink(() => orm.transaction(async (tx) => {
       if (codeChanged) await assertPersonnelCodeAvailable(personnelCode ?? '', tx, id);
+      if (nationalIdChanged) await assertPersonnelNationalIdAvailable(nextNationalId, tx, id);
       const requestedUserId = parsePersonnelUserId(userId);
       const linkedUserId = requestedUserId === existing.userId ? requestedUserId : await resolvePersonnelUserLink(tx, requestedUserId, id);
       const updated = await updatePersonnelAtVersion(tx, id, existing.version, {
@@ -672,7 +686,7 @@ router.put('/personnel/:id', authorizePermission('personnel.manage'), validate(u
           gender,
           birthDate: requireStorageDate(birthDate, 'تاریخ تولد'),
           nationality,
-          nationalId: requirePersonnelNationalId(nationalId, existing.nationalId),
+          nationalId: nextNationalId,
           phone: phone ? normalizePhoneNumber(phone) : '',
           employmentStatus,
           // V10-4.4: مدل حقوق ثابت/ترکیبی
@@ -713,7 +727,7 @@ router.put('/personnel/:id', authorizePermission('personnel.manage'), validate(u
         req,
         tx
       });
-    })));
+    }))));
 
     res.json({ status: 'ok', message: 'اطلاعات پرسنل با موفقیت ویرایش شد' });
   } catch (err) {
