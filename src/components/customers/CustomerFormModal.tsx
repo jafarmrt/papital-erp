@@ -6,15 +6,8 @@ import { emailError } from '../../lib/customers/contactChannels';
 import { CustomerChannelFields } from './CustomerChannelFields';
 import { DialogLayer } from '../common/DialogLayer';
 import { CustomerTagPicker } from './CustomerTags';
+import { IranAddressFields } from './IranAddressFields';
 import type { CustomerTag } from '../../lib/customers/customerTags';
-
-export const IRAN_PROVINCES = [
-  'آذربایجان شرقی', 'آذربایجان غربی', 'اردبیل', 'اصفهان', 'البرز', 'ایلام',
-  'بوشهر', 'تهران', 'چهارمحال و بختیاری', 'خراسان جنوبی', 'خراسان رضوی',
-  'خراسان شمالی', 'خوزستان', 'زنجان', 'سمنان', 'سیستان و بلوچستان', 'فارس',
-  'قزوین', 'قم', 'کردستان', 'کرمان', 'کرمانشاه', 'کهگیلویه و بویراحمد',
-  'گلستان', 'گیلان', 'لرستان', 'مازندران', 'مرکزی', 'هرمزگان', 'همدان', 'یزد'
-];
 
 export const CONTACT_ROLES = [
   'مدیر خرید',
@@ -450,20 +443,12 @@ export function CustomerFormModal({
                   </select>
                 </div>
                 {form.country === 'ایران' && (
-                  <div>
-                    <label htmlFor={`${fieldId}-province`} className="block text-[10px] font-medium mb-1 text-slate-600">استان</label>
-                    <select id={`${fieldId}-province`} value={form.province} onChange={e => setForm({...form, province: e.target.value})} className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white">
-                      <option value="">انتخاب استان...</option>
-                      {IRAN_PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                  </div>
-                )}
-
-                {form.country === 'ایران' && (
-                  <div>
-                    <label htmlFor={`${fieldId}-city`} className="block text-[10px] font-medium mb-1 text-slate-600">شهر</label>
-                    <input id={`${fieldId}-city`} type="text" value={form.city} onChange={e => setForm({...form, city: e.target.value})} className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white" placeholder="نام شهر" />
-                  </div>
+                  <IranAddressFields
+                    id={fieldId}
+                    province={form.province}
+                    city={form.city}
+                    onChange={({ province, city }) => setForm(prev => ({ ...prev, province, city }))}
+                  />
                 )}
               </div>
 
