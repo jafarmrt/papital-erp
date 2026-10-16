@@ -13,7 +13,7 @@ import { runCase, type Harness, type Row, type Session, type ShouldRun } from '.
 const MIGRATION_FILE = '0065_workflow_roles_without_equivalence.sql';
 
 async function tasksOf(h: Harness, s: Session, instanceId: number): Promise<Row[]> {
-  const res = await h.get('/api/workflow/tasks/my-tasks?limit=1000', s);
+  const res = await h.get('/api/workflow/tasks/my-tasks?limit=100', s);
   const rows = Array.isArray(res.body?.data) ? (res.body.data as Row[]) : [];
   return rows.filter(t => Number(t.instanceId ?? (t.instance as Row | undefined)?.id) === instanceId);
 }

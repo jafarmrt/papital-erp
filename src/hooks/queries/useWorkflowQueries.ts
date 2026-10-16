@@ -197,10 +197,17 @@ export function useWorkflowDefinitionVersionsQuery(id?: number) {
   });
 }
 
+export const WORKFLOW_SAVED_MESSAGE = 'طرح گردش کار ذخیره شد.';
+
 export const WORKFLOW_DRAFT_SAVED_MESSAGE = 'پیش‌نویس طرح ذخیره شد؛ پرونده‌های تازه تا انتشار آن در «تاریخچه نسخه‌ها» با نسخه منتشرشده آغاز می‌شوند.';
 
-export function useSaveWorkflowDefinitionMutation() {
+/**
+ * OBS-R2-77: `notifySuccess: false` leaves the success message to the caller (the new workflow window says once whether
+ * the definition was saved active or inactive); an error is always shown here.
+ */
+export function useSaveWorkflowDefinitionMutation(options: { notifySuccess?: boolean } = {}) {
   const queryClient = useQueryClient();
+  const notifySuccess = options.notifySuccess !== false;
 
   return useMutation({
     mutationFn: async (payload: any) => {
@@ -213,7 +220,7 @@ export function useSaveWorkflowDefinitionMutation() {
       // TD-469: پیشوند definitions جزئیات و نسخه‌ها را هم دربرمی‌گیرد (پیش‌تر کلید جزئیات ['workflow','definition',id] بود)
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workflow.definitions() });
       // v10.1.21 (TD-1270): a save of an existing workflow is a draft that new records do not see until it is published
-      toast.success(payload?.id ? WORKFLOW_DRAFT_SAVED_MESSAGE : 'طرح گردش کار ذخیره شد.');
+      if (notifySuccess) toast.success(payload?.id ? WORKFLOW_DRAFT_SAVED_MESSAGE : WORKFLOW_SAVED_MESSAGE);
     },
     onError: (err: any) => {
       toast.error(err.message || 'طرح گردش کار ذخیره نشد؛ دوباره تلاش کنید.');
@@ -261,13 +268,23 @@ export function useWorkflowSlaAnalyticsQuery() {
   });
 }
 
+/**
+ * OBS-R2-70: the inbox and its counts are read again once a minute, and only while the tab is visible; each read matches
+ * every pending task on the server, and a 15-second poll in a background tab kept it busy for nobody.
+ */
+export const WORKFLOW_INBOX_POLL_MS = 60_000;
+/** OBS-R2-70: the server's largest inbox page (`MY_TASKS_MAX_LIMIT`) */
+export const WORKFLOW_INBOX_MAX_LIMIT = 100;
+
 export function useMyTasksQuery(status = 'pending', page = 1, limit = 50) {
+  const pageSize = Math.min(WORKFLOW_INBOX_MAX_LIMIT, Math.max(1, limit));
   return useQuery({
-    queryKey: ['workflow', 'tasks', 'my-tasks', status, page, limit],
+    queryKey: ['workflow', 'tasks', 'my-tasks', status, page, pageSize],
     queryFn: async () => {
-      return fetchJson(`/workflow/tasks/my-tasks?status=${status}&page=${page}&limit=${limit}`);
+      return fetchJson(`/workflow/tasks/my-tasks?status=${status}&page=${page}&limit=${pageSize}`);
     },
-    refetchInterval: 15000
+    refetchInterval: WORKFLOW_INBOX_POLL_MS,
+    refetchIntervalInBackground: false
   });
 }
 
@@ -277,7 +294,8 @@ export function useTaskStatsQuery() {
     queryFn: async () => {
       return fetchJson('/workflow/tasks/stats');
     },
-    refetchInterval: 15000
+    refetchInterval: WORKFLOW_INBOX_POLL_MS,
+    refetchIntervalInBackground: false
   });
 }
 

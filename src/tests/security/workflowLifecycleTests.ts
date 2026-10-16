@@ -222,7 +222,7 @@ export async function runWorkflowLifecycleTests(shouldRun: ShouldRun): Promise<T
       await h.q(`UPDATE workflow_tasks SET due_at = now() - interval '1 hour' WHERE instance_id = $1 AND status = 'pending'`, [late]);
 
       const tab = async (s: typeof accountant, status: string) => {
-        const res = await h.get(`/api/workflow/tasks/my-tasks?status=${status}&limit=1000`, s);
+        const res = await h.get(`/api/workflow/tasks/my-tasks?status=${status}&limit=100`, s);
         if (res.status !== 200) { wrong.push(`Tab ${status}: ${res.status}`); return [] as Row[]; }
         return Array.isArray(res.body?.data) ? (res.body.data as Row[]) : [];
       };

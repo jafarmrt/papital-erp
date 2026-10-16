@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { LayoutTemplate, Plus, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { useCreateWorkflowFromTemplateMutation, useSaveWorkflowDefinitionMutation } from '../../hooks/queries/useWorkflowQueries';
+import { WORKFLOW_SAVED_MESSAGE, useCreateWorkflowFromTemplateMutation, useSaveWorkflowDefinitionMutation } from '../../hooks/queries/useWorkflowQueries';
 import { NEW_WORKFLOW_SAVED_INACTIVE } from '../../lib/workflow/workflowLifecycle';
 import { WORKFLOW_ENTITY_TYPES, workflowEntityTypeLabel } from '../../lib/workflow/workflowEntityLabels';
 import { TEMPLATE_DEFINITION_SAVED_INACTIVE, WORKFLOW_TEMPLATES, type WorkflowTemplateId } from '../../lib/workflow/workflowTemplates';
@@ -33,7 +33,8 @@ function blankDesign() {
  * from `WORKFLOW_ENTITY_TYPES` (OBS-R2-76), never a type no workflow starts on.
  */
 export function WorkflowCreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (definitionId: number) => void }) {
-  const saveMutation = useSaveWorkflowDefinitionMutation();
+  // OBS-R2-77: one message per creation, written here; the mutation shows only an error
+  const saveMutation = useSaveWorkflowDefinitionMutation({ notifySuccess: false });
   const templateMutation = useCreateWorkflowFromTemplateMutation();
   const [mode, setMode] = useState<CreateMode>('template');
   const [templateId, setTemplateId] = useState<WorkflowTemplateId>(WORKFLOW_TEMPLATES[0].id);
@@ -70,6 +71,7 @@ export function WorkflowCreateModal({ onClose, onCreated }: { onClose: () => voi
       });
       // v10.1.7 (TD-1229, decision ت۲۷): a new workflow is active only when its record type has none
       if (Number(result?.data?.isActive) !== 1) toast(NEW_WORKFLOW_SAVED_INACTIVE, { duration: 8000 });
+      else toast.success(WORKFLOW_SAVED_MESSAGE);
       const id = Number(result?.data?.id);
       if (id > 0) onCreated(id);
     } catch {

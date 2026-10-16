@@ -41,6 +41,12 @@ const FIELD_LABELS: Record<string, string> = {
   purchasePrice: 'قیمت خرید',
   salesPrice: 'قیمت فروش',
   balance: 'مانده حساب',
+  // OBS-R2-67: fields of a bank account and a purchase requisition
+  bankName: 'نام بانک',
+  initialBalance: 'مانده افتتاحیه',
+  currentBalance: 'مانده جاری',
+  totalEstimatedAmount: 'برآورد مبلغ',
+  requiredDate: 'تاریخ نیاز',
 };
 
 const OPERATOR_TEXT: Record<string, string> = {

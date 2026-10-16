@@ -45,7 +45,7 @@ async function startTwoRejectWorkflow(h: Harness, code: string): Promise<{ insta
 }
 
 async function inboxRowOf(h: Harness, instanceId: number): Promise<Row | undefined> {
-  const res = await h.get('/api/workflow/tasks/my-tasks?status=pending&limit=1000');
+  const res = await h.get('/api/workflow/tasks/my-tasks?status=pending&limit=100');
   return (Array.isArray(res.body?.data) ? (res.body.data as Row[]) : []).find(r => Number(r.instanceId) === instanceId);
 }
 

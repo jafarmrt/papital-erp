@@ -7,10 +7,10 @@ import {
   customers, 
   crmLeads, 
   journalVouchers,
-  purchaseRequisitions
+  purchaseRequisitions,
+  bankAccounts
 } from '../../db/schema';
 import { eq } from 'drizzle-orm';
-import { logger } from '../../middleware/logger';
 import { workflowDocumentAmount } from './workflowDocumentAmount.js';
 import { RuleEngineService, RuleExpression, EvaluationTraceResult, EvaluationTraceItem } from '../ruleEngine.service.js';
 
@@ -101,110 +101,132 @@ export class WorkflowRuleEngine {
 
 /**
  * Fetch context data for an entity to evaluate JSON conditions
+ *
+ * OBS-R2-67: a database error reaches the caller. It was logged and an empty context returned, so a transition's rules
+ * were evaluated on nothing and the step either opened or closed on missing data; inside a transaction the aborted
+ * statement also failed every later one with an unrelated message. A bank account and a purchase requisition carry the
+ * fields their records hold (amount, currency, status …), so a rule on them compares real values.
  */
 export async function getEntityContext(entityType: string, entityId: string, txExecutor: DbExecutor = orm): Promise<Record<string, unknown>> {
   const context: Record<string, unknown> = { entityType, entityId };
-  try {
-    const numericId = Number(entityId) || 0;
-    if (entityType === 'document' || entityType === 'doc' || entityType === 'invoice' || entityType === 'proforma') {
-      let doc: typeof documents.$inferSelect | undefined = undefined;
-      if (numericId > 0) {
-        [doc] = await txExecutor.select().from(documents).where(eq(documents.id, numericId));
-      }
-      if (!doc) {
-        [doc] = await txExecutor.select().from(documents).where(eq(documents.refNumber, String(entityId)));
-      }
-      if (doc) {
-        // v8.0.123 (TD-404): مبلغ قابل پرداخت ریالی (با مالیات، هزینه خدمات و تسعیر)؛ سند ارزی بی نرخ NaN
-        const docAmount = await workflowDocumentAmount(txExecutor, doc);
-        context.amount = docAmount.amountIrr;
-        context.finalAmount = docAmount.amountIrr;
-        context.totalAmount = docAmount.amountIrr;
-        context.amountInCurrency = docAmount.amountInCurrency;
-        context.exchangeRate = docAmount.exchangeRate;
-        context.itemCount = docAmount.lineCount;
-        context.docType = doc.type;
-        context.type = doc.type;
-        context.status = doc.status;
-        context.buyerName = doc.buyerName || '';
-        context.buyer_name = doc.buyerName || '';
-        context.buyerCity = doc.buyerCity || '';
-        context.buyer_city = doc.buyerCity || '';
-        context.currency = doc.currency || 'IRR';
-        context.refNumber = doc.refNumber || '';
-        context.ref_number = doc.refNumber || '';
-        context.createdById = (doc as any).createdById;
-        context.notes = doc.notes || '';
-      }
-    } else if (entityType === 'project') {
-      const [proj] = await txExecutor.select().from(productionProjects).where(eq(productionProjects.id, numericId));
-      if (proj) {
-        context.priority = proj.priority || 'medium';
-        context.quantity = Number(proj.quantity) || 1;
-        context.status = proj.status;
-        context.title = proj.title;
-        context.projectCode = proj.projectCode || '';
-      }
-    } else if (entityType === 'pending_material') {
-      const [mat] = await txExecutor.select().from(pendingMaterials).where(eq(pendingMaterials.id, numericId));
-      if (mat) {
-        context.weight = Number(mat.weight) || 0;
-        context.unit = mat.unit;
-        context.category = mat.category || '';
-        context.status = mat.status;
-        context.title = mat.name || '';
-      }
-    } else if (entityType === 'item') {
-      const [item] = await txExecutor.select().from(items).where(eq(items.id, numericId));
-      if (item) {
-        const itemRecord = item as unknown as Record<string, unknown>;
-        context.code = item.code;
-        context.name = item.name;
-        context.category = item.category;
-        context.currentStock = Number(item.currentStock) || 0;
-        context.purchasePrice = Number(itemRecord.purchasePrice) || Number(item.weightedAverageCost) || 0;
-        context.salesPrice = Number(itemRecord.salesPrice) || 0;
-      }
-    } else if (entityType === 'customer') {
-      const [cust] = await txExecutor.select().from(customers).where(eq(customers.id, numericId));
-      if (cust) {
-        const custRecord = cust as unknown as Record<string, unknown>;
-        context.code = String(custRecord.code || cust.id);
-        context.name = cust.name;
-        context.type = cust.partyType;
-        context.balance = Number(custRecord.balance) || 0;
-      }
-    } else if (entityType === 'crm_lead') {
-      const [lead] = await txExecutor.select().from(crmLeads).where(eq(crmLeads.id, numericId));
-      if (lead) {
-        context.title = lead.title;
-        context.status = lead.status;
-        context.value = Number(lead.estimatedValue) || 0;
-        context.estimatedValue = Number(lead.estimatedValue) || 0;
-        context.source = lead.source || '';
-      }
-    } else if (entityType === 'purchase_requisition') {
-      // v10.0.149 (TD-1178): the inbox card shows the requisition's own code and priority, never its row id
-      const [req] = await txExecutor.select().from(purchaseRequisitions).where(eq(purchaseRequisitions.id, numericId));
-      if (req) {
-        context.code = req.code;
-        context.title = req.title;
-        context.priority = req.priority;
-        context.status = req.status;
-      }
-    } else if (entityType === 'journal_voucher') {
-      const [jv] = await txExecutor.select().from(journalVouchers).where(eq(journalVouchers.id, numericId));
-      if (jv) {
-        context.voucherNumber = jv.voucherNumber;
-        context.status = jv.status;
-        context.totalDebit = Number(jv.totalDebit) || 0;
-        context.totalCredit = Number(jv.totalCredit) || 0;
-        context.amount = Number(jv.totalDebit) || 0;
-      }
+  const numericId = Number(entityId) || 0;
+  if (entityType === 'document' || entityType === 'doc' || entityType === 'invoice' || entityType === 'proforma') {
+    let doc: typeof documents.$inferSelect | undefined = undefined;
+    if (numericId > 0) {
+      [doc] = await txExecutor.select().from(documents).where(eq(documents.id, numericId));
     }
-  } catch (err: unknown) {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    logger.warn(`[WorkflowDslParser] Entity context error for ${entityType} #${entityId}: ${errMsg}`);
+    if (!doc) {
+      [doc] = await txExecutor.select().from(documents).where(eq(documents.refNumber, String(entityId)));
+    }
+    if (doc) {
+      // v8.0.123 (TD-404): مبلغ قابل پرداخت ریالی (با مالیات، هزینه خدمات و تسعیر)؛ سند ارزی بی نرخ NaN
+      const docAmount = await workflowDocumentAmount(txExecutor, doc);
+      context.amount = docAmount.amountIrr;
+      context.finalAmount = docAmount.amountIrr;
+      context.totalAmount = docAmount.amountIrr;
+      context.amountInCurrency = docAmount.amountInCurrency;
+      context.exchangeRate = docAmount.exchangeRate;
+      context.itemCount = docAmount.lineCount;
+      context.docType = doc.type;
+      context.type = doc.type;
+      context.status = doc.status;
+      context.buyerName = doc.buyerName || '';
+      context.buyer_name = doc.buyerName || '';
+      context.buyerCity = doc.buyerCity || '';
+      context.buyer_city = doc.buyerCity || '';
+      context.currency = doc.currency || 'IRR';
+      context.refNumber = doc.refNumber || '';
+      context.ref_number = doc.refNumber || '';
+      context.createdById = (doc as any).createdById;
+      context.notes = doc.notes || '';
+    }
+  } else if (entityType === 'project') {
+    const [proj] = await txExecutor.select().from(productionProjects).where(eq(productionProjects.id, numericId));
+    if (proj) {
+      context.priority = proj.priority || 'medium';
+      context.quantity = Number(proj.quantity) || 1;
+      context.status = proj.status;
+      context.title = proj.title;
+      context.projectCode = proj.projectCode || '';
+    }
+  } else if (entityType === 'pending_material') {
+    const [mat] = await txExecutor.select().from(pendingMaterials).where(eq(pendingMaterials.id, numericId));
+    if (mat) {
+      context.weight = Number(mat.weight) || 0;
+      context.unit = mat.unit;
+      context.category = mat.category || '';
+      context.status = mat.status;
+      context.title = mat.name || '';
+    }
+  } else if (entityType === 'item') {
+    const [item] = await txExecutor.select().from(items).where(eq(items.id, numericId));
+    if (item) {
+      const itemRecord = item as unknown as Record<string, unknown>;
+      context.code = item.code;
+      context.name = item.name;
+      context.category = item.category;
+      context.currentStock = Number(item.currentStock) || 0;
+      context.purchasePrice = Number(itemRecord.purchasePrice) || Number(item.weightedAverageCost) || 0;
+      context.salesPrice = Number(itemRecord.salesPrice) || 0;
+    }
+  } else if (entityType === 'customer') {
+    const [cust] = await txExecutor.select().from(customers).where(eq(customers.id, numericId));
+    if (cust) {
+      const custRecord = cust as unknown as Record<string, unknown>;
+      context.code = String(custRecord.code || cust.id);
+      context.name = cust.name;
+      context.type = cust.partyType;
+      context.balance = Number(custRecord.balance) || 0;
+    }
+  } else if (entityType === 'crm_lead') {
+    const [lead] = await txExecutor.select().from(crmLeads).where(eq(crmLeads.id, numericId));
+    if (lead) {
+      context.title = lead.title;
+      context.status = lead.status;
+      context.value = Number(lead.estimatedValue) || 0;
+      context.estimatedValue = Number(lead.estimatedValue) || 0;
+      context.source = lead.source || '';
+    }
+  } else if (entityType === 'purchase_requisition') {
+    // v10.0.149 (TD-1178): the inbox card shows the requisition's own code and priority, never its row id
+    const [req] = await txExecutor.select().from(purchaseRequisitions).where(eq(purchaseRequisitions.id, numericId));
+    if (req) {
+      const lines = Array.isArray(req.items) ? req.items : [];
+      context.code = req.code;
+      context.title = req.title;
+      context.priority = req.priority;
+      context.status = req.status;
+      context.amount = Number(req.totalEstimatedAmount) || 0;
+      context.totalAmount = Number(req.totalEstimatedAmount) || 0;
+      context.totalEstimatedAmount = Number(req.totalEstimatedAmount) || 0;
+      context.itemCount = lines.length;
+      context.projectCode = req.projectCode || '';
+      context.requiredDate = req.requiredDate || '';
+      context.requestedById = req.requestedById;
+    }
+  } else if (entityType === 'bank_account') {
+    // OBS-R2-67: the bank account approval compares its opening balance, type and currency
+    const [bank] = await txExecutor.select().from(bankAccounts).where(eq(bankAccounts.id, numericId));
+    if (bank) {
+      context.code = bank.code;
+      context.title = bank.title;
+      context.type = bank.type;
+      context.bankName = bank.bankName || '';
+      context.currency = bank.currency || 'IRR';
+      context.amount = Number(bank.initialBalance) || 0;
+      context.initialBalance = Number(bank.initialBalance) || 0;
+      context.currentBalance = Number(bank.currentBalance) || 0;
+      context.isActive = Number(bank.isActive ?? 1);
+    }
+  } else if (entityType === 'journal_voucher') {
+    const [jv] = await txExecutor.select().from(journalVouchers).where(eq(journalVouchers.id, numericId));
+    if (jv) {
+      context.voucherNumber = jv.voucherNumber;
+      context.status = jv.status;
+      context.totalDebit = Number(jv.totalDebit) || 0;
+      context.totalCredit = Number(jv.totalCredit) || 0;
+      context.amount = Number(jv.totalDebit) || 0;
+    }
   }
   return context;
 }

@@ -62,11 +62,11 @@ export async function runWorkflowInboxGateTests(shouldRun: ShouldRun): Promise<T
         const { instanceId } = await startOneStep(h, code);
         const reader = await h.sessionWith(['workflow.view']);
         const approver = await h.sessionWith(['workflow.view', 'workflow.approve']);
-        const readerRows = rowsOf((await h.get('/api/workflow/tasks/my-tasks?status=pending&limit=1000', reader)).body);
+        const readerRows = rowsOf((await h.get('/api/workflow/tasks/my-tasks?status=pending&limit=100', reader)).body);
         if (readerRows.some(r => Number(r.instanceId) === instanceId)) wrong.push('a workflow.view-only user gets an inbox task they cannot execute');
         const stats = await h.get('/api/workflow/tasks/stats', reader);
         if (Number(stats.body?.pendingCount) !== 0) wrong.push(`a workflow.view-only user has pendingCount ${String(stats.body?.pendingCount)}, expected 0`);
-        const approverRows = rowsOf((await h.get('/api/workflow/tasks/my-tasks?status=pending&limit=1000', approver)).body);
+        const approverRows = rowsOf((await h.get('/api/workflow/tasks/my-tasks?status=pending&limit=100', approver)).body);
         if (!approverRows.some(r => Number(r.instanceId) === instanceId)) wrong.push('a workflow.approve user lost the roleless task');
       } finally {
         await dropDefinition(h, code);

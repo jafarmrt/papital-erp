@@ -48,6 +48,7 @@ import { PROJECT_PRIORITIES, PROJECT_STATUSES, STAGE_STATUSES } from '../../lib/
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
 import { buildUnguardedPurchaseActionHealthTest, findUnguardedPurchaseActions } from './unguardedPurchaseActionHealth.js';
 import { buildUnguardedDocumentStepHealthTest, findUnguardedDocumentSteps } from './unguardedDocumentStepHealth.js';
+import { buildUnguardedDocumentInstanceHealthTest, findUnguardedDocumentInstances } from './unguardedDocumentInstanceHealth.js';
 import { buildWorkflowRoleReviewHealthTest, findWorkflowRoleReviews } from '../workflow/workflowRoleReview.js';
 import { buildRetiredRuleActionHealthTest, findRetiredActionRules } from '../events/retiredRuleActionHealth.js';
 import { buildUnpublishedRuleEventHealthTest, findRulesWithUnpublishedEvent } from '../events/unpublishedRuleEventHealth.js';
@@ -1136,6 +1137,11 @@ export class FinancialHealthService {
     const unguardedDocumentStepTest = buildUnguardedDocumentStepHealthTest(await findUnguardedDocumentSteps(orm));
     overallScore += unguardedDocumentStepTest.scoreImpact;
     tests.push(unguardedDocumentStepTest);
+
+    // آزمون ۱۷د: OBS-R2-78 فرایند در جریان سند که تصویرش اقدام قطعی‌سازی بی نقش و بی مجوز دارد (فقط فهرست)
+    const unguardedDocumentInstanceTest = buildUnguardedDocumentInstanceHealthTest(await findUnguardedDocumentInstances(orm));
+    overallScore += unguardedDocumentInstanceTest.scoreImpact;
+    tests.push(unguardedDocumentInstanceTest);
 
     // آزمون ۱۷الف: v10.0.37 (OBS-R2-36) اقدام بی نقش و بی مجوز در گردش کار فعال درخواست خرید
     const unguardedPurchaseTest = buildUnguardedPurchaseActionHealthTest(await findUnguardedPurchaseActions(orm));
