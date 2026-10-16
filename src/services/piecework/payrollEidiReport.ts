@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
-import { daysInclusive, eidiEntitlement } from '../../lib/payroll/eidi.js';
+import { daysInclusive, eidiEntitlement, isEidiCovered } from '../../lib/payroll/eidi.js';
 import type { EidiReport, EidiReportRow } from '../../lib/payroll/eidiReport.js';
 import { serviceEndOf, serviceStartOf } from '../../lib/payroll/payrollPeriod.js';
 import { jalaliYearBounds } from '../../utils/calendarDate.js';
@@ -11,6 +11,8 @@ import { eidiRatesOf, eidiRatesOfYear } from './payrollEidi.js';
 /**
  * v10.0.222 (TD-1089، طرح حقوق §۳.۸): گزارش «عیدی سال». جمع فیش‌های هر پرسنل در SQL است (§1.8)؛ در روش‌های «قانون کار» و
  * «مبلغ ثابت» پرسنلی هم که همکاری‌اش با سال هم‌پوشانی دارد ولی فیشی ندارد آمده است.
+ * v10.1.32 (TD-1282، تصمیم ت۳۴ الف): پرسنلی که «مشمول عیدی» نیست حق سال ندارد؛ بی فیش عیدی در گزارش نمی‌آید و با فیش عیدی
+ * مانده‌ای ندارد.
  */
 export async function payrollEidiReport(jalaliYear: number): Promise<EidiReport> {
   const bounds = Number.isInteger(jalaliYear) ? jalaliYearBounds(jalaliYear) : null;
@@ -30,12 +32,12 @@ export async function payrollEidiReport(jalaliYear: number): Promise<EidiReport>
        GROUP BY p.personnel_id
     )
     SELECT pe.id, pe.full_name, COALESCE(pe.personnel_code, '') AS personnel_code, pe.start_date, pe.end_date, pe.employment_status,
-           COALESCE(pe.monthly_salary, 0)::text AS monthly_salary,
+           COALESCE(pe.monthly_salary, 0)::text AS monthly_salary, pe.is_eidi_covered,
            s.accrued, s.draft_shares, s.issued, s.issued_from_accrual, s.paid
       FROM personnel pe
       LEFT JOIN sums s ON s.personnel_id = pe.id
      WHERE s.personnel_id IS NOT NULL
-        OR (${accrues ? sql`false` : sql`true`} AND pe.is_deleted = 0)
+        OR (${accrues ? sql`false` : sql`true`} AND pe.is_deleted = 0 AND pe.is_eidi_covered = 1)
      ORDER BY pe.full_name, pe.id`);
   const yearDays = daysInclusive(bounds.firstDay, bounds.lastDay);
   const rows: EidiReportRow[] = [];
@@ -44,7 +46,10 @@ export async function payrollEidiReport(jalaliYear: number): Promise<EidiReport>
     const t = (k: string) => fin(String(r[k] ?? '0'));
     let due: FinancialDecimal = t('accrued');
     let settled = t('issued_from_accrual');
-    if (rates && !accrues) {
+    if (rates && !accrues && !isEidiCovered({ isEidiCovered: Number(r.is_eidi_covered) })) {
+      due = t('issued');
+      settled = t('issued');
+    } else if (rates && !accrues) {
       const start = serviceStartOf({ startDate: r.start_date as string | null });
       const end = serviceEndOf({ employmentStatus: r.employment_status as string | null, endDate: r.end_date as string | null });
       const from = start && start > bounds.firstDay ? start : bounds.firstDay;

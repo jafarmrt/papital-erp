@@ -19,6 +19,7 @@ import { auditPayrollDeleted, auditPayrollIssued, auditPayrollUpdated } from './
 import { payrollStatusLabel } from '../../lib/payroll/payrollStatusLabels.js';
 import { assertPayrollDutyNotByIssuer } from './payrollDuties.js';
 import { resolvePayrollStatutory, statutoryAuditInfo, statutoryPayrollColumns, type StatutoryEntryInput } from './payrollStatutory.js';
+import { isEidiCovered } from '../../lib/payroll/eidi.js';
 import { assertEidiShareNotSettled, lockPayrollPersonnel, payslipEidiColumns, resolvePayslipEidiShare } from './payrollEidi.js';
 
 /**
@@ -238,7 +239,7 @@ export class PieceworkPayrollService {
       }
 
       // v10.0.222 (TD-1089، طرح حقوق §۳.۸، ت۱۴ الف): سهم عیدی از کارکرد و حقوق ثابت، بی پاداش و کسورات؛ از خالص کم نمی‌شود
-      const eidi = await resolvePayslipEidiShare(tx, { personnelId: pId, endIso: eDate, base: pieceworkTotalFin.add(fixedPortionFin) });
+      const eidi = await resolvePayslipEidiShare(tx, { personnelId: pId, endIso: eDate, base: pieceworkTotalFin.add(fixedPortionFin), eidiCovered: isEidiCovered(pInfo) });
 
       const pieceworkTotal = money(pieceworkTotalFin.round(4));
       const fixedPortion = money(fixedPortionFin.round(4));

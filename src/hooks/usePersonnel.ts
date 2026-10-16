@@ -36,6 +36,7 @@ export interface PersonnelFormData {
   // v10.0.210 (TD-1087): «مشمول بیمه» و «مشمول مالیات حقوق»
   isInsuranceCovered: boolean;
   isTaxCovered: boolean;
+  isEidiCovered: boolean;
   endDate: string;
   terminationReason: string;
   specializedSkills: string;
@@ -70,6 +71,7 @@ const INITIAL_FORM_DATA: PersonnelFormData = {
   startDate: '',
   isInsuranceCovered: false,
   isTaxCovered: false,
+  isEidiCovered: true,
   endDate: '',
   terminationReason: '',
   specializedSkills: '',
@@ -158,6 +160,7 @@ export function usePersonnel() {
       startDate: p.startDate || '',
       isInsuranceCovered: Number(p.isInsuranceCovered ?? 0) === 1,
       isTaxCovered: Number(p.isTaxCovered ?? 0) === 1,
+      isEidiCovered: Number(p.isEidiCovered ?? 1) === 1,
       endDate: p.endDate || '',
       terminationReason: p.terminationReason || '',
       specializedSkills: p.specializedSkills || '',

@@ -64,6 +64,11 @@ export function eidiRatesError(r: EidiRates): string | null {
   return null;
 }
 
+/** «مشمول عیدی» پرونده پرسنل (v10.1.32، TD-1282)؛ مقدار نخوانده روشن است، مثل پیش‌فرض ستون */
+export const isEidiCovered = (person: { isEidiCovered?: number | null }): boolean => Number(person.isEidiCovered ?? 1) === 1;
+
+export const EIDI_NOT_COVERED_NOTE = 'این نفر «مشمول عیدی» نیست؛ فقط عیدی انباشته‌ای که پیش‌تر برایش ثبت شده پیشنهاد می‌شود و مبلغ دیگر شرح می‌خواهد.';
+
 /**
  * سهم عیدی یک فیش عادی در روش درصدی: گرد(پایه × درصد ÷ ۱۰۰)، کمینه با آنچه از سقف سال مانده است (`otherShares` جمع سهم
  * فیش‌های زنده دیگر همان پرسنل در همان سال). روش دیگر یا بی نرخ صفر است.
@@ -116,7 +121,8 @@ export interface EidiPayslipSuggestion {
 
 /**
  * مبلغ پیشنهادی «فیش عیدی»: در روش درصدی سهم انباشته فیش‌های تأییدشده منهای آنچه فیش‌های عیدی پیشین از انباشته پرداخته‌اند؛
- * در دو روش دیگر حق سال منهای جمع فیش‌های عیدی پیشین همان سال.
+ * در دو روش دیگر حق سال منهای جمع فیش‌های عیدی پیشین همان سال. پرسنلی که «مشمول عیدی» نیست (`covered: false`، v10.1.32،
+ * TD-1282) حق سال ندارد و فقط عیدی انباشته‌ای که پیش‌تر برایش ثبت شده پیشنهاد می‌شود.
  */
 export function suggestEidiPayslip(input: {
   rates: EidiRates;
@@ -126,10 +132,11 @@ export function suggestEidiPayslip(input: {
   monthlySalary: DecimalValue;
   workedDays: number;
   yearDays: number;
+  covered?: boolean;
 }): EidiPayslipSuggestion {
   const remaining = fin(input.accruedApproved ?? 0).subtract(fin(input.issuedFromAccrual ?? 0));
   const remainingAccrual = remaining.isPositive() ? remaining : fin(0);
-  const entitlement = eidiEntitlement(input);
+  const entitlement = input.covered === false ? null : eidiEntitlement(input);
   const due = entitlement === null ? remainingAccrual : entitlement.subtract(fin(input.issuedTotal ?? 0));
   return {
     method: input.rates.method,
