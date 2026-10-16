@@ -17,7 +17,7 @@ import { requireStorageDate } from '../../../lib/storageDate.js';
 import { isoToJalaliDate } from '../../../utils/calendarDate.js';
 import { assertNoVoucherAllowed } from './noVoucherTreasury.js';
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
-import { requireChequeBankAccount } from './bankLinks.js';
+import { assertChequeClearingAccountType, requireChequeBankAccount } from './bankLinks.js';
 import { normalizePartyPurpose, requireChoosableContraAccount } from './partyContraAccount.js';
 import { assertPersonnelPartyId, resolveTreasuryPartyName } from './treasuryLinks.js';
 import { chequePartyPosting, requireChequePartyAccount, resolveChequePartyAccountId } from './chequePartyAccount.js';
@@ -382,15 +382,24 @@ export class ChequeLifecycleService {
       // 1. Pre-read cheque to check target bank account if status is passed
       let targetBankId = data.bankAccountId;
       let chequeCurrency = 'IRR';
-      if (data.status === 'passed' && !targetBankId) {
-        const [preCheck] = await txEngine.select({ bankAccountId: cheques.bankAccountId, currency: cheques.currency }).from(cheques).where(eq(cheques.id, id));
-        if (preCheck) {
-          targetBankId = preCheck.bankAccountId;
-          chequeCurrency = preCheck.currency || 'IRR';
-        }
-      } else if (data.status === 'passed') {
-        const [preCheck] = await txEngine.select({ currency: cheques.currency }).from(cheques).where(eq(cheques.id, id));
+      if (data.status === 'passed') {
+        const [preCheck] = await txEngine.select({ bankAccountId: cheques.bankAccountId, currency: cheques.currency, type: cheques.type })
+          .from(cheques).where(eq(cheques.id, id));
         chequeCurrency = preCheck?.currency || 'IRR';
+        // v10.1.47: چک پرداختی فقط از حسابی وصول می‌شود که از آن صادر شده؛ پیش‌تر حساب فرستاده‌شده برنده بود و سند وصول
+        // حساب بانکی دیگری را بستانکار می‌کرد. حساب دیگر 422 `CHEQUE_PAID_BANK_FIXED` است.
+        if (preCheck?.type === 'paid' && preCheck.bankAccountId) {
+          if (targetBankId && Number(targetBankId) !== preCheck.bankAccountId) {
+            throw new ValidationError(
+              'چک پرداختی فقط از حساب بانکی صادرکننده‌اش وصول می‌شود؛ حساب دیگری انتخاب نکنید.',
+              { bankAccountId: targetBankId, issuingBankAccountId: preCheck.bankAccountId },
+              'CHEQUE_PAID_BANK_FIXED',
+            );
+          }
+          targetBankId = preCheck.bankAccountId;
+        } else if (!targetBankId) {
+          targetBankId = preCheck?.bankAccountId ?? null;
+        }
       }
 
       let bankRecord: typeof bankAccounts.$inferSelect | null = null;
@@ -410,6 +419,7 @@ export class ChequeLifecycleService {
         // 1. Lock bank account (level 10) FIRST
         const [bank] = await txEngine.select().from(bankAccounts).where(and(eq(bankAccounts.id, targetBankId), eq(bankAccounts.isDeleted, 0))).for('update');
         if (!bank) throw new NotFoundError('حساب بانکی یافت نشد');
+        assertChequeClearingAccountType(bank); // v10.1.47 (ت۴۰): فقط حساب بانکی یا صندوق
 
         // V1.4.0: گارد هم‌ارزی ارز — چک با ارز متفاوت از حساب بانکی قابل وصول نیست
         if (bank.currency && chequeCurrency && bank.currency !== chequeCurrency) {
@@ -431,7 +441,7 @@ export class ChequeLifecycleService {
         // نوشتن حساب بانکی قفل کلید خارجی بانک را می‌خواست، در حالی که «وصول» هم‌زمان بانک را گرفته و منتظر چک بود: بن‌بست.
         // v10.1.47 (OBS-R1-70): فقط ارسال به وصول حساب بانکی چک را عوض می‌کند؛ در گام‌های دیگر حساب فرستاده‌شده نادیده است
         nextBankId = chequeStepTakesBankAccount(data.status) && Number(data.bankAccountId) > 0
-          ? await requireChequeBankAccount(txEngine, data.bankAccountId)
+          ? await requireChequeBankAccount(txEngine, data.bankAccountId, { clearing: true })
           : null;
         validateLockOrder([
           ...(nextBankId ? [{ name: 'bankAccount', hierarchyLevel: LockHierarchyLevel.BANK_ACCOUNTS }] : []),

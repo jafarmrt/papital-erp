@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
-import { CHEQUE_STATUSES, CHEQUE_STATUS_LABELS, chequeHasNextStep, chequeNextStatuses, chequeStepTakesBankAccount } from '../../lib/treasury/chequeTransitions';
+import { CHEQUE_STATUSES, CHEQUE_STATUS_LABELS, chequeHasNextStep, chequeNextStatuses, chequeStepTakesBankAccount, isChequeClearingAccountType } from '../../lib/treasury/chequeTransitions';
 
 // v10.1.47 closing sweep: OBS-R1-61 (paid cheque steps), OBS-R1-70 (bank account only for collection and clearing),
 // OBS-PR-12 (the list filter takes the real statuses).
@@ -38,5 +38,17 @@ describe('OBS-R2-04: saving settings reads the shop warehouse with the save tran
     const src = read('src/services/settings/systemSettings.service.ts');
     expect(src).toContain('await validateSettingValue(tx, item.key, value)');
     expect(src).not.toMatch(/await orm\.select\(\{ id: warehouses\.id \}\)/);
+  });
+});
+
+describe('decision t40: a cheque clears only into a bank or cash account', () => {
+  it('allows bank and cash, refuses POS and petty cash', () => {
+    expect(['bank', 'cash', 'pos', 'petty_cash'].filter(isChequeClearingAccountType)).toEqual(['bank', 'cash']);
+  });
+
+  it('the status window lists only those accounts and shows the issuing account of a paid cheque', () => {
+    const tab = read('src/components/accounting/ChequesTab.tsx');
+    expect(tab).toContain('clearingBankAccounts.map');
+    expect(tab).toContain('paidBankFixed');
   });
 });

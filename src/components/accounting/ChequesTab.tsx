@@ -16,7 +16,7 @@ import { FinancialAttachmentViewerModal } from './FinancialAttachmentViewerModal
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { useChequeReconciliationReport } from '../../hooks/accounting/useChequeQueries';
 import { copyToClipboard } from '../../utils/clipboard';
-import { CHEQUE_STATUS_LABELS, chequeHasNextStep, chequeNextStatuses, chequeStatusLabel, chequeStepTakesBankAccount } from '../../lib/treasury/chequeTransitions';
+import { CHEQUE_STATUS_LABELS, chequeHasNextStep, chequeNextStatuses, chequeStatusLabel, chequeStepTakesBankAccount, isChequeClearingAccountType } from '../../lib/treasury/chequeTransitions';
 import { needsChosenContraAccount, type PersonnelPurpose } from '../../lib/treasury/partyPurpose';
 import { personnelPartyName } from '../../lib/treasury/personnelPartyName';
 import { PartyPurposeFields } from './treasury/PartyPurposeFields';
@@ -50,6 +50,8 @@ export function ChequesTab({
   const rial = useRialDisplay();
   const safeCheques = Array.isArray(cheques) ? cheques : [];
   const safeBankAccounts = Array.isArray(bankAccounts) ? bankAccounts : [];
+  // v10.1.47 (ت۴۰): چک فقط به حساب بانکی یا صندوق وصول یا به وصول فرستاده می‌شود
+  const clearingBankAccounts = safeBankAccounts.filter(b => isChequeClearingAccountType(b.type));
   const safeCustomers = Array.isArray(customers) ? customers : [];
   const safePersonnelList = Array.isArray(personnelList) ? personnelList : [];
 
@@ -205,6 +207,10 @@ export function ChequesTab({
     }
   };
 
+  /** v10.1.47: چک پرداختی دارای حساب صادرکننده فقط از همان حساب وصول می‌شود */
+  const paidBankFixed = statusModalCheque?.type === 'paid' && Boolean(statusModalCheque.bankAccountId);
+  const paidIssuingBank = paidBankFixed ? safeBankAccounts.find(b => b.id === statusModalCheque?.bankAccountId) : undefined;
+
   const handleUpdateStatusSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!statusModalCheque) return;
@@ -218,8 +224,9 @@ export function ChequesTab({
       toast.error('تأمین‌کننده‌ای را که چک به او واگذار می‌شود انتخاب کنید');
       return;
     }
-    // v10.1.47 (OBS-R1-70): حساب بانکی دیگر پیش‌فرض نمی‌گیرد؛ وصول بی حساب فرستاده نمی‌شود
-    if (targetStatus === 'passed' && !targetBankAccountId) {
+    // v10.1.47 (OBS-R1-70): حساب بانکی دیگر پیش‌فرض نمی‌گیرد؛ وصول بی حساب فرستاده نمی‌شود. چک پرداختی از حساب صادرکننده‌اش
+    // وصول می‌شود و حسابی نمی‌فرستد؛ برای ارسال به وصول حساب اختیاری است.
+    if (targetStatus === 'passed' && !paidBankFixed && !targetBankAccountId) {
       toast.error('حساب بانکی مقصد را انتخاب کنید');
       return;
     }
@@ -238,7 +245,7 @@ export function ChequesTab({
         statusModalCheque.id, 
         targetStatus, 
         statusDescription, 
-        chequeStepTakesBankAccount(targetStatus) ? targetBankAccountId || undefined : undefined,
+        chequeStepTakesBankAccount(targetStatus) && !paidBankFixed ? targetBankAccountId || undefined : undefined,
         targetStatus === 'spent' ? transfereePartyId ?? undefined : undefined,
         statusActionDate
       );
@@ -1011,10 +1018,16 @@ export function ChequesTab({
                 )}
               </div>
 
-              {chequeStepTakesBankAccount(targetStatus) && (
+              {chequeStepTakesBankAccount(targetStatus) && paidBankFixed && (
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  وصول از حساب صادرکننده چک: {paidIssuingBank ? paidIssuingBank.title : 'حساب ثبت‌شده چک'}
+                </p>
+              )}
+
+              {chequeStepTakesBankAccount(targetStatus) && !paidBankFixed && (
                 <div>
                   <label htmlFor={`${fieldId}-target-bank-account-id`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    حساب بانکی مقصد *
+                    {targetStatus === 'passed' ? 'حساب بانکی مقصد *' : 'حساب بانکی مقصد'}
                   </label>
                   <select
                     id={`${fieldId}-target-bank-account-id`}
@@ -1023,7 +1036,7 @@ export function ChequesTab({
                     className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
                   >
                     <option value="">انتخاب حساب بانکی...</option>
-                    {safeBankAccounts.map(b => (
+                    {clearingBankAccounts.map(b => (
                       <option key={b.id} value={b.id}>
                         {b.title} ({b.bankName})
                       </option>

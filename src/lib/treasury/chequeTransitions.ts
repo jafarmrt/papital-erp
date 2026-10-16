@@ -45,6 +45,16 @@ export function chequeStepTakesBankAccount(status: string | null | undefined): b
 }
 
 /**
+ * v10.1.47 (ت۴۰): چک فقط به حساب بانکی یا صندوق وصول می‌شود یا به وصول فرستاده می‌شود، نه کارتخوان یا تنخواه‌گردان.
+ * یک قاعده برای سرور و پنجره وضعیت چک.
+ */
+export const CHEQUE_CLEARING_ACCOUNT_TYPES = ['bank', 'cash'] as const;
+
+export function isChequeClearingAccountType(type: string | null | undefined): boolean {
+  return (CHEQUE_CLEARING_ACCOUNT_TYPES as readonly string[]).includes(String(type ?? 'bank'));
+}
+
+/**
  * v9.0.104 (TD-512 / TD-513، B04-16 / B04-17): برچسب فارسی هر وضعیت چک، یک نگاشت برای پیام‌های سرور، ممیزی، یادداشت
  * پیش‌فرض تاریخچه و رابط. پیش‌تر پیام‌ها کد انگلیسی (`in_collection`، `passed`) را نشان می‌دادند.
  */

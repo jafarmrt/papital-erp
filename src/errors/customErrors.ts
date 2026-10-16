@@ -209,7 +209,7 @@ export function normalizeError(err: unknown): NormalizedError {
       };
     }
     // v10.1.47 (OBS-R1-57): دو قید پرکاربرد خزانه پیام فیلدی خود را دارند؛ پیش‌تر پیام عمومی «تکراری» یا «نامعتبر» بود
-    const fieldConstraint = typeof pgErr.constraint === 'string' ? CONSTRAINT_FIELD_ERRORS[pgErr.constraint] : undefined;
+    const fieldConstraint = typeof pgErr.constraint === 'string' && Object.hasOwn(CONSTRAINT_FIELD_ERRORS, pgErr.constraint) ? CONSTRAINT_FIELD_ERRORS[pgErr.constraint] : undefined;
     if (fieldConstraint && fieldConstraint.pgCode === code) {
       return { message: fieldConstraint.message, statusCode: fieldConstraint.statusCode, code: fieldConstraint.code, stack: typeof errObj.stack === 'string' ? errObj.stack : undefined };
     }

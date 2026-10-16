@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { bankAccounts, cheques } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
-import { normalizeError } from '../../errors/customErrors.js';
+import { normalizeError, ValidationError } from '../../errors/customErrors.js';
 import { ChequeLifecycleService } from '../../services/accounting/treasury/chequeLifecycle.service.js';
 import { createBank } from './treasuryPartyTests.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
@@ -124,6 +124,51 @@ export async function runTreasuryChequeSweepTests(shouldRun: ShouldRun): Promise
         ...(balanceCode === 'BANK_BALANCE_NEGATIVE' ? [] : [`a negative bank balance answered ${balanceCode}`]),
       ]);
       return 'CHEQUE_SAYAD_TAKEN and BANK_BALANCE_NEGATIVE';
+    });
+  }
+
+  const clearingId = 'reg_cheque_clearing_account_rules_t40';
+  if (shouldRun(clearingId, 'obs-r1-70', 'cheque', 'bank', 'clearing', 'pos', 'petty')) {
+    await runCase(results, clearingId, 'v10.1.47: a cheque clears only into a bank or cash account, and a paid cheque only from its issuing account (decision t40)', async () => {
+      const issuing = await createBank('Sweep issuing bank');
+      await orm.update(bankAccounts).set({ currentBalance: money(1_000_000) }).where(eq(bankAccounts.id, issuing.id));
+      const other = await createBank('Sweep other bank');
+      const pos = await createBank('Sweep pos');
+      await orm.update(bankAccounts).set({ type: 'pos' }).where(eq(bankAccounts.id, pos.id));
+      const petty = await createBank('Sweep petty');
+      await orm.update(bankAccounts).set({ type: 'petty_cash' }).where(eq(bankAccounts.id, petty.id));
+
+      const paidOther = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'paid', chequeNumber: `SWC${tagOf()}`, amount: 60000, partyName: 'Sweep clearing supplier', bankAccountId: issuing.id });
+      const otherBankCode = await codeOf(() => ChequeLifecycleService.updateChequeStatus(paidOther.id, { status: 'passed', bankAccountId: other.id, username: 'inv' }));
+      const afterOther = await chequeRow(paidOther.id);
+
+      const paidStored = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'paid', chequeNumber: `SWC${tagOf()}`, amount: 60000, partyName: 'Sweep clearing supplier', bankAccountId: issuing.id });
+      const storedCode = await ChequeLifecycleService.updateChequeStatus(paidStored.id, { status: 'passed', username: 'inv' }).then(() => 'accepted', (err: unknown) => `${String((err as { code?: unknown }).code)} ${err instanceof Error ? err.message : ''}`);
+      const afterStored = await chequeRow(paidStored.id);
+
+      const noBank = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'received', chequeNumber: `SWC${tagOf()}`, amount: 50000, partyName: 'Sweep clearing customer' });
+      let noBankError = 'accepted';
+      try {
+        await ChequeLifecycleService.updateChequeStatus(noBank.id, { status: 'passed', username: 'inv' });
+      } catch (err) {
+        noBankError = err instanceof ValidationError ? 'ValidationError' : String((err as { code?: unknown }).code ?? err);
+      }
+
+      const toPos = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'received', chequeNumber: `SWC${tagOf()}`, amount: 50000, partyName: 'Sweep clearing customer' });
+      const posPassCode = await codeOf(() => ChequeLifecycleService.updateChequeStatus(toPos.id, { status: 'passed', bankAccountId: pos.id, username: 'inv' }));
+      const pettyCollectCode = await codeOf(() => ChequeLifecycleService.updateChequeStatus(toPos.id, { status: 'in_collection', bankAccountId: petty.id, username: 'inv' }));
+      const afterPos = await chequeRow(toPos.id);
+
+      assertNoProblems([
+        ...(otherBankCode === 'CHEQUE_PAID_BANK_FIXED' ? [] : [`clearing a paid cheque from another bank answered ${otherBankCode}`]),
+        ...(afterOther?.status === 'in_treasury' && afterOther.bankAccountId === issuing.id ? [] : [`the refused paid cheque is ${afterOther?.status} on bank ${afterOther?.bankAccountId}`]),
+        ...(storedCode === 'accepted' && afterStored?.status === 'passed' && afterStored.bankAccountId === issuing.id ? [] : [`a paid cheque cleared without a bank answered ${storedCode}, now ${afterStored?.status} on bank ${afterStored?.bankAccountId}`]),
+        ...(noBankError === 'ValidationError' ? [] : [`clearing a received cheque with no bank answered ${noBankError}`]),
+        ...(posPassCode === 'CHEQUE_CLEARING_ACCOUNT_TYPE' ? [] : [`clearing into a POS account answered ${posPassCode}`]),
+        ...(pettyCollectCode === 'CHEQUE_CLEARING_ACCOUNT_TYPE' ? [] : [`sending to collection into petty cash answered ${pettyCollectCode}`]),
+        ...(afterPos?.status === 'received' && afterPos.bankAccountId === null ? [] : [`the refused received cheque moved to ${afterPos?.status} on bank ${afterPos?.bankAccountId}`]),
+      ]);
+      return 'paid cheques clear from their issuing bank, POS and petty cash are refused';
     });
   }
 
