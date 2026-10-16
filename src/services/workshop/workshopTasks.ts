@@ -3,7 +3,8 @@ import type { DbExecutor } from '../../db/drizzle.js';
 import { personnel, pieceworkLogs, productionProjects, projectStages, workshopTaskReports } from '../../db/schema.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import type {
-  MyWorkshopTasks, ProjectWorkshopReports, WorkshopApprovedReport, WorkshopReportView, WorkshopReviewItem, WorkshopStageProgress, WorkshopTaskCard,
+  MyWorkshopTasks, ProjectWorkshopReports, WorkshopApprovedReport, WorkshopManualLog, WorkshopReportView, WorkshopReviewItem, WorkshopStageProgress,
+  WorkshopTaskCard,
 } from '../../lib/workshop/workshopContract.js';
 import {
   daysUntilDeadline, taskDeadlineIso, workshopScheduleRows, type WorkshopReportStatus, type WorkshopScheduleRow,
@@ -171,6 +172,42 @@ async function approvedReports(executor: DbExecutor, personnelId: number): Promi
   });
 }
 
+/**
+ * Live work logs of a worker and task in a project that no schedule row of that project links: logs recorded by hand on
+ * the piecework page. Approving a workshop report beside one could pay the same work twice, so the reviewer sees them and
+ * acknowledges them first (review finding of TD-1284). Keyed `projectId|personnelId|taskId`.
+ */
+export async function manualWorkLogs(
+  executor: DbExecutor,
+  projects: ReadonlyArray<{ id: number; stageSchedules: unknown }>,
+  keys: ReadonlyArray<{ projectId: number; personnelId: number; taskId: number | null }>,
+): Promise<Map<string, WorkshopManualLog[]>> {
+  const result = new Map<string, WorkshopManualLog[]>();
+  const wanted = keys.filter((k): k is { projectId: number; personnelId: number; taskId: number } => k.taskId !== null);
+  if (wanted.length === 0) return result;
+  const rows = await executor.select({
+    id: pieceworkLogs.id, projectId: pieceworkLogs.projectId, personnelId: pieceworkLogs.personnelId, taskId: pieceworkLogs.taskId,
+    date: pieceworkLogs.date, dateIso: pieceworkLogs.dateIso, quantity: pieceworkLogs.quantity,
+  }).from(pieceworkLogs)
+    .where(and(
+      eq(pieceworkLogs.isDeleted, 0),
+      inArray(pieceworkLogs.projectId, [...new Set(wanted.map(k => k.projectId))]),
+      inArray(pieceworkLogs.personnelId, [...new Set(wanted.map(k => k.personnelId))]),
+      inArray(pieceworkLogs.taskId, [...new Set(wanted.map(k => k.taskId))]),
+    ))
+    .orderBy(asc(pieceworkLogs.id));
+  const scheduled = new Set(projects.flatMap(p => workshopScheduleRows(p.stageSchedules).map(r => r.pieceworkLogId)).filter((id): id is number => id !== null));
+  const wantedKeys = new Set(wanted.map(k => `${k.projectId}|${k.personnelId}|${k.taskId}`));
+  for (const r of rows) {
+    const key = `${r.projectId}|${r.personnelId}|${r.taskId}`;
+    if (scheduled.has(r.id) || !wantedKeys.has(key)) continue;
+    const list = result.get(key) ?? [];
+    list.push({ id: r.id, date: r.dateIso || r.date, quantity: Number(r.quantity) });
+    result.set(key, list);
+  }
+  return result;
+}
+
 async function reviewItems(executor: DbExecutor, reports: ReportRow[]): Promise<WorkshopReviewItem[]> {
   if (reports.length === 0) return [];
   const projects = await executor.select({
@@ -182,6 +219,7 @@ async function reviewItems(executor: DbExecutor, reports: ReportRow[]): Promise<
     .where(inArray(personnel.id, [...new Set(reports.map(r => r.personnelId))]));
   const nameOf = new Map(names.map(n => [n.id, n.fullName]));
   const stages = await stageTitles(executor, reports.map(r => r.stageId));
+  const manual = await manualWorkLogs(executor, projects, reports.map(r => ({ projectId: r.projectId, personnelId: r.personnelId, taskId: r.taskId })));
   return reports.map(r => {
     const project = byId.get(r.projectId);
     const row = workshopScheduleRows(project?.stageSchedules).find(x => x.stageId === r.stageId && x.productId === r.productId && x.rowId === r.rowId);
@@ -201,6 +239,7 @@ async function reviewItems(executor: DbExecutor, reports: ReportRow[]): Promise<
       personnelId: r.personnelId,
       personnelName: nameOf.get(r.personnelId) ?? '',
       deadline: row ? taskDeadlineIso(row, project?.endDate) : null,
+      manualLogs: manual.get(`${r.projectId}|${r.personnelId}|${r.taskId}`) ?? [],
     };
   });
 }
@@ -219,7 +258,7 @@ export async function listReviewReports(executor: DbExecutor, user: WorkshopUser
   return reviewItems(executor, reports);
 }
 
-/** Per stage: approved quantity of approved reports ÷ planned quantity of the stage's schedule rows. */
+/** Per stage: approved quantity of approved reports whose work log is live ÷ planned quantity of the stage's schedule rows. */
 export function stageProgressOf(schedules: unknown, approved: ReadonlyArray<{ stageId: number; quantity: number }>): WorkshopStageProgress[] {
   const planned = new Map<number, number>();
   for (const row of workshopScheduleRows(schedules)) planned.set(row.stageId, (planned.get(row.stageId) ?? 0) + Math.max(0, row.quantity));
@@ -240,6 +279,7 @@ export async function projectWorkshopReports(executor: DbExecutor, user: Worksho
   const scope = canReviewKey ? await reviewableProjectIds(executor, user) : [];
   const canReview = canReviewKey && (scope === null || scope.includes(projectId));
   const approved = await executor.select({ stageId: workshopTaskReports.stageId, quantity: workshopTaskReports.approvedQuantity }).from(workshopTaskReports)
+    .innerJoin(pieceworkLogs, and(eq(pieceworkLogs.id, workshopTaskReports.pieceworkLogId), eq(pieceworkLogs.isDeleted, 0)))
     .where(and(eq(workshopTaskReports.projectId, projectId), eq(workshopTaskReports.status, 'approved')));
   return {
     pending: canReview ? await listReviewReports(executor, user, projectId) : [],

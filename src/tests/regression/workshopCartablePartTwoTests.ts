@@ -26,6 +26,9 @@ export async function runWorkshopCartablePartTwoTests(shouldRun: ShouldRun): Pro
     ['reg_workshop_due_reminders_n01',
       'v10.1.38: the bell reminds a workshop worker once the day before a deadline and once after it, skips reported rows and never repeats a dismissed reminder (N-01, TD-1284)',
       ['n01', 'workshop', 'notifications'], remindersCase],
+    ['reg_workshop_review_guards_n01',
+      'v10.1.38: a row without a planned quantity takes no report, edit or approval; a changed task or a removed row is refused; a manual work log of the same worker, task and project needs an explicit acknowledgement before approval; two approvals at once write one log; deleting the approved log reopens the row (N-01, TD-1284)',
+      ['n01', 'workshop', 'piecework', 'projects'], reviewGuardsCase],
   ]);
 }
 
@@ -223,8 +226,93 @@ async function remindersCase(h: Harness, wrong: string[]): Promise<string> {
   if (bell.status !== 200 || JSON.stringify(kinds) !== '["workshop_task_due_soon","workshop_task_overdue"]') wrong.push(`the bell made reminders ${JSON.stringify(kinds)}, expected one due-soon and one overdue`);
   await h.del(`/api/notifications/${first[0]?.id}`, worker);
   await h.get('/api/notifications', worker);
-  if ((await reminders(worker.userId)).length !== 2) wrong.push(`a second bell request left ${(await reminders(worker.userId)).length} reminders, expected the same 2 (dismissed one kept, none new)`);
+  // the bell scans once an hour per user; the scan itself never brings back a dismissed reminder
+  const { generateWorkshopDueReminders } = await import('../../services/notifications/workshopDueReminders.js');
+  const rescanned = await generateWorkshopDueReminders(worker.userId);
+  if (rescanned !== 0 || (await reminders(worker.userId)).length !== 2) wrong.push(`a second scan made ${rescanned} and left ${(await reminders(worker.userId)).length} reminders, expected the same 2 (dismissed one kept, none new)`);
   await h.get('/api/notifications', plain);
   if ((await reminders(plain.userId)).length !== 0) wrong.push('a user without workshop.self got a workshop reminder');
   return 'one reminder before and one after the deadline; reported rows and users without the key get none';
+}
+
+const setRow = (h: Harness, projectId: number, stageId: number, index: number, key: string, value: unknown) =>
+  h.q(`UPDATE production_projects SET stage_schedules = jsonb_set(stage_schedules, ARRAY[$2::text, 'prod-a', 'tasks', $3::text, $4::text], $5::jsonb) WHERE id = $1`,
+    [projectId, String(stageId), String(index), key, JSON.stringify(value)]);
+
+async function reviewGuardsCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const task = await newTaskId(h, 1_000);
+  const otherTask = await newTaskId(h, 2_000);
+  const { session: worker, personnelId } = await linkedWorker(h, ['workshop.self'], 'N01 guarded');
+  const manager = await h.sessionWith(['workshop.review', 'projects.view']);
+  const logKeeper = await h.sessionWith(['piecework.log', 'piecework.view']);
+  const { projectId, stageId } = await scheduledProject(h, [
+    { id: 'zero', taskId: task, taskTitle: 'بی تعداد', assignedPersonnelId: personnelId, quantity: 0 },
+    { id: 'shrink', taskId: task, taskTitle: 'تعداد پاک‌شده', assignedPersonnelId: personnelId, quantity: 4 },
+    { id: 'moved', taskId: task, taskTitle: 'کار عوض‌شده', assignedPersonnelId: personnelId, quantity: 4 },
+    { id: 'manual', taskId: task, taskTitle: 'کار با کارکرد دستی', assignedPersonnelId: personnelId, quantity: 4 },
+    { id: 'gone', taskId: task, taskTitle: 'ردیف حذف‌شده', assignedPersonnelId: personnelId, quantity: 4 },
+  ]);
+  await h.q(`INSERT INTO project_managers (project_id, user_id) VALUES ($1, $2)`, [projectId, manager.userId]);
+  const ref = (rowId: string) => ({ projectId, stageId, productId: 'prod-a', rowId });
+  const submit = async (rowId: string, quantity: number) => {
+    const res = await h.post('/api/workshop/reports', { ...ref(rowId), quantity }, worker);
+    const report = (res.body as { report?: { id: number; version: number } }).report;
+    if (res.status !== 201 || !report) throw new Error(`setup: submitting ${rowId} answered ${brief(res)}`);
+    return report;
+  };
+  const approve = (report: { id: number; version: number }, extra: Record<string, unknown> = {}) =>
+    h.post(`/api/workshop/reports/${report.id}/approve`, { version: report.version, ...extra }, manager);
+
+  // 1. a row without a planned quantity: no report; a quantity cleared after the report: no edit, no approval
+  const zero = await h.post('/api/workshop/reports', { ...ref('zero'), quantity: 1 }, worker);
+  if (zero.status !== 422 || codeOf(zero) !== 'WORKSHOP_ROW_QUANTITY_MISSING') wrong.push(`a report on a row of quantity 0 answered ${brief(zero)}, expected 422 WORKSHOP_ROW_QUANTITY_MISSING`);
+  const shrink = await submit('shrink', 3);
+  await setRow(h, projectId, stageId, 1, 'quantity', '');
+  const shrinkEdit = await h.put(`/api/workshop/reports/${shrink.id}`, { version: shrink.version, quantity: 2 }, worker);
+  if (shrinkEdit.status !== 422 || codeOf(shrinkEdit) !== 'WORKSHOP_ROW_QUANTITY_MISSING') wrong.push(`editing a report whose row lost its quantity answered ${brief(shrinkEdit)}, expected 422 WORKSHOP_ROW_QUANTITY_MISSING`);
+  const shrinkApprove = await approve(shrink);
+  if (shrinkApprove.status !== 422 || codeOf(shrinkApprove) !== 'WORKSHOP_ROW_QUANTITY_MISSING') wrong.push(`approving a report whose row lost its quantity answered ${brief(shrinkApprove)}, expected 422 WORKSHOP_ROW_QUANTITY_MISSING`);
+
+  // 2. the row's task changed after the report: approval refused
+  const moved = await submit('moved', 2);
+  await setRow(h, projectId, stageId, 2, 'taskId', otherTask);
+  const movedApprove = await approve(moved);
+  if (movedApprove.status !== 409 || codeOf(movedApprove) !== 'WORKSHOP_ROW_TASK_CHANGED') wrong.push(`approving a report whose row changed its task answered ${brief(movedApprove)}, expected 409 WORKSHOP_ROW_TASK_CHANGED`);
+
+  // 3. the row removed from the schedule: edit refused
+  const gone = await submit('gone', 1);
+  await h.q(`UPDATE production_projects SET stage_schedules = jsonb_set(stage_schedules, ARRAY[$2::text, 'prod-a', 'tasks', '4', 'id'], '"gone-renamed"'::jsonb) WHERE id = $1`, [projectId, String(stageId)]);
+  const goneEdit = await h.put(`/api/workshop/reports/${gone.id}`, { version: gone.version, quantity: 1 }, worker);
+  if (goneEdit.status !== 422 || codeOf(goneEdit) !== 'WORKSHOP_ROW_NOT_FOUND') wrong.push(`editing a report whose row left the schedule answered ${brief(goneEdit)}, expected 422 WORKSHOP_ROW_NOT_FOUND`);
+
+  // 4. a manual work log of the same worker, task and project: shown in review, approval needs the acknowledgement
+  const [manualLog] = await h.q(`INSERT INTO piecework_logs (personnel_id, task_id, project_id, date, date_iso, quantity, unit_rate, total_amount, created_by_id, created_by_username)
+    VALUES ($1, $2, $3, $4, $4, 2, 1000, 2000, $5, 'n01') RETURNING id`, [personnelId, task, projectId, f.today, manager.userId]);
+  const manual = await submit('manual', 4);
+  const review = await h.get(`/api/workshop/review/reports?projectId=${projectId}`, manager);
+  const item = ((review.body as { data?: Array<{ report: { id: number }; manualLogs?: Array<{ id: number }> }> }).data ?? []).find(i => i.report.id === manual.id);
+  if (!item || (item.manualLogs ?? []).map(l => l.id).join() !== String(manualLog?.id)) wrong.push(`the review item lists manual logs ${JSON.stringify(item?.manualLogs ?? null)}, expected log ${manualLog?.id}`);
+  const unacknowledged = await approve(manual);
+  if (unacknowledged.status !== 409 || codeOf(unacknowledged) !== 'WORKSHOP_MANUAL_LOGS_EXIST') wrong.push(`approving beside a manual log answered ${brief(unacknowledged)}, expected 409 WORKSHOP_MANUAL_LOGS_EXIST`);
+
+  // 5. two approvals at once write exactly one work log
+  const racing = await Promise.all([approve(manual, { acknowledgeManualLogs: true }), approve(manual, { acknowledgeManualLogs: true })]);
+  const okCount = racing.filter(r => r.status === 200).length;
+  if (okCount !== 1) wrong.push(`two approvals at once answered ${racing.map(brief).join(' / ')}, expected exactly one 200`);
+  const [rowLogs] = await h.q(`SELECT count(*)::int AS n FROM piecework_logs WHERE personnel_id = $1 AND project_id = $2 AND is_deleted = 0 AND notes LIKE '%گزارش کارگاه%'`, [personnelId, projectId]);
+  if (Number(rowLogs?.n) !== 1) wrong.push(`the approvals left ${rowLogs?.n} workshop work logs, expected 1`);
+
+  // 6. the approved log deleted: the report is undone, the stage progress drops it and the row takes a new report
+  const approvedLogId = Number((racing.find(r => r.status === 200)?.body as { pieceworkLogId?: number } | undefined)?.pieceworkLogId);
+  const deleted = await h.del(`/api/piecework/logs/${approvedLogId}`, logKeeper);
+  if (deleted.status !== 200) wrong.push(`deleting the approved work log answered ${brief(deleted)}, expected 200`);
+  const [reverted] = await h.q(`SELECT status, review_note FROM workshop_task_reports WHERE id = $1`, [manual.id]);
+  if (reverted?.status !== 'rejected' || !String(reverted?.review_note).includes('حذف شد')) wrong.push(`after its log was deleted the report is ${JSON.stringify(reverted ?? null)}, expected rejected with a note`);
+  const progress = await h.get(`/api/workshop/projects/${projectId}/reports`, manager);
+  const stage = ((progress.body as { stageProgress?: Array<{ stageId: number; approvedQuantity: number }> }).stageProgress ?? []).find(s => s.stageId === stageId);
+  if (stage?.approvedQuantity !== 0) wrong.push(`after the log was deleted the stage shows ${JSON.stringify(stage ?? null)}, expected approved quantity 0`);
+  const again = await h.post('/api/workshop/reports', { ...ref('manual'), quantity: 4 }, worker);
+  if (again.status !== 201) wrong.push(`a new report after the log was deleted answered ${brief(again)}, expected 201`);
+  return 'rows without a quantity, changed tasks, removed rows and manual logs are guarded; one log per approval race; a deleted log reopens the row';
 }

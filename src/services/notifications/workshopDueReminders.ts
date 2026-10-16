@@ -5,6 +5,7 @@ import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import {
   daysUntilDeadline, deadlineLabel, taskDeadlineIso, WORKSHOP_REMINDER_DUE_SOON, workshopReminderKind, workshopRowLink, workshopScheduleRows,
 } from '../../lib/workshop/workshopSchedule.js';
+import { takeWorkshopReminderScan } from '../../lib/workshop/reminderThrottle.js';
 
 /**
  * v10.1.38 (N-01 part 2, decision ت۸ الف of the mobile workshop plan): the notification bell reminds a workshop worker of
@@ -12,6 +13,12 @@ import {
  * report waiting for review is not reminded. Each reminder is one row per user, kind and schedule row, kept after it is
  * dismissed (`uq_notifications_workshop_reminder`, the TD-717 pattern), so it never comes back and two bell requests make one.
  */
+/** The bell's call: the reminder scan, at most once an hour per user, on the pool and never inside a transaction. */
+export async function generateWorkshopDueRemindersThrottled(userId: number, nowMs = Date.now()): Promise<number> {
+  if (!takeWorkshopReminderScan(userId, nowMs)) return 0;
+  return generateWorkshopDueReminders(userId);
+}
+
 export async function generateWorkshopDueReminders(userId: number): Promise<number> {
   const [me] = await orm.select({ id: personnel.id }).from(personnel)
     .where(and(eq(personnel.userId, userId), eq(personnel.isDeleted, 0))).orderBy(asc(personnel.id)).limit(1);

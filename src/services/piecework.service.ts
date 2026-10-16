@@ -9,6 +9,7 @@ import { lockEditableWorkLog, workLogFreeOfLivePayroll } from './piecework/workL
 import { auditWorkLogCreated, auditWorkLogDeleted, auditWorkLogUpdated, type AuditActor } from './piecework/pieceworkAudit.js';
 import { activePersonnelRate, savePersonnelRate, type PersonnelRateInput, type RateActor } from './piecework/personnelRate.js';
 import { assertScheduleRowsFree, linkScheduleRows, lockProjectsOfLogMove, lockScheduleProjects, unlinkScheduleRow } from './piecework/scheduleRowLink.js';
+import { revertWorkshopReportsOfLog } from './piecework/workshopReportRevert.js';
 import type { ScheduleRowRef } from '../lib/projects/scheduleWorkLog.js';
 import { assertWorkLogParentsLive, assertWorkLogsWithinService, normalizeWorkLogEntries, workLogId, workLogManualRate, workLogQuantity, type WorkLogEntryInput } from './piecework/workLogEntry.js';
 import {
@@ -739,7 +740,10 @@ export class PieceworkService {
       if (!updated) {
         throw new ConflictError('کارکرد هم‌زمان در فیش حقوقی درج یا حذف شد؛ فهرست را دوباره بارگذاری کنید');
       }
-      if (projectMoved) await unlinkScheduleRow(tx, existing.projectId, id);
+      if (projectMoved) {
+        await unlinkScheduleRow(tx, existing.projectId, id);
+        await revertWorkshopReportsOfLog(tx, id, actor);
+      }
       // v9.0.285 (TD-810): فقط فیلدهای تغییرکرده با قبل و بعد
       await auditWorkLogUpdated(tx, existing, updated, actor);
       return updated;
@@ -765,6 +769,8 @@ export class PieceworkService {
       }
       // v9.0.282 (TD-736): ردیف برنامه کارکرد حذف‌شده دوباره ثبت‌شدنی است
       await unlinkScheduleRow(tx, existing.projectId, id);
+      // v10.1.38 (TD-1284): the workshop report approved into this log is undone, so its row takes a new report
+      await revertWorkshopReportsOfLog(tx, id, actor);
       await auditWorkLogDeleted(tx, existing, actor);
       return existing;
     });

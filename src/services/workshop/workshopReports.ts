@@ -12,7 +12,7 @@ import {
 import { formatPersianNumber, toPersianDigits } from '../../utils/persianNumber.js';
 import { PieceworkService } from '../piecework.service.js';
 import { assertProjectReviewer, liveUserIds, notifyUsers, projectManagerUserIds, requireLinkedPersonnel, type WorkshopActor } from './workshopAccess.js';
-import { CLOSED_PROJECT_STATUSES, liveLogIds, productItemIdOf, productNameOf, reportView, rowHasLiveLog } from './workshopTasks.js';
+import { CLOSED_PROJECT_STATUSES, liveLogIds, manualWorkLogs, productItemIdOf, productNameOf, reportView, rowHasLiveLog } from './workshopTasks.js';
 
 /**
  * v10.1.38 (N-01 part 2, plan §4.3, decisions ت۲ الف, ت۵ الف, ت۶ الف and ت۷ الف): a worker's end-of-task report.
@@ -171,13 +171,13 @@ async function lockOwnReport(tx: DbExecutor, actor: WorkshopActor, reportId: num
 
 export async function editWorkshopReport(tx: DbExecutor, actor: WorkshopActor, reportId: number, input: { version: number; quantity?: number; notes?: string }): Promise<WorkshopReportView> {
   const report = await lockOwnReport(tx, actor, reportId, input.version);
-  const [project] = await tx.select({
-    id: productionProjects.id, projectCode: productionProjects.projectCode, title: productionProjects.title, status: productionProjects.status,
-    stageSchedules: productionProjects.stageSchedules, products: productionProjects.products,
-  }).from(productionProjects).where(eq(productionProjects.id, report.projectId));
-  const row = project ? scheduleRowOf(project, report) : null;
+  const project = await lockOpenProject(tx, report.projectId, 'share');
+  // the row must still be in the saved schedule, assigned to the worker, with the task the report names and a quantity
+  const row = scheduleRowOf(project, report);
+  if (!row || row.personnelId !== report.personnelId) throw fail(WORKSHOP_ERRORS.rowNotFound);
+  if (row.taskId !== report.taskId) throw conflict(WORKSHOP_ERRORS.rowTaskChanged);
   const quantity = input.quantity ?? Number(report.quantity);
-  assertQuantity(quantity, row?.quantity ?? 0);
+  assertQuantity(quantity, row.quantity);
   const [updated] = await tx.update(workshopTaskReports).set({
     quantity,
     notes: input.notes === undefined ? report.notes : cleanNote(input.notes),
@@ -236,6 +236,8 @@ export interface ApproveReportInput {
   /** the work log's ISO date; empty is the business today */
   date?: string;
   note?: string;
+  /** «بررسی کردم»: the reviewer has seen the manual work logs of the same worker, task and project */
+  acknowledgeManualLogs?: boolean;
 }
 
 /** «تأیید»: writes the row's work log through the piecework path and marks the report approved, in one transaction. */
@@ -245,10 +247,15 @@ export async function approveWorkshopReport(tx: DbExecutor, actor: WorkshopActor
   const row = scheduleRowOf(project, report);
   if (!row || row.personnelId !== report.personnelId) throw fail(WORKSHOP_ERRORS.rowNotFound);
   if (row.taskId === null) throw fail(WORKSHOP_ERRORS.rowNoTask);
+  // the work log takes the row's current task; a report made for another task is rejected and sent again, never paid at another rate
+  if (row.taskId !== report.taskId) throw conflict(WORKSHOP_ERRORS.rowTaskChanged, { reportTaskId: report.taskId, rowTaskId: row.taskId });
   await assertRowOpen(tx, row);
   const quantity = input.quantity ?? Number(report.quantity);
   assertQuantity(quantity, row.quantity);
   const reviewNote = cleanNote(input.note);
+  const manual = (await manualWorkLogs(tx, [project], [{ projectId: project.id, personnelId: report.personnelId, taskId: row.taskId }]))
+    .get(`${project.id}|${report.personnelId}|${row.taskId}`) ?? [];
+  if (manual.length > 0 && input.acknowledgeManualLogs !== true) throw conflict(WORKSHOP_ERRORS.manualLogsExist, { manualLogs: manual });
 
   const [logId] = await PieceworkService.logWorkEntries([{
     personnelId: report.personnelId,

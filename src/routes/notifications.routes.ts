@@ -9,7 +9,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { UnauthorizedError } from '../errors/customErrors.js';
 import { logger } from '../middleware/logger.js';
 import { generateCrmDueReminders } from '../services/notifications/crmDueReminders.js';
-import { generateWorkshopDueReminders } from '../services/notifications/workshopDueReminders.js';
+import { generateWorkshopDueRemindersThrottled } from '../services/notifications/workshopDueReminders.js';
 import { can } from '../middleware/authorize.js';
 import { WORKSHOP_SELF_PERMISSION } from '../lib/permissions/workshopPermissions.js';
 import { dismissNotification, markAllNotificationsRead, markNotificationRead } from '../services/notifications/notificationInbox.service.js';
@@ -34,10 +34,11 @@ async function checkAndGenerateCrmTaskDueNotifications(userId: number) {
   }
 }
 
-// v10.1.38 (N-01, decision t8 A): a workshop worker's deadline reminders, once before and once after each deadline
+// v10.1.38 (N-01, decision t8 A): a workshop worker's deadline reminders, once before and once after each deadline;
+// the scan runs at most once an hour per user, outside any transaction
 async function checkWorkshopDueReminders(user: Express.Request['user']) {
   try {
-    if (user?.id && await can(user, WORKSHOP_SELF_PERMISSION)) await generateWorkshopDueReminders(user.id);
+    if (user?.id && await can(user, WORKSHOP_SELF_PERMISSION)) await generateWorkshopDueRemindersThrottled(user.id);
   } catch (err) {
     logger.error({ message: 'Error checking workshop deadline reminders', error: err });
   }

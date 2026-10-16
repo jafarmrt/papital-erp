@@ -132,6 +132,9 @@ export const WORKSHOP_ERRORS = {
   rowNotFound: { code: 'WORKSHOP_ROW_NOT_FOUND', message: 'این کار در برنامه ذخیره‌شده پروژه نیست یا به شما سپرده نشده است.' },
   rowLogged: { code: 'WORKSHOP_ROW_LOGGED', message: 'کارکرد این کار پیش‌تر ثبت شده است.' },
   rowNoTask: { code: 'WORKSHOP_ROW_NO_TASK', message: 'عنوان کار این ردیف در برنامه پروژه مشخص نشده است؛ به مسئول پروژه بگویید.' },
+  rowQuantityMissing: { code: 'WORKSHOP_ROW_QUANTITY_MISSING', message: 'تعداد برنامه این کار مشخص نیست؛ به مسئول پروژه بگویید.' },
+  rowTaskChanged: { code: 'WORKSHOP_ROW_TASK_CHANGED', message: 'عنوان کار این ردیف پس از گزارش در برنامه پروژه عوض شده است؛ این گزارش باید رد یا پس گرفته شود و دوباره فرستاده شود.' },
+  manualLogsExist: { code: 'WORKSHOP_MANUAL_LOGS_EXIST', message: 'برای همین کارکن و همین کار در این پروژه کارکرد دستی ثبت شده است؛ آن را بررسی کنید و «بررسی کردم» را بزنید تا کارکرد دو بار ثبت نشود.' },
   projectClosed: { code: 'WORKSHOP_PROJECT_CLOSED', message: 'این پروژه بسته یا لغو شده است و گزارش کار نمی‌پذیرد.' },
   reportExists: { code: 'WORKSHOP_REPORT_EXISTS', message: 'برای این کار گزارشی در انتظار تأیید یا تأییدشده هست.' },
   quantityInvalid: { code: 'WORKSHOP_REPORT_QUANTITY_INVALID', message: 'تعداد باید عددی بزرگ‌تر از صفر و حداکثر با چهار رقم اعشار باشد.' },
@@ -147,10 +150,17 @@ export const WORKSHOP_ERRORS = {
   discrepancyNoteRequired: { code: 'WORKSHOP_DISCREPANCY_NOTE_REQUIRED', message: 'برای «مغایرت دارد» توضیح بنویسید که چه چیزی کم یا متفاوت بود.' },
 } as const;
 
-/** A worker's or a manager's quantity: above zero, at most four decimals, not above the planned quantity when one is set. */
+/**
+ * A worker's or a manager's quantity: the row needs a planned quantity above zero (a blank or zero row takes no report,
+ * since nothing would cap it), and the quantity is above zero, has at most four decimals and is not above the plan.
+ */
 export function reportQuantityError(quantity: number, planned: number): { code: string; message: string } | null {
+  if (!Number.isFinite(planned) || planned <= 0) return WORKSHOP_ERRORS.rowQuantityMissing;
   const scaled = quantity * 10 ** WORKSHOP_QUANTITY_MAX_DECIMALS;
   if (!Number.isFinite(quantity) || quantity <= 0 || Math.abs(scaled - Math.round(scaled)) > 1e-6) return WORKSHOP_ERRORS.quantityInvalid;
-  if (Number.isFinite(planned) && planned > 0 && quantity > planned + 1e-9) return WORKSHOP_ERRORS.quantityExceeded;
+  if (quantity > planned + 1e-9) return WORKSHOP_ERRORS.quantityExceeded;
   return null;
 }
+
+/** The review note a report takes when its approved work log is deleted or moved to another project (the row reopens). */
+export const WORKSHOP_REPORT_LOG_REMOVED_NOTE = 'کارکرد ثبت‌شده این گزارش حذف شد یا به پروژه دیگری رفت؛ اگر کار انجام شده است، گزارش را دوباره بفرستید.';

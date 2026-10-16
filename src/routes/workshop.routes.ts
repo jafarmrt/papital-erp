@@ -43,7 +43,7 @@ const editSchema = z.object({ params: reportParams, body: z.object({ version, qu
 const withdrawSchema = z.object({ params: reportParams, body: z.object({ version }).strict() });
 const approveSchema = z.object({
   params: reportParams,
-  body: z.object({ version, quantity: quantity.optional(), date: storageDateParam, note: note.optional() }).strict(),
+  body: z.object({ version, quantity: quantity.optional(), date: storageDateParam, note: note.optional(), acknowledgeManualLogs: z.boolean().optional() }).strict(),
 });
 const rejectSchema = z.object({ params: reportParams, body: z.object({ version, reason: note }).strict() });
 const confirmSchema = z.object({

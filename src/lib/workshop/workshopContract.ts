@@ -93,6 +93,16 @@ export interface WorkshopReviewItem {
   personnelId: number;
   personnelName: string;
   deadline: string | null;
+  /** live work logs of the same worker, task and project recorded by hand (no schedule row); approval needs «بررسی کردم» */
+  manualLogs: WorkshopManualLog[];
+}
+
+/** A work log recorded outside the workshop schedule, which an approval might pay a second time. */
+export interface WorkshopManualLog {
+  id: number;
+  /** ISO date */
+  date: string;
+  quantity: number;
 }
 
 /** After the last row of a product in a stage is approved: offer the progress matrix tick (decision ت۶ الف). */
