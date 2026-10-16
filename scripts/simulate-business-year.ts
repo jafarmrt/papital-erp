@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
-import { assertRealTestDatabase } from '../src/tests/testRunner.js';
+import { assertRealTestDatabase, assertRunnerEnvironment } from '../src/tests/testRunner.js';
 import { setupTestSchema } from '../src/tests/setup/testDb.js';
 import { bootstrapTestMasterData } from '../src/tests/setup/testBootstrap.js';
 import { runBusinessYearSimulation, SimulationResult } from '../src/tests/simulation/businessYearSimulator.js';
@@ -49,6 +49,8 @@ async function main(): Promise<void> {
   const reportPath = argValue('report');
   const users = Math.max(1, Number(argValue('users') ?? 1) || 1);
 
+  // OBS-R1-24: like the test runner, the simulator writes schemas and data only with NODE_ENV test or development
+  assertRunnerEnvironment();
   await assertRealTestDatabase();
 
   const results: SimulationResult[] = [];

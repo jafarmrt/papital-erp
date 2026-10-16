@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 457
+تعداد مسیرها: 459
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -284,6 +284,8 @@
 | POST | `/api/messenger/links/:messenger/code` | login-only |
 | POST | `/api/messenger/links/:messenger/test` | login-only |
 | GET | `/api/messenger/links/mine` | login-only |
+| GET | `/api/messenger/preferences/mine` | login-only |
+| PUT | `/api/messenger/preferences/mine` | login-only |
 | GET | `/api/metrics` | public |
 | GET | `/api/notifications` | login-only |
 | DELETE | `/api/notifications/:id` | login-only |

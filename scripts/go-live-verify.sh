@@ -102,8 +102,14 @@ LIVE="$(probe /health/live || true)"
 echo "$LIVE" | grep -q '"alive"' && ok "/health/live alive" || bad "/health/live failed: $LIVE"
 READY="$(probe /health/ready || true)"
 echo "$READY" | grep -q '"ready"' && ok "/health/ready ready" || bad "/health/ready failed: $READY"
+# OBS-R1-18: a startup probe that does not answer 200 "started" (still starting, 503, or no answer) is a failure
 STARTUP="$(probe /health/startup || true)"
-[ -n "$STARTUP" ] && ok "/health/startup responds" || warnc "/health/startup did not respond"
+if echo "$STARTUP" | grep -q '"started"'; then
+  ok "/health/startup started"
+  echo "$STARTUP" | grep -q '"degradedSteps"' && warnc "/health/startup reports degraded boot steps: $STARTUP"
+else
+  bad "/health/startup not started: ${STARTUP:-no answer}"
+fi
 
 # ---------- 3) Version consistency ----------
 echo "[3] Version consistency"
@@ -210,8 +216,14 @@ fi
 
 # ---------- 7) Metrics ----------
 echo "[7] Metrics endpoint"
-METRICS="$(curl -s --max-time 5 "$BASE_URL/metrics" | head -1 || true)"
-echo "$METRICS" | grep -qE 'HELP|TYPE|#' && ok "/metrics serving Prometheus format" || warnc "/metrics not readable without token/session (expected if METRICS_TOKEN enforced)"
+# OBS-R1-18: /metrics is read with METRICS_TOKEN from .env, as scripts/monitor.sh reads it, so the check can pass
+METRICS_TOKEN_VALUE="$(env_val METRICS_TOKEN)"
+if [ -z "$METRICS_TOKEN_VALUE" ]; then
+  warnc "METRICS_TOKEN not set in .env - /metrics cannot be read and scripts/monitor.sh cannot check the event queue"
+else
+  METRICS="$(curl -fsS --max-time 5 -H "X-Metrics-Token: $METRICS_TOKEN_VALUE" "$BASE_URL/metrics" 2>/dev/null | head -1 || true)"
+  echo "$METRICS" | grep -qE '^# (HELP|TYPE)' && ok "/metrics serving Prometheus format (METRICS_TOKEN)" || bad "/metrics not readable with METRICS_TOKEN from .env"
+fi
 
 # ---------- Summary ----------
 echo "=============================================================="
