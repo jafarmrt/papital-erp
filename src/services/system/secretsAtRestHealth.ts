@@ -1,0 +1,104 @@
+import { inArray, notLike } from 'drizzle-orm';
+import { orm } from '../../db/drizzle.js';
+import { appSettings, personnel, users, webhookSubscriptions } from '../../db/schema.js';
+import { decryptSecret, isEncryptedSecret } from '../../lib/secretBox.js';
+import { startsWithLikePattern } from '../../lib/sqlLike.js';
+import type { HealthCheckTestResult } from '../../types/accounting.types.js';
+import { isBcryptHash } from '../auth/loginSecurity.service.js';
+import { ENCRYPTED_SETTING_KEYS } from '../settings/settingSecrets.js';
+import { PLAIN_PASSWORD_LOCK_MARKER } from '../users/plainPasswordLock.js';
+
+/**
+ * v10.1.44 (OBS-PR-09): the two one-off upgrade commands (`npm run secrets:encrypt -- --apply` and
+ * `npm run users:lock-plain-passwords -- --apply`) show up in the financial health check until they have run.
+ * Read only, without row locks; only counts and record kinds are reported, never a value.
+ */
+export interface SecretsAtRestCounts {
+  /** third-party secrets still stored as plain text, per place */
+  plaintext: { personnel: number; settings: number; webhooks: number };
+  /** stored secrets the current key cannot open */
+  unreadable: number;
+  /** users (deleted ones too) whose stored password is not a bcrypt hash and is not locked yet */
+  nonBcryptPasswords: number;
+}
+
+function tally(value: unknown, counts: { plain: number; unreadable: number }): void {
+  const v = String(value ?? '');
+  if (v === '') return;
+  if (isEncryptedSecret(v)) {
+    if (decryptSecret(v) === null) counts.unreadable++;
+    return;
+  }
+  counts.plain++;
+}
+
+export async function countSecretsAtRest(): Promise<SecretsAtRestCounts> {
+  const personnelRows = await orm.select({ value: personnel.nobitexPassword }).from(personnel);
+  const settingRows = await orm.select({ value: appSettings.value }).from(appSettings).where(inArray(appSettings.key, [...ENCRYPTED_SETTING_KEYS]));
+  const webhookRows = await orm.select({ secretKey: webhookSubscriptions.secretKey, customHeaders: webhookSubscriptions.customHeaders }).from(webhookSubscriptions);
+  const passwordRows = await orm.select({ password: users.password }).from(users)
+    .where(notLike(users.password, startsWithLikePattern(PLAIN_PASSWORD_LOCK_MARKER)));
+
+  const p = { plain: 0, unreadable: 0 };
+  personnelRows.forEach(r => tally(r.value, p));
+  const s = { plain: 0, unreadable: 0 };
+  settingRows.forEach(r => tally(r.value, s));
+  const w = { plain: 0, unreadable: 0 };
+  for (const row of webhookRows) {
+    tally(row.secretKey, w);
+    const headers = row.customHeaders && typeof row.customHeaders === 'object' && !Array.isArray(row.customHeaders)
+      ? Object.values(row.customHeaders as Record<string, unknown>) : [];
+    headers.forEach(h => tally(h, w));
+  }
+  return {
+    plaintext: { personnel: p.plain, settings: s.plain, webhooks: w.plain },
+    unreadable: p.unreadable + s.unreadable + w.unreadable,
+    nonBcryptPasswords: passwordRows.filter(r => !isBcryptHash(r.password)).length,
+  };
+}
+
+const fa = (n: number) => String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
+
+export function buildSecretsAtRestHealthTest(counts: SecretsAtRestCounts): HealthCheckTestResult {
+  const plain = counts.plaintext.personnel + counts.plaintext.settings + counts.plaintext.webhooks;
+  const problems = plain + counts.nonBcryptPasswords + counts.unreadable;
+  const items: HealthCheckTestResult['items'] = [];
+  if (plain > 0) {
+    items.push({
+      id: 'plaintext_secrets',
+      title: 'رمز سامانه‌های بیرونی به‌صورت متن ساده',
+      subtitle: `پرسنل ${fa(counts.plaintext.personnel)}، تنظیمات ${fa(counts.plaintext.settings)}، وب‌هوک ${fa(counts.plaintext.webhooks)}`,
+      details: 'روی کارساز یک بار «npm run secrets:encrypt -- --apply» را اجرا کنید.',
+    });
+  }
+  if (counts.nonBcryptPasswords > 0) {
+    items.push({
+      id: 'non_bcrypt_passwords',
+      title: 'گذرواژه کاربر بی درهم‌سازی امن',
+      subtitle: `${fa(counts.nonBcryptPasswords)} کاربر`,
+      details: 'روی کارساز یک بار «npm run users:lock-plain-passwords -- --apply» را اجرا کنید و سپس به این کاربران رمز موقت تازه بدهید.',
+    });
+  }
+  if (counts.unreadable > 0) {
+    items.push({
+      id: 'unreadable_secrets',
+      title: 'رمز ذخیره‌شده‌ای که با کلید فعلی باز نمی‌شود',
+      subtitle: `${fa(counts.unreadable)} مقدار`,
+      details: 'کلید ERP_SECRETS_KEY عوض شده است؛ کلید پیشین را برگردانید یا این رمزها را دوباره وارد کنید.',
+    });
+  }
+  return {
+    id: 'secrets_at_rest',
+    category: 'system',
+    title: 'رمزها و گذرواژه‌های ذخیره‌شده',
+    description: 'رمز سامانه‌های بیرونی باید رمزنگاری‌شده و گذرواژه کاربران درهم‌سازی‌شده ذخیره شوند. پس از ارتقا از نسخه‌های قدیمی، دو فرمان یک‌باره این کار را می‌کنند؛ این بررسی نشان می‌دهد که آیا اجرا شده‌اند.',
+    status: problems > 0 ? 'warning' : 'healthy',
+    scoreImpact: problems > 0 ? -3 : 0,
+    count: problems,
+    message: problems > 0
+      ? `${fa(problems)} رمز یا گذرواژه به شکل امن ذخیره نشده است.`
+      : 'همه رمزها رمزنگاری‌شده و همه گذرواژه‌ها درهم‌سازی‌شده‌اند.',
+    items,
+    metrics: { plaintextSecrets: plain, nonBcryptPasswords: counts.nonBcryptPasswords, unreadableSecrets: counts.unreadable },
+  };
+}

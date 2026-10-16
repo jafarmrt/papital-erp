@@ -22,6 +22,7 @@ import {
 } from '../services/auth/loginSecurity.service.js';
 import { notSyntheticTestUsername, isSyntheticTestUsername, SYNTHETIC_USERNAME_REFUSED } from '../lib/syntheticUsers.js';
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE } from '../lib/auth/passwordPolicy.js';
+import { publicUserView } from '../lib/auth/publicUser.js';
 import { FULL_NAME_MAX_LENGTH, FULL_NAME_TOO_LONG_MESSAGE } from '../lib/users/profileFields.js';
 import { roleDisplayName } from '../lib/users/roleDisplayName.js';
 import { normalizeRialDisplayUnit } from '../lib/rialDisplay.js';
@@ -166,7 +167,6 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
 
   const csrfToken = generateCsrfToken();
   const token = generateToken({ id: user.id, username: user.username, role: user.role ?? '', csrfToken, tokenVersion: user.tokenVersion || 0 });
-  const { password: _, ...userWithoutPassword } = user;
 
   // Set secure HttpOnly cookie
   res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
@@ -174,7 +174,7 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
   // V3.0.6 (BUG-08) / v7.0.27 (TD-185): توکن فقط در کوکی HttpOnly؛ فیلد token تنها با EXPOSE_TOKEN_IN_BODY=true
   res.json({
     success: true,
-    user: { ...userWithoutPassword, full_name: user.fullName || user.username },
+    user: publicUserView(user),
     ...(shouldExposeTokenInBody() ? { token } : {}),
     csrfToken
   });
@@ -220,7 +220,6 @@ router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async
     // v10.1.37 (N-01, TD-1283): seven days for a role holding workshop.long_session, else 24 hours
     const lifetime = await sessionLifetimeOfRole(activeUser.role);
     const token = generateToken({ id: activeUser.id, username: activeUser.username, role: activeUser.role ?? '', csrfToken, tokenVersion: activeUser.tokenVersion || 0 }, lifetime);
-    const { password: _, ...userWithoutPassword } = activeUser;
 
     // Set secure HttpOnly cookie
     res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req, lifetime));
@@ -242,13 +241,7 @@ router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async
 
     return res.json({
       success: true,
-      user: {
-        ...userWithoutPassword,
-        full_name: activeUser.fullName || activeUser.username,
-        avatar_url: activeUser.avatarUrl || '',
-        mustResetPassword: Boolean(activeUser.mustResetPassword),
-        must_reset_password: Boolean(activeUser.mustResetPassword)
-      },
+      user: publicUserView(activeUser),
       // v7.0.27 (TD-185 / audit P1-4): توکن فقط در کوکی HttpOnly؛ فیلد token تنها با EXPOSE_TOKEN_IN_BODY=true
       ...(shouldExposeTokenInBody() ? { token } : {}),
       csrfToken
@@ -397,16 +390,9 @@ const meHandler = asyncHandler(async (req, res) => {
 
   // V3.0.6 (BUG-08): توکن بازتولیدشده دیگر در بدنه پاسخ برگردانده نمی‌شود
   // (قبلاً هرگز به‌صورت کوکی هم ست نمی‌شد و صرفاً افشای توکن بود).
-  const { password: _, ...userWithoutPassword } = user;
   res.json({
     authenticated: true,
-    user: {
-      ...userWithoutPassword,
-      full_name: user.fullName || user.username,
-      avatar_url: user.avatarUrl || '',
-      mustResetPassword: Boolean(user.mustResetPassword),
-      must_reset_password: Boolean(user.mustResetPassword)
-    },
+    user: publicUserView(user),
     csrfToken
   });
 });

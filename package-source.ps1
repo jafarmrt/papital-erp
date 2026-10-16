@@ -17,11 +17,18 @@ if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Path $stage -Force | Out-Null
 
 # Copy everything except runtime/local artifacts
-$excludeDirs = @('node_modules', '.pgdata', '.pgsql', 'dist', 'logs', 'coverage', '.git')
+# v10.1.44 (OBS-R1-21): local env files (.env.*, except the .example templates), backups, update logs and .claude never ship
+$excludeDirs = @('node_modules', '.pgdata', '.pgsql', 'dist', 'logs', 'coverage', '.git', 'backups', '.claude')
 $excludeFiles = @('dev-server.log', 'app.log', '.env', $zipName)
 
+function Test-LocalOnlyFile([string]$name) {
+    if ($name -like '.env.*' -and $name -notlike '*.example') { return $true }
+    if ($name -like 'update-*.log') { return $true }
+    return $false
+}
+
 Get-ChildItem $root -Force | Where-Object {
-    $_.Name -notin $excludeDirs -and $_.Name -notin $excludeFiles
+    $_.Name -notin $excludeDirs -and $_.Name -notin $excludeFiles -and -not (Test-LocalOnlyFile $_.Name)
 } | ForEach-Object {
     Copy-Item $_.FullName -Destination $stage -Recurse -Force
 }
@@ -53,4 +60,4 @@ $size = [math]::Round((Get-Item $zipName).Length / 1MB, 1)
 Write-Host ""
 Write-Host "Package created: $zipName ($size MB)" -ForegroundColor Green
 Write-Host "Included: full source + public + scripts + .env.example + local PS1 helpers" -ForegroundColor Cyan
-Write-Host "Excluded: node_modules, .pgdata (DB data!), .pgsql, dist, logs" -ForegroundColor Yellow
+Write-Host "Excluded: node_modules, .pgdata (DB data!), .pgsql, dist, logs, backups, .claude, local .env files" -ForegroundColor Yellow

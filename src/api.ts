@@ -126,12 +126,33 @@ const PUBLIC_API_PATHS = new Set([
   '/me', '/auth/me',
 ]);
 
-export function isPublicApiEndpoint(endpoint: string): boolean {
+function apiPathOf(endpoint: string): string {
   let path = endpoint.split(/[?#]/)[0];
   if (!path.startsWith('/')) path = `/${path}`;
   if (path === '/api' || path.startsWith('/api/')) path = path.substring(4);
   if (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1);
-  return PUBLIC_API_PATHS.has(path);
+  return path;
+}
+
+export function isPublicApiEndpoint(endpoint: string): boolean {
+  return PUBLIC_API_PATHS.has(apiPathOf(endpoint));
+}
+
+/**
+ * v10.1.44 (OBS-R2-18): the only answers whose `token` / `csrfToken` the browser keeps: the session endpoints
+ * (login, setup, CSRF, session check) and the profile, which answers a fresh session after a password change.
+ * A field of the same name in any other answer is data, never the session.
+ */
+const SESSION_TOKEN_PATHS = new Set([
+  '/login', '/auth/login',
+  '/setup',
+  '/csrf', '/auth/csrf',
+  '/me', '/auth/me',
+  '/users/profile',
+]);
+
+export function issuesSessionTokens(endpoint: string): boolean {
+  return SESSION_TOKEN_PATHS.has(apiPathOf(endpoint));
 }
 
 /** v9.0.307 (TD-670): پیام قطع ارتباط هنگام ثبت؛ معلوم نیست کارساز ثبت را انجام داده است یا نه */
@@ -314,11 +335,13 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
       res.status
     );
   }
-  if ((jsonResponse as any)?.csrfToken) {
-    setCsrfToken((jsonResponse as any).csrfToken);
-  }
-  if ((jsonResponse as any)?.token) {
-    setAuthToken((jsonResponse as any).token);
+  if (issuesSessionTokens(endpoint)) {
+    if ((jsonResponse as any)?.csrfToken) {
+      setCsrfToken((jsonResponse as any).csrfToken);
+    }
+    if ((jsonResponse as any)?.token) {
+      setAuthToken((jsonResponse as any).token);
+    }
   }
   return jsonResponse;
 }
