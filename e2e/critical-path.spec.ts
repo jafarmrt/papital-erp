@@ -20,10 +20,11 @@ test('login, issue a final sales invoice and see its journal voucher', async ({ 
   await page.goto('/invoices/create');
   // v10.0.192 (TD-1260): type into the picker's own search box; keyboard.type right after the click could send the
   // first key before the box mounted and searched a broken name
-  await page.getByRole('button', { name: /جهت انتخاب خریدار/ }).click();
+  // v10.1.31 (TD-1278): a picker is named by its label; its placeholder is only the shown text
+  await page.locator('button', { hasText: /جهت انتخاب خریدار/ }).click();
   await page.getByPlaceholder('جست‌وجو...', { exact: true }).fill(customerName);
   await page.locator('li', { hasText: customerName }).first().click();
-  await page.getByRole('button', { name: 'انتخاب کالا / ماده اولیه' }).click();
+  await page.locator('button', { hasText: 'انتخاب کالا / ماده اولیه' }).click();
   await page.getByPlaceholder('جست‌وجو...', { exact: true }).fill(itemCode);
   await page.locator('li', { hasText: itemCode }).first().click();
   // v10.1.22 (TD-1273): number fields are text fields with the decimal keypad, found by their label
