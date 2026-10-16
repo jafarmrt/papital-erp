@@ -299,6 +299,25 @@ export const treasuryTransactions = pgTable('treasury_transactions', {
   idx_treasury_transactions_voucher_id: index('idx_treasury_transactions_voucher_id').on(table.voucherId).where(sql`${table.voucherId} IS NOT NULL`),
 }));
 
+/**
+ * v10.1.32 (D-16, decision ت۳۰ «متغیر»): the lines of a petty cash expense statement (migration 0116). The statement is one
+ * treasury payment from a petty cash fund; its voucher debits each line's expense account and credits the fund.
+ */
+export const pettyCashExpenseLines = pgTable('petty_cash_expense_lines', {
+  id: serial('id').primaryKey(),
+  treasuryTransactionId: integer('treasury_transaction_id').notNull().references(() => treasuryTransactions.id),
+  lineNo: integer('line_no').notNull(),
+  accountId: integer('account_id').notNull().references(() => accounts.id),
+  amount: moneyNumeric('amount').notNull(),
+  description: text('description').notNull().default(''),
+  sellerName: text('seller_name').notNull().default(''),
+  invoiceNumber: text('invoice_number').notNull().default(''),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+}, (table) => ({
+  uq_petty_cash_expense_lines_transaction_line: uniqueIndex('uq_petty_cash_expense_lines_transaction_line').on(table.treasuryTransactionId, table.lineNo),
+  idx_petty_cash_expense_lines_account: index('idx_petty_cash_expense_lines_account').on(table.accountId),
+}));
+
 export const accountingSettings = pgTable('accounting_settings', {
   id: serial('id').primaryKey(),
   key: text('key').notNull().unique(),

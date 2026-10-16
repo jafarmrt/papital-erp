@@ -311,6 +311,20 @@ export interface TreasuryTransaction {
   createdAt?: string | null;
   isDeleted?: number | null;
   is_deleted?: number | null;
+  /** v10.1.32 (D-16): number of expense lines when the row is a petty cash expense statement */
+  pettyCashLineCount?: number;
+}
+
+/** v10.1.32 (D-16): one line of a petty cash expense statement (`GET /accounting/treasury/:id/petty-cash-lines`) */
+export interface PettyCashExpenseLine {
+  lineNo: number;
+  accountId: number;
+  accountCode: string;
+  accountName: string;
+  amount: number;
+  description: string;
+  sellerName: string;
+  invoiceNumber: string;
 }
 
 export interface TrialBalanceRow {

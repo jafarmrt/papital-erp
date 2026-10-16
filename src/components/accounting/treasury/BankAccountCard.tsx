@@ -10,12 +10,22 @@ import {
   ShieldCheck, 
   AlertTriangle, 
   CheckCircle2, 
-  Layers 
+  Layers,
+  HandCoins,
 } from 'lucide-react';
 import { formatPersianPrice, formatCurrencyLabel, formatBankCard, formatIranianSheba } from '../../../utils';
 import { isRialCurrency, rialDisplayOf } from '../../../lib/rialDisplay';
 import { ActionMenu } from '../../ActionMenu';
 import type { BankAccount } from '../../../types';
+
+/** v10.1.32 (D-16): کارهای تنخواه‌گردان — شارژ و برگشت وجه با انتقال وجه، خرج‌ها با صورت‌هزینه */
+export type PettyCashAction = 'charge' | 'expense' | 'return';
+
+const PETTY_CASH_ACTIONS: ReadonlyArray<{ action: PettyCashAction; label: string }> = [
+  { action: 'charge', label: 'شارژ تنخواه' },
+  { action: 'expense', label: 'صورت‌هزینه' },
+  { action: 'return', label: 'برگشت وجه' },
+];
 
 interface BankAccountCardProps {
   bank: BankAccount;
@@ -25,6 +35,7 @@ interface BankAccountCardProps {
   onEdit: (bank: BankAccount) => void;
   onDelete: (id: number, title: string) => void;
   onReconcile: (bankId: number) => void;
+  onPettyCash?: (bank: BankAccount, action: PettyCashAction) => void;
 }
 
 export const BankAccountCard: React.FC<BankAccountCardProps> = React.memo(({
@@ -35,9 +46,11 @@ export const BankAccountCard: React.FC<BankAccountCardProps> = React.memo(({
   onEdit,
   onDelete,
   onReconcile,
+  onPettyCash,
 }) => {
   const isBank = bank.type === 'bank';
   const isPos = bank.type === 'pos';
+  const isPettyCash = bank.type === 'petty_cash';
   const isSynced = bank.syncStatus === 'synced';
   const isDiscrepant = bank.syncStatus === 'discrepant';
   const rial = rialDisplayOf(appCurrency);
@@ -61,10 +74,12 @@ export const BankAccountCard: React.FC<BankAccountCardProps> = React.memo(({
                   ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400'
                   : isPos
                   ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400'
+                  : isPettyCash
+                  ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400'
                   : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400'
               }`}
             >
-              {isBank ? <Building2 className="w-5 h-5" /> : isPos ? <CreditCard className="w-5 h-5" /> : <Wallet className="w-5 h-5" />}
+              {isBank ? <Building2 className="w-5 h-5" /> : isPos ? <CreditCard className="w-5 h-5" /> : isPettyCash ? <HandCoins className="w-5 h-5" /> : <Wallet className="w-5 h-5" />}
             </div>
             <div>
               <div className="flex items-center gap-1.5">
@@ -76,7 +91,7 @@ export const BankAccountCard: React.FC<BankAccountCardProps> = React.memo(({
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                {bank.bankName ? `${bank.bankName} ${bank.branch ? `(${bank.branch})` : ''}` : (bank.type === 'cash' ? 'صندوق نقد' : 'دستگاه کارتخوان')}
+                {bank.bankName ? `${bank.bankName} ${bank.branch ? `(${bank.branch})` : ''}` : (bank.type === 'cash' ? 'صندوق نقد' : isPettyCash ? 'تنخواه‌گردان' : 'دستگاه کارتخوان')}
               </p>
             </div>
           </div>
@@ -160,6 +175,21 @@ export const BankAccountCard: React.FC<BankAccountCardProps> = React.memo(({
             {bankNumber(bank.currentBalance || 0)} <span className="text-xs font-normal text-slate-500">{isRialBank ? rial.label : formatCurrencyLabel(bank.currency ?? undefined)}</span>
           </div>
         </div>
+
+        {isPettyCash && onPettyCash && (
+          <div className="grid grid-cols-3 gap-1.5 my-2">
+            {PETTY_CASH_ACTIONS.map(({ action, label }) => (
+              <button
+                key={action}
+                type="button"
+                onClick={() => onPettyCash(bank, action)}
+                className="px-2 py-1.5 text-[11px] font-bold rounded-lg border border-amber-200 dark:border-amber-800/60 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-900/40 cursor-pointer"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Sub-Ledger & Treasury Breakdown */}
         <div className="grid grid-cols-2 gap-2 my-2 text-[11px]">
