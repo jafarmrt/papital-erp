@@ -1,6 +1,6 @@
 import express from 'express';
 import { ATTACHMENT_BODY_LIMIT, DEFAULT_BODY_LIMIT, acceptsAttachmentBody } from './lib/attachments/attachmentBodyLimit.js';
-import { isPublicUploadPath } from './lib/attachments/publicUploadPath.js';
+import { isPublicUploadPath, isUploadsRequestPath, normalizedUploadPath } from './lib/attachments/publicUploadPath.js';
 import 'express-async-errors';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -377,15 +377,15 @@ export async function createApp(): Promise<express.Express> {
 
   const uploadsStatic = express.static(path.join(process.cwd(), 'public', 'uploads'));
   app.use('/uploads', (req, res, next) => {
-    const p = (req.path || '').toLowerCase();
+    // OBS-R2-60: a malformed path, an encoded slash or backslash and any `..` segment never reach the files
+    const p = normalizedUploadPath(req.path || '');
+    if (p === null) return res.status(404).end();
     // v7.0.56 (audit P2-9): فایل پیوست‌ها فقط از GET /api/attachments/:id با بررسی مجوز رکورد مالک سرو می‌شوند
-    let decodedPath = p;
-    try { decodedPath = decodeURIComponent(p); } catch { /* keep raw */ }
-    if (p.startsWith('/.attachments') || decodedPath.startsWith('/.attachments')) {
+    if (p.startsWith('/.attachments')) {
       return res.status(404).end();
     }
-    // Public assets and media images (catalog items, transfers, logos, product photos)
-    if (isPublicUploadPath(p)) {
+    // OBS-R2-60 (ت۴۰): only the public asset folders and a legacy company logo file; every image needs a session
+    if (isPublicUploadPath(req.path || '')) {
       return uploadsStatic(req, res, next);
     }
     // All other uploads (e.g. documents, invoices, attachments) require authentication
@@ -399,6 +399,14 @@ export async function createApp(): Promise<express.Express> {
   // تک‌صفحه‌ای (server.ts) می‌رسید و index.html با کد 200 برمی‌گشت که کلاینت آن را پاسخ موفق تلقی می‌کرد.
   app.use('/api', (req, res) => {
     res.status(404).json({ error: 'مسیر درخواستی در API وجود ندارد', path: (req.originalUrl || '').split('?')[0] });
+  });
+
+  // Public static assets (fonts, icons, images) at the site root. OBS-R2-60: a path that decodes and normalizes into
+  // /uploads (`//uploads/…`, `/uploads%2f…`, `/%75ploads/…`) is refused here, so uploads pass only the guard above.
+  const publicStatic = express.static(path.join(process.cwd(), 'public'));
+  app.use((req, res, next) => {
+    if (isUploadsRequestPath(req.path || '')) return res.status(404).end();
+    publicStatic(req, res, next);
   });
 
   app.use(errorHandler);

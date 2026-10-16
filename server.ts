@@ -92,8 +92,7 @@ async function startServer() {
     process.exit(1);
   });
 
-  // Serve public static assets (fonts, icons, images) directly
-  app.use(express.static(path.join(process.cwd(), 'public')));
+  // Public static assets are served by createApp, behind the /uploads guard (OBS-R2-60)
 
   // ======== Vite Middleware ========
   // v4.0.30: import استاتیک vite حذف شد — باندل پروداکشن (--packages=external)
