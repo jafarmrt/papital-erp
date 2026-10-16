@@ -159,7 +159,7 @@
   "src/tests/fixtures/factories.ts": 15,
   "src/tests/fixtures/httpTestHelper.ts": 3,
   "src/tests/fixtures/wooWebhookHelper.ts": 1,
-  "src/tests/setup/testDb.ts": 6,
+  "src/tests/setup/testDb.ts": 5,
   "src/tests/suites/apiSuite.ts": 4,
   "src/tests/suites/businessLogicAuditSuite.ts": 17,
   "src/tests/suites/concurrencySuite.ts": 21,

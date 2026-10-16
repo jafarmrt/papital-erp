@@ -65,10 +65,9 @@ export async function requisitionOrderCounts(db: DbExecutor, requisitionIds: num
 
 /** DTO هر درخواست با کد درخواست تجمیعی و شمار سفارش‌هایش */
 export async function requisitionDtos(db: DbExecutor, rows: Array<typeof purchaseRequisitions.$inferSelect>): Promise<PurchaseRequisition[]> {
-  const [targetCodes, orderCounts] = await Promise.all([
-    consolidatedIntoCodes(db, rows),
-    requisitionOrderCounts(db, rows.map(row => row.id)),
-  ]);
+  // v10.1.29 (TD-1279): `db` may be a transaction's single connection, so one query at a time
+  const targetCodes = await consolidatedIntoCodes(db, rows);
+  const orderCounts = await requisitionOrderCounts(db, rows.map(row => row.id));
   return rows.map(row => ({
     ...toRequisitionDto(row),
     consolidatedIntoCode: targetCodes.get(Number(row.consolidatedIntoId)) ?? null,

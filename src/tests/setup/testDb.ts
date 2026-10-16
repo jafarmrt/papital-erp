@@ -1,6 +1,7 @@
 import { pool } from '../../db/drizzle.js';
 import { logger } from '../../middleware/logger.js';
 import { runMigrations, setMigrationsJournalSchema, type MigrationResult } from '../../db/migrator.js';
+import { pinSearchPathOnCheckout, type SearchPathClient, type SearchPathPool } from './schemaSearchPath.js';
 
 /**
  * TST-007 — Test Isolation via Dedicated PostgreSQL Schema
@@ -37,21 +38,13 @@ export async function setupTestSchema(options: SetupTestSchemaOptions = {}): Pro
   await pool.query('CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public');
   await pool.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
 
-  const setSearchPath = (client: { query: (q: string) => unknown }) => {
-    // Guarantees every checked-out connection resolves tables inside the sandbox
-    return client.query(`SET search_path TO "${schema}", public`);
-  };
-
   const typedPool = pool as unknown as PoolWithEvents & { on: any };
 
-  // 'acquire' fires on EVERY checkout (not just brand-new clients),
-  // covering warm/idle pooled connections created before setup.
-  const acquireHandler = (client: any) => {
-    try { setSearchPath(client); } catch { /* non-fatal */ }
-  };
+  // v10.1.29 (TD-1279): every checkout (new or idle client) waits for its search_path before the
+  // caller's query runs; an 'acquire' handler could not wait and overlapped two queries on one client.
+  const restoreConnect = pinSearchPathOnCheckout(pool as unknown as SearchPathPool<SearchPathClient>, schema);
   const errorHandler = () => { /* pool error observer */ };
 
-  typedPool.on('acquire', acquireHandler);
   typedPool.on('error', errorHandler);
 
   // v7.0.42 (TD-192): دفتر ثبت مهاجرت‌ها داخل همین اسکیمای موقت (و حذف همراه آن)
@@ -66,7 +59,7 @@ export async function setupTestSchema(options: SetupTestSchemaOptions = {}): Pro
 
   const teardown = async (): Promise<void> => {
     try {
-      typedPool.removeListener('acquire', acquireHandler);
+      restoreConnect();
       typedPool.removeListener('error', errorHandler);
       setMigrationsJournalSchema(previousJournalSchema);
       await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);

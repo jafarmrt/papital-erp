@@ -231,10 +231,9 @@ export class WorkflowDefinitionService {
           const refusal = workflowEntityTypeChangeRefusal({ isActive, startedCount: await startedInstanceCount(tx, existing.id) });
           if (refusal) throw new ValidationError(refusal, undefined, 'WF_ENTITY_TYPE_LOCKED');
         }
-        const [oldStates, oldTransitions] = await Promise.all([
-          tx.select({ stateKey: workflowStates.stateKey }).from(workflowStates).where(eq(workflowStates.workflowDefinitionId, existing.id)),
-          tx.select({ actionKey: workflowTransitions.actionKey }).from(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, existing.id)),
-        ]);
+        // v10.1.29 (TD-1279): one query at a time on the transaction's connection (pg 9 refuses overlap)
+        const oldStates = await tx.select({ stateKey: workflowStates.stateKey }).from(workflowStates).where(eq(workflowStates.workflowDefinitionId, existing.id));
+        const oldTransitions = await tx.select({ actionKey: workflowTransitions.actionKey }).from(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, existing.id));
         before = designAuditSummary(existing, oldStates.map(r => r.stateKey), oldTransitions.map(r => r.actionKey));
         // v10.1.21 (TD-1270): before the tables become a draft, the published design keeps its own usable snapshot
         await ensurePublishedSnapshot(tx, existing.id, { title: existing.title, userId: payload.userId });
