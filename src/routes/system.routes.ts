@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { authenticateToken, AUTH_COOKIE_NAME, getAuthCookieOptions } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { authorizePermission, userHasRoleOrPermission, requireSystemAdmin } from '../middleware/authorize.js';
+import { authorizePermission, userHasRoleOrPermission, requireSystemAdmin, can } from '../middleware/authorize.js';
+import { isSettingReadable, WOOCOMMERCE_SETTING_READ_PERMISSIONS } from '../lib/settings/settingReadScope.js';
 import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog.js';
 import { logger } from '../middleware/logger.js';
 import { errorMessageOf } from '../utils.js';
@@ -152,6 +153,7 @@ router.get('/system/env', requireSystemAdmin, asyncHandler(async (req, res) => {
 // wc_consumer_secret / wc_webhook_secret / erp_webhook_secret_token جلوگیری شود.
 // v7.0.26 (TD-184): الگوی کلیدهای حساس و مقدار ماسک در سرویس تنظیمات متمرکز شد (consumer_key نیز ماسک می‌شود)
 
+// OBS-R2-96 (ت۴۰): a reader without `settings.manage` gets only the shared settings (`isSettingReadable`)
 router.get('/settings', asyncHandler(async (req, res) => {
   const safeSettings = await SystemSettingsService.getAllSettings();
   const isAdmin = req.user?.role === SYSTEM_ADMIN_ROLE;
@@ -159,7 +161,10 @@ router.get('/settings', asyncHandler(async (req, res) => {
     res.json(SystemSettingsService.revealSettingSecrets(safeSettings));
     return;
   }
-  res.json(SystemSettingsService.maskSensitiveSettings(safeSettings));
+  const allSettings = await can(req.user, 'settings.manage');
+  const woocommerce = allSettings || await can(req.user, ...WOOCOMMERCE_SETTING_READ_PERMISSIONS);
+  const readable = safeSettings.filter(s => isSettingReadable(s.key, { allSettings, woocommerce }));
+  res.json(SystemSettingsService.maskSensitiveSettings(readable));
 }));
 
 // v7.0.26 (TD-184 / audit P1-3): ذخیره فقط کلیدهای تغییرکرده با مجوز سطح کلید در SystemSettingsService

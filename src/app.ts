@@ -384,7 +384,7 @@ export async function createApp(): Promise<express.Express> {
     if (p.startsWith('/.attachments') || decodedPath.startsWith('/.attachments')) {
       return res.status(404).end();
     }
-    // Public assets and media images (catalog items, transfers, logos, product photos)
+    // OBS-R2-60 (ت۴۰): only the public asset folders and a legacy company logo file; every image needs a session
     if (isPublicUploadPath(p)) {
       return uploadsStatic(req, res, next);
     }

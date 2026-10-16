@@ -11115,5 +11115,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runPersonnelNationalIdTests } = await import('../regression/personnelNationalIdTests.js');
   results.push(...await runPersonnelNationalIdTests(shouldRun));
 
+  // closing sweep: login-only images and the settings read scope (OBS-R2-60, OBS-R2-96, ت۴۰)
+  const { runClosingReadAccessTests } = await import('../regression/closingReadAccessTests.js');
+  results.push(...await runClosingReadAccessTests(shouldRun));
+
   return results;
 }
