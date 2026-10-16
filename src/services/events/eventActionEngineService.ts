@@ -3,9 +3,9 @@ import { orm } from '../../db/drizzle.js';
 import { 
   eventActionRules, 
   eventActionLogs, 
-  notifications, 
   appSettings
 } from '../../db/schema.js';
+import { createNotifications } from '../notifications/notificationCreator.js';
 import { eq, and, desc, sql, type SQL } from 'drizzle-orm';
 import { BaseDomainEvent, DomainEventType } from './domainEvents.js';
 import { logger } from '../../middleware/logger.js';
@@ -235,18 +235,16 @@ export class EventActionEngineService {
       return { deliveredCount: 0, reason: 'هیچ گیرنده‌ای برای این اعلان یافت نشد.' };
     }
 
-    for (const uId of targetUserIds) {
-      await orm.insert(notifications).values({
-        userId: uId,
-        senderId: event.metadata?.userId || null,
-        senderName: event.metadata?.userName || 'موتور رویدادها',
-        type: notifType,
-        title,
-        message,
-        link,
-        isRead: 0
-      });
-    }
+    await orm.transaction(tx => createNotifications(tx, targetUserIds.map(uId => ({
+      userId: uId,
+      category: 'event_rule' as const,
+      senderId: event.metadata?.userId || null,
+      senderName: event.metadata?.userName || 'موتور رویدادها',
+      type: notifType,
+      title,
+      message,
+      link,
+    }))));
 
     return { deliveredCount: targetUserIds.length, targetUserIds, title, message, link };
   }

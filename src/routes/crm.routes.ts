@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { eq, desc, and, ilike, sql, gte, lte, or } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
-import { crmLeads, crmActivities, customers, users, notifications, personnel } from '../db/schema.js';
+import { crmLeads, crmActivities, customers, users, personnel } from '../db/schema.js';
+import { createNotifications } from '../services/notifications/notificationCreator.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission, can } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
@@ -354,19 +355,17 @@ async function notifySalesOnWonLead(lead: (Partial<typeof crmLeads.$inferSelect>
   try {
     const targetUserIds = await permissionHolderUserIds(WON_LEAD_NOTIFY_PERMISSION);
 
-    for (const userId of targetUserIds) {
-      if (senderId && userId === senderId) continue;
-      await orm.insert(notifications).values({
-        userId,
-        senderId: senderId || null,
-        senderName: authorName,
-        type: 'system',
-        title: `🎉 معامله موفق جدید: ${lead.title}`,
-        message: `پرونده فروش با موفقیت نهایی شد.`,
-        link: `/crm?leadId=${lead.id}`,
-        isRead: 0
-      });
-    }
+    const recipients = targetUserIds.filter(userId => !(senderId && userId === senderId));
+    await orm.transaction(tx => createNotifications(tx, recipients.map(userId => ({
+      userId,
+      category: 'crm_won' as const,
+      senderId: senderId || null,
+      senderName: authorName,
+      type: 'system',
+      title: `🎉 معامله موفق جدید: ${lead.title}`,
+      message: `پرونده فروش با موفقیت نهایی شد.`,
+      link: `/crm?leadId=${lead.id}`,
+    }))));
   } catch (err) {
     logger.error({ message: 'Error notifying managers and sales on won lead', error: err });
   }
@@ -926,16 +925,16 @@ router.post('/crm/activities', authorizePermission('crm.manage'), validate(creat
       }
       const notifUserId = targetUserId || currentUser?.id;
       if (notifUserId) {
-        await tx.insert(notifications).values({
+        await createNotifications(tx, [{
           userId: notifUserId,
+          category: 'crm_followup',
           senderId: currentUser?.id,
           senderName: authorName,
           type: 'task',
           title: 'پیگیری تازه ارتباط با مشتری',
           message: `${authorName} پیگیری تازه‌ای برای شما ثبت کرد: "${nextFollowUpTask || title}" (تاریخ سررسید: ${toPersianDigits(isoToJalaliDate(nextFollowIso || actDateIso))})`,
           link: `/crm?activityId=${act.id}`,
-          isRead: 0
-        });
+        }]);
       }
     }
 

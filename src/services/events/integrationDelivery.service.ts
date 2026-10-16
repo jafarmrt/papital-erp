@@ -16,7 +16,9 @@ import type { BaseDomainEvent } from './domainEvents.js';
  * again. Before, webhook retries were three timers lost on a restart, a failed rule action was never run again, the outbox
  * handlers always reported success and nothing reached the dead letter queue.
  */
-export type DeliveryKind = 'webhook' | 'rule_action';
+// v10.1.39 (messenger notifications plan part 2): `messenger` is one notification sent to one linked Bale or Telegram
+// account; its target is the user's link and its row is queued by `createNotifications` in the notification's transaction
+export type DeliveryKind = 'webhook' | 'rule_action' | 'messenger';
 export type DeliveryJob = typeof integrationDeliveryJobs.$inferSelect;
 
 export interface DeliveryAttemptOutcome {
@@ -51,7 +53,8 @@ export function webhookMaxAttempts(retryLimit: number | null | undefined): numbe
 
 /** The dead letter row of one delivery: the event id with the delivery's target, so each failed delivery has its own row */
 export function deliveryDeadLetterId(job: Pick<DeliveryJob, 'kind' | 'targetId' | 'eventId'>): string {
-  return `${job.eventId}#${job.kind === 'webhook' ? 'webhook' : 'rule'}:${job.targetId}`;
+  const kind = job.kind === 'webhook' ? 'webhook' : job.kind === 'messenger' ? 'messenger' : 'rule';
+  return `${job.eventId}#${kind}:${job.targetId}`;
 }
 
 function errorText(err: unknown): string {
@@ -114,6 +117,10 @@ export class IntegrationDeliveryService {
   private static async execute(job: DeliveryJob): Promise<DeliveryAttemptOutcome> {
     const context = { jobId: job.id, attempt: job.attempts };
     try {
+      if (job.kind === 'messenger') {
+        const { deliverMessengerJob } = await import('../messenger/messengerDelivery.js');
+        return await deliverMessengerJob(job.targetId, eventOf(job));
+      }
       if (job.kind === 'webhook') {
         const { WebhookSubscriptionService } = await import('./webhookSubscriptionService.js');
         return await WebhookSubscriptionService.deliverJobAttempt(job.targetId, eventOf(job), context);
@@ -162,13 +169,14 @@ export class IntegrationDeliveryService {
 
   private static async moveToDeadLetter(job: DeliveryJob, error: string): Promise<void> {
     const event = eventOf(job);
-    const target = job.kind === 'webhook' ? `اشتراک وب‌هوک #${job.targetId}` : `اقدام قانون خودکار #${job.targetId}`;
+    const target = job.kind === 'webhook' ? `اشتراک وب‌هوک #${job.targetId}`
+      : job.kind === 'messenger' ? `پیام‌رسان کاربر (اتصال #${job.targetId})` : `اقدام قانون خودکار #${job.targetId}`;
     await DeadLetterQueueService.moveToDeadLetter({
       originalEventId: deliveryDeadLetterId(job),
       eventType: job.eventType,
       aggregateType: String(event.aggregateType ?? ''),
       aggregateId: String(event.aggregateId ?? ''),
-      source: job.kind === 'webhook' ? 'webhook' : 'action_engine',
+      source: job.kind === 'webhook' ? 'webhook' : job.kind === 'messenger' ? 'messenger' : 'action_engine',
       payload: event.payload ?? {},
       metadata: { ...((event.metadata as unknown as Record<string, unknown>) || {}), deliveryJobId: job.id, deliveryKind: job.kind, deliveryTargetId: job.targetId, originalEventId: job.eventId },
       failureReason: `تحویل به ${target} پس از ${job.attempts} تلاش انجام نشد: ${error}`,

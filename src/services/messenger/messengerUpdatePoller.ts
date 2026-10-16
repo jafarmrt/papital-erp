@@ -121,12 +121,17 @@ export class MessengerUpdatePoller {
     return { count: inWindow ? Number(row?.count ?? 0) : 0, inWindow };
   }
 
+  /** One more wrong code for the bot, counted in one statement so concurrent passes never lose one */
   private static async countBotWrongCode(messenger: Messenger): Promise<void> {
-    const current = await this.botWrongCodes(messenger);
-    const count = current.count + 1;
-    await orm.update(messengerBots)
-      .set(current.inWindow ? { wrongCodesCount: count } : { wrongCodesCount: count, wrongCodesSince: sql`now()` })
-      .where(eq(messengerBots.messenger, messenger));
+    const inWindow = sql`coalesce(${messengerBots.wrongCodesSince} > now() - make_interval(mins => ${WRONG_CODE_WINDOW_MINUTES}), false)`;
+    const [row] = await orm.update(messengerBots)
+      .set({
+        wrongCodesCount: sql`CASE WHEN ${inWindow} THEN ${messengerBots.wrongCodesCount} + 1 ELSE 1 END`,
+        wrongCodesSince: sql`CASE WHEN ${inWindow} THEN ${messengerBots.wrongCodesSince} ELSE now() END`,
+      })
+      .where(eq(messengerBots.messenger, messenger))
+      .returning({ count: messengerBots.wrongCodesCount });
+    const count = Number(row?.count ?? 0);
     if (count === BOT_WRONG_CODE_LIMIT) {
       logger.warn(`[Messenger] The ${messenger} bot got ${count} wrong link codes in ${WRONG_CODE_WINDOW_MINUTES} minutes; link codes are refused until the window ends`);
     }
@@ -198,8 +203,10 @@ export class MessengerUpdatePoller {
     return updates.length;
   }
 
-  /** One pass over one bot under its own lock; skipped when another pass of the same bot holds it */
+  /** One pass over one bot under its own lock; skipped while it backs off or another pass of the same bot holds it */
   static async pollMessengerExclusive(messenger: Messenger, now = Date.now()): Promise<number> {
+    // a bot backing off takes no connection and no lock
+    if (now < this.stateOf(messenger).nextAt) return 0;
     const outcome = await withRowAdvisoryLock(ROW_ADVISORY_LOCK_NAMESPACES.MESSENGER_BOT_UPDATES, MESSENGERS.indexOf(messenger) + 1, () => this.pollMessenger(messenger, now));
     return outcome.acquired ? outcome.result : 0;
   }

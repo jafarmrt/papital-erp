@@ -1,7 +1,7 @@
 {
   "name": "workshop-erp-crm",
   "private": true,
-  "version": "10.1.38",
+  "version": "10.1.39",
   "engines": {
     "node": ">=24"
   },

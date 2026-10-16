@@ -1,6 +1,7 @@
 import { and, eq, type SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { crmActivities, notifications, users } from '../../db/schema.js';
+import { createNotifications } from './notificationCreator.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { isoToJalaliDate, toPersianDigits } from '../../utils.js';
 import { dueFollowupCondition, ownFollowupCondition } from '../crm/crmFollowups.js';
@@ -37,16 +38,16 @@ export async function generateCrmDueReminders(userId: number): Promise<void> {
         eq(notifications.type, 'crm_due_task'),
       ));
     if (existing) continue;
-    // v9.0.434 (TD-717): uq_notifications_due_reminder makes a concurrent second insert a no-op
-    await orm.insert(notifications).values({
+    // v9.0.434 (TD-717): uq_notifications_due_reminder makes a concurrent second insert a no-op (and sends nothing)
+    await orm.transaction(tx => createNotifications(tx, [{
       userId,
+      category: 'crm_followup',
       senderId: null,
       senderName: 'سامانه ارتباط با مشتری',
       type: 'crm_due_task',
       title: '⏰ سررسید پیگیری ارتباط با مشتری',
       message: `سررسید پیگیری: "${act.nextFollowUpTask || act.title}" (تاریخ: ${dueDate})`,
       link: notifLink,
-      isRead: 0,
-    }).onConflictDoNothing();
+    }], { skipExisting: true }));
   }
 }

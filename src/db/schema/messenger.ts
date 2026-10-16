@@ -51,3 +51,17 @@ export const messengerLinkCodes = pgTable('messenger_link_codes', {
   idx_messenger_link_codes_user_id: index('idx_messenger_link_codes_user_id').on(table.userId),
   uq_messenger_link_codes_code: unique('uq_messenger_link_codes_code').on(table.messenger, table.codeHash),
 }));
+
+/**
+ * v10.1.39 (messenger notifications plan part 2): a user's choice per notification category (migration 0120). A missing
+ * row means the category goes to the messenger too (the default); `send_to_messenger = 0` keeps it in the bell only.
+ */
+export const userNotificationPreferences = pgTable('user_notification_preferences', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull().references(() => users.id),
+  category: text('category').notNull(),
+  sendToMessenger: integer('send_to_messenger').notNull().default(1),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
+}, (table) => ({
+  uq_user_notification_preferences_user_category: unique('uq_user_notification_preferences_user_category').on(table.userId, table.category),
+}));

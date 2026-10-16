@@ -1,7 +1,9 @@
 import crypto from 'node:crypto';
 import request from 'supertest';
+import type { PoolClient } from 'pg';
 import { eq, sql } from 'drizzle-orm';
-import { orm } from '../../db/drizzle.js';
+import { orm, pool } from '../../db/drizzle.js';
+import { withRowAdvisoryLock } from '../../lib/advisoryLock.js';
 import { messengerBots, messengerLinkCodes, userMessengerLinks, users } from '../../db/schema.js';
 import { MessengerUpdatePoller, BOT_REPLIES, BOT_WRONG_CODE_LIMIT } from '../../services/messenger/messengerUpdatePoller.js';
 import type { BotUpdate } from '../../services/messenger/messengerClient.js';
@@ -19,13 +21,13 @@ import { type ShouldRun, runCase } from './fiscalClosingTests.js';
  */
 
 type Res = { status: number; body?: unknown };
-const brief = (res: Res) => `${res.status} ${JSON.stringify(res.body ?? null).slice(0, 240)}`;
-const codeOf = (res: Res) => String((res.body as { code?: unknown } | undefined)?.code ?? '');
+export const brief = (res: Res) => `${res.status} ${JSON.stringify(res.body ?? null).slice(0, 240)}`;
+export const codeOf = (res: Res) => String((res.body as { code?: unknown } | undefined)?.code ?? '');
 
-const TOKEN = '987654:FAKE-STAFF-BOT-TOKEN';
+export const TOKEN = '987654:FAKE-STAFF-BOT-TOKEN';
 const OTHER_TOKEN = '555555:ANOTHER-STAFF-BOT-TOKEN';
 
-interface FakeBotApi {
+export interface FakeBotApi {
   calls: Array<{ url: string; body: Record<string, unknown> }>;
   usernames: Record<string, string>;
   sendStatus: number;
@@ -36,7 +38,7 @@ interface FakeBotApi {
 }
 
 /** Replaces `fetch` with a fake bot API for the time of `fn` */
-async function withFakeBotApi<T>(fn: (api: FakeBotApi) => Promise<T>): Promise<T> {
+export async function withFakeBotApi<T>(fn: (api: FakeBotApi) => Promise<T>): Promise<T> {
   const api: FakeBotApi = { calls: [], usernames: { [TOKEN]: 'papital_staff_bot', [OTHER_TOKEN]: 'papital_other_bot' }, sendStatus: 200, updates: [], failingTokens: new Set() };
   const original = globalThis.fetch;
   globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
@@ -65,7 +67,7 @@ async function withFakeBotApi<T>(fn: (api: FakeBotApi) => Promise<T>): Promise<T
   }
 }
 
-async function clientFor(permissions: string[] | 'admin') {
+export async function clientFor(permissions: string[] | 'admin', fullName = 'مریم احمدی') {
   const { getTestApp, getAdminSession, loginTestUserWithSession } = await import('../fixtures/httpTestHelper.js');
   const app = await getTestApp();
   let userId = 0;
@@ -74,7 +76,7 @@ async function clientFor(permissions: string[] | 'admin') {
     s = await getAdminSession();
   } else {
     const role = await createTestRole({ permissions });
-    const user = await createTestUser({ role: role.code, fullName: 'مریم احمدی' });
+    const user = await createTestUser({ role: role.code, fullName });
     userId = user.id;
     s = await loginTestUserWithSession(app, user.username);
   }
@@ -92,7 +94,7 @@ const chatUpdate = (updateId: number, chatId: number, text: string): BotUpdate =
   message: { text, chat: { id: chatId, type: 'private', first_name: 'Maryam' } },
 });
 
-async function inSandbox<T>(fn: () => Promise<T>): Promise<T> {
+export async function inSandbox<T>(fn: () => Promise<T>): Promise<T> {
   return withIsolatedTestSchema(async () => {
     MessengerUpdatePoller.reset();
     try {
@@ -291,6 +293,55 @@ export async function runMessengerLinkTests(shouldRun: ShouldRun): Promise<TestC
       const baleView = (bots.body as { data?: Array<{ messenger: string; activeLinks: number }> }).data?.find(b => b.messenger === 'bale');
       if (baleView?.activeLinks !== 0) throw new Error(`a deleted user's link was counted: ${brief(bots)}`);
       return 'removal closed the link and reset the offset; deleted users left out of the admin list and count';
+    })));
+  }
+
+  const followId = 'reg_messenger_poller_review_followups';
+  if (shouldRun(followId, 'messenger')) {
+    await runCase(results, followId, 'v10.1.39: wrong codes sent at the same time are all counted against the bot; a bot backing off takes no pool connection; a connection whose advisory unlock failed is closed, never returned to the pool', async () => inSandbox(() => withFakeBotApi(async (api) => {
+      const admin = await clientFor('admin');
+      await admin.put('/api/messenger/bots/bale', { token: TOKEN });
+      const wrongCount = 20;
+      await Promise.all(Array.from({ length: wrongCount }, (_, i) => MessengerUpdatePoller.handleMessage('bale', chatUpdate(60 + i, 1000 + i, '000000'))));
+      const [counted] = await orm.select().from(messengerBots).where(eq(messengerBots.messenger, 'bale'));
+      if (counted?.wrongCodesCount !== wrongCount) throw new Error(`concurrent wrong codes lost: ${String(counted?.wrongCodesCount)} of ${wrongCount}`);
+
+      const originalConnect = pool.connect;
+      let connects = 0;
+      const releasedWith: Array<boolean | Error | undefined> = [];
+      // only the promise form (the lock helpers); pool.query passes a callback and keeps the real connect
+      const patchedConnect = async () => {
+        connects += 1;
+        const client: PoolClient = await (originalConnect as () => Promise<PoolClient>).call(pool);
+        const query = client.query.bind(client);
+        const release = client.release.bind(client);
+        client.query = ((text: unknown, ...rest: unknown[]) => (typeof text === 'string' && text.includes('pg_advisory_unlock')
+          ? Promise.reject(new Error('connection lost'))
+          : (query as (...args: unknown[]) => unknown)(text, ...rest))) as typeof client.query;
+        client.release = ((err?: boolean | Error) => {
+          releasedWith.push(err);
+          client.query = query;
+          release(true);
+        }) as typeof client.release;
+        return client;
+      };
+      pool.connect = ((...args: unknown[]) => (args.length > 0
+        ? (originalConnect as (...a: unknown[]) => unknown).apply(pool, args)
+        : patchedConnect())) as unknown as typeof pool.connect;
+      try {
+        const t0 = Date.now();
+        api.failingTokens.add(TOKEN);
+        await MessengerUpdatePoller.pollMessengerExclusive('bale', t0);
+        connects = 0;
+        await MessengerUpdatePoller.pollMessengerExclusive('bale', t0 + 1_000);
+        if (connects !== 0) throw new Error(`a bot backing off took ${connects} pool connection(s)`);
+        releasedWith.length = 0;
+        await withRowAdvisoryLock(99_901, 1, async () => 'held');
+        if (releasedWith.length !== 1 || releasedWith[0] !== true) throw new Error(`a failed unlock returned its connection to the pool: ${JSON.stringify(releasedWith)}`);
+      } finally {
+        pool.connect = originalConnect;
+      }
+      return `${wrongCount} concurrent wrong codes counted; no connection while backing off; failed unlock closed the connection`;
     })));
   }
 
