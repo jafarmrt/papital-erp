@@ -15,8 +15,16 @@ interface CustomerExcelModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  existingCustomers?: Customer[];
   activeTabFilter?: 'all' | 'customer' | 'supplier';
+}
+
+/**
+ * v10.1.51 (OBS-R2-25): the preview matches the file against every live party (`GET /customers?export=true`), never the
+ * 50 rows of the list page, so a party outside that page is shown as an update and not as a new party.
+ */
+export async function fetchAllCustomersForImport(): Promise<Customer[]> {
+  const res = await fetchJson('/customers?export=true');
+  return Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
 }
 
 interface CounterpartyPreviewRow {
@@ -53,7 +61,6 @@ export function CustomerExcelModal({
   isOpen,
   onClose,
   onSuccess,
-  existingCustomers = [],
   activeTabFilter = 'all'
 }: CustomerExcelModalProps) {
   const [step, setStep] = useState<'upload' | 'preview' | 'result'>('upload');
@@ -73,6 +80,19 @@ export function CustomerExcelModal({
   } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // v10.1.51 (OBS-R2-25): a closed window opens again on its first step, with no earlier file or result
+  const handleClose = () => {
+    if (isImporting) return;
+    setStep('upload');
+    setPreviewRows([]);
+    setFilterMode('all');
+    setSearchQuery('');
+    setImportResult(null);
+    setUpdateIfExists(true);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    onClose();
+  };
 
   // Normalization helper
   const normalizeKey = (key: string): string => {
@@ -216,7 +236,8 @@ export function CustomerExcelModal({
   const processExcelFile = (file: File) => {
     const reader = new FileReader();
 
-    reader.onload = (e) => {
+    // v10.1.51 (OBS-R2-25): the preview first reads every live party, so the handler is async
+    reader.onload = (e) => { void (async () => {
       try {
         const bstr = e.target?.result;
         const wb = xlsx.read(bstr, { type: 'binary' });
@@ -230,6 +251,14 @@ export function CustomerExcelModal({
         }
 
         // Build existing lookup maps
+        let existingCustomers: Customer[];
+        try {
+          existingCustomers = await fetchAllCustomersForImport();
+        } catch (loadErr) {
+          console.error(loadErr);
+          toast.error('فهرست طرفین حساب برای مقایسه با فایل خوانده نشد؛ دوباره تلاش کنید.');
+          return;
+        }
         const existingNameMap = new Map<string, Customer>();
         const existingPhoneMap = new Map<string, Customer>();
         const existingIdMap = new Map<number, Customer>();
@@ -299,7 +328,8 @@ export function CustomerExcelModal({
           }
 
           return {
-            index: idx + 1,
+            // v10.1.51 (OBS-R2-25): the Excel row number, header = row 1, the number the server names in its errors
+            index: idx + 2,
             raw: row,
             id,
             version,
@@ -333,7 +363,7 @@ export function CustomerExcelModal({
         console.error(err);
         toast.error('خطا در خواندن فایل اکسل. لطفاً از سالم بودن فایل مطمئن شوید.');
       }
-    };
+    })(); };
 
     reader.readAsBinaryString(file);
   };
@@ -366,6 +396,7 @@ export function CustomerExcelModal({
     setIsImporting(true);
     try {
       const payloadRows = validRows.map((r) => ({
+        sheetRow: r.index,
         id: r.id,
         version: r.version,
         name: r.name,
@@ -436,7 +467,7 @@ export function CustomerExcelModal({
 
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <DialogLayer onClose={onClose} disabled={isImporting} />
+      <DialogLayer onClose={handleClose} disabled={isImporting} />
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden text-right font-farsi">
         {/* Header */}
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70 shrink-0">
@@ -451,7 +482,7 @@ export function CustomerExcelModal({
           </div>
           <button aria-label="بستن"
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-xl transition-colors cursor-pointer"
           >
             <X size={18} />
@@ -752,16 +783,16 @@ export function CustomerExcelModal({
               </div>
 
               {importResult.errors && importResult.errors.length > 0 && (
-                <div className="text-right max-w-md mx-auto p-4 bg-rose-50 border border-rose-200 rounded-xl text-xs space-y-1">
+                <div className="text-right max-w-md mx-auto p-4 bg-rose-50 border border-rose-200 rounded-xl text-xs">
                   <span className="font-bold text-rose-800 block mb-1">خطاهای پردازش ({formatPersianNumber(importResult.errors.length)}):</span>
-                  {importResult.errors.slice(0, 5).map((err, i) => (
-                    <p key={`err-${i}`} className="text-rose-700 text-[11px]">
-                      سطر {formatPersianNumber(err.row)}: {err.message}
-                    </p>
-                  ))}
-                  {importResult.errors.length > 5 && (
-                    <p className="text-rose-600 text-[10px]">و {formatPersianNumber(importResult.errors.length - 5)} خطای دیگر...</p>
-                  )}
+                  {/* v10.1.51 (OBS-R2-25): every error, in a scrolling list; before, only the first five were shown */}
+                  <ul data-testid="customer-import-errors" className="max-h-48 overflow-y-auto space-y-1 custom-scrollbar">
+                    {importResult.errors.map((err, i) => (
+                      <li key={`err-${i}`} className="text-rose-700 text-[11px]">
+                        سطر {formatPersianNumber(err.row)}: {err.message}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </div>
@@ -774,7 +805,7 @@ export function CustomerExcelModal({
             <>
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleClose}
                 className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-200/60 rounded-xl transition-colors cursor-pointer"
               >
                 انصراف و بستن
@@ -819,7 +850,7 @@ export function CustomerExcelModal({
             <div className="w-full flex justify-end">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleClose}
                 className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
               >
                 بستن و مشاهده فهرست طرفین حساب

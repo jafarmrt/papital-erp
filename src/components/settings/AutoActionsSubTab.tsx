@@ -113,18 +113,15 @@ export function AutoActionsSubTab() {
     const url = isEdit ? `/events/action-rules/${formData.id}` : '/events/action-rules';
     const method = isEdit ? 'PUT' : 'POST';
 
-    try {
-      const data = await fetchJson<{ success?: boolean; message?: string }>(url, {
-        method,
-        body: JSON.stringify(formData)
-      });
+    // v10.1.51 (OBS-R2-87): an error goes back to the rule window, which shows it and stays open (one message, not a
+    // notification behind the window)
+    const data = await fetchJson<{ success?: boolean; message?: string }>(url, {
+      method,
+      body: JSON.stringify(formData)
+    });
 
-      showNotification(data?.message || 'قانون با موفقیت ذخیره گردید.');
-      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
-    } catch (err) {
-      showNotification(errorMessageOf(err) || 'خطا در ذخیره‌سازی قانون', 'error');
-      throw err;
-    }
+    showNotification(data?.message || 'قانون با موفقیت ذخیره گردید.');
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
   };
 
   const getActionBadge = (actionType: string) => {

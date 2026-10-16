@@ -7,7 +7,7 @@ import { fetchJson } from '../../api';
 import { useHasPermission } from '../../contexts/AuthContext';
 import { isEnteredSecret } from '../../lib/secrets/maskedSecret';
 import { WebhookSecretRevealPanel, type RevealedWebhookSecret } from './WebhookSecretRevealPanel';
-import { WEBHOOK_TIMEOUT_DEFAULT_MS, WEBHOOK_TIMEOUT_MAX_MS, WEBHOOK_TIMEOUT_MIN_MS } from '../../lib/events/webhookTimeout';
+import { WEBHOOK_RETRY_LIMIT_MAX, WEBHOOK_RETRY_LIMIT_MIN, WEBHOOK_TIMEOUT_DEFAULT_MS, WEBHOOK_TIMEOUT_MAX_MS, WEBHOOK_TIMEOUT_MIN_MS, webhookFormLimits } from '../../lib/events/webhookTimeout';
 import { DecimalInput } from '../common/DecimalInput';
 import { DialogLayer } from '../common/DialogLayer';
 
@@ -91,9 +91,11 @@ export function WebhookManagementSubTab() {
     eventPatterns: ['*'] as string[],
     customHeadersJson: '{\n  "X-Custom-Auth": "erp-token"\n}',
     isActive: 1,
-    retryLimit: 3,
-    timeoutMs: 5000
+    // v10.1.51 (OBS-R2-87): the fields' text, checked on save by `webhookFormLimits`
+    retryLimit: '3',
+    timeoutMs: String(WEBHOOK_TIMEOUT_DEFAULT_MS)
   });
+  const [limitsError, setLimitsError] = useState<string | null>(null);
 
   // Ping Test State
   const [pingTestingId, setPingTestingId] = useState<number | null>(null);
@@ -164,9 +166,10 @@ export function WebhookManagementSubTab() {
       eventPatterns: ['*'],
       customHeadersJson: '{\n  "X-Custom-Auth": "erp-token"\n}',
       isActive: 1,
-      retryLimit: 3,
-      timeoutMs: 5000
+      retryLimit: '3',
+      timeoutMs: String(WEBHOOK_TIMEOUT_DEFAULT_MS)
     });
+    setLimitsError(null);
     setPingResult(null);
     setIsModalOpen(true);
   };
@@ -181,9 +184,10 @@ export function WebhookManagementSubTab() {
       eventPatterns: sub.eventPatterns || ['*'],
       customHeadersJson: JSON.stringify(sub.customHeaders || {}, null, 2),
       isActive: sub.isActive,
-      retryLimit: sub.retryLimit || 3,
-      timeoutMs: sub.timeoutMs || 5000
+      retryLimit: String(sub.retryLimit || 3),
+      timeoutMs: String(sub.timeoutMs || WEBHOOK_TIMEOUT_DEFAULT_MS)
     });
+    setLimitsError(null);
     setPingResult(null);
     setIsModalOpen(true);
   };
@@ -194,6 +198,14 @@ export function WebhookManagementSubTab() {
       showToast('نام درگاه و نشانی مقصد را وارد کنید.', 'error');
       return;
     }
+
+    const limits = webhookFormLimits(formData);
+    if (!limits.ok) {
+      setLimitsError(limits.message);
+      showToast(limits.message, 'error');
+      return;
+    }
+    setLimitsError(null);
 
     let parsedHeaders = {};
     try {
@@ -216,8 +228,8 @@ export function WebhookManagementSubTab() {
       eventPatterns: formData.eventPatterns,
       customHeaders: parsedHeaders,
       isActive: formData.isActive,
-      retryLimit: Number(formData.retryLimit),
-      timeoutMs: Number(formData.timeoutMs)
+      retryLimit: limits.retryLimit,
+      timeoutMs: limits.timeoutMs
     };
 
     try {
@@ -787,10 +799,11 @@ export function WebhookManagementSubTab() {
                   <label htmlFor={`${fieldId}-retry-limit`} className="font-semibold text-slate-700 dark:text-slate-300">سقف تلاش مجدد:</label>
                   <DecimalInput
                     id={`${fieldId}-retry-limit`}
-                    min="1"
-                    max="10"
+                    min={WEBHOOK_RETRY_LIMIT_MIN}
+                    max={WEBHOOK_RETRY_LIMIT_MAX}
                     value={formData.retryLimit}
-                    onValueChange={(v) => setFormData({ ...formData, retryLimit: parseInt(v, 10) || 3 })}
+                    aria-invalid={limitsError !== null}
+                    onValueChange={(v) => setFormData({ ...formData, retryLimit: v })}
                     className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200"
                   />
                 </div>
@@ -803,7 +816,8 @@ export function WebhookManagementSubTab() {
                     max={WEBHOOK_TIMEOUT_MAX_MS}
                     step="500"
                     value={formData.timeoutMs}
-                    onValueChange={(v) => setFormData({ ...formData, timeoutMs: parseInt(v, 10) || WEBHOOK_TIMEOUT_DEFAULT_MS })}
+                    aria-invalid={limitsError !== null}
+                    onValueChange={(v) => setFormData({ ...formData, timeoutMs: v })}
                     className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200"
                   />
                 </div>
@@ -821,6 +835,9 @@ export function WebhookManagementSubTab() {
                   </select>
                 </div>
               </div>
+              {limitsError && (
+                <p role="alert" className="text-[11px] text-rose-600 dark:text-rose-400">{limitsError}</p>
+              )}
 
               {/* Form Action Buttons */}
               <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">

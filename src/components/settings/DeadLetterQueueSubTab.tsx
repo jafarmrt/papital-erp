@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useId } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { AlertOctagon, RefreshCw, Search, Filter, RotateCcw, CheckCircle2, XCircle, Trash2, Edit3, AlertTriangle, Layers, ChevronDown, ChevronUp, CheckSquare, Square } from 'lucide-react';
-import { formatPersianDate, errorMessageOf, formatPersianNumber, toPersianDigits } from '../../utils';
+import { formatPersianDate, errorMessageOf, formatPersianNumber, formatPersianCode, toPersianDigits } from '../../utils';
+import { eventAggregateLabel, eventTypeLabel } from '../../lib/events/eventTypeCatalog';
 import { fetchJson } from '../../api';
 import { useHasPermission } from '../../contexts/AuthContext';
 import { DialogLayer } from '../common/DialogLayer';
@@ -101,12 +102,15 @@ export function DeadLetterQueueSubTab() {
   };
 
   useEffect(() => {
+    // v10.1.51 (OBS-R2-87): a selection never outlives the list it was made in, so a batch replays only rows on screen
+    setSelectedIds([]);
     void fetchStats();
     void fetchEvents();
   }, [statusFilter, sourceFilter]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+    setSelectedIds([]);
     void fetchEvents();
   };
 
@@ -484,7 +488,7 @@ export function DeadLetterQueueSubTab() {
 
                         <td className="p-3">
                           <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
-                            <span className="font-mono text-[11px] text-indigo-600 dark:text-indigo-400">{item.eventType}</span>
+                            <span className="text-[11px] text-indigo-600 dark:text-indigo-400" title={item.eventType}>{eventTypeLabel(item.eventType)}</span>
                           </div>
                           <div className="text-[10px] text-slate-400 font-mono mt-0.5" title={item.originalEventId}>
                             {item.originalEventId.substring(0, 18)}...
@@ -493,7 +497,7 @@ export function DeadLetterQueueSubTab() {
 
                         <td className="p-3">
                           <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                            {item.aggregateType} #{item.aggregateId}
+                            {eventAggregateLabel(item.aggregateType)} #{formatPersianCode(item.aggregateId)}
                           </span>
                         </td>
 
@@ -643,7 +647,7 @@ export function DeadLetterQueueSubTab() {
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <Edit3 className="w-4 h-4 text-indigo-500" />
-                  اصلاح داده رویداد #{toPersianDigits(editingItem.id)} ({editingItem.eventType})
+                  اصلاح داده رویداد #{toPersianDigits(editingItem.id)} ({eventTypeLabel(editingItem.eventType)})
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
                   مقادیر معیوب را اصلاح کنید و سپس رویداد را در گذرگاه دامنه‌ای بازپخش کنید.

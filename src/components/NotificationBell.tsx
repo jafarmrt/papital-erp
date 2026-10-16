@@ -144,12 +144,14 @@ export default function NotificationBell() {
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {/* v10.1.51 (OBS-R2-87): shown on hover and on keyboard focus, each with its Persian name */}
+                    <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity">
                       {isUnread && (
                         <button
                           onClick={(e) => handleMarkAsRead(notif.id, e)}
                           className="p-1 hover:bg-slate-200 rounded-lg text-slate-500"
                           title="علامت خوانده شده"
+                          aria-label="علامت خوانده شده"
                         >
                           <CheckCheck className="w-3.5 h-3.5" />
                         </button>
@@ -157,7 +159,8 @@ export default function NotificationBell() {
                       <button
                         onClick={(e) => handleDeleteNotif(notif.id, e)}
                         className="p-1 hover:bg-rose-100 text-rose-500 rounded-lg"
-                        title="حذف"
+                        title="حذف اعلان"
+                        aria-label="حذف اعلان"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>

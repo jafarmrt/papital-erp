@@ -76,7 +76,9 @@ router.get('/items', authorizePermission(...READ_PERMISSIONS.items), asyncHandle
     const search = req.query.search as string;
     const isExport = req.query.export === 'true';
 
-    const whereClause = itemListConditions(type, search, { withCategory: true });
+    // v10.1.51 (OBS-R2-62): `image=1` keeps items with a picture and `category` one category (the gallery's page)
+    const category = typeof req.query.category === 'string' ? req.query.category.trim() : '';
+    const whereClause = itemListConditions(type, search, { withCategory: true, withImage: req.query.image === '1', category: category || undefined });
     // v10.0.218 (OBS-R1-74): مرتب‌سازی در پایگاه‌داده روی همه کالاهای پالایش
     const sort = parseItemListSort(req.query.sort, req.query.direction);
 

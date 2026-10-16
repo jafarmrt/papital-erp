@@ -11083,5 +11083,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runPieceworkPersonnelSweepTests } = await import('../regression/pieceworkPersonnelSweepTests.js');
   results.push(...await runPieceworkPersonnelSweepTests(shouldRun));
 
+  // closing sweep (package 9 and 14): daily log search folding and customer import row numbers (OBS-R2-61, OBS-R2-25)
+  const { runDailyLogCustomerSweepTests } = await import('../regression/dailyLogCustomerSweepTests.js');
+  results.push(...await runDailyLogCustomerSweepTests(shouldRun));
+
   return results;
 }

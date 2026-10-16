@@ -20,3 +20,22 @@ export function resolveWebhookTimeoutMs(body: { timeoutMs?: unknown; timeoutSeco
   }
   return { ok: true, timeoutMs: value };
 }
+
+export const WEBHOOK_RETRY_LIMIT_MIN = 1;
+export const WEBHOOK_RETRY_LIMIT_MAX = 10;
+
+export type WebhookFormLimits = { ok: true; retryLimit: number; timeoutMs: number } | { ok: false; message: string };
+
+/**
+ * v10.1.51 (OBS-R2-87): the webhook form's retry limit and timeout as typed (the `DecimalInput` text, '' when empty or
+ * invalid). An empty or wrong entry is an error the form shows, never silently the default (`parseInt(v) || default`).
+ */
+export function webhookFormLimits(form: { retryLimit: string; timeoutMs: string }): WebhookFormLimits {
+  const retry = form.retryLimit.trim() === '' ? NaN : Number(form.retryLimit);
+  if (!Number.isInteger(retry) || retry < WEBHOOK_RETRY_LIMIT_MIN || retry > WEBHOOK_RETRY_LIMIT_MAX) {
+    return { ok: false, message: 'سقف تلاش مجدد وب‌هوک باید عدد درستی از ۱ تا ۱۰ باشد.' };
+  }
+  const timeout = resolveWebhookTimeoutMs({ timeoutMs: form.timeoutMs.trim() === '' ? NaN : Number(form.timeoutMs) });
+  if (!timeout.ok) return timeout;
+  return { ok: true, retryLimit: retry, timeoutMs: timeout.timeoutMs ?? WEBHOOK_TIMEOUT_DEFAULT_MS };
+}

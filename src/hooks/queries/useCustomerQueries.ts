@@ -84,6 +84,8 @@ export function useSaveCustomerMutation() {
       void invalidateDomain(queryClient, 'customers');
     },
     onError: (err: any) => {
+      // v10.1.51 (OBS-R2-26): after a stale version (409) the list is read again, so the form reopens on the stored version
+      if (err?.status === 409) void invalidateDomain(queryClient, 'customers');
       toast.error(err?.message || 'خطا در ذخیره اطلاعات مشتری');
     },
   });

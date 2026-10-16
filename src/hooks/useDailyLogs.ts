@@ -263,14 +263,6 @@ export function useDailyLogs(user: User) {
     setFormTags(formTags.filter(t => t !== tagToRemove));
   };
 
-  const handleToggleMentionUser = (uId: number) => {
-    if (formMentions.includes(uId)) {
-      setFormMentions(formMentions.filter(id => id !== uId));
-    } else {
-      setFormMentions([...formMentions, uId]);
-    }
-  };
-
   const handleSaveLog = async (e: FormEvent) => {
     e.preventDefault();
     if (!formTitle.trim()) {
@@ -437,7 +429,6 @@ export function useDailyLogs(user: User) {
     handleOpenEditModal,
     handleAddTag,
     handleRemoveTag,
-    handleToggleMentionUser,
     handleSaveLog,
     handleDeleteLog,
     handleOpenReviewModal,

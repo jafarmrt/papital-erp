@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Zap, RefreshCw, Search, Filter, CheckCircle2, Activity, Package, FileText, GitBranch, CreditCard, ChevronDown, ChevronUp, Clock, Inbox, AlertTriangle, Play, RotateCcw, Database, Sliders, AlertOctagon, History, Globe } from 'lucide-react';
-import { formatPersianDate, errorMessageOf, formatPersianNumber, toPersianDigits } from '../../utils';
+import { formatPersianDate, errorMessageOf, formatPersianNumber, formatPersianCode, toPersianDigits } from '../../utils';
+import { eventAggregateLabel, eventTypeLabel } from '../../lib/events/eventTypeCatalog';
 import { OUTBOX_MAX_ATTEMPTS } from '../../lib/events/outboxAttempts';
 import { AutoActionsSubTab } from './AutoActionsSubTab';
 import { DeadLetterQueueSubTab } from './DeadLetterQueueSubTab';
@@ -114,6 +115,8 @@ export function DomainEventsTab() {
     const q = searchQuery.toLowerCase();
     return (
       (e.eventType || '').toLowerCase().includes(q) ||
+      eventTypeLabel(e.eventType || '').includes(q) ||
+      eventAggregateLabel(e.aggregateType).includes(q) ||
       (e.aggregateType || '').toLowerCase().includes(q) ||
       String(e.aggregateId || '').toLowerCase().includes(q) ||
       (e.metadata?.userName || '').toLowerCase().includes(q) ||
@@ -128,6 +131,8 @@ export function DomainEventsTab() {
     return (
       (e.eventId || '').toLowerCase().includes(q) ||
       (e.eventType || '').toLowerCase().includes(q) ||
+      eventTypeLabel(e.eventType || '').includes(q) ||
+      eventAggregateLabel(e.aggregateType).includes(q) ||
       (e.aggregateType || '').toLowerCase().includes(q) ||
       String(e.aggregateId || '').toLowerCase().includes(q) ||
       (e.lastError || '').toLowerCase().includes(q) ||
@@ -411,11 +416,11 @@ export function DomainEventsTab() {
                           </div>
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs font-bold text-slate-800 dark:text-white">
-                                {evt.eventType}
+                              <span className="text-xs font-bold text-slate-800 dark:text-white" title={evt.eventType}>
+                                {eventTypeLabel(evt.eventType)}
                               </span>
-                              <span className="text-[10px] px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-md font-mono">
-                                {evt.aggregateType}#{evt.aggregateId}
+                              <span className="text-[10px] px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-md">
+                                {eventAggregateLabel(evt.aggregateType)} #{formatPersianCode(evt.aggregateId)}
                               </span>
                               <PillBadge variants={OUTBOX_STATUS_BADGES} value={evt.status} />
                               {evt.retryCount > 0 && (
@@ -607,11 +612,11 @@ export function DomainEventsTab() {
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-slate-800 dark:text-white">
-                                {evt.eventType}
+                              <span className="text-xs font-bold text-slate-800 dark:text-white" title={evt.eventType}>
+                                {eventTypeLabel(evt.eventType)}
                               </span>
-                              <span className="text-[10px] px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-md font-mono">
-                                {evt.aggregateType}#{evt.aggregateId}
+                              <span className="text-[10px] px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-md">
+                                {eventAggregateLabel(evt.aggregateType)} #{formatPersianCode(evt.aggregateId)}
                               </span>
                             </div>
                             <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">

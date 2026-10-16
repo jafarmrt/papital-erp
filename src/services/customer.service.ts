@@ -96,6 +96,17 @@ export interface BulkImportRowInput {
   website?: string;
   email?: string;
   instagram?: string;
+  /** v10.1.51 (OBS-R2-25): the row's Excel row number (header = row 1), sent by the import window for rows it filtered */
+  sheetRow?: number | string;
+}
+
+/**
+ * v10.1.51 (OBS-R2-25): the number an import error names is the Excel row, header included, like the item import (`i + 2`);
+ * the window sends each row's own number because it leaves out rows with issues. It was the position among the sent rows.
+ */
+export function customerImportRowNumber(row: Pick<BulkImportRowInput, 'sheetRow'>, index: number): number {
+  const sheetRow = Number(row.sheetRow);
+  return Number.isInteger(sheetRow) && sheetRow >= 2 ? sheetRow : index + 2;
 }
 
 export interface BulkImportResult {
@@ -340,7 +351,7 @@ export class CustomerService {
 
     for (let i = 0; i < rows.length; i++) {
       const item = rows[i];
-      const rowIndex = i + 1;
+      const rowIndex = customerImportRowNumber(item, i);
 
       try {
         const name = String(item.name || '').trim();

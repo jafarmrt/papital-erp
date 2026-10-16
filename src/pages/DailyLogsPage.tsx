@@ -242,7 +242,6 @@ export default function DailyLogsPage({ user }: DailyLogsPageProps) {
         projects={dl.projects}
         onAddTag={dl.handleAddTag}
         onRemoveTag={dl.handleRemoveTag}
-        onToggleMentionUser={dl.handleToggleMentionUser}
         onSaveLog={dl.handleSaveLog}
       />
 

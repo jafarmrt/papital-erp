@@ -27,7 +27,8 @@ const SECTIONS: Record<string, Section> = {
     fullList: 'customers',
     ownGroups: ['customers.'],
     fullListFetch: /(?:fetch\w*(?:<[^>]*>)?\(\s*|fetchUrl=\{?\s*)['"`](?:\/api)?\/customers(?:\?|['"`])/g,
-    ownPages: ['hooks/queries/useCustomerQueries.ts'],
+    // v10.1.51 (OBS-R2-25): the customers page's Excel window matches a file against every party
+    ownPages: ['hooks/queries/useCustomerQueries.ts', 'components/customers/CustomerExcelModal.tsx'],
   },
   // v9.0.138 (TD-888)
   items: {
