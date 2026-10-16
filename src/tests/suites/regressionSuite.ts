@@ -10678,6 +10678,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 11 PR b (v9.0.380 on): project edit and input — status lists, delivery input, stage clock, audit, version (TD-754 ...)
   const { runProjectEditTests } = await import('../regression/projectEditTests.js');
   results.push(...await runProjectEditTests(shouldRun));
+  // Closing sweep (v10.1.x): project customer link and progress rows on delete (OBS-R2-43, OBS-R2-44)
+  const { runProjectSweepTests } = await import('../regression/projectSweepTests.js');
+  results.push(...await runProjectSweepTests(shouldRun));
   // Package 11 PR c (v9.0.410 on): project list, purchase document and material allocation
   const { runProjectPurchaseAllocationTests } = await import('../regression/projectPurchaseAllocationTests.js');
   results.push(...await runProjectPurchaseAllocationTests(shouldRun));

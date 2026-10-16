@@ -1,6 +1,6 @@
 import { eq, and, asc, ne, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
-import { productionProjects, projectStages, items, customers, projectProductStageProgress, documents } from '../db/schema.js';
+import { productionProjects, projectStages, items, projectProductStageProgress, documents } from '../db/schema.js';
 import { AppError, ConflictError, NotFoundError, ValidationError } from '../errors/customErrors.js';
 import { deliveredProjectQuantities, describeOverDeliveries, findOverDeliveries, plannedProjectProducts, type ProjectOverDelivery } from './projects/projectDeliveryCap.js';
 import { withOrderedLocks } from '../lib/lockOrder.js';
@@ -24,6 +24,7 @@ import { assertProjectVersion, projectVersionConflict } from './projects/project
 import { assertNoOpenAllocations } from './projects/projectOpenAllocations.js';
 import { assertProjectDeletable } from './projects/projectDeleteGuard.js';
 import { setProjectManagers } from './projects/projectManagers.js';
+import { linkedCustomerName, resolveProjectCustomer } from './projects/projectCustomer.js';
 
 export interface CreateProjectInput {
   title: string;
@@ -164,11 +165,8 @@ export class ProjectService {
   ): Promise<{ project: typeof productionProjects.$inferSelect; stages: Array<typeof projectStages.$inferSelect> }> {
     const finalCode = await assignProjectCode(executor, input.projectCode);
 
-    let validCustomerId: number | null = null;
-    if (input.customerId && !isNaN(Number(input.customerId))) {
-      const foundCust = await executor.select({ id: customers.id }).from(customers).where(eq(customers.id, Number(input.customerId)));
-      if (foundCust.length > 0) validCustomerId = Number(input.customerId);
-    }
+    // OBS-R2-43: a positive customer id is a live party (else 422) and the name is its current name; none keeps the typed name
+    const customer = await resolveProjectCustomer(executor, input.customerId);
 
     let validItemId: number | null = null;
     if (input.itemId && !isNaN(Number(input.itemId))) {
@@ -179,8 +177,8 @@ export class ProjectService {
     const [newProject] = await executor.insert(productionProjects).values({
       projectCode: finalCode,
       title: input.title.trim(),
-      customerId: validCustomerId,
-      customerName: input.customerName || '',
+      customerId: customer?.id ?? null,
+      customerName: customer ? customer.name : (input.customerName || ''),
       itemId: validItemId,
       itemCode: input.itemCode || '',
       itemName: input.itemName || '',
@@ -265,16 +263,16 @@ export class ProjectService {
       updateData.projectCode = await assignProjectCode(executor, String(input.projectCode), id);
     }
 
+    // OBS-R2-43: a positive customer id is a live party (the project's current one even if deleted since), else 422;
+    // a linked project's name is always its party's current name, and only a project without a party keeps a typed name
     if (input.customerId !== undefined) {
-      if (input.customerId && !isNaN(Number(input.customerId))) {
-        const foundCust = await executor.select({ id: customers.id }).from(customers).where(eq(customers.id, Number(input.customerId)));
-        updateData.customerId = foundCust.length > 0 ? Number(input.customerId) : null;
-      } else {
-        updateData.customerId = null;
-      }
+      const customer = await resolveProjectCustomer(executor, input.customerId, existing.customerId);
+      updateData.customerId = customer?.id ?? null;
+      if (customer) updateData.customerName = customer.name;
+      else if (input.customerName !== undefined) updateData.customerName = input.customerName;
+    } else if (input.customerName !== undefined) {
+      updateData.customerName = (await linkedCustomerName(executor, existing.customerId)) ?? input.customerName;
     }
-
-    if (input.customerName !== undefined) updateData.customerName = input.customerName;
 
     if (input.itemId !== undefined) {
       if (input.itemId && !isNaN(Number(input.itemId))) {
@@ -348,6 +346,9 @@ export class ProjectService {
 
       await tx.update(productionProjects).set({ isDeleted: 1 }).where(eq(productionProjects.id, id));
       await tx.update(projectStages).set({ isDeleted: 1 }).where(eq(projectStages.projectId, id));
+      // OBS-R2-44: the progress matrix rows of a deleted project are deleted with it (before, they stayed live)
+      await tx.update(projectProductStageProgress).set({ isDeleted: 1 })
+        .where(and(eq(projectProductStageProgress.projectId, id), eq(projectProductStageProgress.isDeleted, 0)));
 
       return existing;
     });
