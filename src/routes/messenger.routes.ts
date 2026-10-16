@@ -19,6 +19,9 @@ router.use(authenticateToken);
 
 const messengerParam = z.object({ params: z.object({ messenger: z.enum(MESSENGERS, { message: 'پیام‌رسان باید «بله» یا «تلگرام» باشد' }) }) });
 
+// a code request and a test message carry no body (TD-979: every writer route reads its input through Zod)
+const messengerNoBody = messengerParam.extend({ body: z.object({}).strict() });
+
 const botTokenSchema = messengerParam.extend({
   body: z.object({ token: z.string().max(200, 'نشانه ربات بیش از اندازه بلند است') }).strict(),
 });
@@ -33,11 +36,11 @@ router.get('/messenger/links/mine', asyncHandler(async (req, res) => {
   res.json({ data: await listMyLinks(currentUserId(req)) });
 }));
 
-router.post('/messenger/links/:messenger/code', validate(messengerParam), asyncHandler(async (req, res) => {
+router.post('/messenger/links/:messenger/code', validate(messengerNoBody), asyncHandler(async (req, res) => {
   res.status(201).json(await issueLinkCode(currentUserId(req), req.params.messenger as Messenger));
 }));
 
-router.post('/messenger/links/:messenger/test', validate(messengerParam), asyncHandler(async (req, res) => {
+router.post('/messenger/links/:messenger/test', validate(messengerNoBody), asyncHandler(async (req, res) => {
   await sendTestMessage(currentUserId(req), req.params.messenger as Messenger);
   res.json({ success: true });
 }));
