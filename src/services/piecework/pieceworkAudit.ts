@@ -1,5 +1,5 @@
 import type { DbExecutor } from '../../db/drizzle.js';
-import type { pieceworkLogs, pieceworkPayrolls } from '../../db/schema.js';
+import type { pieceworkLogs, pieceworkPayrolls, pieceworkTasks } from '../../db/schema.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { payrollStatusLabel, workLogStatusLabel } from '../../lib/payroll/payrollStatusLabels.js';
 import { isoToJalaliDate } from '../../utils.js';
@@ -14,6 +14,7 @@ import { toPersianDigits } from '../../utils/persianNumber.js';
 export const WORK_LOG_AUDIT_ENTITY = 'کارکرد پرکیسی';
 export const PAYROLL_AUDIT_ENTITY = 'فیش حقوقی';
 export const PAYROLL_PAYMENT_AUDIT_ENTITY = 'پرداخت حقوق';
+export const TASK_AUDIT_ENTITY = 'عنوان پرکیسی';
 
 export interface AuditActor {
   req?: unknown;
@@ -23,6 +24,7 @@ export interface AuditActor {
 
 type WorkLogRow = typeof pieceworkLogs.$inferSelect;
 type PayrollRow = typeof pieceworkPayrolls.$inferSelect;
+type TaskRow = typeof pieceworkTasks.$inferSelect;
 type Snapshot = Record<string, string | number | null>;
 
 const text = (v: unknown): string | null => (v === null || v === undefined ? null : String(v));
@@ -96,6 +98,32 @@ export function actorFields(actor: AuditActor) {
 
 const amount = (v: unknown) => toPersianDigits(String(v ?? 0));
 const day = (iso: string) => toPersianDigits(isoToJalaliDate(iso) || iso);
+
+function taskSnapshot(row: TaskRow): Snapshot {
+  return {
+    code: row.code,
+    title: row.title,
+    category: row.category ?? '',
+    defaultRate: text(row.defaultRate),
+    unit: row.unit ?? '',
+    description: row.description ?? '',
+    isActive: row.isActive ?? 1,
+  };
+}
+
+/** OBS-R2-50: the task edit's audit row, written with the edit's `tx` and only the fields that changed */
+export async function auditTaskUpdated(tx: DbExecutor, before: TaskRow, after: TaskRow, actor: AuditActor): Promise<void> {
+  const codeChange = after.code !== before.code ? ` (کد «${before.code}» به «${after.code}»)` : '';
+  await logActivity({
+    tx,
+    ...actorFields(actor),
+    action: 'UPDATE',
+    entity: TASK_AUDIT_ENTITY,
+    entityId: after.id,
+    description: `ویرایش عنوان کاری کارمزدی «${before.title}»${codeChange}`,
+    details: changedFields(taskSnapshot(before), taskSnapshot(after)),
+  });
+}
 
 export async function auditWorkLogCreated(tx: DbExecutor, row: WorkLogRow, names: { personnel?: string; task?: string }, actor: AuditActor): Promise<void> {
   await logActivity({

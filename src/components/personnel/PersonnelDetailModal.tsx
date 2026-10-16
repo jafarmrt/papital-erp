@@ -8,7 +8,8 @@ interface PersonnelDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   personnel: Personnel | null;
-  onEdit: (p: Personnel) => void;
+  /** OBS-R2-55: left out for a reader without `personnel.manage`, so the dossier has no edit button */
+  onEdit?: (p: Personnel) => void;
 }
 
 export function PersonnelDetailModal({
@@ -49,6 +50,7 @@ export function PersonnelDetailModal({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {onEdit && (
             <button
               onClick={() => {
                 onClose();
@@ -59,6 +61,7 @@ export function PersonnelDetailModal({
               <Edit2 size={14} />
               <span>ویرایش</span>
             </button>
+            )}
             <button aria-label="بستن"
               onClick={onClose}
               className="p-2 hover:bg-white/20 rounded-xl transition-all cursor-pointer"

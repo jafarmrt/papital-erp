@@ -7,9 +7,13 @@ import { PersonnelFormModal } from '../components/personnel/PersonnelFormModal';
 import { PersonnelDetailModal } from '../components/personnel/PersonnelDetailModal';
 import { PersonnelExcelModal } from '../components/personnel/PersonnelExcelModal';
 import { usersLinkedToOtherPersonnel } from '../lib/personnel/personnelUserLinks';
+import { PERSONNEL_MANAGE_PERMISSION } from '../lib/permissions/personnelPermissions';
+import { useHasPermission } from '../contexts/AuthContext';
 
 export function PersonnelPage() {
   const [showExcelModal, setShowExcelModal] = useState<boolean>(false);
+  // OBS-R2-55: every write button asks the key of its API
+  const canManage = useHasPermission(PERSONNEL_MANAGE_PERMISSION);
   const {
     personnelList,
     usersList,
@@ -65,6 +69,7 @@ export function PersonnelPage() {
           </div>
         </div>
 
+        {canManage && (
         <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
           <button
             onClick={() => setShowExcelModal(true)}
@@ -82,6 +87,7 @@ export function PersonnelPage() {
             <span>ثبت پرسنل جدید</span>
           </button>
         </div>
+        )}
       </div>
 
       {/* Stats Cards */}
@@ -106,8 +112,8 @@ export function PersonnelPage() {
         onStatusFilterChange={setStatusFilter}
         onResetFilters={resetFilters}
         onViewDetail={handleViewDetail}
-        onEdit={handleOpenEditModal}
-        onDelete={handleDelete}
+        onEdit={canManage ? handleOpenEditModal : undefined}
+        onDelete={canManage ? handleDelete : undefined}
       />
 
       {/* Modal 1: Create / Edit Form */}
@@ -128,15 +134,15 @@ export function PersonnelPage() {
         isOpen={showDetailModal}
         onClose={() => setShowDetailModal(false)}
         personnel={selectedPersonnel}
-        onEdit={(p) => {
+        onEdit={canManage ? (p) => {
           setShowDetailModal(false);
           handleOpenEditModal(p);
-        }}
+        } : undefined}
       />
 
       {/* Modal 3: Excel Import / Export */}
       <PersonnelExcelModal
-        isOpen={showExcelModal}
+        isOpen={canManage && showExcelModal}
         onClose={() => setShowExcelModal(false)}
         onSuccess={loadData}
         existingPersonnel={personnelList}

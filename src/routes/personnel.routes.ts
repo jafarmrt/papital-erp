@@ -6,6 +6,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
+import { ConflictError } from '../errors/customErrors.js';
 import { personnelAuditChanges, personnelAuditSnapshot } from '../services/personnel/personnelAudit.js';
 import { logger } from '../middleware/logger.js';
 import { z } from 'zod';
@@ -319,9 +320,18 @@ router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), v
         // Check if existing by personnelCode
         const existing = personnelCode ? codeMap.get(personnelCodeKey(personnelCode)) : null;
 
-        if (existing) {
-          if (updateIfExists) {
-            const updated = await updatePersonnelAtVersion(orm, existing.id, existing.version, {
+        // OBS-R2-53: each row is its own transaction (rows are independent and reported one by one): the personnel write and its
+        // audit row commit together, so a row whose audit fails leaves no personnel behind; the other rows still go in.
+        if (existing && !updateIfExists) {
+          errors.push({
+            row: rowIndex,
+            code: personnelCode,
+            name: fullName,
+            message: `کد پرسنلی «${personnelCode}» تکراری است و به‌روزرسانی غیرفعال بود.`
+          });
+        } else if (existing) {
+          const updated = await orm.transaction(async (tx) => {
+            const row = await updatePersonnelAtVersion(tx, existing.id, existing.version, {
                 firstName: firstName || existing.firstName,
                 lastName: lastName || existing.lastName,
                 fullName: fullName || existing.fullName,
@@ -347,26 +357,21 @@ router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), v
                 version: nextVersion(existing.version)
               });
             // v9.0.30 (TD-442): پرسنلی که از خواندن فهرست تا این ردیف ویرایش یا حذف شده بازنویسی نمی‌شود
-            if (!updated) throw new Error(`پرسنل «${existing.fullName}» هم‌زمان ویرایش یا حذف شده است؛ این ردیف به‌روز نشد.`);
+            if (!row) throw new ConflictError(`پرسنل «${existing.fullName}» هم‌زمان ویرایش یا حذف شده است؛ این ردیف به‌روز نشد.`, undefined, 'OCC_CONFLICT');
 
             // v9.0.26 (TD-437): یک ردیف ممیزی برای هر پرسنل، با مقدار قبل و بعد فیلدهای تغییرکرده
             await logActivity({
-              req, action: 'UPDATE', entity: 'پرسنل', entityId: existing.id,
-              description: `به‌روزرسانی پرسنل «${updated.fullName}» از ورود اکسل (ردیف ${rowIndex})`,
-              details: personnelAuditChanges(existing, updated)
+              tx, req, action: 'UPDATE', entity: 'پرسنل', entityId: existing.id,
+              description: `به‌روزرسانی پرسنل «${row.fullName}» از ورود اکسل (ردیف ${rowIndex})`,
+              details: personnelAuditChanges(existing, row)
             });
-            codeMap.set(personnelCodeKey(personnelCode), updated);
-            updatedCount++;
-          } else {
-            errors.push({
-              row: rowIndex,
-              code: personnelCode,
-              name: fullName,
-              message: `کد پرسنلی «${personnelCode}» تکراری است و به‌روزرسانی غیرفعال بود.`
-            });
-          }
+            return row;
+          });
+          codeMap.set(personnelCodeKey(personnelCode), updated);
+          updatedCount++;
         } else {
-          const newRecord = await insertPersonnel(orm, {
+          const newRecord = await orm.transaction(async (tx) => {
+            const row = await insertPersonnel(tx, {
               firstName,
               lastName,
               fullName,
@@ -392,11 +397,12 @@ router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), v
               createdAt: nowIso,
               updatedAt: nowIso
             });
-
-          await logActivity({
-            req, action: 'CREATE', entity: 'پرسنل', entityId: newRecord.id,
-            description: `ثبت پرسنل «${newRecord.fullName}» از ورود اکسل (ردیف ${rowIndex})`,
-            details: { after: personnelAuditSnapshot(newRecord) }
+            await logActivity({
+              tx, req, action: 'CREATE', entity: 'پرسنل', entityId: row.id,
+              description: `ثبت پرسنل «${row.fullName}» از ورود اکسل (ردیف ${rowIndex})`,
+              details: { after: personnelAuditSnapshot(row) }
+            });
+            return row;
           });
           if (personnelCode) {
             codeMap.set(personnelCodeKey(personnelCode), newRecord);

@@ -30,6 +30,8 @@ export interface VoidPayrollPaymentResult {
   reversalTransactionNumber: string;
   reversalVoucherId: number | null;
   paidAmount: number;
+  /** OBS-R2-51: the voided payment's currency, which the route's message names */
+  currency: string;
 }
 
 /**
@@ -164,6 +166,7 @@ export class PayrollPaymentVoidService {
         reversalTransactionNumber: reversalNumber,
         reversalVoucherId,
         paidAmount: paidAmount.toNumber(),
+        currency: payment.currency || 'IRR',
       };
     });
   }

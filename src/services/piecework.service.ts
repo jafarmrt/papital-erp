@@ -6,7 +6,7 @@ import { requireStorageDate } from '../lib/storageDate.js';
 import { businessTodayIsoDate } from '../lib/businessClock.js';
 import { PieceworkPayrollService } from './piecework/payroll.service.js';
 import { lockEditableWorkLog, workLogFreeOfLivePayroll } from './piecework/workLogPayrollLink.js';
-import { auditWorkLogCreated, auditWorkLogDeleted, auditWorkLogUpdated, type AuditActor } from './piecework/pieceworkAudit.js';
+import { auditTaskUpdated, auditWorkLogCreated, auditWorkLogDeleted, auditWorkLogUpdated, type AuditActor } from './piecework/pieceworkAudit.js';
 import { activePersonnelRate, savePersonnelRate, type PersonnelRateInput, type RateActor } from './piecework/personnelRate.js';
 import { assertScheduleRowsFree, linkScheduleRows, lockProjectsOfLogMove, lockScheduleProjects, unlinkScheduleRow } from './piecework/scheduleRowLink.js';
 import { revertWorkshopReportsOfLog } from './piecework/workshopReportRevert.js';
@@ -101,25 +101,21 @@ export class PieceworkService {
     },
     executor: DbExecutor = orm
   ) {
-    try {
-      // v7.0.134 (TD-232): تاریخ اعمال نرخ میلادی ISO (پیش‌تر «۱۴۰۵/۰۷/۱۱» با ارقام فارسی و ساعت سرور)
-      const today = await businessTodayIsoDate();
-      // savepoint: خطای این درج تراکنش فراخواننده (مثلاً ورود اکسل یکجا، TD-246) را از کار نمی‌اندازد
-      await executor.transaction(async (sp) => sp.insert(pieceworkTaskRateHistory).values({
-        taskId: data.taskId,
-        taskCode: data.taskCode || '',
-        taskTitle: data.taskTitle || '',
-        oldRate: money(data.oldRate || 0),
-        newRate: money(data.newRate || 0),
-        changeType: data.changeType,
-        reason: data.reason || '',
-        changedByUserId: data.userId || null,
-        changedByUsername: data.username || 'سیستم',
-        effectiveDate: today,
-      }));
-    } catch {
-      // Safe fallback
-    }
+    // v7.0.134 (TD-232): تاریخ اعمال نرخ میلادی ISO (پیش‌تر «۱۴۰۵/۰۷/۱۱» با ارقام فارسی و ساعت سرور)
+    const today = await businessTodayIsoDate();
+    // OBS-R2-50: a history row that cannot be written refuses the write it records (it was swallowed in a savepoint)
+    await executor.insert(pieceworkTaskRateHistory).values({
+      taskId: data.taskId,
+      taskCode: data.taskCode || '',
+      taskTitle: data.taskTitle || '',
+      oldRate: money(data.oldRate || 0),
+      newRate: money(data.newRate || 0),
+      changeType: data.changeType,
+      reason: data.reason || '',
+      changedByUserId: data.userId || null,
+      changedByUsername: data.username || 'سیستم',
+      effectiveDate: today,
+    });
   }
 
   /**
@@ -127,7 +123,15 @@ export class PieceworkService {
    */
   static async createTask(
     input: CreatePieceworkTaskInput,
-    executor: DbExecutor = orm
+    executor?: DbExecutor
+  ): Promise<typeof pieceworkTasks.$inferSelect> {
+    // OBS-R2-50: the task and its history row in one transaction (a history error no longer leaves a task without history)
+    return inTransaction(executor, (tx) => PieceworkService.createTaskIn(input, tx));
+  }
+
+  private static async createTaskIn(
+    input: CreatePieceworkTaskInput,
+    executor: DbExecutor
   ): Promise<typeof pieceworkTasks.$inferSelect> {
     let taskCode = input.code ? String(input.code).trim() : '';
     if (!taskCode) {
@@ -170,69 +174,78 @@ export class PieceworkService {
   }
 
   /**
-   * Updates an existing piecework task
+   * Updates an existing piecework task.
+   * OBS-R2-50: the task row (locked), its rate history row and its audit row are written in one transaction, so a history or
+   * audit error refuses the edit (the route wrote the audit row after commit and the history error was swallowed).
    */
   static async updateTask(
     id: number,
     input: UpdatePieceworkTaskInput,
-    executor: DbExecutor = orm
+    executor?: DbExecutor,
+    actor: AuditActor = {}
   ): Promise<{ previous: typeof pieceworkTasks.$inferSelect; current: typeof pieceworkTasks.$inferSelect }> {
-    const [existing] = await executor.select().from(pieceworkTasks).where(and(eq(pieceworkTasks.id, id), eq(pieceworkTasks.isDeleted, 0)));
-    if (!existing) {
-      throw new NotFoundError('عنوان کاری یافت نشد');
-    }
+    return inTransaction(executor, async (tx) => {
+      const [existing] = await tx.select().from(pieceworkTasks)
+        .where(and(eq(pieceworkTasks.id, id), eq(pieceworkTasks.isDeleted, 0)))
+        .for('update');
+      if (!existing) {
+        throw new NotFoundError('عنوان کاری یافت نشد');
+      }
 
-    const oldRate = money(existing.defaultRate ?? 0);
-    const requestedRate = requireTaskRate(input.defaultRate);
-    const newRate = requestedRate !== undefined ? money(requestedRate) : oldRate;
-    const newTitle = input.title !== undefined ? String(input.title).trim() : existing.title;
-    const requestedCode = input.code !== undefined ? String(input.code).trim() : '';
-    const newCode = requestedCode || existing.code;
-    // TD-246: تغییر کد به کدی که عنوان فعال دیگری دارد رد می‌شود
-    if (newCode !== existing.code) await assertPieceworkTaskCodeAvailable(executor, newCode, id);
+      const oldRate = money(existing.defaultRate ?? 0);
+      const requestedRate = requireTaskRate(input.defaultRate);
+      const newRate = requestedRate !== undefined ? money(requestedRate) : oldRate;
+      const newTitle = input.title !== undefined ? String(input.title).trim() : existing.title;
+      const requestedCode = input.code !== undefined ? String(input.code).trim() : '';
+      const newCode = requestedCode || existing.code;
+      // TD-246: تغییر کد به کدی که عنوان فعال دیگری دارد رد می‌شود
+      if (newCode !== existing.code) await assertPieceworkTaskCodeAvailable(tx, newCode, id);
 
-    let current: typeof pieceworkTasks.$inferSelect | undefined;
-    try {
-      [current] = await executor.update(pieceworkTasks).set({
-        code: newCode,
-        title: newTitle,
-        category: input.category !== undefined ? String(input.category).trim() : existing.category,
-        defaultRate: newRate,
-        unit: input.unit !== undefined ? String(input.unit).trim() : existing.unit,
-        description: input.description !== undefined ? String(input.description).trim() : existing.description,
-        isActive: input.isActive !== undefined ? (input.isActive ? 1 : 0) : existing.isActive
-      }).where(eq(pieceworkTasks.id, id)).returning();
-    } catch (err) {
-      throw toPieceworkTaskCodeError(err, newCode);
-    }
+      let updated: typeof pieceworkTasks.$inferSelect | undefined;
+      try {
+        [updated] = await tx.update(pieceworkTasks).set({
+          code: newCode,
+          title: newTitle,
+          category: input.category !== undefined ? String(input.category).trim() : existing.category,
+          defaultRate: newRate,
+          unit: input.unit !== undefined ? String(input.unit).trim() : existing.unit,
+          description: input.description !== undefined ? String(input.description).trim() : existing.description,
+          isActive: input.isActive !== undefined ? (input.isActive ? 1 : 0) : existing.isActive
+        }).where(eq(pieceworkTasks.id, id)).returning();
+      } catch (err) {
+        throw toPieceworkTaskCodeError(err, newCode);
+      }
+      const current = updated || { ...existing, code: newCode, defaultRate: newRate, title: newTitle };
 
-    if (!oldRate.equals(newRate)) {
-      await PieceworkService.recordTaskRateHistory({
-        taskId: id,
-        taskCode: newCode,
-        taskTitle: newTitle,
-        oldRate,
-        newRate,
-        changeType: 'rate_change',
-        reason: input.reason || `تغییر نرخ پایه از ${oldRate.toLocaleString()} به ${newRate.toLocaleString()}`,
-        userId: input.userId,
-        username: input.username
-      }, executor);
-    } else if (existing.title !== newTitle) {
-      await PieceworkService.recordTaskRateHistory({
-        taskId: id,
-        taskCode: newCode,
-        taskTitle: newTitle,
-        oldRate,
-        newRate,
-        changeType: 'title_change',
-        reason: `تغییر عنوان از «${existing.title}» به «${newTitle}»`,
-        userId: input.userId,
-        username: input.username
-      }, executor);
-    }
+      if (!oldRate.equals(newRate)) {
+        await PieceworkService.recordTaskRateHistory({
+          taskId: id,
+          taskCode: newCode,
+          taskTitle: newTitle,
+          oldRate,
+          newRate,
+          changeType: 'rate_change',
+          reason: input.reason || `تغییر نرخ پایه از ${oldRate.toLocaleString()} به ${newRate.toLocaleString()}`,
+          userId: input.userId,
+          username: input.username
+        }, tx);
+      } else if (existing.title !== newTitle) {
+        await PieceworkService.recordTaskRateHistory({
+          taskId: id,
+          taskCode: newCode,
+          taskTitle: newTitle,
+          oldRate,
+          newRate,
+          changeType: 'title_change',
+          reason: `تغییر عنوان از «${existing.title}» به «${newTitle}»`,
+          userId: input.userId,
+          username: input.username
+        }, tx);
+      }
 
-    return { previous: existing, current: current || { ...existing, code: newCode, defaultRate: newRate, title: newTitle } };
+      await auditTaskUpdated(tx, existing, current, { req: actor.req, userId: actor.userId ?? input.userId, username: actor.username || input.username });
+      return { previous: existing, current };
+    });
   }
 
   /**
@@ -241,7 +254,15 @@ export class PieceworkService {
   static async deleteTask(
     id: number,
     audit?: { userId?: number; username?: string },
-    executor: DbExecutor = orm
+    executor?: DbExecutor
+  ): Promise<typeof pieceworkTasks.$inferSelect> {
+    return inTransaction(executor, (tx) => PieceworkService.deleteTaskIn(id, audit, tx));
+  }
+
+  private static async deleteTaskIn(
+    id: number,
+    audit: { userId?: number; username?: string } | undefined,
+    executor: DbExecutor
   ): Promise<typeof pieceworkTasks.$inferSelect> {
     const [existing] = await executor.select().from(pieceworkTasks).where(and(eq(pieceworkTasks.id, id), eq(pieceworkTasks.isDeleted, 0)));
     if (!existing) {
@@ -487,13 +508,12 @@ export class PieceworkService {
       }
     }
 
+    // OBS-R2-50: a category that cannot be written refuses the import (a swallowed error left the transaction aborted)
     for (const catName of addedCategories) {
-      try {
-        await executor.insert(taskCategories).values({
-          name: catName,
-          description: 'دسته‌بندی کاری ایجادشده از طریق واردات اکسل'
-        }).onConflictDoNothing();
-      } catch (_) {}
+      await executor.insert(taskCategories).values({
+        name: catName,
+        description: 'دسته‌بندی کاری ایجادشده از طریق واردات اکسل'
+      }).onConflictDoNothing();
     }
 
     return {
@@ -509,7 +529,14 @@ export class PieceworkService {
    */
   static async clearAllTasks(
     audit?: { userId?: number; username?: string },
-    executor: DbExecutor = orm
+    executor?: DbExecutor
+  ): Promise<number> {
+    return inTransaction(executor, (tx) => PieceworkService.clearAllTasksIn(audit, tx));
+  }
+
+  private static async clearAllTasksIn(
+    audit: { userId?: number; username?: string } | undefined,
+    executor: DbExecutor
   ): Promise<number> {
     const deleted = await executor.update(pieceworkTasks)
       .set({ isDeleted: 1 })
@@ -539,7 +566,15 @@ export class PieceworkService {
   static async restoreTask(
     id: number,
     audit?: { userId?: number; username?: string },
-    executor: DbExecutor = orm
+    executor?: DbExecutor
+  ): Promise<typeof pieceworkTasks.$inferSelect> {
+    return inTransaction(executor, (tx) => PieceworkService.restoreTaskIn(id, audit, tx));
+  }
+
+  private static async restoreTaskIn(
+    id: number,
+    audit: { userId?: number; username?: string } | undefined,
+    executor: DbExecutor
   ): Promise<typeof pieceworkTasks.$inferSelect> {
     const [existing] = await executor.select().from(pieceworkTasks).where(eq(pieceworkTasks.id, id));
     if (!existing) {

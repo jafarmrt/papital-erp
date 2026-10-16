@@ -4,6 +4,7 @@ import { journalVouchers, personnel, pieceworkPayrolls } from '../../db/schema.j
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
+import { payrollAmountText } from '../../lib/payroll/payrollCurrency.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
 import { PayrollPaymentService } from '../accounting/payrollPayment.service.js';
 import { payrollVouchersWhere } from '../accounting/payrollVoucherLink.js';
@@ -30,8 +31,6 @@ export interface EditDraftPayrollInput {
   username: string;
   req?: unknown;
 }
-
-const faAmount = (v: AmountInput) => fin(v).toNumber().toLocaleString('fa-IR');
 
 /**
  * v10.0.200 (TD-1242، طرح حقوق §۳.۱ بند ۳ و ۴): فیش پیش‌نویس ویرایش می‌شود (عنوان، پاداش، کسورات و شرحش، کسر مساعده) و
@@ -73,7 +72,7 @@ export async function editDraftPayroll(id: number, input: EditDraftPayrollInput)
       const { outstandingAdvance } = await PayrollPaymentService.getPersonnelAdvanceBalance(before.personnelId, tx);
       const ceiling = fin(outstandingAdvance).add(before.advanceDeduction ?? 0);
       if (advance.greaterThan(ceiling)) {
-        throw new ValidationError(`کسر مساعده (${faAmount(advance.toString())} ریال) از مانده مساعده تسویه‌نشده ${person?.fullName ?? ''} (${faAmount(ceiling.toString())} ریال) بیشتر است.`, undefined, 'PAYROLL_ADVANCE_EXCEEDS_BALANCE');
+        throw new ValidationError(`کسر مساعده (${payrollAmountText(advance)}) از مانده مساعده تسویه‌نشده ${person?.fullName ?? ''} (${payrollAmountText(ceiling)}) بیشتر است.`, undefined, 'PAYROLL_ADVANCE_EXCEEDS_BALANCE');
       }
     }
     // v10.0.210 (TD-1087): کسورات قانونی با ناخالص تازه؛ مبلغی که پیش‌تر با شرح تغییر کرده می‌ماند مگر دوباره فرستاده شود

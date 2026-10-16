@@ -20,7 +20,8 @@ import { LockHierarchyLevel, withOrderedLocks } from '../../lib/lockOrder.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
 import { OutboxService } from '../events/outboxService.js';
-import { fin } from '../../lib/financialDecimal.js';
+import { fin, type DecimalValue } from '../../lib/financialDecimal.js';
+import { PAYROLL_CURRENCY, payrollAmountText } from '../../lib/payroll/payrollCurrency.js';
 import { money } from '../../lib/money.js';
 import { isoToJalaliDate } from '../../utils.js';
 import { resolveTreasuryWriteDate } from './treasury/treasuryDate.js';
@@ -32,7 +33,8 @@ export interface RegisterPayrollPaymentInput {
   payrollId: number;
   bankAccountId: number;
   method?: 'cash' | 'bank_transfer' | 'pos' | 'cheque';
-  amount?: number;
+  /** OBS-R2-51: the exact decimal the route read (`decimalInput`), never a `Number()` of it */
+  amount?: DecimalValue;
   paymentDate?: string;
   paymentReference?: string;
   notes?: string;
@@ -51,6 +53,8 @@ export interface RegisterPayrollPaymentResult {
   paidAmount: number;
   remainingAmount: number;
   isFullyPaid: boolean;
+  /** OBS-R2-51: the payment's currency, which the route's message names */
+  currency: string;
 }
 
 export class PayrollPaymentService {
@@ -204,7 +208,7 @@ export class PayrollPaymentService {
 
       if (payAmount.greaterThan(remainingAmount)) {
         throw new ValidationError(
-          `مبلغ پرداختی (${payAmount.toNumber().toLocaleString('fa-IR')} ریال) نمی‌تواند از مانده قابل پرداخت فیش (${remainingAmount.toNumber().toLocaleString('fa-IR')} ریال) بیشتر باشد.`
+          `مبلغ پرداختی (${payrollAmountText(payAmount)}) نمی‌تواند از مانده قابل پرداخت فیش (${payrollAmountText(remainingAmount)}) بیشتر باشد.`
         );
       }
 
@@ -247,7 +251,7 @@ export class PayrollPaymentService {
         referenceModule: 'payroll_payment',
         referenceId: payroll.id,
         referenceNumber: txNum,
-        currency: 'IRR',
+        currency: PAYROLL_CURRENCY,
         userId: input.userId,
         username: input.username,
         items: [
@@ -258,7 +262,7 @@ export class PayrollPaymentService {
             detailedName: pers?.fullName || 'پرسنل',
             debit: payAmount.toNumber(),
             credit: 0,
-            currency: 'IRR',
+            currency: PAYROLL_CURRENCY,
             description: `کاهش تعهد پرداخت حقوق به ${pers?.fullName || ''} بابت فیش ${payroll.payrollNumber}`
           },
           {
@@ -268,7 +272,7 @@ export class PayrollPaymentService {
             detailedName: bank.title,
             debit: 0,
             credit: payAmount.toNumber(),
-            currency: 'IRR',
+            currency: PAYROLL_CURRENCY,
             description: `خروج وجه از ${bank.title} بابت پرداخت فیش ${payroll.payrollNumber}`
           }
         ]
@@ -282,7 +286,7 @@ export class PayrollPaymentService {
         date: payIso,
         method: input.method || 'bank_transfer',
         amount: money(payAmount),
-        currency: 'IRR',
+        currency: PAYROLL_CURRENCY,
         exchangeRate: money(1),
         bankAccountId: bank.id,
         partyType: 'personnel',
@@ -307,7 +311,7 @@ export class PayrollPaymentService {
           transactionId: tr.id,
           type: 'withdrawal',
           amount: payAmount.toNumber(),
-          currency: 'IRR',
+          currency: PAYROLL_CURRENCY,
           accountId: bank.id,
           accountName: bank.title,
           payrollId: payroll.id,
@@ -359,7 +363,8 @@ export class PayrollPaymentService {
         voucherNumber: voucher?.voucherNumber ?? null,
         paidAmount: payAmount.toNumber(),
         remainingAmount: netPayable.subtract(newTotalPaid).toNumber(),
-        isFullyPaid
+        isFullyPaid,
+        currency: PAYROLL_CURRENCY
       };
     });
   }

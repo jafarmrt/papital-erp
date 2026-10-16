@@ -21,6 +21,7 @@ import { WORK_LOG_PAGE_SIZE } from '../lib/piecework/workLogList.js';
 import { parsePagination } from '../lib/pagination.js';
 import { PREPAYMENT_REASON_MAX } from '../lib/payroll/payrollPeriod.js';
 import { STATUTORY_OVERRIDE_REASON_MAX } from '../lib/payroll/statutoryDeductions.js';
+import { payrollAmountText } from '../lib/payroll/payrollCurrency.js';
 import { editDraftPayroll } from '../services/piecework/payrollDraftEdit.js';
 import { pageWorkLogs, workLogSummary } from '../services/piecework/workLogList.js';
 
@@ -387,7 +388,8 @@ router.put('/piecework/tasks/:id', requirePermission(PIECEWORK_TASKS_PERMISSION)
     const id = Number(req.params.id);
     const { code, title, category, defaultRate, unit, description, isActive } = req.body;
 
-    const { previous: existing, current } = await PieceworkService.updateTask(id, {
+    // OBS-R2-50: the edit, its rate history row and its audit row are one transaction in the service
+    await PieceworkService.updateTask(id, {
       code,
       title,
       category,
@@ -398,16 +400,7 @@ router.put('/piecework/tasks/:id', requirePermission(PIECEWORK_TASKS_PERMISSION)
       reason: req.body.reason,
       userId: req.user?.id,
       username: req.user?.username
-    });
-
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username || 'سیستم',
-      action: 'UPDATE',
-      entity: 'عنوان پرکیسی',
-      entityId: id,
-      description: `ویرایش عنوان کاری کارمزدی «${existing.title}»${current.code !== existing.code ? ` (کد «${existing.code}» به «${current.code}»)` : ''}`
-    });
+    }, undefined, { req });
 
     res.json({ status: 'ok', message: 'عنوان کاری با موفقیت به‌روزرسانی شد' });
   } catch (err) {
@@ -562,7 +555,7 @@ router.get(['/piecework/personnel-rates/:personnelId', '/piecework/rates/:person
     res.json(rates);
   } catch (err) {
     logger.error({ message: 'Error fetching custom rates', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
+    // Pass the error on to the global errorHandler, which answers with the trace id
     throw err;
   }
 }));
@@ -734,7 +727,7 @@ router.get('/piecework/payrolls/:id', authorizePermission(...READ_PERMISSIONS.pa
     });
   } catch (err) {
     logger.error({ message: 'Error fetching payroll detail', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
+    // Pass the error on to the global errorHandler, which answers with the trace id
     throw err;
   }
 }));
@@ -867,7 +860,8 @@ router.post('/piecework/payrolls/:id/register-payment', requirePermission(PIECEW
       payrollId: id,
       bankAccountId: Number(bankAccountId),
       method,
-      amount: amount !== undefined ? Number(amount) : undefined,
+      // OBS-R2-51: the exact decimal string of `decimalInput`; `Number()` dropped digits past the 15th
+      amount,
       paymentDate,
       paymentReference,
       notes,
@@ -881,7 +875,7 @@ router.post('/piecework/payrolls/:id/register-payment', requirePermission(PIECEW
       success: true,
       message: result.isFullyPaid
         ? `پرداخت فیش ${result.payroll.payrollNumber} با موفقیت تسویه کامل شد؛ تراکنش خزانه ${result.transactionNumber} و سند تسویه صادر گردید.`
-        : `پرداخت مرحله‌ای فیش ${result.payroll.payrollNumber} ثبت شد (مانده: ${result.remainingAmount.toLocaleString('fa-IR')} ریال)؛ تراکنش خزانه ${result.transactionNumber} صادر گردید.`,
+        : `پرداخت مرحله‌ای فیش ${result.payroll.payrollNumber} ثبت شد (مانده: ${payrollAmountText(result.remainingAmount, result.currency)})؛ تراکنش خزانه ${result.transactionNumber} صادر گردید.`,
       ...result
     });
   } catch (err) {
@@ -905,7 +899,7 @@ router.post('/piecework/payrolls/:id/payments/:transactionId/void', requirePermi
 
   res.json({
     success: true,
-    message: `پرداخت ${result.transactionNumber} فیش ${result.payroll.payrollNumber} ابطال شد؛ مبلغ پرداخت‌شده فیش اکنون ${result.paidAmount.toLocaleString('fa-IR')} ریال است.`,
+    message: `پرداخت ${result.transactionNumber} فیش ${result.payroll.payrollNumber} ابطال شد؛ مبلغ پرداخت‌شده فیش اکنون ${payrollAmountText(result.paidAmount, result.currency)} است.`,
     ...result
   });
 }));

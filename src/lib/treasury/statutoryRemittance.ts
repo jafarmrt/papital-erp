@@ -93,6 +93,19 @@ export const hasStatutoryUnassignedPayments = (options: Pick<StatutoryRemittance
   Boolean(options?.unassignedPayments && fin(options.unassignedPayments.amount).isPositive());
 
 /**
+ * The vouchers the server names when it refuses a payment for earlier payments without a personnel name (409
+ * `STATUTORY_REMITTANCE_UNASSIGNED_PAYMENTS`, `details.unassignedPayments`), else null. The window shows them instead of the
+ * list it loaded, which may be stale.
+ */
+export function unassignedPaymentsOfError(err: unknown): StatutoryUnassignedPayments | null {
+  const e = err as { code?: unknown; details?: { unassignedPayments?: unknown } } | null | undefined;
+  if (e?.code !== 'STATUTORY_REMITTANCE_UNASSIGNED_PAYMENTS') return null;
+  const payments = e.details?.unassignedPayments as Partial<StatutoryUnassignedPayments> | undefined;
+  if (!payments || typeof payments !== 'object') return null;
+  return { amount: String(payments.amount ?? '0'), vouchers: Array.isArray(payments.vouchers) ? payments.vouchers : [] };
+}
+
+/**
  * هشدار فرم خزانه و دفتر چک وقتی سرفصل طرف مقابل «بیمه پرداختنی» یا «مالیات حقوق پرداختنی» است: ثبت رد نمی‌شود، ولی پرداخت
  * از آن‌جا به نام هیچ پرسنلی نمی‌نشیند و پنجره پرداخت فهرست همان ماه را دوباره پیشنهاد می‌کند
  */

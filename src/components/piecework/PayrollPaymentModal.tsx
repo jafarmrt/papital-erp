@@ -10,6 +10,7 @@ import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { DecimalInput } from '../common/DecimalInput';
 import { DialogLayer } from '../common/DialogLayer';
+import { isRialCurrency } from '../../lib/rialDisplay';
 
 // V4.0.33: مودال واحد «پرداخت حقوق (کامل یا چندمرحله‌ای)»
 // ثبت فقط با انتخاب حساب خزانه/بانک تا تراکنش مالی + سند تسویه اتمیک صادر شود.
@@ -67,7 +68,9 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
       // v9.0.97 (TD-505، ت۷): فهرست انتخاب، بی شماره حساب و مانده
       fetchJson<{ data?: BankAccountOption[] } | BankAccountOption[]>('/accounting/bank-accounts/options', { signal: controller.signal })
         .then((res) => {
-          setBankAccounts(Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []));
+          const list = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+          // OBS-R2-51: a payslip is rial only and the server refuses a bank in another currency, so only rial accounts are offered
+          setBankAccounts(list.filter(b => isRialCurrency(b.currency)));
         })
         .catch(() => toast.error('خطا در دریافت فهرست حساب‌های خزانه'))
         .finally(() => setLoadingBanks(false));
