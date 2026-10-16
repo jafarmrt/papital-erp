@@ -27,9 +27,9 @@ export function useCustomerOptionsQuery() {
   });
 }
 
-export function useCustomersQuery(page: number = 1, limit: number = 50, search?: string, partyType?: string) {
+export function useCustomersQuery(page: number = 1, limit: number = 50, search?: string, partyType?: string, tagId?: number | null) {
   return useQuery<CustomersResponse>({
-    queryKey: QUERY_KEYS.customers.list({ page, limit, search, partyType }),
+    queryKey: QUERY_KEYS.customers.list({ page, limit, search, partyType, tagId: tagId ?? null }),
     queryFn: async () => {
       const query = new URLSearchParams({
         page: page.toString(),
@@ -41,6 +41,7 @@ export function useCustomersQuery(page: number = 1, limit: number = 50, search?:
       if (partyType && partyType !== 'all') {
         query.append('partyType', partyType);
       }
+      if (tagId) query.append('tagId', String(tagId));
       const res = await fetchJson(`/customers?${query.toString()}`);
       if (res && res.data) {
         return {

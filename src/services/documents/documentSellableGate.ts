@@ -202,7 +202,7 @@ export async function documentLineStock(tx: DbExecutor, documentId: number): Pro
 
   const itemIds = Array.from(new Set(Array.from(requested.values(), r => r.itemId))).sort((a, b) => a - b);
   const codes = Array.from(new Set(Array.from(requested.values(), r => r.location)));
-  // v10.1.29 (TD-1279): one query at a time; `tx` may be a transaction's single connection (pg 9 refuses overlap)
+  // v10.1.31 (TD-1279): one query at a time; `tx` may be a transaction's single connection (pg 9 refuses overlap)
   const stocks = await ItemWarehouseStockService.getStocksForItems(tx, itemIds);
   const report = await ItemStockReservationService.getReservedStockDetails(tx, true, { itemIds });
   const whRows = await tx.select({ code: warehouses.code, name: warehouses.name }).from(warehouses).where(inArray(warehouses.code, codes));

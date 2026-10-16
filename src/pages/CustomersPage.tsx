@@ -3,7 +3,7 @@ import { confirmAction } from '../components/ConfirmDialogHost';
 import { useLocation } from 'react-router-dom';
 import { fetchJson } from '../api';
 import { Customer, User, CRMLead, CRMActivity } from '../types';
-import { Search, Plus, ChevronRight, ChevronLeft, Edit2, Trash2, X, Phone, Building2, Briefcase, Truck, Users, FileText, FileSpreadsheet } from 'lucide-react';
+import { Search, Plus, ChevronRight, ChevronLeft, Edit2, Trash2, X, Phone, Building2, Briefcase, Truck, Users, FileText, FileSpreadsheet, Tag } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useSearch } from '../SearchContext';
 import { CrmInteractionModalHost, CrmCustomerDossierHost } from '../components/crm/crmSharedHosts';
@@ -24,6 +24,10 @@ import { blankContactPerson } from '../lib/customers/contactPerson';
 import { emailError } from '../lib/customers/contactChannels';
 import { customerChannelFormError } from '../components/customers/CustomerChannelFields';
 import { CustomerChannelLinks, PhoneLinks } from '../components/customers/ContactLinks';
+import { DialogLayer } from '../components/common/DialogLayer';
+import { CustomerTagChips, CustomerTagFilter } from '../components/customers/CustomerTags';
+import { CustomerTagsWindow } from '../components/customers/CustomerTagsWindow';
+import { useCustomerTagsQuery } from '../hooks/queries/useCustomerTagQueries';
 
 export default function CustomersPage({ user }: { user: User }) {
   const rial = useRialDisplay();
@@ -48,6 +52,10 @@ export default function CustomersPage({ user }: { user: User }) {
   const [crmLeads, setCrmLeads] = useState<CRMLead[]>([]);
   const [crmActivities, setCrmActivities] = useState<CRMActivity[]>([]);
   const [page, setPage] = useState(1);
+  // v10.1.23 (N-02 بخش ۳): پالایه برچسب و پنجره برچسب‌ها
+  const [tagFilter, setTagFilter] = useState<number | null>(null);
+  const [showTagsWindow, setShowTagsWindow] = useState(false);
+  const { data: tagOptions = [] } = useCustomerTagsQuery();
 
   // Sync tab with URL query parameter (?tab=suppliers or ?type=supplier)
   useEffect(() => {
@@ -63,7 +71,7 @@ export default function CustomersPage({ user }: { user: User }) {
   }, [location.search]);
 
   // V4 Phase 6.2 (یافته U-1): تغذیه کوئری مشتریان با debouncedSearchQuery جهت ممانعت از ارسال کی‌استروک‌های تکراری به سرور
-  const { data: customersData, isLoading: loading } = useCustomersQuery(page, 50, debouncedSearchQuery, activeTab === 'all' ? undefined : activeTab);
+  const { data: customersData, isLoading: loading } = useCustomersQuery(page, 50, debouncedSearchQuery, activeTab === 'all' ? undefined : activeTab, tagFilter);
   const customers = Array.isArray(customersData?.data) ? customersData.data : [];
   const totalPages = customersData?.totalPages || 1;
   const totalItems = customersData?.total || 0;
@@ -71,7 +79,7 @@ export default function CustomersPage({ user }: { user: User }) {
   // Reset page to 1 on debounced search or tab change
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearchQuery, activeTab]);
+  }, [debouncedSearchQuery, activeTab, tagFilter]);
 
   const saveMutation = useSaveCustomerMutation();
   const deleteMutation = useDeleteCustomerMutation();
@@ -118,7 +126,8 @@ export default function CustomersPage({ user }: { user: User }) {
     },
     website: '',
     email: '',
-    instagram: ''
+    instagram: '',
+    tagIds: [] as number[]
   });
 
   const [contacts, setContacts] = useState<FormContactPerson[]>([
@@ -201,7 +210,8 @@ export default function CustomersPage({ user }: { user: User }) {
       contacts: activeContacts,
       website: form.website,
       email: form.email,
-      instagram: form.instagram
+      instagram: form.instagram,
+      tagIds: form.tagIds
     };
 
     saveMutation.mutate({ id: editingId, payload: customerSaveBody(finalPayload, editingId, editingVersion) }, {
@@ -232,7 +242,8 @@ export default function CustomersPage({ user }: { user: User }) {
       },
       website: '',
       email: '',
-      instagram: ''
+      instagram: '',
+      tagIds: []
     });
     setContacts([blankContactPerson(Date.now().toString(), true)]);
   };
@@ -258,7 +269,8 @@ export default function CustomersPage({ user }: { user: User }) {
       },
       website: c.website || '',
       email: c.email || '',
-      instagram: c.instagram || ''
+      instagram: c.instagram || '',
+      tagIds: Array.isArray(c.tags) ? c.tags.map(t => t.id) : []
     });
 
     if (c.contacts && Array.isArray(c.contacts) && c.contacts.length > 0) {
@@ -351,6 +363,17 @@ export default function CustomersPage({ user }: { user: User }) {
           </button>
 
           {canManageCustomers && (
+            <button
+              type="button"
+              onClick={() => setShowTagsWindow(true)}
+              className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-3.5 py-2.5 rounded-xl flex items-center gap-2 text-xs font-bold shadow-2xs transition-all cursor-pointer"
+            >
+              <Tag size={16} className="text-blue-600" />
+              <span>برچسب‌ها</span>
+            </button>
+          )}
+
+          {canManageCustomers && (
             <button 
               type="button"
               onClick={() => {
@@ -406,6 +429,8 @@ export default function CustomersPage({ user }: { user: User }) {
             <span>تامین‌کنندگان متریال</span>
           </button>
         </div>
+
+        <CustomerTagFilter tags={tagOptions} value={tagFilter} onChange={setTagFilter} />
 
         {/* Search Field */}
         <div className="relative w-full max-w-sm">
@@ -487,6 +512,7 @@ export default function CustomersPage({ user }: { user: User }) {
                           </span>
                         )}
                         <CustomerChannelLinks website={c.website} email={c.email} instagram={c.instagram} />
+                        <CustomerTagChips tags={c.tags} />
                       </div>
                     </div>
                   </td>
@@ -665,11 +691,15 @@ export default function CustomersPage({ user }: { user: User }) {
         setPrimaryContact={setPrimaryContact}
         onSubmit={handleSubmit}
         isSaving={isSaving}
+        tagOptions={tagOptions}
       />
+
+      {showTagsWindow && <CustomerTagsWindow onClose={() => setShowTagsWindow(false)} />}
 
       {/* Ledger / Account Card Modal */}
       {selectedLedgerCustomer && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-[85] p-4">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-[85] p-4">
+          <DialogLayer onClose={() => setSelectedLedgerCustomer(null)} />
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-200">
             <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center shrink-0 bg-slate-50/80">
               <div className="flex items-center gap-2.5">

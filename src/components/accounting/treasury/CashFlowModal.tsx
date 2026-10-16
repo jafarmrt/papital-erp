@@ -3,6 +3,7 @@ import { TrendingUp, X, ArrowDownLeft, ArrowUpRight, Scale } from 'lucide-react'
 import { JalaliDateInput } from '../../common/JalaliDateInput';
 import { formatPersianPrice } from '../../../utils';
 import { useCashFlowReport } from '../../../hooks/accounting/useTreasuryQueries';
+import { DialogLayer } from '../../common/DialogLayer';
 
 interface CashFlowModalProps {
   isOpen: boolean;
@@ -33,7 +34,8 @@ export const CashFlowModal: React.FC<CashFlowModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <DialogLayer onClose={onClose} />
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-2xl w-full p-6 border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold text-slate-900 dark:text-white text-base flex items-center gap-2">

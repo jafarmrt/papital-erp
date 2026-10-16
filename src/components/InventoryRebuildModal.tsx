@@ -5,6 +5,7 @@ import { SearchableSelect } from './SearchableSelect';
 import { formatPersianNumber, errorMessageOf } from '../utils';
 import { KardexWacDifferencesPanel } from './inventory/KardexWacDifferencesPanel';
 import { wacDifferencesOf } from '../lib/inventoryAudit/wacCorrection';
+import { DialogLayer } from './common/DialogLayer';
 
 interface InventoryRebuildModalProps {
   isOpen: boolean;
@@ -57,7 +58,8 @@ export default function InventoryRebuildModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in" style={{ direction: 'rtl' }}>
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in" style={{ direction: 'rtl' }}>
+      <DialogLayer onClose={onClose} disabled={submitting} />
       <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-200">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b bg-gradient-to-l from-slate-50 to-white">

@@ -11,6 +11,7 @@ import { errorMessageOf } from '../utils';
 import { PASSWORD_LENGTH_HINT, passwordLengthError } from '../lib/auth/passwordPolicy';
 import { mustChangePassword } from '../lib/auth/passwordReset';
 import { FULL_NAME_MAX_LENGTH, isProfileImageType, PROFILE_IMAGE_ACCEPT, PROFILE_IMAGE_HINT, PROFILE_IMAGE_TYPE_MESSAGE } from '../lib/users/profileFields';
+import { DialogLayer } from './common/DialogLayer';
 
 interface UserProfileModalProps {
   user: User;
@@ -179,7 +180,8 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+      <DialogLayer onClose={onClose} disabled={saving} />
       <div className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-200 max-h-[90vh] flex flex-col">
         {/* Modal Header */}
         <div className="bg-slate-900 text-white p-6 relative">

@@ -1,6 +1,7 @@
 import { History, Filter, X, RefreshCw, Clock, Tag } from 'lucide-react';
 import { cn, formatPersianPrice, formatPersianNumber, formatCurrencyLabel } from '../../utils';
 import { priceHistoryRegisteredAt } from '../../lib/items/priceHistory';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface PriceHistoryModalProps {
   historyItem: { id: number; name: string; code: string } | null;
@@ -56,7 +57,8 @@ export function PriceHistoryModal({
   );
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+      <DialogLayer onClose={onClose} />
       <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-100 overflow-hidden animate-in zoom-in duration-150 flex flex-col max-h-[85vh]">
         {/* Modal Header */}
         <div className="p-4 bg-slate-900 text-white flex justify-between items-center shrink-0">

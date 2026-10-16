@@ -239,6 +239,7 @@ G  scripts/check-version-sync.ts
 # ───────── ۹ مشتریان و CRM ─────────
 9  src/routes/crm.routes.ts
 9  src/routes/customers.routes.ts
+9  src/routes/customerTags.routes.ts
 9  src/services/customer.service.ts
 9  src/pages/CRMPage.tsx
 9  src/pages/CustomersPage.tsx

@@ -14,6 +14,7 @@ import toast from 'react-hot-toast';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { postingAccountsOf } from '../../lib/accounting/postingAccount';
 import { DecimalInput } from '../common/DecimalInput';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface VoucherCorrectionModalProps {
   isOpen: boolean;
@@ -200,7 +201,8 @@ export function VoucherCorrectionModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+      <DialogLayer onClose={onClose} disabled={isSubmitting} />
       <div className="bg-white dark:bg-slate-850 w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col max-h-[92vh] overflow-hidden">
         
         {/* Modal Header */}

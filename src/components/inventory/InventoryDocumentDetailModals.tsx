@@ -3,6 +3,7 @@ import { ArrowLeftRight, ClipboardCheck, Printer, RefreshCw, X, type LucideIcon 
 import { TransferDocumentPrint } from './TransferDocumentPrint';
 import { formatPersianDate, formatPersianNumber } from '../../utils';
 import type { InventoryDocumentDetail } from '../../hooks/inventoryAudit/useInventoryAuditQueries';
+import { DialogLayer } from '../common/DialogLayer';
 
 /** مودال‌های جزئیات سند انبارگردانی و حواله انتقال صفحه انبارگردانی (قاب مشترک + محتوای هر سند) */
 
@@ -19,7 +20,8 @@ interface ShellProps {
 
 function DocumentDetailShell({ title, icon: Icon, maxWidthClass, loading, loadingText, onClose, children, footerActions }: ShellProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in" style={{ direction: 'rtl' }}>
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in" style={{ direction: 'rtl' }}>
+      <DialogLayer onClose={onClose} />
       <div className={`w-full ${maxWidthClass} bg-white rounded-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden border border-slate-200`}>
         <div className="flex items-center justify-between p-5 border-b bg-slate-50">
           <div className="flex items-center gap-3">

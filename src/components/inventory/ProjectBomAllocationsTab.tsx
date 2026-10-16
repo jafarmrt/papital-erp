@@ -17,6 +17,7 @@ import { useProjectPermissions } from '../../hooks/useProjectPermissions';
 import { allocationStatusLabel } from '../../lib/projects/allocationLabels';
 import { warehouseLabel } from '../../lib/inventory/warehouseLabel';
 import { DecimalInput } from '../common/DecimalInput';
+import { DialogLayer } from '../common/DialogLayer';
 
 interface ProjectBomAllocationsTabProps {
   user?: any;
@@ -502,7 +503,8 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
 
       {/* Traceability Modal */}
       {selectedAllocForTrace && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div role="dialog" aria-modal="true" aria-label="شناسنامه ردگیری تخصیص مواد به پروژه" className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <DialogLayer onClose={() => setSelectedAllocForTrace(null)} />
           <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl text-right animate-in fade-in zoom-in-95 duration-200 max-h-[85vh] flex flex-col overflow-hidden"><div className="p-6 overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2 text-slate-800 font-black">
@@ -589,7 +591,8 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
 
       {/* Release Reason Modal */}
       {releaseTarget && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div role="dialog" aria-modal="true" aria-label="تأیید آزادسازی و برگشت مواد به انبار" className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <DialogLayer onClose={() => setReleaseTarget(null)} disabled={releasing} />
           <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl text-right animate-in fade-in zoom-in-95 duration-200 max-h-[85vh] overflow-y-auto p-6">
             <div className="flex items-center gap-2 text-rose-600 font-black border-b border-slate-100 pb-3">
               <RotateCcw size={20} />
@@ -634,7 +637,8 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
 
       {/* Allocate Material Form Modal */}
       {showAllocateModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div role="dialog" aria-modal="true" aria-label="تخصیص مواد اولیه به پروژه تولید" className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <DialogLayer onClose={() => setShowAllocateModal(false)} disabled={submitting} />
           <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl text-right animate-in fade-in zoom-in-95 duration-200 max-h-[85vh] flex flex-col overflow-hidden"><div className="p-6 overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2 text-slate-800 font-black">

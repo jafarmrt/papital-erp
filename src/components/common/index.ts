@@ -14,3 +14,4 @@ export { executePrint, useDocumentPrint } from '../../utils/printHelper';
 export type { PrintOptions } from '../../utils/printHelper';
 export * from './PillBadge';
 export * from './JalaliDateInput';
+export * from './DialogLayer';

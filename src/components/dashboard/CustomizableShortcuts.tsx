@@ -4,6 +4,7 @@ import { Settings2, Package, Box, FileText, Target, CalendarCheck, Layers, Check
 import { User } from '../../types';
 import { canOpenPage, type ViewerAccess } from '../../lib/permissions/pageAccess';
 import { formatPersianNumber } from '../../utils';
+import { DialogLayer } from '../common/DialogLayer';
 
 export interface ShortcutItemDef {
   id: string;
@@ -323,7 +324,8 @@ export function CustomizableShortcuts({ user, userPermissions }: CustomizableSho
 
       {/* Customize Modal */}
       {isCustomizeOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <DialogLayer onClose={() => setIsCustomizeOpen(false)} />
           <div className="bg-white rounded-3xl border border-slate-200 shadow-xl max-w-xl w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
