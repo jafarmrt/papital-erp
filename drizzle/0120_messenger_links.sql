@@ -2,7 +2,8 @@
 -- product-owner decision ت۱ الف)
 --
 -- messenger_bots holds the two staff bots (Bale and Telegram, separate from the server alert bots): the token, stored
--- only encrypted by the application (`encryptSecret`), and the bot's username. user_messenger_links holds each user's
+-- only encrypted by the application (`encryptSecret`), the bot's username, the next `getUpdates` offset (so a restart
+-- never reads old messages again) and the count of wrong link codes in the current ten-minute window (every chat). user_messenger_links holds each user's
 -- link to a bot's chat: at most one active link per user and messenger, and one active user per chat. messenger_link_codes
 -- holds the one-time six-digit codes a user sends to the bot from their profile, stored as a hash and valid ten minutes.
 -- New tables only: the foreign keys are validated at once and each foreign key column has an index that leads with it
@@ -14,6 +15,9 @@ CREATE TABLE IF NOT EXISTS messenger_bots (
   bot_username text NOT NULL DEFAULT '',
   updated_by_id integer,
   updated_at timestamp DEFAULT now(),
+  update_offset bigint NOT NULL DEFAULT 0,
+  wrong_codes_count integer NOT NULL DEFAULT 0,
+  wrong_codes_since timestamp,
   CONSTRAINT chk_messenger_bots_messenger CHECK (messenger IN ('bale', 'telegram')),
   CONSTRAINT fk_messenger_bots_updated_by FOREIGN KEY (updated_by_id) REFERENCES users (id)
 );

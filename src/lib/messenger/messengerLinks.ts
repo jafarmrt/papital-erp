@@ -18,6 +18,16 @@ export function isMessenger(value: unknown): value is Messenger {
 export const LINK_CODE_LENGTH = 6;
 export const LINK_CODE_TTL_MINUTES = 10;
 
+/**
+ * A bot token as the bot makers of Bale and Telegram give it: the bot's number, a colon and at least twenty letters, digits,
+ * «_» or «-». Anything else is refused before the bot API is asked (and the token is never sent to it).
+ */
+export const BOT_TOKEN_PATTERN = /^\d+:[A-Za-z0-9_-]{20,}$/;
+
+export function isBotTokenShape(token: string): boolean {
+  return BOT_TOKEN_PATTERN.test(token.trim());
+}
+
 export const UNLINK_REASONS = ['user', 'stop', 'blocked', 'relinked', 'bot_changed'] as const;
 export type UnlinkReason = (typeof UNLINK_REASONS)[number];
 

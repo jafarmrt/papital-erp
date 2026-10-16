@@ -5,6 +5,7 @@ import { orm, type DbTransaction } from '../../db/drizzle.js';
 import { messengerLinkCodes, userMessengerLinks, users } from '../../db/schema.js';
 import { AppError, ConflictError, ValidationError } from '../../errors/customErrors.js';
 import { logActivity } from '../../lib/auditLogger.js';
+import { derivedSecretKey } from '../../lib/secretBox.js';
 import { serverTimestampToUtcIso } from '../../lib/serverTimestamp.js';
 import {
   botStartLink, LINK_CODE_TTL_MINUTES, MESSENGER_LABELS, MESSENGERS, UNLINK_REASONS,
@@ -15,7 +16,8 @@ import { sendBotMessage } from './messengerClient.js';
 
 /**
  * v10.1.38 (messenger notifications plan part 1, §2.2): each user's link to the staff bots. A link is made only from the
- * user's own profile: the profile asks for a one-time six-digit code (ten minutes, stored as a hash), the user sends it to
+ * user's own profile: the profile asks for a one-time six-digit code (ten minutes, stored as an HMAC keyed from
+ * `ERP_SECRETS_KEY`, so the database alone cannot turn a hash back into its code), the user sends it to
  * the bot, and the update poller (`messengerUpdatePoller.ts`) links that chat to the code's user. A user has at most one
  * active link per messenger and a chat at most one active user (partial unique indexes of migration 0120), so a new link
  * closes the older ones (`relinked`). «قطع اتصال» in the profile, «/stop» to the bot and a 403 from the bot (blocked)
@@ -27,7 +29,9 @@ export const MESSENGER_LINK_AUDIT_ENTITY = 'اتصال پیام‌رسان';
 const MAX_CODE_ATTEMPTS = 5;
 
 export function hashLinkCode(messenger: Messenger, code: string): string {
-  return crypto.createHash('sha256').update(`${messenger}:${code}`).digest('hex');
+  const key = derivedSecretKey('messenger-link-code');
+  if (!key) throw new AppError('کلید رمزنگاری سامانه تنظیم نشده است؛ اتصال پیام‌رسان ممکن نیست.', 503, 'SECRETS_KEY_MISSING');
+  return crypto.createHmac('sha256', key).update(`${messenger}:${code}`).digest('hex');
 }
 
 function newCode(): string {
@@ -69,6 +73,9 @@ export async function issueLinkCode(userId: number, messenger: Messenger): Promi
     throw new ValidationError(`ربات ${MESSENGER_LABELS[messenger]} هنوز راه‌اندازی نشده است. از مدیر سامانه بخواهید آن را در تنظیمات وارد کند.`, undefined, 'MESSENGER_BOT_NOT_CONFIGURED');
   }
   return orm.transaction(async (tx) => {
+    // the user row first (the order `completeLinkFromChat` takes too), so two requests of one user never leave two codes
+    const [user] = await tx.select({ id: users.id, isDeleted: users.isDeleted }).from(users).where(eq(users.id, userId)).for('update');
+    if (!user || user.isDeleted === 1) throw new ConflictError('این حساب کاربری فعال نیست.', undefined, 'MESSENGER_USER_INACTIVE');
     await tx.delete(messengerLinkCodes).where(or(
       and(eq(messengerLinkCodes.userId, userId), eq(messengerLinkCodes.messenger, messenger)),
       lte(messengerLinkCodes.expiresAt, sql`now()`),
@@ -111,18 +118,18 @@ export type CompleteLinkOutcome =
  * messenger and the chat's link to another user. An unknown, used or expired code changes nothing.
  */
 export async function completeLinkFromChat(messenger: Messenger, chatId: string, chatName: string, code: string): Promise<CompleteLinkOutcome> {
+  const codeHash = hashLinkCode(messenger, code);
   return orm.transaction(async (tx) => {
-    const [codeRow] = await tx.select().from(messengerLinkCodes)
-      .where(and(
-        eq(messengerLinkCodes.messenger, messenger),
-        eq(messengerLinkCodes.codeHash, hashLinkCode(messenger, code)),
-        sql`${messengerLinkCodes.expiresAt} > now()`,
-      ))
-      .for('update');
+    const matching = and(eq(messengerLinkCodes.messenger, messenger), eq(messengerLinkCodes.codeHash, codeHash), sql`${messengerLinkCodes.expiresAt} > now()`);
+    const [found] = await tx.select({ id: messengerLinkCodes.id, userId: messengerLinkCodes.userId }).from(messengerLinkCodes).where(matching);
+    if (!found) return { status: 'invalid' } as const;
+    // user row before code row, the order of `issueLinkCode`
+    const [user] = await tx.select({ id: users.id, fullName: users.fullName, isDeleted: users.isDeleted }).from(users)
+      .where(eq(users.id, found.userId)).for('update');
+    const [codeRow] = await tx.select({ id: messengerLinkCodes.id }).from(messengerLinkCodes)
+      .where(and(eq(messengerLinkCodes.id, found.id), matching)).for('update');
     if (!codeRow) return { status: 'invalid' } as const;
     await tx.delete(messengerLinkCodes).where(eq(messengerLinkCodes.id, codeRow.id));
-    const [user] = await tx.select({ id: users.id, fullName: users.fullName, isDeleted: users.isDeleted }).from(users)
-      .where(eq(users.id, codeRow.userId)).for('update');
     if (!user || user.isDeleted === 1) return { status: 'invalid' } as const;
     const closedOwn = await closeLinks(tx, and(eq(userMessengerLinks.userId, user.id), eq(userMessengerLinks.messenger, messenger)), 'relinked');
     const closedChat = await closeLinks(tx, and(eq(userMessengerLinks.messenger, messenger), eq(userMessengerLinks.chatId, chatId), ne(userMessengerLinks.userId, user.id)), 'relinked');
@@ -212,7 +219,7 @@ export async function sendTestMessage(userId: number, messenger: Messenger): Pro
   throw new AppError(`پیام آزمایشی به ${MESSENGER_LABELS[messenger]} نرسید. کمی بعد دوباره بکوشید.`, 502, 'MESSENGER_SEND_FAILED');
 }
 
-/** The system admin's list of active links: who is linked to which messenger, never the chat id */
+/** The system admin's list of active links of live users: who is linked to which messenger, never the chat id */
 export async function listActiveLinksForAdmin(): Promise<MessengerLinkAdminRow[]> {
   const rows = await orm.select({
     userId: userMessengerLinks.userId,
@@ -222,7 +229,7 @@ export async function listActiveLinksForAdmin(): Promise<MessengerLinkAdminRow[]
     linkedAt: userMessengerLinks.linkedAt,
   }).from(userMessengerLinks)
     .innerJoin(users, eq(users.id, userMessengerLinks.userId))
-    .where(eq(userMessengerLinks.isActive, 1))
+    .where(and(eq(userMessengerLinks.isActive, 1), eq(users.isDeleted, 0)))
     .orderBy(asc(users.fullName), asc(userMessengerLinks.messenger));
   return rows.map(r => ({ ...r, messenger: r.messenger as Messenger, linkedAt: serverTimestampToUtcIso(r.linkedAt ?? null) }));
 }

@@ -24,6 +24,15 @@ export function isSecretsKeyConfigured(): boolean {
   return resolveKey() !== null;
 }
 
+/**
+ * v10.1.38 (messenger plan part 1): a key for one purpose derived from `ERP_SECRETS_KEY` (HMAC-SHA256 of the purpose), so a
+ * keyed hash (a messenger link code) cannot be recomputed from the database alone; null without a valid key.
+ */
+export function derivedSecretKey(purpose: string): Buffer | null {
+  const key = resolveKey();
+  return key ? crypto.createHmac('sha256', key).update(`papital-erp:${purpose}`).digest() : null;
+}
+
 export function isEncryptedSecret(value: unknown): boolean {
   return typeof value === 'string' && value.startsWith(PREFIX);
 }

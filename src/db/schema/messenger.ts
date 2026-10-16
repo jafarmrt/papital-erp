@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, index, uniqueIndex, unique } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, integer, bigint, timestamp, index, uniqueIndex, unique } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { users } from './auth';
 
@@ -15,6 +15,11 @@ export const messengerBots = pgTable('messenger_bots', {
   botUsername: text('bot_username').notNull().default(''),
   updatedById: integer('updated_by_id').references(() => users.id),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
+  // the next `getUpdates` offset of this bot, so a restart never reads old messages again; 0 after the bot changes
+  updateOffset: bigint('update_offset', { mode: 'number' }).notNull().default(0),
+  // wrong link codes sent to this bot in the current ten-minute window (every chat together)
+  wrongCodesCount: integer('wrong_codes_count').notNull().default(0),
+  wrongCodesSince: timestamp('wrong_codes_since', { mode: 'string' }),
 }, (table) => ({
   idx_messenger_bots_updated_by_id: index('idx_messenger_bots_updated_by_id').on(table.updatedById).where(sql`${table.updatedById} IS NOT NULL`),
 }));

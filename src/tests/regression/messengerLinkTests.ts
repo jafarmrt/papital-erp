@@ -1,8 +1,9 @@
+import crypto from 'node:crypto';
 import request from 'supertest';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { messengerBots, messengerLinkCodes, userMessengerLinks } from '../../db/schema.js';
-import { MessengerUpdatePoller, BOT_REPLIES } from '../../services/messenger/messengerUpdatePoller.js';
+import { messengerBots, messengerLinkCodes, userMessengerLinks, users } from '../../db/schema.js';
+import { MessengerUpdatePoller, BOT_REPLIES, BOT_WRONG_CODE_LIMIT } from '../../services/messenger/messengerUpdatePoller.js';
 import type { BotUpdate } from '../../services/messenger/messengerClient.js';
 import { withIsolatedTestSchema } from '../setup/testDb.js';
 import { createTestRole, createTestUser } from '../fixtures/factories.js';
@@ -22,17 +23,21 @@ const brief = (res: Res) => `${res.status} ${JSON.stringify(res.body ?? null).sl
 const codeOf = (res: Res) => String((res.body as { code?: unknown } | undefined)?.code ?? '');
 
 const TOKEN = '987654:FAKE-STAFF-BOT-TOKEN';
-const OTHER_TOKEN = '555555:ANOTHER-BOT-TOKEN';
+const OTHER_TOKEN = '555555:ANOTHER-STAFF-BOT-TOKEN';
 
 interface FakeBotApi {
   calls: Array<{ url: string; body: Record<string, unknown> }>;
   usernames: Record<string, string>;
   sendStatus: number;
+  /** updates `getUpdates` answers (those at or after the offset sent) */
+  updates: BotUpdate[];
+  /** tokens whose `getUpdates` answers 502 */
+  failingTokens: Set<string>;
 }
 
 /** Replaces `fetch` with a fake bot API for the time of `fn` */
 async function withFakeBotApi<T>(fn: (api: FakeBotApi) => Promise<T>): Promise<T> {
-  const api: FakeBotApi = { calls: [], usernames: { [TOKEN]: 'papital_staff_bot', [OTHER_TOKEN]: 'papital_other_bot' }, sendStatus: 200 };
+  const api: FakeBotApi = { calls: [], usernames: { [TOKEN]: 'papital_staff_bot', [OTHER_TOKEN]: 'papital_other_bot' }, sendStatus: 200, updates: [], failingTokens: new Set() };
   const original = globalThis.fetch;
   globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
@@ -45,6 +50,11 @@ async function withFakeBotApi<T>(fn: (api: FakeBotApi) => Promise<T>): Promise<T
     }
     if (url.endsWith('/sendMessage')) {
       return api.sendStatus === 200 ? json(200, { ok: true, result: { message_id: 1 } }) : json(api.sendStatus, { ok: false, description: 'Forbidden: bot was blocked by the user' });
+    }
+    if (url.endsWith('/getUpdates')) {
+      if (api.failingTokens.has(token)) return json(502, { ok: false, description: 'Bad Gateway' });
+      const offset = Number(body.offset ?? 0);
+      return json(200, { ok: true, result: api.updates.filter(u => u.update_id >= offset) });
     }
     return json(200, { ok: true, result: [] });
   }) as typeof fetch;
@@ -104,6 +114,9 @@ export async function runMessengerLinkTests(shouldRun: ShouldRun): Promise<TestC
       const refused = await admin.put('/api/messenger/bots/bale', { token: 'not-a-token' });
       if (refused.status !== 422 || codeOf(refused) !== 'MESSENGER_TOKEN_INVALID') throw new Error(`a refused token must be 422: ${brief(refused)}`);
       if ((await orm.select().from(messengerBots)).length !== 0) throw new Error('a refused token wrote a row');
+      if (api.calls.length !== 0) throw new Error('a token not in the bot token shape was sent to the bot API');
+      const unknown = await admin.put('/api/messenger/bots/bale', { token: '111111:UNKNOWN-BOT-TOKEN-ABCDEFG' });
+      if (unknown.status !== 422 || codeOf(unknown) !== 'MESSENGER_TOKEN_INVALID') throw new Error(`a token the bot API refuses must be 422: ${brief(unknown)}`);
 
       const saved = await admin.put('/api/messenger/bots/bale', { token: TOKEN });
       if (saved.status !== 200 || (saved.body as { botUsername?: string }).botUsername !== 'papital_staff_bot') throw new Error(`save: ${brief(saved)}`);
@@ -120,6 +133,7 @@ export async function runMessengerLinkTests(shouldRun: ShouldRun): Promise<TestC
       if (issued.status !== 201 || !/^\d{6}$/.test(code)) throw new Error(`code: ${brief(issued)}`);
       const [codeRow] = await orm.select().from(messengerLinkCodes);
       if (!codeRow || codeRow.codeHash.includes(code)) throw new Error('the code must be stored as a hash');
+      if (codeRow.codeHash === crypto.createHash('sha256').update(`bale:${code}`).digest('hex')) throw new Error('the code hash must be keyed, not a plain sha256');
 
       const wrong = await MessengerUpdatePoller.handleMessage('bale', chatUpdate(1, 4242, code === '000000' ? '111111' : '000000'));
       if (wrong !== BOT_REPLIES.invalidCode) throw new Error(`a wrong code: ${wrong}`);
@@ -191,6 +205,92 @@ export async function runMessengerLinkTests(shouldRun: ShouldRun): Promise<TestC
       const unlinked = await second.del('/api/messenger/links/telegram');
       if (unlinked.status !== 409 || codeOf(unlinked) !== 'MESSENGER_NOT_LINKED') throw new Error(`unlink without a link: ${brief(unlinked)}`);
       return 'blocked, relinked and bot_changed each close a link';
+    })));
+  }
+
+  const pollId = 'reg_messenger_poller_offset_backoff_and_code_cap';
+  if (shouldRun(pollId, 'messenger')) {
+    await runCase(results, pollId, 'v10.1.38: the update offset is stored per bot and survives a restart; a failing bot backs off 5 s, doubling, without holding up the other bot and reads again after a success; thirty wrong codes in ten minutes from any chats stop the bot reading codes until the window ends', async () => inSandbox(() => withFakeBotApi(async (api) => {
+      const admin = await clientFor('admin');
+      await admin.put('/api/messenger/bots/bale', { token: TOKEN });
+      await admin.put('/api/messenger/bots/telegram', { token: OTHER_TOKEN });
+      const offsetOf = async (messenger: 'bale' | 'telegram') => Number((await orm.select().from(messengerBots).where(eq(messengerBots.messenger, messenger)))[0]?.updateOffset);
+      const updateCalls = (token: string) => api.calls.filter(c => c.url.endsWith('/getUpdates') && c.url.includes(token));
+
+      api.updates = [chatUpdate(41, 700, 'سلام')];
+      if (await MessengerUpdatePoller.pollOnce() !== 2) throw new Error('both bots should read the update once');
+      if (await offsetOf('bale') !== 42) throw new Error(`stored offset: ${await offsetOf('bale')}`);
+      MessengerUpdatePoller.reset();
+      const handledAfterRestart = await MessengerUpdatePoller.pollOnce();
+      if (handledAfterRestart !== 0 || Number(updateCalls(TOKEN).at(-1)?.body.offset) !== 42) throw new Error(`after a restart the update was read again (${handledAfterRestart}, offset ${String(updateCalls(TOKEN).at(-1)?.body.offset)})`);
+      api.updates = [];
+
+      const t0 = Date.now();
+      api.failingTokens.add(TOKEN);
+      await MessengerUpdatePoller.pollMessenger('bale', t0);
+      const failed = updateCalls(TOKEN).length;
+      await MessengerUpdatePoller.pollMessenger('bale', t0 + 1_000);
+      if (updateCalls(TOKEN).length !== failed) throw new Error('a failing bot was called again within its 5 s wait');
+      const otherBefore = updateCalls(OTHER_TOKEN).length;
+      await MessengerUpdatePoller.pollMessenger('telegram', t0 + 1_000);
+      if (updateCalls(OTHER_TOKEN).length !== otherBefore + 1) throw new Error('the other bot waited for the failing one');
+      await MessengerUpdatePoller.pollMessenger('bale', t0 + 5_000);
+      await MessengerUpdatePoller.pollMessenger('bale', t0 + 14_000);
+      if (updateCalls(TOKEN).length !== failed + 1) throw new Error('the second wait must be 10 s');
+      api.failingTokens.clear();
+      await MessengerUpdatePoller.pollMessenger('bale', t0 + 15_000);
+      await MessengerUpdatePoller.pollMessenger('bale', t0 + 15_001);
+      if (updateCalls(TOKEN).length !== failed + 3) throw new Error('a success must end the wait');
+
+      const user = await clientFor([]);
+      const issued = await user.post('/api/messenger/links/bale/code');
+      const code = String((issued.body as { code?: string }).code ?? '');
+      const wrong = code === '000000' ? '111111' : '000000';
+      await MessengerUpdatePoller.handleMessage('bale', chatUpdate(50, 801, wrong));
+      await MessengerUpdatePoller.handleMessage('bale', chatUpdate(51, 802, wrong));
+      const [counted] = await orm.select().from(messengerBots).where(eq(messengerBots.messenger, 'bale'));
+      if (counted?.wrongCodesCount !== 2 || !counted.wrongCodesSince) throw new Error(`wrong codes of two chats: ${JSON.stringify(counted)}`);
+      await orm.update(messengerBots).set({ wrongCodesCount: BOT_WRONG_CODE_LIMIT }).where(eq(messengerBots.messenger, 'bale'));
+      const paused = await MessengerUpdatePoller.handleMessage('bale', chatUpdate(52, 803, code));
+      if (paused !== BOT_REPLIES.codesPaused) throw new Error(`the right code must wait while codes are paused: ${paused}`);
+      if ((await orm.select().from(userMessengerLinks)).length !== 0) throw new Error('a code linked while codes were paused');
+      await orm.update(messengerBots).set({ wrongCodesSince: sql`now() - interval '11 minutes'` }).where(eq(messengerBots.messenger, 'bale'));
+      const linked = await MessengerUpdatePoller.handleMessage('bale', chatUpdate(53, 803, code));
+      if (linked !== BOT_REPLIES.linked('مریم احمدی')) throw new Error(`after the window the code must link: ${linked}`);
+      return 'offset 42 stored and kept after reset; backoff 5 s then 10 s, other bot unaffected; 30 wrong codes pause codes for the window';
+    })));
+  }
+
+  const removalId = 'reg_messenger_bot_removal_closes_links';
+  if (shouldRun(removalId, 'messenger')) {
+    await runCase(results, removalId, 'v10.1.38: removing a bot closes its links (bot_changed) and starts its offset again, so a later bot never inherits them; a code is not issued to a deleted user and the admin list leaves out the links of deleted users', async () => inSandbox(() => withFakeBotApi(async () => {
+      const admin = await clientFor('admin');
+      await admin.put('/api/messenger/bots/bale', { token: TOKEN });
+      const linkUser = async (client: Awaited<ReturnType<typeof clientFor>>, chatId: number) => {
+        const issued = await client.post('/api/messenger/links/bale/code');
+        return MessengerUpdatePoller.handleMessage('bale', chatUpdate(chatId, chatId, String((issued.body as { code?: string }).code ?? '')));
+      };
+      const first = await clientFor([]);
+      await linkUser(first, 900);
+      await orm.update(messengerBots).set({ updateOffset: 77 }).where(eq(messengerBots.messenger, 'bale'));
+      const removed = await admin.put('/api/messenger/bots/bale', { token: '' });
+      if (removed.status !== 200) throw new Error(`remove: ${brief(removed)}`);
+      const [closed] = await orm.select().from(userMessengerLinks).where(eq(userMessengerLinks.userId, first.userId));
+      if (closed?.isActive !== 0 || closed.unlinkReason !== 'bot_changed') throw new Error(`a removed bot left its link: ${JSON.stringify(closed)}`);
+      await admin.put('/api/messenger/bots/bale', { token: OTHER_TOKEN });
+      const [row] = await orm.select().from(messengerBots).where(eq(messengerBots.messenger, 'bale'));
+      if (Number(row?.updateOffset) !== 0) throw new Error(`a new bot kept the old offset ${String(row?.updateOffset)}`);
+      if ((await orm.select().from(userMessengerLinks).where(eq(userMessengerLinks.isActive, 1))).length !== 0) throw new Error('the new bot inherited a link');
+
+      const second = await clientFor([]);
+      await linkUser(second, 901);
+      await orm.update(users).set({ isDeleted: 1 }).where(eq(users.id, second.userId));
+      const list = await admin.get('/api/messenger/links');
+      if (JSON.stringify(list.body).includes(`"userId":${second.userId}`)) throw new Error(`the admin list shows a deleted user: ${brief(list)}`);
+      const bots = await admin.get('/api/messenger/bots');
+      const baleView = (bots.body as { data?: Array<{ messenger: string; activeLinks: number }> }).data?.find(b => b.messenger === 'bale');
+      if (baleView?.activeLinks !== 0) throw new Error(`a deleted user's link was counted: ${brief(bots)}`);
+      return 'removal closed the link and reset the offset; deleted users left out of the admin list and count';
     })));
   }
 
