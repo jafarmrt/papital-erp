@@ -9,6 +9,7 @@ import { DEFAULT_ACCOUNT_MAPPINGS, type ConceptualAccountMappingConfig } from '.
 import { decimalInput, latinDigitsString, storageDateParam } from '../../middleware/validate.js';
 import { TREASURY_CURRENCIES, normalizeTreasuryCurrency } from '../../lib/treasury/treasuryCurrency.js';
 import { VOUCHER_DETAILED_TYPES } from '../../lib/accounting/voucherDetailedTypes.js';
+import { VOUCHER_PAGE_MAX } from '../../lib/accounting/voucherList.js';
 import { PERSONNEL_PURPOSES } from '../../lib/treasury/partyPurpose.js';
 import { isReservedVoucherReference, MANUAL_CLOSING_TYPE_MESSAGE, RESERVED_REFERENCE_MESSAGE } from '../../lib/accounting/manualVoucherRules.js';
 import { ACCOUNT_CODE_FORMAT_MESSAGE, ACCOUNT_CODE_PATTERN } from '../../lib/accounting/accountCode.js';
@@ -74,7 +75,8 @@ export const saveAccountMappingsSchema = z.object({
 export const vouchersQuerySchema = z.object({
   query: z.object({
     page: z.coerce.number().int().positive().optional(),
-    limit: z.coerce.number().int().positive().max(1000).optional(),
+    // v10.1.45 (OBS-R1-43): the page size the service reads (VOUCHER_PAGE_MAX); before, 101 to 1000 passed and got 100 rows
+    limit: z.coerce.number().int().positive().max(VOUCHER_PAGE_MAX).optional(),
     search: z.string().optional(),
     status: z.enum(['draft', 'approved', 'permanent', 'all']).optional(),
     voucherType: z.enum(['general', 'opening', 'closing', 'sales', 'purchase', 'treasury', 'payroll', 'adjustment', 'settlement', 'all']).optional(),
