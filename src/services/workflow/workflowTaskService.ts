@@ -5,7 +5,7 @@ import {
   workflowDefinitions,
   workflowHistoryLogs
 } from '../../db/schema.js';
-import { eq, desc, sql } from 'drizzle-orm';
+import { and, eq, desc, inArray, sql } from 'drizzle-orm';
 import { logActivity } from '../../lib/auditLogger.js';
 import { WorkflowTransitionExecutor } from './workflowTransitionExecutor.js';
 import { lockWorkflowEntity } from './workflowTransitionActions.js';
@@ -15,6 +15,7 @@ import { isSystemAdminRole } from '../../lib/permissions/permissionCatalog.js';
 import { completedByUserCondition, completedTasksOf, inboxEntityFields } from './workflowInboxRows.js';
 import { NotFoundError, ConflictError, ValidationError, ForbiddenError } from '../../errors/customErrors.js';
 import { holdsWorkflowExecuteKey } from '../../lib/permissions/workflowPermissions.js';
+import { OPEN_WORKFLOW_INSTANCE_STATUSES } from './transitionRoles.js';
 
 /** v9.0.34 (TD-444): کاربر کارتابل و مجوزهایی که موتور برای او و تفویض‌کنندگانش می‌خواند */
 interface TaskSigner {
@@ -28,6 +29,13 @@ interface TaskSigner {
 /** v9.0.41 (TD-448، ت۶ الف): زبانه‌های کارتابل */
 export const MY_TASK_FILTERS = ['pending', 'overdue', 'delegated', 'completed'] as const;
 export type MyTaskFilter = typeof MY_TASK_FILTERS[number];
+
+/**
+ * OBS-R2-70: the largest inbox page. Who may run a pending task is decided in code (role match against the instance's own
+ * snapshot, delegations, initiator rules), so the pending tasks are matched in memory, but only the page's rows get their
+ * entity fields and reject actions, and no caller asks more than this many rows at once.
+ */
+export const MY_TASKS_MAX_LIMIT = 100;
 
 interface PendingTaskMatch {
   task: typeof workflowTasks.$inferSelect;
@@ -59,8 +67,8 @@ export class WorkflowTaskService {
     const userId = params.userId;
     const userRole = (params.userRole || '').trim().toLowerCase();
     const filter = params.status || 'pending';
-    const page = params.page || 1;
-    const limit = params.limit || 50;
+    const page = Math.max(1, Math.floor(Number(params.page) || 1));
+    const limit = Math.min(MY_TASKS_MAX_LIMIT, Math.max(1, Math.floor(Number(params.limit) || 50)));
     const offset = (page - 1) * limit;
     if (filter === 'completed') return completedTasksOf(userId, page, limit);
 
@@ -140,8 +148,9 @@ export class WorkflowTaskService {
     .from(workflowTasks)
     .innerJoin(workflowInstances, eq(workflowTasks.instanceId, workflowInstances.id))
     .leftJoin(workflowDefinitions, eq(workflowInstances.workflowDefinitionId, workflowDefinitions.id))
-    .where(eq(workflowTasks.status, 'pending'))
-    .orderBy(desc(workflowTasks.createdAt));
+    // OBS-R2-70: only tasks of an open instance (a finished one's step never runs); newest first, id breaks a tie
+    .where(and(eq(workflowTasks.status, 'pending'), inArray(workflowInstances.status, OPEN_WORKFLOW_INSTANCE_STATUSES)))
+    .orderBy(desc(workflowTasks.createdAt), desc(workflowTasks.id));
 
     // Consolidate per instance: Ensure at most ONE task card is returned per workflow instance.
     // If an instance has multiple tasks (e.g. positive approval and rejection), keep only the positive review task.

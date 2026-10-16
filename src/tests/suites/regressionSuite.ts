@@ -11099,5 +11099,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runOpsSweepTests } = await import('../regression/opsSweepTests.js');
   results.push(...await runOpsSweepTests(shouldRun));
 
+  // closing sweep (package 14): workflow engine observations (OBS-R2-67, -68, -69, -70, -72, -78)
+  const { runWorkflowSweepTests } = await import('../regression/workflowSweepTests.js');
+  results.push(...await runWorkflowSweepTests(shouldRun));
+
   return results;
 }

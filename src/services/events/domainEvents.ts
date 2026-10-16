@@ -152,6 +152,8 @@ export interface WorkflowEventPayload {
   requiredThreshold?: number;
   isCompleted?: boolean;
   isRejected?: boolean;
+  /** OBS-R2-68: how the step ended; a canceled end is `WorkflowCompleted` with `canceled` */
+  outcome?: 'approved' | 'rejected' | 'canceled';
   comment?: string;
 }
 

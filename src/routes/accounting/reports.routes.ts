@@ -9,7 +9,7 @@ import { AccountingService } from '../../services/accounting.service.js';
 import { validate } from '../../middleware/validate.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { orm } from '../../db/drizzle.js';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, asc, desc } from 'drizzle-orm';
 import { workflowInstances, workflowHistoryLogs, workflowStates } from '../../db/schema.js';
 import { snapshotStateTitles } from '../../services/workflow/workflowSnapshot.js';
 import {
@@ -212,7 +212,7 @@ router.get('/accounting/doc-signatures', authorizePermission('accounting.reports
       eq(workflowHistoryLogs.instanceId, instance.id),
       eq(workflowHistoryLogs.actionKey, 'approve')
     ))
-    .orderBy(workflowHistoryLogs.createdAt);
+    .orderBy(asc(workflowHistoryLogs.createdAt), asc(workflowHistoryLogs.id)); // OBS-R2-69: id breaks a tie
 
   // v9.0.444 (TD-612, B01-32): the step title comes from the instance's own snapshot. Saving the design replaces the
   // step rows and their ids, so the live table (kept only as a fallback for old snapshots) lost the title of an old step.

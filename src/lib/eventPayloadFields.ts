@@ -87,6 +87,7 @@ const WORKFLOW_LABELS: Record<keyof WorkflowEventPayload, string> = {
   requiredThreshold: 'امضاهای لازم',
   isCompleted: 'پایان یافته',
   isRejected: 'رد شده',
+  outcome: 'نتیجه پایان (تأیید، رد یا لغو)',
   comment: 'توضیح اقدام',
 };
 

@@ -25,7 +25,7 @@ export const PUBLISHED_EVENT_TYPES: readonly EventTypeOption[] = [
   { value: 'InventoryReorderAlert', label: 'هشدار رسیدن به نقطه سفارش', category: 'انبار' },
   { value: 'TreasuryTransactionApproved', label: 'ثبت یا ابطال تراکنش خزانه', category: 'خزانه' },
   { value: 'WorkflowTransitioned', label: 'گذر از گام گردش کار', category: 'گردش کار' },
-  { value: 'WorkflowCompleted', label: 'پایان گردش کار با تأیید', category: 'گردش کار' },
+  { value: 'WorkflowCompleted', label: 'پایان گردش کار با تأیید یا لغو', category: 'گردش کار' },
   { value: 'WorkflowRejected', label: 'رد شدن در گردش کار', category: 'گردش کار' },
   { value: 'woocommerce.order.synced', label: 'صدور فاکتور سفارش ووکامرس', category: 'ووکامرس' },
   { value: 'woocommerce.order.voided', label: 'ابطال فاکتور سفارش ووکامرس', category: 'ووکامرس' },

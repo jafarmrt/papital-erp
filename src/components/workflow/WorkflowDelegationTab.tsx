@@ -43,9 +43,13 @@ export function WorkflowDelegationTab() {
   const expiredCount = delegations.filter((d: any) => d.status === 'expired').length;
   const revokedCount = delegations.filter((d: any) => d.status === 'revoked').length;
 
+  // OBS-R2-77: a refused revoke is shown by the mutation's error message, never left as an unhandled rejection
   const handleRevoke = async (id: number) => {
-    if (await confirmAction({ title: 'لغو تفویض اختیار', message: 'آیا از لغو این تفویض اختیار اطمینان دارید؟' })) {
+    if (!(await confirmAction({ title: 'لغو تفویض اختیار', message: 'آیا از لغو این تفویض اختیار اطمینان دارید؟' }))) return;
+    try {
       await revokeMutation.mutateAsync(id);
+    } catch {
+      // the mutation shows the server's message
     }
   };
 
@@ -228,7 +232,7 @@ export function WorkflowDelegationTab() {
                       <td className="p-3.5 text-center">
                         {(item.status === 'active' || item.status === 'scheduled') && canRevoke(item.fromUserId) && (
                           <button
-                            onClick={() => handleRevoke(item.id)}
+                            onClick={() => void handleRevoke(item.id)}
                             disabled={revokeMutation.isPending}
                             className="p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors"
                             title="لغو تفویض اختیار"

@@ -95,7 +95,24 @@ export interface WorkflowDefinitionRow {
 
 /** گام‌هایی که پایان موفق یا رد فرایند را منتشر می‌کنند (همان شرط پل درون‌فرایندی پیش از v9.0.2) */
 const WORKFLOW_COMPLETED_STATE_KEYS = new Set(['approved', 'final', 'completed']);
-const WORKFLOW_REJECTED_STATE_KEYS = new Set(['rejected', 'canceled']);
+const WORKFLOW_REJECTED_STATE_KEYS = new Set(['rejected']);
+/**
+ * OBS-R2-68: a terminal `canceled` step ends the instance `COMPLETED` (only `rejected` is `REJECTED`, which stays open
+ * for a reopen), so it publishes `WorkflowCompleted` with `outcome: 'canceled'`, never `WorkflowRejected`; before, the
+ * status and the event disagreed.
+ */
+const WORKFLOW_CANCELED_STATE_KEY = 'canceled';
+
+/** OBS-R2-69: history in registration order; rows written in one transaction share `created_at`, so `id` breaks the tie */
+const HISTORY_ORDER = [asc(workflowHistoryLogs.createdAt), asc(workflowHistoryLogs.id)] as const;
+
+/** How a finished step ended: carried as `outcome` by `WorkflowTransitioned` and the end event */
+export function workflowEndOutcome(stateKey: string, stateType: string | null | undefined): 'approved' | 'rejected' | 'canceled' | null {
+  if (stateKey === WORKFLOW_CANCELED_STATE_KEY) return stateType === 'terminal' ? 'canceled' : null;
+  if (WORKFLOW_REJECTED_STATE_KEYS.has(stateKey)) return 'rejected';
+  if (WORKFLOW_COMPLETED_STATE_KEYS.has(stateKey)) return 'approved';
+  return null;
+}
 
 export class WorkflowTransitionExecutor {
   /**
@@ -818,8 +835,9 @@ export class WorkflowTransitionExecutor {
       });
 
       const workflowCode = definition?.code || '';
-      const isCompleted = WORKFLOW_COMPLETED_STATE_KEYS.has(toState.stateKey);
-      const isRejected = WORKFLOW_REJECTED_STATE_KEYS.has(toState.stateKey);
+      const outcome = workflowEndOutcome(toState.stateKey, toState.stateType);
+      const isCompleted = outcome === 'approved' || outcome === 'canceled';
+      const isRejected = outcome === 'rejected';
       const transitionPayload = {
         instanceId: instance.id,
         entityType: instance.entityType,
@@ -837,7 +855,8 @@ export class WorkflowTransitionExecutor {
         comment: params.comment,
         snapshotData: params.snapshotData,
         isCompleted,
-        isRejected
+        isRejected,
+        ...(outcome ? { outcome } : {})
       };
 
       // v9.0.2 (TD-415، یافته A02-01): اقدام خودکار دامنه (قطعی‌سازی سند، سند افتتاحیه، وضعیت سند حسابداری، دریافت کالای
@@ -894,7 +913,8 @@ export class WorkflowTransitionExecutor {
             entityType: instance.entityType,
             entityId: instance.entityId,
             finalState: toState.stateKey,
-            ...(isRejected ? { comment: params.comment } : {})
+            outcome,
+            ...(isRejected || outcome === 'canceled' ? { comment: params.comment } : {})
           },
           eventMetadata
         ));
@@ -978,7 +998,7 @@ export class WorkflowTransitionExecutor {
     const [inst] = await orm.select().from(workflowInstances).where(eq(workflowInstances.id, instanceId));
     if (!inst) return null;
 
-    const history = await orm.select().from(workflowHistoryLogs).where(eq(workflowHistoryLogs.instanceId, instanceId)).orderBy(workflowHistoryLogs.createdAt);
+    const history = await orm.select().from(workflowHistoryLogs).where(eq(workflowHistoryLogs.instanceId, instanceId)).orderBy(...HISTORY_ORDER);
     return {
       ...inst,
       history
@@ -1010,7 +1030,7 @@ export class WorkflowTransitionExecutor {
 
     if (!inst) return null;
 
-    const history = await txExecutor.select().from(workflowHistoryLogs).where(eq(workflowHistoryLogs.instanceId, inst.id)).orderBy(workflowHistoryLogs.createdAt);
+    const history = await txExecutor.select().from(workflowHistoryLogs).where(eq(workflowHistoryLogs.instanceId, inst.id)).orderBy(...HISTORY_ORDER);
     
     // Server-side authoritative entity context resolution
     const entityContext = await getEntityContext(entityType, entityId, txExecutor);
@@ -1094,7 +1114,7 @@ export class WorkflowTransitionExecutor {
    * Get Workflow History Logs
    */
   static async getWorkflowHistory(instanceId: number) {
-    return await orm.select().from(workflowHistoryLogs).where(eq(workflowHistoryLogs.instanceId, instanceId)).orderBy(workflowHistoryLogs.createdAt);
+    return await orm.select().from(workflowHistoryLogs).where(eq(workflowHistoryLogs.instanceId, instanceId)).orderBy(...HISTORY_ORDER);
   }
 }
 

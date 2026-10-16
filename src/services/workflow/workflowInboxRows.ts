@@ -1,5 +1,6 @@
 import { and, desc, eq, isNotNull, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
+import { logger } from '../../middleware/logger.js';
 import { users, workflowHistoryLogs, workflowInstances, workflowStates } from '../../db/schema.js';
 import { getEntityContext } from './workflowDslParser.js';
 import { WorkflowTransitionExecutor, type WorkflowSnapshotDsl } from './workflowTransitionExecutor.js';
@@ -33,8 +34,18 @@ async function starterDisplayName(instance: typeof workflowInstances.$inferSelec
  * ردیف می‌خواند؛ پیش‌تر نه گام فرستاده می‌شد و نه نام، و کارت «گام جاری» را همان عنوان کار و «متقاضی» را همیشه
  * «ثبت‌کننده سیستم» نشان می‌داد. مبلغ سند ریالی است (workflowDocumentAmount).
  */
-export async function inboxEntityFields(instance: typeof workflowInstances.$inferSelect) {
-  const context = await getEntityContext(instance.entityType, instance.entityId);
+export async function inboxEntityFields(
+  instance: typeof workflowInstances.$inferSelect,
+  readContext: (entityType: string, entityId: string) => Promise<Record<string, unknown>> = getEntityContext,
+) {
+  // OBS-R2-67: the context read now passes a database error on; one card whose entity cannot be read is shown without
+  // its number, party and amount instead of failing the whole inbox page
+  let context: Record<string, unknown> = {};
+  try {
+    context = await readContext(instance.entityType, instance.entityId);
+  } catch (err) {
+    logger.warn(`Workflow inbox: entity context of instance ${instance.id} (${instance.entityType} ${instance.entityId}) could not be read: ${err instanceof Error ? err.message : String(err)}`);
+  }
   return {
     entityType: instance.entityType,
     entityId: instance.entityId,

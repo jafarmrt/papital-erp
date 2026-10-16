@@ -9,7 +9,7 @@ import { logger } from '../middleware/logger.js';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { getErrorMessage } from '../utils.js';
 import { z } from 'zod';
-import { MY_TASK_FILTERS } from '../services/workflow/workflowTaskService.js';
+import { MY_TASK_FILTERS, MY_TASKS_MAX_LIMIT } from '../services/workflow/workflowTaskService.js';
 import { withUtcTimestamps } from '../services/workflow/workflowTimestamps.js';
 import { isSystemAdminRole } from '../lib/permissions/permissionCatalog.js';
 import { activateDefinitionSchema, canvasPositionsSchema, publishDraftSchema, revertVersionSchema, definitionFromTemplateSchema, definitionSwitchSchema, createDelegationSchema, delegationListSchema, executeTaskSchema, executeTransitionSchema, saveDefinitionSchema, terminateInstanceSchema } from './workflowRouteSchemas.js';
@@ -35,7 +35,8 @@ const myTasksQuerySchema = z.object({
   query: z.object({
     status: z.enum(MY_TASK_FILTERS).default('pending'),
     page: z.coerce.number().int().min(1).max(100000).default(1),
-    limit: z.coerce.number().int().min(1).max(1000).default(50),
+    // OBS-R2-70: at most MY_TASKS_MAX_LIMIT rows a page (400 above it)
+    limit: z.coerce.number().int().min(1).max(MY_TASKS_MAX_LIMIT).default(50),
   }).passthrough(),
 });
 

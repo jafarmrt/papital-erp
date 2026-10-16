@@ -5,11 +5,34 @@ import {
   workflowHistoryLogs,
   workflowTaskReopenLog
 } from '../../db/schema';
-import { desc } from 'drizzle-orm';
+import { asc, desc } from 'drizzle-orm';
 import { isUsableSnapshot } from './workflowSnapshot.js';
 import type { WorkflowSnapshotDsl } from './workflowTransitionExecutor.js';
 
 type StateRow = typeof workflowStates.$inferSelect;
+type HistoryRow = typeof workflowHistoryLogs.$inferSelect;
+
+/**
+ * OBS-R2-72: a history row that moved the instance into its target step. A partial signature (`<action>_SIGN`) keeps the
+ * instance in its step, so it is no entry: SLA counts from when the step was entered, never from the last signature
+ * (the signature rewrites `workflow_instances.updated_at`, which the overdue check read).
+ */
+export function isStepEntry(row: Pick<HistoryRow, 'actionKey'>): boolean {
+  return !String(row.actionKey || '').endsWith('_SIGN');
+}
+
+/** OBS-R2-72: when the instance entered its current step: its latest entry row into that step, else its start */
+export function currentStepEnteredAt(
+  instance: { currentStateId: number | null; createdAt: string | null },
+  logs: Array<Pick<HistoryRow, 'actionKey' | 'toStateId' | 'createdAt'>>,
+): string | null {
+  for (let i = logs.length - 1; i >= 0; i--) {
+    const log = logs[i];
+    if (isStepEntry(log) && log.toStateId === instance.currentStateId) return log.createdAt;
+  }
+  return instance.createdAt;
+}
+
 interface ResolvedState { rowId: number; title: string; color: string; slaHours: number }
 
 /**
@@ -92,7 +115,13 @@ export class WorkflowSlaEvaluator {
 
     const states = await orm.select().from(workflowStates);
     const resolve = createStateResolver(states);
-    const historyLogs = await orm.select().from(workflowHistoryLogs).orderBy(workflowHistoryLogs.createdAt);
+    // OBS-R2-69: rows of one transaction share `created_at`; `id` keeps their registration order
+    const historyLogs = await orm.select().from(workflowHistoryLogs).orderBy(asc(workflowHistoryLogs.createdAt), asc(workflowHistoryLogs.id));
+    const instanceLogsMap: Record<number, HistoryRow[]> = {};
+    for (const log of historyLogs) {
+      if (!instanceLogsMap[log.instanceId]) instanceLogsMap[log.instanceId] = [];
+      instanceLogsMap[log.instanceId].push(log);
+    }
 
     const now = new Date().getTime();
 
@@ -124,8 +153,9 @@ export class WorkflowSlaEvaluator {
     for (const inst of activeInstances) {
       const state = resolve(inst.workflowDefinitionId, inst.snapshotDsl, inst.currentStateId);
       const slaHours = state?.slaHours ?? 24;
-      const lastUpdate = inst.updatedAt ? new Date(inst.updatedAt).getTime() : new Date(inst.createdAt || '').getTime();
-      const hoursInState = Math.round(((now - lastUpdate) / (1000 * 60 * 60)) * 10) / 10;
+      // OBS-R2-72: from the step's entry, not `updated_at` (a partial signature rewrote it and restarted the count)
+      const enteredAt = currentStepEnteredAt(inst, instanceLogsMap[inst.id] ?? []);
+      const hoursInState = Math.round(((now - new Date(enteredAt || '').getTime()) / (1000 * 60 * 60)) * 10) / 10;
       const isOverdue = hoursInState > slaHours;
 
       if (state) {
@@ -150,15 +180,9 @@ export class WorkflowSlaEvaluator {
       }
     }
 
-    // Calculate historical durations from logs
-    const instanceLogsMap: Record<number, (typeof workflowHistoryLogs.$inferSelect)[]> = {};
-    for (const log of historyLogs) {
-      if (!instanceLogsMap[log.instanceId]) instanceLogsMap[log.instanceId] = [];
-      instanceLogsMap[log.instanceId].push(log);
-    }
-
+    // Calculate historical durations from logs: from one step entry to the next (OBS-R2-72: a signature is no entry)
     for (const instId in instanceLogsMap) {
-      const logs = instanceLogsMap[instId];
+      const logs = instanceLogsMap[instId].filter(isStepEntry);
       const inst = instanceById.get(Number(instId));
       for (let i = 0; i < logs.length - 1; i++) {
         const currentLog = logs[i];

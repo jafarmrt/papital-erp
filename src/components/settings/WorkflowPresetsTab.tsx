@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useId } from 'react';
 import { Layers, Plus, Trash2, ArrowUp, ArrowDown, Archive, ArchiveRestore } from 'lucide-react';
-import { WorkflowPreset } from '../../constants/presets';
+import type { WorkflowPreset, WorkflowStageItem } from '../../constants/presets';
 import { fetchJson, isAbortError } from '../../api';
 import { errorMessageOf, formatPersianNumber, toPersianDigits } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
@@ -16,6 +16,19 @@ interface PieceworkTask {
   defaultRate: number;
   unit: string;
   description?: string;
+}
+
+/** A stage as an object: a legacy stage stored as its title alone becomes `{ title }` with no tasks */
+function stageItemOf(stage: string | WorkflowStageItem): WorkflowStageItem {
+  if (typeof stage === 'string') return { title: stage, isOptionalPerProduct: false, defaultTasks: [] };
+  return { ...stage, defaultTasks: Array.isArray(stage.defaultTasks) ? stage.defaultTasks : [] };
+}
+
+/** A new stage list with two places exchanged */
+function swapStages(stages: WorkflowPreset['stages'], a: number, b: number): WorkflowPreset['stages'] {
+  const next = [...stages];
+  [next[a], next[b]] = [next[b], next[a]];
+  return next;
 }
 
 interface WorkflowPresetsTabProps {
@@ -82,18 +95,27 @@ export function WorkflowPresetsTab({
     toast.success('الگوی جدید اضافه شد. می‌توانید مراحل و کارمزدهای آن را مشخص کنید.');
   };
 
+  /**
+   * OBS-R2-77: every change builds new preset and stage objects by preset id in a state updater; the objects held in the
+   * settings page's state are never written in place (an in-place write changed a previous render's objects too)
+   */
+  const updatePreset = (presetId: string, change: (preset: WorkflowPreset) => WorkflowPreset) => {
+    setWorkflowPresets((prev) => (Array.isArray(prev) ? prev : []).map((p) => (p.id === presetId ? change(p) : p)));
+  };
+  const updateStages = (presetId: string, change: (stages: WorkflowPreset['stages']) => WorkflowPreset['stages']) => {
+    updatePreset(presetId, (p) => ({ ...p, stages: change([...(Array.isArray(p.stages) ? p.stages : [])]) }));
+  };
+  const updateStage = (presetId: string, sIdx: number, change: (stage: WorkflowStageItem) => WorkflowStageItem) => {
+    updateStages(presetId, (stages) => stages.map((stg, idx) => (idx === sIdx ? change(stageItemOf(stg)) : stg)));
+  };
+
+  // OBS-R2-77: the message is shown once, outside the state updater (React may run an updater twice)
   const handleToggleArchive = (presetId: string) => {
-    setWorkflowPresets((prev) => {
-      const current = Array.isArray(prev) ? prev : [];
-      return current.map((p) => {
-        if (p.id === presetId) {
-          const nextArchived = !p.isArchived;
-          toast.success(nextArchived ? `الگوی "${p.title}" آرشیو شد (در کنترل پروژه نمایش داده نمی‌شود).` : `الگوی "${p.title}" فعال شد.`);
-          return { ...p, isArchived: nextArchived };
-        }
-        return p;
-      });
-    });
+    const target = (Array.isArray(workflowPresets) ? workflowPresets : []).find((p) => p.id === presetId);
+    if (!target) return;
+    const nextArchived = !target.isArchived;
+    updatePreset(presetId, (p) => ({ ...p, isArchived: nextArchived }));
+    toast.success(nextArchived ? `الگوی "${target.title}" آرشیو شد (در کنترل پروژه نمایش داده نمی‌شود).` : `الگوی "${target.title}" فعال شد.`);
   };
 
   const handleDeletePreset = (presetId: string) => {
@@ -189,9 +211,8 @@ export function WorkflowPresetsTab({
                           type="text"
                           value={p.title}
                           onChange={(e) => {
-                            const copy = [...workflowPresets];
-                            copy[pIdx].title = e.target.value;
-                            setWorkflowPresets(copy);
+                            const title = e.target.value;
+                            updatePreset(p.id, (preset) => ({ ...preset, title }));
                           }}
                           className="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
@@ -203,9 +224,8 @@ export function WorkflowPresetsTab({
                           type="text"
                           value={p.description ?? ''}
                           onChange={(e) => {
-                            const copy = [...workflowPresets];
-                            copy[pIdx].description = e.target.value;
-                            setWorkflowPresets(copy);
+                            const description = e.target.value;
+                            updatePreset(p.id, (preset) => ({ ...preset, description }));
                           }}
                           placeholder="شرح مختصر فرآیند تولید"
                           className="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -254,15 +274,10 @@ export function WorkflowPresetsTab({
                       <span className="text-xs font-bold text-slate-700">مراحل فرآیند ({toPersianDigits(p.stages.length)} مرحله):</span>
                       <button
                         type="button"
-                        onClick={() => {
-                          const copy = [...workflowPresets];
-                          copy[pIdx].stages.push({
-                            title: `مرحله ${copy[pIdx].stages.length + 1}`,
-                            isOptionalPerProduct: false,
-                            defaultTasks: []
-                          });
-                          setWorkflowPresets(copy);
-                        }}
+                        onClick={() => updateStages(p.id, (stages) => [
+                          ...stages,
+                          { title: `مرحله ${stages.length + 1}`, isOptionalPerProduct: false, defaultTasks: [] },
+                        ])}
                         className="text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition-colors"
                       >
                         <Plus size={13} /> افزودن مرحله
@@ -285,14 +300,8 @@ export function WorkflowPresetsTab({
                                 type="text"
                                 value={stgTitle}
                                 onChange={(e) => {
-                                  const copy = [...workflowPresets];
-                                  const current = copy[pIdx].stages[sIdx];
-                                  if (typeof current === 'string') {
-                                    copy[pIdx].stages[sIdx] = { title: e.target.value, isOptionalPerProduct: stgIsOptional, defaultTasks: stgTasks };
-                                  } else {
-                                    copy[pIdx].stages[sIdx] = { ...current, title: e.target.value };
-                                  }
-                                  setWorkflowPresets(copy);
+                                  const title = e.target.value;
+                                  updateStage(p.id, sIdx, (stage) => ({ ...stage, title }));
                                 }}
                                 placeholder="عنوان مرحله..."
                                 className="flex-1 border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -305,11 +314,7 @@ export function WorkflowPresetsTab({
                                   disabled={sIdx === 0}
                                   onClick={() => {
                                     if (sIdx === 0) return;
-                                    const copy = [...workflowPresets];
-                                    const temp = copy[pIdx].stages[sIdx];
-                                    copy[pIdx].stages[sIdx] = copy[pIdx].stages[sIdx - 1];
-                                    copy[pIdx].stages[sIdx - 1] = temp;
-                                    setWorkflowPresets(copy);
+                                    updateStages(p.id, (stages) => swapStages(stages, sIdx, sIdx - 1));
                                   }}
                                   className="p-1 text-slate-500 hover:text-slate-800 disabled:opacity-30 cursor-pointer"
                                   title="انتقال به بالا"
@@ -321,11 +326,7 @@ export function WorkflowPresetsTab({
                                   disabled={sIdx === p.stages.length - 1}
                                   onClick={() => {
                                     if (sIdx === p.stages.length - 1) return;
-                                    const copy = [...workflowPresets];
-                                    const temp = copy[pIdx].stages[sIdx];
-                                    copy[pIdx].stages[sIdx] = copy[pIdx].stages[sIdx + 1];
-                                    copy[pIdx].stages[sIdx + 1] = temp;
-                                    setWorkflowPresets(copy);
+                                    updateStages(p.id, (stages) => swapStages(stages, sIdx, sIdx + 1));
                                   }}
                                   className="p-1 text-slate-500 hover:text-slate-800 disabled:opacity-30 cursor-pointer"
                                   title="انتقال به پایین"
@@ -334,11 +335,7 @@ export function WorkflowPresetsTab({
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    const copy = [...workflowPresets];
-                                    copy[pIdx].stages = copy[pIdx].stages.filter((_, idx) => idx !== sIdx);
-                                    setWorkflowPresets(copy);
-                                  }}
+                                  onClick={() => updateStages(p.id, (stages) => stages.filter((_, idx) => idx !== sIdx))}
                                   className="p-1 text-rose-500 hover:text-rose-700 cursor-pointer"
                                   title="حذف این مرحله"
                                 >
@@ -353,14 +350,8 @@ export function WorkflowPresetsTab({
                                   type="checkbox"
                                   checked={stgIsOptional}
                                   onChange={(e) => {
-                                    const copy = [...workflowPresets];
-                                    const current = copy[pIdx].stages[sIdx];
-                                    if (typeof current === 'string') {
-                                      copy[pIdx].stages[sIdx] = { title: current, isOptionalPerProduct: e.target.checked, defaultTasks: stgTasks };
-                                    } else {
-                                      copy[pIdx].stages[sIdx] = { ...current, isOptionalPerProduct: e.target.checked };
-                                    }
-                                    setWorkflowPresets(copy);
+                                    const isOptionalPerProduct = e.target.checked;
+                                    updateStage(p.id, sIdx, (stage) => ({ ...stage, isOptionalPerProduct }));
                                   }}
                                   className="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5"
                                 />
@@ -397,30 +388,18 @@ export function WorkflowPresetsTab({
                                     const selectedTask = availableTasks.find((t) => t.id === selectedId);
                                     if (!selectedTask) return;
 
-                                    const copy = [...workflowPresets];
-                                    const current = copy[pIdx].stages[sIdx];
-                                    const currentTasks = typeof current === 'object' && current.defaultTasks ? [...current.defaultTasks] : [];
-
                                     // Check if already added
-                                    if (currentTasks.some((t) => t.taskId === selectedTask.id || t.taskTitle === selectedTask.title)) {
+                                    if (stgTasks.some((t) => t.taskId === selectedTask.id || t.taskTitle === selectedTask.title)) {
                                       toast.error('این عنوان کاری قبلاً به این مرحله اضافه شده است');
                                       return;
                                     }
-
-                                    currentTasks.push({
+                                    const added = {
                                       taskId: selectedTask.id,
                                       taskTitle: selectedTask.title,
                                       unit: selectedTask.unit || 'عدد',
                                       defaultRate: selectedTask.defaultRate || 0
-                                    });
-
-                                    if (typeof current === 'string') {
-                                      copy[pIdx].stages[sIdx] = { title: current, isOptionalPerProduct: stgIsOptional, defaultTasks: currentTasks };
-                                    } else {
-                                      copy[pIdx].stages[sIdx] = { ...current, defaultTasks: currentTasks };
-                                    }
-
-                                    setWorkflowPresets(copy);
+                                    };
+                                    updateStage(p.id, sIdx, (stage) => ({ ...stage, defaultTasks: [...(stage.defaultTasks ?? []), added] }));
                                   }}
                                   options={availableTasks.map((t) => ({
                                     value: t.id,
@@ -464,14 +443,10 @@ export function WorkflowPresetsTab({
                                           </span>
                                           <button
                                             type="button"
-                                            onClick={() => {
-                                              const copy = [...workflowPresets];
-                                              const current = copy[pIdx].stages[sIdx];
-                                              if (typeof current === 'object' && current.defaultTasks) {
-                                                current.defaultTasks = current.defaultTasks.filter((_, idx) => idx !== dtIdx);
-                                                setWorkflowPresets(copy);
-                                              }
-                                            }}
+                                            onClick={() => updateStage(p.id, sIdx, (stage) => ({
+                                              ...stage,
+                                              defaultTasks: (stage.defaultTasks ?? []).filter((_, idx) => idx !== dtIdx),
+                                            }))}
                                             className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded cursor-pointer transition-colors"
                                             title="حذف این عنوان از الگوی مرحله"
                                           >
