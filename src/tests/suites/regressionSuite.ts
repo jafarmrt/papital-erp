@@ -9633,8 +9633,14 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       await assertUniqueAgainstAll('concurrent creation', concurrent);
 
       // (ب) کد دستی برابر با کدی که روش قدیمی (COUNT(*)+1) بعدی می‌ساخت، سپس ایجاد خودکار
+      // OBS-PR-05: earlier tests of the suite create and remove tasks, so COUNT(*)+2 may be a code (a)'s automatic
+      // creation already took; the manual code starts there and moves to the first PW number no row holds
       const [{ count: rowCount }] = await orm.select({ count: sql<number>`count(*)` }).from(pieceworkTasks);
-      const manual = await PieceworkService.createTask({ code: pad(Number(rowCount) + 2), title: title('دستی'), defaultRate: 1000, username: 'test-agent' });
+      const takenNumbers = new Set((await orm.select({ code: pieceworkTasks.code }).from(pieceworkTasks))
+        .map(r => codeNumber(r.code)).filter((n): n is string => n !== null).map(Number));
+      let manualNumber = Number(rowCount) + 2;
+      while (takenNumbers.has(manualNumber)) manualNumber++;
+      const manual = await PieceworkService.createTask({ code: pad(manualNumber), title: title('دستی'), defaultRate: 1000, username: 'test-agent' });
       taskIds.push(manual.id);
       const afterManual = await PieceworkService.createTask({ title: title('پس از دستی'), defaultRate: 1000, username: 'test-agent' });
       taskIds.push(afterManual.id);

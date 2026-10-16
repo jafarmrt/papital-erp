@@ -5,6 +5,7 @@ import path from 'path';
 import { Phase21TestRunner, assertRealTestDatabase, assertRunnerEnvironment } from '../src/tests/testRunner.js';
 import { setupTestSchema } from '../src/tests/setup/testDb.js';
 import { bootstrapTestMasterData } from '../src/tests/setup/testBootstrap.js';
+import { REAL_EXECUTION_TYPES, realExecutionCount, runnerExitCode } from '../src/tests/runnerOutcome.js';
 
 async function main() {
   const rawArgs = process.argv.slice(2);
@@ -182,7 +183,8 @@ Available Suites:
     // Compute key quality metrics
     const totalCases = report.totalTests;
     const passPercentage = totalCases > 0 ? ((report.passedCount / totalCases) * 100).toFixed(1) : '0.0';
-    const realCodeCases = report.testCases.filter(c => c.executionType === 'real_code').length;
+    // OBS-R2-114: real_database and real_api cases run real code too; only simulation_logic is not real execution
+    const realCodeCases = realExecutionCount(report.testCases);
     const realCodePercentage = totalCases > 0 ? ((realCodeCases / totalCases) * 100).toFixed(1) : '0.0';
     const avgDuration = totalCases > 0 ? (report.totalDurationMs / totalCases).toFixed(2) : '0.00';
 
@@ -198,12 +200,14 @@ Available Suites:
         }
       };
       console.log(JSON.stringify(jsonReport, null, 2));
+      // OBS-R1-23: a failed test fails the JSON run too
+      process.exitCode = runnerExitCode(report);
     } else {
       console.log('📊 --- Suite Execution Metrics & Layer Coverage ---');
       console.log(`  ⏱️  Total Duration  : ${report.totalDurationMs} ms (Avg: ${avgDuration} ms/test)`);
       console.log(`  ✅ Passed Tests    : ${report.passedCount} / ${totalCases} (${passPercentage}%)`);
       console.log(`  ❌ Failed Tests    : ${report.failedCount}`);
-      console.log(`  🛡️  Real Code Ratio : ${realCodeCases} / ${totalCases} (${realCodePercentage}% real execution)`);
+      console.log(`  🛡️  Real Execution  : ${realCodeCases} / ${totalCases} (${realCodePercentage}% real database, API or code)`);
       console.log(`  🚦 Overall Status  : ${report.overallStatus.toUpperCase()}\n`);
 
       console.log('📑 --- Layer Breakdown ---');
@@ -217,7 +221,7 @@ Available Suites:
         console.log('\n🎯 --- Critical Path & Security Scenarios ---');
         report.scenarioSummaries.forEach(sc => {
           const icon = sc.passed ? '✅ [PASS]' : '❌ [FAIL]';
-          const typeTag = sc.executionType === 'real_code' ? '[REAL-CODE]' : '[SIMULATION]';
+          const typeTag = REAL_EXECUTION_TYPES.has(sc.executionType) ? '[REAL-CODE]' : '[SIMULATION]';
           console.log(`  ${icon} ${typeTag} ${sc.title}`);
           if (isVerbose || !sc.passed) {
             console.log(`     └─ Details: ${sc.details}`);

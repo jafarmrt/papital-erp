@@ -8,6 +8,7 @@ import { ESLint } from 'eslint';
  * ESLint روی کل کد (eslint.config.js) اجرا و تعداد تخلف هر قاعده با eslint-baseline.json مقایسه می‌شود:
  *   - افزایش هر قاعده → شکست (کد تازه نباید any، Promise رهاشده، وابستگی ناقص hook یا فایل بلند اضافه کند)
  *   - کاهش هر قاعده → شکست با راهنمای `npm run lint:eslint -- --update` تا بهبود در فایل پایه قفل شود
+ *   - `--update` هیچ عددی را بالا نمی‌برد: افزایش هر قاعده یا any هر فایل آن را رد می‌کند (OBS-R1-20)
  *   - خطای پارس (پیام بدون قاعده) → همیشه شکست
  * شمارش در سطح قاعده است (نه فایل) تا جابه‌جایی کد هنگام تقسیم فایل‌های بزرگ گیت را نشکند.
  *
@@ -100,6 +101,26 @@ export function compareWithBaseline(current: RuleCounts, baseline: RuleCounts): 
   return result;
 }
 
+/**
+ * OBS-R1-20: what `--update` refuses to write: a rule count or a file's any count above the stored baseline.
+ * A missing baseline file (null) is written as it is; `--update` only ever lowers a baseline.
+ */
+export function baselineUpdateRefusals(
+  counts: RuleCounts,
+  baseline: RuleCounts | null,
+  anyCounts: RuleCounts,
+  anyBaseline: RuleCounts | null
+): string[] {
+  const refusals: string[] = [];
+  if (baseline) for (const i of compareWithBaseline(counts, baseline).increased) refusals.push(`${i.rule}: ${i.baseline} → ${i.current}`);
+  if (anyBaseline) for (const g of compareAnyByFile(anyCounts, anyBaseline).increased) refusals.push(`${g.file}: any ${g.baseline} → ${g.current}`);
+  return refusals;
+}
+
+function readCounts(file: string): RuleCounts | null {
+  return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null;
+}
+
 function totalOf(counts: RuleCounts): number {
   return Object.values(counts).reduce((sum, n) => sum + n, 0);
 }
@@ -135,11 +156,10 @@ async function main(): Promise<void> {
   }
 
   if (update) {
-    const previousAny: RuleCounts = fs.existsSync(anyBaselinePath) ? JSON.parse(fs.readFileSync(anyBaselinePath, 'utf8')) : {};
-    const grown = compareAnyByFile(anyCounts, previousAny).increased;
-    if (fs.existsSync(anyBaselinePath) && grown.length > 0) {
-      for (const g of grown) console.error(`❌ ${g.file}: any ${g.baseline} → ${g.current}`);
-      console.error('The any baseline may only shrink; fix the new any.');
+    const refusals = baselineUpdateRefusals(counts, readCounts(baselinePath), anyCounts, readCounts(anyBaselinePath));
+    if (refusals.length > 0) {
+      for (const r of refusals) console.error(`❌ ${r}`);
+      console.error('The ESLint baselines may only shrink; fix the new violations instead of updating.');
       process.exit(1);
     }
     fs.writeFileSync(baselinePath, JSON.stringify(sortedCounts(counts), null, 2) + '\n');

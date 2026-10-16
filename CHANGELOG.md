@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.1.53 — بررسی درست پیش از راه‌اندازی و ابزارهای آزمون
+- بررسی پیش از راه‌اندازی کارساز نیمه‌آماده را خطا می‌گیرد و شاخص‌ها را با کلید خودش می‌خواند، و ابزارهای آزمون و خط‌کش ESLint نتیجه درست می‌دهند (پاک‌سازی بدهی‌ها، بخش ۱۰).
+
 ### v10.1.52 — پاک‌سازی روزانه جدول‌های عملیاتی و سقف انتظار قفل مهاجرت
 - کلیدهای منقضی تکرار درخواست و رویدادهای انجام‌شده قدیمی‌تر از ۹۰ روز هر روز پاک می‌شوند، مهاجرت حداکثر ده دقیقه منتظر قفل می‌ماند و تمرین ارتقا فقط پس از مقایسه سلامت مالی می‌گوید بدتر نشد؛ خط زمانی رکورد از صف ارسال رویدادها فقط ۹۰ روز اخیر را نشان می‌دهد (پاک‌سازی بدهی‌ها، بخش ۹).
 
@@ -2402,7 +2405,7 @@ going forward.
 ## Version 8.x Series (Archived at v8.0.128)
 
 ### v8.0.128 — پاکسازی تست‌ها و ابزارهای بلااستفاده
-- - سوئیت stress (دو سناریوی آن کد برنامه را اجرا نمی‌کرد)، سرویس‌های فقط‌تستی SystemRecoveryService و DataReconciliationService، شابلون ماژول v4، اسکریپت‌های قدیمی (start/stop/clean-install، db:baseline، setup:init، create-local-db)، فایل‌های AI Studio، دو سند قدیمی، سه وابستگی و خروجی‌های بی‌استفاده حذف شدند؛ رفتار برنامه تغییری نکرد.
+- سوئیت stress (دو سناریوی آن کد برنامه را اجرا نمی‌کرد)، سرویس‌های فقط‌تستی SystemRecoveryService و DataReconciliationService، شابلون ماژول v4، اسکریپت‌های قدیمی (start/stop/clean-install، db:baseline، setup:init، create-local-db)، فایل‌های AI Studio، دو سند قدیمی، سه وابستگی و خروجی‌های بی‌استفاده حذف شدند؛ رفتار برنامه تغییری نکرد.
 
 ### v8.0.127 — کلید ووکامرس روی HTTPS فقط در هدر
 - کلید و رمز API ووکامرس روی HTTPS دیگر در آدرس درخواست (و لاگ وب‌سرور فروشگاه) نمی‌آیند و فقط در هدر می‌روند (TD-408).
@@ -2423,16 +2426,16 @@ going forward.
 - TD-403: ویرایش طرف حساب و درون‌ریزی اکسل با نسخه کهنه رد می‌شود و روی ویرایش دیگری نمی‌نویسد.
 
 ### v8.0.121 — حذف پروژه با تخصیص باز رد می‌شود
-- - TD-412: پروژه‌ای که تخصیص مواد باز دارد تا آزادسازی تخصیص‌ها حذف نمی‌شود.
+- TD-412: پروژه‌ای که تخصیص مواد باز دارد تا آزادسازی تخصیص‌ها حذف نمی‌شود.
 
 ### v8.0.120 — پرداخت حقوق بدون روش چک
-- - TD-411: روش «چک» از پرداخت حقوق حذف شد؛ پرداخت چکی رد می‌شود.
+- TD-411: روش «چک» از پرداخت حقوق حذف شد؛ پرداخت چکی رد می‌شود.
 
 ### v8.0.119 — فاکتور پیش‌فاکتور با تاریخ نهایی‌سازی
-- - TD-410: فاکتورِ حاصل از پیش‌فاکتور تاریخ روز نهایی‌سازی را می‌گیرد؛ شماره و تاریخ پیش‌فاکتور در یادداشت می‌ماند.
+- TD-410: فاکتورِ حاصل از پیش‌فاکتور تاریخ روز نهایی‌سازی را می‌گیرد؛ شماره و تاریخ پیش‌فاکتور در یادداشت می‌ماند.
 
 ### v8.0.118 — ثبت خزانه بی‌سند فقط با مجوز جدا
-- - TD-409: دریافت، پرداخت، انتقال و چک «بدون سند حسابداری» فقط با مجوز جدا ثبت و در بررسی سلامت مالی فهرست می‌شوند.
+- TD-409: دریافت، پرداخت، انتقال و چک «بدون سند حسابداری» فقط با مجوز جدا ثبت و در بررسی سلامت مالی فهرست می‌شوند.
 
 ### v8.0.117 — سند فیش حقوق با مبالغ دقیق
 - TD-402: سند حسابداری فیش حقوق مبالغ را با محاسبه اعشاری دقیق می‌گیرد، نه عدد جاوااسکریپت.
@@ -2546,7 +2549,7 @@ going forward.
 - Before running, the migrator compares the code journal with __drizzle_migrations: a migration whose `when` is older than the last applied one (Drizzle skipped it silently) or a database newer than the build stops startup with the migration named; a journal lint checks strictly increasing `when` values.
 
 ### v8.0.80 — Atomic Project Codes
-- - Automatic project codes (PRJ-<year>-<number>) come from an atomic yearly counter in `document_ref_counters` instead of `COUNT(*) + 1`, so concurrent project creation no longer fails on a duplicate code; a custom code is checked under the same lock.
+- Automatic project codes (PRJ-<year>-<number>) come from an atomic yearly counter in `document_ref_counters` instead of `COUNT(*) + 1`, so concurrent project creation no longer fails on a duplicate code; a custom code is checked under the same lock.
 
 ### v8.0.79 — Idempotency Keys Keep Only Successful Responses
 - The browser derives the Idempotency-Key from the submission's content and keeps it until a definitive answer, so a resubmission after a lost response returns the first result; the server stores only successful responses, refuses a key reused for another path or body, and extends the key's lock while a long request runs.

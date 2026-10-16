@@ -15,7 +15,6 @@ export const MONEY_STOCK_PATHS = [
   'src/services/inventory/**/*.ts',
   'src/services/items/**/*.ts',
   'src/services/items.service.ts',
-  'src/services/reconciliation/**/*.ts',
   'src/services/woocommerce/**/*.ts',
   'src/services/procurement.service.ts',
   'src/services/piecework.service.ts',

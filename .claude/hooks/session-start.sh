@@ -1,6 +1,6 @@
 #!/bin/bash
 # v8.0.45: آماده‌سازی جلسه Claude Code روی وب (کانتینر تازه) تا lint، Vitest، npm test و build بی‌کار دستی اجرا شوند:
-#   ۱) وابستگی‌های npm دقیقاً از package-lock.json (npm ci، فقط وقتی node_modules نیست یا از lock قدیمی‌تر است)
+#   ۱) وابستگی‌های npm دقیقاً از package-lock.json (npm ci، فقط وقتی node_modules نیست یا وابستگی‌های lock تغییر کرده‌اند؛ OT-B-04)
 #   ۲) PostgreSQL 16 محلی روشن، رمز کاربر postgres همان مقدار job «test» در CI (test) و پایگاه‌داده‌های erp_test و erp_e2e
 # متغیرهای محیط آزمون CI در scripts/ci-test-env.sh است: `source scripts/ci-test-env.sh && npm test`.
 set -euo pipefail
@@ -12,12 +12,9 @@ fi
 cd "${CLAUDE_PROJECT_DIR:-$(pwd)}"
 
 # ── ۱. وابستگی‌ها ─────────────────────────────────────────────
-if [ ! -d node_modules ] || [ ! -f node_modules/.package-lock.json ] || [ package-lock.json -nt node_modules/.package-lock.json ]; then
-  echo "[session-start] npm ci"
-  npm ci --no-audit --no-fund
-else
-  echo "[session-start] node_modules matches package-lock.json"
-fi
+# OT-B-04: npm ci only when node_modules is missing or the dependencies of package-lock.json changed (a hash,
+# not the mtime), so a resumed or compacted session does not reinstall node_modules under a running test
+bash .claude/hooks/ensure-node-modules.sh .
 
 # ── ۲. PostgreSQL 16 ──────────────────────────────────────────
 if ! command -v pg_ctlcluster >/dev/null 2>&1; then
