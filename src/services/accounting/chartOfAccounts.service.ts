@@ -11,6 +11,16 @@ import { assertAccountPlacement } from './accountPlacement.js';
 import { assertAccountCodeAvailable, guardAccountCode, requireAccountCode } from './accountCodeGuard.js';
 import { isValidAccountCode, normalizeAccountCode } from '../../lib/accounting/accountCode.js';
 
+export interface NewAccountInput {
+  code: string;
+  name: string;
+  level: AccountLevel;
+  parentId?: number | null;
+  accountType: AccountType;
+  nature: AccountNature;
+  description?: string;
+}
+
 export class ChartOfAccountsService {
   /**
    * Seed standard Chart of Accounts if empty or missing system accounts
@@ -248,38 +258,44 @@ export class ChartOfAccountsService {
    * چون ردیف‌های سند آن حساب به حساب تازه با نام و نوع دیگر می‌چسبیدند.
    * v9.0.201 (TD-558، B03-16): کد فقط رقم لاتین (۴۲۲ `ACCOUNT_CODE_INVALID`)؛ تکراری، با رقم فارسی هم، ۴۰۹.
    */
-  static async createAccount(data: {
-    code: string;
-    name: string;
-    level: AccountLevel;
-    parentId?: number | null;
-    accountType: AccountType;
-    nature: AccountNature;
-    description?: string;
-  }): Promise<Account> {
+  static async createAccount(data: NewAccountInput): Promise<Account> {
     const code = requireAccountCode(data.code);
-    const insertedId = await guardAccountCode(code, () => orm.transaction(async (tx) => {
-      await assertAccountCodeAvailable(tx, code);
-      // v9.0.200 (TD-553، B03-11): بالادست یک سطح بالاتر و حذف‌نشده
-      await assertAccountPlacement(tx, { level: data.level, parentId: data.parentId || null });
-
-      const [inserted] = await tx.insert(accounts).values({
-        code,
-        name: data.name.trim(),
-        level: data.level,
-        parentId: data.parentId || null,
-        accountType: data.accountType,
-        nature: data.nature,
-        description: data.description?.trim() || null,
-        isSystem: 0,
-        isActive: 1,
-        isDeleted: 0,
-      }).returning({ id: accounts.id });
-      return inserted.id;
-    }));
+    const insertedId = await guardAccountCode(code, () => orm.transaction(tx => this.insertAccount(tx, data)));
 
     const all = await this.getAllAccounts();
     return all.find(a => a.id === insertedId)!;
+  }
+
+  /**
+   * v10.1.45 (OBS-R1-48): the account row written inside the caller's transaction (code and placement rules of
+   * createAccount); the fiscal-year closing uses it after its year lock, so a refused closing leaves no new account.
+   */
+  static async createAccountInTx(tx: DbExecutor, data: NewAccountInput): Promise<Account> {
+    const code = requireAccountCode(data.code);
+    const insertedId = await guardAccountCode(code, () => this.insertAccount(tx, data));
+    const all = await this.getAllAccounts(tx);
+    return all.find(a => a.id === insertedId)!;
+  }
+
+  private static async insertAccount(tx: DbExecutor, data: NewAccountInput): Promise<number> {
+    const code = requireAccountCode(data.code);
+    await assertAccountCodeAvailable(tx, code);
+    // v9.0.200 (TD-553، B03-11): بالادست یک سطح بالاتر و حذف‌نشده
+    await assertAccountPlacement(tx, { level: data.level, parentId: data.parentId || null });
+
+    const [inserted] = await tx.insert(accounts).values({
+      code,
+      name: data.name.trim(),
+      level: data.level,
+      parentId: data.parentId || null,
+      accountType: data.accountType,
+      nature: data.nature,
+      description: data.description?.trim() || null,
+      isSystem: 0,
+      isActive: 1,
+      isDeleted: 0,
+    }).returning({ id: accounts.id });
+    return inserted.id;
   }
 
   /**

@@ -317,31 +317,6 @@ export class FiscalYearService {
     // می‌شد و از آن لحظه هیچ سندی با تاریخ امروز ثبت نمی‌شد
     assertFiscalYearEnded(year, await businessTodayIsoDate());
 
-    // Conceptual Account Resolution (Subphase 9.2: Summary Profit/Loss and Retained Earnings)
-    let summaryProfitAcc = await AccountMappingService.getSummaryProfitLossAccount();
-    if (!summaryProfitAcc) {
-      summaryProfitAcc = await ChartOfAccountsService.createAccount({
-        code: '4301',
-        name: 'خلاصه سود و زیان سال جاری',
-        level: 'subsidiary',
-        accountType: 'equity',
-        nature: 'both',
-        description: 'حساب واسط بستن حساب‌های درآمد و هزینه'
-      });
-    }
-
-    let retainedEarningsAcc = await AccountMappingService.getRetainedEarningsAccount();
-    if (!retainedEarningsAcc) {
-      retainedEarningsAcc = await ChartOfAccountsService.createAccount({
-        code: '4201',
-        name: 'سود (زیان) انباشته سنواتی',
-        level: 'subsidiary',
-        accountType: 'equity',
-        nature: 'credit',
-        description: 'سود یا زیان انباشته سنوات قبل و جاری'
-      });
-    }
-
     const createdVouchers: JournalVoucher[] = [];
     let finalNetProfit = 0;
     type VoucherItemInput = Parameters<typeof VoucherService.createJournalVoucher>[0]['items'][number];
@@ -370,6 +345,28 @@ export class FiscalYearService {
       await FiscalPeriodService.lockForClosing(tx, year);
       // v9.0.162 (TD-544، تصمیم ت۱): سال‌ها به ترتیب بسته می‌شوند؛ پیش‌تر بستن ۱۳۹۷ با ۱۳۹۶ باز درآمد ۱۳۹۶ را هم می‌بست
       await assertEarlierYearsClosed(tx, year);
+
+      // Conceptual Account Resolution (Subphase 9.2: Summary Profit/Loss and Retained Earnings)
+      // v10.1.45 (OBS-R1-48): read with this transaction after the year lock; a missing account is created in it too,
+      // so a refused closing (drafts, a lock, an error) leaves no new account behind
+      const summaryProfitAcc = await AccountMappingService.getSummaryProfitLossAccount(tx)
+        ?? await ChartOfAccountsService.createAccountInTx(tx, {
+          code: '4301',
+          name: 'خلاصه سود و زیان سال جاری',
+          level: 'subsidiary',
+          accountType: 'equity',
+          nature: 'both',
+          description: 'حساب واسط بستن حساب‌های درآمد و هزینه'
+        });
+      const retainedEarningsAcc = await AccountMappingService.getRetainedEarningsAccount(tx)
+        ?? await ChartOfAccountsService.createAccountInTx(tx, {
+          code: '4201',
+          name: 'سود (زیان) انباشته سنواتی',
+          level: 'subsidiary',
+          accountType: 'equity',
+          nature: 'credit',
+          description: 'سود یا زیان انباشته سنوات قبل و جاری'
+        });
 
       // C-02 & P0-05: محاسبه تراز اختتامیه و ارقام به صورت تازه در داخل تراکنش و زیر چتر قفل
       const preview = await this.getFiscalYearClosingPreview({

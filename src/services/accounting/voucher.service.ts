@@ -3,7 +3,7 @@ import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { accounts, journalVouchers, journalVoucherItems } from '../../db/schema.js';
 import { eq, desc, asc, and, or, sql, ilike, inArray, gte, lte } from 'drizzle-orm';
 import type { JournalVoucher, JournalVoucherItem, FinancialAttachment } from '../../types.js';
-import type { JournalVoucherPage, VoucherStatusCounts } from '../../lib/accounting/voucherList.js';
+import { VOUCHER_PAGE_MAX, VOUCHER_PAGE_SIZE, type JournalVoucherPage, type VoucherStatusCounts } from '../../lib/accounting/voucherList.js';
 import { updateRequestContext } from '../../lib/requestContext.js';
 import { fin, type DecimalValue } from '../../lib/financialDecimal.js';
 import { money, moneyOr } from '../../lib/money.js';
@@ -78,7 +78,7 @@ export class VoucherService {
     endDate?: string;
   }): Promise<JournalVoucherPage> {
     const page = Math.max(1, Number(params.page) || 1);
-    const limit = Math.max(1, Math.min(100, Number(params.limit) || 20));
+    const limit = Math.max(1, Math.min(VOUCHER_PAGE_MAX, Number(params.limit) || VOUCHER_PAGE_SIZE));
     const offset = (page - 1) * limit;
 
     // v9.0.115 (TD-565): شمارنده‌های وضعیت با همه صافی‌ها جز خود وضعیت شمرده می‌شوند (برگه‌های وضعیت فهرست اسناد)

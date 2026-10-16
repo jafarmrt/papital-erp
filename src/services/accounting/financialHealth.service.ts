@@ -3,6 +3,7 @@ import { sql, asc, and, eq, or, like } from 'drizzle-orm';
 import { documents, legacyDateRepairs, refFiscalYearCorrections } from '../../db/schema.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
 import { fin } from '../../lib/financialDecimal.js';
+import { VOUCHER_BALANCE_TOLERANCE } from '../../lib/voucherBalance.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { readInventoryLedgerValues } from './inventoryLedgerValue.js';
 import { findDuplicateVoucherNumbers, hasVoucherNumberUniqueIndex } from './voucherNumberIntegrity.js';
@@ -205,7 +206,7 @@ export class FinancialHealthService {
                calc_debit::float AS calc_debit, calc_credit::float AS calc_credit,
                ABS(calc_debit - calc_credit)::float AS discrepancy
           FROM checked
-         WHERE ABS(calc_debit - calc_credit) > 0.05
+         WHERE ABS(calc_debit - calc_credit) > ${sql.raw(String(VOUCHER_BALANCE_TOLERANCE))}
          ORDER BY voucher_number DESC
          LIMIT 50;
       `),

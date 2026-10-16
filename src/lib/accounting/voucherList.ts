@@ -35,6 +35,8 @@ export interface VoucherListFilters {
 }
 
 export const VOUCHER_PAGE_SIZE = 20;
+/** v10.1.45 (OBS-R1-43): the largest page `GET /accounting/vouchers` reads; a larger `limit` is 400 */
+export const VOUCHER_PAGE_MAX = 100;
 
 export const EMPTY_VOUCHER_STATUS_COUNTS: VoucherStatusCounts = { draft: 0, approved: 0, permanent: 0 };
 

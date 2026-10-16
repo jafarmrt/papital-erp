@@ -498,7 +498,8 @@ export class AccountingReportService {
     const totalCurrentLiabilities = bs.totalCurrentLiabilities || 0;
     const totalAssets = (bs.totalAssets && bs.totalAssets > 0) ? bs.totalAssets : 1;
     const totalLiabilities = totalCurrentLiabilities;
-    const totalEquity = (bs.totalEquity + bs.netProfitPeriod) || 1;
+    // v10.1.45 (OBS-R1-53): sums and differences of amounts with FinancialMath, never JS + / -
+    const totalEquity = FinancialMath.add(bs.totalEquity, bs.netProfitPeriod) || 1;
     const totalRevenue = is.totalRevenue || 0;
     const grossProfit = is.grossProfit || 0;
     const operatingProfit = is.operatingProfit || 0;
@@ -518,9 +519,9 @@ export class AccountingReportService {
 
     // Liquidity Ratios
     const currentRatio = totalCurrentLiabilities > 0 ? (totalCurrentAssets / totalCurrentLiabilities) : (totalCurrentAssets > 0 ? 99 : 0);
-    const quickRatio = totalCurrentLiabilities > 0 ? ((totalCurrentAssets - inventoryBalance) / totalCurrentLiabilities) : 0;
+    const quickRatio = totalCurrentLiabilities > 0 ? (FinancialMath.subtract(totalCurrentAssets, inventoryBalance) / totalCurrentLiabilities) : 0;
     const cashRatio = totalCurrentLiabilities > 0 ? (cashAndBankBalance / totalCurrentLiabilities) : 0;
-    const netWorkingCapital = totalCurrentAssets - totalCurrentLiabilities;
+    const netWorkingCapital = FinancialMath.subtract(totalCurrentAssets, totalCurrentLiabilities);
 
     // Solvency & Leverage Ratios
     const debtRatio = totalAssets > 0 ? (totalLiabilities / totalAssets) * 100 : 0;

@@ -7890,7 +7890,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       // ۳) فهرست اسناد با بازه شمسی
       const app = await getTestApp();
       const session = await getAdminSession();
-      const list = await request(app).get(`/api/accounting/vouchers?startDate=${encodeURIComponent('1405/07/10')}&endDate=${encodeURIComponent('1405/07/10')}&limit=1000`).set('Cookie', session.cookie);
+      const list = await request(app).get(`/api/accounting/vouchers?startDate=${encodeURIComponent('1405/07/10')}&endDate=${encodeURIComponent('1405/07/10')}&limit=100`).set('Cookie', session.cookie);
       const rows: Array<{ id: number }> = Array.isArray(list.body?.data) ? list.body.data : (Array.isArray(list.body) ? list.body : []);
       if (list.status !== 200 || !rows.some(r => r.id === created.id)) violations.push(`voucher list with a Jalali range: ${list.status}, ${rows.length} rows without the test voucher`);
 
@@ -10634,6 +10634,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 3 PR b (v9.0.159 on): fiscal-year closing and reopening (TD-545 ...)
   const { runFiscalClosingTests } = await import('../regression/fiscalClosingTests.js');
   results.push(...await runFiscalClosingTests(shouldRun));
+  // v10.1.45 closing sweep: accounting server observations of package 3 (OBS-R1-42, OBS-R1-43, OBS-R1-48)
+  const { runAccountingSweepTests } = await import('../regression/accountingSweepTests.js');
+  results.push(...await runAccountingSweepTests(shouldRun));
   const { runClosingPartyDetailTests } = await import('../regression/closingPartyDetailTests.js');
   results.push(...await runClosingPartyDetailTests(shouldRun));
   const { runFiscalYearOrderTests } = await import('../regression/fiscalYearOrderTests.js');
