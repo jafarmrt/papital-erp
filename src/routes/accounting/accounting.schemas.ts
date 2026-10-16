@@ -11,6 +11,7 @@ import { TREASURY_CURRENCIES, normalizeTreasuryCurrency } from '../../lib/treasu
 import { VOUCHER_DETAILED_TYPES } from '../../lib/accounting/voucherDetailedTypes.js';
 import { VOUCHER_PAGE_MAX } from '../../lib/accounting/voucherList.js';
 import { PERSONNEL_PURPOSES } from '../../lib/treasury/partyPurpose.js';
+import { CHEQUE_STATUSES } from '../../lib/treasury/chequeTransitions.js';
 import { isReservedVoucherReference, MANUAL_CLOSING_TYPE_MESSAGE, RESERVED_REFERENCE_MESSAGE } from '../../lib/accounting/manualVoucherRules.js';
 import { ACCOUNT_CODE_FORMAT_MESSAGE, ACCOUNT_CODE_PATTERN } from '../../lib/accounting/accountCode.js';
 
@@ -430,7 +431,8 @@ export const voidTreasuryTxSchema = z.object({
 export const chequesQuerySchema = z.object({
   query: z.object({
     type: z.enum(['received', 'paid', 'all']).optional(),
-    status: z.enum(['pending', 'passed', 'cashed', 'returned', 'voided', 'bounced', 'all']).optional(),
+    // v10.1.47 (OBS-PR-12): وضعیت‌های واقعی چک؛ پیش‌تر فقط وضعیت‌های کهنه پذیرفته و «در جریان وصول» و «خرج‌شده» ۴۰۰ بود
+    status: z.enum([...CHEQUE_STATUSES, 'all']).optional(),
     startDate: storageDateParam,
     endDate: storageDateParam,
     search: z.string().optional(),
@@ -471,19 +473,7 @@ export const updateChequeStatusSchema = z.object({
     id: z.string().regex(/^\d+$/, 'شناسه چک باید عددی باشد')
   }),
   body: z.object({
-    status: z.enum([
-      'received',
-      'in_treasury',
-      'in_collection',
-      'passed',
-      'bounced',
-      'returned',
-      'spent',
-      'in_safe',
-      'pending',
-      'cashed',
-      'voided'
-    ], {
+    status: z.enum(CHEQUE_STATUSES, {
       message: 'وضعیت چک نامعتبر است'
     }),
     actionDate: z.string().optional(),

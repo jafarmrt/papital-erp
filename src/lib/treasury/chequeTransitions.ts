@@ -16,9 +16,32 @@ export const CHEQUE_TRANSITIONS: Record<string, ChequeStatus[]> = {
   spent: [],         // پایانی
 };
 
+/** v10.1.47 (OBS-R1-61): گام‌هایی که فقط چک دریافتی دارد؛ چک پرداختی را ما نه به وصول می‌فرستیم و نه به دیگری واگذار می‌کنیم */
+const RECEIVED_ONLY_STEPS: readonly ChequeStatus[] = ['in_collection', 'spent'];
+
+/**
+ * v10.1.47 (OBS-R1-61): گام‌های مجاز بعدی یک چک بر پایه وضعیت و نوع آن، یک جدول برای سرور و مرورگر. پیش‌تر چک پرداختی
+ * «در جریان وصول» پذیرفته می‌شد و سندی نمی‌گرفت، چون جدول انتقال نوع چک را نمی‌دید.
+ */
+export function chequeNextStatuses(status: string | null | undefined, type?: string | null): ChequeStatus[] {
+  const all = CHEQUE_TRANSITIONS[String(status ?? '')] ?? [];
+  return type === 'paid' ? all.filter(s => !RECEIVED_ONLY_STEPS.includes(s)) : all;
+}
+
 /** v9.0.69 (TD-502، تصمیم ت۹): چکی که گام بعدی ندارد (وصول‌شده، عودت‌شده، خرج‌شده) در منوی ردیف «تغییر وضعیت» و «حذف» ندارد */
-export function chequeHasNextStep(status: string | null | undefined): boolean {
-  return (CHEQUE_TRANSITIONS[String(status ?? '')] ?? []).length > 0;
+export function chequeHasNextStep(status: string | null | undefined, type?: string | null): boolean {
+  return chequeNextStatuses(status, type).length > 0;
+}
+
+/** v10.1.47 (OBS-PR-12): همه وضعیت‌های واقعی چک، برای پالایه فهرست چک‌ها */
+export const CHEQUE_STATUSES = ['received', 'in_treasury', 'in_safe', 'in_collection', 'passed', 'bounced', 'returned', 'spent'] as const satisfies readonly ChequeStatus[];
+
+/**
+ * v10.1.47 (OBS-R1-70): گام‌هایی که حساب بانکی چک را تعیین می‌کنند (ارسال به وصول و وصول). در گام‌های دیگر حساب بانکی
+ * فرستاده و ذخیره نمی‌شود؛ پیش‌تر پنجره وضعیت نخستین حساب بانکی را پیش‌فرض می‌گذاشت، حتی برای خرج، و سرور آن را ذخیره می‌کرد.
+ */
+export function chequeStepTakesBankAccount(status: string | null | undefined): boolean {
+  return status === 'in_collection' || status === 'passed';
 }
 
 /**

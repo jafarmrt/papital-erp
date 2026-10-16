@@ -16,7 +16,7 @@ import { FinancialAttachmentViewerModal } from './FinancialAttachmentViewerModal
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { useChequeReconciliationReport } from '../../hooks/accounting/useChequeQueries';
 import { copyToClipboard } from '../../utils/clipboard';
-import { CHEQUE_STATUS_LABELS, CHEQUE_TRANSITIONS, chequeHasNextStep, chequeStatusLabel } from '../../lib/treasury/chequeTransitions';
+import { CHEQUE_STATUS_LABELS, chequeHasNextStep, chequeNextStatuses, chequeStatusLabel, chequeStepTakesBankAccount } from '../../lib/treasury/chequeTransitions';
 import { needsChosenContraAccount, type PersonnelPurpose } from '../../lib/treasury/partyPurpose';
 import { personnelPartyName } from '../../lib/treasury/personnelPartyName';
 import { PartyPurposeFields } from './treasury/PartyPurposeFields';
@@ -155,16 +155,14 @@ export function ChequesTab({
     spent: [],
   };
   const allowedStatusOptions: { value: ChequeStatus; label: string }[] = statusModalCheque
-    ? (STATUS_OPTIONS[String(statusModalCheque.status)] || []).filter(o => {
-        if (o.value === 'spent' && statusModalCheque.type === 'paid') return false;
-        return true;
-      })
+    ? (STATUS_OPTIONS[String(statusModalCheque.status)] || [])
+        .filter(o => chequeNextStatuses(statusModalCheque.status, statusModalCheque.type).includes(o.value))
     : [];
 
   // باز شدن مودال: وضعیت هدف به اولین گزینه مجاز ریست شود
   useEffect(() => {
     if (statusModalCheque) {
-      const opts = CHEQUE_TRANSITIONS[String(statusModalCheque.status)] || [];
+      const opts = chequeNextStatuses(statusModalCheque.status, statusModalCheque.type);
       setTargetStatus(opts[0] || ('passed' as ChequeStatus));
       setTransfereePartyId(null);
     }
@@ -220,6 +218,11 @@ export function ChequesTab({
       toast.error('تأمین‌کننده‌ای را که چک به او واگذار می‌شود انتخاب کنید');
       return;
     }
+    // v10.1.47 (OBS-R1-70): حساب بانکی دیگر پیش‌فرض نمی‌گیرد؛ وصول بی حساب فرستاده نمی‌شود
+    if (targetStatus === 'passed' && !targetBankAccountId) {
+      toast.error('حساب بانکی مقصد را انتخاب کنید');
+      return;
+    }
     if (!statusActionDate) {
       toast.error('تاریخ اقدام را وارد کنید');
       return;
@@ -235,7 +238,7 @@ export function ChequesTab({
         statusModalCheque.id, 
         targetStatus, 
         statusDescription, 
-        targetBankAccountId || undefined,
+        chequeStepTakesBankAccount(targetStatus) ? targetBankAccountId || undefined : undefined,
         targetStatus === 'spent' ? transfereePartyId ?? undefined : undefined,
         statusActionDate
       );
@@ -604,7 +607,7 @@ export function ChequesTab({
                             // وضعیت هدف توسط useEffect بر اساس اولین گزینه مجاز ریست می‌شود
                             setStatusDescription('');
                             setStatusActionDate(getTodayIsoDate());
-                            setTargetBankAccountId(c.bankAccountId || bankAccounts[0]?.id || null);
+                            setTargetBankAccountId(c.bankAccountId || null);
                           }}
                           className={`text-[10px] font-bold px-2.5 py-1 rounded-full border transition hover:opacity-80 ${statusInfo.badge}`}
                         >
@@ -624,14 +627,14 @@ export function ChequesTab({
                           <ActionMenu
                             items={[
                               // v9.0.69 (TD-502، ت۹): وضعیت پایانی نه تغییر وضعیت دارد نه حذف
-                              ...(chequeHasNextStep(c.status) ? [{
+                              ...(chequeHasNextStep(c.status, c.type) ? [{
                                 label: 'تغییر وضعیت چک',
                                 icon: Edit3,
                                 onClick: () => {
                                   setStatusModalCheque(c);
                                   setStatusDescription('');
                                   setStatusActionDate(getTodayIsoDate());
-                                  setTargetBankAccountId(c.bankAccountId || bankAccounts[0]?.id || null);
+                                  setTargetBankAccountId(c.bankAccountId || null);
                                 },
                               }] : []),
                               {
@@ -663,7 +666,7 @@ export function ChequesTab({
                                   });
                                 },
                               },
-                              ...(chequeHasNextStep(c.status) ? [{
+                              ...(chequeHasNextStep(c.status, c.type) ? [{
                                 label: 'حذف چک',
                                 icon: Trash2,
                                 variant: 'danger' as const,
@@ -1008,7 +1011,7 @@ export function ChequesTab({
                 )}
               </div>
 
-              {(targetStatus === 'in_collection' || targetStatus === 'passed') && (
+              {chequeStepTakesBankAccount(targetStatus) && (
                 <div>
                   <label htmlFor={`${fieldId}-target-bank-account-id`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                     حساب بانکی مقصد *
