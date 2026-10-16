@@ -13,4 +13,5 @@ export * from './procurement';
 export * from './events';
 export * from './attachments';
 export * from './media';
+export * from './messenger';
 export * from './workshop';

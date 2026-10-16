@@ -392,5 +392,10 @@ G  scripts/check-version-sync.ts
 9  src/services/customers/**
 13 src/services/dailyLogs/**
 15 src/services/notifications/**
+15 src/services/messenger/**
+15 src/routes/messenger.routes.ts
+15 src/lib/messenger/**
+15 src/components/messenger/**
+15 src/hooks/queries/useMessengerQueries.ts
 12 src/services/personnel/**
 2  src/services/users/**

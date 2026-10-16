@@ -7,7 +7,7 @@ import { toPersianDigits } from '../../utils/persianNumber.js';
 import { actorFields, type AuditActor } from './pieceworkAudit.js';
 
 /**
- * v10.1.38 (N-01 part 2, TD-1284 review finding): a work log written by approving a workshop report was deleted or moved
+ * v10.1.39 (N-01 part 2, TD-1284 review finding): a work log written by approving a workshop report was deleted or moved
  * to another project. The schedule row is free again (`unlinkScheduleRow`), so the report stops being the row's live
  * approved report: it becomes «ردشده» with a note saying why, under its row lock, with its audit row in the same
  * transaction. Otherwise the stage progress would still count it and the row could never take a new report.

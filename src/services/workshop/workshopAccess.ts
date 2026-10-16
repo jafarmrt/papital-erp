@@ -6,7 +6,7 @@ import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
 import { WORKSHOP_ERRORS } from '../../lib/workshop/workshopSchedule.js';
 
 /**
- * v10.1.38 (N-01 part 2): who the workshop cartable's user is. A worker acts only as the live personnel linked to their
+ * v10.1.39 (N-01 part 2): who the workshop cartable's user is. A worker acts only as the live personnel linked to their
  * user (`personnel.user_id`, TD-435); a reviewer reviews only the projects they manage (`project_managers`, decision ت۳
  * الف), the system admin every project.
  */

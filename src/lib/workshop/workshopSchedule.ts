@@ -2,7 +2,7 @@ import { toStorageDate } from '../../utils/calendarDate';
 import { toPersianDigits } from '../../utils/persianNumber';
 
 /**
- * v10.1.38 (N-01 part 2, mobile workshop plan §4.3): the rows of a project's workshop schedule
+ * v10.1.39 (N-01 part 2, mobile workshop plan §4.3): the rows of a project's workshop schedule
  * (`production_projects.stage_schedules`: stage id → product id → `{ endDate, productName, tasks: [...] }`) read as the
  * workshop cartable needs them, plus the deadline, report and error rules shared by the server and the cartable screens.
  */

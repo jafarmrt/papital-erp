@@ -14,7 +14,7 @@ import { approveWorkshopReport, editWorkshopReport, rejectWorkshopReport, submit
 import { listMyTasks, listReviewReports, projectWorkshopReports } from '../services/workshop/workshopTasks.js';
 
 /**
- * v10.1.38 (N-01 part 2, mobile workshop plan §4.3): the workshop cartable. A worker (`workshop.self`) reads their open
+ * v10.1.39 (N-01 part 2, mobile workshop plan §4.3): the workshop cartable. A worker (`workshop.self`) reads their open
  * schedule rows and deliveries, answers each delivery once and reports the end of a task; a project manager
  * (`workshop.review`) approves a report, which writes the work log, or rejects it. Each write runs in one transaction in
  * its service, with its audit row and notifications.

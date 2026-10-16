@@ -1,7 +1,7 @@
 import type { DeliveryConfirmationStatus, WorkshopReportStatus } from './workshopSchedule';
 
 /**
- * v10.1.38 (N-01 part 2): the answers of the workshop cartable routes (`/api/workshop/...`), shared by the server and the
+ * v10.1.39 (N-01 part 2): the answers of the workshop cartable routes (`/api/workshop/...`), shared by the server and the
  * cartable screens. Dates are ISO; amounts are rial numbers and reach the worker only after approval (decision ت۷ الف).
  */
 

@@ -15,7 +15,7 @@ import { assertProjectReviewer, liveUserIds, notifyUsers, projectManagerUserIds,
 import { CLOSED_PROJECT_STATUSES, liveLogIds, manualWorkLogs, productItemIdOf, productNameOf, reportView, rowHasLiveLog } from './workshopTasks.js';
 
 /**
- * v10.1.38 (N-01 part 2, plan §4.3, decisions ت۲ الف, ت۵ الف, ت۶ الف and ت۷ الف): a worker's end-of-task report.
+ * v10.1.39 (N-01 part 2, plan §4.3, decisions ت۲ الف, ت۵ الف, ت۶ الف and ت۷ الف): a worker's end-of-task report.
  * - The worker reports the final quantity of a schedule row assigned to them (at most the row's quantity, the TD-955
  *   rule); the project's managers are notified. Before review the worker edits or withdraws it.
  * - A manager approves it (the quantity may be corrected) in one transaction that writes the work log through

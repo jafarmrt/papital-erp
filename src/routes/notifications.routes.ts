@@ -34,7 +34,7 @@ async function checkAndGenerateCrmTaskDueNotifications(userId: number) {
   }
 }
 
-// v10.1.38 (N-01, decision t8 A): a workshop worker's deadline reminders, once before and once after each deadline;
+// v10.1.39 (N-01, decision t8 A): a workshop worker's deadline reminders, once before and once after each deadline;
 // the scan runs at most once an hour per user, outside any transaction
 async function checkWorkshopDueReminders(user: Express.Request['user']) {
   try {

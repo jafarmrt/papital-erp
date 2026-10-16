@@ -9,7 +9,7 @@ import { toPersianDigits } from '../../utils/persianNumber.js';
 import { liveUserIds, notifyUsers, permissionHolderIds, requireLinkedPersonnel, type WorkshopActor } from './workshopAccess.js';
 
 /**
- * v10.1.38 (N-01 part 2, plan §4.3 «حواله‌های من», decision ت۱ الف): the final remittances and the material allocations
+ * v10.1.39 (N-01 part 2, plan §4.3 «حواله‌های من», decision ت۱ الف): the final remittances and the material allocations
  * whose recipient is the user's personnel. The worker answers each once, «تحویل گرفتم» or «مغایرت دارد» with a note;
  * stock never changes here (a correction is a separate warehouse document). A discrepancy notifies the remittance's
  * recorder (the allocation's user) and the holders of `warehouse.out`.

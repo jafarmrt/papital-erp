@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { takeWorkshopReminderScan, WORKSHOP_REMINDER_SCAN_INTERVAL_MS } from '../../lib/workshop/reminderThrottle';
 import { reportQuantityError, WORKSHOP_ERRORS } from '../../lib/workshop/workshopSchedule';
 
-/** v10.1.38 (TD-1284 review): a row without a planned quantity takes no report; the reminder scan runs once an hour per user. */
+/** v10.1.39 (TD-1284 review): a row without a planned quantity takes no report; the reminder scan runs once an hour per user. */
 describe('workshop review guards (TD-1284)', () => {
   it('refuses any quantity on a row whose planned quantity is zero, blank or not a number', () => {
     for (const planned of [0, -1, Number.NaN]) {

@@ -5,7 +5,7 @@ import { brief, fixture } from './documentEntryTests.js';
 import { runReservationCases } from './stockReservationTests.js';
 
 /**
- * v10.1.38 (N-01 part 2, TD-1284, mobile workshop plan §4.3): the workshop cartable's server.
+ * v10.1.39 (N-01 part 2, TD-1284, mobile workshop plan §4.3): the workshop cartable's server.
  * - Decisions ت۲ الف, ت۵ الف, ت۶ الف, ت۷ الف: a worker reports a schedule row's final quantity (never above the row),
  *   edits or withdraws it before review; only a manager of the project approves it, which writes the row's work log at
  *   the server rate, or rejects it with a reason; the worker sees the amount only after approval, and the last approved
@@ -18,16 +18,16 @@ import { runReservationCases } from './stockReservationTests.js';
 export async function runWorkshopCartablePartTwoTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   return runReservationCases(shouldRun, [
     ['reg_workshop_report_review_n01',
-      'v10.1.38: a worker reports a schedule row up to its quantity and edits or withdraws it; only a project manager, never for their own work, approves it (one work log at the server rate, the worker notified with the amount, the matrix tick suggested after the last row) or rejects it with a reason (N-01, TD-1284)',
+      'v10.1.39: a worker reports a schedule row up to its quantity and edits or withdraws it; only a project manager, never for their own work, approves it (one work log at the server rate, the worker notified with the amount, the matrix tick suggested after the last row) or rejects it with a reason (N-01, TD-1284)',
       ['n01', 'workshop', 'piecework', 'projects'], reportReviewCase],
     ['reg_workshop_delivery_confirm_n01',
-      'v10.1.38: the recipient answers a final remittance or an allocation once; a discrepancy needs a note and notifies the recorder and warehouse.out holders; stock never changes (N-01, TD-1284)',
+      'v10.1.39: the recipient answers a final remittance or an allocation once; a discrepancy needs a note and notifies the recorder and warehouse.out holders; stock never changes (N-01, TD-1284)',
       ['n01', 'workshop', 'documents', 'allocations'], deliveryCase],
     ['reg_workshop_due_reminders_n01',
-      'v10.1.38: the bell reminds a workshop worker once the day before a deadline and once after it, skips reported rows and never repeats a dismissed reminder (N-01, TD-1284)',
+      'v10.1.39: the bell reminds a workshop worker once the day before a deadline and once after it, skips reported rows and never repeats a dismissed reminder (N-01, TD-1284)',
       ['n01', 'workshop', 'notifications'], remindersCase],
     ['reg_workshop_review_guards_n01',
-      'v10.1.38: a row without a planned quantity takes no report, edit or approval; a changed task or a removed row is refused; a manual work log of the same worker, task and project needs an explicit acknowledgement before approval; two approvals at once write one log; deleting the approved log reopens the row (N-01, TD-1284)',
+      'v10.1.39: a row without a planned quantity takes no report, edit or approval; a changed task or a removed row is refused; a manual work log of the same worker, task and project needs an explicit acknowledgement before approval; two approvals at once write one log; deleting the approved log reopens the row (N-01, TD-1284)',
       ['n01', 'workshop', 'piecework', 'projects'], reviewGuardsCase],
   ]);
 }

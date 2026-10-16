@@ -12,7 +12,7 @@ import {
 import { reviewableProjectIds, requireLinkedPersonnel, type WorkshopUser } from './workshopAccess.js';
 
 /**
- * v10.1.38 (N-01 part 2, plan §4.3 «کارهای من» and «بررسی مسئول پروژه»): the worker's open schedule rows and the
+ * v10.1.39 (N-01 part 2, plan §4.3 «کارهای من» and «بررسی مسئول پروژه»): the worker's open schedule rows and the
  * reports waiting for a project manager. A row is open while its project is neither completed nor cancelled and it has
  * no live work log; its report is its submitted or latest report.
  */

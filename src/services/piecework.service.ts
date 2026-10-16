@@ -769,7 +769,7 @@ export class PieceworkService {
       }
       // v9.0.282 (TD-736): ردیف برنامه کارکرد حذف‌شده دوباره ثبت‌شدنی است
       await unlinkScheduleRow(tx, existing.projectId, id);
-      // v10.1.38 (TD-1284): the workshop report approved into this log is undone, so its row takes a new report
+      // v10.1.39 (TD-1284): the workshop report approved into this log is undone, so its row takes a new report
       await revertWorkshopReportsOfLog(tx, id, actor);
       await auditWorkLogDeleted(tx, existing, actor);
       return existing;

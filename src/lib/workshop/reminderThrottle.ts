@@ -1,5 +1,5 @@
 /**
- * v10.1.38 (N-01 part 2, TD-1284 review): the bell asks for notifications often and the workshop reminder scan reads every
+ * v10.1.39 (N-01 part 2, TD-1284 review): the bell asks for notifications often and the workshop reminder scan reads every
  * open project, so the scan runs at most once an hour per user. The system is one process (§22), so an in-memory map is
  * enough.
  */

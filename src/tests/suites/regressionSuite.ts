@@ -10988,6 +10988,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runPayrollStatutoryTests(shouldRun));
   const { runStatutoryRemittanceTests } = await import('../regression/statutoryRemittanceTests.js');
   results.push(...await runStatutoryRemittanceTests(shouldRun));
+  // v10.1.38 (messenger plan part 1): staff bots and each user's link to them
+  const { runMessengerLinkTests } = await import('../regression/messengerLinkTests.js');
+  results.push(...await runMessengerLinkTests(shouldRun));
   const { runPayrollEidiTests } = await import('../regression/payrollEidiTests.js');
   results.push(...await runPayrollEidiTests(shouldRun));
   const { runPayrollVoucherDateTests } = await import('../regression/payrollVoucherDateTests.js');
@@ -11058,7 +11061,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v10.1.37 (N-01 part 1): workshop cartable data (long session, project managers, stock recipient)
   const { runWorkshopCartablePartOneTests } = await import('../regression/workshopCartablePartOneTests.js');
   results.push(...await runWorkshopCartablePartOneTests(shouldRun));
-  // v10.1.38 (N-01 part 2): workshop cartable server (reports, approval, deliveries, reminders)
+  // v10.1.39 (N-01 part 2): workshop cartable server (reports, approval, deliveries, reminders)
   const { runWorkshopCartablePartTwoTests } = await import('../regression/workshopCartablePartTwoTests.js');
   results.push(...await runWorkshopCartablePartTwoTests(shouldRun));
 

@@ -73,6 +73,11 @@ export const ROW_ADVISORY_LOCK_NAMESPACES = {
    * delegations saved at once never give the same user two deputies for one workflow in one window
    */
   WORKFLOW_DELEGATION_FROM_USER: 91080,
+  /**
+   * v10.1.38 (messenger notifications plan part 1): reading what users send to one staff bot (session lock keyed by the
+   * messenger's place in `MESSENGERS` + 1), so one pass at a time per bot and a slow bot never holds up the other
+   */
+  MESSENGER_BOT_UPDATES: 91090,
 } as const;
 
 export type AdvisoryLockOutcome<T> = { acquired: true; result: T } | { acquired: false };

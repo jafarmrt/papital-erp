@@ -8,7 +8,7 @@ import {
 import { takeWorkshopReminderScan } from '../../lib/workshop/reminderThrottle.js';
 
 /**
- * v10.1.38 (N-01 part 2, decision ت۸ الف of the mobile workshop plan): the notification bell reminds a workshop worker of
+ * v10.1.39 (N-01 part 2, decision ت۸ الف of the mobile workshop plan): the notification bell reminds a workshop worker of
  * their open schedule rows once the day before the deadline (or on it) and once after it. A row with a live work log or a
  * report waiting for review is not reminded. Each reminder is one row per user, kind and schedule row, kept after it is
  * dismissed (`uq_notifications_workshop_reminder`, the TD-717 pattern), so it never comes back and two bell requests make one.

@@ -17,6 +17,7 @@ import { PayrollStatutoryRatesTab } from '../components/settings/PayrollStatutor
 import { PayrollEidiRatesSection } from '../components/settings/PayrollEidiRatesSection';
 import { SystemOperationsTab, ClearDataModal } from '../components/settings/SystemOperationsTab';
 import { WooCommerceTab } from '../components/settings/WooCommerceTab';
+import { MessengerBotsTab } from '../components/settings/MessengerBotsTab';
 import { AccountingSettingsTab } from '../components/settings/AccountingSettingsTab';
 import { ChartOfAccountsSettingsTab } from '../components/settings/ChartOfAccountsSettingsTab';
 import { 
@@ -252,6 +253,8 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
           />
         )}
         
+        {activeTab === 'messenger' && <MessengerBotsTab />}
+
         {activeTab === 'woocommerce' && (
           <WooCommerceTab
             wcStoreUrl={s.wcStoreUrl}
