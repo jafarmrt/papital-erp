@@ -30,7 +30,7 @@ export const personnel = pgTable('personnel', {
   // v10.0.210 (TD-1087، طرح حقوق ت۵ الف): «مشمول بیمه» و «مشمول مالیات حقوق»؛ پرسنل موجود خاموش (مهاجرت 0104)
   isInsuranceCovered: integer('is_insurance_covered').notNull().default(0),
   isTaxCovered: integer('is_tax_covered').notNull().default(0),
-  // v10.1.34 (TD-1282، تصمیم ت۳۴ الف): «مشمول عیدی»؛ پرسنل موجود و تازه روشن (مهاجرت 0117)
+  // v10.1.35 (TD-1282، تصمیم ت۳۴ الف): «مشمول عیدی»؛ پرسنل موجود و تازه روشن (مهاجرت 0117)
   isEidiCovered: integer('is_eidi_covered').notNull().default(1),
   endDate: text('end_date').default(''),
   terminationReason: text('termination_reason').default(''),

@@ -169,7 +169,7 @@ export interface PayslipEidiResolution {
 /**
  * سهم عیدی فیش عادی که صادر می‌شود (زیر قفل ردیف پرسنل که صدور فیش گرفته است): در روش درصدی گرد(پایه × درصد ÷ ۱۰۰) تا
  * سقف سال منهای سهم فیش‌های زنده دیگر همان سال؛ روش دیگر صفر. سال بی نرخ عیدی هشدار دارد و فیش بی سهم صادر می‌شود.
- * v10.1.34 (TD-1282، تصمیم ت۳۴ الف): فیش پرسنلی که «مشمول عیدی» نیست سهم، سال عیدی و هشدار ندارد.
+ * v10.1.35 (TD-1282، تصمیم ت۳۴ الف): فیش پرسنلی که «مشمول عیدی» نیست سهم، سال عیدی و هشدار ندارد.
  */
 export async function resolvePayslipEidiShare(tx: DbExecutor, input: { personnelId: number; endIso: string; base: DecimalValue; eidiCovered: boolean }): Promise<PayslipEidiResolution> {
   if (!input.eidiCovered) return { jalaliYear: null, share: '0', warning: null };

@@ -228,7 +228,7 @@ export async function runPayrollEidiTests(shouldRun: ShouldRun): Promise<TestCas
 
   const notCoveredId = 'reg_payroll_eidi_not_covered_td_1282';
   if (shouldRun(notCoveredId, 'td1282', 'td1269', 'payroll', 'eidi', 'personnel', 'optional')) {
-    await runCase(results, notCoveredId, 'v10.1.34: a personnel not marked for eidi gets no eidi share, no rate warning and no report row; the flag is on by default and kept on edit (TD-1282, t34 A)', async () => inFiscalSandbox(async () => {
+    await runCase(results, notCoveredId, 'v10.1.35: a personnel not marked for eidi gets no eidi share, no rate warning and no report row; the flag is on by default and kept on edit (TD-1282, t34 A)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const flagOf = async (id: number) => Number((await q('SELECT is_eidi_covered AS f FROM personnel WHERE id = $1', [id]))[0]?.f);
@@ -272,7 +272,7 @@ export async function runPayrollEidiTests(shouldRun: ShouldRun): Promise<TestCas
 
   const notCoveredLaborId = 'reg_payroll_eidi_not_covered_labor_law_td_1282';
   if (shouldRun(notCoveredLaborId, 'td1282', 'payroll', 'eidi', 'labor', 'optional')) {
-    await runCase(results, notCoveredLaborId, 'v10.1.34: under the labor-law method a personnel not marked for eidi has no entitlement: the eidi payslip suggests zero, takes an amount only with a reason, and the report shows nothing remaining (TD-1282, t34 A)', async () => inFiscalSandbox(async () => {
+    await runCase(results, notCoveredLaborId, 'v10.1.35: under the labor-law method a personnel not marked for eidi has no entitlement: the eidi payslip suggests zero, takes an amount only with a reason, and the report shows nothing remaining (TD-1282, t34 A)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const saved = await admin.put('/api/piecework/eidi-rates/1405', { method: 'labor_law', laborDays: '60', laborCapDays: '90', minDailyWage: '1000000' });

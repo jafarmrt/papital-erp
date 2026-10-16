@@ -20,7 +20,7 @@ interface Preview {
   fullName: string;
   period: { startIso: string; endIso: string; workedDays: number };
   suggestion: EidiPayslipSuggestion;
-  /** v10.1.34 (TD-1282): «مشمول عیدی» پرونده پرسنل */
+  /** v10.1.35 (TD-1282): «مشمول عیدی» پرونده پرسنل */
   eidiCovered?: boolean;
   draftWarning: string | null;
 }

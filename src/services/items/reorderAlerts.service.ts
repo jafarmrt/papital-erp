@@ -65,12 +65,11 @@ export async function listReorderAlerts(filters: ReorderAlertFilters, executor: 
   }
   const candidates = await executor.select().from(items).where(and(...conditions)).orderBy(asc(items.id));
   const ids = candidates.map(it => it.id);
-  const [reserved, inTransit, requested, stockMap] = await Promise.all([
-    ItemStockReservationService.getReservedStocksMap({ itemIds: ids }),
-    inTransitQuantities(executor, ids),
-    openRequisitionQuantities(executor, ids),
-    ItemWarehouseStockService.getStocksForItems(executor, ids),
-  ]);
+  // v10.1.34 (TD-1279): the executor may be a transaction's single connection, so its queries run one at a time
+  const reserved = await ItemStockReservationService.getReservedStocksMap({ itemIds: ids });
+  const inTransit = await inTransitQuantities(executor, ids);
+  const requested = await openRequisitionQuantities(executor, ids);
+  const stockMap = await ItemWarehouseStockService.getStocksForItems(executor, ids);
 
   const rows: ReorderAlertRow[] = [];
   for (const it of candidates) {
