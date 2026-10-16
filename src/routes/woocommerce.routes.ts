@@ -73,6 +73,8 @@ async function makeWcRequest(
     formattedUrl = formattedUrl.slice(0, -1);
   }
 
+  // OBS-R2-82 (ت۴۰ item 4): every request to the shop, not only the connection test, passes the SSRF guard
+  await assertSafeExternalUrl(formattedUrl, { allowLocalEcho: false });
   const fullUrl = `${formattedUrl}/wp-json/wc/v3/${urlPath.replace(/^\//, '')}`;
   const authHeader = 'Basic ' + Buffer.from(`${key}:${secret}`).toString('base64');
 
@@ -94,7 +96,8 @@ async function makeWcRequest(
       headers,
       httpsAgent,
       timeout: 15000,
-      maxRedirects: 5
+      // OBS-R2-82: a redirect is never followed, so the keys never reach an address the guard did not check
+      maxRedirects: 0
     });
     return response.data;
   } catch (error) {
@@ -103,7 +106,12 @@ async function makeWcRequest(
       const errorData = error.response.data as { message?: string } | undefined;
       const wcMsg = errorData?.message || '';
 
-      if (status === 401 || status === 403) {
+      if (status >= 300 && status < 400) {
+        throw new Error(
+          `سایت فروشگاه به نشانی دیگری هدایت می‌کند (${status})${error.response.headers?.location ? `: ${String(error.response.headers.location)}` : ''}. ` +
+          `برای امنیت کلیدها، نشانی نهایی فروشگاه (مثلاً با https یا www) را در تنظیمات ووکامرس بگذارید.`
+        );
+      } else if (status === 401 || status === 403) {
         throw new Error(
           `خطای عدم دسترسی (${status}): ${wcMsg || 'کلید نامعتبر است یا فایروال هاست/کلودفلر مانع شده است.'} \n` +
           `نکته: در صورت استفاده از کلودفلر یا آروان‌کلود، کد $_SERVER['HTTPS']='on'; را در بالای wp-config.php قرار دهید ` +

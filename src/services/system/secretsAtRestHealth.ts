@@ -1,6 +1,6 @@
 import { inArray, notLike } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { appSettings, personnel, users, webhookSubscriptions } from '../../db/schema.js';
+import { appSettings, eventActionRules, personnel, users, webhookSubscriptions } from '../../db/schema.js';
 import { decryptSecret, isEncryptedSecret } from '../../lib/secretBox.js';
 import { startsWithLikePattern } from '../../lib/sqlLike.js';
 import type { HealthCheckTestResult } from '../../types/accounting.types.js';
@@ -36,6 +36,7 @@ export async function countSecretsAtRest(): Promise<SecretsAtRestCounts> {
   const personnelRows = await orm.select({ value: personnel.nobitexPassword }).from(personnel);
   const settingRows = await orm.select({ value: appSettings.value }).from(appSettings).where(inArray(appSettings.key, [...ENCRYPTED_SETTING_KEYS]));
   const webhookRows = await orm.select({ secretKey: webhookSubscriptions.secretKey, customHeaders: webhookSubscriptions.customHeaders }).from(webhookSubscriptions);
+  const ruleRows = await orm.select({ config: eventActionRules.actionConfigJson }).from(eventActionRules);
   const passwordRows = await orm.select({ password: users.password }).from(users)
     .where(notLike(users.password, startsWithLikePattern(PLAIN_PASSWORD_LOCK_MARKER)));
 
@@ -49,6 +50,13 @@ export async function countSecretsAtRest(): Promise<SecretsAtRestCounts> {
     const headers = row.customHeaders && typeof row.customHeaders === 'object' && !Array.isArray(row.customHeaders)
       ? Object.values(row.customHeaders as Record<string, unknown>) : [];
     headers.forEach(h => tally(h, w));
+  }
+  // OBS-PR-07 (ت۴۰): an action rule's webhook token and header values count with the webhooks
+  for (const { config } of ruleRows) {
+    if (!config || typeof config !== 'object' || Array.isArray(config)) continue;
+    const { secretToken, headers } = config as { secretToken?: unknown; headers?: unknown };
+    if (typeof secretToken === 'string') tally(secretToken, w);
+    if (headers && typeof headers === 'object' && !Array.isArray(headers)) Object.values(headers as Record<string, unknown>).forEach(h => tally(h, w));
   }
   return {
     plaintext: { personnel: p.plain, settings: s.plain, webhooks: w.plain },

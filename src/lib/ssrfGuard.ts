@@ -4,12 +4,33 @@ import net from 'net';
 import { ValidationError } from '../errors/customErrors.js';
 
 const dnsResolve4 = promisify(dns.resolve4);
+const dnsResolve6 = promisify(dns.resolve6);
 const dnsLookup = promisify(dns.lookup);
 
 /**
  * Standard disallowed ports commonly targeted in SSRF attacks against internal databases and infrastructure.
  */
 export const DISALLOWED_PORTS = ['5432', '6379', '27017', '3306', '9200', '22', '23', '25', '8080'];
+
+/**
+ * OBS-R2-81 (decision ت۴۰ item 4): an explicit port is accepted by rule, not only refused by a list: 80, 443, or an
+ * unprivileged port (1024 and above) outside `DISALLOWED_PORTS`. A system port such as 21, 110, 389 or 445 is refused.
+ */
+export function isAllowedTargetPort(port: string): boolean {
+  if (port === '' || port === '80' || port === '443') return true;
+  const n = Number(port);
+  return Number.isInteger(n) && n >= 1024 && n <= 65535 && !DISALLOWED_PORTS.includes(port);
+}
+
+/**
+ * OBS-R2-81: a host under the reserved test domain example.com (RFC 2606) that does not resolve is accepted only in test
+ * and development, where tests name partner sites under it; before, any host merely containing «example.com» or
+ * «webhook.site» (e.g. example.com.attacker.net) passed in production too when its DNS failed.
+ */
+export function isUnresolvedTestHost(hostname: string, env: NodeJS.ProcessEnv = process.env): boolean {
+  if (!isEchoSimulatorEnvironment(env)) return false;
+  return hostname === 'example.com' || hostname.endsWith('.example.com');
+}
 
 /**
  * Regex patterns for initial heuristics and backward compatibility.
@@ -265,7 +286,7 @@ export async function assertSafeExternalUrl(url: string, options?: { allowLocalE
   }
 
   // 2. Port check: disallow common internal services / database ports
-  if (parsed.port && DISALLOWED_PORTS.includes(parsed.port)) {
+  if (parsed.port && !isAllowedTargetPort(parsed.port)) {
     throw unsafeTarget(`درگاه ${parsed.port} برای جلوگیری از دسترسی به خدمات داخلی بسته است.`, 'port');
   }
 
@@ -283,43 +304,25 @@ export async function assertSafeExternalUrl(url: string, options?: { allowLocalE
     throw unsafeTarget(`نشانی «${hostname}» داخلی یا رزروشده است و برای امنیت پذیرفته نمی‌شود.`, 'private_address');
   }
 
-  // 4. DNS resolution to catch domains resolving to private/internal IPs
-  try {
-    const rawIpType = net.isIP(cleanHostname);
-    // If it's not a raw IP, it's a domain name that needs resolution
-    if (rawIpType === 0) {
-      const addresses: string[] = [];
-      try {
-        const v4 = await dnsResolve4(cleanHostname);
-        addresses.push(...v4);
-      } catch {
-        try {
-          const lookupResult = await dnsLookup(cleanHostname, { all: true });
-          if (Array.isArray(lookupResult)) {
-            addresses.push(...lookupResult.map(r => r.address));
-          }
-        } catch {
-          // If domain cannot be resolved (e.g. mock test domain example.com in offline container)
-          if (cleanHostname.includes('example.com') || cleanHostname.includes('webhook.site')) {
-            return;
-          }
-          throw unsafeTarget(`نام «${hostname}» پیدا نشد؛ نشانی را بررسی کنید.`, 'dns_failed');
-        }
-      }
-
-      for (const ip of addresses) {
-        if (isPrivateOrReservedIp(ip)) {
-          throw unsafeTarget(`نام «${hostname}» به نشانی داخلی ${ip} می‌رسد و برای امنیت پذیرفته نمی‌شود.`, 'private_resolution');
-        }
-      }
+  // 4. DNS resolution to catch domains resolving to private/internal IPs. OBS-R2-81: both the A and the AAAA records are
+  // checked; before, an AAAA record pointing inside was never read when the name also had an A record
+  if (net.isIP(cleanHostname) !== 0) return;
+  const addresses: string[] = [];
+  const [v4, v6] = await Promise.allSettled([dnsResolve4(cleanHostname), dnsResolve6(cleanHostname)]);
+  if (v4.status === 'fulfilled') addresses.push(...v4.value);
+  if (v6.status === 'fulfilled') addresses.push(...v6.value);
+  if (addresses.length === 0) {
+    // the system resolver (hosts file, mDNS) when DNS answered nothing
+    const [lookup] = await Promise.allSettled([dnsLookup(cleanHostname, { all: true })]);
+    if (lookup.status === 'fulfilled' && Array.isArray(lookup.value)) addresses.push(...lookup.value.map(r => r.address));
+  }
+  if (addresses.length === 0) {
+    if (isUnresolvedTestHost(cleanHostname)) return;
+    throw unsafeTarget(`نام «${hostname}» پیدا نشد؛ نشانی را بررسی کنید.`, 'dns_failed');
+  }
+  for (const ip of addresses) {
+    if (isPrivateOrReservedIp(ip)) {
+      throw unsafeTarget(`نام «${hostname}» به نشانی داخلی ${ip} می‌رسد و برای امنیت پذیرفته نمی‌شود.`, 'private_resolution');
     }
-  } catch (err: unknown) {
-    if (err instanceof ValidationError && (err.details as { reason?: string } | undefined)?.reason === 'private_resolution') {
-      throw err;
-    }
-    if (cleanHostname.includes('example.com') || cleanHostname.includes('webhook.site')) {
-      return;
-    }
-    throw err;
   }
 }
