@@ -340,7 +340,7 @@ export async function deleteUser(req: Request, targetUserId: number): Promise<vo
       isDeleted: 1,
       tokenVersion: (delUser.tokenVersion || 0) + 1
     }).where(eq(users.id, targetUserId));
-    // v10.1.40: a deleted user's Bale and Telegram links close with the account, so no notice reaches their chat
+    // v10.1.41: a deleted user's Bale and Telegram links close with the account, so no notice reaches their chat
     const closedMessengerLinks = await tx.update(userMessengerLinks)
       .set({ isActive: 0, unlinkedAt: sql`now()`, unlinkReason: 'user_deleted' })
       .where(and(eq(userMessengerLinks.userId, targetUserId), eq(userMessengerLinks.isActive, 1)))

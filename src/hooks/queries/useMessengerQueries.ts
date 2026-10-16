@@ -79,7 +79,7 @@ export function useSaveBotTokenMutation() {
   });
 }
 
-/** v10.1.40 (plan part 2): «در پیام‌رسان هم بفرست» per notification category, for the user's own account */
+/** v10.1.41 (plan part 2): «در پیام‌رسان هم بفرست» per notification category, for the user's own account */
 export function useMyMessengerPreferencesQuery(enabled = true) {
   return useQuery<MessengerPreference[]>({
     queryKey: MESSENGER_KEYS.preferences,

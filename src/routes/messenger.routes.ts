@@ -28,7 +28,7 @@ const botTokenSchema = messengerParam.extend({
   body: z.object({ token: z.string().max(200, 'نشانه ربات بیش از اندازه بلند است') }).strict(),
 });
 
-// v10.1.40 (plan part 2): «در پیام‌رسان هم بفرست» of one notification category, for the user's own account
+// v10.1.41 (plan part 2): «در پیام‌رسان هم بفرست» of one notification category, for the user's own account
 const preferenceSchema = z.object({
   body: z.object({
     category: z.enum(MESSENGER_PREFERENCE_CATEGORIES as [NotificationCategory, ...NotificationCategory[]], { message: 'نوع اعلان شناخته نیست' }),

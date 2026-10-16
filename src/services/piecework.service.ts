@@ -1,5 +1,5 @@
 import { eq, and } from 'drizzle-orm';
-import { orm, type DbExecutor } from '../db/drizzle.js';
+import { orm, type DbExecutor, type DbTransaction } from '../db/drizzle.js';
 import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkLogs, pieceworkPayrolls, taskCategories } from '../db/schema.js';
 import { NotFoundError, BadRequestError, ConflictError, ValidationError } from '../errors/customErrors.js';
 import { requireStorageDate } from '../lib/storageDate.js';
@@ -75,6 +75,11 @@ export interface TaskImportRowError {
 }
 
 async function inTransaction<T>(externalTx: DbExecutor | undefined, fn: (tx: DbExecutor) => Promise<T>): Promise<T> {
+  return externalTx ? fn(externalTx) : orm.transaction(fn);
+}
+
+/** A write that notifies (a reverted workshop report) runs only in a transaction, the caller's or its own */
+async function inWriteTransaction<T>(externalTx: DbTransaction | undefined, fn: (tx: DbTransaction) => Promise<T>): Promise<T> {
   return externalTx ? fn(externalTx) : orm.transaction(fn);
 }
 
@@ -705,10 +710,10 @@ export class PieceworkService {
       notes?: string;
       projectId?: number | string | null;
     },
-    executor?: DbExecutor,
+    executor?: DbTransaction,
     actor: AuditActor = {}
   ): Promise<typeof pieceworkLogs.$inferSelect> {
-    return inTransaction(executor, async (tx) => {
+    return inWriteTransaction(executor, async (tx) => {
       // v8.0.76 (TD-328): قفل ردیف و گارد «در فیش است» در همان تراکنش (کارکرد فیش حذف‌شده آزاد است، مانند صدور فیش)
       const existing = await lockEditableWorkLog(tx, id, 'کارکردی که در فیش حقوقی درج شده قابل تغییر نیست');
 
@@ -755,10 +760,10 @@ export class PieceworkService {
    */
   static async deleteWorkLog(
     id: number,
-    executor?: DbExecutor,
+    executor?: DbTransaction,
     actor: AuditActor = {}
   ): Promise<typeof pieceworkLogs.$inferSelect> {
-    return inTransaction(executor, async (tx) => {
+    return inWriteTransaction(executor, async (tx) => {
       // v8.0.76 (TD-328): همان قفل و گارد ویرایش
       const existing = await lockEditableWorkLog(tx, id, 'امکان حذف کارکردی که در فیش حقوقی درج شده وجود ندارد');
       const [deleted] = await tx.update(pieceworkLogs).set({ isDeleted: 1 })

@@ -1,4 +1,4 @@
--- Drizzle Migration 0121: messenger delivery jobs and per-category notification choices (v10.1.40, messenger
+-- Drizzle Migration 0121: messenger delivery jobs and per-category notification choices (v10.1.41, messenger
 -- notifications plan part 2)
 --
 -- Every in-app notification is now written through one function, which in the same transaction queues one delivery job

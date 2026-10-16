@@ -16,6 +16,8 @@ const fetchJson = vi.fn(async (url: string, opts?: FetchOpts) => {
 vi.mock('../../api', () => ({ fetchJson: (url: string, opts?: FetchOpts) => fetchJson(url, opts) }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 // v9.0.417 (TD-752): buttons follow the project API keys; these tests act as a user who holds them
+// v10.1.40 (N-01): the workshop reports panel has its own test (workshopCartablePageTd1285)
+vi.mock('../../components/workshop/ProjectWorkshopPanel', () => ({ ProjectWorkshopPanel: () => null }));
 vi.mock('../../hooks/useProjectPermissions', () => ({
   useProjectPermissions: () => ({
     canCreate: true, canEdit: true, canDelete: true, canAllocate: true, canConsumeAllocation: true, canReleaseAllocation: true, canDeliver: true, canRequestPurchase: true,

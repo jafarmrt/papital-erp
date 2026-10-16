@@ -9,7 +9,7 @@ import { deadLetterDeliveryJobId } from '../../services/events/deadLetterDeliver
 import { nextAttemptDelaySeconds } from '../../services/events/integrationDelivery.service';
 
 /**
- * v10.1.40 (messenger notifications plan part 2, §2.3): every in-app notification is written by `createNotifications`,
+ * v10.1.41 (messenger notifications plan part 2, §2.3): every in-app notification is written by `createNotifications`,
  * which queues its messenger jobs in the same transaction, so no production file outside it inserts into `notifications`.
  * Before, eight places wrote the bell row themselves and nothing reached Bale or Telegram. The messenger text is personal,
  * in Persian digits, without the text of an administrator's rule template, and carries the app's own link.

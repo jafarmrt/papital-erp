@@ -1,5 +1,5 @@
 /**
- * v10.1.40 (messenger notifications plan part 2, §2.3): the categories of in-app notifications, shared by the server and
+ * v10.1.41 (messenger notifications plan part 2, §2.3): the categories of in-app notifications, shared by the server and
  * the profile. Every notification is written with one of them; the user chooses per category whether it also goes to
  * their linked Bale or Telegram account (on by default). The messenger text is personal (decision ت۲): the recipient's
  * name, what it is about and a direct link, in Persian digits and without any amount.

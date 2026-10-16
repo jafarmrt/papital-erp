@@ -208,16 +208,19 @@ export async function manualWorkLogs(
   return result;
 }
 
-async function reviewItems(executor: DbExecutor, reports: ReportRow[]): Promise<WorkshopReviewItem[]> {
+async function reviewItems(executor: DbExecutor, user: WorkshopUser, reports: ReportRow[]): Promise<WorkshopReviewItem[]> {
   if (reports.length === 0) return [];
   const projects = await executor.select({
     id: productionProjects.id, projectCode: productionProjects.projectCode, title: productionProjects.title, endDate: productionProjects.endDate,
     stageSchedules: productionProjects.stageSchedules, products: productionProjects.products,
   }).from(productionProjects).where(inArray(productionProjects.id, [...new Set(reports.map(r => r.projectId))]));
   const byId = new Map(projects.map(p => [p.id, p]));
-  const names = await executor.select({ id: personnel.id, fullName: personnel.fullName }).from(personnel)
+  const names = await executor.select({ id: personnel.id, fullName: personnel.fullName, userId: personnel.userId }).from(personnel)
     .where(inArray(personnel.id, [...new Set(reports.map(r => r.personnelId))]));
   const nameOf = new Map(names.map(n => [n.id, n.fullName]));
+  const userOf = new Map(names.map(n => [n.id, n.userId]));
+  // the rule the approval checks (assertNotOwnReport), so the page offers no button the server refuses
+  const isOwn = (r: ReportRow) => !user.isAdmin && (userOf.get(r.personnelId) === user.id || r.createdById === user.id);
   const stages = await stageTitles(executor, reports.map(r => r.stageId));
   const manual = await manualWorkLogs(executor, projects, reports.map(r => ({ projectId: r.projectId, personnelId: r.personnelId, taskId: r.taskId })));
   return reports.map(r => {
@@ -240,6 +243,7 @@ async function reviewItems(executor: DbExecutor, reports: ReportRow[]): Promise<
       personnelName: nameOf.get(r.personnelId) ?? '',
       deadline: row ? taskDeadlineIso(row, project?.endDate) : null,
       manualLogs: manual.get(`${r.projectId}|${r.personnelId}|${r.taskId}`) ?? [],
+      isOwn: isOwn(r),
     };
   });
 }
@@ -255,7 +259,7 @@ export async function listReviewReports(executor: DbExecutor, user: WorkshopUser
       projectId ? eq(workshopTaskReports.projectId, projectId) : undefined,
     ))
     .orderBy(asc(workshopTaskReports.createdAt), asc(workshopTaskReports.id)).limit(500);
-  return reviewItems(executor, reports);
+  return reviewItems(executor, user, reports);
 }
 
 /** Per stage: approved quantity of approved reports whose work log is live ÷ planned quantity of the stage's schedule rows. */

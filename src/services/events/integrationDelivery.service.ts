@@ -16,7 +16,7 @@ import type { BaseDomainEvent } from './domainEvents.js';
  * again. Before, webhook retries were three timers lost on a restart, a failed rule action was never run again, the outbox
  * handlers always reported success and nothing reached the dead letter queue.
  */
-// v10.1.40 (messenger notifications plan part 2): `messenger` is one notification sent to one linked Bale or Telegram
+// v10.1.41 (messenger notifications plan part 2): `messenger` is one notification sent to one linked Bale or Telegram
 // account; its target is the user's link and its row is queued by `createNotifications` in the notification's transaction
 export type DeliveryKind = 'webhook' | 'rule_action' | 'messenger';
 export type DeliveryJob = typeof integrationDeliveryJobs.$inferSelect;

@@ -6,7 +6,7 @@ type DeadLetterRow = Pick<typeof deadLetterEvents.$inferSelect, 'source' | 'meta
 /**
  * v9.0.378 (TD-705): a dead letter row of one integration delivery (a webhook subscription or a rule action for one event)
  * carries its delivery row in `metadata.deliveryJobId`; its replay and requeue run that delivery, never the whole event.
- * v10.1.40: a messenger delivery (source `messenger`) too, so its replay never goes through the event bus.
+ * v10.1.41: a messenger delivery (source `messenger`) too, so its replay never goes through the event bus.
  */
 const DELIVERY_DEAD_LETTER_SOURCES: ReadonlySet<string> = new Set(['webhook', 'action_engine', 'messenger']);
 

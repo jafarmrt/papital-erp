@@ -11,7 +11,7 @@ import {
 } from '../../lib/workshop/workshopSchedule.js';
 import { formatPersianNumber, toPersianDigits } from '../../utils/persianNumber.js';
 import { PieceworkService } from '../piecework.service.js';
-import { assertProjectReviewer, liveUserIds, notifyUsers, projectManagerUserIds, requireLinkedPersonnel, type WorkshopActor } from './workshopAccess.js';
+import { assertProjectReviewer, notifyUsers, projectManagerUserIds, requireLinkedPersonnel, workerUserIds, type WorkshopActor } from './workshopAccess.js';
 import { CLOSED_PROJECT_STATUSES, liveLogIds, manualWorkLogs, productItemIdOf, productNameOf, reportView, rowHasLiveLog } from './workshopTasks.js';
 
 /**
@@ -224,9 +224,11 @@ async function assertNotOwnReport(tx: DbTransaction, user: WorkshopActor['user']
   }
 }
 
-async function workerUserIds(tx: DbTransaction, personnelId: number): Promise<number[]> {
-  const [row] = await tx.select({ userId: personnel.userId }).from(personnel).where(eq(personnel.id, personnelId));
-  return liveUserIds(tx, row?.userId ? [row.userId] : []);
+/** Whether two id lists hold the same ids, order and repeats aside. */
+export function sameIdSet(current: readonly number[], acknowledged: readonly number[]): boolean {
+  const a = new Set(current);
+  const b = new Set(acknowledged);
+  return a.size === b.size && [...a].every(id => b.has(id));
 }
 
 export interface ApproveReportInput {
@@ -236,8 +238,11 @@ export interface ApproveReportInput {
   /** the work log's ISO date; empty is the business today */
   date?: string;
   note?: string;
-  /** «بررسی کردم»: the reviewer has seen the manual work logs of the same worker, task and project */
-  acknowledgeManualLogs?: boolean;
+  /**
+   * «بررسی کردم»: the ids of the manual work logs (same worker, task and project) the reviewer saw. The approval goes
+   * through only when they are exactly the current ones, so a log added after the page loaded is seen first.
+   */
+  acknowledgedManualLogIds?: number[];
 }
 
 /** «تأیید»: writes the row's work log through the piecework path and marks the report approved, in one transaction. */
@@ -255,7 +260,9 @@ export async function approveWorkshopReport(tx: DbTransaction, actor: WorkshopAc
   const reviewNote = cleanNote(input.note);
   const manual = (await manualWorkLogs(tx, [project], [{ projectId: project.id, personnelId: report.personnelId, taskId: row.taskId }]))
     .get(`${project.id}|${report.personnelId}|${row.taskId}`) ?? [];
-  if (manual.length > 0 && input.acknowledgeManualLogs !== true) throw conflict(WORKSHOP_ERRORS.manualLogsExist, { manualLogs: manual });
+  if (!sameIdSet(manual.map(log => log.id), input.acknowledgedManualLogIds ?? [])) {
+    throw conflict(WORKSHOP_ERRORS.manualLogsExist, { manualLogs: manual });
+  }
 
   const [logId] = await PieceworkService.logWorkEntries([{
     personnelId: report.personnelId,

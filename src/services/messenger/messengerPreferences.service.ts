@@ -8,7 +8,7 @@ import {
 } from '../../lib/notifications/notificationCategories.js';
 
 /**
- * v10.1.40 (messenger notifications plan part 2, §2.3): «در پیام‌رسان هم بفرست» per notification category, in the user's
+ * v10.1.41 (messenger notifications plan part 2, §2.3): «در پیام‌رسان هم بفرست» per notification category, in the user's
  * own profile. Every category is on until the user turns it off; the bell keeps every notification either way.
  */
 /** Same audit entity as a link change (`MESSENGER_LINK_AUDIT_ENTITY`): both are the user's own messenger settings */

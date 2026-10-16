@@ -5,7 +5,7 @@ import { useMyMessengerPreferencesQuery, useSetMessengerPreferenceMutation } fro
 import { errorMessageOf } from '../../utils';
 
 /**
- * v10.1.40 (messenger notifications plan part 2, §2.3): «در پیام‌رسان هم بفرست» per notification category in the profile.
+ * v10.1.41 (messenger notifications plan part 2, §2.3): «در پیام‌رسان هم بفرست» per notification category in the profile.
  * Every category is on by default; turning one off keeps it in the app's bell only. Each tick is saved at once and is
  * disabled while its answer is on the way.
  */

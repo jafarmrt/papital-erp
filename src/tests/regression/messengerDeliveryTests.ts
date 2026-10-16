@@ -9,7 +9,7 @@ import { type ShouldRun, runCase } from './fiscalClosingTests.js';
 import { brief, clientFor, codeOf, inSandbox, TOKEN, withFakeBotApi, type FakeBotApi } from './messengerLinkTests.js';
 
 /**
- * v10.1.40 (messenger notifications plan part 2, §2.3): an in-app notification reaches the recipient's linked Bale or
+ * v10.1.41 (messenger notifications plan part 2, §2.3): an in-app notification reaches the recipient's linked Bale or
  * Telegram account. `createNotifications` queues one `messenger` job per active link in the notification's own
  * transaction; the delivery worker sends a personal Persian text with the app's link, retries a network error or 5xx,
  * closes the link on a 403 and moves any other refusal to the dead letter queue; a category the user turned off in the
@@ -56,7 +56,7 @@ export async function runMessengerDeliveryTests(shouldRun: ShouldRun): Promise<T
 
   const flowId = 'reg_messenger_notification_delivery';
   if (shouldRun(flowId, 'messenger')) {
-    await runCase(results, flowId, 'v10.1.40: a daily log mention reaches the mentioned user\'s linked Bale account as a personal Persian message with the app link; a rolled-back write sends nothing; a category turned off in the profile stays in the bell only', async () => inSandbox(() => withAppUrl(() => withFakeBotApi(async (api) => {
+    await runCase(results, flowId, 'v10.1.41: a daily log mention reaches the mentioned user\'s linked Bale account as a personal Persian message with the app link; a rolled-back write sends nothing; a category turned off in the profile stays in the bell only', async () => inSandbox(() => withAppUrl(() => withFakeBotApi(async (api) => {
       const admin = await clientFor('admin');
       const saved = await admin.put('/api/messenger/bots/bale', { token: TOKEN });
       if (saved.status !== 200) throw new Error(`bot: ${brief(saved)}`);
@@ -120,7 +120,7 @@ export async function runMessengerDeliveryTests(shouldRun: ShouldRun): Promise<T
 
   const failId = 'reg_messenger_delivery_failures';
   if (shouldRun(failId, 'messenger')) {
-    await runCase(results, failId, 'v10.1.40: a 5xx is retried later, a 403 closes the link (shown in the profile) and the job without a dead letter, any other refusal goes to the dead letter queue as a messenger delivery', async () => inSandbox(() => withFakeBotApi(async (api) => {
+    await runCase(results, failId, 'v10.1.41: a 5xx is retried later, a 403 closes the link (shown in the profile) and the job without a dead letter, any other refusal goes to the dead letter queue as a messenger delivery', async () => inSandbox(() => withFakeBotApi(async (api) => {
       const admin = await clientFor('admin');
       if ((await admin.put('/api/messenger/bots/bale', { token: TOKEN })).status !== 200) throw new Error('bot not saved');
       const user = await clientFor([], 'رضا کریمی');
@@ -168,7 +168,7 @@ export async function runMessengerDeliveryTests(shouldRun: ShouldRun): Promise<T
 
   const reviewId = 'reg_messenger_delivery_review_fixes';
   if (shouldRun(reviewId, 'messenger')) {
-    await runCase(results, reviewId, 'v10.1.40: a messenger dead letter is replayed and requeued as its own delivery, never through the event bus; a user deleted or a category turned off after queueing sends nothing and deleting a user closes their links; a 429 waits for its retry_after; a messenger job has ten attempts', async () => inSandbox(() => withFakeBotApi(async (api) => {
+    await runCase(results, reviewId, 'v10.1.41: a messenger dead letter is replayed and requeued as its own delivery, never through the event bus; a user deleted or a category turned off after queueing sends nothing and deleting a user closes their links; a 429 waits for its retry_after; a messenger job has ten attempts', async () => inSandbox(() => withFakeBotApi(async (api) => {
       const admin = await clientFor('admin');
       if ((await admin.put('/api/messenger/bots/bale', { token: TOKEN })).status !== 200) throw new Error('bot not saved');
       const user = await clientFor([], 'نرگس کاظمی');
