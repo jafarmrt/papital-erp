@@ -36,6 +36,7 @@ import crmRoutes from './routes/crm.routes.js';
 import woocommerceRoutes from './routes/woocommerce.routes.js';
 import personnelRoutes from './routes/personnel.routes.js';
 import pieceworkRoutes from './routes/piecework.routes.js';
+import workshopRoutes from './routes/workshop.routes.js';
 import payrollStatutoryRoutes from './routes/payrollStatutory.routes.js';
 import pendingMaterialsRoutes from './routes/pendingMaterials.routes.js';
 import mediaRoutes from './routes/media.routes.js';
@@ -360,6 +361,7 @@ export async function createApp(): Promise<express.Express> {
   app.use('/api', personnelRoutes);
   app.use('/api', payrollStatutoryRoutes);
   app.use('/api', pieceworkRoutes);
+  app.use('/api', workshopRoutes);
   app.use('/api', pendingMaterialsRoutes);
   app.use('/api', accountingRoutes);
   app.use('/api', reportsRoutes);

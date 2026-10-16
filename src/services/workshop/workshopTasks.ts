@@ -1,0 +1,249 @@
+import { and, asc, desc, eq, gte, inArray, notInArray, or, sql } from 'drizzle-orm';
+import type { DbExecutor } from '../../db/drizzle.js';
+import { personnel, pieceworkLogs, productionProjects, projectStages, workshopTaskReports } from '../../db/schema.js';
+import { businessTodayIsoDate } from '../../lib/businessClock.js';
+import type {
+  MyWorkshopTasks, ProjectWorkshopReports, WorkshopApprovedReport, WorkshopReportView, WorkshopReviewItem, WorkshopStageProgress, WorkshopTaskCard,
+} from '../../lib/workshop/workshopContract.js';
+import {
+  daysUntilDeadline, taskDeadlineIso, workshopScheduleRows, type WorkshopReportStatus, type WorkshopScheduleRow,
+} from '../../lib/workshop/workshopSchedule.js';
+import { reviewableProjectIds, requireLinkedPersonnel, type WorkshopUser } from './workshopAccess.js';
+
+/**
+ * v10.1.38 (N-01 part 2, plan §4.3 «کارهای من» and «بررسی مسئول پروژه»): the worker's open schedule rows and the
+ * reports waiting for a project manager. A row is open while its project is neither completed nor cancelled and it has
+ * no live work log; its report is its submitted or latest report.
+ */
+
+/** Projects a workshop row may still be worked on. */
+export const CLOSED_PROJECT_STATUSES = ['completed', 'cancelled'];
+const APPROVED_WINDOW_DAYS = 30;
+
+type ProjectRow = { id: number; projectCode: string; title: string; endDate: string | null; status: string | null; stageSchedules: unknown; products: unknown };
+type ReportRow = typeof workshopTaskReports.$inferSelect;
+
+const rowKey = (projectId: number, stageId: number, productId: string, rowId: string) => `${projectId}|${stageId}|${productId}|${rowId}`;
+
+export function reportView(r: ReportRow): WorkshopReportView {
+  return {
+    id: r.id,
+    status: r.status as WorkshopReportStatus,
+    quantity: Number(r.quantity),
+    approvedQuantity: r.approvedQuantity === null ? null : Number(r.approvedQuantity),
+    notes: r.notes,
+    reviewNote: r.reviewNote,
+    version: r.version,
+    createdAt: r.createdAt,
+    reviewedAt: r.reviewedAt,
+  };
+}
+
+/** The display name of a schedule product: its schedule's name, else the project's product of that id. */
+export function productNameOf(products: unknown, row: Pick<WorkshopScheduleRow, 'productId' | 'productName'>): string {
+  if (row.productName) return row.productName;
+  const list = Array.isArray(products) ? products : [];
+  const found = list.find((p: { id?: unknown }) => String(p?.id) === row.productId) as { item_name?: string; itemName?: string } | undefined;
+  return found?.item_name || found?.itemName || '';
+}
+
+/** The project product's warehouse item id (for the progress matrix), when it has one. */
+export function productItemIdOf(products: unknown, productId: string): number | null {
+  const list = Array.isArray(products) ? products : [];
+  const found = list.find((p: { id?: unknown }) => String(p?.id) === productId) as { item_id?: unknown; itemId?: unknown } | undefined;
+  const id = Number(found?.item_id ?? found?.itemId);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+async function stageTitles(executor: DbExecutor, stageIds: number[]): Promise<Map<number, { title: string; stageOrder: number }>> {
+  const map = new Map<number, { title: string; stageOrder: number }>();
+  const ids = [...new Set(stageIds)];
+  if (ids.length === 0) return map;
+  const rows = await executor.select({ id: projectStages.id, title: projectStages.title, stageOrder: projectStages.stageOrder }).from(projectStages)
+    .where(and(inArray(projectStages.id, ids), eq(projectStages.isDeleted, 0)));
+  for (const r of rows) map.set(r.id, { title: r.title, stageOrder: r.stageOrder });
+  return map;
+}
+
+/** Ids among `logIds` of work logs that are not deleted. */
+export async function liveLogIds(executor: DbExecutor, logIds: number[]): Promise<Set<number>> {
+  const ids = [...new Set(logIds)];
+  if (ids.length === 0) return new Set();
+  const rows = await executor.select({ id: pieceworkLogs.id }).from(pieceworkLogs)
+    .where(and(inArray(pieceworkLogs.id, ids), eq(pieceworkLogs.isDeleted, 0)));
+  return new Set(rows.map(r => r.id));
+}
+
+/** A row is done once it has a live work log, or carries the pre-v9.0.282 logged flag. */
+export function rowHasLiveLog(row: WorkshopScheduleRow, live: Set<number>): boolean {
+  return row.legacyLogged || (row.pieceworkLogId !== null && live.has(row.pieceworkLogId));
+}
+
+async function openProjects(executor: DbExecutor, ids?: number[]): Promise<ProjectRow[]> {
+  if (ids && ids.length === 0) return [];
+  return executor.select({
+    id: productionProjects.id, projectCode: productionProjects.projectCode, title: productionProjects.title, endDate: productionProjects.endDate,
+    status: productionProjects.status, stageSchedules: productionProjects.stageSchedules, products: productionProjects.products,
+  }).from(productionProjects)
+    .where(and(
+      eq(productionProjects.isDeleted, 0),
+      or(sql`${productionProjects.status} IS NULL`, notInArray(productionProjects.status, CLOSED_PROJECT_STATUSES)),
+      ids ? inArray(productionProjects.id, ids) : undefined,
+    ))
+    .orderBy(asc(productionProjects.id));
+}
+
+/** «کارهای من»: open rows assigned to the user's personnel, nearest deadline first, and their approved reports of 30 days. */
+export async function listMyTasks(executor: DbExecutor, user: WorkshopUser): Promise<MyWorkshopTasks> {
+  const me = await requireLinkedPersonnel(executor, user.id);
+  const todayIso = await businessTodayIsoDate();
+  const projects = await openProjects(executor);
+  const mine = projects.flatMap(project => workshopScheduleRows(project.stageSchedules)
+    .filter(row => row.personnelId === me.id)
+    .map(row => ({ project, row })));
+  const live = await liveLogIds(executor, mine.map(m => m.row.pieceworkLogId).filter((id): id is number => id !== null));
+  const open = mine.filter(m => !rowHasLiveLog(m.row, live));
+
+  const reports = open.length === 0 ? [] : await executor.select().from(workshopTaskReports)
+    .where(and(eq(workshopTaskReports.personnelId, me.id), inArray(workshopTaskReports.projectId, [...new Set(open.map(m => m.project.id))])))
+    .orderBy(desc(workshopTaskReports.id));
+  const reportOf = new Map<string, ReportRow>();
+  for (const r of reports) {
+    const key = rowKey(r.projectId, r.stageId, r.productId, r.rowId);
+    const current = reportOf.get(key);
+    // the live (submitted) report wins, else the latest one
+    if (!current || (r.status === 'submitted' && current.status !== 'submitted')) reportOf.set(key, r);
+  }
+  const stages = await stageTitles(executor, open.map(m => m.row.stageId));
+
+  const tasks: WorkshopTaskCard[] = open.map(({ project, row }) => {
+    const deadline = taskDeadlineIso(row, project.endDate);
+    const report = reportOf.get(rowKey(project.id, row.stageId, row.productId, row.rowId));
+    return {
+      projectId: project.id,
+      projectCode: project.projectCode,
+      projectTitle: project.title,
+      stageId: row.stageId,
+      stageTitle: stages.get(row.stageId)?.title ?? '',
+      productId: row.productId,
+      productName: productNameOf(project.products, row),
+      rowId: row.rowId,
+      taskId: row.taskId,
+      taskTitle: row.taskTitle,
+      quantity: row.quantity,
+      unit: row.unit,
+      deadline,
+      daysLeft: deadline ? daysUntilDeadline(deadline, todayIso) : null,
+      report: report ? reportView(report) : null,
+    };
+  }).sort((a, b) => (a.daysLeft ?? Number.MAX_SAFE_INTEGER) - (b.daysLeft ?? Number.MAX_SAFE_INTEGER) || a.projectId - b.projectId);
+
+  return { personnel: me, tasks, approved: await approvedReports(executor, me.id) };
+}
+
+async function approvedReports(executor: DbExecutor, personnelId: number): Promise<WorkshopApprovedReport[]> {
+  const rows = await executor.select({
+    report: workshopTaskReports, projectCode: productionProjects.projectCode, projectTitle: productionProjects.title,
+    products: productionProjects.products, schedules: productionProjects.stageSchedules, amount: pieceworkLogs.totalAmount,
+  }).from(workshopTaskReports)
+    .innerJoin(productionProjects, eq(productionProjects.id, workshopTaskReports.projectId))
+    .innerJoin(pieceworkLogs, and(eq(pieceworkLogs.id, workshopTaskReports.pieceworkLogId), eq(pieceworkLogs.isDeleted, 0)))
+    .where(and(
+      eq(workshopTaskReports.personnelId, personnelId),
+      eq(workshopTaskReports.status, 'approved'),
+      gte(workshopTaskReports.reviewedAt, sql`now() - make_interval(days => ${APPROVED_WINDOW_DAYS})`),
+    ))
+    .orderBy(desc(workshopTaskReports.reviewedAt)).limit(100);
+  const stages = await stageTitles(executor, rows.map(r => r.report.stageId));
+  return rows.map(r => {
+    const row = workshopScheduleRows(r.schedules).find(x => x.stageId === r.report.stageId && x.productId === r.report.productId && x.rowId === r.report.rowId);
+    return {
+      reportId: r.report.id,
+      projectCode: r.projectCode,
+      projectTitle: r.projectTitle,
+      stageTitle: stages.get(r.report.stageId)?.title ?? '',
+      productName: row ? productNameOf(r.products, row) : '',
+      taskTitle: row?.taskTitle ?? '',
+      quantity: Number(r.report.approvedQuantity ?? r.report.quantity),
+      amount: r.amount.toNumber(),
+      reviewedAt: r.report.reviewedAt,
+    };
+  });
+}
+
+async function reviewItems(executor: DbExecutor, reports: ReportRow[]): Promise<WorkshopReviewItem[]> {
+  if (reports.length === 0) return [];
+  const projects = await executor.select({
+    id: productionProjects.id, projectCode: productionProjects.projectCode, title: productionProjects.title, endDate: productionProjects.endDate,
+    stageSchedules: productionProjects.stageSchedules, products: productionProjects.products,
+  }).from(productionProjects).where(inArray(productionProjects.id, [...new Set(reports.map(r => r.projectId))]));
+  const byId = new Map(projects.map(p => [p.id, p]));
+  const names = await executor.select({ id: personnel.id, fullName: personnel.fullName }).from(personnel)
+    .where(inArray(personnel.id, [...new Set(reports.map(r => r.personnelId))]));
+  const nameOf = new Map(names.map(n => [n.id, n.fullName]));
+  const stages = await stageTitles(executor, reports.map(r => r.stageId));
+  return reports.map(r => {
+    const project = byId.get(r.projectId);
+    const row = workshopScheduleRows(project?.stageSchedules).find(x => x.stageId === r.stageId && x.productId === r.productId && x.rowId === r.rowId);
+    return {
+      report: reportView(r),
+      projectId: r.projectId,
+      projectCode: project?.projectCode ?? '',
+      projectTitle: project?.title ?? '',
+      stageId: r.stageId,
+      stageTitle: stages.get(r.stageId)?.title ?? '',
+      productId: r.productId,
+      productName: row ? productNameOf(project?.products, row) : '',
+      rowId: r.rowId,
+      taskTitle: row?.taskTitle ?? '',
+      plannedQuantity: row?.quantity ?? 0,
+      unit: row?.unit ?? 'عدد',
+      personnelId: r.personnelId,
+      personnelName: nameOf.get(r.personnelId) ?? '',
+      deadline: row ? taskDeadlineIso(row, project?.endDate) : null,
+    };
+  });
+}
+
+/** Reports waiting for this reviewer: submitted reports of the projects they manage (every project for the admin). */
+export async function listReviewReports(executor: DbExecutor, user: WorkshopUser, projectId?: number): Promise<WorkshopReviewItem[]> {
+  const scope = await reviewableProjectIds(executor, user);
+  if (scope && scope.length === 0) return [];
+  const reports = await executor.select().from(workshopTaskReports)
+    .where(and(
+      eq(workshopTaskReports.status, 'submitted'),
+      scope ? inArray(workshopTaskReports.projectId, scope) : undefined,
+      projectId ? eq(workshopTaskReports.projectId, projectId) : undefined,
+    ))
+    .orderBy(asc(workshopTaskReports.createdAt), asc(workshopTaskReports.id)).limit(500);
+  return reviewItems(executor, reports);
+}
+
+/** Per stage: approved quantity of approved reports ÷ planned quantity of the stage's schedule rows. */
+export function stageProgressOf(schedules: unknown, approved: ReadonlyArray<{ stageId: number; quantity: number }>): WorkshopStageProgress[] {
+  const planned = new Map<number, number>();
+  for (const row of workshopScheduleRows(schedules)) planned.set(row.stageId, (planned.get(row.stageId) ?? 0) + Math.max(0, row.quantity));
+  const done = new Map<number, number>();
+  for (const a of approved) done.set(a.stageId, (done.get(a.stageId) ?? 0) + a.quantity);
+  return [...planned.entries()].sort((a, b) => a[0] - b[0]).map(([stageId, plannedQuantity]) => {
+    const approvedQuantity = done.get(stageId) ?? 0;
+    const percent = plannedQuantity > 0 ? Math.min(100, Math.round((approvedQuantity / plannedQuantity) * 100)) : 0;
+    return { stageId, plannedQuantity, approvedQuantity, percent };
+  });
+}
+
+/** The project schedule tab's view: pending reports (reviewers only) and each stage's approved share. */
+export async function projectWorkshopReports(executor: DbExecutor, user: WorkshopUser, projectId: number, canReviewKey: boolean): Promise<ProjectWorkshopReports> {
+  const [project] = await executor.select({ id: productionProjects.id, stageSchedules: productionProjects.stageSchedules }).from(productionProjects)
+    .where(and(eq(productionProjects.id, projectId), eq(productionProjects.isDeleted, 0)));
+  if (!project) return { pending: [], stageProgress: [], canReview: false };
+  const scope = canReviewKey ? await reviewableProjectIds(executor, user) : [];
+  const canReview = canReviewKey && (scope === null || scope.includes(projectId));
+  const approved = await executor.select({ stageId: workshopTaskReports.stageId, quantity: workshopTaskReports.approvedQuantity }).from(workshopTaskReports)
+    .where(and(eq(workshopTaskReports.projectId, projectId), eq(workshopTaskReports.status, 'approved')));
+  return {
+    pending: canReview ? await listReviewReports(executor, user, projectId) : [],
+    stageProgress: stageProgressOf(project.stageSchedules, approved.map(a => ({ stageId: a.stageId, quantity: Number(a.quantity ?? 0) }))),
+    canReview,
+  };
+}

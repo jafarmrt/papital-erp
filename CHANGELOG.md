@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.1.38 — کارتابل کارگاه، بخش سرور (N-01 بخش ۲، TD-1284)
+- Workshop cartable server (N-01 part 2, mobile workshop plan ت۱ / ت۲ / ت۵–ت۸ الف): /api/workshop routes for the worker's tasks and deliveries, receipt confirmation, end-of-task reports and the project manager's approve / reject (piecework log at the server rate, own report refused), and deadline reminders; no migration.
+
 ### v10.1.37 — داده کارتابل کارگاه (N-01 بخش ۱، TD-1283)
 - Workshop cartable data (N-01 part 1, mobile workshop plan ت۳ / ت۴ / ت۱۱ الف): migration 0119 (project_managers, stock_receipt_confirmations, workshop_task_reports, recipient_personnel_id on documents and allocations, reminder dedup index); keys workshop.self / workshop.review / workshop.long_session and the «کارکن کارگاه» role template; seven-day login for workshop.long_session; project managers on project create and edit (422 PROJECT_MANAGER_INVALID); remittance and allocation recipient (422 RECIPIENT_REMITTANCE_ONLY / RECIPIENT_PERSONNEL_INVALID). Tests: reg_workshop_long_session_n01, reg_project_managers_n01, reg_stock_recipient_n01, Vitest workshopCartablePartOne.test.ts
 
