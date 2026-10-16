@@ -131,7 +131,7 @@ export async function runTreasuryChequeSweepTests(shouldRun: ShouldRun): Promise
   if (shouldRun(clearingId, 'obs-r1-70', 'cheque', 'bank', 'clearing', 'pos', 'petty')) {
     await runCase(results, clearingId, 'v10.1.47: a cheque clears only into a bank or cash account, and a paid cheque only from its issuing account (decision t40)', async () => {
       const issuing = await createBank('Sweep issuing bank');
-      await orm.update(bankAccounts).set({ currentBalance: money(1_000_000) }).where(eq(bankAccounts.id, issuing.id));
+      await orm.update(bankAccounts).set({ initialBalance: money(1_000_000), currentBalance: money(1_000_000) }).where(eq(bankAccounts.id, issuing.id));
       const other = await createBank('Sweep other bank');
       const pos = await createBank('Sweep pos');
       await orm.update(bankAccounts).set({ type: 'pos' }).where(eq(bankAccounts.id, pos.id));
@@ -178,7 +178,7 @@ export async function runTreasuryChequeSweepTests(shouldRun: ShouldRun): Promise
       const pos = await createBank('Sweep paid pos');
       await orm.update(bankAccounts).set({ type: 'pos' }).where(eq(bankAccounts.id, pos.id));
       const bank = await createBank('Sweep paid clearing bank');
-      await orm.update(bankAccounts).set({ currentBalance: money(1_000_000) }).where(eq(bankAccounts.id, bank.id));
+      await orm.update(bankAccounts).set({ initialBalance: money(1_000_000), currentBalance: money(1_000_000) }).where(eq(bankAccounts.id, bank.id));
       const createCode = await codeOf(() => ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'paid', chequeNumber: `SWL${tagOf()}`, amount: 40000, partyName: 'Sweep legacy supplier', bankAccountId: pos.id }));
 
       // a paid cheque drawn on a POS account before this release
