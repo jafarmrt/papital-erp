@@ -30,7 +30,9 @@ import {
   Zap,
   Compass,
   Calculator,
-  Images
+  Images,
+  Hammer,
+  ClipboardCheck
 } from 'lucide-react';
 import { User } from '../../types';
 import { canOpenPage } from '../../lib/permissions/pageAccess';
@@ -101,6 +103,9 @@ export function getMenuGroups(
       groupIcon: Layers,
       items: [
         { name: 'کنترل پروژه‌های تولید', path: '/projects', icon: Layers, visible: open('/projects') },
+        // v10.1.40 (N-01): کارتابل کارگاه برای کارکن و بررسی گزارش‌های پایان کار برای مسئول پروژه
+        { name: 'کارتابل کارگاه', path: '/workshop', icon: Hammer, visible: open('/workshop') },
+        { name: 'بررسی گزارش‌های کار', path: '/workshop/review', icon: ClipboardCheck, visible: open('/workshop/review') },
       ]
     },
     {

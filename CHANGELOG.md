@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.1.40 — صفحهٔ کارتابل کارگاه (N-01 بخش ۳، TD-1285)
+- Workshop cartable pages (N-01 part 3): /workshop for the worker's tasks, reports, approved amounts and delivery answers, /workshop/review for the project manager's approve / reject with the matrix tick offer, phone sheets that send nothing offline, a phone bar button and the project schedule's stage progress.
+
 ### v10.1.39 — کارتابل کارگاه، بخش سرور (N-01 بخش ۲، TD-1284)
 - Workshop cartable server (N-01 part 2, mobile workshop plan ت۱ / ت۲ / ت۵–ت۸ الف): /api/workshop routes for the worker's tasks and deliveries, receipt confirmation, end-of-task reports and the project manager's approve / reject (piecework log at the server rate, own report refused), and deadline reminders; no migration.
 

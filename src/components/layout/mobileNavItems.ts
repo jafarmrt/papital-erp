@@ -7,10 +7,13 @@ import { canOpenPage, type ViewerAccess } from '../../lib/permissions/pageAccess
 export interface MobileNavItem {
   path: string;
   label: string;
+  /** v10.1.40 (N-01): the page the button opens instead when the viewer cannot open `path` (a project manager's review page) */
+  fallbackPath?: string;
 }
 
 export const MOBILE_NAV_ITEMS: readonly MobileNavItem[] = [
   { path: '/', label: 'پیشخوان' },
+  { path: '/workshop', label: 'کارگاه', fallbackPath: '/workshop/review' },
   { path: '/approval-inbox', label: 'تأییدها' },
   { path: '/audit', label: 'شمارش انبار' },
   { path: '/piecework', label: 'کارکرد' },
@@ -19,7 +22,11 @@ export const MOBILE_NAV_ITEMS: readonly MobileNavItem[] = [
 export const MOBILE_MENU_LABEL = 'فهرست';
 
 export function visibleMobileNavItems(viewer: ViewerAccess | null | undefined): MobileNavItem[] {
-  return MOBILE_NAV_ITEMS.filter(item => canOpenPage(item.path, viewer));
+  return MOBILE_NAV_ITEMS.flatMap(item => {
+    if (canOpenPage(item.path, viewer)) return [{ path: item.path, label: item.label }];
+    if (item.fallbackPath && canOpenPage(item.fallbackPath, viewer)) return [{ path: item.fallbackPath, label: item.label }];
+    return [];
+  });
 }
 
 /** مسیر فعال: پیشخوان فقط روی «/»، بقیه روی خود مسیر و زیرمسیرهایش */

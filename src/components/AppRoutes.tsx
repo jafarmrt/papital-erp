@@ -69,6 +69,7 @@ const DailyLogsPage = lazyWithRetry(() => import('../pages/DailyLogsPage'));
 const PersonnelPage = lazyWithRetry(() => import('../pages/PersonnelPage'));
 const PieceworkPayrollPage = lazyWithRetry(() => import('../pages/PieceworkPayrollPage'));
 const MyPayslipsPage = lazyWithRetry(() => import('../pages/MyPayslipsPage'));
+const WorkshopPage = lazyWithRetry(() => import('../pages/WorkshopPage'));
 const CRMPage = lazyWithRetry(() => import('../pages/CRMPage'));
 const AccountingPage = lazyWithRetry(() => import('../pages/AccountingPage'));
 const ApprovalInboxPage = lazyWithRetry(() => import('../pages/ApprovalInboxPage'));
@@ -226,6 +227,16 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
         <Route path="/piecework" element={
           <ProtectedRoute page="/piecework" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <PieceworkPayrollPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/workshop" element={
+          <ProtectedRoute page="/workshop" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+            <WorkshopPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/workshop/review" element={
+          <ProtectedRoute page="/workshop/review" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+            <WorkshopPage />
           </ProtectedRoute>
         } />
         <Route path="/my-payslips" element={

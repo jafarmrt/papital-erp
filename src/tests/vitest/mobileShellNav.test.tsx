@@ -48,7 +48,13 @@ function renderShell(permissions: string[], startCollapsed = true) {
 describe('phone bottom bar (D-11)', () => {
   it('offers only the pages the role may open', () => {
     expect(visibleMobileNavItems({ permissions: ['audit.view'], isAdmin: false }).map(i => i.path)).toEqual(['/', '/audit']);
-    expect(visibleMobileNavItems({ permissions: [], isAdmin: true }).map(i => i.path)).toEqual(['/', '/approval-inbox', '/audit', '/piecework']);
+    expect(visibleMobileNavItems({ permissions: [], isAdmin: true }).map(i => i.path)).toEqual(['/', '/workshop', '/approval-inbox', '/audit', '/piecework']);
+  });
+
+  it('opens the workshop cartable for a worker and the review page for a project manager (N-01)', () => {
+    expect(visibleMobileNavItems({ permissions: ['workshop.self'], isAdmin: false }).map(i => i.path)).toEqual(['/', '/workshop']);
+    expect(visibleMobileNavItems({ permissions: ['projects.view', 'workshop.review'], isAdmin: false }).map(i => i.path)).toEqual(['/', '/workshop/review']);
+    expect(isMobileNavItemActive('/workshop', '/workshop/review')).toBe(true);
   });
 
   it('marks the dashboard active only on its own address', () => {

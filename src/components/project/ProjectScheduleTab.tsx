@@ -13,6 +13,7 @@ import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 import { useProjectVersion } from '../../hooks/useProjectVersion';
 import { useProjectPermissions } from '../../hooks/useProjectPermissions';
+import { ProjectWorkshopPanel } from '../workshop/ProjectWorkshopPanel';
 import {
   isScheduleRowLogged, scheduleLogItem, withPieceworkTask, withScheduleLogLink, withScheduleRowIds,
   type ScheduleLogItem, type ScheduleRowRef
@@ -613,6 +614,9 @@ export default function ProjectScheduleTab({
           <span className="text-[10px] text-emerald-800">کارکرد با همین تاریخ در حقوق ماه آن حساب می‌شود؛ پیش‌فرض امروز است.</span>
         </div>
       )}
+
+      {/* v10.1.40 (N-01): گزارش‌های پایان کار کارگاه و پیشرفت تأییدشده هر مرحله */}
+      {project.id ? <ProjectWorkshopPanel projectId={project.id} stages={stages} /> : null}
 
       {/* Breakdown per Stage */}
       <div className="space-y-5">

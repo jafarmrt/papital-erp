@@ -295,9 +295,14 @@ async function reviewGuardsCase(h: Harness, wrong: string[]): Promise<string> {
   if (!item || (item.manualLogs ?? []).map(l => l.id).join() !== String(manualLog?.id)) wrong.push(`the review item lists manual logs ${JSON.stringify(item?.manualLogs ?? null)}, expected log ${manualLog?.id}`);
   const unacknowledged = await approve(manual);
   if (unacknowledged.status !== 409 || codeOf(unacknowledged) !== 'WORKSHOP_MANUAL_LOGS_EXIST') wrong.push(`approving beside a manual log answered ${brief(unacknowledged)}, expected 409 WORKSHOP_MANUAL_LOGS_EXIST`);
+  // the acknowledgement names the logs the reviewer saw: another set (an extra or a missing log) is refused
+  for (const seen of [[], [Number(manualLog?.id), 999_999_999]]) {
+    const stale = await approve(manual, { acknowledgedManualLogIds: seen });
+    if (stale.status !== 409 || codeOf(stale) !== 'WORKSHOP_MANUAL_LOGS_EXIST') wrong.push(`approving with acknowledged logs ${JSON.stringify(seen)} answered ${brief(stale)}, expected 409 WORKSHOP_MANUAL_LOGS_EXIST`);
+  }
 
   // 5. two approvals at once write exactly one work log
-  const racing = await Promise.all([approve(manual, { acknowledgeManualLogs: true }), approve(manual, { acknowledgeManualLogs: true })]);
+  const racing = await Promise.all([approve(manual, { acknowledgedManualLogIds: [Number(manualLog?.id)] }), approve(manual, { acknowledgedManualLogIds: [Number(manualLog?.id)] })]);
   const okCount = racing.filter(r => r.status === 200).length;
   if (okCount !== 1) wrong.push(`two approvals at once answered ${racing.map(brief).join(' / ')}, expected exactly one 200`);
   const [rowLogs] = await h.q(`SELECT count(*)::int AS n FROM piecework_logs WHERE personnel_id = $1 AND project_id = $2 AND is_deleted = 0 AND notes LIKE '%گزارش کارگاه%'`, [personnelId, projectId]);
@@ -314,5 +319,21 @@ async function reviewGuardsCase(h: Harness, wrong: string[]): Promise<string> {
   if (stage?.approvedQuantity !== 0) wrong.push(`after the log was deleted the stage shows ${JSON.stringify(stage ?? null)}, expected approved quantity 0`);
   const again = await h.post('/api/workshop/reports', { ...ref('manual'), quantity: 4 }, worker);
   if (again.status !== 201) wrong.push(`a new report after the log was deleted answered ${brief(again)}, expected 201`);
-  return 'rows without a quantity, changed tasks, removed rows and manual logs are guarded; one log per approval race; a deleted log reopens the row';
+  const revertNotes = async () => (await notificationsOf(h, worker.userId, 'workshop_report_reverted')).length;
+  if (await revertNotes() !== 1) wrong.push(`after its log was deleted the worker has ${await revertNotes()} revert notifications, expected 1`);
+
+  // 7. the approved log moved to another project: the report is undone the same way and the worker is told (TD-1285)
+  const againReport = (again.body as { report?: { id: number; version: number } }).report;
+  if (againReport) {
+    const approvedAgain = await approve(againReport, { acknowledgedManualLogIds: [Number(manualLog?.id)] });
+    const movedLogId = Number((approvedAgain.body as { pieceworkLogId?: number }).pieceworkLogId);
+    if (approvedAgain.status !== 200 || !movedLogId) wrong.push(`approving the new report answered ${brief(approvedAgain)}, expected 200 with a work log`);
+    const { projectId: otherProjectId } = await scheduledProject(h, []);
+    const move = await h.put(`/api/piecework/logs/${movedLogId}`, { projectId: otherProjectId }, logKeeper);
+    if (move.status !== 200) wrong.push(`moving the approved work log to another project answered ${brief(move)}, expected 200`);
+    const [movedReport] = await h.q(`SELECT status, review_note FROM workshop_task_reports WHERE id = $1`, [againReport.id]);
+    if (movedReport?.status !== 'rejected' || !String(movedReport?.review_note).includes('حذف شد')) wrong.push(`after its log moved the report is ${JSON.stringify(movedReport ?? null)}, expected rejected with a note`);
+    if (await revertNotes() !== 2) wrong.push(`after its log moved the worker has ${await revertNotes()} revert notifications, expected 2`);
+  }
+  return 'rows without a quantity, changed tasks, removed rows and manual logs are guarded; the acknowledgement names the logs seen; one log per approval race; a deleted or moved log reopens the row and tells the worker';
 }

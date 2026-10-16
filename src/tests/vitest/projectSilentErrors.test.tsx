@@ -17,6 +17,8 @@ vi.mock('react-hot-toast', () => ({
   toast: { success: vi.fn(), error: (...args: unknown[]) => toastError(...args) },
   default: { success: vi.fn(), error: (...args: unknown[]) => toastError(...args) },
 }));
+// v10.1.40 (N-01): the workshop reports panel has its own test (workshopCartablePageTd1285)
+vi.mock('../../components/workshop/ProjectWorkshopPanel', () => ({ ProjectWorkshopPanel: () => null }));
 vi.mock('../../hooks/useProjectPermissions', () => ({
   useProjectPermissions: () => ({
     canCreate: true, canEdit: true, canDelete: true, canAllocate: true, canConsumeAllocation: true, canReleaseAllocation: true, canDeliver: true, canRequestPurchase: true,
