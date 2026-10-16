@@ -25,7 +25,7 @@ import { CLOSED_PROJECT_STATUSES, liveLogIds, productItemIdOf, productNameOf, re
  * Every write has its «گزارش کار کارگاه» audit row in its own transaction.
  */
 
-const REVIEW_LINK = '/workshop?tab=review';
+const REVIEW_LINK = '/workshop/review';
 const WORKER_LINK = '/workshop';
 
 type ReportRow = typeof workshopTaskReports.$inferSelect;
