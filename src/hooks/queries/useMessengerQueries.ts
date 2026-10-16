@@ -2,12 +2,14 @@ import { useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import type { LinkCodeIssued, Messenger, MessengerBotView, MessengerLinkAdminRow, MyMessengerLink } from '../../lib/messenger/messengerLinks';
+import type { MessengerPreference, NotificationCategory } from '../../lib/notifications/notificationCategories';
 
 /** v10.1.38 (messenger plan part 1): the user's own links to the staff bots and, for the system admin, the bots */
 const MESSENGER_KEYS = {
   mine: ['messenger', 'links', 'mine'] as const,
   bots: ['messenger', 'bots'] as const,
   adminLinks: ['messenger', 'links', 'all'] as const,
+  preferences: ['messenger', 'preferences', 'mine'] as const,
 };
 
 const listOf = <T,>(res: unknown): T[] => {
@@ -74,5 +76,24 @@ export function useSaveBotTokenMutation() {
       void queryClient.invalidateQueries({ queryKey: MESSENGER_KEYS.bots });
       void queryClient.invalidateQueries({ queryKey: MESSENGER_KEYS.adminLinks });
     },
+  });
+}
+
+/** v10.1.41 (plan part 2): «در پیام‌رسان هم بفرست» per notification category, for the user's own account */
+export function useMyMessengerPreferencesQuery(enabled = true) {
+  return useQuery<MessengerPreference[]>({
+    queryKey: MESSENGER_KEYS.preferences,
+    queryFn: async () => listOf<MessengerPreference>(await fetchJson('/messenger/preferences/mine')),
+    enabled,
+  });
+}
+
+export function useSetMessengerPreferenceMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: { category: NotificationCategory; sendToMessenger: boolean }) =>
+      listOf<MessengerPreference>(await fetchJson('/messenger/preferences/mine', { method: 'PUT', body: JSON.stringify(body) })),
+    onSuccess: (rows) => { queryClient.setQueryData(MESSENGER_KEYS.preferences, rows); },
+    onSettled: () => { void queryClient.invalidateQueries({ queryKey: MESSENGER_KEYS.preferences }); },
   });
 }

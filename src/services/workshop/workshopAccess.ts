@@ -1,9 +1,10 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
-import type { DbExecutor } from '../../db/drizzle.js';
-import { notifications, personnel, projectManagers, roles, users } from '../../db/schema.js';
+import type { DbExecutor, DbTransaction } from '../../db/drizzle.js';
+import { personnel, projectManagers, roles, users } from '../../db/schema.js';
 import { ForbiddenError, ValidationError } from '../../errors/customErrors.js';
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
 import { WORKSHOP_ERRORS } from '../../lib/workshop/workshopSchedule.js';
+import { createNotifications } from '../notifications/notificationCreator.js';
 
 /**
  * v10.1.39 (N-01 part 2): who the workshop cartable's user is. A worker acts only as the live personnel linked to their
@@ -105,18 +106,21 @@ export interface WorkshopNotification {
   link: string;
 }
 
-/** One in-app notification per recipient, in the caller's transaction; the sender never notifies themselves. */
-export async function notifyUsers(tx: DbExecutor, recipientIds: readonly number[], sender: WorkshopUser, note: WorkshopNotification): Promise<void> {
+/**
+ * One in-app notification per recipient, in the caller's transaction, through `createNotifications` (category `workshop`,
+ * so a linked messenger gets its fixed sentence); the sender never notifies themselves.
+ */
+export async function notifyUsers(tx: DbTransaction, recipientIds: readonly number[], sender: WorkshopUser, note: WorkshopNotification): Promise<void> {
   const ids = [...new Set(recipientIds)].filter(id => id !== sender.id);
   if (ids.length === 0) return;
-  await tx.insert(notifications).values(ids.map(userId => ({
+  await createNotifications(tx, ids.map(userId => ({
     userId,
+    category: 'workshop' as const,
     senderId: sender.id,
     senderName: sender.fullName || sender.username || 'کارتابل کارگاه',
     type: note.type,
     title: note.title,
     message: note.message,
     link: note.link,
-    isRead: 0,
   })));
 }

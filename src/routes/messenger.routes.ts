@@ -6,8 +6,10 @@ import { requireSystemAdmin } from '../middleware/authorize.js';
 import { validate } from '../middleware/validate.js';
 import { UnauthorizedError } from '../errors/customErrors.js';
 import { MESSENGERS, type Messenger } from '../lib/messenger/messengerLinks.js';
+import { MESSENGER_PREFERENCE_CATEGORIES, type NotificationCategory } from '../lib/notifications/notificationCategories.js';
 import { listBotViews, saveBotToken } from '../services/messenger/messengerBots.service.js';
 import { issueLinkCode, listActiveLinksForAdmin, listMyLinks, sendTestMessage, unlinkMine } from '../services/messenger/messengerLinks.service.js';
+import { listMyPreferences, setMyPreference } from '../services/messenger/messengerPreferences.service.js';
 
 /**
  * v10.1.38 (messenger notifications plan part 1): the staff messenger bots. A user reads, makes and ends only their own
@@ -24,6 +26,14 @@ const messengerNoBody = messengerParam.extend({ body: z.object({}).strict() });
 
 const botTokenSchema = messengerParam.extend({
   body: z.object({ token: z.string().max(200, 'نشانه ربات بیش از اندازه بلند است') }).strict(),
+});
+
+// v10.1.41 (plan part 2): «در پیام‌رسان هم بفرست» of one notification category, for the user's own account
+const preferenceSchema = z.object({
+  body: z.object({
+    category: z.enum(MESSENGER_PREFERENCE_CATEGORIES as [NotificationCategory, ...NotificationCategory[]], { message: 'نوع اعلان شناخته نیست' }),
+    sendToMessenger: z.boolean({ message: 'روشن یا خاموش بودن را بفرستید' }),
+  }).strict(),
 });
 
 function currentUserId(req: { user?: { id?: number } }): number {
@@ -48,6 +58,15 @@ router.post('/messenger/links/:messenger/test', validate(messengerNoBody), async
 router.delete('/messenger/links/:messenger', validate(messengerParam), asyncHandler(async (req, res) => {
   await unlinkMine(currentUserId(req), req.params.messenger as Messenger, req);
   res.json({ success: true });
+}));
+
+router.get('/messenger/preferences/mine', asyncHandler(async (req, res) => {
+  res.json({ data: await listMyPreferences(currentUserId(req)) });
+}));
+
+router.put('/messenger/preferences/mine', validate(preferenceSchema), asyncHandler(async (req, res) => {
+  const body = req.body as { category: NotificationCategory; sendToMessenger: boolean };
+  res.json({ data: await setMyPreference(currentUserId(req), body.category, body.sendToMessenger, req) });
 }));
 
 router.get('/messenger/bots', requireSystemAdmin, asyncHandler(async (_req, res) => {

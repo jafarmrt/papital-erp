@@ -6,9 +6,12 @@ type DeadLetterRow = Pick<typeof deadLetterEvents.$inferSelect, 'source' | 'meta
 /**
  * v9.0.378 (TD-705): a dead letter row of one integration delivery (a webhook subscription or a rule action for one event)
  * carries its delivery row in `metadata.deliveryJobId`; its replay and requeue run that delivery, never the whole event.
+ * v10.1.41: a messenger delivery (source `messenger`) too, so its replay never goes through the event bus.
  */
+const DELIVERY_DEAD_LETTER_SOURCES: ReadonlySet<string> = new Set(['webhook', 'action_engine', 'messenger']);
+
 export function deadLetterDeliveryJobId(record: DeadLetterRow): number | null {
-  if (record.source !== 'webhook' && record.source !== 'action_engine') return null;
+  if (!DELIVERY_DEAD_LETTER_SOURCES.has(String(record.source))) return null;
   const jobId = Number((record.metadata as Record<string, unknown> | null)?.deliveryJobId);
   return Number.isInteger(jobId) && jobId > 0 ? jobId : null;
 }

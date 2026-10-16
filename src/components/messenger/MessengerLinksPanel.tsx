@@ -11,6 +11,7 @@ import {
 import { formatPersianDateTime } from '../../utils/dateUtils';
 import { formatPersianCode, formatPersianNumber } from '../../utils/persianNumber';
 import { errorMessageOf } from '../../utils';
+import { MessengerPreferencesList } from './MessengerPreferencesList';
 
 /**
  * v10.1.38 (messenger notifications plan part 1, §2.2): the profile tab «پیام‌رسان». The user links their own Bale or
@@ -169,6 +170,7 @@ export function MessengerLinksPanel() {
           onIssued={(code) => setIssued(prev => ({ ...prev, [link.messenger]: code }))}
         />
       ))}
+      {links.some(l => l.linked) && <MessengerPreferencesList />}
     </div>
   );
 }

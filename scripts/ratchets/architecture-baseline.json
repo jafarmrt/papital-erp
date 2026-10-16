@@ -1,6 +1,6 @@
 {
   "routeWrites": {
-    "src/routes/crm.routes.ts": 10
+    "src/routes/crm.routes.ts": 8
   },
   "ormFallback": {
     "src/lib/auditLogger.ts": 2,

@@ -115,6 +115,8 @@ export async function withAdvisoryLockWaiting<T>(key: number, fn: () => Promise<
 
 async function withSessionAdvisoryLock<T>(keyArgs: string, keys: number[], fn: () => Promise<T>, wait = false): Promise<AdvisoryLockOutcome<T>> {
   const client = await pool.connect();
+  // a connection whose unlock failed may still hold the lock: it is closed, never returned to the pool
+  let unlockFailed = false;
   try {
     const res = wait
       ? await client.query(`SELECT pg_advisory_lock(${keyArgs}), true AS acquired`, keys)
@@ -125,9 +127,9 @@ async function withSessionAdvisoryLock<T>(keyArgs: string, keys: number[], fn: (
     try {
       return { acquired: true, result: await fn() };
     } finally {
-      await client.query(`SELECT pg_advisory_unlock(${keyArgs})`, keys).catch(() => undefined);
+      await client.query(`SELECT pg_advisory_unlock(${keyArgs})`, keys).catch(() => { unlockFailed = true; });
     }
   } finally {
-    client.release();
+    client.release(unlockFailed);
   }
 }

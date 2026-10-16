@@ -39,6 +39,8 @@ export const LOGIN_ONLY_ROUTES = new Set([
   // v10.1.38 (messenger plan part 1): the user's own messenger links
   'GET /api/messenger/links/mine', 'POST /api/messenger/links/:messenger/code', 'POST /api/messenger/links/:messenger/test',
   'DELETE /api/messenger/links/:messenger',
+  // v10.1.41 (messenger plan part 2): the user's own «در پیام‌رسان هم بفرست» choices
+  'GET /api/messenger/preferences/mine', 'PUT /api/messenger/preferences/mine',
 ]);
 
 /**

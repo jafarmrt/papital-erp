@@ -33,7 +33,7 @@ export const userMessengerLinks = pgTable('user_messenger_links', {
   isActive: integer('is_active').notNull().default(1),
   linkedAt: timestamp('linked_at', { mode: 'string' }).defaultNow(),
   unlinkedAt: timestamp('unlinked_at', { mode: 'string' }),
-  unlinkReason: text('unlink_reason').notNull().default(''), // '' | 'user' | 'stop' | 'blocked' | 'relinked' | 'bot_changed'
+  unlinkReason: text('unlink_reason').notNull().default(''), // '' | 'user' | 'stop' | 'blocked' | 'relinked' | 'bot_changed' | 'user_deleted' (0121)
 }, (table) => ({
   idx_user_messenger_links_user_id: index('idx_user_messenger_links_user_id').on(table.userId),
   uq_user_messenger_links_user_active: uniqueIndex('uq_user_messenger_links_user_active').on(table.userId, table.messenger).where(sql`${table.isActive} = 1`),
@@ -50,4 +50,18 @@ export const messengerLinkCodes = pgTable('messenger_link_codes', {
 }, (table) => ({
   idx_messenger_link_codes_user_id: index('idx_messenger_link_codes_user_id').on(table.userId),
   uq_messenger_link_codes_code: unique('uq_messenger_link_codes_code').on(table.messenger, table.codeHash),
+}));
+
+/**
+ * v10.1.41 (messenger notifications plan part 2): a user's choice per notification category (migration 0121). A missing
+ * row means the category goes to the messenger too (the default); `send_to_messenger = 0` keeps it in the bell only.
+ */
+export const userNotificationPreferences = pgTable('user_notification_preferences', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull().references(() => users.id),
+  category: text('category').notNull(),
+  sendToMessenger: integer('send_to_messenger').notNull().default(1),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
+}, (table) => ({
+  uq_user_notification_preferences_user_category: unique('uq_user_notification_preferences_user_category').on(table.userId, table.category),
 }));

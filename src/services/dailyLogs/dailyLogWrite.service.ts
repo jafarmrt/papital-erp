@@ -1,6 +1,7 @@
 import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { dailyWorkLogs, notifications, productionProjects, users } from '../../db/schema.js';
+import { dailyWorkLogs, productionProjects, users } from '../../db/schema.js';
+import { createNotifications } from '../notifications/notificationCreator.js';
 import { computeAuditDiff, logActivity } from '../../lib/auditLogger.js';
 import { requireStorageDate } from '../../lib/storageDate.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
@@ -95,18 +96,16 @@ async function resolveProject(tx: Tx, projectId: number | null | '' | undefined)
 async function notifyMentions(tx: Tx, log: DailyLogRow, actor: AuthUserPayload, alreadyMentioned: number[]): Promise<void> {
   const fresh = idList(log.mentions).filter(id => !alreadyMentioned.includes(id) && mentionNotifies(log, id));
   const name = actorName(actor);
-  for (const userId of fresh) {
-    await tx.insert(notifications).values({
-      userId,
-      senderId: actor.id,
-      senderName: name,
-      type: 'mention',
-      title: 'اشاره در گزارش کار روزانه',
-      message: `${name} در گزارش کار روزانه «${log.title}» به شما اشاره کرد.`,
-      link: `/daily-logs?id=${log.id}`,
-      isRead: 0,
-    });
-  }
+  await createNotifications(tx, fresh.map(userId => ({
+    userId,
+    category: 'mention' as const,
+    senderId: actor.id,
+    senderName: name,
+    type: 'mention',
+    title: 'اشاره در گزارش کار روزانه',
+    message: `${name} در گزارش کار روزانه «${log.title}» به شما اشاره کرد.`,
+    link: `/daily-logs?id=${log.id}`,
+  })));
 }
 
 /** The row under lock; a missing or deleted log is 404 */
@@ -249,16 +248,16 @@ export async function reviewDailyLog(actor: AuthUserPayload, logId: number, mana
       .where(eq(dailyWorkLogs.id, logId)).returning();
     const name = actorName(actor);
     if (existing.userId !== actor.id) {
-      await tx.insert(notifications).values({
+      await createNotifications(tx, [{
         userId: existing.userId,
+        category: 'daily_log_review',
         senderId: actor.id,
         senderName: name,
         type: 'work_log_review',
         title: 'بازخورد مدیریتی بر گزارش کار',
         message: `${name} برای گزارش کار «${existing.title}» یادداشت و بازخورد ثبت کرد.`,
         link: `/daily-logs?id=${logId}`,
-        isRead: 0,
-      });
+      }]);
     }
     await logActivity({
       tx,

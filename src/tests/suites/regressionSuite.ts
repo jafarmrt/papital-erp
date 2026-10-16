@@ -10991,6 +10991,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v10.1.38 (messenger plan part 1): staff bots and each user's link to them
   const { runMessengerLinkTests } = await import('../regression/messengerLinkTests.js');
   results.push(...await runMessengerLinkTests(shouldRun));
+  const { runMessengerDeliveryTests } = await import('../regression/messengerDeliveryTests.js');
+  results.push(...await runMessengerDeliveryTests(shouldRun));
   const { runPayrollEidiTests } = await import('../regression/payrollEidiTests.js');
   results.push(...await runPayrollEidiTests(shouldRun));
   const { runPayrollVoucherDateTests } = await import('../regression/payrollVoucherDateTests.js');

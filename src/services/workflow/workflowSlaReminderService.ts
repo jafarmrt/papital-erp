@@ -1,7 +1,6 @@
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { orm, DbExecutor } from '../../db/drizzle.js';
 import {
-  notifications,
   roles as rolesTable,
   users,
   workflowDefinitions,
@@ -9,6 +8,7 @@ import {
   workflowTasks,
   workflowTransitions,
 } from '../../db/schema.js';
+import { createNotifications } from '../notifications/notificationCreator.js';
 import { ADVISORY_LOCK_KEYS, withAdvisoryLock } from '../../lib/advisoryLock.js';
 import { logger } from '../../middleware/logger.js';
 import { getEntityContext } from './workflowDslParser.js';
@@ -133,15 +133,15 @@ export class WorkflowSlaReminderService {
           const ref = String(context.refNumber || context.code || instance.entityId);
           const step = tasks[0].title;
           const message = `مهلت «${step}» در فرایند «${instance.workflowTitle}» برای ${ref} به پایان رسید؛ لطفاً از کارتابل تایید اقدام کنید.`;
-          await tx.insert(notifications).values([...recipients].map((userId) => ({
+          await createNotifications(tx, [...recipients].map((userId) => ({
             userId,
+            category: 'workflow_sla' as const,
             senderId: null,
             senderName: 'گردش کار',
             type: 'system',
             title: 'مهلت کار تاییدی گذشت',
             message,
             link: WORKFLOW_SLA_REMINDER_LINK,
-            isRead: 0,
           })));
           sent += recipients.size;
         } else {

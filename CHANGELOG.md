@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.1.41 — v10.1.41 — اعلان‌های برنامه در بله و تلگرام
+- هر اعلان زنگ برنامه برای کاربر وصل‌شده در بله یا تلگرام هم فرستاده می‌شود، با نام او، موضوع و پیوند مستقیم، بی مبلغ؛ هر نوع اعلان را می‌توان در نمایه خاموش کرد (طرح پیام‌رسان، بخش ۲).
+
 ### v10.1.40 — صفحهٔ کارتابل کارگاه (N-01 بخش ۳، TD-1285)
 - Workshop cartable pages (N-01 part 3): /workshop for the worker's tasks, reports, approved amounts and delivery answers, /workshop/review for the project manager's approve / reject with the matrix tick offer, phone sheets that send nothing offline, a phone bar button and the project schedule's stage progress.
 

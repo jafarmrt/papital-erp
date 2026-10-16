@@ -1,6 +1,7 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { notifications, roles, users } from '../../db/schema.js';
+import { roles, users } from '../../db/schema.js';
+import { createNotifications } from '../notifications/notificationCreator.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
 
@@ -51,17 +52,15 @@ export async function notifyActivityMentions(
   actor: { id?: number; name: string },
 ): Promise<number[]> {
   const readers = await mentionReaders(tx, activity.mentions, actor.id);
-  for (const userId of readers) {
-    await tx.insert(notifications).values({
-      userId,
-      senderId: actor.id,
-      senderName: actor.name,
-      type: 'mention',
-      title: 'اشاره به شما در اقدام ارتباط با مشتری',
-      message: `${actor.name} در اقدام «${activity.title}» به شما اشاره کرد.`,
-      link: `/crm?activityId=${activity.id}`,
-      isRead: 0,
-    });
-  }
+  await createNotifications(tx, readers.map(userId => ({
+    userId,
+    category: 'mention' as const,
+    senderId: actor.id,
+    senderName: actor.name,
+    type: 'mention',
+    title: 'اشاره به شما در اقدام ارتباط با مشتری',
+    message: `${actor.name} در اقدام «${activity.title}» به شما اشاره کرد.`,
+    link: `/crm?activityId=${activity.id}`,
+  })));
   return readers;
 }

@@ -1,9 +1,10 @@
 import { and, asc, eq, sql } from 'drizzle-orm';
-import type { DbExecutor } from '../../db/drizzle.js';
-import { notifications, workshopTaskReports } from '../../db/schema.js';
+import type { DbTransaction } from '../../db/drizzle.js';
+import { workshopTaskReports } from '../../db/schema.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { WORKSHOP_REPORT_LOG_REMOVED_NOTE } from '../../lib/workshop/workshopSchedule.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
+import { createNotifications } from '../notifications/notificationCreator.js';
 import { workerUserIds } from '../workshop/workshopAccess.js';
 import { actorFields, type AuditActor } from './pieceworkAudit.js';
 
@@ -15,7 +16,7 @@ import { actorFields, type AuditActor } from './pieceworkAudit.js';
  * v10.1.40 (TD-1285, review of TD-1284): the worker is told in the same transaction, so a report they saw approved
  * never turns «ردشده» without a word.
  */
-export async function revertWorkshopReportsOfLog(tx: DbExecutor, logId: number, actor: AuditActor): Promise<number> {
+export async function revertWorkshopReportsOfLog(tx: DbTransaction, logId: number, actor: AuditActor): Promise<number> {
   const reports = await tx.select().from(workshopTaskReports)
     .where(and(eq(workshopTaskReports.pieceworkLogId, logId), eq(workshopTaskReports.status, 'approved')))
     .orderBy(asc(workshopTaskReports.id)).for('update');
@@ -46,18 +47,18 @@ export async function revertWorkshopReportsOfLog(tx: DbExecutor, logId: number, 
   return reports.length;
 }
 
-async function notifyWorkerOfRevert(tx: DbExecutor, personnelId: number, reportId: number, actor: AuditActor): Promise<void> {
+async function notifyWorkerOfRevert(tx: DbTransaction, personnelId: number, reportId: number, actor: AuditActor): Promise<void> {
   const { userId: senderId, username } = actorFields(actor);
   const recipients = (await workerUserIds(tx, personnelId)).filter(id => id !== senderId);
   if (recipients.length === 0) return;
-  await tx.insert(notifications).values(recipients.map(userId => ({
+  await createNotifications(tx, recipients.map(userId => ({
     userId,
+    category: 'workshop' as const,
     senderId: senderId ?? null,
     senderName: username || 'کارتابل کارگاه',
     type: 'workshop_report_reverted',
     title: 'گزارش پایان کار برگشت خورد',
     message: `کارکرد گزارش شماره ${toPersianDigits(reportId)} حذف یا به پروژه دیگری برده شد؛ گزارش ردشده است و می‌توانید دوباره گزارش دهید.`,
     link: '/workshop',
-    isRead: 0,
   })));
 }

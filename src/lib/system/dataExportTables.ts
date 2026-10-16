@@ -112,6 +112,7 @@ export const DATA_EXPORT_EXCLUDED_TABLES: Readonly<Record<string, string>> = {
   messenger_bots: 'نشانه ربات‌های پیام‌رسان را دارد',
   user_messenger_links: 'شناسه گفت‌وگوی پیام‌رسان کارکنان را دارد',
   messenger_link_codes: 'کدهای موقت اتصال به پیام‌رسان',
+  user_notification_preferences: 'انتخاب‌های شخصی کارکنان برای اعلان در پیام‌رسان',
   event_action_rule_retirements: 'پیکربندی قاعده‌های بازنشسته که ممکن است کلید داشته باشد',
   webhook_event_pattern_repairs: 'سابقه تبدیل یک‌باره الگوی رویداد اشتراک‌های وبهوک',
   woocommerce_order_logs: 'سابقه فنی همگام‌سازی سفارش‌های ووکامرس',

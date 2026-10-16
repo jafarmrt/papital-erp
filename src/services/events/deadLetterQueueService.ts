@@ -63,7 +63,7 @@ export class DeadLetterQueueService {
     eventType: string;
     aggregateType: string;
     aggregateId: string;
-    source?: 'outbox' | 'action_engine' | 'webhook' | 'manual';
+    source?: 'outbox' | 'action_engine' | 'webhook' | 'messenger' | 'manual';
     payload?: unknown;
     metadata?: unknown;
     failureReason: string;

@@ -3,6 +3,7 @@ import { orm, type DbTransaction } from '../../db/drizzle.js';
 import { integrationDeliveryJobs } from '../../db/schema.js';
 import { ConflictError, NotFoundError } from '../../errors/customErrors.js';
 import { logger } from '../../middleware/logger.js';
+import { MESSENGER_DELIVERY_KIND, rebuildMessengerJobEvent } from '../notifications/notificationCreator.js';
 import { DeadLetterQueueService } from './deadLetterQueueService.js';
 import type { BaseDomainEvent } from './domainEvents.js';
 
@@ -16,7 +17,9 @@ import type { BaseDomainEvent } from './domainEvents.js';
  * again. Before, webhook retries were three timers lost on a restart, a failed rule action was never run again, the outbox
  * handlers always reported success and nothing reached the dead letter queue.
  */
-export type DeliveryKind = 'webhook' | 'rule_action';
+// v10.1.41 (messenger notifications plan part 2): `messenger` is one notification sent to one linked Bale or Telegram
+// account; its target is the user's link and its row is queued by `createNotifications` in the notification's transaction
+export type DeliveryKind = 'webhook' | 'rule_action' | 'messenger';
 export type DeliveryJob = typeof integrationDeliveryJobs.$inferSelect;
 
 export interface DeliveryAttemptOutcome {
@@ -26,6 +29,8 @@ export interface DeliveryAttemptOutcome {
   retryable?: boolean;
   /** the subscription or rule is gone or inactive: the row is closed without a dead letter */
   cancelled?: boolean;
+  /** the receiver's own wait (a 429's retry_after): the next attempt is not earlier than this */
+  retryAfterSeconds?: number;
 }
 
 export interface DeliveryAttemptContext {
@@ -43,6 +48,15 @@ export function deliveryBackoffSeconds(attempt: number): number {
   return Math.min(300, 5 * 2 ** Math.max(0, attempt - 1));
 }
 
+/** The longest wait a receiver's retry_after may ask for */
+export const RETRY_AFTER_MAX_SECONDS = 3600;
+
+/** The backoff, or the receiver's own wait when it asks for longer (at most an hour) */
+export function nextAttemptDelaySeconds(attempt: number, retryAfterSeconds?: number): number {
+  const asked = Number(retryAfterSeconds);
+  return Math.max(deliveryBackoffSeconds(attempt), Number.isFinite(asked) && asked > 0 ? Math.min(asked, RETRY_AFTER_MAX_SECONDS) : 0);
+}
+
 /** Attempts of a webhook subscription's delivery: its retry limit (default 3), between 1 and 10 */
 export function webhookMaxAttempts(retryLimit: number | null | undefined): number {
   const limit = Math.trunc(Number(retryLimit)) || WEBHOOK_DEFAULT_ATTEMPTS;
@@ -51,7 +65,8 @@ export function webhookMaxAttempts(retryLimit: number | null | undefined): numbe
 
 /** The dead letter row of one delivery: the event id with the delivery's target, so each failed delivery has its own row */
 export function deliveryDeadLetterId(job: Pick<DeliveryJob, 'kind' | 'targetId' | 'eventId'>): string {
-  return `${job.eventId}#${job.kind === 'webhook' ? 'webhook' : 'rule'}:${job.targetId}`;
+  const kind = job.kind === 'webhook' ? 'webhook' : job.kind === 'messenger' ? 'messenger' : 'rule';
+  return `${job.eventId}#${kind}:${job.targetId}`;
 }
 
 function errorText(err: unknown): string {
@@ -60,6 +75,10 @@ function errorText(err: unknown): string {
 
 function eventOf(job: DeliveryJob): BaseDomainEvent {
   return job.event as BaseDomainEvent;
+}
+
+async function messengerReplayEvent(job: DeliveryJob): Promise<BaseDomainEvent | null> {
+  return (await rebuildMessengerJobEvent(orm, job)) as BaseDomainEvent | null;
 }
 
 export class IntegrationDeliveryService {
@@ -114,6 +133,10 @@ export class IntegrationDeliveryService {
   private static async execute(job: DeliveryJob): Promise<DeliveryAttemptOutcome> {
     const context = { jobId: job.id, attempt: job.attempts };
     try {
+      if (job.kind === 'messenger') {
+        const { deliverMessengerJob } = await import('../messenger/messengerDelivery.js');
+        return await deliverMessengerJob(job.targetId, eventOf(job));
+      }
       if (job.kind === 'webhook') {
         const { WebhookSubscriptionService } = await import('./webhookSubscriptionService.js');
         return await WebhookSubscriptionService.deliverJobAttempt(job.targetId, eventOf(job), context);
@@ -144,7 +167,7 @@ export class IntegrationDeliveryService {
     }
     const final = replay || outcome.retryable === false || job.attempts >= job.maxAttempts;
     if (!final) {
-      const nextAttemptAt = new Date(Date.now() + deliveryBackoffSeconds(job.attempts) * 1000).toISOString();
+      const nextAttemptAt = new Date(Date.now() + nextAttemptDelaySeconds(job.attempts, outcome.retryAfterSeconds) * 1000).toISOString();
       await orm.update(integrationDeliveryJobs)
         .set({ status: 'pending', lockedAt: null, lastError: error, nextAttemptAt, updatedAt: sql`now()` })
         .where(eq(integrationDeliveryJobs.id, job.id));
@@ -162,13 +185,14 @@ export class IntegrationDeliveryService {
 
   private static async moveToDeadLetter(job: DeliveryJob, error: string): Promise<void> {
     const event = eventOf(job);
-    const target = job.kind === 'webhook' ? `اشتراک وب‌هوک #${job.targetId}` : `اقدام قانون خودکار #${job.targetId}`;
+    const target = job.kind === 'webhook' ? `اشتراک وب‌هوک #${job.targetId}`
+      : job.kind === 'messenger' ? `پیام‌رسان کاربر (اتصال #${job.targetId})` : `اقدام قانون خودکار #${job.targetId}`;
     await DeadLetterQueueService.moveToDeadLetter({
       originalEventId: deliveryDeadLetterId(job),
       eventType: job.eventType,
       aggregateType: String(event.aggregateType ?? ''),
       aggregateId: String(event.aggregateId ?? ''),
-      source: job.kind === 'webhook' ? 'webhook' : 'action_engine',
+      source: job.kind === 'webhook' ? 'webhook' : job.kind === 'messenger' ? 'messenger' : 'action_engine',
       payload: event.payload ?? {},
       metadata: { ...((event.metadata as unknown as Record<string, unknown>) || {}), deliveryJobId: job.id, deliveryKind: job.kind, deliveryTargetId: job.targetId, originalEventId: job.eventId },
       failureReason: `تحویل به ${target} پس از ${job.attempts} تلاش انجام نشد: ${error}`,
@@ -179,12 +203,21 @@ export class IntegrationDeliveryService {
   /**
    * Replay of a delivery's dead letter row (under that row's lock): one more attempt now, with the edited payload when one
    * is given. A row being attempted is refused (409); a delivered one needs nothing.
+   * A messenger job ignores the given payload: its event is written again from its notification (`rebuildMessengerJobEvent`),
+   * so an edited dead letter never sends another text or link; a job whose notification or link is gone is closed.
    */
   static async replayDeadJob(jobId: number, payload?: unknown): Promise<DeliveryAttemptOutcome> {
     const [job] = await orm.select().from(integrationDeliveryJobs).where(eq(integrationDeliveryJobs.id, jobId));
     if (!job) throw new NotFoundError(`ردیف تحویل #${jobId} یافت نشد.`, undefined, 'DELIVERY_JOB_NOT_FOUND');
     if (job.status === 'succeeded') return { ok: true };
-    const event = payload === undefined || payload === null ? eventOf(job) : { ...eventOf(job), payload };
+    const event = job.kind === MESSENGER_DELIVERY_KIND ? await messengerReplayEvent(job)
+      : payload === undefined || payload === null ? eventOf(job) : { ...eventOf(job), payload };
+    if (event === null) {
+      await orm.update(integrationDeliveryJobs)
+        .set({ status: 'cancelled', lockedAt: null, lastError: 'The notification or the messenger link is gone', updatedAt: sql`now()` })
+        .where(and(eq(integrationDeliveryJobs.id, job.id), inArray(integrationDeliveryJobs.status, ['pending', 'failed', 'cancelled'])));
+      return { ok: false, cancelled: true, error: 'The notification or the messenger link is gone' };
+    }
     const [claimed] = await orm.update(integrationDeliveryJobs)
       .set({ status: 'processing', attempts: job.attempts + 1, event, lockedAt: sql`now()`, updatedAt: sql`now()` })
       .where(and(eq(integrationDeliveryJobs.id, job.id), eq(integrationDeliveryJobs.status, job.status), inArray(integrationDeliveryJobs.status, ['pending', 'failed', 'cancelled'])))

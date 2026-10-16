@@ -1,11 +1,12 @@
 import { and, asc, eq, inArray, isNull, notInArray, or } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { notifications, personnel, pieceworkLogs, productionProjects, workshopTaskReports } from '../../db/schema.js';
+import { personnel, pieceworkLogs, productionProjects, workshopTaskReports } from '../../db/schema.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import {
   daysUntilDeadline, deadlineLabel, taskDeadlineIso, WORKSHOP_REMINDER_DUE_SOON, workshopReminderKind, workshopRowLink, workshopScheduleRows,
 } from '../../lib/workshop/workshopSchedule.js';
 import { runThrottledReminderScan } from '../../lib/workshop/reminderThrottle.js';
+import { createNotifications } from './notificationCreator.js';
 
 /**
  * v10.1.39 (N-01 part 2, decision ت۸ الف of the mobile workshop plan): the notification bell reminds a workshop worker of
@@ -53,16 +54,16 @@ export async function generateWorkshopDueReminders(userId: number): Promise<numb
     if (row.pieceworkLogId !== null && live.has(row.pieceworkLogId)) continue;
     if (reported.has(`${project.id}|${row.stageId}|${row.productId}|${row.rowId}`)) continue;
     const link = workshopRowLink({ projectId: project.id, stageId: row.stageId, productId: row.productId, rowId: row.rowId });
-    const inserted = await orm.insert(notifications).values({
+    const inserted = await orm.transaction(tx => createNotifications(tx, [{
       userId,
+      category: 'workshop',
       senderId: null,
       senderName: 'کارتابل کارگاه',
       type: kind as string,
       title: kind === WORKSHOP_REMINDER_DUE_SOON ? '⏰ مهلت کار نزدیک است' : '⏰ مهلت کار گذشته است',
       message: `«${row.taskTitle || 'کار'}» در پروژه ${project.projectCode}: ${deadlineLabel(days)}.`,
       link,
-      isRead: 0,
-    }).onConflictDoNothing().returning({ id: notifications.id });
+    }], { skipExisting: true }));
     created += inserted.length;
   }
   return created;

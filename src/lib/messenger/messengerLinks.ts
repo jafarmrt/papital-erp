@@ -28,7 +28,7 @@ export function isBotTokenShape(token: string): boolean {
   return BOT_TOKEN_PATTERN.test(token.trim());
 }
 
-export const UNLINK_REASONS = ['user', 'stop', 'blocked', 'relinked', 'bot_changed'] as const;
+export const UNLINK_REASONS = ['user', 'stop', 'blocked', 'relinked', 'bot_changed', 'user_deleted'] as const;
 export type UnlinkReason = (typeof UNLINK_REASONS)[number];
 
 export const UNLINK_REASON_LABELS: Readonly<Record<UnlinkReason, string>> = {
@@ -37,6 +37,7 @@ export const UNLINK_REASON_LABELS: Readonly<Record<UnlinkReason, string>> = {
   blocked: 'ربات را مسدود کردید و پیام‌ها نرسید',
   relinked: 'این حساب پیام‌رسان به کاربر دیگری وصل شد',
   bot_changed: 'مدیر سامانه ربات را عوض کرد',
+  user_deleted: 'حساب کاربری در برنامه حذف شد',
 };
 
 /**

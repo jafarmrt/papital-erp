@@ -365,6 +365,7 @@ export function DeadLetterQueueSubTab() {
               <option value="outbox">صف ارسال رویداد</option>
               <option value="action_engine">موتور واکنش خودکار</option>
               <option value="webhook">وب‌هوک‌ها</option>
+              <option value="messenger">پیام‌رسان کارکنان</option>
             </select>
           </div>
 
@@ -504,6 +505,8 @@ export function DeadLetterQueueSubTab() {
                               ? 'موتور واکنش خودکار'
                               : item.source === 'webhook'
                               ? 'وب‌هوک مقصد'
+                              : item.source === 'messenger'
+                              ? 'پیام‌رسان کارکنان'
                               : item.source}
                           </div>
                           <div className="text-[10px] text-slate-400 mt-0.5">تعداد تلاش: {formatPersianNumber(item.retryCount ?? 0)} بار</div>

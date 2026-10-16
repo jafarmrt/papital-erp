@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, inArray, ne, or, isNull, gte, sql } from 'drizzle-orm';
-import type { DbExecutor } from '../../db/drizzle.js';
+import type { DbExecutor, DbTransaction } from '../../db/drizzle.js';
 import { documentItems, documents, items, productionProjects, projectBomAllocations, stockReceiptConfirmations, users } from '../../db/schema.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { logActivity } from '../../lib/auditLogger.js';
@@ -89,7 +89,7 @@ export interface ConfirmDeliveryInput {
 const notFound = () => new NotFoundError(WORKSHOP_ERRORS.deliveryNotFound.message, undefined, WORKSHOP_ERRORS.deliveryNotFound.code);
 
 /** One answer per remittance or allocation, by its recipient; the row is read `FOR SHARE` so a void waits for it. */
-export async function confirmDelivery(tx: DbExecutor, actor: WorkshopActor, input: ConfirmDeliveryInput): Promise<WorkshopDelivery['confirmation']> {
+export async function confirmDelivery(tx: DbTransaction, actor: WorkshopActor, input: ConfirmDeliveryInput): Promise<WorkshopDelivery['confirmation']> {
   const note = String(input.note ?? '').trim().slice(0, WORKSHOP_NOTE_MAX);
   if (input.status === 'discrepancy' && !note) {
     throw new ValidationError(WORKSHOP_ERRORS.discrepancyNoteRequired.message, undefined, WORKSHOP_ERRORS.discrepancyNoteRequired.code);

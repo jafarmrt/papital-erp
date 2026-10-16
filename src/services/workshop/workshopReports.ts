@@ -1,5 +1,5 @@
 import { and, asc, eq, sql } from 'drizzle-orm';
-import type { DbExecutor } from '../../db/drizzle.js';
+import type { DbTransaction } from '../../db/drizzle.js';
 import { personnel, pieceworkLogs, productionProjects, projectProductStageProgress, projectStages, workshopTaskReports } from '../../db/schema.js';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { logActivity } from '../../lib/auditLogger.js';
@@ -50,7 +50,7 @@ function snapshot(r: ReportRow) {
   };
 }
 
-async function audit(tx: DbExecutor, actor: WorkshopActor, action: 'CREATE' | 'UPDATE', report: ReportRow, description: string, before: ReportRow | null): Promise<void> {
+async function audit(tx: DbTransaction, actor: WorkshopActor, action: 'CREATE' | 'UPDATE', report: ReportRow, description: string, before: ReportRow | null): Promise<void> {
   await logActivity({
     ...auditFields(actor),
     tx,
@@ -71,7 +71,7 @@ async function audit(tx: DbExecutor, actor: WorkshopActor, action: 'CREATE' | 'U
 }
 
 /** Locks the project row (`FOR SHARE` for a worker's report, `FOR UPDATE` for a review) and refuses a closed project. */
-async function lockOpenProject(tx: DbExecutor, projectId: number, mode: 'share' | 'update'): Promise<LockedProject> {
+async function lockOpenProject(tx: DbTransaction, projectId: number, mode: 'share' | 'update'): Promise<LockedProject> {
   const query = tx.select({
     id: productionProjects.id, projectCode: productionProjects.projectCode, title: productionProjects.title, status: productionProjects.status,
     stageSchedules: productionProjects.stageSchedules, products: productionProjects.products,
@@ -86,7 +86,7 @@ function scheduleRowOf(project: LockedProject, ref: { stageId: number; productId
   return workshopScheduleRows(project.stageSchedules).find(r => r.stageId === ref.stageId && r.productId === ref.productId && r.rowId === ref.rowId) ?? null;
 }
 
-async function assertRowOpen(tx: DbExecutor, row: WorkshopScheduleRow): Promise<void> {
+async function assertRowOpen(tx: DbTransaction, row: WorkshopScheduleRow): Promise<void> {
   const live = await liveLogIds(tx, row.pieceworkLogId ? [row.pieceworkLogId] : []);
   if (rowHasLiveLog(row, live)) throw conflict(WORKSHOP_ERRORS.rowLogged);
 }
@@ -113,7 +113,7 @@ export interface SubmitReportInput {
 }
 
 /** «پایان کار و ثبت تعداد» by the worker the row is assigned to. */
-export async function submitWorkshopReport(tx: DbExecutor, actor: WorkshopActor, input: SubmitReportInput): Promise<WorkshopReportView> {
+export async function submitWorkshopReport(tx: DbTransaction, actor: WorkshopActor, input: SubmitReportInput): Promise<WorkshopReportView> {
   const me = await requireLinkedPersonnel(tx, actor.user.id, true);
   const project = await lockOpenProject(tx, input.projectId, 'share');
   const row = scheduleRowOf(project, input);
@@ -147,7 +147,7 @@ export async function submitWorkshopReport(tx: DbExecutor, actor: WorkshopActor,
 }
 
 /** Locks a report row; the caller checks who may act on it. */
-async function lockReport(tx: DbExecutor, reportId: number): Promise<ReportRow> {
+async function lockReport(tx: DbTransaction, reportId: number): Promise<ReportRow> {
   const [report] = await tx.select().from(workshopTaskReports).where(eq(workshopTaskReports.id, reportId)).for('update');
   if (!report) throw new NotFoundError(WORKSHOP_ERRORS.reportNotFound.message, undefined, WORKSHOP_ERRORS.reportNotFound.code);
   return report;
@@ -159,7 +159,7 @@ function assertSubmittedAt(report: ReportRow, version: number): void {
 }
 
 /** The worker's own submitted report; another personnel's report is «not found». */
-async function lockOwnReport(tx: DbExecutor, actor: WorkshopActor, reportId: number, version: number): Promise<ReportRow> {
+async function lockOwnReport(tx: DbTransaction, actor: WorkshopActor, reportId: number, version: number): Promise<ReportRow> {
   const me = await requireLinkedPersonnel(tx, actor.user.id, true);
   const [peek] = await tx.select({ projectId: workshopTaskReports.projectId }).from(workshopTaskReports).where(eq(workshopTaskReports.id, reportId));
   if (peek) await tx.select({ id: productionProjects.id }).from(productionProjects).where(eq(productionProjects.id, peek.projectId)).for('share');
@@ -169,7 +169,7 @@ async function lockOwnReport(tx: DbExecutor, actor: WorkshopActor, reportId: num
   return report;
 }
 
-export async function editWorkshopReport(tx: DbExecutor, actor: WorkshopActor, reportId: number, input: { version: number; quantity?: number; notes?: string }): Promise<WorkshopReportView> {
+export async function editWorkshopReport(tx: DbTransaction, actor: WorkshopActor, reportId: number, input: { version: number; quantity?: number; notes?: string }): Promise<WorkshopReportView> {
   const report = await lockOwnReport(tx, actor, reportId, input.version);
   const project = await lockOpenProject(tx, report.projectId, 'share');
   // the row must still be in the saved schedule, assigned to the worker, with the task the report names and a quantity
@@ -188,7 +188,7 @@ export async function editWorkshopReport(tx: DbExecutor, actor: WorkshopActor, r
   return reportView(updated);
 }
 
-export async function withdrawWorkshopReport(tx: DbExecutor, actor: WorkshopActor, reportId: number, version: number): Promise<WorkshopReportView> {
+export async function withdrawWorkshopReport(tx: DbTransaction, actor: WorkshopActor, reportId: number, version: number): Promise<WorkshopReportView> {
   const report = await lockOwnReport(tx, actor, reportId, version);
   const [updated] = await tx.update(workshopTaskReports).set({
     status: 'withdrawn', updatedAt: sql`now()`, version: report.version + 1,
@@ -198,7 +198,7 @@ export async function withdrawWorkshopReport(tx: DbExecutor, actor: WorkshopActo
 }
 
 /** Locks the report's project `FOR UPDATE`, then the report, and checks the reviewer and the version. */
-async function lockForReview(tx: DbExecutor, actor: WorkshopActor, reportId: number, version: number): Promise<{ report: ReportRow; project: LockedProject | null }> {
+async function lockForReview(tx: DbTransaction, actor: WorkshopActor, reportId: number, version: number): Promise<{ report: ReportRow; project: LockedProject | null }> {
   const [peek] = await tx.select({ projectId: workshopTaskReports.projectId }).from(workshopTaskReports).where(eq(workshopTaskReports.id, reportId));
   if (!peek) throw new NotFoundError(WORKSHOP_ERRORS.reportNotFound.message, undefined, WORKSHOP_ERRORS.reportNotFound.code);
   await assertProjectReviewer(tx, actor.user, peek.projectId);
@@ -216,7 +216,7 @@ async function lockForReview(tx: DbExecutor, actor: WorkshopActor, reportId: num
  * A reviewer never approves or rejects a report of their own work (its personnel is linked to them, or they recorded it),
  * since the approval writes the work log they are paid for; the system admin is exempt, as in the payroll duties.
  */
-async function assertNotOwnReport(tx: DbExecutor, user: WorkshopActor['user'], report: ReportRow): Promise<void> {
+async function assertNotOwnReport(tx: DbTransaction, user: WorkshopActor['user'], report: ReportRow): Promise<void> {
   if (user.isAdmin) return;
   const [worker] = await tx.select({ userId: personnel.userId }).from(personnel).where(eq(personnel.id, report.personnelId));
   if (worker?.userId === user.id || report.createdById === user.id) {
@@ -246,7 +246,7 @@ export interface ApproveReportInput {
 }
 
 /** «تأیید»: writes the row's work log through the piecework path and marks the report approved, in one transaction. */
-export async function approveWorkshopReport(tx: DbExecutor, actor: WorkshopActor, reportId: number, input: ApproveReportInput): Promise<WorkshopApproveResult> {
+export async function approveWorkshopReport(tx: DbTransaction, actor: WorkshopActor, reportId: number, input: ApproveReportInput): Promise<WorkshopApproveResult> {
   const { report, project } = await lockForReview(tx, actor, reportId, input.version);
   if (!project || (project.status && CLOSED_PROJECT_STATUSES.includes(project.status))) throw fail(WORKSHOP_ERRORS.projectClosed);
   const row = scheduleRowOf(project, report);
@@ -304,7 +304,7 @@ export async function approveWorkshopReport(tx: DbExecutor, actor: WorkshopActor
  * Decision ت۶ الف: once every row of the product in the stage has its work log, suggest ticking that cell of the
  * progress matrix, unless it is already completed. The tick itself stays the matrix's own route.
  */
-async function matrixTickSuggestion(tx: DbExecutor, projectId: number, approvedRow: WorkshopScheduleRow): Promise<MatrixTickSuggestion | null> {
+async function matrixTickSuggestion(tx: DbTransaction, projectId: number, approvedRow: WorkshopScheduleRow): Promise<MatrixTickSuggestion | null> {
   const [project] = await tx.select({ stageSchedules: productionProjects.stageSchedules, products: productionProjects.products }).from(productionProjects)
     .where(eq(productionProjects.id, projectId));
   if (!project) return null;
@@ -336,7 +336,7 @@ async function matrixTickSuggestion(tx: DbExecutor, projectId: number, approvedR
 }
 
 /** «رد» with a required reason; the row becomes reportable again. */
-export async function rejectWorkshopReport(tx: DbExecutor, actor: WorkshopActor, reportId: number, input: { version: number; reason: string }): Promise<WorkshopReportView> {
+export async function rejectWorkshopReport(tx: DbTransaction, actor: WorkshopActor, reportId: number, input: { version: number; reason: string }): Promise<WorkshopReportView> {
   const reason = cleanNote(input.reason);
   if (!reason) throw fail(WORKSHOP_ERRORS.rejectReasonRequired);
   const { report, project } = await lockForReview(tx, actor, reportId, input.version);

@@ -65,6 +65,8 @@ G  scripts/check-version-sync.ts
 15 src/middleware/idempotency.ts
 15 src/services/idempotency.service.ts
 15 src/lib/submissionKey.ts
+# ۲ نوشتن اعلان (زنگ و صف پیام‌رسان) میان‌بخشی است، مثل لاگ فعالیت: هر بسته‌ای آن را صدا می‌زند (v10.1.41)
+2  src/services/notifications/notificationCreator.ts
 # ۱ مشاهده‌پذیری درون middleware
 1  src/middleware/logger.ts
 1  src/middleware/metrics.ts
