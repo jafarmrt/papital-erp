@@ -69,6 +69,11 @@ export class TreasuryTransactionService {
     return `${prefix}-${String(seqNum).padStart(6, '0')}`;
   }
 
+  /** v10.1.36 (TD-1243): حساب نگاشت‌شده بیمه پرداختنی (3204) یا مالیات حقوق پرداختنی (3206) برای پرداخت یکجای ماهانه */
+  static payrollStatutoryPayableAccount(kind: 'insurance' | 'tax', tx?: DbExecutor): Promise<Account | null> {
+    return kind === 'insurance' ? AccountMappingService.getInsurancePayableAccount(tx) : AccountMappingService.getPayrollTaxPayableAccount(tx);
+  }
+
   /**
    * V1.8.0: انتخاب طرف حساب متقابل — منطق مشترک بین ثبت و پیش‌نمایش سند
    * purpose برای پرسنل: 'settlement' (تسویه حقوق → 3201) | 'advance' (مساعده → 1301) | 'deductions' (واریز کسورات → 3205)

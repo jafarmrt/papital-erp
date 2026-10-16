@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { X, FileSpreadsheet } from 'lucide-react';
+import { X, FileSpreadsheet, Landmark } from 'lucide-react';
 import { fetchJson } from '../../api';
 import { errorMessageOf, getTodayJalaliDate } from '../../utils';
 import { toPersianDigits } from '../../utils/persianNumber';
@@ -8,11 +8,15 @@ import { toLatinDigits } from '../../lib/numericInput';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { statutoryReportFileName, statutoryReportSheetRows, statutoryReportWithoutNote, type StatutoryReport } from '../../lib/payroll/statutoryReport';
 import { DialogLayer } from '../common/DialogLayer';
+import { useHasPermission } from '../../contexts/AuthContext';
+import { STATUTORY_REMITTANCE_KINDS, STATUTORY_REMITTANCE_PERMISSION, STATUTORY_REMITTANCE_TEXT, type StatutoryRemittanceKind } from '../../lib/treasury/statutoryRemittance';
+import { StatutoryRemittanceModal } from './StatutoryRemittanceModal';
 
 /**
  * v10.0.211 (TD-1088، طرح حقوق §۳.۳ بند ۶، تصمیم ت۷ الف): «فهرست بیمه و مالیات» یک ماه جلالی — جمع حقوق، بیمه سهم کارگر
  * و کارفرما و مالیات فیش‌های تأییدشده هر پرسنل، با خروجی اکسل برای ارسال دستی به تأمین اجتماعی و سامانه مالیات. از v10.1.19
- * (TD-1269) پرسنل بی بیمه و مالیات در فهرست نمی‌آید و فقط شمارش آن نشان داده می‌شود.
+ * (TD-1269) پرسنل بی بیمه و مالیات در فهرست نمی‌آید و فقط شمارش آن نشان داده می‌شود. از v10.1.36 (TD-1243، ت۳۳ الف) دارنده
+ * «خزانه» بیمه یا مالیات کل ماه را با یک پرداخت به نام هر نفر می‌پردازد.
  */
 const MONTHS = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
 
@@ -23,6 +27,8 @@ export function PayrollStatutoryReportModal({ onClose }: { onClose: () => void }
   const [month, setMonth] = useState(Number(today.slice(5, 7)) || 1);
   const [report, setReport] = useState<StatutoryReport | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [remitting, setRemitting] = useState<StatutoryRemittanceKind | null>(null);
+  const canRemit = useHasPermission(STATUTORY_REMITTANCE_PERMISSION);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -51,7 +57,7 @@ export function PayrollStatutoryReportModal({ onClose }: { onClose: () => void }
   const cell = 'px-3 py-2 text-xs font-bold text-slate-700';
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-      <DialogLayer onClose={onClose} />
+      <DialogLayer onClose={onClose} disabled={remitting !== null} />
       <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
           <h2 className="text-sm font-black text-slate-900">فهرست بیمه و مالیات ماهانه</h2>
@@ -68,6 +74,12 @@ export function PayrollStatutoryReportModal({ onClose }: { onClose: () => void }
             className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 disabled:opacity-50 cursor-pointer">
             <FileSpreadsheet size={14} /> خروجی اکسل
           </button>
+          {canRemit && STATUTORY_REMITTANCE_KINDS.map(kind => (
+            <button key={kind} type="button" onClick={() => setRemitting(kind)} disabled={!report}
+              className="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 disabled:opacity-50 cursor-pointer">
+              <Landmark size={14} /> {STATUTORY_REMITTANCE_TEXT[kind].button}
+            </button>
+          ))}
         </div>
         <div className="px-5 pb-5 overflow-y-auto space-y-2">
           {error && <p className="text-xs text-rose-700 font-bold">{error}</p>}
@@ -108,6 +120,7 @@ export function PayrollStatutoryReportModal({ onClose }: { onClose: () => void }
           <p className="text-[10px] text-slate-500 font-bold leading-5">فقط فیش‌های تأییدشده و پرداخت‌شده‌ای که پایان دوره آن‌ها در همین ماه است، و فقط پرسنلی که بیمه یا مالیات حقوق دارند. خروجی اکسل مبلغ‌ها را به ریال دارد.</p>
         </div>
       </div>
+      {remitting && <StatutoryRemittanceModal kind={remitting} jalaliYear={year} jalaliMonth={month} onClose={() => setRemitting(null)} />}
     </div>
   );
 }

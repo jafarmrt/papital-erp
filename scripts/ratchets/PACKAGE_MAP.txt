@@ -31,6 +31,7 @@ G  scripts/check-version-sync.ts
 # ۴ خزانه درون پوشه حسابداری
 4  src/routes/accounting/treasury.routes.ts
 4  src/routes/accounting/pettyCash.schemas.ts
+4  src/routes/accounting/statutoryRemittance.schemas.ts
 4  src/services/accounting/treasury/**
 4  src/services/accounting/treasury.service.ts
 4  src/components/accounting/ChequesTab.tsx

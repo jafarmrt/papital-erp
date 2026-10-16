@@ -827,6 +827,13 @@
       "when": 1795310000000,
       "tag": "0117_personnel_eidi_covered",
       "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1795380000000,
+      "tag": "0118_statutory_remittance_lines",
+      "breakpoints": true
     }
   ]
 }

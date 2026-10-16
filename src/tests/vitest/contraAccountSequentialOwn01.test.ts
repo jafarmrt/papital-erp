@@ -22,6 +22,8 @@ vi.mock('../../services/accounting/accountMapping.service.js', () => {
     'getTradeReceivablesAccount', 'getTradePayablesAccount', 'getWagesPayableAccount', 'getChequeReceivableAccount',
     'getChequeInCollectionAccount', 'getChequeProtestAccount', 'getChequePayableAccount', 'getInventoryRawMaterialsAccount',
     'getWorkInProgressAccount', 'getInventoryFinishedGoodsAccount', 'getSummaryProfitLossAccount', 'getClosingBalanceAccount',
+    // v10.1.36 (TD-1243): the insurance and payroll tax payables are read too, to mark them in the list
+    'getInsurancePayableAccount', 'getPayrollTaxPayableAccount',
   ];
   return { AccountMappingService: Object.fromEntries(names.map(n => [n, read])) };
 });
@@ -37,9 +39,9 @@ function emptyExecutor(): unknown {
 }
 
 describe('contra_account_sequential_reads_own_01', () => {
-  it('reads the twelve mapped accounts one at a time on the transaction', async () => {
+  it('reads the twelve excluded and two statutory mapped accounts one at a time on the transaction', async () => {
     await choosableContraAccounts(emptyExecutor() as never);
-    expect(state.calls).toBe(12);
+    expect(state.calls).toBe(14);
     expect(state.maxInFlight).toBe(1);
   });
 });

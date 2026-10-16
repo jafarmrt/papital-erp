@@ -10986,6 +10986,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runPayrollPrepaymentStartTests(shouldRun));
   const { runPayrollStatutoryTests } = await import('../regression/payrollStatutoryTests.js');
   results.push(...await runPayrollStatutoryTests(shouldRun));
+  const { runStatutoryRemittanceTests } = await import('../regression/statutoryRemittanceTests.js');
+  results.push(...await runStatutoryRemittanceTests(shouldRun));
   const { runPayrollEidiTests } = await import('../regression/payrollEidiTests.js');
   results.push(...await runPayrollEidiTests(shouldRun));
   const { runPayrollVoucherDateTests } = await import('../regression/payrollVoucherDateTests.js');
