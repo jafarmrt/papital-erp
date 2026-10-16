@@ -65,7 +65,7 @@ export async function listReorderAlerts(filters: ReorderAlertFilters, executor: 
   }
   const candidates = await executor.select().from(items).where(and(...conditions)).orderBy(asc(items.id));
   const ids = candidates.map(it => it.id);
-  // v10.1.32 (TD-1279): the executor may be a transaction's single connection, so its queries run one at a time
+  // v10.1.33 (TD-1279): the executor may be a transaction's single connection, so its queries run one at a time
   const reserved = await ItemStockReservationService.getReservedStocksMap({ itemIds: ids });
   const inTransit = await inTransitQuantities(executor, ids);
   const requested = await openRequisitionQuantities(executor, ids);

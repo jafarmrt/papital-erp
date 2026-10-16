@@ -231,7 +231,7 @@ export class WorkflowDefinitionService {
           const refusal = workflowEntityTypeChangeRefusal({ isActive, startedCount: await startedInstanceCount(tx, existing.id) });
           if (refusal) throw new ValidationError(refusal, undefined, 'WF_ENTITY_TYPE_LOCKED');
         }
-        // v10.1.32 (TD-1279): one query at a time on the transaction's connection (pg 9 refuses overlap)
+        // v10.1.33 (TD-1279): one query at a time on the transaction's connection (pg 9 refuses overlap)
         const oldStates = await tx.select({ stateKey: workflowStates.stateKey }).from(workflowStates).where(eq(workflowStates.workflowDefinitionId, existing.id));
         const oldTransitions = await tx.select({ actionKey: workflowTransitions.actionKey }).from(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, existing.id));
         before = designAuditSummary(existing, oldStates.map(r => r.stateKey), oldTransitions.map(r => r.actionKey));

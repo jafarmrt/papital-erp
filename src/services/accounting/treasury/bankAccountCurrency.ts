@@ -5,6 +5,7 @@ import { ValidationError } from '../../../errors/customErrors.js';
 import { fin, type DecimalValue } from '../../../lib/financialDecimal.js';
 import { TREASURY_CURRENCIES, isTreasuryCurrency, normalizeTreasuryCurrency, type TreasuryCurrency } from '../../../lib/treasury/treasuryCurrency.js';
 import { formatCurrencyLabel } from '../../../utils/formatters.js';
+import { pettyCashCurrencyRefusal } from '../../../lib/treasury/pettyCash.js';
 
 const CURRENCY_LIST_TEXT = TREASURY_CURRENCIES.map(formatCurrencyLabel).join('، ');
 
@@ -15,6 +16,12 @@ export function requireTreasuryCurrency(value: unknown): TreasuryCurrency {
     throw new ValidationError(`ارز «${String(value)}» برای حساب خزانه پشتیبانی نمی‌شود؛ یکی از ${CURRENCY_LIST_TEXT} را انتخاب کنید.`, { value }, 'BANK_ACCOUNT_CURRENCY_INVALID');
   }
   return code;
+}
+
+/** v10.1.32 (D-16): تنخواه‌گردان فقط ریالی است (422 `PETTY_CASH_RIAL_ONLY`) */
+export function assertPettyCashCurrency(type: unknown, currency: unknown): void {
+  const refusal = pettyCashCurrencyRefusal(type, currency ?? 'IRR');
+  if (refusal) throw new ValidationError(refusal, { currency }, 'PETTY_CASH_RIAL_ONLY');
 }
 
 /**
