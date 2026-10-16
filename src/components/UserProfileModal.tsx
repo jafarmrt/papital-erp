@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useId } from 'react';
 import { 
   User as UserIcon, Lock, Camera, Check, X, Eye, EyeOff, ShieldCheck, KeyRound, 
-  UploadCloud, AlertCircle, RefreshCw
+  UploadCloud, AlertCircle, RefreshCw, MessageCircle
 } from 'lucide-react';
 import { User } from '../types';
 import { fetchJson } from '../api';
@@ -12,6 +12,7 @@ import { PASSWORD_LENGTH_HINT, passwordLengthError } from '../lib/auth/passwordP
 import { mustChangePassword } from '../lib/auth/passwordReset';
 import { FULL_NAME_MAX_LENGTH, isProfileImageType, PROFILE_IMAGE_ACCEPT, PROFILE_IMAGE_HINT, PROFILE_IMAGE_TYPE_MESSAGE } from '../lib/users/profileFields';
 import { DialogLayer } from './common/DialogLayer';
+import { MessengerLinksPanel } from './messenger/MessengerLinksPanel';
 
 interface UserProfileModalProps {
   user: User;
@@ -26,7 +27,7 @@ interface UserProfileModalProps {
 
 export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, roleName, onLogout }: UserProfileModalProps) {
   const fieldId = useId();
-  const [activeTab, setActiveTab] = useState<'profile' | 'password'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'messenger'>('profile');
   const [fullName, setFullName] = useState<string>(user.full_name || '');
   const [avatarPreview, setAvatarPreview] = useState<string>(user.avatar_url || '');
   const [isNewAvatarSelected, setIsNewAvatarSelected] = useState<boolean>(false);
@@ -193,7 +194,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
               </div>
               <div>
                 <h2 className="text-lg font-bold">تنظیمات حساب کاربری</h2>
-                <p className="text-xs text-slate-400">ویرایش مشخصات، تصویر نمایه و کلمه عبور</p>
+                <p className="text-xs text-slate-400">ویرایش مشخصات، تصویر نمایه، کلمه عبور و پیام‌رسان</p>
               </div>
             </div>
             {!requiresPasswordReset && (
@@ -232,13 +233,26 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
               <KeyRound className="w-4 h-4" />
               تغییر کلمه عبور
             </button>
+            <button
+              onClick={() => setActiveTab('messenger')}
+              className={`flex-1 py-2 rounded-lg font-bold transition-all flex items-center justify-center gap-2 ${
+                activeTab === 'messenger'
+                  ? 'bg-amber-400 text-slate-950 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <MessageCircle className="w-4 h-4" />
+              پیام‌رسان
+            </button>
           </div>
           )}
         </div>
 
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto">
-          {activeTab === 'profile' && !requiresPasswordReset ? (
+          {activeTab === 'messenger' && !requiresPasswordReset ? (
+            <MessengerLinksPanel />
+          ) : activeTab === 'profile' && !requiresPasswordReset ? (
             <form onSubmit={handleSubmitProfile} className="space-y-6">
               {/* Avatar Upload Box */}
               <div className="flex flex-col items-center justify-center gap-3">

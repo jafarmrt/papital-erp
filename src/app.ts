@@ -32,6 +32,7 @@ import projectsRoutes from './routes/projects.routes.js';
 import transfersRoutes from './routes/transfers.routes.js';
 import dailyLogsRoutes from './routes/dailyLogs.routes.js';
 import notificationsRoutes from './routes/notifications.routes.js';
+import messengerRoutes from './routes/messenger.routes.js';
 import crmRoutes from './routes/crm.routes.js';
 import woocommerceRoutes from './routes/woocommerce.routes.js';
 import personnelRoutes from './routes/personnel.routes.js';
@@ -356,6 +357,7 @@ export async function createApp(): Promise<express.Express> {
   app.use('/api', mediaRoutes);
   app.use('/api', dailyLogsRoutes);
   app.use('/api', notificationsRoutes);
+  app.use('/api', messengerRoutes);
   app.use('/api', crmRoutes);
   app.use('/api', personnelRoutes);
   app.use('/api', payrollStatutoryRoutes);

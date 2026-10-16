@@ -40,6 +40,8 @@ export const ADVISORY_LOCK_KEYS = {
   CONDITIONAL_CONSTRAINTS: 91040,
   /** v10.1.3 (N-05 PR 4): rebuilding the light versions of the media library (`npm run media:rebuild-light`); one run at a time */
   MEDIA_LIGHT_REBUILD: 91041,
+  /** v10.1.37 (messenger notifications plan part 1): reading what users send to the staff bots; one pass at a time */
+  MESSENGER_UPDATES: 91090,
 } as const;
 
 /**
