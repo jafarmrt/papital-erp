@@ -1,7 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
-import type { DbTransaction } from '../../db/drizzle.js';
+import type { DbExecutor, DbTransaction } from '../../db/drizzle.js';
 import { integrationDeliveryJobs, notifications, userMessengerLinks, userNotificationPreferences, users } from '../../db/schema.js';
-import { messengerLinkPath, messengerNotificationText, type NotificationCategory } from '../../lib/notifications/notificationCategories.js';
+import { isNotificationCategory, messengerLinkPath, messengerNotificationText, type NotificationCategory } from '../../lib/notifications/notificationCategories.js';
 
 /**
  * v10.1.41 (messenger notifications plan part 2, §2.3): the one way an in-app notification is written. In the caller's
@@ -88,31 +88,92 @@ async function queueMessengerJobs(tx: DbTransaction, written: ReadonlyArray<NewN
   const off = new Set(turnedOff.map(p => `${p.userId}:${p.category}`));
 
   const jobs = written.flatMap(n => off.has(`${n.userId}:${n.category}`) ? [] : links.filter(l => l.userId === n.userId).map(link => {
-    const payload: MessengerDeliveryPayload = {
-      notificationId: n.id,
-      userId: n.userId,
-      messenger: link.messenger,
-      category: n.category,
-      text: messengerNotificationText({ recipientName: link.fullName ?? '', category: n.category, title: n.title, message: n.message }),
-      link: messengerLinkPath(n.category, n.link),
-    };
     const eventId = messengerDeliveryEventId(n.id);
     return {
       kind: MESSENGER_DELIVERY_KIND,
       targetId: link.id,
       eventId,
       eventType: MESSENGER_DELIVERY_EVENT_TYPE,
-      event: {
-        eventId,
-        eventType: MESSENGER_DELIVERY_EVENT_TYPE,
-        aggregateType: 'notification',
-        aggregateId: String(n.id),
-        payload,
-        metadata: {},
-        occurredAt: new Date().toISOString(),
-      },
+      event: messengerDeliveryEvent(n.id, { ...n, recipientName: link.fullName ?? '', messenger: link.messenger }),
       maxAttempts: MESSENGER_DELIVERY_MAX_ATTEMPTS,
     };
   }));
   if (jobs.length > 0) await tx.insert(integrationDeliveryJobs).values(jobs).onConflictDoNothing();
+}
+
+interface MessengerEventSource {
+  userId: number;
+  recipientName: string;
+  messenger: string;
+  category: NotificationCategory;
+  title: string;
+  message: string;
+  link?: string | null;
+}
+
+/** The event of one messenger job: its text and link written from the notification by the category's rule */
+function messengerDeliveryEvent(notificationId: number, source: MessengerEventSource) {
+  const payload: MessengerDeliveryPayload = {
+    notificationId,
+    userId: source.userId,
+    messenger: source.messenger,
+    category: source.category,
+    text: messengerNotificationText({ recipientName: source.recipientName, category: source.category, title: source.title, message: source.message }),
+    link: messengerLinkPath(source.category, source.link),
+  };
+  const eventId = messengerDeliveryEventId(notificationId);
+  return {
+    eventId,
+    eventType: MESSENGER_DELIVERY_EVENT_TYPE,
+    aggregateType: 'notification',
+    aggregateId: String(notificationId),
+    payload,
+    metadata: {},
+    occurredAt: new Date().toISOString(),
+  };
+}
+
+/** The notification id of a messenger job, read from its event id (`notification:<id>`), never from its payload */
+export function messengerJobNotificationId(eventId: string): number | null {
+  const match = /^notification:(\d+)$/.exec(eventId);
+  const id = match ? Number(match[1]) : NaN;
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+/**
+ * v10.1.41: a dead letter replay of a messenger job never sends the payload it is given (a payload edited in the dead
+ * letter queue could carry any text, amount or address): the event is written again from the notification row, the
+ * recipient's name and the category the job was queued with (an unknown one reads as `event_rule`, a fixed sentence),
+ * by the same rule as `createNotifications`. Null when the notification or its link is gone.
+ */
+export async function rebuildMessengerJobEvent(
+  executor: DbExecutor,
+  job: { eventId: string; targetId: number; event: unknown },
+): Promise<ReturnType<typeof messengerDeliveryEvent> | null> {
+  const notificationId = messengerJobNotificationId(job.eventId);
+  if (notificationId === null) return null;
+  const [row] = await executor.select({
+    userId: notifications.userId,
+    title: notifications.title,
+    message: notifications.message,
+    link: notifications.link,
+    recipientName: users.fullName,
+  }).from(notifications)
+    .leftJoin(users, eq(users.id, notifications.userId))
+    .where(eq(notifications.id, notificationId));
+  if (!row) return null;
+  const [link] = await executor.select({ userId: userMessengerLinks.userId, messenger: userMessengerLinks.messenger })
+    .from(userMessengerLinks).where(eq(userMessengerLinks.id, job.targetId));
+  if (!link || link.userId !== row.userId) return null;
+  const queued = ((job.event as { payload?: { category?: unknown } } | null)?.payload ?? {}).category;
+  const category: NotificationCategory = isNotificationCategory(queued) ? queued : 'event_rule';
+  return messengerDeliveryEvent(notificationId, {
+    userId: row.userId,
+    recipientName: row.recipientName ?? '',
+    messenger: link.messenger,
+    category,
+    title: row.title ?? '',
+    message: row.message ?? '',
+    link: row.link,
+  });
 }

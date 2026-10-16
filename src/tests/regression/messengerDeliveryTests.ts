@@ -236,5 +236,52 @@ export async function runMessengerDeliveryTests(shouldRun: ShouldRun): Promise<T
     })));
   }
 
+  const editedId = 'reg_messenger_dlq_replay_rebuilds_payload';
+  if (shouldRun(editedId, 'messenger')) {
+    await runCase(results, editedId, 'v10.1.41: replaying a messenger dead letter whose payload was edited, or with a payload passed to the replay, sends the text and link rebuilt from the notification, never the edited ones, and keeps the queued category; a job whose notification is gone is closed unsent', async () => inSandbox(() => withAppUrl(() => withFakeBotApi(async (api) => {
+      const admin = await clientFor('admin');
+      if ((await admin.put('/api/messenger/bots/bale', { token: TOKEN })).status !== 200) throw new Error('bot not saved');
+      const user = await clientFor([], 'مریم صادقی');
+      const linkId = await linkUser(user.userId, '9101');
+      const forged = { notificationId: 1, userId: user.userId, messenger: 'bale', category: 'workflow_sla', text: 'مبلغ 5000000 ریال واریز شد EDITED', link: 'https://evil.example/pay' };
+
+      api.sendStatus = 400;
+      const notificationId = await notify(user.userId, 'پیگیری ویرایش');
+      await IntegrationDeliveryService.processDueJobs();
+      const [dead] = await orm.select().from(deadLetterEvents).where(eq(deadLetterEvents.originalEventId, `notification:${notificationId}#messenger:${linkId}`));
+      if (!dead) throw new Error('no dead letter for the refused message');
+      await DeadLetterQueueService.editPayload(dead.id, forged);
+      api.sendStatus = 200;
+      const before = sentTexts(api).length;
+      const replayed = await DeadLetterQueueService.replayEvent(dead.id, forged);
+      const sent = sentTexts(api).slice(before);
+      if (!replayed.success || sent.length !== 1) throw new Error(`the replay must send one message: ${replayed.message}, sent ${sent.length}`);
+      for (const part of ['EDITED', '5000000', 'evil.example']) {
+        if (sent[0].text.includes(part)) throw new Error(`the replay sent the edited payload («${part}»): ${sent[0].text}`);
+      }
+      for (const part of ['مریم صادقی،', `${APP_URL}/crm`]) {
+        if (!sent[0].text.includes(part)) throw new Error(`the rebuilt message lacks «${part}»: ${sent[0].text}`);
+      }
+      const [job] = await jobsOfLink(linkId);
+      const stored = (job.event as { payload?: { category?: string; text?: string } }).payload;
+      if (job.status !== 'succeeded' || stored?.category !== 'crm_followup' || String(stored?.text).includes('EDITED')) {
+        throw new Error(`the job must keep its own category and text: ${job.status} ${JSON.stringify(stored)}`);
+      }
+
+      api.sendStatus = 400;
+      const goneId = await notify(user.userId, 'پیگیری حذف‌شده');
+      await IntegrationDeliveryService.processDueJobs();
+      const [goneDead] = await orm.select().from(deadLetterEvents).where(eq(deadLetterEvents.originalEventId, `notification:${goneId}#messenger:${linkId}`));
+      if (!goneDead) throw new Error('no dead letter for the second message');
+      await orm.delete(notifications).where(eq(notifications.id, goneId));
+      api.sendStatus = 200;
+      const beforeGone = sentTexts(api).length;
+      await DeadLetterQueueService.replayEvent(goneDead.id, forged).catch(() => undefined);
+      const goneJob = (await jobsOfLink(linkId)).at(-1);
+      if (sentTexts(api).length !== beforeGone || goneJob?.status !== 'cancelled') throw new Error(`a job without its notification must be closed unsent: ${goneJob?.status}`);
+      return 'edited payload ignored, text and link rebuilt from the notification; a missing notification closes the job';
+    }))));
+  }
+
   return results;
 }

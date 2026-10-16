@@ -3,6 +3,7 @@ import { orm, type DbTransaction } from '../../db/drizzle.js';
 import { integrationDeliveryJobs } from '../../db/schema.js';
 import { ConflictError, NotFoundError } from '../../errors/customErrors.js';
 import { logger } from '../../middleware/logger.js';
+import { MESSENGER_DELIVERY_KIND, rebuildMessengerJobEvent } from '../notifications/notificationCreator.js';
 import { DeadLetterQueueService } from './deadLetterQueueService.js';
 import type { BaseDomainEvent } from './domainEvents.js';
 
@@ -74,6 +75,10 @@ function errorText(err: unknown): string {
 
 function eventOf(job: DeliveryJob): BaseDomainEvent {
   return job.event as BaseDomainEvent;
+}
+
+async function messengerReplayEvent(job: DeliveryJob): Promise<BaseDomainEvent | null> {
+  return (await rebuildMessengerJobEvent(orm, job)) as BaseDomainEvent | null;
 }
 
 export class IntegrationDeliveryService {
@@ -198,12 +203,21 @@ export class IntegrationDeliveryService {
   /**
    * Replay of a delivery's dead letter row (under that row's lock): one more attempt now, with the edited payload when one
    * is given. A row being attempted is refused (409); a delivered one needs nothing.
+   * A messenger job ignores the given payload: its event is written again from its notification (`rebuildMessengerJobEvent`),
+   * so an edited dead letter never sends another text or link; a job whose notification or link is gone is closed.
    */
   static async replayDeadJob(jobId: number, payload?: unknown): Promise<DeliveryAttemptOutcome> {
     const [job] = await orm.select().from(integrationDeliveryJobs).where(eq(integrationDeliveryJobs.id, jobId));
     if (!job) throw new NotFoundError(`ردیف تحویل #${jobId} یافت نشد.`, undefined, 'DELIVERY_JOB_NOT_FOUND');
     if (job.status === 'succeeded') return { ok: true };
-    const event = payload === undefined || payload === null ? eventOf(job) : { ...eventOf(job), payload };
+    const event = job.kind === MESSENGER_DELIVERY_KIND ? await messengerReplayEvent(job)
+      : payload === undefined || payload === null ? eventOf(job) : { ...eventOf(job), payload };
+    if (event === null) {
+      await orm.update(integrationDeliveryJobs)
+        .set({ status: 'cancelled', lockedAt: null, lastError: 'The notification or the messenger link is gone', updatedAt: sql`now()` })
+        .where(and(eq(integrationDeliveryJobs.id, job.id), inArray(integrationDeliveryJobs.status, ['pending', 'failed', 'cancelled'])));
+      return { ok: false, cancelled: true, error: 'The notification or the messenger link is gone' };
+    }
     const [claimed] = await orm.update(integrationDeliveryJobs)
       .set({ status: 'processing', attempts: job.attempts + 1, event, lockedAt: sql`now()`, updatedAt: sql`now()` })
       .where(and(eq(integrationDeliveryJobs.id, job.id), eq(integrationDeliveryJobs.status, job.status), inArray(integrationDeliveryJobs.status, ['pending', 'failed', 'cancelled'])))
