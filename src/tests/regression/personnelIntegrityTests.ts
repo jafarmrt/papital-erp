@@ -5,6 +5,7 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { accounts, activityLogs, journalVoucherItems, journalVouchers, personnel, pieceworkLogs, pieceworkPayrolls, pieceworkTasks } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
+import { nationalIdWithCheckDigit } from './personnelNationalIdTests.js';
 
 /**
  * بسته ۱۲ (بخش پرسنل) — یکپارچگی داده پرسنل در مسیرهای واقعی Express؛ هر آزمون روی کد پیشین قرمز است.
@@ -423,18 +424,22 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
       const short = await send('post', '/api/personnel', { firstName: 'کوتاه', lastName: `کد ملی ${tag}`, personnelCode: `NID-${tag}-S`, nationalId: '19' });
       if (short.status !== 422 || short.body?.code !== 'NATIONAL_ID_INVALID') wrong.push(`short ID on save: ${short.status} ${short.body?.code}`);
       if (short.body?.id) ids.push(Number(short.body.id));
-      const full = await send('post', '/api/personnel', { firstName: 'کامل', lastName: `کد ملی ${tag}`, personnelCode: `NID-${tag}-F`, nationalId: '۰۰۱۲۳۴۵۶۷۹' });
+      // national IDs of this run only: a national ID is unique among active personnel (OBS-R2-56)
+      const fullId = nationalIdWithCheckDigit(`3${tag}11`);
+      const paddedId = nationalIdWithCheckDigit(`009${tag}`);
+      const toPersian = (v: string) => v.replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
+      const full = await send('post', '/api/personnel', { firstName: 'کامل', lastName: `کد ملی ${tag}`, personnelCode: `NID-${tag}-F`, nationalId: toPersian(fullId) });
       if (full.status !== 201) wrong.push(`ten-digit ID on save: ${full.status}`);
       else ids.push(Number(full.body.id));
       const imported = await send('post', '/api/personnel/bulk-import', { rows: [
-        { personnelCode: `NID-${tag}-P`, firstName: 'اکسل', lastName: `کد ملی ${tag}`, nationalId: 12345679 },
+        { personnelCode: `NID-${tag}-P`, firstName: 'اکسل', lastName: `کد ملی ${tag}`, nationalId: Number(paddedId) },
         { personnelCode: `NID-${tag}-X`, firstName: 'اکسل', lastName: `ناقص ${tag}`, nationalId: '19' },
       ], updateIfExists: false });
       const rows = await orm.select().from(personnel).where(and(sql`${personnel.personnelCode} like ${`NID-${tag}-%`}`, eq(personnel.isDeleted, 0)));
       ids.push(...rows.map(r => r.id).filter(id => !ids.includes(id)));
       const padded = rows.find(r => r.personnelCode === `NID-${tag}-P`);
       if (imported.status !== 200 || imported.body?.createdCount !== 1) wrong.push(`import: ${imported.status} created ${imported.body?.createdCount}`);
-      if (padded?.nationalId !== '0012345679') wrong.push(`8-digit Excel ID stored as ${padded?.nationalId}`);
+      if (padded?.nationalId !== paddedId) wrong.push(`8-digit Excel ID stored as ${padded?.nationalId}`);
       if (imported.body?.warnings?.length !== 1 || imported.body.warnings[0].row !== 1) wrong.push(`warnings ${JSON.stringify(imported.body?.warnings)}`);
       if (imported.body?.errors?.length !== 1 || imported.body.errors[0].row !== 2) wrong.push(`errors ${JSON.stringify(imported.body?.errors)}`);
       if (rows.some(r => r.personnelCode === `NID-${tag}-X`)) wrong.push('two-digit Excel ID was saved');
