@@ -54,7 +54,7 @@ async function audit(tx: DbExecutor, actor: WorkshopActor, action: 'CREATE' | 'U
   await logActivity({
     ...auditFields(actor),
     tx,
-    action,
+    action: action === 'CREATE' ? 'CREATE' : 'UPDATE',
     entity: 'گزارش کار کارگاه',
     entityId: String(report.id),
     description,
