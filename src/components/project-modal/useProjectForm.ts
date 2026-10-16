@@ -15,6 +15,7 @@ import {
   buildProjectPayload
 } from './projectFormHelpers';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { managerUserIdsOf } from '../../lib/projects/projectManagers';
 
 export function useProjectForm({
   isOpen,
@@ -35,6 +36,8 @@ export function useProjectForm({
   const [priority, setPriority] = useState<'low' | 'medium' | 'high' | 'urgent'>('medium');
   const [description, setDescription] = useState<string>('');
   const [attachments, setAttachments] = useState<FinancialAttachment[]>([]);
+  // v10.1.35 (N-01, TD-1283): «مسئولان پروژه» by user id
+  const [managerIds, setManagerIds] = useState<number[]>([]);
 
   const [localCustomers, setLocalCustomers] = useState<Customer[]>([]);
   const [localItems, setLocalItems] = useState<Item[]>([]);
@@ -113,7 +116,9 @@ export function useProjectForm({
         })) || []);
         setProductsList(mapProjectProductsToRows(projectToEdit));
         setAttachments(Array.isArray(projectToEdit.attachments) ? projectToEdit.attachments : []);
+        setManagerIds(managerUserIdsOf(projectToEdit.managers));
       } else {
+        setManagerIds([]);
         setProjectCode('');
         setTitle(initialTitle || (initialProducts && initialProducts.length > 0 
           ? `تولید کسری انبار (${initialProducts.map(p => p.item_name).slice(0, 2).join('، ')}${initialProducts.length > 2 ? ' و...' : ''})`
@@ -254,6 +259,7 @@ export function useProjectForm({
         attachments,
         includeStages: !projectToEdit
       });
+      const body = { ...payload, managerUserIds: managerIds };
 
       const url = projectToEdit ? `/projects/${projectToEdit.id}` : '/projects';
       const method = projectToEdit ? 'PUT' : 'POST';
@@ -261,7 +267,7 @@ export function useProjectForm({
       const res = await fetchJson(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(projectToEdit ? { ...payload, version: projectToEdit.version } : payload)
+        body: JSON.stringify(projectToEdit ? { ...body, version: projectToEdit.version } : body)
       });
 
       if (res && (res.id || res.success)) {
@@ -295,6 +301,8 @@ export function useProjectForm({
     setDescription,
     attachments,
     setAttachments,
+    managerIds,
+    setManagerIds,
     productsList,
     stages,
     preset,

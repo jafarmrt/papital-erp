@@ -67,4 +67,7 @@ export const notifications = pgTable('notifications', {
   // v9.0.434 (TD-717): ایندکس یکتای جزئی uq_notifications_due_reminder روی (user_id, type, link) یادآوری‌های crm_due_task
   // (مهاجرت 0089، فقط روی داده بی تکرار ساخته شد؛ تکراری‌های قدیمی را بررسی سلامت مالی فهرست می‌کند)
   uq_notifications_due_reminder: uniqueIndex('uq_notifications_due_reminder').on(table.userId, table.type, table.link).where(sql`${table.type} = 'crm_due_task'`),
+  // v10.1.35 (N-01، TD-1283، تصمیم ت۸ الف): هر یادآوری مهلت کار کارگاه یک بار برای هر کاربر و ردیف برنامه (مهاجرت 0117)
+  uq_notifications_workshop_reminder: uniqueIndex('uq_notifications_workshop_reminder').on(table.userId, table.type, table.link)
+    .where(sql`${table.type} IN ('workshop_task_due_soon', 'workshop_task_overdue')`),
 }));

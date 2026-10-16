@@ -4,9 +4,10 @@ import {
   productionProjects,
   items,
   warehouses,
-  transactions
+  transactions,
+  personnel
 } from '../../db/schema.js';
-import { eq, and, desc, asc, type SQL } from 'drizzle-orm';
+import { eq, and, desc, asc, isNull, ne, or, type SQL } from 'drizzle-orm';
 import { fin } from '../../lib/financialDecimal.js';
 import { DocumentService } from '../document.service.js';
 import { issueBomAllocationVoucher, voidBomAllocationVouchers } from '../accounting/bomAllocationVoucher.js';
@@ -22,6 +23,7 @@ import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { isProjectOpenForAllocation, projectStatusLabel } from '../../lib/projects/projectStatus.js';
 import { allocationStatusLabel } from '../../lib/projects/allocationLabels.js';
 import { logBomAllocation, logBomConsumption, logBomRelease } from './bomAllocationAudit.js';
+import { RECIPIENT_INVALID, RECIPIENT_INVALID_MESSAGE, RECIPIENT_TERMINATED_STATUS } from '../../lib/workshop/recipient.js';
 export interface BomAllocationItemInput {
   itemId: number;
   quantity: number;
@@ -56,6 +58,8 @@ export interface ProjectBomAllocationRecord {
   allocatedAt: string | null;
   consumedAt: string | null;
   releasedAt: string | null;
+  /** v10.1.35 (N-01, TD-1283): the personnel who receives the materials and confirms them in the workshop cartable */
+  recipientPersonnelId: number | null;
   /** v10.0.130 (TD-1210): بهای کاردکس خروج تخصیص به ریال (همان مبلغ سند ۱۴۰۲)؛ null وقتی حرکت منبع خروج نیست */
   cost?: number | null;
   transactionDetails?: {
@@ -96,6 +100,7 @@ function toAllocationRecord(alloc: AllocationRow, tx?: TransactionRow | null): P
     allocatedAt: alloc.allocatedAt,
     consumedAt: alloc.consumedAt,
     releasedAt: alloc.releasedAt,
+    recipientPersonnelId: alloc.recipientPersonnelId ?? null,
   };
   if (tx === undefined) return record;
   return {
@@ -189,6 +194,19 @@ async function lockActiveItem(txEngine: DbExecutor, itemId: number): Promise<Ite
   return item;
 }
 
+/**
+ * v10.1.35 (N-01, TD-1283, decision ت۴ الف): the allocation's recipient is a live personnel who has not left, read
+ * `FOR SHARE` in the allocation's transaction (else 422 `RECIPIENT_PERSONNEL_INVALID`); none when not sent.
+ */
+async function liveAllocationRecipient(txEngine: DbExecutor, personnelId: number | null | undefined): Promise<number | null> {
+  if (personnelId === undefined || personnelId === null) return null;
+  const [row] = await txEngine.select({ id: personnel.id }).from(personnel)
+    .where(and(eq(personnel.id, personnelId), eq(personnel.isDeleted, 0), or(isNull(personnel.employmentStatus), ne(personnel.employmentStatus, RECIPIENT_TERMINATED_STATUS))))
+    .for('share');
+  if (!row) throw new ValidationError(RECIPIENT_INVALID_MESSAGE, { personnelId }, RECIPIENT_INVALID);
+  return row.id;
+}
+
 /** بهای واحد حرکت انبار تخصیص: میانگین موزون، وگرنه آخرین قیمت خرید */
 function allocationUnitPrice(item: ItemRow): number {
   return Number(item.weightedAverageCost) || Number((item as { lastPurchasePrice?: number }).lastPurchasePrice) || 0;
@@ -204,6 +222,7 @@ async function recordAllocation(txEngine: DbExecutor, params: {
   notes: string;
   action: 'ALLOCATED' | 'RECEIPT_ALLOCATED';
   operator: AllocationOperator;
+  recipientPersonnelId: number | null;
 }): Promise<ProjectBomAllocationRecord> {
   const { project, item, quantity, location, sourceTransactionId, operator } = params;
   const [allocRecord] = await txEngine
@@ -222,6 +241,7 @@ async function recordAllocation(txEngine: DbExecutor, params: {
       userId: operator.id,
       username: operator.name,
       notes: params.notes,
+      recipientPersonnelId: params.recipientPersonnelId,
       allocatedAt: new Date().toISOString(),
     })
     .returning();
@@ -304,6 +324,8 @@ export class ProjectBomAllocationService {
   static async allocateReceiptItemsForProjectBom(params: {
     projectId: number;
     allocations: BomReceiptAllocationInput[];
+    /** v10.1.35 (N-01, TD-1283): the personnel who receives the materials */
+    recipientPersonnelId?: number | null;
     userId?: number;
     username?: string;
     externalTx?: DbExecutor;
@@ -317,6 +339,7 @@ export class ProjectBomAllocationService {
     return inTransaction(params.externalTx, async (txEngine) => {
       const { project, defaultWh } = await lockProjectForAllocation(txEngine, params.projectId, params.allocations.map(a => a.itemId));
       await assertAllocationWithinSellable(txEngine, project.id, defaultWh, params.allocations);
+      const recipientPersonnelId = await liveAllocationRecipient(txEngine, params.recipientPersonnelId);
       const results: ProjectBomAllocationRecord[] = [];
 
       for (const req of params.allocations) {
@@ -368,6 +391,7 @@ export class ProjectBomAllocationService {
           notes: req.notes || `تخصیص از محل رسید خرید/انبار به پروژه ${project.projectCode}`,
           action: 'RECEIPT_ALLOCATED',
           operator,
+          recipientPersonnelId,
         });
         await postAllocationVoucher(txEngine, record, project, item, operator);
         await deductProjectReservation(txEngine, project, record, operator);
@@ -392,6 +416,8 @@ export class ProjectBomAllocationService {
   static async allocateMaterialsForProject(params: {
     projectId: number;
     allocations: BomAllocationItemInput[];
+    /** v10.1.35 (N-01, TD-1283): the personnel who receives the materials */
+    recipientPersonnelId?: number | null;
     userId?: number;
     username?: string;
     externalTx?: DbExecutor;
@@ -406,6 +432,7 @@ export class ProjectBomAllocationService {
     return inTransaction(params.externalTx, async (txEngine) => {
       const { project, defaultWh } = await lockProjectForAllocation(txEngine, params.projectId, params.allocations.map(a => a.itemId));
       await assertAllocationWithinSellable(txEngine, project.id, defaultWh, params.allocations);
+      const recipientPersonnelId = await liveAllocationRecipient(txEngine, params.recipientPersonnelId);
       const results: ProjectBomAllocationRecord[] = [];
 
       for (const req of params.allocations) {
@@ -438,6 +465,7 @@ export class ProjectBomAllocationService {
           notes: req.notes || '',
           action: 'ALLOCATED',
           operator,
+          recipientPersonnelId,
         });
         await postAllocationVoucher(txEngine, record, project, item, operator);
         await deductProjectReservation(txEngine, project, record, operator);

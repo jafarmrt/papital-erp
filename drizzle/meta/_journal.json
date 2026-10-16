@@ -820,6 +820,13 @@
       "when": 1795300000000,
       "tag": "0116_petty_cash_expense_lines",
       "breakpoints": true
+    },
+    {
+      "idx": 117,
+      "version": "7",
+      "when": 1795340000000,
+      "tag": "0117_workshop_cartable",
+      "breakpoints": true
     }
   ]
 }

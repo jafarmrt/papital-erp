@@ -4,10 +4,11 @@ import crypto from 'crypto';
 import { AuthUserPayload } from '../types.js';
 import { updateRequestContext } from '../lib/requestContext.js';
 import { orm } from '../db/drizzle.js';
-import { users } from '../db/schema.js';
+import { users, roles } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { safeCompareTokens } from '../lib/timingSafeCompare.js';
 import { PASSWORD_RESET_REQUIRED, PASSWORD_RESET_REQUIRED_MESSAGE, isPasswordResetAllowedPath } from '../lib/auth/passwordReset.js';
+import { DEFAULT_SESSION_SECONDS, sessionLifetimeSeconds } from '../lib/auth/sessionLifetime.js';
 
 declare global {
   namespace Express {
@@ -74,16 +75,26 @@ export const AUTH_COOKIE_OPTIONS = {
  * - HTTP (سرور مجازی قبل از تنظیم دامنه): بدون Secure + SameSite=Lax — چون مرورگرهای
  *   مدرن کوکی Secure را روی HTTP ذخیره نمی‌کنند و ورود/تصاویر از کار می‌افتاد.
  */
-export const getAuthCookieOptions = (req?: any) => {
+export const getAuthCookieOptions = (req?: any, lifetimeSeconds: number = DEFAULT_SESSION_SECONDS) => {
   const isHttps = req?.secure === true || req?.headers?.['x-forwarded-proto'] === 'https';
   return {
     httpOnly: true,
     secure: isHttps,
     sameSite: (isHttps ? 'none' : 'lax') as 'none' | 'lax',
-    maxAge: 24 * 60 * 60 * 1000,
+    maxAge: lifetimeSeconds * 1000,
     path: '/'
   };
 };
+
+/**
+ * v10.1.35 (N-01, TD-1283, decision ت۱۱ الف): the lifetime of a new login, read from the role's stored permissions
+ * (seven days with `workshop.long_session`, else 24 hours); the token and its cookie carry the same lifetime.
+ */
+export async function sessionLifetimeOfRole(roleCode: string | null | undefined): Promise<number> {
+  if (!roleCode) return DEFAULT_SESSION_SECONDS;
+  const [row] = await orm.select({ permissions: roles.permissions }).from(roles).where(eq(roles.code, roleCode)).limit(1);
+  return sessionLifetimeSeconds(roleCode, row?.permissions);
+}
 
 /**
  * v7.0.27 (TD-185 / audit P1-4): تحویل JWT در بدنه پاسخ ورود/راه‌اندازی به‌صورت پیش‌فرض خاموش است
@@ -341,9 +352,12 @@ export const csrfProtection = (req: Request, res: Response, next: NextFunction) 
   next();
 };
 
-export const generateToken = (payload: AuthUserPayload | { id: number; username: string; role: string; fullName?: string; full_name?: string; csrfToken?: string; tokenVersion?: number }) => {
+export const generateToken = (
+  payload: AuthUserPayload | { id: number; username: string; role: string; fullName?: string; full_name?: string; csrfToken?: string; tokenVersion?: number },
+  lifetimeSeconds: number = DEFAULT_SESSION_SECONDS,
+) => {
   const jwtSecret = getJwtSecret();
-  return jwt.sign(payload, jwtSecret, { expiresIn: '24h', algorithm: JWT_ALGORITHM });
+  return jwt.sign(payload, jwtSecret, { expiresIn: lifetimeSeconds, algorithm: JWT_ALGORITHM });
 };
 
 export { authorizePermission, requirePermission, requireSystemAdmin } from './authorize.js';

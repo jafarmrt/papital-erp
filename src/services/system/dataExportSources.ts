@@ -11,7 +11,7 @@ import {
   purchaseRequisitions, fileAttachments, eventActionRules,
   workflowDefinitions, workflowDefinitionVersions, workflowStates, workflowTransitions, workflowInstances,
   workflowHistoryLogs, workflowTasks, workflowPendingApprovals, workflowDelegations,
-  mediaSections, mediaAssets,
+  mediaSections, mediaAssets, projectManagers, stockReceiptConfirmations, workshopTaskReports,
 } from '../../db/schema.js';
 import { SENSITIVE_SETTING_PATTERN } from '../settings/systemSettings.service.js';
 
@@ -82,6 +82,9 @@ export const DATA_EXPORT_TABLE_SOURCES: Readonly<Record<string, TableSpecSource>
   project_bom_allocations: { table: projectBomAllocations, key: ['id'] },
   project_reservation_releases: { table: projectReservationReleases, key: ['id'] },
   pending_materials: { table: pendingMaterials, key: ['id'] },
+  project_managers: { table: projectManagers, key: ['id'] },
+  stock_receipt_confirmations: { table: stockReceiptConfirmations, key: ['id'] },
+  workshop_task_reports: { table: workshopTaskReports, key: ['id'] },
   purchase_requisitions: { table: purchaseRequisitions, key: ['id'] },
   accounts: { table: accounts, key: ['id'] },
   fiscal_periods: { table: fiscalPeriods, key: ['fiscalYear'] },

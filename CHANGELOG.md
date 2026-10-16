@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.1.35 — داده کارتابل کارگاه (N-01 بخش ۱، TD-1283)
+- Workshop cartable data (N-01 part 1, mobile workshop plan ت۳ / ت۴ / ت۱۱ الف): migration 0117 (project_managers, stock_receipt_confirmations, workshop_task_reports, recipient_personnel_id on documents and allocations, reminder dedup index); keys workshop.self / workshop.review / workshop.long_session and the «کارکن کارگاه» role template; seven-day login for workshop.long_session; project managers on project create and edit (422 PROJECT_MANAGER_INVALID); remittance and allocation recipient (422 RECIPIENT_REMITTANCE_ONLY / RECIPIENT_PERSONNEL_INVALID). Tests: reg_workshop_long_session_n01, reg_project_managers_n01, reg_stock_recipient_n01, Vitest workshopCartablePartOne.test.ts
+
 ### v10.1.34 — آماده برای pg 9 (TD-1279)
 - دو پرس‌وجوی هم‌زمان روی یک اتصال در pg 9 خطاست. راه‌انداز آزمون `SET search_path` را با رویداد `acquire` بی انتظار می‌فرستاد؛ اکنون `connect` استخر تا پایان آن صبر می‌کند (`pinSearchPathOnCheckout`). چهار جای کد کارساز هم با `Promise.all` روی یک تراکنش یا اجراکننده پرس‌وجو می‌فرستادند (ذخیره طرح گردش کار، موجودی سطرهای سند، هشدار نقطه سفارش، فهرست درخواست‌های خرید) و اکنون یکی‌یکی می‌فرستند. pg به 8.23.1 رسید؛ pg 9 هنوز منتشر نشده و کار دستی روی کارساز ندارد.
 

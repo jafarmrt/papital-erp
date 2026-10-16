@@ -48,6 +48,8 @@ export interface CreateDocumentInput {
   crmLeadId?: number | string | null;
   /** v9.0.336 (TD-778): طرف حساب سند فروش و خرید (شناسه `customers`)؛ نام خریدار فقط برای نمایش */
   partyId?: number | string | null;
+  /** v10.1.35 (N-01, TD-1283): the personnel who receives a remittance (remittance only) */
+  recipientPersonnelId?: number | string | null;
   user?: string;
   inOut?: 'in' | 'out';
   buyer_name?: string;

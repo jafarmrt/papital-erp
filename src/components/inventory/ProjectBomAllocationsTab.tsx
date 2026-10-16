@@ -18,6 +18,7 @@ import { allocationStatusLabel } from '../../lib/projects/allocationLabels';
 import { warehouseLabel } from '../../lib/inventory/warehouseLabel';
 import { DecimalInput } from '../common/DecimalInput';
 import { DialogLayer } from '../common/DialogLayer';
+import { RecipientPersonnelField } from '../workshop/RecipientPersonnelField';
 
 interface ProjectBomAllocationsTabProps {
   user?: any;
@@ -52,6 +53,8 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
     }
   }, [warehousesList, selectedLocation]);
   const [allocateNotes, setAllocateNotes] = useState('');
+  // v10.1.35 (N-01, TD-1283): the personnel who receives the materials
+  const [recipientPersonnelId, setRecipientPersonnelId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [, setSuccessMsg] = useState<string | null>(null);
@@ -115,6 +118,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
     // v9.0.411 (TD-751): انبار پیش‌فرض همان انبار فعال با کمترین شناسه (اولین ردیف فهرست، TD-203)، نه «main» که فهرست نشان نمی‌داد
     setSelectedLocation(warehousesList[0]?.code ?? '');
     setAllocateNotes('');
+    setRecipientPersonnelId(null);
     setShowAllocateModal(true);
   };
 
@@ -138,6 +142,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
         method: 'POST',
         body: JSON.stringify({
           projectId: selectedProjectId,
+          recipientPersonnelId,
           allocations: [
             {
               itemId: selectedItemId,
@@ -739,6 +744,13 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
                   className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+
+              <RecipientPersonnelField
+                id={`${fieldId}-recipient`}
+                value={recipientPersonnelId}
+                onChange={setRecipientPersonnelId}
+                disabled={submitting}
+              />
 
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
                 <button

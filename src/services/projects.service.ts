@@ -23,6 +23,7 @@ import { nextVersion } from '../lib/occHelper.js';
 import { assertProjectVersion, projectVersionConflict } from './projects/projectVersion.js';
 import { assertNoOpenAllocations } from './projects/projectOpenAllocations.js';
 import { assertProjectDeletable } from './projects/projectDeleteGuard.js';
+import { setProjectManagers } from './projects/projectManagers.js';
 
 export interface CreateProjectInput {
   title: string;
@@ -45,6 +46,10 @@ export interface CreateProjectInput {
   customStages?: unknown[];
   attachments?: unknown[];
   createdBy?: string;
+  /** v10.1.35 (N-01, TD-1283): the user who records the project, written on its manager rows and their audit row */
+  createdById?: number;
+  /** v10.1.35 (N-01, TD-1283, decision ت۳ الف): «مسئولان پروژه»; missing = none */
+  managerUserIds?: number[];
 }
 
 export interface UpdateProjectInput {
@@ -69,6 +74,8 @@ export interface UpdateProjectInput {
   attachments?: unknown[];
   /** v9.0.385 (TD-742): نسخه‌ای که فرم از آن ساخته شده؛ مسیر `PUT /projects/:id` همیشه می‌فرستد */
   expectedVersion?: number;
+  /** v10.1.35 (N-01, TD-1283, decision ت۳ الف): «مسئولان پروژه»; missing = unchanged */
+  managerUserIds?: number[];
 }
 
 export interface AddProjectToInventoryInput {
@@ -217,6 +224,10 @@ export class ProjectService {
       createdStages = await executor.insert(projectStages).values(stageValues).returning();
     }
 
+    if (input.managerUserIds !== undefined && input.managerUserIds.length > 0) {
+      await setProjectManagers(executor, newProject, input.managerUserIds, { userId: input.createdById, username: input.createdBy });
+    }
+
     return { project: newProject, stages: createdStages };
   }
 
@@ -310,6 +321,10 @@ export class ProjectService {
 
     // v9.0.383 (TD-757): ردیف ممیزی ویرایش با پیش و پس فیلدهای تغییرکرده، با همین تراکنش
     await logProjectUpdate(executor, actor, existing, current);
+    if (input.managerUserIds !== undefined) {
+      const reqUserId = (actor.req as { user?: { id?: number } } | undefined)?.user?.id;
+      await setProjectManagers(executor, current, input.managerUserIds, { ...actor, userId: actor.userId ?? reqUserId });
+    }
 
     // v9.0.365 (TD-738): ویرایش پروژه (محصولات، کالای اصلی) مراحل و وضعیت را زیر همین قفل با ماتریس همگام می‌کند
     const synced = await syncProjectFromMatrix(executor, current, actor);

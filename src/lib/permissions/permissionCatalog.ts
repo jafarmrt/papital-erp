@@ -159,6 +159,15 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     ]
   },
   {
+    // v10.1.35 (N-01، TD-1283، طرح کارتابل کارگاه): کارتابل گوشی پرسنل کارگاه و بررسی گزارش‌های کار؛ به هیچ نقشی داده نمی‌شود
+    category: 'کارتابل کارگاه',
+    permissions: [
+      { key: 'workshop.self', title: 'کارتابل کارگاه خودم', description: 'دیدن کارهای سپرده‌شده و حواله‌های تحویلی خود، تأیید دریافت و ثبت تعداد پایان هر کار؛ فقط برای کاربری که به پرونده پرسنلی وصل است' },
+      { key: 'workshop.review', title: 'بررسی گزارش‌های کار کارگاه', description: 'تأیید با امکان اصلاح تعداد یا رد گزارش پایان کار پرسنل در پروژه‌هایی که کاربر مسئول آن‌هاست؛ تأیید، کارکرد کارمزدی می‌سازد', requires: ['projects.view'] },
+      { key: 'workshop.long_session', title: 'ماندن ورود تا ۷ روز', description: 'ورود این کاربر روی گوشی ۷ روز می‌ماند و هر روز دوباره نمی‌پرسد؛ ورود دیگران ۲۴ ساعت است', requires: ['workshop.self'] },
+    ]
+  },
+  {
     category: 'مواد اولیه در انتظار تایید',
     permissions: [
       { key: 'pending_materials.view', title: 'مشاهده درخواست‌های مواد اولیه', description: 'مشاهده پیشنهادها و ثبت مواد اولیه توسط کاربران' },
