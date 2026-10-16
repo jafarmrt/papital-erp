@@ -78,6 +78,9 @@ describe('test schema search_path pinning (TD-1279)', () => {
   });
 });
 
+/** Names that hold a transaction or a pool client: tx, trx, externalTx, txEngine, executor, txExecutor, db, dbx, client, outer, held; a class name such as WorkflowTransitionExecutor is not one. */
+const EXECUTOR_NAME = /\b(?![A-Z])\w*(tx|Tx|[eE]xecutor)\w*\b|\b(trx|db|dbx|client|outer|held)\b/;
+
 /** `Promise.all(...)` / `Promise.allSettled(...)` whose arguments use a transaction or executor (pg 9 refuses the overlap). */
 function concurrentExecutorQueries(roots: string[]): string[] {
   const found: string[] = [];
@@ -90,7 +93,7 @@ function concurrentExecutorQueries(roots: string[]): string[] {
       let depth = 1;
       let end = m.index + m[0].length;
       while (depth > 0 && end < text.length) { if (text[end] === '(') depth += 1; else if (text[end] === ')') depth -= 1; end += 1; }
-      if (/\b(tx|trx|executor|db|dbx)\b/.test(text.slice(m.index, end))) found.push(`${path}:${text.slice(0, m.index).split('\n').length}`);
+      if (EXECUTOR_NAME.test(text.slice(m.index, end))) found.push(`${path}:${text.slice(0, m.index).split('\n').length}`);
     }
   };
   roots.forEach(visit);
