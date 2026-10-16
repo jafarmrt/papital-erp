@@ -23,6 +23,8 @@ interface TreasuryTransferModalProps {
   bankAccounts: BankAccount[];
   appCurrency: string;
   onSave: (data: any) => Promise<void>;
+  /** v10.1.32 (D-16): مبدأ یا مقصد از پیش انتخاب‌شده، برای شارژ تنخواه و برگشت وجه آن */
+  preset?: { fromBankAccountId?: number | null; toBankAccountId?: number | null } | null;
 }
 
 export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
@@ -31,6 +33,7 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
   bankAccounts,
   appCurrency,
   onSave,
+  preset,
 }) => {
   const fieldId = useId();
   const rial = useMemo(() => rialDisplayOf(appCurrency), [appCurrency]);
@@ -65,11 +68,13 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
     return () => { cancelled = true; };
   }, [isOpen]);
 
+  const presetFrom = preset?.fromBankAccountId ?? null;
+  const presetTo = preset?.toBankAccountId ?? null;
   useEffect(() => {
     if (isOpen) {
       setFormData({
-        fromBankAccountId: null,
-        toBankAccountId: null,
+        fromBankAccountId: presetFrom,
+        toBankAccountId: presetTo,
         amount: 0,
         date: '',
         trackingNumber: '',
@@ -77,7 +82,7 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
       });
       setFormError('');
     }
-  }, [isOpen]);
+  }, [isOpen, presetFrom, presetTo]);
 
   if (!isOpen) return null;
 

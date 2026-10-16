@@ -36,6 +36,31 @@ export async function resolveTreasuryBusinessDate(rawDate?: string | null): Prom
 }
 
 export class TreasuryTransactionService {
+  /** v10.1.32 (D-16): سند پیش‌نویس خزانه (نوع و ماژول مرجع «خزانه») برای پرداختی که خدمت دیگری از خزانه، صورت‌هزینه تنخواه، می‌سازد */
+  static createTreasuryVoucher(
+    data: Omit<Parameters<typeof VoucherService.createJournalVoucher>[0], 'voucherType' | 'referenceModule'>,
+    txEngine: DbExecutor,
+  ) {
+    return VoucherService.createJournalVoucher({ ...data, voucherType: 'treasury', referenceModule: 'treasury' }, txEngine);
+  }
+
+  /**
+   * v10.1.32 (D-16): پیوست‌ها و رویداد «تراکنش خزانه تأیید شد» یک پرداخت خزانه که خدمت دیگری از خزانه (صورت‌هزینه
+   * تنخواه) با همین `tx` درج کرده است؛ همان کاری که ثبت دریافت و پرداخت پس از درج ردیف می‌کند.
+   */
+  static async recordInsertedPaymentEffects(
+    txEngine: DbExecutor,
+    rowId: number,
+    effects: { attachments?: unknown[]; userId?: number; username?: string; event: Record<string, unknown> },
+  ) {
+    const attachments = await AttachmentStorageService.attachToNewRecord(txEngine, 'treasury_transaction', rowId, effects.attachments, effects.username);
+    await OutboxService.saveToOutbox(txEngine, domainEventBus.createEvent(
+      DomainEventType.TREASURY_TRANSACTION_APPROVED, 'Treasury', String(rowId), effects.event,
+      { userId: effects.userId, userName: effects.username },
+    ));
+    return attachments;
+  }
+
   static async generateTransactionNumber(type: 'receipt' | 'payment', tx?: DbExecutor): Promise<string> {
     const executor = tx || orm;
     const result = await executor.execute(sql`SELECT nextval('treasury_tx_number_seq') AS num`);

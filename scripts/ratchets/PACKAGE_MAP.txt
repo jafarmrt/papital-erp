@@ -30,6 +30,7 @@ G  scripts/check-version-sync.ts
 # ───────── استثناهای دامنه‌ای درون پوشه‌های بسته‌های دیگر (پیش از قاعده‌های کلی) ─────────
 # ۴ خزانه درون پوشه حسابداری
 4  src/routes/accounting/treasury.routes.ts
+4  src/routes/accounting/pettyCash.schemas.ts
 4  src/services/accounting/treasury/**
 4  src/services/accounting/treasury.service.ts
 4  src/components/accounting/ChequesTab.tsx
@@ -38,6 +39,7 @@ G  scripts/check-version-sync.ts
 4  src/components/accounting/treasury/**
 4  src/hooks/accounting/useChequeQueries.ts
 4  src/hooks/accounting/useTreasuryQueries.ts
+4  src/hooks/accounting/usePettyCashQueries.ts
 4  src/lib/noVoucherPermission.ts
 # ۱۲ پرداخت حقوق درون پوشه حسابداری؛ رمز پرسنل درون system
 12 src/services/accounting/payrollPayment*.ts

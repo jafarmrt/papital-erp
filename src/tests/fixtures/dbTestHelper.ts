@@ -259,6 +259,8 @@ export async function cleanupAllTestFixtures(): Promise<void> {
     await orm.execute(sql`DELETE FROM journal_voucher_items WHERE voucher_id IN (SELECT v.id FROM journal_vouchers v WHERE ${TEST_VOUCHER_COND})`);
     // V3.0.7: تراکنش‌های خزانه‌ای ارجاع‌دهنده به ووچرهای تستی قبل از والد حذف شوند
     // (FK treasury_transactions.voucher_id در DBهای مشتق از schema کامل)
+    // v10.1.32 (D-16): ردیف‌های صورت‌هزینه تنخواه پیش از تراکنش خزانه‌شان (FK petty_cash_expense_lines.treasury_transaction_id)
+    await orm.execute(sql`DELETE FROM petty_cash_expense_lines WHERE treasury_transaction_id IN (SELECT t.id FROM treasury_transactions t WHERE t.voucher_id IN (SELECT v.id FROM journal_vouchers v WHERE ${TEST_VOUCHER_COND}))`);
     await orm.execute(sql`DELETE FROM treasury_transactions WHERE voucher_id IN (SELECT v.id FROM journal_vouchers v WHERE ${TEST_VOUCHER_COND})`);
     await orm.execute(sql`DELETE FROM journal_vouchers WHERE id IN (SELECT v.id FROM journal_vouchers v WHERE ${TEST_VOUCHER_COND})`);
   } catch (err: any) {
