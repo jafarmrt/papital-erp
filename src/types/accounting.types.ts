@@ -322,6 +322,8 @@ export interface PettyCashExpenseLine {
   accountCode: string;
   accountName: string;
   amount: number;
+  /** بخشی از مبلغ که به حساب مالیات بر ارزش افزوده خرید رفت؛ صفر یعنی همه مبلغ هزینه است */
+  vatAmount: number;
   description: string;
   sellerName: string;
   invoiceNumber: string;

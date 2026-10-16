@@ -7,11 +7,11 @@ import { money } from '../../../lib/money.js';
 import { toLatinDigits } from '../../../lib/numericInput.js';
 import { validateLockOrder, LockHierarchyLevel } from '../../../lib/lockOrder.js';
 import {
-  PETTY_CASH_CURRENCY, PETTY_CASH_TYPE, pettyCashLineAmount, pettyCashLineVoucherDescription, pettyCashStatementError,
-  type PettyCashLineInput,
+  PETTY_CASH_CURRENCY, PETTY_CASH_TYPE, pettyCashLineAmount, pettyCashLineVat, pettyCashLineVoucherDescription,
+  pettyCashStatementError, type PettyCashLineInput,
 } from '../../../lib/treasury/pettyCash.js';
 import type { PettyCashExpenseLine, TreasuryTransaction } from '../../../types.js';
-import { choosableContraAccounts, type ContraAccountOption } from './partyContraAccount.js';
+import { choosableContraAccounts, purchaseVatAccount, type ContraAccountOption } from './partyContraAccount.js';
 import { auditTreasuryTransactionCreated, type TreasuryAuditActor } from './treasuryAudit.js';
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
 import { TreasuryTransactionService } from './treasuryTransaction.service.js';
@@ -20,9 +20,10 @@ import { TreasuryTransactionService } from './treasuryTransaction.service.js';
  * v10.1.32 (D-16، تصمیم مالک محصول ت۳۰ «متغیر»): صورت‌هزینه تنخواه‌گردان. یک پرداخت خزانه از حساب تنخواه (نوع
  * `petty_cash`، ریالی) که سند پیش‌نویس آن هر ردیف را به حساب هزینه همان ردیف بدهکار و سرفصل تنخواه را با تفصیلی همان
  * تنخواه بستانکار می‌کند؛ مانده تنخواه به اندازه جمع ردیف‌ها کم می‌شود و از مانده بیشتر نمی‌شود. ردیف‌ها در
- * `petty_cash_expense_lines` می‌مانند. مالیات بر ارزش افزوده، فروشنده و شماره فاکتور لازم نیستند و ردیف مالیات خرید
- * ساخته نمی‌شود (ت۱۳). ابطال همان ابطال تراکنش خزانه است: سند پیش‌نویس حذف نرم و سند تأییدشده معکوس می‌شود و مانده
- * برمی‌گردد. شارژ و برگشت وجه همان «انتقال وجه» است.
+ * `petty_cash_expense_lines` می‌مانند. مالیات بر ارزش افزوده، فروشنده و شماره فاکتور لازم نیستند؛ مالیات نوشته‌شده بخشی
+ * از مبلغ ردیف است که به جای حساب هزینه به حساب «مالیات بر ارزش افزوده خرید» (نگاشت purchaseVatAccountCode) می‌رود.
+ * ابطال همان ابطال تراکنش خزانه است: سند پیش‌نویس حذف نرم و سند تأییدشده معکوس می‌شود و مانده برمی‌گردد. شارژ و
+ * برگشت وجه همان «انتقال وجه» است.
  */
 
 /** انواع حسابی که ردیف صورت‌هزینه می‌پذیرد: هزینه و بهای تمام‌شده (گروه «هزینه» نگاشت حساب‌ها) */
@@ -59,10 +60,13 @@ async function expenseAccountsWith(executor: DbExecutor): Promise<ContraAccountO
   return options.filter(a => !parents.has(a.id));
 }
 
-async function assertExpenseAccounts(tx: DbExecutor, accountIds: number[]): Promise<Map<number, { code: string; name: string }>> {
-  // قفل اشتراکی حساب‌ها مانند سند دستی؛ فهرست مجاز فقط حساب‌های معین فعال هزینه‌ای بی زیرحساب فعال (قابل ثبت) را دارد
+async function assertExpenseAccounts(
+  tx: DbExecutor, accountIds: number[], otherLockedIds: number[],
+): Promise<Map<number, { code: string; name: string }>> {
+  // قفل اشتراکی حساب‌ها (و حساب مالیات خرید) مانند سند دستی، به ترتیب شناسه؛ فهرست مجاز فقط حساب‌های معین فعال هزینه‌ای
+  // بی زیرحساب فعال (قابل ثبت) را دارد
   await tx.select({ id: accounts.id }).from(accounts)
-    .where(inArray(accounts.id, [...new Set(accountIds)])).orderBy(asc(accounts.id)).for('share');
+    .where(inArray(accounts.id, [...new Set([...accountIds, ...otherLockedIds])])).orderBy(asc(accounts.id)).for('share');
   const allowed = new Map((await expenseAccountsWith(tx)).map(a => [a.id, { code: a.code, name: a.name }]));
   const refused = [...new Set(accountIds)].filter(id => !allowed.has(id));
   if (refused.length > 0) {
@@ -73,6 +77,19 @@ async function assertExpenseAccounts(tx: DbExecutor, accountIds: number[]): Prom
     );
   }
   return allowed;
+}
+
+/** حساب مالیات خرید فقط وقتی لازم است که ردیفی مالیات نوشته باشد */
+async function requirePurchaseVatAccount(tx: DbExecutor) {
+  const account = await purchaseVatAccount(tx);
+  if (!account || (account.isActive ?? 1) !== 1) {
+    throw new ValidationError(
+      'حساب «مالیات بر ارزش افزوده خرید» در نگاشت حساب‌ها پیدا نشد یا غیرفعال است؛ آن را در تنظیمات حسابداری نگاشت کنید یا مالیات ردیف‌ها را خالی بگذارید.',
+      undefined,
+      'PETTY_CASH_VAT_ACCOUNT_MISSING',
+    );
+  }
+  return account;
 }
 
 async function lockFund(tx: DbExecutor, fundId: number) {
@@ -100,12 +117,14 @@ export async function createPettyCashExpense(input: PettyCashExpenseInput): Prom
     lineNo: i + 1,
     accountId: Number(line.accountId),
     amount: fin(pettyCashLineAmount(line.amount)).round(4),
+    vatAmount: fin(pettyCashLineVat(line.vatAmount)).round(4),
     description: (line.description ?? '').trim(),
     sellerName: (line.sellerName ?? '').trim(),
     // شماره فاکتور مانند شماره چک با ارقام لاتین ذخیره می‌شود (TD-385)
     invoiceNumber: toLatinDigits(line.invoiceNumber ?? '').trim(),
   }));
   const total = lines.reduce((sum, line) => sum.add(line.amount), fin(0)).round(4);
+  const vatTotal = lines.reduce((sum, line) => sum.add(line.vatAmount), fin(0)).round(4);
   const date = await resolveTreasuryWriteDate(input.date, 'تاریخ صورت‌هزینه');
   const description = (input.description ?? '').trim();
 
@@ -116,7 +135,8 @@ export async function createPettyCashExpense(input: PettyCashExpenseInput): Prom
       { name: 'treasuryTransaction', hierarchyLevel: LockHierarchyLevel.TREASURY_TRANSACTIONS },
     ]);
     const fund = await lockFund(tx, input.fundId);
-    const accountNames = await assertExpenseAccounts(tx, lines.map(l => l.accountId));
+    const vatAccount = vatTotal.isPositive() ? await requirePurchaseVatAccount(tx) : null;
+    const accountNames = await assertExpenseAccounts(tx, lines.map(l => l.accountId), vatAccount ? [vatAccount.id] : []);
 
     const balanceAfter = fin(fund.currentBalance).subtract(total).round(4);
     if (balanceAfter.isNegative()) {
@@ -141,12 +161,21 @@ export async function createPettyCashExpense(input: PettyCashExpenseInput): Prom
         ...lines.map(line => ({
           accountId: line.accountId,
           detailedType: 'none',
-          debit: line.amount.toNumber(),
+          debit: line.amount.subtract(line.vatAmount).toNumber(),
           credit: 0,
           currency: PETTY_CASH_CURRENCY,
           exchangeRate: 1,
           description: pettyCashLineVoucherDescription(fund.title, line),
         })),
+        ...(vatAccount ? [{
+          accountId: vatAccount.id,
+          detailedType: 'none',
+          debit: vatTotal.toNumber(),
+          credit: 0,
+          currency: PETTY_CASH_CURRENCY,
+          exchangeRate: 1,
+          description: `مالیات بر ارزش افزوده خرید — ${voucherDescription}`,
+        }] : []),
         {
           accountId: Number(fund.accountId),
           detailedType: 'bank_account',
@@ -188,6 +217,7 @@ export async function createPettyCashExpense(input: PettyCashExpenseInput): Prom
       lineNo: line.lineNo,
       accountId: line.accountId,
       amount: money(line.amount),
+      vatAmount: money(line.vatAmount),
       description: line.description,
       sellerName: line.sellerName,
       invoiceNumber: line.invoiceNumber,
@@ -208,6 +238,7 @@ export async function createPettyCashExpense(input: PettyCashExpenseInput): Prom
       accountCode: accountNames.get(line.accountId)?.code ?? '',
       accountName: accountNames.get(line.accountId)?.name ?? '',
       amount: line.amount.toNumber(),
+      vatAmount: line.vatAmount.toNumber(),
       description: line.description,
       sellerName: line.sellerName,
       invoiceNumber: line.invoiceNumber,
@@ -240,6 +271,7 @@ export async function listPettyCashExpenseLines(transactionId: number): Promise<
     accountCode: accounts.code,
     accountName: accounts.name,
     amount: pettyCashExpenseLines.amount,
+    vatAmount: pettyCashExpenseLines.vatAmount,
     description: pettyCashExpenseLines.description,
     sellerName: pettyCashExpenseLines.sellerName,
     invoiceNumber: pettyCashExpenseLines.invoiceNumber,
@@ -252,5 +284,6 @@ export async function listPettyCashExpenseLines(transactionId: number): Promise<
     accountCode: r.accountCode ?? '',
     accountName: r.accountName ?? '',
     amount: r.amount.toNumber(),
+    vatAmount: r.vatAmount.toNumber(),
   }));
 }

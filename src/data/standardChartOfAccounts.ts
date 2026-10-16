@@ -39,6 +39,8 @@ export const STANDARD_CHART_OF_ACCOUNTS: InitialAccountItem[] = [
   { code: '13', name: 'سایر حساب‌ها و اسناد دریافتنی', level: 'general', parentCode: '1', accountType: 'asset', nature: 'debit', isSystem: 1 },
   { code: '1301', name: 'مساعده و وام به پرسنل', level: 'subsidiary', parentCode: '13', accountType: 'asset', nature: 'debit', isSystem: 1 },
   { code: '1302', name: 'پیش‌پرداخت‌ها به تامین‌کنندگان', level: 'subsidiary', parentCode: '13', accountType: 'asset', nature: 'debit', isSystem: 1 },
+  // v10.1.32 (D-16): مالیات بر ارزش افزوده اختیاری ردیف صورت‌هزینه تنخواه (نگاشت purchaseVatAccountCode، مهاجرت 0116)
+  { code: '1303', name: 'مالیات بر ارزش افزوده خرید', level: 'subsidiary', parentCode: '13', accountType: 'asset', nature: 'debit', isSystem: 1 },
 
   // کل ۱۴: موجودی مواد و کالا
   { code: '14', name: 'موجودی مواد و کالا', level: 'general', parentCode: '1', accountType: 'asset', nature: 'debit', isSystem: 1 },

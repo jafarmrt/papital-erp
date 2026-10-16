@@ -7,8 +7,10 @@ import { DECIMAL_PATTERN, normalizeDecimalString } from '../numericInput';
  * تنخواه حساب خزانه‌ای از نوع `petty_cash` و ریالی است که سرفصلش معمولاً ۱۰۰۶ «تنخواه‌گردان» است. هر مبلغی از بانک یا
  * صندوق با «انتقال وجه» به آن شارژ می‌شود و مانده‌اش بالا و پایین می‌رود (تنخواه ثابت نیست). خرج‌ها با «صورت‌هزینه
  * تنخواه» ثبت می‌شوند: یک پرداخت از تنخواه که سند آن هر ردیف را به حساب هزینه همان ردیف بدهکار و تنخواه را بستانکار
- * می‌کند. مالیات بر ارزش افزوده، فروشنده و شماره فاکتور هیچ‌کدام لازم نیستند؛ مالیات خرید جدا ثبت نمی‌شود (ت۱۳) و در
- * مبلغ همان هزینه است. وجه مانده با «انتقال وجه» از تنخواه به بانک برمی‌گردد.
+ * می‌کند. مالیات بر ارزش افزوده، فروشنده و شماره فاکتور هیچ‌کدام لازم نیستند (قاعده همیشگی مالک محصول: مالیات پشتیبانی
+ * می‌شود ولی هرگز الزامی نیست). مالیات ردیف بخشی از مبلغ پرداخت‌شده است: خالی یا صفر یعنی همه مبلغ هزینه است، و اگر نوشته
+ * شود آن بخش به حساب «مالیات بر ارزش افزوده خرید» (نگاشت purchaseVatAccountCode) می‌رود و باید از مبلغ ردیف کمتر باشد.
+ * وجه مانده با «انتقال وجه» از تنخواه به بانک برمی‌گردد.
  */
 export const PETTY_CASH_TYPE = 'petty_cash';
 export const PETTY_CASH_CURRENCY = 'IRR';
@@ -27,6 +29,7 @@ export function pettyCashCurrencyRefusal(type: unknown, currency: unknown): stri
 export interface PettyCashLineInput {
   accountId: number | null;
   amount: string | number;
+  vatAmount?: string | number | null;
   description?: string;
   sellerName?: string;
   invoiceNumber?: string;
@@ -39,12 +42,23 @@ export function pettyCashLineAmount(value: string | number): FinancialDecimal | 
   return DECIMAL_PATTERN.test(text) ? fin(text) : null;
 }
 
+/** مالیات اختیاری ردیف: تهی صفر است؛ نامعتبر null */
+export function pettyCashLineVat(value: string | number | null | undefined): FinancialDecimal | null {
+  if (value === undefined || value === null) return fin(0);
+  if (typeof value === 'string' && normalizeDecimalString(value) === '') return fin(0);
+  return pettyCashLineAmount(value);
+}
+
 /** خطای یک ردیف صورت‌هزینه (شماره ردیف از یک)، یا رشته خالی */
 export function pettyCashLineError(line: PettyCashLineInput, lineNo: number): string {
   const label = `ردیف ${lineNo.toLocaleString('fa-IR')}`;
   if (!line.accountId || !Number.isInteger(line.accountId) || line.accountId <= 0) return `${label}: حساب هزینه را انتخاب کنید.`;
-  const amount = pettyCashLineAmount(line.amount);
+  // هر دو با همان چهار رقم اعشاری سنجیده می‌شوند که ذخیره می‌شوند
+  const amount = pettyCashLineAmount(line.amount)?.round(4);
   if (!amount || !amount.isPositive()) return `${label}: مبلغ باید عددی بزرگ‌تر از صفر باشد.`;
+  const vat = pettyCashLineVat(line.vatAmount)?.round(4);
+  if (!vat || vat.isNegative()) return `${label}: مالیات بر ارزش افزوده باید عددی صفر یا بیشتر باشد.`;
+  if (!vat.lessThan(amount)) return `${label}: مالیات بر ارزش افزوده بخشی از مبلغ ردیف است و باید از آن کمتر باشد.`;
   for (const text of [line.description, line.sellerName, line.invoiceNumber]) {
     if ((text ?? '').length > PETTY_CASH_TEXT_MAX) return `${label}: هر متن ردیف حداکثر ${PETTY_CASH_TEXT_MAX.toLocaleString('fa-IR')} نویسه است.`;
   }
@@ -86,13 +100,14 @@ export interface PettyCashLineDraft {
   key: number;
   accountId: number | null;
   amount: string;
+  vatAmount: string;
   description: string;
   sellerName: string;
   invoiceNumber: string;
 }
 
 export const emptyPettyCashLine = (key: number): PettyCashLineDraft => ({
-  key, accountId: null, amount: '', description: '', sellerName: '', invoiceNumber: '',
+  key, accountId: null, amount: '', vatAmount: '', description: '', sellerName: '', invoiceNumber: '',
 });
 
 /** بدنه `POST /accounting/treasury/petty-cash/:id/expenses`: متن‌های خالی فرستاده نمی‌شوند */
@@ -104,6 +119,7 @@ export function pettyCashExpensePayload(form: { date: string; description: strin
     lines: form.lines.map(line => ({
       accountId: Number(line.accountId),
       amount: line.amount.trim(),
+      vatAmount: text(line.vatAmount),
       description: text(line.description),
       sellerName: text(line.sellerName),
       invoiceNumber: text(line.invoiceNumber),

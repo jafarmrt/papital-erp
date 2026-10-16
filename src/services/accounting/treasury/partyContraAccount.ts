@@ -85,6 +85,11 @@ export async function requireChoosableContraAccount(tx: DbExecutor | undefined, 
   return acc as unknown as Account;
 }
 
+/** v10.1.32 (D-16): سرفصل مالیات بر ارزش افزوده ردیف صورت‌هزینه تنخواه (نگاشت purchaseVatAccountCode، پیش‌فرض ۱۳۰۳) */
+export function purchaseVatAccount(tx: DbExecutor): Promise<Account | null> {
+  return AccountMappingService.resolveAccount('purchaseVatAccountCode', tx);
+}
+
 /**
  * ورودی طرف حساب پیش از ثبت: پرداخت یا دریافت پرسنل هدف می‌خواهد و «متفرقه» و «سایر» سرفصل طرف مقابل. خروجی همان چیزی
  * است که روی ردیف ذخیره می‌شود (هدف فقط برای پرسنل، سرفصل فقط وقتی انتخاب کاربر است).
