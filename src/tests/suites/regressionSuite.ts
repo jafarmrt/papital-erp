@@ -3,7 +3,7 @@ import { personnelVersion } from '../fixtures/personnelVersion.js';
 import { money } from '../../lib/money.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { eq, and, sql, inArray } from 'drizzle-orm';
+import { eq, and, ne, sql, inArray } from 'drizzle-orm';
 import { categories, items, documents, documentItems, transactions, warehouses, journalVouchers, journalVoucherItems, accounts, documentRefCounters } from '../../db/schema.js';
 import { cleanTestTableData } from '../fixtures/dbTestHelper.js';
 import { normalizeDateToDbTimestamp, jalaliToIsoDate, getErrorMessage } from '../../utils.js';
@@ -8676,7 +8676,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       defId = saved?.definition?.id;
       if (!defId) throw new Error('The definition was not saved');
       const instance = await WorkflowTransitionExecutor.startInstance({ workflowDefinitionId: defId, entityType, entityId: '7' });
-      const ours = async () => orm.select().from(notifications).where(inArray(notifications.userId, userIds));
+      // v10.1.40: entering the step also tells the role about its new task (type 'task'); only the deadline reminders count here
+      const ours = async () => orm.select().from(notifications).where(and(inArray(notifications.userId, userIds), ne(notifications.type, 'task')));
 
       await WorkflowSlaReminderService.sendDueReminders(new Date());
       if ((await ours()).length !== 0) violations.push('a notification was sent before the deadline passed');
@@ -8745,7 +8746,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     const testName = 'v7.0.101: an approval task does not expire, and expired tasks of the current step are reopened with a report (TD-085)';
     const {
       workflowDefinitions, workflowStates, workflowTransitions, workflowInstances, workflowHistoryLogs,
-      workflowPendingApprovals, workflowDefinitionVersions, workflowTasks, users, roles,
+      workflowPendingApprovals, workflowDefinitionVersions, workflowTasks, users, roles, notifications,
     } = await import('../../db/schema.js');
     const { WorkflowDefinitionService } = await import('../../services/workflow/workflowDefinitionService.js');
     const { WorkflowTransitionExecutor } = await import('../../services/workflow/workflowTransitionExecutor.js');
@@ -8863,6 +8864,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         await orm.delete(workflowDefinitionVersions).where(eq(workflowDefinitionVersions.definitionId, defId));
         await orm.delete(workflowDefinitions).where(eq(workflowDefinitions.id, defId));
       }
+      // v10.1.40: entering a step notifies the task's users, so their notifications go first
+      if (userId) await orm.delete(notifications).where(eq(notifications.userId, userId));
       if (userId) await orm.delete(users).where(eq(users.id, userId));
       await deleteTestRoles(eq(roles.code, role));
     }
@@ -10993,6 +10996,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runMessengerLinkTests(shouldRun));
   const { runMessengerDeliveryTests } = await import('../regression/messengerDeliveryTests.js');
   results.push(...await runMessengerDeliveryTests(shouldRun));
+  const { runMessengerNoticeTests } = await import('../regression/messengerNoticeTests.js');
+  results.push(...await runMessengerNoticeTests(shouldRun));
   const { runPayrollEidiTests } = await import('../regression/payrollEidiTests.js');
   results.push(...await runPayrollEidiTests(shouldRun));
   const { runPayrollVoucherDateTests } = await import('../regression/payrollVoucherDateTests.js');

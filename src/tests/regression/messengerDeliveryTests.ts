@@ -106,7 +106,7 @@ export async function runMessengerDeliveryTests(shouldRun: ShouldRun): Promise<T
       const listed = await reader.get('/api/messenger/preferences/mine');
       const rows = (listed.body as { data?: Array<{ category: string; sendToMessenger: boolean }> }).data ?? [];
       if (rows.find(r => r.category === 'mention')?.sendToMessenger !== false || rows.find(r => r.category === 'crm_won')?.sendToMessenger !== true
-        || rows.some(r => r.category === 'payslip' || r.category === 'workflow_task')) {
+        || rows.find(r => r.category === 'payslip')?.sendToMessenger !== true || rows.find(r => r.category === 'workflow_task')?.sendToMessenger !== true) {
         throw new Error(`preferences: ${brief(listed)}`);
       }
 
