@@ -422,19 +422,16 @@ export class IdempotencyService {
   }
 
   /**
-   * Cleans up expired idempotency keys
+   * Deletes the idempotency keys whose window has passed and returns how many went (OBS-R2-10: run daily by
+   * `OperationalPurgeService`). Errors reach the caller, which logs them; a failed purge is never reported as zero.
    */
   static async cleanupExpired(): Promise<number> {
-    try {
-      const now = new Date().toISOString();
-      await orm
-        .delete(idempotencyKeys)
-        .where(and(sql`${idempotencyKeys.expiresAt} IS NOT NULL`, lt(idempotencyKeys.expiresAt, now)));
-      return 1;
-    } catch (err) {
-      logger.error('[Idempotency] Error cleaning up expired keys:', err);
-      return 0;
-    }
+    const now = new Date().toISOString();
+    const removed = await orm
+      .delete(idempotencyKeys)
+      .where(and(sql`${idempotencyKeys.expiresAt} IS NOT NULL`, lt(idempotencyKeys.expiresAt, now)))
+      .returning({ id: idempotencyKeys.id });
+    return removed.length;
   }
 }
 

@@ -53,3 +53,32 @@ export function unscopedCatalogReads(fileName: string, source: string): Unscoped
   visit(file);
   return found;
 }
+
+/**
+ * OT-B-09: `to_regclass('<name>')` with a bare name resolves along the search path, so in an isolated test schema
+ * (`search_path "test_x", public`) an index missing there was found in `public`. A lookup in the services names the
+ * current schema as the migrations do (TD-610): `to_regclass(format('%I.%I', current_schema(), <name>))`.
+ */
+const BARE_REGCLASS = /to_regclass\(\s*(?!format\(\s*'%I\.%I'\s*,\s*current_schema\(\))/gi;
+
+/** The `to_regclass(...)` lookups of one TypeScript source that do not name the current schema */
+export function unqualifiedRegclassLookups(fileName: string, source: string): UnscopedCatalogRead[] {
+  if (!source.includes('to_regclass')) return [];
+  const file = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, fileName.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+  const found: UnscopedCatalogRead[] = [];
+  const visit = (node: ts.Node): void => {
+    const text = literalText(node);
+    // a template's substitutions may hold SQL of their own (`sql.join(... sql\`to_regclass(...)\` ...)`)
+    ts.forEachChild(node, visit);
+    if (text === null) return;
+    for (const m of text.matchAll(BARE_REGCLASS)) {
+      found.push({
+        line: file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1,
+        catalog: 'to_regclass',
+        text: text.slice(m.index ?? 0).replace(/\s+/g, ' ').trim().slice(0, 120),
+      });
+    }
+  };
+  visit(file);
+  return found;
+}

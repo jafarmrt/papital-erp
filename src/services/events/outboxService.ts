@@ -1,5 +1,5 @@
 import { orm, type DbExecutor } from '../../db/drizzle.js';
-import { outboxEvents } from '../../db/schema.js';
+import { outboxEvents, deadLetterEvents } from '../../db/schema.js';
 import { eq, and, or, lte, lt, sql, desc, isNull, type SQL } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 import { BaseDomainEvent, AggregateType } from './domainEvents.js';
@@ -8,6 +8,9 @@ import { DeadLetterQueueService } from './deadLetterQueueService.js';
 import { observeOutboxProcessing } from '../../middleware/metrics.js';
 import { OUTBOX_MAX_ATTEMPTS } from '../../lib/events/outboxAttempts.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
+
+/** OBS-R2-10: completed outbox events are kept this many days (the audit purge's horizon), then purged daily */
+export const OUTBOX_COMPLETED_RETENTION_DAYS = 90;
 
 export interface OutboxQueryFilters {
   status?: string;
@@ -462,25 +465,21 @@ export class OutboxService {
   }
 
   /**
-   * پاکسازی/بایگانی رویدادهای پردازش‌شده قدیمی‌تر از تعداد روز مشخص (پیش‌فرض ۳۰ روز)
+   * OBS-R2-10: deletes the completed events processed more than `olderThanDays` days ago (default
+   * `OUTBOX_COMPLETED_RETENTION_DAYS`, the audit purge's 90 days) and returns how many went. Pending, processing and
+   * failed events are never deleted, nor a completed one whose dead-letter row is not yet replayed (a replay reads its
+   * `completed_handlers`); dead-letter rows are never touched. Errors reach the caller.
    */
-  static async purgeProcessedEvents(olderThanDays: number = 30): Promise<number> {
-    try {
-      const cutoffDate = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000).toISOString();
-      // V3.0.6 (BUG-04): worker رویدادهای موفق را با وضعیت 'completed' علامت می‌زند
-      // (outboxService.ts:163) — پاکسازی قبلی 'processed' را جست‌وجو می‌کرد که هرگز
-      // وجود ندارد و جدول outbox برای همیشه رشد می‌کرد.
-      const result = await orm
-        .delete(outboxEvents)
-        .where(and(
-          eq(outboxEvents.status, 'completed'),
-          lt(outboxEvents.processedAt, cutoffDate)
-        ));
-
-      return (result as any)?.rowCount || 0;
-    } catch (err) {
-      logger.error({ message: 'Error purging old processed outbox events', error: err });
-      return 0;
-    }
+  static async purgeProcessedEvents(olderThanDays: number = OUTBOX_COMPLETED_RETENTION_DAYS): Promise<number> {
+    const cutoffDate = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000).toISOString();
+    const removed = await orm
+      .delete(outboxEvents)
+      .where(and(
+        eq(outboxEvents.status, 'completed'),
+        lt(outboxEvents.processedAt, cutoffDate),
+        sql`NOT EXISTS (SELECT 1 FROM ${deadLetterEvents} WHERE ${deadLetterEvents.originalEventId} = ${outboxEvents.eventId} AND ${deadLetterEvents.status} <> 'replayed')`
+      ))
+      .returning({ id: outboxEvents.id });
+    return removed.length;
   }
 }

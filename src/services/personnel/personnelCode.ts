@@ -69,7 +69,7 @@ export async function findDuplicatePersonnelCodes(db: DbExecutor = orm): Promise
 }
 
 export async function hasPersonnelCodeUniqueIndex(db: DbExecutor = orm): Promise<boolean> {
-  const res = await db.execute(sql`SELECT to_regclass(${PERSONNEL_CODE_UNIQUE_INDEX}) IS NOT NULL AS present`);
+  const res = await db.execute(sql`SELECT to_regclass(format('%I.%I', current_schema(), ${PERSONNEL_CODE_UNIQUE_INDEX}::text)) IS NOT NULL AS present`);
   return Boolean((res.rows?.[0] as { present?: boolean } | undefined)?.present);
 }
 

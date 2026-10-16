@@ -40,6 +40,8 @@ export const ADVISORY_LOCK_KEYS = {
   CONDITIONAL_CONSTRAINTS: 91040,
   /** v10.1.3 (N-05 PR 4): rebuilding the light versions of the media library (`npm run media:rebuild-light`); one run at a time */
   MEDIA_LIGHT_REBUILD: 91041,
+  /** OBS-R2-10: the daily purge of expired idempotency keys and old completed outbox events; one run at a time */
+  OPERATIONAL_PURGE: 91100,
 } as const;
 
 /**

@@ -39,6 +39,8 @@ export interface RehearsalFindings {
   problems: string[];
   /** برای اطلاع اپراتور */
   notices: string[];
+  /** OT-A-04: the financial health check ran both before and after the migrations, so «not worse» was really compared */
+  healthCompared: boolean;
 }
 
 export const REHEARSAL_DATABASE_PREFIX = 'erp_restore_drill_';
@@ -234,7 +236,19 @@ export function compareRehearsal(
 
   for (const u of before.unavailable) notices.push(`not compared (before): ${u}`);
   for (const u of after.unavailable) notices.push(`not compared (after): ${u}`);
-  return { problems, notices };
+  return { problems, notices, healthCompared: Boolean(healthBefore && healthAfter) };
+}
+
+/**
+ * OT-A-04: the line a passing rehearsal prints. It says «financial health not worse» only when the health check ran on
+ * both sides; when either side could not run (an older schema before the migrations) nothing was compared and the line
+ * says so instead of claiming the health is not worse.
+ */
+export function rehearsalPassLine(findings: Pick<RehearsalFindings, 'healthCompared'>): string {
+  const health = findings.healthCompared
+    ? 'financial health not worse'
+    : 'financial health not compared (the check did not run before and after the migrations)';
+  return `  ✓ ledger totals per account, stock and average cost per item, stock per warehouse and bank balances unchanged; ${health}`;
 }
 
 const FAILED_QUERY = /^Failed query:/;

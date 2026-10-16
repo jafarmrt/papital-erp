@@ -2073,8 +2073,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       // 1. Ensure required accounts exist
       await AccountingService.seedStandardAccounts();
       const allAccounts = await AccountingService.getAllAccounts();
-      const expenseAcc = allAccounts.find((a: any) => a.code === '7101') || allAccounts[0];
-      const bankAcc = allAccounts.find((a: any) => a.code === '1102') || allAccounts[1];
+      // OBS-R1-49: posting accounts (subsidiary), since the live correction path accepts rows only on them (TD-549)
+      const expenseAcc = allAccounts.find((a: any) => a.code === '7001') || allAccounts[0];
+      const bankAcc = allAccounts.find((a: any) => a.code === '1001') || allAccounts[1];
 
       // 2. Direct Voucher with Jalali Date (1404-10-15) -> Must normalize to Gregorian ISO
       const vJalali = await VoucherService.createJournalVoucher({
@@ -2093,8 +2094,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         throw new Error(`voucher date was not normalized to Gregorian! Stored value: ${storedVoucher.date}`);
       }
 
-      // 3. Repost voucher with no date passed -> must use businessTodayIsoDate, not Jalali string
-      const repostRes = await VoucherService.repostVoucher({
+      // 3. Correct the voucher with no date passed -> must use businessTodayIsoDate, not a Jalali string
+      // (OBS-R1-49: the dead repostVoucher was removed; correctVoucher is the live reversal-and-new-rows path)
+      const correctRes = await VoucherService.correctVoucher({
         voucherId: vJalali.id,
         reason: 'تغییر ردیف برای آزمون نرمال‌سازی تاریخ',
         newItems: [
@@ -2104,11 +2106,11 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       });
 
       const todayIso = await businessTodayIsoDate();
-      if (!repostRes.voidVoucher.date || !repostRes.voidVoucher.date.startsWith(todayIso.slice(0, 7))) {
-        throw new Error(`void voucher date of the repost is not Gregorian ISO! Value: ${repostRes.voidVoucher.date}`);
+      if (!correctRes.reversalVoucher.date || !correctRes.reversalVoucher.date.startsWith(todayIso.slice(0, 7))) {
+        throw new Error(`reversal voucher date of the correction is not Gregorian ISO! Value: ${correctRes.reversalVoucher.date}`);
       }
-      if (!repostRes.repostedVoucher.date || !repostRes.repostedVoucher.date.startsWith(todayIso.slice(0, 7))) {
-        throw new Error(`new voucher date of the repost is not Gregorian ISO! Value: ${repostRes.repostedVoucher.date}`);
+      if (!correctRes.correctedVoucher.date || !correctRes.correctedVoucher.date.startsWith(todayIso.slice(0, 7))) {
+        throw new Error(`new voucher date of the correction is not Gregorian ISO! Value: ${correctRes.correctedVoucher.date}`);
       }
 
       // 4. Cheque with Jalali issueDate -> Voucher date must be ISO
@@ -2137,7 +2139,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (chq?.id) {
         await cleanTestTableData('cheques', 'id', [chq.id]);
       }
-      const voucherIdsToClean = [vJalali.id, repostRes.voidVoucher.id, repostRes.repostedVoucher.id];
+      const voucherIdsToClean = [vJalali.id, correctRes.reversalVoucher.id, correctRes.correctedVoucher.id];
       if (chqVoucher) voucherIdsToClean.push(chqVoucher.id);
       await cleanTestTableData('journal_voucher_items', 'voucher_id', voucherIdsToClean);
       await cleanTestTableData('journal_vouchers', 'id', voucherIdsToClean);
@@ -2145,18 +2147,18 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       results.push(makeTestCase({
         id: 'reg_voucher_iso_date_normalization_td_149',
         scenarioId: 'period_closing_and_conceptual_mappings',
-        name: 'V6 Phase 3.4: voucher date format in the cheque cycle and repost fixed to Gregorian ISO (TD-149)',
+        name: 'V6 Phase 3.4: voucher date format in the cheque cycle and voucher correction fixed to Gregorian ISO (TD-149)',
         layer: 'regression',
         executionType: 'real_database',
         passed: true,
         durationMs: Date.now() - t23Start,
-        details: 'Gregorian ISO format (YYYY-MM-DD) is enforced for journal vouchers, repost and the cheque cycle.'
+        details: 'Gregorian ISO format (YYYY-MM-DD) is enforced for journal vouchers, voucher correction and the cheque cycle.'
       }));
     } catch (err: any) {
       results.push(makeTestCase({
         id: 'reg_voucher_iso_date_normalization_td_149',
         scenarioId: 'period_closing_and_conceptual_mappings',
-        name: 'V6 Phase 3.4: voucher date format in the cheque cycle and repost fixed to Gregorian ISO (TD-149)',
+        name: 'V6 Phase 3.4: voucher date format in the cheque cycle and voucher correction fixed to Gregorian ISO (TD-149)',
         layer: 'regression',
         executionType: 'real_database',
         passed: false,
@@ -11086,6 +11088,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // closing sweep (package 9 and 14): daily log search folding and customer import row numbers (OBS-R2-61, OBS-R2-25)
   const { runDailyLogCustomerSweepTests } = await import('../regression/dailyLogCustomerSweepTests.js');
   results.push(...await runDailyLogCustomerSweepTests(shouldRun));
+
+  // closing sweep: operational purge, migration lock wait, schema-qualified catalog lookups
+  const { runOpsSweepTests } = await import('../regression/opsSweepTests.js');
+  results.push(...await runOpsSweepTests(shouldRun));
 
   return results;
 }

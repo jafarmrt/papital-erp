@@ -36,7 +36,7 @@ export async function findDuplicateOpenInstances(db: DbExecutor = orm): Promise<
 }
 
 export async function hasOpenInstanceUniqueIndex(db: DbExecutor = orm): Promise<boolean> {
-  const res = await db.execute(sql`SELECT to_regclass(${WORKFLOW_OPEN_INSTANCE_UNIQUE_INDEX}) IS NOT NULL AS present`);
+  const res = await db.execute(sql`SELECT to_regclass(format('%I.%I', current_schema(), ${WORKFLOW_OPEN_INSTANCE_UNIQUE_INDEX}::text)) IS NOT NULL AS present`);
   return Boolean((res.rows?.[0] as { present?: boolean } | undefined)?.present);
 }
 

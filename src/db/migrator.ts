@@ -110,6 +110,37 @@ function migrationStatementTimeoutMs(): number {
 }
 
 /**
+ * OBS-PR-10: how long a run waits for the migration advisory lock (a PostgreSQL `lock_timeout` value, default `10min`).
+ * Another run holding the lock longer makes this run fail with a clear error instead of waiting forever.
+ */
+export function migrationLockTimeout(): string {
+  const value = (process.env.MIGRATION_LOCK_TIMEOUT ?? '').trim();
+  return value === '' ? '10min' : value;
+}
+
+/** PostgreSQL `lock_not_available`: the lock wait ran past `lock_timeout` */
+const LOCK_NOT_AVAILABLE = '55P03';
+
+/**
+ * OBS-PR-10: takes the migration advisory lock, waiting at most `migrationLockTimeout()`. The lock timeout is set only
+ * for this wait and set back to 0 at once, so the migrations themselves wait for their table locks as before.
+ */
+async function acquireMigrationLock(client: pkg.PoolClient): Promise<void> {
+  const timeout = migrationLockTimeout();
+  await client.query("SELECT set_config('lock_timeout', $1, false)", [timeout]);
+  try {
+    await client.query('SELECT pg_advisory_lock($1::bigint)', [ADVISORY_LOCK_KEYS.MIGRATIONS]);
+  } catch (err) {
+    if ((err as { code?: unknown }).code === LOCK_NOT_AVAILABLE) {
+      throw new Error(`Timed out after ${timeout} waiting for the migration advisory lock ${ADVISORY_LOCK_KEYS.MIGRATIONS}; another migration run still holds it (MIGRATION_LOCK_TIMEOUT)`);
+    }
+    throw err;
+  } finally {
+    await client.query('SET lock_timeout = 0');
+  }
+}
+
+/**
  * Runs Drizzle ORM migrations using the official Drizzle Migrator pipeline.
  * Ensures the single source of truth (drizzle/*.sql) is applied cleanly and idempotently.
  *
@@ -146,7 +177,7 @@ export async function runMigrations(options: RunMigrationsOptions = {}): Promise
     client.on('notice', onNotice);
     await client.query(`SET statement_timeout = ${migrationStatementTimeoutMs()}`);
     await client.query('SET idle_in_transaction_session_timeout = 0');
-    await client.query('SELECT pg_advisory_lock($1::bigint)', [ADVISORY_LOCK_KEYS.MIGRATIONS]);
+    await acquireMigrationLock(client);
     locked = true;
 
     // V3.0.9 (TD-063): appliedCount واقعی از روی رکوردهای __drizzle_migrations
@@ -185,6 +216,7 @@ export async function runMigrations(options: RunMigrationsOptions = {}): Promise
       if (locked) await client.query('SELECT pg_advisory_unlock($1::bigint)', [ADVISORY_LOCK_KEYS.MIGRATIONS]).catch(() => undefined);
       await client.query('RESET statement_timeout').catch(() => undefined);
       await client.query('RESET idle_in_transaction_session_timeout').catch(() => undefined);
+      await client.query('RESET lock_timeout').catch(() => undefined);
       client.release();
     }
   }

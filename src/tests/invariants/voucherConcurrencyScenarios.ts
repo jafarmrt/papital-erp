@@ -42,9 +42,6 @@ export async function checkVoucherReversedOnce(): Promise<string[]> {
   const correction = async (voucherId: number) => VoucherService.correctVoucher({
     voucherId, reason: 'اصلاح مبلغ', date: '2026-04-02', newItems: await voucherLines(900000),
   });
-  const repost = async (voucherId: number) => VoucherService.repostVoucher({
-    voucherId, reason: 'بازثبت', date: '2026-04-02', newItems: await voucherLines(900000),
-  });
   const reverse = (voucherId: number) => VoucherService.reverseVoucher({ voucherId, date: '2026-04-02', reason: 'ابطال' });
 
   const raced = await approvedVoucher('سند آزمون اصلاح هم‌زمان');
@@ -57,8 +54,9 @@ export async function checkVoucherReversedOnce(): Promise<string[]> {
   if (racedReversals !== 1) problems.push(`after a concurrent correction and void the voucher has ${racedReversals} active reversal vouchers, not one`);
 
   const sequences: Array<[(id: number) => Promise<unknown>, (id: number) => Promise<unknown>, string]> = [
-    [reverse, repost, 'void then void-and-repost'],
-    [repost, correction, 'void-and-repost then correction'],
+    // OBS-R1-49: the dead void-and-repost path was removed; the live void and correction still refuse each other
+    [reverse, correction, 'void then correction'],
+    [correction, reverse, 'correction then void'],
   ];
   for (const [first, second, label] of sequences) {
     const voucherId = await approvedVoucher(`سند آزمون ${label}`);

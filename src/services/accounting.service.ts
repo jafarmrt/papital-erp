@@ -48,7 +48,6 @@ export class AccountingService {
   static deleteJournalVoucher = VoucherService.deleteJournalVoucher.bind(VoucherService);
   static reverseVoucher = VoucherService.reverseVoucher.bind(VoucherService);
   static correctVoucher = VoucherService.correctVoucher.bind(VoucherService);
-  static repostVoucher = VoucherService.repostVoucher.bind(VoucherService);
   static finalizeJournalVoucher = VoucherService.finalizeJournalVoucher.bind(VoucherService);
   static finalizeJournalVouchers = VoucherService.finalizeJournalVouchers.bind(VoucherService);
   static approveJournalVouchers = VoucherService.approveJournalVouchers.bind(VoucherService);

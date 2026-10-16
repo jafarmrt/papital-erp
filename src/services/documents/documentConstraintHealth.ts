@@ -52,7 +52,7 @@ export async function findDocumentIntegrityGaps(executor: DbExecutor = orm): Pro
     let state: DocumentConstraintState = 'service';
     if (rule.constraint) {
       const stateRes = await executor.execute(sql`
-        SELECT convalidated FROM pg_constraint WHERE conname = ${rule.name} AND conrelid = to_regclass(${rule.table})`);
+        SELECT convalidated FROM pg_constraint WHERE conname = ${rule.name} AND conrelid = to_regclass(format('%I.%I', current_schema(), ${rule.table}::text))`);
       const row = (stateRes.rows as Array<{ convalidated?: boolean }>)[0];
       state = !row ? 'missing' : row.convalidated ? 'valid' : 'not_valid';
     }

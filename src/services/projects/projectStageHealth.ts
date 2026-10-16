@@ -43,8 +43,8 @@ export async function findProjectStageIntegrity(db: DbExecutor = orm): Promise<P
     stageIds: (Array.isArray(r.ids) ? r.ids : []).map(Number),
   }));
   const [state] = rowsOf(await db.execute(sql`
-    SELECT to_regclass(${PROJECT_STAGE_ORDER_INDEX}) IS NOT NULL AS index_present,
-      (SELECT c.convalidated FROM pg_constraint c WHERE c.conname = ${PROJECT_STAGE_PROJECT_FK} AND c.conrelid = to_regclass('project_stages')) AS fk_valid,
+    SELECT to_regclass(format('%I.%I', current_schema(), ${PROJECT_STAGE_ORDER_INDEX}::text)) IS NOT NULL AS index_present,
+      (SELECT c.convalidated FROM pg_constraint c WHERE c.conname = ${PROJECT_STAGE_PROJECT_FK} AND c.conrelid = to_regclass(format('%I.%I', current_schema(), 'project_stages'))) AS fk_valid,
       (SELECT count(*)::int FROM project_stages s WHERE NOT EXISTS (SELECT 1 FROM production_projects p WHERE p.id = s.project_id)) AS orphans
   `));
   const fkValid = state?.fk_valid;
