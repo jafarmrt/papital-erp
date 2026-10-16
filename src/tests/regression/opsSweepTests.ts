@@ -119,6 +119,38 @@ export async function runOpsSweepTests(shouldRun: ShouldRun): Promise<TestCaseRe
     });
   }
 
+  const batchId = 'reg_operational_purge_batches_obs_r2_10';
+  if (shouldRun(batchId, 'obs-r2-10', 'idempotency', 'outbox', 'purge', 'batch')) {
+    await runCase(results, batchId, 'closing sweep: both purges delete a backlog larger than one batch in several statements and count every row (OBS-R2-10 review)', async () => {
+      const tag = tagOf();
+      const backlog = 7;
+      const batchSize = 3;
+      const keys = await orm.insert(idempotencyKeys).values(Array.from({ length: backlog }, (_, i) => (
+        { key: `ops-batch-expired-${i}-${tag}`, scope: 'ops_sweep', status: 'completed', expiresAt: isoDaysAgo(1) }
+      ))).returning({ id: idempotencyKeys.id });
+      const events = await orm.insert(outboxEvents).values(Array.from({ length: backlog }, (_, i) => ({
+        eventId: `ops-batch-old-${i}-${tag}`, eventType: 'OpsSweepProbe', aggregateType: 'ops_sweep', aggregateId: tag,
+        status: 'completed', processedAt: isoDaysAgo(120),
+      }))).returning({ id: outboxEvents.id });
+      const [live] = await orm.insert(outboxEvents).values({
+        eventId: `ops-batch-pending-${tag}`, eventType: 'OpsSweepProbe', aggregateType: 'ops_sweep', aggregateId: tag, status: 'pending',
+      }).returning({ id: outboxEvents.id });
+      const keysDeleted = await IdempotencyService.cleanupExpired(batchSize);
+      const eventsDeleted = await OutboxService.purgeProcessedEvents(90, batchSize);
+      const keysLeft = (await orm.select({ id: idempotencyKeys.id }).from(idempotencyKeys).where(inArray(idempotencyKeys.id, keys.map(k => k.id)))).length;
+      const eventsLeft = (await orm.select({ id: outboxEvents.id }).from(outboxEvents).where(inArray(outboxEvents.id, events.map(e => e.id)))).length;
+      const liveKept = (await orm.select({ id: outboxEvents.id }).from(outboxEvents).where(inArray(outboxEvents.id, [live.id]))).length === 1;
+      assertNoProblems([
+        ...(keysLeft === 0 ? [] : [`${keysLeft} of ${backlog} expired keys were left after batches of ${batchSize}`]),
+        ...(eventsLeft === 0 ? [] : [`${eventsLeft} of ${backlog} old completed events were left after batches of ${batchSize}`]),
+        ...(keysDeleted >= backlog ? [] : [`cleanupExpired counted ${keysDeleted}, expected at least ${backlog}`]),
+        ...(eventsDeleted >= backlog ? [] : [`purgeProcessedEvents counted ${eventsDeleted}, expected at least ${backlog}`]),
+        ...(liveKept ? [] : ['a pending event was deleted']),
+      ]);
+      return `batches of ${batchSize}: ${keysDeleted} key(s) and ${eventsDeleted} event(s) deleted, pending event kept`;
+    });
+  }
+
   const wiringId = 'reg_operational_purge_scheduled_obs_r2_10';
   if (shouldRun(wiringId, 'obs-r2-10', 'purge', 'advisory')) {
     await runCase(results, wiringId, 'closing sweep: the server starts and stops the daily purge under its own advisory lock key (OBS-R2-10)', async () => {

@@ -1,6 +1,7 @@
-import { eq, and, sql, lt, isNull } from 'drizzle-orm';
+import { eq, and, sql, lt, isNull, inArray } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { idempotencyKeys } from '../db/schema.js';
+import { OPERATIONAL_PURGE_BATCH_SIZE, deleteInBatches, deletedRowCount } from '../lib/batchDelete.js';
 import { logger } from '../middleware/logger.js';
 
 export interface AcquireKeyOptions {
@@ -423,15 +424,16 @@ export class IdempotencyService {
 
   /**
    * Deletes the idempotency keys whose window has passed and returns how many went (OBS-R2-10: run daily by
-   * `OperationalPurgeService`). Errors reach the caller, which logs them; a failed purge is never reported as zero.
+   * `OperationalPurgeService`), in batches of `batchSize`, each its own statement, so only counts reach Node.
+   * Errors reach the caller, which logs them; a failed purge is never reported as zero.
    */
-  static async cleanupExpired(): Promise<number> {
+  static async cleanupExpired(batchSize: number = OPERATIONAL_PURGE_BATCH_SIZE): Promise<number> {
     const now = new Date().toISOString();
-    const removed = await orm
-      .delete(idempotencyKeys)
-      .where(and(sql`${idempotencyKeys.expiresAt} IS NOT NULL`, lt(idempotencyKeys.expiresAt, now)))
-      .returning({ id: idempotencyKeys.id });
-    return removed.length;
+    const expired = and(sql`${idempotencyKeys.expiresAt} IS NOT NULL`, lt(idempotencyKeys.expiresAt, now));
+    return deleteInBatches(batchSize, async () => {
+      const batch = orm.select({ id: idempotencyKeys.id }).from(idempotencyKeys).where(expired).limit(batchSize);
+      return deletedRowCount(await orm.delete(idempotencyKeys).where(inArray(idempotencyKeys.id, batch)));
+    });
   }
 }
 

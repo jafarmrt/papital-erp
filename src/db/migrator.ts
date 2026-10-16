@@ -123,7 +123,7 @@ const LOCK_NOT_AVAILABLE = '55P03';
 
 /**
  * OBS-PR-10: takes the migration advisory lock, waiting at most `migrationLockTimeout()`. The lock timeout is set only
- * for this wait and set back to 0 at once, so the migrations themselves wait for their table locks as before.
+ * for this wait and then reset to the role or database default, so the migrations wait for their table locks as before.
  */
 async function acquireMigrationLock(client: pkg.PoolClient): Promise<void> {
   const timeout = migrationLockTimeout();
@@ -136,7 +136,7 @@ async function acquireMigrationLock(client: pkg.PoolClient): Promise<void> {
     }
     throw err;
   } finally {
-    await client.query('SET lock_timeout = 0');
+    await client.query('RESET lock_timeout');
   }
 }
 

@@ -1,6 +1,7 @@
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { outboxEvents, deadLetterEvents } from '../../db/schema.js';
-import { eq, and, or, lte, lt, sql, desc, isNull, type SQL } from 'drizzle-orm';
+import { eq, and, or, lte, lt, sql, desc, isNull, inArray, type SQL } from 'drizzle-orm';
+import { OPERATIONAL_PURGE_BATCH_SIZE, deleteInBatches, deletedRowCount } from '../../lib/batchDelete.js';
 import { logger } from '../../middleware/logger.js';
 import { BaseDomainEvent, AggregateType } from './domainEvents.js';
 import { domainEventBus } from './domainEventBus.js';
@@ -468,18 +469,25 @@ export class OutboxService {
    * OBS-R2-10: deletes the completed events processed more than `olderThanDays` days ago (default
    * `OUTBOX_COMPLETED_RETENTION_DAYS`, the audit purge's 90 days) and returns how many went. Pending, processing and
    * failed events are never deleted, nor a completed one whose dead-letter row is not yet replayed (a replay reads its
-   * `completed_handlers`); dead-letter rows are never touched. Errors reach the caller.
+   * `completed_handlers`); dead-letter rows are never touched. A webhook or rule delivery's dead-letter row carries a
+   * suffixed id (`<eventId>#webhook:<id>`) and never matches here, which is safe: its replay reads the event from its own
+   * `integration_delivery_jobs` row, not from the outbox. Rows go in batches of `batchSize` (each its own statement under
+   * the pool's statement timeout), so a large first backlog is purged step by step and only counts reach Node.
+   * Errors reach the caller.
    */
-  static async purgeProcessedEvents(olderThanDays: number = OUTBOX_COMPLETED_RETENTION_DAYS): Promise<number> {
+  static async purgeProcessedEvents(
+    olderThanDays: number = OUTBOX_COMPLETED_RETENTION_DAYS,
+    batchSize: number = OPERATIONAL_PURGE_BATCH_SIZE
+  ): Promise<number> {
     const cutoffDate = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000).toISOString();
-    const removed = await orm
-      .delete(outboxEvents)
-      .where(and(
-        eq(outboxEvents.status, 'completed'),
-        lt(outboxEvents.processedAt, cutoffDate),
-        sql`NOT EXISTS (SELECT 1 FROM ${deadLetterEvents} WHERE ${deadLetterEvents.originalEventId} = ${outboxEvents.eventId} AND ${deadLetterEvents.status} <> 'replayed')`
-      ))
-      .returning({ id: outboxEvents.id });
-    return removed.length;
+    const purgeable = and(
+      eq(outboxEvents.status, 'completed'),
+      lt(outboxEvents.processedAt, cutoffDate),
+      sql`NOT EXISTS (SELECT 1 FROM ${deadLetterEvents} WHERE ${deadLetterEvents.originalEventId} = ${outboxEvents.eventId} AND ${deadLetterEvents.status} <> 'replayed')`
+    );
+    return deleteInBatches(batchSize, async () => {
+      const batch = orm.select({ id: outboxEvents.id }).from(outboxEvents).where(purgeable).limit(batchSize);
+      return deletedRowCount(await orm.delete(outboxEvents).where(inArray(outboxEvents.id, batch)));
+    });
   }
 }
