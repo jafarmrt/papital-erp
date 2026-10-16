@@ -35,6 +35,8 @@ export interface FakeBotApi {
   updates: BotUpdate[];
   /** tokens whose `getUpdates` answers 502 */
   failingTokens: Set<string>;
+  /** a 429 of `sendMessage` carries this `retry_after` */
+  sendRetryAfter?: number;
 }
 
 /** Replaces `fetch` with a fake bot API for the time of `fn` */
@@ -51,6 +53,7 @@ export async function withFakeBotApi<T>(fn: (api: FakeBotApi) => Promise<T>): Pr
       return api.usernames[token] ? json(200, { ok: true, result: { username: api.usernames[token] } }) : json(401, { ok: false, description: 'Unauthorized' });
     }
     if (url.endsWith('/sendMessage')) {
+      if (api.sendStatus === 429) return json(429, { ok: false, description: 'Too Many Requests', parameters: { retry_after: api.sendRetryAfter ?? 1 } });
       return api.sendStatus === 200 ? json(200, { ok: true, result: { message_id: 1 } }) : json(api.sendStatus, { ok: false, description: 'Forbidden: bot was blocked by the user' });
     }
     if (url.endsWith('/getUpdates')) {

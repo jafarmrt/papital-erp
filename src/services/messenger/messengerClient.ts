@@ -19,6 +19,8 @@ export interface BotApiResult<T> {
   result?: T;
   /** The API's own error text, or the network error's name (never the address) */
   description?: string;
+  /** a 429's `parameters.retry_after`: seconds to wait before the next call */
+  retryAfterSeconds?: number;
 }
 
 export interface BotSendResult {
@@ -29,6 +31,8 @@ export interface BotSendResult {
   blocked: boolean;
   /** a later attempt may succeed (network error, 429, 5xx) */
   retryable: boolean;
+  /** a 429's own wait in seconds, when the API says it */
+  retryAfterSeconds?: number;
 }
 
 export interface BotUpdate {
@@ -63,14 +67,21 @@ export async function callBotApi<T>(messenger: Messenger, token: string, method:
   } catch (err) {
     return { ok: false, status: 0, description: networkErrorText(err) };
   }
-  let parsed: { ok?: boolean; result?: T; description?: string } = {};
+  let parsed: { ok?: boolean; result?: T; description?: string; parameters?: { retry_after?: unknown } } = {};
   try {
     parsed = await response.json() as typeof parsed;
   } catch {
     parsed = {};
   }
   const ok = response.ok && parsed.ok === true;
-  return { ok, status: response.status, result: ok ? parsed.result : undefined, description: ok ? undefined : String(parsed.description ?? `HTTP ${response.status}`) };
+  const retryAfter = Number(parsed.parameters?.retry_after);
+  return {
+    ok,
+    status: response.status,
+    result: ok ? parsed.result : undefined,
+    description: ok ? undefined : String(parsed.description ?? `HTTP ${response.status}`),
+    ...(!ok && Number.isFinite(retryAfter) && retryAfter > 0 ? { retryAfterSeconds: retryAfter } : {}),
+  };
 }
 
 /** The bot's own username, or null when the token is not a working bot token */
@@ -87,6 +98,7 @@ export async function sendBotMessage(messenger: Messenger, token: string, chatId
     description: res.description,
     blocked: res.status === 403,
     retryable: !res.ok && (res.status === 0 || res.status === 429 || res.status >= 500),
+    ...(res.retryAfterSeconds ? { retryAfterSeconds: res.retryAfterSeconds } : {}),
   };
 }
 

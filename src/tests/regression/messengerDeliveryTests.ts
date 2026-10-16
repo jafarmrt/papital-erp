@@ -1,6 +1,7 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { deadLetterEvents, integrationDeliveryJobs, notifications, userMessengerLinks } from '../../db/schema.js';
+import { deadLetterEvents, integrationDeliveryJobs, notifications, userMessengerLinks, users } from '../../db/schema.js';
+import { DeadLetterQueueService } from '../../services/events/deadLetterQueueService.js';
 import { IntegrationDeliveryService } from '../../services/events/integrationDelivery.service.js';
 import { createNotifications } from '../../services/notifications/notificationCreator.js';
 import { TestCaseResult } from '../types.js';
@@ -73,10 +74,13 @@ export async function runMessengerDeliveryTests(shouldRun: ShouldRun): Promise<T
       await IntegrationDeliveryService.processDueJobs();
       const [sent] = sentTexts(api);
       if (!sent || sent.chat !== '7001') throw new Error(`nothing was sent to the linked chat: ${JSON.stringify(api.calls.map(c => c.url.split('/').pop()))}`);
-      for (const part of ['زهرا احمدی،', 'اشاره در گزارش کار روزانه', 'علی رضایی', '۱۵', `${APP_URL}/daily-logs?id=`]) {
+      for (const part of ['زهرا احمدی،', 'به شما اشاره شد', `${APP_URL}/daily-logs`]) {
         if (!sent.text.includes(part)) throw new Error(`the message lacks «${part}»: ${sent.text}`);
       }
-      if (/15|FAKE/.test(sent.text.replace(APP_URL, '').replace(/\?id=\d+/, ''))) throw new Error(`the message has Latin digits or a token: ${sent.text}`);
+      // the log title and the author's name are typed by users: the messenger gets a fixed sentence and the section's page
+      for (const part of ['بسته‌بندی', 'علی رضایی', '?id=', '15', '۱۵', 'FAKE']) {
+        if (sent.text.includes(part)) throw new Error(`the message carries «${part}»: ${sent.text}`);
+      }
       const [done] = await jobsOfLink(linkId);
       if (done.status !== 'succeeded') throw new Error(`the job must be succeeded, got ${done.status} ${done.lastError}`);
 
@@ -101,7 +105,8 @@ export async function runMessengerDeliveryTests(shouldRun: ShouldRun): Promise<T
       if ((await jobsOfLink(linkId)).length !== jobsBefore + 1) throw new Error('another category must still be queued');
       const listed = await reader.get('/api/messenger/preferences/mine');
       const rows = (listed.body as { data?: Array<{ category: string; sendToMessenger: boolean }> }).data ?? [];
-      if (rows.find(r => r.category === 'mention')?.sendToMessenger !== false || rows.find(r => r.category === 'payslip')?.sendToMessenger !== true) {
+      if (rows.find(r => r.category === 'mention')?.sendToMessenger !== false || rows.find(r => r.category === 'crm_won')?.sendToMessenger !== true
+        || rows.some(r => r.category === 'payslip' || r.category === 'workflow_task')) {
         throw new Error(`preferences: ${brief(listed)}`);
       }
 
@@ -158,6 +163,76 @@ export async function runMessengerDeliveryTests(shouldRun: ShouldRun): Promise<T
       const [closed] = await jobsOfLink(relinkId);
       if (closed.status !== 'cancelled' || sentTexts(api).length !== callsBefore) throw new Error(`a job of a closed link must be cancelled unsent, got ${closed.status}`);
       return '502 retried, 403 closed the link, 400 in the dead letter queue, a closed link sends nothing';
+    })));
+  }
+
+  const reviewId = 'reg_messenger_delivery_review_fixes';
+  if (shouldRun(reviewId, 'messenger')) {
+    await runCase(results, reviewId, 'v10.1.39: a messenger dead letter is replayed and requeued as its own delivery, never through the event bus; a user deleted or a category turned off after queueing sends nothing and deleting a user closes their links; a 429 waits for its retry_after; a messenger job has ten attempts', async () => inSandbox(() => withFakeBotApi(async (api) => {
+      const admin = await clientFor('admin');
+      if ((await admin.put('/api/messenger/bots/bale', { token: TOKEN })).status !== 200) throw new Error('bot not saved');
+      const user = await clientFor([], 'نرگس کاظمی');
+      const linkId = await linkUser(user.userId, '9001');
+
+      api.sendStatus = 400;
+      const firstId = await notify(user.userId, 'پیگیری صف');
+      await IntegrationDeliveryService.processDueJobs();
+      const [failed] = await jobsOfLink(linkId);
+      if (failed.maxAttempts !== 10) throw new Error(`a messenger job must have 10 attempts, got ${failed.maxAttempts}`);
+      const deadOf = async (notificationId: number) => (await orm.select().from(deadLetterEvents).where(eq(deadLetterEvents.originalEventId, `notification:${notificationId}#messenger:${linkId}`)))[0];
+      const dead = await deadOf(firstId);
+      if (!dead) throw new Error('no dead letter for the refused message');
+      api.sendStatus = 200;
+      const sentBefore = sentTexts(api).length;
+      const replayed = await DeadLetterQueueService.replayEvent(dead.id);
+      const [afterReplay] = await jobsOfLink(linkId);
+      if (!replayed.success || sentTexts(api).length !== sentBefore + 1 || afterReplay.status !== 'succeeded') {
+        throw new Error(`the replay must send the message itself: ${replayed.message}, sent ${sentTexts(api).length - sentBefore}, job ${afterReplay.status}`);
+      }
+
+      api.sendStatus = 400;
+      const secondId = await notify(user.userId, 'پیگیری صف دو');
+      await IntegrationDeliveryService.processDueJobs();
+      if (!(await deadOf(secondId))) throw new Error('no dead letter for the second message');
+      const requeued = await orm.transaction(tx => DeadLetterQueueService.requeueUnresolvedToOutbox(tx));
+      const [, secondJob] = await jobsOfLink(linkId);
+      const outbox = await orm.execute(sql`SELECT count(*)::int AS n FROM outbox_events WHERE event_id LIKE ${`notification:${secondId}%`}`);
+      if (requeued.requeuedCount !== 1 || secondJob.status !== 'pending' || Number((outbox.rows[0] as { n: number }).n) !== 0) {
+        throw new Error(`the requeue must put the delivery back in its own queue: ${JSON.stringify(requeued)} job ${secondJob.status}`);
+      }
+      api.sendStatus = 200;
+
+      await orm.update(integrationDeliveryJobs).set({ status: 'succeeded' }).where(eq(integrationDeliveryJobs.id, secondJob.id));
+      await user.put('/api/messenger/preferences/mine', { category: 'crm_followup', sendToMessenger: true });
+      await notify(user.userId, 'خاموش پس از صف');
+      await user.put('/api/messenger/preferences/mine', { category: 'crm_followup', sendToMessenger: false });
+      await IntegrationDeliveryService.processDueJobs();
+      const offJob = (await jobsOfLink(linkId)).at(-1);
+      if (offJob?.status !== 'cancelled') throw new Error(`a category turned off after queueing must not send: ${offJob?.status}`);
+      await user.put('/api/messenger/preferences/mine', { category: 'crm_followup', sendToMessenger: true });
+
+      api.sendStatus = 429;
+      api.sendRetryAfter = 120;
+      await notify(user.userId, 'محدودیت');
+      await IntegrationDeliveryService.processDueJobs();
+      const limited = (await jobsOfLink(linkId)).at(-1);
+      const waitSeconds = (Date.parse(`${String(limited?.nextAttemptAt).replace(' ', 'T')}Z`) - Date.now()) / 1000;
+      if (limited?.status !== 'pending' || waitSeconds < 100) throw new Error(`a 429 must wait for its retry_after: ${limited?.status} in ${Math.round(waitSeconds)} s`);
+      api.sendStatus = 200;
+
+      await orm.update(users).set({ isDeleted: 1 }).where(eq(users.id, user.userId));
+      if (limited) await dueNow(limited.id);
+      const before = sentTexts(api).length;
+      await IntegrationDeliveryService.processDueJobs();
+      const deletedJob = (await jobsOfLink(linkId)).at(-1);
+      if (deletedJob?.status !== 'cancelled' || sentTexts(api).length !== before) throw new Error(`a deleted user's queued message must not be sent: ${deletedJob?.status}`);
+      await orm.update(users).set({ isDeleted: 0 }).where(eq(users.id, user.userId));
+
+      const removed = await admin.del(`/api/users/${user.userId}`);
+      if (removed.status !== 200) throw new Error(`delete user: ${brief(removed)}`);
+      const [link] = await orm.select().from(userMessengerLinks).where(eq(userMessengerLinks.id, linkId));
+      if (link.isActive !== 0 || link.unlinkReason !== 'user_deleted') throw new Error(`deleting a user must close their link: ${JSON.stringify(link)}`);
+      return 'replay sent the message, requeue went to its own queue; turned off, deleted and 429 cases held; link closed on delete';
     })));
   }
 

@@ -151,8 +151,17 @@ export async function completeLinkFromChat(messenger: Messenger, chatId: string,
 
 /** Closes the active link of a chat («/stop» to the bot, or a 403 when sending); the number of links closed */
 export async function closeChatLink(messenger: Messenger, chatId: string, reason: 'stop' | 'blocked'): Promise<number> {
+  return closeLinksWithAudit(messenger, and(eq(userMessengerLinks.messenger, messenger), eq(userMessengerLinks.chatId, chatId)), reason);
+}
+
+/** A delivery the bot could not send (403): closes exactly that link, never a later link of the same chat */
+export async function closeBlockedLink(messenger: Messenger, linkId: number): Promise<number> {
+  return closeLinksWithAudit(messenger, and(eq(userMessengerLinks.id, linkId)), 'blocked');
+}
+
+async function closeLinksWithAudit(messenger: Messenger, where: ReturnType<typeof and>, reason: 'stop' | 'blocked'): Promise<number> {
   return orm.transaction(async (tx) => {
-    const closed = await closeLinks(tx, and(eq(userMessengerLinks.messenger, messenger), eq(userMessengerLinks.chatId, chatId)), reason);
+    const closed = await closeLinks(tx, where, reason);
     for (const row of closed) {
       await logActivity({
         tx,

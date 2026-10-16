@@ -1,18 +1,19 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import type { DbTransaction } from '../../db/drizzle.js';
 import { integrationDeliveryJobs, notifications, userMessengerLinks, userNotificationPreferences, users } from '../../db/schema.js';
-import { messengerNotificationText, type NotificationCategory } from '../../lib/notifications/notificationCategories.js';
+import { messengerLinkPath, messengerNotificationText, type NotificationCategory } from '../../lib/notifications/notificationCategories.js';
 
 /**
  * v10.1.39 (messenger notifications plan part 2, §2.3): the one way an in-app notification is written. In the caller's
  * transaction it writes the bell row and, for each active messenger link of the recipient whose category the user has not
  * turned off, one delivery job of kind `messenger` in `integration_delivery_jobs`; the delivery worker sends it, retries a
  * failed send and moves one that never arrives to the dead letter queue. So a write that rolls back sends nothing.
- * No production file outside this one inserts into `notifications` (Vitest `notificationWrites.test.ts`).
+ * No production file outside this one inserts into `notifications` (Vitest `messengerDelivery.test.ts`).
  */
 export const MESSENGER_DELIVERY_KIND = 'messenger';
 export const MESSENGER_DELIVERY_EVENT_TYPE = 'MessengerNotification';
-export const MESSENGER_DELIVERY_MAX_ATTEMPTS = 5;
+/** 5 s doubling to 5 min: about twenty minutes before a send that keeps failing goes to the dead letter queue */
+export const MESSENGER_DELIVERY_MAX_ATTEMPTS = 10;
 
 export interface NewNotification {
   userId: number;
@@ -93,7 +94,7 @@ async function queueMessengerJobs(tx: DbTransaction, written: ReadonlyArray<NewN
       messenger: link.messenger,
       category: n.category,
       text: messengerNotificationText({ recipientName: link.fullName ?? '', category: n.category, title: n.title, message: n.message }),
-      link: n.link ?? '',
+      link: messengerLinkPath(n.category, n.link),
     };
     const eventId = messengerDeliveryEventId(n.id);
     return {

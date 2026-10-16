@@ -1,8 +1,8 @@
 import type { Request } from 'express';
 import bcrypt from 'bcryptjs';
-import { eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { users, roles } from '../../db/schema.js';
+import { users, roles, userMessengerLinks } from '../../db/schema.js';
 import { logActivity, computeAuditDiff } from '../../lib/auditLogger.js';
 import { NotFoundError, ForbiddenError, BadRequestError, ValidationError, ConflictError } from '../../errors/customErrors.js';
 import { invalidateUserAuthCache } from '../../middleware/auth.js';
@@ -340,6 +340,11 @@ export async function deleteUser(req: Request, targetUserId: number): Promise<vo
       isDeleted: 1,
       tokenVersion: (delUser.tokenVersion || 0) + 1
     }).where(eq(users.id, targetUserId));
+    // v10.1.39: a deleted user's Bale and Telegram links close with the account, so no notice reaches their chat
+    const closedMessengerLinks = await tx.update(userMessengerLinks)
+      .set({ isActive: 0, unlinkedAt: sql`now()`, unlinkReason: 'user_deleted' })
+      .where(and(eq(userMessengerLinks.userId, targetUserId), eq(userMessengerLinks.isActive, 1)))
+      .returning({ id: userMessengerLinks.id });
 
     await logActivity({
       req,
@@ -352,6 +357,7 @@ export async function deleteUser(req: Request, targetUserId: number): Promise<vo
         before: { id: targetUserId, username: delUser.username, fullName: delUser.fullName, role: delUser.role ?? '' },
         softDeleted: true,
         sessionsRevoked: true,
+        closedMessengerLinkIds: closedMessengerLinks.map(l => l.id),
         deletedAt: new Date().toISOString()
       }
     });

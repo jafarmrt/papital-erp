@@ -28,6 +28,8 @@ export interface DeliveryAttemptOutcome {
   retryable?: boolean;
   /** the subscription or rule is gone or inactive: the row is closed without a dead letter */
   cancelled?: boolean;
+  /** the receiver's own wait (a 429's retry_after): the next attempt is not earlier than this */
+  retryAfterSeconds?: number;
 }
 
 export interface DeliveryAttemptContext {
@@ -43,6 +45,15 @@ const STUCK_JOB_MINUTES = 5;
 /** Delay before the next attempt after `attempt` failed ones: 5, 10, 20, 40 … seconds, at most 5 minutes */
 export function deliveryBackoffSeconds(attempt: number): number {
   return Math.min(300, 5 * 2 ** Math.max(0, attempt - 1));
+}
+
+/** The longest wait a receiver's retry_after may ask for */
+export const RETRY_AFTER_MAX_SECONDS = 3600;
+
+/** The backoff, or the receiver's own wait when it asks for longer (at most an hour) */
+export function nextAttemptDelaySeconds(attempt: number, retryAfterSeconds?: number): number {
+  const asked = Number(retryAfterSeconds);
+  return Math.max(deliveryBackoffSeconds(attempt), Number.isFinite(asked) && asked > 0 ? Math.min(asked, RETRY_AFTER_MAX_SECONDS) : 0);
 }
 
 /** Attempts of a webhook subscription's delivery: its retry limit (default 3), between 1 and 10 */
@@ -151,7 +162,7 @@ export class IntegrationDeliveryService {
     }
     const final = replay || outcome.retryable === false || job.attempts >= job.maxAttempts;
     if (!final) {
-      const nextAttemptAt = new Date(Date.now() + deliveryBackoffSeconds(job.attempts) * 1000).toISOString();
+      const nextAttemptAt = new Date(Date.now() + nextAttemptDelaySeconds(job.attempts, outcome.retryAfterSeconds) * 1000).toISOString();
       await orm.update(integrationDeliveryJobs)
         .set({ status: 'pending', lockedAt: null, lastError: error, nextAttemptAt, updatedAt: sql`now()` })
         .where(eq(integrationDeliveryJobs.id, job.id));

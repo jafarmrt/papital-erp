@@ -4,7 +4,7 @@ import { orm } from '../../db/drizzle.js';
 import { userNotificationPreferences, users } from '../../db/schema.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import {
-  NOTIFICATION_CATEGORIES, NOTIFICATION_CATEGORY_LABELS, type MessengerPreference, type NotificationCategory,
+  MESSENGER_PREFERENCE_CATEGORIES, NOTIFICATION_CATEGORY_LABELS, type MessengerPreference, type NotificationCategory,
 } from '../../lib/notifications/notificationCategories.js';
 
 /**
@@ -18,7 +18,7 @@ export async function listMyPreferences(userId: number): Promise<MessengerPrefer
   const rows = await orm.select({ category: userNotificationPreferences.category, sendToMessenger: userNotificationPreferences.sendToMessenger })
     .from(userNotificationPreferences).where(eq(userNotificationPreferences.userId, userId));
   const off = new Set(rows.filter(r => r.sendToMessenger === 0).map(r => r.category));
-  return NOTIFICATION_CATEGORIES.map(category => ({ category, label: NOTIFICATION_CATEGORY_LABELS[category], sendToMessenger: !off.has(category) }));
+  return MESSENGER_PREFERENCE_CATEGORIES.map(category => ({ category, label: NOTIFICATION_CATEGORY_LABELS[category], sendToMessenger: !off.has(category) }));
 }
 
 /** Sets one category under the user's row lock, with its audit row; a repeat changes nothing and writes nothing */

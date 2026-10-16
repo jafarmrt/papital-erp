@@ -6,7 +6,7 @@ import { requireSystemAdmin } from '../middleware/authorize.js';
 import { validate } from '../middleware/validate.js';
 import { UnauthorizedError } from '../errors/customErrors.js';
 import { MESSENGERS, type Messenger } from '../lib/messenger/messengerLinks.js';
-import { NOTIFICATION_CATEGORIES, type NotificationCategory } from '../lib/notifications/notificationCategories.js';
+import { MESSENGER_PREFERENCE_CATEGORIES, type NotificationCategory } from '../lib/notifications/notificationCategories.js';
 import { listBotViews, saveBotToken } from '../services/messenger/messengerBots.service.js';
 import { issueLinkCode, listActiveLinksForAdmin, listMyLinks, sendTestMessage, unlinkMine } from '../services/messenger/messengerLinks.service.js';
 import { listMyPreferences, setMyPreference } from '../services/messenger/messengerPreferences.service.js';
@@ -31,7 +31,7 @@ const botTokenSchema = messengerParam.extend({
 // v10.1.39 (plan part 2): «در پیام‌رسان هم بفرست» of one notification category, for the user's own account
 const preferenceSchema = z.object({
   body: z.object({
-    category: z.enum(NOTIFICATION_CATEGORIES, { message: 'نوع اعلان شناخته نیست' }),
+    category: z.enum(MESSENGER_PREFERENCE_CATEGORIES as [NotificationCategory, ...NotificationCategory[]], { message: 'نوع اعلان شناخته نیست' }),
     sendToMessenger: z.boolean({ message: 'روشن یا خاموش بودن را بفرستید' }),
   }).strict(),
 });

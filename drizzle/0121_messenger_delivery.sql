@@ -6,6 +6,7 @@
 -- only widens; every stored row already satisfies the new list, so it is added valid.
 -- user_notification_preferences holds a user's choice per notification category: a missing row means «send to the
 -- messenger too» (the default), a row with send_to_messenger = 0 keeps that category in the app's bell only.
+-- A soft-deleted user's links are closed with the new unlink reason `user_deleted`; the reason CHECK only widens.
 -- New table only: its foreign key is validated at once and its unique index leads with user_id (TD-614). No existing row
 -- is written. Runs inside the Drizzle migrator transaction.
 
@@ -13,6 +14,11 @@ ALTER TABLE integration_delivery_jobs DROP CONSTRAINT IF EXISTS chk_integration_
 --> statement-breakpoint
 ALTER TABLE integration_delivery_jobs ADD CONSTRAINT chk_integration_delivery_jobs_kind
   CHECK (kind IN ('webhook', 'rule_action', 'messenger'));
+--> statement-breakpoint
+ALTER TABLE user_messenger_links DROP CONSTRAINT IF EXISTS chk_user_messenger_links_unlink_reason;
+--> statement-breakpoint
+ALTER TABLE user_messenger_links ADD CONSTRAINT chk_user_messenger_links_unlink_reason
+  CHECK (unlink_reason IN ('', 'user', 'stop', 'blocked', 'relinked', 'bot_changed', 'user_deleted'));
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS user_notification_preferences (
   id serial PRIMARY KEY,

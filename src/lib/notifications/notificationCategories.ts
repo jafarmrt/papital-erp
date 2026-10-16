@@ -39,10 +39,43 @@ export function isNotificationCategory(value: unknown): value is NotificationCat
 }
 
 /**
- * Categories whose in-app text is written by the administrator (an automatic rule's template may carry any field of an
- * event, amounts included): their messenger text says only that a notification came, never the template's text.
+ * The categories the profile offers a choice for: those that some code already writes. Part 3 of the plan adds
+ * `workflow_task` and `payslip` with their producers.
  */
-const GENERIC_TEXT_CATEGORIES: ReadonlySet<NotificationCategory> = new Set(['event_rule']);
+export const MESSENGER_PREFERENCE_CATEGORIES: readonly NotificationCategory[] = NOTIFICATION_CATEGORIES
+  .filter(category => category !== 'workflow_task' && category !== 'payslip');
+
+/**
+ * Allowlist (security review of part 2): only a category whose title and text the code builds from fixed words, step and
+ * workflow titles and document numbers, never an amount, a person's name or text a user typed, sends its own text. Every
+ * other category, a future one included, sends its fixed sentence below (an automatic rule's template may carry any event
+ * field, amounts included; a follow-up, mention or lead title is typed by a user).
+ */
+const FULL_TEXT_CATEGORIES: ReadonlySet<NotificationCategory> = new Set(['workflow_sla']);
+
+const GENERIC_SENTENCES: Readonly<Partial<Record<NotificationCategory, string>>> = {
+  mention: 'در یک گزارش کار یا اقدام ارتباط با مشتری به شما اشاره شد.',
+  daily_log_review: 'مدیر برای گزارش کار شما بازخورد ثبت کرد.',
+  crm_followup: 'یک پیگیری ارتباط با مشتری برای شما ثبت شد یا سررسید آن رسید.',
+  crm_won: 'یک پرونده فروش با موفقیت نهایی شد.',
+  payslip: 'فیش حقوق شما تأیید شد.',
+  workflow_task: 'کار تازه‌ای در کارتابل تأیید شما آمد.',
+};
+const GENERIC_DEFAULT_SENTENCE = 'اعلان تازه‌ای در برنامه پاپیتال برای شما آمده است.';
+
+/**
+ * The page a messenger link opens: a full-text category keeps the notification's own path; every other one opens a fixed
+ * page of its section (never a rule template's link, which may carry amounts or ids), else the app's first page.
+ */
+const GENERIC_LINK_SECTIONS: readonly string[] = ['/daily-logs', '/crm', '/approval-inbox'];
+
+export function messengerLinkPath(category: NotificationCategory, path: string | null | undefined): string {
+  const target = String(path ?? '').trim();
+  if (FULL_TEXT_CATEGORIES.has(category)) return target;
+  if (category === 'event_rule') return '/';
+  const section = target.split(/[?#]/)[0];
+  return GENERIC_LINK_SECTIONS.includes(section) ? section : '/';
+}
 
 /** The longest notification body put in a message; the rest is in the app */
 export const MESSENGER_BODY_MAX_CHARS = 500;
@@ -68,8 +101,8 @@ export interface MessengerTextInput {
 export function messengerNotificationText(input: MessengerTextInput): string {
   const name = input.recipientName.trim();
   const greeting = name ? `${name}،` : 'سلام،';
-  if (GENERIC_TEXT_CATEGORIES.has(input.category)) {
-    return persianDigits(`${greeting}\nاعلان تازه‌ای در برنامه پاپیتال برای شما آمده است.`);
+  if (!FULL_TEXT_CATEGORIES.has(input.category)) {
+    return persianDigits(`${greeting}\n${GENERIC_SENTENCES[input.category] ?? GENERIC_DEFAULT_SENTENCE}`);
   }
   const lines = [greeting, clipped(input.title)];
   const body = clipped(input.message);
