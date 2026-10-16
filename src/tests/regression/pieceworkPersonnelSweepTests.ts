@@ -52,7 +52,7 @@ export async function runPieceworkPersonnelSweepTests(shouldRun: ShouldRun): Pro
 
   const taskId = 'reg_piecework_task_edit_tx_obs_r2_50';
   if (shouldRun(taskId, 'obs-r2-50', 'piecework', 'task', 'audit', 'history')) {
-    await runCase(results, taskId, 'v10.1.x: a piecework task edit, its rate history row and its audit row are one transaction; a history or audit error refuses the edit (OBS-R2-50)', async () => inFiscalSandbox(async () => {
+    await runCase(results, taskId, 'v10.1.50: a piecework task edit, its rate history row and its audit row are one transaction; a history or audit error refuses the edit (OBS-R2-50)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       await failInsertsHolding('piecework_task_rate_history', 'task_title', 'HISTFAIL');
@@ -91,7 +91,7 @@ export async function runPieceworkPersonnelSweepTests(shouldRun: ShouldRun): Pro
 
   const amountId = 'reg_payroll_payment_exact_amount_currency_obs_r2_51';
   if (shouldRun(amountId, 'obs-r2-51', 'payroll', 'payment', 'currency')) {
-    await runCase(results, amountId, 'v10.1.x: a payroll payment reaches the service with the exact decimal sent, and the payment and void answers name the payment currency instead of a fixed «ریال» (OBS-R2-51)', async () => inFiscalSandbox(async () => {
+    await runCase(results, amountId, 'v10.1.50: a payroll payment reaches the service with the exact decimal sent, and the payment and void answers name the payment currency instead of a fixed rial label (OBS-R2-51)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const register = PayrollPaymentService.registerPayrollPayment;
@@ -126,7 +126,7 @@ export async function runPieceworkPersonnelSweepTests(shouldRun: ShouldRun): Pro
 
   const importId = 'reg_personnel_bulk_import_row_tx_obs_r2_53';
   if (shouldRun(importId, 'obs-r2-53', 'personnel', 'import', 'excel')) {
-    await runCase(results, importId, 'v10.1.x: each personnel Excel import row is written with its audit row in its own transaction; a row whose audit fails leaves no personnel and the other rows still go in (OBS-R2-53)', async () => inFiscalSandbox(async () => {
+    await runCase(results, importId, 'v10.1.50: each personnel Excel import row is written with its audit row in its own transaction; a row whose audit fails leaves no personnel and the other rows still go in (OBS-R2-53)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       await failInsertsHolding('activity_logs', 'description', 'AUDITFAIL');

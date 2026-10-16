@@ -83,10 +83,19 @@ function commentsOf(file: string): string[] {
 // UTF-8 Persian read as Windows-1252: a lead byte Ø Ù Ú Û (or Ã) followed by a continuation byte 0x80-0xBF as cp1252 shows it
 const MOJIBAKE = /[ÃØÙÚÛ][\u0080-¿ŒœŠšŸŽžƒˆ˜–—‘-„†-•…‰‹›€™]/;
 
+/** a correctly encoded Persian comment, which the check must accept */
+const CLEAN_PERSIAN_COMMENT = '// هدایت خطا به errorHandler';
+
+/** the server's 409 message for earlier payments without a personnel name */
+const UNASSIGNED_REFUSAL = 'پیش‌تر بی نام پرسنل پرداخت شده است.';
+
+/** any Persian letter: the label shown for the stored salary model */
+const PERSIAN_LETTERS = /[\u0600-\u06FF]/;
+
 describe('no mojibake in source comments (OBS-R1-40)', () => {
   it('no comment under src/ holds UTF-8 Persian decoded as Windows-1252', () => {
     expect(MOJIBAKE.test('// V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§')).toBe(true);
-    expect(MOJIBAKE.test('// هدایت خطا به errorHandler')).toBe(false);
+    expect(MOJIBAKE.test(CLEAN_PERSIAN_COMMENT)).toBe(false);
     expect(commentsOf(path.join(SRC, 'routes/piecework.routes.ts')).length).toBeGreaterThan(10);
     // only a file whose text holds the marker at all is parsed for its comments
     const offenders = sourceFiles(SRC)
@@ -199,7 +208,7 @@ describe('personnel page buttons and form (OBS-R2-55)', () => {
     expect(labels.some(l => l.includes('حذف پرسنل'))).toBe(true);
   });
 
-  it('a stored salary model «none» keeps its value and is shown with a Persian label', () => {
+  it('a stored salary model none keeps its value and is shown with a Persian label', () => {
     const formData = new Proxy({ salaryType: 'none' } as Record<string, unknown>, {
       get: (target, key) => (typeof key === 'string' && !(key in target) ? '' : target[key as string]),
     }) as unknown as PersonnelFormData;
@@ -209,7 +218,7 @@ describe('personnel page buttons and form (OBS-R2-55)', () => {
     expect(select.value).toBe('none');
     const shown = select.options[select.selectedIndex]?.textContent ?? '';
     expect(shown).not.toMatch(/none/i);
-    expect(shown).toMatch(/[؀-ۿ]/);
+    expect(shown).toMatch(PERSIAN_LETTERS);
   });
 
   it('a refused save stays in the form and does not leave its rejection unhandled', () => {
@@ -229,12 +238,12 @@ const remittanceOptions: StatutoryRemittanceOptions = {
 };
 
 describe('statutory remittance window (review nit)', () => {
-  it('shows the payments without a personnel name that the server names in its 409 and asks for «بررسی کردم» again', async () => {
+  it('shows the payments without a personnel name that the server names in its 409 and asks for the acknowledgement again', async () => {
     let posts = 0;
     fetchJson.mockImplementation(async (url: string, opts?: FetchOpts) => {
       if (opts?.method === 'POST') {
         posts += 1;
-        throw Object.assign(new Error('پیش‌تر بی نام پرسنل پرداخت شده است.'), {
+        throw Object.assign(new Error(UNASSIGNED_REFUSAL), {
           code: 'STATUTORY_REMITTANCE_UNASSIGNED_PAYMENTS', status: 409,
           details: { unassignedPayments: { amount: '500000', vouchers: [{ voucherId: 9, voucherNumber: NAMED_VOUCHER, date: '2026-04-11', amount: '500000' }] } },
         });
