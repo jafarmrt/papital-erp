@@ -34,6 +34,7 @@ import { AccountingAuditChecklistView } from './reports/AccountingAuditChecklist
 import { AutomationStatusView } from './reports/AutomationStatusView';
 import { ProjectReportView } from './reports/ProjectReportView';
 import { IncludeClosingToggle } from './reports/IncludeClosingToggle';
+import { trialBalanceTotals } from './reports/trialBalanceTotals';
 
 interface FinancialReportsTabProps {
   accounts: Account[];
@@ -196,48 +197,8 @@ export function FinancialReportsTab({
     );
   }, [safeTrialRows, tableSearch]);
 
-  // Calculate totals for Trial Balance
-  const trialTotals = useMemo(() => {
-    let initialDebit = 0;
-    let initialCredit = 0;
-    let debitTurnover = 0;
-    let creditTurnover = 0;
-    let totalDebit = 0;
-    let totalCredit = 0;
-    let debitBalance = 0;
-    let creditBalance = 0;
-
-    const rowsToSum = trialLevel === 'all' 
-      ? safeTrialRows.filter(r => r.level === 'group') 
-      : safeTrialRows;
-
-    for (const r of rowsToSum) {
-      initialDebit += Number(r.initialDebit || 0);
-      initialCredit += Number(r.initialCredit || 0);
-      debitTurnover += Number(r.debitTurnover || 0);
-      creditTurnover += Number(r.creditTurnover || 0);
-      totalDebit += Number(r.totalDebit || 0);
-      totalCredit += Number(r.totalCredit || 0);
-      debitBalance += Number(r.debitBalance || 0);
-      creditBalance += Number(r.creditBalance || 0);
-    }
-
-    const isBalanced = Math.abs(debitBalance - creditBalance) < 0.01;
-    const diff = Math.abs(debitBalance - creditBalance);
-
-    return {
-      initialDebit,
-      initialCredit,
-      debitTurnover,
-      creditTurnover,
-      totalDebit,
-      totalCredit,
-      debitBalance,
-      creditBalance,
-      isBalanced,
-      diff,
-    };
-  }, [safeTrialRows, trialLevel]);
+  // جمع ستون‌های تراز آزمایشی با FinancialDecimal (OBS-R1-53)، نه `Number` و `+=`
+  const trialTotals = useMemo(() => trialBalanceTotals(safeTrialRows, trialLevel), [safeTrialRows, trialLevel]);
 
   // Navigate to Ledger for specific account
   const handleDrillDownToLedger = (accountId: number) => {

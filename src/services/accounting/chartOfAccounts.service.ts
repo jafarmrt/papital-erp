@@ -260,25 +260,25 @@ export class ChartOfAccountsService {
    */
   static async createAccount(data: NewAccountInput): Promise<Account> {
     const code = requireAccountCode(data.code);
-    const insertedId = await guardAccountCode(code, () => orm.transaction(tx => this.insertAccount(tx, data)));
+    const insertedId = await guardAccountCode(code, () => orm.transaction(tx => this.insertAccount(tx, data, code)));
 
     const all = await this.getAllAccounts();
     return all.find(a => a.id === insertedId)!;
   }
 
   /**
-   * v10.1.45 (OBS-R1-48): the account row written inside the caller's transaction (code and placement rules of
+   * v10.1.46 (OBS-R1-48): the account row written inside the caller's transaction (code and placement rules of
    * createAccount); the fiscal-year closing uses it after its year lock, so a refused closing leaves no new account.
    */
   static async createAccountInTx(tx: DbExecutor, data: NewAccountInput): Promise<Account> {
     const code = requireAccountCode(data.code);
-    const insertedId = await guardAccountCode(code, () => this.insertAccount(tx, data));
+    const insertedId = await guardAccountCode(code, () => this.insertAccount(tx, data, code));
     const all = await this.getAllAccounts(tx);
     return all.find(a => a.id === insertedId)!;
   }
 
-  private static async insertAccount(tx: DbExecutor, data: NewAccountInput): Promise<number> {
-    const code = requireAccountCode(data.code);
+  /** `code` is the caller's `requireAccountCode(data.code)`, read once */
+  private static async insertAccount(tx: DbExecutor, data: NewAccountInput, code: string): Promise<number> {
     await assertAccountCodeAvailable(tx, code);
     // v9.0.200 (TD-553، B03-11): بالادست یک سطح بالاتر و حذف‌نشده
     await assertAccountPlacement(tx, { level: data.level, parentId: data.parentId || null });

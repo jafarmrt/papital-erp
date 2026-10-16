@@ -1,5 +1,5 @@
 import { formatPersianNumber, formatPersianPrice, formatPersianCode } from '../../../utils';
-import { addLineQuantity, amountDecimalsOf, type InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
+import { addLineNet, addLineQuantity, amountDecimalsOf, type InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
 
 /** TD-080 (بخش ۳): جدول ریز اقلام سند در مودال جزئیات */
 export function InvoiceDetailsItemsTable({ selectedDocDetails }: { selectedDocDetails: InvoiceListDocument }) {
@@ -31,7 +31,8 @@ export function InvoiceDetailsItemsTable({ selectedDocDetails }: { selectedDocDe
               const qty = Number(it.quantity || 0);
               const price = Number(it.unit_price || 0);
               const disc = Number(it.discount || 0);
-              const total = (qty * price) - disc;
+              // مبلغ ردیف با FinancialDecimal، همان جمع خالص سند (OBS-R1-53)
+              const total = addLineNet(0, it);
 
               return (
                 <tr key={it.id || idx} className="hover:bg-slate-50">

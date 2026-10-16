@@ -123,7 +123,7 @@ export class FactoryResetService {
     if (!outcome.acquired) {
       throw new ConflictError(
         'راه‌اندازی داده‌های پایه (seed) هم‌اکنون در حال اجراست؛ پاک کردن داده‌ها انجام نشد. چند لحظه دیگر دوباره تلاش کنید.',
-        'SEED_RUNNING'
+        undefined, 'SEED_RUNNING'
       );
     }
 

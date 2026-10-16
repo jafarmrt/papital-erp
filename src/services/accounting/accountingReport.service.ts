@@ -498,7 +498,7 @@ export class AccountingReportService {
     const totalCurrentLiabilities = bs.totalCurrentLiabilities || 0;
     const totalAssets = (bs.totalAssets && bs.totalAssets > 0) ? bs.totalAssets : 1;
     const totalLiabilities = totalCurrentLiabilities;
-    // v10.1.45 (OBS-R1-53): sums and differences of amounts with FinancialMath, never JS + / -
+    // v10.1.46 (OBS-R1-53): sums and differences of amounts with FinancialMath, never JS + / -
     const totalEquity = FinancialMath.add(bs.totalEquity, bs.netProfitPeriod) || 1;
     const totalRevenue = is.totalRevenue || 0;
     const grossProfit = is.grossProfit || 0;

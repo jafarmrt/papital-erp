@@ -270,10 +270,6 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
               bankAccounts={bankAccounts}
               loading={loading}
               onRefresh={refreshAll}
-              onViewVoucher={v => {
-                setEditingVoucher(v);
-                setIsNewVoucherModalOpen(true);
-              }}
             />
           )}
 
@@ -328,10 +324,6 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
 
           {currentTab === 'fiscal-closing' && (
             <FiscalYearClosingTab
-              onViewVoucher={v => {
-                setEditingVoucher(v);
-                setIsNewVoucherModalOpen(true);
-              }}
               onPrintVoucher={v => setPrintingVoucher(v)}
             />
           )}

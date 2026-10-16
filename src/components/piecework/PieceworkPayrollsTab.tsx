@@ -20,6 +20,8 @@ interface PieceworkPayrollsTabProps {
   onUpdateStatus: (id: number, status: 'draft' | 'approved' | 'paid') => void;
   onDeletePayroll: (id: number) => void;
   onReload?: () => void;
+  /** پس از صدور سند فیش: فهرست فیش‌ها و حافظه سندهای حسابداری دوباره خوانده می‌شوند (OBS-R2-104؛ پیش‌تر کل صفحه بارگذاری دوباره می‌شد) */
+  onVoucherSynced?: () => void;
   /** v10.0.222 (TD-1089): پرسنل برای فیش عیدی */
   personnelSelectOptions?: { value: string; label: string }[];
 }
@@ -31,6 +33,7 @@ export function PieceworkPayrollsTab({
   onUpdateStatus,
   onDeletePayroll,
   onReload,
+  onVoucherSynced,
   personnelSelectOptions = []
 }: PieceworkPayrollsTabProps) {
   const rial = useRialDisplay();
@@ -55,7 +58,7 @@ export function PieceworkPayrollsTab({
       });
       if (res && res.voucher) {
         toast.success(`سند حسابداری به شماره ${res.voucher.voucherNumber} با موفقیت ثبت/همگام شد.`);
-        window.location.reload();
+        (onVoucherSynced ?? onReload)?.();
       }
     } catch (err: any) {
       toast.error(err.message || 'خطا در ثبت سند حسابداری فیش');

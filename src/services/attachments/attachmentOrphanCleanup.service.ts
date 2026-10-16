@@ -118,7 +118,7 @@ export class AttachmentOrphanCleanupService {
     });
 
     if (!outcome.acquired) {
-      throw new ConflictError('پاک‌سازی پیوست‌ها هم‌اکنون در حال اجراست', 'ATTACHMENT_CLEANUP_RUNNING');
+      throw new ConflictError('پاک‌سازی پیوست‌ها هم‌اکنون در حال اجراست', undefined, 'ATTACHMENT_CLEANUP_RUNNING');
     }
 
     if (options.apply && report.unregistered.removed > 0) {

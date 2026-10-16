@@ -42,7 +42,8 @@ export function AccountingAuditChecklistView() {
   const [expandedTestIds, setExpandedTestIds] = useState<Record<string, boolean>>({});
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const isSyncingVouchers = syncVouchers.isPending;
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  // OBS-R1-51: پیام صدور با نوعش؛ خطا یا صدور ناقص در کادر قرمز، نه کادر سبز موفقیت
+  const [syncMessage, setSyncMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [showStandards, setShowStandards] = useState(false);
 
   const { refetch: refetchHealth } = healthQuery;
@@ -69,9 +70,13 @@ export function AccountingAuditChecklistView() {
     try {
       // پس از صدور، گزارش سلامت (همراه دیگر کلیدهای اسناد حسابداری) دوباره خوانده می‌شود
       const res = await syncVouchers.mutateAsync();
-      setSyncMessage(res.message || 'اسناد حسابداری فاکتورها صادر شد.');
+      const failed = res?.success === false;
+      setSyncMessage({
+        tone: failed ? 'error' : 'success',
+        text: res?.message || (failed ? 'صدور برخی اسناد حسابداری ناموفق بود.' : 'اسناد حسابداری فاکتورها صادر شد.'),
+      });
     } catch (err: unknown) {
-      setSyncMessage(err instanceof Error ? err.message : 'خطا در صدور خودکار اسناد');
+      setSyncMessage({ tone: 'error', text: err instanceof Error ? err.message : 'خطا در صدور خودکار اسناد' });
     }
   };
 
@@ -252,10 +257,16 @@ export function AccountingAuditChecklistView() {
           })()
         )}
 
-        {syncMessage && (
-          <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2">
+        {syncMessage?.tone === 'success' && (
+          <div role="status" className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>{syncMessage}</span>
+            <span>{syncMessage.text}</span>
+          </div>
+        )}
+        {syncMessage?.tone === 'error' && (
+          <div role="alert" className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300 text-xs flex items-center gap-2">
+            <AlertOctagon className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{syncMessage.text}</span>
           </div>
         )}
       </div>

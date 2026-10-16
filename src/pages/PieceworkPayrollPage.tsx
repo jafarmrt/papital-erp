@@ -1,4 +1,6 @@
 import { Calculator } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { invalidateAfterVoucherChange } from '../hooks/accounting/accountingInvalidation';
 import { usePiecework } from '../hooks/usePiecework';
 import { PieceworkStatsCards } from '../components/piecework/PieceworkStatsCards';
 import { PieceworkTabsNav } from '../components/piecework/PieceworkTabsNav';
@@ -138,6 +140,12 @@ export function PieceworkPayrollPage() {
     canViewPayrolls,
     canSetLogRate
   } = usePiecework();
+  const queryClient = useQueryClient();
+  // OBS-R2-104: سند تازه فیش، فهرست فیش‌ها و حافظه سندهای حسابداری را تازه می‌کند، نه بارگذاری دوباره کل صفحه
+  const handlePayrollVoucherSynced = () => {
+    loadData();
+    void invalidateAfterVoucherChange(queryClient);
+  };
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto font-farsi text-slate-800 dir-rtl">
@@ -243,6 +251,7 @@ export function PieceworkPayrollPage() {
           onUpdateStatus={handleUpdatePayrollStatus}
           onDeletePayroll={handleDeletePayroll}
           onReload={loadData}
+          onVoucherSynced={handlePayrollVoucherSynced}
           personnelSelectOptions={personnelSelectOptions}
         />
       )}
