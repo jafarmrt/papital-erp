@@ -21,6 +21,7 @@ export interface Personnel {
   // v10.0.210 (TD-1087): «مشمول بیمه» و «مشمول مالیات حقوق» (۰ / ۱)
   isInsuranceCovered?: number;
   isTaxCovered?: number;
+  isEidiCovered?: number;
   endDate?: string;
   terminationReason?: string;
   specializedSkills?: string;

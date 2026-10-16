@@ -4,7 +4,7 @@ import { pieceworkPayrolls, type personnel } from '../../db/schema.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import { fin, type DecimalValue } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
-import { daysInclusive, eidiFromAccrual, suggestEidiPayslip, EIDI_OVERRIDE_REASON_MAX, type EidiPayslipSuggestion } from '../../lib/payroll/eidi.js';
+import { daysInclusive, eidiFromAccrual, isEidiCovered, suggestEidiPayslip, EIDI_OVERRIDE_REASON_MAX, type EidiPayslipSuggestion } from '../../lib/payroll/eidi.js';
 import { serviceEndOf, serviceStartOf } from '../../lib/payroll/payrollPeriod.js';
 import { isoToJalaliDate, jalaliYearBounds } from '../../utils/calendarDate.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
@@ -52,6 +52,8 @@ export interface EidiPayslipPreview {
   period: EidiServicePeriod;
   totals: EidiYearTotals;
   suggestion: EidiPayslipSuggestion;
+  /** «مشمول عیدی» پرسنل (v10.1.35، TD-1282)؛ خاموش یعنی حق سال ندارد و فقط عیدی انباشته پیشین پیشنهاد می‌شود */
+  eidiCovered: boolean;
   /** فیش‌های عادی پیش‌نویس سال با سهم عیدی که هنوز در عیدی انباشته شمرده نمی‌شوند */
   draftWarning: string | null;
 }
@@ -63,6 +65,7 @@ async function previewWith(db: DbExecutor, person: PersonnelRow, year: number): 
   }
   const period = eidiServicePeriod(person, year);
   const totals = await eidiYearTotals(db, person.id, year);
+  const eidiCovered = isEidiCovered(person);
   const suggestion = suggestEidiPayslip({
     rates: eidiRatesOf(rates),
     accruedApproved: totals.accruedApproved,
@@ -71,11 +74,12 @@ async function previewWith(db: DbExecutor, person: PersonnelRow, year: number): 
     monthlySalary: person.monthlySalary ?? 0,
     workedDays: period.workedDays,
     yearDays: period.yearDays,
+    covered: eidiCovered,
   });
   const draftWarning = totals.draftPayslips > 0
     ? `${toPersianDigits(totals.draftPayslips)} فیش پیش‌نویس این سال سهم عیدی دارد که تا تأیید فیش در عیدی انباشته شمرده نمی‌شود.`
     : null;
-  return { personnelId: person.id, fullName: person.fullName, jalaliYear: year, period, totals, suggestion, draftWarning };
+  return { personnelId: person.id, fullName: person.fullName, jalaliYear: year, period, totals, suggestion, eidiCovered, draftWarning };
 }
 
 export async function previewEidiPayslip(personnelId: number, year: number): Promise<EidiPayslipPreview> {

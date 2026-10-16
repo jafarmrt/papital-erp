@@ -226,5 +226,84 @@ export async function runPayrollEidiTests(shouldRun: ShouldRun): Promise<TestCas
     }));
   }
 
+  const notCoveredId = 'reg_payroll_eidi_not_covered_td_1282';
+  if (shouldRun(notCoveredId, 'td1282', 'td1269', 'payroll', 'eidi', 'personnel', 'optional')) {
+    await runCase(results, notCoveredId, 'v10.1.35: a personnel not marked for eidi gets no eidi share, no rate warning and no report row; the flag is on by default and kept on edit (TD-1282, t34 A)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      const flagOf = async (id: number) => Number((await q('SELECT is_eidi_covered AS f FROM personnel WHERE id = $1', [id]))[0]?.f);
+
+      const byDefault = await admin.post('/api/personnel', { fullName: `TD-1282 default ${Date.now()}`, salaryType: 'piecework' });
+      const optedOut = await admin.post('/api/personnel', { fullName: `TD-1282 opted out ${Date.now()}`, salaryType: 'piecework', isEidiCovered: false });
+      const defaultId = Number(field(byDefault, 'id'));
+      const outId = Number(field(optedOut, 'id'));
+      if (byDefault.status !== 201 || await flagOf(defaultId) !== 1) problems.push(`a new personnel answered ${brief(byDefault)} with flag ${await flagOf(defaultId)}, expected 1`);
+      if (optedOut.status !== 201 || await flagOf(outId) !== 0) problems.push(`an opted-out personnel answered ${brief(optedOut)} with flag ${await flagOf(outId)}, expected 0`);
+      const edit = await admin.put(`/api/personnel/${outId}`, { version: Number(field(optedOut, 'version')), phone: '09120000000' });
+      if (edit.status !== 200 || await flagOf(outId) !== 0) problems.push(`an edit without the flag answered ${brief(edit)} and left flag ${await flagOf(outId)}, expected 0 kept`);
+
+      const task = await newTask();
+      await addLog(outId, task, '2026-03-25', 10_000_000);
+      const noRates = await admin.post('/api/piecework/payrolls/generate', { personnelId: outId, ...FARVARDIN });
+      if (noRates.status !== 201 || field(noRates, 'eidiWarning')) problems.push(`a payslip of an opted-out personnel without eidi rates answered ${brief(noRates)}, expected 201 without an eidi warning`);
+
+      const saved = await admin.put('/api/piecework/eidi-rates/1405', PERCENT_1405);
+      if (saved.status !== 200) throw new Error(`setup: rates ${brief(saved)}`);
+      await addLog(outId, task, '2026-04-25', 20_000_000);
+      await addLog(defaultId, task, '2026-04-25', 20_000_000);
+      const out = await admin.post('/api/piecework/payrolls/generate', { personnelId: outId, ...ORDIBEHESHT });
+      const covered = await admin.post('/api/piecework/payrolls/generate', { personnelId: defaultId, ...ORDIBEHESHT });
+      const outRow = await eidiOf(Number(field(out, 'id')));
+      const coveredRow = await eidiOf(Number(field(covered, 'id')));
+      if (out.status !== 201 || !fin(String(outRow.eidi)).isZero() || outRow.year !== null) problems.push(`the opted-out payslip answered ${brief(out)} and stored ${JSON.stringify(outRow)}, expected no share and no eidi year`);
+      if (covered.status !== 201 || !fin(String(coveredRow.eidi)).equals(3_000_000)) problems.push(`the covered payslip answered ${brief(covered)} with share ${String(coveredRow.eidi)}, expected 3,000,000`);
+      if (!fin(await personNet('7014', outId)).isZero() || !fin(await personNet('3207', outId)).isZero()) problems.push('the opted-out payslip posted eidi rows');
+
+      const report = await admin.get('/api/piecework/reports/eidi?year=1405');
+      const ids = ((field(report, 'rows') as Array<{ personnelId: number }> | undefined) ?? []).map(r => r.personnelId);
+      if (report.status !== 200 || ids.includes(outId) || !ids.includes(defaultId)) problems.push(`the report answered ${brief(report)} listing ${JSON.stringify(ids)}, expected only the covered personnel`);
+
+      const violations = await checkPayrollInvariants(0);
+      if (violations.length) problems.push(`I10: ${JSON.stringify(violations).slice(0, 300)}`);
+      assertNoProblems(problems);
+      return 'Flag 1 by default, 0 when sent, kept on edit; opted-out payslips: no warning without rates, no share or eidi year with rates, nothing on 7014 / 3207; the covered one 3,000,000; report lists only the covered personnel; I10 clean.';
+    }));
+  }
+
+  const notCoveredLaborId = 'reg_payroll_eidi_not_covered_labor_law_td_1282';
+  if (shouldRun(notCoveredLaborId, 'td1282', 'payroll', 'eidi', 'labor', 'optional')) {
+    await runCase(results, notCoveredLaborId, 'v10.1.35: under the labor-law method a personnel not marked for eidi has no entitlement: the eidi payslip suggests zero, takes an amount only with a reason, and the report shows nothing remaining (TD-1282, t34 A)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      const saved = await admin.put('/api/piecework/eidi-rates/1405', { method: 'labor_law', laborDays: '60', laborCapDays: '90', minDailyWage: '1000000' });
+      if (saved.status !== 200) throw new Error(`setup: rates ${brief(saved)}`);
+      const covered = await newWorker('TD-1282 labor covered', { salaryType: 'monthly_fixed', monthlySalary: 30_000_000 });
+      const out = await newWorker('TD-1282 labor opted out', { salaryType: 'monthly_fixed', monthlySalary: 30_000_000 });
+      await orm.update(personnel).set({ isEidiCovered: 0 }).where(eq(personnel.id, out));
+
+      const preview = await admin.get(`/api/piecework/eidi-preview?personnelId=${out}&year=1405`);
+      const suggestion = field(preview, 'suggestion') as { amount?: string; entitlement?: string | null } | undefined;
+      if (preview.status !== 200 || !fin(suggestion?.amount ?? 1).isZero() || suggestion?.entitlement !== null || field(preview, 'eidiCovered') !== false) {
+        problems.push(`the opted-out preview answered ${brief(preview)}, expected amount 0, no entitlement and eidiCovered false`);
+      }
+      const zero = await admin.post('/api/piecework/eidi-payslips', { personnelId: out, year: 1405 });
+      if (zero.status !== 422 || codeOf(zero) !== 'PAYROLL_EIDI_AMOUNT_ZERO') problems.push(`an eidi payslip at the suggestion answered ${brief(zero)}, expected 422 PAYROLL_EIDI_AMOUNT_ZERO`);
+      const noReason = await admin.post('/api/piecework/eidi-payslips', { personnelId: out, year: 1405, amount: '5000000' });
+      if (noReason.status !== 422 || codeOf(noReason) !== 'PAYROLL_EIDI_OVERRIDE_REASON_REQUIRED') problems.push(`another amount without a reason answered ${brief(noReason)}, expected 422 PAYROLL_EIDI_OVERRIDE_REASON_REQUIRED`);
+      const manual = await admin.post('/api/piecework/eidi-payslips', { personnelId: out, year: 1405, amount: '5000000', overrideReason: 'TD-1282 agreed gift' });
+      if (manual.status !== 201) problems.push(`an eidi payslip with a reason answered ${brief(manual)}, expected 201`);
+
+      const report = await admin.get('/api/piecework/reports/eidi?year=1405');
+      const rows = (field(report, 'rows') as Array<Record<string, string | number>> | undefined) ?? [];
+      const outLine = rows.find(r => r.personnelId === out);
+      const coveredLine = rows.find(r => r.personnelId === covered);
+      if (report.status !== 200 || !outLine || !fin(outLine.due).equals(5_000_000) || !fin(outLine.remaining).isZero()) problems.push(`the opted-out report line is ${JSON.stringify(outLine)}, expected due 5,000,000 (what was issued) and nothing remaining`);
+      if (!coveredLine || !fin(coveredLine.due).isPositive()) problems.push(`the covered report line is ${JSON.stringify(coveredLine)}, expected a positive entitlement`);
+
+      assertNoProblems(problems);
+      return 'Opted-out preview 0 without entitlement; issue at 0 422, another amount 422 without a reason and 201 with one; report: opted-out due = issued 5,000,000 with nothing remaining, covered keeps its entitlement.';
+    }));
+  }
+
   return results;
 }
