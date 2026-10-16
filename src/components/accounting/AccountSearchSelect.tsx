@@ -17,6 +17,8 @@ interface AccountSearchSelectProps {
   autoFocus?: boolean;
   inputRef?: React.RefObject<HTMLInputElement>;
   filterFn?: (account: Account) => boolean;
+  /** Id of the search field, so a `<label htmlFor>` names it (v10.1.31, TD-1278). */
+  id?: string;
 }
 
 export function AccountSearchSelect({
@@ -29,6 +31,7 @@ export function AccountSearchSelect({
   autoFocus = false,
   inputRef: externalInputRef,
   filterFn,
+  id,
 }: AccountSearchSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -153,6 +156,7 @@ export function AccountSearchSelect({
       <div className="relative flex items-center">
         <input
           ref={inputRef}
+          id={id}
           type="text"
           autoFocus={autoFocus}
           value={searchQuery}

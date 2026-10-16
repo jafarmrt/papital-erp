@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useId } from 'react';
 import { 
   User as UserIcon, Lock, Camera, Check, X, Eye, EyeOff, ShieldCheck, KeyRound, 
   UploadCloud, AlertCircle, RefreshCw
@@ -25,6 +25,7 @@ interface UserProfileModalProps {
 }
 
 export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, roleName, onLogout }: UserProfileModalProps) {
+  const fieldId = useId();
   const [activeTab, setActiveTab] = useState<'profile' | 'password'>('profile');
   const [fullName, setFullName] = useState<string>(user.full_name || '');
   const [avatarPreview, setAvatarPreview] = useState<string>(user.avatar_url || '');
@@ -300,8 +301,9 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
               {/* Form Inputs */}
               <div className="space-y-4 text-xs">
                 <div>
-                  <label className="block text-slate-700 font-bold mb-1">نام کاربری (غیرقابل تغییر):</label>
+                  <label htmlFor={`${fieldId}-username`} className="block text-slate-700 font-bold mb-1">نام کاربری (غیرقابل تغییر):</label>
                   <input
+                    id={`${fieldId}-username`}
                     type="text"
                     value={user.username}
                     disabled
@@ -310,8 +312,9 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
                 </div>
 
                 <div>
-                  <label className="block text-slate-700 font-bold mb-1">نام و نام خانوادگی:</label>
+                  <label htmlFor={`${fieldId}-full-name`} className="block text-slate-700 font-bold mb-1">نام و نام خانوادگی:</label>
                   <input
+                    id={`${fieldId}-full-name`}
                     type="text"
                     value={fullName}
                     maxLength={FULL_NAME_MAX_LENGTH}
@@ -385,9 +388,10 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
               )}
 
               <div>
-                <label className="block text-slate-700 font-bold mb-1">کلمه عبور فعلی:</label>
+                <label htmlFor={`${fieldId}-current-password`} className="block text-slate-700 font-bold mb-1">کلمه عبور فعلی:</label>
                 <div className="relative">
                   <input
+                    id={`${fieldId}-current-password`}
                     type={showCurrentPassword ? 'text' : 'password'}
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
@@ -405,9 +409,10 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
               </div>
 
               <div>
-                <label className="block text-slate-700 font-bold mb-1">کلمه عبور جدید:</label>
+                <label htmlFor={`${fieldId}-new-password`} className="block text-slate-700 font-bold mb-1">کلمه عبور جدید:</label>
                 <div className="relative">
                   <input
+                    id={`${fieldId}-new-password`}
                     type={showNewPassword ? 'text' : 'password'}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
@@ -425,8 +430,9 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
               </div>
 
               <div>
-                <label className="block text-slate-700 font-bold mb-1">تکرار کلمه عبور جدید:</label>
+                <label htmlFor={`${fieldId}-confirm-password`} className="block text-slate-700 font-bold mb-1">تکرار کلمه عبور جدید:</label>
                 <input
+                  id={`${fieldId}-confirm-password`}
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}

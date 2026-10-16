@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useId } from 'react';
 import { X, Check, Calendar, User, Package, Users, Layers, CheckCircle2, Edit3, RefreshCw, ShoppingCart, BarChart2, CheckSquare, FileText, Maximize2, Minimize2, Sparkles, Paperclip } from 'lucide-react';
 import { ProductionProject, ProjectStage, Item } from '../types';
 import { fetchJson } from '../api';
@@ -43,6 +43,7 @@ export default function ProjectDetailModal({
   onEditProject,
   initialTab = 'overview'
 }: ProjectDetailModalProps) {
+  const fieldId = useId();
   const [project, setProject] = useState<ProductionProject | null>(null);
   const projectVersion = useProjectVersion(project);
   const [loading, setLoading] = useState<boolean>(false);
@@ -701,8 +702,9 @@ export default function ProjectDetailModal({
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                                   <div>
-                                    <label className="block text-[11px] font-bold text-slate-700 mb-1">عنوان مرحله</label>
+                                    <label htmlFor={`${fieldId}-stage-title-${stg.id}`} className="block text-[11px] font-bold text-slate-700 mb-1">عنوان مرحله</label>
                                     <input
+                                      id={`${fieldId}-stage-title-${stg.id}`}
                                       type="text"
                                       value={stageTitle}
                                       onChange={(e) => setStageTitle(e.target.value)}
@@ -741,8 +743,9 @@ export default function ProjectDetailModal({
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                                   <div>
-                                    <label className="block text-[11px] font-bold text-slate-700 mb-1">پرسنل مسئول (با ویرگول)</label>
+                                    <label htmlFor={`${fieldId}-personnel-input-${stg.id}`} className="block text-[11px] font-bold text-slate-700 mb-1">پرسنل مسئول (با ویرگول)</label>
                                     <input
+                                      id={`${fieldId}-personnel-input-${stg.id}`}
                                       type="text"
                                       value={personnelInput}
                                       onChange={(e) => setPersonnelInput(e.target.value)}
@@ -752,8 +755,9 @@ export default function ProjectDetailModal({
                                   </div>
 
                                   <div>
-                                    <label className="block text-[11px] font-bold text-slate-700 mb-1">تاریخ شروع</label>
+                                    <label htmlFor={`${fieldId}-stage-start-date-${stg.id}`} className="block text-[11px] font-bold text-slate-700 mb-1">تاریخ شروع</label>
                                     <JalaliDateInput
+                                      id={`${fieldId}-stage-start-date-${stg.id}`}
                                       value={stageStartDate}
                                       onChange={setStageStartDate}
                                       placeholder="انتخاب تاریخ"
@@ -762,8 +766,9 @@ export default function ProjectDetailModal({
                                   </div>
 
                                   <div>
-                                    <label className="block text-[11px] font-bold text-slate-700 mb-1">تاریخ پایان / تحویل</label>
+                                    <label htmlFor={`${fieldId}-stage-end-date-${stg.id}`} className="block text-[11px] font-bold text-slate-700 mb-1">تاریخ پایان / تحویل</label>
                                     <JalaliDateInput
+                                      id={`${fieldId}-stage-end-date-${stg.id}`}
                                       value={stageEndDate}
                                       onChange={setStageEndDate}
                                       placeholder="انتخاب تاریخ"
@@ -772,8 +777,9 @@ export default function ProjectDetailModal({
                                   </div>
 
                                   <div>
-                                    <label className="block text-[11px] font-bold text-slate-700 mb-1">یادداشت و نکات مرحله</label>
+                                    <label htmlFor={`${fieldId}-stage-notes-${stg.id}`} className="block text-[11px] font-bold text-slate-700 mb-1">یادداشت و نکات مرحله</label>
                                     <input
+                                      id={`${fieldId}-stage-notes-${stg.id}`}
                                       type="text"
                                       value={stageNotes}
                                       onChange={(e) => setStageNotes(e.target.value)}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useId } from 'react';
 import { Plus, Trash2, Landmark } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { fetchJson } from '../../api';
@@ -48,6 +48,7 @@ function formOf(view: RatesView | undefined): FormState {
 }
 
 export function PayrollStatutoryRatesTab() {
+  const fieldId = useId();
   const thisYear = Number(toLatinDigits(getTodayJalaliDate()).slice(0, 4));
   const [years, setYears] = useState<RatesView[]>([]);
   const [year, setYear] = useState<number>(thisYear);
@@ -118,8 +119,8 @@ export function PayrollStatutoryRatesTab() {
       </p>
 
       <div className="flex items-center gap-2">
-        <label className="text-xs font-bold text-slate-700">سال جلالی</label>
-        <select value={year} onChange={(e) => pickYear(Number(e.target.value))} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold">
+        <label htmlFor={`${fieldId}-year`} className="text-xs font-bold text-slate-700">سال جلالی</label>
+        <select id={`${fieldId}-year`} value={year} onChange={(e) => pickYear(Number(e.target.value))} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold">
           {yearOptions.map(y => (
             <option key={y} value={y}>{toPersianDigits(String(y))}{years.some(r => r.jalaliYear === y) ? '' : ' (بی نرخ)'}</option>
           ))}
@@ -128,16 +129,16 @@ export function PayrollStatutoryRatesTab() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1">درصد بیمه سهم کارگر</label>
-          <input inputMode="decimal" value={form.employeeInsurancePercent} onChange={(e) => setForm(p => ({ ...p, employeeInsurancePercent: e.target.value }))} className={inputClass} />
+          <label htmlFor={`${fieldId}-employee-insurance-percent`} className="block text-xs font-bold text-slate-700 mb-1">درصد بیمه سهم کارگر</label>
+          <input id={`${fieldId}-employee-insurance-percent`} inputMode="decimal" value={form.employeeInsurancePercent} onChange={(e) => setForm(p => ({ ...p, employeeInsurancePercent: e.target.value }))} className={inputClass} />
         </div>
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1">درصد بیمه سهم کارفرما (همراه بیمه بیکاری)</label>
-          <input inputMode="decimal" value={form.employerInsurancePercent} onChange={(e) => setForm(p => ({ ...p, employerInsurancePercent: e.target.value }))} className={inputClass} />
+          <label htmlFor={`${fieldId}-employer-insurance-percent`} className="block text-xs font-bold text-slate-700 mb-1">درصد بیمه سهم کارفرما (همراه بیمه بیکاری)</label>
+          <input id={`${fieldId}-employer-insurance-percent`} inputMode="decimal" value={form.employerInsurancePercent} onChange={(e) => setForm(p => ({ ...p, employerInsurancePercent: e.target.value }))} className={inputClass} />
         </div>
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1">سقف ماهانه دستمزد مشمول بیمه (ریال)</label>
-          <input inputMode="decimal" value={form.insuranceWageCap} placeholder="خالی یعنی بی سقف" onChange={(e) => setForm(p => ({ ...p, insuranceWageCap: e.target.value }))} className={inputClass} />
+          <label htmlFor={`${fieldId}-insurance-wage-cap`} className="block text-xs font-bold text-slate-700 mb-1">سقف ماهانه دستمزد مشمول بیمه (ریال)</label>
+          <input id={`${fieldId}-insurance-wage-cap`} inputMode="decimal" value={form.insuranceWageCap} placeholder="خالی یعنی بی سقف" onChange={(e) => setForm(p => ({ ...p, insuranceWageCap: e.target.value }))} className={inputClass} />
         </div>
       </div>
 

@@ -1,4 +1,4 @@
-import React , { useState, useMemo, useEffect } from 'react';
+import React , { useState, useMemo, useEffect, useId } from 'react';
 import { ShoppingCart, FileText, CheckCircle2, AlertCircle, X, Loader2, Check } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { ProductionProject, PurchaseListItem, Item } from '../../types';
@@ -47,6 +47,7 @@ export function CreatePurchaseOrderModal({
   warehouseItems,
   onOrderCreated
 }: CreatePurchaseOrderModalProps) {
+  const fieldId = useId();
   const [orderMode, setOrderMode] = useState<'requisition' | 'direct_document'>('requisition');
   const [priority, setPriority] = useState<RequisitionPriority>('normal');
   // v9.0.420 (TD-764): تاریخ نیاز ISO است و با تقویم شمسی انتخاب می‌شود (پیش‌تر متن آزاد با نمونه 1405/01/01)
@@ -290,8 +291,9 @@ export function CreatePurchaseOrderModal({
           {mode === 'requisition' ? (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-amber-50/50 p-4 rounded-xl border border-amber-200 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">اولویت درخواست خرید:</label>
+                <label htmlFor={`${fieldId}-priority`} className="block font-bold text-slate-700 mb-1">اولویت درخواست خرید:</label>
                 <select
+                  id={`${fieldId}-priority`}
                   value={priority}
                   onChange={e => setPriority(e.target.value as any)}
                   className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-bold focus:ring-2 focus:ring-amber-400 focus:outline-none"
@@ -304,8 +306,9 @@ export function CreatePurchaseOrderModal({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">تاریخ نیاز به کالا:</label>
+                <label htmlFor={`${fieldId}-order-date`} className="block font-bold text-slate-700 mb-1">تاریخ نیاز به کالا:</label>
                 <JalaliDateInput
+                  id={`${fieldId}-order-date`}
                   value={orderDate}
                   onChange={setOrderDate}
                   placeholder="انتخاب تاریخ"
@@ -314,8 +317,9 @@ export function CreatePurchaseOrderModal({
               </div>
 
               <div className="sm:col-span-3">
-                <label className="block font-bold text-slate-700 mb-1">یادداشت و الزامات کیفی/تدارکاتی:</label>
+                <label htmlFor={`${fieldId}-notes`} className="block font-bold text-slate-700 mb-1">یادداشت و الزامات کیفی/تدارکاتی:</label>
                 <input
+                  id={`${fieldId}-notes`}
                   type="text"
                   value={notes}
                   onChange={e => setNotes(e.target.value)}

@@ -17,9 +17,11 @@ interface JalaliDateInputProps {
   containerClassName?: string;
   calendarPosition?: string;
   disabled?: boolean;
+  /** Id of the text field, so a `<label htmlFor>` names it (v10.1.31, TD-1278). */
+  id?: string;
 }
 
-export function JalaliDateInput({ value, onChange, placeholder, className, containerClassName = 'w-full', calendarPosition = 'bottom-right', disabled }: JalaliDateInputProps) {
+export function JalaliDateInput({ value, onChange, placeholder, className, containerClassName = 'w-full', calendarPosition = 'bottom-right', disabled, id }: JalaliDateInputProps) {
   return (
     <DatePicker
       value={isoToJalaliDate(value) || ''}
@@ -32,6 +34,7 @@ export function JalaliDateInput({ value, onChange, placeholder, className, conta
       inputClass={className}
       containerClassName={containerClassName}
       disabled={disabled}
+      id={id}
     />
   );
 }

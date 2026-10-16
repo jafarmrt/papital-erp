@@ -1,5 +1,5 @@
 /**
- * v10.1.31 (TD-1279): pins every client checked out of the pool to the isolated test schema.
+ * v10.1.32 (TD-1279): pins every client checked out of the pool to the isolated test schema.
  *
  * The test bootstrap used to send `SET search_path` from the pool's 'acquire' event without waiting,
  * so the caller's own query ran on the same client while the SET was still running. pg 8 queues that

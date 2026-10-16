@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useId } from 'react';
 import { Plus, Save, Trash2, Clock, ArrowRight, Move, SlidersHorizontal } from 'lucide-react';
 import { 
   useWorkflowDefinitionDetailQuery, 
@@ -58,6 +58,7 @@ const STATE_COLORS: Record<string, { bg: string; border: string; text: string; h
 };
 
 export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ definitionId, onBack }) => {
+  const fieldId = useId();
   const { data: detailData, isLoading, refetch } = useWorkflowDefinitionDetailQuery(definitionId);
   const saveMutation = useSaveWorkflowDefinitionMutation();
   const updatePositionsMutation = useUpdateCanvasPositionsMutation();
@@ -463,8 +464,9 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">کلید گام</label>
+                <label htmlFor={`${fieldId}-state-key`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">کلید گام</label>
                 <input
+                  id={`${fieldId}-state-key`}
                   type="text"
                   value={selectedNode.stateKey}
                   onChange={(e) => {
@@ -480,8 +482,9 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">عنوان نمایش</label>
+                <label htmlFor={`${fieldId}-title`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">عنوان نمایش</label>
                 <input
+                  id={`${fieldId}-title`}
                   type="text"
                   value={selectedNode.title}
                   onChange={(e) => {
@@ -493,8 +496,9 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">نوع گام</label>
+                <label htmlFor={`${fieldId}-state-type`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">نوع گام</label>
                 <select
+                  id={`${fieldId}-state-type`}
                   value={selectedNode.stateType}
                   onChange={(e) => {
                     const val = e.target.value as any;
@@ -523,8 +527,9 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">مهلت انجام (ساعت)</label>
+                <label htmlFor={`${fieldId}-sla-hours`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">مهلت انجام (ساعت)</label>
                 <input
+                  id={`${fieldId}-sla-hours`}
                   type="number"
                   value={selectedNode.slaHours}
                   onChange={(e) => {
@@ -536,8 +541,9 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">ترتیب گام در نمایش مراحل</label>
+                <label htmlFor={`${fieldId}-step-order`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">ترتیب گام در نمایش مراحل</label>
                 <input
+                  id={`${fieldId}-step-order`}
                   type="number"
                   min="1"
                   value={selectedNode.stepOrder}
@@ -557,8 +563,9 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">عنوان اقدام</label>
+                <label htmlFor={`${fieldId}-title-2`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">عنوان اقدام</label>
                 <input
+                  id={`${fieldId}-title-2`}
                   type="text"
                   value={selectedEdge.title}
                   onChange={(e) => {
@@ -570,8 +577,9 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">کلید اقدام</label>
+                <label htmlFor={`${fieldId}-action-key`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">کلید اقدام</label>
                 <input
+                  id={`${fieldId}-action-key`}
                   type="text"
                   value={selectedEdge.actionKey}
                   onChange={(e) => {
@@ -589,8 +597,9 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
               />
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">شیوه امضا</label>
+                <label htmlFor={`${fieldId}-approval-rule-type`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">شیوه امضا</label>
                 <select
+                  id={`${fieldId}-approval-rule-type`}
                   value={selectedEdge.approvalRuleType}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -613,8 +622,9 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
 
               {(selectedEdge.approvalRuleType === 'AND_ALL' || selectedEdge.approvalRuleType === 'K_OF_N') && (
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{selectedEdge.approvalRuleType === 'AND_ALL' ? 'تعداد امضا برای گام بدون نقش (K)' : 'تعداد امضاهای لازم (K)'}</label>
+                  <label htmlFor={`${fieldId}-k-value`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{selectedEdge.approvalRuleType === 'AND_ALL' ? 'تعداد امضا برای گام بدون نقش (K)' : 'تعداد امضاهای لازم (K)'}</label>
                   <input
+                    id={`${fieldId}-k-value`}
                     type="number"
                     min="1"
                     value={selectedEdge.kValue}
@@ -628,8 +638,9 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
               )}
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">اقدام خودکار سیستم</label>
+                <label htmlFor={`${fieldId}-auto-action-key`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">اقدام خودکار سیستم</label>
                 <select
+                  id={`${fieldId}-auto-action-key`}
                   value={selectedEdge.autoActionKey}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -671,8 +682,9 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
             
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">گام مبدأ</label>
+                <label htmlFor={`${fieldId}-new-edge-from`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">گام مبدأ</label>
                 <select
+                  id={`${fieldId}-new-edge-from`}
                   value={newEdgeFrom}
                   onChange={e => setNewEdgeFrom(e.target.value)}
                   className="w-full text-xs p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
@@ -684,8 +696,9 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">گام مقصد</label>
+                <label htmlFor={`${fieldId}-new-edge-to`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">گام مقصد</label>
                 <select
+                  id={`${fieldId}-new-edge-to`}
                   value={newEdgeTo}
                   onChange={e => setNewEdgeTo(e.target.value)}
                   className="w-full text-xs p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"

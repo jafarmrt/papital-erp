@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useId } from 'react';
 import { Lock, CheckCircle2, AlertTriangle, TrendingUp, TrendingDown, Scale, RefreshCw, ShieldCheck, Check, Layers, Printer, ChevronDown, ChevronUp } from 'lucide-react';
 import { toPersianDigits, formatPersianDate, errorMessageOf } from '../../utils';
 import { fiscalClosingJalaliDates } from '../../lib/fiscalClosingDates';
@@ -19,6 +19,7 @@ interface FiscalYearClosingTabProps {
 }
 
 export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYearClosingTabProps) {
+  const fieldId = useId();
   const rial = useRialDisplay();
   const curLbl = rial.label;
   // v9.0.228 (TD-567): دکمه اجرای بستن فقط برای دارنده کلید API آن؛ پیش‌تر مدیر، مدیر مالی و حسابدار آن را می‌دیدند و ۴۰۳ می‌گرفتند
@@ -173,10 +174,11 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
 
           <div className="flex flex-wrap items-center gap-3">
             <div>
-              <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
+              <label htmlFor={`${fieldId}-selected-year`} className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
                 سال مالی:
               </label>
               <select
+                id={`${fieldId}-selected-year`}
                 value={selectedYear}
                 onChange={e => handleYearChange(e.target.value)}
                 className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 outline-none"

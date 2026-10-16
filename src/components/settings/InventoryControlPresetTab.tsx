@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { Plus, Trash2, Save, RefreshCw, ShoppingBag, HelpCircle, ArrowUp, ArrowDown } from 'lucide-react';
 import { DEFAULT_INVENTORY_CONTROL_SECTIONS, InventoryControlPresetSection } from '../../constants/inventoryControlPresets';
@@ -18,6 +18,7 @@ export function InventoryControlPresetTab({
   isSaving,
   onSave
 }: InventoryControlPresetTabProps) {
+  const fieldId = useId();
   const safeSections = Array.isArray(sections) ? sections : [];
 
   const handleAddSection = () => {
@@ -174,8 +175,9 @@ export function InventoryControlPresetTab({
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-slate-600 mb-1">توضیحات و راهنمای این بخش:</label>
+              <label htmlFor={`${fieldId}-description-${secIdx}`} className="block text-[11px] font-semibold text-slate-600 mb-1">توضیحات و راهنمای این بخش:</label>
               <input
+                id={`${fieldId}-description-${secIdx}`}
                 type="text"
                 value={sec.description || ''}
                 onChange={(e) => handleUpdateSection(secIdx, 'description', e.target.value)}

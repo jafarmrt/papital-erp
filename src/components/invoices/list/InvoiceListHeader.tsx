@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { formatPersianNumber } from '../../../utils';
 
@@ -11,6 +12,7 @@ interface InvoiceListHeaderProps {
 
 /** TD-080 (بخش ۳): نوار عنوان جدول اسناد (تعداد کل، بارگذاری مجدد، تعداد ردیف هر صفحه) */
 export function InvoiceListHeader({ totalItems, loading, loadData, pageSize, setPageSize }: InvoiceListHeaderProps) {
+  const fieldId = useId();
   return (
     <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-white flex-wrap gap-4">
       <div className="flex items-center gap-3">
@@ -40,8 +42,9 @@ export function InvoiceListHeader({ totalItems, loading, loadData, pageSize, set
         </button>
 
         <div className="flex items-center gap-2 border-r border-slate-200 pr-3 mr-1">
-          <label className="text-xs text-slate-500 font-medium">نمایش:</label>
+          <label htmlFor={`${fieldId}-page-size`} className="text-xs text-slate-500 font-medium">نمایش:</label>
           <select
+            id={`${fieldId}-page-size`}
             value={pageSize}
             onChange={(e) => setPageSize(Number(e.target.value))}
             className="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:ring-2 focus:ring-blue-500 font-medium"

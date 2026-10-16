@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useId } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { CreditCard, Plus, Search, ArrowDownLeft, ArrowUpRight, Trash2, X, History, Download, ShieldCheck, Copy, Edit3 } from 'lucide-react';
 import * as xlsx from 'xlsx';
@@ -46,6 +46,7 @@ export function ChequesTab({
   onUpdateStatus,
   onDeleteCheque,
 }: ChequesTabProps) {
+  const fieldId = useId();
   const rial = useRialDisplay();
   const safeCheques = Array.isArray(cheques) ? cheques : [];
   const safeBankAccounts = Array.isArray(bankAccounts) ? bankAccounts : [];
@@ -715,10 +716,11 @@ export function ChequesTab({
               <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    <label htmlFor={`${fieldId}-type`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                       نوع چک *
                     </label>
                     <select
+                      id={`${fieldId}-type`}
                       value={newFormData.type}
                       onChange={e => {
                         const nextType = e.target.value as ChequeType;
@@ -738,10 +740,11 @@ export function ChequesTab({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    <label htmlFor={`${fieldId}-cheque-number`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                       شماره چک (سریال) *
                     </label>
                     <input
+                      id={`${fieldId}-cheque-number`}
                       type="text"
                       required
                       placeholder="مثال: 123456"
@@ -753,10 +756,11 @@ export function ChequesTab({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  <label htmlFor={`${fieldId}-sayad-number`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                     شناسه صیاد ۱۶ رقمی
                   </label>
                   <input
+                    id={`${fieldId}-sayad-number`}
                     type="text"
                     maxLength={16}
                     placeholder="1234567890123456"
@@ -768,10 +772,11 @@ export function ChequesTab({
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    <label htmlFor={`${fieldId}-bank-name`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                       نام بانک صادرکننده *
                     </label>
                     <input
+                      id={`${fieldId}-bank-name`}
                       type="text"
                       required
                       placeholder="مثال: بانک ملت"
@@ -782,10 +787,11 @@ export function ChequesTab({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    <label htmlFor={`${fieldId}-branch`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                       شعبه
                     </label>
                     <input
+                      id={`${fieldId}-branch`}
                       type="text"
                       placeholder="کد یا نام شعبه"
                       value={newFormData.branch}
@@ -797,10 +803,11 @@ export function ChequesTab({
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    <label htmlFor={`${fieldId}-issue-date`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                       تاریخ صدور
                     </label>
                     <JalaliDateInput
+                      id={`${fieldId}-issue-date`}
                       value={newFormData.issueDate}
                       onChange={iso => setNewFormData({ ...newFormData, issueDate: iso })}
                       calendarPosition="bottom-right"
@@ -810,10 +817,11 @@ export function ChequesTab({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    <label htmlFor={`${fieldId}-due-date`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                       تاریخ سررسید *
                     </label>
                     <JalaliDateInput
+                      id={`${fieldId}-due-date`}
                       value={newFormData.dueDate}
                       onChange={iso => setNewFormData({ ...newFormData, dueDate: iso })}
                       calendarPosition="bottom-right"
@@ -825,10 +833,11 @@ export function ChequesTab({
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    <label htmlFor={`${fieldId}-party-type`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                       طرف حساب
                     </label>
                     <select
+                      id={`${fieldId}-party-type`}
                       value={newFormData.partyType}
                       onChange={e => setNewFormData({ ...newFormData, partyType: e.target.value as any, partyId: null, partyName: '', purpose: '', contraAccountId: null })}
                       className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-bold"
@@ -919,10 +928,11 @@ export function ChequesTab({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  <label htmlFor={`${fieldId}-description`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                     توضیحات و بابت
                   </label>
                   <input
+                    id={`${fieldId}-description`}
                     type="text"
                     placeholder="بابت تسویه فاکتور فروش شماره..."
                     value={newFormData.description}
@@ -1000,10 +1010,11 @@ export function ChequesTab({
 
               {(targetStatus === 'in_collection' || targetStatus === 'passed') && (
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  <label htmlFor={`${fieldId}-target-bank-account-id`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                     حساب بانکی مقصد *
                   </label>
                   <select
+                    id={`${fieldId}-target-bank-account-id`}
                     value={targetBankAccountId || ''}
                     onChange={e => setTargetBankAccountId(Number(e.target.value) || null)}
                     className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
@@ -1020,10 +1031,11 @@ export function ChequesTab({
 
               {targetStatus === 'spent' && (
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  <label htmlFor={`${fieldId}-transferee-party-id`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                     تأمین‌کننده گیرنده چک *
                   </label>
                   <SearchableSelect
+                    id={`${fieldId}-transferee-party-id`}
                     value={String(transfereePartyId || '')}
                     onChange={(val) => setTransfereePartyId(Number(val) || null)}
                     placeholder="جست‌وجو و انتخاب تأمین‌کننده..."
@@ -1033,10 +1045,11 @@ export function ChequesTab({
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                <label htmlFor={`${fieldId}-status-action-date`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                   تاریخ اقدام *
                 </label>
                 <JalaliDateInput
+                  id={`${fieldId}-status-action-date`}
                   value={statusActionDate}
                   onChange={setStatusActionDate}
                   placeholder="تاریخ اقدام"
@@ -1045,10 +1058,11 @@ export function ChequesTab({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                <label htmlFor={`${fieldId}-status-description`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                   شرح و یادداشت تغییر وضعیت
                 </label>
                 <textarea
+                  id={`${fieldId}-status-description`}
                   rows={2}
                   value={statusDescription}
                   onChange={e => setStatusDescription(e.target.value)}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { Layers, Plus, Trash2, ArrowUp, ArrowDown, Archive, ArchiveRestore } from 'lucide-react';
 import { WorkflowPreset } from '../../constants/presets';
 import { fetchJson } from '../../api';
@@ -31,6 +31,7 @@ export function WorkflowPresetsTab({
   isSaving,
   onSave
 }: WorkflowPresetsTabProps) {
+  const fieldId = useId();
   const rial = useRialDisplay();
 
   const [availableTasks, setAvailableTasks] = useState<PieceworkTask[]>([]);
@@ -196,8 +197,9 @@ export function WorkflowPresetsTab({
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-bold text-slate-700 mb-1">توضیحات خلاصه:</label>
+                        <label htmlFor={`${fieldId}-description-${p.id}`} className="block text-xs font-bold text-slate-700 mb-1">توضیحات خلاصه:</label>
                         <input
+                          id={`${fieldId}-description-${p.id}`}
                           type="text"
                           value={p.description ?? ''}
                           onChange={(e) => {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useId } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { isCancelledError } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
@@ -38,6 +38,7 @@ import { DecimalInput, refuseInvalidDecimalInputs } from '../components/common/D
 
 // Print styles are added globally or inline
 export default function CreateInvoicePage({ user: currentUser }: { user: User }) {
+  const fieldId = useId();
   // v9.0.125 (TD-541 / TD-771): گزینه «فاکتور نهایی» با همان مجوزی که سرور می‌سنجد، نه کد نقش (documentPermissions.ts)
   const isSystemAdmin = currentUser.role === SYSTEM_ADMIN_ROLE;
   const holdsFinalize = useHasPermission(SALES_FINALIZE_PERMISSION);
@@ -488,8 +489,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
           {/* Header Info */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 bg-slate-50 p-4 rounded-lg border">
             <div>
-              <label className="block text-xs font-medium mb-1 text-slate-500">وضعیت سند</label>
-              <select className="w-full border rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white font-bold text-slate-700" value={status} onChange={e => setStatus(e.target.value)}>
+              <label htmlFor={`${fieldId}-status`} className="block text-xs font-medium mb-1 text-slate-500">وضعیت سند</label>
+              <select id={`${fieldId}-status`} className="w-full border rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white font-bold text-slate-700" value={status} onChange={e => setStatus(e.target.value)}>
                 <option value="proforma">پیش فاکتور (رزرو موقت)</option>
                 <option value="final" disabled={!canFinalizeSales || isEditing}>
                   فاکتور نهایی (کسر قطعی از انبار){finalOptionNote}
@@ -497,8 +498,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1 text-slate-500">واحد پول (ارز)</label>
-              <select className="w-full border rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white font-bold text-slate-700" value={currency} onChange={e => handleCurrencyChange(e.target.value)}>
+              <label htmlFor={`${fieldId}-currency`} className="block text-xs font-medium mb-1 text-slate-500">واحد پول (ارز)</label>
+              <select id={`${fieldId}-currency`} className="w-full border rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white font-bold text-slate-700" value={currency} onChange={e => handleCurrencyChange(e.target.value)}>
                 <option value="IRR">ریال</option>
                 <option value="USD">دلار</option>
                 <option value="EUR">یورو</option>
@@ -528,12 +529,12 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
             </div>
             <div>
               {/* v9.0.327 (TD-783، تصمیم ت۹ الف): شماره فقط از سری سرور؛ سند تازه شماره را هنگام ثبت می‌گیرد */}
-              <label className="block text-xs font-medium mb-1 text-slate-500">شماره سند (از سری سامانه)</label>
-              <input type="text" value={refNumber} readOnly title="شماره هنگام ثبت از سری فاکتورهای سامانه داده می‌شود" className="w-full border shadow-sm rounded text-sm px-3 py-1.5 text-left font-mono text-slate-500 bg-slate-50 focus:outline-none" dir="ltr" />
+              <label htmlFor={`${fieldId}-ref-number`} className="block text-xs font-medium mb-1 text-slate-500">شماره سند (از سری سامانه)</label>
+              <input id={`${fieldId}-ref-number`} type="text" value={refNumber} readOnly title="شماره هنگام ثبت از سری فاکتورهای سامانه داده می‌شود" className="w-full border shadow-sm rounded text-sm px-3 py-1.5 text-left font-mono text-slate-500 bg-slate-50 focus:outline-none" dir="ltr" />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1 text-slate-500">تاریخ</label>
-              <DatePicker 
+              <label htmlFor={`${fieldId}-date`} className="block text-xs font-medium mb-1 text-slate-500">تاریخ</label>
+              <DatePicker id={`${fieldId}-date`} 
                 value={date} 
                 onChange={(dateObj) => setDate(extractDateString(dateObj))} 
                 calendar={persian} 
@@ -554,8 +555,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
             </div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
               <div className="col-span-1 md:col-span-4 bg-blue-50/80 p-3 rounded-xl border border-blue-100 flex flex-col md:flex-row md:items-center gap-3">
-                <label className="text-sm font-bold text-blue-900 shrink-0 min-w-[170px]">انتخاب خریدار از فهرست طرفین حساب:*</label>
-                <SearchableSelect 
+                <label htmlFor={`${fieldId}-selected-customer-id`} className="text-sm font-bold text-blue-900 shrink-0 min-w-[170px]">انتخاب خریدار از فهرست طرفین حساب:*</label>
+                <SearchableSelect id={`${fieldId}-selected-customer-id`} 
                   className="w-full"
                   fetchUrl={documentPartyPickListUrl('invoice')}
                   mapResultToOption={(c: BuyerSource & { id: number }) => {
@@ -573,8 +574,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                 />
               </div>
               <div>
-                <label className="block text-xs mb-1 text-slate-600 font-bold">نام خریدار (طرف حساب)</label>
-                <input 
+                <label htmlFor={`${fieldId}-buyer-name`} className="block text-xs mb-1 text-slate-600 font-bold">نام خریدار (طرف حساب)</label>
+                <input id={`${fieldId}-buyer-name`} 
                   type="text" 
                   value={buyerName} 
                   readOnly 
@@ -583,8 +584,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                 />
               </div>
               <div>
-                <label className="block text-xs mb-1 text-slate-600 font-bold">استان / شهر</label>
-                <input 
+                <label htmlFor={`${fieldId}-buyer-city`} className="block text-xs mb-1 text-slate-600 font-bold">استان / شهر</label>
+                <input id={`${fieldId}-buyer-city`} 
                   type="text" 
                   value={buyerCity} 
                   readOnly 
@@ -593,8 +594,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                 />
               </div>
               <div>
-                <label className="block text-xs mb-1 text-slate-600 font-bold">تلفن</label>
-                <input 
+                <label htmlFor={`${fieldId}-buyer-phone`} className="block text-xs mb-1 text-slate-600 font-bold">تلفن</label>
+                <input id={`${fieldId}-buyer-phone`} 
                   type="text" 
                   value={buyerPhone} 
                   readOnly 
@@ -604,8 +605,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                 />
               </div>
               <div className="col-span-1 md:col-span-3">
-                <label className="block text-xs mb-1 text-slate-600 font-bold">نشانی تحویل / اقامتگاه</label>
-                <input 
+                <label htmlFor={`${fieldId}-buyer-address`} className="block text-xs mb-1 text-slate-600 font-bold">نشانی تحویل / اقامتگاه</label>
+                <input id={`${fieldId}-buyer-address`} 
                   type="text" 
                   value={buyerAddress} 
                   readOnly 
@@ -620,8 +621,9 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
             <h3 className="text-sm font-bold mb-3 text-slate-800">اقلام فاکتور</h3>
             <div data-decimal-scope="" className="flex flex-wrap gap-3 items-end bg-slate-50 p-3 rounded-lg border">
               <div className="flex-1 min-w-[200px]">
-                <label className="block text-xs mb-1 text-slate-500">انتخاب کالا</label>
+                <label htmlFor={`${fieldId}-selected-item`} className="block text-xs mb-1 text-slate-500">انتخاب کالا</label>
                 <SearchableSelect
+                  id={`${fieldId}-selected-item`}
                   key={`item-select-${location}-${status}-${editingDocId ?? 'new'}`}
                   className="w-full shadow-sm rounded"
                   fetchUrl={itemPickWithReservedUrl(editingDocId)}
@@ -645,8 +647,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                 />
               </div>
               <div className="w-48">
-                <label className="block text-xs mb-1 text-slate-500">سیاست قیمتی از پیش تعریف شده</label>
-                <select 
+                <label htmlFor={`${fieldId}-field`} className="block text-xs mb-1 text-slate-500">سیاست قیمتی از پیش تعریف شده</label>
+                <select id={`${fieldId}-field`} 
                   className="w-full border shadow-sm rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   onChange={e => e.target.value && setUnitPrice(Number(e.target.value))}
                   disabled={!selectedItem || pricesForCurrency(itemPrices, currency).length === 0}
@@ -776,8 +778,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
           )}
 
           <div>
-            <label className="block text-xs font-medium mb-1 text-slate-500">توضیحات تکمیلی</label>
-            <textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={3} className="w-full border rounded text-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"></textarea>
+            <label htmlFor={`${fieldId}-notes`} className="block text-xs font-medium mb-1 text-slate-500">توضیحات تکمیلی</label>
+            <textarea id={`${fieldId}-notes`} value={notes} onChange={e=>setNotes(e.target.value)} rows={3} className="w-full border rounded text-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"></textarea>
           </div>
 
           <div className="border-t pt-4 flex items-center justify-between">

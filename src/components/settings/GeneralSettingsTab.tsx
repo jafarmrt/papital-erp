@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { Building2, List, Globe } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { compressTo300KB } from '../../utils/imageCompression';
@@ -64,6 +65,7 @@ export function GeneralSettingsTab({
   isSaving,
   onSave
 }: GeneralSettingsTabProps) {
+  const fieldId = useId();
   return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-xs p-6 max-w-4xl mx-auto space-y-8 text-right font-farsi">
       {/* Section 1: Business / Store Details */}
@@ -73,8 +75,9 @@ export function GeneralSettingsTab({
         </h3>
         <div className="grid md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium mb-1 text-slate-700">نام فروشگاه / شرکت</label>
+            <label htmlFor={`${fieldId}-company-name`} className="block text-sm font-medium mb-1 text-slate-700">نام فروشگاه / شرکت</label>
             <input
+              id={`${fieldId}-company-name`}
               type="text"
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
@@ -83,8 +86,9 @@ export function GeneralSettingsTab({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1 text-slate-700">شماره تماس پشتیبانی</label>
+            <label htmlFor={`${fieldId}-company-phone`} className="block text-sm font-medium mb-1 text-slate-700">شماره تماس پشتیبانی</label>
             <input
+              id={`${fieldId}-company-phone`}
               type="text"
               value={companyPhone}
               onChange={(e) => setCompanyPhone(e.target.value)}
@@ -93,8 +97,9 @@ export function GeneralSettingsTab({
             />
           </div>
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium mb-1 text-slate-700">آدرس فروشگاه / انبار مرکزی</label>
+            <label htmlFor={`${fieldId}-company-address`} className="block text-sm font-medium mb-1 text-slate-700">آدرس فروشگاه / انبار مرکزی</label>
             <input
+              id={`${fieldId}-company-address`}
               type="text"
               value={companyAddress}
               onChange={(e) => setCompanyAddress(e.target.value)}
@@ -103,8 +108,9 @@ export function GeneralSettingsTab({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1 text-slate-700">واحد نمایش مبالغ ریالی</label>
+            <label htmlFor={`${fieldId}-currency`} className="block text-sm font-medium mb-1 text-slate-700">واحد نمایش مبالغ ریالی</label>
             <select
+              id={`${fieldId}-currency`}
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
               className="w-full border rounded-lg px-3 py-2 bg-white border-slate-300 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none"
@@ -162,8 +168,9 @@ export function GeneralSettingsTab({
         </h3>
         <div className="grid md:grid-cols-2 gap-6 mb-8">
           <div>
-            <label className="block text-sm font-medium mb-1 text-slate-700">شماره شروع فاکتور چاپی</label>
+            <label htmlFor={`${fieldId}-invoice-start-num`} className="block text-sm font-medium mb-1 text-slate-700">شماره شروع فاکتور چاپی</label>
             <input
+              id={`${fieldId}-invoice-start-num`}
               type="text"
               value={invoiceStartNum}
               onChange={(e) => setInvoiceStartNum(e.target.value)}
@@ -173,8 +180,9 @@ export function GeneralSettingsTab({
             <p className="text-xs text-slate-500 mt-1">شماره فاکتور بعدی از این عدد شروع خواهد شد.</p>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1 text-slate-700">تند گردش (کمتر از چند روز)</label>
+            <label htmlFor={`${fieldId}-fast-moving-days`} className="block text-sm font-medium mb-1 text-slate-700">تند گردش (کمتر از چند روز)</label>
             <DecimalInput
+              id={`${fieldId}-fast-moving-days`}
               min="1"
               max="3650"
               step="1"
@@ -186,8 +194,9 @@ export function GeneralSettingsTab({
             <p className="text-xs text-slate-500 mt-1">کالاهایی که در این بازه خروج داشته باشند.</p>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1 text-slate-700">کند گردش (بیشتر از چند روز)</label>
+            <label htmlFor={`${fieldId}-slow-moving-days`} className="block text-sm font-medium mb-1 text-slate-700">کند گردش (بیشتر از چند روز)</label>
             <DecimalInput
+              id={`${fieldId}-slow-moving-days`}
               min="1"
               max="3650"
               step="1"
@@ -199,8 +208,9 @@ export function GeneralSettingsTab({
             <p className="text-xs text-slate-500 mt-1">شروع بازه بدون خروج متوسط (مثلا ۹۰ روز).</p>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1 text-slate-700">کالای راکد (بیشتر از چند روز)</label>
+            <label htmlFor={`${fieldId}-dead-stock-days`} className="block text-sm font-medium mb-1 text-slate-700">کالای راکد (بیشتر از چند روز)</label>
             <DecimalInput
+              id={`${fieldId}-dead-stock-days`}
               min="1"
               max="3650"
               step="1"
@@ -221,8 +231,9 @@ export function GeneralSettingsTab({
         </h3>
         <div className="grid md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium mb-1 text-slate-700">منطقه زمانی رسمی سامانه</label>
+            <label htmlFor={`${fieldId}-display-timezone`} className="block text-sm font-medium mb-1 text-slate-700">منطقه زمانی رسمی سامانه</label>
             <select
+              id={`${fieldId}-display-timezone`}
               value={displayTimezone}
               onChange={(e) => setDisplayTimezone?.(e.target.value)}
               className="w-full border rounded-lg px-3 py-2 bg-white border-slate-300 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none"

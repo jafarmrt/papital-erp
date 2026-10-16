@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useId, useMemo } from 'react';
 import { AccountSearchSelect } from '../AccountSearchSelect';
 import { HelpBadge } from '../../common/HelpBadge';
 import { useContraAccountsQuery } from '../../../hooks/accounting/useTreasuryQueries';
@@ -14,6 +14,7 @@ interface ContraAccountFieldProps {
  * (حساب‌های معین فعال، به‌جز دریافتنی و پرداختنی تجاری، حقوق، چک‌ها، موجودی کالا و سرفصل حساب‌های خزانه) و هنگام ثبت همان را می‌سنجد.
  */
 export const ContraAccountField: React.FC<ContraAccountFieldProps> = ({ value, onChange }) => {
+  const fieldId = useId();
   const { data, isLoading } = useContraAccountsQuery(true);
   const options = useMemo<Account[]>(() => (Array.isArray(data) ? data : []).map(o => ({
     id: o.id,
@@ -26,11 +27,12 @@ export const ContraAccountField: React.FC<ContraAccountFieldProps> = ({ value, o
 
   return (
     <div>
-      <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+      <label htmlFor={`${fieldId}-account`} className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
         <span>سرفصل طرف مقابل *</span>
         <HelpBadge text="حساب معینی که این وجه به آن تعلق دارد؛ مثلاً هزینه اجاره، وام دریافتی یا سایر بدهکاران. دریافتنی و پرداختنی تجاری و حقوق از کارت طرف حساب و فیش حقوق ثبت می‌شوند." />
       </label>
       <AccountSearchSelect
+        id={`${fieldId}-account`}
         accounts={options}
         value={value ?? ''}
         onChange={id => onChange(id === '' ? null : Number(id))}

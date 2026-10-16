@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { needsChosenContraAccount, SALARY_SETTLEMENT_VIA_PAYSLIP_MESSAGE, type PersonnelPurpose } from '../../../lib/treasury/partyPurpose';
 import { ContraAccountField } from './ContraAccountField';
 
@@ -17,15 +17,17 @@ interface PartyPurposeFieldsProps {
  * و سرفصل طرف مقابل «متفرقه» و «سایر» پرسنل؛ فرم خزانه و فرم ثبت چک هر دو همین را دارند.
  */
 export const PartyPurposeFields: React.FC<PartyPurposeFieldsProps> = ({ partyType, purpose, contraAccountId, isReceipt, settlementViaPayslipOnly = false, onChange }) => {
+  const fieldId = useId();
   const offerSettlement = isReceipt || !settlementViaPayslipOnly;
   return (
   <>
     {partyType === 'personnel' && (
       <div>
-        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+        <label htmlFor={`${fieldId}-purpose`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
           {isReceipt ? 'نوع دریافت از پرسنل *' : 'نوع پرداخت به پرسنل *'}
         </label>
         <select
+          id={`${fieldId}-purpose`}
           required
           value={purpose}
           onChange={e => onChange({ purpose: e.target.value as PersonnelPurpose | '', contraAccountId: null })}

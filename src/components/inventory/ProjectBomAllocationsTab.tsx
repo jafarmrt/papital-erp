@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useId } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import toast from 'react-hot-toast';
 import { Boxes, Plus, Search, RefreshCw, CheckCircle2, Clock, RotateCcw, User, Warehouse, FileText, AlertCircle, Download } from 'lucide-react';
@@ -24,6 +24,7 @@ interface ProjectBomAllocationsTabProps {
 }
 
 export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps) {
+  const fieldId = useId();
   // تخصیص، مصرف و آزادسازی موجودی را تغییر می‌دهند: کش صفحات دیگر (کالاها، کاردکس، داشبورد، رزروها) باطل می‌شود
   const queryClient = useQueryClient();
   // v9.0.417 (TD-752): تخصیص، مصرف و آزادسازی هر کدام با کلیدهای گارد API خودشان نشان داده می‌شوند
@@ -604,8 +605,9 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
             </p>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">دلیل آزادسازی:</label>
+              <label htmlFor={`${fieldId}-release-reason`} className="text-xs font-bold text-slate-700">دلیل آزادسازی:</label>
               <textarea
+                id={`${fieldId}-release-reason`}
                 value={releaseReason}
                 onChange={(e) => setReleaseReason(e.target.value)}
                 rows={3}
@@ -663,9 +665,10 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
             <form onSubmit={handleSubmitAllocation} className="space-y-3.5 text-xs">
               {/* Project Select */}
               <div>
-                <label className="block text-slate-700 font-bold mb-1">پروژه تولید مقصد:</label>
+                <label htmlFor={`${fieldId}-selected-project-id`} className="block text-slate-700 font-bold mb-1">پروژه تولید مقصد:</label>
                 {/* v9.0.423 (TD-767): فهرست جست‌وجوپذیر به جای select بومی روی همه پروژه‌ها */}
                 <SearchableSelect
+                  id={`${fieldId}-selected-project-id`}
                   value={selectedProjectId}
                   onChange={(value) => setSelectedProjectId(value ? Number(value) : '')}
                   options={projectsList.map((p) => ({ value: p.id, label: `${p.projectCode} - ${p.title}` }))}
@@ -675,8 +678,9 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
 
               {/* Raw Material Select */}
               <div>
-                <label className="block text-slate-700 font-bold mb-1">ماده اولیه / قطعه مصرفی:</label>
+                <label htmlFor={`${fieldId}-selected-item-id`} className="block text-slate-700 font-bold mb-1">ماده اولیه / قطعه مصرفی:</label>
                 <SearchableSelect
+                  id={`${fieldId}-selected-item-id`}
                   value={selectedItemId}
                   onChange={(value) => setSelectedItemId(value ? Number(value) : '')}
                   options={itemsList.map((item) => ({
@@ -690,8 +694,9 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
               <div className="grid grid-cols-2 gap-3">
                 {/* Quantity */}
                 <div>
-                  <label className="block text-slate-700 font-bold mb-1">مقدار تخصیص:</label>
+                  <label htmlFor={`${fieldId}-allocate-qty`} className="block text-slate-700 font-bold mb-1">مقدار تخصیص:</label>
                   <DecimalInput
+                    id={`${fieldId}-allocate-qty`}
                     step="0.01"
                     min="0.01"
                     value={allocateQty}
@@ -702,8 +707,9 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
 
                 {/* Warehouse Location */}
                 <div>
-                  <label className="block text-slate-700 font-bold mb-1">انبار مبداء کسر موجودی:</label>
+                  <label htmlFor={`${fieldId}-selected-location`} className="block text-slate-700 font-bold mb-1">انبار مبداء کسر موجودی:</label>
                   <select
+                    id={`${fieldId}-selected-location`}
                     value={selectedLocation}
                     onChange={(e) => setSelectedLocation(e.target.value)}
                     className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium"
@@ -723,8 +729,9 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
 
               {/* Notes */}
               <div>
-                <label className="block text-slate-700 font-bold mb-1">توضیحات و بابت (اختیاری):</label>
+                <label htmlFor={`${fieldId}-allocate-notes`} className="block text-slate-700 font-bold mb-1">توضیحات و بابت (اختیاری):</label>
                 <input
+                  id={`${fieldId}-allocate-notes`}
                   type="text"
                   value={allocateNotes}
                   onChange={(e) => setAllocateNotes(e.target.value)}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { fetchJson } from '../api';
 import { X, RefreshCw, ShieldCheck, AlertTriangle, CheckCircle2, Wrench, RotateCcw } from 'lucide-react';
 import { SearchableSelect } from './SearchableSelect';
@@ -22,6 +22,7 @@ export default function InventoryRebuildModal({
   itemsList = [],
   defaultItemId
 }: InventoryRebuildModalProps) {
+  const fieldId = useId();
   const [mode, setMode] = useState<'all' | 'single'>(defaultItemId ? 'single' : 'all');
   const [selectedItemId, setSelectedItemId] = useState<number | null>(defaultItemId || null);
   const [submitting, setSubmitting] = useState(false);
@@ -216,10 +217,11 @@ export default function InventoryRebuildModal({
               {/* Single Item Selector */}
               {mode === 'single' && (
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  <label htmlFor={`${fieldId}-selected-item-id`} className="block text-xs font-semibold text-slate-700 mb-1.5">
                     انتخاب کالا <span className="text-rose-500">*</span>
                   </label>
                   <SearchableSelect
+                    id={`${fieldId}-selected-item-id`}
                     options={itemsList.map(it => ({
                       value: it.id,
                       label: `${it.name} (کد: ${it.code}) - موجودی دفتری: ${formatPersianNumber(it.current_stock || it.currentStock || 0)} ${it.unit}`

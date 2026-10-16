@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useId } from 'react';
 import { useAppFavicon } from '../hooks/useAppFavicon';
 import { ApiError, fetchJson } from '../api';
 import { User } from '../types';
@@ -9,6 +9,7 @@ import { formatLockoutCountdown, loginLockoutMinutes } from '../lib/auth/loginLo
 import { errorMessageOf } from '../utils';
 
 export default function LoginPage({ onLogin }: { onLogin: (user: User, token: string) => void }) {
+  const fieldId = useId();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -135,10 +136,10 @@ export default function LoginPage({ onLogin }: { onLogin: (user: User, token: st
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">نام کاربری</label>
+            <label htmlFor={`${fieldId}-username`} className="block text-sm font-medium text-slate-700 mb-1">نام کاربری</label>
             <div className="relative">
               <UserIcon className="absolute right-3 top-2.5 text-slate-400" size={18} />
-              <input 
+              <input id={`${fieldId}-username`} 
                 required 
                 type="text" 
                 value={username} 
@@ -152,10 +153,10 @@ export default function LoginPage({ onLogin }: { onLogin: (user: User, token: st
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">رمز عبور</label>
+            <label htmlFor={`${fieldId}-password`} className="block text-sm font-medium text-slate-700 mb-1">رمز عبور</label>
             <div className="relative">
               <Lock className="absolute right-3 top-2.5 text-slate-400" size={18} />
-              <input 
+              <input id={`${fieldId}-password`} 
                 required 
                 type={showPassword ? 'text' : 'password'} 
                 value={password} 

@@ -40,7 +40,7 @@ export async function setupTestSchema(options: SetupTestSchemaOptions = {}): Pro
 
   const typedPool = pool as unknown as PoolWithEvents & { on: any };
 
-  // v10.1.31 (TD-1279): every checkout (new or idle client) waits for its search_path before the
+  // v10.1.32 (TD-1279): every checkout (new or idle client) waits for its search_path before the
   // caller's query runs; an 'acquire' handler could not wait and overlapped two queries on one client.
   const restoreConnect = pinSearchPathOnCheckout(pool as unknown as SearchPathPool<SearchPathClient>, schema);
   const errorHandler = () => { /* pool error observer */ };

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 import { useCreateDelegationMutation } from '../../hooks/queries/useWorkflowQueries';
 import { useDelegationScopesQuery, useDelegationUsersQuery } from '../../hooks/queries/useWorkflowDelegationQueries';
 import { toStorageDate, getTodayJalaliDate, getFutureJalaliDate } from '../../utils';
@@ -21,6 +21,7 @@ export function DelegationForm({ currentUserId, onDone, onCancel }: {
   onDone?: () => void;
   onCancel?: () => void;
 }): React.ReactElement {
+  const fieldId = useId();
   const { data: users = [] } = useDelegationUsersQuery();
   const { data: scopes = [] } = useDelegationScopesQuery();
   const createMutation = useCreateDelegationMutation();
@@ -62,10 +63,10 @@ export function DelegationForm({ currentUserId, onDone, onCancel }: {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label className={LABEL}>
+        <label htmlFor={`${fieldId}-to-user-id`} className={LABEL}>
           کاربر جانشین (دریافت‌کننده تفویض) <span className="text-rose-500">*</span>
         </label>
-        <select value={toUserId} onChange={(e) => setToUserId(e.target.value ? Number(e.target.value) : '')} required className={FIELD}>
+        <select id={`${fieldId}-to-user-id`} value={toUserId} onChange={(e) => setToUserId(e.target.value ? Number(e.target.value) : '')} required className={FIELD}>
           <option value="">-- انتخاب کاربر جانشین --</option>
           {users.filter((u) => u.id !== currentUserId).map((u) => (
             <option key={u.id} value={u.id}>{u.full_name || u.username}</option>
@@ -74,8 +75,8 @@ export function DelegationForm({ currentUserId, onDone, onCancel }: {
       </div>
 
       <div>
-        <label className={LABEL}>حوزه تفویض</label>
-        <select value={scope} onChange={(e) => setScope(e.target.value)} className={FIELD}>
+        <label htmlFor={`${fieldId}-scope`} className={LABEL}>حوزه تفویض</label>
+        <select id={`${fieldId}-scope`} value={scope} onChange={(e) => setScope(e.target.value)} className={FIELD}>
           {/* TD-467 (یافته B14-25، تصمیم ت۶ الف): فقط «همه» و گردش‌کارهای تعریف‌شده */}
           <option value="ALL">همه گردش‌کارها</option>
           {scopes.map((s) => (
@@ -86,18 +87,19 @@ export function DelegationForm({ currentUserId, onDone, onCancel }: {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label className={LABEL}>تاریخ آغاز تفویض <span className="text-rose-500">*</span></label>
-          <JalaliDateInput value={startDate} onChange={setStartDate} className={FIELD} />
+          <label htmlFor={`${fieldId}-start-date`} className={LABEL}>تاریخ آغاز تفویض <span className="text-rose-500">*</span></label>
+          <JalaliDateInput id={`${fieldId}-start-date`} value={startDate} onChange={setStartDate} className={FIELD} />
         </div>
         <div>
-          <label className={LABEL}>تاریخ پایان تفویض <span className="text-rose-500">*</span></label>
-          <JalaliDateInput value={endDate} onChange={setEndDate} className={FIELD} />
+          <label htmlFor={`${fieldId}-end-date`} className={LABEL}>تاریخ پایان تفویض <span className="text-rose-500">*</span></label>
+          <JalaliDateInput id={`${fieldId}-end-date`} value={endDate} onChange={setEndDate} className={FIELD} />
         </div>
       </div>
 
       <div>
-        <label className={LABEL}>علت تفویض / توضیحات</label>
+        <label htmlFor={`${fieldId}-reason`} className={LABEL}>علت تفویض / توضیحات</label>
         <textarea
+          id={`${fieldId}-reason`}
           rows={3}
           value={reason}
           onChange={(e) => setReason(e.target.value)}

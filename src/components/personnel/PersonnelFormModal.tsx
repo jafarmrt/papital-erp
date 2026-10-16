@@ -1,4 +1,4 @@
-import React, { FormEvent } from 'react';
+import React, { FormEvent, useId } from 'react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
@@ -46,6 +46,7 @@ export function PersonnelFormModal({
   linkedUsers,
   isSaving
 }: PersonnelFormModalProps) {
+  const fieldId = useId();
   if (!isOpen) return null;
 
   return (
@@ -92,8 +93,9 @@ export function PersonnelFormModal({
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">نام *</label>
+                <label htmlFor={`${fieldId}-first-name`} className="block text-xs font-bold text-slate-700 mb-1">نام *</label>
                 <input
+                  id={`${fieldId}-first-name`}
                   type="text"
                   required
                   value={formData.firstName}
@@ -110,8 +112,9 @@ export function PersonnelFormModal({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">نام خانوادگی *</label>
+                <label htmlFor={`${fieldId}-last-name`} className="block text-xs font-bold text-slate-700 mb-1">نام خانوادگی *</label>
                 <input
+                  id={`${fieldId}-last-name`}
                   type="text"
                   required
                   value={formData.lastName}
@@ -128,8 +131,9 @@ export function PersonnelFormModal({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">نام و نام خانوادگی (کامل)</label>
+                <label htmlFor={`${fieldId}-full-name`} className="block text-xs font-bold text-slate-700 mb-1">نام و نام خانوادگی (کامل)</label>
                 <input
+                  id={`${fieldId}-full-name`}
                   type="text"
                   value={formData.fullName}
                   onChange={(e) => setFormData((prev) => ({ ...prev, fullName: e.target.value }))}
@@ -144,8 +148,9 @@ export function PersonnelFormModal({
               />
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">جنسیت</label>
+                <label htmlFor={`${fieldId}-gender`} className="block text-xs font-bold text-slate-700 mb-1">جنسیت</label>
                 <select
+                  id={`${fieldId}-gender`}
                   value={formData.gender}
                   onChange={(e) => setFormData((prev) => ({ ...prev, gender: e.target.value }))}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
@@ -157,8 +162,9 @@ export function PersonnelFormModal({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">تاریخ تولد</label>
+                <label htmlFor={`${fieldId}-birth-date`} className="block text-xs font-bold text-slate-700 mb-1">تاریخ تولد</label>
                 <DatePicker
+                  id={`${fieldId}-birth-date`}
                   value={isoToJalaliDate(formData.birthDate) || formData.birthDate || ''}
                   onChange={(dateObj: any) => {
                     setFormData((prev) => ({ ...prev, birthDate: extractDateString(dateObj) }));
@@ -173,8 +179,9 @@ export function PersonnelFormModal({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">ملیت</label>
+                <label htmlFor={`${fieldId}-nationality`} className="block text-xs font-bold text-slate-700 mb-1">ملیت</label>
                 <input
+                  id={`${fieldId}-nationality`}
                   type="text"
                   value={formData.nationality}
                   onChange={(e) => setFormData((prev) => ({ ...prev, nationality: e.target.value }))}
@@ -189,8 +196,9 @@ export function PersonnelFormModal({
               />
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">آخرین مدرک تحصیلی</label>
+                <label htmlFor={`${fieldId}-education`} className="block text-xs font-bold text-slate-700 mb-1">آخرین مدرک تحصیلی</label>
                 <input
+                  id={`${fieldId}-education`}
                   type="text"
                   placeholder="دیپلم / کارشناسی / ارشد..."
                   value={formData.education}
@@ -201,8 +209,9 @@ export function PersonnelFormModal({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">آدرس سکونت</label>
+              <label htmlFor={`${fieldId}-address`} className="block text-xs font-bold text-slate-700 mb-1">آدرس سکونت</label>
               <input
+                id={`${fieldId}-address`}
                 type="text"
                 value={formData.address}
                 onChange={(e) => setFormData((prev) => ({ ...prev, address: e.target.value }))}
@@ -222,8 +231,9 @@ export function PersonnelFormModal({
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">کد پرسنلی</label>
+                <label htmlFor={`${fieldId}-personnel-code`} className="block text-xs font-bold text-slate-700 mb-1">کد پرسنلی</label>
                 <input
+                  id={`${fieldId}-personnel-code`}
                   type="text"
                   value={formData.personnelCode}
                   onChange={(e) => setFormData((prev) => ({ ...prev, personnelCode: e.target.value }))}
@@ -232,8 +242,9 @@ export function PersonnelFormModal({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">عنوان شغلی</label>
+                <label htmlFor={`${fieldId}-job-title`} className="block text-xs font-bold text-slate-700 mb-1">عنوان شغلی</label>
                 <input
+                  id={`${fieldId}-job-title`}
                   type="text"
                   placeholder="کارشناس فروش / سرپرست انبار / مدیر..."
                   value={formData.jobTitle}
@@ -243,8 +254,9 @@ export function PersonnelFormModal({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">وضعیت همکاری *</label>
+                <label htmlFor={`${fieldId}-employment-status`} className="block text-xs font-bold text-slate-700 mb-1">وضعیت همکاری *</label>
                 <select
+                  id={`${fieldId}-employment-status`}
                   value={formData.employmentStatus}
                   onChange={(e) => setFormData((prev) => ({ ...prev, employmentStatus: e.target.value }))}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 font-bold"
@@ -257,8 +269,9 @@ export function PersonnelFormModal({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">اتصال به کاربر سیستم</label>
+                <label htmlFor={`${fieldId}-user-id`} className="block text-xs font-bold text-slate-700 mb-1">اتصال به کاربر سیستم</label>
                 <select
+                  id={`${fieldId}-user-id`}
                   value={formData.userId}
                   onChange={(e) => setFormData((prev) => ({ ...prev, userId: e.target.value }))}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
@@ -277,8 +290,9 @@ export function PersonnelFormModal({
 
               {/* V10-4.4 / V1.3.1: مدل حقوق — گزینه‌های متمایز با توضیح صریح تفاوت‌ها */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">مدل حقوق</label>
+                <label htmlFor={`${fieldId}-piecework`} className="block text-xs font-bold text-slate-700 mb-1">مدل حقوق</label>
                 <select
+                  id={`${fieldId}-piecework`}
                   value={formData.salaryType === 'monthly_fixed' || formData.salaryType === 'mixed' ? formData.salaryType : 'piecework'}
                   onChange={(e) => setFormData((prev) => ({ ...prev, salaryType: e.target.value }))}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
@@ -298,8 +312,9 @@ export function PersonnelFormModal({
 
               {(formData.salaryType === 'monthly_fixed' || formData.salaryType === 'mixed') && (
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">مبلغ حقوق ماهانه (ریال)</label>
+                  <label htmlFor={`${fieldId}-monthly-salary`} className="block text-xs font-bold text-slate-700 mb-1">مبلغ حقوق ماهانه (ریال)</label>
                   <DecimalInput
+                    id={`${fieldId}-monthly-salary`}
                     min="0"
                     step="any"
                     placeholder="مثال: 30000000"
@@ -315,8 +330,9 @@ export function PersonnelFormModal({
               )}
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">نحوه آشنایی با پاپیتال</label>
+                <label htmlFor={`${fieldId}-referral-source`} className="block text-xs font-bold text-slate-700 mb-1">نحوه آشنایی با پاپیتال</label>
                 <input
+                  id={`${fieldId}-referral-source`}
                   type="text"
                   placeholder="معرفی دوستان / جابینجا /..."
                   value={formData.referralSource}
@@ -327,8 +343,9 @@ export function PersonnelFormModal({
 
               <div>
                 {/* v10.0.199 (TD-1086): حقوق ثابت از این روز آغاز می‌شود؛ ماه نخست روزشمار */}
-                <label className="block text-xs font-bold text-slate-700 mb-1">تاریخ آغاز همکاری</label>
+                <label htmlFor={`${fieldId}-start-date`} className="block text-xs font-bold text-slate-700 mb-1">تاریخ آغاز همکاری</label>
                 <JalaliDateInput
+                  id={`${fieldId}-start-date`}
                   value={formData.startDate}
                   onChange={(iso) => setFormData((prev) => ({ ...prev, startDate: iso }))}
                   placeholder="انتخاب تاریخ آغاز همکاری"
@@ -344,8 +361,9 @@ export function PersonnelFormModal({
               />
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">تاریخ پایان کار با پاپیتال</label>
+                <label htmlFor={`${fieldId}-end-date`} className="block text-xs font-bold text-slate-700 mb-1">تاریخ پایان کار با پاپیتال</label>
                 <DatePicker
+                  id={`${fieldId}-end-date`}
                   value={isoToJalaliDate(formData.endDate) || formData.endDate || ''}
                   onChange={(dateObj: any) => {
                     setFormData((prev) => ({ ...prev, endDate: extractDateString(dateObj) }));
@@ -361,8 +379,9 @@ export function PersonnelFormModal({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">علت قطع همکاری</label>
+              <label htmlFor={`${fieldId}-termination-reason`} className="block text-xs font-bold text-slate-700 mb-1">علت قطع همکاری</label>
               <input
+                id={`${fieldId}-termination-reason`}
                 type="text"
                 placeholder="توضیح دلایل استعفا، پایان قرارداد یا تعدیل..."
                 value={formData.terminationReason}
@@ -383,8 +402,9 @@ export function PersonnelFormModal({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">مهارت‌های تخصصی</label>
+                <label htmlFor={`${fieldId}-specialized-skills`} className="block text-xs font-bold text-slate-700 mb-1">مهارت‌های تخصصی</label>
                 <textarea
+                  id={`${fieldId}-specialized-skills`}
                   rows={2}
                   placeholder="برنامه‌نویسی، طراحی فتوشاپ، نرم‌افزار هلو، ICDL..."
                   value={formData.specializedSkills}
@@ -394,8 +414,9 @@ export function PersonnelFormModal({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">مهارت‌های دیگر</label>
+                <label htmlFor={`${fieldId}-other-skills`} className="block text-xs font-bold text-slate-700 mb-1">مهارت‌های دیگر</label>
                 <textarea
+                  id={`${fieldId}-other-skills`}
                   rows={2}
                   placeholder="زبان انگلیسی، فن بیان، رانندگی، مدیریت زمان..."
                   value={formData.otherSkills}
@@ -417,8 +438,9 @@ export function PersonnelFormModal({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">نام بانک</label>
+                <label htmlFor={`${fieldId}-bank-name`} className="block text-xs font-bold text-slate-700 mb-1">نام بانک</label>
                 <input
+                  id={`${fieldId}-bank-name`}
                   type="text"
                   placeholder="ملی، ملت، پاسارگاد..."
                   value={formData.bankName}
@@ -446,8 +468,9 @@ export function PersonnelFormModal({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">شماره حساب</label>
+                <label htmlFor={`${fieldId}-account-number`} className="block text-xs font-bold text-slate-700 mb-1">شماره حساب</label>
                 <input
+                  id={`${fieldId}-account-number`}
                   type="text"
                   value={formData.accountNumber}
                   onChange={(e) => setFormData((prev) => ({ ...prev, accountNumber: e.target.value }))}
@@ -474,8 +497,9 @@ export function PersonnelFormModal({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">نام کاربری نوبیتکس</label>
+                <label htmlFor={`${fieldId}-nobitex-username`} className="block text-xs font-bold text-slate-700 mb-1">نام کاربری نوبیتکس</label>
                 <input
+                  id={`${fieldId}-nobitex-username`}
                   type="text"
                   name="personnel_nobitex_username_field"
                   autoComplete="off"
@@ -496,8 +520,9 @@ export function PersonnelFormModal({
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">توضیحات تکمیلی و یادداشت‌ها</label>
+            <label htmlFor={`${fieldId}-notes`} className="block text-xs font-bold text-slate-700 mb-1">توضیحات تکمیلی و یادداشت‌ها</label>
             <textarea
+              id={`${fieldId}-notes`}
               rows={2}
               value={formData.notes}
               onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}

@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import {
   ShieldCheck, X, Printer, CheckCircle2, XCircle, MessageSquare, Send
 } from 'lucide-react';
@@ -54,6 +55,7 @@ export function TaskExecuteModal({
   rejectTransitionId = null,
   onRejectTransitionChange
 }: TaskExecuteModalProps) {
+  const fieldId = useId();
   // v10.0.18 (D-11): بی اتصال تصمیم فرستاده نمی‌شود؛ پس از خطای شبکه هم خودکار دوباره فرستاده نمی‌شد (TD-670)
   const online = useOnlineStatus();
   const needsRejectChoice = taskAction === 'reject' && rejectOptions.length > 1;
@@ -191,12 +193,13 @@ export function TaskExecuteModal({
           )}
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1">
+            <label htmlFor={`${fieldId}-comment`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1">
               <MessageSquare className="w-3.5 h-3.5 text-indigo-500" />
               {/* v10.0.148 (TD-1179): رد بی دلیل ثبت نمی‌شود؛ برچسب دیگر «اختیاری» نمی‌گوید */}
               {taskAction === 'reject' ? 'دلیل رد (الزامی):' : 'دستور / توضیحات مدیر (اختیاری):'}
             </label>
             <textarea
+              id={`${fieldId}-comment`}
               value={comment}
               onChange={(e) => onCommentChange(e.target.value)}
               placeholder={isRequisition ? "دستور خرید یا تامین‌کننده مدنظر و دلایل تایید/رد..." : "توضیحات تایید کالا، بررسی موجودی، یا دلیل رد را در اینجا درج کنید..."}

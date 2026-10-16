@@ -173,7 +173,7 @@ test('run a received cheque to cleared and post each step', async ({ page }) => 
   await page.locator('.rmdp-day-picker .rmdp-day.rmdp-today').click();
   await expect(dueInput, 'due date picked').toHaveValue(toPersianDigits(jalali));
   await page.getByPlaceholder(TEXT.bankName).click();
-  await page.getByRole('button', { name: TEXT.customerPicker }).click();
+  await page.locator('button', { hasText: TEXT.customerPicker }).click();
   await page.getByPlaceholder(TEXT.pickerSearch).fill(setup.customerName);
   await page.locator('li', { hasText: setup.customerName }).first().click();
   await page.getByPlaceholder(TEXT.amount).fill(String(CHEQUE_AMOUNT));

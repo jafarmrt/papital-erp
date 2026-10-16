@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { Sparkles } from 'lucide-react';
 import { SearchableSelect } from '../SearchableSelect';
 import { JalaliDateInput } from '../common/JalaliDateInput';
@@ -47,6 +47,7 @@ export const ProjectGeneralForm: React.FC<ProjectGeneralFormProps> = ({
   attachments = [],
   setAttachments
 }) => {
+  const fieldId = useId();
   return (
     <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200/80 space-y-4">
       <h3 className="text-xs font-bold text-slate-800 flex items-center gap-2 border-b border-slate-200 pb-2">
@@ -57,10 +58,11 @@ export const ProjectGeneralForm: React.FC<ProjectGeneralFormProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Project Code */}
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+          <label htmlFor={`${fieldId}-project-code`} className="block text-xs font-bold text-slate-700 mb-1.5">
             کد پروژه (اختیاری)
           </label>
           <input
+            id={`${fieldId}-project-code`}
             type="text"
             value={projectCode}
             onChange={(e) => setProjectCode(e.target.value)}
@@ -72,10 +74,11 @@ export const ProjectGeneralForm: React.FC<ProjectGeneralFormProps> = ({
 
         {/* Project Title */}
         <div className="md:col-span-2">
-          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+          <label htmlFor={`${fieldId}-title`} className="block text-xs font-bold text-slate-700 mb-1.5">
             عنوان پروژه / سفارش <span className="text-red-500">*</span>
           </label>
           <input
+            id={`${fieldId}-title`}
             type="text"
             required
             value={title}
@@ -87,10 +90,11 @@ export const ProjectGeneralForm: React.FC<ProjectGeneralFormProps> = ({
 
         {/* Customer Select */}
         <div className="md:col-span-3">
-          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+          <label htmlFor={`${fieldId}-selected-customer-id`} className="block text-xs font-bold text-slate-700 mb-1.5">
             مشتری / سفارش‌دهنده
           </label>
           <SearchableSelect
+            id={`${fieldId}-selected-customer-id`}
             options={activeCustomersList.map((c) => ({
               value: String(c.id),
               label: `${c.name}${c.code ? ` (کد: ${c.code})` : ''}${c.phone ? ` - ${c.phone}` : ''}`,
@@ -110,11 +114,12 @@ export const ProjectGeneralForm: React.FC<ProjectGeneralFormProps> = ({
 
         {/* Start Date */}
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+          <label htmlFor={`${fieldId}-start-date`} className="block text-xs font-bold text-slate-700 mb-1.5">
             تاریخ شروع <span className="text-red-500">*</span>
           </label>
           <div className="relative">
             <JalaliDateInput
+              id={`${fieldId}-start-date`}
               value={startDate}
               onChange={setStartDate}
               className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
@@ -125,11 +130,12 @@ export const ProjectGeneralForm: React.FC<ProjectGeneralFormProps> = ({
 
         {/* End Date */}
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+          <label htmlFor={`${fieldId}-end-date`} className="block text-xs font-bold text-slate-700 mb-1.5">
             تاریخ تحویل / پایان <span className="text-red-500">*</span>
           </label>
           <div className="relative">
             <JalaliDateInput
+              id={`${fieldId}-end-date`}
               value={endDate}
               onChange={setEndDate}
               className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
@@ -140,10 +146,11 @@ export const ProjectGeneralForm: React.FC<ProjectGeneralFormProps> = ({
 
         {/* Priority */}
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+          <label htmlFor={`${fieldId}-priority`} className="block text-xs font-bold text-slate-700 mb-1.5">
             اولویت پروژه
           </label>
           <select
+            id={`${fieldId}-priority`}
             value={priority}
             onChange={(e) => setPriority(e.target.value as any)}
             className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
@@ -157,10 +164,11 @@ export const ProjectGeneralForm: React.FC<ProjectGeneralFormProps> = ({
 
         {/* Workshop Description */}
         <div className="md:col-span-3">
-          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+          <label htmlFor={`${fieldId}-description`} className="block text-xs font-bold text-slate-700 mb-1.5">
             توضیحات و دستورالعمل کارگاهی
           </label>
           <textarea
+            id={`${fieldId}-description`}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={2}

@@ -25,6 +25,8 @@ interface SearchableSelectProps {
   maxResults?: number;
   /** v9.0.309 (TD-680): برچسب مقدار ازپیش‌انتخاب‌شده‌ای که هنوز در نتایج `fetchUrl` نیامده است (مثلاً نام خریدار) */
   valueLabel?: string;
+  /** Id of the opening button, so a `<label htmlFor>` names it; the chosen value is its description (v10.1.31, TD-1278). */
+  id?: string;
 }
 
 /**
@@ -49,7 +51,8 @@ export function SearchableSelect({
   fetchUrl,
   mapResultToOption,
   maxResults = 50,
-  valueLabel
+  valueLabel,
+  id
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -199,6 +202,8 @@ export function SearchableSelect({
       <button
         ref={buttonRef}
         type="button"
+        id={id}
+        aria-describedby={id ? `${id}-value` : undefined}
         disabled={disabled}
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
@@ -207,7 +212,7 @@ export function SearchableSelect({
           className
         )}
       >
-        <span className="truncate text-right font-medium">{currentLabel}</span>
+        <span id={id ? `${id}-value` : undefined} className="truncate text-right font-medium">{currentLabel}</span>
         <ChevronDown size={15} className="text-slate-400 shrink-0 mr-1.5" />
       </button>
 

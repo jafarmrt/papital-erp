@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useId } from 'react';
 import { ShieldCheck, UploadCloud, FileSpreadsheet, CheckCircle2, AlertTriangle, Search, X, ArrowDownLeft, ArrowUpRight, RefreshCw, Check, Info } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { BankAccount } from '../../../types';
@@ -29,6 +29,7 @@ export function BankReconciliationModal({
   initialBankAccountId,
   onReconcileTransactions,
 }: BankReconciliationModalProps) {
+  const fieldId = useId();
   const [selectedAccountId, setSelectedAccountId] = useState<string>(
     initialBankAccountId ? String(initialBankAccountId) : (bankAccounts[0]?.id ? String(bankAccounts[0].id) : '')
   );
@@ -267,10 +268,11 @@ export function BankReconciliationModal({
           {/* بخش انتخاب حساب بانکی */}
           <div className="bg-slate-50 dark:bg-slate-850/50 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="w-full sm:w-80">
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+              <label htmlFor={`${fieldId}-selected-account-id`} className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
                 حساب بانکی مورد بررسی *
               </label>
               <select
+                id={`${fieldId}-selected-account-id`}
                 value={selectedAccountId}
                 onChange={e => {
                   setSelectedAccountId(e.target.value);

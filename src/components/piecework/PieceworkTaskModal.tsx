@@ -1,4 +1,4 @@
-import React, { FormEvent, useState, useEffect } from 'react';
+import React, { FormEvent, useState, useEffect, useId } from 'react';
 import { X, Award } from 'lucide-react';
 import { PieceworkTask } from '../../types';
 import { TaskFormData } from '../../hooks/usePiecework';
@@ -30,6 +30,7 @@ export function PieceworkTaskModal({
   isSaving = false,
   categories: propCategories = []
 }: PieceworkTaskModalProps) {
+  const fieldId = useId();
   // ورودی نرخ همیشه به ریال است (مبلغ ذخیره‌شده)
   const curLbl = formatCurrencyLabel('IRR');
   const [categories, setCategories] = useState<{ id: number | string; name: string }[]>([]);
@@ -88,8 +89,9 @@ export function PieceworkTaskModal({
 
         <form onSubmit={onSubmit} className="p-6 space-y-4 overflow-y-auto">
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">عنوان کاری *</label>
+            <label htmlFor={`${fieldId}-title`} className="block text-xs font-bold text-slate-700 mb-1">عنوان کاری *</label>
             <input
+              id={`${fieldId}-title`}
               type="text"
               required
               placeholder="مثلاً کاشی گردنبند بزرگ"
@@ -101,11 +103,12 @@ export function PieceworkTaskModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+              <label htmlFor={`${fieldId}-category`} className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
                 <span>دسته‌بندی کاری</span>
                 {loadingCategories && <span className="text-[10px] text-blue-500 font-normal">در حال دریافت...</span>}
               </label>
               <select
+                id={`${fieldId}-category`}
                 value={taskFormData.category}
                 onChange={(e) => setTaskFormData(prev => ({ ...prev, category: e.target.value }))}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
@@ -126,8 +129,9 @@ export function PieceworkTaskModal({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">واحد اندازه‌گیری *</label>
+              <label htmlFor={`${fieldId}-unit`} className="block text-xs font-bold text-slate-700 mb-1">واحد اندازه‌گیری *</label>
               <select
+                id={`${fieldId}-unit`}
                 value={taskFormData.unit || 'عدد'}
                 onChange={(e) => setTaskFormData(prev => ({ ...prev, unit: e.target.value }))}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 font-medium"
@@ -143,8 +147,9 @@ export function PieceworkTaskModal({
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">{`نرخ پایه پیش‌فرض (${curLbl})`}</label>
+            <label htmlFor={`${fieldId}-default-rate`} className="block text-xs font-bold text-slate-700 mb-1">{`نرخ پایه پیش‌فرض (${curLbl})`}</label>
             <FinancialAmountInput
+              id={`${fieldId}-default-rate`}
               value={taskFormData.defaultRate}
               onChange={(val) => setTaskFormData(prev => ({ ...prev, defaultRate: val }))}
               currency="IRR"

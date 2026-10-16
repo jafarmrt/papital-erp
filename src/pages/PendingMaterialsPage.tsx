@@ -1,4 +1,4 @@
-import React, { useDeferredValue, useEffect, useState } from 'react';
+import React, { useDeferredValue, useEffect, useState, useId } from 'react';
 import { PENDING_MATERIAL_PAGE_SIZE, type PendingMaterialStatusFilter } from '../lib/pendingMaterials/pendingMaterialList';
 import { ProcurementPager } from '../components/procurement/ProcurementPager';
 import { confirmAction } from '../components/ConfirmDialogHost';
@@ -35,6 +35,7 @@ import { DialogLayer } from '../components/common/DialogLayer';
 
 
 export default function PendingMaterialsPage({ user }: { user: User }) {
+  const fieldId = useId();
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<PendingMaterialStatusFilter>('pending');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -541,8 +542,9 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
               {/* Form Fields Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 text-xs">دسته‌بندی کالا *</label>
+                  <label htmlFor={`${fieldId}-category`} className="font-bold text-slate-700 text-xs">دسته‌بندی کالا *</label>
                   <select
+                    id={`${fieldId}-category`}
                     required
                     value={approveForm.category}
                     onChange={(e) => setApproveForm({ ...approveForm, category: e.target.value })}
@@ -555,8 +557,9 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 text-xs">کد رسمی کالا در انبار *</label>
+                  <label htmlFor={`${fieldId}-code`} className="font-bold text-slate-700 text-xs">کد رسمی کالا در انبار *</label>
                   <input
+                    id={`${fieldId}-code`}
                     type="text"
                     required
                     value={approveForm.code}
@@ -649,8 +652,9 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
               </div>
 
               <div className="space-y-1">
-                <label className="font-bold text-slate-700 text-xs">دلیل رد درخواست (اختیاری)</label>
+                <label htmlFor={`${fieldId}-rejection-reason`} className="font-bold text-slate-700 text-xs">دلیل رد درخواست (اختیاری)</label>
                 <input
+                  id={`${fieldId}-rejection-reason`}
                   type="text"
                   value={rejectionReason}
                   onChange={(e) => setRejectionReason(e.target.value)}

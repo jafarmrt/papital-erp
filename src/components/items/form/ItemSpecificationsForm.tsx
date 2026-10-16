@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { ItemFormData, PREDEFINED_COLORS, PREDEFINED_MATERIALS } from './types';
 import { DecimalInput } from '../../common/DecimalInput';
 
@@ -17,6 +17,7 @@ export const ItemSpecificationsForm: React.FC<ItemSpecificationsFormProps> = ({
   formatMultiValue,
   onImageChange
 }) => {
+  const fieldId = useId();
   return (
     <div className="space-y-4">
       <div className="p-3.5 border border-slate-200 rounded-xl bg-slate-50/70 space-y-3">
@@ -168,8 +169,9 @@ export const ItemSpecificationsForm: React.FC<ItemSpecificationsFormProps> = ({
 
           {/* Weight */}
           <div>
-            <label className="block text-xs font-medium mb-1 text-slate-600">وزن (گرم)</label>
+            <label htmlFor={`${fieldId}-weight`} className="block text-xs font-medium mb-1 text-slate-600">وزن (گرم)</label>
             <DecimalInput
+              id={`${fieldId}-weight`}
               min="0"
               step="any"
               value={form.weight || ''}
@@ -182,8 +184,9 @@ export const ItemSpecificationsForm: React.FC<ItemSpecificationsFormProps> = ({
 
           {/* Size */}
           <div>
-            <label className="block text-xs font-medium mb-1 text-slate-600">اندازه (میلی‌متر)</label>
+            <label htmlFor={`${fieldId}-size`} className="block text-xs font-medium mb-1 text-slate-600">اندازه (میلی‌متر)</label>
             <input
+              id={`${fieldId}-size`}
               type="text"
               value={form.size || ''}
               onChange={e => setForm({ ...form, size: e.target.value })}

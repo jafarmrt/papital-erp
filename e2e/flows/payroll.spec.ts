@@ -119,7 +119,7 @@ test('issue a payslip from work logs, approve it and pay it from a bank account'
   await page.goto('/piecework');
   await page.getByRole('button', { name: TEXT.payrollsTab }).click();
   await page.getByRole('button', { name: TEXT.newPayroll }).click();
-  await page.getByRole('button', { name: TEXT.pickPersonnel }).click();
+  await page.locator('button', { hasText: TEXT.pickPersonnel }).click();
   await page.keyboard.type(setup.personnelName);
   await page.locator('li', { hasText: setup.personnelName }).first().click();
   // The Jalali pickers open on the current month: day 1, then today.
