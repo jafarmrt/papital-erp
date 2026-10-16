@@ -14,7 +14,8 @@ import { workflowTaskRecipients, type WorkflowTaskRow } from './workflowTaskReci
  * them in their approval inbox gets one notice for that step (bell and linked messenger, in the step's own transaction):
  * the assigned and candidate users, else the members of the task's role holding its required permission, and their
  * active deputies. The user who moved the record into the step is left out, a step closed to the initiator does not
- * notify the initiator, and a step only the initiator runs notifies only the initiator and their deputies.
+ * notify the initiator, and a step only the initiator runs notifies only the initiator and their deputies, and only those
+ * of them who are already its recipients (live, with the step's role or permission).
  */
 export async function notifyWorkflowTasksArrived(
   tx: DbTransaction,
@@ -46,7 +47,9 @@ export async function notifyWorkflowTasksArrived(
       const allowed = new Set([starter, ...deputies
         .filter((d) => WorkflowDelegationService.delegationCovers(d.scope, instance.workflowCode ?? ''))
         .map((d) => d.toUserId)]);
-      users = [...allowed];
+      // keep only the starter and their deputies already resolved above: live users holding the step's role or
+      // permission, so a deleted starter, or one without the step's permission, is not notified (part 3 review)
+      users = users.filter((id) => allowed.has(id));
     } else if (transition && Number(transition.isInitiatorExcluded) === 1 && starter) {
       users = users.filter((id) => id !== starter);
     }

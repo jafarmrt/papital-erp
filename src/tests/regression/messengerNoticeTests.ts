@@ -1,3 +1,7 @@
+import { and, eq } from 'drizzle-orm';
+import { orm } from '../../db/drizzle.js';
+import { workflowTasks } from '../../db/schema.js';
+import { notifyWorkflowTasksArrived } from '../../services/workflow/workflowTaskNotice.js';
 import { addLog, newTask, newWorker } from '../invariants/payrollScenarios.js';
 import { createHarness, draftSalesDocument } from '../security/workflowTestHarness.js';
 import { TestCaseResult } from '../types.js';
@@ -124,6 +128,52 @@ export async function runMessengerNoticeTests(shouldRun: ShouldRun): Promise<Tes
         if (users.length > 0) {
           await h.q(`DELETE FROM integration_delivery_jobs WHERE kind = 'messenger' AND target_id IN (SELECT id FROM user_messenger_links WHERE user_id = ANY($1::int[]))`, [users]);
           await h.q('DELETE FROM user_messenger_links WHERE user_id = ANY($1::int[])', [users]);
+          await h.q('DELETE FROM notifications WHERE user_id = ANY($1::int[])', [users]);
+        }
+        await h.cleanup();
+      }
+    });
+  }
+
+  const initiatorId = 'reg_messenger_initiator_only_task_notice';
+  if (shouldRun(initiatorId, 'messenger', 'workflow', 'notice', 'initiator')) {
+    await runCase(results, initiatorId, 'v10.1.43: a step only the initiator runs notifies the starter only while the starter is a live user holding the step permission; a deleted starter, or one whose role lost the permission, gets no task notice', async () => {
+      const h = await createHarness();
+      const users: number[] = [];
+      try {
+        const problems: string[] = [];
+        const seller = await h.sessionWith(['documents.view', 'documents.create', 'documents.edit', 'workflow.view', 'workflow.execute']);
+        const mover = await h.sessionWith(['documents.view', 'workflow.view', 'workflow.execute']);
+        users.push(seller.userId, mover.userId);
+        const proforma = await draftSalesDocument(h, 'proforma');
+        const started = await h.start({ workflowCode: 'DOC_APPROVAL_WORKFLOW', entityType: 'document', entityId: proforma }, seller);
+        const instanceId = Number(started.body?.data?.id);
+        if (!(instanceId > 0)) throw new Error(`start: ${started.status} ${JSON.stringify(started.body).slice(0, 160)}`);
+        const tasks = await orm.select().from(workflowTasks)
+          .where(and(eq(workflowTasks.instanceId, instanceId), eq(workflowTasks.status, 'pending')));
+        if (tasks.length === 0) throw new Error('the started proforma has no pending task at its first step');
+        const notify = () => orm.transaction(tx => notifyWorkflowTasksArrived(tx, instanceId, tasks, { actorUserId: mover.userId }));
+        const clearBell = () => h.q('DELETE FROM notifications WHERE user_id = $1 AND title = $2', [seller.userId, TASK_TITLE]);
+
+        await notify();
+        if ((await bellOf(seller.userId, TASK_TITLE)).length !== 1) problems.push('the live starter holding documents.create was not notified of the initiator-only step');
+        await clearBell();
+
+        await h.q('UPDATE users SET is_deleted = 1 WHERE id = $1', [seller.userId]);
+        await notify();
+        if ((await bellOf(seller.userId, TASK_TITLE)).length !== 0) problems.push('a deleted starter was notified of the initiator-only step');
+        await h.q('UPDATE users SET is_deleted = 0 WHERE id = $1', [seller.userId]);
+        await clearBell();
+
+        await h.q(`UPDATE roles SET permissions = permissions - 'documents.create' WHERE code = $1`, [seller.role]);
+        await notify();
+        if ((await bellOf(seller.userId, TASK_TITLE)).length !== 0) problems.push('a starter whose role lost documents.create was notified of the initiator-only step');
+
+        assertNoProblems(problems);
+        return 'The live starter with the permission got one notice; once deleted, and once without documents.create, the starter got none.';
+      } finally {
+        if (users.length > 0) {
+          await h.q('UPDATE users SET is_deleted = 0 WHERE id = ANY($1::int[])', [users]);
           await h.q('DELETE FROM notifications WHERE user_id = ANY($1::int[])', [users]);
         }
         await h.cleanup();
