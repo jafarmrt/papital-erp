@@ -8,7 +8,7 @@ import sharp from 'sharp';
 import { ValidationError } from '../../errors/customErrors.js';
 import {
   MEDIA_FORMAT_TEXT, MEDIA_LIGHT_LONG_SIDE, MEDIA_MAX_BYTES, MEDIA_THUMB_LONG_SIDE, MEDIA_TOO_LARGE_TEXT, MEDIA_TYPES,
-  type MediaKind, type MediaVariant,
+  type MediaKind,
 } from '../../lib/media/mediaRules.js';
 import { getMediaRoot } from '../../lib/media/mediaRoot.js';
 
@@ -21,22 +21,9 @@ import { getMediaRoot } from '../../lib/media/mediaRoot.js';
 
 export { getMediaRoot };
 
-const SHA256 = /^[0-9a-f]{64}$/;
-const VARIANT_DIRS: Readonly<Record<MediaVariant, string>> = { original: 'originals', light: 'light', thumb: 'thumbs' };
+import { extensionOfType, mediaFilePath } from '../../lib/media/mediaPaths.js';
 
-/** Absolute path of one variant of a stored file; the extension of light and thumbnail is always webp */
-export function mediaFilePath(sha256: string, variant: MediaVariant, originalExt: string): string {
-  if (!SHA256.test(sha256)) throw new Error(`Invalid media file key ${sha256}`);
-  const ext = variant === 'original' ? originalExt : 'webp';
-  if (!/^[a-z0-9]{2,5}$/.test(ext)) throw new Error(`Invalid media file extension ${ext}`);
-  return path.join(getMediaRoot(), VARIANT_DIRS[variant], sha256.slice(0, 2), `${sha256}.${ext}`);
-}
-
-export function extensionOfType(mimeType: string): string {
-  const known = MEDIA_TYPES[mimeType];
-  if (!known) throw new Error(`Unknown media type ${mimeType}`);
-  return known.ext;
-}
+export { mediaFilePath, extensionOfType };
 
 export interface ReceivedFile {
   tempPath: string;
