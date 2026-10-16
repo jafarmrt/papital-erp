@@ -388,7 +388,7 @@ export function useSettings() {
     try {
       const res = await fetchJson<{ success?: boolean; isSetup?: boolean; message?: string }>('/admin/clear-data', {
         method: 'POST',
-        body: JSON.stringify({ mode: 'all' })
+        body: JSON.stringify({})
       });
       toast.success(res?.message || 'همه اطلاعات و کاربران پاک شدند. در حال رفتن به صفحه راه‌اندازی اولیه…');
       setShowClearModal(false);

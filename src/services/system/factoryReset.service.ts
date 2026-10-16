@@ -1,23 +1,9 @@
 import fs from 'fs';
-import type { PgTable } from 'drizzle-orm/pg-core';
 import { orm } from '../../db/drizzle.js';
-import {
-  transactions, documentItems, documents, items,
-  warehouses, itemPrices, customers, activityLogs, productionProjects, categories,
-  projectStages, projectProductStageProgress, dailyWorkLogs, transfers, notifications, crmLeads, crmActivities, crmLeadStageHistory, customerTagLinks, customerTags,
-  stockReceiptConfirmations, workshopTaskReports, projectManagers,
-  users, personnel, taskCategories, pieceworkTasks, pieceworkPersonnelRates, pieceworkTaskRateHistory,
-  pieceworkLogs, pieceworkPayrolls, pendingMaterials, accounts, journalVouchers,
-  journalVoucherItems, itemOpeningVoucherItems, bankAccounts, cheques, treasuryTransactions, pettyCashExpenseLines, accountingSettings,
-  outboxEvents, deadLetterEvents, workflowInstances, workflowTasks,
-  workflowHistoryLogs, workflowPendingApprovals, workflowDelegations,
-  workflowDefinitionVersions, workflowTransitions, workflowStates, workflowDefinitions,
-  eventActionLogs, eventActionRules, webhookDeliveries, webhookSubscriptions,
-  projectBomAllocations, formDrafts, idempotencyKeys, woocommerceOrderLogs,
-  documentRefCounters, itemCodeCounters, purchaseRequisitions, appSettings,
-  fiscalPeriods, fileAttachments, legacyDateRepairs, refFiscalYearCorrections, workflowTaskReopenLog,
-  projectReservationReleases, inventoryReconciliationAnomalies, itemWarehouseStocks
-} from '../../db/schema.js';
+import { and, eq, ne } from 'drizzle-orm';
+import { fileAttachments, mediaAssets, mediaSections } from '../../db/schema.js';
+import { FACTORY_RESET_WIPE_ORDER, MEDIA_SYSTEM_SECTION_KIND } from './factoryResetTables.js';
+import { extensionOfType, mediaFilePath } from '../../lib/media/mediaPaths.js';
 import { logger } from '../../middleware/logger.js';
 import { invalidateUserAuthCache } from '../../middleware/auth.js';
 import { ConflictError, ForbiddenError } from '../../errors/customErrors.js';
@@ -52,9 +38,23 @@ export interface FactoryResetReport {
   /** تعداد ردیف‌های حذف‌شده هر جدول (به ترتیب حذف) */
   deletedRows: Record<string, number>;
   attachmentFiles: { total: number; removed: number; missing: number; failed: number };
+  /** v10.1.45 (OBS-R1-12): media library files (each with its light version and thumbnail) */
+  mediaFiles: { total: number; removed: number; missing: number; failed: number };
+}
+
+interface RemovedMediaFile {
+  sha256: string;
+  mimeType: string;
 }
 
 export const FACTORY_RESET_AUDIT_ENTITY = 'سیستم:بازنشانی کامل';
+
+/** v10.1.45 (OBS-R1-11): the error answered after the wipe committed but the base data seed failed */
+export const FACTORY_RESET_SEED_INCOMPLETE = 'FACTORY_RESET_SEED_INCOMPLETE';
+
+export function isFactoryResetCommittedError(err: unknown): boolean {
+  return err instanceof ConflictError && err.code === FACTORY_RESET_SEED_INCOMPLETE;
+}
 
 interface AttachmentFileRemoval {
   removed: number;
@@ -98,10 +98,11 @@ export class FactoryResetService {
 
     // قفل seed پیش از پاک‌سازی گرفته و تا پایان seed دوباره نگه داشته می‌شود؛ اگر seed دیگری در جریان باشد هیچ چیز پاک نمی‌شود
     const outcome = await withAdvisoryLock(ADVISORY_LOCK_KEYS.SEED, async (): Promise<FactoryResetReport> => {
-      const { deletedRows, attachmentPaths } = await this.wipeAllData(actor);
+      const { deletedRows, attachmentPaths, mediaFiles } = await this.wipeAllData(actor);
 
       // فایل‌ها فقط پس از commit: اگر تراکنش برگردد ردیف‌ها و فایل‌ها هر دو می‌مانند
       const files = await this.removeAttachmentFiles(attachmentPaths);
+      const media = await this.removeMediaFiles(mediaFiles);
       this.invalidateCaches();
 
       // Re-seed the base data (categories, settings, chart of accounts, task categories, piecework tasks; roles are kept,
@@ -111,12 +112,12 @@ export class FactoryResetService {
       const seed = await runSeed();
       if (!seed.success) {
         logger.error(`Factory reset: ${seed.message}`);
-        throw new ConflictError('داده‌ها پاک شد، ولی بخشی از داده پایه ساخته نشد. سامانه را دوباره راه‌اندازی کنید تا دوباره ساخته شود.', { failedSections: seed.failedSections }, 'FACTORY_RESET_SEED_INCOMPLETE');
+        throw new ConflictError('داده‌ها پاک شد، ولی بخشی از داده پایه ساخته نشد. سامانه را دوباره راه‌اندازی کنید تا دوباره ساخته شود.', { failedSections: seed.failedSections }, FACTORY_RESET_SEED_INCOMPLETE);
       }
       await seedDefaultEngines();
       this.invalidateCaches();
 
-      return { deletedRows, attachmentFiles: { total: attachmentPaths.length, ...files } };
+      return { deletedRows, attachmentFiles: { total: attachmentPaths.length, ...files }, mediaFiles: { total: mediaFiles.length, ...media } };
     });
 
     if (!outcome.acquired) {
@@ -137,118 +138,33 @@ export class FactoryResetService {
   }
 
   /** همه حذف‌ها در یک تراکنش و به ترتیب کلیدهای خارجی؛ مسیر فایل پیوست‌های حذف‌شده برای حذف پس از commit برمی‌گردد */
-  private static async wipeAllData(actor: FactoryResetActor): Promise<{ deletedRows: Record<string, number>; attachmentPaths: string[] }> {
+  private static async wipeAllData(actor: FactoryResetActor): Promise<{ deletedRows: Record<string, number>; attachmentPaths: string[]; mediaFiles: RemovedMediaFile[] }> {
     return orm.transaction(async (tx) => {
       const deletedRows: Record<string, number> = {};
-      const wipe = async (name: string, table: PgTable): Promise<void> => {
-        const result = await tx.delete(table);
-        deletedRows[name] = Number(result.rowCount ?? 0);
-      };
+      let removedAttachments: Array<{ storagePath: string }> = [];
+      let removedMedia: Array<{ sha256: string; mimeType: string }> = [];
 
-      // 1. Logs, Webhooks, Outbox, DLQ, Drafts & Idempotency
-      await wipe('event_action_logs', eventActionLogs);
-      await wipe('webhook_deliveries', webhookDeliveries);
-      await wipe('webhook_subscriptions', webhookSubscriptions);
-      await wipe('event_action_rules', eventActionRules);
-      await wipe('dead_letter_events', deadLetterEvents);
-      await wipe('outbox_events', outboxEvents);
-      await wipe('woocommerce_order_logs', woocommerceOrderLogs);
-      await wipe('idempotency_keys', idempotencyKeys);
-      await wipe('form_drafts', formDrafts);
-      await wipe('activity_logs', activityLogs);
-      await wipe('notifications', notifications);
-
-      // 1.2. Attachment registry (files on disk are removed only after commit) & data-repair reports (no foreign keys)
-      const removedAttachments = await tx.delete(fileAttachments).returning({ storagePath: fileAttachments.storagePath });
-      deletedRows.file_attachments = removedAttachments.length;
-      await wipe('legacy_date_repairs', legacyDateRepairs);
-      await wipe('workflow_task_reopen_log', workflowTaskReopenLog);
-
-      // 3. Fiscal Periods, Treasury & Accounting (fiscal_periods.closing_voucher_id references journal_vouchers)
-      await wipe('fiscal_periods', fiscalPeriods);
-      await wipe('petty_cash_expense_lines', pettyCashExpenseLines);
-      await wipe('treasury_transactions', treasuryTransactions);
-      await wipe('cheques', cheques);
-      await wipe('item_opening_voucher_items', itemOpeningVoucherItems);
-      await wipe('journal_voucher_items', journalVoucherItems);
-      await wipe('journal_vouchers', journalVouchers);
-      await wipe('accounting_settings', accountingSettings);
-      await wipe('bank_accounts', bankAccounts);
-      await wipe('accounts', accounts);
-
-      // 4. Inventory Transactions & Documents (Must be deleted BEFORE productionProjects, items, customers and crmLeads:
-      //    documents.project_id references production_projects without cascade)
-      // v10.1.37 (N-01): the workshop cartable references documents, allocations, piecework logs and projects (migration 0119)
-      await wipe('stock_receipt_confirmations', stockReceiptConfirmations);
-      await wipe('workshop_task_reports', workshopTaskReports);
-      await wipe('project_managers', projectManagers);
-      await wipe('project_reservation_releases', projectReservationReleases);
-      await wipe('ref_fiscal_year_corrections', refFiscalYearCorrections);
-      await wipe('document_items', documentItems);
-      // v9.0.447 (TD-903): project_bom_allocations.source_transaction_id references transactions (migration 0092)
-      await wipe('project_bom_allocations', projectBomAllocations);
-      await wipe('transactions', transactions);
-      await wipe('documents', documents);
-      await wipe('document_ref_counters', documentRefCounters);
-      await wipe('item_code_counters', itemCodeCounters);
-
-      // 4.5. Purchase Requisitions (AFTER documents: documents.procurement_requisition_id references them, v9.0.347 / TD-691;
-      //      BEFORE workflowInstances, productionProjects and users)
-      await wipe('purchase_requisitions', purchaseRequisitions);
-
-      // 4.6. Workflow Tasks, Delegations, Instances, History & Definitions
-      await wipe('workflow_history_logs', workflowHistoryLogs);
-      await wipe('workflow_tasks', workflowTasks);
-      await wipe('workflow_pending_approvals', workflowPendingApprovals);
-      await wipe('workflow_instances', workflowInstances);
-      await wipe('workflow_delegations', workflowDelegations);
-      await wipe('workflow_definition_versions', workflowDefinitionVersions);
-      await wipe('workflow_transitions', workflowTransitions);
-      await wipe('workflow_states', workflowStates);
-      await wipe('workflow_definitions', workflowDefinitions);
-
-      // 5. Project Dependencies & Allocations (Must be deleted BEFORE items)
-      await wipe('piecework_logs', pieceworkLogs);
-      await wipe('daily_work_logs', dailyWorkLogs);
-      await wipe('project_product_stage_progress', projectProductStageProgress);
-      await wipe('project_stages', projectStages);
-      await wipe('production_projects', productionProjects);
-
-      // 6. CRM & Customer Relations (Must be deleted BEFORE personnel and customers)
-      await wipe('crm_activities', crmActivities);
-      // v10.1.18 (N-02 part 2): the stage history references crm_leads (migration 0113)
-      await wipe('crm_lead_stage_history', crmLeadStageHistory);
-      await wipe('crm_leads', crmLeads);
-      // v10.1.23 (N-02 part 3): customer tags reference customers and users (migration 0115)
-      await wipe('customer_tag_links', customerTagLinks);
-      await wipe('customer_tags', customerTags);
-
-      // 7. HR, Piecework & Payroll Records (Must be deleted AFTER CRM and projects)
-      await wipe('piecework_payrolls', pieceworkPayrolls);
-      await wipe('piecework_personnel_rates', pieceworkPersonnelRates);
-      await wipe('piecework_task_rate_history', pieceworkTaskRateHistory);
-      await wipe('piecework_tasks', pieceworkTasks);
-      await wipe('task_categories', taskCategories);
-      await wipe('personnel', personnel);
-
-      // 8. Materials, Transfers, Stock, Items & Customers (items_stocks_archive goes with items via ON DELETE CASCADE)
-      await wipe('pending_materials', pendingMaterials);
-      await wipe('transfers', transfers);
-      await wipe('inventory_reconciliation_anomalies', inventoryReconciliationAnomalies);
-      await wipe('item_warehouse_stocks', itemWarehouseStocks);
-      await wipe('item_prices', itemPrices);
-      await wipe('items', items);
-      await wipe('customers', customers);
-
-      // 9. Categories, Warehouses & Settings
-      await wipe('categories', categories);
-      await wipe('warehouses', warehouses);
-      await wipe('app_settings', appSettings);
-
-      // 10. Users (Wipe all user accounts to return system to initial setup state)
-      await wipe('users', users);
-
+      // v10.1.45 (OBS-R1-12): one ordered list (factoryResetTables.ts), checked against the schema by Vitest
+      for (const { name, table } of FACTORY_RESET_WIPE_ORDER) {
+        if (table === fileAttachments) {
+          removedAttachments = await tx.delete(fileAttachments).returning({ storagePath: fileAttachments.storagePath });
+          deletedRows[name] = removedAttachments.length;
+        } else if (table === mediaAssets) {
+          removedMedia = await tx.delete(mediaAssets).returning({ sha256: mediaAssets.sha256, mimeType: mediaAssets.mimeType });
+          deletedRows[name] = removedMedia.length;
+        } else if (table === mediaSections) {
+          // the system section «محصولات» is made only by migration 0096, so it stays (empty)
+          const result = await tx.delete(mediaSections).where(ne(mediaSections.kind, MEDIA_SYSTEM_SECTION_KIND));
+          await tx.update(mediaSections).set({ isDeleted: 0 })
+            .where(and(eq(mediaSections.kind, MEDIA_SYSTEM_SECTION_KIND), eq(mediaSections.isDeleted, 1)));
+          deletedRows[name] = Number(result.rowCount ?? 0);
+        } else {
+          const result = await tx.delete(table);
+          deletedRows[name] = Number(result.rowCount ?? 0);
+        }
+      }
       const attachmentPaths = Array.from(new Set(removedAttachments.map((row) => row.storagePath)));
+      const mediaFiles = Array.from(new Map(removedMedia.map((row) => [row.sha256, row])).values());
 
       // ممیزی در همان تراکنش و پس از پاک شدن activity_logs: بدون ردیف ممیزی هیچ پاک‌سازی‌ای commit نمی‌شود.
       // کاربر اجراکننده هم حذف شده است، پس فقط نام کاربری و IP ثبت می‌شود (نه user_id).
@@ -263,7 +179,7 @@ export class FactoryResetService {
         details: { deletedRows, attachmentFiles: attachmentPaths.length },
       });
 
-      return { deletedRows, attachmentPaths };
+      return { deletedRows, attachmentPaths, mediaFiles };
     });
   }
 
@@ -290,6 +206,40 @@ export class FactoryResetService {
           error: errorMessageOf(err)
         });
       }
+    }
+    return result;
+  }
+
+  /**
+   * v10.1.45 (OBS-R1-12): media library files of the wiped rows, removed only after commit. A file is named by its
+   * content and every row holding it was wiped, so its original, light version and thumbnail all go; a missing
+   * variant (a video has no light version) is counted as missing, a failure only logged.
+   */
+  private static async removeMediaFiles(files: RemovedMediaFile[]): Promise<AttachmentFileRemoval> {
+    const result: AttachmentFileRemoval = { removed: 0, missing: 0, failed: 0 };
+    for (const file of files) {
+      let ext: string;
+      try {
+        ext = extensionOfType(file.mimeType);
+      } catch {
+        result.failed += 1;
+        continue;
+      }
+      let removedAny = false;
+      let failed = false;
+      for (const variant of ['original', 'light', 'thumb'] as const) {
+        try {
+          await fs.promises.unlink(mediaFilePath(file.sha256, variant, ext));
+          removedAny = true;
+        } catch (err: unknown) {
+          if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') continue;
+          failed = true;
+          logger.error({ message: 'Factory reset: failed to remove media file after commit', sha256: file.sha256, variant, error: errorMessageOf(err) });
+        }
+      }
+      if (failed) result.failed += 1;
+      else if (removedAny) result.removed += 1;
+      else result.missing += 1;
     }
     return result;
   }

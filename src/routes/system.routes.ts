@@ -14,7 +14,7 @@ import { systemNowUtcIso } from '../lib/businessClock.js';
 import { SystemSettingsService } from '../services/settings/systemSettings.service.js';
 import { DataExportService, type DataExportOptions } from '../services/system/dataExport.service.js';
 import { ActivityLogQueryService } from '../services/system/activityLogQuery.service.js';
-import { FactoryResetService } from '../services/system/factoryReset.service.js';
+import { FactoryResetService, isFactoryResetCommittedError } from '../services/system/factoryReset.service.js';
 import { SystemHealthService } from '../services/system/systemHealth.service.js';
 import { SystemReconciliationService, requeueResultMessage, stuckResetResultMessage } from '../services/system/systemReconciliation.service.js';
 import { GlobalSearchService } from '../services/system/globalSearch.service.js';
@@ -32,10 +32,9 @@ const settingsSchema = z.object({
   })
 });
 
+// v10.1.45 (OBS-R1-11): the reset takes no options; an unknown key is 400 instead of being ignored
 const clearDataSchema = z.object({
-  body: z.object({
-    mode: z.string().optional(),
-  }).optional()
+  body: z.object({}).strict().optional()
 });
 
 // TD-245 (§23): ورودی‌های مسیرهای تاریخچه ممیزی و اقدام اصلاحی ممیزی یکپارچگی
@@ -236,6 +235,8 @@ router.post('/admin/clear-data', requireSystemAdmin, validate(clearDataSchema), 
     });
   } catch (err) {
     logger.error({ message: 'Error clearing system data', error: err });
+    // v10.1.45 (OBS-R1-11): the wipe committed (users included) even when the base data seed then failed
+    if (isFactoryResetCommittedError(err)) res.clearCookie(AUTH_COOKIE_NAME, getAuthCookieOptions(req));
     throw err;
   }
 }));
