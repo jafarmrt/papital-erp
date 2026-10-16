@@ -220,3 +220,19 @@ export const itemCodeHistory = pgTable('item_code_history', {
   idx_item_code_history_user: index('idx_item_code_history_user').on(table.userId).where(sql`${table.userId} IS NOT NULL`),
   idx_item_code_history_old_code: index('idx_item_code_history_old_code').on(table.oldCode),
 }));
+
+/** Transfer design codes («ترنسفر»), an inventory catalogue; moved here from crm.ts (OBS-R2-19) */
+export const transfers = pgTable('transfers', {
+  id: serial('id').primaryKey(),
+  code: text('code').notNull().unique(), // e.g. "003", "001"
+  title: text('title').default(''),
+  image: text('image').default(''),
+  thumbnail: text('thumbnail').default(''),
+  notes: text('notes').default(''),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
+  isDeleted: integer('is_deleted').default(0),
+}, (table) => ({
+  idx_transfer_code: index('idx_transfer_code').on(table.code),
+  idx_transfer_deleted: index('idx_transfer_deleted').on(table.isDeleted),
+}));

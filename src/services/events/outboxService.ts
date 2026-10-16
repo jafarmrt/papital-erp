@@ -21,6 +21,13 @@ export interface OutboxQueryFilters {
   offset?: number;
 }
 
+/** the pending outbox row of an event */
+const outboxRowOf = <T>(event: BaseDomainEvent<T>) => ({
+  eventId: event.eventId, eventType: event.eventType, aggregateType: event.aggregateType,
+  aggregateId: String(event.aggregateId), status: 'pending', payload: event.payload || {}, metadata: event.metadata || {},
+  retryCount: 0, nextRetryAt: null, lastError: '', occurredAt: event.occurredAt || new Date().toISOString(),
+});
+
 export class OutboxService {
   private static isWorkerRunning = false;
   private static workerIntervalId: NodeJS.Timeout | null = null;
@@ -36,6 +43,16 @@ export class OutboxService {
   }
 
   /**
+   * OBS-R2-17: records an event whose id is derived from another event, once: a second record of the same id (a
+   * retried handler) changes nothing. Returns whether a row was written.
+   */
+  static async recordEventOnce<T = unknown>(tx: DbExecutor, event: BaseDomainEvent<T>): Promise<boolean> {
+    const inserted = await tx.insert(outboxEvents).values(outboxRowOf(event))
+      .onConflictDoNothing({ target: outboxEvents.eventId }).returning({ id: outboxEvents.id });
+    return inserted.length > 0;
+  }
+
+  /**
    * Saves a domain event inside an existing Drizzle transaction.
    * This guarantees transactional atomicity between business mutations and outbox persistence.
    */
@@ -46,19 +63,7 @@ export class OutboxService {
     try {
       const dbExecutor = tx || orm;
 
-      await dbExecutor.insert(outboxEvents).values({
-        eventId: event.eventId,
-        eventType: event.eventType,
-        aggregateType: event.aggregateType,
-        aggregateId: String(event.aggregateId),
-        status: 'pending',
-        payload: event.payload || {},
-        metadata: event.metadata || {},
-        retryCount: 0,
-        nextRetryAt: null,
-        lastError: '',
-        occurredAt: event.occurredAt || new Date().toISOString()
-      });
+      await dbExecutor.insert(outboxEvents).values(outboxRowOf(event));
 
       logger.info(`[Transactional Outbox] Enqueued event ${event.eventType} for ${event.aggregateType}#${event.aggregateId} [EventID: ${event.eventId}]`);
     } catch (err: unknown) {

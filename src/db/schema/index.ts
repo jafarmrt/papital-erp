@@ -15,3 +15,6 @@ export * from './attachments';
 export * from './media';
 export * from './messenger';
 export * from './workshop';
+export * from './notifications';
+export * from './system';
+export * from './woocommerce';
