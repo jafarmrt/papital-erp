@@ -47,11 +47,45 @@ export async function runClosingReadAccessTests(shouldRun: ShouldRun): Promise<T
       if (logo.status !== 200) wrong.push(`the legacy logo file without a session answered ${logo.status}`);
       const nested = await request(app).get(`/uploads/items/logo-${stamp}.png`);
       if (nested.status !== 401) wrong.push(`a logo-named image in a sub-folder without a session answered ${nested.status}`);
+      // an item image reached through a public folder, an encoded separator or the site root static handler
+      const item = `items/${stamp}.jpg`;
+      const itemFile = path.join(dir, 'items', `${stamp}.jpg`);
+      const branding = path.join(dir, 'branding', `${stamp}.png`);
+      const madeDirs = ['items', 'branding'].filter(d => !fs.existsSync(path.join(dir, d)));
+      try {
+        for (const f of [itemFile, branding]) {
+          fs.mkdirSync(path.dirname(f), { recursive: true });
+          fs.writeFileSync(f, Buffer.from([0xff, 0xd8, 0xff]));
+        }
+        const bypasses = [
+          `/uploads/public/..%2f${item.replace('/', '%2f')}`,
+          `/uploads/branding/..%2f${item.replace('/', '%2f')}`,
+          `/uploads/logo-a%2f..%2f${item.replace('/', '%2f')}`,
+          `//uploads/${item}`,
+          `/uploads%2f${item.replace('/', '%2f')}`,
+          `/%75ploads/${item}`,
+          `/uploads/public/%2e%2e/${item}`,
+          `/uploads/public\\..\\${item}`,
+        ];
+        for (const url of bypasses) {
+          const res = await request(app).get(url);
+          if (res.status === 200) wrong.push(`${url} without a session answered 200`);
+        }
+        const signedItem = await request(app).get(`/uploads/${item}`).set('Cookie', admin.cookie);
+        if (signedItem.status !== 200) wrong.push(`the item image with a session answered ${signedItem.status}`);
+        const publicFolder = await request(app).get(`/uploads/branding/${stamp}.png`);
+        if (publicFolder.status !== 200) wrong.push(`a public folder image without a session answered ${publicFolder.status}`);
+        const favicon = await request(app).get('/favicon.svg');
+        if (favicon.status !== 200) wrong.push(`the site root asset answered ${favicon.status}`);
+      } finally {
+        for (const f of [itemFile, branding]) fs.rmSync(f, { force: true });
+        for (const d of madeDirs) fs.rmSync(path.join(dir, d), { recursive: true, force: true });
+      }
       if (wrong.length > 0) throw new Error(wrong.join('; '));
       results.push(makeTestCase({
         id: imagesId, name: 'OBS-R2-60: an uploaded image needs a session; only the public folders and a legacy logo file are open',
         layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-        details: 'item, thumbnail and profile images 401 without a session and 200 with one; logo-*.png at the root 200',
+        details: 'item, thumbnail and profile images 401 without a session and 200 with one; logo-*.png at the root 200; encoded, traversal and root-static paths to an item image refused',
       }));
     } catch (err) {
       results.push(makeTestCase({
