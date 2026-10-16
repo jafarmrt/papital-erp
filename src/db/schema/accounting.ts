@@ -318,6 +318,24 @@ export const pettyCashExpenseLines = pgTable('petty_cash_expense_lines', {
   idx_petty_cash_expense_lines_account: index('idx_petty_cash_expense_lines_account').on(table.accountId),
 }));
 
+/**
+ * v10.1.36 (TD-1243، تصمیم ت۳۳ الف): ردیف هر نفر در پرداخت یکجای بیمه یا مالیات حقوق یک ماه از خزانه. یک ردیف خزانه
+ * (همان یک واریز بانکی) چند ردیف دارد؛ ردیف تا وقتی زنده است که ردیف خزانه‌اش «completed» و معکوس نشده باشد.
+ */
+export const statutoryRemittanceLines = pgTable('statutory_remittance_lines', {
+  id: serial('id').primaryKey(),
+  treasuryTransactionId: integer('treasury_transaction_id').notNull().references(() => treasuryTransactions.id),
+  kind: text('kind').notNull(), // 'insurance' | 'tax'
+  jalaliYear: integer('jalali_year').notNull(),
+  jalaliMonth: integer('jalali_month').notNull(),
+  personnelId: integer('personnel_id').notNull().references(baseRelations.personnelId),
+  amount: moneyNumeric('amount').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+}, (table) => ({
+  idx_statutory_remittance_lines_treasury_transaction_id: index('idx_statutory_remittance_lines_treasury_transaction_id').on(table.treasuryTransactionId),
+  idx_statutory_remittance_lines_personnel_id: index('idx_statutory_remittance_lines_personnel_id').on(table.personnelId),
+}));
+
 export const accountingSettings = pgTable('accounting_settings', {
   id: serial('id').primaryKey(),
   key: text('key').notNull().unique(),

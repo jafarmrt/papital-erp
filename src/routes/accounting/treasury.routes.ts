@@ -14,6 +14,8 @@ import { listTreasuryRelinkOptions } from '../../services/accounting/treasury/tr
 import { choosableContraAccounts } from '../../services/accounting/treasury/partyContraAccount.js';
 import { listReconcilableCheques } from '../../services/accounting/treasury/bankReconciliation.js';
 import { createPettyCashExpense, listPettyCashExpenseLines, pettyCashExpenseAccounts } from '../../services/accounting/treasury/pettyCashExpense.service.js';
+import { createStatutoryRemittance, statutoryRemittanceOptions } from '../../services/accounting/treasury/statutoryRemittance.js';
+import { STATUTORY_REMITTANCE_PERMISSION } from '../../lib/treasury/statutoryRemittance.js';
 import { validate, paramsIdSchema } from '../../middleware/validate.js';
 import { idempotency } from '../../middleware/idempotency.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
@@ -36,6 +38,7 @@ import {
   nextBankCodeQuerySchema,
 } from './accounting.schemas.js';
 import { pettyCashExpenseSchema, pettyCashLinesSchema } from './pettyCash.schemas.js';
+import { statutoryRemittanceOptionsSchema, statutoryRemittanceSchema } from './statutoryRemittance.schemas.js';
 
 const router = Router();
 
@@ -193,6 +196,27 @@ router.post('/accounting/treasury/petty-cash/:id/expenses', authorizePermission(
 
 router.get('/accounting/treasury/:id/petty-cash-lines', authorizePermission(...RECORD_READ_PERMISSIONS.treasury_transaction), validate(pettyCashLinesSchema), asyncHandler(async (req, res) => {
   res.json({ success: true, data: await listPettyCashExpenseLines(Number(req.params.id)) });
+}));
+
+// v10.1.36 (TD-1243، ت۳۳ الف): پرداخت یکجای بیمه یا مالیات حقوق یک ماه با ردیف هر نفر روی ۳۲۰۴ / ۳۲۰۶
+router.get('/accounting/treasury/statutory-remittance/options', authorizePermission(STATUTORY_REMITTANCE_PERMISSION), validate(statutoryRemittanceOptionsSchema), asyncHandler(async (req, res) => {
+  // validate() نوع، سال و ماه را الزامی کرده است
+  const { kind, year, month } = req.query as unknown as Required<ValidatedQuery<typeof statutoryRemittanceOptionsSchema>>;
+  res.json(await statutoryRemittanceOptions(kind, year, month));
+}));
+
+router.post('/accounting/treasury/statutory-remittance', authorizePermission(STATUTORY_REMITTANCE_PERMISSION), idempotency({ scope: 'treasury' }), validate(statutoryRemittanceSchema), asyncHandler(async (req, res) => {
+  const { kind, year, month, ...rest } = req.body as z.infer<typeof statutoryRemittanceSchema>['body'];
+  const result = await createStatutoryRemittance({
+    ...rest,
+    kind,
+    jalaliYear: year,
+    jalaliMonth: month,
+    userId: req.user?.id,
+    username: req.user?.fullName || req.user?.username,
+    audit: { req, userFullName: req.user?.fullName },
+  });
+  res.status(201).json(result);
 }));
 
 // v10.0.254 (TD-971): چک‌های وصول‌شده حساب، نامزد تطبیق صورت‌حساب در کنار تراکنش‌های خزانه
