@@ -65,7 +65,7 @@ G  scripts/check-version-sync.ts
 15 src/middleware/idempotency.ts
 15 src/services/idempotency.service.ts
 15 src/lib/submissionKey.ts
-# ۲ نوشتن اعلان (زنگ و صف پیام‌رسان) میان‌بخشی است، مثل لاگ فعالیت: هر بسته‌ای آن را صدا می‌زند (v10.1.39)
+# ۲ نوشتن اعلان (زنگ و صف پیام‌رسان) میان‌بخشی است، مثل لاگ فعالیت: هر بسته‌ای آن را صدا می‌زند (v10.1.40)
 2  src/services/notifications/notificationCreator.ts
 # ۱ مشاهده‌پذیری درون middleware
 1  src/middleware/logger.ts
@@ -285,10 +285,12 @@ G  scripts/check-version-sync.ts
 # ───────── ۱۲ پرسنل و حقوق کارمزدی ─────────
 12 src/routes/personnel.routes.ts
 12 src/routes/piecework.routes.ts
+12 src/routes/workshop.routes.ts
 12 src/routes/payrollStatutory.routes.ts
 12 src/routes/payrollEidi.routes.ts
 12 src/services/piecework.service.ts
 12 src/services/piecework/**
+12 src/services/workshop/**
 12 src/pages/PersonnelPage.tsx
 12 src/pages/PieceworkPayrollPage.tsx
 12 src/pages/MyPayslipsPage.tsx

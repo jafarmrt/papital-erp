@@ -1,5 +1,5 @@
 /**
- * v10.1.39 (messenger notifications plan part 2, §2.3): the categories of in-app notifications, shared by the server and
+ * v10.1.40 (messenger notifications plan part 2, §2.3): the categories of in-app notifications, shared by the server and
  * the profile. Every notification is written with one of them; the user chooses per category whether it also goes to
  * their linked Bale or Telegram account (on by default). The messenger text is personal (decision ت۲): the recipient's
  * name, what it is about and a direct link, in Persian digits and without any amount.
@@ -13,6 +13,7 @@ export const NOTIFICATION_CATEGORIES = [
   'crm_followup',
   'crm_won',
   'event_rule',
+  'workshop',
 ] as const;
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
 
@@ -25,6 +26,7 @@ export const NOTIFICATION_CATEGORY_LABELS: Readonly<Record<NotificationCategory,
   crm_followup: 'پیگیری‌های ارتباط با مشتری',
   crm_won: 'پرونده فروش موفق',
   event_rule: 'اعلان‌های قانون‌های خودکار',
+  workshop: 'کارها و گزارش‌های کارتابل کارگاه',
 };
 
 /** One row of «در پیام‌رسان هم بفرست» in the profile (`GET /messenger/preferences/mine`) */
@@ -60,6 +62,7 @@ const GENERIC_SENTENCES: Readonly<Partial<Record<NotificationCategory, string>>>
   crm_won: 'یک پرونده فروش با موفقیت نهایی شد.',
   payslip: 'فیش حقوق شما تأیید شد.',
   workflow_task: 'کار تازه‌ای در کارتابل تأیید شما آمد.',
+  workshop: 'یک کار یا گزارش در کارتابل کارگاه منتظر شماست.',
 };
 const GENERIC_DEFAULT_SENTENCE = 'اعلان تازه‌ای در برنامه پاپیتال برای شما آمده است.';
 
@@ -67,7 +70,7 @@ const GENERIC_DEFAULT_SENTENCE = 'اعلان تازه‌ای در برنامه �
  * The page a messenger link opens: a full-text category keeps the notification's own path; every other one opens a fixed
  * page of its section (never a rule template's link, which may carry amounts or ids), else the app's first page.
  */
-const GENERIC_LINK_SECTIONS: readonly string[] = ['/daily-logs', '/crm', '/approval-inbox'];
+const GENERIC_LINK_SECTIONS: readonly string[] = ['/daily-logs', '/crm', '/approval-inbox', '/workshop'];
 
 export function messengerLinkPath(category: NotificationCategory, path: string | null | undefined): string {
   const target = String(path ?? '').trim();

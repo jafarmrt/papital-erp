@@ -53,7 +53,7 @@ export const messengerLinkCodes = pgTable('messenger_link_codes', {
 }));
 
 /**
- * v10.1.39 (messenger notifications plan part 2): a user's choice per notification category (migration 0121). A missing
+ * v10.1.40 (messenger notifications plan part 2): a user's choice per notification category (migration 0121). A missing
  * row means the category goes to the messenger too (the default); `send_to_messenger = 0` keeps it in the bell only.
  */
 export const userNotificationPreferences = pgTable('user_notification_preferences', {

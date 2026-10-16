@@ -9,7 +9,7 @@ import { deadLetterDeliveryJobId } from '../../services/events/deadLetterDeliver
 import { nextAttemptDelaySeconds } from '../../services/events/integrationDelivery.service';
 
 /**
- * v10.1.39 (messenger notifications plan part 2, §2.3): every in-app notification is written by `createNotifications`,
+ * v10.1.40 (messenger notifications plan part 2, §2.3): every in-app notification is written by `createNotifications`,
  * which queues its messenger jobs in the same transaction, so no production file outside it inserts into `notifications`.
  * Before, eight places wrote the bell row themselves and nothing reached Bale or Telegram. The messenger text is personal,
  * in Persian digits, without the text of an administrator's rule template, and carries the app's own link.
@@ -80,12 +80,19 @@ describe('messenger text of a notification', () => {
     expect(messengerLinkPath('event_rule', '/accounting/vouchers?amount=1500000')).toBe('/');
     expect(messengerLinkPath('crm_followup', '/payroll?id=3')).toBe('/');
     expect(messengerLinkPath('workflow_sla', '/approval-inbox')).toBe('/approval-inbox');
+    expect(messengerLinkPath('workshop', '/workshop?row=3%3A1%3A2%3A9')).toBe('/workshop');
+  });
+
+  it('a workshop cartable notification sends its fixed sentence, never the task, project or quantity', () => {
+    const text = messengerNotificationText({ recipientName: 'x', category: 'workshop', title: 'گزارش «برش ۱۲ عدد» تأیید شد', message: 'پروژه PR-0012: 12 عدد' });
+    expect(text).toBe('x،\nیک کار یا گزارش در کارتابل کارگاه منتظر شماست.');
   });
 
   it('the profile offers only categories some code writes yet', () => {
     expect(MESSENGER_PREFERENCE_CATEGORIES).not.toContain('payslip');
     expect(MESSENGER_PREFERENCE_CATEGORIES).not.toContain('workflow_task');
     expect(MESSENGER_PREFERENCE_CATEGORIES).toContain('mention');
+    expect(MESSENGER_PREFERENCE_CATEGORIES).toContain('workshop');
   });
 
   it('a 429 waits at least its retry_after, at most an hour', () => {

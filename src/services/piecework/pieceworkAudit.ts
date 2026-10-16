@@ -89,7 +89,7 @@ export function changedFields(before: Snapshot, after: Snapshot): { before: Snap
   return { before: b, after: a, changes };
 }
 
-function actorFields(actor: AuditActor) {
+export function actorFields(actor: AuditActor) {
   const reqUser = (actor.req as { user?: { id?: number; username?: string } } | undefined)?.user;
   return { req: actor.req, userId: actor.userId ?? reqUser?.id, username: actor.username || reqUser?.username || undefined };
 }

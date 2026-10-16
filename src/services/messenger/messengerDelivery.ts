@@ -10,7 +10,7 @@ import { sendBotMessage } from './messengerClient.js';
 import { closeBlockedLink } from './messengerLinks.service.js';
 
 /**
- * v10.1.39 (messenger notifications plan part 2, §2.3): one attempt of a `messenger` delivery job. The job's target is the
+ * v10.1.40 (messenger notifications plan part 2, §2.3): one attempt of a `messenger` delivery job. The job's target is the
  * user's link; its event carries the text written with the notification. A closed link or a removed bot closes the job
  * without a dead letter; a 403 (the user blocked the bot) closes the link too, which the profile then shows; a network
  * error, 429 or 5xx is retried by the delivery worker (a 429 not before its retry_after), any other refusal goes to the dead

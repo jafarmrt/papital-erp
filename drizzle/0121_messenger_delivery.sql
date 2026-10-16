@@ -1,4 +1,4 @@
--- Drizzle Migration 0121: messenger delivery jobs and per-category notification choices (v10.1.39, messenger
+-- Drizzle Migration 0121: messenger delivery jobs and per-category notification choices (v10.1.40, messenger
 -- notifications plan part 2)
 --
 -- Every in-app notification is now written through one function, which in the same transaction queues one delivery job
@@ -27,7 +27,8 @@ CREATE TABLE IF NOT EXISTS user_notification_preferences (
   send_to_messenger integer NOT NULL DEFAULT 1,
   updated_at timestamp DEFAULT now(),
   CONSTRAINT chk_user_notification_preferences_category CHECK (category IN (
-    'workflow_task', 'workflow_sla', 'payslip', 'mention', 'daily_log_review', 'crm_followup', 'crm_won', 'event_rule'
+    'workflow_task', 'workflow_sla', 'payslip', 'mention', 'daily_log_review', 'crm_followup', 'crm_won', 'event_rule',
+    'workshop'
   )),
   CONSTRAINT chk_user_notification_preferences_send_to_messenger_flag CHECK (send_to_messenger IN (0, 1)),
   CONSTRAINT uq_user_notification_preferences_user_category UNIQUE (user_id, category),

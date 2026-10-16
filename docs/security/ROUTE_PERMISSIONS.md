@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 449
+تعداد مسیرها: 457
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -284,8 +284,6 @@
 | POST | `/api/messenger/links/:messenger/code` | login-only |
 | POST | `/api/messenger/links/:messenger/test` | login-only |
 | GET | `/api/messenger/links/mine` | login-only |
-| GET | `/api/messenger/preferences/mine` | login-only |
-| PUT | `/api/messenger/preferences/mine` | login-only |
 | GET | `/api/metrics` | public |
 | GET | `/api/notifications` | login-only |
 | DELETE | `/api/notifications/:id` | login-only |
@@ -299,10 +297,10 @@
 | PUT | `/api/pending-materials/:id/approve` | pending_materials.approve |
 | PUT | `/api/pending-materials/:id/reject` | pending_materials.approve |
 | GET | `/api/permissions` | roles.manage \| users.manage |
-| GET | `/api/personnel` | personnel.view \| personnel.manage \| piecework.view \| projects.view \| accounting.view \| crm.view \| documents.view \| documents.create \| warehouse.in |
+| GET | `/api/personnel` | personnel.view \| personnel.manage \| piecework.view \| projects.view \| accounting.view \| crm.view \| documents.view \| documents.create \| warehouse.in \| warehouse.out |
 | POST | `/api/personnel` | personnel.manage |
 | DELETE | `/api/personnel/:id` | personnel.manage |
-| GET | `/api/personnel/:id` | personnel.view \| personnel.manage \| piecework.view \| projects.view \| accounting.view \| crm.view \| documents.view \| documents.create \| warehouse.in |
+| GET | `/api/personnel/:id` | personnel.view \| personnel.manage \| piecework.view \| projects.view \| accounting.view \| crm.view \| documents.view \| documents.create \| warehouse.in \| warehouse.out |
 | PUT | `/api/personnel/:id` | personnel.manage |
 | POST | `/api/personnel/bulk-import` | personnel.manage |
 | GET | `/api/personnel/export` | personnel.manage |
@@ -451,6 +449,16 @@
 | GET | `/api/workflow/tasks/my-tasks` | workflow.view \| workflow.approve \| workflow.execute \| workflow.manage \| workflow.admin |
 | GET | `/api/workflow/tasks/stats` | workflow.view \| workflow.approve \| workflow.execute \| workflow.manage \| workflow.admin |
 | POST | `/api/workflow/transition` | workflow.approve \| workflow.execute \| workflow.manage \| workflow.admin |
+| POST | `/api/workshop/deliveries/confirm` | workshop.self |
+| GET | `/api/workshop/my-deliveries` | workshop.self |
+| GET | `/api/workshop/my-tasks` | workshop.self |
+| GET | `/api/workshop/projects/:projectId/reports` | projects.view \| workshop.review |
+| POST | `/api/workshop/reports` | workshop.self |
+| PUT | `/api/workshop/reports/:id` | workshop.self |
+| POST | `/api/workshop/reports/:id/approve` | workshop.review |
+| POST | `/api/workshop/reports/:id/reject` | workshop.review |
+| POST | `/api/workshop/reports/:id/withdraw` | workshop.self |
+| GET | `/api/workshop/review/reports` | workshop.review |
 | GET | `/health` | public |
 | GET | `/health/live` | public |
 | GET | `/health/ready` | public |

@@ -301,7 +301,7 @@ export async function runMessengerLinkTests(shouldRun: ShouldRun): Promise<TestC
 
   const followId = 'reg_messenger_poller_review_followups';
   if (shouldRun(followId, 'messenger')) {
-    await runCase(results, followId, 'v10.1.39: wrong codes sent at the same time are all counted against the bot; a bot backing off takes no pool connection; a connection whose advisory unlock failed is closed, never returned to the pool', async () => inSandbox(() => withFakeBotApi(async (api) => {
+    await runCase(results, followId, 'v10.1.40: wrong codes sent at the same time are all counted against the bot; a bot backing off takes no pool connection; a connection whose advisory unlock failed is closed, never returned to the pool', async () => inSandbox(() => withFakeBotApi(async (api) => {
       const admin = await clientFor('admin');
       await admin.put('/api/messenger/bots/bale', { token: TOKEN });
       const wrongCount = 20;

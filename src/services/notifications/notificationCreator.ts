@@ -4,7 +4,7 @@ import { integrationDeliveryJobs, notifications, userMessengerLinks, userNotific
 import { messengerLinkPath, messengerNotificationText, type NotificationCategory } from '../../lib/notifications/notificationCategories.js';
 
 /**
- * v10.1.39 (messenger notifications plan part 2, §2.3): the one way an in-app notification is written. In the caller's
+ * v10.1.40 (messenger notifications plan part 2, §2.3): the one way an in-app notification is written. In the caller's
  * transaction it writes the bell row and, for each active messenger link of the recipient whose category the user has not
  * turned off, one delivery job of kind `messenger` in `integration_delivery_jobs`; the delivery worker sends it, retries a
  * failed send and moves one that never arrives to the dead letter queue. So a write that rolls back sends nothing.

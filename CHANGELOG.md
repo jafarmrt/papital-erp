@@ -20,8 +20,11 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
-### v10.1.39 — v10.1.39 — اعلان‌های برنامه در بله و تلگرام
+### v10.1.40 — v10.1.40 — اعلان‌های برنامه در بله و تلگرام
 - هر اعلان زنگ برنامه برای کاربر وصل‌شده در بله یا تلگرام هم فرستاده می‌شود، با نام او، موضوع و پیوند مستقیم، بی مبلغ؛ هر نوع اعلان را می‌توان در نمایه خاموش کرد (طرح پیام‌رسان، بخش ۲).
+
+### v10.1.39 — کارتابل کارگاه، بخش سرور (N-01 بخش ۲، TD-1284)
+- Workshop cartable server (N-01 part 2, mobile workshop plan ت۱ / ت۲ / ت۵–ت۸ الف): /api/workshop routes for the worker's tasks and deliveries, receipt confirmation, end-of-task reports and the project manager's approve / reject (piecework log at the server rate, own report refused), and deadline reminders; no migration.
 
 ### v10.1.38 — v10.1.38 — اتصال کارکنان به ربات‌های بله و تلگرام
 - مدیر سامانه نشانه ربات کارکنان را رمزشده وارد می‌کند و هر کاربر از «نمایه ← پیام‌رسان» با کد یک‌بارمصرف به بله یا تلگرام وصل می‌شود (طرح پیام‌رسان، بخش ۱).
