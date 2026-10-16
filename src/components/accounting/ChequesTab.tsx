@@ -16,7 +16,7 @@ import { FinancialAttachmentViewerModal } from './FinancialAttachmentViewerModal
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { useChequeReconciliationReport } from '../../hooks/accounting/useChequeQueries';
 import { copyToClipboard } from '../../utils/clipboard';
-import { CHEQUE_STATUS_LABELS, CHEQUE_TRANSITIONS, chequeHasNextStep, chequeStatusLabel } from '../../lib/treasury/chequeTransitions';
+import { CHEQUE_STATUS_LABELS, chequeHasNextStep, chequeNextStatuses, chequeStatusLabel, chequeStepTakesBankAccount, isChequeClearingAccountType } from '../../lib/treasury/chequeTransitions';
 import { needsChosenContraAccount, type PersonnelPurpose } from '../../lib/treasury/partyPurpose';
 import { personnelPartyName } from '../../lib/treasury/personnelPartyName';
 import { PartyPurposeFields } from './treasury/PartyPurposeFields';
@@ -50,6 +50,8 @@ export function ChequesTab({
   const rial = useRialDisplay();
   const safeCheques = Array.isArray(cheques) ? cheques : [];
   const safeBankAccounts = Array.isArray(bankAccounts) ? bankAccounts : [];
+  // v10.1.47 (ت۴۰): چک فقط به حساب بانکی یا صندوق وصول یا به وصول فرستاده می‌شود
+  const clearingBankAccounts = safeBankAccounts.filter(b => isChequeClearingAccountType(b.type));
   const safeCustomers = Array.isArray(customers) ? customers : [];
   const safePersonnelList = Array.isArray(personnelList) ? personnelList : [];
 
@@ -155,16 +157,14 @@ export function ChequesTab({
     spent: [],
   };
   const allowedStatusOptions: { value: ChequeStatus; label: string }[] = statusModalCheque
-    ? (STATUS_OPTIONS[String(statusModalCheque.status)] || []).filter(o => {
-        if (o.value === 'spent' && statusModalCheque.type === 'paid') return false;
-        return true;
-      })
+    ? (STATUS_OPTIONS[String(statusModalCheque.status)] || [])
+        .filter(o => chequeNextStatuses(statusModalCheque.status, statusModalCheque.type).includes(o.value))
     : [];
 
   // باز شدن مودال: وضعیت هدف به اولین گزینه مجاز ریست شود
   useEffect(() => {
     if (statusModalCheque) {
-      const opts = CHEQUE_TRANSITIONS[String(statusModalCheque.status)] || [];
+      const opts = chequeNextStatuses(statusModalCheque.status, statusModalCheque.type);
       setTargetStatus(opts[0] || ('passed' as ChequeStatus));
       setTransfereePartyId(null);
     }
@@ -207,6 +207,16 @@ export function ChequesTab({
     }
   };
 
+  /** v10.1.47: چک پرداختی دارای حساب صادرکننده فقط از همان حساب وصول می‌شود */
+  const storedChequeBank = statusModalCheque?.bankAccountId ? safeBankAccounts.find(b => b.id === statusModalCheque.bankAccountId) : undefined;
+  const paidBankFixed = statusModalCheque?.type === 'paid' && Boolean(storedChequeBank) && isChequeClearingAccountType(storedChequeBank?.type);
+  const paidIssuingBank = paidBankFixed ? storedChequeBank : undefined;
+  /** v10.1.47 (ت۴۰): حساب ثبت‌شده چک فقط وقتی پیش‌فرض است که بانک یا صندوق باشد */
+  const clearingBankIdOf = (bankAccountId: number | null | undefined): number | null => {
+    const bank = bankAccountId ? safeBankAccounts.find(b => b.id === bankAccountId) : undefined;
+    return bank && isChequeClearingAccountType(bank.type) ? bank.id : null;
+  };
+
   const handleUpdateStatusSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!statusModalCheque) return;
@@ -218,6 +228,12 @@ export function ChequesTab({
     // v9.0.85 (TD-498، تصمیم ت۳ الف): خرج چک بی تأمین‌کننده انتخاب‌شده فرستاده نمی‌شود
     if (targetStatus === 'spent' && !transfereePartyId) {
       toast.error('تأمین‌کننده‌ای را که چک به او واگذار می‌شود انتخاب کنید');
+      return;
+    }
+    // v10.1.47 (OBS-R1-70): حساب بانکی دیگر پیش‌فرض نمی‌گیرد؛ وصول بی حساب فرستاده نمی‌شود. چک پرداختی از حساب صادرکننده‌اش
+    // وصول می‌شود و حسابی نمی‌فرستد؛ برای ارسال به وصول حساب اختیاری است.
+    if (targetStatus === 'passed' && !paidBankFixed && !targetBankAccountId) {
+      toast.error('حساب بانکی مقصد را انتخاب کنید');
       return;
     }
     if (!statusActionDate) {
@@ -235,7 +251,7 @@ export function ChequesTab({
         statusModalCheque.id, 
         targetStatus, 
         statusDescription, 
-        targetBankAccountId || undefined,
+        chequeStepTakesBankAccount(targetStatus) && !paidBankFixed ? targetBankAccountId || undefined : undefined,
         targetStatus === 'spent' ? transfereePartyId ?? undefined : undefined,
         statusActionDate
       );
@@ -604,7 +620,7 @@ export function ChequesTab({
                             // وضعیت هدف توسط useEffect بر اساس اولین گزینه مجاز ریست می‌شود
                             setStatusDescription('');
                             setStatusActionDate(getTodayIsoDate());
-                            setTargetBankAccountId(c.bankAccountId || bankAccounts[0]?.id || null);
+                            setTargetBankAccountId(clearingBankIdOf(c.bankAccountId));
                           }}
                           className={`text-[10px] font-bold px-2.5 py-1 rounded-full border transition hover:opacity-80 ${statusInfo.badge}`}
                         >
@@ -624,14 +640,14 @@ export function ChequesTab({
                           <ActionMenu
                             items={[
                               // v9.0.69 (TD-502، ت۹): وضعیت پایانی نه تغییر وضعیت دارد نه حذف
-                              ...(chequeHasNextStep(c.status) ? [{
+                              ...(chequeHasNextStep(c.status, c.type) ? [{
                                 label: 'تغییر وضعیت چک',
                                 icon: Edit3,
                                 onClick: () => {
                                   setStatusModalCheque(c);
                                   setStatusDescription('');
                                   setStatusActionDate(getTodayIsoDate());
-                                  setTargetBankAccountId(c.bankAccountId || bankAccounts[0]?.id || null);
+                                  setTargetBankAccountId(clearingBankIdOf(c.bankAccountId));
                                 },
                               }] : []),
                               {
@@ -663,7 +679,7 @@ export function ChequesTab({
                                   });
                                 },
                               },
-                              ...(chequeHasNextStep(c.status) ? [{
+                              ...(chequeHasNextStep(c.status, c.type) ? [{
                                 label: 'حذف چک',
                                 icon: Trash2,
                                 variant: 'danger' as const,
@@ -1008,10 +1024,16 @@ export function ChequesTab({
                 )}
               </div>
 
-              {(targetStatus === 'in_collection' || targetStatus === 'passed') && (
+              {chequeStepTakesBankAccount(targetStatus) && paidBankFixed && (
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  وصول از حساب صادرکننده چک: {paidIssuingBank ? paidIssuingBank.title : 'حساب ثبت‌شده چک'}
+                </p>
+              )}
+
+              {chequeStepTakesBankAccount(targetStatus) && !paidBankFixed && (
                 <div>
                   <label htmlFor={`${fieldId}-target-bank-account-id`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    حساب بانکی مقصد *
+                    {targetStatus === 'passed' ? 'حساب بانکی مقصد *' : 'حساب بانکی مقصد'}
                   </label>
                   <select
                     id={`${fieldId}-target-bank-account-id`}
@@ -1020,7 +1042,7 @@ export function ChequesTab({
                     className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
                   >
                     <option value="">انتخاب حساب بانکی...</option>
-                    {safeBankAccounts.map(b => (
+                    {clearingBankAccounts.map(b => (
                       <option key={b.id} value={b.id}>
                         {b.title} ({b.bankName})
                       </option>

@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import type { DbExecutor } from '../../../db/drizzle.js';
 import { accounts, bankAccounts } from '../../../db/schema.js';
 import { ValidationError } from '../../../errors/customErrors.js';
+import { isChequeClearingAccountType } from '../../../lib/treasury/chequeTransitions.js';
 
 /** کل «موجودی نقد و بانک» در کدینگ استاندارد */
 const CASH_AND_BANK_GENERAL_CODE = '10';
@@ -36,12 +37,28 @@ export async function requireBankLedgerAccount(tx: DbExecutor, accountId: number
  * v9.0.100 (TD-510، B04-14): حساب بانکی چک باید حساب خزانه فعال و حذف‌نشده باشد (قفل اشتراکی، تا حذف هم‌زمان حساب منتظر
  * بماند)؛ وگرنه 422 `CHEQUE_BANK_ACCOUNT_INVALID`. پیش‌تر چک با `bankAccountId 999999` ۲۰۱ می‌گرفت.
  */
-export async function requireChequeBankAccount(tx: DbExecutor, bankAccountId: number | null | undefined): Promise<number | null> {
+export async function requireChequeBankAccount(
+  tx: DbExecutor,
+  bankAccountId: number | null | undefined,
+  opts: { clearing?: boolean } = {},
+): Promise<number | null> {
   if (bankAccountId === null || bankAccountId === undefined || Number(bankAccountId) === 0) return null;
-  const [bank] = await tx.select({ id: bankAccounts.id, isActive: bankAccounts.isActive }).from(bankAccounts)
+  const [bank] = await tx.select({ id: bankAccounts.id, isActive: bankAccounts.isActive, type: bankAccounts.type, title: bankAccounts.title }).from(bankAccounts)
     .where(and(eq(bankAccounts.id, Number(bankAccountId)), eq(bankAccounts.isDeleted, 0))).for('share');
   if (!bank || (bank.isActive ?? 1) !== 1) {
     throw new ValidationError('حساب بانکی چک یافت نشد یا غیرفعال است؛ یک حساب بانکی فعال انتخاب کنید.', { bankAccountId }, 'CHEQUE_BANK_ACCOUNT_INVALID');
   }
+  if (opts.clearing) assertChequeClearingAccountType(bank);
   return bank.id;
+}
+
+/** v10.1.47 (ت۴۰): وصول و ارسال به وصول فقط به حساب بانکی یا صندوق؛ کارتخوان و تنخواه‌گردان 422 `CHEQUE_CLEARING_ACCOUNT_TYPE` */
+export function assertChequeClearingAccountType(bank: { id: number; type: string | null; title: string }): void {
+  if (!isChequeClearingAccountType(bank.type)) {
+    throw new ValidationError(
+      `چک فقط به حساب بانکی یا صندوق وصول می‌شود؛ «${bank.title}» کارتخوان یا تنخواه‌گردان است.`,
+      { bankAccountId: bank.id, type: bank.type },
+      'CHEQUE_CLEARING_ACCOUNT_TYPE',
+    );
+  }
 }

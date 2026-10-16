@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm';
-import { orm } from '../../db/drizzle.js';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { appSettings, warehouses } from '../../db/schema.js';
 import { ValidationError, ForbiddenError } from '../../errors/customErrors.js';
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
@@ -83,7 +83,8 @@ function normalizeSettingValue(key: string, raw: string): string {
   return raw;
 }
 
-async function validateSettingValue(key: string, value: string): Promise<void> {
+// v10.1.47 (OBS-R2-04): خواندن انبار با تراکنش ذخیره (`tx`)، نه اتصال دوم استخر (قاعده TD-324)
+async function validateSettingValue(tx: DbExecutor, key: string, value: string): Promise<void> {
   // v9.0.276 (TD-667 / TD-672، تصمیم‌های ت۱ و ت۴): واحد نمایش فقط ریال یا تومان
   if (key === 'currency') {
     const error = currencySettingError(value);
@@ -101,7 +102,7 @@ async function validateSettingValue(key: string, value: string): Promise<void> {
     if (namesError) throw new ValidationError(namesError, { key }, 'SETTING_PRICE_LIST_NAMES_INVALID');
   }
   if (key === 'wc_shop_warehouse' && value.trim() !== '') {
-    const [wh] = await orm.select({ id: warehouses.id }).from(warehouses)
+    const [wh] = await tx.select({ id: warehouses.id }).from(warehouses)
       .where(and(eq(warehouses.code, value.trim()), eq(warehouses.isActive, 1)));
     if (!wh) {
       throw new ValidationError(`انبار فروشگاه اینترنتی «${value}» انبار فعالی نیست.`);
@@ -190,7 +191,7 @@ export class SystemSettingsService {
         }
 
         await assertKeyPermission(item.key, actor);
-        await validateSettingValue(item.key, value);
+        await validateSettingValue(tx, item.key, value);
         // encrypted before any write, so a missing ERP_SECRETS_KEY (503) saves nothing
         changes.push({ key: item.key, before: before ?? undefined, after: value, stored: sealSettingValue(item.key, value) });
       }

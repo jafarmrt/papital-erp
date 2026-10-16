@@ -103,6 +103,18 @@ export interface NormalizedError {
  * Normalizes PostgreSQL / Drizzle / Zod / JWT / system errors into safe, operational error objects.
  * Prevents internal database queries, constraints, or schemas from leaking to frontend users.
  */
+/** v10.1.47 (OBS-R1-57): قیدهای پایگاه‌داده‌ای که پیام فیلدی دارند (پشتیبان پیش‌سنجی سرویس در رقابت هم‌زمان) */
+const CONSTRAINT_FIELD_ERRORS: Record<string, { pgCode: string; message: string; statusCode: number; code: string }> = {
+  uq_cheques_sayad_number_active: {
+    pgCode: '23505', statusCode: 409, code: 'CHEQUE_SAYAD_TAKEN',
+    message: 'این شناسه صیادی پیش‌تر برای چک دیگری ثبت شده است.',
+  },
+  chk_bank_balance_nonneg: {
+    pgCode: '23514', statusCode: 422, code: 'BANK_BALANCE_NEGATIVE',
+    message: 'مانده حساب بانکی منفی نمی‌شود؛ مبلغ یا حساب را بررسی کنید.',
+  },
+};
+
 /** v9.0.312 (TD-594): خطاهای `body-parser` (کلید: `err.type`) با پیام فارسی، وضعیت و کد پایدار */
 const BODY_PARSER_ERRORS: Record<string, { message: string; statusCode: number; code: string }> = {
   'entity.parse.failed': { message: 'بدنه درخواست JSON معتبر نیست؛ داده را بررسی و دوباره ارسال کنید.', statusCode: 400, code: 'INVALID_JSON_BODY' },
@@ -195,6 +207,11 @@ export function normalizeError(err: unknown): NormalizedError {
         code: 'INVALID_DATE_FORMAT',
         stack: typeof errObj.stack === 'string' ? errObj.stack : undefined,
       };
+    }
+    // v10.1.47 (OBS-R1-57): دو قید پرکاربرد خزانه پیام فیلدی خود را دارند؛ پیش‌تر پیام عمومی «تکراری» یا «نامعتبر» بود
+    const fieldConstraint = typeof pgErr.constraint === 'string' && Object.hasOwn(CONSTRAINT_FIELD_ERRORS, pgErr.constraint) ? CONSTRAINT_FIELD_ERRORS[pgErr.constraint] : undefined;
+    if (fieldConstraint && fieldConstraint.pgCode === code) {
+      return { message: fieldConstraint.message, statusCode: fieldConstraint.statusCode, code: fieldConstraint.code, stack: typeof errObj.stack === 'string' ? errObj.stack : undefined };
     }
     if (code === '23505') {
       return {

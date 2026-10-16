@@ -1,4 +1,4 @@
-import { orm } from '../../../db/drizzle.js';
+import { orm, type DbExecutor } from '../../../db/drizzle.js';
 import { bankAccounts, cheques, journalVouchers } from '../../../db/schema.js';
 import { eq, ne, desc, asc, and, or, like, gte, lte, isNull, sql } from 'drizzle-orm';
 import { ChartOfAccountsService } from '../chartOfAccounts.service.js';
@@ -6,7 +6,7 @@ import { AccountMappingService } from '../accountMapping.service.js';
 import { VoucherService } from '../voucher.service.js';
 import { validateLockOrder, LockHierarchyLevel, LockableResource } from '../../../lib/lockOrder.js';
 import type { Cheque, ChequeStatus } from '../../../types.js';
-import { CHEQUE_TRANSITIONS, chequeStatusLabel } from '../../../lib/treasury/chequeTransitions.js';
+import { CHEQUE_TRANSITIONS, chequeNextStatuses, chequeStatusLabel, chequeStepTakesBankAccount, isChequeClearingAccountType } from '../../../lib/treasury/chequeTransitions.js';
 import { NotFoundError, ValidationError, BusinessLogicError, ConflictError } from '../../../errors/customErrors.js';
 import { fin } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
@@ -17,7 +17,7 @@ import { requireStorageDate } from '../../../lib/storageDate.js';
 import { isoToJalaliDate } from '../../../utils/calendarDate.js';
 import { assertNoVoucherAllowed } from './noVoucherTreasury.js';
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
-import { requireChequeBankAccount } from './bankLinks.js';
+import { assertChequeClearingAccountType, requireChequeBankAccount } from './bankLinks.js';
 import { normalizePartyPurpose, requireChoosableContraAccount } from './partyContraAccount.js';
 import { assertPersonnelPartyId, resolveTreasuryPartyName } from './treasuryLinks.js';
 import { chequePartyPosting, requireChequePartyAccount, resolveChequePartyAccountId } from './chequePartyAccount.js';
@@ -28,14 +28,19 @@ import { auditChequeCreated } from './treasuryAudit.js';
 export { CHEQUE_TRANSITIONS };
 
 // v9.0.105 (TD-513، B04-17): پیام‌ها نام فارسی وضعیت را دارند (`chequeStatusLabel`)، نه کد انگلیسی
-export function assertChequeTransition(current: string, next: ChequeStatus): void {
+// v10.1.47 (OBS-R1-61): گام‌های مجاز نوع چک را هم می‌بینند (`chequeNextStatuses`)، پس چک پرداختی به وصول نمی‌رود
+export function assertChequeTransition(current: string, next: ChequeStatus, type?: string | null): void {
   if (current === next) {
     throw new ConflictError(`چک هم‌اکنون در وضعیت «${chequeStatusLabel(next)}» است — تکرار همان وضعیت مجاز نیست`);
   }
-  const allowed = CHEQUE_TRANSITIONS[current];
-  if (!allowed) {
+  if (!CHEQUE_TRANSITIONS[current]) {
     throw new ConflictError(`وضعیت فعلی چک («${chequeStatusLabel(current)}») نامعتبر است`);
   }
+  if (type === 'paid' && next === 'in_collection') {
+    throw new BusinessLogicError('چک پرداختی به وصول فرستاده نمی‌شود؛ وصول آن را با «وصول نهایی» ثبت کنید.');
+  }
+  // خرج چک پرداختی پیام خودش را پس از این سنجه می‌گیرد («تنها چک‌های دریافتی …»)
+  const allowed = next === 'spent' ? CHEQUE_TRANSITIONS[current] : chequeNextStatuses(current, type);
   if (!allowed.includes(next)) {
     throw new BusinessLogicError(
       `انتقال وضعیت «${chequeStatusLabel(current)}» به «${chequeStatusLabel(next)}» مجاز نیست — انتقال‌های مجاز: ${allowed.map(chequeStatusLabel).join('، ') || 'هیچ'}`
@@ -55,6 +60,22 @@ function requireChequeAccounts(chequeNumber: string, step: string, ...required: 
     );
   }
   return true;
+}
+
+/** v10.1.47 (OBS-R1-57): پیام قید `uq_cheques_sayad_number_active` در errorHandler هم همین است */
+export const CHEQUE_SAYAD_TAKEN = 'CHEQUE_SAYAD_TAKEN';
+
+/**
+ * v10.1.47 (OBS-R1-57): شناسه صیادی تکراری پیش از درج با نام چک دارنده آن رد می‌شود. پیش‌تر فقط قید یکتای پایگاه‌داده آن را
+ * می‌گرفت و کاربر «مقدار وارد شده تکراری است» می‌دید، بی آنکه بداند کدام فیلد.
+ */
+async function assertSayadNumberFree(tx: DbExecutor, sayadNumber: string): Promise<void> {
+  if (!sayadNumber) return;
+  const [held] = await tx.select({ chequeNumber: cheques.chequeNumber }).from(cheques)
+    .where(and(eq(cheques.sayadNumber, sayadNumber), eq(cheques.isDeleted, 0))).limit(1);
+  if (held) {
+    throw new ConflictError(`شناسه صیادی ${sayadNumber} پیش‌تر برای چک ${held.chequeNumber} ثبت شده است.`, undefined, CHEQUE_SAYAD_TAKEN);
+  }
 }
 
 export class ChequeLifecycleService {
@@ -211,12 +232,14 @@ export class ChequeLifecycleService {
     // در نبود کدینگ، خطای صریح (به‌جای skip بی‌صدای قبلی) تا چک بدون رد دفتری ثبت نشود.
     const inserted = await orm.transaction(async (txEngine) => {
       // v9.0.100 (TD-510): حساب بانکی چک فعال و موجود (قفل اشتراکی سطح ۱۰ پیش از درج چک، سطح ۲۰)
-      const chequeBankAccountId = await requireChequeBankAccount(txEngine, data.bankAccountId);
+      // v10.1.47 (ت۴۰): چک پرداختی فقط از حساب بانکی یا صندوق صادر می‌شود، چون از همان حساب وصول می‌شود
+      const chequeBankAccountId = await requireChequeBankAccount(txEngine, data.bankAccountId, { clearing: data.type === 'paid' });
       if (party.contraAccountId) await requireChoosableContraAccount(txEngine, party.contraAccountId);
       // شناسه طرف حساب در جدول همان نوع (B04-05)
       assertPersonnelPartyId(partyType, data.partyId);
       await resolveTreasuryPartyName(txEngine, partyType, data.partyId);
       const partyAccountId = await resolveChequePartyAccountId(txEngine, partyType, party.purpose, party.contraAccountId);
+      await assertSayadNumberFree(txEngine, data.sayadNumber?.trim() || '');
       // v8.0.19 (TD-271): ابتدا چک ثبت می‌شود تا سند ثبت آن با source_cheque_id به همین چک پیوند بخورد
       const [row] = await txEngine.insert(cheques).values({
         type: data.type,
@@ -360,18 +383,30 @@ export class ChequeLifecycleService {
       // 1. Pre-read cheque to check target bank account if status is passed
       let targetBankId = data.bankAccountId;
       let chequeCurrency = 'IRR';
-      if (data.status === 'passed' && !targetBankId) {
-        const [preCheck] = await txEngine.select({ bankAccountId: cheques.bankAccountId, currency: cheques.currency }).from(cheques).where(eq(cheques.id, id));
-        if (preCheck) {
-          targetBankId = preCheck.bankAccountId;
-          chequeCurrency = preCheck.currency || 'IRR';
-        }
-      } else if (data.status === 'passed') {
-        const [preCheck] = await txEngine.select({ currency: cheques.currency }).from(cheques).where(eq(cheques.id, id));
+      if (data.status === 'passed') {
+        const [preCheck] = await txEngine.select({
+          bankAccountId: cheques.bankAccountId, currency: cheques.currency, type: cheques.type, storedBankType: bankAccounts.type,
+        }).from(cheques).leftJoin(bankAccounts, eq(bankAccounts.id, cheques.bankAccountId)).where(eq(cheques.id, id));
         chequeCurrency = preCheck?.currency || 'IRR';
+        // v10.1.47: چک پرداختی فقط از حسابی وصول می‌شود که از آن صادر شده؛ پیش‌تر حساب فرستاده‌شده برنده بود و سند وصول
+        // حساب بانکی دیگری را بستانکار می‌کرد. حساب دیگر 422 `CHEQUE_PAID_BANK_FIXED` است. چک پرداختی قدیمی که از کارتخوان یا
+        // تنخواه‌گردان صادر شده (پیش از این نسخه پذیرفته می‌شد) حساب وصول خود را از حساب‌های بانکی و صندوق می‌گیرد، تا گیر نکند.
+        if (preCheck?.type === 'paid' && preCheck.bankAccountId && isChequeClearingAccountType(preCheck.storedBankType)) {
+          if (targetBankId && Number(targetBankId) !== preCheck.bankAccountId) {
+            throw new ValidationError(
+              'چک پرداختی فقط از حساب بانکی صادرکننده‌اش وصول می‌شود؛ حساب دیگری انتخاب نکنید.',
+              { bankAccountId: targetBankId, issuingBankAccountId: preCheck.bankAccountId },
+              'CHEQUE_PAID_BANK_FIXED',
+            );
+          }
+          targetBankId = preCheck.bankAccountId;
+        } else if (!targetBankId) {
+          targetBankId = preCheck?.bankAccountId ?? null;
+        }
       }
 
       let bankRecord: typeof bankAccounts.$inferSelect | null = null;
+      let nextBankId: number | null = null;
       let existing: typeof cheques.$inferSelect | null = null;
 
       if (data.status === 'passed') {
@@ -387,6 +422,7 @@ export class ChequeLifecycleService {
         // 1. Lock bank account (level 10) FIRST
         const [bank] = await txEngine.select().from(bankAccounts).where(and(eq(bankAccounts.id, targetBankId), eq(bankAccounts.isDeleted, 0))).for('update');
         if (!bank) throw new NotFoundError('حساب بانکی یافت نشد');
+        assertChequeClearingAccountType(bank); // v10.1.47 (ت۴۰): فقط حساب بانکی یا صندوق
 
         // V1.4.0: گارد هم‌ارزی ارز — چک با ارز متفاوت از حساب بانکی قابل وصول نیست
         if (bank.currency && chequeCurrency && bank.currency !== chequeCurrency) {
@@ -406,8 +442,9 @@ export class ChequeLifecycleService {
       } else {
         // v10.0.196 (TD-1217): حساب بانکی تازه پیش از چک قفل می‌شود (همان ترتیب «وصول»: بانک ← چک). پیش‌تر چک اول قفل می‌شد و
         // نوشتن حساب بانکی قفل کلید خارجی بانک را می‌خواست، در حالی که «وصول» هم‌زمان بانک را گرفته و منتظر چک بود: بن‌بست.
-        const nextBankId = Number(data.bankAccountId) > 0
-          ? await requireChequeBankAccount(txEngine, data.bankAccountId)
+        // v10.1.47 (OBS-R1-70): فقط ارسال به وصول حساب بانکی چک را عوض می‌کند؛ در گام‌های دیگر حساب فرستاده‌شده نادیده است
+        nextBankId = chequeStepTakesBankAccount(data.status) && Number(data.bankAccountId) > 0
+          ? await requireChequeBankAccount(txEngine, data.bankAccountId, { clearing: true })
           : null;
         validateLockOrder([
           ...(nextBankId ? [{ name: 'bankAccount', hierarchyLevel: LockHierarchyLevel.BANK_ACCOUNTS }] : []),
@@ -419,7 +456,7 @@ export class ChequeLifecycleService {
       }
 
       // V1.4.0: ماشین وضعیت — انتقال مجاز + جلوگیری از تکرار (دوبار وصول = دوبار مانده و سند)
-      assertChequeTransition(String(existing.status), data.status);
+      assertChequeTransition(String(existing.status), data.status, existing.type);
       const vouchersBefore = new Set(await activeChequeVoucherIds(txEngine, id));
 
       if (data.status === 'spent' && existing.type !== 'received') {
@@ -740,7 +777,7 @@ export class ChequeLifecycleService {
         // پیش‌تر bankAccountId: null در درخواست، حساب پیش‌فرض چک را که وصول به آن انجام شده بود پاک می‌کرد.
         ...(data.status === 'passed' && bankRecord
           ? { bankAccountId: bankRecord.id }
-          : data.bankAccountId !== undefined ? { bankAccountId: data.bankAccountId } : {}),
+          : data.status === 'in_collection' && data.bankAccountId !== undefined ? { bankAccountId: nextBankId } : {}),
         ...(transfereeName ? { payeeName: transfereeName } : {}),
         statusHistory: history,
       }).where(eq(cheques.id, id)).returning();

@@ -11048,6 +11048,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Phase 3 lane L1, package A5 (v10.0.254): cheque steps without a mapped account, cleared cheques in reconciliation, bank heading lock
   const { runTreasuryChequeA5Tests } = await import('../regression/treasuryChequeA5Tests.js');
   results.push(...await runTreasuryChequeA5Tests(shouldRun));
+  const { runTreasuryChequeSweepTests } = await import('../regression/treasuryChequeSweepTests.js');
+  results.push(...await runTreasuryChequeSweepTests(shouldRun));
 
   // Phase 3 lane L1, package A6 (v10.0.257): party balances on permanent accounts only, deductions remitted per personnel
   const { runPartyPermanentA6Tests } = await import('../regression/partyPermanentA6Tests.js');
