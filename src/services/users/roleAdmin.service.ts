@@ -1,5 +1,5 @@
 import type { Request } from 'express';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { users, roles } from '../../db/schema.js';
 import { logActivity } from '../../lib/auditLogger.js';
@@ -8,6 +8,8 @@ import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '.
 import { ROLE_CODE_PATTERN } from '../../middleware/authorize.js';
 import { isCatalogPermission, isSystemAdminRole, missingRequiredPermissions, withRequiredPermissions } from '../../lib/permissions/permissionCatalog.js';
 import { assertGrantWithinOwn, assertNotOwnRole, grantorPermissions } from './grantBoundary.js';
+import { WORKSHOP_LONG_SESSION_PERMISSION } from '../../lib/permissions/workshopPermissions.js';
+import { invalidateUserAuthCache } from '../../middleware/auth.js';
 
 export type RoleRow = typeof roles.$inferSelect;
 
@@ -81,7 +83,7 @@ export async function createRole(req: Request, input: RoleCreateInput): Promise<
 
 export async function updateRole(req: Request, roleId: number, input: RoleUpdateInput): Promise<void> {
   const grantor = await grantorPermissions(req.user?.role);
-  const roleCode = await orm.transaction(async (tx) => {
+  const updated = await orm.transaction(async (tx) => {
     const [targetRole] = await tx.select().from(roles).where(eq(roles.id, roleId)).for('update');
     if (!targetRole) throw new NotFoundError(ROLE_NOT_FOUND);
     // v9.0.129 (TD-520، ت۳): نقش خود ویرایشگر ویرایش نمی‌شود
@@ -115,6 +117,15 @@ export async function updateRole(req: Request, roleId: number, input: RoleUpdate
     };
     await tx.update(roles).set(updateData).where(eq(roles.id, roleId));
 
+    // v10.1.37 (N-01, TD-1283): a seven-day login must not keep powers its role gains later, nor outlive a role that
+    // loses the long session; a permission change of a role that holds or held the key ends its users' sessions
+    const longSessionTouched = (addedPermissions.length > 0 || removedPermissions.length > 0)
+      && (prevPermissions.includes(WORKSHOP_LONG_SESSION_PERMISSION) || newPermissions.includes(WORKSHOP_LONG_SESSION_PERMISSION));
+    const sessionsEndedUserIds = longSessionTouched
+      ? (await tx.update(users).set({ tokenVersion: sql`COALESCE(${users.tokenVersion}, 0) + 1` })
+        .where(eq(users.role, targetRole.code)).returning({ id: users.id })).map(u => u.id)
+      : [];
+
     await logActivity({
       tx,
       req,
@@ -131,11 +142,13 @@ export async function updateRole(req: Request, roleId: number, input: RoleUpdate
         addedPermissions,
         removedPermissions,
         addedByRequirement,
+        ...(longSessionTouched ? { sessionsEndedUserIds } : {}),
       },
     });
-    return targetRole.code;
+    return { code: targetRole.code, sessionsEndedUserIds };
   });
-  invalidateRoleCache(roleCode);
+  invalidateRoleCache(updated.code);
+  updated.sessionsEndedUserIds.forEach(id => invalidateUserAuthCache(id));
 }
 
 export async function deleteRole(req: Request, roleId: number, workflowsRequiringRole: WorkflowsRequiringRole): Promise<void> {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SESSION_SECONDS, LONG_SESSION_SECONDS, sessionLifetimeSeconds } from '../../lib/auth/sessionLifetime';
+import { DEFAULT_SESSION_SECONDS, LONG_SESSION_SECONDS, isLongSessionRole, sessionLifetimeSeconds } from '../../lib/auth/sessionLifetime';
 import { managerUserIdsOf } from '../../lib/projects/projectManagers';
-import { parseRecipientPersonnelId } from '../../lib/workshop/recipient';
+import { isRecipientCandidate, parseRecipientPersonnelId } from '../../lib/workshop/recipient';
 import { PERMISSION_CATALOG } from '../../lib/permissions/permissionCatalog';
 
 /** v10.1.37 (N-01 part 1, TD-1283): the shared rules of the workshop cartable data. */
@@ -13,6 +13,20 @@ describe('workshop cartable part 1 (N-01, TD-1283)', () => {
     expect(sessionLifetimeSeconds('admin', ['workshop.long_session'])).toBe(DEFAULT_SESSION_SECONDS);
     expect(sessionLifetimeSeconds(null, ['workshop.long_session'])).toBe(DEFAULT_SESSION_SECONDS);
     expect(sessionLifetimeSeconds('worker', null)).toBe(DEFAULT_SESSION_SECONDS);
+  });
+
+  it('keeps 24 hours for a role that holds any key outside the workshop-only list', () => {
+    expect(sessionLifetimeSeconds('worker', ['workshop.self', 'workshop.long_session', 'warehouse.out'])).toBe(DEFAULT_SESSION_SECONDS);
+    expect(sessionLifetimeSeconds('worker', ['workshop.long_session', 'workshop.review', 'projects.view'])).toBe(DEFAULT_SESSION_SECONDS);
+    expect(isLongSessionRole(['workshop.self'])).toBe(false);
+    expect(isLongSessionRole(['workshop.long_session', 'workshop.self'])).toBe(true);
+  });
+
+  it('offers a terminated personnel as no recipient', () => {
+    expect(isRecipientCandidate({ employmentStatus: 'فعال' })).toBe(true);
+    expect(isRecipientCandidate({})).toBe(true);
+    expect(isRecipientCandidate({ employmentStatus: ' قطع همکاری ' })).toBe(false);
+    expect(isRecipientCandidate(null)).toBe(false);
   });
 
   it('declares the three workshop keys with their requirements', () => {

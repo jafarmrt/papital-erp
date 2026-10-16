@@ -11,6 +11,14 @@ export const RECIPIENT_REMITTANCE_ONLY_MESSAGE = 'تحویل‌گیرنده فق
 export const RECIPIENT_TERMINATED_STATUS = 'قطع همکاری';
 
 /**
+ * Whether a picked personnel can be sent as the recipient. The stock page still lists terminated personnel as the
+ * counterparty of a remittance (its buyer name, as before); only a live one is sent as `recipientPersonnelId`.
+ */
+export function isRecipientCandidate(person: { employmentStatus?: string | null } | null | undefined): boolean {
+  return !!person && String(person.employmentStatus ?? '').trim() !== RECIPIENT_TERMINATED_STATUS;
+}
+
+/**
  * The recipient a body sends: `undefined` when not sent, `null` when cleared, a positive whole id, else `NaN`
  * (the caller refuses it).
  */

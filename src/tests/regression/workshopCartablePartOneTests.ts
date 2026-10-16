@@ -22,10 +22,10 @@ export async function runWorkshopCartablePartOneTests(shouldRun: ShouldRun): Pro
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (h: Harness, wrong: string[]) => Promise<string>]> = [
     ['reg_workshop_long_session_n01',
-      'v10.1.37: a role with workshop.long_session logs in for seven days (token exp and cookie Max-Age), other roles and the system admin for 24 hours, and the workshop worker template holds both workshop keys (N-01, TD-1283)',
+      'v10.1.37: a role holding only workshop.long_session and workshop.self logs in for seven days (token exp and cookie Max-Age), a role with any other key and the system admin for 24 hours, a permission change of such a role ends its users\' sessions, and the workshop worker template holds both workshop keys (N-01, TD-1283)',
       ['n01', 'workshop', 'auth', 'session'], longSessionCase],
     ['reg_project_managers_n01',
-      'v10.1.37: project managers are saved on project create and edit, returned with the project record and audited; a deleted or repeated user is 422 PROJECT_MANAGER_INVALID with nothing written (N-01, TD-1283)',
+      'v10.1.37: project managers are saved on project create and edit, returned with the project record and audited with the added users; a newly added deleted user or a repeated one is 422 PROJECT_MANAGER_INVALID with nothing written, while a manager deleted later never blocks the save (N-01, TD-1283)',
       ['n01', 'workshop', 'projects'], projectManagersCase],
     ['reg_stock_recipient_n01',
       'v10.1.37: a remittance and a material allocation store their recipient personnel; a recipient on another document type is 422 RECIPIENT_REMITTANCE_ONLY and a deleted or terminated personnel 422 RECIPIENT_PERSONNEL_INVALID before any stock movement (N-01, TD-1283)',
@@ -74,9 +74,11 @@ async function longSessionCase(h: Harness, wrong: string[]): Promise<string> {
   };
   const worker = await h.sessionWith(['workshop.self', 'workshop.long_session']);
   const keeper = await h.sessionWith(['warehouse.view', 'workshop.self']);
+  const wider = await h.sessionWith(['workshop.self', 'workshop.long_session', 'warehouse.out']);
   const cases: Array<[string, string, number]> = [
     ['a role with workshop.long_session', worker.role, 7 * DAY],
     ['a role without it', keeper.role, DAY],
+    ['a role with workshop.long_session and another key', wider.role, DAY],
     ['the system admin', 'admin', DAY],
   ];
   for (const [label, role, expected] of cases) {
@@ -84,6 +86,19 @@ async function longSessionCase(h: Harness, wrong: string[]): Promise<string> {
     if (got.tokenSeconds !== expected || got.maxAge !== expected) {
       wrong.push(`${label} logged in with a token of ${got.tokenSeconds} s and a cookie Max-Age of ${got.maxAge}, expected ${expected} for both`);
     }
+  }
+
+  // a permission change of a long-session role ends its users' sessions, so an old seven-day token gets no new key
+  const member = await createTestUser({ role: worker.role });
+  try {
+    const versionOf = async () => Number((await h.q(`SELECT COALESCE(token_version, 0) AS v FROM users WHERE id = $1`, [member.id]))[0]?.v);
+    const before = await versionOf();
+    const [roleRow] = await h.q(`SELECT id FROM roles WHERE code = $1`, [worker.role]);
+    const changed = await h.put(`/api/roles/${roleRow?.id}`, { permissions: ['workshop.self', 'workshop.long_session', 'warehouse.view'] });
+    if (changed.status !== 200) wrong.push(`changing the long-session role answered ${brief(changed)}, expected 200`);
+    if (await versionOf() !== before + 1) wrong.push(`after the long-session role changed its member has token version ${await versionOf()}, expected ${before + 1}`);
+  } finally {
+    await h.q(`DELETE FROM users WHERE id = $1`, [member.id]);
   }
 
   const template = ROLE_TEMPLATES.find(t => t.code === 'workshop_worker');
@@ -129,6 +144,8 @@ async function projectManagersCase(h: Harness, wrong: string[]): Promise<string>
       [String(projectId)]);
     const after = (audit?.details as { after?: { managers?: string[] } } | undefined)?.after?.managers ?? [];
     if (after.length !== 2) wrong.push(`the manager change audit row holds ${JSON.stringify(audit?.details ?? null)}, expected two managers after`);
+    const addedIds = (audit?.details as { addedUserIds?: number[] } | undefined)?.addedUserIds ?? [];
+    if (JSON.stringify(addedIds) !== JSON.stringify([b.id])) wrong.push(`the manager change audit row names added users ${JSON.stringify(addedIds)}, expected [${b.id}]`);
 
     // refusals: a deleted user and a repeated user change nothing (the project version stays too)
     const versionBefore = await versionOf();
@@ -143,6 +160,12 @@ async function projectManagersCase(h: Harness, wrong: string[]): Promise<string>
     // an edit without managerUserIds keeps them; an empty list clears them
     const kept = await h.put(`/api/projects/${projectId}`, { version: await versionOf(), description: 'N01' });
     if (kept.status !== 200 || (await managersOf(projectId)).length !== 2) wrong.push(`an edit without managers answered ${brief(kept)} with ${(await managersOf(projectId)).length} managers, expected 200 and 2`);
+    // a manager whose user was deleted later never blocks the project save: kept as is, or removed
+    await h.q(`UPDATE users SET is_deleted = 1 WHERE id = $1`, [b.id]);
+    const stays = await h.put(`/api/projects/${projectId}`, { version: await versionOf(), description: 'N01 b', managerUserIds: [a.id, b.id] });
+    if (stays.status !== 200 || (await managersOf(projectId)).length !== 2) wrong.push(`keeping a manager whose user was deleted answered ${brief(stays)} with ${(await managersOf(projectId)).length} managers, expected 200 and 2`);
+    const dropped = await h.put(`/api/projects/${projectId}`, { version: await versionOf(), managerUserIds: [a.id] });
+    if (dropped.status !== 200 || JSON.stringify(await managersOf(projectId)) !== JSON.stringify([a.id])) wrong.push(`removing a deleted manager answered ${brief(dropped)} with managers ${JSON.stringify(await managersOf(projectId))}, expected 200 and [${a.id}]`);
     const cleared = await h.put(`/api/projects/${projectId}`, { version: await versionOf(), managerUserIds: [] });
     if (cleared.status !== 200 || (await managersOf(projectId)).length !== 0) wrong.push(`an empty manager list answered ${brief(cleared)} with ${(await managersOf(projectId)).length} managers, expected 200 and 0`);
     return `project ${projectId}: managers saved, read, audited and refused`;

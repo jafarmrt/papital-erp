@@ -37,8 +37,9 @@ function managerIdsError(message: string, details?: unknown): ValidationError {
 }
 
 /**
- * Replaces a project's managers with `userIds` (the caller holds the project row lock). Users are read `FOR SHARE`, so
- * a user deleted meanwhile cannot become a manager; an unchanged list writes nothing.
+ * Replaces a project's managers with `userIds` (the caller holds the project row lock). A newly added user is read
+ * `FOR SHARE`, so a user deleted meanwhile cannot become a manager; a manager already on the project may stay or go even
+ * after their user is deleted, so the project still saves. An unchanged list writes nothing.
  */
 export async function setProjectManagers(
   tx: DbExecutor,
@@ -53,23 +54,24 @@ export async function setProjectManagers(
     throw managerIdsError(`یک پروژه حداکثر ${toPersianDigits(MAX_PROJECT_MANAGERS)} مسئول دارد.`);
   }
 
-  const live = wanted.length === 0 ? [] : await tx
-    .select({ id: users.id, fullName: users.fullName, username: users.username })
-    .from(users)
-    .where(and(inArray(users.id, wanted), eq(users.isDeleted, 0)))
-    .orderBy(asc(users.id))
-    .for('share');
-  const liveIds = new Set(live.map(u => u.id));
-  const missing = wanted.filter(id => !liveIds.has(id));
-  if (missing.length > 0) {
-    throw managerIdsError('مسئول پروژه باید کاربر فعال سامانه باشد؛ کاربر انتخاب‌شده پیدا نشد یا حذف شده است.', { userIds: missing });
-  }
-
+  // Only a newly added manager must be a live user: a manager deleted later stays on the project until removed
   const current = (await readProjectManagers(tx, [project.id])).get(project.id) ?? [];
   const currentIds = current.map(m => m.userId);
   const removed = currentIds.filter(id => !wanted.includes(id));
   const added = wanted.filter(id => !currentIds.includes(id));
   if (removed.length === 0 && added.length === 0) return;
+
+  const live = added.length === 0 ? [] : await tx
+    .select({ id: users.id, fullName: users.fullName, username: users.username })
+    .from(users)
+    .where(and(inArray(users.id, added), eq(users.isDeleted, 0)))
+    .orderBy(asc(users.id))
+    .for('share');
+  const liveIds = new Set(live.map(u => u.id));
+  const missing = added.filter(id => !liveIds.has(id));
+  if (missing.length > 0) {
+    throw managerIdsError('مسئول پروژه باید کاربر فعال سامانه باشد؛ کاربر انتخاب‌شده پیدا نشد یا حذف شده است.', { userIds: missing });
+  }
 
   if (removed.length > 0) {
     await tx.delete(projectManagers).where(and(eq(projectManagers.projectId, project.id), inArray(projectManagers.userId, removed)));
@@ -95,6 +97,8 @@ export async function setProjectManagers(
       before: { managers: names(currentIds) },
       after: { managers: names(wanted) },
       changes: { managers: { before: names(currentIds), after: names(wanted) } },
+      addedUserIds: added,
+      removedUserIds: removed,
     },
   });
 }
