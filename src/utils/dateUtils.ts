@@ -1,4 +1,5 @@
 import { toEnglishDigits, toPersianDigits } from "./persianNumber.js";
+import { gregorianToJalali } from "./calendarDate.js";
 
 /**
  * تبدیل مستقیم سال، ماه و روز جلالی به میلادی با الگوریتم استاندارد و دقیق تقویم جلالی (Kazimierz M. Borkowski)
@@ -73,17 +74,19 @@ export function jalaliToIsoDate(str: string | null | undefined): string {
  * نرمال‌سازی قطعی انواع تاریخ ورودی (رشته جلالی، تاریخ میلادی، رشته ISO یا شیء Date)
  * به فرمت استاندارد timestamp پایگاه‌داده PostgreSQL (YYYY-MM-DD HH:mm:ss).
  * این تابع از وقوع خطای datetime out of range هنگام ذخیره تاریخ‌های جلالی در ستون‌های timestamp جلوگیری می‌کند.
+ * OBS-R2-100: ورودی خالی یا ناخوانا رشته خالی برمی‌گرداند، نه «اکنون» UTC؛ فراخواننده اکنونِ کسب‌وکار را خودش می‌گذارد
+ * (`businessNowIsoDateTime`، §1.10).
  */
 export function normalizeDateToDbTimestamp(dateInput?: string | Date | null): string {
   if (!dateInput) {
-    return new Date().toISOString().replace('T', ' ').slice(0, 19);
+    return '';
   }
   if (dateInput instanceof Date && !isNaN(dateInput.getTime())) {
     return dateInput.toISOString().replace('T', ' ').slice(0, 19);
   }
   const s = String(dateInput).trim();
   if (!s) {
-    return new Date().toISOString().replace('T', ' ').slice(0, 19);
+    return '';
   }
   // اگر قبلاً ISO با زمان است (مثلاً 2026-09-22T06:19:46.000Z)
   if (s.includes('T') && /^\d{4}-\d{2}-\d{2}/.test(s) && !s.startsWith('13') && !s.startsWith('14') && !s.startsWith('15')) {
@@ -106,7 +109,7 @@ export function normalizeDateToDbTimestamp(dateInput?: string | Date | null): st
     const timePart = timeMatch ? (timeMatch[1].length === 5 ? `${timeMatch[1]}:00` : timeMatch[1]) : '00:00:00';
     return `${isoDate} ${timePart}`;
   }
-  return new Date().toISOString().replace('T', ' ').slice(0, 19);
+  return '';
 }
 
 /**
@@ -116,11 +119,22 @@ export function normalizeDateToDbTimestamp(dateInput?: string | Date | null): st
  * ماژولی در این فایل ست می‌شود (TimezoneProvider روی App اتصال می‌زند).
  * پیش‌فرض: Asia/Tehran مطابق توافق کاربر.
  */
-let _displayTimezone = 'Asia/Tehran';
+export const DEFAULT_DISPLAY_TIMEZONE = 'Asia/Tehran';
+let _displayTimezone = DEFAULT_DISPLAY_TIMEZONE;
+const _displayTimezoneListeners = new Set<() => void>();
+
+/** The zone `setDisplayTimezone` would keep for this value, or null when it would ignore it */
+export function normalizeDisplayTimezone(tz: string | null | undefined): string | null {
+  return typeof tz === 'string' && tz.trim() && !/[^\w\/+\-]/.test(tz.trim()) ? tz.trim() : null;
+}
 
 export function setDisplayTimezone(tz: string | null | undefined): void {
-  if (typeof tz === 'string' && tz.trim() && !/[^\w\/+\-]/.test(tz.trim())) {
-    _displayTimezone = tz.trim();
+  const next = normalizeDisplayTimezone(tz);
+  if (next) {
+    if (next === _displayTimezone) return;
+    _displayTimezone = next;
+    // OBS-R2-106: React readers (`useDisplayTimezone`) re-render when the zone changes
+    _displayTimezoneListeners.forEach(listener => listener());
   }
 }
 
@@ -128,27 +142,44 @@ export function getDisplayTimezoneClient(): string {
   return _displayTimezone;
 }
 
+/** Subscribes to display time zone changes (for `useSyncExternalStore`); returns the unsubscribe function. */
+export function subscribeDisplayTimezone(listener: () => void): () => void {
+  _displayTimezoneListeners.add(listener);
+  return () => { _displayTimezoneListeners.delete(listener); };
+}
+
 /**Intl options با timeZone تزریق‌شده از تنظیمات */
 function tzOptions(base: Intl.DateTimeFormatOptions): Intl.DateTimeFormatOptions {
   return { ...base, timeZone: _displayTimezone };
 }
 
-/** پیاده‌سازی واحد برای هر سه تابع تاریخ جلالی (v4.0.29 — حذف بدنه‌های تکراری) */
-function getShiftedJalaliDate(dayOffset: number, fallback: string = ''): string {
-  try {
-    const date = new Date();
-    if (dayOffset !== 0) {
-      date.setDate(date.getDate() + dayOffset);
+/**
+ * OBS-R2-100: today's Gregorian calendar day in the display time zone; when that zone is unusable, in the default zone,
+ * then in the device's zone. Never a fixed date.
+ */
+function todayCalendarDay(now: Date = new Date()): [number, number, number] {
+  for (const timeZone of [_displayTimezone, DEFAULT_DISPLAY_TIMEZONE, undefined]) {
+    try {
+      const parts = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone }).formatToParts(now);
+      const part = (type: string) => Number(parts.find(p => p.type === type)?.value);
+      const [y, m, d] = [part('year'), part('month'), part('day')];
+      if (y > 0 && m > 0 && d > 0) return [y, m, d];
+    } catch {
+      // the next zone
     }
-    const formatted = new Intl.DateTimeFormat('fa-IR-u-ca-persian', tzOptions({
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    })).format(date);
-    return toEnglishDigits(formatted);
-  } catch (e) {
-    return fallback;
   }
+  return [now.getFullYear(), now.getMonth() + 1, now.getDate()];
+}
+
+/**
+ * پیاده‌سازی واحد برای هر سه تابع تاریخ جلالی (v4.0.29). OBS-R2-100: روزها روی تاریخ تقویمی جمع و کم می‌شوند، نه روی
+ * میلی‌ثانیه، پس تغییر ساعت تابستانی روز را جابه‌جا نمی‌کند؛ و در شکست منطقه زمانی، امروزِ منطقه پیش‌فرض می‌آید، نه تاریخ ثابت.
+ */
+function getShiftedJalaliDate(dayOffset: number): string {
+  const [y, m, d] = todayCalendarDay();
+  const day = new Date(Date.UTC(y, m - 1, d + dayOffset));
+  const [jy, jm, jd] = gregorianToJalali(day.getUTCFullYear(), day.getUTCMonth() + 1, day.getUTCDate());
+  return `${jy}/${String(jm).padStart(2, '0')}/${String(jd).padStart(2, '0')}`;
 }
 
 /**
@@ -167,7 +198,7 @@ export function displayClockNow(now: Date = new Date()): { hour: number; time: s
 }
 
 export function getTodayJalaliDate(): string {
-  return getShiftedJalaliDate(0, '1405/06/06');
+  return getShiftedJalaliDate(0);
 }
 
 /**
@@ -175,7 +206,8 @@ export function getTodayJalaliDate(): string {
  * ثبت ۰۰:۰۰ تا ۰۳:۳۰ تهران را به دیروز (شب نوروز: سال مالی قبل) می‌برد.
  */
 export function getTodayIsoDate(): string {
-  return new Intl.DateTimeFormat('en-CA', tzOptions({ year: 'numeric', month: '2-digit', day: '2-digit' })).format(new Date());
+  const [y, m, d] = todayCalendarDay();
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
 export function getPastJalaliDate(daysAgo: number = 30): string {

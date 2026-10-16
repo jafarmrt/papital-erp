@@ -1,6 +1,6 @@
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { User } from '../types';
-import { fetchJson, setAuthToken, setCsrfToken } from '../api';
+import { ApiError, fetchJson, setAuthToken, setCsrfToken } from '../api';
 import { queryClient } from '../lib/queryClient';
 import { userHoldsPermission } from '../lib/permissions/userHoldsPermission';
 import { isSystemAdminViewer, type ViewerAccess } from '../lib/permissions/pageAccess';
@@ -11,10 +11,11 @@ export interface UserPermissions {
   roleName?: string;
 }
 
-export interface LoginCredentials {
-  username: string;
-  password?: string;
-}
+/** OBS-R1-33: what the user is told when the session ends or cannot be read (shown by `App` and the login page) */
+export const SESSION_EXPIRED_MESSAGE = 'نشست شما پایان یافته است؛ دوباره وارد شوید.';
+export const LOGOUT_NOT_CONFIRMED_MESSAGE = 'خروج در کارساز تأیید نشد؛ برای اطمینان پنجره مرورگر را ببندید.';
+export const SESSION_CHECK_FAILED_MESSAGE = 'نشست شما بررسی نشد، چون اتصال یا کارساز در دسترس نیست. دوباره تلاش کنید.';
+export const PERMISSIONS_LOAD_FAILED_MESSAGE = 'مجوزهای کاربر خوانده نشد؛ برخی بخش‌ها نشان داده نمی‌شوند. دوباره تلاش کنید.';
 
 export interface AuthContextValue {
   user: User | null;
@@ -23,8 +24,14 @@ export interface AuthContextValue {
   permissionsLoaded: boolean;
   isProfileModalOpen: boolean;
   setIsProfileModalOpen: (open: boolean) => void;
-  login: (userOrCredentials: User | LoginCredentials, token?: string) => Promise<any>;
+  /** the login and setup pages call it with the user and token the server answered */
+  login: (user: User, token?: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** OBS-R1-33: why the permissions could not be read (null when they were) */
+  permissionsError: string | null;
+  sessionCheckError: string | null;
+  /** OBS-R1-33: a notice for the login page: the session expired or the logout was not confirmed */
+  sessionNotice: string | null;
   updateUser: (updatedUser: User) => void;
   refreshUser: () => Promise<void>;
   loadUserPermissions: () => Promise<void>;
@@ -41,8 +48,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAdmin: false
   });
   const [permissionsLoaded, setPermissionsLoaded] = useState<boolean>(false);
+  const [permissionsError, setPermissionsError] = useState<string | null>(null);
+  const [sessionNotice, setSessionNotice] = useState<string | null>(null);
+  const [sessionCheckError, setSessionCheckError] = useState<string | null>(null);
+  const userRef = useRef<User | null>(null);
+  userRef.current = user;
+
+  /** OBS-R1-33: everything of the previous session leaves the browser (cache, user, permissions, open windows) */
+  const resetSessionState = useCallback(() => {
+    setCsrfToken(null);
+    setAuthToken(null);
+    // v9.0.74 (TD-518): داده کاربر قبلی در کش نمی‌ماند تا کاربر بعدی همین مرورگر آن را بی درخواست به سرور نبیند
+    queryClient.clear();
+    setUser(null);
+    setUserPermissions({ permissions: [], isAdmin: false });
+    setPermissionsLoaded(false);
+    setPermissionsError(null);
+    setSessionCheckError(null);
+    setIsProfileModalOpen(false);
+  }, []);
 
   const loadUserPermissions = useCallback(async (signal?: AbortSignal) => {
+    setPermissionsError(null);
     try {
       const res = await fetchJson<{ permissions: string[]; isAdmin: boolean; roleName?: string }>('/users/my-permissions', { signal });
       if (res && res.permissions) {
@@ -55,30 +82,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err: any) {
       if (err?.name === 'AbortError') return;
       console.error('Failed to load user permissions:', err);
+      // OBS-R1-33: a failure is shown, never read as «no permissions»
+      setPermissionsError(PERMISSIONS_LOAD_FAILED_MESSAGE);
     } finally {
       setPermissionsLoaded(true);
     }
   }, []);
 
   const logout = useCallback(async () => {
+    let notice: string | null = null;
     try {
       await fetchJson('/auth/logout', { method: 'POST' });
-    } catch {
-      // Ignore network errors on logout
+    } catch (err) {
+      // OBS-R1-33: the local session is cleared anyway; the user is told the server did not confirm it (a 401 means
+      // the server session had already ended)
+      if (!(err instanceof ApiError && err.status === 401)) notice = LOGOUT_NOT_CONFIRMED_MESSAGE;
     } finally {
-      setCsrfToken(null);
-      setAuthToken(null);
-      // v9.0.74 (TD-518): داده کاربر قبلی در کش نمی‌ماند تا کاربر بعدی همین مرورگر آن را بی درخواست به سرور نبیند
-      queryClient.clear();
-      setUser(null);
-      setUserPermissions({ permissions: [], isAdmin: false });
-      setPermissionsLoaded(false);
+      resetSessionState();
+      setSessionNotice(notice);
     }
-  }, []);
+  }, [resetSessionState]);
 
   const refreshUser = useCallback(async (signal?: AbortSignal) => {
     try {
       const res = await fetchJson<{ authenticated?: boolean; user?: User; token?: string }>('/auth/me', { signal });
+      // the error page stays up while a retry runs and goes only with the answer
+      setSessionCheckError(null);
       if (res?.authenticated && res?.user) {
         setUser(res.user);
         if (res.token) setAuthToken(res.token);
@@ -88,32 +117,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (err: any) {
       if (err?.name === 'AbortError') return;
-      setUser(null);
-      setUserPermissions({ permissions: [], isAdmin: false });
+      // OBS-R1-33: only a 401 ends the session; a network or server error (common on a workshop phone) keeps the token
+      // and cache and shows «تلاش دوباره» instead of the login page
+      if (err?.status === 401) resetSessionState();
+      else setSessionCheckError(SESSION_CHECK_FAILED_MESSAGE);
     } finally {
       setLoading(false);
     }
-  }, [loadUserPermissions, logout]);
+  }, [loadUserPermissions, logout, resetSessionState]);
 
-  const login = useCallback(async (userOrCredentials: User | LoginCredentials, token?: string): Promise<any> => {
-    if ('username' in userOrCredentials && ('password' in userOrCredentials || !('role' in userOrCredentials))) {
-      const res = await fetchJson('/login', {
-        method: 'POST',
-        body: JSON.stringify(userOrCredentials)
-      });
-      if (res?.success && res?.user) {
-        if (res.token) setAuthToken(res.token);
-        setUser(res.user);
-        await loadUserPermissions();
-      }
-      return res;
-    } else {
-      const u = userOrCredentials as User;
-      if (token) setAuthToken(token);
-      setUser(u);
-      await loadUserPermissions();
-      return { success: true, user: u };
-    }
+  // OBS-R1-33: the login and setup pages post the credentials themselves; the old credentials branch here was never used
+  const login = useCallback(async (loggedInUser: User, token?: string): Promise<void> => {
+    if (token) setAuthToken(token);
+    setSessionNotice(null);
+    setUser(loggedInUser);
+    await loadUserPermissions();
   }, [loadUserPermissions]);
 
   const updateUser = useCallback((updatedUser: User) => {
@@ -121,10 +139,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // OBS-R1-33: a 401 during a session resets everything and tells the user why they are on the login page
     const handleUnauthorized = () => {
-      queryClient.clear();
-      setUser(null);
-      setUserPermissions({ permissions: [], isAdmin: false });
+      const hadSession = userRef.current !== null;
+      resetSessionState();
+      if (hadSession) setSessionNotice(SESSION_EXPIRED_MESSAGE);
     };
     // v9.0.219 (TD-523): سرور رمز را موقت دانست؛ `App` به جای برنامه فقط برگه تغییر رمز را نشان می‌دهد
     const handlePasswordResetRequired = () => {
@@ -136,7 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('auth:unauthorized', handleUnauthorized);
       window.removeEventListener('auth:password-reset-required', handlePasswordResetRequired);
     };
-  }, []);
+  }, [resetSessionState]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -151,6 +170,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         userPermissions,
         permissionsLoaded,
+        permissionsError,
+        sessionCheckError,
+        sessionNotice,
         isProfileModalOpen,
         setIsProfileModalOpen,
         login,

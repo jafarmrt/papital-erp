@@ -7,6 +7,7 @@ import { RoleFormModal } from '../../components/users/RoleFormModal';
 import { PERMISSION_CATALOG, withRequiredPermissions } from '../../lib/permissions/permissionCatalog';
 import { ROLE_TEMPLATES, roleDraftFromTemplate, uniqueRoleCode } from '../../lib/permissions/roleTemplates';
 import type { PermissionCategory, Role, User } from '../../types';
+import { QueryWrapper } from './helpers/queryWrapper';
 
 // v9.0.134 (TD-526، یافته B02-11، تصمیم ت۶ بازنگری‌شده الف): نصب تازه جز «مدیر سیستم» نقشی ندارد؛ مدیر با «ساخت نقش از الگو»
 // یکی از فهرست واحد الگوها را برمی‌گزیند و فرم نقش تازه با نام و تیک‌های همان الگو باز می‌شود. قالب‌های جداگانه فرم نقش رفتند.
@@ -46,6 +47,7 @@ describe('role templates (TD-526)', () => {
   it('has no separate presets in the role form any more', () => {
     render(
       <RoleFormModal isOpen onClose={() => undefined} editingRole={null} permCatalog={PERMISSION_CATALOG as unknown as PermissionCategory[]} onSuccess={() => undefined} />,
+      { wrapper: QueryWrapper },
     );
     expect(screen.queryByText(/قالب‌های آماده نقش/)).toBeNull();
   });

@@ -4,6 +4,7 @@ import { RolesTab } from '../../components/users/RolesTab';
 import { RoleFormModal } from '../../components/users/RoleFormModal';
 import { PERMISSION_CATALOG, PERMISSION_KEYS } from '../../lib/permissions/permissionCatalog';
 import type { PermissionCategory, Role } from '../../types';
+import { QueryWrapper } from './helpers/queryWrapper';
 
 // v9.0.135 (TD-885، تصمیم ت۹ الف مدل مجوز): فقط «مدیر سیستم» نقش ثابت است. نقش پیش‌فرض قدیمی (که پیش‌تر «سیستمی» و
 // حذف‌نشدنی بود) مثل هر نقش دیگری دکمه حذف دارد. v9.0.136 (TD-886، قاعده ۳): تیک‌های «مدیر سیستم» همه زده و قفل‌اند.
@@ -40,7 +41,7 @@ describe('the system admin role ticks are shown but fixed (TD-886)', () => {
   it('shows every permission ticked and locked and saves only the name and description', async () => {
     fetchJson.mockResolvedValue({ success: true });
     const catalog = PERMISSION_CATALOG as unknown as PermissionCategory[];
-    render(<RoleFormModal isOpen onClose={() => undefined} editingRole={{ ...admin, permissions: [] }} permCatalog={catalog} onSuccess={() => undefined} />);
+    render(<RoleFormModal isOpen onClose={() => undefined} editingRole={{ ...admin, permissions: [] }} permCatalog={catalog} onSuccess={() => undefined} />, { wrapper: QueryWrapper });
     expect(screen.getByRole('note').textContent).toContain('همیشه همه مجوزها را دارد');
     const boxes = screen.getAllByRole('checkbox') as HTMLInputElement[];
     expect(boxes).toHaveLength(PERMISSION_KEYS.length);

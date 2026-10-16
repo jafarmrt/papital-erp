@@ -3,6 +3,9 @@
  * customer name, document number, project code), so the list shows that record, not every match of the typed text.
  * The documents list also reads the number from its address (`?search=`, TD-828).
  */
+/** OBS-R2-99: the longest global search text the server accepts (and the header input allows) */
+export const GLOBAL_SEARCH_MAX_LENGTH = 100;
+
 export type GlobalSearchHit =
   | { kind: 'item'; code: string; type: 'product' | 'raw_material' }
   | { kind: 'customer'; name: string }

@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { items, transactions } from '../../db/schema.js';
 import { normalizeDateToDbTimestamp } from '../../utils.js';
+import { businessNowIsoDateTime } from '../../lib/businessClock.js';
 import { fin, FinancialMath, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
 import { nextVersion } from '../../lib/occHelper.js';
@@ -110,7 +111,8 @@ export class DocumentStockEngine {
     const before = await ItemWarehouseStockService.getStockSnapshot(tx, itemId);
     const oldTotalStock = before.total;
 
-    const normalizedTxDate = normalizeDateToDbTimestamp(date);
+    // OBS-R2-100: an empty date is the business now (§1.10), never the UTC now
+    const normalizedTxDate = normalizeDateToDbTimestamp(date) || normalizeDateToDbTimestamp(await businessNowIsoDateTime());
 
     // v8.0.4 (TD-257): تاریخ گردش نه پیش از آخرین گردش همین کالا، مگر با مجوز و موجودی کافی تا آن تاریخ و پس از آن
     await assertStockMovementDate(tx, {

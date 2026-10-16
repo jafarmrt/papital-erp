@@ -94,8 +94,9 @@ async function minimumStockFromDay(tx: DbExecutor, itemId: number, day: string, 
 
 /** قاعده تاریخ گردش انبار (نه آینده، نه پیش از آخرین گردش کالا)؛ پیش از ثبت ردیف کاردکس و زیر قفل سطری کالا صدا زده می‌شود */
 export async function assertStockMovementDate(tx: DbExecutor, check: StockMovementDateCheck): Promise<void> {
-  const day = normalizeDateToDbTimestamp(check.date).slice(0, 10);
   const today = await businessTodayIsoDate();
+  // OBS-R2-100: an empty date is today's business date, never the UTC day
+  const day = normalizeDateToDbTimestamp(check.date).slice(0, 10) || today;
   if (day > today) {
     throw new ValidationError(
       `تاریخ گردش کالای ${check.itemLabel} (${isoToJalaliDate(day)}) پس از امروز (${isoToJalaliDate(today)}) است. ` +

@@ -1,11 +1,14 @@
 import React , { ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import { isChunkLoadError, reloadOnceForNewVersion, reloadPage } from '../lib/system/chunkReload';
 
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
   title?: string;
   description?: string;
+  /** OBS-R2-92: a new value (the route's pathname for the root boundary) clears a caught error */
+  resetKey?: unknown;
 }
 
 interface State {
@@ -35,27 +38,15 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('[ErrorBoundary] Uncaught error in component tree:', error, errorInfo);
+    // OBS-R2-92: only a chunk that failed to load is a new version; one automatic reload per guard window, never a loop
+    if (isChunkLoadError(error)) {
+      setTimeout(() => { reloadOnceForNewVersion(error); }, 150);
+    }
+  }
 
-    const isStaleBundleError =
-      error?.message?.includes('dynamically imported module') ||
-      error?.name === 'ChunkLoadError' ||
-      error?.message?.includes('resolveDispatcher') ||
-      error?.message?.includes('Invalid hook call') ||
-      error?.message?.includes('Loading chunk');
-
-    if (isStaleBundleError && typeof window !== 'undefined') {
-      const lastReload = Number(sessionStorage.getItem('eb_chunk_reload_ts') || '0');
-      const now = Date.now();
-      if (now - lastReload > 3000) {
-        sessionStorage.setItem('eb_chunk_reload_ts', String(now));
-        setTimeout(() => {
-          try {
-            window.location.reload();
-          } catch {
-            window.location.href = window.location.href;
-          }
-        }, 150);
-      }
+  public componentDidUpdate(prevProps: Props) {
+    if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
+      this.setState({ hasError: false, error: null });
     }
   }
 
@@ -64,11 +55,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
   };
 
   private handleReload = () => {
-    try {
-      window.location.reload();
-    } catch {
-      window.location.href = window.location.href;
-    }
+    reloadPage();
   };
 
   private handleGoHome = () => {
@@ -81,12 +68,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
         return this.props.fallback;
       }
 
-      const isModuleLoadError =
-        this.state.error?.message?.includes('dynamically imported module') ||
-        this.state.error?.name === 'ChunkLoadError' ||
-        this.state.error?.message?.includes('resolveDispatcher') ||
-        this.state.error?.message?.includes('Invalid hook call') ||
-        this.state.error?.message?.includes('Loading chunk');
+      const isModuleLoadError = isChunkLoadError(this.state.error);
 
       return (
         <div className="min-h-[420px] flex items-center justify-center p-6 text-center" dir="rtl">

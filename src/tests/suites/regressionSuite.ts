@@ -11103,5 +11103,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runWorkflowSweepTests } = await import('../regression/workflowSweepTests.js');
   results.push(...await runWorkflowSweepTests(shouldRun));
 
+  // closing sweep: app shell (global search text cap and phone match, page limit 0)
+  const { runShellSweepTests } = await import('../regression/shellSweepTests.js');
+  results.push(...await runShellSweepTests(shouldRun));
+
   return results;
 }

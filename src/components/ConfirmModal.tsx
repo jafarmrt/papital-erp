@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Modal, ModalFooterActions } from './common/Modal';
 
@@ -11,8 +12,11 @@ interface ConfirmModalProps {
   isOpen: boolean;
   title?: string;
   message: string;
-  onConfirm: () => void;
+  /** OBS-R1-34: may return a promise; the window then runs once, shows «running» and keeps Esc and cancel off */
+  onConfirm: () => void | Promise<unknown>;
   onCancel: () => void;
+  /** the caller's own running flag (a mutation's isPending) */
+  isLoading?: boolean;
   confirmText?: string;
   cancelText?: string;
 }
@@ -24,25 +28,50 @@ export default function ConfirmModal({
   onConfirm,
   onCancel,
   confirmText = 'بله، مطمئنم',
-  cancelText = 'انصراف'
+  cancelText = 'انصراف',
+  isLoading = false,
 }: ConfirmModalProps) {
+  // OBS-R1-34: a second click while the action runs sends nothing; the ref sees it before React re-renders
+  const runningRef = useRef(false);
+  const [running, setRunning] = useState(false);
+  const busy = running || isLoading;
+
+  const handleConfirm = async () => {
+    if (runningRef.current || isLoading) return;
+    runningRef.current = true;
+    setRunning(true);
+    try {
+      await onConfirm();
+    } catch {
+      // the caller reports its own error (a mutation's onError); the window stays open for another try
+    } finally {
+      runningRef.current = false;
+      setRunning(false);
+    }
+  };
+  const handleCancel = () => {
+    if (!busy) onCancel();
+  };
+
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onCancel}
+      onClose={handleCancel}
       title={title}
       icon={<AlertTriangle className="text-amber-500 shrink-0 w-5 h-5" />}
       size="sm"
       layerClassName={CONFIRM_LAYER_CLASS}
-      closeOnEscape
-      closeOnBackdropClick
+      closeOnEscape={!busy}
+      closeOnBackdropClick={!busy}
+      showCloseButton={!busy}
       footer={
         <ModalFooterActions
-          onCancel={onCancel}
-          onConfirm={onConfirm}
+          onCancel={handleCancel}
+          onConfirm={() => void handleConfirm()}
           confirmText={confirmText}
           cancelText={cancelText}
           confirmVariant="danger"
+          isLoading={busy}
         />
       }
     >

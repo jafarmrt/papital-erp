@@ -7,6 +7,9 @@ import { AppLayout } from './components/layout';
 import { AppRoutes } from './components/AppRoutes';
 import { ForcedPasswordChange } from './components/auth/ForcedPasswordChange';
 import { mustChangePassword } from './lib/auth/passwordReset';
+import { SearchRouteReset } from './SearchContext';
+import { PermissionsLoadError } from './components/auth/PermissionsLoadError';
+import { SessionCheckError } from './components/auth/SessionCheckError';
 
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 
@@ -16,6 +19,11 @@ export default function App() {
     loading,
     userPermissions,
     permissionsLoaded,
+    permissionsError,
+    sessionCheckError,
+    refreshUser,
+    sessionNotice,
+    loadUserPermissions,
     login,
     logout,
     updateUser,
@@ -58,10 +66,15 @@ export default function App() {
     return <PageLoader message="در حال آماده‌سازی و بررسی نشست کاربری..." />;
   }
 
+  // OBS-R1-33: the session could not be checked (network or server error): retry, never the login page
+  if (!user && sessionCheckError) {
+    return <SessionCheckError message={sessionCheckError} onRetry={refreshUser} />;
+  }
+
   if (!user) {
     return (
       <Suspense fallback={<PageLoader message="در حال آماده‌سازی سامانه..." />}>
-        <LoginPage onLogin={login} />
+        <LoginPage onLogin={login} notice={sessionNotice} />
       </Suspense>
     );
   }
@@ -109,7 +122,12 @@ export default function App() {
 
   return (
     <Router>
+      {/* OBS-R2-91: before the pages, so a page's own filter from the address survives the route change */}
+      <SearchRouteReset />
       {toaster}
+      {permissionsError && (
+        <PermissionsLoadError message={permissionsError} onRetry={() => void loadUserPermissions()} />
+      )}
       <AppLayout
         user={user}
         userPermissions={userPermissions}

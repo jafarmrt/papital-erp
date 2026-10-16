@@ -7,6 +7,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { UserFormModal } from '../../components/users/UserFormModal';
 import { setCsrfToken } from '../../api';
 import type { Role } from '../../types';
+import { QueryWrapper } from './helpers/queryWrapper';
 
 const seedOrderRoles = [
   { id: 1, code: 'admin', name: 'مدیر سیستم', permissions: [], isSystem: 1 },
@@ -36,7 +37,7 @@ describe('TD-517 new-user form role', () => {
   it('starts with no role selected, and a form without a role sends nothing', async () => {
     setCsrfToken('test-csrf');
     const calls = stubFetch();
-    render(<UserFormModal isOpen onClose={() => {}} editingUser={null} rolesList={seedOrderRoles} onSuccess={() => {}} />);
+    render(<UserFormModal isOpen onClose={() => {}} editingUser={null} rolesList={seedOrderRoles} onSuccess={() => {}} />, { wrapper: QueryWrapper });
     const select = document.querySelector('select') as HTMLSelectElement;
     expect(select.value).toBe('');
     fillAccount();
@@ -48,7 +49,7 @@ describe('TD-517 new-user form role', () => {
   it('lists the system admin last with a warning, and sends the role the manager picked', async () => {
     setCsrfToken('test-csrf');
     const calls = stubFetch();
-    render(<UserFormModal isOpen onClose={() => {}} editingUser={null} rolesList={seedOrderRoles} onSuccess={() => {}} />);
+    render(<UserFormModal isOpen onClose={() => {}} editingUser={null} rolesList={seedOrderRoles} onSuccess={() => {}} />, { wrapper: QueryWrapper });
     const select = document.querySelector('select') as HTMLSelectElement;
     const values = Array.from(select.options).map(o => o.value);
     expect(values[0]).toBe('');

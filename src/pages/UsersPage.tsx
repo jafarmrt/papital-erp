@@ -86,10 +86,15 @@ export default function UsersPage({ currentUser, userPermissions }: UsersPagePro
     return (Array.isArray(permCatalog) ? permCatalog : []).reduce((acc: number, c: any) => acc + (c?.permissions?.length || 0), 0);
   }, [permCatalog]);
 
+  // OBS-R1-34: the error is shown by the mutation's onError and the window stays open; ConfirmModal sends it once
   const executeDeleteUser = async () => {
     const id = confirmUserState.userId;
-    await deleteUserMutation.mutateAsync(id);
-    setConfirmUserState({ isOpen: false, userId: 0 });
+    try {
+      await deleteUserMutation.mutateAsync(id);
+      setConfirmUserState({ isOpen: false, userId: 0 });
+    } catch {
+      // Handled in mutation onError
+    }
   };
 
   const executeDeleteRole = async () => {
@@ -279,6 +284,7 @@ export default function UsersPage({ currentUser, userPermissions }: UsersPagePro
         message={DELETE_USER_CONFIRM_MESSAGE}
         onConfirm={executeDeleteUser}
         onCancel={() => setConfirmUserState({ isOpen: false, userId: 0 })}
+        isLoading={deleteUserMutation.isPending}
       />
 
       {/* CONFIRM DELETE ROLE */}
@@ -287,6 +293,7 @@ export default function UsersPage({ currentUser, userPermissions }: UsersPagePro
         message={`آیا از حذف نقش "${confirmRoleState.roleName}" اطمینان دارید؟`}
         onConfirm={executeDeleteRole}
         onCancel={() => setConfirmRoleState({ isOpen: false, roleId: 0, roleName: '' })}
+        isLoading={deleteRoleMutation.isPending}
       />
     </div>
   );

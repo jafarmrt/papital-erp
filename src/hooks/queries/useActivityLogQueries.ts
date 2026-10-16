@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { MAX_PAGE_LIMIT } from '../../lib/pagination';
@@ -29,7 +29,7 @@ export interface ActivityLogItem {
   timestamp?: string;
 }
 
-async function fetchActivityLogs(filters: ActivityLogFilters) {
+async function fetchActivityLogs(filters: ActivityLogFilters, signal?: AbortSignal) {
   const params = new URLSearchParams();
   params.set('page', String(filters.page ?? 1));
   params.set('limit', String(filters.limit ?? 30));
@@ -41,7 +41,7 @@ async function fetchActivityLogs(filters: ActivityLogFilters) {
   if (filters.startDate) params.set('startDate', filters.startDate);
   if (filters.endDate) params.set('endDate', filters.endDate);
 
-  const res = await fetchJson(`/activity-logs?${params.toString()}`);
+  const res = await fetchJson(`/activity-logs?${params.toString()}`, { signal });
   // V9: گارد استاندارد آرایه — پاسخ صفحه‌بندی‌شده یا آرایه خام
   const rawData = Array.isArray(res?.data)
     ? res.data
@@ -56,7 +56,8 @@ async function fetchActivityLogs(filters: ActivityLogFilters) {
 export function useActivityLogsQuery(filters: ActivityLogFilters) {
   return useQuery({
     queryKey: QUERY_KEYS.activityLogs.list(filters),
-    queryFn: () => fetchActivityLogs(filters),
+    // OBS-R1-38: a superseded page request is aborted
+    queryFn: ({ signal }) => fetchActivityLogs(filters, signal),
     staleTime: 30 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -82,8 +83,8 @@ export async function fetchAuditReportRows(filters: Omit<ActivityLogFilters, 'pa
 export function useActivityLogFilterOptionsQuery() {
   return useQuery({
     queryKey: QUERY_KEYS.activityLogs.filters(),
-    queryFn: async () => {
-      const res = await fetchJson('/activity-logs/filters');
+    queryFn: async ({ signal }) => {
+      const res = await fetchJson('/activity-logs/filters', { signal });
       return {
         users: Array.isArray(res?.users) ? res.users : [],
         actions: Array.isArray(res?.actions) ? res.actions : [],
@@ -108,8 +109,8 @@ export interface AuditLogIntegrityReport {
 export function useAuditLogIntegrityQuery() {
   return useQuery<AuditLogIntegrityReport>({
     queryKey: ['activity-logs', 'integrity'],
-    queryFn: async () => {
-      return await fetchJson('/activity-logs/integrity');
+    queryFn: async ({ signal }) => {
+      return await fetchJson('/activity-logs/integrity', { signal });
     },
     staleTime: 60 * 1000,
     refetchOnWindowFocus: false,
@@ -123,4 +124,27 @@ export function useInvalidateActivityLogs() {
     void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.activityLogs.all });
     void queryClient.invalidateQueries({ queryKey: ['activity-logs', 'integrity'] });
   };
+}
+
+export const PURGE_FAILED_MESSAGE = 'پاک‌سازی سجل انجام نشد؛ دوباره تلاش کنید.';
+
+export interface PurgeActivityLogsResult {
+  success?: boolean;
+  message?: string;
+}
+
+/** OBS-R1-36: the audit purge as a React Query mutation; a success refreshes the integrity card and the log lists */
+export function usePurgeActivityLogsMutation() {
+  const invalidate = useInvalidateActivityLogs();
+  return useMutation({
+    mutationFn: async (retentionDays: number): Promise<PurgeActivityLogsResult> => {
+      const res = await fetchJson<PurgeActivityLogsResult>('/activity-logs/purge', {
+        method: 'POST',
+        body: JSON.stringify({ retentionDays }),
+      });
+      if (!res?.success) throw new Error(res?.message || PURGE_FAILED_MESSAGE);
+      return res;
+    },
+    onSuccess: () => invalidate(),
+  });
 }

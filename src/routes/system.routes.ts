@@ -18,6 +18,8 @@ import { FactoryResetService, isFactoryResetCommittedError } from '../services/s
 import { SystemHealthService } from '../services/system/systemHealth.service.js';
 import { SystemReconciliationService, requeueResultMessage, stuckResetResultMessage } from '../services/system/systemReconciliation.service.js';
 import { GlobalSearchService } from '../services/system/globalSearch.service.js';
+import { GLOBAL_SEARCH_MAX_LENGTH } from '../lib/search/globalSearchTarget.js';
+import { toPersianDigits } from '../utils/persianNumber.js';
 import { DateCalendarReportService } from '../services/system/dateCalendarReport.service.js';
 import { buildConditionalConstraints, conditionalConstraintsResultMessage, findMissingConditionalConstraints } from '../services/system/conditionalConstraints.js';
 
@@ -55,6 +57,15 @@ export const activityLogsQuerySchema = z.object({
     startDate: storageDateParam,
     endDate: storageDateParam,
   }).optional()
+});
+
+// OBS-R2-99: the global search text has a length cap (400 with a Persian message, never a scan of a huge pattern)
+export const globalSearchQuerySchema = z.object({
+  query: z.object({
+    q: z.string({ message: 'متن جست‌وجو باید یک متن باشد' })
+      .max(GLOBAL_SEARCH_MAX_LENGTH, `متن جست‌وجوی سراسری حداکثر ${toPersianDigits(String(GLOBAL_SEARCH_MAX_LENGTH))} نویسه است`)
+      .optional(),
+  }).optional(),
 });
 
 export const purgeActivityLogsSchema = z.object({
@@ -354,7 +365,7 @@ router.post('/system/conditional-constraints/build', requireSystemAdmin, validat
 // می‌شود (کالا: products.view، طرف حساب: customers.view، سند و فاکتور: documents.view، پروژه: projects.view)؛
 // بخش بدون مجوز خالی است، نه خطا. پیش‌تر هر کاربر واردشده (مثلاً «کاربر ثبت گزارش») همه بخش‌ها را می‌گرفت.
 // نویسه‌های % و _ ورودی هم escape می‌شوند.
-router.get('/global-search', asyncHandler(async (req, res) => {
+router.get('/global-search', validate(globalSearchQuerySchema), asyncHandler(async (req, res) => {
   try {
     const q = String(req.query.q || '').trim();
     if (!q || q.length < 1) {

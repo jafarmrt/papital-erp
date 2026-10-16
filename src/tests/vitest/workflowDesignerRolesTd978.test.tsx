@@ -26,7 +26,8 @@ describe('WorkflowDesignerCanvas role list (TD-978)', () => {
         <WorkflowDesignerCanvas definitionId={7} onBack={() => {}} />
       </QueryClientProvider>,
     );
-    await waitFor(() => expect(fetchJson).toHaveBeenCalledWith('/roles'));
+    // OBS-R1-38: the read passes React Query's abort signal as its second argument
+    await waitFor(() => expect(fetchJson.mock.calls.map(c => c[0])).toContain('/roles'));
     expect(fetchJson.mock.calls.map(c => c[0])).not.toContain('/users/roles');
   });
 });

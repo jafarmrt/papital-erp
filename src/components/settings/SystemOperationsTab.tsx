@@ -1,9 +1,8 @@
 import { useState, useId } from 'react';
 import { ShieldAlert, AlertTriangle, Trash2, CheckCircle2, RotateCcw, ShieldCheck, History, RefreshCw } from 'lucide-react';
-import { useAuditLogIntegrityQuery, useInvalidateActivityLogs } from '../../hooks/queries/useActivityLogQueries';
-import { fetchJson } from '../../api';
+import { PURGE_FAILED_MESSAGE, useAuditLogIntegrityQuery, usePurgeActivityLogsMutation } from '../../hooks/queries/useActivityLogQueries';
 import toast from 'react-hot-toast';
-import { formatPersianNumber } from '../../utils';
+import { errorMessageOf, formatPersianNumber } from '../../utils';
 import { MIN_AUDIT_RETENTION_DAYS, PURGEABLE_AUDIT_ENTITY_LABELS } from '../../lib/audit/auditRetention';
 import {
   FACTORY_RESET_CONFIRM_WORD, FACTORY_RESET_ERASED, FACTORY_RESET_KEPT, FACTORY_RESET_RESTORED, isFactoryResetConfirmed,
@@ -14,40 +13,35 @@ import { DialogLayer } from '../common/DialogLayer';
 /** v9.0.212 (TD-522، تصمیم ت۴ الف): بخش‌هایی که پاک‌سازی سجلشان را پاک می‌کند، از همان فهرست سرور */
 const PURGEABLE_SECTIONS_TEXT = Object.values(PURGEABLE_AUDIT_ENTITY_LABELS).join('، ');
 
+/** OBS-R1-36: the integrity card when the check could not be read */
+export const INTEGRITY_UNKNOWN = 'نامعلوم';
+export const INTEGRITY_FAILED_MESSAGE = 'وضعیت سجل رویدادها خوانده نشد؛ دکمه «بروزرسانی وضعیت» را بزنید.';
+
 interface SystemOperationsTabProps {
   onOpenClearModal: () => void;
 }
 
 export function SystemOperationsTab({ onOpenClearModal }: SystemOperationsTabProps) {
   const fieldId = useId();
-  const { data: integrity, isLoading: isCheckingIntegrity, refetch: refetchIntegrity } = useAuditLogIntegrityQuery();
-  const invalidateActivityLogs = useInvalidateActivityLogs();
+  const {
+    data: integrity, isFetching: isCheckingIntegrity, isError: integrityFailed, error: integrityError, refetch: refetchIntegrity,
+  } = useAuditLogIntegrityQuery();
+  const purgeMutation = usePurgeActivityLogsMutation();
 
   const [retentionDays, setRetentionDays] = useState<number>(MIN_AUDIT_RETENTION_DAYS);
-  const [isPurging, setIsPurging] = useState<boolean>(false);
+  const isPurging = purgeMutation.isPending;
   const [showPurgeModal, setShowPurgeModal] = useState<boolean>(false);
+  // OBS-R1-36: a failed integrity read shows «نامعلوم» and its message, never «...» for ever
+  const integrityValue = (value: number | undefined) =>
+    integrity ? formatPersianNumber(value ?? 0) : (integrityFailed ? INTEGRITY_UNKNOWN : '...');
 
   const handleExecutePurge = async () => {
     try {
-      setIsPurging(true);
-      const res = await fetchJson('/activity-logs/purge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ retentionDays })
-      });
-
-      if (res?.success) {
-        toast.success(res.message || 'پاک‌سازی رویدادهای کهنه سجل انجام شد.');
-        setShowPurgeModal(false);
-        void refetchIntegrity();
-        invalidateActivityLogs();
-      } else {
-        toast.error(res?.message || 'پاک‌سازی سجل انجام نشد؛ دوباره تلاش کنید.');
-      }
-    } catch (err: any) {
-      toast.error(err?.message || 'ارتباط با سرور برای پاک‌سازی سجل برقرار نشد؛ دوباره تلاش کنید.');
-    } finally {
-      setIsPurging(false);
+      const res = await purgeMutation.mutateAsync(retentionDays);
+      toast.success(res.message || 'پاک‌سازی رویدادهای کهنه سجل انجام شد.');
+      setShowPurgeModal(false);
+    } catch (err) {
+      toast.error(errorMessageOf(err) || PURGE_FAILED_MESSAGE);
     }
   };
 
@@ -70,18 +64,24 @@ export function SystemOperationsTab({ onOpenClearModal }: SystemOperationsTabPro
           </button>
         </div>
 
+        {integrityFailed && !isCheckingIntegrity && (
+          <div role="alert" className="bg-rose-50 border border-rose-200 text-rose-800 p-3 rounded-xl text-xs leading-relaxed">
+            {INTEGRITY_FAILED_MESSAGE} {errorMessageOf(integrityError)}
+          </div>
+        )}
+
         {/* Stats Summary */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl">
             <div className="text-[11px] text-slate-500 font-medium">کل رویدادهای ثبت‌شده</div>
             <div className="text-lg font-black text-slate-800 mt-1">
-              {integrity ? formatPersianNumber(integrity.totalLogs) : '...'}
+              {integrityValue(integrity?.totalLogs)}
             </div>
           </div>
           <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl">
             <div className="text-[11px] text-emerald-700 font-medium">رویدادهای ماندگار (پاک‌نشدنی)</div>
             <div className="text-lg font-black text-emerald-800 mt-1">
-              {integrity ? formatPersianNumber(integrity.criticalLogsCount) : '...'}
+              {integrityValue(integrity?.criticalLogsCount)}
             </div>
           </div>
           <div className="bg-indigo-50 border border-indigo-200 p-3.5 rounded-xl">

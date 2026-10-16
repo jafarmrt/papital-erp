@@ -8,6 +8,7 @@ import { RoleFormModal } from '../../components/users/RoleFormModal';
 import { getMenuGroups } from '../../components/layout/menuConfig';
 import { PERMISSION_CATALOG } from '../../lib/permissions/permissionCatalog';
 import type { PermissionCategory, Role, User } from '../../types';
+import { QueryWrapper } from './helpers/queryWrapper';
 
 // v9.0.130 (TD-525، یافته B02-10، تصمیم ت۳ الف): صفحه و منوی کاربران و نقش‌ها با «مدیریت کاربران» / «مدیریت نقش‌ها» باز
 // است، نه فقط با کد مدیر سیستم، و فرم‌ها فقط آنچه کاربر جاری می‌تواند بدهد پیشنهاد می‌کنند (همان قاعده سرور، TD-520)
@@ -85,6 +86,7 @@ describe('users and roles page by permission (TD-525)', () => {
     const grantor = own.permissions;
     const { unmount } = render(
       <UserFormModal isOpen onClose={() => undefined} editingUser={null} rolesList={[weak, strong, own]} onSuccess={() => undefined} grantor={grantor} currentUserId={me.id} />,
+      { wrapper: QueryWrapper },
     );
     const options = within(screen.getByRole('combobox')).getAllByRole('option').map(o => o.textContent ?? '');
     expect(options).toContain(weak.name);
@@ -94,6 +96,7 @@ describe('users and roles page by permission (TD-525)', () => {
 
     render(
       <UserFormModal isOpen onClose={() => undefined} editingUser={me} rolesList={[weak, strong, own]} onSuccess={() => undefined} grantor={grantor} currentUserId={me.id} />,
+      { wrapper: QueryWrapper },
     );
     expect((screen.getByRole('combobox') as HTMLSelectElement).disabled).toBe(true);
   });
@@ -101,6 +104,7 @@ describe('users and roles page by permission (TD-525)', () => {
   it('does not let a role manager tick a permission it does not hold', () => {
     render(
       <RoleFormModal isOpen onClose={() => undefined} editingRole={null} permCatalog={PERMISSION_CATALOG as unknown as PermissionCategory[]} onSuccess={() => undefined} grantor={own.permissions} />,
+      { wrapper: QueryWrapper },
     );
     const locked = screen.getByText('(accounting.vouchers)').closest('label') as HTMLLabelElement;
     const box = within(locked).getByRole('checkbox') as HTMLInputElement;

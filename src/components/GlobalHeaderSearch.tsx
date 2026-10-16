@@ -6,7 +6,7 @@ import { useSearch } from '../SearchContext';
 import { fetchJson } from '../api';
 import { SafeImage } from './SafeImage';
 import { formatPersianNumber, formatPersianDate } from '../utils';
-import { globalSearchTarget, type GlobalSearchHit } from '../lib/search/globalSearchTarget';
+import { GLOBAL_SEARCH_MAX_LENGTH, globalSearchTarget, type GlobalSearchHit } from '../lib/search/globalSearchTarget';
 
 interface SearchResultItems {
   id: number;
@@ -51,7 +51,9 @@ interface GlobalSearchResults {
 }
 
 export default function GlobalHeaderSearch() {
-  const { searchQuery, setSearchQuery } = useSearch();
+  // OBS-R2-91: the header keeps its own text; the shared page filter is set only when a hit opens its list
+  const { setSearchForNavigation } = useSearch();
+  const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -140,7 +142,8 @@ export default function GlobalHeaderSearch() {
   const handleSelectResult = (hit: GlobalSearchHit) => {
     const target = globalSearchTarget(hit);
     setIsOpen(false);
-    setSearchQuery(target.search);
+    setSearchQuery('');
+    setSearchForNavigation(target.search, target.path);
     void navigate(target.path);
   };
 
@@ -153,6 +156,7 @@ export default function GlobalHeaderSearch() {
           type="text" 
           placeholder="جست‌وجوی سراسری کالا، مشتری، فاکتور، پروژه... (Ctrl+K)" 
           value={searchQuery}
+          maxLength={GLOBAL_SEARCH_MAX_LENGTH}
           onFocus={() => setIsOpen(true)}
           onChange={e => {
             setSearchQuery(e.target.value);
