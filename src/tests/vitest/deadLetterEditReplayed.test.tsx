@@ -16,6 +16,7 @@ vi.mock('../../api', async () => {
 afterEach(() => { cleanup(); vi.mocked(fetchJson).mockReset(); });
 
 const EDIT_TITLE = 'اصلاح داده و بازپخش';
+const INVOICE_APPROVED_LABEL = 'صدور قطعی فاکتور فروش';
 const row = (id: number, status: string) => ({
   id, originalEventId: `evt-${id}`, eventType: 'InvoiceApproved', aggregateType: 'Document', aggregateId: String(id),
   source: 'outbox', payload: { documentId: id }, metadata: {}, failureReason: 'timeout', errorStack: '', retryCount: 5,
@@ -29,7 +30,8 @@ describe('TD-716 a replayed dead-letter row offers no payload edit', () => {
       return { success: true, data: [row(1, 'quarantined'), row(2, 'replayed'), row(3, 'dismissed')] };
     });
     render(<DeadLetterQueueSubTab />);
-    await screen.findAllByText('InvoiceApproved');
+    // v10.1.51 (OBS-R2-87): rows show the event's Persian name
+    await screen.findAllByText(INVOICE_APPROVED_LABEL);
     expect(screen.getAllByTitle(EDIT_TITLE)).toHaveLength(2);
   });
 });

@@ -3,6 +3,7 @@ import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog';
 import { NotificationRecipientField } from './NotificationRecipientField';
 import { X, Plus, Trash2, Globe, Bell, ShieldCheck, HelpCircle, Play, CheckCircle2, XCircle, AlertTriangle, Code } from 'lucide-react';
 import { fetchJson } from '../../api';
+import { errorMessageOf } from '../../utils';
 import { eventFieldOptions } from '../../lib/eventPayloadFields';
 import { EventFieldChips } from './EventFieldChips';
 import { isRetiredRuleActionType, retiredRuleActionMessage, type RuleActionType, type StoredRuleActionType } from '../../lib/events/ruleActionTypes';
@@ -60,6 +61,7 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
   });
 
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<any>(null);
   const [isTesting, setIsTesting] = useState(false);
 
@@ -178,8 +180,12 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
 
     try {
       setIsSaving(true);
+      setSaveError(null);
       await onSave({ ...formData, conditionsJson: formData.conditionsJson.map((cond, idx) => ({ ...cond, value: conditionChecks[idx].value })) });
       onClose();
+    } catch (err) {
+      // v10.1.51 (OBS-R2-87): the window stays open and says why the rule was not saved
+      setSaveError(errorMessageOf(err) || 'قانون ذخیره نشد.');
     } finally {
       setIsSaving(false);
     }
@@ -651,6 +657,9 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
           )}
 
           {/* Footer Actions */}
+          {saveError && (
+            <p role="alert" className="text-[11px] text-rose-600 dark:text-rose-400">{saveError}</p>
+          )}
           <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
             <button
               type="button"

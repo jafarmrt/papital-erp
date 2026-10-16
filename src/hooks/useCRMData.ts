@@ -291,7 +291,8 @@ export function useCRMData(user: any) {
         ...leadFields,
         ...(leadForm.stage === 'lost' && lostReason ? { lostReason, lostReasonNote } : {}),
         estimatedValue: Number(leadForm.estimatedValue || 0),
-        probability: Number(leadForm.probability || 50),
+        // v10.1.51 (OBS-R2-26): a probability of 0 stays 0
+        probability: Number(leadForm.probability ?? 50),
         contacts: Array.isArray(leadForm.contacts) ? leadForm.contacts : []
       };
 

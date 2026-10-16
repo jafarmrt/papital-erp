@@ -46,7 +46,6 @@ interface DailyLogModalProps {
   projects: ProjectPick[];
   onAddTag: () => void;
   onRemoveTag: (tag: string) => void;
-  onToggleMentionUser: (userId: number) => void;
   onSaveLog: (e: FormEvent) => void;
 }
 
@@ -82,7 +81,6 @@ export function DailyLogModal({
   projects,
   onAddTag,
   onRemoveTag,
-  onToggleMentionUser,
   onSaveLog
 }: DailyLogModalProps) {
   const fieldId = useId();

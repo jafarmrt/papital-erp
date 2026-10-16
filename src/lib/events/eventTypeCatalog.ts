@@ -64,3 +64,29 @@ export function publishedEventTypesByCategory(): { category: string; types: Even
 export function unknownEventPatterns(patterns: readonly unknown[]): string[] {
   return patterns.filter(p => !isSubscribableEventPattern(p)).map(p => String(p));
 }
+
+/**
+ * v10.1.51 (OBS-R2-87): Persian names of the aggregate types events carry (`Document`, `Item`, `Treasury` … and the lower-case
+ * workflow entity types), compared without letter case; an unknown type is shown as it is.
+ */
+export const EVENT_AGGREGATE_LABELS: Readonly<Record<string, string>> = {
+  document: 'سند',
+  item: 'کالا',
+  treasury: 'خزانه',
+  project: 'پروژه',
+  workflow: 'گردش کار',
+  woocommerce: 'ووکامرس',
+  customer: 'طرف حساب',
+  notification: 'اعلان',
+  journal_voucher: 'سند حسابداری',
+  bank_account: 'حساب بانکی',
+  purchase_requisition: 'درخواست خرید',
+  pending_material: 'درخواست ماده اولیه',
+  system: 'سامانه',
+};
+
+export function eventAggregateLabel(value: string | null | undefined): string {
+  const key = String(value ?? '').trim();
+  const lower = key.toLowerCase();
+  return Object.prototype.hasOwnProperty.call(EVENT_AGGREGATE_LABELS, lower) ? EVENT_AGGREGATE_LABELS[lower] : key;
+}

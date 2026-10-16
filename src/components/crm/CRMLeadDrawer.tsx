@@ -409,7 +409,8 @@ export function CRMLeadDrawer({
                       {/* Quick copy info */}
                       <div className="flex items-center justify-between pt-1 text-[10px] text-slate-500">
                         <span>
-                          {item.sales_price ? `قیمت پایه: ${rial.amount(item.sales_price)}` : 'بدون قیمت ثبت شده'}
+                          {/* v10.1.51 (OBS-R2-26): the item pick list carries no sale price, so the item code is shown, not «بدون قیمت» */}
+                          کد کالا: {formatPersianCode(item.code)}
                         </span>
                         <button
                           onClick={() => {

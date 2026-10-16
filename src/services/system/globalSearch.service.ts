@@ -2,7 +2,8 @@ import { eq, and, or, asc, sql, type AnyColumn, type SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { items, customers, documents, productionProjects } from '../../db/schema.js';
 import { containsLikePattern, startsWithLikePattern } from '../../lib/sqlLike.js';
-import { normalizeSearchText, SEARCH_FOLD_FROM, SEARCH_FOLD_TO } from '../../lib/search/searchText.js';
+import { normalizeSearchText } from '../../lib/search/searchText.js';
+import { foldedSearchSql } from '../../lib/search/searchSql.js';
 import { logger } from '../../middleware/logger.js';
 
 /**
@@ -17,7 +18,7 @@ import { logger } from '../../middleware/logger.js';
 
 /** ستون یکسان‌شده برای مقایسه، همان `normalizeSearchText` در SQL */
 function folded(column: AnyColumn): SQL {
-  return sql`translate(lower(coalesce(${column}, '')), ${SEARCH_FOLD_FROM}, ${SEARCH_FOLD_TO})`;
+  return foldedSearchSql(column);
 }
 
 function matchesAny(columns: AnyColumn[], pattern: string): SQL {

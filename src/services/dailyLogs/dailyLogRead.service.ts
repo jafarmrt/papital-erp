@@ -1,8 +1,10 @@
-import { and, asc, desc, eq, gte, ilike, lt, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, lt, or, sql, type SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { dailyWorkLogs, users } from '../../db/schema.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
+import { normalizeSearchText } from '../../lib/search/searchText.js';
+import { foldedSearchSql } from '../../lib/search/searchSql.js';
 import { serverTimestampToUtcIso } from '../../lib/serverTimestamp.js';
 import { DEFAULT_DAILY_LOG_VISIBILITY, idList } from '../../lib/dailyLogs/dailyLogVisibility.js';
 import { isoToJalaliDate, jalaliMonthStart, toStorageDate } from '../../utils/calendarDate.js';
@@ -96,15 +98,15 @@ export async function listDailyLogs(userId: number, canManageAll: boolean, q: Da
   if (q.date) conditions.push(eq(dailyWorkLogs.date, q.date));
   if (q.user_id) conditions.push(eq(dailyWorkLogs.userId, q.user_id));
   if (q.work_mode) conditions.push(eq(dailyWorkLogs.workMode, q.work_mode));
-  if (q.search) {
-    const pattern = containsLikePattern(q.search);
-    conditions.push(or(
-      ilike(dailyWorkLogs.title, pattern),
-      ilike(dailyWorkLogs.content, pattern),
-      ilike(dailyWorkLogs.userFullName, pattern),
-      ilike(dailyWorkLogs.projectName, pattern),
-      sql`${dailyWorkLogs.tags}::text ILIKE ${pattern}`,
-    ));
+  // v10.1.51 (OBS-R2-61): both sides folded like global search (TD-675), so Arabic «ي/ك» and Persian or Arabic digits match
+  const search = normalizeSearchText(q.search);
+  if (search) {
+    const pattern = containsLikePattern(search);
+    const columns: SQL[] = [
+      sql`${dailyWorkLogs.title}`, sql`${dailyWorkLogs.content}`, sql`${dailyWorkLogs.userFullName}`,
+      sql`${dailyWorkLogs.projectName}`, sql`${dailyWorkLogs.tags}::text`,
+    ];
+    conditions.push(or(...columns.map(column => sql`${foldedSearchSql(column)} LIKE ${pattern}`)));
   }
   const where = and(...conditions);
   const [{ total }] = await orm.select({ total: sql<number>`count(*)::int` }).from(dailyWorkLogs).where(where);

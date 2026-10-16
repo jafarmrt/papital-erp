@@ -6,7 +6,8 @@ import persian_fa from "react-date-object/locales/persian_fa";
 import { CRMLead } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
 import { STAGES, SOURCES } from '../../hooks/useCRMData';
-import { formatPersianPrice, formatCurrencyLabel, getFutureJalaliDate, extractDateString, isoToJalaliDate } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel, getFutureJalaliDate, extractDateString, isoToJalaliDate } from '../../utils';
+import { normalizeDecimalString } from '../../lib/numericInput';
 import { IranianPhoneInput } from '../common';
 import { DecimalInput } from '../common/DecimalInput';
 import { LostReasonFields } from './LostReasonFields';
@@ -281,10 +282,12 @@ export function CRMLeadModal({
                 id={`${fieldId}-us`}
                 type="text"
                 placeholder="0"
-                value={leadForm.estimatedValue ? leadForm.estimatedValue.toLocaleString('en-US') : ''}
+                inputMode="numeric"
+                value={leadForm.estimatedValue ? formatPersianNumber(leadForm.estimatedValue) : ''}
                 onChange={(e) => {
-                  const rawNum = e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '');
-                  setLeadForm({ ...leadForm, estimatedValue: rawNum ? parseInt(rawNum, 10) : 0 });
+                  // v10.1.51 (OBS-R2-26): Persian and Arabic digits and separators are read, never dropped
+                  const rawNum = normalizeDecimalString(e.target.value).replace(/[^0-9]/g, '');
+                  setLeadForm({ ...leadForm, estimatedValue: rawNum ? Number(rawNum) : 0 });
                 }}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500 focus:bg-white transition-all font-mono text-left"
                 dir="ltr"
@@ -303,7 +306,7 @@ export function CRMLeadModal({
                 min="0"
                 max="100"
                 value={leadForm.probability}
-                onValueChange={(v) => setLeadForm({ ...leadForm, probability: parseInt(v) || 50 })}
+                onValueChange={(v) => setLeadForm({ ...leadForm, probability: v === '' ? 0 : Number(v) })}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500 focus:bg-white transition-all"
               />
             </div>

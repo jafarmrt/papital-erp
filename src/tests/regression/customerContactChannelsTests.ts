@@ -70,7 +70,8 @@ export async function runCustomerContactChannelsTests(shouldRun: (id: string, ..
       ],
     });
     if (imp.status !== 200) wrong.push(`import answered ${imp.status}`);
-    if (!(imp.body?.errors ?? []).some((e: { row: number }) => e.row === 2)) wrong.push(`bad import row not reported: ${JSON.stringify(imp.body?.errors)}`);
+    // v10.1.51 (OBS-R2-25): the second data row is Excel row 3 (header = row 1)
+    if (!(imp.body?.errors ?? []).some((e: { row: number }) => e.row === 3)) wrong.push(`bad import row not reported: ${JSON.stringify(imp.body?.errors)}`);
     const [row3] = await orm.select().from(customers).where(eq(customers.id, row.id));
     if (row3.website !== row.website || row3.email !== row.email) wrong.push(`empty import cells changed the party: ${row3.website} ${row3.email}`);
     if (row3.instagram !== 'newhandle') wrong.push(`imported instagram ${row3.instagram}`);

@@ -16,10 +16,14 @@ import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.servi
 
 /** شرط نوع و جست‌وجوی کالا، مشترک فهرست کامل و فهرست انتخاب */
 export function itemListConditions(
-  type: string | undefined, search: string | undefined, options: { withCategory?: boolean } = {},
+  type: string | undefined, search: string | undefined,
+  options: { withCategory?: boolean; withImage?: boolean; category?: string } = {},
 ): SQL {
   const conditions: SQL[] = [eq(items.isDeleted, 0)];
   if (type === 'product' || type === 'raw_material') conditions.push(eq(items.type, type));
+  // v10.1.51 (OBS-R2-62): the gallery pages on the server, over items with a picture and of one category
+  if (options.withImage) conditions.push(sql`(coalesce(${items.image}, '') <> '' OR coalesce(${items.thumbnail}, '') <> '')`);
+  if (options.category) conditions.push(eq(items.category, options.category));
   if (search) {
     const pattern = containsLikePattern(search);
     // v10.0.218 (OBS-R1-74): فهرست کامل در دسته‌بندی هم جست‌وجو می‌کند، همان که جعبه جست‌وجوی صفحه کالاها می‌گوید

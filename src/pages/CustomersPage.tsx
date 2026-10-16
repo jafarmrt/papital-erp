@@ -839,7 +839,6 @@ export default function CustomersPage({ user }: { user: User }) {
         onSuccess={() => {
           void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.customers.all });
         }}
-        existingCustomers={customers}
         activeTabFilter={activeTab}
       />
     </div>
