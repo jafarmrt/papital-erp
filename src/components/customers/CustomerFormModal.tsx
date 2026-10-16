@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { Users, Building2, Truck, UserPlus, UserCheck, Trash2, Plus, CreditCard, X } from 'lucide-react';
 import { IranianPhoneInput, BankCardInput, ShebaInput } from '../common';
 import { getIranianBankFromCard, getIranianBankFromSheba, formatPersianNumber } from '../../utils';
@@ -108,6 +108,7 @@ export function CustomerFormModal({
   isSaving,
   tagOptions = []
 }: CustomerFormModalProps) {
+  const fieldId = useId();
   if (!isOpen) return null;
 
   return (
@@ -213,8 +214,8 @@ export function CustomerFormModal({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="md:col-span-2">
-                  <label className="block text-xs font-bold mb-1 text-slate-700">نام کامل شرکت / مجموعه / شخص <span className="text-rose-500">*</span></label>
-                  <input 
+                  <label htmlFor={`${fieldId}-name`} className="block text-xs font-bold mb-1 text-slate-700">نام کامل شرکت / مجموعه / شخص <span className="text-rose-500">*</span></label>
+                  <input id={`${fieldId}-name`} 
                     required 
                     type="text" 
                     value={form.name} 
@@ -226,8 +227,9 @@ export function CustomerFormModal({
 
                 {form.partyType !== 'customer' && (
                   <div className="md:col-span-2">
-                    <label className="block text-xs font-bold mb-1 text-slate-700">حوزه تامین و رسته کالاها</label>
+                    <label htmlFor={`${fieldId}-supplier-category`} className="block text-xs font-bold mb-1 text-slate-700">حوزه تامین و رسته کالاها</label>
                     <select
+                      id={`${fieldId}-supplier-category`}
                       value={form.supplierCategory}
                       onChange={e => setForm({ ...form, supplierCategory: e.target.value })}
                       className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
@@ -301,8 +303,8 @@ export function CustomerFormModal({
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                       <div>
-                        <label className="block text-[10px] font-medium mb-1 text-slate-600">نام رابط</label>
-                        <input 
+                        <label htmlFor={`${fieldId}-name-2-${index}`} className="block text-[10px] font-medium mb-1 text-slate-600">نام رابط</label>
+                        <input id={`${fieldId}-name-2-${index}`} 
                           type="text" 
                           value={contact.name} 
                           onChange={e => updateContactPerson(contact.id, 'name', e.target.value)} 
@@ -312,8 +314,8 @@ export function CustomerFormModal({
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-medium mb-1 text-slate-600">سمت / مسئولیت</label>
-                        <input 
+                        <label htmlFor={`${fieldId}-role-${index}`} className="block text-[10px] font-medium mb-1 text-slate-600">سمت / مسئولیت</label>
+                        <input id={`${fieldId}-role-${index}`} 
                           type="text"
                           list={`roles-list-${contact.id}`}
                           value={contact.role} 
@@ -375,8 +377,8 @@ export function CustomerFormModal({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-medium mb-1 text-slate-600">نام بانک و شعبه</label>
-                  <input 
+                  <label htmlFor={`${fieldId}-bank-name`} className="block text-[10px] font-medium mb-1 text-slate-600">نام بانک و شعبه</label>
+                  <input id={`${fieldId}-bank-name`} 
                     type="text" 
                     value={form.bankInfo.bankName} 
                     onChange={e => setForm({ ...form, bankInfo: { ...form.bankInfo, bankName: e.target.value } })} 
@@ -422,8 +424,8 @@ export function CustomerFormModal({
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-medium mb-1 text-slate-600">شماره حساب</label>
-                  <input 
+                  <label htmlFor={`${fieldId}-account-number`} className="block text-[10px] font-medium mb-1 text-slate-600">شماره حساب</label>
+                  <input id={`${fieldId}-account-number`} 
                     type="text" 
                     value={form.bankInfo.accountNumber} 
                     onChange={e => setForm({ ...form, bankInfo: { ...form.bankInfo, accountNumber: e.target.value } })} 
@@ -441,16 +443,16 @@ export function CustomerFormModal({
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-[10px] font-medium mb-1 text-slate-600">کشور</label>
-                  <select value={form.country} onChange={e => setForm({...form, country: e.target.value, province: '', city: ''})} className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white">
+                  <label htmlFor={`${fieldId}-country`} className="block text-[10px] font-medium mb-1 text-slate-600">کشور</label>
+                  <select id={`${fieldId}-country`} value={form.country} onChange={e => setForm({...form, country: e.target.value, province: '', city: ''})} className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white">
                     <option value="ایران">ایران</option>
                     <option value="سایر">سایر</option>
                   </select>
                 </div>
                 {form.country === 'ایران' && (
                   <div>
-                    <label className="block text-[10px] font-medium mb-1 text-slate-600">استان</label>
-                    <select value={form.province} onChange={e => setForm({...form, province: e.target.value})} className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white">
+                    <label htmlFor={`${fieldId}-province`} className="block text-[10px] font-medium mb-1 text-slate-600">استان</label>
+                    <select id={`${fieldId}-province`} value={form.province} onChange={e => setForm({...form, province: e.target.value})} className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white">
                       <option value="">انتخاب استان...</option>
                       {IRAN_PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
@@ -459,19 +461,19 @@ export function CustomerFormModal({
 
                 {form.country === 'ایران' && (
                   <div>
-                    <label className="block text-[10px] font-medium mb-1 text-slate-600">شهر</label>
-                    <input type="text" value={form.city} onChange={e => setForm({...form, city: e.target.value})} className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white" placeholder="نام شهر" />
+                    <label htmlFor={`${fieldId}-city`} className="block text-[10px] font-medium mb-1 text-slate-600">شهر</label>
+                    <input id={`${fieldId}-city`} type="text" value={form.city} onChange={e => setForm({...form, city: e.target.value})} className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white" placeholder="نام شهر" />
                   </div>
                 )}
               </div>
 
               <div>
-                <label className="block text-[10px] font-medium mb-1 text-slate-600">نشانی کامل پستی</label>
-                <textarea value={form.address} onChange={e => setForm({...form, address: e.target.value})} className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white" rows={2} placeholder="خیابان، پلاک، طبقه و واحد..." />
+                <label htmlFor={`${fieldId}-address`} className="block text-[10px] font-medium mb-1 text-slate-600">نشانی کامل پستی</label>
+                <textarea id={`${fieldId}-address`} value={form.address} onChange={e => setForm({...form, address: e.target.value})} className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white" rows={2} placeholder="خیابان، پلاک، طبقه و واحد..." />
               </div>
               <div>
-                <label className="block text-[10px] font-medium mb-1 text-slate-600">یادداشت و شرایط تسویه</label>
-                <textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white" rows={2} placeholder="نحوه تسویه، مدت اعتبار، توضیحات تکمیلی..." />
+                <label htmlFor={`${fieldId}-notes`} className="block text-[10px] font-medium mb-1 text-slate-600">یادداشت و شرایط تسویه</label>
+                <textarea id={`${fieldId}-notes`} value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white" rows={2} placeholder="نحوه تسویه، مدت اعتبار، توضیحات تکمیلی..." />
               </div>
             </div>
           </div>

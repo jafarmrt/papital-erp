@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { WarehouseItem } from '../../../hooks/queries/useSettingsQueries';
 import { FinancialAmountInput } from '../../common/FinancialAmountInput';
@@ -18,6 +18,7 @@ export const ItemWarehouseStockForm: React.FC<ItemWarehouseStockFormProps> = ({
   form,
   setForm
 }) => {
+  const fieldId = useId();
   return (
     <div className="space-y-4">
       {/* باکس هشدار و راهنمای فرآیند تولید */}
@@ -39,10 +40,11 @@ export const ItemWarehouseStockForm: React.FC<ItemWarehouseStockFormProps> = ({
           <div className="grid grid-cols-2 gap-3 bg-slate-50/70 p-3 rounded-xl border border-slate-200">
             {warehouses.map(w => (
               <div key={w.id}>
-                <label className="block text-2xs font-medium text-slate-600 mb-1 truncate">
+                <label htmlFor={`${fieldId}-code-${w.id}`} className="block text-2xs font-medium text-slate-600 mb-1 truncate">
                   {w.name}
                 </label>
                 <DecimalInput
+                  id={`${fieldId}-code-${w.id}`}
                   min="0"
                   step="any"
                   value={form.stocks[w.code] ?? ''}
@@ -69,8 +71,9 @@ export const ItemWarehouseStockForm: React.FC<ItemWarehouseStockFormProps> = ({
             <span>هنوز هیچ انباری در سامانه تعریف نشده است. برای تفکیک مکان‌های نگهداری می‌توانید از بخش تنظیمات انبارها را ایجاد کنید، یا فعلاً موجودی کل اولیه را در کادر زیر وارد کنید:</span>
           </div>
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">موجودی کل اولیه</label>
+            <label htmlFor={`${fieldId}-current_stock`} className="block text-xs font-bold text-slate-700 mb-1">موجودی کل اولیه</label>
             <DecimalInput
+              id={`${fieldId}-current_stock`}
               min="0"
               step="any"
               value={form.current_stock}
@@ -84,11 +87,12 @@ export const ItemWarehouseStockForm: React.FC<ItemWarehouseStockFormProps> = ({
 
       {/* Initial cost */}
       <div>
-        <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1">
+        <label htmlFor={`${fieldId}-initial_cost`} className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1">
           <span>میانگین موزون بهای اولیه (بهای هر واحد)</span>
           <HelpBadge text="ارزش دفتری و بهای تمام‌شده هر واحد کالا به ریال در زمان ورود اولیه به انبار. معادل تومانی و حروفی آن در زیر کادر به‌طور خودکار محاسبه و درج می‌شود." />
         </label>
         <FinancialAmountInput
+          id={`${fieldId}-initial_cost`}
           currency="IRR"
           value={form.initial_cost}
           onChange={val => setForm({ ...form, initial_cost: val })}

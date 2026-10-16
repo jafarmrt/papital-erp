@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useId } from 'react';
 import toast from 'react-hot-toast';
 import { Landmark, BanknoteArrowUp, CheckCircle2, AlertCircle } from 'lucide-react';
 import { fetchJson } from '../../api';
@@ -34,6 +34,7 @@ const METHOD_OPTIONS = [
 ] as const;
 
 export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPaymentModalProps) {
+  const fieldId = useId();
   // v9.0.320 (TD-805): ثبت و ابطال پرداخت با «پرداخت و ابطال پرداخت فیش»؛ دیگر خوانندگان فیش فقط سابقه را می‌بینند
   const { canPay } = usePieceworkPermissions();
   const [bankAccounts, setBankAccounts] = useState<BankAccountOption[]>([]);
@@ -256,10 +257,11 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                  <label htmlFor={`${fieldId}-bank-account-id`} className="block text-xs font-bold text-slate-700 mb-1">
                     حساب بانکی / صندوق مبدا <span className="text-red-500">*</span>
                   </label>
                   <select
+                    id={`${fieldId}-bank-account-id`}
                     value={bankAccountId}
                     onChange={(e) => setBankAccountId(e.target.value)}
                     className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500"
@@ -278,8 +280,9 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">روش پرداخت</label>
+                    <label htmlFor={`${fieldId}-method`} className="block text-xs font-bold text-slate-700 mb-1">روش پرداخت</label>
                     <select
+                      id={`${fieldId}-method`}
                       value={method}
                       onChange={(e) => setMethod(e.target.value)}
                       className="w-full border border-slate-300 rounded-xl px-2 py-2 text-xs bg-white outline-none focus:ring-2 focus:ring-blue-500"
@@ -290,8 +293,9 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">تاریخ پرداخت</label>
+                    <label htmlFor={`${fieldId}-payment-date`} className="block text-xs font-bold text-slate-700 mb-1">تاریخ پرداخت</label>
                     <JalaliDateInput
+                      id={`${fieldId}-payment-date`}
                       value={paymentDate}
                       onChange={setPaymentDate}
                       className="w-full border border-slate-300 rounded-xl px-2 py-2 text-xs text-center bg-white outline-none focus:ring-2 focus:ring-blue-500"
@@ -300,8 +304,9 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">شماره مرجع / پیگیری واریز</label>
+                  <label htmlFor={`${fieldId}-payment-reference`} className="block text-xs font-bold text-slate-700 mb-1">شماره مرجع / پیگیری واریز</label>
                   <input
+                    id={`${fieldId}-payment-reference`}
                     type="text"
                     placeholder="شماره سند انتقال، چک یا رسید"
                     value={paymentReference}
@@ -312,8 +317,9 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">توضیحات و بابت</label>
+                  <label htmlFor={`${fieldId}-notes`} className="block text-xs font-bold text-slate-700 mb-1">توضیحات و بابت</label>
                   <textarea
+                    id={`${fieldId}-notes`}
                     rows={2}
                     placeholder="توضیحات تکمیلی نوبت پرداخت..."
                     value={notes}

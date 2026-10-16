@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 import { formatPersianNumber } from '../../utils';
 import type { ReorderItem } from '../../lib/reorderAlerts/reorderItems';
 import { DecimalInput } from '../common/DecimalInput';
@@ -14,6 +14,7 @@ interface ReorderPointEditModalProps {
 
 /** مودال ویرایش سریع نقطه سفارش یک کالا؛ مقدار اولیه نقطه سفارش فعلی کالاست */
 export function ReorderPointEditModal({ item, saving, onCancel, onSave }: ReorderPointEditModalProps) {
+  const fieldId = useId();
   const [newReorderPoint, setNewReorderPoint] = useState<string>(() => String(item.reorder_point));
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -32,10 +33,11 @@ export function ReorderPointEditModal({ item, saving, onCancel, onSave }: Reorde
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
+            <label htmlFor={`${fieldId}-new-reorder-point`} className="block text-xs font-bold text-slate-700 mb-1">
               نقطه سفارش جدید (تعداد/مقدار به {item.unit}):
             </label>
             <DecimalInput
+              id={`${fieldId}-new-reorder-point`}
               min="0"
               value={newReorderPoint}
               onValueChange={(v) => setNewReorderPoint(v)}

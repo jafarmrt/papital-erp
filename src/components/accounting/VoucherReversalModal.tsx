@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 import { RotateCcw, AlertTriangle, ArrowRightLeft, Calendar, FileText, CheckCircle2, Sparkles } from 'lucide-react';
 import { formatPersianNumber, getTodayIsoDate } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
@@ -28,6 +28,7 @@ export function VoucherReversalModal({
   voucher,
   onConfirm,
 }: VoucherReversalModalProps) {
+  const fieldId = useId();
   const rial = useRialDisplay();
   const [date, setDate] = useState(() => getTodayIsoDate());
   const [reason, setReason] = useState('');
@@ -82,11 +83,12 @@ export function VoucherReversalModal({
           {/* Details & Inputs */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+              <label htmlFor={`${fieldId}-date`} className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5 text-indigo-500" />
                 <span>تاریخ ثبت سند برگشتی</span>
               </label>
               <JalaliDateInput
+                id={`${fieldId}-date`}
                 value={date}
                 onChange={setDate}
                 className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-indigo-500 outline-none"

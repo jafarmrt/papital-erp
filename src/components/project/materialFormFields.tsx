@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { DecimalInput } from '../common/DecimalInput';
 
 /**
@@ -11,19 +12,21 @@ const LABEL = 'font-bold text-slate-700 text-xs';
 
 /** عنوان ماده اولیه (دو ستون، الزامی) */
 export function MaterialNameField({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
+  const fieldId = useId();
   return (
     <div className="sm:col-span-2 space-y-1">
-      <label className={LABEL}>{label}</label>
-      <input type="text" required value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={STRONG_INPUT} />
+      <label htmlFor={`${fieldId}-field`} className={LABEL}>{label}</label>
+      <input id={`${fieldId}-field`} type="text" required value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={STRONG_INPUT} />
     </div>
   );
 }
 
 export function MaterialUnitSelect({ value, onChange, units }: { value: string; onChange: (v: string) => void; units: readonly string[] }) {
+  const fieldId = useId();
   return (
     <div className="space-y-1">
-      <label className={LABEL}>واحد شمارش *</label>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className={STRONG_INPUT}>
+      <label htmlFor={`${fieldId}-field`} className={LABEL}>واحد شمارش *</label>
+      <select id={`${fieldId}-field`} value={value} onChange={(e) => onChange(e.target.value)} className={STRONG_INPUT}>
         {units.map(u => (
           <option key={u} value={u}>{u}</option>
         ))}
@@ -34,10 +37,12 @@ export function MaterialUnitSelect({ value, onChange, units }: { value: string; 
 
 /** عدد نامنفی (مقدار، قیمت، نقطه سفارش، وزن) */
 export function MaterialNumberField({ label, value, onChange, bold = true }: { label: string; value: number; onChange: (v: number) => void; bold?: boolean }) {
+  const fieldId = useId();
   return (
     <div className="space-y-1">
-      <label className={LABEL}>{label}</label>
+      <label htmlFor={`${fieldId}-field`} className={LABEL}>{label}</label>
       <DecimalInput
+        id={`${fieldId}-field`}
         min="0"
         step="any"
         value={value}
@@ -55,6 +60,7 @@ export function MaterialAttributeFields({ color, material, size, onChange }: {
   size: string;
   onChange: (field: 'color' | 'material' | 'size', value: string) => void;
 }) {
+  const fieldId = useId();
   const fields: Array<['color' | 'material' | 'size', string, string]> = [
     ['color', 'رنگ', color],
     ['material', 'جنس', material],
@@ -64,8 +70,8 @@ export function MaterialAttributeFields({ color, material, size, onChange }: {
     <>
       {fields.map(([key, label, value]) => (
         <div key={key} className="space-y-1">
-          <label className={LABEL}>{label}</label>
-          <input type="text" value={value} onChange={(e) => onChange(key, e.target.value)} className={PLAIN_INPUT} />
+          <label htmlFor={`${fieldId}-field-${key}`} className={LABEL}>{label}</label>
+          <input id={`${fieldId}-field-${key}`} type="text" value={value} onChange={(e) => onChange(key, e.target.value)} className={PLAIN_INPUT} />
         </div>
       ))}
     </>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog';
 import { NotificationRecipientField } from './NotificationRecipientField';
 import { X, Plus, Trash2, Globe, Bell, ShieldCheck, HelpCircle, Play, CheckCircle2, XCircle, AlertTriangle, Code } from 'lucide-react';
@@ -42,6 +42,7 @@ interface RuleEditorModalProps {
 const EVENT_TYPE_GROUPS = publishedEventTypesByCategory();
 
 export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEditorModalProps) {
+  const fieldId = useId();
   const [formData, setFormData] = useState<RuleFormData>({
     name: '',
     description: '',
@@ -247,10 +248,11 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">
+                <label htmlFor={`${fieldId}-name`} className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">
                   نام قانون <span className="text-rose-500">*</span>
                 </label>
                 <input
+                  id={`${fieldId}-name`}
                   type="text"
                   required
                   value={formData.name}
@@ -261,10 +263,11 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">
+                <label htmlFor={`${fieldId}-event-type`} className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">
                   رویداد فعال‌کننده <span className="text-rose-500">*</span>
                 </label>
                 <select
+                  id={`${fieldId}-event-type`}
                   value={formData.eventType}
                   onChange={(e) => setFormData(prev => ({ ...prev, eventType: e.target.value }))}
                   className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-white"
@@ -290,10 +293,11 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">
+              <label htmlFor={`${fieldId}-description`} className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">
                 توضیحات تکمیلی
               </label>
               <input
+                id={`${fieldId}-description`}
                 type="text"
                 value={formData.description}
                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
@@ -445,10 +449,11 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
               {formData.actionType === 'webhook' && (
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                    <label htmlFor={`${fieldId}-url`} className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
                       نشانی وب‌هوک <span className="text-rose-500">*</span>
                     </label>
                     <input
+                      id={`${fieldId}-url`}
                       type="url"
                       required
                       value={formData.actionConfigJson?.url || ''}
@@ -463,10 +468,11 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                      <label htmlFor={`${fieldId}-post`} className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
                         روش ارسال
                       </label>
                       <select
+                        id={`${fieldId}-post`}
                         value={formData.actionConfigJson?.method || 'POST'}
                         onChange={(e) => setFormData(prev => ({
                           ...prev,
@@ -480,10 +486,11 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
                     </div>
 
                     <div>
-                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                      <label htmlFor={`${fieldId}-field`} className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
                         مهلت زمانی (میلی‌ثانیه)
                       </label>
                       <DecimalInput
+                        id={`${fieldId}-field`}
                         value={formData.actionConfigJson?.timeoutMs || 5000}
                         onValueChange={(v) => setFormData(prev => ({
                           ...prev,
@@ -494,11 +501,12 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
                     </div>
 
                     <div>
-                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                      <label htmlFor={`${fieldId}-secret-token`} className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
                         کلید امنیتی سرآیند
                       </label>
                       {/* v9.0.360 (TD-710): a stored token comes back masked; «********» keeps it on save */}
                       <input
+                        id={`${fieldId}-secret-token`}
                         type="password"
                         autoComplete="new-password"
                         value={formData.actionConfigJson?.secretToken || ''}
@@ -524,10 +532,11 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
                     />
 
                     <div>
-                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                      <label htmlFor={`${fieldId}-title-template`} className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
                         عنوان اعلان
                       </label>
                       <input
+                        id={`${fieldId}-title-template`}
                         type="text"
                         value={formData.actionConfigJson?.titleTemplate || ''}
                         onChange={(e) => setFormData(prev => ({
@@ -541,10 +550,11 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                    <label htmlFor={`${fieldId}-message-template`} className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
                       قالب متن اعلان
                     </label>
                     <textarea
+                      id={`${fieldId}-message-template`}
                       rows={2}
                       value={formData.actionConfigJson?.messageTemplate || ''}
                       onChange={(e) => setFormData(prev => ({
@@ -563,10 +573,11 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                      <label htmlFor={`${fieldId}-category`} className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
                         دسته‌بندی ممیزی
                       </label>
                       <input
+                        id={`${fieldId}-category`}
                         type="text"
                         value={formData.actionConfigJson?.category || ''}
                         onChange={(e) => setFormData(prev => ({
@@ -579,10 +590,11 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
                     </div>
 
                     <div>
-                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                      <label htmlFor={`${fieldId}-tag`} className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
                         برچسب اختصاصی
                       </label>
                       <input
+                        id={`${fieldId}-tag`}
                         type="text"
                         value={formData.actionConfigJson?.tag || ''}
                         onChange={(e) => setFormData(prev => ({

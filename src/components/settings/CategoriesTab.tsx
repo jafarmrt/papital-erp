@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { FolderTree, Plus, Edit2, Trash2, RotateCcw } from 'lucide-react';
 import { Category } from '../../types';
@@ -144,6 +144,7 @@ export function CategoryModal({
   isSaving,
   onSubmit
 }: CategoryModalProps) {
+  const fieldId = useId();
   if (!isOpen) return null;
 
   return (
@@ -157,8 +158,9 @@ export function CategoryModal({
         </div>
         <form onSubmit={onSubmit} className="p-6 space-y-4 text-xs overflow-y-auto">
           <div>
-            <label className="block font-medium mb-1 text-slate-700">نام دسته‌بندی</label>
+            <label htmlFor={`${fieldId}-name`} className="block font-medium mb-1 text-slate-700">نام دسته‌بندی</label>
             <input
+              id={`${fieldId}-name`}
               required
               type="text"
               value={catForm.name}
@@ -167,8 +169,9 @@ export function CategoryModal({
             />
           </div>
           <div>
-            <label className="block font-medium mb-1 text-slate-700">پیشوند کد (انگلیسی)</label>
+            <label htmlFor={`${fieldId}-prefix`} className="block font-medium mb-1 text-slate-700">پیشوند کد (انگلیسی)</label>
             <input
+              id={`${fieldId}-prefix`}
               required
               type="text"
               value={catForm.prefix}
@@ -178,8 +181,9 @@ export function CategoryModal({
             />
           </div>
           <div>
-            <label className="block font-medium mb-1 text-slate-700">واحد اندازه‌گیری پیش‌فرض</label>
+            <label htmlFor={`${fieldId}-default-unit`} className="block font-medium mb-1 text-slate-700">واحد اندازه‌گیری پیش‌فرض</label>
             <input
+              id={`${fieldId}-default-unit`}
               required
               type="text"
               value={catForm.defaultUnit || ''}
@@ -189,8 +193,9 @@ export function CategoryModal({
             />
           </div>
           <div>
-            <label className="block font-medium mb-1 text-slate-700">نوع کالا</label>
+            <label htmlFor={`${fieldId}-type`} className="block font-medium mb-1 text-slate-700">نوع کالا</label>
             <select
+              id={`${fieldId}-type`}
               value={catForm.type}
               onChange={(e) => setCatForm({ ...catForm, type: e.target.value })}
               className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-1 focus:ring-blue-500 outline-none"

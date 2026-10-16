@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useId } from 'react';
 import { ALL_EVENTS_LABEL, ALL_EVENTS_PATTERN, PUBLISHED_EVENT_TYPES, eventTypeLabel } from '../../lib/events/eventTypeCatalog';
 import { confirmAction } from '../ConfirmDialogHost';
 import { Globe, Plus, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Send, Key, Trash2, Edit3, Shield, Activity } from 'lucide-react';
@@ -70,6 +70,7 @@ const AVAILABLE_EVENT_PRESETS = [
 ];
 
 export function WebhookManagementSubTab() {
+  const fieldId = useId();
   // v9.0.435 (TD-722): create, edit, delete, toggle, ping and key rotation are guarded by events.manage
   const canManage = useHasPermission('events.manage');
   const [subscriptions, setSubscriptions] = useState<WebhookSubscription[]>([]);
@@ -684,8 +685,9 @@ export function WebhookManagementSubTab() {
             <form onSubmit={handleSaveSubscription} className="space-y-4 text-xs">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="font-semibold text-slate-700 dark:text-slate-300">نام یا عنوان سامانه مقصد:</label>
+                  <label htmlFor={`${fieldId}-name`} className="font-semibold text-slate-700 dark:text-slate-300">نام یا عنوان سامانه مقصد:</label>
                   <input
+                    id={`${fieldId}-name`}
                     type="text"
                     required
                     placeholder="مثال: فروشگاه برخط ووکامرس"
@@ -696,9 +698,10 @@ export function WebhookManagementSubTab() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-semibold text-slate-700 dark:text-slate-300">کلید محرمانه امضای امنیتی:</label>
+                  <label htmlFor={`${fieldId}-secret-key`} className="font-semibold text-slate-700 dark:text-slate-300">کلید محرمانه امضای امنیتی:</label>
                   <div className="relative">
                     <input
+                      id={`${fieldId}-secret-key`}
                       type="text"
                       placeholder={editingSub ? 'کلید ذخیره‌شده بی‌تغییر می‌ماند؛ برای تغییر، کلید تازه وارد کنید' : 'خالی بماند تا کارساز کلید امن بسازد'}
                       value={formData.secretKey}
@@ -710,9 +713,10 @@ export function WebhookManagementSubTab() {
               </div>
 
               <div className="space-y-1">
-                <label className="font-semibold text-slate-700 dark:text-slate-300">نشانی مقصد وب‌هوک:</label>
+                <label htmlFor={`${fieldId}-target-url`} className="font-semibold text-slate-700 dark:text-slate-300">نشانی مقصد وب‌هوک:</label>
                 <div className="flex items-center gap-2">
                   <input
+                    id={`${fieldId}-target-url`}
                     type="url"
                     required
                     placeholder="https://your-domain.com/api/webhook/receiver"
@@ -762,8 +766,9 @@ export function WebhookManagementSubTab() {
 
               {/* Custom Headers JSON */}
               <div className="space-y-1">
-                <label className="font-semibold text-slate-700 dark:text-slate-300">سرآیندهای سفارشی:</label>
+                <label htmlFor={`${fieldId}-custom-headers-json`} className="font-semibold text-slate-700 dark:text-slate-300">سرآیندهای سفارشی:</label>
                 <textarea
+                  id={`${fieldId}-custom-headers-json`}
                   rows={3}
                   value={formData.customHeadersJson}
                   onChange={e => setFormData({ ...formData, customHeadersJson: e.target.value })}
@@ -779,8 +784,9 @@ export function WebhookManagementSubTab() {
               {/* Advanced Settings Row */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1">
-                  <label className="font-semibold text-slate-700 dark:text-slate-300">سقف تلاش مجدد:</label>
+                  <label htmlFor={`${fieldId}-retry-limit`} className="font-semibold text-slate-700 dark:text-slate-300">سقف تلاش مجدد:</label>
                   <DecimalInput
+                    id={`${fieldId}-retry-limit`}
                     min="1"
                     max="10"
                     value={formData.retryLimit}
@@ -790,8 +796,9 @@ export function WebhookManagementSubTab() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-semibold text-slate-700 dark:text-slate-300">مهلت پاسخ (میلی‌ثانیه):</label>
+                  <label htmlFor={`${fieldId}-timeout-ms`} className="font-semibold text-slate-700 dark:text-slate-300">مهلت پاسخ (میلی‌ثانیه):</label>
                   <DecimalInput
+                    id={`${fieldId}-timeout-ms`}
                     min={WEBHOOK_TIMEOUT_MIN_MS}
                     max={WEBHOOK_TIMEOUT_MAX_MS}
                     step="500"
@@ -802,8 +809,9 @@ export function WebhookManagementSubTab() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-semibold text-slate-700 dark:text-slate-300">وضعیت درگاه:</label>
+                  <label htmlFor={`${fieldId}-is-active`} className="font-semibold text-slate-700 dark:text-slate-300">وضعیت درگاه:</label>
                   <select
+                    id={`${fieldId}-is-active`}
                     value={formData.isActive}
                     onChange={e => setFormData({ ...formData, isActive: parseInt(e.target.value, 10) })}
                     className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200"

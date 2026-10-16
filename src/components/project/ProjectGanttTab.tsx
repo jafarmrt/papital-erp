@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useId } from 'react';
 import { Calendar, Clock, CheckCircle2, PlayCircle, Tag, BarChart3 } from 'lucide-react';
 import { ProductionProject, ProjectStage, ProjectProductItem } from '../../types';
 import { toPersianDigits, toStorageDate, formatPersianDate, getTodayIsoDate } from '../../utils';
@@ -48,6 +48,7 @@ function getDaysDiff(startVal: number, endVal: number): number {
 }
 
 export default function ProjectGanttTab({ project, onUpdate }: ProjectGanttTabProps) {
+  const fieldId = useId();
   const [selectedProductId, setSelectedProductId] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'in_progress' | 'pending'>('all');
   const [activeViewMode, setActiveViewMode] = useState<'interactive' | 'timeline' | 'summary'>('interactive');
@@ -308,8 +309,9 @@ export default function ProjectGanttTab({ project, onUpdate }: ProjectGanttTabPr
           {products.length > 1 && (
             <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-xl text-[11px]">
               <Tag className="w-3.5 h-3.5 text-slate-400" />
-              <label className="font-bold text-slate-600">فیلتر کالا:</label>
+              <label htmlFor={`${fieldId}-selected-product-id`} className="font-bold text-slate-600">فیلتر کالا:</label>
               <select
+                id={`${fieldId}-selected-product-id`}
                 value={selectedProductId}
                 onChange={(e) => setSelectedProductId(e.target.value)}
                 className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer"

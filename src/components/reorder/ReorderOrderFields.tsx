@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { SearchableSelect } from '../SearchableSelect';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import type { WarehouseItem } from '../../hooks/queries/useSettingsQueries';
@@ -36,19 +37,20 @@ const FIELD = 'w-full p-2 bg-white border border-slate-300 rounded-lg text-slate
  * و کالا همیشه به انبار پیش‌فرض می‌رفت، و تاریخ یک کادر متنی بود که سند مستقیم اصلاً نشانش نمی‌داد.
  */
 export function ReorderOrderFields(props: ReorderOrderFieldsProps) {
+  const fieldId = useId();
   const direct = props.orderTarget === 'direct_document';
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
       <div className="sm:col-span-2">
-        <label className="block font-bold text-slate-700 mb-1">
+        <label htmlFor={`${fieldId}-title`} className="block font-bold text-slate-700 mb-1">
           عنوان سفارش / درخواست <span className="text-rose-500">*</span>:
         </label>
-        <input type="text" value={props.title} onChange={e => props.onTitleChange(e.target.value)} required className={FIELD} />
+        <input id={`${fieldId}-title`} type="text" value={props.title} onChange={e => props.onTitleChange(e.target.value)} required className={FIELD} />
       </div>
 
       <div>
-        <label className="block font-bold text-slate-700 mb-1">اولویت نیاز:</label>
-        <select value={props.priority} onChange={e => props.onPriorityChange(e.target.value as ReorderPriority)} className={`${FIELD} font-bold`}>
+        <label htmlFor={`${fieldId}-priority`} className="block font-bold text-slate-700 mb-1">اولویت نیاز:</label>
+        <select id={`${fieldId}-priority`} value={props.priority} onChange={e => props.onPriorityChange(e.target.value as ReorderPriority)} className={`${FIELD} font-bold`}>
           <option value="urgent">فوری / اضطراری</option>
           <option value="high">مهم</option>
           <option value="normal">عادی</option>
@@ -59,10 +61,11 @@ export function ReorderOrderFields(props: ReorderOrderFieldsProps) {
       {direct && (
         <>
           <div className="sm:col-span-2">
-            <label className="block font-bold text-slate-700 mb-1">
+            <label htmlFor={`${fieldId}-supplier-name`} className="block font-bold text-slate-700 mb-1">
               نام تامین‌کننده / فروشنده <span className="text-rose-500">*</span>:
             </label>
             <SearchableSelect
+              id={`${fieldId}-supplier-name`}
               value={props.supplierName}
               onChange={props.onSupplierChange}
               placeholder="-- انتخاب یا جست‌وجوی طرف‌حساب --"
@@ -93,8 +96,8 @@ export function ReorderOrderFields(props: ReorderOrderFieldsProps) {
       )}
 
       <div>
-        <label className="block font-bold text-slate-700 mb-1">{direct ? 'تاریخ سند:' : 'تاریخ نیاز / تحویل:'}</label>
-        <JalaliDateInput value={props.date} onChange={props.onDateChange} className={`${FIELD} font-mono text-center`} />
+        <label htmlFor={`${fieldId}-date`} className="block font-bold text-slate-700 mb-1">{direct ? 'تاریخ سند:' : 'تاریخ نیاز / تحویل:'}</label>
+        <JalaliDateInput id={`${fieldId}-date`} value={props.date} onChange={props.onDateChange} className={`${FIELD} font-mono text-center`} />
       </div>
 
       {direct && props.askDonated && (
@@ -113,8 +116,9 @@ export function ReorderOrderFields(props: ReorderOrderFieldsProps) {
       )}
 
       <div className="sm:col-span-3">
-        <label className="block font-bold text-slate-700 mb-1">یادداشت و توضیحات:</label>
+        <label htmlFor={`${fieldId}-notes`} className="block font-bold text-slate-700 mb-1">یادداشت و توضیحات:</label>
         <input
+          id={`${fieldId}-notes`}
           type="text"
           value={props.notes}
           onChange={e => props.onNotesChange(e.target.value)}

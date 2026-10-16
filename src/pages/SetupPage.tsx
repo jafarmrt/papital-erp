@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useId } from 'react';
 import { fetchJson } from '../api';
 import { User } from '../types';
 import { Shield, Building2, User as UserIcon, Lock, KeyRound, CheckCircle2, ArrowRight, ArrowLeft, Upload, Image as ImageIcon, Phone, MapPin, DollarSign, Eye, EyeOff } from 'lucide-react';
@@ -29,6 +29,7 @@ function removeSetupTokenFromAddress(): void {
 }
 
 export default function SetupPage({ onLogin }: SetupPageProps) {
+  const fieldId = useId();
   const [step, setStep] = useState<1 | 2>(1);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
@@ -223,12 +224,13 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
+                <label htmlFor={`${fieldId}-setup-token`} className="block text-sm font-medium text-slate-700 mb-1">
                   رمز راه‌اندازی <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <KeyRound className="absolute right-3 top-3 text-slate-400" size={18} />
                   <input
+                    id={`${fieldId}-setup-token`}
                     required
                     type="text"
                     value={setupToken}
@@ -253,10 +255,11 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">نام و نام خانوادگی مدیر <span className="text-red-500">*</span></label>
+                <label htmlFor={`${fieldId}-full-name`} className="block text-sm font-medium text-slate-700 mb-1">نام و نام خانوادگی مدیر <span className="text-red-500">*</span></label>
                 <div className="relative">
                   <UserIcon className="absolute right-3 top-3 text-slate-400" size={18} />
                   <input
+                    id={`${fieldId}-full-name`}
                     required
                     type="text"
                     value={fullName}
@@ -269,10 +272,11 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">نام کاربری اختصاصی <span className="text-red-500">*</span></label>
+                <label htmlFor={`${fieldId}-username`} className="block text-sm font-medium text-slate-700 mb-1">نام کاربری اختصاصی <span className="text-red-500">*</span></label>
                 <div className="relative">
                   <UserIcon className="absolute right-3 top-3 text-slate-400" size={18} />
                   <input
+                    id={`${fieldId}-username`}
                     required
                     type="text"
                     value={username}
@@ -287,10 +291,11 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
 
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">کلمه عبور اختصاصی <span className="text-red-500">*</span></label>
+                  <label htmlFor={`${fieldId}-password`} className="block text-sm font-medium text-slate-700 mb-1">کلمه عبور اختصاصی <span className="text-red-500">*</span></label>
                   <div className="relative">
                     <Lock className="absolute right-3 top-3 text-slate-400" size={18} />
                     <input
+                      id={`${fieldId}-password`}
                       required
                       type={showPassword ? 'text' : 'password'}
                       value={password}
@@ -323,10 +328,11 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">تکرار کلمه عبور <span className="text-red-500">*</span></label>
+                  <label htmlFor={`${fieldId}-confirm-password`} className="block text-sm font-medium text-slate-700 mb-1">تکرار کلمه عبور <span className="text-red-500">*</span></label>
                   <div className="relative">
                     <Lock className="absolute right-3 top-3 text-slate-400" size={18} />
                     <input
+                      id={`${fieldId}-confirm-password`}
                       required
                       type={showPassword ? 'text' : 'password'}
                       value={confirmPassword}
@@ -362,10 +368,11 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
 
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">نام فروشگاه / شرکت <span className="text-red-500">*</span></label>
+                  <label htmlFor={`${fieldId}-company-name`} className="block text-sm font-medium text-slate-700 mb-1">نام فروشگاه / شرکت <span className="text-red-500">*</span></label>
                   <div className="relative">
                     <Building2 className="absolute right-3 top-3 text-slate-400" size={18} />
                     <input
+                      id={`${fieldId}-company-name`}
                       required
                       type="text"
                       value={companyName}
@@ -377,10 +384,11 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">شماره تماس پشتیبانی / دفتر</label>
+                  <label htmlFor={`${fieldId}-phone`} className="block text-sm font-medium text-slate-700 mb-1">شماره تماس پشتیبانی / دفتر</label>
                   <div className="relative">
                     <Phone className="absolute right-3 top-3 text-slate-400" size={18} />
                     <input
+                      id={`${fieldId}-phone`}
                       type="text"
                       value={phone}
                       onChange={e => setPhone(e.target.value)}
@@ -392,10 +400,11 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">آدرس فروشگاه / انبار مرکزی</label>
+                <label htmlFor={`${fieldId}-address`} className="block text-sm font-medium text-slate-700 mb-1">آدرس فروشگاه / انبار مرکزی</label>
                 <div className="relative">
                   <MapPin className="absolute right-3 top-3 text-slate-400" size={18} />
                   <input
+                    id={`${fieldId}-address`}
                     type="text"
                     value={address}
                     onChange={e => setAddress(e.target.value)}
@@ -407,10 +416,11 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
 
               <div className="grid md:grid-cols-2 gap-4 items-start">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">نام انبار پیش‌فرض <span className="text-red-500">*</span></label>
+                  <label htmlFor={`${fieldId}-warehouse-name`} className="block text-sm font-medium text-slate-700 mb-1">نام انبار پیش‌فرض <span className="text-red-500">*</span></label>
                   <div className="relative">
                     <Building2 className="absolute right-3 top-3 text-slate-400" size={18} />
                     <input
+                      id={`${fieldId}-warehouse-name`}
                       required
                       type="text"
                       value={warehouseName}
@@ -422,10 +432,11 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">واحد نمایش مبالغ ریالی</label>
+                  <label htmlFor={`${fieldId}-currency`} className="block text-sm font-medium text-slate-700 mb-1">واحد نمایش مبالغ ریالی</label>
                   <div className="relative">
                     <DollarSign className="absolute right-3 top-3 text-slate-400" size={18} />
                     <select
+                      id={`${fieldId}-currency`}
                       value={currency}
                       onChange={e => setCurrency(e.target.value)}
                       className="w-full pr-10 pl-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"

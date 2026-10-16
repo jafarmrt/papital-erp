@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { Layers, Plus, Edit3, Trash2, Search, FolderPlus, Tag, X } from 'lucide-react';
 import { fetchJson } from '../../api';
@@ -25,6 +25,7 @@ interface PieceworkTask {
 }
 
 export function TaskTitlesSettingsTab() {
+  const fieldId = useId();
   const rial = useRialDisplay();
   const curLbl = rial.label;
   const [tasks, setTasks] = useState<PieceworkTask[]>([]);
@@ -405,8 +406,9 @@ export function TaskTitlesSettingsTab() {
             <div className="overflow-y-auto px-6 pb-6"><form onSubmit={handleSaveTask} className="space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">کد عنوان کاری</label>
+                  <label htmlFor={`${fieldId}-code`} className="block font-bold text-slate-700 mb-1">کد عنوان کاری</label>
                   <input
+                    id={`${fieldId}-code`}
                     type="text"
                     placeholder="مثلا PW-001 (اختیاری)"
                     value={taskForm.code}
@@ -415,8 +417,9 @@ export function TaskTitlesSettingsTab() {
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">دسته‌بندی</label>
+                  <label htmlFor={`${fieldId}-category`} className="block font-bold text-slate-700 mb-1">دسته‌بندی</label>
                   <select
+                    id={`${fieldId}-category`}
                     value={taskForm.category}
                     onChange={(e) => setTaskForm({ ...taskForm, category: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none"
@@ -438,8 +441,9 @@ export function TaskTitlesSettingsTab() {
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">عنوان کامل کار *</label>
+                <label htmlFor={`${fieldId}-title`} className="block font-bold text-slate-700 mb-1">عنوان کامل کار *</label>
                 <input
+                  id={`${fieldId}-title`}
                   type="text"
                   required
                   placeholder="مثلا: ساخت کاشی 20*20"
@@ -451,8 +455,9 @@ export function TaskTitlesSettingsTab() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">واحد اندازه‌گیری *</label>
+                  <label htmlFor={`${fieldId}-unit`} className="block font-bold text-slate-700 mb-1">واحد اندازه‌گیری *</label>
                   <select
+                    id={`${fieldId}-unit`}
                     value={taskForm.unit}
                     onChange={(e) => setTaskForm({ ...taskForm, unit: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none font-bold text-blue-800"
@@ -469,8 +474,9 @@ export function TaskTitlesSettingsTab() {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">نرخ پایه ({formatCurrencyLabel('IRR')}) *</label>
+                  <label htmlFor={`${fieldId}-default-rate`} className="block font-bold text-slate-700 mb-1">نرخ پایه ({formatCurrencyLabel('IRR')}) *</label>
                   <FinancialAmountInput
+                    id={`${fieldId}-default-rate`}
                     value={taskForm.defaultRate}
                     onChange={(val) => setTaskForm({ ...taskForm, defaultRate: val })}
                     currency="IRR"
@@ -484,8 +490,9 @@ export function TaskTitlesSettingsTab() {
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">توضیحات (اختیاری)</label>
+                <label htmlFor={`${fieldId}-description`} className="block font-bold text-slate-700 mb-1">توضیحات (اختیاری)</label>
                 <textarea
+                  id={`${fieldId}-description`}
                   rows={2}
                   value={taskForm.description}
                   onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
@@ -534,8 +541,9 @@ export function TaskTitlesSettingsTab() {
             <div className="overflow-y-auto px-6 pb-6">
             <form onSubmit={handleSaveCategory} className="space-y-4 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">نام دسته‌بندی *</label>
+                <label htmlFor={`${fieldId}-cat-name`} className="block font-bold text-slate-700 mb-1">نام دسته‌بندی *</label>
                 <input
+                  id={`${fieldId}-cat-name`}
                   type="text"
                   required
                   placeholder="مثلا: بسته‌بندی، روتوش، کاشی..."
@@ -546,8 +554,9 @@ export function TaskTitlesSettingsTab() {
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">توضیحات (اختیاری)</label>
+                <label htmlFor={`${fieldId}-cat-desc`} className="block font-bold text-slate-700 mb-1">توضیحات (اختیاری)</label>
                 <input
+                  id={`${fieldId}-cat-desc`}
                   type="text"
                   placeholder="توضیحات کوتاه درباره این دسته‌بندی"
                   value={catDesc}

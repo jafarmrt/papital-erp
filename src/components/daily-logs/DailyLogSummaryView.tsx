@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { 
   Calendar as CalendarIcon, Clock, UserCheck, TrendingUp, FileText, 
   Users, FileSpreadsheet, Printer, ChevronLeft, CalendarDays, X 
@@ -50,6 +51,7 @@ export function DailyLogSummaryView({
   onExportCSV,
   onPrint
 }: DailyLogSummaryViewProps) {
+  const fieldId = useId();
   return (
     <div className="space-y-5 font-farsi text-right">
       {/* Summary Filter Bar */}
@@ -104,8 +106,9 @@ export function DailyLogSummaryView({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 items-center">
           {summaryMode === 'daily' ? (
             <div>
-              <label className="block text-[11px] font-bold text-slate-500 mb-1">انتخاب روز شمسی:</label>
+              <label htmlFor={`${fieldId}-summary-date-filter`} className="block text-[11px] font-bold text-slate-500 mb-1">انتخاب روز شمسی:</label>
               <DatePicker
+                id={`${fieldId}-summary-date-filter`}
                 value={summaryDateFilter}
                 onChange={(dateObj: any) => {
                   setSummaryDateFilter(extractDateString(dateObj));
@@ -119,8 +122,9 @@ export function DailyLogSummaryView({
           ) : (
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[11px] font-bold text-slate-500 mb-1">ماه شمسی:</label>
+                <label htmlFor={`${fieldId}-summary-month`} className="block text-[11px] font-bold text-slate-500 mb-1">ماه شمسی:</label>
                 <select
+                  id={`${fieldId}-summary-month`}
                   value={summaryMonth}
                   onChange={(e) => setSummaryMonth(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold bg-slate-50 focus:bg-white text-slate-800"
@@ -140,8 +144,9 @@ export function DailyLogSummaryView({
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] font-bold text-slate-500 mb-1">سال شمسی:</label>
+                <label htmlFor={`${fieldId}-summary-year`} className="block text-[11px] font-bold text-slate-500 mb-1">سال شمسی:</label>
                 <select
+                  id={`${fieldId}-summary-year`}
                   value={summaryYear}
                   onChange={(e) => setSummaryYear(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold bg-slate-50 focus:bg-white text-slate-800"
@@ -155,8 +160,9 @@ export function DailyLogSummaryView({
           )}
 
           <div className="md:col-span-2">
-            <label className="block text-[11px] font-bold text-slate-500 mb-1">فیلتر نیروی کاری / همکار:</label>
+            <label htmlFor={`${fieldId}-summary-selected-user-id`} className="block text-[11px] font-bold text-slate-500 mb-1">فیلتر نیروی کاری / همکار:</label>
             <select
+              id={`${fieldId}-summary-selected-user-id`}
               value={summarySelectedUserId}
               onChange={(e) => setSummarySelectedUserId(e.target.value)}
               className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold bg-slate-50 focus:bg-white text-slate-800"

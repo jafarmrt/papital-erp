@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { fetchJson } from '../../api';
 import { errorMessageOf } from '../../utils';
 import { toast } from 'react-hot-toast';
@@ -30,6 +30,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   grantor = 'all',
   currentUserId,
 }) => {
+  const fieldId = useId();
   // v9.0.73 (TD-517): کاربر تازه نقش پیش‌گزیده ندارد؛ پیش‌تر نقش اول فهرست (مدیر سیستم) انتخاب می‌شد
   const [userForm, setUserForm] = useState({
     username: '',
@@ -160,10 +161,11 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
           <div>
-            <label className="block text-sm font-medium mb-1 text-slate-700">
+            <label htmlFor={`${fieldId}-full_name`} className="block text-sm font-medium mb-1 text-slate-700">
               نام و نام خانوادگی
             </label>
             <input
+              id={`${fieldId}-full_name`}
               required
               type="text"
               value={userForm.full_name}
@@ -176,10 +178,11 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1 text-slate-700">
+              <label htmlFor={`${fieldId}-username`} className="block text-sm font-medium mb-1 text-slate-700">
                 نام کاربری (حساب)
               </label>
               <input
+                id={`${fieldId}-username`}
                 required={!isEditing}
                 disabled={isEditing}
                 type="text"
@@ -192,10 +195,11 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1 text-slate-700">
+              <label htmlFor={`${fieldId}-role`} className="block text-sm font-medium mb-1 text-slate-700">
                 نقش سیستم
               </label>
               <select
+                id={`${fieldId}-role`}
                 required
                 value={userForm.role}
                 disabled={ownAccount}
@@ -238,12 +242,13 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1 text-slate-700">
+            <label htmlFor={`${fieldId}-password`} className="block text-sm font-medium mb-1 text-slate-700">
               {isEditing
                 ? 'کلمه عبور جدید (در صورت تمایل به تغییر)'
                 : 'کلمه عبور ورود'}
             </label>
             <input
+              id={`${fieldId}-password`}
               required={!isEditing}
               type="password"
               value={userForm.password}

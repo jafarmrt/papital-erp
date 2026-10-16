@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { PhoneCall, Video, MessageSquare, Mail, FileText, Clock, CheckCircle2 } from 'lucide-react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
@@ -60,6 +60,7 @@ export function CRMInteractionModal({
   isSubmittingFollowupResult,
   onConfirmFollowupResult
 }: CRMInteractionModalProps) {
+  const fieldId = useId();
   return (
     <>
       {/* Modal 1: Log Activity / Call */}
@@ -184,10 +185,11 @@ export function CRMInteractionModal({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
+                <label htmlFor={`${fieldId}-title`} className="block text-xs font-bold text-slate-700 mb-1">
                   عنوان اقدام <span className="text-rose-500">*</span>
                 </label>
                 <input
+                  id={`${fieldId}-title`}
                   type="text"
                   required
                   placeholder="مثلاً: تماس جهت بررسی قیمت کاشی‌ها"
@@ -199,8 +201,9 @@ export function CRMInteractionModal({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">تاریخ انجام این تماس / اقدام</label>
+                  <label htmlFor={`${fieldId}-get-today-jalali-date`} className="block text-xs font-bold text-slate-700 mb-1">تاریخ انجام این تماس / اقدام</label>
                   <DatePicker
+                    id={`${fieldId}-get-today-jalali-date`}
                     value={isoToJalaliDate(activityForm.activityDate) || getTodayJalaliDate()}
                     onChange={(dateObj: any) => {
                       setActivityForm({ ...activityForm, activityDate: extractDateString(dateObj) });
@@ -214,8 +217,9 @@ export function CRMInteractionModal({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">نتیجه اولیه تماس / اقدام</label>
+                  <label htmlFor={`${fieldId}-result`} className="block text-xs font-bold text-slate-700 mb-1">نتیجه اولیه تماس / اقدام</label>
                   <select
+                    id={`${fieldId}-result`}
                     value={activityForm.result}
                     onChange={(e) => setActivityForm({ ...activityForm, result: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500 font-bold"
@@ -231,8 +235,9 @@ export function CRMInteractionModal({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">شرح مذاکرات و جزئیات تماس</label>
+                <label htmlFor={`${fieldId}-description`} className="block text-xs font-bold text-slate-700 mb-1">شرح مذاکرات و جزئیات تماس</label>
                 <MentionTextarea
+                  id={`${fieldId}-description`}
                   rows={3}
                   placeholder="مشتری چه مواردی مطرح کرد و فروشنده چه پاسخی داد... (برای اشاره به همکار، @ را تایپ کنید)"
                   value={activityForm.description}
@@ -253,8 +258,9 @@ export function CRMInteractionModal({
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] font-semibold text-amber-800 mb-1">تاریخ پیگیری بعدی</label>
+                    <label htmlFor={`${fieldId}-next-follow-up-date`} className="block text-[11px] font-semibold text-amber-800 mb-1">تاریخ پیگیری بعدی</label>
                     <DatePicker
+                      id={`${fieldId}-next-follow-up-date`}
                       value={isoToJalaliDate(activityForm.nextFollowUpDate)}
                       onChange={(dateObj: any) => {
                         setActivityForm({ ...activityForm, nextFollowUpDate: extractDateString(dateObj) });
@@ -268,8 +274,9 @@ export function CRMInteractionModal({
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-semibold text-amber-800 mb-1">عنوان کار پیگیری</label>
+                    <label htmlFor={`${fieldId}-next-follow-up-task`} className="block text-[11px] font-semibold text-amber-800 mb-1">عنوان کار پیگیری</label>
                     <input
+                      id={`${fieldId}-next-follow-up-task`}
                       type="text"
                       placeholder="پیگیری ارسال نمونه کار"
                       value={activityForm.nextFollowUpTask}
@@ -280,8 +287,9 @@ export function CRMInteractionModal({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-amber-800 mb-1">مسئول پیگیری (پرسنل)</label>
+                  <label htmlFor={`${fieldId}-assigned-personnel-id`} className="block text-[11px] font-semibold text-amber-800 mb-1">مسئول پیگیری (پرسنل)</label>
                   <select
+                    id={`${fieldId}-assigned-personnel-id`}
                     value={activityForm.assignedPersonnelId ? String(activityForm.assignedPersonnelId) : ''}
                     onChange={(e) => {
                       const id = e.target.value ? Number(e.target.value) : null;
@@ -352,10 +360,11 @@ export function CRMInteractionModal({
 
             <form onSubmit={onConfirmFollowupResult} className="space-y-4 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">
+                <label htmlFor={`${fieldId}-result-2`} className="block font-bold text-slate-700 mb-1">
                   نتیجه تماس / پیگیری <span className="text-rose-500">*</span>
                 </label>
                 <select
+                  id={`${fieldId}-result-2`}
                   value={followupResultForm.result}
                   onChange={(e) => setFollowupResultForm({ ...followupResultForm, result: e.target.value })}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-blue-500"
@@ -370,10 +379,11 @@ export function CRMInteractionModal({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">
+                <label htmlFor={`${fieldId}-result-note`} className="block font-bold text-slate-700 mb-1">
                   خلاصه توضیحات و نتیجه صحبت‌ها (یادداشت پیگیری):
                 </label>
                 <textarea
+                  id={`${fieldId}-result-note`}
                   rows={3}
                   placeholder="مثال: با مشتری صحبت شد، قرار شد تا فردا پیش‌فاکتور اصلاحی ارسال شود..."
                   value={followupResultForm.resultNote}

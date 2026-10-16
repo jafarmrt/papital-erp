@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { AlertOctagon, RefreshCw, Search, Filter, RotateCcw, CheckCircle2, XCircle, Trash2, Edit3, AlertTriangle, Layers, ChevronDown, ChevronUp, CheckSquare, Square } from 'lucide-react';
 import { formatPersianDate, errorMessageOf, formatPersianNumber, toPersianDigits } from '../../utils';
@@ -35,6 +35,7 @@ interface DLQStats {
 }
 
 export function DeadLetterQueueSubTab() {
+  const fieldId = useId();
   // v9.0.435 (TD-722): replay, edit, dismiss and purge call routes guarded by events.manage
   const canManage = useHasPermission('events.manage');
   const [items, setItems] = useState<DeadLetterItem[]>([]);
@@ -657,8 +658,9 @@ export function DeadLetterQueueSubTab() {
             )}
 
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">داده رویداد (JSON):</label>
+              <label htmlFor={`${fieldId}-edited-payload-json`} className="text-xs font-semibold text-slate-700 dark:text-slate-300">داده رویداد (JSON):</label>
               <textarea
+                id={`${fieldId}-edited-payload-json`}
                 rows={12}
                 value={editedPayloadJson}
                 onChange={e => {

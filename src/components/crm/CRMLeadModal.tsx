@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { Briefcase, Trash2, Users, Plus } from 'lucide-react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
@@ -43,6 +43,7 @@ export function CRMLeadModal({
   currentPersonnelId,
   currentLoggedInUser
 }: CRMLeadModalProps) {
+  const fieldId = useId();
   if (!isLeadModalOpen) return null;
 
   return (
@@ -66,10 +67,11 @@ export function CRMLeadModal({
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
-              <label className="block text-xs font-bold text-slate-700 mb-1">
+              <label htmlFor={`${fieldId}-title`} className="block text-xs font-bold text-slate-700 mb-1">
                 عنوان فرصت فروش <span className="text-rose-500">*</span>
               </label>
               <input
+                id={`${fieldId}-title`}
                 type="text"
                 required
                 placeholder="مثلاً: فروش کاشی‌های ۵۰×۵۰ پروژه برج آسمان"
@@ -80,8 +82,9 @@ export function CRMLeadModal({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">انتخاب از لیست مشتریان / طرفین حساب (اختیاری)</label>
+              <label htmlFor={`${fieldId}-customer-id`} className="block text-xs font-bold text-slate-700 mb-1">انتخاب از لیست مشتریان / طرفین حساب (اختیاری)</label>
               <SearchableSelect
+                id={`${fieldId}-customer-id`}
                 options={customersList.map((c) => ({
                   value: String(c.id),
                   label: `${c.name}${c.contactName ? ` (${c.contactName})` : ''} - ${c.phone || 'بدون تلفن'}`
@@ -107,8 +110,9 @@ export function CRMLeadModal({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">نام مشتری / مخاطب</label>
+              <label htmlFor={`${fieldId}-customer-name`} className="block text-xs font-bold text-slate-700 mb-1">نام مشتری / مخاطب</label>
               <input
+                id={`${fieldId}-customer-name`}
                 type="text"
                 placeholder="نام کامل خریدار"
                 value={leadForm.customerName}
@@ -125,8 +129,9 @@ export function CRMLeadModal({
             />
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">نام شرکت / مجموعه</label>
+              <label htmlFor={`${fieldId}-company`} className="block text-xs font-bold text-slate-700 mb-1">نام شرکت / مجموعه</label>
               <input
+                id={`${fieldId}-company`}
                 type="text"
                 placeholder="مثلاً: شرکت ساختمانی پارس"
                 value={leadForm.company}
@@ -226,8 +231,9 @@ export function CRMLeadModal({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">منبع آشنایی / جذب</label>
+              <label htmlFor={`${fieldId}-source`} className="block text-xs font-bold text-slate-700 mb-1">منبع آشنایی / جذب</label>
               <select
+                id={`${fieldId}-source`}
                 value={leadForm.source}
                 onChange={(e) => setLeadForm({ ...leadForm, source: e.target.value })}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500 font-medium"
@@ -241,8 +247,9 @@ export function CRMLeadModal({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">مرحله قیف فروش</label>
+              <label htmlFor={`${fieldId}-stage`} className="block text-xs font-bold text-slate-700 mb-1">مرحله قیف فروش</label>
               <select
+                id={`${fieldId}-stage`}
                 value={leadForm.stage}
                 onChange={(e) => setLeadForm({ ...leadForm, stage: e.target.value })}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500 font-medium"
@@ -267,10 +274,11 @@ export function CRMLeadModal({
             )}
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
+              <label htmlFor={`${fieldId}-us`} className="block text-xs font-bold text-slate-700 mb-1">
                 ارزش تخمینی معامله ({formatCurrencyLabel(leadForm.currency)})
               </label>
               <input
+                id={`${fieldId}-us`}
                 type="text"
                 placeholder="0"
                 value={leadForm.estimatedValue ? leadForm.estimatedValue.toLocaleString('en-US') : ''}
@@ -289,8 +297,9 @@ export function CRMLeadModal({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">احتمال موفقیت (٪)</label>
+              <label htmlFor={`${fieldId}-probability`} className="block text-xs font-bold text-slate-700 mb-1">احتمال موفقیت (٪)</label>
               <DecimalInput
+                id={`${fieldId}-probability`}
                 min="0"
                 max="100"
                 value={leadForm.probability}
@@ -300,8 +309,9 @@ export function CRMLeadModal({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">فروشنده مسئول (پرسنل)</label>
+              <label htmlFor={`${fieldId}-assigned-personnel-id`} className="block text-xs font-bold text-slate-700 mb-1">فروشنده مسئول (پرسنل)</label>
               <select
+                id={`${fieldId}-assigned-personnel-id`}
                 value={leadForm.assignedPersonnelId ? String(leadForm.assignedPersonnelId) : ''}
                 onChange={(e) => {
                   const id = e.target.value ? Number(e.target.value) : null;
@@ -325,8 +335,9 @@ export function CRMLeadModal({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">تاریخ پیش‌بینی بسته‌شدن</label>
+              <label htmlFor={`${fieldId}-field`} className="block text-xs font-bold text-slate-700 mb-1">تاریخ پیش‌بینی بسته‌شدن</label>
               <DatePicker
+                id={`${fieldId}-field`}
                 value={isoToJalaliDate(leadForm.expectedCloseDate) || getFutureJalaliDate(30)}
                 onChange={(dateObj: any) => {
                   setLeadForm({ ...leadForm, expectedCloseDate: extractDateString(dateObj) });
@@ -340,8 +351,9 @@ export function CRMLeadModal({
             </div>
 
             <div className="md:col-span-2">
-              <label className="block text-xs font-bold text-slate-700 mb-1">توضیحات و یادداشت اولیه</label>
+              <label htmlFor={`${fieldId}-notes`} className="block text-xs font-bold text-slate-700 mb-1">توضیحات و یادداشت اولیه</label>
               <textarea
+                id={`${fieldId}-notes`}
                 rows={3}
                 placeholder="جزئیات درخواست مشتری و نیازمندی‌ها..."
                 value={leadForm.notes}
