@@ -182,7 +182,8 @@ export function AccountingSettingsTab({ currentUser, canSeedDefaults = true }: {
                             })()}
                             onChange={(accountId) => {
                               const acc = accounts.find(a => a.id === accountId);
-                              setMappings(prev => ({ ...prev, [row.key]: acc ? acc.code : currentCode }));
+                              // OBS-R1-54: پاک کردن انتخاب، نگاشت را خالی می‌کند تا سرور کد پیش‌فرض مفهوم را بگیرد (پیش‌تر کد قبلی می‌ماند)
+                              setMappings(prev => ({ ...prev, [row.key]: acc ? acc.code : '' }));
                             }}
                             placeholder="انتخاب حساب معین یا تفصیلی..."
                             className="max-w-md"

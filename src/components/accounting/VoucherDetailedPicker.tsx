@@ -39,12 +39,12 @@ interface VoucherDetailedPickerProps {
   size?: 'normal' | 'compact';
 }
 
+// OBS-R1-55: فقط طرف‌حساب‌های همان نوع (یا «هر دو»)؛ پیش‌تر نبودِ طرف‌حساب این نوع همه طرف‌حساب‌ها را زیر آن نشان می‌داد
 function partiesOf(customers: readonly Party[], type: 'customer' | 'supplier'): readonly Party[] {
-  const matching = customers.filter(c => {
+  return customers.filter(c => {
     const pt = c.partyType || c.party_type || (type === 'customer' ? 'customer' : '');
     return pt === type || pt === 'both';
   });
-  return matching.length > 0 ? matching : customers;
 }
 
 export function VoucherDetailedPicker({

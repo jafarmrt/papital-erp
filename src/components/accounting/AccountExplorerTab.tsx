@@ -17,7 +17,6 @@ interface AccountExplorerTabProps {
   bankAccounts: BankAccount[];
   loading?: boolean;
   onRefresh?: () => void;
-  onViewVoucher?: (voucher: JournalVoucher) => void;
 }
 
 type VoucherItemRow = ExplorerLedgerRow;
@@ -28,8 +27,7 @@ export function AccountExplorerTab({
   personnelList = [],
   bankAccounts = [],
   loading = false,
-  onRefresh,
-  onViewVoucher
+  onRefresh
 }: AccountExplorerTabProps) {
   const rial = useRialDisplay();
   const curLbl = rial.label;

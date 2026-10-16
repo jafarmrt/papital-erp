@@ -14,11 +14,10 @@ import { DialogLayer } from '../common/DialogLayer';
 export const FISCAL_CLOSE_PERMISSION = 'accounting.fiscal_close';
 
 interface FiscalYearClosingTabProps {
-  onViewVoucher?: (voucher: JournalVoucher) => void;
   onPrintVoucher?: (voucher: JournalVoucher) => void;
 }
 
-export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYearClosingTabProps) {
+export function FiscalYearClosingTab({ onPrintVoucher }: FiscalYearClosingTabProps) {
   const fieldId = useId();
   const rial = useRialDisplay();
   const curLbl = rial.label;
