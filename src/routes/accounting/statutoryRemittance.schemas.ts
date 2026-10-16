@@ -33,5 +33,7 @@ export const statutoryRemittanceSchema = z.object({
       amount: positiveAmount('جریمه دیرکرد', 'جریمه دیرکرد باید بزرگتر از صفر باشد'),
       accountId: z.coerce.number().int().positive('سرفصل جریمه دیرکرد را انتخاب کنید'),
     }).strict().nullable().optional(),
+    // پرداخت‌های بی نام پرسنل همان حساب را دیده است («بررسی کردم»)؛ تا چنین پرداختی هست، بی آن ۴۰۹
+    acknowledgeUnassignedPayments: z.boolean().optional(),
   }).strict(),
 });

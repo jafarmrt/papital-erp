@@ -52,12 +52,19 @@ export interface ContraAccountOption {
   code: string;
   name: string;
   accountType: string;
+  /**
+   * v10.1.36 (TD-1243): «بیمه پرداختنی» (۳۲۰۴) یا «مالیات حقوق پرداختنی» (۳۲۰۶) نگاشت‌شده. پرداخت از فرم خزانه یا دفتر چک روی
+   * آن بی نام پرسنل است؛ فرم هشدار می‌دهد و پنجره پرداخت فهرست آن را سرفصل جریمه پیشنهاد نمی‌کند
+   */
+  statutoryKind?: 'insurance' | 'tax';
 }
 
 /** سرفصل‌هایی که فرم خزانه و دفتر چک برای «متفرقه» و «سایر» پیشنهاد می‌دهند؛ همان قاعده‌ای که سرور هنگام ثبت می‌سنجد */
 export async function choosableContraAccounts(tx?: DbExecutor): Promise<ContraAccountOption[]> {
   const executor = tx || orm;
   const excluded = await excludedContraAccountIds(tx);
+  const insurance = await AccountMappingService.getInsurancePayableAccount(tx);
+  const payrollTax = await AccountMappingService.getPayrollTaxPayableAccount(tx);
   const rows = await executor.select({ id: accounts.id, code: accounts.code, name: accounts.name, accountType: accounts.accountType })
     .from(accounts)
     .where(and(
@@ -66,7 +73,10 @@ export async function choosableContraAccounts(tx?: DbExecutor): Promise<ContraAc
       sql`COALESCE(${accounts.isActive}, 1) = 1`,
     ))
     .orderBy(asc(accounts.code));
-  return rows.filter(r => !excluded.has(r.id));
+  return rows.filter(r => !excluded.has(r.id)).map(r => {
+    const statutoryKind = r.id === insurance?.id ? 'insurance' as const : (r.id === payrollTax?.id ? 'tax' as const : undefined);
+    return statutoryKind ? { ...r, statutoryKind } : r;
+  });
 }
 
 /** سرفصل طرف مقابلی که کاربر انتخاب کرده است؛ اگر در فهرست مجاز نباشد ۴۲۲ */

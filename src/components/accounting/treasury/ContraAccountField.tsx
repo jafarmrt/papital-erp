@@ -2,6 +2,7 @@ import React, { useId, useMemo } from 'react';
 import { AccountSearchSelect } from '../AccountSearchSelect';
 import { HelpBadge } from '../../common/HelpBadge';
 import { useContraAccountsQuery } from '../../../hooks/accounting/useTreasuryQueries';
+import { statutoryContraWarning } from '../../../lib/treasury/statutoryRemittance';
 import type { Account, AccountType } from '../../../types';
 
 interface ContraAccountFieldProps {
@@ -24,6 +25,8 @@ export const ContraAccountField: React.FC<ContraAccountFieldProps> = ({ value, o
     accountType: o.accountType as AccountType,
     nature: 'both',
   })), [data]);
+  // v10.1.36 (TD-1243): پرداخت بیمه یا مالیات حقوق از این فرم بی نام پرسنل است؛ هشدار، نه رد
+  const statutoryKind = (Array.isArray(data) ? data : []).find(o => o.id === value)?.statutoryKind;
 
   return (
     <div>
@@ -38,6 +41,11 @@ export const ContraAccountField: React.FC<ContraAccountFieldProps> = ({ value, o
         onChange={id => onChange(id === '' ? null : Number(id))}
         placeholder={isLoading ? 'در حال بارگذاری سرفصل‌ها...' : 'جست‌وجو و انتخاب سرفصل معین...'}
       />
+      {statutoryKind && (
+        <p role="status" className="mt-1.5 text-[11px] leading-5 font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-2 py-1.5">
+          {statutoryContraWarning(statutoryKind)}
+        </p>
+      )}
     </div>
   );
 };

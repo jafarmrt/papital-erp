@@ -14,12 +14,13 @@ const granted = new Set<string>();
 vi.mock('../../contexts/AuthContext', () => ({ useHasPermission: (key: string) => granted.has(key) }));
 
 import {
-  STATUTORY_REMITTANCE_NOTHING, STATUTORY_REMITTANCE_PERMISSION, STATUTORY_REMITTANCE_TEXT,
-  statutoryRemittanceDraftLines, statutoryRemittanceFormError, statutoryRemittancePayload, statutoryRemittanceTotal,
-  type StatutoryRemittanceOptions,
+  STATUTORY_REMITTANCE_NOTHING, STATUTORY_REMITTANCE_PERMISSION, STATUTORY_REMITTANCE_TEXT, STATUTORY_UNASSIGNED_ACK_LABEL,
+  statutoryContraWarning, statutoryRemittanceDraftLines, statutoryRemittanceFormError, statutoryRemittancePayload, statutoryRemittanceTotal,
+  type StatutoryRemittanceOptions, type StatutoryUnassignedPayments,
 } from '../../lib/treasury/statutoryRemittance';
 import { StatutoryRemittanceModal } from '../../components/piecework/StatutoryRemittanceModal';
 import { PayrollStatutoryReportModal } from '../../components/piecework/PayrollStatutoryReportModal';
+import { ContraAccountField } from '../../components/accounting/treasury/ContraAccountField';
 
 /**
  * TD-1243 (product-owner decision t33 «الف»): one treasury payment for a month's insurance or payroll tax list, with a
@@ -36,9 +37,11 @@ const PAID = 'کارگر پرداخت‌شده';
 const BANK_TITLE = 'بانک ملت کارگاه';
 const ACCOUNT_NAME = 'بیمه پرداختنی';
 
-const options = (rows: StatutoryRemittanceOptions['rows'] = []): StatutoryRemittanceOptions => ({
+const NO_UNASSIGNED: StatutoryUnassignedPayments = { amount: '0', vouchers: [] };
+const UNASSIGNED: StatutoryUnassignedPayments = { amount: '200000', vouchers: [{ voucherId: 41, voucherNumber: '1077', date: '2026-04-10', amount: '200000' }] };
+const options = (rows: StatutoryRemittanceOptions['rows'] = [], unassignedPayments = NO_UNASSIGNED): StatutoryRemittanceOptions => ({
   kind: 'insurance', jalaliYear: 1405, jalaliMonth: 1, accountCode: '3204', accountName: ACCOUNT_NAME, rows,
-  totals: { monthAmount: '0', remitted: '0', suggested: '0' },
+  totals: { monthAmount: '0', remitted: '0', suggested: '0' }, unassignedPayments,
 });
 const ROWS: StatutoryRemittanceOptions['rows'] = [
   { personnelId: 1, fullName: HIGH, personnelCode: 'P1', monthAmount: '6000000', remitted: '0', balance: '6000000', suggested: '6000000' },
@@ -46,17 +49,22 @@ const ROWS: StatutoryRemittanceOptions['rows'] = [
   { personnelId: 3, fullName: PAID, personnelCode: '', monthAmount: '1000000', remitted: '1000000', balance: '0', suggested: '0' },
 ];
 
-function serve(rows: StatutoryRemittanceOptions['rows']) {
+function serve(rows: StatutoryRemittanceOptions['rows'], unassigned = NO_UNASSIGNED) {
   fetchJson.mockImplementation(async (url: string, init?: { method?: string }) => {
     if (init?.method === 'POST') return { id: 99 };
-    if (url.startsWith('/accounting/treasury/statutory-remittance/options')) return options(rows);
+    if (url.startsWith('/accounting/treasury/statutory-remittance/options')) return options(rows, unassigned);
     if (url === '/accounting/bank-accounts/options') {
       return { data: [
         { id: 5, code: 'B1', title: BANK_TITLE, type: 'bank', bankName: null, currency: 'IRR', hasLedgerAccount: true },
         { id: 6, code: 'B2', title: 'USD', type: 'bank', bankName: null, currency: 'USD', hasLedgerAccount: true },
       ] };
     }
-    if (url === '/accounting/treasury/contra-accounts') return { data: [{ id: 70, code: '7009', name: 'سایر هزینه‌ها', accountType: 'expense' }] };
+    if (url === '/accounting/treasury/contra-accounts') {
+      return { data: [
+        { id: 70, code: '7009', name: 'سایر هزینه‌ها', accountType: 'expense' },
+        { id: 32, code: '3204', name: ACCOUNT_NAME, accountType: 'liability', statutoryKind: 'insurance' },
+      ] };
+    }
     return {};
   });
 }
@@ -80,6 +88,26 @@ describe('monthly remittance rules (TD-1243)', () => {
     expect(statutoryRemittanceFormError({ ...base, bankAccountId: '' })).not.toBe('');
     expect(statutoryRemittanceFormError({ ...base, penaltyAmount: '1000' })).not.toBe('');
     expect(statutoryRemittanceFormError({ ...base, penaltyAmount: '1000', penaltyAccountId: '70' })).toBe('');
+  });
+
+  it('refuses an amount above what the month leaves even when the balance holds later months', () => {
+    // the month was paid in full; the next month's payslip raised the balance to 9,000,000
+    const paidMonth = statutoryRemittanceDraftLines(options(ROWS)).map(l => (l.personnelId === 1 ? { ...l, remitted: '6000000', balance: '9000000', amount: '1000' } : l));
+    const error = statutoryRemittanceFormError({ lines: paidMonth, bankAccountId: '5', penaltyAmount: '', penaltyAccountId: '' });
+    expect(error).toContain(HIGH);
+    expect(error).toContain('این ماه');
+  });
+
+  it('asks to acknowledge payments made without a personnel name, and sends the acknowledgment only then', () => {
+    const lines = statutoryRemittanceDraftLines(options(ROWS));
+    const base = { lines, bankAccountId: '5', penaltyAmount: '', penaltyAccountId: '', unassignedPayments: true };
+    expect(statutoryRemittanceFormError(base)).not.toBe('');
+    expect(statutoryRemittanceFormError({ ...base, unassignedAcknowledged: true })).toBe('');
+    const payload = (unassignedAcknowledged: boolean) => statutoryRemittancePayload({
+      ...base, unassignedAcknowledged, kind: 'insurance', jalaliYear: 1405, jalaliMonth: 1, date: '2026-04-20', method: 'bank_transfer', trackingNumber: '', description: '',
+    });
+    expect(payload(true).acknowledgeUnassignedPayments).toBe(true);
+    expect('acknowledgeUnassignedPayments' in payload(false)).toBe(false);
   });
 
   it('sends only the chosen people, with Latin digits, and no penalty when it is empty', () => {
@@ -119,6 +147,26 @@ describe('remittance window (TD-1243)', () => {
     expect(sent.bankAccountId).toBe(5);
   });
 
+  it('blocks the payment until earlier payments without a personnel name are acknowledged, and offers no payable account as penalty', async () => {
+    serve(ROWS, UNASSIGNED);
+    render(wrap(<StatutoryRemittanceModal kind="insurance" jalaliYear={1405} jalaliMonth={1} onClose={() => undefined} />));
+    expect(await screen.findByText(/سند ۱۰۷۷/)).toBeTruthy();
+    const bank = await screen.findByLabelText(/حساب بانکی یا صندوق/) as HTMLSelectElement;
+    await waitFor(() => expect(bank.options.length).toBe(2));
+    fireEvent.change(bank, { target: { value: '5' } });
+    const submit = screen.getByRole('button', { name: 'ثبت پرداخت با سند حسابداری' }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    const penalty = screen.getByLabelText('سرفصل جریمه دیرکرد') as HTMLSelectElement;
+    await waitFor(() => expect(penalty.options.length).toBe(2));
+    expect(Array.from(penalty.options).map(o => o.value)).toEqual(['', '70']);
+    fireEvent.click(screen.getByLabelText(STATUTORY_UNASSIGNED_ACK_LABEL));
+    expect(submit.disabled).toBe(false);
+    fireEvent.click(submit);
+    await waitFor(() => expect(fetchJson.mock.calls.some(([, init]) => (init as { method?: string } | undefined)?.method === 'POST')).toBe(true));
+    const post = fetchJson.mock.calls.find(([, init]) => (init as { method?: string } | undefined)?.method === 'POST');
+    expect(JSON.parse(String((post?.[1] as { body?: string }).body)).acknowledgeUnassignedPayments).toBe(true);
+  });
+
   it('says there is nothing to pay in a month without insurance', async () => {
     serve([]);
     render(wrap(<StatutoryRemittanceModal kind="insurance" jalaliYear={1405} jalaliMonth={1} onClose={() => undefined} />));
@@ -137,5 +185,17 @@ describe('remittance window (TD-1243)', () => {
     render(wrap(<PayrollStatutoryReportModal onClose={() => undefined} />));
     expect(await screen.findByRole('button', { name: STATUTORY_REMITTANCE_TEXT.insurance.button })).toBeTruthy();
     expect(screen.getByRole('button', { name: STATUTORY_REMITTANCE_TEXT.tax.button })).toBeTruthy();
+  });
+});
+
+describe('treasury form counter account (TD-1243)', () => {
+  it('warns, without refusing, when the counter account is the insurance payable account', async () => {
+    serve([]);
+    render(wrap(<ContraAccountField value={32} onChange={() => undefined} />));
+    expect(await screen.findByText(statutoryContraWarning('insurance'))).toBeTruthy();
+    cleanup();
+    render(wrap(<ContraAccountField value={70} onChange={() => undefined} />));
+    await waitFor(() => expect(fetchJson).toHaveBeenCalled());
+    expect(screen.queryByText(statutoryContraWarning('insurance'))).toBeNull();
   });
 });

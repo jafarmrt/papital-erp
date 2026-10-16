@@ -7,6 +7,7 @@ import { Modal } from '../common/Modal';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { DecimalInput, refuseInvalidDecimalInputs } from '../common/DecimalInput';
 import { StatutoryRemittanceLines } from './StatutoryRemittanceLines';
+import { StatutoryUnassignedNotice } from './StatutoryUnassignedNotice';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { useOnlineStatus } from '../../lib/pwa/useOnlineStatus';
 import { OFFLINE_SUBMIT_TITLE } from '../../lib/pwa/phoneLayout';
@@ -15,7 +16,7 @@ import { errorMessageOf, getTodayIsoDate } from '../../utils';
 import { jalaliMonthLabel } from '../../utils/calendarDate';
 import { toPersianDigits } from '../../utils/persianNumber';
 import {
-  STATUTORY_REMITTANCE_METHODS, STATUTORY_REMITTANCE_NOTHING, STATUTORY_REMITTANCE_TEXT,
+  STATUTORY_REMITTANCE_METHODS, STATUTORY_REMITTANCE_NOTHING, STATUTORY_REMITTANCE_TEXT, hasStatutoryUnassignedPayments,
   statutoryRemittanceDescription, statutoryRemittanceDraftLines, statutoryRemittanceFormError, statutoryRemittancePayload,
   statutoryRemittanceTotal,
   type StatutoryRemittanceDraftLine, type StatutoryRemittanceKind, type StatutoryRemittanceMethod, type StatutoryRemittanceOptions,
@@ -29,7 +30,7 @@ interface Props {
   onClose: () => void;
 }
 
-interface ContraAccountOption { id: number; code: string; name: string }
+interface ContraAccountOption { id: number; code: string; name: string; statutoryKind?: 'insurance' | 'tax' }
 
 const listOf = <T,>(res: unknown): T[] => (Array.isArray(res) ? res : (Array.isArray((res as { data?: unknown })?.data) ? (res as { data: T[] }).data : [])) as T[];
 const field = 'w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl';
@@ -59,6 +60,7 @@ export function StatutoryRemittanceModal({ kind, jalaliYear, jalaliMonth, onClos
   const [description, setDescription] = useState('');
   const [penaltyAmount, setPenaltyAmount] = useState('');
   const [penaltyAccountId, setPenaltyAccountId] = useState('');
+  const [acknowledged, setAcknowledged] = useState(false);
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -72,7 +74,8 @@ export function StatutoryRemittanceModal({ kind, jalaliYear, jalaliMonth, onClos
       .then((res: unknown) => { if (!signal.aborted) setBanks(listOf<BankAccountOption>(res).filter(b => (b.currency || 'IRR') === 'IRR' && b.hasLedgerAccount)); })
       .catch(() => undefined);
     fetchJson('/accounting/treasury/contra-accounts', { signal })
-      .then((res: unknown) => { if (!signal.aborted) setPenaltyAccounts(listOf<ContraAccountOption>(res)); })
+      // جریمه هزینه است: «بیمه پرداختنی» و «مالیات حقوق پرداختنی» سرفصل جریمه نیستند (کارساز هم رد می‌کند)
+      .then((res: unknown) => { if (!signal.aborted) setPenaltyAccounts(listOf<ContraAccountOption>(res).filter(a => !a.statutoryKind)); })
       .catch(() => undefined);
     return () => controller.abort();
   }, [kind, jalaliYear, jalaliMonth]);
@@ -80,6 +83,7 @@ export function StatutoryRemittanceModal({ kind, jalaliYear, jalaliMonth, onClos
   const total = useMemo(() => statutoryRemittanceTotal(lines, penaltyAmount), [lines, penaltyAmount]);
   const monthLabel = jalaliMonthLabel(`${jalaliYear}/${String(jalaliMonth).padStart(2, '0')}`);
   const nothing = options !== null && lines.length === 0;
+  const unassigned = hasStatutoryUnassignedPayments(options);
 
   const changeLine = (personnelId: number, change: Partial<StatutoryRemittanceDraftLine>) => {
     setLines(prev => prev.map(l => (l.personnelId === personnelId ? { ...l, ...change } : l)));
@@ -89,12 +93,15 @@ export function StatutoryRemittanceModal({ kind, jalaliYear, jalaliMonth, onClos
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (saving || refuseInvalidDecimalInputs(formRef.current)) return;
-    const error = statutoryRemittanceFormError({ lines, bankAccountId, penaltyAmount, penaltyAccountId });
+    const error = statutoryRemittanceFormError({ lines, bankAccountId, penaltyAmount, penaltyAccountId, unassignedPayments: unassigned, unassignedAcknowledged: acknowledged });
     setFormError(error);
     if (error) return;
     setSaving(true);
     try {
-      const body = statutoryRemittancePayload({ kind, jalaliYear, jalaliMonth, lines, bankAccountId, penaltyAmount, penaltyAccountId, date, method, trackingNumber, description });
+      const body = statutoryRemittancePayload({
+        kind, jalaliYear, jalaliMonth, lines, bankAccountId, penaltyAmount, penaltyAccountId, date, method, trackingNumber, description,
+        unassignedPayments: unassigned, unassignedAcknowledged: acknowledged,
+      });
       await fetchJson('/accounting/treasury/statutory-remittance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       toast.success(`${text.button} با سند حسابداری ثبت شد؛ مانده هر نفر به نام خودش بسته شد.`);
       void invalidatePreset(queryClient, 'settlementChange');
@@ -112,7 +119,7 @@ export function StatutoryRemittanceModal({ kind, jalaliYear, jalaliMonth, onClos
       <div className="flex gap-2">
         <button type="button" onClick={onClose} disabled={saving}
           className="px-4 py-2 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50">انصراف</button>
-        <button type="submit" form={`${id}-form`} disabled={saving || !online || !options || nothing}
+        <button type="submit" form={`${id}-form`} disabled={saving || !online || !options || nothing || (unassigned && !acknowledged)}
           title={online ? undefined : OFFLINE_SUBMIT_TITLE}
           className="px-4 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl disabled:opacity-50">
           {saving ? 'در حال ثبت...' : 'ثبت پرداخت با سند حسابداری'}
@@ -129,6 +136,10 @@ export function StatutoryRemittanceModal({ kind, jalaliYear, jalaliMonth, onClos
         {loadError && <p role="alert" className="text-xs font-bold text-rose-600">{loadError}</p>}
         {!options && !loadError && <p className="text-xs text-slate-500">در حال خواندن فهرست...</p>}
         {nothing && <p className="text-xs font-bold text-slate-600 dark:text-slate-300">{STATUTORY_REMITTANCE_NOTHING}</p>}
+        {lines.length > 0 && options && unassigned && (
+          <StatutoryUnassignedNotice accountName={options.accountName} payments={options.unassignedPayments} rial={rial}
+            acknowledged={acknowledged} disabled={saving} onAcknowledge={v => { setAcknowledged(v); setFormError(''); }} />
+        )}
         {lines.length > 0 && <StatutoryRemittanceLines lines={lines} rial={rial} disabled={saving} onChange={changeLine} />}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>

@@ -19,13 +19,18 @@ import { q } from './projectStageIntegrityTests.js';
 
 type Res = { status: number; body?: unknown };
 
+/** the Persian thousands separator of server messages (§6) */
+const PERSIAN_THOUSANDS = '\u066C';
+
 const brief = (res: Res) => `${res.status} ${JSON.stringify(res.body ?? null).slice(0, 240)}`;
 const codeOf = (res: Res) => String((res.body as { code?: unknown } | undefined)?.code ?? '');
 const field = (res: Res, key: string) => (res.body as Record<string, unknown> | undefined)?.[key];
 
 /** Farvardin 1405, a whole Jalali month */
 const MONTH = { startDate: '1405/01/01', endDate: '1405/01/31' };
+const MONTH_2 = { startDate: '1405/02/01', endDate: '1405/02/31' };
 const LOG_DATE = '2026-03-25';
+const LOG_DATE_2 = '2026-05-01';
 const PAY_DATE = '2026-04-20';
 
 /** employee 7 %, employer 23 %, tax 0 % up to 10,000,000 then 10 %, employee insurance off the tax base */
@@ -41,6 +46,27 @@ type OptionRow = { personnelId: number; monthAmount: string; remitted: string; b
 
 const bankBalance = async (bankId: number) => fin(String((await q('SELECT current_balance::text AS b FROM bank_accounts WHERE id = $1', [bankId]))[0]?.b ?? '0'));
 
+type Admin = Awaited<ReturnType<typeof sandboxAdminClient>>;
+
+/** an approved payslip for the period; returns its id */
+async function approvedPayslip(admin: Admin, personnelId: number, period: { startDate: string; endDate: string }): Promise<number> {
+  const issued = await admin.post('/api/piecework/payrolls/generate', { personnelId, ...period });
+  const payrollId = Number(field(issued, 'id'));
+  if (issued.status !== 201 || !payrollId) throw new Error(`setup: payslip ${brief(issued)}`);
+  const approved = await admin.put(`/api/piecework/payrolls/${payrollId}/status`, { status: 'approved' });
+  if (approved.status !== 200) throw new Error(`setup: approve ${brief(approved)}`);
+  return payrollId;
+}
+
+/** a funded bank with 20,000,000 more for the payments */
+async function richBank(): Promise<number> {
+  const bankId = await fundedBank();
+  await TreasuryTransactionService.createTreasuryTransaction({
+    type: 'receipt', method: 'bank_transfer', amount: 20_000_000, bankAccountId: bankId, partyType: 'other', contraAccountId: await miscContraAccountId(), partyName: 'TD-1243 funding', date: '2026-04-01', username: 'reg',
+  });
+  return bankId;
+}
+
 async function setup() {
   const admin = await sandboxAdminClient();
   const saved = await admin.put('/api/piecework/statutory-rates/1405', RATES_1405);
@@ -50,22 +76,15 @@ async function setup() {
     const id = await newWorker(name);
     if (covered) await orm.update(personnel).set({ isInsuranceCovered: 1, isTaxCovered: 1 }).where(eq(personnel.id, id));
     await addLog(id, task, LOG_DATE, amount);
-    const issued = await admin.post('/api/piecework/payrolls/generate', { personnelId: id, ...MONTH });
-    const payrollId = Number(field(issued, 'id'));
-    if (issued.status !== 201 || !payrollId) throw new Error(`setup: payslip ${brief(issued)}`);
-    const approved = await admin.put(`/api/piecework/payrolls/${payrollId}/status`, { status: 'approved' });
-    if (approved.status !== 200) throw new Error(`setup: approve ${brief(approved)}`);
+    await approvedPayslip(admin, id, MONTH);
     return id;
   };
   // 20,000,000 → insurance 1,400,000 + 4,600,000, tax 860,000; 10,000,000 → insurance 700,000 + 2,300,000, tax 0
   const high = await worker('TD-1243 high', 20_000_000, true);
   const low = await worker('TD-1243 low', 10_000_000, true);
   const informal = await worker('TD-1243 informal', 8_000_000, false);
-  const bankId = await fundedBank();
-  await TreasuryTransactionService.createTreasuryTransaction({
-    type: 'receipt', method: 'bank_transfer', amount: 20_000_000, bankAccountId: bankId, partyType: 'other', contraAccountId: await miscContraAccountId(), partyName: 'TD-1243 funding', date: '2026-04-01', username: 'reg',
-  });
-  return { admin, high, low, informal, bankId };
+  const bankId = await richBank();
+  return { admin, high, low, informal, bankId, task };
 }
 
 const rowsOf = (res: Res) => (field(res, 'rows') as OptionRow[] | undefined) ?? [];
@@ -91,9 +110,9 @@ export async function runStatutoryRemittanceTests(shouldRun: ShouldRun): Promise
 
       const pay = (body: Record<string, unknown>) => admin.post('/api/accounting/treasury/statutory-remittance', { year: 1405, month: 1, bankAccountId: bankId, date: PAY_DATE, ...body });
       const over = await pay({ kind: 'insurance', lines: [{ personnelId: high, amount: '6000001' }] });
-      if (over.status !== 422 || codeOf(over) !== 'STATUTORY_REMITTANCE_EXCEEDS_BALANCE') problems.push(`an amount above the balance answered ${brief(over)}, expected 422 STATUTORY_REMITTANCE_EXCEEDS_BALANCE`);
+      if (over.status !== 422 || codeOf(over) !== 'STATUTORY_REMITTANCE_EXCEEDS_MONTH') problems.push(`an amount above the month answered ${brief(over)}, expected 422 STATUTORY_REMITTANCE_EXCEEDS_MONTH`);
       const notOwed = await pay({ kind: 'insurance', lines: [{ personnelId: informal, amount: '1000' }] });
-      if (notOwed.status !== 422 || codeOf(notOwed) !== 'STATUTORY_REMITTANCE_EXCEEDS_BALANCE') problems.push(`a payment for a worker who owes nothing answered ${brief(notOwed)}, expected 422`);
+      if (notOwed.status !== 422 || codeOf(notOwed) !== 'STATUTORY_REMITTANCE_EXCEEDS_MONTH') problems.push(`a payment for a worker who owes nothing answered ${brief(notOwed)}, expected 422 STATUTORY_REMITTANCE_EXCEEDS_MONTH`);
       const twice = await pay({ kind: 'insurance', lines: [{ personnelId: high, amount: '1000' }, { personnelId: high, amount: '1000' }] });
       if (twice.status !== 422 || codeOf(twice) !== 'STATUTORY_REMITTANCE_LINE_INVALID') problems.push(`a person listed twice answered ${brief(twice)}, expected 422 STATUTORY_REMITTANCE_LINE_INVALID`);
 
@@ -129,7 +148,7 @@ export async function runStatutoryRemittanceTests(shouldRun: ShouldRun): Promise
       if (!reopened || !fin(reopened.remitted).isZero() || !fin(reopened.suggested).equals(6_000_000)) problems.push(`after the void the list shows ${JSON.stringify(reopened ?? null)}, expected nothing paid and 6,000,000 suggested`);
 
       assertNoProblems(problems);
-      return 'Lists show the covered workers only (insurance 6,000,000 / 3,000,000, tax 860,000); above balance, not owed and twice 422; one payment of 9,150,000 with a 150,000 penalty leaves 3204 at zero per person; tax payment leaves 3206 at zero; void restores the balances, the bank and the suggestion.';
+      return 'Lists show the covered workers only (insurance 6,000,000 / 3,000,000, tax 860,000); above the month, not owed and twice 422; one payment of 9,150,000 with a 150,000 penalty leaves 3204 at zero per person; tax payment leaves 3206 at zero; void restores the balances, the bank and the suggestion.';
     }));
   }
 
@@ -160,10 +179,18 @@ export async function runStatutoryRemittanceTests(shouldRun: ShouldRun): Promise
       const afterRemittance = await health();
       if (!afterRemittance || afterRemittance.status !== 'healthy') problems.push(`the health check is ${afterRemittance?.status} after a remittance with personnel detail`);
 
-      const { '3204': insuranceAccountId } = await accountIdsByCode('3204');
-      const legacy = await admin.post('/api/accounting/treasury', {
+      // the penalty is an expense: neither a payable account of the list nor the bank's own ledger account
+      const { '3204': insuranceAccountId, '3206': taxAccountId } = await accountIdsByCode('3204', '3206');
+      const [bankLedger] = await q('SELECT account_id FROM bank_accounts WHERE id = $1', [bankId]);
+      for (const [label, accountId, code] of [['3204', insuranceAccountId, 'STATUTORY_REMITTANCE_PENALTY_ACCOUNT_INVALID'], ['3206', taxAccountId, 'STATUTORY_REMITTANCE_PENALTY_ACCOUNT_INVALID'], ['the bank ledger', Number(bankLedger?.account_id), 'TREASURY_CONTRA_ACCOUNT_INVALID']] as const) {
+        const refused = await admin.post('/api/accounting/treasury/statutory-remittance', { ...body, penalty: { amount: '1000', accountId } });
+        if (refused.status !== 422 || codeOf(refused) !== code) problems.push(`a penalty on ${label} answered ${brief(refused)}, expected 422 ${code}`);
+      }
+
+      const legacyPayment = () => admin.post('/api/accounting/treasury', {
         type: 'payment', method: 'bank_transfer', amount: 200_000, bankAccountId: bankId, partyType: 'other', partyName: 'TD-1243 social security', contraAccountId: insuranceAccountId, date: PAY_DATE,
       });
+      const legacy = await legacyPayment();
       if (legacy.status !== 201) throw new Error(`setup: legacy payment ${brief(legacy)}`);
       const listed = await health();
       if (!listed || listed.status !== 'warning' || listed.items?.length !== 1) problems.push(`the health check is ${listed?.status} ${JSON.stringify(listed?.items ?? []).slice(0, 200)}, expected the legacy payment`);
@@ -171,8 +198,81 @@ export async function runStatutoryRemittanceTests(shouldRun: ShouldRun): Promise
       const cleared = await health();
       if (voided.status !== 200 || !cleared || cleared.status !== 'healthy') problems.push(`after voiding the legacy payment (${brief(voided)}) the health check is ${cleared?.status}`);
 
+      // a payment without personnel detail may have paid this month already: the list names it and asks to acknowledge it
+      const legacy2 = await legacyPayment();
+      if (legacy2.status !== 201) throw new Error(`setup: second legacy payment ${brief(legacy2)}`);
+      const listedOptions = await admin.get('/api/accounting/treasury/statutory-remittance/options?kind=insurance&year=1405&month=1');
+      const unassigned = field(listedOptions, 'unassignedPayments') as { amount?: string; vouchers?: unknown[] } | undefined;
+      if (!fin(unassigned?.amount ?? 0).equals(200_000) || unassigned?.vouchers?.length !== 1) problems.push(`the list carries ${JSON.stringify(unassigned ?? null)}, expected 200,000 in one voucher`);
+      const unacknowledged = await admin.post('/api/accounting/treasury/statutory-remittance', body);
+      if (unacknowledged.status !== 409 || codeOf(unacknowledged) !== 'STATUTORY_REMITTANCE_UNASSIGNED_PAYMENTS') problems.push(`a payment without the acknowledgment answered ${brief(unacknowledged)}, expected 409 STATUTORY_REMITTANCE_UNASSIGNED_PAYMENTS`);
+      const acknowledged = await admin.post('/api/accounting/treasury/statutory-remittance', { ...body, acknowledgeUnassignedPayments: true });
+      if (acknowledged.status !== 201) problems.push(`an acknowledged payment answered ${brief(acknowledged)}, expected 201`);
+
+      // the correction voucher the health check asks for moves the payment to the person and clears both warnings
+      const correction = await admin.post('/api/accounting/vouchers', {
+        date: PAY_DATE, description: 'TD-1243 correction', items: [
+          { accountId: insuranceAccountId, detailedType: 'personnel', detailedId: high, detailedName: 'TD-1243 high', debit: '200000', credit: '0' },
+          { accountId: insuranceAccountId, detailedType: 'none', debit: '0', credit: '200000' },
+        ],
+      });
+      if (correction.status !== 201) throw new Error(`setup: correction voucher ${brief(correction)}`);
+      const corrected = await health();
+      const afterCorrection = field(await admin.get('/api/accounting/treasury/statutory-remittance/options?kind=insurance&year=1405&month=1'), 'unassignedPayments') as { amount?: string } | undefined;
+      if (!corrected || corrected.status !== 'healthy' || !fin(afterCorrection?.amount ?? -1).isZero()) problems.push(`after the correction the health check is ${corrected?.status} and the list carries ${JSON.stringify(afterCorrection ?? null)}`);
+
+      // the month leaves 5,998,000 but the correction lowered the balance to 5,798,000: the balance caps the payment
+      const aboveBalance = await admin.post('/api/accounting/treasury/statutory-remittance', { ...body, lines: [{ personnelId: high, amount: '5998000' }] });
+      if (aboveBalance.status !== 422 || codeOf(aboveBalance) !== 'STATUTORY_REMITTANCE_EXCEEDS_BALANCE') problems.push(`an amount above the balance answered ${brief(aboveBalance)}, expected 422 STATUTORY_REMITTANCE_EXCEEDS_BALANCE`);
+      const balanceMessage = String(field(aboveBalance, 'error') ?? '');
+      if (!balanceMessage.includes(PERSIAN_THOUSANDS) || balanceMessage.includes(',')) problems.push(`the balance message writes its amount as ${balanceMessage.slice(0, 160)}, expected Persian thousands separators`);
+      const rest = await admin.post('/api/accounting/treasury/statutory-remittance', { ...body, lines: [{ personnelId: high, amount: '5798000' }] });
+      if (rest.status !== 201 || !fin(await personNet('3204', high)).isZero()) problems.push(`the rest answered ${brief(rest)} and left 3204 at ${await personNet('3204', high)}`);
+
       assertNoProblems(problems);
-      return 'Payroll issuer 403 on list and payment; foreign bank 422; unknown kind 400; health check clean after a remittance, warns on a legacy 3204 payment without detail and clears after its void.';
+      return 'Payroll issuer 403; foreign bank 422; unknown kind 400; penalty on 3204, 3206 or the bank ledger 422; health check clean after a remittance, warns on a legacy 3204 payment and clears after its void; a second legacy payment is named by the list and needs the acknowledgment (409 without); a correction voucher clears both; the balance caps the payment.';
+    }));
+  }
+
+  const capId = 'reg_statutory_remittance_month_cap_td_1243';
+  if (shouldRun(capId, 'td1243', 'payroll', 'statutory', 'treasury', 'remittance', 'month', 'concurrency')) {
+    await runCase(results, capId, 'v10.1.36: a month already paid is never paid again while a later month is owed, two concurrent payments of one month pay it once, and a month without payslips lists nobody and takes no payment (TD-1243)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const { admin, high, bankId, task } = await setup();
+      // Ordibehesht raises the high earner's 3204 balance to 12,000,000 (two months of 6,000,000)
+      await addLog(high, task, LOG_DATE_2, 20_000_000);
+      await approvedPayslip(admin, high, MONTH_2);
+      const pay = (month: number, amount: string, bank = bankId) => admin.post('/api/accounting/treasury/statutory-remittance', {
+        kind: 'insurance', year: 1405, month, bankAccountId: bank, date: PAY_DATE, lines: [{ personnelId: high, amount }],
+      });
+
+      const empty = await admin.get('/api/accounting/treasury/statutory-remittance/options?kind=insurance&year=1405&month=3');
+      if (empty.status !== 200 || rowsOf(empty).length !== 0 || !fin(String((field(empty, 'totals') as { suggested?: string } | undefined)?.suggested ?? '-1')).isZero()) problems.push(`a month without payslips answered ${brief(empty)}, expected 200 with no row`);
+      const emptyPaid = await pay(3, '1000');
+      if (emptyPaid.status !== 422 || codeOf(emptyPaid) !== 'STATUTORY_REMITTANCE_EXCEEDS_MONTH') problems.push(`a payment for a month without payslips answered ${brief(emptyPaid)}, expected 422 STATUTORY_REMITTANCE_EXCEEDS_MONTH`);
+
+      const first = await pay(1, '6000000');
+      if (first.status !== 201) throw new Error(`setup: Farvardin payment ${brief(first)}`);
+      for (const amount of ['6000000', '1']) {
+        const again = await pay(1, amount);
+        if (again.status !== 422 || codeOf(again) !== 'STATUTORY_REMITTANCE_EXCEEDS_MONTH') problems.push(`paying Farvardin again (${amount}) while Ordibehesht is owed answered ${brief(again)}, expected 422 STATUTORY_REMITTANCE_EXCEEDS_MONTH`);
+      }
+      const farvardin = rowsOf(await admin.get('/api/accounting/treasury/statutory-remittance/options?kind=insurance&year=1405&month=1')).find(r => r.personnelId === high);
+      const ordibehesht = rowsOf(await admin.get('/api/accounting/treasury/statutory-remittance/options?kind=insurance&year=1405&month=2')).find(r => r.personnelId === high);
+      if (!farvardin || !fin(farvardin.suggested).isZero() || !ordibehesht || !fin(ordibehesht.suggested).equals(6_000_000)) problems.push(`the lists suggest ${farvardin?.suggested} for Farvardin and ${ordibehesht?.suggested} for Ordibehesht, expected 0 and 6,000,000`);
+
+      // two tabs pay Ordibehesht at once from two banks: the personnel row lock lets one through
+      const otherBank = await richBank();
+      const raced = await Promise.all([pay(2, '6000000'), pay(2, '6000000', otherBank)]);
+      const statuses = raced.map(r => r.status).sort();
+      if (statuses[0] !== 201 || statuses[1] !== 422 || !raced.some(r => codeOf(r) === 'STATUTORY_REMITTANCE_EXCEEDS_MONTH')) problems.push(`two concurrent Ordibehesht payments answered ${raced.map(brief).join(' / ')}, expected one 201 and one 422 STATUTORY_REMITTANCE_EXCEEDS_MONTH`);
+      const [lines] = await q(`SELECT COALESCE(SUM(l.amount), 0)::text AS paid FROM statutory_remittance_lines l
+                                 JOIN treasury_transactions t ON t.id = l.treasury_transaction_id AND t.is_deleted = 0 AND t.status = 'completed'
+                                WHERE l.personnel_id = $1 AND l.jalali_month = 2`, [high]);
+      if (!fin(String(lines?.paid ?? '0')).equals(6_000_000) || !fin(await personNet('3204', high)).isZero()) problems.push(`Ordibehesht was paid ${lines?.paid} and 3204 stands at ${await personNet('3204', high)}, expected 6,000,000 and 0`);
+
+      assertNoProblems(problems);
+      return 'Khordad lists nobody and refuses a payment; after Farvardin is paid, paying it again (6,000,000 or 1) is 422 while Ordibehesht is owed; the lists suggest 0 and 6,000,000; two concurrent Ordibehesht payments from two banks give one 201 and one 422, and 3204 ends at zero.';
     }));
   }
 

@@ -11,7 +11,9 @@ import { AccountMappingService } from './accountMapping.service.js';
  * خودش بدهکار می‌کند؛ پرداختی که پیش‌تر با فرم خزانه («متفرقه» با طرف حساب ۳۲۰۴ یا ۳۲۰۶) ثبت شده، تفصیلی پرسنل ندارد و
  * مانده هر نفر را باز می‌گذارد. این بررسی سندهای زنده‌ای را فهرست می‌کند که روی این دو حساب بی تفصیلی پرسنل بدهکار
  * مانده‌اند (سند معکوس و سندی که معکوس زنده دارد شمرده نمی‌شود)، تا حسابدار با سند اصلاحی به نام هر نفر ببرد. هیچ ردیف
- * قدیمی خودکار عوض نمی‌شود.
+ * قدیمی خودکار عوض نمی‌شود. فقط حسابی فهرست می‌شود که بدهکار خالص ردیف‌های بی تفصیلی پرسنل کل آن هنوز مثبت است؛ سند اصلاحی
+ * (بدهکار با تفصیلی هر نفر، بستانکار بی تفصیلی) آن را صفر و بررسی را پاک می‌کند. پنجره پرداخت فهرست
+ * (`statutoryRemittanceOptions.ts`) همین قاعده را برای «بررسی کردم» می‌خواند.
  */
 
 export interface StatutoryPaymentWithoutPersonnel {
@@ -28,6 +30,15 @@ export async function findStatutoryPaymentsWithoutPersonnel(): Promise<Statutory
   const accounts = [await AccountMappingService.getInsurancePayableAccount(), await AccountMappingService.getPayrollTaxPayableAccount()]
     .filter((a): a is Account => Boolean(a));
   if (accounts.length === 0) return [];
+  const noPersonnel = sql`(i.detailed_type IS DISTINCT FROM 'personnel' OR i.detailed_id IS NULL)`;
+  const net = await orm.execute(sql`
+    SELECT i.account_id FROM journal_voucher_items i
+      JOIN journal_vouchers v ON v.id = i.voucher_id AND v.is_deleted = 0
+     WHERE i.is_deleted = 0 AND i.account_id IN (${sql.join(accounts.map(a => sql`${a.id}`), sql`, `)}) AND ${noPersonnel}
+     GROUP BY i.account_id
+    HAVING SUM(i.debit - i.credit) > 0`);
+  const open = (net.rows as Array<{ account_id: unknown }>).map(r => Number(r.account_id));
+  if (open.length === 0) return [];
   const res = await orm.execute(sql`
     SELECT v.id AS voucher_id, v.voucher_number::text AS voucher_number, v.date, a.code AS account_code, a.name AS account_name,
            SUM(i.debit - i.credit)::text AS amount
@@ -35,8 +46,8 @@ export async function findStatutoryPaymentsWithoutPersonnel(): Promise<Statutory
       JOIN journal_vouchers v ON v.id = i.voucher_id AND v.is_deleted = 0
       JOIN accounts a ON a.id = i.account_id
      WHERE i.is_deleted = 0
-       AND i.account_id IN (${sql.join(accounts.map(a => sql`${a.id}`), sql`, `)})
-       AND (i.detailed_type IS DISTINCT FROM 'personnel' OR i.detailed_id IS NULL)
+       AND i.account_id IN (${sql.join(open.map(id => sql`${id}`), sql`, `)})
+       AND ${noPersonnel}
        AND COALESCE(v.reference_number, '') NOT LIKE 'REV-V%'
        AND COALESCE(v.reference_number, '') NOT LIKE 'VOID-REPOST-V%'
        AND NOT EXISTS (

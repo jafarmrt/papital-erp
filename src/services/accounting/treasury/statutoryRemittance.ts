@@ -1,19 +1,17 @@
-import { and, asc, eq, inArray, sql, type SQL } from 'drizzle-orm';
-import { orm, type DbExecutor } from '../../../db/drizzle.js';
+import { and, asc, eq, inArray } from 'drizzle-orm';
+import { orm } from '../../../db/drizzle.js';
 import { bankAccounts, personnel, statutoryRemittanceLines, treasuryTransactions } from '../../../db/schema.js';
-import { NotFoundError, ValidationError } from '../../../errors/customErrors.js';
+import { ConflictError, NotFoundError, ValidationError } from '../../../errors/customErrors.js';
 import { fin, type DecimalValue, type FinancialDecimal } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
 import { LockHierarchyLevel, validateLockOrder } from '../../../lib/lockOrder.js';
 import {
-  STATUTORY_REMITTANCE_TEXT, statutoryRemittanceDescription,
-  type StatutoryRemittanceKind, type StatutoryRemittanceOptionRow, type StatutoryRemittanceOptions,
+  STATUTORY_REMITTANCE_TEXT, statutoryMonthLeft, statutoryRemittanceDescription, type StatutoryRemittanceKind,
 } from '../../../lib/treasury/statutoryRemittance.js';
-import { jalaliMonthLength } from '../../../utils/calendarDate.js';
-import { jalaliToGregorian } from '../../../utils/dateUtils.js';
-import { toPersianDigits } from '../../../utils/persianNumber.js';
-import type { Account, TreasuryTransaction } from '../../../types.js';
+import { formatPersianNumber, toPersianDigits } from '../../../utils/persianNumber.js';
+import type { TreasuryTransaction } from '../../../types.js';
 import { requireChoosableContraAccount } from './partyContraAccount.js';
+import { monthFigures, monthRange, personnelBalances, remittanceAccount, unassignedPayments } from './statutoryRemittanceOptions.js';
 import { auditTreasuryTransactionCreated, type TreasuryAuditActor } from './treasuryAudit.js';
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
 import { TreasuryTransactionService } from './treasuryTransaction.service.js';
@@ -23,121 +21,12 @@ import { TreasuryTransactionService } from './treasuryTransaction.service.js';
  * مالیات ماهانه». یک پرداخت خزانه (همان یک واریز بانکی) با یک سند: بدهکار حساب نگاشت‌شده (بیمه پرداختنی ۳۲۰۴ یا مالیات
  * حقوق پرداختنی ۳۲۰۶) برای هر نفر با تفصیلی خود او، بدهکار جریمه دیرکرد اختیاری روی سرفصلی که کاربر انتخاب می‌کند، و
  * بستانکار بانک. پیش‌تر پرداخت «متفرقه» با طرف حساب ۳۲۰۴ تفصیلی پرسنل نداشت و صورت‌حساب هر نفر و نگهبان حذف پرسنل مانده
- * پرداخت‌شده را بدهی می‌دیدند. مبلغ هر نفر از مانده بستانکار او روی همان حساب بیشتر نیست؛ ابطال همان ابطال خزانه است.
+ * پرداخت‌شده را بدهی می‌دیدند. مبلغ هر نفر از آنچه فهرست همان ماه پس از پرداخت‌های زنده پیشین مانده و از مانده بستانکار او
+ * روی همان حساب بیشتر نیست، هر دو پس از قفل ردیف پرسنل خوانده می‌شوند تا همان ماه دو بار پرداخت نشود؛ ابطال همان ابطال خزانه است.
  */
 
-const pad = (n: number) => String(n).padStart(2, '0');
-const isoOf = ([y, m, d]: [number, number, number]) => `${y}-${pad(m)}-${pad(d)}`;
-const faAmount = (v: DecimalValue) => toPersianDigits(fin(v).toNumber().toLocaleString('en-US'));
-
-/** مبلغ هر فیش: بیمه سهم کارگر و کارفرما، یا مالیات حقوق */
-const MONTH_AMOUNT: Record<StatutoryRemittanceKind, SQL> = {
-  insurance: sql.raw('COALESCE(p.employee_insurance, 0) + COALESCE(p.employer_insurance, 0)'),
-  tax: sql.raw('COALESCE(p.income_tax, 0)'),
-};
-
-function monthRange(jalaliYear: number, jalaliMonth: number): { from: string; to: string } {
-  if (!Number.isInteger(jalaliYear) || jalaliYear < 1390 || jalaliYear > 1500 || !Number.isInteger(jalaliMonth) || jalaliMonth < 1 || jalaliMonth > 12) {
-    throw new ValidationError('سال و ماه جلالی فهرست معتبر نیست.', undefined, 'PAYROLL_REPORT_MONTH_INVALID');
-  }
-  return {
-    from: isoOf(jalaliToGregorian(jalaliYear, jalaliMonth, 1)),
-    to: isoOf(jalaliToGregorian(jalaliYear, jalaliMonth, jalaliMonthLength(jalaliYear, jalaliMonth))),
-  };
-}
-
-/** حساب نگاشت‌شده بیمه پرداختنی یا مالیات حقوق پرداختنی؛ نبودش ۴۲۲ */
-async function remittanceAccount(kind: StatutoryRemittanceKind, db?: DbExecutor): Promise<Account> {
-  const account = await TreasuryTransactionService.payrollStatutoryPayableAccount(kind, db);
-  if (!account) {
-    throw new ValidationError(`حساب «${STATUTORY_REMITTANCE_TEXT[kind].account}» در نگاشت حساب‌ها یافت نشد؛ آن را در تنظیمات حسابداری مشخص کنید.`, undefined, 'STATUTORY_REMITTANCE_ACCOUNT_MISSING');
-  }
-  return account;
-}
-
-/** مانده بستانکار حساب برای تفصیلی پرسنل هر نفر، روی ردیف‌های زنده سندهای زنده با هر وضعیت (جمع در SQL، §1.8) */
-async function personnelBalances(db: DbExecutor, accountId: number, personnelIds: number[]): Promise<Map<number, FinancialDecimal>> {
-  const balances = new Map<number, FinancialDecimal>();
-  if (personnelIds.length === 0) return balances;
-  const res = await db.execute(sql`
-    SELECT i.detailed_id AS personnel_id, SUM(i.credit - i.debit)::text AS balance
-      FROM journal_voucher_items i
-      JOIN journal_vouchers v ON v.id = i.voucher_id AND v.is_deleted = 0
-     WHERE i.is_deleted = 0 AND i.account_id = ${accountId} AND i.detailed_type = 'personnel'
-       AND i.detailed_id IN (${sql.join(personnelIds.map(id => sql`${id}`), sql`, `)})
-     GROUP BY i.detailed_id`);
-  for (const r of res.rows as Array<{ personnel_id: unknown; balance: unknown }>) {
-    balances.set(Number(r.personnel_id), fin(String(r.balance ?? '0')));
-  }
-  return balances;
-}
-
-/** پرسنل فهرست ماه با مبلغ ماه، پرداخت‌شده همان ماه، مانده و مبلغ پیشنهادی */
-export async function statutoryRemittanceOptions(kind: StatutoryRemittanceKind, jalaliYear: number, jalaliMonth: number): Promise<StatutoryRemittanceOptions> {
-  const { from, to } = monthRange(jalaliYear, jalaliMonth);
-  const account = await remittanceAccount(kind);
-  const amount = MONTH_AMOUNT[kind];
-  const res = await orm.execute(sql`
-    WITH month_pay AS (
-      SELECT p.personnel_id, SUM(${amount}) AS month_amount
-        FROM piecework_payrolls p
-       WHERE p.is_deleted = 0 AND p.is_eidi = 0 AND p.status IN ('approved', 'partially_paid', 'paid')
-         AND p.end_date >= ${from} AND p.end_date <= ${to}
-       GROUP BY p.personnel_id
-      HAVING SUM(${amount}) > 0
-    ), remitted AS (
-      SELECT l.personnel_id, SUM(l.amount) AS remitted
-        FROM statutory_remittance_lines l
-        JOIN treasury_transactions t ON t.id = l.treasury_transaction_id
-       WHERE t.is_deleted = 0 AND t.status = 'completed' AND t.reversal_of_id IS NULL
-         AND l.kind = ${kind} AND l.jalali_year = ${jalaliYear} AND l.jalali_month = ${jalaliMonth}
-       GROUP BY l.personnel_id
-    ), bal AS (
-      SELECT i.detailed_id AS personnel_id, SUM(i.credit - i.debit) AS balance
-        FROM journal_voucher_items i
-        JOIN journal_vouchers v ON v.id = i.voucher_id AND v.is_deleted = 0
-       WHERE i.is_deleted = 0 AND i.account_id = ${account.id} AND i.detailed_type = 'personnel'
-         AND i.detailed_id IN (SELECT personnel_id FROM month_pay)
-       GROUP BY i.detailed_id
-    )
-    SELECT pe.id, pe.full_name, COALESCE(pe.personnel_code, '') AS personnel_code,
-           m.month_amount::text AS month_amount, COALESCE(r.remitted, 0)::text AS remitted, COALESCE(b.balance, 0)::text AS balance
-      FROM month_pay m
-      JOIN personnel pe ON pe.id = m.personnel_id
-      LEFT JOIN remitted r ON r.personnel_id = m.personnel_id
-      LEFT JOIN bal b ON b.personnel_id = m.personnel_id
-     ORDER BY pe.full_name, pe.id`);
-  const totals = { monthAmount: fin(0), remitted: fin(0), suggested: fin(0) };
-  const rows: StatutoryRemittanceOptionRow[] = (res.rows as Array<Record<string, unknown>>).map(r => {
-    const monthAmount = fin(String(r.month_amount ?? '0'));
-    const remitted = fin(String(r.remitted ?? '0'));
-    const balance = fin(String(r.balance ?? '0'));
-    const left = monthAmount.subtract(remitted);
-    const cap = left.lessThan(balance) ? left : balance;
-    const suggested = cap.isPositive() ? cap : fin(0);
-    totals.monthAmount = totals.monthAmount.add(monthAmount);
-    totals.remitted = totals.remitted.add(remitted);
-    totals.suggested = totals.suggested.add(suggested);
-    return {
-      personnelId: Number(r.id),
-      fullName: String(r.full_name ?? ''),
-      personnelCode: String(r.personnel_code ?? ''),
-      monthAmount: monthAmount.toString(),
-      remitted: remitted.toString(),
-      balance: balance.toString(),
-      suggested: suggested.toString(),
-    };
-  });
-  return {
-    kind,
-    jalaliYear,
-    jalaliMonth,
-    accountCode: account.code,
-    accountName: account.name,
-    rows,
-    totals: { monthAmount: totals.monthAmount.toString(), remitted: totals.remitted.toString(), suggested: totals.suggested.toString() },
-  };
-}
+/** مبلغ ریالی با رقم و جداکننده هزارگان فارسی (§6) */
+const faAmount = (v: DecimalValue) => formatPersianNumber(fin(v).toString(), 4);
 
 export interface CreateStatutoryRemittanceInput {
   kind: StatutoryRemittanceKind;
@@ -150,6 +39,8 @@ export interface CreateStatutoryRemittanceInput {
   description?: string;
   lines: Array<{ personnelId: number; amount: DecimalValue }>;
   penalty?: { amount: DecimalValue; accountId: number } | null;
+  /** پرداخت‌های بی نام پرسنل این حساب را دیده و تأیید کرده است («بررسی کردم») */
+  acknowledgeUnassignedPayments?: boolean;
   userId?: number;
   username?: string;
   audit?: TreasuryAuditActor;
@@ -194,6 +85,18 @@ export async function createStatutoryRemittance(input: CreateStatutoryRemittance
     ]);
     const account = await remittanceAccount(kind, tx);
     const penaltyAccount = penalty ? await requireChoosableContraAccount(tx, penalty.accountId) : null;
+    if (penaltyAccount) {
+      // جریمه هزینه است، نه بدهی پرسنل: روی ۳۲۰۴ یا ۳۲۰۶ مانده بی نام پرسنل می‌ساخت. سرفصل هر حساب خزانه را
+      // `requireChoosableContraAccount` پیش‌تر رد کرده است
+      const statutoryIds = new Set<number>();
+      for (const k of ['insurance', 'tax'] as const) {
+        const statutory = await TreasuryTransactionService.payrollStatutoryPayableAccount(k, tx);
+        if (statutory) statutoryIds.add(statutory.id);
+      }
+      if (statutoryIds.has(penaltyAccount.id)) {
+        throw new ValidationError('سرفصل جریمه دیرکرد نمی‌تواند «بیمه پرداختنی» یا «مالیات حقوق پرداختنی» باشد؛ یک حساب هزینه انتخاب کنید.', undefined, 'STATUTORY_REMITTANCE_PENALTY_ACCOUNT_INVALID');
+      }
+    }
 
     const [bank] = await tx.select().from(bankAccounts)
       .where(and(eq(bankAccounts.id, input.bankAccountId), eq(bankAccounts.isDeleted, 0)))
@@ -214,6 +117,21 @@ export async function createStatutoryRemittance(input: CreateStatutoryRemittance
       throw new ValidationError('یکی از پرسنل فهرست یافت نشد.', undefined, 'STATUTORY_REMITTANCE_PERSONNEL_INVALID');
     }
     const nameOf = new Map(people.map(p => [p.id, p.fullName]));
+
+    // سقف ماه: مانده حساب همه ماه‌ها را دارد، پس بی این سقف ماهی که پرداخت شده با بدهی ماه بعد دوباره پرداخت می‌شد
+    const figures = await monthFigures(tx, kind, input.jalaliYear, input.jalaliMonth, ids);
+    const overMonth = lines
+      .map(l => ({ ...l, left: statutoryMonthLeft(figures.get(l.personnelId) ?? { monthAmount: '0', remitted: '0' }) }))
+      .filter(l => l.amount.greaterThan(l.left));
+    if (overMonth.length > 0) {
+      const names = overMonth.map(l => `${nameOf.get(l.personnelId) ?? ''} (مانده فهرست این ماه ${faAmount(l.left)} ریال)`).join('، ');
+      throw new ValidationError(
+        `مبلغ پرداخت از ${text.subject} پرداخت‌نشده فهرست این ماه برای این افراد بیشتر است: ${names}. فهرست را دوباره باز کنید.`,
+        { personnel: overMonth.map(l => ({ personnelId: l.personnelId, amount: l.amount.toString(), monthLeft: l.left.toString() })) },
+        'STATUTORY_REMITTANCE_EXCEEDS_MONTH',
+      );
+    }
+
     const balances = await personnelBalances(tx, account.id, ids);
     const over = lines
       .map(l => ({ ...l, balance: balances.get(l.personnelId) ?? fin(0) }))
@@ -224,6 +142,16 @@ export async function createStatutoryRemittance(input: CreateStatutoryRemittance
         `مبلغ پرداخت از مانده ${text.account} این افراد بیشتر است: ${names}.`,
         { personnel: over.map(l => ({ personnelId: l.personnelId, amount: l.amount.toString(), balance: l.balance.toString() })) },
         'STATUTORY_REMITTANCE_EXCEEDS_BALANCE',
+      );
+    }
+
+    const unassigned = await unassignedPayments(tx, account.id);
+    if (fin(unassigned.amount).isPositive() && input.acknowledgeUnassignedPayments !== true) {
+      const numbers = unassigned.vouchers.slice(0, 5).map(v => toPersianDigits(v.voucherNumber)).join('، ');
+      throw new ConflictError(
+        `پیش‌تر ${faAmount(unassigned.amount)} ریال بی نام پرسنل به «${account.name}» پرداخت شده است${numbers ? ` (سند ${numbers})` : ''}. اگر بخشی از آن برای همین فهرست است، دوباره نپردازید؛ وگرنه «بررسی کردم» را بزنید.`,
+        { unassignedPayments: unassigned },
+        'STATUTORY_REMITTANCE_UNASSIGNED_PAYMENTS',
       );
     }
 
@@ -332,7 +260,10 @@ export async function createStatutoryRemittance(input: CreateStatutoryRemittance
     } as StatutoryRemittanceResult;
     await auditTreasuryTransactionCreated(tx, input.audit, created, {
       ...created,
-      statutoryRemittance: { kind, jalaliYear: input.jalaliYear, jalaliMonth: input.jalaliMonth, accountCode: account.code, penaltyAccountId: penaltyAccount?.id ?? null },
+      statutoryRemittance: {
+        kind, jalaliYear: input.jalaliYear, jalaliMonth: input.jalaliMonth, accountCode: account.code, penaltyAccountId: penaltyAccount?.id ?? null,
+        ...(fin(unassigned.amount).isPositive() ? { acknowledgedUnassignedPayments: unassigned.amount } : {}),
+      },
     });
     return created;
   });

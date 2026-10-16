@@ -14,7 +14,8 @@ import { listTreasuryRelinkOptions } from '../../services/accounting/treasury/tr
 import { choosableContraAccounts } from '../../services/accounting/treasury/partyContraAccount.js';
 import { listReconcilableCheques } from '../../services/accounting/treasury/bankReconciliation.js';
 import { createPettyCashExpense, listPettyCashExpenseLines, pettyCashExpenseAccounts } from '../../services/accounting/treasury/pettyCashExpense.service.js';
-import { createStatutoryRemittance, statutoryRemittanceOptions } from '../../services/accounting/treasury/statutoryRemittance.js';
+import { createStatutoryRemittance } from '../../services/accounting/treasury/statutoryRemittance.js';
+import { statutoryRemittanceOptions } from '../../services/accounting/treasury/statutoryRemittanceOptions.js';
 import { STATUTORY_REMITTANCE_PERMISSION } from '../../lib/treasury/statutoryRemittance.js';
 import { validate, paramsIdSchema } from '../../middleware/validate.js';
 import { idempotency } from '../../middleware/idempotency.js';
