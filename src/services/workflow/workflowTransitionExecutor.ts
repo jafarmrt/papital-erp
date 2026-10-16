@@ -29,6 +29,8 @@ import { workflowEntityTypeLabel } from '../../lib/workflow/workflowEntityLabels
 import type { RuleExpression } from '../ruleEngine.service.js';
 import { isSystemAdminRole, permissionDefinition } from '../../lib/permissions/permissionCatalog.js';
 import { STOCK_BACKDATE_PERMISSION } from '../../lib/permissions/documentPermissions.js';
+import { notifyWorkflowTasksArrived } from './workflowTaskNotice.js';
+import type { DbTransaction } from '../../db/drizzle.js';
 
 type DbClient = typeof orm | Parameters<Parameters<typeof orm.transaction>[0]>[0];
 
@@ -322,7 +324,10 @@ export class WorkflowTransitionExecutor {
    * ذخیره طرح در طراح وضعیت‌ها و انتقال‌ها را با شناسه تازه می‌سازد؛ پیش‌تر فرایند در جریان پس از ویرایش طرح در گام بعد
    * هیچ کار و مهلتی نمی‌گرفت و از کارتابل بیرون می‌رفت.
    */
-  static async refreshPendingApprovals(instanceId: number, newStateId: number, workflowDefinitionId: number, txExecutor: DbClient = orm, snapshotDsl?: unknown) {
+  static async refreshPendingApprovals(
+    instanceId: number, newStateId: number, workflowDefinitionId: number, txExecutor: DbClient = orm, snapshotDsl?: unknown,
+    notify?: { actorUserId?: number | null }
+  ) {
     // 1. Delete previous pending approvals & cancel pending tasks for prior states
     await txExecutor.delete(workflowPendingApprovals).where(eq(workflowPendingApprovals.instanceId, instanceId));
     await txExecutor.update(workflowTasks)
@@ -363,8 +368,9 @@ export class WorkflowTransitionExecutor {
       });
     }
 
+    const created: Array<typeof workflowTasks.$inferSelect> = [];
     for (const tr of itemsToCreate) {
-      await txExecutor.insert(workflowTasks).values({
+      const [task] = await txExecutor.insert(workflowTasks).values({
         instanceId,
         transitionId: tr.id,
         assignedRole: tr.requiredRole || '',
@@ -375,7 +381,13 @@ export class WorkflowTransitionExecutor {
         description: `وظیفه جهت اقدام «${tr.title}» در فرآیند شماره #${instanceId}`,
         dueAt,
         createdAt: new Date().toISOString()
-      });
+      }).returning();
+      created.push(task);
+    }
+
+    // v10.1.42 (messenger plan part 3): whoever will see the new tasks in their inbox gets one notice, in this transaction
+    if (notify && txExecutor !== orm) {
+      await notifyWorkflowTasksArrived(txExecutor as DbTransaction, instanceId, created, { actorUserId: notify.actorUserId });
     }
   }
 
@@ -513,7 +525,7 @@ export class WorkflowTransitionExecutor {
         updatedAt: new Date().toISOString()
       }).returning();
 
-      await WorkflowTransitionExecutor.refreshPendingApprovals(newInstance.id, initialStateId, def.id, tx, snapshotDsl);
+      await WorkflowTransitionExecutor.refreshPendingApprovals(newInstance.id, initialStateId, def.id, tx, snapshotDsl, { actorUserId: params.userId });
 
       await tx.insert(workflowHistoryLogs).values({
         instanceId: newInstance.id,
@@ -781,7 +793,7 @@ export class WorkflowTransitionExecutor {
         .where(eq(workflowInstances.id, instance.id));
 
       if (newStatus === 'IN_PROGRESS') {
-        await WorkflowTransitionExecutor.refreshPendingApprovals(instance.id, toState.id, instance.workflowDefinitionId, tx, instance.snapshotDsl);
+        await WorkflowTransitionExecutor.refreshPendingApprovals(instance.id, toState.id, instance.workflowDefinitionId, tx, instance.snapshotDsl, { actorUserId: params.userId });
       } else {
         await tx.delete(workflowPendingApprovals).where(eq(workflowPendingApprovals.instanceId, instance.id));
         await tx.update(workflowTasks)

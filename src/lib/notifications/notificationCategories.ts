@@ -40,12 +40,8 @@ export function isNotificationCategory(value: unknown): value is NotificationCat
   return typeof value === 'string' && (NOTIFICATION_CATEGORIES as readonly string[]).includes(value);
 }
 
-/**
- * The categories the profile offers a choice for: those that some code already writes. Part 3 of the plan adds
- * `workflow_task` and `payslip` with their producers.
- */
-export const MESSENGER_PREFERENCE_CATEGORIES: readonly NotificationCategory[] = NOTIFICATION_CATEGORIES
-  .filter(category => category !== 'workflow_task' && category !== 'payslip');
+/** The categories the profile offers a choice for: every category, since v10.1.42 each one has its producer */
+export const MESSENGER_PREFERENCE_CATEGORIES: readonly NotificationCategory[] = NOTIFICATION_CATEGORIES;
 
 /**
  * Allowlist (security review of part 2): only a category whose title and text the code builds from fixed words, step and
@@ -53,7 +49,7 @@ export const MESSENGER_PREFERENCE_CATEGORIES: readonly NotificationCategory[] = 
  * other category, a future one included, sends its fixed sentence below (an automatic rule's template may carry any event
  * field, amounts included; a follow-up, mention or lead title is typed by a user).
  */
-const FULL_TEXT_CATEGORIES: ReadonlySet<NotificationCategory> = new Set(['workflow_sla']);
+const FULL_TEXT_CATEGORIES: ReadonlySet<NotificationCategory> = new Set(['workflow_sla', 'workflow_task']);
 
 const GENERIC_SENTENCES: Readonly<Partial<Record<NotificationCategory, string>>> = {
   mention: 'در یک گزارش کار یا اقدام ارتباط با مشتری به شما اشاره شد.',
@@ -61,7 +57,6 @@ const GENERIC_SENTENCES: Readonly<Partial<Record<NotificationCategory, string>>>
   crm_followup: 'یک پیگیری ارتباط با مشتری برای شما ثبت شد یا سررسید آن رسید.',
   crm_won: 'یک پرونده فروش با موفقیت نهایی شد.',
   payslip: 'فیش حقوق شما تأیید شد.',
-  workflow_task: 'کار تازه‌ای در کارتابل تأیید شما آمد.',
   workshop: 'یک کار یا گزارش در کارتابل کارگاه منتظر شماست.',
 };
 const GENERIC_DEFAULT_SENTENCE = 'اعلان تازه‌ای در برنامه پاپیتال برای شما آمده است.';
@@ -70,7 +65,7 @@ const GENERIC_DEFAULT_SENTENCE = 'اعلان تازه‌ای در برنامه �
  * The page a messenger link opens: a full-text category keeps the notification's own path; every other one opens a fixed
  * page of its section (never a rule template's link, which may carry amounts or ids), else the app's first page.
  */
-const GENERIC_LINK_SECTIONS: readonly string[] = ['/daily-logs', '/crm', '/approval-inbox', '/workshop'];
+const GENERIC_LINK_SECTIONS: readonly string[] = ['/daily-logs', '/crm', '/approval-inbox', '/workshop', '/my-payslips'];
 
 export function messengerLinkPath(category: NotificationCategory, path: string | null | undefined): string {
   const target = String(path ?? '').trim();

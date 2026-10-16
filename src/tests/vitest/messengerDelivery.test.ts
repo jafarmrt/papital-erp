@@ -63,8 +63,13 @@ describe('messenger text of a notification', () => {
     expect(text.split('\n')).toEqual(['زهرا احمدی،', 'مهلت کار تاییدی گذشت', 'مهلت «بررسی» برای ۱۲ به پایان رسید.']);
   });
 
+  it('a new inbox task sends its own notice: the step title and the record number, built by the code', () => {
+    const text = messengerNotificationText({ recipientName: 'x', category: 'workflow_task', title: 'کار تازه در کارتابل', message: 'کار «تأیید انبار» برای سند 123 در کارتابل شما منتظر است.' });
+    expect(text.split('\n')).toEqual(['x،', 'کار تازه در کارتابل', 'کار «تأیید انبار» برای سند ۱۲۳ در کارتابل شما منتظر است.']);
+  });
+
   it('every other category, a future one included, sends only its fixed sentence, never the typed title or a name', () => {
-    for (const category of NOTIFICATION_CATEGORIES.filter(c => c !== 'workflow_sla')) {
+    for (const category of NOTIFICATION_CATEGORIES.filter(c => c !== 'workflow_sla' && c !== 'workflow_task')) {
       const text = messengerNotificationText({ recipientName: 'رضا', category, title: 'پرونده شرکت آلفا 1500000', message: 'علی رضایی در «سفارش 15» اشاره کرد' });
       expect(text.split('\n')[0]).toBe('رضا،');
       expect(text).not.toMatch(/آلفا|علی|سفارش|1500000|۱۵۰۰۰۰۰|15|۱۵/);
@@ -81,6 +86,8 @@ describe('messenger text of a notification', () => {
     expect(messengerLinkPath('crm_followup', '/payroll?id=3')).toBe('/');
     expect(messengerLinkPath('workflow_sla', '/approval-inbox')).toBe('/approval-inbox');
     expect(messengerLinkPath('workshop', '/workshop?row=3%3A1%3A2%3A9')).toBe('/workshop');
+    expect(messengerLinkPath('payslip', '/my-payslips')).toBe('/my-payslips');
+    expect(messengerLinkPath('workflow_task', '/approval-inbox')).toBe('/approval-inbox');
   });
 
   it('a workshop cartable notification sends its fixed sentence, never the task, project or quantity', () => {
@@ -88,9 +95,9 @@ describe('messenger text of a notification', () => {
     expect(text).toBe('x،\nیک کار یا گزارش در کارتابل کارگاه منتظر شماست.');
   });
 
-  it('the profile offers only categories some code writes yet', () => {
-    expect(MESSENGER_PREFERENCE_CATEGORIES).not.toContain('payslip');
-    expect(MESSENGER_PREFERENCE_CATEGORIES).not.toContain('workflow_task');
+  it('the profile offers every category, the approved payslip and the new inbox task included', () => {
+    expect(MESSENGER_PREFERENCE_CATEGORIES).toContain('payslip');
+    expect(MESSENGER_PREFERENCE_CATEGORIES).toContain('workflow_task');
     expect(MESSENGER_PREFERENCE_CATEGORIES).toContain('mention');
     expect(MESSENGER_PREFERENCE_CATEGORIES).toContain('workshop');
   });
