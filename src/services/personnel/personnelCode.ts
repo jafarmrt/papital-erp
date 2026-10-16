@@ -3,6 +3,7 @@ import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { personnel } from '../../db/schema.js';
 import { BadRequestError } from '../../errors/customErrors.js';
 import type { HealthCheckTestResult } from '../../types.js';
+import { UNIQUE_INDEX_BUILD_HINT } from './personnelNationalIdUnique.js';
 
 /**
  * v9.0.28 (TD-439، تصمیم مالک محصول D6 الف): کد پرسنلی غیرخالی میان پرسنل فعال یکتاست. کلید `lower(btrim(code))` است
@@ -89,10 +90,10 @@ export function buildPersonnelCodeHealthTest(duplicates: DuplicatePersonnelCodeR
     scoreImpact: -Math.min(10, duplicateCodeCount * 2),
     count: duplicateCodeCount,
     message: duplicateCodeCount > 0
-      ? `${duplicateCodeCount} کد پرسنلی میان بیش از یک پرسنل فعال تکرار شده و قید یکتایی در پایگاه‌داده اعمال نشده است؛ کدها خودکار عوض نمی‌شوند و تا مدیر کد درست را در فرم پرسنل نگذارد، ورود اکسل نخستین پرسنل همان کد را به‌روز می‌کند.`
+      ? `${duplicateCodeCount} کد پرسنلی میان بیش از یک پرسنل فعال تکرار شده و قید یکتایی در پایگاه‌داده اعمال نشده است؛ کدها خودکار عوض نمی‌شوند و تا مدیر کد درست را در فرم پرسنل نگذارد، ورود اکسل نخستین پرسنل همان کد را به‌روز می‌کند. پس از رفع تکراری‌ها ${UNIQUE_INDEX_BUILD_HINT}`
       : (uniqueIndexPresent
         ? 'هیچ کد پرسنلی میان پرسنل فعال تکرار نشده و پایگاه‌داده از کد تکراری جلوگیری می‌کند.'
-        : 'هیچ کد پرسنلی میان پرسنل فعال تکرار نشده اما قید یکتایی در پایگاه‌داده اعمال نشده است.'),
+        : `هیچ کد پرسنلی میان پرسنل فعال تکرار نشده اما قید یکتایی در پایگاه‌داده اعمال نشده است؛ ${UNIQUE_INDEX_BUILD_HINT}`),
     items: duplicates.map((r) => ({
       id: r.id,
       code: `پرسنل ${r.personnelCode.trim()}`,
@@ -103,3 +104,6 @@ export function buildPersonnelCodeHealthTest(duplicates: DuplicatePersonnelCodeR
     metrics: { duplicateCodes: duplicateCodeCount, duplicatePersonnelRows: duplicates.length, uniqueIndexPresent: uniqueIndexPresent ? 1 : 0 },
   };
 }
+
+// OBS-R2-56: the national ID's uniqueness lives next to the personnel code's and is read by the health check through here
+export { buildPersonnelNationalIdHealthTest, findDuplicatePersonnelNationalIds, hasPersonnelNationalIdUniqueIndex } from './personnelNationalIdUnique.js';
