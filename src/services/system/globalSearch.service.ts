@@ -5,6 +5,7 @@ import { containsLikePattern, startsWithLikePattern } from '../../lib/sqlLike.js
 import { normalizeSearchText } from '../../lib/search/searchText.js';
 import { foldedSearchSql } from '../../lib/search/searchSql.js';
 import { logger } from '../../middleware/logger.js';
+import { phoneMatchKey, phoneMatchKeySql } from '../../lib/search/phoneMatchKey.js';
 
 /**
  * جستجوی سراسری چندبخشی (GET /global-search).
@@ -30,6 +31,20 @@ function matchRank(columns: AnyColumn[], q: string): SQL {
   const starts = startsWithLikePattern(q);
   return sql`CASE WHEN ${or(...columns.map(column => sql`${folded(column)} = ${q}`))} THEN 0
     WHEN ${matchesAny(columns, starts)} THEN 1 ELSE 2 END`;
+}
+
+/** OBS-R2-99: the fewest digits a search text needs to be matched as a phone number */
+export const PHONE_SEARCH_MIN_DIGITS = 4;
+
+/**
+ * OBS-R2-99: the TD-296 phone key of a search text that looks like a phone number (only digits, spaces, «+», «-», «(»,
+ * «)» and at least `PHONE_SEARCH_MIN_DIGITS` digits), without leading zeros so a part of the number matches inside the
+ * stored key («0912 741» finds +98 912 741 2032); else null.
+ */
+export function phoneSearchKey(q: string): string | null {
+  if (!/^[\d۰-۹٠-٩\s+\-()]+$/.test(q)) return null;
+  const key = phoneMatchKey(q).replace(/^0+/, '');
+  return key.length >= PHONE_SEARCH_MIN_DIGITS ? key : null;
 }
 
 export interface GlobalSearchScope {
@@ -115,8 +130,9 @@ export class GlobalSearchService {
       }
     }
 
-    // 2. Customers
+    // 2. Customers (OBS-R2-99: a phone-like text also matches the TD-296 phone key)
     let matchingCustomers: GlobalSearchCustomer[] = [];
+    const phoneKey = phoneSearchKey(q.trim());
     if (scope.customers) {
       try {
         matchingCustomers = await orm.select({
@@ -130,7 +146,12 @@ export class GlobalSearchService {
         .where(
           and(
             eq(customers.isDeleted, 0),
-            matchesAny([customers.name, customers.city, customers.province, customers.phone], searchTerm)
+            phoneKey
+              ? or(
+                matchesAny([customers.name, customers.city, customers.province, customers.phone], searchTerm),
+                sql`${phoneMatchKeySql(customers.phone)} LIKE ${containsLikePattern(phoneKey)}`,
+              )
+              : matchesAny([customers.name, customers.city, customers.province, customers.phone], searchTerm)
           )
         )
         .orderBy(matchRank([customers.name], query), sql`length(${customers.name})`, asc(customers.id))

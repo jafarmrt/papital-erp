@@ -20,7 +20,8 @@ export function parsePagination(
 
   const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : (defaults?.page ?? 1);
   let limit: number;
-  if (Number.isFinite(rawLimit) && rawLimit >= 0) {
+  // OBS-R2-100: `limit=0` (or negative) is the default page, never «no limit» (a whole-table read) or an empty page
+  if (Number.isFinite(rawLimit) && rawLimit > 0) {
     limit = rawLimit;
   } else {
     limit = defaults?.limit ?? 50;

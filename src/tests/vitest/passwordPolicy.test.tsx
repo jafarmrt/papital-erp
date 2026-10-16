@@ -12,6 +12,7 @@ import SetupPage from '../../pages/SetupPage';
 import { setCsrfToken } from '../../api';
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE, passwordLengthError } from '../../lib/auth/passwordPolicy';
 import type { Role, User } from '../../types';
+import { QueryWrapper } from './helpers/queryWrapper';
 
 const toastError = vi.fn();
 vi.mock('react-hot-toast', () => {
@@ -47,7 +48,7 @@ describe('password minimum length (TD-532)', () => {
     setCsrfToken('test-csrf');
     const calls = stubFetch();
     const roles = [{ id: 3, code: 'accountant', name: 'حسابدار', permissions: [], isSystem: 0 }] as unknown as Role[];
-    render(<UserFormModal isOpen onClose={() => {}} editingUser={null} rolesList={roles} onSuccess={() => {}} />);
+    render(<UserFormModal isOpen onClose={() => {}} editingUser={null} rolesList={roles} onSuccess={() => {}} />, { wrapper: QueryWrapper });
     const inputs = Array.from(document.querySelectorAll('input')) as HTMLInputElement[];
     fireEvent.change(inputs[0], { target: { value: 'علی رضایی' } });
     fireEvent.change(inputs[1], { target: { value: 'ali' } });

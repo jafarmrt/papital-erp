@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useId } from 'react';
-import { fetchJson } from '../../api';
+import { useRestoreUserMutation, useSaveUserMutation } from '../../hooks/queries/useUserQueries';
 import { errorMessageOf } from '../../utils';
 import { toast } from 'react-hot-toast';
 import { User, Role } from '../../types';
@@ -38,7 +38,10 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
     full_name: '',
     role: '',
   });
-  const [isSaving, setIsSaving] = useState(false);
+  // OBS-R1-38: the writes go through React Query mutations, which refresh the users list
+  const saveUserMutation = useSaveUserMutation();
+  const restoreUserMutation = useRestoreUserMutation();
+  const isSaving = saveUserMutation.isPending || restoreUserMutation.isPending;
   // v9.0.178 (TD-519، تصمیم ت۲ الف): نام کاربری کاربر حذف‌شده رد می‌شود و بازگرداندن همان کاربر اقدامی جداست
   const [deletedMatch, setDeletedMatch] = useState<DeletedUserMatch | null>(null);
 
@@ -82,7 +85,6 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       toast.error(passwordError);
       return;
     }
-    setIsSaving(true);
     try {
       const payload = {
         username: userForm.username.trim(),
@@ -91,27 +93,14 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         role: userForm.role,
       };
 
-      if (isEditing) {
-        await fetchJson(`/users/${editingUser.id}`, {
-          method: 'PUT',
-          body: JSON.stringify(payload),
-        });
-        toast.success('اطلاعات کاربر با موفقیت ویرایش شد');
-      } else {
-        await fetchJson('/users', {
-          method: 'POST',
-          body: JSON.stringify(payload),
-        });
-        toast.success('کاربر جدید با موفقیت ایجاد شد');
-      }
+      await saveUserMutation.mutateAsync({ id: isEditing ? editingUser.id : null, payload });
+      toast.success(isEditing ? 'اطلاعات کاربر با موفقیت ویرایش شد' : 'کاربر جدید با موفقیت ایجاد شد');
       onSuccess();
       onClose();
     } catch (err: any) {
       const match = !isEditing && err?.code === USERNAME_OF_DELETED_USER ? deletedUserOf(err?.details) : null;
       if (match) setDeletedMatch(match);
       else toast.error(err?.message || err?.error || 'خطا در ثبت کاربر');
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -127,19 +116,13 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       toast.error(passwordError);
       return;
     }
-    setIsSaving(true);
     try {
-      await fetchJson(`/users/${deletedMatch.id}/restore`, {
-        method: 'POST',
-        body: JSON.stringify({ role: userForm.role, password: userForm.password }),
-      });
+      await restoreUserMutation.mutateAsync({ id: deletedMatch.id, role: userForm.role, password: userForm.password });
       toast.success(`کاربر «${deletedName}» بازگردانده شد؛ در ورود بعدی باید رمز موقت را عوض کند`);
       onSuccess();
       onClose();
     } catch (err) {
       toast.error(errorMessageOf(err) || 'خطا در بازگرداندن کاربر');
-    } finally {
-      setIsSaving(false);
     }
   };
 

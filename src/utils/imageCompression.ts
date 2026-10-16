@@ -32,9 +32,45 @@ function approxBytesFromDataUrl(dataUrl: string): number {
   return Math.floor((base64.length * 3) / 4);
 }
 
+/** OBS-R2-95: sources that may carry transparency keep a format with an alpha channel */
+const ALPHA_CAPABLE_TYPES = new Set(['image/png', 'image/webp', 'image/gif']);
+
+export type CompressedImageType = 'image/jpeg' | 'image/webp' | 'image/png';
+
+/** True when any pixel of the drawn image is not fully opaque; an unreadable canvas counts as transparent (kept lossless). */
+export function hasTransparentPixels(ctx: CanvasRenderingContext2D, width: number, height: number): boolean {
+  try {
+    const pixels = ctx.getImageData(0, 0, width, height).data;
+    for (let i = 3; i < pixels.length; i += 4) {
+      if (pixels[i] < 255) return true;
+    }
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * OBS-R2-95: the output format. An opaque photo becomes JPEG; a PNG, WEBP or GIF with transparency (a logo) keeps its
+ * alpha channel: WEBP where the browser can write it, else PNG. JPEG has no alpha, so a transparent logo used to get a
+ * black background.
+ */
+export function compressedImageType(sourceType: string, transparent: boolean): CompressedImageType {
+  if (!ALPHA_CAPABLE_TYPES.has(sourceType) || !transparent) return 'image/jpeg';
+  return 'image/webp';
+}
+
+function encodeCanvas(canvas: HTMLCanvasElement, type: CompressedImageType, quality: number): string {
+  const out = canvas.toDataURL(type, quality);
+  // a browser that cannot write WEBP returns PNG (still with alpha); `toDataURL` never falls back to JPEG
+  if (type === 'image/webp' && !out.startsWith('data:image/webp')) return canvas.toDataURL('image/png');
+  return out;
+}
+
 /**
  * تصویر ورودی را با canvas بازکدگذاری می‌کند تا خروجی dataURL زیر سقف تعیین‌شده باشد.
- * ابتدا کیفیت JPEG کاهش می‌یابد، سپس ابعاد؛ در صورت نرسیدن به سقف، بهترین تلاش برگردانده می‌شود.
+ * ابتدا کیفیت کاهش می‌یابد، سپس ابعاد؛ در صورت نرسیدن به سقف، بهترین تلاش برگردانده می‌شود.
+ * OBS-R2-95: تصویر شفاف (لوگوی PNG) قالب دارای شفافیت (WEBP یا PNG) می‌گیرد، نه JPEG با زمینه سیاه.
  */
 export async function compressTo300KB(file: File, opts: CompressOptions = {}): Promise<string> {
   const maxBytes = opts.maxBytes ?? DEFAULT_MAX_BYTES;
@@ -47,6 +83,7 @@ export async function compressTo300KB(file: File, opts: CompressOptions = {}): P
   let width = Math.max(40, Math.round(img.width * initialScale));
   let height = Math.max(40, Math.round(img.height * initialScale));
   let quality = 0.85;
+  let outputType: CompressedImageType | null = null;
 
   let best = '';
   let attempt = 0;
@@ -57,14 +94,18 @@ export async function compressTo300KB(file: File, opts: CompressOptions = {}): P
     const ctx = canvas.getContext('2d');
     if (!ctx) break;
     ctx.drawImage(img, 0, 0, width, height);
-    const out = canvas.toDataURL('image/jpeg', quality);
+    if (outputType === null) {
+      outputType = compressedImageType(file.type, ALPHA_CAPABLE_TYPES.has(file.type) && hasTransparentPixels(ctx, width, height));
+    }
+    const out = encodeCanvas(canvas, outputType, quality);
     best = out;
 
     if (approxBytesFromDataUrl(out) <= maxBytes) {
       return out;
     }
 
-    if (quality > 0.4) {
+    // PNG has no quality setting: only smaller dimensions make it smaller
+    if (quality > 0.4 && !out.startsWith('data:image/png')) {
       quality -= 0.15;
     } else {
       width = Math.max(40, Math.round(width * 0.8));

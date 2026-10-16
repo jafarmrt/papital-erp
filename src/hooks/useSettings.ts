@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { fetchJson } from '../api';
 import { mutationSucceeded } from '../lib/settings/mutationSucceeded';
 import { toast } from 'react-hot-toast';
@@ -24,6 +24,7 @@ import {
 } from './queries/useSettingsQueries';
 import { settingsKeys } from '../lib/queryKeys';
 import { readPricingStrategies, serializePricingStrategies } from '../lib/items/pricingStrategies';
+import { createSettingsDirtyKeys, trackedSetter, untouchedSetting } from '../lib/settings/settingsFormSync';
 
 /** مقدار ماسک کلیدهای محرمانه در پاسخ GET /settings برای غیرادمین (هم‌راستا با systemSettings.service.ts) */
 const MASKED_SETTING_VALUE = '********';
@@ -130,50 +131,66 @@ export function useSettings() {
   const [isSyncingManualOrder, setIsSyncingManualOrder] = useState(false);
   const [isSyncingAllStocks, setIsSyncingAllStocks] = useState(false);
 
-  // Synchronize local form inputs when React Query settingsData updates
+  const dirtyKeys = useMemo(() => createSettingsDirtyKeys(), []);
+  const edit = useMemo(() => {
+    const track = <T,>(key: string, set: React.Dispatch<React.SetStateAction<T>>) => trackedSetter(dirtyKeys, key, set);
+    return {
+      setInvoiceStartNum: track('invoice_start_number', setInvoiceStartNum), setFastMovingDays: track('fast_moving_days', setFastMovingDays),
+      setSlowMovingDays: track('slow_moving_days', setSlowMovingDays), setDeadStockDays: track('dead_stock_days', setDeadStockDays),
+      setPricingStrategies: track('pricing_strategies', setPricingStrategies), setWorkflowPresets: track('project_workflow_presets', setWorkflowPresets),
+      setInventoryControlSections: track('inventory_control_preset_sections', setInventoryControlSections), setCompanyName: track('company_name', setCompanyName),
+      setCompanyPhone: track('company_phone', setCompanyPhone), setCompanyAddress: track('company_address', setCompanyAddress),
+      setCompanyLogo: track('company_logo', setCompanyLogo), setCurrency: track('currency', setCurrency),
+      setDisplayTimezone: track('display_timezone', setDisplayTimezone), setWcStoreUrl: track('wc_store_url', setWcStoreUrl),
+      setWcConsumerKey: track('wc_consumer_key', setWcConsumerKey), setWcConsumerSecret: track('wc_consumer_secret', setWcConsumerSecret),
+      setWcWebhookSecret: track('wc_webhook_secret', setWcWebhookSecret), setWcShopWarehouse: track('wc_shop_warehouse', setWcShopWarehouse),
+    };
+  }, [dirtyKeys]);
+
+  // Synchronize local form inputs when React Query settingsData updates; OBS-R2-94: an unsaved edit is never overwritten
   useEffect(() => {
     if (!settingsData || settingsData.length === 0) return;
     const data = settingsData;
 
-    const startNum = data.find((s) => s.key === 'invoice_start_number');
+    const startNum = untouchedSetting(data, dirtyKeys, 'invoice_start_number');
     if (startNum) setInvoiceStartNum(startNum.value);
 
-    const fastDaysSetting = data.find((s) => s.key === 'fast_moving_days');
+    const fastDaysSetting = untouchedSetting(data, dirtyKeys, 'fast_moving_days');
     if (fastDaysSetting) setFastMovingDays(fastDaysSetting.value);
 
-    const slowDaysSetting = data.find((s) => s.key === 'slow_moving_days');
+    const slowDaysSetting = untouchedSetting(data, dirtyKeys, 'slow_moving_days');
     if (slowDaysSetting) setSlowMovingDays(slowDaysSetting.value);
 
-    const deadDaysSetting = data.find((s) => s.key === 'dead_stock_days');
+    const deadDaysSetting = untouchedSetting(data, dirtyKeys, 'dead_stock_days');
     if (deadDaysSetting) setDeadStockDays(deadDaysSetting.value);
 
-    const strategies = data.find((s) => s.key === 'pricing_strategies');
+    const strategies = untouchedSetting(data, dirtyKeys, 'pricing_strategies');
     // v10.0.201 (OBS-R1-71): آرایه JSON (مقدار کهنه با کاما هم خوانده می‌شود)
     const readStrategies = strategies ? readPricingStrategies(strategies.value) : null;
     if (readStrategies && 'titles' in readStrategies) setPricingStrategies(readStrategies.titles);
 
-    const compName = data.find((s) => s.key === 'company_name');
+    const compName = untouchedSetting(data, dirtyKeys, 'company_name');
     if (compName) setCompanyName(compName.value);
 
-    const compPhone = data.find((s) => s.key === 'company_phone');
+    const compPhone = untouchedSetting(data, dirtyKeys, 'company_phone');
     if (compPhone) setCompanyPhone(compPhone.value);
 
-    const compAddr = data.find((s) => s.key === 'company_address');
+    const compAddr = untouchedSetting(data, dirtyKeys, 'company_address');
     if (compAddr) setCompanyAddress(compAddr.value);
 
-    const compLogo = data.find((s) => s.key === 'company_logo');
+    const compLogo = untouchedSetting(data, dirtyKeys, 'company_logo');
     if (compLogo) setCompanyLogo(compLogo.value);
 
-    const curr = data.find((s) => s.key === 'currency');
+    const curr = untouchedSetting(data, dirtyKeys, 'currency');
     if (curr) setCurrency(normalizeRialDisplayUnit(curr.value));
 
     // V10-1.1: ساعت توافقی واحد
-    const tzSetting = data.find((s) => s.key === 'display_timezone');
+    const tzSetting = untouchedSetting(data, dirtyKeys, 'display_timezone');
     if (tzSetting?.value) {
       setDisplayTimezone(tzSetting.value);
     }
 
-    const presetsSetting = data.find((s) => s.key === 'project_workflow_presets');
+    const presetsSetting = untouchedSetting(data, dirtyKeys, 'project_workflow_presets');
     if (presetsSetting && presetsSetting.value) {
       try {
         const parsed = JSON.parse(presetsSetting.value);
@@ -187,7 +204,7 @@ export function useSettings() {
       }
     }
 
-    const invCtrlSetting = data.find((s) => s.key === 'inventory_control_preset_sections');
+    const invCtrlSetting = untouchedSetting(data, dirtyKeys, 'inventory_control_preset_sections');
     if (invCtrlSetting && invCtrlSetting.value) {
       try {
         const parsed = JSON.parse(invCtrlSetting.value);
@@ -199,21 +216,21 @@ export function useSettings() {
       }
     }
 
-    const wcUrl = data.find((s) => s.key === 'wc_store_url');
+    const wcUrl = untouchedSetting(data, dirtyKeys, 'wc_store_url');
     if (wcUrl) setWcStoreUrl(wcUrl.value);
 
-    const wcKey = data.find((s) => s.key === 'wc_consumer_key');
+    const wcKey = untouchedSetting(data, dirtyKeys, 'wc_consumer_key');
     if (wcKey) setWcConsumerKey(wcKey.value);
 
-    const wcSecret = data.find((s) => s.key === 'wc_consumer_secret');
+    const wcSecret = untouchedSetting(data, dirtyKeys, 'wc_consumer_secret');
     if (wcSecret) setWcConsumerSecret(wcSecret.value);
 
-    const wcWebhookSecretSetting = data.find((s) => s.key === 'wc_webhook_secret');
+    const wcWebhookSecretSetting = untouchedSetting(data, dirtyKeys, 'wc_webhook_secret');
     if (wcWebhookSecretSetting) setWcWebhookSecret(wcWebhookSecretSetting.value);
 
-    const wcShopWarehouseSetting = data.find((s) => s.key === 'wc_shop_warehouse');
+    const wcShopWarehouseSetting = untouchedSetting(data, dirtyKeys, 'wc_shop_warehouse');
     if (wcShopWarehouseSetting) setWcShopWarehouse(wcShopWarehouseSetting.value);
-  }, [settingsData]);
+  }, [settingsData, dirtyKeys]);
 
   const loadSyncedWcOrders = (signal?: AbortSignal) => {
     loadWcList('/woocommerce/synced-orders', setSyncedWcOrders, setSyncedWcOrdersError, signal);
@@ -331,10 +348,12 @@ export function useSettings() {
       (item) => item.value !== MASKED_SETTING_VALUE && (!serverValues.has(item.key) || serverValues.get(item.key) !== item.value)
     );
     if (changedSettings.length === 0) {
+      dirtyKeys.clear();
       toast.success('تغییری برای ذخیره وجود ندارد');
       return;
     }
     if (!(await mutationSucceeded(saveSettingsMutation.mutateAsync({ settings: changedSettings })))) return;
+    dirtyKeys.clear();
   };
 
   const handleCatSubmit = async (e: React.FormEvent) => {
@@ -404,24 +423,10 @@ export function useSettings() {
   return {
     categories: categoriesData,
     appSettings: settingsData,
-    invoiceStartNum, setInvoiceStartNum,
-    fastMovingDays, setFastMovingDays,
-    slowMovingDays, setSlowMovingDays,
-    deadStockDays, setDeadStockDays,
-    pricingStrategies, setPricingStrategies,
-    workflowPresets, setWorkflowPresets,
-    inventoryControlSections, setInventoryControlSections,
-    companyName, setCompanyName,
-    companyPhone, setCompanyPhone,
-    companyAddress, setCompanyAddress,
-    companyLogo, setCompanyLogo,
-    currency, setCurrency,
-    displayTimezone, setDisplayTimezone,
-    wcStoreUrl, setWcStoreUrl,
-    wcConsumerKey, setWcConsumerKey,
-    wcConsumerSecret, setWcConsumerSecret,
-    wcWebhookSecret, setWcWebhookSecret,
-    wcShopWarehouse, setWcShopWarehouse,
+    invoiceStartNum, fastMovingDays, slowMovingDays, deadStockDays, pricingStrategies, workflowPresets,
+    inventoryControlSections, companyName, companyPhone, companyAddress, companyLogo, currency, displayTimezone,
+    wcStoreUrl, wcConsumerKey, wcConsumerSecret, wcWebhookSecret, wcShopWarehouse,
+    ...edit,
     wcOrderLogs,
     wcOrderLogsError,
     isSyncingAllStocks,

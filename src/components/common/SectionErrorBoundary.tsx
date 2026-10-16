@@ -1,5 +1,6 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
 import { ErrorStateView } from './ErrorStateView';
+import { isChunkLoadError as isChunkLoadFailure, reloadPage } from '../../lib/system/chunkReload';
 
 export interface SectionErrorBoundaryProps {
   children: ReactNode;
@@ -75,11 +76,8 @@ export class SectionErrorBoundary extends Component<
         return this.props.fallback;
       }
 
-      const isChunkLoadError =
-        this.state.error.message?.includes('dynamically imported module') ||
-        this.state.error.name === 'ChunkLoadError' ||
-        this.state.error.message?.includes('Loading chunk') ||
-        this.state.error.message?.includes('Failed to fetch');
+      // OBS-R2-92: a plain «Failed to fetch» (an API request) is an ordinary error, not a new version
+      const isChunkLoadError = isChunkLoadFailure(this.state.error);
 
       const title = isChunkLoadError
         ? 'به‌روزرسانی نسخه جدید سامانه'
@@ -91,13 +89,7 @@ export class SectionErrorBoundary extends Component<
            'پردازش داده‌های این بخش با مشکل مواجه شد. می‌توانید با فشردن دکمه زیر مجدداً تلاش کنید.');
 
       const onRetryAction = isChunkLoadError
-        ? () => {
-            try {
-              window.location.reload();
-            } catch {
-              this.handleReset();
-            }
-          }
+        ? reloadPage
         : this.handleReset;
 
       return (

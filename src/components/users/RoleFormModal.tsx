@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useId } from 'react';
-import { fetchJson } from '../../api';
+import { useSaveRoleMutation } from '../../hooks/queries/useUserQueries';
 import { toast } from 'react-hot-toast';
 import { Role, PermissionCategory } from '../../types';
 import {
@@ -63,7 +63,9 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
   const [permSearch, setPermSearch] = useState('');
   const [permCategoryFilter, setPermCategoryFilter] = useState<string>('ALL');
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
-  const [isSaving, setIsSaving] = useState(false);
+  // OBS-R1-38: the write is a React Query mutation, which refreshes the roles and users lists
+  const saveRoleMutation = useSaveRoleMutation();
+  const isSaving = saveRoleMutation.isPending;
   // v9.0.86 (TD-880): مجوزهای لازمی که نقش ذخیره‌شده ندارد و ذخیره بعدی می‌افزاید
   const [addedOnOpen, setAddedOnOpen] = useState<string[]>([]);
 
@@ -126,28 +128,22 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSaving(true);
     try {
       if (isEditing) {
         // v9.0.136 (TD-886): از نقش «مدیر سیستم» فقط نام و توضیح فرستاده می‌شود
-        await fetchJson(`/roles/${editingRole.id}`, {
-          method: 'PUT',
-          body: JSON.stringify(isFixedAdmin ? { name: roleForm.name, description: roleForm.description } : roleForm),
+        await saveRoleMutation.mutateAsync({
+          id: editingRole.id,
+          body: isFixedAdmin ? { name: roleForm.name, description: roleForm.description } : roleForm,
         });
         toast.success('نقش و ماتریس دسترسی با موفقیت بروزرسانی شد');
       } else {
-        await fetchJson('/roles', {
-          method: 'POST',
-          body: JSON.stringify(roleForm),
-        });
+        await saveRoleMutation.mutateAsync({ id: null, body: roleForm });
         toast.success('نقش جدید با موفقیت ایجاد شد');
       }
       onSuccess();
       onClose();
     } catch (err) {
       toast.error(errorMessageOf(err) || 'خطا در ثبت نقش');
-    } finally {
-      setIsSaving(false);
     }
   };
 

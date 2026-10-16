@@ -8,7 +8,13 @@ import { useAppVersionLabel } from '../hooks/useAppVersionLabel';
 import { formatLockoutCountdown, loginLockoutMinutes } from '../lib/auth/loginLockout';
 import { errorMessageOf } from '../utils';
 
-export default function LoginPage({ onLogin }: { onLogin: (user: User, token: string) => void }) {
+interface LoginPageProps {
+  onLogin: (user: User, token: string) => void;
+  /** OBS-R1-33: why the user is back on the login page (session expired, logout not confirmed) */
+  notice?: string | null;
+}
+
+export default function LoginPage({ onLogin, notice }: LoginPageProps) {
   const fieldId = useId();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -114,6 +120,12 @@ export default function LoginPage({ onLogin }: { onLogin: (user: User, token: st
             لطفاً برای ورود به سیستم اطلاعات خود را وارد کنید.
           </p>
         </div>
+
+        {notice && (
+          <div role="status" className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl mb-5 text-xs leading-relaxed">
+            {notice}
+          </div>
+        )}
 
         {isLocked ? (
           <div className="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-xl mb-5 flex items-start gap-3 text-xs leading-relaxed">

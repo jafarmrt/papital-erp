@@ -9,6 +9,7 @@ import { RoleFormModal } from '../../components/users/RoleFormModal';
 import { setCsrfToken } from '../../api';
 import { PERMISSION_CATALOG } from '../../lib/permissions/permissionCatalog';
 import type { PermissionCategory, Role } from '../../types';
+import { QueryWrapper } from './helpers/queryWrapper';
 
 const catalog = PERMISSION_CATALOG as unknown as PermissionCategory[];
 
@@ -31,7 +32,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('TD-880 role form permission dependencies', () => {
   it('ticks the view permission with an action and unticks the actions when the view is removed', () => {
-    render(<RoleFormModal isOpen onClose={() => {}} editingRole={null} permCatalog={catalog} onSuccess={() => {}} />);
+    render(<RoleFormModal isOpen onClose={() => {}} editingRole={null} permCatalog={catalog} onSuccess={() => {}} />, { wrapper: QueryWrapper });
     fireEvent.click(box('documents.edit'));
     expect(box('documents.edit').checked).toBe(true);
     expect(box('documents.view').checked).toBe(true);
@@ -52,7 +53,7 @@ describe('TD-880 role form permission dependencies', () => {
     setCsrfToken('test-csrf');
     const calls = stubFetch();
     const role = { id: 7, code: 'sales_desk', name: 'میز فروش', description: '', permissions: ['customers.manage'], isSystem: 0 } as Role;
-    render(<RoleFormModal isOpen onClose={() => {}} editingRole={role} permCatalog={catalog} onSuccess={() => {}} />);
+    render(<RoleFormModal isOpen onClose={() => {}} editingRole={role} permCatalog={catalog} onSuccess={() => {}} />, { wrapper: QueryWrapper });
     expect(box('customers.view').checked).toBe(true);
     expect(screen.getByRole('status').textContent).toContain('«مشاهده لیست مشتریان»');
 

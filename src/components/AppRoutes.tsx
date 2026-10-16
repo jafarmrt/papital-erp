@@ -1,11 +1,12 @@
 import React, { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { User } from '../types';
 import { PageLoader } from './PageLoader';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import TimezoneProvider from './providers/TimezoneProvider';
 import { ConfirmDialogHost } from './ConfirmDialogHost';
 import { ErrorBoundary } from './ErrorBoundary';
+import { reloadOnceForNewVersion } from '../lib/system/chunkReload';
 
 // Helper for resilient lazy loading with auto-retry and cache-busting reload
 function lazyWithRetry<T extends React.ComponentType<any>>(
@@ -20,20 +21,8 @@ function lazyWithRetry<T extends React.ComponentType<any>>(
         await new Promise(r => setTimeout(r, 400));
         return await factory();
       } catch (err: any) {
-        if (typeof window !== 'undefined') {
-          const key = 'chunk_reload_ts';
-          const last = Number(sessionStorage.getItem(key) || '0');
-          const now = Date.now();
-          if (now - last > 3000) {
-            sessionStorage.setItem(key, String(now));
-            try {
-              window.location.reload();
-            } catch {
-              window.location.href = window.location.href;
-            }
-            return new Promise(() => {});
-          }
-        }
+        // OBS-R2-92: one automatic reload per guard window for a chunk that cannot be loaded, never a loop
+        if (reloadOnceForNewVersion(err)) return new Promise(() => {});
         throw err;
       }
     }
@@ -84,13 +73,15 @@ export interface AppRoutesProps {
 }
 
 export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoutesProps) {
+  // OBS-R2-92: an error caught on one page is cleared when the user moves to another page
+  const { pathname } = useLocation();
   return (
     <Suspense fallback={<PageLoader />}>
       {/* V10-1.3: ساعت توافقی واحد — همه فرمتورها از display_timezone تنظیمات تغذیه می‌شوند */}
       <TimezoneProvider>
       {/* V10-3.1: هاست تایید استاندارد — همه confirm های Promise-based از اینجا رندر می‌شوند */}
       <ConfirmDialogHost />
-      <ErrorBoundary>
+      <ErrorBoundary resetKey={pathname}>
         <Routes>
           <Route path="/" element={<Dashboard />} />
         {/* V10-5.0: وضعیت انبار = داشبورد تحلیلی و هوش تجاری انبار */}

@@ -16,6 +16,7 @@ import { RoleFormModal } from '../../components/users/RoleFormModal';
 import { PERMISSION_CATALOG, SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog';
 import { roleDisplayName } from '../../lib/users/roleDisplayName';
 import type { PermissionCategory, Role, User } from '../../types';
+import { QueryWrapper } from './helpers/queryWrapper';
 
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
@@ -128,7 +129,7 @@ describe('package 2 Persian wording (TD-540)', () => {
     expect(document.body.textContent).not.toContain('code:');
     cleanup();
 
-    render(<RoleFormModal isOpen onClose={() => {}} editingRole={null} permCatalog={PERMISSION_CATALOG as unknown as PermissionCategory[]} onSuccess={() => {}} />);
+    render(<RoleFormModal isOpen onClose={() => {}} editingRole={null} permCatalog={PERMISSION_CATALOG as unknown as PermissionCategory[]} onSuccess={() => {}} />, { wrapper: QueryWrapper });
     const labels = Array.from(document.querySelectorAll('button, option, strong, span')).map(e => e.textContent ?? '');
     expect(labels.filter(text => /[0-9]/.test(text) && !/\(\w+\.\w+\)/.test(text))).toEqual([]);
   });

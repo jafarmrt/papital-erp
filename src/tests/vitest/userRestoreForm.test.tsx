@@ -9,6 +9,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { UserFormModal } from '../../components/users/UserFormModal';
 import { setCsrfToken } from '../../api';
 import type { Role } from '../../types';
+import { QueryWrapper } from './helpers/queryWrapper';
 
 const rolesList = [
   { id: 2, code: 'sales_clerk', name: 'کارشناس فروش', permissions: ['customers.view'], isSystem: 0 },
@@ -47,7 +48,7 @@ describe('TD-519 a deleted user\'s username is restored only by an explicit acti
     setCsrfToken('test-csrf');
     const calls = stubFetch();
     const onSuccess = vi.fn();
-    render(<UserFormModal isOpen onClose={() => {}} editingUser={null} rolesList={rolesList} onSuccess={onSuccess} />);
+    render(<UserFormModal isOpen onClose={() => {}} editingUser={null} rolesList={rolesList} onSuccess={onSuccess} />, { wrapper: QueryWrapper });
     fillNewUser('ali');
     fireEvent.submit(document.querySelector('form')!);
 
@@ -65,7 +66,7 @@ describe('TD-519 a deleted user\'s username is restored only by an explicit acti
   it('drops the restore offer when the username changes', async () => {
     setCsrfToken('test-csrf');
     stubFetch();
-    render(<UserFormModal isOpen onClose={() => {}} editingUser={null} rolesList={rolesList} onSuccess={() => {}} />);
+    render(<UserFormModal isOpen onClose={() => {}} editingUser={null} rolesList={rolesList} onSuccess={() => {}} />, { wrapper: QueryWrapper });
     fillNewUser('ali');
     fireEvent.submit(document.querySelector('form')!);
     await screen.findByRole('alert');

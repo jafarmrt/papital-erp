@@ -7,6 +7,7 @@ import { cleanup, fireEvent, render } from '@testing-library/react';
 import { RoleFormModal } from '../../components/users/RoleFormModal';
 import { PERMISSION_CATALOG } from '../../lib/permissions/permissionCatalog';
 import type { PermissionCategory } from '../../types';
+import { QueryWrapper } from './helpers/queryWrapper';
 
 const catalog = PERMISSION_CATALOG as unknown as PermissionCategory[];
 
@@ -22,7 +23,7 @@ afterEach(() => cleanup());
 
 describe('role form permission title (TD-536)', () => {
   it('a click on the title or the description ticks and unticks the permission once', () => {
-    render(<RoleFormModal isOpen onClose={() => {}} editingRole={null} permCatalog={catalog} onSuccess={() => {}} />);
+    render(<RoleFormModal isOpen onClose={() => {}} editingRole={null} permCatalog={catalog} onSuccess={() => {}} />, { wrapper: QueryWrapper });
     fireEvent.click(description('customers.view'));
     expect(box('customers.view').checked).toBe(true);
     fireEvent.click(description('customers.view'));
