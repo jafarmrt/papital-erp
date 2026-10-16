@@ -297,11 +297,12 @@ export async function createApp(): Promise<express.Express> {
         pool: { total, idle, waiting },
         timestamp: new Date().toISOString(),
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      // v10.1.44 (OBS-R2-12): the probe is public, so the database error (host, role, database name) stays in the log
+      logger.warn(`Readiness probe: database unreachable: ${err instanceof Error ? err.message : String(err)}`);
       res.status(503).json({
         status: 'not_ready',
         reason: 'Database unreachable',
-        error: err?.message,
         timestamp: new Date().toISOString(),
       });
     }

@@ -15,6 +15,7 @@ import { createUser, deleteUser, restoreUser, updateOwnProfile, updateUser } fro
 import { workflowsRequiringRole } from '../services/workflow/transitionRoles.js';
 import { roleDisplayName } from '../lib/users/roleDisplayName.js';
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE } from '../lib/auth/passwordPolicy.js';
+import { publicUserView } from '../lib/auth/publicUser.js';
 import { NotFoundError, UnauthorizedError } from '../errors/customErrors.js';
 
 const router = Router();
@@ -83,12 +84,7 @@ router.get('/users/profile', asyncHandler(async (req, res) => {
   if (!userId) throw new UnauthorizedError('غیر مجاز');
   const [u] = await orm.select().from(users).where(eq(users.id, userId));
   if (!u) throw new NotFoundError('کاربر یافت نشد', undefined, 'USER_NOT_FOUND');
-  const { password: _, ...userInfo } = u;
-  res.json({
-    ...userInfo,
-    full_name: u.fullName,
-    avatar_url: u.avatarUrl || ''
-  });
+  res.json(publicUserView(u));
 }));
 
 router.put('/users/profile', validate(updateProfileSchema), asyncHandler(async (req, res) => {
@@ -107,16 +103,9 @@ router.put('/users/profile', validate(updateProfileSchema), asyncHandler(async (
     session = { token, csrfToken };
   }
 
-  const { password: _, ...userInfo } = updatedUser;
   res.json({
     success: true,
-    user: {
-      ...userInfo,
-      full_name: updatedUser.fullName,
-      avatar_url: updatedUser.avatarUrl || '',
-      mustResetPassword: Boolean(updatedUser.mustResetPassword),
-      must_reset_password: Boolean(updatedUser.mustResetPassword)
-    },
+    user: publicUserView(updatedUser),
     ...(session ? { csrfToken: session.csrfToken, ...(shouldExposeTokenInBody() ? { token: session.token } : {}) } : {})
   });
 }));

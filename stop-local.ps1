@@ -13,8 +13,10 @@ if (-not (Test-Path $pgCtl)) {
 Write-Host "=== Papital ERP Stop ===" -ForegroundColor Cyan
 
 # --- 1) Stop node dev server (tsx server.ts) ---
+# v10.1.44 (OBS-R1-21): only node processes running this checkout's server, never another project's tsx
+$rootPattern = [regex]::Escape($root)
 $nodeProcs = Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" |
-    Where-Object { $_.CommandLine -match 'server\.ts|tsx' }
+    Where-Object { $_.CommandLine -match $rootPattern -and $_.CommandLine -match 'server\.ts|tsx' }
 if ($nodeProcs) {
     $nodeProcs | ForEach-Object {
         Write-Host "[1/2] Stopping node PID $($_.ProcessId)..." -ForegroundColor Yellow

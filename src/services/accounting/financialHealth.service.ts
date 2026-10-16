@@ -53,6 +53,7 @@ import { buildUnpublishedRuleEventHealthTest, findRulesWithUnpublishedEvent } fr
 import { buildDueReminderHealthTest, findDuplicateDueReminders, hasDueReminderUniqueIndex } from '../notifications/notificationReminderHealth.js';
 import { buildPersonnelCodeHealthTest, findDuplicatePersonnelCodes, hasPersonnelCodeUniqueIndex } from '../personnel/personnelCode.js';
 import { buildSyntheticUsersHealthTest, findActiveSyntheticUsers } from '../users/syntheticUserHealth.js';
+import { buildSecretsAtRestHealthTest, countSecretsAtRest } from '../system/secretsAtRestHealth.js';
 import { buildPersonnelUserLinkHealthTest, findDuplicatePersonnelUserLinks, hasPersonnelUserUniqueIndex } from '../personnel/personnelUserLink.js';
 import {
   findDuplicatePieceworkTaskCodes,
@@ -1166,6 +1167,11 @@ export class FinancialHealthService {
     const syntheticUsersTest = buildSyntheticUsersHealthTest(await findActiveSyntheticUsers());
     overallScore += syntheticUsersTest.scoreImpact;
     tests.push(syntheticUsersTest);
+
+    // v10.1.44 (OBS-PR-09): رمز ساده‌مانده و گذرواژه غیر bcrypt، تا دو فرمان یک‌باره پس از ارتقا اجرا شوند
+    const secretsAtRestTest = buildSecretsAtRestHealthTest(await countSecretsAtRest());
+    overallScore += secretsAtRestTest.scoreImpact;
+    tests.push(secretsAtRestTest);
 
     // آزمون ۲۱: v9.0.79 (TD-483) گردش کاردکس با تاریخ پس از امروز (فقط فهرست، بی بازنویسی)
     const futureMovementTest = buildFutureStockMovementHealthTest(await findFutureStockMovements());

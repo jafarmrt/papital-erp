@@ -203,6 +203,8 @@ sudo bash update.sh --zip /root/papital-erp-source-v<NEW>.zip
 
 > **Invariants for every update path:** migrations run automatically at startup via the atomic migrator — `npm run db:push` is **banned**. `update.sh` always backs up first (`--no-backup` override exists but is discouraged).
 
+> **One-off commands after upgrading from an old version (v10.1.44, OBS-PR-09):** if the financial health check shows «رمزها و گذرواژه‌های ذخیره‌شده» as a warning, run once on the server: `npm run secrets:encrypt -- --apply` (third-party secrets still in plain text) and `npm run users:lock-plain-passwords -- --apply` (passwords that are not bcrypt hashes; then give those users a temporary password). The check turns healthy once both have run.
+
 ---
 
 ## Sign-off
