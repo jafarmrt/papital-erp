@@ -49,7 +49,7 @@ export async function findWorkflowReferenceGaps(db: DbExecutor = orm): Promise<W
   const present = new Map<string, boolean>();
   const constraints = rowsOf(await db.execute(sql`
     SELECT c.conname, c.convalidated FROM pg_constraint c
-    WHERE c.connamespace = current_schema()::regnamespace AND c.contype = 'f' AND c.conrelid IN (${sql.join(WORKFLOW_FOREIGN_KEYS.map(fk => sql`to_regclass(${fk.table})`), sql`, `)})
+    WHERE c.connamespace = current_schema()::regnamespace AND c.contype = 'f' AND c.conrelid IN (${sql.join(WORKFLOW_FOREIGN_KEYS.map(fk => sql`to_regclass(format('%I.%I', current_schema(), ${fk.table}::text))`), sql`, `)})
   `));
   for (const r of constraints) present.set(String(r.conname), Boolean(r.convalidated));
 
@@ -70,7 +70,7 @@ export async function findWorkflowReferenceGaps(db: DbExecutor = orm): Promise<W
     GROUP BY definition_id, version HAVING count(*) > 1 ORDER BY definition_id, version
   `)).map(r => ({ definitionId: Number(r.definition_id), version: Number(r.version), rows: Number(r.n) }));
 
-  const [index] = rowsOf(await db.execute(sql`SELECT to_regclass(${WORKFLOW_VERSION_UNIQUE_INDEX}) IS NOT NULL AS present`));
+  const [index] = rowsOf(await db.execute(sql`SELECT to_regclass(format('%I.%I', current_schema(), ${WORKFLOW_VERSION_UNIQUE_INDEX}::text)) IS NOT NULL AS present`));
   return { foreignKeyGaps, duplicateVersions, versionIndexPresent: Boolean(index?.present) };
 }
 

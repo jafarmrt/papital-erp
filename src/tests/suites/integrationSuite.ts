@@ -490,7 +490,15 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
   // 8. Subphase 9.1 — Ledger Invariants & Repost Lifecycle Test
   const t8Start = Date.now();
   try {
-    const [accA, accB] = await getTestAccounts();
+    // OBS-R1-49: the correction (the live path that replaced the dead repost) posts only on posting accounts (TD-549)
+    await getTestAccounts();
+    const postingAccount = async (code: string) => {
+      const [row] = await orm.select().from(accounts).where(and(eq(accounts.code, code), eq(accounts.isDeleted, 0)));
+      if (!row) throw new Error(`standard account ${code} is missing`);
+      return row;
+    };
+    const accA = await postingAccount('1001');
+    const accB = await postingAccount('4001');
 
     // Invariant 1: Double-entry strict equilibrium rejection
     let unbalancedBlocked = false;
@@ -551,31 +559,31 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       throw new Error('Posted and permanent vouchers must be protected against direct edit and delete');
     }
 
-    // Invariant 3 (v7.0.24 / TD-174): طبق قاعده C-03 & P0-06 سرویس اسناد، سند «قطعی» قابل ابطال/بازثبت نیست
-    // و اصلاح آن فقط با سند معکوس انجام می‌شود؛ تلاش برای بازثبت باید رد شود.
-    let permanentRepostBlocked = false;
+    // Invariant 3 (v7.0.24 / TD-174): طبق قاعده C-03 & P0-06 سرویس اسناد، سند «قطعی» قابل ابطال یا اصلاح نیست؛
+    // تلاش برای اصلاح باید رد شود. OBS-R1-49: the dead repostVoucher was removed; correctVoucher is the live path.
+    let permanentCorrectionBlocked = false;
     try {
-      await AccountingService.repostVoucher({
+      await AccountingService.correctVoucher({
         voucherId: postedVoucher.id,
-        reason: 'تلاش غیرمجاز بازثبت سند قطعی',
+        reason: 'تلاش غیرمجاز اصلاح سند قطعی',
         newItems: [
           { accountId: accA.id, debit: 950000, credit: 0 },
           { accountId: accB.id, debit: 0, credit: 950000 }
         ]
       });
     } catch (e: any) {
-      if (e.message.includes('غیرقابل ابطال یا بازثبت')) {
-        permanentRepostBlocked = true;
+      if (e.message.includes('غیرقابل اصلاح یا ابطال')) {
+        permanentCorrectionBlocked = true;
       }
     }
-    if (!permanentRepostBlocked) {
-      throw new Error('A permanent voucher must not be voidable and repostable (rule C-03 & P0-06).');
+    if (!permanentCorrectionBlocked) {
+      throw new Error('A permanent voucher must not be correctable (rule C-03 & P0-06).');
     }
 
-    // Invariant 4: Repost Workflow on an approved (not yet permanent) voucher
+    // Invariant 4: correction of an approved (not yet permanent) voucher: a reversal and a new voucher, both linked
     const approvedVoucher = await AccountingService.createJournalVoucher({
       date: '1403/05/12',
-      description: 'سند تاییدشده جهت آزمون ابطال و بازثبت',
+      description: 'سند تاییدشده جهت آزمون اصلاح',
       status: 'approved',
       items: [
         { accountId: accA.id, debit: 800000, credit: 0 },
@@ -583,44 +591,44 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       ]
     });
 
-    const repostResult = await AccountingService.repostVoucher({
+    const correctionResult = await AccountingService.correctVoucher({
       voucherId: approvedVoucher.id,
       reason: 'تغییر سرفصل و مبلغ به دلیل اصلاحیه فاکتور',
       newItems: [
         { accountId: accA.id, debit: 950000, credit: 0 },
         { accountId: accB.id, debit: 0, credit: 950000 }
       ],
-      newDescription: 'سند بازثبت‌شده با اقلام اصلاحی جدید'
+      newDescription: 'سند اصلاحی با اقلام جدید'
     });
 
-    const isRepostValid = (
-      repostResult.voidVoucher &&
-      repostResult.voidVoucher.referenceId === approvedVoucher.id &&
-      repostResult.voidVoucher.totalDebit === 800000 &&
-      repostResult.repostedVoucher &&
-      repostResult.repostedVoucher.referenceId === approvedVoucher.id &&
-      repostResult.repostedVoucher.totalDebit === 950000
+    const isCorrectionValid = (
+      correctionResult.reversalVoucher &&
+      correctionResult.reversalVoucher.referenceId === approvedVoucher.id &&
+      correctionResult.reversalVoucher.totalDebit === 800000 &&
+      correctionResult.correctedVoucher &&
+      correctionResult.correctedVoucher.referenceId === approvedVoucher.id &&
+      correctionResult.correctedVoucher.totalDebit === 950000
     );
 
-    if (!isRepostValid) {
-      throw new Error('Void and repost did not build the voucher references and amounts correctly');
+    if (!isCorrectionValid) {
+      throw new Error('The correction did not build the voucher references and amounts correctly');
     }
 
     results.push(makeTestCase({
       id: 'int_ledger_invariants_and_repost',
       scenarioId: 'ledger_invariants_and_repost',
-      name: 'General ledger immutability invariants and void-and-repost',
+      name: 'General ledger immutability invariants and voucher correction',
       layer: 'integration',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t8Start,
-      details: 'Unbalanced vouchers, direct edits of permanent vouchers and direct deletes were blocked; void and repost succeeded.'
+      details: 'Unbalanced vouchers, direct edits of permanent vouchers and direct deletes were blocked; the correction succeeded.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'int_ledger_invariants_and_repost',
       scenarioId: 'ledger_invariants_and_repost',
-      name: 'General ledger immutability invariants and void-and-repost',
+      name: 'General ledger immutability invariants and voucher correction',
       layer: 'integration',
       executionType: 'real_database',
       passed: false,

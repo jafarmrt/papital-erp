@@ -29,7 +29,7 @@ export async function findDuplicateCustomerNames(executor: DbExecutor = orm): Pr
 }
 
 export async function hasCustomerNameUniqueIndex(executor: DbExecutor = orm): Promise<boolean> {
-  const res = await executor.execute(sql`SELECT to_regclass(${CUSTOMER_NAME_UNIQUE_INDEX}) IS NOT NULL AS present`);
+  const res = await executor.execute(sql`SELECT to_regclass(format('%I.%I', current_schema(), ${CUSTOMER_NAME_UNIQUE_INDEX}::text)) IS NOT NULL AS present`);
   return Boolean((res.rows?.[0] as { present?: boolean } | undefined)?.present);
 }
 

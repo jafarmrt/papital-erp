@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
-  checkExpression, compareRehearsal, isRehearsalDatabase, rehearsalErrorCause, type HealthStatus, type RehearsalSnapshot, type TotalsSection,
+  checkExpression, compareRehearsal, isRehearsalDatabase, rehearsalErrorCause, rehearsalPassLine, type HealthStatus, type RehearsalSnapshot, type TotalsSection,
 } from '../../db/upgradeRehearsal';
 
 /**
@@ -47,6 +47,19 @@ describe('upgrade rehearsal comparison (TD-367)', () => {
     const findings = compareRehearsal(before, after, null, null);
     expect(findings.problems).toEqual([]);
     expect(findings.notices).toHaveLength(3);
+  });
+
+  it('claims «financial health not worse» only when the check ran before and after the migrations (OT-A-04)', () => {
+    const h = (status: HealthStatus['status'], count: number): HealthStatus => ({ status, count });
+    const health = new Map([['a', h('healthy', 0)]]);
+    const both = compareRehearsal(snapshot({}), snapshot({}), health, health);
+    const noBefore = compareRehearsal(snapshot({}), snapshot({}), null, health);
+    const noAfter = compareRehearsal(snapshot({}), snapshot({}), health, null);
+    expect(rehearsalPassLine(both)).toContain('financial health not worse');
+    for (const findings of [noBefore, noAfter]) {
+      expect(rehearsalPassLine(findings)).not.toContain('not worse');
+      expect(rehearsalPassLine(findings)).toContain('financial health not compared');
+    }
   });
 
   it('extracts CHECK expressions and recognises only drill copies', () => {

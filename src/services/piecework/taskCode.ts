@@ -144,6 +144,6 @@ export async function findDuplicatePieceworkTaskCodes(executor: DbExecutor = orm
 }
 
 export async function hasPieceworkTaskCodeUniqueIndex(executor: DbExecutor = orm): Promise<boolean> {
-  const res = await executor.execute(sql`SELECT to_regclass(${PIECEWORK_TASK_CODE_UNIQUE_INDEX}) IS NOT NULL AS present`);
+  const res = await executor.execute(sql`SELECT to_regclass(format('%I.%I', current_schema(), ${PIECEWORK_TASK_CODE_UNIQUE_INDEX}::text)) IS NOT NULL AS present`);
   return Boolean((res.rows?.[0] as { present?: boolean } | undefined)?.present);
 }

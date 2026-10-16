@@ -176,7 +176,8 @@ router.post('/accounting/vouchers/:id/correct', authorizePermission('accounting.
 }));
 
 // repostVoucherSchema + POST /accounting/vouchers/:id/repost — حذف شدند (v4.0.29):
-// هیچ فراخوانی frontend ندارند؛ سرویس AccountingService.repostVoucher برای تست باقی است.
+// هیچ فراخوانی frontend ندارند. OBS-R1-49: the dead service method `repostVoucher` was removed as well; a posted voucher is
+// corrected with `correctVoucher` or reversed with `reverseVoucher`.
 
 // Finalize Voucher Route (قطعی‌سازی و تبدیل به دائم)
 router.post('/accounting/vouchers/:id/finalize', authorizePermission('accounting.vouchers_approve'), idempotency({ scope: 'accounting_voucher' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {

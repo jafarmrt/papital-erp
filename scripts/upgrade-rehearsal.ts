@@ -3,7 +3,8 @@ import 'dotenv/config';
 import { pool } from '../src/db/drizzle.js';
 import { runMigrations } from '../src/db/migrator.js';
 import {
-  compareRehearsal, healthStatuses, isRehearsalDatabase, REHEARSAL_DATABASE_PREFIX, rehearsalErrorCause, snapshotBusinessData, type HealthStatus,
+  compareRehearsal, healthStatuses, isRehearsalDatabase, REHEARSAL_DATABASE_PREFIX, rehearsalErrorCause, rehearsalPassLine, snapshotBusinessData,
+  type HealthStatus,
 } from '../src/db/upgradeRehearsal.js';
 import { terminalLine } from '../src/lib/terminalText.js';
 import { FinancialHealthService } from '../src/services/accounting/financialHealth.service.js';
@@ -66,7 +67,7 @@ async function main(): Promise<number> {
     list(`✗ the migrations changed ${findings.problems.length} business total(s) or health check(s) (before → after):`, findings.problems);
     return 1;
   }
-  console.log(`  ✓ ledger totals per account, stock and average cost per item, stock per warehouse and bank balances unchanged; financial health not worse`);
+  console.log(rehearsalPassLine(findings));
   return 0;
 }
 

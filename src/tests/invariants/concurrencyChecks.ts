@@ -19,7 +19,7 @@ export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<
     checkMixedStockPathsNoDeadlock, 'nine concurrent operations without deadlock; invariants hold'],
   ['inv_td_320_void_kardex_order', 'v8.0.67: the reversal Kardex row of a void waiting behind the item lock is numbered after the intermediate sale and the Kardex rebuild gives the same live WAC (TD-320)',
     checkVoidKardexOrderMatchesLive, 'stock 11; Kardex rebuild matches the live WAC (I13)'],
-  ['inv_td_321_voucher_reversed_once', 'v8.0.68: each journal voucher is reversed only once; of two corrections and one void running concurrently only one is accepted, and void-and-repost after a void or before a correction is refused (TD-321)',
+  ['inv_td_321_voucher_reversed_once', 'v8.0.68: each journal voucher is reversed only once; of two corrections and one void running concurrently only one is accepted, and a correction after a void or a void after a correction is refused (TD-321)',
     () => checkVoucherReversedOnce(), 'of three concurrent reversals one was accepted and the second sequential reversal was refused; each voucher has one active reversal voucher'],
   ['inv_td_322_deleted_cheque_frozen', 'v8.0.69: a deleted cheque is not cleared or deleted again, and of a concurrent delete and clear only one is accepted (TD-322)',
     () => checkDeletedChequeFrozen(), 'clearing and deleting a deleted cheque again gave "not found"; in three rounds of concurrent delete and clear only one was accepted and the bank balance stayed correct'],

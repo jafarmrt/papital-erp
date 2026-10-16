@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
-import { unscopedCatalogReads } from '../setup/catalogSchemaScope';
+import { unqualifiedRegclassLookups, unscopedCatalogReads } from '../setup/catalogSchemaScope';
 
 // TD-1266: a catalog read in the code restricts its own schema. The 10.0 closing run failed the TD-653 and TD-786 tests
 // locally: they looked up an index and a constraint by name alone and also counted the stale `test_*` schemas of the test
@@ -62,6 +62,24 @@ describe('catalog schema scope scanner', () => {
           problems.push(`${rel}:${read.line} ${read.catalog}: ${read.text}`);
         }
       }
+    }
+    expect(problems).toEqual([]);
+  });
+  it('flags a to_regclass lookup by a bare name and accepts one that names the current schema (OT-B-09)', () => {
+    const src = [
+      'await db.execute(sql`SELECT to_regclass(${INDEX}) IS NOT NULL AS present`);',
+      "await q(`SELECT 1 FROM pg_constraint WHERE conname = 'c' AND conrelid = to_regclass('items')`);",
+      "await db.execute(sql`SELECT to_regclass(format('%I.%I', current_schema(), ${INDEX}::text)) IS NOT NULL AS present`);",
+      "await q(`SELECT 1 FROM pg_constraint WHERE conrelid = to_regclass(format('%I.%I', current_schema(), 'items'))`);",
+    ].join('\n');
+    expect(unqualifiedRegclassLookups('x.ts', src).map(r => r.line)).toEqual([1, 2]);
+  });
+
+  it('no service looks a relation up with to_regclass by a bare name (OT-B-09)', () => {
+    const problems: string[] = [];
+    for (const file of sourceFiles(path.join(process.cwd(), 'src', 'services'))) {
+      const rel = path.relative(process.cwd(), file).split(path.sep).join('/');
+      for (const read of unqualifiedRegclassLookups(rel, fs.readFileSync(file, 'utf8'))) problems.push(`${rel}:${read.line} ${read.text}`);
     }
     expect(problems).toEqual([]);
   });

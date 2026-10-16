@@ -308,7 +308,7 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
   // 5. Optimistic Concurrency Control (OCC) & Version Stamping Test (Subphase 3.3)
   const t5Start = Date.now();
   try {
-    const { checkOccVersion, nextVersion, withOccRetry, OptimisticLockError } = await import('../../lib/occHelper.js');
+    const { checkOccVersion, nextVersion, OptimisticLockError } = await import('../../lib/occHelper.js');
 
     // Test 5.1: Successful version check & increment
     const entity = { id: 101, version: 3, name: 'تست کالا' };
@@ -338,53 +338,7 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
       throw new Error('OptimisticLockError was not thrown on stale version mismatch');
     }
 
-    // Test 5.3: withOccRetry automatic retry on transient collision
-    let attemptCount = 0;
-    let mockResourceVersion = 1;
-    const retryResult = await withOccRetry<{ success: boolean; version: number }>(async (attempt) => {
-      attemptCount++;
-      if (attempt === 1) {
-        // Simulate concurrent modification during attempt 1
-        mockResourceVersion = 2;
-        throw new OptimisticLockError('Item', 101, 1, 2);
-      }
-      return { success: true, version: nextVersion(mockResourceVersion) };
-    }, { maxRetries: 3, baseDelayMs: 10 });
-
-    if (attemptCount !== 2 || retryResult.version !== 3) {
-      throw new Error(`withOccRetry failed: attempts=${attemptCount}, resultVersion=${retryResult.version}`);
-    }
-
-    // Test 5.4: executeOccUpdate helper workflow validation
-    const { executeOccUpdate } = await import('../../lib/occHelper.js');
-    let occState = { id: 200, version: 1, stock: 50 };
-    let occAttempts = 0;
-    const occUpdatedResult = await executeOccUpdate<{ id: number; version: number; stock: number }>({
-      entityType: 'Item',
-      entityId: 200,
-      fetch: async () => ({ ...occState }),
-      mutate: async (current, attempt) => {
-        occAttempts++;
-        if (attempt === 1) {
-          // Simulate someone else changing version in between
-          occState.version = 2;
-          throw new OptimisticLockError({
-            entityType: 'Item',
-            entityId: 200,
-            expectedVersion: 1,
-            currentVersion: 2
-          });
-        }
-        occState.version = nextVersion(current.version);
-        occState.stock += 10;
-        return { success: true, updatedStock: occState.stock, version: occState.version };
-      },
-      options: { maxRetries: 3, baseDelayMs: 10 }
-    });
-
-    if (occAttempts !== 2 || occUpdatedResult.version !== 3 || occUpdatedResult.updatedStock !== 60) {
-      throw new Error(`executeOccUpdate failed: attempts=${occAttempts}, version=${occUpdatedResult.version}`);
-    }
+    // OBS-R1-09: the retry helpers withOccRetry and executeOccUpdate were removed; nothing in production used them
 
     results.push(makeTestCase({
       id: 'conc_optimistic_concurrency_control',
@@ -393,7 +347,7 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
       executionType: 'real_code',
       passed: true,
       durationMs: Date.now() - t5Start,
-      details: 'Version conflict detection (Version Mismatch), a structured 409 error and the automatic retry mechanism verified.'
+      details: 'Version conflict detection (Version Mismatch) and a structured 409 error verified.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({

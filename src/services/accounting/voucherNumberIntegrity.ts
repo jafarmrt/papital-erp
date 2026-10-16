@@ -40,6 +40,6 @@ export async function findDuplicateVoucherNumbers(executor: DbExecutor = orm): P
 }
 
 export async function hasVoucherNumberUniqueIndex(executor: DbExecutor = orm): Promise<boolean> {
-  const res = await executor.execute(sql`SELECT to_regclass(${VOUCHER_NUMBER_UNIQUE_INDEX}) IS NOT NULL AS present`);
+  const res = await executor.execute(sql`SELECT to_regclass(format('%I.%I', current_schema(), ${VOUCHER_NUMBER_UNIQUE_INDEX}::text)) IS NOT NULL AS present`);
   return Boolean((res.rows?.[0] as { present?: boolean } | undefined)?.present);
 }

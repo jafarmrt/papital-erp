@@ -93,7 +93,7 @@ export async function findDuplicateItemIdentities(db: DbExecutor = orm): Promise
 }
 
 export async function hasItemIdentityIndexes(db: DbExecutor = orm): Promise<boolean> {
-  const res = await db.execute(sql`SELECT to_regclass(${ITEM_CODE_UNIQUE_INDEX}) IS NOT NULL AND to_regclass(${ITEM_NAME_UNIQUE_INDEX}) IS NOT NULL AS present`);
+  const res = await db.execute(sql`SELECT to_regclass(format('%I.%I', current_schema(), ${ITEM_CODE_UNIQUE_INDEX}::text)) IS NOT NULL AND to_regclass(format('%I.%I', current_schema(), ${ITEM_NAME_UNIQUE_INDEX}::text)) IS NOT NULL AS present`);
   return Boolean((res.rows?.[0] as { present?: boolean } | undefined)?.present);
 }
 

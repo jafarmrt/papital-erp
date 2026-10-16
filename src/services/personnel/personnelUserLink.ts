@@ -99,7 +99,7 @@ export async function findDuplicatePersonnelUserLinks(db: DbExecutor = orm): Pro
 }
 
 export async function hasPersonnelUserUniqueIndex(db: DbExecutor = orm): Promise<boolean> {
-  const res = await db.execute(sql`SELECT to_regclass(${PERSONNEL_USER_UNIQUE_INDEX}) IS NOT NULL AS present`);
+  const res = await db.execute(sql`SELECT to_regclass(format('%I.%I', current_schema(), ${PERSONNEL_USER_UNIQUE_INDEX}::text)) IS NOT NULL AS present`);
   return Boolean((res.rows?.[0] as { present?: boolean } | undefined)?.present);
 }
 

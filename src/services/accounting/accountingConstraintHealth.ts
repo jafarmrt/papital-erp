@@ -48,7 +48,7 @@ export async function findAccountingIntegrityGaps(): Promise<AccountingIntegrity
   const entries: AccountingIntegrityEntry[] = [];
   for (const rule of ACCOUNTING_INTEGRITY_RULES) {
     const stateRes = await orm.execute(sql`
-      SELECT convalidated FROM pg_constraint WHERE conname = ${rule.name} AND conrelid = to_regclass(${rule.table})`);
+      SELECT convalidated FROM pg_constraint WHERE conname = ${rule.name} AND conrelid = to_regclass(format('%I.%I', current_schema(), ${rule.table}::text))`);
     const row = (stateRes.rows as Array<{ convalidated?: boolean }>)[0];
     const state: ConstraintState = !row ? 'missing' : row.convalidated ? 'valid' : 'not_valid';
     const countRes = await orm.execute(sql`SELECT COUNT(*)::int AS n FROM ${sql.identifier(rule.table)} WHERE ${sql.raw(rule.violation)}`);
