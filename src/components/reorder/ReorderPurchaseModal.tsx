@@ -332,7 +332,7 @@ export function ReorderPurchaseModal({
                           onChange={val => handleUpdateItemField(it.id, 'unitPrice', val)}
                           currency="IRR"
                           variant="table"
-                          placeholder="0"
+                          placeholder="۰"
                           className="w-28 mx-auto"
                           containerClassName="w-full bg-white border border-slate-300 rounded focus-within:ring-2 focus-within:ring-amber-400"
                           inputClassName="p-1.5 text-center font-mono font-bold text-slate-800"

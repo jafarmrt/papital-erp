@@ -182,7 +182,7 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
                 value={formData.amount}
                 currency={selectedFrom?.currency || 'IRR'}
                 onChange={val => updateForm(p => ({ ...p, amount: val }))}
-                placeholder="1000000"
+                placeholder="۱٬۰۰۰٬۰۰۰"
                 showWordsBadge={true}
                 showTomanEquivalent={true}
               />

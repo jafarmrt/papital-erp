@@ -5,11 +5,9 @@ import {
   Download, UserCheck, CheckCircle2, Clock, ArrowRightLeft, FileCode, AlertCircle, LogOut,
   Printer, FileSpreadsheet, Layers, ShieldCheck, DollarSign, Package, Laptop
 } from 'lucide-react';
-import DatePicker from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
 import { ActivityLog } from '../types';
-import { formatPersianNumber, formatPersianDateTime, extractDateString, errorMessageOf, formatPersianCode } from '../utils';
+import { formatPersianNumber, formatPersianDateTime, extractDateString, errorMessageOf, formatPersianCode, isoToJalaliDate } from '../utils';
+import { JalaliDateInput } from '../components/common/JalaliDateInput';
 import { useSearch } from '../SearchContext';
 import toast from 'react-hot-toast';
 import {
@@ -344,23 +342,17 @@ export default function ActivityLogsPage() {
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-slate-400" />
             <span className="text-slate-500 font-medium">بازه زمانی:</span>
-            <DatePicker 
-              value={startDate} 
-              onChange={(val: any) => { setStartDate(extractDateString(val)); setPage(1); }} 
-              calendar={persian} 
-              locale={persian_fa} 
-              calendarPosition="bottom-right"
-              inputClass="px-2 py-1 border border-slate-200 rounded text-xs outline-none focus:ring-1 focus:ring-blue-500 w-28" 
+            <JalaliDateInput
+              value={startDate}
+              onChange={iso => { setStartDate(isoToJalaliDate(iso)); setPage(1); }}
+              className="px-2 py-1 border border-slate-200 rounded text-xs outline-none focus:ring-1 focus:ring-blue-500 w-28"
               containerClassName="inline-block"
             />
             <span className="text-slate-400">تا</span>
-            <DatePicker 
-              value={endDate} 
-              onChange={(val: any) => { setEndDate(extractDateString(val)); setPage(1); }} 
-              calendar={persian} 
-              locale={persian_fa} 
-              calendarPosition="bottom-right"
-              inputClass="px-2 py-1 border border-slate-200 rounded text-xs outline-none focus:ring-1 focus:ring-blue-500 w-28" 
+            <JalaliDateInput
+              value={endDate}
+              onChange={iso => { setEndDate(isoToJalaliDate(iso)); setPage(1); }}
+              className="px-2 py-1 border border-slate-200 rounded text-xs outline-none focus:ring-1 focus:ring-blue-500 w-28"
               containerClassName="inline-block"
             />
           </div>

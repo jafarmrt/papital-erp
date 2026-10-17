@@ -178,7 +178,7 @@ export const ItemSpecificationsForm: React.FC<ItemSpecificationsFormProps> = ({
               onValueChange={(v) => setForm({ ...form, weight: v })}
               className="w-full border border-slate-300/80 rounded-xl px-3 py-1.5 text-sm font-mono text-left bg-white outline-none focus:ring-1 focus:ring-blue-500"
               dir="ltr"
-              placeholder="مثال: 5.5"
+              placeholder="مثال: ۵٫۵"
             />
           </div>
 

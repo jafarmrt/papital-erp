@@ -1,11 +1,9 @@
 import { FormEvent, ReactNode, useEffect, useState, useId } from 'react';
-import DatePicker from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
 import { X, FileText, Landmark, AlertCircle } from 'lucide-react';
 import { PieceworkLog } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
-import { formatPersianNumber, extractDateString, formatCurrencyLabel, formatPersianPrice } from '../../utils';
+import { formatPersianNumber, formatCurrencyLabel, formatPersianPrice, isoToJalaliDate } from '../../utils';
+import { JalaliDateInput } from '../common/JalaliDateInput';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { fetchJson } from '../../api';
 import { PayrollDeductionsField, deductionsNeedDescription } from './PayrollDeductionsField';
@@ -142,33 +140,23 @@ export function PieceworkPayrollModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label htmlFor={`${fieldId}-payroll-start-date`} className="block text-xs font-bold text-slate-700 mb-1">از تاریخ *</label>
-              <DatePicker
+              <JalaliDateInput
                 id={`${fieldId}-payroll-start-date`}
                 value={payrollStartDate}
-                onChange={(dateObj: any) => {
-                  setPayrollStartDate(extractDateString(dateObj));
-                }}
-                calendar={persian}
-                locale={persian_fa}
+                onChange={iso => setPayrollStartDate(isoToJalaliDate(iso))}
                 placeholder="انتخاب تاریخ شروع"
-                inputClass="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono outline-none focus:border-emerald-500"
-                containerClassName="w-full"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono outline-none focus:border-emerald-500"
               />
             </div>
 
             <div>
               <label htmlFor={`${fieldId}-payroll-end-date`} className="block text-xs font-bold text-slate-700 mb-1">تا تاریخ *</label>
-              <DatePicker
+              <JalaliDateInput
                 id={`${fieldId}-payroll-end-date`}
                 value={payrollEndDate}
-                onChange={(dateObj: any) => {
-                  setPayrollEndDate(extractDateString(dateObj));
-                }}
-                calendar={persian}
-                locale={persian_fa}
+                onChange={iso => setPayrollEndDate(isoToJalaliDate(iso))}
                 placeholder="انتخاب تاریخ پایان"
-                inputClass="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono outline-none focus:border-emerald-500"
-                containerClassName="w-full"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono outline-none focus:border-emerald-500"
               />
             </div>
           </div>

@@ -1,8 +1,6 @@
 import { Search } from 'lucide-react';
-import DatePicker from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
-import { extractDateString } from '../../../utils';
+import { isoToJalaliDate } from '../../../utils';
+import { JalaliDateInput } from '../../common/JalaliDateInput';
 import type { InvoiceListQueryState } from '../../../hooks/invoices/useInvoiceListQuery';
 import { SALES_PROFORMA_FILTER } from '../../../lib/invoices/invoiceListDocuments';
 
@@ -58,25 +56,19 @@ export function InvoiceListFilters({ query }: { query: InvoiceListQueryState }) 
       <div className="flex gap-2 items-center flex-wrap">
         <div className="flex items-center gap-1.5 text-xs">
           <span className="text-slate-500 font-medium">از تاریخ:</span>
-          <DatePicker 
-            value={startDate} 
-            onChange={(dateObj) => setStartDate(extractDateString(dateObj))} 
-            calendar={persian} 
-            locale={persian_fa} 
-            calendarPosition="bottom-right"
-            inputClass="p-1.5 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 outline-none w-28 bg-white text-center font-medium" 
+          <JalaliDateInput
+            value={startDate}
+            onChange={iso => setStartDate(isoToJalaliDate(iso))}
+            className="p-1.5 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 outline-none w-28 bg-white text-center font-medium"
             containerClassName="inline-block"
           />
         </div>
         <div className="flex items-center gap-1.5 text-xs">
           <span className="text-slate-500 font-medium">تا تاریخ:</span>
-          <DatePicker 
-            value={endDate} 
-            onChange={(dateObj) => setEndDate(extractDateString(dateObj))} 
-            calendar={persian} 
-            locale={persian_fa} 
-            calendarPosition="bottom-right"
-            inputClass="p-1.5 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 outline-none w-28 bg-white text-center font-medium" 
+          <JalaliDateInput
+            value={endDate}
+            onChange={iso => setEndDate(isoToJalaliDate(iso))}
+            className="p-1.5 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 outline-none w-28 bg-white text-center font-medium"
             containerClassName="inline-block"
           />
         </div>

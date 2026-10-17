@@ -1,10 +1,8 @@
 import { useId } from 'react';
 import { Lock, Building2, Calendar, UserCheck } from 'lucide-react';
-import DatePicker from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
 import { Customer, Personnel, User } from '../../../types';
-import { extractDateString } from '../../../utils';
+import { isoToJalaliDate } from '../../../utils';
+import { JalaliDateInput } from '../../common/JalaliDateInput';
 import { ExchangeRateField } from '../ExchangeRateField';
 import type { WarehouseItem } from '../../../hooks/queries/useSettingsQueries';
 import type { StockDocProject } from '../../../lib/documents/stockReservations';
@@ -195,14 +193,11 @@ export function StockDocumentDetailsFields({ form, currentUser, warehouses, proj
             <Calendar size={13} className="text-slate-500" />
             <span>تاریخ سند</span>
           </label>
-          <DatePicker id={`${fieldId}-date`} 
-            value={date} 
-            onChange={(dateObj) => setDate(extractDateString(dateObj))} 
-            calendar={persian} 
-            locale={persian_fa} 
-            calendarPosition="bottom-right"
-            inputClass="w-full border border-slate-200 bg-slate-50/50 rounded-xl text-sm px-3 py-2 font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" 
-            containerClassName="w-full"
+          <JalaliDateInput
+            id={`${fieldId}-date`}
+            value={date}
+            onChange={iso => setDate(isoToJalaliDate(iso))}
+            className="w-full border border-slate-200 bg-slate-50/50 rounded-xl text-sm px-3 py-2 font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
       </div>

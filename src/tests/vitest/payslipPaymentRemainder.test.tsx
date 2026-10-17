@@ -17,6 +17,8 @@ import type { PieceworkPayroll } from '../../types';
 afterEach(cleanup);
 
 const noop = () => undefined;
+// v10.1.72 (TD-1288): number fields show Persian digits and «٬» while typing
+const SHOWN_REMAINDER = '۴۰۰٬۰۰۰';
 
 // v9.0.322 (TD-814, B12P-11): the pay button inside a payslip gives the payment form what was already paid
 describe('the payment form opened from a payslip takes its remainder (TD-814)', () => {
@@ -28,7 +30,7 @@ describe('the payment form opened from a payslip takes its remainder (TD-814)', 
     render(<PieceworkPayslipModal viewingPayroll={payroll} onClose={noop} onUpdateStatus={noop} onDeletePayroll={noop} />);
     fireEvent.click(screen.getByText('ثبت پرداخت (از خزانه)'));
     const amount = screen.getByPlaceholderText('مبلغ پرداختی...') as HTMLInputElement;
-    expect(amount.value).toBe('400000');
+    expect(amount.value).toBe(SHOWN_REMAINDER);
     // v10.1.22 (TD-1273): the amount field is a text field; its max shows as an error under it and blocks the form
     fireEvent.change(amount, { target: { value: '500000' } });
     expect(amount.validity.valid).toBe(false);

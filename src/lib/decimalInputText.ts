@@ -6,6 +6,7 @@
  */
 import { normalizeDecimalString, toLatinDigits } from './numericInput.js';
 import { formatPersianNumber } from '../utils/persianNumber.js';
+import { persianDigitsOf, persianNumberText } from './numberFieldDisplay.js';
 
 export interface DecimalInputRules {
   /** کمترین مقدار؛ بدون آن یا با کمینه منفی، عدد منفی پذیرفته است */
@@ -77,6 +78,32 @@ export function readDecimalInputText(raw: string, rules: DecimalInputRules = {})
     rangeError = `بیشتر از ${formatPersianNumber(max, 6)} نباشد.`;
   }
   return rangeError ? { kind: 'value', text, rangeError } : { kind: 'value', text };
+}
+
+/**
+ * v10.1.72 (TD-1288): آنچه کادر عدد نشان می‌دهد. متن پذیرفته یا نیمه‌کاره با ارقام فارسی، «٫» و (با `grouped`) «٬»
+ * میان دسته‌های سه‌رقمی دیده می‌شود؛ متن نامعتبر همان‌طور که تایپ شده می‌ماند و فقط ارقامش فارسی می‌شود، تا کاربر ببیند
+ * کجای آن را باید درست کند.
+ */
+export function decimalDisplayText(text: string, grouped: boolean): string {
+  const canonical = canonicalText(text);
+  if ('error' in canonical || !DECIMAL_TEXT.test(canonical.text)) return persianDigitsOf(text);
+  return persianNumberText(canonical.text, grouped);
+}
+
+/**
+ * آیا کادر `text` را از نو ساخته نشان می‌دهد (پس «٬»های نمایش از خود کادرند)؟ متن نامعتبر همان‌طور که تایپ شده دیده می‌شود و
+ * هر «٬» آن را کاربر زده است.
+ */
+export function decimalTextIsRebuilt(text: string): boolean {
+  const canonical = canonicalText(text);
+  return !('error' in canonical) && DECIMAL_TEXT.test(canonical.text);
+}
+
+/** خطای «٬» یا «,» که میان دسته‌های سه‌رقمی نیست؛ همان قاعدهٔ کادر عدد برای کادر مبلغ */
+export function groupSeparatorError(raw: string): string | undefined {
+  const canonical = canonicalText(raw);
+  return 'error' in canonical ? canonical.error : undefined;
 }
 
 /** پیام مرورگر برای متن نیمه‌کاره هنگام ارسال فرم */

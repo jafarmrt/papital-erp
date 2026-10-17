@@ -4,6 +4,8 @@
  * نگه می‌دارد و پیام می‌دهد، نه اینکه مبلغ را صفر کند. تعداد اعشار مجاز از `currencyScale` ارز می‌آید (ریال ۰، ارز ۲).
  */
 import { normalizeDecimalString } from './numericInput.js';
+import { persianNumberText } from './numberFieldDisplay.js';
+import { groupSeparatorError } from './decimalInputText.js';
 
 export interface AmountTextOptions {
   /** حداکثر رقم اعشار (`currencyScale`) */
@@ -21,8 +23,12 @@ const AMOUNT_TEXT = /^-?\d*(\.\d*)?$/;
 
 /** متن تایپ‌شده یا چسبانده‌شده را می‌خواند؛ ارقام فارسی و عربی، «٫» و جداکننده‌های هزارگان پذیرفته می‌شوند */
 export function readAmountText(raw: string, options: AmountTextOptions): AmountTextResult {
-  const text = normalizeDecimalString(String(raw ?? '').replace(CURRENCY_SUFFIX, ''));
+  const typed = String(raw ?? '').replace(CURRENCY_SUFFIX, '');
+  const text = normalizeDecimalString(typed);
   if (!AMOUNT_TEXT.test(text)) return { ok: false, error: 'مبلغ فقط رقم و ممیز می‌پذیرد' };
+  // v10.1.72 (TD-1288): «٬» یا «,» فقط میان دسته‌های سه‌رقمی؛ «۱۲٬۵» پیش‌تر صد و بیست و پنج خوانده می‌شد
+  const groupError = groupSeparatorError(typed);
+  if (groupError) return { ok: false, error: groupError };
   if (text.startsWith('-') && !options.allowNegative) return { ok: false, error: 'مبلغ منفی پذیرفته نیست' };
   const fraction = text.split('.')[1];
   if (fraction !== undefined && options.scale === 0) return { ok: false, error: 'این مبلغ اعشار ندارد' };
@@ -37,13 +43,13 @@ export function readAmountText(raw: string, options: AmountTextOptions): AmountT
   return { ok: true, text: clean, value: Number.isFinite(numeric) ? numeric : 0 };
 }
 
-/** متن پذیرفته‌شده با جداکننده هزارگان (کادر چپ‌به‌راست با ارقام لاتین) */
+/**
+ * متن پذیرفته‌شده برای نمایش در کادر مبلغ. v10.1.72 (TD-1288): ارقام فارسی، «٬» میان دسته‌های سه‌رقمی و ممیز «٫»
+ * (پیش‌تر ارقام لاتین و «,»)، با هر صفحه‌کلیدی که کاربر تایپ کند.
+ */
 export function groupAmountText(text: string): string {
   if (!text) return '';
-  const sign = text.startsWith('-') ? '-' : '';
-  const [intPart, frac] = text.replace('-', '').split('.');
-  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return sign + grouped + (frac !== undefined ? `.${frac}` : '');
+  return persianNumberText(text, true);
 }
 
 /** متن یک مقدار عددی برای کادر، بی گرد کردن و بی نماد علمی */

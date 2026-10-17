@@ -1,10 +1,8 @@
 import React, { useId } from 'react';
 import { PhoneCall, Video, MessageSquare, Mail, FileText, Clock, CheckCircle2 } from 'lucide-react';
-import DatePicker from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
 import { CRMLead, CRMActivity } from '../../types';
-import { getTodayJalaliDate, extractDateString, isoToJalaliDate, formatPersianDate } from '../../utils';
+import { getTodayJalaliDate, isoToJalaliDate, formatPersianDate } from '../../utils';
+import { JalaliDateInput } from '../common/JalaliDateInput';
 import { MentionTextarea } from '../MentionTextarea';
 import { DialogLayer } from '../common/DialogLayer';
 
@@ -202,17 +200,11 @@ export function CRMInteractionModal({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label htmlFor={`${fieldId}-get-today-jalali-date`} className="block text-xs font-bold text-slate-700 mb-1">تاریخ انجام این تماس / اقدام</label>
-                  <DatePicker
+                  <JalaliDateInput
                     id={`${fieldId}-get-today-jalali-date`}
-                    value={isoToJalaliDate(activityForm.activityDate) || getTodayJalaliDate()}
-                    onChange={(dateObj: any) => {
-                      setActivityForm({ ...activityForm, activityDate: extractDateString(dateObj) });
-                    }}
-                    calendar={persian}
-                    locale={persian_fa}
-                    calendarPosition="bottom-right"
-                    inputClass="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500 font-semibold text-slate-800"
-                    containerClassName="w-full"
+                    value={activityForm.activityDate || getTodayJalaliDate()}
+                    onChange={iso => setActivityForm({ ...activityForm, activityDate: isoToJalaliDate(iso) })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500 font-semibold text-slate-800"
                   />
                 </div>
 
@@ -259,17 +251,11 @@ export function CRMInteractionModal({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label htmlFor={`${fieldId}-next-follow-up-date`} className="block text-[11px] font-semibold text-amber-800 mb-1">تاریخ پیگیری بعدی</label>
-                    <DatePicker
+                    <JalaliDateInput
                       id={`${fieldId}-next-follow-up-date`}
-                      value={isoToJalaliDate(activityForm.nextFollowUpDate)}
-                      onChange={(dateObj: any) => {
-                        setActivityForm({ ...activityForm, nextFollowUpDate: extractDateString(dateObj) });
-                      }}
-                      calendar={persian}
-                      locale={persian_fa}
-                      calendarPosition="bottom-right"
-                      inputClass="w-full px-2.5 py-1.5 bg-white border border-amber-300 rounded-lg text-xs outline-none focus:border-amber-500 font-semibold text-slate-800"
-                      containerClassName="w-full"
+                      value={activityForm.nextFollowUpDate}
+                      onChange={iso => setActivityForm({ ...activityForm, nextFollowUpDate: isoToJalaliDate(iso) })}
+                      className="w-full px-2.5 py-1.5 bg-white border border-amber-300 rounded-lg text-xs outline-none focus:border-amber-500 font-semibold text-slate-800"
                     />
                   </div>
 

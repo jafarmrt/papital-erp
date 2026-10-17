@@ -107,7 +107,7 @@ export function StockItemPicker({ form, onItemSelect, onAddItem, onCreateItem }:
               step="any" 
               value={quantity} 
               onValueChange={(v) => setQuantity(v ? Number(v) : '')} 
-              placeholder="0"
+              placeholder="۰"
               className="w-full border border-slate-200 bg-white rounded-xl text-sm px-3 py-2 text-center font-mono font-bold focus:outline-none focus:ring-2 focus:ring-blue-500" 
               dir="ltr" 
             />
@@ -123,7 +123,7 @@ export function StockItemPicker({ form, onItemSelect, onAddItem, onCreateItem }:
                 step="any" 
                 value={unitPrice} 
                 onValueChange={(v) => setUnitPrice(v ? Number(v) : '')} 
-                placeholder={production ? 'خالی: میانگین موزون بها' : 'مثال: 100000'}
+                placeholder={production ? 'خالی: میانگین موزون بها' : 'مثال: ۱۰۰٬۰۰۰'}
                 className="w-full border border-slate-200 bg-white rounded-xl text-sm px-3 py-2 text-left font-mono font-bold focus:outline-none focus:ring-2 focus:ring-blue-500" 
                 dir="ltr" 
               />

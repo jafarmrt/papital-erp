@@ -36,7 +36,7 @@ describe('manual invoice service charge (TD-1136)', () => {
     expect(screen.getByText(SERVICE_CHARGE_LABEL)).toBeTruthy();
     expect(screen.getByRole('alert').textContent).toBe(SERVICE_CHARGE_INVALID);
     fireEvent.change(screen.getByRole('textbox'), { target: { value: '۵۰' } });
-    expect(value).toBe('۵۰');
+    expect(value).toBe('50');
   });
 
   it('sends the service charge with the invoice and blocks an invalid one', () => {

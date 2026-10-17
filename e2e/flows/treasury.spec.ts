@@ -23,7 +23,7 @@ const TEXT = {
   dueDateLabel: 'تاریخ سررسید *',
   customerPicker: 'جست‌وجو و انتخاب مشتری...',
   pickerSearch: 'جست‌وجو...',
-  amount: '50000000',
+  amount: '۵۰٬۰۰۰٬۰۰۰',
   chequeSubmit: 'ثبت قطعی چک',
   chequeCreated: 'چک با موفقیت در سامانه ثبت شد',
   chequeSearch: 'جست‌وجو در شماره چک، شناسه صیاد ۱۶ رقمی، طرف حساب یا بانک...',

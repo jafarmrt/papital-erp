@@ -34,6 +34,8 @@ const necklace = {
   current_stock: 0, reorder_point: 3, weighted_average_cost: 5000, deficit: 3, deficit_value: 15000, is_zero_stock: true,
 };
 const biStats = { monthlyTrends: [], fastMoving: [], slowMoving: [], deadStock: [] };
+// v10.1.72 (TD-1288): number fields show Persian digits and «٬» while typing
+const SHOWN_REORDER_POINT = '۱۰';
 
 function baseResponse(url: string, init?: RequestInitLike): unknown {
   const method = init?.method ?? 'GET';
@@ -100,7 +102,7 @@ describe('ReorderAlertsPage — React Query cache', () => {
     const listBefore = callsTo(REORDER_URL);
 
     fireEvent.click(screen.getAllByRole('button', { name: 'ویرایش نقطه' })[0]);
-    const input = screen.getByDisplayValue('10');
+    const input = screen.getByDisplayValue(SHOWN_REORDER_POINT);
     fireEvent.change(input, { target: { value: '12' } });
     fireEvent.click(screen.getByRole('button', { name: 'ذخیره تغییرات' }));
 

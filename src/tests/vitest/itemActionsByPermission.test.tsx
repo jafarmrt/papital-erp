@@ -26,6 +26,10 @@ vi.mock('../../hooks/useAppCurrency', () => ({ useAppCurrency: () => 'IRR', useR
 import ItemsPage from '../../pages/ItemsPage';
 import PricingPage from '../../pages/PricingPage';
 
+// v10.1.72 (TD-1288): number fields show Persian digits and «٬» while typing
+const SHOWN_PRICE_20 = '۲۰';
+const SHOWN_PRICE_1650000 = '۱٬۶۵۰٬۰۰۰';
+
 const item = {
   id: 11, type: 'product', code: '1404-N-101-01', name: 'گردنبند لوتوس', category: 'گردنبند', unit: 'عدد',
   current_stock: 4, reorder_point: 0, weighted_average_cost: 1500000, stocks: {}, version: 1,
@@ -124,12 +128,12 @@ describe('Pricing margin against the rial average cost (O10)', () => {
     await screen.findByText('گردنبند لوتوس');
     const input = await waitFor(() => {
       const el = screen.getAllByPlaceholderText('مبلغ')[0] as HTMLInputElement;
-      expect(el.value).toBe('20');
+      expect(el.value).toBe(SHOWN_PRICE_20);
       return el;
     });
     expect(screen.queryByText(/سود|زیان|سربرسر/)).toBeNull();
     screen.getByText('+۱۰٪').click();
-    await waitFor(() => expect(input.value).toBe('1650000'));
+    await waitFor(() => expect(input.value).toBe(SHOWN_PRICE_1650000));
     const currency = input.parentElement?.querySelector('select') as HTMLSelectElement;
     expect(currency.value).toBe('IRR');
     expect(screen.getByText(/۱۰٪ سود/)).toBeTruthy();

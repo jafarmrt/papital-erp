@@ -3,10 +3,8 @@ import {
   Calendar as CalendarIcon, Clock, UserCheck, TrendingUp, FileText, 
   Users, FileSpreadsheet, Printer, ChevronLeft, CalendarDays, X 
 } from 'lucide-react';
-import DatePicker from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
-import { formatPersianNumber, extractDateString, formatPersianDate, toPersianDigits } from '../../utils';
+import { formatPersianNumber, formatPersianDate, toPersianDigits, isoToJalaliDate } from '../../utils';
+import { JalaliDateInput } from '../common/JalaliDateInput';
 import { summaryYearOptions } from '../../lib/dailyLogs/summaryYears';
 import { workModeLabel } from '../../lib/dailyLogs/workMode';
 import { SimpleUserOption } from '../../hooks/useDailyLogs';
@@ -107,16 +105,12 @@ export function DailyLogSummaryView({
           {summaryMode === 'daily' ? (
             <div>
               <label htmlFor={`${fieldId}-summary-date-filter`} className="block text-[11px] font-bold text-slate-500 mb-1">انتخاب روز شمسی:</label>
-              <DatePicker
+              <JalaliDateInput
                 id={`${fieldId}-summary-date-filter`}
                 value={summaryDateFilter}
-                onChange={(dateObj: any) => {
-                  setSummaryDateFilter(extractDateString(dateObj));
-                }}
-                calendar={persian}
-                locale={persian_fa}
-                calendarPosition="bottom-right"
-                inputClass="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white text-slate-800 text-center font-bold"
+                onChange={iso => setSummaryDateFilter(isoToJalaliDate(iso))}
+                className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white text-slate-800 text-center font-bold"
+                containerClassName=""
               />
             </div>
           ) : (

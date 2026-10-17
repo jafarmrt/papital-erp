@@ -58,7 +58,7 @@ export const ItemWarehouseStockForm: React.FC<ItemWarehouseStockFormProps> = ({
                   }}
                   className="w-full border border-slate-300/80 rounded-xl px-2.5 py-1.5 text-xs font-mono text-left bg-white outline-none focus:ring-1 focus:ring-blue-500"
                   dir="ltr"
-                  placeholder="0"
+                  placeholder="۰"
                 />
               </div>
             ))}
@@ -99,7 +99,7 @@ export const ItemWarehouseStockForm: React.FC<ItemWarehouseStockFormProps> = ({
           showTomanEquivalent={true}
           showWordsBadge={true}
           allowCopyWords={false}
-          placeholder="0"
+          placeholder="۰"
           className="w-full"
         />
       </div>

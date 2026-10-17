@@ -748,7 +748,7 @@ export function SplitOrderModal({
                                     onChange={val => handleUpdateItemField(pkg.id, it.reqItemId, 'unitPrice', val)}
                                     currency="IRR"
                                     variant="table"
-                                    placeholder="0"
+                                    placeholder="۰"
                                     className="w-28 mx-auto"
                                     containerClassName="w-full border border-slate-300 rounded focus-within:ring-1 focus-within:ring-amber-500"
                                     inputClassName="p-1 text-center font-mono font-bold"
