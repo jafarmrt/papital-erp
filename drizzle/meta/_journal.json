@@ -862,6 +862,13 @@
       "when": 1795520000000,
       "tag": "0122_personnel_national_id_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1795606400000,
+      "tag": "0123_closing_permission_keys",
+      "breakpoints": true
     }
   ]
 }

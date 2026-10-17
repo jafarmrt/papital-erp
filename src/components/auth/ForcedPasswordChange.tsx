@@ -11,7 +11,7 @@ interface ForcedPasswordChangeProps {
 /**
  * v9.0.219 (TD-523، تصمیم ت۵ الف): کاربری که رمز موقت مدیر را دارد جز برگه تغییر رمز چیزی نمی‌بیند؛ منو، نوار بالا و
  * صفحه‌ها بار نمی‌شوند (سرور هم درخواست‌های دیگر را رد می‌کند). پس از تغییر رمز، `onUserUpdate` کاربر را بی پرچم
- * برمی‌گرداند و برنامه باز می‌شود؛ تنها راه دیگر «خروج» است.
+ * برمی‌گرداند و برنامه باز می‌شود؛ تنها راه دیگر «خروج از همهٔ دستگاه‌ها» است.
  */
 export function ForcedPasswordChange({ user, onLogout, onUserUpdate, roleName }: ForcedPasswordChangeProps) {
   return (

@@ -4,7 +4,5 @@
     "src/pages/SetupPage.tsx": 1
   },
   "uncataloguedPermissionKeys": [],
-  "uncheckedCatalogKeys": [
-    "audit.create"
-  ]
+  "uncheckedCatalogKeys": []
 }

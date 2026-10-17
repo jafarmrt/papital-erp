@@ -14,7 +14,7 @@ export const LOGIN_TEXT = {
   username: 'نام کاربری',
   password: 'کلمه عبور',
   submit: 'ورود به سیستم',
-  signedIn: 'خروج از حساب',
+  signedIn: 'خروج از همهٔ دستگاه‌ها',
 } as const;
 
 export type Json = Record<string, unknown>;

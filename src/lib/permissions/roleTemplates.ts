@@ -24,8 +24,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     permissions: [
       'products.view', 'products.create', 'products.edit', 'products.edit_price', 'products.delete', 'warehouse.view',
       'warehouse.in', 'warehouse.out', 'warehouse.transfer', 'inventory.reconcile', 'documents.view', 'documents.create',
-      'documents.finalize', 'documents.edit', 'documents.delete', 'audit.view', 'audit.create', 'audit.apply',
-      'customers.view', 'customers.manage', 'crm.view', 'crm.manage', 'crm.delete', 'reports.view', 'reports.sales', 'reports.purchases',
+      'documents.finalize', 'documents.edit', 'documents.delete', 'audit.view', 'audit.apply',
+      'customers.view', 'customers.manage', 'customers.delete', 'crm.view', 'crm.manage', 'crm.delete', 'reports.view', 'reports.sales', 'reports.purchases',
       'projects.view', 'projects.create', 'projects.edit', 'projects.delete', 'workflow.view', 'workflow.approve',
       'workflow.manage', 'events.view', 'events.manage', 'daily_logs.view', 'daily_logs.create', 'daily_logs.manage_all',
       'personnel.view', 'personnel.manage', 'piecework.view', 'piecework.manage_tasks', 'piecework.log', 'piecework.payroll', 'piecework.payroll_approve',
@@ -42,7 +42,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     permissions: [
       'accounting.view', 'accounting.vouchers', 'accounting.vouchers_approve', 'accounting.coa', 'accounting.treasury', 'accounting.cheques', 'accounting.reports',
       'products.view', 'products.edit_price', 'documents.view', 'documents.create', 'documents.edit', 'documents.delete',
-      'documents.finalize', 'customers.view', 'customers.manage', 'workflow.view', 'workflow.approve', 'events.view',
+      'documents.finalize', 'customers.view', 'customers.manage', 'customers.delete', 'workflow.view', 'workflow.approve', 'events.view',
       'personnel.view', 'piecework.view', 'piecework.payroll', 'piecework.payroll_approve', 'daily_logs.view', 'daily_logs.create', 'reports.view',
       'reports.sales', 'reports.purchases', 'audit_logs.view',
     ],
@@ -54,7 +54,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     permissions: [
       'products.view', 'products.create', 'products.edit', 'warehouse.view', 'warehouse.in', 'warehouse.out',
       'warehouse.transfer', 'inventory.reconcile', 'documents.view', 'documents.edit', 'documents.finalize', 'audit.view',
-      'audit.create', 'audit.apply', 'pending_materials.view', 'pending_materials.create', 'pending_materials.approve', 'workflow.view', 'workflow.approve',
+      'audit.apply', 'pending_materials.view', 'pending_materials.create', 'pending_materials.approve', 'workflow.view', 'workflow.approve',
       'workflow.execute', 'customers.view', 'projects.view', 'projects.edit', 'daily_logs.view', 'daily_logs.create',
       'media.view', 'media.upload', 'procurement.view', 'procurement.manage',
     ],
@@ -65,7 +65,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     description: 'مدیریت اسناد دوبل، کدینگ، فاکتورهای فروش، خزانه‌داری و صدور چک و صورت‌های مالی',
     permissions: [
       'products.view', 'products.edit_price', 'warehouse.view', 'documents.view', 'documents.create', 'documents.edit',
-      'documents.delete', 'documents.finalize', 'customers.view', 'customers.manage', 'workflow.view', 'workflow.approve',
+      'documents.delete', 'documents.finalize', 'customers.view', 'customers.manage', 'customers.delete', 'workflow.view', 'workflow.approve',
       'crm.view', 'reports.view', 'projects.view', 'accounting.view', 'accounting.vouchers', 'accounting.coa',
       'accounting.treasury', 'accounting.cheques', 'accounting.reports', 'daily_logs.view', 'daily_logs.create',
     ],
@@ -97,7 +97,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     description: 'صدور فاکتور و پیش‌فاکتور فروش، ثبت مشتریان و مشاهده موجودی کالاها',
     permissions: [
       'products.view', 'warehouse.view', 'documents.view', 'documents.create', 'documents.edit', 'customers.view',
-      'customers.manage', 'workflow.view', 'workflow.approve', 'crm.view', 'crm.manage', 'reports.view', 'reports.sales',
+      'customers.manage', 'customers.delete', 'workflow.view', 'workflow.approve', 'crm.view', 'crm.manage', 'reports.view', 'reports.sales',
       'projects.view', 'daily_logs.view', 'daily_logs.create', 'media.view',
     ],
   },
@@ -106,7 +106,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     name: 'ناظر انبارگردانی',
     description: 'ایجاد دوره‌های انبارگردانی، ثبت شمارش عینی و کنترل و اعمال مغایرت‌ها',
     permissions: [
-      'products.view', 'warehouse.view', 'inventory.reconcile', 'audit.view', 'audit.create', 'audit.apply',
+      'products.view', 'warehouse.view', 'inventory.reconcile', 'audit.view', 'audit.apply',
       'workflow.view', 'projects.view', 'daily_logs.view', 'daily_logs.create',
     ],
   },
@@ -134,7 +134,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     permissions: [
       'procurement.view', 'procurement.create', 'procurement.manage', 'procurement.order', 'procurement.approve', 'products.view',
       'products.edit_price', 'warehouse.view', 'documents.view', 'documents.create', 'documents.edit',
-      'customers.view', 'customers.manage', 'projects.view', 'workflow.view', 'workflow.approve', 'daily_logs.view',
+      'customers.view', 'customers.manage', 'customers.delete', 'projects.view', 'workflow.view', 'workflow.approve', 'daily_logs.view',
       'daily_logs.create', 'reports.purchases',
     ],
   },
@@ -143,7 +143,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     name: 'کارشناس فروش و ارتباط با مشتری',
     description: 'مدیریت مشتریان، پرونده‌های فروش، پیش‌فاکتورها و مشاهده سفارش‌های فروشگاه اینترنتی',
     permissions: [
-      'crm.view', 'crm.manage', 'customers.view', 'customers.manage', 'documents.view', 'documents.create',
+      'crm.view', 'crm.manage', 'customers.view', 'customers.manage', 'customers.delete', 'documents.view', 'documents.create',
       'documents.edit', 'woocommerce.view', 'media.view', 'workflow.view', 'workflow.execute', 'daily_logs.view',
       'daily_logs.create',
     ],

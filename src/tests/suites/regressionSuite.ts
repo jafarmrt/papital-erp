@@ -11123,5 +11123,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runClosingIntegrationGuardTests } = await import('../regression/closingIntegrationGuardTests.js');
   results.push(...await runClosingIntegrationGuardTests(shouldRun));
 
+  // closing sweep: customers.delete and audit.create removed (OBS-R1-41, OBS-PR-13, ت۴۰)
+  const { runClosingPermissionKeysTests } = await import('../regression/closingPermissionKeysTests.js');
+  results.push(...await runClosingPermissionKeysTests(shouldRun));
+
   return results;
 }
