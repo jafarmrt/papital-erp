@@ -40,7 +40,10 @@ export async function findUnknownPermissionActions(db: DbExecutor): Promise<Unkn
   const liveRows = live
     .map(r => ({ ...r, code: r.code ?? '', title: r.title ?? '', transitionTitle: r.transitionTitle ?? '', requiredPermission: (r.requiredPermission ?? '').trim() }))
     .filter(r => isUnknownPermission(r.requiredPermission));
-  const published = (await Promise.all(WORKFLOW_ENTITY_TYPES.map(t => publishedWorkflowActions(db, t.id)))).flat()
+  // one query at a time: `db` may be a transaction, which runs a single query at once (TD-1279)
+  const publishedByType = [];
+  for (const t of WORKFLOW_ENTITY_TYPES) publishedByType.push(await publishedWorkflowActions(db, t.id));
+  const published = publishedByType.flat()
     .filter(a => isUnknownPermission(a.requiredPermission))
     .map(a => ({ definitionId: a.definitionId, code: a.code, title: a.title, transitionId: a.transitionId, transitionTitle: a.transitionTitle, requiredPermission: a.requiredPermission.trim(), stableKey: a.stableKey }));
   return mergeWorkflowActionRows(liveRows, published);
