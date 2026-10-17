@@ -15,6 +15,8 @@ describe('OBS-R1-26 drizzle-kit guard', () => {
     }
     expect(drizzleKitCommandRefusal(kit('studio'))).toBeNull();
     expect(drizzleKitCommandRefusal(kit('check'))).toBeNull();
+    // v10.1.66: `export` only prints the schema's SQL
+    expect(drizzleKitCommandRefusal(kit('export'))).toBeNull();
     expect(drizzleKitCommandRefusal(['node', 'server.ts'])).toBeNull();
   });
 
