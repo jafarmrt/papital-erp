@@ -25,7 +25,7 @@ describe('RuleEditorModal — trigger event types (TD-726)', () => {
     const { container } = renderEditor(null);
     const options = [...eventSelect(container).options];
     expect(options.map(o => o.value).sort()).toEqual([ALL_EVENTS_PATTERN, ...PUBLISHED_EVENT_TYPES.map(t => t.value)].sort());
-    for (const unpublished of ['InvoiceCancelled', 'ChequeStatusChanged', 'ProjectStageCompleted', 'CustomerCreated']) {
+    for (const unpublished of ['InvoiceCancelled', 'ChequeTeleported', 'ProjectStageCompleted', 'CustomerCreated']) {
       expect(options.some(o => o.value === unpublished)).toBe(false);
     }
     for (const option of options) expect(option.textContent).toMatch(/[؀-ۿ]/);

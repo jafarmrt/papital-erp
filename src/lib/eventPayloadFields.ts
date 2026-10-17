@@ -1,6 +1,8 @@
 import type {
+  ChequeEventPayload,
   InventoryReorderAlertPayload,
   InvoiceEventPayload,
+  PayrollEventPayload,
   PurchaseEventPayload,
   StockMovementEventPayload,
   TreasuryEventPayload,
@@ -73,6 +75,37 @@ const TREASURY_LABELS: Record<keyof TreasuryEventPayload, string> = {
   sayadNumber: 'شماره صیادی',
 };
 
+// OBS-R2-13 (ت۴۰): cheque status change and payslip approval and payment
+const CHEQUE_LABELS: Record<keyof ChequeEventPayload, string> = {
+  chequeId: 'شناسه چک',
+  chequeNumber: 'شماره چک',
+  sayadNumber: 'شماره صیادی',
+  chequeType: 'نوع چک (دریافتی یا پرداختی)',
+  previousStatus: 'وضعیت پیشین',
+  newStatus: 'وضعیت تازه',
+  newStatusLabel: 'نام وضعیت تازه',
+  amount: 'مبلغ',
+  currency: 'ارز',
+  dueDate: 'تاریخ سررسید',
+  actionDate: 'تاریخ اقدام',
+  bankAccountId: 'شناسه حساب بانکی',
+  partyType: 'نوع طرف حساب',
+  partyId: 'شناسه طرف حساب',
+  partyName: 'نام طرف حساب',
+  voucherIds: 'شناسه سندهای صادرشده',
+};
+
+const PAYROLL_LABELS: Record<keyof PayrollEventPayload, string> = {
+  payrollId: 'شناسه فیش',
+  payrollNumber: 'شماره فیش',
+  personnelId: 'شناسه پرسنل',
+  startDate: 'آغاز دوره',
+  endDate: 'پایان دوره',
+  status: 'وضعیت فیش',
+  transactionId: 'شناسه تراکنش خزانه',
+  isFullyPaid: 'تسویه کامل',
+};
+
 const WORKFLOW_LABELS: Record<keyof WorkflowEventPayload, string> = {
   instanceId: 'شناسه فرایند',
   workflowCode: 'کد گردش کار',
@@ -131,6 +164,9 @@ const PAYLOAD_LABELS_BY_EVENT: Record<string, Record<string, string>> = {
   StockAdjusted: STOCK_LABELS,
   InventoryReorderAlert: REORDER_LABELS,
   TreasuryTransactionApproved: TREASURY_LABELS,
+  ChequeStatusChanged: CHEQUE_LABELS,
+  PayrollApproved: PAYROLL_LABELS,
+  PayrollPaid: PAYROLL_LABELS,
   WorkflowTransitioned: WORKFLOW_LABELS,
   WorkflowCompleted: WORKFLOW_LABELS,
   WorkflowRejected: WORKFLOW_LABELS,

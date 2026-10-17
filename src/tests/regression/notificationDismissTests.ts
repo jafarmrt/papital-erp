@@ -72,7 +72,8 @@ export async function runNotificationDismissTests(shouldRun: (id: string, ...ext
     const unreadAfter = await unread();
     if (unreadAfter !== unreadBefore - 1) wrong.push(`unread count after dismissal is ${unreadAfter}, expected ${unreadBefore - 1}`);
 
-    // 4) the next bell requests do not bring it back
+    // 4) the next bell requests do not bring it back, even when the hourly scan is due again (OBS-R2-85)
+    (await import('../../services/notifications/crmDueReminders.js')).forgetCrmReminderScan(owner.userId);
     await Promise.all([h.get('/api/notifications', owner), h.get('/api/notifications/unread-count', owner)]);
     const again = await reminderRows();
     if (again.length !== 1) wrong.push(`after dismissal the bell made the reminder again (${again.length} rows)`);

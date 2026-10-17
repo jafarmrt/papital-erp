@@ -22,7 +22,7 @@ describe('event payload fields of the rule editor (TD-713)', () => {
   });
 
   it('offers no payload field for a type nothing publishes', () => {
-    for (const type of ['InvoiceCancelled', 'PurchaseReceived', 'ChequeStatusChanged', 'WorkflowApprovalProgress']) {
+    for (const type of ['InvoiceCancelled', 'PurchaseReceived', 'ChequeTeleported', 'WorkflowApprovalProgress']) {
       expect(eventFieldOptions(type)).toEqual(COMMON_EVENT_FIELDS);
     }
   });

@@ -23,6 +23,9 @@ import { assertPersonnelPartyId, resolveTreasuryPartyName } from './treasuryLink
 import { chequePartyPosting, requireChequePartyAccount, resolveChequePartyAccountId } from './chequePartyAccount.js';
 import { activeChequeVoucherIds, auditChequeDelete, auditChequeStatusChange, type ChequeAuditActor } from './chequeAudit.js';
 import { auditChequeCreated } from './treasuryAudit.js';
+import { domainEventBus } from '../../events/domainEventBus.js';
+import { DomainEventType, type ChequeEventPayload } from '../../events/domainEvents.js';
+import { OutboxService } from '../../events/outboxService.js';
 
 // v9.0.69: جدول انتقال وضعیت چک در `src/lib/treasury/chequeTransitions.ts` است و مرورگر هم همان را می‌خواند
 export { CHEQUE_TRANSITIONS };
@@ -784,6 +787,28 @@ export class ChequeLifecycleService {
 
       const issuedVoucherIds = (await activeChequeVoucherIds(txEngine, id)).filter(v => !vouchersBefore.has(v));
       await auditChequeStatusChange(txEngine, data.audit, existing, updated, issuedVoucherIds);
+      // OBS-R2-13 (ت۴۰ بند ۱۱): قانون‌ها و وب‌هوک‌ها تغییر وضعیت چک را از صف رویداد در همین تراکنش می‌شنوند
+      await OutboxService.saveToOutbox(txEngine, domainEventBus.createEvent<ChequeEventPayload>(
+        DomainEventType.CHEQUE_STATUS_CHANGED, 'Cheque', String(updated.id), {
+          chequeId: updated.id,
+          chequeNumber: updated.chequeNumber,
+          sayadNumber: updated.sayadNumber || '',
+          chequeType: updated.type === 'paid' ? 'paid' : 'received',
+          previousStatus: existing.status || '',
+          newStatus: data.status,
+          newStatusLabel: chequeStatusLabel(data.status),
+          amount: updated.amount.toNumber(),
+          currency: updated.currency || 'IRR',
+          dueDate: updated.dueDate,
+          actionDate: voucherIsoDate,
+          bankAccountId: updated.bankAccountId ?? null,
+          partyType: updated.partyType || 'customer',
+          partyId: updated.partyId ?? null,
+          partyName: updated.partyName,
+          voucherIds: issuedVoucherIds,
+        },
+        { userId: data.userId, userName: data.username },
+      ));
 
       return {
         ...updated,

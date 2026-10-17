@@ -7329,10 +7329,14 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       // ۴) یادآوری: پیگیری آینده سررسید اعلام نمی‌شود؛ پیگیری گذشته اعلام می‌شود و تاریخ پیام شمسی است
       const link = `/crm?activityId=${created.body.id}`;
       const dueNotifs = async () => orm.select().from(notifications).where(and(eq(notifications.link, link), eq(notifications.type, 'crm_due_task')));
+      // v10.1.62 (OBS-R2-85): the bell scans follow-ups at most once an hour per user; each check here scans afresh
+      const { forgetCrmReminderScan } = await import('../../services/notifications/crmDueReminders.js');
+      forgetCrmReminderScan();
       await request(app).get('/api/notifications').set('Cookie', session.cookie);
       if ((await dueNotifs()).length > 0) violations.push('a follow-up 20 days ahead was reported due today');
       const pastIso = shiftIso(-1);
       await orm.update(crmActivities).set({ nextFollowUpDate: pastIso, nextFollowUpDateIso: pastIso }).where(eq(crmActivities.id, created.body.id));
+      forgetCrmReminderScan();
       await request(app).get('/api/notifications').set('Cookie', session.cookie);
       const due = await dueNotifs();
       // اعلان «تسک جدید» همین پیوند را دارد و نباید جلوی یادآوری سررسید را بگیرد
@@ -10877,6 +10881,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runDeadLetterEditRetryTests(shouldRun));
   const { runCrmDueReminderTests } = await import('../regression/crmDueReminderTests.js');
   results.push(...await runCrmDueReminderTests(shouldRun));
+  const { runCrmReminderThrottleTests } = await import('../regression/crmReminderThrottleTests.js');
+  results.push(...await runCrmReminderThrottleTests(shouldRun));
   const { runNotificationDismissTests } = await import('../regression/notificationDismissTests.js');
   results.push(...await runNotificationDismissTests(shouldRun));
   const { runNotificationReadScopeTests } = await import('../regression/notificationReadScopeTests.js');
@@ -11069,6 +11075,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Phase 3 lane L1, package A7 (v10.0.259): payroll payment void event and audit, «my payslips» paid amount, personnel id on treasury rows
   const { runPayrollHygieneA7Tests } = await import('../regression/payrollHygieneA7Tests.js');
   results.push(...await runPayrollHygieneA7Tests(shouldRun));
+  // v10.1.62 closing sweep (ت۴۰ item 11, OBS-R2-13): cheque status and payslip approval / payment domain events
+  const { runClosingDomainEventsTests } = await import('../regression/closingDomainEventsTests.js');
+  results.push(...await runClosingDomainEventsTests(shouldRun));
   // Phase 3 lane L1, package A8 (v10.0.262): treasury audit inside the write's transaction, no general account fallback
   const { runTreasuryAuditA8Tests } = await import('../regression/treasuryAuditA8Tests.js');
   results.push(...await runTreasuryAuditA8Tests(shouldRun));
