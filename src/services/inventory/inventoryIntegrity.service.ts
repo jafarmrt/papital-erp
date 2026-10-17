@@ -17,7 +17,6 @@ import type { NegativeStockPolicyType } from './negativeStockPolicy.service.js';
 import {
   ProjectBomAllocationService,
   type BomAllocationItemInput,
-  type BomReceiptAllocationInput,
   type ProjectBomAllocationRecord
 } from './projectBomAllocation.service.js';
 import type { DbExecutor } from '../../db/drizzle.js';
@@ -31,7 +30,6 @@ export type {
   RunningKardexResponse,
   NegativeStockPolicyType,
   BomAllocationItemInput,
-  BomReceiptAllocationInput,
   ProjectBomAllocationRecord,
   KardexRebuildOptions
 };
@@ -113,18 +111,6 @@ export class InventoryIntegrityService {
     auditReq?: unknown;
   }) {
     return ProjectBomAllocationService.allocateMaterialsForProject(params);
-  }
-
-  static async allocateReceiptItemsForProjectBom(params: {
-    projectId: number;
-    allocations: BomReceiptAllocationInput[];
-    recipientPersonnelId?: number | null;
-    userId?: number;
-    username?: string;
-    externalTx?: DbExecutor;
-    auditReq?: unknown;
-  }) {
-    return ProjectBomAllocationService.allocateReceiptItemsForProjectBom(params);
   }
 
   static async consumeAllocation(allocationId: number, opts?: { userId?: number; username?: string; externalTx?: DbExecutor; auditReq?: unknown }) {

@@ -1,4 +1,5 @@
 import type { VoucherSourceKind } from '../lib/accounting/voucherSource';
+import type { BankSyncStatus } from '../lib/treasury/bankSyncStatus';
 export type AccountLevel = 'group' | 'general' | 'subsidiary' | 'detailed';
 export type AccountType = 'asset' | 'liability' | 'equity' | 'revenue' | 'expense' | 'cost_of_sales';
 export type AccountNature = 'debit' | 'credit' | 'both';
@@ -164,7 +165,7 @@ export interface BankAccount {
   totalDebit?: number;
   totalCredit?: number;
   discrepancy?: number;
-  syncStatus?: 'synced' | 'discrepant' | 'unlinked';
+  syncStatus?: BankSyncStatus;
   currency?: string | null;
   accountId?: number | null;
   account_id?: number | null;
@@ -182,6 +183,8 @@ export interface BankAccount {
 export interface BankReconciliationReport {
   syncedCount: number;
   discrepantCount: number;
+  /** v10.1.63 (OBS-PR-11) */
+  pendingApprovalCount?: number;
   unlinkedCount: number;
   totalCashAndBankLedger: number;
   totalCashAndBankTreasury: number;
@@ -200,7 +203,7 @@ export interface BankReconciliationReport {
     totalDebit: number;
     totalCredit: number;
     discrepancy: number;
-    syncStatus: 'synced' | 'discrepant' | 'unlinked';
+    syncStatus: BankSyncStatus;
     notes?: string;
   }[];
 }

@@ -10883,6 +10883,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runCrmDueReminderTests(shouldRun));
   const { runCrmReminderThrottleTests } = await import('../regression/crmReminderThrottleTests.js');
   results.push(...await runCrmReminderThrottleTests(shouldRun));
+  const { runBankPendingApprovalTests } = await import('../regression/bankPendingApprovalTests.js');
+  results.push(...await runBankPendingApprovalTests(shouldRun));
   const { runNotificationDismissTests } = await import('../regression/notificationDismissTests.js');
   results.push(...await runNotificationDismissTests(shouldRun));
   const { runNotificationReadScopeTests } = await import('../regression/notificationReadScopeTests.js');

@@ -31,15 +31,6 @@ export interface BomAllocationItemInput {
   notes?: string;
 }
 
-export interface BomReceiptAllocationInput {
-  receiptTransactionId?: number;
-  documentId?: number;
-  itemId: number;
-  quantity: number;
-  location?: string;
-  notes?: string;
-}
-
 export interface ProjectBomAllocationRecord {
   id: number;
   projectId: number;
@@ -224,7 +215,7 @@ async function recordAllocation(txEngine: DbExecutor, params: {
   location: string;
   sourceTransactionId: number | null;
   notes: string;
-  action: 'ALLOCATED' | 'RECEIPT_ALLOCATED';
+  action: 'ALLOCATED';
   operator: AllocationOperator;
   recipientPersonnelId: number | null;
 }): Promise<ProjectBomAllocationRecord> {
@@ -321,93 +312,6 @@ async function listAllocations(conditions: SQL[]): Promise<ProjectBomAllocationR
  * یک بار نوشته شده‌اند؛ هر مسیر فقط حرکت انبار خودش را دارد.
  */
 export class ProjectBomAllocationService {
-  /**
-   * Allocates raw materials received via receiving/purchase transactions directly to a project BOM.
-   * Creates explicit allocation records linked to the receiving transaction.
-   */
-  static async allocateReceiptItemsForProjectBom(params: {
-    projectId: number;
-    allocations: BomReceiptAllocationInput[];
-    /** v10.1.37 (N-01, TD-1283): the personnel who receives the materials */
-    recipientPersonnelId?: number | null;
-    userId?: number;
-    username?: string;
-    externalTx?: DbExecutor;
-    auditReq?: unknown;
-  }): Promise<{
-    allocatedCount: number;
-    allocations: ProjectBomAllocationRecord[];
-  }> {
-    const operator = operatorOf(params.userId, params.username);
-
-    return inTransaction(params.externalTx, async (txEngine) => {
-      const { project, defaultWh } = await lockProjectForAllocation(txEngine, params.projectId, params.allocations.map(a => a.itemId));
-      await assertAllocationWithinSellable(txEngine, project.id, defaultWh, params.allocations);
-      const recipientPersonnelId = await liveAllocationRecipient(txEngine, params.recipientPersonnelId);
-      const results: ProjectBomAllocationRecord[] = [];
-
-      for (const req of params.allocations) {
-        const qty = fin(req.quantity).toNumber();
-        if (qty <= 0) continue;
-
-        const targetLocation = req.location || defaultWh;
-        const item = await lockActiveItem(txEngine, req.itemId);
-
-        // v8.0.32 (TD-287، تصمیم مالک محصول — گزینه الف): مواد فقط با رسید خرید وارد انبار می‌شوند و سپس تخصیص می‌یابند.
-        // پیش‌تر بی‌رسید یک حرکت «ورود» بی‌تأمین‌کننده و بی‌سند حسابداری ساخته می‌شد (موجودی از هیچ)، و تخصیصِ رسیدِ ثبت‌شده
-        // موجودی را از انبار برنمی‌داشت در حالی که آزادسازی آن دوباره به انبار اضافه می‌کرد. اکنون رسید ثبت‌شده همین کالا الزامی
-        // است و تخصیص مانند تخصیص عادی مواد را از انبار خارج می‌کند (آزادسازی و مصرف یکسان رفتار می‌کنند).
-        const receiptConditions = req.receiptTransactionId
-          ? [eq(transactions.id, req.receiptTransactionId)]
-          : req.documentId ? [eq(transactions.documentId, req.documentId), eq(transactions.itemId, item.id)] : null;
-        const [receipt] = receiptConditions
-          ? await txEngine.select({ id: transactions.id, itemId: transactions.itemId, type: transactions.type, documentRef: transactions.documentRef })
-            .from(transactions)
-            .where(and(...receiptConditions, eq(transactions.type, 'in'), eq(transactions.isDeleted, 0)))
-            .limit(1)
-          : [];
-        if (!receipt || receipt.itemId !== item.id) {
-          throw new ValidationError(
-            `تخصیص از رسید برای «${item.name}» فقط با رسید ثبت‌شده همین کالا ممکن است؛ مواد را ابتدا با رسید خرید وارد انبار کنید و سپس به پروژه تخصیص دهید.`
-          );
-        }
-
-        const stockResult = await DocumentService.applyStockMovement(txEngine, {
-          itemId: item.id,
-          inOut: 'out',
-          quantity: qty,
-          price: allocationUnitPrice(item),
-          date: await businessTodayIsoDate(),
-          documentType: 'تخصیص مواد BOM',
-          documentRef: `پروژه ${project.projectCode}`,
-          user: operator.name,
-          targetLoc: targetLocation,
-          notes: req.notes || `تخصیص از رسید ${receipt.documentRef || receipt.id} به پروژه ${project.title} (${project.projectCode})`,
-        });
-        const resolvedTxId: number | null = stockResult.transactionId;
-
-        const record = await recordAllocation(txEngine, {
-          project,
-          item,
-          quantity: qty,
-          location: targetLocation,
-          sourceTransactionId: resolvedTxId,
-          notes: req.notes || `تخصیص از محل رسید خرید/انبار به پروژه ${project.projectCode}`,
-          action: 'RECEIPT_ALLOCATED',
-          operator,
-          recipientPersonnelId,
-        });
-        await postAllocationVoucher(txEngine, record, project, item, operator);
-        await deductProjectReservation(txEngine, project, record, operator);
-        results.push(record);
-      }
-
-      const result = { allocatedCount: results.length, allocations: results };
-      await logBomAllocation(txEngine, { req: params.auditReq, userId: params.userId, username: params.username }, project.id, result);
-      return result;
-    });
-  }
-
   /**
    * Allocates raw materials / parts to a production project.
    * Atomically:

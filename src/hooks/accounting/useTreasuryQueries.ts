@@ -2,7 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { toast } from 'react-hot-toast';
 import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
-import { errorMessageOf, safeExtractArray } from '../../utils';
+import { errorMessageOf, formatPersianNumber, safeExtractArray } from '../../utils';
 import type { BankAccount, BankAccountOption, BankReconciliationReport, TreasuryTransaction } from '../../types';
 import { ACCOUNTING_LIST_QUERY_OPTIONS, fetchAccountingList, silentMutationError } from './accountingQueryConfig';
 import { invalidateAfterReconciliation, invalidateAfterTreasuryChange } from './accountingInvalidation';
@@ -141,10 +141,13 @@ export interface ReconcileVariables {
 // v8.0.74 (TD-340، تصمیم مالک محصول): مانده از تراکنش‌ها ساخته می‌شود و اختلاف با دفتر کل فقط گزارش می‌شود
 function notifyBankSync(report: BankReconciliationReport): void {
   const { syncedCount, discrepantCount } = report;
+  // v10.1.63 (OBS-PR-11): an account that only waits for its draft vouchers is named apart, not as a discrepancy
+  const pending = report.pendingApprovalCount ?? 0;
+  const pendingNote = pending > 0 ? ` ${formatPersianNumber(pending)} حساب فقط در انتظار تأیید سند است.` : '';
   if (discrepantCount === 0) {
-    toast.success(`مانده ${syncedCount} حساب بانکی و صندوق از تراکنش‌ها ساخته شد و با دفتر کل یکی است.`);
+    toast.success(`مانده ${formatPersianNumber(syncedCount)} حساب بانکی و صندوق از تراکنش‌ها ساخته شد و با دفتر کل یکی است.${pendingNote}`);
   } else {
-    toast(`مانده حساب‌ها از تراکنش‌ها ساخته شد: ${syncedCount} حساب با دفتر کل یکی است و ${discrepantCount} حساب با دفتر کل اختلاف دارد (فقط گزارش شد).`, {
+    toast(`مانده حساب‌ها از تراکنش‌ها ساخته شد: ${formatPersianNumber(syncedCount)} حساب با دفتر کل یکی است و ${formatPersianNumber(discrepantCount)} حساب با دفتر کل اختلاف دارد (فقط گزارش شد).${pendingNote}`, {
       icon: '⚠️',
       duration: 5000,
     });

@@ -272,7 +272,7 @@ export default function ProjectsPage() {
             }`}
           >
             <LayoutGrid className="w-3.5 h-3.5" />
-            تخته کانبان
+            نمای ستونی
           </button>
 
           <button
