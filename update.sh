@@ -134,6 +134,16 @@ if [ "$NODE_MAJOR" -lt 24 ]; then
   warn "Node.js $(node -v 2>/dev/null || echo 'not found') is older than 24; install Node.js 24 (see install.sh) before the next update."
 fi
 
+# v10.1.67 (TD-1286): without ERP_SECRETS_KEY every new WooCommerce key, bot token or webhook key is refused (503), and
+# only install.sh used to add it; add the generated secrets .env lacks (existing values are never changed)
+if [ -z "$(env_file_value ERP_SECRETS_KEY)" ]; then
+  if bash "$APP_DIR/scripts/ensure-env-secrets.sh" "$APP_DIR/.env" && [ -n "$(env_file_value ERP_SECRETS_KEY)" ]; then
+    warn "ERP_SECRETS_KEY was missing and has been added to .env; keep a copy of it off this server. If secrets were encrypted with an earlier key, put that key back instead."
+  else
+    warn "ERP_SECRETS_KEY is not set in .env and could not be added; new secrets are refused until it is set."
+  fi
+fi
+
 # ---------- 1) Pre-update database backup ----------
 PREVIOUS_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || true)"
 PRE_DEPLOY_DUMP=""
