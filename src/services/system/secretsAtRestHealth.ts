@@ -1,7 +1,7 @@
 import { inArray, notLike } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { appSettings, personnel, users, webhookSubscriptions } from '../../db/schema.js';
-import { decryptSecret, isEncryptedSecret } from '../../lib/secretBox.js';
+import { appSettings, eventActionRules, personnel, users, webhookSubscriptions } from '../../db/schema.js';
+import { decryptSecret, isEncryptedSecret, isSecretsKeyConfigured } from '../../lib/secretBox.js';
 import { startsWithLikePattern } from '../../lib/sqlLike.js';
 import type { HealthCheckTestResult } from '../../types/accounting.types.js';
 import { isBcryptHash } from '../auth/loginSecurity.service.js';
@@ -20,6 +20,8 @@ export interface SecretsAtRestCounts {
   unreadable: number;
   /** users (deleted ones too) whose stored password is not a bcrypt hash and is not locked yet */
   nonBcryptPasswords: number;
+  /** whether ERP_SECRETS_KEY is set on this server (missing = treated as set, for older callers) */
+  keyConfigured?: boolean;
 }
 
 function tally(value: unknown, counts: { plain: number; unreadable: number }): void {
@@ -36,6 +38,7 @@ export async function countSecretsAtRest(): Promise<SecretsAtRestCounts> {
   const personnelRows = await orm.select({ value: personnel.nobitexPassword }).from(personnel);
   const settingRows = await orm.select({ value: appSettings.value }).from(appSettings).where(inArray(appSettings.key, [...ENCRYPTED_SETTING_KEYS]));
   const webhookRows = await orm.select({ secretKey: webhookSubscriptions.secretKey, customHeaders: webhookSubscriptions.customHeaders }).from(webhookSubscriptions);
+  const ruleRows = await orm.select({ config: eventActionRules.actionConfigJson }).from(eventActionRules);
   const passwordRows = await orm.select({ password: users.password }).from(users)
     .where(notLike(users.password, startsWithLikePattern(PLAIN_PASSWORD_LOCK_MARKER)));
 
@@ -50,10 +53,18 @@ export async function countSecretsAtRest(): Promise<SecretsAtRestCounts> {
       ? Object.values(row.customHeaders as Record<string, unknown>) : [];
     headers.forEach(h => tally(h, w));
   }
+  // OBS-PR-07 (ت۴۰): an action rule's webhook token and header values count with the webhooks
+  for (const { config } of ruleRows) {
+    if (!config || typeof config !== 'object' || Array.isArray(config)) continue;
+    const { secretToken, headers } = config as { secretToken?: unknown; headers?: unknown };
+    if (typeof secretToken === 'string') tally(secretToken, w);
+    if (headers && typeof headers === 'object' && !Array.isArray(headers)) Object.values(headers as Record<string, unknown>).forEach(h => tally(h, w));
+  }
   return {
     plaintext: { personnel: p.plain, settings: s.plain, webhooks: w.plain },
     unreadable: p.unreadable + s.unreadable + w.unreadable,
     nonBcryptPasswords: passwordRows.filter(r => !isBcryptHash(r.password)).length,
+    keyConfigured: isSecretsKeyConfigured(),
   };
 }
 
@@ -63,12 +74,16 @@ export function buildSecretsAtRestHealthTest(counts: SecretsAtRestCounts): Healt
   const plain = counts.plaintext.personnel + counts.plaintext.settings + counts.plaintext.webhooks;
   const problems = plain + counts.nonBcryptPasswords + counts.unreadable;
   const items: HealthCheckTestResult['items'] = [];
+  // OBS-PR-07 (ت۴۰): without ERP_SECRETS_KEY the encryption command cannot run and a webhook rule holding a token or
+  // headers is refused on save, so the key comes first
+  const noKey = counts.keyConfigured === false;
+  const setKeyFirst = 'نخست کلید ERP_SECRETS_KEY را در فایل .env کارساز بگذارید و سرویس را دوباره راه بیندازید؛ ';
   if (plain > 0) {
     items.push({
       id: 'plaintext_secrets',
       title: 'رمز سامانه‌های بیرونی به‌صورت متن ساده',
       subtitle: `پرسنل ${fa(counts.plaintext.personnel)}، تنظیمات ${fa(counts.plaintext.settings)}، وب‌هوک ${fa(counts.plaintext.webhooks)}`,
-      details: 'روی کارساز یک بار «npm run secrets:encrypt -- --apply» را اجرا کنید.',
+      details: `${noKey ? setKeyFirst + 'سپس ' : ''}روی کارساز یک بار «npm run secrets:encrypt -- --apply» را اجرا کنید.`,
     });
   }
   if (counts.nonBcryptPasswords > 0) {
@@ -84,7 +99,9 @@ export function buildSecretsAtRestHealthTest(counts: SecretsAtRestCounts): Healt
       id: 'unreadable_secrets',
       title: 'رمز ذخیره‌شده‌ای که با کلید فعلی باز نمی‌شود',
       subtitle: `${fa(counts.unreadable)} مقدار`,
-      details: 'کلید ERP_SECRETS_KEY عوض شده است؛ کلید پیشین را برگردانید یا این رمزها را دوباره وارد کنید.',
+      details: noKey
+        ? 'کلید ERP_SECRETS_KEY روی کارساز تعریف نشده است؛ همان کلید پیشین را در فایل .env بگذارید یا این رمزها را دوباره وارد کنید.'
+        : 'کلید ERP_SECRETS_KEY عوض شده است؛ کلید پیشین را برگردانید یا این رمزها را دوباره وارد کنید.',
     });
   }
   return {

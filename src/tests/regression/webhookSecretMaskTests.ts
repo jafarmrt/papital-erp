@@ -124,7 +124,7 @@ export async function runWebhookSecretMaskTests(shouldRun: (id: string, ...extra
     const ruleMoved = await send(manager, 'put', `/api/events/action-rules/${ruleId}`, { actionConfigJson: { ...masked, url: 'https://collector-td710.example.com/r' } });
     const [ruleRow] = await orm.select().from(eventActionRules).where(eq(eventActionRules.id, ruleId));
     const storedConfig = ruleRow?.actionConfigJson as { url?: string; secretToken?: string; headers?: Record<string, string> } | undefined;
-    if (ruleSave.status !== 200 || storedConfig?.secretToken !== RULE_TOKEN || storedConfig?.headers?.Authorization !== RULE_HEADER || storedConfig?.url !== ruleUrl) {
+    if (ruleSave.status !== 200 || decryptSecret(storedConfig?.secretToken) !== RULE_TOKEN || decryptSecret(storedConfig?.headers?.Authorization) !== RULE_HEADER || storedConfig?.url !== ruleUrl) {
       wrong.push(`masked rule save: ${ruleSave.status}, stored ${JSON.stringify(storedConfig)}`);
     }
     leaks('rule save', ruleSave.body, [RULE_TOKEN, RULE_HEADER]);

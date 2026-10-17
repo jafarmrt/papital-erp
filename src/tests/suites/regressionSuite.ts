@@ -11119,5 +11119,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runClosingReadAccessTests } = await import('../regression/closingReadAccessTests.js');
   results.push(...await runClosingReadAccessTests(shouldRun));
 
+  // closing sweep: rule secrets encrypted and WooCommerce requests guarded (OBS-PR-07, OBS-R2-82, ت۴۰)
+  const { runClosingIntegrationGuardTests } = await import('../regression/closingIntegrationGuardTests.js');
+  results.push(...await runClosingIntegrationGuardTests(shouldRun));
+
   return results;
 }

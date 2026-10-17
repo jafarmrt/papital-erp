@@ -15,6 +15,8 @@ import { LOCAL_ECHO_PATH, assertSafeExternalUrl, isEchoSimulatorEnvironment, isL
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
 import { assertNotificationPermission, permissionHolderUserIds, roleMemberUserIds } from '../notifications/notificationRecipients.js';
 import { resolveRuleConfigSecrets } from './integrationSecrets.js';
+import { openRuleConfig, sealRuleConfig, UNREADABLE_RULE_SECRET_MESSAGE } from './webhookSecretStorage.js';
+import { isSecretsKeyConfigured } from '../../lib/secretBox.js';
 import { type RuleActionType } from '../../lib/events/ruleActionTypes.js';
 import { assertRuleActionTypeAllowed, assertRuleEventTypeAllowed } from './ruleActionTypeGuard.js';
 import type { ActionEngineStats, ActionLogPage } from '../../lib/events/actionLogContract.js';
@@ -277,7 +279,7 @@ export class EventActionEngineService {
   public static async executeAction(
     rule: typeof eventActionRules.$inferSelect,
     event: BaseDomainEvent
-  ): Promise<{ status: 'success' | 'failed' | 'skipped'; result: unknown; errorMessage?: string; durationMs: number }> {
+  ): Promise<{ status: 'success' | 'failed' | 'skipped'; result: unknown; errorMessage?: string; durationMs: number; secretUnreadable?: boolean }> {
     const startTime = Date.now();
     const actionType = rule.actionType as ActionType;
     const config = (rule.actionConfigJson as Record<string, unknown>) || {};
@@ -287,7 +289,13 @@ export class EventActionEngineService {
 
       switch (actionType) {
         case 'webhook': {
-          const webhookConfig = config as unknown as WebhookActionConfig;
+          // OBS-PR-07 (ت۴۰): a token or header the current key cannot open is never sent, and the delivery is not retried
+          const opened = openRuleConfig(config);
+          if (opened.unreadableSecrets.length > 0) {
+            logger.error(`[EventActionEngine] Rule #${rule.id} skipped: ${opened.unreadableSecrets.join(', ')} cannot be decrypted with the current ERP_SECRETS_KEY`);
+            return { status: 'failed', result: { unreadableSecrets: opened.unreadableSecrets }, errorMessage: UNREADABLE_RULE_SECRET_MESSAGE, durationMs: Date.now() - startTime, secretUnreadable: true };
+          }
+          const webhookConfig = opened.config as WebhookActionConfig;
           const webhookOutcome = await this.executeWebhookAction(rule, event, webhookConfig, startTime);
           if (webhookOutcome.earlyReturn) {
             return webhookOutcome.earlyReturn;
@@ -405,7 +413,7 @@ export class EventActionEngineService {
     });
 
     return executionResult.status === 'failed'
-      ? { ok: false, error: executionResult.errorMessage || 'خطای ناشناخته در اجرای اقدام' }
+      ? { ok: false, error: executionResult.errorMessage || 'خطای ناشناخته در اجرای اقدام', ...(executionResult.secretUnreadable ? { retryable: false } : {}) }
       : { ok: true };
   }
 
@@ -511,7 +519,8 @@ export class EventActionEngineService {
             method: 'POST',
             timeoutMs: 5000,
             includeMetadata: true,
-            secretToken: webhookSecret
+            // OBS-PR-07: stored encrypted below; without ERP_SECRETS_KEY the echo rule is seeded without a token
+            secretToken: isSecretsKeyConfigured() ? webhookSecret : ''
           },
           isActive: 1
         } satisfies CreateRuleInput] : []),
@@ -539,7 +548,7 @@ export class EventActionEngineService {
           eventType: rule.eventType,
           conditionsJson: rule.conditionsJson,
           actionType: rule.actionType,
-          actionConfigJson: rule.actionConfigJson,
+          actionConfigJson: sealRuleConfig(rule.actionConfigJson) as CreateRuleInput['actionConfigJson'],
           isActive: rule.isActive ?? 1,
           executionCount: 0,
           createdAt: new Date().toISOString(),
@@ -600,7 +609,8 @@ export class EventActionEngineService {
       conditionsJson: data.conditionsJson || [],
       actionType: data.actionType,
       // v9.0.360 (TD-710): a masked token or header value of a new rule has no stored value to stand for
-      actionConfigJson: resolveRuleConfigSecrets(data.actionConfigJson || {}, {}) as CreateRuleInput['actionConfigJson'],
+      // OBS-PR-07 (ت۴۰): the token and header values are stored encrypted
+      actionConfigJson: sealRuleConfig(resolveRuleConfigSecrets(data.actionConfigJson || {}, {})) as CreateRuleInput['actionConfigJson'],
       isActive: data.isActive ?? 1,
       executionCount: 0,
       createdBy: userId || null,
@@ -635,7 +645,8 @@ export class EventActionEngineService {
     if (data.actionType !== undefined) updatePayload.actionType = data.actionType;
     if (data.actionConfigJson !== undefined) {
       // v9.0.360 (TD-710): responses mask the token and header values; «********» keeps the stored value for the same address
-      updatePayload.actionConfigJson = resolveRuleConfigSecrets(data.actionConfigJson, current?.actionConfigJson);
+      // OBS-PR-07 (ت۴۰): resolved against the opened stored settings, then stored encrypted again
+      updatePayload.actionConfigJson = sealRuleConfig(resolveRuleConfigSecrets(data.actionConfigJson, openRuleConfig(current?.actionConfigJson).config));
     }
     if (data.isActive !== undefined) updatePayload.isActive = data.isActive;
 

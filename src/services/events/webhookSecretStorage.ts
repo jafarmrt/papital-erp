@@ -49,3 +49,48 @@ export function assertWebhookSecretsReadable(sub: { unreadableSecrets: string[] 
     throw new AppError(UNREADABLE_WEBHOOK_SECRET_MESSAGE, 503, 'INTEGRATION_SECRET_UNREADABLE', { fields: sub.unreadableSecrets });
   }
 }
+
+/**
+ * OBS-PR-07 (decision ت۴۰ item 2): an action rule's webhook token (`actionConfigJson.secretToken`) and header values are
+ * stored like a subscription's, with `encryptSecret`, and opened only inside the server. A legacy plain value is read as
+ * it is until `npm run secrets:encrypt -- --apply`; a value the current key cannot open is never sent.
+ */
+export const UNREADABLE_RULE_SECRET_MESSAGE = 'توکن یا سرآیندهای این قانون خودکار با کلید رمزنگاری فعلی کارساز (ERP_SECRETS_KEY) باز نمی‌شود. کلید درست را به کارساز برگردانید، یا توکن و سرآیندها را در قانون دوباره وارد کنید.';
+
+type RuleConfig = Record<string, unknown>;
+
+const ruleConfigOf = (config: unknown): RuleConfig | null =>
+  config && typeof config === 'object' && !Array.isArray(config) ? config as RuleConfig : null;
+
+/** plain token and header values of a rule's action settings ← stored ones; 503 without the key when there is a secret */
+export function sealRuleConfig(config: unknown): unknown {
+  const source = ruleConfigOf(config);
+  if (!source) return config;
+  const sealed: RuleConfig = { ...source };
+  if (typeof sealed.secretToken === 'string') sealed.secretToken = encryptSecret(sealed.secretToken);
+  if (sealed.headers !== undefined) sealed.headers = sealHeaders(sealed.headers);
+  return sealed;
+}
+
+/** stored action settings ← plain ones for use inside the server; a value the key cannot open is emptied and named */
+export function openRuleConfig(config: unknown): { config: unknown; unreadableSecrets: string[] } {
+  const source = ruleConfigOf(config);
+  if (!source) return { config, unreadableSecrets: [] };
+  const unreadableSecrets: string[] = [];
+  const opened: RuleConfig = { ...source };
+  if (typeof opened.secretToken === 'string') {
+    const token = decryptSecret(opened.secretToken);
+    if (token === null) unreadableSecrets.push('secretToken');
+    opened.secretToken = token ?? '';
+  }
+  if (opened.headers !== undefined) {
+    const headers: HeaderMap = {};
+    for (const [name, value] of Object.entries(headersOf(opened.headers))) {
+      const plain = decryptSecret(value);
+      if (plain === null) unreadableSecrets.push(`headers.${name}`);
+      headers[name] = plain ?? '';
+    }
+    opened.headers = headers;
+  }
+  return { config: opened, unreadableSecrets };
+}

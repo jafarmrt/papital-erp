@@ -41,7 +41,7 @@ export async function runWebhookErrorContractTests(shouldRun: (id: string, ...ex
     if (ok.status !== 201 || !subId) wrong.push(`safe create: ${ok.status} ${JSON.stringify(ok.body)}`);
     else {
       created.push(subId);
-      refusedProperly('edit to a loopback address', await h.put(`/api/events/webhooks/${subId}`, { targetUrl: 'http://127.0.0.1:9/x' }, manager), PRIVATE_ADDRESS_REFUSAL);
+      refusedProperly('edit to a loopback address', await h.put(`/api/events/webhooks/${subId}`, { targetUrl: 'http://127.0.0.1/x' }, manager), PRIVATE_ADDRESS_REFUSAL);
       const missing = await h.put('/api/events/webhooks/999999999', { name: 'x' }, manager);
       const toggleMissing = await h.post('/api/events/webhooks/999999999/toggle', {}, manager);
       if (toggleMissing.status !== 404 || toggleMissing.body?.code !== 'WEBHOOK_NOT_FOUND') wrong.push(`toggle a missing subscription: ${toggleMissing.status} ${toggleMissing.body?.code}`);
