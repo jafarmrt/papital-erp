@@ -482,10 +482,10 @@ export function Sidebar({
         <button 
           onClick={onLogout} 
           className={cn("flex items-center gap-2 text-red-400 hover:text-red-300 transition-colors border-t border-slate-900 rounded-lg hover:bg-slate-900 cursor-pointer", isCollapsed ? "p-2 justify-center pt-2" : "px-2 py-1.5 pt-2")}
-          title="خروج از حساب کاربری"
+          title="خروج از حساب در همهٔ دستگاه‌ها"
         >
           <LogOut size={16} className="shrink-0" />
-          {!isCollapsed && <span className="truncate">خروج از حساب</span>}
+          {!isCollapsed && <span className="truncate">خروج از همهٔ دستگاه‌ها</span>}
         </button>
         <AppVersionLabel compact={isCollapsed} />
       </div>

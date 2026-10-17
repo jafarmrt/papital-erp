@@ -448,7 +448,7 @@ router.put('/customers/:id', authorizePermission('customers.manage'), validate(u
   res.json({ success: true });
 }));
 
-router.delete('/customers/:id', authorizePermission('customers.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/customers/:id', authorizePermission('customers.delete'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const customerId = Number(req.params.id);
   const delCust = await CustomerService.deleteCustomer(customerId);
 

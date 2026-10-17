@@ -37,6 +37,8 @@ export default function CustomersPage({ user }: { user: User }) {
   const { searchQuery: search, debouncedSearchQuery, setSearchQuery: setSearch } = useSearch();
   // v9.0.148 (TD-893): افزودن، ویرایش و حذف طرف حساب با همان مجوز API (`customers.manage`)، نه با کد نقش
   const canManageCustomers = useHasPermission('customers.manage');
+  // v10.1.60 (OBS-R1-41, ت۴۰): حذف طرف حساب کلید جدای خودش را دارد، همان کلید DELETE /customers/:id
+  const canDeleteCustomers = useHasPermission('customers.delete');
 
   // Tab filter: 'all' | 'customer' | 'supplier'
   const [activeTab, setActiveTab] = useState<'all' | 'customer' | 'supplier'>('all');
@@ -620,14 +622,14 @@ export default function CustomersPage({ user }: { user: User }) {
                       )}
 
                       {canManageCustomers && (
-                        <>
-                          <button onClick={() => handleEdit(c)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer" title="ویرایش">
-                            <Edit2 size={14} />
-                          </button>
-                          <button onClick={() => handleDelete(c.id)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer" title="حذف">
-                            <Trash2 size={14} />
-                          </button>
-                        </>
+                        <button onClick={() => handleEdit(c)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer" title="ویرایش">
+                          <Edit2 size={14} />
+                        </button>
+                      )}
+                      {canDeleteCustomers && (
+                        <button onClick={() => handleDelete(c.id)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer" title="حذف">
+                          <Trash2 size={14} />
+                        </button>
                       )}
                     </div>
                   </td>

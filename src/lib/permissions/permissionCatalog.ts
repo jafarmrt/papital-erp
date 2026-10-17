@@ -79,7 +79,6 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     category: 'انبارگردانی',
     permissions: [
       { key: 'audit.view', title: 'مشاهده انبارگردانی', description: 'مشاهده دوره‌ها و سوابق انبارگردانی' },
-      { key: 'audit.create', title: 'شروع دوره انبارگردانی', description: 'ثبت شمارش واقعی فیزیکی کالاها', requires: ['audit.view'] },
       { key: 'audit.apply', title: 'اعمال و تسویه مغایرت', description: 'تأیید نهایی و اصلاح خودکار موجودی انبار', requires: ['audit.view'] },
     ]
   },
@@ -87,7 +86,8 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     category: 'مدیریت مشتریان',
     permissions: [
       { key: 'customers.view', title: 'مشاهده لیست مشتریان', description: 'مشاهده اطلاعات تماس و سوابق خریداران' },
-      { key: 'customers.manage', title: 'مدیریت کامل مشتریان', description: 'افزودن، ویرایش و حذف خریداران', requires: ['customers.view'] },
+      { key: 'customers.manage', title: 'مدیریت کامل مشتریان', description: 'افزودن و ویرایش خریداران و برچسب‌ها', requires: ['customers.view'] },
+      { key: 'customers.delete', title: 'حذف طرف حساب', description: 'حذف مشتری یا تأمین‌کننده‌ای که کار باز ندارد', requires: ['customers.view'] },
     ]
   },
   {

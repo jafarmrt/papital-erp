@@ -61,12 +61,18 @@ afterEach(() => {
 });
 
 describe('party, sales file and stock form actions follow the API permission, not the role code (TD-893)', () => {
-  it('the customers page offers add, edit and delete to a customers.manage holder even when its role code is viewer', async () => {
+  it('the customers page offers add and edit to a customers.manage holder even when its role code is viewer, and delete only with customers.delete (OBS-R1-41)', async () => {
     granted.add('customers.manage');
-    render(withClient(<CustomersPage user={userWithRole('viewer')} />));
+    const first = render(withClient(<CustomersPage user={userWithRole('viewer')} />));
     expect(await screen.findByText('علی کاظمی')).toBeTruthy();
     expect(screen.getByText('ثبت طرف حساب جدید')).toBeTruthy();
     expect(screen.getByTitle('ویرایش')).toBeTruthy();
+    expect(screen.queryByTitle('حذف')).toBeNull();
+    first.unmount();
+
+    granted.add('customers.delete');
+    render(withClient(<CustomersPage user={userWithRole('viewer')} />));
+    expect(await screen.findByText('علی کاظمی')).toBeTruthy();
     expect(screen.getByTitle('حذف')).toBeTruthy();
   });
 

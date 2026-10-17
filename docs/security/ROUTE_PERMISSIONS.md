@@ -123,7 +123,7 @@
 | GET | `/api/csrf` | login-only |
 | GET | `/api/customers` | customers.view |
 | POST | `/api/customers` | customers.manage |
-| DELETE | `/api/customers/:id` | customers.manage |
+| DELETE | `/api/customers/:id` | customers.delete |
 | PUT | `/api/customers/:id` | customers.manage |
 | GET | `/api/customers/:id/account-card` | accounting.reports \| accounting.view \| customers.view \| customers.manage |
 | GET | `/api/customers/:id/documents` | documents.view \| customers.view \| crm.view |

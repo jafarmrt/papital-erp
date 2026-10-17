@@ -464,7 +464,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
                       onClick={onLogout}
                       className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
                     >
-                      خروج
+                      خروج از همهٔ دستگاه‌ها
                     </button>
                   )
                 ) : (

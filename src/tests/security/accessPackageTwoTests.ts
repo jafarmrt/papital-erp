@@ -11,7 +11,9 @@ import { deleteTestRoles } from '../fixtures/roleCleanup.js';
  */
 
 /** کلیدهایی که پس از مهاجرت 0062 (v9.0.107) به کاتالوگ آمدند */
-const KEYS_ADDED_AFTER_0062: ReadonlySet<string> = new Set(['documents.finalize', 'personnel.view_sensitive', 'payroll.view_sensitive', 'accounting.fiscal_reopen', 'piecework.pay', 'pending_materials.create', 'media.view', 'media.upload', 'media.manage', 'accounting.vouchers_approve', 'piecework.payroll_approve', 'payroll.rates_manage', 'warehouse.production_receipt', 'reports.sales', 'products.change_code', 'reports.purchases', 'workshop.self', 'workshop.review', 'workshop.long_session']);
+/** Keys 0062 expanded «*» into that later left the catalog, each with the key it follows in 0062's list. */
+const KEYS_REMOVED_AFTER_0062: ReadonlyArray<readonly [string, string]> = [['audit.create', 'audit.view']];
+const KEYS_ADDED_AFTER_0062: ReadonlySet<string> = new Set(['documents.finalize', 'personnel.view_sensitive', 'payroll.view_sensitive', 'accounting.fiscal_reopen', 'piecework.pay', 'pending_materials.create', 'media.view', 'media.upload', 'media.manage', 'accounting.vouchers_approve', 'piecework.payroll_approve', 'payroll.rates_manage', 'warehouse.production_receipt', 'reports.sales', 'products.change_code', 'reports.purchases', 'workshop.self', 'workshop.review', 'workshop.long_session', 'customers.delete']);
 
 export async function runAccessPackageTwoTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
@@ -305,6 +307,8 @@ export async function runAccessPackageTwoTests(shouldRun: ShouldRun): Promise<Te
       if (!same(permsOf('accountant'), [])) wrong.push('a custom role coded accountant was changed');
       // 0062 lists the catalog of v9.0.107; keys added to the catalog later are not part of its «*» expansion
       const keysOf0062 = PERMISSION_KEYS.filter(k => !KEYS_ADDED_AFTER_0062.has(k));
+      // v10.1.60 (OBS-PR-13): a key that left the catalog after 0062 is still in 0062's own list, after its neighbour
+      for (const [removed, after] of KEYS_REMOVED_AFTER_0062) keysOf0062.splice(keysOf0062.indexOf(after) + 1, 0, removed);
       if (!same(permsOf(starCode), ['legacy.key', ...keysOf0062])) wrong.push(`the «*» role after 0062: ${JSON.stringify(permsOf(starCode))}`);
 
       const idOf = (code: string) => String(outcome.ids.find(r => r.code === code)?.id);
