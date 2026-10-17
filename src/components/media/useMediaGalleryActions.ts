@@ -4,16 +4,19 @@ import { confirmAction } from '../ConfirmDialogHost';
 import { mediaErrorMessage, type MediaAssetView } from '../../lib/media/mediaApi';
 import { MEDIA_WARNING_TEXT } from '../../lib/media/mediaRules';
 import {
-  copyMediaAssetToItemImage, movedIds, reorderMediaAssets, setMediaAssetCover,
+  copyMediaAssetToItemImage, movedIds, reorderMediaAssets, type MediaItemImageAnswer,
 } from '../../lib/media/mediaSectionsApi';
 import {
   MEDIA_REPLACE_KIND_TEXT, posterFromVideo, precheckMediaFile, replaceAcceptOf, replaceMediaFileContent, uploadVideoPoster,
 } from '../../lib/media/mediaUpload';
 
-/** The item whose picture a product image may become; its version comes from the product page and returns updated */
+/**
+ * The item whose picture (the product's featured image) a product image may become; its version comes from the product
+ * page, which takes the saved picture and the new version back
+ */
 export interface MediaItemImageTarget {
   version: number;
-  onVersion: (version: number) => void;
+  onSaved: (answer: MediaItemImageAnswer) => void;
 }
 
 export interface MediaGalleryActionsInput {
@@ -38,7 +41,7 @@ export function orderAfterMove(ordered: MediaAssetView[], asset: MediaAssetView,
   return ordered.map(a => (a.shotType === asset.shotType ? next[k++] : a.id));
 }
 
-/** v10.0.247 (N-05 PR 3): order, cover, replacement and item-picture actions of a gallery's files */
+/** v10.0.247 (N-05 PR 3): order, replacement and featured-image actions of a gallery's files */
 export function useMediaGalleryActions({ ordered, sectionId, itemId, onListReplaced, onChanged, itemImage }: MediaGalleryActionsInput) {
   const [busyId, setBusyId] = useState<number | null>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
@@ -63,25 +66,19 @@ export function useMediaGalleryActions({ ordered, sectionId, itemId, onListRepla
     }, 'تغییر ترتیب فایل‌ها ناموفق بود.');
   }, [ordered, sectionId, itemId, onListReplaced, run]);
 
-  const toggleCover = useCallback((asset: MediaAssetView) => run(asset.id, async () => {
-    onListReplaced(await setMediaAssetCover(asset.id, !asset.isCover));
-    toast.success(asset.isCover ? 'تصویر شاخص برداشته شد.' : 'تصویر شاخص محصول تعیین شد.');
-  }, 'تعیین تصویر شاخص ناموفق بود.'), [onListReplaced, run]);
-
   const copyToItem = useCallback(async (asset: MediaAssetView) => {
     if (!itemImage) return;
     const ok = await confirmAction({
-      title: 'عکس کالا',
-      message: `نسخه سبک «${asset.title || asset.originalName}» عکس کالا در فهرست کالاها شود؟`,
-      confirmText: 'استفاده',
+      title: 'تصویر شاخص محصول',
+      message: `نسخه سبک «${asset.title || asset.originalName}» تصویر شاخص محصول شود؟ همین تصویر در فهرست کالاها، سندها، گالری و کتابخانه نشان داده می‌شود.`,
+      confirmText: 'تصویر شاخص شود',
       cancelText: 'انصراف',
     });
     if (!ok) return;
     await run(asset.id, async () => {
-      const answer = await copyMediaAssetToItemImage(asset.id, itemImage.version);
-      itemImage.onVersion(answer.version);
-      toast.success('عکس کالا به‌روزرسانی شد.');
-    }, 'به‌روزرسانی عکس کالا ناموفق بود.');
+      itemImage.onSaved(await copyMediaAssetToItemImage(asset.id, itemImage.version));
+      toast.success('تصویر شاخص محصول به‌روزرسانی شد.');
+    }, 'به‌روزرسانی تصویر شاخص محصول ناموفق بود.');
   }, [itemImage, run]);
 
   const startReplace = useCallback((asset: MediaAssetView) => {
@@ -124,5 +121,5 @@ export function useMediaGalleryActions({ ordered, sectionId, itemId, onListRepla
     }, 'جایگزینی فایل ناموفق بود.');
   }, [onChanged, run]);
 
-  return { busyId, move, toggleCover, copyToItem, startReplace, onReplaceFile, replaceInputRef };
+  return { busyId, move, copyToItem, startReplace, onReplaceFile, replaceInputRef };
 }

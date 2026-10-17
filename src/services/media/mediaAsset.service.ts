@@ -59,7 +59,6 @@ export interface MediaAssetView {
   title: string;
   description: string;
   sortOrder: number;
-  isCover: boolean;
   tags: string[];
   originalName: string;
   mimeType: string;
@@ -89,7 +88,6 @@ export function assetView(row: AssetRow): MediaAssetView {
     title: row.title,
     description: row.description,
     sortOrder: row.sortOrder,
-    isCover: row.isCover === 1,
     tags: row.tags ?? [],
     originalName: row.originalName,
     mimeType: row.mimeType,

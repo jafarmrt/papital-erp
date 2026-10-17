@@ -14,7 +14,7 @@ import { MediaSectionService } from '../services/media/mediaSections.service.js'
 import { MediaArrangeService } from '../services/media/mediaArrange.service.js';
 import { businessTodayIsoDate } from '../lib/businessClock.js';
 import {
-  mediaAssetOrderSchema, mediaCoverSchema, mediaFileSchema, mediaItemImageSchema, mediaListSchema, mediaPosterSchema,
+  mediaAssetOrderSchema, mediaFileSchema, mediaItemImageSchema, mediaListSchema, mediaPosterSchema,
   mediaProductInfoSchema, mediaProductListSchema, mediaProductParamsSchema, mediaReplaceSchema, mediaSectionCreateSchema,
   mediaSectionOrderSchema, mediaSectionUpdateSchema, mediaTagsSchema, mediaUpdateSchema, mediaUploadSchema, mediaZipSchema,
 } from './media.schemas.js';
@@ -132,10 +132,6 @@ router.post('/media/assets', authenticateToken, requirePermission(MEDIA_UPLOAD_P
 // v10.0.247 (N-05 PR 3): the order of a section's (or one product's) files, before `/media/assets/:id`
 router.put('/media/assets/order', authenticateToken, requirePermission(MEDIA_MANAGE_PERMISSION), validate(mediaAssetOrderSchema), asyncHandler(async (req: Request, res: Response) => {
   res.json({ success: true, data: await MediaArrangeService.reorder(req.body, await actorOf(req)) });
-}));
-
-router.put('/media/assets/:id/cover', authenticateToken, requirePermission(MEDIA_MANAGE_PERMISSION), validate(mediaCoverSchema), asyncHandler(async (req: Request, res: Response) => {
-  res.json({ success: true, data: await MediaArrangeService.setCover(Number(req.params.id), (req.body as { cover: boolean }).cover, await actorOf(req)) });
 }));
 
 /** Replaces the file with a better version; the body is the raw file, like an upload */

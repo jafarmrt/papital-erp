@@ -15,7 +15,6 @@ export interface MediaAssetView {
   title: string;
   description: string;
   sortOrder: number;
-  isCover: boolean;
   originalName: string;
   mimeType: string;
   sizeBytes: number;
@@ -46,8 +45,16 @@ export interface MediaProductRow {
   imageCount: number;
   videoCount: number;
   lowQualityCount: number;
-  coverAssetId: number | null;
-  coverHasThumb: boolean;
+  /** v10.1.69: the item's own picture, the product's one featured image in the whole app */
+  featuredImage: string | null;
+  /** the first library file with a thumbnail, shown only while the item has no picture */
+  fallbackAssetId: number | null;
+}
+
+/** The product's featured image: the item's own picture and its thumbnail */
+export interface MediaFeaturedImage {
+  image: string | null;
+  thumbnail: string | null;
 }
 
 export interface MediaProductPage {
@@ -84,6 +91,7 @@ export interface MediaProductItem {
 
 export interface MediaProductDetail {
   item: MediaProductItem;
+  featuredImage: MediaFeaturedImage;
   assets: MediaAssetView[];
   productsSectionId: number;
 }

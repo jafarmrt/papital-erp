@@ -135,11 +135,6 @@ export const mediaAssetOrderSchema = z.object({
   }).strict(),
 });
 
-export const mediaCoverSchema = z.object({
-  params: z.object({ id: numericIdString }).passthrough(),
-  body: z.object({ cover: z.boolean({ error: 'وضعیت تصویر شاخص لازم است' }) }).strict(),
-});
-
 export const mediaReplaceSchema = z.object({
   params: z.object({ id: numericIdString }).passthrough(),
   query: z.object({}).strict(),

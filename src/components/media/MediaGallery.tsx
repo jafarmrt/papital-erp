@@ -17,10 +17,10 @@ interface Props {
   rights: MediaViewerRights;
   onChanged: (asset: MediaAssetView) => void;
   onDeleted: (id: number) => void;
-  /** v10.0.247 (N-05 PR 3): the section (and product) the files belong to, for the order and cover routes */
+  /** v10.0.247 (N-05 PR 3): the section (and product) the files belong to, for the order routes */
   sectionId: number;
   itemId: number | null;
-  /** the answer of an order or cover change: every live file of the section (or product) */
+  /** the answer of an order change: every live file of the section (or product) */
   onListReplaced: (assets: MediaAssetView[]) => void;
   /** the page holds every file of the section with no search condition, so a manager may change the order */
   canReorder: boolean;
@@ -124,12 +124,10 @@ export function MediaGallery({ assets, rights, onChanged, onDeleted, sectionId, 
                     flags={{
                       canMoveEarlier: canMove && index > 0,
                       canMoveLater: canMove && index < group.items.length - 1,
-                      canCover: rights.canManage && itemId !== null && asset.kind === 'image' && asset.hasThumb,
                       canReplace: canChangeAsset(asset, rights),
                       canItemImage: Boolean(itemImage) && asset.kind === 'image' && asset.hasLight,
                     }}
                     onMove={step => void actions.move(asset, step)}
-                    onCover={() => void actions.toggleCover(asset)}
                     onReplace={() => actions.startReplace(asset)}
                     onItemImage={() => void actions.copyToItem(asset)}
                   />

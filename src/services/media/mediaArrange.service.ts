@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import type { Readable } from 'stream';
 import { v4 as uuidv4 } from 'uuid';
-import { and, asc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, ne, sql } from 'drizzle-orm';
 import { orm, type DbTransaction } from '../../db/drizzle.js';
 import { items, mediaAssets, mediaSections } from '../../db/schema.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
@@ -24,9 +24,10 @@ const AUDIT_ENTITY: 'کتابخانه تصاویر' = MEDIA_AUDIT_ENTITY;
 const ITEM_ENTITY: 'کالا' = ITEM_AUDIT_ENTITY;
 
 /**
- * v10.0.247 (N-05 PR 3): arranging the files of the media library — their order, the cover of a product, replacing a
- * file with a better version and using a product image as the item's picture. Each change runs in one transaction with
- * its audit row (`tx`).
+ * v10.0.247 (N-05 PR 3): arranging the files of the media library — their order, replacing a file with a better
+ * version and using a product image as the item's picture. Each change runs in one transaction with its audit row (`tx`).
+ * v10.1.69: the item's own picture (`items.image` / `items.thumbnail`) is the product's one featured image; the library's
+ * separate cover mark was retired (its column is kept as stored and no longer read).
  */
 
 type AssetRow = typeof mediaAssets.$inferSelect;
@@ -77,43 +78,8 @@ export const MediaArrangeService = {
   },
 
   /**
-   * Makes a product image the cover of its product, or takes the mark away. Only an image of the products section with a
-   * thumbnail may be the cover (422 `MEDIA_COVER_INVALID`); the other files of the product lose the mark in the same
-   * transaction, so one live file per product carries it (`uq_media_assets_cover_item`).
-   */
-  async setCover(id: number, cover: boolean, actor: MediaActor): Promise<MediaAssetView[]> {
-    return orm.transaction(async (tx) => {
-      const [target] = await tx.select().from(mediaAssets).where(and(eq(mediaAssets.id, id), eq(mediaAssets.isDeleted, 0)));
-      if (!target) throw new NotFoundError('فایل یافت نشد.', undefined, 'MEDIA_NOT_FOUND');
-      if (target.itemId === null || target.kind !== 'image' || target.thumbBytes === null) {
-        throw new ValidationError('فقط تصویر یک محصول که تصویر کوچک دارد تصویر شاخص می‌شود.', undefined, 'MEDIA_COVER_INVALID');
-      }
-      const rows = await lockScope(tx, target.sectionId, target.itemId);
-      const current = rows.find(r => r.id === id);
-      if (!current) throw new NotFoundError('فایل یافت نشد.', undefined, 'MEDIA_NOT_FOUND');
-      const previous = rows.find(r => r.isCover === 1) ?? null;
-      if (cover) {
-        await tx.update(mediaAssets).set({ isCover: 0, version: sql`${mediaAssets.version} + 1`, updatedAt: sql`now()` })
-          .where(and(inArray(mediaAssets.id, rows.map(r => r.id)), eq(mediaAssets.isCover, 1), ne(mediaAssets.id, id)));
-      }
-      if ((current.isCover === 1) !== cover) {
-        await tx.update(mediaAssets).set({ isCover: cover ? 1 : 0, version: current.version + 1, updatedAt: sql`now()` })
-          .where(eq(mediaAssets.id, id));
-        await logActivity({
-          tx, req: actor.req, userId: actor.userId, username: actor.username, action: 'UPDATE', entity: AUDIT_ENTITY,
-          entityId: id, description: cover
-            ? `تعیین فایل «${current.originalName}» به‌عنوان تصویر شاخص کالای ${target.itemId}`
-            : `برداشتن تصویر شاخص «${current.originalName}» از کالای ${target.itemId}`,
-          details: { itemId: target.itemId, before: { coverAssetId: previous?.id ?? null }, after: { coverAssetId: cover ? id : null } },
-        });
-      }
-      return ordered(await lockScope(tx, target.sectionId, target.itemId));
-    });
-  },
-
-  /**
-   * Replaces the content of a file with a better version of the same kind. Title, description, tags, order and cover are
-   * kept; the earlier original stays on disk and its fingerprint stays in the audit row. The same content is 409
+   * Replaces the content of a file with a better version of the same kind. Title, description, tags and order are kept;
+   * the earlier original stays on disk and its fingerprint stays in the audit row. The same content is 409
    * `MEDIA_REPLACE_SAME`, content another live file holds 409 `MEDIA_DUPLICATE`.
    */
   async replaceContent(id: number, input: { body: Readable; fileName: string; declaredType: string }, actor: MediaActor): Promise<{ asset: MediaAssetView; warnings: MediaWarning[] }> {
@@ -153,7 +119,7 @@ export const MediaArrangeService = {
           lightBytes: null,
           thumbBytes: null,
           lightError: '',
-          // a cover needs a thumbnail; a replaced video has none until the browser sends its poster
+          // the retired cover mark stays as stored for an image; a replaced video has none until the browser sends its poster
           isCover: kind === 'image' ? before.isCover : 0,
           version: before.version + 1,
           updatedAt: sql`now()`,

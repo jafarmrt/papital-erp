@@ -1,11 +1,10 @@
 import type { ReactNode } from 'react';
-import { AlertTriangle, Download, Film, Image as ImageIcon, Loader2, Pencil, Star, Trash2 } from 'lucide-react';
+import { AlertTriangle, Download, Film, Image as ImageIcon, Loader2, Pencil, Trash2 } from 'lucide-react';
 import { formatPersianNumber } from '../../utils';
 import { mediaFileUrl, type MediaAssetView } from '../../lib/media/mediaApi';
 
 export const PREPARING_TEXT = 'در حال آماده‌سازی';
 export const LIGHT_FAILED_TEXT = 'ساخت نسخه سبک ناموفق بود';
-export const COVER_BADGE_TEXT = 'شاخص';
 
 interface Props {
   asset: MediaAssetView;
@@ -15,7 +14,7 @@ interface Props {
   onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;
-  /** v10.0.247 (N-05 PR 3): order, cover, replacement and item-picture buttons */
+  /** v10.0.247 (N-05 PR 3): order, replacement and featured-image buttons */
   extraActions?: ReactNode;
 }
 
@@ -50,11 +49,6 @@ export function MediaAssetTile({ asset, selected, canChange, onToggle, onOpen, o
         {asset.isLowQuality && (
           <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5">
             <AlertTriangle size={11} /> کیفیت پایین
-          </span>
-        )}
-        {asset.isCover && (
-          <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5" data-testid="media-cover-badge">
-            <Star size={11} /> {COVER_BADGE_TEXT}
           </span>
         )}
       </div>

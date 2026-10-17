@@ -13,6 +13,7 @@ import { productCardValues, type ProductCardInput } from './productCardWrite.js'
  * v10.0.25 (N-05 PR 2): the product side of the media library. The grid lists live products (`items.type = 'product'`)
  * with the counts of their files in the «محصولات» section, filtered and paged in SQL; the product page reads one product
  * with its card and files; the card is edited with the item's own version (OCC, TD-654) and audited under «کالا».
+ * v10.1.69: the grid and the product page show the item's own picture as the product's featured image.
  */
 
 export const ITEM_AUDIT_ENTITY = 'کالا';
@@ -42,8 +43,24 @@ export interface MediaProductRow {
   imageCount: number;
   videoCount: number;
   lowQualityCount: number;
-  coverAssetId: number | null;
-  coverHasThumb: boolean;
+  /** v10.1.69: the item's own picture (thumbnail, else image), the one featured image of the product in the whole app */
+  featuredImage: string | null;
+  /** the first library file with a thumbnail, shown only while the item has no picture */
+  fallbackAssetId: number | null;
+}
+
+/** The item's own picture: its thumbnail, else its image; an empty text is none */
+export function featuredImageOf(item: { thumbnail?: string | null; image?: string | null }): string | null {
+  const thumbnail = item.thumbnail?.trim();
+  if (thumbnail) return thumbnail;
+  const image = item.image?.trim();
+  return image || null;
+}
+
+/** The product's featured image as the product page shows it: the full picture and its thumbnail */
+export interface MediaFeaturedImage {
+  image: string | null;
+  thumbnail: string | null;
 }
 
 const liveProduct = and(eq(items.isDeleted, 0), eq(items.type, 'product'))!;
@@ -96,23 +113,25 @@ export const MediaProductService = {
       imageCount: sql<number>`(SELECT count(*)::int FROM ${mediaAssets} WHERE ${liveAssetsOfItem} AND ${mediaAssets.kind} = 'image')`,
       videoCount: sql<number>`(SELECT count(*)::int FROM ${mediaAssets} WHERE ${liveAssetsOfItem} AND ${mediaAssets.kind} = 'video')`,
       lowQualityCount: sql<number>`(SELECT count(*)::int FROM ${mediaAssets} WHERE ${liveAssetsOfItem} AND ${mediaAssets.isLowQuality} = 1)`,
-      // the cover is the file marked as cover, else the first file with a thumbnail in the product's order
-      coverAssetId: sql<number | null>`(SELECT ${mediaAssets.id} FROM ${mediaAssets} WHERE ${liveAssetsOfItem}
+      image: items.image,
+      thumbnail: items.thumbnail,
+      // only shown while the item has no picture: the first file with a thumbnail in the product's order
+      fallbackAssetId: sql<number | null>`(SELECT ${mediaAssets.id} FROM ${mediaAssets} WHERE ${liveAssetsOfItem}
         AND ${mediaAssets.thumbBytes} IS NOT NULL
-        ORDER BY ${mediaAssets.isCover} DESC, ${mediaAssets.sortOrder} ASC, ${mediaAssets.id} ASC LIMIT 1)`,
+        ORDER BY ${mediaAssets.sortOrder} ASC, ${mediaAssets.id} ASC LIMIT 1)`,
     }).from(items).where(where)
       .orderBy(asc(items.code), asc(items.id))
       .limit(f.limit).offset((f.page - 1) * f.limit);
     return {
-      data: rows.map(r => ({
+      data: rows.map(({ image, thumbnail, fallbackAssetId, ...r }) => ({
         ...r,
         collections: r.collections ?? [],
         assetCount: toNumber(r.assetCount),
         imageCount: toNumber(r.imageCount),
         videoCount: toNumber(r.videoCount),
         lowQualityCount: toNumber(r.lowQualityCount),
-        coverAssetId: r.coverAssetId === null ? null : Number(r.coverAssetId),
-        coverHasThumb: r.coverAssetId !== null,
+        featuredImage: featuredImageOf({ image, thumbnail }),
+        fallbackAssetId: fallbackAssetId === null ? null : Number(fallbackAssetId),
       })),
       total: Number(total),
       page: f.page,
@@ -139,13 +158,20 @@ export const MediaProductService = {
     };
   },
 
-  async detail(itemId: number): Promise<{ item: ReturnType<typeof productCardOf>; assets: MediaAssetView[]; productsSectionId: number }> {
+  async detail(itemId: number): Promise<{
+    item: ReturnType<typeof productCardOf>; featuredImage: MediaFeaturedImage; assets: MediaAssetView[]; productsSectionId: number;
+  }> {
     const [item] = await orm.select().from(items).where(and(eq(items.id, itemId), liveProduct));
     if (!item) throw new NotFoundError('محصول یافت نشد.', undefined, 'MEDIA_PRODUCT_NOT_FOUND');
     const assets = await orm.select().from(mediaAssets)
       .where(and(eq(mediaAssets.itemId, itemId), eq(mediaAssets.isDeleted, 0)))
       .orderBy(asc(mediaAssets.sortOrder), asc(mediaAssets.id));
-    return { item: productCardOf(item), assets: assets.map(assetView), productsSectionId: await MediaAssetService.productsSectionId() };
+    return {
+      item: productCardOf(item),
+      featuredImage: { image: item.image?.trim() || null, thumbnail: featuredImageOf(item) },
+      assets: assets.map(assetView),
+      productsSectionId: await MediaAssetService.productsSectionId(),
+    };
   },
 
   /**

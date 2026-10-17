@@ -10,8 +10,9 @@ import { runReservationCases } from './stockReservationTests.js';
 import { createTestItem } from '../fixtures/factories.js';
 
 /**
- * Series 10, N-05 PR 3 (v10.0.247+): the other sections of the media library, file tags, the order and cover of a
- * product's files, replacing a file's content and using a library image as the item's picture.
+ * Series 10, N-05 PR 3 (v10.0.247+): the other sections of the media library, file tags, the order of a product's files,
+ * replacing a file's content and using a library image as the item's picture. v10.1.69: the item's picture is the
+ * product's one featured image in the library too, and the library's own cover route is gone.
  */
 export async function runMediaArrangeTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   return runReservationCases(shouldRun, [
@@ -21,11 +22,14 @@ export async function runMediaArrangeTests(shouldRun: ShouldRun): Promise<TestCa
     ['reg_media_tags_n05',
       'v10.0.247: file tags are normalized and capped, filter and search the list and are listed per section (N-05)',
       ['n05', 'media'], tagsCase],
-    ['reg_media_order_cover_n05',
-      'v10.0.247: a product files order is set as a whole and one image is its cover; a video or a non-product file is never a cover (N-05)',
-      ['n05', 'media', 'permissions'], orderCoverCase],
+    ['reg_media_order_n05',
+      'v10.0.247: a product files order is set as a whole by media.manage only (N-05)',
+      ['n05', 'media', 'permissions'], orderCase],
+    ['reg_media_featured_image_v10169',
+      'v10.1.69: the library grid and product page show the item picture as the featured image, a library file only while the item has none, and the cover route is gone',
+      ['n05', 'media', 'items'], featuredImageCase],
     ['reg_media_replace_n05',
-      'v10.0.247: replacing a file keeps its card, order and cover, keeps the old original on disk and refuses the same content, a duplicate or another kind (N-05)',
+      'v10.0.247: replacing a file keeps its card and order, keeps the old original on disk and refuses the same content, a duplicate or another kind (N-05)',
       ['n05', 'media', 'permissions'], replaceCase],
     ['reg_media_item_image_n05',
       'v10.0.247: a product image becomes the item picture at the item version, with copied files and an item audit row (N-05)',
@@ -38,7 +42,7 @@ const codeOf = (res: { body?: unknown }) => (res.body as { code?: string } | und
 const digits = (n: number) => String(crypto.randomInt(10 ** (n - 1), 10 ** n));
 const sha = (b: Buffer) => crypto.createHash('sha256').update(b).digest('hex');
 
-type AssetBody = { id: number; isCover: boolean; tags: string[]; sortOrder: number; title: string; version: number };
+type AssetBody = { id: number; tags: string[]; sortOrder: number; title: string; version: number };
 
 function withTempMediaDir(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'erp-media-test-'));
@@ -173,13 +177,15 @@ async function tagsCase(h: Harness, wrong: string[]): Promise<string> {
   return `tags ${JSON.stringify(tags)}; too many ${tooMany.status}; filter ${byTagIds.length}; search ${bySearchIds.length}; list ${tagList.length}`;
 }
 
-async function productCover(h: Harness, item: { id: number; code: string }): Promise<number | null | undefined> {
+type GridRow = { itemId: number; featuredImage: string | null; fallbackAssetId: number | null };
+
+async function gridRowOf(h: Harness, item: { id: number; code: string }): Promise<GridRow | undefined> {
   const res = await h.get(`/api/media/products?search=${encodeURIComponent(item.code)}&limit=50`);
-  const rows = (res.body as { data?: Array<{ itemId: number; coverAssetId: number | null }> }).data ?? [];
-  return rows.find(r => r.itemId === item.id)?.coverAssetId;
+  const rows = (res.body as { data?: GridRow[] }).data ?? [];
+  return rows.find(r => r.itemId === item.id);
 }
 
-async function orderCoverCase(h: Harness, wrong: string[]): Promise<string> {
+async function orderCase(h: Harness, wrong: string[]): Promise<string> {
   withTempMediaDir();
   const products = await sectionId(h);
   const item = await createTestItem({ type: 'product' });
@@ -203,25 +209,45 @@ async function orderCoverCase(h: Harness, wrong: string[]): Promise<string> {
   const listedIds = ((listed.body as { data?: Array<{ id: number }> }).data ?? []).map(a => a.id);
   if (JSON.stringify(listedIds) !== JSON.stringify([video.id, second.id, first.id])) wrong.push(`the list after reorder is ${JSON.stringify(listedIds)}`);
 
-  const byUploaderCover = await h.put(`/api/media/assets/${second.id}/cover`, { cover: true }, uploader);
-  if (byUploaderCover.status !== 403) wrong.push(`media.upload set a cover: ${brief(byUploaderCover)}`);
-  const coverSecond = await h.put(`/api/media/assets/${second.id}/cover`, { cover: true }, manager);
-  if (coverSecond.status !== 200) wrong.push(`setting a cover answered ${brief(coverSecond)}`);
-  if (await productCover(h, item) !== second.id) wrong.push('the grid cover does not follow the chosen cover');
-  const coverFirst = await h.put(`/api/media/assets/${first.id}/cover`, { cover: true }, manager);
-  const covers = ((coverFirst.body as { data?: AssetBody[] }).data ?? []).filter(a => a.isCover).map(a => a.id);
-  if (JSON.stringify(covers) !== JSON.stringify([first.id])) wrong.push(`covers after moving it ${JSON.stringify(covers)}, expected only the first image`);
-  const videoCover = await h.put(`/api/media/assets/${video.id}/cover`, { cover: true }, manager);
-  if (videoCover.status !== 422 || codeOf(videoCover) !== 'MEDIA_COVER_INVALID') wrong.push(`a video cover answered ${brief(videoCover)}`);
-  const custom = await h.post('/api/media/sections', { title: `جلد ${digits(6)}` }, manager);
-  const customId = (custom.body as { data: { id: number } }).data.id;
-  const loose = await uploadTo(h, manager, `sectionId=${customId}`, await noisyJpeg(900, 700));
-  const looseCover = await h.put(`/api/media/assets/${loose.id}/cover`, { cover: true }, manager);
-  if (looseCover.status !== 422 || codeOf(looseCover) !== 'MEDIA_COVER_INVALID') wrong.push(`a cover outside products answered ${brief(looseCover)}`);
-  const cleared = await h.put(`/api/media/assets/${first.id}/cover`, { cover: false }, manager);
-  const [count] = await h.q(`SELECT count(*)::int AS n FROM media_assets WHERE item_id = $1 AND is_cover = 1 AND is_deleted = 0`, [item.id]);
-  if (cleared.status !== 200 || Number(count.n) !== 0) wrong.push(`clearing the cover answered ${brief(cleared)} and left ${count.n} covers`);
-  return `order ${ordered.status}; cover ${coverSecond.status}/${coverFirst.status}; video ${videoCover.status}; loose ${looseCover.status}; cleared ${cleared.status}`;
+  return `order ${ordered.status}; uploader ${byUploader.status}; missing ${wrongIds.status}`;
+}
+
+async function featuredImageCase(h: Harness, wrong: string[]): Promise<string> {
+  withTempMediaDir();
+  const products = await sectionId(h);
+  const manager = await h.sessionWith(['media.view', 'media.upload', 'media.manage', 'products.edit']);
+  const pictured = await createTestItem({ type: 'product', image: '/uploads/featured-full.webp', thumbnail: '/uploads/featured-thumb.webp' });
+  const imageOnly = await createTestItem({ type: 'product', image: '/uploads/only-full.webp', thumbnail: '  ' });
+  const bare = await createTestItem({ type: 'product' });
+  const scope = (id: number) => `sectionId=${products}&itemId=${id}`;
+  await uploadTo(h, manager, `${scope(pictured.id)}&shotType=side`, await noisyJpeg(900, 700));
+  const first = await uploadTo(h, manager, `${scope(bare.id)}&shotType=white_background`, await noisyJpeg(900, 700));
+  const second = await uploadTo(h, manager, `${scope(bare.id)}&shotType=side`, await noisyJpeg(900, 700));
+  // a cover mark stored before v10.1.69 is kept as it is and no longer read
+  await h.q(`UPDATE media_assets SET is_cover = 1 WHERE id = $1`, [second.id]);
+
+  const pictureRow = await gridRowOf(h, pictured);
+  if (pictureRow?.featuredImage !== '/uploads/featured-thumb.webp') wrong.push(`grid featured image of a pictured item ${JSON.stringify(pictureRow)}`);
+  const imageOnlyRow = await gridRowOf(h, imageOnly);
+  if (imageOnlyRow?.featuredImage !== '/uploads/only-full.webp') wrong.push(`grid featured image of an item without thumbnail ${JSON.stringify(imageOnlyRow)}`);
+  const bareRow = await gridRowOf(h, bare);
+  if (bareRow?.featuredImage !== null || bareRow.fallbackAssetId !== first.id) wrong.push(`grid row of an item without picture ${JSON.stringify(bareRow)}, expected the first file ${first.id}`);
+
+  const detail = await h.get(`/api/media/products/${pictured.id}`, manager);
+  const featured = (detail.body as { featuredImage?: { image: string | null; thumbnail: string | null } }).featuredImage;
+  if (featured?.image !== '/uploads/featured-full.webp' || featured.thumbnail !== '/uploads/featured-thumb.webp') wrong.push(`product page featured image ${brief(detail)}`);
+
+  const [before] = await h.q(`SELECT version FROM items WHERE id = $1`, [bare.id]);
+  const set = await h.post(`/api/media/assets/${first.id}/item-image`, { version: Number(before.version) }, manager);
+  const saved = (set.body as { data?: { thumbnail: string } }).data;
+  const afterRow = await gridRowOf(h, bare);
+  if (set.status !== 200 || !saved || afterRow?.featuredImage !== saved.thumbnail) wrong.push(`grid after setting the featured image ${JSON.stringify(afterRow)} answer ${brief(set)}`);
+
+  const coverRoute = await h.put(`/api/media/assets/${second.id}/cover`, { cover: true }, manager);
+  if (coverRoute.status !== 404) wrong.push(`the retired cover route answered ${brief(coverRoute)}, expected 404`);
+  const [mark] = await h.q(`SELECT is_cover FROM media_assets WHERE id = $1`, [second.id]);
+  if (Number(mark.is_cover) !== 1) wrong.push('the stored cover mark was rewritten');
+  return `pictured ${pictureRow?.featuredImage}; bare fallback ${bareRow?.fallbackAssetId}; set ${set.status}; cover route ${coverRoute.status}`;
 }
 
 async function replaceCase(h: Harness, wrong: string[]): Promise<string> {
@@ -239,7 +265,6 @@ async function replaceCase(h: Harness, wrong: string[]): Promise<string> {
   const titled = await h.put(`/api/media/assets/${asset.id}`, { version: asset.version, title: 'نمای کنار', tags: ['ویترین'] }, owner);
   if (titled.status !== 200) wrong.push(`card edit answered ${brief(titled)}`);
   await h.put('/api/media/assets/order', { sectionId: products, itemId: item.id, ids: [neighbour.id, asset.id] }, manager);
-  await h.put(`/api/media/assets/${asset.id}/cover`, { cover: true }, manager);
 
   const url = `/api/media/assets/${asset.id}/content`;
   const byOther = await send(h, other, 'put', url, await noisyJpeg(900, 700), 'image/jpeg', 'x.jpg');
@@ -259,8 +284,8 @@ async function replaceCase(h: Harness, wrong: string[]): Promise<string> {
     wrong.push(`replace answered ${brief(replaced)}`);
     return 'replace failed';
   }
-  if (after.title !== 'نمای کنار' || JSON.stringify(after.tags) !== JSON.stringify(['ویترین']) || !after.isCover || after.sortOrder !== 2) {
-    wrong.push(`the card after replace ${JSON.stringify({ title: after.title, tags: after.tags, isCover: after.isCover, sortOrder: after.sortOrder })}`);
+  if (after.title !== 'نمای کنار' || JSON.stringify(after.tags) !== JSON.stringify(['ویترین']) || after.sortOrder !== 2) {
+    wrong.push(`the card after replace ${JSON.stringify({ title: after.title, tags: after.tags, sortOrder: after.sortOrder })}`);
   }
   if (after.width !== 1400 || !after.hasLight || !after.hasThumb || after.originalName !== 'بهتر.jpg') wrong.push(`the new file facts ${JSON.stringify(after).slice(0, 200)}`);
   const [row] = await h.q(`SELECT sha256 FROM media_assets WHERE id = $1`, [asset.id]);
