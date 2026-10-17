@@ -81,7 +81,8 @@ export async function runPayrollHygieneA7Tests(shouldRun: ShouldRun): Promise<Te
       const event = (await pool.query<{ payload: Record<string, unknown> }>(
         `SELECT payload FROM outbox_events WHERE aggregate_type = 'Treasury' AND aggregate_id = $1`, [String(reversal?.id ?? 0)])).rows[0];
       if (!event) problems.push('no outbox event carries the reversal row id');
-      else if (event.payload.isReversal !== true || Number(event.payload.voidedTransactionId) !== transactionId || Number(event.payload.amount) !== 400_000) {
+      // v10.1.66: a payslip payment's treasury event carries no amount (a salary is for payroll readers only)
+      else if (event.payload.isReversal !== true || Number(event.payload.voidedTransactionId) !== transactionId || 'amount' in event.payload) {
         problems.push(`the reversal event payload is ${JSON.stringify(event.payload).slice(0, 200)}`);
       }
 

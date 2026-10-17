@@ -115,5 +115,59 @@ export async function runClosingDomainEventsTests(shouldRun: ShouldRun): Promise
     });
   }
 
+  const privacyId = 'reg_payroll_treasury_event_privacy_and_void_events';
+  if (shouldRun(privacyId, 'obs-r2-13', 'payroll', 'event', 'outbox', 'privacy')) {
+    await runCase(results, privacyId, 'v10.1.66: a payslip payment and its void send their treasury event without amount, name or text, the void writes PayrollPaymentVoided and deleting the payslip PayrollDeleted (review of #306)', async () => {
+      const problems: string[] = [];
+      const name = `ERP-TEST-MARKER privacy ${tagOf()}`;
+      const workerId = await newWorker(name);
+      await addLog(workerId, await newTask(), '2026-04-06', 900_000);
+      const issued = await PieceworkPayrollService.generatePayroll({ personnelId: workerId, startDate: '2026-04-01', endDate: '2026-04-30', username: 'inv' });
+      if (!issued.payroll) throw new Error(`setup: issuing the payslip failed (${issued.error})`);
+      const id = issued.payroll.id;
+      await PieceworkPayrollService.updatePayrollStatus(id, { status: 'approved', username: 'inv' });
+      const api = await adminClient();
+      const paid = await api.post(`/api/piecework/payrolls/${id}/register-payment`, { bankAccountId: await fundedBank(), method: 'bank_transfer', amount: 300_000 });
+      if (paid.status !== 200) throw new Error(`setup: payment ${paid.status}`);
+      const rows = async () => (await pool.query<{ id: number; reversal_of_id: number | null }>(
+        'SELECT id, reversal_of_id FROM treasury_transactions WHERE payroll_id = $1 ORDER BY id', [id])).rows;
+      const payment = (await rows())[0];
+      if (!payment) throw new Error('setup: no treasury row for the payment');
+      const leaks = (payload: Record<string, unknown>) => {
+        const found = ['amount', 'remainingAmount', 'description', 'reason', 'partyName'].filter(key => key in payload);
+        if (JSON.stringify(payload).includes(name)) found.push('the employee name');
+        return found;
+      };
+      const paidEvent = (await eventsOf('Treasury', payment.id)).find(e => e.event_type === 'TreasuryTransactionApproved');
+      if (!paidEvent) problems.push('the payment wrote no TreasuryTransactionApproved');
+      else if (leaks(paidEvent.payload).length > 0) problems.push(`the payment event carries ${leaks(paidEvent.payload).join(', ')}`);
+      else if (paidEvent.payload.payrollId !== id || paidEvent.payload.isFullyPaid !== false) problems.push(`payment event ${JSON.stringify(paidEvent.payload).slice(0, 200)}`);
+
+      const voided = await api.post(`/api/piecework/payrolls/${id}/payments/${payment.id}/void`, { reason: `voided for ${name}` });
+      if (voided.status !== 200) throw new Error(`setup: void ${voided.status} ${JSON.stringify(voided.body).slice(0, 200)}`);
+      const reversal = (await rows()).find(r => r.reversal_of_id === payment.id);
+      const voidEvent = reversal ? (await eventsOf('Treasury', reversal.id)).find(e => e.event_type === 'TreasuryTransactionApproved') : undefined;
+      if (!voidEvent) problems.push('the void wrote no TreasuryTransactionApproved');
+      else if (leaks(voidEvent.payload).length > 0) problems.push(`the void event carries ${leaks(voidEvent.payload).join(', ')}`);
+      const payrollVoided = (await eventsOf('Payroll', id)).filter(e => e.event_type === 'PayrollPaymentVoided');
+      if (payrollVoided.length !== 1) problems.push(`expected 1 PayrollPaymentVoided, got ${payrollVoided.length}`);
+      else if (payrollVoided[0].payload.voidedTransactionId !== payment.id || payrollVoided[0].payload.status !== 'approved' || leaks(payrollVoided[0].payload).length > 0) {
+        problems.push(`PayrollPaymentVoided ${JSON.stringify(payrollVoided[0].payload).slice(0, 200)}`);
+      }
+
+      await PieceworkPayrollService.deletePayroll(id, { username: 'inv' });
+      const deleted = (await eventsOf('Payroll', id)).filter(e => e.event_type === 'PayrollDeleted');
+      if (deleted.length !== 1) problems.push(`expected 1 PayrollDeleted, got ${deleted.length}`);
+
+      const draft = await PieceworkPayrollService.generatePayroll({ personnelId: workerId, startDate: '2026-04-01', endDate: '2026-04-30', username: 'inv' });
+      if (draft.payroll) {
+        await PieceworkPayrollService.deletePayroll(draft.payroll.id, { username: 'inv' });
+        if ((await eventsOf('Payroll', draft.payroll.id)).length !== 0) problems.push('deleting a draft payslip wrote a payroll event');
+      }
+      if (problems.length) throw new Error(problems.join(' | '));
+      return 'payment and void treasury events without amount, name or text; PayrollPaymentVoided and PayrollDeleted once; nothing for a draft';
+    });
+  }
+
   return results;
 }

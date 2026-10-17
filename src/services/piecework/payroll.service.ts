@@ -19,7 +19,7 @@ import { workLogFreeOfLivePayroll } from './workLogPayrollLink.js';
 import { auditPayrollDeleted, auditPayrollIssued, auditPayrollUpdated } from './pieceworkAudit.js';
 import { payrollStatusLabel } from '../../lib/payroll/payrollStatusLabels.js';
 import { assertPayrollDutyNotByIssuer } from './payrollDuties.js';
-import { onPayslipApproved } from './payrollEvents.js';
+import { onPayslipApproved, onPayslipDeleted } from './payrollEvents.js';
 import { resolvePayrollStatutory, statutoryAuditInfo, statutoryPayrollColumns, type StatutoryEntryInput } from './payrollStatutory.js';
 import { isEidiCovered } from '../../lib/payroll/eidi.js';
 import { assertEidiShareNotSettled, lockPayrollPersonnel, payslipEidiColumns, resolvePayslipEidiShare } from './payrollEidi.js';
@@ -517,6 +517,8 @@ export class PieceworkPayrollService {
         voidedVoucherIds: linkedVouchers.map(v => v.id),
         freedLogIds: freedLogs.map(l => l.id),
       }, { req: options?.req, userId: operatorId ?? undefined, username: operatorName });
+      // v10.1.66 (ت۴۰): a payslip past draft told its subscribers so; its delete is told too, in this transaction
+      await onPayslipDeleted(tx, pay, updatedPay || pay, { userId: operatorId ?? undefined, username: operatorName });
 
       return updatedPay || pay;
     };
