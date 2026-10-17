@@ -152,6 +152,9 @@ export const crmLeadStageHistory = pgTable('crm_lead_stage_history', {
   changedById: integer('changed_by_id').references(() => users.id),
   changedByName: text('changed_by_name').notNull().default(''),
   changedAt: timestamp('changed_at', { mode: 'string' }).notNull().defaultNow(),
+  // v10.1.69 (migration 0125): `live` از همین نسخه به بعد؛ `backfill` / `backfill_estimated` بازسازی تاریخچه پیش از ۱۰.۱.۱۸
+  // از دفترچه اقدامات پرونده (`erp_backfill_crm_lead_stage_history`)، دومی با مرحله یا تاریخ تخمینی
+  source: text('source').notNull().default('live'),
 }, (table) => ({
   idx_crm_lead_stage_history_lead: index('idx_crm_lead_stage_history_lead').on(table.leadId, table.changedAt),
   idx_crm_lead_stage_history_changed_at: index('idx_crm_lead_stage_history_changed_at').on(table.changedAt),

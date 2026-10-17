@@ -32,7 +32,8 @@ const days = (value: number | null) => (value === null ? '—' : `${formatPersia
 /**
  * v10.1.18 (N-02 بخش ۲، تصمیم ت۷): زبانه «گزارش قیف» صفحه ارتباط با مشتری از `GET /crm/reports/funnel`: برای هر مرحله
  * شمار ورود، پیشرفت به مرحله بعد، درصد پیشرفت و میانگین روزهای ماندن، و دلیل‌های از دست رفتن، در یک بازه و برای یک
- * فروشنده. تغییرهای مرحله پیش از این نسخه ثبت نشده‌اند و در گزارش نمی‌آیند.
+ * فروشنده. تغییرهای مرحله پیش از این نسخه را v10.1.69 از دفترچه تماس‌ها و اقدامات بازسازی کرد و شمار ورودهای تخمینی
+ * آن زیر قیف گفته می‌شود.
  */
 export function CRMFunnelReport({ personnelList = [] }: { personnelList?: PersonnelOption[] }) {
   const todayIso = getTodayIsoDate();
@@ -80,7 +81,10 @@ export function CRMFunnelReport({ personnelList = [] }: { personnelList?: Person
                 </div>
               </div>
             ))}
-            <p className="text-[10px] text-slate-400">تغییر مرحله‌های پیش از نسخه ۱۰.۱.۱۸ ثبت نشده‌اند و در این گزارش نیستند.</p>
+            <p className="text-[10px] text-slate-400" data-testid="funnel-backfill-note">
+              تغییر مرحله‌های پیش از نسخه ۱۰.۱.۱۸ از دفترچه تماس‌ها و اقدامات پرونده‌ها بازسازی شده‌اند.
+              {(data?.estimatedEntries ?? 0) > 0 && <> مرحله یا تاریخ {formatPersianNumber(data?.estimatedEntries ?? 0)} ورود این بازه تخمینی است.</>}
+            </p>
           </div>
           <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-2">
             <h4 className="font-bold text-xs text-slate-800 flex items-center gap-1.5">

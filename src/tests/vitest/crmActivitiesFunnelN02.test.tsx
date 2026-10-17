@@ -99,6 +99,7 @@ describe('CRM activities, lost reason and funnel (N-02 part 2)', () => {
         { stage: 'proposal', entered: 1, advanced: 1, conversionPercent: 100, avgDays: 3, measured: 1 },
         { stage: 'won', entered: 1, advanced: 0, conversionPercent: null, avgDays: null, measured: 0 },
       ],
+      estimatedEntries: 3,
       lost: { count: 2, reasons: [{ reason: 'competitor', count: 1 }, { reason: 'price', count: 1 }] },
     };
     fetchJson.mockResolvedValue(report);
@@ -107,5 +108,8 @@ describe('CRM activities, lost reason and funnel (N-02 part 2)', () => {
     expect(String(fetchJson.mock.calls[0][0])).toMatch(/^\/crm\/reports\/funnel\?fromDate=/);
     expect(screen.getByTestId('funnel-stage-lead').textContent).toContain('۵۰٪');
     expect(screen.getByText('قیمت')).toBeTruthy();
+    // v10.1.69: the earlier history is rebuilt from the activity log and its estimated entries are counted
+    expect(screen.getByTestId('funnel-backfill-note').textContent).toContain('بازسازی شده‌اند');
+    expect(screen.getByTestId('funnel-backfill-note').textContent).toContain('۳ ورود این بازه تخمینی است');
   });
 });
