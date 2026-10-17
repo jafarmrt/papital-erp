@@ -9,12 +9,13 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { ConflictError } from '../../errors/customErrors.js';
 import { getAutomationStatus } from '../../services/accounting/automationStatus.service.js';
+import { idempotency } from '../../middleware/idempotency.js';
 
 const router = Router();
 
 // اقدام سریع: صدور اسناد حسابداری فقط برای اسناد نهایی فاقد سند (v7.0.31 / TD-193 / audit P1-8)
 // هیچ سند حسابداری موجودی بازنویسی نمی‌شود؛ قفل مشورتی تضمین می‌کند در کل خوشه فقط یک اجرا فعال باشد.
-router.post('/accounting/quick-fix/sync-all-vouchers', authorizePermission('accounting.vouchers'), asyncHandler(async (req, res) => {
+router.post('/accounting/quick-fix/sync-all-vouchers', authorizePermission('accounting.vouchers'), idempotency({ scope: 'accounting' }), asyncHandler(async (req, res) => {
   const summary = await AccountingService.syncMissingDocumentVouchers({
     userId: req.user?.id,
     username: req.user?.username || 'system',

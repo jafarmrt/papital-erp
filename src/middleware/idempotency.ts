@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { IdempotencyService, type AcquireResult } from '../services/idempotency.service.js';
 import { logger } from './logger.js';
 import { asyncHandler } from './asyncHandler.js';
+import { IDEMPOTENT } from './idempotencyMark.js';
 
 export interface IdempotencyMiddlewareOptions {
   scope?: string;
@@ -22,7 +23,7 @@ export function idempotency(options: IdempotencyMiddlewareOptions = {}) {
   const headerName = (options.headerName || 'idempotency-key').toLowerCase();
   const altHeaderName = 'x-idempotency-key';
 
-  return asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  return Object.assign(asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     // Only apply idempotency to mutating HTTP methods
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method.toUpperCase())) {
       return next();
@@ -128,7 +129,7 @@ export function idempotency(options: IdempotencyMiddlewareOptions = {}) {
     res.send = (body?: unknown): Response => sendAfterFinalize(body, () => originalSend(body));
 
     next();
-  });
+  }), { [IDEMPOTENT]: true });
 }
 
 function parseBody(body: unknown): unknown {

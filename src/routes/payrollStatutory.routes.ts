@@ -9,6 +9,7 @@ import { PAYROLL_RATES_PERMISSION } from '../lib/permissions/pieceworkPermission
 import { listStatutoryRates, previewPayrollStatutory, saveStatutoryRates } from '../services/piecework/payrollStatutory.js';
 import { payrollStatutoryReport } from '../services/piecework/payrollStatutoryReport.js';
 import payrollEidiRoutes from './payrollEidi.routes.js';
+import { idempotency } from '../middleware/idempotency.js';
 
 /**
  * v10.0.210 (TD-1087، طرح حقوق §۳.۳، تصمیم ت۴ الف): نرخ‌های سالانه بیمه و مالیات حقوق (نوشتن با `payroll.rates_manage`)
@@ -52,7 +53,7 @@ router.get('/piecework/statutory-rates', authorizePermission(PAYROLL_RATES_PERMI
   res.json({ data: await listStatutoryRates() });
 }));
 
-router.put('/piecework/statutory-rates/:year', requirePermission(PAYROLL_RATES_PERMISSION), validate(saveRatesSchema), asyncHandler(async (req, res) => {
+router.put('/piecework/statutory-rates/:year', requirePermission(PAYROLL_RATES_PERMISSION), idempotency({ scope: 'piecework' }), validate(saveRatesSchema), asyncHandler(async (req, res) => {
   const body = req.body as z.infer<typeof saveRatesSchema>['body'];
   res.json(await saveStatutoryRates({ ...body, taxBrackets: body.taxBrackets, jalaliYear: Number(req.params.year), req }));
 }));

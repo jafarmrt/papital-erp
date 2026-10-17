@@ -87,7 +87,7 @@ router.post('/requisitions', authorizePermission('procurement.create', 'projects
  * PUT /api/procurement/requisitions/:id
  * Update requisition
  */
-router.put('/requisitions/:id', authorizePermission('procurement.manage'), validate(updateRequisitionSchema), asyncHandler(async (req, res) => {
+router.put('/requisitions/:id', authorizePermission('procurement.manage'), idempotency({ scope: 'procurement' }), validate(updateRequisitionSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const updated = await ProcurementService.updateRequisition(id, req.body, {
     id: req.user!.id,
@@ -105,7 +105,7 @@ router.put('/requisitions/:id', authorizePermission('procurement.manage'), valid
  * DELETE /api/procurement/requisitions/:id
  * Soft delete requisition
  */
-router.delete('/requisitions/:id', authorizePermission('procurement.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/requisitions/:id', authorizePermission('procurement.manage'), idempotency({ scope: 'procurement' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   await ProcurementService.deleteRequisition(id, {
     id: req.user!.id,
@@ -122,7 +122,7 @@ router.delete('/requisitions/:id', authorizePermission('procurement.manage'), va
  * POST /api/procurement/requisitions/:id/workflow-action
  * Execute workflow transition
  */
-router.post('/requisitions/:id/workflow-action', authorizePermission('procurement.approve', 'procurement.manage'), validate(workflowActionSchema), asyncHandler(async (req, res) => {
+router.post('/requisitions/:id/workflow-action', authorizePermission('procurement.approve', 'procurement.manage'), idempotency({ scope: 'procurement' }), validate(workflowActionSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const { actionKey, comment } = req.body;
 

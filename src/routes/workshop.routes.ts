@@ -80,14 +80,14 @@ router.post('/workshop/reports', requirePermission(WORKSHOP_SELF_PERMISSION), id
   res.status(201).json({ report });
 }));
 
-router.put('/workshop/reports/:id', requirePermission(WORKSHOP_SELF_PERMISSION), validate(editSchema), asyncHandler(async (req, res) => {
+router.put('/workshop/reports/:id', requirePermission(WORKSHOP_SELF_PERMISSION), idempotency({ scope: 'workshop' }), validate(editSchema), asyncHandler(async (req, res) => {
   const actor = actorOf(req);
   const body = req.body as z.infer<typeof editSchema>['body'];
   const report = await orm.transaction(tx => editWorkshopReport(tx, actor, Number(req.params.id), { ...body, quantity: toNumber(body.quantity) }));
   res.json({ report });
 }));
 
-router.post('/workshop/reports/:id/withdraw', requirePermission(WORKSHOP_SELF_PERMISSION), validate(withdrawSchema), asyncHandler(async (req, res) => {
+router.post('/workshop/reports/:id/withdraw', requirePermission(WORKSHOP_SELF_PERMISSION), idempotency({ scope: 'workshop' }), validate(withdrawSchema), asyncHandler(async (req, res) => {
   const actor = actorOf(req);
   const report = await orm.transaction(tx => withdrawWorkshopReport(tx, actor, Number(req.params.id), Number(req.body.version)));
   res.json({ report });
@@ -105,7 +105,7 @@ router.post('/workshop/reports/:id/approve', requirePermission(WORKSHOP_REVIEW_P
   res.json(result);
 }));
 
-router.post('/workshop/reports/:id/reject', requirePermission(WORKSHOP_REVIEW_PERMISSION), validate(rejectSchema), asyncHandler(async (req, res) => {
+router.post('/workshop/reports/:id/reject', requirePermission(WORKSHOP_REVIEW_PERMISSION), idempotency({ scope: 'workshop' }), validate(rejectSchema), asyncHandler(async (req, res) => {
   const actor = actorOf(req);
   const report = await orm.transaction(tx => rejectWorkshopReport(tx, actor, Number(req.params.id), req.body));
   res.json({ report });

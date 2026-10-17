@@ -176,7 +176,7 @@ router.get(
 router.post(
   '/warehouse-stock-reconciliation/repair',
   authorizePermission('inventory.reconcile'),
-  validate(warehouseStockRepairSchema),
+  idempotency({ scope: 'inventory' }), validate(warehouseStockRepairSchema),
   asyncHandler(async (req, res) => {
     const { dryRun, itemIds } = req.body as { dryRun: boolean; itemIds?: number[] };
     const userId = req.user?.id;
@@ -211,7 +211,7 @@ router.post(
 router.post(
   '/kardex-initial-backfill',
   authorizePermission('inventory.reconcile'),
-  asyncHandler(async (req, res) => {
+  idempotency({ scope: 'inventory' }), asyncHandler(async (req, res) => {
     const outcome = await KardexBackfillService.runExclusive();
     if (outcome.locked) {
       throw new ConflictError('ثبت موجودی اولیه کاردکس هم‌اکنون توسط کاربر یا نمونه دیگری در حال اجراست.');
@@ -237,7 +237,7 @@ router.post(
 router.post(
   '/rebuild-from-ledger',
   authorizePermission('inventory.reconcile'),
-  validate(rebuildStockSchema),
+  idempotency({ scope: 'inventory' }), validate(rebuildStockSchema),
   asyncHandler(async (req, res) => {
     const { itemId } = req.body || {};
     const user: AuthUserPayload | undefined = req.user;
@@ -294,7 +294,7 @@ router.post(
 router.post(
   '/correct-wac',
   authorizePermission(WAC_CORRECTION_PERMISSION),
-  validate(correctWacSchema),
+  idempotency({ scope: 'inventory' }), validate(correctWacSchema),
   asyncHandler(async (req, res) => {
     const user: AuthUserPayload | undefined = req.user;
     const result = await InventoryIntegrityService.correctItemWacFromLedger(Number(req.body.itemId), {

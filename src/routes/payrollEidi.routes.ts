@@ -55,7 +55,7 @@ router.get('/piecework/eidi-rates', authorizePermission(PAYROLL_RATES_PERMISSION
   res.json({ data: await listEidiRates() });
 }));
 
-router.put('/piecework/eidi-rates/:year', requirePermission(PAYROLL_RATES_PERMISSION), validate(saveRatesSchema), asyncHandler(async (req, res) => {
+router.put('/piecework/eidi-rates/:year', requirePermission(PAYROLL_RATES_PERMISSION), idempotency({ scope: 'piecework' }), validate(saveRatesSchema), asyncHandler(async (req, res) => {
   const body = req.body as z.infer<typeof saveRatesSchema>['body'];
   res.json(await saveEidiRates({ ...body, jalaliYear: Number(req.params.year), req }));
 }));

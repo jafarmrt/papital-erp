@@ -8,6 +8,7 @@ import { validate, paramsIdSchema, numericIdString } from '../middleware/validat
 import { logActivity } from '../lib/auditLogger.js';
 import { WarehouseService } from '../services/warehouse.service.js';
 import { orm } from '../db/drizzle.js';
+import { idempotency } from '../middleware/idempotency.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -42,7 +43,7 @@ router.get('/warehouses', validate(listWarehousesValidation), asyncHandler(async
   res.json(includeInactive ? await WarehouseService.listAll() : await WarehouseService.listActive());
 }));
 
-router.post('/warehouses', authorizePermission('warehouse.manage'), validate(createWarehouseValidation), asyncHandler(async (req, res) => {
+router.post('/warehouses', authorizePermission('warehouse.manage'), idempotency({ scope: 'warehouses' }), validate(createWarehouseValidation), asyncHandler(async (req, res) => {
   try {
     const { name, code } = req.body;
     const created = await WarehouseService.createWarehouse({ name, code });
@@ -63,7 +64,7 @@ router.post('/warehouses', authorizePermission('warehouse.manage'), validate(cre
   }
 }));
 
-router.put('/warehouses/:id', authorizePermission('warehouse.manage'), validate(updateWarehouseValidation), asyncHandler(async (req, res) => {
+router.put('/warehouses/:id', authorizePermission('warehouse.manage'), idempotency({ scope: 'warehouses' }), validate(updateWarehouseValidation), asyncHandler(async (req, res) => {
   try {
     const { name } = req.body;
     const id = Number(req.params.id);
@@ -82,7 +83,7 @@ router.put('/warehouses/:id', authorizePermission('warehouse.manage'), validate(
   } catch (err) { throw err; }
 }));
 
-router.delete('/warehouses/:id', authorizePermission('warehouse.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/warehouses/:id', authorizePermission('warehouse.manage'), idempotency({ scope: 'warehouses' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   // v9.0.112 (TD-490): غیرفعال‌سازی و ثبت ممیزی در یک تراکنش، زیر قفل ردیف انبار
   await orm.transaction(async (tx) => {
@@ -101,7 +102,7 @@ router.delete('/warehouses/:id', authorizePermission('warehouse.manage'), valida
 }));
 
 // v9.0.112 (TD-490، تصمیم ت۵ الف): فعال‌سازی دوباره انبار غیرفعال، فقط مدیر سیستم، با ممیزی در همان تراکنش
-router.post('/warehouses/:id/reactivate', requireSystemAdmin, validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.post('/warehouses/:id/reactivate', requireSystemAdmin, idempotency({ scope: 'warehouses' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const result = await orm.transaction(async (tx) => {
     const { previous, current } = await WarehouseService.reactivateWarehouse(id, tx);

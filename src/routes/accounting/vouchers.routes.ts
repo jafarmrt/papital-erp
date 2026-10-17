@@ -94,7 +94,7 @@ router.put('/accounting/vouchers/:id', authorizePermission('accounting.vouchers'
   res.json(voucher);
 }));
 
-router.delete('/accounting/vouchers/:id', authorizePermission('accounting.vouchers'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/accounting/vouchers/:id', authorizePermission('accounting.vouchers'), idempotency({ scope: 'accounting' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const before = await AccountingService.getJournalVoucherById(id); // v9.0.295 (TD-555): ممیزی حذف کل سند را دارد
   const result = await AccountingService.deleteJournalVoucher(id);
@@ -203,7 +203,7 @@ router.post('/accounting/vouchers/:id/finalize', authorizePermission('accounting
   res.json({ message: `سند شماره #${finalized.voucherNumber} با موفقیت قطعی و دائم شد.`, voucher: finalized });
 }));
 
-router.post('/accounting/vouchers/batch-finalize', authorizePermission('accounting.vouchers_approve'), validate(batchFinalizeVouchersSchema), asyncHandler(async (req, res) => {
+router.post('/accounting/vouchers/batch-finalize', authorizePermission('accounting.vouchers_approve'), idempotency({ scope: 'accounting' }), validate(batchFinalizeVouchersSchema), asyncHandler(async (req, res) => {
   const { ids } = req.body;
   const result = await AccountingService.finalizeJournalVouchers(
     ids,
@@ -227,7 +227,7 @@ router.post('/accounting/vouchers/batch-finalize', authorizePermission('accounti
   res.json({ message: batchFinalizeMessage(result), ...result });
 }));
 
-router.post('/accounting/vouchers/batch-approve', authorizePermission('accounting.vouchers_approve'), validate(batchApproveVouchersSchema), asyncHandler(async (req, res) => {
+router.post('/accounting/vouchers/batch-approve', authorizePermission('accounting.vouchers_approve'), idempotency({ scope: 'accounting' }), validate(batchApproveVouchersSchema), asyncHandler(async (req, res) => {
   const { ids } = req.body;
   const result = await AccountingService.approveJournalVouchers(
     ids,
@@ -254,7 +254,7 @@ router.post('/accounting/vouchers/batch-approve', authorizePermission('accountin
   res.json({ message: `${toPersianDigits(String(result.approvedCount))} سند پیش‌نویس تأیید حسابداری شد${refusedNote}.`, ...result });
 }));
 
-router.put('/accounting/vouchers/:id/status', authorizePermission('accounting.vouchers_approve'), validate(setVoucherStatusSchema), asyncHandler(async (req, res) => {
+router.put('/accounting/vouchers/:id/status', authorizePermission('accounting.vouchers_approve'), idempotency({ scope: 'accounting' }), validate(setVoucherStatusSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const { status, reason } = req.body;
 

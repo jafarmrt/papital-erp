@@ -16,6 +16,7 @@ import {
   fiscalClosingExecuteSchema,
   fiscalYearReopenSchema,
 } from './accounting.schemas.js';
+import { idempotency } from '../../middleware/idempotency.js';
 
 const router = Router();
 
@@ -38,7 +39,7 @@ router.get('/accounting/fiscal-closing/preview', authorizePermission('accounting
   res.json(data);
 }));
 
-router.post('/accounting/fiscal-closing/execute', authorizePermission('accounting.fiscal_close'), validate(fiscalClosingExecuteSchema), asyncHandler(async (req, res) => {
+router.post('/accounting/fiscal-closing/execute', authorizePermission('accounting.fiscal_close'), idempotency({ scope: 'accounting' }), validate(fiscalClosingExecuteSchema), asyncHandler(async (req, res) => {
   const { year, closingDate, openingDateNewYear, createOpeningVoucher } = req.body;
 
   const result = await AccountingService.executeFiscalYearClosing({
@@ -66,7 +67,7 @@ router.post('/accounting/fiscal-closing/execute', authorizePermission('accountin
 }));
 
 // v9.0.161 (TD-543، تصمیم ت۲ مالک محصول): فقط آخرین سال بسته، با دلیل؛ ممیزی درون تراکنش بازگشایی ثبت می‌شود
-router.post('/accounting/fiscal-closing/reopen', requirePermission('accounting.fiscal_reopen'), validate(fiscalYearReopenSchema), asyncHandler(async (req, res) => {
+router.post('/accounting/fiscal-closing/reopen', requirePermission('accounting.fiscal_reopen'), idempotency({ scope: 'accounting' }), validate(fiscalYearReopenSchema), asyncHandler(async (req, res) => {
   const { year, reason } = req.body;
   const result = await reopenFiscalYear({
     year,

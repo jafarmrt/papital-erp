@@ -2,6 +2,7 @@ import type { Express } from 'express';
 import { GUARD_ENTRIES } from '../middleware/authorize.js';
 import { AUTHENTICATES } from '../middleware/auth.js';
 import { VALIDATES } from '../middleware/validate.js';
+import { IDEMPOTENT } from '../middleware/idempotencyMark.js';
 
 /**
  * جدول «مسیر ← مجوز» از خود روترهای Express (حوزه H نقشه راه V8).
@@ -19,6 +20,8 @@ export interface RouteGuardRow {
   validated: boolean;
   /** v10.0.35 (TD-979): اسکیمای `validate` آن کلید `body` دارد */
   validatesBody: boolean;
+  /** v10.1.64 (OBS-R2-14): the route itself runs the `idempotency` middleware */
+  idempotent: boolean;
 }
 
 interface ExpressLayer {
@@ -70,11 +73,12 @@ function walk(stack: ExpressLayer[], prefix: string, inherited: Chain, rows: Rou
       let routeChain = chain;
       for (const handlerLayer of layer.route.stack) routeChain = applyMiddleware(routeChain, handlerLayer.handle);
       const validation = validationOf(layer.route.stack);
+      const idempotent = layer.route.stack.some(l => typeof l.handle === 'function' && (l.handle as unknown as Record<string, unknown>)[IDEMPOTENT] === true);
       const paths = Array.isArray(layer.route.path) ? layer.route.path : [layer.route.path];
       for (const method of Object.keys(layer.route.methods)) {
         if (method === '_all') continue;
         for (const p of paths) {
-          rows.push({ method: method.toUpperCase(), path: `${prefix}${p}`, authenticated: routeChain.authenticated, guards: routeChain.guards, ...validation });
+          rows.push({ method: method.toUpperCase(), path: `${prefix}${p}`, authenticated: routeChain.authenticated, guards: routeChain.guards, ...validation, idempotent });
         }
       }
       continue;
