@@ -221,7 +221,8 @@ METRICS_TOKEN_VALUE="$(env_val METRICS_TOKEN)"
 if [ -z "$METRICS_TOKEN_VALUE" ]; then
   warnc "METRICS_TOKEN not set in .env - /metrics cannot be read and scripts/monitor.sh cannot check the event queue"
 else
-  METRICS="$(curl -fsS --max-time 5 -H "X-Metrics-Token: $METRICS_TOKEN_VALUE" "$BASE_URL/metrics" 2>/dev/null | head -1 || true)"
+  # the token goes to curl on stdin (--config -), never on its command line, where ps would show it to other users
+  METRICS="$(printf 'header = "X-Metrics-Token: %s"\n' "$METRICS_TOKEN_VALUE" | curl -fsS --max-time 5 --config - "$BASE_URL/metrics" 2>/dev/null | head -1 || true)"
   echo "$METRICS" | grep -qE '^# (HELP|TYPE)' && ok "/metrics serving Prometheus format (METRICS_TOKEN)" || bad "/metrics not readable with METRICS_TOKEN from .env"
 fi
 
