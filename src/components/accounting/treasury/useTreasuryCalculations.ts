@@ -19,6 +19,8 @@ export function useTreasuryCalculations({ bankAccounts }: UseTreasuryCalculation
     const discrepancy = safeBankAccounts.reduce((sum, b) => sum + (Number(b.discrepancy) || 0), 0);
     const syncedCount = safeBankAccounts.filter(b => b.syncStatus === 'synced').length;
     const discrepantCount = safeBankAccounts.filter(b => b.syncStatus === 'discrepant').length;
+    // v10.1.66: an account whose only difference is a draft voucher is counted on its own, never as «همگام» or «مغایرت»
+    const pendingApprovalCount = safeBankAccounts.filter(b => b.syncStatus === 'pending_approval').length;
 
     return {
       totalLedgerBalance: totalLedger,
@@ -26,6 +28,7 @@ export function useTreasuryCalculations({ bankAccounts }: UseTreasuryCalculation
       totalDiscrepancy: discrepancy,
       syncedAccountsCount: syncedCount,
       discrepantAccountsCount: discrepantCount,
+      pendingApprovalAccountsCount: pendingApprovalCount,
       totalAccountsCount: safeBankAccounts.length,
     };
   }, [safeBankAccounts]);
