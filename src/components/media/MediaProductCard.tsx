@@ -5,7 +5,7 @@ import { mediaFileUrl, type MediaProductRow } from '../../lib/media/mediaApi';
 import { SafeImage } from '../SafeImage';
 
 /**
- * One product of the media library grid: its featured image (the item's own picture, v10.1.69; else the first library
+ * One product of the media library grid: its featured image (the item's own picture, v10.1.70; else the first library
  * file while the item has none), counts and a low quality badge
  */
 export function MediaProductCard({ row }: { row: MediaProductRow }) {

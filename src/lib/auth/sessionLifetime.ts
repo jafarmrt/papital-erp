@@ -3,7 +3,7 @@ import { WORKSHOP_LONG_SESSION_PERMISSION, WORKSHOP_SELF_PERMISSION } from '../p
 
 /**
  * v10.1.37 (N-01, TD-1283, decision ت۱۱ الف of the mobile workshop plan): a login lasts 24 hours, and seven days for a
- * role that holds `workshop.long_session` (the «کارکن کارگاه» template), so a worker on the shop floor is not asked for
+ * role that holds `workshop.long_session` (the «همکار کارگاه» template), so a worker on the shop floor is not asked for
  * the password every morning. The key is read from the role's own stored permissions: the system admin, who passes
  * every check, never gets the long session. Only a workshop-only role gets it: a role holding any key outside
  * `LONG_SESSION_ROLE_KEYS` keeps 24 hours, so a role with wider powers never gets a seven-day login.

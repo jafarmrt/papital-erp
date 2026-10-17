@@ -4,7 +4,7 @@ import type { MediaAssetView } from '../../lib/media/mediaApi';
 export const MOVE_EARLIER_TEXT = 'جابه‌جایی به قبل';
 export const MOVE_LATER_TEXT = 'جابه‌جایی به بعد';
 export const REPLACE_TEXT = 'جایگزینی با نسخه بهتر';
-/** v10.1.69: the item's picture is the product's one featured image, so the library sets it instead of its own cover */
+/** v10.1.70: the item's picture is the product's one featured image, so the library sets it instead of its own cover */
 export const ITEM_IMAGE_TEXT = 'تصویر شاخص محصول شود';
 
 /** What one tile may do besides download, edit and delete; each flag follows the key its route asks */

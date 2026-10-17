@@ -13,7 +13,7 @@ interface Props {
   canChange: boolean;
 }
 
-/** v10.1.69: the product's one featured image (the item's own picture), shown on its media library page */
+/** v10.1.70: the product's one featured image (the item's own picture), shown on its media library page */
 export function MediaFeaturedImage({ name, image, canChange }: Props) {
   const src = image.thumbnail || image.image;
   return (

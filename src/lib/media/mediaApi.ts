@@ -45,7 +45,7 @@ export interface MediaProductRow {
   imageCount: number;
   videoCount: number;
   lowQualityCount: number;
-  /** v10.1.69: the item's own picture, the product's one featured image in the whole app */
+  /** v10.1.70: the item's own picture, the product's one featured image in the whole app */
   featuredImage: string | null;
   /** the first library file with a thumbnail, shown only while the item has no picture */
   fallbackAssetId: number | null;

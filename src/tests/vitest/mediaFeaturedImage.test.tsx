@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { MediaAssetView, MediaProductDetail, MediaProductRow } from '../../lib/media/mediaApi';
 import { MediaProductCard } from '../../components/media/MediaProductCard';
 
-// v10.1.69: the item's own picture is the product's one featured image. The library grid card shows it (a library file
+// v10.1.70: the item's own picture is the product's one featured image. The library grid card shows it (a library file
 // only while the item has none), the product page shows it with the button that changes it, and the library's own cover
 // button and badge are gone.
 

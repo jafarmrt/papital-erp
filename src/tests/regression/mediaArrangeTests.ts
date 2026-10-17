@@ -11,7 +11,7 @@ import { createTestItem } from '../fixtures/factories.js';
 
 /**
  * Series 10, N-05 PR 3 (v10.0.247+): the other sections of the media library, file tags, the order of a product's files,
- * replacing a file's content and using a library image as the item's picture. v10.1.69: the item's picture is the
+ * replacing a file's content and using a library image as the item's picture. v10.1.70: the item's picture is the
  * product's one featured image in the library too, and the library's own cover route is gone.
  */
 export async function runMediaArrangeTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
@@ -25,8 +25,8 @@ export async function runMediaArrangeTests(shouldRun: ShouldRun): Promise<TestCa
     ['reg_media_order_n05',
       'v10.0.247: a product files order is set as a whole by media.manage only (N-05)',
       ['n05', 'media', 'permissions'], orderCase],
-    ['reg_media_featured_image_v10169',
-      'v10.1.69: the library grid and product page show the item picture as the featured image, a library file only while the item has none, and the cover route is gone',
+    ['reg_media_featured_image_v10170',
+      'v10.1.70: the library grid and product page show the item picture as the featured image, a library file only while the item has none, and the cover route is gone',
       ['n05', 'media', 'items'], featuredImageCase],
     ['reg_media_replace_n05',
       'v10.0.247: replacing a file keeps its card and order, keeps the old original on disk and refuses the same content, a duplicate or another kind (N-05)',
@@ -223,7 +223,7 @@ async function featuredImageCase(h: Harness, wrong: string[]): Promise<string> {
   await uploadTo(h, manager, `${scope(pictured.id)}&shotType=side`, await noisyJpeg(900, 700));
   const first = await uploadTo(h, manager, `${scope(bare.id)}&shotType=white_background`, await noisyJpeg(900, 700));
   const second = await uploadTo(h, manager, `${scope(bare.id)}&shotType=side`, await noisyJpeg(900, 700));
-  // a cover mark stored before v10.1.69 is kept as it is and no longer read
+  // a cover mark stored before v10.1.70 is kept as it is and no longer read
   await h.q(`UPDATE media_assets SET is_cover = 1 WHERE id = $1`, [second.id]);
 
   const pictureRow = await gridRowOf(h, pictured);

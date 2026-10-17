@@ -8,7 +8,7 @@ import { orderAfterMove } from '../../components/media/useMediaGalleryActions';
 
 // v10.0.247 (N-05 PR 3): a product gallery shows the order buttons only to media.manage, «replace with a better version» by
 // the file's change rule and the item picture button to media.manage or products.edit, each sending the body its route
-// takes; the edit form sends normalized tags and shows the tag error under the field. v10.1.69: the item picture is the
+// takes; the edit form sends normalized tags and shows the tag error under the field. v10.1.70: the item picture is the
 // product's one featured image, so the button says so and the library's own cover button is gone.
 
 let granted = new Set<string>();
