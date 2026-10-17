@@ -18,6 +18,10 @@ describe('unsupported_k8s_and_no_staging_obs_r1_15', () => {
     expect(ci).not.toContain('staging.erp.example.com');
   });
 
+  it('no_staging_word_in_ci: neither the triggers nor the header comment name a staging branch or deploy (#309 review)', () => {
+    expect(ci.toLowerCase()).not.toContain('staging');
+  });
+
   it('the Kubernetes manifest says at its top that it is an unsupported example', () => {
     expect(manifest.split('\n').slice(0, 5).join('\n')).toContain('UNSUPPORTED EXAMPLE');
   });

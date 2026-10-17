@@ -2,7 +2,7 @@
 # Multi-stage CI: lint-and-typecheck (+version-sync) → database-integration-tests → coverage-soft-gate (non-blocking) + e2e-critical-path (Playwright) → client-server-build → docker-build-gate
 # v10.0.192 (product-owner decision t20): the check jobs (lint, database tests, coverage, e2e, build, docker build) all start
 # at once and none waits for another, so a PR result comes after the longest job instead of after the sum of the chain;
-# every job still has to pass. Only the image push (docker-publish) and the staging deploy wait for all of them.
+# every job still has to pass. Only the image push (docker-publish) waits for all of them.
 # The database jobs start the runner's own PostgreSQL 16 (scripts/ci-start-postgres.sh), no image pull.
 # TD-471: actions on their Node 24 majors (v7) and runners pinned to ubuntu-24.04 (ubuntu-latest moves to Ubuntu 26 on 2026-10-19);
 # raise the pin deliberately in its own change after checking the PostgreSQL service, Playwright and Docker steps.
@@ -16,9 +16,9 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [main, master, staging, 'release/**']
+    branches: [main, master, 'release/**']
   pull_request:
-    branches: [main, master, staging]
+    branches: [main, master]
   workflow_dispatch:
 
 concurrency:
