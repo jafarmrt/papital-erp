@@ -285,7 +285,7 @@ router.get('/piecework/tasks/:id/history', authorizePermission(...READ_PERMISSIO
 }));
 
 // POST /api/piecework/tasks - Create new task
-router.post('/piecework/tasks', requirePermission(PIECEWORK_TASKS_PERMISSION), validate(createPieceworkTaskSchema), asyncHandler(async (req, res) => {
+router.post('/piecework/tasks', requirePermission(PIECEWORK_TASKS_PERMISSION), idempotency({ scope: 'piecework' }), validate(createPieceworkTaskSchema), asyncHandler(async (req, res) => {
   try {
     const { code, title, category, defaultRate, unit, description } = req.body;
 
@@ -317,7 +317,7 @@ router.post('/piecework/tasks', requirePermission(PIECEWORK_TASKS_PERMISSION), v
 }));
 
 // POST /api/piecework/tasks/import-excel - Bulk import piecework tasks
-router.post('/piecework/tasks/import-excel', requirePermission(PIECEWORK_TASKS_PERMISSION), validate(pieceworkTaskImportSchema), asyncHandler(async (req, res) => {
+router.post('/piecework/tasks/import-excel', requirePermission(PIECEWORK_TASKS_PERMISSION), idempotency({ scope: 'piecework' }), validate(pieceworkTaskImportSchema), asyncHandler(async (req, res) => {
   try {
     const { rows, mode = 'upsert' } = req.body;
     if (!Array.isArray(rows) || rows.length === 0) {
@@ -356,7 +356,7 @@ router.post('/piecework/tasks/import-excel', requirePermission(PIECEWORK_TASKS_P
 }));
 
 // POST /api/piecework/tasks/clear-defaults or clear-all
-router.post(['/piecework/tasks/clear-defaults', '/piecework/tasks/clear-all'], requirePermission(PIECEWORK_TASKS_PERMISSION), asyncHandler(async (req, res) => {
+router.post(['/piecework/tasks/clear-defaults', '/piecework/tasks/clear-all'], requirePermission(PIECEWORK_TASKS_PERMISSION), idempotency({ scope: 'piecework' }), asyncHandler(async (req, res) => {
   try {
     const count = await PieceworkService.clearAllTasks({
       userId: req.user?.id,
@@ -383,7 +383,7 @@ router.post(['/piecework/tasks/clear-defaults', '/piecework/tasks/clear-all'], r
 }));
 
 // PUT /api/piecework/tasks/:id - Update task
-router.put('/piecework/tasks/:id', requirePermission(PIECEWORK_TASKS_PERMISSION), validate(updatePieceworkTaskSchema), asyncHandler(async (req, res) => {
+router.put('/piecework/tasks/:id', requirePermission(PIECEWORK_TASKS_PERMISSION), idempotency({ scope: 'piecework' }), validate(updatePieceworkTaskSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { code, title, category, defaultRate, unit, description, isActive } = req.body;
@@ -410,7 +410,7 @@ router.put('/piecework/tasks/:id', requirePermission(PIECEWORK_TASKS_PERMISSION)
 }));
 
 // DELETE /api/piecework/tasks/:id
-router.delete('/piecework/tasks/:id', requirePermission(PIECEWORK_TASKS_PERMISSION), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/piecework/tasks/:id', requirePermission(PIECEWORK_TASKS_PERMISSION), idempotency({ scope: 'piecework' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const existing = await PieceworkService.deleteTask(id, {
@@ -435,7 +435,7 @@ router.delete('/piecework/tasks/:id', requirePermission(PIECEWORK_TASKS_PERMISSI
 }));
 
 // POST /api/piecework/tasks/:id/restore - Restore an archived/deleted task
-router.post('/piecework/tasks/:id/restore', requirePermission(PIECEWORK_TASKS_PERMISSION), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.post('/piecework/tasks/:id/restore', requirePermission(PIECEWORK_TASKS_PERMISSION), idempotency({ scope: 'piecework' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const existing = await PieceworkService.restoreTask(id, {
@@ -476,7 +476,7 @@ router.get('/piecework/categories', authorizePermission(...READ_PERMISSIONS.piec
 }));
 
 // POST /api/piecework/categories
-router.post('/piecework/categories', requirePermission(PIECEWORK_TASKS_PERMISSION), validate(createTaskCategorySchema), asyncHandler(async (req, res) => {
+router.post('/piecework/categories', requirePermission(PIECEWORK_TASKS_PERMISSION), idempotency({ scope: 'piecework' }), validate(createTaskCategorySchema), asyncHandler(async (req, res) => {
   try {
     const { name, description } = req.body;
     const inserted = await PieceworkService.createCategory({ name, description });
@@ -498,7 +498,7 @@ router.post('/piecework/categories', requirePermission(PIECEWORK_TASKS_PERMISSIO
 }));
 
 // PUT /api/piecework/categories/:id
-router.put('/piecework/categories/:id', requirePermission(PIECEWORK_TASKS_PERMISSION), validate(updateTaskCategorySchema), asyncHandler(async (req, res) => {
+router.put('/piecework/categories/:id', requirePermission(PIECEWORK_TASKS_PERMISSION), idempotency({ scope: 'piecework' }), validate(updateTaskCategorySchema), asyncHandler(async (req, res) => {
   try {
     const rawId = req.params.id;
     const { name, description } = req.body;
@@ -522,7 +522,7 @@ router.put('/piecework/categories/:id', requirePermission(PIECEWORK_TASKS_PERMIS
 }));
 
 // DELETE /api/piecework/categories/:id
-router.delete('/piecework/categories/:id', requirePermission(PIECEWORK_TASKS_PERMISSION), validate(pieceworkCategoryParamSchema), asyncHandler(async (req, res) => {
+router.delete('/piecework/categories/:id', requirePermission(PIECEWORK_TASKS_PERMISSION), idempotency({ scope: 'piecework' }), validate(pieceworkCategoryParamSchema), asyncHandler(async (req, res) => {
   try {
     const rawId = req.params.id;
     const result = await PieceworkService.deleteCategory(rawId);
@@ -561,7 +561,7 @@ router.get(['/piecework/personnel-rates/:personnelId', '/piecework/rates/:person
 }));
 
 // POST /api/piecework/personnel-rates - Set or update custom rate
-router.post(['/piecework/personnel-rates', '/piecework/rates'], requirePermission(PIECEWORK_TASKS_PERMISSION), validate(setPersonnelRateSchema), asyncHandler(async (req, res) => {
+router.post(['/piecework/personnel-rates', '/piecework/rates'], requirePermission(PIECEWORK_TASKS_PERMISSION), idempotency({ scope: 'piecework' }), validate(setPersonnelRateSchema), asyncHandler(async (req, res) => {
   try {
     const { personnelId, taskId, customRate } = req.body;
     const saved = await PieceworkService.setPersonnelRate({ personnelId, taskId, customRate }, { req });
@@ -606,7 +606,7 @@ router.get('/piecework/logs/summary', authorizePermission(...READ_PERMISSIONS.pi
 
 // POST /api/piecework/logs - Record work logs (Supports single or batch array)
 // حوزه H (TD-300): ثبت کارکرد مبلغ فیش را می‌سازد؛ مجوزش «ثبت کارکرد پرسنل» است نه «ثبت گزارش کار روزانه»
-router.post('/piecework/logs', requirePermission(PIECEWORK_LOG_PERMISSION), validate(createPieceworkLogsSchema), asyncHandler(async (req, res) => {
+router.post('/piecework/logs', requirePermission(PIECEWORK_LOG_PERMISSION), idempotency({ scope: 'piecework' }), validate(createPieceworkLogsSchema), asyncHandler(async (req, res) => {
   try {
     const currentUserId = req.user?.id;
     const currentUsername = req.user?.username || 'سیستم';
@@ -640,7 +640,7 @@ router.post('/piecework/logs', requirePermission(PIECEWORK_LOG_PERMISSION), vali
 }));
 
 // PUT /api/piecework/logs/:id - Update work log
-router.put('/piecework/logs/:id', requirePermission(PIECEWORK_LOG_PERMISSION), validate(updatePieceworkLogSchema), asyncHandler(async (req, res) => {
+router.put('/piecework/logs/:id', requirePermission(PIECEWORK_LOG_PERMISSION), idempotency({ scope: 'piecework' }), validate(updatePieceworkLogSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { date, quantity, unitRate, notes, projectId } = req.body;
@@ -658,7 +658,7 @@ router.put('/piecework/logs/:id', requirePermission(PIECEWORK_LOG_PERMISSION), v
 }));
 
 // DELETE /api/piecework/logs/:id - Delete work log
-router.delete('/piecework/logs/:id', requirePermission(PIECEWORK_LOG_PERMISSION), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/piecework/logs/:id', requirePermission(PIECEWORK_LOG_PERMISSION), idempotency({ scope: 'piecework' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     await PieceworkService.deleteWorkLog(id, undefined, { req });
@@ -787,7 +787,7 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], requirePerm
 // PUT /api/piecework/payrolls/:id/status - Update status or mark as paid
 // v10.0.193 (TD-1083، طرح حقوق ت۱ الف): تغییر وضعیت (تأیید و بازگشت به پیش‌نویس) «تأیید فیش حقوق» را می‌خواهد و یادداشت
 // تنها «محاسبه و صدور فیش حقوقی» را؛ پیش‌تر صادرکننده با همان کلید صدور، فیش خودش را تأیید هم می‌کرد.
-router.put('/piecework/payrolls/:id/status', requirePermission(PIECEWORK_PAYROLL_PERMISSION, PIECEWORK_PAYROLL_APPROVE_PERMISSION), validate(updatePieceworkPayrollStatusSchema), asyncHandler(async (req, res) => {
+router.put('/piecework/payrolls/:id/status', requirePermission(PIECEWORK_PAYROLL_PERMISSION, PIECEWORK_PAYROLL_APPROVE_PERMISSION), idempotency({ scope: 'piecework' }), validate(updatePieceworkPayrollStatusSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { status, notes } = req.body;
@@ -840,7 +840,7 @@ const editDraftPayrollSchema = z.object({
   }).strict(),
 });
 
-router.put('/piecework/payrolls/:id', requirePermission(PIECEWORK_PAYROLL_PERMISSION), validate(editDraftPayrollSchema), asyncHandler(async (req, res) => {
+router.put('/piecework/payrolls/:id', requirePermission(PIECEWORK_PAYROLL_PERMISSION), idempotency({ scope: 'piecework' }), validate(editDraftPayrollSchema), asyncHandler(async (req, res) => {
   const { payroll, voucher, statutoryWarning } = await editDraftPayroll(Number(req.params.id), {
     ...req.body,
     userId: req.user?.id,
@@ -957,7 +957,7 @@ router.post('/piecework/payrolls/:id/sync-voucher', requirePermission(PIECEWORK_
 }));
 
 // DELETE /api/piecework/payrolls/:id - Cancel/delete payroll and un-link logs
-router.delete('/piecework/payrolls/:id', requirePermission(PIECEWORK_PAYROLL_PERMISSION), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/piecework/payrolls/:id', requirePermission(PIECEWORK_PAYROLL_PERMISSION), idempotency({ scope: 'piecework' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
 
   const deletedPayroll = await PieceworkPayrollService.deletePayroll(id, {

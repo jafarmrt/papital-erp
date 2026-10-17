@@ -23,6 +23,7 @@ import { readWcConnectionSettings } from '../services/woocommerce/wcConnectionSe
 import { openSettingSecret } from '../services/settings/settingSecrets.js';
 import { withUtcTimestampKeys } from '../lib/serverTimestamp.js';
 import { WOO_ORDER_LOG_TIMESTAMP_KEYS } from '../services/events/eventTimestamps.js';
+import { idempotency } from '../middleware/idempotency.js';
 
 const router = Router();
 
@@ -282,7 +283,7 @@ router.get('/synced-orders', authorizePermission('woocommerce.view'), asyncHandl
 }));
 
 // Manual order sync trigger by Order ID
-router.post('/sync-order-by-id', authorizePermission('woocommerce.manage'), validate(syncOrderSchema), asyncHandler(async (req, res) => {
+router.post('/sync-order-by-id', authorizePermission('woocommerce.manage'), idempotency({ scope: 'woocommerce' }), validate(syncOrderSchema), asyncHandler(async (req, res) => {
   try {
     const { orderId } = req.body;
 
@@ -302,7 +303,7 @@ router.post('/sync-order-by-id', authorizePermission('woocommerce.manage'), vali
 }));
 
 // Sync single item stock to WooCommerce
-router.post('/sync-item', authorizePermission('woocommerce.manage'), validate(syncItemSchema), asyncHandler(async (req, res) => {
+router.post('/sync-item', authorizePermission('woocommerce.manage'), idempotency({ scope: 'woocommerce' }), validate(syncItemSchema), asyncHandler(async (req, res) => {
   try {
     const { itemId } = req.body;
 
@@ -343,7 +344,7 @@ router.post('/sync-item', authorizePermission('woocommerce.manage'), validate(sy
 }));
 
 // Bulk sync all active ERP items' stock to WooCommerce
-router.post('/sync-all-stocks', authorizePermission('woocommerce.manage'), asyncHandler(async (req, res) => {
+router.post('/sync-all-stocks', authorizePermission('woocommerce.manage'), idempotency({ scope: 'woocommerce' }), asyncHandler(async (req, res) => {
   try {
     const { url, consumerKey: key, consumerSecret: secret } = await readWcConnectionSettings();
 

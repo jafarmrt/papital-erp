@@ -514,7 +514,7 @@ router.put('/documents/:id/finalize', authorizePermission('documents.finalize', 
   res.json({ success: true });
 }));
 
-router.put('/documents/:id', authorizePermission('documents.edit'), validate(documentUpdateSchema), asyncHandler(async (req, res) => {
+router.put('/documents/:id', authorizePermission('documents.edit'), idempotency({ scope: 'documents' }), validate(documentUpdateSchema), asyncHandler(async (req, res) => {
   const docId = Number(req.params.id);
   await assertMayLinkLead(req.user, req.body.crmLeadId);
   // v9.0.323 (TD-776): پیوند پرونده فروش (`crmLeadId`، null = قطع) درون تراکنش ویرایش و زیر قفل پرونده؛ پیش‌تر پس از commit
@@ -539,7 +539,7 @@ router.put('/documents/:id', authorizePermission('documents.edit'), validate(doc
   res.json({ success: true, docId, stockWarnings });
 }));
 
-router.put('/documents/:id/notes', authorizePermission('documents.edit'), validate(updateDocumentNotesSchema), asyncHandler(async (req, res) => {
+router.put('/documents/:id/notes', authorizePermission('documents.edit'), idempotency({ scope: 'documents' }), validate(updateDocumentNotesSchema), asyncHandler(async (req, res) => {
   const docId = Number(req.params.id);
   const { notes } = req.body;
   // v9.0.337 (TD-785): یادداشت (حتی سند قطعی) فقط همراه ردیف ممیزی پیش و پس در همان تراکنش عوض می‌شود
@@ -559,7 +559,7 @@ router.put('/documents/:id/notes', authorizePermission('documents.edit'), valida
 }));
 
 // V10-5.1: enforce documents.delete — مطابق ماتریس سید‌شده (admin همیشه عبور می‌کند)
-router.delete('/documents/:id', authorizePermission('documents.delete'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/documents/:id', authorizePermission('documents.delete'), idempotency({ scope: 'documents' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const docId = Number(req.params.id);
   const beforeDoc = await DocumentService.getDocumentById(docId);
   if (!beforeDoc) {

@@ -107,7 +107,7 @@ router.put('/transfers/:code', authenticateToken, authorizePermission('products.
 router.put('/transfers', authenticateToken, authorizePermission('products.create', 'products.edit'), idempotency({ scope: 'transfers' }), validate(saveTransferSchema), asyncHandler(handleSaveTransfer));
 
 // DELETE /api/transfers/:code - Delete transfer details/image
-router.delete('/transfers/:code', authenticateToken, authorizePermission('products.delete'), validate(deleteTransferSchema), asyncHandler(async (req: Request, res: Response) => {
+router.delete('/transfers/:code', authenticateToken, authorizePermission('products.delete'), idempotency({ scope: 'transfers' }), validate(deleteTransferSchema), asyncHandler(async (req: Request, res: Response) => {
   try {
     const code = req.params.code;
     await TransferService.deleteTransfer(code, req.user);

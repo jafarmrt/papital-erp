@@ -63,8 +63,8 @@ const syncBanksHandler = asyncHandler(async (req, res) => {
   const report = await AccountingService.recalculateAndSyncBankBalances({ req, userFullName: req.user?.fullName });
   res.json({ message: 'مانده حساب‌های بانکی از تراکنش‌ها ساخته شد؛ اختلاف با دفتر کل در گزارش آمده است', report });
 });
-router.post('/accounting/banks/sync-reconcile', authorizePermission('accounting.treasury'), syncBanksHandler);
-router.post('/accounting/bank-accounts/sync-reconcile', authorizePermission('accounting.treasury'), syncBanksHandler);
+router.post('/accounting/banks/sync-reconcile', authorizePermission('accounting.treasury'), idempotency({ scope: 'accounting' }), syncBanksHandler);
+router.post('/accounting/bank-accounts/sync-reconcile', authorizePermission('accounting.treasury'), idempotency({ scope: 'accounting' }), syncBanksHandler);
 
 // v7.0.127 (TD-247): جمع کل‌ها در TreasuryService با Decimal (AGENTS.md §1.8)؛ همان شکل پاسخ پیشین
 const reportBanksHandler = asyncHandler(async (req, res) => {
@@ -93,8 +93,8 @@ const createBankHandler = asyncHandler(async (req, res) => {
   });
   res.status(201).json(bank);
 });
-router.post('/accounting/banks', authorizePermission('accounting.treasury'), validate(createBankAccountSchema), createBankHandler);
-router.post('/accounting/bank-accounts', authorizePermission('accounting.treasury'), validate(createBankAccountSchema), createBankHandler);
+router.post('/accounting/banks', authorizePermission('accounting.treasury'), idempotency({ scope: 'accounting' }), validate(createBankAccountSchema), createBankHandler);
+router.post('/accounting/bank-accounts', authorizePermission('accounting.treasury'), idempotency({ scope: 'accounting' }), validate(createBankAccountSchema), createBankHandler);
 
 const updateBankHandler = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
@@ -107,8 +107,8 @@ const updateBankHandler = asyncHandler(async (req, res) => {
   });
   res.json(updated);
 });
-router.put('/accounting/banks/:id', authorizePermission('accounting.treasury'), validate(updateBankAccountSchema), updateBankHandler);
-router.put('/accounting/bank-accounts/:id', authorizePermission('accounting.treasury'), validate(updateBankAccountSchema), updateBankHandler);
+router.put('/accounting/banks/:id', authorizePermission('accounting.treasury'), idempotency({ scope: 'accounting' }), validate(updateBankAccountSchema), updateBankHandler);
+router.put('/accounting/bank-accounts/:id', authorizePermission('accounting.treasury'), idempotency({ scope: 'accounting' }), validate(updateBankAccountSchema), updateBankHandler);
 
 const deleteBankHandler = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
@@ -117,8 +117,8 @@ const deleteBankHandler = asyncHandler(async (req, res) => {
   });
   res.json(result);
 });
-router.delete('/accounting/banks/:id', authorizePermission('accounting.treasury'), validate(paramsIdSchema), deleteBankHandler);
-router.delete('/accounting/bank-accounts/:id', authorizePermission('accounting.treasury'), validate(paramsIdSchema), deleteBankHandler);
+router.delete('/accounting/banks/:id', authorizePermission('accounting.treasury'), idempotency({ scope: 'accounting' }), validate(paramsIdSchema), deleteBankHandler);
+router.delete('/accounting/bank-accounts/:id', authorizePermission('accounting.treasury'), idempotency({ scope: 'accounting' }), validate(paramsIdSchema), deleteBankHandler);
 
 // Treasury Transactions (دریافت و پرداخت)
 
@@ -225,7 +225,7 @@ router.get('/accounting/treasury/reconcile-cheques', authorizePermission('accoun
   res.json(await listReconcilableCheques(Number(req.query.bankAccountId)));
 }));
 
-router.post('/accounting/treasury/reconcile', authorizePermission('accounting.treasury'), validate(reconcileSchema), asyncHandler(async (req, res) => {
+router.post('/accounting/treasury/reconcile', authorizePermission('accounting.treasury'), idempotency({ scope: 'accounting' }), validate(reconcileSchema), asyncHandler(async (req, res) => {
   const { bankAccountId, txIds, chequeIds, batch, reconciled } = req.body;
   // v9.0.103 (TD-511): ممیزی فقط ردیف‌های تغییرکرده، درون همان تراکنش
   const result = await AccountingService.reconcileTransactions({
@@ -240,7 +240,7 @@ router.post('/accounting/treasury/reconcile', authorizePermission('accounting.tr
   res.json(result);
 }));
 
-router.post('/accounting/treasury/:id/void', authorizePermission('accounting.treasury'), validate(voidTreasuryTxSchema), asyncHandler(async (req, res) => {
+router.post('/accounting/treasury/:id/void', authorizePermission('accounting.treasury'), idempotency({ scope: 'accounting' }), validate(voidTreasuryTxSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const reversal = await AccountingService.voidTreasuryTransaction(id, {
     reason: req.body.reason,
@@ -257,7 +257,7 @@ router.get('/accounting/treasury/:id/document-options', authorizePermission('acc
 }));
 
 // v9.0.272 (TD-779، ت۴ الف): جدا کردن دریافت یا پرداخت از سندش («علی‌الحساب») یا وصل کردن به سند فعال دیگر
-router.put('/accounting/treasury/:id/document', authorizePermission('accounting.treasury'), validate(relinkTreasuryDocumentSchema), asyncHandler(async (req, res) => {
+router.put('/accounting/treasury/:id/document', authorizePermission('accounting.treasury'), idempotency({ scope: 'accounting' }), validate(relinkTreasuryDocumentSchema), asyncHandler(async (req, res) => {
   const result = await relinkTreasuryDocument({
     id: Number(req.params.id),
     documentId: req.body.documentId,
@@ -316,7 +316,7 @@ const updateChequeStatusHandler = asyncHandler(async (req, res) => {
 router.put('/accounting/cheques/:id/status', authorizePermission('accounting.cheques'), idempotency({ scope: 'cheques' }), validate(updateChequeStatusSchema), updateChequeStatusHandler);
 router.patch('/accounting/cheques/:id/status', authorizePermission('accounting.cheques'), idempotency({ scope: 'cheques' }), validate(updateChequeStatusSchema), updateChequeStatusHandler);
 
-router.delete('/accounting/cheques/:id', authorizePermission('accounting.cheques'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/accounting/cheques/:id', authorizePermission('accounting.cheques'), idempotency({ scope: 'accounting' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   // v9.0.104 (TD-512): ممیزی با وضعیت پیش از حذف و سندهای حذف یا باطل‌شده، درون تراکنش حذف
   const result = await AccountingService.deleteCheque(id, {

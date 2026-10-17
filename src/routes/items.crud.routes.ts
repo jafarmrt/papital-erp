@@ -20,6 +20,7 @@ import { itemListConditions, itemListOrder, itemListStats, listItemPicks } from 
 import { parseItemListSort } from '../lib/items/itemListSort.js';
 import { listReorderAlerts } from '../services/items/reorderAlerts.service.js';
 import { changeItemCode, listItemCodeHistory } from '../services/items/itemCodeChange.js';
+import { idempotency } from '../middleware/idempotency.js';
 
 const router = Router();
 
@@ -192,7 +193,7 @@ router.get('/items', authorizePermission(...READ_PERMISSIONS.items), asyncHandle
 }));
 
 // POST /items
-router.post('/items', authorizePermission('products.create'), validate(itemCreateUpdateSchema), asyncHandler(async (req, res) => {
+router.post('/items', authorizePermission('products.create'), idempotency({ scope: 'items' }), validate(itemCreateUpdateSchema), asyncHandler(async (req, res) => {
   // v9.0.36 (TD-451): کالا و شروع گردش‌کار افتتاحیه در یک تراکنش؛ شروع ناموفقِ تعریف فعال ثبت کالا را رد می‌کند.
   // v9.0.169 (TD-652، تصمیم ت۶ الف): سند افتتاحیه و ردیف ممیزی هم درون همان تراکنش‌اند و شکست سند ثبت کالا و موجودی اولیه‌اش
   // را رد می‌کند، مثل ویرایش کالا و ورود اکسل. پیش‌تر سند بیرون از تراکنش صادر و شکستش با `logger.warn` بلعیده می‌شد: کالا با
@@ -256,7 +257,7 @@ router.post('/items', authorizePermission('products.create'), validate(itemCreat
 
 // PUT /items/:id
 // v9.0.171 (TD-654): نسخه کالا لازم است (۴۰۰ بی آن، ۴۰۹ OCC_CONFLICT برای نسخه کهنه) و ردیف ممیزی درون همان تراکنش نوشته می‌شود
-router.put('/items/:id', authorizePermission('products.edit'), validate(itemUpdateSchema), asyncHandler(async (req, res) => {
+router.put('/items/:id', authorizePermission('products.edit'), idempotency({ scope: 'items' }), validate(itemUpdateSchema), asyncHandler(async (req, res) => {
   const itemId = Number(req.params.id);
   const result = await orm.transaction(async (tx) => {
     const result = await ItemCatalogService.updateItem(itemId, req.body, {
@@ -296,7 +297,7 @@ router.put('/items/:id', authorizePermission('products.edit'), validate(itemUpda
 }));
 
 // v10.1.9 (D-15, TD-1264): the code (WooCommerce SKU) changes only here, with its own permission, reason and history
-router.post('/items/:id/change-code', authorizePermission('products.change_code'), validate(itemCodeChangeSchema), asyncHandler(async (req, res) => {
+router.post('/items/:id/change-code', authorizePermission('products.change_code'), idempotency({ scope: 'items' }), validate(itemCodeChangeSchema), asyncHandler(async (req, res) => {
   const itemId = Number(req.params.id);
   const { code, reason, version } = req.body as { code: string; reason: string; version: number };
   const { item, previousCode } = await orm.transaction(tx => changeItemCode(tx, itemId, { code, reason, version }, {
@@ -310,7 +311,7 @@ router.get('/items/:id/code-history', authorizePermission(...READ_PERMISSIONS.it
 }));
 
 // DELETE /items/:id
-router.delete('/items/:id', authorizePermission('products.delete'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/items/:id', authorizePermission('products.delete'), idempotency({ scope: 'items' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const itemId = Number(req.params.id);
     const stockBeforeDelete = await ItemWarehouseStockService.getStockSnapshot(orm, itemId);
@@ -354,7 +355,7 @@ router.get('/items/next-code', authorizePermission(...READ_PERMISSIONS.items), a
   res.json(result);
 }));
 
-router.post('/items/next-code', authorizePermission('products.create', 'products.edit'), validate(consumeNextItemCodeSchema), asyncHandler(async (req, res) => {
+router.post('/items/next-code', authorizePermission('products.create', 'products.edit'), idempotency({ scope: 'items' }), validate(consumeNextItemCodeSchema), asyncHandler(async (req, res) => {
   const { type, year, prefix, transfer } = req.body;
   // v10.0.35 (TD-979): the body is read through Zod and the audit row is written in the counter's transaction
   const result = await ItemCatalogService.consumeNextItemCode({ type, year, prefix, transfer }, (reserved, tx) => logActivity({

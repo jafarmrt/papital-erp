@@ -489,7 +489,7 @@ router.get('/projects/:id', authorizePermission(...RECORD_READ_PERMISSIONS.produ
 }));
 
 // POST /api/projects - Create a new production project with stages
-router.post('/projects', authorizePermission(...PROJECT_CREATE_PERMISSIONS), validate(createProjectSchema), asyncHandler(async (req, res) => {
+router.post('/projects', authorizePermission(...PROJECT_CREATE_PERMISSIONS), idempotency({ scope: 'projects' }), validate(createProjectSchema), asyncHandler(async (req, res) => {
   try {
     const { 
       title, customer_id, customer_name, item_id, item_code, item_name, 
@@ -544,7 +544,7 @@ router.post('/projects', authorizePermission(...PROJECT_CREATE_PERMISSIONS), val
 }));
 
 // PUT /api/projects/:id - Edit project details
-router.put('/projects/:id', authorizePermission(...PROJECT_EDIT_PERMISSIONS), validate(updateProjectSchema), asyncHandler(async (req, res) => {
+router.put('/projects/:id', authorizePermission(...PROJECT_EDIT_PERMISSIONS), idempotency({ scope: 'projects' }), validate(updateProjectSchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
@@ -629,7 +629,7 @@ router.post('/projects/:id/add-to-inventory', authorizePermission(...PROJECT_EDI
 }));
 
 // DELETE /api/projects/:id - Soft delete project and stages
-router.delete('/projects/:id', authorizePermission(...PROJECT_DELETE_PERMISSIONS), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/projects/:id', authorizePermission(...PROJECT_DELETE_PERMISSIONS), idempotency({ scope: 'projects' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
@@ -654,7 +654,7 @@ router.delete('/projects/:id', authorizePermission(...PROJECT_DELETE_PERMISSIONS
 }));
 
 // POST /api/projects/:id/stages - Add a stage to project
-router.post('/projects/:id/stages', authorizePermission(...PROJECT_EDIT_PERMISSIONS), validate(createProjectStageSchema), asyncHandler(async (req, res) => {
+router.post('/projects/:id/stages', authorizePermission(...PROJECT_EDIT_PERMISSIONS), idempotency({ scope: 'projects' }), validate(createProjectStageSchema), asyncHandler(async (req, res) => {
   try {
     const projectId = parseInt(req.params.id, 10);
     const { title, status, start_date, end_date, assigned_personnel, required_resources, notes } = req.body;
@@ -676,7 +676,7 @@ router.post('/projects/:id/stages', authorizePermission(...PROJECT_EDIT_PERMISSI
 }));
 
 // PUT /api/projects/:id/stages/:stageId - Update a stage
-router.put('/projects/:id/stages/:stageId', authorizePermission(...PROJECT_EDIT_PERMISSIONS), validate(updateProjectStageSchema), asyncHandler(async (req, res) => {
+router.put('/projects/:id/stages/:stageId', authorizePermission(...PROJECT_EDIT_PERMISSIONS), idempotency({ scope: 'projects' }), validate(updateProjectStageSchema), asyncHandler(async (req, res) => {
   try {
     const projectId = parseInt(req.params.id, 10);
     const stageId = parseInt(req.params.stageId, 10);
@@ -709,7 +709,7 @@ router.put('/projects/:id/stages/:stageId', authorizePermission(...PROJECT_EDIT_
 }));
 
 // DELETE /api/projects/:id/stages/:stageId - Delete a stage
-router.delete('/projects/:id/stages/:stageId', authorizePermission(...PROJECT_EDIT_PERMISSIONS), validate(deleteProjectStageSchema), asyncHandler(async (req, res) => {
+router.delete('/projects/:id/stages/:stageId', authorizePermission(...PROJECT_EDIT_PERMISSIONS), idempotency({ scope: 'projects' }), validate(deleteProjectStageSchema), asyncHandler(async (req, res) => {
   try {
     const projectId = parseInt(req.params.id, 10);
     const stageId = parseInt(req.params.stageId, 10);
@@ -757,7 +757,7 @@ const updateProductProgressSchema = z.object({
   })
 });
 
-router.put('/projects/:id/product-progress', authorizePermission(...PROJECT_EDIT_PERMISSIONS), validate(updateProductProgressSchema), asyncHandler(async (req, res) => {
+router.put('/projects/:id/product-progress', authorizePermission(...PROJECT_EDIT_PERMISSIONS), idempotency({ scope: 'projects' }), validate(updateProductProgressSchema), asyncHandler(async (req, res) => {
   try {
     const projectId = parseInt(req.params.id, 10);
     if (isNaN(projectId)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });

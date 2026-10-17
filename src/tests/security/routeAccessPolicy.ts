@@ -139,6 +139,12 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       if (violations.length > 0) throw new Error(`${violations.length} writer routes without Zod: ${violations.join(' | ')}`);
       return `${WRITER_ROUTES_WITHOUT_BODY.size} body-less routes listed`;
     }),
+    record('sec_money_stock_routes_idempotent_obs_r2_14', 'v10.1.64: every money and stock writer route takes an Idempotency-Key, except the listed routes that write nothing (OBS-R2-14)', 'real_code', async () => {
+      const { resubmissionPolicyViolations, RESUBMISSION_EXEMPT_ROUTES } = await import('./resubmissionPolicy.js');
+      const violations = resubmissionPolicyViolations(buildRouteGuardTable(app));
+      if (violations.length > 0) throw new Error(`${violations.length} money or stock writer routes break the resubmission rule: ${violations.join(' | ')}`);
+      return `${RESUBMISSION_EXEMPT_ROUTES.size} exempt routes listed`;
+    }),
     record('sec_view_permission_cannot_mutate_td_298', 'area H: a view permission does not open BOM material allocation, and the browser workflow start route is gone (TD-298, TD-1263)', 'real_database', async () => {
       const viewer = await userWith(['warehouse.view', 'projects.view', 'workflow.view', 'products.view']);
       const allocate = await send(viewer.session, 'post', '/api/inventory/allocations/allocate', { projectId: 999999999, allocations: [{ itemId: 999999999, quantity: 1 }] });

@@ -13,6 +13,7 @@ import { logActivity, extractClientIp } from '../../lib/auditLogger.js';
 import { validate, paramsIdSchema } from '../../middleware/validate.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { createAccountSchema, updateAccountSchema, saveAccountMappingsSchema } from './accounting.schemas.js';
+import { idempotency } from '../../middleware/idempotency.js';
 
 const router = Router();
 
@@ -43,10 +44,10 @@ const seedAccountsHandler = asyncHandler(async (req, res) => {
   });
   res.json({ message: 'کدینگ استاندارد حساب‌ها با موفقیت مستقر و همگام شد', ...result });
 });
-router.post('/accounting/accounts/seed-default', requireSystemAdmin, seedAccountsHandler);
-router.post('/accounting/accounts/seed-standard', requireSystemAdmin, seedAccountsHandler);
+router.post('/accounting/accounts/seed-default', requireSystemAdmin, idempotency({ scope: 'accounting' }), seedAccountsHandler);
+router.post('/accounting/accounts/seed-standard', requireSystemAdmin, idempotency({ scope: 'accounting' }), seedAccountsHandler);
 
-router.post('/accounting/accounts', authorizePermission('accounting.coa'), validate(createAccountSchema), asyncHandler(async (req, res) => {
+router.post('/accounting/accounts', authorizePermission('accounting.coa'), idempotency({ scope: 'accounting' }), validate(createAccountSchema), asyncHandler(async (req, res) => {
   const account = await AccountingService.createAccount(req.body);
   await logActivity({
     userId: req.user?.id,
@@ -62,7 +63,7 @@ router.post('/accounting/accounts', authorizePermission('accounting.coa'), valid
   res.status(201).json(account);
 }));
 
-router.put('/accounting/accounts/:id', authorizePermission('accounting.coa'), validate(updateAccountSchema), asyncHandler(async (req, res) => {
+router.put('/accounting/accounts/:id', authorizePermission('accounting.coa'), idempotency({ scope: 'accounting' }), validate(updateAccountSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const before = await accountAuditRow(orm, id); // v9.0.295 (TD-555، B03-13): ممیزی مقدار پیش و پس
   const updated = await AccountingService.updateAccount(id, req.body);
@@ -80,7 +81,7 @@ router.put('/accounting/accounts/:id', authorizePermission('accounting.coa'), va
   res.json(updated);
 }));
 
-router.delete('/accounting/accounts/:id', authorizePermission('accounting.coa'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/accounting/accounts/:id', authorizePermission('accounting.coa'), idempotency({ scope: 'accounting' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const before = await accountAuditRow(orm, id); // v9.0.295 (TD-555): ممیزی حذف کل حساب را دارد
   const result = await AccountingService.deleteAccount(id);
@@ -98,7 +99,7 @@ router.delete('/accounting/accounts/:id', authorizePermission('accounting.coa'),
   res.json(result);
 }));
 
-router.post('/accounting/accounts/:id/restore', authorizePermission('accounting.coa'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.post('/accounting/accounts/:id/restore', authorizePermission('accounting.coa'), idempotency({ scope: 'accounting' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const restored = await AccountingService.restoreAccount(id);
   await logActivity({
@@ -130,7 +131,7 @@ router.get('/accounting/mappings', authorizePermission('accounting.coa', 'accoun
   });
 }));
 
-router.post('/accounting/mappings', authorizePermission('accounting.coa'), validate(saveAccountMappingsSchema), asyncHandler(async (req, res) => {
+router.post('/accounting/mappings', authorizePermission('accounting.coa'), idempotency({ scope: 'accounting' }), validate(saveAccountMappingsSchema), asyncHandler(async (req, res) => {
   const { disabled, ...mappings } = (req.body || {}) as z.infer<typeof saveAccountMappingsSchema>['body'];
   // v9.0.199 (TD-550): نگاشت و فهرست مفهوم‌های خاموش در یک تراکنش، پس از اعتبارسنجی هر کد
   const updated = await AccountingService.saveAccountMappings(mappings, Array.isArray(disabled) ? disabled : undefined);

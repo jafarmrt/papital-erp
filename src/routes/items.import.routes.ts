@@ -10,6 +10,7 @@ import { logActivity, extractClientIp } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { buildItemExcelTemplate } from '../services/items/itemExcelTemplate.js';
+import { idempotency } from '../middleware/idempotency.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -60,7 +61,7 @@ async function itemImportPermissionsOf(user: { role?: string } | undefined): Pro
 }
 
 // POST /items/unified-import
-router.post('/items/unified-import', authorizePermission('products.create', 'products.edit'), validate(unifiedImportSchema), asyncHandler(async (req, res) => {
+router.post('/items/unified-import', authorizePermission('products.create', 'products.edit'), idempotency({ scope: 'items' }), validate(unifiedImportSchema), asyncHandler(async (req, res) => {
   try {
     const { rows, typeFilter } = req.body;
     // v9.0.158 (TD-655): ممیزی هر کالا و جمع‌بندی ورود درون تراکنش سرویس نوشته می‌شود

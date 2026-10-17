@@ -16,6 +16,7 @@ import { priceListMatcher } from '../lib/items/excelPriceColumns.js';
 import { NotFoundError, ValidationError } from '../errors/customErrors.js';
 import { listPricingPage } from '../services/items/pricingPage.js';
 import { PRICING_PAGE_MAX_LIMIT, PRICING_PAGE_SIZE, PRICING_PRICE_FILTERS } from '../lib/items/pricingPage.js';
+import { idempotency } from '../middleware/idempotency.js';
 
 const router = Router();
 
@@ -139,7 +140,7 @@ router.get('/items/:id/prices/history', authorizePermission(...READ_PERMISSIONS.
 
 // POST /items/:id/prices
 // v9.0.175 (TD-660): نوشتن در `ItemPricingService.applyPriceWrites`، درون تراکنش و زیر قفل ردیف کالا، با ردیف ممیزی در همان تراکنش
-router.post('/items/:id/prices', authorizePermission('products.edit_price'), validate(itemPriceSchema), asyncHandler(async (req, res) => {
+router.post('/items/:id/prices', authorizePermission('products.edit_price'), idempotency({ scope: 'items' }), validate(itemPriceSchema), asyncHandler(async (req, res) => {
   const { title, price, currency = 'IRR' } = req.body;
   const itemId = Number(req.params.id);
   const saved = await orm.transaction(async (tx) => {
@@ -180,7 +181,7 @@ router.post('/items/:id/prices', authorizePermission('products.edit_price'), val
 // POST /items/prices/batch-update
 // v9.0.175 (TD-660): همه تغییرها و ردیف ممیزی‌شان در یک تراکنش، زیر قفل ردیف کالاها (پیش‌تر قفل ردیف قیمت‌های موجود جلوی
 // درج هم‌زمان قیمت تازه را نمی‌گرفت و ممیزی بیرون از تراکنش نوشته می‌شد)
-router.post('/items/prices/batch-update', authorizePermission('products.edit_price'), validate(batchPriceUpdateSchema), asyncHandler(async (req, res) => {
+router.post('/items/prices/batch-update', authorizePermission('products.edit_price'), idempotency({ scope: 'items' }), validate(batchPriceUpdateSchema), asyncHandler(async (req, res) => {
   const updates = req.body.updates as Array<{ itemId: number; title: string; remove?: true; price?: string; currency: string }>;
   const changes = await orm.transaction(async (tx) => {
     const strategies = await ItemPricingService.getPricingStrategies(tx);
