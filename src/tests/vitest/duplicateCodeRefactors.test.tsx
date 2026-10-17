@@ -7,6 +7,9 @@ import type { FinancialRatiosReport } from '../../types';
 
 afterEach(cleanup);
 
+// v10.1.69 (TD-1287): number fields show Persian digits and «٬» while typing
+const SHOWN_THREE = '۳';
+
 // v7.0.140: کد مشترک استخراج‌شده (حذف تکرار) همان خروجی و رفتار قبلی را دارد
 describe('FinancialRatiosView (data-driven cards)', () => {
   it('renders the four sections with every ratio, its value and the status badges', () => {
@@ -47,7 +50,7 @@ describe('material form fields', () => {
         <MaterialAttributeFields color="سفید" material="" size="" onChange={onAttr} />
       </div>
     );
-    fireEvent.change(screen.getByDisplayValue('3'), { target: { value: '7.5' } });
+    fireEvent.change(screen.getByDisplayValue(SHOWN_THREE), { target: { value: '7.5' } });
     expect(onNumber).toHaveBeenLastCalledWith(7.5);
     fireEvent.change(screen.getByDisplayValue('عدد'), { target: { value: 'متر' } });
     expect(onUnit).toHaveBeenLastCalledWith('متر');

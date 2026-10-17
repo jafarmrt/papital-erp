@@ -18,10 +18,10 @@ describe('TD-665 amount input keeps decimals while typing', () => {
     render(<ControlledAmount currency="USD" log={log} />);
     const input = screen.getByRole('textbox') as HTMLInputElement;
     for (const step of ['1', '12', '12.']) fireEvent.change(input, { target: { value: step } });
-    expect(input.value).toBe('12.');
+    expect(input.value).toBe('۱۲٫');
     fireEvent.change(input, { target: { value: `${input.value}5` } });
     expect(log).toEqual([1, 12, 12, 12.5]);
-    expect(input.value).toBe('12.5');
+    expect(input.value).toBe('۱۲٫۵');
   });
 
   it('a third decimal in a USD field and any decimal in a rial field are refused with a message, the amount is kept', () => {
@@ -36,7 +36,7 @@ describe('TD-665 amount input keeps decimals while typing', () => {
     render(<ControlledAmount currency="IRR" log={irr} initial={1000} />);
     fireEvent.change(screen.getByRole('textbox'), { target: { value: '1000.5' } });
     expect(irr).toEqual([]);
-    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('1,000');
+    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('۱٬۰۰۰');
   });
 
   it('a minus sign is typed only when the field allows negative amounts', () => {
@@ -73,7 +73,7 @@ describe('TD-666 Persian separators and stray characters never zero an amount', 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: '1,250,000x' } });
     expect(onChange).not.toHaveBeenCalled();
     expect(screen.getByRole('alert').textContent).toBe('مبلغ فقط رقم و ممیز می‌پذیرد');
-    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('1,250,000');
+    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('۱٬۲۵۰٬۰۰۰');
   });
 
   it('the shared number parsers read the Persian decimal and thousands separators', () => {

@@ -4,6 +4,7 @@
  * نگه می‌دارد و پیام می‌دهد، نه اینکه مبلغ را صفر کند. تعداد اعشار مجاز از `currencyScale` ارز می‌آید (ریال ۰، ارز ۲).
  */
 import { normalizeDecimalString } from './numericInput.js';
+import { persianNumberText } from './numberFieldDisplay.js';
 
 export interface AmountTextOptions {
   /** حداکثر رقم اعشار (`currencyScale`) */
@@ -37,13 +38,13 @@ export function readAmountText(raw: string, options: AmountTextOptions): AmountT
   return { ok: true, text: clean, value: Number.isFinite(numeric) ? numeric : 0 };
 }
 
-/** متن پذیرفته‌شده با جداکننده هزارگان (کادر چپ‌به‌راست با ارقام لاتین) */
+/**
+ * متن پذیرفته‌شده برای نمایش در کادر مبلغ. v10.1.69 (TD-1287): ارقام فارسی، «٬» میان دسته‌های سه‌رقمی و ممیز «٫»
+ * (پیش‌تر ارقام لاتین و «,»)، با هر صفحه‌کلیدی که کاربر تایپ کند.
+ */
 export function groupAmountText(text: string): string {
   if (!text) return '';
-  const sign = text.startsWith('-') ? '-' : '';
-  const [intPart, frac] = text.replace('-', '').split('.');
-  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return sign + grouped + (frac !== undefined ? `.${frac}` : '');
+  return persianNumberText(text, true);
 }
 
 /** متن یک مقدار عددی برای کادر، بی گرد کردن و بی نماد علمی */

@@ -6,6 +6,7 @@
  */
 import { normalizeDecimalString, toLatinDigits } from './numericInput.js';
 import { formatPersianNumber } from '../utils/persianNumber.js';
+import { PERSIAN_GROUP_SEPARATOR, persianDigitsOf, persianNumberText } from './numberFieldDisplay.js';
 
 export interface DecimalInputRules {
   /** کمترین مقدار؛ بدون آن یا با کمینه منفی، عدد منفی پذیرفته است */
@@ -77,6 +78,22 @@ export function readDecimalInputText(raw: string, rules: DecimalInputRules = {})
     rangeError = `بیشتر از ${formatPersianNumber(max, 6)} نباشد.`;
   }
   return rangeError ? { kind: 'value', text, rangeError } : { kind: 'value', text };
+}
+
+/**
+ * v10.1.69 (TD-1287): آنچه کادر عدد نشان می‌دهد. متن پذیرفته یا نیمه‌کاره با ارقام فارسی، «٫» و (با `grouped`) «٬»
+ * میان دسته‌های سه‌رقمی دیده می‌شود؛ متن نامعتبر همان‌طور که تایپ شده می‌ماند و فقط ارقامش فارسی می‌شود، تا کاربر ببیند
+ * کجای آن را باید درست کند.
+ */
+export function decimalDisplayText(text: string, grouped: boolean): string {
+  const canonical = canonicalText(text);
+  if ('error' in canonical || !DECIMAL_TEXT.test(canonical.text)) return persianDigitsOf(text);
+  return persianNumberText(canonical.text, grouped);
+}
+
+/** متن تازهٔ کادر گروه‌بندی‌شده بی «٬»هایی که خود کادر گذاشته است، تا پاک‌کردن یک رقم دسته‌ها را نامعتبر نکند */
+export function withoutGroupSeparators(text: string): string {
+  return text.split(PERSIAN_GROUP_SEPARATOR).join('');
 }
 
 /** پیام مرورگر برای متن نیمه‌کاره هنگام ارسال فرم */

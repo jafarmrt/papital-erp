@@ -397,7 +397,7 @@ export function VoucherCorrectionModal({
                             handleItemChange(idx, 'debit', val);
                             if (val > 0) handleItemChange(idx, 'credit', 0);
                           }}
-                          placeholder="0"
+                          placeholder="۰"
                           className="w-full text-xs text-left font-mono font-bold text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 rounded px-2 py-1 focus:ring-1 focus:ring-indigo-500"
                         />
                       </td>
@@ -410,7 +410,7 @@ export function VoucherCorrectionModal({
                             handleItemChange(idx, 'credit', val);
                             if (val > 0) handleItemChange(idx, 'debit', 0);
                           }}
-                          placeholder="0"
+                          placeholder="۰"
                           className="w-full text-xs text-left font-mono font-bold text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 rounded px-2 py-1 focus:ring-1 focus:ring-indigo-500"
                         />
                       </td>

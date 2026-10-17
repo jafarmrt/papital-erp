@@ -65,7 +65,7 @@ describe('TD-1273 numeric fields read Persian digits and the Persian decimal sep
     fireEvent.change(input, { target: { value: '12٫5' } });
     expect(onValueChange).toHaveBeenLastCalledWith('12.5');
     fireEvent.change(input, { target: { value: '12.' } });
-    expect(input.value).toBe('12.');
+    expect(input.value).toBe('۱۲٫');
   });
 
   it('invalid text shows its error under the field, blocks the form and sends an empty value, never the last valid prefix', () => {
@@ -139,7 +139,7 @@ describe('TD-1273 numeric fields read Persian digits and the Persian decimal sep
     expect(onAdd).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(input);
     fireEvent.click(screen.getByText('هفت'));
-    expect(input.value).toBe('7');
+    expect(input.value).toBe('۷');
     expect(input.validity.valid).toBe(true);
     expect(screen.queryByRole('alert')).toBeNull();
     fireEvent.click(screen.getByText('افزودن'));

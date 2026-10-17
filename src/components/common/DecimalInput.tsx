@@ -1,5 +1,8 @@
-import { useEffect, useId, useRef, useState, type InputHTMLAttributes } from 'react';
-import { PARTIAL_DECIMAL_MESSAGE, decimalTextMatches, decimalTextOf, readDecimalInputText } from '../../lib/decimalInputText';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type InputHTMLAttributes } from 'react';
+import {
+  PARTIAL_DECIMAL_MESSAGE, decimalDisplayText, decimalTextMatches, decimalTextOf, readDecimalInputText, withoutGroupSeparators
+} from '../../lib/decimalInputText';
+import { caretAfterSignificant, significantCharsBefore, stepOverGroupSeparator } from '../../lib/numberFieldDisplay';
 
 type NativeInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'defaultValue' | 'onChange' | 'inputMode' | 'min' | 'max' | 'step'>;
 
@@ -10,22 +13,30 @@ export interface DecimalInputProps extends NativeInputProps {
   min?: number | string;
   max?: number | string;
   step?: number | string;
+  /**
+   * v10.1.69 (TD-1287): «٬» میان دسته‌های سه‌رقمی هنگام تایپ (پیش‌فرض)؛ کادری که شناسه می‌گیرد (مثل شماره سفارش) false
+   * می‌دهد. ارقام در هر حال فارسی دیده می‌شوند.
+   */
+  grouped?: boolean;
 }
 
 /**
  * v10.1.22 (TD-1273، قاعده فرم وایب فارسی): کادر عدد به جای `type=number`.
+ * v10.1.69 (TD-1287): کادر با ارقام فارسی، «٫» و «٬» میان دسته‌های سه‌رقمی دیده می‌شود (`grouped`، پیش‌فرض)، با هر صفحه‌کلید.
  * متن تایپ‌شده تا پایان ویرایش می‌ماند («12.» از دست نمی‌رود)، صفحه‌کلید عددی گوشی باز می‌شود، ارقام فارسی و «٫»
  * خوانده می‌شوند و متن نامعتبر یا بیرون از بازه زیر همان کادر پیام می‌دهد و مثل کادر قدیمی ارسال فرم را نگه می‌دارد.
  * متن نامعتبر یا نیمه‌کاره مثل کادر قدیمی مقدار خالی می‌فرستد (هرگز پیشوند معتبر پیشین را نگه نمی‌دارد) و تا اصلاح روی کادر
  * می‌ماند؛ دکمه‌های «افزودن ردیف» که فرم را ارسال نمی‌کنند با `refuseInvalidDecimalInputs` آن را رد می‌کنند.
  */
-export function DecimalInput({ value, onValueChange, min, max, step, className, dir = 'ltr', id, ...rest }: DecimalInputProps) {
+export function DecimalInput({ value, onValueChange, min, max, step, grouped = true, className, dir = 'ltr', id, onKeyDown, ...rest }: DecimalInputProps) {
   const [text, setText] = useState(() => decimalTextOf(value));
   const [error, setError] = useState<string | undefined>();
   const [partial, setPartial] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const previousValue = useRef(value);
   const ownChange = useRef(false);
+  /** شمار نویسه‌های معنادار پیش از مکان‌نما در آخرین تایپ، تا پس از ساختن متن نمایشی سر جای خود برگردد */
+  const pendingCaret = useRef<number | null>(null);
   const autoId = useId();
   const errorId = `${id ?? autoId}-error`;
 
@@ -47,6 +58,18 @@ export function DecimalInput({ value, onValueChange, min, max, step, className, 
     inputRef.current?.setCustomValidity(error ?? (partial ? PARTIAL_DECIMAL_MESSAGE : ''));
   }, [error, partial]);
 
+  const shown = decimalDisplayText(text, grouped);
+
+  // v10.1.69 (TD-1287): متن نمایشی (ارقام فارسی و «٬») با متن تایپ‌شده یک‌اندازه نیست؛ مکان‌نما پس از همان رقم می‌ماند
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    const count = pendingCaret.current;
+    pendingCaret.current = null;
+    if (!input || count === null || input.ownerDocument.activeElement !== input) return;
+    const caret = caretAfterSignificant(input.value, count);
+    input.setSelectionRange(caret, caret);
+  });
+
   return (
     <>
       <input
@@ -57,10 +80,16 @@ export function DecimalInput({ value, onValueChange, min, max, step, className, 
         inputMode="decimal"
         autoComplete="off"
         dir={dir}
-        value={text}
+        value={shown}
         data-decimal-input=""
+        onKeyDown={e => {
+          if (grouped) stepOverGroupSeparator(e.currentTarget, e.key);
+          onKeyDown?.(e);
+        }}
         onChange={e => {
-          const raw = e.target.value;
+          const typed = e.target.value;
+          pendingCaret.current = significantCharsBefore(typed, e.target.selectionStart ?? typed.length);
+          const raw = grouped ? withoutGroupSeparators(typed) : typed;
           setText(raw);
           ownChange.current = true;
           const read = readDecimalInputText(raw, { min, max, step });

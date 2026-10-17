@@ -300,8 +300,9 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
           <form onSubmit={handleSyncManualOrder} className="flex gap-2">
             <DecimalInput
               value={manualOrderId}
+              grouped={false}
               onValueChange={(v) => setManualOrderId(v)}
-              placeholder="شماره سفارش (مثلاً 1042)"
+              placeholder="شماره سفارش (مثلاً ۱۰۴۲)"
               className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-xs bg-white focus:ring-2 focus:ring-blue-500 outline-none"
             />
             <button

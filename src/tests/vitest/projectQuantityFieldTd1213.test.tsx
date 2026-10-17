@@ -7,6 +7,9 @@ import type { ProductRow } from '../../components/project-modal/types';
 afterEach(() => { cleanup(); });
 
 const QTY_LABEL = 'تعداد / تیراژ';
+// v10.1.69 (TD-1287): number fields show Persian digits and «٬» while typing
+const SHOWN_QTY_20 = '۲۰';
+const SHOWN_QTY_0 = '۰';
 
 function ProductsHarness() {
   const [rows, setRows] = useState<ProductRow[]>([{ id: 'r1', item_id: null, item_code: '', item_name: '', customer_code: '', quantity: 1, unit: 'pcs', needs_assembly: false } as unknown as ProductRow]);
@@ -28,14 +31,14 @@ describe('project form fixes (TD-1213)', () => {
     fireEvent.change(quantityInput(), { target: { value: '' } });
     expect(quantityInput().value).toBe('');
     fireEvent.change(quantityInput(), { target: { value: '20' } });
-    expect(quantityInput().value).toBe('20');
+    expect(quantityInput().value).toBe(SHOWN_QTY_20);
     expect(screen.getByTestId('stored-qty').textContent).toBe('20');
   });
 
   it('TD-1213: a zero quantity is shown as typed, never turned into 1', () => {
     render(<ProductsHarness />);
     fireEvent.change(quantityInput(), { target: { value: '0' } });
-    expect(quantityInput().value).toBe('0');
+    expect(quantityInput().value).toBe(SHOWN_QTY_0);
     expect(screen.getByTestId('stored-qty').textContent).not.toBe('1');
   });
 });

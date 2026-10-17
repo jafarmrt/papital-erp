@@ -1,7 +1,4 @@
 import React, { FormEvent, useId } from 'react';
-import DatePicker from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
 import {
   Users,
   UserPlus,
@@ -14,7 +11,7 @@ import {
 } from 'lucide-react';
 import { User } from '../../types';
 import { PersonnelFormData } from '../../hooks/usePersonnel';
-import { extractDateString, getIranianBankFromCard, getIranianBankFromSheba, isoToJalaliDate } from '../../utils';
+import { getIranianBankFromCard, getIranianBankFromSheba, isoToJalaliDate } from '../../utils';
 import { NationalIdInput, IranianPhoneInput, BankCardInput, ShebaInput } from '../common';
 import { PersonnelStatutoryFlags } from './PersonnelStatutoryFlags';
 import { JalaliDateInput } from '../common/JalaliDateInput';
@@ -164,18 +161,12 @@ export function PersonnelFormModal({
 
               <div>
                 <label htmlFor={`${fieldId}-birth-date`} className="block text-xs font-bold text-slate-700 mb-1">تاریخ تولد</label>
-                <DatePicker
+                <JalaliDateInput
                   id={`${fieldId}-birth-date`}
-                  value={isoToJalaliDate(formData.birthDate) || formData.birthDate || ''}
-                  onChange={(dateObj: any) => {
-                    setFormData((prev) => ({ ...prev, birthDate: extractDateString(dateObj) }));
-                  }}
-                  calendar={persian}
-                  locale={persian_fa}
-                  calendarPosition="bottom-right"
+                  value={formData.birthDate || ''}
+                  onChange={iso => setFormData((prev) => ({ ...prev, birthDate: isoToJalaliDate(iso) }))}
                   placeholder="انتخاب تاریخ تولد"
-                  inputClass="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 font-mono"
-                  containerClassName="w-full"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 font-mono"
                 />
               </div>
 
@@ -319,7 +310,7 @@ export function PersonnelFormModal({
                     id={`${fieldId}-monthly-salary`}
                     min="0"
                     step="any"
-                    placeholder="مثال: 30000000"
+                    placeholder="مثال: ۳۰٬۰۰۰٬۰۰۰"
                     value={formData.monthlySalary}
                     onValueChange={(v) => setFormData((prev) => ({ ...prev, monthlySalary: v }))}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-left outline-none focus:border-blue-500"
@@ -365,18 +356,12 @@ export function PersonnelFormModal({
 
               <div>
                 <label htmlFor={`${fieldId}-end-date`} className="block text-xs font-bold text-slate-700 mb-1">تاریخ پایان کار با پاپیتال</label>
-                <DatePicker
+                <JalaliDateInput
                   id={`${fieldId}-end-date`}
-                  value={isoToJalaliDate(formData.endDate) || formData.endDate || ''}
-                  onChange={(dateObj: any) => {
-                    setFormData((prev) => ({ ...prev, endDate: extractDateString(dateObj) }));
-                  }}
-                  calendar={persian}
-                  locale={persian_fa}
-                  calendarPosition="bottom-right"
+                  value={formData.endDate || ''}
+                  onChange={iso => setFormData((prev) => ({ ...prev, endDate: isoToJalaliDate(iso) }))}
                   placeholder="انتخاب تاریخ پایان کار"
-                  inputClass="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 font-mono"
-                  containerClassName="w-full"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 font-mono"
                 />
               </div>
             </div>

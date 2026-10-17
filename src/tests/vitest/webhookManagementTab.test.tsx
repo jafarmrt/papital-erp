@@ -21,6 +21,8 @@ vi.mock('../../api', async () => {
 afterEach(() => { cleanup(); vi.mocked(fetchJson).mockReset(); });
 
 const maskedKey = '**********************abcd';
+// v10.1.69 (TD-1287): number fields show Persian digits and «٬» while typing
+const SHOWN_TIMEOUT = '۵٬۰۰۰';
 const subscription = {
   id: 7, name: 'فروشگاه شریک', targetUrl: 'https://partner.example.com/hook', secretKey: maskedKey, eventPatterns: ['*'],
   customHeaders: {}, isActive: 1, retryLimit: 3, timeoutMs: 5000, totalDeliveries: 0, successfulDeliveries: 0, failedDeliveries: 0,
@@ -72,7 +74,7 @@ describe('TD-720 the create form leaves the signing key to the server', () => {
     fireEvent.click(await screen.findByText('تعریف وب‌هوک جدید'));
     fireEvent.change(screen.getByPlaceholderText('مثال: فروشگاه برخط ووکامرس'), { target: { value: 'شریک تازه' } });
     fireEvent.change(screen.getByPlaceholderText('https://your-domain.com/api/webhook/receiver'), { target: { value: 'https://new.example.com/hook' } });
-    fireEvent.change(screen.getByDisplayValue('5000'), { target: { value: '12000' } });
+    fireEvent.change(screen.getByDisplayValue(SHOWN_TIMEOUT), { target: { value: '12000' } });
     fireEvent.click(screen.getByText('ایجاد و فعال‌سازی درگاه وب‌هوک'));
     await waitFor(() => expect(writes.some(w => w.method === 'POST' && w.url === '/events/webhooks')).toBe(true));
     const post = writes.find(w => w.method === 'POST' && w.url === '/events/webhooks');

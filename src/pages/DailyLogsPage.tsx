@@ -1,11 +1,9 @@
 import { useEffect } from 'react';
 import { Search, X, Calendar as CalendarIcon, BarChart3 } from 'lucide-react';
-import DatePicker from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
 
 import { User } from '../types';
-import { formatPersianNumber, getTodayJalaliDate, extractDateString } from '../utils';
+import { formatPersianNumber, getTodayJalaliDate, isoToJalaliDate } from '../utils';
+import { JalaliDateInput } from '../components/common/JalaliDateInput';
 import { useHasPermission } from '../contexts/AuthContext';
 import { useDailyLogs } from '../hooks/useDailyLogs';
 import { DailyLogStatsCards } from '../components/daily-logs/DailyLogStatsCards';
@@ -116,16 +114,12 @@ export default function DailyLogsPage({ user }: DailyLogsPageProps) {
               <CalendarIcon className="w-3.5 h-3.5 text-blue-600" />
               فیلتر تاریخ شمسی:
             </span>
-            <DatePicker
-              value={dl.selectedDateFilter}
-              onChange={(dateObj: any) => {
-                dl.setSelectedDateFilter(extractDateString(dateObj));
-              }}
-              calendar={persian}
-              locale={persian_fa}
-              calendarPosition="bottom-right"
+            <JalaliDateInput
+              value={dl.selectedDateFilter ?? ''}
+              onChange={iso => dl.setSelectedDateFilter(isoToJalaliDate(iso))}
               placeholder="انتخاب تاریخ شمسی..."
-              inputClass="w-36 px-3 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white text-slate-700 text-center font-bold"
+              className="w-36 px-3 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white text-slate-700 text-center font-bold"
+              containerClassName=""
             />
             {dl.selectedDateFilter && (
               <button

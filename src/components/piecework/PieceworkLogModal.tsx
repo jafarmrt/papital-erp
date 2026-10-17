@@ -1,12 +1,10 @@
 import React, { FormEvent, useId } from 'react';
-import DatePicker from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
 import { Calculator, X, FolderKanban, Plus, Trash2 } from 'lucide-react';
 import { PieceworkLog, PieceworkTask } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
 import { BatchLogRow } from '../../hooks/usePiecework';
-import { formatQuantityOrTime, parseQuantityOrTime, extractDateString, formatCurrencyLabel, isoToJalaliDate } from '../../utils';
+import { formatQuantityOrTime, parseQuantityOrTime, formatCurrencyLabel, isoToJalaliDate } from '../../utils';
+import { JalaliDateInput } from '../common/JalaliDateInput';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { useOnlineStatus } from '../../lib/pwa/useOnlineStatus';
@@ -107,16 +105,11 @@ export function PieceworkLogModal({
                   </div>
                   <div>
                     <label htmlFor={`${fieldId}-date`} className="block text-xs font-bold text-slate-700 mb-1">تاریخ</label>
-                    <DatePicker
+                    <JalaliDateInput
                       id={`${fieldId}-date`}
-                      value={isoToJalaliDate(editingLog.date) || editingLog.date}
-                      onChange={(dateObj: any) => {
-                        setEditingLog(prev => prev ? { ...prev, date: extractDateString(dateObj) } : null);
-                      }}
-                      calendar={persian}
-                      locale={persian_fa}
-                      inputClass="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono"
-                      containerClassName="w-full"
+                      value={editingLog.date}
+                      onChange={iso => setEditingLog(prev => prev ? { ...prev, date: isoToJalaliDate(iso) } : null)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono"
                     />
                   </div>
                 </div>
@@ -189,16 +182,11 @@ export function PieceworkLogModal({
 
                   <div>
                     <label htmlFor={`${fieldId}-log-date`} className="block text-xs font-bold text-slate-700 mb-1">تاریخ کارکرد *</label>
-                    <DatePicker
+                    <JalaliDateInput
                       id={`${fieldId}-log-date`}
                       value={logDate}
-                      onChange={(dateObj: any) => {
-                        setLogDate(extractDateString(dateObj));
-                      }}
-                      calendar={persian}
-                      locale={persian_fa}
-                      inputClass="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono outline-none focus:border-blue-500"
-                      containerClassName="w-full"
+                      onChange={iso => setLogDate(isoToJalaliDate(iso))}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono outline-none focus:border-blue-500"
                     />
                   </div>
                 </div>
@@ -315,7 +303,7 @@ export function PieceworkLogModal({
                               readOnly={!canSetRate}
                               currency="IRR"
                               variant="table"
-                              placeholder="0"
+                              placeholder="۰"
                               className="w-full"
                               containerClassName="w-full bg-white border border-slate-200 rounded-lg"
                               inputClassName="px-2.5 py-1.5 text-xs font-bold text-slate-800 text-center font-mono"

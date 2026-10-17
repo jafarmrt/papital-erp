@@ -381,7 +381,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
               value={formData.initialBalance}
               currency={formData.currency || 'IRR'}
               onChange={val => setFormData({ ...formData, initialBalance: val })}
-              placeholder="0"
+              placeholder="۰"
               showWordsBadge={true}
               showTomanEquivalent={true}
               inputClassName="!py-1.5 !text-xs"

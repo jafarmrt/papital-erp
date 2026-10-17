@@ -434,7 +434,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                   value={formData.amount}
                   currency={inputCurrency}
                   onChange={val => setFormData({ ...formData, amount: val })}
-                  placeholder="1000000"
+                  placeholder="۱٬۰۰۰٬۰۰۰"
                   showWordsBadge={true}
                   showTomanEquivalent={true}
                 />

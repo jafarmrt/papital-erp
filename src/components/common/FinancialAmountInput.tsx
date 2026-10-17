@@ -8,7 +8,7 @@ import {
 import { copyToClipboard } from '../../utils/clipboard';
 import { currencyScale } from '../../lib/currencyScale';
 import { amountTextOf, groupAmountText, readAmountText } from '../../lib/amountText';
-import { toLatinDigits } from '../../lib/numericInput';
+import { caretAfterSignificant, significantCharsBefore, stepOverGroupSeparator } from '../../lib/numberFieldDisplay';
 
 export interface FinancialAmountInputProps {
   /** مقدار عددی مبلغ به واحد پولی مشخص‌شده (مثلاً ریال یا دلار) */
@@ -52,7 +52,7 @@ export interface FinancialAmountInputProps {
 /**
  * کامپوننت ارگونومیک ورودی مبالغ مالی (وایب‌فارسی - فاز ۳)
  * ویژگی‌ها:
- * - جداسازی خودکار ۳ رقمی ارقام (1,000,000) در زمان تایپ زنده
+ * - جداسازی خودکار ۳ رقمی با ارقام فارسی و «٬» (۱٬۰۰۰٬۰۰۰) در زمان تایپ زنده (v10.1.69، TD-1287)
  * - کنترل دقیق مکان‌نما (Caret Tracking) و عدم پرش کرسر هنگام درج جداکننده‌ها
  * - تبدیل همگام مبلغ به حروف سلیس فارسی (پشتیبانی تا کوادریلیون)
  * - تفکیک هوشمند ریال و تومان (نمایش معادل تومانی زیر مبلغ ریالی)
@@ -67,7 +67,7 @@ export const FinancialAmountInput = React.forwardRef<HTMLInputElement, Financial
   onKeyDown,
   currency = 'IRR',
   label,
-  placeholder = '0',
+  placeholder = '۰',
   required = false,
   disabled = false,
   readOnly = false,
@@ -123,19 +123,14 @@ export const FinancialAmountInput = React.forwardRef<HTMLInputElement, Financial
   const curLabel = useMemo(() => formatCurrencyLabel(currency), [currency]);
   const isRial = (currency?.toUpperCase() === 'IRR' || currency === 'ریال');
 
-  const significantCount = (text: string) => toLatinDigits(text).replace(/[^\d.٫-]/g, '').length;
+  const significantCount = (text: string) => significantCharsBefore(text, text.length);
 
+  // v10.1.69 (TD-1287): کادر ارقام فارسی و «٬» نشان می‌دهد؛ مکان‌نما پس از همان رقمی می‌ماند که پیش از آن بود
   const placeCaret = (significantBefore: number) => {
     requestAnimationFrame(() => {
       const el = internalInputRef.current;
       if (!el) return;
-      const shown = el.value;
-      let caret = significantBefore === 0 ? 0 : shown.length;
-      let count = 0;
-      for (let i = 0; i < shown.length && significantBefore > 0; i++) {
-        if (/[\d.-]/.test(shown[i])) count++;
-        if (count === significantBefore) { caret = i + 1; break; }
-      }
+      const caret = caretAfterSignificant(el.value, significantBefore);
       el.setSelectionRange(caret, caret);
     });
   };
@@ -181,8 +176,8 @@ export const FinancialAmountInput = React.forwardRef<HTMLInputElement, Financial
     : `relative rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 transition-all focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent flex items-center shadow-xs ${containerClassName}`;
 
   const baseInputStyle = isTable
-    ? `w-full text-xs font-mono font-bold text-left bg-transparent outline-none placeholder:text-slate-400 ${inputClassName}`
-    : `w-full py-2 px-3 text-xs font-mono font-bold text-left bg-transparent border-0 outline-none text-slate-900 dark:text-white placeholder:text-slate-400 ${inputClassName}`;
+    ? `w-full text-xs tabular-nums font-bold text-left bg-transparent outline-none placeholder:text-slate-400 ${inputClassName}`
+    : `w-full py-2 px-3 text-xs tabular-nums font-bold text-left bg-transparent border-0 outline-none text-slate-900 dark:text-white placeholder:text-slate-400 ${inputClassName}`;
 
   return (
     <div className={isTable ? className : `space-y-1.5 ${className}`}>
@@ -219,7 +214,10 @@ export const FinancialAmountInput = React.forwardRef<HTMLInputElement, Financial
           onChange={handleChange}
           onBlur={handleBlur}
           onFocus={onFocus}
-          onKeyDown={onKeyDown}
+          onKeyDown={e => {
+            stepOverGroupSeparator(e.currentTarget, e.key);
+            onKeyDown?.(e);
+          }}
           placeholder={placeholder}
           className={baseInputStyle}
         />

@@ -1,12 +1,10 @@
 import { FormEvent, useId } from 'react';
 import { Clock, X, Building2, Laptop, AtSign, Lock } from 'lucide-react';
-import DatePicker from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
 import { DailyWorkLog, User } from '../../types';
 import type { ProjectPick } from '../../lib/permissions/pickLists';
 import { SimpleUserOption } from '../../hooks/useDailyLogs';
-import { formatPersianNumber, getTodayJalaliDate, extractDateString } from '../../utils';
+import { formatPersianNumber, getTodayJalaliDate, isoToJalaliDate } from '../../utils';
+import { JalaliDateInput } from '../common/JalaliDateInput';
 import { MentionTextarea } from '../MentionTextarea';
 import { workTimeError } from '../../lib/dailyLogs/workHours';
 import { TimeOfDayInput } from './TimeOfDayInput';
@@ -113,17 +111,11 @@ export function DailyLogModal({
               <label htmlFor={`${fieldId}-form-date`} className="block text-xs font-bold text-slate-700 mb-1">
                 تاریخ (هجری شمسی) <span className="text-rose-500">*</span>
               </label>
-              <DatePicker
+              <JalaliDateInput
                 id={`${fieldId}-form-date`}
                 value={formDate}
-                onChange={(dateObj: any) => {
-                  setFormDate(extractDateString(dateObj));
-                }}
-                calendar={persian}
-                locale={persian_fa}
-                calendarPosition="bottom-right"
-                inputClass="w-full px-3 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white text-center font-bold text-slate-800"
-                containerClassName="w-full"
+                onChange={iso => setFormDate(isoToJalaliDate(iso))}
+                className="w-full px-3 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white text-center font-bold text-slate-800"
               />
               {/* Quick Jalali Date Presets */}
               <div className="flex items-center gap-1 mt-1 text-[10px]">

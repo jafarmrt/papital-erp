@@ -197,7 +197,7 @@ export function VoucherItemsTable({
                           }
                         }}
                         onChange={val => updateItem(idx, { debit: val })}
-                        placeholder="0"
+                        placeholder="۰"
                         className="w-full"
                         containerClassName="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus-within:ring-2 focus-within:ring-emerald-500"
                         inputClassName="w-full px-2.5 py-1.5 text-xs text-left font-mono text-slate-900 dark:text-white font-bold"
@@ -236,7 +236,7 @@ export function VoucherItemsTable({
                           }
                         }}
                         onChange={val => updateItem(idx, { credit: val })}
-                        placeholder="0"
+                        placeholder="۰"
                         className="w-full"
                         containerClassName="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus-within:ring-2 focus-within:ring-rose-500"
                         inputClassName="w-full px-2.5 py-1.5 text-xs text-left font-mono text-slate-900 dark:text-white font-bold"

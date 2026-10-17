@@ -1,12 +1,10 @@
 import React, { useId } from 'react';
 import { Briefcase, Trash2, Users, Plus } from 'lucide-react';
-import DatePicker from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
 import { CRMLead } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
 import { STAGES, SOURCES } from '../../hooks/useCRMData';
-import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel, getFutureJalaliDate, extractDateString, isoToJalaliDate } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel, getFutureJalaliDate, isoToJalaliDate } from '../../utils';
+import { JalaliDateInput } from '../common/JalaliDateInput';
 import { normalizeDecimalString } from '../../lib/numericInput';
 import { IranianPhoneInput } from '../common';
 import { DecimalInput } from '../common/DecimalInput';
@@ -339,17 +337,11 @@ export function CRMLeadModal({
 
             <div>
               <label htmlFor={`${fieldId}-field`} className="block text-xs font-bold text-slate-700 mb-1">تاریخ پیش‌بینی بسته‌شدن</label>
-              <DatePicker
+              <JalaliDateInput
                 id={`${fieldId}-field`}
-                value={isoToJalaliDate(leadForm.expectedCloseDate) || getFutureJalaliDate(30)}
-                onChange={(dateObj: any) => {
-                  setLeadForm({ ...leadForm, expectedCloseDate: extractDateString(dateObj) });
-                }}
-                calendar={persian}
-                locale={persian_fa}
-                calendarPosition="bottom-right"
-                inputClass="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500 focus:bg-white transition-all text-right font-semibold text-slate-800"
-                containerClassName="w-full"
+                value={leadForm.expectedCloseDate || getFutureJalaliDate(30)}
+                onChange={iso => setLeadForm({ ...leadForm, expectedCloseDate: isoToJalaliDate(iso) })}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500 focus:bg-white transition-all text-right font-semibold text-slate-800"
               />
             </div>
 

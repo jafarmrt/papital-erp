@@ -1,11 +1,9 @@
 import { useId } from 'react';
-import DatePicker from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
 import { Search, Plus, Edit2, Trash2, CheckCircle2, Clock, FolderKanban } from 'lucide-react';
 import { PieceworkLog } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
-import { formatQuantityOrTime, formatPersianDate, extractDateString, formatPersianCode } from '../../utils';
+import { formatQuantityOrTime, formatPersianDate, formatPersianCode, isoToJalaliDate } from '../../utils';
+import { JalaliDateInput } from '../common/JalaliDateInput';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 import { PieceworkLogsPagination, type PieceworkLogsPaginationState } from './PieceworkLogsPagination';
@@ -121,33 +119,23 @@ export function PieceworkLogsTab({
 
           <div>
             <label htmlFor={`${fieldId}-start-date-filter`} className="block text-[11px] font-bold text-slate-500 mb-1">از تاریخ</label>
-            <DatePicker
+            <JalaliDateInput
               id={`${fieldId}-start-date-filter`}
               value={startDateFilter}
-              onChange={(dateObj: any) => {
-                onStartDateChange(extractDateString(dateObj));
-              }}
-              calendar={persian}
-              locale={persian_fa}
+              onChange={iso => onStartDateChange(isoToJalaliDate(iso))}
               placeholder="از تاریخ..."
-              inputClass="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono outline-none"
-              containerClassName="w-full"
+              className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono outline-none"
             />
           </div>
 
           <div>
             <label htmlFor={`${fieldId}-end-date-filter`} className="block text-[11px] font-bold text-slate-500 mb-1">تا تاریخ</label>
-            <DatePicker
+            <JalaliDateInput
               id={`${fieldId}-end-date-filter`}
               value={endDateFilter}
-              onChange={(dateObj: any) => {
-                onEndDateChange(extractDateString(dateObj));
-              }}
-              calendar={persian}
-              locale={persian_fa}
+              onChange={iso => onEndDateChange(isoToJalaliDate(iso))}
               placeholder="تا تاریخ..."
-              inputClass="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono outline-none"
-              containerClassName="w-full"
+              className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono outline-none"
             />
           </div>
         </div>

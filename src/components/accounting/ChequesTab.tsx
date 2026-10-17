@@ -937,7 +937,7 @@ export function ChequesTab({
                     value={newFormData.amount}
                     currency="IRR"
                     onChange={val => setNewFormData({ ...newFormData, amount: val })}
-                    placeholder="50000000"
+                    placeholder="۵۰٬۰۰۰٬۰۰۰"
                     showWordsBadge={true}
                     showTomanEquivalent={true}
                   />

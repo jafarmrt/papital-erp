@@ -1,10 +1,8 @@
 import { useState } from 'react';
 import { Search, ArrowDownRight, ArrowUpRight, Download, ChevronRight, ChevronLeft, Eye } from 'lucide-react';
-import DatePicker from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
 import { useSearch } from '../SearchContext';
-import { formatPersianNumber, formatPersianCode, formatPersianDate, extractDateString } from '../utils';
+import { formatPersianNumber, formatPersianCode, formatPersianDate, extractDateString, isoToJalaliDate } from '../utils';
+import { JalaliDateInput } from '../components/common/JalaliDateInput';
 import { kardexDocumentTypeLabel } from '../lib/documents/documentTypeTitles';
 import RunningKardexModal from '../components/RunningKardexModal';
 import { useTransactionsQuery } from '../hooks/queries';
@@ -110,25 +108,19 @@ export default function TransactionsPage() {
           <div className="flex gap-2 items-center flex-wrap">
              <div className="flex items-center gap-1 text-xs">
                <span className="text-slate-500">از:</span>
-               <DatePicker 
-                 value={startDate} 
-                 onChange={(dateObj) => setStartDate(extractDateString(dateObj))} 
-                 calendar={persian} 
-                 locale={persian_fa} 
-                 calendarPosition="bottom-right"
-                 inputClass="p-1.5 border border-slate-300 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none w-28 bg-white" 
+               <JalaliDateInput
+                 value={startDate}
+                 onChange={iso => setStartDate(isoToJalaliDate(iso))}
+                 className="p-1.5 border border-slate-300 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none w-28 bg-white"
                  containerClassName="inline-block"
                />
              </div>
              <div className="flex items-center gap-1 text-xs">
                <span className="text-slate-500">تا:</span>
-               <DatePicker 
-                 value={endDate} 
-                 onChange={(dateObj) => setEndDate(extractDateString(dateObj))} 
-                 calendar={persian} 
-                 locale={persian_fa} 
-                 calendarPosition="bottom-right"
-                 inputClass="p-1.5 border border-slate-300 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none w-28 bg-white" 
+               <JalaliDateInput
+                 value={endDate}
+                 onChange={iso => setEndDate(isoToJalaliDate(iso))}
+                 className="p-1.5 border border-slate-300 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none w-28 bg-white"
                  containerClassName="inline-block"
                />
              </div>

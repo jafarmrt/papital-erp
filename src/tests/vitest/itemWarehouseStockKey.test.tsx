@@ -23,7 +23,7 @@ afterEach(() => {
 describe('item form opening stock key (OBS-R1-77)', () => {
   it('stores each warehouse quantity once, under its code', () => {
     render(<Harness />);
-    const inputs = screen.getAllByPlaceholderText('0');
+    const inputs = screen.getAllByPlaceholderText('۰');
     fireEvent.change(inputs[0], { target: { value: '10' } });
     fireEvent.change(inputs[1], { target: { value: '4' } });
     expect(latest?.stocks).toEqual({ A: 10, B: 4 });

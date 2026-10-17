@@ -5,9 +5,9 @@ import { FinancialAmountInput } from '../../components/common/FinancialAmountInp
 afterEach(cleanup);
 
 describe('FinancialAmountInput', () => {
-  it('shows the amount with thousand separators', () => {
+  it('shows the amount with Persian digits and Persian thousand separators', () => {
     render(<FinancialAmountInput value={1234567} onChange={() => {}} label="مبلغ" showWordsBadge={false} />);
-    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('1,234,567');
+    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('۱٬۲۳۴٬۵۶۷');
   });
 
   it('returns a clean number for typed Persian digits and separators', () => {

@@ -4,10 +4,9 @@ import { isCancelledError } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { Item, User } from '../types';
 import { Plus, Trash2, Printer, X } from 'lucide-react';
-import DatePicker from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
-import { formatPersianPrice, formatPersianNumber, formatPersianCode, formatCurrencyLabel, extractDateString, getTodayJalaliDate, getTodayIsoDate } from '../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianCode, formatCurrencyLabel, getTodayIsoDate, toStorageDate } from '../utils';
+import { JalaliDateInput } from '../components/common/JalaliDateInput';
+import { TREASURY_CURRENCIES } from '../lib/treasury/treasuryCurrency';
 import InvoicePrintView from '../components/InvoicePrintView';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { OpenProformasPanel } from '../components/invoices/create/OpenProformasPanel';
@@ -63,7 +62,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
   // شماره سند = شماره بعدی سرور، یا شماره پیش‌فاکتوری که ویرایش می‌شود (null = شماره سرور)؛ v9.0.327 (TD-783): فقط نمایشی
   const [refOverride, setRefNumber] = useState<string | null>(null);
   const refNumber = refOverride ?? nextRef;
-  const [date, setDate] = useState<string>(() => getTodayJalaliDate());
+  // v10.1.69 (TD-1287): تاریخ میلادی ISO مثل فرم‌های دیگر؛ کادر تاریخ شمسی مشترک آن را شمسی نشان می‌دهد
+  const [date, setDate] = useState<string>(() => getTodayIsoDate());
 
   // Buyer fields
   const buyer = useInvoiceBuyer(customersList);
@@ -170,7 +170,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       setStatus(form.status);
       setCrmLeadId(form.crmLeadId);
       setRefNumber(form.refNumber);
-      if (form.date) setDate(form.date);
+      if (form.date) setDate(toStorageDate(form.date) || getTodayIsoDate());
       buyer.setBuyer(form);
       // v9.0.336 (TD-778): انتخابگر خریدار از شناسه طرف حساب سند، نه تطبیق نام
       if (form.partyId) setSelectedCustomerId(String(form.partyId));
@@ -213,7 +213,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     setLocation(null);
     setMultiWarehouseEdit(false);
     setRefNumber(null);
-    setDate(getTodayJalaliDate());
+    setDate(getTodayIsoDate());
     buyer.setBuyer({ buyerName: '', buyerCity: '', buyerPhone: '', buyerAddress: '' });
     setSelectedCustomerId('');
     setNotes('');
@@ -383,7 +383,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       }
     }
 
-    const formattedDate = extractDateString(date) || getTodayIsoDate();
+    const formattedDate = date || getTodayIsoDate();
 
     const payload = {
       docType,
@@ -500,11 +500,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
             <div>
               <label htmlFor={`${fieldId}-currency`} className="block text-xs font-medium mb-1 text-slate-500">واحد پول (ارز)</label>
               <select id={`${fieldId}-currency`} className="w-full border rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white font-bold text-slate-700" value={currency} onChange={e => handleCurrencyChange(e.target.value)}>
-                <option value="IRR">ریال</option>
-                <option value="USD">دلار</option>
-                <option value="EUR">یورو</option>
-                <option value="AED">درهم</option>
-                <option value="GBP">پوند</option>
+                {TREASURY_CURRENCIES.map(code => <option key={code} value={code}>{formatCurrencyLabel(code)}</option>)}
               </select>
               <ExchangeRateField currency={currency} value={exchangeRate} onChange={setExchangeRate} />
             </div>
@@ -534,14 +530,10 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
             </div>
             <div>
               <label htmlFor={`${fieldId}-date`} className="block text-xs font-medium mb-1 text-slate-500">تاریخ</label>
-              <DatePicker id={`${fieldId}-date`} 
-                value={date} 
-                onChange={(dateObj) => setDate(extractDateString(dateObj))} 
-                calendar={persian} 
-                locale={persian_fa} 
-                calendarPosition="bottom-right"
-                inputClass="w-full border shadow-sm rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" 
-                containerClassName="w-full"
+              <JalaliDateInput id={`${fieldId}-date`}
+                value={date}
+                onChange={setDate}
+                className="w-full border shadow-sm rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
               />
             </div>
           </div>
@@ -662,15 +654,15 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
               </div>
               <div className="w-24">
                 <label htmlFor="invoice-line-quantity" className="block text-xs mb-1 text-slate-500">تعداد</label>
-                <DecimalInput id="invoice-line-quantity" min="0" step="any" value={quantity} onValueChange={(v) => setQuantity(v ? Number(v) : '')} className="w-full shadow-sm border rounded text-sm px-3 py-1.5 text-center focus:outline-none focus:ring-1 focus:ring-blue-500" dir="ltr" />
+                <DecimalInput id="invoice-line-quantity" min="0" step="any" value={quantity} onValueChange={(v) => setQuantity(v ? Number(v) : '')} className="w-full shadow-sm border rounded text-sm px-3 py-1.5 text-center tabular-nums focus:outline-none focus:ring-1 focus:ring-blue-500" />
               </div>
               <div className="w-32">
                 <label htmlFor="invoice-line-unit-price" className="block text-xs mb-1 text-slate-500">مبلغ واحد ({formatCurrencyLabel(currency)})</label>
-                <DecimalInput id="invoice-line-unit-price" min="0" value={unitPrice} onValueChange={(v) => setUnitPrice(v ? Number(v) : '')} className="w-full border shadow-sm rounded text-sm px-3 py-1.5 text-center focus:outline-none focus:ring-1 focus:ring-blue-500" dir="ltr" />
+                <DecimalInput id="invoice-line-unit-price" min="0" value={unitPrice} onValueChange={(v) => setUnitPrice(v ? Number(v) : '')} className="w-full border shadow-sm rounded text-sm px-3 py-1.5 text-center tabular-nums focus:outline-none focus:ring-1 focus:ring-blue-500" />
               </div>
               <div className="w-32">
                 <label htmlFor="invoice-line-discount" className="block text-xs mb-1 text-slate-500">تخفیف کلی ردیف ({formatCurrencyLabel(currency)})</label>
-                <DecimalInput id="invoice-line-discount" min="0" value={discount} onValueChange={(v) => setDiscount(v ? Number(v) : '')} className="w-full border shadow-sm rounded text-sm px-3 py-1.5 text-center focus:outline-none focus:ring-1 focus:ring-blue-500" dir="ltr" />
+                <DecimalInput id="invoice-line-discount" min="0" value={discount} onValueChange={(v) => setDiscount(v ? Number(v) : '')} className="w-full border shadow-sm rounded text-sm px-3 py-1.5 text-center tabular-nums focus:outline-none focus:ring-1 focus:ring-blue-500" />
               </div>
               <button type="button" onClick={(e) => { if (!refuseInvalidDecimalInputs(e.currentTarget)) handleAddItem(); }} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded flex items-center gap-1 text-sm h-[34px] transition-colors shadow-sm">
                 <Plus size={16} /> افزودن به فهرست
@@ -732,15 +724,17 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                   </label>
                   {applyVat && (
                     <div className="flex items-center gap-1.5 border-r pr-3 mr-1">
-                      <span className="text-xs text-slate-500">نرخ:</span>
-                      <DecimalInput 
-                        min="0" 
-                        max="100" 
-                        value={vatRate} 
-                        onValueChange={(v) => setVatRate(Number(v) || 0)} 
-                        className="w-14 border rounded px-2 py-1 text-center text-xs font-bold bg-slate-50 focus:bg-white" 
-                        dir="ltr" 
-                      />
+                      <label htmlFor={`${fieldId}-vat-rate`} className="text-xs text-slate-500">نرخ:</label>
+                      <div className="flex flex-col">
+                        <DecimalInput
+                          id={`${fieldId}-vat-rate`}
+                          min="0"
+                          max="100"
+                          value={vatRate}
+                          onValueChange={(v) => setVatRate(Number(v) || 0)}
+                          className="w-14 border rounded px-2 py-1 text-center text-xs font-bold tabular-nums bg-slate-50 focus:bg-white"
+                        />
+                      </div>
                       <span className="text-xs text-slate-500">٪</span>
                     </div>
                   )}
