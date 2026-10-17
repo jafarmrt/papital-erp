@@ -51,16 +51,18 @@ export function shopRedirectTarget(currentUrl: string, location: string | undefi
 /**
  * Sends a shop request and follows its redirects by hand: each target must stay on the same site
  * (`shopRedirectTarget`) and pass `guard` (the SSRF guard) before anything is sent to it; at most `WC_MAX_REDIRECTS`
- * hops. Any other redirect is a 422 with a Persian message.
+ * hops. Any other redirect is a 422 with a Persian message. After a 303 («see other») the next requests are a GET without
+ * a body (`asGet`), as HTTP asks (v10.1.66); 301, 302, 307 and 308 keep the method and body.
  */
 export async function followShopRedirects<T>(
   firstUrl: string,
-  send: (url: string) => Promise<ShopHop<T>>,
+  send: (url: string, options: { asGet: boolean }) => Promise<ShopHop<T>>,
   guard: (url: string) => Promise<void>
 ): Promise<T> {
   let url = firstUrl;
+  let asGet = false;
   for (let hop = 0; ; hop++) {
-    const answer = await send(url);
+    const answer = await send(url, { asGet });
     if (!isRedirectStatus(answer.status)) return answer.data;
     if (hop >= WC_MAX_REDIRECTS) {
       throw new ValidationError(
@@ -79,6 +81,7 @@ export async function followShopRedirects<T>(
       );
     }
     await guard(target);
+    if (answer.status === 303) asGet = true;
     url = target;
   }
 }

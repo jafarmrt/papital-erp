@@ -137,3 +137,18 @@ describe('OBS-PR-07: secrets at rest says to set ERP_SECRETS_KEY first when it i
     expect(withKey.items?.find(i => i.id === 'unreadable_secrets')?.details).not.toContain(KEY_NOT_DEFINED);
   });
 });
+
+describe('shop_redirect_303_as_get_v10_1_66', () => {
+  it('sends a GET without body after a 303 and keeps the method after a 307', async () => {
+    const shop = 'https://shop.example.ir/wp-json/wc/v3/products';
+    const seen: boolean[] = [];
+    const hops: ShopHop<string>[] = [
+      { status: 307, location: '/wp-json/wc/v3/products-a', data: '' },
+      { status: 303, location: '/wp-json/wc/v3/products-b', data: '' },
+      { status: 200, data: 'done' },
+    ];
+    const send = async (_url: string, options: { asGet: boolean }) => { seen.push(options.asGet); return hops[seen.length - 1]; };
+    await expect(followShopRedirects(shop, send, async () => undefined)).resolves.toBe('done');
+    expect(seen).toEqual([false, false, true]);
+  });
+});

@@ -93,11 +93,11 @@ async function makeWcRequest(
     // built again for each address
     return await followShopRedirects(
       fullUrl,
-      async (url) => {
+      async (url, { asGet }) => {
         const response = await axios({
-          method,
+          method: asGet ? 'GET' : method,
           url,
-          data,
+          data: asGet ? undefined : data,
           params: wcAuthQueryParams(url, params, key, secret),
           headers,
           httpsAgent,
