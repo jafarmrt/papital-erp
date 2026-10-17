@@ -59,7 +59,6 @@ export type CriticalScenarioId =
   | 'inventory_negative_stock_policy'
   | 'project_bom_allocation_traceability'
   | 'payroll_voucher_and_crm_accounting_read_model'
-  | 'project_bom_receipt_allocation'
   | 'server_backed_form_drafts'
   | 'structured_error_contract'
   | 'e2e_purchase_receipt_inventory_accounting'
