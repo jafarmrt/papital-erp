@@ -11,7 +11,7 @@ import { createTestItem } from '../fixtures/factories.js';
 
 /**
  * Series 10, N-05 PR 3 (v10.0.247+): the other sections of the media library, file tags, the order of a product's files,
- * replacing a file's content and using a library image as the item's picture. v10.1.70: the item's picture is the
+ * replacing a file's content and using a library image as the item's picture. v10.1.71: the item's picture is the
  * product's one featured image in the library too, and the library's own cover route is gone.
  */
 export async function runMediaArrangeTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
@@ -25,14 +25,14 @@ export async function runMediaArrangeTests(shouldRun: ShouldRun): Promise<TestCa
     ['reg_media_order_n05',
       'v10.0.247: a product files order is set as a whole by media.manage only (N-05)',
       ['n05', 'media', 'permissions'], orderCase],
-    ['reg_media_featured_image_v10170',
-      'v10.1.70: the library grid and product page show the item picture as the featured image, a library file (an old cover mark first) only while the item has none, and the cover route is gone',
+    ['reg_media_featured_image_v10171',
+      'v10.1.71: the library grid and product page show the item picture as the featured image, a library file (an old cover mark first) only while the item has none, and the cover route is gone',
       ['n05', 'media', 'items'], featuredImageCase],
     ['reg_media_replace_n05',
       'v10.0.247: replacing a file keeps its card and order, keeps the old original on disk and refuses the same content, a duplicate or another kind (N-05)',
       ['n05', 'media', 'permissions'], replaceCase],
     ['reg_media_item_image_n05',
-      'v10.0.247: a product image becomes the item picture at the item version, with copied files and an item audit row (N-05); v10.1.70: only products.edit sets it, media.manage alone is refused',
+      'v10.0.247: a product image becomes the item picture at the item version, with copied files and an item audit row (N-05); v10.1.71: only products.edit sets it, media.manage alone is refused',
       ['n05', 'media', 'items', 'permissions'], itemImageCase],
   ]);
 }
@@ -230,7 +230,7 @@ async function featuredImageCase(h: Harness, wrong: string[]): Promise<string> {
   if (imageOnlyRow?.featuredImage !== '/uploads/only-full.webp') wrong.push(`grid featured image of an item without thumbnail ${JSON.stringify(imageOnlyRow)}`);
   const bareRow = await gridRowOf(h, bare);
   if (bareRow?.featuredImage !== null || bareRow.fallbackAssetId !== first.id) wrong.push(`grid row of an item without picture ${JSON.stringify(bareRow)}, expected the first file ${first.id}`);
-  // a cover mark stored before v10.1.70 is kept as it is and still picks the card's file while the item has no picture
+  // a cover mark stored before v10.1.71 is kept as it is and still picks the card's file while the item has no picture
   await h.q(`UPDATE media_assets SET is_cover = 1 WHERE id = $1`, [second.id]);
   const coveredRow = await gridRowOf(h, bare);
   if (coveredRow?.fallbackAssetId !== second.id) wrong.push(`grid row with an old cover mark ${JSON.stringify(coveredRow)}, expected the marked file ${second.id}`);

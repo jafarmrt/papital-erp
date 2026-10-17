@@ -31,7 +31,7 @@ export const MEDIA_UPLOAD_PERMISSION = 'media.upload';
 export const MEDIA_MANAGE_PERMISSION = 'media.manage';
 /** v10.0.25 (N-05 PR 2): the product card is item data, so the item editor's key opens it too */
 export const MEDIA_PRODUCT_INFO_PERMISSIONS = [MEDIA_MANAGE_PERMISSION, 'products.edit'] as const;
-/** v10.1.70: the item's picture is the product's featured image in the whole app, so only the item form's key changes it */
+/** v10.1.71: the item's picture is the product's featured image in the whole app, so only the item form's key changes it */
 export const MEDIA_ITEM_IMAGE_PERMISSION = 'products.edit';
 
 async function actorOf(req: Request): Promise<MediaActor> {

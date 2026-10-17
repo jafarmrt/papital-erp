@@ -13,7 +13,7 @@ import { productCardValues, type ProductCardInput } from './productCardWrite.js'
  * v10.0.25 (N-05 PR 2): the product side of the media library. The grid lists live products (`items.type = 'product'`)
  * with the counts of their files in the «محصولات» section, filtered and paged in SQL; the product page reads one product
  * with its card and files; the card is edited with the item's own version (OCC, TD-654) and audited under «کالا».
- * v10.1.70: the grid and the product page show the item's own picture as the product's featured image.
+ * v10.1.71: the grid and the product page show the item's own picture as the product's featured image.
  */
 
 export const ITEM_AUDIT_ENTITY = 'کالا';
@@ -43,7 +43,7 @@ export interface MediaProductRow {
   imageCount: number;
   videoCount: number;
   lowQualityCount: number;
-  /** v10.1.70: the item's own picture (thumbnail, else image), the one featured image of the product in the whole app */
+  /** v10.1.71: the item's own picture (thumbnail, else image), the one featured image of the product in the whole app */
   featuredImage: string | null;
   /** the first library file with a thumbnail, shown only while the item has no picture */
   fallbackAssetId: number | null;
@@ -115,7 +115,7 @@ export const MediaProductService = {
       lowQualityCount: sql<number>`(SELECT count(*)::int FROM ${mediaAssets} WHERE ${liveAssetsOfItem} AND ${mediaAssets.isLowQuality} = 1)`,
       image: items.image,
       thumbnail: items.thumbnail,
-      // only shown while the item has no picture: a file marked as cover before v10.1.70, else the first file with a
+      // only shown while the item has no picture: a file marked as cover before v10.1.71, else the first file with a
       // thumbnail in the product's order
       fallbackAssetId: sql<number | null>`(SELECT ${mediaAssets.id} FROM ${mediaAssets} WHERE ${liveAssetsOfItem}
         AND ${mediaAssets.thumbBytes} IS NOT NULL

@@ -13,7 +13,7 @@ export interface FunnelFilter {
   assignedPersonnelId?: number;
 }
 
-type FunnelSqlRow = { stage: string; reason: string; entered: number; advanced: number; avg_days: string | null; measured: number };
+type FunnelSqlRow = { stage: string; reason: string; entered: number; advanced: number; avg_days: string | null; measured: number; estimated: number };
 
 /** ترتیب مرحله در قیف؛ «از دست رفته» بیرون از قیف است (-1) */
 const stageRank = (column: string) => sql.raw(
@@ -22,7 +22,8 @@ const stageRank = (column: string) => sql.raw(
 
 /**
  * v10.1.18 (N-02 بخش ۲، ت۷): گزارش قیف از `crm_lead_stage_history` در SQL. بازه روز کسب‌وکار با `zonedDayRangeUtc` به بازه
- * UTC زمان تغییر برمی‌گردد؛ پرونده حذف‌شده شمرده نمی‌شود. قاعده‌ها در `src/lib/crm/funnelReport.ts`.
+ * UTC زمان تغییر برمی‌گردد؛ پرونده حذف‌شده شمرده نمی‌شود. قاعده‌ها در `src/lib/crm/funnelReport.ts`. تاریخچه پیش از ۱۰.۱.۱۸
+ * را migration 0125 از دفترچه اقدامات بازسازی کرده و ورودهای تخمینی آن (`backfill_estimated`) جدا شمرده می‌شوند.
  */
 export async function crmFunnelReport(filter: FunnelFilter): Promise<FunnelReport> {
   const range = zonedDayRangeUtc(filter.fromDate, filter.toDate, await getDisplayTimezone());
@@ -35,7 +36,7 @@ export async function crmFunnelReport(filter: FunnelFilter): Promise<FunnelRepor
 
   const result = await orm.execute(sql`
     WITH h AS (
-      SELECT sh.id, sh.lead_id, sh.to_stage, sh.lost_reason, sh.changed_at, sh.assigned_personnel_id,
+      SELECT sh.id, sh.lead_id, sh.to_stage, sh.lost_reason, sh.changed_at, sh.assigned_personnel_id, sh.source,
              lead(sh.changed_at) OVER (PARTITION BY sh.lead_id ORDER BY sh.changed_at, sh.id) AS next_at
       FROM crm_lead_stage_history sh
       JOIN crm_leads l ON l.id = sh.lead_id AND l.is_deleted = 0
@@ -55,10 +56,12 @@ export async function crmFunnelReport(filter: FunnelFilter): Promise<FunnelRepor
            count(DISTINCT lead_id)::int AS entered,
            count(DISTINCT lead_id) FILTER (WHERE advanced)::int AS advanced,
            round(avg(extract(epoch FROM (next_at - changed_at)) / 86400.0) FILTER (WHERE next_at IS NOT NULL)::numeric, 1)::text AS avg_days,
-           count(*) FILTER (WHERE next_at IS NOT NULL)::int AS measured
+           count(*) FILTER (WHERE next_at IS NOT NULL)::int AS measured,
+           count(DISTINCT lead_id) FILTER (WHERE source = 'backfill_estimated')::int AS estimated
     FROM entries WHERE to_stage <> 'lost' GROUP BY to_stage
     UNION ALL
-    SELECT 'lost', coalesce(lost_reason, ''), count(DISTINCT lead_id)::int, 0, NULL, 0
+    SELECT 'lost', coalesce(lost_reason, ''), count(DISTINCT lead_id)::int, 0, NULL, 0,
+           count(DISTINCT lead_id) FILTER (WHERE source = 'backfill_estimated')::int
     FROM entries WHERE to_stage = 'lost' GROUP BY coalesce(lost_reason, '')
   `);
   const rows = result.rows as FunnelSqlRow[];
@@ -82,6 +85,7 @@ export async function crmFunnelReport(filter: FunnelFilter): Promise<FunnelRepor
     toDate: filter.toDate ?? null,
     assignedPersonnelId: filter.assignedPersonnelId ?? null,
     stages,
+    estimatedEntries: rows.reduce((n, r) => n + Number(r.estimated ?? 0), 0),
     lost: {
       count: lostRows.reduce((n, r) => n + Number(r.entered), 0),
       reasons: lostRows

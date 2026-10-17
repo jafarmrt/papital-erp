@@ -26,7 +26,7 @@ const ITEM_ENTITY: 'کالا' = ITEM_AUDIT_ENTITY;
 /**
  * v10.0.247 (N-05 PR 3): arranging the files of the media library — their order, replacing a file with a better
  * version and using a product image as the item's picture. Each change runs in one transaction with its audit row (`tx`).
- * v10.1.70: the item's own picture (`items.image` / `items.thumbnail`) is the product's one featured image; the library's
+ * v10.1.71: the item's own picture (`items.image` / `items.thumbnail`) is the product's one featured image; the library's
  * separate cover mark was retired (its column is kept as stored and no longer read).
  */
 
