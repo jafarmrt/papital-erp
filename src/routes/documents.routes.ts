@@ -433,7 +433,7 @@ router.get('/documents/by-ref/:ref', authorizePermission(...READ_PERMISSIONS.doc
   // v9.0.326 (TD-782): یک کوئری روی شاخص (نوع، سال، شماره) و فقط سند قطعی فعال؛ چند سال با یک شماره ۴۰۹ با فهرست سال‌ها.
   // پیش‌تر همه اسناد نوع بار می‌شد و سند سال جاری همیشه برنده بود
   const fiscalYear = req.query.fiscalYear === undefined ? null : Number(req.query.fiscalYear);
-  const docId = await findFinalDocumentIdByRef({ ref: req.params.ref, type, fiscalYear, typeTitle: docTypeTitles[type] ?? 'سند' });
+  const docId = await findFinalDocumentIdByRef({ ref: String(req.params.ref), type, fiscalYear, typeTitle: docTypeTitles[type] ?? 'سند' });
   const doc = await DocumentService.getDocumentById(docId);
   if (!doc) throw new NotFoundError('سند یافت نشد');
   assertDocumentTypeReadable(readable, doc?.type);

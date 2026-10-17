@@ -61,7 +61,7 @@ router.post('/drafts', validate(saveDraftSchema), asyncHandler(async (req, res) 
 // Get a specific draft by entityType and draftKey
 router.get('/drafts/:entityType', validate(entityTypeParamSchema), asyncHandler(async (req, res) => {
   const draft = await FormDraftService.getDraft(
-    req.params.entityType, draftKeyOf(req.query.draftKey), req.user?.id || null, sessionIdOf(req.headers['x-session-id']),
+    String(req.params.entityType), draftKeyOf(req.query.draftKey), req.user?.id || null, sessionIdOf(req.headers['x-session-id']),
   );
   res.json({ draft });
 }));
@@ -76,7 +76,7 @@ router.get('/drafts', validate(listDraftsSchema), asyncHandler(async (req, res) 
 // Delete / discard a specific draft by entityType and optional draftKey
 router.delete('/drafts/:entityType', validate(entityTypeParamSchema), asyncHandler(async (req, res) => {
   const result = await FormDraftService.deleteDraft(
-    req.params.entityType, draftKeyOf(req.query.draftKey), req.user?.id || null, sessionIdOf(req.headers['x-session-id']),
+    String(req.params.entityType), draftKeyOf(req.query.draftKey), req.user?.id || null, sessionIdOf(req.headers['x-session-id']),
   );
   res.json(result);
 }));

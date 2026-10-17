@@ -457,7 +457,7 @@ router.post('/piecework/categories', requirePermission(PIECEWORK_TASKS_PERMISSIO
 // PUT /api/piecework/categories/:id
 router.put('/piecework/categories/:id', requirePermission(PIECEWORK_TASKS_PERMISSION), idempotency({ scope: 'piecework' }), validate(updateTaskCategorySchema), asyncHandler(async (req, res) => {
   try {
-    const rawId = req.params.id;
+    const rawId = String(req.params.id);
     const { name, description } = req.body;
 
     const result = await PieceworkService.updateCategory(rawId, { name, description });
@@ -481,7 +481,7 @@ router.put('/piecework/categories/:id', requirePermission(PIECEWORK_TASKS_PERMIS
 // DELETE /api/piecework/categories/:id
 router.delete('/piecework/categories/:id', requirePermission(PIECEWORK_TASKS_PERMISSION), idempotency({ scope: 'piecework' }), validate(pieceworkCategoryParamSchema), asyncHandler(async (req, res) => {
   try {
-    const rawId = req.params.id;
+    const rawId = String(req.params.id);
     const result = await PieceworkService.deleteCategory(rawId);
 
     await logActivity({

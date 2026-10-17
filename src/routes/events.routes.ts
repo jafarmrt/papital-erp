@@ -133,7 +133,7 @@ router.post('/outbox/retry-failed', authorizePermission('events.manage'), asyncH
 }));
 
 router.post('/outbox/:eventId/retry', authorizePermission('events.manage'), validate(eventIdParamSchema), asyncHandler(async (req, res) => {
-  const { eventId } = req.params;
+  const eventId = String(req.params.eventId);
   // v9.0.432 (TD-716): only a failed event (else 409), and its DLQ row is resolved in the same transaction
   await retryFailedOutboxEvents({ eventId, userId: req.user?.id });
 
@@ -172,7 +172,7 @@ router.get(['/action-rules', '/rules'], authorizePermission('events.view'), asyn
 }));
 
 router.get(['/action-rules/:id', '/rules/:id'], authorizePermission('events.view'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params.id), 10);
   const rule = await EventActionEngineService.getRuleById(id);
 
   if (!rule) {
@@ -224,7 +224,7 @@ router.post(['/action-rules', '/rules'], authorizePermission('events.manage'), v
 }));
 
 router.put(['/action-rules/:id', '/rules/:id'], authorizePermission('events.manage'), validate(updateActionRuleSchema), asyncHandler(async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params.id), 10);
   const updatedRule = await EventActionEngineService.updateRule(id, req.body);
 
   await logActivity({
@@ -244,7 +244,7 @@ router.put(['/action-rules/:id', '/rules/:id'], authorizePermission('events.mana
 }));
 
 router.delete(['/action-rules/:id', '/rules/:id'], authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params.id), 10);
   // v9.0.445 (TD-611): the service writes the audit row in the delete transaction
   await EventActionEngineService.deleteRule(id, { req });
 
@@ -261,7 +261,7 @@ const ruleActiveSchema = z.object({
 }).passthrough();
 
 router.post(['/action-rules/:id/toggle', '/rules/:id/toggle'], authorizePermission('events.manage'), validate(ruleActiveSchema), asyncHandler(async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params.id), 10);
   const { rule, changed } = await setRuleActive(id, req.body.active === true, req);
   const state = rule.isActive === 1 ? 'فعال' : 'غیرفعال';
   res.json({
@@ -274,7 +274,7 @@ router.post(['/action-rules/:id/toggle', '/rules/:id/toggle'], authorizePermissi
 
 // v9.0.430 (TD-708, decision t5 a): a rule test evaluates the stored rule and shows what its action would do; it never runs it
 router.post(['/action-rules/:id/test', '/rules/:id/test'], authorizePermission('events.manage'), validate(testStoredRuleSchema), asyncHandler(async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params.id), 10);
   const testResult = await testStoredRule(id, req.body?.customEvent);
   res.json({
     success: true,
@@ -349,7 +349,7 @@ router.get('/dlq', authorizePermission('events.view'), asyncHandler(async (req, 
 }));
 
 router.post('/dlq/:id/replay', authorizePermission('events.manage'), validate(dlqReplaySchema), asyncHandler(async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params.id), 10);
   const { payload, adjustedPayload } = req.body;
   const finalPayload = payload || adjustedPayload;
   const userId = req.user?.id;
@@ -394,7 +394,7 @@ router.post('/dlq/replay-batch', authorizePermission('events.manage'), validate(
 }));
 
 router.post('/dlq/:id/dismiss', authorizePermission('events.manage'), validate(dlqDismissSchema), asyncHandler(async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params.id), 10);
   const { notes } = req.body;
   const userId = req.user?.id;
 
@@ -408,7 +408,7 @@ router.post('/dlq/:id/dismiss', authorizePermission('events.manage'), validate(d
 }));
 
 router.put('/dlq/:id/payload', authorizePermission('events.manage'), validate(dlqPayloadSchema), asyncHandler(async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params.id), 10);
   const { payload } = req.body;
   const userId = req.user?.id;
 
@@ -522,7 +522,7 @@ router.get('/webhooks', authorizePermission('events.view'), asyncHandler(async (
 }));
 
 router.get('/webhooks/:id', authorizePermission('events.view'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params.id), 10);
   const sub = await WebhookSubscriptionService.getSubscriptionById(id);
 
   if (!sub) {
@@ -578,7 +578,7 @@ router.post('/webhooks', authorizePermission('events.manage'), validate(createWe
 }));
 
 router.put('/webhooks/:id', authorizePermission('events.manage'), validate(updateWebhookSchema), asyncHandler(async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params.id), 10);
   const updated = await WebhookSubscriptionService.updateSubscription(id, req.body);
 
   res.json({
@@ -589,7 +589,7 @@ router.put('/webhooks/:id', authorizePermission('events.manage'), validate(updat
 }));
 
 router.delete('/webhooks/:id', authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params.id), 10);
   // v9.0.445 (TD-611): one transaction with its deliveries, queued jobs and audit row
   await WebhookSubscriptionService.deleteSubscription(id, { req });
 
@@ -600,7 +600,7 @@ router.delete('/webhooks/:id', authorizePermission('events.manage'), validate(pa
 }));
 
 router.post('/webhooks/:id/toggle', authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params.id), 10);
   const updated = await WebhookSubscriptionService.toggleSubscription(id);
 
   res.json({
@@ -611,7 +611,7 @@ router.post('/webhooks/:id/toggle', authorizePermission('events.manage'), valida
 }));
 
 router.post('/webhooks/:id/rotate-secret', authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params.id), 10);
   const rotated = await WebhookSubscriptionService.rotateSecret(id);
   await logActivity({
     userId: req.user?.id,

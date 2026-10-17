@@ -27,8 +27,37 @@ export interface RouteGuardRow {
 interface ExpressLayer {
   name?: string;
   handle: unknown;
-  regexp?: RegExp & { fast_slash?: boolean };
+  /** Express 5 (router 2): true for a path-less `use` */
+  slash?: boolean;
+  /** the literal path an `app.use(path, …)` mounted this layer at (`recordMountPaths`) */
+  [MOUNT_PATH]?: string;
   route?: { path: string | string[]; methods: Record<string, boolean>; stack: ExpressLayer[] };
+}
+
+/** Express 5 keeps no mount path on a layer (only its matcher), so `app.use(path, …)` records it here. */
+export const MOUNT_PATH = Symbol.for('erp.routeMountPath');
+
+interface MountableApp {
+  use: (...args: unknown[]) => unknown;
+  router: { stack: ExpressLayer[] };
+}
+
+/**
+ * Wraps `app.use` once so every layer it adds under a string path carries that path. Only the app's own `use` is
+ * wrapped: a prefix given to `router.use(path, …)` inside a mounted router is not recorded and shows as «?» in the
+ * route table, so routers mount their sub-routers under path-less `use` (as every router does today).
+ */
+export function recordMountPaths(app: Express): void {
+  const target = app as unknown as MountableApp;
+  const original = target.use.bind(target);
+  target.use = (...args: unknown[]) => {
+    const before = target.router.stack.length;
+    const result = original(...args);
+    if (typeof args[0] === 'string') {
+      for (const layer of target.router.stack.slice(before)) layer[MOUNT_PATH] = args[0];
+    }
+    return result;
+  };
 }
 
 interface Chain {
@@ -42,13 +71,12 @@ function guardEntriesOf(handle: unknown): string[] | null {
   return Array.isArray(entries) ? (entries as string[]) : null;
 }
 
-/** پیشوند سوار شدن روتر از regexp لایه Express 4 (`^\/api\/?(?=\/|$)`). */
+/** The router's mount prefix: '' for a path-less `use`, the recorded path of `app.use(path, …)`, else unknown. */
 function mountPathOf(layer: ExpressLayer): string {
-  const re = layer.regexp;
-  if (!re || re.fast_slash) return '';
-  const match = re.source.match(/^\^((?:\\\/[^\\?(]+)+)\\\/\?\(\?=\\\/\|\$\)$/);
-  if (!match) return '?';
-  return match[1].replace(/\\\//g, '/');
+  if (layer.slash) return '';
+  const mount = layer[MOUNT_PATH];
+  if (typeof mount !== 'string') return '?';
+  return mount === '/' ? '' : mount.replace(/\/+$/, '');
 }
 
 function validationOf(stack: ExpressLayer[]): { validated: boolean; validatesBody: boolean } {
@@ -91,13 +119,13 @@ function walk(stack: ExpressLayer[], prefix: string, inherited: Chain, rows: Rou
       if (mount === '') chain = after;
       continue;
     }
-    if (!layer.regexp || layer.regexp.fast_slash) chain = applyMiddleware(chain, layer.handle);
+    if (layer.slash) chain = applyMiddleware(chain, layer.handle);
   }
   return chain;
 }
 
 export function buildRouteGuardTable(app: Express): RouteGuardRow[] {
-  const root = (app as unknown as { _router?: { stack: ExpressLayer[] } })._router;
+  const root = (app as unknown as { router?: { stack: ExpressLayer[] } }).router;
   const rows: RouteGuardRow[] = [];
   if (!root) return rows;
   // app.use('/api', ...) میدل‌ورهای بی‌مسیر سطح app را هم دارد؛ authenticateToken در سطح app سوار نمی‌شود

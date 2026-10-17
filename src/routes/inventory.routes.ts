@@ -349,7 +349,7 @@ router.get(
   authorizePermission(...ITEM_KARDEX_READ_PERMISSIONS),
   validate(paramsItemIdSchema),
   asyncHandler(async (req, res) => {
-    const itemId = parseInt(req.params.itemId, 10);
+    const itemId = parseInt(String(req.params.itemId), 10);
     if (isNaN(itemId)) {
       throw new BadRequestError('شناسه کالا نامعتبر است.');
     }
@@ -419,7 +419,7 @@ router.post(
   idempotency({ scope: 'inventory' }),
   validate(paramsIdSchema),
   asyncHandler(async (req, res) => {
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(String(req.params.id), 10);
     if (isNaN(id)) {
       throw new BadRequestError('شناسه تخصیص نامعتبر است.');
     }
@@ -448,7 +448,7 @@ router.post(
   idempotency({ scope: 'inventory' }),
   validate(releaseAllocationSchema),
   asyncHandler(async (req, res) => {
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(String(req.params.id), 10);
     if (isNaN(id)) {
       throw new BadRequestError('شناسه تخصیص نامعتبر است.');
     }
