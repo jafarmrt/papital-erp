@@ -145,5 +145,54 @@ export async function runPieceworkPersonnelSweepTests(shouldRun: ShouldRun): Pro
     }));
   }
 
+  const taskAuditId = 'reg_piecework_task_create_delete_audit_tx';
+  if (shouldRun(taskAuditId, 'piecework', 'task', 'audit')) {
+    await runCase(results, taskAuditId, 'Closing sweep (#294 review): a piecework task create, delete and restore write their audit row in their own transaction; a refused audit row refuses the change', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      await failInsertsHolding('activity_logs', 'description', 'AUDITFAIL');
+      const auditOf = (id: number, action: string) => orm.select().from(activityLogs)
+        .where(and(eq(activityLogs.entity, 'عنوان پرکیسی'), eq(activityLogs.entityId, String(id)), eq(activityLogs.action, action)));
+
+      // a valid create writes one audit row with the task after, under the request's trace id
+      const okTitle = tag('Sweep task ok ');
+      const created = await admin.post('/api/piecework/tasks', { title: okTitle, defaultRate: '1200' });
+      const createdId = Number(created.body?.id);
+      const createAudit = createdId ? await auditOf(createdId, 'CREATE') : [];
+      if (created.status !== 201) problems.push(`a valid create answered ${created.status} ${brief(created.body)}`);
+      if (createAudit.length !== 1 || !(createAudit[0].details as { after?: unknown } | null)?.after || !createAudit[0].traceId) {
+        problems.push(`a valid create wrote ${createAudit.length} audit rows ${brief(createAudit[0]?.details)} trace ${String(createAudit[0]?.traceId)}`);
+      }
+
+      // a create whose audit row fails leaves no task
+      const failTitle = tag('Sweep task AUDITFAIL ');
+      const failed = await admin.post('/api/piecework/tasks', { title: failTitle, defaultRate: '1200' });
+      const leftover = await orm.select().from(pieceworkTasks).where(eq(pieceworkTasks.title, failTitle));
+      if (failed.status < 400) problems.push(`a create whose audit row failed answered ${failed.status}`);
+      if (leftover.length !== 0) problems.push('a create whose audit row failed left its task');
+
+      // a delete whose audit row fails leaves the task live; a restore likewise leaves it deleted
+      const live = await newTask(tag('Sweep del AUDITFAIL '), 1000);
+      const del = await admin.del(`/api/piecework/tasks/${live.id}`);
+      if (del.status < 400) problems.push(`a delete whose audit row failed answered ${del.status}`);
+      if ((await taskRow(live.id))?.isDeleted !== 0) problems.push('a delete whose audit row failed deleted the task');
+      await orm.update(pieceworkTasks).set({ isDeleted: 1 }).where(eq(pieceworkTasks.id, live.id));
+      const restore = await admin.post(`/api/piecework/tasks/${live.id}/restore`, {});
+      if (restore.status < 400) problems.push(`a restore whose audit row failed answered ${restore.status}`);
+      if ((await taskRow(live.id))?.isDeleted !== 1) problems.push('a restore whose audit row failed restored the task');
+
+      // a valid delete writes its audit row with the task before
+      if (createdId) {
+        const okDel = await admin.del(`/api/piecework/tasks/${createdId}`);
+        const delAudit = await auditOf(createdId, 'DELETE');
+        if (okDel.status !== 200 || delAudit.length !== 1 || !(delAudit[0].details as { before?: unknown } | null)?.before) {
+          problems.push(`a valid delete answered ${okDel.status} with ${delAudit.length} audit rows`);
+        }
+      }
+      assertNoProblems(problems);
+      return 'create, delete and restore commit with their audit row; a failing audit row refuses each';
+    }));
+  }
+
   return results;
 }
