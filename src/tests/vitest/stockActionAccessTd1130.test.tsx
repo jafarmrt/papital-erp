@@ -22,7 +22,7 @@ vi.mock('../../hooks/queries', () => ({
 }));
 
 import inventoryRouter from '../../routes/inventory.routes';
-import { buildRouteGuardTable } from '../../lib/routeGuardTable';
+import { buildRouteGuardTable, recordMountPaths } from '../../lib/routeGuardTable';
 import { PAGE_ACCESS } from '../../lib/permissions/pageAccess';
 import { ITEM_COST_READ_PERMISSIONS } from '../../lib/inventory/reservedItemsReport';
 import { ITEM_KARDEX_READ_PERMISSIONS } from '../../lib/permissions/stockActionPermissions';
@@ -65,6 +65,7 @@ function AuditButtons() {
 describe('stock buttons follow the key of their API (TD-1130)', () => {
   it('opens the item Kardex for every reader of the stock movements page, and only for cost readers', () => {
     const app = express();
+    recordMountPaths(app);
     app.use('/api/inventory', inventoryRouter);
     const row = buildRouteGuardTable(app).find(r => r.method === 'GET' && r.path === '/api/inventory/item-kardex/:itemId');
     expect(row?.guards).toEqual([[...ITEM_KARDEX_READ_PERMISSIONS]]);

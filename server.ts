@@ -110,11 +110,11 @@ async function startServer() {
     const distPath = path.join(process.cwd(), 'dist');
     if (fs.existsSync(distPath)) {
       app.use(express.static(distPath));
-      app.get('*', (req, res) => {
+      app.get('/{*splat}', (req, res) => {
         res.sendFile(path.join(distPath, 'index.html'));
       });
     } else {
-      app.get('*', (req, res) => {
+      app.get('/{*splat}', (req, res) => {
         res.status(404).send('Not built yet');
       });
     }

@@ -103,7 +103,8 @@ export const validate = (schema: ZodSchema) => {
           req.body = (parsed as any).body;
         }
         if ('query' in parsed && (parsed as any).query !== undefined) {
-          req.query = (parsed as any).query;
+          // Express 5: req.query is a getter, so the parsed query is set as the request's own property
+          Object.defineProperty(req, 'query', { value: (parsed as any).query, writable: true, configurable: true, enumerable: true });
         }
         if ('params' in parsed && (parsed as any).params !== undefined) {
           req.params = (parsed as any).params;

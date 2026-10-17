@@ -55,7 +55,7 @@ router.get('/transfers', authenticateToken, authorizePermission(...READ_PERMISSI
 
 // GET /api/transfers/:code - Get single transfer code details and products
 router.get('/transfers/:code', authenticateToken, authorizePermission(...READ_PERMISSIONS.transfers), validate(deleteTransferSchema), asyncHandler(async (req: Request, res: Response) => {
-  const transfer = await getTransferCode(req.params.code);
+  const transfer = await getTransferCode(String(req.params.code));
   // TD-493: a deleted design with no product using its code is gone
   if (!transfer) throw new NotFoundError('ترنسفر یافت نشد');
   res.json({ data: transfer });
@@ -109,7 +109,7 @@ router.put('/transfers', authenticateToken, authorizePermission('products.create
 // DELETE /api/transfers/:code - Delete transfer details/image
 router.delete('/transfers/:code', authenticateToken, authorizePermission('products.delete'), idempotency({ scope: 'transfers' }), validate(deleteTransferSchema), asyncHandler(async (req: Request, res: Response) => {
   try {
-    const code = req.params.code;
+    const code = String(req.params.code);
     await TransferService.deleteTransfer(code, req.user);
 
     res.json({ message: `اطلاعات و تصویر ترنسفر کد ${code} با موفقیت پاک شد.` });

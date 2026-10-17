@@ -1,7 +1,6 @@
 import express from 'express';
 import { ATTACHMENT_BODY_LIMIT, DEFAULT_BODY_LIMIT, acceptsAttachmentBody } from './lib/attachments/attachmentBodyLimit.js';
 import { isPublicUploadPath, isUploadsRequestPath, normalizedUploadPath } from './lib/attachments/publicUploadPath.js';
-import 'express-async-errors';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
@@ -16,6 +15,7 @@ import { asyncHandler } from './middleware/asyncHandler.js';
 import { buildCspDirectives } from './lib/cspDirectives.js';
 import promClient from 'prom-client';
 import { requestContextMiddleware } from './lib/requestContext.js';
+import { applyExpress4RequestShapes, emptyBodyDefault } from './lib/express5Compat.js';
 import { validateCorsOrigin } from './lib/corsValidator.js';
 import authRoutes from './routes/auth.routes.js';
 import usersRoutes from './routes/users.routes.js';
@@ -99,6 +99,8 @@ export async function createApp(): Promise<express.Express> {
   }
 
   const app = express();
+  // v10.1.67 (Express 5): the Express 4 query shape and the mount paths the route table reads
+  applyExpress4RequestShapes(app);
   // v7.0.23 (TD-181 / audit P0-5): فقط پراکسی‌های شناخته‌شده (TRUST_PROXY) قابل‌اعتمادند؛ req.ip آدرس واقعی کلاینت
   // پشت Nginx/Ingress است و X-Forwarded-For ارسالی از کلاینت مستقیم نادیده گرفته می‌شود (قبلاً trust proxy = 1).
   app.set('trust proxy', resolveTrustProxySetting());
@@ -185,6 +187,7 @@ export async function createApp(): Promise<express.Express> {
       if (!req.rawBody) req.rawBody = buf;
     }
   }));
+  app.use(emptyBodyDefault);
   app.use(morganMiddleware);
   app.use(metricsMiddleware);
   // v9.0.164 (TD-584, decision ت۲): /api answers 503 SYSTEM_STARTING until migrations and seed finish

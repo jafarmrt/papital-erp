@@ -146,7 +146,8 @@ router.post('/tasks/:taskId/execute', authorizePermission(...WORKFLOW_EXECUTE_PE
  */
 router.get('/instance/:entityType/:entityId', authorizePermission(...WORKFLOW_WIDGET_PERMISSIONS), validate(entityParamSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
-    const { entityType, entityId } = req.params;
+    const entityType = String(req.params.entityType);
+    const entityId = String(req.params.entityId);
     const userId = req.user?.id;
     const userRole = req.user?.role;
     const userPermissions = req.user?.permissions || [];
