@@ -15,9 +15,12 @@ export const USERNAME_FORMAT_INVALID = 'USERNAME_FORMAT_INVALID';
 export const USERNAME_FORMAT_MESSAGE =
   'نام کاربری باید ۳ تا ۵۰ نویسه و فقط حرف لاتین، رقم لاتین، نقطه، زیرخط یا خط تیره باشد.';
 
-/** The key two usernames are compared by: letter case and surrounding spaces do not count */
+/**
+ * The key two usernames are compared by: letter case and surrounding spaces do not count. Only the space character is
+ * stripped, like SQL `btrim` of the unique index, so an old username with a tab or a no-break space keys alike in both.
+ */
 export function usernameKey(username: string): string {
-  return String(username ?? '').trim().toLowerCase();
+  return String(username ?? '').replace(/^ +| +$/g, '').toLowerCase();
 }
 
 /** Why a new username may not be saved, or null */

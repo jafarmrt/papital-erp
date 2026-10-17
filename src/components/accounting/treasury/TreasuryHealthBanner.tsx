@@ -2,6 +2,7 @@ import React from 'react';
 import { ShieldCheck, AlertTriangle } from 'lucide-react';
 import { rialDisplayOf } from '../../../lib/rialDisplay';
 import { formatPersianNumber } from '../../../utils';
+import { BANK_PENDING_APPROVAL_LABEL } from '../../../lib/treasury/bankSyncStatus';
 
 interface TreasuryHealthBannerProps {
   totalLedgerBalance: number;
@@ -9,6 +10,8 @@ interface TreasuryHealthBannerProps {
   totalDiscrepancy: number;
   syncedAccountsCount: number;
   discrepantAccountsCount: number;
+  /** v10.1.66: accounts that differ only by a draft voucher (`pending_approval`) */
+  pendingApprovalAccountsCount?: number;
   totalAccountsCount: number;
   appCurrency: string;
 }
@@ -19,10 +22,12 @@ export const TreasuryHealthBanner: React.FC<TreasuryHealthBannerProps> = React.m
   totalDiscrepancy,
   syncedAccountsCount,
   discrepantAccountsCount,
+  pendingApprovalAccountsCount = 0,
   totalAccountsCount,
   appCurrency,
 }) => {
   const isHealthy = discrepantAccountsCount === 0;
+  const waitsForApproval = isHealthy && pendingApprovalAccountsCount > 0;
   const rial = rialDisplayOf(appCurrency);
 
   return (
@@ -47,9 +52,11 @@ export const TreasuryHealthBanner: React.FC<TreasuryHealthBannerProps> = React.m
           <div>
             <div className="flex items-center gap-2">
               <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                {isHealthy
-                  ? 'وضعیت سلامت ریالی: انطباق ۱۰۰٪ کامل خزانه‌داری با دفاتر حسابداری'
-                  : `هشدار مغایرت ریالی: ${formatPersianNumber(discrepantAccountsCount)} حساب نیازمند بررسی و تطبیق`}
+                {!isHealthy
+                  ? `هشدار مغایرت ریالی: ${formatPersianNumber(discrepantAccountsCount)} حساب نیازمند بررسی و تطبیق`
+                  : waitsForApproval
+                    ? `بی‌مغایرت؛ ${formatPersianNumber(pendingApprovalAccountsCount)} حساب ${BANK_PENDING_APPROVAL_LABEL}`
+                    : 'وضعیت سلامت ریالی: انطباق ۱۰۰٪ کامل خزانه‌داری با دفاتر حسابداری'}
               </h4>
               <span
                 className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
@@ -62,7 +69,9 @@ export const TreasuryHealthBanner: React.FC<TreasuryHealthBannerProps> = React.m
               </span>
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-              {isHealthy
+              {waitsForApproval
+                ? 'اختلاف این حساب‌ها فقط از سند حسابداری پیش‌نویس دریافت یا پرداخت است و با تأیید سند برطرف می‌شود.'
+                : isHealthy
                 ? 'تمامی مانده‌های صندوق‌ها و بانک‌ها مستقیماً با مجموع گردش اسناد حسابداری تاییدشده تراز هستند.'
                 : 'مغایرت معمولاً از این‌هاست: سند حسابداری دریافت یا پرداخت هنوز پیش‌نویس است و تا تأیید در دفاتر شمرده نمی‌شود؛ تراکنشی بی سند حسابداری ثبت شده؛ یا مانده اولیه در سند افتتاحیه نیامده است.'}
             </p>

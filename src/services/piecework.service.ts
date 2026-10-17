@@ -6,7 +6,7 @@ import { requireStorageDate } from '../lib/storageDate.js';
 import { businessTodayIsoDate } from '../lib/businessClock.js';
 import { PieceworkPayrollService } from './piecework/payroll.service.js';
 import { lockEditableWorkLog, workLogFreeOfLivePayroll } from './piecework/workLogPayrollLink.js';
-import { auditTaskUpdated, auditWorkLogCreated, auditWorkLogDeleted, auditWorkLogUpdated, type AuditActor } from './piecework/pieceworkAudit.js';
+import { auditTaskCreated, auditTaskDeleted, auditTaskRestored, auditTasksCleared, auditTasksImported, auditTaskUpdated, auditWorkLogCreated, auditWorkLogDeleted, auditWorkLogUpdated, type AuditActor } from './piecework/pieceworkAudit.js';
 import { activePersonnelRate, savePersonnelRate, type PersonnelRateInput, type RateActor } from './piecework/personnelRate.js';
 import { assertScheduleRowsFree, linkScheduleRows, lockProjectsOfLogMove, lockScheduleProjects, unlinkScheduleRow } from './piecework/scheduleRowLink.js';
 import { revertWorkshopReportsOfLog } from './piecework/workshopReportRevert.js';
@@ -123,10 +123,16 @@ export class PieceworkService {
    */
   static async createTask(
     input: CreatePieceworkTaskInput,
-    executor?: DbExecutor
+    executor?: DbExecutor,
+    actor: AuditActor = {}
   ): Promise<typeof pieceworkTasks.$inferSelect> {
-    // OBS-R2-50: the task and its history row in one transaction (a history error no longer leaves a task without history)
-    return inTransaction(executor, (tx) => PieceworkService.createTaskIn(input, tx));
+    // OBS-R2-50: the task and its history row in one transaction (a history error no longer leaves a task without history);
+    // closing sweep (#294 review): its audit row too
+    return inTransaction(executor, async (tx) => {
+      const created = await PieceworkService.createTaskIn(input, tx);
+      await auditTaskCreated(tx, created, { ...actor, userId: actor.userId ?? input.userId, username: actor.username || input.username });
+      return created;
+    });
   }
 
   private static async createTaskIn(
@@ -254,9 +260,14 @@ export class PieceworkService {
   static async deleteTask(
     id: number,
     audit?: { userId?: number; username?: string },
-    executor?: DbExecutor
+    executor?: DbExecutor,
+    actor: AuditActor = {}
   ): Promise<typeof pieceworkTasks.$inferSelect> {
-    return inTransaction(executor, (tx) => PieceworkService.deleteTaskIn(id, audit, tx));
+    return inTransaction(executor, async (tx) => {
+      const existing = await PieceworkService.deleteTaskIn(id, audit, tx);
+      await auditTaskDeleted(tx, existing, { ...actor, ...audit });
+      return existing;
+    });
   }
 
   private static async deleteTaskIn(
@@ -358,7 +369,8 @@ export class PieceworkService {
       userId?: number;
       username?: string;
     },
-    executor: DbExecutor = orm
+    executor: DbExecutor = orm,
+    actor: AuditActor = {}
   ): Promise<{
     createdCount: number;
     updatedCount: number;
@@ -372,7 +384,11 @@ export class PieceworkService {
 
     // TD-246: ورود اکسل یکجاست؛ ردیفی که کد تکراری دارد کل فایل را رد می‌کند و هیچ ردیفی ثبت نمی‌شود
     // (روی تراکنش فراخواننده، savepoint)
-    return await executor.transaction(async (tx) => PieceworkService.importTaskRows(rows, mode, userId, username, tx));
+    return await executor.transaction(async (tx) => {
+      const result = await PieceworkService.importTaskRows(rows, mode, userId, username, tx);
+      await auditTasksImported(tx, { createdCount: result.createdCount, updatedCount: result.updatedCount, mode }, { ...actor, userId: actor.userId ?? userId, username: actor.username || username });
+      return result;
+    });
   }
 
   /**
@@ -529,15 +545,20 @@ export class PieceworkService {
    */
   static async clearAllTasks(
     audit?: { userId?: number; username?: string },
-    executor?: DbExecutor
+    executor?: DbExecutor,
+    actor: AuditActor = {}
   ): Promise<number> {
-    return inTransaction(executor, (tx) => PieceworkService.clearAllTasksIn(audit, tx));
+    return inTransaction(executor, async (tx) => {
+      const taskIds = await PieceworkService.clearAllTasksIn(audit, tx);
+      await auditTasksCleared(tx, taskIds, { ...actor, ...audit });
+      return taskIds.length;
+    });
   }
 
   private static async clearAllTasksIn(
     audit: { userId?: number; username?: string } | undefined,
     executor: DbExecutor
-  ): Promise<number> {
+  ): Promise<number[]> {
     const deleted = await executor.update(pieceworkTasks)
       .set({ isDeleted: 1 })
       .where(eq(pieceworkTasks.isDeleted, 0))
@@ -557,7 +578,7 @@ export class PieceworkService {
       }, executor);
     }
 
-    return deleted.length;
+    return deleted.map(d => d.id);
   }
 
   /**
@@ -566,9 +587,14 @@ export class PieceworkService {
   static async restoreTask(
     id: number,
     audit?: { userId?: number; username?: string },
-    executor?: DbExecutor
+    executor?: DbExecutor,
+    actor: AuditActor = {}
   ): Promise<typeof pieceworkTasks.$inferSelect> {
-    return inTransaction(executor, (tx) => PieceworkService.restoreTaskIn(id, audit, tx));
+    return inTransaction(executor, async (tx) => {
+      const existing = await PieceworkService.restoreTaskIn(id, audit, tx);
+      await auditTaskRestored(tx, existing, { ...actor, ...audit });
+      return existing;
+    });
   }
 
   private static async restoreTaskIn(

@@ -32,6 +32,9 @@ export enum DomainEventType {
   // OBS-R2-13 (ت۴۰ بند ۱۱): تأیید و پرداخت فیش حقوق
   PAYROLL_APPROVED = 'PayrollApproved',
   PAYROLL_PAID = 'PayrollPaid',
+  // ت۴۰: a voided payslip payment and a deleted payslip, so a subscriber that saw «paid» or «approved» hears it was undone
+  PAYROLL_PAYMENT_VOIDED = 'PayrollPaymentVoided',
+  PAYROLL_DELETED = 'PayrollDeleted',
   VOUCHER_POSTED = 'VoucherPosted',
 
   // 5. Workflow Engine
@@ -137,7 +140,8 @@ export interface TreasuryEventPayload {
   transactionId?: number;
   chequeId?: number;
   type: 'deposit' | 'withdrawal' | 'transfer' | 'cheque_pass' | 'cheque_return';
-  amount: number;
+  /** absent on a payslip payment and its void (`payrollId` set): a salary amount is for payroll readers only */
+  amount?: number;
   currency: string;
   accountId?: number;
   accountName?: string;
@@ -183,6 +187,8 @@ export interface PayrollEventPayload {
   status: string;
   transactionId?: number;
   isFullyPaid?: boolean;
+  /** `PayrollPaymentVoided`: the payment voided (`transactionId` is its reversal row) */
+  voidedTransactionId?: number;
 }
 
 export interface WorkflowEventPayload {

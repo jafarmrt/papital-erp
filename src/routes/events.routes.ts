@@ -110,7 +110,7 @@ router.get('/outbox', authorizePermission('events.view'), asyncHandler(async (re
 
 router.post(['/outbox/process-now', '/outbox/process'], authorizePermission('events.manage'), validate(outboxProcessSchema), asyncHandler(async (req, res) => {
   const batchSize = req.body.batchSize ?? 25;
-  const result = await OutboxService.processPendingBatch(batchSize);
+  const result = await OutboxService.processPendingBatchAsWorker(batchSize);
 
   res.json({
     success: true,
@@ -553,7 +553,7 @@ router.post('/webhooks', authorizePermission('events.manage'), validate(createWe
       // خودش secret امن CSPRNG (generateSecretKey) تولید می‌کند.
       secretKey: secretKey?.trim() || undefined,
       customHeaders: customHeaders || {},
-      retryLimit: retryLimit || 3,
+      retryLimit: retryLimit ?? 3,
       // v9.0.359 (TD-720): the form's timeoutMs (legacy timeoutSeconds), checked by the service; it used to become 10 s
       timeoutMs,
       timeoutSeconds

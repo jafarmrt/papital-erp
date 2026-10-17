@@ -2,7 +2,8 @@
 
 Business rows are never deleted physically: they are soft-deleted with `is_deleted = 1` and, for stock, reversed (AGENTS.md
 §3 and §19, DB-009). The architecture ratchet (`npm run ratchet:architecture`, metric `hardDeletes`) counts every
-`x.delete(<schema table>)` and every SQL text with `DELETE FROM` in production code; the files below are the only
+`x.delete(<schema table>)`, every delete on a database executor or chained with `.where` / `.returning` (a table held in
+a variable too) and every SQL text with `DELETE FROM` or `TRUNCATE` in production code; the files below are the only
 exceptions, each with its reason, and their counts may only go down. A new physical delete needs its own line here and a
 product-owner decision; a file that no longer deletes is removed from this list in the same change
 (Vitest `hardDeleteExceptions.test.ts` keeps this list and the baseline equal).

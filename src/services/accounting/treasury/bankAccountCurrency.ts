@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../../db/drizzle.js';
 import { cheques, treasuryTransactions } from '../../../db/schema.js';
 import { ValidationError } from '../../../errors/customErrors.js';
@@ -6,6 +6,8 @@ import { fin, type DecimalValue } from '../../../lib/financialDecimal.js';
 import { TREASURY_CURRENCIES, isTreasuryCurrency, normalizeTreasuryCurrency, type TreasuryCurrency } from '../../../lib/treasury/treasuryCurrency.js';
 import { formatCurrencyLabel } from '../../../utils/formatters.js';
 import { pettyCashCurrencyRefusal } from '../../../lib/treasury/pettyCash.js';
+import { toPersianDigits } from '../../../utils/persianNumber.js';
+import { PAID_CHEQUE_OPEN_CLEARING_STATUSES, isChequeClearingAccountType } from '../../../lib/treasury/chequeTransitions.js';
 
 const CURRENCY_LIST_TEXT = TREASURY_CURRENCIES.map(formatCurrencyLabel).join('، ');
 
@@ -79,4 +81,25 @@ export async function assertBankLedgerChangeAllowed(
       'BANK_ACCOUNT_LEDGER_LOCKED',
     );
   }
+}
+
+/**
+ * Closing sweep (#291 review): a bank or cash account with paid cheques not yet cleared does not turn into a POS or petty
+ * cash account; those cheques clear only from their issuing account (v10.1.47), and once it is no longer a bank or cash
+ * account the clearing step would ask for another account and credit it (422 `BANK_ACCOUNT_TYPE_HAS_OPEN_PAID_CHEQUES`).
+ */
+export async function assertBankTypeChangeKeepsPaidCheques(
+  tx: DbExecutor, existing: { id: number; title: string | null; type: string | null }, newType: string,
+): Promise<void> {
+  if (!isChequeClearingAccountType(existing.type) || isChequeClearingAccountType(newType)) return;
+  const open = await tx.select({ chequeNumber: cheques.chequeNumber }).from(cheques).where(and(
+    eq(cheques.bankAccountId, existing.id), eq(cheques.type, 'paid'), eq(cheques.isDeleted, 0),
+    inArray(cheques.status, [...PAID_CHEQUE_OPEN_CLEARING_STATUSES]),
+  ));
+  if (open.length === 0) return;
+  const numbers = open.map(c => c.chequeNumber);
+  throw new ValidationError(
+    `حساب «${existing.title ?? ''}» ${toPersianDigits(open.length)} چک پرداختی وصول‌نشده دارد (${numbers.slice(0, 5).map(n => toPersianDigits(n)).join('، ')})؛ تا وصول یا برگشت آن‌ها نوع حساب به کارتخوان یا تنخواه‌گردان تغییر نمی‌کند.`,
+    { chequeNumbers: numbers }, 'BANK_ACCOUNT_TYPE_HAS_OPEN_PAID_CHEQUES',
+  );
 }

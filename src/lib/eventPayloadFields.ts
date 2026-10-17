@@ -104,6 +104,7 @@ const PAYROLL_LABELS: Record<keyof PayrollEventPayload, string> = {
   status: 'وضعیت فیش',
   transactionId: 'شناسه تراکنش خزانه',
   isFullyPaid: 'تسویه کامل',
+  voidedTransactionId: 'شناسه پرداخت باطل‌شده',
 };
 
 const WORKFLOW_LABELS: Record<keyof WorkflowEventPayload, string> = {
@@ -167,6 +168,8 @@ const PAYLOAD_LABELS_BY_EVENT: Record<string, Record<string, string>> = {
   ChequeStatusChanged: CHEQUE_LABELS,
   PayrollApproved: PAYROLL_LABELS,
   PayrollPaid: PAYROLL_LABELS,
+  PayrollPaymentVoided: PAYROLL_LABELS,
+  PayrollDeleted: PAYROLL_LABELS,
   WorkflowTransitioned: WORKFLOW_LABELS,
   WorkflowCompleted: WORKFLOW_LABELS,
   WorkflowRejected: WORKFLOW_LABELS,

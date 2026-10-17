@@ -20,9 +20,9 @@ import { LockHierarchyLevel, withOrderedLocks } from '../../lib/lockOrder.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
 import { OutboxService } from '../events/outboxService.js';
-import { recordPayrollEvent } from '../piecework/payrollEvents.js';
+import { payrollTreasuryEventPayload, recordPayrollEvent } from '../piecework/payrollEvents.js';
 import { fin, type DecimalValue } from '../../lib/financialDecimal.js';
-import { PAYROLL_CURRENCY, payrollAmountText } from '../../lib/payroll/payrollCurrency.js';
+import { isPayrollBankCurrency, PAYROLL_CURRENCY, payrollAmountText } from '../../lib/payroll/payrollCurrency.js';
 import { money } from '../../lib/money.js';
 import { isoToJalaliDate } from '../../utils.js';
 import { resolveTreasuryWriteDate } from './treasury/treasuryDate.js';
@@ -138,7 +138,7 @@ export class PayrollPaymentService {
         throw new ValidationError('برای این حساب بانکی/صندوق، حساب معین در چارت حساب‌ها تعریف نشده است؛ ابتدا آن را در بخش کدینگ متصل کنید.');
       }
 
-      if (bank.currency && bank.currency !== 'IRR') {
+      if (!isPayrollBankCurrency(bank.currency)) {
         throw new ValidationError(`پرداخت حقوق فقط با حساب ریالی امکان‌پذیر است (حساب انتخاب‌شده «${bank.title}» ارز ${bank.currency} دارد).`);
       }
 
@@ -193,8 +193,8 @@ export class PayrollPaymentService {
         .where(eq(personnel.id, payroll.personnelId));
 
       // ۴. محاسبات مبالغ با دقت اعشاری و اعتبارسنجی
-      const netPayable = fin(Number(payroll.netPayable) || 0);
-      const alreadyPaid = fin(Number(payroll.paidAmount) || 0);
+      const netPayable = fin(payroll.netPayable ?? 0);
+      const alreadyPaid = fin(payroll.paidAmount ?? 0);
       const remainingAmount = netPayable.subtract(alreadyPaid).round(4);
 
       if (remainingAmount.lessThanOrEqual(0)) {
@@ -308,19 +308,10 @@ export class PayrollPaymentService {
         DomainEventType.TREASURY_TRANSACTION_APPROVED,
         'Treasury',
         String(tr.id),
-        {
-          transactionId: tr.id,
-          type: 'withdrawal',
-          amount: payAmount.toNumber(),
-          currency: PAYROLL_CURRENCY,
-          accountId: bank.id,
-          accountName: bank.title,
-          payrollId: payroll.id,
-          payrollNumber: payroll.payrollNumber,
-          isFullyPaid,
-          remainingAmount: netPayable.subtract(newTotalPaid).toNumber(),
-          description: input.notes || descText
-        },
+        // v10.1.66: no amount, remaining balance, name or description (they reach every «*» webhook)
+        payrollTreasuryEventPayload({
+          transactionId: tr.id, type: 'withdrawal', currency: PAYROLL_CURRENCY, bank, payroll, isFullyPaid,
+        }),
         { userId: input.userId, userName: input.username }
       );
       await OutboxService.saveToOutbox(tx, evt);

@@ -298,16 +298,7 @@ router.post('/piecework/tasks', requirePermission(PIECEWORK_TASKS_PERMISSION), i
       description,
       userId: req.user?.id,
       username: req.user?.username
-    });
-
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username || 'سیستم',
-      action: 'CREATE',
-      entity: 'عنوان پرکیسی',
-      entityId: newTask.id,
-      description: `تعریف عنوان کاری کارمزدی جدید «${newTask.title}» با کد «${newTask.code}»`
-    });
+    }, undefined, { req });
 
     res.status(201).json(newTask);
   } catch (err) {
@@ -329,15 +320,7 @@ router.post('/piecework/tasks/import-excel', requirePermission(PIECEWORK_TASKS_P
       mode,
       userId: req.user?.id,
       username: req.user?.username
-    });
-
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username || 'سیستم',
-      action: 'IMPORT',
-      entity: 'عناوین پرکیسی',
-      description: `ورود اکسل عناوین کاری کارمزدی (${result.createdCount} عنوان جدید، ${result.updatedCount} عنوان ویرایش‌شده، شیوه: ${mode})`
-    });
+    }, undefined, { req });
 
     // v9.0.279 (TD-813): ردیف‌های ثبت‌نشده (نرخ متن یا منفی) با شماره ردیف و دلیل در `errors`
     const skipped = result.errors.length > 0 ? ` ${result.errors.length} ردیف ثبت نشد.` : '';
@@ -361,15 +344,7 @@ router.post(['/piecework/tasks/clear-defaults', '/piecework/tasks/clear-all'], r
     const count = await PieceworkService.clearAllTasks({
       userId: req.user?.id,
       username: req.user?.username
-    });
-
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username || 'سیستم',
-      action: 'DELETE',
-      entity: 'عناوین پرکیسی',
-      description: `پاکسازی کلی عناوین کاری کارمزدی (${count} مورد حذف شدند)`
-    });
+    }, undefined, { req });
 
     res.json({
       status: 'ok',
@@ -413,19 +388,10 @@ router.put('/piecework/tasks/:id', requirePermission(PIECEWORK_TASKS_PERMISSION)
 router.delete('/piecework/tasks/:id', requirePermission(PIECEWORK_TASKS_PERMISSION), idempotency({ scope: 'piecework' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const existing = await PieceworkService.deleteTask(id, {
+    await PieceworkService.deleteTask(id, {
       userId: req.user?.id,
       username: req.user?.username
-    });
-
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username || 'سیستم',
-      action: 'DELETE',
-      entity: 'عنوان پرکیسی',
-      entityId: id,
-      description: `حذف عنوان کاری کارمزدی «${existing.title}»`
-    });
+    }, undefined, { req });
 
     res.json({ status: 'ok', message: 'عنوان کاری حذف شد' });
   } catch (err) {
@@ -438,19 +404,10 @@ router.delete('/piecework/tasks/:id', requirePermission(PIECEWORK_TASKS_PERMISSI
 router.post('/piecework/tasks/:id/restore', requirePermission(PIECEWORK_TASKS_PERMISSION), idempotency({ scope: 'piecework' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const existing = await PieceworkService.restoreTask(id, {
+    await PieceworkService.restoreTask(id, {
       userId: req.user?.id,
       username: req.user?.username
-    });
-
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username || 'سیستم',
-      action: 'UPDATE',
-      entity: 'عنوان پرکیسی',
-      entityId: id,
-      description: `بازیابی عنوان کاری کارمزدی «${existing.title}» از بایگانی`
-    });
+    }, undefined, { req });
 
     res.json({ status: 'ok', message: 'عنوان کاری با موفقیت بازیابی شد' });
   } catch (err) {

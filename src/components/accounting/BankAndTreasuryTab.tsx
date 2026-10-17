@@ -324,6 +324,7 @@ export function BankAndTreasuryTab({
         totalDiscrepancy={summary.totalDiscrepancy}
         syncedAccountsCount={summary.syncedAccountsCount}
         discrepantAccountsCount={summary.discrepantAccountsCount}
+        pendingApprovalAccountsCount={summary.pendingApprovalAccountsCount}
         totalAccountsCount={summary.totalAccountsCount}
         appCurrency={appCurrency}
       />

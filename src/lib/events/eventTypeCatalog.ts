@@ -27,6 +27,8 @@ export const PUBLISHED_EVENT_TYPES: readonly EventTypeOption[] = [
   { value: 'ChequeStatusChanged', label: 'تغییر وضعیت چک', category: 'خزانه' },
   { value: 'PayrollApproved', label: 'تأیید فیش حقوق', category: 'حقوق' },
   { value: 'PayrollPaid', label: 'پرداخت کامل یا بخشی فیش حقوق', category: 'حقوق' },
+  { value: 'PayrollPaymentVoided', label: 'ابطال پرداخت فیش حقوق', category: 'حقوق' },
+  { value: 'PayrollDeleted', label: 'ابطال و حذف فیش حقوق', category: 'حقوق' },
   { value: 'WorkflowTransitioned', label: 'گذر از گام گردش کار', category: 'گردش کار' },
   { value: 'WorkflowCompleted', label: 'پایان گردش کار با تأیید یا لغو', category: 'گردش کار' },
   { value: 'WorkflowRejected', label: 'رد شدن در گردش کار', category: 'گردش کار' },

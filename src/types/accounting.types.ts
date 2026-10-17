@@ -250,6 +250,8 @@ export interface Cheque {
   bankAccountId?: number | null;
   bank_account_id?: number | null;
   bankAccountTitle?: string | null;
+  /** closing sweep (#291 review): the type of the cheque's own treasury account */
+  bankAccountType?: string | null;
   voucherId?: number | null;
   voucher_id?: number | null;
   description?: string | null;

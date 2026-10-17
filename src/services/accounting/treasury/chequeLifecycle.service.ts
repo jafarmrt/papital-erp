@@ -139,6 +139,7 @@ export class ChequeLifecycleService {
       payeeName: cheques.payeeName,
       bankAccountId: cheques.bankAccountId,
       bankAccountTitle: bankAccounts.title,
+      bankAccountType: bankAccounts.type,
       voucherId: cheques.voucherId,
       description: cheques.description,
       statusHistory: cheques.statusHistory,

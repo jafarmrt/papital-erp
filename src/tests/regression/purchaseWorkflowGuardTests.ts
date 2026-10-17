@@ -1,11 +1,12 @@
 import request from 'supertest';
 import { and, eq } from 'drizzle-orm';
-import { orm } from '../../db/drizzle.js';
+import { orm, pool } from '../../db/drizzle.js';
 import { purchaseRequisitions, workflowDefinitions, workflowInstances, workflowStates, workflowTransitions } from '../../db/schema.js';
 import { WorkflowEngineService } from '../../services/workflow/workflowEngineService.js';
 import { upgradeLegacySeedGuards } from '../../services/workflow/seedGuardUpgrade.js';
 import { PURCHASE_REQUISITION_GUARD_UPGRADE } from '../../services/workflow/purchaseWorkflowGuards.js';
 import { buildUnguardedPurchaseActionHealthTest, findUnguardedPurchaseActions } from '../../services/accounting/unguardedPurchaseActionHealth.js';
+import { buildUnknownPermissionActionHealthTest, findUnknownPermissionActions } from '../../services/accounting/workflowUnknownPermissionHealth.js';
 import { createTestRole, createTestUser } from '../fixtures/factories.js';
 import { TestCaseResult } from '../types.js';
 import { type ShouldRun, inFiscalSandbox, runCase } from './fiscalClosingTests.js';
@@ -82,6 +83,32 @@ export async function runPurchaseWorkflowGuardTests(shouldRun: ShouldRun): Promi
       const health = buildUnguardedPurchaseActionHealthTest(await findUnguardedPurchaseActions(orm));
       expect(health.status === 'warning' && health.count === 5, `health check ${health.status} / ${health.count}`);
       return 'seed guards every action; upgrade runs once and only on the untouched old seed; an edited one is listed';
+    }));
+  }
+
+  if (shouldRun('reg_workflow_unknown_permission_health', 'workflow', 'permission', 'health')) {
+    await runCase(results, 'reg_workflow_unknown_permission_health', 'Closing sweep (#304 review): an active workflow action whose permission is no longer a catalog key (audit.create, removed by 0123) is listed by the health check, in the step tables and in the published version', () => inFiscalSandbox(async () => {
+      await WorkflowEngineService.seedDefaultWorkflows();
+      const [def] = await orm.select().from(workflowDefinitions).where(eq(workflowDefinitions.code, 'PURCHASE_REQUISITION_WORKFLOW'));
+      expect(!!def, 'purchase requisition workflow is not seeded');
+      expect((await findUnknownPermissionActions(orm)).length === 0, 'fresh seed is listed with an unknown permission');
+
+      const reopen = and(eq(workflowTransitions.workflowDefinitionId, def.id), eq(workflowTransitions.actionKey, 'reopen'));
+      await orm.update(workflowTransitions).set({ requiredPermission: 'audit.create' }).where(reopen);
+      const live = await findUnknownPermissionActions(orm);
+      expect(live.length === 1 && live[0].requiredPermission === 'audit.create' && live[0].definitionId === def.id, `step tables: ${JSON.stringify(live)}`);
+      const health = buildUnknownPermissionActionHealthTest(live);
+      expect(health.status === 'warning' && health.count === 1, `health check ${health.status} / ${health.count}`);
+
+      // the step tables are fixed again, but the published version still holds the removed key
+      await orm.update(workflowTransitions).set({ requiredPermission: 'procurement.create' }).where(reopen);
+      await pool.query(`UPDATE workflow_definition_versions v
+        SET dsl_json = jsonb_set(v.dsl_json, '{transitions}', (SELECT jsonb_agg(CASE WHEN t ->> 'actionKey' = 'reopen'
+          THEN jsonb_set(t, '{requiredPermission}', '"audit.create"') ELSE t END) FROM jsonb_array_elements(v.dsl_json -> 'transitions') t))
+        WHERE v.definition_id = $1 AND v.status = 'published'`, [def.id]);
+      const published = await findUnknownPermissionActions(orm);
+      expect(published.length === 1 && published[0].requiredPermission === 'audit.create', `published version: ${JSON.stringify(published)}`);
+      return 'an action with a removed permission is listed from the step tables and from the published version';
     }));
   }
 

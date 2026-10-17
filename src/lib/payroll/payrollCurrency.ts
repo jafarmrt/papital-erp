@@ -11,3 +11,11 @@ export const PAYROLL_CURRENCY = 'IRR';
 export function payrollAmountText(amount: DecimalValue, currency: string | null | undefined = PAYROLL_CURRENCY): string {
   return formatPersianPrice(fin(amount).toString(), currency || PAYROLL_CURRENCY, 4);
 }
+
+/**
+ * v10.1.66: the treasury accounts a payslip may be paid from, one rule for the server's refusal and the payment window's
+ * list: an account without a currency or in IRR (the stored code of a rial account), never another code, «ریال» included.
+ */
+export function isPayrollBankCurrency(currency: string | null | undefined): boolean {
+  return !currency || currency === PAYROLL_CURRENCY;
+}

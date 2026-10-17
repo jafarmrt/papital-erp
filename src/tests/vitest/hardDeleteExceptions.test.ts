@@ -25,6 +25,18 @@ describe('hard_delete_exceptions_obs_r2_15', () => {
     expect(countSource('src/services/x.ts', code).hardDeletes).toBe(2);
   });
 
+  it('hard_delete_variable_table_and_truncate: a table held in a variable and TRUNCATE text count too, a CSS class does not', () => {
+    const code = [
+      'for (const entry of tables) await tx.delete(entry.table);',
+      'await someDb.delete(table).returning({ id: x });',
+      'seen.delete(id);',
+      "await pool.query('TRUNCATE TABLE roles');",
+      "await pool.query('truncate table roles');",
+      'const css = "truncate max-w-[200px]";',
+    ].join('\n');
+    expect(countSource('src/services/x.ts', code).hardDeletes).toBe(4);
+  });
+
   it('every file with a physical delete has its written reason, and every written file still deletes', () => {
     expect(Object.keys(baseline.hardDeletes ?? {}).sort()).toEqual(listed);
   });

@@ -106,6 +106,21 @@ function isAuditWithoutTx(n: ts.CallExpression): boolean {
     || ((ts.isPropertyAssignment(p) || ts.isShorthandPropertyAssignment(p)) && ts.isIdentifier(p.name) && p.name.text === 'tx'));
 }
 
+/** A database executor's name: a delete on it is a Drizzle delete whatever its argument (a table held in a variable too). */
+const EXECUTOR_NAMES = new Set(['tx', 'trx', 'db', 'orm', 'executor', 'txEngine', 'externalTx', 'innerTx']);
+
+/**
+ * Closing sweep (#309 review): `x.delete(arg)` is a Drizzle delete when `x` is an executor (`tx.delete(entry.table)`) or
+ * when the call is chained with `.where(...)` / `.returning(...)`, which a `Map` or `Set` delete never is.
+ */
+function isDrizzleDelete(n: ts.CallExpression): boolean {
+  const receiver = (n.expression as ts.PropertyAccessExpression).expression;
+  const name = ts.isIdentifier(receiver) ? receiver.text : ts.isPropertyAccessExpression(receiver) ? receiver.name.text : '';
+  if (EXECUTOR_NAMES.has(name)) return true;
+  const parent = n.parent;
+  return ts.isPropertyAccessExpression(parent) && parent.expression === n && ['where', 'returning'].includes(parent.name.text);
+}
+
 /** Counts of every metric in one source file. */
 export type SourceMetric = Exclude<Metric, 'packageBoundary'>;
 
@@ -119,14 +134,14 @@ export function countSource(file: string, source: string): Record<SourceMetric, 
     if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression)) {
       const method = n.expression.name.text;
       if (isRoute(file) && ['insert', 'update', 'delete'].includes(method) && n.arguments.length === 1 && isTable(n.arguments[0])) counts.routeWrites++;
-      if (method === 'delete' && n.arguments.length === 1 && isTable(n.arguments[0])) counts.hardDeletes++;
+      if (method === 'delete' && n.arguments.length === 1 && (isTable(n.arguments[0]) || isDrizzleDelete(n))) counts.hardDeletes++;
       if (isRoute(file) && method === 'status' && n.arguments.length === 1 && isErrorStatus(n.arguments[0])
         && ts.isIdentifier(n.expression.expression) && n.expression.expression.text === 'res') counts.routeErrorResponses++;
     }
     if (ts.isCallExpression(n) && isAuditWithoutTx(n)) counts.auditWithoutTx++;
     if (ts.isCatchClause(n) && isNoopCatch(n)) counts.noopCatches++;
     if ((ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n) || ts.isTemplateHead(n) || ts.isTemplateMiddle(n) || ts.isTemplateTail(n))
-      && /\bDELETE\s+FROM\b/i.test(n.text)) counts.hardDeletes++;
+      && (/\bDELETE\s+FROM\b/i.test(n.text) || /\bTRUNCATE\s+(TABLE\s+)?["\w$]/.test(n.text) || /\btruncate\s+table\b/i.test(n.text))) counts.hardDeletes++;
     if (ts.isBinaryExpression(n) && isOrm(n.right)
       && [ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.EqualsToken].includes(n.operatorToken.kind)) counts.ormFallback++;
     if ((ts.isVariableDeclaration(n) || ts.isParameter(n)) && n.initializer && isOrm(n.initializer)) counts.ormFallback++;

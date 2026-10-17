@@ -47,6 +47,7 @@ import { buildProjectStageHealthTest, buildProjectValueHealthTest, findProjectFr
 import { PROJECT_PRIORITIES, PROJECT_STATUSES, STAGE_STATUSES } from '../../lib/projects/projectStatus.js';
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
 import { buildUnguardedPurchaseActionHealthTest, findUnguardedPurchaseActions } from './unguardedPurchaseActionHealth.js';
+import { buildUnknownPermissionActionHealthTest, findUnknownPermissionActions } from './workflowUnknownPermissionHealth.js';
 import { buildUnguardedDocumentStepHealthTest, findUnguardedDocumentSteps } from './unguardedDocumentStepHealth.js';
 import { buildUnguardedDocumentInstanceHealthTest, findUnguardedDocumentInstances } from './unguardedDocumentInstanceHealth.js';
 import { buildWorkflowRoleReviewHealthTest, findWorkflowRoleReviews } from '../workflow/workflowRoleReview.js';
@@ -1160,6 +1161,11 @@ export class FinancialHealthService {
     const unguardedPurchaseTest = buildUnguardedPurchaseActionHealthTest(await findUnguardedPurchaseActions(orm));
     overallScore += unguardedPurchaseTest.scoreImpact;
     tests.push(unguardedPurchaseTest);
+
+    // آزمون ۱۷ح: v10.1.66 اقدام گردش کار فعال با مجوزی که دیگر در فهرست مجوزها نیست (مثل audit.create، مهاجرت 0123)
+    const unknownPermissionTest = buildUnknownPermissionActionHealthTest(await findUnknownPermissionActions(orm));
+    overallScore += unknownPermissionTest.scoreImpact;
+    tests.push(unknownPermissionTest);
 
     // آزمون ۱۷ب: v9.0.128 (TD-542) گام‌های گردش کاری که مهاجرت 0065 برای بازبینی نقش فهرست کرد
     const workflowRoleReviewTest = buildWorkflowRoleReviewHealthTest(await findWorkflowRoleReviews());

@@ -30,4 +30,10 @@ describe('OBS-R1-30: the health check lists usernames that differ only in letter
     expect(buildUsernameUniquenessHealthTest([], true).status).toBe('healthy');
     expect(buildUsernameUniquenessHealthTest([], false).status).toBe('warning');
   });
+
+  it('username_key_matches_sql_btrim: only the space character is stripped, like btrim of the unique index (#305 review)', () => {
+    expect(usernameKey('  Ali  ')).toBe('ali');
+    expect(usernameKey('\tAli')).toBe('\tali');
+    expect(usernameKey('Ali\u00a0')).toBe('ali\u00a0');
+  });
 });

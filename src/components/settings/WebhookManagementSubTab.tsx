@@ -184,7 +184,7 @@ export function WebhookManagementSubTab() {
       eventPatterns: sub.eventPatterns || ['*'],
       customHeadersJson: JSON.stringify(sub.customHeaders || {}, null, 2),
       isActive: sub.isActive,
-      retryLimit: String(sub.retryLimit || 3),
+      retryLimit: String(sub.retryLimit ?? 3),
       timeoutMs: String(sub.timeoutMs || WEBHOOK_TIMEOUT_DEFAULT_MS)
     });
     setLimitsError(null);

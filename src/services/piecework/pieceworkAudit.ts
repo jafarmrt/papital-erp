@@ -15,6 +15,7 @@ export const WORK_LOG_AUDIT_ENTITY = 'کارکرد پرکیسی';
 export const PAYROLL_AUDIT_ENTITY = 'فیش حقوقی';
 export const PAYROLL_PAYMENT_AUDIT_ENTITY = 'پرداخت حقوق';
 export const TASK_AUDIT_ENTITY = 'عنوان پرکیسی';
+export const TASKS_AUDIT_ENTITY = 'عناوین پرکیسی';
 
 export interface AuditActor {
   req?: unknown;
@@ -109,6 +110,50 @@ function taskSnapshot(row: TaskRow): Snapshot {
     description: row.description ?? '',
     isActive: row.isActive ?? 1,
   };
+}
+
+/**
+ * Closing sweep (#294 review): a task's create, delete and restore, the clear-all and the Excel import write their audit
+ * row with their own `tx`, so a refused audit row refuses the change (the route wrote them after commit).
+ */
+export async function auditTaskCreated(tx: DbExecutor, row: TaskRow, actor: AuditActor): Promise<void> {
+  await logActivity({
+    tx, ...actorFields(actor), action: 'CREATE', entity: TASK_AUDIT_ENTITY, entityId: row.id,
+    description: `تعریف عنوان کاری کارمزدی جدید «${row.title}» با کد «${row.code}»`,
+    details: { after: taskSnapshot(row) },
+  });
+}
+
+export async function auditTaskDeleted(tx: DbExecutor, row: TaskRow, actor: AuditActor): Promise<void> {
+  await logActivity({
+    tx, ...actorFields(actor), action: 'DELETE', entity: TASK_AUDIT_ENTITY, entityId: row.id,
+    description: `حذف عنوان کاری کارمزدی «${row.title}»`,
+    details: { before: taskSnapshot(row) },
+  });
+}
+
+export async function auditTaskRestored(tx: DbExecutor, row: TaskRow, actor: AuditActor): Promise<void> {
+  await logActivity({
+    tx, ...actorFields(actor), action: 'UPDATE', entity: TASK_AUDIT_ENTITY, entityId: row.id,
+    description: `بازیابی عنوان کاری کارمزدی «${row.title}» از بایگانی`,
+    details: { after: taskSnapshot({ ...row, isDeleted: 0, isActive: 1 }) },
+  });
+}
+
+export async function auditTasksCleared(tx: DbExecutor, taskIds: number[], actor: AuditActor): Promise<void> {
+  await logActivity({
+    tx, ...actorFields(actor), action: 'DELETE', entity: TASKS_AUDIT_ENTITY,
+    description: `پاکسازی کلی عناوین کاری کارمزدی (${toPersianDigits(taskIds.length)} مورد حذف شدند)`,
+    details: { taskIds },
+  });
+}
+
+export async function auditTasksImported(tx: DbExecutor, counts: { createdCount: number; updatedCount: number; mode: string }, actor: AuditActor): Promise<void> {
+  await logActivity({
+    tx, ...actorFields(actor), action: 'IMPORT', entity: TASKS_AUDIT_ENTITY,
+    description: `ورود اکسل عناوین کاری کارمزدی (${toPersianDigits(counts.createdCount)} عنوان جدید، ${toPersianDigits(counts.updatedCount)} عنوان ویرایش‌شده، شیوه: ${counts.mode})`,
+    details: counts,
+  });
 }
 
 /** OBS-R2-50: the task edit's audit row, written with the edit's `tx` and only the fields that changed */

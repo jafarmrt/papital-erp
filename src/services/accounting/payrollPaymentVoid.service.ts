@@ -13,6 +13,7 @@ import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
 import { OutboxService } from '../events/outboxService.js';
 import { auditPayrollPaymentVoided } from '../piecework/pieceworkAudit.js';
+import { payrollTreasuryEventPayload, recordPayrollEvent } from '../piecework/payrollEvents.js';
 
 export interface VoidPayrollPaymentInput {
   payrollId: number;
@@ -126,20 +127,11 @@ export class PayrollPaymentVoidService {
         DomainEventType.TREASURY_TRANSACTION_APPROVED,
         'Treasury',
         String(reversal.id),
-        {
-          transactionId: reversal.id,
-          voidedTransactionId: payment.id,
-          voidedTransactionNumber: payment.transactionNumber,
-          type: 'deposit',
-          isReversal: true,
-          amount: amount.toNumber(),
-          currency: payment.currency || 'IRR',
-          accountId: bank.id,
-          accountName: bank.title,
-          payrollId: payroll.id,
-          payrollNumber: payroll.payrollNumber,
-          reason,
-        },
+        // v10.1.66: no amount and no reason text (a salary is for payroll readers only)
+        payrollTreasuryEventPayload({
+          transactionId: reversal.id, type: 'deposit', currency: payment.currency || 'IRR', bank, payroll,
+          voided: { transactionId: payment.id, transactionNumber: payment.transactionNumber },
+        }),
         { userId: input.userId, userName: input.username },
       ));
 
@@ -159,6 +151,10 @@ export class PayrollPaymentVoidService {
         transactionId: payment.id, transactionNumber: payment.transactionNumber, reversalTransactionNumber: reversalNumber,
         amount: amount.toString(), reason, reversalVoucherId, paidBefore: String(payroll.paidAmount ?? 0),
       }, { req: input.req, userId: input.userId, username: input.username });
+      // v10.1.66 (ت۴۰): a subscriber that saw `PayrollPaid` hears the payment was voided, in the same transaction
+      await recordPayrollEvent(tx, 'payment_voided', updated, { userId: input.userId, username: input.username }, {
+        transactionId: reversal.id, voidedTransactionId: payment.id,
+      });
 
       return {
         payroll: updated,

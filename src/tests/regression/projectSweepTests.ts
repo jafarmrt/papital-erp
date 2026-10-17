@@ -122,9 +122,16 @@ export async function runProjectSweepTests(shouldRun: ShouldRun): Promise<TestCa
       const allocated = await ProjectBomAllocationService.allocateMaterialsForProject({ projectId: project.id, allocations: [{ itemId: item.id, quantity: 2, location: wh }], username: 'inv' });
       const sourceId = allocated.allocations[0]?.sourceTransactionId ?? 0;
       const [out] = await q('SELECT type, unit_price::text AS price FROM transactions WHERE id = $1', [sourceId]);
-      assertNoProblems(out?.type === 'out' && fin(String(out.price)).equals('1234.5678')
-        ? [] : [`the allocation's movement is ${brief(out)}, expected an out row at 1234.5678`]);
-      return 'the allocation left stock at 1234.5678';
+      // #292 review: the allocation's voucher posts the same cost, 2 × 1234.5678, on each side
+      const [posted] = await q(`SELECT coalesce(sum(i.debit), 0)::text AS debit, coalesce(sum(i.credit), 0)::text AS credit
+        FROM journal_voucher_items i JOIN journal_vouchers v ON v.id = i.voucher_id
+        WHERE v.source_bom_allocation_id = $1 AND v.is_deleted = 0 AND i.is_deleted = 0`, [allocated.allocations[0]?.id ?? 0]);
+      assertNoProblems([
+        ...(out?.type === 'out' && fin(String(out.price)).equals('1234.5678') ? [] : [`the allocation's movement is ${brief(out)}, expected an out row at 1234.5678`]),
+        ...(fin(String(posted?.debit ?? 0)).equals('2469.1356') && fin(String(posted?.credit ?? 0)).equals('2469.1356')
+          ? [] : [`the allocation voucher posts ${brief(posted)}, expected 2469.1356 on each side`]),
+      ]);
+      return 'the allocation left stock at 1234.5678 and its voucher posts 2469.1356';
     }));
   }
 
