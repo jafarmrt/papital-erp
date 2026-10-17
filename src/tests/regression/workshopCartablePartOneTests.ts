@@ -9,7 +9,7 @@ import { withRequiredPermissions } from '../../lib/permissions/permissionCatalog
 
 /**
  * v10.1.37 (N-01 part 1, TD-1283, mobile workshop plan): the data of the workshop cartable.
- * - Decision ت۱۱ الف: a role holding workshop.long_session (template «کارکن کارگاه») logs in for seven days, any other
+ * - Decision ت۱۱ الف: a role holding workshop.long_session (template «همکار کارگاه») logs in for seven days, any other
  *   role, the system admin included, for 24 hours (token and cookie alike).
  * - Decision ت۳ الف: «مسئولان پروژه» are saved with the project (create and edit), read with the project record and
  *   audited; a deleted user or a repeated one refuses the save with nothing written.
