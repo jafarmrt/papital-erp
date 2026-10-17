@@ -20,6 +20,7 @@ import { OperationalPurgeService } from './src/services/events/operationalPurge.
 import { pool, getDatabaseMode } from './src/db/drizzle.js';
 import { decideProcessErrorAction, processErrorMessage } from './src/lib/processErrorPolicy.js';
 import { REQUEST_TIMEOUT_MS } from './src/lib/media/mediaRules.js';
+import { listenCallback } from './src/lib/serverListen.js';
 
 async function startServer() {
   // TST-001: production startup assertion — abort if test code leaked into bundle
@@ -111,7 +112,8 @@ async function startServer() {
     if (fs.existsSync(distPath)) {
       app.use(express.static(distPath));
       app.get('/{*splat}', (req, res) => {
-        res.sendFile(path.join(distPath, 'index.html'));
+        // send 1.x refuses an absolute path under a dot-directory (404), so the file is named relative to its root
+        res.sendFile('index.html', { root: distPath });
       });
     } else {
       app.get('/{*splat}', (req, res) => {
@@ -120,9 +122,7 @@ async function startServer() {
     }
   }
 
-  const server = app.listen(PORT, '0.0.0.0', () => {
-    logger.info(`Server running on port ${PORT}`);
-  });
+  const server = app.listen(PORT, '0.0.0.0', listenCallback(PORT, logger));
   // v10.0.21 (N-05): a media library upload of up to 50 MB on a slow line outlasts Node's 5-minute request timeout
   server.requestTimeout = REQUEST_TIMEOUT_MS;
 

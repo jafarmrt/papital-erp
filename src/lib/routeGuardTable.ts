@@ -42,7 +42,11 @@ interface MountableApp {
   router: { stack: ExpressLayer[] };
 }
 
-/** Wraps `app.use` once so every layer it adds under a string path carries that path. */
+/**
+ * Wraps `app.use` once so every layer it adds under a string path carries that path. Only the app's own `use` is
+ * wrapped: a prefix given to `router.use(path, …)` inside a mounted router is not recorded and shows as «?» in the
+ * route table, so routers mount their sub-routers under path-less `use` (as every router does today).
+ */
 export function recordMountPaths(app: Express): void {
   const target = app as unknown as MountableApp;
   const original = target.use.bind(target);
