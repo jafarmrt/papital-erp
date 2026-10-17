@@ -1446,6 +1446,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // Package 2, password group (from TD-532): password policy
   const { runAccessPackageTwoPasswordTests } = await import('../security/accessPackageTwoPasswordTests.js');
   results.push(...await runAccessPackageTwoPasswordTests(shouldRunAccess));
+  // OBS-R1-30 (ت۴۰): new usernames are unique regardless of letter case and follow one format
+  const { runUsernameRuleTests } = await import('../security/usernameRuleTests.js');
+  results.push(...await runUsernameRuleTests(shouldRunAccess));
   // v10.0.198 (TD-963): audit rows carry the request's trace id
   const { runAuditTraceTests } = await import('../security/auditTraceTests.js');
   results.push(...await runAuditTraceTests(shouldRunAccess));

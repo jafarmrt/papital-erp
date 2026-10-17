@@ -21,6 +21,7 @@ import {
   GENERIC_LOGIN_FAILURE_MESSAGE
 } from '../services/auth/loginSecurity.service.js';
 import { notSyntheticTestUsername, isSyntheticTestUsername, SYNTHETIC_USERNAME_REFUSED } from '../lib/syntheticUsers.js';
+import { USERNAME_FORMAT_INVALID, usernameFormatError } from '../lib/users/usernameRules.js';
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE } from '../lib/auth/passwordPolicy.js';
 import { publicUserView } from '../lib/auth/publicUser.js';
 import { FULL_NAME_MAX_LENGTH, FULL_NAME_TOO_LONG_MESSAGE } from '../lib/users/profileFields.js';
@@ -147,6 +148,9 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
   if (isSyntheticTestUsername(tUsername)) {
     throw new ValidationError(SYNTHETIC_USERNAME_REFUSED);
   }
+  // OBS-R1-30 (ت۴۰): the first admin's username follows the rule of every new username
+  const usernameError = usernameFormatError(tUsername);
+  if (usernameError) throw new ValidationError(usernameError, undefined, USERNAME_FORMAT_INVALID);
 
   // v10.0.46 (L5 E7, TD-960): admin, default warehouse, company settings and the audit row in one transaction under
   // the transaction advisory lock 79234 (SEC-012); the company logo stays a data URL in app_settings (V3.1.11)
