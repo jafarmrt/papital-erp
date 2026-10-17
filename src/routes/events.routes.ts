@@ -110,7 +110,7 @@ router.get('/outbox', authorizePermission('events.view'), asyncHandler(async (re
 
 router.post(['/outbox/process-now', '/outbox/process'], authorizePermission('events.manage'), validate(outboxProcessSchema), asyncHandler(async (req, res) => {
   const batchSize = req.body.batchSize ?? 25;
-  const result = await OutboxService.processPendingBatch(batchSize);
+  const result = await OutboxService.processPendingBatchAsWorker(batchSize);
 
   res.json({
     success: true,

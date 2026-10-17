@@ -9,6 +9,7 @@ import { DeadLetterQueueService } from './deadLetterQueueService.js';
 import { observeOutboxProcessing } from '../../middleware/metrics.js';
 import { OUTBOX_MAX_ATTEMPTS } from '../../lib/events/outboxAttempts.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
+import { requestContextStorage } from '../../lib/requestContext.js';
 
 /** OBS-R2-10: completed outbox events are kept this many days (the audit purge's horizon), then purged daily */
 export const OUTBOX_COMPLETED_RETENTION_DAYS = 90;
@@ -71,6 +72,15 @@ export class OutboxService {
       logger.error(`[Transactional Outbox Save Error] Failed to persist outbox event ${event.eventId}: ${errMsg}`);
       throw err; // Re-throw to abort business transaction if outbox persistence fails
     }
+  }
+
+  /**
+   * Closing sweep (#300 review): «پردازش اکنون» drains the queue as the background worker does, outside the request
+   * that pressed it, so each handler runs under the trace id of the request that recorded its event (OBS-R2-16),
+   * never the system admin's.
+   */
+  static processPendingBatchAsWorker(batchSize?: number): Promise<{ processed: number; succeeded: number; failed: number }> {
+    return requestContextStorage.exit(() => OutboxService.processPendingBatch(batchSize));
   }
 
   /**
