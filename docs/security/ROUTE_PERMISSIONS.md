@@ -261,7 +261,7 @@
 | PUT | `/api/media/assets/:id` | media.upload \| media.manage |
 | PUT | `/api/media/assets/:id/content` | media.upload \| media.manage |
 | GET | `/api/media/assets/:id/file` | media.view |
-| POST | `/api/media/assets/:id/item-image` | media.manage \| products.edit |
+| POST | `/api/media/assets/:id/item-image` | products.edit |
 | PUT | `/api/media/assets/:id/poster` | media.upload \| media.manage |
 | POST | `/api/media/assets/:id/rebuild-light` | media.manage |
 | PUT | `/api/media/assets/order` | media.manage |

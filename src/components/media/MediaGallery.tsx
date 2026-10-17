@@ -5,7 +5,7 @@ import { confirmAction } from '../ConfirmDialogHost';
 import { formatPersianNumber } from '../../utils';
 import { MEDIA_SHOT_TYPES, MEDIA_SHOT_TYPE_LABELS } from '../../lib/media/mediaRules';
 import { deleteMediaAsset, downloadMediaZip, mediaErrorMessage, MEDIA_ZIP_MAX_ASSETS, type MediaAssetView } from '../../lib/media/mediaApi';
-import { canChangeAsset, type MediaViewerRights } from '../../lib/media/mediaAccess';
+import { canChangeAsset, isItemImageCandidate, type MediaViewerRights } from '../../lib/media/mediaAccess';
 import { MediaAssetTile } from './MediaAssetTile';
 import { MediaLightbox } from './MediaLightbox';
 import { MediaAssetEditModal } from './MediaAssetEditModal';
@@ -125,7 +125,7 @@ export function MediaGallery({ assets, rights, onChanged, onDeleted, sectionId, 
                       canMoveEarlier: canMove && index > 0,
                       canMoveLater: canMove && index < group.items.length - 1,
                       canReplace: canChangeAsset(asset, rights),
-                      canItemImage: Boolean(itemImage) && asset.kind === 'image' && asset.hasLight,
+                      canItemImage: Boolean(itemImage) && isItemImageCandidate(asset),
                     }}
                     onMove={step => void actions.move(asset, step)}
                     onReplace={() => actions.startReplace(asset)}

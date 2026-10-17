@@ -26,13 +26,13 @@ export async function runMediaArrangeTests(shouldRun: ShouldRun): Promise<TestCa
       'v10.0.247: a product files order is set as a whole by media.manage only (N-05)',
       ['n05', 'media', 'permissions'], orderCase],
     ['reg_media_featured_image_v10170',
-      'v10.1.70: the library grid and product page show the item picture as the featured image, a library file only while the item has none, and the cover route is gone',
+      'v10.1.70: the library grid and product page show the item picture as the featured image, a library file (an old cover mark first) only while the item has none, and the cover route is gone',
       ['n05', 'media', 'items'], featuredImageCase],
     ['reg_media_replace_n05',
       'v10.0.247: replacing a file keeps its card and order, keeps the old original on disk and refuses the same content, a duplicate or another kind (N-05)',
       ['n05', 'media', 'permissions'], replaceCase],
     ['reg_media_item_image_n05',
-      'v10.0.247: a product image becomes the item picture at the item version, with copied files and an item audit row (N-05)',
+      'v10.0.247: a product image becomes the item picture at the item version, with copied files and an item audit row (N-05); v10.1.70: only products.edit sets it, media.manage alone is refused',
       ['n05', 'media', 'items', 'permissions'], itemImageCase],
   ]);
 }
@@ -223,8 +223,6 @@ async function featuredImageCase(h: Harness, wrong: string[]): Promise<string> {
   await uploadTo(h, manager, `${scope(pictured.id)}&shotType=side`, await noisyJpeg(900, 700));
   const first = await uploadTo(h, manager, `${scope(bare.id)}&shotType=white_background`, await noisyJpeg(900, 700));
   const second = await uploadTo(h, manager, `${scope(bare.id)}&shotType=side`, await noisyJpeg(900, 700));
-  // a cover mark stored before v10.1.70 is kept as it is and no longer read
-  await h.q(`UPDATE media_assets SET is_cover = 1 WHERE id = $1`, [second.id]);
 
   const pictureRow = await gridRowOf(h, pictured);
   if (pictureRow?.featuredImage !== '/uploads/featured-thumb.webp') wrong.push(`grid featured image of a pictured item ${JSON.stringify(pictureRow)}`);
@@ -232,6 +230,10 @@ async function featuredImageCase(h: Harness, wrong: string[]): Promise<string> {
   if (imageOnlyRow?.featuredImage !== '/uploads/only-full.webp') wrong.push(`grid featured image of an item without thumbnail ${JSON.stringify(imageOnlyRow)}`);
   const bareRow = await gridRowOf(h, bare);
   if (bareRow?.featuredImage !== null || bareRow.fallbackAssetId !== first.id) wrong.push(`grid row of an item without picture ${JSON.stringify(bareRow)}, expected the first file ${first.id}`);
+  // a cover mark stored before v10.1.70 is kept as it is and still picks the card's file while the item has no picture
+  await h.q(`UPDATE media_assets SET is_cover = 1 WHERE id = $1`, [second.id]);
+  const coveredRow = await gridRowOf(h, bare);
+  if (coveredRow?.fallbackAssetId !== second.id) wrong.push(`grid row with an old cover mark ${JSON.stringify(coveredRow)}, expected the marked file ${second.id}`);
 
   const detail = await h.get(`/api/media/products/${pictured.id}`, manager);
   const featured = (detail.body as { featuredImage?: { image: string | null; thumbnail: string | null } }).featuredImage;
@@ -305,6 +307,7 @@ async function itemImageCase(h: Harness, wrong: string[]): Promise<string> {
   const products = await sectionId(h);
   const item = await createTestItem({ type: 'product' });
   const viewer = await h.sessionWith(['media.view']);
+  const mediaManager = await h.sessionWith(['media.view', 'media.upload', 'media.manage']);
   const editor = await h.sessionWith(['media.view', 'products.view', 'products.edit']);
   const asset = await uploadTo(h, h.admin, `sectionId=${products}&itemId=${item.id}&shotType=white_background`, await noisyJpeg(2000, 1500));
   const [before] = await h.q(`SELECT version FROM items WHERE id = $1`, [item.id]);
@@ -313,6 +316,8 @@ async function itemImageCase(h: Harness, wrong: string[]): Promise<string> {
 
   const denied = await h.post(url, { version }, viewer);
   if (denied.status !== 403) wrong.push(`media.view alone set the item picture: ${brief(denied)}`);
+  const byMediaManager = await h.post(url, { version }, mediaManager);
+  if (byMediaManager.status !== 403) wrong.push(`media.manage without products.edit set the item picture: ${brief(byMediaManager)}`);
   const stale = await h.post(url, { version: version + 5 }, editor);
   if (stale.status !== 409 || codeOf(stale) !== 'OCC_CONFLICT') wrong.push(`a stale item version answered ${brief(stale)}`);
   const done = await h.post(url, { version }, editor);
@@ -339,5 +344,5 @@ async function itemImageCase(h: Harness, wrong: string[]): Promise<string> {
   const video = await uploadTo(h, h.admin, `sectionId=${products}&itemId=${item.id}&shotType=detail`, fakeMp4(250_000), 'video/mp4', 'v.mp4');
   const fromVideo = await h.post(`/api/media/assets/${video.id}/item-image`, { version: version + 1 }, editor);
   if (fromVideo.status !== 422 || codeOf(fromVideo) !== 'MEDIA_ITEM_IMAGE_INVALID') wrong.push(`a video as item picture answered ${brief(fromVideo)}`);
-  return `viewer ${denied.status}; stale ${stale.status}; done ${done.status}; video ${fromVideo.status}; audit ${audit.length}`;
+  return `viewer ${denied.status}; media manager ${byMediaManager.status}; stale ${stale.status}; done ${done.status}; video ${fromVideo.status}; audit ${audit.length}`;
 }

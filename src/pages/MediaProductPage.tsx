@@ -10,7 +10,7 @@ import { MediaFeaturedImage } from '../components/media/MediaFeaturedImage';
 import { MediaUploadBox } from '../components/media/MediaUploadBox';
 import { getMediaProduct, mediaErrorMessage, type MediaAssetView, type MediaProductDetail } from '../lib/media/mediaApi';
 import type { MediaItemImageAnswer } from '../lib/media/mediaSectionsApi';
-import { MEDIA_INFO_EDIT_KEYS, MEDIA_ITEM_IMAGE_KEYS, MEDIA_MANAGE_KEY, MEDIA_UPLOAD_KEYS } from '../lib/media/mediaAccess';
+import { isItemImageCandidate, MEDIA_INFO_EDIT_KEYS, MEDIA_ITEM_IMAGE_KEYS, MEDIA_MANAGE_KEY, MEDIA_UPLOAD_KEYS } from '../lib/media/mediaAccess';
 
 /** v10.0.25 (N-05 PR 2): one product of the media library: its card, gallery and upload box */
 export default function MediaProductPage({ user }: { user?: User | null }) {
@@ -72,7 +72,7 @@ export default function MediaProductPage({ user }: { user?: User | null }) {
       {detail && (
         <>
           <MediaProductInfoCard item={detail.item} canEdit={canEditInfo} onSaved={item => setDetail(prev => (prev ? { ...prev, item } : prev))} />
-          <MediaFeaturedImage name={detail.item.name} image={detail.featuredImage} canChange={Boolean(itemImage)} />
+          <MediaFeaturedImage name={detail.item.name} image={detail.featuredImage} canChange={Boolean(itemImage) && detail.assets.some(isItemImageCandidate)} />
           {canUpload && <MediaUploadBox sectionId={detail.productsSectionId} itemId={detail.item.id} onUploaded={onUploaded} />}
           <MediaGallery
             assets={[...detail.assets].sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)}

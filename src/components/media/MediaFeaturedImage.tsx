@@ -21,7 +21,7 @@ export function MediaFeaturedImage({ name, image, canChange }: Props) {
       <div className="w-24 h-24 shrink-0 rounded-lg overflow-hidden bg-slate-50">
         {src ? (
           <a href={image.image || src} target="_blank" rel="noreferrer" aria-label={`نمایش بزرگ ${FEATURED_IMAGE_TITLE}`}>
-            <SafeImage src={src} alt={`${FEATURED_IMAGE_TITLE} ${name}`} className="w-full h-full object-cover" fallbackIcon={<ImageOff size={28} />} />
+            <SafeImage key={src} src={src} alt={`${FEATURED_IMAGE_TITLE} ${name}`} className="w-full h-full object-cover" fallbackIcon={<ImageOff size={28} />} />
           </a>
         ) : (
           <div className="w-full h-full flex items-center justify-center"><ImageOff size={28} className="text-slate-300" /></div>

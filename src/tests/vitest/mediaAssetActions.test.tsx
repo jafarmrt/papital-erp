@@ -9,7 +9,7 @@ import { orderAfterMove } from '../../components/media/useMediaGalleryActions';
 // v10.0.247 (N-05 PR 3): a product gallery shows the order buttons only to media.manage, «replace with a better version» by
 // the file's change rule and the item picture button to media.manage or products.edit, each sending the body its route
 // takes; the edit form sends normalized tags and shows the tag error under the field. v10.1.70: the item picture is the
-// product's one featured image, so the button says so and the library's own cover button is gone.
+// product's one featured image, so the button says so, only products.edit sees it and the library's own cover button is gone.
 
 let granted = new Set<string>();
 vi.mock('../../contexts/AuthContext', () => ({
@@ -125,10 +125,11 @@ describe('media gallery manager actions by permission', () => {
     fireEvent.click(screen.getByLabelText(`${MOVE_LATER} file 1`));
     await waitFor(() => expect(sent('/media/assets/order')).toHaveLength(1));
     expect(sent('/media/assets/order')[0]).toEqual({ sectionId: 1, itemId: 7, ids: [2, 1, 3] });
+    expect(screen.queryByText(ITEM_IMAGE_TEXT)).toBeNull();
   });
 
   it('copies an image into the item picture with the item version and keeps the new version', async () => {
-    await renderAs(['media.view', 'media.manage'], 'boss');
+    await renderAs(['media.view', 'products.edit'], 'boss');
     fireEvent.click(within(tile(1)).getByText(ITEM_IMAGE_TEXT));
     await waitFor(() => expect(sent('/media/assets/1/item-image')).toHaveLength(1));
     fireEvent.click(within(tile(1)).getByText(ITEM_IMAGE_TEXT));

@@ -21,7 +21,7 @@ going forward.
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
 ### v10.1.70 — عکس کالا، تصویر شاخص محصول در کتابخانه تصاویر
-- کتابخانه تصاویر و فیلم‌ها عکس کالا را تصویر شاخص محصول نشان می‌دهد و جلد جداگانه آن برداشته شد.
+- کتابخانه تصاویر و فیلم‌ها عکس کالا را تصویر شاخص محصول نشان می‌دهد و جلد جداگانه آن برداشته شد؛ عوض کردن آن از کتابخانه فقط با مجوز ویرایش کالاست.
 
 ### v10.1.69 — نام نقش «همکار کارگاه»
 - Workshop role template renamed from «کارکن کارگاه» to «همکار کارگاه» (product-owner request); code workshop_worker unchanged, existing roles keep their stored name. Test: Vitest workshopRoleName.test.ts

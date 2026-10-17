@@ -115,10 +115,11 @@ export const MediaProductService = {
       lowQualityCount: sql<number>`(SELECT count(*)::int FROM ${mediaAssets} WHERE ${liveAssetsOfItem} AND ${mediaAssets.isLowQuality} = 1)`,
       image: items.image,
       thumbnail: items.thumbnail,
-      // only shown while the item has no picture: the first file with a thumbnail in the product's order
+      // only shown while the item has no picture: a file marked as cover before v10.1.70, else the first file with a
+      // thumbnail in the product's order
       fallbackAssetId: sql<number | null>`(SELECT ${mediaAssets.id} FROM ${mediaAssets} WHERE ${liveAssetsOfItem}
         AND ${mediaAssets.thumbBytes} IS NOT NULL
-        ORDER BY ${mediaAssets.sortOrder} ASC, ${mediaAssets.id} ASC LIMIT 1)`,
+        ORDER BY ${mediaAssets.isCover} DESC, ${mediaAssets.sortOrder} ASC, ${mediaAssets.id} ASC LIMIT 1)`,
     }).from(items).where(where)
       .orderBy(asc(items.code), asc(items.id))
       .limit(f.limit).offset((f.page - 1) * f.limit);
