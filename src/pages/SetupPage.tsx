@@ -7,7 +7,8 @@ import { compressTo300KB } from '../utils/imageCompression';
 import { MIN_PASSWORD_LENGTH, passwordLengthError } from '../lib/auth/passwordPolicy';
 import { FULL_NAME_MAX_LENGTH } from '../lib/users/profileFields';
 import { RIAL_DISPLAY_UNITS, RIAL_DISPLAY_UNIT_LABELS } from '../lib/rialDisplay';
-import { SETUP_TOKEN_REQUIRED_MESSAGE, SETUP_USERNAME_MIN_LENGTH, SETUP_USERNAME_TOO_SHORT_MESSAGE, setupCompanyNameError } from '../lib/auth/setupRules';
+import { SETUP_TOKEN_REQUIRED_MESSAGE, setupCompanyNameError } from '../lib/auth/setupRules';
+import { USERNAME_MAX_LENGTH, usernameFormatError } from '../lib/users/usernameRules';
 import { errorMessageOf } from '../utils';
 
 interface SetupPageProps {
@@ -85,8 +86,10 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
       setError('لطفاً نام و نام خانوادگی مدیر را وارد کنید');
       return;
     }
-    if (username.trim().length < SETUP_USERNAME_MIN_LENGTH) {
-      setError(SETUP_USERNAME_TOO_SHORT_MESSAGE);
+    // OBS-R1-30 (ت۴۰): the server's rule of a new username
+    const usernameError = usernameFormatError(username);
+    if (usernameError) {
+      setError(usernameError);
       return;
     }
     // v9.0.217 (TD-532): همان کمینه مشترک سرور (۸ نویسه)، نه ۶
@@ -282,11 +285,12 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                     value={username}
                     onChange={e => setUsername(e.target.value)}
                     dir="ltr"
+                    maxLength={USERNAME_MAX_LENGTH}
                     placeholder="به حروف لاتین"
                     className="w-full pr-10 pl-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-mono text-left focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                   />
                 </div>
-                <p className="text-xs text-slate-500 mt-1">نام کاربری ورود به سامانه، دست‌کم ۳ نویسه به حروف لاتین</p>
+                <p className="text-xs text-slate-500 mt-1">نام کاربری ورود به سامانه، ۳ تا ۵۰ نویسه: حرف و رقم لاتین، نقطه، زیرخط یا خط تیره</p>
               </div>
 
               <div className="grid md:grid-cols-2 gap-4">

@@ -55,6 +55,7 @@ import { buildUnpublishedRuleEventHealthTest, findRulesWithUnpublishedEvent } fr
 import { buildDueReminderHealthTest, findDuplicateDueReminders, hasDueReminderUniqueIndex } from '../notifications/notificationReminderHealth.js';
 import { buildPersonnelCodeHealthTest, buildPersonnelNationalIdHealthTest, findDuplicatePersonnelCodes, findDuplicatePersonnelNationalIds, hasPersonnelCodeUniqueIndex, hasPersonnelNationalIdUniqueIndex } from '../personnel/personnelCode.js';
 import { buildSyntheticUsersHealthTest, findActiveSyntheticUsers } from '../users/syntheticUserHealth.js';
+import { buildUsernameUniquenessHealthTest, findCaseDuplicateUsernames, hasUsernameKeyUniqueIndex } from '../users/usernameUniqueness.js';
 import { buildSecretsAtRestHealthTest, countSecretsAtRest } from '../system/secretsAtRestHealth.js';
 import { buildPersonnelUserLinkHealthTest, findDuplicatePersonnelUserLinks, hasPersonnelUserUniqueIndex } from '../personnel/personnelUserLink.js';
 import {
@@ -1133,6 +1134,12 @@ export class FinancialHealthService {
     const personnelNationalIdTest = buildPersonnelNationalIdHealthTest(duplicateNationalIds, nationalIdIndexPresent);
     overallScore += personnelNationalIdTest.scoreImpact;
     tests.push(personnelNationalIdTest);
+
+    // آزمون ۱۶ج: OBS-R1-30 (ت۴۰) یکتایی نام کاربری بی توجه به بزرگی و کوچکی حروف (مهاجرت 0124)
+    const [duplicateUsernames, usernameIndexPresent] = await Promise.all([findCaseDuplicateUsernames(orm), hasUsernameKeyUniqueIndex(orm)]);
+    const usernameTest = buildUsernameUniquenessHealthTest(duplicateUsernames, usernameIndexPresent);
+    overallScore += usernameTest.scoreImpact;
+    tests.push(usernameTest);
 
     // آزمون ۱۷: v9.0.35 (TD-445) اقدام قطعی‌سازی بی نقش و بی مجوز در گردش کار فعال اسناد
     const unguardedApprovalTest = buildUnguardedDocumentApprovalHealthTest(await findUnguardedDocumentApprovals());

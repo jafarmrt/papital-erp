@@ -8,6 +8,7 @@ import { roleWithinGrant, type GrantorPermissions } from '../../lib/permissions/
 import { USERNAME_OF_DELETED_USER, deletedUserOf, deletedUsernameMessage, type DeletedUserMatch } from '../../lib/users/userRestore';
 import { PASSWORD_LENGTH_HINT, passwordLengthError } from '../../lib/auth/passwordPolicy';
 import { FULL_NAME_MAX_LENGTH } from '../../lib/users/profileFields';
+import { USERNAME_MAX_LENGTH, usernameFormatError } from '../../lib/users/usernameRules';
 import { DialogLayer } from '../common/DialogLayer';
 
 interface UserFormModalProps {
@@ -77,6 +78,12 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
     e.preventDefault();
     if (!userForm.role) {
       toast.error('نقش کاربر را انتخاب کنید');
+      return;
+    }
+    // OBS-R1-30 (ت۴۰): the server's rule of a new username; an existing user's username is not edited
+    const usernameError = isEditing ? null : usernameFormatError(userForm.username);
+    if (usernameError) {
+      toast.error(usernameError);
       return;
     }
     // v9.0.217 (TD-532): رمز تازه (و در ویرایش، اگر وارد شده) با همان کمینه مشترک سرور
@@ -173,8 +180,10 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                 onChange={(e) => { setUserForm({ ...userForm, username: e.target.value }); setDeletedMatch(null); }}
                 className="w-full border rounded-lg px-3 py-2 text-sm font-mono text-left focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
                 dir="ltr"
+                maxLength={USERNAME_MAX_LENGTH}
                 placeholder="مثلاً ali_rezaei"
               />
+              {!isEditing && <p className="text-xs text-slate-500 mt-1">۳ تا ۵۰ نویسه: حرف و رقم لاتین، نقطه، زیرخط یا خط تیره</p>}
             </div>
 
             <div>

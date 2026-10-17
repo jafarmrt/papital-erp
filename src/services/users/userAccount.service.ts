@@ -10,6 +10,7 @@ import { isDataUrl, uploadBase64ToStorage } from '../../lib/storage.js';
 import { AVATAR_INVALID_MESSAGE, isStoredAvatarPath } from '../../lib/users/profileFields.js';
 import { isSyntheticTestUsername, SYNTHETIC_USERNAME_REFUSED } from '../../lib/syntheticUsers.js';
 import { USERNAME_OF_DELETED_USER, deletedUsernameMessage } from '../../lib/users/userRestore.js';
+import { USERNAME_FORMAT_INVALID, usernameFormatError, usernameKey } from '../../lib/users/usernameRules.js';
 import { passwordChangeLockMinutes, passwordChangeLockedError, recordPasswordChangeFailure, resetPasswordChangeFailures, verifyPasswordConstantWork } from '../auth/loginSecurity.service.js';
 import { lockSystemAdminSet, assertAnotherActiveAdmin, SYSTEM_ADMIN_ROLE } from './lastAdminGuard.js';
 import { assertAssignableRole, assertManageableAccount, assertNotOwnAccountRole, grantorPermissions } from './grantBoundary.js';
@@ -21,6 +22,7 @@ const USER_ENTITY = 'کاربران سیستم';
 const USER_NOT_FOUND = 'کاربر یافت نشد';
 const ROLE_INVALID = 'نقش انتخاب‌شده در سامانه معتبر نیست';
 const USERNAME_TAKEN = 'نام کاربری تکراری است';
+const USERNAME_HELD_BY_LIVE_USER = 'USERNAME_HELD_BY_LIVE_USER';
 
 /**
  * حوزه H (TD-299): نقش admin از همه گاردها می‌گذرد؛ پس دادن یا گرفتن آن، و تغییر رمز یا حذف حساب یک مدیر سیستم،
@@ -133,12 +135,18 @@ export async function createUser(req: Request, input: UserCreateInput): Promise<
   const tUsername = (input.username || '').trim();
   // v9.0.76 (TD-521): پیشوند کاربران آزمون رد می‌شود؛ چنین کاربری پیش‌تر در فهرست‌ها پنهان می‌ماند
   if (isSyntheticTestUsername(tUsername)) throw new ValidationError(SYNTHETIC_USERNAME_REFUSED);
+  // OBS-R1-30 (ت۴۰): a new username is 3 to 50 Latin letters, digits, «.», «_» or «-»; old usernames are left as they are
+  const formatError = usernameFormatError(tUsername);
+  if (formatError) throw new ValidationError(formatError, undefined, USERNAME_FORMAT_INVALID);
   const tFullName = (input.full_name && String(input.full_name).trim()) ? String(input.full_name).trim() : tUsername;
   const hashedPassword = await hashPassword(input.password);
 
   try {
     return await orm.transaction(async (tx) => {
-      const [existingUser] = await tx.select().from(users).where(eq(users.username, tUsername)).limit(1);
+      // OBS-R1-30 (ت۴۰): «Ali» and «ali» are one username; a live holder is named before a deleted one (TD-519)
+      const [existingUser] = await tx.select().from(users)
+        .where(sql`lower(btrim(${users.username})) = ${usernameKey(tUsername)}::text`)
+        .orderBy(users.isDeleted, users.id).limit(1);
       if (existingUser) {
         // v9.0.178 (TD-519، یافته B02-04، تصمیم ت۲ الف): کاربر تازه همیشه شناسه تازه می‌گیرد. پیش‌تر همان ردیف کاربر حذف‌شده
         // با رمز و نقش تازه زنده می‌شد و فرد تازه اعلان‌ها، فیش و اطلاعات بانکی فرد قبلی را می‌دید؛ بازگرداندن همان شخص
@@ -282,6 +290,17 @@ export async function restoreUser(req: Request, targetUserId: number, input: { p
     await assertManageableAccount(tx, grantor, target.role ?? '');
     await assertAssignableRole(tx, grantor, role);
     await assertRoleDefined(tx, role);
+    // OBS-R1-30 (ت۴۰): a deleted user comes back only when no live user holds its username in another letter case
+    const [liveHolder] = await tx.select({ id: users.id, username: users.username, fullName: users.fullName }).from(users)
+      .where(and(sql`lower(btrim(${users.username})) = ${usernameKey(target.username)}::text`, eq(users.isDeleted, 0), sql`${users.id} <> ${targetUserId}`))
+      .limit(1);
+    if (liveHolder) {
+      throw new ConflictError(
+        `نام کاربری «${target.username}» اکنون با حروف دیگری از آنِ کاربر «${liveHolder.fullName || liveHolder.username}» است؛ این کاربر بازگردانده نمی‌شود.`,
+        { liveUser: { id: liveHolder.id, username: liveHolder.username } },
+        USERNAME_HELD_BY_LIVE_USER,
+      );
+    }
 
     await tx.update(users).set({
       password: passwordHash,
