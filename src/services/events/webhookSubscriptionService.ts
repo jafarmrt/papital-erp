@@ -177,7 +177,7 @@ export class WebhookSubscriptionService {
         eventPatterns: eventPatterns,
         customHeaders: sealedHeaders,
         isActive: data.isActive !== undefined ? data.isActive : 1,
-        retryLimit: data.retryLimit || 3,
+        retryLimit: data.retryLimit ?? 3,
         timeoutMs: timeoutMs ?? WEBHOOK_TIMEOUT_DEFAULT_MS,
         totalDeliveries: 0,
         successfulDeliveries: 0,

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { numericIdString } from '../middleware/validate.js';
+import { WEBHOOK_RETRY_LIMIT_MAX, WEBHOOK_RETRY_LIMIT_MIN } from '../lib/events/webhookTimeout.js';
 
 /**
  * v10.0.35 (TD-979، OBS-R2-06): بدنه routeهای نویسنده رویدادها با Zod خوانده می‌شود. اسکیما فقط شکل و اندازه را می‌سنجد؛
@@ -94,7 +95,8 @@ const webhookFields = {
   secretKey: text(500).optional(),
   customHeaders: z.record(text(200), z.coerce.string().max(4000)).optional(),
   isActive: activeFlag.optional(),
-  retryLimit: z.coerce.number().int().min(0).max(20).optional(),
+  // v10.1.66: the form's and the delivery's own range, 1 to 10 (0 was stored and then delivered as 3, above 10 as 10)
+  retryLimit: z.coerce.number().int().min(WEBHOOK_RETRY_LIMIT_MIN).max(WEBHOOK_RETRY_LIMIT_MAX).optional(),
   timeoutMs: looseNumber.optional(),
   timeoutSeconds: looseNumber.optional(),
 };
