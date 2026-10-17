@@ -2,8 +2,8 @@
 /**
  * v10.0.192 (TD-1260, product-owner decision t20): the CI check jobs start at once. A PR result used to wait for the
  * sum of a chain (lint, then the database tests, then build, then the Docker build, about 17 minutes); now it waits
- * for the longest job only. Every job still runs and has to pass: only the image push and the staging deploy wait,
- * and they wait for every check job. The database jobs start the runner's own PostgreSQL 16 instead of pulling an
+ * for the longest job only. Every job still runs and has to pass: only the image push waits,
+ * and it waits for every check job (the empty staging jobs were removed in v10.1.65, OBS-R1-19). The database jobs start the runner's own PostgreSQL 16 instead of pulling an
  * image (an anonymous pull was refused with "toomanyrequests" and failed a master run before any test ran).
  */
 import fs from 'fs';
@@ -39,10 +39,10 @@ describe('ci_check_jobs_start_together_td_1260', () => {
     expect(waiting).toEqual([]);
   });
 
-  it('the image push and the staging deploy wait for every test job', () => {
+  it('the image push waits for every test job', () => {
     const jobs = ciJobs();
     const testJobs = ['lint-and-typecheck', 'test', 'coverage-gate', 'e2e', 'build'];
-    for (const name of ['docker-publish', 'deploy-staging']) {
+    for (const name of ['docker-publish']) {
       const needs = needsOf(jobs.get(name) ?? '');
       expect(testJobs.filter(job => !needs.includes(job)), name).toEqual([]);
     }
