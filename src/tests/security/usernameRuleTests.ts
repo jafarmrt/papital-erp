@@ -21,7 +21,7 @@ export async function runUsernameRuleTests(shouldRun: ShouldRun): Promise<TestCa
   await runCase(results, {
     id: 'sec_username_case_and_format_obs_r1_30',
     name: 'OBS-R1-30: a new username is unique regardless of letter case and takes only Latin letters, digits, . _ -',
-    details: 'POST /users refuses a username that differs from another (live or deleted) only in letter case or spaces, and one that breaks the format with 422 USERNAME_FORMAT_INVALID; the database index uq_users_username_key refuses a direct duplicate; a legacy username outside the format still logs in',
+    details: 'POST /users refuses a username that differs from another (live or deleted) only in letter case or spaces, and one that breaks the format with 422 USERNAME_FORMAT_INVALID; the partial index uq_users_username_key refuses a direct live duplicate; a deleted user is not restored beside a live case duplicate; a legacy live duplicate is listed and the index is built once one account is deleted; a legacy username outside the format still logs in',
   }, async (h, wrong) => {
     const member = await h.sessionWith(['documents.view']);
     const base = `Obs130_${h.tag}`;
@@ -50,6 +50,13 @@ export async function runUsernameRuleTests(shouldRun: ShouldRun): Promise<TestCa
       const goodRes = await create(good);
       if (goodRes.status === 200) made.push(good); else wrong.push(`«${good}» returned ${goodRes.status}`);
 
+      // the database refuses a direct case duplicate of a live user
+      const insertUser = (username: string) => h.q('INSERT INTO users (username, password, full_name, role) VALUES ($1, $2, $3, $4) RETURNING id',
+        [username, 'x', 'obs130', member.role]).then((rows) => { made.push(username); return Number(rows[0]?.id); }, (err: unknown) => String((err as { code?: string }).code ?? err));
+      const direct = await insertUser(base.toUpperCase());
+      if (typeof direct === 'number') wrong.push('a direct insert of a live case duplicate was accepted');
+      else if (direct !== '23505') wrong.push(`a direct insert of a case duplicate failed with ${direct}, not 23505`);
+
       // a deleted user's username in another letter case is still that deleted user's (TD-519)
       const [{ id }] = await h.q('SELECT id FROM users WHERE username = $1', [base]);
       const removed = await h.del(`/api/users/${id}`);
@@ -60,11 +67,32 @@ export async function runUsernameRuleTests(shouldRun: ShouldRun): Promise<TestCa
         wrong.push(`«${base.toLowerCase()}» beside the deleted «${base}» returned ${reuse.status} ${reuse.body?.code ?? ''}, not 409 ${USERNAME_OF_DELETED_USER}`);
       }
 
-      // the database refuses a direct case duplicate
-      const direct = await h.q('INSERT INTO users (username, password, full_name, role) VALUES ($1, $2, $3, $4) RETURNING id',
-        [base.toUpperCase(), 'x', 'obs130', member.role]).then(() => 'inserted', (err: unknown) => String((err as { code?: string }).code ?? err));
-      if (direct === 'inserted') { made.push(base.toUpperCase()); wrong.push('a direct insert of a case duplicate was accepted'); }
-      else if (direct !== '23505') wrong.push(`a direct insert of a case duplicate failed with ${direct}, not 23505`);
+      // a deleted user does not come back while a live user holds its username in another letter case
+      const holder = await insertUser(base.toUpperCase());
+      if (typeof holder !== 'number') wrong.push(`a live user beside the deleted «${base}» could not be inserted: ${holder}`);
+      const restore = await h.post(`/api/users/${id}/restore`, { role: member.role, password: 'Passw0rd!x' });
+      if (restore.status !== 409 || restore.body?.code !== 'USERNAME_HELD_BY_LIVE_USER') {
+        wrong.push(`restoring «${base}» beside the live «${base.toUpperCase()}» returned ${restore.status} ${restore.body?.code ?? ''}`);
+      }
+
+      // a legacy live duplicate is listed, blocks the index, and deleting one account lets the system admin build it
+      await h.q('DROP INDEX IF EXISTS uq_users_username_key');
+      const dupA = `dup130_${h.tag}`;
+      const dupB = dupA.toUpperCase();
+      const idA = await insertUser(dupA);
+      const idB = await insertUser(dupB);
+      const { findCaseDuplicateUsernames, hasUsernameKeyUniqueIndex } = await import('../../services/users/usernameUniqueness.js');
+      const { orm } = await import('../../db/drizzle.js');
+      const listed = (await findCaseDuplicateUsernames(orm)).map(r => r.id);
+      if (!listed.includes(Number(idA)) || !listed.includes(Number(idB))) wrong.push(`the health check lists ${JSON.stringify(listed)}, not both duplicates`);
+      const blocked = await h.post('/api/system/conditional-constraints/build', { apply: true });
+      if (JSON.stringify(blocked.body?.built ?? []).includes('uq_users_username_key')) wrong.push('the index was built over a live duplicate');
+      const removedDup = await h.del(`/api/users/${idB}`);
+      if (removedDup.status !== 200) wrong.push(`deleting the duplicate returned ${removedDup.status}`);
+      const built = await h.post('/api/system/conditional-constraints/build', { apply: true });
+      if (!JSON.stringify(built.body?.built ?? []).includes('uq_users_username_key') || !(await hasUsernameKeyUniqueIndex(orm))) {
+        wrong.push(`after deleting one account the build answered ${JSON.stringify(built.body).slice(0, 200)}`);
+      }
 
       // an old username outside the format keeps logging in
       await h.q('INSERT INTO users (username, password, full_name, role) VALUES ($1, $2, $3, $4)',
@@ -77,6 +105,7 @@ export async function runUsernameRuleTests(shouldRun: ShouldRun): Promise<TestCa
       if (login.status !== 200) wrong.push(`the legacy username «${legacy}» could not log in: ${login.status}`);
     } finally {
       if (made.length) await h.q('DELETE FROM users WHERE username = ANY($1::text[])', [made]).catch(() => undefined);
+      await h.q('CREATE UNIQUE INDEX IF NOT EXISTS uq_users_username_key ON users (lower(btrim(username))) WHERE is_deleted = 0').catch(() => undefined);
     }
   });
   return results;

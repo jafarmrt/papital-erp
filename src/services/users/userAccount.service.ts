@@ -22,6 +22,7 @@ const USER_ENTITY = 'کاربران سیستم';
 const USER_NOT_FOUND = 'کاربر یافت نشد';
 const ROLE_INVALID = 'نقش انتخاب‌شده در سامانه معتبر نیست';
 const USERNAME_TAKEN = 'نام کاربری تکراری است';
+const USERNAME_HELD_BY_LIVE_USER = 'USERNAME_HELD_BY_LIVE_USER';
 
 /**
  * حوزه H (TD-299): نقش admin از همه گاردها می‌گذرد؛ پس دادن یا گرفتن آن، و تغییر رمز یا حذف حساب یک مدیر سیستم،
@@ -289,6 +290,17 @@ export async function restoreUser(req: Request, targetUserId: number, input: { p
     await assertManageableAccount(tx, grantor, target.role ?? '');
     await assertAssignableRole(tx, grantor, role);
     await assertRoleDefined(tx, role);
+    // OBS-R1-30 (ت۴۰): a deleted user comes back only when no live user holds its username in another letter case
+    const [liveHolder] = await tx.select({ id: users.id, username: users.username, fullName: users.fullName }).from(users)
+      .where(and(sql`lower(btrim(${users.username})) = ${usernameKey(target.username)}::text`, eq(users.isDeleted, 0), sql`${users.id} <> ${targetUserId}`))
+      .limit(1);
+    if (liveHolder) {
+      throw new ConflictError(
+        `نام کاربری «${target.username}» اکنون با حروف دیگری از آنِ کاربر «${liveHolder.fullName || liveHolder.username}» است؛ این کاربر بازگردانده نمی‌شود.`,
+        { liveUser: { id: liveHolder.id, username: liveHolder.username } },
+        USERNAME_HELD_BY_LIVE_USER,
+      );
+    }
 
     await tx.update(users).set({
       password: passwordHash,

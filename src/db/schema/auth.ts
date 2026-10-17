@@ -21,9 +21,9 @@ export const users = pgTable('users', {
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow()
 }, (table) => ({
   idx_users_role: index('idx_users_role').on(table.role).where(sql`${table.role} IS NOT NULL`),
-  // OBS-R1-30 (ت۴۰): نام کاربری بی توجه به بزرگی و کوچکی حروف یکتاست؛ ایندکس را مهاجرت 0124 فقط روی داده بی تکرار
-  // می‌سازد (src/services/users/usernameUniqueness.ts)
-  uq_users_username_key: uniqueIndex('uq_users_username_key').on(sql`lower(btrim(${table.username}))`),
+  // OBS-R1-30 (ت۴۰): نام کاربری کاربران فعال بی توجه به بزرگی و کوچکی حروف یکتاست؛ ایندکس را مهاجرت 0124 فقط روی داده
+  // بی تکرار می‌سازد (src/services/users/usernameUniqueness.ts)
+  uq_users_username_key: uniqueIndex('uq_users_username_key').on(sql`lower(btrim(${table.username}))`).where(sql`${table.isDeleted} = 0`),
 }));
 
 export const roles = pgTable('roles', {

@@ -5,10 +5,10 @@ import type { HealthCheckTestResult } from '../../types.js';
 import { usernameKey } from '../../lib/users/usernameRules.js';
 
 /**
- * OBS-R1-30 (ت۴۰ item 8): a username is unique by `lower(btrim(username))` over every user, deleted ones included (a
- * deleted user's name is offered for restore, TD-519). Migration 0124 builds the unique index uq_users_username_key only
- * on data without such duplicates, and the financial health check lists the duplicates that are left
- * (username_case_uniqueness); old usernames are never changed.
+ * OBS-R1-30 (ت۴۰ item 8): a live user's username is unique by `lower(btrim(username))`. Migration 0124 builds the
+ * partial unique index uq_users_username_key (is_deleted = 0) only on data without such duplicates, and the financial
+ * health check lists the live duplicates that are left (username_case_uniqueness); deleting one of the two accounts
+ * clears one. Old usernames are never changed. A new user is still refused a deleted user's key (TD-519), in the service.
  */
 export const USERNAME_KEY_UNIQUE_INDEX = 'uq_users_username_key';
 
@@ -19,14 +19,15 @@ export interface DuplicateUsernameRow {
   id: number;
   username: string;
   fullName: string | null;
-  isDeleted: number | null;
 }
 
 export async function findCaseDuplicateUsernames(db: DbExecutor): Promise<DuplicateUsernameRow[]> {
   const key = sql`lower(btrim(${users.username}))`;
-  return db.select({ id: users.id, username: users.username, fullName: users.fullName, isDeleted: users.isDeleted })
+  return db.select({ id: users.id, username: users.username, fullName: users.fullName })
     .from(users)
-    .where(sql`${key} IN (SELECT lower(btrim(u.username)) FROM users u GROUP BY lower(btrim(u.username)) HAVING COUNT(*) > 1)`)
+    .where(sql`${users.isDeleted} = 0 AND ${key} IN (
+      SELECT lower(btrim(u.username)) FROM users u WHERE u.is_deleted = 0 GROUP BY lower(btrim(u.username)) HAVING COUNT(*) > 1
+    )`)
     .orderBy(asc(key), asc(users.id));
 }
 
@@ -47,12 +48,12 @@ export function buildUsernameUniquenessHealthTest(duplicates: DuplicateUsernameR
     id: 'username_case_uniqueness',
     category: 'system',
     title: 'یکتایی نام کاربری بی توجه به بزرگی و کوچکی حروف',
-    description: 'دو نام کاربری که فقط در بزرگی و کوچکی حروف یا فاصله دو سر فرق دارند یک نام‌اند و پایگاه‌داده با ایندکس یکتا از آن جلوگیری می‌کند',
+    description: 'دو نام کاربری کاربران فعال که فقط در بزرگی و کوچکی حروف یا فاصله دو سر فرق دارند یک نام‌اند و پایگاه‌داده با ایندکس یکتا از آن جلوگیری می‌کند',
     status: duplicateCount > 0 || !uniqueIndexPresent ? 'warning' : 'healthy',
     scoreImpact: -Math.min(10, duplicateCount * 2),
     count: duplicateCount,
     message: duplicateCount > 0
-      ? `${duplicateCount.toLocaleString('fa-IR')} نام کاربری میان بیش از یک کاربر تکرار شده و قید یکتایی در پایگاه‌داده اعمال نشده است؛ نام‌ها خودکار عوض نمی‌شوند و همچنان وارد می‌شوند. برای یکی از هر دو کاربر کاربری تازه با نام دیگر بسازید و کاربر قدیمی را حذف کنید، سپس ${UNIQUE_INDEX_BUILD_HINT}`
+      ? `${duplicateCount.toLocaleString('fa-IR')} نام کاربری میان بیش از یک کاربر فعال تکرار شده و قید یکتایی در پایگاه‌داده اعمال نشده است؛ نام‌ها خودکار عوض نمی‌شوند و همچنان وارد می‌شوند. یکی از دو حساب را حذف کنید، سپس ${UNIQUE_INDEX_BUILD_HINT}`
       : (uniqueIndexPresent
         ? 'هیچ نام کاربری تکرار نشده و پایگاه‌داده از نام کاربری تکراری جلوگیری می‌کند.'
         : `هیچ نام کاربری تکرار نشده اما قید یکتایی در پایگاه‌داده اعمال نشده است؛ ${UNIQUE_INDEX_BUILD_HINT}`),
@@ -60,8 +61,8 @@ export function buildUsernameUniquenessHealthTest(duplicates: DuplicateUsernameR
       id: r.id,
       code: r.username,
       title: r.fullName || r.username,
-      subtitle: r.isDeleted === 1 ? 'کاربر حذف‌شده' : 'کاربر فعال',
-      details: `کاربران با همین نام کاربری: ${(idsByKey.get(usernameKey(r.username)) ?? [r.id]).map(userNumber).join('، ')}`,
+      subtitle: 'کاربر فعال',
+      details: `کاربران فعال با همین نام کاربری: ${(idsByKey.get(usernameKey(r.username)) ?? [r.id]).map(userNumber).join('، ')}`,
     })),
     metrics: { duplicateUsernames: duplicateCount, duplicateUserRows: duplicates.length, uniqueIndexPresent: uniqueIndexPresent ? 1 : 0 },
   };

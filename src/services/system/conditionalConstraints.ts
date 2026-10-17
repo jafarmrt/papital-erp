@@ -193,13 +193,13 @@ export const CONDITIONAL_CONSTRAINT_RULES: readonly ConditionalConstraintRule[] 
       WHERE is_deleted = 0 AND btrim(national_id) <> '' GROUP BY btrim(national_id) HAVING COUNT(*) > 1) d`,
     create: "CREATE UNIQUE INDEX uq_personnel_national_id_active ON personnel (btrim(national_id)) WHERE is_deleted = 0 AND btrim(national_id) <> ''",
   },
-  // OBS-R1-30: usernames that differ only in letter case or surrounding spaces (0124), deleted users included
+  // OBS-R1-30: live users whose usernames differ only in letter case or surrounding spaces (0124)
   {
     name: 'uq_users_username_key', kind: 'unique_index', table: 'users', migration: '0124',
-    label: 'یکتایی نام کاربری بی توجه به بزرگی و کوچکی حروف', blockerUnit: 'نام کاربری مشترک میان کاربران',
+    label: 'یکتایی نام کاربری بی توجه به بزرگی و کوچکی حروف', blockerUnit: 'نام کاربری مشترک میان کاربران فعال',
     blockerCount: `SELECT COUNT(*)::int AS n FROM (SELECT lower(btrim(username)) FROM users
-      GROUP BY lower(btrim(username)) HAVING COUNT(*) > 1) d`,
-    create: 'CREATE UNIQUE INDEX uq_users_username_key ON users (lower(btrim(username)))',
+      WHERE is_deleted = 0 GROUP BY lower(btrim(username)) HAVING COUNT(*) > 1) d`,
+    create: 'CREATE UNIQUE INDEX uq_users_username_key ON users (lower(btrim(username))) WHERE is_deleted = 0',
   },
   // v9.0.445 (TD-611): webhook deliveries and rule action logs, with the ON DELETE the Drizzle schema declares
   notValidForeignKey({
