@@ -17,7 +17,7 @@ export async function runBankPendingApprovalTests(shouldRun: (id: string, ...ext
   const id = 'reg_bank_pending_approval_obs_pr_11';
   if (!shouldRun(id, 'obs-pr-11', 'treasury', 'bank', 'pending', 'reconciliation')) return results;
 
-  const name = 'v10.1.63: a bank account that only waits for its draft vouchers is «در انتظار تأیید سند», and a real difference is still a discrepancy (OBS-PR-11)';
+  const name = 'v10.1.63: a bank account that only waits for its draft vouchers waits for approval (pending_approval), and a real difference is still a discrepancy (OBS-PR-11)';
   const tStart = Date.now();
   try {
     const stamp = `${Date.now().toString().slice(-7)}`;

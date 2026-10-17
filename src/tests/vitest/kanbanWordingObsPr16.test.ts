@@ -11,6 +11,7 @@ import { countFileSites } from '../../../scripts/ui-wording-ratchet';
 // built from code points so that this file holds none of the words
 const KANBAN = String.fromCodePoint(0x6a9, 0x627, 0x646, 0x628, 0x627, 0x646);
 const BOARD = String.fromCodePoint(0x62a, 0x62e, 0x62a, 0x647);
+const COLUMN_VIEW = 'نمای ستونی';
 
 describe('kanban_wording_obs_pr_16', () => {
   it('the UI wording ratchet counts the word, alone and in a phrase', () => {
@@ -19,9 +20,9 @@ describe('kanban_wording_obs_pr_16', () => {
     expect(countFileSites(`// ${KANBAN} in a comment\nconst a = 1;`, 'a.ts')).toBe(0);
   });
 
-  it('the projects page names its view «نمای ستونی»', () => {
+  it('the projects page names its view as columns', () => {
     const page = fs.readFileSync('src/pages/ProjectsPage.tsx', 'utf8');
     expect(countFileSites(page, 'ProjectsPage.tsx')).toBe(0);
-    expect(page).toContain('نمای ستونی');
+    expect(page).toContain(COLUMN_VIEW);
   });
 });
