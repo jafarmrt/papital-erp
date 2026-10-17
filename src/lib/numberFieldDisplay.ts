@@ -48,19 +48,30 @@ const withoutSeparators = (text: string) => text.split(PERSIAN_GROUP_SEPARATOR).
 const TYPED_GROUP_SEPARATOR = /[,٬،]/;
 
 /**
- * متن تازهٔ کادری که عدد را با «٬» خودش نشان می‌دهد، بی «٬»هایی که خود کادر گذاشته بود. `shown` متنی است که کادر پیش از این
- * ویرایش نشان می‌داد و `caret` جای مکان‌نما پس از آن (پایان متن درج‌شده). ویرایشی که جداکننده‌ای ندارد (رقم، ممیز، پاک‌کردن)
- * «٬»های بخش دست‌نخورده را، که از خود کادرند، برمی‌دارد تا کادر عدد را از نو دسته کند. اگر متن درج‌شده جداکننده دارد (کاربر
- * Shift+2 زده یا عدد دسته‌شده چسبانده)، همهٔ جداکننده‌ها می‌مانند و از کاربر شمرده می‌شوند، تا خوانندهٔ کادر آن‌ها را جز میان
- * دسته‌های سه‌رقمی نپذیرد: «۱۲٬۵» هرگز صد و بیست و پنج نمی‌شود و «۱٬۲۵۰» و سپس «٬۰۰۰» یک میلیون و دویست و پنجاه هزار است.
+ * متن تازهٔ کادری که عدد را با «٬» خودش نشان می‌دهد، بی «٬»هایی که خود کادر گذاشته بود، و جای مکان‌نما در آن. `shown` متنی است
+ * که کادر پیش از این ویرایش نشان می‌داد و `caret` جای مکان‌نما پس از آن (پایان متن درج‌شده). ویرایشی که جداکننده‌ای ندارد (رقم،
+ * ممیز، پاک‌کردن) «٬»های بخش دست‌نخورده را، که از خود کادرند، برمی‌دارد تا کادر عدد را از نو دسته کند؛ «٬»های برداشته پیش از
+ * مکان‌نما از جای آن کم می‌شوند. اگر متن درج‌شده جداکننده دارد (کاربر Shift+2 زده یا عدد دسته‌شده چسبانده)، همهٔ جداکننده‌ها
+ * می‌مانند و از کاربر شمرده می‌شوند، تا خوانندهٔ کادر آن‌ها را جز میان دسته‌های سه‌رقمی نپذیرد: «۱۲٬۵» هرگز صد و بیست و پنج
+ * نمی‌شود و «۱٬۲۵۰» و سپس «٬۰۰۰» یک میلیون و دویست و پنجاه هزار است.
  */
-export function withoutFieldSeparators(shown: string, typed: string, caret: number): string {
+export function editWithoutFieldSeparators(shown: string, typed: string, caret: number): { text: string; caret: number } {
   const end = Math.max(0, Math.min(caret, typed.length));
   const keptAfter = Math.min(typed.length - end, commonSuffixLength(shown, typed));
   const keptBefore = Math.min(commonPrefixLength(shown, typed), Math.min(shown.length, typed.length) - keptAfter);
   const inserted = typed.slice(keptBefore, typed.length - keptAfter);
-  if (TYPED_GROUP_SEPARATOR.test(inserted)) return typed;
-  return withoutSeparators(typed.slice(0, keptBefore)) + inserted + withoutSeparators(typed.slice(typed.length - keptAfter));
+  if (TYPED_GROUP_SEPARATOR.test(inserted)) return { text: typed, caret: end };
+  const before = typed.slice(0, keptBefore);
+  const removedBeforeCaret = before.slice(0, end).length - withoutSeparators(before.slice(0, end)).length;
+  return {
+    text: withoutSeparators(before) + inserted + withoutSeparators(typed.slice(typed.length - keptAfter)),
+    caret: end - removedBeforeCaret,
+  };
+}
+
+/** متن `editWithoutFieldSeparators` بی جای مکان‌نما */
+export function withoutFieldSeparators(shown: string, typed: string, caret: number): string {
+  return editWithoutFieldSeparators(shown, typed, caret).text;
 }
 
 /** رقم (هر خطی)، ممیز («.» «٫» «/») و منفی؛ جداکننده‌ها، فاصله و نویسه‌های نامرئی معنادار نیستند */

@@ -1,9 +1,9 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type InputHTMLAttributes } from 'react';
+import { useEffect, useId, useLayoutEffect, useReducer, useRef, useState, type InputHTMLAttributes } from 'react';
 import {
   PARTIAL_DECIMAL_MESSAGE, decimalDisplayText, decimalTextIsRebuilt, decimalTextMatches, decimalTextOf, readDecimalInputText
 } from '../../lib/decimalInputText';
 import {
-  caretAfterSignificant, significantCharsBefore, stepOverGroupSeparator, withoutFieldSeparators
+  caretAfterSignificant, editWithoutFieldSeparators, significantCharsBefore, stepOverGroupSeparator
 } from '../../lib/numberFieldDisplay';
 
 type NativeInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'defaultValue' | 'onChange' | 'inputMode' | 'min' | 'max' | 'step'>;
@@ -37,8 +37,13 @@ export function DecimalInput({ value, onValueChange, min, max, step, grouped = t
   const inputRef = useRef<HTMLInputElement>(null);
   const previousValue = useRef(value);
   const ownChange = useRef(false);
-  /** شمار نویسه‌های معنادار پیش از مکان‌نما در آخرین تایپ، تا پس از ساختن متن نمایشی سر جای خود برگردد */
-  const pendingCaret = useRef<number | null>(null);
+  /**
+   * جای مکان‌نما پس از آخرین تایپ: در متنی که کادر از نو می‌سازد شمار نویسه‌های معنادار پیش از آن، و در متنی که همان‌طور
+   * که تایپ شده دیده می‌شود (هر نویسه سر جای خود) جای آن در همان متن
+   */
+  const pendingCaret = useRef<{ significant: number } | { index: number } | null>(null);
+  // تایپی که متن کادر را دگرگون نمی‌کند (پاک‌کردن «٬» خود کادر) هم باید کادر را بسازد تا مکان‌نما سر جای خود بماند
+  const [, rerender] = useReducer((n: number) => n + 1, 0);
   const autoId = useId();
   const errorId = `${id ?? autoId}-error`;
 
@@ -62,13 +67,16 @@ export function DecimalInput({ value, onValueChange, min, max, step, grouped = t
 
   const shown = decimalDisplayText(text, grouped);
 
-  // v10.1.72 (TD-1288): متن نمایشی (ارقام فارسی و «٬») با متن تایپ‌شده یک‌اندازه نیست؛ مکان‌نما پس از همان رقم می‌ماند
+  // v10.1.72 (TD-1288): متن نمایشی (ارقام فارسی و «٬») با متن تایپ‌شده یک‌اندازه نیست؛ مکان‌نما پس از همان رقم می‌ماند،
+  // و پس از «٬»ی که کاربر زده است، نه پیش از آن
   useLayoutEffect(() => {
     const input = inputRef.current;
-    const count = pendingCaret.current;
+    const pending = pendingCaret.current;
     pendingCaret.current = null;
-    if (!input || count === null || input.ownerDocument.activeElement !== input) return;
-    const caret = caretAfterSignificant(input.value, count);
+    if (!input || pending === null || input.ownerDocument.activeElement !== input) return;
+    // React کادری را که مقدارش دگرگون نشده دوباره نمی‌نویسد؛ متن نمایشی پیش از نهادن مکان‌نما برمی‌گردد
+    if (input.value !== shown) input.value = shown;
+    const caret = 'index' in pending ? Math.min(pending.index, input.value.length) : caretAfterSignificant(input.value, pending.significant);
     input.setSelectionRange(caret, caret);
   });
 
@@ -92,12 +100,14 @@ export function DecimalInput({ value, onValueChange, min, max, step, grouped = t
         onChange={e => {
           const typed = e.target.value;
           const caret = e.target.selectionStart ?? typed.length;
-          pendingCaret.current = significantCharsBefore(typed, caret);
           // فقط «٬»هایی که خود کادر گذاشته بود برداشته می‌شوند؛ «٬» تایپ‌شده می‌ماند و خطاست («۱۲٬۵» صد و بیست و پنج نمی‌شود)
-          const raw = grouped && decimalTextIsRebuilt(text) ? withoutFieldSeparators(shown, typed, caret) : typed;
-          const read = readDecimalInputText(raw, { min, max, step });
+          const edit = grouped && decimalTextIsRebuilt(text) ? editWithoutFieldSeparators(shown, typed, caret) : { text: typed, caret };
+          const read = readDecimalInputText(edit.text, { min, max, step });
           // عدد پذیرفته بی جداکننده نگه داشته می‌شود، پس هر «٬»ی که از این پس دیده می‌شود از خود کادر است
-          setText(read.kind === 'value' ? read.text : raw);
+          const next = read.kind === 'value' ? read.text : edit.text;
+          pendingCaret.current = decimalTextIsRebuilt(next) ? { significant: significantCharsBefore(typed, caret) } : { index: edit.caret };
+          setText(next);
+          rerender();
           ownChange.current = true;
           setPartial(read.kind === 'partial');
           setError(read.kind === 'invalid' ? read.error : read.kind === 'value' ? read.rangeError : undefined);
