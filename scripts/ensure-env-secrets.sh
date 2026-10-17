@@ -3,22 +3,39 @@
 # never changed. install.sh runs it on a new and on an existing .env.
 #   ERP_SECRETS_KEY           encrypts third-party passwords, WooCommerce keys and webhook secrets at rest
 #                             (src/lib/secretBox.ts; v9.0.361, TD-898; without it new ones are refused)
-#   ERP_WEBHOOK_SECRET_TOKEN  signs outgoing webhooks (X-ERP-Signature-256)
+#   ERP_WEBHOOK_SECRET_TOKEN  the system's echo token (X-ERP-Signature-Token), sent only to the local echo simulator;
+#                             webhook signatures use each subscription's own key
 #   METRICS_TOKEN             lets scripts/monitor.sh read /metrics (v10.0.6, TD-1021); the service reads it at start
-# Usage: bash scripts/ensure-env-secrets.sh <path/to/.env>
+# Usage: bash scripts/ensure-env-secrets.sh <path/to/.env> [KEY ...]
+#   With KEY names only those keys are added (v10.1.68, TD-1286: update.sh adds only ERP_SECRETS_KEY).
+# A key counts as present in any form the service may read: leading spaces, «export KEY=» and quotes included, so a
+# second line is never appended (node --env-file lets the later line win).
 # ERP_SECRETS_KEY travels inside the encrypted off-server copy of .env (scripts/backup-offsite.sh, v10.0.4, TD-957).
 set -euo pipefail
 
-ENV_FILE="${1:?usage: ensure-env-secrets.sh <path/to/.env>}"
+ENV_FILE="${1:?usage: ensure-env-secrets.sh <path/to/.env> [KEY ...]}"
+shift
+ONLY=" $* "
 [ -f "$ENV_FILE" ] || { echo "ERROR: $ENV_FILE not found" >&2; exit 1; }
 command -v openssl >/dev/null 2>&1 || { echo "ERROR: openssl is required to generate secrets" >&2; exit 1; }
+for wanted in "$@"; do
+  case "$wanted" in
+    ERP_SECRETS_KEY|ERP_WEBHOOK_SECRET_TOKEN|METRICS_TOKEN) ;;
+    *) echo "ERROR: unknown key $wanted (supported: ERP_SECRETS_KEY, ERP_WEBHOOK_SECRET_TOKEN, METRICS_TOKEN)" >&2; exit 1 ;;
+  esac
+done
 
 added=0
 for key in ERP_SECRETS_KEY ERP_WEBHOOK_SECRET_TOKEN METRICS_TOKEN; do
-  if grep -qE "^${key}=.+" "$ENV_FILE"; then
+  if [ "$ONLY" != "  " ] && [[ "$ONLY" != *" ${key} "* ]]; then
     continue
   fi
-  if grep -qE "^${key}=" "$ENV_FILE"; then
+  declared="^[[:space:]]*(export[[:space:]]+)?${key}[[:space:]]*="
+  if grep -qE "${declared}[[:space:]]*[^[:space:]\"']" "$ENV_FILE" \
+    || grep -qE "${declared}[[:space:]]*([\"'])[^\"']+" "$ENV_FILE"; then
+    continue
+  fi
+  if grep -qE "$declared" "$ENV_FILE"; then
     echo "WARN: ${key} is empty in $ENV_FILE; set it by hand (an empty value is kept)" >&2
     continue
   fi
