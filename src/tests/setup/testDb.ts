@@ -2,6 +2,8 @@ import { pool } from '../../db/drizzle.js';
 import { logger } from '../../middleware/logger.js';
 import { runMigrations, setMigrationsJournalSchema, type MigrationResult } from '../../db/migrator.js';
 import { pinSearchPathOnCheckout, type SearchPathClient, type SearchPathPool } from './schemaSearchPath.js';
+import { invalidateUserAuthCache } from '../../middleware/auth.js';
+import { invalidateRoleCache } from '../../lib/memoryCache.js';
 
 /**
  * TST-007 — Test Isolation via Dedicated PostgreSQL Schema
@@ -92,10 +94,16 @@ export async function setupTestSchema(options: SetupTestSchemaOptions = {}): Pro
  * Convenience wrapper: run a whole test batch inside an isolated schema.
  */
 export async function withIsolatedTestSchema<T>(fn: (ctx: TestSchemaContext) => Promise<T>): Promise<T> {
+  // Closing sweep (TD-965 test order): user ids and role codes start over in each schema, so the process caches of
+  // user sessions and role permissions are emptied on the way in and out; otherwise a user of an earlier schema with
+  // the same id lent its role to this one (a recorder passed the approve key of an earlier test's approver).
+  const clearCaches = () => { invalidateUserAuthCache(); invalidateRoleCache(); };
+  clearCaches();
   const ctx = await setupTestSchema();
   try {
     return await fn(ctx);
   } finally {
+    clearCaches();
     await ctx.teardown();
   }
 }
