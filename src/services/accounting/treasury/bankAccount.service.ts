@@ -13,7 +13,7 @@ import { fin } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
 import { assertNoPendingOpeningApproval, voidBankOpeningVouchers } from './bankOpeningVoucher.js';
 import { requireBankLedgerAccount } from './bankLinks.js';
-import { assertBankCurrencyChangeAllowed, assertBankLedgerChangeAllowed, assertPettyCashCurrency, requireTreasuryCurrency } from './bankAccountCurrency.js';
+import { assertBankCurrencyChangeAllowed, assertBankLedgerChangeAllowed, assertBankTypeChangeKeepsPaidCheques, assertPettyCashCurrency, requireTreasuryCurrency } from './bankAccountCurrency.js';
 import { normalizeTreasuryCurrency } from '../../../lib/treasury/treasuryCurrency.js';
 import { assignTreasuryAccountCode, peekNextTreasuryAccountCode, type TreasuryAccountType } from './bankAccountCode.js';
 import { auditBankAccountChange, auditBankBalanceSync, type TreasuryAuditActor } from './treasuryAudit.js';
@@ -557,6 +557,7 @@ export class BankAccountService {
       const typeChanges = Boolean(data.type) && data.type !== existing.type;
       const currencyChanges = Boolean(newCurrency) && newCurrency !== normalizeTreasuryCurrency(existing.currency ?? '');
       if (typeChanges || currencyChanges) assertPettyCashCurrency(data.type || existing.type, newCurrency || existing.currency);
+      if (typeChanges && data.type) await assertBankTypeChangeKeepsPaidCheques(tx, existing, data.type);
       // v9.0.100 (TD-510): سرفصل تازه معین فعال زیر کل ۱۰ باشد (سرفصل بی‌تغییر حساب‌های قدیمی دوباره سنجیده نمی‌شود)
       // v10.0.254 (TD-969): سرفصل معین پس از نخستین گردش ثابت است (422 `BANK_ACCOUNT_LEDGER_LOCKED`)
       const ledgerChanges = data.accountId !== undefined && (data.accountId || null) !== (existing.accountId || null);

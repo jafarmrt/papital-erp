@@ -54,6 +54,24 @@ export function isChequeClearingAccountType(type: string | null | undefined): bo
   return (CHEQUE_CLEARING_ACCOUNT_TYPES as readonly string[]).includes(String(type ?? 'bank'));
 }
 
+/** Closing sweep (#291 review): the statuses from which a paid cheque still clears from its issuing account */
+export const PAID_CHEQUE_OPEN_CLEARING_STATUSES: readonly ChequeStatus[] = CHEQUE_STATUSES
+  .filter(status => chequeNextStatuses(status, 'paid').some(chequeStepTakesBankAccount));
+
+/**
+ * Closing sweep (#291 review): a paid cheque drawn on a bank or cash account clears only from that account, the server's
+ * rule of v10.1.47. The cheque row carries its account's type, so the status window knows it even when the account list
+ * has not loaded that account; with no type known at all the window asks for an account as before.
+ */
+export function paidChequeIssuingAccountFixed(
+  cheque: { type?: string | null; bankAccountId?: number | null; bankAccountType?: string | null } | null | undefined,
+  loadedAccountType?: string | null,
+): boolean {
+  if (!cheque || cheque.type !== 'paid' || !cheque.bankAccountId) return false;
+  const type = cheque.bankAccountType ?? loadedAccountType;
+  return type != null && isChequeClearingAccountType(type);
+}
+
 /**
  * v9.0.104 (TD-512 / TD-513، B04-16 / B04-17): برچسب فارسی هر وضعیت چک، یک نگاشت برای پیام‌های سرور، ممیزی، یادداشت
  * پیش‌فرض تاریخچه و رابط. پیش‌تر پیام‌ها کد انگلیسی (`in_collection`، `passed`) را نشان می‌دادند.

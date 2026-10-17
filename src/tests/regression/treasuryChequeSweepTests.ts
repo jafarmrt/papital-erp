@@ -5,6 +5,7 @@ import { bankAccounts, cheques } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
 import { normalizeError, ValidationError } from '../../errors/customErrors.js';
 import { ChequeLifecycleService } from '../../services/accounting/treasury/chequeLifecycle.service.js';
+import { BankAccountService } from '../../services/accounting/treasury/bankAccount.service.js';
 import { createBank } from './treasuryPartyTests.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 
@@ -191,6 +192,32 @@ export async function runTreasuryChequeSweepTests(shouldRun: ShouldRun): Promise
         ...(clearCode === 'accepted' && after?.status === 'passed' && after.bankAccountId === bank.id ? [] : [`the legacy paid cheque answered ${clearCode}, now ${after?.status} on bank ${after?.bankAccountId}`]),
       ]);
       return 'a new paid cheque on a POS account is refused, a legacy one clears into a bank account';
+    });
+  }
+
+  const typeId = 'reg_bank_type_change_keeps_paid_cheques';
+  if (shouldRun(typeId, 'cheque', 'bank', 'pos', 'paid', 'type')) {
+    await runCase(results, typeId, 'Closing sweep (#291 review): a bank account with paid cheques not yet cleared does not turn into a POS or petty cash account; the cheque list carries its account type', async () => {
+      const bank = await createBank('Sweep type change bank');
+      await orm.update(bankAccounts).set({ initialBalance: money(1_000_000), currentBalance: money(1_000_000) }).where(eq(bankAccounts.id, bank.id));
+      const paid = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'paid', chequeNumber: `SWT${tagOf()}`, amount: 30000, partyName: 'Sweep type supplier', bankAccountId: bank.id });
+      const posCode = await codeOf(() => BankAccountService.updateBankAccount(bank.id, { type: 'pos' }));
+      const pettyCode = await codeOf(() => BankAccountService.updateBankAccount(bank.id, { type: 'petty_cash' }));
+      const [stillBank] = await orm.select({ type: bankAccounts.type }).from(bankAccounts).where(eq(bankAccounts.id, bank.id));
+      const listed = (await ChequeLifecycleService.getCheques({ type: 'paid', search: paid.chequeNumber })).find(c => c.id === paid.id);
+      const cashCode = await codeOf(() => BankAccountService.updateBankAccount(bank.id, { type: 'cash' }));
+      await orm.update(bankAccounts).set({ type: 'bank' }).where(eq(bankAccounts.id, bank.id));
+      await ChequeLifecycleService.updateChequeStatus(paid.id, { status: 'passed', username: 'inv' });
+      const afterClearCode = await codeOf(() => BankAccountService.updateBankAccount(bank.id, { type: 'pos' }));
+      assertNoProblems([
+        ...(posCode === 'BANK_ACCOUNT_TYPE_HAS_OPEN_PAID_CHEQUES' ? [] : [`bank to POS with an open paid cheque answered ${posCode}`]),
+        ...(pettyCode === 'BANK_ACCOUNT_TYPE_HAS_OPEN_PAID_CHEQUES' ? [] : [`bank to petty cash with an open paid cheque answered ${pettyCode}`]),
+        ...(stillBank?.type === 'bank' ? [] : [`the refused change left the type ${stillBank?.type}`]),
+        ...(listed?.bankAccountType === 'bank' ? [] : [`the cheque list carries account type ${String(listed?.bankAccountType)}`]),
+        ...(cashCode === 'accepted' ? [] : [`bank to cash answered ${cashCode}`]),
+        ...(afterClearCode === 'accepted' ? [] : [`bank to POS after the cheque cleared answered ${afterClearCode}`]),
+      ]);
+      return 'BANK_ACCOUNT_TYPE_HAS_OPEN_PAID_CHEQUES until the cheque clears; cash stays allowed';
     });
   }
 

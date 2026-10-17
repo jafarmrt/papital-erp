@@ -16,7 +16,7 @@ import { FinancialAttachmentViewerModal } from './FinancialAttachmentViewerModal
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { useChequeReconciliationReport } from '../../hooks/accounting/useChequeQueries';
 import { copyToClipboard } from '../../utils/clipboard';
-import { CHEQUE_STATUS_LABELS, chequeHasNextStep, chequeNextStatuses, chequeStatusLabel, chequeStepTakesBankAccount, isChequeClearingAccountType } from '../../lib/treasury/chequeTransitions';
+import { CHEQUE_STATUS_LABELS, chequeHasNextStep, chequeNextStatuses, chequeStatusLabel, chequeStepTakesBankAccount, isChequeClearingAccountType, paidChequeIssuingAccountFixed } from '../../lib/treasury/chequeTransitions';
 import { needsChosenContraAccount, type PersonnelPurpose } from '../../lib/treasury/partyPurpose';
 import { personnelPartyName } from '../../lib/treasury/personnelPartyName';
 import { PartyPurposeFields } from './treasury/PartyPurposeFields';
@@ -209,7 +209,7 @@ export function ChequesTab({
 
   /** v10.1.47: چک پرداختی دارای حساب صادرکننده فقط از همان حساب وصول می‌شود */
   const storedChequeBank = statusModalCheque?.bankAccountId ? safeBankAccounts.find(b => b.id === statusModalCheque.bankAccountId) : undefined;
-  const paidBankFixed = statusModalCheque?.type === 'paid' && Boolean(storedChequeBank) && isChequeClearingAccountType(storedChequeBank?.type);
+  const paidBankFixed = paidChequeIssuingAccountFixed(statusModalCheque, storedChequeBank?.type);
   const paidIssuingBank = paidBankFixed ? storedChequeBank : undefined;
   /** v10.1.47 (ت۴۰): حساب ثبت‌شده چک فقط وقتی پیش‌فرض است که بانک یا صندوق باشد */
   const clearingBankIdOf = (bankAccountId: number | null | undefined): number | null => {
@@ -1026,7 +1026,7 @@ export function ChequesTab({
 
               {chequeStepTakesBankAccount(targetStatus) && paidBankFixed && (
                 <p className="text-xs text-slate-600 dark:text-slate-400">
-                  وصول از حساب صادرکننده چک: {paidIssuingBank ? paidIssuingBank.title : 'حساب ثبت‌شده چک'}
+                  وصول از حساب صادرکننده چک: {paidIssuingBank?.title ?? statusModalCheque?.bankAccountTitle ?? 'حساب ثبت‌شده چک'}
                 </p>
               )}
 
