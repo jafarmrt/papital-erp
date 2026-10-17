@@ -62,7 +62,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
   // شماره سند = شماره بعدی سرور، یا شماره پیش‌فاکتوری که ویرایش می‌شود (null = شماره سرور)؛ v9.0.327 (TD-783): فقط نمایشی
   const [refOverride, setRefNumber] = useState<string | null>(null);
   const refNumber = refOverride ?? nextRef;
-  // v10.1.71 (TD-1288): تاریخ میلادی ISO مثل فرم‌های دیگر؛ کادر تاریخ شمسی مشترک آن را شمسی نشان می‌دهد
+  // v10.1.72 (TD-1288): تاریخ میلادی ISO مثل فرم‌های دیگر؛ کادر تاریخ شمسی مشترک آن را شمسی نشان می‌دهد
   const [date, setDate] = useState<string>(() => getTodayIsoDate());
 
   // Buyer fields

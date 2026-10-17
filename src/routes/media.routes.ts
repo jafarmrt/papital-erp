@@ -14,7 +14,7 @@ import { MediaSectionService } from '../services/media/mediaSections.service.js'
 import { MediaArrangeService } from '../services/media/mediaArrange.service.js';
 import { businessTodayIsoDate } from '../lib/businessClock.js';
 import {
-  mediaAssetOrderSchema, mediaCoverSchema, mediaFileSchema, mediaItemImageSchema, mediaListSchema, mediaPosterSchema,
+  mediaAssetOrderSchema, mediaFileSchema, mediaItemImageSchema, mediaListSchema, mediaPosterSchema,
   mediaProductInfoSchema, mediaProductListSchema, mediaProductParamsSchema, mediaReplaceSchema, mediaSectionCreateSchema,
   mediaSectionOrderSchema, mediaSectionUpdateSchema, mediaTagsSchema, mediaUpdateSchema, mediaUploadSchema, mediaZipSchema,
 } from './media.schemas.js';
@@ -31,6 +31,8 @@ export const MEDIA_UPLOAD_PERMISSION = 'media.upload';
 export const MEDIA_MANAGE_PERMISSION = 'media.manage';
 /** v10.0.25 (N-05 PR 2): the product card is item data, so the item editor's key opens it too */
 export const MEDIA_PRODUCT_INFO_PERMISSIONS = [MEDIA_MANAGE_PERMISSION, 'products.edit'] as const;
+/** v10.1.71: the item's picture is the product's featured image in the whole app, so only the item form's key changes it */
+export const MEDIA_ITEM_IMAGE_PERMISSION = 'products.edit';
 
 async function actorOf(req: Request): Promise<MediaActor> {
   return {
@@ -134,10 +136,6 @@ router.put('/media/assets/order', authenticateToken, requirePermission(MEDIA_MAN
   res.json({ success: true, data: await MediaArrangeService.reorder(req.body, await actorOf(req)) });
 }));
 
-router.put('/media/assets/:id/cover', authenticateToken, requirePermission(MEDIA_MANAGE_PERMISSION), validate(mediaCoverSchema), asyncHandler(async (req: Request, res: Response) => {
-  res.json({ success: true, data: await MediaArrangeService.setCover(Number(req.params.id), (req.body as { cover: boolean }).cover, await actorOf(req)) });
-}));
-
 /** Replaces the file with a better version; the body is the raw file, like an upload */
 router.put('/media/assets/:id/content', authenticateToken, requirePermission(MEDIA_UPLOAD_PERMISSION, MEDIA_MANAGE_PERMISSION), validate(mediaReplaceSchema), asyncHandler(async (req: Request, res: Response) => {
   assertDeclaredLength(req, MEDIA_MAX_BYTES);
@@ -147,8 +145,8 @@ router.put('/media/assets/:id/content', authenticateToken, requirePermission(MED
   res.json({ success: true, data: result.asset, warnings: result.warnings });
 }));
 
-/** The item's picture from a product image of the library: item data, so the product card's keys open it */
-router.post('/media/assets/:id/item-image', authenticateToken, requirePermission(...MEDIA_PRODUCT_INFO_PERMISSIONS), validate(mediaItemImageSchema), asyncHandler(async (req: Request, res: Response) => {
+/** The item's picture (the product's featured image) from a product image of the library: the item form's key only */
+router.post('/media/assets/:id/item-image', authenticateToken, requirePermission(MEDIA_ITEM_IMAGE_PERMISSION), validate(mediaItemImageSchema), asyncHandler(async (req: Request, res: Response) => {
   const data = await MediaArrangeService.useAsItemImage(Number(req.params.id), (req.body as { version: number }).version, {
     req, userId: req.user?.id, username: req.user?.username ?? '',
   });

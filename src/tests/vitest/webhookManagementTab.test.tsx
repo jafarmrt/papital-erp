@@ -21,7 +21,7 @@ vi.mock('../../api', async () => {
 afterEach(() => { cleanup(); vi.mocked(fetchJson).mockReset(); });
 
 const maskedKey = '**********************abcd';
-// v10.1.71 (TD-1288): number fields show Persian digits and «٬» while typing
+// v10.1.72 (TD-1288): number fields show Persian digits and «٬» while typing
 const SHOWN_TIMEOUT = '۵٬۰۰۰';
 const subscription = {
   id: 7, name: 'فروشگاه شریک', targetUrl: 'https://partner.example.com/hook', secretKey: maskedKey, eventPatterns: ['*'],

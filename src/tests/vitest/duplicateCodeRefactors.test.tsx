@@ -7,7 +7,7 @@ import type { FinancialRatiosReport } from '../../types';
 
 afterEach(cleanup);
 
-// v10.1.71 (TD-1288): number fields show Persian digits and «٬» while typing
+// v10.1.72 (TD-1288): number fields show Persian digits and «٬» while typing
 const SHOWN_THREE = '۳';
 
 // v7.0.140: کد مشترک استخراج‌شده (حذف تکرار) همان خروجی و رفتار قبلی را دارد

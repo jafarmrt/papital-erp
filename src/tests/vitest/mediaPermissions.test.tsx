@@ -36,7 +36,7 @@ const PREPARING = 'در حال آماده‌سازی';
 function asset(id: number, createdBy: string, extra: Partial<MediaAssetView> = {}): MediaAssetView {
   return {
     id, sectionId: 1, itemId: 7, kind: 'image', shotType: 'white_background', title: `file ${id}`, description: '', sortOrder: id,
-    isCover: false, originalName: `f${id}.jpg`, mimeType: 'image/jpeg', sizeBytes: 2_000_000, width: 2000, height: 2000,
+    originalName: `f${id}.jpg`, mimeType: 'image/jpeg', sizeBytes: 2_000_000, width: 2000, height: 2000,
     durationSeconds: null, isLowQuality: false, hasLight: true, hasThumb: true, lightFailed: false, createdBy, createdAt: null,
     version: 1, warnings: [], tags: [], ...extra,
   };
@@ -47,6 +47,7 @@ const detail: MediaProductDetail = {
     id: 7, code: '1404-N-101-01', name: 'گوشواره', category: 'گوشواره میخی', unit: 'جفت', color: null, material: null, size: null,
     weight: null, collections: ['بهار'], designYear: 1404, transferCode: '101', productDescription: null, technicalNotes: null, version: 3,
   },
+  featuredImage: { image: null, thumbnail: null },
   assets: [asset(1, 'ali'), asset(2, 'sara', { hasThumb: false, hasLight: false })],
   productsSectionId: 1,
 };

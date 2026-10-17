@@ -2,8 +2,12 @@ import { Link } from 'react-router-dom';
 import { AlertTriangle, ImageOff, Image as ImageIcon, Film } from 'lucide-react';
 import { formatPersianCode, formatPersianNumber } from '../../utils';
 import { mediaFileUrl, type MediaProductRow } from '../../lib/media/mediaApi';
+import { SafeImage } from '../SafeImage';
 
-/** One product of the media library grid: its cover thumbnail, counts and a low quality badge */
+/**
+ * One product of the media library grid: its featured image (the item's own picture, v10.1.71; else the first library
+ * file while the item has none), counts and a low quality badge
+ */
 export function MediaProductCard({ row }: { row: MediaProductRow }) {
   return (
     <Link
@@ -11,8 +15,10 @@ export function MediaProductCard({ row }: { row: MediaProductRow }) {
       className="group bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-md hover:border-blue-300 transition flex flex-col"
     >
       <div className="relative aspect-square bg-slate-50 flex items-center justify-center">
-        {row.coverAssetId && row.coverHasThumb ? (
-          <img src={mediaFileUrl(row.coverAssetId, 'thumb')} alt={row.name} loading="lazy" className="w-full h-full object-cover" />
+        {row.featuredImage ? (
+          <SafeImage src={row.featuredImage} alt={row.name} className="w-full h-full object-cover" fallbackIcon={<ImageOff size={36} />} />
+        ) : row.fallbackAssetId ? (
+          <img src={mediaFileUrl(row.fallbackAssetId, 'thumb')} alt={row.name} loading="lazy" className="w-full h-full object-cover" />
         ) : (
           <ImageOff size={36} className="text-slate-300" aria-label="بی‌تصویر" />
         )}
