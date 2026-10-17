@@ -77,7 +77,7 @@ export function buildSecretsAtRestHealthTest(counts: SecretsAtRestCounts): Healt
   // OBS-PR-07 (ت۴۰): without ERP_SECRETS_KEY the encryption command cannot run and a webhook rule holding a token or
   // headers is refused on save, so the key comes first
   const noKey = counts.keyConfigured === false;
-  // v10.1.67 (TD-1286): a missing key is a warning of its own, also on a server with no stored secret yet, since every
+  // v10.1.68 (TD-1286): a missing key is a warning of its own, also on a server with no stored secret yet, since every
   // new WooCommerce key, messenger bot token or webhook key is refused until it is set
   const problems = stored + (noKey ? 1 : 0);
   const setKeyFirst = 'نخست کلید ERP_SECRETS_KEY را در فایل .env کارساز بگذارید و سرویس را دوباره راه بیندازید؛ ';
@@ -86,7 +86,7 @@ export function buildSecretsAtRestHealthTest(counts: SecretsAtRestCounts): Healt
       id: 'secrets_key_missing',
       title: 'کلید رمزنگاری ERP_SECRETS_KEY روی کارساز تعریف نشده است',
       subtitle: 'ذخیره کلید ووکامرس، نشانه ربات پیام‌رسان و کلید وب‌هوک رد می‌شود',
-      details: 'روی کارساز در پوشه برنامه «bash scripts/ensure-env-secrets.sh .env» را اجرا کنید، سرویس را دوباره راه بیندازید و کلید تازه را جایی امن بیرون از کارساز نگه دارید. اگر رمزها پیش‌تر با کلیدی دیگر رمزنگاری شده‌اند، همان کلید پیشین را برگردانید.',
+      details: 'روی کارساز در پوشه برنامه «bash scripts/ensure-env-secrets.sh .env ERP_SECRETS_KEY» را اجرا کنید، سرویس را دوباره راه بیندازید و کلید تازه را جایی امن بیرون از کارساز نگه دارید. اگر رمزها پیش‌تر با کلیدی دیگر رمزنگاری شده‌اند، همان کلید پیشین را برگردانید.',
     });
   }
   if (plain > 0) {

@@ -134,14 +134,14 @@ if [ "$NODE_MAJOR" -lt 24 ]; then
   warn "Node.js $(node -v 2>/dev/null || echo 'not found') is older than 24; install Node.js 24 (see install.sh) before the next update."
 fi
 
-# v10.1.67 (TD-1286): without ERP_SECRETS_KEY every new WooCommerce key, bot token or webhook key is refused (503), and
-# only install.sh used to add it; add the generated secrets .env lacks (existing values are never changed)
-if [ -z "$(env_file_value ERP_SECRETS_KEY)" ]; then
-  if bash "$APP_DIR/scripts/ensure-env-secrets.sh" "$APP_DIR/.env" && [ -n "$(env_file_value ERP_SECRETS_KEY)" ]; then
-    warn "ERP_SECRETS_KEY was missing and has been added to .env; keep a copy of it off this server. If secrets were encrypted with an earlier key, put that key back instead."
-  else
-    warn "ERP_SECRETS_KEY is not set in .env and could not be added; new secrets are refused until it is set."
-  fi
+# v10.1.68 (TD-1286): without ERP_SECRETS_KEY every new WooCommerce key, bot token or webhook key is refused (503), and
+# only install.sh used to add it; add that one key when .env lacks it (in any form the service reads), nothing else
+if ! KEY_STEP="$(bash "$APP_DIR/scripts/ensure-env-secrets.sh" "$APP_DIR/.env" ERP_SECRETS_KEY 2>&1)"; then
+  warn "ERP_SECRETS_KEY could not be checked or added ($KEY_STEP); new secrets are refused until it is set."
+elif [[ "$KEY_STEP" == *"Added ERP_SECRETS_KEY"* ]]; then
+  warn "ERP_SECRETS_KEY was missing and has been added to .env; keep a copy of it somewhere safe off this server. If secrets were encrypted with an earlier key, put that key back instead."
+elif [[ "$KEY_STEP" == *"WARN:"* ]]; then
+  warn "ERP_SECRETS_KEY is empty in .env and was left as it is; new secrets are refused until it is set."
 fi
 
 # ---------- 1) Pre-update database backup ----------

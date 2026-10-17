@@ -30,26 +30,24 @@ describe('secrets_key_missing_warns_td_1286', () => {
   });
 });
 
-/** The ERP_SECRETS_KEY step of update.sh, run on its own against a scratch app directory. */
+const UPDATE_SH = () => readFileSync(path.join(ROOT, 'update.sh'), 'utf8');
+
+/** The ERP_SECRETS_KEY step of update.sh with its own log helpers, run on its own against a scratch app directory. */
 function updateKeyStep(): string {
-  const src = readFileSync(path.join(ROOT, 'update.sh'), 'utf8');
-  const start = src.indexOf('# v10.1.67 (TD-1286)');
+  const src = UPDATE_SH();
+  const start = src.indexOf('# v10.1.68 (TD-1286)');
   expect(start).toBeGreaterThan(0);
   const end = src.indexOf('\nfi\n', start);
   expect(end).toBeGreaterThan(start);
   // the step runs before the pre-update backup, so a failed update later on still leaves the key in place
   expect(start).toBeLessThan(src.indexOf('# ---------- 1) Pre-update database backup'));
-  return src.slice(start, end + 4);
+  const helpers = src.split('\n').filter(l => /^(log|warn)\(\)/.test(l));
+  expect(helpers).toHaveLength(2);
+  return `${helpers.join('\n')}\n${src.slice(start, end + 4)}`;
 }
 
 function runStep(appDir: string): string {
-  const prelude = [
-    'set -euo pipefail',
-    'warn() { echo "WARN: $*"; }',
-    `APP_DIR=${JSON.stringify(appDir)}`,
-    'cd "$APP_DIR"',
-    'env_file_value() { [ -f .env ] || return 0; grep -E "^$1=" .env | head -1 | cut -d= -f2- || true; }',
-  ].join('\n');
+  const prelude = ['set -euo pipefail', `APP_DIR=${JSON.stringify(appDir)}`, 'cd "$APP_DIR"'].join('\n');
   return execFileSync('bash', ['-c', `${prelude}\n${updateKeyStep()}`], { encoding: 'utf8' });
 }
 
@@ -64,29 +62,46 @@ describe('update_adds_missing_secrets_key_td_1286', () => {
     writeFileSync(path.join(dir, '.env'), env);
     return dir;
   }
+  const envOf = (app: string) => readFileSync(path.join(app, '.env'), 'utf8');
 
-  it('adds ERP_SECRETS_KEY to a .env without it and keeps the existing values', () => {
-    const app = scratchApp('PORT=3000\nJWT_SECRET=keep-me\nERP_WEBHOOK_SECRET_TOKEN=keep-token\n');
+  it('adds only ERP_SECRETS_KEY to a .env without it and keeps the existing values', () => {
+    const app = scratchApp('PORT=3000\nJWT_SECRET=keep-me');
     const out = runStep(app);
-    const env = readFileSync(path.join(app, '.env'), 'utf8');
+    const env = envOf(app);
     expect(env).toMatch(/^ERP_SECRETS_KEY=[0-9a-f]{64}$/m);
-    expect(env).toContain('JWT_SECRET=keep-me\n');
-    expect(env).toContain('ERP_WEBHOOK_SECRET_TOKEN=keep-token\n');
+    expect(env).toMatch(/^JWT_SECRET=keep-me$/m);
+    // the echo token would replace the stored one and the metrics token would start monitor alerts
+    expect(env).not.toContain('ERP_WEBHOOK_SECRET_TOKEN');
+    expect(env).not.toContain('METRICS_TOKEN');
     expect(out).toContain('ERP_SECRETS_KEY was missing and has been added');
+    expect(out).toContain('off this server');
     expect(out).not.toMatch(/[0-9a-f]{64}/);
   });
 
-  it('leaves a .env that already has the key untouched and silent', () => {
-    const before = 'PORT=3000\nERP_SECRETS_KEY=existing\n';
+  it.each([
+    'ERP_SECRETS_KEY=existing',
+    'export ERP_SECRETS_KEY=existing',
+    '  ERP_SECRETS_KEY="existing"',
+    "ERP_SECRETS_KEY = 'existing'",
+  ])('leaves a key already present as %j untouched and stays silent', line => {
+    const before = `PORT=3000\n${line}\n`;
     const app = scratchApp(before);
     expect(runStep(app)).toBe('');
-    expect(readFileSync(path.join(app, '.env'), 'utf8')).toBe(before);
+    expect(envOf(app)).toBe(before);
   });
 
-  it('warns and keeps an empty key line as it is', () => {
-    const app = scratchApp('PORT=3000\nERP_SECRETS_KEY=\n');
-    const out = runStep(app);
-    expect(out).toContain('ERP_SECRETS_KEY is not set in .env and could not be added');
-    expect(readFileSync(path.join(app, '.env'), 'utf8')).toMatch(/^ERP_SECRETS_KEY=$/m);
+  it.each(['ERP_SECRETS_KEY=', 'ERP_SECRETS_KEY=""'])('warns and keeps an empty key line %j as it is', line => {
+    const before = `PORT=3000\n${line}\n`;
+    const app = scratchApp(before);
+    expect(runStep(app)).toContain('ERP_SECRETS_KEY is empty in .env and was left as it is');
+    expect(envOf(app)).toBe(before);
+  });
+
+  it('ensure-env-secrets.sh still adds every missing key without a key list and refuses an unknown key', () => {
+    const app = scratchApp('PORT=3000\n');
+    const script = path.join(app, 'scripts/ensure-env-secrets.sh');
+    execFileSync('bash', [script, path.join(app, '.env')], { encoding: 'utf8' });
+    for (const key of ['ERP_SECRETS_KEY', 'ERP_WEBHOOK_SECRET_TOKEN', 'METRICS_TOKEN']) expect(envOf(app)).toMatch(new RegExp(`^${key}=[0-9a-f]{64}$`, 'm'));
+    expect(() => execFileSync('bash', [script, path.join(app, '.env'), 'JWT_SECRET'], { stdio: 'pipe' })).toThrow();
   });
 });
