@@ -52,6 +52,8 @@ export const FACTORY_RESET_AUDIT_ENTITY = 'سیستم:بازنشانی کامل'
 /** v10.1.45 (OBS-R1-11): the error answered after the wipe committed but the base data seed failed */
 export const FACTORY_RESET_SEED_INCOMPLETE = 'FACTORY_RESET_SEED_INCOMPLETE';
 
+const SEED_INCOMPLETE_MESSAGE = 'داده‌ها پاک شد، ولی بخشی از داده پایه ساخته نشد. سامانه را دوباره راه‌اندازی کنید تا دوباره ساخته شود.';
+
 export function isFactoryResetCommittedError(err: unknown): boolean {
   return err instanceof ConflictError && err.code === FACTORY_RESET_SEED_INCOMPLETE;
 }
@@ -99,25 +101,14 @@ export class FactoryResetService {
     // قفل seed پیش از پاک‌سازی گرفته و تا پایان seed دوباره نگه داشته می‌شود؛ اگر seed دیگری در جریان باشد هیچ چیز پاک نمی‌شود
     const outcome = await withAdvisoryLock(ADVISORY_LOCK_KEYS.SEED, async (): Promise<FactoryResetReport> => {
       const { deletedRows, attachmentPaths, mediaFiles } = await this.wipeAllData(actor);
-
-      // فایل‌ها فقط پس از commit: اگر تراکنش برگردد ردیف‌ها و فایل‌ها هر دو می‌مانند
-      const files = await this.removeAttachmentFiles(attachmentPaths);
-      const media = await this.removeMediaFiles(mediaFiles);
-      this.invalidateCaches();
-
-      // Re-seed the base data (categories, settings, chart of accounts, task categories, piecework tasks; roles are kept,
-      // TD-245) and, as at boot, the default workflows, event rules and webhook subscriptions this reset wiped
-      // (v9.0.390, TD-620: before, they stayed missing until the next restart)
-      // v10.0.180 (TD-959): a base data section that failed is reported, never silently left missing
-      const seed = await runSeed();
-      if (!seed.success) {
-        logger.error(`Factory reset: ${seed.message}`);
-        throw new ConflictError('داده‌ها پاک شد، ولی بخشی از داده پایه ساخته نشد. سامانه را دوباره راه‌اندازی کنید تا دوباره ساخته شود.', { failedSections: seed.failedSections }, FACTORY_RESET_SEED_INCOMPLETE);
+      // v10.1.66: the wipe is committed now, so any later failure is reported as such and the route ends the session
+      try {
+        return await this.afterWipe(deletedRows, attachmentPaths, mediaFiles);
+      } catch (err) {
+        if (isFactoryResetCommittedError(err)) throw err;
+        logger.error(`Factory reset: a step after the committed wipe failed: ${errorMessageOf(err)}`);
+        throw new ConflictError(SEED_INCOMPLETE_MESSAGE, { failedStep: 'after-wipe' }, FACTORY_RESET_SEED_INCOMPLETE);
       }
-      await seedDefaultEngines();
-      this.invalidateCaches();
-
-      return { deletedRows, attachmentFiles: { total: attachmentPaths.length, ...files }, mediaFiles: { total: mediaFiles.length, ...media } };
     });
 
     if (!outcome.acquired) {
@@ -126,8 +117,34 @@ export class FactoryResetService {
         undefined, 'SEED_RUNNING'
       );
     }
+    return this.reportDone(actor, outcome.result);
+  }
 
-    const report = outcome.result;
+  /** The steps after the committed wipe: files, caches and the base data again */
+  private static async afterWipe(
+    deletedRows: Record<string, number>, attachmentPaths: string[], mediaFiles: RemovedMediaFile[],
+  ): Promise<FactoryResetReport> {
+    // فایل‌ها فقط پس از commit: اگر تراکنش برگردد ردیف‌ها و فایل‌ها هر دو می‌مانند
+    const files = await this.removeAttachmentFiles(attachmentPaths);
+    const media = await this.removeMediaFiles(mediaFiles);
+    this.invalidateCaches();
+
+    // Re-seed the base data (categories, settings, chart of accounts, task categories, piecework tasks; roles are kept,
+    // TD-245) and, as at boot, the default workflows, event rules and webhook subscriptions this reset wiped
+    // (v9.0.390, TD-620: before, they stayed missing until the next restart)
+    // v10.0.180 (TD-959): a base data section that failed is reported, never silently left missing
+    const seed = await runSeed();
+    if (!seed.success) {
+      logger.error(`Factory reset: ${seed.message}`);
+      throw new ConflictError(SEED_INCOMPLETE_MESSAGE, { failedSections: seed.failedSections }, FACTORY_RESET_SEED_INCOMPLETE);
+    }
+    await seedDefaultEngines();
+    this.invalidateCaches();
+
+    return { deletedRows, attachmentFiles: { total: attachmentPaths.length, ...files }, mediaFiles: { total: mediaFiles.length, ...media } };
+  }
+
+  private static reportDone(actor: FactoryResetActor, report: FactoryResetReport): FactoryResetReport {
     logger.warn({
       message: 'Factory reset completed',
       user: actor.username,
