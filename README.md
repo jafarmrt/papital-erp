@@ -2,7 +2,7 @@
 
 سیستم یکپارچه مدیریت کارگاه تولیدی: انبارداری با کاردکس رویدادمحور، فاکتور و پیش‌فاکتور، حسابداری دوبل (کدینگ ۴ سطحی، دفتر روزنامه، تراز آزمایشی)، خزانه‌داری و چک صیادی، CRM و قیف فروش، کنترل پروژه‌های تولید با BOM، منابع انسانی و حقوق و دستمزد، موتور گردش کار (ورکفلو) با کارتابل تاییدات، گذرگاه رویدادها (Outbox/DLQ/Webhook) و گزارش‌های BI.
 
-> **نسخه فعلی:** سری فعال `v10.x.y` (نسخه مستقر: `v10.1.64`) — نقشه راه: `V10_MASTER_ROADMAP.md` (سری‌های بسته‌شده: `V9_MASTER_ROADMAP.md`، `V8_MASTER_ROADMAP.md`، `V7_MASTER_ROADMAP.md`) • تاریخچه تغییرات: صفحه «معرفی و به‌روزرسانی‌ها» داخل سامانه + `CHANGELOG.md` + `src/data/changelogs/10.ts`
+> **نسخه فعلی:** سری فعال `v10.x.y` (نسخه مستقر: `v10.1.65`) — نقشه راه: `V10_MASTER_ROADMAP.md` (سری‌های بسته‌شده: `V9_MASTER_ROADMAP.md`، `V8_MASTER_ROADMAP.md`، `V7_MASTER_ROADMAP.md`) • تاریخچه تغییرات: صفحه «معرفی و به‌روزرسانی‌ها» داخل سامانه + `CHANGELOG.md` + `src/data/changelogs/10.ts`
 
 ---
 
@@ -63,7 +63,7 @@ sudo ./install.sh
 ### روش ۲: راه‌اندازی دستی
 ```bash
 git clone <repo-url> && cd <repo>
-cp .env.production.example .env    # سپس مقادیر را ویرایش کنید
+cp .env.example .env               # سپس مقادیر را ویرایش کنید
 npm ci
 npm run build                       # کلاینت + bundle سرور (dist/server.cjs)
 NODE_ENV=production npm start      # مهاجرت‌ها هنگام startup اعمال می‌شوند

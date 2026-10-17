@@ -202,7 +202,7 @@ jobs:
     runs-on: ubuntu-24.04
     # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
     timeout-minutes: 20
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/staging' || github.event_name == 'pull_request'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v7
@@ -357,39 +357,3 @@ jobs:
           echo "${REGISTRY_TOKEN}" | docker login "$REGISTRY" -u "$REGISTRY_USER" --password-stdin
           docker tag papital-erp:${IMAGE_TAG} "${REGISTRY}/erp:${IMAGE_TAG}"
           docker push "${REGISTRY}/erp:${IMAGE_TAG}"
-
-  deploy-staging:
-    name: Deploy to Staging Environment
-    # v10.0.192: build no longer waits for the tests, so the deploy waits for every check job itself
-    needs: [lint-and-typecheck, test, coverage-gate, e2e, build]
-    runs-on: ubuntu-24.04
-    # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
-    timeout-minutes: 10
-    if: github.ref == 'refs/heads/staging'
-    environment: staging
-    steps:
-      - name: Trigger Staging Deployment
-        run: |
-          echo "Triggering automated staging deployment for commit ${{ github.sha }}..."
-
-  smoke-test-staging:
-    name: Staging Post-Deployment Smoke Tests
-    needs: deploy-staging
-    runs-on: ubuntu-24.04
-    # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
-    timeout-minutes: 10
-    if: github.ref == 'refs/heads/staging'
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v7
-
-      - name: Run Smoke Tests Against Staging Cluster
-        env:
-          ADMIN_TOKEN: ${{ secrets.STAGING_ADMIN_TOKEN }}
-          METRICS_TOKEN: ${{ secrets.METRICS_TOKEN }}
-        run: |
-          if [ -z "${ADMIN_TOKEN}" ]; then
-            echo "STAGING_ADMIN_TOKEN not configured — skipping staging smoke tests."
-            exit 0
-          fi
-          bash scripts/smoke-test.sh https://staging.erp.example.com

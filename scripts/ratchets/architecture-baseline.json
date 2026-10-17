@@ -127,6 +127,21 @@
     "src/services/events/domainEventHandlers.ts": 1,
     "src/services/events/eventActionEngineService.ts": 1
   },
+  "hardDeletes": {
+    "src/lib/auditLogger.ts": 1,
+    "src/services/customers/customerTags.service.ts": 1,
+    "src/services/events/deadLetterQueueService.ts": 1,
+    "src/services/events/integrationParentDelete.ts": 2,
+    "src/services/events/outboxService.ts": 1,
+    "src/services/idempotency.service.ts": 2,
+    "src/services/messenger/messengerLinks.service.ts": 2,
+    "src/services/projects/projectManagers.ts": 1,
+    "src/services/system/factoryReset.service.ts": 3,
+    "src/services/users/roleAdmin.service.ts": 1,
+    "src/services/workflow/workflowDesignTables.ts": 2,
+    "src/services/workflow/workflowTermination.ts": 1,
+    "src/services/workflow/workflowTransitionExecutor.ts": 2
+  },
   "packageBoundary": {
     "src/db/seed.ts": 4,
     "src/errors/customErrors.ts": 1,

@@ -85,7 +85,7 @@ describe('architecture_ratchet: phase-2 decisions may only shrink their debt', (
   });
 
   it('refuses a grown count and reports a lowered one', () => {
-    const empty = { routeWrites: {}, ormFallback: {}, routeErrorResponses: {}, serviceGenericErrors: {}, noopCatches: {}, auditWithoutTx: {}, packageBoundary: {} };
+    const empty = { routeWrites: {}, ormFallback: {}, routeErrorResponses: {}, serviceGenericErrors: {}, noopCatches: {}, auditWithoutTx: {}, hardDeletes: {}, packageBoundary: {} };
     const baseline: ArchitectureBaseline = { ...empty, routeWrites: { 'a.ts': 2, 'b.ts': 1 } };
     const report = compareWithBaseline({ ...empty, routeWrites: { 'a.ts': 3, 'c.ts': 1 } }, baseline);
     expect(report.errors).toEqual([

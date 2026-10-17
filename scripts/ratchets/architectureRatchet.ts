@@ -23,13 +23,16 @@ import { boundaryState } from './packageBoundary';
  *  - packageBoundary (decision t3 A, OBS-R2-02): server imports against the package direction of
  *    scripts/ratchets/PACKAGE_MAP.txt (scripts/ratchets/packageBoundary.ts); a server file the map does not cover is refused;
  *  - auditWithoutTx (TD-963 part 2, OBS-R2-07): a `logActivity(...)` call whose argument names no `tx`, so the audit row
- *    is written on its own pool connection after the change committed, and a failed insert never refuses the change.
+ *    is written on its own pool connection after the change committed, and a failed insert never refuses the change;
+ *  - hardDeletes (OBS-R2-15, decision ت۴۰ item 19): a physical delete, `x.delete(<schema table>)` or SQL text holding
+ *    `DELETE FROM`, in any production file. Business rows are soft-deleted (AGENTS.md, DB-009); the deletes that remain
+ *    are the allowed exceptions, each file with its reason in scripts/ratchets/HARD_DELETES.md, and their count only shrinks.
  * Terminal output is English (AGENTS.md, owner rule t9).
  */
 
 export const BASELINE_FILE = 'scripts/ratchets/architecture-baseline.json';
 
-export const METRICS = ['routeWrites', 'ormFallback', 'routeErrorResponses', 'serviceGenericErrors', 'noopCatches', 'auditWithoutTx', 'packageBoundary'] as const;
+export const METRICS = ['routeWrites', 'ormFallback', 'routeErrorResponses', 'serviceGenericErrors', 'noopCatches', 'auditWithoutTx', 'hardDeletes', 'packageBoundary'] as const;
 export type Metric = (typeof METRICS)[number];
 export type ArchitectureBaseline = Record<Metric, Record<string, number>> & { unmappedServerFiles?: string[] };
 
@@ -40,6 +43,7 @@ const METRIC_ADVICE: Record<Metric, string> = {
   serviceGenericErrors: 'throw an AppError subclass (decision t5 A)',
   noopCatches: 'remove the try / catch: asyncHandler already passes the error to errorHandler (decision t5 A)',
   auditWithoutTx: 'pass the write\'s own tx to logActivity so the audit row commits or rolls back with the change (TD-963)',
+  hardDeletes: 'soft-delete the row (is_deleted = 1); a delete that must stay physical is listed with its reason in scripts/ratchets/HARD_DELETES.md (OBS-R2-15)',
   packageBoundary: 'import only towards a lower layer, or go through an event or the composition root (decision t3 A)',
 };
 
@@ -107,19 +111,22 @@ export type SourceMetric = Exclude<Metric, 'packageBoundary'>;
 
 export function countSource(file: string, source: string): Record<SourceMetric, number> {
   const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
-  const counts: Record<SourceMetric, number> = { routeWrites: 0, ormFallback: 0, routeErrorResponses: 0, serviceGenericErrors: 0, noopCatches: 0, auditWithoutTx: 0 };
-  const tables = isRoute(file) ? schemaImports(sf) : new Set<string>();
+  const counts: Record<SourceMetric, number> = { routeWrites: 0, ormFallback: 0, routeErrorResponses: 0, serviceGenericErrors: 0, noopCatches: 0, auditWithoutTx: 0, hardDeletes: 0 };
+  const tables = schemaImports(sf);
   const isTable = (n: ts.Expression) => (ts.isIdentifier(n) && tables.has(n.text))
     || (ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.expression) && tables.has(`${n.expression.text}.*`));
   const visit = (n: ts.Node) => {
     if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression)) {
       const method = n.expression.name.text;
       if (isRoute(file) && ['insert', 'update', 'delete'].includes(method) && n.arguments.length === 1 && isTable(n.arguments[0])) counts.routeWrites++;
+      if (method === 'delete' && n.arguments.length === 1 && isTable(n.arguments[0])) counts.hardDeletes++;
       if (isRoute(file) && method === 'status' && n.arguments.length === 1 && isErrorStatus(n.arguments[0])
         && ts.isIdentifier(n.expression.expression) && n.expression.expression.text === 'res') counts.routeErrorResponses++;
     }
     if (ts.isCallExpression(n) && isAuditWithoutTx(n)) counts.auditWithoutTx++;
     if (ts.isCatchClause(n) && isNoopCatch(n)) counts.noopCatches++;
+    if ((ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n) || ts.isTemplateHead(n) || ts.isTemplateMiddle(n) || ts.isTemplateTail(n))
+      && /\bDELETE\s+FROM\b/i.test(n.text)) counts.hardDeletes++;
     if (ts.isBinaryExpression(n) && isOrm(n.right)
       && [ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.EqualsToken].includes(n.operatorToken.kind)) counts.ormFallback++;
     if ((ts.isVariableDeclaration(n) || ts.isParameter(n)) && n.initializer && isOrm(n.initializer)) counts.ormFallback++;
