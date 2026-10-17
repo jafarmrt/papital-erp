@@ -75,24 +75,32 @@ export async function runUsernameRuleTests(shouldRun: ShouldRun): Promise<TestCa
         wrong.push(`restoring «${base}» beside the live «${base.toUpperCase()}» returned ${restore.status} ${restore.body?.code ?? ''}`);
       }
 
-      // a legacy live duplicate is listed, blocks the index, and deleting one account lets the system admin build it
-      await h.q('DROP INDEX IF EXISTS uq_users_username_key');
-      const dupA = `dup130_${h.tag}`;
-      const dupB = dupA.toUpperCase();
-      const idA = await insertUser(dupA);
-      const idB = await insertUser(dupB);
-      const { findCaseDuplicateUsernames, hasUsernameKeyUniqueIndex } = await import('../../services/users/usernameUniqueness.js');
-      const { orm } = await import('../../db/drizzle.js');
-      const listed = (await findCaseDuplicateUsernames(orm)).map(r => r.id);
-      if (!listed.includes(Number(idA)) || !listed.includes(Number(idB))) wrong.push(`the health check lists ${JSON.stringify(listed)}, not both duplicates`);
-      const blocked = await h.post('/api/system/conditional-constraints/build', { apply: true });
-      if (JSON.stringify(blocked.body?.built ?? []).includes('uq_users_username_key')) wrong.push('the index was built over a live duplicate');
-      const removedDup = await h.del(`/api/users/${idB}`);
-      if (removedDup.status !== 200) wrong.push(`deleting the duplicate returned ${removedDup.status}`);
-      const built = await h.post('/api/system/conditional-constraints/build', { apply: true });
-      if (!JSON.stringify(built.body?.built ?? []).includes('uq_users_username_key') || !(await hasUsernameKeyUniqueIndex(orm))) {
-        wrong.push(`after deleting one account the build answered ${JSON.stringify(built.body).slice(0, 200)}`);
-      }
+      // a legacy live duplicate is listed, blocks the index, and deleting one account lets the system admin build it.
+      // #305 review: the index is dropped only inside an isolated schema, so other tests on this database never run
+      // without it
+      const { inFiscalSandbox, sandboxAdminClient } = await import('../regression/fiscalClosingTests.js');
+      await inFiscalSandbox(async () => {
+        const { orm, pool } = await import('../../db/drizzle.js');
+        const admin = await sandboxAdminClient();
+        await pool.query(`DO $$ BEGIN EXECUTE format('DROP INDEX IF EXISTS %I.uq_users_username_key', current_schema()); END $$`);
+        const roleCode = String((await pool.query<{ code: string }>('SELECT code FROM roles ORDER BY id LIMIT 1')).rows[0]?.code ?? '');
+        const sandboxUser = async (username: string) => Number((await pool.query<{ id: number }>(
+          'INSERT INTO users (username, password, full_name, role) VALUES ($1, $2, $3, $4) RETURNING id', [username, 'x', 'obs130', roleCode])).rows[0]?.id);
+        const dupA = `dup130_${h.tag}`;
+        const idA = await sandboxUser(dupA);
+        const idB = await sandboxUser(dupA.toUpperCase());
+        const { findCaseDuplicateUsernames, hasUsernameKeyUniqueIndex } = await import('../../services/users/usernameUniqueness.js');
+        const listed = (await findCaseDuplicateUsernames(orm)).map(r => r.id);
+        if (!listed.includes(idA) || !listed.includes(idB)) wrong.push(`the health check lists ${JSON.stringify(listed)}, not both duplicates`);
+        const blocked = await admin.post('/api/system/conditional-constraints/build', { apply: true });
+        if (JSON.stringify(blocked.body?.built ?? []).includes('uq_users_username_key')) wrong.push('the index was built over a live duplicate');
+        const removedDup = await admin.del(`/api/users/${idB}`);
+        if (removedDup.status !== 200) wrong.push(`deleting the duplicate returned ${removedDup.status}`);
+        const built = await admin.post('/api/system/conditional-constraints/build', { apply: true });
+        if (!JSON.stringify(built.body?.built ?? []).includes('uq_users_username_key') || !(await hasUsernameKeyUniqueIndex(orm))) {
+          wrong.push(`after deleting one account the build answered ${JSON.stringify(built.body).slice(0, 200)}`);
+        }
+      });
 
       // an old username outside the format keeps logging in
       await h.q('INSERT INTO users (username, password, full_name, role) VALUES ($1, $2, $3, $4)',
@@ -105,7 +113,6 @@ export async function runUsernameRuleTests(shouldRun: ShouldRun): Promise<TestCa
       if (login.status !== 200) wrong.push(`the legacy username «${legacy}» could not log in: ${login.status}`);
     } finally {
       if (made.length) await h.q('DELETE FROM users WHERE username = ANY($1::text[])', [made]).catch(() => undefined);
-      await h.q('CREATE UNIQUE INDEX IF NOT EXISTS uq_users_username_key ON users (lower(btrim(username))) WHERE is_deleted = 0').catch(() => undefined);
     }
   });
   return results;
