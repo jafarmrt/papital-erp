@@ -78,12 +78,16 @@ BEGIN
     SELECT h.changed_at, h.from_stage INTO v_cutoff, v_first_live_from
     FROM crm_lead_stage_history h WHERE h.lead_id = l.id ORDER BY h.changed_at, h.id LIMIT 1;
     v_has_live := FOUND;
-    -- created after v10.1.18: its history is complete
-    CONTINUE WHEN v_has_live AND v_first_live_from IS NULL;
+    -- created after v10.1.18: its first live row is its creation (no old stage, written with the lead); a lead without a
+    -- creation time is left alone, so nothing is written twice. An older lead whose stage was empty also leaves no old stage
+    -- on its first live change, but was created well before it.
+    CONTINUE WHEN v_has_live AND btrim(coalesce(v_first_live_from, '')) = ''
+      AND (l.created_at IS NULL OR l.created_at >= v_cutoff - interval '10 seconds');
 
+    -- the stage the lead had next: an empty stage is the default «مخاطب اولیه», an unknown value none (no row goes to it)
     v_target := CASE
-      WHEN v_has_live THEN coalesce(erp_crm_stage_code(v_first_live_from), v_first_live_from)
-      ELSE coalesce(erp_crm_stage_code(l.stage), 'lead')
+      WHEN btrim(coalesce(CASE WHEN v_has_live THEN v_first_live_from ELSE l.stage END, '')) = '' THEN 'lead'
+      ELSE erp_crm_stage_code(CASE WHEN v_has_live THEN v_first_live_from ELSE l.stage END)
     END;
     v_created := coalesce(l.created_at, l.updated_at, v_cutoff, now()::timestamp);
     IF v_has_live AND v_created >= v_cutoff THEN
@@ -91,7 +95,9 @@ BEGIN
     END IF;
 
     -- creation stage: the old stage of the first change read from the lead form; with no stage activity at all, the stage
-    -- the lead had next (nothing moved it); otherwise guessed as the default «مخاطب اولیه»
+    -- the lead had next (exact only when that is the default «مخاطب اولیه»: a lead may have been created in a later stage
+    -- or moved without a log row); otherwise guessed as «مخاطب اولیه». Soft-deleted activities are read on purpose: a
+    -- deleted log row still records a stage change that happened.
     v_initial := NULL;
     v_first := true;
     FOR ev IN
@@ -112,8 +118,8 @@ BEGIN
       END IF;
     END LOOP;
     IF v_first THEN
-      v_initial := v_target;
-      v_initial_source := 'backfill';
+      v_initial := coalesce(v_target, 'lead');
+      v_initial_source := CASE WHEN v_initial = 'lead' AND v_target IS NOT NULL THEN 'backfill' ELSE 'backfill_estimated' END;
     ELSIF v_initial IS NOT NULL THEN
       v_initial_source := 'backfill';
     ELSE

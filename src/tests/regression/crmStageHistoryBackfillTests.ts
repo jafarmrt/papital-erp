@@ -78,6 +78,18 @@ async function backfillCase(h: Harness, leads: number[], staff: number[]): Promi
   const e = await lead('E', 'lead', '2020-01-03', '2020-01-03');
   await orm.insert(crmLeadStageHistory).values({ leadId: e, fromStage: null, toStage: 'lead', assignedPersonnelId: seller.id, changedAt: at('2020-01-03') });
 
+  // F–K (another seller): no stage activity, no dates, an unreadable log row, an empty old stage, an unknown stage
+  const other = { assignedPersonnelId: null };
+  const f = await lead('F', 'won', '2020-01-02', '2020-01-02', { ...other, status: 'won' });
+  const g = await lead('G', 'lead', '2020-01-02', '2020-01-02', other);
+  const [hRow] = await orm.insert(crmLeads).values({ title: `BF H ${h.tag}`, stage: 'lead', createdAt: null, updatedAt: null }).returning({ id: crmLeads.id });
+  leads.push(hRow.id);
+  const i = await lead('I', 'qualified', '2020-01-02', '2020-01-08', other);
+  await activity(i, 'تغییر مرحله فروش', 'متن دست‌خورده بی مرحله', at('2020-01-05'));
+  const j = await lead('J', '', '2020-01-01', '2020-01-10', other);
+  await orm.insert(crmLeadStageHistory).values({ leadId: j, fromStage: null, toStage: 'qualified', changedAt: at('2020-01-10') });
+  const k = await lead('K', 'archived', '2020-01-02', '2020-01-02', other);
+
   await orm.execute(sql`SELECT erp_backfill_crm_lead_stage_history()`);
   const history = async (leadId: number) => (await orm.select().from(crmLeadStageHistory)
     .where(eq(crmLeadStageHistory.leadId, leadId)).orderBy(asc(crmLeadStageHistory.changedAt), asc(crmLeadStageHistory.id)))
@@ -91,6 +103,14 @@ async function backfillCase(h: Harness, leads: number[], staff: number[]): Promi
   await expectHistory('C', c, '->lead@2020-01-02:backfill_estimated lead>proposal@2020-01-06:backfill proposal>qualified@2020-01-09:backfill_estimated');
   await expectHistory('D', d, '->lead@2020-01-01:backfill lead>qualified@2020-01-02:backfill qualified>proposal@2020-01-10:live');
   await expectHistory('E', e, '->lead@2020-01-03:live');
+
+  await expectHistory('F', f, '->won@2020-01-02:backfill_estimated');
+  await expectHistory('G', g, '->lead@2020-01-02:backfill');
+  const hHistory = await history(hRow.id);
+  if (!/^->lead@\d{4}-\d{2}-\d{2}:backfill$/.test(hHistory)) wrong.push(`H (no dates): ${hHistory}`);
+  await expectHistory('I', i, '->lead@2020-01-02:backfill_estimated lead>qualified@2020-01-08:backfill_estimated');
+  await expectHistory('J', j, '->lead@2020-01-01:backfill ->qualified@2020-01-10:live');
+  await expectHistory('K', k, '->lead@2020-01-02:backfill_estimated');
 
   const before = await history(a) + await history(c) + await history(d);
   await orm.execute(sql`SELECT erp_backfill_crm_lead_stage_history()`);
