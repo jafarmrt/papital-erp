@@ -4,7 +4,7 @@ import type { MediaAssetView } from './mediaApi';
 
 /**
  * v10.0.247 (N-05 PR 3): sections of the media library («محصولات» and the sections a manager adds), the files of a custom
- * section with their search conditions in the page address, tags, and the manager's order, cover and item-picture actions.
+ * section with their search conditions in the page address, tags, and the manager's order and item-picture actions.
  */
 
 export type MediaSectionKind = 'products' | 'custom';
@@ -139,12 +139,6 @@ export async function reorderMediaAssets(input: { sectionId: number; itemId?: nu
   return Array.isArray(res?.data) ? res.data : [];
 }
 
-/** Makes a product image the cover (or not); answers all live files of that product */
-export async function setMediaAssetCover(id: number, cover: boolean): Promise<MediaAssetView[]> {
-  const res = await fetchJson<{ data: MediaAssetView[] }>(`/media/assets/${id}/cover`, { method: 'PUT', body: JSON.stringify({ cover }) });
-  return Array.isArray(res?.data) ? res.data : [];
-}
-
 export interface MediaItemImageAnswer {
   itemId: number;
   image: string;
@@ -152,7 +146,7 @@ export interface MediaItemImageAnswer {
   version: number;
 }
 
-/** Copies the light version of a product image into the item's picture; `version` is the item's version */
+/** Copies the light version of a product image into the item's picture, the product's featured image; `version` is the item's version */
 export async function copyMediaAssetToItemImage(id: number, version: number): Promise<MediaItemImageAnswer> {
   const res = await fetchJson<{ data: MediaItemImageAnswer }>(`/media/assets/${id}/item-image`, { method: 'POST', body: JSON.stringify({ version }) });
   return res.data;

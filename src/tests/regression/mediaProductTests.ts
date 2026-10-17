@@ -173,11 +173,11 @@ async function gridCase(h: Harness, wrong: string[]): Promise<string> {
   const assetId = await uploadImage(h, h.admin, withImage.id, 'side', await noisyJpeg(1200, 1000));
 
   const byCollection = await h.get(`/api/media/products?collection=${encodeURIComponent(collection)}&limit=50`);
-  const rows = (byCollection.body as { data?: Array<{ itemId: number; imageCount: number; coverAssetId: number | null }>; total?: number }).data ?? [];
+  const rows = (byCollection.body as { data?: Array<{ itemId: number; imageCount: number; fallbackAssetId: number | null }>; total?: number }).data ?? [];
   const ids = rows.map(r => r.itemId).sort((a, b) => a - b);
   if (JSON.stringify(ids) !== JSON.stringify([withImage.id, without.id].sort((a, b) => a - b))) wrong.push(`collection filter gave ${JSON.stringify(ids)}`);
   const imaged = rows.find(r => r.itemId === withImage.id);
-  if (imaged?.imageCount !== 1 || imaged.coverAssetId !== assetId) wrong.push(`counts of the imaged product ${JSON.stringify(imaged)}`);
+  if (imaged?.imageCount !== 1 || imaged.fallbackAssetId !== assetId) wrong.push(`counts of the imaged product ${JSON.stringify(imaged)}`);
 
   const byYear = await h.get(`/api/media/products?collection=${encodeURIComponent(collection)}&designYear=1398`);
   const yearIds = ((byYear.body as { data?: Array<{ itemId: number }> }).data ?? []).map(r => r.itemId);
