@@ -159,7 +159,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
   {
     // v10.1.37 (N-01، TD-1283، تصمیم ت۱۱ الف طرح کارتابل کارگاه): کارتابل گوشی پرسنل کارگاه با ورود ۷ روزه
     code: 'workshop_worker',
-    name: 'کارکن کارگاه',
+    name: 'همکار کارگاه',
     description: 'کارتابل کارگاه روی گوشی: کارهای سپرده‌شده با مهلت، تأیید دریافت حواله و ثبت تعداد پایان کار؛ ورود ۷ روز می‌ماند',
     permissions: [
       'workshop.self', 'workshop.long_session',

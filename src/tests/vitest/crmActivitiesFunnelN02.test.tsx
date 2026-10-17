@@ -108,7 +108,7 @@ describe('CRM activities, lost reason and funnel (N-02 part 2)', () => {
     expect(String(fetchJson.mock.calls[0][0])).toMatch(/^\/crm\/reports\/funnel\?fromDate=/);
     expect(screen.getByTestId('funnel-stage-lead').textContent).toContain('۵۰٪');
     expect(screen.getByText('قیمت')).toBeTruthy();
-    // v10.1.69: the earlier history is rebuilt from the activity log and its estimated entries are counted
+    // v10.1.70: the earlier history is rebuilt from the activity log and its estimated entries are counted
     expect(screen.getByTestId('funnel-backfill-note').textContent).toContain('بازسازی شده‌اند');
     expect(screen.getByTestId('funnel-backfill-note').textContent).toContain('۳ ورود این بازه تخمینی است');
   });

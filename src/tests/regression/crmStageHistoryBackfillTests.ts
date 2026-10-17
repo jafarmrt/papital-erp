@@ -7,7 +7,7 @@ type ShouldRun = (id: string, ...extra: string[]) => boolean;
 type Harness = Awaited<ReturnType<typeof import('../security/workflowTestHarness.js')['createHarness']>>;
 
 /**
- * v10.1.69 (migration 0125): the funnel report read only the stage history that starts with v10.1.18, so every lead
+ * v10.1.70 (migration 0125): the funnel report read only the stage history that starts with v10.1.18, so every lead
  * changed earlier was missing from it. erp_backfill_crm_lead_stage_history() rebuilds each lead's earlier history from
  * its activity rows (stage change, proforma, conversion, reopened proforma), marks guessed rows `backfill_estimated`,
  * skips leads created after v10.1.18, never duplicates a live row and adds nothing when it runs again; the report counts
@@ -15,7 +15,7 @@ type Harness = Awaited<ReturnType<typeof import('../security/workflowTestHarness
  */
 export async function runCrmStageHistoryBackfillTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const id = 'reg_crm_stage_history_backfill';
-  const name = 'v10.1.69: the lead stage history before v10.1.18 is rebuilt from the activity log, estimated rows marked, run again adds nothing';
+  const name = 'v10.1.70: the lead stage history before v10.1.18 is rebuilt from the activity log, estimated rows marked, run again adds nothing';
   if (!shouldRun(id, 'crm', 'funnel', 'n02')) return [];
   const { createHarness } = await import('../security/workflowTestHarness.js');
   const h = await createHarness();
