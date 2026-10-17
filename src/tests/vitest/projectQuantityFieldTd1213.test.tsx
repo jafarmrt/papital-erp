@@ -7,7 +7,7 @@ import type { ProductRow } from '../../components/project-modal/types';
 afterEach(() => { cleanup(); });
 
 const QTY_LABEL = 'تعداد / تیراژ';
-// v10.1.69 (TD-1287): number fields show Persian digits and «٬» while typing
+// v10.1.71 (TD-1288): number fields show Persian digits and «٬» while typing
 const SHOWN_QTY_20 = '۲۰';
 const SHOWN_QTY_0 = '۰';
 

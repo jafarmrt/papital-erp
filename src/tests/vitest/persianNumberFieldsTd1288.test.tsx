@@ -50,8 +50,8 @@ function NumberHost({ grouped, onValue }: { grouped?: boolean; onValue: (text: s
   );
 }
 
-describe('TD-1287 number and amount fields show Persian digits and Persian thousands separators while typing', () => {
-  it('builds the shown text from the Latin text: Persian digits, «٫» and «٬» between three-digit groups', () => {
+describe('TD-1288 number and amount fields show Persian digits and Persian thousands separators while typing', () => {
+  it('builds the shown text from the Latin text: Persian digits and the Persian decimal and thousands separators', () => {
     expect(persianNumberText('1250000', true)).toBe(SHOWN.million);
     expect(persianNumberText('1234.5', true)).toBe(SHOWN.decimal);
     expect(persianNumberText('10425', false)).toBe(SHOWN.orderId);

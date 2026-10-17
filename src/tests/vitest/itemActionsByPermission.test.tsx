@@ -26,7 +26,7 @@ vi.mock('../../hooks/useAppCurrency', () => ({ useAppCurrency: () => 'IRR', useR
 import ItemsPage from '../../pages/ItemsPage';
 import PricingPage from '../../pages/PricingPage';
 
-// v10.1.69 (TD-1287): number fields show Persian digits and «٬» while typing
+// v10.1.71 (TD-1288): number fields show Persian digits and «٬» while typing
 const SHOWN_PRICE_20 = '۲۰';
 const SHOWN_PRICE_1650000 = '۱٬۶۵۰٬۰۰۰';
 

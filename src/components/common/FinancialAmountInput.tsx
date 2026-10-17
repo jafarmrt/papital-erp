@@ -52,7 +52,7 @@ export interface FinancialAmountInputProps {
 /**
  * کامپوننت ارگونومیک ورودی مبالغ مالی (وایب‌فارسی - فاز ۳)
  * ویژگی‌ها:
- * - جداسازی خودکار ۳ رقمی با ارقام فارسی و «٬» (۱٬۰۰۰٬۰۰۰) در زمان تایپ زنده (v10.1.69، TD-1287)
+ * - جداسازی خودکار ۳ رقمی با ارقام فارسی و «٬» (۱٬۰۰۰٬۰۰۰) در زمان تایپ زنده (v10.1.71، TD-1288)
  * - کنترل دقیق مکان‌نما (Caret Tracking) و عدم پرش کرسر هنگام درج جداکننده‌ها
  * - تبدیل همگام مبلغ به حروف سلیس فارسی (پشتیبانی تا کوادریلیون)
  * - تفکیک هوشمند ریال و تومان (نمایش معادل تومانی زیر مبلغ ریالی)
@@ -125,7 +125,7 @@ export const FinancialAmountInput = React.forwardRef<HTMLInputElement, Financial
 
   const significantCount = (text: string) => significantCharsBefore(text, text.length);
 
-  // v10.1.69 (TD-1287): کادر ارقام فارسی و «٬» نشان می‌دهد؛ مکان‌نما پس از همان رقمی می‌ماند که پیش از آن بود
+  // v10.1.71 (TD-1288): کادر ارقام فارسی و «٬» نشان می‌دهد؛ مکان‌نما پس از همان رقمی می‌ماند که پیش از آن بود
   const placeCaret = (significantBefore: number) => {
     requestAnimationFrame(() => {
       const el = internalInputRef.current;

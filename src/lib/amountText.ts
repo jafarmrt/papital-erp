@@ -39,7 +39,7 @@ export function readAmountText(raw: string, options: AmountTextOptions): AmountT
 }
 
 /**
- * متن پذیرفته‌شده برای نمایش در کادر مبلغ. v10.1.69 (TD-1287): ارقام فارسی، «٬» میان دسته‌های سه‌رقمی و ممیز «٫»
+ * متن پذیرفته‌شده برای نمایش در کادر مبلغ. v10.1.71 (TD-1288): ارقام فارسی، «٬» میان دسته‌های سه‌رقمی و ممیز «٫»
  * (پیش‌تر ارقام لاتین و «,»)، با هر صفحه‌کلیدی که کاربر تایپ کند.
  */
 export function groupAmountText(text: string): string {

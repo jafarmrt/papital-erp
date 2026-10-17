@@ -11,7 +11,7 @@ interface InvoiceServiceChargeFieldProps {
 
 /**
  * v10.0.260 (TD-1136): کادر «هزینه ارسال و خدمات» فاکتور دستی؛ همان `serviceChargeAmount` که سفارش ووکامرس دارد.
- * v10.1.69 (TD-1287): کادر عدد مشترک (ارقام فارسی و «٬» هنگام تایپ)، نه کادر متنی ساده.
+ * v10.1.71 (TD-1288): کادر عدد مشترک (ارقام فارسی و «٬» هنگام تایپ)، نه کادر متنی ساده.
  */
 export const InvoiceServiceChargeField: React.FC<InvoiceServiceChargeFieldProps> = ({ value, onChange, error, currency }) => {
   const id = useId();
