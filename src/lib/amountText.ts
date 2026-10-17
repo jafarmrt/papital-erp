@@ -5,6 +5,7 @@
  */
 import { normalizeDecimalString } from './numericInput.js';
 import { persianNumberText } from './numberFieldDisplay.js';
+import { groupSeparatorError } from './decimalInputText.js';
 
 export interface AmountTextOptions {
   /** حداکثر رقم اعشار (`currencyScale`) */
@@ -22,8 +23,12 @@ const AMOUNT_TEXT = /^-?\d*(\.\d*)?$/;
 
 /** متن تایپ‌شده یا چسبانده‌شده را می‌خواند؛ ارقام فارسی و عربی، «٫» و جداکننده‌های هزارگان پذیرفته می‌شوند */
 export function readAmountText(raw: string, options: AmountTextOptions): AmountTextResult {
-  const text = normalizeDecimalString(String(raw ?? '').replace(CURRENCY_SUFFIX, ''));
+  const typed = String(raw ?? '').replace(CURRENCY_SUFFIX, '');
+  const text = normalizeDecimalString(typed);
   if (!AMOUNT_TEXT.test(text)) return { ok: false, error: 'مبلغ فقط رقم و ممیز می‌پذیرد' };
+  // v10.1.72 (TD-1288): «٬» یا «,» فقط میان دسته‌های سه‌رقمی؛ «۱۲٬۵» پیش‌تر صد و بیست و پنج خوانده می‌شد
+  const groupError = groupSeparatorError(typed);
+  if (groupError) return { ok: false, error: groupError };
   if (text.startsWith('-') && !options.allowNegative) return { ok: false, error: 'مبلغ منفی پذیرفته نیست' };
   const fraction = text.split('.')[1];
   if (fraction !== undefined && options.scale === 0) return { ok: false, error: 'این مبلغ اعشار ندارد' };

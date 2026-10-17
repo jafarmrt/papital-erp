@@ -1,8 +1,10 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type InputHTMLAttributes } from 'react';
 import {
-  PARTIAL_DECIMAL_MESSAGE, decimalDisplayText, decimalTextMatches, decimalTextOf, readDecimalInputText, withoutGroupSeparators
+  PARTIAL_DECIMAL_MESSAGE, decimalDisplayText, decimalTextIsRebuilt, decimalTextMatches, decimalTextOf, readDecimalInputText
 } from '../../lib/decimalInputText';
-import { caretAfterSignificant, significantCharsBefore, stepOverGroupSeparator } from '../../lib/numberFieldDisplay';
+import {
+  caretAfterSignificant, significantCharsBefore, stepOverGroupSeparator, withoutFieldSeparators
+} from '../../lib/numberFieldDisplay';
 
 type NativeInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'defaultValue' | 'onChange' | 'inputMode' | 'min' | 'max' | 'step'>;
 
@@ -88,8 +90,10 @@ export function DecimalInput({ value, onValueChange, min, max, step, grouped = t
         }}
         onChange={e => {
           const typed = e.target.value;
-          pendingCaret.current = significantCharsBefore(typed, e.target.selectionStart ?? typed.length);
-          const raw = grouped ? withoutGroupSeparators(typed) : typed;
+          const caret = e.target.selectionStart ?? typed.length;
+          pendingCaret.current = significantCharsBefore(typed, caret);
+          // فقط «٬»هایی که خود کادر گذاشته بود برداشته می‌شوند؛ «٬» تایپ‌شده می‌ماند و خطاست («۱۲٬۵» صد و بیست و پنج نمی‌شود)
+          const raw = grouped && decimalTextIsRebuilt(text) ? withoutFieldSeparators(shown, typed, caret) : typed;
           setText(raw);
           ownChange.current = true;
           const read = readDecimalInputText(raw, { min, max, step });

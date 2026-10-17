@@ -329,8 +329,14 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     setDocItems(prev => prev.map(d => ({ ...d, location: undefined })));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    // v10.1.72 (TD-1288): کادر عدد نامعتبر (هزینه ارسال «abc»، نرخ مالیات «۹٬۵») مقدار خالی می‌فرستد که صفر خوانده می‌شود؛
+    // مرورگر با خطای همان کادر جلوی ارسال را می‌گیرد و فرم هم دوباره می‌سنجد تا چیزی با آن صفر ثبت نشود
+    if (!e.currentTarget.checkValidity()) {
+      e.currentTarget.reportValidity();
+      return;
+    }
     if (!buyerName || !buyerName.trim()) {
       toast.error('لطفاً خریدار / طرف حساب فاکتور را حتماً از فهرست طرفین حساب انتخاب کنید.');
       return;

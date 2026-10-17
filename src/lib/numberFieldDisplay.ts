@@ -23,8 +23,40 @@ export function persianDigitsOf(text: string): string {
 export function persianNumberText(text: string, grouped: boolean): string {
   const sign = text.startsWith('-') ? '-' : '';
   const [intPart, fraction] = text.slice(sign.length).split('.');
-  const integer = grouped ? intPart.replace(/\B(?=(\d{3})+(?!\d))/g, PERSIAN_GROUP_SEPARATOR) : intPart;
+  // صفرهای آغاز عدد («۰۰۱۲۵۰») دسته نمی‌شوند؛ فقط بقیهٔ رقم‌ها
+  const zeros = /^0+(?=\d)/.exec(intPart)?.[0] ?? '';
+  const rest = intPart.slice(zeros.length);
+  const integer = grouped ? zeros + rest.replace(/\B(?=(\d{3})+(?!\d))/g, PERSIAN_GROUP_SEPARATOR) : intPart;
   return persianDigitsOf(sign + integer + (fraction !== undefined ? PERSIAN_DECIMAL_SEPARATOR + fraction : ''));
+}
+
+function commonPrefixLength(a: string, b: string): number {
+  let n = 0;
+  while (n < a.length && n < b.length && a[n] === b[n]) n++;
+  return n;
+}
+
+function commonSuffixLength(a: string, b: string): number {
+  let n = 0;
+  while (n < a.length && n < b.length && a[a.length - 1 - n] === b[b.length - 1 - n]) n++;
+  return n;
+}
+
+const withoutSeparators = (text: string) => text.split(PERSIAN_GROUP_SEPARATOR).join('');
+
+/**
+ * متن تازهٔ کادری که عدد را با «٬» خودش نشان می‌دهد، بی «٬»هایی که خود کادر گذاشته بود. `shown` متنی است که کادر پیش از این
+ * ویرایش نشان می‌داد و `caret` جای مکان‌نما پس از آن (پایان متن درج‌شده). «٬» در بخشی از متن که ویرایش دست نزده، پیش و پس از
+ * متن درج‌شده، از خود کادر است و برداشته می‌شود؛ «٬» در متن درج‌شده را کاربر زده (Shift+2، کنار «٫») یا چسبانده و می‌ماند، تا
+ * خوانندهٔ کادر آن را جز میان دسته‌های سه‌رقمی نپذیرد: «۱۲٬۵» هرگز صد و بیست و پنج نمی‌شود.
+ */
+export function withoutFieldSeparators(shown: string, typed: string, caret: number): string {
+  const end = Math.max(0, Math.min(caret, typed.length));
+  const keptAfter = Math.min(typed.length - end, commonSuffixLength(shown, typed));
+  const keptBefore = Math.min(commonPrefixLength(shown, typed), Math.min(shown.length, typed.length) - keptAfter);
+  return withoutSeparators(typed.slice(0, keptBefore))
+    + typed.slice(keptBefore, typed.length - keptAfter)
+    + withoutSeparators(typed.slice(typed.length - keptAfter));
 }
 
 /** رقم (هر خطی)، ممیز («.» «٫» «/») و منفی؛ جداکننده‌ها، فاصله و نویسه‌های نامرئی معنادار نیستند */

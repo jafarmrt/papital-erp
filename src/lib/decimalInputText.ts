@@ -6,7 +6,7 @@
  */
 import { normalizeDecimalString, toLatinDigits } from './numericInput.js';
 import { formatPersianNumber } from '../utils/persianNumber.js';
-import { PERSIAN_GROUP_SEPARATOR, persianDigitsOf, persianNumberText } from './numberFieldDisplay.js';
+import { persianDigitsOf, persianNumberText } from './numberFieldDisplay.js';
 
 export interface DecimalInputRules {
   /** کمترین مقدار؛ بدون آن یا با کمینه منفی، عدد منفی پذیرفته است */
@@ -91,9 +91,19 @@ export function decimalDisplayText(text: string, grouped: boolean): string {
   return persianNumberText(canonical.text, grouped);
 }
 
-/** متن تازهٔ کادر گروه‌بندی‌شده بی «٬»هایی که خود کادر گذاشته است، تا پاک‌کردن یک رقم دسته‌ها را نامعتبر نکند */
-export function withoutGroupSeparators(text: string): string {
-  return text.split(PERSIAN_GROUP_SEPARATOR).join('');
+/**
+ * آیا کادر `text` را از نو ساخته نشان می‌دهد (پس «٬»های نمایش از خود کادرند)؟ متن نامعتبر همان‌طور که تایپ شده دیده می‌شود و
+ * هر «٬» آن را کاربر زده است.
+ */
+export function decimalTextIsRebuilt(text: string): boolean {
+  const canonical = canonicalText(text);
+  return !('error' in canonical) && DECIMAL_TEXT.test(canonical.text);
+}
+
+/** خطای «٬» یا «,» که میان دسته‌های سه‌رقمی نیست؛ همان قاعدهٔ کادر عدد برای کادر مبلغ */
+export function groupSeparatorError(raw: string): string | undefined {
+  const canonical = canonicalText(raw);
+  return 'error' in canonical ? canonical.error : undefined;
 }
 
 /** پیام مرورگر برای متن نیمه‌کاره هنگام ارسال فرم */

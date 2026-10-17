@@ -8,7 +8,9 @@ import {
 import { copyToClipboard } from '../../utils/clipboard';
 import { currencyScale } from '../../lib/currencyScale';
 import { amountTextOf, groupAmountText, readAmountText } from '../../lib/amountText';
-import { caretAfterSignificant, significantCharsBefore, stepOverGroupSeparator } from '../../lib/numberFieldDisplay';
+import {
+  caretAfterSignificant, significantCharsBefore, stepOverGroupSeparator, withoutFieldSeparators
+} from '../../lib/numberFieldDisplay';
 
 export interface FinancialAmountInputProps {
   /** مقدار عددی مبلغ به واحد پولی مشخص‌شده (مثلاً ریال یا دلار) */
@@ -140,7 +142,8 @@ export const FinancialAmountInput = React.forwardRef<HTMLInputElement, Financial
     const cursor = input.selectionStart ?? input.value.length;
     // v9.0.244 (TD-666): ورودی نامعتبر (حرف، نویسه ناآشنا، اعشار بیش از ارز) مقدار قبلی را نگه می‌دارد و پیام می‌دهد؛
     // جداکننده‌های فارسی «٬» «٫» «،»، فاصله و برچسب ارزی که از خود برنامه کپی شده پذیرفته می‌شوند.
-    const result = readAmountText(input.value, { scale, allowNegative });
+    // v10.1.72 (TD-1288): «٬»های نمایش از خود کادرند و برداشته می‌شوند؛ «٬» تایپ‌شده جز میان دسته‌های سه‌رقمی خطاست
+    const result = readAmountText(withoutFieldSeparators(displayFormatted, input.value, cursor), { scale, allowNegative });
     if (!result.ok) {
       setInputError(result.error);
       placeCaret(Math.max(0, significantCount(input.value.slice(0, cursor)) - 1));
