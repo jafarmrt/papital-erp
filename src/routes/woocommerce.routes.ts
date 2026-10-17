@@ -16,6 +16,7 @@ import { shopSellableStocks } from '../services/woocommerce/shopWarehouse.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 import { assertSafeExternalUrl } from '../lib/ssrfGuard.js';
+import { followShopRedirects } from '../lib/woocommerce/wcRedirect.js';
 import { ValidationError } from '../errors/customErrors.js';
 import { resolveWcTestCredentials } from '../lib/woocommerce/wcConnectionTest.js';
 import { readWcConnectionSettings } from '../services/woocommerce/wcConnectionSettings.js';
@@ -85,33 +86,37 @@ async function makeWcRequest(
     'Content-Type': 'application/json'
   };
 
-  const queryParams = wcAuthQueryParams(fullUrl, params, key, secret);
-
   try {
-    const response = await axios({
-      method,
-      url: fullUrl,
-      data,
-      params: queryParams,
-      headers,
-      httpsAgent,
-      timeout: 15000,
-      // OBS-R2-82: a redirect is never followed, so the keys never reach an address the guard did not check
-      maxRedirects: 0
-    });
-    return response.data;
+    // OBS-R2-82: redirects are followed by hand, at most WC_MAX_REDIRECTS hops, only on the same site and each through the
+    // SSRF guard, so the keys never reach an address the guard did not check; the query (and on plain http the keys) is
+    // built again for each address
+    return await followShopRedirects(
+      fullUrl,
+      async (url) => {
+        const response = await axios({
+          method,
+          url,
+          data,
+          params: wcAuthQueryParams(url, params, key, secret),
+          headers,
+          httpsAgent,
+          timeout: 15000,
+          maxRedirects: 0,
+          validateStatus: (status) => status >= 200 && status < 400
+        });
+        const location = response.headers?.location;
+        return { status: response.status, location: location ? String(location) : undefined, data: response.data };
+      },
+      (url) => assertSafeExternalUrl(url, { allowLocalEcho: false })
+    );
   } catch (error) {
+    if (error instanceof ValidationError) throw error;
     if (axios.isAxiosError(error) && error.response) {
       const status = error.response.status;
       const errorData = error.response.data as { message?: string } | undefined;
       const wcMsg = errorData?.message || '';
 
-      if (status >= 300 && status < 400) {
-        throw new Error(
-          `سایت فروشگاه به نشانی دیگری هدایت می‌کند (${status})${error.response.headers?.location ? `: ${String(error.response.headers.location)}` : ''}. ` +
-          `برای امنیت کلیدها، نشانی نهایی فروشگاه (مثلاً با https یا www) را در تنظیمات ووکامرس بگذارید.`
-        );
-      } else if (status === 401 || status === 403) {
+      if (status === 401 || status === 403) {
         throw new Error(
           `خطای عدم دسترسی (${status}): ${wcMsg || 'کلید نامعتبر است یا فایروال هاست/کلودفلر مانع شده است.'} \n` +
           `نکته: در صورت استفاده از کلودفلر یا آروان‌کلود، کد $_SERVER['HTTPS']='on'; را در بالای wp-config.php قرار دهید ` +
@@ -400,10 +405,7 @@ router.post('/test-connection', authorizePermission('woocommerce.manage'), valid
     if (!resolved.ok) throw new ValidationError(resolved.message, undefined, resolved.code);
     const { url, consumerKey, consumerSecret } = resolved.credentials;
 
-    // V3.0.7 (TD-057): مسیر test-connection یک URL کاربر-محور را fetch می‌کند و
-    // باید از گارد SSRF عبور کند (قبلاً بدون گارد بود). echo محلی مجاز نیست.
-    await assertSafeExternalUrl(url, { allowLocalEcho: false });
-
+    // V3.0.7 (TD-057): the shop address passes the SSRF guard inside makeWcRequest (OBS-R2-82), without the local echo
     const data = await makeWcRequest('GET', 'products', url, consumerKey, consumerSecret, null, { per_page: 1, _t: Date.now() });
 
     if (Array.isArray(data)) {

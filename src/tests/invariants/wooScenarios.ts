@@ -334,7 +334,11 @@ async function mockWooStore(productIdBySku: Map<string, number>): Promise<{ url:
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', () => resolve()));
   const address = server.address();
   const port = typeof address === 'object' && address ? address.port : 0;
-  return { url: `http://127.0.0.1:${port}`, pushed, close: () => new Promise<void>(resolve => server.close(() => resolve())) };
+  const url = `http://127.0.0.1:${port}`;
+  // OBS-R2-82: every shop request passes the SSRF guard; only this stand-in's exact origin is let through, in tests only
+  const { allowTestLoopbackOrigin } = await import('../../lib/ssrfGuard.js');
+  const disallow = allowTestLoopbackOrigin(url);
+  return { url, pushed, close: () => new Promise<void>(resolve => { disallow(); server.close(() => resolve()); }) };
 }
 
 /**

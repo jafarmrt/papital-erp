@@ -7,6 +7,18 @@ const dnsResolve4 = promisify(dns.resolve4);
 const dnsResolve6 = promisify(dns.resolve6);
 const dnsLookup = promisify(dns.lookup);
 
+/** OBS-R2-81: a DNS answer the guard waits for at most this long; a name that does not answer in time is not found. */
+export const DNS_LOOKUP_TIMEOUT_MS = 3000;
+
+/** Rejects when `lookup` has not settled within `ms`, so a slow resolver never holds the request open. */
+export function withDnsTimeout<T>(lookup: Promise<T>, ms: number = DNS_LOOKUP_TIMEOUT_MS): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('DNS lookup timed out')), ms);
+  });
+  return Promise.race([lookup, timeout]).finally(() => clearTimeout(timer));
+}
+
 /**
  * Standard disallowed ports commonly targeted in SSRF attacks against internal databases and infrastructure.
  */
@@ -262,6 +274,25 @@ export function isLocalEchoTarget(parsed: URL, env: NodeJS.ProcessEnv = process.
   return parsed.pathname === LOCAL_ECHO_PATH;
 }
 
+const testLoopbackOrigins = new Set<string>();
+
+/**
+ * OBS-R2-82: a test registers the in-process stand-in of a partner site (a fake WooCommerce shop on 127.0.0.1) for its
+ * exact origin (scheme, host and port) and removes it with the returned function. Only while `NODE_ENV` is test and only
+ * for a loopback host; any other loopback port stays refused.
+ */
+export function allowTestLoopbackOrigin(origin: string, env: NodeJS.ProcessEnv = process.env): () => void {
+  if (env.NODE_ENV !== 'test') throw new Error('allowTestLoopbackOrigin is for tests only');
+  const key = new URL(origin).origin;
+  testLoopbackOrigins.add(key);
+  return () => { testLoopbackOrigins.delete(key); };
+}
+
+export function isTestLoopbackOrigin(parsed: URL, env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env.NODE_ENV !== 'test' || !testLoopbackOrigins.has(parsed.origin)) return false;
+  return LOOPBACK_HOSTS.has(parsed.hostname.toLowerCase().replace(/^\[|\]$/g, ''));
+}
+
 /** v10.0.253 (OBS-R2-05): the code of every refusal of `assertSafeExternalUrl` (422, Persian message for the user). */
 export const UNSAFE_TARGET_URL_CODE = 'UNSAFE_TARGET_URL';
 
@@ -298,6 +329,7 @@ export async function assertSafeExternalUrl(url: string, options?: { allowLocalE
   if (options?.allowLocalEcho && isLocalEchoTarget(parsed)) {
     return;
   }
+  if (isTestLoopbackOrigin(parsed)) return;
 
   // 3. Direct hostname check for raw IP or reserved names (e.g. 169.254.169.254, 127.0.0.1, [::1], [::ffff:169.254.169.254], localhost)
   if (isPrivateOrReservedIp(cleanHostname)) {
@@ -308,12 +340,12 @@ export async function assertSafeExternalUrl(url: string, options?: { allowLocalE
   // checked; before, an AAAA record pointing inside was never read when the name also had an A record
   if (net.isIP(cleanHostname) !== 0) return;
   const addresses: string[] = [];
-  const [v4, v6] = await Promise.allSettled([dnsResolve4(cleanHostname), dnsResolve6(cleanHostname)]);
+  const [v4, v6] = await Promise.allSettled([withDnsTimeout(dnsResolve4(cleanHostname)), withDnsTimeout(dnsResolve6(cleanHostname))]);
   if (v4.status === 'fulfilled') addresses.push(...v4.value);
   if (v6.status === 'fulfilled') addresses.push(...v6.value);
   if (addresses.length === 0) {
     // the system resolver (hosts file, mDNS) when DNS answered nothing
-    const [lookup] = await Promise.allSettled([dnsLookup(cleanHostname, { all: true })]);
+    const [lookup] = await Promise.allSettled([withDnsTimeout(dnsLookup(cleanHostname, { all: true }))]);
     if (lookup.status === 'fulfilled' && Array.isArray(lookup.value)) addresses.push(...lookup.value.map(r => r.address));
   }
   if (addresses.length === 0) {
