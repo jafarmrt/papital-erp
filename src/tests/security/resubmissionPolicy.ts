@@ -11,6 +11,8 @@ import type { RouteGuardRow } from '../../lib/routeGuardTable.js';
 export const MONEY_STOCK_ROUTE_PREFIXES = [
   '/api/accounting/', '/api/documents', '/api/inventory/', '/api/items', '/api/piecework/', '/api/procurement/',
   '/api/projects', '/api/transfers', '/api/warehouses', '/api/woocommerce/', '/api/workshop/',
+  // a raw material request becomes an item on approval (review of #308)
+  '/api/pending-materials',
 ];
 
 export const RESUBMISSION_EXEMPT_ROUTES = new Map<string, string>([
