@@ -169,19 +169,18 @@ export interface ChequeEventPayload {
  * OBS-R2-13 (ت۴۰ بند ۱۱): a payslip approved (`PayrollApproved`) or paid in full or in part (`PayrollPaid`, one event per
  * payment), recorded in the transaction of the approval or the payment; amounts are in rials.
  */
+/**
+ * v10.1.62 (OBS-R2-13): a payslip event carries no name and no amount: every «*» webhook, the event screens and the audit
+ * log read it, while payslip amounts are for payroll readers only; a subscriber reads the payslip through the API with
+ * its own access.
+ */
 export interface PayrollEventPayload {
   payrollId: number;
   payrollNumber: string;
   personnelId: number;
-  personnelName: string;
   startDate: string;
   endDate: string;
-  netPayable: number;
-  paidAmount: number;
-  remainingAmount: number;
   status: string;
-  currency: string;
-  paymentAmount?: number;
   transactionId?: number;
   isFullyPaid?: boolean;
 }

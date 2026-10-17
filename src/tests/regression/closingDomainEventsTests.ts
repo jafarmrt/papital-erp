@@ -77,7 +77,7 @@ export async function runClosingDomainEventsTests(shouldRun: ShouldRun): Promise
 
   const payrollId = 'reg_payroll_approved_paid_events_obs_r2_13';
   if (shouldRun(payrollId, 'obs-r2-13', 'obs-r1-64', 'payroll', 'event', 'outbox')) {
-    await runCase(results, payrollId, 'v10.1.62: approving a payslip writes PayrollApproved and each payment PayrollPaid with its amount and whether it settled the payslip (OBS-R2-13)', async () => {
+    await runCase(results, payrollId, 'v10.1.62: approving a payslip writes PayrollApproved and each payment PayrollPaid with its treasury row and whether it settled the payslip, never a name or an amount (OBS-R2-13)', async () => {
       const problems: string[] = [];
       const workerId = await newWorker(`ERP-TEST-MARKER events ${tagOf()}`);
       await addLog(workerId, await newTask(), '2026-04-05', 1_000_000);
@@ -90,24 +90,28 @@ export async function runClosingDomainEventsTests(shouldRun: ShouldRun): Promise
       const approved = (await eventsOf('Payroll', id)).filter(e => e.event_type === 'PayrollApproved');
       if (approved.length !== 1) problems.push(`expected 1 PayrollApproved, got ${approved.length}`);
       if (approved[0] && (approved[0].payload.status !== 'approved' || approved[0].payload.personnelId !== workerId)) problems.push(`approved payload ${JSON.stringify(approved[0].payload).slice(0, 200)}`);
+      // no name and no amount in a payslip event (review of #306): they reach every «*» webhook and the event screens
+      const leaks = (payload: Record<string, unknown>) => ['personnelName', 'netPayable', 'paidAmount', 'remainingAmount', 'paymentAmount', 'currency']
+        .filter(key => key in payload);
 
       const bankId = await fundedBank();
       const api = await adminClient();
       const net = Number((await pool.query<{ n: string }>('SELECT net_payable::text AS n FROM piecework_payrolls WHERE id = $1', [id])).rows[0]?.n ?? 0);
-      if (approved[0] && Number(approved[0].payload.netPayable) !== net) problems.push(`approved netPayable ${String(approved[0].payload.netPayable)} != ${net}`);
+      if (approved[0] && leaks(approved[0].payload).length > 0) problems.push(`PayrollApproved carries ${leaks(approved[0].payload).join(', ')}`);
       const first = await api.post(`/api/piecework/payrolls/${id}/register-payment`, { bankAccountId: bankId, method: 'bank_transfer', amount: 400_000 });
       const second = await api.post(`/api/piecework/payrolls/${id}/register-payment`, { bankAccountId: bankId, method: 'bank_transfer', amount: net - 400_000 });
       if (first.status !== 200 || second.status !== 200) throw new Error(`setup: payments ${first.status} ${second.status}`);
       const paid = (await eventsOf('Payroll', id)).filter(e => e.event_type === 'PayrollPaid');
       if (paid.length !== 2) problems.push(`expected 2 PayrollPaid, got ${paid.length}`);
-      if (paid[0] && (Number(paid[0].payload.paymentAmount) !== 400_000 || paid[0].payload.isFullyPaid !== false || paid[0].payload.status !== 'partially_paid')) {
+      for (const event of paid) if (leaks(event.payload).length > 0) problems.push(`PayrollPaid carries ${leaks(event.payload).join(', ')}`);
+      if (paid[0] && (!Number(paid[0].payload.transactionId) || paid[0].payload.isFullyPaid !== false || paid[0].payload.status !== 'partially_paid')) {
         problems.push(`first payment payload ${JSON.stringify(paid[0].payload).slice(0, 200)}`);
       }
-      if (paid[1] && (paid[1].payload.isFullyPaid !== true || Number(paid[1].payload.remainingAmount) !== 0 || paid[1].payload.status !== 'paid')) {
+      if (paid[1] && (paid[1].payload.isFullyPaid !== true || paid[1].payload.status !== 'paid')) {
         problems.push(`second payment payload ${JSON.stringify(paid[1].payload).slice(0, 200)}`);
       }
       if (problems.length) throw new Error(problems.join(' | '));
-      return 'PayrollApproved once, PayrollPaid per payment with its amount and settlement';
+      return 'PayrollApproved once, PayrollPaid per payment with its settlement, no name or amount';
     });
   }
 

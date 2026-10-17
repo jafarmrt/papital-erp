@@ -1,7 +1,5 @@
-import { eq } from 'drizzle-orm';
 import type { DbExecutor, DbTransaction } from '../../db/drizzle.js';
-import { personnel, pieceworkPayrolls } from '../../db/schema.js';
-import { fin } from '../../lib/financialDecimal.js';
+import type { pieceworkPayrolls } from '../../db/schema.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType, type PayrollEventPayload } from '../events/domainEvents.js';
 import { OutboxService } from '../events/outboxService.js';
@@ -19,24 +17,17 @@ export async function recordPayrollEvent(
   kind: 'approved' | 'paid',
   payroll: PayrollRow,
   actor: { userId?: number; username?: string },
-  payment?: { amount: number; transactionId: number; isFullyPaid: boolean },
+  payment?: { transactionId: number; isFullyPaid: boolean },
 ): Promise<void> {
-  const [pers] = await tx.select({ fullName: personnel.fullName }).from(personnel).where(eq(personnel.id, payroll.personnelId));
-  const netPayable = fin(payroll.netPayable ?? 0);
-  const paidAmount = fin(payroll.paidAmount ?? 0);
+  // no personnel name and no amount (payslip amounts are for payroll readers only, an event reaches every «*» webhook)
   const payload: PayrollEventPayload = {
     payrollId: payroll.id,
     payrollNumber: payroll.payrollNumber,
     personnelId: payroll.personnelId,
-    personnelName: pers?.fullName ?? '',
     startDate: payroll.startDate,
     endDate: payroll.endDate,
-    netPayable: netPayable.toNumber(),
-    paidAmount: paidAmount.toNumber(),
-    remainingAmount: netPayable.subtract(paidAmount).toNumber(),
     status: payroll.status ?? '',
-    currency: 'IRR',
-    ...(payment ? { paymentAmount: payment.amount, transactionId: payment.transactionId, isFullyPaid: payment.isFullyPaid } : {}),
+    ...(payment ? { transactionId: payment.transactionId, isFullyPaid: payment.isFullyPaid } : {}),
   };
   const payrollEventType = kind === 'approved' ? DomainEventType.PAYROLL_APPROVED : DomainEventType.PAYROLL_PAID;
   await OutboxService.saveToOutbox(tx, domainEventBus.createEvent<PayrollEventPayload>(

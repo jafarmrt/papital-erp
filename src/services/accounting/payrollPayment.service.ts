@@ -357,7 +357,7 @@ export class PayrollPaymentService {
       }, { req: input.req, userId: input.userId, username: input.username });
       // OBS-R2-13 (ت۴۰ بند ۱۱): رویداد «پرداخت فیش حقوق» برای قانون‌ها و وب‌هوک‌ها، یکی برای هر پرداخت
       await recordPayrollEvent(tx, 'paid', updatedPayroll, { userId: input.userId, username: input.username },
-        { amount: payAmount.toNumber(), transactionId: tr.id, isFullyPaid });
+        { transactionId: tr.id, isFullyPaid });
 
       return {
         payroll: updatedPayroll,
