@@ -1,4 +1,3 @@
-import React from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, renderHook, screen } from '@testing-library/react';
 import { TreasuryHealthBanner } from '../../components/accounting/treasury/TreasuryHealthBanner';

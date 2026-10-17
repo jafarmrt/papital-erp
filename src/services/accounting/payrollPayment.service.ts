@@ -22,7 +22,7 @@ import { DomainEventType } from '../events/domainEvents.js';
 import { OutboxService } from '../events/outboxService.js';
 import { payrollTreasuryEventPayload, recordPayrollEvent } from '../piecework/payrollEvents.js';
 import { fin, type DecimalValue } from '../../lib/financialDecimal.js';
-import { PAYROLL_CURRENCY, payrollAmountText } from '../../lib/payroll/payrollCurrency.js';
+import { isPayrollBankCurrency, PAYROLL_CURRENCY, payrollAmountText } from '../../lib/payroll/payrollCurrency.js';
 import { money } from '../../lib/money.js';
 import { isoToJalaliDate } from '../../utils.js';
 import { resolveTreasuryWriteDate } from './treasury/treasuryDate.js';
@@ -138,7 +138,7 @@ export class PayrollPaymentService {
         throw new ValidationError('برای این حساب بانکی/صندوق، حساب معین در چارت حساب‌ها تعریف نشده است؛ ابتدا آن را در بخش کدینگ متصل کنید.');
       }
 
-      if (bank.currency && bank.currency !== 'IRR') {
+      if (!isPayrollBankCurrency(bank.currency)) {
         throw new ValidationError(`پرداخت حقوق فقط با حساب ریالی امکان‌پذیر است (حساب انتخاب‌شده «${bank.title}» ارز ${bank.currency} دارد).`);
       }
 
@@ -193,8 +193,8 @@ export class PayrollPaymentService {
         .where(eq(personnel.id, payroll.personnelId));
 
       // ۴. محاسبات مبالغ با دقت اعشاری و اعتبارسنجی
-      const netPayable = fin(Number(payroll.netPayable) || 0);
-      const alreadyPaid = fin(Number(payroll.paidAmount) || 0);
+      const netPayable = fin(payroll.netPayable ?? 0);
+      const alreadyPaid = fin(payroll.paidAmount ?? 0);
       const remainingAmount = netPayable.subtract(alreadyPaid).round(4);
 
       if (remainingAmount.lessThanOrEqual(0)) {
