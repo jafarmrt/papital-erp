@@ -72,7 +72,6 @@ const CRITICAL_SCENARIO_TITLES: Record<CriticalScenarioId, string> = {
   inventory_negative_stock_policy: 'Negative Stock Policy Enforcement & Violations',
   project_bom_allocation_traceability: 'Project BOM Allocations & Source Transaction Traceability',
   payroll_voucher_and_crm_accounting_read_model: 'Payroll Voucher Sync & CRM Customer Accounting Read Model',
-  project_bom_receipt_allocation: 'Direct Project BOM Receipt Allocation & Traceability',
   server_backed_form_drafts: 'Server-Backed Form Drafts Lifecycle & Persistence',
   structured_error_contract: 'Structured API Error Contract (code, message, details)',
   e2e_purchase_receipt_inventory_accounting: 'E2E Journey 1: Purchase -> Receipt -> Inventory WAC -> Accounting',

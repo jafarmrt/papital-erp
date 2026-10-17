@@ -105,15 +105,6 @@ export const projectAllocateSchema = z.object({
   })
 });
 
-export const bomReceiptAllocationItemSchema = z.object({
-  itemId: z.coerce.number().int().positive('شناسه کالا باید عدد مثبت باشد'),
-  quantity: z.coerce.number().positive('مقدار تخصیص باید بزرگتر از صفر باشد'),
-  receiptTransactionId: z.coerce.number().int().positive().optional(),
-  documentId: z.coerce.number().int().positive().optional(),
-  location: z.string().optional(),
-  notes: z.string().optional()
-});
-
 export const releaseAllocationSchema = z.object({
   params: z.object({
     id: numericIdString

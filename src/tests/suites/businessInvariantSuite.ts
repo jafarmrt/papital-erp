@@ -30,7 +30,7 @@ import {
   probeTreasuryChequeMethodWithoutCheque,
 } from '../invariants/treasuryScenarios.js';
 import { checkAdvanceDeductionWithinBalance, checkFixedSalaryProratedByMonth, checkPayrollPaymentVoidable, checkPayrollStatusKeepsLifecycle, probeAdvanceDeductionBeyondBalance, probeFixedSalaryOneMonthPerPayroll, probePayrollPaymentNotVoidable, probePayrollStatusDoubleCountsLogs } from '../invariants/payrollScenarios.js';
-import { checkBomAllocationPostsVoucher, checkBomReceiptAllocationNeedsReceipt, checkBomReleaseAtOwnCost, checkProjectDeliveryPostsVoucher, checkRequisitionReceiptSumsLines, probeBomAllocationWithoutVoucher, probeBomReceiptAllocationFromNothing, probeBomReleaseAtCurrentWac, probeProjectDeliveryWithoutVoucher, probeRequisitionReceiptCountsFirstLine, probeRequisitionReconvertedOverOrdered } from '../invariants/projectScenarios.js';
+import { checkBomAllocationPostsVoucher, checkBomReleaseAtOwnCost, checkProjectDeliveryPostsVoucher, checkRequisitionReceiptSumsLines, probeBomAllocationWithoutVoucher, probeBomReleaseAtCurrentWac, probeProjectDeliveryWithoutVoucher, probeRequisitionReceiptCountsFirstLine, probeRequisitionReconvertedOverOrdered } from '../invariants/projectScenarios.js';
 import { DATE_BOUNDARY_CHECKS } from '../invariants/dateBoundaryScenarios.js';
 import { DOMAIN_CHECKS } from '../invariants/domainChecks.js';
 import { checkBackdatedStockMovement, checkRebuildMatchesLiveEngine, checkReplayStartsAtZeroWac, checkRunningKardexShowsVoided, checkVoidConsumedReceiptRefused, probeRunningKardexAfterVoid, probeVoidConsumedReceipt } from '../invariants/stockDateScenarios.js';
@@ -309,9 +309,6 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
     // ── v8.0.33: TD-288 ──
     ['inv_td_288_bom_release_at_own_cost', 'v8.0.33: releasing a material allocation returns at the Kardex outflow cost of that same allocation and creates no value from nothing; an allocation of an older receipt adds no stock (TD-288)',
       () => checkBomReleaseAtOwnCost(wh), 'returned at 100,000, weighted average cost 150,000 and warehouse value 3,000,000; releasing the older receipt allocation kept the stock at 20'],
-    // ── v8.0.32: TD-287 ──
-    ['inv_td_287_bom_receipt_allocation_needs_receipt', 'v8.0.32: a "direct BOM receipt" allocation without a registered receipt is refused; an allocation from a registered receipt moves the materials out of the warehouse and its release restores exactly that stock (TD-287, option A)',
-      () => checkBomReceiptAllocationNeedsReceipt(wh), 'without a receipt refused and no stock created; the allocation from the receipt moved 4 units out and the release brought the same 4 back'],
     // ── v8.0.31: TD-283 ──
     ['inv_td_283_payroll_payment_voidable', 'v8.0.31: a payslip payment is voidable; bank balance, payment voucher, paid amount and payslip status are restored, and a payslip without payments is deleted (TD-283, option A)',
       () => checkPayrollPaymentVoidable(), 'two payments voided and everything restored; repeated void refused; payslip deleted and wages payable became zero'],
@@ -459,7 +456,6 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
     if (await probePayrollPaymentNotVoidable()) observed.add('FOCUSED:payroll-payment-not-voidable');
     if (await probeFixedSalaryOneMonthPerPayroll()) observed.add('FOCUSED:fixed-salary-one-month-per-payroll');
     // حوزه E — خرید، پروژه، BOM و تولید (v8.0.32)
-    if (await probeBomReceiptAllocationFromNothing(wh)) observed.add('FOCUSED:bom-receipt-allocation-from-nothing');
     if (await probeProjectDeliveryWithoutVoucher(wh)) observed.add('FOCUSED:project-delivery-without-voucher');
     if (await probeBomAllocationWithoutVoucher(wh)) observed.add('FOCUSED:bom-allocation-without-voucher');
     if (await probeBomReleaseAtCurrentWac(wh)) observed.add('FOCUSED:bom-release-at-current-wac');

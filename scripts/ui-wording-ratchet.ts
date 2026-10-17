@@ -28,9 +28,10 @@ const LETTER = '[\\u0621-\\u064A\\u067E\\u0686\\u0698\\u06A9\\u06AF\\u06CC]';
  * «سیستم» (and «سیستمی»), «کاتالوگ», «فیلتر» (and «فیلترها»), «دوبل»; a longer word that only starts with one is not matched.
  * v10.1.26 (TD-1275, Vibe Farsi audit item 4): also «جستجو» (written «جست‌وجو»), and the formal «نمایید» / «می‌باشد» /
  * «نمی‌باشد» (written «کنید» / «است» / «نیست»).
+ * v10.1.63 (OBS-PR-16, decision ت۴۰ item 16): also «کانبان» everywhere (written «نمای ستونی» or «تخته»).
  */
 export const FORBIDDEN = new RegExp(
-  `(?<!${LETTER})((?:سیستم|کاتالوگ|فیلتر|دوبل|جستجو)(?:‌?(?:هایی|های|ها)|ی)?|نمایید|ن?می‌باشد)(?!${LETTER})`,
+  `(?<!${LETTER})((?:سیستم|کاتالوگ|فیلتر|دوبل|جستجو|کانبان)(?:‌?(?:هایی|های|ها)|ی)?|نمایید|ن?می‌باشد)(?!${LETTER})`,
 );
 
 export type Baseline = Record<string, number>;

@@ -3,6 +3,7 @@ import { orm, type DbExecutor } from '../../../db/drizzle.js';
 import { accounts, bankAccounts, cheques, treasuryTransactions, journalVouchers, journalVoucherItems } from '../../../db/schema.js';
 import { eq, asc, and, or, ne, inArray, sql } from 'drizzle-orm';
 import type { BankAccount } from '../../../types.js';
+import type { BankSyncStatus } from '../../../lib/treasury/bankSyncStatus.js';
 import { NotFoundError, BusinessLogicError, ValidationError } from '../../../errors/customErrors.js';
 import { AccountMappingService } from '../accountMapping.service.js';
 import { VoucherService } from '../voucher.service.js';
@@ -21,6 +22,8 @@ import { auditBankAccountChange, auditBankBalanceSync, type TreasuryAuditActor }
 export interface BankReconciliationReport {
   syncedCount: number;
   discrepantCount: number;
+  /** v10.1.63 (OBS-PR-11): accounts whose difference is only draft vouchers waiting for approval */
+  pendingApprovalCount: number;
   unlinkedCount: number;
   totalCashAndBankLedger: number;
   totalCashAndBankTreasury: number;
@@ -87,6 +90,26 @@ export class BankAccountService {
     ))
     .groupBy(journalVoucherItems.accountId, taggedBank);
 
+    // v10.1.63 (OBS-PR-11, decision t40 item 13): the same rows of draft vouchers, so a difference that only waits for
+    // their approval is told apart from a real difference
+    const draftLedgerSums = await db.select({
+      accountId: journalVoucherItems.accountId,
+      taggedBank,
+      debit: sql<string>`COALESCE(SUM(${journalVoucherItems.debit}), 0)::text`,
+      credit: sql<string>`COALESCE(SUM(${journalVoucherItems.credit}), 0)::text`,
+    })
+    .from(journalVoucherItems)
+    .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
+    .where(and(
+      eq(journalVouchers.isDeleted, 0),
+      eq(journalVoucherItems.isDeleted, 0),
+      eq(journalVouchers.status, 'draft'),
+      bankLedgerIds.length > 0
+        ? or(sql`${taggedBank} IS NOT NULL`, inArray(journalVoucherItems.accountId, bankLedgerIds))
+        : sql`${taggedBank} IS NOT NULL`,
+    ))
+    .groupBy(journalVoucherItems.accountId, taggedBank);
+
     // v8.0.26 (TD-278): تراکنش‌های پیشین با روش «چک» (و معکوس ابطال آن‌ها) پول حساب را جابه‌جا نکرده‌اند — مانده حساب
     // تغییر نکرد و سندشان اسناد دریافتنی/پرداختنی را گرفت — پس در مانده خزانه حساب شمرده نمی‌شوند.
     const treasurySums = await db.select({
@@ -126,19 +149,31 @@ export class BankAccountService {
     for (const ov of openingVouchers) {
       if (ov.referenceId) openingVoucherBanks.add(Number(ov.referenceId));
     }
+    const draftOpeningBanks = new Set<number>();
+    const draftOpenings = await db.select({ referenceId: journalVouchers.referenceId }).from(journalVouchers)
+      .where(and(eq(journalVouchers.referenceModule, 'treasury_opening'), eq(journalVouchers.isDeleted, 0), eq(journalVouchers.status, 'draft')));
+    for (const ov of draftOpenings) {
+      if (ov.referenceId) draftOpeningBanks.add(Number(ov.referenceId));
+    }
 
     return rawList.map(b => {
       const initBal = fin(b.initialBalance);
 
       let totalDebit = fin(0);
       let totalCredit = fin(0);
-      for (const row of ledgerSums) {
+      const belongs = (row: { accountId: number | null; taggedBank: number | null }) => {
         const tagged = row.taggedBank === null || row.taggedBank === undefined ? null : Number(row.taggedBank);
-        const matchesAccount = Boolean(b.accountId && row.accountId === b.accountId && tagged === null);
-        if (matchesAccount || tagged === b.id) {
+        return Boolean(b.accountId && row.accountId === b.accountId && tagged === null) || tagged === b.id;
+      };
+      for (const row of ledgerSums) {
+        if (belongs(row)) {
           totalDebit = totalDebit.add(fin(row.debit));
           totalCredit = totalCredit.add(fin(row.credit));
         }
+      }
+      let draftNet = fin(0);
+      for (const row of draftLedgerSums) {
+        if (belongs(row)) draftNet = draftNet.add(fin(row.debit)).subtract(fin(row.credit));
       }
 
       let receipts = fin(0);
@@ -162,15 +197,21 @@ export class BankAccountService {
       const discrepancy = ledgerBalance.subtract(treasuryBalance).abs();
       const hasLedgerRows = !totalDebit.isZero() || !totalCredit.isZero();
 
-      let syncStatus: 'synced' | 'discrepant' | 'unlinked' = 'synced';
+      // v10.1.63 (OBS-PR-11): with the draft vouchers counted too (a draft opening voucher holds the opening balance), the
+      // ledger equals the treasury balance: the difference only waits for those drafts to be approved
+      const hasAnyOpeningVoucher = hasOpeningVoucher || draftOpeningBanks.has(b.id);
+      const ledgerWithDrafts = (hasAnyOpeningVoucher ? fin(0) : initBal).add(totalDebit).subtract(totalCredit).add(draftNet);
+      const waitsForDrafts = ledgerWithDrafts.subtract(treasuryBalance).abs().lessThan(0.01);
+
+      let syncStatus: BankSyncStatus = 'synced';
       const currentBalance = treasuryBalance;
 
-      if (!b.accountId && !hasLedgerRows) {
+      if (!b.accountId && !hasLedgerRows && draftNet.isZero()) {
         syncStatus = 'unlinked';
       } else if (discrepancy.lessThan(0.01)) {
         syncStatus = 'synced';
       } else {
-        syncStatus = 'discrepant';
+        syncStatus = waitsForDrafts ? 'pending_approval' : 'discrepant';
       }
 
       return { row: b, initBal, currentBalance, ledgerBalance, treasuryBalance, totalDebit, totalCredit, discrepancy, syncStatus };
@@ -246,6 +287,7 @@ export class BankAccountService {
   private static summarizeReconciliation(computed: Awaited<ReturnType<typeof BankAccountService.computeBankBalances>>): BankReconciliationReport {
     let syncedCount = 0;
     let discrepantCount = 0;
+    let pendingApprovalCount = 0;
     let unlinkedCount = 0;
     let totalCashAndBankLedger = fin(0);
     let totalCashAndBankTreasury = fin(0);
@@ -258,6 +300,7 @@ export class BankAccountService {
 
       if (bank.syncStatus === 'synced') syncedCount++;
       else if (bank.syncStatus === 'discrepant') discrepantCount++;
+      else if (bank.syncStatus === 'pending_approval') pendingApprovalCount++;
       else unlinkedCount++;
     }
 
@@ -265,6 +308,7 @@ export class BankAccountService {
     return {
       syncedCount,
       discrepantCount,
+      pendingApprovalCount,
       unlinkedCount,
       totalCashAndBankLedger: totalCashAndBankLedger.toNumber(),
       totalCashAndBankTreasury: totalCashAndBankTreasury.toNumber(),

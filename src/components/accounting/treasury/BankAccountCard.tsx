@@ -12,11 +12,13 @@ import {
   CheckCircle2, 
   Layers,
   HandCoins,
+  Clock,
 } from 'lucide-react';
 import { formatPersianPrice, formatCurrencyLabel, formatBankCard, formatIranianSheba } from '../../../utils';
 import { isRialCurrency, rialDisplayOf } from '../../../lib/rialDisplay';
 import { ActionMenu } from '../../ActionMenu';
 import type { BankAccount } from '../../../types';
+import { BANK_DISCREPANT_LABEL, BANK_PENDING_APPROVAL_LABEL } from '../../../lib/treasury/bankSyncStatus';
 
 /** v10.1.32 (D-16): کارهای تنخواه‌گردان — شارژ و برگشت وجه با انتقال وجه، خرج‌ها با صورت‌هزینه */
 export type PettyCashAction = 'charge' | 'expense' | 'return';
@@ -53,6 +55,8 @@ export const BankAccountCard: React.FC<BankAccountCardProps> = React.memo(({
   const isPettyCash = bank.type === 'petty_cash';
   const isSynced = bank.syncStatus === 'synced';
   const isDiscrepant = bank.syncStatus === 'discrepant';
+  // v10.1.63 (OBS-PR-11): a difference made only by draft vouchers waits for their approval and is no discrepancy
+  const isPendingApproval = bank.syncStatus === 'pending_approval';
   const rial = rialDisplayOf(appCurrency);
   const isRialBank = isRialCurrency(bank.currency);
   const bankNumber = (value: number) => (isRialBank ? rial.number(value) : formatPersianPrice(value));
@@ -152,7 +156,16 @@ export const BankAccountCard: React.FC<BankAccountCardProps> = React.memo(({
           {isDiscrepant && (
             <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded-lg border border-amber-200/60 dark:border-amber-800/40">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-              <span>مغایرت دفتری: {rial.money(bank.discrepancy || 0, bank.currency)}</span>
+              <span>{BANK_DISCREPANT_LABEL}: {rial.money(bank.discrepancy || 0, bank.currency)}</span>
+            </div>
+          )}
+          {isPendingApproval && (
+            <div
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/40 px-2.5 py-1 rounded-lg border border-sky-200/60 dark:border-sky-800/40"
+              title="مانده دفتری با سندهای پیش‌نویس این حساب برابر است؛ با تأیید آن سندها یکی می‌شود."
+            >
+              <Clock className="w-3.5 h-3.5 shrink-0" />
+              <span>{BANK_PENDING_APPROVAL_LABEL}: {rial.money(bank.discrepancy || 0, bank.currency)}</span>
             </div>
           )}
           {bank.syncStatus === 'unlinked' && (

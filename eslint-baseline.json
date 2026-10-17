@@ -1,5 +1,5 @@
 {
   "@typescript-eslint/no-misused-promises": 6,
-  "max-lines": 128,
+  "max-lines": 127,
   "react-hooks/exhaustive-deps": 36
 }

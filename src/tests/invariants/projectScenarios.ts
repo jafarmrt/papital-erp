@@ -55,34 +55,6 @@ async function refusalOf(fn: () => Promise<unknown>): Promise<string | null> {
 }
 
 /**
- * TD-287 (تصمیم مالک محصول — گزینه الف): تخصیص «رسید مستقیم BOM» بی‌رسید ثبت‌شده رد می‌شود (موجودی از هیچ ساخته نمی‌شود)؛
- * تخصیص از رسید ثبت‌شده مانند تخصیص عادی مواد را از انبار خارج می‌کند و آزادسازی آن موجودی را دقیقاً برمی‌گرداند.
- */
-export async function checkBomReceiptAllocationNeedsReceipt(wh: string): Promise<string[]> {
-  const problems: string[] = [];
-  const { itemId, documentId } = await rawWithStock(wh, 10, 100000);
-  const projectId = await newProject('پروژه آزمون تخصیص رسید');
-
-  const refused = await refusalOf(() => ProjectBomAllocationService.allocateReceiptItemsForProjectBom({
-    projectId, allocations: [{ itemId, quantity: 3, location: wh }], username: 'inv',
-  }));
-  if (!refused?.includes('رسید ثبت‌شده')) problems.push(`direct receipt allocation without a receipt was not refused (${refused ?? 'accepted'})`);
-  if (!fin(await stockOf(itemId)).equals(10)) problems.push(`stock after the refused allocation ${await stockOf(itemId)}, expected 10`);
-
-  const allocated = await ProjectBomAllocationService.allocateReceiptItemsForProjectBom({
-    projectId, allocations: [{ itemId, quantity: 4, location: wh, documentId }], username: 'inv',
-  });
-  if (!fin(await stockOf(itemId)).equals(6)) problems.push(`allocation from a registered receipt did not take the stock (${await stockOf(itemId)}, expected 6)`);
-  const sourceId = allocated.allocations[0]?.sourceTransactionId ?? 0;
-  const [source] = await orm.select({ type: transactions.type }).from(transactions).where(eq(transactions.id, sourceId));
-  if (source?.type !== 'out') problems.push(`allocation source movement is ${source?.type ?? 'missing'}, expected out`);
-
-  await ProjectBomAllocationService.releaseAllocation(allocated.allocations[0].id, { username: 'inv' });
-  if (!fin(await stockOf(itemId)).equals(10)) problems.push(`releasing the receipt allocation made the stock ${await stockOf(itemId)}, expected 10`);
-  return problems;
-}
-
-/**
  * TD-288: آزادسازی تخصیص مواد را به بهای کاردکس خروج همان تخصیص برمی‌گرداند — پس از خرید گران‌تر ارزشی از هیچ ساخته
  * نمی‌شود (ارزش انبار = جمع دو رسید) — و تخصیصِ رسیدِ پیش از v8.0.32 (حرکت منبع «ورود») موجودی اضافه نمی‌کند.
  */
@@ -269,16 +241,6 @@ export async function checkRequisitionReceiptSumsLines(wh: string): Promise<stri
 }
 
 // ── کاوش یافته‌های باز (true = یافته هنوز رخ می‌دهد) ───────────────────────────
-
-/** TD-287 (کاوش رگرسیون؛ رفع v8.0.32): «رسید مستقیم BOM» بی‌رسید موجودی را بی‌تأمین‌کننده و بی‌سند حسابداری بالا می‌برد */
-export async function probeBomReceiptAllocationFromNothing(wh: string): Promise<boolean> {
-  const { itemId } = await rawWithStock(wh, 5, 100000);
-  const projectId = await newProject('پروژه کاوش رسید مستقیم');
-  const refused = await refusalOf(() => ProjectBomAllocationService.allocateReceiptItemsForProjectBom({
-    projectId, allocations: [{ itemId, quantity: 3, location: wh }], username: 'inv',
-  }));
-  return !refused && fin(await stockOf(itemId)).greaterThan(5);
-}
 
 /** TD-285 (کاوش رگرسیون؛ رفع v8.0.35): تحویل کالای ساخته‌شده پروژه به انبار («ورود به انبار») موجودی را بی‌سند حسابداری بالا می‌برد */
 export async function probeProjectDeliveryWithoutVoucher(wh: string): Promise<boolean> {
