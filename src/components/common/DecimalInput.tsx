@@ -85,7 +85,8 @@ export function DecimalInput({ value, onValueChange, min, max, step, grouped = t
         value={shown}
         data-decimal-input=""
         onKeyDown={e => {
-          if (grouped) stepOverGroupSeparator(e.currentTarget, e.key);
+          // فقط از روی «٬» خود کادر می‌پرد؛ در متنی که همان‌طور که تایپ شده دیده می‌شود هر «٬» از کاربر است و Backspace آن را پاک می‌کند
+          if (grouped && decimalTextIsRebuilt(text)) stepOverGroupSeparator(e.currentTarget, e.key);
           onKeyDown?.(e);
         }}
         onChange={e => {
@@ -94,9 +95,10 @@ export function DecimalInput({ value, onValueChange, min, max, step, grouped = t
           pendingCaret.current = significantCharsBefore(typed, caret);
           // فقط «٬»هایی که خود کادر گذاشته بود برداشته می‌شوند؛ «٬» تایپ‌شده می‌ماند و خطاست («۱۲٬۵» صد و بیست و پنج نمی‌شود)
           const raw = grouped && decimalTextIsRebuilt(text) ? withoutFieldSeparators(shown, typed, caret) : typed;
-          setText(raw);
-          ownChange.current = true;
           const read = readDecimalInputText(raw, { min, max, step });
+          // عدد پذیرفته بی جداکننده نگه داشته می‌شود، پس هر «٬»ی که از این پس دیده می‌شود از خود کادر است
+          setText(read.kind === 'value' ? read.text : raw);
+          ownChange.current = true;
           setPartial(read.kind === 'partial');
           setError(read.kind === 'invalid' ? read.error : read.kind === 'value' ? read.rangeError : undefined);
           onValueChange(read.kind === 'value' ? read.text : '');

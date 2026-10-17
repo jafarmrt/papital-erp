@@ -49,6 +49,7 @@ const SHOWN = {
   twelveFiftyWithTypedGroup: '۱٬۲۵٬۰',
   quarterMillion: '۲۵۰٬۰۰۰',
   leadingZeros: '۰۰۰۱٬۲۵۰',
+  twelveFiftyTypedGroup: '۱٬۲۵۰٬',
   copiedAmount: '۱٬۲۵۰٬۰۰۰ ریال',
   serviceChargeLabel: 'هزینه ارسال و خدمات',
   edit: 'ویرایش',
@@ -179,8 +180,10 @@ describe('TD-1288 number and amount fields show Persian digits and Persian thous
     expect(withoutFieldSeparators(SHOWN.twelveFifty, SHOWN.twelveFifty + '0', 6)).toBe('۱۲۵۰0');
     // a separator typed after «۱۲»
     expect(withoutFieldSeparators(SHOWN.twelve, SHOWN.twelve + '٬', 3)).toBe('۱۲٬');
-    // a separator typed inside a grouped number
-    expect(withoutFieldSeparators(SHOWN.twelveFifty, SHOWN.twelveFiftyWithTypedGroup, 5)).toBe('۱۲۵٬۰');
+    // a separator typed inside a grouped number: every separator then counts as the user's and is checked
+    expect(withoutFieldSeparators(SHOWN.twelveFifty, SHOWN.twelveFiftyWithTypedGroup, 5)).toBe(SHOWN.twelveFiftyWithTypedGroup);
+    // a separator typed after a grouped number keeps the separators before it, so 1,250, then 000 reads 1250000
+    expect(withoutFieldSeparators(SHOWN.twelveFifty, SHOWN.twelveFiftyTypedGroup, 6)).toBe(SHOWN.twelveFiftyTypedGroup);
     // a grouped number pasted over the whole text
     expect(withoutFieldSeparators(SHOWN.twelve, SHOWN.million, SHOWN.million.length)).toBe(SHOWN.million);
     expect(persianNumberText('0001250', true)).toBe(SHOWN.leadingZeros);
