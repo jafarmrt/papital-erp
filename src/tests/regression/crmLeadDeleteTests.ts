@@ -63,6 +63,7 @@ export async function runCrmLeadDeleteTests(shouldRun: (id: string, ...extra: st
     if (listed.some(r => r.id === act.id)) wrong.push('the follow-up of the deleted sales file stayed in the follow-up list');
     const activities = await send(request(app).get(`/api/crm/activities?pendingFollowupsOnly=true&limit=500`));
     if (Array.isArray(activities.body) && (activities.body as Array<{ id: number }>).some(r => r.id === act.id)) wrong.push('the follow-up of the deleted sales file stayed in "pending follow-ups"');
+    (await import('../../services/notifications/crmDueReminders.js')).forgetCrmReminderScan();
     await send(request(app).get('/api/notifications'));
     const reminders = await orm.select({ id: notifications.id }).from(notifications)
       .where(and(eq(notifications.link, `/crm?activityId=${act.id}`), eq(notifications.type, 'crm_due_task')));

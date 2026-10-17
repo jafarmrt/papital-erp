@@ -67,7 +67,8 @@ export async function runCrmDueReminderTests(shouldRun: (id: string, ...extra: s
     if (JSON.stringify(gotAli) !== JSON.stringify(expectedAli)) wrong.push(`short-name user was reminded of ${JSON.stringify(gotAli)}, expected ${JSON.stringify(expectedAli)}`);
     if (JSON.stringify(gotAlireza) !== JSON.stringify(expectedAlireza)) wrong.push(`long-name user was reminded of ${JSON.stringify(gotAlireza)}, expected ${JSON.stringify(expectedAlireza)}`);
 
-    // a second bell request adds no second reminder
+    // a second bell request adds no second reminder (its hourly scan made due again, OBS-R2-85)
+    (await import('../../services/notifications/crmDueReminders.js')).forgetCrmReminderScan(ali.userId);
     await h.get('/api/notifications', ali);
     const again = await orm.select({ id: notifications.id }).from(notifications)
       .where(and(eq(notifications.userId, ali.userId), eq(notifications.type, 'crm_due_task')));

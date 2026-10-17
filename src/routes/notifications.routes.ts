@@ -8,7 +8,7 @@ import { validate, numericIdString } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { UnauthorizedError } from '../errors/customErrors.js';
 import { logger } from '../middleware/logger.js';
-import { generateCrmDueReminders } from '../services/notifications/crmDueReminders.js';
+import { generateCrmDueRemindersThrottled } from '../services/notifications/crmDueReminders.js';
 import { generateWorkshopDueRemindersThrottled } from '../services/notifications/workshopDueReminders.js';
 import { can } from '../middleware/authorize.js';
 import { WORKSHOP_SELF_PERMISSION } from '../lib/permissions/workshopPermissions.js';
@@ -25,10 +25,11 @@ const notifParamSchema = z.object({
   })
 });
 
-// v9.0.433 (TD-709): only the user's own due follow-ups (linked personnel id, else the exact trimmed name), never «contains»
+// v9.0.433 (TD-709): only the user's own due follow-ups (linked personnel id, else the exact trimmed name), never «contains»;
+// v10.1.62 (OBS-R2-85, decision t40 item 12): at most once an hour per user, no longer on every bell and counter request
 async function checkAndGenerateCrmTaskDueNotifications(userId: number) {
   try {
-    await generateCrmDueReminders(userId);
+    await generateCrmDueRemindersThrottled(userId);
   } catch (err) {
     logger.error({ message: 'Error checking due CRM tasks notifications', error: err });
   }
