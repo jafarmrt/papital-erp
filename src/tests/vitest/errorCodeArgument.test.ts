@@ -8,6 +8,10 @@ import { ConflictError } from '../../errors/customErrors';
 // draft vouchers, a closing already running, a closed year, the attachment jobs and the factory reset while seeding).
 const ROOT = path.resolve(__dirname, '../..');
 const CLASSES = ['ConflictError', 'ValidationError', 'NotFoundError', 'ForbiddenError'];
+/** classes with (message, details) only: a code given to them is lost (closing sweep, #293 review) */
+const TWO_ARGUMENT_CLASSES = ['BadRequestError', 'UnauthorizedError', 'BusinessLogicError', 'InsufficientStockError', 'UnbalancedVoucherError'];
+/** an error code written as a string literal or as a constant holding one */
+const CODE_ARGUMENT = /^('[A-Z][A-Z0-9_]+'|[A-Z][A-Z0-9_]*_[A-Z0-9_]+)$/;
 
 function sourceFiles(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
@@ -46,10 +50,14 @@ function callArguments(text: string, start: number): string[] {
 
 function codeInDetailsCalls(text: string): string[] {
   const found: string[] = [];
-  const pattern = new RegExp(`new (${CLASSES.join('|')})\\(`, 'g');
+  const pattern = new RegExp(`new (${[...CLASSES, ...TWO_ARGUMENT_CLASSES].join('|')})\\(`, 'g');
   for (let m = pattern.exec(text); m; m = pattern.exec(text)) {
     const args = callArguments(text, m.index + m[0].length);
-    if (args.length === 2 && /^'[A-Z][A-Z0-9_]+'$/.test(args[1])) found.push(`${m[1]} ${args[1]}`);
+    if (TWO_ARGUMENT_CLASSES.includes(m[1])) {
+      if ((args.length === 2 && CODE_ARGUMENT.test(args[1])) || args.length > 2) found.push(`${m[1]} ${args.slice(1).join(', ')}`);
+    } else if (args.length === 2 && CODE_ARGUMENT.test(args[1])) {
+      found.push(`${m[1]} ${args[1]}`);
+    }
   }
   return found;
 }
@@ -59,6 +67,15 @@ describe('error codes go in the third argument', () => {
     expect(codeInDetailsCalls("throw new ConflictError('x', 'SOME_CODE');")).toEqual(['ConflictError \'SOME_CODE\'']);
     expect(codeInDetailsCalls("throw new ConflictError('x', undefined, 'SOME_CODE');")).toEqual([]);
     expect(codeInDetailsCalls("throw new ValidationError(`a ${b('c, d')}`, { e: 1 });")).toEqual([]);
+  });
+
+  it('error_code_constant_and_two_argument_classes: a code constant as details and a code given to a (message, details) class are found', () => {
+    expect(codeInDetailsCalls('throw new ValidationError(msg, USERNAME_FORMAT_INVALID);')).toEqual(['ValidationError USERNAME_FORMAT_INVALID']);
+    expect(codeInDetailsCalls('throw new ValidationError(msg, undefined, USERNAME_FORMAT_INVALID);')).toEqual([]);
+    expect(codeInDetailsCalls("throw new BusinessLogicError('x', 'SOME_CODE');")).toEqual(['BusinessLogicError \'SOME_CODE\'']);
+    expect(codeInDetailsCalls("throw new BadRequestError('x', { a: 1 }, 'SOME_CODE');")).toEqual(['BadRequestError { a: 1 }, \'SOME_CODE\'']);
+    expect(codeInDetailsCalls("throw new BusinessLogicError('x', { a: 1 });")).toEqual([]);
+    expect(codeInDetailsCalls('throw new ValidationError(msg, details);')).toEqual([]);
   });
 
   it('no production file passes a code as details', () => {
