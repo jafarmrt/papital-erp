@@ -28,7 +28,7 @@ export async function runRuleEventTypeTests(shouldRun: (id: string, ...extra: st
     const audit = { descriptionTemplate: 'td726' };
 
     // 1. a new rule for a type nothing publishes is refused; «*» and a published type are accepted
-    for (const eventType of ['InvoiceCancelled', 'ChequeStatusChanged', 'ProjectStageCompleted', 'CustomerCreated']) {
+    for (const eventType of ['InvoiceCancelled', 'ChequeTeleported', 'ProjectStageCompleted', 'CustomerCreated']) {
       const res = await send('post', '/api/events/action-rules', { name: `${tag} new ${eventType}`, eventType, actionType: 'audit_log', actionConfigJson: audit, isActive: 0 });
       if (res.status !== 422 || res.body?.code !== 'RULE_EVENT_TYPE_UNKNOWN') wrong.push(`create ${eventType}: ${res.status} ${res.body?.code}`);
     }
@@ -36,8 +36,8 @@ export async function runRuleEventTypeTests(shouldRun: (id: string, ...extra: st
       const res = await send('post', '/api/events/action-rules', { name: `${tag} new ${eventType}`, eventType, actionType: 'audit_log', actionConfigJson: audit, isActive: 0 });
       if (res.status >= 300) wrong.push(`create ${eventType}: ${res.status} ${res.body?.message}`);
     }
-    const draft = await send('post', '/api/events/action-rules/test-draft', { rule: { name: 'd', eventType: 'ChequeStatusChanged', actionType: 'audit_log', conditionsJson: [], actionConfigJson: audit } });
-    if (draft.status !== 422 || !JSON.stringify(draft.body?.details ?? {}).includes('ChequeStatusChanged')) wrong.push(`draft ChequeStatusChanged: ${draft.status} ${draft.body?.code}`);
+    const draft = await send('post', '/api/events/action-rules/test-draft', { rule: { name: 'd', eventType: 'ChequeTeleported', actionType: 'audit_log', conditionsJson: [], actionConfigJson: audit } });
+    if (draft.status !== 422 || !JSON.stringify(draft.body?.details ?? {}).includes('ChequeTeleported')) wrong.push(`draft ChequeStatusChanged: ${draft.status} ${draft.body?.code}`);
 
     // 2. stored rules of such types are listed by the health check
     const insertRule = async (eventType: string, isActive: number) => {

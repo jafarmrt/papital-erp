@@ -20,6 +20,7 @@ import { auditPayrollDeleted, auditPayrollIssued, auditPayrollUpdated } from './
 import { payrollStatusLabel } from '../../lib/payroll/payrollStatusLabels.js';
 import { assertPayrollDutyNotByIssuer } from './payrollDuties.js';
 import { notifyPayslipApproved } from './payslipApprovedNotice.js';
+import { recordPayrollEvent } from './payrollEvents.js';
 import { resolvePayrollStatutory, statutoryAuditInfo, statutoryPayrollColumns, type StatutoryEntryInput } from './payrollStatutory.js';
 import { isEidiCovered } from '../../lib/payroll/eidi.js';
 import { assertEidiShareNotSettled, lockPayrollPersonnel, payslipEidiColumns, resolvePayslipEidiShare } from './payrollEidi.js';
@@ -380,7 +381,11 @@ export class PieceworkPayrollService {
       // v9.0.285 (TD-810): قبل و بعد فیلدهای تغییرکرده و وضعیت با برچسب فارسی (پیش‌تر «به «draft»» پس از commit)
       await auditPayrollUpdated(tx, pay, { ...pay, ...updates } as typeof pay, autoVoucher, { req: input.req, userId: currentUserId, username: currentUsername });
       // v10.1.42 (messenger plan part 3, ت۳ الف): the personnel's linked user hears of the approval, without amounts
-      if (targetStatus === 'approved' && pay.status === 'draft') await notifyPayslipApproved(tx, pay);
+      if (targetStatus === 'approved' && pay.status === 'draft') {
+        await notifyPayslipApproved(tx, pay);
+        // OBS-R2-13 (ت۴۰ بند ۱۱): رویداد «تأیید فیش حقوق» برای قانون‌ها و وب‌هوک‌ها، در همین تراکنش
+        await recordPayrollEvent(tx, 'approved', { ...pay, ...updates } as typeof pay, { userId: currentUserId, username: currentUsername });
+      }
 
       return { status: 200, payroll: pay, voucher: autoVoucher };
     });

@@ -11069,6 +11069,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Phase 3 lane L1, package A7 (v10.0.259): payroll payment void event and audit, «my payslips» paid amount, personnel id on treasury rows
   const { runPayrollHygieneA7Tests } = await import('../regression/payrollHygieneA7Tests.js');
   results.push(...await runPayrollHygieneA7Tests(shouldRun));
+  // v10.1.62 closing sweep (ت۴۰ item 11, OBS-R2-13): cheque status and payslip approval / payment domain events
+  const { runClosingDomainEventsTests } = await import('../regression/closingDomainEventsTests.js');
+  results.push(...await runClosingDomainEventsTests(shouldRun));
   // Phase 3 lane L1, package A8 (v10.0.262): treasury audit inside the write's transaction, no general account fallback
   const { runTreasuryAuditA8Tests } = await import('../regression/treasuryAuditA8Tests.js');
   results.push(...await runTreasuryAuditA8Tests(shouldRun));

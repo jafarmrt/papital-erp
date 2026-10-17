@@ -20,6 +20,7 @@ import { LockHierarchyLevel, withOrderedLocks } from '../../lib/lockOrder.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
 import { OutboxService } from '../events/outboxService.js';
+import { recordPayrollEvent } from '../piecework/payrollEvents.js';
 import { fin, type DecimalValue } from '../../lib/financialDecimal.js';
 import { PAYROLL_CURRENCY, payrollAmountText } from '../../lib/payroll/payrollCurrency.js';
 import { money } from '../../lib/money.js';
@@ -354,6 +355,9 @@ export class PayrollPaymentService {
         transactionId: tr.id, transactionNumber: txNum, amount: payAmount.toString(), paidBefore: String(payroll.paidAmount ?? 0),
         voucherId: voucher?.id ?? null, voucherNumber: voucher?.voucherNumber ?? null,
       }, { req: input.req, userId: input.userId, username: input.username });
+      // OBS-R2-13 (ت۴۰ بند ۱۱): رویداد «پرداخت فیش حقوق» برای قانون‌ها و وب‌هوک‌ها، یکی برای هر پرداخت
+      await recordPayrollEvent(tx, 'paid', updatedPayroll, { userId: input.userId, username: input.username },
+        { amount: payAmount.toNumber(), transactionId: tr.id, isFullyPaid });
 
       return {
         payroll: updatedPayroll,

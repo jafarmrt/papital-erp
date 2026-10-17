@@ -29,6 +29,9 @@ export enum DomainEventType {
   PAYMENT_APPROVED = 'PaymentApproved',
   TREASURY_TRANSACTION_APPROVED = 'TreasuryTransactionApproved',
   CHEQUE_STATUS_CHANGED = 'ChequeStatusChanged',
+  // OBS-R2-13 (ت۴۰ بند ۱۱): تأیید و پرداخت فیش حقوق
+  PAYROLL_APPROVED = 'PayrollApproved',
+  PAYROLL_PAID = 'PayrollPaid',
   VOUCHER_POSTED = 'VoucherPosted',
 
   // 5. Workflow Engine
@@ -67,7 +70,7 @@ export interface DomainEventMetadata {
   [key: string]: unknown;
 }
 
-export type AggregateType = 'Document' | 'Item' | 'Workflow' | 'Treasury' | 'Project' | 'Customer' | 'Voucher' | 'WooCommerce';
+export type AggregateType = 'Document' | 'Item' | 'Workflow' | 'Treasury' | 'Cheque' | 'Payroll' | 'Project' | 'Customer' | 'Voucher' | 'WooCommerce';
 
 export interface BaseDomainEvent<T = unknown> {
   eventId: string;
@@ -140,6 +143,47 @@ export interface TreasuryEventPayload {
   accountName?: string;
   description?: string;
   sayadNumber?: string;
+}
+
+/** OBS-R2-13 (ت۴۰ بند ۱۱): a cheque's status change, recorded in the transaction of the change (`ChequeStatusChanged`) */
+export interface ChequeEventPayload {
+  chequeId: number;
+  chequeNumber: string;
+  sayadNumber: string;
+  chequeType: 'received' | 'paid';
+  previousStatus: string;
+  newStatus: string;
+  newStatusLabel: string;
+  amount: number;
+  currency: string;
+  dueDate: string;
+  actionDate: string;
+  bankAccountId: number | null;
+  partyType: string;
+  partyId: number | null;
+  partyName: string;
+  voucherIds: number[];
+}
+
+/**
+ * OBS-R2-13 (ت۴۰ بند ۱۱): a payslip approved (`PayrollApproved`) or paid in full or in part (`PayrollPaid`, one event per
+ * payment), recorded in the transaction of the approval or the payment; amounts are in rials.
+ */
+export interface PayrollEventPayload {
+  payrollId: number;
+  payrollNumber: string;
+  personnelId: number;
+  personnelName: string;
+  startDate: string;
+  endDate: string;
+  netPayable: number;
+  paidAmount: number;
+  remainingAmount: number;
+  status: string;
+  currency: string;
+  paymentAmount?: number;
+  transactionId?: number;
+  isFullyPaid?: boolean;
 }
 
 export interface WorkflowEventPayload {
