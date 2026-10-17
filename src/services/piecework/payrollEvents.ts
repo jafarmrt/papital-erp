@@ -1,10 +1,11 @@
 import { eq } from 'drizzle-orm';
-import type { DbExecutor } from '../../db/drizzle.js';
+import type { DbExecutor, DbTransaction } from '../../db/drizzle.js';
 import { personnel, pieceworkPayrolls } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType, type PayrollEventPayload } from '../events/domainEvents.js';
 import { OutboxService } from '../events/outboxService.js';
+import { notifyPayslipApproved } from './payslipApprovedNotice.js';
 
 type PayrollRow = typeof pieceworkPayrolls.$inferSelect;
 
@@ -41,4 +42,15 @@ export async function recordPayrollEvent(
   await OutboxService.saveToOutbox(tx, domainEventBus.createEvent<PayrollEventPayload>(
     payrollEventType, 'Payroll', String(payroll.id), payload, { userId: actor.userId, userName: actor.username },
   ));
+}
+
+/**
+ * A draft payslip just approved: its linked user's notice (v10.1.42) and the `PayrollApproved` event, both with the
+ * approval's transaction. `before` is the payslip as it was read, `after` as it is saved.
+ */
+export async function onPayslipApproved(
+  tx: DbTransaction, before: PayrollRow, after: PayrollRow, actor: { userId?: number; username?: string },
+): Promise<void> {
+  await notifyPayslipApproved(tx, before);
+  await recordPayrollEvent(tx, 'approved', after, actor);
 }
