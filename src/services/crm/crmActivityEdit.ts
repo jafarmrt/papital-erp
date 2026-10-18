@@ -59,7 +59,7 @@ export function activityAuditDetails(before: Activity, after: Activity) {
   return { before: b, after: a, changes };
 }
 
-async function lockLiveActivity(tx: DbExecutor, id: number): Promise<Activity> {
+export async function lockLiveActivity(tx: DbExecutor, id: number): Promise<Activity> {
   const [row] = await tx.select().from(crmActivities)
     .where(and(eq(crmActivities.id, id), eq(crmActivities.isDeleted, 0)))
     .for('update');

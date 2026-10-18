@@ -1,6 +1,6 @@
-import { and, eq, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { crmLeads, customers } from '../../db/schema.js';
+import { crmActivities, crmLeads, customers } from '../../db/schema.js';
 
 /**
  * v9.0.15 (TD-429): فیلتر «مشتری» پرونده‌های فروش با شناسه طرف حساب. پیش‌تر صفحه نام طرف حساب را می‌فرستاد و سرور آن را با
@@ -18,4 +18,14 @@ export async function leadCustomerCondition(customerId: number): Promise<SQL> {
     or(sql`btrim(${crmLeads.customerName}) = ${name}::text`, sql`btrim(${crmLeads.company}) = ${name}::text`),
   );
   return or(byId, legacy) as SQL;
+}
+
+/**
+ * v10.2 package 7 (OBS-R2-24): the activities of a party's dossier, read on the server instead of filtering the page's
+ * date-limited list: those recorded for the party itself and those of its sales files (`leadCustomerCondition`).
+ */
+export async function activityPartyCondition(customerId: number): Promise<SQL> {
+  const leadsOfParty = orm.select({ id: crmLeads.id }).from(crmLeads)
+    .where(and(eq(crmLeads.isDeleted, 0), await leadCustomerCondition(customerId)));
+  return or(eq(crmActivities.customerId, customerId), inArray(crmActivities.leadId, leadsOfParty)) as SQL;
 }

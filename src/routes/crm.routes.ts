@@ -30,7 +30,8 @@ import { CRM_LEAD_CURRENCIES, CRM_LEAD_STAGES, CRM_LEAD_STATUSES, CRM_LOST_REASO
 import { recordLeadStageChange } from '../services/crm/crmLeadStageHistory.js';
 import { crmFunnelReport } from '../services/crm/crmFunnelReport.js';
 import { resolveLeadLostReason } from '../services/crm/crmLeadLostReason.js';
-import { leadCustomerCondition } from '../services/crm/crmLeadCustomerFilter.js';
+import { activityPartyCondition, leadCustomerCondition } from '../services/crm/crmLeadCustomerFilter.js';
+import { CrmAttachmentService } from '../services/crm/crmAttachments.service.js';
 import { leadCustomerHasTagCondition } from '../services/customers/customerTags.service.js';
 import { canSeePartyBankInfo, withoutBankInfo } from '../services/customers/partyBankInfoAccess.js';
 import { permissionHolderUserIds } from '../services/notifications/notificationRecipients.js';
@@ -344,9 +345,17 @@ router.get('/crm/leads/:id', authorizePermission('crm.view', 'customers.view', '
     .where(and(eq(crmActivities.leadId, id), eq(crmActivities.isDeleted, 0)))
     .orderBy(desc(crmActivities.createdAt));
 
+  // v10.2 package 7: the attachments of the file and of each activity, for `crm.view` holders only (the key of the files)
+  if (!(await can(req.user, 'crm.view'))) {
+    res.json({ ...formatLead(lead), activities: activities.map(formatActivity) });
+    return;
+  }
+  const leadFiles = await CrmAttachmentService.listByOwners('lead', [id], orm);
+  const activityFiles = await CrmAttachmentService.listByOwners('activity', activities.map((a) => a.id), orm);
   res.json({
     ...formatLead(lead),
-    activities: activities.map(formatActivity)
+    attachments: leadFiles.get(id) ?? [],
+    activities: activities.map((a) => ({ ...formatActivity(a), attachments: activityFiles.get(a.id) ?? [], attachmentCount: activityFiles.get(a.id)?.length ?? 0 })),
   });
 }));
 
@@ -725,8 +734,26 @@ router.delete('/crm/leads/:id', authorizePermission('crm.delete'), validate(para
 }));
 
 // GET /api/crm/activities - List activities & call logs
-router.get('/crm/activities', authorizePermission('crm.view', 'customers.view', 'customers.manage'), asyncHandler(async (req, res) => {
-  const { leadId, customerId, type, pendingFollowupsOnly, fromDate, toDate } = req.query;
+// v10.2 package 7 (OBS-R2-28): with `page` one page `{ data, total, page, limit }` counted in SQL, searched by `search` and
+// limited to a party's own activities and those of its sales files by `partyId` (the customer dossier); without `page` the
+// older array of at most 500 rows. Each row carries its live attachment count for `crm.view` holders.
+const activitiesQuerySchema = z.object({
+  query: z.object({
+    leadId: numericIdString.optional(),
+    customerId: numericIdString.optional(),
+    partyId: numericIdString.optional(),
+    type: z.string().max(40).optional(),
+    pendingFollowupsOnly: z.enum(['true', 'false']).optional(),
+    fromDate: z.string().max(20).optional(),
+    toDate: z.string().max(20).optional(),
+    search: z.string().max(200).optional(),
+    page: numericIdString.optional(),
+    limit: numericIdString.optional(),
+  }).passthrough(),
+}).passthrough();
+
+router.get('/crm/activities', authorizePermission('crm.view', 'customers.view', 'customers.manage'), validate(activitiesQuerySchema), asyncHandler(async (req, res) => {
+  const { leadId, customerId, partyId, type, pendingFollowupsOnly, fromDate, toDate, search } = req.query;
 
   // v9.0.16 (TD-425): اقدام‌های پرونده حذف‌شده فهرست نمی‌شوند
   const conditions = [eq(crmActivities.isDeleted, 0), liveLeadActivityCondition()];
@@ -739,7 +766,22 @@ router.get('/crm/activities', authorizePermission('crm.view', 'customers.view', 
     conditions.push(eq(crmActivities.customerId, Number(customerId)));
   }
 
-  if (type && typeof type === 'string' && type.trim()) {
+  if (partyId) {
+    conditions.push(await activityPartyCondition(Number(partyId)));
+  }
+
+  if (search && typeof search === 'string' && search.trim()) {
+    const s = containsLikePattern(search.trim());
+    conditions.push(or(
+      ilike(crmActivities.title, s),
+      ilike(crmActivities.description, s),
+      ilike(crmActivities.result, s),
+      ilike(crmActivities.loggedBy, s),
+      ilike(crmActivities.nextFollowUpTask, s),
+    )!);
+  }
+
+  if (type && typeof type === 'string' && type.trim() && type !== 'all') {
     conditions.push(eq(crmActivities.type, type.trim()));
   }
 
@@ -759,6 +801,8 @@ router.get('/crm/activities', authorizePermission('crm.view', 'customers.view', 
     conditions.push(sql`(${crmActivities.activityDate} <= ${tIso}::text OR COALESCE(${crmActivities.activityDate}, '') = '')`);
   }
 
+  const isPaged = req.query.page !== undefined;
+  const pageOf = isPaged ? parsePagination(req.query as Record<string, unknown>, { page: 1, limit: 20 }) : null;
   const activities = await orm.select({
     id: crmActivities.id,
     leadId: crmActivities.leadId,
@@ -790,10 +834,40 @@ router.get('/crm/activities', authorizePermission('crm.view', 'customers.view', 
     .leftJoin(crmLeads, eq(crmActivities.leadId, crmLeads.id))
     .leftJoin(customers, eq(crmActivities.customerId, customers.id))
     .where(and(...conditions))
-    .orderBy(desc(crmActivities.createdAt))
-    .limit(Math.min(Number(req.query.limit) || 200, 500));
+    .orderBy(desc(crmActivities.createdAt), desc(crmActivities.id))
+    .limit(pageOf ? pageOf.limit : Math.min(Number(req.query.limit) || 200, 500))
+    .offset(pageOf ? pageOf.offset : 0);
 
-  res.json(activities.map(formatActivity));
+  const counts = await can(req.user, 'crm.view')
+    ? await CrmAttachmentService.countByOwners('activity', activities.map((a) => a.id), orm)
+    : null;
+  const rows = activities.map((a) => ({ ...formatActivity(a), ...(counts ? { attachmentCount: counts.get(a.id) ?? 0 } : {}) }));
+  if (!pageOf) {
+    res.json(rows);
+    return;
+  }
+  const [{ total }] = await orm.select({ total: sql<number>`count(*)::int` })
+    .from(crmActivities)
+    .leftJoin(crmLeads, eq(crmActivities.leadId, crmLeads.id))
+    .where(and(...conditions));
+  res.json({ data: rows, total: Number(total), page: pageOf.page, limit: pageOf.limit });
+}));
+
+// v10.2 package 7 (OBS-R2-24): one activity, for a link `/crm?activityId=` of a mention or a due reminder
+router.get('/crm/activities/:id', authorizePermission('crm.view', 'customers.view', 'customers.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const [act] = await orm.select({
+    activity: crmActivities,
+    leadTitle: crmLeads.title,
+    leadCustomerName: crmLeads.customerName,
+    customerName: customers.name,
+  })
+    .from(crmActivities)
+    .leftJoin(crmLeads, eq(crmActivities.leadId, crmLeads.id))
+    .leftJoin(customers, eq(crmActivities.customerId, customers.id))
+    .where(and(eq(crmActivities.id, id), eq(crmActivities.isDeleted, 0), liveLeadActivityCondition()));
+  if (!act) throw new NotFoundError('اقدام یا پیگیری یافت نشد', { id }, 'CRM_ACTIVITY_NOT_FOUND');
+  res.json(formatActivity({ ...act.activity, leadTitle: act.leadTitle, leadCustomerName: act.leadCustomerName, customerName: act.customerName }));
 }));
 
 // v9.0.14 (TD-428، تصمیم مالک محصول ت۵ الف): پیگیری‌ها بی بازه تاریخ اقدام و با صفحه‌بندی (`listFollowups`)؛

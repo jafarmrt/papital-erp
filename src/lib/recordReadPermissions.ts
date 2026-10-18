@@ -188,6 +188,9 @@ export const RECORD_READ_PERMISSIONS = {
   production_project: READ_PERMISSIONS.projectRecord,
   document: READ_PERMISSIONS.documentRecord,
   piecework_payroll: READ_PERMISSIONS.payrolls,
+  // v10.2 package 7 (N-02 §3.3): image and PDF attachments of a sales file and of an activity open only for `crm.view`
+  crm_lead: ['crm.view'],
+  crm_activity: ['crm.view'],
 } as const satisfies Record<string, readonly string[] | null>;
 
 export type AttachmentEntityType = keyof typeof RECORD_READ_PERMISSIONS;

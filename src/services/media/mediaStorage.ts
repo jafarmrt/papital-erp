@@ -39,8 +39,13 @@ export function mediaTooLarge(): ValidationError {
  * Streams a request body to a temporary file while hashing and counting it. A body above `maxBytes` stops at once and
  * leaves no file (422 `MEDIA_FILE_TOO_LARGE`); an empty body is 422 `MEDIA_FILE_EMPTY`.
  */
-export async function receiveToTemp(body: Readable, maxBytes: number = MEDIA_MAX_BYTES): Promise<ReceivedFile> {
-  const tmpDir = path.join(getMediaRoot(), 'tmp');
+export async function receiveToTemp(
+  body: Readable, maxBytes: number = MEDIA_MAX_BYTES,
+  /** v10.2 package 7: CRM attachments stream into the attachment root (same disk as their place) with their own size error */
+  options: { tmpDir?: string; tooLarge?: () => Error } = {},
+): Promise<ReceivedFile> {
+  const tmpDir = options.tmpDir ?? path.join(getMediaRoot(), 'tmp');
+  const tooLarge = options.tooLarge ?? mediaTooLarge;
   await fs.promises.mkdir(tmpDir, { recursive: true });
   const tempPath = path.join(tmpDir, `${uuidv4()}.part`);
   const hash = crypto.createHash('sha256');
@@ -48,7 +53,7 @@ export async function receiveToTemp(body: Readable, maxBytes: number = MEDIA_MAX
   const meter = new Transform({
     transform(chunk: Buffer, _enc, done) {
       size += chunk.length;
-      if (size > maxBytes) { done(mediaTooLarge()); return; }
+      if (size > maxBytes) { done(tooLarge()); return; }
       hash.update(chunk);
       done(null, chunk);
     },

@@ -25,7 +25,8 @@ export const DEFAULT_ORPHAN_MIN_AGE_MINUTES = 60;
  * this floor, so a file of a save transaction still in progress is never taken for an orphan.
  */
 export const MIN_ORPHAN_AGE_MINUTES = 5;
-const STORED_FILE_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.[a-z0-9]{1,10}$/i;
+// v10.2 package 7: `<uuid>.light.webp` is the light version of an image attachment, registered in `light_storage_path`
+const STORED_FILE_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\.light)?\.[a-z0-9]{1,10}$/i;
 const MAX_LISTED_PATHS = 200;
 
 export interface OrphanAttachmentCleanupReport {
@@ -79,11 +80,14 @@ export class AttachmentOrphanCleanupService {
       const diskFiles = await listStoredFiles(root);
       report.scannedFiles = diskFiles.length;
       // ردیف‌ها پس از فهرست دیسک خوانده می‌شوند تا فایلی که در این فاصله ثبت شده بدون ثبت شمرده نشود
-      const rows = await orm.select({ storagePath: fileAttachments.storagePath, isDeleted: fileAttachments.isDeleted }).from(fileAttachments);
+      const rows = await orm.select({
+        storagePath: fileAttachments.storagePath, lightStoragePath: fileAttachments.lightStoragePath, isDeleted: fileAttachments.isDeleted,
+      }).from(fileAttachments);
       const registered = new Map<string, number>();
       for (const r of rows) {
         // ردیف فعال بر ردیف جداشده با همان مسیر مقدم است
         registered.set(r.storagePath, Math.min(registered.get(r.storagePath) ?? 1, r.isDeleted));
+        if (r.lightStoragePath) registered.set(r.lightStoragePath, Math.min(registered.get(r.lightStoragePath) ?? 1, r.isDeleted));
       }
       const onDisk = new Set(diskFiles.map((f) => f.storagePath));
       for (const [storagePath, isDeleted] of registered) {

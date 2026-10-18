@@ -10601,6 +10601,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // N-02 part 2 (v10.1.18): activity edit and delete, lost reason, stage history, funnel report and my follow-ups
   const { runCrmActivityEditFunnelTests } = await import('../regression/crmActivityEditFunnelTests.js');
   results.push(...await runCrmActivityEditFunnelTests(shouldRun));
+
+  // v10.2 package 7 (N-02 §3.3, OBS-R2-24 / OBS-R2-28): sales file and activity attachments, paged activity list
+  const { runCrmAttachmentsTests } = await import('../regression/crmAttachmentsTests.js');
+  results.push(...await runCrmAttachmentsTests(shouldRun));
   const { runCrmStageHistoryBackfillTests } = await import('../regression/crmStageHistoryBackfillTests.js');
   results.push(...await runCrmStageHistoryBackfillTests(shouldRun));
   // N-02 part 3 (v10.1.24, TD-1272): the lead list carries each lead's nearest open follow-up for the pipeline card
