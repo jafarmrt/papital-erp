@@ -1,11 +1,14 @@
+import { useEffect, useRef } from 'react';
 import { ArrowRight, Calendar, Edit3, Layers, Package, User } from 'lucide-react';
 import type { ProductionProject } from '../../../types';
 import { formatPersianDate, formatPersianNumber } from '../../../utils';
 import { PROJECT_STATUS_LABELS } from '../../../lib/projects/projectStatus';
 import { PROJECT_WORKSPACE_TABS, PROJECT_WORKSPACE_TAB_LABELS, type ProjectWorkspaceTab } from '../../../lib/projects/projectWorkspaceTabs';
 import { ProjectStatusActions } from '../ProjectStatusActions';
+import { PHONE_ONLY_TAP_TARGET } from '../../../lib/pwa/phoneLayout';
+import { usePhoneWidth } from '../../../lib/pwa/usePhoneWidth';
 
-const STATUS_STYLES: Record<string, string> = {
+export const PROJECT_STATUS_STYLES: Record<string, string> = {
   planned: 'bg-slate-100 text-slate-700 border-slate-200',
   in_progress: 'bg-amber-50 text-amber-800 border-amber-200',
   completed: 'bg-emerald-50 text-emerald-800 border-emerald-200',
@@ -40,7 +43,7 @@ export function ProjectWorkspaceHeader({ project, version, canEdit, editingSpecs
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-base sm:text-lg font-bold text-slate-900">{project.title}</h1>
             {project.project_code && <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold border border-slate-200">{project.project_code}</span>}
-            <span className={`px-2 py-0.5 rounded-lg text-xs font-bold border ${STATUS_STYLES[status] ?? STATUS_STYLES.planned}`}>{statusLabel}</span>
+            <span className={`px-2 py-0.5 rounded-lg text-xs font-bold border ${PROJECT_STATUS_STYLES[status] ?? PROJECT_STATUS_STYLES.planned}`}>{statusLabel}</span>
           </div>
           <div className="flex items-center gap-3 text-xs text-slate-600 mt-1.5 flex-wrap">
             {project.customer_name && (
@@ -87,10 +90,27 @@ interface ProjectWorkspaceTabBarProps {
   onSelect: (tab: ProjectWorkspaceTab) => void;
 }
 
-/** the five tabs of a project page; a tab holding an unsaved change says so */
+/**
+ * the five tabs of a project page; a tab holding an unsaved change says so
+ * v10.2.9 (10.2 package 10): on a phone each tab is at least 44 px high, and the row scrolls the active tab into view,
+ * since the five tabs do not fit a phone's width (only the row moves, never the page); a wider screen shows every tab
+ * and never moves the row (delta D4)
+ */
 export function ProjectWorkspaceTabBar({ active, dirty, badges, onSelect }: ProjectWorkspaceTabBarProps) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const phone = usePhoneWidth();
+  useEffect(() => {
+    if (!phone) return;
+    const list = listRef.current;
+    const tab = list?.querySelector<HTMLElement>(`#project-tab-${active}`);
+    if (!list || !tab || typeof list.scrollBy !== 'function') return;
+    const shown = list.getBoundingClientRect();
+    const own = tab.getBoundingClientRect();
+    const delta = own.left < shown.left ? own.left - shown.left : own.right > shown.right ? own.right - shown.right : 0;
+    if (delta !== 0) list.scrollBy({ left: delta });
+  }, [active, phone]);
   return (
-    <div role="tablist" aria-label="بخش‌های پروژه" className="flex items-center gap-1.5 overflow-x-auto border-b border-slate-200">
+    <div ref={listRef} role="tablist" aria-label="بخش‌های پروژه" className="flex items-center gap-1.5 overflow-x-auto border-b border-slate-200">
       {PROJECT_WORKSPACE_TABS.map(tab => (
         <button
           key={tab}
@@ -100,7 +120,7 @@ export function ProjectWorkspaceTabBar({ active, dirty, badges, onSelect }: Proj
           aria-selected={tab === active}
           aria-controls="project-tab-panel"
           onClick={() => onSelect(tab)}
-          className={`px-3.5 py-2.5 rounded-t-xl font-bold text-xs flex items-center gap-2 border-t border-x shrink-0 cursor-pointer ${tab === active ? 'bg-white text-slate-900 border-slate-200 -mb-px' : 'text-slate-600 hover:text-slate-900 border-transparent'}`}
+          className={`${PHONE_ONLY_TAP_TARGET} px-3.5 py-2.5 rounded-t-xl font-bold text-xs flex items-center gap-2 border-t border-x shrink-0 cursor-pointer ${tab === active ? 'bg-white text-slate-900 border-slate-200 -mb-px' : 'text-slate-600 hover:text-slate-900 border-transparent'}`}
         >
           <span>{PROJECT_WORKSPACE_TAB_LABELS[tab]}</span>
           {badges[tab] && <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">{badges[tab]}</span>}
