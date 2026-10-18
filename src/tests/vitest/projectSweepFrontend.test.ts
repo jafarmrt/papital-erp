@@ -25,7 +25,8 @@ describe('OBS-R2-46: the material allocation service reads money as decimals and
 describe('OBS-R2-47: the project screens abort their effect requests on cleanup', () => {
   const files = [
     'src/components/inventory/ProjectBomAllocationsTab.tsx',
-    'src/components/project/ProjectProductProgressTab.tsx',
+    // v10.2.7 (10.2 package 10): the progress matrix load moved into the hook shared with the phone list
+    'src/hooks/useProductProgressTicks.ts',
     'src/components/settings/WorkflowPresetsTab.tsx',
   ];
 

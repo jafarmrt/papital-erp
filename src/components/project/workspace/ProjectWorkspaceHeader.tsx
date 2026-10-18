@@ -5,7 +5,7 @@ import { PROJECT_STATUS_LABELS } from '../../../lib/projects/projectStatus';
 import { PROJECT_WORKSPACE_TABS, PROJECT_WORKSPACE_TAB_LABELS, type ProjectWorkspaceTab } from '../../../lib/projects/projectWorkspaceTabs';
 import { ProjectStatusActions } from '../ProjectStatusActions';
 
-const STATUS_STYLES: Record<string, string> = {
+export const PROJECT_STATUS_STYLES: Record<string, string> = {
   planned: 'bg-slate-100 text-slate-700 border-slate-200',
   in_progress: 'bg-amber-50 text-amber-800 border-amber-200',
   completed: 'bg-emerald-50 text-emerald-800 border-emerald-200',
@@ -40,7 +40,7 @@ export function ProjectWorkspaceHeader({ project, version, canEdit, editingSpecs
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-base sm:text-lg font-bold text-slate-900">{project.title}</h1>
             {project.project_code && <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold border border-slate-200">{project.project_code}</span>}
-            <span className={`px-2 py-0.5 rounded-lg text-xs font-bold border ${STATUS_STYLES[status] ?? STATUS_STYLES.planned}`}>{statusLabel}</span>
+            <span className={`px-2 py-0.5 rounded-lg text-xs font-bold border ${PROJECT_STATUS_STYLES[status] ?? PROJECT_STATUS_STYLES.planned}`}>{statusLabel}</span>
           </div>
           <div className="flex items-center gap-3 text-xs text-slate-600 mt-1.5 flex-wrap">
             {project.customer_name && (

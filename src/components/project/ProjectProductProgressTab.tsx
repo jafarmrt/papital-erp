@@ -1,58 +1,14 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { RefreshCw, Layers, Package, CheckCircle2, Circle, Clock, Ban, Save, Info, Search, CheckSquare, Square, RotateCcw, Lock } from 'lucide-react';
-import { fetchJson, isAbortError } from '../../api';
-import toast from 'react-hot-toast';
-import { errorMessageOf, toPersianDigits } from '../../utils';
+import { toPersianDigits } from '../../utils';
 import { useProjectPermissions } from '../../hooks/useProjectPermissions';
+import { useProductProgressTicks } from '../../hooks/useProductProgressTicks';
+import { PROGRESS_CELL_LABELS, splitStageColumns } from '../../lib/projects/progressTicks';
 
 // V3.1.5 — تب «پیشرفت به تفکیک کد کالا» (ماتریسی SKU × مرحله + فیلتر، انتخاب ردیف و عملیات دسته‌ای)
 // مدل: هر ردیف = یک SKU (کد کالا × کمیت)؛ وضعیت هر مرحله دودویی (تمام/ناتمام)؛
 // پیشرفت کل پروژه = تجمیع وزن‌دار (Σ sku%×qty / Σ qty)
-
-interface StageMeta { stage_order: number; title: string; status?: string }
-interface ProductProgressRow {
-  stage_order: number;
-  stage_title: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'blocked';
-  updated_at: string;
-  updated_by_name: string;
-}
-interface ProductProgressRowData {
-  item_id: number | null;
-  item_code: string;
-  item_name: string;
-  customer_code?: string;
-  quantity: number;
-  unit: string;
-  applicable_stage_orders: number[];
-  excluded_stage_orders: number[];
-  progress: ProductProgressRow[];
-  completed_count: number;
-  applicable_count: number;
-  progress_percent: number;
-}
-interface ProductProgressResponse {
-  stages: StageMeta[];
-  products: ProductProgressRowData[];
-  summary: {
-    total_skus: number;
-    total_quantity: number;
-    weighted_progress_percent: number;
-    fully_completed_skus: number;
-    per_stage_counts: Array<{ stage_order: number; title: string; completed_count: number; applicable_skus: number }>;
-    total_matrix_cells?: number;
-    completed_matrix_cells?: number;
-    all_matrix_completed?: boolean;
-    missing_matrix_cells?: number;
-  };
-}
-
-const STATUS_LABELS: Record<ProductProgressRow['status'], string> = {
-  pending: 'ناتمام',
-  in_progress: 'در جریان',
-  completed: 'تمام',
-  blocked: 'متوقف'
-};
+// v10.2.7 (10.2 package 10): reading, ticking and saving live in `useProductProgressTicks`, shared with the phone list
 
 export default function ProjectProductProgressTab({ projectId, onUpdate, onDirtyChange }: {
   projectId: number;
@@ -60,11 +16,14 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
   /** v10.2.1 (review U2): the page asks before a tab change or leaving while ticks are not saved */
   onDirtyChange?: (dirty: boolean) => void;
 }) {
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [data, setData] = useState<ProductProgressResponse | null>(null);
   // v9.0.417 (TD-752): تیک ماتریس با `PUT /projects/:id/product-progress` و کلید `projects.edit` ثبت می‌شود
   const { canEdit } = useProjectPermissions();
+  const ticks = useProductProgressTicks(projectId, { canEdit, onUpdate, onDirtyChange });
+  const {
+    loading, saving, stages, products, editCount, hasChanges,
+    statusOf: resolveStatus, percentOf: progressPercent, isEdited, toggle: toggleStatus,
+    setStageForAll: setStageForAllSkus, reset: resetDirty, save: saveChanges,
+  } = ticks;
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -73,70 +32,8 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
   // Selected SKU item_ids for batch operations
   const [selectedSkuIds, setSelectedSkuIds] = useState<Set<number>>(new Set());
 
-  // pending local edits: key `${itemId}|${stageOrder}` → newStatus
-  const [dirty, setDirty] = useState<Map<string, ProductProgressRow['status']>>(new Map());
-
-  // OBS-R2-47: the effect's request is aborted on cleanup (project change, unmount) and a late answer is dropped
-  const load = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const res = await fetchJson(`/projects/${projectId}/product-progress`, { signal });
-      if (signal?.aborted) return;
-      const payload = res?.data ?? res;
-      if (payload && Array.isArray(payload.products)) {
-        setData(payload);
-      } else {
-        toast.error('ساختار پاسخ پیشرفت نامعتبر است');
-      }
-    } catch (err: unknown) {
-      if (isAbortError(err) || signal?.aborted) return;
-      toast.error(errorMessageOf(err) || 'خطا در دریافت پیشرفت تفکیکی کد کالا');
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  }, [projectId]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void load(controller.signal);
-    return () => controller.abort();
-  }, [load]);
-
-  const stages = data?.stages || [];
-  const products = useMemo(() => (Array.isArray(data?.products) ? data!.products : []), [data]);
-
   // گروه‌بندی ستون‌ها: مراحل پایه (همه SKUها) اول، مراحل اختیاری (زیرمجموعه SKUها) بعد از آن
-  const { baseStages, optionalStages } = useMemo(() => {
-    const applicableEverywhere = stages.filter(s => products.length > 0 && products.every(p => p.applicable_stage_orders.includes(s.stage_order)));
-    const optional = stages.filter(s => !applicableEverywhere.includes(s));
-    return { baseStages: applicableEverywhere, optionalStages: optional };
-  }, [stages, products]);
-
-  const resolveStatus = (p: ProductProgressRowData, order: number): ProductProgressRow['status'] => {
-    const key = `${p.item_id}|${order}`;
-    if (dirty.has(key)) return dirty.get(key)!;
-    const row = p.progress.find(pr => pr.stage_order === order);
-    return row?.status || 'pending';
-  };
-
-  const toggleStatus = (p: ProductProgressRowData, order: number) => {
-    if (!canEdit) return;
-    const key = `${p.item_id}|${order}`;
-    const current = resolveStatus(p, order);
-    const next: ProductProgressRow['status'] = current === 'completed' ? 'pending' : 'completed';
-    setDirty(prev => {
-      const m = new Map(prev);
-      m.set(key, next);
-      return m;
-    });
-  };
-
-  const progressPercent = (p: ProductProgressRowData): number => {
-    const applicable = p.applicable_stage_orders;
-    if (applicable.length === 0) return 0;
-    const done = applicable.filter(o => resolveStatus(p, o) === 'completed').length;
-    return Math.round((done / applicable.length) * 100);
-  };
+  const { baseStages, optionalStages } = useMemo(() => splitStageColumns(stages, products), [stages, products]);
 
   // Filtered products based on search and progress status
   const filteredProducts = useMemo(() => {
@@ -154,7 +51,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
       if (filterProgress === 'incomplete') return pct < 100;
       return true;
     });
-  }, [products, searchQuery, filterProgress, dirty]);
+  }, [products, searchQuery, filterProgress, progressPercent]);
 
   // Selection handlers
   const toggleSelectSku = (itemId: number | null) => {
@@ -180,78 +77,9 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
   };
 
   // Bulk operation: Set all stages for selected SKUs
-  const setAllStagesForSelectedSkus = (status: ProductProgressRow['status']) => {
-    if (!canEdit || selectedSkuIds.size === 0) return;
-    setDirty(prev => {
-      const m = new Map(prev);
-      for (const p of products) {
-        if (p.item_id && selectedSkuIds.has(p.item_id)) {
-          for (const order of p.applicable_stage_orders) {
-            m.set(`${p.item_id}|${order}`, status);
-          }
-        }
-      }
-      return m;
-    });
-    toast.success(`وضعیت تمام مراحل برای ${toPersianDigits(selectedSkuIds.size)} محصول تغییر یافت`);
-  };
+  const setAllStagesForSelectedSkus = (status: 'pending' | 'completed') => ticks.setAllStagesOf(selectedSkuIds, status);
 
-  // Bulk operation: Set specific stage for all applicable SKUs
-  const setStageForAllSkus = (order: number, status: ProductProgressRow['status']) => {
-    if (!canEdit) return;
-    setDirty(prev => {
-      const m = new Map(prev);
-      for (const p of products) {
-        if (p.applicable_stage_orders.includes(order)) {
-          m.set(`${p.item_id}|${order}`, status);
-        }
-      }
-      return m;
-    });
-    toast.success(`وضعیت مرحله برای تمام کالاها به روز شد`);
-  };
-
-  // Bulk operation: Complete a specific stage for selected SKUs only
-
-  // Reset unsaved changes
-  const resetDirty = () => {
-    setDirty(new Map());
-    toast('تغییرات ثبت‌نشده لغو شدند', { icon: '↩️' });
-  };
-
-  const hasChanges = dirty.size > 0;
-  useEffect(() => { onDirtyChange?.(hasChanges && !saving); }, [hasChanges, saving, onDirtyChange]);
-  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
-
-  const saveChanges = async () => {
-    if (!hasChanges || saving) return;
-    setSaving(true);
-    try {
-      const items = Array.from(dirty.entries()).map(([key, status]) => {
-        const [itemId, order] = key.split('|');
-        return { item_id: Number(itemId), stage_order: Number(order), status };
-      });
-      const res = await fetchJson(`/projects/${projectId}/product-progress`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items })
-      });
-      if (res?.success) {
-        toast.success(`${toPersianDigits(res.applied)} تغییر وضعیت ثبت شد`);
-        setDirty(new Map());
-        void load();
-        onUpdate?.();
-      } else {
-        toast.error(res?.error || 'خطا در ثبت تغییرات');
-      }
-    } catch (err: any) {
-      toast.error(err?.message || 'خطا در ثبت تغییرات');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const summary = data?.summary;
+const summary = ticks.summary;
 
   if (loading) {
     return (
@@ -427,7 +255,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
                   className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-xl font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs animate-pulse"
                 >
                   <Save className="w-3.5 h-3.5" />
-                  <span>{saving ? 'در حال ثبت...' : `ثبت ${toPersianDigits(dirty.size)} تغییر در سامانه`}</span>
+                  <span>{saving ? 'در حال ثبت...' : `ثبت ${toPersianDigits(editCount)} تغییر در سامانه`}</span>
                 </button>
               )}
             </div>
@@ -627,7 +455,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
                       {baseStages.map(s => {
                         const applicable = p.applicable_stage_orders.includes(s.stage_order);
                         const st = applicable ? resolveStatus(p, s.stage_order) : null;
-                        const isDirty = dirty.has(`${p.item_id}|${s.stage_order}`);
+                        const isDirty = isEdited(p, s.stage_order);
                         return (
                           <td key={`c-${s.stage_order}`} className={`p-1 text-center ${isDirty ? 'bg-blue-100/50' : ''}`}>
                             {applicable ? (
@@ -643,7 +471,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
                                     ? 'bg-red-100 text-red-700 border border-red-300 hover:bg-red-200'
                                     : 'bg-slate-100 text-slate-300 border border-slate-200 hover:bg-slate-200'
                                 }`}
-                                title={`${s.title} — ${st ? STATUS_LABELS[st] : ''} (کلیک: تغییر تمام/ناتمام)`}
+                                title={`${s.title} — ${st ? PROGRESS_CELL_LABELS[st] : ''} (کلیک: تغییر تمام/ناتمام)`}
                               >
                                 {st === 'completed' ? <CheckCircle2 className="w-4 h-4" /> : st === 'in_progress' ? <Clock className="w-4 h-4" /> : st === 'blocked' ? <Ban className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
                               </button>
@@ -656,7 +484,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
                       {optionalStages.map(s => {
                         const applicable = p.applicable_stage_orders.includes(s.stage_order);
                         const st = applicable ? resolveStatus(p, s.stage_order) : null;
-                        const isDirty = dirty.has(`${p.item_id}|${s.stage_order}`);
+                        const isDirty = isEdited(p, s.stage_order);
                         return (
                           <td key={`oc-${s.stage_order}`} className={`p-1 text-center bg-amber-50/30 ${isDirty ? 'bg-blue-100/50' : ''}`}>
                             {applicable ? (
@@ -672,7 +500,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
                                     ? 'bg-red-100 text-red-700 border border-red-300 hover:bg-red-200'
                                     : 'bg-slate-100 text-slate-300 border border-slate-200 hover:bg-slate-200'
                                 }`}
-                                title={`${s.title} (اختیاری) — ${st ? STATUS_LABELS[st] : ''}`}
+                                title={`${s.title} (اختیاری) — ${st ? PROGRESS_CELL_LABELS[st] : ''}`}
                               >
                                 {st === 'completed' ? <CheckCircle2 className="w-4 h-4" /> : st === 'in_progress' ? <Clock className="w-4 h-4" /> : st === 'blocked' ? <Ban className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
                               </button>
