@@ -14,6 +14,7 @@ import { activityPayload } from '../lib/crm/activityPayload';
 import { useLeadDrawerActivities } from './useLeadDrawerActivities';
 import { activityEditForm, activityEditPayload } from '../lib/crm/activityEdit';
 import { lostReasonError } from '../lib/crm/leadFields';
+import { WON_LEAD_MESSAGE, crmAssignablePersonnel } from '../lib/crm/crmScreenText';
 
 export const STAGES = [
   { key: 'lead', title: 'مخاطب اولیه', color: 'bg-slate-100 border-slate-300 text-slate-700', badge: 'bg-slate-200 text-slate-800' },
@@ -168,7 +169,8 @@ export function useCRMData(user: any) {
         const perRes = await fetchJson('/personnel?limit=1000', { signal });
         if (signal?.aborted) return;
         const perData = Array.isArray(perRes) ? perRes : (Array.isArray(perRes?.data) ? perRes.data : []);
-        const activePeople = perData.filter((p: any) => (p.employmentStatus || 'فعال') === 'فعال');
+        // v10.2.0: everyone but a personnel who left; before, only the exact status «فعال»
+        const activePeople = crmAssignablePersonnel(perData);
         setPersonnelList(activePeople);
       } catch (e: any) {
         if (isAbortError(e) || signal?.aborted) return;
@@ -311,7 +313,7 @@ export function useCRMData(user: any) {
       }
 
       if (leadForm.stage === 'won') {
-        toast.success('🎉 عالی بود! معامله با موفقیت بسته شد. همزمان اعلان ثبت پیش‌فاکتور به واحد انبار ارسال شد.', { duration: 6000 });
+        toast.success(WON_LEAD_MESSAGE, { duration: 6000 });
       } else if (leadForm.stage === 'lost') {
         toast('💪 با تلاش بیشتر در فرصت‌های بعدی موفق خواهید شد! هر تجربه گامی به سوی فروش‌های بزرگ‌تر است.', { duration: 6000 });
       }
@@ -343,7 +345,7 @@ export function useCRMData(user: any) {
       });
       setLostPromptLeadId(null);
       if (newStage === 'won') {
-        toast.success('🎉 عالی بود! معامله با موفقیت بسته شد. همزمان اعلان ثبت پیش‌فاکتور به واحد انبار ارسال گردید.', { duration: 6000 });
+        toast.success(WON_LEAD_MESSAGE, { duration: 6000 });
       } else if (newStage === 'lost') {
         toast('💪 با تلاش بیشتر در فرصت‌های بعدی موفق خواهید شد! هر تجربه گامی به سوی فروش‌های بزرگ‌تر است.', { duration: 6000 });
       } else {

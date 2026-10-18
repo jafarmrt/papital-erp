@@ -86,7 +86,7 @@ export default function LoginPage({ onLogin, notice }: LoginPageProps) {
   };
 
   if (isSetup === null) {
-    return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 font-sans" dir="rtl">در حال بررسی وضعیت سیستم...</div>;
+    return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 font-sans" dir="rtl">در حال بررسی وضعیت سامانه...</div>;
   }
 
   if (isSetup === false) {
@@ -117,7 +117,7 @@ export default function LoginPage({ onLogin, notice }: LoginPageProps) {
             {companyName ? `ورود به ${companyName}` : 'ورود به سامانه جامع ERP پاپیتال'}
           </h1>
           <p className="text-slate-500 mt-2 text-sm">
-            لطفاً برای ورود به سیستم اطلاعات خود را وارد کنید.
+            لطفاً برای ورود به سامانه اطلاعات خود را وارد کنید.
           </p>
         </div>
 
@@ -195,7 +195,7 @@ export default function LoginPage({ onLogin, notice }: LoginPageProps) {
             disabled={isSaving || isLocked} 
             className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg transition-colors mt-4"
           >
-            {isSaving ? 'در حال ورود...' : isLocked ? 'ورود موقتاً بسته است' : 'ورود به سیستم'}
+            {isSaving ? 'در حال ورود...' : isLocked ? 'ورود موقتاً بسته است' : 'ورود به سامانه'}
           </button>
         </form>
       </div>

@@ -16,6 +16,7 @@ import { ensurePublishedSnapshot, recordDefinitionVersion } from './workflowSnap
 import { writeDesignTables, type DesignStateInput, type DesignTransitionInput } from './workflowDesignTables.js';
 import { DOC_APPROVAL_STEP_GUARDS, DOC_APPROVAL_SUBMIT_GUARD_UPGRADE, upgradeLegacyDocApprovalGuards } from './docApprovalGuards.js';
 import { upgradeLegacySeedGuards } from './seedGuardUpgrade.js';
+import { replaceRemovedWorkflowPermissions } from './removedPermissionKeys.js';
 import { JOURNAL_VOUCHER_GUARD_UPGRADE, JOURNAL_VOUCHER_STEP_GUARDS } from './voucherWorkflowGuards.js';
 import { PURCHASE_REQUISITION_GUARD_UPGRADE, PURCHASE_REQUISITION_STEP_GUARDS } from './purchaseWorkflowGuards.js';
 import { resolveTransitionRoles } from './transitionRoles.js';
@@ -433,6 +434,12 @@ export class WorkflowDefinitionService {
         logger.info('[WorkflowDefinitionService] Seeded simplified JOURNAL_VOUCHER_WORKFLOW successfully.');
       } else if (await upgradeLegacySeedGuards(JOURNAL_VOUCHER_GUARD_UPGRADE)) {
         logger.info('[WorkflowDefinitionService] JOURNAL_VOUCHER_WORKFLOW step permissions upgraded (TD-965).');
+      }
+
+      // v10.2.0: actions still asking the removed key of migration 0123 ask its replacement
+      const replaced = await replaceRemovedWorkflowPermissions();
+      if (replaced.length > 0) {
+        logger.info(`[WorkflowDefinitionService] Removed permission keys replaced in ${replaced.length} workflow definition(s).`);
       }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);

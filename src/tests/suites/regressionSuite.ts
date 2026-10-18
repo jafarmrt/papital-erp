@@ -11142,5 +11142,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runClosingPermissionKeysTests } = await import('../regression/closingPermissionKeysTests.js');
   results.push(...await runClosingPermissionKeysTests(shouldRun));
 
+  // v10.2.0 package 1: urgent fixes after the 10.1 upgrade (TD-1289)
+  const { runUrgentFixesV1020Tests } = await import('../regression/urgentFixesV1020Tests.js');
+  results.push(...await runUrgentFixesV1020Tests(shouldRun));
+
   return results;
 }
