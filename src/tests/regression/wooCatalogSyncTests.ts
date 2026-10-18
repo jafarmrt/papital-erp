@@ -2,6 +2,7 @@ import { TestCaseResult } from '../types.js';
 import type { Harness, ShouldRun } from '../security/workflowTestHarness.js';
 import { runReservationCases } from './stockReservationTests.js';
 import { mockWooCatalogStore, type MockProduct, type MockWooCatalogStore } from '../fixtures/mockWooCatalogStore.js';
+import { WC_LIST_LIMIT } from '../../lib/woocommerce/wcCatalog.js';
 
 /**
  * 10.2 package 6 (D-04 part A, OBS-R2-83): items are linked to the shop's products by «بازخوانی محصولات سایت» and stock goes
@@ -117,7 +118,7 @@ async function catalogRefreshCase(h: Harness, wrong: string[]): Promise<string> 
 
     const catalog = await h.get('/api/woocommerce/catalog', reader);
     if (catalog.status !== 200) wrong.push(`a woocommerce.view reader read the catalog: ${brief(catalog)}`);
-    const body = catalog.body as { unmatched?: Array<{ productId: number; variationId: number; reason: string }>; unmatchedTotal?: number; itemsNotOnSite?: Array<{ itemId: number }> };
+    const body = catalog.body as { unmatched?: Array<{ productId: number; variationId: number; reason: string }>; unmatchedTotal?: number; itemsNotOnSite?: Array<{ itemId: number }>; itemsNotOnSiteTotal?: number };
     const reasonOf = (productId: number, variationId = 0) => body.unmatched?.find(u => u.productId === productId && u.variationId === variationId)?.reason;
     if (reasonOf(3) !== 'duplicate_sku' || reasonOf(4) !== 'duplicate_sku') wrong.push(`duplicate SKUs: ${reasonOf(3)} / ${reasonOf(4)}`);
     if (reasonOf(5) !== 'no_sku') wrong.push(`a product without SKU: ${reasonOf(5)}`);
@@ -125,7 +126,15 @@ async function catalogRefreshCase(h: Harness, wrong: string[]): Promise<string> 
     if (reasonOf(6) !== 'unknown_sku') wrong.push(`an unknown SKU: ${reasonOf(6)}`);
     if (reasonOf(6, 62) !== undefined) wrong.push('a variation inheriting its parent\'s SKU was listed on its own');
     if (body.unmatchedTotal !== 105) wrong.push(`unmatched total ${body.unmatchedTotal}, expected 105`);
-    if (!body.itemsNotOnSite?.some(i => i.itemId === notOnSite.id)) wrong.push('the item without a site product is not listed');
+    // the list holds the first WC_LIST_LIMIT items by code; the shared test schema has many unlinked items, so the total is
+    // compared with the database and the item is looked for only while the list is not full
+    const [{ unlinked }] = await h.q(
+      `SELECT count(*)::int AS unlinked FROM items i WHERE i.is_deleted = 0 AND i.type = 'product' AND btrim(coalesce(i.code, '')) <> ''
+         AND NOT EXISTS (SELECT 1 FROM wc_product_links l WHERE l.item_id = i.id AND l.is_deleted = 0)`,
+    );
+    const listed = body.itemsNotOnSite ?? [];
+    if (body.itemsNotOnSiteTotal !== Number(unlinked)) wrong.push(`items not on the site: total ${body.itemsNotOnSiteTotal}, expected ${unlinked}`);
+    if (listed.length < WC_LIST_LIMIT && !listed.some(i => i.itemId === notOnSite.id)) wrong.push('the item without a site product is not listed');
 
     const audit = await h.q(`SELECT details FROM activity_logs WHERE action = 'WC_CATALOG_REFRESH' AND entity = 'فروشگاه اینترنتی' ORDER BY id DESC LIMIT 1`);
     if (audit.length !== 1) wrong.push('the refresh wrote no audit row');
