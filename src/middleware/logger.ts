@@ -255,7 +255,7 @@ export function errorLogEntry(
     code: normalized.code,
     userMessage: normalized.message,
     ...(db ? { database: db } : {}),
-    ...(normalized.statusCode >= 500 && frames.length > 0 ? { stack: [`${name} (${code})${englishMessage}`, ...frames].join('\n') } : {}),
+    ...(normalized.statusCode >= 500 && frames.length > 0 ? { stack: [`${name} (${code})${englishMessage}${dbReason}`, ...frames].join('\n') } : {}),
     errorStack: normalized.stack,
   };
 }

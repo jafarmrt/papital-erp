@@ -65,6 +65,9 @@ describe('database_error_answer_td_1320', () => {
       expect(String(entry.message)).toContain(`SQLSTATE ${sqlState}`);
       expect(String(entry.message)).toContain(part);
       expect(String(entry.message)).not.toContain('params');
+      // a 5xx with frames prints its stack on the terminal, so the reason is in its header too
+      expect(String(entry.stack).split('\n')[0]).toContain(`SQLSTATE ${sqlState}`);
+      expect(String(entry.stack).split('\n')[0]).toContain(part);
       const { body } = answerOf(err);
       expect(body.code).toBe('DATABASE_ERROR');
       expect(JSON.stringify(body)).not.toContain(sqlState);
