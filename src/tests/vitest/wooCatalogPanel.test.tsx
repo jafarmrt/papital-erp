@@ -10,7 +10,7 @@ import { toast } from 'react-hot-toast';
 import { fetchJson } from '../../api';
 import { WcCatalogPanel } from '../../components/settings/WcCatalogPanel';
 import { stockSyncOutcome } from '../../lib/woocommerce/stockSyncOutcome';
-import { WC_UNMATCHED_REASON_LABELS, catalogCapNotice, catalogRefreshMessage, trackingEnabledNote, chunked, siteStockQuantity, type WcCatalogReport } from '../../lib/woocommerce/wcCatalog';
+import { WC_UNMATCHED_REASON_LABELS, catalogCapNotice, catalogOrderNotice, catalogRefreshMessage, trackingEnabledNote, chunked, siteStockQuantity, type WcCatalogReport } from '../../lib/woocommerce/wcCatalog';
 
 vi.mock('../../api', async () => {
   const actual = await vi.importActual<typeof import('../../api')>('../../api');
@@ -39,6 +39,7 @@ const report: WcCatalogReport = {
   failing: [{ itemId: 8, code: 'PR-8', name: 'دستبند', error: 'محصول در سایت پیدا نشد' }],
   failingTotal: 1,
   catalogTruncated: false,
+  catalogUnordered: false,
 };
 
 function serve(refreshAnswer: unknown = { success: true, message: 'پیام کارساز' }, catalog: WcCatalogReport = report) {
@@ -90,6 +91,14 @@ describe('D-04 the item ↔ shop product links panel', () => {
     serve(undefined, { ...report, catalogTruncated: true });
     render(<WcCatalogPanel canManage={false} stockPushRunning={false} />, { wrapper });
     expect(await screen.findByText(catalogCapNotice())).toBeTruthy();
+  });
+
+  it('review M-C: a reading out of id order says its unread links were kept, in the toast and on the panel', async () => {
+    expect(catalogRefreshMessage({ siteProductCount: 3, linkedCount: 2, unmatchedTotal: 0, catalogUnordered: true })).toContain(catalogOrderNotice());
+    expect(catalogRefreshMessage({ siteProductCount: 3, linkedCount: 2, unmatchedTotal: 0 })).not.toContain(catalogOrderNotice());
+    serve(undefined, { ...report, catalogUnordered: true });
+    render(<WcCatalogPanel canManage={false} stockPushRunning={false} />, { wrapper });
+    expect(await screen.findByText(catalogOrderNotice())).toBeTruthy();
   });
 
   it('review N-2: no cap notice for a full reading', async () => {

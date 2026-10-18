@@ -1,6 +1,9 @@
 import { readFileSync } from 'fs';
 import path from 'path';
 import { describe, expect, it, vi } from 'vitest';
+import {
+  pushBudgetMs, refreshBudgetMs, WC_PUSH_DEADLINE_MS, WC_PUSH_MIN_BUDGET_MS,
+} from '../../lib/woocommerce/wcCatalog';
 
 /**
  * 10.2 package 6 review M-5 (OBS-R2-81): the shop request checks the address the socket really connects to. Before, the
@@ -61,5 +64,30 @@ describe('wc_connect_time_lookup_d04_m5', () => {
     expect(src).toMatch(/signal/);
     // review N-B: an environment proxy would resolve the name itself and skip the guarded lookup
     expect(src).toMatch(/proxy:\s*false/);
+    // review N-E: a plain-HTTP shop goes through an own agent, never Node's global one that may follow HTTP_PROXY
+    expect(src).toMatch(/const httpAgent = new http\.Agent\(/);
+    expect(src).toMatch(/^\s*httpAgent,$/m);
+  });
+});
+
+describe('wc_push_shared_budget_d04_n_d', () => {
+  it('a refresh before a push leaves the push its minimum budget out of one exchange deadline', () => {
+    expect(refreshBudgetMs(0)).toBe(WC_PUSH_DEADLINE_MS - WC_PUSH_MIN_BUDGET_MS);
+    expect(refreshBudgetMs(2_000)).toBe(WC_PUSH_DEADLINE_MS - WC_PUSH_MIN_BUDGET_MS - 2_000);
+    expect(refreshBudgetMs(WC_PUSH_DEADLINE_MS)).toBe(1_000);
+  });
+
+  it('the push gets what is left, and is not started when less than its minimum budget is left', () => {
+    expect(pushBudgetMs(0)).toBe(WC_PUSH_DEADLINE_MS);
+    expect(pushBudgetMs(WC_PUSH_DEADLINE_MS - WC_PUSH_MIN_BUDGET_MS)).toBe(WC_PUSH_MIN_BUDGET_MS);
+    expect(pushBudgetMs(WC_PUSH_DEADLINE_MS - WC_PUSH_MIN_BUDGET_MS + 1)).toBeNull();
+    expect(pushBudgetMs(WC_PUSH_DEADLINE_MS + 10_000)).toBeNull();
+  });
+
+  it('both pushes run their refresh and their push on the shared budget', () => {
+    const src = readFileSync(path.resolve(__dirname, '../../services/woocommerce/wcStockPush.service.ts'), 'utf8');
+    expect(src).not.toMatch(/await refreshCatalogLocked\(actor, conn\)/);
+    expect(src.match(/refreshBeforePush\(actor, conn, startedAt\)/g)).toHaveLength(2);
+    expect(src.match(/deadlineMs: await pushBudgetOrStop\(actor, startedAt\)/g)).toHaveLength(2);
   });
 });

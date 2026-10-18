@@ -4,13 +4,15 @@ import { items, wcSyncRuns } from '../../db/schema.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
-import { chunked, siteStockQuantity, WC_LIST_LIMIT } from '../../lib/woocommerce/wcCatalog.js';
+import {
+  chunked, pushBudgetMs, refreshBudgetMs, siteStockQuantity, WC_LIST_LIMIT, WC_PUSH_DEADLINE_MS,
+} from '../../lib/woocommerce/wcCatalog.js';
 import { shopSellableStocks } from './shopWarehouse.js';
 import { updateLinkRows } from './wcLinkUpdates.js';
 import { formatPersianNumber } from '../../utils/persianNumber.js';
 import { requireWcConnection, wcRequest, WC_SHOP_REQUEST_FAILED, type WcConnection } from './wcClient.js';
 import {
-  actorUserId, hasLiveLinks, liveLinks, refreshCatalogLocked, withWcSyncLock, type WcActor, type WcRefreshSummary,
+  actorUserId, hasLiveLinks, liveLinks, recordFailedRun, refreshCatalogLocked, withWcSyncLock, type WcActor, type WcRefreshSummary,
 } from './wcCatalog.service.js';
 
 /**
@@ -44,8 +46,7 @@ function answerRows(answer: unknown): BatchAnswerRow[] {
   return Array.isArray(rows) ? rows as BatchAnswerRow[] : [];
 }
 
-/** review N-A: one push never holds the lock longer than this (under the 60 s of a reverse proxy), a refresh before it included */
-export const WC_PUSH_DEADLINE_MS = 50_000;
+export { WC_PUSH_DEADLINE_MS };
 const PUSH_DEADLINE_MESSAGE = 'ارسال موجودی در مهلت تعیین‌شده تمام نشد و این محصول فرستاده نشد؛ کمی بعد دوباره بزنید.';
 
 async function pushBatch(
@@ -161,9 +162,24 @@ export async function pushStocksLocked(actor: WcActor, options: PushOptions, con
 
 export const WC_ITEM_NOT_LINKED = 'WC_ITEM_NOT_LINKED';
 
-/** what is left of the exchange's deadline after a refresh that ran first (at least one second, so the push still tries) */
-function remainingMs(startedAt: number): number {
-  return Math.max(1_000, WC_PUSH_DEADLINE_MS - (Date.now() - startedAt));
+/** review N-D: a refresh run before a push shares the exchange's deadline and leaves the push its minimum budget */
+function refreshBeforePush(actor: WcActor, conn: WcConnection, startedAt: number): Promise<WcRefreshSummary> {
+  return refreshCatalogLocked(actor, conn, { deadlineMs: refreshBudgetMs(Date.now() - startedAt) });
+}
+
+/**
+ * What is left of the exchange for the push; when the refresh before it left too little, the push is not started (a failed
+ * run with its reason, no link marked failed)
+ */
+async function pushBudgetOrStop(actor: WcActor, startedAt: number): Promise<number> {
+  const budget = pushBudgetMs(Date.now() - startedAt);
+  if (budget !== null) return budget;
+  const err = new ValidationError(
+    'بازخوانی محصولات سایت انجام شد ولی برای ارسال موجودی وقت نماند و چیزی فرستاده نشد؛ دوباره «ارسال موجودی» را بزنید.',
+    undefined, WC_SHOP_REQUEST_FAILED,
+  );
+  await recordFailedRun('stock_push', actor, err);
+  throw err;
 }
 
 export interface WcPushAllResult extends WcStockPushResult {
@@ -176,8 +192,8 @@ export function pushAllStocks(actor: WcActor): Promise<WcPushAllResult> {
   return withWcSyncLock(async () => {
     const startedAt = Date.now();
     const conn = await requireWcConnection();
-    const refreshed = (await hasLiveLinks()) ? undefined : await refreshCatalogLocked(actor, conn);
-    const result = await pushStocksLocked(actor, { trigger: 'all', deadlineMs: remainingMs(startedAt) }, conn);
+    const refreshed = (await hasLiveLinks()) ? undefined : await refreshBeforePush(actor, conn, startedAt);
+    const result = await pushStocksLocked(actor, { trigger: 'all', deadlineMs: await pushBudgetOrStop(actor, startedAt) }, conn);
     return refreshed ? { ...result, refreshed } : result;
   });
 }
@@ -193,7 +209,7 @@ export function pushItemStock(actor: WcActor, itemId: number): Promise<{ sku: st
     let [link] = await liveLinks([itemId]);
     if (!link) {
       // a product made on the site since the last refresh: read the catalog once before giving up
-      await refreshCatalogLocked(actor, conn);
+      await refreshBeforePush(actor, conn, startedAt);
       [link] = await liveLinks([itemId]);
     }
     if (!link) {
@@ -202,7 +218,7 @@ export function pushItemStock(actor: WcActor, itemId: number): Promise<{ sku: st
         undefined, WC_ITEM_NOT_LINKED,
       );
     }
-    const result = await pushStocksLocked(actor, { itemIds: [itemId], trigger: 'item', deadlineMs: remainingMs(startedAt) }, conn);
+    const result = await pushStocksLocked(actor, { itemIds: [itemId], trigger: 'item', deadlineMs: await pushBudgetOrStop(actor, startedAt) }, conn);
     if (result.failedCount > 0) throw new ValidationError(`موجودی به سایت نرسید: ${result.errors[0] ?? ''}`, undefined, WC_SHOP_REQUEST_FAILED);
     const [after] = await liveLinks([itemId]);
     return { sku: after?.siteSku || String(item.code), quantity: Number(after?.siteStock ?? 0), trackingEnabledCount: result.trackingEnabledCount };

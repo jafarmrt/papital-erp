@@ -30,6 +30,12 @@ export interface MockWooCatalogStore {
   /** catalog pages after the first start one row early, so their first row repeats the last row of the page before (a date
    * order without a tie-breaker): only for a request without `orderby=id&order=asc`, or for every request with `always` */
   unstableOrder?: 'without_id_order' | 'always';
+  /** the product list ignores `orderby=id` and answers the newest product first (review M-C) */
+  newestFirst?: boolean;
+  /** requests whose path matches `pattern` are answered only once `until` settles (review N-G: no timing in the test) */
+  hold?: { pattern: RegExp; until: Promise<void> };
+  /** every request as it arrives, before any wait, as `METHOD path?page=N` */
+  arrivals: string[];
   /** the most requests the shop was answering at the same time */
   maxInFlight: number;
   /** each answer waits this long (a slow shop) */
@@ -50,6 +56,10 @@ function page<T>(rows: T[], url: URL, store: MockWooCatalogStore): T[] {
   return rows.slice(start, start + perPage);
 }
 
+function productPage(products: MockProduct[], url: URL, store: MockWooCatalogStore): MockProduct[] {
+  return page(store.newestFirst ? [...products].sort((a, b) => b.id - a.id) : products, url, store);
+}
+
 function batchAnswer(store: MockWooCatalogStore, body: string): unknown {
   const parsed = JSON.parse(body || '{}') as { update?: Array<{ id: number; stock_quantity?: number }> };
   const rows = parsed.update ?? [];
@@ -64,7 +74,9 @@ function batchAnswer(store: MockWooCatalogStore, body: string): unknown {
 }
 
 export async function mockWooCatalogStore(products: MockProduct[]): Promise<MockWooCatalogStore> {
-  const store = { pushed: new Map(), requests: [], batchSizes: [], rowErrors: new Set(), failPaths: new Set(), queries: [], maxInFlight: 0 } as unknown as MockWooCatalogStore;
+  const store = {
+    pushed: new Map(), requests: [], arrivals: [], batchSizes: [], rowErrors: new Set(), failPaths: new Set(), queries: [], maxInFlight: 0,
+  } as unknown as MockWooCatalogStore;
   let inFlight = 0;
   const server = http.createServer((req, res) => {
     const url = new URL(req.url || '/', 'http://127.0.0.1');
@@ -72,12 +84,15 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
     let body = '';
     req.on('data', chunk => { body += String(chunk); });
     req.on('end', () => void (async () => {
+      const label = `${req.method} ${path}${url.searchParams.get('page') ? `?page=${url.searchParams.get('page')}` : ''}`;
+      store.arrivals.push(label);
+      if (store.hold?.pattern.test(path)) await store.hold.until;
       inFlight++;
       store.maxInFlight = Math.max(store.maxInFlight, inFlight);
       if (store.delayMs) await new Promise(resolve => setTimeout(resolve, store.delayMs));
       inFlight--;
       store.queries.push(url.searchParams);
-      store.requests.push(`${req.method} ${path}${url.searchParams.get('page') ? `?page=${url.searchParams.get('page')}` : ''}`);
+      store.requests.push(label);
       res.setHeader('Content-Type', 'application/json');
       const send = (data: unknown) => res.end(JSON.stringify(data));
       if (store.failStatus || store.failPaths.has(path)) {
@@ -86,7 +101,7 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
         return;
       }
       if (req.method === 'GET' && path === 'products') {
-        send(page(products, url, store).map(p => ({
+        send(productPage(products, url, store).map(p => ({
           id: p.id, name: p.name ?? `محصول ${p.id}`, sku: p.sku, type: p.type ?? (p.variations ? 'variable' : 'simple'),
           stock_quantity: p.stock ?? null, manage_stock: p.stock !== undefined && p.stock !== null,
         })));

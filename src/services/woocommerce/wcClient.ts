@@ -1,4 +1,5 @@
 import axios from 'axios';
+import http from 'http';
 import https from 'https';
 import fs from 'fs';
 import { assertSafeExternalUrl, guardedDnsLookup, UNSAFE_RESOLVED_ADDRESS } from '../../lib/ssrfGuard.js';
@@ -38,6 +39,11 @@ const httpsAgent = new https.Agent({
   rejectUnauthorized: true,
   ca: (wooCaPath && fs.existsSync(wooCaPath)) ? fs.readFileSync(wooCaPath, 'utf8') : undefined,
 });
+/**
+ * review N-E: an own agent for a plain-HTTP shop too, so Node's global agent (which follows HTTP_PROXY when
+ * NODE_USE_ENV_PROXY is set) never carries a shop request past the guarded lookup
+ */
+const httpAgent = new http.Agent();
 
 /** The stored connection, or 422 `WC_SETTINGS_INCOMPLETE` when the address or a key is missing */
 export async function requireWcConnection(executor?: DbExecutor): Promise<WcConnection> {
@@ -96,6 +102,7 @@ export async function makeWcRequest(
           data: asGet ? undefined : data,
           params: wcAuthQueryParams(url, params, key, secret),
           headers,
+          httpAgent,
           httpsAgent,
           // review M-5: the socket checks every address it resolves, so DNS rebinding after the guard reaches nothing inside
           lookup: guardedDnsLookup as never,

@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Link2, RefreshCw } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useRefreshWcCatalogMutation, useWcCatalogQuery } from '../../hooks/queries/useWooCatalogQueries';
-import { catalogCapNotice, type WcRunView } from '../../lib/woocommerce/wcCatalog';
+import { catalogCapNotice, catalogOrderNotice, type WcRunView } from '../../lib/woocommerce/wcCatalog';
 import { formatPersianDateTime, formatPersianNumber, getErrorMessage } from '../../utils';
 import { WcItemList, WcUnmatchedList } from './WcCatalogLists';
 
@@ -91,6 +91,7 @@ export function WcCatalogPanel({ canManage, stockPushRunning }: { canManage: boo
             <p className="text-xs text-amber-800">محصولات سایت هنوز خوانده نشده است؛ نخستین ارسال موجودی ابتدا آن‌ها را می‌خواند.</p>
           )}
           {report.catalogTruncated && <p className="text-xs text-amber-800">{catalogCapNotice()}</p>}
+          {report.catalogUnordered && <p className="text-xs text-amber-800">{catalogOrderNotice()}</p>}
           <div className="space-y-2">
             <WcItemList
               title="کالاهایی که ارسال موجودی آن‌ها شکست خورد"

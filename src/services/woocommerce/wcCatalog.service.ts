@@ -62,6 +62,11 @@ export interface SiteCatalog {
   truncated: boolean;
   /** the largest product id read; when the reading was truncated, a link of a product above it is left as it is */
   maxProductId: number;
+  /**
+   * review M-C: a list came in another order than the id order asked for (a shop or plugin that ignores `orderby`), so a
+   * product may have been missed between two pages; every link of a product not read is then left as it is
+   */
+  unordered: boolean;
 }
 
 /** review M-6: one refresh never holds the lock longer than this (under the 60 s of a reverse proxy) */
@@ -83,13 +88,18 @@ function stockOf(raw: RawProduct): number | null {
   return raw.stock_quantity === null || raw.stock_quantity === undefined || !Number.isFinite(n) ? null : Math.trunc(n);
 }
 
+interface PagedRows { rows: RawProduct[]; truncated: boolean; unordered: boolean }
+
 /**
  * Every page of a list in id order (review H-1: the default date order has no tie-breaker, so a product could be read on
- * two pages and be reported as a duplicate of itself); a row read twice is kept once
+ * two pages and be reported as a duplicate of itself); a row read twice is kept once, and a new id not above every id
+ * read before marks the list `unordered` (review M-C)
  */
-async function readPages(conn: WcConnection, path: string, fields: string, signal?: AbortSignal): Promise<{ rows: RawProduct[]; truncated: boolean }> {
+async function readPages(conn: WcConnection, path: string, fields: string, signal?: AbortSignal): Promise<PagedRows> {
   const rows: RawProduct[] = [];
   const seen = new Set<number>();
+  let lastId = 0;
+  let unordered = false;
   for (let page = 1; page <= WC_MAX_CATALOG_PAGES; page++) {
     const batch = asRows(await wcRequest(conn, 'GET', path, null, {
       per_page: WC_BATCH_SIZE, page, status: 'any', orderby: 'id', order: 'asc', _fields: fields,
@@ -98,18 +108,23 @@ async function readPages(conn: WcConnection, path: string, fields: string, signa
       const id = Number(row.id);
       if (seen.has(id)) continue;
       seen.add(id);
+      if (id <= lastId) unordered = true;
+      lastId = Math.max(lastId, id);
       rows.push(row);
     }
-    if (batch.length < WC_BATCH_SIZE) return { rows, truncated: false };
+    if (batch.length < WC_BATCH_SIZE) return { rows, truncated: false, unordered };
   }
-  return { rows, truncated: true };
+  return { rows, truncated: true, unordered };
 }
 
 /**
  * `fn` over `inputs`, at most `limit` at a time, results in input order; after the first failure no worker starts another
- * input (review M-A: the other workers kept calling the shop after the refresh had answered and released the lock)
+ * input (review M-A: the other workers kept calling the shop after the refresh had answered and released the lock) and
+ * `onFailure` runs once, so the caller can abort what is still in flight
  */
-export async function mapLimited<T, R>(inputs: T[], limit: number, fn: (input: T) => Promise<R>): Promise<R[]> {
+export async function mapLimited<T, R>(
+  inputs: T[], limit: number, fn: (input: T) => Promise<R>, onFailure?: () => void,
+): Promise<R[]> {
   const out: R[] = new Array(inputs.length);
   let next = 0;
   let failed = false;
@@ -119,6 +134,7 @@ export async function mapLimited<T, R>(inputs: T[], limit: number, fn: (input: T
       try {
         out[i] = await fn(inputs[i]);
       } catch (err) {
+        if (!failed) onFailure?.();
         failed = true;
         throw err;
       }
@@ -136,7 +152,8 @@ export async function mapLimited<T, R>(inputs: T[], limit: number, fn: (input: T
  * linked, so a push never changes how the shop keeps their stock (review M-1 / N-4).
  */
 export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal): Promise<SiteCatalog> {
-  const { rows: products, truncated } = await readPages(conn, 'products', 'id,name,sku,type,stock_quantity,manage_stock', signal);
+  const { rows: products, truncated, unordered: productsUnordered } =
+    await readPages(conn, 'products', 'id,name,sku,type,stock_quantity,manage_stock', signal);
   const site: SiteProduct[] = [];
   const skipped: WcUnmatchedProduct[] = [];
   let maxProductId = 0;
@@ -154,8 +171,18 @@ export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal):
     site.push({ productId, variationId: 0, name, sku, stock: stockOf(p), manageStock: p.manage_stock === true });
     if (p.type === 'variable') variable.push({ productId, name, sku });
   }
-  const variationLists = await mapLimited(variable, WC_VARIATION_READ_CONCURRENCY,
-    v => readPages(conn, `products/${v.productId}/variations`, 'id,sku,stock_quantity,manage_stock', signal));
+  // review N-G: the first failed variation read aborts the reads still in flight; the deadline aborts them all too
+  const readers = new AbortController();
+  const stopReaders = () => readers.abort();
+  if (signal?.aborted) readers.abort();
+  signal?.addEventListener('abort', stopReaders, { once: true });
+  let variationLists: PagedRows[];
+  try {
+    variationLists = await mapLimited(variable, WC_VARIATION_READ_CONCURRENCY,
+      v => readPages(conn, `products/${v.productId}/variations`, 'id,sku,stock_quantity,manage_stock', readers.signal), stopReaders);
+  } finally {
+    signal?.removeEventListener('abort', stopReaders);
+  }
   variable.forEach(({ productId, name, sku }, i) => {
     for (const v of variationLists[i].rows) {
       const variationId = Number(v.id);
@@ -168,7 +195,7 @@ export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal):
       site.push({ productId, variationId, name, sku: vSku, stock: stockOf(v), manageStock: v.manage_stock === true });
     }
   });
-  return { site, skipped, truncated, maxProductId };
+  return { site, skipped, truncated, maxProductId, unordered: productsUnordered || variationLists.some(l => l.unordered) };
 }
 
 interface Match { site: SiteProduct; itemId: number }
@@ -218,18 +245,30 @@ export interface WcRefreshSummary {
   unmatched: WcUnmatchedProduct[];
   /** the shop had more products than one refresh reads; links of products past the cap were left as they are */
   catalogTruncated: boolean;
+  /** the shop ignored the id order; links of products not read were left as they are (review M-C) */
+  catalogUnordered: boolean;
 }
+
+/** review M-B: the shop answered no product at all while items are linked (a plugin, a cache or a wrong address) */
+export const EMPTY_CATALOG_MESSAGE =
+  'سایت هیچ محصولی برنگرداند و پیوند کالاها دست نخورد؛ نشانی سایت، کلیدها و افزونه‌های سایت را بررسی کنید و دوباره بزنید.';
 
 /** Writes the links of one catalog reading (one transaction) and the run row and audit row with it */
 export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor): Promise<WcRefreshSummary> {
-  const { site, skipped, truncated, maxProductId } = catalog;
+  const { site, skipped, truncated, maxProductId, unordered } = catalog;
   return orm.transaction(async (tx) => {
     const live = await tx.select().from(wcProductLinks).where(eq(wcProductLinks.isDeleted, 0))
       .orderBy(asc(wcProductLinks.id)).for('update');
-    // review H-A: only a link of a product past the cap (a truncated reading, an id above every id read) is left as it is,
-    // and so is its item; a link of any other product the shop no longer lists is closed
-    const pastCap = (l: { wcProductId: number }) => truncated && l.wcProductId > maxProductId;
-    const untouched = live.filter(pastCap);
+    if (site.length + skipped.length === 0 && live.length > 0) {
+      throw new ValidationError(EMPTY_CATALOG_MESSAGE, undefined, WC_SHOP_REQUEST_FAILED);
+    }
+    // review H-A: a link of a product past the cap (a truncated reading, an id above every id read) is left as it is, and so
+    // is its item; review M-C: when the shop ignored the id order, so is the link of every product not read. A link of any
+    // other product the shop no longer lists is closed
+    const readKeys = new Set([...site, ...skipped].map(p => keyOf(p.productId, p.variationId)));
+    const leftAsIs = (l: { wcProductId: number; wcVariationId: number }) =>
+      (truncated && l.wcProductId > maxProductId) || (unordered && !readKeys.has(keyOf(l.wcProductId, l.wcVariationId)));
+    const untouched = live.filter(leftAsIs);
     const { matches, unmatched: notMatched } = await matchSiteCatalog(tx, site, new Set(untouched.map(l => l.itemId)));
     const unmatched = [...skipped, ...notMatched];
     const wanted = new Map(matches.map(m => [keyOf(m.site.productId, m.site.variationId), m]));
@@ -238,7 +277,7 @@ export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor): P
     const updates: LinkRowUpdate[] = [];
     let closedCount = 0;
     for (const link of live) {
-      if (pastCap(link)) continue;
+      if (leftAsIs(link)) continue;
       const key = keyOf(link.wcProductId, link.wcVariationId);
       const match = wanted.get(key);
       if (match && match.itemId === link.itemId && !kept.has(key)) {
@@ -268,6 +307,7 @@ export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor): P
       unmatchedTotal: unmatched.length,
       unmatched: unmatched.slice(0, WC_LIST_LIMIT),
       catalogTruncated: truncated,
+      catalogUnordered: unordered,
     };
     await tx.insert(wcSyncRuns).values({
       kind: 'refresh', status: 'ok', userId: actorUserId(actor), startedAt: now, finishedAt: now, summary,
@@ -278,7 +318,7 @@ export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor): P
       description: `بازخوانی محصولات سایت: ${n(linkedCount)} کالا وصل، ${n(unmatched.length)} محصول سایت بی کالا`,
       details: {
         siteProductCount: summary.siteProductCount, linkedCount, newCount: fresh.length, closedCount,
-        unmatchedTotal: unmatched.length, catalogTruncated: truncated,
+        unmatchedTotal: unmatched.length, catalogTruncated: truncated, catalogUnordered: unordered,
       },
     });
     return summary;
@@ -403,6 +443,7 @@ export async function getWcCatalogReport(): Promise<WcCatalogReport> {
     unmatched,
     unmatchedTotal: Number(lastReading?.summary.unmatchedTotal) || 0,
     catalogTruncated: lastReading?.summary.catalogTruncated === true,
+    catalogUnordered: lastReading?.summary.catalogUnordered === true,
     itemsNotOnSite,
     itemsNotOnSiteTotal,
     failing: failingRows.map(r => ({ itemId: r.itemId, code: r.code ?? '', name: r.name ?? '', error: r.error })),

@@ -15,6 +15,21 @@ export const WC_MAX_CATALOG_PAGES = 100;
 export const WC_MAX_CATALOG_PRODUCTS = WC_BATCH_SIZE * WC_MAX_CATALOG_PAGES;
 /** unmatched shop products and items kept in a run and sent to the tab */
 export const WC_LIST_LIMIT = 200;
+/** one exchange with the shop (a stock push, a refresh before it included) never holds the lock longer than this (review N-A / N-D) */
+export const WC_PUSH_DEADLINE_MS = 50_000;
+/** a push left less than this after the refresh before it is not started (review N-D) */
+export const WC_PUSH_MIN_BUDGET_MS = 5_000;
+
+/** The deadline of a refresh run before a push, `elapsedMs` into the exchange: it leaves the push its minimum budget */
+export function refreshBudgetMs(elapsedMs: number): number {
+  return Math.max(1_000, WC_PUSH_DEADLINE_MS - WC_PUSH_MIN_BUDGET_MS - Math.max(0, elapsedMs));
+}
+
+/** What is left of the exchange for the push, `elapsedMs` into it; null when less than `WC_PUSH_MIN_BUDGET_MS` is left */
+export function pushBudgetMs(elapsedMs: number): number | null {
+  const left = WC_PUSH_DEADLINE_MS - Math.max(0, elapsedMs);
+  return left < WC_PUSH_MIN_BUDGET_MS ? null : left;
+}
 
 export type WcUnmatchedReason =
   | 'no_sku' | 'unknown_sku' | 'duplicate_sku' | 'item_taken' | 'item_ambiguous' | 'parent_stock' | 'no_stock_type';
@@ -61,6 +76,8 @@ export interface WcCatalogReport {
   unmatchedTotal: number;
   /** the last refresh that read the shop stopped at `WC_MAX_CATALOG_PRODUCTS` (review N-2) */
   catalogTruncated: boolean;
+  /** the shop did not list the last refresh's products in id order, so links of products it did not read were kept (review M-C) */
+  catalogUnordered: boolean;
   /** finished products with a code and no live link (only after a refresh) */
   itemsNotOnSite: WcCatalogItem[];
   itemsNotOnSiteTotal: number;
@@ -95,14 +112,18 @@ export function catalogCapNotice(): string {
   return `بازخوانی سایت به سقف ${formatPersianNumber(WC_MAX_CATALOG_PRODUCTS)} محصول رسید؛ محصولات پس از آن خوانده نشد و پیوند آن‌ها دست نخورد.`;
 }
 
+/** Shown while the last reading came in another order than the id order asked for (review M-C) */
+export function catalogOrderNotice(): string {
+  return 'سایت محصولات را به ترتیب شناسه نفرستاد؛ پیوند محصولاتی که خوانده نشد دست نخورد. افزونه‌ها یا تنظیمات مرتب‌سازی سایت را بررسی کنید.';
+}
+
 export function catalogRefreshMessage(summary: {
-  siteProductCount?: unknown; linkedCount?: unknown; unmatchedTotal?: unknown; catalogTruncated?: unknown;
+  siteProductCount?: unknown; linkedCount?: unknown; unmatchedTotal?: unknown; catalogTruncated?: unknown; catalogUnordered?: unknown;
 }): string {
   const n = (v: unknown) => formatPersianNumber(Math.max(0, Math.floor(Number(v) || 0)));
   const unmatched = Number(summary.unmatchedTotal) || 0;
   return `${n(summary.siteProductCount)} محصول سایت خوانده شد و ${n(summary.linkedCount)} کالا به محصول سایت وصل است.`
     + (unmatched > 0 ? ` ${n(unmatched)} محصول سایت به هیچ کالایی وصل نشد؛ فهرست آن پایین‌تر است.` : '')
-    + (summary.catalogTruncated === true
-      ? ` ${catalogCapNotice()}`
-      : '');
+    + (summary.catalogTruncated === true ? ` ${catalogCapNotice()}` : '')
+    + (summary.catalogUnordered === true ? ` ${catalogOrderNotice()}` : '');
 }
