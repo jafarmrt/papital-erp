@@ -6,6 +6,7 @@ import { WcOrderLogStatusBadge } from './WcOrderLogStatusBadge';
 import { ShopWarehouseSelect } from './ShopWarehouseSelect';
 import { WcListEmptyRow } from './WcListEmptyRow';
 import { WcCatalogPanel } from './WcCatalogPanel';
+import { BULK_PUSH_OPEN_ORDERS_NOTE } from '../../lib/woocommerce/wcAutoPush';
 import type { WarehouseItem } from '../../hooks/queries/useSettingsQueries';
 import { copyToClipboard } from '../../utils/clipboard';
 import { DecimalInput } from '../common/DecimalInput';
@@ -276,6 +277,9 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
           </div>
           <p className="text-xs text-emerald-900 leading-relaxed">
             موجودی همه کالاهای وصل به محصولات سایت، گروهی و صدتایی، به فروشگاه برخط ووکامرس فرستاده می‌شود:
+          </p>
+          <p className="text-xs text-emerald-900 leading-relaxed">
+            {BULK_PUSH_OPEN_ORDERS_NOTE}
           </p>
           <button
             onClick={handleSyncAllStocks}

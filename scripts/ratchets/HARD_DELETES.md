@@ -20,6 +20,7 @@ product-owner decision; a file that no longer deletes is removed from this list 
 | `src/services/projects/projectManagers.ts` | the manager rows a project save removed | a row is the state of the project's manager list; the audit row keeps the before and after |
 | `src/services/system/factoryReset.service.ts` | every business table | the system admin's factory reset, confirmed by typing «حذف همه» |
 | `src/services/users/roleAdmin.service.ts` | a role with no active user and no workflow step | roles are settings; the delete is audited with the role before |
+| `src/services/woocommerce/wcSyncRunPurge.ts` | automatic WooCommerce stock push runs older than 30 days | the daily operational purge (10.2 package 6, review of PR #327): a run row a minute is a log, not a record; manual pushes and refreshes stay |
 | `src/services/workflow/workflowDesignTables.ts` | the live step and action rows of a definition being saved | the design is rewritten from the saved version; every version stays in `workflow_definition_versions` and running instances keep their snapshot |
 | `src/services/workflow/workflowTermination.ts` | the pending approvals of a terminated instance | approvals waiting on a step that no longer runs; the history and tasks stay |
 | `src/services/workflow/workflowTransitionExecutor.ts` | the pending approvals of the step being left | approvals of a step that is no longer current; the history keeps every signature |

@@ -5,9 +5,11 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import {
-  chunked, pushBudgetMs, refreshBudgetMs, siteStockQuantity, WC_LIST_LIMIT, WC_PUSH_DEADLINE_MS,
+  chunked, pushBudgetMs, refreshBudgetMs, siteStockQuantity, WC_LIST_LIMIT, WC_PUSH_DEADLINE_MS, WC_PUSH_MIN_BUDGET_MS,
 } from '../../lib/woocommerce/wcCatalog.js';
+import { orderReadBudgetMs } from '../../lib/woocommerce/wcAutoPush.js';
 import { shopSellableStocks } from './shopWarehouse.js';
+import { openOrderQuantities, readOpenOrders, type OpenOrder } from './wcOpenOrders.js';
 import { updateLinkRows } from './wcLinkUpdates.js';
 import { formatPersianNumber } from '../../utils/persianNumber.js';
 import { requireWcConnection, wcRequest, WC_SHOP_REQUEST_FAILED, type WcConnection } from './wcClient.js';
@@ -39,7 +41,23 @@ export interface WcStockPushResult {
 
 interface BatchAnswerRow { id?: unknown; error?: { message?: unknown } }
 
-interface Outcome { link: Link; quantity: number; error: string }
+/** `requestFailed`: the request itself failed or was never sent (the shop, not this product); the automatic push then
+ * leaves the link's failure count alone, so a shop that is down never stops every product */
+export interface Outcome { link: Link; quantity: number; error: string; requestFailed?: boolean }
+
+/** answers that say the shop or the connection failed, not the products of the batch (review M-4) */
+const SHOP_LEVEL_STATUSES = new Set([401, 403, 408, 429]);
+
+/**
+ * Whether a failed batch request failed for the shop (no answer, a timeout, a redirect, 5xx, 401/403, 408, 429) rather than
+ * for its products. Any other 4xx (400, 404: a product or a parent removed in the shop) is the products': each counts it,
+ * so a batch the shop keeps refusing stops after `WC_AUTO_MAX_LINK_FAILURES` instead of holding every run back.
+ */
+export function isShopLevelFailure(err: unknown): boolean {
+  const status = (err instanceof ValidationError ? (err.details as { status?: unknown } | undefined)?.status : undefined);
+  if (typeof status !== 'number') return true;
+  return status < 400 || status >= 500 || SHOP_LEVEL_STATUSES.has(status);
+}
 
 function answerRows(answer: unknown): BatchAnswerRow[] {
   const rows = (answer as { update?: unknown } | null)?.update;
@@ -49,14 +67,26 @@ function answerRows(answer: unknown): BatchAnswerRow[] {
 export { WC_PUSH_DEADLINE_MS };
 const PUSH_DEADLINE_MESSAGE = 'ارسال موجودی در مهلت تعیین‌شده تمام نشد و این محصول فرستاده نشد؛ کمی بعد دوباره بزنید.';
 
+export interface SendOptions {
+  signal?: AbortSignal;
+  /**
+   * send `manage_stock: true` with each product (the manual push, like the earlier per-item push); the automatic push sends
+   * only the stock, to products whose tracking is already on, so it never changes how the shop keeps stock
+   */
+  setManageStock: boolean;
+}
+
 async function pushBatch(
-  conn: WcConnection, path: string, rows: Array<{ link: Link; id: number; quantity: number }>, signal?: AbortSignal,
+  conn: WcConnection, path: string, rows: Array<{ link: Link; id: number; quantity: number }>, options: SendOptions,
 ): Promise<Outcome[]> {
+  const { signal } = options;
   // past the deadline the remaining batches are not sent at all; each of their products records why
-  if (signal?.aborted) return rows.map(r => ({ link: r.link, quantity: r.quantity, error: PUSH_DEADLINE_MESSAGE }));
+  if (signal?.aborted) return rows.map(r => ({ link: r.link, quantity: r.quantity, error: PUSH_DEADLINE_MESSAGE, requestFailed: true }));
   try {
     const answer = await wcRequest(conn, 'POST', path, {
-      update: rows.map(r => ({ id: r.id, manage_stock: true, stock_quantity: r.quantity })),
+      update: rows.map(r => (options.setManageStock
+        ? { id: r.id, manage_stock: true, stock_quantity: r.quantity }
+        : { id: r.id, stock_quantity: r.quantity })),
     }, {}, { signal });
     const byId = new Map(answerRows(answer).map(a => [Number(a.id), a]));
     return rows.map(r => {
@@ -67,34 +97,65 @@ async function pushBatch(
     });
   } catch (err) {
     const message = err instanceof ValidationError ? err.message : 'ارتباط با سایت ناموفق بود.';
-    return rows.map(r => ({ link: r.link, quantity: r.quantity, error: message.slice(0, 300) }));
+    const requestFailed = isShopLevelFailure(err);
+    return rows.map(r => ({ link: r.link, quantity: r.quantity, error: message.slice(0, 300), requestFailed }));
   }
 }
 
 /** Sends the stock of these links in batches; returns each link's outcome */
-export async function sendStocks(conn: WcConnection, wanted: Array<{ link: Link; quantity: number }>, signal?: AbortSignal): Promise<Outcome[]> {
+export async function sendStocks(conn: WcConnection, wanted: Array<{ link: Link; quantity: number }>, options: SendOptions): Promise<Outcome[]> {
   const simple = wanted.filter(w => w.link.wcVariationId === 0).map(w => ({ ...w, id: w.link.wcProductId }));
   const byParent = new Map<number, Array<{ link: Link; quantity: number; id: number }>>();
   for (const w of wanted.filter(x => x.link.wcVariationId > 0)) {
     byParent.set(w.link.wcProductId, [...(byParent.get(w.link.wcProductId) ?? []), { ...w, id: w.link.wcVariationId }]);
   }
   const outcomes: Outcome[] = [];
-  for (const rows of chunked(simple)) outcomes.push(...await pushBatch(conn, 'products/batch', rows, signal));
+  for (const rows of chunked(simple)) outcomes.push(...await pushBatch(conn, 'products/batch', rows, options));
   for (const [parent, rows] of byParent) {
-    for (const part of chunked(rows)) outcomes.push(...await pushBatch(conn, `products/${parent}/variations/batch`, part, signal));
+    for (const part of chunked(rows)) outcomes.push(...await pushBatch(conn, `products/${parent}/variations/batch`, part, options));
   }
   return outcomes;
 }
 
-/** The whole-number stock each linked item should show in the shop */
-export async function wantedSiteStocks(links: Link[]): Promise<Map<number, number>> {
-  const itemIds = [...new Set(links.map(l => l.itemId))];
-  const { sellable } = await shopSellableStocks(orm, itemIds);
-  return new Map(itemIds.map(id => [id, siteStockQuantity(sellable.get(id) ?? 0)]));
+export interface SiteStocks {
+  /** the whole-number sellable stock of each item in the shop warehouse */
+  sellable: Map<number, number>;
+  /** what each item should show in the shop: its sellable stock less what the shop's open orders hold, never below zero */
+  wanted: Map<number, number>;
 }
 
-/** Records the outcomes on the links, the run row and one audit row (counts only), in one transaction */
-async function recordOutcomes(outcomes: Outcome[], skippedCount: number, totalItems: number, actor: WcActor, trigger: string): Promise<WcStockPushResult> {
+/**
+ * The stock each item should show in the shop (part B, plan question ق۶). The sellable stock and the order log read in one
+ * snapshot (repeatable read), so a processing order invoiced meanwhile is taken off once, never twice or not at all;
+ * `mapLinks` are the links an order line is matched through (every live link, so a line never lands on the wrong item).
+ */
+export async function siteStocks(itemIds: number[], orders: OpenOrder[], mapLinks: Link[]): Promise<SiteStocks> {
+  return orm.transaction(async (tx) => {
+    const { sellable: raw } = await shopSellableStocks(tx, itemIds);
+    const held = await openOrderQuantities(tx, orders, mapLinks);
+    const sellable = new Map(itemIds.map(id => [id, siteStockQuantity(raw.get(id) ?? 0)]));
+    const wanted = new Map(itemIds.map(id => [id, Math.max(0, (sellable.get(id) ?? 0) - (held.get(id) ?? 0))]));
+    return { sellable, wanted };
+  }, { isolationLevel: 'repeatable read', accessMode: 'read only' });
+}
+
+/**
+ * A run failed when nothing it sent arrived; an automatic run fails only for the shop (review M-4): a run whose products
+ * were all refused one by one is `partial`, so one rejected product never makes every later run wait
+ */
+function runStatus(outcomes: Outcome[], failedCount: number, trigger: PushOptions['trigger']): 'ok' | 'partial' | 'failed' {
+  if (failedCount === 0) return 'ok';
+  if (failedCount < outcomes.length) return 'partial';
+  return trigger !== 'auto' || outcomes.some(o => o.requestFailed) ? 'failed' : 'partial';
+}
+
+/**
+ * Records the outcomes on the links, the run row and one audit row (counts only), in one transaction. In an automatic run a
+ * failure of the request itself (`requestFailed`) is recorded on the link without counting against it
+ */
+export async function recordOutcomes(
+  outcomes: Outcome[], skippedCount: number, totalItems: number, actor: WcActor, trigger: PushOptions['trigger'],
+): Promise<WcStockPushResult & { status: 'ok' | 'partial' | 'failed' }> {
   const now = systemNowUtcIso();
   const failed = outcomes.filter(o => o.error);
   const errors = failed.map(o => `${o.link.siteSku || `#${o.link.wcProductId}`}: ${o.error}`);
@@ -103,15 +164,16 @@ async function recordOutcomes(outcomes: Outcome[], skippedCount: number, totalIt
     totalItems, syncedCount: outcomes.length - failed.length, failedCount: failed.length, skippedCount, trackingEnabledCount,
     errors: errors.slice(0, WC_LIST_LIMIT),
   };
+  let status: 'ok' | 'partial' | 'failed' = 'ok';
   await orm.transaction(async (tx) => {
     // review M-3: one UPDATE per batch of links; the failure count is the one read with the links, under the sync lock
     await updateLinkRows(tx, outcomes.map(o => ({
       id: o.link.id,
       values: o.error
-        ? { lastError: o.error, failureCount: o.link.failureCount + 1 }
+        ? { lastError: o.error, failureCount: trigger === 'auto' && o.requestFailed ? o.link.failureCount : o.link.failureCount + 1 }
         : { siteStock: o.quantity, siteManageStock: 1, lastPushedAt: now, lastError: '', failureCount: 0 },
     })), now);
-    const status = failed.length === 0 ? 'ok' : failed.length === outcomes.length ? 'failed' : 'partial';
+    status = runStatus(outcomes, failed.length, trigger);
     await tx.insert(wcSyncRuns).values({
       kind: 'stock_push', status, userId: actorUserId(actor), startedAt: now, finishedAt: now,
       summary: {
@@ -119,6 +181,9 @@ async function recordOutcomes(outcomes: Outcome[], skippedCount: number, totalIt
         errors: errors.slice(0, 20),
       },
     });
+    // review (c): an automatic run writes no audit row here; its run row is the record and a failure is audited once per
+    // streak by the automatic push itself
+    if (trigger === 'auto') return;
     await logActivity({
       tx, req: actor.req, action: 'WC_STOCK_PUSH', entity: 'فروشگاه اینترنتی', entityId: '',
       description: `ارسال موجودی به سایت: ${formatPersianNumber(result.syncedCount)} محصول به‌روز شد، ${formatPersianNumber(result.failedCount)} ناموفق`
@@ -126,7 +191,7 @@ async function recordOutcomes(outcomes: Outcome[], skippedCount: number, totalIt
       details: { trigger, totalItems, syncedCount: result.syncedCount, failedCount: result.failedCount, skippedCount, trackingEnabledCount },
     });
   });
-  return result;
+  return { ...result, status };
 }
 
 export interface PushOptions {
@@ -142,16 +207,30 @@ export interface PushOptions {
 export async function pushStocksLocked(actor: WcActor, options: PushOptions, conn?: WcConnection): Promise<WcStockPushResult> {
   const connection = conn ?? await requireWcConnection();
   const links = await liveLinks(options.itemIds);
-  const wanted = await wantedSiteStocks(links);
-  const rows = links.map(link => ({ link, quantity: wanted.get(link.itemId) ?? 0 }));
-  const toSend = options.onlyChanged ? rows.filter(r => !(r.link.siteManageStock === 1 && r.link.siteStock === r.quantity)) : rows;
-  if (toSend.length === 0) {
-    return { totalItems: links.length, syncedCount: 0, failedCount: 0, skippedCount: links.length, trackingEnabledCount: 0, errors: [] };
+  if (links.length === 0) {
+    return { totalItems: 0, syncedCount: 0, failedCount: 0, skippedCount: 0, trackingEnabledCount: 0, errors: [] };
   }
+  const deadlineMs = options.deadlineMs ?? WC_PUSH_DEADLINE_MS;
   const deadline = new AbortController();
-  const timer = setTimeout(() => deadline.abort(), options.deadlineMs ?? WC_PUSH_DEADLINE_MS);
+  const timer = setTimeout(() => deadline.abort(), deadlineMs);
   try {
-    const outcomes = await sendStocks(connection, toSend, deadline.signal);
+    // part B: the open orders are read first, then the stock in one snapshot with the order log (`siteStocks`)
+    let orders: OpenOrder[];
+    try {
+      orders = await readOpenOrders(connection, {
+        signal: deadline.signal, budgetMs: orderReadBudgetMs(deadlineMs, WC_PUSH_MIN_BUDGET_MS), trigger: options.trigger,
+      });
+    } catch (err) {
+      await recordFailedRun('stock_push', actor, err, { trigger: options.trigger });
+      throw err;
+    }
+    const { wanted } = await siteStocks([...new Set(links.map(l => l.itemId))], orders, options.itemIds ? await liveLinks() : links);
+    const rows = links.map(link => ({ link, quantity: wanted.get(link.itemId) ?? 0 }));
+    const toSend = options.onlyChanged ? rows.filter(r => !(r.link.siteManageStock === 1 && r.link.siteStock === r.quantity)) : rows;
+    if (toSend.length === 0) {
+      return { totalItems: links.length, syncedCount: 0, failedCount: 0, skippedCount: links.length, trackingEnabledCount: 0, errors: [] };
+    }
+    const outcomes = await sendStocks(connection, toSend, { signal: deadline.signal, setManageStock: true });
     return await recordOutcomes(outcomes, links.length - toSend.length, links.length, actor, options.trigger);
   } finally {
     clearTimeout(timer);

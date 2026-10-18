@@ -138,6 +138,7 @@
     "src/services/projects/projectManagers.ts": 1,
     "src/services/system/factoryReset.service.ts": 4,
     "src/services/users/roleAdmin.service.ts": 1,
+    "src/services/woocommerce/wcSyncRunPurge.ts": 1,
     "src/services/workflow/workflowDesignTables.ts": 2,
     "src/services/workflow/workflowTermination.ts": 1,
     "src/services/workflow/workflowTransitionExecutor.ts": 2

@@ -26,3 +26,14 @@ export function useRefreshWcCatalogMutation() {
     onSettled: () => { void queryClient.invalidateQueries({ queryKey: WC_CATALOG_KEY }); },
   });
 }
+
+/** part B: «ارسال خودکار موجودی» on or off; the server takes the target state, never a toggle */
+export function useSetWcAutoPushMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (enabled: boolean) => (await fetchJson('/woocommerce/auto-push', {
+      method: 'POST', body: JSON.stringify({ enabled }),
+    })) as WcRefreshResult,
+    onSettled: () => { void queryClient.invalidateQueries({ queryKey: WC_CATALOG_KEY }); },
+  });
+}
