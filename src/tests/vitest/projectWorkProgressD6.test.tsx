@@ -171,6 +171,12 @@ describe('schedule work rules (10.2 package 12, D6)', () => {
     expect(projectStageProgress([{ status: 'completed', progressPercent: 100 }, { status: 'completed', progressPercent: 100 }]).progressPercent).toBe(100);
   });
 
+  it('shows a project list row with any stage work at 1% at least (delta review nit)', () => {
+    const stages = [{ status: 'in_progress', progressPercent: 1 }, ...Array.from({ length: 9 }, () => ({ status: 'pending', progressPercent: 0 }))];
+    expect(projectStageProgress(stages).progressPercent).toBe(1);
+    expect(projectStageProgress([{ status: 'pending', progressPercent: 0 }, { status: 'pending', progressPercent: 0 }]).progressPercent).toBe(0);
+  });
+
   it('lets a product row without a warehouse item hold no project below 100 (review N1)', () => {
     const products = [
       { itemId: 50, itemCode: '', itemName: '', quantity: 1000, unit: 'عدد', selectedOptionalStages: [] },

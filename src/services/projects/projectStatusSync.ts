@@ -73,11 +73,13 @@ export async function syncProjectFromMatrix(tx: DbExecutor, project: ProjectRow,
     let percent = Number(stg.progressPercent || 0);
     let status = stg.status || 'pending';
     if (applicableCount > 0) {
-      // 10.2 package 12 (D6, ت۴۲ الف): the percent counts the schedule work of cells not yet ticked; only ticks complete
+      // 10.2 package 12 (D6, ت۴۲ الف): the percent counts the schedule work of cells not yet ticked; only ticks complete,
+      // and only a tick unblocks a blocked stage (work alone leaves it blocked, review M1 of the delta)
       percent = matrixPercent;
       status = completedCount === applicableCount ? 'completed'
-        : completedCount > 0 || matrixPercent > 0 ? 'in_progress'
-        : stg.status === 'blocked' ? 'blocked' : 'pending';
+        : completedCount > 0 ? 'in_progress'
+        : stg.status === 'blocked' ? 'blocked'
+        : matrixPercent > 0 ? 'in_progress' : 'pending';
     }
     if (completedCount > 0 || percent > 0) anyProgress = true;
     if (status !== 'completed') allStagesCompleted = false;

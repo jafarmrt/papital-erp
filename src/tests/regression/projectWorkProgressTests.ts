@@ -21,7 +21,7 @@ export async function runProjectWorkProgressTests(shouldRun: ShouldRun): Promise
       '10.2 package 12: a single-item project\'s schedule («prod-main») counts in its matrix, an approved workshop report syncs the stage and the tick suggestion names the main item; a project without a matrix keeps its status (D6, TD-1340)',
       ['d6', 'projects', 'workshop'], mainItemCase],
     ['reg_project_work_progress_closed_d6',
-      '10.2 package 12 review H1: a work log never reopens a completed project or a completed stage, never unblocks a stage and never touches a paused project; it only updates percents and starts a waiting stage or a planned project (D6, TD-1340)',
+      '10.2 package 12 review H1: a work log never reopens a completed project or a completed stage, never unblocks a stage and never touches a paused project; it only updates percents and starts a waiting stage or a planned project; a later tick of another cell leaves a blocked stage with work blocked (D6, TD-1340)',
       ['d6', 'projects', 'piecework'], closedProjectCase],
   ]);
 }
@@ -70,7 +70,7 @@ const stageRows = (h: Harness, projectId: number) =>
   h.q(`SELECT stage_order, progress_percent, status FROM project_stages WHERE project_id = $1 AND is_deleted = 0 ORDER BY stage_order`, [projectId]);
 const projectStatus = async (h: Harness, projectId: number) => String((await h.q(`SELECT status FROM production_projects WHERE id = $1`, [projectId]))[0]?.status);
 
-interface CellView { stage_order: number; status: string; work?: { planned_quantity: number; done_quantity: number; unit: string | null; share: number } | null }
+interface CellView { stage_order: number; status: string; work?: { planned_quantity: number | null; done_quantity: number | null; unit: string | null; share: number } | null }
 interface ProgressView { products: Array<{ item_id: number | null; progress: CellView[]; progress_percent: number }>; summary: { per_stage_counts: Array<{ stage_order: number; progress_percent?: number }> } }
 
 async function progressView(h: Harness, projectId: number): Promise<ProgressView> {
@@ -274,6 +274,11 @@ async function closedProjectCase(h: Harness, wrong: string[]): Promise<string> {
   if (edit.status !== 200) wrong.push(`editing the running project's log answered ${brief(edit)}`);
   const expected = `in_progress 1:100:completed:${DONE_AT} 2:50:blocked:-`;
   if (await projectState(h, running.projectId) !== expected) wrong.push(`the running project reads ${await projectState(h, running.projectId)}, expected ${expected}`);
+  // the manager ticks another cell: the tick path re-syncs every stage, and the blocked stage with work stays blocked
+  // (delta review M1: only a tick of its own cells unblocks it)
+  const tickedOther = await h.put(`/api/projects/${running.projectId}/product-progress`, { items: [{ item_id: item, stage_order: 1, status: 'completed' }] });
+  if (tickedOther.status !== 200) wrong.push(`ticking the stage 1 cell answered ${brief(tickedOther)}`);
+  if (await projectState(h, running.projectId) !== expected) wrong.push(`after a tick of another cell the running project reads ${await projectState(h, running.projectId)}, expected ${expected}`);
 
   // a paused project is left alone
   const paused = await scheduled();
