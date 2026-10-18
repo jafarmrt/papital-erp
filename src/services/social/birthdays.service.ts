@@ -13,6 +13,7 @@ import {
 } from '../../lib/social/birthdays.js';
 import { COLLEAGUE_FALLBACK_NAME } from '../../lib/social/presence.js';
 import { runThrottledReminderScan } from '../../lib/workshop/reminderThrottle.js';
+import { birthdayTodayShown } from './birthdayNotificationWithdraw.js';
 
 /**
  * v10.2 package 9 (group dashboard, parts A to C of the social dashboard proposal, owner's decisions of 24 Mehr 1405):
@@ -137,21 +138,34 @@ export async function generateColleagueBirthdayNotificationsThrottled(userId: nu
   return runThrottledReminderScan(userId, nowMs, () => generateColleagueBirthdayNotifications(userId), runs);
 }
 
-/** One notification per colleague whose birthday is today; the unique index keeps it once, even after it is dismissed */
+/**
+ * One notification per colleague whose birthday is today; the unique index keeps it once, even after it is dismissed.
+ * The candidates are read again `FOR SHARE` in the insert transaction (delta review nit 1), so a withdraw that hid a
+ * birthday meanwhile is seen here, and a withdraw that comes after waits for this insert and then dismisses it.
+ */
 export async function generateColleagueBirthdayNotifications(userId: number): Promise<number> {
   const todayIso = await businessTodayIsoDate();
   const today = (await visibleUpcoming(todayIso)).filter(p => p.upcoming.daysAway === 0 && p.userId !== userId);
   if (today.length === 0) return 0;
-  const made = await orm.transaction(tx => createNotifications(tx, today.map(p => ({
-    userId,
-    category: 'social' as const,
-    type: COLLEAGUE_BIRTHDAY_NOTIFICATION,
-    senderId: null,
-    senderName: 'پیشخوان',
-    title: '🎂 تولد همکار',
-    message: `امروز تولد ${p.fullName} است؛ از پیشخوان تبریک بگویید.`,
-    link: birthdayLink(p.id, p.upcoming.jalaliYear),
-  })), { skipExisting: true }));
+  const made = await orm.transaction(async (tx) => {
+    const locked = await tx.select({
+      id: personnel.id, birthDate: personnel.birthDate, isDeleted: personnel.isDeleted,
+      isBirthdayVisible: personnel.isBirthdayVisible, employmentStatus: personnel.employmentStatus,
+    }).from(personnel).where(inArray(personnel.id, today.map(p => p.id))).orderBy(asc(personnel.id)).for('share');
+    const stillShown = new Set(locked.filter(row => birthdayTodayShown(row, todayIso)).map(row => row.id));
+    const shown = today.filter(p => stillShown.has(p.id));
+    if (shown.length === 0) return [];
+    return createNotifications(tx, shown.map(p => ({
+      userId,
+      category: 'social' as const,
+      type: COLLEAGUE_BIRTHDAY_NOTIFICATION,
+      senderId: null,
+      senderName: 'پیشخوان',
+      title: '🎂 تولد همکار',
+      message: `امروز تولد ${p.fullName} است؛ از پیشخوان تبریک بگویید.`,
+      link: birthdayLink(p.id, p.upcoming.jalaliYear),
+    })), { skipExisting: true });
+  });
   return made.length;
 }
 

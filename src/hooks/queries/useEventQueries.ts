@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
-import { BACKGROUND_POLL_HEADERS } from '../../lib/social/presence';
+import { repeatPollHeaders } from './repeatPollHeaders';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import type { StoredRuleActionType } from '../../lib/events/ruleActionTypes';
 import type { ActionEngineStats, ActionLogPage, ActionLogRow } from '../../lib/events/actionLogContract';
@@ -78,10 +78,10 @@ export const DOMAIN_EVENTS_REFRESH_MS = 10000;
 export function useDomainEventsQuery(filter: string = 'ALL', options?: { enabled?: boolean; refetchInterval?: number | false }) {
   return useQuery<{ events: DomainEvent[]; stats: DomainEventStats | null }>({
     queryKey: QUERY_KEYS.events.list(filter),
-    queryFn: async ({ signal }) => {
+    queryFn: async (context) => {
       const res = await fetchJson<{ events?: DomainEvent[]; stats?: DomainEventStats }>(
         `/events/domain-events?limit=100&filter=${encodeURIComponent(filter)}`,
-        { signal, headers: BACKGROUND_POLL_HEADERS }
+        { signal: context.signal, headers: repeatPollHeaders(context) }
       );
       return {
         events: Array.isArray(res?.events) ? res.events : [],
@@ -98,8 +98,8 @@ export function useDomainEventsQuery(filter: string = 'ALL', options?: { enabled
 export function useOutboxStatsQuery(options?: { enabled?: boolean; refetchInterval?: number | false }) {
   return useQuery<OutboxStats | null>({
     queryKey: QUERY_KEYS.events.outboxStats(),
-    queryFn: async ({ signal }) => {
-      const res = await fetchJson<{ success?: boolean; stats?: OutboxStats }>('/events/outbox/stats', { signal, headers: BACKGROUND_POLL_HEADERS });
+    queryFn: async (context) => {
+      const res = await fetchJson<{ success?: boolean; stats?: OutboxStats }>('/events/outbox/stats', { signal: context.signal, headers: repeatPollHeaders(context) });
       return res?.stats || null;
     },
     staleTime: 5000,
@@ -112,10 +112,10 @@ export function useOutboxStatsQuery(options?: { enabled?: boolean; refetchInterv
 export function useOutboxEventsQuery(status: string = 'ALL', options?: { enabled?: boolean; refetchInterval?: number | false }) {
   return useQuery<OutboxEvent[]>({
     queryKey: QUERY_KEYS.events.outbox(status),
-    queryFn: async ({ signal }) => {
+    queryFn: async (context) => {
       const res = await fetchJson<{ success?: boolean; events?: OutboxEvent[] }>(
         `/events/outbox?limit=100&status=${encodeURIComponent(status)}`,
-        { signal, headers: BACKGROUND_POLL_HEADERS }
+        { signal: context.signal, headers: repeatPollHeaders(context) }
       );
       return Array.isArray(res?.events) ? res.events : [];
     },
@@ -129,8 +129,8 @@ export function useOutboxEventsQuery(status: string = 'ALL', options?: { enabled
 export function useActionRulesQuery(options?: { enabled?: boolean; refetchInterval?: number | false }) {
   return useQuery<ActionRule[]>({
     queryKey: QUERY_KEYS.events.actionRules(),
-    queryFn: async ({ signal }) => {
-      const res = await fetchJson<{ success?: boolean; data?: ActionRule[] }>('/events/action-rules', { signal, headers: BACKGROUND_POLL_HEADERS });
+    queryFn: async (context) => {
+      const res = await fetchJson<{ success?: boolean; data?: ActionRule[] }>('/events/action-rules', { signal: context.signal, headers: repeatPollHeaders(context) });
       return Array.isArray(res?.data) ? res.data : [];
     },
     staleTime: 10000,
@@ -143,8 +143,8 @@ export function useActionRulesQuery(options?: { enabled?: boolean; refetchInterv
 export function useActionStatsQuery(options?: { enabled?: boolean; refetchInterval?: number | false }) {
   return useQuery<ActionStats | null>({
     queryKey: QUERY_KEYS.events.actionStats(),
-    queryFn: async ({ signal }) => {
-      const res = await fetchJson<{ success?: boolean; stats?: ActionStats }>('/events/action-rules/stats', { signal, headers: BACKGROUND_POLL_HEADERS });
+    queryFn: async (context) => {
+      const res = await fetchJson<{ success?: boolean; stats?: ActionStats }>('/events/action-rules/stats', { signal: context.signal, headers: repeatPollHeaders(context) });
       return res?.stats || null;
     },
     staleTime: 10000,
@@ -157,9 +157,9 @@ export function useActionStatsQuery(options?: { enabled?: boolean; refetchInterv
 export function useActionLogsQuery(limit: number = 50, options?: { enabled?: boolean; refetchInterval?: number | false }) {
   return useQuery<{ logs: ActionLog[]; total: number }>({
     queryKey: QUERY_KEYS.events.actionLogs(limit),
-    queryFn: async ({ signal }) => {
+    queryFn: async (context) => {
       // v9.0.408 (TD-721): the server sends { data, total }; the hook used to read `logs`, so the list was always empty
-      const res = await fetchJson<Partial<ActionLogPage>>(`/events/action-logs?limit=${limit}`, { signal, headers: BACKGROUND_POLL_HEADERS });
+      const res = await fetchJson<Partial<ActionLogPage>>(`/events/action-logs?limit=${limit}`, { signal: context.signal, headers: repeatPollHeaders(context) });
       const logs = Array.isArray(res?.data) ? res.data : [];
       return { logs, total: Number(res?.total ?? logs.length) };
     },

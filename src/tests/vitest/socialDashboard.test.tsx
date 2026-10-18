@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
@@ -16,6 +16,7 @@ import { ColleagueBirthdaysCard } from '../../components/dashboard/social/Collea
 import { MyBirthdayBanner } from '../../components/dashboard/social/MyBirthdayBanner';
 import { OnlineColleaguesCard } from '../../components/dashboard/social/OnlineColleaguesCard';
 import { SocialPreferencesPanel } from '../../components/dashboard/social/SocialPreferencesPanel';
+import { useTaskStatsQuery } from '../../hooks/queries/useWorkflowQueries';
 
 vi.mock('../../api', () => ({ fetchJson: vi.fn() }));
 const fetchMock = vi.mocked(fetchJson);
@@ -149,6 +150,19 @@ describe('group dashboard review fixes (v10.2 package 9)', () => {
   it('tells a background poll apart from the user\'s own request (N-5)', () => {
     expect(BACKGROUND_POLL_HEADER.toLowerCase()).toBe('x-erp-background');
     expect([isBackgroundPoll('1'), isBackgroundPoll(undefined), isBackgroundPoll('0'), isBackgroundPoll(['1'])]).toEqual([true, false, false, true]);
+  });
+
+  it('counts the inbox page\'s first read as presence and tags only its repeat reads (delta nit 3)', async () => {
+    fetchMock.mockResolvedValue({ pending: 0 });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useTaskStatsQuery(), {
+      wrapper: ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    await result.current.refetch();
+    const headersOf = (call: number) => (fetchMock.mock.calls[call]?.[1] as { headers?: Record<string, string> } | undefined)?.headers;
+    expect(headersOf(0)).toBeUndefined();
+    expect(headersOf(1)?.[BACKGROUND_POLL_HEADER]).toBe('1');
   });
 
   it('clears the busy flag when the panel closes during a save (N-3)', async () => {

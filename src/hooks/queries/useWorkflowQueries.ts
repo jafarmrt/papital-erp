@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
-import { BACKGROUND_POLL_HEADERS } from '../../lib/social/presence';
+import { repeatPollHeaders } from './repeatPollHeaders';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { invalidatePreset } from '../../lib/queryInvalidation';
 import { toast } from 'react-hot-toast';
@@ -262,8 +262,8 @@ export function useUpdateCanvasPositionsMutation() {
 export function useWorkflowSlaAnalyticsQuery() {
   return useQuery({
     queryKey: ['workflow', 'analytics', 'sla'],
-    queryFn: async () => {
-      return fetchJson('/workflow/analytics/sla', { headers: BACKGROUND_POLL_HEADERS });
+    queryFn: async (context) => {
+      return fetchJson('/workflow/analytics/sla', { headers: repeatPollHeaders(context) });
     },
     refetchInterval: 30000 // Refresh SLA metrics every 30s
   });
@@ -281,8 +281,8 @@ export function useMyTasksQuery(status = 'pending', page = 1, limit = 50) {
   const pageSize = Math.min(WORKFLOW_INBOX_MAX_LIMIT, Math.max(1, limit));
   return useQuery({
     queryKey: ['workflow', 'tasks', 'my-tasks', status, page, pageSize],
-    queryFn: async () => {
-      return fetchJson(`/workflow/tasks/my-tasks?status=${status}&page=${page}&limit=${pageSize}`, { headers: BACKGROUND_POLL_HEADERS });
+    queryFn: async (context) => {
+      return fetchJson(`/workflow/tasks/my-tasks?status=${status}&page=${page}&limit=${pageSize}`, { headers: repeatPollHeaders(context) });
     },
     refetchInterval: WORKFLOW_INBOX_POLL_MS,
     refetchIntervalInBackground: false
@@ -292,8 +292,8 @@ export function useMyTasksQuery(status = 'pending', page = 1, limit = 50) {
 export function useTaskStatsQuery() {
   return useQuery({
     queryKey: ['workflow', 'tasks', 'stats'],
-    queryFn: async () => {
-      return fetchJson('/workflow/tasks/stats', { headers: BACKGROUND_POLL_HEADERS });
+    queryFn: async (context) => {
+      return fetchJson('/workflow/tasks/stats', { headers: repeatPollHeaders(context) });
     },
     refetchInterval: WORKFLOW_INBOX_POLL_MS,
     refetchIntervalInBackground: false
