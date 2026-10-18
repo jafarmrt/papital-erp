@@ -2,7 +2,7 @@
 
 سیستم یکپارچه مدیریت کارگاه تولیدی: انبارداری با کاردکس رویدادمحور، فاکتور و پیش‌فاکتور، حسابداری دوبل (کدینگ ۴ سطحی، دفتر روزنامه، تراز آزمایشی)، خزانه‌داری و چک صیادی، CRM و قیف فروش، کنترل پروژه‌های تولید با BOM، منابع انسانی و حقوق و دستمزد، موتور گردش کار (ورکفلو) با کارتابل تاییدات، گذرگاه رویدادها (Outbox/DLQ/Webhook) و گزارش‌های BI.
 
-> **نسخه فعلی:** سری فعال `v10.x.y` (نسخه مستقر: `v10.2.13`) — نقشه راه: `V10_MASTER_ROADMAP.md` (سری‌های بسته‌شده: `V9_MASTER_ROADMAP.md`، `V8_MASTER_ROADMAP.md`، `V7_MASTER_ROADMAP.md`) • تاریخچه تغییرات: `CHANGELOG.md` + `src/data/changelogs/10.ts`
+> **نسخه فعلی:** سری فعال `v10.x.y` (نسخه مستقر: `v10.2.14`) — نقشه راه: `V10_MASTER_ROADMAP.md` (سری‌های بسته‌شده: `V9_MASTER_ROADMAP.md`، `V8_MASTER_ROADMAP.md`، `V7_MASTER_ROADMAP.md`) • تاریخچه تغییرات: `CHANGELOG.md` + `src/data/changelogs/10.ts`
 
 ---
 
@@ -142,7 +142,7 @@ sudo bash scripts/go-live-verify.sh http://localhost:3000   # پس از هر ب�
 
 ### Backup روزانه
 
-`install.sh` (فقط برای نصب تازه؛ روی سرور در حال کار اجرا نکنید) زمان‌بندی را با `scripts/install-ops-cron.sh` در یک فایل `/etc/cron.d/papital-erp` می‌نویسد: `scripts/backup.sh` هر روز ساعت ۰۲:۳۰ و `scripts/monitor.sh` هر پنج دقیقه، با گزارش در `logs/backup.log` و `logs/monitor.log`. فقط اگر `ls /etc/cron.d/papital-erp` چنین فایلی نشان ندهد، یک بار اجرا کنید. کاربر سرویس را `systemctl show -p User --value papital-erp` می‌گوید (خالی یعنی `root`)، و ساعت پشتیبان فقط از همین دستور خوانده می‌شود:
+`install.sh` (فقط برای نصب تازه؛ روی سرور در حال کار اجرا نکنید) زمان‌بندی را با `scripts/install-ops-cron.sh` در یک فایل `/etc/cron.d/papital-erp` می‌نویسد: `scripts/backup.sh` هر روز ساعت ۰۲:۳۰ و `scripts/monitor.sh` هر پنج دقیقه، با گزارش در `logs/backup.log` و `logs/monitor.log`. اگر `ls /etc/cron.d/papital-erp` چنین فایلی نشان ندهد، یا پس از به‌روزرسانی به v10.2.14 (برای افزودن بررسی شبانه)، یک بار اجرا کنید؛ فایل از نو نوشته می‌شود و دوباره اجرا کردن آن چیزی را دو تا نمی‌کند. کاربر سرویس را `systemctl show -p User --value papital-erp` می‌گوید (خالی یعنی `root`)، و ساعت پشتیبان فقط از همین دستور خوانده می‌شود:
 
 ```bash
 cd /opt/papital-erp
@@ -152,6 +152,8 @@ sudo BACKUP_HOUR=2 BACKUP_MINUTE=30 bash scripts/install-ops-cron.sh root   # ro
 > `scripts/ensure-env-secrets.sh` را هرگز بی نام کلید اجرا نکنید: بی نام، `ERP_WEBHOOK_SECRET_TOKEN` و `METRICS_TOKEN` را هم به `.env` می‌افزاید. روی سروری که `METRICS_TOKEN` ندارد، هشدار «وضعیت صف رویدادها خوانده نشد (METRICS_TOKEN).» از `monitor.sh` و هشدار `METRICS_TOKEN` در `go-live-verify.sh` مورد انتظارند، و `audit-env.sh` (که `METRICS_TOKEN` را بررسی نمی‌کند) نبودن `ERP_WEBHOOK_SECRET_TOKEN` را خطا (`❌ MISSING`) می‌شمارد؛ این هم مورد انتظار است و آن کلید را نیفزایید. به همین دلیل هشدار `ERP_WEBHOOK_SECRET_TOKEN missing` در `go-live-verify.sh` هم مورد انتظار است.
 
 رونوشت رمزگذاری‌شده بیرون از سرور و کانال هشدار: `docs/OFFSITE_BACKUP.md`.
+
+همان فایل زمان‌بندی هر شب ساعت ۰۴:۰۰ (`NIGHTLY_VERIFY_HOUR` / `NIGHTLY_VERIFY_MINUTE`) با کاربر root `scripts/nightly-verify.sh` را اجرا می‌کند: پشتیبان دیشب روی یک پایگاه‌داده جدا بازیابی می‌شود، بررسی سلامت مالی و ناوردایی‌های حساب و انبار روی آن اجرا و با شب پیش مقایسه می‌شود، و نتیجه در `logs/nightly-verify.json` و کارت «بررسی شبانهٔ پشتیبان» صفحه سلامت سامانه دیده می‌شود. پایگاه‌داده برنامه دست نمی‌خورد.
 
 انواع backup در `scripts/backup.sh`: `daily` (نگه‌داری ۳۰ روز) • `pre-deployment` (۹۰ روز — `update.sh` خودکار می‌سازد) • `pre-migration` (۱۸۰ روز)
 
