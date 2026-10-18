@@ -84,7 +84,7 @@ describe('crm_attachments_n02_browser', () => {
 
 // v10.2 package 7 (OBS-R2-28 / OBS-R2-32): lists paged on the server and activity type names
 describe('crm_lists_paged_obs_r2_28', () => {
-  it('names an e-mail and a task by their own type, never «یادداشت»', () => {
+  it('names an e-mail and a task by their own type, never as a note', () => {
     expect(activityTypeLabel('email')).toBe('ایمیل');
     expect(activityTypeLabel('task')).toBe('کار');
     expect(activityTypeLabel('note')).toBe('یادداشت');
