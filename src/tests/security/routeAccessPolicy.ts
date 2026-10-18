@@ -28,11 +28,17 @@ export const PUBLIC_ROUTES = new Set([
  */
 export const LOGIN_ONLY_ROUTES = new Set([
   'GET /api/auth/me', 'GET /api/me', 'GET /api/auth/csrf', 'GET /api/csrf',
+  // 10.2 package 8 (D-07): the user's own signed-in devices
+  'GET /api/auth/sessions', 'DELETE /api/auth/sessions/:id', 'POST /api/auth/sessions/close-others',
   'GET /api/users/my-permissions', 'GET /api/users/profile', 'PUT /api/users/profile', 'GET /api/users/list-simple',
   'GET /api/system/business-date', 'GET /api/settings', 'GET /api/global-search',
   'GET /api/categories', 'GET /api/warehouses',
   'GET /api/notifications', 'GET /api/notifications/unread-count', 'PUT /api/notifications/:id/read',
   'PUT /api/notifications/read-all', 'DELETE /api/notifications/:id',
+  // v10.2 package 9: the group dashboard (birthdays, greetings, presence, whats-new and the user's own switches)
+  'GET /api/social/birthdays', 'PUT /api/social/birthdays/:personnelId/greeting', 'DELETE /api/social/birthdays/:personnelId/greeting',
+  'GET /api/social/presence', 'GET /api/social/preferences', 'PUT /api/social/preferences',
+  'GET /api/social/whats-new', 'POST /api/social/whats-new/dismiss',
   'GET /api/piecework/payrolls/mine',
   'POST /api/drafts', 'GET /api/drafts/:entityType', 'GET /api/drafts', 'DELETE /api/drafts/:entityType', 'DELETE /api/drafts/id/:id',
   'GET /api/attachments/:id',

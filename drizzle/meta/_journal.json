@@ -904,6 +904,20 @@
       "when": 1796038400000,
       "tag": "0128_wc_product_links",
       "breakpoints": true
+    },
+    {
+      "idx": 129,
+      "version": "7",
+      "when": 1796124800000,
+      "tag": "0129_user_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 130,
+      "version": "7",
+      "when": 1796134800000,
+      "tag": "0130_social_dashboard",
+      "breakpoints": true
     }
   ]
 }

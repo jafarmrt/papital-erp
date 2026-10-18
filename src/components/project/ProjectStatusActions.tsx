@@ -14,7 +14,7 @@ interface ProjectStatusActionsProps {
   onSaved: (response: unknown) => void;
 }
 
-// v10.2.7 (10.2 package 10): at least 44 px high on a phone, where the phone header shows these buttons too
+// v10.2.9 (10.2 package 10): at least 44 px high on a phone, where the phone header shows these buttons too
 const BUTTON = `${PHONE_ONLY_TAP_TARGET} px-3 py-1.5 bg-white hover:bg-slate-50 text-xs font-bold rounded-xl transition-colors border border-slate-300 cursor-pointer disabled:opacity-50`;
 
 /**

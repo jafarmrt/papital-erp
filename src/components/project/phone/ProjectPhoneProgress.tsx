@@ -33,7 +33,7 @@ function CellIcon({ status }: { status: ProgressCellStatus }) {
 }
 
 /**
- * v10.2.7 (10.2 package 10, production projects review «ث»): the progress matrix on a phone, one card per product with
+ * v10.2.9 (10.2 package 10, production projects review «ث»): the progress matrix on a phone, one card per product with
  * one row per stage it has, in place of the item × stage table that does not fit. A tap flips a stage between «تمام»
  * and «ناتمام»; the changes are sent together with «ثبت», through the same hook, rules and route as the desktop table
  * (`useProductProgressTicks`), so the server syncs the stages and the project status as it does there. The save bar

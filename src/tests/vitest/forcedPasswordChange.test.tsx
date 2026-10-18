@@ -16,7 +16,8 @@ import { PASSWORD_RESET_ALLOWED_PATHS, PASSWORD_RESET_REQUIRED, mustChangePasswo
 import type { User } from '../../types';
 
 /** the logout button's label: logout ends every session of the user (OBS-R1-27, decision t40) */
-const LOGOUT_ALL_DEVICES = 'خروج از همهٔ دستگاه‌ها';
+// 10.2 package 8 (D-07): «خروج» signs out this device only
+const LOGOUT_THIS_DEVICE = 'خروج';
 
 vi.mock('react-hot-toast', () => {
   const toast = Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn(), loading: vi.fn(), dismiss: vi.fn() });
@@ -102,11 +103,11 @@ describe('temporary password (TD-523)', () => {
     const onLogout = vi.fn();
     render(<UserProfileModal user={temporaryUser as unknown as User} isOpen onClose={onClose} onUserUpdate={() => {}} onLogout={onLogout} />);
     for (const button of screen.getAllByRole('button')) {
-      if (button.getAttribute('type') !== 'submit' && button.textContent !== LOGOUT_ALL_DEVICES) fireEvent.click(button);
+      if (button.getAttribute('type') !== 'submit' && button.textContent !== LOGOUT_THIS_DEVICE) fireEvent.click(button);
     }
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'انصراف' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: LOGOUT_ALL_DEVICES }));
+    fireEvent.click(screen.getByRole('button', { name: LOGOUT_THIS_DEVICE }));
     expect(onLogout).toHaveBeenCalledTimes(1);
   });
 
@@ -120,7 +121,7 @@ describe('temporary password (TD-523)', () => {
     expect(document.querySelector('aside')).toBeNull();
     expect(screen.getByText('کلمه عبور شما موقت است')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: LOGOUT_ALL_DEVICES }));
+    fireEvent.click(screen.getByRole('button', { name: LOGOUT_THIS_DEVICE }));
     await waitForStep(() => expect(calls.some(c => c.url === '/api/auth/logout' && c.method === 'POST')).toBe(true));
   });
 

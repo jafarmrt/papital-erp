@@ -1,7 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import type { DbExecutor, DbTransaction } from '../../db/drizzle.js';
 import { integrationDeliveryJobs, notifications, userMessengerLinks, userNotificationPreferences, users } from '../../db/schema.js';
-import { isNotificationCategory, messengerLinkPath, messengerNotificationText, type NotificationCategory } from '../../lib/notifications/notificationCategories.js';
+import { isBellOnlyCategory, isNotificationCategory, messengerLinkPath, messengerNotificationText, type NotificationCategory } from '../../lib/notifications/notificationCategories.js';
 
 /**
  * v10.1.41 (messenger notifications plan part 2, §2.3): the one way an in-app notification is written. In the caller's
@@ -70,7 +70,10 @@ export async function createNotifications(tx: DbTransaction, items: readonly New
   return written.map(n => n.id);
 }
 
-async function queueMessengerJobs(tx: DbTransaction, written: ReadonlyArray<NewNotification & { id: number }>): Promise<void> {
+async function queueMessengerJobs(tx: DbTransaction, allWritten: ReadonlyArray<NewNotification & { id: number }>): Promise<void> {
+  // v10.2 package 9: a bell-only category (birthdays and greetings) never goes to the messenger
+  const written = allWritten.filter(n => !isBellOnlyCategory(n.category));
+  if (written.length === 0) return;
   const userIds = [...new Set(written.map(n => n.userId))];
   const links = await tx.select({
     id: userMessengerLinks.id,

@@ -21,7 +21,7 @@ interface ProductProgressTicksOptions {
 }
 
 /**
- * v10.2.7 (10.2 package 10): reading, ticking and saving a project's progress matrix, shared by the desktop table and
+ * v10.2.9 (10.2 package 10): reading, ticking and saving a project's progress matrix, shared by the desktop table and
  * the phone list (rules in `src/lib/projects/progressTicks.ts`). Changes stay on screen until «ثبت», which sends them
  * all in one `PUT /projects/:id/product-progress`; the server then syncs the stages and the project status in the same
  * transaction (TD-738 / TD-739).

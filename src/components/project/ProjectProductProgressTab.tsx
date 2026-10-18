@@ -8,14 +8,14 @@ import { PROGRESS_CELL_LABELS, splitStageColumns } from '../../lib/projects/prog
 // V3.1.5 — تب «پیشرفت به تفکیک کد کالا» (ماتریسی SKU × مرحله + فیلتر، انتخاب ردیف و عملیات دسته‌ای)
 // مدل: هر ردیف = یک SKU (کد کالا × کمیت)؛ وضعیت هر مرحله دودویی (تمام/ناتمام)؛
 // پیشرفت کل پروژه = تجمیع وزن‌دار (Σ sku%×qty / Σ qty)
-// v10.2.7 (10.2 package 10): reading, ticking and saving live in `useProductProgressTicks`, shared with the phone list
+// v10.2.9 (10.2 package 10): reading, ticking and saving live in `useProductProgressTicks`, shared with the phone list
 
 export default function ProjectProductProgressTab({ projectId, onUpdate, onDirtyChange, onBusyChange }: {
   projectId: number;
   onUpdate?: () => void;
   /** v10.2.1 (review U2): the page asks before a tab change or leaving while ticks are not saved */
   onDirtyChange?: (dirty: boolean) => void;
-  /** v10.2.7 (10.2 package 10): ticks not saved or a save under way, so a phone page keeps this layout */
+  /** v10.2.9 (10.2 package 10): ticks not saved or a save under way, so a phone page keeps this layout */
   onBusyChange?: (busy: boolean) => void;
 }) {
   // v9.0.417 (TD-752): تیک ماتریس با `PUT /projects/:id/product-progress` و کلید `projects.edit` ثبت می‌شود

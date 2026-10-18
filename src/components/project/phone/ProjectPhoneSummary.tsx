@@ -22,7 +22,7 @@ interface ProjectPhoneSummaryProps {
 const CARD = 'bg-white rounded-2xl border border-slate-200 p-4 space-y-3';
 
 /**
- * v10.2.7 (10.2 package 10, production projects review «ث»): the first tab of a project page on a phone. It carries
+ * v10.2.9 (10.2 package 10, production projects review «ث»): the first tab of a project page on a phone. It carries
  * what the desktop header, step bar and summary tab say in one column: the progress, the customer, the delivery date
  * and how far it is, the step the project waits on and every step still open, and each stage with its status. A step
  * opens its tab; «تیک جدول پیشرفت» opens the matrix list, and «نمای کامل» shows the desktop tab for what this card

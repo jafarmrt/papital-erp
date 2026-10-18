@@ -67,12 +67,11 @@ const TREASURY_LABELS: Record<keyof TreasuryEventPayload, string> = {
   transactionId: 'شناسه تراکنش',
   chequeId: 'شناسه چک',
   type: 'نوع تراکنش',
-  amount: 'مبلغ',
   currency: 'ارز',
   accountId: 'شناسه حساب',
   accountName: 'نام حساب',
-  description: 'شرح',
   sayadNumber: 'شماره صیادی',
+  isHighValue: 'تراکنش کلان (ارزش ریالی دست‌کم آستانه تنظیمات)',
 };
 
 // OBS-R2-13 (ت۴۰): cheque status change and payslip approval and payment

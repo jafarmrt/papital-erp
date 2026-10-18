@@ -1,5 +1,5 @@
 /**
- * v10.2.7 (10.2 package 10): the tick rules of a project's progress matrix (item × stage), shared by the desktop table
+ * v10.2.9 (10.2 package 10): the tick rules of a project's progress matrix (item × stage), shared by the desktop table
  * («۳. پیشرفت هر کالا») and the phone list, so both read the same answer of `GET /projects/:id/product-progress`,
  * flip a cell the same way and send the same `PUT` body. The server alone decides what a tick means
  * (`computeProgressMatrix` and the status sync in the tick's transaction, TD-738 / TD-739); a later rule for the

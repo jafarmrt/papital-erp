@@ -92,7 +92,7 @@ interface ProjectWorkspaceTabBarProps {
 
 /**
  * the five tabs of a project page; a tab holding an unsaved change says so
- * v10.2.7 (10.2 package 10): on a phone each tab is at least 44 px high, and the row scrolls the active tab into view,
+ * v10.2.9 (10.2 package 10): on a phone each tab is at least 44 px high, and the row scrolls the active tab into view,
  * since the five tabs do not fit a phone's width (only the row moves, never the page); a wider screen shows every tab
  * and never moves the row (delta D4)
  */

@@ -106,7 +106,7 @@ export async function runAccessPackageTwoTests(shouldRun: ShouldRun): Promise<Te
     await runCase(results, {
       id: 'sec_session_endpoints_same_origin_td_528',
       name: 'v9.0.77: a forged cross-site form cannot log a user out of every device or log them into another account (TD-528)',
-      details: 'logout and login from Origin https://evil.example and from Origin null get 403 and the two sessions stay valid; logout with a valid session but no CSRF header gets 403; a same-host Origin and a non-browser client without Origin still log in; a logout with the session CSRF header ends both sessions',
+      details: 'logout and login from Origin https://evil.example and from Origin null get 403 and the two sessions stay valid; logout with a valid session but no CSRF header gets 403; a same-host Origin and a non-browser client without Origin still log in; a logout with the session CSRF header ends only its own device (10.2 package 8, D-07: the phone stays signed in)',
     }, async (h, wrong) => {
       const request = (await import('supertest')).default;
       const { loginTestUserWithSession } = await import('../fixtures/httpTestHelper.js');
@@ -141,7 +141,8 @@ export async function runAccessPackageTwoTests(shouldRun: ShouldRun): Promise<Te
 
       const legit = await request(app).post('/api/auth/logout').set('Cookie', victim.cookie).set('x-csrf-token', victim.csrfToken).send({});
       if (legit.status !== 200) wrong.push(`logout with the session CSRF header returned ${legit.status}, not 200`);
-      if (await alive(phone.cookie)) wrong.push('a real logout did not end the other session');
+      if (await alive(victim.cookie)) wrong.push('a real logout did not end its own session');
+      if (!(await alive(phone.cookie))) wrong.push('a real logout also ended the other device (only this device closes since D-07)');
     });
   }
 

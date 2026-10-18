@@ -23,7 +23,7 @@ export const MOBILE_NAV_ITEMS: readonly MobileNavItem[] = [
 export const MOBILE_MENU_LABEL = 'فهرست';
 
 /**
- * v10.2.7 (10.2 package 10): at most five page buttons beside «فهرست», so the bar keeps its six cells on a narrow phone;
+ * v10.2.9 (10.2 package 10): at most five page buttons beside «فهرست», so the bar keeps its six cells on a narrow phone;
  * a viewer who may open more pages keeps the first five in `MOBILE_NAV_ITEMS` order and reaches the rest from «فهرست»
  */
 export const MOBILE_NAV_MAX_ITEMS = 5;

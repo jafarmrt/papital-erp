@@ -14,7 +14,7 @@ export const LOGIN_TEXT = {
   username: 'نام کاربری',
   password: 'کلمه عبور',
   submit: 'ورود به سامانه',
-  signedIn: 'خروج از همهٔ دستگاه‌ها',
+  signedInTitle: 'خروج از حساب در همین دستگاه',
 } as const;
 
 export type Json = Record<string, unknown>;
@@ -55,7 +55,7 @@ export async function signIn(page: Page): Promise<void> {
   await page.getByPlaceholder(LOGIN_TEXT.username).fill(E2E_ADMIN.username);
   await page.getByPlaceholder(LOGIN_TEXT.password).fill(E2E_ADMIN.password);
   await page.getByRole('button', { name: LOGIN_TEXT.submit }).click();
-  await expect(page.getByText(LOGIN_TEXT.signedIn)).toBeVisible();
+  await expect(page.getByTitle(LOGIN_TEXT.signedInTitle)).toBeVisible();
 }
 
 /** A short suffix that keeps codes and names unique across runs on the same local database. */

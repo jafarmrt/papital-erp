@@ -12,6 +12,12 @@ import { logger } from '../../middleware/logger.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { RuleEngineService, type RuleExpression } from '../ruleEngine.service.js';
 import { LOCAL_ECHO_PATH, assertSafeExternalUrl, isEchoSimulatorEnvironment, isLocalEchoTarget } from '../../lib/ssrfGuard.js';
+import { guardedWebhookFetch } from './guardedWebhookFetch.js';
+import { logRulesOnMissingNumericFields } from './ruleMissingFieldLog.js';
+import {
+  HIGH_VALUE_TREASURY_RULE_CONDITIONS, HIGH_VALUE_TREASURY_RULE_DESCRIPTION, HIGH_VALUE_TREASURY_RULE_NAME, HIGH_VALUE_TREASURY_RULE_TEMPLATE,
+  repairSeededHighValueTreasuryRule,
+} from './highValueTreasuryRuleRepair.js';
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
 import { assertNotificationPermission, permissionHolderUserIds, roleMemberUserIds } from '../notifications/notificationRecipients.js';
 import { resolveRuleConfigSecrets } from './integrationSecrets.js';
@@ -163,13 +169,11 @@ export class EventActionEngineService {
         timestamp: new Date().toISOString()
       };
 
-      const response = await fetch(targetUrl, {
+      const response = await guardedWebhookFetch(targetUrl, {
         method,
         headers,
         body: JSON.stringify(bodyPayload),
-        signal: controller.signal,
-        // V3.0.7 (TD-057): جلوگیری از دورزدن SSRF Guard با redirect
-        redirect: 'manual'
+        signal: controller.signal
       });
 
       clearTimeout(timeoutId);
@@ -460,6 +464,10 @@ export class EventActionEngineService {
    * Seeds standard out-of-the-box automation rules if database is clean
    */
   public static async seedDefaultRules(): Promise<void> {
+    // 10.2 package 8 (TD-1297, review M-3): an installed seeded high-value treasury rule moves from the amount to
+    // `isHighValue` once (its own transaction and error handling), before the empty-table check below
+    await repairSeededHighValueTreasuryRule();
+    await logRulesOnMissingNumericFields();
     try {
       const webhookSecret = await EventActionEngineService.getWebhookSecretToken();
 
@@ -524,21 +532,22 @@ export class EventActionEngineService {
           },
           isActive: 1
         } satisfies CreateRuleInput] : []),
+        // 10.2 package 8 (TD-1297, review M-3): the treasury event carries no amount, so the high-value audit rule reads
+        // `isHighValue` («آستانه تراکنش کلان خزانه», default 500,000,000 rials); an installed copy still on the amount is
+        // moved once by `repairSeededHighValueTreasuryRule`
         {
-          name: 'ثبت ممیزی تراکنش‌های کلان خزانه‌داری',
-          description: 'ثبت لاگ ممیزی امنیتی اختصاصی برای کلیه تراکنش‌های واریز یا برداشت بالای ۵۰۰ میلیون ریال',
+          name: HIGH_VALUE_TREASURY_RULE_NAME,
+          description: HIGH_VALUE_TREASURY_RULE_DESCRIPTION,
           eventType: DomainEventType.TREASURY_TRANSACTION_APPROVED,
-          conditionsJson: [
-            { field: 'payload.amount', operator: 'gte', value: 500000000 }
-          ],
+          conditionsJson: HIGH_VALUE_TREASURY_RULE_CONDITIONS,
           actionType: 'audit_log',
           actionConfigJson: {
             category: 'خزانه‌داری:تراکنش_کلان',
             tag: 'HIGH_VALUE_TRANSACTION',
-            descriptionTemplate: 'تراکنش خزانه‌داری با ارزش کلان {{payload.amount}} {{payload.currency}} به ثبت رسید.'
+            descriptionTemplate: HIGH_VALUE_TREASURY_RULE_TEMPLATE,
           },
           isActive: 1
-        }
+        },
       ];
 
       for (const rule of defaultRules) {

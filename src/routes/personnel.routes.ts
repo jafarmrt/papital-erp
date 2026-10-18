@@ -58,6 +58,8 @@ const PERSONNEL_DETAIL_COLUMNS = {
   isInsuranceCovered: personnel.isInsuranceCovered,
   isTaxCovered: personnel.isTaxCovered,
   isEidiCovered: personnel.isEidiCovered,
+  // v10.2 بستهٔ ۹: نمایش روز و ماه تولد به همکاران در پیشخوان
+  isBirthdayVisible: personnel.isBirthdayVisible,
   endDate: personnel.endDate,
   terminationReason: personnel.terminationReason,
   specializedSkills: personnel.specializedSkills,
@@ -139,6 +141,8 @@ const personnelBodySchema = z.object({
   isInsuranceCovered: z.boolean().optional(),
   isTaxCovered: z.boolean().optional(),
   isEidiCovered: z.boolean().optional(),
+  // v10.2 بستهٔ ۹ (پیشخوان گروهی): پیش‌فرض روشن؛ نبودنش در ویرایش مقدار فعلی را نگه می‌دارد
+  isBirthdayVisible: z.boolean().optional(),
   endDate: z.string().optional(),
   terminationReason: z.string().optional(),
   specializedSkills: z.string().optional(),
@@ -360,7 +364,7 @@ router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), v
                 notes: notes || existing.notes,
                 updatedAt: nowIso,
                 version: nextVersion(existing.version)
-              });
+              }, existing.birthDate);
             // v9.0.30 (TD-442): پرسنلی که از خواندن فهرست تا این ردیف ویرایش یا حذف شده بازنویسی نمی‌شود
             if (!row) throw new ConflictError(`پرسنل «${existing.fullName}» هم‌زمان ویرایش یا حذف شده است؛ این ردیف به‌روز نشد.`, undefined, 'OCC_CONFLICT');
 
@@ -521,6 +525,7 @@ router.post('/personnel', authorizePermission('personnel.manage'), validate(crea
       isInsuranceCovered = false,
       isTaxCovered = false,
       isEidiCovered = true,
+      isBirthdayVisible = true,
       endDate = '',
       terminationReason = '',
       specializedSkills = '',
@@ -570,6 +575,7 @@ router.post('/personnel', authorizePermission('personnel.manage'), validate(crea
           isInsuranceCovered: isInsuranceCovered === true ? 1 : 0,
           isTaxCovered: isTaxCovered === true ? 1 : 0,
           isEidiCovered: isEidiCovered === true ? 1 : 0,
+          isBirthdayVisible: isBirthdayVisible === true ? 1 : 0,
           endDate: requireStorageDate(endDate, 'تاریخ پایان همکاری'),
           terminationReason,
           specializedSkills,
@@ -646,6 +652,7 @@ router.put('/personnel/:id', authorizePermission('personnel.manage'), validate(u
       isInsuranceCovered = existing.isInsuranceCovered === 1,
       isTaxCovered = existing.isTaxCovered === 1,
       isEidiCovered = existing.isEidiCovered === 1,
+      isBirthdayVisible = existing.isBirthdayVisible === 1,
       endDate = existing.endDate,
       terminationReason = existing.terminationReason,
       specializedSkills = existing.specializedSkills,
@@ -698,6 +705,7 @@ router.put('/personnel/:id', authorizePermission('personnel.manage'), validate(u
           isInsuranceCovered: isInsuranceCovered === true ? 1 : 0,
           isTaxCovered: isTaxCovered === true ? 1 : 0,
           isEidiCovered: isEidiCovered === true ? 1 : 0,
+          isBirthdayVisible: isBirthdayVisible === true ? 1 : 0,
           endDate: requireStorageDate(endDate, 'تاریخ پایان همکاری'),
           terminationReason: terminationReason || '',
           specializedSkills: specializedSkills || '',
@@ -713,7 +721,7 @@ router.put('/personnel/:id', authorizePermission('personnel.manage'), validate(u
           notes: notes ? notes.trim() : '',
           updatedAt: nowIso,
           version: nextVersion(existing.version)
-        });
+        }, existing.birthDate);
       if (!updated) throw new OptimisticLockError({ entityType: 'Personnel', entityId: id, expectedVersion });
 
       await logActivity({

@@ -18,3 +18,4 @@ export * from './workshop';
 export * from './notifications';
 export * from './system';
 export * from './woocommerce';
+export * from './social';

@@ -37,6 +37,8 @@ export interface PersonnelFormData {
   isInsuranceCovered: boolean;
   isTaxCovered: boolean;
   isEidiCovered: boolean;
+  // v10.2 package 9: the birthday (day and month) on the group dashboard, on by default
+  isBirthdayVisible: boolean;
   endDate: string;
   terminationReason: string;
   specializedSkills: string;
@@ -72,6 +74,7 @@ const INITIAL_FORM_DATA: PersonnelFormData = {
   isInsuranceCovered: false,
   isTaxCovered: false,
   isEidiCovered: true,
+  isBirthdayVisible: true,
   endDate: '',
   terminationReason: '',
   specializedSkills: '',
@@ -161,6 +164,7 @@ export function usePersonnel() {
       isInsuranceCovered: Number(p.isInsuranceCovered ?? 0) === 1,
       isTaxCovered: Number(p.isTaxCovered ?? 0) === 1,
       isEidiCovered: Number(p.isEidiCovered ?? 1) === 1,
+      isBirthdayVisible: Number(p.isBirthdayVisible ?? 1) === 1,
       endDate: p.endDate || '',
       terminationReason: p.terminationReason || '',
       specializedSkills: p.specializedSkills || '',

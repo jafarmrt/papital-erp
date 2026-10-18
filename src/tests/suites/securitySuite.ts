@@ -1413,6 +1413,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // بسته ۲ (از v9.0.75، TD-524 به بعد): کاربران، دسترسی و سجل
   const { runAccessPackageTwoTests } = await import('../security/accessPackageTwoTests.js');
   results.push(...await runAccessPackageTwoTests(shouldRunAccess));
+  // 10.2 package 8 (D-07, TD-1295): one session row per device, closing one device
+  const { runDeviceSessionTests } = await import('../security/deviceSessionTests.js');
+  results.push(...await runDeviceSessionTests(shouldRunAccess));
   const { runAccessPackageTwoDocumentTests } = await import('../security/accessPackageTwoDocumentTests.js');
   results.push(...await runAccessPackageTwoDocumentTests(shouldRunAccess));
   const { runAccessPackageTwoSensitiveTests } = await import('../security/accessPackageTwoSensitiveTests.js');

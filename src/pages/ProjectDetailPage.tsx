@@ -35,7 +35,7 @@ type DirtySetter = (dirty: boolean) => void;
  * The step bar says where the project stands; a tab with an unsaved change is marked, and leaving it (another tab, the
  * list, a menu link, the browser's back button, the search or a notification, closing the browser tab) asks first. Only the tab on screen is mounted, so each one starts from the
  * project as the server last saved it.
- * v10.2.7 (10.2 package 10, review «ث»): narrower than 768 px the page has a phone layout: a short header, the
+ * v10.2.9 (10.2 package 10, review «ث»): narrower than 768 px the page has a phone layout: a short header, the
  * summary of the project instead of the first tab and a list per product instead of the progress matrix, both
  * reading the same project and the same tick hook as the desktop; «نمای کامل» shows the desktop layout. Only one
  * layout is built at a time (`usePhoneWidth`).

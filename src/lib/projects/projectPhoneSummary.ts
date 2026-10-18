@@ -4,7 +4,7 @@ import { daysUntilDeadline } from '../workshop/workshopSchedule';
 import type { ProjectStep } from './projectSteps';
 
 /**
- * v10.2.7 (10.2 package 10, production projects review «ث»): what the phone summary of a project says beside the
+ * v10.2.9 (10.2 package 10, production projects review «ث»): what the phone summary of a project says beside the
  * desktop summary tab: how far the delivery date is and which steps still wait. Both read what the page already has,
  * the project record and the step bar's steps; nothing new is asked of the server.
  */

@@ -16,7 +16,7 @@ interface ProjectPhoneHeaderProps {
 }
 
 /**
- * v10.2.7 (10.2 package 10): the top of a project page on a phone: back to the list, the title, the code and the
+ * v10.2.9 (10.2 package 10): the top of a project page on a phone: back to the list, the title, the code and the
  * status, and the same edit and status buttons as the desktop header. The customer, the delivery date and the
  * progress are in the phone summary below it.
  */

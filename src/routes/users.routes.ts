@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { eq, desc } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { users, roles } from '../db/schema.js';
-import { authenticateToken, generateToken, generateCsrfToken, AUTH_COOKIE_NAME, getAuthCookieOptions, sessionLifetimeOfRole, shouldExposeTokenInBody } from '../middleware/auth.js';
+import { authenticateToken, shouldExposeTokenInBody } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { z } from 'zod';
@@ -12,6 +12,7 @@ import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { PERMISSION_CATALOG, PERMISSION_KEYS, isSystemAdminRole } from '../lib/permissions/permissionCatalog.js';
 import { createRole, deleteRole, updateRole } from '../services/users/roleAdmin.service.js';
 import { createUser, deleteUser, restoreUser, updateOwnProfile, updateUser } from '../services/users/userAccount.service.js';
+import { closeAllUserSessionsByAdmin, closeUserSessionByAdmin, listManagedUserSessions, renewSessionCookie } from '../services/auth/userSessions.service.js';
 import { workflowsRequiringRole } from '../services/workflow/transitionRoles.js';
 import { roleDisplayName } from '../lib/users/roleDisplayName.js';
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE } from '../lib/auth/passwordPolicy.js';
@@ -96,11 +97,8 @@ router.put('/users/profile', validate(updateProfileSchema), asyncHandler(async (
   // پس از پیام موفقیت، درخواست بعدی ۴۰۱ می‌گرفت
   let session: { token: string; csrfToken: string } | null = null;
   if (passwordChanged) {
-    const csrfToken = req.user?.csrfToken || generateCsrfToken();
-    const lifetime = await sessionLifetimeOfRole(updatedUser.role);
-    const token = generateToken({ id: updatedUser.id, username: updatedUser.username, role: updatedUser.role ?? '', csrfToken, tokenVersion: updatedUser.tokenVersion || 0 }, lifetime);
-    res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req, lifetime));
-    session = { token, csrfToken };
+    // 10.2 package 8 (D-07): this device keeps its session row, which takes the new token version
+    session = await renewSessionCookie(req, res, updatedUser);
   }
 
   res.json({
@@ -248,6 +246,23 @@ router.post('/users/:id/restore', authorizePermission('users.manage'), validate(
 router.delete('/users/:id', authorizePermission('users.manage'), validate(userParamsSchema), asyncHandler(async (req, res) => {
   await deleteUser(req, Number(req.params.id));
   res.json({ success: true });
+}));
+
+// 10.2 package 8 (D-07, TD-1295): another user's signed-in devices, and closing one (a lost phone) or all of them;
+// the close follows the account rules of TD-299 / TD-520 and is audited (`src/services/auth/userSessions.service.ts`)
+const userSessionParamsSchema = z.object({ params: z.object({ id: numericIdString, sessionId: numericIdString }) });
+
+router.get('/users/:id/sessions', authorizePermission('users.manage'), validate(userParamsSchema), asyncHandler(async (req, res) => {
+  res.json({ sessions: await listManagedUserSessions(req, Number(req.params.id)) });
+}));
+
+router.delete('/users/:id/sessions/:sessionId', authorizePermission('users.manage'), validate(userSessionParamsSchema), asyncHandler(async (req, res) => {
+  await closeUserSessionByAdmin(req, Number(req.params.id), Number(req.params.sessionId));
+  res.json({ success: true });
+}));
+
+router.post('/users/:id/sessions/close-all', authorizePermission('users.manage'), validate(userParamsSchema.extend({ body: z.object({}).strict() })), asyncHandler(async (req, res) => {
+  res.json({ success: true, ...(await closeAllUserSessionsByAdmin(req, Number(req.params.id))) });
 }));
 
 export default router;

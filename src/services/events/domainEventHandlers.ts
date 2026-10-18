@@ -142,9 +142,7 @@ export function registerDomainEventHandlers(): void {
         description = `تغییر وضعیت فرآیند (${payload.workflowCode}) بر روی ${payload.entityType} شماره ${payload.entityId}: ${payload.fromStateKey} ➔ ${payload.toStateKey} [${payload.actionTitle}]`;
       } else if (event.eventType === DomainEventType.TREASURY_TRANSACTION_APPROVED) {
         const payload = event.payload as TreasuryEventPayload;
-        description = payload.amount === undefined
-          ? `تراکنش خزانه‌داری (${payload.type}) ثبت و تایید شد`
-          : `تراکنش خزانه‌داری (${payload.type}) به مبلغ ${payload.amount.toLocaleString('fa-IR')} ${payload.currency} ثبت و تایید شد`;
+        description = `تراکنش خزانه‌داری (${payload.type}) ثبت و تایید شد`;
       }
 
       await logActivity({
