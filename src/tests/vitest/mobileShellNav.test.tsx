@@ -48,12 +48,19 @@ function renderShell(permissions: string[], startCollapsed = true) {
 describe('phone bottom bar (D-11)', () => {
   it('offers only the pages the role may open', () => {
     expect(visibleMobileNavItems({ permissions: ['audit.view'], isAdmin: false }).map(i => i.path)).toEqual(['/', '/audit']);
-    expect(visibleMobileNavItems({ permissions: [], isAdmin: true }).map(i => i.path)).toEqual(['/', '/workshop', '/approval-inbox', '/audit', '/piecework']);
+    expect(visibleMobileNavItems({ permissions: [], isAdmin: true }).map(i => i.path)).toEqual(['/', '/workshop', '/approval-inbox', '/projects', '/audit']);
+  });
+
+  it('offers the project list to a project reader and keeps the bar at five pages (10.2 package 10)', () => {
+    expect(visibleMobileNavItems({ permissions: ['projects.view', 'workshop.review', 'workflow.approve'], isAdmin: false }).map(i => i.path)).toEqual(['/', '/workshop/review', '/approval-inbox', '/projects']);
+    expect(visibleMobileNavItems({ permissions: ['projects.view', 'piecework.view'], isAdmin: false }).map(i => i.path)).toEqual(['/', '/projects', '/piecework']);
+    expect(visibleMobileNavItems({ permissions: ['piecework.view'], isAdmin: false }).map(i => i.path)).toEqual(['/', '/piecework']);
+    expect(isMobileNavItemActive('/projects', '/projects/7/progress')).toBe(true);
   });
 
   it('opens the workshop cartable for a worker and the review page for a project manager (N-01)', () => {
     expect(visibleMobileNavItems({ permissions: ['workshop.self'], isAdmin: false }).map(i => i.path)).toEqual(['/', '/workshop']);
-    expect(visibleMobileNavItems({ permissions: ['projects.view', 'workshop.review'], isAdmin: false }).map(i => i.path)).toEqual(['/', '/workshop/review']);
+    expect(visibleMobileNavItems({ permissions: ['projects.view', 'workshop.review'], isAdmin: false }).map(i => i.path)).toEqual(['/', '/workshop/review', '/projects']);
     expect(isMobileNavItemActive('/workshop', '/workshop/review')).toBe(true);
   });
 
