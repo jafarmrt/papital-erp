@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString, storageDateParam } from '../middleware/validate.js';
 import { customerBulkImportSchema } from './importRows.schemas.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
+import { NotFoundError } from '../errors/customErrors.js';
 import { parsePagination, parsePickListLimit } from '../lib/pagination.js';
 import { CustomerService } from '../services/customer.service.js';
 import { getCustomerAccountCard } from '../services/customers/customerAccountCard.js';
@@ -299,6 +300,17 @@ const customerDocumentsValidation = z.object({
 router.get('/customers/:id/documents', authorizePermission(...READ_PERMISSIONS.partyDocuments), validate(customerDocumentsValidation), asyncHandler(async (req, res) => {
   const { page, limit } = parsePagination(req.query as Record<string, unknown>, { page: 1, limit: 50 });
   res.json(await getCustomerSalesDocuments(Number(req.params.id), page, limit));
+}));
+
+// v10.2 package 7 (OBS-R2-24): one party's full record by its id (the edit form and the dossier opened from another
+// page), with its tags and its bank details by the TD-433 rule; a pick-list row carries no notes or version to edit with
+router.get('/customers/:id', authorizePermission(...READ_PERMISSIONS.customers), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const found = await orm.select().from(customers).where(and(eq(customers.id, id), eq(customers.isDeleted, 0)));
+  if (found.length === 0) throw new NotFoundError('طرف حساب یافت نشد', { id }, 'CUSTOMER_NOT_FOUND');
+  const [row] = await partyRowsForUser(req.user, found);
+  const tags = await tagsByCustomer([id], orm);
+  res.json({ ...row, tags: tags.get(id) ?? [] });
 }));
 
 // POST /api/customers/bulk-import - Bulk import and update counterparties from Excel

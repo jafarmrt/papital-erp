@@ -2,10 +2,12 @@ import crypto from 'crypto';
 import { MAX_ATTACHMENT_FILE_MB } from '../../lib/attachments/attachmentBodyLimit.js';
 import fs from 'fs';
 import path from 'path';
+import { getAttachmentsRoot } from '../../lib/storage.js';
 import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import {
-  fileAttachments, documents, journalVouchers, cheques, treasuryTransactions, productionProjects, pieceworkPayrolls
+  fileAttachments, documents, journalVouchers, cheques, treasuryTransactions, productionProjects, pieceworkPayrolls,
+  crmLeads, crmActivities,
 } from '../../db/schema.js';
 import { ValidationError, ConflictError } from '../../errors/customErrors.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
@@ -41,7 +43,9 @@ const EXTENSION_BY_MIME: Record<string, string> = {
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
 };
 
-// همه این جدول‌ها ستون‌های id (serial) و attachments (jsonb) هم‌نوع دارند؛ نوع یکی برای تایپ عمومی کافی است
+// همه این جدول‌ها ستون‌های id (serial) و attachments (jsonb) هم‌نوع دارند؛ نوع یکی برای تایپ عمومی کافی است.
+// v10.2 package 7: the attachments of a sales file and an activity live only in file_attachments (no JSONB column), so
+// those two types have no table here and the inline migration skips them
 const ENTITY_TABLES = {
   document: documents,
   journal_voucher: journalVouchers,
@@ -49,7 +53,7 @@ const ENTITY_TABLES = {
   treasury_transaction: treasuryTransactions,
   production_project: productionProjects,
   piecework_payroll: pieceworkPayrolls,
-} as unknown as Record<AttachmentEntityType, typeof documents>;
+} as unknown as Partial<Record<AttachmentEntityType, typeof documents>>;
 
 export interface InlineAttachmentMigrationReport {
   dryRun: boolean;
@@ -61,9 +65,7 @@ export interface InlineAttachmentMigrationReport {
   failures: Array<{ entityType: AttachmentEntityType; entityId: number; error: string }>;
 }
 
-export function getAttachmentsRoot(): string {
-  return path.resolve(process.env.ATTACHMENTS_DIR || path.join(process.cwd(), 'public', 'uploads', '.attachments'));
-}
+export { getAttachmentsRoot };
 
 function resolveStoragePath(relativePath: string): string {
   const root = getAttachmentsRoot();
@@ -110,6 +112,41 @@ export class AttachmentStorageService {
 
   static absolutePath(storagePath: string): string {
     return resolveStoragePath(storagePath);
+  }
+
+  /**
+   * v10.2 package 7: the name a download is saved under ends with the extension of the stored type («فاکتور.pdf» stored
+   * as an image becomes «فاکتور.jpg»), so a browser never opens it as another kind; a type without a known extension
+   * keeps the name as sent.
+   */
+  static downloadName(name: string, mimeType: string): string {
+    const base = name.trim() || 'attachment';
+    const ext = EXTENSION_BY_MIME[mimeType];
+    if (!ext) return base;
+    const current = /\.([^./\\]{1,10})$/.exec(base)?.[1]?.toLowerCase();
+    if (current === ext || (ext === 'jpg' && current === 'jpeg')) return base;
+    const stem = current ? base.slice(0, -(current.length + 1)) : base;
+    return `${stem || 'attachment'}.${ext}`;
+  }
+
+  /**
+   * v10.2 package 7: whether the record an attachment belongs to is still live. A sales file or activity that was
+   * deleted (or an activity of a deleted file) keeps its attachment rows, but their files are no longer served; other owners are checked by their routes.
+   */
+  static async ownerIsLive(row: { entityType: string; entityId: number }): Promise<boolean> {
+    if (row.entityType === 'crm_lead') {
+      const [lead] = await orm.select({ id: crmLeads.id }).from(crmLeads)
+        .where(and(eq(crmLeads.id, row.entityId), eq(crmLeads.isDeleted, 0)));
+      return Boolean(lead);
+    }
+    if (row.entityType === 'crm_activity') {
+      // an activity of a deleted sales file is not live either (the rule of the activity routes)
+      const [activity] = await orm.select({ leadId: crmActivities.leadId, leadDeleted: crmLeads.isDeleted })
+        .from(crmActivities).leftJoin(crmLeads, eq(crmLeads.id, crmActivities.leadId))
+        .where(and(eq(crmActivities.id, row.entityId), eq(crmActivities.isDeleted, 0)));
+      return Boolean(activity) && (!activity.leadId || activity.leadDeleted === 0);
+    }
+    return true;
   }
 
   static async findActive(id: string, executor: DbExecutor = orm) {
@@ -212,6 +249,7 @@ export class AttachmentStorageService {
     if (!Array.isArray(input) || input.length === 0) return [];
     const stored = await this.normalizeForRecord(executor, entityType, entityId, input, actor);
     const table = ENTITY_TABLES[entityType];
+    if (!table) throw new ValidationError('این نوع رکورد پیوست فهرستی ندارد');
     await executor.update(table).set({ attachments: stored }).where(eq(table.id, entityId));
     return stored;
   }
@@ -235,6 +273,7 @@ export class AttachmentStorageService {
       for (const entityType of ATTACHMENT_ENTITY_TYPES) {
         if (options.scope && options.scope.entityType !== entityType) continue;
         const table = ENTITY_TABLES[entityType];
+        if (!table) continue;
         const candidates = await orm.select({ id: table.id }).from(table)
           .where(and(
             sql`${table.attachments}::text LIKE ${'%"data:%'}`,

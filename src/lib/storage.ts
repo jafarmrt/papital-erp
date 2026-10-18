@@ -29,6 +29,15 @@ export function getImageUploadsDir(): string {
   return path.join(process.cwd(), 'public', 'uploads');
 }
 
+/**
+ * The private attachment directory (`ATTACHMENTS_DIR`, else `public/uploads/.attachments`), never served by `/uploads`.
+ * In the shared kernel since v10.2 package 7, so a domain that stores its own files (sales file attachments) reads it
+ * without importing the attachments package; `attachmentStorage.service.ts` re-exports it.
+ */
+export function getAttachmentsRoot(): string {
+  return path.resolve(process.env.ATTACHMENTS_DIR || path.join(process.cwd(), 'public', 'uploads', '.attachments'));
+}
+
 export const uploadBase64ToStorage = async (base64String: string, type: 'image' | 'thumbnail' = 'image', namePrefix?: string): Promise<string> => {
   if (!isDataUrl(base64String)) {
     return base64String;

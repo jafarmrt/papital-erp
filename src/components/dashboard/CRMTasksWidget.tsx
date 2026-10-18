@@ -260,7 +260,7 @@ export function CRMTasksWidget({
             return (
               <div
                 key={act.id}
-                onClick={() => navigate(`/crm?leadId=${act.leadId || ''}`)}
+                onClick={() => navigate(act.leadId ? `/crm?leadId=${act.leadId}` : `/crm?activityId=${act.id}`)}
                 className={`p-3 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between gap-2 ${
                   isOverdue
                     ? 'bg-rose-50/70 border-rose-200/80 hover:bg-rose-100/80'

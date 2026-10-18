@@ -47,7 +47,7 @@ export function CRMLeadModal({
 
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <DialogLayer onClose={onCloseLeadModal} />
+      <DialogLayer onClose={onCloseLeadModal} disabled={isSavingLead} />
       <div className="bg-white rounded-2xl max-w-2xl w-full shadow-xl border border-slate-200 max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95">
         <div className="p-5 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
           <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
@@ -56,6 +56,7 @@ export function CRMLeadModal({
           </h3>
           <button
             onClick={onCloseLeadModal}
+            disabled={isSavingLead}
             className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 cursor-pointer transition-colors"
           >
             ✕
@@ -311,25 +312,17 @@ export function CRMLeadModal({
 
             <div>
               <label htmlFor={`${fieldId}-assigned-personnel-id`} className="block text-xs font-bold text-slate-700 mb-1">فروشنده مسئول (پرسنل)</label>
-              <select
+              <SearchableSelect
                 id={`${fieldId}-assigned-personnel-id`}
                 value={leadForm.assignedPersonnelId ? String(leadForm.assignedPersonnelId) : ''}
-                onChange={(e) => {
-                  const id = e.target.value ? Number(e.target.value) : null;
+                onChange={(value) => {
+                  const id = value ? Number(value) : null;
                   const selected = personnelList.find((p: any) => p.id === id);
                   setLeadForm({ ...leadForm, assignedPersonnelId: id, assignedTo: selected?.fullName || leadForm.assignedTo });
                 }}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500 font-semibold text-slate-800"
-              >
-                {!leadForm.assignedPersonnelId && (
-                  <option value="">{leadForm.assignedTo || currentLoggedInUser} (بدون اتصال پرسنلی)</option>
-                )}
-                {personnelList.map((p: any) => (
-                  <option key={p.id} value={String(p.id)}>
-                    {p.fullName}{p.jobTitle ? ` — ${p.jobTitle}` : ''}
-                  </option>
-                ))}
-              </select>
+                placeholder={`${leadForm.assignedTo || currentLoggedInUser} (بدون اتصال پرسنلی)`}
+                options={personnelList.map((p: any) => ({ value: String(p.id), label: `${p.fullName}${p.jobTitle ? ` — ${p.jobTitle}` : ''}` }))}
+              />
               {currentPersonnelId && String(leadForm.assignedPersonnelId || '') !== '' && !editingLead && (
                 <p className="text-[10px] text-emerald-600 mt-1">پیش‌فرض: پرسنل متصل به حساب کاربری شما</p>
               )}
@@ -378,6 +371,7 @@ export function CRMLeadModal({
               <button
                 type="button"
                 onClick={onCloseLeadModal}
+                disabled={isSavingLead}
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
               >
                 انصراف

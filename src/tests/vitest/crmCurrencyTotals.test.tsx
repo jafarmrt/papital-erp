@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Customer, CRMLead } from '../../types';
 import { formatPersianPrice, formatCurrencyLabel } from '../../utils';
 import { sumByCurrency } from '../../lib/crm/leadCurrencyTotals';
 
-vi.mock('../../api', () => ({ fetchJson: () => Promise.resolve([]) }));
+const partyLeads: CRMLead[] = [];
+vi.mock('../../api', () => ({
+  fetchJson: (url: string) => Promise.resolve(url.startsWith('/crm/leads?customerId=7') ? partyLeads : []),
+}));
 
 import { CRMStatsCards } from '../../components/crm/CRMStatsCards';
 import { CustomerDossierDrawer } from '../../components/crm/CustomerDossierDrawer';
@@ -43,25 +46,24 @@ describe('CRM lead values per currency (TD-422)', () => {
     expect(screen.queryByText(new RegExp(formatPersianPrice(2_001_000)))).toBeNull();
   });
 
-  it('shows the pipeline and won values of a customer dossier per currency', () => {
+  it('shows the pipeline and won values of a customer dossier per currency', async () => {
     const customer = { id: 7, name: 'گالری فیروزه', partyType: 'customer', version: 1 } as Customer;
     const lead = (id: number, stage: string, currency: string, estimatedValue: number) =>
       ({ id, title: `پرونده ${id}`, customerId: 7, customerName: customer.name, stage, status: stage === 'won' ? 'won' : 'active', currency, estimatedValue }) as CRMLead;
+    partyLeads.splice(0, partyLeads.length, lead(1, 'proposal', 'USD', 1000), lead(2, 'proposal', 'IRR', 2_000_000), lead(3, 'won', 'USD', 250.5));
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { container } = render(
       <QueryClientProvider client={client}>
         <CustomerDossierDrawer
           customer={customer}
           onClose={() => undefined}
-          allLeads={[lead(1, 'proposal', 'USD', 1000), lead(2, 'proposal', 'IRR', 2_000_000), lead(3, 'won', 'USD', 250.5)]}
-          allActivities={[]}
           onOpenLeadDrawer={() => undefined}
           onOpenLeadModal={() => undefined}
           onOpenActivityModal={() => undefined}
         />
       </QueryClientProvider>,
     );
-    expect(lineOf(container, 'IRR')).toEqual([`${formatPersianPrice(2_000_000)} ${formatCurrencyLabel('IRR')}`]);
+    await waitFor(() => expect(lineOf(container, 'IRR')).toEqual([`${formatPersianPrice(2_000_000)} ${formatCurrencyLabel('IRR')}`]));
     expect(lineOf(container, 'USD')).toEqual([
       `${formatPersianPrice(250.5, undefined, 2)} ${formatCurrencyLabel('USD')}`,
       `${formatPersianPrice(1250.5, undefined, 2)} ${formatCurrencyLabel('USD')}`,

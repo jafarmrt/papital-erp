@@ -70,7 +70,7 @@ export const migrationsLog = pgTable('migrations_log', {
 
 
 /**
- * 10.2 package 8 (D-07, migration 0127): one row per signed-in device. The session token carries `sid`; a token whose
+ * 10.2 package 8 (D-07, migration 0128): one row per signed-in device. The session token carries `sid`; a token whose
  * row is closed (`revokedAt`), expired or written under an earlier `users.token_version` is refused on its next
  * request. Rows are never deleted: «خروج» and «بستن» close them.
  */

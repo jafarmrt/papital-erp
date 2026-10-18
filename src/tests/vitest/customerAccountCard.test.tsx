@@ -16,6 +16,7 @@ vi.mock('../../hooks/useCRMData', async (importOriginal) => ({
 vi.mock('../../components/crm/crmSharedHosts', () => ({
   CrmInteractionModalHost: () => null,
   CrmCustomerDossierHost: () => null,
+  CrmLeadModalHost: () => null,
 }));
 
 import CustomersPage from '../../pages/CustomersPage';
@@ -73,8 +74,6 @@ describe('party account card by id (TD-416)', () => {
         <CustomerDossierDrawer
           customer={customer}
           onClose={() => undefined}
-          allLeads={[]}
-          allActivities={[]}
           onOpenLeadDrawer={() => undefined}
           onOpenLeadModal={() => undefined}
           onOpenActivityModal={() => undefined}
