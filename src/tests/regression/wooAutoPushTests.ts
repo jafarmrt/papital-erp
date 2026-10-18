@@ -92,7 +92,7 @@ export async function autoPushChangedTrackedCase(h: Harness, wrong: string[]): P
     if (store.pushed.has(1)) wrong.push('a product whose stock did not move was pushed');
     if (store.pushed.has(3)) wrong.push('a product with stock tracking off was pushed automatically');
     if (store.manageStockSent.has(2)) wrong.push(`the automatic push sent manage_stock ${String(store.manageStockSent.get(2))}`);
-    if (!store.requests.includes('GET orders?page=1')) wrong.push(`the open orders were not read before the push: ${store.requests.join(', ')}`);
+    if (!store.requests.includes('GET orders?offset=0')) wrong.push(`the open orders were not read before the push: ${store.requests.join(', ')}`);
 
     store.requests.length = 0;
     const idle = await runAutoPushOnce();
@@ -170,7 +170,7 @@ export async function autoPushOpenOrdersCase(h: Harness, wrong: string[]): Promi
       if (store.pushed.get(pid) !== 5) wrong.push(`the shop got ${store.pushed.get(pid)} for the product, expected 5 (run ${JSON.stringify(run)})`);
       // the variation's stock did not move in the program, and its only order is pending: nothing to correct
       if (store.pushed.has(variation)) wrong.push(`a variation whose stock did not move got ${store.pushed.get(variation)}`);
-      const query = store.queries.find((_, i) => store.requests[i] === 'GET orders?page=1');
+      const query = store.queries.find((_, i) => store.requests[i] === 'GET orders?offset=0');
       if (query?.get('status') !== 'on-hold,processing') wrong.push(`orders asked with status ${query?.get('status')}`);
 
       await setStock(h, v.id, 9);

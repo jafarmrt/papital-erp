@@ -217,7 +217,9 @@ export async function pushStocksLocked(actor: WcActor, options: PushOptions, con
     // part B: the open orders are read first, then the stock in one snapshot with the order log (`siteStocks`)
     let orders: OpenOrder[];
     try {
-      orders = await readOpenOrders(connection, deadline.signal, orderReadBudgetMs(deadlineMs, WC_PUSH_MIN_BUDGET_MS));
+      orders = await readOpenOrders(connection, {
+        signal: deadline.signal, budgetMs: orderReadBudgetMs(deadlineMs, WC_PUSH_MIN_BUDGET_MS), trigger: options.trigger === 'auto' ? 'auto' : 'manual',
+      });
     } catch (err) {
       await recordFailedRun('stock_push', actor, err, { trigger: options.trigger });
       throw err;

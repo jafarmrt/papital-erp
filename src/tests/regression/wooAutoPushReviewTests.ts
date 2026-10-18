@@ -193,8 +193,8 @@ export async function autoPushRunPurgeCase(h: Harness, wrong: string[]): Promise
     } catch (err) {
       wrong.push(`a failing purge stopped the daily run: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
-      OperationalPurgeService.unregister('n6Throws');
-      OperationalPurgeService.unregister('n6Later');
+      OperationalPurgeService.unregisterForTests('n6Throws');
+      OperationalPurgeService.unregisterForTests('n6Later');
     }
     const server = fs.readFileSync(path.join(process.cwd(), 'server.ts'), 'utf8');
     if (!/OperationalPurgeService\.register\('wcAutoPushRuns', \(\) => purgeOldAutoRuns\(\)\)/.test(server)) wrong.push('server.ts does not register the purge with the daily operational purge');
@@ -245,8 +245,8 @@ export async function autoPushOrderPageEdgeCase(h: Harness, wrong: string[]): Pr
     const stable = await runAutoPushOnce(later(6));
     const reads = store.requests.filter(r => r.startsWith('GET orders'));
     if (stable.state !== 'pushed' || store.pushed.get(pid) !== 6) wrong.push(`with a stable list the run was ${stable.state} and sent ${store.pushed.get(pid)}, expected 6`);
-    if (reads.length !== 3) wrong.push(`a two-page list was read with ${reads.join(', ')}, expected pages 1, 2 and 1 again`);
-    const query = store.queries.find((_, i) => store.requests[i] === 'GET orders?page=1');
+    if (reads.join(',') !== 'GET orders?offset=0,GET orders?offset=99,GET orders?offset=0') wrong.push(`a two-page list was read with ${reads.join(', ')}, expected rows 0, 99 and 0 again`);
+    const query = store.queries.find((_, i) => store.requests[i] === 'GET orders?offset=0');
     if (query?.get('order') !== 'desc') wrong.push(`orders asked in ${query?.get('order')} order, expected newest first`);
 
     // N-2: a reading slower than its budget fails with its own message
@@ -254,7 +254,7 @@ export async function autoPushOrderPageEdgeCase(h: Harness, wrong: string[]): Pr
     const { readOpenOrders } = await import('../../services/woocommerce/wcOpenOrders.js');
     store.delayMs = 400;
     try {
-      await readOpenOrders(await requireWcConnection(), undefined, 100);
+      await readOpenOrders(await requireWcConnection(), { budgetMs: 100, trigger: 'auto' });
       wrong.push('an order reading slower than its budget did not fail');
     } catch (err) {
       if (!/بیش از اندازه طول کشید/.test(err instanceof Error ? err.message : '')) wrong.push(`the slow reading said ${err instanceof Error ? err.message : String(err)}`);

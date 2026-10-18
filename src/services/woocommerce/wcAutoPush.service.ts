@@ -124,7 +124,9 @@ async function autoPushLocked(failedRunsBefore: number, options: AutoPushRunOpti
     if (due.length === 0) return { state: 'nothing' };
 
     const conn = await requireWcConnection();
-    const orders = await readOpenOrders(conn, deadline.signal, orderReadBudgetMs(WC_PUSH_DEADLINE_MS, WC_PUSH_MIN_BUDGET_MS));
+    const orders = await readOpenOrders(conn, {
+      signal: deadline.signal, budgetMs: orderReadBudgetMs(WC_PUSH_DEADLINE_MS, WC_PUSH_MIN_BUDGET_MS), trigger: 'auto',
+    });
     const dueItems = [...new Set(due.map(l => l.itemId))];
     const { sellable, wanted } = await siteStocks(dueItems, orders, all);
     if (fullPass) lastFullPassAt = now;

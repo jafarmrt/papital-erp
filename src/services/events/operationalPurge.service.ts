@@ -32,9 +32,9 @@ export class OperationalPurgeService {
     this.registered.set(name, purge);
   }
 
-  /** test hook: removes a registered purge */
-  static unregister(name: string): void {
-    this.registered.delete(name);
+  /** test hook (delta review N-D): removes a registered purge, and only under `NODE_ENV=test` */
+  static unregisterForTests(name: string): void {
+    if (process.env.NODE_ENV === 'test') this.registered.delete(name);
   }
 
   /** One purge; deletes run outside any transaction, each its own statement, and each purge on its own. */

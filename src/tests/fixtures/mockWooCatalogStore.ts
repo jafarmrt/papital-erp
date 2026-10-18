@@ -17,6 +17,8 @@ export interface MockProduct {
  * with `order=desc`) */
 export interface MockOrder {
   id: number; status: string; lines: Array<{ productId: number; variationId?: number; quantity: number }>;
+  /** `date_completed_gmt` of a completed order, as the shop sends it (no zone) */
+  dateCompletedGmt?: string;
 }
 
 export interface MockWooCatalogStore {
@@ -68,6 +70,11 @@ const PREFIX = '/wp-json/wc/v3/';
 function page<T>(rows: T[], url: URL, store: MockWooCatalogStore): T[] {
   const perPage = Number(url.searchParams.get('per_page') || 10);
   const n = Number(url.searchParams.get('page') || 1);
+  // part B (delta review N-A): an `offset` starts the page at that row, as WordPress does, and ignores `page`
+  if (url.searchParams.has('offset')) {
+    const offset = Number(url.searchParams.get('offset'));
+    return rows.slice(offset, offset + perPage);
+  }
   const stable = url.searchParams.get('orderby') === 'id' && url.searchParams.get('order') === 'asc';
   const shifted = store.unstableOrder === 'always' || (store.unstableOrder === 'without_id_order' && !stable);
   const start = (n - 1) * perPage - (shifted && n > 1 ? 1 : 0);
@@ -111,7 +118,7 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
     let body = '';
     req.on('data', chunk => { body += String(chunk); });
     req.on('end', () => void (async () => {
-      const label = `${req.method} ${path}${url.searchParams.get('page') ? `?page=${url.searchParams.get('page')}` : ''}`;
+      const label = `${req.method} ${path}${url.searchParams.get('page') ? `?page=${url.searchParams.get('page')}` : ''}${url.searchParams.has('offset') ? `?offset=${url.searchParams.get('offset')}` : ''}`;
       store.arrivals.push(label);
       if (store.hold?.pattern.test(path)) await store.hold.until;
       inFlight++;
@@ -150,7 +157,10 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
         return;
       }
       if (req.method === 'GET' && path === 'orders') {
-        store.beforeOrdersPage?.(Number(url.searchParams.get('page') || 1));
+        // the reading's number: page n, or for an overlapping reading (offset 0, 99, 198 … of 100 rows) its order
+        const perPage = Number(url.searchParams.get('per_page') || 10);
+        const offset = Number(url.searchParams.get('offset') || 0);
+        store.beforeOrdersPage?.(url.searchParams.has('offset') ? Math.round(offset / Math.max(1, perPage - 1)) + 1 : Number(url.searchParams.get('page') || 1));
         const statuses = new Set((url.searchParams.get('status') || 'any').split(','));
         const newestFirst = url.searchParams.get('order') === 'desc';
         const rows = [...store.orders].sort((a, b) => (newestFirst ? b.id - a.id : a.id - b.id))
@@ -160,6 +170,20 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
           id: o.id, status: o.status,
           line_items: o.lines.map(l => ({ product_id: l.productId, variation_id: l.variationId ?? 0, quantity: l.quantity })),
         })));
+        return;
+      }
+      const oneOrder = path.match(/^orders\/(\d+)$/);
+      if (req.method === 'GET' && oneOrder) {
+        const o = store.orders.find(row => row.id === Number(oneOrder[1]));
+        if (!o) {
+          res.statusCode = 404;
+          send({ code: 'woocommerce_rest_shop_order_invalid_id', message: 'شناسه نامعتبر است.' });
+          return;
+        }
+        send({
+          id: o.id, status: o.status, date_completed_gmt: o.dateCompletedGmt ?? null, billing: { first_name: 'خریدار', last_name: 'آزمایشی' },
+          line_items: o.lines.map(l => ({ product_id: l.productId, variation_id: l.variationId ?? 0, quantity: l.quantity })),
+        });
         return;
       }
       if (req.method === 'POST' && (path === 'products/batch' || /^products\/\d+\/variations\/batch$/.test(path))) {
