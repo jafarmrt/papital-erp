@@ -8,7 +8,7 @@ import { autoPushBoundedFailuresCase, autoPushChangedTrackedCase, autoPushOpenOr
 import {
   autoPushCapCase, autoPushOrderListMovedCase, autoPushOrderPageEdgeCase, autoPushRefusedBatchCase, autoPushRunPurgeCase, autoPushWebhookAndHourlyCase,
 } from './wooAutoPushReviewTests.js';
-import { autoPushFailedHoldCase, autoPushHandTagDigitsCase, autoPushOrderOverlapCase } from './wooAutoPushHoldTests.js';
+import { autoPushFailedHoldCase, autoPushHandTagDigitsCase, autoPushOrderOverlapCase, autoPushOrderWithoutIdCase } from './wooAutoPushHoldTests.js';
 import { WC_LIST_LIMIT } from '../../lib/woocommerce/wcCatalog.js';
 
 /**
@@ -71,6 +71,9 @@ export async function runWooCatalogSyncTests(shouldRun: ShouldRun): Promise<Test
     ['reg_wc_auto_push_order_overlap_d04',
       'D-04 part B delta review N-A: open orders are read with overlapping pages, so an order leaving a later read page while an older one joins fails the push closed',
       ['d04', 'woocommerce', 'auto'], autoPushOrderOverlapCase],
+    ['reg_wc_auto_push_order_without_id_d04',
+      'D-04 part B delta review 4 item E: an open order the shop lists without its id makes the reading unreadable and nothing is sent, with or without the shop count',
+      ['d04', 'woocommerce', 'auto'], autoPushOrderWithoutIdCase],
     ['reg_wc_auto_push_webhook_hourly_d04',
       'D-04 part B review M-3 / delta N-4: an order webhook (order.deleted too, through the order log) makes its products due on the next run and the hourly pass corrects an order that came without one',
       ['d04', 'woocommerce', 'auto'], autoPushWebhookAndHourlyCase],

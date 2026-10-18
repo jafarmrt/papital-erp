@@ -23,11 +23,14 @@ const ORDERS_UNREADABLE = 'سفارش‌های باز سایت خوانده نش
 const ORDERS_MOVED = 'فهرست سفارش‌های باز سایت هنگام خواندن تغییر کرد و موجودی فرستاده نشد';
 const ORDERS_TOO_SLOW = 'خواندن سفارش‌های باز سایت بیش از اندازه طول کشید و موجودی فرستاده نشد';
 
-/** delta review N-B: only the automatic push tries again by itself */
-const retryNote = (trigger: 'auto' | 'manual') =>
-  (trigger === 'auto'
-    ? '؛ ارسال خودکار کمی بعد دوباره تلاش می‌کند.'
-    : '؛ کمی بعد دوباره «همگام‌سازی موجودی کل کالاها با سایت» یا «همگام‌سازی ووکامرس» همان کالا را بزنید.');
+export type OpenOrderReadTrigger = 'auto' | 'all' | 'item';
+
+/** delta review N-B: only the automatic push tries again by itself; a manual push names the button that was pressed */
+const RETRY_NOTES: Record<OpenOrderReadTrigger, string> = {
+  auto: '؛ ارسال خودکار کمی بعد دوباره تلاش می‌کند.',
+  all: '؛ کمی بعد دوباره «همگام‌سازی موجودی کل کالاها با سایت» را بزنید.',
+  item: '؛ کمی بعد دوباره «همگام‌سازی ووکامرس» همان کالا را بزنید.',
+};
 
 function asLines(raw: unknown): OpenOrderLine[] {
   return (Array.isArray(raw) ? raw : []).map((l: unknown) => {
@@ -60,14 +63,15 @@ function tooManyOrders(): ValidationError {
  * reading, the first page read again at the end does not show the same orders. A first page that counts more open orders
  * than `WC_MAX_ORDER_PAGES` pages fails at once (review M-6). A shop that sends no count is read until a short page.
  * `budgetMs` (delta review N-2) is the time the reading may take, so the push it feeds keeps its own part of the deadline;
- * `trigger` (delta review N-B) words the failure for an automatic run, which tries again, or a manual push, which does not.
+ * `trigger` (delta review N-B) words the failure for an automatic run, which tries again, or for the manual push of all
+ * items or of one item, naming the button that was pressed. A row without an id makes the reading unreadable.
  */
 export async function readOpenOrders(
   conn: WcConnection,
-  options: { signal?: AbortSignal; budgetMs?: number; trigger: 'auto' | 'manual' },
+  options: { signal?: AbortSignal; budgetMs?: number; trigger: OpenOrderReadTrigger },
 ): Promise<OpenOrder[]> {
   const { signal, budgetMs, trigger } = options;
-  const fail = (text: string) => new ValidationError(`${text}${retryNote(trigger)}`, undefined, WC_SHOP_REQUEST_FAILED);
+  const fail = (text: string) => new ValidationError(`${text}${RETRY_NOTES[trigger]}`, undefined, WC_SHOP_REQUEST_FAILED);
   const limit = budgetMs ? AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(budgetMs)]) : signal;
   const read = async (offset: number) => {
     try {
@@ -89,7 +93,8 @@ export async function readOpenOrders(
   // the first reading takes a full page and every later one a page less its overlap row
   for (let reading = 1; reading <= WC_MAX_ORDER_PAGES + 2; reading++) {
     const { data: answer, total } = await read(offset);
-    if (!Array.isArray(answer)) throw fail(ORDERS_UNREADABLE);
+    // delta review 4, item E: every row needs its id, to anchor the next reading and to count the orders read
+    if (!Array.isArray(answer) || answer.some(row => !asOrder(row))) throw fail(ORDERS_UNREADABLE);
     let rows: unknown[] = answer;
     if (reading === 1) {
       firstTotal = total;
@@ -102,7 +107,7 @@ export async function readOpenOrders(
     }
     for (const row of rows) {
       const order = asOrder(row);
-      if (!order) continue;
+      if (!order) throw fail(ORDERS_UNREADABLE);
       if (orders.has(order.id)) throw fail(ORDERS_MOVED);
       orders.set(order.id, order);
     }
@@ -114,9 +119,9 @@ export async function readOpenOrders(
       }
       return [...orders.values()];
     }
-    // delta review 3, nit 5: the next reading is anchored on this row, so a row without an id fails closed
+    // delta review 3, nit 5: the next reading is anchored on this row (its id was checked above)
     lastId = asOrder(answer[answer.length - 1])?.id ?? 0;
-    if (lastId <= 0) throw fail(ORDERS_MOVED);
+    if (lastId <= 0) throw fail(ORDERS_UNREADABLE);
     offset += answer.length - 1;
   }
   throw tooManyOrders();
@@ -167,15 +172,17 @@ async function failedCompletedOrders(executor: DbExecutor, skip: Set<number>): P
 }
 
 /**
- * When a failed completed order's hold starts (UTC ms): its completion in the shop, else when its order log was made; a
- * completion in the future (a wrong shop clock) counts as now (delta review 3, nit 2)
+ * When a failed completed order's hold starts (UTC ms): its completion in the shop, else when its order log was made. A
+ * completion in the future (a wrong shop clock) is treated as missing (delta review 4, item C): counting it as now would
+ * keep the order held until the pre-filter on the log's last change dropped it, so the hold falls back to the log's
+ * creation, which never moves.
  */
 export function failedOrderHeldSince(payload: unknown, logCreatedAt: string | null, now = Date.now()): number {
   const completed = (payload as { date_completed_gmt?: unknown } | null)?.date_completed_gmt;
   const text = typeof completed === 'string' ? completed.trim() : '';
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(text)) {
     const at = Date.parse(`${text}Z`);
-    if (Number.isFinite(at)) return Math.min(at, now);
+    if (Number.isFinite(at) && at <= now) return at;
   }
   // the log's own timestamp is UTC without a zone (TD-314)
   const made = Date.parse(serverTimestampToUtcIso(logCreatedAt) ?? '');

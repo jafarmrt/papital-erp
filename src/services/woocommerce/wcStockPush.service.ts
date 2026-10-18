@@ -218,7 +218,7 @@ export async function pushStocksLocked(actor: WcActor, options: PushOptions, con
     let orders: OpenOrder[];
     try {
       orders = await readOpenOrders(connection, {
-        signal: deadline.signal, budgetMs: orderReadBudgetMs(deadlineMs, WC_PUSH_MIN_BUDGET_MS), trigger: options.trigger === 'auto' ? 'auto' : 'manual',
+        signal: deadline.signal, budgetMs: orderReadBudgetMs(deadlineMs, WC_PUSH_MIN_BUDGET_MS), trigger: options.trigger,
       });
     } catch (err) {
       await recordFailedRun('stock_push', actor, err, { trigger: options.trigger });

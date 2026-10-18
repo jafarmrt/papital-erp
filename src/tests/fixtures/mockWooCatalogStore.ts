@@ -41,6 +41,8 @@ export interface MockWooCatalogStore {
   beforeOrdersPage?: (page: number) => void;
   /** the orders list sends no `X-WP-Total` (a shop or a cache that strips it) */
   omitTotalHeader?: boolean;
+  /** orders the list sends without their `id` (delta review 4, item E: a shop or a plugin that drops the field) */
+  ordersWithoutId?: Set<number>;
   /** catalog pages after the first start one row early, so their first row repeats the last row of the page before (a date
    * order without a tie-breaker): only for a request without `orderby=id&order=asc`, or for every request with `always`;
    * `swap_ties` (review M-R / M-S) swaps the rows on each side of a page edge for every page after the first, so the last row of
@@ -167,7 +169,7 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
           .filter(o => statuses.has('any') || statuses.has(o.status));
         if (!store.omitTotalHeader) res.setHeader('X-WP-Total', String(rows.length));
         send(page(rows, url, store).map(o => ({
-          id: o.id, status: o.status,
+          ...(store.ordersWithoutId?.has(o.id) ? {} : { id: o.id }), status: o.status,
           line_items: o.lines.map(l => ({ product_id: l.productId, variation_id: l.variationId ?? 0, quantity: l.quantity })),
         })));
         return;

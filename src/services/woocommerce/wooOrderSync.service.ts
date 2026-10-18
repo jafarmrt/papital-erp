@@ -114,9 +114,13 @@ type BuyerInfo = WooOrderBuyer;
 
 const notesTag = (wcOrderId: string) => `سفارش ووکامرس #${wcOrderId}`;
 
-/** Persian and Arabic-Indic digits and the Arabic kaf of a typed note, and what they are read as */
-const NOTES_DIGITS_FROM = '۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩ك';
-const NOTES_DIGITS_TO = '01234567890123456789ک';
+/**
+ * Persian and Arabic-Indic digits, the Arabic kaf and a no-break space of a typed note, and what they are read as; the
+ * zero-width non-joiner and the direction marks (LRM, RLM, ALM) a Persian keyboard or a copy may add come last and have
+ * nothing to be read as, so translate() drops them (delta review 4, item A)
+ */
+const NOTES_DIGITS_FROM = '۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩ك\u00a0\u200c\u200e\u200f\u061c';
+const NOTES_DIGITS_TO = '01234567890123456789ک ';
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -266,7 +270,8 @@ export class WooOrderSyncService {
       if (doc) return doc;
     }
     // 10.2 package 6 (delta review 3, M-1): an invoice entered by hand carries the tag as typed, so Persian and Arabic-Indic
-    // digits (and the Arabic kaf) are read as Latin, and the whole number after # must be the order's, never a prefix of it
+    // digits (and the Arabic kaf) are read as Latin, a no-break space as a space, the zero-width and direction marks are
+    // dropped, and the whole number after # must be the order's, never a prefix of it
     const pattern = `سفارش\\s*ووکامرس\\s*#\\s*${escapeRegex(wcOrderId)}(\\D|$)`;
     const [legacy] = await tx.select({ id: documents.id, refNumber: documents.refNumber, buyerName: documents.buyerName })
       .from(documents)
