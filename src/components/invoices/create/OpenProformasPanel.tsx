@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Edit3, GitBranch, X } from 'lucide-react';
+import { Clock, Edit3, GitBranch, X } from 'lucide-react';
 import { cn, formatPersianCode, formatPersianDate, formatPersianNumber } from '../../../utils';
 import { WorkflowStepperWidget } from '../../workflow/WorkflowStepperWidget';
 import type { InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
@@ -28,9 +28,13 @@ export function OpenProformasPanel({ proformas, total, page, onPageChange, editi
   return (
     <>
       {proformas.length > 0 && (
-        <div className="bg-white border rounded-xl shadow-sm flex flex-col p-6 mt-8">
-          <h3 className="font-bold flex items-center gap-2 mb-4">⏳ پیش فاکتورهای باز ({formatPersianNumber(total)})</h3>
-          <div className="border rounded-xl flex overflow-hidden">
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col p-4 sm:p-6 mt-8">
+          {/* v10.2.4 (گزینه «ج»): سرتیتر با نشانه، بی شکلک؛ جدول در پهنای گوشی افقی پیمایش می‌شود */}
+          <h3 className="font-bold text-sm text-slate-800 flex items-center gap-2 mb-4">
+            <Clock size={18} className="text-blue-600 shrink-0" aria-hidden="true" />
+            پیش‌فاکتورهای باز ({formatPersianNumber(total)})
+          </h3>
+          <div className="border rounded-xl overflow-x-auto">
             <table className="w-full text-sm text-right">
               <thead className="bg-slate-50 text-slate-500 border-b">
                 <tr>

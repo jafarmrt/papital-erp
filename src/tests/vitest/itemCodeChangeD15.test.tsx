@@ -99,7 +99,7 @@ describe('the edited proforma leaves out its own reservation (TD-1209)', () => {
     expect(itemPickWithReservedUrl(null)).toBe(ITEM_PICK_WITH_RESERVED_URL);
     expect(itemPickWithReservedUrl(0)).toBe(ITEM_PICK_WITH_RESERVED_URL);
     expect(itemPickWithReservedUrl(42)).toBe(`${ITEM_PICK_WITH_RESERVED_URL}&excludeDocumentId=42`);
-    expect(read('pages/CreateInvoicePage.tsx')).toContain('fetchUrl={itemPickWithReservedUrl(editingDocId)}');
+    expect(read('components/invoices/create/InvoiceLinePicker.tsx')).toContain('fetchUrl={itemPickWithReservedUrl(editingDocId)}');
   });
 });
 

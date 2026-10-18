@@ -10,6 +10,7 @@ import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { useOnlineStatus } from '../../lib/pwa/useOnlineStatus';
 import { OFFLINE_SUBMIT_TITLE, PHONE_SHEET_FOOTER_SAFE_AREA, PHONE_SHEET_OVERLAY, PHONE_SHEET_PANEL, PHONE_TAP_TARGET } from '../../lib/pwa/phoneLayout';
 import { DialogLayer } from '../common/DialogLayer';
+import { rowKeyOf } from '../../lib/rowKey';
 
 interface PieceworkLogModalProps {
   isOpen: boolean;
@@ -235,7 +236,7 @@ export function PieceworkLogModal({
                       const rowTotal = parsedQty * (Number(row.unitRate) || 0);
 
                       return (
-                        <div key={idx} className="flex flex-col sm:flex-row items-center gap-2 bg-slate-50/60 p-3 rounded-xl border border-slate-200/60">
+                        <div key={rowKeyOf(row, idx)} className="flex flex-col sm:flex-row items-center gap-2 bg-slate-50/60 p-3 rounded-xl border border-slate-200/60">
                           <div className="flex-1 w-full sm:w-5/12">
                             <label htmlFor={`${fieldId}-task-id-${idx}`} className="block text-[10px] font-bold text-slate-500 mb-1">عنوان کاری *</label>
                             <SearchableSelect

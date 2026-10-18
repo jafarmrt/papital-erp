@@ -17,7 +17,7 @@ export const WRITER_ROUTES_WITHOUT_BODY = new Set([
   'POST /api/accounting/vouchers/:id/finalize',
   'POST /api/categories/reset-defaults',
   'POST /api/crm/leads/:id/convert-to-customer',
-  // بدنه خود پرونده پیوست است (جریان خام، نام پرونده در `X-File-Name`)؛ شناسه پرونده یا اقدام با `uploadSchema` سنجیده می‌شود (v10.2.4)
+  // بدنه خود پرونده پیوست است (جریان خام، نام پرونده در `X-File-Name`)؛ شناسه پرونده یا اقدام با `uploadSchema` سنجیده می‌شود (v10.2.5)
   'POST /api/crm/leads/:id/attachments', 'POST /api/crm/activities/:id/attachments',
   'POST /api/events/dlq/purge',
   'POST /api/events/outbox/:eventId/retry',

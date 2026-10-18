@@ -8,8 +8,9 @@ import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { VoucherDetailedPicker } from './VoucherDetailedPicker';
 import type { VoucherDetailedType } from '../../lib/accounting/voucherDetailedTypes';
 import type { Account } from '../../types';
+import { rowKeyOf, type KeyedRow } from '../../lib/rowKey';
 
-export interface VoucherItemDraft {
+export interface VoucherItemDraft extends KeyedRow {
   id?: number;
   accountId: number | '';
   /** v9.0.193 (TD-569): همان نوع‌های سرور؛ `custom` قدیمی «متفرقه» (`other`) است */
@@ -94,7 +95,7 @@ export function VoucherItemsTable({
 
               return (
                 <tr 
-                  key={idx} 
+                  key={rowKeyOf(it, idx)} 
                   onClick={() => setActiveRowIndex(idx)}
                   className={`transition ${
                     isActiveRow 
