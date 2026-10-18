@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { CRMActivity, CRMLead } from '../../types';
@@ -32,6 +32,9 @@ import { activityTarget, parseCrmDeepLink, resolveDossierParty } from '../../lib
 import { ActivityRowActions } from '../../components/crm/ActivityRowActions';
 import { CRMLeadsTable } from '../../components/crm/CRMLeadsTable';
 import { useCrmDeepLink } from '../../hooks/useCrmDeepLink';
+import { CRMLeadModal } from '../../components/crm/CRMLeadModal';
+import { CRMInteractionModal } from '../../components/crm/CRMInteractionModal';
+import { useClampPage, useFilterPage } from '../../hooks/useCrmListPages';
 
 const withClient = (node: ReactElement, entry = '/') => (
   <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
@@ -169,5 +172,81 @@ describe('crm_navigation_obs_r2_24', () => {
       '/crm?activityId=6',
     ));
     await waitFor(() => expect(onParty).toHaveBeenCalledWith(3));
+  });
+});
+
+const pressEscape = () => fireEvent.keyDown(window, { key: 'Escape' });
+
+// v10.2 package 7 review (M-2): Esc and the close buttons do not close the sales file or activity window while it saves
+describe('crm_windows_keep_open_while_saving', () => {
+  const leadForm = { title: '', customerName: '', phone: '', company: '', contacts: [], source: '', stage: 'lead', currency: 'IRR', estimatedValue: '', probability: '', notes: '' };
+  const leadModal = (saving: boolean, onClose: () => void) => (
+    <CRMLeadModal isLeadModalOpen onCloseLeadModal={onClose} editingLead={null} leadForm={leadForm} setLeadForm={() => undefined}
+      isSavingLead={saving} onSaveLead={() => undefined} customersList={[]} personnelList={[]} currentPersonnelId={null} currentLoggedInUser="u" />
+  );
+
+  it('keeps the sales file window open on Esc while saving and closes it afterwards', () => {
+    const onClose = vi.fn();
+    const view = render(withClient(leadModal(true, onClose)));
+    pressEscape();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'انصراف' })).toHaveProperty('disabled', true);
+    view.rerender(withClient(leadModal(false, onClose)));
+    pressEscape();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the activity window open on Esc while saving', () => {
+    const onClose = vi.fn();
+    const activityModal = (saving: boolean) => (
+      <CRMInteractionModal isActivityModalOpen onCloseActivityModal={onClose} selectedLeadForActivity={null} setSelectedLeadForActivity={() => undefined}
+        leads={[]} activityForm={{ type: 'call', title: '', description: '', result: '', mentions: [] }} setActivityForm={() => undefined}
+        isSavingActivity={saving} onSaveActivity={() => undefined} personnelList={[]} mentionUsers={[]} currentUser={{ id: 1 }} currentLoggedInUser="u"
+        isFollowupResultModalOpen={false} onCloseFollowupResultModal={() => undefined} selectedFollowupAct={null}
+        followupResultForm={{ result: '', resultNote: '' }} setFollowupResultForm={() => undefined} isSubmittingFollowupResult={false} onConfirmFollowupResult={() => undefined} />
+    );
+    const view = render(withClient(activityModal(true)));
+    pressEscape();
+    expect(onClose).not.toHaveBeenCalled();
+    view.rerender(withClient(activityModal(false)));
+    pressEscape();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+// v10.2 package 7 review (N-4 / N-5): pages follow their conditions, and an attachment count never drops to zero while loading
+describe('crm_pages_and_counts_review_p7', () => {
+  it('starts a list on its first page in the same render its conditions change', () => {
+    const { result, rerender } = renderHook(({ key }) => useFilterPage(key), { initialProps: { key: 'a' } });
+    act(() => result.current[1](4));
+    expect(result.current[0]).toBe(4);
+    rerender({ key: 'b' });
+    expect(result.current[0]).toBe(1);
+  });
+
+  it('moves back to the last page when deletions leave the current page empty', () => {
+    const setPage = vi.fn();
+    const { rerender } = renderHook(({ total, loading }) => useClampPage(5, { totalPages: total, loading, error: null }, setPage), {
+      initialProps: { total: 5, loading: false },
+    });
+    expect(setPage).not.toHaveBeenCalled();
+    rerender({ total: 3, loading: true });
+    expect(setPage).not.toHaveBeenCalled();
+    rerender({ total: 3, loading: false });
+    expect(setPage).toHaveBeenCalledWith(3);
+  });
+
+  it('opens an activity\'s window on the files its row already has and keeps the badge while the list loads', () => {
+    granted.add('crm.view');
+    fetchJson.mockReturnValue(new Promise(() => undefined));
+    const seed = [1, 2].map((n) => ({
+      id: `00000000-0000-4000-8000-00000000000${n}`, name: `f${n}.pdf`, type: 'application/pdf', size: 10, hasLight: false,
+      url: `/api/attachments/00000000-0000-4000-8000-00000000000${n}`, lightUrl: null, uploadedBy: 'a', uploadedAt: '2026-10-18T00:00:00Z',
+    }));
+    const activity = { id: 9, title: 'تماس', type: 'call', attachmentCount: 2, attachments: seed } as unknown as CRMActivity;
+    render(withClient(<ActivityRowActions activity={activity} />));
+    fireEvent.click(screen.getByRole('button', { name: /پیوست‌های اقدام/ }));
+    expect(screen.getByText('f1.pdf')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /پیوست‌های اقدام/ }).textContent).toContain('۲');
   });
 });

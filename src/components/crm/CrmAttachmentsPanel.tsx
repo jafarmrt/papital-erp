@@ -26,7 +26,7 @@ import {
 interface CrmAttachmentsPanelProps {
   owner: CrmAttachmentOwner;
   ownerId: number;
-  /** files the parent already read (the sales file detail); the panel reads them itself without it */
+  /** files the parent already read (the sales file detail, an activity row): shown at once while the panel reads them again */
   initial?: CrmAttachmentView[];
   /** true while a file is being sent or removed, so the window around it does not close (Esc included) */
   onBusyChange?: (busy: boolean) => void;
@@ -54,17 +54,25 @@ export function CrmAttachmentsPanel({ owner, ownerId, initial, onBusyChange, onC
     onBusyChange?.(value !== null);
   }, [onBusyChange]);
 
+  // v10.2 package 7 review (N-5): files the parent already has are shown (and counted) at once; the panel still reads
+  // the current list, so a file added since the parent's read is never missing
+  const [fetched, setFetched] = useState(false);
   useEffect(() => {
-    if (initial) {
+    if (initial && !fetched) {
       setFiles(initial);
       setLoading(false);
-      return;
     }
+  }, [initial, fetched]);
+
+  useEffect(() => {
     const controller = new AbortController();
-    setLoading(true);
     setLoadError(null);
+    setFetched(false);
     fetchJson<{ data: CrmAttachmentView[] }>(crmAttachmentsPath(owner, ownerId), { signal: controller.signal })
-      .then((res) => setFiles(Array.isArray(res?.data) ? res.data : []))
+      .then((res) => {
+        setFiles(Array.isArray(res?.data) ? res.data : []);
+        setFetched(true);
+      })
       .catch((err: unknown) => {
         if (!controller.signal.aborted) setLoadError(errorMessageOf(err) || 'فهرست پیوست‌ها دریافت نشد.');
       })
@@ -72,11 +80,13 @@ export function CrmAttachmentsPanel({ owner, ownerId, initial, onBusyChange, onC
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [owner, ownerId, initial]);
+  }, [owner, ownerId]);
 
+  // the count goes to the parent only once it is known, so a badge never drops to zero while the list loads
+  const countKnown = fetched || Boolean(initial);
   useEffect(() => {
-    onCountChange?.(files.length);
-  }, [files.length, onCountChange]);
+    if (countKnown) onCountChange?.(files.length);
+  }, [countKnown, files.length, onCountChange]);
 
   const addFiles = async (picked: File[]) => {
     const error = crmAttachmentPickError(picked, files.length);
@@ -118,6 +128,7 @@ export function CrmAttachmentsPanel({ owner, ownerId, initial, onBusyChange, onC
   };
 
   const full = files.length >= CRM_ATTACHMENT_MAX_FILES;
+  const blocked = busy !== null || !fetched;
   return (
     <section className="space-y-2" aria-busy={loading || busy !== null} data-testid={`crm-attachments-${owner}-${ownerId}`}>
       <div className="flex items-center justify-between gap-2">
@@ -127,11 +138,11 @@ export function CrmAttachmentsPanel({ owner, ownerId, initial, onBusyChange, onC
         {canManage && (
           <>
             <label htmlFor={inputId} title={!online ? OFFLINE_SUBMIT_TITLE : full ? 'سقف پیوست‌ها پر است' : undefined}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border ${busy || !online || full ? 'opacity-50 pointer-events-none border-slate-200 text-slate-400' : 'cursor-pointer border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100'}`}>
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border ${blocked || !online || full ? 'opacity-50 pointer-events-none border-slate-200 text-slate-400' : 'cursor-pointer border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100'}`}>
               افزودن عکس یا PDF
             </label>
             <input id={inputId} type="file" multiple accept={CRM_ATTACHMENT_ACCEPT} className="sr-only"
-              disabled={busy !== null || !online || full}
+              disabled={blocked || !online || full}
               onChange={(e) => {
                 const picked = Array.from(e.target.files ?? []);
                 e.target.value = '';
@@ -167,7 +178,7 @@ export function CrmAttachmentsPanel({ owner, ownerId, initial, onBusyChange, onC
                 <button type="button" onClick={() => download(file)} aria-label={`دریافت ${file.name}`} title="دریافت"
                   className="p-1 rounded-md text-slate-500 hover:text-blue-700 cursor-pointer"><Download size={13} /></button>
                 {canManage && (
-                  <button type="button" onClick={() => void remove(file)} disabled={busy !== null || !online} aria-label={`حذف ${file.name}`} title="حذف"
+                  <button type="button" onClick={() => void remove(file)} disabled={blocked || !online} aria-label={`حذف ${file.name}`} title="حذف"
                     className="p-1 rounded-md text-slate-500 hover:text-rose-600 cursor-pointer disabled:opacity-40"><Trash2 size={13} /></button>
                 )}
               </div>

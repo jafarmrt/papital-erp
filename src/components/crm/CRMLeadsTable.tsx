@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { PhoneCall, Edit3, Trash2, FileText, Loader2 } from 'lucide-react';
 import { CRMLead } from '../../types';
 import { STAGES } from '../../hooks/useCRMData';
 import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../utils';
-import { useCrmLeadPage } from '../../hooks/useCrmListPages';
+import { useClampPage, useCrmLeadPage, useFilterPage } from '../../hooks/useCrmListPages';
 import { CRM_LEAD_PAGE_SIZES } from '../../lib/crm/crmListPages';
 import { CrmPager } from './CrmPager';
 
@@ -35,11 +35,11 @@ export function CRMLeadsTable({
   onOpenCustomerDossier,
   convertingLeadId = null,
 }: CRMLeadsTableProps) {
-  const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(CRM_LEAD_PAGE_SIZES[0]);
-  useEffect(() => setPage(1), [filterQuery]);
+  const [page, setPage] = useFilterPage(`${filterQuery}|${pageSize}`);
   const filters = new URLSearchParams(filterQuery);
   const { data: leads, total, totalPages, loading, error, refetch } = useCrmLeadPage(filters, page, pageSize);
+  useClampPage(page, { totalPages, loading, error }, setPage);
 
   return (
     <div className="space-y-4" aria-busy={loading}>
@@ -163,10 +163,7 @@ export function CRMLeadsTable({
           <select
             id="crm-lead-page-size"
             value={pageSize}
-            onChange={(e) => {
-              setPageSize(Number(e.target.value));
-              setPage(1);
-            }}
+            onChange={(e) => setPageSize(Number(e.target.value))}
             className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold outline-none focus:border-blue-500 cursor-pointer"
           >
             {CRM_LEAD_PAGE_SIZES.map((size) => (

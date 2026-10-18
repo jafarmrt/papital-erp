@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Building2, Users, Briefcase, Plus, PhoneCall, FileText, X, Edit2, TrendingUp, Award, ExternalLink, BookOpen, ArrowDownLeft, ArrowUpRight, Scale } from 'lucide-react';
 import { Customer, CRMLead } from '../../types';
 import { useCrmPartyRecords } from '../../hooks/useCrmPartyRecords';
+import { useClampPage, useFilterPage } from '../../hooks/useCrmListPages';
 import { activityTypeLabel } from '../../lib/crm/activityTypes';
 import { ActivityRowActions } from './ActivityRowActions';
 import { CrmPager } from './CrmPager';
@@ -47,11 +48,11 @@ export function CustomerDossierDrawer({
   const [loadingFinancials, setLoadingFinancials] = useState(false);
 
   // v10.2 package 7 (OBS-R2-24 / OBS-R2-28): the party's files and one page of its activities come from the server
-  const [activityPage, setActivityPage] = useState(1);
+  const [activityPage, setActivityPage] = useFilterPage(String(customer?.id ?? 0));
   const party = useCrmPartyRecords(customer?.id ?? null, activityPage);
   const customerLeads = party.leads;
   const customerActivities = party.activities.data;
-  useEffect(() => setActivityPage(1), [customer?.id]);
+  useClampPage(activityPage, party.activities, setActivityPage);
 
   // Stats
   const totalLeadsCount = customerLeads.length;

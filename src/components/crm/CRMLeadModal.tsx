@@ -47,7 +47,7 @@ export function CRMLeadModal({
 
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <DialogLayer onClose={onCloseLeadModal} />
+      <DialogLayer onClose={onCloseLeadModal} disabled={isSavingLead} />
       <div className="bg-white rounded-2xl max-w-2xl w-full shadow-xl border border-slate-200 max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95">
         <div className="p-5 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
           <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
@@ -56,6 +56,7 @@ export function CRMLeadModal({
           </h3>
           <button
             onClick={onCloseLeadModal}
+            disabled={isSavingLead}
             className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 cursor-pointer transition-colors"
           >
             ✕
@@ -370,6 +371,7 @@ export function CRMLeadModal({
               <button
                 type="button"
                 onClick={onCloseLeadModal}
+                disabled={isSavingLead}
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
               >
                 انصراف

@@ -13,11 +13,14 @@ import { DialogLayer } from '../common/DialogLayer';
 import { activityResultLabel } from '../../lib/crm/crmScreenText';
 import { CrmAttachmentsPanel } from './CrmAttachmentsPanel';
 import { useHasPermission } from '../../contexts/AuthContext';
+import type { CrmAttachmentView } from '../../lib/crm/crmAttachments';
 
 interface CRMLeadDrawerProps {
   selectedLeadDrawer: CRMLead | null;
   onCloseDrawer: () => void;
   drawerActivities: CRMActivity[];
+  /** v10.2 package 7 review (N-5): the sales file's attachments from its detail, shown while the box reads them again */
+  drawerAttachments?: CrmAttachmentView[];
   onOpenActivityModal: (lead: CRMLead, defaultType?: string) => void;
   onOpenLeadModal: (lead: CRMLead) => void;
   /** v9.0.148 (TD-893): فقط برای دارنده `crm.delete`؛ بی آن دکمه حذف نیست */
@@ -35,6 +38,7 @@ export function CRMLeadDrawer({
   selectedLeadDrawer,
   onCloseDrawer,
   drawerActivities,
+  drawerAttachments,
   onOpenActivityModal,
   onOpenLeadModal,
   onDeleteLead,
@@ -263,7 +267,7 @@ export function CRMLeadDrawer({
 
         {canViewAttachments && (
           <div className="border border-slate-200 rounded-2xl p-3.5 mb-4">
-            <CrmAttachmentsPanel key={selectedLeadDrawer.id} owner="lead" ownerId={selectedLeadDrawer.id} onBusyChange={setAttachmentsBusy} />
+            <CrmAttachmentsPanel key={selectedLeadDrawer.id} owner="lead" ownerId={selectedLeadDrawer.id} initial={drawerAttachments} onBusyChange={setAttachmentsBusy} />
           </div>
         )}
 

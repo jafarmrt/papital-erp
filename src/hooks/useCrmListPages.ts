@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '../api';
 import { normalizeLeadStage } from './useCRMFilters';
@@ -63,4 +64,23 @@ export function useCrmActivityPage(query: ActivityPageQuery, enabled = true): Ac
     error: result.isError ? errorText(result.error, 'فهرست اقدام‌ها دریافت نشد.') : null,
     refetch: () => void result.refetch(),
   };
+}
+
+/**
+ * v10.2 package 7 review (N-4): the page of a server-paged list, back to 1 in the same render its conditions change, so
+ * the request of the new conditions never asks the old page; `filterKey` is every condition joined.
+ */
+export function useFilterPage(filterKey: string): [number, (page: number) => void] {
+  const [state, setState] = useState({ key: filterKey, page: 1 });
+  const page = state.key === filterKey ? state.page : 1;
+  const setPage = useCallback((next: number) => setState({ key: filterKey, page: Math.max(1, next) }), [filterKey]);
+  return [page, setPage];
+}
+
+/** v10.2 package 7 review (N-4): after a removal leaves fewer pages, the list moves to its new last page */
+export function useClampPage(page: number, list: { totalPages: number; loading: boolean; error: string | null }, setPage: (page: number) => void): void {
+  const { totalPages, loading, error } = list;
+  useEffect(() => {
+    if (!loading && !error && totalPages >= 1 && page > totalPages) setPage(totalPages);
+  }, [page, totalPages, loading, error, setPage]);
 }

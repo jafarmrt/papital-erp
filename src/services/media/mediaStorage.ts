@@ -143,14 +143,22 @@ async function writeAtomically(target: string, data: Buffer): Promise<void> {
   await fs.promises.rename(part, target);
 }
 
-/** Makes the light version and the thumbnail of a stored image and answers their sizes */
-export async function buildImageVariants(sha256: string, ext: string): Promise<{ lightBytes: number; thumbBytes: number }> {
-  const source = mediaFilePath(sha256, 'original', ext);
-  const base = () => sharp(source, { limitInputPixels: 300_000_000 }).rotate();
-  const light = await base()
+const IMAGE_PIXEL_LIMIT = 300_000_000;
+
+/** The light WEBP of an image (EXIF orientation applied, long side `MEDIA_LIGHT_LONG_SIDE`); shared with CRM attachments */
+export async function buildLightWebp(source: string): Promise<Buffer> {
+  return sharp(source, { limitInputPixels: IMAGE_PIXEL_LIMIT })
+    .rotate()
     .resize({ width: MEDIA_LIGHT_LONG_SIDE, height: MEDIA_LIGHT_LONG_SIDE, fit: 'inside', withoutEnlargement: true })
     .webp({ quality: 82 })
     .toBuffer();
+}
+
+/** Makes the light version and the thumbnail of a stored image and answers their sizes */
+export async function buildImageVariants(sha256: string, ext: string): Promise<{ lightBytes: number; thumbBytes: number }> {
+  const source = mediaFilePath(sha256, 'original', ext);
+  const base = () => sharp(source, { limitInputPixels: IMAGE_PIXEL_LIMIT }).rotate();
+  const light = await buildLightWebp(source);
   const thumb = await base()
     .resize({ width: MEDIA_THUMB_LONG_SIDE, height: MEDIA_THUMB_LONG_SIDE, fit: 'inside', withoutEnlargement: true })
     .webp({ quality: 75 })

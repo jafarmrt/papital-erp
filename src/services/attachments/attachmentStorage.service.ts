@@ -6,7 +6,8 @@ import { getAttachmentsRoot } from '../../lib/storage.js';
 import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import {
-  fileAttachments, documents, journalVouchers, cheques, treasuryTransactions, productionProjects, pieceworkPayrolls
+  fileAttachments, documents, journalVouchers, cheques, treasuryTransactions, productionProjects, pieceworkPayrolls,
+  crmLeads, crmActivities,
 } from '../../db/schema.js';
 import { ValidationError, ConflictError } from '../../errors/customErrors.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
@@ -111,6 +112,41 @@ export class AttachmentStorageService {
 
   static absolutePath(storagePath: string): string {
     return resolveStoragePath(storagePath);
+  }
+
+  /**
+   * v10.2 package 7: the name a download is saved under ends with the extension of the stored type («فاکتور.pdf» stored
+   * as an image becomes «فاکتور.jpg»), so a browser never opens it as another kind; a type without a known extension
+   * keeps the name as sent.
+   */
+  static downloadName(name: string, mimeType: string): string {
+    const base = name.trim() || 'attachment';
+    const ext = EXTENSION_BY_MIME[mimeType];
+    if (!ext) return base;
+    const current = /\.([^./\\]{1,10})$/.exec(base)?.[1]?.toLowerCase();
+    if (current === ext || (ext === 'jpg' && current === 'jpeg')) return base;
+    const stem = current ? base.slice(0, -(current.length + 1)) : base;
+    return `${stem || 'attachment'}.${ext}`;
+  }
+
+  /**
+   * v10.2 package 7: whether the record an attachment belongs to is still live. A sales file or activity that was
+   * deleted (or an activity of a deleted file) keeps its attachment rows, but their files are no longer served; other owners are checked by their routes.
+   */
+  static async ownerIsLive(row: { entityType: string; entityId: number }, executor: DbExecutor = orm): Promise<boolean> {
+    if (row.entityType === 'crm_lead') {
+      const [lead] = await executor.select({ id: crmLeads.id }).from(crmLeads)
+        .where(and(eq(crmLeads.id, row.entityId), eq(crmLeads.isDeleted, 0)));
+      return Boolean(lead);
+    }
+    if (row.entityType === 'crm_activity') {
+      // an activity of a deleted sales file is not live either (the rule of the activity routes)
+      const [activity] = await executor.select({ leadId: crmActivities.leadId, leadDeleted: crmLeads.isDeleted })
+        .from(crmActivities).leftJoin(crmLeads, eq(crmLeads.id, crmActivities.leadId))
+        .where(and(eq(crmActivities.id, row.entityId), eq(crmActivities.isDeleted, 0)));
+      return Boolean(activity) && (!activity.leadId || activity.leadDeleted === 0);
+    }
+    return true;
   }
 
   static async findActive(id: string, executor: DbExecutor = orm) {

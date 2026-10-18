@@ -34,7 +34,8 @@ export function ActivityRowActions({ activity, onEdit, onDelete }: ActivityRowAc
         </button>
       )}
       {open && (
-        <CrmAttachmentsWindow owner="activity" ownerId={activity.id} title={activity.title} onClose={() => setOpen(false)} onCountChange={setCount} />
+        <CrmAttachmentsWindow owner="activity" ownerId={activity.id} title={activity.title} onClose={() => setOpen(false)} onCountChange={setCount}
+          initial={activity.attachments} />
       )}
       {editable && onEdit && (
         <button type="button" onClick={() => onEdit(activity)} title="ویرایش اقدام" aria-label="ویرایش اقدام"

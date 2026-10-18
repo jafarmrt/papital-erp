@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { PhoneCall, Plus, Check, Video, MessageSquare, Mail, FileText, Search } from 'lucide-react';
 import { CRMActivity, CRMLead } from '../../types';
 import { useDebounce } from '../../hooks/useDebounce';
-import { useCrmActivityPage } from '../../hooks/useCrmListPages';
+import { useClampPage, useCrmActivityPage, useFilterPage } from '../../hooks/useCrmListPages';
 import { CRM_ACTIVITY_PAGE_SIZE } from '../../lib/crm/crmListPages';
 import { CrmPager } from './CrmPager';
 import { formatPersianNumber, formatPersianDate } from '../../utils';
@@ -55,13 +55,13 @@ export function CRMFollowupsView({
   // v10.2 package 7 (OBS-R2-28): search, type and page are applied on the server; the search waits for a pause
   const [actSearch, setActSearch] = useState('');
   const [actTypeFilter, setActTypeFilter] = useState<string>('all');
-  const [actPage, setActPage] = useState(1);
   const debouncedSearch = useDebounce(actSearch, 300);
+  const [actPage, setActPage] = useFilterPage(`${fromDate ?? ''}|${toDate ?? ''}|${debouncedSearch}|${actTypeFilter}`);
   const book = useCrmActivityPage(
     { fromDate, toDate, search: debouncedSearch, type: actTypeFilter, page: actPage, limit: CRM_ACTIVITY_PAGE_SIZE },
     activeTab === 'activities',
   );
-  useEffect(() => setActPage(1), [fromDate, toDate, debouncedSearch]);
+  useClampPage(actPage, book, setActPage);
   const currentActPage = Math.min(actPage, book.totalPages);
   const paginatedActivities = book.data;
 
@@ -108,7 +108,6 @@ export function CRMFollowupsView({
                 key={t.id}
                 onClick={() => {
                   setActTypeFilter(t.id);
-                  setActPage(1);
                 }}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
                   actTypeFilter === t.id

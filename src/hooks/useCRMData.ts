@@ -60,7 +60,7 @@ export function useCRMData(user: any, options: { withLists?: boolean } = {}) {
   const [selectedLeadForActivity, setSelectedLeadForActivity] = useState<CRMLead | null>(null);
 
   const [selectedLeadDrawer, setSelectedLeadDrawer] = useState<CRMLead | null>(null);
-  const { drawerActivities, loadDrawerActivities } = useLeadDrawerActivities();
+  const { drawerActivities, drawerAttachments, loadDrawerActivities } = useLeadDrawerActivities();
 
   // Followup completion result modal state
   const [isFollowupResultModalOpen, setIsFollowupResultModalOpen] = useState<boolean>(false);
@@ -584,6 +584,7 @@ export function useCRMData(user: any, options: { withLists?: boolean } = {}) {
     selectedLeadDrawer,
     setSelectedLeadDrawer,
     drawerActivities,
+    drawerAttachments,
     openLeadDrawer,
     handleToggleFollowup,
     isFollowupResultModalOpen,

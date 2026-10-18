@@ -329,6 +329,7 @@ export default function CRMPage({ user }: { user: any }) {
         selectedLeadDrawer={crm.selectedLeadDrawer}
         onCloseDrawer={() => crm.setSelectedLeadDrawer(null)}
         drawerActivities={crm.drawerActivities}
+        drawerAttachments={crm.drawerAttachments}
         onOpenActivityModal={crm.openActivityModal}
         onOpenLeadModal={crm.openLeadModal}
         onDeleteLead={deleteLead}

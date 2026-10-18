@@ -3,23 +3,21 @@ import fs from 'fs';
 import path from 'path';
 import type { Readable } from 'stream';
 import type { Request } from 'express';
-import sharp from 'sharp';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
-import { crmLeads, fileAttachments } from '../../db/schema.js';
+import { crmActivities, crmLeads, fileAttachments } from '../../db/schema.js';
 import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { serverTimestampToUtcIso } from '../../lib/serverTimestamp.js';
 import { logger } from '../../middleware/logger.js';
 import { errorMessageOf } from '../../utils.js';
-import { MEDIA_LIGHT_LONG_SIDE } from '../../lib/media/mediaRules.js';
 import {
   CRM_ATTACHMENT_ENTITY_TYPES, CRM_ATTACHMENT_FORMAT_TEXT, CRM_ATTACHMENT_LIMIT_TEXT, CRM_ATTACHMENT_MAX_BYTES,
   CRM_ATTACHMENT_MAX_FILES, CRM_ATTACHMENT_TOO_LARGE_TEXT, CRM_ATTACHMENT_TYPES, crmAttachmentTypeOf, crmAttachmentUrl,
   type CrmAttachmentOwner, type CrmAttachmentView,
 } from '../../lib/crm/crmAttachments.js';
 import { getAttachmentsRoot } from '../../lib/storage.js';
-import { receiveToTemp, sniffMediaType } from '../media/mediaStorage.js';
+import { buildLightWebp, receiveToTemp, sniffMediaType } from '../media/mediaStorage.js';
 import { lockLiveActivity } from './crmActivityEdit.js';
 
 /**
@@ -87,11 +85,7 @@ async function sniffedType(filePath: string): Promise<string | null> {
 /** The light WEBP of an image; an image sharp cannot read is 422 */
 async function lightVersion(filePath: string): Promise<Buffer> {
   try {
-    return await sharp(filePath, { limitInputPixels: 300_000_000 })
-      .rotate()
-      .resize({ width: MEDIA_LIGHT_LONG_SIDE, height: MEDIA_LIGHT_LONG_SIDE, fit: 'inside', withoutEnlargement: true })
-      .webp({ quality: 82 })
-      .toBuffer();
+    return await buildLightWebp(filePath);
   } catch {
     throw new ValidationError('تصویر خوانده نشد؛ فایل آسیب دیده یا قالب آن پشتیبانی نمی‌شود.', undefined, 'CRM_ATTACHMENT_IMAGE_UNREADABLE');
   }
@@ -115,6 +109,33 @@ function liveOwnerFiles(owner: CrmAttachmentOwner, ownerIds: number[]) {
     inArray(fileAttachments.entityId, ownerIds.length > 0 ? ownerIds : [-1]),
     eq(fileAttachments.isDeleted, 0),
   );
+}
+
+/** A `.part` file older than this is an upload whose process stopped midway and is removed */
+export const CRM_TEMP_PART_MAX_AGE_MS = 60 * 60 * 1000;
+let lastTempSweepAt = 0;
+
+/** Removes stale `.part` files of the upload folder, at most once an hour; its errors are only logged */
+export async function sweepStaleUploadParts(tmpDir: string, now = Date.now()): Promise<number> {
+  let removed = 0;
+  const names = await fs.promises.readdir(tmpDir).catch(() => [] as string[]);
+  for (const name of names) {
+    if (!name.endsWith('.part')) continue;
+    const full = path.join(tmpDir, name);
+    const stat = await fs.promises.stat(full).catch(() => null);
+    if (!stat?.isFile() || now - stat.mtimeMs < CRM_TEMP_PART_MAX_AGE_MS) continue;
+    await fs.promises.rm(full, { force: true }).then(() => { removed += 1; }, (err: unknown) => {
+      logger.warn(`[crm-attachments] could not remove stale upload ${full}: ${errorMessageOf(err)}`);
+    });
+  }
+  return removed;
+}
+
+function sweepStaleUploadPartsThrottled(tmpDir: string): void {
+  const now = Date.now();
+  if (now - lastTempSweepAt < CRM_TEMP_PART_MAX_AGE_MS) return;
+  lastTempSweepAt = now;
+  void sweepStaleUploadParts(tmpDir, now);
 }
 
 async function removeQuietly(paths: string[]): Promise<void> {
@@ -153,14 +174,20 @@ export const CrmAttachmentService = {
 
   /** Attachments of one live record; a missing or deleted record is 404 */
   async list(owner: CrmAttachmentOwner, ownerId: number): Promise<CrmAttachmentView[]> {
-    return orm.transaction(async (tx) => {
-      if (owner === 'activity') await lockLiveActivity(tx, ownerId);
-      else {
-        const [lead] = await tx.select({ id: crmLeads.id }).from(crmLeads).where(and(eq(crmLeads.id, ownerId), eq(crmLeads.isDeleted, 0)));
-        if (!lead) throw new NotFoundError('پرونده فروش یافت نشد', { id: ownerId }, 'CRM_LEAD_NOT_FOUND');
+    // a read takes no row lock: it never waits on an edit of the record
+    if (owner === 'activity') {
+      const [activity] = await orm.select({ id: crmActivities.id, leadId: crmActivities.leadId, leadDeleted: crmLeads.isDeleted })
+        .from(crmActivities).leftJoin(crmLeads, eq(crmLeads.id, crmActivities.leadId))
+        .where(and(eq(crmActivities.id, ownerId), eq(crmActivities.isDeleted, 0)));
+      if (!activity) throw new NotFoundError('اقدام یا پیگیری یافت نشد', { id: ownerId }, 'CRM_ACTIVITY_NOT_FOUND');
+      if (activity.leadId && activity.leadDeleted !== 0) {
+        throw new NotFoundError('پرونده فروش این اقدام حذف شده است', { id: ownerId }, 'CRM_ACTIVITY_NOT_FOUND');
       }
-      return (await this.listByOwners(owner, [ownerId], tx)).get(ownerId) ?? [];
-    });
+    } else {
+      const [lead] = await orm.select({ id: crmLeads.id }).from(crmLeads).where(and(eq(crmLeads.id, ownerId), eq(crmLeads.isDeleted, 0)));
+      if (!lead) throw new NotFoundError('پرونده فروش یافت نشد', { id: ownerId }, 'CRM_LEAD_NOT_FOUND');
+    }
+    return (await this.listByOwners(owner, [ownerId], orm)).get(ownerId) ?? [];
   },
 
   async upload(
@@ -172,7 +199,9 @@ export const CrmAttachmentService = {
     const declared = crmAttachmentTypeOf(fileName, input.declaredType);
     if (!declared) throw formatError();
     const root = getAttachmentsRoot();
-    const received = await receiveToTemp(input.body, CRM_ATTACHMENT_MAX_BYTES, { tmpDir: path.join(root, '.tmp'), tooLarge });
+    const tmpDir = path.join(root, '.tmp');
+    sweepStaleUploadPartsThrottled(tmpDir);
+    const received = await receiveToTemp(input.body, CRM_ATTACHMENT_MAX_BYTES, { tmpDir, tooLarge });
     const written: string[] = [received.tempPath];
     try {
       const actual = await sniffedType(received.tempPath);

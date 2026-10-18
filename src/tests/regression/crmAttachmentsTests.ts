@@ -8,6 +8,7 @@ import type { TestCaseResult } from '../types.js';
 import type { Harness, Session, ShouldRun } from '../security/workflowTestHarness.js';
 import { runReservationCases } from './stockReservationTests.js';
 import { createTestCustomer } from '../fixtures/factories.js';
+import { CRM_TEMP_PART_MAX_AGE_MS, sweepStaleUploadParts } from '../../services/crm/crmAttachments.service.js';
 
 /**
  * v10.2 package 7 (N-02 §3.3, CRM plan decisions ت۶ / ت۷ / ت۸): image and PDF attachments of a sales file and of an
@@ -17,6 +18,18 @@ import { createTestCustomer } from '../fixtures/factories.js';
  * type, no light version and an activity list without paging or party.
  */
 export async function runCrmAttachmentsTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
+  const previousDir = process.env.ATTACHMENTS_DIR;
+  try {
+    return await runCases(shouldRun);
+  } finally {
+    // the temporary attachment folders go away and the suite after this one sees the folder it had
+    if (previousDir === undefined) delete process.env.ATTACHMENTS_DIR;
+    else process.env.ATTACHMENTS_DIR = previousDir;
+    for (const dir of tempDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+function runCases(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   return runReservationCases(shouldRun, [
     ['reg_crm_attachment_upload_light_n02',
       'v10.2.4: an image attached to a sales file keeps its original and gets a light WEBP, a PDF on an activity has none, both listed and audited (N-02)',
@@ -33,6 +46,9 @@ export async function runCrmAttachmentsTests(shouldRun: ShouldRun): Promise<Test
     ['reg_customer_record_by_id_obs_r2_24',
       'v10.2.4: one party\'s full record (version, notes, tags) reads by id for customers.view, and a deleted or missing party is 404 (OBS-R2-24)',
       ['crm', 'customers', 'obs-r2-24'], customerByIdCase],
+    ['reg_crm_attachment_download_rules_n02',
+      'v10.2.5: a download name takes the stored type\'s extension, an extra query key is ignored, a deleted file\'s attachments no longer download and stale partial uploads are swept (N-02 review)',
+      ['n02', 'crm', 'attachments'], downloadRulesCase],
   ]);
 }
 
@@ -40,8 +56,11 @@ const brief = (res: { status: number; body?: unknown }) => `${res.status} ${JSON
 const sha = (b: Buffer) => crypto.createHash('sha256').update(b).digest('hex');
 const PDF = Buffer.from('%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n');
 
+const tempDirs: string[] = [];
+
 function withTempAttachmentsDir(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'erp-crm-attach-test-'));
+  tempDirs.push(dir);
   process.env.ATTACHMENTS_DIR = dir;
   return dir;
 }
@@ -246,4 +265,54 @@ async function customerByIdCase(h: Harness, wrong: string[]): Promise<string> {
   const deleted = await h.get(`/api/customers/${customer.id}`, viewer);
   if (deleted.status !== 404) wrong.push(`a deleted party answered ${deleted.status}, expected 404`);
   return `party ${customer.id} read by id; refused, missing and deleted checked`;
+}
+
+/** `filename*` of a Content-Disposition header, decoded */
+function savedName(res: request.Response): string {
+  const header = String(res.headers['content-disposition'] ?? '');
+  const encoded = /filename\*=UTF-8''([^;]+)/.exec(header)?.[1];
+  return encoded ? decodeURIComponent(encoded) : header;
+}
+
+async function downloadRulesCase(h: Harness, wrong: string[]): Promise<string> {
+  const dir = withTempAttachmentsDir();
+  const leadId = await newLead(h, 'download');
+  const activityId = await newActivity(h, { leadId, title: `P7 download ${h.tag}` });
+  const jpeg = await noisyJpeg(40, 30);
+  const image = (await upload(h, h.admin, `/crm/leads/${leadId}/attachments`, jpeg, 'image/jpeg', 'عکس.jpg')).body as AttachmentBody;
+  const pdf = (await upload(h, h.admin, `/crm/activities/${activityId}/attachments`, PDF, 'application/pdf', 'قرارداد.pdf')).body as AttachmentBody;
+  const imageId = image.data?.id;
+  const pdfId = pdf.data?.id;
+  if (!imageId || !pdfId) {
+    wrong.push(`uploads answered ${JSON.stringify(image).slice(0, 120)} / ${JSON.stringify(pdf).slice(0, 120)}`);
+    return 'upload failed';
+  }
+
+  // a stored name whose extension is not its type's (an older row, or a name changed later) is saved with the right one
+  await h.q(`UPDATE file_attachments SET original_name = 'گزارش.pdf' WHERE id = $1`, [imageId]);
+  const original = await rawGet(h, `/api/attachments/${imageId}`).buffer(true).parse(binary);
+  if (savedName(original) !== 'گزارش.jpg') wrong.push(`image saved as «${savedName(original)}», expected «گزارش.jpg»`);
+  const light = await rawGet(h, `/api/attachments/${imageId}?variant=light`).buffer(true).parse(binary);
+  if (savedName(light) !== 'گزارش.webp') wrong.push(`light copy saved as «${savedName(light)}», expected «گزارش.webp»`);
+  const busted = await rawGet(h, `/api/attachments/${imageId}?v=2`).buffer(true).parse(binary);
+  if (busted.status !== 200) wrong.push(`a download with an extra query key answered ${busted.status}, expected 200`);
+
+  // the attachments of a deleted sales file, and of its activities, no longer download
+  await h.q('UPDATE crm_leads SET is_deleted = 1 WHERE id = $1', [leadId]);
+  const goneImage = await rawGet(h, `/api/attachments/${imageId}`);
+  const gonePdf = await rawGet(h, `/api/attachments/${pdfId}`);
+  if (goneImage.status !== 404 || gonePdf.status !== 404) wrong.push(`downloads after the file was deleted answered ${goneImage.status} / ${gonePdf.status}, expected 404 / 404`);
+
+  // a partial upload older than an hour is swept, a fresh one is kept
+  const tmp = path.join(dir, '.tmp');
+  fs.mkdirSync(tmp, { recursive: true });
+  const stale = path.join(tmp, 'stale.part');
+  const fresh = path.join(tmp, 'fresh.part');
+  fs.writeFileSync(stale, 'x');
+  fs.writeFileSync(fresh, 'x');
+  const old = new Date(Date.now() - CRM_TEMP_PART_MAX_AGE_MS - 60_000);
+  fs.utimesSync(stale, old, old);
+  const removed = await sweepStaleUploadParts(tmp);
+  if (removed !== 1 || fs.existsSync(stale) || !fs.existsSync(fresh)) wrong.push(`sweep removed ${removed}; stale ${fs.existsSync(stale)}, fresh ${fs.existsSync(fresh)}`);
+  return 'names follow the type, extra key ignored, deleted owner 404, stale part swept';
 }
