@@ -96,7 +96,7 @@ export function ProjectInventoryTab({
       .map((item, gIdx) => ({ item, gIdx }))
       .map(({ item, gIdx }) => {
         const matchWh = findProjectItemMatch({ code: item.itemCode, name: item.name }, warehouseItems);
-        // v10.2.0 (TD-1289): کسری با موجودی آزاد این پروژه و آنچه به آن داده شده، مانند فهرست خرید
+        // v10.2.1 (TD-1290): کسری با موجودی آزاد این پروژه و آنچه به آن داده شده، مانند فهرست خرید
         const figures = materialFiguresOf(availability.rowState(item));
         const currentStock = figures ? figures.free : matchWh ? Number(matchWh.current_stock || 0) : Number(item.stockQty || 0);
         const requiredQty = Number(item.requiredQty || 1);
@@ -223,7 +223,7 @@ export function ProjectInventoryTab({
               style={{ width: `${materialProgress ?? 0}%` }}
             />
           </div>
-          {/* v10.2.0 (TD-1289): free stock follows the finalize's rule */}
+          {/* v10.2.1 (TD-1290): free stock follows the finalize's rule */}
           <p className="text-[11px] text-slate-400">
             «آزاد برای این پروژه» موجودی کل منهای رزرو پیش‌فاکتورهای فروش و پروژه‌های دیگر است، همان رقمی که ثبت نهایی با آن رزرو می‌کند؛ وضعیت «موجود / کسری» خودکار است.
           </p>
@@ -327,7 +327,7 @@ export function ProjectInventoryTab({
             handlePurchaseSection={canRequestPurchase ? handlePurchaseSection : undefined}
           />
 
-          {/* v10.2.0 (TD-1289): materials already taken from stock for this project */}
+          {/* v10.2.1 (TD-1290): materials already taken from stock for this project */}
           <ProjectIssuedMaterialsList projectId={project.id} />
 
           {/* Quick Jump Banner to Purchase List */}

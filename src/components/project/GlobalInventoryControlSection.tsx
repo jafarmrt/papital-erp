@@ -10,7 +10,7 @@ import { DecimalInput } from '../common/DecimalInput';
 interface GlobalInventoryControlSectionProps {
   sections: ProjectInventoryControlSectionData[];
   warehouseItems: Item[];
-  /** v10.2.0 (TD-1289): موجودی آزاد و وضعیت خودکار هر ردیف با قاعدهٔ ثبت نهایی */
+  /** v10.2.1 (TD-1290): موجودی آزاد و وضعیت خودکار هر ردیف با قاعدهٔ ثبت نهایی */
   availability: MaterialAvailabilityView;
   /** v10.0.162 (TD-1211): left out for a reader without `projects.edit`, so the add buttons are not shown */
   handleOpenAddMaterialModal?: (secIdx: number, prodId?: string) => void;
@@ -259,7 +259,7 @@ export function GlobalInventoryControlSection({
                                 onLinkWarehouse={() => handleOpenChangeMaterialModal(originalIdx, item.itemId, undefined, gIdx)}
                               />
 
-                              {/* v10.2.0 (TD-1289): free stock for this project */}
+                              {/* v10.2.1 (TD-1290): free stock for this project */}
                               <FreeStockCell state={rowState} status={availability.status} />
 
                               {/* Required Quantity & Unit & Conversion */}

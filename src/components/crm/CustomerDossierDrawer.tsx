@@ -16,6 +16,7 @@ import { CustomerChannelLinks, EmailLink, PhoneLinks } from '../customers/Contac
 import { splitPhones } from '../../lib/customers/contactChannels';
 import toast from 'react-hot-toast';
 import { DialogLayer } from '../common/DialogLayer';
+import { activityResultLabel } from '../../lib/crm/crmScreenText';
 
 interface CustomerDossierDrawerProps {
   customer: Customer | null;
@@ -417,7 +418,7 @@ export function CustomerDossierDrawer({
 
                     {act.result && (
                       <div className="p-2 bg-emerald-50 text-emerald-900 border border-emerald-200/60 rounded-xl text-[11px] font-medium">
-                        نتیجه: {act.result}
+                        نتیجه: {activityResultLabel(act.result)}
                       </div>
                     )}
 

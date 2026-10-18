@@ -185,9 +185,11 @@ export function migrationAuditWrites(property: 'entity' | 'action'): AuditWriteU
     const text = fs.readFileSync(path.join(dir, name), 'utf8');
     for (const statement of text.split(/;\s*\n/)) {
       if (!/INSERT INTO activity_logs/i.test(statement)) continue;
-      const pairs = [...statement.matchAll(/'([A-Z][A-Z_]+)',\s*'([^']+)'/g)];
-      const names = pairs.map(m => (property === 'action' ? m[1] : m[2]));
-      uses.push({ file: `drizzle/${name}`, line: 0, names, heads: [], unresolved: names.length ? [] : [`(${property} not found in the statement)`] });
+      const pairs = [...statement.matchAll(/'([A-Z][A-Z_]+)',\s*'([^']+)'(\s*\|\|)?/g)];
+      // an entity written as `'<prefix>' || <column>` (migration 0126) is a variable name with that head
+      const names = pairs.filter(m => property === 'action' || !m[3]).map(m => (property === 'action' ? m[1] : m[2]));
+      const heads = property === 'action' ? [] : pairs.filter(m => m[3]).map(m => m[2]);
+      uses.push({ file: `drizzle/${name}`, line: 0, names, heads, unresolved: names.length || heads.length ? [] : [`(${property} not found in the statement)`] });
     }
   }
   return uses;

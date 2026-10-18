@@ -10940,7 +10940,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runProjectScreenGapsTests(shouldRun));
   const { runProjectReservationIssueTests } = await import('../regression/projectReservationIssueTests.js');
   results.push(...await runProjectReservationIssueTests(shouldRun));
-  // Series 10.2 package 3 (v10.2.0, TD-1289): free stock, delivery cost and issued materials of a project
+  // Series 10.2 package 3 (v10.2.1, TD-1290): free stock, delivery cost and issued materials of a project
   const { runProjectMaterialsCostTests } = await import('../regression/projectMaterialsCostTests.js');
   results.push(...await runProjectMaterialsCostTests(shouldRun));
   // Series 10 N-05 PR 3 (v10.0.247+): sections, tags, order, cover, replace and the item picture of the media library
@@ -11144,6 +11144,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // closing sweep: customers.delete and audit.create removed (OBS-R1-41, OBS-PR-13, ت۴۰)
   const { runClosingPermissionKeysTests } = await import('../regression/closingPermissionKeysTests.js');
   results.push(...await runClosingPermissionKeysTests(shouldRun));
+
+  // v10.2.0 package 1: urgent fixes after the 10.1 upgrade (TD-1289)
+  const { runUrgentFixesV1020Tests } = await import('../regression/urgentFixesV1020Tests.js');
+  results.push(...await runUrgentFixesV1020Tests(shouldRun));
 
   return results;
 }

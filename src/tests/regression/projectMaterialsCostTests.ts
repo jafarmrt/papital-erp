@@ -4,20 +4,20 @@ import { brief, fixture, type Fixture } from './documentEntryTests.js';
 import { createProject, globalSection, postDoc, runReservationCases } from './stockReservationTests.js';
 
 /**
- * Series 10.2 package 3 (v10.2.0, TD-1289): the material and cost readers of a production project, through the real
+ * Series 10.2 package 3 (v10.2.1, TD-1290): the material and cost readers of a production project, through the real
  * Express routes with real sessions. Each case is red on the code before the change (the routes did not exist).
  */
 export async function runProjectMaterialsCostTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   return runReservationCases(shouldRun, [
-    ['reg_project_material_availability_td_1289',
-      'v10.2.0: the free stock of a project material is total stock minus the reservations of sales proformas and other projects, never its own; the row status follows the finalize rule (TD-1289)',
-      ['td1289', 'd1', 'projects', 'reservation', 'package3'], availabilityCase],
-    ['reg_project_delivery_cost_td_1289',
-      'v10.2.0: the delivery tab reads the project work-in-progress balance, planned and delivered quantities; balance and cost only for item cost readers (TD-1289)',
-      ['td1289', 'd2', 'projects', 'delivery', 'wip', 'package3'], deliveryCostCase],
-    ['reg_project_issued_materials_td_1289',
-      'v10.2.0: the materials taken from stock list live allocations and final remittances and waste of the project, with Kardex cost only for item cost readers (TD-1289)',
-      ['td1289', 'd3', 'projects', 'allocation', 'package3'], issuedMaterialsCase],
+    ['reg_project_material_availability_td_1290',
+      'v10.2.1: the free stock of a project material is total stock minus the reservations of sales proformas and other projects, never its own; the row status follows the finalize rule (TD-1290)',
+      ['td1290', 'd1', 'projects', 'reservation', 'package3'], availabilityCase],
+    ['reg_project_delivery_cost_td_1290',
+      'v10.2.1: the delivery tab reads the project work-in-progress balance, planned and delivered quantities; balance and cost only for item cost readers (TD-1290)',
+      ['td1290', 'd2', 'projects', 'delivery', 'wip', 'package3'], deliveryCostCase],
+    ['reg_project_issued_materials_td_1290',
+      'v10.2.1: the materials taken from stock list live allocations and final remittances and waste of the project, with Kardex cost only for item cost readers (TD-1290)',
+      ['td1290', 'd3', 'projects', 'allocation', 'package3'], issuedMaterialsCase],
   ]);
 }
 
@@ -203,7 +203,7 @@ async function issuedMaterialsCase(h: Harness, wrong: string[]): Promise<string>
   const consumed = await h.post(`/api/inventory/allocations/${kept}/consume`, {});
   if (consumed.status !== 200) throw new Error(`setup: consume answered ${brief(consumed)}`);
   const released = await allocate(project, 2);
-  const rel = await h.post(`/api/inventory/allocations/${released}/release`, { reason: 'TD-1289' });
+  const rel = await h.post(`/api/inventory/allocations/${released}/release`, { reason: 'TD-1290' });
   if (rel.status !== 200) throw new Error(`setup: release answered ${brief(rel)}`);
   await allocate(otherProject, 6);
   const remittance = await doc('remittance', 'final', 3);

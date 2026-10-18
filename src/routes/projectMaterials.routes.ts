@@ -13,7 +13,7 @@ import { projectDeliveryCost } from '../services/projects/projectDeliveryCost.js
 import { projectIssuedMaterials } from '../services/projects/projectIssuedMaterials.js';
 
 /**
- * v10.2.0 (TD-1289، بستهٔ ۳ نسخهٔ ۱۰.۲): سه مسیر فقط‌خواندنی کنترل مواد و ورود به انبار پروژه، با مجوز خواندن پرونده پروژه
+ * v10.2.1 (TD-1290، بستهٔ ۳ نسخهٔ ۱۰.۲): سه مسیر فقط‌خواندنی کنترل مواد و ورود به انبار پروژه، با مجوز خواندن پرونده پروژه
  * (`READ_PERMISSIONS.projectRecord`، همان زبانهٔ مواد و صفحهٔ کنترل موجودی): موجودی آزاد هر کالا برای این پروژه (مقدار، بی بها)،
  * ورودی‌های بهای پیشنهادی رسید تولید و فهرست مواد گرفته‌شده از انبار. بها و ماندهٔ ۱۴۰۲ فقط به خوانندهٔ بهای کالا
  * (`ITEM_COST_READ_PERMISSIONS`) می‌رسد. هیچ‌کدام چیزی نمی‌نویسد.

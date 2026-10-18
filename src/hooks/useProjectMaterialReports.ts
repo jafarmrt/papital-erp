@@ -7,7 +7,7 @@ import { deliveryCostReportOf, type DeliveryCostReport } from '../lib/projects/d
 import { issuedMaterialsReportOf, type IssuedMaterialsReport } from '../lib/projects/issuedMaterials';
 
 /**
- * v10.2.0 (TD-1289، بستهٔ ۳ نسخهٔ ۱۰.۲): خواندن سه گزارش فقط‌خواندنی زبانهٔ مواد و «ورود به انبار» پروژه. با `fetchJson`، نه
+ * v10.2.1 (TD-1290، بستهٔ ۳ نسخهٔ ۱۰.۲): خواندن سه گزارش فقط‌خواندنی زبانهٔ مواد و «ورود به انبار» پروژه. با `fetchJson`، نه
  * react-query، چون این زبانه‌ها بیرون از QueryClientProvider هم ساخته می‌شوند؛ درخواست پیشین با برگشت از اثر لغو می‌شود.
  */
 export interface ProjectReadReport<T> {

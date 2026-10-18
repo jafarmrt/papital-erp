@@ -8,7 +8,7 @@ type FetchOpts = { signal?: AbortSignal };
 let stockItems: Item[] = [];
 const fetchJson = vi.fn(async (url: string, _opts?: FetchOpts): Promise<unknown> => {
   if (url.startsWith('/items/options')) return { data: stockItems };
-  // v10.2.0 (TD-1289): free stock figures of the asked items, with no reservation of others and nothing issued yet
+  // v10.2.1 (TD-1290): free stock figures of the asked items, with no reservation of others and nothing issued yet
   if (url.startsWith('/projects/7/material-availability')) {
     const ids = new Set((new URL(url, 'http://local').searchParams.get('itemIds') ?? '').split(',').map(Number));
     return {
@@ -50,7 +50,7 @@ describe('inventory control presets in a project (TD-748)', () => {
   });
 
   it('marks a material the warehouse holds as available and leaves it off the purchase list', async () => {
-    // v10.2.0 (TD-1289): the paper is kept in sheets, the preset's unit; a row in another unit without a conversion is
+    // v10.2.1 (TD-1290): the paper is kept in sheets, the preset's unit; a row in another unit without a conversion is
     // refused by the finalize (TD-820), so it no longer counts as available
     stockItems = [stock(1, 'کاغذ ترنسفر', 20, 'برگ'), stock(2, 'کارتن بسته‌بندی', 40)];
     const p = project();

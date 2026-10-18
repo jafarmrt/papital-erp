@@ -51,7 +51,7 @@ export const withProcurementStatus = (
 });
 
 /**
- * v10.2.0 (TD-1289، یافتهٔ D1): ستون موجودی ردیف فهرست خرید «آزاد برای این پروژه» است و کسری خرید = نیاز − آزاد − آنچه
+ * v10.2.1 (TD-1290، یافتهٔ D1): ستون موجودی ردیف فهرست خرید «آزاد برای این پروژه» است و کسری خرید = نیاز − آزاد − آنچه
  * به پروژه داده شده، و ردیف با وضعیت خودکار ثبت نهایی (`availability`) در فهرست می‌آید. بی ارقام کارساز (`availability` نیامده،
  * در حال خواندن یا خطا) موجودی کل و قاعدهٔ پیشین به کار می‌رود و `issuedQty` خالی می‌ماند.
  */
@@ -214,7 +214,7 @@ export const buildConsolidatedPurchaseList = (
 };
 
 /**
- * درصد ردیف‌های موجود. v10.2.0 (TD-1289): با `availability` «موجود» وضعیت خودکار ثبت نهایی است، نه وضعیت ذخیره‌شده، و تا
+ * درصد ردیف‌های موجود. v10.2.1 (TD-1290): با `availability` «موجود» وضعیت خودکار ثبت نهایی است، نه وضعیت ذخیره‌شده، و تا
  * ارقام کارساز نرسیده (در حال خواندن یا خطا) درصدی نیست (null). بی `availability` قاعدهٔ پیشین.
  */
 export function calculateMaterialProgress(sections: ProjectInventoryControlSectionData[], products: ProjectProductItem[]): number;

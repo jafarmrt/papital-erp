@@ -12,7 +12,7 @@ const shortState: MaterialRowState = { kind: 'short', itemId: 1, free: 2, issued
 const availableState: MaterialRowState = { kind: 'available', itemId: 1, free: 9, issued: 0, unit: 'pcs' };
 
 // v10.0.146 (TD-1214): the status of a row short of stock is never «available».
-// v10.2.0 (TD-1289): the status comes from the free stock rule and is no longer a list, so «available» cannot be picked on a short row.
+// v10.2.1 (TD-1290): the status comes from the free stock rule and is no longer a list, so «available» cannot be picked on a short row.
 describe('project form fixes (TD-1214)', () => {
   it('TD-1214: a short row does not show «available» in its status, whatever was stored', () => {
     render(<table><tbody><tr><MaterialStatusCell state={shortState} status="ready" procurementStatus="pending" onProcurementChange={() => undefined} /></tr></tbody></table>);

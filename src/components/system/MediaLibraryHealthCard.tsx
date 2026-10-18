@@ -55,7 +55,12 @@ export function MediaLibraryHealthCard({ media }: { media?: MediaLibraryHealth }
       {((media?.lightFailedCount ?? 0) > 0 || (media?.lightMissingCount ?? 0) > 0) && (
         <p className="mt-2 text-[10px] text-slate-600 dark:text-slate-300" dir="ltr" data-technical>{MEDIA_REBUILD_LIGHT_COMMAND}</p>
       )}
-      {media?.path && <p className="mt-2 text-[10px] text-slate-500 truncate" dir="ltr" title={media.path} data-technical>{media.path}</p>}
+      {media?.path && (
+        <details className="mt-2 text-[10px] text-slate-500" data-technical>
+          <summary className="cursor-pointer">جزئیات فنی</summary>
+          <p className="truncate" dir="ltr" title={media.path}>{media.path}</p>
+        </details>
+      )}
     </div>
   );
 }

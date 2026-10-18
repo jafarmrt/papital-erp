@@ -58,9 +58,9 @@ const report = (items: Array<Partial<MaterialAvailabilityReport['items'][number]
 const viewOf = (sections: unknown, r: MaterialAvailabilityReport | null, status: 'ready' | 'loading' | 'error' = 'ready') =>
   buildMaterialAvailabilityView({ sections, products: [], manualPurchaseItems: [], stockItems: [GLUE, BEAD], report: r, status });
 
-// v10.2.0 (TD-1289, package 3 of 10.2, finding D1): the materials tab judged rows against total stock with a manual status,
+// v10.2.1 (TD-1290, package 3 of 10.2, finding D1): the materials tab judged rows against total stock with a manual status,
 // so it said «available» while the finalize reserved less because a sales proforma or another project held the stock
-describe('free stock for the project (TD-1289 D1)', () => {
+describe('free stock for the project (TD-1290 D1)', () => {
   it('marks a row short when other reservations take the stock the total covered', () => {
     const view = viewOf(globalSection(5), report([{ itemId: 3, stock: 8, reservedByOthers: 6 }]));
     const row = globalSection(5)[0].globalItems[0];
@@ -125,7 +125,7 @@ const inventoryRoute = (figures: { reservedByOthers: number; issuedToProject: nu
   return [];
 };
 
-describe('materials tab and purchase list use the free stock (TD-1289 D1)', () => {
+describe('materials tab and purchase list use the free stock (TD-1290 D1)', () => {
   it('shows the free stock and an automatic shortage where total stock covered the need', async () => {
     route = inventoryRoute({ reservedByOthers: 6, issuedToProject: 0 });
     render(<ProjectInventoryTab project={inventoryProject()} />);
@@ -176,8 +176,8 @@ describe('materials tab and purchase list use the free stock (TD-1289 D1)', () =
 
 const issuedRow = { key: 'allocation-1', source: 'allocation', sourceId: 1, refNumber: null, date: '2026-10-01T08:00:00Z', itemId: 3, itemCode: 'G-1', itemName: 'glue', unit: 'pcs', quantity: 2, status: 'allocated', cost: 1500 };
 
-// v10.2.0 (TD-1289, finding D3): the materials tab did not say what the project had already taken from stock
-describe('materials taken from stock (TD-1289 D3)', () => {
+// v10.2.1 (TD-1290, finding D3): the materials tab did not say what the project had already taken from stock
+describe('materials taken from stock (TD-1290 D3)', () => {
   it('lists what was taken and hides the cost from a reader without the cost permission', async () => {
     route = () => ({ projectId: 7, costVisible: false, rows: [{ ...issuedRow, cost: 1500 }], total: 1, totalCost: 1500 });
     render(<ProjectIssuedMaterialsList projectId={7} />);
@@ -202,9 +202,9 @@ const deliveryReport = (over: Partial<DeliveryCostReport> = {}): DeliveryCostRep
   ...over,
 });
 
-// v10.2.0 (TD-1289, finding D2): the unit cost of a project's production receipt was typed by hand, so whatever did not
+// v10.2.1 (TD-1290, finding D2): the unit cost of a project's production receipt was typed by hand, so whatever did not
 // match the project's materials stayed in its work in progress (1402)
-describe('delivery unit cost from the project work in progress (TD-1289 D2)', () => {
+describe('delivery unit cost from the project work in progress (TD-1290 D2)', () => {
   it('divides the balance over what is left of the plan, or over a larger delivery', () => {
     expect(suggestedDeliveryUnitCost(8000, 10, 0, 10)).toBe(800);
     expect(suggestedDeliveryUnitCost(8000, 10, 4, 2)).toBe(1333.3333);
@@ -250,7 +250,7 @@ const deliveryCalls = () => fetchJson.mock.calls.filter(([url]) => url.endsWith(
 const sentLines = (call = 0) => JSON.parse(deliveryCalls()[call][1]?.body ?? '{}').itemsToAdd as Array<{ unitPrice?: number; quantity: number }>;
 const priceInput = async () => (await screen.findByText(PRICE_LABEL)).parentElement?.querySelector('input') as HTMLInputElement;
 
-describe('delivery tab fills the unit cost from the project balance (TD-1289 D2)', () => {
+describe('delivery tab fills the unit cost from the project balance (TD-1290 D2)', () => {
   it('prefills the suggestion for a single product and posts it', async () => {
     route = deliveryRoute(deliveryReport());
     render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />);
