@@ -68,8 +68,8 @@ export interface SiteCatalog {
    */
   unordered: boolean;
   /**
-   * review M-R: a list showed one row on two pages; with `unordered` this is a date order without a tie-breaker, which
-   * also leaves a row out, so every link of a product not read is then left as it is
+   * review M-R / M-S: a list showed one row on two pages, an order with ties (date, menu order) that may also leave a row
+   * out, so every link of a product not read is then left as it is
    */
   repeated: boolean;
 }
@@ -279,10 +279,11 @@ export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor): P
       throw new ValidationError(EMPTY_CATALOG_MESSAGE, undefined, WC_SHOP_REQUEST_FAILED);
     }
     // review H-A: a link of a product past the cap (a truncated reading, an id above every id read) is left as it is, and so
-    // is its item; review M-C / N-1 / M-R: a reading out of id order that was cut at the cap or showed a row twice (a date
-    // order without a tie-breaker, which also leaves a row out) may have missed any product, so the link of every product
-    // not read is left as it is too. Any other reading lists every product, so a link of a product it misses is closed
-    const keepUnread = unordered && (truncated || repeated);
+    // is its item; review M-C / N-1 / M-R / M-S: a reading that showed a row twice (an order with ties, such as date or
+    // menu order, which also leaves a row out, whether its ids look ascending or not) or that was out of id order and cut at
+    // the cap may have missed any product, so the link of every product not read is left as it is too. Any other reading
+    // lists every product, so a link of a product it misses is closed
+    const keepUnread = repeated || (unordered && truncated);
     const readKeys = new Set([...site, ...skipped].map(p => keyOf(p.productId, p.variationId)));
     const leftAsIs = (l: { wcProductId: number; wcVariationId: number }) => (truncated && l.wcProductId > maxProductId)
       || (keepUnread && !readKeys.has(keyOf(l.wcProductId, l.wcVariationId)));

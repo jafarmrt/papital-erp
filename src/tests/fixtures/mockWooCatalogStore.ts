@@ -29,7 +29,7 @@ export interface MockWooCatalogStore {
   failPaths: Set<string>;
   /** catalog pages after the first start one row early, so their first row repeats the last row of the page before (a date
    * order without a tie-breaker): only for a request without `orderby=id&order=asc`, or for every request with `always`;
-   * `swap_ties` (review M-R) swaps the rows on each side of a page edge for every page after the first, so the last row of
+   * `swap_ties` (review M-R / M-S) swaps the rows on each side of a page edge for every page after the first, so the last row of
    * a page shows again first on the next one and the row that followed it is never shown */
   unstableOrder?: 'without_id_order' | 'always' | 'swap_ties';
   /** the product list ignores `orderby=id` and answers the newest product first (review M-C) */

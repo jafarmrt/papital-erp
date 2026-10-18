@@ -113,11 +113,11 @@ export function catalogCapNotice(): string {
 }
 
 /**
- * Shown while the last reading came in another order than the id order asked for and may have missed a product (it stopped
- * at the cap or showed a product twice; review M-C / N-1 / M-R)
+ * Shown while the last reading may have missed a product (it showed a product twice, or came out of id order and stopped at
+ * the cap; review M-C / N-1 / M-R / M-S)
  */
 export function catalogOrderNotice(): string {
-  return 'سایت محصولات را به ترتیب شناسه نفرستاد و ممکن است محصولی خوانده نشده باشد؛ پیوند محصولاتی که خوانده نشد دست نخورد. افزونه‌ها یا تنظیمات مرتب‌سازی سایت را بررسی کنید.';
+  return 'ممکن است در بازخوانی سایت محصولی خوانده نشده باشد؛ پیوند محصولاتی که خوانده نشد دست نخورد. اگر این پیام تکرار شد، افزونه‌ها یا تنظیمات مرتب‌سازی سایت را بررسی کنید.';
 }
 
 export function catalogRefreshMessage(summary: {

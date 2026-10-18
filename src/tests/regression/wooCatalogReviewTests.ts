@@ -75,8 +75,20 @@ export async function emptyOrUnorderedCase(h: Harness, wrong: string[]): Promise
     if ((await linksOf(h, [dropped.id])).get(dropped.id)?.product !== 1049) wrong.push('a reading that showed a row twice and left one out closed its link');
     if (!shaky.catalogUnordered || shaky.closedCount !== 0 || shaky.catalogTruncated) wrong.push(`repeated unordered summary ${JSON.stringify(shaky).slice(0, 200)}`);
     if (((await h.get('/api/woocommerce/catalog')).body as { catalogUnordered?: boolean }).catalogUnordered !== true) {
-      wrong.push('the tab does not say the reading with a repeated row was out of id order');
+      wrong.push('the tab does not say the reading with a repeated row may have missed a product');
     }
+
+    // M-S: the same ties in an ascending order whose ids look ascending (date or menu order): page 2 starts with 1099 again
+    // and 1100, still on the shop, is never shown; its link is kept too
+    const later = await newItem(h, 'LATE');
+    products[100] = { id: 1100, sku: later.code };
+    await refreshCatalogLocked({});
+    if ((await linksOf(h, [later.id])).get(later.id)?.product !== 1100) wrong.push('the product of the ascending tie case was not linked first');
+    store.unstableOrder = 'swap_ties';
+    const ascending = await refreshCatalogLocked({});
+    store.unstableOrder = undefined;
+    if ((await linksOf(h, [later.id])).get(later.id)?.product !== 1100) wrong.push('an ascending reading that showed a row twice and left one out closed its link');
+    if (!ascending.catalogUnordered || ascending.closedCount !== 0) wrong.push(`repeated ascending summary ${JSON.stringify(ascending).slice(0, 200)}`);
     return 'empty and unordered catalogs';
   });
 }
