@@ -9,7 +9,9 @@ import { liveActionStableKey, mergeWorkflowActionRows, publishedWorkflowActions 
 /**
  * v10.1.66 (#304 review): an action of an active workflow whose permission is no longer a catalog key — migration 0123
  * removed `audit.create` — is signed by no one but the system admin. A design is saved only with catalog keys, so such an
- * action is older than the key's removal; it is only listed here, never rewritten, for the admin to pick another key.
+ * action is older than the key's removal. Since v10.2.0 the boot rewrites the removed key to its replacement
+ * (`replaceRemovedWorkflowPermissions`: `audit.create` -> `audit.apply`) in a published definition without a draft;
+ * a definition holding a draft is left alone and its action stays listed here until the admin publishes a catalog key.
  * Reads only workflow tables, like the other workflow health checks.
  */
 export interface UnknownPermissionActionRow {

@@ -436,10 +436,15 @@ export class WorkflowDefinitionService {
         logger.info('[WorkflowDefinitionService] JOURNAL_VOUCHER_WORKFLOW step permissions upgraded (TD-965).');
       }
 
-      // v10.2.0: actions still asking the removed key of migration 0123 ask its replacement
-      const replaced = await replaceRemovedWorkflowPermissions();
-      if (replaced.length > 0) {
-        logger.info(`[WorkflowDefinitionService] Removed permission keys replaced in ${replaced.length} workflow definition(s).`);
+      // v10.2.0: actions still asking the removed key of migration 0123 ask its replacement; a failure here is logged
+      // and never stops the boot seed (the event rules seed runs after it)
+      try {
+        const replaced = await replaceRemovedWorkflowPermissions();
+        if (replaced.length > 0) {
+          logger.info(`[WorkflowDefinitionService] Removed permission keys replaced in ${replaced.length} workflow definition(s).`);
+        }
+      } catch (err: unknown) {
+        logger.error(`[WorkflowDefinitionService] Replacing removed permission keys failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);

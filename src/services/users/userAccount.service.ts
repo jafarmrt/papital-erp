@@ -43,11 +43,17 @@ async function assertRoleDefined(db: Tx | typeof orm, role: string): Promise<voi
   if (!roleRecord) throw new BadRequestError(ROLE_INVALID);
 }
 
-function isUniqueViolation(err: unknown): boolean {
-  const e = err as { code?: string; message?: string; cause?: { code?: string; message?: string } } | null;
+const USERNAME_KEY_INDEX = 'uq_users_username_key';
+
+/** A unique violation; with `constraint`, only a violation of that constraint (never another unique key) */
+function isUniqueViolation(err: unknown, constraint?: string): boolean {
+  type PgError = { code?: string; message?: string; constraint?: string };
+  const e = err as (PgError & { cause?: PgError }) | null;
   const code = e?.cause?.code || e?.code;
   const text = `${e?.message ?? ''} ${e?.cause?.message ?? ''}`;
-  return code === '23505' || /unique constraint|UNIQUE|duplicate key/.test(text);
+  const unique = code === '23505' || /unique constraint|UNIQUE|duplicate key/.test(text);
+  if (!unique || !constraint) return unique;
+  return (e?.cause?.constraint || e?.constraint) === constraint || text.includes(`"${constraint}"`);
 }
 
 const hashPassword = async (password: string) => bcrypt.hash(password, await bcrypt.genSalt(10));
@@ -335,7 +341,7 @@ export async function restoreUser(req: Request, targetUserId: number, input: { p
     });
     return { id: targetUserId, username: target.username, full_name: name, role };
   }).catch((err: unknown) => {
-    if (isUniqueViolation(err)) throw new ConflictError(USERNAME_TAKEN_DURING_RESTORE, undefined, USERNAME_HELD_BY_LIVE_USER);
+    if (isUniqueViolation(err, USERNAME_KEY_INDEX)) throw new ConflictError(USERNAME_TAKEN_DURING_RESTORE, undefined, USERNAME_HELD_BY_LIVE_USER);
     throw err;
   });
   invalidateUserAuthCache(targetUserId);

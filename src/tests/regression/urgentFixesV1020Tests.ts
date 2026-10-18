@@ -66,53 +66,72 @@ export async function runUrgentFixesV1020Tests(shouldRun: ShouldRun): Promise<Te
   if (shouldRun('reg_users_deleted_not_null_v10_2_0', 'v10_2_0', 'td_1289', 'users', 'migration')) {
     await runCase(results, 'reg_users_deleted_not_null_v10_2_0',
       'v10.2.0: migration 0126 turns NULL users.is_deleted into 0 or 1 without breaking the username key, then NOT NULL DEFAULT 0',
-      'NULL rows: live name -> 0; no role -> 1; key held by a live user -> 1; two NULL rows of one key -> first 0, second 1; one audit row each; column NOT NULL DEFAULT 0',
+      'with uq_users_username_key: live name -> 0; no role -> 1; key held by a live user -> 1; two NULL rows of one key -> first 0, second 1; a WARNING counts 1 + 2. Without the index only the no-role row -> 1. One audit row each; column NOT NULL DEFAULT 0',
       async (wrong) => {
         const { ensureTestRole } = await import('../fixtures/factories.js');
         const roleCode = `v1020_role_${tail()}`;
         await ensureTestRole(roleCode);
-        const base = `v1020null_${tail()}`;
         try {
-          await orm.transaction(async (tx) => {
-            await tx.execute(sql`ALTER TABLE users ALTER COLUMN is_deleted DROP NOT NULL`);
-            await tx.execute(sql`ALTER TABLE users ALTER COLUMN is_deleted DROP DEFAULT`);
-            const insert = async (username: string, role: string | null, isDeleted: number | null) => {
-              const rows = await tx.execute(sql`INSERT INTO users (username, password, full_name, role, is_deleted)
-                VALUES (${username}, 'x', 'ERP-TEST-MARKER', ${role}, ${isDeleted}) RETURNING id`);
-              return Number((rows as unknown as { rows: Array<{ id: number }> }).rows[0].id);
+          for (const withIndex of [true, false]) {
+            const scenario = withIndex ? 'with the username index' : 'without the username index';
+            const base = `v1020null_${tail()}`;
+            const notices: string[] = [];
+            const client = await pool.connect();
+            const onNotice = (n: { severity?: string; message?: string }) => {
+              if (String(n.severity ?? '').toUpperCase() === 'WARNING') notices.push(String(n.message ?? ''));
             };
-            const liveName = await insert(`${base}_a`, roleCode, null);
-            const noRole = await insert(`${base}_b`, null, null);
-            await insert(`${base}_c`, roleCode, 0);
-            const heldKey = await insert(` ${base.toUpperCase()}_C`, roleCode, null);
-            const firstTwin = await insert(`${base}_d`, roleCode, null);
-            const secondTwin = await insert(`${base}_D`, roleCode, null);
-            for (const s of migrationStatements()) await tx.execute(sql.raw(s));
-            const flags = await tx.select({ id: users.id, isDeleted: users.isDeleted }).from(users)
-              .where(inArray(users.id, [liveName, noRole, heldKey, firstTwin, secondTwin]));
-            const flagOf = (id: number) => flags.find(f => f.id === id)?.isDeleted;
-            const expected: Array<[string, number, number]> = [
-              ['live name', liveName, 0], ['no role', noRole, 1], ['key held by a live user', heldKey, 1],
-              ['first of two NULL rows', firstTwin, 0], ['second of two NULL rows', secondTwin, 1],
-            ];
-            for (const [label, id, value] of expected) {
-              if (flagOf(id) !== value) wrong.push(`${label}: is_deleted ${String(flagOf(id))}, expected ${value}`);
+            client.on('notice', onNotice);
+            try {
+              await client.query('BEGIN');
+              await client.query('ALTER TABLE users ALTER COLUMN is_deleted DROP NOT NULL');
+              await client.query('ALTER TABLE users ALTER COLUMN is_deleted DROP DEFAULT');
+              await client.query(withIndex
+                ? 'CREATE UNIQUE INDEX IF NOT EXISTS uq_users_username_key ON users (lower(btrim(username))) WHERE is_deleted = 0'
+                : 'DROP INDEX IF EXISTS uq_users_username_key');
+              const insert = async (username: string, role: string | null, isDeleted: number | null) => {
+                const res = await client.query(`INSERT INTO users (username, password, full_name, role, is_deleted)
+                  VALUES ($1, 'x', 'ERP-TEST-MARKER', $2, $3) RETURNING id`, [username, role, isDeleted]);
+                return Number(res.rows[0].id);
+              };
+              const liveName = await insert(`${base}_a`, roleCode, null);
+              const noRole = await insert(`${base}_b`, null, null);
+              await insert(`${base}_c`, roleCode, 0);
+              const heldKey = await insert(` ${base.toUpperCase()}_C`, roleCode, null);
+              const firstTwin = await insert(`${base}_d`, roleCode, null);
+              const secondTwin = await insert(`${base}_D`, roleCode, null);
+              for (const statement of migrationStatements()) await client.query(statement);
+              const keyTaken = withIndex ? 1 : 0;
+              const expected: Array<[string, number, number]> = [
+                ['live name', liveName, 0], ['no role', noRole, 1], ['key held by a live user', heldKey, keyTaken],
+                ['first of two NULL rows', firstTwin, 0], ['second of two NULL rows', secondTwin, keyTaken],
+              ];
+              const flags = await client.query('SELECT id, is_deleted FROM users WHERE id = ANY($1::int[])', [expected.map(([, id]) => id)]);
+              const flagOf = (id: number) => (flags.rows as Array<{ id: number; is_deleted: number }>).find(f => Number(f.id) === id)?.is_deleted;
+              for (const [label, id, value] of expected) {
+                if (flagOf(id) !== value) wrong.push(`${scenario}, ${label}: is_deleted ${String(flagOf(id))}, expected ${value}`);
+              }
+              const logs = await client.query(`SELECT entity_id, details->>'reason' AS reason FROM activity_logs
+                WHERE details->>'migration' = $1 AND details->>'username' ILIKE $2`, [MIGRATION_TAG, `%${base}%`]);
+              const logged = (logs.rows as Array<{ entity_id: string }>).map(l => l.entity_id).sort();
+              const wanted = expected.map(([, id]) => String(id)).sort();
+              if (JSON.stringify(logged) !== JSON.stringify(wanted)) wrong.push(`${scenario}: audit rows for ${JSON.stringify(logged)}, expected ${JSON.stringify(wanted)}`);
+              const takenRows = (logs.rows as Array<{ reason: string }>).filter(l => l.reason === 'username_key_taken').length;
+              if (takenRows !== (withIndex ? 2 : 0)) wrong.push(`${scenario}: ${takenRows} audit rows say the username key is taken`);
+              const warning = notices.find(n => n.includes('marked deleted'));
+              const wantedCounts = withIndex ? ': 1 without a role, 2 whose username' : ': 1 without a role, 0 whose username';
+              if (!warning?.includes(wantedCounts)) wrong.push(`${scenario}: warning ${JSON.stringify(warning ?? null)} does not count ${wantedCounts}`);
+              const column = await client.query(`SELECT is_nullable, column_default FROM information_schema.columns
+                WHERE table_schema = current_schema() AND table_name = 'users' AND column_name = 'is_deleted'`);
+              const info = column.rows[0] as { is_nullable: string; column_default: string | null } | undefined;
+              if (info?.is_nullable !== 'NO' || !String(info?.column_default ?? '').startsWith('0')) {
+                wrong.push(`${scenario}: users.is_deleted is nullable ${String(info?.is_nullable)} with default ${String(info?.column_default)}`);
+              }
+            } finally {
+              await client.query('ROLLBACK').catch(() => undefined);
+              client.off('notice', onNotice);
+              client.release();
             }
-            const logs = await tx.select({ entityId: activityLogs.entityId }).from(activityLogs)
-              .where(sql`${activityLogs.details}->>'migration' = ${MIGRATION_TAG} AND ${activityLogs.details}->>'username' ILIKE ${`%${base}%`}`);
-            const logged = logs.map(l => l.entityId).sort();
-            const wanted = expected.map(([, id]) => String(id)).sort();
-            if (JSON.stringify(logged) !== JSON.stringify(wanted)) wrong.push(`audit rows for ${JSON.stringify(logged)}, expected ${JSON.stringify(wanted)}`);
-            const column = await tx.execute(sql`SELECT is_nullable, column_default FROM information_schema.columns
-              WHERE table_schema = current_schema() AND table_name = 'users' AND column_name = 'is_deleted'`);
-            const info = (column as unknown as { rows: Array<{ is_nullable: string; column_default: string | null }> }).rows[0];
-            if (info?.is_nullable !== 'NO' || !String(info?.column_default ?? '').startsWith('0')) {
-              wrong.push(`users.is_deleted is nullable ${String(info?.is_nullable)} with default ${String(info?.column_default)}`);
-            }
-            throw new Rollback();
-          });
-        } catch (err) {
-          if (!(err instanceof Rollback)) throw err;
+          }
         } finally {
           await deleteTestRoles(eq(roles.code, roleCode)).catch(() => undefined);
         }
@@ -240,6 +259,15 @@ export async function runUrgentFixesV1020Tests(shouldRun: ShouldRun): Promise<Te
           if (logs.length !== 1) wrong.push(`${logs.length} audit rows for the changed definition, expected 1`);
           const again = await replaceRemovedWorkflowPermissions();
           if (again.includes(published)) wrong.push('a second run changed the definition again');
+          // a running instance keeps its snapshot asking the removed key: the holder of the replacement signs it
+          const { WorkflowTransitionExecutor } = await import('../../services/workflow/workflowTransitionExecutor.js');
+          const snapshotAction = { requiredPermission: ` ${REMOVED_KEY} ` };
+          const holder = await WorkflowTransitionExecutor.holdsRequiredPermission(snapshotAction,
+            { role: `v1020_none_${tail()}`, permissions: ['audit.apply'], ownPermissions: true });
+          if (!holder) wrong.push('a holder of audit.apply cannot sign a snapshot action asking the removed key');
+          const stranger = await WorkflowTransitionExecutor.holdsRequiredPermission(snapshotAction,
+            { role: `v1020_none_${tail()}`, permissions: ['audit.view'], ownPermissions: true });
+          if (stranger) wrong.push('a user without audit.apply signs a snapshot action asking the removed key');
         } finally {
           await orm.update(workflowDefinitions).set({ isActive: 0 }).where(inArray(workflowDefinitions.id, [published, drafted])).catch(() => undefined);
         }
