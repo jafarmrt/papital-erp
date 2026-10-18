@@ -1,6 +1,7 @@
-import { and, count, eq, sql } from 'drizzle-orm';
+import { and, count, eq, inArray, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { productionProjects, projectBomAllocations, purchaseRequisitions } from '../../db/schema.js';
+import { documents, productionProjects, projectBomAllocations, purchaseRequisitions } from '../../db/schema.js';
+import { PROJECT_ISSUE_DOCUMENT_TYPES } from '../../lib/transactions/projectIssueTypes.js';
 import { NotFoundError } from '../../errors/customErrors.js';
 import type { ProjectStepCounts } from '../../lib/projects/projectSteps.js';
 import { deliveredProjectQuantities, plannedProjectProducts } from './projectDeliveryCap.js';
@@ -12,7 +13,8 @@ const CLOSED_STATUSES = new Set(['rejected', 'cancelled', 'consolidated']);
 
 /**
  * v10.2.x (10.2 package 2, review U4): the counts of a project's step bar. Read only: the live requisitions of the
- * project by stage, its allocations not released, and its final production receipts against the planned products (the
+ * project by stage, its allocations not released, its live final remittances and waste (the documents that issue
+ * material to a project, TD-233 / TD-945), and its final production receipts against the planned products (the
  * delivery cap's own rule). It carries no amount, so `projects.view` reads it like the project record.
  */
 export async function loadProjectStepCounts(projectId: number): Promise<ProjectStepCounts> {
@@ -41,7 +43,14 @@ export async function loadProjectStepCounts(projectId: number): Promise<ProjectS
     .from(projectBomAllocations)
     .where(and(eq(projectBomAllocations.projectId, projectId), eq(projectBomAllocations.isDeleted, 0), sql`${projectBomAllocations.status} IN ('allocated', 'consumed')`))
     .groupBy(projectBomAllocations.status);
-  const allocations = { open: 0, consumed: 0 };
+  const [issueRow] = await orm
+    .select({ rows: count() })
+    .from(documents)
+    .where(and(
+      eq(documents.projectId, projectId), eq(documents.isDeleted, 0), eq(documents.status, 'final'),
+      inArray(documents.type, [...PROJECT_ISSUE_DOCUMENT_TYPES]),
+    ));
+  const allocations = { open: 0, consumed: 0, issueDocuments: Number(issueRow?.rows) || 0 };
   for (const row of allocationRows) {
     if (row.status === 'consumed') allocations.consumed += Number(row.rows) || 0;
     else allocations.open += Number(row.rows) || 0;

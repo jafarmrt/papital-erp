@@ -39,7 +39,8 @@ const CARD = 'bg-white rounded-2xl border border-slate-200 p-4 space-y-3';
 /**
  * v10.2.x (10.2 package 2, review U3 / U6): the first tab of a project page, «مشخصات و مراحل»: the summary or its
  * edit form, the products, the stages with their timeline chart beneath (the old fifth tab) and the attachments. The
- * project workflow box, which no project workflow ever filled, is gone.
+ * project workflow box, which no project workflow ever filled, is gone. While the specs are being edited nothing else
+ * here saves (stage edits, a new stage, the attachments card), so no reload interrupts the form.
  */
 export function ProjectOverviewTab({ project, version, rememberVersion, personnel, canEdit, editingSpecs, onCloseSpecs, onChanged, onDirtyChange }: ProjectOverviewTabProps) {
   const [editingStages, setEditingStages] = useState<ReadonlySet<number>>(new Set());
@@ -165,13 +166,13 @@ export function ProjectOverviewTab({ project, version, rememberVersion, personne
               stage={stage}
               personnel={personnel}
               stagesFromMatrix={stagesFromMatrix}
-              canEdit={canEdit}
+              canEdit={canEdit && !editingSpecs}
               onChanged={onChanged}
               onEditingChange={onStageEditing}
             />
           ))}
         </div>
-        {canEdit && <AddStageForm projectId={project.id} onChanged={onChanged} />}
+        {canEdit && !editingSpecs && <AddStageForm projectId={project.id} onChanged={onChanged} />}
       </section>
 
       <section className={CARD} aria-labelledby={`project-${project.id}-timeline`}>
@@ -182,6 +183,8 @@ export function ProjectOverviewTab({ project, version, rememberVersion, personne
         <ProjectGanttTab project={project} />
       </section>
 
+      {/* the specs editor has its own attachments field; this card would save beside it and reload the page */}
+      {!editingSpecs && (
       <section className={CARD}>
         <FinancialAttachmentUploader
           readOnly={!canEdit}
@@ -192,6 +195,7 @@ export function ProjectOverviewTab({ project, version, rememberVersion, personne
           maxFiles={15}
         />
       </section>
+      )}
     </div>
   );
 }

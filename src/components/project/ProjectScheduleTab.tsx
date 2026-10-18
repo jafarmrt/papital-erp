@@ -165,7 +165,7 @@ export default function ProjectScheduleTab({
   // the plan as last read or saved; the tab holds unsaved changes while the two differ
   const [savedSchedulesMap, setSavedSchedulesMap] = useState<ProjectStageSchedulesMap>({});
   const hasUnsavedSchedules = useMemo(() => JSON.stringify(schedulesMap) !== JSON.stringify(savedSchedulesMap), [schedulesMap, savedSchedulesMap]);
-  useEffect(() => { onDirtyChange?.(hasUnsavedSchedules); }, [hasUnsavedSchedules, onDirtyChange]);
+  useEffect(() => { onDirtyChange?.(hasUnsavedSchedules && !saving); }, [hasUnsavedSchedules, saving, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   useEffect(() => {

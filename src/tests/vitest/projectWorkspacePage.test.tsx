@@ -18,11 +18,12 @@ const personnel = [
 ];
 const steps = {
   requisitions: { open: 1, ordered: 0, received: 0 },
-  allocations: { open: 0, consumed: 0 },
+  allocations: { open: 0, consumed: 0, issueDocuments: 0 },
   delivery: { products: 1, completeProducts: 0, delivered: 2, planned: 12, unit: 'عدد' },
 };
 const puts: Array<Record<string, unknown>> = [];
-const fetchJson = vi.fn(async (url: string, opts?: FetchOpts): Promise<unknown> => {
+const CANCELLED_NOTE = 'این پروژه لغو شده است؛ گام‌ها فقط برای دیدن است.';
+const defaultFetch = async (url: string, opts?: FetchOpts): Promise<unknown> => {
   if (url === '/projects/7/stages/11' && opts?.method === 'PUT') {
     const body = JSON.parse(opts.body ?? '{}') as Record<string, unknown>;
     puts.push(body);
@@ -32,7 +33,8 @@ const fetchJson = vi.fn(async (url: string, opts?: FetchOpts): Promise<unknown> 
   if (url === '/projects/7/steps') return steps;
   if (url === '/personnel') return personnel;
   return [];
-});
+};
+const fetchJson = vi.fn(defaultFetch);
 const confirmAction = vi.fn(async () => true);
 vi.mock('../../api', () => ({ fetchJson: (url: string, opts?: FetchOpts) => fetchJson(url, opts) }));
 vi.mock('../../components/ConfirmDialogHost', () => ({ confirmAction: () => confirmAction() }));
@@ -52,12 +54,16 @@ vi.mock('../../components/accounting/FinancialAttachmentUploader', () => ({ Fina
 
 import { renderProjectPage } from './helpers/projectPage';
 import { parseProjectWorkspaceTab, projectIdFromParam, projectWorkspacePath } from '../../lib/projects/projectWorkspaceTabs';
-import { projectSteps } from '../../lib/projects/projectSteps';
+import { projectInactiveNote, projectSteps } from '../../lib/projects/projectSteps';
 import { currentStepIndex } from '../../components/project/workspace/ProjectStepsBar';
 import { stagePersonnelChoices } from '../../components/project/workspace/StagePersonnelPicker';
 import type { Personnel } from '../../types';
 
-afterEach(() => { cleanup(); vi.clearAllMocks(); puts.length = 0; confirmAction.mockImplementation(async () => true); });
+afterEach(() => {
+  cleanup(); vi.clearAllMocks(); puts.length = 0;
+  confirmAction.mockImplementation(async () => true);
+  fetchJson.mockImplementation(defaultFetch);
+});
 
 const location = () => screen.getByTestId('location').textContent;
 const tab = (name: string) => screen.getByRole('tab', { name: new RegExp(name) });
@@ -122,6 +128,28 @@ describe('project step bar (10.2 package 2, U4)', () => {
     expect(current?.textContent).toContain('رزرو انبار');
     fireEvent.click(within(bar).getByText('ورود به انبار'));
     await waitFor(() => expect(location()).toBe('/projects/7/delivery'));
+  });
+
+  // review M4 / L3: a remittance of the project counts as material taken; a failed read and a stopped project say so
+  it('counts project remittances, says a failed read and marks a stopped project', () => {
+    const issued = projectSteps(project, { ...steps, allocations: { open: 1, consumed: 0, issueDocuments: 2 } });
+    expect(issued[3].note).toBe('۱ تخصیص و ۲ حواله از انبار');
+    expect(issued[3].state).not.toBe('todo');
+    expect(projectSteps(project, null, true)[2].note).toBe('خوانده نشد');
+    expect(projectInactiveNote('cancelled')).toBe(CANCELLED_NOTE);
+    expect(projectInactiveNote('in_progress')).toBeNull();
+  });
+
+  it('shows the note of a cancelled project over its steps', async () => {
+    fetchJson.mockImplementation(async (url: string): Promise<unknown> => {
+      if (url === '/projects/7') return { ...project, status: 'cancelled' };
+      if (url === '/projects/7/steps') return steps;
+      return [];
+    });
+    renderProjectPage();
+    const bar = await screen.findByRole('navigation', { name: 'گام‌های پروژه' });
+    expect(within(bar).getByText(CANCELLED_NOTE)).toBeTruthy();
+    expect(within(bar).getAllByRole('button').some(b => b.getAttribute('aria-current') === 'step')).toBe(false);
   });
 });
 

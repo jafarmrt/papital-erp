@@ -150,7 +150,7 @@ export function useProjectForm({
         setStages(newProjectStages());
       }
     }
-  }, [isOpen, projectToEdit, workflowPresets, initialProducts, initialTitle]);
+  }, [isOpen, projectToEdit, initialProducts, initialTitle]);
 
   const handleAddProductRow = () => {
     setProductsList(prev => [...prev, createInitialProductRow()]);

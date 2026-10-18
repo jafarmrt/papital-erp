@@ -220,7 +220,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
   };
 
   const hasChanges = dirty.size > 0;
-  useEffect(() => { onDirtyChange?.(hasChanges); }, [hasChanges, onDirtyChange]);
+  useEffect(() => { onDirtyChange?.(hasChanges && !saving); }, [hasChanges, saving, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   const saveChanges = async () => {

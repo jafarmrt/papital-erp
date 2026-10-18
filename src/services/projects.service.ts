@@ -570,7 +570,7 @@ export class ProjectService {
   static assertMatrixCompleted(check: ProgressMatrixStatus): void {
     if (check.allMatrixCompleted) return;
     throw new ValidationError(
-      `امکان تغییر وضعیت پروژه به تکمیل‌شده وجود ندارد؛ هنوز تمام گزینه‌های ماتریس پیشرفت فیزیکی محصولات در بخش «پیشرفت به تفکیک کد کالا» تیک نخورده‌اند (${check.completedMatrixCells} از ${check.totalMatrixCells} مورد تکمیل شده است).`,
+      `امکان تغییر وضعیت پروژه به تکمیل‌شده وجود ندارد؛ هنوز تمام گزینه‌های ماتریس پیشرفت فیزیکی محصولات در زبانه «۳. پیشرفت هر کالا» تیک نخورده‌اند (${check.completedMatrixCells} از ${check.totalMatrixCells} مورد تکمیل شده است).`,
       { completedMatrixCells: check.completedMatrixCells, totalMatrixCells: check.totalMatrixCells },
       'PROJECT_MATRIX_INCOMPLETE'
     );
@@ -623,7 +623,7 @@ export class ProjectService {
         const percentChanged = data.progressPercent !== undefined && Number(data.progressPercent) !== Number(existing.progressPercent ?? 0);
         if (statusChanged || percentChanged) {
           throw new ValidationError(
-            `وضعیت و درصد پیشرفت مرحله «${existing.title}» از ماتریس «پیشرفت به تفکیک کد کالا» محاسبه می‌شود و دستی تغییر نمی‌کند؛ خانه‌های این مرحله را در ماتریس تیک بزنید.`,
+            `وضعیت و درصد پیشرفت مرحله «${existing.title}» از ماتریس زبانه «۳. پیشرفت هر کالا» محاسبه می‌شود و دستی تغییر نمی‌کند؛ خانه‌های این مرحله را در ماتریس تیک بزنید.`,
             { stageId, status: existing.status, progressPercent: existing.progressPercent },
             'STAGE_STATUS_FROM_MATRIX'
           );

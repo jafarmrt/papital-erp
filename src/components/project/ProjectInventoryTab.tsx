@@ -87,7 +87,8 @@ export function ProjectInventoryTab({
     currentModalSection
   } = useProjectInventory(project, effectiveItemsList, onUpdate);
 
-  useEffect(() => { onDirtyChange?.(isDirty); }, [isDirty, onDirtyChange]);
+  // a change being saved is not left unsaved: switching tabs mid-save does not ask
+  useEffect(() => { onDirtyChange?.(isDirty && !saving); }, [isDirty, saving, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   // V3.1.46 (TD-070): پل مستقیم خرید از ردیف بخش — ساخت لیست خرید موقت از کسری‌های همان بخش

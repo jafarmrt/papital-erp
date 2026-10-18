@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { projectStatusLabel } from '../lib/projects/projectStatus';
 import { useNavigate } from 'react-router-dom';
+import { confirmLeaveIfDirty, leaveNavigateOptions } from '../hooks/useUnsavedChangesGuard';
 import { Search, X, Package, Box, UsersRound, ClipboardList, Layers, ArrowLeft, Loader2 } from 'lucide-react';
 import { useSearch } from '../SearchContext';
 import { fetchJson } from '../api';
@@ -139,12 +140,14 @@ export default function GlobalHeaderSearch() {
     (Array.isArray(results?.projects) ? results.projects.length : 0);
 
   // TD-1155: the result opens its list searched by its own key (the shared search the list pages read)
-  const handleSelectResult = (hit: GlobalSearchHit) => {
+  // v10.2.x (10.2 package 2): a page holding unsaved changes asks first
+  const handleSelectResult = async (hit: GlobalSearchHit) => {
     const target = globalSearchTarget(hit);
     setIsOpen(false);
+    if (!(await confirmLeaveIfDirty())) return;
     setSearchQuery('');
     setSearchForNavigation(target.search, target.path);
-    void navigate(target.path);
+    void navigate(target.path, leaveNavigateOptions());
   };
 
   return (
@@ -214,7 +217,7 @@ export default function GlobalHeaderSearch() {
                     return (
                       <button
                         key={`item-${item.id}`}
-                        onClick={() => handleSelectResult({ kind: 'item', code: item.code || '', type: item.type })}
+                        onClick={() => void handleSelectResult({ kind: 'item', code: item.code || '', type: item.type })}
                         className="w-full text-right p-2 hover:bg-blue-50/70 rounded-xl transition-colors flex items-center justify-between group"
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
@@ -257,7 +260,7 @@ export default function GlobalHeaderSearch() {
                   {results.customers.map(cust => (
                     <button
                       key={`cust-${cust.id}`}
-                      onClick={() => handleSelectResult({ kind: 'customer', name: cust.name || '' })}
+                      onClick={() => void handleSelectResult({ kind: 'customer', name: cust.name || '' })}
                       className="w-full text-right p-2 hover:bg-emerald-50/70 rounded-xl transition-colors flex items-center justify-between group"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -289,7 +292,7 @@ export default function GlobalHeaderSearch() {
                   {results.documents.map(doc => (
                     <button
                       key={`doc-${doc.id}`}
-                      onClick={() => handleSelectResult({ kind: 'document', refNumber: doc.ref_number || '' })}
+                      onClick={() => void handleSelectResult({ kind: 'document', refNumber: doc.ref_number || '' })}
                       className="w-full text-right p-2 hover:bg-purple-50/70 rounded-xl transition-colors flex items-center justify-between group"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -323,7 +326,7 @@ export default function GlobalHeaderSearch() {
                   {results.projects.map(proj => (
                     <button
                       key={`proj-${proj.id}`}
-                      onClick={() => handleSelectResult({ kind: 'project', code: proj.project_code || '' })}
+                      onClick={() => void handleSelectResult({ kind: 'project', code: proj.project_code || '' })}
                       className="w-full text-right p-2 hover:bg-amber-50/70 rounded-xl transition-colors flex items-center justify-between group"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">

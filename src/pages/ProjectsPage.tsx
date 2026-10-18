@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
-import { projectWorkspacePath, type ProjectWorkspaceTab } from '../lib/projects/projectWorkspaceTabs';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { projectWorkspacePath, rememberProjectListSearch, type ProjectWorkspaceTab } from '../lib/projects/projectWorkspaceTabs';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { 
   Plus, Search, Layers, LayoutGrid, List, Calendar, CheckCircle2,
@@ -71,17 +71,41 @@ export default function ProjectsPage() {
 
   // Filters
   const { searchQuery, debouncedSearchQuery, setSearchQuery } = useSearch();
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [priorityFilter, setPriorityFilter] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'gantt'>('kanban');
-  const [page, setPage] = useState(1);
+  // v10.2.x (10.2 package 2, review L1): the status, priority, view and page live in the address, so coming back from a
+  // project (its «بازگشت» button or the browser's back) shows the same page of the list
+  const [listParams, setListParams] = useSearchParams();
+  const statusFilter = listParams.get('status') || 'all';
+  const priorityFilter = listParams.get('priority') || 'all';
+  const viewParam = listParams.get('view');
+  const viewMode: 'kanban' | 'list' | 'gantt' = viewParam === 'list' || viewParam === 'gantt' ? viewParam : 'kanban';
+  const page = Math.max(1, Math.floor(Number(listParams.get('page'))) || 1);
+  const updateListParams = useCallback((patch: Record<string, string | null>) => {
+    setListParams(prev => {
+      const next = new URLSearchParams(prev);
+      for (const [key, value] of Object.entries(patch)) {
+        if (value === null) next.delete(key); else next.set(key, value);
+      }
+      return next;
+    }, { replace: true });
+  }, [setListParams]);
+  const setStatusFilter = (value: string) => updateListParams({ status: value === 'all' ? null : value, page: null });
+  const setPriorityFilter = (value: string) => updateListParams({ priority: value === 'all' ? null : value, page: null });
+  const setViewMode = (value: 'kanban' | 'list' | 'gantt') => updateListParams({ view: value === 'kanban' ? null : value });
+  const setPage = useCallback((value: number) => updateListParams({ page: value > 1 ? String(value) : null }), [updateListParams]);
+  useEffect(() => { rememberProjectListSearch(listParams.toString()); }, [listParams]);
 
   // v9.0.412 (TD-743): صافی‌ها و صفحه‌بندی در سرور؛ صافی تازه از صفحه نخست
   const filters = useMemo<ProjectListFilters>(
     () => ({ search: debouncedSearchQuery, status: statusFilter, priority: priorityFilter }),
     [debouncedSearchQuery, statusFilter, priorityFilter],
   );
-  useEffect(() => { setPage(1); }, [filters]);
+  // a new search starts from the first page; the first render keeps the page the address names
+  const searchedFor = useRef(debouncedSearchQuery);
+  useEffect(() => {
+    if (searchedFor.current === debouncedSearchQuery) return;
+    searchedFor.current = debouncedSearchQuery;
+    setPage(1);
+  }, [debouncedSearchQuery, setPage]);
 
   const projectsQuery = useProjectListQuery(filters, page, PROJECT_LIST_PAGE_SIZE);
   const customersQuery = useCustomerOptionsQuery();
@@ -99,7 +123,7 @@ export default function ProjectsPage() {
   const lastPage = Math.max(1, Math.ceil(projectTotal / PROJECT_LIST_PAGE_SIZE));
   useEffect(() => {
     if (!projectsQuery.isFetching && page > lastPage) setPage(lastPage);
-  }, [projectsQuery.isFetching, page, lastPage]);
+  }, [projectsQuery.isFetching, page, lastPage, setPage]);
 
   // v10.2.x (10.2 package 2, review U1): a project opens as its own page; the window here only defines a new project
   const navigate = useNavigate();
@@ -520,7 +544,6 @@ export default function ProjectsPage() {
       <ProjectModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        projectToEdit={null}
         customersList={customersList}
         itemsList={NO_PRELOADED_ITEMS}
         onSuccess={loadInitialData}

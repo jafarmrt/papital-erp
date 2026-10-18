@@ -65,12 +65,15 @@ export function ProjectWorkspaceHeader({ project, version, canEdit, editingSpecs
       {canEdit && (
         <div className="flex items-center gap-2 flex-wrap">
           {!editingSpecs && (
+            <>
             <button type="button" onClick={onEditSpecs} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer">
               <Edit3 className="w-3.5 h-3.5" aria-hidden="true" />
               ویرایش مشخصات
             </button>
+            {/* a status change saves and reloads the project, which would interrupt the specs form */}
+            <ProjectStatusActions projectId={project.id} status={project.status} version={version} onSaved={onStatusSaved} />
+            </>
           )}
-          <ProjectStatusActions projectId={project.id} status={project.status} version={version} onSaved={onStatusSaved} />
         </div>
       )}
     </header>

@@ -6,6 +6,8 @@ import { formatPersianNumber } from '../../../utils';
 interface ProjectStepsBarProps {
   steps: ProjectStep[];
   onOpenTab: (tab: ProjectWorkspaceTab) => void;
+  /** a cancelled or paused project: the bar is shown muted with this note, and no step is the current one */
+  inactiveNote?: string | null;
 }
 
 const CIRCLE: Record<ProjectStepState, string> = {
@@ -39,11 +41,12 @@ export function currentStepIndex(steps: readonly ProjectStep[]): number {
  * v10.2.x (10.2 package 2, review U4): where the project stands, from the material list to «ورود به انبار», in one row
  * at the top of its page. Each step says what is left and opens its tab. On a phone the row scrolls sideways.
  */
-export function ProjectStepsBar({ steps, onOpenTab }: ProjectStepsBarProps) {
-  const current = currentStepIndex(steps);
+export function ProjectStepsBar({ steps, onOpenTab, inactiveNote }: ProjectStepsBarProps) {
+  const current = inactiveNote ? -1 : currentStepIndex(steps);
   return (
-    <nav aria-label="گام‌های پروژه" className="bg-white rounded-2xl border border-slate-200 px-3 py-3 overflow-x-auto">
-      <ol className="flex items-start min-w-max sm:min-w-0">
+    <nav aria-label="گام‌های پروژه" className={`rounded-2xl border px-3 py-3 overflow-x-auto ${inactiveNote ? 'bg-slate-50 border-slate-200' : 'bg-white border-slate-200'}`}>
+      {inactiveNote && <p className="text-xs font-bold text-slate-600 mb-2">{inactiveNote}</p>}
+      <ol className={`flex items-start min-w-max sm:min-w-0 ${inactiveNote ? 'opacity-60 grayscale' : ''}`}>
         {steps.map((step, index) => (
           <li key={step.key} className="flex-1 flex items-start min-w-[7.5rem]">
             <button

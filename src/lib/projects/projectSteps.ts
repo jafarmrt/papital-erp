@@ -15,8 +15,11 @@ import type { ProjectWorkspaceTab } from './projectWorkspaceTabs';
 export interface ProjectStepCounts {
   /** live purchase requisitions of the project by stage (consolidated sources not counted) */
   requisitions: { open: number; ordered: number; received: number };
-  /** live material allocations of the project: still allocated, or consumed; released ones are not counted */
-  allocations: { open: number; consumed: number };
+  /**
+   * material taken for the project: its live allocations, still allocated or consumed (released ones not counted),
+   * and its live final remittances and waste, which issue material to the project too (TD-233)
+   */
+  allocations: { open: number; consumed: number; issueDocuments: number };
   /** the project's products against its final production receipts */
   delivery: {
     products: number;
@@ -73,13 +76,14 @@ export function isProjectStepCounts(value: unknown): value is ProjectStepCounts 
     && !!v.delivery && typeof v.delivery === 'object';
 }
 
-export function projectSteps(project: StepProject, answer: ProjectStepCounts | null): ProjectStep[] {
+/** `readFailed`: the counts could not be read, so their steps say so instead of «در حال خواندن» for ever */
+export function projectSteps(project: StepProject, answer: ProjectStepCounts | null, readFailed = false): ProjectStep[] {
   const counts = isProjectStepCounts(answer) ? answer : null;
   const materialRows = projectMaterialRowCount(project);
   const finalized = project.inventory_control?.isFinalized === true;
   const shortages = finalized ? storedReservationShortages(project.inventory_control).length : 0;
   const progress = Math.max(0, Math.min(100, Math.round(Number(project.progress_percent) || 0)));
-  const unknown = 'در حال خواندن';
+  const unknown = readFailed ? 'خوانده نشد' : 'در حال خواندن';
 
   const materials: ProjectStep = materialRows > 0
     ? { key: 'materials', label: 'فهرست مواد', state: 'done', note: `${n(materialRows)} ردیف`, tab: 'materials' }
@@ -112,9 +116,11 @@ export function projectSteps(project: StepProject, answer: ProjectStepCounts | n
   if (!counts) {
     allocation = { key: 'allocation', label: 'مواد گرفته‌شده', state: 'todo', note: unknown, tab: 'materials' };
   } else {
-    const taken = counts.allocations.open + counts.allocations.consumed;
-    allocation = taken > 0
-      ? { key: 'allocation', label: 'مواد گرفته‌شده', state: 'done', note: `${n(taken)} تخصیص از انبار`, tab: 'materials' }
+    const allocated = counts.allocations.open + counts.allocations.consumed;
+    const issued = Number(counts.allocations.issueDocuments) || 0;
+    const parts = [allocated > 0 ? `${n(allocated)} تخصیص` : '', issued > 0 ? `${n(issued)} حواله` : ''].filter(Boolean);
+    allocation = parts.length > 0
+      ? { key: 'allocation', label: 'مواد گرفته‌شده', state: 'done', note: `${parts.join(' و ')} از انبار`, tab: 'materials' }
       : { key: 'allocation', label: 'مواد گرفته‌شده', state: finalized ? 'active' : 'todo', note: 'هنوز از انبار گرفته نشده', tab: 'materials' };
   }
 
@@ -136,4 +142,11 @@ export function projectSteps(project: StepProject, answer: ProjectStepCounts | n
   }
 
   return [materials, reservation, purchase, allocation, progressStep, delivery];
+}
+
+/** a cancelled or paused project's step bar is muted with this note (review L3); an open project has none */
+export function projectInactiveNote(status: string | null | undefined): string | null {
+  if (status === 'cancelled') return 'این پروژه لغو شده است؛ گام‌ها فقط برای دیدن است.';
+  if (status === 'paused') return 'این پروژه متوقف است؛ گام‌ها تا ادامه پروژه پیش نمی‌روند.';
+  return null;
 }

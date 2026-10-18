@@ -1,7 +1,7 @@
 /**
  * v10.2.x (10.2 package 2, production projects review U1 / U6): a project is a page with its own address,
- * `/projects/<id>/<tab>`, instead of a window over the project list, so the browser's back button, a link from a
- * notification or the reservation report and a reload open the same tab. Five tabs instead of six: the timeline chart
+ * `/projects/<id>/<tab>`, instead of a window over the project list, so a reload or a copied link opens the same tab
+ * and a later notification can link to one. Five tabs instead of six: the timeline chart
  * sits beside the stages in the first tab. The old window's tab names are still read, so an earlier link keeps working.
  */
 export const PROJECT_WORKSPACE_TABS = ['overview', 'materials', 'progress', 'workshop', 'delivery'] as const;
@@ -41,4 +41,18 @@ export function projectIdFromParam(value: string | undefined): number | null {
   if (!value || !/^\d+$/.test(value)) return null;
   const id = Number(value);
   return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+/**
+ * the project list's address with the search, filters and page it was left with, so «بازگشت به فهرست پروژه‌ها»
+ * returns to the same page of the list (review L1); held for the browser tab's session only
+ */
+let projectListSearch = '';
+
+export function rememberProjectListSearch(search: string): void {
+  projectListSearch = search && search !== '?' ? (search.startsWith('?') ? search : `?${search}`) : '';
+}
+
+export function projectListPath(): string {
+  return `/projects${projectListSearch}`;
 }

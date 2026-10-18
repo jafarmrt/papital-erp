@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { ProductionProject } from '../../../types';
 import { useProjectForm } from '../../project-modal/useProjectForm';
@@ -20,13 +20,15 @@ const NO_ITEMS: never[] = [];
  * v10.2.x (10.2 package 2, review U3): a project's specs (title, customer, dates, priority, description, managers and
  * products) are edited on its own page, in place of the read-only summary, instead of in a second window over the
  * project window. It is the project form of `useProjectForm` without its stages: stages change only through the stage
- * cards below it (TD-740). While it is open the page counts as holding unsaved changes.
+ * cards below it (TD-740). While it is open the page counts as holding unsaved changes. The form starts from the
+ * project as it was when the editor opened: a reload of the page meanwhile never resets what was typed.
  */
 export function ProjectSpecsEditor({ project, onSaved, onCancel }: ProjectSpecsEditorProps) {
+  const [opened] = useState(project);
   const form = useProjectForm({
     isOpen: true,
     onClose: onCancel,
-    projectToEdit: project,
+    projectToEdit: opened,
     customersList: NO_CUSTOMERS,
     itemsList: NO_ITEMS,
     onSuccess: onSaved,
@@ -60,7 +62,7 @@ export function ProjectSpecsEditor({ project, onSaved, onCancel }: ProjectSpecsE
         attachments={form.attachments}
         setAttachments={form.setAttachments}
       />
-      <ProjectManagersField managerIds={form.managerIds} onChange={form.setManagerIds} storedManagers={project.managers} disabled={form.saving} />
+      <ProjectManagersField managerIds={form.managerIds} onChange={form.setManagerIds} storedManagers={opened.managers} disabled={form.saving} />
       <ProjectProductsForm
         productsList={form.productsList}
         activeItemsList={form.activeItemsList}

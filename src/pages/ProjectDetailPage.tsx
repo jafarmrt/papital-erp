@@ -10,9 +10,9 @@ import { useProjectVersion } from '../hooks/useProjectVersion';
 import { useProjectPermissions } from '../hooks/useProjectPermissions';
 import { usePersonnelListQuery } from '../hooks/queries/usePersonnelQueries';
 import { useProjectItemOptions, useProjectStepCounts } from '../hooks/queries/useProjectWorkspaceQueries';
-import { confirmLeaveUnsaved, useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
-import { parseProjectWorkspaceTab, projectIdFromParam, projectWorkspacePath, PROJECT_WORKSPACE_TABS, type ProjectWorkspaceTab } from '../lib/projects/projectWorkspaceTabs';
-import { projectSteps } from '../lib/projects/projectSteps';
+import { confirmLeaveUnsaved, leaveNavigateOptions, useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
+import { parseProjectWorkspaceTab, projectIdFromParam, projectListPath, projectWorkspacePath, PROJECT_WORKSPACE_TABS, type ProjectWorkspaceTab } from '../lib/projects/projectWorkspaceTabs';
+import { projectInactiveNote, projectSteps } from '../lib/projects/projectSteps';
 import { storedReservationShortages } from '../lib/projects/projectReservationState';
 import { ProjectStepsBar } from '../components/project/workspace/ProjectStepsBar';
 import { ProjectWorkspaceHeader, ProjectWorkspaceTabBar } from '../components/project/workspace/ProjectWorkspaceHeader';
@@ -26,10 +26,10 @@ type DirtySetter = (dirty: boolean) => void;
 
 /**
  * v10.2.x (10.2 package 2, production projects review U1–U6): a production project is a page, `/projects/<id>/<tab>`,
- * instead of a window over the project list. The address names the tab, so the back button, a reload, a notification
- * or the reservation report's link open it again; an earlier link with the old tab names still lands on the right one.
+ * instead of a window over the project list. The address names the tab, so a reload or a copied link opens the same
+ * tab and a later notification can link to one; an earlier link with the old tab names still lands on the right one.
  * The step bar says where the project stands; a tab with an unsaved change is marked, and leaving it (another tab, the
- * list, a menu link, closing the browser tab) asks first. Only the tab on screen is mounted, so each one starts from the
+ * list, a menu link, the browser's back button, the search or a notification, closing the browser tab) asks first. Only the tab on screen is mounted, so each one starts from the
  * project as the server last saved it.
  */
 export default function ProjectDetailPage() {
@@ -100,27 +100,31 @@ export default function ProjectDetailPage() {
   const goToTab = async (next: ProjectWorkspaceTab) => {
     if (projectId === null || next === tab) return;
     if (dirtyTabs.has(tab) && !(await confirmLeaveUnsaved())) return;
-    void navigate(projectWorkspacePath(projectId, next));
+    void navigate(projectWorkspacePath(projectId, next), leaveNavigateOptions());
   };
 
   const goBack = async () => {
     if (dirtyTabs.size > 0 && !(await confirmLeaveUnsaved())) return;
-    void navigate('/projects');
+    void navigate(projectListPath(), leaveNavigateOptions());
   };
 
   const openSpecs = async () => {
     if (projectId === null) return;
     if (tab !== 'overview') {
       if (dirtyTabs.has(tab) && !(await confirmLeaveUnsaved())) return;
-      void navigate(`${projectWorkspacePath(projectId, 'overview')}?edit=1`);
+      void navigate(`${projectWorkspacePath(projectId, 'overview')}?edit=1`, leaveNavigateOptions());
       return;
     }
-    setSearchParams({ edit: '1' });
+    // replaced, not pushed: while the form is open «back» is the unsaved-changes question, not a silent close
+    setSearchParams({ edit: '1' }, { replace: true });
   };
 
   const closeSpecs = useCallback(() => setSearchParams({}, { replace: true }), [setSearchParams]);
 
-  const steps = useMemo(() => (project ? projectSteps(project, stepCounts.data ?? null) : []), [project, stepCounts.data]);
+  const steps = useMemo(
+    () => (project ? projectSteps(project, stepCounts.data ?? null, stepCounts.isError) : []),
+    [project, stepCounts.data, stepCounts.isError],
+  );
 
   if (projectId === null || (loadError && !project)) {
     return (
@@ -159,7 +163,7 @@ export default function ProjectDetailPage() {
         onEditSpecs={() => void openSpecs()}
         onStatusSaved={(res) => { projectVersion.remember(res); void refresh(); }}
       />
-      <ProjectStepsBar steps={steps} onOpenTab={(next) => void goToTab(next)} />
+      <ProjectStepsBar steps={steps} onOpenTab={(next) => void goToTab(next)} inactiveNote={projectInactiveNote(project.status)} />
       <ProjectWorkspaceTabBar active={tab} dirty={dirtyTabs} badges={badges} onSelect={(next) => void goToTab(next)} />
       <div id="project-tab-panel" role="tabpanel" aria-labelledby={`project-tab-${tab}`}>
         {tab === 'overview' && (

@@ -31,6 +31,7 @@ vi.mock('../../components/ProjectModal', () => ({
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { SearchProvider } from '../../SearchContext';
 import ProjectsPage from '../../pages/ProjectsPage';
+import { projectListPath } from '../../lib/projects/projectWorkspaceTabs';
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
@@ -78,5 +79,22 @@ describe('project list page (TD-743)', () => {
     fireEvent.click(edit);
     expect((await screen.findByTestId('location')).textContent).toMatch(/^\/projects\/\d+\?edit=1$/);
     expect(screen.queryByTestId('project-form')).toBeNull();
+  });
+
+  // v10.2.x (10.2 package 2, review L1): the filters live in the address, so «بازگشت» from a project finds them again
+  it('reads its filters from the address, writes them back and remembers them for the way back', async () => {
+    const Probe = () => { const loc = useLocation(); return <output data-testid="list-address">{loc.search}</output>; };
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter initialEntries={['/projects?status=planned&page=2']}>
+          <SearchProvider><ProjectsPage /><Probe /></SearchProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(listUrls()).toContain('/projects?status=planned&page=2&limit=50'));
+    fireEvent.change(screen.getByDisplayValue('همه اولویت‌ها'), { target: { value: 'high' } });
+    await waitFor(() => expect(screen.getByTestId('list-address').textContent).toBe('?status=planned&priority=high'));
+    await waitFor(() => expect(listUrls()).toContain('/projects?status=planned&priority=high&page=1&limit=50'));
+    expect(projectListPath()).toBe('/projects?status=planned&priority=high');
   });
 });
