@@ -82,7 +82,7 @@ describe('OBS-R2-82: shop redirects are followed by hand, same site only, each t
   });
 
   it('makeWcRequest sends every shop request through the manual redirect loop', () => {
-    const src = readFileSync('src/routes/woocommerce.routes.ts', 'utf8');
+    const src = readFileSync('src/services/woocommerce/wcClient.ts', 'utf8');
     const start = src.indexOf('async function makeWcRequest');
     const body = src.slice(start, src.indexOf('\n}\n', start));
     expect(body).toContain('followShopRedirects(');

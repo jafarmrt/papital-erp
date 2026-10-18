@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 478
+تعداد مسیرها: 486
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -99,6 +99,9 @@
 | POST | `/api/auth/login` | public |
 | POST | `/api/auth/logout` | public |
 | GET | `/api/auth/me` | login-only |
+| GET | `/api/auth/sessions` | login-only |
+| DELETE | `/api/auth/sessions/:id` | login-only |
+| POST | `/api/auth/sessions/close-others` | login-only |
 | GET | `/api/categories` | login-only |
 | POST | `/api/categories` | products.create \| products.edit |
 | DELETE | `/api/categories/:id` | products.delete |
@@ -430,6 +433,9 @@
 | DELETE | `/api/users/:id` | users.manage |
 | PUT | `/api/users/:id` | users.manage |
 | POST | `/api/users/:id/restore` | users.manage |
+| GET | `/api/users/:id/sessions` | users.manage |
+| DELETE | `/api/users/:id/sessions/:sessionId` | users.manage |
+| POST | `/api/users/:id/sessions/close-all` | users.manage |
 | GET | `/api/users/list-simple` | login-only |
 | GET | `/api/users/my-permissions` | login-only |
 | GET | `/api/users/profile` | login-only |
@@ -439,7 +445,9 @@
 | DELETE | `/api/warehouses/:id` | warehouse.manage |
 | PUT | `/api/warehouses/:id` | warehouse.manage |
 | POST | `/api/warehouses/:id/reactivate` | admin |
+| GET | `/api/woocommerce/catalog` | woocommerce.view |
 | GET | `/api/woocommerce/order-logs` | woocommerce.view |
+| POST | `/api/woocommerce/refresh-products` | woocommerce.manage |
 | POST | `/api/woocommerce/sync-all-stocks` | woocommerce.manage |
 | POST | `/api/woocommerce/sync-item` | woocommerce.manage |
 | POST | `/api/woocommerce/sync-order-by-id` | woocommerce.manage |

@@ -1,4 +1,4 @@
--- Drizzle Migration 0128: v10.2 package 9, the group dashboard (social dashboard proposal parts A to E)
+-- Drizzle Migration 0130: v10.2 package 9, the group dashboard (social dashboard proposal parts A to E)
 --
 -- 1. personnel.is_birthday_visible: whether colleagues see the person's birthday (day and month only) on the dashboard
 --    and get its bell notification. DEFAULT 1 (the owner's default: on, each person may turn it off), with its CHECK.

@@ -141,6 +141,8 @@ export const PURGEABLE_AUDIT_ENTITIES = [
   'ماده اولیه',
   'کد کالا',
   'انبار',
+  // 10.2 package 6 (D-04): catalog refreshes and stock pushes to the online shop (counts only, no prices)
+  'فروشگاه اینترنتی',
   // v10.2 package 9: a colleague's birthday reaction or greeting
   'تبریک تولد'
 ] as const;
@@ -157,5 +159,6 @@ export const PURGEABLE_AUDIT_ENTITY_LABELS: Record<PurgeableAuditEntity, string>
   'ماده اولیه': 'درخواست ماده اولیه',
   'کد کالا': 'گرفتن شماره کد کالا',
   'انبار': 'تعریف انبار',
+  'فروشگاه اینترنتی': 'همگام‌سازی با فروشگاه اینترنتی',
   'تبریک تولد': 'تبریک‌های تولد همکاران'
 };

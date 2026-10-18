@@ -4,7 +4,7 @@ import { users } from './auth';
 import { personnel } from './personnel';
 
 /**
- * v10.2 package 9 (group dashboard, part C of the social dashboard proposal, migration 0128): a colleague's reaction
+ * v10.2 package 9 (group dashboard, part C of the social dashboard proposal, migration 0130): a colleague's reaction
  * (🎉 🎂 👏 ❤️, stored by key) or short message on a birthday. One live row per birthday person, Jalali year and sender;
  * the sender edits or removes their own, and a removal is a soft delete.
  */

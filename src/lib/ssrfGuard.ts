@@ -358,3 +358,34 @@ export async function assertSafeExternalUrl(url: string, options?: { allowLocalE
     }
   }
 }
+
+/** the error code of a connection refused by `guardedDnsLookup` */
+export const UNSAFE_RESOLVED_ADDRESS = 'EUNSAFEADDRESS';
+
+/**
+ * 10.2 package 6 (review M-5, OBS-R2-81): the DNS lookup of the connection itself. `assertSafeExternalUrl` resolves the name
+ * before the request and the socket resolves it again, so a name that answers a public address to the check and an inside
+ * address to the socket (DNS rebinding) passed. Given as the `lookup` of a request, this checks every address the socket
+ * would use and refuses the connection when one is private or reserved, so the request only ever reaches an address checked
+ * at connect time. An IP literal host never calls a lookup and is checked by `assertSafeExternalUrl`.
+ */
+export function guardedDnsLookup(
+  hostname: string,
+  options: dns.LookupOptions,
+  callback: (err: NodeJS.ErrnoException | null, address?: string | dns.LookupAddress[], family?: number) => void,
+): void {
+  dns.lookup(hostname, { ...options, all: true }, (err, addresses) => {
+    if (err) {
+      callback(err);
+      return;
+    }
+    const unsafe = addresses.find(a => isPrivateOrReservedIp(a.address));
+    if (unsafe || addresses.length === 0) {
+      callback(Object.assign(new Error(`Address of ${hostname} is private or reserved at connect time`), { code: UNSAFE_RESOLVED_ADDRESS }));
+      return;
+    }
+    // review N-B: the answer has the shape the caller asked for, so `net.connect` and other callers outside axios can use it
+    if (options?.all) callback(null, addresses);
+    else callback(null, addresses[0].address, addresses[0].family);
+  });
+}

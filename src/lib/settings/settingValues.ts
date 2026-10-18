@@ -106,3 +106,32 @@ export function priceListNamesError(names: readonly string[], options: { allowLa
   }
   return null;
 }
+
+/**
+ * 10.2 package 8 (TD-1297, review M-3): «آستانه تراکنش کلان خزانه» in rials. The treasury event carries no amount, only
+ * `isHighValue` (its rial value at or above this threshold), so a rule such as the seeded «ثبت ممیزی تراکنش‌های کلان
+ * خزانه‌داری» still finds large transactions. A whole number of rials above zero (Persian digits read), default
+ * 500,000,000, the amount the seeded rule compared before.
+ */
+export const TREASURY_HIGH_VALUE_THRESHOLD_KEY = 'treasury_high_value_threshold';
+export const TREASURY_HIGH_VALUE_THRESHOLD_DEFAULT = 500_000_000;
+export const TREASURY_HIGH_VALUE_THRESHOLD_MAX = 1_000_000_000_000_000;
+
+/** the threshold as a whole number of rials above zero, else null */
+export function readTreasuryHighValueThreshold(raw: unknown): number | null {
+  const text = normalizeDecimalString(String(raw ?? ''));
+  if (!/^\d+$/.test(text)) return null;
+  const n = Number(text);
+  return n > 0 && n <= TREASURY_HIGH_VALUE_THRESHOLD_MAX ? n : null;
+}
+
+export function treasuryHighValueThresholdError(raw: unknown): string | null {
+  return readTreasuryHighValueThreshold(raw) === null
+    ? '«آستانه تراکنش کلان خزانه» باید مبلغ صحیحی به ریال و بزرگ‌تر از صفر باشد.'
+    : null;
+}
+
+/** the stored threshold, or the default when it is missing or not valid */
+export function resolveTreasuryHighValueThreshold(stored: unknown): number {
+  return readTreasuryHighValueThreshold(stored) ?? TREASURY_HIGH_VALUE_THRESHOLD_DEFAULT;
+}

@@ -4,6 +4,7 @@ import { eq, desc, count } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 import { BaseDomainEvent } from './domainEvents.js';
 import { assertSafeExternalUrl } from '../../lib/ssrfGuard.js';
+import { guardedWebhookFetch } from './guardedWebhookFetch.js';
 import { isEnteredSecret } from '../../lib/secrets/maskedSecret.js';
 import { resolveWebhookTimeoutMs, WEBHOOK_TIMEOUT_DEFAULT_MS } from '../../lib/events/webhookTimeout.js';
 import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
@@ -375,16 +376,13 @@ export class WebhookSubscriptionService {
       // Validate target URL against SSRF before making network dispatch (SEC-010)
       await assertSafeExternalUrl(sub.targetUrl, { allowLocalEcho: true });
 
-      // In development or preview, targetUrl might be local or mock endpoint
-      // V3.0.7 (TD-057): redirect: 'manual' — دنبال‌کردن خودکار redirect می‌توانست
-      // پس از تأیید URL عمومی، درخواست را به مقصد خصوصی (مثلاً 169.254.169.254)
-      // بفرستد و گارد SSRF را دور بزند.
-      const response = await fetch(sub.targetUrl, {
+      // V3.0.7 (TD-057): a redirect is never followed (it could lead past the guard to 169.254.169.254); since 10.2
+      // package 8 (TD-1296) the connection also checks at connect time every address the name resolves to
+      const response = await guardedWebhookFetch(sub.targetUrl, {
         method: 'POST',
         headers,
         body: payloadString,
-        signal: controller.signal,
-        redirect: 'manual'
+        signal: controller.signal
       });
 
       statusCode = response.status;
@@ -526,13 +524,11 @@ export class WebhookSubscriptionService {
       // Validate target URL against SSRF before making ping test (SEC-010)
       await assertSafeExternalUrl(targetUrl, { allowLocalEcho: true });
 
-      const response = await fetch(targetUrl, {
+      const response = await guardedWebhookFetch(targetUrl, {
         method: 'POST',
         headers,
         body: payloadString,
-        signal: controller.signal,
-        // v9.0.356 (TD-704): like a real delivery, a redirect is never followed, so the guard above cannot be bypassed by a 302
-        redirect: 'manual'
+        signal: controller.signal
       });
 
       const durationMs = Date.now() - startTime;

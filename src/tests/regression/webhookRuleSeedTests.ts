@@ -17,7 +17,7 @@ export async function runWebhookRuleSeedTests(shouldRun: (id: string, ...extra: 
   const name = 'v9.0.357: server start leaves webhook rules as saved and the system echo token never goes to another address (TD-715)';
   const tStart = Date.now();
   const ruleIds: number[] = [];
-  const realFetch = globalThis.fetch;
+  const { setWebhookTransportForTests } = await import('../../services/events/guardedWebhookFetch.js');
   try {
     const { EventActionEngineService } = await import('../../services/events/eventActionEngineService.js');
     const wrong: string[] = [];
@@ -44,11 +44,11 @@ export async function runWebhookRuleSeedTests(shouldRun: (id: string, ...extra: 
     // 2. the system echo token goes only to the echo simulator; a rule's own token goes to its address
     const systemToken = await EventActionEngineService.getWebhookSecretToken();
     const sent: Array<{ url: string; token: string | null }> = [];
-    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    setWebhookTransportForTests(async (input, init) => {
       const headers = new Headers(init?.headers);
       sent.push({ url: String(input), token: headers.get('X-ERP-Signature-Token') });
       return new Response('{"ok":true}', { status: 200, headers: { 'content-type': 'application/json' } });
-    }) as typeof fetch;
+    });
     const event = {
       eventId: `td715-${Date.now()}`, eventType: 'InvoiceApproved', aggregateType: 'Document', aggregateId: '715',
       payload: {}, metadata: {}, occurredAt: new Date().toISOString(),
@@ -77,7 +77,7 @@ export async function runWebhookRuleSeedTests(shouldRun: (id: string, ...extra: 
       error: err instanceof Error ? err.message : String(err),
     }));
   } finally {
-    globalThis.fetch = realFetch;
+    setWebhookTransportForTests(null);
     if (ruleIds.length > 0) await orm.delete(eventActionRules).where(inArray(eventActionRules.id, ruleIds));
   }
   return results;

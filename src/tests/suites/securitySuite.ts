@@ -910,12 +910,12 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     }
 
     // 2. Verify WooCommerce SSL configuration enforces strict rejectUnauthorized
-    const wooModule = await fs.promises.readFile(path.join(process.cwd(), 'src/routes/woocommerce.routes.ts'), 'utf8');
+    const wooModule = await fs.promises.readFile(path.join(process.cwd(), 'src/services/woocommerce/wcClient.ts'), 'utf8');
     if (wooModule.includes('rejectUnauthorized: false')) {
-      throw new Error('src/routes/woocommerce.routes.ts has rejectUnauthorized: false');
+      throw new Error('src/services/woocommerce/wcClient.ts has rejectUnauthorized: false');
     }
     if (!wooModule.includes('WOOCOMMERCE_SSL_CA_PATH')) {
-      throw new Error('src/routes/woocommerce.routes.ts does not use the WOOCOMMERCE_SSL_CA_PATH variable');
+      throw new Error('src/services/woocommerce/wcClient.ts (the one WooCommerce client) does not use the WOOCOMMERCE_SSL_CA_PATH variable');
     }
 
     // 3. Verify HTTPS agent instantiation works with strict validation
@@ -1413,6 +1413,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // بسته ۲ (از v9.0.75، TD-524 به بعد): کاربران، دسترسی و سجل
   const { runAccessPackageTwoTests } = await import('../security/accessPackageTwoTests.js');
   results.push(...await runAccessPackageTwoTests(shouldRunAccess));
+  // 10.2 package 8 (D-07, TD-1295): one session row per device, closing one device
+  const { runDeviceSessionTests } = await import('../security/deviceSessionTests.js');
+  results.push(...await runDeviceSessionTests(shouldRunAccess));
   const { runAccessPackageTwoDocumentTests } = await import('../security/accessPackageTwoDocumentTests.js');
   results.push(...await runAccessPackageTwoDocumentTests(shouldRunAccess));
   const { runAccessPackageTwoSensitiveTests } = await import('../security/accessPackageTwoSensitiveTests.js');

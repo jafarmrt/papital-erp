@@ -11091,6 +11091,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // 10.2 package 4 (OBS-R2-52): payslip payment and its void through the shared treasury path
   const { runTreasuryOnePathObsR252Tests } = await import('../regression/treasuryOnePathObsR252Tests.js');
   results.push(...await runTreasuryOnePathObsR252Tests(shouldRun));
+  // 10.2 package 8 (TD-1297): treasury events without amount or description, payroll events without name or amount
+  const { runTreasuryEventPrivacyTests } = await import('../regression/treasuryEventPrivacyTests.js');
+  results.push(...await runTreasuryEventPrivacyTests(shouldRun));
   // v10.1.62 closing sweep (ت۴۰ item 11, OBS-R2-13): cheque status and payslip approval / payment domain events
   const { runClosingDomainEventsTests } = await import('../regression/closingDomainEventsTests.js');
   results.push(...await runClosingDomainEventsTests(shouldRun));
@@ -11158,6 +11161,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // 10.2 package 2: the project page's step bar counts
   const { runProjectWorkspaceStepsTests } = await import('../regression/projectWorkspaceStepsTests.js');
   results.push(...await runProjectWorkspaceStepsTests(shouldRun));
+  // 10.2 package 6 (D-04 part A): item ↔ shop product links and the batched stock push (OBS-R2-83)
+  const { runWooCatalogSyncTests } = await import('../regression/wooCatalogSyncTests.js');
+  results.push(...await runWooCatalogSyncTests(shouldRun));
   // 10.2 package 9: the group dashboard (birthdays, greetings, presence, whats-new; TD-1300)
   const { runSocialDashboardTests } = await import('../regression/socialDashboardTests.js');
   results.push(...await runSocialDashboardTests(shouldRun));

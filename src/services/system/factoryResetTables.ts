@@ -11,13 +11,13 @@ import {
   workflowHistoryLogs, workflowPendingApprovals, workflowDelegations,
   workflowDefinitionVersions, workflowTransitions, workflowStates, workflowDefinitions,
   eventActionLogs, eventActionRules, webhookDeliveries, webhookSubscriptions,
-  projectBomAllocations, formDrafts, idempotencyKeys, woocommerceOrderLogs,
+  projectBomAllocations, formDrafts, idempotencyKeys, woocommerceOrderLogs, wcProductLinks, wcSyncRuns,
   documentRefCounters, itemCodeCounters, purchaseRequisitions, appSettings,
   fiscalPeriods, fileAttachments, legacyDateRepairs, refFiscalYearCorrections, workflowTaskReopenLog,
   projectReservationReleases, inventoryReconciliationAnomalies, itemWarehouseStocks,
   integrationDeliveryJobs, eventActionRuleRetirements, webhookEventPatternRepairs, itemPriceTitleCleanup,
   dailyLogVisibilityRepairs, statutoryRemittanceLines, payrollStatutoryRates, payrollEidiRates, itemCodeHistory,
-  mediaAssets, mediaSections, messengerLinkCodes, userMessengerLinks, userNotificationPreferences, messengerBots,
+  mediaAssets, mediaSections, messengerLinkCodes, userMessengerLinks, userNotificationPreferences, messengerBots, userSessions,
 } from '../../db/schema.js';
 
 /**
@@ -44,6 +44,8 @@ export const FACTORY_RESET_WIPE_ORDER: readonly FactoryResetWipe[] = [
   { name: 'dead_letter_events', table: deadLetterEvents },
   { name: 'outbox_events', table: outboxEvents },
   { name: 'woocommerce_order_logs', table: woocommerceOrderLogs },
+  { name: 'wc_product_links', table: wcProductLinks },
+  { name: 'wc_sync_runs', table: wcSyncRuns },
   { name: 'idempotency_keys', table: idempotencyKeys },
   { name: 'form_drafts', table: formDrafts },
   { name: 'activity_logs', table: activityLogs },
@@ -146,6 +148,7 @@ export const FACTORY_RESET_WIPE_ORDER: readonly FactoryResetWipe[] = [
   { name: 'user_messenger_links', table: userMessengerLinks },
   { name: 'user_notification_preferences', table: userNotificationPreferences },
   { name: 'messenger_bots', table: messengerBots },
+  { name: 'user_sessions', table: userSessions },
   { name: 'users', table: users },
 ];
 
