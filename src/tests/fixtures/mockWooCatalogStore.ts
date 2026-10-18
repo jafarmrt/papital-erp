@@ -6,8 +6,12 @@ import http from 'http';
  * `POST products/<id>/variations/batch`), records every request and every stock it was sent, and answers a row error for
  * the ids in `rowErrors`. No real shop is ever called.
  */
-export interface MockVariation { id: number; sku: string; stock?: number | null }
-export interface MockProduct { id: number; sku: string; name?: string; stock?: number | null; variations?: MockVariation[] }
+export interface MockVariation { id: number; sku: string; stock?: number | null; manageStock?: boolean | 'parent' }
+export interface MockProduct {
+  id: number; sku: string; name?: string; stock?: number | null; variations?: MockVariation[];
+  /** WooCommerce product type; `variable` when the product has variations, else `simple` */
+  type?: string;
+}
 
 export interface MockWooCatalogStore {
   url: string;
@@ -21,15 +25,27 @@ export interface MockWooCatalogStore {
   rowErrors: Set<number>;
   /** when set, every request answers this status (a shop that is down or refuses the keys) */
   failStatus?: number;
+  /** catalog pages after the first start one row early, so their first row repeats the last row of the page before (a date
+   * order without a tie-breaker): only for a request without `orderby=id&order=asc`, or for every request with `always` */
+  unstableOrder?: 'without_id_order' | 'always';
+  /** the most requests the shop was answering at the same time */
+  maxInFlight: number;
+  /** each answer waits this long (a slow shop) */
+  delayMs?: number;
+  /** the query of every request, in order */
+  queries: URLSearchParams[];
   close(): Promise<void>;
 }
 
 const PREFIX = '/wp-json/wc/v3/';
 
-function page<T>(rows: T[], url: URL): T[] {
+function page<T>(rows: T[], url: URL, store: MockWooCatalogStore): T[] {
   const perPage = Number(url.searchParams.get('per_page') || 10);
   const n = Number(url.searchParams.get('page') || 1);
-  return rows.slice((n - 1) * perPage, n * perPage);
+  const stable = url.searchParams.get('orderby') === 'id' && url.searchParams.get('order') === 'asc';
+  const shifted = store.unstableOrder === 'always' || (store.unstableOrder === 'without_id_order' && !stable);
+  const start = (n - 1) * perPage - (shifted && n > 1 ? 1 : 0);
+  return rows.slice(start, start + perPage);
 }
 
 function batchAnswer(store: MockWooCatalogStore, body: string): unknown {
@@ -46,14 +62,20 @@ function batchAnswer(store: MockWooCatalogStore, body: string): unknown {
 }
 
 export async function mockWooCatalogStore(products: MockProduct[]): Promise<MockWooCatalogStore> {
-  const store = { pushed: new Map(), requests: [], batchSizes: [], rowErrors: new Set() } as unknown as MockWooCatalogStore;
+  const store = { pushed: new Map(), requests: [], batchSizes: [], rowErrors: new Set(), queries: [], maxInFlight: 0 } as unknown as MockWooCatalogStore;
   const byId = new Map(products.map(p => [p.id, p]));
+  let inFlight = 0;
   const server = http.createServer((req, res) => {
     const url = new URL(req.url || '/', 'http://127.0.0.1');
     const path = url.pathname.startsWith(PREFIX) ? url.pathname.slice(PREFIX.length) : url.pathname;
     let body = '';
     req.on('data', chunk => { body += String(chunk); });
-    req.on('end', () => {
+    req.on('end', () => void (async () => {
+      inFlight++;
+      store.maxInFlight = Math.max(store.maxInFlight, inFlight);
+      if (store.delayMs) await new Promise(resolve => setTimeout(resolve, store.delayMs));
+      inFlight--;
+      store.queries.push(url.searchParams);
       store.requests.push(`${req.method} ${path}${url.searchParams.get('page') ? `?page=${url.searchParams.get('page')}` : ''}`);
       res.setHeader('Content-Type', 'application/json');
       const send = (data: unknown) => res.end(JSON.stringify(data));
@@ -63,8 +85,8 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
         return;
       }
       if (req.method === 'GET' && path === 'products') {
-        send(page(products, url).map(p => ({
-          id: p.id, name: p.name ?? `محصول ${p.id}`, sku: p.sku, type: p.variations ? 'variable' : 'simple',
+        send(page(products, url, store).map(p => ({
+          id: p.id, name: p.name ?? `محصول ${p.id}`, sku: p.sku, type: p.type ?? (p.variations ? 'variable' : 'simple'),
           stock_quantity: p.stock ?? null, manage_stock: p.stock !== undefined && p.stock !== null,
         })));
         return;
@@ -72,7 +94,10 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
       const variations = path.match(/^products\/(\d+)\/variations$/);
       if (req.method === 'GET' && variations) {
         const rows = byId.get(Number(variations[1]))?.variations ?? [];
-        send(page(rows, url).map(v => ({ id: v.id, sku: v.sku, stock_quantity: v.stock ?? null, manage_stock: v.stock !== undefined && v.stock !== null })));
+        send(page(rows, url, store).map(v => ({
+          id: v.id, sku: v.sku, stock_quantity: v.stock ?? null,
+          manage_stock: v.manageStock ?? (v.stock !== undefined && v.stock !== null),
+        })));
         return;
       }
       if (req.method === 'POST' && (path === 'products/batch' || /^products\/\d+\/variations\/batch$/.test(path))) {
@@ -81,7 +106,7 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
       }
       res.statusCode = 404;
       send({ code: 'rest_no_route', message: 'مسیر پیدا نشد' });
-    });
+    })());
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', () => resolve()));
   const address = server.address();

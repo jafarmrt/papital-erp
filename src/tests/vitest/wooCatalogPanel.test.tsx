@@ -9,7 +9,7 @@ import React from 'react';
 import { toast } from 'react-hot-toast';
 import { fetchJson } from '../../api';
 import { WcCatalogPanel } from '../../components/settings/WcCatalogPanel';
-import { WC_UNMATCHED_REASON_LABELS, catalogRefreshMessage, chunked, siteStockQuantity, type WcCatalogReport } from '../../lib/woocommerce/wcCatalog';
+import { WC_UNMATCHED_REASON_LABELS, catalogCapNotice, catalogRefreshMessage, chunked, siteStockQuantity, type WcCatalogReport } from '../../lib/woocommerce/wcCatalog';
 
 vi.mock('../../api', async () => {
   const actual = await vi.importActual<typeof import('../../api')>('../../api');
@@ -37,11 +37,12 @@ const report: WcCatalogReport = {
   itemsNotOnSiteTotal: 1,
   failing: [{ itemId: 8, code: 'PR-8', name: 'دستبند', error: 'محصول در سایت پیدا نشد' }],
   failingTotal: 1,
+  catalogTruncated: false,
 };
 
-function serve(refreshAnswer: unknown = { success: true, message: 'پیام کارساز' }) {
+function serve(refreshAnswer: unknown = { success: true, message: 'پیام کارساز' }, catalog: WcCatalogReport = report) {
   vi.mocked(fetchJson).mockImplementation(async (url: string) => {
-    if (url === '/woocommerce/catalog') return report;
+    if (url === '/woocommerce/catalog') return catalog;
     if (url === '/woocommerce/refresh-products') return refreshAnswer;
     return [];
   });
@@ -66,9 +67,29 @@ describe('D-04 the catalog helpers', () => {
       .toBe('۱۲۰ محصول سایت خوانده شد و ۱۰۰ کالا به محصول سایت وصل است.');
     expect(catalogRefreshMessage({ siteProductCount: 5, linkedCount: 3, unmatchedTotal: 2 })).toContain('۲ محصول سایت به هیچ کالایی وصل نشد');
   });
+
+  it('review N-2: a refresh stopped at the product cap says so', () => {
+    expect(catalogCapNotice()).toContain('۱۰٬۰۰۰');
+    expect(catalogRefreshMessage({ siteProductCount: 10000, linkedCount: 9000, unmatchedTotal: 0, catalogTruncated: true }))
+      .toContain(catalogCapNotice());
+    expect(catalogRefreshMessage({ siteProductCount: 10, linkedCount: 9, unmatchedTotal: 0 })).not.toContain(catalogCapNotice());
+  });
 });
 
 describe('D-04 the item ↔ shop product links panel', () => {
+  it('review N-2: the panel keeps the cap notice while the last reading stopped at the cap', async () => {
+    serve(undefined, { ...report, catalogTruncated: true });
+    render(<WcCatalogPanel canManage={false} stockPushRunning={false} />, { wrapper });
+    expect(await screen.findByText(catalogCapNotice())).toBeTruthy();
+  });
+
+  it('review N-2: no cap notice for a full reading', async () => {
+    serve();
+    render(<WcCatalogPanel canManage={false} stockPushRunning={false} />, { wrapper });
+    expect(await screen.findByText('۱۲')).toBeTruthy();
+    expect(screen.queryByText(catalogCapNotice())).toBeNull();
+  });
+
   it('a reader sees the links, the runs and the lists, and no refresh button', async () => {
     serve();
     render(<WcCatalogPanel canManage={false} stockPushRunning={false} />, { wrapper });

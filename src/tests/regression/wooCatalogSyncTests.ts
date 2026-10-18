@@ -22,6 +22,15 @@ export async function runWooCatalogSyncTests(shouldRun: ShouldRun): Promise<Test
     ['reg_wc_shop_errors_visible_d04',
       'D-04: an item the shop has no product for is 422 WC_ITEM_NOT_LINKED, a failing shop is 422 WC_SHOP_REQUEST_FAILED with a Persian message and a failed run in the tab, never a 500',
       ['d04', 'woocommerce', 'errors'], shopErrorsCase],
+    ['reg_wc_catalog_stable_order_d04',
+      'D-04 review H-1 / M-6: the catalog is read in id order, a product read on two pages is one product, and variation lists are read a few at a time',
+      ['d04', 'woocommerce', 'catalog', 'review'], stableOrderCase],
+    ['reg_wc_catalog_skips_stock_mode_d04',
+      'D-04 review M-1 / M-2 / N-3 / N-4 / N-5: a variation whose stock the parent holds and an external or grouped product are listed, never linked; an item two earlier codes reach is ambiguous; a deleted item is never pushed; a failed refresh keeps the lists',
+      ['d04', 'woocommerce', 'catalog', 'review'], skippedProductsCase],
+    ['reg_wc_catalog_deadline_cap_d04',
+      'D-04 review M-6 / N-1 / N-2: a refresh past its deadline and one stopped by the address guard are failed runs that change no link, and a reading cut at the product cap leaves the links of products it did not reach',
+      ['d04', 'woocommerce', 'catalog', 'review'], deadlineAndCapCase],
     ['reg_wc_synced_orders_by_log_obs_r2_83',
       'OBS-R2-83: the synced-orders list shows the invoices the order log names, not invoices whose notes mention an online order',
       ['obs_r2_83', 'woocommerce', 'orders'], syncedOrdersCase],
@@ -232,4 +241,147 @@ async function syncedOrdersCase(h: Harness, wrong: string[]): Promise<string> {
   } finally {
     await h.q(`DELETE FROM woocommerce_order_logs WHERE wc_order_id = $1`, [orderId]);
   }
+}
+
+type CatalogBody = {
+  unmatched?: Array<{ productId: number; variationId: number; reason: string }>;
+  unmatchedTotal?: number;
+  linkedCount?: number;
+  lastRefresh?: { status?: string };
+};
+
+async function stableOrderCase(h: Harness, wrong: string[]): Promise<string> {
+  const edge = await newItem(h, 'EDGE');
+  const fillers: MockProduct[] = Array.from({ length: 149 }, (_, i) => ({ id: 1000 + i, sku: `ORD_${h.tag}_${i}` }));
+  // product 1099 is the last row of page 1; a date order without a tie-breaker shows it again first on page 2
+  fillers[99] = { id: 1099, sku: edge.code };
+  const variable: MockProduct[] = Array.from({ length: 10 }, (_, i) => ({
+    id: 3000 + i, sku: `VAR_${h.tag}_${i}`, variations: [{ id: 30000 + i, sku: `VARV_${h.tag}_${i}` }],
+  }));
+  return withShop(h, [...fillers, ...variable], async (store) => {
+    store.unstableOrder = 'without_id_order';
+    store.delayMs = 20;
+    const res = await h.post('/api/woocommerce/refresh-products', {});
+    if (res.status !== 200) {
+      wrong.push(`refresh answered ${brief(res)}, expected 200`);
+      return 'refresh refused';
+    }
+    const pageQueries = store.queries.filter(q => q.has('page'));
+    if (pageQueries.some(q => q.get('orderby') !== 'id' || q.get('order') !== 'asc')) wrong.push('a catalog page was asked without orderby=id&order=asc');
+    const links = await linksOf(h, [edge.id]);
+    if (links.get(edge.id)?.product !== 1099) wrong.push(`the product on the page edge was not linked: ${JSON.stringify(links.get(edge.id) ?? null)}`);
+    const body = res.body as { unmatched?: Array<{ productId: number; reason: string }> };
+    if (body.unmatched?.some(u => u.reason === 'duplicate_sku')) wrong.push('a product read on two pages was reported as a duplicate of itself');
+    if (store.maxInFlight < 2 || store.maxInFlight > 4) wrong.push(`variation lists were read ${store.maxInFlight} at a time, expected 2 to 4`);
+
+    // a shop that repeats a row whatever the order: still one product
+    store.unstableOrder = 'always';
+    const again = await h.post('/api/woocommerce/refresh-products', {});
+    const againBody = again.body as { unmatched?: Array<{ reason: string }>; closedCount?: number };
+    if (again.status !== 200 || againBody.unmatched?.some(u => u.reason === 'duplicate_sku') || againBody.closedCount !== 0) {
+      wrong.push(`a repeated row was not read once: ${brief(again)}`);
+    }
+    return `${store.requests.length} shop requests, at most ${store.maxInFlight} at once`;
+  });
+}
+
+async function skippedProductsCase(h: Harness, wrong: string[]): Promise<string> {
+  const parentStock = await newItem(h, 'PS', { '': 2 });
+  const external = await newItem(h, 'EX', { '': 2 });
+  const ambiguous = await newItem(h, 'AM', { '': 2 });
+  const deleted = await newItem(h, 'DL', { '': 5 });
+  const kept = await newItem(h, 'KP', { '': 3 });
+  const old1 = `OLD1_${h.tag}`;
+  const old2 = `OLD2_${h.tag}`;
+  await h.q(`INSERT INTO item_code_history (item_id, old_code, new_code, reason) VALUES ($1, $2, $3, 'آزمون'), ($1, $4, $3, 'آزمون')`,
+    [ambiguous.id, old1, ambiguous.code, old2]);
+  const products: MockProduct[] = [
+    { id: 10, sku: `PAR_${h.tag}`, variations: [{ id: 101, sku: parentStock.code, manageStock: 'parent' }] },
+    { id: 11, sku: external.code, type: 'external' },
+    { id: 12, sku: '', type: 'grouped' },
+    { id: 13, sku: old1 }, { id: 14, sku: old2 },
+    { id: 15, sku: deleted.code, stock: 5 },
+    { id: 16, sku: kept.code, stock: 3 },
+  ];
+  return withShop(h, products, async (store) => {
+    const res = await h.post('/api/woocommerce/refresh-products', {});
+    if (res.status !== 200) {
+      wrong.push(`refresh answered ${brief(res)}, expected 200`);
+      return 'refresh refused';
+    }
+    const body = res.body as CatalogBody;
+    const reasonOf = (productId: number, variationId = 0) => body.unmatched?.find(u => u.productId === productId && u.variationId === variationId)?.reason;
+    if (reasonOf(10, 101) !== 'parent_stock') wrong.push(`a variation whose stock the parent holds: ${reasonOf(10, 101)}`);
+    if (reasonOf(11) !== 'no_stock_type' || reasonOf(12) !== 'no_stock_type') wrong.push(`external / grouped: ${reasonOf(11)} / ${reasonOf(12)}`);
+    if (reasonOf(13) !== 'item_ambiguous' || reasonOf(14) !== 'item_ambiguous') wrong.push(`two earlier codes of one item: ${reasonOf(13)} / ${reasonOf(14)}`);
+    const links = await linksOf(h, [parentStock.id, external.id, ambiguous.id, deleted.id, kept.id]);
+    for (const [label, id] of [['parent stock', parentStock.id], ['external', external.id], ['ambiguous', ambiguous.id]] as const) {
+      if (links.has(id)) wrong.push(`the ${label} item got a link`);
+    }
+    if (!links.has(deleted.id) || !links.has(kept.id)) wrong.push('the two ordinary products were not linked');
+
+    const [audit] = await h.q(`SELECT description FROM activity_logs WHERE action = 'WC_CATALOG_REFRESH' ORDER BY id DESC LIMIT 1`);
+    if (/[0-9]/.test(String(audit?.description ?? ''))) wrong.push(`the refresh audit row prints Latin digits: ${audit?.description}`);
+
+    // an item deleted in the program is never pushed and no longer counts as linked
+    await h.q(`UPDATE items SET is_deleted = 1 WHERE id = $1`, [deleted.id]);
+    const push = await h.post('/api/woocommerce/sync-all-stocks', {});
+    if (push.status !== 200 || store.pushed.has(15) || store.pushed.get(16) !== 3) {
+      wrong.push(`push after a delete answered ${brief(push)}, pushed ${JSON.stringify([...store.pushed])}`);
+    }
+    if ((push.body as { totalItems?: number }).totalItems !== 1) wrong.push(`push counted ${(push.body as { totalItems?: number }).totalItems} items, expected 1`);
+    if (store.requests.some(r => r.startsWith('POST') && r.includes('variations'))) wrong.push('a variation whose stock the parent holds was pushed');
+
+    // a failed refresh keeps the lists of the last reading
+    store.failStatus = 500;
+    await h.post('/api/woocommerce/refresh-products', {});
+    const catalog = (await h.get('/api/woocommerce/catalog')).body as CatalogBody;
+    if (catalog.lastRefresh?.status !== 'failed') wrong.push(`last refresh ${catalog.lastRefresh?.status}, expected failed`);
+    if (!catalog.unmatched?.some(u => u.productId === 11) || (catalog.unmatchedTotal ?? 0) < 5) wrong.push('a failed refresh emptied the unmatched list');
+    if (catalog.linkedCount !== 1) wrong.push(`linked count ${catalog.linkedCount}, expected 1 without the deleted item`);
+    return `${store.requests.length} shop requests`;
+  });
+}
+
+async function deadlineAndCapCase(h: Harness, wrong: string[]): Promise<string> {
+  const { refreshCatalogLocked, applyCatalogLinks } = await import('../../services/woocommerce/wcCatalog.service.js');
+  const far = await newItem(h, 'FAR');
+  const near = await newItem(h, 'NEAR');
+  return withShop(h, [{ id: 1, sku: near.code }], async (store) => {
+    // a link of a product past the cap (id 999) and a reading that stopped at the cap
+    await h.q(`INSERT INTO wc_product_links (item_id, wc_product_id, wc_variation_id, site_sku) VALUES ($1, 999, 0, $2)`, [far.id, far.code]);
+    const capped = await applyCatalogLinks({
+      site: [
+        { productId: 1, variationId: 0, name: 'n', sku: near.code, stock: null, manageStock: false },
+        { productId: 2, variationId: 0, name: 'f', sku: far.code, stock: null, manageStock: false },
+      ],
+      skipped: [], truncated: true, productIds: new Set([1, 2]),
+    }, {});
+    const links = await linksOf(h, [far.id, near.id]);
+    if (links.get(far.id)?.product !== 999) wrong.push(`the link past the cap was changed: ${JSON.stringify(links.get(far.id) ?? null)}`);
+    if (links.get(near.id)?.product !== 1) wrong.push('the product read before the cap was not linked');
+    if (!capped.catalogTruncated || capped.closedCount !== 0) wrong.push(`capped summary ${JSON.stringify(capped).slice(0, 200)}`);
+    if (capped.unmatched.find(u => u.productId === 2)?.reason !== 'item_taken') wrong.push('a product of an item linked past the cap was not listed as taken');
+
+    // a refresh past its deadline aborts, records a failed run and changes no link
+    await h.q(`DELETE FROM wc_sync_runs`);
+    store.delayMs = 400;
+    const before = await h.q(`SELECT id FROM wc_product_links WHERE is_deleted = 0 ORDER BY id`);
+    const late = await refreshCatalogLocked({}, undefined, { deadlineMs: 150 }).then(() => null, (err: unknown) => err as { code?: string });
+    if (late?.code !== 'WC_SHOP_REQUEST_FAILED') wrong.push(`a refresh past its deadline ended with ${JSON.stringify(late)}`);
+    const after = await h.q(`SELECT id FROM wc_product_links WHERE is_deleted = 0 ORDER BY id`);
+    if (JSON.stringify(before) !== JSON.stringify(after)) wrong.push('a refresh past its deadline changed the links');
+    const runs = await h.q(`SELECT status FROM wc_sync_runs WHERE kind = 'refresh'`);
+    if (runs.length !== 1 || runs[0].status !== 'failed') wrong.push(`runs after the deadline: ${JSON.stringify(runs)}`);
+
+    // the address guard refusing the shop is a failed run too
+    store.delayMs = 0;
+    await h.q(`DELETE FROM wc_sync_runs`);
+    await h.q(`UPDATE app_settings SET value = 'http://shop-d04.invalid' WHERE key = 'wc_store_url'`);
+    const refused = await h.post('/api/woocommerce/refresh-products', {});
+    if (refused.status !== 422) wrong.push(`a shop the address guard refuses answered ${brief(refused)}, expected 422`);
+    const guardRuns = await h.q(`SELECT status FROM wc_sync_runs WHERE kind = 'refresh'`);
+    if (guardRuns.length !== 1 || guardRuns[0].status !== 'failed') wrong.push(`runs after the guard refused: ${JSON.stringify(guardRuns)}`);
+    return 'cap, deadline and guard';
+  });
 }

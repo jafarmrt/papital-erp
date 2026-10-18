@@ -1,11 +1,13 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { items, wcProductLinks, wcSyncRuns } from '../../db/schema.js';
+import { items, wcSyncRuns } from '../../db/schema.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { chunked, siteStockQuantity, WC_LIST_LIMIT } from '../../lib/woocommerce/wcCatalog.js';
 import { shopSellableStocks } from './shopWarehouse.js';
+import { updateLinkRows } from './wcLinkUpdates.js';
+import { formatPersianNumber } from '../../utils/persianNumber.js';
 import { requireWcConnection, wcRequest, WC_SHOP_REQUEST_FAILED, type WcConnection } from './wcClient.js';
 import {
   actorUserId, hasLiveLinks, liveLinks, refreshCatalogLocked, withWcSyncLock, type WcActor, type WcRefreshSummary,
@@ -86,12 +88,13 @@ async function recordOutcomes(outcomes: Outcome[], skippedCount: number, totalIt
     totalItems, syncedCount: outcomes.length - failed.length, failedCount: failed.length, skippedCount, errors: errors.slice(0, WC_LIST_LIMIT),
   };
   await orm.transaction(async (tx) => {
-    for (const o of outcomes) {
-      await tx.update(wcProductLinks).set(o.error
-        ? { lastError: o.error, failureCount: sql`${wcProductLinks.failureCount} + 1`, updatedAt: now }
-        : { siteStock: o.quantity, siteManageStock: 1, lastPushedAt: now, lastError: '', failureCount: 0, updatedAt: now })
-        .where(eq(wcProductLinks.id, o.link.id));
-    }
+    // review M-3: one UPDATE per batch of links; the failure count is the one read with the links, under the sync lock
+    await updateLinkRows(tx, outcomes.map(o => ({
+      id: o.link.id,
+      values: o.error
+        ? { lastError: o.error, failureCount: o.link.failureCount + 1 }
+        : { siteStock: o.quantity, siteManageStock: 1, lastPushedAt: now, lastError: '', failureCount: 0 },
+    })), now);
     const status = failed.length === 0 ? 'ok' : failed.length === outcomes.length ? 'failed' : 'partial';
     await tx.insert(wcSyncRuns).values({
       kind: 'stock_push', status, userId: actorUserId(actor), startedAt: now, finishedAt: now,
@@ -99,7 +102,7 @@ async function recordOutcomes(outcomes: Outcome[], skippedCount: number, totalIt
     });
     await logActivity({
       tx, req: actor.req, action: 'WC_STOCK_PUSH', entity: 'فروشگاه اینترنتی', entityId: '',
-      description: `ارسال موجودی به سایت: ${result.syncedCount} محصول به‌روز شد، ${result.failedCount} ناموفق`,
+      description: `ارسال موجودی به سایت: ${formatPersianNumber(result.syncedCount)} محصول به‌روز شد، ${formatPersianNumber(result.failedCount)} ناموفق`,
       details: { trigger, totalItems, syncedCount: result.syncedCount, failedCount: result.failedCount, skippedCount },
     });
   });

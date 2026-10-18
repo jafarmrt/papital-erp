@@ -1,16 +1,20 @@
-import { and, asc, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, inArray, isNull, ne, sql } from 'drizzle-orm';
 import type { Request } from 'express';
-import { orm } from '../../db/drizzle.js';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { items, wcProductLinks, wcSyncRuns } from '../../db/schema.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { ADVISORY_LOCK_KEYS, withAdvisoryLock } from '../../lib/advisoryLock.js';
-import { ConflictError, ValidationError } from '../../errors/customErrors.js';
+import { AppError, ConflictError, ValidationError } from '../../errors/customErrors.js';
+import { logger } from '../../middleware/logger.js';
+import { errorMessageOf } from '../../utils/formatters.js';
 import {
-  WC_BATCH_SIZE, WC_LIST_LIMIT, WC_MAX_CATALOG_PAGES,
+  chunked, WC_BATCH_SIZE, WC_LIST_LIMIT, WC_MAX_CATALOG_PAGES,
   type WcCatalogItem, type WcCatalogReport, type WcRunView, type WcUnmatchedProduct,
 } from '../../lib/woocommerce/wcCatalog.js';
 import { resolveItemsByCode } from '../items/itemCodeChange.js';
 import { requireWcConnection, wcRequest, WC_SHOP_REQUEST_FAILED, type WcConnection } from './wcClient.js';
+import { updateLinkRows, type LinkRowUpdate } from './wcLinkUpdates.js';
+import { formatPersianNumber } from '../../utils/persianNumber.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { serverTimestampToUtcIso } from '../../lib/serverTimestamp.js';
 
@@ -48,6 +52,25 @@ interface RawProduct {
   manage_stock?: unknown;
 }
 
+/** One reading of the shop's catalog */
+export interface SiteCatalog {
+  /** products and variations that hold their own stock */
+  site: SiteProduct[];
+  /** products read but never linked, with the reason (a variation whose stock the parent holds, an external product) */
+  skipped: WcUnmatchedProduct[];
+  /** the shop had more products than one refresh reads (`WC_MAX_CATALOG_PRODUCTS`) */
+  truncated: boolean;
+  /** every product id read, so a link of a product past the cap is left as it is */
+  productIds: Set<number>;
+}
+
+/** review M-6: one refresh never holds the lock longer than this (under the 60 s of a reverse proxy) */
+export const WC_CATALOG_DEADLINE_MS = 50_000;
+/** variation lists read at the same time */
+export const WC_VARIATION_READ_CONCURRENCY = 4;
+/** product types that hold no stock of their own in WooCommerce */
+const NO_STOCK_TYPES = new Set(['external', 'grouped']);
+
 function asRows(answer: unknown): RawProduct[] {
   if (!Array.isArray(answer)) {
     throw new ValidationError('پاسخ سایت فهرست محصولات نبود؛ نشانی سایت و افزونه ووکامرس را بررسی کنید.', undefined, WC_SHOP_REQUEST_FAILED);
@@ -60,43 +83,89 @@ function stockOf(raw: RawProduct): number | null {
   return raw.stock_quantity === null || raw.stock_quantity === undefined || !Number.isFinite(n) ? null : Math.trunc(n);
 }
 
-async function readPages(conn: WcConnection, path: string, fields: string): Promise<RawProduct[]> {
+/**
+ * Every page of a list in id order (review H-1: the default date order has no tie-breaker, so a product could be read on
+ * two pages and be reported as a duplicate of itself); a row read twice is kept once
+ */
+async function readPages(conn: WcConnection, path: string, fields: string, signal?: AbortSignal): Promise<{ rows: RawProduct[]; truncated: boolean }> {
   const rows: RawProduct[] = [];
+  const seen = new Set<number>();
   for (let page = 1; page <= WC_MAX_CATALOG_PAGES; page++) {
-    const batch = asRows(await wcRequest(conn, 'GET', path, null, { per_page: WC_BATCH_SIZE, page, status: 'any', _fields: fields }));
-    rows.push(...batch);
-    if (batch.length < WC_BATCH_SIZE) break;
+    const batch = asRows(await wcRequest(conn, 'GET', path, null, {
+      per_page: WC_BATCH_SIZE, page, status: 'any', orderby: 'id', order: 'asc', _fields: fields,
+    }, { signal }));
+    for (const row of batch) {
+      const id = Number(row.id);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      rows.push(row);
+    }
+    if (batch.length < WC_BATCH_SIZE) return { rows, truncated: false };
   }
-  return rows;
+  return { rows, truncated: true };
 }
 
-/** Every product of the shop, and every variation with its own SKU (one that inherits its parent's SKU is the parent) */
-export async function readSiteCatalog(conn: WcConnection): Promise<SiteProduct[]> {
-  const products = await readPages(conn, 'products', 'id,name,sku,type,stock_quantity,manage_stock');
+/** `fn` over `inputs`, at most `limit` at a time, results in input order */
+async function mapLimited<T, R>(inputs: T[], limit: number, fn: (input: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(inputs.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < inputs.length) {
+      const i = next++;
+      out[i] = await fn(inputs[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, inputs.length) }, worker));
+  return out;
+}
+
+/**
+ * Every product of the shop, and every variation with its own SKU (one that inherits its parent's SKU is the parent). A
+ * variation whose stock the parent holds (`manage_stock: "parent"`) and an external or grouped product are listed, never
+ * linked, so a push never changes how the shop keeps their stock (review M-1 / N-4).
+ */
+export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal): Promise<SiteCatalog> {
+  const { rows: products, truncated } = await readPages(conn, 'products', 'id,name,sku,type,stock_quantity,manage_stock', signal);
   const site: SiteProduct[] = [];
+  const skipped: WcUnmatchedProduct[] = [];
+  const productIds = new Set<number>();
+  const variable: Array<{ productId: number; name: string; sku: string }> = [];
   for (const p of products) {
     const productId = Number(p.id);
     if (!Number.isInteger(productId) || productId <= 0) continue;
+    productIds.add(productId);
     const name = String(p.name ?? '');
     const sku = String(p.sku ?? '').trim();
+    if (NO_STOCK_TYPES.has(String(p.type))) {
+      skipped.push({ productId, variationId: 0, name, sku, reason: 'no_stock_type' });
+      continue;
+    }
     site.push({ productId, variationId: 0, name, sku, stock: stockOf(p), manageStock: p.manage_stock === true });
-    if (p.type !== 'variable') continue;
-    const variations = await readPages(conn, `products/${productId}/variations`, 'id,sku,stock_quantity,manage_stock');
-    for (const v of variations) {
+    if (p.type === 'variable') variable.push({ productId, name, sku });
+  }
+  const variationLists = await mapLimited(variable, WC_VARIATION_READ_CONCURRENCY,
+    v => readPages(conn, `products/${v.productId}/variations`, 'id,sku,stock_quantity,manage_stock', signal));
+  variable.forEach(({ productId, name, sku }, i) => {
+    for (const v of variationLists[i].rows) {
       const variationId = Number(v.id);
       const vSku = String(v.sku ?? '').trim();
       if (!Number.isInteger(variationId) || variationId <= 0 || (vSku !== '' && vSku === sku)) continue;
-      // «parent» means the variation's stock is held by the parent product
+      if (v.manage_stock === 'parent') {
+        skipped.push({ productId, variationId, name, sku: vSku, reason: 'parent_stock' });
+        continue;
+      }
       site.push({ productId, variationId, name, sku: vSku, stock: stockOf(v), manageStock: v.manage_stock === true });
     }
-  }
-  return site;
+  });
+  return { site, skipped, truncated, productIds };
 }
 
 interface Match { site: SiteProduct; itemId: number }
 
-/** Which shop product each item gets, and why the others get none */
-export async function matchSiteCatalog(site: SiteProduct[]): Promise<{ matches: Match[]; unmatched: WcUnmatchedProduct[] }> {
+/** Which shop product each item gets, and why the others get none; `heldItemIds` are items a link outside this reading keeps */
+export async function matchSiteCatalog(
+  executor: DbExecutor, site: SiteProduct[], heldItemIds: ReadonlySet<number> = new Set(),
+): Promise<{ matches: Match[]; unmatched: WcUnmatchedProduct[] }> {
   const unmatched: WcUnmatchedProduct[] = [];
   const note = (p: SiteProduct, reason: WcUnmatchedProduct['reason']) =>
     unmatched.push({ productId: p.productId, variationId: p.variationId, name: p.name, sku: p.sku, reason });
@@ -105,7 +174,7 @@ export async function matchSiteCatalog(site: SiteProduct[]): Promise<{ matches: 
     if (!p.sku) { note(p, 'no_sku'); continue; }
     bySku.set(p.sku, [...(bySku.get(p.sku) ?? []), p]);
   }
-  const resolved = await resolveItemsByCode(orm, [...bySku.keys()]);
+  const resolved = await resolveItemsByCode(executor, [...bySku.keys()]);
   const byItem = new Map<number, Array<{ site: SiteProduct; current: boolean }>>();
   for (const [sku, products] of bySku) {
     if (products.length > 1) { products.forEach(p => note(p, 'duplicate_sku')); continue; }
@@ -115,12 +184,13 @@ export async function matchSiteCatalog(site: SiteProduct[]): Promise<{ matches: 
   }
   const matches: Match[] = [];
   for (const [itemId, candidates] of byItem) {
+    if (heldItemIds.has(itemId)) { candidates.forEach(c => note(c.site, 'item_taken')); continue; }
     // the product with the item's current code wins over one still holding an earlier code
     const current = candidates.filter(c => c.current);
     const winner = candidates.length === 1 ? candidates[0] : current.length === 1 ? current[0] : null;
     for (const c of candidates) {
       if (c === winner) matches.push({ site: c.site, itemId });
-      else note(c.site, 'item_taken');
+      else note(c.site, winner ? 'item_taken' : 'item_ambiguous');
     }
   }
   return { matches, unmatched };
@@ -135,54 +205,68 @@ export interface WcRefreshSummary {
   closedCount: number;
   unmatchedTotal: number;
   unmatched: WcUnmatchedProduct[];
+  /** the shop had more products than one refresh reads; links of products past the cap were left as they are */
+  catalogTruncated: boolean;
 }
 
 /** Writes the links of one catalog reading (one transaction) and the run row and audit row with it */
-export async function applyCatalogLinks(site: SiteProduct[], actor: WcActor): Promise<WcRefreshSummary> {
-  const { matches, unmatched } = await matchSiteCatalog(site);
-  const wanted = new Map(matches.map(m => [keyOf(m.site.productId, m.site.variationId), m]));
+export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor): Promise<WcRefreshSummary> {
+  const { site, skipped, truncated, productIds } = catalog;
   return orm.transaction(async (tx) => {
     const live = await tx.select().from(wcProductLinks).where(eq(wcProductLinks.isDeleted, 0))
       .orderBy(asc(wcProductLinks.id)).for('update');
+    // a link of a product this reading did not reach (past the cap) is left as it is, and so is its item
+    const untouched = live.filter(l => !productIds.has(l.wcProductId));
+    const { matches, unmatched: notMatched } = await matchSiteCatalog(tx, site, new Set(untouched.map(l => l.itemId)));
+    const unmatched = [...skipped, ...notMatched];
+    const wanted = new Map(matches.map(m => [keyOf(m.site.productId, m.site.variationId), m]));
     const now = systemNowUtcIso();
     const kept = new Set<string>();
+    const updates: LinkRowUpdate[] = [];
     let closedCount = 0;
     for (const link of live) {
+      if (!productIds.has(link.wcProductId)) continue;
       const key = keyOf(link.wcProductId, link.wcVariationId);
       const match = wanted.get(key);
       if (match && match.itemId === link.itemId && !kept.has(key)) {
         kept.add(key);
-        await tx.update(wcProductLinks).set({
-          siteSku: match.site.sku, siteStock: match.site.stock, siteManageStock: match.site.manageStock ? 1 : 0,
-          lastReadAt: now, updatedAt: now,
-        }).where(eq(wcProductLinks.id, link.id));
+        updates.push({ id: link.id, values: {
+          siteSku: match.site.sku, siteStock: match.site.stock, siteManageStock: match.site.manageStock ? 1 : 0, lastReadAt: now,
+        } });
       } else {
         closedCount++;
-        await tx.update(wcProductLinks).set({ isDeleted: 1, updatedAt: now }).where(eq(wcProductLinks.id, link.id));
+        updates.push({ id: link.id, values: { isDeleted: 1 } });
       }
     }
+    await updateLinkRows(tx, updates, now);
     const fresh = matches.filter(m => !kept.has(keyOf(m.site.productId, m.site.variationId)));
-    if (fresh.length > 0) {
-      await tx.insert(wcProductLinks).values(fresh.map(m => ({
+    for (const part of chunked(fresh, 500)) {
+      await tx.insert(wcProductLinks).values(part.map(m => ({
         itemId: m.itemId, wcProductId: m.site.productId, wcVariationId: m.site.variationId, siteSku: m.site.sku,
         siteStock: m.site.stock, siteManageStock: m.site.manageStock ? 1 : 0, lastReadAt: now, createdAt: now, updatedAt: now,
       })));
     }
+    const linkedCount = matches.length + untouched.length;
     const summary: WcRefreshSummary = {
-      siteProductCount: site.length,
-      linkedCount: matches.length,
+      siteProductCount: site.length + skipped.length,
+      linkedCount,
       newCount: fresh.length,
       closedCount,
       unmatchedTotal: unmatched.length,
       unmatched: unmatched.slice(0, WC_LIST_LIMIT),
+      catalogTruncated: truncated,
     };
     await tx.insert(wcSyncRuns).values({
       kind: 'refresh', status: 'ok', userId: actorUserId(actor), startedAt: now, finishedAt: now, summary,
     });
+    const n = formatPersianNumber;
     await logActivity({
       tx, req: actor.req, action: 'WC_CATALOG_REFRESH', entity: WC_CATALOG_AUDIT_ENTITY, entityId: '',
-      description: `بازخوانی محصولات سایت: ${matches.length} کالا وصل، ${unmatched.length} محصول سایت بی کالا`,
-      details: { siteProductCount: site.length, linkedCount: matches.length, newCount: fresh.length, closedCount, unmatchedTotal: unmatched.length },
+      description: `بازخوانی محصولات سایت: ${n(linkedCount)} کالا وصل، ${n(unmatched.length)} محصول سایت بی کالا`,
+      details: {
+        siteProductCount: summary.siteProductCount, linkedCount, newCount: fresh.length, closedCount,
+        unmatchedTotal: unmatched.length, catalogTruncated: truncated,
+      },
     });
     return summary;
   });
@@ -194,12 +278,16 @@ export function actorUserId(actor: WcActor): number | undefined {
   return Number.isInteger(id) && id > 0 ? id : undefined;
 }
 
-/** A failed exchange with the shop stays visible in the tab */
+/** A failed exchange with the shop stays visible in the tab (review N-1: whatever stopped it, a DNS or redirect refusal too) */
 export async function recordFailedRun(kind: 'refresh' | 'stock_push', actor: WcActor, err: unknown): Promise<void> {
-  const message = err instanceof ValidationError ? err.message : 'ارتباط با سایت ناموفق بود.';
-  await orm.insert(wcSyncRuns).values({
-    kind, status: 'failed', userId: actorUserId(actor), finishedAt: systemNowUtcIso(), errorMessage: message.slice(0, 1000),
-  });
+  const message = err instanceof AppError && err.statusCode < 500 ? err.message : 'ارتباط با سایت ناموفق بود.';
+  try {
+    await orm.insert(wcSyncRuns).values({
+      kind, status: 'failed', userId: actorUserId(actor), finishedAt: systemNowUtcIso(), errorMessage: message.slice(0, 1000),
+    });
+  } catch (recordErr) {
+    logger.warn(`[WooCommerce] failed run not recorded: ${errorMessageOf(recordErr)}`);
+  }
 }
 
 /** Runs `fn` as the only exchange with the shop; another one at the same time is 409 `WC_SYNC_BUSY` */
@@ -210,13 +298,29 @@ export async function withWcSyncLock<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /** The refresh itself, for a caller that already holds the lock */
-export async function refreshCatalogLocked(actor: WcActor, conn?: WcConnection): Promise<WcRefreshSummary> {
+export async function refreshCatalogLocked(
+  actor: WcActor, conn?: WcConnection, options: { deadlineMs?: number } = {},
+): Promise<WcRefreshSummary> {
   const connection = conn ?? await requireWcConnection();
+  // review M-6: the whole reading has one deadline; past it every open request is aborted and the run is recorded as failed
+  const deadlineMs = options.deadlineMs ?? WC_CATALOG_DEADLINE_MS;
+  const deadline = new AbortController();
+  const timer = setTimeout(() => deadline.abort(), deadlineMs);
   try {
-    return await applyCatalogLinks(await readSiteCatalog(connection), actor);
+    const catalog = await readSiteCatalog(connection, deadline.signal);
+    clearTimeout(timer);
+    return await applyCatalogLinks(catalog, actor);
   } catch (err) {
-    if (err instanceof ValidationError && err.code === WC_SHOP_REQUEST_FAILED) await recordFailedRun('refresh', actor, err);
-    throw err;
+    const failure = deadline.signal.aborted
+      ? new ValidationError(
+        `بازخوانی محصولات سایت در ${formatPersianNumber(Math.ceil(deadlineMs / 1000))} ثانیه تمام نشد و پیوندها دست نخورد؛ کمی بعد دوباره بزنید.`,
+        undefined, WC_SHOP_REQUEST_FAILED,
+      )
+      : err;
+    await recordFailedRun('refresh', actor, failure);
+    throw failure;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -224,13 +328,18 @@ export function refreshWcCatalog(actor: WcActor): Promise<WcRefreshSummary> {
   return withWcSyncLock(() => refreshCatalogLocked(actor));
 }
 
+/** review M-2: a link counts only while its item is live; a link of an item deleted in the program is never pushed */
+const liveLinkWhere = and(eq(wcProductLinks.isDeleted, 0), eq(items.isDeleted, 0));
+
 export async function hasLiveLinks(): Promise<boolean> {
-  const [row] = await orm.select({ id: wcProductLinks.id }).from(wcProductLinks).where(eq(wcProductLinks.isDeleted, 0)).limit(1);
+  const [row] = await orm.select({ id: wcProductLinks.id }).from(wcProductLinks)
+    .innerJoin(items, eq(items.id, wcProductLinks.itemId)).where(liveLinkWhere).limit(1);
   return Boolean(row);
 }
 
-async function lastRun(kind: 'refresh' | 'stock_push'): Promise<WcRunView | null> {
-  const [run] = await orm.select().from(wcSyncRuns).where(eq(wcSyncRuns.kind, kind)).orderBy(desc(wcSyncRuns.id)).limit(1);
+async function lastRun(kind: 'refresh' | 'stock_push', okOnly = false): Promise<WcRunView | null> {
+  const where = okOnly ? and(eq(wcSyncRuns.kind, kind), ne(wcSyncRuns.status, 'failed')) : eq(wcSyncRuns.kind, kind);
+  const [run] = await orm.select().from(wcSyncRuns).where(where).orderBy(desc(wcSyncRuns.id)).limit(1);
   if (!run) return null;
   return {
     at: serverTimestampToUtcIso(run.finishedAt ?? run.startedAt),
@@ -242,16 +351,18 @@ async function lastRun(kind: 'refresh' | 'stock_push'): Promise<WcRunView | null
 
 /** What the WooCommerce tab shows about the links (`GET /woocommerce/catalog`) */
 export async function getWcCatalogReport(): Promise<WcCatalogReport> {
-  const [lastRefresh, lastPush] = await Promise.all([lastRun('refresh'), lastRun('stock_push')]);
-  const [{ linked }] = await orm.select({ linked: sql<number>`count(*)::int` }).from(wcProductLinks).where(eq(wcProductLinks.isDeleted, 0));
-  const [{ refreshed }] = await orm.select({ refreshed: sql<number>`count(*)::int` }).from(wcSyncRuns)
-    .where(and(eq(wcSyncRuns.kind, 'refresh'), ne(wcSyncRuns.status, 'failed')));
+  // review N-5: the unmatched lists come from the last refresh that read the shop, so a failed one never empties them
+  const [lastRefresh, lastReading, lastPush] = await Promise.all([lastRun('refresh'), lastRun('refresh', true), lastRun('stock_push')]);
+  const [{ linked }] = await orm.select({ linked: sql<number>`count(*)::int` }).from(wcProductLinks)
+    .innerJoin(items, eq(items.id, wcProductLinks.itemId)).where(liveLinkWhere);
+  const refreshed = lastReading ? 1 : 0;
 
-  const failingWhere = and(eq(wcProductLinks.isDeleted, 0), ne(wcProductLinks.lastError, ''));
+  const failingWhere = and(liveLinkWhere, ne(wcProductLinks.lastError, ''));
   const failingRows = await orm.select({ itemId: items.id, code: items.code, name: items.name, error: wcProductLinks.lastError })
     .from(wcProductLinks).innerJoin(items, eq(items.id, wcProductLinks.itemId))
     .where(failingWhere).orderBy(asc(items.code)).limit(WC_LIST_LIMIT);
-  const [{ failingTotal }] = await orm.select({ failingTotal: sql<number>`count(*)::int` }).from(wcProductLinks).where(failingWhere);
+  const [{ failingTotal }] = await orm.select({ failingTotal: sql<number>`count(*)::int` }).from(wcProductLinks)
+    .innerJoin(items, eq(items.id, wcProductLinks.itemId)).where(failingWhere);
 
   let itemsNotOnSite: WcCatalogItem[] = [];
   let itemsNotOnSiteTotal = 0;
@@ -268,15 +379,15 @@ export async function getWcCatalogReport(): Promise<WcCatalogReport> {
     itemsNotOnSiteTotal = total;
   }
 
-  const unmatched = Array.isArray(lastRefresh?.summary.unmatched) && lastRefresh?.status !== 'failed'
-    ? lastRefresh.summary.unmatched as WcUnmatchedProduct[] : [];
+  const unmatched = Array.isArray(lastReading?.summary.unmatched) ? lastReading.summary.unmatched as WcUnmatchedProduct[] : [];
   return {
     refreshed: refreshed > 0,
     linkedCount: linked,
     lastRefresh,
     lastPush,
     unmatched,
-    unmatchedTotal: Number(lastRefresh?.status !== 'failed' ? lastRefresh?.summary.unmatchedTotal : 0) || 0,
+    unmatchedTotal: Number(lastReading?.summary.unmatchedTotal) || 0,
+    catalogTruncated: lastReading?.summary.catalogTruncated === true,
     itemsNotOnSite,
     itemsNotOnSiteTotal,
     failing: failingRows.map(r => ({ itemId: r.itemId, code: r.code ?? '', name: r.name ?? '', error: r.error })),
@@ -286,6 +397,7 @@ export async function getWcCatalogReport(): Promise<WcCatalogReport> {
 
 /** The live links of these items (all live links without a list) */
 export async function liveLinks(itemIds?: number[]) {
-  const where = itemIds ? and(eq(wcProductLinks.isDeleted, 0), inArray(wcProductLinks.itemId, itemIds.length ? itemIds : [-1])) : eq(wcProductLinks.isDeleted, 0);
-  return orm.select().from(wcProductLinks).where(where).orderBy(asc(wcProductLinks.id));
+  const where = itemIds ? and(liveLinkWhere, inArray(wcProductLinks.itemId, itemIds.length ? itemIds : [-1])) : liveLinkWhere;
+  return orm.select(getTableColumns(wcProductLinks)).from(wcProductLinks)
+    .innerJoin(items, eq(items.id, wcProductLinks.itemId)).where(where).orderBy(asc(wcProductLinks.id));
 }

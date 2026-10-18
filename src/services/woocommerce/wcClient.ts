@@ -1,7 +1,7 @@
 import axios from 'axios';
 import https from 'https';
 import fs from 'fs';
-import { assertSafeExternalUrl } from '../../lib/ssrfGuard.js';
+import { assertSafeExternalUrl, guardedDnsLookup, UNSAFE_RESOLVED_ADDRESS } from '../../lib/ssrfGuard.js';
 import { followShopRedirects } from '../../lib/woocommerce/wcRedirect.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import { wcAuthQueryParams } from './wcRequestAuth.js';
@@ -18,6 +18,13 @@ export const WC_SHOP_REQUEST_FAILED = 'WC_SHOP_REQUEST_FAILED';
 export const WC_SETTINGS_INCOMPLETE = 'WC_SETTINGS_INCOMPLETE';
 /** a request to the shop never waits longer than this */
 export const WC_REQUEST_TIMEOUT_MS = 15_000;
+/** the largest answer the shop may send to one request (a catalog page of 100 products is far smaller) */
+export const WC_MAX_RESPONSE_BYTES = 10 * 1024 * 1024;
+
+export interface WcRequestOptions {
+  /** aborts the request when the caller's overall deadline passes */
+  signal?: AbortSignal;
+}
 
 export interface WcConnection {
   url: string;
@@ -53,7 +60,8 @@ export async function makeWcRequest(
   key: string,
   secret: string,
   data?: unknown,
-  params: Record<string, unknown> = {}
+  params: Record<string, unknown> = {},
+  options: WcRequestOptions = {}
 ): Promise<unknown> {
   let formattedUrl = storeUrl.trim();
   if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
@@ -89,7 +97,12 @@ export async function makeWcRequest(
           params: wcAuthQueryParams(url, params, key, secret),
           headers,
           httpsAgent,
+          // review M-5: the socket checks every address it resolves, so DNS rebinding after the guard reaches nothing inside
+          lookup: guardedDnsLookup as never,
           timeout: WC_REQUEST_TIMEOUT_MS,
+          signal: options.signal,
+          maxContentLength: WC_MAX_RESPONSE_BYTES,
+          maxBodyLength: WC_MAX_RESPONSE_BYTES,
           maxRedirects: 0,
           validateStatus: (status) => status >= 200 && status < 400
         });
@@ -100,6 +113,15 @@ export async function makeWcRequest(
     );
   } catch (error) {
     if (error instanceof ValidationError) throw error;
+    if (axios.isCancel(error) || options.signal?.aborted) {
+      throw shopError('کار با سایت در مهلت تعیین‌شده تمام نشد و نیمه‌کاره ماند؛ کمی بعد دوباره بزنید.');
+    }
+    if (axios.isAxiosError(error) && error.code === UNSAFE_RESOLVED_ADDRESS) {
+      throw shopError('نشانی سایت هنگام اتصال به نشانی داخلی رسید و برای امنیت چیزی فرستاده نشد. نشانی و DNS سایت را بررسی کنید.');
+    }
+    if (axios.isAxiosError(error) && error.code === 'ERR_BAD_RESPONSE' && /maxContentLength/i.test(error.message)) {
+      throw shopError('پاسخ سایت بزرگ‌تر از اندازه مجاز بود و خوانده نشد.');
+    }
     if (axios.isAxiosError(error) && error.response) {
       const status = error.response.status;
       const errorData = error.response.data as { message?: unknown } | undefined;
@@ -129,6 +151,9 @@ export async function makeWcRequest(
 }
 
 /** The same request with the stored connection */
-export function wcRequest(conn: WcConnection, method: 'GET' | 'POST' | 'PUT', urlPath: string, data?: unknown, params: Record<string, unknown> = {}): Promise<unknown> {
-  return makeWcRequest(method, urlPath, conn.url, conn.consumerKey, conn.consumerSecret, data, params);
+export function wcRequest(
+  conn: WcConnection, method: 'GET' | 'POST' | 'PUT', urlPath: string, data?: unknown, params: Record<string, unknown> = {},
+  options: WcRequestOptions = {},
+): Promise<unknown> {
+  return makeWcRequest(method, urlPath, conn.url, conn.consumerKey, conn.consumerSecret, data, params, options);
 }
