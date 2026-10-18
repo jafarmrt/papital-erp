@@ -158,6 +158,15 @@ export function deliveryCostOutlook(report: DeliveryCostReport | null | undefine
   };
 }
 
+/**
+ * v10.2.2 (TD-1290، بازبینی بستهٔ ۳): ماندهٔ ۱۴۰۲ پس از گرد کردن به ریال منفی می‌شود؛ پیشنهاد چهاررقمی (۲۰۰۰ ÷ ۳) ماندهٔ
+ * −۰٫۰۰۰۱ می‌دهد که هشدار نمی‌خواهد
+ */
+export const wipOverdrawn = (outlook: Pick<DeliveryCostOutlook, 'remaining'>): boolean => Math.round(outlook.remaining) < 0;
+
+/** ماندهٔ ۱۴۰۲ پس از گرد کردن به ریال بیش از صفر است */
+export const wipLeftOver = (outlook: Pick<DeliveryCostOutlook, 'remaining'>): boolean => Math.round(outlook.remaining) > 0;
+
 export interface DeliveryPriceLine {
   itemId: number;
   quantity: number;
@@ -187,5 +196,5 @@ export function checkDeliveryPrices(fresh: DeliveryCostReport, lines: readonly D
     prices.push(price && price > 0 ? Number(price) : undefined);
   }
   const outlook = deliveryCostOutlook(fresh, lines.map((l, i) => ({ itemId: l.itemId, quantity: l.quantity, unitPrice: prices[i] ?? null })));
-  return { kind: 'post', prices, outlook, overdraws: !!outlook && outlook.credit > 0 && outlook.remaining < 0 };
+  return { kind: 'post', prices, outlook, overdraws: !!outlook && outlook.credit > 0 && wipOverdrawn(outlook) };
 }

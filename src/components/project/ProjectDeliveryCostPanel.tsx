@@ -1,7 +1,7 @@
 import { Calculator } from 'lucide-react';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { formatPersianNumber } from '../../utils';
-import type { DeliveryCostOutlook } from '../../lib/projects/deliveryCostSuggestion';
+import { wipLeftOver, wipOverdrawn, type DeliveryCostOutlook } from '../../lib/projects/deliveryCostSuggestion';
 import type { MaterialAvailabilityStatus } from '../../lib/projects/materialAvailability';
 
 interface ProjectDeliveryCostPanelProps {
@@ -60,12 +60,12 @@ export function ProjectDeliveryCostPanel({ status, outlook, suggestedUnitCost, r
           پروژهٔ چندمحصولی پیشنهاد خودکار ندارد؛ بهای هر محصول را طوری بنویسید که جمع تحویل‌ها با مانده بخواند.
         </p>
       )}
-      {outlook.remaining < 0 && (
+      {wipOverdrawn(outlook) && (
         <p className="text-[11px] text-rose-700 font-semibold" role="alert">
           این ورود بیش از ماندهٔ مواد پروژه را بستانکار می‌کند و ماندهٔ کالای در جریان ساخت پروژه منفی می‌شود.
         </p>
       )}
-      {outlook.remaining > 0 && outlook.completesPlan && (
+      {wipLeftOver(outlook) && outlook.completesPlan && (
         <p className="text-[11px] text-amber-800 font-semibold" role="alert">
           با این ورود همهٔ برنامهٔ پروژه تحویل می‌شود و {rial.amount(outlook.remaining)} در کالای در جریان ساخت پروژه می‌ماند.
         </p>

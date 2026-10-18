@@ -9,6 +9,7 @@ import {
   ISSUED_MATERIALS_MAX_ROWS, type IssuedMaterialRow, type IssuedMaterialSource, type IssuedMaterialsReport,
 } from '../../lib/projects/issuedMaterials.js';
 import { NotFoundError } from '../../errors/customErrors.js';
+import { projectIssueAllocationConditions, projectIssueLineConditions } from './projectIssuedQuantities.js';
 
 interface SortedRow {
   row: IssuedMaterialRow;
@@ -47,10 +48,7 @@ export async function projectIssuedMaterials(executor: DbExecutor, projectId: nu
     })
     .from(projectBomAllocations)
     .leftJoin(transactions, eq(transactions.id, projectBomAllocations.sourceTransactionId))
-    .where(and(
-      eq(projectBomAllocations.projectId, projectId), eq(projectBomAllocations.isDeleted, 0),
-      inArray(projectBomAllocations.status, ['allocated', 'consumed']),
-    ))
+    .where(projectIssueAllocationConditions(projectId))
     .orderBy(desc(projectBomAllocations.allocatedAt), desc(projectBomAllocations.id))
     .limit(ISSUED_MATERIALS_MAX_ROWS);
 
@@ -76,10 +74,7 @@ export async function projectIssuedMaterials(executor: DbExecutor, projectId: nu
     .from(documentItems)
     .innerJoin(documents, eq(documents.id, documentItems.documentId))
     .innerJoin(items, eq(items.id, documentItems.itemId))
-    .where(and(
-      eq(documents.projectId, projectId), eq(documents.isDeleted, 0), eq(documents.status, 'final'),
-      inArray(documents.type, [...PROJECT_ISSUE_DOCUMENT_TYPES]), eq(documentItems.isDeleted, 0),
-    ))
+    .where(projectIssueLineConditions(projectId))
     .groupBy(documents.id, documents.type, documents.refNumber, documents.date, documentItems.itemId, items.code, items.name, items.unit)
     .orderBy(desc(documents.date), desc(documents.id), documentItems.itemId)
     .limit(ISSUED_MATERIALS_MAX_ROWS);
@@ -87,18 +82,12 @@ export async function projectIssuedMaterials(executor: DbExecutor, projectId: nu
   const [allocationCount] = await executor
     .select({ n: sql<number>`COUNT(*)::int` })
     .from(projectBomAllocations)
-    .where(and(
-      eq(projectBomAllocations.projectId, projectId), eq(projectBomAllocations.isDeleted, 0),
-      inArray(projectBomAllocations.status, ['allocated', 'consumed']),
-    ));
+    .where(projectIssueAllocationConditions(projectId));
   const [documentLineCount] = await executor
     .select({ n: sql<number>`COUNT(DISTINCT (${documentItems.documentId}, ${documentItems.itemId}))::int` })
     .from(documentItems)
     .innerJoin(documents, eq(documents.id, documentItems.documentId))
-    .where(and(
-      eq(documents.projectId, projectId), eq(documents.isDeleted, 0), eq(documents.status, 'final'),
-      inArray(documents.type, [...PROJECT_ISSUE_DOCUMENT_TYPES]), eq(documentItems.isDeleted, 0),
-    ));
+    .where(projectIssueLineConditions(projectId));
 
   const sorted: SortedRow[] = [];
   for (const a of allocationRows) {
@@ -162,10 +151,7 @@ async function projectIssuedCostTotal(executor: DbExecutor, projectId: number): 
     .select({ total: sql<string>`COALESCE(SUM(${transactions.unitPrice} * ${transactions.quantity}), 0)::text` })
     .from(projectBomAllocations)
     .innerJoin(transactions, and(eq(transactions.id, projectBomAllocations.sourceTransactionId), eq(transactions.type, 'out')))
-    .where(and(
-      eq(projectBomAllocations.projectId, projectId), eq(projectBomAllocations.isDeleted, 0),
-      inArray(projectBomAllocations.status, ['allocated', 'consumed']),
-    ));
+    .where(projectIssueAllocationConditions(projectId));
   const [kardex] = await executor
     .select({ total: sql<string>`COALESCE(SUM(${transactions.totalPrice}), 0)::text` })
     .from(transactions)

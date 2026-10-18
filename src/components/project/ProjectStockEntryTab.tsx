@@ -28,11 +28,17 @@ interface DeliveryBody {
   markCompleted: boolean;
 }
 
+/** v10.2.2 (TD-1290): one product of a delivery with the quantity its request carries */
+interface DeliveryTarget {
+  product: ProjectProductItem;
+  quantity: number;
+}
+
 /** v8.0.72 (TD-327): a delivery the server refused as over the plan, resent with a reason; v10.2.2 (TD-1290): with its products and the negative 1402 balance already accepted */
 interface PendingOverDelivery {
   body: DeliveryBody;
   items: ProjectOverDeliveryView[];
-  targets: ProjectProductItem[];
+  targets: DeliveryTarget[];
   confirmedRemaining: number | null;
 }
 
@@ -158,8 +164,11 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
   // و کارساز بی بهای واردشده میانگین موزون جاری کالا را زیر قفل برمی‌دارد
   const [unitCosts, setUnitCosts] = useState<Record<string, number>>({});
 
+  // v10.2.2 (TD-1290، بازبینی بستهٔ ۳): کادر دلیل بیش از برنامه برای همان مقدارهایی است که سرور رد کرد؛ تغییر مقدار یکی از
+  // محصولات آن کادر را می‌بندد تا دوباره فرستادن مقدار کهنه با بهای مقدار تازه ممکن نباشد
   const handleQtyChange = (prodId: string, val: number) => {
     setProducedQuantities(prev => ({ ...prev, [prodId]: val }));
+    setOverDelivery(prev => (prev && prev.targets.some(t => t.product.id === prodId && t.quantity !== val) ? null : prev));
   };
 
   const handleCostChange = (prodId: string, val: number) => {
@@ -179,13 +188,18 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
     onUpdate();
   };
   const productItemId = (p: ProjectProductItem) => Number(p.item_id || project.item_id) || 0;
-  const suggestedCostOf = (p: ProjectProductItem): number | null =>
+  const suggestedCostOf = (p: ProjectProductItem, quantity: number = producedQuantities[p.id] ?? 0): number | null =>
     deliveryCost.status === 'ready' && products.length === 1
-      ? projectDeliverySuggestion(deliveryCost.data, productItemId(p), producedQuantities[p.id] ?? 0)
+      ? projectDeliverySuggestion(deliveryCost.data, productItemId(p), quantity)
       : null;
   /** بهایی که فرستاده می‌شود: واردشده، وگرنه پیشنهادی؛ صفر یا خالی یعنی میانگین موزون بها */
   const postedCostOf = (p: ProjectProductItem): number | undefined => {
     const cost = unitCosts[p.id] !== undefined ? unitCosts[p.id] : suggestedCostOf(p);
+    return cost && cost > 0 ? Number(cost) : undefined;
+  };
+  /** فقط بهای واردشده، برای کسی که بها را نمی‌بیند (پیشنهادی ندارد) */
+  const typedCostOf = (p: ProjectProductItem): number | undefined => {
+    const cost = unitCosts[p.id];
     return cost && cost > 0 ? Number(cost) : undefined;
   };
   // تا نخستین پاسخ نرسیده، و پس از یک ورود تا ماندهٔ تازه نرسیده، ورود با پیشنهاد کهنه یا بی پیشنهاد فرستاده نمی‌شود
@@ -193,24 +207,27 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
     && (deliveryCost.data === null || (deliveryCost.data.costVisible && products.length === 1));
 
   /**
-   * v10.2.2 (TD-1290، بررسی بستهٔ ۳): بهای ردیف‌ها با گزارش تازهٔ ۱۴۰۲ درست پیش از فرستادن (`checkDeliveryPrices`)؛ null یعنی
-   * فرستاده نشود. ورودی که ماندهٔ ۱۴۰۲ را منفی می‌کند پیش از ثبت تأیید می‌خواهد، مگر کاربر همان مانده یا بدتر از آن را برای همین
-   * تحویل پذیرفته باشد (`confirmedRemaining`، کادر دلیل بیش از برنامه). قاعدهٔ ثبت کارساز عوض نشده است.
+   * v10.2.2 (TD-1290، بررسی بستهٔ ۳): بهای ردیف‌ها با گزارش تازهٔ ۱۴۰۲ درست پیش از فرستادن (`checkDeliveryPrices`)، با همان
+   * مقدارهایی که درخواست می‌برد؛ null یعنی فرستاده نشود. ورودی که ماندهٔ ۱۴۰۲ را منفی می‌کند پیش از ثبت تأیید می‌خواهد، مگر کاربر
+   * همان مانده یا بدتر از آن را برای همین تحویل پذیرفته باشد (`confirmedRemaining`، کادر دلیل بیش از برنامه). خواندن تازه فقط وقتی
+   * کنار می‌رود که خواندن موفق پیشین گفته بها دیده نمی‌شود؛ پس از خطای خواندن هم خوانده می‌شود. قاعدهٔ ثبت کارساز عوض نشده است.
    */
-  const pricesToPost = async (targets: ProjectProductItem[], confirmedRemaining: number | null): Promise<{ prices: Array<number | undefined>; remaining: number | null } | null> => {
-    if (deliveryCost.data?.costVisible !== true) return { prices: targets.map(postedCostOf), remaining: null };
+  const pricesToPost = async (targets: DeliveryTarget[], confirmedRemaining: number | null): Promise<{ prices: Array<number | undefined>; remaining: number | null } | null> => {
+    const typedOnly = () => ({ prices: targets.map(t => typedCostOf(t.product)), remaining: null });
+    if (deliveryCost.data?.costVisible === false) return typedOnly();
     let fresh: DeliveryCostReport | null = null;
     try {
       fresh = deliveryCostReportOf(await fetchJson(`/projects/${project.id}/delivery-cost`));
     } catch {
       fresh = null;
     }
-    if (!fresh?.costVisible) {
+    if (!fresh) {
       toast.error('ماندهٔ کالای در جریان ساخت پروژه خوانده نشد؛ دوباره تلاش کنید.');
       return null;
     }
-    const check = checkDeliveryPrices(fresh, targets.map(p => ({
-      itemId: productItemId(p), quantity: producedQuantities[p.id] ?? 0, typedPrice: unitCosts[p.id], shownSuggestion: suggestedCostOf(p),
+    if (!fresh.costVisible) return typedOnly();
+    const check = checkDeliveryPrices(fresh, targets.map(t => ({
+      itemId: productItemId(t.product), quantity: t.quantity, typedPrice: unitCosts[t.product.id], shownSuggestion: suggestedCostOf(t.product, t.quantity),
     })), products.length === 1);
     if (check.kind === 'suggestion_changed') {
       setDeliveryReload(n => n + 1);
@@ -281,7 +298,8 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
     }
 
     setSubmitting(true);
-    const priced = await pricesToPost([product], null);
+    const targets: DeliveryTarget[] = [{ product, quantity: Number(qty) }];
+    const priced = await pricesToPost(targets, null);
     if (!priced) {
       setSubmitting(false);
       return;
@@ -290,7 +308,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
       itemsToAdd: [
         {
           itemId: Number(itemId),
-          quantity: Number(qty),
+          quantity: targets[0].quantity,
           location: targetLocation,
           unitPrice: priced.prices[0],
           notes: `ورود مستقیم از پروژه کنترل تولید ${project.project_code || project.id} - محصول ${product.item_name}`
@@ -312,7 +330,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
         toast.error(res?.error || 'خطا در ثبت ورود به انبار');
       }
     } catch (err) {
-      if (!askOverDeliveryReason(err, body, [product], priced.remaining)) toast.error(errorMessageOf(err) || 'خطا در ارتباط با سامانه');
+      if (!askOverDeliveryReason(err, body, targets, priced.remaining)) toast.error(errorMessageOf(err) || 'خطا در ارتباط با سامانه');
     } finally {
       setSubmitting(false);
     }
@@ -343,15 +361,16 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
     }
 
     setBatchSubmitting(true);
-    const priced = await pricesToPost(deliverable, null);
+    const targets: DeliveryTarget[] = deliverable.map(p => ({ product: p, quantity: Number(producedQuantities[p.id] ?? 0) }));
+    const priced = await pricesToPost(targets, null);
     if (!priced) {
       setBatchSubmitting(false);
       return;
     }
     const body: DeliveryBody = {
-      itemsToAdd: deliverable.map((p, i) => ({
+      itemsToAdd: targets.map(({ product: p, quantity }, i) => ({
         itemId: Number(p.item_id || project.item_id),
-        quantity: Number(producedQuantities[p.id] ?? 0),
+        quantity,
         location: targetLocation,
         notes: `ورود دسته‌ای از پروژه کنترل تولید ${project.project_code || project.id} - محصول ${p.item_name}`,
         unitPrice: priced.prices[i]
@@ -373,14 +392,14 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
         toast.error(res?.error || 'خطا در ثبت دسته‌ای محصولات به انبار');
       }
     } catch (err) {
-      if (!askOverDeliveryReason(err, body, deliverable, priced.remaining)) toast.error(errorMessageOf(err) || 'خطا در ارتباط با سامانه');
+      if (!askOverDeliveryReason(err, body, targets, priced.remaining)) toast.error(errorMessageOf(err) || 'خطا در ارتباط با سامانه');
     } finally {
       setBatchSubmitting(false);
     }
   };
 
   // v8.0.72 (TD-327): تحویل بیش از برنامه را سرور بی‌دلیل رد می‌کند؛ کادر دلیل باز می‌شود و همان تحویل با دلیل دوباره فرستاده می‌شود
-  function askOverDeliveryReason(err: unknown, body: DeliveryBody, targets: ProjectProductItem[], confirmedRemaining: number | null): boolean {
+  function askOverDeliveryReason(err: unknown, body: DeliveryBody, targets: DeliveryTarget[], confirmedRemaining: number | null): boolean {
     const items = overDeliveriesOf(err);
     if (!items) return false;
     setOverDeliveryReason('');
@@ -393,7 +412,8 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
     if (!overDelivery || !reason) return;
     setSubmitting(true);
     try {
-      // v10.2.2 (TD-1290): the resend prices its lines again from a fresh balance, never the stale body's suggestion
+      // v10.2.2 (TD-1290): the resend prices its lines again from a fresh balance, never the stale body's suggestion, for
+      // the quantities the refused request carried, which are the ones sent again
       const priced = await pricesToPost(overDelivery.targets, overDelivery.confirmedRemaining);
       if (!priced) return;
       const itemsToAdd = overDelivery.body.itemsToAdd.map((line, i) => ({ ...line, unitPrice: priced.prices[i] }));
@@ -405,7 +425,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
       toast.success(`تحویل بیش از برنامه با دلیل ثبت شد${res?.refNumber ? ` (رسید تولید ${toPersianDigits(res.refNumber)})` : ''}`);
       setOverDelivery(null);
       setSelectedIds(new Set());
-      delivered(overDelivery.targets.map(p => p.id));
+      delivered(overDelivery.targets.map(t => t.product.id));
     } catch (err) {
       toast.error(errorMessageOf(err) || 'خطا در ارتباط با سامانه');
     } finally {

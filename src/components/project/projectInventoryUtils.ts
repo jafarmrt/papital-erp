@@ -7,7 +7,7 @@ import {
 import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
 import { MATERIAL_UNITS } from '../../lib/pendingMaterials/materialRequestRules';
 import { materialFiguresOf, rowIsShort, type MaterialAvailabilityView, type MaterialRowInput, type MaterialRowState } from '../../lib/projects/materialAvailability';
-import { rowQtyInItemUnit } from '../../lib/projects/projectReservation';
+import { rowQtyInItemUnit, unitKey } from '../../lib/projects/projectReservation';
 import { fin } from '../../lib/financialDecimal';
 
 /** v10.0.143 (TD-1202): the same unit list as the keeper's approval window (`MATERIAL_UNITS`) */
@@ -217,27 +217,39 @@ export const buildConsolidatedPurchaseList = (
 
 type GlobalItem = NonNullable<ProjectInventoryControlSectionData['globalItems']>[number];
 
+interface SectionGroupRow {
+  gIdx: number;
+  state: MaterialRowState;
+  /** نیاز ردیف به واحد گروه با قاعدهٔ ثبت نهایی (مقدار خالی صفر است) */
+  need: number;
+  /** نیاز ردیف به واحد گروه با قاعدهٔ پیشین فرم (مقدار خالی یک است) */
+  legacyNeed: number;
+}
+
 interface SectionItemGroup {
   key: string;
-  rows: number[];
   first: GlobalItem;
   match: Item | undefined;
-  states: MaterialRowState[];
-  /** نیاز ردیف‌های بخش به واحد کالا با قاعدهٔ ثبت نهایی (ردیف بی تبدیل معتبر شمرده نمی‌شود) */
-  itemQty: number;
-  /** نیاز ردیف‌ها به واحد خودشان، قاعدهٔ پیشین فرم (مقدار خالی یک است) */
-  rowQty: number;
+  /** واحد همهٔ مقدارهای گروه: واحد کالا برای ردیف‌هایی که ثبت نهایی تبدیل می‌کند، وگرنه واحد خود ردیف‌ها */
+  unit: string;
+  /** مقدارهای گروه به واحد کالای انبارند */
+  inItemUnit: boolean;
+  rows: SectionGroupRow[];
   /** موجودی کل کالا (وگرنه موجودی ذخیره‌شدهٔ نخستین ردیف) برای قاعدهٔ پیشین */
   totalStock: number;
   /** ردیفی با وضعیت ذخیره‌شدهٔ «نیاز به خرید» */
   storedNeeds: boolean;
 }
 
+const sumOf = (values: number[]): number => values.reduce((sum, v) => fin(sum).add(v).toNumber(), 0);
+
 /**
  * v10.2.2 (TD-1290، بررسی بستهٔ ۳): «ثبت سفارش خرید» یک بخش کنترل کلی. ردیف‌های بخش به ازای کالای انبار (وگرنه کد یا نام)
- * یکی می‌شوند تا ردیف‌های تکراری یک کالا هر کدام همهٔ موجودی آزاد را جدا نشمارند. با ارقام کارساز مقدار خرید کالای کسری
- * کمینهٔ کسری کل پروژهٔ آن کالا (`shortQty` ثبت نهایی) و نیاز همین بخش است، به واحد کالا، پس بخش بیش از کسری پروژه سفارش
- * نمی‌دهد. بی ارقام کارساز (در حال خواندن، خطا، بی کالای انبار یا تبدیل واحد لازم) قاعدهٔ پیشین: نیاز گروه − موجودی − داده‌شده.
+ * و واحد یکی می‌شوند: ردیفی که ثبت نهایی به واحد کالا تبدیل می‌کند به واحد کالا، ردیف بی تبدیل معتبر با هم‌واحدهای خودش، پس
+ * ردیف‌های تکراری یک کالا هر کدام همهٔ موجودی آزاد را جدا نمی‌شمارند و مقدار دو واحد ناهمسان جمع نمی‌شود. با ارقام کارساز مقدار
+ * خرید کالای کسری کمینهٔ کسری کل پروژهٔ آن کالا (`shortQty` ثبت نهایی) و نیاز همین بخش است، به واحد کالا، پس بخش بیش از کسری
+ * پروژه سفارش نمی‌دهد. بی ارقام کارساز (در حال خواندن، خطا، بی کالای انبار یا تبدیل واحد لازم) قاعدهٔ پیشین روی همان گروه:
+ * نیاز − موجودی − داده‌شده. هر قلم فقط ردیف‌هایی را می‌برد که مقدارشان در آن سفارش داده می‌شود.
  */
 export function buildSectionPurchaseList(
   sec: ProjectInventoryControlSectionData | undefined,
@@ -248,18 +260,24 @@ export function buildSectionPurchaseList(
   const groups = new Map<string, SectionItemGroup>();
   (sec?.globalItems || []).forEach((item, gIdx) => {
     const match = findProjectItemMatch({ code: item.itemCode, name: item.name }, warehouseItems);
-    const key = match ? `item_${match.id}` : purchaseRowKey(item.itemCode, item.name);
+    const rowUnit = String(item.unit || '').trim() || 'عدد';
+    const need = Number(item.requiredQty) || 0;
+    const legacyNeed = Number(item.requiredQty || 1);
+    const converted = match ? rowQtyInItemUnit(item, need, match.unit) : null;
+    const inItemUnit = converted !== null;
+    const key = match
+      ? (inItemUnit ? `item_${match.id}` : `item_${match.id}_u_${unitKey(rowUnit)}`)
+      : `${purchaseRowKey(item.itemCode, item.name)}_u_${unitKey(rowUnit)}`;
     const group: SectionItemGroup = groups.get(key) ?? {
-      key, rows: [], first: item, match, states: [], itemQty: 0, rowQty: 0,
+      key, first: item, match, unit: inItemUnit ? (String(match?.unit || '').trim() || rowUnit) : rowUnit, inItemUnit, rows: [],
       totalStock: match ? Number(match.current_stock || 0) : Number(item.stockQty || 0), storedNeeds: false,
     };
-    const state = availability.rowState(item);
-    const rowQty = Number(item.requiredQty || 1);
-    const inItemUnit = match ? rowQtyInItemUnit(item, Number(item.requiredQty) || 0, match.unit) : null;
-    group.rows.push(gIdx);
-    group.states.push(state);
-    group.rowQty = fin(group.rowQty).add(rowQty).toNumber();
-    if (inItemUnit !== null && inItemUnit > 0) group.itemQty = fin(group.itemQty).add(inItemUnit).toNumber();
+    group.rows.push({
+      gIdx,
+      state: availability.rowState(item),
+      need: inItemUnit ? Math.max(0, converted) : need,
+      legacyNeed: inItemUnit && match ? (rowQtyInItemUnit(item, legacyNeed, match.unit) ?? legacyNeed) : legacyNeed,
+    });
     if (item.status === 'needs_procurement') group.storedNeeds = true;
     groups.set(key, group);
   });
@@ -267,35 +285,40 @@ export function buildSectionPurchaseList(
   const lines: PurchaseListItem[] = [];
   for (const g of groups.values()) {
     const { first, match } = g;
-    const base = {
-      id: `sec${secIdx}_g${g.rows.join('-')}_${g.key}`,
+    const lineOf = (rows: SectionGroupRow[]) => ({
+      id: `sec${secIdx}_g${rows.map(r => r.gIdx).join('-')}_${g.key}`,
       itemCode: first.itemCode || match?.code || '',
       itemName: first.name || match?.name || '',
       category: sec?.title || 'بخش کنترل',
       procurementStatus: first.procurementStatus || 'pending',
       notes: first.notes,
-    };
-    const short = g.states.find((s): s is Extract<MaterialRowState, { kind: 'short' }> => s.kind === 'short');
+    });
+    const short = g.inItemUnit
+      ? g.rows.map(r => r.state).find((s): s is Extract<MaterialRowState, { kind: 'short' }> => s.kind === 'short')
+      : undefined;
     if (short) {
-      const qty = Math.min(short.shortQty, g.itemQty);
+      const ordered = g.rows.filter(r => r.need > 0);
+      const need = sumOf(ordered.map(r => r.need));
+      const qty = Math.min(short.shortQty, need);
       if (qty > 0) {
         lines.push({
-          ...base, totalRequiredQty: g.itemQty, unit: short.unit, warehouseStockQty: short.free, issuedQty: short.issued,
+          ...lineOf(ordered), totalRequiredQty: need, unit: short.unit, warehouseStockQty: short.free, issuedQty: short.issued,
           warehouseUnit: match?.unit || short.unit, toPurchaseQty: qty,
         });
       }
       continue;
     }
-    // قاعدهٔ پیشین روی کل گروه: نیاز همهٔ ردیف‌های کالا در برابر موجودی کل، یا وضعیت ذخیره‌شده
-    const legacyShort = g.storedNeeds || g.rowQty - g.totalStock > 0;
-    if (!g.states.some(s => rowIsShort(s, legacyShort))) continue;
-    const figures = materialFiguresOf(g.states[0]);
-    const stock = figures ? figures.free : match ? Number(match.current_stock || 0) : Number(first.stockQty || 0);
+    // قاعدهٔ پیشین روی کل گروه: نیاز همهٔ ردیف‌های هم‌واحد کالا در برابر موجودی کل، یا وضعیت ذخیره‌شده
+    const legacyNeed = sumOf(g.rows.map(r => r.legacyNeed));
+    const legacyShort = g.storedNeeds || legacyNeed - g.totalStock > 0;
+    if (!g.rows.some(r => rowIsShort(r.state, legacyShort))) continue;
+    const figures = materialFiguresOf(g.rows[0].state);
+    const stock = figures ? figures.free : g.totalStock;
     const issued = figures?.issued ?? 0;
-    const qty = Math.max(0, fin(g.rowQty).subtract(stock).subtract(issued).toNumber());
+    const qty = Math.max(0, fin(legacyNeed).subtract(stock).subtract(issued).toNumber());
     if (qty > 0) {
       lines.push({
-        ...base, totalRequiredQty: g.rowQty, unit: first.unit || match?.unit || 'عدد', warehouseStockQty: stock, issuedQty: figures?.issued,
+        ...lineOf(g.rows), totalRequiredQty: legacyNeed, unit: g.unit, warehouseStockQty: stock, issuedQty: figures?.issued,
         warehouseUnit: match?.unit || first.unit, toPurchaseQty: qty,
       });
     }
