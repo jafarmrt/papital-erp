@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useId } from 'react';
 import { 
   User as UserIcon, Lock, Camera, Check, X, Eye, EyeOff, ShieldCheck, KeyRound, 
-  UploadCloud, AlertCircle, RefreshCw, MessageCircle, MonitorSmartphone
+  UploadCloud, AlertCircle, RefreshCw, MessageCircle, PartyPopper, MonitorSmartphone
 } from 'lucide-react';
 import { User } from '../types';
 import { fetchJson } from '../api';
@@ -13,6 +13,7 @@ import { mustChangePassword } from '../lib/auth/passwordReset';
 import { FULL_NAME_MAX_LENGTH, isProfileImageType, PROFILE_IMAGE_ACCEPT, PROFILE_IMAGE_HINT, PROFILE_IMAGE_TYPE_MESSAGE } from '../lib/users/profileFields';
 import { DialogLayer } from './common/DialogLayer';
 import { MessengerLinksPanel } from './messenger/MessengerLinksPanel';
+import { SocialPreferencesPanel } from './dashboard/social/SocialPreferencesPanel';
 import { UserSessionsPanel } from './users/UserSessionsPanel';
 
 interface UserProfileModalProps {
@@ -28,7 +29,8 @@ interface UserProfileModalProps {
 
 export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, roleName, onLogout }: UserProfileModalProps) {
   const fieldId = useId();
-  const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'messenger' | 'devices'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'messenger' | 'social' | 'devices'>('profile');
+  const [socialSaving, setSocialSaving] = useState(false);
   const [sessionsBusy, setSessionsBusy] = useState(false);
   const [fullName, setFullName] = useState<string>(user.full_name || '');
   const [avatarPreview, setAvatarPreview] = useState<string>(user.avatar_url || '');
@@ -185,7 +187,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
 
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
-      <DialogLayer onClose={onClose} disabled={saving || sessionsBusy} />
+      <DialogLayer onClose={onClose} disabled={saving || socialSaving || sessionsBusy} />
       <div className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-200 max-h-[90vh] flex flex-col">
         {/* Modal Header */}
         <div className="bg-slate-900 text-white p-6 relative">
@@ -196,7 +198,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
               </div>
               <div>
                 <h2 className="text-lg font-bold">تنظیمات حساب کاربری</h2>
-                <p className="text-xs text-slate-400">ویرایش مشخصات، تصویر نمایه، کلمه عبور و پیام‌رسان</p>
+                <p className="text-xs text-slate-400">ویرایش مشخصات، تصویر نمایه، کلمه عبور، پیام‌رسان، پیشخوان گروهی و دستگاه‌ها</p>
               </div>
             </div>
             {!requiresPasswordReset && (
@@ -212,7 +214,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
 
           {/* Navigation Tabs */}
           {!requiresPasswordReset && (
-          <div className="flex items-center gap-2 mt-6 bg-slate-800/80 p-1 rounded-xl text-xs">
+          <div className="flex flex-wrap items-center gap-2 mt-6 bg-slate-800/80 p-1 rounded-xl text-xs *:whitespace-nowrap *:px-3">
             <button
               onClick={() => setActiveTab('profile')}
               className={`flex-1 py-2 rounded-lg font-bold transition-all flex items-center justify-center gap-2 ${
@@ -247,6 +249,17 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
               پیام‌رسان
             </button>
             <button
+              onClick={() => setActiveTab('social')}
+              className={`flex-1 py-2 rounded-lg font-bold transition-all flex items-center justify-center gap-2 ${
+                activeTab === 'social'
+                  ? 'bg-amber-400 text-slate-950 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <PartyPopper className="w-4 h-4" />
+              پیشخوان گروهی
+            </button>
+            <button
               onClick={() => setActiveTab('devices')}
               className={`flex-1 py-2 rounded-lg font-bold transition-all flex items-center justify-center gap-2 ${
                 activeTab === 'devices'
@@ -265,6 +278,8 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
         <div className="p-6 overflow-y-auto">
           {activeTab === 'messenger' && !requiresPasswordReset ? (
             <MessengerLinksPanel />
+          ) : activeTab === 'social' && !requiresPasswordReset ? (
+            <SocialPreferencesPanel onBusyChange={setSocialSaving} />
           ) : activeTab === 'devices' && !requiresPasswordReset ? (
             <UserSessionsPanel onBusyChange={setSessionsBusy} />
           ) : activeTab === 'profile' && !requiresPasswordReset ? (

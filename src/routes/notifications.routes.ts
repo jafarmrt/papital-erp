@@ -10,6 +10,7 @@ import { UnauthorizedError } from '../errors/customErrors.js';
 import { logger } from '../middleware/logger.js';
 import { generateCrmDueRemindersThrottled } from '../services/notifications/crmDueReminders.js';
 import { generateWorkshopDueRemindersThrottled } from '../services/notifications/workshopDueReminders.js';
+import { generateColleagueBirthdayNotificationsThrottled } from '../services/social/birthdays.service.js';
 import { can } from '../middleware/authorize.js';
 import { WORKSHOP_SELF_PERMISSION } from '../lib/permissions/workshopPermissions.js';
 import { dismissNotification, markAllNotificationsRead, markNotificationRead } from '../services/notifications/notificationInbox.service.js';
@@ -45,6 +46,15 @@ async function checkWorkshopDueReminders(user: Express.Request['user']) {
   }
 }
 
+// v10.2 package 9: a colleague's birthday in the bell on the day, at most one scan an hour per user, bell only
+async function checkColleagueBirthdays(userId: number) {
+  try {
+    await generateColleagueBirthdayNotificationsThrottled(userId);
+  } catch (err) {
+    logger.error({ message: 'Error checking colleague birthday notifications', error: err });
+  }
+}
+
 // Get my notifications
 router.get('/notifications', asyncHandler(async (req, res) => {
   const userId = req.user?.id;
@@ -52,6 +62,7 @@ router.get('/notifications', asyncHandler(async (req, res) => {
 
   await checkAndGenerateCrmTaskDueNotifications(userId);
   await checkWorkshopDueReminders(req.user);
+  await checkColleagueBirthdays(userId);
 
   // v9.0.434 (TD-717): a dismissed notification is kept but never listed
   const userNotifs = await orm
@@ -84,6 +95,7 @@ router.get('/notifications/unread-count', asyncHandler(async (req, res) => {
   if (!userId) throw new UnauthorizedError('احراز هویت انجام نشده است');
 
   await checkAndGenerateCrmTaskDueNotifications(userId);
+  await checkColleagueBirthdays(userId);
 
   // v9.0.434 (TD-717): counted in SQL, without dismissed notifications
   const [unread] = await orm

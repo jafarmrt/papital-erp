@@ -162,13 +162,18 @@ export function cleanupSteps(m: string): CleanupStep[] {
     {
       label: 'personnel',
       candidates: sql`SELECT count(*)::int AS c FROM personnel WHERE full_name ILIKE ${m}`,
-      deletes: [sql`DELETE FROM personnel p WHERE p.full_name ILIKE ${m}
-        AND NOT EXISTS (SELECT 1 FROM piecework_logs pl WHERE pl.personnel_id = p.id)
-        AND NOT EXISTS (SELECT 1 FROM piecework_payrolls pp WHERE pp.personnel_id = p.id)
-        AND NOT EXISTS (SELECT 1 FROM crm_leads l WHERE l.assigned_personnel_id = p.id)
-        AND NOT EXISTS (SELECT 1 FROM crm_activities a WHERE a.assigned_personnel_id = p.id)
-        AND NOT EXISTS (SELECT 1 FROM treasury_transactions tt WHERE tt.party_type = 'personnel' AND tt.party_id = p.id)
-        AND NOT EXISTS (SELECT 1 FROM journal_voucher_items vi WHERE vi.detailed_type = 'personnel' AND vi.detailed_id = p.id)`],
+      deletes: [
+        sql`CREATE TEMP TABLE erp_cleanup_personnel ON COMMIT DROP AS SELECT p.id FROM personnel p WHERE p.full_name ILIKE ${m}
+          AND NOT EXISTS (SELECT 1 FROM piecework_logs pl WHERE pl.personnel_id = p.id)
+          AND NOT EXISTS (SELECT 1 FROM piecework_payrolls pp WHERE pp.personnel_id = p.id)
+          AND NOT EXISTS (SELECT 1 FROM crm_leads l WHERE l.assigned_personnel_id = p.id)
+          AND NOT EXISTS (SELECT 1 FROM crm_activities a WHERE a.assigned_personnel_id = p.id)
+          AND NOT EXISTS (SELECT 1 FROM treasury_transactions tt WHERE tt.party_type = 'personnel' AND tt.party_id = p.id)
+          AND NOT EXISTS (SELECT 1 FROM journal_voucher_items vi WHERE vi.detailed_type = 'personnel' AND vi.detailed_id = p.id)`,
+        // v10.2 package 9 (review N-6): a test personnel's birthday greetings go first (fk_birthday_greetings_personnel)
+        sql`DELETE FROM birthday_greetings WHERE personnel_id IN (SELECT id FROM erp_cleanup_personnel)`,
+        sql`DELETE FROM personnel WHERE id IN (SELECT id FROM erp_cleanup_personnel)`,
+      ],
     },
     {
       label: 'customers and suppliers',

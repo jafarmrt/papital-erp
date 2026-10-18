@@ -14,7 +14,7 @@ import { deleteTestRoles } from '../fixtures/roleCleanup.js';
  * - webhook retry limits outside 1 to 10 saved before v10.1.66 are brought to the number delivery already used;
  * - a restore racing a new user with the same username key answered a raw database error, not the friendly 409;
  * - workflow actions still asking the removed key of migration 0123 ask audit.apply after the boot step.
- * Each case is red on v10.1.72. v10.2.8 (TD-1320) adds the inbox: a task of a running instance whose snapshot still
+ * Each case is red on v10.1.72. v10.2.10 (TD-1320) adds the inbox: a task of a running instance whose snapshot still
  * asks the removed key reaches the inbox, the recipients and the task run of an audit.apply holder, and the event lists
  * read a negative or text page as the first page (both red on v10.2.7).
  */
@@ -279,7 +279,7 @@ export async function runUrgentFixesV1020Tests(shouldRun: ShouldRun): Promise<Te
 
   if (shouldRun('reg_workflow_removed_permission_inbox_td_1320', 'v10_2_0', 'td_1320', 'workflow', 'inbox', 'permissions')) {
     await runCase(results, 'reg_workflow_removed_permission_inbox_td_1320',
-      'v10.2.8: an inbox task whose snapshot action still asks the removed key reaches the holder of audit.apply',
+      'v10.2.10: an inbox task whose snapshot action still asks the removed key reaches the holder of audit.apply',
       'snapshot action asks the removed key: getMyTasks lists the task for a role holding audit.apply, workflowTaskRecipients names that user, the task runs from the inbox',
       async (wrong) => {
         const { defineWorkflow, startWf, tasksOf, runTask, wfUser, instanceRow } = await import('../invariants/workflowScenarioHelpers.js');
@@ -362,7 +362,7 @@ export async function runUrgentFixesV1020Tests(shouldRun: ShouldRun): Promise<Te
 
   if (shouldRun('reg_events_negative_page_td_1320', 'v10_2_0', 'td_1320', 'events', 'pagination')) {
     await runCase(results, 'reg_events_negative_page_td_1320',
-      'v10.2.8: the event lists read a bad page as page 1 and a bad limit as 50, and page with the cap of their service',
+      'v10.2.10: the event lists read a bad page as page 1 and a bad limit as 50, and page with the cap of their service',
       'GET /api/events/{outbox,action-logs,dlq,webhooks/deliveries/list}?page=-1|0|abc&limit=-5|abc -> 200 with the seeded rows at limit 50, offset 0; page=2&limit=500 -> the service cap as limit and offset',
       async (wrong) => {
         const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');

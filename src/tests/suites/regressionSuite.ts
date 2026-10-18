@@ -11164,6 +11164,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // 10.2 package 6 (D-04 part A): item ↔ shop product links and the batched stock push (OBS-R2-83)
   const { runWooCatalogSyncTests } = await import('../regression/wooCatalogSyncTests.js');
   results.push(...await runWooCatalogSyncTests(shouldRun));
+  // 10.2 package 9: the group dashboard (birthdays, greetings, presence, whats-new; TD-1300)
+  const { runSocialDashboardTests } = await import('../regression/socialDashboardTests.js');
+  results.push(...await runSocialDashboardTests(shouldRun));
 
   return results;
 }

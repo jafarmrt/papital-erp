@@ -15,18 +15,25 @@ export const MOBILE_NAV_ITEMS: readonly MobileNavItem[] = [
   { path: '/', label: 'پیشخوان' },
   { path: '/workshop', label: 'کارگاه', fallbackPath: '/workshop/review' },
   { path: '/approval-inbox', label: 'تأییدها' },
+  { path: '/projects', label: 'پروژه‌ها' },
   { path: '/audit', label: 'شمارش انبار' },
   { path: '/piecework', label: 'کارکرد' },
 ];
 
 export const MOBILE_MENU_LABEL = 'فهرست';
 
+/**
+ * v10.2.9 (10.2 package 10): at most five page buttons beside «فهرست», so the bar keeps its six cells on a narrow phone;
+ * a viewer who may open more pages keeps the first five in `MOBILE_NAV_ITEMS` order and reaches the rest from «فهرست»
+ */
+export const MOBILE_NAV_MAX_ITEMS = 5;
+
 export function visibleMobileNavItems(viewer: ViewerAccess | null | undefined): MobileNavItem[] {
   return MOBILE_NAV_ITEMS.flatMap(item => {
     if (canOpenPage(item.path, viewer)) return [{ path: item.path, label: item.label }];
     if (item.fallbackPath && canOpenPage(item.fallbackPath, viewer)) return [{ path: item.fallbackPath, label: item.label }];
     return [];
-  });
+  }).slice(0, MOBILE_NAV_MAX_ITEMS);
 }
 
 /** مسیر فعال: پیشخوان فقط روی «/»، بقیه روی خود مسیر و زیرمسیرهایش */
