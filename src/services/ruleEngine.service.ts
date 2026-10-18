@@ -1,5 +1,6 @@
 import { logger } from '../middleware/logger.js';
 import { numericRuleEquality, ruleComparableNumber } from '../lib/events/ruleConditionValue.js';
+import { NUMERIC_RULE_OPERATORS } from '../lib/events/ruleMissingField.js';
 
 export interface SingleRuleCondition {
   field: string;
@@ -70,9 +71,6 @@ function isRuleGroupNode(node: unknown): node is RuleGroup {
   return isPlainObject(node) && !('field' in node) && (Array.isArray(node.conditions) || Array.isArray(node.rules));
 }
 
-/** operators that never match a missing field (numeric ones a null value too); the absence checks are not among them */
-const FIELD_REQUIRED_OPERATORS: ReadonlySet<string> = new Set(['>', 'gt', '>=', 'gte', '<', 'lt', '<=', 'lte', '!=', 'neq', 'not_equal', 'not_in', 'nin']);
-
 export class RuleEngineService {
   /**
    * Resolve nested property paths using dot notation and array index notation.
@@ -111,13 +109,11 @@ export class RuleEngineService {
 
     let passed = false;
     let reason = '';
-    // 10.2 package 8 (TD-1297): a field the event does not carry never matches a comparison by accident. A numeric
-    // comparison on a missing or null value read it as 0, and «not equal» / «not in» on a missing field passed, so a rule
-    // on a field an event stopped carrying (the treasury amount) fired on every event; only the explicit absence checks
-    // («خالی» / «وجود ندارد») still match a missing field
+    // 10.2 package 8 (TD-1297): a numeric comparison on a field the event does not carry read it as 0, so `amount lt
+    // 1000` fired on every treasury event once the event stopped carrying its amount. Such a comparison no longer
+    // matches a missing field; a null value is still 0, and «not equal» / «not in» still match a missing field as
+    // before (review N-1), since workflow and document events often leave a field out
     const missing = actualValue === undefined;
-    const notNumber = missing || actualValue === null;
-    const missingReason = `بخش «${rule.field}» در داده نیست`;
 
     switch (op) {
       case '=':
@@ -132,7 +128,7 @@ export class RuleEngineService {
       case '!=':
       case 'neq':
       case 'not_equal':
-        passed = !missing && !(numericRuleEquality(actualValue, targetValue) ?? String(actualValue ?? '') === String(targetValue ?? ''));
+        passed = !(numericRuleEquality(actualValue, targetValue) ?? String(actualValue ?? '') === String(targetValue ?? ''));
         reason = passed ? `مقدار ${actualValue} مخالف ${targetValue} است` : `مقدار واقعی (${actualValue}) برابر با (${targetValue}) است`;
         break;
 
@@ -140,25 +136,25 @@ export class RuleEngineService {
       // (`ruleComparableNumber`); `Number('۱۰۰۰۰۰۰')` and `Number('1,000,000')` were NaN, so the rule never matched
       case '>':
       case 'gt':
-        passed = !notNumber && ruleComparableNumber(actualValue) > ruleComparableNumber(targetValue);
+        passed = !missing && ruleComparableNumber(actualValue) > ruleComparableNumber(targetValue);
         reason = passed ? `مقدار ${actualValue} بزرگتر از ${targetValue} است` : `مقدار واقعی (${actualValue}) بزرگتر از (${targetValue}) نیست`;
         break;
 
       case '>=':
       case 'gte':
-        passed = !notNumber && ruleComparableNumber(actualValue) >= ruleComparableNumber(targetValue);
+        passed = !missing && ruleComparableNumber(actualValue) >= ruleComparableNumber(targetValue);
         reason = passed ? `مقدار ${actualValue} بزرگتر یا مساوی ${targetValue} است` : `مقدار واقعی (${actualValue}) کوچکتر از (${targetValue}) است`;
         break;
 
       case '<':
       case 'lt':
-        passed = !notNumber && ruleComparableNumber(actualValue) < ruleComparableNumber(targetValue);
+        passed = !missing && ruleComparableNumber(actualValue) < ruleComparableNumber(targetValue);
         reason = passed ? `مقدار ${actualValue} کوچکتر از ${targetValue} است` : `مقدار واقعی (${actualValue}) کوچکتر از (${targetValue}) نیست`;
         break;
 
       case '<=':
       case 'lte':
-        passed = !notNumber && ruleComparableNumber(actualValue) <= ruleComparableNumber(targetValue);
+        passed = !missing && ruleComparableNumber(actualValue) <= ruleComparableNumber(targetValue);
         reason = passed ? `مقدار ${actualValue} کوچکتر یا مساوی ${targetValue} است` : `مقدار واقعی (${actualValue}) بزرگتر از (${targetValue}) است`;
         break;
 
@@ -176,9 +172,7 @@ export class RuleEngineService {
 
       case 'not_in':
       case 'nin':
-        if (missing) {
-          passed = false;
-        } else if (Array.isArray(targetValue)) {
+        if (Array.isArray(targetValue)) {
           passed = !targetValue.map(String).includes(String(actualValue ?? ''));
         } else if (typeof targetValue === 'string') {
           const list = targetValue.split(',').map(s => s.trim());
@@ -238,7 +232,7 @@ export class RuleEngineService {
         break;
     }
 
-    if (!passed && (missing || actualValue === null) && FIELD_REQUIRED_OPERATORS.has(op)) reason = missingReason;
+    if (missing && NUMERIC_RULE_OPERATORS.has(op)) reason = `بخش «${rule.field}» در داده نیست`;
     return { passed, actualValue, reason };
   }
 

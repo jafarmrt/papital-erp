@@ -13,6 +13,7 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { RuleEngineService, type RuleExpression } from '../ruleEngine.service.js';
 import { LOCAL_ECHO_PATH, assertSafeExternalUrl, isEchoSimulatorEnvironment, isLocalEchoTarget } from '../../lib/ssrfGuard.js';
 import { guardedWebhookFetch } from './guardedWebhookFetch.js';
+import { logRulesOnMissingNumericFields } from './ruleMissingFieldLog.js';
 import {
   HIGH_VALUE_TREASURY_RULE_CONDITIONS, HIGH_VALUE_TREASURY_RULE_DESCRIPTION, HIGH_VALUE_TREASURY_RULE_NAME, HIGH_VALUE_TREASURY_RULE_TEMPLATE,
   repairSeededHighValueTreasuryRule,
@@ -466,6 +467,7 @@ export class EventActionEngineService {
     // 10.2 package 8 (TD-1297, review M-3): an installed seeded high-value treasury rule moves from the amount to
     // `isHighValue` once (its own transaction and error handling), before the empty-table check below
     await repairSeededHighValueTreasuryRule();
+    await logRulesOnMissingNumericFields();
     try {
       const webhookSecret = await EventActionEngineService.getWebhookSecretToken();
 

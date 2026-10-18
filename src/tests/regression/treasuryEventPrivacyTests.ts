@@ -233,13 +233,14 @@ export async function runTreasuryEventPrivacyTests(shouldRun: ShouldRun): Promis
 
   const repairId = 'reg_seeded_high_value_rule_repaired_td_1297';
   if (shouldRun(repairId, 'td1297', 'treasury', 'event', 'rule', 'high_value', 'package8')) {
-    await runCase(results, repairId, 'v10.2.7: the boot moves the seeded high-value treasury audit rule from the amount to isHighValue once, with an audit row, and leaves a rule the owner changed as it is (TD-1297, review M-3)', async () => {
+    await runCase(results, repairId, 'v10.2.7: the boot moves the seeded high-value treasury audit rule from the amount to isHighValue once, with an audit row, and leaves a rule the owner changed, or whose text the owner rewrote to print the amount, as it is (TD-1297, review M-3 / N-5)', async () => {
       const { repairSeededHighValueTreasuryRule, HIGH_VALUE_TREASURY_RULE_NAME } = await import('../../services/events/highValueTreasuryRuleRepair.js');
       const { RuleEngineService } = await import('../../services/ruleEngine.service.js');
       const seededConfig = { category: 'خزانه‌داری:تراکنش_کلان', tag: 'HIGH_VALUE_TRANSACTION', descriptionTemplate: 'تراکنش خزانه‌داری با ارزش کلان {{payload.amount}} {{payload.currency}} به ثبت رسید.' };
       const inserted = await orm.insert(eventActionRules).values([
         { name: HIGH_VALUE_TREASURY_RULE_NAME, description: 'ثبت لاگ ممیزی امنیتی اختصاصی برای کلیه تراکنش‌های واریز یا برداشت بالای ۵۰۰ میلیون ریال', eventType: 'TreasuryTransactionApproved', actionType: 'audit_log', conditionsJson: [{ field: 'payload.amount', operator: 'gte', value: 500000000 }], actionConfigJson: seededConfig, isActive: 1 },
         { name: HIGH_VALUE_TREASURY_RULE_NAME, description: 'owner changed', eventType: 'TreasuryTransactionApproved', actionType: 'audit_log', conditionsJson: [{ field: 'payload.amount', operator: 'gte', value: 100000000 }], actionConfigJson: seededConfig, isActive: 1 },
+        { name: HIGH_VALUE_TREASURY_RULE_NAME, description: 'owner text', eventType: 'TreasuryTransactionApproved', actionType: 'audit_log', conditionsJson: [{ field: 'payload.amount', operator: 'gte', value: 500000000 }], actionConfigJson: { ...seededConfig, descriptionTemplate: 'مبلغ {{payload.amount}}' }, isActive: 1 },
       ]).returning({ id: eventActionRules.id });
       try {
         await repairSeededHighValueTreasuryRule();
@@ -247,11 +248,13 @@ export async function runTreasuryEventPrivacyTests(shouldRun: ShouldRun): Promis
         const rows = (await pool.query<{ id: number; conditions_json: unknown; action_config_json: Record<string, unknown> }>(
           'SELECT id, conditions_json, action_config_json FROM event_action_rules WHERE id = ANY($1::int[]) ORDER BY id', [inserted.map(r => r.id)],
         )).rows;
-        const [seeded, changed] = rows;
+        const [seeded, changed, ownText] = rows;
         const [moved] = (seeded.conditions_json ?? []) as Array<Record<string, unknown>>;
         if ((seeded.conditions_json as unknown[]).length !== 1 || moved?.field !== 'payload.isHighValue' || moved?.operator !== 'eq' || moved?.value !== true) throw new Error(`the seeded rule now holds ${JSON.stringify(seeded.conditions_json)}`);
         if (String(seeded.action_config_json.descriptionTemplate).includes('payload.amount')) throw new Error('the seeded rule still prints the amount');
         if (JSON.stringify(changed.conditions_json).indexOf('100000000') < 0) throw new Error('the rule the owner changed was rewritten');
+        // review N-5: a seeded condition whose action text the owner rewrote to print the amount is left for the health check
+        if (JSON.stringify(ownText.conditions_json).indexOf('payload.amount') < 0 || ownText.action_config_json.descriptionTemplate !== 'مبلغ {{payload.amount}}') throw new Error('the rule with the owner\'s own text was rewritten');
         if (again !== 0) throw new Error(`a second boot moved ${again} more rules`);
         const audits = Number((await pool.query<{ c: string }>(`SELECT count(*) AS c FROM activity_logs WHERE entity = $1`, [`قانون واکنش خودکار #${seeded.id}`])).rows[0]?.c ?? 0);
         if (audits !== 1) throw new Error(`the repair wrote ${audits} audit rows`);
@@ -267,7 +270,7 @@ export async function runTreasuryEventPrivacyTests(shouldRun: ShouldRun): Promis
 
   const healthId = 'reg_treasury_amount_rule_health_td_1297';
   if (shouldRun(healthId, 'td1297', 'treasury', 'event', 'rule', 'health', 'package8')) {
-    await runCase(results, healthId, 'v10.2.7: the financial health check lists the automatic rules of the treasury event that read its amount, description or reason, which it no longer carries, by whether they now never match, match every time or print empty, and leaves them as saved (TD-1297)', async () => {
+    await runCase(results, healthId, 'v10.2.7: the financial health check lists the automatic rules of the treasury event that read its amount, description or reason, which it no longer carries, by whether they now never match, match every time (not equal, absence, a NOT group, the event.payload spelling) or print empty, and leaves them as saved (TD-1297)', async () => {
       const { findTreasuryPrivateFieldRules, buildTreasuryPrivateFieldRuleHealthTest } = await import('../../services/accounting/treasuryRuleFieldHealth.js');
       const tag = tagOf();
       const inserted = await orm.insert(eventActionRules).values([
@@ -277,19 +280,21 @@ export async function runTreasuryEventPrivacyTests(shouldRun: ShouldRun): Promis
         { name: `TD1297 invoice ${tag}`, eventType: 'InvoiceApproved', actionType: 'audit_log', conditionsJson: [{ field: 'payload.amount', operator: 'gt', value: 0 }], actionConfigJson: {}, isActive: 1 },
         { name: `TD1297 empty ${tag}`, eventType: 'TreasuryTransactionApproved', actionType: 'audit_log', conditionsJson: { logic: 'AND', conditions: [{ field: 'payload.currency', operator: 'eq', value: 'IRR' }, { logic: 'OR', rules: [{ field: 'payload.reason', operator: 'is_empty' }] }] }, actionConfigJson: {}, isActive: 1 },
         { name: `TD1297 below ${tag}`, eventType: 'TreasuryTransactionApproved', actionType: 'audit_log', conditionsJson: [{ field: 'payload.amount', operator: 'lt', value: 1000 }], actionConfigJson: {}, isActive: 1 },
+        { name: `TD1297 notequal ${tag}`, eventType: 'TreasuryTransactionApproved', actionType: 'audit_log', conditionsJson: [{ field: 'payload.amount', operator: 'neq', value: 0 }], actionConfigJson: {}, isActive: 1 },
+        { name: `TD1297 negated ${tag}`, eventType: 'TreasuryTransactionApproved', actionType: 'audit_log', conditionsJson: { logic: 'NOT', conditions: [{ field: 'event.payload.amount', operator: 'gte', value: 1 }] }, actionConfigJson: {}, isActive: 1 },
       ]).returning({ id: eventActionRules.id, name: eventActionRules.name });
       try {
         const listed = (await findTreasuryPrivateFieldRules()).filter(r => r.name.endsWith(tag));
         const names = listed.map(r => `${r.name.split(' ')[1]}:${r.fields.join('+')}:${r.use}`).sort().join(',');
-        const expected = 'amount:payload.amount:never_matches,below:payload.amount:never_matches,empty:payload.reason:always_matches,text:payload.description:text_only';
+        const expected = 'amount:payload.amount:never_matches,below:payload.amount:never_matches,empty:payload.reason:always_matches,negated:payload.amount:always_matches,notequal:payload.amount:always_matches,text:payload.description:text_only';
         if (names !== expected) throw new Error(`the health check listed "${names}", expected "${expected}"`);
         const test = buildTreasuryPrivateFieldRuleHealthTest(listed);
-        if (test.status !== 'warning' || test.count !== 4) throw new Error(`the health test is ${test.status} with ${test.count}`);
+        if (test.status !== 'warning' || test.count !== 6) throw new Error(`the health test is ${test.status} with ${test.count}`);
         if (!(test.scoreImpact < 0)) throw new Error(`a rule that now matches every treasury event left the score at ${test.scoreImpact}`);
         if (buildTreasuryPrivateFieldRuleHealthTest(listed.filter(r => r.use !== 'always_matches')).scoreImpact !== 0) throw new Error('rules that never match lowered the score');
         const kept = await orm.select({ c: eventActionRules.conditionsJson }).from(eventActionRules).where(inArray(eventActionRules.id, inserted.map(r => r.id)));
         if (JSON.stringify(kept[0]?.c).indexOf('payload.amount') < 0) throw new Error('the listed rule was rewritten');
-        return 'comparison, absence and text rules listed by kind, currency and invoice rules not';
+        return 'comparison, absence, not-equal, negated and text rules listed by kind, currency and invoice rules not';
       } finally {
         await orm.delete(eventActionRules).where(inArray(eventActionRules.id, inserted.map(r => r.id)));
       }

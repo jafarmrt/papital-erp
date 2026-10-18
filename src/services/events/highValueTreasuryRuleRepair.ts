@@ -12,8 +12,9 @@ import { errorMessageOf } from '../../utils/index.js';
  * rewrites (an exception to TD-715 the review chose): only while it still holds exactly its seeded condition, it is
  * moved to `payload.isHighValue eq true`, whose threshold «آستانه تراکنش کلان خزانه» is 500,000,000 rials by default,
  * and its seeded texts lose the amount; one audit row with the condition before and after, in the same transaction
- * under the rule row lock. A rule the owner changed (another condition, name or event type) is left as it is and is
- * listed by the financial health check (`event_rule_treasury_private_fields`).
+ * under the rule row lock. A rule the owner changed (another condition, name or event type, or a text of its own that
+ * still prints the amount or description, review N-5) is left as it is and is listed by the financial health check
+ * (`event_rule_treasury_private_fields`).
  */
 export const HIGH_VALUE_TREASURY_RULE_NAME = 'ثبت ممیزی تراکنش‌های کلان خزانه‌داری';
 export const HIGH_VALUE_TREASURY_RULE_DESCRIPTION = 'ثبت ردیف ممیزی امنیتی اختصاصی برای هر دریافت یا پرداخت خزانه که ارزش ریالی آن دست‌کم «آستانه تراکنش کلان خزانه» در تنظیمات باشد (پیش‌فرض ۵۰۰ میلیون ریال)';
@@ -23,6 +24,13 @@ export const HIGH_VALUE_TREASURY_RULE_TEMPLATE = 'تراکنش کلان خزان
 const SEEDED_CONDITIONS = [{ field: 'payload.amount', operator: 'gte', value: 500000000 }];
 const SEEDED_DESCRIPTION = 'ثبت لاگ ممیزی امنیتی اختصاصی برای کلیه تراکنش‌های واریز یا برداشت بالای ۵۰۰ میلیون ریال';
 const SEEDED_TEMPLATE = 'تراکنش خزانه‌داری با ارزش کلان {{payload.amount}} {{payload.currency}} به ثبت رسید.';
+
+/** an action text the owner wrote that prints a field the treasury event no longer carries */
+function ownTextReadsPrivateField(actionConfig: unknown): boolean {
+  const template = (actionConfig as Record<string, unknown> | null)?.descriptionTemplate;
+  if (template === undefined || template === null || template === SEEDED_TEMPLATE) return false;
+  return /payload\.(amount|description|reason)\b/.test(String(template));
+}
 
 function isSeededCondition(conditions: unknown): boolean {
   if (!Array.isArray(conditions) || conditions.length !== 1) return false;
@@ -52,7 +60,7 @@ async function moveSeededRules(): Promise<number> {
       .for('update');
     let repaired = 0;
     for (const rule of candidates) {
-      if (!isSeededCondition(rule.conditionsJson)) continue;
+      if (!isSeededCondition(rule.conditionsJson) || ownTextReadsPrivateField(rule.actionConfigJson)) continue;
       const config = { ...((rule.actionConfigJson ?? {}) as Record<string, unknown>) };
       if (config.descriptionTemplate === SEEDED_TEMPLATE) config.descriptionTemplate = HIGH_VALUE_TREASURY_RULE_TEMPLATE;
       const description = rule.description === SEEDED_DESCRIPTION ? HIGH_VALUE_TREASURY_RULE_DESCRIPTION : rule.description;
