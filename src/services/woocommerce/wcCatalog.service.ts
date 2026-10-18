@@ -64,9 +64,14 @@ export interface SiteCatalog {
   maxProductId: number;
   /**
    * review M-C: a list came in another order than the id order asked for (a shop or plugin that ignores `orderby`), so a
-   * product may have been missed between two pages; every link of a product not read is then left as it is
+   * product may have been missed between two pages
    */
   unordered: boolean;
+  /**
+   * review M-R: a list showed one row on two pages; with `unordered` this is a date order without a tie-breaker, which
+   * also leaves a row out, so every link of a product not read is then left as it is
+   */
+  repeated: boolean;
 }
 
 /** review M-6: one refresh never holds the lock longer than this (under the 60 s of a reverse proxy) */
@@ -88,33 +93,37 @@ function stockOf(raw: RawProduct): number | null {
   return raw.stock_quantity === null || raw.stock_quantity === undefined || !Number.isFinite(n) ? null : Math.trunc(n);
 }
 
-interface PagedRows { rows: RawProduct[]; truncated: boolean; unordered: boolean }
+interface PagedRows { rows: RawProduct[]; truncated: boolean; unordered: boolean; repeated: boolean }
 
 /**
  * Every page of a list in id order (review H-1: the default date order has no tie-breaker, so a product could be read on
- * two pages and be reported as a duplicate of itself); a row read twice is kept once, and a new id not above every id
- * read before marks the list `unordered` (review M-C)
+ * two pages and be reported as a duplicate of itself); a row read twice is kept once and marks the list `repeated`
+ * (review M-R), and a new id not above every id read before marks it `unordered` (review M-C)
  */
 async function readPages(conn: WcConnection, path: string, fields: string, signal?: AbortSignal): Promise<PagedRows> {
   const rows: RawProduct[] = [];
   const seen = new Set<number>();
   let lastId = 0;
   let unordered = false;
+  let repeated = false;
   for (let page = 1; page <= WC_MAX_CATALOG_PAGES; page++) {
     const batch = asRows(await wcRequest(conn, 'GET', path, null, {
       per_page: WC_BATCH_SIZE, page, status: 'any', orderby: 'id', order: 'asc', _fields: fields,
     }, { signal }));
     for (const row of batch) {
       const id = Number(row.id);
-      if (seen.has(id)) continue;
+      if (seen.has(id)) {
+        repeated = true;
+        continue;
+      }
       seen.add(id);
       if (id <= lastId) unordered = true;
       lastId = Math.max(lastId, id);
       rows.push(row);
     }
-    if (batch.length < WC_BATCH_SIZE) return { rows, truncated: false, unordered };
+    if (batch.length < WC_BATCH_SIZE) return { rows, truncated: false, unordered, repeated };
   }
-  return { rows, truncated: true, unordered };
+  return { rows, truncated: true, unordered, repeated };
 }
 
 /**
@@ -155,7 +164,7 @@ export async function mapLimited<T, R>(
  * linked, so a push never changes how the shop keeps their stock (review M-1 / N-4).
  */
 export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal): Promise<SiteCatalog> {
-  const { rows: products, truncated, unordered: productsUnordered } =
+  const { rows: products, truncated, unordered: productsUnordered, repeated: productsRepeated } =
     await readPages(conn, 'products', 'id,name,sku,type,stock_quantity,manage_stock', signal);
   const site: SiteProduct[] = [];
   const skipped: WcUnmatchedProduct[] = [];
@@ -198,7 +207,11 @@ export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal):
       site.push({ productId, variationId, name, sku: vSku, stock: stockOf(v), manageStock: v.manage_stock === true });
     }
   });
-  return { site, skipped, truncated, maxProductId, unordered: productsUnordered || variationLists.some(l => l.unordered) };
+  return {
+    site, skipped, truncated, maxProductId,
+    unordered: productsUnordered || variationLists.some(l => l.unordered),
+    repeated: productsRepeated || variationLists.some(l => l.repeated),
+  };
 }
 
 interface Match { site: SiteProduct; itemId: number }
@@ -258,7 +271,7 @@ export const EMPTY_CATALOG_MESSAGE =
 
 /** Writes the links of one catalog reading (one transaction) and the run row and audit row with it */
 export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor): Promise<WcRefreshSummary> {
-  const { site, skipped, truncated, maxProductId, unordered } = catalog;
+  const { site, skipped, truncated, maxProductId, unordered, repeated } = catalog;
   return orm.transaction(async (tx) => {
     const live = await tx.select().from(wcProductLinks).where(eq(wcProductLinks.isDeleted, 0))
       .orderBy(asc(wcProductLinks.id)).for('update');
@@ -266,12 +279,13 @@ export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor): P
       throw new ValidationError(EMPTY_CATALOG_MESSAGE, undefined, WC_SHOP_REQUEST_FAILED);
     }
     // review H-A: a link of a product past the cap (a truncated reading, an id above every id read) is left as it is, and so
-    // is its item; review M-C / N-1: when such a truncated reading also ignored the id order, so is the link of every product
-    // not read. A complete reading lists every product whatever its order, so a link of any other product it misses is closed
-    const unorderedCut = truncated && unordered;
+    // is its item; review M-C / N-1 / M-R: a reading out of id order that was cut at the cap or showed a row twice (a date
+    // order without a tie-breaker, which also leaves a row out) may have missed any product, so the link of every product
+    // not read is left as it is too. Any other reading lists every product, so a link of a product it misses is closed
+    const keepUnread = unordered && (truncated || repeated);
     const readKeys = new Set([...site, ...skipped].map(p => keyOf(p.productId, p.variationId)));
-    const leftAsIs = (l: { wcProductId: number; wcVariationId: number }) => truncated
-      && (l.wcProductId > maxProductId || (unorderedCut && !readKeys.has(keyOf(l.wcProductId, l.wcVariationId))));
+    const leftAsIs = (l: { wcProductId: number; wcVariationId: number }) => (truncated && l.wcProductId > maxProductId)
+      || (keepUnread && !readKeys.has(keyOf(l.wcProductId, l.wcVariationId)));
     const untouched = live.filter(leftAsIs);
     const { matches, unmatched: notMatched } = await matchSiteCatalog(tx, site, new Set(untouched.map(l => l.itemId)));
     const unmatched = [...skipped, ...notMatched];
@@ -311,7 +325,7 @@ export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor): P
       unmatchedTotal: unmatched.length,
       unmatched: unmatched.slice(0, WC_LIST_LIMIT),
       catalogTruncated: truncated,
-      catalogUnordered: unorderedCut,
+      catalogUnordered: keepUnread,
     };
     await tx.insert(wcSyncRuns).values({
       kind: 'refresh', status: 'ok', userId: actorUserId(actor), startedAt: now, finishedAt: now, summary,
@@ -322,7 +336,7 @@ export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor): P
       description: `بازخوانی محصولات سایت: ${n(linkedCount)} کالا وصل، ${n(unmatched.length)} محصول سایت بی کالا`,
       details: {
         siteProductCount: summary.siteProductCount, linkedCount, newCount: fresh.length, closedCount,
-        unmatchedTotal: unmatched.length, catalogTruncated: truncated, catalogUnordered: unorderedCut,
+        unmatchedTotal: unmatched.length, catalogTruncated: truncated, catalogUnordered: keepUnread,
       },
     });
     return summary;

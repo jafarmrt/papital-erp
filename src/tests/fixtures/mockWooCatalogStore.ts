@@ -28,8 +28,10 @@ export interface MockWooCatalogStore {
   /** request paths (without the API prefix) that answer 500, so one read of a refresh fails */
   failPaths: Set<string>;
   /** catalog pages after the first start one row early, so their first row repeats the last row of the page before (a date
-   * order without a tie-breaker): only for a request without `orderby=id&order=asc`, or for every request with `always` */
-  unstableOrder?: 'without_id_order' | 'always';
+   * order without a tie-breaker): only for a request without `orderby=id&order=asc`, or for every request with `always`;
+   * `swap_ties` (review M-R) swaps the rows on each side of a page edge for every page after the first, so the last row of
+   * a page shows again first on the next one and the row that followed it is never shown */
+  unstableOrder?: 'without_id_order' | 'always' | 'swap_ties';
   /** the product list ignores `orderby=id` and answers the newest product first (review M-C) */
   newestFirst?: boolean;
   /** requests whose path matches `pattern` are answered only once `until` settles (review N-G: no timing in the test) */
@@ -53,6 +55,11 @@ function page<T>(rows: T[], url: URL, store: MockWooCatalogStore): T[] {
   const stable = url.searchParams.get('orderby') === 'id' && url.searchParams.get('order') === 'asc';
   const shifted = store.unstableOrder === 'always' || (store.unstableOrder === 'without_id_order' && !stable);
   const start = (n - 1) * perPage - (shifted && n > 1 ? 1 : 0);
+  if (store.unstableOrder === 'swap_ties' && n > 1 && start < rows.length) {
+    const swapped = [...rows];
+    [swapped[start - 1], swapped[start]] = [swapped[start], swapped[start - 1]];
+    return swapped.slice(start, start + perPage);
+  }
   return rows.slice(start, start + perPage);
 }
 

@@ -112,9 +112,12 @@ export function catalogCapNotice(): string {
   return `بازخوانی سایت به سقف ${formatPersianNumber(WC_MAX_CATALOG_PRODUCTS)} محصول رسید؛ محصولات پس از آن خوانده نشد و پیوند آن‌ها دست نخورد.`;
 }
 
-/** Shown while the last reading stopped at the cap and came in another order than the id order asked for (review M-C / N-1) */
+/**
+ * Shown while the last reading came in another order than the id order asked for and may have missed a product (it stopped
+ * at the cap or showed a product twice; review M-C / N-1 / M-R)
+ */
 export function catalogOrderNotice(): string {
-  return 'سایت محصولات را به ترتیب شناسه نفرستاد و بازخوانی به سقف رسید؛ پیوند محصولاتی که خوانده نشد دست نخورد. افزونه‌ها یا تنظیمات مرتب‌سازی سایت را بررسی کنید.';
+  return 'سایت محصولات را به ترتیب شناسه نفرستاد و ممکن است محصولی خوانده نشده باشد؛ پیوند محصولاتی که خوانده نشد دست نخورد. افزونه‌ها یا تنظیمات مرتب‌سازی سایت را بررسی کنید.';
 }
 
 export function catalogRefreshMessage(summary: {
