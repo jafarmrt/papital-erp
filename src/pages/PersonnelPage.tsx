@@ -49,7 +49,7 @@ export function PersonnelPage() {
     handleDelete,
     handleViewDetail,
     stats
-  } = usePersonnel();
+  } = usePersonnel({ fullListOpen: canManage && showExcelModal });
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto font-farsi text-slate-800 dir-rtl">

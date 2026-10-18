@@ -1,12 +1,15 @@
-import { useState, useMemo, FormEvent, useEffect } from 'react';
+import { useState, FormEvent, useEffect } from 'react';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { Personnel } from '../types';
 import { toast as hotToast } from 'react-hot-toast';
 import { fetchJson } from '../api';
 import { errorMessageOf } from '../utils/formatters';
-import { normalizePersianText, validateIranianNationalId, validateIranianPhoneNumber, normalizeNationalId, normalizePhoneNumber } from '../utils';
+import { validateIranianNationalId, validateIranianPhoneNumber, normalizeNationalId, normalizePhoneNumber } from '../utils';
+import { useDebounce } from './useDebounce';
+import { EMPTY_PERSONNEL_STATS } from '../lib/personnel/personnelList';
 import {
   usePersonnelListQuery,
+  usePersonnelPageQuery,
   useUsersListQuery,
   useSavePersonnelMutation,
   useDeletePersonnelMutation,
@@ -90,15 +93,15 @@ const INITIAL_FORM_DATA: PersonnelFormData = {
   notes: ''
 };
 
-export function usePersonnel() {
-  const { data: personnelList = [], isLoading: isLoadingPersonnel, refetch: loadData } = usePersonnelListQuery();
-  const { data: usersList = [] } = useUsersListQuery();
-
-  const saveMutation = useSavePersonnelMutation();
-  const deleteMutation = useDeletePersonnelMutation();
-
+/**
+ * OBS-R2-57 (TD-1321): the table reads one page from the server (search, status and page in SQL, the cards from the same
+ * answer); every personnel is read only while a window that needs them is open: the form (users linked to another
+ * personnel) or the Excel window (`fullListOpen`).
+ */
+export function usePersonnel(options: { fullListOpen?: boolean } = {}) {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const debouncedSearch = useDebounce(searchQuery);
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -107,10 +110,18 @@ export function usePersonnel() {
   // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, statusFilter]);
+  }, [debouncedSearch, statusFilter, pageSize]);
 
   // Modal states
   const [showFormModal, setShowFormModal] = useState<boolean>(false);
+
+  const pageQuery = usePersonnelPageQuery({ page: currentPage, limit: pageSize, search: debouncedSearch, status: statusFilter });
+  const fullListQuery = usePersonnelListQuery({ enabled: showFormModal || Boolean(options.fullListOpen) });
+  const personnelList = fullListQuery.data ?? [];
+  const { data: usersList = [] } = useUsersListQuery();
+
+  const saveMutation = useSavePersonnelMutation();
+  const deleteMutation = useDeletePersonnelMutation();
   const [editingId, setEditingId] = useState<number | null>(null);
   // v9.0.30 (TD-442): نسخه رکوردی که فرم ویرایش از آن ساخته شده؛ سرور نسخه کهنه را با ۴۰۹ رد می‌کند
   const [editingVersion, setEditingVersion] = useState<number | undefined>(undefined);
@@ -257,56 +268,19 @@ export function usePersonnel() {
     });
   };
 
-  // Filtered List with robust Persian normalization and comprehensive field matching
-  const filteredPersonnel = useMemo(() => {
-    const safePersonnel = Array.isArray(personnelList) ? personnelList : [];
-    const normalizedQ = normalizePersianText(searchQuery);
-
-    return safePersonnel.filter((p) => {
-      const matchesStatus = statusFilter === 'all' || p.employmentStatus === statusFilter;
-      if (!matchesStatus) return false;
-
-      if (!normalizedQ) return true;
-
-      const searchableFields = [
-        p.fullName,
-        p.firstName,
-        p.lastName,
-        p.personnelCode,
-        p.phone,
-        p.nationalId,
-        p.jobTitle,
-        p.education,
-        p.specializedSkills,
-        p.otherSkills,
-        p.bankName,
-        p.cardNumber,
-        p.accountNumber,
-        p.shebaNumber,
-        p.username,
-        p.address,
-        p.notes,
-        p.referralSource
-      ];
-
-      return searchableFields.some(field => {
-        if (!field) return false;
-        return normalizePersianText(String(field)).includes(normalizedQ);
-      });
-    });
-  }, [personnelList, statusFilter, searchQuery]);
-
-  // Pagination computations
-  const totalFilteredCount = filteredPersonnel.length;
+  const page = pageQuery.data;
+  const paginatedPersonnel = page?.data ?? [];
+  const totalFilteredCount = page?.total ?? 0;
+  const stats = page?.stats ?? EMPTY_PERSONNEL_STATS;
   const totalPages = Math.max(1, Math.ceil(totalFilteredCount / (pageSize || 15)));
   const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
-
   const startIndex = (safeCurrentPage - 1) * pageSize;
-  const endIndex = Math.min(startIndex + pageSize, totalFilteredCount);
+  const endIndex = Math.min(startIndex + paginatedPersonnel.length, totalFilteredCount);
 
-  const paginatedPersonnel = useMemo(() => {
-    return filteredPersonnel.slice(startIndex, endIndex);
-  }, [filteredPersonnel, startIndex, endIndex]);
+  // a delete that empties the last page moves back to the page that still has rows
+  useEffect(() => {
+    if (page && currentPage > totalPages) setCurrentPage(totalPages);
+  }, [page, currentPage, totalPages]);
 
   const resetFilters = () => {
     setSearchQuery('');
@@ -314,21 +288,12 @@ export function usePersonnel() {
     setCurrentPage(1);
   };
 
-  // Statistics
-  const stats = useMemo(() => {
-    const safePersonnel = Array.isArray(personnelList) ? personnelList : [];
-    const total = safePersonnel.length;
-    const active = safePersonnel.filter((p) => p.employmentStatus === 'فعال').length;
-    const terminated = safePersonnel.filter((p) => p.employmentStatus === 'قطع همکاری').length;
-    const onLeave = safePersonnel.filter((p) => p.employmentStatus === 'مرخصی' || p.employmentStatus === 'تعلیق').length;
-    const usersCount = safePersonnel.filter((p) => p.userId).length;
-    return { total, active, terminated, onLeave, usersCount };
-  }, [personnelList]);
+  const loadData = () => Promise.all([pageQuery.refetch(), ...(fullListQuery.isFetched ? [fullListQuery.refetch()] : [])]);
 
   return {
     personnelList,
     usersList,
-    isLoading: isLoadingPersonnel,
+    isLoading: pageQuery.isLoading,
     searchQuery,
     setSearchQuery,
     statusFilter,
@@ -341,7 +306,7 @@ export function usePersonnel() {
     setPageSize,
     totalPages,
     totalFilteredCount,
-    totalAllCount: personnelList.length,
+    totalAllCount: stats.total,
     startIndex,
     endIndex,
     paginatedPersonnel,
@@ -363,7 +328,6 @@ export function usePersonnel() {
     handleSave,
     handleDelete,
     handleViewDetail,
-    filteredPersonnel,
     stats
   };
 }

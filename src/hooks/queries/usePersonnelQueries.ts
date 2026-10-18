@@ -1,17 +1,20 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { Personnel, User } from '../../types';
 import { toast } from 'react-hot-toast';
 import { QUERY_KEYS, personnelKeys } from '../../lib/queryKeys';
 import { invalidateDomain } from '../../lib/queryInvalidation';
+import { EMPTY_PERSONNEL_STATS, personnelPageUrl, type PersonnelPage, type PersonnelPageParams } from '../../lib/personnel/personnelList';
 
 export { personnelKeys };
 
 /**
- * Hook to query all personnel
+ * Hook to query all personnel (the pick lists). OBS-R2-57: the personnel page reads it only while a window that needs every
+ * personnel is open (`enabled`), and its table reads `usePersonnelPageQuery`.
  */
-export function usePersonnelListQuery() {
+export function usePersonnelListQuery(options: { enabled?: boolean } = {}) {
   return useQuery<Personnel[]>({
+    enabled: options.enabled ?? true,
     queryKey: QUERY_KEYS.personnel.list(),
     queryFn: async () => {
       const res = await fetchJson('/personnel');
@@ -19,6 +22,26 @@ export function usePersonnelListQuery() {
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+/** OBS-R2-57 (TD-1321): one page of the personnel table, searched, filtered and counted on the server */
+export function usePersonnelPageQuery(params: PersonnelPageParams) {
+  return useQuery<PersonnelPage<Personnel>>({
+    queryKey: QUERY_KEYS.personnel.page(params),
+    queryFn: async () => {
+      const res = await fetchJson<Partial<PersonnelPage<Personnel>>>(personnelPageUrl(params));
+      return {
+        data: Array.isArray(res?.data) ? res.data : [],
+        total: Number(res?.total ?? 0),
+        page: Number(res?.page ?? params.page),
+        limit: Number(res?.limit ?? params.limit),
+        stats: res?.stats ?? EMPTY_PERSONNEL_STATS,
+      };
+    },
+    placeholderData: keepPreviousData,
+    staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: true,
   });
 }

@@ -130,6 +130,8 @@ export const QUERY_KEYS = {
     list: () => ['personnel', 'list'] as const,
     // فهرست انتخاب پرسنل با پارامترهای درخواست (مثلاً GET /personnel?limit=1000 صفحه حسابداری)
     lookup: (params: Record<string, unknown> | object) => ['personnel', 'list', params] as const,
+    // OBS-R2-57: one page of the personnel table (`GET /personnel?page=`)
+    page: (params: Record<string, unknown> | object) => ['personnel', 'page', params] as const,
   },
 
   // Piecework & Work Logs

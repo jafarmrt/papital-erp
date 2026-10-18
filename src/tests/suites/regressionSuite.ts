@@ -11167,6 +11167,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // 10.2 package 9: the group dashboard (birthdays, greetings, presence, whats-new; TD-1300)
   const { runSocialDashboardTests } = await import('../regression/socialDashboardTests.js');
   results.push(...await runSocialDashboardTests(shouldRun));
+  // 10.2 package 11: lists read one page at a time from the server (TD-1321 …)
+  const { runSpeedConsistencyV102Tests } = await import('../regression/speedConsistencyV102Tests.js');
+  results.push(...await runSpeedConsistencyV102Tests(shouldRun));
 
   return results;
 }
