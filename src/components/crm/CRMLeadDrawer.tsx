@@ -11,6 +11,8 @@ import { copyToClipboard } from '../../utils/clipboard';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
 import { DialogLayer } from '../common/DialogLayer';
 import { activityResultLabel } from '../../lib/crm/crmScreenText';
+import { CrmAttachmentsPanel } from './CrmAttachmentsPanel';
+import { useHasPermission } from '../../contexts/AuthContext';
 
 interface CRMLeadDrawerProps {
   selectedLeadDrawer: CRMLead | null;
@@ -25,7 +27,8 @@ interface CRMLeadDrawerProps {
   onEditActivity?: (act: CRMActivity) => void;
   onDeleteActivity?: (act: CRMActivity) => void;
   onConvertToInvoice?: (lead: CRMLead) => void;
-  onOpenCustomerDossier?: (customerName: string) => void;
+  /** v10.2 package 7 (OBS-R2-24): the page opens the dossier of the file's own party */
+  onOpenCustomerDossier?: (lead: CRMLead) => void;
 }
 
 export function CRMLeadDrawer({
@@ -47,6 +50,12 @@ export function CRMLeadDrawer({
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [stockSearchTerm, setStockSearchTerm] = useState('');
   const [isLoadingStock, setIsLoadingStock] = useState(false);
+  // v10.2 package 7: the sales file's attachments; the drawer does not close while a file is being sent
+  const canViewAttachments = useHasPermission('crm.view');
+  const [attachmentsBusy, setAttachmentsBusy] = useState(false);
+  const closeDrawer = () => {
+    if (!attachmentsBusy) onCloseDrawer();
+  };
 
   useEffect(() => {
     if (activeTab === 'stock' && items.length === 0) {
@@ -83,7 +92,7 @@ export function CRMLeadDrawer({
 
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-[60] bg-slate-900/50 backdrop-blur-xs flex justify-end">
-      <DialogLayer onClose={onCloseDrawer} />
+      <DialogLayer onClose={closeDrawer} disabled={attachmentsBusy} />
       <div className="bg-white w-full md:w-[60%] lg:w-[60%] max-w-[60vw] h-full shadow-2xl flex flex-col p-6 overflow-y-auto custom-scrollbar animate-in slide-in-from-left duration-200">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3 shrink-0">
           <div>
@@ -113,7 +122,9 @@ export function CRMLeadDrawer({
               </button>
             )}
             <button
-              onClick={onCloseDrawer}
+              onClick={closeDrawer}
+              disabled={attachmentsBusy}
+              aria-label="بستن"
               className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 cursor-pointer ml-1 text-xs"
             >
               ✕
@@ -128,7 +139,7 @@ export function CRMLeadDrawer({
               <span className="text-slate-400 block text-[10px]">خریدار / مخاطب:</span>
               {selectedLeadDrawer.customerName && onOpenCustomerDossier ? (
                 <button
-                  onClick={() => onOpenCustomerDossier(selectedLeadDrawer.customerName!)}
+                  onClick={() => onOpenCustomerDossier(selectedLeadDrawer)}
                   className="font-black text-xs text-blue-700 hover:text-blue-900 hover:underline cursor-pointer inline-flex items-center gap-1 mt-0.5"
                   title="مشاهده پرونده جامع این مشتری"
                 >
@@ -249,6 +260,12 @@ export function CRMLeadDrawer({
             )}
           </div>
         </div>
+
+        {canViewAttachments && (
+          <div className="border border-slate-200 rounded-2xl p-3.5 mb-4">
+            <CrmAttachmentsPanel key={selectedLeadDrawer.id} owner="lead" ownerId={selectedLeadDrawer.id} onBusyChange={setAttachmentsBusy} />
+          </div>
+        )}
 
         {/* Tab Navigation */}
         <div className="flex items-center border-b border-slate-200 mb-4 gap-4">

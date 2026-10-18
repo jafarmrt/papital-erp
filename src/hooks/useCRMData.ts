@@ -1,11 +1,13 @@
-import { useState, useEffect, useCallback, useRef, FormEvent } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { fetchJson, isAbortError } from '../api';
 import { CRMLead, CRMActivity } from '../types';
 import { getTodayJalaliDate, getFutureJalaliDate, errorMessageOf, isoToJalaliDate } from '../utils';
 import toast from 'react-hot-toast';
 import { confirmAction } from '../components/ConfirmDialogHost';
-import { useCRMFilters, normalizeLeadStage, buildLeadQueryParams, buildActivityQueryParams } from './useCRMFilters';
+import { useCRMFilters, normalizeLeadStage, buildLeadQueryParams } from './useCRMFilters';
+import { useDebounce } from './useDebounce';
+import { CRM_ACTIVITY_PAGE_QUERY_KEY, CRM_LEAD_PAGE_QUERY_KEY, CRM_PARTY_RECORDS_QUERY_KEY } from '../lib/crm/crmListPages';
 import type { CrmStats } from '../lib/crm/leadCurrencyTotals';
 import { CRM_FOLLOWUPS_QUERY_KEY } from '../lib/crm/crmFollowupsQuery';
 import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
@@ -26,7 +28,12 @@ export const STAGES = [
 
 export const SOURCES = ['تماس تلفنی', 'وبسایت', 'معرف', 'نمایشگاه', 'شبکه‌های اجتماعی', 'مراجع حضوری', 'سایر'];
 
-export function useCRMData(user: any) {
+/**
+ * `withLists: false` (the customers page) loads only the pick lists the windows need: neither the statistics nor the
+ * board's sales files, which that page never shows (v10.2 package 7, OBS-R2-31).
+ */
+export function useCRMData(user: any, options: { withLists?: boolean } = {}) {
+  const withLists = options.withLists !== false;
   const currentLoggedInUser = user?.fullName || user?.full_name || user?.username || '';
   // v9.0.148 (TD-893): دکمه حذف پرونده فروش با همان مجوز API حذف (`crm.delete`)، نه با کد نقش
   const canDeleteLead = useHasPermission('crm.delete');
@@ -34,7 +41,6 @@ export function useCRMData(user: any) {
   const [activeTab, setActiveTab] = useState<'kanban' | 'list' | 'activities' | 'followups' | 'funnel'>('kanban');
   const [stats, setStats] = useState<Partial<CrmStats>>({});
   const [leads, setLeads] = useState<CRMLead[]>([]);
-  const [activities, setActivities] = useState<CRMActivity[]>([]);
   const [customersList, setCustomersList] = useState<any[]>([]);
   // V10-4.1: منبع «فروشنده مسئول» اکنون پرسنل فعال است (نه users)
   const [personnelList, setPersonnelList] = useState<any[]>([]);
@@ -44,7 +50,7 @@ export function useCRMData(user: any) {
 
   // V3.2.3 (TD-080 / Playbook Scenario 6): فیلترها به هوک اختصاصی useCRMFilters منتقل شدند
   const filters = useCRMFilters();
-  const { searchTerm, filterSeller, filterStage, filterCustomer, filterTag, fromDate, toDate } = filters;
+  const { searchTerm, filterSeller, filterStage, filterCustomer, filterTag } = filters;
 
   // Modals state
   const [isLeadModalOpen, setIsLeadModalOpen] = useState<boolean>(false);
@@ -108,99 +114,81 @@ export function useCRMData(user: any) {
   const [lostPromptLeadId, setLostPromptLeadId] = useState<number | null>(null);
 
   const queryClient = useQueryClient();
+  // v10.2 package 7 (OBS-R2-31): typing in the search box waits for a pause before asking the server
+  const debouncedSearch = useDebounce(searchTerm, 300);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [pickListsReady, setPickListsReady] = useState(false);
+  // the search conditions of the board and the server-paged table, with the search box's text after its pause
+  const leadFilterQuery = useMemo(
+    () => buildLeadQueryParams({ searchTerm: debouncedSearch, filterSeller, filterStage, filterCustomer, filterTag }).toString(),
+    [debouncedSearch, filterSeller, filterStage, filterCustomer, filterTag],
+  );
+
+  // v10.2 package 7 (OBS-R2-31): the pick lists (parties, personnel, users for mentions) load once, not with every key
+  // pressed in the search box; a failure is shown, never only logged
+  useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
+    const failed: string[] = [];
+    const pick = async <T,>(url: string, label: string, apply: (rows: T[]) => void) => {
+      try {
+        const res = await fetchJson(url, { signal });
+        if (signal.aborted) return;
+        apply(Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []));
+      } catch (e) {
+        if (isAbortError(e) || signal.aborted) return;
+        failed.push(label);
+      }
+    };
+    void Promise.all([
+      pick(PICK_LIST_URLS.customers, 'مشتریان', setCustomersList),
+      // V10-4.1: فروشنده مسئول از پرسنل؛ v10.2.0: everyone but a personnel who left
+      pick('/personnel?limit=1000', 'پرسنل', (rows) => setPersonnelList(crmAssignablePersonnel(rows as Array<{ employmentStatus?: string | null }>))),
+      pick('/users/list-simple', 'کاربران', setMentionUsers),
+    ]).then(() => {
+      if (signal.aborted) return;
+      setPickListsReady(true);
+      if (failed.length > 0) toast.error(`فهرست ${failed.join('، ')} دریافت نشد؛ صفحه را دوباره باز کنید.`);
+    });
+    return () => controller.abort();
+  }, []);
+
   const loadAllData = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
-    // v9.0.14 (TD-428): فهرست پیگیری‌ها (`useCrmFollowups`) با هر بارگذاری دوباره تازه می‌شود
-    void queryClient.invalidateQueries({ queryKey: CRM_FOLLOWUPS_QUERY_KEY });
+    // v9.0.14 (TD-428) / v10.2 package 7: the server-paged lists refresh with every reload
+    for (const queryKey of [CRM_FOLLOWUPS_QUERY_KEY, CRM_LEAD_PAGE_QUERY_KEY, CRM_ACTIVITY_PAGE_QUERY_KEY, CRM_PARTY_RECORDS_QUERY_KEY]) {
+      void queryClient.invalidateQueries({ queryKey });
+    }
+    const problems: string[] = [];
+    if (!withLists) {
+      setLoading(false);
+      return;
+    }
     try {
-      // Fetch stats
       try {
         const statsRes = await fetchJson('/crm/stats', { signal });
         if (signal?.aborted) return;
         setStats(statsRes || {});
-      } catch (e: any) {
+      } catch (e) {
         if (isAbortError(e) || signal?.aborted) return;
-        console.error('Could not load CRM stats:', e);
+        problems.push('آمار');
       }
 
-      // Build query
-      const params = buildLeadQueryParams({ searchTerm, filterSeller, filterStage, filterCustomer, filterTag });
-
+      // the board reads the newest CRM_BOARD_LEAD_CAP files; the table pages on the server (useCrmLeadPage)
       try {
-        const leadsRes = await fetchJson(`/crm/leads?${params.toString()}`, { signal });
+        const leadsRes = await fetchJson(`/crm/leads?${leadFilterQuery}`, { signal });
         if (signal?.aborted) return;
         const rawLeads = Array.isArray(leadsRes?.data) ? leadsRes.data : (Array.isArray(leadsRes) ? leadsRes : []);
-        const mappedLeads = rawLeads.map((l: CRMLead) => ({ ...l, stage: normalizeLeadStage(l.stage) }));
-        setLeads(mappedLeads);
-      } catch (e: any) {
+        setLeads(rawLeads.map((l: CRMLead) => ({ ...l, stage: normalizeLeadStage(l.stage) })));
+      } catch (e) {
         if (isAbortError(e) || signal?.aborted) return;
-        console.error('Could not load CRM leads:', e);
-        toast.error('خطا در دریافت پرونده‌های فروش');
+        problems.push('پرونده‌های فروش');
       }
-
-      const actParams = buildActivityQueryParams(fromDate, toDate);
-
-      try {
-        const actRes = await fetchJson(`/crm/activities?${actParams.toString()}`, { signal });
-        if (signal?.aborted) return;
-        setActivities(Array.isArray(actRes) ? actRes : []);
-      } catch (e: any) {
-        if (isAbortError(e) || signal?.aborted) return;
-        console.error('Could not load CRM activities:', e);
-        toast.error('خطا در دریافت اقدام‌های ارتباط با مشتری');
-      }
-
-      // Load customers
-      try {
-        const custRes = await fetchJson(PICK_LIST_URLS.customers, { signal });
-        if (signal?.aborted) return;
-        if (Array.isArray(custRes)) {
-          setCustomersList(custRes);
-        } else if (custRes && Array.isArray(custRes.data)) {
-          setCustomersList(custRes.data);
-        }
-      } catch (e: any) {
-        if (isAbortError(e) || signal?.aborted) return;
-        console.error('Could not load customers for CRM:', e);
-      }
-
-      // V10-4.1: بارگذاری پرسنل فعال — فروشنده مسئول از پرسنل انتخاب می‌شود
-      try {
-        const perRes = await fetchJson('/personnel?limit=1000', { signal });
-        if (signal?.aborted) return;
-        const perData = Array.isArray(perRes) ? perRes : (Array.isArray(perRes?.data) ? perRes.data : []);
-        // v10.2.0: everyone but a personnel who left; before, only the exact status «فعال»
-        const activePeople = crmAssignablePersonnel(perData);
-        setPersonnelList(activePeople);
-      } catch (e: any) {
-        if (isAbortError(e) || signal?.aborted) return;
-        console.error('Could not load personnel for CRM:', e);
-      }
-
-      // کاربران سیستم صرفاً برای منشن‌ها
-      try {
-        const usersRes = await fetchJson('/users/list-simple', { signal }).catch((err) => {
-          if (isAbortError(err) || signal?.aborted) throw err;
-          return fetchJson('/users', { signal });
-        });
-        if (signal?.aborted) return;
-        if (Array.isArray(usersRes)) {
-          setMentionUsers(usersRes);
-        }
-      } catch (e: any) {
-        if (isAbortError(e) || signal?.aborted) return;
-        console.error('Could not load mention users:', e);
-      }
-    } catch (err: any) {
-      if (isAbortError(err) || signal?.aborted) return;
-      console.error('Error loading CRM data:', err);
-      toast.error('خطا در دریافت اطلاعات ارتباط با مشتری');
+      setLoadError(problems.length > 0 ? `دریافت ${problems.join(' و ')} ناموفق بود.` : null);
     } finally {
-      if (!signal?.aborted) {
-        setLoading(false);
-      }
+      if (!signal?.aborted) setLoading(false);
     }
-  }, [searchTerm, filterSeller, filterStage, filterCustomer, filterTag, fromDate, toDate, queryClient]);
+  }, [withLists, leadFilterQuery, queryClient]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -327,7 +315,10 @@ export function useCRMData(user: any) {
     }
   };
 
+  // v10.2 package 7 (OBS-R2-31): one stage change per file at a time; a second drop waits for the first answer
+  const changingStageIds = useRef(new Set<number>());
   const handleStageChange = async (leadId: number, newStage: string, lost?: { lostReason: string; lostReasonNote: string }) => {
+    if (changingStageIds.current.has(leadId)) return;
     const targetLead = leads.find((l) => l.id === leadId);
     if (newStage === 'lost' && !lost && targetLead?.stage !== 'lost') {
       setLostPromptLeadId(leadId);
@@ -338,6 +329,7 @@ export function useCRMData(user: any) {
       return;
     }
 
+    changingStageIds.current.add(leadId);
     try {
       await fetchJson(`/crm/leads/${leadId}`, {
         method: 'PUT',
@@ -354,6 +346,8 @@ export function useCRMData(user: any) {
       void loadAllData();
     } catch (err) {
       toast.error(errorMessageOf(err) || 'خطا در تغییر مرحله فروش');
+    } finally {
+      changingStageIds.current.delete(leadId);
     }
   };
 
@@ -478,9 +472,7 @@ export function useCRMData(user: any) {
 
   const reopeningFollowupIds = useRef(new Set<number>());
   const handleToggleFollowup = async (actInput: number | CRMActivity) => {
-    const act = typeof actInput === 'number'
-      ? activities.find((a) => a.id === actInput) || drawerActivities.find((a) => a.id === actInput)
-      : actInput;
+    const act = typeof actInput === 'number' ? drawerActivities.find((a) => a.id === actInput) : actInput;
 
     if (!act) return;
 
@@ -540,12 +532,14 @@ export function useCRMData(user: any) {
     setActiveTab,
     stats,
     leads,
-    activities,
     customersList,
     personnelList,
     currentPersonnelId,
     mentionUsers,
     loading,
+    loadError,
+    pickListsReady,
+    leadFilterQuery,
     searchTerm: filters.searchTerm,
     setSearchTerm: filters.setSearchTerm,
     filterSeller: filters.filterSeller,

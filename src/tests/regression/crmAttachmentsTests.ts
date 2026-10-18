@@ -30,6 +30,9 @@ export async function runCrmAttachmentsTests(shouldRun: ShouldRun): Promise<Test
     ['reg_crm_activities_paged_party_obs_r2_28',
       'v10.2.4: the activity list pages on the server by party (its own and its files\' activities) and search, and one activity reads by id (OBS-R2-24 / OBS-R2-28)',
       ['n02', 'crm', 'obs-r2-28'], activityListCase],
+    ['reg_customer_record_by_id_obs_r2_24',
+      'v10.2.4: one party\'s full record (version, notes, tags) reads by id for customers.view, and a deleted or missing party is 404 (OBS-R2-24)',
+      ['crm', 'customers', 'obs-r2-24'], customerByIdCase],
   ]);
 }
 
@@ -223,4 +226,24 @@ async function activityListCase(h: Harness, wrong: string[]): Promise<string> {
   const gone = await h.get(`/api/crm/activities/${direct}`);
   if (gone.status !== 404) wrong.push(`a deleted activity by id answered ${gone.status}, expected 404`);
   return `party ${customer.id}: ${ids.length} activities, search and by-id read`;
+}
+
+async function customerByIdCase(h: Harness, wrong: string[]): Promise<string> {
+  const customer = await createTestCustomer({ name: `P7 record ${h.tag}` });
+  await h.q('UPDATE customers SET notes = $1 WHERE id = $2', [`P7 note ${h.tag}`, customer.id]);
+  const viewer = await h.sessionWith(['customers.view']);
+  const crmOnly = await h.sessionWith(['crm.view']);
+
+  const read = await h.get(`/api/customers/${customer.id}`, viewer);
+  if (read.status !== 200 || Number(read.body.id) !== customer.id || read.body.notes !== `P7 note ${h.tag}` || !Number.isInteger(read.body.version) || !Array.isArray(read.body.tags)) {
+    wrong.push(`customers.view read answered ${brief(read)}, expected the record with notes, version and tags`);
+  }
+  const refused = await h.get(`/api/customers/${customer.id}`, crmOnly);
+  if (refused.status !== 403) wrong.push(`crm.view alone read the full record (${refused.status}), expected 403`);
+  const missing = await h.get('/api/customers/987654321', viewer);
+  if (missing.status !== 404) wrong.push(`a missing party answered ${missing.status}, expected 404`);
+  await h.q('UPDATE customers SET is_deleted = 1 WHERE id = $1', [customer.id]);
+  const deleted = await h.get(`/api/customers/${customer.id}`, viewer);
+  if (deleted.status !== 404) wrong.push(`a deleted party answered ${deleted.status}, expected 404`);
+  return `party ${customer.id} read by id; refused, missing and deleted checked`;
 }

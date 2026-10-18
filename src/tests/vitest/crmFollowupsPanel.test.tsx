@@ -47,7 +47,7 @@ const withClient = (node: ReactElement) => (
 describe('CRM open follow-ups from the server (TD-428)', () => {
   it('lists the follow-ups tab from /crm/followups, not from the 30-day activity list', async () => {
     render(withClient(
-      <CRMFollowupsView activeTab="followups" activities={[]} onOpenActivityModal={() => undefined} onToggleFollowup={() => undefined} />,
+      <CRMFollowupsView activeTab="followups" onOpenActivityModal={() => undefined} onToggleFollowup={() => undefined} />,
     ));
     expect(await screen.findByText('کار پیگیری اقدام قدیمی')).toBeTruthy();
     expect(calledUrls()).toContain('/crm/followups?status=pending&page=1&limit=12');

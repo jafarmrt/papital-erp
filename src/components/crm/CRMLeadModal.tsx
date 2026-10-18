@@ -311,25 +311,17 @@ export function CRMLeadModal({
 
             <div>
               <label htmlFor={`${fieldId}-assigned-personnel-id`} className="block text-xs font-bold text-slate-700 mb-1">فروشنده مسئول (پرسنل)</label>
-              <select
+              <SearchableSelect
                 id={`${fieldId}-assigned-personnel-id`}
                 value={leadForm.assignedPersonnelId ? String(leadForm.assignedPersonnelId) : ''}
-                onChange={(e) => {
-                  const id = e.target.value ? Number(e.target.value) : null;
+                onChange={(value) => {
+                  const id = value ? Number(value) : null;
                   const selected = personnelList.find((p: any) => p.id === id);
                   setLeadForm({ ...leadForm, assignedPersonnelId: id, assignedTo: selected?.fullName || leadForm.assignedTo });
                 }}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500 font-semibold text-slate-800"
-              >
-                {!leadForm.assignedPersonnelId && (
-                  <option value="">{leadForm.assignedTo || currentLoggedInUser} (بدون اتصال پرسنلی)</option>
-                )}
-                {personnelList.map((p: any) => (
-                  <option key={p.id} value={String(p.id)}>
-                    {p.fullName}{p.jobTitle ? ` — ${p.jobTitle}` : ''}
-                  </option>
-                ))}
-              </select>
+                placeholder={`${leadForm.assignedTo || currentLoggedInUser} (بدون اتصال پرسنلی)`}
+                options={personnelList.map((p: any) => ({ value: String(p.id), label: `${p.fullName}${p.jobTitle ? ` — ${p.jobTitle}` : ''}` }))}
+              />
               {currentPersonnelId && String(leadForm.assignedPersonnelId || '') !== '' && !editingLead && (
                 <p className="text-[10px] text-emerald-600 mt-1">پیش‌فرض: پرسنل متصل به حساب کاربری شما</p>
               )}

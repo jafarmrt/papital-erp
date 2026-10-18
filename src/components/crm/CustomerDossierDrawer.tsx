@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Building2, Users, Briefcase, Plus, PhoneCall, FileText, X, Edit2, TrendingUp, Award, ExternalLink, BookOpen, ArrowDownLeft, ArrowUpRight, Scale } from 'lucide-react';
-import { Customer, CRMLead, CRMActivity } from '../../types';
+import { Customer, CRMLead } from '../../types';
+import { useCrmPartyRecords } from '../../hooks/useCrmPartyRecords';
+import { activityTypeLabel } from '../../lib/crm/activityTypes';
+import { ActivityRowActions } from './ActivityRowActions';
+import { CrmPager } from './CrmPager';
 import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel, formatPersianDate, formatPersianPhone, formatPersianCode } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { isRialCurrency } from '../../lib/rialDisplay';
@@ -21,8 +25,6 @@ import { activityResultLabel } from '../../lib/crm/crmScreenText';
 interface CustomerDossierDrawerProps {
   customer: Customer | null;
   onClose: () => void;
-  allLeads: CRMLead[];
-  allActivities: CRMActivity[];
   onOpenLeadDrawer: (lead: CRMLead) => void;
   onOpenLeadModal: (lead?: CRMLead, defaultCustomerName?: string) => void;
   onOpenActivityModal: (lead?: CRMLead, defaultCustomerName?: string, defaultCustomerId?: number) => void;
@@ -32,8 +34,6 @@ interface CustomerDossierDrawerProps {
 export function CustomerDossierDrawer({
   customer,
   onClose,
-  allLeads = [],
-  allActivities = [],
   onOpenLeadDrawer,
   onOpenLeadModal,
   onOpenActivityModal,
@@ -46,15 +46,12 @@ export function CustomerDossierDrawer({
   const [financialReport, setFinancialReport] = useState<any | null>(null);
   const [loadingFinancials, setLoadingFinancials] = useState(false);
 
-  // Filter leads and activities belonging to this customer
-  const customerLeads = allLeads.filter(
-    (l) => l.customerId === customer?.id || (l.customerName && customer?.name && l.customerName.trim().toLowerCase() === customer.name.trim().toLowerCase())
-  );
-
-  const leadIds = new Set(customerLeads.map((l) => l.id));
-  const customerActivities = allActivities.filter(
-    (a) => a.customerId === customer?.id || (a.leadId && leadIds.has(a.leadId))
-  );
+  // v10.2 package 7 (OBS-R2-24 / OBS-R2-28): the party's files and one page of its activities come from the server
+  const [activityPage, setActivityPage] = useState(1);
+  const party = useCrmPartyRecords(customer?.id ?? null, activityPage);
+  const customerLeads = party.leads;
+  const customerActivities = party.activities.data;
+  useEffect(() => setActivityPage(1), [customer?.id]);
 
   // Stats
   const totalLeadsCount = customerLeads.length;
@@ -256,7 +253,7 @@ export function CustomerDossierDrawer({
             }`}
           >
             <PhoneCall size={14} />
-            سوابق تعاملات ({formatPersianNumber(customerActivities.length)})
+            سوابق تعاملات ({formatPersianNumber(party.activities.total)})
           </button>
 
           <button
@@ -302,7 +299,7 @@ export function CustomerDossierDrawer({
             <div className="flex items-center justify-between">
               <h3 className="font-black text-xs text-slate-800 flex items-center gap-1.5">
                 <Briefcase size={15} className="text-blue-600" />
-                لیست فرصت‌ها و پرونده‌های فروش این مشتری
+                فهرست فرصت‌ها و پرونده‌های فروش این مشتری
               </h3>
               <button
                 onClick={() => onOpenLeadModal(undefined, customer.name)}
@@ -313,7 +310,11 @@ export function CustomerDossierDrawer({
               </button>
             </div>
 
-            {customerLeads.length === 0 ? (
+            {party.leadsError ? (
+              <p className="p-4 text-center bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-700" role="alert">{party.leadsError}</p>
+            ) : party.leadsLoading && customerLeads.length === 0 ? (
+              <p className="p-6 text-center text-xs text-slate-500" role="status">در حال دریافت پرونده‌های فروش…</p>
+            ) : customerLeads.length === 0 ? (
               <div className="p-8 text-center bg-slate-50 border border-dashed border-slate-200 rounded-2xl space-y-2">
                 <Briefcase size={32} className="mx-auto text-slate-300" />
                 <p className="text-xs font-bold text-slate-600">هنوز هیچ فرصت فروشی برای این مشتری ایجاد نشده است.</p>
@@ -395,7 +396,14 @@ export function CustomerDossierDrawer({
               </button>
             </div>
 
-            {customerActivities.length === 0 ? (
+            {party.activities.error ? (
+              <div className="p-4 text-center bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-700 space-y-2" role="alert">
+                <p>{party.activities.error}</p>
+                <button type="button" onClick={party.activities.refetch} className="px-3 py-1 bg-white border border-rose-200 rounded-lg font-bold cursor-pointer">تلاش دوباره</button>
+              </div>
+            ) : party.activities.loading && customerActivities.length === 0 ? (
+              <p className="p-6 text-center text-xs text-slate-500" role="status">در حال دریافت سوابق تعاملات…</p>
+            ) : customerActivities.length === 0 ? (
               <div className="p-8 text-center bg-slate-50 border border-dashed border-slate-200 rounded-2xl space-y-2">
                 <PhoneCall size={32} className="mx-auto text-slate-300" />
                 <p className="text-xs font-bold text-slate-600">هیچ سابقه تماس یا اقدامی برای این مشتری ثبت نشده است.</p>
@@ -407,11 +415,14 @@ export function CustomerDossierDrawer({
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className="px-2 py-0.5 bg-slate-200 text-slate-800 font-bold text-[10px] rounded-md">
-                          {act.type === 'call' ? 'تماس تلفنی' : act.type === 'meeting' ? 'جلسه حضوری' : act.type === 'whatsapp' ? 'واتساپ/پیام' : act.type === 'quote' ? 'پیش‌فاکتور' : 'یادداشت'}
+                          {activityTypeLabel(act.type)}
                         </span>
                         <span className="font-bold text-slate-900">{act.title}</span>
                       </div>
-                      <span className="text-[10px] text-slate-400 font-mono">{formatPersianDate(act.activityDate || act.createdAt)}</span>
+                      <span className="flex items-center gap-1.5">
+                        <ActivityRowActions activity={act} />
+                        <span className="text-[10px] text-slate-400 font-mono">{formatPersianDate(act.activityDate || act.createdAt)}</span>
+                      </span>
                     </div>
 
                     {act.description && <p className="text-slate-600 leading-relaxed text-[11px] bg-white p-2.5 rounded-xl border border-slate-100">{act.description}</p>}
@@ -434,6 +445,8 @@ export function CustomerDossierDrawer({
                 ))}
               </div>
             )}
+            <CrmPager page={party.activities.page} totalPages={party.activities.totalPages} total={party.activities.total}
+              limit={party.activities.limit} onPage={setActivityPage} disabled={party.activities.loading} />
           </div>
         )}
 

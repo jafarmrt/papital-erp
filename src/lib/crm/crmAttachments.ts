@@ -38,8 +38,10 @@ const EXTENSION_TYPES: Readonly<Record<string, string>> = {
 export const CRM_ATTACHMENT_ACCEPT = '.jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf';
 
 export const CRM_ATTACHMENT_FORMAT_TEXT = 'فقط تصویر (JPG، PNG، WEBP) یا PDF پیوست می‌شود.';
-export const CRM_ATTACHMENT_TOO_LARGE_TEXT = `حجم هر پیوست حداکثر ${formatPersianNumber(CRM_ATTACHMENT_MAX_MB)} مگابایت است.`;
-export const CRM_ATTACHMENT_LIMIT_TEXT = `هر پرونده یا اقدام حداکثر ${formatPersianNumber(CRM_ATTACHMENT_MAX_FILES)} پیوست دارد.`;
+const maxSizeText = formatPersianNumber(CRM_ATTACHMENT_MAX_MB);
+const maxFilesText = formatPersianNumber(CRM_ATTACHMENT_MAX_FILES);
+export const CRM_ATTACHMENT_TOO_LARGE_TEXT = `حجم هر پیوست حداکثر ${maxSizeText} مگابایت است.`;
+export const CRM_ATTACHMENT_LIMIT_TEXT = `هر پرونده یا اقدام حداکثر ${maxFilesText} پیوست دارد.`;
 
 /** The type of a file from its declared type, else its extension; null when it is not accepted */
 export function crmAttachmentTypeOf(fileName: string, declaredType: string): string | null {

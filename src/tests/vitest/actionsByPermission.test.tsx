@@ -23,6 +23,7 @@ vi.mock('../../SearchContext', () => ({
 vi.mock('../../components/crm/crmSharedHosts', () => ({
   CrmInteractionModalHost: () => null,
   CrmCustomerDossierHost: () => null,
+  CrmLeadModalHost: () => null,
 }));
 
 import CustomersPage from '../../pages/CustomersPage';
@@ -34,6 +35,7 @@ const customer = { id: 7, name: 'علی کاظمی', phone: '09121110001', party
 const lead = { id: 3, title: 'گردنبند عروس', customerName: 'علی کاظمی', stage: 'lead', estimatedValue: 0, currency: 'IRR' } as CRMLead;
 
 function apiResponse(url: string): unknown {
+  if (url.startsWith('/crm/leads?')) return { data: [lead], total: 1, page: 1, limit: 10, totalPages: 1 };
   if (url.startsWith('/customers?')) return { data: [customer], total: 1, page: 1, totalPages: 1 };
   if (url === '/warehouses') return [{ id: 1, name: 'انبار مرکزی', code: 'WH1', is_active: 1 }];
   if (url.startsWith('/items/options')) return { data: [] };
@@ -97,14 +99,14 @@ describe('party, sales file and stock form actions follow the API permission, no
     expect(withKey.result.current.canDeleteLead).toBe(true);
   });
 
-  it('the sales file list shows a delete button only when a delete handler is given', () => {
+  it('the sales file list shows a delete button only when a delete handler is given', async () => {
     const noop = () => undefined;
-    const { unmount } = render(<CRMLeadsTable leads={[lead]} onOpenLeadDrawer={noop} onOpenActivityModal={noop} onOpenLeadModal={noop} />);
-    expect(screen.getByTitle('ویرایش')).toBeTruthy();
+    const { unmount } = render(withClient(<CRMLeadsTable filterQuery="" onOpenLeadDrawer={noop} onOpenActivityModal={noop} onOpenLeadModal={noop} />));
+    expect(await screen.findByTitle('ویرایش')).toBeTruthy();
     expect(screen.queryByTitle('حذف')).toBeNull();
     unmount();
-    render(<CRMLeadsTable leads={[lead]} onOpenLeadDrawer={noop} onOpenActivityModal={noop} onOpenLeadModal={noop} onDeleteLead={noop} />);
-    expect(screen.getByTitle('حذف')).toBeTruthy();
+    render(withClient(<CRMLeadsTable filterQuery="" onOpenLeadDrawer={noop} onOpenActivityModal={noop} onOpenLeadModal={noop} onDeleteLead={noop} />));
+    expect(await screen.findByTitle('حذف')).toBeTruthy();
   });
 
   it('the stock document form offers item definition only to products.create or products.edit holders, not to the manager code', async () => {

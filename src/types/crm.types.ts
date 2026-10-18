@@ -111,6 +111,9 @@ export interface CRMActivity {
   version?: number;
   updatedAt?: string | null;
   updatedBy?: string;
+  /** v10.2 package 7: live attachments, sent to crm.view holders */
+  attachmentCount?: number;
+  attachments?: import('../lib/crm/crmAttachments').CrmAttachmentView[];
 }
 
 export interface PartyOption {

@@ -16,7 +16,8 @@ export interface DisplayableAttachment {
   dataUrl?: string;
 }
 
-const PROTECTED_ATTACHMENT_URL = /^(?:https?:\/\/[^/]+)?\/api\/attachments\/[0-9a-f-]{36}$/i;
+// v10.2 package 7: `?variant=light` is the light WEBP of a sales file or activity image, protected the same way
+const PROTECTED_ATTACHMENT_URL = /^(?:https?:\/\/[^/]+)?\/api\/attachments\/[0-9a-f-]{36}(?:\?variant=light)?$/i;
 const IMAGE_NAME = /\.(jpg|jpeg|png|webp|gif|svg)$/i;
 
 export function attachmentSourceOf(att: DisplayableAttachment): string {

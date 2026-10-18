@@ -1,20 +1,22 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, Calendar, Briefcase, PhoneCall, Clock, Building2, TrendingUp } from 'lucide-react';
+import { Search, Filter, Briefcase, PhoneCall, Clock, Building2, TrendingUp, Loader2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { fetchJson } from '../api';
 import { CRMLead, Customer } from '../types';
-import { formatPersianNumber } from '../utils';
+import { errorMessageOf, formatPersianNumber } from '../utils';
 import { useCRMData, STAGES } from '../hooks/useCRMData';
 import { CRMStatsCards } from '../components/crm/CRMStatsCards';
 import { CRMKanbanPipeline } from '../components/crm/CRMKanbanPipeline';
 import { CRMLeadsTable } from '../components/crm/CRMLeadsTable';
 import { CRMFollowupsView } from '../components/crm/CRMFollowupsView';
-import { CrmInteractionModalHost, CrmCustomerDossierHost } from '../components/crm/crmSharedHosts';
+import { CrmInteractionModalHost, CrmCustomerDossierHost, CrmLeadModalHost } from '../components/crm/crmSharedHosts';
 import { SearchableSelect } from '../components/SearchableSelect';
-import { CRMLeadModal } from '../components/crm/CRMLeadModal';
 import { CRMLeadDrawer } from '../components/crm/CRMLeadDrawer';
-import { JalaliDateInput } from '../components/common/JalaliDateInput';
+import { CrmDateRangeBar } from '../components/crm/CrmDateRangeBar';
+import { useCrmDeepLink } from '../hooks/useCrmDeepLink';
+import { DOSSIER_PARTY_MISSING_TEXT, resolveDossierParty } from '../lib/crm/crmDeepLink';
+import { boardCapNotice } from '../lib/crm/crmListPages';
 import { leadProformaState } from '../lib/crm/leadProformaState';
 import { CRMFunnelReport } from '../components/crm/CRMFunnelReport';
 import { LostReasonDialog } from '../components/crm/LostReasonFields';
@@ -28,26 +30,32 @@ export default function CRMPage({ user }: { user: any }) {
   const navigate = useNavigate();
   const [selectedCustomerDossier, setSelectedCustomerDossier] = useState<Customer | null>(null);
 
-  const handleOpenCustomerDossierByName = (custName: string) => {
-    if (!custName) return;
-    const found = crm.customersList.find(
-      (c) => c.name.trim().toLowerCase() === custName.trim().toLowerCase()
-    );
-    if (found) {
-      setSelectedCustomerDossier(found);
-    } else {
-      setSelectedCustomerDossier({
-        id: 0,
-        name: custName,
-        country: 'ایران',
-        province: '',
-        city: '',
-        phone: '',
-        address: '',
-        notes: 'حساب ثبت‌شده در ارتباط با مشتری'
-      });
-    }
+  // v10.2 package 7 (OBS-R2-24): the dossier of the file's own party, never a made-up party with id 0
+  const handleOpenLeadDossier = (lead: CRMLead) => {
+    const party = resolveDossierParty(lead, crm.customersList as Customer[]);
+    if (party) setSelectedCustomerDossier(party);
+    else toast.error(DOSSIER_PARTY_MISSING_TEXT);
   };
+
+  // a party named by a link waits for the party pick list
+  const [pendingPartyId, setPendingPartyId] = useState<number | null>(null);
+  useEffect(() => {
+    if (pendingPartyId === null || !crm.pickListsReady) return;
+    const party = resolveDossierParty({ customerId: pendingPartyId }, crm.customersList as Customer[]);
+    if (party) setSelectedCustomerDossier(party);
+    else toast.error('طرف حساب این اقدام پیدا نشد.');
+    setPendingPartyId(null);
+  }, [pendingPartyId, crm.pickListsReady, crm.customersList]);
+
+  useCrmDeepLink({
+    openLead: (lead) => void crm.openLeadDrawer(lead),
+    openParty: setPendingPartyId,
+    openActivities: () => crm.setActiveTab('activities'),
+  });
+
+  // v10.2 package 7 (OBS-R2-31): one conversion at a time; a second click while it runs does nothing
+  const convertingRef = useRef(false);
+  const [convertingLeadId, setConvertingLeadId] = useState<number | null>(null);
 
   const handleConvertToInvoice = async (lead: CRMLead) => {
     if (Number(lead.hasProforma) === 1) {
@@ -60,6 +68,9 @@ export default function CRMPage({ user }: { user: any }) {
       return;
     }
 
+    if (convertingRef.current) return;
+    convertingRef.current = true;
+    setConvertingLeadId(lead.id);
     try {
       toast.loading('در حال ثبت رسمی مشتری و انتقال به صدور پیش‌فاکتور...', { id: 'convert-lead' });
       const res = await fetchJson(`/crm/leads/${lead.id}/convert-to-customer`, { method: 'POST' });
@@ -72,9 +83,12 @@ export default function CRMPage({ user }: { user: any }) {
       // Navigate to create invoice page with pre-filled buyer details
       // v10.0.177 (OBS-R2-30): نشانی خریدار فقط از مشتری، نه یادداشت پرونده؛ v10.0.213 (OBS-R1-102): فرم فاکتور فروش
       void navigate('/invoices/create', { state: leadProformaState(lead, res.customer) });
-    } catch (err: any) {
+    } catch (err) {
       toast.dismiss('convert-lead');
-      toast.error(err.message || 'خطا در تبدیل پرونده فروش به مشتری');
+      toast.error(errorMessageOf(err) || 'خطا در تبدیل پرونده فروش به مشتری');
+    } finally {
+      convertingRef.current = false;
+      setConvertingLeadId(null);
     }
   };
 
@@ -88,59 +102,20 @@ export default function CRMPage({ user }: { user: any }) {
 
       {/* Tabs & Search Filter Bar */}
       <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs space-y-4">
-        {/* Date Filter Bar */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200/80">
-          <div className="flex items-center gap-2">
-            <Calendar size={16} className="text-blue-600 shrink-0" />
-            <span className="text-xs font-bold text-slate-700">فیلتر زمانی (هجری شمسی):</span>
-            <div className="flex flex-wrap items-center gap-1">
-              {[
-                { key: '1m', label: 'یک ماه اخیر (پیش‌فرض)' },
-                { key: '7d', label: '۷ روز اخیر' },
-                { key: 'today', label: 'امروز' },
-                { key: 'all', label: 'همه زمان‌ها' },
-              ].map((p) => (
-                <button
-                  key={p.key}
-                  onClick={() => crm.handleApplyPreset(p.key as any)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                    crm.datePreset === p.key
-                      ? 'bg-blue-600 text-white shadow-2xs'
-                      : 'bg-white text-slate-600 hover:bg-slate-200 border border-slate-200'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 w-full sm:w-auto text-xs">
-            <span className="text-slate-500 text-[11px]">از:</span>
-            <JalaliDateInput
-              placeholder="از تاریخ"
-              value={crm.fromDate}
-              onChange={(iso) => {
-                crm.setDatePreset('custom');
-                crm.setFromDate(iso);
-              }}
-              containerClassName="inline-block"
-              className="w-24 px-2 py-1 bg-white border border-slate-200 rounded-lg text-[11px] text-center font-mono outline-none focus:border-blue-500"
-            />
-            <span className="text-slate-500 text-[11px]">تا:</span>
-            <JalaliDateInput
-              placeholder="تا تاریخ"
-              value={crm.toDate}
-              onChange={(iso) => {
-                crm.setDatePreset('custom');
-                crm.setToDate(iso);
-              }}
-              containerClassName="inline-block"
-              calendarPosition="bottom-left"
-              className="w-24 px-2 py-1 bg-white border border-slate-200 rounded-lg text-[11px] text-center font-mono outline-none focus:border-blue-500"
-            />
-          </div>
-        </div>
+        <CrmDateRangeBar
+          datePreset={crm.datePreset}
+          fromDate={crm.fromDate}
+          toDate={crm.toDate}
+          onPreset={crm.handleApplyPreset}
+          onFromDate={(iso) => {
+            crm.setDatePreset('custom');
+            crm.setFromDate(iso);
+          }}
+          onToDate={(iso) => {
+            crm.setDatePreset('custom');
+            crm.setToDate(iso);
+          }}
+        />
 
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
           {/* Tabs */}
@@ -166,7 +141,7 @@ export default function CRMPage({ user }: { user: any }) {
               }`}
             >
               <Filter size={15} />
-              جدول پرونده‌های فروش ({formatPersianNumber(crm.leads.length)})
+              جدول پرونده‌های فروش
             </button>
 
             <button
@@ -178,7 +153,7 @@ export default function CRMPage({ user }: { user: any }) {
               }`}
             >
               <PhoneCall size={15} />
-              دفترچه تماس‌ها و اقدامات ({formatPersianNumber(crm.activities.length)})
+              دفترچه تماس‌ها و اقدامات
             </button>
 
             <button
@@ -218,18 +193,17 @@ export default function CRMPage({ user }: { user: any }) {
               <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
             </div>
 
-            <select
+            {/* v10.2 package 7 (OBS-R2-32): the seller is picked with search, like the party */}
+            <SearchableSelect
               value={crm.filterSeller}
-              onChange={(e) => crm.setFilterSeller(e.target.value)}
-              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-blue-500 cursor-pointer"
-            >
-              <option value="">همه فروشندگان</option>
-              {crm.personnelList.map((p: any) => (
-                <option key={p.id} value={String(p.id)}>
-                  {p.fullName}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => crm.setFilterSeller(val)}
+              className="max-w-[200px]"
+              placeholder="همه فروشندگان"
+              options={[
+                { value: '', label: 'همه فروشندگان' },
+                ...(Array.isArray(crm.personnelList) ? crm.personnelList : []).map((p: { id: number; fullName?: string }) => ({ value: String(p.id), label: p.fullName || '' })),
+              ]}
+            />
 
             <div className="flex items-center gap-1">
               <SearchableSelect
@@ -267,6 +241,7 @@ export default function CRMPage({ user }: { user: any }) {
             />
 
             <select
+              aria-label="مرحله فروش"
               value={crm.filterStage}
               onChange={(e) => crm.setFilterStage(e.target.value)}
               className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-blue-500 cursor-pointer"
@@ -281,7 +256,25 @@ export default function CRMPage({ user }: { user: any }) {
           </div>
         </div>
 
+        {/* v10.2 package 7 (OBS-R2-31): the page says it is loading and shows a failed load with a retry */}
+        {crm.loading && (
+          <p className="text-xs text-blue-700 flex items-center gap-1" role="status">
+            <Loader2 size={13} className="animate-spin" /> در حال دریافت…
+          </p>
+        )}
+        {crm.loadError && (
+          <div className="flex items-center justify-between gap-2 p-3 rounded-xl border border-rose-200 bg-rose-50 text-xs text-rose-700" role="alert">
+            <span>{crm.loadError}</span>
+            <button type="button" onClick={() => void crm.loadAllData()} className="px-3 py-1 rounded-lg bg-white border border-rose-200 font-bold cursor-pointer">
+              تلاش دوباره
+            </button>
+          </div>
+        )}
+
         {/* Tab 1: Kanban Pipeline */}
+        {crm.activeTab === 'kanban' && boardCapNotice(crm.leads.length) && (
+          <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-2.5">{boardCapNotice(crm.leads.length)}</p>
+        )}
         {crm.activeTab === 'kanban' && (
           <CRMKanbanPipeline
             leads={crm.leads}
@@ -297,13 +290,14 @@ export default function CRMPage({ user }: { user: any }) {
         {/* Tab 2: Leads List Table */}
         {crm.activeTab === 'list' && (
           <CRMLeadsTable
-            leads={crm.leads}
+            filterQuery={crm.leadFilterQuery}
             onOpenLeadDrawer={crm.openLeadDrawer}
             onOpenActivityModal={crm.openActivityModal}
             onOpenLeadModal={crm.openLeadModal}
             onDeleteLead={deleteLead}
             onConvertToInvoice={handleConvertToInvoice}
-            onOpenCustomerDossier={handleOpenCustomerDossierByName}
+            onOpenCustomerDossier={handleOpenLeadDossier}
+            convertingLeadId={convertingLeadId}
           />
         )}
 
@@ -311,7 +305,8 @@ export default function CRMPage({ user }: { user: any }) {
         {(crm.activeTab === 'activities' || crm.activeTab === 'followups') && (
           <CRMFollowupsView
             activeTab={crm.activeTab}
-            activities={crm.activities}
+            fromDate={crm.fromDate}
+            toDate={crm.toDate}
             onOpenActivityModal={() => crm.openActivityModal()}
             onToggleFollowup={crm.handleToggleFollowup}
             onEditActivity={crm.openEditActivity}
@@ -327,20 +322,7 @@ export default function CRMPage({ user }: { user: any }) {
       <CrmInteractionModalHost crm={crm} currentUser={user} />
 
       {/* Modal 3: Lead Create / Edit */}
-      <CRMLeadModal
-        isLeadModalOpen={crm.isLeadModalOpen}
-        onCloseLeadModal={() => crm.setIsLeadModalOpen(false)}
-        editingLead={crm.editingLead}
-        leadForm={crm.leadForm}
-        setLeadForm={crm.setLeadForm}
-        isSavingLead={crm.isSavingLead}
-        onSaveLead={crm.handleSaveLead}
-        onDeleteLead={deleteLead}
-        customersList={crm.customersList}
-        personnelList={crm.personnelList}
-        currentPersonnelId={crm.currentPersonnelId}
-        currentLoggedInUser={crm.currentLoggedInUser}
-      />
+      <CrmLeadModalHost crm={crm} />
 
       {/* Drawer: Lead Detail Timeline */}
       <CRMLeadDrawer
@@ -354,7 +336,7 @@ export default function CRMPage({ user }: { user: any }) {
         onEditActivity={crm.openEditActivity}
         onDeleteActivity={crm.handleDeleteActivity}
         onConvertToInvoice={handleConvertToInvoice}
-        onOpenCustomerDossier={handleOpenCustomerDossierByName}
+        onOpenCustomerDossier={handleOpenLeadDossier}
       />
 
       {crm.lostPromptLeadId !== null && (
@@ -370,11 +352,10 @@ export default function CRMPage({ user }: { user: any }) {
         crm={crm}
         customer={selectedCustomerDossier}
         onClose={() => setSelectedCustomerDossier(null)}
-        allLeads={crm.leads}
-        allActivities={crm.activities}
         onEditCustomer={(cust) => {
           setSelectedCustomerDossier(null);
-          void navigate('/customers', { state: { editCustomerId: cust.id, editCustomer: cust } });
+          // v10.2 package 7 (OBS-R2-24): the customers page reads the full record by id (a pick-list row has no version)
+          void navigate('/customers', { state: { editCustomerId: cust.id } });
         }}
       />
     </div>

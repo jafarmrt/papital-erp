@@ -38,8 +38,6 @@ describe('customer dossier documents (TD-417)', () => {
         <CustomerDossierDrawer
           customer={customer}
           onClose={() => undefined}
-          allLeads={[]}
-          allActivities={[]}
           onOpenLeadDrawer={() => undefined}
           onOpenLeadModal={() => undefined}
           onOpenActivityModal={() => undefined}

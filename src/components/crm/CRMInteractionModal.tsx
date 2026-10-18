@@ -1,4 +1,5 @@
 import React, { useId } from 'react';
+import { SearchableSelect } from '../SearchableSelect';
 import { PhoneCall, Video, MessageSquare, Mail, FileText, Clock, CheckCircle2 } from 'lucide-react';
 import { CRMLead, CRMActivity } from '../../types';
 import { getTodayJalaliDate, isoToJalaliDate, formatPersianDate } from '../../utils';
@@ -274,23 +275,17 @@ export function CRMInteractionModal({
 
                 <div>
                   <label htmlFor={`${fieldId}-assigned-personnel-id`} className="block text-[11px] font-semibold text-amber-800 mb-1">مسئول پیگیری (پرسنل)</label>
-                  <select
+                  <SearchableSelect
                     id={`${fieldId}-assigned-personnel-id`}
                     value={activityForm.assignedPersonnelId ? String(activityForm.assignedPersonnelId) : ''}
-                    onChange={(e) => {
-                      const id = e.target.value ? Number(e.target.value) : null;
+                    onChange={(value) => {
+                      const id = value ? Number(value) : null;
                       const selected = personnelList.find((p: any) => p.id === id);
                       setActivityForm({ ...activityForm, assignedPersonnelId: id, assignedTo: selected?.fullName || '' });
                     }}
-                    className="w-full px-2.5 py-1.5 bg-white border border-amber-300 rounded-lg text-xs outline-none focus:border-amber-500 font-bold text-slate-800"
-                  >
-                    <option value="">-- انتخاب مسئول پیگیری --</option>
-                    {personnelList.map((p: any) => (
-                      <option key={p.id} value={String(p.id)}>
-                        {p.fullName}{p.jobTitle ? ` — ${p.jobTitle}` : ''}
-                      </option>
-                    ))}
-                  </select>
+                    placeholder="انتخاب مسئول پیگیری"
+                    options={personnelList.map((p: any) => ({ value: String(p.id), label: `${p.fullName}${p.jobTitle ? ` — ${p.jobTitle}` : ''}` }))}
+                  />
                 </div>
               </div>
             </div>
