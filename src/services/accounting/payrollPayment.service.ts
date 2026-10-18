@@ -2,8 +2,6 @@ import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { assertPayrollDutyNotByIssuer } from '../piecework/payrollDuties.js';
 import { auditPayrollPaymentRegistered } from '../piecework/pieceworkAudit.js';
 import {
-  bankAccounts,
-  treasuryTransactions,
   pieceworkPayrolls,
   pieceworkLogs,
   personnel,
@@ -13,13 +11,10 @@ import {
 import { eq, and } from 'drizzle-orm';
 import { VoucherService } from './voucher.service.js';
 import { AccountMappingService } from './accountMapping.service.js';
-import { TreasuryTransactionService } from './treasury/treasuryTransaction.service.js';
+import { lockTreasuryBank, postTreasuryRow } from './treasury/treasuryPosting.js';
 import { payrollVouchersWhere, pickPayrollVoucher } from './payrollVoucherLink.js';
 import { isPayablePayrollStatus } from '../../lib/payroll/payrollPayable.js';
-import { LockHierarchyLevel, withOrderedLocks } from '../../lib/lockOrder.js';
-import { domainEventBus } from '../events/domainEventBus.js';
-import { DomainEventType } from '../events/domainEvents.js';
-import { OutboxService } from '../events/outboxService.js';
+import { LockHierarchyLevel, validateLockOrder } from '../../lib/lockOrder.js';
 import { payrollTreasuryEventPayload, recordPayrollEvent } from '../piecework/payrollEvents.js';
 import { fin, type DecimalValue } from '../../lib/financialDecimal.js';
 import { isPayrollBankCurrency, PAYROLL_CURRENCY, payrollAmountText } from '../../lib/payroll/payrollCurrency.js';
@@ -123,17 +118,13 @@ export class PayrollPaymentService {
     const payIso = await resolveTreasuryWriteDate(input.paymentDate, 'تاریخ پرداخت');
     return await orm.transaction(async (tx) => {
       // V1.4.0: ترتیب واقعی قفل: بانک (سطح ۱۰) اول، سپس فیش حقوقی (سطح ۳۰)
-      await withOrderedLocks(tx, [
-        { table: bankAccounts, id: input.bankAccountId, name: 'bank_account', level: LockHierarchyLevel.BANK_ACCOUNTS },
-        { table: pieceworkPayrolls, id: input.payrollId, name: 'piecework_payrolls', level: LockHierarchyLevel.PARTIES }
-      ], async () => true);
+      validateLockOrder([
+        { name: 'bankAccount', hierarchyLevel: LockHierarchyLevel.BANK_ACCOUNTS },
+        { name: 'payroll', hierarchyLevel: LockHierarchyLevel.PARTIES },
+      ]);
 
-      // ۱. حساب بانکی / صندوق
-      const [bank] = await tx
-        .select()
-        .from(bankAccounts)
-        .where(and(eq(bankAccounts.id, input.bankAccountId), eq(bankAccounts.isDeleted, 0)));
-      if (!bank) throw new NotFoundError('حساب بانکی یا صندوق انتخاب‌شده یافت نشد');
+      // ۱. حساب بانکی / صندوق، با قفل راه مشترک خزانه
+      const bank = await lockTreasuryBank(tx, input.bankAccountId);
       if (!bank.accountId) {
         throw new ValidationError('برای این حساب بانکی/صندوق، حساب معین در چارت حساب‌ها تعریف نشده است؛ ابتدا آن را در بخش کدینگ متصل کنید.');
       }
@@ -146,7 +137,8 @@ export class PayrollPaymentService {
       const [payroll] = await tx
         .select()
         .from(pieceworkPayrolls)
-        .where(and(eq(pieceworkPayrolls.id, input.payrollId), eq(pieceworkPayrolls.isDeleted, 0)));
+        .where(and(eq(pieceworkPayrolls.id, input.payrollId), eq(pieceworkPayrolls.isDeleted, 0)))
+        .for('update');
 
       if (!payroll) throw new NotFoundError('فیش حقوقی یافت نشد');
 
@@ -213,22 +205,7 @@ export class PayrollPaymentService {
         );
       }
 
-      // ۵. کنترل موجودی حساب بانکی
-      const currentBal = fin(bank.currentBalance);
-      const newBal = currentBal.subtract(payAmount).round(4);
-      if (newBal.isNegative()) {
-        throw new ValidationError(
-          `مانده حساب «${bank.title}» برای این پرداخت کافی نیست (مانده فعلی: ${currentBal.toNumber().toLocaleString('fa-IR')} ریال)`
-        );
-      }
-      await tx.update(bankAccounts).set({ currentBalance: money(newBal) }).where(eq(bankAccounts.id, bank.id));
-
-      // ۶. شماره تراکنش اتمیک
-      const txNum = await TreasuryTransactionService.generateTransactionNumber('payment', tx);
-
-      // ۷. سند حسابداری دوبل پرداخت حقوق:
-      // بدهکار: حقوق و دستمزد پرداختنی (3201) معادل مبلغ پرداختی (payAmount)
-      // بستانکار: حساب بانکی / صندوق معادل مبلغ پرداختی (payAmount)
+      // ۵. حساب «حقوق و دستمزد پرداختنی» (3201) که سند پرداخت بدهکارش می‌کند
       const payableAcc = await AccountMappingService.getWagesPayableAccount(tx);
       if (!payableAcc) {
         throw new NotFoundError('حساب معین «حقوق و دستمزد پرداختنی» (3201) در چارت حساب‌ها یافت نشد');
@@ -244,77 +221,81 @@ export class PayrollPaymentService {
         ? `تسویه نهایی ${input.method === 'cash' ? 'نقدی' : input.method === 'pos' ? 'کارتخوان' : 'بانکی'} حقوق ${pers?.fullName || ''} فیش ${payroll.payrollNumber}`
         : `پرداخت مرحله‌ای (قسطی) حقوق ${pers?.fullName || ''} بابت فیش ${payroll.payrollNumber} (مانده پس از پرداخت: ${netPayable.subtract(newTotalPaid).toNumber().toLocaleString('fa-IR')} ریال)`;
 
-      const voucher = await VoucherService.createJournalVoucher({
-        date: payIso,
-        voucherType: 'treasury',
-        status: 'draft',
-        description: descText,
-        referenceModule: 'payroll_payment',
-        referenceId: payroll.id,
-        referenceNumber: txNum,
-        currency: PAYROLL_CURRENCY,
-        userId: input.userId,
-        username: input.username,
-        items: [
-          {
-            accountId: payableAcc.id,
-            detailedType: 'personnel',
-            detailedId: payroll.personnelId,
-            detailedName: pers?.fullName || 'پرسنل',
-            debit: payAmount.toNumber(),
-            credit: 0,
-            currency: PAYROLL_CURRENCY,
-            description: `کاهش تعهد پرداخت حقوق به ${pers?.fullName || ''} بابت فیش ${payroll.payrollNumber}`
-          },
-          {
-            accountId: bank.accountId,
-            detailedType: 'bank_account',
-            detailedId: bank.id,
-            detailedName: bank.title,
-            debit: 0,
-            credit: payAmount.toNumber(),
-            currency: PAYROLL_CURRENCY,
-            description: `خروج وجه از ${bank.title} بابت پرداخت فیش ${payroll.payrollNumber}`
-          }
-        ]
-      }, tx);
-
-      // ۸. درج تراکنش خزانه
-      const [tr] = await tx.insert(treasuryTransactions).values({
-        transactionNumber: txNum,
+      // ۶ تا ۹. v10.2.1 (OBS-R2-52): پرداخت فیش از راه مشترک خزانه (`postTreasuryRow`) ثبت می‌شود، همان راه دریافت و پرداخت
+      // فرم خزانه: کاهش مانده حساب با همان نگهبان مانده منفی (کد `TREASURY_BALANCE_INSUFFICIENT`)، شماره از دنباله خزانه،
+      // سند پرداخت، ردیف خزانه و رویداد آن در صف ارسال. پیش‌تر این سرویس مانده بانک و ردیف خزانه را خودش می‌نوشت.
+      // سند: بدهکار حقوق و دستمزد پرداختنی با تفصیلی پرسنل، بستانکار حساب بانکی / صندوق، هر دو به مبلغ پرداخت.
+      let voucherNumber: number | string | null = null;
+      const posted = await postTreasuryRow(tx, bank, {
         type: 'payment',
-        // v7.0.74: تاریخ تراکنش خزانه ISO است (TD-105)؛ تاریخ پرداخت فیش شمسی می‌ماند
+        // v7.0.74: تاریخ تراکنش خزانه ISO است (TD-105)
         date: payIso,
         method: input.method || 'bank_transfer',
-        amount: money(payAmount),
+        amount: payAmount,
         currency: PAYROLL_CURRENCY,
-        exchangeRate: money(1),
-        bankAccountId: bank.id,
+        exchangeRate: 1,
         partyType: 'personnel',
         partyId: payroll.personnelId,
         partyName: pers?.fullName || '',
         // v9.0.82 (TD-507): هدف پرداخت پرسنل ذخیره می‌شود؛ پرداخت فیش تسویه حقوق است
         purpose: 'settlement',
         trackingNumber: input.paymentReference?.trim() || '',
-        voucherId: voucher?.id ?? null,
         payrollId: payroll.id,
         description: input.notes?.trim() || descText,
-        status: 'completed',
-        createdById: input.userId || null
-      }).returning();
-
-      // ۹. رویداد دامنه اتمیک (Outbox)
-      const evt = domainEventBus.createEvent(
-        DomainEventType.TREASURY_TRANSACTION_APPROVED,
-        'Treasury',
-        String(tr.id),
+        createdById: input.userId || null,
+        voucher: async (txNum) => {
+          const voucher = await VoucherService.createJournalVoucher({
+            date: payIso,
+            voucherType: 'treasury',
+            status: 'draft',
+            description: descText,
+            referenceModule: 'payroll_payment',
+            referenceId: payroll.id,
+            referenceNumber: txNum,
+            currency: PAYROLL_CURRENCY,
+            userId: input.userId,
+            username: input.username,
+            items: [
+              {
+                accountId: payableAcc.id,
+                detailedType: 'personnel',
+                detailedId: payroll.personnelId,
+                detailedName: pers?.fullName || 'پرسنل',
+                debit: payAmount.toNumber(),
+                credit: 0,
+                currency: PAYROLL_CURRENCY,
+                description: `کاهش تعهد پرداخت حقوق به ${pers?.fullName || ''} بابت فیش ${payroll.payrollNumber}`
+              },
+              {
+                accountId: bank.accountId as number,
+                detailedType: 'bank_account',
+                detailedId: bank.id,
+                detailedName: bank.title,
+                debit: 0,
+                credit: payAmount.toNumber(),
+                currency: PAYROLL_CURRENCY,
+                description: `خروج وجه از ${bank.title} بابت پرداخت فیش ${payroll.payrollNumber}`
+              }
+            ]
+          }, tx);
+          voucherNumber = voucher.voucherNumber ?? null;
+          return voucher;
+        },
         // v10.1.66: no amount, remaining balance, name or description (they reach every «*» webhook)
-        payrollTreasuryEventPayload({
-          transactionId: tr.id, type: 'withdrawal', currency: PAYROLL_CURRENCY, bank, payroll, isFullyPaid,
+        event: (rowId) => payrollTreasuryEventPayload({
+          transactionId: rowId, type: 'withdrawal', currency: PAYROLL_CURRENCY, bank, payroll, isFullyPaid,
         }),
-        { userId: input.userId, userName: input.username }
-      );
-      await OutboxService.saveToOutbox(tx, evt);
+        actor: { userId: input.userId, username: input.username },
+        // متن پیشین پیام کمبود مانده پرداخت فیش، با کد مشترک راه خزانه
+        insufficientBalance: (balance) => new ValidationError(
+          `مانده حساب «${bank.title}» برای این پرداخت کافی نیست (مانده فعلی: ${balance.toNumber().toLocaleString('fa-IR')} ریال)`,
+          undefined,
+          'TREASURY_BALANCE_INSUFFICIENT'
+        ),
+      });
+      const tr = posted.row;
+      const txNum = posted.transactionNumber;
+      const voucherId = posted.voucherId;
 
       // ۱۰. بروزرسانی فیش حقوقی
       await tx.update(pieceworkPayrolls).set({
@@ -344,7 +325,7 @@ export class PayrollPaymentService {
       // v10.0.259 (TD-950): ممیزی پرداخت در همین تراکنش، با کاربر و IP و مبلغ؛ پیش‌تر مسیر پس از commit و بی مبلغ می‌نوشت
       await auditPayrollPaymentRegistered(tx, updatedPayroll, {
         transactionId: tr.id, transactionNumber: txNum, amount: payAmount.toString(), paidBefore: String(payroll.paidAmount ?? 0),
-        voucherId: voucher?.id ?? null, voucherNumber: voucher?.voucherNumber ?? null,
+        voucherId, voucherNumber,
       }, { req: input.req, userId: input.userId, username: input.username });
       // OBS-R2-13 (ت۴۰ بند ۱۱): رویداد «پرداخت فیش حقوق» برای قانون‌ها و وب‌هوک‌ها، یکی برای هر پرداخت
       await recordPayrollEvent(tx, 'paid', updatedPayroll, { userId: input.userId, username: input.username },
@@ -354,8 +335,8 @@ export class PayrollPaymentService {
         payroll: updatedPayroll,
         transactionNumber: txNum,
         transactionId: tr.id,
-        voucherId: voucher?.id ?? null,
-        voucherNumber: voucher?.voucherNumber ?? null,
+        voucherId,
+        voucherNumber,
         paidAmount: payAmount.toNumber(),
         remainingAmount: netPayable.subtract(newTotalPaid).toNumber(),
         isFullyPaid,

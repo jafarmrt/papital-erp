@@ -15,6 +15,7 @@ import { choosableContraAccounts, type ContraAccountOption } from './partyContra
 import { auditTreasuryTransactionCreated, type TreasuryAuditActor } from './treasuryAudit.js';
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
 import { TreasuryTransactionService } from './treasuryTransaction.service.js';
+import { postTreasuryRow } from './treasuryPosting.js';
 
 /**
  * v10.1.32 (D-16، تصمیم مالک محصول ت۳۰ «متغیر»): صورت‌هزینه تنخواه‌گردان. یک پرداخت خزانه از حساب تنخواه (نوع
@@ -118,71 +119,66 @@ export async function createPettyCashExpense(input: PettyCashExpenseInput): Prom
     const fund = await lockFund(tx, input.fundId);
     const accountNames = await assertExpenseAccounts(tx, lines.map(l => l.accountId));
 
-    const balanceAfter = fin(fund.currentBalance).subtract(total).round(4);
-    if (balanceAfter.isNegative()) {
-      throw new ValidationError(
-        `جمع صورت‌هزینه از مانده تنخواه «${fund.title}» (${fin(fund.currentBalance).toNumber().toLocaleString('fa-IR')} ریال) بیشتر است؛ نخست تنخواه را شارژ کنید.`,
-        { balance: fin(fund.currentBalance).toNumber(), total: total.toNumber() },
-        'PETTY_CASH_INSUFFICIENT_BALANCE',
-      );
-    }
-    await tx.update(bankAccounts).set({ currentBalance: money(balanceAfter) }).where(eq(bankAccounts.id, fund.id));
-
-    const txNum = await TreasuryTransactionService.generateTransactionNumber('payment', tx);
     const voucherDescription = description || `صورت‌هزینه تنخواه ${fund.title}`;
-    const voucher = await TreasuryTransactionService.createTreasuryVoucher({
-      date,
-      description: voucherDescription,
-      referenceNumber: txNum,
-      currency: PETTY_CASH_CURRENCY,
-      userId: input.userId,
-      username: input.username,
-      items: [
-        ...lines.map(line => ({
-          accountId: line.accountId,
-          detailedType: 'none',
-          debit: line.amount,
-          credit: 0,
-          currency: PETTY_CASH_CURRENCY,
-          exchangeRate: 1,
-          description: pettyCashLineVoucherDescription(fund.title, line),
-        })),
-        {
-          accountId: Number(fund.accountId),
-          detailedType: 'bank_account',
-          detailedId: fund.id,
-          detailedName: fund.title,
-          debit: 0,
-          credit: total,
-          currency: PETTY_CASH_CURRENCY,
-          exchangeRate: 1,
-          description: voucherDescription,
-        },
-      ],
-    }, tx);
-
-    const [row] = await tx.insert(treasuryTransactions).values({
-      transactionNumber: txNum,
+    // v10.2.1 (OBS-R2-52): از راه مشترک خزانه (`postTreasuryRow`): مانده تنخواه با همان نگهبان مانده منفی (پیام و کد
+    // خود تنخواه)، شماره، سند پیش‌نویس، ردیف و رویداد آن؛ ردیف‌های صورت‌هزینه و پیوست‌ها پس از آن نوشته می‌شوند
+    const { row } = await postTreasuryRow(tx, fund, {
       type: 'payment',
       date,
       method: 'cash',
-      amount: money(total),
+      amount: total,
       currency: PETTY_CASH_CURRENCY,
-      exchangeRate: money(1),
-      bankAccountId: fund.id,
+      exchangeRate: 1,
       partyType: 'other',
       partyId: null,
       partyName: 'هزینه‌های تنخواه',
       purpose: null,
       contraAccountId: null,
       trackingNumber: '',
-      voucherId: voucher.id,
       documentId: null,
       description: voucherDescription,
-      status: 'completed',
-      attachments: [],
       createdById: input.userId || null,
-    }).returning();
+      voucher: (txNum) => TreasuryTransactionService.createTreasuryVoucher({
+        date,
+        description: voucherDescription,
+        referenceNumber: txNum,
+        currency: PETTY_CASH_CURRENCY,
+        userId: input.userId,
+        username: input.username,
+        items: [
+          ...lines.map(line => ({
+            accountId: line.accountId,
+            detailedType: 'none',
+            debit: line.amount,
+            credit: 0,
+            currency: PETTY_CASH_CURRENCY,
+            exchangeRate: 1,
+            description: pettyCashLineVoucherDescription(fund.title, line),
+          })),
+          {
+            accountId: Number(fund.accountId),
+            detailedType: 'bank_account',
+            detailedId: fund.id,
+            detailedName: fund.title,
+            debit: 0,
+            credit: total,
+            currency: PETTY_CASH_CURRENCY,
+            exchangeRate: 1,
+            description: voucherDescription,
+          },
+        ],
+      }, tx),
+      event: (rowId) => ({
+        transactionId: rowId, type: 'withdrawal', amount: total.toNumber(), currency: PETTY_CASH_CURRENCY,
+        accountId: fund.id, accountName: fund.title, description: voucherDescription, pettyCashLines: lines.length,
+      }),
+      actor: { userId: input.userId, username: input.username },
+      insufficientBalance: (balance) => new ValidationError(
+        `جمع صورت‌هزینه از مانده تنخواه «${fund.title}» (${balance.toNumber().toLocaleString('fa-IR')} ریال) بیشتر است؛ نخست تنخواه را شارژ کنید.`,
+        { balance: balance.toNumber(), total: total.toNumber() },
+        'PETTY_CASH_INSUFFICIENT_BALANCE',
+      ),
+    });
     await tx.insert(pettyCashExpenseLines).values(lines.map(line => ({
       treasuryTransactionId: row.id,
       lineNo: line.lineNo,
@@ -192,15 +188,7 @@ export async function createPettyCashExpense(input: PettyCashExpenseInput): Prom
       sellerName: line.sellerName,
       invoiceNumber: line.invoiceNumber,
     })));
-    row.attachments = await TreasuryTransactionService.recordInsertedPaymentEffects(tx, row.id, {
-      attachments: input.attachments,
-      userId: input.userId,
-      username: input.username,
-      event: {
-        transactionId: row.id, type: 'withdrawal', amount: total.toNumber(), currency: PETTY_CASH_CURRENCY,
-        accountId: fund.id, accountName: fund.title, description: voucherDescription, pettyCashLines: lines.length,
-      },
-    });
+    row.attachments = await TreasuryTransactionService.attachTreasuryRowFiles(tx, row.id, input.attachments, input.username);
 
     const resultLines: PettyCashExpenseLine[] = lines.map(line => ({
       lineNo: line.lineNo,

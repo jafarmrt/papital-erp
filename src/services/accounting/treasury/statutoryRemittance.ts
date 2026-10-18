@@ -1,7 +1,7 @@
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { asc, inArray } from 'drizzle-orm';
 import { orm } from '../../../db/drizzle.js';
-import { bankAccounts, personnel, statutoryRemittanceLines, treasuryTransactions } from '../../../db/schema.js';
-import { ConflictError, NotFoundError, ValidationError } from '../../../errors/customErrors.js';
+import { personnel, statutoryRemittanceLines } from '../../../db/schema.js';
+import { ConflictError, ValidationError } from '../../../errors/customErrors.js';
 import { fin, type DecimalValue, type FinancialDecimal } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
 import { LockHierarchyLevel, validateLockOrder } from '../../../lib/lockOrder.js';
@@ -15,6 +15,7 @@ import { monthFigures, monthRange, personnelBalances, remittanceAccount, unassig
 import { auditTreasuryTransactionCreated, type TreasuryAuditActor } from './treasuryAudit.js';
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
 import { TreasuryTransactionService } from './treasuryTransaction.service.js';
+import { lockTreasuryBank, postTreasuryRow } from './treasuryPosting.js';
 
 /**
  * v10.1.36 (TD-1243، تصمیم مالک محصول ت۳۳ الف): «پرداخت به تأمین اجتماعی» و «پرداخت به امور مالیاتی» از «فهرست بیمه و
@@ -98,10 +99,7 @@ export async function createStatutoryRemittance(input: CreateStatutoryRemittance
       }
     }
 
-    const [bank] = await tx.select().from(bankAccounts)
-      .where(and(eq(bankAccounts.id, input.bankAccountId), eq(bankAccounts.isDeleted, 0)))
-      .for('update');
-    if (!bank) throw new NotFoundError('حساب بانکی یا صندوق انتخاب‌شده یافت نشد');
+    const bank = await lockTreasuryBank(tx, input.bankAccountId);
     if ((bank.currency || 'IRR') !== 'IRR') {
       throw new ValidationError(`بیمه و مالیات حقوق ریالی است؛ «${bank.title}» ریالی نیست.`, undefined, 'STATUTORY_REMITTANCE_RIAL_ONLY');
     }
@@ -157,80 +155,71 @@ export async function createStatutoryRemittance(input: CreateStatutoryRemittance
 
     const linesTotal = lines.reduce((t, l) => t.add(l.amount), fin(0));
     const total = linesTotal.add(penalty?.amount ?? 0).round(4);
-    const newBalance = fin(bank.currentBalance).subtract(total).round(4);
-    if (newBalance.isNegative()) {
-      throw new ValidationError(`مانده حساب «${bank.title}» کافی نیست (مانده فعلی: ${faAmount(bank.currentBalance)})`, undefined, 'TREASURY_BALANCE_INSUFFICIENT');
-    }
-    await tx.update(bankAccounts).set({ currentBalance: money(newBalance) }).where(eq(bankAccounts.id, bank.id));
-
-    const txNum = await TreasuryTransactionService.generateTransactionNumber('payment', tx);
     const description = input.description?.trim() || statutoryRemittanceDescription(kind, input.jalaliYear, input.jalaliMonth);
-    const voucher = await TreasuryTransactionService.createTreasuryVoucher({
-      date,
-      description,
-      referenceNumber: txNum,
-      currency: 'IRR',
-      userId: input.userId,
-      username: input.username,
-      items: [
-        ...lines.map(l => ({
-          accountId: account.id,
-          detailedType: 'personnel',
-          detailedId: l.personnelId,
-          detailedName: nameOf.get(l.personnelId) ?? 'پرسنل',
-          debit: l.amount,
-          credit: 0,
-          currency: 'IRR',
-          exchangeRate: 1,
-          description: `${description} (${nameOf.get(l.personnelId) ?? 'پرسنل'})`,
-        })),
-        ...(penalty && penaltyAccount ? [{
-          accountId: penaltyAccount.id,
-          detailedType: 'other',
-          detailedId: null,
-          detailedName: text.payee,
-          debit: penalty.amount,
-          credit: 0,
-          currency: 'IRR',
-          exchangeRate: 1,
-          description: `جریمه دیرکرد ${description}`,
-        }] : []),
-        {
-          accountId: bank.accountId,
-          detailedType: 'bank_account',
-          detailedId: bank.id,
-          detailedName: bank.title,
-          debit: 0,
-          credit: total,
-          currency: 'IRR',
-          exchangeRate: 1,
-          description,
-        },
-      ],
-    }, tx);
-
-    const [row] = await tx.insert(treasuryTransactions).values({
-      transactionNumber: txNum,
+    // v10.2.1 (OBS-R2-52): از راه مشترک خزانه (`postTreasuryRow`): مانده حساب (هرگز منفی، `TREASURY_BALANCE_INSUFFICIENT`)،
+    // شماره، سند پیش‌نویس، ردیف و رویداد آن؛ ردیف‌های هر نفر پس از آن با شناسه ردیف خزانه نوشته می‌شوند
+    const { row } = await postTreasuryRow(tx, bank, {
       type: 'payment',
       date,
       method,
-      amount: money(total),
+      amount: total,
       currency: 'IRR',
-      exchangeRate: money(1),
-      bankAccountId: bank.id,
+      exchangeRate: 1,
       partyType: 'other',
       partyId: null,
       partyName: text.payee,
       purpose: null,
       contraAccountId: account.id,
       trackingNumber: input.trackingNumber?.trim() || '',
-      voucherId: voucher.id,
       documentId: null,
       description,
-      status: 'completed',
-      attachments: [],
       createdById: input.userId || null,
-    }).returning();
+      voucher: (txNum) => TreasuryTransactionService.createTreasuryVoucher({
+        date,
+        description,
+        referenceNumber: txNum,
+        currency: 'IRR',
+        userId: input.userId,
+        username: input.username,
+        items: [
+          ...lines.map(l => ({
+            accountId: account.id,
+            detailedType: 'personnel',
+            detailedId: l.personnelId,
+            detailedName: nameOf.get(l.personnelId) ?? 'پرسنل',
+            debit: l.amount,
+            credit: 0,
+            currency: 'IRR',
+            exchangeRate: 1,
+            description: `${description} (${nameOf.get(l.personnelId) ?? 'پرسنل'})`,
+          })),
+          ...(penalty && penaltyAccount ? [{
+            accountId: penaltyAccount.id,
+            detailedType: 'other',
+            detailedId: null,
+            detailedName: text.payee,
+            debit: penalty.amount,
+            credit: 0,
+            currency: 'IRR',
+            exchangeRate: 1,
+            description: `جریمه دیرکرد ${description}`,
+          }] : []),
+          {
+            accountId: bank.accountId as number,
+            detailedType: 'bank_account',
+            detailedId: bank.id,
+            detailedName: bank.title,
+            debit: 0,
+            credit: total,
+            currency: 'IRR',
+            exchangeRate: 1,
+            description,
+          },
+        ],
+      }, tx),
+      event: (rowId) => ({ transactionId: rowId, type: 'withdrawal', amount: total.toNumber(), currency: 'IRR', accountId: bank.id, accountName: bank.title, description }),
+      actor: { userId: input.userId, username: input.username },
+    });
     await tx.insert(statutoryRemittanceLines).values(lines.map(l => ({
       treasuryTransactionId: row.id,
       kind,
@@ -239,12 +228,6 @@ export async function createStatutoryRemittance(input: CreateStatutoryRemittance
       personnelId: l.personnelId,
       amount: money(l.amount),
     })));
-
-    await TreasuryTransactionService.recordInsertedPaymentEffects(tx, row.id, {
-      userId: input.userId,
-      username: input.username,
-      event: { transactionId: row.id, type: 'withdrawal', amount: total.toNumber(), currency: 'IRR', accountId: bank.id, accountName: bank.title, description },
-    });
 
     const created: StatutoryRemittanceResult = {
       ...row,
