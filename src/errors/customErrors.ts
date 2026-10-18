@@ -99,6 +99,24 @@ export interface NormalizedError {
   stack?: string;
   /** TD-1320: the stack carries the database's own text (the SQL and its parameters): log files only, never the answer */
   internal?: boolean;
+  /** TD-1320: the database's own reason of a DATABASE_ERROR, for the log entry and the terminal line, never the answer */
+  logDetails?: DatabaseErrorLogDetails;
+}
+
+/** The parts of a node-postgres error that say why the database refused, without the SQL text or its parameters */
+export interface DatabaseErrorLogDetails {
+  sqlState?: string;
+  dbMessage?: string;
+  constraint?: string;
+  table?: string;
+}
+
+const textOf = (value: unknown): string | undefined => (typeof value === 'string' && value !== '' ? value : undefined);
+
+/** Only a real node-postgres error gives its reason: a Drizzle error without one carries the SQL text in its message */
+function databaseErrorLogDetails(pgErr: Record<string, unknown>): DatabaseErrorLogDetails | undefined {
+  if (typeof pgErr.severity !== 'string') return undefined;
+  return { sqlState: textOf(pgErr.code), dbMessage: textOf(pgErr.message), constraint: textOf(pgErr.constraint), table: textOf(pgErr.table) };
 }
 
 /** TD-1320: what any environment answers for a database error no rule above names; the SQL stays in the log files */
@@ -269,6 +287,7 @@ export function normalizeError(err: unknown): NormalizedError {
         code: 'DATABASE_ERROR',
         stack: typeof errObj.stack === 'string' ? errObj.stack : undefined,
         internal: true,
+        logDetails: databaseErrorLogDetails(pgErr),
       };
     }
   }

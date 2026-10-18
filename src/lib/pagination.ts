@@ -39,7 +39,11 @@ export function parsePagination(
     limit = defaults?.limit ?? 50;
   }
   // TD-1320: a list whose service reads at most `maxLimit` rows pages with that cap too, so page 2 starts where page 1 ended
-  const cap = Math.min(MAX_PAGE_LIMIT, defaults?.maxLimit ?? MAX_PAGE_LIMIT);
+  // a cap that is not a whole number above zero (0, negative, NaN) is a caller's mistake: the general cap holds
+  const maxLimit = defaults?.maxLimit;
+  const cap = maxLimit !== undefined && Number.isFinite(maxLimit) && maxLimit >= 1
+    ? Math.min(MAX_PAGE_LIMIT, Math.floor(maxLimit))
+    : MAX_PAGE_LIMIT;
   if (limit > cap) {
     limit = cap;
   }

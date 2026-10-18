@@ -398,6 +398,11 @@ export async function runUrgentFixesV1020Tests(shouldRun: ShouldRun): Promise<Te
               if ('offset' in res.body && res.body.offset !== 0) wrong.push(`${list.path}?${query} read offset ${String(res.body.offset)}`);
               if ('page' in res.body && res.body.page !== 1) wrong.push(`${list.path}?${query} read page ${String(res.body.page)}`);
             }
+            // a malformed limit with a good page reads that page at the default limit
+            const bad = await request(app).get(`/api/events/${list.path}?limit=abc&page=2`).set('Cookie', session.cookie);
+            if (bad.status !== 200 || bad.body.limit !== 50) wrong.push(`${list.path}?limit=abc&page=2 read limit ${String(bad.body?.limit)}`);
+            if ('offset' in bad.body && bad.body.offset !== 50) wrong.push(`${list.path}?limit=abc&page=2 read offset ${String(bad.body.offset)}`);
+            if ('page' in bad.body && bad.body.page !== 2) wrong.push(`${list.path}?limit=abc&page=2 read page ${String(bad.body.page)}`);
             // a limit above the service's cap pages with that cap: page 2 starts where page 1 ended
             const res = await request(app).get(`/api/events/${list.path}?page=2&limit=5000`).set('Cookie', session.cookie);
             if (res.status !== 200 || res.body.limit !== list.cap) wrong.push(`${list.path}?page=2&limit=5000 read limit ${String(res.body?.limit)}`);
