@@ -17,7 +17,8 @@ export const users = pgTable('users', {
   lastFailedLoginAt: text('last_failed_login_at'),
   // V9-2.2: ابطال نشست با نسخه توکن و حذف نرم کاربران
   tokenVersion: integer('token_version').default(0),
-  isDeleted: integer('is_deleted').default(0),
+  // v10.2.0 (migration 0126): NOT NULL; a NULL was live for login but not for the profile, health check or restore
+  isDeleted: integer('is_deleted').default(0).notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow()
 }, (table) => ({
   idx_users_role: index('idx_users_role').on(table.role).where(sql`${table.role} IS NOT NULL`),

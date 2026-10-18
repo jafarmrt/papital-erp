@@ -10,6 +10,7 @@ import { toast } from 'react-hot-toast';
 import { copyToClipboard } from '../../utils/clipboard';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
 import { DialogLayer } from '../common/DialogLayer';
+import { activityResultLabel } from '../../lib/crm/crmScreenText';
 
 interface CRMLeadDrawerProps {
   selectedLeadDrawer: CRMLead | null;
@@ -311,7 +312,7 @@ export function CRMLeadDrawer({
                           مسئول پیگیری: {act.assignedTo}
                         </span>
                       )}
-                      {act.result && <span className="font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-md">{act.result}</span>}
+                      {act.result && <span className="font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-md">{activityResultLabel(act.result)}</span>}
                     </div>
 
                     {act.nextFollowUpDate && (

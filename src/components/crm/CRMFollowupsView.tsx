@@ -4,6 +4,7 @@ import { CRMActivity, CRMLead } from '../../types';
 import { formatPersianNumber, formatPersianDate } from '../../utils';
 import { CRMFollowupsPanel } from './CRMFollowupsPanel';
 import { ActivityRowActions } from './ActivityRowActions';
+import { activityResultLabel } from '../../lib/crm/crmScreenText';
 
 interface CRMFollowupsViewProps {
   activeTab: 'activities' | 'followups';
@@ -193,7 +194,7 @@ export function CRMFollowupsView({
                       </td>
                       <td className="p-3">
                         <span className="px-2 py-0.5 bg-slate-100 text-slate-700 font-semibold rounded-md text-[11px]">
-                          {act.result || '-'}
+                          {activityResultLabel(act.result) || '-'}
                         </span>
                       </td>
                       <td className="p-3 font-medium text-slate-700">{act.loggedBy || '-'}</td>

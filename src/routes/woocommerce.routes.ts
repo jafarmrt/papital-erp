@@ -24,6 +24,7 @@ import { openSettingSecret } from '../services/settings/settingSecrets.js';
 import { withUtcTimestampKeys } from '../lib/serverTimestamp.js';
 import { WOO_ORDER_LOG_TIMESTAMP_KEYS } from '../services/events/eventTimestamps.js';
 import { idempotency } from '../middleware/idempotency.js';
+import { wooWebhookAnswer, wooWebhookErrorAnswer } from '../lib/woocommerce/wooWebhookAnswer.js';
 
 const router = Router();
 
@@ -229,14 +230,15 @@ const handleWebhookPingOrPayload = async (req: Request, res: Response) => {
     // v7.0.30 (TD-190 / audit P1-2): سیاست وضعیت سفارش (فاکتور / ابطال / بررسی / انتظار پرداخت) در سرویس اعمال می‌شود
     // v8.0.126 (TD-407): موضوع order.deleted (سطل زباله یا حذف دائم) بی وضعیت می‌رسد و «نیازمند بررسی» می‌شود
     const result = await WooOrderSyncService.handleOrder(payload, String(topicHeader));
-    return res.status(200).json(result);
+    // v10.2.0: a failure goes to the shop with the general message only; the order log keeps its details
+    return res.status(200).json(wooWebhookAnswer(result));
   } catch (error) {
     logger.error({ message: 'WooCommerce Webhook error', error });
     // تصمیم مالک محصول (v7.0.30): همیشه 200 — ووکامرس تحویل ناموفق را دوباره ارسال نمی‌کند و پس از ۵ پاسخ
     // غیر 2xx پیاپی وب‌هوک را غیرفعال می‌کند. شکست در woocommerce_order_logs ماندگار است و از ERP با
     // «همگام‌سازی دستی سفارش» دوباره پردازش می‌شود.
-    const message = error instanceof Error ? error.message : 'خطا در پردازش وب‌هوک ووکامرس';
-    res.status(200).json({ success: false, status: 'failed', message, error: message });
+    // v10.2.0: never the error text itself (a database error carried its SQL to the shop)
+    res.status(200).json(wooWebhookErrorAnswer());
   }
 };
 

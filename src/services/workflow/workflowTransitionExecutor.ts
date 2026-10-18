@@ -30,6 +30,7 @@ import type { RuleExpression } from '../ruleEngine.service.js';
 import { isSystemAdminRole, permissionDefinition } from '../../lib/permissions/permissionCatalog.js';
 import { STOCK_BACKDATE_PERMISSION } from '../../lib/permissions/documentPermissions.js';
 import { notifyWorkflowTasksArrived } from './workflowTaskNotice.js';
+import { REPLACED_PERMISSION_KEYS } from './removedPermissionKeys.js';
 import type { DbTransaction } from '../../db/drizzle.js';
 
 type DbClient = typeof orm | Parameters<Parameters<typeof orm.transaction>[0]>[0];
@@ -221,8 +222,10 @@ export class WorkflowTransitionExecutor {
     signer: { role?: string; permissions?: string[]; ownPermissions: boolean },
     txExecutor: DbClient = orm
   ): Promise<boolean> {
-    const permission = (transition.requiredPermission || '').trim();
-    if (!permission) return true;
+    const asked = (transition.requiredPermission || '').trim();
+    if (!asked) return true;
+    // a running instance keeps its snapshot: a key removed from the catalog is read as the key that replaced it (v10.2.0)
+    const permission = REPLACED_PERMISSION_KEYS[asked] ?? asked;
     const role = (signer.role || '').trim().toLowerCase();
     if (isSystemAdminRole(role)) return true;
     const held = (list: string[]) => list.includes(permission);
