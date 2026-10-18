@@ -1,5 +1,6 @@
 import type { useCRMData } from '../../hooks/useCRMData';
-import type { CRMActivity, CRMLead, Customer } from '../../types';
+import type { CRMLead, Customer } from '../../types';
+import { CRMLeadModal } from './CRMLeadModal';
 import { CRMInteractionModal } from './CRMInteractionModal';
 import { CustomerDossierDrawer } from './CustomerDossierDrawer';
 
@@ -40,20 +41,18 @@ interface CrmCustomerDossierHostProps {
   crm: CrmState;
   customer: Customer | null;
   onClose: () => void;
-  allLeads: CRMLead[];
-  allActivities: CRMActivity[];
   onEditCustomer: (customer: Customer) => void;
+  /** the customers page has no sales file drawer: it opens the file on the sales page instead (v10.2 package 7, OBS-R2-24) */
+  onOpenLeadDrawer?: (lead: CRMLead) => void;
 }
 
 /** پرونده مشتری: فرصت یا اقدام تازه با نام و شناسه همان مشتری از پیش پرشده باز می‌شود */
-export function CrmCustomerDossierHost({ crm, customer, onClose, allLeads, allActivities, onEditCustomer }: CrmCustomerDossierHostProps) {
+export function CrmCustomerDossierHost({ crm, customer, onClose, onEditCustomer, onOpenLeadDrawer }: CrmCustomerDossierHostProps) {
   return (
     <CustomerDossierDrawer
       customer={customer}
       onClose={onClose}
-      allLeads={allLeads}
-      allActivities={allActivities}
-      onOpenLeadDrawer={crm.openLeadDrawer}
+      onOpenLeadDrawer={onOpenLeadDrawer ?? crm.openLeadDrawer}
       onOpenLeadModal={(lead, defaultCustName) => {
         crm.openLeadModal(lead);
         if (defaultCustName) {
@@ -71,6 +70,29 @@ export function CrmCustomerDossierHost({ crm, customer, onClose, allLeads, allAc
         }
       }}
       onEditCustomer={onEditCustomer}
+    />
+  );
+}
+
+/**
+ * The sales file window, shared by the sales page and the customers page, where the dossier's «پرونده فروش تازه» opened
+ * nothing before (v10.2 package 7, OBS-R2-24)
+ */
+export function CrmLeadModalHost({ crm }: { crm: CrmState }) {
+  return (
+    <CRMLeadModal
+      isLeadModalOpen={crm.isLeadModalOpen}
+      onCloseLeadModal={() => crm.setIsLeadModalOpen(false)}
+      editingLead={crm.editingLead}
+      leadForm={crm.leadForm}
+      setLeadForm={crm.setLeadForm}
+      isSavingLead={crm.isSavingLead}
+      onSaveLead={crm.handleSaveLead}
+      onDeleteLead={crm.canDeleteLead ? crm.handleDeleteLead : undefined}
+      customersList={crm.customersList}
+      personnelList={crm.personnelList}
+      currentPersonnelId={crm.currentPersonnelId}
+      currentLoggedInUser={crm.currentLoggedInUser}
     />
   );
 }

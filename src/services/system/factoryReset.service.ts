@@ -158,13 +158,15 @@ export class FactoryResetService {
   private static async wipeAllData(actor: FactoryResetActor): Promise<{ deletedRows: Record<string, number>; attachmentPaths: string[]; mediaFiles: RemovedMediaFile[] }> {
     return orm.transaction(async (tx) => {
       const deletedRows: Record<string, number> = {};
-      let removedAttachments: Array<{ storagePath: string }> = [];
+      let removedAttachments: Array<{ storagePath: string; lightStoragePath: string | null }> = [];
       let removedMedia: Array<{ sha256: string; mimeType: string }> = [];
 
       // v10.1.45 (OBS-R1-12): one ordered list (factoryResetTables.ts), checked against the schema by Vitest
       for (const { name, table } of FACTORY_RESET_WIPE_ORDER) {
         if (table === fileAttachments) {
-          removedAttachments = await tx.delete(fileAttachments).returning({ storagePath: fileAttachments.storagePath });
+          // v10.2 package 7: an image attachment of a sales file or activity also has its light WEBP on disk
+          removedAttachments = await tx.delete(fileAttachments)
+            .returning({ storagePath: fileAttachments.storagePath, lightStoragePath: fileAttachments.lightStoragePath });
           deletedRows[name] = removedAttachments.length;
         } else if (table === mediaAssets) {
           removedMedia = await tx.delete(mediaAssets).returning({ sha256: mediaAssets.sha256, mimeType: mediaAssets.mimeType });
@@ -180,7 +182,7 @@ export class FactoryResetService {
           deletedRows[name] = Number(result.rowCount ?? 0);
         }
       }
-      const attachmentPaths = Array.from(new Set(removedAttachments.map((row) => row.storagePath)));
+      const attachmentPaths = Array.from(new Set(removedAttachments.flatMap((row) => (row.lightStoragePath ? [row.storagePath, row.lightStoragePath] : [row.storagePath]))));
       const mediaFiles = Array.from(new Map(removedMedia.map((row) => [row.sha256, row])).values());
 
       // ممیزی در همان تراکنش و پس از پاک شدن activity_logs: بدون ردیف ممیزی هیچ پاک‌سازی‌ای commit نمی‌شود.

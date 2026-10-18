@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { SearchableSelect } from '../SearchableSelect';
 import { Clock, Search, ChevronRight, ChevronLeft } from 'lucide-react';
 import type { CRMActivity, CRMLead } from '../../types';
 import { formatPersianNumber } from '../../utils';
@@ -105,22 +106,20 @@ export function CRMFollowupsPanel({ leads = [], onToggleFollowup, personnelList 
 
           {/* Seller / Assignee filter — V10-4.1: منبع پرسنل */}
           {canSeeAll && (
-            <select
+            <SearchableSelect
               value={seller}
-              onChange={(e) => {
-                setSeller(e.target.value);
+              onChange={(value) => {
+                setSeller(value || 'mine');
                 setPage(1);
               }}
-              className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-amber-500 cursor-pointer"
-            >
-              <option value="mine">پیگیری‌های من</option>
-              <option value="all">همه مسئولان پیگیری</option>
-              {personnelList.map((p) => (
-                <option key={p.id} value={String(p.id)}>
-                  {p.fullName}
-                </option>
-              ))}
-            </select>
+              className="min-w-[180px]"
+              placeholder="پیگیری‌های من"
+              options={[
+                { value: 'mine', label: 'پیگیری‌های من' },
+                { value: 'all', label: 'همه مسئولان پیگیری' },
+                ...personnelList.map((p) => ({ value: String(p.id), label: p.fullName || '' })),
+              ]}
+            />
           )}
         </div>
 

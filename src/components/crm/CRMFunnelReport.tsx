@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { SearchableSelect } from '../SearchableSelect';
 import { useQuery } from '@tanstack/react-query';
 import { TrendingDown, Filter as FunnelIcon } from 'lucide-react';
 import { fetchJson } from '../../api';
@@ -53,11 +54,13 @@ export function CRMFunnelReport({ personnelList = [] }: { personnelList?: Person
     <div className="space-y-4" data-testid="crm-funnel-report">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200">
         <ReportRangeFields range={range} todayIso={todayIso} onChange={setRange} />
-        <select value={seller} onChange={e => setSeller(e.target.value)} aria-label="فروشنده"
-          className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none cursor-pointer">
-          <option value="all">همه فروشندگان</option>
-          {personnelList.map(p => <option key={p.id} value={String(p.id)}>{p.fullName}</option>)}
-        </select>
+        <SearchableSelect
+          value={seller}
+          onChange={(value) => setSeller(value || 'all')}
+          className="min-w-[180px]"
+          placeholder="همه فروشندگان"
+          options={[{ value: 'all', label: 'همه فروشندگان' }, ...personnelList.map((p) => ({ value: String(p.id), label: p.fullName || '' }))]}
+        />
       </div>
 
       {error ? (

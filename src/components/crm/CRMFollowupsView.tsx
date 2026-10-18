@@ -1,14 +1,21 @@
 import { useState } from 'react';
-import { PhoneCall, Plus, Check, Video, MessageSquare, Mail, FileText, Search, ChevronRight, ChevronLeft } from 'lucide-react';
+import { PhoneCall, Plus, Check, Video, MessageSquare, Mail, FileText, Search } from 'lucide-react';
 import { CRMActivity, CRMLead } from '../../types';
+import { useDebounce } from '../../hooks/useDebounce';
+import { useClampPage, useCrmActivityPage, useFilterPage } from '../../hooks/useCrmListPages';
+import { CRM_ACTIVITY_PAGE_SIZE } from '../../lib/crm/crmListPages';
+import { CrmPager } from './CrmPager';
 import { formatPersianNumber, formatPersianDate } from '../../utils';
 import { CRMFollowupsPanel } from './CRMFollowupsPanel';
 import { ActivityRowActions } from './ActivityRowActions';
 import { activityResultLabel } from '../../lib/crm/crmScreenText';
+import { activityTypeLabel } from '../../lib/crm/activityTypes';
 
 interface CRMFollowupsViewProps {
   activeTab: 'activities' | 'followups';
-  activities: CRMActivity[];
+  /** v10.2 package 7 (OBS-R2-28): the page's date range; the book reads its pages from the server */
+  fromDate?: string;
+  toDate?: string;
   leads?: CRMLead[];
   onOpenActivityModal: () => void;
   onToggleFollowup: (act: CRMActivity) => void;
@@ -19,28 +26,24 @@ interface CRMFollowupsViewProps {
   personnelList?: any[];
 }
 
+const ACTIVITY_TYPE_STYLES: Readonly<Record<string, { icon: typeof PhoneCall; class: string }>> = {
+  call: { icon: PhoneCall, class: 'bg-blue-100 text-blue-800 border-blue-200' },
+  meeting: { icon: Video, class: 'bg-purple-100 text-purple-800 border-purple-200' },
+  whatsapp: { icon: MessageSquare, class: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+  email: { icon: Mail, class: 'bg-indigo-100 text-indigo-800 border-indigo-200' },
+  quote: { icon: FileText, class: 'bg-amber-100 text-amber-800 border-amber-200' },
+};
+const DEFAULT_TYPE_STYLE = { icon: FileText, class: 'bg-slate-100 text-slate-800 border-slate-200' };
+
+/** v10.2 package 7 (OBS-R2-32): the name comes from `activityTypeLabel`, shared with the dossier */
 export function getActivityTypeBadge(type: string) {
-  switch (type) {
-    case 'call':
-      return { label: 'تماس تلفنی', icon: PhoneCall, class: 'bg-blue-100 text-blue-800 border-blue-200' };
-    case 'meeting':
-      return { label: 'جلسه', icon: Video, class: 'bg-purple-100 text-purple-800 border-purple-200' };
-    case 'whatsapp':
-      return { label: 'پیام/واتساپ', icon: MessageSquare, class: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
-    case 'email':
-      return { label: 'ایمیل', icon: Mail, class: 'bg-indigo-100 text-indigo-800 border-indigo-200' };
-    case 'quote':
-      return { label: 'پیش‌فاکتور', icon: FileText, class: 'bg-amber-100 text-amber-800 border-amber-200' };
-    case 'note':
-      return { label: 'یادداشت', icon: FileText, class: 'bg-slate-100 text-slate-800 border-slate-200' };
-    default:
-      return { label: 'اقدام / کار', icon: FileText, class: 'bg-slate-100 text-slate-800 border-slate-200' };
-  }
+  return { label: activityTypeLabel(type), ...(ACTIVITY_TYPE_STYLES[type] ?? DEFAULT_TYPE_STYLE) };
 }
 
 export function CRMFollowupsView({
   activeTab,
-  activities,
+  fromDate,
+  toDate,
   leads = [],
   onOpenActivityModal,
   onToggleFollowup,
@@ -49,32 +52,18 @@ export function CRMFollowupsView({
   // V10-4.1: منبع مسئول تسک = پرسنل
   personnelList = []
 }: CRMFollowupsViewProps) {
-  // Search & Filters for Activities
+  // v10.2 package 7 (OBS-R2-28): search, type and page are applied on the server; the search waits for a pause
   const [actSearch, setActSearch] = useState('');
   const [actTypeFilter, setActTypeFilter] = useState<string>('all');
-  const [actPage, setActPage] = useState(1);
-  const actPageSize = 20;
-
-  // Filter Activities tab
-  const filteredActivities = activities.filter((act) => {
-    if (actTypeFilter !== 'all' && act.type !== actTypeFilter) return false;
-    if (actSearch.trim()) {
-      const q = actSearch.trim().toLowerCase();
-      const matchTitle = (act.title || '').toLowerCase().includes(q);
-      const matchDesc = (act.description || '').toLowerCase().includes(q);
-      const matchUser = (act.loggedBy || '').toLowerCase().includes(q);
-      const matchResult = (act.result || '').toLowerCase().includes(q);
-      if (!matchTitle && !matchDesc && !matchUser && !matchResult) return false;
-    }
-    return true;
-  });
-
-  const actTotalPages = Math.ceil(filteredActivities.length / actPageSize) || 1;
-  const currentActPage = Math.min(actPage, actTotalPages);
-  const paginatedActivities = filteredActivities.slice(
-    (currentActPage - 1) * actPageSize,
-    currentActPage * actPageSize
+  const debouncedSearch = useDebounce(actSearch, 300);
+  const [actPage, setActPage] = useFilterPage(`${fromDate ?? ''}|${toDate ?? ''}|${debouncedSearch}|${actTypeFilter}`);
+  const book = useCrmActivityPage(
+    { fromDate, toDate, search: debouncedSearch, type: actTypeFilter, page: actPage, limit: CRM_ACTIVITY_PAGE_SIZE },
+    activeTab === 'activities',
   );
+  useClampPage(actPage, book, setActPage);
+  const currentActPage = Math.min(actPage, book.totalPages);
+  const paginatedActivities = book.data;
 
   if (activeTab === 'activities') {
     return (
@@ -85,10 +74,10 @@ export function CRMFollowupsView({
             <PhoneCall size={18} className="text-blue-600" />
             <div>
               <h3 className="font-black text-xs text-slate-800">
-                دفترچه تمام تماس‌ها و اقدامات ({formatPersianNumber(filteredActivities.length)} مورد)
+                دفترچه تمام تماس‌ها و اقدامات ({formatPersianNumber(book.total)} مورد)
               </h3>
               <p className="text-[11px] text-slate-500">
-                لیست تمام تماس‌های تلفنی، جلسات، پیام‌های واتساپ، ایمیل‌ها و یادداشت‌های ثبت شده
+                فهرست تمام تماس‌های تلفنی، جلسات، پیام‌های واتساپ، ایمیل‌ها و یادداشت‌های ثبت شده
               </p>
             </div>
           </div>
@@ -119,7 +108,6 @@ export function CRMFollowupsView({
                 key={t.id}
                 onClick={() => {
                   setActTypeFilter(t.id);
-                  setActPage(1);
                 }}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
                   actTypeFilter === t.id
@@ -138,18 +126,22 @@ export function CRMFollowupsView({
               type="text"
               placeholder="جست‌وجو در تماس‌ها و شرح مذاکرات..."
               value={actSearch}
-              onChange={(e) => {
-                setActSearch(e.target.value);
-                setActPage(1);
-              }}
+              onChange={(e) => setActSearch(e.target.value)}
               className="w-full pr-9 pl-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500 transition-all"
             />
             <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2" />
           </div>
         </div>
 
+        {book.error && (
+          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center justify-between gap-2" role="alert">
+            <span>{book.error}</span>
+            <button type="button" onClick={book.refetch} className="px-3 py-1 bg-white border border-rose-200 rounded-lg font-bold cursor-pointer">تلاش دوباره</button>
+          </div>
+        )}
+
         {/* Activities Table */}
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white" aria-busy={book.loading}>
           <table className="w-full text-right text-xs">
             <thead className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
               <tr>
@@ -168,16 +160,18 @@ export function CRMFollowupsView({
               {paginatedActivities.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="p-8 text-center text-slate-400">
-                    {actSearch || actTypeFilter !== 'all'
-                      ? 'هیچ اقدمی با این فیلتر یا عبارت جست‌وجو یافت نشد.'
-                      : 'هنوز هیچ تماسی یا اقدامی ثبت نشده است.'}
+                    {book.loading
+                      ? 'در حال دریافت اقدام‌ها…'
+                      : actSearch || actTypeFilter !== 'all'
+                        ? 'هیچ اقدامی با این شرط‌ها یا عبارت جست‌وجو یافت نشد.'
+                        : 'هنوز هیچ تماسی یا اقدامی ثبت نشده است.'}
                   </td>
                 </tr>
               ) : (
                 paginatedActivities.map((act, index) => {
                   const badge = getActivityTypeBadge(act.type);
                   const Icon = badge.icon;
-                  const rowNum = (currentActPage - 1) * actPageSize + index + 1;
+                  const rowNum = (currentActPage - 1) * CRM_ACTIVITY_PAGE_SIZE + index + 1;
 
                   return (
                     <tr key={act.id} className="hover:bg-slate-50/80 transition-colors">
@@ -230,34 +224,7 @@ export function CRMFollowupsView({
           </table>
         </div>
 
-        {/* Activities Pagination */}
-        {actTotalPages > 1 && (
-          <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
-            <span className="text-slate-500">
-              نمایش {formatPersianNumber((currentActPage - 1) * actPageSize + 1)} تا {formatPersianNumber(Math.min(currentActPage * actPageSize, filteredActivities.length))} از {formatPersianNumber(filteredActivities.length)} مورد
-            </span>
-
-            <div className="flex items-center gap-1">
-              <button aria-label="صفحه قبل"
-                disabled={currentActPage === 1}
-                onClick={() => setActPage((p) => Math.max(1, p - 1))}
-                className="p-1.5 border rounded-lg bg-white hover:bg-slate-100 disabled:opacity-40 text-slate-700 cursor-pointer"
-              >
-                <ChevronRight size={16} />
-              </button>
-              <span className="px-3 font-bold text-slate-800">
-                صفحه {formatPersianNumber(currentActPage)} از {formatPersianNumber(actTotalPages)}
-              </span>
-              <button aria-label="صفحه بعد"
-                disabled={currentActPage === actTotalPages}
-                onClick={() => setActPage((p) => Math.min(actTotalPages, p + 1))}
-                className="p-1.5 border rounded-lg bg-white hover:bg-slate-100 disabled:opacity-40 text-slate-700 cursor-pointer"
-              >
-                <ChevronLeft size={16} />
-              </button>
-            </div>
-          </div>
-        )}
+        <CrmPager page={currentActPage} totalPages={book.totalPages} total={book.total} limit={CRM_ACTIVITY_PAGE_SIZE} onPage={setActPage} disabled={book.loading} />
       </div>
     );
   }
