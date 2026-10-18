@@ -3,7 +3,7 @@ import { fetchJson } from '../api';
 import { mutationSucceeded } from '../lib/settings/mutationSucceeded';
 import { toast } from 'react-hot-toast';
 import { normalizeRialDisplayUnit } from '../lib/rialDisplay';
-import { movementDaysError, priceListNamesError } from '../lib/settings/settingValues';
+import { TREASURY_HIGH_VALUE_THRESHOLD_DEFAULT, TREASURY_HIGH_VALUE_THRESHOLD_KEY, movementDaysError, priceListNamesError, treasuryHighValueThresholdError } from '../lib/settings/settingValues';
 import { wcTestConnectionBody } from '../lib/woocommerce/wcConnectionTest';
 import { stockSyncOutcome } from '../lib/woocommerce/stockSyncOutcome';
 import { errorMessageOf } from '../utils/formatters';
@@ -62,6 +62,7 @@ export function useSettings() {
   const [fastMovingDays, setFastMovingDays] = useState('30');
   const [slowMovingDays, setSlowMovingDays] = useState('90');
   const [deadStockDays, setDeadStockDays] = useState('180');
+  const [treasuryHighValueThreshold, setTreasuryHighValueThreshold] = useState(String(TREASURY_HIGH_VALUE_THRESHOLD_DEFAULT));
   const [pricingStrategies, setPricingStrategies] = useState<string[]>(['فروشگاه', 'مصرف‌کننده', 'عمده']);
   const [workflowPresets, setWorkflowPresets] = useState<WorkflowPreset[]>(DEFAULT_WORKFLOW_PRESETS);
   const [inventoryControlSections, setInventoryControlSections] = useState<InventoryControlPresetSection[]>(DEFAULT_INVENTORY_CONTROL_SECTIONS);
@@ -137,6 +138,7 @@ export function useSettings() {
     return {
       setInvoiceStartNum: track('invoice_start_number', setInvoiceStartNum), setFastMovingDays: track('fast_moving_days', setFastMovingDays),
       setSlowMovingDays: track('slow_moving_days', setSlowMovingDays), setDeadStockDays: track('dead_stock_days', setDeadStockDays),
+      setTreasuryHighValueThreshold: track(TREASURY_HIGH_VALUE_THRESHOLD_KEY, setTreasuryHighValueThreshold),
       setPricingStrategies: track('pricing_strategies', setPricingStrategies), setWorkflowPresets: track('project_workflow_presets', setWorkflowPresets),
       setInventoryControlSections: track('inventory_control_preset_sections', setInventoryControlSections), setCompanyName: track('company_name', setCompanyName),
       setCompanyPhone: track('company_phone', setCompanyPhone), setCompanyAddress: track('company_address', setCompanyAddress),
@@ -152,17 +154,15 @@ export function useSettings() {
     if (!settingsData || settingsData.length === 0) return;
     const data = settingsData;
 
-    const startNum = untouchedSetting(data, dirtyKeys, 'invoice_start_number');
-    if (startNum) setInvoiceStartNum(startNum.value);
+    const startNum = untouchedSetting(data, dirtyKeys, 'invoice_start_number'); if (startNum) setInvoiceStartNum(startNum.value);
 
-    const fastDaysSetting = untouchedSetting(data, dirtyKeys, 'fast_moving_days');
-    if (fastDaysSetting) setFastMovingDays(fastDaysSetting.value);
+    const fastDaysSetting = untouchedSetting(data, dirtyKeys, 'fast_moving_days'); if (fastDaysSetting) setFastMovingDays(fastDaysSetting.value);
 
-    const slowDaysSetting = untouchedSetting(data, dirtyKeys, 'slow_moving_days');
-    if (slowDaysSetting) setSlowMovingDays(slowDaysSetting.value);
+    const slowDaysSetting = untouchedSetting(data, dirtyKeys, 'slow_moving_days'); if (slowDaysSetting) setSlowMovingDays(slowDaysSetting.value);
 
-    const deadDaysSetting = untouchedSetting(data, dirtyKeys, 'dead_stock_days');
-    if (deadDaysSetting) setDeadStockDays(deadDaysSetting.value);
+    const deadDaysSetting = untouchedSetting(data, dirtyKeys, 'dead_stock_days'); if (deadDaysSetting) setDeadStockDays(deadDaysSetting.value);
+
+    const highValueSetting = untouchedSetting(data, dirtyKeys, TREASURY_HIGH_VALUE_THRESHOLD_KEY); if (highValueSetting) setTreasuryHighValueThreshold(highValueSetting.value);
 
     const strategies = untouchedSetting(data, dirtyKeys, 'pricing_strategies');
     // v10.0.201 (OBS-R1-71): آرایه JSON (مقدار کهنه با کاما هم خوانده می‌شود)
@@ -321,6 +321,7 @@ export function useSettings() {
         { key: 'fast_moving_days', value: fastMovingDays },
         { key: 'slow_moving_days', value: slowMovingDays },
         { key: 'dead_stock_days', value: deadStockDays },
+        { key: TREASURY_HIGH_VALUE_THRESHOLD_KEY, value: treasuryHighValueThreshold },
         { key: 'pricing_strategies', value: serializePricingStrategies(pricingStrategies) },
         { key: 'company_name', value: companyName },
         { key: 'company_phone', value: companyPhone },
@@ -341,6 +342,8 @@ export function useSettings() {
       fast_moving_days: fastMovingDays, slow_moving_days: slowMovingDays, dead_stock_days: deadStockDays
     });
     if (daysError) return void toast.error(daysError);
+    // 10.2 package 8 (TD-1297): «آستانه تراکنش کلان خزانه» with the server's rule
+    const thresholdError = treasuryHighValueThresholdError(treasuryHighValueThreshold); if (thresholdError) return void toast.error(thresholdError);
     // v10.0.95 (TD-1192): نام فهرست قیمت بی ویرگول لاتین و یکتا، با همان قاعده کارساز
     const priceListError = priceListNamesError(pricingStrategies, { allowLatinComma: true });
     if (priceListError) return void toast.error(priceListError);
@@ -423,7 +426,7 @@ export function useSettings() {
   return {
     categories: categoriesData,
     appSettings: settingsData,
-    invoiceStartNum, fastMovingDays, slowMovingDays, deadStockDays, pricingStrategies, workflowPresets,
+    invoiceStartNum, fastMovingDays, slowMovingDays, deadStockDays, treasuryHighValueThreshold, pricingStrategies, workflowPresets,
     inventoryControlSections, companyName, companyPhone, companyAddress, companyLogo, currency, displayTimezone,
     wcStoreUrl, wcConsumerKey, wcConsumerSecret, wcWebhookSecret, wcShopWarehouse,
     ...edit,

@@ -17,6 +17,11 @@ export interface AuthUserPayload {
   avatarUrl?: string;
   avatar_url?: string;
   csrfToken?: string;
+  /** 10.2 package 8 (D-07): the key of the token's `user_sessions` row; absent on a token issued before it */
+  sid?: string;
+  tokenVersion?: number;
+  iat?: number;
+  exp?: number;
   mustResetPassword?: boolean | number;
   must_reset_password?: boolean | number;
   permissions?: string[];

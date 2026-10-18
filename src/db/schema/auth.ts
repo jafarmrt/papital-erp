@@ -68,3 +68,25 @@ export const migrationsLog = pgTable('migrations_log', {
 // (v4.0.29) جدول changelogs حذف شد — dual-storage زیان‌بار با منبع حقیقت واحد
 // (src/data/changelogs/*.ts) جایگزین شد؛ مهاجرت 0008 جدول را از DB برمی‌دارد.
 
+
+/**
+ * 10.2 package 8 (D-07, migration 0129): one row per signed-in device. The session token carries `sid`; a token whose
+ * row is closed (`revokedAt`), expired or written under an earlier `users.token_version` is refused on its next
+ * request. Rows are never deleted: «خروج» and «بستن» close them.
+ */
+export const userSessions = pgTable('user_sessions', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  sid: text('sid').notNull(),
+  tokenVersion: integer('token_version').notNull().default(0),
+  userAgent: text('user_agent').notNull().default(''),
+  ipAddress: text('ip_address').notNull().default(''),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+  lastSeenAt: timestamp('last_seen_at', { mode: 'string' }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { mode: 'string' }).notNull(),
+  revokedAt: timestamp('revoked_at', { mode: 'string' }),
+  revokeReason: text('revoke_reason').notNull().default(''), // '' | 'logout' | 'closed_by_user' | 'closed_by_admin' | 'others_closed'
+}, (table) => ({
+  uq_user_sessions_sid: uniqueIndex('uq_user_sessions_sid').on(table.sid),
+  idx_user_sessions_user_id: index('idx_user_sessions_user_id').on(table.userId, table.id),
+}));

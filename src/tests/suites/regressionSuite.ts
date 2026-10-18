@@ -11091,6 +11091,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // 10.2 package 4 (OBS-R2-52): payslip payment and its void through the shared treasury path
   const { runTreasuryOnePathObsR252Tests } = await import('../regression/treasuryOnePathObsR252Tests.js');
   results.push(...await runTreasuryOnePathObsR252Tests(shouldRun));
+  // 10.2 package 8 (TD-1297): treasury events without amount or description, payroll events without name or amount
+  const { runTreasuryEventPrivacyTests } = await import('../regression/treasuryEventPrivacyTests.js');
+  results.push(...await runTreasuryEventPrivacyTests(shouldRun));
   // v10.1.62 closing sweep (ت۴۰ item 11, OBS-R2-13): cheque status and payslip approval / payment domain events
   const { runClosingDomainEventsTests } = await import('../regression/closingDomainEventsTests.js');
   results.push(...await runClosingDomainEventsTests(shouldRun));

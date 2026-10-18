@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { eq, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { users, appSettings, warehouses } from '../../db/schema.js';
 import { logActivity } from '../../lib/auditLogger.js';
@@ -84,18 +84,5 @@ export async function runInitialSetup(input: InitialSetupInput): Promise<SetupAd
       ipAddress: input.ipAddress,
     });
     return user;
-  });
-}
-
-/**
- * v10.0.46 (L5 E7): logout ends every session of the user by raising the token version, read and written under the
- * user row lock in one transaction (AGENTS.md §1.2-1.3); a user that is gone is skipped.
- */
-export async function revokeUserSessions(userId: number): Promise<{ username: string; fullName: string } | null> {
-  return orm.transaction(async (tx) => {
-    const [row] = await tx.select().from(users).where(eq(users.id, userId)).limit(1).for('update');
-    if (!row) return null;
-    await tx.update(users).set({ tokenVersion: (row.tokenVersion || 0) + 1 }).where(eq(users.id, userId));
-    return { username: row.username, fullName: row.fullName || row.username };
   });
 }

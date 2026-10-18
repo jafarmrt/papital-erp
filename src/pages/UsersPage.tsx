@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 import { UsersTab } from '../components/users/UsersTab';
+import { UserSessionsPanel } from '../components/users/UserSessionsPanel';
+import { Modal } from '../components/common/Modal';
 import { RolesTab } from '../components/users/RolesTab';
 import { UserFormModal } from '../components/users/UserFormModal';
 import { RoleFormModal } from '../components/users/RoleFormModal';
@@ -63,6 +65,10 @@ export default function UsersPage({ currentUser, userPermissions }: UsersPagePro
     isOpen: false,
     userId: 0,
   });
+
+  // 10.2 package 8 (D-07): another user's signed-in devices
+  const [sessionsUser, setSessionsUser] = React.useState<User | null>(null);
+  const [sessionsBusy, setSessionsBusy] = React.useState(false);
 
   // Role Modal State
   const [showRoleModal, setShowRoleModal] = React.useState(false);
@@ -201,6 +207,7 @@ export default function UsersPage({ currentUser, userPermissions }: UsersPagePro
       {/* TAB 1: USERS LIST */}
       {activeTab === 'users' && (
         <UsersTab
+          onShowSessions={canManageUsers ? setSessionsUser : undefined}
           users={users}
           rolesList={rolesList}
           currentUser={currentUser}
@@ -277,6 +284,19 @@ export default function UsersPage({ currentUser, userPermissions }: UsersPagePro
         grantor={fullGrantor}
         draft={roleDraft}
       />
+
+      <Modal
+        isOpen={sessionsUser !== null}
+        onClose={() => { if (!sessionsBusy) setSessionsUser(null); }}
+        closeOnEscape={!sessionsBusy}
+        closeOnBackdropClick={!sessionsBusy}
+        title={`دستگاه‌های واردشدهٔ ${sessionsUser?.full_name || sessionsUser?.username || ''}`}
+        size="md"
+      >
+        {sessionsUser && (
+          <UserSessionsPanel userId={sessionsUser.id} userName={sessionsUser.full_name || sessionsUser.username} onBusyChange={setSessionsBusy} />
+        )}
+      </Modal>
 
       {/* CONFIRM DELETE USER */}
       <ConfirmModal

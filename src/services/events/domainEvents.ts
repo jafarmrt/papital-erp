@@ -140,13 +140,17 @@ export interface TreasuryEventPayload {
   transactionId?: number;
   chequeId?: number;
   type: 'deposit' | 'withdrawal' | 'transfer' | 'cheque_pass' | 'cheque_return';
-  /** absent on a payslip payment and its void (`payrollId` set): a salary amount is for payroll readers only */
-  amount?: number;
+  // 10.2 package 8 (TD-1297): no amount, description or void reason, for any treasury row (the description names the
+  // party and the amount); they reach every webhook and rule of this event (`treasuryEventPayload`)
   currency: string;
   accountId?: number;
   accountName?: string;
-  description?: string;
   sayadNumber?: string;
+  /**
+   * review M-3: the row's rial value at or above «آستانه تراکنش کلان خزانه» (`treasuryRowIsHighValue`); not on a
+   * payslip payment or its void, whose event carries nothing derived from the amount
+   */
+  isHighValue?: boolean;
 }
 
 /** OBS-R2-13 (ت۴۰ بند ۱۱): a cheque's status change, recorded in the transaction of the change (`ChequeStatusChanged`) */

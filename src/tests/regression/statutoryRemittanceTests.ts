@@ -141,6 +141,10 @@ export async function runStatutoryRemittanceTests(shouldRun: ShouldRun): Promise
 
       const voided = await admin.post(`/api/accounting/treasury/${treasuryId}/void`, { reason: 'TD-1243 wrong bank' });
       if (voided.status !== 200) problems.push(`the void answered ${brief(voided)}, expected 200`);
+      // 10.2 package 8 (TD-1297): the payment and its void write their treasury event without amount, description or reason
+      const { treasuryEventLeaks } = await import('./treasuryEventPrivacyTests.js');
+      const [reversal] = await q('SELECT id FROM treasury_transactions WHERE reversal_of_id = $1', [treasuryId]);
+      problems.push(...await treasuryEventLeaks([treasuryId, Number(reversal?.id)], ['9150000', 'TD-1243 wrong bank']));
       if (!fin(await personNet('3204', high)).equals(-6_000_000)) problems.push(`after the void the high worker's 3204 balance is ${await personNet('3204', high)}, expected −6,000,000`);
       // only the 860,000 tax payment stays out of the bank
       if (!before.subtract(860_000).equals(await bankBalance(bankId))) problems.push(`after the void the bank is ${(await bankBalance(bankId)).toString()}, expected ${before.subtract(860_000).toString()}`);

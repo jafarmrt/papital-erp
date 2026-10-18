@@ -149,6 +149,8 @@ const SESSION_TOKEN_PATHS = new Set([
   '/csrf', '/auth/csrf',
   '/me', '/auth/me',
   '/users/profile',
+  // 10.2 package 8 (D-07): «بستن دستگاه‌های دیگر» issues this device's token again
+  '/auth/sessions/close-others',
 ]);
 
 export function issuesSessionTokens(endpoint: string): boolean {

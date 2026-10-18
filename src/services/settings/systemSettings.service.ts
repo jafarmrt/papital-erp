@@ -8,7 +8,8 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { readSettingValue, revealSettingSecrets, sealSettingValue } from './settingSecrets.js';
 import { invalidateSettingsCache, appSettingsCache } from '../../lib/memoryCache.js';
 import {
-  MOVEMENT_DAY_KEYS, currencySettingError, priceListNamesError, isMovementDayKey, movementDaysError, readMovementDays
+  MOVEMENT_DAY_KEYS, currencySettingError, priceListNamesError, isMovementDayKey, movementDaysError, readMovementDays,
+  TREASURY_HIGH_VALUE_THRESHOLD_KEY, readTreasuryHighValueThreshold, treasuryHighValueThresholdError,
 } from '../../lib/settings/settingValues.js';
 import { pricingStrategiesSettingError } from '../../lib/items/pricingStrategies.js';
 
@@ -43,6 +44,8 @@ const BUSINESS_SETTING_KEYS = new Set([
   'inventory_control_preset_sections',
   // v8.0.44 (TD-293): «انبار فروشگاه اینترنتی» — کد انبار فعال یا خالی (انبار پیش‌فرض)
   'wc_shop_warehouse',
+  // 10.2 package 8 (TD-1297): «آستانه تراکنش کلان خزانه» of the treasury event's `isHighValue`
+  TREASURY_HIGH_VALUE_THRESHOLD_KEY,
 ]);
 
 /** کلیدهای محرمانه یکپارچه‌سازی — فقط مدیر سیستم؛ فهرست مشترک با زبانه ووکامرس (v9.0.131، TD-668) */
@@ -80,6 +83,10 @@ function normalizeSettingValue(key: string, raw: string): string {
     const days = readMovementDays(raw);
     return days === null ? String(raw) : String(days);
   }
+  if (key === TREASURY_HIGH_VALUE_THRESHOLD_KEY) {
+    const threshold = readTreasuryHighValueThreshold(raw);
+    return threshold === null ? String(raw) : String(threshold);
+  }
   return raw;
 }
 
@@ -100,6 +107,10 @@ async function validateSettingValue(tx: DbExecutor, key: string, value: string):
     if (error) throw new ValidationError(error, { key }, 'SETTING_PRICING_STRATEGIES_INVALID');
     const namesError = priceListNamesError(JSON.parse(value) as string[], { allowLatinComma: true });
     if (namesError) throw new ValidationError(namesError, { key }, 'SETTING_PRICE_LIST_NAMES_INVALID');
+  }
+  if (key === TREASURY_HIGH_VALUE_THRESHOLD_KEY) {
+    const error = treasuryHighValueThresholdError(value);
+    if (error) throw new ValidationError(error, { key, value }, 'SETTING_TREASURY_HIGH_VALUE_INVALID');
   }
   if (key === 'wc_shop_warehouse' && value.trim() !== '') {
     const [wh] = await tx.select({ id: warehouses.id }).from(warehouses)

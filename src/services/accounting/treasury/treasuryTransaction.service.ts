@@ -25,7 +25,7 @@ import { reconcileTreasuryRows, type ReconcileParams, type ReconcileResult } fro
 import type { TreasuryVoucherPreview } from '../../../lib/treasury/treasuryVoucherPreview.js';
 import { listTreasuryTransactions, pageTreasuryTransactions, type TreasuryListFilters, type TreasuryTransactionPage } from './treasuryTransactionList.js';
 import {
-  assertBankCurrency, lockTreasuryBank, nextTreasuryTransactionNumber, postTreasuryRow, reverseTreasuryRow, type TreasuryBank, type TreasuryRow,
+  assertBankCurrency, lockTreasuryBank, nextTreasuryTransactionNumber, postTreasuryRow, reverseTreasuryRow, treasuryEventPayload, isHighValueAmount, treasuryHighValueThreshold, type TreasuryBank, type TreasuryRow,
 } from './treasuryPosting.js';
 
 /**
@@ -363,11 +363,9 @@ export class TreasuryTransactionService {
         event: (rowId) => ({
           transactionId: rowId,
           type: data.type === 'receipt' ? 'deposit' : 'withdrawal',
-          amount,
           currency: txCurrency,
           accountId: bank.id,
           accountName: bank.title,
-          description: data.description
         }),
         actor: { userId: data.userId, username: data.username },
       });
@@ -483,11 +481,9 @@ export class TreasuryTransactionService {
             voidedTransactionNumber: side.transactionNumber,
             type: row.type === 'receipt' ? 'deposit' : 'withdrawal',
             isReversal: true,
-            amount: money(side.amount),
             currency: side.currency || bank.currency || 'IRR',
             accountId: bank.id,
             accountName: bank.title,
-            reason,
           }),
           actor: { userId: params.userId, username: params.username },
         });
@@ -673,22 +669,22 @@ export class TreasuryTransactionService {
         createdById: data.userId || null,
       }).returning();
 
-      // Outbox (همان تراکنش)
+      // Outbox (همان تراکنش)؛ بی مبلغ و شرح (۱۰.۲ بسته ۸، TD-1297)
       const transferEvent = domainEventBus.createEvent(
         DomainEventType.TREASURY_TRANSACTION_APPROVED,
         'Treasury',
         String(recTx.id),
-        {
+        treasuryEventPayload({
           transactionId: recTx.id,
           pairedTransactionId: payTx.id,
           isTransfer: true,
-          amount,
           currency,
           fromAccountId: from.id,
           fromAccountName: from.title,
           toAccountId: to.id,
-          toAccountName: to.title
-        },
+          toAccountName: to.title,
+          isHighValue: isHighValueAmount(amount, currency, transferRate, await treasuryHighValueThreshold(txEngine)),
+        }),
         { userId: data.userId, userName: data.username }
       );
       await OutboxService.saveToOutbox(txEngine, transferEvent);

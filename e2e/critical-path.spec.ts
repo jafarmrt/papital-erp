@@ -14,7 +14,7 @@ test('login, issue a final sales invoice and see its journal voucher', async ({ 
   await page.getByPlaceholder('نام کاربری').fill(E2E_ADMIN.username);
   await page.getByPlaceholder('کلمه عبور').fill(E2E_ADMIN.password);
   await page.getByRole('button', { name: 'ورود به سامانه' }).click();
-  await expect(page.getByText('خروج از همهٔ دستگاه‌ها')).toBeVisible();
+  await expect(page.getByTitle('خروج از حساب در همین دستگاه')).toBeVisible();
 
   // ۲. صدور فاکتور فروش نهایی: ۲ عدد × ۷۵۰٬۰۰۰ ریال
   await page.goto('/invoices/create');

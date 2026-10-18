@@ -1,5 +1,6 @@
 import { logger } from '../middleware/logger.js';
 import { numericRuleEquality, ruleComparableNumber } from '../lib/events/ruleConditionValue.js';
+import { NUMERIC_RULE_OPERATORS, isRuleGroupNode as isSharedRuleGroupNode, isSingleRuleNode as isSharedSingleRuleNode, ruleGroupParts } from '../lib/events/ruleMissingField.js';
 
 export interface SingleRuleCondition {
   field: string;
@@ -62,13 +63,8 @@ export function isEmptyRuleExpression(expression: unknown): boolean {
   return isPlainObject(expression) && Object.keys(expression).length === 0;
 }
 
-function isSingleRuleNode(node: unknown): node is SingleRuleCondition {
-  return isPlainObject(node) && typeof node.field === 'string' && node.field.trim() !== '' && node.operator !== undefined && node.operator !== null;
-}
-
-function isRuleGroupNode(node: unknown): node is RuleGroup {
-  return isPlainObject(node) && !('field' in node) && (Array.isArray(node.conditions) || Array.isArray(node.rules));
-}
+const isSingleRuleNode = (node: unknown): node is SingleRuleCondition => isSharedSingleRuleNode(node);
+const isRuleGroupNode = (node: unknown): node is RuleGroup => isSharedRuleGroupNode(node);
 
 export class RuleEngineService {
   /**
@@ -108,6 +104,11 @@ export class RuleEngineService {
 
     let passed = false;
     let reason = '';
+    // 10.2 package 8 (TD-1297): a numeric comparison on a field the event does not carry read it as 0, so `amount lt
+    // 1000` fired on every treasury event once the event stopped carrying its amount. Such a comparison no longer
+    // matches a missing field; a null value is still 0, and «not equal» / «not in» still match a missing field as
+    // before (review N-1), since workflow and document events often leave a field out
+    const missing = actualValue === undefined;
 
     switch (op) {
       case '=':
@@ -130,25 +131,25 @@ export class RuleEngineService {
       // (`ruleComparableNumber`); `Number('۱۰۰۰۰۰۰')` and `Number('1,000,000')` were NaN, so the rule never matched
       case '>':
       case 'gt':
-        passed = ruleComparableNumber(actualValue) > ruleComparableNumber(targetValue);
+        passed = !missing && ruleComparableNumber(actualValue) > ruleComparableNumber(targetValue);
         reason = passed ? `مقدار ${actualValue} بزرگتر از ${targetValue} است` : `مقدار واقعی (${actualValue}) بزرگتر از (${targetValue}) نیست`;
         break;
 
       case '>=':
       case 'gte':
-        passed = ruleComparableNumber(actualValue) >= ruleComparableNumber(targetValue);
+        passed = !missing && ruleComparableNumber(actualValue) >= ruleComparableNumber(targetValue);
         reason = passed ? `مقدار ${actualValue} بزرگتر یا مساوی ${targetValue} است` : `مقدار واقعی (${actualValue}) کوچکتر از (${targetValue}) است`;
         break;
 
       case '<':
       case 'lt':
-        passed = ruleComparableNumber(actualValue) < ruleComparableNumber(targetValue);
+        passed = !missing && ruleComparableNumber(actualValue) < ruleComparableNumber(targetValue);
         reason = passed ? `مقدار ${actualValue} کوچکتر از ${targetValue} است` : `مقدار واقعی (${actualValue}) کوچکتر از (${targetValue}) نیست`;
         break;
 
       case '<=':
       case 'lte':
-        passed = ruleComparableNumber(actualValue) <= ruleComparableNumber(targetValue);
+        passed = !missing && ruleComparableNumber(actualValue) <= ruleComparableNumber(targetValue);
         reason = passed ? `مقدار ${actualValue} کوچکتر یا مساوی ${targetValue} است` : `مقدار واقعی (${actualValue}) بزرگتر از (${targetValue}) است`;
         break;
 
@@ -226,6 +227,7 @@ export class RuleEngineService {
         break;
     }
 
+    if (missing && NUMERIC_RULE_OPERATORS.has(op)) reason = `بخش «${rule.field}» در داده نیست`;
     return { passed, actualValue, reason };
   }
 
@@ -326,11 +328,7 @@ export class RuleEngineService {
     flatTraceList: { path: string; passed: boolean; details: string }[],
     parentPath: string
   ): EvaluationTraceItem {
-    const rawLogic = (group.logic || group.matchType || 'AND').toString().toUpperCase().trim();
-    const logic: 'AND' | 'OR' | 'NOT' = rawLogic === 'OR' ? 'OR' : (rawLogic === 'NOT' ? 'NOT' : 'AND');
-
-    const childrenRaw = group.conditions || group.rules || [];
-    const childrenList = Array.isArray(childrenRaw) ? childrenRaw : [];
+    const { logic, children: childrenList } = ruleGroupParts(group as unknown as Record<string, unknown>);
 
     if (childrenList.length === 0) {
       return {
@@ -346,7 +344,7 @@ export class RuleEngineService {
     let innerPassed = logic === 'OR' ? false : true;
 
     for (let i = 0; i < childrenList.length; i++) {
-      const child = childrenList[i];
+      const child = childrenList[i] as RuleExpression;
       const childPath = parentPath ? `${parentPath}.g[${i}]` : `g[${i}]`;
       const childResult = this.evaluateExpressionNode(child, context, flatTraceList, childPath);
       childrenTrace.push(childResult);
