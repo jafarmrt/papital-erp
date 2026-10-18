@@ -5,6 +5,7 @@ import { useRefreshWcCatalogMutation, useWcCatalogQuery } from '../../hooks/quer
 import { catalogCapNotice, catalogOrderNotice, type WcRunView } from '../../lib/woocommerce/wcCatalog';
 import { formatPersianDateTime, formatPersianNumber, getErrorMessage } from '../../utils';
 import { WcItemList, WcUnmatchedList } from './WcCatalogLists';
+import { WcAutoPushPanel } from './WcAutoPushPanel';
 
 /**
  * 10.2 package 6 (D-04 part A, OBS-R2-83): the links between items and the shop's products. «بازخوانی محصولات سایت» reads
@@ -87,6 +88,7 @@ export function WcCatalogPanel({ canManage, stockPushRunning }: { canManage: boo
             <RunLine label="آخرین بازخوانی" run={report.lastRefresh} />
             <RunLine label="آخرین ارسال موجودی" run={report.lastPush} />
           </div>
+          {report.autoPush && <WcAutoPushPanel view={report.autoPush} canManage={canManage} />}
           {!report.refreshed && (
             <p className="text-xs text-amber-800">محصولات سایت هنوز خوانده نشده است؛ نخستین ارسال موجودی ابتدا آن‌ها را می‌خواند.</p>
           )}

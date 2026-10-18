@@ -4,6 +4,7 @@ import { runReservationCases } from './stockReservationTests.js';
 import type { MockProduct } from '../fixtures/mockWooCatalogStore.js';
 import { brief, linksOf, newItem, withShop } from './wooCatalogTestKit.js';
 import { deadlineAndCapCase, emptyOrUnorderedCase, removedProductAndDeadlinesCase } from './wooCatalogReviewTests.js';
+import { autoPushBoundedFailuresCase, autoPushChangedTrackedCase, autoPushOpenOrdersCase, autoPushSwitchCase } from './wooAutoPushTests.js';
 import { WC_LIST_LIMIT } from '../../lib/woocommerce/wcCatalog.js';
 
 /**
@@ -39,6 +40,18 @@ export async function runWooCatalogSyncTests(shouldRun: ShouldRun): Promise<Test
     ['reg_wc_catalog_empty_or_unordered_d04',
       'D-04 delta review M-B / M-C / N-1 / M-R / M-S: an empty catalog while items are linked is a failed run that closes no link, and only a reading that showed a row twice, or was out of id order and cut at the cap, keeps the links of products it did not read and says so',
       ['d04', 'woocommerce', 'catalog', 'review'], emptyOrUnorderedCase],
+    ['reg_wc_auto_push_switch_d04',
+      'D-04 part B: the automatic push is off by default, only woocommerce.manage turns it on or off with the target state, with an audit row and a complete connection',
+      ['d04', 'woocommerce', 'auto'], autoPushSwitchCase],
+    ['reg_wc_auto_push_changed_tracked_d04',
+      'D-04 part B: an automatic run sends only products whose sellable stock moved and whose stock tracking is already on, never manage_stock, and asks the shop nothing when nothing moved',
+      ['d04', 'woocommerce', 'auto'], autoPushChangedTrackedCase],
+    ['reg_wc_auto_push_open_orders_d04',
+      'D-04 part B: pending, on-hold and not-yet-invoiced processing orders are kept off the stock the automatic and the manual push send, and unreadable orders stop the push',
+      ['d04', 'woocommerce', 'auto'], autoPushOpenOrdersCase],
+    ['reg_wc_auto_push_bounded_failures_d04',
+      'D-04 part B: a shop that is down makes each automatic run wait longer without counting against a product, a product the shop keeps refusing stops after the limit, and a run skips while the lock is taken',
+      ['d04', 'woocommerce', 'auto'], autoPushBoundedFailuresCase],
     ['reg_wc_synced_orders_by_log_obs_r2_83',
       'OBS-R2-83: the synced-orders list shows the invoices the order log names, not invoices whose notes mention an online order',
       ['obs_r2_83', 'woocommerce', 'orders'], syncedOrdersCase],

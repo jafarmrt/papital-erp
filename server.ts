@@ -17,6 +17,7 @@ import { WorkflowSlaReminderService } from './src/services/workflow/workflowSlaR
 import { MessengerUpdatePoller } from './src/services/messenger/messengerUpdatePoller.js';
 import { FormDraftService } from './src/services/drafts/formDraft.service.js';
 import { OperationalPurgeService } from './src/services/events/operationalPurge.service.js';
+import { WcAutoPushService } from './src/services/woocommerce/wcAutoPush.service.js';
 import { pool, getDatabaseMode } from './src/db/drizzle.js';
 import { decideProcessErrorAction, processErrorMessage } from './src/lib/processErrorPolicy.js';
 import { REQUEST_TIMEOUT_MS } from './src/lib/media/mediaRules.js';
@@ -85,6 +86,8 @@ async function startServer() {
     FormDraftService.startCleanup();
     // OBS-R2-10: daily purge of expired idempotency keys and completed outbox events older than 90 days
     OperationalPurgeService.start();
+    // 10.2 package 6 (D-04 part B): the automatic stock push to the online shop, a run a minute while its setting is on
+    WcAutoPushService.start();
     // v10.1.38 (messenger plan part 1): link codes and «/stop» sent to the staff bots
     MessengerUpdatePoller.start(5000);
     markStartupComplete();
@@ -141,6 +144,7 @@ async function startServer() {
       WorkflowSlaReminderService.stop();
       FormDraftService.stopCleanup();
       OperationalPurgeService.stop();
+      WcAutoPushService.stop();
       MessengerUpdatePoller.stop();
 
       if (pool && typeof pool.end === 'function') {

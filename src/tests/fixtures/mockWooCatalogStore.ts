@@ -13,6 +13,11 @@ export interface MockProduct {
   type?: string;
 }
 
+/** part B: an order the shop holds; `GET orders?status=a,b` answers those of the listed statuses, in id order */
+export interface MockOrder {
+  id: number; status: string; lines: Array<{ productId: number; variationId?: number; quantity: number }>;
+}
+
 export interface MockWooCatalogStore {
   url: string;
   /** product or variation id → the last stock_quantity sent to it */
@@ -44,6 +49,10 @@ export interface MockWooCatalogStore {
   delayMs?: number;
   /** the query of every request, in order */
   queries: URLSearchParams[];
+  /** the shop's orders (part B); empty by default */
+  orders: MockOrder[];
+  /** product or variation id → the `manage_stock` value of its last batch row (absent when the row sent none) */
+  manageStockSent: Map<number, unknown>;
   close(): Promise<void>;
 }
 
@@ -68,13 +77,15 @@ function productPage(products: MockProduct[], url: URL, store: MockWooCatalogSto
 }
 
 function batchAnswer(store: MockWooCatalogStore, body: string): unknown {
-  const parsed = JSON.parse(body || '{}') as { update?: Array<{ id: number; stock_quantity?: number }> };
+  const parsed = JSON.parse(body || '{}') as { update?: Array<{ id: number; stock_quantity?: number; manage_stock?: unknown }> };
   const rows = parsed.update ?? [];
   store.batchSizes.push(rows.length);
   return {
     update: rows.map(row => {
       if (store.rowErrors.has(row.id)) return { id: row.id, error: { code: 'woocommerce_rest_invalid_id', message: 'شناسه نامعتبر است.' } };
       store.pushed.set(row.id, Number(row.stock_quantity));
+      if ('manage_stock' in row) store.manageStockSent.set(row.id, row.manage_stock);
+      else store.manageStockSent.delete(row.id);
       return { id: row.id, stock_quantity: row.stock_quantity };
     }),
   };
@@ -83,6 +94,7 @@ function batchAnswer(store: MockWooCatalogStore, body: string): unknown {
 export async function mockWooCatalogStore(products: MockProduct[]): Promise<MockWooCatalogStore> {
   const store = {
     pushed: new Map(), requests: [], arrivals: [], batchSizes: [], rowErrors: new Set(), failPaths: new Set(), queries: [], maxInFlight: 0,
+    orders: [], manageStockSent: new Map(),
   } as unknown as MockWooCatalogStore;
   let inFlight = 0;
   const server = http.createServer((req, res) => {
@@ -121,6 +133,15 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
         send(page(rows, url, store).map(v => ({
           id: v.id, sku: v.sku, stock_quantity: v.stock ?? null,
           manage_stock: v.manageStock ?? (v.stock !== undefined && v.stock !== null),
+        })));
+        return;
+      }
+      if (req.method === 'GET' && path === 'orders') {
+        const statuses = new Set((url.searchParams.get('status') || 'any').split(','));
+        const rows = [...store.orders].sort((a, b) => a.id - b.id).filter(o => statuses.has('any') || statuses.has(o.status));
+        send(page(rows, url, store).map(o => ({
+          id: o.id, status: o.status,
+          line_items: o.lines.map(l => ({ product_id: l.productId, variation_id: l.variationId ?? 0, quantity: l.quantity })),
         })));
         return;
       }
