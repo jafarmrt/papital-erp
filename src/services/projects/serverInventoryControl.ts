@@ -1,14 +1,18 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { projectIssuedQuantities } from './projectIssuedQuantities.js';
 import type { DbExecutor } from '../../db/drizzle.js';
-import { items } from '../../db/schema.js';
+import { items, productionProjects } from '../../db/schema.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import {
   planProjectReservation, type ProjectReservationPlan, type ReservationStockItem, type ReservationUnitMismatch,
 } from '../../lib/projects/projectReservation.js';
 import { ADVISORY_LOCK_KEYS } from '../../lib/advisoryLock.js';
-import { ItemStockReservationService } from '../items/itemStockReservation.service.js';
-import { ValidationError } from '../../errors/customErrors.js';
+import { ItemStockReservationService, othersReservations } from '../items/itemStockReservation.service.js';
+import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
+import { fin } from '../../lib/financialDecimal.js';
+import {
+  MATERIAL_AVAILABILITY_MAX_ITEMS, freeForProject, type MaterialAvailabilityReport,
+} from '../../lib/projects/materialAvailability.js';
 import { hasPresetShapedSections, projectSectionsFromPreset } from '../../lib/projects/inventoryControlSections.js';
 import { findProjectItemMatch } from '../../lib/projects/projectItemMatch.js';
 
@@ -112,4 +116,37 @@ export async function resolveServerInventoryControl(
   if (nowFinal && finalizedAt) result.finalizedAt = finalizedAt;
   if (nowFinal && Array.isArray(shortages)) result.reservationShortages = shortages;
   return result;
+}
+
+/**
+ * v10.2.3 (TD-1290، یافتهٔ D1): ارقام موجودی آزاد کالاهای `itemIds` برای پروژه، با همان ورودی‌های ثبت نهایی: موجودی کل کالا،
+ * رزرو پیش‌فاکتورهای فروش و پروژه‌های ثبت نهایی‌شدهٔ دیگر (رزرو خود این پروژه کنار می‌رود، `othersReservations`) و آنچه تاکنون
+ * به پروژه داده شده (`projectIssuedQuantities`). فقط خواندن است؛ خطای خواندن رزروها به فراخواننده می‌رسد و هرگز رزرو صفر
+ * نمی‌شود (TD-821). کالای حذف‌شده یا ناموجود در پاسخ نمی‌آید.
+ */
+export async function projectMaterialAvailability(executor: DbExecutor, projectId: number, itemIds: readonly number[]): Promise<MaterialAvailabilityReport> {
+  const [project] = await executor.select({ id: productionProjects.id }).from(productionProjects)
+    .where(and(eq(productionProjects.id, projectId), eq(productionProjects.isDeleted, 0)));
+  if (!project) throw new NotFoundError('پروژه مورد نظر یافت نشد', undefined, 'PROJECT_NOT_FOUND');
+  const ids = [...new Set(itemIds)].filter(id => Number.isInteger(id) && id > 0).sort((a, b) => a - b).slice(0, MATERIAL_AVAILABILITY_MAX_ITEMS);
+  if (ids.length === 0) return { projectId, items: [] };
+  const stockRows = await executor.select({ id: items.id, currentStock: items.currentStock }).from(items)
+    .where(and(eq(items.isDeleted, 0), inArray(items.id, ids)));
+  const issued = await projectIssuedQuantities(executor, projectId, ids);
+  const report = await ItemStockReservationService.getReservedStockDetails(executor, true, { itemIds: ids });
+  const others = new Map<number, number>();
+  for (const s of report.itemSummaries) {
+    const itemId = Number(s.itemId);
+    if (!Number.isInteger(itemId) || itemId <= 0) continue;
+    const rows = othersReservations(s.reservations, { projectId });
+    others.set(itemId, rows.reduce((sum, r) => fin(sum).add(Number(r.reservedQty) || 0).toNumber(), 0));
+  }
+  return {
+    projectId,
+    items: stockRows.sort((a, b) => a.id - b.id).map(r => {
+      const stock = fin(r.currentStock ?? 0).toNumber();
+      const reservedByOthers = others.get(r.id) ?? 0;
+      return { itemId: r.id, stock, reservedByOthers, issuedToProject: issued.get(r.id) ?? 0, freeForProject: freeForProject(stock, reservedByOthers) };
+    }),
+  };
 }

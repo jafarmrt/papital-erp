@@ -26,6 +26,8 @@ const DELIVERY_TEXT = {
   overReason: 'مثال: مشتری ۲ عدد اضافه سفارش داد',
   cancel: 'انصراف',
   delivered: 'به انبار تحویل داده شد',
+  overdrawTitle: 'ماندهٔ کالای در جریان ساخت منفی می‌شود',
+  overdrawConfirm: 'ثبت',
 } as const;
 
 // Default codes of the account mapping (src/lib/accounting/accountMappingConcepts.ts)
@@ -138,20 +140,27 @@ test('allocate raw material to a project and deliver its finished goods to stock
   const [rawStock] = await db('SELECT current_stock::text AS stock FROM items WHERE id = $1', [rawId]);
   expect(Number(rawStock.stock), 'raw material stock after allocation').toBe(RECEIPT_QTY - ALLOCATE_QTY);
 
-  // 2. Delivery above the plan without a reason is refused and the reason prompt opens
+  // 2. Delivery above the plan without a reason is refused and the reason prompt opens; its credit
+  // (6 × 40,000) is above the project's 1402 balance (4 × 50,000), so the page asks before posting
   await openDeliveryTab(page);
   const productCard = page.locator('div.flex', { hasText: String(setup.product.name) })
     .filter({ has: page.getByRole('button', { name: DELIVERY_TEXT.deliver, exact: true }) }).last();
   const [qtyInput, costInput] = [productCard.locator('input[inputmode=decimal]').nth(0), productCard.locator('input[inputmode=decimal]').nth(1)];
   await qtyInput.fill(String(PLANNED_QTY + 1));
   await costInput.fill(String(PRODUCT_UNIT_COST));
-  const deliver = async (): Promise<{ status: number; body: Json }> => {
+  const deliver = async (overdraws = false): Promise<{ status: number; body: Json }> => {
     const posted = page.waitForResponse(r => r.url().endsWith(`/api/projects/${projectId}/add-to-inventory`) && r.request().method() === 'POST');
     await productCard.getByRole('button', { name: DELIVERY_TEXT.deliver, exact: true }).click();
+    if (overdraws) {
+      // TD-1290: a credit above the project's 1402 balance is confirmed before it is posted
+      const confirm = page.getByRole('dialog', { name: DELIVERY_TEXT.overdrawTitle });
+      await expect(confirm).toBeVisible();
+      await confirm.getByRole('button', { name: DELIVERY_TEXT.overdrawConfirm, exact: true }).click();
+    }
     const response = await posted;
     return { status: response.status(), body: await response.json() as Json };
   };
-  const refused = await deliver();
+  const refused = await deliver(true);
   expect(refused.status, 'over-delivery answer').toBe(422);
   expect(JSON.stringify(refused.body), 'over-delivery code').toContain('OVER_DELIVERY_REASON_REQUIRED');
   const prompt = page.locator('div', { has: page.getByPlaceholder(DELIVERY_TEXT.overReason) }).filter({ hasText: DELIVERY_TEXT.overTitle }).last();

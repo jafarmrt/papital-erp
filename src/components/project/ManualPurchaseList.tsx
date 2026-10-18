@@ -218,7 +218,7 @@ export function ManualPurchaseList({
                 <th className="p-3 border-b border-slate-700">بخش / دسته کنترل</th>
                 <th className="p-3 border-b border-slate-700">شرح کالا / نیازمندی تامین</th>
                 <th className="p-3 border-b border-slate-700 text-center">مقدار مورد نیاز اولیه</th>
-                <th className="p-3 border-b border-slate-700 text-center">موجودی فعلی انبار</th>
+                <th className="p-3 border-b border-slate-700 text-center">آزاد برای این پروژه</th>
                 <th className="p-3 border-b border-slate-700 text-center">واحد و ضریب تبدیل (انبار)</th>
                 <th className="p-3 border-b border-slate-700 text-center">مقدار کسری نهایی (خرید)</th>
                 <th className="p-3 border-b border-slate-700">وضعیت تامین و پیگیری</th>
@@ -298,6 +298,12 @@ export function ManualPurchaseList({
                   </td>
                   <td className="p-3 text-center font-mono text-slate-600">
                     {item.id.startsWith('manual_') ? `۰ ${item.unit}` : `${formatPersianNumber(item.warehouseStockQty)} ${item.warehouseUnit || item.unit}`}
+                    {/* v10.2.3 (TD-1290): without the server's figures the column is the total stock */}
+                    {!item.id.startsWith('manual_') && (item.issuedQty === undefined ? (
+                      <span className="block text-[10px] font-normal text-slate-400">موجودی کل</span>
+                    ) : item.issuedQty > 0 && (
+                      <span className="block text-[10px] font-normal text-slate-500">داده‌شده به پروژه: {formatPersianNumber(item.issuedQty)} {item.warehouseUnit || item.unit}</span>
+                    ))}
                   </td>
                   <td className="p-3 text-center font-mono font-bold">
                     {item.convertedRequiredQty ? (

@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { FinancialRatiosView } from '../../components/accounting/reports/FinancialRatiosView';
 import { MaterialAttributeFields, MaterialNumberField, MaterialUnitSelect } from '../../components/project/materialFormFields';
-import { CurrentStockCell, MaterialNameCell, NotesCell, ProcurementStatusCell } from '../../components/project/inventoryRowCells';
+import { FreeStockCell, MaterialNameCell, MaterialStatusCell, NotesCell } from '../../components/project/inventoryRowCells';
+import type { MaterialRowState } from '../../lib/projects/materialAvailability';
 import type { FinancialRatiosReport } from '../../types';
 
 afterEach(cleanup);
@@ -61,25 +62,26 @@ describe('material form fields', () => {
 });
 
 describe('inventory row cells', () => {
-  it('render name, stock, status with shortfall and notes', () => {
+  it('render name, free stock, status with shortfall and notes', () => {
     const onLink = vi.fn();
-    const onStatus = vi.fn();
+    const onOrder = vi.fn();
     const onNotes = vi.fn();
+    const shortState: MaterialRowState = { kind: 'short', itemId: 4, free: 0, issued: 0, shortQty: 12, unit: 'برگ' };
     render(
       <table><tbody><tr>
         <MaterialNameCell displayCategory="کاغذ" effectiveName="کاغذ ترنسفر" effectiveCode="RM-1" onLinkWarehouse={onLink} />
-        <CurrentStockCell currentStock={0} unit="برگ" />
-        <ProcurementStatusCell status="needs_procurement" onChange={onStatus} shortfall={12} unit="برگ" />
+        <FreeStockCell state={shortState} status="ready" />
+        <MaterialStatusCell state={shortState} status="ready" procurementStatus="pending" onProcurementChange={onOrder} />
         <NotesCell value="" onChange={onNotes} />
       </tr></tbody></table>
     );
     expect(screen.getByText('کد: RM-1')).toBeTruthy();
     expect(screen.getByText('۰ برگ')).toBeTruthy();
-    expect(screen.getByText(/کسری خرید:/)).toBeTruthy();
+    expect(screen.getByText(/کسری کل پروژه:/)).toBeTruthy();
     fireEvent.click(screen.getByTitle('اتصال این ردیف به کالای موجود در انبار'));
     expect(onLink).toHaveBeenCalled();
-    fireEvent.change(screen.getByDisplayValue('⚠ نیاز به تامین / خرید'), { target: { value: 'available' } });
-    expect(onStatus).toHaveBeenLastCalledWith('available');
+    fireEvent.change(screen.getByRole('combobox', { name: 'وضعیت سفارش' }), { target: { value: 'in_progress' } });
+    expect(onOrder).toHaveBeenLastCalledWith('in_progress');
     fireEvent.change(screen.getByPlaceholderText('یادداشت...'), { target: { value: 'فوری' } });
     expect(onNotes).toHaveBeenLastCalledWith('فوری');
   });

@@ -1,7 +1,7 @@
 import request from 'supertest';
 import { eq, inArray } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { documents, items, productionProjects, projectBomAllocations, purchaseRequisitions, roles, users } from '../../db/schema.js';
+import { documentItems, documents, items, productionProjects, projectBomAllocations, purchaseRequisitions, roles, users } from '../../db/schema.js';
 import { loadProjectStepCounts } from '../../services/projects/projectSteps.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 
@@ -66,18 +66,26 @@ async function runStepCountsTest(shouldRun: ShouldRun): Promise<TestCaseResult |
     });
     await orm.insert(projectBomAllocations).values([allocation('allocated'), allocation('consumed'), allocation('consumed'), allocation('released'), allocation('allocated', 1)]);
     // review M4: a live final remittance or waste of the project issues material too; a draft, a voided one, another
-    // project's and a sales invoice naming the project do not count
+    // project's and a sales invoice naming the project do not count. v10.2.3 (TD-1290): only a document with a live
+    // line counts, the rows `projectIssuedQuantities` reads: r1 has two live lines and counts once, r5 has only a deleted one
     const doc = (suffix: string, type: string, status: string, isDeleted = 0, projectId: number | null = project.id) => ({
       type, refNumber: `STEP-${tag}-${suffix}`, date: '2026-10-01 10:00:00', projectId, status, isDeleted, buyerName: 'step',
     });
-    await orm.insert(documents).values([
+    const docs = await orm.insert(documents).values([
       doc('r1', 'remittance', 'final'),
       doc('w1', 'waste', 'final'),
       doc('r2', 'remittance', 'draft'),
       doc('r3', 'remittance', 'final', 1),
       doc('r4', 'remittance', 'final', 0, null),
       doc('i1', 'invoice', 'final'),
-    ]).returning({ id: documents.id }).then(rows => documentIds.push(...rows.map(r => r.id)));
+      doc('r5', 'remittance', 'final'),
+    ]).returning({ id: documents.id });
+    documentIds.push(...docs.map(r => r.id));
+    const line = (documentId: number, isDeleted = 0) => ({ documentId, itemId: item.id, quantity: 1, isDeleted });
+    await orm.insert(documentItems).values([
+      line(docs[0].id), line(docs[0].id), line(docs[1].id), line(docs[2].id), line(docs[3].id), line(docs[4].id), line(docs[5].id),
+      line(docs[6].id, 1),
+    ]);
 
     const counts = await loadProjectStepCounts(project.id);
     const expected = {
@@ -113,7 +121,10 @@ async function runStepCountsTest(shouldRun: ShouldRun): Promise<TestCaseResult |
       await orm.update(projectBomAllocations).set({ isDeleted: 1 }).where(inArray(projectBomAllocations.projectId, projectIds)).catch(() => undefined);
       await orm.update(productionProjects).set({ isDeleted: 1 }).where(inArray(productionProjects.id, projectIds)).catch(() => undefined);
     }
-    if (documentIds.length > 0) await orm.update(documents).set({ isDeleted: 1 }).where(inArray(documents.id, documentIds)).catch(() => undefined);
+    if (documentIds.length > 0) {
+      await orm.update(documentItems).set({ isDeleted: 1 }).where(inArray(documentItems.documentId, documentIds)).catch(() => undefined);
+      await orm.update(documents).set({ isDeleted: 1 }).where(inArray(documents.id, documentIds)).catch(() => undefined);
+    }
     for (const itemId of itemIds) await orm.update(items).set({ isDeleted: 1 }).where(eq(items.id, itemId)).catch(() => undefined);
   }
   return results[0] ?? null;
