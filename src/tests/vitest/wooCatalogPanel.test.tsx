@@ -24,6 +24,7 @@ function wrapper({ children }: { children: React.ReactNode }) {
 }
 
 const REFRESH_BUTTON = 'بازخوانی محصولات سایت';
+const SHOP_DOWN = 'فروشگاه پاسخ نداد';
 
 const report: WcCatalogReport = {
   refreshed: true,
@@ -93,11 +94,11 @@ describe('D-04 the item ↔ shop product links panel', () => {
   it('a failed refresh shows the server message as an error', async () => {
     vi.mocked(fetchJson).mockImplementation(async (url: string) => {
       if (url === '/woocommerce/catalog') return report;
-      throw new Error('فروشگاه پاسخ نداد');
+      throw new Error(SHOP_DOWN);
     });
     render(<WcCatalogPanel canManage stockPushRunning={false} />, { wrapper });
     fireEvent.click(await screen.findByRole('button', { name: REFRESH_BUTTON }));
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('فروشگاه پاسخ نداد', { duration: 12000 }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(SHOP_DOWN, { duration: 12000 }));
   });
 
   it('reads the links again when the bulk stock push of the tab ends, and blocks a refresh while it runs', async () => {
