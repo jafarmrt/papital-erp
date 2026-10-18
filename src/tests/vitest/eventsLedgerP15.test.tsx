@@ -44,7 +44,7 @@ describe('OBS-PR-17 the WooCommerce lists load only with the WooCommerce tab', (
       ...result.current, warehouses: [], loadSyncedWcOrders: load,
       handleSaveSettings: noop, handleTestWcConnection: noop, handleSyncManualOrder: noop, handleSyncAllStocks: noop,
     };
-    const view = render(<WooCommerceTab {...(props as unknown as React.ComponentProps<typeof WooCommerceTab>)} />);
+    const view = render(<WooCommerceTab {...(props as unknown as React.ComponentProps<typeof WooCommerceTab>)} />, { wrapper });
     view.rerender(<WooCommerceTab {...(props as unknown as React.ComponentProps<typeof WooCommerceTab>)} />);
     expect(load).toHaveBeenCalledTimes(1);
     const signal = load.mock.calls[0][0] as AbortSignal;

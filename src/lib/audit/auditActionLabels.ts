@@ -22,6 +22,8 @@ export const AUDIT_ACTION_LABELS = {
   RECONCILIATION_EXECUTE: 'اجرای تطبیق',
   PURGE: 'پاک‌سازی سجل',
   CHANGE_CODE: 'تغییر کد',
+  WC_CATALOG_REFRESH: 'بازخوانی محصولات سایت',
+  WC_STOCK_PUSH: 'ارسال موجودی به سایت',
 } as const satisfies Record<string, string>;
 
 export type KnownAuditAction = keyof typeof AUDIT_ACTION_LABELS;
