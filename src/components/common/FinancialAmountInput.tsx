@@ -119,19 +119,27 @@ export const FinancialAmountInput = React.forwardRef<HTMLInputElement, Financial
    * هرگز پیشوند معتبر پیشین، و ارسال فرم با پیام همان خطا نگه داشته می‌شود.
    */
   const [typedGroupText, setTypedGroupText] = useState<string | null>(null);
-  const reportedValue = useRef<number | null>(null);
+  /** مقداری که خود کادر با `onChange` فرستاده و والد هنوز برنگردانده است؛ هر تغییر دیگرِ مقدار از بیرون است */
+  const ownChange = useRef<number | null>(null);
   const previousValue = useRef(value);
+  const reportChange = (next: number) => {
+    ownChange.current = next;
+    onChange(next);
+  };
   const draftValue = draft === null ? null : readAmountText(draft, { scale, allowNegative });
   const draftMatchesValue = draftValue?.ok === true && draftValue.value === numericValue;
   const displayFormatted = typedGroupText !== null
     ? persianDigitsOf(typedGroupText)
     : draftMatchesValue && draft !== null ? groupAmountText(draft) : groupAmountText(amountTextOf(value));
 
-  // مقداری که از بیرون می‌رسد (پاک‌کردن فرم، تراز خودکار ردیف) متن نادرست را کنار می‌زند؛ صفری که خود کادر فرستاده است نه
+  // هر مقداری که از بیرون می‌رسد (پاک‌کردن فرم با صفر یا خالی، تراز خودکار ردیف) متن نادرست را کنار می‌زند؛
+  // فقط بازگشت همان مقداری که خود کادر فرستاده است متن را نگه می‌دارد
   useEffect(() => {
-    const changed = !Object.is(previousValue.current, value);
+    if (Object.is(previousValue.current, value)) return;
     previousValue.current = value;
-    if (!changed || typedGroupText === null || parseCleanNumber(value, 0) === reportedValue.current) return;
+    const own = ownChange.current !== null && parseCleanNumber(value, 0) === ownChange.current;
+    ownChange.current = null;
+    if (own || typedGroupText === null) return;
     setTypedGroupText(null);
     setInputError(null);
   }, [value, typedGroupText]);
@@ -188,8 +196,7 @@ export const FinancialAmountInput = React.forwardRef<HTMLInputElement, Financial
       if (result.error === groupSeparatorError(edit.text)) {
         setTypedGroupText(edit.text);
         setDraft(null);
-        reportedValue.current = 0;
-        if (numericValue !== 0) onChange(0);
+        if (numericValue !== 0) reportChange(0);
         placeCaretAt(edit.caret);
         return;
       }
@@ -199,8 +206,8 @@ export const FinancialAmountInput = React.forwardRef<HTMLInputElement, Financial
     setInputError(null);
     setTypedGroupText(null);
     setDraft(result.text);
-    reportedValue.current = result.value;
-    onChange(result.value);
+    if (result.value !== numericValue) reportChange(result.value);
+    else onChange(result.value);
     placeCaret(Math.min(significantCount(input.value.slice(0, cursor)), result.text.length));
   };
 

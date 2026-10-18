@@ -18,6 +18,7 @@ import { JalaliDateInput } from '../common/JalaliDateInput';
 import { postingAccountsOf } from '../../lib/accounting/postingAccount';
 import { DialogLayer } from '../common/DialogLayer';
 import { useDialogEscape } from '../../lib/a11y/dialogEscapeStack';
+import { withRowKey, withRowKeys } from '../../lib/rowKey';
 
 interface NewVoucherModalProps {
   isOpen: boolean;
@@ -71,10 +72,10 @@ export function NewVoucherModal({
     creditRef?: React.RefObject<HTMLInputElement>;
   }>>([]);
 
-  const [items, setItems] = useState<VoucherItemDraft[]>([
+  const [items, setItems] = useState<VoucherItemDraft[]>(() => withRowKeys([
     { accountId: '', detailedType: 'none', detailedId: null, detailedName: '', debit: 0, credit: 0, description: '' },
     { accountId: '', detailedType: 'none', detailedId: null, detailedName: '', debit: 0, credit: 0, description: '' },
-  ]);
+  ]));
 
   // Server-backed draft auto-save hook
   const currentFormData = useMemo(() => ({
@@ -107,7 +108,7 @@ export function NewVoucherModal({
       if (Array.isArray(loaded.attachments)) setAttachments(loaded.attachments);
       if (Array.isArray(loaded.items) && loaded.items.length > 0) {
         // v9.0.193 (TD-569): پیش‌نویس قدیمی «متفرقه» را `custom` نگه داشته بود
-        setItems((loaded.items as VoucherItemDraft[]).map(it => ({ ...it, detailedType: voucherDetailedTypeFromStored(it.detailedType) })));
+        setItems(withRowKeys((loaded.items as VoucherItemDraft[]).map(it => ({ ...it, detailedType: voucherDetailedTypeFromStored(it.detailedType) }))));
       }
     }
   });
@@ -138,7 +139,7 @@ export function NewVoucherModal({
       setHeaderRate(editHeader.rate);
       setAttachments(Array.isArray(editingVoucher.attachments) ? editingVoucher.attachments : []);
       if (editingVoucher.items && Array.isArray(editingVoucher.items) && editingVoucher.items.length > 0) {
-        setItems(editingVoucher.items.map(it => ({
+        setItems(withRowKeys(editingVoucher.items.map(it => ({
           ...voucherRowDraftFromStored({ currency: it.currency, exchangeRate: it.exchangeRate ?? it.exchange_rate }, editHeader),
           id: it.id,
           accountId: it.accountId,
@@ -148,16 +149,16 @@ export function NewVoucherModal({
           debit: it.debit || 0,
           credit: it.credit || 0,
           description: it.description || '',
-        })));
+        }))));
       }
     } else {
       setDescription('');
       setManualVoucherNumber('');
       setAttachments([]);
-      setItems([
+      setItems(withRowKeys([
         { accountId: '', detailedType: 'none', detailedId: null, detailedName: '', debit: 0, credit: 0, description: '' },
         { accountId: '', detailedType: 'none', detailedId: null, detailedName: '', debit: 0, credit: 0, description: '' },
-      ]);
+      ]));
     }
   }, [editingVoucher, isOpen]);
 
@@ -174,7 +175,7 @@ export function NewVoucherModal({
     const newRowIndex = items.length;
     setItems(prev => [
       ...prev,
-      {
+      withRowKey({
         accountId: '',
         detailedType: 'none',
         detailedId: null,
@@ -183,7 +184,8 @@ export function NewVoucherModal({
         credit: 0,
         description: description || '',
         ...initialData,
-      }
+        rowKey: undefined,
+      })
     ]);
     setActiveRowIndex(newRowIndex);
     // Focus new row account input on next tick

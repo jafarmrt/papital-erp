@@ -102,7 +102,7 @@ export function InvoiceLinePicker(props: InvoiceLinePickerProps) {
       </div>
       <div className="col-span-1 sm:col-span-6 lg:col-span-2">
         <button type="button" onClick={(e) => { if (!refuseInvalidDecimalInputs(e.currentTarget)) onAdd(); }}
-          className="w-full min-h-[40px] bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl flex items-center justify-center gap-1.5 text-sm font-bold transition-colors shadow-sm">
+          className="w-full min-h-[44px] bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl flex items-center justify-center gap-1.5 text-sm font-bold transition-colors shadow-sm">
           <Plus size={16} aria-hidden="true" /> {INVOICE_LINE_TEXT.add}
         </button>
       </div>

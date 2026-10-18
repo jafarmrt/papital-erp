@@ -59,15 +59,21 @@ export function InvoiceHeaderFields(props: InvoiceHeaderFieldsProps) {
           <ExchangeRateField currency={currency} value={exchangeRate} onChange={onExchangeRateChange} />
         </div>
         <div>
-          <label htmlFor={`${id}-warehouse`} className={INVOICE_LABEL}>انبار خروج</label>
           {warehouses.length > 0 ? (
-            <select id={`${id}-warehouse`} className={`${INVOICE_FIELD} font-bold`} value={location} onChange={e => onLocationChange(e.target.value)}>
-              {warehouses.map(w => <option key={w.code} value={w.code}>{w.name}</option>)}
-            </select>
+            <>
+              <label htmlFor={`${id}-warehouse`} className={INVOICE_LABEL}>انبار خروج</label>
+              <select id={`${id}-warehouse`} className={`${INVOICE_FIELD} font-bold`} value={location} onChange={e => onLocationChange(e.target.value)}>
+                {warehouses.map(w => <option key={w.code} value={w.code}>{w.name}</option>)}
+              </select>
+            </>
           ) : (
-            <p id={`${id}-warehouse`} role="status" className="text-xs text-amber-800 bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl">
+            <>
+              {/* بی انبار کادری نیست که برچسب به آن اشاره کند؛ عنوان، نام پیام وضعیت است */}
+              <span id={`${id}-warehouse-title`} className={INVOICE_LABEL}>انبار خروج</span>
+              <p role="status" aria-labelledby={`${id}-warehouse-title`} className="text-xs text-amber-800 bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl">
               هنوز انباری تعریف نشده است (تنظیمات، انبارها).
-            </p>
+              </p>
+            </>
           )}
           {multiWarehouseEdit && (
             <p className="mt-1 text-[11px] text-amber-800">

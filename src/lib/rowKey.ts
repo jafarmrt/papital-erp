@@ -1,0 +1,24 @@
+/**
+ * v10.2.3 (TD-1291): کلید پایدار ردیف‌های فرم‌های چندردیفی (ردیف سند حسابداری، ردیف کارکرد).
+ * کلید فقط در مرورگر است و هرگز فرستاده نمی‌شود؛ با حذف یک ردیف، کادرهای ردیف بعدی جای آن را نمی‌گیرند
+ * و متن نادرست یا خطای کادرِ ردیف حذف‌شده به ردیف دیگر نمی‌رسد.
+ */
+export interface KeyedRow {
+  rowKey?: string;
+}
+
+let lastRowKey = 0;
+
+export function withRowKey<T extends KeyedRow>(row: T): T {
+  if (row.rowKey) return row;
+  lastRowKey += 1;
+  return { ...row, rowKey: `row-${lastRowKey}` };
+}
+
+export function withRowKeys<T extends KeyedRow>(rows: T[]): T[] {
+  return rows.map(withRowKey);
+}
+
+export function rowKeyOf(row: KeyedRow, index: number): string {
+  return row.rowKey ?? `index-${index}`;
+}

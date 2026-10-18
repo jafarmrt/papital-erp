@@ -6,6 +6,8 @@ import { PHONE_WIDTH_QUERY } from '../../lib/pwa/usePhoneWidth';
 import { InvoiceLinesList, INVOICE_LINES_TEXT } from '../../components/invoices/create/InvoiceLinesList';
 import { InvoiceTotalsPanel } from '../../components/invoices/create/InvoiceTotalsPanel';
 import { InvoiceSubmitBar, INVOICE_SUBMIT_TEXT } from '../../components/invoices/create/InvoiceSubmitBar';
+import { InvoiceHeaderFields } from '../../components/invoices/create/InvoiceHeaderFields';
+import { INVOICE_LINE_TEXT } from '../../components/invoices/create/InvoiceLinePicker';
 import type { InvoiceDocItem } from '../../lib/invoices/invoiceForm';
 import type { Item } from '../../types';
 
@@ -21,6 +23,7 @@ const TEXT = {
   payable: 'قابل پرداخت',
   lineName: 'گردنبند نقره',
   editing: 'در حال ویرایش پیش‌فاکتور',
+  warehouse: 'انبار خروج',
 } as const;
 
 function formSources(): Array<{ file: string; text: string }> {
@@ -113,5 +116,23 @@ describe('TD-1292 the sales invoice form is laid out like the other forms (optio
     expect(screen.getByText(new RegExp(TEXT.editing))).toBeTruthy();
     fireEvent.click(screen.getByText(INVOICE_SUBMIT_TEXT.cancel));
     expect(onCancel).toHaveBeenCalled();
+  });
+
+  it('without a warehouse the warehouse title names the status message and no label points at something that is not a field', () => {
+    render(
+      <InvoiceHeaderFields status="proforma" onStatusChange={() => undefined} finalDisabled={false} finalOptionNote="" currency="IRR"
+        onCurrencyChange={() => undefined} exchangeRate={0} onExchangeRateChange={() => undefined} warehouses={[]} location=""
+        onLocationChange={() => undefined} multiWarehouseEdit={false} refNumber="PF-1" date="2026-10-18" onDateChange={() => undefined} />
+    );
+    expect(screen.getByRole('status', { name: TEXT.warehouse })).toBeTruthy();
+    const labelled = Array.from(document.querySelectorAll('label[for]')).map(l => document.getElementById(l.getAttribute('for') ?? ''));
+    expect(labelled.every(el => el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement)).toBe(true);
+  });
+
+  it('the add-line button is a 44px tap target like the phone delete buttons', () => {
+    const picker = readFileSync(join(FORM_DIR, 'InvoiceLinePicker.tsx'), 'utf8');
+    const button = picker.slice(picker.lastIndexOf('<button', picker.indexOf('INVOICE_LINE_TEXT.add}')), picker.indexOf('INVOICE_LINE_TEXT.add}'));
+    expect(INVOICE_LINE_TEXT.add.length).toBeGreaterThan(0);
+    expect(button).toContain('min-h-[44px]');
   });
 });
