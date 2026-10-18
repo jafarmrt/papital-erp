@@ -54,7 +54,12 @@ const STATUS_LABELS: Record<ProductProgressRow['status'], string> = {
   blocked: 'متوقف'
 };
 
-export default function ProjectProductProgressTab({ projectId, onUpdate }: { projectId: number; onUpdate?: () => void }) {
+export default function ProjectProductProgressTab({ projectId, onUpdate, onDirtyChange }: {
+  projectId: number;
+  onUpdate?: () => void;
+  /** v10.2.1 (review U2): the page asks before a tab change or leaving while ticks are not saved */
+  onDirtyChange?: (dirty: boolean) => void;
+}) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<ProductProgressResponse | null>(null);
@@ -215,6 +220,8 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
   };
 
   const hasChanges = dirty.size > 0;
+  useEffect(() => { onDirtyChange?.(hasChanges && !saving); }, [hasChanges, saving, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   const saveChanges = async () => {
     if (!hasChanges || saving) return;

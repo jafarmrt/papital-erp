@@ -272,12 +272,13 @@ G  scripts/check-version-sync.ts
 11 src/services/projects/**
 11 src/pages/ProjectsPage.tsx
 11 src/pages/ProjectInventoryPage.tsx
+11 src/pages/ProjectDetailPage.tsx
 11 src/components/project/**
 11 src/components/project-modal/**
-11 src/components/ProjectDetailModal.tsx
 11 src/components/ProjectModal.tsx
 11 src/hooks/useProjectInventory.ts
 11 src/hooks/queries/useProjectQueries.ts
+11 src/hooks/queries/useProjectWorkspaceQueries.ts
 11 src/lib/projects/**
 11 src/types/project.types.ts
 # WorkflowPresetsTab از بسته ۱۴ به ۱۱ آمد (بازبینی بسته ۱۱، فاز ۵)

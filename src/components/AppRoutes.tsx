@@ -49,6 +49,7 @@ const TransactionsPage = lazyWithRetry(() => import('../pages/TransactionsPage')
 const ReservedItemsReportPage = lazyWithRetry(() => import('../pages/ReservedItemsReportPage'));
 const ManagementReportsPage = lazyWithRetry(() => import('../pages/ManagementReportsPage'));
 const ProjectsPage = lazyWithRetry(() => import('../pages/ProjectsPage'));
+const ProjectDetailPage = lazyWithRetry(() => import('../pages/ProjectDetailPage'));
 const ProjectInventoryPage = lazyWithRetry(() => import('../pages/ProjectInventoryPage'));
 const ProcurementPage = lazyWithRetry(() => import('../pages/ProcurementPage'));
 const ReorderAlertsPage = lazyWithRetry(() => import('../pages/ReorderAlertsPage'));
@@ -173,6 +174,11 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
         <Route path="/projects" element={
           <ProtectedRoute page="/projects" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <ProjectsPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/projects/:projectId/:tab?" element={
+          <ProtectedRoute page="/projects/:projectId/:tab?" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+            <ProjectDetailPage />
           </ProtectedRoute>
         } />
         <Route path="/project-inventory" element={

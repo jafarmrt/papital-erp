@@ -20,7 +20,7 @@ const ALLOCATION_TEXT = {
 
 const DELIVERY_TEXT = {
   projectSearch: 'جست‌وجو (کد پروژه، مشتری، کالا)...',
-  tab: '۶. ورود به انبار',
+  tab: '۵. ورود به انبار',
   deliver: 'ورود به انبار',
   overTitle: 'تحویل بیش از مقدار برنامه‌ریزی‌شده پروژه',
   overReason: 'مثال: مشتری ۲ عدد اضافه سفارش داد',
@@ -105,7 +105,7 @@ async function openDeliveryTab(page: Page): Promise<void> {
   await page.goto('/projects');
   await page.getByPlaceholder(DELIVERY_TEXT.projectSearch).fill(projectCodeOf());
   await page.getByText(String(setup.project.title), { exact: true }).first().click();
-  await page.getByRole('button', { name: DELIVERY_TEXT.tab }).click();
+  await page.getByRole('tab', { name: DELIVERY_TEXT.tab }).click();
 }
 
 test('allocate raw material to a project and deliver its finished goods to stock', async ({ page }) => {

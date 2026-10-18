@@ -16,8 +16,8 @@ const fetchJson = vi.fn(async (url: string, _opts?: FetchOpts): Promise<unknown>
 vi.mock('../../api', () => ({ fetchJson: (url: string, opts?: FetchOpts) => fetchJson(url, opts) }));
 vi.mock('react-hot-toast', () => ({ toast: { success: vi.fn(), error: vi.fn() }, default: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('../../components/ProjectModal', () => ({ default: () => null }));
-vi.mock('../../components/ProjectDetailModal', () => ({ default: () => null }));
 
+import { MemoryRouter } from 'react-router-dom';
 import { SearchProvider } from '../../SearchContext';
 import ProjectsPage from '../../pages/ProjectsPage';
 import { groupProjectsForKanban } from '../../lib/projects/projectStatus';
@@ -26,7 +26,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 const renderPage = () => render(
   <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-    <SearchProvider><ProjectsPage /></SearchProvider>
+    <MemoryRouter><SearchProvider><ProjectsPage /></SearchProvider></MemoryRouter>
   </QueryClientProvider>,
 );
 

@@ -8,7 +8,7 @@ import { projectWipBalances } from '../accounting/projectWipBalance.js';
 import { deliveredProjectQuantities, plannedProjectProducts } from './projectDeliveryCap.js';
 
 /**
- * v10.2.1 (TD-1290، یافتهٔ D2): ورودی‌های بهای پیشنهادی «ورود به انبار» پروژه: مقدار برنامه و تحویل‌شدهٔ هر محصول
+ * v10.2.2 (TD-1290، یافتهٔ D2): ورودی‌های بهای پیشنهادی «ورود به انبار» پروژه: مقدار برنامه و تحویل‌شدهٔ هر محصول
  * (`plannedProjectProducts` / `deliveredProjectQuantities`، همان قاعدهٔ سقف تحویل) و، فقط برای خوانندهٔ مجاز به دیدن بها، ماندهٔ
  * ۱۴۰۲ پروژه (`projectWipBalances`: همهٔ وضعیت‌های سند، پیش‌نویس هم) و میانگین موزون بهای جاری هر محصول. فقط خواندن است؛ سند و
  * مانده‌ای دست نمی‌خورد و بهای ثبت‌شدهٔ رسید همان است که کاربر می‌فرستد.

@@ -35,7 +35,8 @@ vi.mock('../../components/workflow/WorkflowStepperWidget', () => ({ WorkflowStep
 vi.mock('../../components/accounting/FinancialAttachmentUploader', () => ({ FinancialAttachmentUploader: () => null }));
 vi.mock('../../components/ProjectModal', () => ({ default: () => null }));
 
-import ProjectDetailModal from '../../components/ProjectDetailModal';
+import { MemoryRouter } from 'react-router-dom';
+import { renderProjectPage } from './helpers/projectPage';
 import ProjectInventoryTab from '../../components/project/ProjectInventoryTab';
 import { SearchProvider } from '../../SearchContext';
 import ProjectsPage from '../../pages/ProjectsPage';
@@ -57,15 +58,13 @@ const inventoryProject = {
 
 // v10.0.162 (TD-1211): a reader with projects.view only saw buttons whose API refused them with 403
 describe('project screens for a projects.view reader (TD-1211)', () => {
-  it('shows no workflow widget without a workflow key, and shows it with one', async () => {
-    const { unmount } = render(<ProjectDetailModal projectId={7} isOpen onClose={vi.fn()} onUpdate={vi.fn()} />);
-    await waitFor(() => expect(fetchJson).toHaveBeenCalledWith('/projects/7', expect.anything()));
-    expect(await screen.findByText(/طرف حساب/)).toBeTruthy();
-    expect(screen.queryByTestId('workflow-widget')).toBeNull();
-    unmount();
+  // v10.2.1 (10.2 package 2, review U6): no project workflow ever filled the box, so the project page has none
+  it('shows no workflow box on the project page, with or without a workflow key', async () => {
     granted.add('workflow.view');
-    render(<ProjectDetailModal projectId={7} isOpen onClose={vi.fn()} onUpdate={vi.fn()} />);
-    expect(await screen.findByTestId('workflow-widget')).toBeTruthy();
+    renderProjectPage('/projects/7');
+    await waitFor(() => expect(fetchJson).toHaveBeenCalledWith('/projects/7', expect.anything()));
+    expect(await screen.findByText('مشتری')).toBeTruthy();
+    expect(screen.queryByTestId('workflow-widget')).toBeNull();
   });
 
   it('offers no add button in the inventory control without projects.edit', async () => {
@@ -83,7 +82,7 @@ describe('project screens for a projects.view reader (TD-1211)', () => {
   it('reads no full item list on the project list page', async () => {
     render(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <SearchProvider><ProjectsPage /></SearchProvider>
+        <MemoryRouter><SearchProvider><ProjectsPage /></SearchProvider></MemoryRouter>
       </QueryClientProvider>,
     );
     await waitFor(() => expect(fetchJson.mock.calls.some(([url]) => url.startsWith('/projects?'))).toBe(true));

@@ -20,8 +20,8 @@ vi.mock('../../hooks/useProjectPermissions', () => ({
   }),
 }));
 vi.mock('../../components/ProjectModal', () => ({ default: () => null }));
-vi.mock('../../components/ProjectDetailModal', () => ({ default: () => null }));
 
+import { MemoryRouter } from 'react-router-dom';
 import { SearchProvider } from '../../SearchContext';
 import ProjectsPage from '../../pages/ProjectsPage';
 
@@ -38,7 +38,7 @@ describe('project form fixes (TD-1216)', () => {
     try {
       render(
         <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}>
-          <SearchProvider><ProjectsPage /></SearchProvider>
+          <MemoryRouter><SearchProvider><ProjectsPage /></SearchProvider></MemoryRouter>
         </QueryClientProvider>,
       );
       const [button] = await screen.findAllByTitle(DELETE_TITLE);

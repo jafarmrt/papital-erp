@@ -7,8 +7,12 @@ import { ProjectStagesForm } from './project-modal/ProjectStagesForm';
 import { ProjectManagersField } from './project-modal/ProjectManagersField';
 import { DialogLayer } from './common/DialogLayer';
 
-export default function ProjectModal(props: ProjectModalProps) {
-  const { isOpen, onClose, projectToEdit, onOpenStages } = props;
+/**
+ * the form that defines a new production project; since 10.2 package 2 an existing project's specs are edited on its
+ * own page (`ProjectSpecsEditor`) and its stages through the stage cards there, never here (TD-740)
+ */
+export default function ProjectModal(props: Omit<ProjectModalProps, 'projectToEdit'>) {
+  const { isOpen, onClose } = props;
 
   const {
     projectCode,
@@ -47,7 +51,7 @@ export default function ProjectModal(props: ProjectModalProps) {
     handleMoveStage,
     handleCustomerSelect,
     handleSubmit
-  } = useProjectForm(props);
+  } = useProjectForm({ ...props, projectToEdit: null });
 
   if (!isOpen) return null;
 
@@ -64,7 +68,7 @@ export default function ProjectModal(props: ProjectModalProps) {
             </div>
             <div>
               <h2 className="text-base font-black">
-                {projectToEdit ? 'ویرایش پروژه تولید' : 'تعریف پروژه تولید جدید'}
+                تعریف پروژه تولید جدید
               </h2>
               <p className="text-2xs text-slate-400 mt-0.5">
                 ثبت سفارش، انتخاب فرآیند تولید و زمان‌بندی تحویل کارگاهی
@@ -105,7 +109,6 @@ export default function ProjectModal(props: ProjectModalProps) {
           <ProjectManagersField
             managerIds={managerIds}
             onChange={setManagerIds}
-            storedManagers={projectToEdit?.managers}
             disabled={saving}
           />
 
@@ -127,8 +130,6 @@ export default function ProjectModal(props: ProjectModalProps) {
             onRemoveStage={handleRemoveStage}
             onStageTitleChange={handleStageTitleChange}
             onMoveStage={handleMoveStage}
-            readOnly={Boolean(projectToEdit)}
-            onOpenStages={projectToEdit && onOpenStages ? () => onOpenStages(projectToEdit) : undefined}
           />
 
           {/* Footer Action Buttons */}
@@ -146,7 +147,7 @@ export default function ProjectModal(props: ProjectModalProps) {
               className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-lg shadow-blue-600/30 hover:shadow-none transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
             >
               {saving ? <Loader2 size={16} className="animate-spin" /> : null}
-              {projectToEdit ? 'ذخیره تغییرات پروژه' : 'ثبت و شروع فرآیند تولید'}
+              ثبت و شروع فرآیند تولید
             </button>
           </div>
         </form>

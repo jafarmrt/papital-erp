@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Boxes, ShoppingCart, CheckCircle2, Lock, Unlock, Save, FolderTree, Printer, ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Item, PurchaseListItem } from '../../types';
@@ -20,13 +20,16 @@ interface ProjectInventoryTabProps {
   itemsList?: Item[];
   warehouseItems?: Item[];
   onUpdate?: (signal?: AbortSignal) => void | Promise<void>;
+  /** v10.2.1 (10.2 package 2, review U2): told whether the sections or the manual purchase rows hold an unsaved change */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 export function ProjectInventoryTab({
   project,
   itemsList,
   warehouseItems: initialWarehouseItems,
-  onUpdate
+  onUpdate,
+  onDirtyChange
 }: ProjectInventoryTabProps) {
   const effectiveItemsList = itemsList || initialWarehouseItems || [];
 
@@ -36,6 +39,7 @@ export function ProjectInventoryTab({
   const { canEdit, canRequestPurchase } = useProjectPermissions();
 
   const {
+    isDirty,
     saving,
     isFinalized,
     reservedItems,
@@ -88,8 +92,12 @@ export function ProjectInventoryTab({
     currentModalSection
   } = useProjectInventory(project, effectiveItemsList, onUpdate);
 
+  // a change being saved is not left unsaved: switching tabs mid-save does not ask
+  useEffect(() => { onDirtyChange?.(isDirty && !saving); }, [isDirty, saving, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+
   // V3.1.46 (TD-070): پل مستقیم خرید از ردیف بخش — ساخت لیست خرید موقت از کسری‌های همان بخش
-  // v10.2.1 (TD-1290): ردیف‌های یک کالا یکی می‌شوند و مقدار خرید از کسری کل پروژه بیشتر نیست (`buildSectionPurchaseList`)
+  // v10.2.2 (TD-1290): ردیف‌های یک کالا یکی می‌شوند و مقدار خرید از کسری کل پروژه بیشتر نیست (`buildSectionPurchaseList`)
   const [sectionPurchase, setSectionPurchase] = useState<{ list: PurchaseListItem[]; secIdx: number } | null>(null);
   const handlePurchaseSection = (secIdx: number) => {
     const list = buildSectionPurchaseList(sections[secIdx], secIdx, warehouseItems, availability);
@@ -109,7 +117,7 @@ export function ProjectInventoryTab({
     void onUpdate?.();
   };
 
-  // v10.2.1 (TD-1290): a stored reservation does not grow when stock arrives; a re-finalize reserves the rest
+  // v10.2.2 (TD-1290): a stored reservation does not grow when stock arrives; a re-finalize reserves the rest
   const unreservedNowFree = storedShortagesNowFree(availability, isFinalized, reservationShortages);
 
   return (
@@ -204,7 +212,7 @@ export function ProjectInventoryTab({
               style={{ width: `${materialProgress ?? 0}%` }}
             />
           </div>
-          {/* v10.2.1 (TD-1290): free stock follows the finalize's rule */}
+          {/* v10.2.2 (TD-1290): free stock follows the finalize's rule */}
           <p className="text-[11px] text-slate-400">
             «آزاد برای این پروژه» موجودی کل منهای رزرو پیش‌فاکتورهای فروش و پروژه‌های دیگر است، همان رقمی که ثبت نهایی با آن رزرو می‌کند؛ وضعیت «موجود / کسری» خودکار است.
           </p>
@@ -313,7 +321,7 @@ export function ProjectInventoryTab({
             handlePurchaseSection={canRequestPurchase ? handlePurchaseSection : undefined}
           />
 
-          {/* v10.2.1 (TD-1290): materials already taken from stock for this project */}
+          {/* v10.2.2 (TD-1290): materials already taken from stock for this project */}
           <ProjectIssuedMaterialsList projectId={project.id} reloadKey={reportsReloadKey} />
 
           {/* Quick Jump Banner to Purchase List */}

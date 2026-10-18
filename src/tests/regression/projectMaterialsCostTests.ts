@@ -4,19 +4,19 @@ import { brief, fixture, type Fixture } from './documentEntryTests.js';
 import { createProject, globalSection, postDoc, runReservationCases } from './stockReservationTests.js';
 
 /**
- * Series 10.2 package 3 (v10.2.1, TD-1290): the material and cost readers of a production project, through the real
+ * Series 10.2 package 3 (v10.2.2, TD-1290): the material and cost readers of a production project, through the real
  * Express routes with real sessions. Each case is red on the code before the change (the routes did not exist).
  */
 export async function runProjectMaterialsCostTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   return runReservationCases(shouldRun, [
     ['reg_project_material_availability_td_1290',
-      'v10.2.1: the free stock of a project material is total stock minus the reservations of sales proformas and other projects, never its own; the row status follows the finalize rule; an id beyond the integer range is 400 (TD-1290)',
+      'v10.2.2: the free stock of a project material is total stock minus the reservations of sales proformas and other projects, never its own; the row status follows the finalize rule; an id beyond the integer range is 400 (TD-1290)',
       ['td1290', 'd1', 'projects', 'reservation', 'package3'], availabilityCase],
     ['reg_project_delivery_cost_td_1290',
-      'v10.2.1: the delivery tab reads the project work-in-progress balance, planned and delivered quantities; balance and cost only for item cost readers (TD-1290)',
+      'v10.2.2: the delivery tab reads the project work-in-progress balance, planned and delivered quantities; balance and cost only for item cost readers (TD-1290)',
       ['td1290', 'd2', 'projects', 'delivery', 'wip', 'package3'], deliveryCostCase],
     ['reg_project_issued_materials_td_1290',
-      'v10.2.1: the materials taken from stock list live allocations and final remittances and waste of the project, with Kardex cost only for item cost readers (TD-1290)',
+      'v10.2.2: the materials taken from stock list live allocations and final remittances and waste of the project, with Kardex cost only for item cost readers (TD-1290)',
       ['td1290', 'd3', 'projects', 'allocation', 'package3'], issuedMaterialsCase],
   ]);
 }

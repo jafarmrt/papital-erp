@@ -71,7 +71,7 @@ const PROCUREMENT_LABELS: Record<string, string> = {
 const unknownText = (status: MaterialAvailabilityStatus): string => (status === 'error' ? 'نامعلوم' : 'در حال خواندن…');
 
 /**
- * v10.2.1 (TD-1290، یافتهٔ D1): «آزاد برای این پروژه»: موجودی کل منهای رزرو پیش‌فاکتورهای فروش و پروژه‌های دیگر، همان رقمی
+ * v10.2.2 (TD-1290، یافتهٔ D1): «آزاد برای این پروژه»: موجودی کل منهای رزرو پیش‌فاکتورهای فروش و پروژه‌های دیگر، همان رقمی
  * که ثبت نهایی با آن رزرو می‌کند، و آنچه تاکنون به این پروژه داده شده. پیش‌تر موجودی کل انبار نشان داده می‌شد.
  */
 export function FreeStockCell({ state, status }: { state: MaterialRowState; status: MaterialAvailabilityStatus }) {
@@ -106,7 +106,7 @@ const STATUS_BADGE: Record<Exclude<MaterialRowState['kind'], 'unknown'>, { text:
 };
 
 /**
- * v10.2.1 (TD-1290، یافتهٔ D1): وضعیت «موجود / کسری» خودکار است و از قاعدهٔ ثبت نهایی می‌آید؛ کاربر فقط «در حال سفارش» را
+ * v10.2.2 (TD-1290، یافتهٔ D1): وضعیت «موجود / کسری» خودکار است و از قاعدهٔ ثبت نهایی می‌آید؛ کاربر فقط «در حال سفارش» را
  * برای ردیف کسری یا ردیفی که پیش‌تر سفارش داده شده می‌گذارد. پیش‌تر وضعیت ردیف فهرستی دستی بود و می‌شد «موجود» گذاشت.
  */
 export function MaterialStatusCell({ state, status, procurementStatus, onProcurementChange }: {

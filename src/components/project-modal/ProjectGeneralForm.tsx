@@ -4,6 +4,7 @@ import { SearchableSelect } from '../SearchableSelect';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { Customer, FinancialAttachment } from '../../types';
 import { FinancialAttachmentUploader } from '../accounting/FinancialAttachmentUploader';
+import { PROJECT_PRIORITIES, PROJECT_PRIORITY_LABELS } from '../../lib/projects/projectStatus';
 
 interface ProjectGeneralFormProps {
   projectCode: string;
@@ -155,10 +156,9 @@ export const ProjectGeneralForm: React.FC<ProjectGeneralFormProps> = ({
             onChange={(e) => setPriority(e.target.value as any)}
             className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
           >
-            <option value="low">کم</option>
-            <option value="medium">متوسط</option>
-            <option value="high">زیاد</option>
-            <option value="urgent">فوری / اضطراری</option>
+            {PROJECT_PRIORITIES.map(level => (
+              <option key={level} value={level}>{PROJECT_PRIORITY_LABELS[level]}</option>
+            ))}
           </select>
         </div>
 
