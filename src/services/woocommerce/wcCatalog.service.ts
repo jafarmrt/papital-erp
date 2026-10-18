@@ -120,7 +120,7 @@ async function readPages(conn: WcConnection, path: string, fields: string, signa
 /**
  * `fn` over `inputs`, at most `limit` at a time, results in input order; after the first failure no worker starts another
  * input (review M-A: the other workers kept calling the shop after the refresh had answered and released the lock) and
- * `onFailure` runs once, so the caller can abort what is still in flight
+ * `onFailure` runs once, so the caller can abort what is still in flight; the error thrown is the first one that happened
  */
 export async function mapLimited<T, R>(
   inputs: T[], limit: number, fn: (input: T) => Promise<R>, onFailure?: () => void,
@@ -128,21 +128,24 @@ export async function mapLimited<T, R>(
   const out: R[] = new Array(inputs.length);
   let next = 0;
   let failed = false;
+  let firstError: unknown;
   const worker = async () => {
     while (!failed && next < inputs.length) {
       const i = next++;
       try {
         out[i] = await fn(inputs[i]);
       } catch (err) {
-        if (!failed) onFailure?.();
+        if (failed) return;
         failed = true;
-        throw err;
+        firstError = err;
+        onFailure?.();
+        return;
       }
     }
   };
-  const runs = await Promise.allSettled(Array.from({ length: Math.min(limit, inputs.length) }, worker));
-  const failure = runs.find((r): r is PromiseRejectedResult => r.status === 'rejected');
-  if (failure) throw failure.reason;
+  await Promise.all(Array.from({ length: Math.min(limit, inputs.length) }, worker));
+  // review M-D: the error that came first, never the abort message of a reader stopped because of it
+  if (failed) throw firstError;
   return out;
 }
 
@@ -263,11 +266,12 @@ export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor): P
       throw new ValidationError(EMPTY_CATALOG_MESSAGE, undefined, WC_SHOP_REQUEST_FAILED);
     }
     // review H-A: a link of a product past the cap (a truncated reading, an id above every id read) is left as it is, and so
-    // is its item; review M-C: when the shop ignored the id order, so is the link of every product not read. A link of any
-    // other product the shop no longer lists is closed
+    // is its item; review M-C / N-1: when such a truncated reading also ignored the id order, so is the link of every product
+    // not read. A complete reading lists every product whatever its order, so a link of any other product it misses is closed
+    const unorderedCut = truncated && unordered;
     const readKeys = new Set([...site, ...skipped].map(p => keyOf(p.productId, p.variationId)));
-    const leftAsIs = (l: { wcProductId: number; wcVariationId: number }) =>
-      (truncated && l.wcProductId > maxProductId) || (unordered && !readKeys.has(keyOf(l.wcProductId, l.wcVariationId)));
+    const leftAsIs = (l: { wcProductId: number; wcVariationId: number }) => truncated
+      && (l.wcProductId > maxProductId || (unorderedCut && !readKeys.has(keyOf(l.wcProductId, l.wcVariationId))));
     const untouched = live.filter(leftAsIs);
     const { matches, unmatched: notMatched } = await matchSiteCatalog(tx, site, new Set(untouched.map(l => l.itemId)));
     const unmatched = [...skipped, ...notMatched];
@@ -307,7 +311,7 @@ export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor): P
       unmatchedTotal: unmatched.length,
       unmatched: unmatched.slice(0, WC_LIST_LIMIT),
       catalogTruncated: truncated,
-      catalogUnordered: unordered,
+      catalogUnordered: unorderedCut,
     };
     await tx.insert(wcSyncRuns).values({
       kind: 'refresh', status: 'ok', userId: actorUserId(actor), startedAt: now, finishedAt: now, summary,
@@ -318,7 +322,7 @@ export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor): P
       description: `بازخوانی محصولات سایت: ${n(linkedCount)} کالا وصل، ${n(unmatched.length)} محصول سایت بی کالا`,
       details: {
         siteProductCount: summary.siteProductCount, linkedCount, newCount: fresh.length, closedCount,
-        unmatchedTotal: unmatched.length, catalogTruncated: truncated, catalogUnordered: unordered,
+        unmatchedTotal: unmatched.length, catalogTruncated: truncated, catalogUnordered: unorderedCut,
       },
     });
     return summary;

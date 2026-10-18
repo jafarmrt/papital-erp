@@ -7,7 +7,8 @@ import { brief, linksOf, newItem, withShop } from './wooCatalogTestKit.js';
  * product cap, removed products, an empty or unordered catalog), registered in `wooCatalogSyncTests.ts`
  */
 export async function emptyOrUnorderedCase(h: Harness, wrong: string[]): Promise<string> {
-  const { refreshCatalogLocked, applyCatalogLinks, EMPTY_CATALOG_MESSAGE } = await import('../../services/woocommerce/wcCatalog.service.js');
+  const { refreshCatalogLocked, applyCatalogLinks, readSiteCatalog, EMPTY_CATALOG_MESSAGE } = await import('../../services/woocommerce/wcCatalog.service.js');
+  const { requireWcConnection } = await import('../../services/woocommerce/wcClient.js');
   const one = await newItem(h, 'ONE');
   const two = await newItem(h, 'TWO');
   const products: MockProduct[] = [{ id: 10, sku: one.code }, { id: 20, sku: two.code }, { id: 30, sku: `NOITEM_${h.tag}` }];
@@ -28,32 +29,35 @@ export async function emptyOrUnorderedCase(h: Harness, wrong: string[]): Promise
       wrong.push(`runs after an empty catalog: ${JSON.stringify(runs)}`);
     }
 
-    // M-C: the shop ignores the id order (newest first) and product 20 is gone; its link is kept and the reading says why
+    // M-C: the shop ignores the id order (newest first); the reading notices it
     products.push(saved[0], saved[2]);
     store.newestFirst = true;
-    const unordered = await refreshCatalogLocked({});
+    const seen = await readSiteCatalog(await requireWcConnection());
+    if (!seen.unordered || seen.truncated) wrong.push(`a reading newest first was not marked unordered: ${JSON.stringify({ unordered: seen.unordered, truncated: seen.truncated })}`);
+
+    // N-1: a complete reading out of id order still lists every product, so product 20's link closes as normal
+    const complete = await refreshCatalogLocked({});
     const links = await linksOf(h, [one.id, two.id]);
-    if (links.get(two.id)?.product !== 20) wrong.push('a reading out of id order closed the link of a product it did not read');
+    if (links.has(two.id)) wrong.push('a complete reading out of id order kept the link of a product the shop no longer lists');
     if (links.get(one.id)?.product !== 10) wrong.push('a reading out of id order lost the link of a product it read');
-    if (!unordered.catalogUnordered || unordered.closedCount !== 0) wrong.push(`unordered summary ${JSON.stringify(unordered).slice(0, 200)}`);
+    if (complete.catalogUnordered || complete.closedCount !== 1) wrong.push(`complete unordered summary ${JSON.stringify(complete).slice(0, 200)}`);
     const catalog = (await h.get('/api/woocommerce/catalog')).body as { catalogUnordered?: boolean };
-    if (catalog.catalogUnordered !== true) wrong.push('the tab does not say the last reading was out of id order');
-
-    // the same reading in id order closes it
+    if (catalog.catalogUnordered !== false) wrong.push('the tab warns about the order of a complete reading');
     store.newestFirst = false;
-    const ordered = await refreshCatalogLocked({});
-    if ((await linksOf(h, [two.id])).has(two.id) || ordered.catalogUnordered || ordered.closedCount !== 1) {
-      wrong.push(`an ordered reading after the removal ${JSON.stringify(ordered).slice(0, 200)}`);
-    }
 
-    // a direct reading marked unordered keeps an unread variation link too
+    // a reading cut at the cap and out of id order keeps every link it did not read, even below the largest id read, and says so
     await h.q(`INSERT INTO wc_product_links (item_id, wc_product_id, wc_variation_id, site_sku) VALUES ($1, 40, 41, $2)`, [two.id, two.code]);
-    const direct = await applyCatalogLinks({
-      site: [{ productId: 10, variationId: 0, name: 'o', sku: one.code, stock: null, manageStock: false }],
-      skipped: [], truncated: false, maxProductId: 10, unordered: true,
-    }, {});
-    if ((await linksOf(h, [two.id])).get(two.id)?.variation !== 41 || direct.closedCount !== 0) {
-      wrong.push(`an unordered reading closed an unread variation link: ${JSON.stringify(direct).slice(0, 200)}`);
+    const read10 = [{ productId: 10, variationId: 0, name: 'o', sku: one.code, stock: null, manageStock: false }];
+    const cut = await applyCatalogLinks({ site: read10, skipped: [], truncated: true, maxProductId: 90, unordered: true }, {});
+    if ((await linksOf(h, [two.id])).get(two.id)?.variation !== 41 || cut.closedCount !== 0 || !cut.catalogUnordered) {
+      wrong.push(`a truncated unordered reading closed an unread variation link: ${JSON.stringify(cut).slice(0, 200)}`);
+    }
+    if (((await h.get('/api/woocommerce/catalog')).body as { catalogUnordered?: boolean }).catalogUnordered !== true) wrong.push('the tab does not say the last cut reading was out of id order');
+
+    // the same reading read to the end closes it
+    const whole = await applyCatalogLinks({ site: read10, skipped: [], truncated: false, maxProductId: 90, unordered: true }, {});
+    if ((await linksOf(h, [two.id])).has(two.id) || whole.closedCount !== 1 || whole.catalogUnordered) {
+      wrong.push(`a complete unordered reading kept an unread variation link: ${JSON.stringify(whole).slice(0, 200)}`);
     }
     return 'empty and unordered catalogs';
   });
@@ -137,16 +141,17 @@ export async function removedProductAndDeadlinesCase(h: Harness, wrong: string[]
     if (capped.closedCount !== 1) wrong.push(`truncated summary ${JSON.stringify(capped).slice(0, 200)}`);
 
     // M-A / N-G: one variation list fails while the others are held unanswered; the refresh fails at once (the held reads are
-    // aborted, never awaited), and no reader starts another list, even after the held ones are let go
+    // aborted, never awaited), and no reader starts another list, even after the held ones are let go. M-D: the list that
+    // fails is not the first one, and the refresh reports the shop's own error, not the abort of the first list's reader
     const variableIds = Array.from({ length: 12 }, (_, i) => 100 + i);
     products.splice(0, products.length, ...variableIds.map(id => ({ id, sku: `VAR${id}_${h.tag}`, variations: [{ id: id * 10, sku: `V${id}_${h.tag}` }] })));
-    store.failPaths.add('products/100/variations');
+    store.failPaths.add('products/102/variations');
     let release = (): void => undefined;
-    store.hold = { pattern: /^products\/(?!100\/)\d+\/variations$/, until: new Promise<void>(resolve => { release = resolve; }) };
+    store.hold = { pattern: /^products\/(?!102\/)\d+\/variations$/, until: new Promise<void>(resolve => { release = resolve; }) };
     const before = store.arrivals.length;
     const startedAt = Date.now();
     const failed = await refreshCatalogLocked({}, undefined, { deadlineMs: 20_000 })
-      .then(() => null, (err: unknown) => err as { code?: string; message?: string });
+      .then(() => null, (err: unknown) => err as { code?: string; message?: string; details?: { status?: number } });
     // the held reads answer only after the refresh returns, so a refresh that awaited them ran into a request timeout
     // (`WC_REQUEST_TIMEOUT_MS`, 15 s) or its deadline; aborted at the first failure it returns in a few milliseconds
     const tookMs = Date.now() - startedAt;
@@ -157,6 +162,7 @@ export async function removedProductAndDeadlinesCase(h: Harness, wrong: string[]
     if (failed?.code !== 'WC_SHOP_REQUEST_FAILED') wrong.push(`a refresh with a failed variation read ended with ${JSON.stringify(failed)}`);
     if (String(failed?.message ?? '').includes(DEADLINE_WORDS) || tookMs >= 10_000) wrong.push(`the refresh waited ${tookMs} ms for the held variation reads`);
     if (variationReads > WC_VARIATION_READ_CONCURRENCY) wrong.push(`${variationReads} variation lists were read after one failed`);
+    if (failed?.details?.status !== 500) wrong.push(`the refresh reported ${JSON.stringify(failed)} instead of the shop's error on a later list`);
     store.failPaths.clear();
 
     // N-A: a push past its deadline aborts the open batch and sends nothing more
