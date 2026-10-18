@@ -173,6 +173,12 @@ export function rowUnitConvertible(row: { unit?: unknown; conversionRate?: unkno
   return needInItemUnit(need, unitKey(itemUnit)) !== null;
 }
 
+/** v10.2.1 (TD-1290): one row's quantity in the item unit by the finalize's rule, or null on a unit mismatch */
+export function rowQtyInItemUnit(row: { unit?: unknown; conversionRate?: unknown; convertedUnit?: unknown }, qty: number, itemUnit: unknown): number | null {
+  const need: NeedRow = { code: '', name: '', qty, unit: text(row.unit) || DEFAULT_ROW_UNIT, conversionRate: row.conversionRate, convertedUnit: row.convertedUnit };
+  return needInItemUnit(need, unitKey(itemUnit))?.qty ?? null;
+}
+
 export function planProjectReservation(
   sections: unknown,
   products: unknown,

@@ -6,7 +6,9 @@ import {
 } from '../../types';
 import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
 import { MATERIAL_UNITS } from '../../lib/pendingMaterials/materialRequestRules';
-import { materialFiguresOf, rowIsShort, type MaterialAvailabilityView, type MaterialRowInput } from '../../lib/projects/materialAvailability';
+import { materialFiguresOf, rowIsShort, type MaterialAvailabilityView, type MaterialRowInput, type MaterialRowState } from '../../lib/projects/materialAvailability';
+import { rowQtyInItemUnit } from '../../lib/projects/projectReservation';
+import { fin } from '../../lib/financialDecimal';
 
 /** v10.0.143 (TD-1202): the same unit list as the keeper's approval window (`MATERIAL_UNITS`) */
 export const COMMON_UNITS = MATERIAL_UNITS;
@@ -212,6 +214,100 @@ export const buildConsolidatedPurchaseList = (
 
   return [...listFromSections, ...manualProcessed];
 };
+
+type GlobalItem = NonNullable<ProjectInventoryControlSectionData['globalItems']>[number];
+
+interface SectionItemGroup {
+  key: string;
+  rows: number[];
+  first: GlobalItem;
+  match: Item | undefined;
+  states: MaterialRowState[];
+  /** نیاز ردیف‌های بخش به واحد کالا با قاعدهٔ ثبت نهایی (ردیف بی تبدیل معتبر شمرده نمی‌شود) */
+  itemQty: number;
+  /** نیاز ردیف‌ها به واحد خودشان، قاعدهٔ پیشین فرم (مقدار خالی یک است) */
+  rowQty: number;
+  /** موجودی کل کالا (وگرنه موجودی ذخیره‌شدهٔ نخستین ردیف) برای قاعدهٔ پیشین */
+  totalStock: number;
+  /** ردیفی با وضعیت ذخیره‌شدهٔ «نیاز به خرید» */
+  storedNeeds: boolean;
+}
+
+/**
+ * v10.2.1 (TD-1290، بررسی بستهٔ ۳): «ثبت سفارش خرید» یک بخش کنترل کلی. ردیف‌های بخش به ازای کالای انبار (وگرنه کد یا نام)
+ * یکی می‌شوند تا ردیف‌های تکراری یک کالا هر کدام همهٔ موجودی آزاد را جدا نشمارند. با ارقام کارساز مقدار خرید کالای کسری
+ * کمینهٔ کسری کل پروژهٔ آن کالا (`shortQty` ثبت نهایی) و نیاز همین بخش است، به واحد کالا، پس بخش بیش از کسری پروژه سفارش
+ * نمی‌دهد. بی ارقام کارساز (در حال خواندن، خطا، بی کالای انبار یا تبدیل واحد لازم) قاعدهٔ پیشین: نیاز گروه − موجودی − داده‌شده.
+ */
+export function buildSectionPurchaseList(
+  sec: ProjectInventoryControlSectionData | undefined,
+  secIdx: number,
+  warehouseItems: Item[],
+  availability: MaterialAvailabilityView
+): PurchaseListItem[] {
+  const groups = new Map<string, SectionItemGroup>();
+  (sec?.globalItems || []).forEach((item, gIdx) => {
+    const match = findProjectItemMatch({ code: item.itemCode, name: item.name }, warehouseItems);
+    const key = match ? `item_${match.id}` : purchaseRowKey(item.itemCode, item.name);
+    const group: SectionItemGroup = groups.get(key) ?? {
+      key, rows: [], first: item, match, states: [], itemQty: 0, rowQty: 0,
+      totalStock: match ? Number(match.current_stock || 0) : Number(item.stockQty || 0), storedNeeds: false,
+    };
+    const state = availability.rowState(item);
+    const rowQty = Number(item.requiredQty || 1);
+    const inItemUnit = match ? rowQtyInItemUnit(item, Number(item.requiredQty) || 0, match.unit) : null;
+    group.rows.push(gIdx);
+    group.states.push(state);
+    group.rowQty = fin(group.rowQty).add(rowQty).toNumber();
+    if (inItemUnit !== null && inItemUnit > 0) group.itemQty = fin(group.itemQty).add(inItemUnit).toNumber();
+    if (item.status === 'needs_procurement') group.storedNeeds = true;
+    groups.set(key, group);
+  });
+
+  const lines: PurchaseListItem[] = [];
+  for (const g of groups.values()) {
+    const { first, match } = g;
+    const base = {
+      id: `sec${secIdx}_g${g.rows.join('-')}_${g.key}`,
+      itemCode: first.itemCode || match?.code || '',
+      itemName: first.name || match?.name || '',
+      category: sec?.title || 'بخش کنترل',
+      procurementStatus: first.procurementStatus || 'pending',
+      notes: first.notes,
+    };
+    const short = g.states.find((s): s is Extract<MaterialRowState, { kind: 'short' }> => s.kind === 'short');
+    if (short) {
+      const qty = Math.min(short.shortQty, g.itemQty);
+      if (qty > 0) {
+        lines.push({
+          ...base, totalRequiredQty: g.itemQty, unit: short.unit, warehouseStockQty: short.free, issuedQty: short.issued,
+          warehouseUnit: match?.unit || short.unit, toPurchaseQty: qty,
+        });
+      }
+      continue;
+    }
+    // قاعدهٔ پیشین روی کل گروه: نیاز همهٔ ردیف‌های کالا در برابر موجودی کل، یا وضعیت ذخیره‌شده
+    const legacyShort = g.storedNeeds || g.rowQty - g.totalStock > 0;
+    if (!g.states.some(s => rowIsShort(s, legacyShort))) continue;
+    const figures = materialFiguresOf(g.states[0]);
+    const stock = figures ? figures.free : match ? Number(match.current_stock || 0) : Number(first.stockQty || 0);
+    const issued = figures?.issued ?? 0;
+    const qty = Math.max(0, fin(g.rowQty).subtract(stock).subtract(issued).toNumber());
+    if (qty > 0) {
+      lines.push({
+        ...base, totalRequiredQty: g.rowQty, unit: first.unit || match?.unit || 'عدد', warehouseStockQty: stock, issuedQty: figures?.issued,
+        warehouseUnit: match?.unit || first.unit, toPurchaseQty: qty,
+      });
+    }
+  }
+  return lines;
+}
+
+/** ردیف‌های بخش یک قلم «ثبت سفارش خرید» بخش، از شناسهٔ آن */
+export function sectionPurchaseRows(lineId: string): { secIdx: number; rows: number[] } | null {
+  const m = /^sec(\d+)_g(\d+(?:-\d+)*)_/.exec(lineId);
+  return m ? { secIdx: Number(m[1]), rows: m[2].split('-').map(Number) } : null;
+}
 
 /**
  * درصد ردیف‌های موجود. v10.2.1 (TD-1290): با `availability` «موجود» وضعیت خودکار ثبت نهایی است، نه وضعیت ذخیره‌شده، و تا

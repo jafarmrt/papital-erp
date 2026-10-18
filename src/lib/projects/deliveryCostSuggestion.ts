@@ -157,3 +157,35 @@ export function deliveryCostOutlook(report: DeliveryCostReport | null | undefine
     multiProduct: report.products.length > 1,
   };
 }
+
+export interface DeliveryPriceLine {
+  itemId: number;
+  quantity: number;
+  /** بهای واردشدهٔ کاربر؛ undefined یعنی خانه دست نخورده و پیشنهاد به کار می‌رود، صفر یعنی پاک‌شده (میانگین موزون بها) */
+  typedPrice: number | undefined;
+  /** پیشنهادی که خانه نشان می‌داد */
+  shownSuggestion: number | null;
+}
+
+export type DeliveryPriceCheck =
+  /** ماندهٔ ۱۴۰۲ از زمان خواندن صفحه عوض شده و پیشنهاد خانه‌ای دست‌نخورده دیگر همان نیست؛ چیزی فرستاده نمی‌شود */
+  | { kind: 'suggestion_changed' }
+  /** بهای هر ردیف (undefined = میانگین موزون بها) و ماندهٔ ۱۴۰۲ پس از این ورود؛ `overdraws` یعنی مانده منفی می‌شود */
+  | { kind: 'post'; prices: Array<number | undefined>; outlook: DeliveryCostOutlook | null; overdraws: boolean };
+
+/**
+ * v10.2.1 (TD-1290، بررسی بستهٔ ۳): بهای ردیف‌های یک ورود به انبار با گزارش تازهٔ ۱۴۰۲ درست پیش از فرستادن. پیشنهاد کهنه (کاربر
+ * دیگری در این میان تحویل داده، یا کادر دلیل بیش از برنامه بدنهٔ پیشین را دوباره می‌فرستد) فرستاده نمی‌شود، و وقتی این ورود
+ * بیش از ماندهٔ ۱۴۰۲ پروژه بستانکار می‌کند `overdraws` هشدار پیش از ثبت را می‌خواهد. قاعدهٔ ثبت کارساز همان است که بود.
+ */
+export function checkDeliveryPrices(fresh: DeliveryCostReport, lines: readonly DeliveryPriceLine[], singleProduct: boolean): DeliveryPriceCheck {
+  const prices: Array<number | undefined> = [];
+  for (const line of lines) {
+    const suggestion = singleProduct ? projectDeliverySuggestion(fresh, line.itemId, line.quantity) : null;
+    if (line.typedPrice === undefined && suggestion !== line.shownSuggestion) return { kind: 'suggestion_changed' };
+    const price = line.typedPrice !== undefined ? line.typedPrice : suggestion;
+    prices.push(price && price > 0 ? Number(price) : undefined);
+  }
+  const outlook = deliveryCostOutlook(fresh, lines.map((l, i) => ({ itemId: l.itemId, quantity: l.quantity, unitPrice: prices[i] ?? null })));
+  return { kind: 'post', prices, outlook, overdraws: !!outlook && outlook.credit > 0 && outlook.remaining < 0 };
+}

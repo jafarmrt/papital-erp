@@ -1,6 +1,6 @@
 import { Boxes, Plus, Trash2, Scale, AlertCircle, CheckCircle2, FilePlus } from 'lucide-react';
 import { ProjectInventoryControlSectionData, Item } from '../../types';
-import { COMMON_UNITS } from './projectInventoryUtils';
+import { COMMON_UNITS, buildSectionPurchaseList } from './projectInventoryUtils';
 import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
 import { formatPersianNumber, toPersianDigits } from '../../utils';
 import { MaterialNameCell, FreeStockCell, MaterialStatusCell, NotesCell, type OpenUnitConversionModalHandler } from './inventoryRowCells';
@@ -119,6 +119,8 @@ export function GlobalInventoryControlSection({
                 shortfallCount++;
               }
             });
+            // v10.2.1 (TD-1290): the button counts the lines the order window gets, one per item of the section
+            const purchaseLineCount = handlePurchaseSection ? buildSectionPurchaseList(sec, originalIdx, warehouseItems, availability).length : 0;
 
             return (
               <div 
@@ -159,7 +161,7 @@ export function GlobalInventoryControlSection({
 
                   <div className="flex items-center gap-2">
                     {/* V3.1.46 (TD-070): پل مستقیم خرید از ردیف بخش به سند سفارش خرید */}
-                    {shortfallCount > 0 && handlePurchaseSection && (
+                    {purchaseLineCount > 0 && handlePurchaseSection && (
                       <button
                         type="button"
                         onClick={() => handlePurchaseSection(originalIdx)}
@@ -167,7 +169,7 @@ export function GlobalInventoryControlSection({
                         title="صدور سند سفارش خرید برای کسری‌های همین بخش"
                       >
                         <FilePlus className="w-3.5 h-3.5" />
-                        <span>ثبت سفارش خرید ({toPersianDigits(shortfallCount)})</span>
+                        <span>ثبت سفارش خرید ({toPersianDigits(purchaseLineCount)})</span>
                       </button>
                     )}
                     {/* Add Material to this Global Section */}

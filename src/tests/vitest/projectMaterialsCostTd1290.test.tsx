@@ -16,6 +16,7 @@ const fetchJson = vi.fn(async (url: string, opts?: FetchOpts): Promise<unknown> 
 vi.mock('../../api', () => ({ fetchJson: (url: string, opts?: FetchOpts) => fetchJson(url, opts) }));
 vi.mock('../../hooks/queries/useSettingsQueries', () => ({ useSettingsQuery: () => ({ data: [] }), useWarehousesQuery: () => ({ data: [{ id: 1, code: 'WH1', name: 'test warehouse' }] }) }));
 vi.mock('react-hot-toast', () => ({ toast: { success: vi.fn(), error: vi.fn() }, default: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }));
+vi.mock('../../components/ConfirmDialogHost', () => ({ confirmAction: vi.fn(async () => true) }));
 vi.mock('../../contexts/AuthContext', () => ({ useHasPermission: () => true, useHasAnyPermission: () => true }));
 vi.mock('../../hooks/useProjectPermissions', () => ({
   useProjectPermissions: () => ({
@@ -260,7 +261,7 @@ describe('delivery tab fills the unit cost from the project balance (TD-1290 D2)
     fireEvent.click(screen.getByText(DELIVER));
     await vi.waitFor(() => expect(deliveryCalls()).toHaveLength(1));
     expect(sentLines()[0]).toMatchObject({ unitPrice: 800, quantity: 10 });
-    await vi.waitFor(() => expect(fetchJson.mock.calls.filter(([url]) => url === '/projects/1/delivery-cost').length).toBe(2));
+    await vi.waitFor(() => expect(fetchJson.mock.calls.filter(([url]) => url === '/projects/1/delivery-cost').length).toBe(3));
   });
 
   it('posts no price when the user clears the suggestion, so the server uses the average cost', async () => {

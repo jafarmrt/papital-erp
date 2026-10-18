@@ -883,6 +883,8 @@ export function useProjectInventory(
     purchaseList,
     materialProgress,
     availability,
+    /** v10.2.1 (TD-1290): changes with each save of the project, so the materials reports are read again */
+    reportsReloadKey: projectVersion.version,
     handleFinalizeAndReserveStock,
     handleUnfinalizeReservation,
     handlePrintPurchaseListWithCheck,

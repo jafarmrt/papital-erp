@@ -21,7 +21,11 @@ import { projectIssuedMaterials } from '../services/projects/projectIssuedMateri
 const router = Router();
 router.use(authenticateToken);
 
-const projectParams = z.object({ id: numericIdString });
+/** v10.2.1 (TD-1290): ids are PostgreSQL integers; a larger one is 400, never a database error */
+const PG_INT_MAX = 2_147_483_647;
+const withinPgInt = (v: string) => v.length <= 10 && Number(v) <= PG_INT_MAX;
+
+const projectParams = z.object({ id: numericIdString.refine(withinPgInt, 'شناسهٔ پروژه نامعتبر است') });
 
 const availabilitySchema = z.object({
   params: projectParams,
@@ -29,6 +33,7 @@ const availabilitySchema = z.object({
     itemIds: z.string()
       .regex(/^\d+(,\d+)*$/, 'فهرست شناسهٔ کالاها نامعتبر است')
       .refine(v => v.split(',').length <= MATERIAL_AVAILABILITY_MAX_ITEMS, `حداکثر ${MATERIAL_AVAILABILITY_MAX_ITEMS} کالا در یک درخواست`)
+      .refine(v => v.split(',').every(withinPgInt), 'فهرست شناسهٔ کالاها نامعتبر است')
       .optional(),
   }),
 });

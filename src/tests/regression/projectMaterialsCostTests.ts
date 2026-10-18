@@ -10,7 +10,7 @@ import { createProject, globalSection, postDoc, runReservationCases } from './st
 export async function runProjectMaterialsCostTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   return runReservationCases(shouldRun, [
     ['reg_project_material_availability_td_1290',
-      'v10.2.1: the free stock of a project material is total stock minus the reservations of sales proformas and other projects, never its own; the row status follows the finalize rule (TD-1290)',
+      'v10.2.1: the free stock of a project material is total stock minus the reservations of sales proformas and other projects, never its own; the row status follows the finalize rule; an id beyond the integer range is 400 (TD-1290)',
       ['td1290', 'd1', 'projects', 'reservation', 'package3'], availabilityCase],
     ['reg_project_delivery_cost_td_1290',
       'v10.2.1: the delivery tab reads the project work-in-progress balance, planned and delivered quantities; balance and cost only for item cost readers (TD-1290)',
@@ -107,6 +107,11 @@ async function availabilityCase(h: Harness, wrong: string[]): Promise<string> {
   if (kept.status !== 200) wrong.push(`a reader with warehouse.view answered ${brief(kept)}, expected 200`);
   const bad = await h.get(`/api/projects/${project}/material-availability?itemIds=1,abc`);
   if (bad.status !== 400) wrong.push(`itemIds «1,abc» answered ${bad.status}, expected 400`);
+  // review of package 3: an id beyond the PostgreSQL integer range was a database error (500), now 400
+  const huge = await h.get(`/api/projects/${project}/material-availability?itemIds=${a},99999999999`);
+  if (huge.status !== 400) wrong.push(`an item id beyond the integer range answered ${huge.status}, expected 400`);
+  const hugeProject = await h.get('/api/projects/99999999999/delivery-cost');
+  if (hugeProject.status !== 400) wrong.push(`a project id beyond the integer range answered ${hugeProject.status}, expected 400`);
   const missing = await h.get(`/api/projects/999999999/material-availability?itemIds=${a}`);
   if (missing.status !== 404) wrong.push(`a missing project answered ${missing.status}, expected 404`);
   const none = await h.get(`/api/projects/${project}/material-availability`);
@@ -114,7 +119,7 @@ async function availabilityCase(h: Harness, wrong: string[]): Promise<string> {
   const settled = await writeCounts(h);
   await h.get(`/api/projects/${project}/material-availability?itemIds=${a}`);
   if ((await writeCounts(h)) !== settled) wrong.push('reading the availability wrote a voucher, document, Kardex, audit or outbox row');
-  return 'stock 8 with a proforma of 4, another project of 3 and 2 issued: free 1, the row is short by 2 as the finalize stores; the own reservation is not counted; 403 / 400 / 404; nothing written';
+  return 'stock 8 with a proforma of 4, another project of 3 and 2 issued: free 1, the row is short by 2 as the finalize stores; the own reservation is not counted; 403 / 400 (an id beyond the integer range too) / 404; nothing written';
 }
 
 async function deliverableProject(h: Harness, f: Fixture, product: number, quantity: number): Promise<number> {

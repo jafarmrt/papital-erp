@@ -73,6 +73,8 @@ export interface MaterialAvailabilityView {
   rowState(row: MaterialRowInput): MaterialRowState;
   /** آنچه پروژه برای کالای این ردیف دارد (آزاد + داده‌شده)، به واحد کالا؛ null وقتی ارقام نیست */
   coverOf(row: MaterialRowInput): number | null;
+  /** ثبت نهایی اکنون این کالا را کمتر از نیازش رزرو می‌کرد؟ null وقتی ارقام کارساز برای آن نیست */
+  isItemShort(itemId: number): boolean | null;
 }
 
 const DEFAULT_UNIT = 'عدد';
@@ -166,7 +168,20 @@ export function buildMaterialAvailabilityView(input: {
         ? fin(state.free).add(state.issued).toNumber()
         : null;
     },
+    isItemShort(itemId) {
+      return ready && byId.has(itemId) ? shortages.has(itemId) : null;
+    },
   };
+}
+
+/**
+ * v10.2.1 (TD-1290): کالاهایی که ثبت نهایی ذخیره‌شده کمتر از نیازشان رزرو کرد و اکنون موجودی آزاد نیاز را می‌پوشاند. رزرو
+ * ذخیره‌شده با رسیدن موجودی بزرگ نمی‌شود و پیش‌فاکتور فروش هنوز می‌تواند آن موجودی را ببرد؛ برای رزرو آن، ثبت نهایی لغو و
+ * دوباره ثبت می‌شود.
+ */
+export function storedShortagesNowFree<T extends { itemId: number }>(view: MaterialAvailabilityView, isFinalized: boolean, storedShortages: readonly T[] | null | undefined): T[] {
+  if (!isFinalized || view.status !== 'ready') return [];
+  return (storedShortages ?? []).filter(s => view.isItemShort(Number(s.itemId)) === false);
 }
 
 /** ردیفی که خرید یا بررسی می‌خواهد (کسری، بی کالای انبار یا تبدیل واحد لازم) */
