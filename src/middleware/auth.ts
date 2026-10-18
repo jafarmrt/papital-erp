@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { recordPresence } from '../lib/social/presence.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { AuthUserPayload } from '../types.js';
@@ -282,6 +283,8 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
     }
     if (req.user?.id) {
       updateRequestContext({ userId: req.user.id, username: req.user.username });
+      // v10.2 package 9: the last request time only, in memory; never the page or the address
+      recordPresence(req.user.id);
     }
     next();
   })().catch(next); });

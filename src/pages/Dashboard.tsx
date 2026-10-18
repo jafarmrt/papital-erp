@@ -11,6 +11,11 @@ import { useCrmFollowups } from '../hooks/useCrmFollowups';
 import { DailyLogsMentionsWidget } from '../components/dashboard/DailyLogsMentionsWidget';
 import { SalesSummaryWidget } from '../components/dashboard/SalesSummaryWidget';
 import { DASHBOARD_SALES_WIDGET_PERMISSIONS } from '../lib/permissions/reportPermissions';
+import { MyBirthdayBanner } from '../components/dashboard/social/MyBirthdayBanner';
+import { WhatsNewCard } from '../components/dashboard/social/WhatsNewCard';
+import { ColleagueBirthdaysCard } from '../components/dashboard/social/ColleagueBirthdaysCard';
+import { OnlineColleaguesCard } from '../components/dashboard/social/OnlineColleaguesCard';
+import { useBirthdaysQuery, usePresenceQuery } from '../hooks/queries/useSocialQueries';
 import { Warehouse, ArrowLeft, Sparkles } from 'lucide-react';
 import { isoToJalaliDate } from '../utils';
 
@@ -53,6 +58,10 @@ export default function Dashboard() {
 
   // v10.1.15 (D-03 بخش ۴، ت۱۴): ابزارک فروش و مطالبات برای دارنده گزارش فروش یا گزارش سن
   const canViewSalesWidget = useHasAnyPermission(DASHBOARD_SALES_WIDGET_PERMISSIONS);
+
+  // v10.2 package 9: the group dashboard («پیشخوان گروهی») for every signed-in user, no amounts
+  const birthdays = useBirthdaysQuery();
+  const presence = usePresenceQuery();
 
   // Convert CRM activities and Daily Logs into Calendar Event items
   const calendarEvents = useMemo<CalendarEventItem[]>(() => {
@@ -132,6 +141,9 @@ export default function Dashboard() {
       {/* 1. Personalized Motivational & Well-being Banner */}
       <PersonalBanner user={user} onLogout={logout} />
 
+      {birthdays.data && <MyBirthdayBanner answer={birthdays.data} firstName={(user.full_name || '').trim().split(/\s+/)[0] ?? ''} />}
+      <WhatsNewCard />
+
       {/* 2. Customizable Quick Shortcuts / User Workbench */}
       <CustomizableShortcuts user={user} userPermissions={userPermissions} />
 
@@ -165,6 +177,9 @@ export default function Dashboard() {
 
         {/* Left Column: Interactive Jalali Calendar & Secondary Panels (5 Cols on desktop) */}
         <div className="lg:col-span-5 space-y-6">
+          <ColleagueBirthdaysCard birthdays={birthdays.data?.birthdays ?? []} loading={birthdays.isLoading} />
+          <OnlineColleaguesCard colleagues={presence.data ?? []} loading={presence.isLoading} />
+
           {canViewSalesWidget && <SalesSummaryWidget />}
 
           {/* Interactive Jalali Calendar */}

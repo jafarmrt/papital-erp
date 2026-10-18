@@ -27,4 +27,8 @@ export const notifications = pgTable('notifications', {
   // v10.1.37 (N-01، TD-1283، تصمیم ت۸ الف): هر یادآوری مهلت کار کارگاه یک بار برای هر کاربر و ردیف برنامه (مهاجرت 0119)
   uq_notifications_workshop_reminder: uniqueIndex('uq_notifications_workshop_reminder').on(table.userId, table.type, table.link)
     .where(sql`${table.type} IN ('workshop_task_due_soon', 'workshop_task_overdue')`),
+  // v10.2 package 9 (group dashboard, migration 0128): one colleague-birthday notification per user and birthday, one
+  // greeting notification per birthday owner and sender
+  uq_notifications_social: uniqueIndex('uq_notifications_social').on(table.userId, table.type, table.link)
+    .where(sql`${table.type} IN ('colleague_birthday', 'birthday_greeting')`),
 }));

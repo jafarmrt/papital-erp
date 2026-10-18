@@ -140,7 +140,9 @@ export const PURGEABLE_AUDIT_ENTITIES = [
   'دسته‌بندی کاری',
   'ماده اولیه',
   'کد کالا',
-  'انبار'
+  'انبار',
+  // v10.2 package 9: a colleague's birthday reaction or greeting
+  'تبریک تولد'
 ] as const;
 
 export type PurgeableAuditEntity = (typeof PURGEABLE_AUDIT_ENTITIES)[number];
@@ -154,5 +156,6 @@ export const PURGEABLE_AUDIT_ENTITY_LABELS: Record<PurgeableAuditEntity, string>
   'دسته‌بندی کاری': 'دسته‌بندی کارها',
   'ماده اولیه': 'درخواست ماده اولیه',
   'کد کالا': 'گرفتن شماره کد کالا',
-  'انبار': 'تعریف انبار'
+  'انبار': 'تعریف انبار',
+  'تبریک تولد': 'تبریک‌های تولد همکاران'
 };

@@ -11158,6 +11158,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // 10.2 package 2: the project page's step bar counts
   const { runProjectWorkspaceStepsTests } = await import('../regression/projectWorkspaceStepsTests.js');
   results.push(...await runProjectWorkspaceStepsTests(shouldRun));
+  // 10.2 package 9: the group dashboard (birthdays, greetings, presence, whats-new; TD-1300)
+  const { runSocialDashboardTests } = await import('../regression/socialDashboardTests.js');
+  results.push(...await runSocialDashboardTests(shouldRun));
 
   return results;
 }

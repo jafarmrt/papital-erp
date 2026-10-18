@@ -358,6 +358,8 @@ G  scripts/check-version-sync.ts
 
 # ───────── ۱۶ داشبورد، تنظیمات، پوسته فرانت و میان‌بخشی تاریخ (I) ─────────
 16 src/routes/dashboard.routes.ts
+16 src/routes/social.routes.ts
+16 src/services/social/**
 16 src/routes/drafts.routes.ts
 16 src/services/drafts/**
 16 src/services/settings/**

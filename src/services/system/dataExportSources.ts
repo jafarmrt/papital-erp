@@ -1,7 +1,7 @@
 import { getTableColumns, type SQL } from 'drizzle-orm';
 import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
 import {
-  users, personnel, customers, items, itemCodeHistory, categories, warehouses, itemPrices, itemWarehouseStocks,
+  users, personnel, birthdayGreetings, customers, items, itemCodeHistory, categories, warehouses, itemPrices, itemWarehouseStocks,
   productionProjects, projectStages, projectProductStageProgress, projectBomAllocations, projectReservationReleases,
   pendingMaterials, transfers, crmLeads, crmActivities, crmLeadStageHistory, customerTags, customerTagLinks, dailyWorkLogs,
   documents, documentItems, transactions, appSettings, roles,
@@ -59,6 +59,7 @@ export const DATA_EXPORT_TABLE_SOURCES: Readonly<Record<string, TableSpecSource>
   roles: { table: roles, key: ['id'] },
   // Personnel WITHOUT the third-party exchange password (TD-189)
   personnel: { table: personnel, key: ['id'], columns: withoutColumns(personnel, ['nobitexPassword']) },
+  birthday_greetings: { table: birthdayGreetings, key: ['id'] },
   categories: { table: categories, key: ['id'] },
   warehouses: { table: warehouses, key: ['id'] },
   items: { table: items, key: ['id'] },
