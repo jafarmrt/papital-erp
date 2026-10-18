@@ -32,6 +32,7 @@ import { personnelReadScope, scopePersonnelRow, withoutNobitexPassword } from '.
 import { PERSONNEL_DETAIL_COLUMNS, countPersonnelRows, listPersonnelRows, personnelListStats } from '../services/personnel/personnelList.js';
 import { parsePagination, parsePickListLimit } from '../lib/pagination.js';
 import { SALARY_TYPE_LABELS, salaryTypeOf } from '../lib/personnel/salaryType.js';
+import { PERSONNEL_PICK_REQUEST_LIMIT } from '../lib/personnel/personnelList.js';
 
 const router = Router();
 
@@ -429,12 +430,13 @@ router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), v
 
 // GET /api/personnel - List personnel
 // OBS-R2-57 / OBS-R1-69 (TD-1321): filtered in SQL; with `page` one page `{ data, total, page, limit, stats }`, without it the
-// array the pick lists read, capped by `limit`
+// array the pick lists read, capped by `limit` (at most PERSONNEL_PICK_REQUEST_LIMIT); `activeOnly=1` leaves out leavers
 router.get('/personnel', authorizePermission(...READ_PERMISSIONS.personnel), asyncHandler(async (req, res) => {
   const [canViewSensitive, scope] = await Promise.all([canAccessSensitivePersonnelData(req.user), personnelReadScope(req.user)]);
   const filter = {
     search: typeof req.query.search === 'string' ? req.query.search : '',
     status: typeof req.query.status === 'string' ? req.query.status : '',
+    activeOnly: req.query.activeOnly === '1',
     scope, canViewSensitive,
   };
   // v9.0.23 (TD-434): هر ردیف فقط با فیلدهای دامنه خواننده؛ رمز نوبیتکس هرگز در فهرست نیست
@@ -447,7 +449,7 @@ router.get('/personnel', authorizePermission(...READ_PERMISSIONS.personnel), asy
     ]);
     return res.json({ data: view(rows), total, page, limit, stats });
   }
-  res.json(view(await listPersonnelRows(filter, { limit: parsePickListLimit(req.query.limit) })));
+  res.json(view(await listPersonnelRows(filter, { limit: parsePickListLimit(req.query.limit, PERSONNEL_PICK_REQUEST_LIMIT) })));
 }));
 
 // GET /api/personnel/:id - Single personnel detail

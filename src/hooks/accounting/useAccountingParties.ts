@@ -4,11 +4,11 @@ import type { Customer, Personnel } from '../../types';
 import { ACCOUNTING_LIST_QUERY_OPTIONS, fetchAccountingList } from './accountingQueryConfig';
 import toast from 'react-hot-toast';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
-import { PERSONNEL_PICK_CAP_TOAST_ID, PERSONNEL_PICK_LIMIT, PERSONNEL_PICK_URL, personnelPickCapNotice } from '../../lib/personnel/personnelList';
+import { PERSONNEL_PICK_CAP_TOAST_ID, PERSONNEL_PICK_LIMIT, PERSONNEL_PICK_URL, takePersonnelPick } from '../../lib/personnel/personnelList';
 
 /**
  * طرف‌حساب‌های قابل انتخاب در فرم‌های حسابداری (سند، خزانه، چک، مرور حساب‌ها): فهرست انتخاب GET /customers/options (TD-887) و
- * GET /personnel?limit=1000 (PERSONNEL_PICK_URL) صفحه پیشین؛ کلیدها زیر customers و personnel‌اند تا ذخیره مشتری/پرسنل تازه‌شان کند.
+ * GET /personnel?limit=5001 (PERSONNEL_PICK_URL، سقف ۵٬۰۰۰ و یک ردیف برای دانستن بیشتر بودن) صفحه پیشین؛ کلیدها زیر customers و personnel‌اند تا ذخیره مشتری/پرسنل تازه‌شان کند.
  */
 
 const CUSTOMERS_KEY = QUERY_KEYS.customers.options({ scope: 'accounting-parties' });
@@ -26,9 +26,8 @@ export function useAccountingPersonnelQuery() {
   return useQuery<Personnel[]>({
     queryKey: PERSONNEL_KEY,
     queryFn: async ({ signal }) => {
-      const rows = await fetchAccountingList<Personnel>(PERSONNEL_PICK_URL, signal, 'personnel');
-      // OBS-R1-69 (TD-1321): a list cut at the cap says so instead of hiding the rest
-      const notice = personnelPickCapNotice(rows.length);
+      // OBS-R1-69 (TD-1321): a list cut at the cap says so once instead of hiding the rest
+      const { rows, notice } = takePersonnelPick(await fetchAccountingList<Personnel>(PERSONNEL_PICK_URL, signal, 'personnel'));
       if (notice) toast(notice, { id: PERSONNEL_PICK_CAP_TOAST_ID });
       return rows;
     },

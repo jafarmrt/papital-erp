@@ -1,8 +1,9 @@
 import { and, count, desc, eq, or, sql, type SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { personnel, users } from '../../db/schema.js';
-import { foldedSearchSql } from '../../lib/search/searchSql.js';
-import { normalizeSearchText } from '../../lib/search/searchText.js';
+import { compactFoldedSearchSql } from '../../lib/search/searchSql.js';
+import { compactSearchText } from '../../lib/search/searchText.js';
+import { TERMINATED_EMPLOYMENT_STATUS } from '../../lib/payroll/payrollPeriod.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
 import type { PersonnelReadScope } from './personnelFieldScope.js';
 import type { PersonnelListStats } from '../../lib/personnel/personnelList.js';
@@ -57,11 +58,13 @@ export const PERSONNEL_DETAIL_COLUMNS = {
 /**
  * OBS-R2-57 / OBS-R1-69 (v10.2.x, TD-1321): the personnel list is filtered and paged in SQL. The search looks only at the
  * fields the reader sees (a pick-list reader never finds a personnel by national ID or phone), and card, account and Sheba
- * numbers only for a reader who sees them unmasked; text is folded like `normalizeSearchText` on both sides.
+ * numbers only for a reader who sees them unmasked; text is folded like `compactSearchText` on both sides (the page's
+ * earlier browser rule: spaces, zero-width marks, «-» and «_» dropped). `activeOnly` leaves out personnel who left.
  */
 export interface PersonnelListFilter {
   search?: string;
   status?: string;
+  activeOnly?: boolean;
   scope: PersonnelReadScope;
   canViewSensitive: boolean;
 }
@@ -80,10 +83,13 @@ export function personnelListConditions(filter: PersonnelListFilter): SQL {
   const conditions: SQL[] = [eq(personnel.isDeleted, 0)];
   const status = (filter.status ?? '').trim();
   if (status && status !== 'all') conditions.push(eq(personnel.employmentStatus, status));
-  const q = normalizeSearchText(filter.search);
+  if (filter.activeOnly) {
+    conditions.push(sql`btrim(coalesce(${personnel.employmentStatus}, '')) <> ${TERMINATED_EMPLOYMENT_STATUS}`);
+  }
+  const q = compactSearchText(filter.search);
   if (q) {
     const pattern = containsLikePattern(q);
-    const matches = or(...searchColumns(filter).map((column) => sql`${foldedSearchSql(column)} LIKE ${pattern}`));
+    const matches = or(...searchColumns(filter).map((column) => sql`${compactFoldedSearchSql(column)} LIKE ${pattern}`));
     if (matches) conditions.push(matches);
   }
   return and(...conditions) as SQL;

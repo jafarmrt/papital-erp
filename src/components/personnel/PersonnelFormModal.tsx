@@ -19,6 +19,7 @@ import { NobitexPasswordInput } from './NobitexPasswordFields';
 import { DecimalInput } from '../common/DecimalInput';
 import { SALARY_TYPES, SALARY_TYPE_LABELS, salaryTypeOf } from '../../lib/personnel/salaryType';
 import { DialogLayer } from '../common/DialogLayer';
+import { PERSONNEL_LIST_STATE_TEXT, type PersonnelListState } from '../../lib/personnel/personnelList';
 
 interface PersonnelFormModalProps {
   isOpen: boolean;
@@ -30,6 +31,8 @@ interface PersonnelFormModalProps {
   usersList: User[];
   /** کاربرانی که به پرسنل دیگری وصل‌اند (نام آن پرسنل)؛ v9.0.24، TD-435 */
   linkedUsers?: Map<number, string>;
+  /** TD-1321: the user picker waits until the users and the personnel they are linked to have arrived */
+  linkedUsersState?: PersonnelListState;
   isSaving: boolean;
 }
 
@@ -42,6 +45,7 @@ export function PersonnelFormModal({
   setFormData,
   usersList,
   linkedUsers,
+  linkedUsersState = 'ready',
   isSaving
 }: PersonnelFormModalProps) {
   const fieldId = useId();
@@ -274,7 +278,9 @@ export function PersonnelFormModal({
                   id={`${fieldId}-user-id`}
                   value={formData.userId}
                   onChange={(e) => setFormData((prev) => ({ ...prev, userId: e.target.value }))}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
+                  disabled={linkedUsersState !== 'ready'}
+                  aria-describedby={linkedUsersState !== 'ready' ? `${fieldId}-user-id-state` : undefined}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 disabled:opacity-60"
                 >
                   <option value="">-- بدون حساب کاربری در سامانه --</option>
                   {usersList.map((u) => {
@@ -286,6 +292,9 @@ export function PersonnelFormModal({
                     );
                   })}
                 </select>
+                {linkedUsersState !== 'ready' && (
+                  <p id={`${fieldId}-user-id-state`} className="text-[10px] text-slate-500 mt-1">{PERSONNEL_LIST_STATE_TEXT[linkedUsersState]}</p>
+                )}
               </div>
 
               {/* V10-4.4 / V1.3.1: مدل حقوق — گزینه‌های متمایز با توضیح صریح تفاوت‌ها */}

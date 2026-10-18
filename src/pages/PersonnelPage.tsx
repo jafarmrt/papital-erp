@@ -17,6 +17,9 @@ export function PersonnelPage() {
   const {
     personnelList,
     usersList,
+    fullListReady,
+    fullListFailed,
+    usersReady,
     isLoading,
     searchQuery,
     setSearchQuery,
@@ -126,6 +129,7 @@ export function PersonnelPage() {
         setFormData={setFormData}
         usersList={usersList}
         linkedUsers={usersLinkedToOtherPersonnel(personnelList, editingId)}
+        linkedUsersState={fullListFailed ? 'failed' : (fullListReady && usersReady ? 'ready' : 'loading')}
         isSaving={isSaving}
       />
 
@@ -146,6 +150,7 @@ export function PersonnelPage() {
         onClose={() => setShowExcelModal(false)}
         onSuccess={loadData}
         existingPersonnel={personnelList}
+        existingState={fullListFailed ? 'failed' : (fullListReady ? 'ready' : 'loading')}
       />
     </div>
   );

@@ -118,7 +118,13 @@ export function usePersonnel(options: { fullListOpen?: boolean } = {}) {
   const pageQuery = usePersonnelPageQuery({ page: currentPage, limit: pageSize, search: debouncedSearch, status: statusFilter });
   const fullListQuery = usePersonnelListQuery({ enabled: showFormModal || Boolean(options.fullListOpen) });
   const personnelList = fullListQuery.data ?? [];
-  const { data: usersList = [] } = useUsersListQuery();
+  const usersQuery = useUsersListQuery();
+  const usersList = usersQuery.data ?? [];
+  // TD-1321 (review): the windows that check against every personnel (linked users, existing codes) wait for these lists,
+  // so a duplicate check never runs on a list that has not arrived
+  const fullListReady = fullListQuery.data !== undefined;
+  const fullListFailed = fullListQuery.isError;
+  const usersReady = usersQuery.data !== undefined;
 
   const saveMutation = useSavePersonnelMutation();
   const deleteMutation = useDeletePersonnelMutation();
@@ -274,7 +280,10 @@ export function usePersonnel(options: { fullListOpen?: boolean } = {}) {
   const stats = page?.stats ?? EMPTY_PERSONNEL_STATS;
   const totalPages = Math.max(1, Math.ceil(totalFilteredCount / (pageSize || 15)));
   const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
-  const startIndex = (safeCurrentPage - 1) * pageSize;
+  // TD-1321 (review): the range follows the rows on screen; while the next page loads the previous page's rows keep their
+  // own range, never the new page's label
+  const shownPage = page ? Math.max(1, page.page) : safeCurrentPage;
+  const startIndex = (shownPage - 1) * (page?.limit || pageSize);
   const endIndex = Math.min(startIndex + paginatedPersonnel.length, totalFilteredCount);
 
   // a delete that empties the last page moves back to the page that still has rows
@@ -293,6 +302,9 @@ export function usePersonnel(options: { fullListOpen?: boolean } = {}) {
   return {
     personnelList,
     usersList,
+    fullListReady,
+    fullListFailed,
+    usersReady,
     isLoading: pageQuery.isLoading,
     searchQuery,
     setSearchQuery,

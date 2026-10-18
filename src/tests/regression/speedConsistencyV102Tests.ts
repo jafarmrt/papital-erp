@@ -46,7 +46,7 @@ export async function runSpeedConsistencyV102Tests(shouldRun: ShouldRun): Promis
     const roleIds: number[] = [];
     const userIds: number[] = [];
     await runCase(results, 'reg_personnel_paged_list_td_1321',
-      'OBS-R2-57 / OBS-R1-69: the personnel list is searched, filtered, counted and paged in SQL, the pick list honours its limit, and the export carries the whole dossier (TD-1321)',
+      'OBS-R2-57 / OBS-R1-69 personnel pagination: the list is searched, filtered, counted and paged in SQL, the pick list honours its limit, and the export carries the whole dossier (TD-1321)',
       'GET /api/personnel?page= answers { data, total, page, limit, stats }; search folds Arabic letters and looks only at fields the reader sees; ?limit caps the array; the export has end date, salary and coverage columns',
       async (wrong) => {
         const { getTestApp, getAdminSession, loginTestUserWithSession } = await import('../fixtures/httpTestHelper.js');
@@ -131,6 +131,54 @@ export async function runSpeedConsistencyV102Tests(shouldRun: ShouldRun): Promis
     if (personnelIds.length > 0) await orm.delete(personnel).where(inArray(personnel.id, personnelIds)).catch(() => undefined);
     if (userIds.length > 0) await orm.delete(users).where(inArray(users.id, userIds)).catch(() => undefined);
     if (roleIds.length > 0) await deleteTestRoles(inArray(roles.id, roleIds)).catch(() => undefined);
+  }
+
+  if (shouldRun('reg_personnel_search_cap_td_1321', 'td_1321', 'personnel', 'pagination', 'zwnj', 'obs_r1_69')) {
+    const personnelIds: number[] = [];
+    await runCase(results, 'reg_personnel_search_cap_td_1321',
+      'OBS-R1-69 personnel pagination: a search ignores spaces and zero-width marks, activeOnly leaves out leavers, and a pick list without a limit stays uncapped (TD-1321)',
+      'a search with a space or without the zero-width non-joiner finds a name stored with it, ta marbuta reads as heh; ?activeOnly=1 drops terminated personnel; no limit answers every row, ?limit at most 5001',
+      async (wrong) => {
+        const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+        const app = await getTestApp();
+        const admin = await getAdminSession();
+        const tag = `ZW${Date.now().toString(36)}`;
+        const inserted = await orm.insert(personnel).values([
+          { fullName: `علی\u200cزاده ${tag}`, firstName: 'علی', lastName: `زاده ${tag}`, employmentStatus: 'فعال' },
+          { fullName: `فاطمة ${tag}`, firstName: 'فاطمة', lastName: tag, employmentStatus: 'فعال' },
+          { fullName: `رضا ${tag}`, firstName: 'رضا', lastName: tag, employmentStatus: TERMINATED },
+        ]).returning({ id: personnel.id });
+        personnelIds.push(...inserted.map(r => r.id));
+
+        const rows = async (query: string): Promise<Row[]> => {
+          const res = await request(app).get(`/api/personnel${query}`).set('Cookie', admin.cookie);
+          if (res.status !== 200 || !Array.isArray(res.body)) throw new Error(`GET /api/personnel${query} returned ${res.status}`);
+          return res.body as Row[];
+        };
+        for (const search of [`علی زاده ${tag}`, `علیزاده ${tag}`, `علی\u200cزاده${tag}`, `فاطمه ${tag}`]) {
+          const found = await rows(`?search=${encodeURIComponent(search)}`);
+          if (found.length !== 1) wrong.push(`the search ${JSON.stringify(search)} found ${found.length} rows`);
+        }
+        const everyone = await rows(`?search=${encodeURIComponent(tag)}`);
+        const active = await rows(`?search=${encodeURIComponent(tag)}&activeOnly=1`);
+        if (everyone.length !== 3) wrong.push(`the tagged search found ${everyone.length} of 3`);
+        if (active.length !== 2 || active.some(r => r.employmentStatus === TERMINATED)) {
+          wrong.push(`activeOnly answered ${active.length} rows, leavers included: ${active.some(r => r.employmentStatus === TERMINATED)}`);
+        }
+
+        const bulkTag = `BULK${Date.now().toString(36)}`;
+        const bulk = await orm.insert(personnel).values(
+          Array.from({ length: 5002 }, (_, i) => ({ fullName: `${bulkTag} ${i}`, employmentStatus: 'فعال' })),
+        ).returning({ id: personnel.id });
+        personnelIds.push(...bulk.map(r => r.id));
+        const bulkSearch = `?search=${encodeURIComponent(bulkTag)}`;
+        const counts: Array<[string, number]> = [['', 5002], ['&limit=0', 5002], ['&limit=abc', 5002], ['&limit=5001', 5001], ['&limit=999999', 5001], ['&limit=20', 20]];
+        for (const [limit, expected] of counts) {
+          const got = (await rows(`${bulkSearch}${limit}`)).length;
+          if (got !== expected) wrong.push(`${limit || 'no limit'} answered ${got} rows, expected ${expected}`);
+        }
+      });
+    if (personnelIds.length > 0) await orm.delete(personnel).where(inArray(personnel.id, personnelIds)).catch(() => undefined);
   }
 
   return results;
