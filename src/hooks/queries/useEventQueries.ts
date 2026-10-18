@@ -1,4 +1,5 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { LIVE_EVENT_BUFFER_SIZE } from '../../lib/events/liveEventBuffer';
 import { fetchJson } from '../../api';
 import { repeatPollHeaders } from './repeatPollHeaders';
 import { QUERY_KEYS } from '../../lib/queryKeys';
@@ -80,7 +81,7 @@ export function useDomainEventsQuery(filter: string = 'ALL', options?: { enabled
     queryKey: QUERY_KEYS.events.list(filter),
     queryFn: async (context) => {
       const res = await fetchJson<{ events?: DomainEvent[]; stats?: DomainEventStats }>(
-        `/events/domain-events?limit=100&filter=${encodeURIComponent(filter)}`,
+        `/events/domain-events?limit=${LIVE_EVENT_BUFFER_SIZE}&filter=${encodeURIComponent(filter)}`,
         { signal: context.signal, headers: repeatPollHeaders(context) }
       );
       return {
@@ -109,17 +110,28 @@ export function useOutboxStatsQuery(options?: { enabled?: boolean; refetchInterv
 }
 
 // Outbox Events List Query
-export function useOutboxEventsQuery(status: string = 'ALL', options?: { enabled?: boolean; refetchInterval?: number | false }) {
-  return useQuery<OutboxEvent[]>({
-    queryKey: QUERY_KEYS.events.outbox(status),
+/** OBS-R2-86 (TD-1323): one page of the outbox, filtered and searched on the server */
+export const EVENT_LIST_PAGE_SIZE = 50;
+export interface OutboxEventPage { events: OutboxEvent[]; total: number }
+export function useOutboxEventsQuery(
+  status: string = 'ALL',
+  options?: { enabled?: boolean; refetchInterval?: number | false; page?: number; search?: string },
+) {
+  const page = options?.page ?? 1;
+  const search = (options?.search ?? '').trim();
+  return useQuery<OutboxEventPage>({
+    queryKey: QUERY_KEYS.events.outbox(status, page, search),
     queryFn: async (context) => {
-      const res = await fetchJson<{ success?: boolean; events?: OutboxEvent[] }>(
-        `/events/outbox?limit=100&status=${encodeURIComponent(status)}`,
-        { signal: context.signal, headers: repeatPollHeaders(context) }
-      );
-      return Array.isArray(res?.events) ? res.events : [];
+      const params = new URLSearchParams({ page: String(page), limit: String(EVENT_LIST_PAGE_SIZE), status });
+      if (search) params.set('search', search);
+      const res = await fetchJson<{ success?: boolean; events?: OutboxEvent[]; total?: number }>(`/events/outbox?${params.toString()}`, {
+        signal: context.signal, headers: repeatPollHeaders(context),
+      });
+      const events = Array.isArray(res?.events) ? res.events : [];
+      return { events, total: Number(res?.total ?? events.length) };
     },
     staleTime: 5000,
+    placeholderData: keepPreviousData,
     enabled: options?.enabled ?? true,
     refetchInterval: options?.refetchInterval ?? 10000,
   });
@@ -154,16 +166,20 @@ export function useActionStatsQuery(options?: { enabled?: boolean; refetchInterv
 }
 
 // Action Logs Query
-export function useActionLogsQuery(limit: number = 50, options?: { enabled?: boolean; refetchInterval?: number | false }) {
+/** OBS-R2-86 (TD-1323): one page of the rule execution log */
+export function useActionLogsQuery(page: number = 1, options?: { enabled?: boolean; refetchInterval?: number | false }) {
   return useQuery<{ logs: ActionLog[]; total: number }>({
-    queryKey: QUERY_KEYS.events.actionLogs(limit),
+    queryKey: QUERY_KEYS.events.actionLogs(page),
     queryFn: async (context) => {
       // v9.0.408 (TD-721): the server sends { data, total }; the hook used to read `logs`, so the list was always empty
-      const res = await fetchJson<Partial<ActionLogPage>>(`/events/action-logs?limit=${limit}`, { signal: context.signal, headers: repeatPollHeaders(context) });
+      const res = await fetchJson<Partial<ActionLogPage>>(`/events/action-logs?page=${page}&limit=${EVENT_LIST_PAGE_SIZE}`, {
+        signal: context.signal, headers: repeatPollHeaders(context),
+      });
       const logs = Array.isArray(res?.data) ? res.data : [];
       return { logs, total: Number(res?.total ?? logs.length) };
     },
     staleTime: 10000,
+    placeholderData: keepPreviousData,
     enabled: options?.enabled ?? true,
     refetchInterval: options?.refetchInterval ?? 12000,
   });

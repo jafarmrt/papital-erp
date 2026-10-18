@@ -2,7 +2,7 @@ import request from 'supertest';
 import { asc, eq, inArray, sql } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { items, itemWarehouseStocks, personnel, productionProjects, projectBomAllocations, roles, users } from '../../db/schema.js';
+import { items, itemWarehouseStocks, outboxEvents, personnel, productionProjects, projectBomAllocations, roles, users } from '../../db/schema.js';
 import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 import { money } from '../../lib/money.js';
 
@@ -31,6 +31,7 @@ async function runCase(results: TestCaseResult[], id: string, name: string, deta
 const TERMINATED = 'قطع همکاری';
 /** typed with the Persian «ی»; the allocation stores the Arabic «ي» */
 const PERSIAN_YEH_SEARCH = 'آبی';
+const INVOICE_APPROVED_LABEL = 'صدور قطعی فاکتور فروش';
 
 /** A valid Iranian national ID not used by another test run */
 function randomNationalId(): string {
@@ -338,6 +339,67 @@ export async function runSpeedConsistencyV102Tests(shouldRun: ShouldRun): Promis
       await orm.delete(itemWarehouseStocks).where(inArray(itemWarehouseStocks.itemId, itemIds)).catch(() => undefined);
       await orm.delete(items).where(inArray(items.id, itemIds)).catch(() => undefined);
     }
+  }
+
+  if (shouldRun('reg_outbox_server_search_td_1323', 'td_1323', 'events', 'outbox', 'pagination', 'obs_r2_86')) {
+    const eventIds: string[] = [];
+    await runCase(results, 'reg_outbox_server_search_td_1323',
+      'OBS-R2-86: the outbox list is searched on the server, by id, payload text and the Persian event name, and paged with its total (TD-1323)',
+      'GET /api/events/outbox ignored search, so the screen searched only the newest 100 rows it had read',
+      async (wrong) => {
+        const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+        const app = await getTestApp();
+        const admin = await getAdminSession();
+        const tag = `ob${Date.now().toString(36)}`;
+        const rows = [
+          { eventId: `${tag}-a`, eventType: 'InvoiceApproved', aggregateType: 'Document', aggregateId: `${tag}A`, payload: {} },
+          { eventId: `${tag}-b`, eventType: 'StockIssued', aggregateType: 'Item', aggregateId: '1', payload: { memo: tag.toUpperCase() } },
+          { eventId: `c-${Date.now()}`, eventType: 'StockIssued', aggregateType: 'Item', aggregateId: '2', payload: {} },
+        ];
+        await orm.insert(outboxEvents).values(rows.map(r => ({ ...r, status: 'completed' })));
+        eventIds.push(...rows.map(r => r.eventId));
+        const get = async (query: string) => {
+          const res = await request(app).get(`/api/events/outbox?${query}`).set('Cookie', admin.cookie);
+          if (res.status !== 200) throw new Error(`GET /api/events/outbox?${query} returned ${res.status}`);
+          const events = Array.isArray(res.body?.events) ? res.body.events as Row[] : [];
+          return { ids: events.map(e => String(e.eventId)), total: Number(res.body?.total) };
+        };
+        const byTag = await get(`search=${tag}&page=1&limit=50`);
+        if (byTag.total !== 2 || !byTag.ids.includes(`${tag}-a`) || !byTag.ids.includes(`${tag}-b`)) {
+          wrong.push(`search by the tag answered total ${byTag.total} with ${byTag.ids.length} rows, expected the two tagged rows (one by id, one by payload text)`);
+        }
+        const byLabel = await get(`search=${encodeURIComponent(INVOICE_APPROVED_LABEL)}&page=1&limit=1000`);
+        if (!byLabel.ids.includes(`${tag}-a`) || byLabel.ids.includes(`${tag}-b`)) wrong.push('a search by the Persian event name did not find exactly that type');
+        const second = await get(`search=${tag}&page=2&limit=1`);
+        if (second.ids.length !== 1 || second.total !== 2) wrong.push(`page 2 of 1 answered ${second.ids.length} rows, total ${second.total}`);
+      });
+    if (eventIds.length > 0) await orm.delete(outboxEvents).where(inArray(outboxEvents.eventId, eventIds)).catch(() => undefined);
+  }
+
+  if (shouldRun('reg_event_timeline_aggregate_limit_td_1323', 'td_1323', 'events', 'timeline', 'pagination')) {
+    const projectIds: number[] = [];
+    await runCase(results, 'reg_event_timeline_aggregate_limit_td_1323',
+      'The entity picker of the event timeline reads a bounded number of rows: a malformed or negative limit is 20, a larger one 50 (TD-1323)',
+      'GET /api/events/timeline/aggregates?limit=-1 answered no rows (the query failed and was swallowed) and limit=100000 read every row',
+      async (wrong) => {
+        const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+        const app = await getTestApp();
+        const admin = await getAdminSession();
+        const tag = `TL${Date.now().toString(36)}`;
+        const rows = await orm.insert(productionProjects).values(Array.from({ length: 60 }, (_, i) => ({ projectCode: `${tag}-${i}`, title: `${tag} ${i}` })))
+          .returning({ id: productionProjects.id });
+        projectIds.push(...rows.map(r => r.id));
+        const count = async (limit: string) => {
+          const res = await request(app).get(`/api/events/timeline/aggregates?type=project&search=${tag}&limit=${limit}`).set('Cookie', admin.cookie);
+          if (res.status !== 200) throw new Error(`GET /api/events/timeline/aggregates?limit=${limit} returned ${res.status}`);
+          return Array.isArray(res.body?.data) ? res.body.data.length : -1;
+        };
+        for (const [limit, want] of [['-1', 20], ['abc', 20], ['100000', 50], ['5', 5]] as const) {
+          const got = await count(limit);
+          if (got !== want) wrong.push(`limit=${limit} answered ${got} rows, expected ${want}`);
+        }
+      });
+    if (projectIds.length > 0) await orm.delete(productionProjects).where(inArray(productionProjects.id, projectIds)).catch(() => undefined);
   }
 
   return results;

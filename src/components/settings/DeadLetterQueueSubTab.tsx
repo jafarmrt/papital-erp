@@ -6,6 +6,8 @@ import { eventAggregateLabel, eventTypeLabel } from '../../lib/events/eventTypeC
 import { fetchJson } from '../../api';
 import { useHasPermission } from '../../contexts/AuthContext';
 import { DialogLayer } from '../common/DialogLayer';
+import { ListPager } from '../common/ListPager';
+import { EVENT_LIST_PAGE_SIZE } from '../../hooks/queries/useEventQueries';
 
 interface DeadLetterItem {
   id: number;
@@ -45,6 +47,9 @@ export function DeadLetterQueueSubTab() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  // OBS-R2-86 (TD-1323): the dead letters are read one page at a time (the list stopped at its first 100 rows)
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
@@ -85,11 +90,16 @@ export function DeadLetterQueueSubTab() {
       if (statusFilter !== 'all') params.append('status', statusFilter);
       if (sourceFilter !== 'all') params.append('source', sourceFilter);
       if (searchQuery.trim()) params.append('search', searchQuery.trim());
-      params.append('limit', '100');
+      params.append('page', String(page));
+      params.append('limit', String(EVENT_LIST_PAGE_SIZE));
 
-      const data = await fetchJson<{ success?: boolean; data?: DeadLetterItem[]; message?: string }>(`/events/dlq?${params.toString()}`);
+      const data = await fetchJson<{ success?: boolean; data?: DeadLetterItem[]; total?: number; message?: string }>(`/events/dlq?${params.toString()}`);
       if (data?.success) {
-        setItems(Array.isArray(data.data) ? data.data : []);
+        const rows = Array.isArray(data.data) ? data.data : [];
+        setItems(rows);
+        setTotal(Number(data.total ?? rows.length));
+        // a replay, dismissal or purge that empties the last page shows the page before it
+        if (rows.length === 0 && page > 1) setPage(page - 1);
       } else {
         showToast(data?.message || 'فهرست صف خطا بارگذاری نشد.', 'error');
       }
@@ -106,12 +116,13 @@ export function DeadLetterQueueSubTab() {
     setSelectedIds([]);
     void fetchStats();
     void fetchEvents();
-  }, [statusFilter, sourceFilter]);
+  }, [statusFilter, sourceFilter, page]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setSelectedIds([]);
-    void fetchEvents();
+    if (page === 1) void fetchEvents();
+    else setPage(1);
   };
 
   const handleReplaySingle = async (id: number) => {
@@ -348,7 +359,7 @@ export function DeadLetterQueueSubTab() {
             <Filter className="w-4 h-4 text-slate-400" />
             <select
               value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
+              onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
               className="bg-transparent text-xs font-medium text-slate-700 dark:text-slate-200 outline-none"
             >
               <option value="all">همه وضعیت‌ها</option>
@@ -362,7 +373,7 @@ export function DeadLetterQueueSubTab() {
             <span className="text-xs text-slate-400">منبع:</span>
             <select
               value={sourceFilter}
-              onChange={e => setSourceFilter(e.target.value)}
+              onChange={e => { setSourceFilter(e.target.value); setPage(1); }}
               className="bg-transparent text-xs font-medium text-slate-700 dark:text-slate-200 outline-none"
             >
               <option value="all">تمام منابع</option>
@@ -637,6 +648,9 @@ export function DeadLetterQueueSubTab() {
           </table>
         </div>
       </div>
+
+      <ListPager page={page} totalPages={Math.max(1, Math.ceil(total / EVENT_LIST_PAGE_SIZE))} total={total}
+        limit={EVENT_LIST_PAGE_SIZE} onPage={setPage} disabled={isLoading} />
 
       {/* Edit Payload Modal */}
       {editingItem && (

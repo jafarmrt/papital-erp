@@ -10,6 +10,7 @@ import { observeOutboxProcessing } from '../../middleware/metrics.js';
 import { OUTBOX_MAX_ATTEMPTS } from '../../lib/events/outboxAttempts.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
 import { requestContextStorage } from '../../lib/requestContext.js';
+import { outboxSearchCondition } from './outboxSearch.js';
 
 /** OBS-R2-10: completed outbox events are kept this many days (the audit purge's horizon), then purged daily */
 export const OUTBOX_COMPLETED_RETENTION_DAYS = 90;
@@ -18,6 +19,8 @@ export interface OutboxQueryFilters {
   status?: string;
   eventType?: string;
   aggregateType?: string;
+  /** OBS-R2-86 (TD-1323): searched on the server, so a page shows the matches of every page */
+  search?: string;
   limit?: number;
   offset?: number;
 }
@@ -453,6 +456,8 @@ export class OutboxService {
     if (filters.aggregateType) {
       conditions.push(eq(outboxEvents.aggregateType, filters.aggregateType));
     }
+    const searchCondition = outboxSearchCondition(filters.search);
+    if (searchCondition) conditions.push(searchCondition);
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 

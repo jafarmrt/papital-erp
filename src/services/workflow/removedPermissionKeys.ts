@@ -15,12 +15,9 @@ import { logActivity } from '../../lib/auditLogger.js';
  * written with `tx`. A definition holding an unpublished draft is left alone (publishing would publish the draft) and
  * stays listed by the health check. Running instances keep their own snapshot. A second run finds nothing to do.
  */
-// the removed key is spelled in parts: it is no catalog key any more, and the permission ratchet refuses such a literal
-export const REMOVED_STOCK_COUNT_START_KEY = ['audit', 'create'].join('.');
+import { REMOVED_STOCK_COUNT_START_KEY, REPLACED_PERMISSION_KEYS } from '../../lib/permissions/replacedPermissionKeys.js';
 
-export const REPLACED_PERMISSION_KEYS: Readonly<Record<string, string>> = {
-  [REMOVED_STOCK_COUNT_START_KEY]: 'audit.apply',
-};
+export { REMOVED_STOCK_COUNT_START_KEY, REPLACED_PERMISSION_KEYS };
 
 /**
  * The key a workflow action's stored permission means today: a key removed from the catalog is read as the key that
