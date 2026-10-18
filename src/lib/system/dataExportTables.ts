@@ -30,6 +30,7 @@ export const DATA_EXPORT_TABLES: ReadonlyArray<{ table: string; group: DataExpor
   { table: 'users', group: 'people' },
   { table: 'roles', group: 'people' },
   { table: 'personnel', group: 'people' },
+  { table: 'birthday_greetings', group: 'people' },
   { table: 'categories', group: 'inventory' },
   { table: 'warehouses', group: 'inventory' },
   { table: 'items', group: 'inventory' },

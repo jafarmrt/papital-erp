@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
+import { BACKGROUND_POLL_HEADERS } from '../../lib/social/presence';
 import { AppNotification } from '../../types';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { invalidateDomain } from '../../lib/queryInvalidation';
@@ -8,7 +9,7 @@ export function useUnreadNotificationsCountQuery() {
   return useQuery<number>({
     queryKey: QUERY_KEYS.notifications.unreadCount(),
     queryFn: async () => {
-      const res = await fetchJson('/notifications/unread-count');
+      const res = await fetchJson('/notifications/unread-count', { headers: BACKGROUND_POLL_HEADERS });
       return typeof res?.count === 'number' ? res.count : 0;
     },
     refetchInterval: 30000, // Background poll every 30s

@@ -4,7 +4,7 @@ import {
   warehouses, itemPrices, customers, activityLogs, productionProjects, categories,
   projectStages, projectProductStageProgress, dailyWorkLogs, transfers, notifications, crmLeads, crmActivities, crmLeadStageHistory, customerTagLinks, customerTags,
   stockReceiptConfirmations, workshopTaskReports, projectManagers,
-  users, personnel, taskCategories, pieceworkTasks, pieceworkPersonnelRates, pieceworkTaskRateHistory,
+  users, personnel, birthdayGreetings, taskCategories, pieceworkTasks, pieceworkPersonnelRates, pieceworkTaskRateHistory,
   pieceworkLogs, pieceworkPayrolls, pendingMaterials, accounts, journalVouchers,
   journalVoucherItems, itemOpeningVoucherItems, bankAccounts, cheques, treasuryTransactions, pettyCashExpenseLines, accountingSettings,
   outboxEvents, deadLetterEvents, workflowInstances, workflowTasks,
@@ -114,6 +114,7 @@ export const FACTORY_RESET_WIPE_ORDER: readonly FactoryResetWipe[] = [
   { name: 'customer_tags', table: customerTags },
 
   // 7. HR, piecework and payroll records, with the yearly insurance, tax and eidi rates
+  { name: 'birthday_greetings', table: birthdayGreetings },
   { name: 'piecework_payrolls', table: pieceworkPayrolls },
   { name: 'piecework_personnel_rates', table: pieceworkPersonnelRates },
   { name: 'piecework_task_rate_history', table: pieceworkTaskRateHistory },
