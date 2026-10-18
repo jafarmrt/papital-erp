@@ -39,8 +39,13 @@ export function mediaTooLarge(): ValidationError {
  * Streams a request body to a temporary file while hashing and counting it. A body above `maxBytes` stops at once and
  * leaves no file (422 `MEDIA_FILE_TOO_LARGE`); an empty body is 422 `MEDIA_FILE_EMPTY`.
  */
-export async function receiveToTemp(body: Readable, maxBytes: number = MEDIA_MAX_BYTES): Promise<ReceivedFile> {
-  const tmpDir = path.join(getMediaRoot(), 'tmp');
+export async function receiveToTemp(
+  body: Readable, maxBytes: number = MEDIA_MAX_BYTES,
+  /** v10.2 package 7: CRM attachments stream into the attachment root (same disk as their place) with their own size error */
+  options: { tmpDir?: string; tooLarge?: () => Error } = {},
+): Promise<ReceivedFile> {
+  const tmpDir = options.tmpDir ?? path.join(getMediaRoot(), 'tmp');
+  const tooLarge = options.tooLarge ?? mediaTooLarge;
   await fs.promises.mkdir(tmpDir, { recursive: true });
   const tempPath = path.join(tmpDir, `${uuidv4()}.part`);
   const hash = crypto.createHash('sha256');
@@ -48,7 +53,7 @@ export async function receiveToTemp(body: Readable, maxBytes: number = MEDIA_MAX
   const meter = new Transform({
     transform(chunk: Buffer, _enc, done) {
       size += chunk.length;
-      if (size > maxBytes) { done(mediaTooLarge()); return; }
+      if (size > maxBytes) { done(tooLarge()); return; }
       hash.update(chunk);
       done(null, chunk);
     },
@@ -138,14 +143,22 @@ async function writeAtomically(target: string, data: Buffer): Promise<void> {
   await fs.promises.rename(part, target);
 }
 
-/** Makes the light version and the thumbnail of a stored image and answers their sizes */
-export async function buildImageVariants(sha256: string, ext: string): Promise<{ lightBytes: number; thumbBytes: number }> {
-  const source = mediaFilePath(sha256, 'original', ext);
-  const base = () => sharp(source, { limitInputPixels: 300_000_000 }).rotate();
-  const light = await base()
+const IMAGE_PIXEL_LIMIT = 300_000_000;
+
+/** The light WEBP of an image (EXIF orientation applied, long side `MEDIA_LIGHT_LONG_SIDE`); shared with CRM attachments */
+export async function buildLightWebp(source: string): Promise<Buffer> {
+  return sharp(source, { limitInputPixels: IMAGE_PIXEL_LIMIT })
+    .rotate()
     .resize({ width: MEDIA_LIGHT_LONG_SIDE, height: MEDIA_LIGHT_LONG_SIDE, fit: 'inside', withoutEnlargement: true })
     .webp({ quality: 82 })
     .toBuffer();
+}
+
+/** Makes the light version and the thumbnail of a stored image and answers their sizes */
+export async function buildImageVariants(sha256: string, ext: string): Promise<{ lightBytes: number; thumbBytes: number }> {
+  const source = mediaFilePath(sha256, 'original', ext);
+  const base = () => sharp(source, { limitInputPixels: IMAGE_PIXEL_LIMIT }).rotate();
+  const light = await buildLightWebp(source);
   const thumb = await base()
     .resize({ width: MEDIA_THUMB_LONG_SIDE, height: MEDIA_THUMB_LONG_SIDE, fit: 'inside', withoutEnlargement: true })
     .webp({ quality: 75 })

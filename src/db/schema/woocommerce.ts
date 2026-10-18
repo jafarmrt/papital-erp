@@ -24,7 +24,7 @@ export const woocommerceOrderLogs = pgTable('woocommerce_order_logs', {
 }));
 
 /**
- * 10.2 package 6 (D-04 part A, migration 0127): an item's product (or product variation, `wcVariationId` > 0) in the
+ * 10.2 package 6 (D-04 part A, migration 0128): an item's product (or product variation, `wcVariationId` > 0) in the
  * WooCommerce shop, matched by SKU on «بازخوانی محصولات سایت». `siteStock` is the stock the shop holds as last read or
  * written; a link that no longer matches is closed (`isDeleted` = 1), never deleted.
  */
@@ -49,7 +49,7 @@ export const wcProductLinks = pgTable('wc_product_links', {
   uq_wc_product_links_product_live: uniqueIndex('uq_wc_product_links_product_live').on(table.wcProductId, table.wcVariationId).where(sql`${table.isDeleted} = 0`),
 }));
 
-/** 10.2 package 6 (migration 0127): one catalog refresh or stock push of the WooCommerce shop and its counts */
+/** 10.2 package 6 (migration 0128): one catalog refresh or stock push of the WooCommerce shop and its counts */
 export const wcSyncRuns = pgTable('wc_sync_runs', {
   id: serial('id').primaryKey(),
   kind: text('kind').notNull(), // 'refresh' | 'stock_push'

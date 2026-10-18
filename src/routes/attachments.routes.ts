@@ -21,7 +21,10 @@ const router = Router();
 router.use(authenticateToken);
 
 const attachmentIdSchema = z.object({
-  params: z.object({ id: z.string().uuid('شناسه پیوست نامعتبر است') })
+  params: z.object({ id: z.string().uuid('شناسه پیوست نامعتبر است') }),
+  // v10.2 package 7: `light` serves the light WEBP of an image attachment of a sales file or activity, else the original
+  // other query keys (a cache buster such as `?v=`) are dropped, never refused
+  query: z.object({ variant: z.enum(['light']).optional() }),
 });
 
 const migrateInlineSchema = z.object({
@@ -67,19 +70,23 @@ router.get('/attachments/:id', validate(attachmentIdSchema), asyncHandler(async 
   if (required && !(await userHasRoleOrPermission(req.user, ...required))) {
     throw new ForbiddenError('دسترسی غیرمجاز به این پیوست', undefined, 'ATTACHMENT_FORBIDDEN');
   }
+  if (!(await AttachmentStorageService.ownerIsLive(row))) throw new NotFoundError('پیوست یافت نشد');
 
   // v9.0.254 (TD-627, finding B13-02): the file is opened before any header is sent, so a missing, unreadable or
   // non-file path answers an error instead of an uncaught stream error, which the process policy turns into a
   // shutdown; a read error after the response started only closes that response.
-  const file = await openAttachmentFile(AttachmentStorageService.absolutePath(row.storagePath));
+  const light = req.query.variant === 'light' && row.lightStoragePath ? row.lightStoragePath : null;
+  const file = await openAttachmentFile(AttachmentStorageService.absolutePath(light ?? row.storagePath));
 
-  const inline = INLINE_SAFE_MIME_TYPES.has(row.mimeType);
-  res.setHeader('Content-Type', row.mimeType);
+  const mimeType = light ? 'image/webp' : row.mimeType;
+  const name = AttachmentStorageService.downloadName(row.originalName || 'attachment', mimeType);
+  const inline = INLINE_SAFE_MIME_TYPES.has(mimeType);
+  res.setHeader('Content-Type', mimeType);
   res.setHeader('Content-Length', String(file.size));
-  res.setHeader('Content-Disposition', contentDisposition(inline ? 'inline' : 'attachment', row.originalName || 'attachment'));
+  res.setHeader('Content-Disposition', contentDisposition(inline ? 'inline' : 'attachment', name));
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Cache-Control', 'private, max-age=86400');
-  if (row.mimeType !== 'application/pdf') {
+  if (mimeType !== 'application/pdf') {
     res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox");
   }
   const stream = file.handle.createReadStream();

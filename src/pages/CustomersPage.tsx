@@ -1,12 +1,12 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { confirmAction } from '../components/ConfirmDialogHost';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { fetchJson } from '../api';
-import { Customer, User, CRMLead, CRMActivity } from '../types';
+import { Customer, User } from '../types';
 import { Search, Plus, ChevronRight, ChevronLeft, Edit2, Trash2, X, Phone, Building2, Briefcase, Truck, Users, FileText, FileSpreadsheet, Tag } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useSearch } from '../SearchContext';
-import { CrmInteractionModalHost, CrmCustomerDossierHost } from '../components/crm/crmSharedHosts';
+import { CrmInteractionModalHost, CrmCustomerDossierHost, CrmLeadModalHost } from '../components/crm/crmSharedHosts';
 import CustomerFormModal, { FormContactPerson } from '../components/customers/CustomerFormModal';
 import { CustomerExcelModal } from '../components/customers/CustomerExcelModal';
 import { useCRMData } from '../hooks/useCRMData';
@@ -17,7 +17,7 @@ import { partyTemporaryRowsOf } from '../lib/accounting/partyTemporaryRows';
 import { PartyTemporaryRowsPanel } from '../components/accounting/reports/PartyTemporaryRowsPanel';
 import { useQueryClient } from '@tanstack/react-query';
 import { QUERY_KEYS } from '../lib/queryKeys';
-import { formatPersianPhone, normalizePhoneNumber, validateIranianPhoneNumber, formatPersianDate, formatPersianNumber } from '../utils';
+import { formatPersianPhone, normalizePhoneNumber, validateIranianPhoneNumber, formatPersianDate, formatPersianNumber, errorMessageOf } from '../utils';
 import { useRialDisplay } from '../hooks/useAppCurrency';
 import { useHasPermission } from '../contexts/AuthContext';
 import { blankContactPerson } from '../lib/customers/contactPerson';
@@ -51,8 +51,6 @@ export default function CustomersPage({ user }: { user: User }) {
   const [selectedLedgerCustomer, setSelectedLedgerCustomer] = useState<Customer | null>(null);
   const [ledgerData, setLedgerData] = useState<any | null>(null);
   const [loadingLedger, setLoadingLedger] = useState(false);
-  const [crmLeads, setCrmLeads] = useState<CRMLead[]>([]);
-  const [crmActivities, setCrmActivities] = useState<CRMActivity[]>([]);
   const [page, setPage] = useState(1);
   // v10.1.23 (N-02 بخش ۳): پالایه برچسب و پنجره برچسب‌ها
   const [tagFilter, setTagFilter] = useState<number | null>(null);
@@ -87,29 +85,6 @@ export default function CustomersPage({ user }: { user: User }) {
   const deleteMutation = useDeleteCustomerMutation();
   const isSaving = saveMutation.isPending;
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchJson('/crm/leads', { signal: controller.signal }).then((res) => {
-      // V3.0.7 (TD-066): Array Safety Guard (قاعده #2 AGENTS)
-      const leads = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
-      setCrmLeads(leads);
-    }).catch(err => {
-      if (err?.name === 'AbortError') return;
-      console.error('Failed to load CRM leads:', err);
-      toast.error('خطا در دریافت پرونده‌های فروش');
-    });
-
-    fetchJson('/crm/activities', { signal: controller.signal }).then((res) => {
-      const acts = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
-      setCrmActivities(acts);
-    }).catch(err => {
-      if (err?.name === 'AbortError') return;
-      console.error('Failed to load CRM activities:', err);
-      toast.error('خطا در دریافت اقدام‌های ارتباط با مشتری');
-    });
-
-    return () => controller.abort();
-  }, []);
   
   const [form, setForm] = useState({
     name: '',
@@ -300,23 +275,31 @@ export default function CustomersPage({ user }: { user: User }) {
     setShowModal(true);
   }, []);
 
-  const crm = useCRMData(user);
+  // v10.2 package 7 (OBS-R2-31): this page shows neither the sales statistics nor the board, so it loads only the pick lists
+  const crm = useCRMData(user, { withLists: false });
+  const navigate = useNavigate();
 
+  // v10.2 package 7 (OBS-R2-24): «ویرایش» from the dossier on the sales page sends a party id; the full record (with its
+  // version and notes) is read by id, and the request is cleared from the address so a reload or «بازگشت» does not repeat it
+  const editRequestId = Number(location.state?.editCustomerId ?? location.state?.editCustomer?.id ?? 0);
+  // clearing the address changes the request id, so the read is cancelled only when the page closes
+  const editRequestAbort = useRef<AbortController | null>(null);
+  useEffect(() => () => editRequestAbort.current?.abort(), []);
   useEffect(() => {
-    if (location.state && (location.state.editCustomerId || location.state.editCustomer)) {
-      const targetId = location.state.editCustomerId || location.state.editCustomer?.id;
-      if (location.state.editCustomer) {
-        handleEdit(location.state.editCustomer);
-      } else if (targetId) {
-        fetchJson(`/customers/${targetId}`).then((c) => {
-          if (c) handleEdit(c);
-        }).catch(err => {
-          console.error(`Failed to load customer ${targetId} for edit:`, err);
-          toast.error('خطا در دریافت اطلاعات مشتری');
-        });
-      }
-    }
-  }, [location.state, handleEdit]);
+    if (!Number.isSafeInteger(editRequestId) || editRequestId <= 0) return;
+    void navigate(location.pathname + location.search, { replace: true, state: null });
+    editRequestAbort.current?.abort();
+    const controller = new AbortController();
+    editRequestAbort.current = controller;
+    fetchJson<Customer>(`/customers/${editRequestId}`, { signal: controller.signal })
+      .then((c) => {
+        if (c && !controller.signal.aborted) handleEdit(c);
+      })
+      .catch((err: unknown) => {
+        if (controller.signal.aborted) return;
+        toast.error(errorMessageOf(err) || 'اطلاعات طرف حساب دریافت نشد.');
+      });
+  }, [editRequestId, handleEdit, navigate, location.pathname, location.search]);
 
   const handleDelete = async (id: number) => {
     if (await confirmAction({ title: 'حذف طرف حساب', message: 'آیا از حذف این حساب شخص مطمئن هستید؟' })) {
@@ -333,7 +316,7 @@ export default function CustomersPage({ user }: { user: User }) {
       const res = await fetchJson(customerAccountCardUrl(c.id));
       setLedgerData(res?.report || res);
     } catch (e) {
-      toast.error('خطا در دریافت کاردکس حساب شخص');
+      toast.error('خطا در دریافت کارت حساب شخص');
     } finally {
       setLoadingLedger(false);
     }
@@ -603,7 +586,7 @@ export default function CustomersPage({ user }: { user: User }) {
                       <button
                         onClick={() => handleOpenLedger(c)}
                         className="p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 rounded-lg transition-colors flex items-center gap-1 text-[10px] font-bold cursor-pointer"
-                        title="مشاهده کاردکس و تراز مالی تفصیلی این شخص در دفاتر حسابداری"
+                        title="مشاهده کارت حساب و تراز مالی تفصیلی این شخص در دفاتر حسابداری"
                       >
                         <FileText size={12} />
                         تراز مالی
@@ -823,8 +806,7 @@ export default function CustomersPage({ user }: { user: User }) {
         crm={crm}
         customer={selectedDossierCustomer}
         onClose={() => setSelectedDossierCustomer(null)}
-        allLeads={crm.leads.length > 0 ? crm.leads : crmLeads}
-        allActivities={crm.activities.length > 0 ? crm.activities : crmActivities}
+        onOpenLeadDrawer={(lead) => void navigate(`/crm?leadId=${lead.id}`)}
         onEditCustomer={(cust) => {
           setSelectedDossierCustomer(null);
           handleEdit(cust);
@@ -833,6 +815,7 @@ export default function CustomersPage({ user }: { user: User }) {
 
       {/* Modal: Activity / Interaction Log */}
       <CrmInteractionModalHost crm={crm} currentUser={user} />
+      <CrmLeadModalHost crm={crm} />
 
       {/* Counterparties Excel Import, Update & Export Modal */}
       <CustomerExcelModal

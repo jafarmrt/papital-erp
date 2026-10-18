@@ -19,12 +19,13 @@ import { computeFixedSalaryShares, priorFixedGrantsOf } from '../lib/payroll/fix
 import { fixedSalaryPeriodEnd, fixedSalaryPeriodStart, payrollPrepaymentError, serviceEndOf, serviceStartOf } from '../lib/payroll/payrollPeriod';
 import { refreshSuggestedRates, submittedRate, suggestedRate } from '../lib/payroll/workLogRate';
 import { EMPTY_STATUTORY_ENTRY, statutoryPayloadOf, type PayrollStatutoryEntry } from '../lib/payroll/statutoryForm';
+import { withRowKey, withRowKeys, type KeyedRow } from '../lib/rowKey';
 import {
   exportPieceworkTasksToExcel,
   downloadPieceworkTemplate
 } from '../components/piecework/pieceworkExcelUtils';
 
-export interface BatchLogRow {
+export interface BatchLogRow extends KeyedRow {
   taskId: number | '';
   projectId: number | '';
   quantity: string;
@@ -74,9 +75,9 @@ export function usePiecework() {
   const [selectedPersonnelForLog, setSelectedPersonnelForLog] = useState<number | ''>('');
   const [defaultBatchProjectId, setDefaultBatchProjectId] = useState<number | ''>('');
   const [logDate, setLogDate] = useState<string>('');
-  const [batchLogRows, setBatchLogRows] = useState<BatchLogRow[]>([
+  const [batchLogRows, setBatchLogRows] = useState<BatchLogRow[]>(() => withRowKeys<BatchLogRow>([
     { taskId: '', projectId: '', quantity: '1', unitRate: 0 }
-  ]);
+  ]));
   const [editingLog, setEditingLog] = useState<PieceworkLog | null>(null);
   // v8.0.109 (TD-386): نرخ‌های اختصاصی پرسنلِ فرم ثبت کارکرد، برای پیشنهاد همان نرخی که سرور برمی‌گزیند
   const [logPersonnelRates, setLogPersonnelRates] = useState<Record<number, number>>({});
@@ -260,7 +261,7 @@ export function usePiecework() {
   const handleAddLogRow = () => {
     setBatchLogRows(prev => [
       ...prev,
-      { taskId: '', projectId: defaultBatchProjectId || '', quantity: '1', unitRate: 0 }
+      withRowKey<BatchLogRow>({ taskId: '', projectId: defaultBatchProjectId || '', quantity: '1', unitRate: 0 })
     ]);
   };
 
@@ -273,7 +274,7 @@ export function usePiecework() {
     setEditingLog(null);
     setSelectedPersonnelForLog('');
     setDefaultBatchProjectId('');
-    setBatchLogRows([{ taskId: '', projectId: '', quantity: '1', unitRate: 0 }]);
+    setBatchLogRows(withRowKeys<BatchLogRow>([{ taskId: '', projectId: '', quantity: '1', unitRate: 0 }]));
     setIsLogModalOpen(true);
   };
 

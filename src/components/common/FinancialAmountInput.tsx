@@ -1,4 +1,4 @@
-import React, { useId, useMemo, useRef, useImperativeHandle, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useImperativeHandle, useState } from 'react';
 import { Coins, Copy, Check } from 'lucide-react';
 import {
   formatCurrencyLabel,
@@ -9,8 +9,9 @@ import { copyToClipboard } from '../../utils/clipboard';
 import { currencyScale } from '../../lib/currencyScale';
 import { amountTextOf, groupAmountText, readAmountText } from '../../lib/amountText';
 import {
-  caretAfterSignificant, significantCharsBefore, stepOverGroupSeparator, withoutFieldSeparators
+  caretAfterSignificant, editWithoutFieldSeparators, persianDigitsOf, significantCharsBefore, stepOverGroupSeparator
 } from '../../lib/numberFieldDisplay';
+import { groupSeparatorError } from '../../lib/decimalInputText';
 
 export interface FinancialAmountInputProps {
   /** مقدار عددی مبلغ به واحد پولی مشخص‌شده (مثلاً ریال یا دلار) */
@@ -112,9 +113,40 @@ export const FinancialAmountInput = React.forwardRef<HTMLInputElement, Financial
   const allowNegative = min !== undefined && min < 0;
   const [draft, setDraft] = useState<string | null>(null);
   const [inputError, setInputError] = useState<string | null>(null);
+  /**
+   * v10.2.4 (TD-1291): متنی که «٬» نابه‌جای کاربر را دارد («۱۲٬» یا «۱۲٬۵») همان‌طور که تایپ شده روی کادر می‌ماند و خطاست،
+   * مثل کادر عدد؛ پیش‌تر کادر «٬» را دور می‌ریخت و کلید بعدی «۱۲۵» می‌ساخت. تا اصلاح آن مبلغ صفر (خالی) فرستاده می‌شود،
+   * هرگز پیشوند معتبر پیشین، و ارسال فرم با پیام همان خطا نگه داشته می‌شود.
+   */
+  const [typedGroupText, setTypedGroupText] = useState<string | null>(null);
+  /** مقداری که خود کادر با `onChange` فرستاده و والد هنوز برنگردانده است؛ هر تغییر دیگرِ مقدار از بیرون است */
+  const ownChange = useRef<number | null>(null);
+  const previousValue = useRef(value);
+  const reportChange = (next: number) => {
+    ownChange.current = next;
+    onChange(next);
+  };
   const draftValue = draft === null ? null : readAmountText(draft, { scale, allowNegative });
   const draftMatchesValue = draftValue?.ok === true && draftValue.value === numericValue;
-  const displayFormatted = draftMatchesValue && draft !== null ? groupAmountText(draft) : groupAmountText(amountTextOf(value));
+  const displayFormatted = typedGroupText !== null
+    ? persianDigitsOf(typedGroupText)
+    : draftMatchesValue && draft !== null ? groupAmountText(draft) : groupAmountText(amountTextOf(value));
+
+  // هر مقداری که از بیرون می‌رسد (پاک‌کردن فرم با صفر یا خالی، تراز خودکار ردیف) متن نادرست را کنار می‌زند؛
+  // فقط بازگشت همان مقداری که خود کادر فرستاده است متن را نگه می‌دارد
+  useEffect(() => {
+    if (Object.is(previousValue.current, value)) return;
+    previousValue.current = value;
+    const own = ownChange.current !== null && parseCleanNumber(value, 0) === ownChange.current;
+    ownChange.current = null;
+    if (own || typedGroupText === null) return;
+    setTypedGroupText(null);
+    setInputError(null);
+  }, [value, typedGroupText]);
+
+  useEffect(() => {
+    internalInputRef.current?.setCustomValidity(typedGroupText !== null ? inputError ?? '' : '');
+  }, [typedGroupText, inputError]);
 
   // تبدیل مبلغ به حروف فارسی
   const wordsResult = useMemo(() => {
@@ -137,21 +169,45 @@ export const FinancialAmountInput = React.forwardRef<HTMLInputElement, Financial
     });
   };
 
+  // متنی که همان‌طور که تایپ شده دیده می‌شود: هر نویسه سر جای خود است و مکان‌نما همان‌جا می‌ماند
+  const placeCaretAt = (index: number) => {
+    requestAnimationFrame(() => {
+      const el = internalInputRef.current;
+      if (!el) return;
+      const caret = Math.min(index, el.value.length);
+      el.setSelectionRange(caret, caret);
+    });
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const input = e.target;
     const cursor = input.selectionStart ?? input.value.length;
     // v9.0.244 (TD-666): ورودی نامعتبر (حرف، نویسه ناآشنا، اعشار بیش از ارز) مقدار قبلی را نگه می‌دارد و پیام می‌دهد؛
     // جداکننده‌های فارسی «٬» «٫» «،»، فاصله و برچسب ارزی که از خود برنامه کپی شده پذیرفته می‌شوند.
     // v10.1.72 (TD-1288): «٬»های نمایش از خود کادرند و برداشته می‌شوند؛ «٬» تایپ‌شده جز میان دسته‌های سه‌رقمی خطاست
-    const result = readAmountText(withoutFieldSeparators(displayFormatted, input.value, cursor), { scale, allowNegative });
+    // v10.2.4 (TD-1291): متن نادرستی که روی کادر مانده «٬» خود کادر ندارد؛ هر «٬» آن از کاربر است و دست نمی‌خورد
+    const edit = typedGroupText !== null
+      ? { text: input.value, caret: cursor }
+      : editWithoutFieldSeparators(displayFormatted, input.value, cursor);
+    const result = readAmountText(edit.text, { scale, allowNegative });
     if (!result.ok) {
       setInputError(result.error);
+      // فقط خطای «٬» نابه‌جا روی کادر می‌ماند؛ حرف، اعشار بیش از ارز یا منفی همچنان کلید را نمی‌پذیرد (TD-666)
+      if (result.error === groupSeparatorError(edit.text)) {
+        setTypedGroupText(edit.text);
+        setDraft(null);
+        if (numericValue !== 0) reportChange(0);
+        placeCaretAt(edit.caret);
+        return;
+      }
       placeCaret(Math.max(0, significantCount(input.value.slice(0, cursor)) - 1));
       return;
     }
     setInputError(null);
+    setTypedGroupText(null);
     setDraft(result.text);
-    onChange(result.value);
+    if (result.value !== numericValue) reportChange(result.value);
+    else onChange(result.value);
     placeCaret(Math.min(significantCount(input.value.slice(0, cursor)), result.text.length));
   };
 
@@ -205,6 +261,7 @@ export const FinancialAmountInput = React.forwardRef<HTMLInputElement, Financial
           type="text"
           inputMode={scale > 0 ? 'decimal' : 'numeric'}
           aria-invalid={inputError ? true : undefined}
+          data-decimal-input=""
           dir="ltr"
           required={required}
           disabled={disabled}
@@ -218,7 +275,8 @@ export const FinancialAmountInput = React.forwardRef<HTMLInputElement, Financial
           onBlur={handleBlur}
           onFocus={onFocus}
           onKeyDown={e => {
-            stepOverGroupSeparator(e.currentTarget, e.key);
+            // فقط از روی «٬» خود کادر می‌پرد؛ «٬»ی که کاربر زده و روی کادر مانده با Backspace پاک می‌شود
+            if (typedGroupText === null) stepOverGroupSeparator(e.currentTarget, e.key);
             onKeyDown?.(e);
           }}
           placeholder={placeholder}

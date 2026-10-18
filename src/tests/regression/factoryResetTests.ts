@@ -94,7 +94,7 @@ async function defaultEnginesCase(shouldRun: ShouldRun): Promise<TestCaseResult 
  */
 async function everyTableCase(): Promise<TestCaseResult> {
   const id = 'reg_factory_reset_every_table_obs_r1_12';
-  const name = 'v10.1.45: the factory reset wipes item code history, messenger, media library and payroll rate rows and their media files (OBS-R1-12)';
+  const name = 'v10.1.45: the factory reset wipes item code history, messenger, media library and payroll rate rows, their media files and an attachment\'s light copy (OBS-R1-12)';
   const tStart = Date.now();
   const fs = (await import('fs')).default;
   const os = (await import('os')).default;
@@ -129,6 +129,16 @@ async function everyTableCase(): Promise<TestCaseResult> {
       fs.writeFileSync(file, 'x');
     }
 
+    // v10.2 package 7: an image attachment of a sales file keeps its original and a light WEBP; both leave the disk
+    const attachmentsDir = path.join(tmpRoot, '.attachments');
+    const attachmentFiles = ['crm_lead/obsr112.jpg', 'crm_lead/obsr112.light.webp'].map((p) => path.join(attachmentsDir, p));
+    for (const file of attachmentFiles) {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, 'x');
+    }
+    await pool.query(`INSERT INTO file_attachments (id, entity_type, entity_id, storage_path, light_storage_path, original_name, mime_type, size_bytes, sha256)
+      VALUES (gen_random_uuid(), 'crm_lead', 1, 'crm_lead/obsr112.jpg', 'crm_lead/obsr112.light.webp', 'a.jpg', 'image/jpeg', 1, 'x')`);
+
     const report = await FactoryResetService.wipeAndReseed({ username: 'obsr112_admin', ip: '127.0.0.112' });
 
     const wrong: string[] = [];
@@ -140,6 +150,8 @@ async function everyTableCase(): Promise<TestCaseResult> {
     if (Number((await one(`SELECT count(*)::int AS n FROM media_sections WHERE kind = 'products' AND is_deleted = 0`)).n) !== 1) wrong.push('the system media section was not kept');
     if (fs.existsSync(original) || fs.existsSync(thumb)) wrong.push('the media files stayed on disk');
     if (report.mediaFiles.removed !== 1) wrong.push(`media files removed: ${report.mediaFiles.removed}`);
+    const leftAttachments = attachmentFiles.filter((file) => fs.existsSync(file)).map((file) => path.basename(file));
+    if (leftAttachments.length > 0) wrong.push(`attachment files stayed on disk: ${leftAttachments.join(', ')}`);
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     return makeTestCase({ id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
       details: 'rows of the new tables and their media files are wiped, the system media section stays' });

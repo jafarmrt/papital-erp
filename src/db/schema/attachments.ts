@@ -16,6 +16,8 @@ export const fileAttachments = pgTable('file_attachments', {
   createdBy: text('created_by').notNull().default(''),
   createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
   isDeleted: integer('is_deleted').notNull().default(0),
+  /** v10.2 package 7 (migration 0127): the light WEBP of an image attachment of a sales file or activity; null otherwise */
+  lightStoragePath: text('light_storage_path'),
 }, (table) => ({
   idx_entity: index('idx_file_attachments_entity').on(table.entityType, table.entityId),
 }));

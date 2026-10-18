@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 464
+تعداد مسیرها: 472
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -108,7 +108,11 @@
 | GET | `/api/crm/activities` | crm.view \| customers.view \| customers.manage |
 | POST | `/api/crm/activities` | crm.manage |
 | DELETE | `/api/crm/activities/:id` | crm.manage |
+| GET | `/api/crm/activities/:id` | crm.view \| customers.view \| customers.manage |
 | PUT | `/api/crm/activities/:id` | crm.manage |
+| GET | `/api/crm/activities/:id/attachments` | crm.view |
+| POST | `/api/crm/activities/:id/attachments` | crm.manage |
+| DELETE | `/api/crm/activities/:id/attachments/:attachmentId` | crm.manage |
 | PUT | `/api/crm/activities/:id/complete-followup` | crm.manage |
 | PUT | `/api/crm/activities/:id/reopen-followup` | crm.manage |
 | GET | `/api/crm/followups` | crm.view \| customers.view \| customers.manage |
@@ -117,6 +121,9 @@
 | DELETE | `/api/crm/leads/:id` | crm.delete |
 | GET | `/api/crm/leads/:id` | crm.view \| customers.view \| customers.manage |
 | PUT | `/api/crm/leads/:id` | crm.manage |
+| GET | `/api/crm/leads/:id/attachments` | crm.view |
+| POST | `/api/crm/leads/:id/attachments` | crm.manage |
+| DELETE | `/api/crm/leads/:id/attachments/:attachmentId` | crm.manage |
 | POST | `/api/crm/leads/:id/convert-to-customer` | crm.manage |
 | GET | `/api/crm/reports/funnel` | crm.view |
 | GET | `/api/crm/stats` | crm.view \| customers.view \| customers.manage |
@@ -124,6 +131,7 @@
 | GET | `/api/customers` | customers.view |
 | POST | `/api/customers` | customers.manage |
 | DELETE | `/api/customers/:id` | customers.delete |
+| GET | `/api/customers/:id` | customers.view |
 | PUT | `/api/customers/:id` | customers.manage |
 | GET | `/api/customers/:id/account-card` | accounting.reports \| accounting.view \| customers.view \| customers.manage |
 | GET | `/api/customers/:id/documents` | documents.view \| customers.view \| crm.view |

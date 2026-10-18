@@ -1,4 +1,5 @@
 import React, { useId } from 'react';
+import { SearchableSelect } from '../SearchableSelect';
 import { PhoneCall, Video, MessageSquare, Mail, FileText, Clock, CheckCircle2 } from 'lucide-react';
 import { CRMLead, CRMActivity } from '../../types';
 import { getTodayJalaliDate, isoToJalaliDate, formatPersianDate } from '../../utils';
@@ -64,7 +65,7 @@ export function CRMInteractionModal({
       {/* Modal 1: Log Activity / Call */}
       {isActivityModalOpen && (
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <DialogLayer onClose={onCloseActivityModal} />
+          <DialogLayer onClose={onCloseActivityModal} disabled={isSavingActivity} />
           <div className="bg-white rounded-2xl max-w-lg w-full shadow-xl border border-slate-200 max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
               <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
@@ -73,6 +74,7 @@ export function CRMInteractionModal({
               </h3>
               <button
                 onClick={onCloseActivityModal}
+                disabled={isSavingActivity}
                 className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 cursor-pointer transition-colors"
               >
                 ✕
@@ -274,23 +276,17 @@ export function CRMInteractionModal({
 
                 <div>
                   <label htmlFor={`${fieldId}-assigned-personnel-id`} className="block text-[11px] font-semibold text-amber-800 mb-1">مسئول پیگیری (پرسنل)</label>
-                  <select
+                  <SearchableSelect
                     id={`${fieldId}-assigned-personnel-id`}
                     value={activityForm.assignedPersonnelId ? String(activityForm.assignedPersonnelId) : ''}
-                    onChange={(e) => {
-                      const id = e.target.value ? Number(e.target.value) : null;
+                    onChange={(value) => {
+                      const id = value ? Number(value) : null;
                       const selected = personnelList.find((p: any) => p.id === id);
                       setActivityForm({ ...activityForm, assignedPersonnelId: id, assignedTo: selected?.fullName || '' });
                     }}
-                    className="w-full px-2.5 py-1.5 bg-white border border-amber-300 rounded-lg text-xs outline-none focus:border-amber-500 font-bold text-slate-800"
-                  >
-                    <option value="">-- انتخاب مسئول پیگیری --</option>
-                    {personnelList.map((p: any) => (
-                      <option key={p.id} value={String(p.id)}>
-                        {p.fullName}{p.jobTitle ? ` — ${p.jobTitle}` : ''}
-                      </option>
-                    ))}
-                  </select>
+                    placeholder="انتخاب مسئول پیگیری"
+                    options={personnelList.map((p: any) => ({ value: String(p.id), label: `${p.fullName}${p.jobTitle ? ` — ${p.jobTitle}` : ''}` }))}
+                  />
                 </div>
               </div>
             </div>
@@ -299,6 +295,7 @@ export function CRMInteractionModal({
                 <button
                   type="button"
                   onClick={onCloseActivityModal}
+                  disabled={isSavingActivity}
                   className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
                 >
                   انصراف
@@ -319,7 +316,7 @@ export function CRMInteractionModal({
       {/* Modal 2: Followup Result Modal */}
       {isFollowupResultModalOpen && selectedFollowupAct && (
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-[90] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <DialogLayer onClose={onCloseFollowupResultModal} />
+          <DialogLayer onClose={onCloseFollowupResultModal} disabled={isSubmittingFollowupResult} />
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-black text-sm text-slate-900 flex items-center gap-2">
@@ -329,6 +326,7 @@ export function CRMInteractionModal({
               <button
                 type="button"
                 onClick={onCloseFollowupResultModal}
+                disabled={isSubmittingFollowupResult}
                 className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 text-xs cursor-pointer"
               >
                 ✕
@@ -382,6 +380,7 @@ export function CRMInteractionModal({
                 <button
                   type="button"
                   onClick={onCloseFollowupResultModal}
+                  disabled={isSubmittingFollowupResult}
                   className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-all cursor-pointer"
                 >
                   انصراف

@@ -5,6 +5,9 @@ import { MemoryRouter } from 'react-router-dom';
 import CreateInvoicePage from '../../pages/CreateInvoicePage';
 import type { User } from '../../types';
 
+/** Persian heading of the open proformas panel (v10.2.4: an icon, no emoji) */
+const OPEN_PROFORMAS_HEADING = 'پیش‌فاکتورهای باز (۴۵)';
+
 // TD-792 (B08-23): پیش‌فاکتورهای باز فرم فاکتور فروش فقط سندهای فروش‌اند و صفحه‌به‌صفحه خوانده می‌شوند
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
@@ -55,7 +58,7 @@ describe('CreateInvoicePage — open proformas are the sales proformas, page by 
     expect(fetchJson).toHaveBeenCalledWith('/documents?statuses=proforma,draft&types=invoice,proforma&page=1&limit=20', expect.anything());
     expect(fetchJson.mock.calls.some(([url]) => String(url).startsWith('/documents?statuses=proforma,draft') && !String(url).includes('types=invoice,proforma'))).toBe(false);
     expect(screen.queryByText('RCP-6')).toBeNull();
-    expect(screen.getByText('⏳ پیش فاکتورهای باز (۴۵)')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: OPEN_PROFORMAS_HEADING })).toBeTruthy();
     expect(screen.getByText('صفحه ۱ از ۳')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'بعدی' }));

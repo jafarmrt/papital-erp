@@ -1,4 +1,4 @@
--- Drizzle Migration 0127: links between items and the online shop's products (10.2 package 6, D-04 part A)
+-- Drizzle Migration 0128: links between items and the online shop's products (10.2 package 6, D-04 part A)
 --
 -- New tables only; no existing row is written.
 -- 1. wc_product_links: one live row per item that matches a product (or a product variation) of the WooCommerce
