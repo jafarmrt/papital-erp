@@ -97,6 +97,35 @@ export interface NormalizedError {
   code: string;
   details?: unknown;
   stack?: string;
+  /** TD-1320: the stack carries the database's own text (the SQL and its parameters): log files only, never the answer */
+  internal?: boolean;
+  /** TD-1320: the database's own reason of a DATABASE_ERROR, for the log entry and the terminal line, never the answer */
+  logDetails?: DatabaseErrorLogDetails;
+}
+
+/** The parts of a node-postgres error that say why the database refused, without the SQL text or its parameters */
+export interface DatabaseErrorLogDetails {
+  sqlState?: string;
+  dbMessage?: string;
+  constraint?: string;
+  table?: string;
+}
+
+const textOf = (value: unknown): string | undefined => (typeof value === 'string' && value !== '' ? value : undefined);
+
+/** Only a real node-postgres error gives its reason: a Drizzle error without one carries the SQL text in its message */
+function databaseErrorLogDetails(pgErr: Record<string, unknown>): DatabaseErrorLogDetails | undefined {
+  if (typeof pgErr.severity !== 'string') return undefined;
+  return { sqlState: textOf(pgErr.code), dbMessage: textOf(pgErr.message), constraint: textOf(pgErr.constraint), table: textOf(pgErr.table) };
+}
+
+/** TD-1320: what any environment answers for a database error no rule above names; the SQL stays in the log files */
+export const DATABASE_ERROR_MESSAGE = 'خطای پایگاه‌داده در انجام درخواست رخ داد.';
+
+/** A Drizzle query error (it carries the query and its parameters) or a raw node-postgres error (severity and SQLSTATE) */
+function isDatabaseError(errObj: Record<string, unknown>, pgErr: Record<string, unknown>): boolean {
+  if (typeof errObj.query === 'string' && 'params' in errObj) return true;
+  return typeof pgErr.severity === 'string' && typeof pgErr.code === 'string' && /^[0-9A-Z]{5}$/.test(pgErr.code);
 }
 
 /**
@@ -247,6 +276,18 @@ export function normalizeError(err: unknown): NormalizedError {
         statusCode: 422,
         code: 'NOT_NULL_VIOLATION',
         stack: typeof errObj.stack === 'string' ? errObj.stack : undefined,
+      };
+    }
+    // TD-1320: any other database error answers a Persian sentence; before, a test or development answer carried
+    // «Failed query: <SQL> params: <values>» in its message and stack (production hid only the message of a 5xx)
+    if (isDatabaseError(errObj, pgErr)) {
+      return {
+        message: DATABASE_ERROR_MESSAGE,
+        statusCode: 500,
+        code: 'DATABASE_ERROR',
+        stack: typeof errObj.stack === 'string' ? errObj.stack : undefined,
+        internal: true,
+        logDetails: databaseErrorLogDetails(pgErr),
       };
     }
   }

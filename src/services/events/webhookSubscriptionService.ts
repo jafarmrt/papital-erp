@@ -40,6 +40,9 @@ type WebhookSubscriptionRow = typeof webhookSubscriptions.$inferSelect;
 /** v9.0.361 (TD-898): a subscription with its signing key and header values decrypted, for use inside the server only */
 export type OpenWebhookSubscription = OpenedWebhookSubscription<WebhookSubscriptionRow>;
 
+/** TD-1320: the most webhook delivery rows one page reads (the route pages with the same cap) */
+export const WEBHOOK_DELIVERY_MAX_LIMIT = 100;
+
 export class WebhookSubscriptionService {
   /**
    * Computes an HMAC-SHA256 hex digest signature for payload verification.
@@ -575,7 +578,7 @@ export class WebhookSubscriptionService {
    */
   static async getDeliveries(options: { subscriptionId?: number; limit?: number; offset?: number } = {}) {
     try {
-      const limit = Math.min(options.limit || 50, 100);
+      const limit = Math.min(options.limit || 50, WEBHOOK_DELIVERY_MAX_LIMIT);
       const offset = options.offset || 0;
 
       const whereClause = options.subscriptionId
