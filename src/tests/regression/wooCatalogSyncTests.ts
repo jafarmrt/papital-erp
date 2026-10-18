@@ -171,10 +171,12 @@ async function stockPushBatchCase(h: Harness, wrong: string[]): Promise<string> 
       wrong.push(`bulk push answered ${brief(res)}, expected 200`);
       return 'push refused';
     }
-    const body = res.body as { totalItems?: number; syncedCount?: number; failedCount?: number; refreshed?: unknown };
+    const body = res.body as { totalItems?: number; syncedCount?: number; failedCount?: number; trackingEnabledCount?: number; refreshed?: unknown };
     if (body.totalItems !== 3 || body.syncedCount !== 2 || body.failedCount !== 1 || !body.refreshed) {
       wrong.push(`bulk push counts ${JSON.stringify(body).slice(0, 200)}, expected 3 / 2 / 1 after a first refresh`);
     }
+    // variation 61 had stock tracking off on the site and the push turned it on; product 1 already tracked, product 2 failed
+    if (body.trackingEnabledCount !== 1) wrong.push(`tracking enabled count ${body.trackingEnabledCount}, expected 1`);
     const batches = store.requests.filter(r => r.startsWith('POST'));
     if (batches.join(',') !== 'POST products/batch,POST products/6/variations/batch' || store.batchSizes.join(',') !== '2,1') {
       wrong.push(`batch requests ${batches.join(', ')} sizes ${store.batchSizes.join(',')}, expected one products batch of 2 and one variations batch of 1`);
@@ -194,7 +196,7 @@ async function stockPushBatchCase(h: Harness, wrong: string[]): Promise<string> 
 
     const [audit] = await h.q(`SELECT details FROM activity_logs WHERE action = 'WC_STOCK_PUSH' AND entity = 'فروشگاه اینترنتی' ORDER BY id DESC LIMIT 1`);
     const details = (audit?.details ?? {}) as Record<string, unknown>;
-    if (details.syncedCount !== 2 || details.failedCount !== 1 || JSON.stringify(details).includes('price')) {
+    if (details.syncedCount !== 2 || details.failedCount !== 1 || details.trackingEnabledCount !== 1 || JSON.stringify(details).includes('price')) {
       wrong.push(`push audit details ${JSON.stringify(details)}, expected counts only`);
     }
 
@@ -202,6 +204,7 @@ async function stockPushBatchCase(h: Harness, wrong: string[]): Promise<string> 
     store.batchSizes.length = 0;
     const one = await h.post('/api/woocommerce/sync-item', { itemId: a.id });
     if (one.status !== 200 || store.batchSizes.join(',') !== '1') wrong.push(`sync of one item answered ${brief(one)} with batches ${store.batchSizes.join(',')}`);
+    if ((one.body as { trackingEnabledCount?: number }).trackingEnabledCount !== 0) wrong.push(`a product already tracked counted as turned on: ${brief(one)}`);
     return `${store.requests.length} shop requests`;
   });
 }

@@ -27,6 +27,11 @@ export interface WcStockPushResult {
   syncedCount: number;
   failedCount: number;
   skippedCount: number;
+  /**
+   * products whose stock tracking was off on the site and that the push turned on (`manage_stock: true`), counted so the
+   * change is never silent; the automatic push of part B leaves such products alone
+   */
+  trackingEnabledCount: number;
   errors: string[];
 }
 
@@ -84,8 +89,10 @@ async function recordOutcomes(outcomes: Outcome[], skippedCount: number, totalIt
   const now = systemNowUtcIso();
   const failed = outcomes.filter(o => o.error);
   const errors = failed.map(o => `${o.link.siteSku || `#${o.link.wcProductId}`}: ${o.error}`);
+  const trackingEnabledCount = outcomes.filter(o => !o.error && o.link.siteManageStock !== 1).length;
   const result: WcStockPushResult = {
-    totalItems, syncedCount: outcomes.length - failed.length, failedCount: failed.length, skippedCount, errors: errors.slice(0, WC_LIST_LIMIT),
+    totalItems, syncedCount: outcomes.length - failed.length, failedCount: failed.length, skippedCount, trackingEnabledCount,
+    errors: errors.slice(0, WC_LIST_LIMIT),
   };
   await orm.transaction(async (tx) => {
     // review M-3: one UPDATE per batch of links; the failure count is the one read with the links, under the sync lock
@@ -98,12 +105,16 @@ async function recordOutcomes(outcomes: Outcome[], skippedCount: number, totalIt
     const status = failed.length === 0 ? 'ok' : failed.length === outcomes.length ? 'failed' : 'partial';
     await tx.insert(wcSyncRuns).values({
       kind: 'stock_push', status, userId: actorUserId(actor), startedAt: now, finishedAt: now,
-      summary: { trigger, totalItems, syncedCount: result.syncedCount, failedCount: result.failedCount, skippedCount, errors: errors.slice(0, 20) },
+      summary: {
+        trigger, totalItems, syncedCount: result.syncedCount, failedCount: result.failedCount, skippedCount, trackingEnabledCount,
+        errors: errors.slice(0, 20),
+      },
     });
     await logActivity({
       tx, req: actor.req, action: 'WC_STOCK_PUSH', entity: 'فروشگاه اینترنتی', entityId: '',
-      description: `ارسال موجودی به سایت: ${formatPersianNumber(result.syncedCount)} محصول به‌روز شد، ${formatPersianNumber(result.failedCount)} ناموفق`,
-      details: { trigger, totalItems, syncedCount: result.syncedCount, failedCount: result.failedCount, skippedCount },
+      description: `ارسال موجودی به سایت: ${formatPersianNumber(result.syncedCount)} محصول به‌روز شد، ${formatPersianNumber(result.failedCount)} ناموفق`
+        + (trackingEnabledCount > 0 ? `، ردیابی موجودی ${formatPersianNumber(trackingEnabledCount)} محصول روشن شد` : ''),
+      details: { trigger, totalItems, syncedCount: result.syncedCount, failedCount: result.failedCount, skippedCount, trackingEnabledCount },
     });
   });
   return result;
@@ -123,7 +134,9 @@ export async function pushStocksLocked(actor: WcActor, options: PushOptions, con
   const wanted = await wantedSiteStocks(links);
   const rows = links.map(link => ({ link, quantity: wanted.get(link.itemId) ?? 0 }));
   const toSend = options.onlyChanged ? rows.filter(r => !(r.link.siteManageStock === 1 && r.link.siteStock === r.quantity)) : rows;
-  if (toSend.length === 0) return { totalItems: links.length, syncedCount: 0, failedCount: 0, skippedCount: links.length, errors: [] };
+  if (toSend.length === 0) {
+    return { totalItems: links.length, syncedCount: 0, failedCount: 0, skippedCount: links.length, trackingEnabledCount: 0, errors: [] };
+  }
   const outcomes = await sendStocks(connection, toSend);
   return recordOutcomes(outcomes, links.length - toSend.length, links.length, actor, options.trigger);
 }
@@ -147,7 +160,7 @@ export function pushAllStocks(actor: WcActor): Promise<WcPushAllResult> {
 }
 
 /** One item's stock (the items page): through its link; 422 `WC_ITEM_NOT_LINKED` when the shop has no product for it */
-export function pushItemStock(actor: WcActor, itemId: number): Promise<{ sku: string; quantity: number }> {
+export function pushItemStock(actor: WcActor, itemId: number): Promise<{ sku: string; quantity: number; trackingEnabledCount: number }> {
   return withWcSyncLock(async () => {
     const [item] = await orm.select({ id: items.id, code: items.code }).from(items).where(and(eq(items.id, itemId), eq(items.isDeleted, 0)));
     if (!item) throw new NotFoundError('کالای مورد نظر در سامانه پیدا نشد.');
@@ -168,6 +181,6 @@ export function pushItemStock(actor: WcActor, itemId: number): Promise<{ sku: st
     const result = await pushStocksLocked(actor, { itemIds: [itemId], trigger: 'item' }, conn);
     if (result.failedCount > 0) throw new ValidationError(`موجودی به سایت نرسید: ${result.errors[0] ?? ''}`, undefined, WC_SHOP_REQUEST_FAILED);
     const [after] = await liveLinks([itemId]);
-    return { sku: after?.siteSku || String(item.code), quantity: Number(after?.siteStock ?? 0) };
+    return { sku: after?.siteSku || String(item.code), quantity: Number(after?.siteStock ?? 0), trackingEnabledCount: result.trackingEnabledCount };
   });
 }

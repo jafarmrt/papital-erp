@@ -9,7 +9,8 @@ import React from 'react';
 import { toast } from 'react-hot-toast';
 import { fetchJson } from '../../api';
 import { WcCatalogPanel } from '../../components/settings/WcCatalogPanel';
-import { WC_UNMATCHED_REASON_LABELS, catalogCapNotice, catalogRefreshMessage, chunked, siteStockQuantity, type WcCatalogReport } from '../../lib/woocommerce/wcCatalog';
+import { stockSyncOutcome } from '../../lib/woocommerce/stockSyncOutcome';
+import { WC_UNMATCHED_REASON_LABELS, catalogCapNotice, catalogRefreshMessage, trackingEnabledNote, chunked, siteStockQuantity, type WcCatalogReport } from '../../lib/woocommerce/wcCatalog';
 
 vi.mock('../../api', async () => {
   const actual = await vi.importActual<typeof import('../../api')>('../../api');
@@ -66,6 +67,14 @@ describe('D-04 the catalog helpers', () => {
     expect(catalogRefreshMessage({ siteProductCount: 120, linkedCount: 100, unmatchedTotal: 0 }))
       .toBe('۱۲۰ محصول سایت خوانده شد و ۱۰۰ کالا به محصول سایت وصل است.');
     expect(catalogRefreshMessage({ siteProductCount: 5, linkedCount: 3, unmatchedTotal: 2 })).toContain('۲ محصول سایت به هیچ کالایی وصل نشد');
+  });
+
+  it('a push that turned on stock tracking on the site says how many products, never silently', () => {
+    expect(trackingEnabledNote(3)).toBe(' ردیابی موجودی ۳ محصول در سایت روشن شد.');
+    expect(trackingEnabledNote(0)).toBe('');
+    expect(stockSyncOutcome({ totalItems: 4, syncedCount: 4, failedCount: 0, trackingEnabledCount: 2, errors: [] }).message)
+      .toContain(trackingEnabledNote(2).trim());
+    expect(stockSyncOutcome({ totalItems: 4, syncedCount: 4, failedCount: 0, errors: [] }).message).not.toContain('ردیابی');
   });
 
   it('review N-2: a refresh stopped at the product cap says so', () => {

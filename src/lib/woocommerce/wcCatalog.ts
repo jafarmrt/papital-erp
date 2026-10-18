@@ -81,6 +81,15 @@ export function chunked<T>(rows: readonly T[], size = WC_BATCH_SIZE): T[][] {
 }
 
 /** The one-line Persian result of a catalog refresh for a toast */
+/**
+ * A manual stock push sets `manage_stock: true` like the earlier per-item push, so a product whose stock tracking was off on
+ * the site has it on afterwards; the push result says how many (coordinator decision on part A, never silent)
+ */
+export function trackingEnabledNote(count: unknown): string {
+  const n = Math.max(0, Math.floor(Number(count) || 0));
+  return n > 0 ? ` ردیابی موجودی ${formatPersianNumber(n)} محصول در سایت روشن شد.` : '';
+}
+
 /** Shown on the panel while the last reading of the shop stopped at the product cap (review N-2) */
 export function catalogCapNotice(): string {
   return `بازخوانی سایت به سقف ${formatPersianNumber(WC_MAX_CATALOG_PRODUCTS)} محصول رسید؛ محصولات پس از آن خوانده نشد و پیوند آن‌ها دست نخورد.`;

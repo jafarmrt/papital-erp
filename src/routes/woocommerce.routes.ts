@@ -11,7 +11,7 @@ import { WooOrderSyncService } from '../services/woocommerce/wooOrderSync.servic
 import { makeWcRequest, requireWcConnection, wcRequest } from '../services/woocommerce/wcClient.js';
 import { getWcCatalogReport, refreshWcCatalog } from '../services/woocommerce/wcCatalog.service.js';
 import { pushAllStocks, pushItemStock } from '../services/woocommerce/wcStockPush.service.js';
-import { catalogRefreshMessage } from '../lib/woocommerce/wcCatalog.js';
+import { catalogRefreshMessage, trackingEnabledNote } from '../lib/woocommerce/wcCatalog.js';
 import { formatPersianNumber } from '../utils/persianNumber.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
@@ -201,14 +201,14 @@ router.post('/refresh-products', authorizePermission('woocommerce.manage'), idem
 
 // Sync single item stock to WooCommerce, through the item's link (OBS-R2-83)
 router.post('/sync-item', authorizePermission('woocommerce.manage'), idempotency({ scope: 'woocommerce' }), validate(syncItemSchema), asyncHandler(async (req, res) => {
-  const { sku, quantity } = await pushItemStock({ req }, Number(req.body.itemId));
-  res.json({ success: true, message: `موجودی کالا (${sku}) در سایت ${formatPersianNumber(quantity)} شد.` });
+  const { sku, quantity, trackingEnabledCount } = await pushItemStock({ req }, Number(req.body.itemId));
+  res.json({ success: true, trackingEnabledCount, message: `موجودی کالا (${sku}) در سایت ${formatPersianNumber(quantity)} شد.${trackingEnabledNote(trackingEnabledCount)}` });
 }));
 
 // The stock of every linked item, in batches of 100 (OBS-R2-83: was two requests per item)
 router.post('/sync-all-stocks', authorizePermission('woocommerce.manage'), idempotency({ scope: 'woocommerce' }), asyncHandler(async (req, res) => {
   const result = await pushAllStocks({ req });
-  res.json({ success: true, ...result, message: `موجودی ${formatPersianNumber(result.syncedCount)} کالا در سایت به‌روز شد.` });
+  res.json({ success: true, ...result, message: `موجودی ${formatPersianNumber(result.syncedCount)} کالا در سایت به‌روز شد.${trackingEnabledNote(result.trackingEnabledCount)}` });
 }));
 
 // Test Connection
