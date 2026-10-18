@@ -1,6 +1,6 @@
 import { logger } from '../middleware/logger.js';
 import { numericRuleEquality, ruleComparableNumber } from '../lib/events/ruleConditionValue.js';
-import { NUMERIC_RULE_OPERATORS } from '../lib/events/ruleMissingField.js';
+import { NUMERIC_RULE_OPERATORS, isRuleGroupNode as isSharedRuleGroupNode, isSingleRuleNode as isSharedSingleRuleNode, ruleGroupParts } from '../lib/events/ruleMissingField.js';
 
 export interface SingleRuleCondition {
   field: string;
@@ -63,13 +63,8 @@ export function isEmptyRuleExpression(expression: unknown): boolean {
   return isPlainObject(expression) && Object.keys(expression).length === 0;
 }
 
-function isSingleRuleNode(node: unknown): node is SingleRuleCondition {
-  return isPlainObject(node) && typeof node.field === 'string' && node.field.trim() !== '' && node.operator !== undefined && node.operator !== null;
-}
-
-function isRuleGroupNode(node: unknown): node is RuleGroup {
-  return isPlainObject(node) && !('field' in node) && (Array.isArray(node.conditions) || Array.isArray(node.rules));
-}
+const isSingleRuleNode = (node: unknown): node is SingleRuleCondition => isSharedSingleRuleNode(node);
+const isRuleGroupNode = (node: unknown): node is RuleGroup => isSharedRuleGroupNode(node);
 
 export class RuleEngineService {
   /**
@@ -333,11 +328,7 @@ export class RuleEngineService {
     flatTraceList: { path: string; passed: boolean; details: string }[],
     parentPath: string
   ): EvaluationTraceItem {
-    const rawLogic = (group.logic || group.matchType || 'AND').toString().toUpperCase().trim();
-    const logic: 'AND' | 'OR' | 'NOT' = rawLogic === 'OR' ? 'OR' : (rawLogic === 'NOT' ? 'NOT' : 'AND');
-
-    const childrenRaw = group.conditions || group.rules || [];
-    const childrenList = Array.isArray(childrenRaw) ? childrenRaw : [];
+    const { logic, children: childrenList } = ruleGroupParts(group as unknown as Record<string, unknown>);
 
     if (childrenList.length === 0) {
       return {
@@ -353,7 +344,7 @@ export class RuleEngineService {
     let innerPassed = logic === 'OR' ? false : true;
 
     for (let i = 0; i < childrenList.length; i++) {
-      const child = childrenList[i];
+      const child = childrenList[i] as RuleExpression;
       const childPath = parentPath ? `${parentPath}.g[${i}]` : `g[${i}]`;
       const childResult = this.evaluateExpressionNode(child, context, flatTraceList, childPath);
       childrenTrace.push(childResult);

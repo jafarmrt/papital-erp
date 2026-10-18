@@ -33,17 +33,30 @@ describe('treasury_rule_health_td_1297', () => {
     expect(treasuryPrivateFieldUseOf([{ field: 'payload.currency', operator: 'neq', value: 'USD' }], {})).toBeNull();
   });
 
-  it('names the saved rules whose numeric comparison reads a field their event does not carry', () => {
+  it('reads malformed shapes as the engine does (review N-3)', () => {
+    // logic '' falls back to matchType NOT, as `group.logic || group.matchType` does in the engine
+    expect(treasuryPrivateFieldUseOf({ logic: '', matchType: 'NOT', conditions: [{ field: 'payload.amount', operator: 'gt', value: 1 }] }, {})?.use).toBe('always_matches');
+    // a group with both lists reads only `conditions`
+    expect(treasuryPrivateFieldUseOf({ conditions: [{ field: 'payload.currency', operator: 'eq', value: 'IRR' }], rules: [{ field: 'payload.amount', operator: 'neq', value: 0 }] }, {})).toBeNull();
+    // a condition without an operator is invalid in the engine and reads no field
+    expect(treasuryPrivateFieldUseOf([{ field: 'payload.amount', value: 1 }], {})).toBeNull();
+    expect(treasuryPrivateFieldUseOf([{ field: 'payload.amount', operator: null, value: 1 }], {})).toBeNull();
+    // a node with a field and a list is no group in the engine
+    expect(treasuryPrivateFieldUseOf({ field: '', conditions: [{ field: 'payload.amount', operator: 'neq', value: 0 }] }, {})).toBeNull();
+  });
+
+  it('names only the treasury rules whose numeric comparison reads a field this release took out (review N-1)', () => {
     const rows = rulesOnMissingNumericFields([
       { id: 1, eventType: 'TreasuryTransactionApproved', conditionsJson: [{ field: 'payload.amount', operator: 'gte', value: 1 }] },
       { id: 2, eventType: 'TreasuryTransactionApproved', conditionsJson: [{ field: 'payload.amount', operator: 'neq', value: 1 }] },
-      { id: 3, eventType: 'InvoiceApproved', conditionsJson: { logic: 'OR', rules: [{ field: 'event.payload.totalAmount', operator: 'lt', value: 5 }, { field: 'payload.discount', operator: 'GT', value: 0 }] } },
-      { id: 4, eventType: '*', conditionsJson: [{ field: 'payload.amount', operator: 'gt', value: 1 }] },
-      { id: 5, eventType: 'StockIssued', conditionsJson: [{ field: 'payload.quantity', operator: 'gt', value: 1 }] },
+      { id: 3, eventType: 'InvoiceApproved', conditionsJson: { logic: 'OR', rules: [{ field: 'payload.discount', operator: 'GT', value: 0 }] } },
+      { id: 4, eventType: '*', conditionsJson: { logic: 'NOT', conditions: [{ field: 'event.payload.amount', operator: 'gt', value: 1 }] } },
+      { id: 5, eventType: 'StockAdjusted', conditionsJson: [{ field: 'payload.newWac', operator: 'gt', value: 0 }] },
+      { id: 6, eventType: 'TreasuryTransactionApproved', conditionsJson: [{ field: 'payload.pairedTransactionId', operator: 'gt', value: 0 }] },
     ]);
     expect(rows).toEqual([
       { ruleId: 1, eventType: 'TreasuryTransactionApproved', field: 'payload.amount', operator: 'gte' },
-      { ruleId: 3, eventType: 'InvoiceApproved', field: 'payload.discount', operator: 'gt' },
+      { ruleId: 4, eventType: '*', field: 'payload.amount', operator: 'gt' },
     ]);
   });
 });

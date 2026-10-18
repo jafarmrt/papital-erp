@@ -3,6 +3,35 @@
  * health check of treasury rules and the boot log of rules on missing fields (the rule engine is
  * `RuleEngineService.evaluateSingleRule`; these helpers follow it and a Vitest test compares them).
  */
+const isPlainObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/** a single condition as the rule engine reads it: a non-empty field and an operator (review N-3) */
+export function isSingleRuleNode(node: unknown): node is Record<string, unknown> & { field: string } {
+  return isPlainObject(node) && typeof node.field === 'string' && node.field.trim() !== '' && node.operator !== undefined && node.operator !== null;
+}
+
+/** a group as the rule engine reads it: no field and a `conditions` or `rules` list */
+export function isRuleGroupNode(node: unknown): node is Record<string, unknown> {
+  return isPlainObject(node) && !('field' in node) && (Array.isArray(node.conditions) || Array.isArray(node.rules));
+}
+
+/** a group's logic and children exactly as `RuleEngineService.evaluateGroupNode` takes them */
+export function ruleGroupParts(group: Record<string, unknown>): { logic: 'AND' | 'OR' | 'NOT'; children: unknown[] } {
+  const raw = String(group.logic || group.matchType || 'AND').toUpperCase().trim();
+  const logic = raw === 'OR' ? 'OR' : raw === 'NOT' ? 'NOT' : 'AND';
+  const children = group.conditions || group.rules || [];
+  return { logic, children: Array.isArray(children) ? children : [] };
+}
+
+/** the event types whose rules see the treasury event: its own type and «همه رویدادها» */
+export const TREASURY_RULE_EVENT_TYPES: readonly string[] = ['TreasuryTransactionApproved', '*'];
+
+/** a treasury event field this release took out of the payload (amount, description, void reason) */
+export const TREASURY_PRIVATE_FIELD_PATH = /^payload\.(amount|description|reason)(\.|$)/;
+
+/** the same fields where an action text or setting names them */
+export const TREASURY_PRIVATE_FIELD_TEXT = /payload\.(amount|description|reason)\b/g;
+
 /** the numeric comparisons, which never match a field the event does not carry */
 export const NUMERIC_RULE_OPERATORS: ReadonlySet<string> = new Set(['>', 'gt', '>=', 'gte', '<', 'lt', '<=', 'lte']);
 

@@ -3,6 +3,7 @@ import { orm } from '../../db/drizzle.js';
 import { eventActionRules } from '../../db/schema.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { DomainEventType } from './domainEvents.js';
+import { TREASURY_PRIVATE_FIELD_TEXT } from '../../lib/events/ruleMissingField.js';
 import { logger } from '../../middleware/logger.js';
 import { errorMessageOf } from '../../utils/index.js';
 
@@ -13,7 +14,7 @@ import { errorMessageOf } from '../../utils/index.js';
  * moved to `payload.isHighValue eq true`, whose threshold «آستانه تراکنش کلان خزانه» is 500,000,000 rials by default,
  * and its seeded texts lose the amount; one audit row with the condition before and after, in the same transaction
  * under the rule row lock. A rule the owner changed (another condition, name or event type, or a text of its own that
- * still prints the amount or description, review N-5) is left as it is and is listed by the financial health check
+ * still names the amount, description or reason in any of its settings, reviews N-5 / N-2) is left as it is and is listed by the financial health check
  * (`event_rule_treasury_private_fields`).
  */
 export const HIGH_VALUE_TREASURY_RULE_NAME = 'ثبت ممیزی تراکنش‌های کلان خزانه‌داری';
@@ -25,11 +26,15 @@ const SEEDED_CONDITIONS = [{ field: 'payload.amount', operator: 'gte', value: 50
 const SEEDED_DESCRIPTION = 'ثبت لاگ ممیزی امنیتی اختصاصی برای کلیه تراکنش‌های واریز یا برداشت بالای ۵۰۰ میلیون ریال';
 const SEEDED_TEMPLATE = 'تراکنش خزانه‌داری با ارزش کلان {{payload.amount}} {{payload.currency}} به ثبت رسید.';
 
-/** an action text the owner wrote that prints a field the treasury event no longer carries */
+/**
+ * an action setting the owner wrote that names a field the treasury event no longer carries (review N-2: any key of
+ * the action, the title included, not only the description; the seeded description template is the one text the
+ * repair rewrites itself)
+ */
 function ownTextReadsPrivateField(actionConfig: unknown): boolean {
-  const template = (actionConfig as Record<string, unknown> | null)?.descriptionTemplate;
-  if (template === undefined || template === null || template === SEEDED_TEMPLATE) return false;
-  return /payload\.(amount|description|reason)\b/.test(String(template));
+  const config = { ...((actionConfig ?? {}) as Record<string, unknown>) };
+  if (config.descriptionTemplate === SEEDED_TEMPLATE) delete config.descriptionTemplate;
+  return [...JSON.stringify(config).matchAll(TREASURY_PRIVATE_FIELD_TEXT)].length > 0;
 }
 
 function isSeededCondition(conditions: unknown): boolean {
