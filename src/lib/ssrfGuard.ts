@@ -372,7 +372,7 @@ export const UNSAFE_RESOLVED_ADDRESS = 'EUNSAFEADDRESS';
 export function guardedDnsLookup(
   hostname: string,
   options: dns.LookupOptions,
-  callback: (err: NodeJS.ErrnoException | null, addresses?: dns.LookupAddress[]) => void,
+  callback: (err: NodeJS.ErrnoException | null, address?: string | dns.LookupAddress[], family?: number) => void,
 ): void {
   dns.lookup(hostname, { ...options, all: true }, (err, addresses) => {
     if (err) {
@@ -384,6 +384,8 @@ export function guardedDnsLookup(
       callback(Object.assign(new Error(`Address of ${hostname} is private or reserved at connect time`), { code: UNSAFE_RESOLVED_ADDRESS }));
       return;
     }
-    callback(null, addresses);
+    // review N-B: the answer has the shape the caller asked for, so `net.connect` and other callers outside axios can use it
+    if (options?.all) callback(null, addresses);
+    else callback(null, addresses[0].address, addresses[0].family);
   });
 }

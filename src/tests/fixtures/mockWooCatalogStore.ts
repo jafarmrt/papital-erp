@@ -25,6 +25,8 @@ export interface MockWooCatalogStore {
   rowErrors: Set<number>;
   /** when set, every request answers this status (a shop that is down or refuses the keys) */
   failStatus?: number;
+  /** request paths (without the API prefix) that answer 500, so one read of a refresh fails */
+  failPaths: Set<string>;
   /** catalog pages after the first start one row early, so their first row repeats the last row of the page before (a date
    * order without a tie-breaker): only for a request without `orderby=id&order=asc`, or for every request with `always` */
   unstableOrder?: 'without_id_order' | 'always';
@@ -62,8 +64,7 @@ function batchAnswer(store: MockWooCatalogStore, body: string): unknown {
 }
 
 export async function mockWooCatalogStore(products: MockProduct[]): Promise<MockWooCatalogStore> {
-  const store = { pushed: new Map(), requests: [], batchSizes: [], rowErrors: new Set(), queries: [], maxInFlight: 0 } as unknown as MockWooCatalogStore;
-  const byId = new Map(products.map(p => [p.id, p]));
+  const store = { pushed: new Map(), requests: [], batchSizes: [], rowErrors: new Set(), failPaths: new Set(), queries: [], maxInFlight: 0 } as unknown as MockWooCatalogStore;
   let inFlight = 0;
   const server = http.createServer((req, res) => {
     const url = new URL(req.url || '/', 'http://127.0.0.1');
@@ -79,8 +80,8 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
       store.requests.push(`${req.method} ${path}${url.searchParams.get('page') ? `?page=${url.searchParams.get('page')}` : ''}`);
       res.setHeader('Content-Type', 'application/json');
       const send = (data: unknown) => res.end(JSON.stringify(data));
-      if (store.failStatus) {
-        res.statusCode = store.failStatus;
+      if (store.failStatus || store.failPaths.has(path)) {
+        res.statusCode = store.failStatus ?? 500;
         send({ code: 'internal_error', message: 'خطای میزبان سایت' });
         return;
       }
@@ -93,7 +94,8 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
       }
       const variations = path.match(/^products\/(\d+)\/variations$/);
       if (req.method === 'GET' && variations) {
-        const rows = byId.get(Number(variations[1]))?.variations ?? [];
+        // read live, so a test may change the shop's products between two readings
+        const rows = products.find(p => p.id === Number(variations[1]))?.variations ?? [];
         send(page(rows, url, store).map(v => ({
           id: v.id, sku: v.sku, stock_quantity: v.stock ?? null,
           manage_stock: v.manageStock ?? (v.stock !== undefined && v.stock !== null),

@@ -26,16 +26,22 @@ vi.mock('dns', () => {
   return { default: mod, ...mod };
 });
 
-async function lookupOf(host: string): Promise<{ code?: string; addresses?: unknown }> {
+async function lookupOf(host: string, all = true): Promise<{ code?: string; addresses?: unknown; family?: number }> {
   const { guardedDnsLookup } = await import('../../lib/ssrfGuard');
   return new Promise(resolve => {
-    guardedDnsLookup(host, {}, (err, addresses) => resolve(err ? { code: err.code } : { addresses }));
+    guardedDnsLookup(host, { all }, (err, addresses, family) =>
+      resolve(err ? { code: err.code } : family === undefined ? { addresses } : { addresses, family }));
   });
 }
 
 describe('wc_connect_time_lookup_d04_m5', () => {
   it('passes a public address through with every address listed', async () => {
     expect(await lookupOf('public.shop.test')).toEqual({ addresses: answers['public.shop.test'] });
+  });
+
+  it('review N-B: answers one address and its family when the caller did not ask for all, after checking every address', async () => {
+    expect(await lookupOf('public.shop.test', false)).toEqual({ addresses: '93.184.216.34', family: 4 });
+    expect((await lookupOf('mixed.shop.test', false)).code).toBe('EUNSAFEADDRESS');
   });
 
   it('refuses a name that resolves to any private or reserved address at connect time', async () => {
@@ -53,5 +59,7 @@ describe('wc_connect_time_lookup_d04_m5', () => {
     expect(src).toMatch(/lookup:\s*guardedDnsLookup/);
     expect(src).toMatch(/maxContentLength:\s*WC_MAX_RESPONSE_BYTES/);
     expect(src).toMatch(/signal/);
+    // review N-B: an environment proxy would resolve the name itself and skip the guarded lookup
+    expect(src).toMatch(/proxy:\s*false/);
   });
 });

@@ -60,8 +60,8 @@ export interface SiteCatalog {
   skipped: WcUnmatchedProduct[];
   /** the shop had more products than one refresh reads (`WC_MAX_CATALOG_PRODUCTS`) */
   truncated: boolean;
-  /** every product id read, so a link of a product past the cap is left as it is */
-  productIds: Set<number>;
+  /** the largest product id read; when the reading was truncated, a link of a product above it is left as it is */
+  maxProductId: number;
 }
 
 /** review M-6: one refresh never holds the lock longer than this (under the 60 s of a reverse proxy) */
@@ -105,17 +105,28 @@ async function readPages(conn: WcConnection, path: string, fields: string, signa
   return { rows, truncated: true };
 }
 
-/** `fn` over `inputs`, at most `limit` at a time, results in input order */
-async function mapLimited<T, R>(inputs: T[], limit: number, fn: (input: T) => Promise<R>): Promise<R[]> {
+/**
+ * `fn` over `inputs`, at most `limit` at a time, results in input order; after the first failure no worker starts another
+ * input (review M-A: the other workers kept calling the shop after the refresh had answered and released the lock)
+ */
+export async function mapLimited<T, R>(inputs: T[], limit: number, fn: (input: T) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(inputs.length);
   let next = 0;
+  let failed = false;
   const worker = async () => {
-    while (next < inputs.length) {
+    while (!failed && next < inputs.length) {
       const i = next++;
-      out[i] = await fn(inputs[i]);
+      try {
+        out[i] = await fn(inputs[i]);
+      } catch (err) {
+        failed = true;
+        throw err;
+      }
     }
   };
-  await Promise.all(Array.from({ length: Math.min(limit, inputs.length) }, worker));
+  const runs = await Promise.allSettled(Array.from({ length: Math.min(limit, inputs.length) }, worker));
+  const failure = runs.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+  if (failure) throw failure.reason;
   return out;
 }
 
@@ -128,12 +139,12 @@ export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal):
   const { rows: products, truncated } = await readPages(conn, 'products', 'id,name,sku,type,stock_quantity,manage_stock', signal);
   const site: SiteProduct[] = [];
   const skipped: WcUnmatchedProduct[] = [];
-  const productIds = new Set<number>();
+  let maxProductId = 0;
   const variable: Array<{ productId: number; name: string; sku: string }> = [];
   for (const p of products) {
     const productId = Number(p.id);
     if (!Number.isInteger(productId) || productId <= 0) continue;
-    productIds.add(productId);
+    maxProductId = Math.max(maxProductId, productId);
     const name = String(p.name ?? '');
     const sku = String(p.sku ?? '').trim();
     if (NO_STOCK_TYPES.has(String(p.type))) {
@@ -157,7 +168,7 @@ export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal):
       site.push({ productId, variationId, name, sku: vSku, stock: stockOf(v), manageStock: v.manage_stock === true });
     }
   });
-  return { site, skipped, truncated, productIds };
+  return { site, skipped, truncated, maxProductId };
 }
 
 interface Match { site: SiteProduct; itemId: number }
@@ -211,12 +222,14 @@ export interface WcRefreshSummary {
 
 /** Writes the links of one catalog reading (one transaction) and the run row and audit row with it */
 export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor): Promise<WcRefreshSummary> {
-  const { site, skipped, truncated, productIds } = catalog;
+  const { site, skipped, truncated, maxProductId } = catalog;
   return orm.transaction(async (tx) => {
     const live = await tx.select().from(wcProductLinks).where(eq(wcProductLinks.isDeleted, 0))
       .orderBy(asc(wcProductLinks.id)).for('update');
-    // a link of a product this reading did not reach (past the cap) is left as it is, and so is its item
-    const untouched = live.filter(l => !productIds.has(l.wcProductId));
+    // review H-A: only a link of a product past the cap (a truncated reading, an id above every id read) is left as it is,
+    // and so is its item; a link of any other product the shop no longer lists is closed
+    const pastCap = (l: { wcProductId: number }) => truncated && l.wcProductId > maxProductId;
+    const untouched = live.filter(pastCap);
     const { matches, unmatched: notMatched } = await matchSiteCatalog(tx, site, new Set(untouched.map(l => l.itemId)));
     const unmatched = [...skipped, ...notMatched];
     const wanted = new Map(matches.map(m => [keyOf(m.site.productId, m.site.variationId), m]));
@@ -225,7 +238,7 @@ export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor): P
     const updates: LinkRowUpdate[] = [];
     let closedCount = 0;
     for (const link of live) {
-      if (!productIds.has(link.wcProductId)) continue;
+      if (pastCap(link)) continue;
       const key = keyOf(link.wcProductId, link.wcVariationId);
       const match = wanted.get(key);
       if (match && match.itemId === link.itemId && !kept.has(key)) {
@@ -321,6 +334,8 @@ export async function refreshCatalogLocked(
     throw failure;
   } finally {
     clearTimeout(timer);
+    // review M-A: no request of this reading outlives it (the lock is released right after)
+    deadline.abort();
   }
 }
 

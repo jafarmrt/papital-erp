@@ -31,6 +31,9 @@ export async function runWooCatalogSyncTests(shouldRun: ShouldRun): Promise<Test
     ['reg_wc_catalog_deadline_cap_d04',
       'D-04 review M-6 / N-1 / N-2: a refresh past its deadline and one stopped by the address guard are failed runs that change no link, and a reading cut at the product cap leaves the links of products it did not reach',
       ['d04', 'woocommerce', 'catalog', 'review'], deadlineAndCapCase],
+    ['reg_wc_catalog_removed_product_closes_link_d04',
+      'D-04 delta review H-A / M-A / N-A: a product removed from the shop closes its link (only a product past the cap keeps one), a failed variation read stops the other readers, and a push past its deadline sends nothing more',
+      ['d04', 'woocommerce', 'catalog', 'review'], removedProductAndDeadlinesCase],
     ['reg_wc_synced_orders_by_log_obs_r2_83',
       'OBS-R2-83: the synced-orders list shows the invoices the order log names, not invoices whose notes mention an online order',
       ['obs_r2_83', 'woocommerce', 'orders'], syncedOrdersCase],
@@ -358,7 +361,7 @@ async function deadlineAndCapCase(h: Harness, wrong: string[]): Promise<string> 
         { productId: 1, variationId: 0, name: 'n', sku: near.code, stock: null, manageStock: false },
         { productId: 2, variationId: 0, name: 'f', sku: far.code, stock: null, manageStock: false },
       ],
-      skipped: [], truncated: true, productIds: new Set([1, 2]),
+      skipped: [], truncated: true, maxProductId: 2,
     }, {});
     const links = await linksOf(h, [far.id, near.id]);
     if (links.get(far.id)?.product !== 999) wrong.push(`the link past the cap was changed: ${JSON.stringify(links.get(far.id) ?? null)}`);
@@ -386,5 +389,68 @@ async function deadlineAndCapCase(h: Harness, wrong: string[]): Promise<string> 
     const guardRuns = await h.q(`SELECT status FROM wc_sync_runs WHERE kind = 'refresh'`);
     if (guardRuns.length !== 1 || guardRuns[0].status !== 'failed') wrong.push(`runs after the guard refused: ${JSON.stringify(guardRuns)}`);
     return 'cap, deadline and guard';
+  });
+}
+
+async function removedProductAndDeadlinesCase(h: Harness, wrong: string[]): Promise<string> {
+  const { refreshCatalogLocked, applyCatalogLinks, WC_VARIATION_READ_CONCURRENCY } = await import('../../services/woocommerce/wcCatalog.service.js');
+  const { pushStocksLocked } = await import('../../services/woocommerce/wcStockPush.service.js');
+  const kept = await newItem(h, 'KEEP', { MAIN: 3 });
+  const gone = await newItem(h, 'GONE', { MAIN: 2 });
+  const products: MockProduct[] = [{ id: 10, sku: kept.code }, { id: 20, sku: gone.code }];
+  return withShop(h, products, async (store) => {
+    await refreshCatalogLocked({});
+    // H-A: the product is deleted on the shop; the next full reading closes its link and keeps the other one
+    products.splice(1, 1);
+    const removed = await refreshCatalogLocked({});
+    let links = await linksOf(h, [kept.id, gone.id]);
+    if (links.has(gone.id)) wrong.push(`the link of a product removed from the shop stayed: ${JSON.stringify(links.get(gone.id))}`);
+    if (links.get(kept.id)?.product !== 10) wrong.push('the link of a product still on the shop was closed');
+    if (removed.closedCount !== 1 || removed.linkedCount !== 1) wrong.push(`summary after a removal ${JSON.stringify(removed).slice(0, 200)}`);
+    // the product made again on the shop links again
+    products.push({ id: 21, sku: gone.code });
+    await refreshCatalogLocked({});
+    links = await linksOf(h, [gone.id]);
+    if (links.get(gone.id)?.product !== 21) wrong.push('a product made again on the shop was not linked');
+
+    // H-A: a truncated reading keeps only links above the largest id it read; a missing product below it is closed
+    await h.q(`UPDATE wc_product_links SET is_deleted = 1 WHERE item_id = $1 AND wc_product_id = 21`, [gone.id]);
+    await h.q(`INSERT INTO wc_product_links (item_id, wc_product_id, wc_variation_id, site_sku) VALUES ($1, 5, 0, 'X5')`, [gone.id]);
+    const capped = await applyCatalogLinks({
+      site: [{ productId: 10, variationId: 0, name: 'k', sku: kept.code, stock: null, manageStock: false }],
+      skipped: [], truncated: true, maxProductId: 10,
+    }, {});
+    if ((await linksOf(h, [gone.id])).has(gone.id)) wrong.push('a truncated reading kept the link of a missing product below the largest id read');
+    if (capped.closedCount !== 1) wrong.push(`truncated summary ${JSON.stringify(capped).slice(0, 200)}`);
+
+    // M-A: one variation list fails; the other readers start no further request and the refresh fails as a whole
+    const variableIds = Array.from({ length: 12 }, (_, i) => 100 + i);
+    products.splice(0, products.length, ...variableIds.map(id => ({ id, sku: `VAR${id}_${h.tag}`, variations: [{ id: id * 10, sku: `V${id}_${h.tag}` }] })));
+    store.failPaths.add('products/100/variations');
+    store.delayMs = 60;
+    const before = store.requests.length;
+    const failed = await refreshCatalogLocked({}).then(() => null, (err: unknown) => err as { code?: string });
+    await new Promise(resolve => setTimeout(resolve, 400));
+    const variationReads = store.requests.slice(before).filter(r => /variations/.test(r)).length;
+    if (failed?.code !== 'WC_SHOP_REQUEST_FAILED') wrong.push(`a refresh with a failed variation read ended with ${JSON.stringify(failed)}`);
+    if (variationReads > WC_VARIATION_READ_CONCURRENCY) wrong.push(`${variationReads} variation lists were read after one failed`);
+    store.failPaths.clear();
+
+    // N-A: a push past its deadline aborts the open batch and sends nothing more
+    await h.q(`DELETE FROM wc_product_links`);
+    await h.q(`DELETE FROM wc_sync_runs`);
+    await h.q(`INSERT INTO wc_product_links (item_id, wc_product_id, wc_variation_id, site_sku) VALUES ($1, 10, 0, $2), ($3, 30, 31, $4)`,
+      [kept.id, kept.code, gone.id, gone.code]);
+    store.delayMs = 300;
+    const postsBefore = store.requests.filter(r => r.startsWith('POST')).length;
+    const late = await pushStocksLocked({}, { trigger: 'all', deadlineMs: 100 });
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const posts = store.requests.filter(r => r.startsWith('POST')).length - postsBefore;
+    if (late.failedCount !== 2 || late.syncedCount !== 0) wrong.push(`a push past its deadline answered ${JSON.stringify(late).slice(0, 200)}`);
+    if (posts > 1) wrong.push(`${posts} batches were sent after the push deadline`);
+    const runs = await h.q(`SELECT status FROM wc_sync_runs WHERE kind = 'stock_push'`);
+    if (runs.length !== 1 || runs[0].status !== 'failed') wrong.push(`runs after the push deadline: ${JSON.stringify(runs)}`);
+    store.delayMs = 0;
+    return 'removal, failed reader and push deadline';
   });
 }

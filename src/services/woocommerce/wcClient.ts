@@ -99,6 +99,8 @@ export async function makeWcRequest(
           httpsAgent,
           // review M-5: the socket checks every address it resolves, so DNS rebinding after the guard reaches nothing inside
           lookup: guardedDnsLookup as never,
+          // review N-B: never through an environment proxy (HTTPS_PROXY), which would resolve the name itself and skip the lookup
+          proxy: false,
           timeout: WC_REQUEST_TIMEOUT_MS,
           signal: options.signal,
           maxContentLength: WC_MAX_RESPONSE_BYTES,
