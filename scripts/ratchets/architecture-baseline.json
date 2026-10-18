@@ -79,7 +79,7 @@
     "src/routes/piecework.routes.ts": 3,
     "src/routes/projects.routes.ts": 8,
     "src/routes/transfers.routes.ts": 1,
-    "src/routes/woocommerce.routes.ts": 9,
+    "src/routes/woocommerce.routes.ts": 3,
     "src/routes/workflow.routes.ts": 3
   },
   "serviceGenericErrors": {
@@ -103,7 +103,7 @@
     "src/routes/projects.routes.ts": 10,
     "src/routes/transactions.routes.ts": 1,
     "src/routes/warehouses.routes.ts": 1,
-    "src/routes/woocommerce.routes.ts": 6
+    "src/routes/woocommerce.routes.ts": 2
   },
   "auditWithoutTx": {
     "src/routes/accounting/accounts.routes.ts": 6,

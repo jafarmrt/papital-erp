@@ -33,7 +33,7 @@ export const WRITER_ROUTES_WITHOUT_BODY = new Set([
   'POST /api/piecework/tasks/clear-defaults', 'POST /api/piecework/tasks/clear-all',
   'POST /api/procurement/orders/:id/deliver',
   'POST /api/warehouses/:id/reactivate',
-  'POST /api/woocommerce/sync-all-stocks',
+  'POST /api/woocommerce/refresh-products', 'POST /api/woocommerce/sync-all-stocks',
   'POST /api/workflow/delegations/:id/revoke',
   'PUT /api/notifications/:id/read', 'PUT /api/notifications/read-all',
 ]);

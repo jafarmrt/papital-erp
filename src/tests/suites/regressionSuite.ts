@@ -11158,6 +11158,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // 10.2 package 2: the project page's step bar counts
   const { runProjectWorkspaceStepsTests } = await import('../regression/projectWorkspaceStepsTests.js');
   results.push(...await runProjectWorkspaceStepsTests(shouldRun));
+  // 10.2 package 6 (D-04 part A): item ↔ shop product links and the batched stock push (OBS-R2-83)
+  const { runWooCatalogSyncTests } = await import('../regression/wooCatalogSyncTests.js');
+  results.push(...await runWooCatalogSyncTests(shouldRun));
 
   return results;
 }

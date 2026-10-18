@@ -1,22 +1,20 @@
 import { Router, Request, Response } from 'express';
 import { orm } from '../db/drizzle.js';
-import { sql, eq, desc, like, and } from 'drizzle-orm';
-import { appSettings, items, documents, woocommerceOrderLogs } from '../db/schema.js';
-import axios from 'axios';
-import https from 'https';
+import { eq, desc, and } from 'drizzle-orm';
+import { appSettings, documents, woocommerceOrderLogs } from '../db/schema.js';
 import crypto from 'crypto';
-import fs from 'fs';
 import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
-import { wcAuthQueryParams } from '../services/woocommerce/wcRequestAuth.js';
 import { WooOrderSyncService } from '../services/woocommerce/wooOrderSync.service.js';
-import { shopSellableStocks } from '../services/woocommerce/shopWarehouse.js';
+import { makeWcRequest, requireWcConnection, wcRequest } from '../services/woocommerce/wcClient.js';
+import { getWcCatalogReport, refreshWcCatalog } from '../services/woocommerce/wcCatalog.service.js';
+import { pushAllStocks, pushItemStock } from '../services/woocommerce/wcStockPush.service.js';
+import { catalogRefreshMessage, trackingEnabledNote } from '../lib/woocommerce/wcCatalog.js';
+import { formatPersianNumber } from '../utils/persianNumber.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
-import { assertSafeExternalUrl } from '../lib/ssrfGuard.js';
-import { followShopRedirects } from '../lib/woocommerce/wcRedirect.js';
 import { ValidationError } from '../errors/customErrors.js';
 import { resolveWcTestCredentials } from '../lib/woocommerce/wcConnectionTest.js';
 import { readWcConnectionSettings } from '../services/woocommerce/wcConnectionSettings.js';
@@ -48,100 +46,6 @@ const testConnectionSchema = z.object({
     consumerSecret: z.string().max(500).optional()
   })
 });
-
-// Secure HTTPS agent with strict TLS validation (SEC-011) and optional custom CA
-const wooCaPath = process.env.WOOCOMMERCE_SSL_CA_PATH;
-const httpsAgent = new https.Agent({
-  rejectUnauthorized: true,
-  ca: (wooCaPath && fs.existsSync(wooCaPath)) ? fs.readFileSync(wooCaPath, 'utf8') : undefined,
-});
-
-/**
- * Helper to make robust WooCommerce API calls
- */
-async function makeWcRequest(
-  method: 'GET' | 'POST' | 'PUT',
-  urlPath: string,
-  storeUrl: string,
-  key: string,
-  secret: string,
-  data?: unknown,
-  params: Record<string, unknown> = {}
-) {
-  let formattedUrl = storeUrl.trim();
-  if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
-    formattedUrl = 'https://' + formattedUrl;
-  }
-  if (formattedUrl.endsWith('/')) {
-    formattedUrl = formattedUrl.slice(0, -1);
-  }
-
-  // OBS-R2-82 (ت۴۰ item 4): every request to the shop, not only the connection test, passes the SSRF guard
-  await assertSafeExternalUrl(formattedUrl, { allowLocalEcho: false });
-  const fullUrl = `${formattedUrl}/wp-json/wc/v3/${urlPath.replace(/^\//, '')}`;
-  const authHeader = 'Basic ' + Buffer.from(`${key}:${secret}`).toString('base64');
-
-  const headers: Record<string, string> = {
-    'Authorization': authHeader,
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ERP-WooSync/2.0',
-    'Accept': 'application/json',
-    'Content-Type': 'application/json'
-  };
-
-  try {
-    // OBS-R2-82: redirects are followed by hand, at most WC_MAX_REDIRECTS hops, only on the same site and each through the
-    // SSRF guard, so the keys never reach an address the guard did not check; the query (and on plain http the keys) is
-    // built again for each address
-    return await followShopRedirects(
-      fullUrl,
-      async (url, { asGet }) => {
-        const response = await axios({
-          method: asGet ? 'GET' : method,
-          url,
-          data: asGet ? undefined : data,
-          params: wcAuthQueryParams(url, params, key, secret),
-          headers,
-          httpsAgent,
-          timeout: 15000,
-          maxRedirects: 0,
-          validateStatus: (status) => status >= 200 && status < 400
-        });
-        const location = response.headers?.location;
-        return { status: response.status, location: location ? String(location) : undefined, data: response.data };
-      },
-      (url) => assertSafeExternalUrl(url, { allowLocalEcho: false })
-    );
-  } catch (error) {
-    if (error instanceof ValidationError) throw error;
-    if (axios.isAxiosError(error) && error.response) {
-      const status = error.response.status;
-      const errorData = error.response.data as { message?: string } | undefined;
-      const wcMsg = errorData?.message || '';
-
-      if (status === 401 || status === 403) {
-        throw new Error(
-          `خطای عدم دسترسی (${status}): ${wcMsg || 'کلید نامعتبر است یا فایروال هاست/کلودفلر مانع شده است.'} \n` +
-          `نکته: در صورت استفاده از کلودفلر یا آروان‌کلود، کد $_SERVER['HTTPS']='on'; را در بالای wp-config.php قرار دهید ` +
-          `و مطمئن شوید کلید شما دارای دسترسی «خواندن/نوشتن» است.`
-        );
-      } else if (status === 404) {
-        throw new Error(
-          `مسیر API یافت نشد (404). بررسی کنید که پیوندهای یکتا در وردپرس روی حالت «نام نوشته» (Post Name) تنظیم باشد ` +
-          `و افزونه ووکامرس در سایت فعال باشد.`
-        );
-      } else {
-        throw new Error(`خطای سایت وردپرس (${status}): ${wcMsg || JSON.stringify(errorData) || 'پاسخ نامشخص از سرور'}`);
-      }
-    } else if (axios.isAxiosError(error) && (error.code === 'ENOTFOUND' || error.code === 'EAI_AGAIN')) {
-      throw new Error(`آدرس دامنه یافت نشد (${formattedUrl}). از صحت آدرس ورودی مطمئن شوید.`);
-    } else if (axios.isAxiosError(error) && (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT')) {
-      throw new Error(`زمان ارتباط با سرور وردپرس به پایان رسید یا اتصال رد شد. ممکن است هاست یا فایروال سرور درخواست را بلاک کرده باشد.`);
-    } else {
-      const errMsg = error instanceof Error ? error.message : String(error);
-      throw new Error(`خطا در برقراری ارتباط با وردپرس: ${errMsg || 'خطای شبکه'}`);
-    }
-  }
-}
 
 // ==========================================
 // UNAUTHENTICATED WEBHOOK ENDPOINT (GET/POST/HEAD)
@@ -266,138 +170,45 @@ router.get('/order-logs', authorizePermission('woocommerce.view'), asyncHandler(
 }));
 
 // Get WooCommerce Synced Orders History
+// OBS-R2-83: the invoices the order log names (erp_document_id), never a LIKE over the document notes
 router.get('/synced-orders', authorizePermission('woocommerce.view'), asyncHandler(async (req, res) => {
-  try {
-    const docs = await orm.select()
-      .from(documents)
-      .where(and(
-        eq(documents.type, 'invoice'),
-        eq(documents.isDeleted, 0),
-        like(documents.notes, '%سفارش ووکامرس%')
-      ))
-      .orderBy(desc(documents.id))
-      .limit(50);
-
-    res.json(docs);
-  } catch (error) {
-    throw error;
-  }
+  const rows = await orm.select({ doc: documents })
+    .from(woocommerceOrderLogs)
+    .innerJoin(documents, eq(documents.id, woocommerceOrderLogs.erpDocumentId))
+    .where(and(eq(documents.type, 'invoice'), eq(documents.isDeleted, 0)))
+    .orderBy(desc(documents.id))
+    .limit(50);
+  res.json(rows.map(r => r.doc));
 }));
 
 // Manual order sync trigger by Order ID
 router.post('/sync-order-by-id', authorizePermission('woocommerce.manage'), idempotency({ scope: 'woocommerce' }), validate(syncOrderSchema), asyncHandler(async (req, res) => {
-  try {
-    const { orderId } = req.body;
-
-    const { url, consumerKey: key, consumerSecret: secret } = await readWcConnectionSettings();
-
-    if (!url || !key || !secret) {
-      return res.status(400).json({ error: 'تنظیمات اتصال به ووکامرس تکمیل نشده است.' });
-    }
-
-    const wcOrder = await makeWcRequest('GET', `orders/${orderId}`, url, key, secret);
-    const result = await WooOrderSyncService.handleOrder(wcOrder);
-
-    res.json(result);
-  } catch (error) {
-    throw error;
-  }
+  const conn = await requireWcConnection();
+  const wcOrder = await wcRequest(conn, 'GET', `orders/${req.body.orderId}`);
+  res.json(await WooOrderSyncService.handleOrder(wcOrder as Parameters<typeof WooOrderSyncService.handleOrder>[0]));
 }));
 
-// Sync single item stock to WooCommerce
+// 10.2 package 6 (D-04 part A): the links between items and the shop's products, for the WooCommerce tab
+router.get('/catalog', authorizePermission('woocommerce.view'), asyncHandler(async (req, res) => {
+  res.json(await getWcCatalogReport());
+}));
+
+// «بازخوانی محصولات سایت»: reads the shop's catalog and links each product to the item its SKU finds
+router.post('/refresh-products', authorizePermission('woocommerce.manage'), idempotency({ scope: 'woocommerce' }), asyncHandler(async (req, res) => {
+  const summary = await refreshWcCatalog({ req });
+  res.json({ success: true, ...summary, message: catalogRefreshMessage(summary) });
+}));
+
+// Sync single item stock to WooCommerce, through the item's link (OBS-R2-83)
 router.post('/sync-item', authorizePermission('woocommerce.manage'), idempotency({ scope: 'woocommerce' }), validate(syncItemSchema), asyncHandler(async (req, res) => {
-  try {
-    const { itemId } = req.body;
-
-    const { url, consumerKey: key, consumerSecret: secret } = await readWcConnectionSettings();
-
-    if (!url || !key || !secret) {
-      return res.status(400).json({ error: 'تنظیمات ووکامرس تکمیل نشده است. ابتدا به صفحه تنظیمات > اتصال به ووکامرس بروید.' });
-    }
-
-    const [item] = await orm.select().from(items).where(eq(items.id, Number(itemId)));
-    if (!item) return res.status(404).json({ error: 'کالای مورد نظر در سیستم یافت نشد.' });
-    if (!item.code) return res.status(400).json({ error: 'کالا فاقد کد (SKU) است و قابل همگام‌سازی نیست.' });
-
-    const sku = item.code;
-    // v8.0.44 (TD-293، گزینه الف): موجودی قابل فروش انبار فروشگاه (همان انباری که فاکتور سفارش از آن کم می‌کند)، نه جمع همه انبارها
-    const { sellable } = await shopSellableStocks(orm, [item.id]);
-    const currentStock = sellable.get(item.id) ?? 0;
-
-    const wcProducts = await makeWcRequest('GET', 'products', url, key, secret, null, { sku });
-
-    if (!Array.isArray(wcProducts) || wcProducts.length === 0) {
-      return res.status(404).json({ error: `محصولی با کد شناسه (SKU) «${sku}» در سایت ووکامرس شما یافت نشد.` });
-    }
-
-    const wcProductId = wcProducts[0].id;
-
-    await makeWcRequest('PUT', `products/${wcProductId}`, url, key, secret, {
-      manage_stock: true,
-      stock_quantity: currentStock,
-      stock_status: currentStock > 0 ? 'instock' : 'outofstock'
-    });
-
-    res.json({ success: true, message: `موجودی کالا (SKU: ${sku}) با موفقیت به ${currentStock} عدد در ووکامرس به‌روزرسانی شد.` });
-
-  } catch (error) {
-    throw error;
-  }
+  const { sku, quantity, trackingEnabledCount } = await pushItemStock({ req }, Number(req.body.itemId));
+  res.json({ success: true, trackingEnabledCount, message: `موجودی کالا (${sku}) در سایت ${formatPersianNumber(quantity)} شد.${trackingEnabledNote(trackingEnabledCount)}` });
 }));
 
-// Bulk sync all active ERP items' stock to WooCommerce
+// The stock of every linked item, in batches of 100 (OBS-R2-83: was two requests per item)
 router.post('/sync-all-stocks', authorizePermission('woocommerce.manage'), idempotency({ scope: 'woocommerce' }), asyncHandler(async (req, res) => {
-  try {
-    const { url, consumerKey: key, consumerSecret: secret } = await readWcConnectionSettings();
-
-    if (!url || !key || !secret) {
-      return res.status(400).json({ error: 'تنظیمات کلیدهای دسترسی ووکامرس در سیستم پیکربندی نشده است.' });
-    }
-
-    const erpItems = await orm.select()
-      .from(items)
-      .where(and(eq(items.isDeleted, 0), sql`code IS NOT NULL AND code != ''`));
-
-    let updatedCount = 0;
-    let failedCount = 0;
-    const errors: string[] = [];
-    // v8.0.44 (TD-293، گزینه الف): موجودی قابل فروش انبار فروشگاه برای همه کالاها با یک گزارش رزرو
-    const { sellable } = await shopSellableStocks(orm, erpItems.map(item => item.id));
-
-    for (const item of erpItems) {
-      const sku = (item.code || '').trim();
-      if (!sku) continue;
-      const currentStock = sellable.get(item.id) ?? 0;
-
-      try {
-        const wcProducts = await makeWcRequest('GET', 'products', url, key, secret, null, { sku });
-        if (Array.isArray(wcProducts) && wcProducts.length > 0) {
-          const wcProductId = wcProducts[0].id;
-          await makeWcRequest('PUT', `products/${wcProductId}`, url, key, secret, {
-            manage_stock: true,
-            stock_quantity: currentStock,
-            stock_status: currentStock > 0 ? 'instock' : 'outofstock'
-          });
-          updatedCount++;
-        }
-      } catch (err) {
-        failedCount++;
-        const errMsg = err instanceof Error ? err.message : String(err);
-        errors.push(`خطا در SKU (${sku}): ${errMsg}`);
-      }
-    }
-
-    res.json({
-      success: true,
-      totalItems: erpItems.length,
-      syncedCount: updatedCount,
-      failedCount,
-      errors,
-      message: `همگام‌سازی دسته‌ای موجودی کل کالاها انجام شد. ${updatedCount} کالا در ووکامرس به‌روزرسانی شدند.`
-    });
-  } catch (error) {
-    throw error;
-  }
+  const result = await pushAllStocks({ req });
+  res.json({ success: true, ...result, message: `موجودی ${formatPersianNumber(result.syncedCount)} کالا در سایت به‌روز شد.${trackingEnabledNote(result.trackingEnabledCount)}` });
 }));
 
 // Test Connection

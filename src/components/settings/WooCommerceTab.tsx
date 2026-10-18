@@ -5,6 +5,7 @@ import { formatPersianDateTime, formatPersianDate, formatPersianNumber } from '.
 import { WcOrderLogStatusBadge } from './WcOrderLogStatusBadge';
 import { ShopWarehouseSelect } from './ShopWarehouseSelect';
 import { WcListEmptyRow } from './WcListEmptyRow';
+import { WcCatalogPanel } from './WcCatalogPanel';
 import type { WarehouseItem } from '../../hooks/queries/useSettingsQueries';
 import { copyToClipboard } from '../../utils/clipboard';
 import { DecimalInput } from '../common/DecimalInput';
@@ -262,6 +263,8 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
         </div>
       </div>
 
+      <WcCatalogPanel canManage={access.sync} stockPushRunning={isSyncingAllStocks} />
+
       {/* SECTION 3: Bulk Stock Sync & Manual Order Sync */}
       {access.sync && (
       <div className="grid md:grid-cols-2 gap-6">
@@ -272,7 +275,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
             همگام‌سازی دسته‌ای موجودی کل کالاها
           </div>
           <p className="text-xs text-emerald-900 leading-relaxed">
-            به‌روزرسانی یک‌باره موجودی همه محصولات دارای شناسه محصول (SKU) در فروشگاه برخط ووکامرس:
+            موجودی همه کالاهای وصل به محصولات سایت، گروهی و صدتایی، به فروشگاه برخط ووکامرس فرستاده می‌شود:
           </p>
           <button
             onClick={handleSyncAllStocks}

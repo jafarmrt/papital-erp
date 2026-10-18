@@ -305,42 +305,6 @@ async function withSettings<T>(values: Record<string, string>, fn: () => Promise
   }
 }
 
-/** فروشگاه ووکامرس ساختگی روی 127.0.0.1: جستجوی محصول با SKU و ثبت stock_quantity هر PUT */
-async function mockWooStore(productIdBySku: Map<string, number>): Promise<{ url: string; pushed: Map<number, number>; close: () => Promise<void> }> {
-  const http = await import('http');
-  const pushed = new Map<number, number>();
-  const server = http.createServer((req, res) => {
-    const url = new URL(req.url || '/', 'http://127.0.0.1');
-    let body = '';
-    req.on('data', chunk => { body += String(chunk); });
-    req.on('end', () => {
-      res.setHeader('Content-Type', 'application/json');
-      if (req.method === 'GET' && url.pathname.endsWith('/wp-json/wc/v3/products')) {
-        const id = productIdBySku.get(url.searchParams.get('sku') || '');
-        res.end(JSON.stringify(id ? [{ id }] : []));
-        return;
-      }
-      const match = url.pathname.match(/\/wp-json\/wc\/v3\/products\/(\d+)$/);
-      if (req.method === 'PUT' && match) {
-        const parsed = JSON.parse(body || '{}') as { stock_quantity?: number };
-        pushed.set(Number(match[1]), Number(parsed.stock_quantity));
-        res.end('{}');
-        return;
-      }
-      res.statusCode = 404;
-      res.end('{}');
-    });
-  });
-  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', () => resolve()));
-  const address = server.address();
-  const port = typeof address === 'object' && address ? address.port : 0;
-  const url = `http://127.0.0.1:${port}`;
-  // OBS-R2-82: every shop request passes the SSRF guard; only this stand-in's exact origin is let through, in tests only
-  const { allowTestLoopbackOrigin } = await import('../../lib/ssrfGuard.js');
-  const disallow = allowTestLoopbackOrigin(url);
-  return { url, pushed, close: () => new Promise<void>(resolve => { disallow(); server.close(() => resolve()); }) };
-}
-
 /**
  * TD-293 (تصمیم مالک محصول — گزینه الف): «انبار فروشگاه اینترنتی». با تنظیم انبار دوم، فاکتور سفارش از همان انبار کم می‌کند
  * (کالایی که فقط آنجا موجودی دارد فاکتور می‌شود)، و همگام‌سازی موجودی (تک‌کالا و دسته‌ای) موجودی قابل فروش همان انبار را
@@ -357,7 +321,8 @@ export async function checkWooShopWarehouse(): Promise<string[]> {
     docType: 'proforma', status: 'proforma', inOut: 'out', date: new Date().toISOString().slice(0, 10), user: 'inv', buyerName: 'خریدار پیش‌فاکتور آزمون',
     items: [{ itemId: reserved.id, quantity: 2, unitPrice: 1000, location: shop.code }],
   });
-  const store = await mockWooStore(new Map([[onlyShop.code, 501], [reserved.code, 502], [mostlyDefault.code, 503]]));
+  const { mockWooCatalogStore } = await import('../fixtures/mockWooCatalogStore.js');
+  const store = await mockWooCatalogStore([{ id: 501, sku: onlyShop.code }, { id: 502, sku: reserved.code }, { id: 503, sku: mostlyDefault.code }]);
   try {
     await withSettings({ wc_shop_warehouse: shop.code, wc_store_url: store.url, wc_consumer_key: 'ck_test', wc_consumer_secret: 'cs_test' }, async () => {
       const result = await WooOrderSyncService.handleOrder(wooOrder(wooOrderId(), 'processing', onlyShop.code, 2, 2000));
@@ -372,6 +337,9 @@ export async function checkWooShopWarehouse(): Promise<string[]> {
       const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
       const app = await getTestApp();
       const session = await getAdminSession();
+      // D-04: stock goes to the shop through the item ↔ product links that «بازخوانی محصولات سایت» makes
+      const refresh = await request(app).post('/api/woocommerce/refresh-products').set('Cookie', session.cookie).set('x-csrf-token', session.csrfToken).send({});
+      if (refresh.status !== 200) problems.push(`catalog refresh: ${refresh.status} ${JSON.stringify(refresh.body).slice(0, 120)}`);
       for (const item of [reserved, mostlyDefault]) {
         const res = await request(app).post('/api/woocommerce/sync-item').set('Cookie', session.cookie).set('x-csrf-token', session.csrfToken).send({ itemId: item.id });
         if (res.status !== 200) problems.push(`sync of item ${item.code}: ${res.status} ${JSON.stringify(res.body).slice(0, 120)}`);

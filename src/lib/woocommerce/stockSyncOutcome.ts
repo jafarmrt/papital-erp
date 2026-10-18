@@ -1,4 +1,5 @@
 import { formatPersianNumber } from '../../utils/persianNumber';
+import { trackingEnabledNote } from './wcCatalog';
 
 /**
  * v9.0.334 (TD-724، B15-22): نتیجه «همگام‌سازی دسته‌ای موجودی» برای کاربر. پاسخ `/woocommerce/sync-all-stocks` همیشه
@@ -10,6 +11,7 @@ export interface StockSyncResponse {
   totalItems?: number;
   syncedCount?: number;
   failedCount?: number;
+  trackingEnabledCount?: number;
   errors?: unknown;
 }
 
@@ -33,7 +35,8 @@ export function stockSyncOutcome(res: StockSyncResponse): StockSyncOutcome {
   const failed = Math.max(count(res.failedCount), errors.length);
   const notInShop = Math.max(0, total - synced - failed);
   const fa = (n: number) => formatPersianNumber(n);
-  const notInShopText = notInShop > 0 ? ` ${fa(notInShop)} کالا با این کد در فروشگاه یافت نشد.` : '';
+  const notInShopText = (notInShop > 0 ? ` ${fa(notInShop)} کالا با این کد در فروشگاه یافت نشد.` : '')
+    + trackingEnabledNote(res.trackingEnabledCount);
   if (failed === 0) {
     return { tone: 'success', message: `موجودی ${fa(synced)} کالا در فروشگاه به‌روز شد.${notInShopText}` };
   }
