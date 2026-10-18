@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import CreateInvoicePage from '../../pages/CreateInvoicePage';
 import type { User } from '../../types';
 
-/** Persian heading of the open proformas panel (v10.2.2: an icon, no emoji) */
+/** Persian heading of the open proformas panel (v10.2.3: an icon, no emoji) */
 const OPEN_PROFORMAS_HEADING = 'پیش‌فاکتورهای باز (۴۵)';
 
 // TD-792 (B08-23): پیش‌فاکتورهای باز فرم فاکتور فروش فقط سندهای فروش‌اند و صفحه‌به‌صفحه خوانده می‌شوند

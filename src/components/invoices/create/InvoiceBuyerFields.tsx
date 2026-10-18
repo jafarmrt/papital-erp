@@ -29,7 +29,7 @@ interface InvoiceBuyerFieldsProps {
 }
 
 /**
- * v10.2.2 (گزینه «ج»): بخش «خریدار». خریدار فقط از فهرست طرف حساب‌ها برگزیده می‌شود و مشخصات او از پرونده‌اش خوانده
+ * v10.2.3 (گزینه «ج»): بخش «خریدار». خریدار فقط از فهرست طرف حساب‌ها برگزیده می‌شود و مشخصات او از پرونده‌اش خوانده
  * می‌شود (فقط‌خواندنی).
  */
 export function InvoiceBuyerFields({ selectedCustomerId, onCustomerSelect, buyerName, buyerCity, buyerPhone, buyerAddress }: InvoiceBuyerFieldsProps) {

@@ -29,7 +29,7 @@ export function OpenProformasPanel({ proformas, total, page, onPageChange, editi
     <>
       {proformas.length > 0 && (
         <div className="bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col p-4 sm:p-6 mt-8">
-          {/* v10.2.2 (گزینه «ج»): سرتیتر با نشانه، بی شکلک؛ جدول در پهنای گوشی افقی پیمایش می‌شود */}
+          {/* v10.2.3 (گزینه «ج»): سرتیتر با نشانه، بی شکلک؛ جدول در پهنای گوشی افقی پیمایش می‌شود */}
           <h3 className="font-bold text-sm text-slate-800 flex items-center gap-2 mb-4">
             <Clock size={18} className="text-blue-600 shrink-0" aria-hidden="true" />
             پیش‌فاکتورهای باز ({formatPersianNumber(total)})

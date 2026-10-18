@@ -21,7 +21,7 @@ test('login, issue a final sales invoice and see its journal voucher', async ({ 
   // v10.0.192 (TD-1260): type into the picker's own search box; keyboard.type right after the click could send the
   // first key before the box mounted and searched a broken name
   // v10.1.31 (TD-1278): a picker is named by its label; its placeholder is only the shown text
-  // v10.2.2 (TD-1292): the invoice form's pickers show shorter placeholders
+  // v10.2.3 (TD-1292): the invoice form's pickers show shorter placeholders
   await page.locator('button', { hasText: 'نام یا تلفن خریدار را بنویسید' }).click();
   await page.getByPlaceholder('جست‌وجو...', { exact: true }).fill(customerName);
   await page.locator('li', { hasText: customerName }).first().click();
