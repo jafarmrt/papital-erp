@@ -59,7 +59,7 @@ describe('project item matching (TD-749, TD-768)', () => {
 
   it('has no item-matching copy left in the project screens and reservation', () => {
     const roots = [
-      'src/components/project', 'src/components/project-modal', 'src/components/ProjectDetailModal.tsx', 'src/components/ProjectModal.tsx',
+      'src/components/project', 'src/components/project-modal', 'src/pages/ProjectDetailPage.tsx', 'src/components/ProjectModal.tsx',
       'src/components/inventory/ProjectBomAllocationsTab.tsx', 'src/hooks/useProjectInventory.ts', 'src/pages/ProjectsPage.tsx',
       'src/pages/ProjectInventoryPage.tsx', 'src/lib/projects',
     ];

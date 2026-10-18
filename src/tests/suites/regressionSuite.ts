@@ -11142,5 +11142,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runClosingPermissionKeysTests } = await import('../regression/closingPermissionKeysTests.js');
   results.push(...await runClosingPermissionKeysTests(shouldRun));
 
+  // 10.2 package 2: the project page's step bar counts
+  const { runProjectWorkspaceStepsTests } = await import('../regression/projectWorkspaceStepsTests.js');
+  results.push(...await runProjectWorkspaceStepsTests(shouldRun));
+
   return results;
 }

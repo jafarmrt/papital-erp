@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 
 type FetchOpts = { method?: string; body?: string; signal?: AbortSignal };
 const project = {
@@ -36,20 +36,21 @@ vi.mock('../../components/project/ProjectScheduleTab', () => ({ default: () => n
 vi.mock('../../components/project/ProjectGanttTab', () => ({ default: () => null }));
 vi.mock('../../components/project/ProjectStockEntryTab', () => ({ default: () => null }));
 vi.mock('../../components/project/ProjectProductProgressTab', () => ({ default: () => null }));
-vi.mock('../../components/workflow/WorkflowStepperWidget', () => ({ WorkflowStepperWidget: () => null }));
 vi.mock('../../components/accounting/FinancialAttachmentUploader', () => ({ FinancialAttachmentUploader: () => null }));
 
-import ProjectDetailModal from '../../components/ProjectDetailModal';
+import { renderProjectPage } from './helpers/projectPage';
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); puts.length = 0; });
 
-const renderModal = () => render(<ProjectDetailModal projectId={7} isOpen onClose={vi.fn()} onUpdate={vi.fn()} />);
+const renderModal = () => renderProjectPage('/projects/7');
 
 // v9.0.419 (TD-763): stage dates were free text with a 1403 sample; the shortage badge read a field nobody writes
 describe('project detail stage dates and shortage badge (TD-763)', () => {
   it('counts the reservation shortages the server wrote at finalize', async () => {
     renderModal();
-    expect(await screen.findByText('۱ قلم کسری')).toBeTruthy();
+    expect(await screen.findByText('۱ کمبود')).toBeTruthy();
+    // v10.2.x: the step bar says the same on its reservation step
+    expect(screen.getByText('۱ قلم کمبود')).toBeTruthy();
   });
 
   it('edits stage dates with the Jalali picker and sends ISO dates', async () => {
@@ -58,7 +59,7 @@ describe('project detail stage dates and shortage badge (TD-763)', () => {
     expect(screen.queryByPlaceholderText('۱۴۰۳/۰۶/۱۵')).toBeNull();
     expect(screen.queryByPlaceholderText('۱۴۰۳/۰۶/۲۰')).toBeNull();
     expect(screen.getAllByPlaceholderText('انتخاب تاریخ')).toHaveLength(2);
-    fireEvent.click(screen.getByText('ذخیره تغییرات مرحله'));
+    fireEvent.click(screen.getByText('ذخیره مرحله'));
     await waitFor(() => expect(puts).toHaveLength(1));
     expect(puts[0].start_date).toBe('2026-08-23');
     expect(puts[0].end_date).toBe('2026-08-28');
@@ -67,7 +68,7 @@ describe('project detail stage dates and shortage badge (TD-763)', () => {
   // TD-762: the price list and work log fetches were removed in v9.0.141 (TD-891) and v9.0.142 (TD-892); this guards it
   it('reads neither every item price nor the project work logs it never shows (TD-762)', async () => {
     renderModal();
-    await waitFor(() => expect(fetchJson.mock.calls.some(([url]) => url === '/piecework/tasks')).toBe(true));
+    await waitFor(() => expect(fetchJson.mock.calls.some(([url]) => url === '/personnel')).toBe(true));
     const urls = fetchJson.mock.calls.map(([url]) => url);
     expect(urls.some(url => url.startsWith('/items/prices'))).toBe(false);
     expect(urls.some(url => url.startsWith('/piecework/logs'))).toBe(false);

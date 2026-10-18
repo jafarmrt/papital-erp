@@ -110,6 +110,8 @@ export const PAGE_ACCESS = {
   '/customers': { gate: anyOf('customers.view'), api: ['GET /api/customers', 'GET /api/customers/:id/documents'] },
   '/invoices/create': { gate: anyOf('documents.create'), api: DOCUMENT_ENTRY },
   '/projects': { gate: anyOf('projects.view'), api: ['GET /api/projects', 'GET /api/items/options'] },
+  // v10.2.x (10.2 package 2, review U1): a project's own page, one tab of five in its address
+  '/projects/:projectId/:tab?': { gate: anyOf('projects.view'), api: ['GET /api/projects/:id', 'GET /api/projects/:id/steps', 'GET /api/items/options'] },
   '/project-inventory': { gate: anyOf('projects.view', 'warehouse.view'), api: ['GET /api/projects/options', 'GET /api/projects/:id', 'GET /api/items/options'] },
   '/procurement': { gate: anyOf('procurement.view', 'projects.view'), api: ['GET /api/procurement/inbox/summary', 'GET /api/procurement/requisitions', 'GET /api/procurement/orders', 'GET /api/items/options'] },
   '/personnel': { gate: anyOf('personnel.view'), api: ['GET /api/personnel'] },

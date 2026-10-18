@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Boxes, ShoppingCart, CheckCircle2, Lock, Unlock, Save, FolderTree, Printer, ArrowLeft } from 'lucide-react';
 import { Item, ProjectInventoryControlSectionData, PurchaseListItem } from '../../types';
 import { useProjectInventory } from '../../hooks/useProjectInventory';
@@ -17,13 +17,16 @@ interface ProjectInventoryTabProps {
   itemsList?: Item[];
   warehouseItems?: Item[];
   onUpdate?: (signal?: AbortSignal) => void | Promise<void>;
+  /** v10.2.x (10.2 package 2, review U2): told whether the sections or the manual purchase rows hold an unsaved change */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 export function ProjectInventoryTab({
   project,
   itemsList,
   warehouseItems: initialWarehouseItems,
-  onUpdate
+  onUpdate,
+  onDirtyChange
 }: ProjectInventoryTabProps) {
   const effectiveItemsList = itemsList || initialWarehouseItems || [];
 
@@ -33,6 +36,7 @@ export function ProjectInventoryTab({
   const { canEdit, canRequestPurchase } = useProjectPermissions();
 
   const {
+    isDirty,
     saving,
     isFinalized,
     reservedItems,
@@ -82,6 +86,9 @@ export function ProjectInventoryTab({
     filteredWarehouseItems,
     currentModalSection
   } = useProjectInventory(project, effectiveItemsList, onUpdate);
+
+  useEffect(() => { onDirtyChange?.(isDirty); }, [isDirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   // V3.1.46 (TD-070): پل مستقیم خرید از ردیف بخش — ساخت لیست خرید موقت از کسری‌های همان بخش
   const [sectionPurchase, setSectionPurchase] = useState<{ list: PurchaseListItem[]; secIdx: number } | null>(null);

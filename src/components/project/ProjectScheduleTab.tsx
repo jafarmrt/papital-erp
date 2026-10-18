@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Users, Calendar, Plus, Trash2, Check, RefreshCw, Wrench, Tag, Calculator, Sparkles, Search, UserCheck, X, CheckCircle2, Coins, Briefcase } from 'lucide-react';
 import { 
   ProductionProject, ProjectStage, ProjectProductItem, 
@@ -27,13 +27,16 @@ interface ProjectScheduleTabProps {
   personnelList: any[];
   pieceworkTasksList: any[];
   onUpdate: () => void;
+  /** v10.2.x (review U2): the page asks before a tab change or leaving while the plan is not saved */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 export default function ProjectScheduleTab({
   project,
   personnelList: initialPersonnelList = [],
   pieceworkTasksList: initialPieceworkTasksList = [],
-  onUpdate
+  onUpdate,
+  onDirtyChange
 }: ProjectScheduleTabProps) {
   const rial = useRialDisplay();
   const [saving, setSaving] = useState<boolean>(false);
@@ -159,10 +162,16 @@ export default function ProjectScheduleTab({
 
   // Map of schedules: stageId -> { productId -> ProductStageSchedule }
   const [schedulesMap, setSchedulesMap] = useState<ProjectStageSchedulesMap>({});
+  // the plan as last read or saved; the tab holds unsaved changes while the two differ
+  const [savedSchedulesMap, setSavedSchedulesMap] = useState<ProjectStageSchedulesMap>({});
+  const hasUnsavedSchedules = useMemo(() => JSON.stringify(schedulesMap) !== JSON.stringify(savedSchedulesMap), [schedulesMap, savedSchedulesMap]);
+  useEffect(() => { onDirtyChange?.(hasUnsavedSchedules); }, [hasUnsavedSchedules, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   useEffect(() => {
     if (project.stage_schedules) {
       setSchedulesMap(project.stage_schedules);
+      setSavedSchedulesMap(project.stage_schedules);
     } else {
       // Initialize map for each stage and product
       const initialMap: ProjectStageSchedulesMap = {};
@@ -182,6 +191,7 @@ export default function ProjectScheduleTab({
         });
       });
       setSchedulesMap(initialMap);
+      setSavedSchedulesMap(initialMap);
     }
   }, [project]);
 
@@ -398,6 +408,7 @@ export default function ProjectScheduleTab({
       return null;
     }
     projectVersion.remember(res);
+    setSavedSchedulesMap(withIds);
     return withIds;
   };
 
@@ -414,6 +425,8 @@ export default function ProjectScheduleTab({
 
   const markRowsLogged = (links: Array<{ ref: ScheduleRowRef; logId: number }>) => {
     setSchedulesMap(prev => links.reduce((map, l) => withScheduleLogLink(map, l.ref, l.logId), prev));
+    // the server wrote the log ids into the saved plan itself
+    setSavedSchedulesMap(prev => links.reduce((map, l) => withScheduleLogLink(map, l.ref, l.logId), prev));
   };
 
   // Log single task to Piecework Logs
@@ -539,6 +552,7 @@ export default function ProjectScheduleTab({
 
       if (res && res.id) {
         projectVersion.remember(res);
+        setSavedSchedulesMap(schedulesMap);
         toast.success('برنامه‌ریزی کارگاه و تخصیص پرسنل با موفقیت ذخیره شد');
         onUpdate();
       } else {

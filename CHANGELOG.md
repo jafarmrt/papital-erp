@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.1.73 — a production project is a page with its own address, a step bar and an unsaved-changes warning
+- The project window became the page `/projects/<id>/<tab>` with five tabs, a step bar (`GET /projects/:id/steps`), specs edited on the page, a warning before an unsaved change is left, stage personnel picked from the list and «لغو پروژه» under «بیشتر».
+
 ### v10.1.72 — ارقام فارسی و جداکننده سه‌رقمی در کادرهای عدد، و یک کادر تاریخ
 - کادرهای عدد و مبلغ هنگام تایپ ارقام فارسی و «٬» نشان می‌دهند؛ تاریخ و ارز فاکتور از کادرهای مشترک می‌آیند و ۲۱ کادر تاریخ قدیمی به کادر تاریخ شمسی مشترک رفتند (TD-1288).
 

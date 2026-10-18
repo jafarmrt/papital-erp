@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { 
@@ -122,16 +122,28 @@ export function useProjectInventory(
 
   // Main sections state
   // v9.0.413 (TD-748): بخش الگو (مواد در items) به ردیف‌های پروژه برده می‌شود تا فهرست خرید، پیشرفت و رزرو آن را ببینند
-  const [sections, setSections] = useState<ProjectInventoryControlSectionData[]>(() => {
+  const [sections, setSectionsState] = useState<ProjectInventoryControlSectionData[]>(() => {
     const stored = project.inventory_control?.sections;
     const source = Array.isArray(stored) && stored.length > 0 ? stored : DEFAULT_INVENTORY_CONTROL_SECTIONS;
     return projectSectionsFromPreset(source, products, materialStockLookup(initialItemsList || []));
   });
 
   // Manual purchase items state
-  const [manualPurchaseItems, setManualPurchaseItems] = useState<PurchaseListItem[]>(() => {
+  const [manualPurchaseItems, setManualPurchaseItemsState] = useState<PurchaseListItem[]>(() => {
     return project.inventory_control?.manualPurchaseItems || [];
   });
+
+  // v10.2.x (10.2 package 2, review U2): a change the user made and has not saved; loading or syncing the project
+  // writes the state directly and leaves it clean, every edit goes through these setters and marks it
+  const [isDirty, setIsDirty] = useState(false);
+  const setSections = useCallback<React.Dispatch<React.SetStateAction<ProjectInventoryControlSectionData[]>>>(value => {
+    setIsDirty(true);
+    setSectionsState(value);
+  }, []);
+  const setManualPurchaseItems = useCallback<React.Dispatch<React.SetStateAction<PurchaseListItem[]>>>(value => {
+    setIsDirty(true);
+    setManualPurchaseItemsState(value);
+  }, []);
 
   // Modal State for adding/selecting raw materials
   const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
@@ -203,7 +215,7 @@ export function useProjectInventory(
         const stored = project.inventory_control?.sections;
         const hasStored = Array.isArray(stored) && stored.length > 0;
         if (!hasStored || hasPresetShapedSections(stored)) {
-          setSections(projectSectionsFromPreset(hasStored ? stored : (presets ?? DEFAULT_INVENTORY_CONTROL_SECTIONS), products, materialStockLookup(loadedItems)));
+          setSectionsState(projectSectionsFromPreset(hasStored ? stored : (presets ?? DEFAULT_INVENTORY_CONTROL_SECTIONS), products, materialStockLookup(loadedItems)));
         }
       } catch (err: any) {
         if (err?.name === 'AbortError') return;
@@ -218,11 +230,12 @@ export function useProjectInventory(
   // Sync state if project changes
   useEffect(() => {
     if (project.inventory_control?.sections && project.inventory_control.sections.length > 0) {
-      setSections(projectSectionsFromPreset(project.inventory_control.sections, products));
+      setSectionsState(projectSectionsFromPreset(project.inventory_control.sections, products));
     }
     if (project.inventory_control?.manualPurchaseItems) {
-      setManualPurchaseItems(project.inventory_control.manualPurchaseItems);
+      setManualPurchaseItemsState(project.inventory_control.manualPurchaseItems);
     }
+    setIsDirty(false);
     setIsFinalized(!!project.inventory_control?.isFinalized);
     setFinalizedAt(project.inventory_control?.finalizedAt);
     setReservedItems(Array.isArray(project.inventory_control?.reservedItems) ? project.inventory_control.reservedItems : []);
@@ -654,6 +667,7 @@ export function useProjectInventory(
       });
 
       projectVersion.remember(saved);
+      setIsDirty(false);
       setIsFinalized(true);
       setFinalizedAt(saved?.inventory_control?.finalizedAt);
       const reserved = savedReservedItems(saved);
@@ -696,6 +710,7 @@ export function useProjectInventory(
         body: JSON.stringify(payload)
       }));
 
+      setIsDirty(false);
       setIsFinalized(false);
       setFinalizedAt(undefined);
       setReservedItems([]);
@@ -738,6 +753,7 @@ export function useProjectInventory(
       });
 
       projectVersion.remember(saved);
+      setIsDirty(false);
       setReservedItems(savedReservedItems(saved));
       setReservationShortages(storedReservationShortages(saved?.inventory_control));
       toast.success('اطلاعات کنترل موجودی با موفقیت ذخیره شد.');
@@ -812,6 +828,7 @@ export function useProjectInventory(
   const currentModalSection = materialModalSectionIdx !== null ? sections[materialModalSectionIdx] : undefined;
 
   return {
+    isDirty,
     saving,
     setSaving,
     activeStepTab,

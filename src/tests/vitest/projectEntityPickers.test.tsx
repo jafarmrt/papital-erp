@@ -25,7 +25,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 const ROOT = join(__dirname, '..', '..');
 /** package 11 screens with entity pickers */
 const PACKAGE_11 = [
-  'pages/ProjectsPage.tsx', 'pages/ProjectInventoryPage.tsx', 'components/ProjectModal.tsx', 'components/ProjectDetailModal.tsx',
+  'pages/ProjectsPage.tsx', 'pages/ProjectInventoryPage.tsx', 'components/ProjectModal.tsx', 'pages/ProjectDetailPage.tsx',
   'components/project/', 'components/project-modal/', 'components/inventory/ProjectBomAllocationsTab.tsx',
   'components/settings/WorkflowPresetsTab.tsx',
 ];

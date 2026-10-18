@@ -23,6 +23,7 @@ import { ValidationError } from '../errors/customErrors.js';
 import { PROJECT_VERSION_REQUIRED_MESSAGE } from '../lib/projects/projectVersion.js';
 import { MAX_PROJECT_MANAGERS } from '../lib/projects/projectManagers.js';
 import { readProjectManagers } from '../services/projects/projectManagers.js';
+import { loadProjectStepCounts } from '../services/projects/projectSteps.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -720,6 +721,11 @@ router.delete('/projects/:id/stages/:stageId', authorizePermission(...PROJECT_ED
   } catch (err) {
     throw err;
   }
+}));
+
+// v10.2.x (10.2 package 2, review U4): the counts of the project page's step bar; counts only, no amount
+router.get('/projects/:id/steps', authorizePermission(...RECORD_READ_PERMISSIONS.production_project), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+  res.json(await loadProjectStepCounts(Number(req.params.id)));
 }));
 
 // GET /api/projects/:id/product-progress — ماتریس کامل پیشرفت SKUها

@@ -27,8 +27,8 @@ vi.mock('../../components/ProjectModal', () => ({
   default: ({ isOpen, projectToEdit }: { isOpen: boolean; projectToEdit: { description?: string } | null }) =>
     (isOpen ? <div data-testid="project-form">{projectToEdit?.description ?? 'new'}</div> : null),
 }));
-vi.mock('../../components/ProjectDetailModal', () => ({ default: () => null }));
 
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { SearchProvider } from '../../SearchContext';
 import ProjectsPage from '../../pages/ProjectsPage';
 
@@ -36,7 +36,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 const renderPage = () => render(
   <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-    <SearchProvider><ProjectsPage /></SearchProvider>
+    <MemoryRouter><SearchProvider><ProjectsPage /></SearchProvider></MemoryRouter>
   </QueryClientProvider>,
 );
 const listUrls = () => fetchJson.mock.calls.map(([url]) => url).filter(url => url.startsWith('/projects?'));
@@ -59,11 +59,24 @@ describe('project list page (TD-743)', () => {
     await waitFor(() => expect(listUrls()).toContain('/projects?status=in_progress&page=1&limit=50'));
   });
 
-  it('opens the edit form with the project record, not the list row', async () => {
-    renderPage();
+  // v10.2.x (10.2 package 2, review U1 / U3): the specs are edited on the project's own page, which reads the full record
+  it('opens the project page in edit mode', async () => {
+    const Probe = () => { const loc = useLocation(); return <output data-testid="location">{loc.pathname + loc.search}</output>; };
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter initialEntries={['/projects']}>
+          <SearchProvider>
+            <Routes>
+              <Route path="/projects" element={<ProjectsPage />} />
+              <Route path="/projects/:projectId/:tab?" element={<Probe />} />
+            </Routes>
+          </SearchProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
     const [edit] = await screen.findAllByTitle('ویرایش');
     fireEvent.click(edit);
-    await waitFor(() => expect(fetchJson.mock.calls.some(([url]) => /^\/projects\/\d+$/.test(url))).toBe(true));
-    expect((await screen.findByTestId('project-form')).textContent).toMatch(/^شرح کامل پروژه \d+$/);
+    expect((await screen.findByTestId('location')).textContent).toMatch(/^\/projects\/\d+\?edit=1$/);
+    expect(screen.queryByTestId('project-form')).toBeNull();
   });
 });

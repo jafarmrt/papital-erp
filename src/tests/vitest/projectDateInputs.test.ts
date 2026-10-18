@@ -5,7 +5,7 @@ import { join, relative } from 'node:path';
 const ROOT = join(__dirname, '..', '..');
 /** package 11 screens: projects page, project forms and tabs, BOM allocations */
 const PACKAGE_11 = [
-  'pages/ProjectsPage.tsx', 'components/ProjectModal.tsx', 'components/ProjectDetailModal.tsx', 'components/project/',
+  'pages/ProjectsPage.tsx', 'components/ProjectModal.tsx', 'pages/ProjectDetailPage.tsx', 'components/project/',
   'components/project-modal/', 'components/inventory/ProjectBomAllocationsTab.tsx', 'hooks/useProjectInventory.ts',
 ];
 
