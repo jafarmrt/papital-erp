@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
+import { BACKGROUND_POLL_HEADERS } from '../../lib/social/presence';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import type { StoredRuleActionType } from '../../lib/events/ruleActionTypes';
 import type { ActionEngineStats, ActionLogPage, ActionLogRow } from '../../lib/events/actionLogContract';
@@ -80,7 +81,7 @@ export function useDomainEventsQuery(filter: string = 'ALL', options?: { enabled
     queryFn: async ({ signal }) => {
       const res = await fetchJson<{ events?: DomainEvent[]; stats?: DomainEventStats }>(
         `/events/domain-events?limit=100&filter=${encodeURIComponent(filter)}`,
-        { signal }
+        { signal, headers: BACKGROUND_POLL_HEADERS }
       );
       return {
         events: Array.isArray(res?.events) ? res.events : [],
@@ -98,7 +99,7 @@ export function useOutboxStatsQuery(options?: { enabled?: boolean; refetchInterv
   return useQuery<OutboxStats | null>({
     queryKey: QUERY_KEYS.events.outboxStats(),
     queryFn: async ({ signal }) => {
-      const res = await fetchJson<{ success?: boolean; stats?: OutboxStats }>('/events/outbox/stats', { signal });
+      const res = await fetchJson<{ success?: boolean; stats?: OutboxStats }>('/events/outbox/stats', { signal, headers: BACKGROUND_POLL_HEADERS });
       return res?.stats || null;
     },
     staleTime: 5000,
@@ -114,7 +115,7 @@ export function useOutboxEventsQuery(status: string = 'ALL', options?: { enabled
     queryFn: async ({ signal }) => {
       const res = await fetchJson<{ success?: boolean; events?: OutboxEvent[] }>(
         `/events/outbox?limit=100&status=${encodeURIComponent(status)}`,
-        { signal }
+        { signal, headers: BACKGROUND_POLL_HEADERS }
       );
       return Array.isArray(res?.events) ? res.events : [];
     },
@@ -129,7 +130,7 @@ export function useActionRulesQuery(options?: { enabled?: boolean; refetchInterv
   return useQuery<ActionRule[]>({
     queryKey: QUERY_KEYS.events.actionRules(),
     queryFn: async ({ signal }) => {
-      const res = await fetchJson<{ success?: boolean; data?: ActionRule[] }>('/events/action-rules', { signal });
+      const res = await fetchJson<{ success?: boolean; data?: ActionRule[] }>('/events/action-rules', { signal, headers: BACKGROUND_POLL_HEADERS });
       return Array.isArray(res?.data) ? res.data : [];
     },
     staleTime: 10000,
@@ -143,7 +144,7 @@ export function useActionStatsQuery(options?: { enabled?: boolean; refetchInterv
   return useQuery<ActionStats | null>({
     queryKey: QUERY_KEYS.events.actionStats(),
     queryFn: async ({ signal }) => {
-      const res = await fetchJson<{ success?: boolean; stats?: ActionStats }>('/events/action-rules/stats', { signal });
+      const res = await fetchJson<{ success?: boolean; stats?: ActionStats }>('/events/action-rules/stats', { signal, headers: BACKGROUND_POLL_HEADERS });
       return res?.stats || null;
     },
     staleTime: 10000,
@@ -158,7 +159,7 @@ export function useActionLogsQuery(limit: number = 50, options?: { enabled?: boo
     queryKey: QUERY_KEYS.events.actionLogs(limit),
     queryFn: async ({ signal }) => {
       // v9.0.408 (TD-721): the server sends { data, total }; the hook used to read `logs`, so the list was always empty
-      const res = await fetchJson<Partial<ActionLogPage>>(`/events/action-logs?limit=${limit}`, { signal });
+      const res = await fetchJson<Partial<ActionLogPage>>(`/events/action-logs?limit=${limit}`, { signal, headers: BACKGROUND_POLL_HEADERS });
       const logs = Array.isArray(res?.data) ? res.data : [];
       return { logs, total: Number(res?.total ?? logs.length) };
     },

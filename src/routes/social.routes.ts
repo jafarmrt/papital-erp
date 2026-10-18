@@ -4,7 +4,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { numericIdString, validate } from '../middleware/validate.js';
 import { UnauthorizedError } from '../errors/customErrors.js';
-import { BIRTHDAY_REACTIONS, GREETING_MESSAGE_MAX, type BirthdayReaction } from '../lib/social/birthdays.js';
+import { BIRTHDAY_REACTIONS, GREETING_MESSAGE_MAX, greetingMessageLength, type BirthdayReaction } from '../lib/social/birthdays.js';
 import { deleteMyGreeting, listBirthdays, saveMyGreeting } from '../services/social/birthdays.service.js';
 import { dismissWhatsNew, getSocialPreferences, getWhatsNew, listPresence, setSocialPreferences } from '../services/social/socialDashboard.service.js';
 
@@ -14,7 +14,8 @@ import { dismissWhatsNew, getSocialPreferences, getWhatsNew, listPresence, setSo
  * age), presence without the page, the user's own greeting and choices. No amount is ever read or sent.
  */
 const router = Router();
-router.use(authenticateToken);
+// review N-4: only this router's own paths need the login; other /api requests never pass through it
+router.use('/social', authenticateToken);
 
 function currentUserId(req: { user?: { id?: number } }): number {
   const id = Number(req.user?.id);
@@ -27,7 +28,7 @@ const birthdayParam = z.object({ params: z.object({ personnelId: numericIdString
 const greetingSchema = birthdayParam.extend({
   body: z.object({
     reaction: z.enum(BIRTHDAY_REACTIONS as unknown as [BirthdayReaction, ...BirthdayReaction[]], { message: 'واکنش شناخته نیست' }).nullable().optional(),
-    message: z.string().max(GREETING_MESSAGE_MAX, `پیام تبریک حداکثر ${GREETING_MESSAGE_MAX.toLocaleString('fa-IR')} نویسه است`).optional(),
+    message: z.string().refine(m => greetingMessageLength(m) <= GREETING_MESSAGE_MAX, `پیام تبریک حداکثر ${GREETING_MESSAGE_MAX.toLocaleString('fa-IR')} نویسه است`).optional(),
   }).strict(),
 });
 

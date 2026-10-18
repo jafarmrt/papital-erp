@@ -5,15 +5,17 @@ import { MemoryRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { fetchJson } from '../../api';
 import {
-  birthMonthDay, birthdayInYear, daysAwayLabel, monthDayLabel, upcomingBirthday, type BirthdaysAnswer, type ColleagueBirthday,
+  birthMonthDay, birthdayInYear, daysAwayLabel, greetingMessageLength, monthDayLabel, scanRunsOfDay, upcomingBirthday,
+  type BirthdaysAnswer, type ColleagueBirthday, type DayScanRuns,
 } from '../../lib/social/birthdays';
-import { PRESENCE_ONLINE_MS, presenceStatus, recordPresence, lastSeenOf } from '../../lib/social/presence';
+import { BACKGROUND_POLL_HEADER, PRESENCE_ONLINE_MS, isBackgroundPoll, presenceStatus, recordPresence, lastSeenOf } from '../../lib/social/presence';
 import {
   BELL_ONLY_CATEGORIES, MESSENGER_PREFERENCE_CATEGORIES, NOTIFICATION_CATEGORIES, isBellOnlyCategory,
 } from '../../lib/notifications/notificationCategories';
 import { ColleagueBirthdaysCard } from '../../components/dashboard/social/ColleagueBirthdaysCard';
 import { MyBirthdayBanner } from '../../components/dashboard/social/MyBirthdayBanner';
 import { OnlineColleaguesCard } from '../../components/dashboard/social/OnlineColleaguesCard';
+import { SocialPreferencesPanel } from '../../components/dashboard/social/SocialPreferencesPanel';
 
 vi.mock('../../api', () => ({ fetchJson: vi.fn() }));
 const fetchMock = vi.mocked(fetchJson);
@@ -127,6 +129,41 @@ describe('group dashboard presence (v10.2 package 9)', () => {
     expect(screen.getByText('برخط است')).toBeTruthy();
     expect(screen.getByText('امروز آمده')).toBeTruthy();
     expect(screen.getByText('۱ نفر برخط')).toBeTruthy();
+  });
+});
+
+describe('group dashboard review fixes (v10.2 package 9)', () => {
+  it('counts a greeting as the database does: code points after trimming (N-2)', () => {
+    expect(greetingMessageLength(`  ${'🎂'.repeat(200)}  `)).toBe(200);
+    expect('🎂'.repeat(200).length).toBe(400);
+    expect(greetingMessageLength('   ')).toBe(0);
+  });
+
+  it('starts every user\'s birthday scan again on a new business day (N-7)', () => {
+    const state: DayScanRuns = { day: '', runs: new Map() };
+    scanRunsOfDay(state, '2026-10-18').set(5, 1000);
+    expect(scanRunsOfDay(state, '2026-10-18').get(5)).toBe(1000);
+    expect(scanRunsOfDay(state, '2026-10-19').size).toBe(0);
+  });
+
+  it('tells a background poll apart from the user\'s own request (N-5)', () => {
+    expect(BACKGROUND_POLL_HEADER.toLowerCase()).toBe('x-erp-background');
+    expect([isBackgroundPoll('1'), isBackgroundPoll(undefined), isBackgroundPoll('0'), isBackgroundPoll(['1'])]).toEqual([true, false, false, true]);
+  });
+
+  it('clears the busy flag when the panel closes during a save (N-3)', async () => {
+    let resolveSave: (v: unknown) => void = () => undefined;
+    fetchMock.mockImplementation(async (url: string, init?: { method?: string }) => {
+      if (init?.method === 'PUT') return new Promise(r => { resolveSave = r; });
+      return { showBirthday: true, showPresence: true };
+    });
+    const busy: boolean[] = [];
+    const { unmount } = render(wrap(<SocialPreferencesPanel onBusyChange={b => busy.push(b)} />));
+    fireEvent.click(await screen.findByLabelText(/حضور|برخط/));
+    await waitFor(() => expect(busy).toContain(true));
+    unmount();
+    expect(busy[busy.length - 1]).toBe(false);
+    resolveSave({ showBirthday: true, showPresence: false });
   });
 });
 

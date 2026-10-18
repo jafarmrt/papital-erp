@@ -8,9 +8,10 @@ import { ConflictError, NotFoundError, ValidationError } from '../../errors/cust
 import { createNotifications } from '../notifications/notificationCreator.js';
 import {
   BIRTHDAY_GREETING_NOTIFICATION, BIRTHDAY_REACTION_EMOJI, birthdayGreetingLink, birthdayLink, COLLEAGUE_BIRTHDAY_NOTIFICATION,
-  GREETING_MESSAGE_MAX, monthDayLabel, upcomingBirthday,
-  type BirthdayGreetingView, type BirthdayReaction, type BirthdaysAnswer, type ColleagueBirthday, type UpcomingBirthday,
+  GREETING_MESSAGE_MAX, greetingMessageLength, monthDayLabel, scanRunsOfDay, upcomingBirthday,
+  type BirthdayGreetingView, type DayScanRuns, type BirthdayReaction, type BirthdaysAnswer, type ColleagueBirthday, type UpcomingBirthday,
 } from '../../lib/social/birthdays.js';
+import { COLLEAGUE_FALLBACK_NAME } from '../../lib/social/presence.js';
 import { runThrottledReminderScan } from '../../lib/workshop/reminderThrottle.js';
 
 /**
@@ -92,7 +93,7 @@ async function greetingsOf(people: VisiblePerson[], viewerId: number): Promise<M
     list.push({
       id: r.id,
       senderUserId: r.senderUserId,
-      senderName: r.senderName || '',
+      senderName: r.senderName?.trim() || COLLEAGUE_FALLBACK_NAME,
       senderAvatarUrl: r.senderAvatarUrl || '',
       reaction: (r.reaction as BirthdayReaction | null) ?? null,
       message: r.message ?? '',
@@ -125,11 +126,15 @@ export async function listBirthdays(viewerId: number): Promise<BirthdaysAnswer> 
   return { myBirthdayToday: mine !== null, birthdays };
 }
 
-const birthdayScans = new Map<number, number>();
+const birthdayScans: DayScanRuns = { day: '', runs: new Map() };
 
-/** The bell's call: today's colleague birthdays of one user, at most once an hour, on the pool, never in a transaction */
-export async function generateColleagueBirthdayNotificationsThrottled(userId: number, nowMs = Date.now()): Promise<number> {
-  return runThrottledReminderScan(userId, nowMs, () => generateColleagueBirthdayNotifications(userId), birthdayScans);
+/**
+ * The bell's call: today's colleague birthdays of one user, at most once an hour, on the pool, never in a transaction.
+ * A new business day starts every user's hour again (review N-7), so the bell shows today's birthdays right after midnight.
+ */
+export async function generateColleagueBirthdayNotificationsThrottled(userId: number, nowMs = Date.now(), todayIso?: string): Promise<number> {
+  const runs = scanRunsOfDay(birthdayScans, todayIso ?? await businessTodayIsoDate());
+  return runThrottledReminderScan(userId, nowMs, () => generateColleagueBirthdayNotifications(userId), runs);
 }
 
 /** One notification per colleague whose birthday is today; the unique index keeps it once, even after it is dismissed */
@@ -155,7 +160,7 @@ export interface GreetingInput {
   message: string;
 }
 
-/** Today's birthday of a live, visible personnel who has not left, read under its row lock; else 404 / 422 */
+/** Today's birthday of a live, visible personnel who has not left, read under its row lock; else 404 */
 async function lockTodayBirthday(tx: DbTransaction, personnelId: number) {
   const [row] = await tx.select({
     id: personnel.id, fullName: personnel.fullName, birthDate: personnel.birthDate, userId: personnel.userId,
@@ -166,13 +171,14 @@ async function lockTodayBirthday(tx: DbTransaction, personnelId: number) {
   }
   const todayIso = await businessTodayIsoDate();
   const upcoming = upcomingBirthday(row.birthDate, todayIso, 0);
-  if (!upcoming) throw new ValidationError('فقط روز تولد می‌شود تبریک گفت.', undefined, 'SOCIAL_BIRTHDAY_NOT_TODAY');
+  // review N-1: a birthday that is not today answers like a missing one, so personnel ids cannot be probed
+  if (!upcoming) throw new NotFoundError('این تولد پیدا نشد.', undefined, 'SOCIAL_BIRTHDAY_NOT_FOUND');
   return { ...row, jalaliYear: upcoming.jalaliYear };
 }
 
 function normalizedGreeting(input: GreetingInput): GreetingInput {
   const message = String(input.message ?? '').trim();
-  if (message.length > GREETING_MESSAGE_MAX) {
+  if (greetingMessageLength(message) > GREETING_MESSAGE_MAX) {
     throw new ValidationError(`پیام تبریک حداکثر ${GREETING_MESSAGE_MAX.toLocaleString('fa-IR')} نویسه است.`, undefined, 'SOCIAL_GREETING_TOO_LONG');
   }
   if (!input.reaction && !message) throw new ValidationError('یک واکنش بزنید یا پیامی بنویسید.', undefined, 'SOCIAL_GREETING_EMPTY');
@@ -223,8 +229,8 @@ export async function saveMyGreeting(senderUserId: number, personnelId: number, 
       details: { personnelId, jalaliYear: person.jalaliYear, after: greeting },
     });
     if (person.userId) {
-      const [sender] = await tx.select({ fullName: users.fullName, username: users.username }).from(users).where(eq(users.id, senderUserId));
-      const senderName = sender?.fullName || sender?.username || 'یک همکار';
+      const [sender] = await tx.select({ fullName: users.fullName }).from(users).where(eq(users.id, senderUserId));
+      const senderName = sender?.fullName?.trim() || 'یک همکار';
       await createNotifications(tx, [{
         userId: person.userId,
         category: 'social',

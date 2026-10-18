@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import type { BirthdayReaction, BirthdaysAnswer } from '../../lib/social/birthdays';
 import type { PresenceColleague, SocialPreferences, WhatsNewAnswer } from '../../lib/social/presence';
+import { BACKGROUND_POLL_HEADERS } from '../../lib/social/presence';
 
 /** v10.2 package 9: the group dashboard («پیشخوان گروهی»): birthdays, greetings, presence and the whats-new card */
 export const SOCIAL_KEYS = {
@@ -61,7 +62,7 @@ export function usePresenceQuery() {
   return useQuery<PresenceColleague[]>({
     queryKey: SOCIAL_KEYS.presence,
     queryFn: async () => {
-      const data = (await fetchJson('/social/presence') as { data?: unknown } | null)?.data;
+      const data = (await fetchJson('/social/presence', { headers: BACKGROUND_POLL_HEADERS }) as { data?: unknown } | null)?.data;
       return Array.isArray(data) ? data as PresenceColleague[] : [];
     },
     refetchInterval: PRESENCE_REFRESH_MS,

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
+import { BACKGROUND_POLL_HEADERS } from '../../lib/social/presence';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { invalidatePreset } from '../../lib/queryInvalidation';
 import { toast } from 'react-hot-toast';
@@ -262,7 +263,7 @@ export function useWorkflowSlaAnalyticsQuery() {
   return useQuery({
     queryKey: ['workflow', 'analytics', 'sla'],
     queryFn: async () => {
-      return fetchJson('/workflow/analytics/sla');
+      return fetchJson('/workflow/analytics/sla', { headers: BACKGROUND_POLL_HEADERS });
     },
     refetchInterval: 30000 // Refresh SLA metrics every 30s
   });
@@ -281,7 +282,7 @@ export function useMyTasksQuery(status = 'pending', page = 1, limit = 50) {
   return useQuery({
     queryKey: ['workflow', 'tasks', 'my-tasks', status, page, pageSize],
     queryFn: async () => {
-      return fetchJson(`/workflow/tasks/my-tasks?status=${status}&page=${page}&limit=${pageSize}`);
+      return fetchJson(`/workflow/tasks/my-tasks?status=${status}&page=${page}&limit=${pageSize}`, { headers: BACKGROUND_POLL_HEADERS });
     },
     refetchInterval: WORKFLOW_INBOX_POLL_MS,
     refetchIntervalInBackground: false
@@ -292,7 +293,7 @@ export function useTaskStatsQuery() {
   return useQuery({
     queryKey: ['workflow', 'tasks', 'stats'],
     queryFn: async () => {
-      return fetchJson('/workflow/tasks/stats');
+      return fetchJson('/workflow/tasks/stats', { headers: BACKGROUND_POLL_HEADERS });
     },
     refetchInterval: WORKFLOW_INBOX_POLL_MS,
     refetchIntervalInBackground: false

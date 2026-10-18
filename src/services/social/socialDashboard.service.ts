@@ -6,8 +6,9 @@ import { businessTodayIsoDate, getDisplayTimezone } from '../../lib/businessCloc
 import { logActivity } from '../../lib/auditLogger.js';
 import { APP_VERSION } from '../../lib/version.js';
 import { ValidationError } from '../../errors/customErrors.js';
-import { lastSeenOf, presenceStatus, type PresenceColleague, type SocialPreferences, type WhatsNewAnswer } from '../../lib/social/presence.js';
+import { COLLEAGUE_FALLBACK_NAME, lastSeenOf, presenceStatus, type PresenceColleague, type SocialPreferences, type WhatsNewAnswer } from '../../lib/social/presence.js';
 import { v10Updates } from '../../data/changelogs/10.js';
+import { withdrawBirthdayNotifications } from './birthdayNotificationWithdraw.js';
 
 /**
  * v10.2 package 9 (group dashboard, parts D and E of the social dashboard proposal): who is in the app, each user's own
@@ -16,7 +17,7 @@ import { v10Updates } from '../../data/changelogs/10.js';
 
 /** `GET /social/presence`: colleagues seen in the last five minutes («برخط است») or today («امروز آمده»), never the page */
 export async function listPresence(viewerId: number, nowMs = Date.now()): Promise<PresenceColleague[]> {
-  const rows = await orm.select({ id: users.id, fullName: users.fullName, username: users.username, avatarUrl: users.avatarUrl })
+  const rows = await orm.select({ id: users.id, fullName: users.fullName, avatarUrl: users.avatarUrl })
     .from(users)
     .where(and(eq(users.isDeleted, 0), eq(users.isPresenceVisible, 1), ne(users.id, viewerId)))
     .orderBy(asc(users.id));
@@ -24,7 +25,8 @@ export async function listPresence(viewerId: number, nowMs = Date.now()): Promis
   const out: PresenceColleague[] = [];
   for (const r of rows) {
     const status = presenceStatus(lastSeenOf(r.id), nowMs, todayIso, timeZone);
-    if (status) out.push({ userId: r.id, name: r.fullName || r.username, avatarUrl: r.avatarUrl || '', status });
+    // review N-5: a user without a full name is «همکار», never the login name
+    if (status) out.push({ userId: r.id, name: r.fullName?.trim() || COLLEAGUE_FALLBACK_NAME, avatarUrl: r.avatarUrl || '', status });
   }
   return out.sort((a, b) => (a.status === b.status ? a.name.localeCompare(b.name, 'fa') : a.status === 'online' ? -1 : 1));
 }
@@ -69,6 +71,7 @@ export async function setSocialPreferences(userId: number, input: { showBirthday
     await tx.update(personnel).set({
       isBirthdayVisible: input.showBirthday ? 1 : 0, updatedAt: sql`now()`, version: sql`${personnel.version} + 1`,
     }).where(eq(personnel.id, person.id));
+    if (!input.showBirthday) await withdrawBirthdayNotifications(tx, person.id);
     await logActivity({
       tx, req, action: 'UPDATE', entity: 'پرسنل', entityId: person.id,
       description: input.showBirthday ? `نمایش تولد ${person.fullName} به همکاران روشن شد` : `نمایش تولد ${person.fullName} به همکاران خاموش شد`,

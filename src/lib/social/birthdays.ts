@@ -10,6 +10,24 @@ import { toPersianDigits } from '../../utils/persianNumber.js';
 export const BIRTHDAY_WINDOW_DAYS = 7;
 export const GREETING_MESSAGE_MAX = 200;
 
+/** The bell's birthday scan runs of one business day (review N-7) */
+export interface DayScanRuns { day: string; runs: Map<number, number> }
+
+/**
+ * The scan runs to throttle with on `day`: a new business day forgets the runs of the day before, so every user's bell
+ * scans for today's birthdays right after midnight instead of up to an hour late.
+ */
+export function scanRunsOfDay(state: DayScanRuns, day: string): Map<number, number> {
+  if (state.day !== day) {
+    state.runs.clear();
+    state.day = day;
+  }
+  return state.runs;
+}
+
+/** A greeting message's length as the database counts it (`char_length`, code points), after trimming (review N-2) */
+export const greetingMessageLength = (message: string) => [...String(message ?? '').trim()].length;
+
 /** The fixed reactions, stored by key (`chk_birthday_greetings_reaction`) */
 export const BIRTHDAY_REACTIONS = ['party', 'cake', 'clap', 'heart'] as const;
 export type BirthdayReaction = (typeof BIRTHDAY_REACTIONS)[number];

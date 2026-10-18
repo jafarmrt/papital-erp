@@ -29,6 +29,9 @@ export async function runSocialDashboardTests(shouldRun: ShouldRun): Promise<Tes
     ['reg_social_presence_preferences_td_1300',
       'v10.2 package 9: presence lists only «online» or «today» and nothing else; each user turns their presence and birthday off for themselves, with an audit row (TD-1300)',
       ['social', 'users', 'personnel'], cleaned(presenceCase)],
+    ['reg_social_birthday_withdrawn_td_1300',
+      'v10.2 package 9 (review M-1): a birthday turned off by its owner, of a personnel who left or of a deleted personnel leaves every bell at once, the rows kept so the bell never makes them again (TD-1300)',
+      ['social', 'notifications', 'personnel'], cleaned(withdrawnCase)],
     ['reg_social_whats_new_td_1300',
       'v10.2 package 9: the what\'s-new card shows the current version\'s changelog entry until the user dismisses it; another version is refused (TD-1300)',
       ['social', 'changelog'], cleaned(whatsNewCase)],
@@ -98,7 +101,7 @@ async function visibilityCase(h: Harness, wrong: string[]): Promise<string> {
   if (!todayRow?.isToday || todayRow.daysAway !== 0) wrong.push('today\'s birthday is not marked today');
   if (rows.find(r => r.personnelId === soon)?.daysAway !== 3) wrong.push('the birthday in three days has another distance');
   const text = JSON.stringify(res.body);
-  if (/birthDate|birth_date|"year"|jalaliYear|age/i.test(text)) wrong.push('the answer carries a birth date, year or age');
+  if (/"(?:birthDate|birth_date|year|jalaliYear|age)"\s*:/i.test(text)) wrong.push('the answer carries a birth date, year or age');
   if ((res.body as { myBirthdayToday?: boolean }).myBirthdayToday !== false) wrong.push('a viewer without personnel is greeted');
 
   const own = await h.get('/api/social/birthdays', hiddenOwner);
@@ -133,11 +136,18 @@ async function greetingsCase(h: Harness, wrong: string[]): Promise<string> {
   const self = await h.put(`/api/social/birthdays/${birthday}/greeting`, { reaction: 'heart' }, owner);
   if (self.status !== 422 || codeOf(self) !== 'SOCIAL_GREETING_SELF') wrong.push(`greeting oneself answered ${self.status} ${codeOf(self)}`);
   const notToday = await h.put(`/api/social/birthdays/${later}/greeting`, { reaction: 'heart' }, sender);
-  if (notToday.status !== 422 || codeOf(notToday) !== 'SOCIAL_BIRTHDAY_NOT_TODAY') wrong.push(`a greeting before the day answered ${notToday.status} ${codeOf(notToday)}`);
+  // review N-1: a birthday that is not today answers like a missing one, so personnel ids cannot be probed
+  if (notToday.status !== 404 || codeOf(notToday) !== 'SOCIAL_BIRTHDAY_NOT_FOUND') wrong.push(`a greeting before the day answered ${notToday.status} ${codeOf(notToday)}`);
   const empty = await h.put(`/api/social/birthdays/${birthday}/greeting`, { reaction: null, message: '   ' }, other);
   if (empty.status !== 422 || codeOf(empty) !== 'SOCIAL_GREETING_EMPTY') wrong.push(`an empty greeting answered ${empty.status} ${codeOf(empty)}`);
   const long = await h.put(`/api/social/birthdays/${birthday}/greeting`, { message: 'ا'.repeat(201) }, other);
   if (long.status !== 400) wrong.push(`a 201-letter message answered ${long.status}`);
+  // review N-2: the limit counts code points after trimming, as the database does (char_length)
+  const emoji = await h.put(`/api/social/birthdays/${birthday}/greeting`, { message: `  ${'🎂'.repeat(200)}  ` }, other);
+  if (emoji.status !== 200) wrong.push(`a 200-emoji message with spaces answered ${emoji.status} ${codeOf(emoji)}`);
+  const emojiLong = await h.put(`/api/social/birthdays/${birthday}/greeting`, { message: '🎂'.repeat(201) }, other);
+  if (emojiLong.status !== 400) wrong.push(`a 201-emoji message answered ${emojiLong.status}`);
+  if (emoji.status === 200) await h.del(`/api/social/birthdays/${birthday}/greeting`, other);
   const badReaction = await h.put(`/api/social/birthdays/${birthday}/greeting`, { reaction: 'fire' }, other);
   if (badReaction.status !== 400) wrong.push(`an unknown reaction answered ${badReaction.status}`);
 
@@ -153,7 +163,7 @@ async function greetingsCase(h: Harness, wrong: string[]): Promise<string> {
 
   const again = await h.put(`/api/social/birthdays/${birthday}/greeting`, { reaction: 'clap' }, sender);
   if (again.status !== 200) wrong.push(`greeting again after a delete answered ${again.status}`);
-  const notesAfter = await h.q(`SELECT id FROM notifications WHERE user_id = $1 AND type = 'birthday_greeting'`, [owner.userId]);
+  const notesAfter = await h.q(`SELECT id FROM notifications WHERE user_id = $1 AND type = 'birthday_greeting' AND sender_id = $2`, [owner.userId, sender.userId]);
   if (notesAfter.length !== 1) wrong.push('greeting again notified the owner a second time');
   return wrong.length ? wrong.join('; ') : 'one live greeting per sender; self, before the day, empty and long refused; bell only; own delete audited';
 }
@@ -181,6 +191,51 @@ async function bellCase(h: Harness, wrong: string[]): Promise<string> {
   return wrong.length ? wrong.join('; ') : 'one bell notification for a visible colleague, none for hidden, departed or own';
 }
 
+/** The fallback name of a user without a full name, compared with the presence answer */
+const COLLEAGUE_NAME = 'همکار';
+
+async function withdrawnCase(h: Harness, wrong: string[]): Promise<string> {
+  const viewer = await h.sessionWith([]);
+  const manager = await h.sessionWith(['personnel.view', 'personnel.manage']);
+  const owner = await h.sessionWith([]);
+  const hidden = await person(h, 'S9 withdraw hidden', { offset: 0, userId: owner.userId });
+  const leaving = await person(h, 'S9 withdraw left', { offset: 0 });
+  const removed = await person(h, 'S9 withdraw deleted', { offset: 0 });
+  const kept = await person(h, 'S9 withdraw kept', { offset: 0 });
+
+  if ((await h.get('/api/notifications', viewer)).status !== 200) return 'the bell did not answer';
+  const greet = await h.put(`/api/social/birthdays/${hidden}/greeting`, { reaction: 'cake' }, viewer);
+  if (greet.status !== 200) return `greeting answered ${greet.status} ${codeOf(greet)}`;
+  const live = async (userId: number, id: number) => (await h.q(
+    `SELECT id FROM notifications WHERE user_id = $1 AND link LIKE $2 AND dismissed_at IS NULL`, [userId, `/?birthday=${id}-%`])).length;
+  for (const id of [hidden, leaving, removed, kept]) {
+    if (await live(viewer.userId, id) !== 1) return `the bell has no notification for a birthday of today (${id})`;
+  }
+  if (await live(owner.userId, hidden) !== 1) return 'the owner has no greeting notification';
+
+  const off = await h.put('/api/social/preferences', { showBirthday: false }, owner);
+  if (off.status !== 200) wrong.push(`turning the birthday off answered ${off.status} ${codeOf(off)}`);
+  const [left] = await h.q(`SELECT version FROM personnel WHERE id = $1`, [leaving]);
+  const leave = await h.put(`/api/personnel/${leaving}`, { version: Number(left.version), employmentStatus: 'قطع همکاری' }, manager);
+  if (leave.status !== 200) wrong.push(`marking the personnel as left answered ${leave.status} ${JSON.stringify(leave.body).slice(0, 200)}`);
+  const del = await h.del(`/api/personnel/${removed}`, manager);
+  if (del.status !== 200) wrong.push(`deleting the personnel answered ${del.status} ${JSON.stringify(del.body).slice(0, 200)}`);
+
+  if (await live(viewer.userId, hidden) !== 0) wrong.push('the bell still shows a birthday its owner turned off');
+  if (await live(owner.userId, hidden) !== 0) wrong.push('the owner still has the greeting notification of a hidden birthday');
+  if (await live(viewer.userId, leaving) !== 0) wrong.push('the bell still shows the birthday of a personnel who left');
+  if (await live(viewer.userId, removed) !== 0) wrong.push('the bell still shows the birthday of a deleted personnel');
+  if (await live(viewer.userId, kept) !== 1) wrong.push('a birthday that is still shown left the bell');
+  const keptRows = await h.q(`SELECT id FROM notifications WHERE user_id = $1 AND link LIKE $2`, [viewer.userId, `/?birthday=${leaving}-%`]);
+  if (keptRows.length !== 1) wrong.push('the withdrawn row was not kept');
+  const count = await h.get('/api/notifications/unread-count', viewer);
+  const listed = (((await h.get('/api/notifications', viewer)).body as Array<{ link?: string }> | { data?: Array<{ link?: string }> }));
+  const links = (Array.isArray(listed) ? listed : (listed.data ?? [])).map(n => String(n.link ?? ''));
+  if ([hidden, leaving, removed].some(id => links.some(l => l.startsWith(`/?birthday=${id}-`)))) wrong.push('the bell list still carries a withdrawn birthday');
+  if (count.status !== 200) wrong.push(`the unread count answered ${count.status}`);
+  return wrong.length ? wrong.join('; ') : 'turned off, left and deleted birthdays left every bell; the rows kept; a shown birthday stays';
+}
+
 interface PresenceRow { userId: number; name: string; avatarUrl: string; status: string }
 
 async function presenceCase(h: Harness, wrong: string[]): Promise<string> {
@@ -198,6 +253,20 @@ async function presenceCase(h: Harness, wrong: string[]): Promise<string> {
   if (rows.some(r => r.userId === viewer.userId)) wrong.push('the viewer is listed to themselves');
   const keys = new Set(rows.flatMap(r => Object.keys(r)));
   if ([...keys].some(k => !['userId', 'name', 'avatarUrl', 'status'].includes(k))) wrong.push(`presence carries other keys: ${[...keys].join(',')}`);
+
+  // review N-5: a background poll of the browser is not the user's own request, and a user without a full name is «همکار»
+  const { lastSeenOf } = await import('../../lib/social/presence.js');
+  const { default: request } = await import('supertest');
+  const quiet = await h.sessionWith([]);
+  const before = lastSeenOf(quiet.userId);
+  const poll = await request(h.app as Parameters<typeof request>[0]).get('/api/notifications/unread-count').set('Cookie', quiet.cookie).set('X-ERP-Background', '1');
+  if (poll.status !== 200) wrong.push(`a background poll answered ${poll.status}`);
+  if (lastSeenOf(quiet.userId) !== before) wrong.push('a background poll counted as presence');
+  await h.q(`UPDATE users SET full_name = '' WHERE id = $1`, [quiet.userId]);
+  await h.get('/api/social/preferences', quiet);
+  if (lastSeenOf(quiet.userId) === before) wrong.push('the user\'s own request did not count as presence');
+  const named = (((await h.get('/api/social/presence', viewer)).body as { data?: PresenceRow[] }).data ?? []).find(r => r.userId === quiet.userId);
+  if (named?.name !== COLLEAGUE_NAME) wrong.push(`a user without a full name is shown as «${named?.name ?? 'missing'}»`);
 
   const off = await h.put('/api/social/preferences', { showPresence: false }, seen);
   if (off.status !== 200 || (off.body as { showPresence?: boolean }).showPresence !== false) wrong.push(`turning presence off answered ${off.status}`);

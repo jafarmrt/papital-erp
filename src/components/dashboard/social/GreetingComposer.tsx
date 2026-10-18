@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { Send, Trash2 } from 'lucide-react';
 import type { BirthdayReaction, ColleagueBirthday } from '../../../lib/social/birthdays';
-import { BIRTHDAY_REACTION_EMOJI, BIRTHDAY_REACTION_LABELS, BIRTHDAY_REACTIONS, GREETING_MESSAGE_MAX } from '../../../lib/social/birthdays';
+import { BIRTHDAY_REACTION_EMOJI, BIRTHDAY_REACTION_LABELS, BIRTHDAY_REACTIONS, GREETING_MESSAGE_MAX, greetingMessageLength } from '../../../lib/social/birthdays';
 import { useDeleteGreetingMutation, useSaveGreetingMutation } from '../../../hooks/queries/useSocialQueries';
 import { useOnlineStatus } from '../../../lib/pwa/useOnlineStatus';
 import { OFFLINE_SUBMIT_TITLE } from '../../../lib/pwa/phoneLayout';
@@ -52,6 +52,8 @@ export function GreetingComposer({ birthday }: { birthday: ColleagueBirthday }) 
 
   const disabledTitle = online ? undefined : OFFLINE_SUBMIT_TITLE;
   const messageChanged = message.trim() !== (mine?.message ?? '').trim();
+  const messageLength = greetingMessageLength(message);
+  const tooLong = messageLength > GREETING_MESSAGE_MAX;
 
   return (
     <div className="space-y-2">
@@ -97,14 +99,14 @@ export function GreetingComposer({ birthday }: { birthday: ColleagueBirthday }) 
           id={fieldId}
           type="text"
           value={message}
-          maxLength={GREETING_MESSAGE_MAX}
+          aria-invalid={tooLong}
           onChange={(e) => setMessage(e.target.value)}
           placeholder="پیام کوتاه تبریک…"
           className="flex-1 min-w-0 h-11 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300"
         />
         <button
           type="submit"
-          disabled={busy || !online || !messageChanged || (message.trim() === '' && !mine?.reaction)}
+          disabled={busy || !online || !messageChanged || tooLong || (message.trim() === '' && !mine?.reaction)}
           title={disabledTitle}
           className="h-11 px-3 rounded-xl bg-amber-500 text-white text-xs font-bold flex items-center gap-1 disabled:opacity-50"
         >
@@ -112,8 +114,8 @@ export function GreetingComposer({ birthday }: { birthday: ColleagueBirthday }) 
           <span>{mine?.message ? 'ویرایش پیام' : 'فرستادن'}</span>
         </button>
       </form>
-      <p className="text-[11px] text-slate-400">
-        {formatPersianNumber(message.length)} از {formatPersianNumber(GREETING_MESSAGE_MAX)} نویسه
+      <p className={`text-[11px] ${tooLong ? 'text-rose-600' : 'text-slate-400'}`}>
+        {formatPersianNumber(messageLength)} از {formatPersianNumber(GREETING_MESSAGE_MAX)} نویسه
       </p>
       {error && <p className="text-xs text-rose-600" role="alert">{error}</p>}
     </div>

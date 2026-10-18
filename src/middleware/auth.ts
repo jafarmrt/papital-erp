@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { recordPresence } from '../lib/social/presence.js';
+import { BACKGROUND_POLL_HEADER, isBackgroundPoll, recordPresence } from '../lib/social/presence.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { AuthUserPayload } from '../types.js';
@@ -283,8 +283,9 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
     }
     if (req.user?.id) {
       updateRequestContext({ userId: req.user.id, username: req.user.username });
-      // v10.2 package 9: the last request time only, in memory; never the page or the address
-      recordPresence(req.user.id);
+      // v10.2 package 9: the last request time only, in memory; never the page or the address. A background poll of the
+      // browser (review N-5) is not the user's own request and does not count.
+      if (!isBackgroundPoll(req.headers[BACKGROUND_POLL_HEADER.toLowerCase()])) recordPresence(req.user.id);
     }
     next();
   })().catch(next); });

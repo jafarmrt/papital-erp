@@ -14,7 +14,11 @@ export function SocialPreferencesPanel({ onBusyChange }: { onBusyChange?: (busy:
   const birthdayId = useId();
   const presenceId = useId();
 
-  useEffect(() => { onBusyChange?.(save.isPending); }, [save.isPending, onBusyChange]);
+  // review N-3: leaving the tab mid-save clears the busy flag, so Esc closes the profile window again
+  useEffect(() => {
+    onBusyChange?.(save.isPending);
+    return () => onBusyChange?.(false);
+  }, [save.isPending, onBusyChange]);
 
   const change = async (input: { showBirthday?: boolean; showPresence?: boolean }) => {
     setError('');
