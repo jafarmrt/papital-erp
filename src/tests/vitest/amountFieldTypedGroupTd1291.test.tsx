@@ -26,7 +26,11 @@ const SHOWN = {
   fiveThousand: '۵٬۰۰۰',
   twelveAndHalf: '۱۲٫۵',
   amountLabel: /مبلغ تراکنش/,
+  oneTwoFive: '۱۲۵',
   reset: 'reset',
+  /** the thousands separator and the decimal point keys */
+  groupKey: '٬',
+  decimalKey: '٫',
 } as const;
 
 /** the frame the field places its caret in */
@@ -77,13 +81,13 @@ function field(): HTMLInputElement {
 }
 
 describe('TD-1291 the amount field keeps a misplaced thousands separator on the field as an error, like the number field', () => {
-  it('1, 2, Shift+2, 5 typed key by key stays «12٬5» with an error and never becomes 125', async () => {
+  it('1, 2, Shift+2, 5 typed key by key stays 12,5 with an error and never becomes 125', async () => {
     const onValue = vi.fn();
     render(<AmountHost onValue={onValue} />);
     const input = field();
     await typeKeys(input, ['1', '2']);
     expect(onValue).toHaveBeenLastCalledWith(12);
-    await typeAtCaret(input, '٬');
+    await typeAtCaret(input, SHOWN.groupKey);
     expect(input.value).toBe(SHOWN.twelveTypedGroup);
     expect(input.selectionStart).toBe(SHOWN.twelveTypedGroup.length);
     expect(screen.getByRole('alert')).toBeTruthy();
@@ -102,7 +106,7 @@ describe('TD-1291 the amount field keeps a misplaced thousands separator on the 
     const onValue = vi.fn();
     render(<AmountHost onValue={onValue} />);
     const input = field();
-    await typeKeys(input, ['1', '2', '٬', '5']);
+    await typeKeys(input, ['1', '2', SHOWN.groupKey, '5']);
     await backspaceAtCaret(input);
     expect(input.value).toBe(SHOWN.twelveTypedGroup);
     expect(screen.getByRole('alert')).toBeTruthy();
@@ -117,7 +121,7 @@ describe('TD-1291 the amount field keeps a misplaced thousands separator on the 
     const onValue = vi.fn();
     render(<AmountHost onValue={onValue} />);
     const input = field();
-    await typeKeys(input, ['1', '2', '٬', '5', '0', '0']);
+    await typeKeys(input, ['1', '2', SHOWN.groupKey, '5', '0', '0']);
     expect(input.value).toBe(SHOWN.twelveFiveHundred);
     expect(onValue).toHaveBeenLastCalledWith(12500);
     expect(screen.queryByRole('alert')).toBeNull();
@@ -130,7 +134,7 @@ describe('TD-1291 the amount field keeps a misplaced thousands separator on the 
     const input = field();
     expect(input.value).toBe(SHOWN.million);
     input.setSelectionRange(3, 3);
-    await typeAtCaret(input, '٬');
+    await typeAtCaret(input, SHOWN.groupKey);
     expect(input.value).toBe(SHOWN.millionTypedGroupInMiddle);
     expect(input.selectionStart).toBe(4);
     expect(onValue).toHaveBeenLastCalledWith(0);
@@ -146,22 +150,22 @@ describe('TD-1291 the amount field keeps a misplaced thousands separator on the 
     const onValue = vi.fn();
     render(<AmountHost onValue={onValue} />);
     const input = field();
-    await typeKeys(input, ['1', '2', '٬', 'x']);
+    await typeKeys(input, ['1', '2', SHOWN.groupKey, 'x']);
     expect(input.value).toBe(SHOWN.twelveTypedGroup);
     expect(input.validity.valid).toBe(false);
     expect(onValue).toHaveBeenLastCalledWith(0);
   });
 
-  it('a foreign-currency amount with «٬» meant as a decimal point stays an error until «٫» is typed', async () => {
+  it('a foreign-currency amount with a separator meant as a decimal point stays an error until the decimal point is typed', async () => {
     const onValue = vi.fn();
     render(<AmountHost onValue={onValue} currency="USD" />);
     const input = field();
-    await typeKeys(input, ['1', '2', '٬', '5']);
+    await typeKeys(input, ['1', '2', SHOWN.groupKey, '5']);
     expect(input.value).toBe(SHOWN.twelveTypedGroupFive);
     expect(onValue).not.toHaveBeenCalledWith(125);
     await backspaceAtCaret(input);
     await backspaceAtCaret(input);
-    await typeKeys(input, ['٫', '5']);
+    await typeKeys(input, [SHOWN.decimalKey, '5']);
     expect(input.value).toBe(SHOWN.twelveAndHalf);
     expect(onValue).toHaveBeenLastCalledWith(12.5);
     expect(screen.queryByRole('alert')).toBeNull();
@@ -171,7 +175,7 @@ describe('TD-1291 the amount field keeps a misplaced thousands separator on the 
     const onSubmit = vi.fn();
     render(<AmountHost onValue={vi.fn()} onSubmit={onSubmit} />);
     const input = field();
-    await typeKeys(input, ['1', '2', '٬', '5']);
+    await typeKeys(input, ['1', '2', SHOWN.groupKey, '5']);
     fireEvent.blur(input);
     expect(input.value).toBe(SHOWN.twelveTypedGroupFive);
     expect(input.closest('form')?.checkValidity()).toBe(false);
@@ -185,14 +189,14 @@ describe('TD-1291 the amount field keeps a misplaced thousands separator on the 
     const onValue = vi.fn();
     render(<AmountHost onValue={onValue} />);
     const input = field();
-    await typeKeys(input, ['1', '2', '٬', '5']);
+    await typeKeys(input, ['1', '2', SHOWN.groupKey, '5']);
     fireEvent.click(screen.getByText(SHOWN.reset));
     expect(input.value).toBe(SHOWN.fiveThousand);
     expect(screen.queryByRole('alert')).toBeNull();
     expect(input.validity.valid).toBe(true);
   });
 
-  it('the treasury receipt form keeps «12٬5» on its amount field as an error and its form is not valid', async () => {
+  it('the treasury receipt form keeps 12,5 on its amount field as an error and its form is not valid', async () => {
     const bank = { id: 5, code: '1003-01', title: 'bank', type: 'bank', currency: 'IRR', currentBalance: 0, accountId: 40 } as unknown as BankAccount;
     const onSave = vi.fn(async () => undefined);
     render(
@@ -201,14 +205,14 @@ describe('TD-1291 the amount field keeps a misplaced thousands separator on the 
     );
     const input = screen.getByLabelText(SHOWN.amountLabel) as HTMLInputElement;
     input.focus();
-    await typeKeys(input, ['1', '2', '٬', '5']);
+    await typeKeys(input, ['1', '2', SHOWN.groupKey, '5']);
     expect(input.value).toBe(SHOWN.twelveTypedGroupFive);
     expect(input.validity.valid).toBe(false);
     expect(input.closest('form')?.checkValidity()).toBe(false);
     expect(onSave).not.toHaveBeenCalled();
   });
 
-  it('a voucher row\'s debit keeps «12٬5» as an error and the column total never shows 125', async () => {
+  it('a voucher row\'s debit keeps 12,5 as an error and the column total never shows 125', async () => {
     const row: VoucherItemDraft = { accountId: '', detailedType: 'none' as VoucherItemDraft['detailedType'], detailedId: null, detailedName: '', debit: 0, credit: 0, description: '' };
     let latest: VoucherItemDraft[] = [];
     function VoucherHost() {
@@ -227,10 +231,10 @@ describe('TD-1291 the amount field keeps a misplaced thousands separator on the 
     render(<QueryClientProvider client={new QueryClient()}><VoucherHost /></QueryClientProvider>);
     const [debit] = screen.getAllByRole('textbox').filter(el => el.getAttribute('data-decimal-input') !== null) as HTMLInputElement[];
     debit.focus();
-    await typeKeys(debit, ['1', '2', '٬', '5']);
+    await typeKeys(debit, ['1', '2', SHOWN.groupKey, '5']);
     expect(debit.value).toBe(SHOWN.twelveTypedGroupFive);
     expect(debit.validity.valid).toBe(false);
     expect(latest[0].debit).toBe(0);
-    expect(document.body.textContent).not.toContain('۱۲۵');
+    expect(document.body.textContent).not.toContain(SHOWN.oneTwoFive);
   });
 });
