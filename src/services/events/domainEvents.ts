@@ -146,6 +146,11 @@ export interface TreasuryEventPayload {
   accountId?: number;
   accountName?: string;
   sayadNumber?: string;
+  /**
+   * review M-3: the row's rial value at or above «آستانه تراکنش کلان خزانه» (`treasuryRowIsHighValue`); not on a
+   * payslip payment or its void, whose event carries nothing derived from the amount
+   */
+  isHighValue?: boolean;
 }
 
 /** OBS-R2-13 (ت۴۰ بند ۱۱): a cheque's status change, recorded in the transaction of the change (`ChequeStatusChanged`) */

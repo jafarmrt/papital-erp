@@ -8,6 +8,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { fetchJson } from '../../api';
+import { confirmAction } from '../../components/ConfirmDialogHost';
 import { UserSessionsPanel } from '../../components/users/UserSessionsPanel';
 import { deviceLabelOf, UNKNOWN_DEVICE_LABEL } from '../../lib/auth/deviceLabel';
 
@@ -28,9 +29,12 @@ function wrap(children: ReactNode) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
-function mockServer() {
+/** another user's devices: the server marks no device of theirs as the viewer's own */
+const otherUserSessions = sessions.map(s => ({ ...s, isCurrent: false }));
+
+function mockServer(list = sessions) {
   vi.mocked(fetchJson).mockImplementation(async (url: string, opts?: RequestInit) => {
-    if ((opts?.method || 'GET') === 'GET') return { sessions };
+    if ((opts?.method || 'GET') === 'GET') return { sessions: list };
     return { success: true, closedCount: 1 };
   });
 }
@@ -56,11 +60,36 @@ describe('device_sessions_panel_td_1295', () => {
   });
 
   it('the users page reads and closes the devices of the chosen user', async () => {
-    mockServer();
+    mockServer(otherUserSessions);
     render(wrap(<UserSessionsPanel userId={7} userName="رضا" />));
     await screen.findByText('گوشی اندروید، کروم');
     expect(fetchJson).toHaveBeenCalledWith('/users/7/sessions');
     fireEvent.click(screen.getByText('خروج از همهٔ دستگاه‌ها'));
     await waitFor(() => expect(fetchJson).toHaveBeenCalledWith('/users/7/sessions/close-all', { method: 'POST' }));
+    expect(vi.mocked(confirmAction)).toHaveBeenLastCalledWith(expect.objectContaining({ message: expect.not.stringContaining('خودتان') }));
+  });
+
+  it('warns an admin closing all devices of their own account on the users page and points to the profile (review N-4)', async () => {
+    mockServer();
+    render(wrap(<UserSessionsPanel userId={1} userName="مدیر" />));
+    expect(await screen.findByText(/این حساب خودتان است/)).toBeTruthy();
+    fireEvent.click(screen.getByText('خروج از همهٔ دستگاه‌ها'));
+    await waitFor(() => expect(vi.mocked(confirmAction)).toHaveBeenLastCalledWith(expect.objectContaining({ message: expect.stringContaining('همین دستگاه هم خارج می‌شود') })));
+  });
+
+  it('releases the window when the panel closes while a close is still being sent (review N-5)', async () => {
+    let finish: (v: unknown) => void = () => undefined;
+    vi.mocked(fetchJson).mockImplementation(async (_url: string, opts?: RequestInit) => {
+      if ((opts?.method || 'GET') === 'GET') return { sessions: otherUserSessions };
+      return new Promise(resolve => { finish = resolve; });
+    });
+    const busy = vi.fn();
+    const view = render(wrap(<UserSessionsPanel userId={7} userName="رضا" onBusyChange={busy} />));
+    await screen.findByText('گوشی اندروید، کروم');
+    fireEvent.click(screen.getByText('خروج از همهٔ دستگاه‌ها'));
+    await waitFor(() => expect(busy).toHaveBeenLastCalledWith(true));
+    view.unmount();
+    expect(busy).toHaveBeenLastCalledWith(false);
+    finish({ success: true, closedCount: 1 });
   });
 });

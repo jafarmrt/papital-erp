@@ -9,6 +9,7 @@ import { formatPersianNumber } from '../../../utils/persianNumber.js';
 import { domainEventBus } from '../../events/domainEventBus.js';
 import { DomainEventType } from '../../events/domainEvents.js';
 import { OutboxService } from '../../events/outboxService.js';
+import { isHighValueAmount, treasuryHighValueThreshold, treasuryRowIsHighValue } from './treasuryHighValue.js';
 
 /**
  * v10.2.2 (OBS-R2-52، بسته ۴ برنامه ۱۰.۲): راه یگانه ثبت و ابطال یک ردیف خزانه. دریافت و پرداخت فرم خزانه، پرداخت فیش
@@ -31,11 +32,25 @@ interface EventActor {
  * ۱۰.۲ بسته ۸ (TD-1297): رویداد «تراکنش خزانه تأیید شد» مبلغ، شرح و دلیل ابطال ندارد، چون به هر وبهوک و قاعده خودکاری
  * که این رویداد را بگیرد می‌رسد و شرح ردیف نام طرف حساب و مبلغ را در خود دارد؛ فقط شناسه ردیف، نوع، ارز و حساب می‌ماند.
  * فرم خزانه، انتقال میان حساب‌ها، صورت‌هزینه تنخواه، پرداخت ماهانه بیمه و مالیات و فیش حقوق همه از این‌جا می‌گذرند.
+ * به‌جای مبلغ فقط `isHighValue` (ارزش ریالی ردیف دست‌کم «آستانه تراکنش کلان خزانه») می‌آید، جز در فیش حقوق.
  */
 export const TREASURY_EVENT_PRIVATE_KEYS: readonly string[] = ['amount', 'description', 'reason'];
 
 export function treasuryEventPayload(payload: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(payload).filter(([key]) => !TREASURY_EVENT_PRIVATE_KEYS.includes(key)));
+}
+
+/**
+ * the event of one treasury row: the caller's payload without the private keys, plus `isHighValue` (review M-3,
+ * `treasuryRowIsHighValue`) unless the row is a payslip payment or its void, whose event carries nothing derived from
+ * the amount
+ */
+export { isHighValueAmount, treasuryHighValueThreshold };
+
+async function treasuryRowEventPayload(tx: DbExecutor, row: TreasuryRow, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const event = treasuryEventPayload(payload);
+  if (row.payrollId) return event;
+  return { ...event, isHighValue: await treasuryRowIsHighValue(tx, row) };
 }
 
 /** حساب زنده خزانه را برای تغییر مانده قفل می‌کند (FOR UPDATE)؛ نخستین قفل هر نوشتن خزانه */
@@ -167,7 +182,7 @@ export async function postTreasuryRow(tx: DbExecutor, bank: TreasuryBank, postin
   }).returning();
 
   await OutboxService.saveToOutbox(tx, domainEventBus.createEvent(
-    DomainEventType.TREASURY_TRANSACTION_APPROVED, 'Treasury', String(row.id), treasuryEventPayload(posting.event(row.id)),
+    DomainEventType.TREASURY_TRANSACTION_APPROVED, 'Treasury', String(row.id), await treasuryRowEventPayload(tx, row, posting.event(row.id)),
     { userId: posting.actor.userId, userName: posting.actor.username },
   ));
   return { row, transactionNumber, voucherId };
@@ -230,7 +245,7 @@ export async function reverseTreasuryRow(
     .where(eq(treasuryTransactions.id, original.id));
 
   await OutboxService.saveToOutbox(tx, domainEventBus.createEvent(
-    DomainEventType.TREASURY_TRANSACTION_APPROVED, 'Treasury', String(row.id), treasuryEventPayload(reversal.event(row)),
+    DomainEventType.TREASURY_TRANSACTION_APPROVED, 'Treasury', String(row.id), await treasuryRowEventPayload(tx, row, reversal.event(row)),
     { userId: reversal.actor.userId, userName: reversal.actor.username },
   ));
   return row;

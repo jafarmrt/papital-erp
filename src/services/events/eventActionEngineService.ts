@@ -13,6 +13,10 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { RuleEngineService, type RuleExpression } from '../ruleEngine.service.js';
 import { LOCAL_ECHO_PATH, assertSafeExternalUrl, isEchoSimulatorEnvironment, isLocalEchoTarget } from '../../lib/ssrfGuard.js';
 import { guardedWebhookFetch } from './guardedWebhookFetch.js';
+import {
+  HIGH_VALUE_TREASURY_RULE_CONDITIONS, HIGH_VALUE_TREASURY_RULE_DESCRIPTION, HIGH_VALUE_TREASURY_RULE_NAME, HIGH_VALUE_TREASURY_RULE_TEMPLATE,
+  repairSeededHighValueTreasuryRule,
+} from './highValueTreasuryRuleRepair.js';
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
 import { assertNotificationPermission, permissionHolderUserIds, roleMemberUserIds } from '../notifications/notificationRecipients.js';
 import { resolveRuleConfigSecrets } from './integrationSecrets.js';
@@ -459,6 +463,9 @@ export class EventActionEngineService {
    * Seeds standard out-of-the-box automation rules if database is clean
    */
   public static async seedDefaultRules(): Promise<void> {
+    // 10.2 package 8 (TD-1297, review M-3): an installed seeded high-value treasury rule moves from the amount to
+    // `isHighValue` once (its own transaction and error handling), before the empty-table check below
+    await repairSeededHighValueTreasuryRule();
     try {
       const webhookSecret = await EventActionEngineService.getWebhookSecretToken();
 
@@ -523,9 +530,22 @@ export class EventActionEngineService {
           },
           isActive: 1
         } satisfies CreateRuleInput] : []),
-        // 10.2 package 8 (TD-1297): the high-value treasury audit rule («ثبت ممیزی تراکنش‌های کلان خزانه‌داری», on
-        // payload.amount) is no longer seeded, since the treasury event carries no amount; an installed copy is listed by
-        // the financial health check (`event_rule_treasury_private_fields`)
+        // 10.2 package 8 (TD-1297, review M-3): the treasury event carries no amount, so the high-value audit rule reads
+        // `isHighValue` («آستانه تراکنش کلان خزانه», default 500,000,000 rials); an installed copy still on the amount is
+        // moved once by `repairSeededHighValueTreasuryRule`
+        {
+          name: HIGH_VALUE_TREASURY_RULE_NAME,
+          description: HIGH_VALUE_TREASURY_RULE_DESCRIPTION,
+          eventType: DomainEventType.TREASURY_TRANSACTION_APPROVED,
+          conditionsJson: HIGH_VALUE_TREASURY_RULE_CONDITIONS,
+          actionType: 'audit_log',
+          actionConfigJson: {
+            category: 'خزانه‌داری:تراکنش_کلان',
+            tag: 'HIGH_VALUE_TRANSACTION',
+            descriptionTemplate: HIGH_VALUE_TREASURY_RULE_TEMPLATE,
+          },
+          isActive: 1
+        },
       ];
 
       for (const rule of defaultRules) {

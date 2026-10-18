@@ -6,22 +6,59 @@ import { toPersianDigits } from '../../utils/persianNumber.js';
 
 /**
  * 10.2 package 8 (TD-1297): since the treasury event («ثبت یا ابطال تراکنش خزانه») carries no amount, description or
- * void reason, a rule of that event (or of every event) that reads one of them in its conditions or its action never
- * matches or prints it empty, like the seeded «ثبت ممیزی تراکنش‌های کلان خزانه‌داری» on `payload.amount`. Saved rules
- * are never rewritten (TD-715); such a rule is only listed here until its condition or text changes or it is deleted.
+ * void reason, a rule of that event (or of every event) that reads one of them changes how it behaves. A comparison on
+ * such a field (greater, less, equal, not equal, in, not in, exists …) never matches any more, since the rule engine
+ * matches no comparison on a field the event does not carry; an absence check on it (`is_empty`, `empty`,
+ * `not_exists`) now matches every treasury event, so that rule may fire on each one; a field read only in the action's
+ * text prints empty. Saved rules are never rewritten (TD-715) except the seeded high-value rule, which the boot moves
+ * to `payload.isHighValue` once; any other such rule is listed here, by kind, until its condition or text changes or
+ * it is deleted. A rule whose condition now matches every time lowers the score.
  */
+export type TreasuryPrivateFieldUse = 'always_matches' | 'never_matches' | 'text_only';
+
 export interface TreasuryPrivateFieldRuleRow {
   ruleId: number;
   name: string;
   isActive: boolean;
   fields: string[];
+  use: TreasuryPrivateFieldUse;
 }
 
 const TREASURY_PRIVATE_FIELD = /payload\.(amount|description|reason)\b/g;
+const PRIVATE_FIELD_EXACT = /^payload\.(amount|description|reason)(\.|$)/;
+/** the absence checks of the rule engine: they match a field the event does not carry */
+const ABSENCE_OPERATORS = new Set(['is_empty', 'empty', 'not_exists']);
 
-export function treasuryPrivateFieldsOf(conditions: unknown, actionConfig: unknown): string[] {
-  const text = `${JSON.stringify(conditions ?? [])} ${JSON.stringify(actionConfig ?? {})}`;
-  return [...new Set([...text.matchAll(TREASURY_PRIVATE_FIELD)].map(m => m[0]))].sort();
+interface PrivateConditionUse { fields: string[]; alwaysMatches: boolean; neverMatches: boolean }
+
+function walkConditions(node: unknown, found: PrivateConditionUse): void {
+  if (Array.isArray(node)) {
+    for (const child of node) walkConditions(child, found);
+    return;
+  }
+  if (!node || typeof node !== 'object') return;
+  const obj = node as Record<string, unknown>;
+  if (typeof obj.field === 'string') {
+    const field = obj.field.trim();
+    if (!PRIVATE_FIELD_EXACT.test(field)) return;
+    found.fields.push(field);
+    const op = String(obj.operator ?? '').toLowerCase().trim();
+    if (ABSENCE_OPERATORS.has(op)) found.alwaysMatches = true;
+    else found.neverMatches = true;
+    return;
+  }
+  walkConditions(obj.conditions, found);
+  walkConditions(obj.rules, found);
+}
+
+export function treasuryPrivateFieldUseOf(conditions: unknown, actionConfig: unknown): { fields: string[]; use: TreasuryPrivateFieldUse } | null {
+  const found: PrivateConditionUse = { fields: [], alwaysMatches: false, neverMatches: false };
+  walkConditions(conditions, found);
+  const textFields = [...JSON.stringify(actionConfig ?? {}).matchAll(TREASURY_PRIVATE_FIELD)].map(m => m[0]);
+  const fields = [...new Set([...found.fields, ...textFields])].sort();
+  if (fields.length === 0) return null;
+  const use: TreasuryPrivateFieldUse = found.alwaysMatches ? 'always_matches' : found.neverMatches ? 'never_matches' : 'text_only';
+  return { fields, use };
 }
 
 /** the treasury event type (`DomainEventType.TREASURY_TRANSACTION_APPROVED`) and «همه رویدادها» */
@@ -34,32 +71,43 @@ export async function findTreasuryPrivateFieldRules(): Promise<TreasuryPrivateFi
   }).from(eventActionRules)
     .where(inArray(eventActionRules.eventType, TREASURY_RULE_EVENT_TYPES))
     .orderBy(asc(eventActionRules.id));
-  return rules
-    .map(r => ({ ruleId: r.id, name: r.name, isActive: r.isActive === 1, fields: treasuryPrivateFieldsOf(r.conditionsJson, r.actionConfigJson) }))
-    .filter(r => r.fields.length > 0);
+  const rows: TreasuryPrivateFieldRuleRow[] = [];
+  for (const r of rules) {
+    const found = treasuryPrivateFieldUseOf(r.conditionsJson, r.actionConfigJson);
+    if (found) rows.push({ ruleId: r.id, name: r.name, isActive: r.isActive === 1, ...found });
+  }
+  return rows;
 }
+
+const USE_DETAILS: Record<TreasuryPrivateFieldUse, string> = {
+  always_matches: 'شرط «خالی بودن» یا «نبودن» این بخش اکنون در هر تراکنش خزانه برقرار است، پس قانون ممکن است با هر تراکنش اجرا شود.',
+  never_matches: 'شرط مقایسه روی این بخش دیگر هرگز برقرار نمی‌شود.',
+  text_only: 'این بخش در متن اقدام خالی چاپ می‌شود.',
+};
 
 export function buildTreasuryPrivateFieldRuleHealthTest(rows: TreasuryPrivateFieldRuleRow[]): HealthCheckTestResult {
   const count = rows.length;
   const active = rows.filter(r => r.isActive).length;
+  const activeAlways = rows.filter(r => r.isActive && r.use === 'always_matches').length;
+  const always = rows.filter(r => r.use === 'always_matches').length;
   return {
     id: 'event_rule_treasury_private_fields',
     category: 'system',
     title: 'قانون‌های خودکار خزانه که مبلغ یا شرح می‌خوانند',
-    description: 'رویداد تراکنش خزانه دیگر مبلغ، شرح و دلیل ابطال ندارد؛ قانونی که این‌ها را می‌خواند هرگز برقرار نمی‌شود یا متنش خالی می‌ماند و تا وقتی شرط یا متن آن عوض نشده این‌جا فهرست می‌شود',
+    description: 'رویداد تراکنش خزانه دیگر مبلغ، شرح و دلیل ابطال ندارد؛ شرط مقایسه روی آن‌ها دیگر برقرار نمی‌شود، شرط «خالی بودن» یا «نبودن» آن‌ها در هر تراکنش برقرار است و متن اقدام آن‌ها را خالی چاپ می‌کند. چنین قانونی تا وقتی شرط یا متن آن عوض نشده این‌جا فهرست می‌شود',
     status: count > 0 ? 'warning' : 'healthy',
-    scoreImpact: 0,
+    scoreImpact: -Math.min(10, activeAlways * 2),
     count,
     message: count > 0
-      ? `${toPersianDigits(count)} قانون خودکار (${toPersianDigits(active)} فعال) مبلغ یا شرح تراکنش خزانه را می‌خواند که رویداد دیگر ندارد؛ در «اقدام‌های خودکار» شرط آن را عوض کنید یا قانون را حذف کنید.`
+      ? `${toPersianDigits(count)} قانون خودکار (${toPersianDigits(active)} فعال) مبلغ یا شرح تراکنش خزانه را می‌خواند که رویداد دیگر ندارد${always > 0 ? `؛ شرط ${toPersianDigits(always)} قانون اکنون در هر تراکنش برقرار است` : ''}. در «اقدام‌های خودکار» شرط آن را عوض کنید یا قانون را حذف کنید.`
       : 'هیچ قانون خودکاری مبلغ یا شرح تراکنش خزانه را نمی‌خواند.',
     items: rows.map(r => ({
       id: r.ruleId,
       code: `قانون #${toPersianDigits(r.ruleId)}`,
       title: r.name || `قانون #${toPersianDigits(r.ruleId)}`,
       subtitle: `بخش‌های ناموجود: ${r.fields.join('، ')}`,
-      details: r.isActive ? 'فعال است، ولی دیگر برقرار نمی‌شود.' : 'غیرفعال است.',
+      details: `${r.isActive ? 'فعال است.' : 'غیرفعال است.'} ${USE_DETAILS[r.use]}`,
     })),
-    metrics: { treasuryPrivateFieldRules: count, activeTreasuryPrivateFieldRules: active },
+    metrics: { treasuryPrivateFieldRules: count, activeTreasuryPrivateFieldRules: active, alwaysMatchingTreasuryRules: always },
   };
 }

@@ -171,26 +171,39 @@ export async function closeOtherOwnSessions(req: Request, res: Response): Promis
   return { closedCount: closedSids.length, ...session };
 }
 
-/** «خروج»: this device's row is closed (an old token's row is written closed), never the user's other devices */
-export async function closeSessionOnLogout(claims: SessionTokenClaims & { tokenVersion?: number }, req: Request): Promise<number | null> {
+/**
+ * «خروج»: this device's row is closed (an old token's row is written closed), never the user's other devices. One
+ * upsert closes it whether or not the row exists yet (review N-2): an old token's first request may adopt its row
+ * between a read and an insert, and an insert that then gave way to that open row left the device signed in.
+ */
+export interface LoggedOutSession {
+  sessionId: number | null;
+  /** the account's stored names, for the logout audit row (review N-6) */
+  username: string | null;
+  fullName: string | null;
+}
+
+export async function closeSessionOnLogout(claims: SessionTokenClaims & { tokenVersion?: number }, req: Request): Promise<LoggedOutSession> {
+  const [account] = await orm.select({ username: users.username, fullName: users.fullName }).from(users)
+    .where(eq(users.id, Number(claims.id))).limit(1);
+  const names = { username: account?.username ?? null, fullName: account?.fullName ?? null };
   const sid = sessionIdOfClaims(claims);
-  if (!sid) return null;
-  const [existing] = await orm.select({ id: userSessions.id, userId: userSessions.userId })
-    .from(userSessions).where(eq(userSessions.sid, sid)).limit(1);
-  if (existing && existing.userId !== Number(claims.id)) return null;
-  if (existing) {
-    await closeRow(orm, existing.id, 'logout');
-  } else {
-    const expSeconds = Number(claims.exp) > 0 ? Number(claims.exp) : Math.floor(Date.now() / 1000);
-    await orm.insert(userSessions).values({
-      userId: Number(claims.id), sid, tokenVersion: Number(claims.tokenVersion ?? 0), ...requestInfo(req),
-      expiresAt: sql`to_timestamp(${expSeconds}) AT TIME ZONE 'UTC'`,
-      revokedAt: sql`now() AT TIME ZONE 'UTC'`, revokeReason: 'logout',
-    }).onConflictDoNothing({ target: userSessions.sid });
-  }
+  if (!sid) return { sessionId: null, ...names };
+  const expSeconds = Number(claims.exp) > 0 ? Number(claims.exp) : Math.floor(Date.now() / 1000);
+  const [row] = await orm.insert(userSessions).values({
+    userId: Number(claims.id), sid, tokenVersion: Number(claims.tokenVersion ?? 0), ...requestInfo(req),
+    expiresAt: sql`to_timestamp(${expSeconds}) AT TIME ZONE 'UTC'`,
+    revokedAt: sql`now() AT TIME ZONE 'UTC'`, revokeReason: 'logout',
+  }).onConflictDoUpdate({
+    target: userSessions.sid,
+    set: {
+      revokedAt: sql`COALESCE(${userSessions.revokedAt}, now() AT TIME ZONE 'UTC')`,
+      revokeReason: sql`COALESCE(${userSessions.revokeReason}, 'logout')`,
+    },
+    setWhere: eq(userSessions.userId, Number(claims.id)),
+  }).returning({ id: userSessions.id });
   invalidateSessionCache(sid);
-  const [row] = await orm.select({ id: userSessions.id }).from(userSessions).where(eq(userSessions.sid, sid)).limit(1);
-  return row?.id ?? null;
+  return { sessionId: row?.id ?? null, ...names };
 }
 
 async function lockManagedUser(tx: DbExecutor, req: Request, targetUserId: number) {

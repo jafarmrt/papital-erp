@@ -25,7 +25,7 @@ import { reconcileTreasuryRows, type ReconcileParams, type ReconcileResult } fro
 import type { TreasuryVoucherPreview } from '../../../lib/treasury/treasuryVoucherPreview.js';
 import { listTreasuryTransactions, pageTreasuryTransactions, type TreasuryListFilters, type TreasuryTransactionPage } from './treasuryTransactionList.js';
 import {
-  assertBankCurrency, lockTreasuryBank, nextTreasuryTransactionNumber, postTreasuryRow, reverseTreasuryRow, treasuryEventPayload, type TreasuryBank, type TreasuryRow,
+  assertBankCurrency, lockTreasuryBank, nextTreasuryTransactionNumber, postTreasuryRow, reverseTreasuryRow, treasuryEventPayload, isHighValueAmount, treasuryHighValueThreshold, type TreasuryBank, type TreasuryRow,
 } from './treasuryPosting.js';
 
 /**
@@ -682,7 +682,8 @@ export class TreasuryTransactionService {
           fromAccountId: from.id,
           fromAccountName: from.title,
           toAccountId: to.id,
-          toAccountName: to.title
+          toAccountName: to.title,
+          isHighValue: isHighValueAmount(amount, currency, transferRate, await treasuryHighValueThreshold(txEngine)),
         }),
         { userId: data.userId, userName: data.username }
       );

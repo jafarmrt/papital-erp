@@ -74,6 +74,31 @@ export async function treasuryEventLeaks(transactionIds: number[], privateTexts:
   return problems;
 }
 
+/** each row's `isHighValue` in its treasury event ('absent' when the event has none) */
+async function highValueFlags(transactionIds: number[]): Promise<string> {
+  const events = await eventPayloads('TreasuryTransactionApproved', transactionIds);
+  return transactionIds.map(id => {
+    const payload = events.find(e => e.id === String(id))?.payload;
+    return payload && 'isHighValue' in payload ? String(payload.isHighValue) : 'absent';
+  }).join(',');
+}
+
+const THRESHOLD_KEY = 'treasury_high_value_threshold';
+
+async function withThreshold<T>(value: string | null, body: () => Promise<T>): Promise<T> {
+  const before = (await pool.query<{ value: string }>('SELECT value FROM app_settings WHERE key = $1', [THRESHOLD_KEY])).rows[0]?.value ?? null;
+  const write = async (v: string | null) => {
+    if (v === null) await pool.query('DELETE FROM app_settings WHERE key = $1', [THRESHOLD_KEY]);
+    else await pool.query('INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value', [THRESHOLD_KEY, v]);
+  };
+  await write(value);
+  try {
+    return await body();
+  } finally {
+    await write(before);
+  }
+}
+
 const reversalOf = async (transactionId: number) =>
   Number((await pool.query<{ id: number }>('SELECT id FROM treasury_transactions WHERE reversal_of_id = $1', [transactionId])).rows[0]?.id ?? 0);
 
@@ -162,15 +187,87 @@ export async function runTreasuryEventPrivacyTests(shouldRun: ShouldRun): Promis
           for (const secret of [storedName, '1234567', '345678', VOID_REASON]) if (text.includes(secret)) problems.push(`${type} carries "${secret.slice(0, 20)}"`);
         }
       }
-      problems.push(...await treasuryEventLeaks([transactionId, await reversalOf(transactionId)], [storedName, '345678', VOID_REASON]));
+      const payrollRows = [transactionId, await reversalOf(transactionId)];
+      problems.push(...await treasuryEventLeaks(payrollRows, [storedName, '345678', VOID_REASON]));
+      const flags = await highValueFlags(payrollRows);
+      if (flags !== 'absent,absent') problems.push(`the payslip payment's treasury events carry isHighValue (${flags})`);
       if (problems.length > 0) throw new Error(problems.join(' | '));
       return 'PayrollPaid, PayrollPaymentVoided and their treasury events carry no name or amount';
     });
   }
 
+  const flagId = 'reg_treasury_event_high_value_flag_td_1297';
+  if (shouldRun(flagId, 'td1297', 'treasury', 'event', 'high_value', 'package8')) {
+    await runCase(results, flagId, 'v10.2.7: the treasury event says whether its row is worth at least the treasury high-value threshold setting in rials (isHighValue), without its amount; the default threshold is 500,000,000 rials (TD-1297, review M-3)', async () => {
+      const api = await adminClient();
+      const contraAccountId = await miscContraAccountId();
+      const receiptOf = async (amount: number, bankId: number) => {
+        const res = await api.post('/api/accounting/treasury', { type: 'receipt', method: 'bank_transfer', amount, bankAccountId: bankId, partyType: 'other', contraAccountId, partyName: PARTY_NAME });
+        const id = Number((res.body as { id?: unknown })?.id);
+        if (!id) throw new Error(`setup: receipt ${brief(res)}`);
+        return id;
+      };
+      const flags = await withThreshold('700000', async () => {
+        const bankId = await fundedBank();
+        const otherBank = await fundedBank();
+        const big = await receiptOf(734_519, bankId);
+        const small = await receiptOf(211_207, bankId);
+        const voided = await api.post(`/api/accounting/treasury/${big}/void`, { reason: VOID_REASON });
+        if (voided.status !== 200) throw new Error(`setup: void ${brief(voided)}`);
+        const transfer = await api.post('/api/accounting/treasury/transfer', { fromBankAccountId: bankId, toBankAccountId: otherBank, amount: 800_000 });
+        const transferId = Number((transfer.body as { receipt?: { id?: number } }).receipt?.id);
+        if (transfer.status !== 201 || !transferId) throw new Error(`setup: transfer ${brief(transfer)}`);
+        const ids = [big, small, await reversalOf(big), transferId];
+        const leaks = await treasuryEventLeaks(ids, ['734519', '211207']);
+        if (leaks.length > 0) throw new Error(leaks.join(' | '));
+        return highValueFlags(ids);
+      });
+      if (flags !== 'true,false,true,true') throw new Error(`with a 700,000 rial threshold the flags were ${flags}, expected true,false,true,true`);
+      const refused = await api.post('/api/settings', { settings: [{ key: THRESHOLD_KEY, value: '0' }] });
+      if (refused.status !== 422 || (refused.body as { code?: string })?.code !== 'SETTING_TREASURY_HIGH_VALUE_INVALID') throw new Error(`saving a zero threshold returned ${brief(refused)}`);
+      const atDefault = await withThreshold(null, async () => highValueFlags([await receiptOf(499_999_999, await fundedBank())]));
+      if (atDefault !== 'false') throw new Error(`499,999,999 rials at the default threshold was ${atDefault}`);
+      return 'receipt, void and transfer at or above the threshold flagged, the smaller receipt not, no amount sent';
+    });
+  }
+
+  const repairId = 'reg_seeded_high_value_rule_repaired_td_1297';
+  if (shouldRun(repairId, 'td1297', 'treasury', 'event', 'rule', 'high_value', 'package8')) {
+    await runCase(results, repairId, 'v10.2.7: the boot moves the seeded high-value treasury audit rule from the amount to isHighValue once, with an audit row, and leaves a rule the owner changed as it is (TD-1297, review M-3)', async () => {
+      const { repairSeededHighValueTreasuryRule, HIGH_VALUE_TREASURY_RULE_NAME } = await import('../../services/events/highValueTreasuryRuleRepair.js');
+      const { RuleEngineService } = await import('../../services/ruleEngine.service.js');
+      const seededConfig = { category: 'خزانه‌داری:تراکنش_کلان', tag: 'HIGH_VALUE_TRANSACTION', descriptionTemplate: 'تراکنش خزانه‌داری با ارزش کلان {{payload.amount}} {{payload.currency}} به ثبت رسید.' };
+      const inserted = await orm.insert(eventActionRules).values([
+        { name: HIGH_VALUE_TREASURY_RULE_NAME, description: 'ثبت لاگ ممیزی امنیتی اختصاصی برای کلیه تراکنش‌های واریز یا برداشت بالای ۵۰۰ میلیون ریال', eventType: 'TreasuryTransactionApproved', actionType: 'audit_log', conditionsJson: [{ field: 'payload.amount', operator: 'gte', value: 500000000 }], actionConfigJson: seededConfig, isActive: 1 },
+        { name: HIGH_VALUE_TREASURY_RULE_NAME, description: 'owner changed', eventType: 'TreasuryTransactionApproved', actionType: 'audit_log', conditionsJson: [{ field: 'payload.amount', operator: 'gte', value: 100000000 }], actionConfigJson: seededConfig, isActive: 1 },
+      ]).returning({ id: eventActionRules.id });
+      try {
+        await repairSeededHighValueTreasuryRule();
+        const again = await repairSeededHighValueTreasuryRule();
+        const rows = (await pool.query<{ id: number; conditions_json: unknown; action_config_json: Record<string, unknown> }>(
+          'SELECT id, conditions_json, action_config_json FROM event_action_rules WHERE id = ANY($1::int[]) ORDER BY id', [inserted.map(r => r.id)],
+        )).rows;
+        const [seeded, changed] = rows;
+        const [moved] = (seeded.conditions_json ?? []) as Array<Record<string, unknown>>;
+        if ((seeded.conditions_json as unknown[]).length !== 1 || moved?.field !== 'payload.isHighValue' || moved?.operator !== 'eq' || moved?.value !== true) throw new Error(`the seeded rule now holds ${JSON.stringify(seeded.conditions_json)}`);
+        if (String(seeded.action_config_json.descriptionTemplate).includes('payload.amount')) throw new Error('the seeded rule still prints the amount');
+        if (JSON.stringify(changed.conditions_json).indexOf('100000000') < 0) throw new Error('the rule the owner changed was rewritten');
+        if (again !== 0) throw new Error(`a second boot moved ${again} more rules`);
+        const audits = Number((await pool.query<{ c: string }>(`SELECT count(*) AS c FROM activity_logs WHERE entity = $1`, [`قانون واکنش خودکار #${seeded.id}`])).rows[0]?.c ?? 0);
+        if (audits !== 1) throw new Error(`the repair wrote ${audits} audit rows`);
+        const matches = (isHighValue: boolean) => RuleEngineService.evaluateSingleRule(
+          { field: 'payload.isHighValue', operator: 'eq', value: true } as never, { payload: { isHighValue } }).passed;
+        if (!matches(true) || matches(false)) throw new Error('the repaired condition does not tell a large transaction from a small one');
+        return 'seeded rule moved once with one audit row, the changed rule kept';
+      } finally {
+        await orm.delete(eventActionRules).where(inArray(eventActionRules.id, inserted.map(r => r.id)));
+      }
+    });
+  }
+
   const healthId = 'reg_treasury_amount_rule_health_td_1297';
   if (shouldRun(healthId, 'td1297', 'treasury', 'event', 'rule', 'health', 'package8')) {
-    await runCase(results, healthId, 'v10.2.7: the financial health check lists the automatic rules of the treasury event that read its amount, description or reason, which it no longer carries, and leaves them as saved (TD-1297)', async () => {
+    await runCase(results, healthId, 'v10.2.7: the financial health check lists the automatic rules of the treasury event that read its amount, description or reason, which it no longer carries, by whether they now never match, match every time or print empty, and leaves them as saved (TD-1297)', async () => {
       const { findTreasuryPrivateFieldRules, buildTreasuryPrivateFieldRuleHealthTest } = await import('../../services/accounting/treasuryRuleFieldHealth.js');
       const tag = tagOf();
       const inserted = await orm.insert(eventActionRules).values([
@@ -178,16 +275,21 @@ export async function runTreasuryEventPrivacyTests(shouldRun: ShouldRun): Promis
         { name: `TD1297 text ${tag}`, eventType: '*', actionType: 'audit_log', conditionsJson: [], actionConfigJson: { descriptionTemplate: 'شرح {{payload.description}}' }, isActive: 0 },
         { name: `TD1297 currency ${tag}`, eventType: 'TreasuryTransactionApproved', actionType: 'audit_log', conditionsJson: [{ field: 'payload.currency', operator: 'eq', value: 'IRR' }], actionConfigJson: {}, isActive: 1 },
         { name: `TD1297 invoice ${tag}`, eventType: 'InvoiceApproved', actionType: 'audit_log', conditionsJson: [{ field: 'payload.amount', operator: 'gt', value: 0 }], actionConfigJson: {}, isActive: 1 },
+        { name: `TD1297 empty ${tag}`, eventType: 'TreasuryTransactionApproved', actionType: 'audit_log', conditionsJson: { logic: 'AND', conditions: [{ field: 'payload.currency', operator: 'eq', value: 'IRR' }, { logic: 'OR', rules: [{ field: 'payload.reason', operator: 'is_empty' }] }] }, actionConfigJson: {}, isActive: 1 },
+        { name: `TD1297 below ${tag}`, eventType: 'TreasuryTransactionApproved', actionType: 'audit_log', conditionsJson: [{ field: 'payload.amount', operator: 'lt', value: 1000 }], actionConfigJson: {}, isActive: 1 },
       ]).returning({ id: eventActionRules.id, name: eventActionRules.name });
       try {
         const listed = (await findTreasuryPrivateFieldRules()).filter(r => r.name.endsWith(tag));
-        const names = listed.map(r => `${r.name.split(' ')[1]}:${r.fields.join('+')}`).sort().join(',');
-        if (names !== 'amount:payload.amount,text:payload.description') throw new Error(`the health check listed "${names}", expected the amount and the description rules only`);
+        const names = listed.map(r => `${r.name.split(' ')[1]}:${r.fields.join('+')}:${r.use}`).sort().join(',');
+        const expected = 'amount:payload.amount:never_matches,below:payload.amount:never_matches,empty:payload.reason:always_matches,text:payload.description:text_only';
+        if (names !== expected) throw new Error(`the health check listed "${names}", expected "${expected}"`);
         const test = buildTreasuryPrivateFieldRuleHealthTest(listed);
-        if (test.status !== 'warning' || test.count !== 2) throw new Error(`the health test is ${test.status} with ${test.count}`);
+        if (test.status !== 'warning' || test.count !== 4) throw new Error(`the health test is ${test.status} with ${test.count}`);
+        if (!(test.scoreImpact < 0)) throw new Error(`a rule that now matches every treasury event left the score at ${test.scoreImpact}`);
+        if (buildTreasuryPrivateFieldRuleHealthTest(listed.filter(r => r.use !== 'always_matches')).scoreImpact !== 0) throw new Error('rules that never match lowered the score');
         const kept = await orm.select({ c: eventActionRules.conditionsJson }).from(eventActionRules).where(inArray(eventActionRules.id, inserted.map(r => r.id)));
         if (JSON.stringify(kept[0]?.c).indexOf('payload.amount') < 0) throw new Error('the listed rule was rewritten');
-        return 'amount and description rules listed, currency and invoice rules not';
+        return 'comparison, absence and text rules listed by kind, currency and invoice rules not';
       } finally {
         await orm.delete(eventActionRules).where(inArray(eventActionRules.id, inserted.map(r => r.id)));
       }

@@ -185,5 +185,30 @@ export async function runDeviceSessionTests(shouldRun: ShouldRun): Promise<TestC
     });
   }
 
+  if (shouldRun('sec_logout_closes_old_token_d07_td_1295', 'security', 'td1295', 'd07', 'sessions', 'logout', 'package8')) {
+    await runCase(results, {
+      id: 'sec_logout_closes_old_token_d07_td_1295',
+      name: 'v10.2.7: logout with a token issued before device sessions closes its row whether or not a request adopted it, and the audit row names the user (review N-2 / N-6, TD-1295)',
+      details: 'logout closes the device row in one upsert, so a row an old token\'s request adopted meanwhile is closed too and the token is refused afterwards; a token that never made a request is written closed; the LOGOUT row carries the stored full name, as before device sessions',
+    }, async (h, wrong) => {
+      const { generateToken } = await import('../../middleware/auth.js');
+      const user = await h.sessionWith(['daily_logs.view']);
+      const [row] = await h.q('SELECT username, full_name, role, token_version FROM users WHERE id = $1', [user.userId]);
+      const tokenOf = (csrf: string) => generateToken({ id: user.userId, username: String(row.username), role: String(row.role), csrfToken: csrf, tokenVersion: Number(row.token_version ?? 0) });
+      const adopted: DeviceSession = { cookie: `auth_token=${tokenOf(`adopt-${h.tag}`)}`, csrfToken: `adopt-${h.tag}`, userAgent: ANDROID_UA };
+      const fresh: DeviceSession = { cookie: `auth_token=${tokenOf(`fresh-${h.tag}`)}`, csrfToken: `fresh-${h.tag}`, userAgent: IPHONE_UA };
+      if (!(await signedIn(h, adopted))) throw new Error('the old token was not adopted on its first request');
+      for (const s of [adopted, fresh]) {
+        const out = await call(h, 'post', '/api/auth/logout', s);
+        if (out.status !== 200) wrong.push(`logout returned ${out.status}`);
+        if (await signedIn(h, s)) wrong.push(`the ${s === adopted ? 'adopted' : 'unused'} old token still signs in after «خروج»`);
+      }
+      const open = await h.q(`SELECT count(*)::int AS c FROM user_sessions WHERE user_id = $1 AND sid LIKE 'legacy:%' AND revoked_at IS NULL`, [user.userId]);
+      if (Number(open[0]?.c) !== 0) wrong.push(`${open[0]?.c} old-token rows stayed open after «خروج»`);
+      const names = await h.q(`SELECT user_full_name FROM activity_logs WHERE action = 'LOGOUT' AND entity = $1 AND entity_id = $2 ORDER BY id DESC LIMIT 1`, [AUTH_ENTITY, String(user.userId)]);
+      if (String(names[0]?.user_full_name ?? '') !== String(row.full_name)) wrong.push(`the logout audit row names "${names[0]?.user_full_name}", not the stored full name`);
+    });
+  }
+
   return results;
 }

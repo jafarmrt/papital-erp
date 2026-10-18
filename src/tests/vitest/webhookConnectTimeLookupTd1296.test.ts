@@ -18,11 +18,13 @@ import {
 let server: http.Server;
 let port = 0;
 const received: string[] = [];
+const seenHeaders: http.IncomingHttpHeaders[] = [];
 let undoLoopback: () => void = () => undefined;
 
 beforeAll(async () => {
   server = http.createServer((req, res) => {
     received.push(`${req.method} ${req.url}`);
+    seenHeaders.push(req.headers);
     if (req.url === '/redirect') {
       res.writeHead(302, { Location: 'http://169.254.169.254/latest/meta-data/' });
       res.end();
@@ -63,6 +65,14 @@ describe('webhook_connect_time_lookup_td_1296', () => {
     const res = await post(`http://127.0.0.1:${port}/hook`);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ echoed: '{"a":1}' });
+  });
+
+  it('keeps the Accept and User-Agent headers fetch used to send (review N-1)', async () => {
+    await guardedWebhookFetch(`http://127.0.0.1:${port}/hook`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'User-Agent': 'ERP-Webhook-Dispatcher/7.0' }, body: '{}' });
+    expect(seenHeaders.at(-1)).toMatchObject({ accept: '*/*', 'user-agent': 'ERP-Webhook-Dispatcher/7.0' });
+    await post(`http://127.0.0.1:${port}/hook`);
+    expect(seenHeaders.at(-1)?.accept).toBe('*/*');
+    expect(seenHeaders.at(-1)?.['user-agent']).toMatch(/^Papital-ERP\/\d+\.\d+\.\d+/);
   });
 
   it('returns a redirect to an inside address as the 3xx without following it', async () => {

@@ -25,8 +25,12 @@ export function UserSessionsPanel({ userId = null, userName, onBusyChange }: {
   const closeMany = useCloseManySessionsMutation(userId);
   const busy = closeOne.isPending || closeMany.isPending;
   useEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
+  // review N-5: leaving the panel (another tab) while a close is in flight never leaves its window held busy
+  useEffect(() => () => { onBusyChange?.(false); }, [onBusyChange]);
   const sessions = Array.isArray(query.data) ? query.data : [];
   const others = sessions.filter(s => !s.isCurrent);
+  // review N-4: on the users page the viewer's own account lists this device too, and «خروج از همه» signs them out here
+  const selfOnUsersPage = !own && sessions.some(s => s.isCurrent);
 
   const handleClose = async (session: UserSessionView) => {
     const ok = await confirmAction({
@@ -47,7 +51,9 @@ export function UserSessionsPanel({ userId = null, userName, onBusyChange }: {
       title: own ? 'بستن دستگاه‌های دیگر' : 'خروج از همهٔ دستگاه‌ها',
       message: own
         ? 'همهٔ دستگاه‌های دیگر شما از حساب خارج شوند؟ همین دستگاه وارد می‌ماند.'
-        : `${userName ? `«${userName}»` : 'این کاربر'} از همهٔ دستگاه‌هایش خارج شود؟`,
+        : selfOnUsersPage
+          ? 'این حساب خودتان است: همین دستگاه هم خارج می‌شود و به صفحهٔ ورود می‌روید. برای بستن فقط دستگاه‌های دیگر، از «نمایه» استفاده کنید. ادامه می‌دهید؟'
+          : `${userName ? `«${userName}»` : 'این کاربر'} از همهٔ دستگاه‌هایش خارج شود؟`,
       confirmText: own ? 'بستن دستگاه‌های دیگر' : 'خروج از همه',
       cancelText: 'انصراف',
     });
@@ -64,7 +70,9 @@ export function UserSessionsPanel({ userId = null, userName, onBusyChange }: {
         <p className="text-slate-600 text-xs leading-6">
           {own
             ? 'دستگاه‌هایی که با حساب شما وارد شده‌اند. اگر دستگاهی را نمی‌شناسید یا گم شده است، آن را ببندید.'
-            : 'دستگاه‌هایی که این کاربر با آن‌ها وارد شده است.'}
+            : selfOnUsersPage
+              ? 'این حساب خودتان است. برای بستن دستگاه‌های دیگر و ماندن در همین دستگاه از «نمایه» استفاده کنید.'
+              : 'دستگاه‌هایی که این کاربر با آن‌ها وارد شده است.'}
         </p>
         <button
           type="button"

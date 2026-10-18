@@ -318,7 +318,10 @@ const logoutHandler = asyncHandler(async (req, res) => {
       if (targetUserId && payload.id === targetUserId) {
         // 10.2 package 8 (D-07, closes OBS-R1-27's «همه دستگاه‌ها»): only this device's session row is closed; the
         // user's other devices stay signed in and are closed one by one, or all at once, from the profile
-        closedSessionId = await closeSessionOnLogout({ ...payload, id: targetUserId }, req);
+        const closed = await closeSessionOnLogout({ ...payload, id: targetUserId }, req);
+        closedSessionId = closed.sessionId;
+        targetUsername = targetUsername || closed.username || undefined;
+        targetFullName = targetFullName || closed.fullName || undefined;
       }
     }
   } catch (err) {
