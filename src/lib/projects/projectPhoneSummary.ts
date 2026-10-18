@@ -1,4 +1,6 @@
 import { formatPersianNumber } from '../../utils/persianNumber';
+import { toStorageDate } from '../../utils/calendarDate';
+import { daysUntilDeadline } from '../workshop/workshopSchedule';
 import type { ProjectStep } from './projectSteps';
 
 /**
@@ -13,25 +15,17 @@ export interface ProjectDueNote {
   late: boolean;
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-function isoDayNumber(iso: string): number | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso.trim());
-  if (!m) return null;
-  const value = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  return Number.isFinite(value) ? Math.round(value / DAY_MS) : null;
-}
-
 /**
- * the days left to the delivery date (ISO), from today in the business time zone (ISO); a completed or cancelled
- * project, or one without a readable date, has no note
+ * the days left to the delivery date, from today in the business time zone (ISO); the date is read like the workshop
+ * deadline (`toStorageDate`: ISO, or a legacy Jalali text, Persian digits too); a completed or cancelled project, or
+ * one without a readable date, has no note
  */
 export function projectDueNote(endDate: string | null | undefined, todayIso: string, status: string | null | undefined): ProjectDueNote | null {
   if (status === 'completed' || status === 'cancelled') return null;
-  const end = isoDayNumber(String(endDate ?? ''));
-  const today = isoDayNumber(todayIso);
-  if (end === null || today === null) return null;
-  const days = end - today;
+  const end = toStorageDate(endDate);
+  const today = toStorageDate(todayIso);
+  if (!end || !today) return null;
+  const days = daysUntilDeadline(end, today);
   if (days > 0) return { text: `${formatPersianNumber(days)} روز مانده`, late: false };
   if (days === 0) return { text: 'موعد تحویل امروز است', late: false };
   return { text: `${formatPersianNumber(-days)} روز از موعد گذشته`, late: true };

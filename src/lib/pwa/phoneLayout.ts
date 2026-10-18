@@ -17,5 +17,8 @@ export const PHONE_SHEET_FOOTER_SAFE_AREA = 'pb-[max(1rem,env(safe-area-inset-bo
 /** بلندی کمینه دکمه‌ای که با انگشت زده می‌شود */
 export const PHONE_TAP_TARGET = 'min-h-11';
 
+/** the same height on a phone only (narrower than md), for a control shared with the desktop layout, which keeps its size */
+export const PHONE_ONLY_TAP_TARGET = 'max-md:min-h-11';
+
 /** راهنمای دکمه ثبت غیرفعال وقتی اتصال قطع است */
 export const OFFLINE_SUBMIT_TITLE = 'اتصال قطع است؛ پس از وصل شدن ثبت کنید.';

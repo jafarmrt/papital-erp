@@ -10,15 +10,17 @@ import { PROGRESS_CELL_LABELS, splitStageColumns } from '../../lib/projects/prog
 // پیشرفت کل پروژه = تجمیع وزن‌دار (Σ sku%×qty / Σ qty)
 // v10.2.7 (10.2 package 10): reading, ticking and saving live in `useProductProgressTicks`, shared with the phone list
 
-export default function ProjectProductProgressTab({ projectId, onUpdate, onDirtyChange }: {
+export default function ProjectProductProgressTab({ projectId, onUpdate, onDirtyChange, onBusyChange }: {
   projectId: number;
   onUpdate?: () => void;
   /** v10.2.1 (review U2): the page asks before a tab change or leaving while ticks are not saved */
   onDirtyChange?: (dirty: boolean) => void;
+  /** v10.2.7 (10.2 package 10): ticks not saved or a save under way, so a phone page keeps this layout */
+  onBusyChange?: (busy: boolean) => void;
 }) {
   // v9.0.417 (TD-752): تیک ماتریس با `PUT /projects/:id/product-progress` و کلید `projects.edit` ثبت می‌شود
   const { canEdit } = useProjectPermissions();
-  const ticks = useProductProgressTicks(projectId, { canEdit, onUpdate, onDirtyChange });
+  const ticks = useProductProgressTicks(projectId, { canEdit, onUpdate, onDirtyChange, onBusyChange });
   const {
     loading, saving, stages, products, editCount, hasChanges,
     statusOf: resolveStatus, percentOf: progressPercent, isEdited, toggle: toggleStatus,
@@ -79,7 +81,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
   // Bulk operation: Set all stages for selected SKUs
   const setAllStagesForSelectedSkus = (status: 'pending' | 'completed') => ticks.setAllStagesOf(selectedSkuIds, status);
 
-const summary = ticks.summary;
+  const summary = ticks.summary;
 
   if (loading) {
     return (

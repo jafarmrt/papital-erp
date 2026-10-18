@@ -58,6 +58,8 @@ export default function ProjectDetailPage() {
   const wantPhoneLayout = phone && !fullView;
   // a phone turned sideways (wider than 768 px) keeps its layout while a tab holds unsaved ticks or edits
   const [phoneLayout, setPhoneLayout] = useState(wantPhoneLayout);
+  // the progress tab's ticks not saved or a save under way (review M1): the tab's list exists in one layout only
+  const [progressBusy, setProgressBusy] = useState(false);
   // read from the address too, so the render before `specsOpen` is set already counts the editor as open (review N1)
   const editingSpecs = canEdit && tab === 'overview' && (specsOpen || searchParams.get('edit') === '1');
 
@@ -136,13 +138,24 @@ export default function ProjectDetailPage() {
 
   useUnsavedChangesGuard(dirtyTabs.size > 0);
 
+  /*
+   * the layout follows the screen width only once nothing would be lost (review M1): a tab with an unsaved change, or the
+   * progress list while its ticks wait or its save runs, keeps the layout it is in; the other layout then mounts its own
+   * list after the save, so it reads the matrix as saved
+   */
   useEffect(() => {
-    if (dirtyTabs.size === 0) setPhoneLayout(wantPhoneLayout);
-  }, [dirtyTabs.size, wantPhoneLayout]);
+    if (dirtyTabs.size === 0 && !progressBusy) setPhoneLayout(wantPhoneLayout);
+  }, [dirtyTabs.size, progressBusy, wantPhoneLayout]);
 
-  /** «نمای کامل» and back on a phone: a tab with an unsaved change asks first, since the other layout starts afresh */
+  /*
+   * «نمای کامل» and back on a phone. Only the progress tab is built differently in the two layouts, so only its unsaved
+   * ticks ask first (review nit); while its save runs the switch waits.
+   */
   const showFullView = async (full: boolean) => {
-    if (dirtyTabs.size > 0 && !(await confirmLeaveUnsaved())) return;
+    if (tab === 'progress' && progressBusy) {
+      if (!dirtyTabs.has('progress')) return;
+      if (!(await confirmLeaveUnsaved())) return;
+    }
     setFullView(full);
     setPhoneLayout(phone && !full);
   };
@@ -220,7 +233,7 @@ export default function ProjectDetailPage() {
       ) : (
         <>
           {phone && (
-            <button type="button" onClick={() => void showFullView(false)} className="w-full min-h-11 rounded-xl border border-blue-200 bg-blue-50 text-blue-800 text-xs font-bold cursor-pointer">
+            <button type="button" onClick={() => void showFullView(false)} disabled={tab === 'progress' && progressBusy && !dirtyTabs.has('progress')} className="w-full min-h-11 disabled:opacity-60 rounded-xl border border-blue-200 bg-blue-50 text-blue-800 text-xs font-bold cursor-pointer">
               بازگشت به نمای گوشی
             </button>
           )}
@@ -262,8 +275,8 @@ export default function ProjectDetailPage() {
         )}
         {tab === 'materials' && <ProjectInventoryTab project={project} itemsList={items} onUpdate={refresh} onDirtyChange={dirtySetters.materials} />}
         {tab === 'progress' && (phoneLayout
-          ? <ProjectPhoneProgress projectId={project.id} canEdit={canEdit} onUpdate={refresh} onDirtyChange={dirtySetters.progress} />
-          : <ProjectProductProgressTab projectId={project.id} onUpdate={refresh} onDirtyChange={dirtySetters.progress} />)}
+          ? <ProjectPhoneProgress projectId={project.id} canEdit={canEdit} onUpdate={refresh} onDirtyChange={dirtySetters.progress} onBusyChange={setProgressBusy} />
+          : <ProjectProductProgressTab projectId={project.id} onUpdate={refresh} onDirtyChange={dirtySetters.progress} onBusyChange={setProgressBusy} />)}
         {tab === 'workshop' && <ProjectScheduleTab project={project} personnelList={personnel} pieceworkTasksList={[]} onUpdate={refresh} onDirtyChange={dirtySetters.workshop} />}
         {tab === 'delivery' && <ProjectStockEntryTab project={project} itemsList={items} onUpdate={refresh} />}
       </div>

@@ -13,6 +13,11 @@ interface ProductProgressTicksOptions {
   onUpdate?: () => void;
   /** the page asks before a tab change or leaving while ticks are not saved */
   onDirtyChange?: (dirty: boolean) => void;
+  /**
+   * ticks not saved or a save under way: the page keeps the layout that holds this hook until it settles, since the
+   * other layout builds its own list and would drop the ticks or read the matrix before the save
+   */
+  onBusyChange?: (busy: boolean) => void;
 }
 
 /**
@@ -21,10 +26,12 @@ interface ProductProgressTicksOptions {
  * all in one `PUT /projects/:id/product-progress`; the server then syncs the stages and the project status in the same
  * transaction (TD-738 / TD-739).
  */
-export function useProductProgressTicks(projectId: number, { canEdit, onUpdate, onDirtyChange }: ProductProgressTicksOptions) {
+export function useProductProgressTicks(projectId: number, { canEdit, onUpdate, onDirtyChange, onBusyChange }: ProductProgressTicksOptions) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<ProductProgressResponse | null>(null);
+  // the last read's error, so a screen can say the matrix was not read instead of «no products»
+  const [loadError, setLoadError] = useState<string | null>(null);
   // pending local edits: key `${itemId}|${stageOrder}` → newStatus
   const [edits, setEdits] = useState<Map<string, ProgressCellStatus>>(new Map());
 
@@ -37,12 +44,16 @@ export function useProductProgressTicks(projectId: number, { canEdit, onUpdate, 
       const payload = res?.data ?? res;
       if (payload && Array.isArray(payload.products)) {
         setData(payload);
+        setLoadError(null);
       } else {
         toast.error('ساختار پاسخ پیشرفت نامعتبر است');
+        setLoadError('ساختار پاسخ پیشرفت نامعتبر است');
       }
     } catch (err: unknown) {
       if (isAbortError(err) || signal?.aborted) return;
-      toast.error(errorMessageOf(err) || 'خطا در دریافت پیشرفت تفکیکی کد کالا');
+      const message = errorMessageOf(err) || 'خطا در دریافت پیشرفت تفکیکی کد کالا';
+      toast.error(message);
+      setLoadError(message);
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
@@ -103,6 +114,8 @@ export function useProductProgressTicks(projectId: number, { canEdit, onUpdate, 
   const hasChanges = edits.size > 0;
   useEffect(() => { onDirtyChange?.(hasChanges && !saving); }, [hasChanges, saving, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+  useEffect(() => { onBusyChange?.(hasChanges || saving); }, [hasChanges, saving, onBusyChange]);
+  useEffect(() => () => onBusyChange?.(false), [onBusyChange]);
 
   const save = async () => {
     if (!hasChanges || saving) return;
@@ -129,7 +142,7 @@ export function useProductProgressTicks(projectId: number, { canEdit, onUpdate, 
   };
 
   return {
-    loading, saving, data, stages, products, summary: data?.summary,
+    loading, saving, loadError, reload: () => void load(), data, stages, products, summary: data?.summary,
     editCount: edits.size, hasChanges, statusOf, percentOf, isEdited,
     toggle, setAllStagesOf, setStageForAll, reset, save,
   };

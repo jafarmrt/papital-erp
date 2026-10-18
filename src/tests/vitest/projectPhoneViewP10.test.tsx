@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { PHONE_WIDTH_QUERY } from '../../lib/pwa/usePhoneWidth';
 
 type FetchOpts = { method?: string; body?: string; signal?: AbortSignal };
@@ -24,20 +24,31 @@ const progress = {
 };
 const steps = { requisitions: { open: 0, ordered: 0, received: 0 }, allocations: { open: 0, consumed: 0, issueDocuments: 0 }, delivery: { products: 1, completeProducts: 0, delivered: 0, planned: 5, unit: 'عدد' } };
 const puts: unknown[] = [];
-const fetchJson = vi.fn(async (url: string, opts?: FetchOpts): Promise<unknown> => {
+/** the answer of the next tick save; a test may hold it open to turn the phone meanwhile */
+let putAnswer: () => Promise<unknown> = async () => ({ success: true, applied: 1 });
+/** every read of the matrix, in order with the saves */
+const calls: string[] = [];
+async function answerRequest(url: string, opts?: FetchOpts): Promise<unknown> {
   if (url === '/projects/7/product-progress' && opts?.method === 'PUT') {
     puts.push(JSON.parse(opts.body ?? '{}'));
-    return { success: true, applied: 1 };
+    calls.push('put');
+    return putAnswer();
   }
-  if (url === '/projects/7/product-progress') return progress;
+  if (url === '/projects/7/product-progress') {
+    calls.push('read');
+    return progress;
+  }
   if (url === '/projects/7/steps') return steps;
   if (url === '/projects/7') return project;
   return [];
-});
+}
+const fetchJson = vi.fn(answerRequest);
 vi.mock('../../api', () => ({
   fetchJson: (url: string, opts?: FetchOpts) => fetchJson(url, opts),
   isAbortError: (err: unknown) => (err as { name?: string } | null)?.name === 'AbortError',
 }));
+const confirmAction = vi.fn(async () => true);
+vi.mock('../../components/ConfirmDialogHost', () => ({ confirmAction: () => confirmAction() }));
 vi.mock('react-hot-toast', () => ({ default: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }));
 let canEdit = true;
 vi.mock('../../hooks/useProjectPermissions', () => ({
@@ -58,20 +69,38 @@ import type { ProjectStep } from '../../lib/projects/projectSteps';
 
 const MATRIX_TABLE_TITLE = 'ماتریس پیشرفت فیزیکی محصولات (مرحله × کالا)';
 const PENDING_TITLE = 'کارهای مانده';
+const SAVE_REFUSED = 'خطای آزمایشی';
+const NETWORK_DOWN = 'network down';
 
-/** a phone-width screen: matchMedia answers the phone query */
+let phoneMatches = false;
+const mediaListeners = new Set<() => void>();
+
+/** a phone-width screen: matchMedia answers the phone query, and `turnScreen` fires its change like a rotation */
 function setPhoneScreen(phone: boolean) {
+  phoneMatches = phone;
   window.matchMedia = ((query: string) => ({
-    matches: phone && query === PHONE_WIDTH_QUERY, media: query, onchange: null,
-    addEventListener: () => undefined, removeEventListener: () => undefined,
+    get matches() { return phoneMatches && query === PHONE_WIDTH_QUERY; },
+    media: query, onchange: null,
+    addEventListener: (_type: string, fn: () => void) => { mediaListeners.add(fn); },
+    removeEventListener: (_type: string, fn: () => void) => { mediaListeners.delete(fn); },
     addListener: () => undefined, removeListener: () => undefined, dispatchEvent: () => false,
   })) as unknown as typeof window.matchMedia;
+}
+
+function turnScreen(phone: boolean) {
+  phoneMatches = phone;
+  act(() => { for (const fn of [...mediaListeners]) fn(); });
 }
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   puts.length = 0;
+  calls.length = 0;
+  mediaListeners.clear();
+  putAnswer = async () => ({ success: true, applied: 1 });
+  confirmAction.mockImplementation(async () => true);
+  fetchJson.mockImplementation(answerRequest);
   canEdit = true;
   delete (window as { matchMedia?: unknown }).matchMedia;
 });
@@ -83,6 +112,13 @@ describe('phone summary and tick rules (10.2 package 10)', () => {
     expect(projectDueNote('2026-10-15', '2026-10-18', 'in_progress')).toEqual({ text: '۳ روز از موعد گذشته', late: true });
     expect(projectDueNote('2026-10-15', '2026-10-18', 'completed')).toBeNull();
     expect(projectDueNote('', '2026-10-18', 'in_progress')).toBeNull();
+  });
+
+  it('reads a Jalali delivery date and Persian digits like the workshop deadline (review M2)', () => {
+    expect(projectDueNote('1405/08/03', '2026-10-18', 'in_progress')).toEqual({ text: '۷ روز مانده', late: false });
+    expect(projectDueNote('۱۴۰۵/۰۷/۲۳', '2026-10-18', 'planned')).toEqual({ text: '۳ روز از موعد گذشته', late: true });
+    expect(projectDueNote('۲۰۲۶-۱۰-۲۵', '2026-10-18', 'planned')).toEqual({ text: '۷ روز مانده', late: false });
+    expect(projectDueNote('not a date', '2026-10-18', 'planned')).toBeNull();
   });
 
   it('lists the open steps with those needing attention first', () => {
@@ -152,7 +188,7 @@ describe('project page on a phone (10.2 package 10)', () => {
     renderProjectPage('/projects/7/progress');
     const stage = await screen.findByRole('checkbox', { name: 'برش برای گردنبند' });
     expect((stage as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText(/فقط دیدن/)).toBeTruthy();
+    expect(screen.getByText(/فقط مشاهده/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /ویرایش مشخصات/ })).toBeNull();
   });
 
@@ -165,5 +201,95 @@ describe('project page on a phone (10.2 package 10)', () => {
     expect(within(header).getByText('پیشرفت')).toBeTruthy();
     fireEvent.click(screen.getByText('بازگشت به نمای گوشی'));
     expect(await screen.findByText(PENDING_TITLE)).toBeTruthy();
+    expect(confirmAction).not.toHaveBeenCalled();
+  });
+
+  it('keeps the phone list while a save runs across a rotation, and keeps the ticks when it fails (review M1)', async () => {
+    setPhoneScreen(true);
+    let answer: (value: unknown) => void = () => undefined;
+    putAnswer = () => new Promise(resolve => { answer = resolve; });
+    renderProjectPage('/projects/7/progress');
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'مونتاژ برای گردنبند' }));
+    turnScreen(false);
+    expect(screen.queryByText(MATRIX_TABLE_TITLE)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /ثبت ۱ تغییر/ }));
+    await waitFor(() => expect(puts).toHaveLength(1));
+    expect(screen.queryByText(MATRIX_TABLE_TITLE)).toBeNull();
+    await act(async () => { answer({ success: false, error: SAVE_REFUSED }); });
+    expect(screen.queryByText(MATRIX_TABLE_TITLE)).toBeNull();
+    const stage = screen.getByRole('checkbox', { name: 'مونتاژ برای گردنبند' });
+    expect(stage.getAttribute('aria-checked')).toBe('true');
+
+    putAnswer = async () => ({ success: true, applied: 1 });
+    fireEvent.click(screen.getByRole('button', { name: /ثبت ۱ تغییر/ }));
+    expect(await screen.findByText(MATRIX_TABLE_TITLE)).toBeTruthy();
+    // the desktop table mounted after the save and read the matrix again
+    expect(calls.lastIndexOf('read')).toBeGreaterThan(calls.lastIndexOf('put'));
+  });
+
+  it('keeps the layout of unsaved ticks across a rotation and follows the screen once they are dropped', async () => {
+    setPhoneScreen(true);
+    renderProjectPage('/projects/7/progress');
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'مونتاژ برای گردنبند' }));
+    turnScreen(false);
+    expect(screen.getByRole('checkbox', { name: 'مونتاژ برای گردنبند' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'انصراف' }));
+    expect(await screen.findByText(MATRIX_TABLE_TITLE)).toBeTruthy();
+  });
+
+  it('asks before the phone layout drops unsaved desktop ticks, and stays when told to', async () => {
+    setPhoneScreen(true);
+    renderProjectPage('/projects/7');
+    fireEvent.click(await screen.findByText('نمای کامل مشخصات و مراحل'));
+    fireEvent.click(await screen.findByRole('tab', { name: /پیشرفت/ }));
+    fireEvent.click(await screen.findByTitle('مونتاژ — ناتمام (کلیک: تغییر تمام/ناتمام)'));
+    confirmAction.mockImplementation(async () => false);
+    fireEvent.click(screen.getByText('بازگشت به نمای گوشی'));
+    await waitFor(() => expect(confirmAction).toHaveBeenCalledTimes(1));
+    expect(screen.getByText(MATRIX_TABLE_TITLE)).toBeTruthy();
+    confirmAction.mockImplementation(async () => true);
+    fireEvent.click(screen.getByText('بازگشت به نمای گوشی'));
+    expect(await screen.findByRole('checkbox', { name: 'مونتاژ برای گردنبند' })).toBeTruthy();
+    expect(screen.queryByText(MATRIX_TABLE_TITLE)).toBeNull();
+  });
+
+  it('says the matrix was not read and offers another try (review nit)', async () => {
+    setPhoneScreen(true);
+    let fail = true;
+    fetchJson.mockImplementation(async (url: string): Promise<unknown> => {
+      if (url === '/projects/7/product-progress') {
+        if (fail) throw new Error(NETWORK_DOWN);
+        return progress;
+      }
+      if (url === '/projects/7/steps') return steps;
+      if (url === '/projects/7') return project;
+      return [];
+    });
+    renderProjectPage('/projects/7/progress');
+    expect(await screen.findByText(/جدول پیشرفت خوانده نشد/)).toBeTruthy();
+    expect(screen.queryByText(/هیچ کد کالایی/)).toBeNull();
+    fail = false;
+    fireEvent.click(screen.getByRole('button', { name: /تلاش دوباره/ }));
+    expect(await screen.findByRole('checkbox', { name: 'مونتاژ برای گردنبند' })).toBeTruthy();
+  });
+
+  it('scrolls the tab row so the active tab is on screen', async () => {
+    setPhoneScreen(true);
+    const scrollBy = vi.fn();
+    const rect = (left: number, right: number) => ({ left, right, top: 0, bottom: 44, width: right - left, height: 44, x: left, y: 0, toJSON: () => ({}) });
+    const rects = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.getAttribute('role') === 'tablist') return rect(0, 375);
+      if (this.id === 'project-tab-progress') return rect(-120, -20);
+      return rect(0, 100);
+    });
+    Object.defineProperty(HTMLElement.prototype, 'scrollBy', { value: scrollBy, configurable: true });
+    try {
+      renderProjectPage('/projects/7/progress');
+      await screen.findByRole('checkbox', { name: 'مونتاژ برای گردنبند' });
+      expect(scrollBy).toHaveBeenCalledWith({ left: -120 });
+    } finally {
+      rects.mockRestore();
+      delete (HTMLElement.prototype as { scrollBy?: unknown }).scrollBy;
+    }
   });
 });

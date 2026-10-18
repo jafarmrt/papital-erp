@@ -5,6 +5,7 @@ import { fetchJson } from '../../api';
 import { errorMessageOf } from '../../utils';
 import { confirmAction } from '../ConfirmDialogHost';
 import { projectStatusActions, type ProjectStatusAction } from '../../lib/projects/projectStatusActions';
+import { PHONE_ONLY_TAP_TARGET } from '../../lib/pwa/phoneLayout';
 
 interface ProjectStatusActionsProps {
   projectId: number;
@@ -13,7 +14,8 @@ interface ProjectStatusActionsProps {
   onSaved: (response: unknown) => void;
 }
 
-const BUTTON = 'px-3 py-1.5 bg-white hover:bg-slate-50 text-xs font-bold rounded-xl transition-colors border border-slate-300 cursor-pointer disabled:opacity-50';
+// v10.2.7 (10.2 package 10): at least 44 px high on a phone, where the phone header shows these buttons too
+const BUTTON = `${PHONE_ONLY_TAP_TARGET} px-3 py-1.5 bg-white hover:bg-slate-50 text-xs font-bold rounded-xl transition-colors border border-slate-300 cursor-pointer disabled:opacity-50`;
 
 /**
  * v10.0.66 (TD-1141): توقف، ادامه و لغو پروژه، با `PUT /projects/:id` و نسخه پروژه (TD-742). فراخواننده آن را فقط برای
@@ -100,7 +102,7 @@ export function ProjectStatusActions({ projectId, status, version, onSaved }: Pr
                   type="button"
                   role="menuitem"
                   onClick={() => void run(action)}
-                  className="w-full text-right px-3 py-2 rounded-lg text-xs font-bold text-rose-700 hover:bg-rose-50 cursor-pointer"
+                  className={`w-full ${PHONE_ONLY_TAP_TARGET} text-right px-3 py-2 rounded-lg text-xs font-bold text-rose-700 hover:bg-rose-50 cursor-pointer`}
                 >
                   {action.label}
                 </button>

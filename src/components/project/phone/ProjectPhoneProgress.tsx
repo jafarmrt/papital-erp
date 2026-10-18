@@ -12,6 +12,8 @@ interface ProjectPhoneProgressProps {
   canEdit: boolean;
   onUpdate?: () => void;
   onDirtyChange?: (dirty: boolean) => void;
+  /** ticks not saved or a save under way: the page keeps the phone layout until it settles */
+  onBusyChange?: (busy: boolean) => void;
 }
 
 type ProgressFilter = 'incomplete' | 'all';
@@ -37,9 +39,9 @@ function CellIcon({ status }: { status: ProgressCellStatus }) {
  * (`useProductProgressTicks`), so the server syncs the stages and the project status as it does there. The save bar
  * stays above the phone's bottom bar and is off while offline.
  */
-export function ProjectPhoneProgress({ projectId, canEdit, onUpdate, onDirtyChange }: ProjectPhoneProgressProps) {
-  const ticks = useProductProgressTicks(projectId, { canEdit, onUpdate, onDirtyChange });
-  const { loading, saving, stages, products, summary, editCount, hasChanges, statusOf, percentOf, isEdited, toggle } = ticks;
+export function ProjectPhoneProgress({ projectId, canEdit, onUpdate, onDirtyChange, onBusyChange }: ProjectPhoneProgressProps) {
+  const ticks = useProductProgressTicks(projectId, { canEdit, onUpdate, onDirtyChange, onBusyChange });
+  const { loading, saving, loadError, stages, products, summary, editCount, hasChanges, statusOf, percentOf, isEdited, toggle } = ticks;
   const online = useOnlineStatus();
   const [filter, setFilter] = useState<ProgressFilter>('incomplete');
   const optionalOrders = useMemo(() => new Set(splitStageColumns(stages, products).optionalStages.map(s => s.stage_order)), [stages, products]);
@@ -55,6 +57,23 @@ export function ProjectPhoneProgress({ projectId, canEdit, onUpdate, onDirtyChan
       <div className="flex items-center justify-center gap-2 py-10 text-slate-500" role="status">
         <RefreshCw className="w-5 h-5 animate-spin text-amber-500" aria-hidden="true" />
         <span>در حال خواندن جدول پیشرفت</span>
+      </div>
+    );
+  }
+
+  if (loadError && products.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-10 text-center text-xs" role="alert">
+        <p className="font-bold text-rose-700">جدول پیشرفت خوانده نشد: {loadError}</p>
+        <button
+          type="button"
+          onClick={ticks.reload}
+          disabled={loading}
+          className={`${PHONE_TAP_TARGET} px-4 rounded-xl bg-blue-600 text-white font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60`}
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
+          تلاش دوباره
+        </button>
       </div>
     );
   }
@@ -92,7 +111,7 @@ export function ProjectPhoneProgress({ projectId, canEdit, onUpdate, onDirtyChan
             {formatPersianNumber(summary.completed_matrix_cells || 0)} از {formatPersianNumber(summary.total_matrix_cells)} خانه جدول تیک خورده است.
           </p>
         ) : null}
-        {!canEdit && <p className="font-bold text-amber-700">فقط دیدن: تیک زدن مراحل مجوز «ویرایش پروژه و مراحل تولید» می‌خواهد.</p>}
+        {!canEdit && <p className="font-bold text-amber-700">فقط مشاهده: تیک زدن مراحل مجوز «ویرایش پروژه و مراحل تولید» می‌خواهد.</p>}
       </section>
 
       <div className="flex gap-1 bg-slate-200/80 p-1 rounded-2xl" role="group" aria-label="نمایش کالاها">
@@ -112,8 +131,8 @@ export function ProjectPhoneProgress({ projectId, canEdit, onUpdate, onDirtyChan
               <div className="min-w-0">
                 <p className="font-bold text-slate-900 truncate">{name}</p>
                 <p className="text-slate-500">
-                  {product.item_code ? product.item_code : 'بدون کد'}
-                  {product.customer_code ? ` · کد مشتری ${product.customer_code}` : ''}
+                  {product.item_code ? <bdi>{product.item_code}</bdi> : 'بدون کد'}
+                  {product.customer_code ? <> · کد مشتری <bdi>{product.customer_code}</bdi></> : ''}
                   {` · ${formatPersianNumber(product.quantity)} ${product.unit || 'عدد'}`}
                 </p>
               </div>

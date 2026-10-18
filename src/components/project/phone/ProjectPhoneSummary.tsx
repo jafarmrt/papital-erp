@@ -50,13 +50,17 @@ export function ProjectPhoneSummary({ project, steps, inactiveNote, onOpenTab, o
         </div>
         <dl className="space-y-2">
           <div className="flex items-center gap-2">
-            <User className="w-4 h-4 text-amber-600 shrink-0" aria-hidden="true" />
-            <dt className="text-slate-500">مشتری:</dt>
+            <dt className="flex items-center gap-2 text-slate-500 shrink-0">
+              <User className="w-4 h-4 text-amber-600 shrink-0" aria-hidden="true" />
+              مشتری:
+            </dt>
             <dd className="font-bold text-slate-900 truncate">{project.customer_name || 'ثبت نشده'}</dd>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <Calendar className="w-4 h-4 text-blue-600 shrink-0" aria-hidden="true" />
-            <dt className="text-slate-500">موعد تحویل:</dt>
+            <dt className="flex items-center gap-2 text-slate-500 shrink-0">
+              <Calendar className="w-4 h-4 text-blue-600 shrink-0" aria-hidden="true" />
+              موعد تحویل:
+            </dt>
             <dd className="font-bold text-slate-900">{project.end_date ? formatPersianDate(project.end_date) : 'ثبت نشده'}</dd>
             {due && (
               <dd className={`px-2 py-0.5 rounded-lg font-bold ${due.late ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-blue-50 text-blue-700 border border-blue-100'}`}>{due.text}</dd>
