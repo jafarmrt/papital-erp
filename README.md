@@ -2,7 +2,7 @@
 
 سیستم یکپارچه مدیریت کارگاه تولیدی: انبارداری با کاردکس رویدادمحور، فاکتور و پیش‌فاکتور، حسابداری دوبل (کدینگ ۴ سطحی، دفتر روزنامه، تراز آزمایشی)، خزانه‌داری و چک صیادی، CRM و قیف فروش، کنترل پروژه‌های تولید با BOM، منابع انسانی و حقوق و دستمزد، موتور گردش کار (ورکفلو) با کارتابل تاییدات، گذرگاه رویدادها (Outbox/DLQ/Webhook) و گزارش‌های BI.
 
-> **نسخه فعلی:** سری فعال `v10.x.y` (نسخه مستقر: `v10.2.11`) — نقشه راه: `V10_MASTER_ROADMAP.md` (سری‌های بسته‌شده: `V9_MASTER_ROADMAP.md`، `V8_MASTER_ROADMAP.md`، `V7_MASTER_ROADMAP.md`) • تاریخچه تغییرات: صفحه «معرفی و به‌روزرسانی‌ها» داخل سامانه + `CHANGELOG.md` + `src/data/changelogs/10.ts`
+> **نسخه فعلی:** سری فعال `v10.x.y` (نسخه مستقر: `v10.2.14`) — نقشه راه: `V10_MASTER_ROADMAP.md` (سری‌های بسته‌شده: `V9_MASTER_ROADMAP.md`، `V8_MASTER_ROADMAP.md`، `V7_MASTER_ROADMAP.md`) • تاریخچه تغییرات: `CHANGELOG.md` + `src/data/changelogs/10.ts`
 
 ---
 
@@ -84,11 +84,11 @@ sudo ./update.sh
 ## به‌روزرسانی
 
 ```bash
-git pull
-npm ci
-npm run build
-# ری‌استارت سرویس (pm2 یا systemd) — مهاجرت‌های جدید در startup اعمال می‌شوند
+sudo ./update.sh            # پشتیبان پیش از استقرار، دریافت کد، ساخت، ری‌استارت سرویس systemd و بررسی نسخه
+sudo ./update.sh --rehearse # نخست مهاجرت‌های تازه را روی رونوشت بازگردانی‌شده آزمایش می‌کند
 ```
+
+`update.sh` سرویس systemd (`papital-erp`) را ری‌استارت می‌کند؛ مهاجرت‌های تازه هنگام راه‌اندازی سرور اعمال می‌شوند. اگر گامی شکست بخورد، گام‌های بازگشت را با شناسه commit قبلی چاپ می‌کند.
 
 - قبل از آپدیت، از دیتابیس backup بگیرید (`scripts/backup.sh`).
 - دکمه «خروجی داده‌های کسب‌وکاری» در تنظیمات (`GET /api/export-backup`، فقط admin) یک فایل JSON برای گزارش و بایگانی است و **قابل بازگردانی نیست**؛ رمزهای عبور و کلیدهای محرمانه در آن نیست. پشتیبان واقعی فقط با `scripts/backup.sh` و بازگردانی با `scripts/restore.sh`.
@@ -115,7 +115,6 @@ npm run build
 | `LOG_LEVEL` | سطح لاگ (error/warn/info) | `info` |
 | `ERP_ALLOW_TEST_CLEANUP` | گیت پاکسازی فیکسچرهای تست (فقط dev/test) | `false` |
 | `APP_URL` | آدرس عمومی اپ (لینک‌های خودارجاع) | — |
-| `GEMINI_API_KEY` | کلید سرویس AI (اختیاری) | — |
 
 ---
 
@@ -139,10 +138,13 @@ npm run build
 
 ### Backup روزانه
 
-```cron
-# /etc/cron.d/papital-erp-backup
-0 2 * * * erp cd /opt/papital-erp && DATABASE_URL=... ./scripts/backup.sh >> /var/log/papital-backup.log 2>&1
+`install.sh` زمان‌بندی را با `scripts/install-ops-cron.sh` در یک فایل `/etc/cron.d/papital-erp` می‌نویسد: `scripts/backup.sh` هر روز ساعت ۰۲:۳۰ (`BACKUP_HOUR` / `BACKUP_MINUTE`) و `scripts/monitor.sh` هر پنج دقیقه، با گزارش در `logs/backup.log` و `logs/monitor.log`. روی سرور قدیمی‌تر یک بار اجرا کنید:
+
+```bash
+sudo bash scripts/install-ops-cron.sh <service-user>
 ```
+
+رونوشت رمزگذاری‌شده بیرون از سرور و کانال هشدار: `docs/OFFSITE_BACKUP.md`.
 
 انواع backup در `scripts/backup.sh`: `daily` (نگه‌داری ۳۰ روز) • `pre-deployment` (۹۰ روز — `update.sh` خودکار می‌سازد) • `pre-migration` (۱۸۰ روز)
 
@@ -165,12 +167,17 @@ curl -fsS http://localhost:3000/health/ready
 
 ### Rollback نسخه اپلیکیشن
 
+`update.sh` در شکست، همین گام‌ها را با شناسه commit پیش از به‌روزرسانی چاپ می‌کند:
+
 ```bash
-git log --oneline -10
-git revert <commit-hash> --no-edit
-npm run build && systemctl restart papital-erp
+sudo systemctl stop papital-erp
+git reset --hard <previous-commit>      # خود شاخه برمی‌گردد؛ checkout یک commit شاخه را جدا می‌کند و git pull بعدی شکست می‌خورد
+NODE_ENV=development npm ci --include=dev && npm run build
+sudo systemctl start papital-erp
 curl -fsS http://localhost:3000/health/ready
 ```
+
+> پشتیبان پیش از استقرار را فقط وقتی بازگردانید که نسخه تازه هنوز هیچ نوشتنی نپذیرفته است؛ بازگردانی هر تغییر پس از آن را پاک می‌کند.
 
 ### Out-of-Memory و Connection Pool
 
@@ -209,4 +216,5 @@ systemctl restart papital-erp && curl -fsS http://localhost:3000/health/startup
 - مهاجرت فقط از migrator اتمیک؛ شماره‌گذاری‌ها فقط با SEQUENCE/counter اتمیک
 - خواندن‌ها با `is_deleted = 0` (soft delete)؛ حذف‌ها فقط نرم
 - فرانت: همه فراخوانی‌ها با `fetchJson`، آرایه‌ها با گارد `Array.isArray`
-- هر تغییر کارکردی: bump نسخه + مدخل چنجلاگ در `src/data/changelogs/3.ts` (سری 3.x) یا فایل فعال مربوطه
+- هر تغییر کارکردی یک نسخه تازه با یک مدخل در چنجلاگ فعال `src/data/changelogs/10.ts` (سری 10.x) می‌گیرد؛ `npm run release -- <spec.json>` چهار محل نسخه را هم‌گام می‌کند و `npm run check:version` آن را می‌آزماید
+- تغییرها روی شاخه جدا با PR پیش‌نویس؛ هرگز push مستقیم به `master`

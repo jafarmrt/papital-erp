@@ -13,9 +13,9 @@
 | 0.1 | Type check / lint | `npm run lint` | `tsc --noEmit` exits 0 — **zero errors** |
 | 0.2 | Full test suite (15 critical scenarios) | `npm run test` | All suites pass (unit, database, workflow, concurrency, integration, security, api, regression) |
 | 0.3 | Production build | `npm run build` | Build completes; `dist/server.cjs` + `dist/index.html` exist |
-| 0.4 | Version sync (3 locations) | — | `package.json` `version` == head entry of active changelog (`src/data/changelogs/3.ts` for v3.x). `/health` reads `package.json` dynamically at runtime. |
+| 0.4 | Version sync (4 locations) | `npm run check:version` | `package.json` `version` == head entry of the active changelog (`src/data/changelogs/10.ts`) == `deploy/k8s/erp-deployment.yaml` (image tag and `APP_VERSION`) == the `README.md` header. `/health` reads `package.json` at runtime. |
 | 0.5 | Source archive (if shipping by zip) | `.\package-source.ps1` (Windows) | `papital-erp-source-v<VER>.zip` produced — never commit this zip |
-| 0.6 | Push to GitHub | `git push origin master` | `git status` clean afterwards |
+| 0.6 | Push to GitHub | `git push -u origin <branch>`, then a draft pull request | `git status` clean afterwards; never push to `master` directly: merging is the product owner's step |
 
 > Gate rule: if any of 0.1–0.3 fails, **STOP**. Fix, re-run, then ship.
 
