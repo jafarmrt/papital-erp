@@ -154,4 +154,3 @@ export async function checkSession(claims: SessionTokenClaims, tokenVersion: num
   }
   return { ok: true, sid, sessionId: session.id };
 }
-
