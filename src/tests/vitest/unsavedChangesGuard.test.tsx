@@ -48,7 +48,7 @@ const unloadPrevented = () => {
 };
 const popState = () => window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }));
 
-// v10.2.x (10.2 package 2, review H1 / M1 / L8): the guard of a page whose changes are not saved yet
+// v10.2.1 (10.2 package 2, review H1 / M1 / L8): the guard of a page whose changes are not saved yet
 describe('unsaved changes guard (10.2 package 2)', () => {
   it('asks the browser before closing only while changes are unsaved', async () => {
     const view = renderGuard(false);

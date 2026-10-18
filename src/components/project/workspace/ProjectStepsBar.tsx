@@ -38,7 +38,7 @@ export function currentStepIndex(steps: readonly ProjectStep[]): number {
 }
 
 /**
- * v10.2.x (10.2 package 2, review U4): where the project stands, from the material list to «ورود به انبار», in one row
+ * v10.2.1 (10.2 package 2, review U4): where the project stands, from the material list to «ورود به انبار», in one row
  * at the top of its page. Each step says what is left and opens its tab. On a phone the row scrolls sideways.
  */
 export function ProjectStepsBar({ steps, onOpenTab, inactiveNote }: ProjectStepsBarProps) {

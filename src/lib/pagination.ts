@@ -5,6 +5,19 @@
  */
 export const MAX_PAGE_LIMIT = 1000;
 
+/** The highest page number read; a larger one reads this page (an empty page), never an OFFSET the database refuses */
+export const MAX_PAGE_NUMBER = 1_000_000;
+
+/**
+ * v10.2.0: a page number from the query string. A missing, malformed, zero or negative page is the first page; a page
+ * above MAX_PAGE_NUMBER is that page. Before, `GET /items?page=-1` sent a negative OFFSET and answered 500.
+ */
+export function parsePageNumber(raw: unknown, fallback = 1): number {
+  const page = Number.parseInt(String(raw ?? ''), 10);
+  if (!Number.isFinite(page) || page < 1) return fallback;
+  return Math.min(page, MAX_PAGE_NUMBER);
+}
+
 export interface ParsedPagination {
   page: number;
   limit: number;
@@ -15,10 +28,9 @@ export function parsePagination(
   query: Record<string, unknown>,
   defaults?: { page?: number; limit?: number }
 ): ParsedPagination {
-  const rawPage = Number.parseInt(String(query.page ?? ''), 10);
   const rawLimit = Number.parseInt(String(query.limit ?? ''), 10);
 
-  const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : (defaults?.page ?? 1);
+  const page = parsePageNumber(query.page, defaults?.page ?? 1);
   let limit: number;
   // OBS-R2-100: `limit=0` (or negative) is the default page, never «no limit» (a whole-table read) or an empty page
   if (Number.isFinite(rawLimit) && rawLimit > 0) {

@@ -60,7 +60,7 @@ describe('project list page (TD-743)', () => {
     await waitFor(() => expect(listUrls()).toContain('/projects?status=in_progress&page=1&limit=50'));
   });
 
-  // v10.2.x (10.2 package 2, review U1 / U3): the specs are edited on the project's own page, which reads the full record
+  // v10.2.1 (10.2 package 2, review U1 / U3): the specs are edited on the project's own page, which reads the full record
   it('opens the project page in edit mode', async () => {
     const Probe = () => { const loc = useLocation(); return <output data-testid="location">{loc.pathname + loc.search}</output>; };
     render(
@@ -81,7 +81,7 @@ describe('project list page (TD-743)', () => {
     expect(screen.queryByTestId('project-form')).toBeNull();
   });
 
-  // v10.2.x (10.2 package 2, review L1): the filters live in the address, so «بازگشت» from a project finds them again
+  // v10.2.1 (10.2 package 2, review L1): the filters live in the address, so «بازگشت» from a project finds them again
   it('reads its filters from the address, writes them back and remembers them for the way back', async () => {
     const Probe = () => { const loc = useLocation(); return <output data-testid="list-address">{loc.search}</output>; };
     render(

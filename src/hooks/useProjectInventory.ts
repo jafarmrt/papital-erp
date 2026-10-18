@@ -133,7 +133,7 @@ export function useProjectInventory(
     return project.inventory_control?.manualPurchaseItems || [];
   });
 
-  // v10.2.x (10.2 package 2, review U2): a change the user made and has not saved; loading or syncing the project
+  // v10.2.1 (10.2 package 2, review U2): a change the user made and has not saved; loading or syncing the project
   // writes the state directly and leaves it clean, every edit goes through these setters and marks it
   const [isDirty, setIsDirty] = useState(false);
   const setSections = useCallback<React.Dispatch<React.SetStateAction<ProjectInventoryControlSectionData[]>>>(value => {

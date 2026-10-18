@@ -41,7 +41,7 @@ export function groupProjectsForKanban<T extends { status?: string | null }>(pro
 }
 
 /**
- * اولویت‌های پروژه (همان گزینه‌های فرم پروژه؛ v9.0.380، TD-754). v10.2.x (10.2 package 2, review U16): each level has
+ * اولویت‌های پروژه (همان گزینه‌های فرم پروژه؛ v9.0.380، TD-754). v10.2.1 (10.2 package 2, review U16): each level has
  * one name on the form, the list filter, the list badge and the audit row; before, «زیاد» was also «اولویت بالا» and «مهم».
  */
 export const PROJECT_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;

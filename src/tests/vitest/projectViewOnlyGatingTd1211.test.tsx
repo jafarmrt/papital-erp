@@ -58,7 +58,7 @@ const inventoryProject = {
 
 // v10.0.162 (TD-1211): a reader with projects.view only saw buttons whose API refused them with 403
 describe('project screens for a projects.view reader (TD-1211)', () => {
-  // v10.2.x (10.2 package 2, review U6): no project workflow ever filled the box, so the project page has none
+  // v10.2.1 (10.2 package 2, review U6): no project workflow ever filled the box, so the project page has none
   it('shows no workflow box on the project page, with or without a workflow key', async () => {
     granted.add('workflow.view');
     renderProjectPage('/projects/7');

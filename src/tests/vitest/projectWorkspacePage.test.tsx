@@ -68,7 +68,7 @@ afterEach(() => {
 const location = () => screen.getByTestId('location').textContent;
 const tab = (name: string) => screen.getByRole('tab', { name: new RegExp(name) });
 
-// v10.2.x (10.2 package 2, production projects review U1–U6, U16, U18): the project window became a page with its own address
+// v10.2.1 (10.2 package 2, production projects review U1–U6, U16, U18): the project window became a page with its own address
 describe('project page addresses (10.2 package 2)', () => {
   it('reads every tab name, the window names of before and nothing else', () => {
     expect(parseProjectWorkspaceTab('delivery')).toBe('delivery');

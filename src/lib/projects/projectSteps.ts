@@ -3,7 +3,7 @@ import { storedReservationShortages } from './projectReservationState';
 import type { ProjectWorkspaceTab } from './projectWorkspaceTabs';
 
 /**
- * v10.2.x (10.2 package 2, production projects review U4): the step bar at the top of a project page says where the
+ * v10.2.1 (10.2 package 2, production projects review U4): the step bar at the top of a project page says where the
  * project stands and what comes next, in the order the guide teaches: the material list, «ثبت نهایی و رزرو», buying
  * the shortages, taking the materials from the warehouse, the progress matrix and «ورود به انبار». Each step opens
  * its own tab. The material list, the reservation and the progress come from the project record; the purchase

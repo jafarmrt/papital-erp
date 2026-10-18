@@ -54,7 +54,7 @@ describe('project pause, resume and cancel (TD-1141)', () => {
 
   it('cancels a project', async () => {
     renderModal();
-    // v10.2.x (review U17): the cancel sits in the «بیشتر» menu, not beside pause
+    // v10.2.1 (review U17): the cancel sits in the «بیشتر» menu, not beside pause
     expect(screen.queryByText('لغو پروژه')).toBeNull();
     fireEvent.click(await screen.findByText('بیشتر'));
     fireEvent.click(screen.getByRole('menuitem', { name: 'لغو پروژه' }));

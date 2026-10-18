@@ -18,7 +18,7 @@ const BUTTON = 'px-3 py-1.5 bg-white hover:bg-slate-50 text-xs font-bold rounded
 /**
  * v10.0.66 (TD-1141): توقف، ادامه و لغو پروژه، با `PUT /projects/:id` و نسخه پروژه (TD-742). فراخواننده آن را فقط برای
  * دارنده `projects.edit` نشان می‌دهد؛ پیام رد سرور (مثلاً تخصیص مواد باز هنگام لغو) همان‌طور نشان داده می‌شود.
- * v10.2.x (10.2 package 2, review U17): «لغو پروژه», which no screen undoes, sits in the «بیشتر» menu instead of beside
+ * v10.2.1 (10.2 package 2, review U17): «لغو پروژه», which no screen undoes, sits in the «بیشتر» menu instead of beside
  * «توقف پروژه», so it is not pressed by mistake; it still asks before it is sent.
  */
 export function ProjectStatusActions({ projectId, status, version, onSaved }: ProjectStatusActionsProps) {

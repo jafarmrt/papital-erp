@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { consumeNextItemCodeSchema, itemCodeChangeSchema, itemCreateUpdateSchema, itemUpdateSchema } from './items.schemas.js';
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
-import { MAX_PAGE_LIMIT, parsePickListLimit } from '../lib/pagination.js';
+import { MAX_PAGE_LIMIT, parsePageNumber, parsePickListLimit } from '../lib/pagination.js';
 import { ItemsService } from '../services/items.service.js';
 import { ItemOpeningService, itemIdsWithOpeningVoucher } from '../services/inventory/itemOpening.service.js';
 import { WorkflowEngineService } from '../services/workflow/workflowEngineService.js';
@@ -68,7 +68,8 @@ router.get('/items', authorizePermission(...READ_PERMISSIONS.items), asyncHandle
   try {
     const type = req.query.type as string;
     // V9-1.3: صفحه‌بندی NaN-safe با سقف (limit=0 به معنای «بدون سقف» برای خروجی باقی می‌ماند)
-    const page = parseInt(req.query.page as string) || 1;
+    // v10.2.0: a zero or negative page is the first page (`page=-1` sent a negative OFFSET and answered 500)
+    const page = parsePageNumber(req.query.page);
     const limitStr = req.query.limit as string;
     let limit = limitStr === '0' ? 0 : (parseInt(limitStr) || 50);
     if (Number.isNaN(limit) || limit < 0) limit = 50;

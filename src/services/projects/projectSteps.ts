@@ -12,7 +12,7 @@ const RECEIVED_STATUSES = new Set(['received', 'completed']);
 const CLOSED_STATUSES = new Set(['rejected', 'cancelled', 'consolidated']);
 
 /**
- * v10.2.x (10.2 package 2, review U4): the counts of a project's step bar. Read only: the live requisitions of the
+ * v10.2.1 (10.2 package 2, review U4): the counts of a project's step bar. Read only: the live requisitions of the
  * project by stage, its allocations not released, its live final remittances and waste (the documents that issue
  * material to a project, TD-233 / TD-945), and its final production receipts against the planned products (the
  * delivery cap's own rule). It carries no amount, so `projects.view` reads it like the project record.

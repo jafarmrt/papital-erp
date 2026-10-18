@@ -69,17 +69,16 @@ export function InvoiceDetailsModal({ selectedDocDetails, setSelectedDocDetails,
           {/* Parties & Metadata Info Cards */}
           <InvoiceDetailsInfoCards selectedDocDetails={selectedDocDetails} />
 
-          {/* Workflow Stepper in Document Details */}
-          <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50">
-            <WorkflowStepperWidget
-              entityType="document"
-              entityId={selectedDocDetails.id}
-              title={`چرخه تاییدات و گردش‌کار سند شماره ${formatPersianCode(selectedDocDetails.ref_number)}`}
-              onStateChange={() => {
-                loadData();
-              }}
-            />
-          </div>
+          {/* Workflow Stepper in Document Details: the widget draws its own card and nothing without a running
+              workflow, so it has no frame here (v10.2.0: an empty frame was left where the start box was removed) */}
+          <WorkflowStepperWidget
+            entityType="document"
+            entityId={selectedDocDetails.id}
+            title={`چرخه تاییدات و گردش‌کار سند شماره ${formatPersianCode(selectedDocDetails.ref_number)}`}
+            onStateChange={() => {
+              loadData();
+            }}
+          />
 
           {/* Items Table */}
           <InvoiceDetailsItemsTable selectedDocDetails={selectedDocDetails} />

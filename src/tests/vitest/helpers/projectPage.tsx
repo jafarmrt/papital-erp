@@ -9,7 +9,7 @@ function LocationProbe() {
   return <output data-testid="location">{`${location.pathname}${location.search}`}</output>;
 }
 
-/** v10.2.x (10.2 package 2): a production project's page at its own address, as the router mounts it */
+/** v10.2.1 (10.2 package 2): a production project's page at its own address, as the router mounts it */
 export function renderProjectPage(path = '/projects/7') {
   return render(
     <QueryWrapper>

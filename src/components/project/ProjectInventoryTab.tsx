@@ -17,7 +17,7 @@ interface ProjectInventoryTabProps {
   itemsList?: Item[];
   warehouseItems?: Item[];
   onUpdate?: (signal?: AbortSignal) => void | Promise<void>;
-  /** v10.2.x (10.2 package 2, review U2): told whether the sections or the manual purchase rows hold an unsaved change */
+  /** v10.2.1 (10.2 package 2, review U2): told whether the sections or the manual purchase rows hold an unsaved change */
   onDirtyChange?: (dirty: boolean) => void;
 }
 

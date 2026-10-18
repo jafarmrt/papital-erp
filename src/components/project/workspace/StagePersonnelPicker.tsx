@@ -24,7 +24,7 @@ export function stagePersonnelChoices(personnel: readonly Personnel[], selected:
 }
 
 /**
- * v10.2.x (10.2 package 2, review U18): a stage's responsible personnel are picked from the personnel list instead of
+ * v10.2.1 (10.2 package 2, review U18): a stage's responsible personnel are picked from the personnel list instead of
  * typed as text with commas, so a name is never misspelt or split by a «،». A name stored earlier that is not on the
  * list stays on the stage until it is removed.
  */

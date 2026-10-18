@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { confirmAction } from '../components/ConfirmDialogHost';
 
 /**
- * v10.2.x (10.2 package 2, production projects review U2): a page whose form holds changes not yet saved asks before
+ * v10.2.1 (10.2 package 2, production projects review U2): a page whose form holds changes not yet saved asks before
  * the work is thrown away. Before, the project window's three tabs with their own save button dropped their changes
  * without a word when another tab was opened, the window was closed or Esc was pressed.
  *

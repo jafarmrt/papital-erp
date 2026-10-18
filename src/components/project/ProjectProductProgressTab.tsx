@@ -57,7 +57,7 @@ const STATUS_LABELS: Record<ProductProgressRow['status'], string> = {
 export default function ProjectProductProgressTab({ projectId, onUpdate, onDirtyChange }: {
   projectId: number;
   onUpdate?: () => void;
-  /** v10.2.x (review U2): the page asks before a tab change or leaving while ticks are not saved */
+  /** v10.2.1 (review U2): the page asks before a tab change or leaving while ticks are not saved */
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [loading, setLoading] = useState(true);

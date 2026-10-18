@@ -27,7 +27,7 @@ interface ProjectScheduleTabProps {
   personnelList: any[];
   pieceworkTasksList: any[];
   onUpdate: () => void;
-  /** v10.2.x (review U2): the page asks before a tab change or leaving while the plan is not saved */
+  /** v10.2.1 (review U2): the page asks before a tab change or leaving while the plan is not saved */
   onDirtyChange?: (dirty: boolean) => void;
 }
 

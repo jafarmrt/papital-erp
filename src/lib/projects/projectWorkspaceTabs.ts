@@ -1,5 +1,5 @@
 /**
- * v10.2.x (10.2 package 2, production projects review U1 / U6): a project is a page with its own address,
+ * v10.2.1 (10.2 package 2, production projects review U1 / U6): a project is a page with its own address,
  * `/projects/<id>/<tab>`, instead of a window over the project list, so a reload or a copied link opens the same tab
  * and a later notification can link to one. Five tabs instead of six: the timeline chart
  * sits beside the stages in the first tab. The old window's tab names are still read, so an earlier link keeps working.

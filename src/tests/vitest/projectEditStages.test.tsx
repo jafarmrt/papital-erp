@@ -25,7 +25,7 @@ const payload = (includeStages?: boolean) => buildProjectPayload({
 
 // v9.0.384 (TD-740, owner decision t2 A): editing a project never sends its stages
 describe('stages in the project edit form (TD-740)', () => {
-  // v10.2.x (10.2 package 2): the specs are edited on the project page; the stages stay with their own cards there
+  // v10.2.1 (10.2 package 2): the specs are edited on the project page; the stages stay with their own cards there
   it('edits the specs of a project without its stages', async () => {
     const project = { id: 7, version: 2, project_code: 'PRJ-7', title: 'پروژه', status: 'planned', products: [], stages: [{ id: 1, title: 'برش' }] } as unknown as ProductionProject;
     render(<QueryWrapper><ProjectSpecsEditor project={project} onSaved={noop} onCancel={noop} /></QueryWrapper>);

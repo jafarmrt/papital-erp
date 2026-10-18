@@ -48,7 +48,7 @@ export default function NotificationBell() {
       handleMarkAsRead(notif.id);
     }
     setIsOpen(false);
-    // v10.2.x (10.2 package 2): a page holding unsaved changes asks first
+    // v10.2.1 (10.2 package 2): a page holding unsaved changes asks first
     if (notif.link && (await confirmLeaveIfDirty())) {
       void navigate(notif.link, leaveNavigateOptions());
     }

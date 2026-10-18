@@ -140,7 +140,7 @@ export default function GlobalHeaderSearch() {
     (Array.isArray(results?.projects) ? results.projects.length : 0);
 
   // TD-1155: the result opens its list searched by its own key (the shared search the list pages read)
-  // v10.2.x (10.2 package 2): a page holding unsaved changes asks first
+  // v10.2.1 (10.2 package 2): a page holding unsaved changes asks first
   const handleSelectResult = async (hit: GlobalSearchHit) => {
     const target = globalSearchTarget(hit);
     setIsOpen(false);

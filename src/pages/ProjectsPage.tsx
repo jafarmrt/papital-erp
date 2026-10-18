@@ -28,7 +28,7 @@ import { PROJECT_PRIORITIES, PROJECT_PRIORITY_LABELS, PROJECT_STATUSES, PROJECT_
 
 // v7.0.86 (TD-108): نشان اولویت و وضعیت پروژه
 const PROJECT_PRIORITY_BASE = 'px-2 py-0.5 rounded font-bold text-[10px]';
-// v10.2.x (review U16): the badge says the level's one name (PROJECT_PRIORITY_LABELS)
+// v10.2.1 (review U16): the badge says the level's one name (PROJECT_PRIORITY_LABELS)
 const PROJECT_PRIORITY_BADGES: PillBadgeVariants = {
   urgent: { label: PROJECT_PRIORITY_LABELS.urgent, className: `${PROJECT_PRIORITY_BASE} bg-rose-100 text-rose-800` },
   high: { label: PROJECT_PRIORITY_LABELS.high, className: `${PROJECT_PRIORITY_BASE} bg-amber-100 text-amber-800` },
@@ -71,7 +71,7 @@ export default function ProjectsPage() {
 
   // Filters
   const { searchQuery, debouncedSearchQuery, setSearchQuery } = useSearch();
-  // v10.2.x (10.2 package 2, review L1): the status, priority, view and page live in the address, so coming back from a
+  // v10.2.1 (10.2 package 2, review L1): the status, priority, view and page live in the address, so coming back from a
   // project (its «بازگشت» button or the browser's back) shows the same page of the list
   const [listParams, setListParams] = useSearchParams();
   const statusFilter = listParams.get('status') || 'all';
@@ -125,7 +125,7 @@ export default function ProjectsPage() {
     if (!projectsQuery.isFetching && page > lastPage) setPage(lastPage);
   }, [projectsQuery.isFetching, page, lastPage, setPage]);
 
-  // v10.2.x (10.2 package 2, review U1): a project opens as its own page; the window here only defines a new project
+  // v10.2.1 (10.2 package 2, review U1): a project opens as its own page; the window here only defines a new project
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 

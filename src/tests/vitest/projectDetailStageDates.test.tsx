@@ -49,7 +49,7 @@ describe('project detail stage dates and shortage badge (TD-763)', () => {
   it('counts the reservation shortages the server wrote at finalize', async () => {
     renderModal();
     expect(await screen.findByText('۱ کمبود')).toBeTruthy();
-    // v10.2.x: the step bar says the same on its reservation step
+    // v10.2.1: the step bar says the same on its reservation step
     expect(screen.getByText('۱ قلم کمبود')).toBeTruthy();
   });
 

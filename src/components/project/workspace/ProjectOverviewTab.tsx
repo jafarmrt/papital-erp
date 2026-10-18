@@ -37,7 +37,7 @@ function projectProductRows(project: ProductionProject) {
 const CARD = 'bg-white rounded-2xl border border-slate-200 p-4 space-y-3';
 
 /**
- * v10.2.x (10.2 package 2, review U3 / U6): the first tab of a project page, «مشخصات و مراحل»: the summary or its
+ * v10.2.1 (10.2 package 2, review U3 / U6): the first tab of a project page, «مشخصات و مراحل»: the summary or its
  * edit form, the products, the stages with their timeline chart beneath (the old fifth tab) and the attachments. The
  * project workflow box, which no project workflow ever filled, is gone. While the specs are being edited nothing else
  * here saves (stage edits, a new stage, the attachments card), so no reload interrupts the form.

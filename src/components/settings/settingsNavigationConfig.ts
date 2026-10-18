@@ -90,7 +90,7 @@ export const SETTINGS_GROUPS: SettingCategoryGroup[] = [
   {
     id: 'inventory',
     title: 'انبار و موجودی کالا',
-    description: 'دسته‌بندی اقلام، مدیریت انبارها، آستانه سفارش و کنترل موجودی منفی',
+    description: 'دسته‌بندی اقلام، مدیریت انبارها و آستانه سفارش',
     icon: Building2,
     colorClass: 'text-amber-600 bg-amber-50 border-amber-200',
     tabs: [

@@ -25,7 +25,7 @@ import ProjectStockEntryTab from '../components/project/ProjectStockEntryTab';
 type DirtySetter = (dirty: boolean) => void;
 
 /**
- * v10.2.x (10.2 package 2, production projects review U1–U6): a production project is a page, `/projects/<id>/<tab>`,
+ * v10.2.1 (10.2 package 2, production projects review U1–U6): a production project is a page, `/projects/<id>/<tab>`,
  * instead of a window over the project list. The address names the tab, so a reload or a copied link opens the same
  * tab and a later notification can link to one; an earlier link with the old tab names still lands on the right one.
  * The step bar says where the project stands; a tab with an unsaved change is marked, and leaving it (another tab, the
