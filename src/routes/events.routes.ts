@@ -4,12 +4,12 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission, can } from '../middleware/authorize.js';
 import { domainEventBus } from '../services/events/domainEventBus.js';
 import { OutboxService } from '../services/events/outboxService.js';
-import { DeadLetterQueueService } from '../services/events/deadLetterQueueService.js';
-import { EventActionEngineService } from '../services/events/eventActionEngineService.js';
+import { DLQ_MAX_LIMIT, DeadLetterQueueService } from '../services/events/deadLetterQueueService.js';
+import { ACTION_LOG_MAX_LIMIT, EventActionEngineService } from '../services/events/eventActionEngineService.js';
 import { evaluateRuleDraft, testStoredRule } from '../services/events/ruleDraftEvaluation.js';
 import { simulateDomainEvent } from '../services/events/eventSimulation.js';
 import { retryFailedOutboxEvents } from '../services/events/outboxRetry.js';
-import { WebhookSubscriptionService } from '../services/events/webhookSubscriptionService.js';
+import { WEBHOOK_DELIVERY_MAX_LIMIT, WebhookSubscriptionService } from '../services/events/webhookSubscriptionService.js';
 import { EventSourcingReplayService } from '../services/events/eventSourcingReplayService.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
@@ -90,7 +90,8 @@ router.get('/outbox/stats', authorizePermission('events.view'), asyncHandler(asy
 }));
 
 router.get('/outbox', authorizePermission('events.view'), asyncHandler(async (req, res) => {
-  // TD-1320: a negative, zero or text page or limit is the first page of 50, never a negative OFFSET (a 500) or LIMIT NaN
+  // TD-1320: a missing, zero, negative or text page is page 1 and such a limit is 50, each on its own (never a negative
+  // OFFSET, a 500, or LIMIT NaN); a limit above the service's cap is that cap, so the OFFSET matches the rows it reads
   const { limit, offset } = parsePagination(req.query);
   const status = req.query.status as string | undefined;
   const eventType = req.query.eventType as string | undefined;
@@ -294,8 +295,9 @@ router.get('/action-logs', authorizePermission('events.view'), asyncHandler(asyn
   const ruleId = req.query.ruleId ? parseInt(req.query.ruleId as string, 10) : undefined;
   const status = req.query.status as string | undefined;
   const eventType = req.query.eventType as string | undefined;
-  // TD-1320: a negative, zero or text page or limit is the first page of 50, never a negative OFFSET (a 500) or LIMIT NaN
-  const { limit, offset } = parsePagination(req.query);
+  // TD-1320: a missing, zero, negative or text page is page 1 and such a limit is 50, each on its own (never a negative
+  // OFFSET, a 500, or LIMIT NaN); a limit above the service's cap is that cap, so the OFFSET matches the rows it reads
+  const { limit, offset } = parsePagination(req.query, { maxLimit: ACTION_LOG_MAX_LIMIT });
 
   const logsResult = await EventActionEngineService.getLogs({
     ruleId,
@@ -324,8 +326,9 @@ router.get('/dlq/stats', authorizePermission('events.view'), asyncHandler(async 
 }));
 
 router.get('/dlq', authorizePermission('events.view'), asyncHandler(async (req, res) => {
-  // TD-1320: a negative, zero or text page or limit is the first page of 50, never a negative OFFSET (a 500) or LIMIT NaN
-  const { limit, offset } = parsePagination(req.query);
+  // TD-1320: a missing, zero, negative or text page is page 1 and such a limit is 50, each on its own (never a negative
+  // OFFSET, a 500, or LIMIT NaN); a limit above the service's cap is that cap, so the OFFSET matches the rows it reads
+  const { limit, offset } = parsePagination(req.query, { maxLimit: DLQ_MAX_LIMIT });
   const status = req.query.status as string | undefined;
   const eventType = req.query.eventType as string | undefined;
   const source = req.query.source as string | undefined;
@@ -660,8 +663,9 @@ router.post('/webhooks/ping', authorizePermission('events.manage'), validate(web
 
 // v10.0.224 (OBS-R2-79): نام دوم `/webhooks/deliveries` زیر `/webhooks/:id` می‌ماند و هرگز پاسخ نمی‌داد؛ برداشته شد
 router.get('/webhooks/deliveries/list', authorizePermission('events.view'), asyncHandler(async (req, res) => {
-  // TD-1320: a negative, zero or text page or limit is the first page of 50, never a negative OFFSET (a 500) or LIMIT NaN
-  const { limit, offset } = parsePagination(req.query);
+  // TD-1320: a missing, zero, negative or text page is page 1 and such a limit is 50, each on its own (never a negative
+  // OFFSET, a 500, or LIMIT NaN); a limit above the service's cap is that cap, so the OFFSET matches the rows it reads
+  const { limit, offset } = parsePagination(req.query, { maxLimit: WEBHOOK_DELIVERY_MAX_LIMIT });
   const subscriptionId = req.query.subscriptionId ? parseInt(req.query.subscriptionId as string, 10) : undefined;
 
   const result = await WebhookSubscriptionService.getDeliveries({

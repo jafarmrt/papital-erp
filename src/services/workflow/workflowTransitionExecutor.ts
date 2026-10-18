@@ -292,7 +292,7 @@ export class WorkflowTransitionExecutor {
       }
     }
     if (ownRole) {
-      throw new ForbiddenError(`اقدام «${transition.title}» مجوز «${requiredPermissionTitle(transition)}» را می‌خواهد.`, { permission: transition.requiredPermission }, 'WF_PERMISSION_REQUIRED');
+      throw new ForbiddenError(`اقدام «${transition.title}» مجوز «${requiredPermissionTitle(transition)}» را می‌خواهد.`, { permission: requiredPermissionKey(transition) }, 'WF_PERMISSION_REQUIRED');
     }
     throw new ForbiddenError(`نقش شما اجازه اقدام «${transition.title}» را ندارد؛ از دارنده نقش این گام بخواهید آن را انجام دهد.`);
   }
@@ -664,7 +664,7 @@ export class WorkflowTransitionExecutor {
         ? { role: actingFor.fromRole, ownPermissions: false }
         : { role: params.userRole, permissions: userPermissions, ownPermissions: true }, tx);
       if (!signerHoldsPermission) {
-        throw new ForbiddenError(`اقدام «${transition.title}» مجوز «${requiredPermissionTitle(transition)}» را می‌خواهد.`, { permission: transition.requiredPermission }, 'WF_PERMISSION_REQUIRED');
+        throw new ForbiddenError(`اقدام «${transition.title}» مجوز «${requiredPermissionTitle(transition)}» را می‌خواهد.`, { permission: requiredPermissionKey(transition) }, 'WF_PERMISSION_REQUIRED');
       }
       if (WorkflowTransitionExecutor.initiatorExcluded(transition, instance.startedBy, {
         userId: actingFor ? actingFor.fromUserId : params.userId, actorId: params.userId, role: params.userRole,
@@ -977,7 +977,7 @@ export class WorkflowTransitionExecutor {
       return { allowed: false, reason: `نقش شما (${params.userRole}) مجوز لازم را ندارد` };
     }
     if (!(await WorkflowTransitionExecutor.holdsRequiredPermission(transition, { role: params.userRole, permissions: userPermissions, ownPermissions: true }))) {
-      return { allowed: false, reason: `این اقدام مجوز «${transition.requiredPermission}» را می‌خواهد` };
+      return { allowed: false, reason: `این اقدام مجوز «${requiredPermissionTitle(transition)}» را می‌خواهد` };
     }
 
     // Authoritative Server-side Context & Rule Check (Subphase 1.3)
@@ -1120,8 +1120,14 @@ export class WorkflowTransitionExecutor {
   }
 }
 
-/** TD-1152: the Persian name of a step's required permission in a refusal; its key stays in the error details */
+/**
+ * TD-1152: the Persian name of a step's required permission in a refusal; its key stays in the error details.
+ * TD-1320: a removed key is named by its replacement, the key an administrator can grant.
+ */
+function requiredPermissionKey(transition: { requiredPermission?: string | null }): string {
+  return effectivePermissionKey(transition.requiredPermission);
+}
 function requiredPermissionTitle(transition: { requiredPermission?: string | null }): string {
-  const key = (transition.requiredPermission || '').trim();
+  const key = requiredPermissionKey(transition);
   return permissionDefinition(key)?.title ?? key;
 }

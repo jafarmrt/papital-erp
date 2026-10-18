@@ -316,22 +316,99 @@ export async function runUrgentFixesV1020Tests(shouldRun: ShouldRun): Promise<Te
         } finally {
           await orm.update(workflowDefinitions).set({ isActive: 0 }).where(eq(workflowDefinitions.id, wf.definitionId)).catch(() => undefined);
         }
+
+        // the other side: a user holding the step's role but not audit.apply stays out of the inbox and the recipients,
+        // and a refusal names the replacement (the key an administrator can grant), never the removed key
+        const { transit } = await import('../invariants/workflowScenarioHelpers.js');
+        const { WorkflowTransitionExecutor } = await import('../../services/workflow/workflowTransitionExecutor.js');
+        const plainRole = `v1020_plain_${tail()}`;
+        await createTestRole({ code: plainRole, name: plainRole, permissions: ['workflow.approve'] });
+        const stranger = await wfUser(plainRole, []);
+        const wf2 = await defineWorkflow({
+          states: [{ key: 'draft', type: 'initial' }, { key: 'done', type: 'terminal' }],
+          transitions: [{ from: 'draft', to: 'done', action: 'approve', role: plainRole, permission: 'audit.view' }],
+        });
+        try {
+          const instanceId = await startWf(wf2);
+          await pool.query(`UPDATE workflow_instances SET snapshot_dsl = replace(snapshot_dsl::text, '"audit.view"', $2)::jsonb WHERE id = $1`,
+            [instanceId, JSON.stringify(` ${REMOVED_KEY} `)]);
+          const [task] = await tasksOf(instanceId);
+          if (!task) throw new Error('the second step made no inbox task');
+          const inbox = await WorkflowTaskService.getMyTasks({ userId: stranger.id, userRole: stranger.role, userPermissions: stranger.permissions });
+          if (inbox.data.some(t => t.instanceId === instanceId)) wrong.push('the task reached the inbox of a role without audit.apply');
+          const [taskRow] = await orm.select().from(workflowTasks).where(eq(workflowTasks.id, task.id));
+          const [instance] = await orm.select({ snapshotDsl: workflowInstances.snapshotDsl }).from(workflowInstances).where(eq(workflowInstances.id, instanceId));
+          const recipients = await workflowTaskRecipients(orm, taskRow, wf2.code, instance.snapshotDsl, new Date());
+          if (recipients.includes(stranger.id)) wrong.push('a role without audit.apply is among the recipients of the task');
+          try {
+            await transit(instanceId, wf2.transitionId.approve, stranger);
+            wrong.push('a role without audit.apply ran the step');
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            const details = (err as { details?: { permission?: string } }).details;
+            if (!message.includes(REPLACEMENT_TITLE) || message.includes(REMOVED_KEY)) wrong.push(`the refusal reads: ${message}`);
+            if (details?.permission !== 'audit.apply') wrong.push(`the refusal details name ${String(details?.permission)}`);
+          }
+          const check = await WorkflowTransitionExecutor.checkCanTransition({
+            instanceId, transitionId: wf2.transitionId.approve, userRole: stranger.role, userPermissions: stranger.permissions,
+          });
+          if (check.allowed || !String(check.reason).includes(REPLACEMENT_TITLE)) wrong.push(`the transition check answers ${JSON.stringify(check)}`);
+          if ((await instanceRow(instanceId)).status !== 'IN_PROGRESS') wrong.push('the refused step moved the workflow');
+        } finally {
+          await orm.update(workflowDefinitions).set({ isActive: 0 }).where(eq(workflowDefinitions.id, wf2.definitionId)).catch(() => undefined);
+        }
       });
   }
 
   if (shouldRun('reg_events_negative_page_td_1320', 'v10_2_0', 'td_1320', 'events', 'pagination')) {
     await runCase(results, 'reg_events_negative_page_td_1320',
-      'v10.2.8: the event lists read a negative, zero or text page or limit as the first page, never a 500',
-      'GET /api/events/{outbox,action-logs,dlq,webhooks/deliveries/list}?page=-1|0|abc&limit=-5|abc -> 200',
+      'v10.2.8: the event lists read a bad page as page 1 and a bad limit as 50, and page with the cap of their service',
+      'GET /api/events/{outbox,action-logs,dlq,webhooks/deliveries/list}?page=-1|0|abc&limit=-5|abc -> 200 with the seeded rows at limit 50, offset 0; page=2&limit=500 -> the service cap as limit and offset',
       async (wrong) => {
         const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+        const { outboxEvents, eventActionLogs, deadLetterEvents, webhookDeliveries } = await import('../../db/schema.js');
         const app = await getTestApp();
         const session = await getAdminSession();
-        for (const list of ['outbox', 'action-logs', 'dlq', 'webhooks/deliveries/list']) {
-          for (const query of ['page=-1', 'page=0', 'page=abc', 'limit=-5', 'limit=abc&page=2']) {
-            const res = await request(app).get(`/api/events/${list}?${query}`).set('Cookie', session.cookie);
-            if (res.status !== 200) wrong.push(`${list}?${query} answered ${res.status} ${JSON.stringify(res.body).slice(0, 120)}`);
+        // one row in each list, so a list that swallowed its database error and answered an empty page is caught
+        // (before, /dlq and /webhooks/deliveries/list answered 200 and no row for a negative page)
+        const tag = `td1320_${tail()}`;
+        const [outbox] = await orm.insert(outboxEvents).values({ eventId: tag, eventType: 'InvoiceApproved', aggregateType: 'Invoice', aggregateId: tag, status: 'completed' })
+          .returning({ id: outboxEvents.id });
+        const [log] = await orm.insert(eventActionLogs).values({ eventId: tag, eventType: 'InvoiceApproved', actionType: 'audit_log', status: 'success' })
+          .returning({ id: eventActionLogs.id });
+        const [dlq] = await orm.insert(deadLetterEvents).values({ originalEventId: tag, eventType: 'InvoiceApproved', aggregateType: 'Invoice', aggregateId: tag, failureReason: 'td1320' })
+          .returning({ id: deadLetterEvents.id });
+        const [sub] = await orm.insert(webhookSubscriptions).values({ name: `TD1320 ${tag}`, targetUrl: 'https://partner.example.org/hook', secretKey: '', isActive: 0 })
+          .returning({ id: webhookSubscriptions.id });
+        await orm.insert(webhookDeliveries).values({ subscriptionId: sub.id, eventId: tag, eventType: 'InvoiceApproved', targetUrl: 'https://partner.example.org/hook', status: 'success' });
+        try {
+          const lists: Array<{ path: string; rows: string; cap: number }> = [
+            { path: 'outbox', rows: 'events', cap: 1000 },
+            { path: 'action-logs', rows: 'data', cap: 100 },
+            { path: 'dlq', rows: 'data', cap: 200 },
+            { path: 'webhooks/deliveries/list', rows: 'data', cap: 100 },
+          ];
+          for (const list of lists) {
+            for (const query of ['page=-1', 'page=0', 'page=abc', 'limit=-5', 'limit=abc&page=-3']) {
+              const res = await request(app).get(`/api/events/${list.path}?${query}`).set('Cookie', session.cookie);
+              const rows = res.body?.[list.rows];
+              if (res.status !== 200) { wrong.push(`${list.path}?${query} answered ${res.status}`); continue; }
+              if (!Array.isArray(rows) || rows.length === 0) wrong.push(`${list.path}?${query} answered no row`);
+              if (res.body.limit !== 50) wrong.push(`${list.path}?${query} read limit ${String(res.body.limit)}`);
+              if ('offset' in res.body && res.body.offset !== 0) wrong.push(`${list.path}?${query} read offset ${String(res.body.offset)}`);
+              if ('page' in res.body && res.body.page !== 1) wrong.push(`${list.path}?${query} read page ${String(res.body.page)}`);
+            }
+            // a limit above the service's cap pages with that cap: page 2 starts where page 1 ended
+            const res = await request(app).get(`/api/events/${list.path}?page=2&limit=5000`).set('Cookie', session.cookie);
+            if (res.status !== 200 || res.body.limit !== list.cap) wrong.push(`${list.path}?page=2&limit=5000 read limit ${String(res.body?.limit)}`);
+            if ('offset' in res.body && res.body.offset !== list.cap) wrong.push(`${list.path}?page=2&limit=5000 read offset ${String(res.body.offset)}`);
+            if ('page' in res.body && res.body.page !== 2) wrong.push(`${list.path}?page=2&limit=5000 read page ${String(res.body.page)}`);
           }
+        } finally {
+          await orm.delete(webhookSubscriptions).where(eq(webhookSubscriptions.id, sub.id)).catch(() => undefined);
+          await orm.delete(deadLetterEvents).where(eq(deadLetterEvents.id, dlq.id)).catch(() => undefined);
+          await orm.delete(eventActionLogs).where(eq(eventActionLogs.id, log.id)).catch(() => undefined);
+          await orm.delete(outboxEvents).where(eq(outboxEvents.id, outbox.id)).catch(() => undefined);
         }
       });
   }

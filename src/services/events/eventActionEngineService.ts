@@ -75,6 +75,9 @@ export interface CreateRuleInput {
   isActive?: number;
 }
 
+/** TD-1320: the most rule execution log rows one page reads (the route pages with the same cap) */
+export const ACTION_LOG_MAX_LIMIT = 100;
+
 export class EventActionEngineService {
   /**
    * Helper to resolve nested dot-notated property paths using RuleEngineService
@@ -679,7 +682,7 @@ export class EventActionEngineService {
    * Get action execution logs with pagination
    */
   public static async getLogs(filter?: { ruleId?: number; status?: string; eventType?: string; limit?: number; offset?: number }): Promise<ActionLogPage> {
-    const limit = Math.min(filter?.limit || 50, 100);
+    const limit = Math.min(filter?.limit || 50, ACTION_LOG_MAX_LIMIT);
     const offset = filter?.offset || 0;
 
     let whereClause: SQL | undefined = undefined;

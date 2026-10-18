@@ -26,7 +26,7 @@ export interface ParsedPagination {
 
 export function parsePagination(
   query: Record<string, unknown>,
-  defaults?: { page?: number; limit?: number }
+  defaults?: { page?: number; limit?: number; maxLimit?: number }
 ): ParsedPagination {
   const rawLimit = Number.parseInt(String(query.limit ?? ''), 10);
 
@@ -38,8 +38,10 @@ export function parsePagination(
   } else {
     limit = defaults?.limit ?? 50;
   }
-  if (limit > MAX_PAGE_LIMIT) {
-    limit = MAX_PAGE_LIMIT;
+  // TD-1320: a list whose service reads at most `maxLimit` rows pages with that cap too, so page 2 starts where page 1 ended
+  const cap = Math.min(MAX_PAGE_LIMIT, defaults?.maxLimit ?? MAX_PAGE_LIMIT);
+  if (limit > cap) {
+    limit = cap;
   }
 
   return { page, limit, offset: (page - 1) * limit };
