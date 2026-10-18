@@ -147,10 +147,10 @@ describe('TD-1273 numeric fields read Persian digits and the Persian decimal sep
   });
 
   it('the invoice and stock document add-line buttons check their number fields first', () => {
-    for (const file of ['pages/CreateInvoicePage.tsx', 'components/documents/stock/StockItemPicker.tsx']) {
+    for (const file of ['components/invoices/create/InvoiceLinePicker.tsx', 'components/documents/stock/StockItemPicker.tsx']) {
       const source = readFileSync(join(SRC, file), 'utf8');
       expect(source).toContain('data-decimal-scope');
-      expect(source).toMatch(/refuseInvalidDecimalInputs\(e\.currentTarget\)\) (handleAddItem|onAddItem)\(\)/);
+      expect(source).toMatch(/refuseInvalidDecimalInputs\(e\.currentTarget\)\) (handleAddItem|onAddItem|onAdd)\(\)/);
     }
   });
 

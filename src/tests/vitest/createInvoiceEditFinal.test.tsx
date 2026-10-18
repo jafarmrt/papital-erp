@@ -6,6 +6,9 @@ import { toast } from 'react-hot-toast';
 import CreateInvoicePage from '../../pages/CreateInvoicePage';
 import { invoiceFormFromDocument } from '../../lib/invoices/invoiceForm';
 import type { User } from '../../types';
+import { INVOICE_STATUS_LABELS } from '../../components/invoices/create/InvoiceHeaderFields';
+
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // TD-801 (B08-32): ویرایش پیش‌فاکتور آن را قطعی نمی‌کند و کد کالای ردیف‌های بارشده از کلید `code` سرور خوانده می‌شود
 const fetchJson = vi.fn();
@@ -67,7 +70,7 @@ describe('CreateInvoicePage — editing a proforma does not finalize it (TD-801)
   it('the final invoice option is closed while editing and says the proforma is finalized by its approval', async () => {
     server();
     await editProforma();
-    const finalOption = screen.getByText(/فاکتور نهایی \(کسر قطعی از انبار\)/) as HTMLOptionElement;
+    const finalOption = screen.getByText(new RegExp(`^${escapeRegExp(INVOICE_STATUS_LABELS.final)}`)) as HTMLOptionElement;
     expect(finalOption.disabled).toBe(true);
     expect(finalOption.textContent).toContain('پیش‌فاکتور از گردش کار تأیید قطعی می‌شود');
   });
@@ -75,7 +78,7 @@ describe('CreateInvoicePage — editing a proforma does not finalize it (TD-801)
   it('a final status forced into the edit is refused with that reason, not a false stock shortage, and nothing is sent', async () => {
     server();
     await editProforma();
-    fireEvent.change(screen.getByDisplayValue('پیش فاکتور (رزرو موقت)'), { target: { value: 'final' } });
+    fireEvent.change(screen.getByDisplayValue(INVOICE_STATUS_LABELS.proforma), { target: { value: 'final' } });
     fireEvent.click(screen.getByRole('button', { name: 'ذخیره تغییرات پیش‌فاکتور' }));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('پیش‌فاکتور در ویرایش قطعی نمی‌شود؛ آن را از گردش کار تأیید پیش‌فاکتور قطعی کنید.'));
     expect(vi.mocked(toast.error).mock.calls.some(([msg]) => String(msg).includes('کافی نیست'))).toBe(false);

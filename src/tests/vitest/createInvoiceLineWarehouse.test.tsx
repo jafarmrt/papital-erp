@@ -7,6 +7,9 @@ import CreateInvoicePage from '../../pages/CreateInvoicePage';
 import { invoiceLineLocations, type InvoiceDocItem } from '../../lib/invoices/invoiceForm';
 import type { Item, User } from '../../types';
 
+/** Persian warehouse name of the fixture (v10.2.4: the option has no emoji) */
+const CENTRAL_WAREHOUSE = 'انبار مرکزی';
+
 // TD-790 (B08-21): ویرایش پیش‌فاکتور انبار هر ردیف را از خود ردیف می‌خواند و با همان ردیف می‌فرستد
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
@@ -71,7 +74,7 @@ async function editProforma(ref: string) {
   await waitFor(() => expect(toast.success).toHaveBeenCalledWith(`پیش‌فاکتور شماره ${ref} جهت ویرایش بارگذاری شد.`));
 }
 
-const warehouseSelect = () => screen.getByRole('option', { name: '📦 انبار مرکزی' }).closest('select') as HTMLSelectElement;
+const warehouseSelect = () => screen.getByRole('option', { name: CENTRAL_WAREHOUSE }).closest('select') as HTMLSelectElement;
 const multiWarehouseNote = 'ردیف‌های این پیش‌فاکتور از چند انبار است و هر ردیف از انبار خودش ذخیره می‌شود. تغییر این انبار همه ردیف‌ها را به آن می‌برد.';
 
 window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;

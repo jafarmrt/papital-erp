@@ -18,6 +18,7 @@ import { JalaliDateInput } from '../common/JalaliDateInput';
 import { postingAccountsOf } from '../../lib/accounting/postingAccount';
 import { DialogLayer } from '../common/DialogLayer';
 import { useDialogEscape } from '../../lib/a11y/dialogEscapeStack';
+import { withFreshRowKeys, withoutRowKey, withRowKey, withRowKeys } from '../../lib/rowKey';
 
 interface NewVoucherModalProps {
   isOpen: boolean;
@@ -61,6 +62,8 @@ export function NewVoucherModal({
   // Active focused row for keyboard actions
   const [activeRowIndex, setActiveRowIndex] = useState<number>(0);
 
+  const formRef = useRef<HTMLFormElement>(null);
+
   // Refs for keyboard focus control
   const itemRefs = useRef<Array<{
     accountRef?: React.RefObject<HTMLInputElement>;
@@ -71,10 +74,10 @@ export function NewVoucherModal({
     creditRef?: React.RefObject<HTMLInputElement>;
   }>>([]);
 
-  const [items, setItems] = useState<VoucherItemDraft[]>([
+  const [items, setItems] = useState<VoucherItemDraft[]>(() => withRowKeys<VoucherItemDraft>([
     { accountId: '', detailedType: 'none', detailedId: null, detailedName: '', debit: 0, credit: 0, description: '' },
     { accountId: '', detailedType: 'none', detailedId: null, detailedName: '', debit: 0, credit: 0, description: '' },
-  ]);
+  ]));
 
   // Server-backed draft auto-save hook
   const currentFormData = useMemo(() => ({
@@ -85,7 +88,8 @@ export function NewVoucherModal({
     currency,
     headerRate,
     attachments,
-    items
+    // v10.2.4 (TD-1291): کلید ردیف فقط در مرورگر است و در پیش‌نویس ذخیره نمی‌شود
+    items: items.map(withoutRowKey)
   }), [date, voucherType, manualVoucherNumber, description, currency, headerRate, attachments, items]);
 
   const {
@@ -107,7 +111,7 @@ export function NewVoucherModal({
       if (Array.isArray(loaded.attachments)) setAttachments(loaded.attachments);
       if (Array.isArray(loaded.items) && loaded.items.length > 0) {
         // v9.0.193 (TD-569): پیش‌نویس قدیمی «متفرقه» را `custom` نگه داشته بود
-        setItems((loaded.items as VoucherItemDraft[]).map(it => ({ ...it, detailedType: voucherDetailedTypeFromStored(it.detailedType) })));
+        setItems(withFreshRowKeys((loaded.items as VoucherItemDraft[]).map(it => ({ ...it, detailedType: voucherDetailedTypeFromStored(it.detailedType) }))));
       }
     }
   });
@@ -138,7 +142,7 @@ export function NewVoucherModal({
       setHeaderRate(editHeader.rate);
       setAttachments(Array.isArray(editingVoucher.attachments) ? editingVoucher.attachments : []);
       if (editingVoucher.items && Array.isArray(editingVoucher.items) && editingVoucher.items.length > 0) {
-        setItems(editingVoucher.items.map(it => ({
+        setItems(withFreshRowKeys(editingVoucher.items.map(it => ({
           ...voucherRowDraftFromStored({ currency: it.currency, exchangeRate: it.exchangeRate ?? it.exchange_rate }, editHeader),
           id: it.id,
           accountId: it.accountId,
@@ -148,16 +152,16 @@ export function NewVoucherModal({
           debit: it.debit || 0,
           credit: it.credit || 0,
           description: it.description || '',
-        })));
+        }))));
       }
     } else {
       setDescription('');
       setManualVoucherNumber('');
       setAttachments([]);
-      setItems([
+      setItems(withRowKeys<VoucherItemDraft>([
         { accountId: '', detailedType: 'none', detailedId: null, detailedName: '', debit: 0, credit: 0, description: '' },
         { accountId: '', detailedType: 'none', detailedId: null, detailedName: '', debit: 0, credit: 0, description: '' },
-      ]);
+      ]));
     }
   }, [editingVoucher, isOpen]);
 
@@ -174,7 +178,7 @@ export function NewVoucherModal({
     const newRowIndex = items.length;
     setItems(prev => [
       ...prev,
-      {
+      withRowKey<VoucherItemDraft>({
         accountId: '',
         detailedType: 'none',
         detailedId: null,
@@ -183,7 +187,8 @@ export function NewVoucherModal({
         credit: 0,
         description: description || '',
         ...initialData,
-      }
+        rowKey: undefined,
+      })
     ]);
     setActiveRowIndex(newRowIndex);
     // Focus new row account input on next tick
@@ -285,6 +290,12 @@ export function NewVoucherModal({
       // Check if saving shortcut: Ctrl+S or Ctrl+Enter
       if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S' || e.key === 'Enter')) {
         e.preventDefault();
+        // v10.2.4 (TD-1291): میان‌بر هم مانند دکمه ثبت، فرمی را که کادر نادرست دارد نمی‌فرستد
+        const form = formRef.current;
+        if (form && !form.checkValidity()) {
+          form.reportValidity();
+          return;
+        }
         if (isBalanced && description.trim()) {
           void submitVoucher();
         } else if (!isBalanced) {
@@ -551,7 +562,7 @@ export function NewVoucherModal({
         )}
 
         {/* Modal Body */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
+        <form ref={formRef} onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
           {/* Permanent Voucher Warning */}
           {isPermanentVoucher && (
             <div className="flex items-start gap-3 p-3.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 rounded-xl text-xs text-emerald-900 dark:text-emerald-200">

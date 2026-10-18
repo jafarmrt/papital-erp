@@ -3,13 +3,18 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { isCancelledError } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { Item, User } from '../types';
-import { Plus, Trash2, Printer, X } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, formatPersianCode, formatCurrencyLabel, getTodayIsoDate, toStorageDate } from '../utils';
-import { JalaliDateInput } from '../components/common/JalaliDateInput';
-import { TREASURY_CURRENCIES } from '../lib/treasury/treasuryCurrency';
+import { Package, Printer, ReceiptText, Sparkles } from 'lucide-react';
+import { formatPersianNumber, getTodayIsoDate, toStorageDate } from '../utils';
 import InvoicePrintView from '../components/InvoicePrintView';
-import { SearchableSelect } from '../components/SearchableSelect';
 import { OpenProformasPanel } from '../components/invoices/create/OpenProformasPanel';
+import { InvoiceFormSection } from '../components/invoices/create/InvoiceFormSection';
+import { InvoiceHeaderFields } from '../components/invoices/create/InvoiceHeaderFields';
+import { InvoiceBuyerFields } from '../components/invoices/create/InvoiceBuyerFields';
+import { InvoiceLinePicker } from '../components/invoices/create/InvoiceLinePicker';
+import { InvoiceLinesList } from '../components/invoices/create/InvoiceLinesList';
+import { InvoiceTotalsPanel } from '../components/invoices/create/InvoiceTotalsPanel';
+import { InvoiceSubmitBar } from '../components/invoices/create/InvoiceSubmitBar';
+import { INVOICE_FIELD, INVOICE_LABEL } from '../components/invoices/create/invoiceFormStyles';
 import { useServerDraft } from '../hooks/useServerDraft';
 import { isEmptyInvoiceDraft } from '../lib/invoices/invoiceForm';
 import { useInvoiceReferenceData, useItemPricesQuery } from '../hooks/invoices/useInvoiceReferenceData';
@@ -21,21 +26,16 @@ import { computeInvoiceTotals } from '../lib/invoiceTotals';
 import { serviceChargeInputOf } from '../lib/invoices/serviceChargeInput';
 import { InvoiceServiceChargeField } from '../components/invoices/create/InvoiceServiceChargeField';
 import { currencyChangeError, lineDiscountError, pricesForCurrency } from '../lib/invoices/invoiceLine';
-import { printLineAmounts } from '../lib/invoices/invoicePrintTotals';
 import { amountDecimalsOf } from '../lib/invoices/invoiceListDocuments';
-import { addInvoiceLine, customerLocationLabel, EDIT_FINAL_REFUSED, finalStatusOptionNote, invoiceFormFromDocument, invoiceLineLocations, isSalesFormDocType, lineLocationOf, type BuyerSource, type InvoiceDocItem, type InvoiceDocumentDetails } from '../lib/invoices/invoiceForm';
+import { addInvoiceLine, customerLocationLabel, EDIT_FINAL_REFUSED, finalStatusOptionNote, invoiceFormFromDocument, invoiceLineLocations, isSalesFormDocType, lineLocationOf, type InvoiceDocItem, type InvoiceDocumentDetails } from '../lib/invoices/invoiceForm';
 import { selectedPartyId } from '../lib/documents/partySelection';
 import type { InvoiceListDocument } from '../lib/invoices/invoiceListDocuments';
-import { Sparkles } from 'lucide-react';
-import { ExchangeRateField, exchangeRateError } from '../components/documents/ExchangeRateField';
+import { exchangeRateError } from '../components/documents/ExchangeRateField';
 import { useHasPermission } from '../contexts/AuthContext';
 import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog';
 import { SALES_FINALIZE_PERMISSION } from '../lib/permissions/documentPermissions';
-import { itemPickWithReservedUrl } from '../lib/permissions/pickLists';
-import { documentPartyPickListUrl } from '../lib/documents/documentPartyKind';
-import { DecimalInput, refuseInvalidDecimalInputs } from '../components/common/DecimalInput';
 
-// Print styles are added globally or inline
+// v10.2.4 (گزینه «ج»): فرم در بخش‌های سرتیتردار components/invoices/create؛ این صفحه وضعیت فرم و ثبت را نگه می‌دارد
 export default function CreateInvoicePage({ user: currentUser }: { user: User }) {
   const fieldId = useId();
   // v9.0.125 (TD-541 / TD-771): گزینه «فاکتور نهایی» با همان مجوزی که سرور می‌سنجد، نه کد نقش (documentPermissions.ts)
@@ -451,357 +451,78 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     );
   }
 
+  const priceOptions = pricesForCurrency(itemPrices, currency);
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto print:hidden">
-      <div className="bg-white border rounded-xl shadow-sm flex flex-col">
-        <div className="p-4 border-b flex justify-between items-center bg-white rounded-t-xl">
-          <div className="flex items-center gap-2">
-            <h3 className="font-bold flex items-center gap-2">📑 ثبت فاکتور فروش (پیش فاکتور/فاکتور)</h3>
-            {draftStatusText && (
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 animate-pulse border">
-                {draftStatusText}
-              </span>
-            )}
-          </div>
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col">
+        <div className="p-4 border-b border-slate-100 flex flex-wrap items-center gap-2">
+          <ReceiptText size={20} className="text-blue-600 shrink-0" aria-hidden="true" />
+          <h2 className="font-bold text-slate-800">ثبت فاکتور فروش</h2>
+          <span className="text-xs text-slate-500">فاکتور نهایی یا پیش‌فاکتور</span>
+          {draftStatusText && (
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border">{draftStatusText}</span>
+          )}
         </div>
 
-        {/* Server Draft Recovery Banner */}
+        {/* پیش‌نویس ذخیره‌شده در سامانه */}
         {hasServerDraft && (
-          <div className="bg-blue-50 border-b border-blue-200 px-4 py-2.5 flex items-center justify-between gap-3 text-xs text-blue-900">
+          <div className="bg-blue-50 border-b border-blue-200 px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-blue-900">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
-              <span>یک پیش‌نویس ذخیره‌شده در سامانه برای فاکتور فروش وجود دارد. مایل به بازیابی اقلام و مشخصات هستید؟</span>
+              <Sparkles className="w-4 h-4 text-blue-600 shrink-0" aria-hidden="true" />
+              <span>پیش‌نویس ذخیره‌شده‌ای از این فرم هست.</span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={restoreDraft}
-                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-xs shadow-xs transition"
-              >
+              <button type="button" onClick={restoreDraft} className="min-h-[36px] px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs transition">
                 بازیابی پیش‌نویس
               </button>
-              <button
-                type="button"
-                onClick={discardDraft}
-                className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-600 rounded border border-slate-300 text-xs transition"
-              >
+              <button type="button" onClick={discardDraft} className="min-h-[36px] px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-600 rounded-lg border border-slate-300 text-xs transition">
                 نادیده گرفتن
               </button>
             </div>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Header Info */}
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 bg-slate-50 p-4 rounded-lg border">
-            <div>
-              <label htmlFor={`${fieldId}-status`} className="block text-xs font-medium mb-1 text-slate-500">وضعیت سند</label>
-              <select id={`${fieldId}-status`} className="w-full border rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white font-bold text-slate-700" value={status} onChange={e => setStatus(e.target.value)}>
-                <option value="proforma">پیش فاکتور (رزرو موقت)</option>
-                <option value="final" disabled={!canFinalizeSales || isEditing}>
-                  فاکتور نهایی (کسر قطعی از انبار){finalOptionNote}
-                </option>
-              </select>
-            </div>
-            <div>
-              <label htmlFor={`${fieldId}-currency`} className="block text-xs font-medium mb-1 text-slate-500">واحد پول (ارز)</label>
-              <select id={`${fieldId}-currency`} className="w-full border rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white font-bold text-slate-700" value={currency} onChange={e => handleCurrencyChange(e.target.value)}>
-                {TREASURY_CURRENCIES.map(code => <option key={code} value={code}>{formatCurrencyLabel(code)}</option>)}
-              </select>
-              <ExchangeRateField currency={currency} value={exchangeRate} onChange={setExchangeRate} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1 text-slate-500">محل خروج قلم کالا (انبار مبدا)</label>
-              {warehouses.length > 0 ? (
-                <select className="w-full border rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white font-bold text-slate-700" value={location} onChange={e => handleLocationChange(e.target.value)}>
-                  {warehouses.map(w => (
-                    <option key={w.code} value={w.code}>📦 {w.name}</option>
-                  ))}
-                </select>
-              ) : (
-                <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded font-medium">
-                  ⚠️ هیچ انباری تعریف نشده است (تنظیمات &gt; انبارها)
-                </div>
-              )}
-              {multiWarehouseEdit && (
-                <p className="mt-1 text-[11px] text-amber-800">
-                  ردیف‌های این پیش‌فاکتور از چند انبار است و هر ردیف از انبار خودش ذخیره می‌شود. تغییر این انبار همه ردیف‌ها را به آن می‌برد.
-                </p>
-              )}
-            </div>
-            <div>
-              {/* v9.0.327 (TD-783، تصمیم ت۹ الف): شماره فقط از سری سرور؛ سند تازه شماره را هنگام ثبت می‌گیرد */}
-              <label htmlFor={`${fieldId}-ref-number`} className="block text-xs font-medium mb-1 text-slate-500">شماره سند (از سری سامانه)</label>
-              <input id={`${fieldId}-ref-number`} type="text" value={refNumber} readOnly title="شماره هنگام ثبت از سری فاکتورهای سامانه داده می‌شود" className="w-full border shadow-sm rounded text-sm px-3 py-1.5 text-left font-mono text-slate-500 bg-slate-50 focus:outline-none" dir="ltr" />
-            </div>
-            <div>
-              <label htmlFor={`${fieldId}-date`} className="block text-xs font-medium mb-1 text-slate-500">تاریخ</label>
-              <JalaliDateInput id={`${fieldId}-date`}
-                value={date}
-                onChange={setDate}
-                className="w-full border shadow-sm rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-              />
-            </div>
-          </div>
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-8">
+          <InvoiceHeaderFields
+            status={status} onStatusChange={setStatus} finalDisabled={!canFinalizeSales || isEditing} finalOptionNote={finalOptionNote}
+            currency={currency} onCurrencyChange={handleCurrencyChange} exchangeRate={exchangeRate} onExchangeRateChange={setExchangeRate}
+            warehouses={warehouses} location={location} onLocationChange={handleLocationChange} multiWarehouseEdit={multiWarehouseEdit}
+            refNumber={refNumber} date={date} onDateChange={setDate}
+          />
 
-          <div className="border-t pt-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-slate-800">مشخصات خریدار (طرف حساب)</h3>
-              <span className="text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                🔒 انتخاب الزاماً از دفتر مشتریان و طرفین حساب (عدم امکان ورود دستی)
-              </span>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-              <div className="col-span-1 md:col-span-4 bg-blue-50/80 p-3 rounded-xl border border-blue-100 flex flex-col md:flex-row md:items-center gap-3">
-                <label htmlFor={`${fieldId}-selected-customer-id`} className="text-sm font-bold text-blue-900 shrink-0 min-w-[170px]">انتخاب خریدار از فهرست طرفین حساب:*</label>
-                <SearchableSelect id={`${fieldId}-selected-customer-id`} 
-                  className="w-full"
-                  fetchUrl={documentPartyPickListUrl('invoice')}
-                  mapResultToOption={(c: BuyerSource & { id: number }) => {
-                    const loc = customerLocationLabel(c);
-                    return {
-                      value: c.id.toString(),
-                      label: `👤 ${c.name} ${c.phone ? `(${c.phone})` : ''} ${loc ? `- ${loc}` : ''}`,
-                      _raw: c
-                    };
-                  }}
-                  value={selectedCustomerId}
-                  valueLabel={buyerName ? `👤 ${buyerName}` : undefined}
-                  onChange={handleCustomerSelect}
-                  placeholder="-- جهت انتخاب خریدار، کلیک کرده یا نام/تلفن وی را تایپ کنید --"
-                />
-              </div>
-              <div>
-                <label htmlFor={`${fieldId}-buyer-name`} className="block text-xs mb-1 text-slate-600 font-bold">نام خریدار (طرف حساب)</label>
-                <input id={`${fieldId}-buyer-name`} 
-                  type="text" 
-                  value={buyerName} 
-                  readOnly 
-                  placeholder={selectedCustomerId ? (buyerName || 'بدون نام') : 'از فهرست طرفین حساب انتخاب کنید'} 
-                  className="w-full border rounded text-sm px-3 py-1.5 bg-slate-100/90 text-slate-800 font-bold cursor-not-allowed border-slate-200 shadow-2xs" 
-                />
-              </div>
-              <div>
-                <label htmlFor={`${fieldId}-buyer-city`} className="block text-xs mb-1 text-slate-600 font-bold">استان / شهر</label>
-                <input id={`${fieldId}-buyer-city`} 
-                  type="text" 
-                  value={buyerCity} 
-                  readOnly 
-                  placeholder={selectedCustomerId ? (buyerCity ? '' : 'در پرونده ثبت نشده است') : 'از پرونده خریدار فراخوانی می‌شود'} 
-                  className="w-full border rounded text-sm px-3 py-1.5 bg-slate-100/90 text-slate-800 font-bold cursor-not-allowed border-slate-200 shadow-2xs" 
-                />
-              </div>
-              <div>
-                <label htmlFor={`${fieldId}-buyer-phone`} className="block text-xs mb-1 text-slate-600 font-bold">تلفن</label>
-                <input id={`${fieldId}-buyer-phone`} 
-                  type="text" 
-                  value={buyerPhone} 
-                  readOnly 
-                  placeholder={selectedCustomerId ? (buyerPhone ? '' : 'در پرونده ثبت نشده است') : 'از پرونده خریدار فراخوانی می‌شود'} 
-                  className="w-full border rounded text-sm px-3 py-1.5 bg-slate-100/90 text-slate-800 font-bold cursor-not-allowed border-slate-200 shadow-2xs" 
-                  dir="ltr" 
-                />
-              </div>
-              <div className="col-span-1 md:col-span-3">
-                <label htmlFor={`${fieldId}-buyer-address`} className="block text-xs mb-1 text-slate-600 font-bold">نشانی تحویل / اقامتگاه</label>
-                <input id={`${fieldId}-buyer-address`} 
-                  type="text" 
-                  value={buyerAddress} 
-                  readOnly 
-                  placeholder={selectedCustomerId ? (buyerAddress ? '' : 'در پرونده مشتری نشانی ثبت نشده است') : 'از پرونده خریدار فراخوانی می‌شود'} 
-                  className="w-full border rounded text-sm px-3 py-1.5 bg-slate-100/90 text-slate-800 font-bold cursor-not-allowed border-slate-200 shadow-2xs" 
-                />
-              </div>
-            </div>
-          </div>
+          <InvoiceBuyerFields
+            selectedCustomerId={selectedCustomerId} onCustomerSelect={handleCustomerSelect}
+            buyerName={buyerName} buyerCity={buyerCity} buyerPhone={buyerPhone} buyerAddress={buyerAddress}
+          />
 
-          <div className="border-t pt-4">
-            <h3 className="text-sm font-bold mb-3 text-slate-800">اقلام فاکتور</h3>
-            <div data-decimal-scope="" className="flex flex-wrap gap-3 items-end bg-slate-50 p-3 rounded-lg border">
-              <div className="flex-1 min-w-[200px]">
-                <label htmlFor={`${fieldId}-selected-item`} className="block text-xs mb-1 text-slate-500">انتخاب کالا</label>
-                <SearchableSelect
-                  id={`${fieldId}-selected-item`}
-                  key={`item-select-${location}-${status}-${editingDocId ?? 'new'}`}
-                  className="w-full shadow-sm rounded"
-                  fetchUrl={itemPickWithReservedUrl(editingDocId)}
-                  mapResultToOption={(it: Item) => {
-                    const { loc, total, reserved, sellable } = getSellableStock(it, location);
-                    const whName = warehouses.find(w => w.code === location)?.name || location || 'انبار انتخابی';
-
-                    const stockLabel = location 
-                      ? `${whName}: ${formatPersianNumber(loc)} | رزرو: ${formatPersianNumber(reserved)} | قابل فروش: ${formatPersianNumber(sellable)} ${it.unit}` 
-                      : `کل: ${formatPersianNumber(total)} | رزرو: ${formatPersianNumber(reserved)} | قابل فروش: ${formatPersianNumber(sellable)} ${it.unit}`;
-
-                    return {
-                      value: it.id.toString(),
-                      label: `${it.code} - ${it.name} (${stockLabel})`,
-                      disabled: status === 'final' && sellable <= 0
-                    };
-                  }}
-                  value={selectedItem}
-                  onChange={handleItemSelect}
-                  placeholder="انتخاب کالا / ماده اولیه"
-                />
-              </div>
-              <div className="w-48">
-                <label htmlFor={`${fieldId}-field`} className="block text-xs mb-1 text-slate-500">سیاست قیمتی از پیش تعریف شده</label>
-                <select id={`${fieldId}-field`} 
-                  className="w-full border shadow-sm rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  onChange={e => e.target.value && setUnitPrice(Number(e.target.value))}
-                  disabled={!selectedItem || pricesForCurrency(itemPrices, currency).length === 0}
-                  defaultValue=""
-                >
-                  <option value="">-- ورود دستی قیمت --</option>
-                  {pricesForCurrency(itemPrices, currency).map((p, pIdx) => (
-                    <option key={`price-opt-${p.id || pIdx}-${pIdx}`} value={p.price}>{p.title} - {formatPersianPrice(p.price)} {formatCurrencyLabel(p.currency)}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="w-24">
-                <label htmlFor="invoice-line-quantity" className="block text-xs mb-1 text-slate-500">تعداد</label>
-                <DecimalInput id="invoice-line-quantity" min="0" step="any" value={quantity} onValueChange={(v) => setQuantity(v ? Number(v) : '')} className="w-full shadow-sm border rounded text-sm px-3 py-1.5 text-center tabular-nums focus:outline-none focus:ring-1 focus:ring-blue-500" />
-              </div>
-              <div className="w-32">
-                <label htmlFor="invoice-line-unit-price" className="block text-xs mb-1 text-slate-500">مبلغ واحد ({formatCurrencyLabel(currency)})</label>
-                <DecimalInput id="invoice-line-unit-price" min="0" value={unitPrice} onValueChange={(v) => setUnitPrice(v ? Number(v) : '')} className="w-full border shadow-sm rounded text-sm px-3 py-1.5 text-center tabular-nums focus:outline-none focus:ring-1 focus:ring-blue-500" />
-              </div>
-              <div className="w-32">
-                <label htmlFor="invoice-line-discount" className="block text-xs mb-1 text-slate-500">تخفیف کلی ردیف ({formatCurrencyLabel(currency)})</label>
-                <DecimalInput id="invoice-line-discount" min="0" value={discount} onValueChange={(v) => setDiscount(v ? Number(v) : '')} className="w-full border shadow-sm rounded text-sm px-3 py-1.5 text-center tabular-nums focus:outline-none focus:ring-1 focus:ring-blue-500" />
-              </div>
-              <button type="button" onClick={(e) => { if (!refuseInvalidDecimalInputs(e.currentTarget)) handleAddItem(); }} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded flex items-center gap-1 text-sm h-[34px] transition-colors shadow-sm">
-                <Plus size={16} /> افزودن به فهرست
-              </button>
-            </div>
-          </div>
+          <InvoiceFormSection icon={Package} title="اقلام فاکتور"
+            aside={docItems.length > 0 && <span className="text-[11px] text-slate-500">{formatPersianNumber(docItems.length)} ردیف</span>}>
+            <InvoiceLinePicker
+              location={location} status={status} editingDocId={editingDocId} warehouses={warehouses} currency={currency}
+              selectedItem={selectedItem} onItemSelect={handleItemSelect} prices={priceOptions}
+              quantity={quantity} onQuantityChange={setQuantity} unitPrice={unitPrice} onUnitPriceChange={setUnitPrice}
+              discount={discount} onDiscountChange={setDiscount} onAdd={handleAddItem}
+            />
+            <InvoiceLinesList lines={docItems} currency={currency} amountDecimals={amountDecimals} warehouses={warehouses} onRemove={handleRemove} />
+          </InvoiceFormSection>
 
           {docItems.length > 0 && (
-            <div className="border rounded-xl overflow-hidden shadow-sm">
-              <table className="w-full text-sm text-right">
-                <thead className="bg-[#6c74ad] text-white">
-                  <tr>
-                    <th className="p-3 font-medium">کد</th>
-                    <th className="p-3 font-medium text-right">شرح کالا</th>
-                    <th className="p-3 font-medium text-center">تعداد / مقدار</th>
-                    <th className="p-3 font-medium text-center">مبلغ واحد ({formatCurrencyLabel(currency)})</th>
-                    <th className="p-3 font-medium text-center">مبلغ کل ({formatCurrencyLabel(currency)})</th>
-                    <th className="p-3 font-medium text-center">تخفیف ({formatCurrencyLabel(currency)})</th>
-                    <th className="p-3 font-medium text-center">مبلغ نهایی ({formatCurrencyLabel(currency)})</th>
-                    <th className="p-3 font-medium text-center">حذف</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y text-sm">
-                  {docItems.map((d, i) => {
-                    const { total: rowTotal, net: rowFinal } = printLineAmounts({ quantity: d.quantity, unit_price: d.unitPrice, discount: d.discount });
-                    return (
-                    <tr key={i} className="hover:bg-slate-50">
-                      <td className="p-3 font-mono text-slate-500" dir="ltr">{formatPersianCode(d.item.code)}</td>
-                      <td className="p-3 font-bold text-slate-800">
-                        {d.item.name}
-                        {d.location && <span className="block text-[11px] font-normal text-slate-500">انبار: {warehouses.find(w => w.code === d.location)?.name || d.location}</span>}
-                      </td>
-                      <td className="p-3 text-center">
-                        <span className="font-bold">{formatPersianNumber(d.quantity)}</span> <span className="text-slate-500 text-xs">{d.item.unit}</span>
-                      </td>
-                      <td className="p-3 text-center text-slate-700">{formatPersianPrice(d.unitPrice, undefined, amountDecimals)}</td>
-                      <td className="p-3 text-center font-bold text-slate-700">{formatPersianPrice(rowTotal, undefined, amountDecimals)}</td>
-                      <td className="p-3 text-center text-rose-600">{d.discount > 0 ? formatPersianPrice(d.discount, undefined, amountDecimals) : '-'}</td>
-                      <td className="p-3 text-center font-bold text-indigo-700">{formatPersianPrice(rowFinal, undefined, amountDecimals)}</td>
-                      <td className="p-3 text-center">
-                        <button aria-label="حذف ردیف" type="button" onClick={() => handleRemove(i)} className="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded transition-colors inline-block">
-                          <Trash2 size={16} />
-                        </button>
-                      </td>
-                    </tr>
-                  )})}
-                </tbody>
-              </table>
-              <div className="bg-slate-50 p-4 border-t flex flex-wrap items-center justify-between gap-4 text-sm">
-                <div className="flex items-center gap-3 bg-white p-2.5 rounded-lg border shadow-xs">
-                  <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-slate-700">
-                    <input 
-                      type="checkbox" 
-                      checked={applyVat} 
-                      onChange={e => setApplyVat(e.target.checked)} 
-                      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 cursor-pointer" 
-                    />
-                    <span>محاسبه مالیات بر ارزش افزوده</span>
-                  </label>
-                  {applyVat && (
-                    <div className="flex items-center gap-1.5 border-r pr-3 mr-1">
-                      <label htmlFor={`${fieldId}-vat-rate`} className="text-xs text-slate-500">نرخ:</label>
-                      <div className="flex flex-col">
-                        <DecimalInput
-                          id={`${fieldId}-vat-rate`}
-                          min="0"
-                          max="100"
-                          value={vatRate}
-                          onValueChange={(v) => setVatRate(Number(v) || 0)}
-                          className="w-14 border rounded px-2 py-1 text-center text-xs font-bold tabular-nums bg-slate-50 focus:bg-white"
-                        />
-                      </div>
-                      <span className="text-xs text-slate-500">٪</span>
-                    </div>
-                  )}
-                </div>
-                <InvoiceServiceChargeField value={serviceChargeText} onChange={setServiceChargeText} error={serviceCharge.error} currency={currency} />
-
-                <div className="flex flex-wrap items-center justify-end gap-6">
-                  <div className="text-center font-medium text-slate-500 text-xs">
-                    مبلغ ناخالص: 
-                    <span className="text-slate-800 font-bold block mt-0.5 text-base">{formatPersianPrice(totalSum, undefined, amountDecimals)}</span>
-                  </div>
-                  <div className="text-center font-medium text-slate-500 text-xs">
-                    تخفیفات: 
-                    <span className="text-rose-600 font-bold block mt-0.5 text-base">{formatPersianPrice(totalDiscount, undefined, amountDecimals)}</span>
-                  </div>
-                  {applyVat && (
-                    <div className="text-center font-medium text-slate-500 text-xs">
-                      ارزش افزوده ({formatPersianNumber(vatRate)}٪): 
-                      <span className="text-amber-700 font-bold block mt-0.5 text-base">{formatPersianPrice(vatAmount, undefined, amountDecimals)}</span>
-                    </div>
-                  )}
-                  {serviceChargeTotal > 0 && (
-                    <div className="text-center font-medium text-slate-500 text-xs">
-                      ارسال و خدمات:
-                      <span className="text-slate-800 font-bold block mt-0.5 text-base">{formatPersianPrice(serviceChargeTotal, undefined, amountDecimals)}</span>
-                    </div>
-                  )}
-                  <div className="text-center font-medium text-indigo-700 bg-indigo-50 border border-indigo-100 px-4 py-2 rounded-lg text-xs">
-                    مبلغ نهایی قابل پرداخت: 
-                    <span className="font-bold block mt-0.5 text-lg text-indigo-900">{formatPersianPrice(finalPrice, undefined, amountDecimals)} {formatCurrencyLabel(currency)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <InvoiceTotalsPanel
+              applyVat={applyVat} onApplyVatChange={setApplyVat} vatRate={vatRate} onVatRateChange={setVatRate}
+              serviceChargeField={<InvoiceServiceChargeField value={serviceChargeText} onChange={setServiceChargeText} error={serviceCharge.error} currency={currency} />}
+              gross={totalSum} discount={totalDiscount} vatAmount={vatAmount} serviceCharge={serviceChargeTotal} payable={finalPrice}
+              currency={currency} amountDecimals={amountDecimals}
+            />
           )}
 
           <div>
-            <label htmlFor={`${fieldId}-notes`} className="block text-xs font-medium mb-1 text-slate-500">توضیحات تکمیلی</label>
-            <textarea id={`${fieldId}-notes`} value={notes} onChange={e=>setNotes(e.target.value)} rows={3} className="w-full border rounded text-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"></textarea>
+            <label htmlFor={`${fieldId}-notes`} className={INVOICE_LABEL}>توضیحات</label>
+            <textarea id={`${fieldId}-notes`} value={notes} onChange={e => setNotes(e.target.value)} rows={3} className={INVOICE_FIELD}></textarea>
           </div>
 
-          <div className="border-t pt-4 flex items-center justify-between">
-            {editingDocId ? (
-              <div className="flex items-center gap-2 text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200 text-xs font-bold">
-                <span>در حال ویرایش پیش‌فاکتور کد {formatPersianCode(refNumber)}</span>
-                <button type="button" onClick={handleCancelEdit} className="text-slate-600 hover:text-slate-900 bg-white border px-2 py-0.5 rounded text-xs flex items-center gap-1 font-normal">
-                  <X size={12} /> انصراف
-                </button>
-              </div>
-            ) : <div />}
-            <div className="flex items-center gap-3">
-              {editingDocId && (
-                <button type="button" onClick={handleCancelEdit} className="border border-slate-300 hover:bg-slate-100 text-slate-700 px-4 py-2.5 rounded-lg text-sm font-medium transition-all">
-                  انصراف
-                </button>
-              )}
-              <button type="submit" disabled={docItems.length === 0 || !canRecordSales || isSaving} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-8 py-2.5 rounded-lg text-sm font-bold shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1">
-                {isSaving ? 'در حال ثبت...' : editingDocId ? 'ذخیره تغییرات پیش‌فاکتور' : 'ثبت و صدور فاکتور'}
-              </button>
-            </div>
-          </div>
+          <InvoiceSubmitBar isEditing={isEditing} refNumber={refNumber} disabled={docItems.length === 0 || !canRecordSales || isSaving}
+            isSaving={isSaving} onCancelEdit={handleCancelEdit} />
         </form>
       </div>
 
