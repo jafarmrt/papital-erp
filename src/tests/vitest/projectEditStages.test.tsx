@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
+
+vi.mock('../../api', () => ({ fetchJson: vi.fn(async () => []) }));
+vi.mock('react-hot-toast', () => ({ default: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }));
+
+import { fetchJson } from '../../api';
 import { ProjectStagesForm } from '../../components/project-modal/ProjectStagesForm';
 import { buildProjectPayload } from '../../components/project-modal/projectFormHelpers';
+import { ProjectSpecsEditor } from '../../components/project/workspace/ProjectSpecsEditor';
+import type { ProductionProject } from '../../types';
+import { QueryWrapper } from './helpers/queryWrapper';
 
 afterEach(cleanup);
 
@@ -15,17 +23,16 @@ const payload = (includeStages?: boolean) => buildProjectPayload({
   ...(includeStages === undefined ? {} : { includeStages }),
 });
 
-// v9.0.384 (TD-740, owner decision t2 A): the project edit form shows the stages read-only and never sends them
+// v9.0.384 (TD-740, owner decision t2 A): editing a project never sends its stages
 describe('stages in the project edit form (TD-740)', () => {
-  it('shows the stages without inputs and opens the stages section', () => {
-    const onOpenStages = vi.fn();
-    render(<ProjectStagesForm stages={STAGES} preset="" availablePresets={[]} onSelectPreset={noop} onAddStage={noop}
-      onRemoveStage={noop} onStageTitleChange={noop} onMoveStage={noop} readOnly onOpenStages={onOpenStages} />);
-    expect(screen.getByText('برش')).toBeTruthy();
-    expect(screen.queryAllByRole('textbox')).toHaveLength(0);
+  // v10.2.1 (10.2 package 2): the specs are edited on the project page; the stages stay with their own cards there
+  it('edits the specs of a project without its stages', async () => {
+    const project = { id: 7, version: 2, project_code: 'PRJ-7', title: 'پروژه', status: 'planned', products: [], stages: [{ id: 1, title: 'برش' }] } as unknown as ProductionProject;
+    render(<QueryWrapper><ProjectSpecsEditor project={project} onSaved={noop} onCancel={noop} /></QueryWrapper>);
+    await waitFor(() => expect(vi.mocked(fetchJson)).toHaveBeenCalled());
+    expect(screen.getByRole('form', { name: 'ویرایش مشخصات پروژه' })).toBeTruthy();
+    expect(screen.queryByText('برش')).toBeNull();
     expect(screen.queryByText('افزودن مرحله جدید به پایان فرآیند')).toBeNull();
-    fireEvent.click(screen.getByText('باز کردن مراحل در جزئیات پروژه'));
-    expect(onOpenStages).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the editable stages for a new project', () => {

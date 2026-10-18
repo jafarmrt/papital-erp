@@ -1,5 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { projectWorkspacePath, rememberProjectListSearch, type ProjectWorkspaceTab } from '../lib/projects/projectWorkspaceTabs';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { 
   Plus, Search, Layers, LayoutGrid, List, Calendar, CheckCircle2,
@@ -7,15 +9,12 @@ import {
   ChevronLeft, RefreshCw, Building, ShoppingCart,
   Paperclip, Ban
 } from 'lucide-react';
-import { Item, ProductionProject } from '../types';
-import { errorMessageOf, formatPersianNumber } from '../utils';
-import { toast } from 'react-hot-toast';
+import { Item } from '../types';
+import { formatPersianNumber } from '../utils';
 import ProjectModal from '../components/ProjectModal';
-import ProjectDetailModal from '../components/ProjectDetailModal';
 import { SectionErrorBoundary } from '../components/common';
 import { useSearch } from '../SearchContext';
 import {
-  fetchProjectRecord,
   useProjectListQuery,
   useCustomerOptionsQuery,
   useDeleteProjectMutation,
@@ -25,16 +24,18 @@ import { PROJECT_LIST_PAGE_SIZE, projectStatusCountTotal, type ProjectListFilter
 import { ProjectListPager } from '../components/project/ProjectListPager';
 import { PillBadge, type PillBadgeVariant, type PillBadgeVariants } from '../components/common/PillBadge';
 import { useProjectPermissions } from '../hooks/useProjectPermissions';
-import { PROJECT_STATUSES, PROJECT_STATUS_LABELS, groupProjectsForKanban } from '../lib/projects/projectStatus';
+import { PROJECT_PRIORITIES, PROJECT_PRIORITY_LABELS, PROJECT_STATUSES, PROJECT_STATUS_LABELS, groupProjectsForKanban } from '../lib/projects/projectStatus';
 
 // v7.0.86 (TD-108): نشان اولویت و وضعیت پروژه
 const PROJECT_PRIORITY_BASE = 'px-2 py-0.5 rounded font-bold text-[10px]';
+// v10.2.1 (review U16): the badge says the level's one name (PROJECT_PRIORITY_LABELS)
 const PROJECT_PRIORITY_BADGES: PillBadgeVariants = {
-  urgent: { label: 'فوری', className: `${PROJECT_PRIORITY_BASE} bg-rose-100 text-rose-800` },
-  high: { label: 'مهم', className: `${PROJECT_PRIORITY_BASE} bg-amber-100 text-amber-800` },
-  medium: { label: 'متوسط', className: `${PROJECT_PRIORITY_BASE} bg-blue-100 text-blue-800` },
+  urgent: { label: PROJECT_PRIORITY_LABELS.urgent, className: `${PROJECT_PRIORITY_BASE} bg-rose-100 text-rose-800` },
+  high: { label: PROJECT_PRIORITY_LABELS.high, className: `${PROJECT_PRIORITY_BASE} bg-amber-100 text-amber-800` },
+  medium: { label: PROJECT_PRIORITY_LABELS.medium, className: `${PROJECT_PRIORITY_BASE} bg-blue-100 text-blue-800` },
+  low: { label: PROJECT_PRIORITY_LABELS.low, className: `${PROJECT_PRIORITY_BASE} bg-slate-100 text-slate-700` },
 };
-const PROJECT_PRIORITY_FALLBACK: PillBadgeVariant = { label: 'عادی', className: `${PROJECT_PRIORITY_BASE} bg-slate-100 text-slate-700` };
+const PROJECT_PRIORITY_FALLBACK: PillBadgeVariant = { label: PROJECT_PRIORITY_LABELS.medium, className: `${PROJECT_PRIORITY_BASE} bg-blue-100 text-blue-800` };
 const PROJECT_STATUS_BASE = 'px-2.5 py-1 rounded-full font-bold text-[11px] flex items-center gap-1';
 const PROJECT_STATUS_BADGES: PillBadgeVariants = {
   completed: { label: 'تکمیل شده', icon: CheckCircle2, iconClassName: 'w-3.5 h-3.5', className: `${PROJECT_STATUS_BASE} bg-emerald-100 text-emerald-800` },
@@ -70,17 +71,41 @@ export default function ProjectsPage() {
 
   // Filters
   const { searchQuery, debouncedSearchQuery, setSearchQuery } = useSearch();
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [priorityFilter, setPriorityFilter] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'gantt'>('kanban');
-  const [page, setPage] = useState(1);
+  // v10.2.1 (10.2 package 2, review L1): the status, priority, view and page live in the address, so coming back from a
+  // project (its «بازگشت» button or the browser's back) shows the same page of the list
+  const [listParams, setListParams] = useSearchParams();
+  const statusFilter = listParams.get('status') || 'all';
+  const priorityFilter = listParams.get('priority') || 'all';
+  const viewParam = listParams.get('view');
+  const viewMode: 'kanban' | 'list' | 'gantt' = viewParam === 'list' || viewParam === 'gantt' ? viewParam : 'kanban';
+  const page = Math.max(1, Math.floor(Number(listParams.get('page'))) || 1);
+  const updateListParams = useCallback((patch: Record<string, string | null>) => {
+    setListParams(prev => {
+      const next = new URLSearchParams(prev);
+      for (const [key, value] of Object.entries(patch)) {
+        if (value === null) next.delete(key); else next.set(key, value);
+      }
+      return next;
+    }, { replace: true });
+  }, [setListParams]);
+  const setStatusFilter = (value: string) => updateListParams({ status: value === 'all' ? null : value, page: null });
+  const setPriorityFilter = (value: string) => updateListParams({ priority: value === 'all' ? null : value, page: null });
+  const setViewMode = (value: 'kanban' | 'list' | 'gantt') => updateListParams({ view: value === 'kanban' ? null : value });
+  const setPage = useCallback((value: number) => updateListParams({ page: value > 1 ? String(value) : null }), [updateListParams]);
+  useEffect(() => { rememberProjectListSearch(listParams.toString()); }, [listParams]);
 
   // v9.0.412 (TD-743): صافی‌ها و صفحه‌بندی در سرور؛ صافی تازه از صفحه نخست
   const filters = useMemo<ProjectListFilters>(
     () => ({ search: debouncedSearchQuery, status: statusFilter, priority: priorityFilter }),
     [debouncedSearchQuery, statusFilter, priorityFilter],
   );
-  useEffect(() => { setPage(1); }, [filters]);
+  // a new search starts from the first page; the first render keeps the page the address names
+  const searchedFor = useRef(debouncedSearchQuery);
+  useEffect(() => {
+    if (searchedFor.current === debouncedSearchQuery) return;
+    searchedFor.current = debouncedSearchQuery;
+    setPage(1);
+  }, [debouncedSearchQuery, setPage]);
 
   const projectsQuery = useProjectListQuery(filters, page, PROJECT_LIST_PAGE_SIZE);
   const customersQuery = useCustomerOptionsQuery();
@@ -98,43 +123,27 @@ export default function ProjectsPage() {
   const lastPage = Math.max(1, Math.ceil(projectTotal / PROJECT_LIST_PAGE_SIZE));
   useEffect(() => {
     if (!projectsQuery.isFetching && page > lastPage) setPage(lastPage);
-  }, [projectsQuery.isFetching, page, lastPage]);
+  }, [projectsQuery.isFetching, page, lastPage, setPage]);
 
-  // Modals
+  // v10.2.1 (10.2 package 2, review U1): a project opens as its own page; the window here only defines a new project
+  const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-  const [projectToEdit, setProjectToEdit] = useState<ProductionProject | null>(null);
-
-  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
-  const [isDetailOpen, setIsDetailOpen] = useState<boolean>(false);
-  const [detailInitialTab, setDetailInitialTab] = useState<'overview' | 'inventory' | 'schedule' | 'gantt' | 'stock' | 'product_progress'>('overview');
 
   const loadInitialData = () => {
     void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.projects.all });
   };
 
   const handleOpenCreateModal = () => {
-    setProjectToEdit(null);
     setIsModalOpen(true);
   };
 
-  const handleOpenEditModal = (proj: ProductionProject) => {
-    setProjectToEdit(proj);
-    setIsModalOpen(true);
+  const openProject = (projectId: number, tab: ProjectWorkspaceTab = 'overview') => {
+    void navigate(projectWorkspacePath(projectId, tab));
   };
 
-  // v9.0.412 (TD-743): فهرست خلاصه است؛ فرم ویرایش با پرونده کامل و تازه پروژه باز می‌شود
-  const handleEditFromList = async (projectId: number) => {
-    try {
-      handleOpenEditModal(await fetchProjectRecord(queryClient, projectId));
-    } catch (err) {
-      toast.error(errorMessageOf(err) || 'پرونده پروژه خوانده نشد');
-    }
-  };
-
-  const handleOpenDetailModal = (projId: number, tab: 'overview' | 'inventory' | 'schedule' | 'gantt' | 'stock' | 'product_progress' = 'overview') => {
-    setSelectedProjectId(projId);
-    setDetailInitialTab(tab);
-    setIsDetailOpen(true);
+  // the specs are edited on the project's page (review U3)
+  const editProject = (projectId: number) => {
+    void navigate(`${projectWorkspacePath(projectId)}?edit=1`);
   };
 
   const handleDeleteProject = async (id: number, code: string) => {
@@ -254,10 +263,9 @@ export default function ProjectsPage() {
             className="px-3 py-2 border border-slate-200 rounded-xl bg-slate-50/50 font-bold text-slate-700 text-xs focus:outline-none"
           >
             <option value="all">همه اولویت‌ها</option>
-            <option value="urgent">فوری و اضطراری</option>
-            <option value="high">اولویت بالا</option>
-            <option value="medium">اولویت متوسط</option>
-            <option value="low">عادی و استاندارد</option>
+            {[...PROJECT_PRIORITIES].reverse().map(level => (
+              <option key={level} value={level}>{PROJECT_PRIORITY_LABELS[level]}</option>
+            ))}
           </select>
         </div>
 
@@ -350,10 +358,10 @@ export default function ProjectsPage() {
                   <ProjectKanbanCard
                     key={p.id}
                     project={p}
-                    onDetail={() => handleOpenDetailModal(p.id, 'overview')}
-                    onInventory={() => handleOpenDetailModal(p.id, 'inventory')}
-                    onProductProgress={() => handleOpenDetailModal(p.id, 'product_progress')}
-                    onEdit={canEdit ? () => { void handleEditFromList(p.id); } : undefined}
+                    onDetail={() => openProject(p.id)}
+                    onInventory={() => openProject(p.id, 'materials')}
+                    onProductProgress={() => openProject(p.id, 'progress')}
+                    onEdit={canEdit ? () => editProject(p.id) : undefined}
                     onDelete={canDelete ? () => handleDeleteProject(p.id, p.project_code) : undefined}
                     priorityBadge={<PillBadge variants={PROJECT_PRIORITY_BADGES} value={p.priority} fallback={PROJECT_PRIORITY_FALLBACK} />}
                   />
@@ -413,13 +421,13 @@ export default function ProjectsPage() {
                     <td className="p-3.5">
                       <div className="flex items-center justify-center gap-1">
                         <button
-                          onClick={() => handleOpenDetailModal(p.id, 'overview')}
+                          onClick={() => openProject(p.id)}
                           className="px-2.5 py-1 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold transition-colors cursor-pointer"
                         >
                           مدیریت مراحل
                         </button>
                         <button
-                          onClick={() => handleOpenDetailModal(p.id, 'inventory')}
+                          onClick={() => openProject(p.id, 'materials')}
                           className="px-2.5 py-1 rounded-xl bg-amber-50 text-amber-900 hover:bg-amber-100 font-bold transition-colors border border-amber-200/80 flex items-center gap-1 cursor-pointer"
                           title="کنترل موجودی و خرید فهرست مواد"
                         >
@@ -427,7 +435,7 @@ export default function ProjectsPage() {
                           انبار و خرید فهرست مواد
                         </button>
                         <button
-                          onClick={() => handleOpenDetailModal(p.id, 'product_progress')}
+                          onClick={() => openProject(p.id, 'progress')}
                           className="px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-900 hover:bg-emerald-100 font-bold transition-colors border border-emerald-200/80 flex items-center gap-1 cursor-pointer"
                           title="پیشرفت به تفکیک هر کد کالا (مرحله × محصول)"
                         >
@@ -436,7 +444,7 @@ export default function ProjectsPage() {
                         </button>
                         {canEdit && (
                           <button
-                            onClick={() => { void handleEditFromList(p.id); }}
+                            onClick={() => editProject(p.id)}
                             className="p-1.5 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 cursor-pointer"
                             title="ویرایش پروژه"
                           >
@@ -484,7 +492,7 @@ export default function ProjectsPage() {
                   </div>
 
                   <button
-                    onClick={() => handleOpenDetailModal(p.id)}
+                    onClick={() => openProject(p.id)}
                     className="text-blue-600 font-bold hover:underline flex items-center gap-1 text-[11px]"
                   >
                     جزئیات فرآیند <ChevronLeft className="w-3.5 h-3.5" />
@@ -532,35 +540,13 @@ export default function ProjectsPage() {
         <ProjectListPager page={page} limit={PROJECT_LIST_PAGE_SIZE} total={projectTotal} onPageChange={setPage} />
       )}
 
-      {/* Project Create/Edit Modal */}
+      {/* Project Create Modal */}
       <ProjectModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        projectToEdit={projectToEdit}
         customersList={customersList}
         itemsList={NO_PRELOADED_ITEMS}
         onSuccess={loadInitialData}
-        onOpenStages={(p) => {
-          setIsModalOpen(false);
-          handleOpenDetailModal(p.id, 'overview');
-        }}
-      />
-
-      {/* Project Detail & Stage Manager Drawer */}
-      <ProjectDetailModal
-        projectId={selectedProjectId}
-        isOpen={isDetailOpen}
-        onClose={() => {
-          setIsDetailOpen(false);
-          // v9.0.385 (TD-742): زبانه‌های جزئیات نسخه پروژه را بالا برده‌اند؛ فرم ویرایش از فهرست تازه باز می‌شود
-          loadInitialData();
-        }}
-        onUpdate={loadInitialData}
-        onEditProject={canEdit ? (p) => {
-          setIsDetailOpen(false);
-          handleOpenEditModal(p);
-        } : undefined}
-        initialTab={detailInitialTab}
       />
     </div>
   );

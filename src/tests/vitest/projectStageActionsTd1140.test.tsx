@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 
 type FetchOpts = { method?: string; body?: string; signal?: AbortSignal };
 const baseProject = {
@@ -34,14 +34,13 @@ vi.mock('../../components/project/ProjectScheduleTab', () => ({ default: () => n
 vi.mock('../../components/project/ProjectGanttTab', () => ({ default: () => null }));
 vi.mock('../../components/project/ProjectStockEntryTab', () => ({ default: () => null }));
 vi.mock('../../components/project/ProjectProductProgressTab', () => ({ default: () => null }));
-vi.mock('../../components/workflow/WorkflowStepperWidget', () => ({ WorkflowStepperWidget: () => null }));
 vi.mock('../../components/accounting/FinancialAttachmentUploader', () => ({ FinancialAttachmentUploader: () => null }));
 
-import ProjectDetailModal from '../../components/ProjectDetailModal';
+import { renderProjectPage } from './helpers/projectPage';
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); writes.length = 0; project = { ...baseProject }; canEdit = true; });
 
-const renderModal = () => render(<ProjectDetailModal projectId={7} isOpen onClose={vi.fn()} onUpdate={vi.fn()} />);
+const renderModal = () => renderProjectPage('/projects/7');
 
 // v10.0.67 (TD-1140): after a project was created no screen added or deleted a stage, although both routes exist
 describe('project stages after creation (TD-1140)', () => {

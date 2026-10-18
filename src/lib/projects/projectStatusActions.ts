@@ -1,5 +1,5 @@
 /**
- * v10.0.66 (TD-1141): the status changes a project's detail window offers. The server already accepts a status on
+ * v10.0.66 (TD-1141): the status changes a project's page offers. The server already accepts a status on
  * `PUT /projects/:id` (a cancel is refused while an allocation is open, TD-759); before, no screen sent «متوقف‌شده» or
  * «لغوشده», so a project could not be paused or cancelled. A paused project resumes as «برنامه‌ریزی‌شده» and the
  * progress matrix sync of the same save moves it on to «در حال انجام» or «تکمیل‌شده» by its own progress (TD-738).
@@ -25,7 +25,7 @@ const CANCEL: ProjectStatusAction = {
   target: 'cancelled',
   label: 'لغو پروژه',
   confirmTitle: 'لغو پروژه',
-  confirmMessage: 'پروژه «لغوشده» می‌شود و مواد تازه نمی‌گیرد؛ این کار از این پنجره برنمی‌گردد.',
+  confirmMessage: 'پروژه «لغوشده» می‌شود و مواد تازه نمی‌گیرد؛ این کار از این صفحه برنمی‌گردد.',
   danger: true,
 };
 

@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Bell, CheckCheck, Trash2, AtSign, CheckCircle2, MessageSquare, ExternalLink } from 'lucide-react';
 import { AppNotification } from '../types';
 import { useNavigate } from 'react-router-dom';
+import { confirmLeaveIfDirty, leaveNavigateOptions } from '../hooks/useUnsavedChangesGuard';
 import {
   useUnreadNotificationsCountQuery,
   useNotificationsQuery,
@@ -42,13 +43,14 @@ export default function NotificationBell() {
     deleteNotifMutation.mutate(id);
   };
 
-  const handleNotifClick = (notif: AppNotification) => {
+  const handleNotifClick = async (notif: AppNotification) => {
     if (!notif.is_read && !notif.isRead) {
       handleMarkAsRead(notif.id);
     }
     setIsOpen(false);
-    if (notif.link) {
-      void navigate(notif.link);
+    // v10.2.1 (10.2 package 2): a page holding unsaved changes asks first
+    if (notif.link && (await confirmLeaveIfDirty())) {
+      void navigate(notif.link, leaveNavigateOptions());
     }
   };
 
@@ -118,7 +120,7 @@ export default function NotificationBell() {
                 return (
                   <div
                     key={notif.id}
-                    onClick={() => handleNotifClick(notif)}
+                    onClick={() => void handleNotifClick(notif)}
                     className={`p-3 text-xs transition-colors cursor-pointer flex items-start gap-3 relative group ${
                       isUnread ? 'bg-amber-50/70 hover:bg-amber-100/60' : 'hover:bg-slate-50'
                     }`}
