@@ -298,7 +298,7 @@ export function ManualPurchaseList({
                   </td>
                   <td className="p-3 text-center font-mono text-slate-600">
                     {item.id.startsWith('manual_') ? `۰ ${item.unit}` : `${formatPersianNumber(item.warehouseStockQty)} ${item.warehouseUnit || item.unit}`}
-                    {/* v10.2.2 (TD-1290): without the server's figures the column is the total stock */}
+                    {/* v10.2.3 (TD-1290): without the server's figures the column is the total stock */}
                     {!item.id.startsWith('manual_') && (item.issuedQty === undefined ? (
                       <span className="block text-[10px] font-normal text-slate-400">موجودی کل</span>
                     ) : item.issuedQty > 0 && (

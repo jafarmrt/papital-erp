@@ -86,7 +86,7 @@ export function useProjectInventory(
   });
 
   const [warehouseItems, setWarehouseItems] = useState<Item[]>(initialItemsList || []);
-  // v10.2.2 (TD-1290): ارقام آزاد پس از رسیدن فهرست کالاها خوانده می‌شوند
+  // v10.2.3 (TD-1290): ارقام آزاد پس از رسیدن فهرست کالاها خوانده می‌شوند
   const [warehouseItemsState, setWarehouseItemsState] = useState<WarehouseItemsState>('loading');
   const [presetSections, setPresetSections] = useState<ProjectInventoryControlSectionData[]>(DEFAULT_INVENTORY_CONTROL_SECTIONS as any);
 
@@ -633,7 +633,7 @@ export function useProjectInventory(
     setSections(prev => withProcurementStatus(prev, rowKey, newStatus));
   };
 
-  // v10.2.2 (TD-1290): موجودی آزاد هر ماده برای این پروژه و وضعیت خودکار ردیف‌ها با قاعدهٔ ثبت نهایی
+  // v10.2.3 (TD-1290): موجودی آزاد هر ماده برای این پروژه و وضعیت خودکار ردیف‌ها با قاعدهٔ ثبت نهایی
   const materialItemIds = useMemo(() => projectMaterialItemIds(sections, manualPurchaseItems, warehouseItems), [sections, manualPurchaseItems, warehouseItems]);
   const availabilityRead = useProjectMaterialAvailability(project.id, materialItemIds, warehouseItemsState, projectVersion.version);
   const availability = useMemo(() => buildMaterialAvailabilityView({
@@ -900,7 +900,7 @@ export function useProjectInventory(
     purchaseList,
     materialProgress,
     availability,
-    /** v10.2.2 (TD-1290): changes with each save of the project, so the materials reports are read again */
+    /** v10.2.3 (TD-1290): changes with each save of the project, so the materials reports are read again */
     reportsReloadKey: projectVersion.version,
     handleFinalizeAndReserveStock,
     handleUnfinalizeReservation,

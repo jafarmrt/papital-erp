@@ -17,7 +17,7 @@ interface ProductTreeInventoryCardsProps {
   sections: ProjectInventoryControlSectionData[];
   warehouseItems: Item[];
   activeStepTab: number;
-  /** v10.2.2 (TD-1290): موجودی آزاد و وضعیت خودکار هر ردیف با قاعدهٔ ثبت نهایی */
+  /** v10.2.3 (TD-1290): موجودی آزاد و وضعیت خودکار هر ردیف با قاعدهٔ ثبت نهایی */
   availability: MaterialAvailabilityView;
   handleUpdatePerItemResult: (secIdx: number, prodId: string, itemId: string, field: string, value: any) => void;
   handleOpenChangeMaterialModal: (secIdx: number, itemId: string, prodId?: string, gIdx?: number) => void;
@@ -400,7 +400,7 @@ export function ProductTreeInventoryCards({
                                             onLinkWarehouse={() => handleOpenChangeMaterialModal(originalIdx, mat.itemId, prod.id)}
                                           />
 
-                                          {/* v10.2.2 (TD-1290): free stock for this project */}
+                                          {/* v10.2.3 (TD-1290): free stock for this project */}
                                           <FreeStockCell state={rowState} status={availability.status} />
 
                                           {/* Required Qty & Unit (Decoupled from order quantity) & Unit Conversion */}

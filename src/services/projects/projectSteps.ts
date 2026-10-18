@@ -14,7 +14,7 @@ const CLOSED_STATUSES = new Set(['rejected', 'cancelled', 'consolidated']);
 /**
  * v10.2.1 (10.2 package 2, review U4): the counts of a project's step bar. Read only: the live requisitions of the
  * project by stage, its allocations not released, its live final remittances and waste with a live line (the documents
- * that issue material to a project, TD-233 / TD-945; the rows of `projectIssuedQuantities` since v10.2.2), and its
+ * that issue material to a project, TD-233 / TD-945; the rows of `projectIssuedQuantities` since v10.2.3), and its
  * final production receipts against the planned products (the delivery cap's own rule). It carries no amount, so
  * `projects.view` reads it like the project record.
  */
@@ -39,7 +39,7 @@ export async function loadProjectStepCounts(projectId: number): Promise<ProjectS
     else if (!CLOSED_STATUSES.has(status)) requisitions.open += rows;
   }
 
-  // v10.2.2 (TD-1290): the same rows as the issued quantities and «مواد گرفته‌شده از انبار», so a document whose lines
+  // v10.2.3 (TD-1290): the same rows as the issued quantities and «مواد گرفته‌شده از انبار», so a document whose lines
   // are all deleted issues nothing here either
   const allocationRows = await orm
     .select({ status: projectBomAllocations.status, rows: count() })

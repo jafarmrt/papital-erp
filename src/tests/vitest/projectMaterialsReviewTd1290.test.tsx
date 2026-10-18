@@ -50,7 +50,7 @@ const viewOf = (sections: ProjectInventoryControlSectionData[], report: Material
   buildMaterialAvailabilityView({ sections, products: [], manualPurchaseItems: [], stockItems: [stockItem], report, status });
 const items = (stockItem = GLUE) => [stockItem] as unknown as Item[];
 
-// v10.2.2 (TD-1290, review of package 3, F1): «سفارش خرید بخش» compared each row with the full free stock and took what the
+// v10.2.3 (TD-1290, review of package 3, F1): «سفارش خرید بخش» compared each row with the full free stock and took what the
 // project had received off every row, while its count came from the project-wide shortage: two rows of one item said
 // «ثبت سفارش خرید (۲)» and the click did nothing
 describe('section purchase order groups the rows of one item (TD-1290 review F1)', () => {
@@ -101,7 +101,7 @@ describe('section purchase order groups the rows of one item (TD-1290 review F1)
   });
 });
 
-// v10.2.2 (TD-1290, review F5): a finalized project kept its stored reservation when stock arrived, while the row turned
+// v10.2.3 (TD-1290, review F5): a finalized project kept its stored reservation when stock arrived, while the row turned
 // «موجود» and a sales proforma could still take that stock
 describe('a finalized project says a re-finalize reserves stock that arrived (TD-1290 review F5)', () => {
   const stored = [{ itemId: 3, itemCode: 'G-1', itemName: 'glue', unit: 'pcs', requiredQty: 5, reservedQty: 2, shortQty: 3, stock: 2, reservedByOthers: 0 }];
@@ -154,7 +154,7 @@ const deliveryReport = (over: Partial<DeliveryCostReport> = {}): DeliveryCostRep
   ...over,
 });
 
-// v10.2.2 (TD-1290, review F2): a suggestion read before another delivery, or kept in the over-delivery resend, could
+// v10.2.3 (TD-1290, review F2): a suggestion read before another delivery, or kept in the over-delivery resend, could
 // credit more than the project's 1402 balance
 describe('delivery prices are checked against a fresh balance (TD-1290 review F2)', () => {
   const line = (typedPrice: number | undefined, shownSuggestion: number | null = 800) => ({ itemId: 42, quantity: 10, typedPrice, shownSuggestion });

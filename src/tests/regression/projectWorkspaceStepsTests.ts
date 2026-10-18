@@ -66,7 +66,7 @@ async function runStepCountsTest(shouldRun: ShouldRun): Promise<TestCaseResult |
     });
     await orm.insert(projectBomAllocations).values([allocation('allocated'), allocation('consumed'), allocation('consumed'), allocation('released'), allocation('allocated', 1)]);
     // review M4: a live final remittance or waste of the project issues material too; a draft, a voided one, another
-    // project's and a sales invoice naming the project do not count. v10.2.2 (TD-1290): only a document with a live
+    // project's and a sales invoice naming the project do not count. v10.2.3 (TD-1290): only a document with a live
     // line counts, the rows `projectIssuedQuantities` reads: r1 has two live lines and counts once, r5 has only a deleted one
     const doc = (suffix: string, type: string, status: string, isDeleted = 0, projectId: number | null = project.id) => ({
       type, refNumber: `STEP-${tag}-${suffix}`, date: '2026-10-01 10:00:00', projectId, status, isDeleted, buyerName: 'step',

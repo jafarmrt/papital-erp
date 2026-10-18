@@ -7,7 +7,7 @@ import { PROJECT_ISSUE_DOCUMENT_TYPES } from '../../lib/transactions/projectIssu
 export const PROJECT_ISSUE_ALLOCATION_STATUSES = ['allocated', 'consumed'] as const;
 
 /**
- * v10.2.2 (TD-1290): the document lines that issue material to a project (a join of `document_items` with `documents`):
+ * v10.2.3 (TD-1290): the document lines that issue material to a project (a join of `document_items` with `documents`):
  * live lines of its live final remittances and waste. The issued quantities, the issued materials list and the step
  * bar count read these same rows.
  */
@@ -18,7 +18,7 @@ export function projectIssueLineConditions(projectId: number): SQL {
   ) as SQL;
 }
 
-/** v10.2.2 (TD-1290): the project's live allocations that issue material, by the same rule as the lines above */
+/** v10.2.3 (TD-1290): the project's live allocations that issue material, by the same rule as the lines above */
 export function projectIssueAllocationConditions(projectId: number): SQL {
   return and(
     eq(projectBomAllocations.projectId, projectId), eq(projectBomAllocations.isDeleted, 0),

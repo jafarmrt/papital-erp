@@ -28,13 +28,13 @@ interface DeliveryBody {
   markCompleted: boolean;
 }
 
-/** v10.2.2 (TD-1290): one product of a delivery with the quantity its request carries */
+/** v10.2.3 (TD-1290): one product of a delivery with the quantity its request carries */
 interface DeliveryTarget {
   product: ProjectProductItem;
   quantity: number;
 }
 
-/** v8.0.72 (TD-327): a delivery the server refused as over the plan, resent with a reason; v10.2.2 (TD-1290): with its products and the negative 1402 balance already accepted */
+/** v8.0.72 (TD-327): a delivery the server refused as over the plan, resent with a reason; v10.2.3 (TD-1290): with its products and the negative 1402 balance already accepted */
 interface PendingOverDelivery {
   body: DeliveryBody;
   items: ProjectOverDeliveryView[];
@@ -164,7 +164,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
   // و کارساز بی بهای واردشده میانگین موزون جاری کالا را زیر قفل برمی‌دارد
   const [unitCosts, setUnitCosts] = useState<Record<string, number>>({});
 
-  // v10.2.2 (TD-1290، بازبینی بستهٔ ۳): کادر دلیل بیش از برنامه برای همان مقدارهایی است که سرور رد کرد؛ تغییر مقدار یکی از
+  // v10.2.3 (TD-1290، بازبینی بستهٔ ۳): کادر دلیل بیش از برنامه برای همان مقدارهایی است که سرور رد کرد؛ تغییر مقدار یکی از
   // محصولات آن کادر را می‌بندد تا دوباره فرستادن مقدار کهنه با بهای مقدار تازه ممکن نباشد
   const handleQtyChange = (prodId: string, val: number) => {
     setProducedQuantities(prev => ({ ...prev, [prodId]: val }));
@@ -175,13 +175,13 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
     setUnitCosts(prev => ({ ...prev, [prodId]: val }));
   };
 
-  // v10.2.2 (TD-1290، یافتهٔ D2): بهای واحد پیشنهادی پروژهٔ تک‌محصولی از ماندهٔ «کالای در جریان ساخت» (۱۴۰۲) پروژه و نمای مانده
+  // v10.2.3 (TD-1290، یافتهٔ D2): بهای واحد پیشنهادی پروژهٔ تک‌محصولی از ماندهٔ «کالای در جریان ساخت» (۱۴۰۲) پروژه و نمای مانده
   // پیش و پس از این ورود. پیشنهاد فقط پر کردن خانه است: کاربر آن را تغییر می‌دهد یا پاک می‌کند (پاک‌شده = میانگین موزون بها)،
   // و قاعدهٔ کارساز و سندهای پیشین همان است که بود
   const [deliveryReload, setDeliveryReload] = useState(0);
   const deliveryCost = useProjectDeliveryCost(project.id, canDeliver, deliveryReload);
   const rial = useRialDisplay();
-  // v10.2.2 (TD-1290): only the delivered products lose the unit cost typed for them
+  // v10.2.3 (TD-1290): only the delivered products lose the unit cost typed for them
   const delivered = (productIds: readonly string[]) => {
     setUnitCosts(prev => Object.fromEntries(Object.entries(prev).filter(([id]) => !productIds.includes(id))));
     setDeliveryReload(n => n + 1);
@@ -207,7 +207,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
     && (deliveryCost.data === null || (deliveryCost.data.costVisible && products.length === 1));
 
   /**
-   * v10.2.2 (TD-1290، بررسی بستهٔ ۳): بهای ردیف‌ها با گزارش تازهٔ ۱۴۰۲ درست پیش از فرستادن (`checkDeliveryPrices`)، با همان
+   * v10.2.3 (TD-1290، بررسی بستهٔ ۳): بهای ردیف‌ها با گزارش تازهٔ ۱۴۰۲ درست پیش از فرستادن (`checkDeliveryPrices`)، با همان
    * مقدارهایی که درخواست می‌برد؛ null یعنی فرستاده نشود. ورودی که ماندهٔ ۱۴۰۲ را منفی می‌کند پیش از ثبت تأیید می‌خواهد، مگر کاربر
    * همان مانده یا بدتر از آن را برای همین تحویل پذیرفته باشد (`confirmedRemaining`، کادر دلیل بیش از برنامه). خواندن تازه فقط وقتی
    * کنار می‌رود که خواندن موفق پیشین گفته بها دیده نمی‌شود؛ پس از خطای خواندن هم خوانده می‌شود. قاعدهٔ ثبت کارساز عوض نشده است.
@@ -344,7 +344,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
       toast.error(`مقدار تحویل «${zeroQty.item_name}» باید بزرگ‌تر از صفر باشد`);
       return;
     }
-    // v10.2.2 (TD-1290): the products are picked before the prices, so each line keeps its product for a resend
+    // v10.2.3 (TD-1290): the products are picked before the prices, so each line keeps its product for a resend
     const deliverable = targetProducts.filter(p => {
       const itemId = Number(p.item_id || project.item_id);
       return Boolean(itemId) && !isNaN(itemId) && (producedQuantities[p.id] ?? 0) > 0;
@@ -412,7 +412,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
     if (!overDelivery || !reason) return;
     setSubmitting(true);
     try {
-      // v10.2.2 (TD-1290): the resend prices its lines again from a fresh balance, never the stale body's suggestion, for
+      // v10.2.3 (TD-1290): the resend prices its lines again from a fresh balance, never the stale body's suggestion, for
       // the quantities the refused request carried, which are the ones sent again
       const priced = await pricesToPost(overDelivery.targets, overDelivery.confirmedRemaining);
       if (!priced) return;

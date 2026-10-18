@@ -66,7 +66,7 @@ const sentBody = (call: number) => JSON.parse(deliveryCalls()[call][1]?.body ?? 
 const priceInputs = () => screen.getAllByText(PRICE_LABEL).map(label => label.parentElement?.querySelector('input') as HTMLInputElement);
 const deliverButton = (i = 0) => screen.getAllByText(DELIVER).map(span => span.closest('button') as HTMLButtonElement)[i];
 
-// v10.2.2 (TD-1290, delta review of package 3)
+// v10.2.3 (TD-1290, delta review of package 3)
 const QTY_LABEL = 'تعداد تحویلی:';
 const OVERDRAW_ALERT = 'ماندهٔ کالای در جریان ساخت پروژه منفی می‌شود';
 const qtyInputs = () => screen.getAllByText(QTY_LABEL).map(label => label.parentElement?.querySelector('input') as HTMLInputElement);

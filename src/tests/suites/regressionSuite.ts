@@ -10940,7 +10940,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runProjectScreenGapsTests(shouldRun));
   const { runProjectReservationIssueTests } = await import('../regression/projectReservationIssueTests.js');
   results.push(...await runProjectReservationIssueTests(shouldRun));
-  // Series 10.2 package 3 (v10.2.2, TD-1290): free stock, delivery cost and issued materials of a project
+  // Series 10.2 package 3 (v10.2.3, TD-1290): free stock, delivery cost and issued materials of a project
   const { runProjectMaterialsCostTests } = await import('../regression/projectMaterialsCostTests.js');
   results.push(...await runProjectMaterialsCostTests(shouldRun));
   // Series 10 N-05 PR 3 (v10.0.247+): sections, tags, order, cover, replace and the item picture of the media library
@@ -11084,6 +11084,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Phase 3 lane L1, package A7 (v10.0.259): payroll payment void event and audit, «my payslips» paid amount, personnel id on treasury rows
   const { runPayrollHygieneA7Tests } = await import('../regression/payrollHygieneA7Tests.js');
   results.push(...await runPayrollHygieneA7Tests(shouldRun));
+  // 10.2 package 4 (OBS-R2-52): payslip payment and its void through the shared treasury path
+  const { runTreasuryOnePathObsR252Tests } = await import('../regression/treasuryOnePathObsR252Tests.js');
+  results.push(...await runTreasuryOnePathObsR252Tests(shouldRun));
   // v10.1.62 closing sweep (ت۴۰ item 11, OBS-R2-13): cheque status and payslip approval / payment domain events
   const { runClosingDomainEventsTests } = await import('../regression/closingDomainEventsTests.js');
   results.push(...await runClosingDomainEventsTests(shouldRun));
