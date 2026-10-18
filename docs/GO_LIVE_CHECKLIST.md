@@ -60,7 +60,7 @@ The installer performs: system deps (Node 24, PostgreSQL 16) → source → DB +
 | 2.3 | **Retired seed flag removed** | `grep '^ALLOW_SEED_IN_PRODUCTION' .env` → no output (retired in v9.0.134: the boot seed only inserts missing base data and creates no role) |
 | 2.4 | **Danger flags absent** | `grep -E '^ERP_ALLOW_TEST_CLEANUP=1|^ENABLE_TEST_ENDPOINTS=true' .env` → no output |
 | 2.5 | `JWT_SECRET` >= 32 chars | `grep -c '^JWT_SECRET=.\{32,\}' .env` → `1` |
-| 2.6 | Env audit | `node --env-file=.env -e "require('child_process').execFileSync('bash', ['scripts/audit-env.sh'], { stdio: 'inherit' })"` (`.env` read literally, as the service reads it, never run as shell code) → no CRITICAL findings (a missing `ERP_WEBHOOK_SECRET_TOKEN` is expected on a server that never added it) |
+| 2.6 | Env audit | `node --env-file=.env -e "process.exitCode = require('child_process').spawnSync('bash', ['scripts/audit-env.sh'], { stdio: 'inherit' }).status"` (`.env` read literally, as the service reads it, never run as shell code) → no `❌` line. On a server that never added `ERP_WEBHOOK_SECRET_TOKEN` the only `❌` line is `❌ MISSING: ERP_WEBHOOK_SECRET_TOKEN` (`Total errors: 1`): that is expected; do not add the token |
 | 2.7 | Service active and enabled | `systemctl is-active papital-erp && systemctl is-enabled papital-erp` → `active` / `enabled` |
 | 2.8 | Lifecycle probes | `curl -fsS localhost:3000/health/live` → `{"status":"alive"}` • `/health/ready` → `{"status":"ready"}` • `/health/startup` |
 | 2.9 | Migrations applied (atomic migrator — NEVER `db:push`) | `journalctl -u papital-erp -n 50 \| grep Migrator` shows success; `logs` free of errors |
@@ -178,7 +178,7 @@ Run each scenario end-to-end and verify the accounting/inventory side effects:
 |---|------|--------|
 | 9.1 | Log rotation & writable LOG_DIR | Winston daily rotation into `LOG_DIR`; `logs/` writable by service user |
 | 9.2 | Metrics & monitoring | `scripts/monitor.sh` (cron, every 5 minutes; v10.0.6) alerts once on `/health/ready` failure, disk use ≥ 85 %, a daily backup or off-server copy older than 26 hours, unresolved dead-letter events or stuck outbox events (`/metrics` gauges `erp_*`, read with `METRICS_TOKEN`), and once on recovery. Channel: a Bale or Telegram bot or e-mail (`ALERT_*` in `.env`, docs/OFFSITE_BACKUP.md) |
-| 9.3 | Memory / pool limits | `MemoryMax` in the systemd unit (default 2G commented) + `DB_POOL_MAX` in `.env` |
+| 9.3 | Memory / pool limits | add `MemoryMax=2G` under `[Service]` in the systemd unit (leave the old commented memory line as it is) + `DB_POOL_MAX` in `.env` |
 | 9.4 | Graceful shutdown verified | `sudo systemctl restart papital-erp` → journal shows `[Shutdown]` sequence, no data loss |
 | 9.5 | Secret rotation calendar | `JWT_SECRET` every 3 months • `ERP_SETUP_TOKEN` once after setup • `DATABASE_URL` password every 6 months • `wc_webhook_secret` every 6 months (README: Secrets table). After each rotation run `bash scripts/smoke-test.sh` (7.2) |
 | 9.6 | Known open tech debt acknowledged | the open rows of `TECH_DEBT.md` reviewed — none blocking go-live |
@@ -188,17 +188,20 @@ Run each scenario end-to-end and verify the accounting/inventory side effects:
 
 **A) Git-based update (recommended):**
 ```bash
-cd /opt/papital-erp && ./update.sh
+cd /opt/papital-erp && sudo ./update.sh --rehearse
 # → automatic pre-deployment backup (90-day retention) → git pull --ff-only
-#   → npm ci → npm run build → service restart → health verification
+#   → npm ci → npm run build → the new migrations rehearsed on a restored copy
+#   → service restart → health verification
+sudo bash scripts/go-live-verify.sh http://localhost:3000   # → STATUS : READY
 ```
 
 **B) Manual update (source zip, no git remote access):**
 ```bash
 # Upload the new source zip, extract it, then:
-sudo bash update.sh --source /root/papital-erp-source-v<NEW>/
+sudo bash update.sh --rehearse --source /root/papital-erp-source-v<NEW>/
 # or directly from the zip archive:
-sudo bash update.sh --zip /root/papital-erp-source-v<NEW>.zip
+sudo bash update.sh --rehearse --zip /root/papital-erp-source-v<NEW>.zip
+sudo bash scripts/go-live-verify.sh http://localhost:3000
 # → backup → sync source over /opt/papital-erp (preserves .env, .git, logs,
 #   uploads, backups, node_modules) → npm ci → build → restart → health check
 ```

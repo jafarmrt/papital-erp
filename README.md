@@ -147,7 +147,7 @@ cd /opt/papital-erp
 sudo BACKUP_HOUR=2 BACKUP_MINUTE=30 bash scripts/install-ops-cron.sh root   # root را با کاربر سرویس عوض کنید
 ```
 
-> `scripts/ensure-env-secrets.sh` را هرگز بی نام کلید اجرا نکنید: بی نام، `ERP_WEBHOOK_SECRET_TOKEN` و `METRICS_TOKEN` را هم به `.env` می‌افزاید. روی سروری که `METRICS_TOKEN` ندارد، هشدار «رویدادها خوانده نمی‌شود» از `monitor.sh` و هشدارهای `METRICS_TOKEN` و `ERP_WEBHOOK_SECRET_TOKEN` در `go-live-verify.sh` و `audit-env.sh` مورد انتظارند.
+> `scripts/ensure-env-secrets.sh` را هرگز بی نام کلید اجرا نکنید: بی نام، `ERP_WEBHOOK_SECRET_TOKEN` و `METRICS_TOKEN` را هم به `.env` می‌افزاید. روی سروری که `METRICS_TOKEN` ندارد، هشدار «وضعیت صف رویدادها خوانده نشد (METRICS_TOKEN).» از `monitor.sh` و هشدار `METRICS_TOKEN` در `go-live-verify.sh` مورد انتظارند، و `audit-env.sh` (که `METRICS_TOKEN` را بررسی نمی‌کند) نبودن `ERP_WEBHOOK_SECRET_TOKEN` را خطا (`❌ MISSING`) می‌شمارد؛ این هم مورد انتظار است و آن کلید را نیفزایید.
 
 رونوشت رمزگذاری‌شده بیرون از سرور و کانال هشدار: `docs/OFFSITE_BACKUP.md`.
 
@@ -173,11 +173,11 @@ curl -fsS http://localhost:3000/health/ready
 
 ### Rollback نسخه اپلیکیشن
 
-`update.sh` در شکست، گام‌هایی مانند این‌ها را با شناسه commit پیش از به‌روزرسانی چاپ می‌کند. پس از یک به‌روزرسانی موفق، `git reflog -5` شناسهٔ commit پیشین را نشان می‌دهد:
+`update.sh` در شکست، گام‌هایی مانند این‌ها را با شناسه commit پیش از به‌روزرسانی چاپ می‌کند. پس از یک به‌روزرسانی موفق، commit پیشین `HEAD@{1}` است (`git reflog -5` نشانش می‌دهد). پس از برگشت، تا مشکل نسخهٔ تازه رفع نشده `update.sh` را دوباره اجرا نکنید: همان commit دوباره دریافت می‌شود.
 
 ```bash
 cd /opt/papital-erp
-git reflog -5                           # commit پیش از به‌روزرسانی
+git reflog -5                           # HEAD@{1}: commit پیش از به‌روزرسانی
 sudo systemctl stop papital-erp
 git reset --hard <previous-commit>      # خود شاخه برمی‌گردد؛ checkout یک commit شاخه را جدا می‌کند و git pull بعدی شکست می‌خورد
 NODE_ENV=development npm ci --include=dev && npm run build
@@ -193,7 +193,7 @@ curl -fsS http://localhost:3000/health/ready
 journalctl -u papital-erp --since "1 hour ago" | grep -i memory
 curl -fsS http://localhost:3000/health/ready     # وضعیت pool
 sudo -u postgres psql -d papital_erp -c "SELECT pid, query, state FROM pg_stat_activity WHERE state='active'"
-# افزایش MemoryMax در unit یا DB_POOL_MAX در .env → daemon-reload → restart
+# در unit زیر [Service] خط `MemoryMax=2G` را بیفزایید (خط کامنت‌شدهٔ قدیمی حافظه را باز نکنید)، یا DB_POOL_MAX در .env → daemon-reload → restart
 ```
 
 ### Migration شکست‌خورده
@@ -208,12 +208,12 @@ systemctl restart papital-erp && curl -fsS http://localhost:3000/health/startup
 
 | Secret | دوره | روش |
 |---|---|---|
-| `JWT_SECRET` | هر ۳ ماه | `openssl rand -hex 48` → `.env` → restart (نشست‌ها باطل می‌شوند) |
+| `JWT_SECRET` | هر ۳ ماه | `sudo sed -i "s/^JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 48)/" .env` → restart (مقدار چاپ نمی‌شود؛ نشست‌ها باطل می‌شوند) |
 | `ERP_SETUP_TOKEN` | یکبار پس از setup | `sudo sed -i "s/^ERP_SETUP_TOKEN=.*/ERP_SETUP_TOKEN=$(openssl rand -hex 24)/" .env` → restart (مقدار چاپ نمی‌شود) |
 | `DATABASE_URL` password | هر ۶ ماه | `ALTER USER` در PostgreSQL → `.env` → restart |
 | `wc_webhook_secret` | هر ۶ ماه | regenerate در WooCommerce + تنظیمات سامانه (بدون restart) |
 
-پس از هر rotation: `read -rs ADMIN_TOKEN` (مقدار کوکی `auth_token` نشست مدیر را بچسبانید؛ روی صفحه دیده نمی‌شود و در تاریخچه نمی‌ماند)، سپس `ADMIN_TOKEN="$ADMIN_TOKEN" bash scripts/smoke-test.sh http://localhost:3000`
+پس از هر rotation: `read -rsp 'auth_token: ' ADMIN_TOKEN; echo` (مقدار کوکی `auth_token` نشست مدیر را بچسبانید؛ روی صفحه دیده نمی‌شود و در تاریخچه نمی‌ماند)، سپس `ADMIN_TOKEN="$ADMIN_TOKEN" bash scripts/smoke-test.sh http://localhost:3000; unset ADMIN_TOKEN`
 
 ---
 

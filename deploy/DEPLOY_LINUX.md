@@ -23,7 +23,6 @@
 
 ### روش A: نصب از ریپو گیت (سرور به GitHub دسترسی دارد)
 ```bash
-# اگر ریپو خصوصی است یک Personal Access Token بسازید و در URL بگذارید:
 git clone https://github.com/jafarmrt/papital-erp.git /opt/papital-erp   # مخزن عمومی است؛ توکنی در نشانی نگذارید
 cd /opt/papital-erp
 sudo bash install.sh          # REPO_URL را با Enter رد کنید یا خالی بگذارید
@@ -50,11 +49,11 @@ sudo bash install.sh
 خروجی موفق:
 ```
 App URL      : http://SERVER_IP:3000
-Setup wizard : http://SERVER_IP:3000/setup?token=<ERP_SETUP_TOKEN از .env>
+Setup wizard : http://SERVER_IP:3000/setup   (ERP_SETUP_TOKEN را در فرم بنویسید، نه در نشانی)
 Service      : systemctl status papital-erp
 ```
 
-⚠️ **نکته:** `ERP_SETUP_TOKEN` در `.env` است — با `cat /opt/papital-erp/.env` ببینید. ویزارد راه‌اندازی اولیه (ساخت شرکت + کاربر ادمین) فقط با این توکن باز می‌شود و بعد از setup قفل می‌شود.
+⚠️ **نکته:** `ERP_SETUP_TOKEN` در `.env` است — با `sudo grep '^ERP_SETUP_TOKEN=' /opt/papital-erp/.env` ببینید. ویزارد راه‌اندازی اولیه (ساخت شرکت + کاربر ادمین) فقط با این توکن باز می‌شود و بعد از setup قفل می‌شود.
 
 ---
 
@@ -91,7 +90,8 @@ sudo certbot renew --dry-run                     # تست تمدید خودکا�
 ## ۴) به‌روزرسانی نسخه‌های بعدی
 ```bash
 cd /opt/papital-erp
-sudo bash update.sh        # بکاپ خودکار دیتابیس + git pull + build + restart + health
+sudo bash update.sh --rehearse   # بکاپ خودکار دیتابیس + git pull + build + آزمایش مهاجرت‌ها + restart + health
+sudo bash scripts/go-live-verify.sh http://localhost:3000   # باید STATUS : READY بگوید
 ```
 در حالت نصب با زیپ، زیپ تازه را به سرور بفرستید و آن را به `update.sh` بدهید؛ زیپ را روی پوشه برنامه باز نکنید:
 ```bash
