@@ -25,7 +25,9 @@ const ORDERS_TOO_SLOW = 'خواندن سفارش‌های باز سایت بیش
 
 /** delta review N-B: only the automatic push tries again by itself */
 const retryNote = (trigger: 'auto' | 'manual') =>
-  (trigger === 'auto' ? '؛ ارسال خودکار کمی بعد دوباره تلاش می‌کند.' : '؛ کمی بعد دوباره «ارسال موجودی» را بزنید.');
+  (trigger === 'auto'
+    ? '؛ ارسال خودکار کمی بعد دوباره تلاش می‌کند.'
+    : '؛ کمی بعد دوباره «همگام‌سازی موجودی کل کالاها با سایت» یا «همگام‌سازی ووکامرس» همان کالا را بزنید.');
 
 function asLines(raw: unknown): OpenOrderLine[] {
   return (Array.isArray(raw) ? raw : []).map((l: unknown) => {
@@ -112,7 +114,9 @@ export async function readOpenOrders(
       }
       return [...orders.values()];
     }
+    // delta review 3, nit 5: the next reading is anchored on this row, so a row without an id fails closed
     lastId = asOrder(answer[answer.length - 1])?.id ?? 0;
+    if (lastId <= 0) throw fail(ORDERS_MOVED);
     offset += answer.length - 1;
   }
   throw tooManyOrders();
@@ -150,6 +154,10 @@ async function failedCompletedOrders(executor: DbExecutor, skip: Set<number>): P
       eq(woocommerceOrderLogs.status, 'failed'),
       isNull(documents.id),
       sql`lower(${woocommerceOrderLogs.payload}->>'status') = 'completed'`,
+      // only a pre-filter (delta review 3, nit 3), never the anchor: the stored payload says completed only once the program
+      // processed the completed order and wrote the failure, which sets updated_at, so updated_at is never earlier than the
+      // completion or the log's creation; a day more than the hold allows for the shop's clock
+      sql`${woocommerceOrderLogs.updatedAt} >= now() - ${sql.raw(`interval '${WC_FAILED_ORDER_HOLD_DAYS + 1} days'`)}`,
     ));
   const since = Date.now() - WC_FAILED_ORDER_HOLD_DAYS * 24 * 60 * 60 * 1000;
   return rows
@@ -158,13 +166,16 @@ async function failedCompletedOrders(executor: DbExecutor, skip: Set<number>): P
     .filter(o => Number.isInteger(o.id) && o.id > 0 && !skip.has(o.id));
 }
 
-/** When a failed completed order's hold starts (UTC ms): its completion in the shop, else when its order log was made */
-export function failedOrderHeldSince(payload: unknown, logCreatedAt: string | null): number {
+/**
+ * When a failed completed order's hold starts (UTC ms): its completion in the shop, else when its order log was made; a
+ * completion in the future (a wrong shop clock) counts as now (delta review 3, nit 2)
+ */
+export function failedOrderHeldSince(payload: unknown, logCreatedAt: string | null, now = Date.now()): number {
   const completed = (payload as { date_completed_gmt?: unknown } | null)?.date_completed_gmt;
   const text = typeof completed === 'string' ? completed.trim() : '';
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(text)) {
     const at = Date.parse(`${text}Z`);
-    if (Number.isFinite(at)) return at;
+    if (Number.isFinite(at)) return Math.min(at, now);
   }
   // the log's own timestamp is UTC without a zone (TD-314)
   const made = Date.parse(serverTimestampToUtcIso(logCreatedAt) ?? '');

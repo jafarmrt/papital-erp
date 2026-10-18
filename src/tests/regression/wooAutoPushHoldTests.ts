@@ -40,8 +40,9 @@ export async function autoPushFailedHoldCase(h: Harness, wrong: string[]): Promi
       id: o.id, status: 'completed', date_completed_gmt: o.dateCompletedGmt ?? null,
       line_items: o.lines.map(l => ({ product_id: l.productId, variation_id: 0, quantity: l.quantity })),
     });
-    // [order, days since the log was made, days since its last change]
-    const logs: Array<[MockOrder, number, number]> = [[orders[0], 45, 0], [orders[1], 60, 60], [orders[2], 3, 0], [orders[3], 50, 0]];
+    // [order, days since the log was made, days since its last change]; the recent order's log was made when it was put on
+    // hold 60 days ago and failed when it completed 5 days ago (a log says completed only after the failure was written)
+    const logs: Array<[MockOrder, number, number]> = [[orders[0], 45, 0], [orders[1], 60, 5], [orders[2], 3, 0], [orders[3], 50, 0]];
     for (const [o, made, changed] of logs) {
       await h.q(
         `INSERT INTO woocommerce_order_logs (wc_order_id, erp_document_id, status, payload, error_message, created_at, updated_at)
@@ -61,6 +62,11 @@ export async function autoPushFailedHoldCase(h: Harness, wrong: string[]): Promi
       // 10 less the order completed 5 days ago (2) and the one without a date whose log was made 3 days ago (1); the order
       // completed 40 days ago and the dateless one logged 50 days ago are not kept off, though both logs changed today
       await pushed('first push', 7);
+
+      // delta review 3, nit 2: a completion dated in the future (a wrong shop clock) counts as now, never as that date
+      const { failedOrderHeldSince } = await import('../../services/woocommerce/wcOpenOrders.js');
+      const at = failedOrderHeldSince({ date_completed_gmt: '2099-01-01T00:00:00' }, null, 1_000);
+      if (at !== 1_000) wrong.push(`a completion in 2099 starts the hold at ${at}, expected now`);
 
       // a no-op update of the old order's log (its trigger moves updated_at) starts nothing again
       await h.q(`UPDATE woocommerce_order_logs SET error_message = error_message WHERE wc_order_id = $1`, [String(oldDone)]);
@@ -83,6 +89,50 @@ export async function autoPushFailedHoldCase(h: Harness, wrong: string[]): Promi
     } finally {
       await h.q(`DELETE FROM woocommerce_order_logs WHERE wc_order_id = ANY($1)`, [ids.map(String)]);
       if (handInvoice.id) await h.q(`UPDATE documents SET is_deleted = 1 WHERE id = $1`, [handInvoice.id]);
+    }
+  });
+}
+
+const PERSIAN = '۰۱۲۳۴۵۶۷۸۹';
+const ARABIC = '٠١٢٣٤٥٦٧٨٩';
+const digitsIn = (n: number, set: string) => String(n).replace(/\d/g, d => set[Number(d)]);
+
+/**
+ * Delta review 3, M-1: the tag of a hand invoice is read as typed. Persian and Arabic-Indic digits link the order; a number
+ * that only starts with the order's (a Persian digit typed after it, or a longer Latin number) never links it.
+ */
+export async function autoPushHandTagDigitsCase(h: Harness, wrong: string[]): Promise<string> {
+  const base = Number(`5${h.tag}`) * 10;
+  const [persian, arabic, prefix] = [base + 1, base + 2, base + 3];
+  // lines of a product no item is linked to: an order that finds no invoice fails, it never makes one
+  const completed = (id: number): MockOrder => ({ id, status: 'completed', lines: [{ productId: 999, quantity: 1 }] });
+  return withShop(h, [], async (store) => {
+    store.orders.push(completed(persian), completed(arabic), completed(prefix));
+    const { createTestDocument } = await import('../fixtures/factories.js');
+    const notes = [
+      `فروش دستی؛ سفارش ووکامرس #${digitsIn(persian, PERSIAN)}`,
+      `فروش دستی؛ سفارش ووكامرس # ${digitsIn(arabic, ARABIC)}`,
+      `فروش دستی؛ سفارش ووکامرس #${prefix}${PERSIAN[4]}`,
+      `فروش دستی؛ سفارش ووکامرس #${prefix}7`,
+    ];
+    const docs: number[] = [];
+    try {
+      for (const note of notes) docs.push((await createTestDocument({ type: 'invoice', status: 'final', notes: note })).document.id);
+      const linkOf = async (orderId: number) => {
+        const sync = await h.post('/api/woocommerce/sync-order-by-id', { orderId });
+        const [log] = await h.q(`SELECT status, erp_document_id FROM woocommerce_order_logs WHERE wc_order_id = $1`, [String(orderId)]);
+        return { sync, docId: log?.erp_document_id === null || log?.erp_document_id === undefined ? null : Number(log.erp_document_id) };
+      };
+      const p = await linkOf(persian);
+      if (p.docId !== docs[0]) wrong.push(`a tag in Persian digits linked ${p.docId} (${brief(p.sync)}), expected invoice ${docs[0]}`);
+      const a = await linkOf(arabic);
+      if (a.docId !== docs[1]) wrong.push(`a tag in Arabic-Indic digits with the Arabic kaf linked ${a.docId} (${brief(a.sync)}), expected invoice ${docs[1]}`);
+      const x = await linkOf(prefix);
+      if (x.docId !== null) wrong.push(`a longer number (a Persian digit or a Latin digit typed after the order's) linked invoice ${x.docId}`);
+      return 'hand invoice tags read as typed';
+    } finally {
+      await h.q(`DELETE FROM woocommerce_order_logs WHERE wc_order_id = ANY($1)`, [[persian, arabic, prefix].map(String)]);
+      if (docs.length) await h.q(`UPDATE documents SET is_deleted = 1 WHERE id = ANY($1)`, [docs]);
     }
   });
 }
@@ -115,7 +165,7 @@ export async function autoPushOrderOverlapCase(h: Harness, wrong: string[]): Pro
     if (moved.status !== 422 || store.pushed.size > 0 || !/تغییر کرد/.test(JSON.stringify(moved.body))) {
       wrong.push(`a leave from page 2 with an older order joining answered ${brief(moved)} and sent ${JSON.stringify([...store.pushed])}`);
     }
-    if (!/«ارسال موجودی» را بزنید/.test(JSON.stringify(moved.body))) wrong.push(`the manual push failure says ${JSON.stringify(moved.body)}, not to press the button again`);
+    if (!/«همگام‌سازی موجودی کل کالاها با سایت»/.test(JSON.stringify(moved.body))) wrong.push(`the manual push failure says ${JSON.stringify(moved.body)}, not to press the button again`);
 
     // a stable list: readings at rows 0, 99 and 198, then the first page again; 10 less the 4 order 1050 holds
     store.beforeOrdersPage = undefined;

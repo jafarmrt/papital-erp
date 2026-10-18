@@ -114,6 +114,10 @@ type BuyerInfo = WooOrderBuyer;
 
 const notesTag = (wcOrderId: string) => `سفارش ووکامرس #${wcOrderId}`;
 
+/** Persian and Arabic-Indic digits and the Arabic kaf of a typed note, and what they are read as */
+const NOTES_DIGITS_FROM = '۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩ك';
+const NOTES_DIGITS_TO = '01234567890123456789ک';
+
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -261,13 +265,15 @@ export class WooOrderSyncService {
         .where(and(eq(documents.id, log.erpDocumentId), eq(documents.isDeleted, 0)));
       if (doc) return doc;
     }
-    const pattern = `${escapeRegex(notesTag(wcOrderId))}(\\D|$)`;
+    // 10.2 package 6 (delta review 3, M-1): an invoice entered by hand carries the tag as typed, so Persian and Arabic-Indic
+    // digits (and the Arabic kaf) are read as Latin, and the whole number after # must be the order's, never a prefix of it
+    const pattern = `سفارش\\s*ووکامرس\\s*#\\s*${escapeRegex(wcOrderId)}(\\D|$)`;
     const [legacy] = await tx.select({ id: documents.id, refNumber: documents.refNumber, buyerName: documents.buyerName })
       .from(documents)
       .where(and(
         eq(documents.type, 'invoice'),
         eq(documents.isDeleted, 0),
-        sql`${documents.notes} ~ ${pattern}`
+        sql`translate(${documents.notes}, ${NOTES_DIGITS_FROM}, ${NOTES_DIGITS_TO}) ~ ${pattern}`
       ))
       .orderBy(asc(documents.id))
       .limit(1);

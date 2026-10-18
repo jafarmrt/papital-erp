@@ -8,7 +8,7 @@ import { autoPushBoundedFailuresCase, autoPushChangedTrackedCase, autoPushOpenOr
 import {
   autoPushCapCase, autoPushOrderListMovedCase, autoPushOrderPageEdgeCase, autoPushRefusedBatchCase, autoPushRunPurgeCase, autoPushWebhookAndHourlyCase,
 } from './wooAutoPushReviewTests.js';
-import { autoPushFailedHoldCase, autoPushOrderOverlapCase } from './wooAutoPushHoldTests.js';
+import { autoPushFailedHoldCase, autoPushHandTagDigitsCase, autoPushOrderOverlapCase } from './wooAutoPushHoldTests.js';
 import { WC_LIST_LIMIT } from '../../lib/woocommerce/wcCatalog.js';
 
 /**
@@ -65,6 +65,9 @@ export async function runWooCatalogSyncTests(shouldRun: ShouldRun): Promise<Test
     ['reg_wc_auto_push_failed_hold_d04',
       'D-04 part B delta review M-A: a failed completed order is kept off for 30 days from its completion in the shop, never restarted by touching its log, and a hand invoice tagged with the order is linked by a manual sync without a second invoice',
       ['d04', 'woocommerce', 'auto'], autoPushFailedHoldCase],
+    ['reg_wc_hand_invoice_tag_digits_d04',
+      'D-04 part B delta review 3 M-1: a hand invoice tagged with the order in Persian or Arabic-Indic digits is linked by a manual order sync, and a longer number never links it',
+      ['d04', 'woocommerce', 'auto'], autoPushHandTagDigitsCase],
     ['reg_wc_auto_push_order_overlap_d04',
       'D-04 part B delta review N-A: open orders are read with overlapping pages, so an order leaving a later read page while an older one joins fails the push closed',
       ['d04', 'woocommerce', 'auto'], autoPushOrderOverlapCase],

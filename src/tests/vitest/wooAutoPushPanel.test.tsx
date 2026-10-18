@@ -67,10 +67,12 @@ describe('D-04 part B delta review: the order reading budget and the bulk push n
 
   it('says a failed completed order is kept off for 30 days and how to stop it (M-1)', () => {
     expect(BULK_PUSH_OPEN_ORDERS_NOTE).toContain('۳۰ روز');
-    expect(BULK_PUSH_OPEN_ORDERS_NOTE).toContain('دوباره همگام کنید');
     // delta review M-A: a re-sync links a hand invoice only through the order's tag in its notes
     expect(BULK_PUSH_OPEN_ORDERS_NOTE).toContain('در یادداشت همان فاکتور «سفارش ووکامرس #شماره سفارش»');
-    expect(BULK_PUSH_OPEN_ORDERS_NOTE.indexOf('یادداشت')).toBeLessThan(BULK_PUSH_OPEN_ORDERS_NOTE.indexOf('دوباره همگام کنید'));
+    // delta review 3, nit 1: the real box and button of the manual order sync, named after the note
+    expect(BULK_PUSH_OPEN_ORDERS_NOTE).toContain('«دریافت دستی سفارش با شماره سفارش»');
+    expect(BULK_PUSH_OPEN_ORDERS_NOTE).toContain('«صدور فاکتور»');
+    expect(BULK_PUSH_OPEN_ORDERS_NOTE.indexOf('یادداشت')).toBeLessThan(BULK_PUSH_OPEN_ORDERS_NOTE.indexOf('«صدور فاکتور»'));
   });
 });
 
