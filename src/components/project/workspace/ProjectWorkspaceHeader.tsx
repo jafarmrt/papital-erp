@@ -6,6 +6,7 @@ import { PROJECT_STATUS_LABELS } from '../../../lib/projects/projectStatus';
 import { PROJECT_WORKSPACE_TABS, PROJECT_WORKSPACE_TAB_LABELS, type ProjectWorkspaceTab } from '../../../lib/projects/projectWorkspaceTabs';
 import { ProjectStatusActions } from '../ProjectStatusActions';
 import { PHONE_ONLY_TAP_TARGET } from '../../../lib/pwa/phoneLayout';
+import { usePhoneWidth } from '../../../lib/pwa/usePhoneWidth';
 
 export const PROJECT_STATUS_STYLES: Record<string, string> = {
   planned: 'bg-slate-100 text-slate-700 border-slate-200',
@@ -92,11 +93,14 @@ interface ProjectWorkspaceTabBarProps {
 /**
  * the five tabs of a project page; a tab holding an unsaved change says so
  * v10.2.7 (10.2 package 10): on a phone each tab is at least 44 px high, and the row scrolls the active tab into view,
- * since the five tabs do not fit a phone's width (only the row moves, never the page)
+ * since the five tabs do not fit a phone's width (only the row moves, never the page); a wider screen shows every tab
+ * and never moves the row (delta D4)
  */
 export function ProjectWorkspaceTabBar({ active, dirty, badges, onSelect }: ProjectWorkspaceTabBarProps) {
   const listRef = useRef<HTMLDivElement>(null);
+  const phone = usePhoneWidth();
   useEffect(() => {
+    if (!phone) return;
     const list = listRef.current;
     const tab = list?.querySelector<HTMLElement>(`#project-tab-${active}`);
     if (!list || !tab || typeof list.scrollBy !== 'function') return;
@@ -104,7 +108,7 @@ export function ProjectWorkspaceTabBar({ active, dirty, badges, onSelect }: Proj
     const own = tab.getBoundingClientRect();
     const delta = own.left < shown.left ? own.left - shown.left : own.right > shown.right ? own.right - shown.right : 0;
     if (delta !== 0) list.scrollBy({ left: delta });
-  }, [active]);
+  }, [active, phone]);
   return (
     <div ref={listRef} role="tablist" aria-label="بخش‌های پروژه" className="flex items-center gap-1.5 overflow-x-auto border-b border-slate-200">
       {PROJECT_WORKSPACE_TABS.map(tab => (

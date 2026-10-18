@@ -148,14 +148,15 @@ export default function ProjectDetailPage() {
   }, [dirtyTabs.size, progressBusy, wantPhoneLayout]);
 
   /*
-   * «نمای کامل» and back on a phone. Only the progress tab is built differently in the two layouts, so only its unsaved
-   * ticks ask first (review nit); while its save runs the switch waits.
+   * «نمای کامل» and back on a phone. The two layouts build the progress tab differently, and the overview tab too unless
+   * the specs form is open (the phone shows its summary there), so an unsaved change of either asks first (review nit,
+   * delta D1); while the progress save runs the switch waits.
    */
+  const progressSaving = tab === 'progress' && progressBusy && !dirtyTabs.has('progress');
+  const layoutRebuildsTab = tab === 'progress' || (tab === 'overview' && !editingSpecs);
   const showFullView = async (full: boolean) => {
-    if (tab === 'progress' && progressBusy) {
-      if (!dirtyTabs.has('progress')) return;
-      if (!(await confirmLeaveUnsaved())) return;
-    }
+    if (progressSaving) return;
+    if (layoutRebuildsTab && dirtyTabs.has(tab) && !(await confirmLeaveUnsaved())) return;
     setFullView(full);
     setPhoneLayout(phone && !full);
   };
@@ -233,7 +234,7 @@ export default function ProjectDetailPage() {
       ) : (
         <>
           {phone && (
-            <button type="button" onClick={() => void showFullView(false)} disabled={tab === 'progress' && progressBusy && !dirtyTabs.has('progress')} className="w-full min-h-11 disabled:opacity-60 rounded-xl border border-blue-200 bg-blue-50 text-blue-800 text-xs font-bold cursor-pointer">
+            <button type="button" onClick={() => void showFullView(false)} disabled={progressSaving} className="w-full min-h-11 disabled:opacity-60 rounded-xl border border-blue-200 bg-blue-50 text-blue-800 text-xs font-bold cursor-pointer">
               بازگشت به نمای گوشی
             </button>
           )}

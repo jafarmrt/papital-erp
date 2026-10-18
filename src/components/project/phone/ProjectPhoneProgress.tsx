@@ -52,15 +52,7 @@ export function ProjectPhoneProgress({ projectId, canEdit, onUpdate, onDirtyChan
   // a product just ticked to 100 stays on screen until the list is read again, so a mistaken tick can be undone
   const shown = filter === 'all' ? products : products.filter(p => percentOf(p) < 100 || p.applicable_stage_orders.some(order => isEdited(p, order)));
 
-  if (loading && products.length === 0) {
-    return (
-      <div className="flex items-center justify-center gap-2 py-10 text-slate-500" role="status">
-        <RefreshCw className="w-5 h-5 animate-spin text-amber-500" aria-hidden="true" />
-        <span>در حال خواندن جدول پیشرفت</span>
-      </div>
-    );
-  }
-
+  // the error stays on screen while «تلاش دوباره» reads again, so its button shows the spinner and waits (delta D3)
   if (loadError && products.length === 0) {
     return (
       <div className="flex flex-col items-center gap-3 py-10 text-center text-xs" role="alert">
@@ -74,6 +66,15 @@ export function ProjectPhoneProgress({ projectId, canEdit, onUpdate, onDirtyChan
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
           تلاش دوباره
         </button>
+      </div>
+    );
+  }
+
+  if (loading && products.length === 0) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-10 text-slate-500" role="status">
+        <RefreshCw className="w-5 h-5 animate-spin text-amber-500" aria-hidden="true" />
+        <span>در حال خواندن جدول پیشرفت</span>
       </div>
     );
   }

@@ -268,8 +268,20 @@ describe('project page on a phone (10.2 package 10)', () => {
     renderProjectPage('/projects/7/progress');
     expect(await screen.findByText(/جدول پیشرفت خوانده نشد/)).toBeTruthy();
     expect(screen.queryByText(/هیچ کد کالایی/)).toBeNull();
+    let answer: () => void = () => undefined;
     fail = false;
-    fireEvent.click(screen.getByRole('button', { name: /تلاش دوباره/ }));
+    const held = new Promise<void>(resolve => { answer = resolve; });
+    const read = fetchJson.getMockImplementation();
+    fetchJson.mockImplementation(async (url: string, opts?: FetchOpts): Promise<unknown> => {
+      if (url === '/projects/7/product-progress') await held;
+      return read?.(url, opts);
+    });
+    const retry = screen.getByRole('button', { name: /تلاش دوباره/ });
+    fireEvent.click(retry);
+    // delta D3: while it reads again the button stays on screen, waits and turns its icon
+    await waitFor(() => expect((retry as HTMLButtonElement).disabled).toBe(true));
+    expect(retry.querySelector('.animate-spin')).toBeTruthy();
+    await act(async () => { answer(); });
     expect(await screen.findByRole('checkbox', { name: 'مونتاژ برای گردنبند' })).toBeTruthy();
   });
 
@@ -287,9 +299,32 @@ describe('project page on a phone (10.2 package 10)', () => {
       renderProjectPage('/projects/7/progress');
       await screen.findByRole('checkbox', { name: 'مونتاژ برای گردنبند' });
       expect(scrollBy).toHaveBeenCalledWith({ left: -120 });
+      cleanup();
+      scrollBy.mockClear();
+      // delta D4: a wider screen shows every tab, and its row never moves
+      setPhoneScreen(false);
+      renderProjectPage('/projects/7/progress');
+      expect(await screen.findByText(MATRIX_TABLE_TITLE)).toBeTruthy();
+      expect(scrollBy).not.toHaveBeenCalled();
     } finally {
       rects.mockRestore();
       delete (HTMLElement.prototype as { scrollBy?: unknown }).scrollBy;
     }
+  });
+
+  it('asks before the phone summary would drop a stage being edited in the full view (delta D1)', async () => {
+    setPhoneScreen(true);
+    renderProjectPage('/projects/7');
+    fireEvent.click(await screen.findByText('نمای کامل مشخصات و مراحل'));
+    fireEvent.click((await screen.findAllByText('ویرایش زمان‌بندی و پرسنل'))[0]);
+    expect(await screen.findByText(/ویرایش مرحله: برش/)).toBeTruthy();
+    confirmAction.mockImplementation(async () => false);
+    fireEvent.click(screen.getByText('بازگشت به نمای گوشی'));
+    await waitFor(() => expect(confirmAction).toHaveBeenCalledTimes(1));
+    expect(screen.getByText(/ویرایش مرحله: برش/)).toBeTruthy();
+    expect(screen.queryByText(PENDING_TITLE)).toBeNull();
+    confirmAction.mockImplementation(async () => true);
+    fireEvent.click(screen.getByText('بازگشت به نمای گوشی'));
+    expect(await screen.findByText(PENDING_TITLE)).toBeTruthy();
   });
 });
