@@ -19,6 +19,7 @@ import { BadRequestError, NotFoundError } from '../errors/customErrors.js';
 import { isEnteredSecret } from '../lib/secrets/maskedSecret.js';
 import { actionRuleView, webhookSubscriptionView } from '../services/events/integrationSecrets.js';
 import { assertWebhookSecretsReadable } from '../services/events/webhookSecretStorage.js';
+import { parsePagination } from '../lib/pagination.js';
 import { utcTimestampResponses } from '../middleware/utcTimestampResponses.js';
 import { EVENT_OPAQUE_KEYS, EVENT_TIMESTAMP_KEYS } from '../services/events/eventTimestamps.js';
 import { setRuleActive } from '../services/events/ruleActiveState.js';
@@ -89,9 +90,8 @@ router.get('/outbox/stats', authorizePermission('events.view'), asyncHandler(asy
 }));
 
 router.get('/outbox', authorizePermission('events.view'), asyncHandler(async (req, res) => {
-  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
-  const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
-  const offset = (page - 1) * limit;
+  // TD-1320: a negative, zero or text page or limit is the first page of 50, never a negative OFFSET (a 500) or LIMIT NaN
+  const { limit, offset } = parsePagination(req.query);
   const status = req.query.status as string | undefined;
   const eventType = req.query.eventType as string | undefined;
 
@@ -294,9 +294,8 @@ router.get('/action-logs', authorizePermission('events.view'), asyncHandler(asyn
   const ruleId = req.query.ruleId ? parseInt(req.query.ruleId as string, 10) : undefined;
   const status = req.query.status as string | undefined;
   const eventType = req.query.eventType as string | undefined;
-  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
-  const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
-  const offset = (page - 1) * limit;
+  // TD-1320: a negative, zero or text page or limit is the first page of 50, never a negative OFFSET (a 500) or LIMIT NaN
+  const { limit, offset } = parsePagination(req.query);
 
   const logsResult = await EventActionEngineService.getLogs({
     ruleId,
@@ -325,9 +324,8 @@ router.get('/dlq/stats', authorizePermission('events.view'), asyncHandler(async 
 }));
 
 router.get('/dlq', authorizePermission('events.view'), asyncHandler(async (req, res) => {
-  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
-  const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
-  const offset = (page - 1) * limit;
+  // TD-1320: a negative, zero or text page or limit is the first page of 50, never a negative OFFSET (a 500) or LIMIT NaN
+  const { limit, offset } = parsePagination(req.query);
   const status = req.query.status as string | undefined;
   const eventType = req.query.eventType as string | undefined;
   const source = req.query.source as string | undefined;
@@ -662,9 +660,8 @@ router.post('/webhooks/ping', authorizePermission('events.manage'), validate(web
 
 // v10.0.224 (OBS-R2-79): نام دوم `/webhooks/deliveries` زیر `/webhooks/:id` می‌ماند و هرگز پاسخ نمی‌داد؛ برداشته شد
 router.get('/webhooks/deliveries/list', authorizePermission('events.view'), asyncHandler(async (req, res) => {
-  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
-  const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
-  const offset = (page - 1) * limit;
+  // TD-1320: a negative, zero or text page or limit is the first page of 50, never a negative OFFSET (a 500) or LIMIT NaN
+  const { limit, offset } = parsePagination(req.query);
   const subscriptionId = req.query.subscriptionId ? parseInt(req.query.subscriptionId as string, 10) : undefined;
 
   const result = await WebhookSubscriptionService.getDeliveries({

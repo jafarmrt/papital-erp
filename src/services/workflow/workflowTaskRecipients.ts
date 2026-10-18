@@ -3,6 +3,7 @@ import type { DbExecutor } from '../../db/drizzle.js';
 import { roles as rolesTable, users, workflowTasks, workflowTransitions } from '../../db/schema.js';
 import { WorkflowDelegationService } from './workflowDelegationService.js';
 import { snapshotTransitionsOf } from './workflowSnapshot.js';
+import { effectivePermissionKey } from './removedPermissionKeys.js';
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
 
 /**
@@ -28,10 +29,10 @@ const positiveIds = (values: unknown): number[] =>
 async function transitionPermissionOf(tx: DbExecutor, task: WorkflowTaskRow, snapshotDsl: unknown): Promise<string> {
   if (!task.transitionId) return '';
   const fromSnapshot = snapshotTransitionsOf(snapshotDsl)?.find((t) => t.id === task.transitionId);
-  if (fromSnapshot) return (fromSnapshot.requiredPermission || '').trim();
+  if (fromSnapshot) return effectivePermissionKey(fromSnapshot.requiredPermission);
   const [live] = await tx.select({ requiredPermission: workflowTransitions.requiredPermission }).from(workflowTransitions)
     .where(eq(workflowTransitions.id, task.transitionId));
-  return (live?.requiredPermission || '').trim();
+  return effectivePermissionKey(live?.requiredPermission);
 }
 
 /** کاربران فعالی که این کار به آن‌ها سپرده شده یا در نقششان است، با جانشین فعال هم‌حوزه */

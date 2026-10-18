@@ -4,7 +4,7 @@ import request from 'supertest';
 import { and, eq, inArray, like, sql } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm, pool } from '../../db/drizzle.js';
-import { activityLogs, roles, users, webhookSubscriptions, workflowDefinitions, workflowTransitions } from '../../db/schema.js';
+import { activityLogs, roles, users, webhookSubscriptions, workflowDefinitions, workflowInstances, workflowTasks, workflowTransitions } from '../../db/schema.js';
 import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 
 /**
@@ -14,7 +14,9 @@ import { deleteTestRoles } from '../fixtures/roleCleanup.js';
  * - webhook retry limits outside 1 to 10 saved before v10.1.66 are brought to the number delivery already used;
  * - a restore racing a new user with the same username key answered a raw database error, not the friendly 409;
  * - workflow actions still asking the removed key of migration 0123 ask audit.apply after the boot step.
- * Each case is red on v10.1.72.
+ * Each case is red on v10.1.72. v10.2.8 (TD-1320) adds the inbox: a task of a running instance whose snapshot still
+ * asks the removed key reaches the inbox, the recipients and the task run of an audit.apply holder, and the event lists
+ * read a negative or text page as the first page (both red on v10.2.7).
  */
 type ShouldRun = (id: string, ...extra: string[]) => boolean;
 
@@ -274,5 +276,64 @@ export async function runUrgentFixesV1020Tests(shouldRun: ShouldRun): Promise<Te
       });
   }
 
+
+  if (shouldRun('reg_workflow_removed_permission_inbox_td_1320', 'v10_2_0', 'td_1320', 'workflow', 'inbox', 'permissions')) {
+    await runCase(results, 'reg_workflow_removed_permission_inbox_td_1320',
+      'v10.2.8: an inbox task whose snapshot action still asks the removed key reaches the holder of audit.apply',
+      'snapshot action asks the removed key: getMyTasks lists the task for a role holding audit.apply, workflowTaskRecipients names that user, the task runs from the inbox',
+      async (wrong) => {
+        const { defineWorkflow, startWf, tasksOf, runTask, wfUser, instanceRow } = await import('../invariants/workflowScenarioHelpers.js');
+        const { createTestRole } = await import('../fixtures/factories.js');
+        const { WorkflowTaskService } = await import('../../services/workflow/workflowTaskService.js');
+        const { workflowTaskRecipients } = await import('../../services/workflow/workflowTaskRecipients.js');
+        const { effectivePermissionKey } = await import('../../services/workflow/removedPermissionKeys.js');
+        // an own-property lookup: a stored text named like an object prototype member stays as it is
+        for (const stored of ['constructor', 'toString', '__proto__']) {
+          if (effectivePermissionKey(stored) !== stored) wrong.push(`the stored key ${stored} was read as ${String(effectivePermissionKey(stored))}`);
+        }
+        const role = `v1020_inbox_${tail()}`;
+        await createTestRole({ code: role, name: role, permissions: ['audit.apply', 'workflow.approve'] });
+        const holder = await wfUser(role, []);
+        const wf = await defineWorkflow({
+          states: [{ key: 'draft', type: 'initial' }, { key: 'done', type: 'terminal' }],
+          transitions: [{ from: 'draft', to: 'done', action: 'approve', role, permission: 'audit.view' }],
+        });
+        try {
+          const instanceId = await startWf(wf);
+          // the running instance as it was before 0123: its own snapshot still asks the removed key
+          await pool.query(`UPDATE workflow_instances SET snapshot_dsl = replace(snapshot_dsl::text, '"audit.view"', $2)::jsonb WHERE id = $1`,
+            [instanceId, JSON.stringify(` ${REMOVED_KEY} `)]);
+          const [task] = await tasksOf(instanceId);
+          if (!task) throw new Error('the step made no inbox task');
+          const inbox = await WorkflowTaskService.getMyTasks({ userId: holder.id, userRole: holder.role, userPermissions: holder.permissions });
+          if (!inbox.data.some(t => t.instanceId === instanceId)) wrong.push('the task is missing from the inbox of the audit.apply holder');
+          const [taskRow] = await orm.select().from(workflowTasks).where(eq(workflowTasks.id, task.id));
+          const [instance] = await orm.select({ snapshotDsl: workflowInstances.snapshotDsl }).from(workflowInstances).where(eq(workflowInstances.id, instanceId));
+          const recipients = await workflowTaskRecipients(orm, taskRow, wf.code, instance.snapshotDsl, new Date());
+          if (!recipients.includes(holder.id)) wrong.push('the audit.apply holder is not among the recipients of the task');
+          await runTask(task.id, holder);
+          if ((await instanceRow(instanceId)).status !== 'COMPLETED') wrong.push('the task run from the inbox did not finish the workflow');
+        } finally {
+          await orm.update(workflowDefinitions).set({ isActive: 0 }).where(eq(workflowDefinitions.id, wf.definitionId)).catch(() => undefined);
+        }
+      });
+  }
+
+  if (shouldRun('reg_events_negative_page_td_1320', 'v10_2_0', 'td_1320', 'events', 'pagination')) {
+    await runCase(results, 'reg_events_negative_page_td_1320',
+      'v10.2.8: the event lists read a negative, zero or text page or limit as the first page, never a 500',
+      'GET /api/events/{outbox,action-logs,dlq,webhooks/deliveries/list}?page=-1|0|abc&limit=-5|abc -> 200',
+      async (wrong) => {
+        const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+        const app = await getTestApp();
+        const session = await getAdminSession();
+        for (const list of ['outbox', 'action-logs', 'dlq', 'webhooks/deliveries/list']) {
+          for (const query of ['page=-1', 'page=0', 'page=abc', 'limit=-5', 'limit=abc&page=2']) {
+            const res = await request(app).get(`/api/events/${list}?${query}`).set('Cookie', session.cookie);
+            if (res.status !== 200) wrong.push(`${list}?${query} answered ${res.status} ${JSON.stringify(res.body).slice(0, 120)}`);
+          }
+        }
+      });
+  }
   return results;
 }
