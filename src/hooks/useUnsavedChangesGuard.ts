@@ -96,6 +96,8 @@ export function useUnsavedChangesGuard(dirty: boolean): void {
     if (!onGuardEntry()) pushGuardEntry();
 
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      // «بی ذخیره برو» went back to another document: the page is going, so the guard is not put on again (review S1)
+      if (leaving) wentBack = true;
       if (!dirtyRef.current) return;
       event.preventDefault();
       // older browsers show their own question only when a value is set

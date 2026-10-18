@@ -45,7 +45,8 @@ export default function ProjectDetailPage() {
   const projectVersion = useProjectVersion(project);
   const [dirtyTabs, setDirtyTabs] = useState<ReadonlySet<ProjectWorkspaceTab>>(new Set());
   const [specsOpen, setSpecsOpen] = useState(false);
-  const editingSpecs = canEdit && tab === 'overview' && specsOpen;
+  // read from the address too, so the render before `specsOpen` is set already counts the editor as open (review N1)
+  const editingSpecs = canEdit && tab === 'overview' && (specsOpen || searchParams.get('edit') === '1');
 
   const personnelQuery = usePersonnelListQuery();
   const itemsQuery = useProjectItemOptions(tab === 'materials' || tab === 'delivery');
@@ -63,6 +64,11 @@ export default function ProjectDetailPage() {
    * extra history entry and left the `?edit=1` entry under it, so «back» opened the editor again and then asked about
    * changes nobody made.
    */
+  // another project starts with its specs closed (review S2)
+  useEffect(() => {
+    setSpecsOpen(false);
+  }, [projectId]);
+
   useEffect(() => {
     if (searchParams.get('edit') !== '1') return;
     setSpecsOpen(true);

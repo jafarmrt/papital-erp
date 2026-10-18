@@ -18,6 +18,15 @@ vi.mock('../../hooks/useProjectPermissions', () => ({
   }),
 }));
 vi.mock('../../components/project/ProjectGanttTab', () => ({ default: () => null }));
+// a materials tab holding an unsaved change from the start
+vi.mock('../../components/project/ProjectInventoryTab', async () => {
+  const { useEffect } = await import('react');
+  function DirtyMaterialsTab({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
+    useEffect(() => { onDirtyChange(true); return () => onDirtyChange(false); }, [onDirtyChange]);
+    return <div data-testid="materials-tab" />;
+  }
+  return { default: DirtyMaterialsTab };
+});
 vi.mock('../../components/accounting/FinancialAttachmentUploader', () => ({ FinancialAttachmentUploader: () => null }));
 // the form saves like useProjectForm: onSaved first, then the editor closes
 vi.mock('../../components/project/workspace/ProjectSpecsEditor', () => ({
@@ -73,5 +82,21 @@ describe('project specs editor and the browser history (10.2 package 2)', () => 
     await settle();
     expect(screen.queryByTestId('specs-editor')).toBeNull();
     expect(confirmAction).not.toHaveBeenCalled();
+  });
+
+  // delta review N1: leaving an unsaved tab for the specs editor asks once and stays in the editor
+  it('asks once when an unsaved tab opens the specs editor', async () => {
+    window.history.replaceState(null, '', '/projects/7/materials');
+    renderInBrowser();
+    expect(await screen.findByTestId('materials-tab')).toBeTruthy();
+    await settle();
+
+    fireEvent.click(await screen.findByRole('button', { name: /ویرایش مشخصات/ }));
+    expect(await screen.findByTestId('specs-editor')).toBeTruthy();
+    await waitFor(() => expect(location()).toBe('/projects/7'));
+    await new Promise(resolve => setTimeout(resolve, 300));
+    expect(confirmAction).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('specs-editor')).toBeTruthy();
+    expect(location()).toBe('/projects/7');
   });
 });
