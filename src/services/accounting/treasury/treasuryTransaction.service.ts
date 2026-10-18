@@ -16,15 +16,17 @@ import { DomainEventType } from '../../events/domainEvents.js';
 import { OutboxService } from '../../events/outboxService.js';
 import { auditTreasuryTransactionCreated, auditTreasuryTransactionVoided, auditTreasuryTransfer, type TreasuryAuditActor } from './treasuryAudit.js';
 import { fin, type DecimalValue } from '../../../lib/financialDecimal.js';
-import { money, moneyOr } from '../../../lib/money.js';
+import { money } from '../../../lib/money.js';
 import type { TreasuryTransaction, Account } from '../../../types.js';
 import { NotFoundError, ValidationError, ConflictError, BusinessLogicError } from '../../../errors/customErrors.js';
-import { businessTodayIsoDate } from '../../../lib/businessClock.js';
 import { AttachmentStorageService } from '../../attachments/attachmentStorage.service.js';
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
 import { reconcileTreasuryRows, type ReconcileParams, type ReconcileResult } from './bankReconciliation.js';
 import type { TreasuryVoucherPreview } from '../../../lib/treasury/treasuryVoucherPreview.js';
 import { listTreasuryTransactions, pageTreasuryTransactions, type TreasuryListFilters, type TreasuryTransactionPage } from './treasuryTransactionList.js';
+import {
+  assertBankCurrency, lockTreasuryBank, nextTreasuryTransactionNumber, postTreasuryRow, reverseTreasuryRow, type TreasuryBank, type TreasuryRow,
+} from './treasuryPosting.js';
 
 /**
  * TD-105 (v4.0.31): تاریخ تراکنش‌های خزانه «سرور authoritative» است: خالی ← امروز کسب‌وکار، تاریخ آینده ← 422.
@@ -45,28 +47,16 @@ export class TreasuryTransactionService {
   }
 
   /**
-   * v10.1.32 (D-16): پیوست‌ها و رویداد «تراکنش خزانه تأیید شد» یک پرداخت خزانه که خدمت دیگری از خزانه (صورت‌هزینه
-   * تنخواه) با همین `tx` درج کرده است؛ همان کاری که ثبت دریافت و پرداخت پس از درج ردیف می‌کند.
+   * v10.1.32 (D-16): پیوست‌های ردیف خزانه‌ای که خدمت دیگری از خزانه (صورت‌هزینه تنخواه) با `postTreasuryRow` در همین `tx`
+   * درج کرده است؛ رویداد ردیف را خود `postTreasuryRow` می‌نویسد (OBS-R2-52).
    */
-  static async recordInsertedPaymentEffects(
-    txEngine: DbExecutor,
-    rowId: number,
-    effects: { attachments?: unknown[]; userId?: number; username?: string; event: Record<string, unknown> },
-  ) {
-    const attachments = await AttachmentStorageService.attachToNewRecord(txEngine, 'treasury_transaction', rowId, effects.attachments, effects.username);
-    await OutboxService.saveToOutbox(txEngine, domainEventBus.createEvent(
-      DomainEventType.TREASURY_TRANSACTION_APPROVED, 'Treasury', String(rowId), effects.event,
-      { userId: effects.userId, userName: effects.username },
-    ));
-    return attachments;
+  static attachTreasuryRowFiles(txEngine: DbExecutor, rowId: number, attachments: unknown[] | undefined, username?: string) {
+    return AttachmentStorageService.attachToNewRecord(txEngine, 'treasury_transaction', rowId, attachments, username);
   }
 
   static async generateTransactionNumber(type: 'receipt' | 'payment', tx?: DbExecutor): Promise<string> {
     const executor = tx || orm;
-    const result = await executor.execute(sql`SELECT nextval('treasury_tx_number_seq') AS num`);
-    const seqNum = Number(result.rows?.[0]?.num);
-    const prefix = type === 'receipt' ? 'REC' : 'PAY';
-    return `${prefix}-${String(seqNum).padStart(6, '0')}`;
+    return nextTreasuryTransactionNumber(type, executor);
   }
 
   /** v10.1.36 (TD-1243): حساب نگاشت‌شده بیمه پرداختنی (3204) یا مالیات حقوق پرداختنی (3206) برای پرداخت یکجای ماهانه */
@@ -279,10 +269,7 @@ export class TreasuryTransactionService {
       // سرفصل انتخابی حتی در ثبت بی‌سند سنجیده می‌شود تا ردیف به حساب نامجاز اشاره نکند
       if (party.contraAccountId) await requireChoosableContraAccount(txEngine, party.contraAccountId);
       // V1.4.0: قفل حساب با فیلتر isDeleted — ثبت وجه در حساب حذف‌شده ممنوع
-      const [bank] = await txEngine.select().from(bankAccounts)
-        .where(and(eq(bankAccounts.id, data.bankAccountId), eq(bankAccounts.isDeleted, 0)))
-        .for('update');
-      if (!bank) throw new NotFoundError('حساب بانکی یا صندوق انتخاب‌شده یافت نشد');
+      const bank = await lockTreasuryBank(txEngine, data.bankAccountId);
       // v10.0.59 (TD-938): سند پیش از هر خواندن قفل می‌شود تا دو پرداخت همزمان مانده آن را پشت سر هم بسنجند
       if (data.documentId) await lockSettlementDocument(txEngine, data.documentId);
       // v9.0.459 (TD-907): ردیف وصل به سند بی شناسه طرف حساب (فرم تسویه فاکتور) شناسه طرف حساب سند و نام کنونی او را
@@ -305,65 +292,57 @@ export class TreasuryTransactionService {
         await assertWithinDocumentRemaining(txEngine, { documentId: data.documentId, amount });
       }
 
-      // V1.4.0: گارد هم‌ارزی ارز — تراکنش باید هم‌ارز با حساب باشد تا مانده‌ها معنادار بمانند
-      if (bank.currency && txCurrency !== bank.currency) {
-        throw new ValidationError(`ارز تراکنش (${txCurrency}) با ارز حساب «${bank.title}» (${bank.currency}) هم‌خوانی ندارد. تراکنش هم‌ارز ثبت کنید.`);
-      }
+      // V1.4.0: گارد هم‌ارزی ارز، پیش از نرخ تسعیر تا ارز ناهم‌خوان پیام خودش را بگیرد (`postTreasuryRow` هم آن را می‌سنجد)
+      assertBankCurrency(bank, txCurrency);
       // v8.0.20 (TD-274): نرخ تسعیر تراکنش ارزی (صریح، فاکتور تسویه‌شده، تنظیمات)؛ بدون نرخ رد می‌شود، هرگز نرخ ۱
       const txExchangeRate = await resolveTreasuryExchangeRate(txEngine, txCurrency, data.exchangeRate, data.documentId);
 
-      const txNum = await this.generateTransactionNumber(data.type, txEngine);
-
-      const currentBal = fin(bank.currentBalance);
-      // V9-1.3: محاسبه موجودی بانک با FinancialDecimal — حذف خطای شناور float
-      const newBal = data.type === 'receipt'
-        ? currentBal.add(amount).round(4)
-        : currentBal.subtract(amount).round(4);
-      // V1.4.0: سیاست مانده منفی ممنوع — پرداخت بیش از مانده رد می‌شود
-      if (newBal.isNegative()) {
-        throw new ValidationError(`مانده حساب «${bank.title}» کافی نیست (مانده فعلی: ${currentBalFa(currentBal)})`);
-      }
-      await txEngine.update(bankAccounts).set({ currentBalance: money(newBal) }).where(eq(bankAccounts.id, data.bankAccountId));
-
-      let voucherId: number | null = null;
+      // V1.8.0: طرف حساب متقابل از منطق مشترک (مپینگ + purpose)، پیش از هر نوشتن
+      let contraAccountId: number | null = null;
       if (data.createVoucher !== false) {
         if (!bank.accountId) {
-          throw new ValidationError('حساب معین مرتبط در چارت حساب‌ها برای این حساب بانکی/صندوق تعریف نشده است');
+          throw new ValidationError('حساب معین مرتبط در چارت حساب‌ها برای این حساب بانکی/صندوق تعریف نشده است', undefined, 'BANK_LEDGER_ACCOUNT_INVALID');
         }
-
-        // V1.8.0: طرف حساب متقابل از منطق مشترک (مپینگ + purpose)
         const contra = await this.resolveContraAccount(partyType, party.purpose, txEngine, party.contraAccountId);
-        const contraAccountId = contra?.account?.id || null;
-
+        contraAccountId = contra?.account?.id || null;
         if (!contraAccountId) {
           throw new NotFoundError('حساب معین طرف حساب در چارت حساب‌ها یافت نشد (آن را از تنظیمات ← تنظیمات حسابداری پیکربندی کنید)');
         }
+      }
 
-        const treasuryAccountId: number = bank.accountId;
-        const treasuryDetailedType = 'bank_account';
-        const treasuryDetailedId: number | null = bank.id;
-        const treasuryDetailedName = bank.title;
+      const descText = data.description || `${data.type === 'receipt' ? 'دریافت' : 'پرداخت'} ${data.method === 'cash' ? 'نقدی' : data.method === 'pos' ? 'کارتخوان' : 'حواله بانکی'} از/به ${partyName}`;
+      const treasuryRow = (accountId: number) => ({ accountId, detailedType: 'bank_account', detailedId: bank.id, detailedName: bank.title });
+      const partyRow = (accountId: number) => ({ accountId, detailedType: data.partyType || 'other', detailedId: partyId, detailedName: partyName });
 
-        const descText = data.description || `${data.type === 'receipt' ? 'دریافت' : 'پرداخت'} ${data.method === 'cash' ? 'نقدی' : data.method === 'pos' ? 'کارتخوان' : 'حواله بانکی'} از/به ${partyName}`;
-        
-        const debitAccountId = data.type === 'receipt' ? treasuryAccountId : contraAccountId;
-        const creditAccountId = data.type === 'receipt' ? contraAccountId : treasuryAccountId;
-
-        const v = await VoucherService.createJournalVoucher({
+      // OBS-R2-52: مانده، شماره، سند، ردیف و رویداد از راه یگانه خزانه
+      const { row: tx } = await postTreasuryRow(txEngine, bank, {
+        type: data.type,
+        date: resolvedDate,
+        method: data.method,
+        amount,
+        currency: txCurrency,
+        exchangeRate: txExchangeRate,
+        partyType,
+        partyId,
+        partyName: partyName.trim(),
+        purpose: party.purpose,
+        contraAccountId: party.contraAccountId,
+        trackingNumber: data.trackingNumber?.trim() || '',
+        documentId: data.documentId || null,
+        description: data.description?.trim() || '',
+        createdById: data.userId || null,
+        voucher: contraAccountId === null ? null : (transactionNumber) => VoucherService.createJournalVoucher({
           date: resolvedDate,
           voucherType: 'treasury',
           description: descText,
           referenceModule: 'treasury',
-          referenceNumber: txNum,
+          referenceNumber: transactionNumber,
           currency: txCurrency,
           userId: data.userId,
           username: data.username,
           items: [
             {
-              accountId: debitAccountId!,
-              detailedType: data.type === 'receipt' ? treasuryDetailedType : (data.partyType || 'other'),
-              detailedId: data.type === 'receipt' ? treasuryDetailedId : partyId,
-              detailedName: data.type === 'receipt' ? treasuryDetailedName : partyName,
+              ...(data.type === 'receipt' ? treasuryRow(Number(bank.accountId)) : partyRow(contraAccountId)),
               debit: amount,
               credit: 0,
               currency: txCurrency,
@@ -371,10 +350,7 @@ export class TreasuryTransactionService {
               description: descText,
             },
             {
-              accountId: creditAccountId!,
-              detailedType: data.type === 'receipt' ? (data.partyType || 'other') : treasuryDetailedType,
-              detailedId: data.type === 'receipt' ? partyId : treasuryDetailedId,
-              detailedName: data.type === 'receipt' ? partyName : treasuryDetailedName,
+              ...(data.type === 'receipt' ? partyRow(contraAccountId) : treasuryRow(Number(bank.accountId))),
               debit: 0,
               credit: amount,
               currency: txCurrency,
@@ -382,63 +358,23 @@ export class TreasuryTransactionService {
               description: descText,
             }
           ]
-        }, txEngine);
-        voucherId = v.id;
-      }
-
-      const [tx] = await txEngine.insert(treasuryTransactions).values({
-        transactionNumber: txNum,
-        type: data.type,
-        date: resolvedDate,
-        method: data.method,
-        amount: money(amount),
-        currency: txCurrency,
-        exchangeRate: money(txExchangeRate),
-        bankAccountId: data.bankAccountId,
-        partyType,
-        partyId,
-        partyName: partyName.trim(),
-        purpose: party.purpose,
-        contraAccountId: party.contraAccountId,
-        trackingNumber: data.trackingNumber?.trim() || '',
-        voucherId,
-        documentId: data.documentId || null,
-        description: data.description?.trim() || '',
-        status: 'completed',
-        attachments: [],
-        createdById: data.userId || null,
-      }).returning();
-      // v7.0.56 (audit P2-9): فایل پیوست‌ها روی دیسک؛ ستون attachments فقط فراداده
-      tx.attachments = await AttachmentStorageService.attachToNewRecord(txEngine, 'treasury_transaction', tx.id, data.attachments, data.username);
-
-      // Phase 12 - Transactional Outbox (Guarantees atomic event persistence with treasury transaction)
-      const treasuryEvent = domainEventBus.createEvent(
-        DomainEventType.TREASURY_TRANSACTION_APPROVED,
-        'Treasury',
-        String(tx.id),
-        {
-          transactionId: tx.id,
+        }, txEngine),
+        // Phase 12 - Transactional Outbox (Guarantees atomic event persistence with treasury transaction)
+        event: (rowId) => ({
+          transactionId: rowId,
           type: data.type === 'receipt' ? 'deposit' : 'withdrawal',
           amount,
           currency: txCurrency,
           accountId: bank.id,
           accountName: bank.title,
           description: data.description
-        },
-        { userId: data.userId, userName: data.username }
-      );
-      await OutboxService.saveToOutbox(txEngine, treasuryEvent);
+        }),
+        actor: { userId: data.userId, username: data.username },
+      });
+      // v7.0.56 (audit P2-9): فایل پیوست‌ها روی دیسک؛ ستون attachments فقط فراداده
+      tx.attachments = await this.attachTreasuryRowFiles(txEngine, tx.id, data.attachments, data.username);
 
-      const created = {
-        ...tx,
-        amount: tx.amount.toNumber(), // قرارداد API: مبلغ عدد (P2-6)
-        exchangeRate: tx.exchangeRate?.toNumber() ?? null,
-        type: tx.type as 'receipt' | 'payment',
-        method: tx.method as TreasuryTransaction['method'],
-        partyType: tx.partyType as TreasuryTransaction['partyType'],
-        status: tx.status as TreasuryTransaction['status'],
-        bankAccountTitle: bank.title,
-      } as TreasuryTransaction;
+      const created = treasuryRowDto(tx, bank);
       await auditTreasuryTransactionCreated(txEngine, data.audit, created, { ...created });
       return created;
     });
@@ -498,8 +434,8 @@ export class TreasuryTransactionService {
       if (original.status === 'voided') {
         throw new ConflictError('این تراکنش قبلاً ابطال شده است');
       }
-      // تراکنش‌های متصل به پرداخت حقوق باید از مسیر خود حقوق مدیریت شوند (اتمیک بودن فیش)
-      if (original.payrollId) {
+      // تراکنش‌های متصل به پرداخت حقوق باید از مسیر خود حقوق مدیریت شوند (اتمیک بودن فیش)؛ هر دو طرف یک انتقال، پیش از هر نوشتن
+      if (sides.some(side => side.payrollId)) {
         throw new BusinessLogicError('این تراکنش یک پرداخت حقوق ثبت‌شده است و از این مسیر قابل ابطال نیست؛ آن را از پنجره پرداخت همان فیش («ابطال پرداخت») ابطال کنید.');
       }
       // v9.0.67 (TD-499، تصمیم مالک محصول ت۱ الف): ردیف معکوس («ابطال تراکنش دیگر») ابطال نمی‌شود. پیش‌تر ابطال آن اثر اصل
@@ -536,9 +472,26 @@ export class TreasuryTransactionService {
       for (const side of partner ? [original, partner] : [original]) {
         const bank = banks.find(b => b.id === side.bankAccountId);
         if (!bank) throw new NotFoundError('حساب بانکی مرتبط با تراکنش یافت نشد');
-        const reversal = await this.voidTreasurySide(txEngine, side, bank, reversalVoucherId, reason,
-          side.id === original.id ? '' : ` (طرف دیگر انتقال ${original.transactionNumber})`, params);
-        if (side.id === original.id) originalReversal = reversal;
+        const pairNote = side.id === original.id ? '' : ` (طرف دیگر انتقال ${original.transactionNumber})`;
+        const reversalRow = await reverseTreasuryRow(txEngine, side, bank, {
+          reversalVoucherId,
+          description: `ابطال تراکنش ${side.transactionNumber}${pairNote} — دلیل: ${reason}`,
+          createdById: params.userId || null,
+          event: (row) => ({
+            transactionId: row.id,
+            voidedTransactionId: side.id,
+            voidedTransactionNumber: side.transactionNumber,
+            type: row.type === 'receipt' ? 'deposit' : 'withdrawal',
+            isReversal: true,
+            amount: money(side.amount),
+            currency: side.currency || bank.currency || 'IRR',
+            accountId: bank.id,
+            accountName: bank.title,
+            reason,
+          }),
+          actor: { userId: params.userId, username: params.username },
+        });
+        if (side.id === original.id) originalReversal = treasuryRowDto(reversalRow, bank);
       }
       const reversal = originalReversal as TreasuryTransaction;
       await auditTreasuryTransactionVoided(txEngine, params.audit, original, { id: reversal.id, transactionNumber: reversal.transactionNumber, voucherId: reversal.voucherId ?? null }, reason);
@@ -567,101 +520,6 @@ export class TreasuryTransactionService {
         sql`${treasuryTransactions.id} <> ${id}`
       ));
     return partners.length === 1 ? [id, partners[0].id] : [id];
-  }
-
-  /** یک طرف ابطال: برگشت مانده بانک، ردیف معکوس با شماره سری جدید، نشان «باطل‌شده» روی اصل و رویداد Outbox */
-  private static async voidTreasurySide(
-    txEngine: DbExecutor,
-    original: typeof treasuryTransactions.$inferSelect,
-    bank: typeof bankAccounts.$inferSelect,
-    reversalVoucherId: number | null,
-    reason: string,
-    pairNote: string,
-    params: { userId?: number; username?: string }
-  ): Promise<TreasuryTransaction> {
-    if (original.payrollId) {
-      throw new BusinessLogicError('این تراکنش یک پرداخت حقوق ثبت‌شده است و از این مسیر قابل ابطال نیست؛ آن را از پنجره پرداخت همان فیش («ابطال پرداخت») ابطال کنید.');
-    }
-    // اصلاح مانده: معکوس اثر اصل
-    // V6 Sub-phase 1.2 (TD-148): اگر روش تراکنش چک بوده، مانده بانک در ثبت اصل تغییر نکرده بود؛
-    // بنابراین در ابطال نیز مانده حساب بانکی نباید تغییر کند
-    const amount = money(original.amount);
-    if (original.method !== 'cheque') {
-      const currentBal = fin(bank.currentBalance);
-      const newBal = original.type === 'receipt'
-        ? currentBal.subtract(amount).round(4)
-        : currentBal.add(amount).round(4);
-      if (newBal.isNegative()) {
-        throw new ValidationError(`ابطال ممکن نیست: مانده فعلی «${bank.title}» (${currentBalFa(currentBal)}) برای برگشت این وجه کافی نیست`);
-      }
-      await txEngine.update(bankAccounts).set({ currentBalance: money(newBal) }).where(eq(bankAccounts.id, bank.id));
-      bank.currentBalance = money(newBal);
-    }
-
-    // تراکنش معکوس با شماره سری جدید
-    const reversalType = original.type === 'receipt' ? 'payment' : 'receipt';
-    const reversalNum = await this.generateTransactionNumber(reversalType, txEngine);
-
-    const [reversalTx] = await txEngine.insert(treasuryTransactions).values({
-      transactionNumber: reversalNum,
-      type: reversalType,
-      date: await businessTodayIsoDate(),
-      method: original.method,
-      amount,
-      currency: original.currency || bank.currency || 'IRR',
-      exchangeRate: moneyOr(original.exchangeRate, 1),
-      bankAccountId: original.bankAccountId,
-      partyType: original.partyType,
-      partyId: original.partyId,
-      partyName: original.partyName,
-      purpose: original.purpose,
-      contraAccountId: original.contraAccountId,
-      trackingNumber: original.trackingNumber || '',
-      voucherId: reversalVoucherId,
-      chequeId: original.chequeId || null,
-      documentId: original.documentId || null,
-      reversalOfId: original.id,
-      description: `ابطال تراکنش ${original.transactionNumber}${pairNote} — دلیل: ${reason}`,
-      status: 'completed',
-      createdById: params.userId || null,
-    }).returning();
-
-    // نشان‌گذاری اصل به‌عنوان voided (soft — بدون حذف)
-    await txEngine.update(treasuryTransactions)
-      .set({ status: 'voided', updatedAt: sql`now()` })
-      .where(eq(treasuryTransactions.id, original.id));
-
-    // Outbox event (same tx)
-    const voidEvent = domainEventBus.createEvent(
-      DomainEventType.TREASURY_TRANSACTION_APPROVED,
-      'Treasury',
-      String(reversalTx.id),
-      {
-        transactionId: reversalTx.id,
-        voidedTransactionId: original.id,
-        voidedTransactionNumber: original.transactionNumber,
-        type: reversalType === 'receipt' ? 'deposit' : 'withdrawal',
-        isReversal: true,
-        amount,
-        currency: original.currency || bank.currency || 'IRR',
-        accountId: bank.id,
-        accountName: bank.title,
-        reason
-      },
-      { userId: params.userId, userName: params.username }
-    );
-    await OutboxService.saveToOutbox(txEngine, voidEvent);
-
-    return {
-      ...reversalTx,
-      amount: reversalTx.amount.toNumber(), // قرارداد API: مبلغ عدد (P2-6)
-      exchangeRate: reversalTx.exchangeRate?.toNumber() ?? null,
-      type: reversalTx.type as 'receipt' | 'payment',
-      method: reversalTx.method as TreasuryTransaction['method'],
-      partyType: reversalTx.partyType as TreasuryTransaction['partyType'],
-      status: reversalTx.status as TreasuryTransaction['status'],
-      bankAccountTitle: bank.title,
-    } as TreasuryTransaction;
   }
 
   /**
@@ -852,6 +710,20 @@ export class TreasuryTransactionService {
   static async reconcileTransactions(params: ReconcileParams): Promise<ReconcileResult> {
     return reconcileTreasuryRows(params);
   }
+}
+
+/** قرارداد API ردیف خزانه: مبلغ و نرخ عدد (P2-6) با نام حساب */
+function treasuryRowDto(row: TreasuryRow, bank: TreasuryBank): TreasuryTransaction {
+  return {
+    ...row,
+    amount: row.amount.toNumber(),
+    exchangeRate: row.exchangeRate?.toNumber() ?? null,
+    type: row.type as 'receipt' | 'payment',
+    method: row.method as TreasuryTransaction['method'],
+    partyType: row.partyType as TreasuryTransaction['partyType'],
+    status: row.status as TreasuryTransaction['status'],
+    bankAccountTitle: bank.title,
+  } as TreasuryTransaction;
 }
 
 // V1.5.0: helper کوچک نمایش مانده در پیام خطا
