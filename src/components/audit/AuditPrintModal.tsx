@@ -1,6 +1,6 @@
 import React from 'react';
 import { Printer, X, ShieldAlert } from 'lucide-react';
-import { formatPersianDateTime, formatPersianNumber, formatPersianDate } from '../../utils';
+import { formatPersianDateTime, formatPersianNumber, formatPersianDate, displayClockNow } from '../../utils';
 import { parseUserAgent } from '../../utils/userAgentParser';
 import type { ActivityLogItem } from '../../hooks/queries/useActivityLogQueries';
 import { auditActionLabel } from '../../lib/audit/auditActionLabels';
@@ -34,10 +34,9 @@ export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, total, o
     window.print();
   };
 
-  const todayShamsi = new Intl.DateTimeFormat('fa-IR', {
-    dateStyle: 'full',
-    timeStyle: 'short'
-  }).format(new Date());
+  // TD-1325 (OBS-R1-35): the print time is the business display time zone's, not the device's
+  const printClock = displayClockNow();
+  const todayShamsi = `${printClock.dateLabel}، ساعت ${printClock.time.slice(0, 5)}`;
 
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
