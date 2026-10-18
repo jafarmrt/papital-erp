@@ -925,6 +925,13 @@
       "when": 1796221200000,
       "tag": "0131_wc_price_sku_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 132,
+      "version": "7",
+      "when": 1796297600000,
+      "tag": "0132_activity_log_search_index",
+      "breakpoints": true
     }
   ]
 }

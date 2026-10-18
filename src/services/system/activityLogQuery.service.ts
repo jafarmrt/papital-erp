@@ -1,6 +1,6 @@
 import { desc, sql, eq, and, SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { activityLogs, users } from '../../db/schema.js';
+import { activityLogs, activityLogSearchText, users } from '../../db/schema.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
 import { getDisplayTimezone } from '../../lib/businessClock.js';
 import { serverTimestampToUtcIso, zonedDayRangeUtc } from '../../lib/serverTimestamp.js';
@@ -62,10 +62,10 @@ function buildActivityLogConditions(filters: ActivityLogFilters, dayRange: { fro
   if (dayRange.before) {
     conditions.push(sql`${activityLogs.timestamp} < ${dayRange.before}`);
   }
+  // OBS-R1-32 (TD-1324): one ILIKE over the indexed expression (GIN trigram, migration 0132) instead of four that read
+  // the whole table; the unit separator between the columns keeps a match inside one column, as before
   if (search) {
-    conditions.push(
-      sql`(${activityLogs.description} ILIKE ${containsLikePattern(search)} OR ${activityLogs.userFullName} ILIKE ${containsLikePattern(search)} OR ${activityLogs.username} ILIKE ${containsLikePattern(search)} OR ${activityLogs.entity} ILIKE ${containsLikePattern(search)})`
-    );
+    conditions.push(sql`(${activityLogSearchText(activityLogs)}) ILIKE ${containsLikePattern(search)}`);
   }
 
   return conditions;
