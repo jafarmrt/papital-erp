@@ -43,9 +43,14 @@ export async function nextTreasuryTransactionNumber(type: 'receipt' | 'payment',
   return `${type === 'receipt' ? 'REC' : 'PAY'}-${String(seqNum).padStart(6, '0')}`;
 }
 
-/** V1.4.0: ردیف هم‌ارز حساب است تا مانده‌ها معنادار بمانند؛ حساب بی ارز هر ارزی را می‌پذیرد */
+const currencyKey = (currency: string) => currency.trim().toUpperCase();
+
+/**
+ * V1.4.0: ردیف هم‌ارز حساب است تا مانده‌ها معنادار بمانند؛ حساب بی ارز هر ارزی را می‌پذیرد. کد ارز بی‌توجه به بزرگی و
+ * کوچکی حروف سنجیده می‌شود، چون تنخواه قدیمی با ارز ذخیره‌شده «irr» پیش از این راه یگانه پذیرفته می‌شد.
+ */
 export function assertBankCurrency(bank: TreasuryBank, currency: string): void {
-  if (bank.currency && currency !== bank.currency) {
+  if (bank.currency && currencyKey(currency) !== currencyKey(bank.currency)) {
     throw new ValidationError(`ارز تراکنش (${currency}) با ارز حساب «${bank.title}» (${bank.currency}) هم‌خوانی ندارد. تراکنش هم‌ارز ثبت کنید.`);
   }
 }
