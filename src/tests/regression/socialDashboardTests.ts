@@ -30,7 +30,7 @@ export async function runSocialDashboardTests(shouldRun: ShouldRun): Promise<Tes
       'v10.2 package 9: presence lists only «online» or «today» and nothing else; each user turns their presence and birthday off for themselves, with an audit row (TD-1300)',
       ['social', 'users', 'personnel'], cleaned(presenceCase)],
     ['reg_social_whats_new_td_1300',
-      'v10.2 package 9: «تازه‌های این نسخه» shows the current version\'s changelog entry until the user dismisses it; another version is refused (TD-1300)',
+      'v10.2 package 9: the what\'s-new card shows the current version\'s changelog entry until the user dismisses it; another version is refused (TD-1300)',
       ['social', 'changelog'], cleaned(whatsNewCase)],
   ]);
 }
