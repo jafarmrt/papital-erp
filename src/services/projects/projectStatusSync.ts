@@ -5,7 +5,8 @@ import { NotFoundError } from '../../errors/customErrors.js';
 import { logMatrixStatusChange } from './projectAudit.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { nextVersion } from '../../lib/occHelper.js';
-import { matrixProjectStatus } from '../../lib/projects/projectStatus.js';
+import { hasMatrixProducts } from '../../lib/projects/progressMatrix.js';
+import { matrixProjectStatus, workSyncHoldsProject, workSyncProjectStatus, workSyncStageStatus } from '../../lib/projects/projectStatus.js';
 import { loadProjectProgressMatrix } from './projectProgressMatrix.js';
 
 type ProjectRow = typeof productionProjects.$inferSelect;
@@ -68,14 +69,17 @@ export async function syncProjectFromMatrix(tx: DbExecutor, project: ProjectRow,
   const stages: SyncedStage[] = [];
 
   for (const [index, stg] of rawStages.entries()) {
-    const { applicableCount, completedCount } = matrix.stageCounts[index];
+    const { applicableCount, completedCount, percent: matrixPercent } = matrix.stageCounts[index];
     let percent = Number(stg.progressPercent || 0);
     let status = stg.status || 'pending';
     if (applicableCount > 0) {
-      percent = Math.round((completedCount / applicableCount) * 100);
+      // 10.2 package 12 (D6, ت۴۲ الف): the percent counts the schedule work of cells not yet ticked; only ticks complete,
+      // and only a tick unblocks a blocked stage (work alone leaves it blocked, review M1 of the delta)
+      percent = matrixPercent;
       status = completedCount === applicableCount ? 'completed'
         : completedCount > 0 ? 'in_progress'
-        : stg.status === 'blocked' ? 'blocked' : 'pending';
+        : stg.status === 'blocked' ? 'blocked'
+        : matrixPercent > 0 ? 'in_progress' : 'pending';
     }
     if (completedCount > 0 || percent > 0) anyProgress = true;
     if (status !== 'completed') allStagesCompleted = false;
@@ -99,4 +103,43 @@ export async function syncProjectFromMatrix(tx: DbExecutor, project: ProjectRow,
   }
 
   return { project: current, stages, weightedProgress: matrix.weightedProgress };
+}
+
+/**
+ * 10.2 package 12, item 3 (D6, owner decision ت۴۲ الف): a work log linked to a workshop schedule row was written,
+ * deleted, moved or given another quantity, so each project's stage percents are synced in the log's transaction, under
+ * the project row lock (already held by the schedule link). A deleted project is skipped, and so is a project without a
+ * progress matrix, whose stages the work never reaches (their status stays the stage form's). Registered for the
+ * piecework package by the composition root (`registerScheduleProgressSync`).
+ *
+ * Review H1: a log never decides a project's course (`workSyncHoldsProject`, `workSyncStageStatus`,
+ * `workSyncProjectStatus`). A completed, cancelled or paused project is left as it is; elsewhere a completed stage keeps
+ * its percent, status and completion time, a blocked stage stays blocked, a waiting stage with work starts and a planned
+ * project with progress starts. Completing, reopening and unblocking stay with the matrix tick and the forms.
+ */
+export async function syncProjectsAfterScheduleWork(tx: DbExecutor, projectIds: readonly number[], actor: ProjectActor = {}): Promise<void> {
+  for (const projectId of [...projectIds].sort((a, b) => a - b)) {
+    const [project] = await tx.select().from(productionProjects)
+      .where(and(eq(productionProjects.id, projectId), eq(productionProjects.isDeleted, 0)))
+      .for('update');
+    if (project && hasMatrixProducts(project) && !workSyncHoldsProject(project.status)) await syncProjectWork(tx, project, actor);
+  }
+}
+
+async function syncProjectWork(tx: DbExecutor, project: ProjectRow, actor: ProjectActor): Promise<void> {
+  const { stages, matrix } = await loadProjectProgressMatrix(tx, project);
+  let anyProgress = matrix.weightedProgress > 0;
+  for (const [index, stg] of stages.entries()) {
+    const { applicableCount, completedCount, percent } = matrix.stageCounts[index];
+    if (completedCount > 0 || percent > 0) anyProgress = true;
+    if (applicableCount === 0 || stg.status === 'completed') continue;
+    const status = workSyncStageStatus(stg.status, percent);
+    if (stg.progressPercent !== percent || stg.status !== status) {
+      await tx.update(projectStages).set({ progressPercent: percent, status }).where(eq(projectStages.id, stg.id));
+    }
+  }
+  const nextStatus = workSyncProjectStatus(project.status, anyProgress);
+  if (nextStatus === project.status) return;
+  await tx.update(productionProjects).set({ status: nextStatus, version: nextVersion(project.version) }).where(eq(productionProjects.id, project.id));
+  await logMatrixStatusChange(tx, actor, project, nextStatus, matrix);
 }

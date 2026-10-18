@@ -8,6 +8,8 @@
  * انتخاب خودش را دارد. کلید هر خانه «شناسه کالا | شماره مرحله» است.
  */
 
+import { workPercent, workProgressOf, type WorkProgress } from '../workshop/scheduleWorkProgress';
+
 export const PRODUCT_PROGRESS_STATUSES = ['pending', 'in_progress', 'completed', 'blocked'] as const;
 export type ProductProgressStatus = typeof PRODUCT_PROGRESS_STATUSES[number];
 
@@ -34,6 +36,18 @@ export interface MatrixProgressRow {
   updatedByName?: string | null;
 }
 
+/**
+ * 10.2 package 12, item 3 (D6, owner decision ت۴۲ الف): one workshop schedule row of a matrix cell, with its planned and
+ * done quantity (`scheduleWorkProgress.ts`); the loader maps the row's stage and product keys to the cell.
+ */
+export interface MatrixWorkRow {
+  itemId: number;
+  stageOrder: number;
+  unit: string;
+  planned: number;
+  done: number;
+}
+
 export interface MatrixProduct {
   /** شناسه کالای انبار؛ ردیف بی شناسه معتبر در ماتریس خانه‌ای ندارد */
   itemId: number | null;
@@ -50,6 +64,8 @@ export interface MatrixCell {
   status: string;
   updatedAt: string;
   updatedByName: string;
+  /** the cell's schedule work, or null when the cell has no schedule row with a planned quantity */
+  work: WorkProgress | null;
 }
 
 export interface MatrixProductProgress extends MatrixProduct {
@@ -65,6 +81,8 @@ export interface MatrixStageCount {
   title: string;
   completedCount: number;
   applicableCount: number;
+  /** the stage's progress over its products: ticked cells count whole, the others their schedule work */
+  percent: number;
 }
 
 export interface ProgressMatrix {
@@ -127,9 +145,31 @@ export const hasMatrixProducts = (project: MatrixProjectSource): boolean =>
 
 export const matrixCellKey = (itemId: number, stageOrder: number): string => `${itemId}|${stageOrder}`;
 
-export function computeProgressMatrix(products: MatrixProduct[], stages: MatrixStage[], rows: MatrixProgressRow[]): ProgressMatrix {
+/** A cell's share of done work: a ticked cell is whole, any other its schedule work (none = 0). */
+export function cellShare(status: string, work: Pick<WorkProgress, 'share'> | null | undefined): number {
+  if (status === 'completed') return 1;
+  return work ? Math.min(1, Math.max(0, work.share)) : 0;
+}
+
+/**
+ * The percent of a set of cells (a product's stages, or a stage's products): the average share, 100 only when every
+ * cell is ticked, so «۱۰۰٪» always means «تمام» and the completion rules (ticks only) read the same.
+ */
+export function cellsPercent(cells: ReadonlyArray<{ status: string; work?: Pick<WorkProgress, 'share'> | null }>): number {
+  if (cells.length === 0) return 0;
+  if (cells.every(c => c.status === 'completed')) return 100;
+  const share = cells.reduce((acc, c) => acc + cellShare(c.status, c.work), 0) / cells.length;
+  return Math.min(99, workPercent(share));
+}
+
+export function computeProgressMatrix(products: MatrixProduct[], stages: MatrixStage[], rows: MatrixProgressRow[], workRows: readonly MatrixWorkRow[] = []): ProgressMatrix {
   const progress = new Map<string, MatrixProgressRow>();
   for (const r of rows) progress.set(matrixCellKey(Number(r.itemId), Number(r.stageOrder)), r);
+  const workOfCell = new Map<string, MatrixWorkRow[]>();
+  for (const w of workRows) {
+    const key = matrixCellKey(w.itemId, w.stageOrder);
+    workOfCell.set(key, [...(workOfCell.get(key) ?? []), w]);
+  }
 
   const optionalTitles = new Set(products.flatMap(p => p.selectedOptionalStages));
   const allOrders = stages.map(s => s.stageOrder);
@@ -147,6 +187,7 @@ export function computeProgressMatrix(products: MatrixProduct[], stages: MatrixS
         status: row?.status || 'pending',
         updatedAt: row?.updatedAt || '',
         updatedByName: row?.updatedByName || '',
+        work: workProgressOf(workOfCell.get(matrixCellKey(p.itemId as number, s.stageOrder)) ?? []),
       };
     });
     const applicableOrders = applicable.map(s => s.stageOrder);
@@ -157,7 +198,7 @@ export function computeProgressMatrix(products: MatrixProduct[], stages: MatrixS
       excludedOrders: allOrders.filter(o => !applicableOrders.includes(o)),
       cells,
       completedCount,
-      percent: applicableOrders.length > 0 ? Math.round((completedCount / applicableOrders.length) * 100) : 0,
+      percent: cellsPercent(cells),
     };
   });
 
@@ -165,9 +206,12 @@ export function computeProgressMatrix(products: MatrixProduct[], stages: MatrixS
   const totalCells = counted.reduce((acc, p) => acc + p.applicableOrders.length, 0);
   const completedCells = counted.reduce((acc, p) => acc + p.completedCount, 0);
   const totalQty = productRows.reduce((acc, p) => acc + p.quantity, 0);
-  const weightedProgress = totalQty > 0
+  const weighted = totalQty > 0
     ? Math.round(productRows.reduce((acc, p) => acc + p.percent * p.quantity, 0) / totalQty)
     : 0;
+  // 10.2 package 12 (D6): 100 only when every counted product reads 100 (every cell ticked), never by rounding 99.5;
+  // a product row without a warehouse item has no cells and never holds the cap (review N1)
+  const weightedProgress = weighted >= 100 && counted.some(p => p.percent < 100) ? 99 : weighted;
   const isDone = (p: MatrixProductProgress) => p.applicableOrders.length > 0 && p.completedCount === p.applicableOrders.length;
 
   return {
@@ -178,11 +222,15 @@ export function computeProgressMatrix(products: MatrixProduct[], stages: MatrixS
     weightedProgress,
     fullyCompletedProducts: productRows.filter(isDone).length,
     allProductsDone: counted.length > 0 && counted.every(isDone),
-    stageCounts: stages.map(s => ({
-      stageOrder: s.stageOrder,
-      title: s.title,
-      applicableCount: counted.filter(p => p.applicableOrders.includes(s.stageOrder)).length,
-      completedCount: counted.filter(p => p.cells.some(c => c.stageOrder === s.stageOrder && c.status === 'completed')).length,
-    })),
+    stageCounts: stages.map(s => {
+      const stageCells = counted.flatMap(p => p.cells.filter(c => c.stageOrder === s.stageOrder));
+      return {
+        stageOrder: s.stageOrder,
+        title: s.title,
+        applicableCount: counted.filter(p => p.applicableOrders.includes(s.stageOrder)).length,
+        completedCount: counted.filter(p => p.cells.some(c => c.stageOrder === s.stageOrder && c.status === 'completed')).length,
+        percent: cellsPercent(stageCells),
+      };
+    }),
   };
 }
