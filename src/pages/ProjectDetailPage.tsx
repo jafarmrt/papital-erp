@@ -27,7 +27,7 @@ type DirtySetter = (dirty: boolean) => void;
 /**
  * v10.2.1 (10.2 package 2, production projects review U1–U6): a production project is a page, `/projects/<id>/<tab>`,
  * instead of a window over the project list. The address names the tab, so a reload or a copied link opens the same
- * tab and a later notification can link to one; an earlier link with the old tab names still lands on the right one.
+ * tab and a later notification can link to one; a caller still naming a tab of the window before 10.2 lands on the right one.
  * The step bar says where the project stands; a tab with an unsaved change is marked, and leaving it (another tab, the
  * list, a menu link, the browser's back button, the search or a notification, closing the browser tab) asks first. Only the tab on screen is mounted, so each one starts from the
  * project as the server last saved it.
@@ -44,7 +44,8 @@ export default function ProjectDetailPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const projectVersion = useProjectVersion(project);
   const [dirtyTabs, setDirtyTabs] = useState<ReadonlySet<ProjectWorkspaceTab>>(new Set());
-  const editingSpecs = canEdit && tab === 'overview' && searchParams.get('edit') === '1';
+  const [specsOpen, setSpecsOpen] = useState(false);
+  const editingSpecs = canEdit && tab === 'overview' && specsOpen;
 
   const personnelQuery = usePersonnelListQuery();
   const itemsQuery = useProjectItemOptions(tab === 'materials' || tab === 'delivery');
@@ -55,6 +56,24 @@ export default function ProjectDetailPage() {
     if (projectId === null || params.tab === undefined || params.tab === tab) return;
     void navigate({ pathname: projectWorkspacePath(projectId, tab), search: tab === 'overview' ? searchParams.toString() : '' }, { replace: true });
   }, [navigate, params.tab, projectId, searchParams, tab]);
+
+  /*
+   * `?edit=1` (the list's edit button, the header from another tab) only opens the specs editor; the address then drops
+   * it at once, before anything is unsaved (review M-A). Kept in the address, a save or a cancel replaced the guard's
+   * extra history entry and left the `?edit=1` entry under it, so «back» opened the editor again and then asked about
+   * changes nobody made.
+   */
+  useEffect(() => {
+    if (searchParams.get('edit') !== '1') return;
+    setSpecsOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete('edit');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (tab !== 'overview') setSpecsOpen(false);
+  }, [tab]);
 
   const loadProject = useCallback(async (signal?: AbortSignal) => {
     if (projectId === null) return;
@@ -115,11 +134,11 @@ export default function ProjectDetailPage() {
       void navigate(`${projectWorkspacePath(projectId, 'overview')}?edit=1`, leaveNavigateOptions());
       return;
     }
-    // replaced, not pushed: while the form is open «back» is the unsaved-changes question, not a silent close
-    setSearchParams({ edit: '1' }, { replace: true });
+    // no history entry of its own: while the form is open «back» is the unsaved-changes question, not a silent close
+    setSpecsOpen(true);
   };
 
-  const closeSpecs = useCallback(() => setSearchParams({}, { replace: true }), [setSearchParams]);
+  const closeSpecs = useCallback(() => setSpecsOpen(false), []);
 
   const steps = useMemo(
     () => (project ? projectSteps(project, stepCounts.data ?? null, stepCounts.isError) : []),

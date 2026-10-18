@@ -133,7 +133,7 @@ describe('project step bar (10.2 package 2, U4)', () => {
   // review M4 / L3: a remittance of the project counts as material taken; a failed read and a stopped project say so
   it('counts project remittances, says a failed read and marks a stopped project', () => {
     const issued = projectSteps(project, { ...steps, allocations: { open: 1, consumed: 0, issueDocuments: 2 } });
-    expect(issued[3].note).toBe('۱ تخصیص و ۲ حواله از انبار');
+    expect(issued[3].note).toBe('۱ تخصیص و ۲ حواله یا ضایعات از انبار');
     expect(issued[3].state).not.toBe('todo');
     expect(projectSteps(project, null, true)[2].note).toBe('خوانده نشد');
     expect(projectInactiveNote('cancelled')).toBe(CANCELLED_NOTE);

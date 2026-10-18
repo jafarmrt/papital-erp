@@ -13,7 +13,7 @@ vi.mock('../../hooks/queries', () => ({
   useDeleteNotificationMutation: () => ({ mutate: vi.fn() }),
 }));
 
-import { GUARD_ENTRY_KEY, confirmLeaveIfDirty, leaveNavigateOptions, useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
+import { GUARD_ENTRY_KEY, LEAVE_BACK_WAIT_MS, confirmLeaveIfDirty, leaveNavigateOptions, useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
 import NotificationBell from '../../components/NotificationBell';
 
 // the browser's own traversal is left out: each test reads what the guard asked for
@@ -85,6 +85,36 @@ describe('unsaved changes guard (10.2 package 2)', () => {
     // a second pop while leaving does not ask again
     popState();
     expect(confirmAction).toHaveBeenCalledTimes(2);
+  });
+
+  // delta review L-A: a second back while the question is open leaves; the late answer then moves nothing
+  it('ignores the answer of a question still open when the page went away', async () => {
+    let answer: (value: boolean) => void = () => undefined;
+    confirmAction.mockImplementation(() => new Promise<boolean>(resolve => { answer = resolve; }));
+    const view = renderGuard(true);
+    window.history.replaceState({}, '', window.location.href);
+    popState();
+    await waitFor(() => expect(confirmAction).toHaveBeenCalledTimes(1));
+    view.unmount();
+    const pushSpy = vi.spyOn(window.history, 'pushState');
+    answer(false);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(pushSpy).not.toHaveBeenCalled();
+    expect(onGuardEntry()).toBe(false);
+  });
+
+  // delta review L-B: «بی ذخیره برو» on the first entry of a browser tab cannot go back; the page stays guarded
+  it('keeps guarding when going back finds no earlier entry', async () => {
+    renderGuard(true);
+    window.history.replaceState({}, '', window.location.href);
+    popState();
+    await waitFor(() => expect(backSpy).toHaveBeenCalledTimes(1));
+    // the mocked back goes nowhere, as on a browser tab's first entry
+    await waitFor(() => expect(onGuardEntry()).toBe(true), { timeout: LEAVE_BACK_WAIT_MS * 5 });
+    expect(unloadPrevented()).toBe(true);
+    window.history.replaceState({}, '', window.location.href);
+    popState();
+    await waitFor(() => expect(confirmAction).toHaveBeenCalledTimes(2));
   });
 
   it('ignores a pop that lands on its own extra entry', () => {

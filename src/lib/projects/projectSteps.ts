@@ -118,7 +118,7 @@ export function projectSteps(project: StepProject, answer: ProjectStepCounts | n
   } else {
     const allocated = counts.allocations.open + counts.allocations.consumed;
     const issued = Number(counts.allocations.issueDocuments) || 0;
-    const parts = [allocated > 0 ? `${n(allocated)} تخصیص` : '', issued > 0 ? `${n(issued)} حواله` : ''].filter(Boolean);
+    const parts = [allocated > 0 ? `${n(allocated)} تخصیص` : '', issued > 0 ? `${n(issued)} حواله یا ضایعات` : ''].filter(Boolean);
     allocation = parts.length > 0
       ? { key: 'allocation', label: 'مواد گرفته‌شده', state: 'done', note: `${parts.join(' و ')} از انبار`, tab: 'materials' }
       : { key: 'allocation', label: 'مواد گرفته‌شده', state: finalized ? 'active' : 'todo', note: 'هنوز از انبار گرفته نشده', tab: 'materials' };

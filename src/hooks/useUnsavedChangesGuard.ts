@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { confirmAction } from '../components/ConfirmDialogHost';
 
 /**
@@ -15,7 +15,11 @@ import { confirmAction } from '../components/ConfirmDialogHost';
  *   address on the history (`GUARD_ENTRY_KEY`), so «back» first lands on the page itself and is caught; «می‌مانم»
  *   puts the entry back, «بی ذخیره برو» goes back for real;
  * - code that moves elsewhere itself (the global search, a notification) awaits `confirmLeaveIfDirty()` first and
- *   navigates with `leaveNavigateOptions()`, so the extra entry is replaced instead of left behind.
+ *   navigates with `leaveNavigateOptions()`, so the extra entry is replaced instead of left behind; a router replace
+ *   writes its own history state, so after any move while changes stay unsaved the extra entry is put on again.
+ * A question still open when the page goes away is answered by nobody: its answer is ignored. When «بی ذخیره برو»
+ * finds no earlier entry to go back to (a tab opened on this page), the page stays guarded instead of quietly
+ * dropping its guard.
  * The application uses `BrowserRouter`, which has no navigation blocker, hence this guard.
  */
 export const UNSAVED_CHANGES_TITLE = 'تغییرهای ذخیره‌نشده';
@@ -59,6 +63,9 @@ function pushGuardEntry(): void {
   window.history.pushState({ ...(state && typeof state === 'object' ? state : {}), [GUARD_ENTRY_KEY]: true }, '', window.location.href);
 }
 
+/** how long «بی ذخیره برو» waits for the browser to go back before it counts the page as still open */
+export const LEAVE_BACK_WAIT_MS = 400;
+
 /** how many mounted guards hold unsaved changes right now */
 let dirtyGuards = 0;
 
@@ -74,17 +81,22 @@ export function leaveNavigateOptions(): { replace?: boolean } {
 
 export function useUnsavedChangesGuard(dirty: boolean): void {
   const navigate = useNavigate();
+  const location = useLocation();
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
 
   useEffect(() => {
     if (!dirty) return undefined;
     dirtyGuards += 1;
+    let active = true;
     let leaving = false;
     let asking = false;
+    let wentBack = false;
+    let backTimer: ReturnType<typeof setTimeout> | undefined;
     if (!onGuardEntry()) pushGuardEntry();
 
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!dirtyRef.current) return;
       event.preventDefault();
       // older browsers show their own question only when a value is set
       event.returnValue = '';
@@ -96,22 +108,33 @@ export function useUnsavedChangesGuard(dirty: boolean): void {
       event.preventDefault();
       event.stopPropagation();
       void confirmLeaveUnsaved().then(ok => {
-        if (ok) {
+        if (ok && active) {
           dirtyRef.current = false;
           void navigate(target, leaveNavigateOptions());
         }
       });
     };
     const onPopState = () => {
+      if (leaving) { wentBack = true; return; }
       // «back» left the extra entry and landed on the page itself
-      if (leaving || asking || !dirtyRef.current || onGuardEntry()) return;
+      if (asking || !dirtyRef.current || onGuardEntry()) return;
       asking = true;
       void confirmLeaveUnsaved().then(ok => {
         asking = false;
+        // the page went away while the question was open (review L-A): its answer moves nothing
+        if (!active) return;
         if (ok) {
           leaving = true;
+          wentBack = false;
           dirtyRef.current = false;
           window.history.back();
+          // no earlier entry to go back to (review L-B): the page is still open and still guarded
+          backTimer = setTimeout(() => {
+            if (!active || wentBack) return;
+            leaving = false;
+            dirtyRef.current = true;
+            if (!onGuardEntry()) pushGuardEntry();
+          }, LEAVE_BACK_WAIT_MS);
         } else {
           pushGuardEntry();
         }
@@ -121,6 +144,8 @@ export function useUnsavedChangesGuard(dirty: boolean): void {
     window.addEventListener('popstate', onPopState);
     document.addEventListener('click', onClick, true);
     return () => {
+      active = false;
+      if (backTimer !== undefined) clearTimeout(backTimer);
       dirtyGuards -= 1;
       window.removeEventListener('beforeunload', onBeforeUnload);
       window.removeEventListener('popstate', onPopState);
@@ -129,4 +154,9 @@ export function useUnsavedChangesGuard(dirty: boolean): void {
       if (!leaving && onGuardEntry()) window.history.back();
     };
   }, [dirty, navigate]);
+
+  // a router replace while changes stay unsaved wrote over the extra entry (review M-A): put it on again
+  useEffect(() => {
+    if (dirtyRef.current && !onGuardEntry()) pushGuardEntry();
+  }, [location.key]);
 }

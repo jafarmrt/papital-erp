@@ -638,7 +638,7 @@ export default function ProjectScheduleTab({
           <div className="flex flex-col items-center justify-center py-10 text-slate-400 gap-1.5 text-center">
             <Users className="w-7 h-7 text-slate-300" />
             <p className="font-bold text-slate-600">هیچ مرحله‌ای برای تقسیم کار وجود ندارد</p>
-            <p className="text-[11px]">ابتدا مراحل پروژه را تعریف کنید (از پریست گردش کار در تنظیمات یا افزودن مرحله در تب خلاصه).</p>
+            <p className="text-[11px]">ابتدا مراحل پروژه را تعریف کنید (از مراحل پیش‌فرض پروژه‌ها در تنظیمات یا با «افزودن مرحله» در زبانه «مشخصات و مراحل»).</p>
           </div>
         ) : stages.map((stg) => {
           const isAssemblyStage = stg.title.includes('مونتاژ');
