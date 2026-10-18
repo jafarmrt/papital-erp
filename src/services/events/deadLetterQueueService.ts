@@ -41,6 +41,9 @@ export interface DLQQueryFilters {
   offset?: number;
 }
 
+/** TD-1320: the most dead-letter rows one page reads (the route pages with the same cap) */
+export const DLQ_MAX_LIMIT = 200;
+
 export class DeadLetterQueueService {
 
   /**
@@ -185,7 +188,7 @@ export class DeadLetterQueueService {
    */
   static async getEvents(filters: DLQQueryFilters = {}) {
     try {
-      const limit = Math.min(filters.limit || 50, 200);
+      const limit = Math.min(filters.limit || 50, DLQ_MAX_LIMIT);
       const offset = filters.offset || 0;
 
       const conditions: SQL[] = [];

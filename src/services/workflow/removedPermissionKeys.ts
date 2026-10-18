@@ -22,6 +22,16 @@ export const REPLACED_PERMISSION_KEYS: Readonly<Record<string, string>> = {
   [REMOVED_STOCK_COUNT_START_KEY]: 'audit.apply',
 };
 
+/**
+ * The key a workflow action's stored permission means today: a key removed from the catalog is read as the key that
+ * replaced it (a running instance keeps its snapshot, so it may still ask the removed key), any other key as it is.
+ * An own-property lookup, so a stored text such as `constructor` is never read off the object prototype.
+ */
+export function effectivePermissionKey(stored: string | null | undefined): string {
+  const key = (stored || '').trim();
+  return Object.hasOwn(REPLACED_PERMISSION_KEYS, key) ? REPLACED_PERMISSION_KEYS[key] : key;
+}
+
 const removedKeys = Object.keys(REPLACED_PERMISSION_KEYS);
 const trimmedPermission = sql<string>`btrim(coalesce(${workflowTransitions.requiredPermission}, ''))`;
 

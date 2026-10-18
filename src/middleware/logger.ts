@@ -222,7 +222,7 @@ export const morganMiddleware = morgan(
   }
 );
 
-import { normalizeError } from '../errors/customErrors.js';
+import { normalizeError, type DatabaseErrorLogDetails } from '../errors/customErrors.js';
 
 /**
  * v9.0.450 (TD-625, B01-45, owner rule t9): the terminal line of an error is English. It names the status, the error
@@ -231,7 +231,7 @@ import { normalizeError } from '../errors/customErrors.js';
  * the terminal with the message line replaced the same way; the full stack stays in `errorStack` for the log files.
  */
 export function errorLogEntry(
-  normalized: { message: string; statusCode: number; code?: string; stack?: string },
+  normalized: { message: string; statusCode: number; code?: string; stack?: string; logDetails?: DatabaseErrorLogDetails },
   req: { method?: string; url?: string; originalUrl?: string; user?: { id?: number } },
   traceId?: string,
 ): Record<string, unknown> {
@@ -240,8 +240,12 @@ export function errorLogEntry(
   const englishMessage = normalized.message && !PERSIAN_TEXT.test(normalized.message) ? `: ${normalized.message}` : '';
   const name = /^([A-Za-z_$][\w$]*)/.exec(normalized.stack ?? '')?.[1] ?? 'Error';
   const frames = (normalized.stack ?? '').split('\n').filter(l => /^\s+at /.test(l));
+  // TD-1320: a database error's own reason (SQLSTATE, constraint, table, the database's message) goes to the log only
+  const db = normalized.logDetails;
+  const dbParts = db ? [db.sqlState && `SQLSTATE ${db.sqlState}`, db.table && `table ${db.table}`, db.constraint && `constraint ${db.constraint}`].filter(Boolean) : [];
+  const dbReason = db ? `${dbParts.length > 0 ? ` (${dbParts.join(', ')})` : ''}${db.dbMessage ? `: ${db.dbMessage}` : ''}` : '';
   return {
-    message: [`HTTP ${normalized.statusCode} ${code}`, req.method, route].filter(Boolean).join(' ') + englishMessage,
+    message: [`HTTP ${normalized.statusCode} ${code}`, req.method, route].filter(Boolean).join(' ') + englishMessage + dbReason,
     traceId,
     userId: req.user?.id,
     method: req.method,
@@ -250,7 +254,8 @@ export function errorLogEntry(
     statusCode: normalized.statusCode,
     code: normalized.code,
     userMessage: normalized.message,
-    ...(normalized.statusCode >= 500 && frames.length > 0 ? { stack: [`${name} (${code})${englishMessage}`, ...frames].join('\n') } : {}),
+    ...(db ? { database: db } : {}),
+    ...(normalized.statusCode >= 500 && frames.length > 0 ? { stack: [`${name} (${code})${englishMessage}${dbReason}`, ...frames].join('\n') } : {}),
     errorStack: normalized.stack,
   };
 }
@@ -289,7 +294,7 @@ export const errorHandler = (err: any, req: any, res: any, next: any) => {
   };
 
   if (!isProduction) {
-    if (normalized.stack) responsePayload.stack = normalized.stack;
+    if (normalized.stack && !normalized.internal) responsePayload.stack = normalized.stack;
     if (normalized.details) responsePayload.details = normalized.details;
   } else if (normalized.details && normalized.statusCode < 500) {
     // v9.0.312 (TD-594، B01-14): جزئیات خطای ۴xx (مثل فهرست کالاهای «تحویل بیش از برنامه») در تولید هم فرستاده می‌شود؛

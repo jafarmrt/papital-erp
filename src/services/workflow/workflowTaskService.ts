@@ -16,6 +16,7 @@ import { completedByUserCondition, completedTasksOf, inboxEntityFields } from '.
 import { NotFoundError, ConflictError, ValidationError, ForbiddenError } from '../../errors/customErrors.js';
 import { holdsWorkflowExecuteKey } from '../../lib/permissions/workflowPermissions.js';
 import { OPEN_WORKFLOW_INSTANCE_STATUSES } from './transitionRoles.js';
+import { effectivePermissionKey } from './removedPermissionKeys.js';
 
 /** v9.0.34 (TD-444): کاربر کارتابل و مجوزهایی که موتور برای او و تفویض‌کنندگانش می‌خواند */
 interface TaskSigner {
@@ -370,7 +371,8 @@ export class WorkflowTaskService {
     permissions: string[]
   ): boolean {
     const transition = snapshotTransitionsOf(instance.snapshotDsl)?.find(t => t.id === task.transitionId);
-    const required = (transition?.requiredPermission || '').trim();
+    // the engine's rule (`holdsRequiredPermission`): a removed key asks the key that replaced it
+    const required = effectivePermissionKey(transition?.requiredPermission);
     if (required && !isSystemAdminRole(role) && !permissions.includes(required)) return false;
     const roles = WorkflowTaskService.taskRolesOf(task);
     return roles.length === 0 || roles.some(r => WorkflowTransitionExecutor.checkUserRoleMatch(role, r === 'all' ? 'ALL' : r));
