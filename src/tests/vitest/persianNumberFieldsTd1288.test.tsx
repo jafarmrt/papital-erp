@@ -238,7 +238,7 @@ describe('TD-1288 number and amount fields show Persian digits and Persian thous
     expect(input.value).toBe(SHOWN.million);
   });
 
-  it('the amount field refuses a typed separator outside three-digit groups and keeps the amount', () => {
+  it('the amount field keeps a typed separator outside three-digit groups on the field as an error, never as thousands', () => {
     const onChange = vi.fn();
     function Host() {
       const [amount, setAmount] = useState(0);
@@ -248,18 +248,21 @@ describe('TD-1288 number and amount fields show Persian digits and Persian thous
     const input = screen.getByRole('textbox') as HTMLInputElement;
     for (const key of ['1', '2']) typeAtEnd(input, key);
     expect(onChange).toHaveBeenLastCalledWith(12);
-    // the amount field refuses the key (TD-666): «٬» does not appear, the amount stays 12 and the field says why
+    // v10.2.2 (TD-1291): like the number field, «٬» stays where it was typed with an error and the amount is empty (0)
     typeAtEnd(input, '٬');
     expect(screen.getByRole('alert')).toBeTruthy();
-    expect(input.value).toBe(SHOWN.twelve);
-    expect(onChange).toHaveBeenLastCalledWith(12);
-    // «۱۲٬۵» pasted at once was 125 on v10.1.70; now it is refused and the amount stays 12
+    expect(input.value).toBe(`${SHOWN.twelve}٬`);
+    expect(onChange).toHaveBeenLastCalledWith(0);
+    expect(input.validity.valid).toBe(false);
+    // «۱۲٬۵» pasted at once was 125 on v10.1.70; it stays on the field as an error
     fireEvent.change(input, { target: { value: SHOWN.typedGroupAfterTwelve } });
     expect(onChange).not.toHaveBeenCalledWith(125);
-    expect(onChange).toHaveBeenLastCalledWith(12);
+    expect(input.value).toBe(SHOWN.typedGroupAfterTwelve);
+    expect(onChange).toHaveBeenLastCalledWith(0);
     // the amount copied from the app, with its separators and currency, is read in full
     fireEvent.change(input, { target: { value: SHOWN.copiedAmount } });
     expect(onChange).toHaveBeenLastCalledWith(1250000);
+    expect(input.validity.valid).toBe(true);
     expect(readAmountText('12,5', { scale: 0, allowNegative: false }).ok).toBe(false);
     expect(readAmountText(SHOWN.typedGroupAfterTwelve, { scale: 0, allowNegative: false }).ok).toBe(false);
     expect(readAmountText('1,250,000', { scale: 0, allowNegative: false })).toEqual({ ok: true, text: '1250000', value: 1250000 });
@@ -315,7 +318,8 @@ describe('TD-1288 number and amount fields show Persian digits and Persian thous
   });
 
   it('the invoice page takes its date, currencies and number fields from the shared fields', () => {
-    const page = readFileSync(join(SRC, 'pages/CreateInvoicePage.tsx'), 'utf8');
+    const page = ['pages/CreateInvoicePage.tsx', 'components/invoices/create/InvoiceHeaderFields.tsx', 'components/invoices/create/InvoiceLinePicker.tsx']
+      .map(file => readFileSync(join(SRC, file), 'utf8')).join('\n');
     expect(page).toContain('<JalaliDateInput');
     expect(page).toContain('TREASURY_CURRENCIES.map(');
     expect(page).not.toMatch(/<option value="(IRR|USD|EUR|AED|GBP)">/);

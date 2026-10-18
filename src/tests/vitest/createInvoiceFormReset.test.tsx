@@ -5,6 +5,13 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import CreateInvoicePage from '../../pages/CreateInvoicePage';
 import type { User } from '../../types';
+import { INVOICE_STATUS_LABELS } from '../../components/invoices/create/InvoiceHeaderFields';
+import { INVOICE_BUYER_TEXT } from '../../components/invoices/create/InvoiceBuyerFields';
+import { INVOICE_LINE_TEXT } from '../../components/invoices/create/InvoiceLinePicker';
+
+/** Persian texts of the invoice form the test reads (v10.2.2: options without emoji) */
+const CENTRAL_WAREHOUSE = 'انبار مرکزی';
+const CASH_CUSTOMER_OPTION = /^مشتری نقدی \(/;
 
 // TD-789 (B08-20): پاک کردن فرم فاکتور فروش همه فیلدها را به مقدار آغازین برمی‌گرداند، پرونده فروش مسیریابی فقط به سند
 // تازه همان بار می‌رسد و این فرم سند غیرفروش را ویرایش یا ثبت نمی‌کند
@@ -95,9 +102,9 @@ async function editProforma(ref: string) {
   await waitFor(() => expect(toast.success).toHaveBeenCalledWith(`پیش‌فاکتور شماره ${ref} جهت ویرایش بارگذاری شد.`));
 }
 
-const statusSelect = () => screen.getByRole('option', { name: /پیش فاکتور \(رزرو موقت\)/ }).closest('select') as HTMLSelectElement;
+const statusSelect = () => screen.getByRole('option', { name: INVOICE_STATUS_LABELS.proforma }).closest('select') as HTMLSelectElement;
 const currencySelect = () => screen.getByRole('option', { name: 'ریال' }).closest('select') as HTMLSelectElement;
-const warehouseSelect = () => screen.getByRole('option', { name: '📦 انبار مرکزی' }).closest('select') as HTMLSelectElement;
+const warehouseSelect = () => screen.getByRole('option', { name: CENTRAL_WAREHOUSE }).closest('select') as HTMLSelectElement;
 
 window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
 
@@ -150,14 +157,14 @@ describe('CreateInvoicePage — cancelling an edit puts every field back to its 
     expect(statusSelect().value).toBe('final');
     expect(await screen.findByDisplayValue('INV-1001')).toBeTruthy();
 
-    fireEvent.click(screen.getByText('-- جهت انتخاب خریدار، کلیک کرده یا نام/تلفن وی را تایپ کنید --'));
-    fireEvent.click(await screen.findByText(/👤 مشتری نقدی/));
-    fireEvent.click(screen.getByText('انتخاب کالا / ماده اولیه'));
+    fireEvent.click(screen.getByText(INVOICE_BUYER_TEXT.placeholder));
+    fireEvent.click(await screen.findByText(CASH_CUSTOMER_OPTION));
+    fireEvent.click(screen.getByText(INVOICE_LINE_TEXT.itemPlaceholder));
     fireEvent.click(await screen.findByText(/^P-3 - گردنبند نقره/));
     const inputOf = (label: string) => screen.getByText(label).parentElement!.querySelector('input') as HTMLInputElement;
     fireEvent.change(inputOf('تعداد'), { target: { value: '2' } });
     fireEvent.change(inputOf('مبلغ واحد (ریال)'), { target: { value: '1000000' } });
-    fireEvent.click(screen.getByText('افزودن به فهرست'));
+    fireEvent.click(screen.getByText(INVOICE_LINE_TEXT.add));
     fireEvent.click(screen.getByRole('button', { name: 'ثبت و صدور فاکتور' }));
     await waitFor(() => expect(bodiesOf('POST', '/documents')).toHaveLength(1));
     const body = bodiesOf('POST', '/documents')[0];
