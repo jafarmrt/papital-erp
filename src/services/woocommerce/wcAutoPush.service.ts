@@ -7,9 +7,9 @@ import { ADVISORY_LOCK_KEYS, withAdvisoryLock } from '../../lib/advisoryLock.js'
 import { invalidateSettingsCache } from '../../lib/memoryCache.js';
 import { serverTimestampToUtcIso } from '../../lib/serverTimestamp.js';
 import { logger } from '../../middleware/logger.js';
-import { WC_LIST_LIMIT, WC_PUSH_DEADLINE_MS, type WcCatalogItem } from '../../lib/woocommerce/wcCatalog.js';
+import { WC_LIST_LIMIT, WC_PUSH_DEADLINE_MS, WC_PUSH_MIN_BUDGET_MS, type WcCatalogItem } from '../../lib/woocommerce/wcCatalog.js';
 import {
-  autoPushBackoffMinutes, isAutoPushOn, WC_AUTO_FULL_PASS_MS, WC_AUTO_MAX_LINK_FAILURES, WC_AUTO_PUSH_INTERVAL_MS,
+  autoPushBackoffMinutes, isAutoPushOn, orderReadBudgetMs, WC_AUTO_FULL_PASS_MS, WC_AUTO_MAX_LINK_FAILURES, WC_AUTO_PUSH_INTERVAL_MS,
   WC_AUTO_PUSH_MAX_PRODUCTS, WC_AUTO_PUSH_SETTING_KEY, type WcAutoPushView,
 } from '../../lib/woocommerce/wcAutoPush.js';
 import { requireWcConnection } from './wcClient.js';
@@ -106,24 +106,25 @@ async function auditFailure(failedRunsBefore: number, message: string): Promise<
 async function autoPushLocked(failedRunsBefore: number, options: AutoPushRunOptions, now: number): Promise<AutoPushOutcome> {
   const maxProducts = options.maxProducts ?? WC_AUTO_PUSH_MAX_PRODUCTS;
   const marks = takeDueMarks();
-  const all = await liveLinks();
-  const tracked = all.filter(l => l.siteManageStock === 1 && l.failureCount < WC_AUTO_MAX_LINK_FAILURES);
-  if (tracked.length === 0) return { state: 'nothing' };
-  // review M-3: once an hour every tracked link is compared, whatever moved (an order that arrived between the order
-  // reading and the push of an earlier run, a refund or a cancellation the program did not follow)
-  const fullPass = now - lastFullPassAt >= WC_AUTO_FULL_PASS_MS;
-  const itemIds = [...new Set(tracked.map(l => l.itemId))];
-  // a first look without the shop: nothing moved and nothing marked, nothing is asked of the shop
-  const before = await siteStocks(itemIds, [], all);
-  const due = fullPass ? tracked
-    : tracked.filter(l => isMarkedDue(marks, l) || isDue(l, before.sellable.get(l.itemId) ?? 0));
-  if (due.length === 0) return { state: 'nothing' };
-
   const deadline = new AbortController();
   const timer = setTimeout(() => deadline.abort(), WC_PUSH_DEADLINE_MS);
+  // delta review N-3: everything after the marks were taken is inside the try, so a database error puts them back
   try {
+    const all = await liveLinks();
+    const tracked = all.filter(l => l.siteManageStock === 1 && l.failureCount < WC_AUTO_MAX_LINK_FAILURES);
+    if (tracked.length === 0) return { state: 'nothing' };
+    // review M-3: once an hour every tracked link is compared, whatever moved (an order that arrived between the order
+    // reading and the push of an earlier run, a refund or a cancellation the program did not follow)
+    const fullPass = now - lastFullPassAt >= WC_AUTO_FULL_PASS_MS;
+    const itemIds = [...new Set(tracked.map(l => l.itemId))];
+    // a first look without the shop: nothing moved and nothing marked, nothing is asked of the shop
+    const before = await siteStocks(itemIds, [], all);
+    const due = fullPass ? tracked
+      : tracked.filter(l => isMarkedDue(marks, l) || isDue(l, before.sellable.get(l.itemId) ?? 0));
+    if (due.length === 0) return { state: 'nothing' };
+
     const conn = await requireWcConnection();
-    const orders = await readOpenOrders(conn, deadline.signal);
+    const orders = await readOpenOrders(conn, deadline.signal, orderReadBudgetMs(WC_PUSH_DEADLINE_MS, WC_PUSH_MIN_BUDGET_MS));
     const dueItems = [...new Set(due.map(l => l.itemId))];
     const { sellable, wanted } = await siteStocks(dueItems, orders, all);
     if (fullPass) lastFullPassAt = now;

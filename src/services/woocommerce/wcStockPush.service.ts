@@ -5,8 +5,9 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import {
-  chunked, pushBudgetMs, refreshBudgetMs, siteStockQuantity, WC_LIST_LIMIT, WC_PUSH_DEADLINE_MS,
+  chunked, pushBudgetMs, refreshBudgetMs, siteStockQuantity, WC_LIST_LIMIT, WC_PUSH_DEADLINE_MS, WC_PUSH_MIN_BUDGET_MS,
 } from '../../lib/woocommerce/wcCatalog.js';
+import { orderReadBudgetMs } from '../../lib/woocommerce/wcAutoPush.js';
 import { shopSellableStocks } from './shopWarehouse.js';
 import { openOrderQuantities, readOpenOrders, type OpenOrder } from './wcOpenOrders.js';
 import { updateLinkRows } from './wcLinkUpdates.js';
@@ -209,13 +210,14 @@ export async function pushStocksLocked(actor: WcActor, options: PushOptions, con
   if (links.length === 0) {
     return { totalItems: 0, syncedCount: 0, failedCount: 0, skippedCount: 0, trackingEnabledCount: 0, errors: [] };
   }
+  const deadlineMs = options.deadlineMs ?? WC_PUSH_DEADLINE_MS;
   const deadline = new AbortController();
-  const timer = setTimeout(() => deadline.abort(), options.deadlineMs ?? WC_PUSH_DEADLINE_MS);
+  const timer = setTimeout(() => deadline.abort(), deadlineMs);
   try {
     // part B: the open orders are read first, then the stock in one snapshot with the order log (`siteStocks`)
     let orders: OpenOrder[];
     try {
-      orders = await readOpenOrders(connection, deadline.signal);
+      orders = await readOpenOrders(connection, deadline.signal, orderReadBudgetMs(deadlineMs, WC_PUSH_MIN_BUDGET_MS));
     } catch (err) {
       await recordFailedRun('stock_push', actor, err, { trigger: options.trigger });
       throw err;

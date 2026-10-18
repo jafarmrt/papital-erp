@@ -195,8 +195,26 @@ export class WooOrderSyncService {
 
     const result = await this.applyOrderStatus(wcOrderId, wcOrder, webhookTopic);
     // 10.2 package 6 (review M-3): after the order's own transaction, its products are compared on the next automatic push
-    markOrderLinesDue(wcOrder.line_items);
+    await this.markOrderDue(wcOrderId, wcOrder);
     return result;
+  }
+
+  /**
+   * The order's products for the next automatic push. An `order.deleted` webhook carries only `{ id }` (delta review N-4),
+   * so its products come from the payload the order log keeps; a failed read only leaves them to the hourly pass.
+   */
+  private static async markOrderDue(wcOrderId: string, wcOrder: WcOrderPayload): Promise<void> {
+    if (Array.isArray(wcOrder.line_items)) {
+      markOrderLinesDue(wcOrder.line_items);
+      return;
+    }
+    try {
+      const [log] = await orm.select({ payload: woocommerceOrderLogs.payload }).from(woocommerceOrderLogs)
+        .where(eq(woocommerceOrderLogs.wcOrderId, wcOrderId)).limit(1);
+      markOrderLinesDue((log?.payload as { line_items?: unknown } | null)?.line_items);
+    } catch (err) {
+      logger.warn({ message: `[WooCommerce] order products not marked for the automatic push: ${err instanceof Error ? err.name : 'unknown error'}` });
+    }
   }
 
   private static applyOrderStatus(wcOrderId: string, wcOrder: WcOrderPayload, webhookTopic?: string): Promise<WcOrderSyncResult> {

@@ -111,6 +111,14 @@ export async function autoPushWebhookAndHourlyCase(h: Harness, wrong: string[]):
       if (minute.state !== 'nothing' || store.pushed.size > 0) wrong.push(`within the hour the run was ${minute.state}`);
       const hourly = await runAutoPushOnce(later(61));
       if (hourly.state !== 'pushed' || store.pushed.get(pid) !== 6) wrong.push(`the hourly pass was ${hourly.state} and sent ${store.pushed.get(pid)}, expected 6`);
+
+      // delta review N-4: the first order is deleted in the shop; its webhook carries only the id, and its products come
+      // from the order log, so the next minute (not the hourly pass) gives the shop its 3 back
+      store.orders.splice(store.orders.findIndex(o => o.id === Number(orderIds[0])), 1);
+      await WooOrderSyncService.handleOrder({ id: orderIds[0] } as Parameters<typeof WooOrderSyncService.handleOrder>[0], 'order.deleted');
+      store.pushed.clear();
+      const deleted = await runAutoPushOnce(later(63));
+      if (deleted.state !== 'pushed' || store.pushed.get(pid) !== 9) wrong.push(`after the order.deleted webhook the run was ${deleted.state} and sent ${store.pushed.get(pid)}, expected 9`);
       return 'webhook and hourly pass';
     } finally {
       await h.q(`DELETE FROM woocommerce_order_logs WHERE wc_order_id = ANY($1)`, [orderIds]);
@@ -174,8 +182,85 @@ export async function autoPushRunPurgeCase(h: Harness, wrong: string[]): Promise
     const deleted = await purgeOldAutoRuns();
     const kept = (await h.q(`SELECT id FROM wc_sync_runs WHERE id = ANY($1)`, [rows.map(r => r.id)])).map(r => Number(r.id));
     if (deleted !== 1 || kept.includes(Number(rows[0].id)) || kept.length !== 3) wrong.push(`the purge deleted ${deleted} and kept ${JSON.stringify(kept)}`);
+    // delta review N-6: a purge that throws never skips the others of the day
+    const { OperationalPurgeService } = await import('../../services/events/operationalPurge.service.js');
+    let laterRan = false;
+    OperationalPurgeService.register('n6Throws', () => Promise.reject(new Error('n6 purge failure')));
+    OperationalPurgeService.register('n6Later', () => { laterRan = true; return Promise.resolve(0); });
+    try {
+      const day = await OperationalPurgeService.purgeOnce();
+      if (!day.failed.includes('n6Throws') || !laterRan) wrong.push(`a failing purge: failed ${JSON.stringify(day.failed)}, the next one ran ${laterRan}`);
+    } catch (err) {
+      wrong.push(`a failing purge stopped the daily run: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      OperationalPurgeService.unregister('n6Throws');
+      OperationalPurgeService.unregister('n6Later');
+    }
     const server = fs.readFileSync(path.join(process.cwd(), 'server.ts'), 'utf8');
     if (!/OperationalPurgeService\.register\('wcAutoPushRuns', \(\) => purgeOldAutoRuns\(\)\)/.test(server)) wrong.push('server.ts does not register the purge with the daily operational purge');
     return 'old automatic runs purged';
   });
+}
+
+/**
+ * Delta review M-2 / N-2: an order that leaves a read page while another joins keeps the shop's count and the number of
+ * orders read the same, and one order at a page edge is never read; page 1 read again at the end shows the move and the
+ * run fails with nothing sent. A reading slower than its budget fails too, leaving the push its part of the deadline.
+ */
+export async function autoPushOrderPageEdgeCase(h: Harness, wrong: string[]): Promise<string> {
+  const a = await newItem(h, 'PE', { '': 10 });
+  const pid = Number(`84${h.tag}`);
+  return withAutoOn(h, () => withShop(h, [{ id: pid, sku: a.code, stock: 2 }], async (store) => {
+    const refresh = await h.post('/api/woocommerce/refresh-products', {});
+    if (refresh.status !== 200) return `refresh ${brief(refresh)}`;
+    const { runAutoPushOnce } = await auto();
+    const moveBeforePage2 = (leave: number, join: MockOrder) => {
+      let done = false;
+      store.beforeOrdersPage = (page) => {
+        if (page !== 2 || done) return;
+        done = true;
+        store.orders.splice(store.orders.findIndex(o => o.id === leave), 1);
+        store.orders.push(join);
+      };
+    };
+    // the reviewer's probe: 100 orders of another product and order 1101 holding 4 of this one; 1050 leaves and 1102 joins
+    for (let i = 1001; i <= 1100; i++) store.orders.push(onHold(i, 999));
+    store.orders.push(onHold(1101, pid, 4));
+    moveBeforePage2(1050, onHold(1102, 999));
+    const newest = await runAutoPushOnce();
+    if (newest.state !== 'failed' || store.pushed.size > 0) wrong.push(`an order joining while one left made the run ${newest.state} and sent ${JSON.stringify([...store.pushed])}`);
+
+    // newest first: an older order that turns on hold joins after the page edge while one on page 1 leaves
+    store.orders.length = 0;
+    for (let i = 1002; i <= 1101; i++) store.orders.push(onHold(i, 999));
+    store.orders.push(onHold(1001, pid, 4));
+    moveBeforePage2(1050, onHold(999, 999));
+    const older = await runAutoPushOnce(later(2));
+    if (older.state !== 'failed' || store.pushed.size > 0) wrong.push(`an older order joining while one left made the run ${older.state} and sent ${JSON.stringify([...store.pushed])}`);
+
+    // a stable list of two pages: page 1 is read again and the run sends 10 less the 4 order 1001 holds
+    store.beforeOrdersPage = undefined;
+    store.requests.length = 0;
+    store.queries.length = 0;
+    const stable = await runAutoPushOnce(later(6));
+    const reads = store.requests.filter(r => r.startsWith('GET orders'));
+    if (stable.state !== 'pushed' || store.pushed.get(pid) !== 6) wrong.push(`with a stable list the run was ${stable.state} and sent ${store.pushed.get(pid)}, expected 6`);
+    if (reads.length !== 3) wrong.push(`a two-page list was read with ${reads.join(', ')}, expected pages 1, 2 and 1 again`);
+    const query = store.queries.find((_, i) => store.requests[i] === 'GET orders?page=1');
+    if (query?.get('order') !== 'desc') wrong.push(`orders asked in ${query?.get('order')} order, expected newest first`);
+
+    // N-2: a reading slower than its budget fails with its own message
+    const { requireWcConnection } = await import('../../services/woocommerce/wcClient.js');
+    const { readOpenOrders } = await import('../../services/woocommerce/wcOpenOrders.js');
+    store.delayMs = 400;
+    try {
+      await readOpenOrders(await requireWcConnection(), undefined, 100);
+      wrong.push('an order reading slower than its budget did not fail');
+    } catch (err) {
+      if (!/بیش از اندازه طول کشید/.test(err instanceof Error ? err.message : '')) wrong.push(`the slow reading said ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      store.delayMs = undefined;
+    }
+    return 'page edge moves fail closed';
+  }));
 }

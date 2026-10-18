@@ -13,7 +13,8 @@ export interface MockProduct {
   type?: string;
 }
 
-/** part B: an order the shop holds; `GET orders?status=a,b` answers those of the listed statuses, in id order */
+/** part B: an order the shop holds; `GET orders?status=a,b` answers those of the listed statuses, in id order (newest first
+ * with `order=desc`) */
 export interface MockOrder {
   id: number; status: string; lines: Array<{ productId: number; variationId?: number; quantity: number }>;
 }
@@ -151,7 +152,9 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
       if (req.method === 'GET' && path === 'orders') {
         store.beforeOrdersPage?.(Number(url.searchParams.get('page') || 1));
         const statuses = new Set((url.searchParams.get('status') || 'any').split(','));
-        const rows = [...store.orders].sort((a, b) => a.id - b.id).filter(o => statuses.has('any') || statuses.has(o.status));
+        const newestFirst = url.searchParams.get('order') === 'desc';
+        const rows = [...store.orders].sort((a, b) => (newestFirst ? b.id - a.id : a.id - b.id))
+          .filter(o => statuses.has('any') || statuses.has(o.status));
         if (!store.omitTotalHeader) res.setHeader('X-WP-Total', String(rows.length));
         send(page(rows, url, store).map(o => ({
           id: o.id, status: o.status,

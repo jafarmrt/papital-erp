@@ -10,7 +10,7 @@ import { fetchJson } from '../../api';
 import { confirmAction } from '../../components/ConfirmDialogHost';
 import { WcAutoPushPanel } from '../../components/settings/WcAutoPushPanel';
 import {
-  AUTO_PUSH_ENABLE_CONFIRM, autoPushBackoffMinutes, isAutoPushOn, WC_AUTO_MAX_BACKOFF_MINUTES, type WcAutoPushView,
+  AUTO_PUSH_ENABLE_CONFIRM, autoPushBackoffMinutes, BULK_PUSH_OPEN_ORDERS_NOTE, isAutoPushOn, orderReadBudgetMs, WC_AUTO_MAX_BACKOFF_MINUTES, type WcAutoPushView,
 } from '../../lib/woocommerce/wcAutoPush';
 
 vi.mock('../../api', async () => {
@@ -56,6 +56,18 @@ describe('D-04 part B: the automatic push rules', () => {
     expect(isAutoPushOn(undefined)).toBe(false);
     expect(isAutoPushOn('0')).toBe(false);
     expect(isAutoPushOn('true')).toBe(false);
+  });
+});
+
+describe('D-04 part B delta review: the order reading budget and the bulk push note', () => {
+  it('leaves the push its minimum budget, and the reading at least half of a short deadline (N-2)', () => {
+    expect(orderReadBudgetMs(50_000, 5_000)).toBe(45_000);
+    expect(orderReadBudgetMs(6_000, 5_000)).toBe(3_000);
+  });
+
+  it('says a failed completed order is kept off for 30 days and how to stop it (M-1)', () => {
+    expect(BULK_PUSH_OPEN_ORDERS_NOTE).toContain('۳۰ روز');
+    expect(BULK_PUSH_OPEN_ORDERS_NOTE).toContain('دوباره همگام کنید');
   });
 });
 

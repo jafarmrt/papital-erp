@@ -3,7 +3,7 @@ import type { DbExecutor } from '../../db/drizzle.js';
 import { documents, woocommerceOrderLogs } from '../../db/schema.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import { WC_BATCH_SIZE } from '../../lib/woocommerce/wcCatalog.js';
-import { WC_MAX_ORDER_PAGES, WC_OPEN_ORDER_STATUSES } from '../../lib/woocommerce/wcAutoPush.js';
+import { WC_FAILED_ORDER_HOLD_DAYS, WC_MAX_ORDER_PAGES, WC_OPEN_ORDER_STATUSES } from '../../lib/woocommerce/wcAutoPush.js';
 import { formatPersianNumber } from '../../utils/persianNumber.js';
 import { wcListRequest, WC_SHOP_REQUEST_FAILED, type WcConnection } from './wcClient.js';
 
@@ -42,36 +42,59 @@ function tooManyOrders(): ValidationError {
   );
 }
 
+const ORDERS_TOO_SLOW = 'خواندن سفارش‌های باز سایت بیش از اندازه طول کشید و موجودی فرستاده نشد؛ کمی بعد دوباره تلاش می‌شود.';
+
+const moved = () => new ValidationError(ORDERS_MOVED, undefined, WC_SHOP_REQUEST_FAILED);
+
 /**
- * Every open order of the shop, in id order. The reading fails, so nothing is sent with a stock too high, when the list
- * moved while it was read: a page shows an order again, the shop's count (`X-WP-Total`) differs between the first and the
- * last page, or the orders read are not that count (review M-5: an order that left the list between two pages shifts the
- * next page and one order is never read). A first page that counts more open orders than `WC_MAX_ORDER_PAGES` pages fails
- * at once (review M-6). A shop that sends no count is read until a short page, as before.
+ * Every open order of the shop, newest first (delta review M-2: an order that arrives while the list is read lands on
+ * page 1, already read, instead of shifting a later page). The reading fails, so nothing is sent with a stock too high,
+ * when the list moved while it was read: a page shows an order again, the shop's count (`X-WP-Total`) differs between the
+ * first and the last page, the orders read are not that count (review M-5), or, for a list of more than one page, page 1
+ * read again at the end does not show the same orders (an order that left a read page while another joined keeps the
+ * count and would leave one order unread at a page edge). A first page that counts more open orders than
+ * `WC_MAX_ORDER_PAGES` pages fails at once (review M-6). A shop that sends no count is read until a short page.
+ * `budgetMs` (delta review N-2) is the time the reading may take, so the push it feeds keeps its own part of the deadline.
  */
-export async function readOpenOrders(conn: WcConnection, signal?: AbortSignal): Promise<OpenOrder[]> {
+export async function readOpenOrders(conn: WcConnection, signal?: AbortSignal, budgetMs?: number): Promise<OpenOrder[]> {
+  const limit = budgetMs ? AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(budgetMs)]) : signal;
+  const read = async (page: number) => {
+    try {
+      return await wcListRequest(conn, 'orders', {
+        status: WC_OPEN_ORDER_STATUSES.join(','), per_page: WC_BATCH_SIZE, page, orderby: 'id', order: 'desc',
+        _fields: 'id,status,line_items',
+      }, { signal: limit });
+    } catch (err) {
+      if (limit?.aborted && !signal?.aborted) throw new ValidationError(ORDERS_TOO_SLOW, undefined, WC_SHOP_REQUEST_FAILED);
+      throw err;
+    }
+  };
+  const idsOf = (answer: unknown[]) => answer.map(row => asOrder(row)?.id ?? 0).join(',');
   const orders = new Map<number, OpenOrder>();
   let firstTotal: number | null = null;
+  let firstPageIds = '';
   for (let page = 1; page <= WC_MAX_ORDER_PAGES; page++) {
-    const { data: answer, total } = await wcListRequest(conn, 'orders', {
-      status: WC_OPEN_ORDER_STATUSES.join(','), per_page: WC_BATCH_SIZE, page, orderby: 'id', order: 'asc',
-      _fields: 'id,status,line_items',
-    }, { signal });
+    const { data: answer, total } = await read(page);
     if (!Array.isArray(answer)) throw new ValidationError(ORDERS_UNREADABLE, undefined, WC_SHOP_REQUEST_FAILED);
     if (page === 1) {
       firstTotal = total;
+      firstPageIds = idsOf(answer);
       if (total !== null && total > WC_MAX_ORDER_PAGES * WC_BATCH_SIZE) throw tooManyOrders();
     } else if (firstTotal !== null && total !== firstTotal) {
-      throw new ValidationError(ORDERS_MOVED, undefined, WC_SHOP_REQUEST_FAILED);
+      throw moved();
     }
     for (const row of answer) {
       const order = asOrder(row);
       if (!order) continue;
-      if (orders.has(order.id)) throw new ValidationError(ORDERS_MOVED, undefined, WC_SHOP_REQUEST_FAILED);
+      if (orders.has(order.id)) throw moved();
       orders.set(order.id, order);
     }
     if (answer.length < WC_BATCH_SIZE || (firstTotal !== null && page * WC_BATCH_SIZE >= firstTotal)) {
-      if (firstTotal !== null && orders.size !== firstTotal) throw new ValidationError(ORDERS_MOVED, undefined, WC_SHOP_REQUEST_FAILED);
+      if (firstTotal !== null && orders.size !== firstTotal) throw moved();
+      if (page > 1) {
+        const again = await read(1);
+        if (!Array.isArray(again.data) || idsOf(again.data) !== firstPageIds || (firstTotal !== null && again.total !== firstTotal)) throw moved();
+      }
       return [...orders.values()];
     }
   }
@@ -94,7 +117,9 @@ async function invoicedOrderIds(executor: DbExecutor, orderIds: number[]): Promi
 /**
  * Completed orders the program failed to invoice (review M-2 nit): the shop took their stock and the program did not, and
  * they are not open any more, so they come from the order log (status `failed`, no live invoice, the stored order
- * completed) instead of the shop. Once the accountant invoices one (manual order sync), it is no longer kept off.
+ * completed) instead of the shop. Once the accountant invoices one (manual order sync), it is no longer kept off. Only a
+ * log touched in the last `WC_FAILED_ORDER_HOLD_DAYS` days counts (delta review M-1): an older failure was most likely put
+ * right by hand (a sale entered without the order sync), and keeping it off for ever would lower the shop twice.
  */
 async function failedCompletedOrders(executor: DbExecutor, skip: Set<number>): Promise<OpenOrder[]> {
   const rows = await executor.select({ wcOrderId: woocommerceOrderLogs.wcOrderId, payload: woocommerceOrderLogs.payload })
@@ -104,6 +129,7 @@ async function failedCompletedOrders(executor: DbExecutor, skip: Set<number>): P
       eq(woocommerceOrderLogs.status, 'failed'),
       isNull(documents.id),
       sql`lower(${woocommerceOrderLogs.payload}->>'status') = 'completed'`,
+      sql`${woocommerceOrderLogs.updatedAt} >= now() - ${sql.raw(`interval '${WC_FAILED_ORDER_HOLD_DAYS} days'`)}`,
     ));
   return rows
     .map(r => ({ id: Number(r.wcOrderId), status: 'completed', lines: asLines((r.payload as { line_items?: unknown } | null)?.line_items) }))

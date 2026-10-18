@@ -28,6 +28,18 @@ export const WC_OPEN_ORDER_STATUSES = ['on-hold', 'processing'] as const;
  * (`X-WP-Total`) stops the push at once with nothing sent (review M-6)
  */
 export const WC_MAX_ORDER_PAGES = 25;
+/**
+ * a completed order the program failed to invoice is kept off the shop's stock only while its order log was touched in
+ * the last this many days (delta review M-1): an older one was most likely entered by hand and would be counted twice
+ */
+export const WC_FAILED_ORDER_HOLD_DAYS = 30;
+/**
+ * The part of a push's deadline the open order reading may take (delta review N-2): all of it but the push's own minimum
+ * budget, and never less than half, so a long order list fails the run instead of leaving the push no time to send.
+ */
+export function orderReadBudgetMs(deadlineMs: number, minPushBudgetMs: number): number {
+  return Math.max(Math.floor(deadlineMs / 2), deadlineMs - minPushBudgetMs);
+}
 /** every link tracked in the shop is compared once an hour, whatever moved (review M-3) */
 export const WC_AUTO_FULL_PASS_MS = 60 * 60_000;
 /** automatic run rows older than this are removed by the daily operational purge (review c); manual runs stay */
@@ -66,4 +78,6 @@ export const AUTO_PUSH_ENABLE_CONFIRM =
 /** review M-6: the bulk push card says what changed in v10.2.8 */
 export const BULK_PUSH_OPEN_ORDERS_NOTE =
   'از این نسخه، موجودی سفارش‌های باز سایت (در انتظار بررسی و در حال انجامی که هنوز فاکتور نشده) از عدد فرستاده‌شده کم می‌شود؛ '
-  + 'اگر سفارش‌های باز سایت خوانده نشود، هیچ موجودی‌ای فرستاده نمی‌شود.';
+  + 'اگر سفارش‌های باز سایت خوانده نشود، هیچ موجودی‌ای فرستاده نمی‌شود. '
+  + 'سفارش تکمیل‌شده‌ای هم که فاکتورش در برنامه ثبت نشد تا ۳۰ روز کم می‌شود؛ اگر فروش آن را دستی ثبت کرده‌اید، '
+  + 'سفارش را از فهرست سفارش‌ها دوباره همگام کنید تا دو بار کم نشود.';

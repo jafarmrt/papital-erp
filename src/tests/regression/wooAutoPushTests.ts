@@ -134,7 +134,7 @@ export async function autoPushOpenOrdersCase(h: Harness, wrong: string[]): Promi
     const invoice = await createTestDocument({ type: 'invoice', status: 'final' });
     const onHoldInvoice = await createTestDocument({ type: 'invoice', status: 'final' });
     const voided = await createTestDocument({ type: 'invoice', status: 'final', isDeleted: 1 });
-    const ids = [1, 2, 3, 4, 5, 6, 7, 8].map(n => Number(`7${h.tag}${n}`));
+    const ids = [1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => Number(`7${h.tag}${n}`));
     store.orders.push(
       { id: ids[0], status: 'pending', lines: [{ productId: pid, quantity: 2 }, { productId: parent, variationId: variation, quantity: 1 }] },
       { id: ids[1], status: 'on-hold', lines: [{ productId: pid, quantity: 1 }] },
@@ -145,11 +145,18 @@ export async function autoPushOpenOrdersCase(h: Harness, wrong: string[]): Promi
       { id: ids[6], status: 'on-hold', lines: [{ productId: pid, quantity: 2 }] },
     );
     const failedPayload = { id: ids[7], status: 'completed', line_items: [{ product_id: pid, variation_id: 0, quantity: 2 }] };
+    // delta review M-1: a completed order that failed 700 days ago (most likely entered by hand since) is not kept off
+    const oldFailedPayload = { id: ids[8], status: 'completed', line_items: [{ product_id: pid, variation_id: 0, quantity: 4 }] };
     await h.q(
       `INSERT INTO woocommerce_order_logs (wc_order_id, erp_document_id, status, payload) VALUES
        ($1, $2, 'processed', NULL), ($3, $4, 'processed', NULL), ($5, $6, 'processed', NULL), ($7, NULL, 'failed', $8::jsonb)`,
       [String(ids[3]), invoice.document.id, String(ids[4]), voided.document.id, String(ids[6]), onHoldInvoice.document.id,
         String(ids[7]), JSON.stringify(failedPayload)],
+    );
+    await h.q(
+      `INSERT INTO woocommerce_order_logs (wc_order_id, erp_document_id, status, payload, created_at, updated_at)
+       VALUES ($1, NULL, 'failed', $2::jsonb, now() - interval '700 days', now() - interval '700 days')`,
+      [String(ids[8]), JSON.stringify(oldFailedPayload)],
     );
     try {
       await h.q(`INSERT INTO app_settings (key, value) VALUES ($1, '1')`, [AUTO_KEY]);
@@ -158,7 +165,8 @@ export async function autoPushOpenOrdersCase(h: Harness, wrong: string[]): Promi
       await setStock(h, v.id, 6);
       const run = await runAutoPushOnce();
       // 12 less on-hold 1, processing without invoice 3, processing whose invoice was voided 1 and the completed order whose
-      // invoice failed 2 = 5; the pending order, the invoiced processing and on-hold orders and the completed one are not kept off
+      // invoice failed 2 = 5; the pending order, the invoiced processing and on-hold orders, the completed one and the completed
+      // order whose invoice failed 700 days ago are not kept off
       if (store.pushed.get(pid) !== 5) wrong.push(`the shop got ${store.pushed.get(pid)} for the product, expected 5 (run ${JSON.stringify(run)})`);
       // the variation's stock did not move in the program, and its only order is pending: nothing to correct
       if (store.pushed.has(variation)) wrong.push(`a variation whose stock did not move got ${store.pushed.get(variation)}`);

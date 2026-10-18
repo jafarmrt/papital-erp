@@ -10,6 +10,8 @@ export interface OperationalPurgeResult {
   outboxEvents: number;
   /** rows each registered purge removed, by its name */
   others: Record<string, number>;
+  /** the purges that failed this run (delta review N-6: one failure never skips the others) */
+  failed: string[];
 }
 
 /** A purge another package registers from the composition root (`server.ts`), so this package imports none of them */
@@ -30,13 +32,28 @@ export class OperationalPurgeService {
     this.registered.set(name, purge);
   }
 
-  /** One purge; deletes run outside any transaction, each its own statement. */
+  /** test hook: removes a registered purge */
+  static unregister(name: string): void {
+    this.registered.delete(name);
+  }
+
+  /** One purge; deletes run outside any transaction, each its own statement, and each purge on its own. */
   static async purgeOnce(): Promise<OperationalPurgeResult> {
-    const idempotencyKeys = await IdempotencyService.cleanupExpired();
-    const outboxEvents = await OutboxService.purgeProcessedEvents(OUTBOX_COMPLETED_RETENTION_DAYS);
+    const failed: string[] = [];
+    const attempt = async (name: string, purge: RegisteredPurge): Promise<number> => {
+      try {
+        return await purge();
+      } catch (err) {
+        failed.push(name);
+        logger.error(`[Operational purge] ${name} failed: ${err instanceof Error ? err.message : String(err)}`);
+        return 0;
+      }
+    };
+    const idempotencyKeys = await attempt('idempotencyKeys', () => IdempotencyService.cleanupExpired());
+    const outboxEvents = await attempt('outboxEvents', () => OutboxService.purgeProcessedEvents(OUTBOX_COMPLETED_RETENTION_DAYS));
     const others: Record<string, number> = {};
-    for (const [name, purge] of this.registered) others[name] = await purge();
-    return { idempotencyKeys, outboxEvents, others };
+    for (const [name, purge] of this.registered) others[name] = await attempt(name, purge);
+    return { idempotencyKeys, outboxEvents, others, failed };
   }
 
   /** One purge at a time across processes (advisory lock 91100); a concurrent run returns null. */
