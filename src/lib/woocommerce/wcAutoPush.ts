@@ -17,12 +17,21 @@ export const WC_AUTO_PUSH_MAX_PRODUCTS = 500;
 export const WC_AUTO_MAX_BACKOFF_MINUTES = 30;
 
 /**
- * Orders the shop has already taken stock for and the program has not (plan question ق۶): pending payment, on hold, and
- * processing orders whose invoice is not in the program yet. Their quantities are kept off the stock sent to the shop.
+ * Orders the shop has already taken stock for and the program has not (plan question ق۶): on-hold orders and processing
+ * orders whose invoice is not in the program yet. Their quantities are kept off the stock sent to the shop. A pending
+ * (unpaid) order is left out (review M-1): WooCommerce lowers no stock for it (its checkout hold is the shop's own
+ * reserved stock), so keeping it off would leave the shop too low once the order is cancelled.
  */
-export const WC_OPEN_ORDER_STATUSES = ['pending', 'on-hold', 'processing'] as const;
-/** pages of open orders read at most (100 orders each); more open orders than this stop the run with nothing sent */
-export const WC_MAX_ORDER_PAGES = 10;
+export const WC_OPEN_ORDER_STATUSES = ['on-hold', 'processing'] as const;
+/**
+ * pages of open orders read at most (100 orders each); a shop whose first page says it holds more open orders than this
+ * (`X-WP-Total`) stops the push at once with nothing sent (review M-6)
+ */
+export const WC_MAX_ORDER_PAGES = 25;
+/** every link tracked in the shop is compared once an hour, whatever moved (review M-3) */
+export const WC_AUTO_FULL_PASS_MS = 60 * 60_000;
+/** automatic run rows older than this are removed by the daily operational purge (review c); manual runs stay */
+export const WC_AUTO_RUN_RETENTION_DAYS = 30;
 
 /** Minutes to wait after `failedRuns` automatic runs failed in a row: 1, 2, 4 … at most `WC_AUTO_MAX_BACKOFF_MINUTES` */
 export function autoPushBackoffMinutes(failedRuns: number): number {
@@ -36,7 +45,8 @@ export function isAutoPushOn(value: unknown): boolean {
 
 export interface WcAutoPushView {
   enabled: boolean;
-  /** the last automatic run that sent something or failed (a run with nothing to send leaves no row) */
+  /** the last automatic run that sent something or failed (a run with nothing to send leaves no row); `partial` when the
+   * shop refused some products (shown as a warning, never as a success) */
   lastRun: WcRunView | null;
   /** automatic runs that failed in a row, and when the next one may run (UTC, with a Z) */
   failedRuns: number;
@@ -52,3 +62,8 @@ export interface WcAutoPushView {
 export const AUTO_PUSH_ENABLE_CONFIRM =
   'با روشن شدن ارسال خودکار، هر دقیقه موجودی قابل فروش کالاهای وصل‌شده (منهای سفارش‌های باز سایت) به سایت می‌رود. '
   + 'پیش از روشن کردن، شمارش انبار انجام شده باشد تا عدد درست به سایت برود. فقط محصولاتی که ردیابی موجودی آن‌ها در سایت روشن است به‌روز می‌شوند. روشن شود؟';
+
+/** review M-6: the bulk push card says what changed in v10.2.7 */
+export const BULK_PUSH_OPEN_ORDERS_NOTE =
+  'از این نسخه، موجودی سفارش‌های باز سایت (در انتظار بررسی و در حال انجامی که هنوز فاکتور نشده) از عدد فرستاده‌شده کم می‌شود؛ '
+  + 'اگر سفارش‌های باز سایت خوانده نشود، هیچ موجودی‌ای فرستاده نمی‌شود.';

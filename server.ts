@@ -18,6 +18,7 @@ import { MessengerUpdatePoller } from './src/services/messenger/messengerUpdateP
 import { FormDraftService } from './src/services/drafts/formDraft.service.js';
 import { OperationalPurgeService } from './src/services/events/operationalPurge.service.js';
 import { WcAutoPushService } from './src/services/woocommerce/wcAutoPush.service.js';
+import { purgeOldAutoRuns } from './src/services/woocommerce/wcSyncRunPurge.js';
 import { pool, getDatabaseMode } from './src/db/drizzle.js';
 import { decideProcessErrorAction, processErrorMessage } from './src/lib/processErrorPolicy.js';
 import { REQUEST_TIMEOUT_MS } from './src/lib/media/mediaRules.js';
@@ -84,7 +85,9 @@ async function startServer() {
     WorkflowSlaReminderService.start(60_000);
     // v9.0.306 (TD-676): daily soft cleanup of expired form drafts
     FormDraftService.startCleanup();
-    // OBS-R2-10: daily purge of expired idempotency keys and completed outbox events older than 90 days
+    // OBS-R2-10: daily purge of expired idempotency keys and completed outbox events older than 90 days; 10.2 package 6:
+    // and of the automatic WooCommerce stock push runs older than 30 days
+    OperationalPurgeService.register('wcAutoPushRuns', () => purgeOldAutoRuns());
     OperationalPurgeService.start();
     // 10.2 package 6 (D-04 part B): the automatic stock push to the online shop, a run a minute while its setting is on
     WcAutoPushService.start();

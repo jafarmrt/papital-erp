@@ -2,18 +2,20 @@ import { and, asc, desc, eq, gte, ne, sql, type SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { appSettings, items, wcProductLinks, wcSyncRuns } from '../../db/schema.js';
 import { logActivity } from '../../lib/auditLogger.js';
+import { AppError } from '../../errors/customErrors.js';
 import { ADVISORY_LOCK_KEYS, withAdvisoryLock } from '../../lib/advisoryLock.js';
 import { invalidateSettingsCache } from '../../lib/memoryCache.js';
 import { serverTimestampToUtcIso } from '../../lib/serverTimestamp.js';
 import { logger } from '../../middleware/logger.js';
 import { WC_LIST_LIMIT, WC_PUSH_DEADLINE_MS, type WcCatalogItem } from '../../lib/woocommerce/wcCatalog.js';
 import {
-  autoPushBackoffMinutes, isAutoPushOn, WC_AUTO_MAX_LINK_FAILURES, WC_AUTO_PUSH_INTERVAL_MS, WC_AUTO_PUSH_MAX_PRODUCTS,
-  WC_AUTO_PUSH_SETTING_KEY, type WcAutoPushView,
+  autoPushBackoffMinutes, isAutoPushOn, WC_AUTO_FULL_PASS_MS, WC_AUTO_MAX_LINK_FAILURES, WC_AUTO_PUSH_INTERVAL_MS,
+  WC_AUTO_PUSH_MAX_PRODUCTS, WC_AUTO_PUSH_SETTING_KEY, type WcAutoPushView,
 } from '../../lib/woocommerce/wcAutoPush.js';
 import { requireWcConnection } from './wcClient.js';
 import { autoRunCondition, liveLinks, recordFailedRun, runView, type WcActor } from './wcCatalog.service.js';
 import { readOpenOrders } from './wcOpenOrders.js';
+import { forgetDueMarks, isMarkedDue, markLinksDue, restoreDueMarks, takeDueMarks } from './wcAutoPushDue.js';
 import { recordOutcomes, sendStocks, siteStocks, type WcStockPushResult } from './wcStockPush.service.js';
 
 /**
@@ -23,9 +25,12 @@ import { recordOutcomes, sendStocks, siteStocks, type WcStockPushResult } from '
  * products whose number moved (sellable less open orders, plan question ق۶). It runs after the stock write has committed and
  * never inside it, so a shop that is slow or down never delays or refuses a document. Only products whose stock tracking is
  * already on in the shop are sent (no `manage_stock` field), a link that failed `WC_AUTO_MAX_LINK_FAILURES` times in a row
- * is left out until a manual push succeeds, at most `WC_AUTO_PUSH_MAX_PRODUCTS` go in one run, and a failed run waits
- * 1, 2, 4 … 30 minutes before the next. One exchange with the shop at a time: a run that finds the `WOOCOMMERCE_SYNC` lock
- * taken skips its turn.
+ * is left out until a manual push succeeds, at most `WC_AUTO_PUSH_MAX_PRODUCTS` go in one run, and a run that failed for
+ * the shop (not for one refused product) waits 1, 2, 4 … 30 minutes before the next. The products an order webhook names
+ * are compared on the next run whatever moved, and once an hour (and first after a start) every tracked link is (review
+ * M-3), so an order that came between an earlier run's order reading and its push, a refund or a cancellation is put
+ * right; a stock changed by hand in the shop is put right only by the nightly catalog refresh (TD-1294 part C). One
+ * exchange with the shop at a time: a run that finds the `WOOCOMMERCE_SYNC` lock taken skips its turn.
  */
 type Link = Awaited<ReturnType<typeof liveLinks>>[number];
 
@@ -40,10 +45,14 @@ const SYSTEM_ACTOR: WcActor = {};
  * stock changes (a manual push or a catalog refresh read another number), the link is compared with its shop stock instead
  */
 const settled = new Map<number, { sellable: number; siteStock: number | null }>();
+/** When the last hourly pass over every tracked link read the shop's orders (0 after a start: the first run is one) */
+let lastFullPassAt = 0;
 
-/** test hook: forget what was settled, as after a restart */
+/** test hook: forget what was settled, the hourly pass and the marks, as after a restart */
 export function forgetSettledLinks(): void {
   settled.clear();
+  lastFullPassAt = 0;
+  forgetDueMarks();
 }
 
 function isDue(link: Link, sellable: number): boolean {
@@ -71,15 +80,43 @@ async function backoffState(): Promise<{ failedRuns: number; nextAttemptAt: Date
   return { failedRuns, nextAttemptAt: new Date(last.getTime() + autoPushBackoffMinutes(failedRuns) * 60_000) };
 }
 
+export interface AutoPushRunOptions {
+  /** the most products one run sends (`WC_AUTO_PUSH_MAX_PRODUCTS`; a test passes a small cap) */
+  maxProducts?: number;
+}
+
+/**
+ * An automatic failure's audit row (review c): only the first failure of a streak, so a shop that stays down writes one
+ * row, not one per attempt; the run rows keep every attempt
+ */
+async function auditFailure(failedRunsBefore: number, message: string): Promise<void> {
+  if (failedRunsBefore > 0) return;
+  try {
+    await orm.transaction(tx => logActivity({
+      tx, action: 'WC_STOCK_PUSH', entity: 'فروشگاه اینترنتی', entityId: WC_AUTO_PUSH_SETTING_KEY,
+      description: `ارسال خودکار موجودی به سایت ناموفق بود: ${message.slice(0, 300)}`,
+      details: { trigger: 'auto', failed: true },
+    }));
+  } catch (err) {
+    logger.warn(`[WooCommerce auto push] failure not audited: ${err instanceof Error ? err.name : 'unknown error'}`);
+  }
+}
+
 /** One automatic run, for a caller holding the `WOOCOMMERCE_SYNC` lock */
-async function autoPushLocked(): Promise<AutoPushOutcome> {
+async function autoPushLocked(failedRunsBefore: number, options: AutoPushRunOptions, now: number): Promise<AutoPushOutcome> {
+  const maxProducts = options.maxProducts ?? WC_AUTO_PUSH_MAX_PRODUCTS;
+  const marks = takeDueMarks();
   const all = await liveLinks();
   const tracked = all.filter(l => l.siteManageStock === 1 && l.failureCount < WC_AUTO_MAX_LINK_FAILURES);
   if (tracked.length === 0) return { state: 'nothing' };
+  // review M-3: once an hour every tracked link is compared, whatever moved (an order that arrived between the order
+  // reading and the push of an earlier run, a refund or a cancellation the program did not follow)
+  const fullPass = now - lastFullPassAt >= WC_AUTO_FULL_PASS_MS;
   const itemIds = [...new Set(tracked.map(l => l.itemId))];
-  // a first look without the shop: nothing moved, nothing is asked of the shop
+  // a first look without the shop: nothing moved and nothing marked, nothing is asked of the shop
   const before = await siteStocks(itemIds, [], all);
-  const due = tracked.filter(l => isDue(l, before.sellable.get(l.itemId) ?? 0));
+  const due = fullPass ? tracked
+    : tracked.filter(l => isMarkedDue(marks, l) || isDue(l, before.sellable.get(l.itemId) ?? 0));
   if (due.length === 0) return { state: 'nothing' };
 
   const deadline = new AbortController();
@@ -89,18 +126,28 @@ async function autoPushLocked(): Promise<AutoPushOutcome> {
     const orders = await readOpenOrders(conn, deadline.signal);
     const dueItems = [...new Set(due.map(l => l.itemId))];
     const { sellable, wanted } = await siteStocks(dueItems, orders, all);
+    if (fullPass) lastFullPassAt = now;
     const rows = due.map(link => ({ link, quantity: wanted.get(link.itemId) ?? 0, sellable: sellable.get(link.itemId) ?? 0 }));
     // a link whose shop stock is already right is settled without a request (an open order the shop already took off)
     for (const r of rows.filter(x => x.quantity === x.link.siteStock)) settled.set(r.link.id, { sellable: r.sellable, siteStock: r.link.siteStock });
-    const toSend = rows.filter(r => r.quantity !== r.link.siteStock).slice(0, WC_AUTO_PUSH_MAX_PRODUCTS);
+    const differing = rows.filter(r => r.quantity !== r.link.siteStock);
+    const toSend = differing.slice(0, maxProducts);
+    // the rest go on the next run, whatever their sellable stock does meanwhile
+    markLinksDue(differing.slice(maxProducts).map(r => r.link.id));
     if (toSend.length === 0) return { state: 'nothing' };
     const outcomes = await sendStocks(conn, toSend, { signal: deadline.signal, setManageStock: false });
     const result = await recordOutcomes(outcomes, tracked.length - toSend.length, tracked.length, SYSTEM_ACTOR, 'auto');
     const sellableOf = new Map(toSend.map(r => [r.link.id, r.sellable]));
     for (const o of outcomes.filter(x => !x.error)) settled.set(o.link.id, { sellable: sellableOf.get(o.link.id) ?? 0, siteStock: o.quantity });
-    return { state: result.syncedCount === 0 && result.failedCount > 0 ? 'failed' : 'pushed', result };
+    // a product the shop refused is tried again on each run until it stops (`WC_AUTO_MAX_LINK_FAILURES`); one the request
+    // never reached goes on the next run even when it was due only for the hourly pass
+    markLinksDue(outcomes.filter(o => o.error && o.requestFailed).map(o => o.link.id));
+    if (result.status === 'failed') await auditFailure(failedRunsBefore, result.errors[0] ?? '');
+    return { state: result.status === 'failed' ? 'failed' : 'pushed', result };
   } catch (err) {
+    restoreDueMarks(marks);
     await recordFailedRun('stock_push', SYSTEM_ACTOR, err, { trigger: 'auto' });
+    await auditFailure(failedRunsBefore, err instanceof AppError && err.statusCode < 500 ? err.message : 'ارتباط با سایت ناموفق بود.');
     return { state: 'failed' };
   } finally {
     clearTimeout(timer);
@@ -109,11 +156,11 @@ async function autoPushLocked(): Promise<AutoPushOutcome> {
 }
 
 /** One automatic run: off, waiting after failures, the lock taken by another exchange, or the run itself */
-export async function runAutoPushOnce(now: Date = new Date()): Promise<AutoPushOutcome> {
+export async function runAutoPushOnce(now: Date = new Date(), options: AutoPushRunOptions = {}): Promise<AutoPushOutcome> {
   if (!(await isAutoPushEnabled())) return { state: 'off' };
-  const { nextAttemptAt } = await backoffState();
+  const { failedRuns, nextAttemptAt } = await backoffState();
   if (nextAttemptAt && nextAttemptAt.getTime() > now.getTime()) return { state: 'waiting' };
-  const outcome = await withAdvisoryLock(ADVISORY_LOCK_KEYS.WOOCOMMERCE_SYNC, () => autoPushLocked());
+  const outcome = await withAdvisoryLock(ADVISORY_LOCK_KEYS.WOOCOMMERCE_SYNC, () => autoPushLocked(failedRuns, options, now.getTime()));
   return outcome.acquired ? outcome.result : { state: 'busy' };
 }
 

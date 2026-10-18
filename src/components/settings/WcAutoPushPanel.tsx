@@ -47,17 +47,21 @@ export function WcAutoPushPanel({ view, canManage }: { view: WcAutoPushView; can
         )}
       </div>
       <p className="text-xs text-slate-600 leading-relaxed">
-        هر دقیقه موجودی قابل فروش کالاهایی که تغییر کرده، منهای سفارش‌های باز سایت، به محصولات وصل‌شده فرستاده می‌شود. ردیابی
-        موجودی هیچ محصولی در سایت خودکار روشن نمی‌شود.
+        هر دقیقه موجودی قابل فروش کالاهایی که تغییر کرده، منهای سفارش‌های باز سایت، به محصولات وصل‌شده فرستاده می‌شود و هر ساعت
+        همه محصولات دوباره سنجیده می‌شوند. ردیابی موجودی هیچ محصولی در سایت خودکار روشن نمی‌شود.
       </p>
       <div className="text-xs text-slate-700">
         <span className="font-medium">آخرین ارسال خودکار: </span>
         {run?.at ? (
           <>
             {formatPersianDateTime(run.at)}{' '}
-            {run.status === 'failed'
-              ? <span className="text-rose-700">(ناموفق){run.error && ` ${run.error}`}</span>
-              : <span className="text-emerald-700">({formatPersianNumber(Number(run.summary.syncedCount) || 0)} محصول به‌روز شد)</span>}
+            {run.status === 'failed' && <span className="text-rose-700">(ناموفق){run.error && ` ${run.error}`}</span>}
+            {run.status === 'partial' && (
+              <span className="text-amber-700">
+                ({formatPersianNumber(Number(run.summary.syncedCount) || 0)} محصول به‌روز شد، {formatPersianNumber(Number(run.summary.failedCount) || 0)} محصول را سایت نپذیرفت)
+              </span>
+            )}
+            {run.status === 'ok' && <span className="text-emerald-700">({formatPersianNumber(Number(run.summary.syncedCount) || 0)} محصول به‌روز شد)</span>}
           </>
         ) : 'هنوز انجام نشده'}
       </div>
@@ -68,7 +72,7 @@ export function WcAutoPushPanel({ view, canManage }: { view: WcAutoPushView; can
       )}
       <WcItemList
         title="محصولاتی که ردیابی موجودی آن‌ها در سایت خاموش است"
-        hint="ارسال خودکار به این محصولات چیزی نمی‌فرستد. ردیابی موجودی را در سایت روشن کنید و محصولات را دوباره بازخوانی کنید، یا یک بار «ارسال موجودی همه کالاها» را بزنید."
+        hint="ارسال خودکار به این محصولات چیزی نمی‌فرستد. ردیابی موجودی را در سایت روشن کنید و محصولات را دوباره بازخوانی کنید، یا یک بار «همگام‌سازی موجودی کل کالاها با سایت» را بزنید."
         rows={view.untracked} total={view.untrackedTotal} tone="slate"
       />
       <WcItemList

@@ -44,6 +44,20 @@ interface BatchAnswerRow { id?: unknown; error?: { message?: unknown } }
  * leaves the link's failure count alone, so a shop that is down never stops every product */
 export interface Outcome { link: Link; quantity: number; error: string; requestFailed?: boolean }
 
+/** answers that say the shop or the connection failed, not the products of the batch (review M-4) */
+const SHOP_LEVEL_STATUSES = new Set([401, 403, 408, 429]);
+
+/**
+ * Whether a failed batch request failed for the shop (no answer, a timeout, a redirect, 5xx, 401/403, 408, 429) rather than
+ * for its products. Any other 4xx (400, 404: a product or a parent removed in the shop) is the products': each counts it,
+ * so a batch the shop keeps refusing stops after `WC_AUTO_MAX_LINK_FAILURES` instead of holding every run back.
+ */
+export function isShopLevelFailure(err: unknown): boolean {
+  const status = (err instanceof ValidationError ? (err.details as { status?: unknown } | undefined)?.status : undefined);
+  if (typeof status !== 'number') return true;
+  return status < 400 || status >= 500 || SHOP_LEVEL_STATUSES.has(status);
+}
+
 function answerRows(answer: unknown): BatchAnswerRow[] {
   const rows = (answer as { update?: unknown } | null)?.update;
   return Array.isArray(rows) ? rows as BatchAnswerRow[] : [];
@@ -82,7 +96,8 @@ async function pushBatch(
     });
   } catch (err) {
     const message = err instanceof ValidationError ? err.message : 'ارتباط با سایت ناموفق بود.';
-    return rows.map(r => ({ link: r.link, quantity: r.quantity, error: message.slice(0, 300), requestFailed: true }));
+    const requestFailed = isShopLevelFailure(err);
+    return rows.map(r => ({ link: r.link, quantity: r.quantity, error: message.slice(0, 300), requestFailed }));
   }
 }
 
@@ -124,12 +139,22 @@ export async function siteStocks(itemIds: number[], orders: OpenOrder[], mapLink
 }
 
 /**
+ * A run failed when nothing it sent arrived; an automatic run fails only for the shop (review M-4): a run whose products
+ * were all refused one by one is `partial`, so one rejected product never makes every later run wait
+ */
+function runStatus(outcomes: Outcome[], failedCount: number, trigger: PushOptions['trigger']): 'ok' | 'partial' | 'failed' {
+  if (failedCount === 0) return 'ok';
+  if (failedCount < outcomes.length) return 'partial';
+  return trigger !== 'auto' || outcomes.some(o => o.requestFailed) ? 'failed' : 'partial';
+}
+
+/**
  * Records the outcomes on the links, the run row and one audit row (counts only), in one transaction. In an automatic run a
  * failure of the request itself (`requestFailed`) is recorded on the link without counting against it
  */
 export async function recordOutcomes(
   outcomes: Outcome[], skippedCount: number, totalItems: number, actor: WcActor, trigger: PushOptions['trigger'],
-): Promise<WcStockPushResult> {
+): Promise<WcStockPushResult & { status: 'ok' | 'partial' | 'failed' }> {
   const now = systemNowUtcIso();
   const failed = outcomes.filter(o => o.error);
   const errors = failed.map(o => `${o.link.siteSku || `#${o.link.wcProductId}`}: ${o.error}`);
@@ -138,6 +163,7 @@ export async function recordOutcomes(
     totalItems, syncedCount: outcomes.length - failed.length, failedCount: failed.length, skippedCount, trackingEnabledCount,
     errors: errors.slice(0, WC_LIST_LIMIT),
   };
+  let status: 'ok' | 'partial' | 'failed' = 'ok';
   await orm.transaction(async (tx) => {
     // review M-3: one UPDATE per batch of links; the failure count is the one read with the links, under the sync lock
     await updateLinkRows(tx, outcomes.map(o => ({
@@ -146,7 +172,7 @@ export async function recordOutcomes(
         ? { lastError: o.error, failureCount: trigger === 'auto' && o.requestFailed ? o.link.failureCount : o.link.failureCount + 1 }
         : { siteStock: o.quantity, siteManageStock: 1, lastPushedAt: now, lastError: '', failureCount: 0 },
     })), now);
-    const status = failed.length === 0 ? 'ok' : failed.length === outcomes.length ? 'failed' : 'partial';
+    status = runStatus(outcomes, failed.length, trigger);
     await tx.insert(wcSyncRuns).values({
       kind: 'stock_push', status, userId: actorUserId(actor), startedAt: now, finishedAt: now,
       summary: {
@@ -154,14 +180,17 @@ export async function recordOutcomes(
         errors: errors.slice(0, 20),
       },
     });
+    // review (c): an automatic run writes no audit row here; its run row is the record and a failure is audited once per
+    // streak by the automatic push itself
+    if (trigger === 'auto') return;
     await logActivity({
       tx, req: actor.req, action: 'WC_STOCK_PUSH', entity: 'فروشگاه اینترنتی', entityId: '',
-      description: `${trigger === 'auto' ? 'ارسال خودکار موجودی به سایت' : 'ارسال موجودی به سایت'}: ${formatPersianNumber(result.syncedCount)} محصول به‌روز شد، ${formatPersianNumber(result.failedCount)} ناموفق`
+      description: `ارسال موجودی به سایت: ${formatPersianNumber(result.syncedCount)} محصول به‌روز شد، ${formatPersianNumber(result.failedCount)} ناموفق`
         + (trackingEnabledCount > 0 ? `، ردیابی موجودی ${formatPersianNumber(trackingEnabledCount)} محصول روشن شد` : ''),
       details: { trigger, totalItems, syncedCount: result.syncedCount, failedCount: result.failedCount, skippedCount, trackingEnabledCount },
     });
   });
-  return result;
+  return { ...result, status };
 }
 
 export interface PushOptions {

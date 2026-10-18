@@ -16,6 +16,7 @@ import { allocateFeeDiscount } from './feeDiscount.js';
 import { describeOrderChange } from './orderChange.js';
 import { resolveShopWarehouseCode } from './shopWarehouse.js';
 import { resolveItemsByCode } from '../items/itemCodeChange.js';
+import { markOrderLinesDue } from './wcAutoPushDue.js';
 import { oldCodeOrderNote } from '../../lib/items/itemCodeChange.js';
 
 /**
@@ -192,6 +193,13 @@ export class WooOrderSyncService {
       };
     }
 
+    const result = await this.applyOrderStatus(wcOrderId, wcOrder, webhookTopic);
+    // 10.2 package 6 (review M-3): after the order's own transaction, its products are compared on the next automatic push
+    markOrderLinesDue(wcOrder.line_items);
+    return result;
+  }
+
+  private static applyOrderStatus(wcOrderId: string, wcOrder: WcOrderPayload, webhookTopic?: string): Promise<WcOrderSyncResult> {
     const wcStatus = isWcOrderDeletedTopic(webhookTopic) ? 'trash' : String(wcOrder.status || '').trim().toLowerCase();
     if (WC_INVOICEABLE_STATUSES.has(wcStatus)) {
       return this.invoiceOrder(wcOrderId, wcOrder);

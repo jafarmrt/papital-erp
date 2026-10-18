@@ -5,6 +5,9 @@ import type { MockProduct } from '../fixtures/mockWooCatalogStore.js';
 import { brief, linksOf, newItem, withShop } from './wooCatalogTestKit.js';
 import { deadlineAndCapCase, emptyOrUnorderedCase, removedProductAndDeadlinesCase } from './wooCatalogReviewTests.js';
 import { autoPushBoundedFailuresCase, autoPushChangedTrackedCase, autoPushOpenOrdersCase, autoPushSwitchCase } from './wooAutoPushTests.js';
+import {
+  autoPushCapCase, autoPushOrderListMovedCase, autoPushRefusedBatchCase, autoPushRunPurgeCase, autoPushWebhookAndHourlyCase,
+} from './wooAutoPushReviewTests.js';
 import { WC_LIST_LIMIT } from '../../lib/woocommerce/wcCatalog.js';
 
 /**
@@ -47,11 +50,26 @@ export async function runWooCatalogSyncTests(shouldRun: ShouldRun): Promise<Test
       'D-04 part B: an automatic run sends only products whose sellable stock moved and whose stock tracking is already on, never manage_stock, and asks the shop nothing when nothing moved',
       ['d04', 'woocommerce', 'auto'], autoPushChangedTrackedCase],
     ['reg_wc_auto_push_open_orders_d04',
-      'D-04 part B: pending, on-hold and not-yet-invoiced processing orders are kept off the stock the automatic and the manual push send, and unreadable orders stop the push',
+      'D-04 part B: on-hold and processing orders without a live invoice and completed orders whose invoice failed are kept off the stock the automatic and the manual push send, pending and invoiced orders are not, and unreadable orders stop the push',
       ['d04', 'woocommerce', 'auto'], autoPushOpenOrdersCase],
     ['reg_wc_auto_push_bounded_failures_d04',
       'D-04 part B: a shop that is down makes each automatic run wait longer without counting against a product, a product the shop keeps refusing stops after the limit, and a run skips while the lock is taken',
       ['d04', 'woocommerce', 'auto'], autoPushBoundedFailuresCase],
+    ['reg_wc_auto_push_order_list_moved_d04',
+      'D-04 part B review M-5 / M-6: an open order list that changes between two pages, or holds more orders than the cap, stops the push with nothing sent',
+      ['d04', 'woocommerce', 'auto'], autoPushOrderListMovedCase],
+    ['reg_wc_auto_push_webhook_hourly_d04',
+      'D-04 part B review M-3: an order webhook makes its products due on the next run and the hourly pass corrects an order that came without one',
+      ['d04', 'woocommerce', 'auto'], autoPushWebhookAndHourlyCase],
+    ['reg_wc_auto_push_refused_batch_d04',
+      'D-04 part B review M-4: a batch refused for its products (404) counts against each product and stops it after the limit without making the runs wait',
+      ['d04', 'woocommerce', 'auto'], autoPushRefusedBatchCase],
+    ['reg_wc_auto_push_cap_d04',
+      'D-04 part B review d: one automatic run sends at most its cap of products and the rest go on the next run',
+      ['d04', 'woocommerce', 'auto'], autoPushCapCase],
+    ['reg_wc_auto_push_run_purge_d04',
+      'D-04 part B review c: the daily operational purge removes automatic run rows older than 30 days and keeps manual and recent runs',
+      ['d04', 'woocommerce', 'auto'], autoPushRunPurgeCase],
     ['reg_wc_synced_orders_by_log_obs_r2_83',
       'OBS-R2-83: the synced-orders list shows the invoices the order log names, not invoices whose notes mention an online order',
       ['obs_r2_83', 'woocommerce', 'orders'], syncedOrdersCase],

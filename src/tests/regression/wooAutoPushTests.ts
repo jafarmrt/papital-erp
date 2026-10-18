@@ -84,6 +84,7 @@ export async function autoPushChangedTrackedCase(h: Harness, wrong: string[]): P
     await h.q(`INSERT INTO app_settings (key, value) VALUES ($1, '1')`, [AUTO_KEY]);
     const { runAutoPushOnce } = await auto();
     store.requests.length = 0;
+    const [{ mark: auditMark }] = await h.q(`SELECT coalesce(max(id), 0) AS mark FROM activity_logs`);
 
     const first = await runAutoPushOnce();
     if (first.state !== 'pushed' || first.result?.syncedCount !== 1) wrong.push(`first run ${JSON.stringify(first)}, expected one product pushed`);
@@ -107,55 +108,73 @@ export async function autoPushChangedTrackedCase(h: Harness, wrong: string[]): P
     if (view?.lastRun?.summary?.trigger !== 'auto') wrong.push(`the tab's last automatic run ${JSON.stringify(view?.lastRun)}`);
     const lastPush = (catalog.body as { lastPush?: unknown }).lastPush;
     if (lastPush !== null) wrong.push(`an automatic run showed as the last manual push: ${JSON.stringify(lastPush)}`);
+    // review (c): a successful automatic run writes no audit row (its run row is the record)
+    const audits = await h.q(`SELECT id FROM activity_logs WHERE action = 'WC_STOCK_PUSH' AND details->>'trigger' = 'auto' AND id > $1`, [auditMark]);
+    if (audits.length > 0) wrong.push(`successful automatic runs wrote ${audits.length} audit row(s)`);
     return `${store.batchSizes.length} batch requests`;
   }));
 }
 
-/** Pending, on-hold and not-yet-invoiced processing orders are kept off the stock sent, by the automatic and the manual push */
+/**
+ * On-hold and processing orders without a live invoice, and completed orders whose invoice failed, are kept off the stock the
+ * automatic and the manual push send; pending orders (review M-1) and invoiced orders of any status (review M-2) are not
+ */
 export async function autoPushOpenOrdersCase(h: Harness, wrong: string[]): Promise<string> {
   const a = await newItem(h, 'OA', { '': 10 });
   const v = await newItem(h, 'OV', { '': 6 });
-  const products = [{ id: 1, sku: a.code, stock: 10 }, { id: 5, sku: `OPAR_${h.tag}`, variations: [{ id: 51, sku: v.code, stock: 6 }] }];
+  // product ids of this case only, so an order log another case left never matches them
+  const pid = Number(`88${h.tag}`);
+  const parent = pid + 1;
+  const variation = pid + 2;
+  const products = [{ id: pid, sku: a.code, stock: 10 }, { id: parent, sku: `OPAR_${h.tag}`, variations: [{ id: variation, sku: v.code, stock: 6 }] }];
   return withAutoSetting(h, () => withShop(h, products, async (store) => {
     const refresh = await h.post('/api/woocommerce/refresh-products', {});
     if (refresh.status !== 200) return `refresh ${brief(refresh)}`;
     const { createTestDocument } = await import('../fixtures/factories.js');
     const invoice = await createTestDocument({ type: 'invoice', status: 'final' });
+    const onHoldInvoice = await createTestDocument({ type: 'invoice', status: 'final' });
     const voided = await createTestDocument({ type: 'invoice', status: 'final', isDeleted: 1 });
-    const ids = [Number(`7${h.tag}1`), Number(`7${h.tag}2`), Number(`7${h.tag}3`), Number(`7${h.tag}4`), Number(`7${h.tag}5`), Number(`7${h.tag}6`)];
+    const ids = [1, 2, 3, 4, 5, 6, 7, 8].map(n => Number(`7${h.tag}${n}`));
     store.orders.push(
-      { id: ids[0], status: 'pending', lines: [{ productId: 1, quantity: 2 }, { productId: 5, variationId: 51, quantity: 1 }] },
-      { id: ids[1], status: 'on-hold', lines: [{ productId: 1, quantity: 1 }] },
-      { id: ids[2], status: 'processing', lines: [{ productId: 1, quantity: 3 }] },
-      { id: ids[3], status: 'processing', lines: [{ productId: 1, quantity: 4 }] },
-      { id: ids[4], status: 'processing', lines: [{ productId: 1, quantity: 1 }] },
-      { id: ids[5], status: 'completed', lines: [{ productId: 1, quantity: 5 }] },
+      { id: ids[0], status: 'pending', lines: [{ productId: pid, quantity: 2 }, { productId: parent, variationId: variation, quantity: 1 }] },
+      { id: ids[1], status: 'on-hold', lines: [{ productId: pid, quantity: 1 }] },
+      { id: ids[2], status: 'processing', lines: [{ productId: pid, quantity: 3 }] },
+      { id: ids[3], status: 'processing', lines: [{ productId: pid, quantity: 4 }] },
+      { id: ids[4], status: 'processing', lines: [{ productId: pid, quantity: 1 }] },
+      { id: ids[5], status: 'completed', lines: [{ productId: pid, quantity: 5 }] },
+      { id: ids[6], status: 'on-hold', lines: [{ productId: pid, quantity: 2 }] },
     );
-    await h.q(`INSERT INTO woocommerce_order_logs (wc_order_id, erp_document_id, status) VALUES ($1, $2, 'processed'), ($3, $4, 'processed')`,
-      [String(ids[3]), invoice.document.id, String(ids[4]), voided.document.id]);
+    const failedPayload = { id: ids[7], status: 'completed', line_items: [{ product_id: pid, variation_id: 0, quantity: 2 }] };
+    await h.q(
+      `INSERT INTO woocommerce_order_logs (wc_order_id, erp_document_id, status, payload) VALUES
+       ($1, $2, 'processed', NULL), ($3, $4, 'processed', NULL), ($5, $6, 'processed', NULL), ($7, NULL, 'failed', $8::jsonb)`,
+      [String(ids[3]), invoice.document.id, String(ids[4]), voided.document.id, String(ids[6]), onHoldInvoice.document.id,
+        String(ids[7]), JSON.stringify(failedPayload)],
+    );
     try {
       await h.q(`INSERT INTO app_settings (key, value) VALUES ($1, '1')`, [AUTO_KEY]);
       const { runAutoPushOnce } = await auto();
       await setStock(h, a.id, 12);
       await setStock(h, v.id, 6);
       const run = await runAutoPushOnce();
-      // 12 less pending 2, on-hold 1, processing without invoice 3 and processing whose invoice was voided 1 = 5
-      if (store.pushed.get(1) !== 5) wrong.push(`the shop got ${store.pushed.get(1)} for the product, expected 5 (run ${JSON.stringify(run)})`);
-      // the variation's stock did not move in the program: nothing sent for it, its order is the shop's own
-      if (store.pushed.has(51)) wrong.push(`a variation whose stock did not move got ${store.pushed.get(51)}`);
+      // 12 less on-hold 1, processing without invoice 3, processing whose invoice was voided 1 and the completed order whose
+      // invoice failed 2 = 5; the pending order, the invoiced processing and on-hold orders and the completed one are not kept off
+      if (store.pushed.get(pid) !== 5) wrong.push(`the shop got ${store.pushed.get(pid)} for the product, expected 5 (run ${JSON.stringify(run)})`);
+      // the variation's stock did not move in the program, and its only order is pending: nothing to correct
+      if (store.pushed.has(variation)) wrong.push(`a variation whose stock did not move got ${store.pushed.get(variation)}`);
       const query = store.queries.find((_, i) => store.requests[i] === 'GET orders?page=1');
-      if (query?.get('status') !== 'pending,on-hold,processing') wrong.push(`orders asked with status ${query?.get('status')}`);
+      if (query?.get('status') !== 'on-hold,processing') wrong.push(`orders asked with status ${query?.get('status')}`);
 
       await setStock(h, v.id, 9);
-      store.pushed.delete(1);
+      store.pushed.delete(pid);
       await runAutoPushOnce();
-      if (store.pushed.get(51) !== 8) wrong.push(`the variation got ${store.pushed.get(51)}, expected 9 less its pending 1 = 8`);
-      if (store.pushed.has(1)) wrong.push('a product already brought in line was sent again');
+      if (store.pushed.get(variation) !== 9) wrong.push(`the variation got ${store.pushed.get(variation)}, expected 9 (its pending order holds no shop stock)`);
+      if (store.pushed.has(pid)) wrong.push('a product already brought in line was sent again');
 
       // the manual push keeps the same orders off
       store.pushed.clear();
       const manual = await h.post('/api/woocommerce/sync-item', { itemId: a.id });
-      if (manual.status !== 200 || store.pushed.get(1) !== 5) wrong.push(`the manual push sent ${store.pushed.get(1)} (${brief(manual)}), expected 5`);
+      if (manual.status !== 200 || store.pushed.get(pid) !== 5) wrong.push(`the manual push sent ${store.pushed.get(pid)} (${brief(manual)}), expected 5`);
 
       // an order that cannot be read stops the push: nothing is sent with a number too high
       store.failPaths.add('orders');
@@ -182,6 +201,7 @@ export async function autoPushBoundedFailuresCase(h: Harness, wrong: string[]): 
     await h.q(`INSERT INTO app_settings (key, value) VALUES ($1, '1')`, [AUTO_KEY]);
     const { runAutoPushOnce } = await auto();
 
+    const [{ mark: auditMark }] = await h.q(`SELECT coalesce(max(id), 0) AS mark FROM activity_logs`);
     // the shop refuses every batch request: the run fails, the links keep their failure count, the next run waits
     store.failPaths.add('products/batch');
     const down = await runAutoPushOnce();
@@ -190,12 +210,19 @@ export async function autoPushBoundedFailuresCase(h: Harness, wrong: string[]): 
     if (afterDown.get(ok.id)?.failures !== 0 || afterDown.get(ok.id)?.error === '') wrong.push(`a request failure counted against the link: ${JSON.stringify(afterDown.get(ok.id))}`);
     const waiting = await runAutoPushOnce();
     if (waiting.state !== 'waiting') wrong.push(`right after a failed run the next was ${waiting.state}, expected waiting`);
+    const auditsOf = async () => (await h.q(
+      `SELECT id FROM activity_logs WHERE action = 'WC_STOCK_PUSH' AND details->>'trigger' = 'auto' AND (details->>'failed')::boolean AND id > $1`,
+      [auditMark],
+    )).length;
     const second = await runAutoPushOnce(later(1));
     const stillWaiting = await runAutoPushOnce(new Date(Date.now() + 90_000));
     if (second.state !== 'failed' || stillWaiting.state !== 'waiting') wrong.push(`two failures in a row: ${second.state} then ${stillWaiting.state}, expected failed then waiting (2 minutes)`);
     const catalog = await h.get('/api/woocommerce/catalog');
     const view = (catalog.body as { autoPush?: { failedRuns?: number; nextAttemptAt?: string | null } }).autoPush;
     if (view?.failedRuns !== 2 || !view.nextAttemptAt) wrong.push(`the tab shows ${JSON.stringify(view)}, expected two failed runs and the next attempt`);
+    // review (c): the first failure of a streak is audited, not every attempt
+    const failureAudits = await auditsOf();
+    if (failureAudits !== 1) wrong.push(`two failed runs in a row wrote ${failureAudits} audit row(s), expected 1`);
 
     // the shop answers again but keeps refusing one product: it stops after the limit, the other one is never held back
     store.failPaths.delete('products/batch');

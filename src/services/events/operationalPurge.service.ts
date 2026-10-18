@@ -8,7 +8,12 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export interface OperationalPurgeResult {
   idempotencyKeys: number;
   outboxEvents: number;
+  /** rows each registered purge removed, by its name */
+  others: Record<string, number>;
 }
+
+/** A purge another package registers from the composition root (`server.ts`), so this package imports none of them */
+export type RegisteredPurge = () => Promise<number>;
 
 /**
  * OBS-R2-10: daily purge of the operational tables that otherwise grow forever: expired idempotency keys and completed
@@ -18,12 +23,20 @@ export interface OperationalPurgeResult {
  */
 export class OperationalPurgeService {
   private static timer: ReturnType<typeof setInterval> | null = null;
+  private static registered = new Map<string, RegisteredPurge>();
+
+  /** Adds a purge to the daily run (10.2 package 6: the automatic WooCommerce run rows); one per name */
+  static register(name: string, purge: RegisteredPurge): void {
+    this.registered.set(name, purge);
+  }
 
   /** One purge; deletes run outside any transaction, each its own statement. */
   static async purgeOnce(): Promise<OperationalPurgeResult> {
     const idempotencyKeys = await IdempotencyService.cleanupExpired();
     const outboxEvents = await OutboxService.purgeProcessedEvents(OUTBOX_COMPLETED_RETENTION_DAYS);
-    return { idempotencyKeys, outboxEvents };
+    const others: Record<string, number> = {};
+    for (const [name, purge] of this.registered) others[name] = await purge();
+    return { idempotencyKeys, outboxEvents, others };
   }
 
   /** One purge at a time across processes (advisory lock 91100); a concurrent run returns null. */
@@ -37,6 +50,9 @@ export class OperationalPurgeService {
       .then((result) => {
         if (result && (result.idempotencyKeys || result.outboxEvents)) {
           logger.info(`[Operational purge] Deleted ${result.idempotencyKeys} expired idempotency key(s) and ${result.outboxEvents} completed outbox event(s)`);
+        }
+        for (const [name, count] of Object.entries(result?.others ?? {})) {
+          if (count) logger.info(`[Operational purge] ${name}: deleted ${count} row(s)`);
         }
       })
       .catch((err: unknown) => logger.error(`[Operational purge] Purge failed: ${err instanceof Error ? err.message : String(err)}`));

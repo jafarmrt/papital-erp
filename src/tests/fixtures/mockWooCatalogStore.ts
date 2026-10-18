@@ -32,6 +32,12 @@ export interface MockWooCatalogStore {
   failStatus?: number;
   /** request paths (without the API prefix) that answer 500, so one read of a refresh fails */
   failPaths: Set<string>;
+  /** request paths that answer their own status (review M-4: 404 for the variations of a parent removed in the shop) */
+  statusPaths: Map<string, number>;
+  /** called before an orders page is answered, with its page number (review M-5: the list moves between two pages) */
+  beforeOrdersPage?: (page: number) => void;
+  /** the orders list sends no `X-WP-Total` (a shop or a cache that strips it) */
+  omitTotalHeader?: boolean;
   /** catalog pages after the first start one row early, so their first row repeats the last row of the page before (a date
    * order without a tie-breaker): only for a request without `orderby=id&order=asc`, or for every request with `always`;
    * `swap_ties` (review M-R / M-S) swaps the rows on each side of a page edge for every page after the first, so the last row of
@@ -93,7 +99,8 @@ function batchAnswer(store: MockWooCatalogStore, body: string): unknown {
 
 export async function mockWooCatalogStore(products: MockProduct[]): Promise<MockWooCatalogStore> {
   const store = {
-    pushed: new Map(), requests: [], arrivals: [], batchSizes: [], rowErrors: new Set(), failPaths: new Set(), queries: [], maxInFlight: 0,
+    pushed: new Map(), requests: [], arrivals: [], batchSizes: [], rowErrors: new Set(), failPaths: new Set(), statusPaths: new Map(),
+    queries: [], maxInFlight: 0,
     orders: [], manageStockSent: new Map(),
   } as unknown as MockWooCatalogStore;
   let inFlight = 0;
@@ -119,6 +126,11 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
         send({ code: 'internal_error', message: 'خطای میزبان سایت' });
         return;
       }
+      if (store.statusPaths.has(path)) {
+        res.statusCode = store.statusPaths.get(path) ?? 500;
+        send({ code: 'woocommerce_rest_product_invalid_id', message: 'شناسه نامعتبر است.' });
+        return;
+      }
       if (req.method === 'GET' && path === 'products') {
         send(productPage(products, url, store).map(p => ({
           id: p.id, name: p.name ?? `محصول ${p.id}`, sku: p.sku, type: p.type ?? (p.variations ? 'variable' : 'simple'),
@@ -137,8 +149,10 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
         return;
       }
       if (req.method === 'GET' && path === 'orders') {
+        store.beforeOrdersPage?.(Number(url.searchParams.get('page') || 1));
         const statuses = new Set((url.searchParams.get('status') || 'any').split(','));
         const rows = [...store.orders].sort((a, b) => a.id - b.id).filter(o => statuses.has('any') || statuses.has(o.status));
+        if (!store.omitTotalHeader) res.setHeader('X-WP-Total', String(rows.length));
         send(page(rows, url, store).map(o => ({
           id: o.id, status: o.status,
           line_items: o.lines.map(l => ({ product_id: l.productId, variation_id: l.variationId ?? 0, quantity: l.quantity })),
