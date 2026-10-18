@@ -198,7 +198,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
               </div>
               <div>
                 <h2 className="text-lg font-bold">تنظیمات حساب کاربری</h2>
-                <p className="text-xs text-slate-400">ویرایش مشخصات، تصویر نمایه، کلمه عبور و پیام‌رسان</p>
+                <p className="text-xs text-slate-400">ویرایش مشخصات، تصویر نمایه، کلمه عبور، پیام‌رسان، پیشخوان گروهی و دستگاه‌ها</p>
               </div>
             </div>
             {!requiresPasswordReset && (

@@ -364,7 +364,7 @@ router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), v
                 notes: notes || existing.notes,
                 updatedAt: nowIso,
                 version: nextVersion(existing.version)
-              });
+              }, existing.birthDate);
             // v9.0.30 (TD-442): پرسنلی که از خواندن فهرست تا این ردیف ویرایش یا حذف شده بازنویسی نمی‌شود
             if (!row) throw new ConflictError(`پرسنل «${existing.fullName}» هم‌زمان ویرایش یا حذف شده است؛ این ردیف به‌روز نشد.`, undefined, 'OCC_CONFLICT');
 
@@ -721,7 +721,7 @@ router.put('/personnel/:id', authorizePermission('personnel.manage'), validate(u
           notes: notes ? notes.trim() : '',
           updatedAt: nowIso,
           version: nextVersion(existing.version)
-        });
+        }, existing.birthDate);
       if (!updated) throw new OptimisticLockError({ entityType: 'Personnel', entityId: id, expectedVersion });
 
       await logActivity({

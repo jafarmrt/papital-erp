@@ -2,7 +2,9 @@ import type { TestCaseResult } from '../types.js';
 import type { Harness, ShouldRun } from '../security/workflowTestHarness.js';
 import { runReservationCases } from './stockReservationTests.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
-import { birthMonthDay, jalaliOfIsoDay } from '../../lib/social/birthdays.js';
+import {
+  BIRTHDAY_GREETING_NOTIFICATION, birthdayGreetingLink, birthdayLink, birthMonthDay, COLLEAGUE_BIRTHDAY_NOTIFICATION, jalaliOfIsoDay,
+} from '../../lib/social/birthdays.js';
 import { APP_VERSION } from '../../lib/version.js';
 
 /**
@@ -30,7 +32,7 @@ export async function runSocialDashboardTests(shouldRun: ShouldRun): Promise<Tes
       'v10.2 package 9: presence lists only «online» or «today» and nothing else; each user turns their presence and birthday off for themselves, with an audit row (TD-1300)',
       ['social', 'users', 'personnel'], cleaned(presenceCase)],
     ['reg_social_birthday_withdrawn_td_1300',
-      'v10.2 package 9 (review M-1, delta nits 2 and 4): a birthday turned off by its owner, of a personnel who left (form or Excel import), of a deleted personnel or whose birth date moved off today leaves every bell at once, the rows kept so the bell never makes them again (TD-1300)',
+      'v10.2 package 9 (review M-1, delta nits 2 and 4, final delta M-1): a birthday turned off by its owner, of a personnel who left (form or Excel import), of a deleted personnel or whose birth date moved off today leaves every bell at once, the rows kept so the bell never makes them again, while an edit of another field after the birthday keeps them (TD-1300)',
       ['social', 'notifications', 'personnel'], cleaned(withdrawnCase)],
     ['reg_social_whats_new_td_1300',
       'v10.2 package 9: the what\'s-new card shows the current version\'s changelog entry until the user dismisses it; another version is refused (TD-1300)',
@@ -206,6 +208,17 @@ async function withdrawnCase(h: Harness, wrong: string[]): Promise<string> {
   const moved = await person(h, 'S9 withdraw moved date', { offset: 0 });
   const importCode = unique('S9X');
   await h.q(`UPDATE personnel SET personnel_code = $2 WHERE id = $1`, [imported, importCode]);
+  // final delta M-1: a birthday three days ago keeps this year's bell rows when something else of the personnel is edited
+  const passedOwner = await h.sessionWith([]);
+  const passed = await person(h, 'S9 withdraw passed', { offset: -3, userId: passedOwner.userId });
+  const passedCode = unique('S9P');
+  await h.q(`UPDATE personnel SET personnel_code = $2 WHERE id = $1`, [passed, passedCode]);
+  const year = jalaliOfIsoDay(await businessTodayIsoDate()).year;
+  await h.q(
+    `INSERT INTO notifications (user_id, type, title, message, link) VALUES ($1, $2, 'S9', 'S9', $3), ($4, $5, 'S9', 'S9', $6)`,
+    [viewer.userId, COLLEAGUE_BIRTHDAY_NOTIFICATION, birthdayLink(passed, year),
+      passedOwner.userId, BIRTHDAY_GREETING_NOTIFICATION, birthdayGreetingLink(passed, year, viewer.userId)],
+  );
 
   if ((await h.get('/api/notifications', viewer)).status !== 200) return 'the bell did not answer';
   const greet = await h.put(`/api/social/birthdays/${hidden}/greeting`, { reaction: 'cake' }, viewer);
@@ -230,6 +243,11 @@ async function withdrawnCase(h: Harness, wrong: string[]): Promise<string> {
   const [movedRow] = await h.q(`SELECT version FROM personnel WHERE id = $1`, [moved]);
   const moveDate = await h.put(`/api/personnel/${moved}`, { version: Number(movedRow.version), birthDate: await birthIsoFor(5) }, manager);
   if (moveDate.status !== 200) wrong.push(`moving the birth date answered ${moveDate.status} ${JSON.stringify(moveDate.body).slice(0, 200)}`);
+  const [passedRow] = await h.q(`SELECT version FROM personnel WHERE id = $1`, [passed]);
+  const phoneEdit = await h.put(`/api/personnel/${passed}`, { version: Number(passedRow.version), phone: '09120000000' }, manager);
+  if (phoneEdit.status !== 200) wrong.push(`editing the phone answered ${phoneEdit.status} ${JSON.stringify(phoneEdit.body).slice(0, 200)}`);
+  const reimport = await h.post('/api/personnel/bulk-import', { rows: [{ personnelCode: passedCode, fullName: 'S9 withdraw passed', jobTitle: 'S9 job' }] }, manager);
+  if (reimport.status !== 200) wrong.push(`the Excel re-import answered ${reimport.status} ${JSON.stringify(reimport.body).slice(0, 200)}`);
 
   if (await live(viewer.userId, hidden) !== 0) wrong.push('the bell still shows a birthday its owner turned off');
   if (await live(owner.userId, hidden) !== 0) wrong.push('the owner still has the greeting notification of a hidden birthday');
@@ -238,6 +256,8 @@ async function withdrawnCase(h: Harness, wrong: string[]): Promise<string> {
   if (await live(viewer.userId, imported) !== 0) wrong.push('the bell still shows the birthday of a personnel the Excel import marked as left');
   if (await live(viewer.userId, moved) !== 0) wrong.push('the bell still shows a birthday whose date was moved off today');
   if (await live(viewer.userId, kept) !== 1) wrong.push('a birthday that is still shown left the bell');
+  if (await live(viewer.userId, passed) !== 1) wrong.push('an edit of another field took a passed birthday out of the bell');
+  if (await live(passedOwner.userId, passed) !== 1) wrong.push('an edit of another field took the owner\'s greeting of a passed birthday out of the bell');
   const keptRows = await h.q(`SELECT id FROM notifications WHERE user_id = $1 AND link LIKE $2`, [viewer.userId, `/?birthday=${leaving}-%`]);
   if (keptRows.length !== 1) wrong.push('the withdrawn row was not kept');
   const count = await h.get('/api/notifications/unread-count', viewer);
@@ -245,7 +265,7 @@ async function withdrawnCase(h: Harness, wrong: string[]): Promise<string> {
   const links = (Array.isArray(listed) ? listed : (listed.data ?? [])).map(n => String(n.link ?? ''));
   if ([hidden, leaving, removed].some(id => links.some(l => l.startsWith(`/?birthday=${id}-`)))) wrong.push('the bell list still carries a withdrawn birthday');
   if (count.status !== 200) wrong.push(`the unread count answered ${count.status}`);
-  return wrong.length ? wrong.join('; ') : 'turned off, left (form and Excel), deleted and re-dated birthdays left every bell; the rows kept; a shown birthday stays';
+  return wrong.length ? wrong.join('; ') : 'turned off, left (form and Excel), deleted and re-dated birthdays left every bell; the rows kept; a shown birthday and a passed one edited elsewhere stay';
 }
 
 interface PresenceRow { userId: number; name: string; avatarUrl: string; status: string }

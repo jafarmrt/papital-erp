@@ -17,21 +17,23 @@ export async function insertPersonnel(db: DbExecutor, values: PersonnelValues): 
 
 /**
  * Writes a live personnel row only at the version it was read with; `undefined` when it changed or was deleted meanwhile.
- * A row whose birthday colleagues no longer see (turned off or left), or whose edited birth date is no longer today, takes
- * its birthday notifications out of every bell in the same executor (v10.2 package 9, review M-1 and delta nit 2).
+ * A row whose birthday colleagues no longer see (turned off or left), or whose birth date was today before the edit and
+ * no longer is, takes its birthday notifications out of every bell in the same executor (v10.2 package 9, review M-1,
+ * delta nit 2 and final delta M-1); `previousBirthDate` is the birth date the row was read with.
  */
 export async function updatePersonnelAtVersion(
   db: DbExecutor,
   id: number,
   version: number,
   values: Partial<PersonnelValues>,
+  previousBirthDate: string | null,
 ): Promise<PersonnelRow | undefined> {
   const [row] = await db
     .update(personnel)
     .set(values)
     .where(and(eq(personnel.id, id), eq(personnel.version, version), eq(personnel.isDeleted, 0)))
     .returning();
-  if (row) await withdrawBirthdayNotificationsIfGone(db, id, row);
+  if (row) await withdrawBirthdayNotificationsIfGone(db, id, row, previousBirthDate);
   return row;
 }
 

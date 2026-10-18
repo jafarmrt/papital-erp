@@ -33,13 +33,21 @@ type BirthdayRow = { isBirthdayVisible: number | null; employmentStatus: string 
 
 /**
  * After a personnel row is written (delta review nit 2): a birthday no longer shown leaves every bell, and a birth date
- * edited or cleared so that today is no longer the birthday takes this year's birthday notifications out too. Turning a
- * birthday back on the same day does not bring withdrawn rows back (the unique index keeps them dismissed), by design.
+ * edited or cleared so that today is no longer the birthday takes this year's birthday notifications out too. Only a date
+ * that WAS today and no longer is withdraws them (final delta M-1): an edit of anything else after the birthday has passed
+ * (a phone, a salary, an Excel re-import) keeps that year's greetings in the bell. Turning a birthday back on the same day
+ * does not bring withdrawn rows back (the unique index keeps them dismissed), by design.
  */
-export async function withdrawBirthdayNotificationsIfGone(tx: DbExecutor, personnelId: number, row: BirthdayRow): Promise<number> {
+export async function withdrawBirthdayNotificationsIfGone(
+  tx: DbExecutor,
+  personnelId: number,
+  row: BirthdayRow,
+  previousBirthDate: string | null,
+): Promise<number> {
   if (!birthdayShownToColleagues(row)) return withdrawBirthdayNotifications(tx, personnelId);
   const todayIso = await businessTodayIsoDate();
-  if (upcomingBirthday(row.birthDate, todayIso, 0)) return 0;
+  const wasToday = upcomingBirthday(previousBirthDate, todayIso, 0) !== null;
+  if (!wasToday || upcomingBirthday(row.birthDate, todayIso, 0)) return 0;
   return withdrawBirthdayNotifications(tx, personnelId, jalaliOfIsoDay(todayIso).year);
 }
 
