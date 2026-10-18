@@ -8,7 +8,9 @@ import { toPersianDigits, errorMessageOf, formatPersianNumber } from '../../util
 import { ProjectOverDeliveryPrompt, overDeliveriesOf, type ProjectOverDeliveryView } from './ProjectOverDeliveryPrompt';
 import { useProjectPermissions } from '../../hooks/useProjectPermissions';
 import { DELIVERY_MATERIALS_ONLY_NOTE } from '../../lib/projects/deliveryCost';
-import { ProjectMaterialCostNote } from './ProjectMaterialCostNote';
+import { ProjectDeliveryCostPanel } from './ProjectDeliveryCostPanel';
+import { useProjectDeliveryCost } from '../../hooks/useProjectMaterialReports';
+import { deliveryCostOutlook, projectDeliverySuggestion } from '../../lib/projects/deliveryCostSuggestion';
 import { DecimalInput } from '../common/DecimalInput';
 
 interface ProjectStockEntryTabProps {
@@ -141,6 +143,29 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
     setUnitCosts(prev => ({ ...prev, [prodId]: val }));
   };
 
+  // v10.2.0 (TD-1289، یافتهٔ D2): بهای واحد پیشنهادی پروژهٔ تک‌محصولی از ماندهٔ «کالای در جریان ساخت» (۱۴۰۲) پروژه و نمای مانده
+  // پیش و پس از این ورود. پیشنهاد فقط پر کردن خانه است: کاربر آن را تغییر می‌دهد یا پاک می‌کند (پاک‌شده = میانگین موزون بها)،
+  // و قاعدهٔ کارساز و سندهای پیشین همان است که بود
+  const [deliveryReload, setDeliveryReload] = useState(0);
+  const deliveryCost = useProjectDeliveryCost(project.id, canDeliver, deliveryReload);
+  const delivered = () => {
+    setUnitCosts({});
+    setDeliveryReload(n => n + 1);
+    onUpdate();
+  };
+  const productItemId = (p: ProjectProductItem) => Number(p.item_id || project.item_id) || 0;
+  const suggestedCostOf = (p: ProjectProductItem): number | null =>
+    deliveryCost.status === 'ready' && products.length === 1
+      ? projectDeliverySuggestion(deliveryCost.data, productItemId(p), producedQuantities[p.id] ?? 0)
+      : null;
+  /** بهایی که فرستاده می‌شود: واردشده، وگرنه پیشنهادی؛ صفر یا خالی یعنی میانگین موزون بها */
+  const postedCostOf = (p: ProjectProductItem): number | undefined => {
+    const cost = unitCosts[p.id] !== undefined ? unitCosts[p.id] : suggestedCostOf(p);
+    return cost && cost > 0 ? Number(cost) : undefined;
+  };
+  // پس از یک ورود، تا ماندهٔ تازه نرسیده ورود دوم با پیشنهاد کهنه فرستاده نمی‌شود
+  const costPending = deliveryCost.status === 'loading' && deliveryCost.data?.costVisible === true && products.length === 1;
+
   // Filtered products based on search query
   const filteredProducts = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -186,8 +211,6 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
       return;
     }
 
-    const cost = unitCosts[product.id];
-
     if (markCompleted && !matrixStatus.allMatrixCompleted && !isAlreadyCompleted) {
       toast.error(`تنها زمانی می‌توانید تیک تغییر وضعیت به تکمیل‌شده را بزنید که در بخش «پیشرفت به تفکیک کد کالا»، تمام گزینه‌های ماتریس پیشرفت فیزیکی محصولات تیک خورده باشند. (${toPersianDigits(matrixStatus.completedMatrixCells)} از ${toPersianDigits(matrixStatus.totalMatrixCells)} مورد تکمیل شده است)`);
       return;
@@ -199,7 +222,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
           itemId: Number(itemId),
           quantity: Number(qty),
           location: targetLocation,
-          unitPrice: cost && cost > 0 ? Number(cost) : undefined,
+          unitPrice: postedCostOf(product),
           notes: `ورود مستقیم از پروژه کنترل تولید ${project.project_code || project.id} - محصول ${product.item_name}`
         }
       ],
@@ -215,7 +238,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
 
       if (res && (res.success || res.addedCount !== undefined || res.message)) {
         toast.success(`تعداد ${toPersianDigits(qty)} ${product.unit} «${product.item_name}» به انبار تحویل داده شد${res.refNumber ? ` (رسید تولید ${toPersianDigits(res.refNumber)})` : ''}`);
-        onUpdate();
+        delivered();
       } else {
         toast.error(res?.error || 'خطا در ثبت ورود به انبار');
       }
@@ -238,12 +261,11 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
       .map(p => {
         const itemId = p.item_id || project.item_id;
         const qty = producedQuantities[p.id] ?? 0;
-        const cost = unitCosts[p.id];
         return {
           itemId: Number(itemId),
           quantity: Number(qty),
           location: targetLocation,
-          unitPrice: cost && cost > 0 ? Number(cost) : undefined,
+          unitPrice: postedCostOf(p),
           notes: `ورود دسته‌ای از پروژه کنترل تولید ${project.project_code || project.id} - محصول ${p.item_name}`,
           name: p.item_name,
           unit: p.unit
@@ -282,7 +304,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
       if (res && (res.success || res.addedCount !== undefined || res.message)) {
         toast.success(`تعداد ${toPersianDigits(res.addedCount || validItems.length)} قلم محصول با موفقیت به انبار تحویل داده شدند${res.refNumber ? ` (رسید تولید ${toPersianDigits(res.refNumber)})` : ''}`);
         setSelectedIds(new Set());
-        onUpdate();
+        delivered();
       } else {
         toast.error(res?.error || 'خطا در ثبت دسته‌ای محصولات به انبار');
       }
@@ -315,7 +337,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
       toast.success(`تحویل بیش از برنامه با دلیل ثبت شد${res?.refNumber ? ` (رسید تولید ${toPersianDigits(res.refNumber)})` : ''}`);
       setOverDelivery(null);
       setSelectedIds(new Set());
-      onUpdate();
+      delivered();
     } catch (err) {
       toast.error(errorMessageOf(err) || 'خطا در ارتباط با سامانه');
     } finally {
@@ -332,6 +354,16 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
   const selectedProducts = useMemo(() => {
     return products.filter(p => selectedIds.has(p.id));
   }, [products, selectedIds]);
+
+  // نمای ۱۴۰۲ برای محصولات انتخاب‌شده، وگرنه همهٔ محصولات (تحویل گروهی یا تنها محصول)
+  const costOutlook = deliveryCost.status === 'ready'
+    ? deliveryCostOutlook(deliveryCost.data, (selectedProducts.length > 0 ? selectedProducts : products).map(p => ({
+      itemId: productItemId(p), quantity: producedQuantities[p.id] ?? 0, unitPrice: postedCostOf(p) ?? null,
+    })))
+    : null;
+  const singleSuggestion = products.length === 1 ? suggestedCostOf(products[0]) : null;
+  const singlePlan = deliveryCost.data?.products.length === 1 ? deliveryCost.data.products[0] : null;
+  const remainingPlanQty = singlePlan ? Math.max(singlePlan.plannedQty - singlePlan.deliveredQty, producedQuantities[products[0]?.id] ?? 0) : null;
 
   return (
     <div className="space-y-4 text-xs animate-fadeIn">
@@ -472,7 +504,9 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
           </div>
         </div>
 
-        {canDeliver && <ProjectMaterialCostNote projectId={project.id} singleProductQuantity={products.length === 1 && Number(products[0].quantity) > 0 ? Number(products[0].quantity) : null} />}
+        {canDeliver && (deliveryCost.status !== 'ready' || deliveryCost.data?.costVisible) && (
+          <ProjectDeliveryCostPanel status={deliveryCost.status} outlook={costOutlook} suggestedUnitCost={singleSuggestion} remainingPlanQty={singleSuggestion === null ? null : remainingPlanQty} />
+        )}
 
         {/* Quick Stats & Controls Bar */}
         <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
@@ -498,7 +532,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
               <button
                 type="button"
                 onClick={() => handleBatchAddToInventory(selectedProducts)}
-                disabled={batchSubmitting || submitting}
+                disabled={batchSubmitting || submitting || costPending}
                 className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
               >
                 {batchSubmitting ? (
@@ -513,7 +547,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
                 <button
                   type="button"
                   onClick={() => handleBatchAddToInventory(products)}
-                  disabled={batchSubmitting || submitting}
+                  disabled={batchSubmitting || submitting || costPending}
                   className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-400 font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
                   title="تحویل تمامی محصولات این پروژه به انبار با یک کلیک"
                 >
@@ -585,6 +619,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
             const catItem = itemId ? catalogMap.get(Number(itemId)) : null;
             const defaultWac = catItem?.weightedAverageCost || catItem?.costPrice || 0;
             const enteredCost = unitCosts[p.id];
+            const suggestedCost = enteredCost === undefined ? suggestedCostOf(p) : null;
             const currentStockInLoc = catItem?.stocks && targetLocation ? (catItem.stocks as Record<string, number>)[targetLocation] || 0 : catItem?.currentStock || 0;
 
             return (
@@ -663,7 +698,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
                       min="0"
                       step="any"
                       placeholder={defaultWac > 0 ? `میانگین موزون بها: ${toPersianDigits(defaultWac)}` : 'میانگین موزون بها'}
-                      value={enteredCost !== undefined && enteredCost > 0 ? enteredCost : ''}
+                      value={enteredCost !== undefined ? (enteredCost > 0 ? enteredCost : '') : (suggestedCost ?? '')}
                       onValueChange={(v) => handleCostChange(p.id, Number(v) || 0)}
                       className="w-24 px-1.5 py-1 bg-white border border-slate-300 rounded-lg text-center font-mono font-bold text-xs focus:ring-2 focus:ring-amber-400 focus:outline-none placeholder:text-slate-400"
                     />
@@ -675,7 +710,8 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
                     <button
                       type="button"
                       onClick={() => handleAddToInventory(p)}
-                      disabled={submitting || batchSubmitting}
+                      disabled={submitting || batchSubmitting || costPending}
+                      title={costPending ? 'در حال خواندن ماندهٔ کالای در جریان ساخت پروژه…' : undefined}
                       className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 transition-all shadow-2xs hover:shadow disabled:opacity-50 shrink-0 cursor-pointer"
                     >
                       {submitting ? (

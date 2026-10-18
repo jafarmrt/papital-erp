@@ -11,6 +11,8 @@ import { UnitConversionModal } from './UnitConversionModal';
 import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
 import { formatPersianNumber, toPersianDigits } from '../../utils';
 import { useProjectPermissions } from '../../hooks/useProjectPermissions';
+import { materialFiguresOf } from '../../lib/projects/materialAvailability';
+import { ProjectIssuedMaterialsList } from './ProjectIssuedMaterialsList';
 
 interface ProjectInventoryTabProps {
   project: any;
@@ -71,6 +73,7 @@ export function ProjectInventoryTab({
     handleApplyUnitConversion,
     purchaseList,
     materialProgress,
+    availability,
     handleFinalizeAndReserveStock,
     handleUnfinalizeReservation,
     handlePrintPurchaseListWithCheck,
@@ -93,9 +96,11 @@ export function ProjectInventoryTab({
       .map((item, gIdx) => ({ item, gIdx }))
       .map(({ item, gIdx }) => {
         const matchWh = findProjectItemMatch({ code: item.itemCode, name: item.name }, warehouseItems);
-        const currentStock = matchWh ? Number(matchWh.current_stock || 0) : Number(item.stockQty || 0);
+        // v10.2.0 (TD-1289): کسری با موجودی آزاد این پروژه و آنچه به آن داده شده، مانند فهرست خرید
+        const figures = materialFiguresOf(availability.rowState(item));
+        const currentStock = figures ? figures.free : matchWh ? Number(matchWh.current_stock || 0) : Number(item.stockQty || 0);
         const requiredQty = Number(item.requiredQty || 1);
-        const shortfall = Math.max(0, requiredQty - currentStock);
+        const shortfall = Math.max(0, requiredQty - currentStock - (figures?.issued ?? 0));
         return {
           id: `sec${secIdx}_g${gIdx}_${item.itemCode || item.name || gIdx}`,
           itemCode: item.itemCode || matchWh?.code || '',
@@ -104,6 +109,7 @@ export function ProjectInventoryTab({
           totalRequiredQty: requiredQty,
           unit: item.unit || matchWh?.unit || 'عدد',
           warehouseStockQty: currentStock,
+          issuedQty: figures?.issued,
           warehouseUnit: matchWh?.unit || item.unit,
           toPurchaseQty: shortfall,
           procurementStatus: item.procurementStatus || 'pending',
@@ -207,14 +213,25 @@ export function ProjectInventoryTab({
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
               میزان آماده‌باش و موجود بودن مواد اولیه:
             </span>
-            <span className="text-amber-400 font-mono text-sm">{formatPersianNumber(materialProgress)}٪</span>
+            <span className="text-amber-400 font-mono text-sm">
+              {materialProgress === null ? (availability.status === 'error' ? 'نامعلوم' : '…') : `${formatPersianNumber(materialProgress)}٪`}
+            </span>
           </div>
           <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-700">
             <div 
               className="h-full bg-gradient-to-r from-amber-500 to-emerald-400 rounded-full transition-all duration-500"
-              style={{ width: `${materialProgress}%` }}
+              style={{ width: `${materialProgress ?? 0}%` }}
             />
           </div>
+          {/* v10.2.0 (TD-1289): free stock follows the finalize's rule */}
+          <p className="text-[11px] text-slate-400">
+            «آزاد برای این پروژه» موجودی کل منهای رزرو پیش‌فاکتورهای فروش و پروژه‌های دیگر است، همان رقمی که ثبت نهایی با آن رزرو می‌کند؛ وضعیت «موجود / کسری» خودکار است.
+          </p>
+          {availability.status === 'error' && (
+            <p className="text-[11px] text-rose-300" role="alert">
+              موجودی آزاد مواد خوانده نشد؛ وضعیت ردیف‌ها نامعلوم است و فهرست خرید با موجودی کل ساخته شده است.
+            </p>
+          )}
         </div>
       </div>
 
@@ -284,6 +301,7 @@ export function ProjectInventoryTab({
               products={products}
               sections={sections}
               warehouseItems={warehouseItems}
+              availability={availability}
               activeStepTab={0}
               handleUpdatePerItemResult={handleUpdatePerItemResult}
               handleOpenChangeMaterialModal={handleOpenChangeMaterialModal}
@@ -297,6 +315,7 @@ export function ProjectInventoryTab({
           <GlobalInventoryControlSection
             sections={sections}
             warehouseItems={warehouseItems}
+            availability={availability}
             handleOpenAddMaterialModal={canEdit ? handleOpenAddMaterialModal : undefined}
             handleOpenChangeMaterialModal={handleOpenChangeMaterialModal}
             handleOpenUnitConversionModal={handleOpenUnitConversionModal}
@@ -307,6 +326,9 @@ export function ProjectInventoryTab({
             handleUpdateSectionDescription={handleUpdateSectionDescription}
             handlePurchaseSection={canRequestPurchase ? handlePurchaseSection : undefined}
           />
+
+          {/* v10.2.0 (TD-1289): materials already taken from stock for this project */}
+          <ProjectIssuedMaterialsList projectId={project.id} />
 
           {/* Quick Jump Banner to Purchase List */}
           {purchaseList.length > 0 && (

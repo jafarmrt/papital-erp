@@ -139,6 +139,8 @@ export interface PurchaseListItem {
   totalRequiredQty: number;
   unit: string;
   warehouseStockQty: number;
+  /** v10.2.0 (TD-1289): آنچه تاکنون به پروژه داده شده؛ فقط وقتی `warehouseStockQty` موجودی آزاد این پروژه است */
+  issuedQty?: number;
   warehouseUnit?: string;
   toPurchaseQty: number;
   // Unit conversion fields

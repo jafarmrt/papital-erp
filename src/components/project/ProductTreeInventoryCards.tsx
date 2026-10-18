@@ -8,7 +8,8 @@ import {
 import { COMMON_UNITS } from './projectInventoryUtils';
 import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
 import { formatPersianNumber, toPersianDigits } from '../../utils';
-import { MaterialNameCell, CurrentStockCell, ProcurementStatusCell, NotesCell, type OpenUnitConversionModalHandler } from './inventoryRowCells';
+import { MaterialNameCell, FreeStockCell, MaterialStatusCell, NotesCell, type OpenUnitConversionModalHandler } from './inventoryRowCells';
+import { rowIsShort, type MaterialAvailabilityView } from '../../lib/projects/materialAvailability';
 import { DecimalInput } from '../common/DecimalInput';
 
 interface ProductTreeInventoryCardsProps {
@@ -16,6 +17,8 @@ interface ProductTreeInventoryCardsProps {
   sections: ProjectInventoryControlSectionData[];
   warehouseItems: Item[];
   activeStepTab: number;
+  /** v10.2.0 (TD-1289): موجودی آزاد و وضعیت خودکار هر ردیف با قاعدهٔ ثبت نهایی */
+  availability: MaterialAvailabilityView;
   handleUpdatePerItemResult: (secIdx: number, prodId: string, itemId: string, field: string, value: any) => void;
   handleOpenChangeMaterialModal: (secIdx: number, itemId: string, prodId?: string, gIdx?: number) => void;
   handleOpenUnitConversionModal: OpenUnitConversionModalHandler;
@@ -29,6 +32,7 @@ export function ProductTreeInventoryCards({
   sections,
   warehouseItems,
   activeStepTab,
+  availability,
   handleUpdatePerItemResult,
   handleOpenChangeMaterialModal,
   handleOpenUnitConversionModal,
@@ -152,7 +156,7 @@ export function ProductTreeInventoryCards({
                   const currentStock = matchWh ? matchWh.current_stock : (mat.stockQty ?? 0);
                   const reqQty = Number(mat.requiredQty !== undefined ? mat.requiredQty : 1);
                   const shortfall = Math.max(0, reqQty - currentStock);
-                  if (mat.status === 'needs_procurement' || shortfall > 0) {
+                  if (rowIsShort(availability.rowState(mat), mat.status === 'needs_procurement' || shortfall > 0)) {
                     prodShortfallCount++;
                   }
                 });
@@ -354,7 +358,7 @@ export function ProductTreeInventoryCards({
                                   <thead className="bg-slate-100/80 text-slate-700 font-bold">
                                     <tr>
                                       <th className="p-2.5 border-b border-slate-200">ماده اولیه / قطعه</th>
-                                      <th className="p-2.5 border-b border-slate-200 text-center">موجودی انبار</th>
+                                      <th className="p-2.5 border-b border-slate-200 text-center">آزاد برای این پروژه</th>
                                       <th className="p-2.5 border-b border-slate-200 text-center">مقدار مورد نیاز</th>
                                       <th className="p-2.5 border-b border-slate-200 text-center">وضعیت تامین و کسری</th>
                                       <th className="p-2.5 border-b border-slate-200">یادداشت تامین</th>
@@ -373,7 +377,8 @@ export function ProductTreeInventoryCards({
                                       const reqUnit = mat.unit || 'عدد';
                                       const reqQty = Number(mat.requiredQty !== undefined ? mat.requiredQty : 1);
                                       const shortfall = Math.max(0, reqQty - currentStock);
-                                      const isNeedsProcurement = mat.status === 'needs_procurement' || shortfall > 0;
+                                      const rowState = availability.rowState(mat);
+                                      const isNeedsProcurement = rowIsShort(rowState, mat.status === 'needs_procurement' || shortfall > 0);
                                       const displayCategory = mat.category || matchWh?.category || 'عمومی';
 
                                       const hasUnitMismatch = !!(
@@ -395,8 +400,8 @@ export function ProductTreeInventoryCards({
                                             onLinkWarehouse={() => handleOpenChangeMaterialModal(originalIdx, mat.itemId, prod.id)}
                                           />
 
-                                          {/* Current Stock */}
-                                          <CurrentStockCell currentStock={currentStock} unit={effectiveWarehouseUnit || reqUnit} />
+                                          {/* v10.2.0 (TD-1289): free stock for this project */}
+                                          <FreeStockCell state={rowState} status={availability.status} />
 
                                           {/* Required Qty & Unit (Decoupled from order quantity) & Unit Conversion */}
                                           <td className="p-2.5 text-center border-l border-slate-100 align-middle min-w-[140px]">
@@ -454,7 +459,7 @@ export function ProductTreeInventoryCards({
                                           </td>
 
                                           {/* Procurement Status & Shortfall */}
-                                          <ProcurementStatusCell status={mat.status} onChange={(v) => handleUpdatePerItemResult(originalIdx, prod.id, mat.itemId, 'status', v)} shortfall={shortfall} unit={reqUnit} />
+                                          <MaterialStatusCell state={rowState} status={availability.status} procurementStatus={mat.procurementStatus} onProcurementChange={(v) => handleUpdatePerItemResult(originalIdx, prod.id, mat.itemId, 'procurementStatus', v)} />
 
                                           {/* Notes */}
                                           <NotesCell value={mat.notes || ''} onChange={(v) => handleUpdatePerItemResult(originalIdx, prod.id, mat.itemId, 'notes', v)} />

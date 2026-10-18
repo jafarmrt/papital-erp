@@ -6,6 +6,7 @@ import {
 } from '../../types';
 import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
 import { MATERIAL_UNITS } from '../../lib/pendingMaterials/materialRequestRules';
+import { materialFiguresOf, rowIsShort, type MaterialAvailabilityView, type MaterialRowInput } from '../../lib/projects/materialAvailability';
 
 /** v10.0.143 (TD-1202): the same unit list as the keeper's approval window (`MATERIAL_UNITS`) */
 export const COMMON_UNITS = MATERIAL_UNITS;
@@ -49,11 +50,33 @@ export const withProcurementStatus = (
   return sec;
 });
 
+/**
+ * v10.2.0 (TD-1289، یافتهٔ D1): ستون موجودی ردیف فهرست خرید «آزاد برای این پروژه» است و کسری خرید = نیاز − آزاد − آنچه
+ * به پروژه داده شده، و ردیف با وضعیت خودکار ثبت نهایی (`availability`) در فهرست می‌آید. بی ارقام کارساز (`availability` نیامده،
+ * در حال خواندن یا خطا) موجودی کل و قاعدهٔ پیشین به کار می‌رود و `issuedQty` خالی می‌ماند.
+ */
+const stockFiguresOf = (
+  availability: MaterialAvailabilityView | undefined,
+  row: MaterialRowInput,
+  fallbackStock: number,
+  storedShort: boolean
+): { stock: number; issued?: number; short: boolean } => {
+  const state = availability ? availability.rowState(row) : { kind: 'unknown' as const };
+  const figures = materialFiguresOf(state);
+  const stock = figures ? figures.free : fallbackStock;
+  return { stock, issued: figures?.issued, short: rowIsShort(state, storedShort) };
+};
+
+/** کسری خرید ردیف: نیاز − موجودی (آزاد) − داده‌شده به پروژه، کمینه صفر */
+const purchaseShortfall = (required: number, row: PurchaseListItem): number =>
+  Math.max(0, required - (row.warehouseStockQty || 0) - (row.issuedQty || 0));
+
 export const buildConsolidatedPurchaseList = (
   sections: ProjectInventoryControlSectionData[],
   products: ProjectProductItem[],
   warehouseItems: Item[],
-  manualPurchaseItems: PurchaseListItem[]
+  manualPurchaseItems: PurchaseListItem[],
+  availability?: MaterialAvailabilityView
 ): PurchaseListItem[] => {
   const map: Record<string, PurchaseListItem> = {};
 
@@ -101,10 +124,11 @@ export const buildConsolidatedPurchaseList = (
 
           const matchWh = findProjectItemMatch({ code: effectiveCode, name: effectiveName }, warehouseItems);
 
-          const currentStock = matchWh ? matchWh.current_stock : (itemRes.stockQty ?? 0);
-          const shortfall = Math.max(0, reqQty - currentStock);
+          const totalStock = matchWh ? matchWh.current_stock : (itemRes.stockQty ?? 0);
+          const figures = stockFiguresOf(availability, itemRes, totalStock, itemRes.status === 'needs_procurement' || reqQty - totalStock > 0);
+          const currentStock = figures.stock;
 
-          if (itemRes.status === 'needs_procurement' || shortfall > 0) {
+          if (figures.short) {
             const key = purchaseRowKey(effectiveCode, effectiveName);
 
             if (!map[key]) {
@@ -116,6 +140,7 @@ export const buildConsolidatedPurchaseList = (
                 unit: reqUnit,
                 totalRequiredQty: 0,
                 warehouseStockQty: currentStock,
+                issuedQty: figures.issued,
                 warehouseUnit: matchWh?.unit || itemRes.warehouseUnit || reqUnit,
                 convertedRequiredQty: itemRes.convertedQty ? roundToOneDecimal(itemRes.convertedQty) : undefined,
                 convertedUnit: itemRes.convertedUnit,
@@ -129,9 +154,9 @@ export const buildConsolidatedPurchaseList = (
             map[key].totalRequiredQty += reqQty;
             if (itemRes.convertedQty) {
               map[key].convertedRequiredQty = (map[key].convertedRequiredQty || 0) + roundToOneDecimal(itemRes.convertedQty);
-              map[key].convertedToPurchaseQty = Math.max(0, (map[key].convertedRequiredQty || 0) - (map[key].warehouseStockQty || 0));
+              map[key].convertedToPurchaseQty = purchaseShortfall(map[key].convertedRequiredQty || 0, map[key]);
             }
-            map[key].toPurchaseQty = Math.max(0, map[key].totalRequiredQty - map[key].warehouseStockQty);
+            map[key].toPurchaseQty = purchaseShortfall(map[key].totalRequiredQty, map[key]);
           }
         });
       });
@@ -139,11 +164,12 @@ export const buildConsolidatedPurchaseList = (
       sec.globalItems.forEach(gItem => {
         // v9.0.363 (TD-749): نام دقیق، نه زیررشته؛ نام خالی هیچ کالایی را نمی‌گیرد
         const matchWh = findProjectItemMatch({ code: gItem.itemCode, name: gItem.name }, warehouseItems);
-        const stQty = matchWh ? matchWh.current_stock : (gItem.stockQty ?? 0);
+        const totalStock = matchWh ? matchWh.current_stock : (gItem.stockQty ?? 0);
         const reqQty = Number(gItem.requiredQty) || 0;
-        const shortfall = Math.max(0, reqQty - stQty);
+        const figures = stockFiguresOf(availability, gItem, totalStock, gItem.status === 'needs_procurement' || reqQty - totalStock > 0);
+        const stQty = figures.stock;
 
-        if (gItem.status === 'needs_procurement' || shortfall > 0) {
+        if (figures.short) {
           const key = purchaseRowKey(gItem.itemCode, gItem.name);
 
           if (!map[key]) {
@@ -155,6 +181,7 @@ export const buildConsolidatedPurchaseList = (
               unit: gItem.unit || 'عدد',
               totalRequiredQty: 0,
               warehouseStockQty: stQty,
+              issuedQty: figures.issued,
               warehouseUnit: matchWh?.unit || gItem.warehouseUnit || gItem.unit,
               convertedRequiredQty: gItem.convertedQty ? roundToOneDecimal(gItem.convertedQty) : undefined,
               convertedUnit: gItem.convertedUnit,
@@ -168,9 +195,9 @@ export const buildConsolidatedPurchaseList = (
           map[key].totalRequiredQty += reqQty;
           if (gItem.convertedQty) {
             map[key].convertedRequiredQty = (map[key].convertedRequiredQty || 0) + roundToOneDecimal(gItem.convertedQty);
-            map[key].convertedToPurchaseQty = Math.max(0, (map[key].convertedRequiredQty || 0) - (map[key].warehouseStockQty || 0));
+            map[key].convertedToPurchaseQty = purchaseShortfall(map[key].convertedRequiredQty || 0, map[key]);
           }
-          map[key].toPurchaseQty = Math.max(0, map[key].totalRequiredQty - map[key].warehouseStockQty);
+          map[key].toPurchaseQty = purchaseShortfall(map[key].totalRequiredQty, map[key]);
         }
       });
     }
@@ -186,10 +213,22 @@ export const buildConsolidatedPurchaseList = (
   return [...listFromSections, ...manualProcessed];
 };
 
-export const calculateMaterialProgress = (
+/**
+ * درصد ردیف‌های موجود. v10.2.0 (TD-1289): با `availability` «موجود» وضعیت خودکار ثبت نهایی است، نه وضعیت ذخیره‌شده، و تا
+ * ارقام کارساز نرسیده (در حال خواندن یا خطا) درصدی نیست (null). بی `availability` قاعدهٔ پیشین.
+ */
+export function calculateMaterialProgress(sections: ProjectInventoryControlSectionData[], products: ProjectProductItem[]): number;
+export function calculateMaterialProgress(sections: ProjectInventoryControlSectionData[], products: ProjectProductItem[], availability: MaterialAvailabilityView): number | null;
+export function calculateMaterialProgress(
   sections: ProjectInventoryControlSectionData[],
-  products: ProjectProductItem[]
-): number => {
+  products: ProjectProductItem[],
+  availability?: MaterialAvailabilityView
+): number | null {
+  if (availability && availability.status !== 'ready') return null;
+  const isAvailable = (row: (MaterialRowInput & { status?: string }) | undefined): boolean => {
+    if (!row) return false;
+    return availability ? availability.rowState(row).kind === 'available' : row.status === 'available';
+  };
   let totalItems = 0;
   let fulfilledItems = 0;
 
@@ -197,17 +236,17 @@ export const calculateMaterialProgress = (
     if (sec.checkType === 'per_item' && sec.perItemResults) {
       products.forEach(prod => {
         const prodRes = sec.perItemResults?.[prod.id];
-        let itemsToProcess: Array<{ status?: string }> = [];
+        let itemsToProcess: Array<MaterialRowInput & { status?: string }> = [];
 
         if (prodRes && Object.keys(prodRes).length > 0) {
           itemsToProcess = Object.values(prodRes);
         } else if (sec.itemsSchema && sec.itemsSchema.length > 0) {
-          itemsToProcess = sec.itemsSchema.map(() => ({ status: 'available' }));
+          itemsToProcess = sec.itemsSchema.map(s => ({ itemCode: s.itemCode, name: s.name, unit: s.unit, status: 'available' }));
         }
 
         itemsToProcess.forEach(itemRes => {
           totalItems++;
-          if (itemRes && itemRes.status === 'available') {
+          if (isAvailable(itemRes)) {
             fulfilledItems++;
           }
         });
@@ -215,7 +254,7 @@ export const calculateMaterialProgress = (
     } else if (sec.checkType === 'global' && sec.globalItems) {
       sec.globalItems.forEach(gItem => {
         totalItems++;
-        if (gItem.status === 'available') {
+        if (isAvailable(gItem)) {
           fulfilledItems++;
         }
       });
@@ -224,4 +263,4 @@ export const calculateMaterialProgress = (
 
   if (totalItems === 0) return 100;
   return Math.round((fulfilledItems / totalItems) * 100);
-};
+}

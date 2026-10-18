@@ -27,6 +27,8 @@ import type { ReservationShortage } from '../lib/projects/projectReservation';
 import { hasPresetShapedSections, projectSectionsFromPreset, type MaterialStockLookup } from '../lib/projects/inventoryControlSections';
 import { findProjectItemMatch } from '../lib/projects/projectItemMatch';
 import { EMPTY_CUSTOM_MATERIAL_FORM, pendingMaterialRequestOf, type CustomMaterialForm } from '../lib/pendingMaterials/customMaterialRequest';
+import { buildMaterialAvailabilityView, projectMaterialItemIds } from '../lib/projects/materialAvailability';
+import { useProjectMaterialAvailability, type WarehouseItemsState } from './useProjectMaterialReports';
 
 /** پاسخ PUT /projects/:id؛ رزرو پروژه را سرور می‌نویسد (v8.0.58، TD-306) */
 interface SavedProjectInventory {
@@ -84,6 +86,8 @@ export function useProjectInventory(
   });
 
   const [warehouseItems, setWarehouseItems] = useState<Item[]>(initialItemsList || []);
+  // v10.2.0 (TD-1289): ارقام آزاد پس از رسیدن فهرست کالاها خوانده می‌شوند
+  const [warehouseItemsState, setWarehouseItemsState] = useState<WarehouseItemsState>('loading');
   const [presetSections, setPresetSections] = useState<ProjectInventoryControlSectionData[]>(DEFAULT_INVENTORY_CONTROL_SECTIONS as any);
 
   // Derive products list from project
@@ -170,6 +174,7 @@ export function useProjectInventory(
         ]);
 
         const loadedItems: Item[] = itemsRes?.data && Array.isArray(itemsRes.data) ? itemsRes.data : (Array.isArray(itemsRes) ? itemsRes : []);
+        setWarehouseItemsState('loaded');
         if (itemsRes?.data && Array.isArray(itemsRes.data)) {
           setWarehouseItems(itemsRes.data);
         } else if (Array.isArray(itemsRes)) {
@@ -207,6 +212,7 @@ export function useProjectInventory(
         }
       } catch (err: any) {
         if (err?.name === 'AbortError') return;
+        setWarehouseItemsState('failed');
         console.error('Error loading inventory control prerequisites:', err);
         toast.error('خطا در دریافت اطلاعات پیش‌نیاز کنترل موجودی پروژه');
       }
@@ -614,15 +620,22 @@ export function useProjectInventory(
     setSections(prev => withProcurementStatus(prev, rowKey, newStatus));
   };
 
+  // v10.2.0 (TD-1289): موجودی آزاد هر ماده برای این پروژه و وضعیت خودکار ردیف‌ها با قاعدهٔ ثبت نهایی
+  const materialItemIds = useMemo(() => projectMaterialItemIds(sections, manualPurchaseItems, warehouseItems), [sections, manualPurchaseItems, warehouseItems]);
+  const availabilityRead = useProjectMaterialAvailability(project.id, materialItemIds, warehouseItemsState, projectVersion.version);
+  const availability = useMemo(() => buildMaterialAvailabilityView({
+    sections, products, manualPurchaseItems, stockItems: warehouseItems, report: availabilityRead.report, status: availabilityRead.status,
+  }), [sections, products, manualPurchaseItems, warehouseItems, availabilityRead.report, availabilityRead.status]);
+
   // Compute purchase list
   const purchaseList = useMemo(() => {
-    return buildConsolidatedPurchaseList(sections, products, warehouseItems, manualPurchaseItems);
-  }, [sections, products, warehouseItems, manualPurchaseItems]);
+    return buildConsolidatedPurchaseList(sections, products, warehouseItems, manualPurchaseItems, availability);
+  }, [sections, products, warehouseItems, manualPurchaseItems, availability]);
 
-  // Compute overall material progress %
+  // Compute overall material progress % (null until the free stock figures are read)
   const materialProgress = useMemo(() => {
-    return calculateMaterialProgress(sections, products);
-  }, [sections, products]);
+    return calculateMaterialProgress(sections, products, availability);
+  }, [sections, products, availability]);
 
   const handleFinalizeAndReserveStock = async () => {
     if (isFinalized) {
@@ -869,6 +882,7 @@ export function useProjectInventory(
     handleUpdateItemProcurementStatus,
     purchaseList,
     materialProgress,
+    availability,
     handleFinalizeAndReserveStock,
     handleUnfinalizeReservation,
     handlePrintPurchaseListWithCheck,
