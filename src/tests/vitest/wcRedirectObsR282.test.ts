@@ -83,8 +83,14 @@ describe('OBS-R2-82: shop redirects are followed by hand, same site only, each t
 
   it('makeWcRequest sends every shop request through the manual redirect loop', () => {
     const src = readFileSync('src/services/woocommerce/wcClient.ts', 'utf8');
-    const start = src.indexOf('async function makeWcRequest');
-    const body = src.slice(start, src.indexOf('\n}\n', start));
+    const bodyOf = (name: string) => {
+      const start = src.indexOf(`async function ${name}`);
+      return src.slice(start, src.indexOf('\n}\n', start));
+    };
+    // 10.2 package 6 part B: makeWcRequest and the list request (X-WP-Total) share one sender
+    expect(bodyOf('makeWcRequest')).toContain('sendWcRequest(');
+    expect(src).toMatch(/export function wcListRequest[\s\S]*?return sendWcRequest\(/);
+    const body = bodyOf('sendWcRequest');
     expect(body).toContain('followShopRedirects(');
     expect(body).toContain('maxRedirects: 0');
     expect(body).toContain('wcAuthQueryParams(url,');

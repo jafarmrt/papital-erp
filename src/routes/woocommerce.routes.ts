@@ -11,6 +11,7 @@ import { WooOrderSyncService } from '../services/woocommerce/wooOrderSync.servic
 import { makeWcRequest, requireWcConnection, wcRequest } from '../services/woocommerce/wcClient.js';
 import { getWcCatalogReport, refreshWcCatalog } from '../services/woocommerce/wcCatalog.service.js';
 import { pushAllStocks, pushItemStock } from '../services/woocommerce/wcStockPush.service.js';
+import { getAutoPushView, setAutoPush } from '../services/woocommerce/wcAutoPush.service.js';
 import { catalogRefreshMessage, trackingEnabledNote } from '../lib/woocommerce/wcCatalog.js';
 import { formatPersianNumber } from '../utils/persianNumber.js';
 import { z } from 'zod';
@@ -36,6 +37,11 @@ const syncItemSchema = z.object({
   body: z.object({
     itemId: z.union([z.number(), z.string().regex(/^\d+$/, 'شناسه کالا نامعتبر است')])
   })
+});
+
+// 10.2 package 6 (D-04 part B): the target state of «ارسال خودکار», never a toggle
+const autoPushSchema = z.object({
+  body: z.object({ enabled: z.boolean() }).strict(),
 });
 
 // v9.0.333 (TD-723): هر سه اختیاری‌اند؛ کلید واردنشده یا ماسک‌شده از تنظیمات ذخیره‌شده خوانده می‌شود (resolveWcTestCredentials)
@@ -190,7 +196,17 @@ router.post('/sync-order-by-id', authorizePermission('woocommerce.manage'), idem
 
 // 10.2 package 6 (D-04 part A): the links between items and the shop's products, for the WooCommerce tab
 router.get('/catalog', authorizePermission('woocommerce.view'), asyncHandler(async (req, res) => {
-  res.json(await getWcCatalogReport());
+  const [report, autoPush] = await Promise.all([getWcCatalogReport(), getAutoPushView()]);
+  res.json({ ...report, autoPush });
+}));
+
+// «ارسال خودکار موجودی» on or off (part B; off by default)
+router.post('/auto-push', authorizePermission('woocommerce.manage'), idempotency({ scope: 'woocommerce' }), validate(autoPushSchema), asyncHandler(async (req, res) => {
+  const result = await setAutoPush({ req }, req.body.enabled === true);
+  res.json({
+    success: true, ...result,
+    message: result.enabled ? 'ارسال خودکار موجودی به سایت روشن شد.' : 'ارسال خودکار موجودی به سایت خاموش شد.',
+  });
 }));
 
 // «بازخوانی محصولات سایت»: reads the shop's catalog and links each product to the item its SKU finds

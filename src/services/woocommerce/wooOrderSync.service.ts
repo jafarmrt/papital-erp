@@ -16,6 +16,7 @@ import { allocateFeeDiscount } from './feeDiscount.js';
 import { describeOrderChange } from './orderChange.js';
 import { resolveShopWarehouseCode } from './shopWarehouse.js';
 import { resolveItemsByCode } from '../items/itemCodeChange.js';
+import { markOrderLinesDue } from './wcAutoPushDue.js';
 import { oldCodeOrderNote } from '../../lib/items/itemCodeChange.js';
 
 /**
@@ -113,6 +114,14 @@ type BuyerInfo = WooOrderBuyer;
 
 const notesTag = (wcOrderId: string) => `سفارش ووکامرس #${wcOrderId}`;
 
+/**
+ * Persian and Arabic-Indic digits, the Arabic kaf and a no-break space of a typed note, and what they are read as; the
+ * zero-width non-joiner and the direction marks (LRM, RLM, ALM) a Persian keyboard or a copy may add come last and have
+ * nothing to be read as, so translate() drops them (delta review 4, item A)
+ */
+const NOTES_DIGITS_FROM = '۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩ك\u00a0\u200c\u200e\u200f\u061c';
+const NOTES_DIGITS_TO = '01234567890123456789ک ';
+
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -192,6 +201,31 @@ export class WooOrderSyncService {
       };
     }
 
+    const result = await this.applyOrderStatus(wcOrderId, wcOrder, webhookTopic);
+    // 10.2 package 6 (review M-3): after the order's own transaction, its products are compared on the next automatic push
+    await this.markOrderDue(wcOrderId, wcOrder);
+    return result;
+  }
+
+  /**
+   * The order's products for the next automatic push. An `order.deleted` webhook carries only `{ id }` (delta review N-4),
+   * so its products come from the payload the order log keeps; a failed read only leaves them to the hourly pass.
+   */
+  private static async markOrderDue(wcOrderId: string, wcOrder: WcOrderPayload): Promise<void> {
+    if (Array.isArray(wcOrder.line_items)) {
+      markOrderLinesDue(wcOrder.line_items);
+      return;
+    }
+    try {
+      const [log] = await orm.select({ payload: woocommerceOrderLogs.payload }).from(woocommerceOrderLogs)
+        .where(eq(woocommerceOrderLogs.wcOrderId, wcOrderId)).limit(1);
+      markOrderLinesDue((log?.payload as { line_items?: unknown } | null)?.line_items);
+    } catch (err) {
+      logger.warn({ message: `[WooCommerce] order products not marked for the automatic push: ${err instanceof Error ? err.name : 'unknown error'}` });
+    }
+  }
+
+  private static applyOrderStatus(wcOrderId: string, wcOrder: WcOrderPayload, webhookTopic?: string): Promise<WcOrderSyncResult> {
     const wcStatus = isWcOrderDeletedTopic(webhookTopic) ? 'trash' : String(wcOrder.status || '').trim().toLowerCase();
     if (WC_INVOICEABLE_STATUSES.has(wcStatus)) {
       return this.invoiceOrder(wcOrderId, wcOrder);
@@ -235,13 +269,16 @@ export class WooOrderSyncService {
         .where(and(eq(documents.id, log.erpDocumentId), eq(documents.isDeleted, 0)));
       if (doc) return doc;
     }
-    const pattern = `${escapeRegex(notesTag(wcOrderId))}(\\D|$)`;
+    // 10.2 package 6 (delta review 3, M-1): an invoice entered by hand carries the tag as typed, so Persian and Arabic-Indic
+    // digits (and the Arabic kaf) are read as Latin, a no-break space as a space, the zero-width and direction marks are
+    // dropped, and the whole number after # must be the order's, never a prefix of it
+    const pattern = `سفارش\\s*ووکامرس\\s*#\\s*${escapeRegex(wcOrderId)}(\\D|$)`;
     const [legacy] = await tx.select({ id: documents.id, refNumber: documents.refNumber, buyerName: documents.buyerName })
       .from(documents)
       .where(and(
         eq(documents.type, 'invoice'),
         eq(documents.isDeleted, 0),
-        sql`${documents.notes} ~ ${pattern}`
+        sql`translate(${documents.notes}, ${NOTES_DIGITS_FROM}, ${NOTES_DIGITS_TO}) ~ ${pattern}`
       ))
       .orderBy(asc(documents.id))
       .limit(1);

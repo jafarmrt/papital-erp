@@ -13,6 +13,14 @@ export interface MockProduct {
   type?: string;
 }
 
+/** part B: an order the shop holds; `GET orders?status=a,b` answers those of the listed statuses, in id order (newest first
+ * with `order=desc`) */
+export interface MockOrder {
+  id: number; status: string; lines: Array<{ productId: number; variationId?: number; quantity: number }>;
+  /** `date_completed_gmt` of a completed order, as the shop sends it (no zone) */
+  dateCompletedGmt?: string;
+}
+
 export interface MockWooCatalogStore {
   url: string;
   /** product or variation id → the last stock_quantity sent to it */
@@ -27,6 +35,14 @@ export interface MockWooCatalogStore {
   failStatus?: number;
   /** request paths (without the API prefix) that answer 500, so one read of a refresh fails */
   failPaths: Set<string>;
+  /** request paths that answer their own status (review M-4: 404 for the variations of a parent removed in the shop) */
+  statusPaths: Map<string, number>;
+  /** called before an orders page is answered, with its page number (review M-5: the list moves between two pages) */
+  beforeOrdersPage?: (page: number) => void;
+  /** the orders list sends no `X-WP-Total` (a shop or a cache that strips it) */
+  omitTotalHeader?: boolean;
+  /** orders the list sends without their `id` (delta review 4, item E: a shop or a plugin that drops the field) */
+  ordersWithoutId?: Set<number>;
   /** catalog pages after the first start one row early, so their first row repeats the last row of the page before (a date
    * order without a tie-breaker): only for a request without `orderby=id&order=asc`, or for every request with `always`;
    * `swap_ties` (review M-R / M-S) swaps the rows on each side of a page edge for every page after the first, so the last row of
@@ -44,6 +60,10 @@ export interface MockWooCatalogStore {
   delayMs?: number;
   /** the query of every request, in order */
   queries: URLSearchParams[];
+  /** the shop's orders (part B); empty by default */
+  orders: MockOrder[];
+  /** product or variation id → the `manage_stock` value of its last batch row (absent when the row sent none) */
+  manageStockSent: Map<number, unknown>;
   close(): Promise<void>;
 }
 
@@ -52,6 +72,11 @@ const PREFIX = '/wp-json/wc/v3/';
 function page<T>(rows: T[], url: URL, store: MockWooCatalogStore): T[] {
   const perPage = Number(url.searchParams.get('per_page') || 10);
   const n = Number(url.searchParams.get('page') || 1);
+  // part B (delta review N-A): an `offset` starts the page at that row, as WordPress does, and ignores `page`
+  if (url.searchParams.has('offset')) {
+    const offset = Number(url.searchParams.get('offset'));
+    return rows.slice(offset, offset + perPage);
+  }
   const stable = url.searchParams.get('orderby') === 'id' && url.searchParams.get('order') === 'asc';
   const shifted = store.unstableOrder === 'always' || (store.unstableOrder === 'without_id_order' && !stable);
   const start = (n - 1) * perPage - (shifted && n > 1 ? 1 : 0);
@@ -68,13 +93,15 @@ function productPage(products: MockProduct[], url: URL, store: MockWooCatalogSto
 }
 
 function batchAnswer(store: MockWooCatalogStore, body: string): unknown {
-  const parsed = JSON.parse(body || '{}') as { update?: Array<{ id: number; stock_quantity?: number }> };
+  const parsed = JSON.parse(body || '{}') as { update?: Array<{ id: number; stock_quantity?: number; manage_stock?: unknown }> };
   const rows = parsed.update ?? [];
   store.batchSizes.push(rows.length);
   return {
     update: rows.map(row => {
       if (store.rowErrors.has(row.id)) return { id: row.id, error: { code: 'woocommerce_rest_invalid_id', message: 'شناسه نامعتبر است.' } };
       store.pushed.set(row.id, Number(row.stock_quantity));
+      if ('manage_stock' in row) store.manageStockSent.set(row.id, row.manage_stock);
+      else store.manageStockSent.delete(row.id);
       return { id: row.id, stock_quantity: row.stock_quantity };
     }),
   };
@@ -82,7 +109,9 @@ function batchAnswer(store: MockWooCatalogStore, body: string): unknown {
 
 export async function mockWooCatalogStore(products: MockProduct[]): Promise<MockWooCatalogStore> {
   const store = {
-    pushed: new Map(), requests: [], arrivals: [], batchSizes: [], rowErrors: new Set(), failPaths: new Set(), queries: [], maxInFlight: 0,
+    pushed: new Map(), requests: [], arrivals: [], batchSizes: [], rowErrors: new Set(), failPaths: new Set(), statusPaths: new Map(),
+    queries: [], maxInFlight: 0,
+    orders: [], manageStockSent: new Map(),
   } as unknown as MockWooCatalogStore;
   let inFlight = 0;
   const server = http.createServer((req, res) => {
@@ -91,7 +120,7 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
     let body = '';
     req.on('data', chunk => { body += String(chunk); });
     req.on('end', () => void (async () => {
-      const label = `${req.method} ${path}${url.searchParams.get('page') ? `?page=${url.searchParams.get('page')}` : ''}`;
+      const label = `${req.method} ${path}${url.searchParams.get('page') ? `?page=${url.searchParams.get('page')}` : ''}${url.searchParams.has('offset') ? `?offset=${url.searchParams.get('offset')}` : ''}`;
       store.arrivals.push(label);
       if (store.hold?.pattern.test(path)) await store.hold.until;
       inFlight++;
@@ -105,6 +134,11 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
       if (store.failStatus || store.failPaths.has(path)) {
         res.statusCode = store.failStatus ?? 500;
         send({ code: 'internal_error', message: 'خطای میزبان سایت' });
+        return;
+      }
+      if (store.statusPaths.has(path)) {
+        res.statusCode = store.statusPaths.get(path) ?? 500;
+        send({ code: 'woocommerce_rest_product_invalid_id', message: 'شناسه نامعتبر است.' });
         return;
       }
       if (req.method === 'GET' && path === 'products') {
@@ -122,6 +156,36 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
           id: v.id, sku: v.sku, stock_quantity: v.stock ?? null,
           manage_stock: v.manageStock ?? (v.stock !== undefined && v.stock !== null),
         })));
+        return;
+      }
+      if (req.method === 'GET' && path === 'orders') {
+        // the reading's number: page n, or for an overlapping reading (offset 0, 99, 198 … of 100 rows) its order
+        const perPage = Number(url.searchParams.get('per_page') || 10);
+        const offset = Number(url.searchParams.get('offset') || 0);
+        store.beforeOrdersPage?.(url.searchParams.has('offset') ? Math.round(offset / Math.max(1, perPage - 1)) + 1 : Number(url.searchParams.get('page') || 1));
+        const statuses = new Set((url.searchParams.get('status') || 'any').split(','));
+        const newestFirst = url.searchParams.get('order') === 'desc';
+        const rows = [...store.orders].sort((a, b) => (newestFirst ? b.id - a.id : a.id - b.id))
+          .filter(o => statuses.has('any') || statuses.has(o.status));
+        if (!store.omitTotalHeader) res.setHeader('X-WP-Total', String(rows.length));
+        send(page(rows, url, store).map(o => ({
+          ...(store.ordersWithoutId?.has(o.id) ? {} : { id: o.id }), status: o.status,
+          line_items: o.lines.map(l => ({ product_id: l.productId, variation_id: l.variationId ?? 0, quantity: l.quantity })),
+        })));
+        return;
+      }
+      const oneOrder = path.match(/^orders\/(\d+)$/);
+      if (req.method === 'GET' && oneOrder) {
+        const o = store.orders.find(row => row.id === Number(oneOrder[1]));
+        if (!o) {
+          res.statusCode = 404;
+          send({ code: 'woocommerce_rest_shop_order_invalid_id', message: 'شناسه نامعتبر است.' });
+          return;
+        }
+        send({
+          id: o.id, status: o.status, date_completed_gmt: o.dateCompletedGmt ?? null, billing: { first_name: 'خریدار', last_name: 'آزمایشی' },
+          line_items: o.lines.map(l => ({ product_id: l.productId, variation_id: l.variationId ?? 0, quantity: l.quantity })),
+        });
         return;
       }
       if (req.method === 'POST' && (path === 'products/batch' || /^products\/\d+\/variations\/batch$/.test(path))) {

@@ -1,4 +1,5 @@
 import { formatPersianNumber } from '../../utils/persianNumber';
+import type { WcAutoPushView } from './wcAutoPush';
 
 /**
  * 10.2 package 6 (D-04 part A): the contract of the online shop catalog shared by the server (`wcCatalog.service.ts`,
@@ -84,6 +85,8 @@ export interface WcCatalogReport {
   /** links whose last push failed */
   failing: WcCatalogItem[];
   failingTotal: number;
+  /** part B: the automatic push (`GET /woocommerce/catalog` adds it) */
+  autoPush?: WcAutoPushView;
 }
 
 /** The stock the shop takes: WooCommerce holds whole numbers, so a fractional stock is floored and never below zero */
