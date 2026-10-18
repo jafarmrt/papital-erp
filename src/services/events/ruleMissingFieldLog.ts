@@ -10,9 +10,9 @@ import { errorMessageOf } from '../../utils/index.js';
 
 /**
  * 10.2 package 8 (TD-1297, review N-1): a numeric comparison on a field the event does not carry no longer matches. The
- * boot names once, in the log, each saved rule of the treasury event (or of every event) whose numeric comparison reads
- * a field this release took out of that event (amount, description, void reason), so an owner's rule that may have
- * stopped firing is found. Only those fields are named: the declared payload lists leave out keys some emitters still
+ * boot names once, in the log (one line per rule), each saved rule of the treasury event (or of every event) whose numeric comparison reads
+ * a field this release took out of that event (amount, description, void reason), so an owner's rule whose behaviour may have
+ * changed is reviewed. Only those fields are named: the declared payload lists leave out keys some emitters still
  * send, so a wider check would warn about working rules on every boot. Nothing is changed, and the same rules are
  * listed by the financial health check (`event_rule_treasury_private_fields`).
  */
@@ -49,8 +49,11 @@ export async function logRulesOnMissingNumericFields(): Promise<RuleMissingNumer
     const rules = await orm.select({ id: eventActionRules.id, eventType: eventActionRules.eventType, conditionsJson: eventActionRules.conditionsJson })
       .from(eventActionRules).where(inArray(eventActionRules.eventType, [...TREASURY_RULE_EVENT_TYPES])).orderBy(asc(eventActionRules.id));
     const rows = rulesOnMissingNumericFields(rules);
-    for (const r of rows) {
-      logger.warn(`[EventActionEngine] Rule #${r.ruleId} (${r.eventType}) compares ${r.field} with "${r.operator}"; the treasury event no longer carries this field, so the condition may never match`);
+    const byRule = new Map<number, RuleMissingNumericField[]>();
+    for (const r of rows) byRule.set(r.ruleId, [...(byRule.get(r.ruleId) ?? []), r]);
+    for (const [ruleId, found] of byRule) {
+      const fields = [...new Set(found.map(f => f.field))].join(', ');
+      logger.warn(`[EventActionEngine] Rule #${ruleId} (${found[0].eventType}): a numeric comparison reads ${fields}, which treasury events no longer carry; review it`);
     }
     return rows;
   } catch (err: unknown) {
