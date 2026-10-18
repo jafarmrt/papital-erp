@@ -161,6 +161,8 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
             setSlowMovingDays={s.setSlowMovingDays}
             deadStockDays={s.deadStockDays}
             setDeadStockDays={s.setDeadStockDays}
+            treasuryHighValueThreshold={s.treasuryHighValueThreshold}
+            setTreasuryHighValueThreshold={s.setTreasuryHighValueThreshold}
             isSaving={s.isSaving}
             onSave={s.handleSaveSettings}
           />

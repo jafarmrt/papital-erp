@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import { Building2, List, Globe } from 'lucide-react';
+import { Building2, List, Globe, Landmark } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { compressTo300KB } from '../../utils/imageCompression';
 import { RIAL_DISPLAY_UNITS, RIAL_DISPLAY_UNIT_LABELS } from '../../lib/rialDisplay';
@@ -37,6 +37,8 @@ interface GeneralSettingsTabProps {
   setSlowMovingDays: (val: string) => void;
   deadStockDays: string;
   setDeadStockDays: (val: string) => void;
+  treasuryHighValueThreshold?: string;
+  setTreasuryHighValueThreshold?: (val: string) => void;
   isSaving: boolean;
   onSave: () => void;
 }
@@ -62,6 +64,8 @@ export function GeneralSettingsTab({
   setSlowMovingDays,
   deadStockDays,
   setDeadStockDays,
+  treasuryHighValueThreshold,
+  setTreasuryHighValueThreshold,
   isSaving,
   onSave
 }: GeneralSettingsTabProps) {
@@ -223,6 +227,30 @@ export function GeneralSettingsTab({
           </div>
         </div>
       </div>
+
+      {/* 10.2 package 8 (TD-1297): the treasury event carries «تراکنش کلان» instead of its amount */}
+      {setTreasuryHighValueThreshold && (
+        <div>
+          <h3 className="font-bold border-b border-slate-200 pb-3 mb-6 text-slate-800 flex items-center gap-2 text-base">
+            <Landmark size={18} className="text-emerald-600" /> تراکنش کلان خزانه
+          </h3>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <label htmlFor={`${fieldId}-treasury-high-value`} className="block text-sm font-medium mb-1 text-slate-700">آستانه تراکنش کلان خزانه (ریال)</label>
+              <DecimalInput
+                id={`${fieldId}-treasury-high-value`}
+                min="1"
+                step="1"
+                value={treasuryHighValueThreshold ?? ''}
+                onValueChange={(v) => setTreasuryHighValueThreshold(v)}
+                className="w-full border rounded-lg px-3 py-2 font-mono text-left bg-white border-slate-300 text-sm"
+                dir="ltr"
+              />
+              <p className="text-xs text-slate-500 mt-1">رویداد خزانه مبلغ ندارد؛ قانون‌های خودکار با «تراکنش کلان» دریافت یا پرداختی را می‌شناسند که ارزش ریالی آن دست‌کم همین مبلغ باشد.</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* V10-1.1: ساعت توافقی واحد */}
       <div>

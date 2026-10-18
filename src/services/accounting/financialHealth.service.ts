@@ -53,6 +53,7 @@ import { buildUnguardedDocumentInstanceHealthTest, findUnguardedDocumentInstance
 import { buildWorkflowRoleReviewHealthTest, findWorkflowRoleReviews } from '../workflow/workflowRoleReview.js';
 import { buildRetiredRuleActionHealthTest, findRetiredActionRules } from '../events/retiredRuleActionHealth.js';
 import { buildUnpublishedRuleEventHealthTest, findRulesWithUnpublishedEvent } from '../events/unpublishedRuleEventHealth.js';
+import { buildTreasuryPrivateFieldRuleHealthTest, findTreasuryPrivateFieldRules } from './treasuryRuleFieldHealth.js';
 import { buildDueReminderHealthTest, findDuplicateDueReminders, hasDueReminderUniqueIndex } from '../notifications/notificationReminderHealth.js';
 import { buildPersonnelCodeHealthTest, buildPersonnelNationalIdHealthTest, findDuplicatePersonnelCodes, findDuplicatePersonnelNationalIds, hasPersonnelCodeUniqueIndex, hasPersonnelNationalIdUniqueIndex } from '../personnel/personnelCode.js';
 import { buildSyntheticUsersHealthTest, findActiveSyntheticUsers } from '../users/syntheticUserHealth.js';
@@ -1303,6 +1304,8 @@ export class FinancialHealthService {
     const unpublishedEventRuleTest = buildUnpublishedRuleEventHealthTest(await findRulesWithUnpublishedEvent());
     overallScore += unpublishedEventRuleTest.scoreImpact;
     tests.push(unpublishedEventRuleTest);
+    // 10.2 package 8 (TD-1297): automatic rules that read the amount, description or reason the treasury event no longer carries (list only)
+    tests.push(buildTreasuryPrivateFieldRuleHealthTest(await findTreasuryPrivateFieldRules()));
     // آزمون ۵۰: v9.0.427 (TD-589) قید و ایندکس یکتای شرطی مهاجرت‌ها که روی داده ناپاک ساخته نشده (فهرست با علت؛ ساختن دستی)
     tests.push(buildConditionalConstraintsHealthTest(await findMissingConditionalConstraints()));
     // آزمون ۵۱: v9.0.434 (TD-717) یادآوری سررسید پیگیری تکراری برای یک کاربر و پیوند (مهاجرت 0089؛ فقط فهرست)

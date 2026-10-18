@@ -8,6 +8,7 @@ import {
   KeyRound,
   Search,
   Copy,
+  MonitorSmartphone,
 } from 'lucide-react';
 import { ActionMenu } from '../ActionMenu';
 import toast from 'react-hot-toast';
@@ -23,6 +24,8 @@ interface UsersTabProps {
   onAddUser: () => void;
   onEditUser: (user: User) => void;
   onDeleteUser: (userId: number) => void;
+  /** 10.2 package 8 (D-07): the user's signed-in devices, to close one or all */
+  onShowSessions?: (user: User) => void;
   /** v9.0.130 (TD-525، ت۳): دارنده «مدیریت کاربران»؛ حساب‌هایی را ویرایش و حذف می‌کند که همه مجوزهای نقششان را دارد */
   canManage?: boolean;
   grantor?: GrantorPermissions;
@@ -35,6 +38,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
   onAddUser,
   onEditUser,
   onDeleteUser,
+  onShowSessions,
   canManage = true,
   grantor = 'all',
 }) => {
@@ -178,6 +182,13 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                               });
                             },
                           },
+                          ...(onShowSessions && canManageAccount(u)
+                            ? [{
+                                label: 'دستگاه‌های واردشده',
+                                icon: MonitorSmartphone,
+                                onClick: () => onShowSessions(u),
+                              }]
+                            : []),
                           ...(u.id !== currentUser.id && canManageAccount(u)
                             ? [
                                 {

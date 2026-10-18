@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { eq } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { users, roles, appSettings } from '../db/schema.js';
-import { generateToken, generateCsrfToken, AUTH_COOKIE_NAME, getAuthCookieOptions, sessionLifetimeOfRole, authenticateToken, getJwtSecret, JWT_VERIFY_OPTIONS, invalidateUserAuthCache, shouldExposeTokenInBody } from '../middleware/auth.js';
+import { AUTH_COOKIE_NAME, getAuthCookieOptions, sessionLifetimeOfRole, authenticateToken, getJwtSecret, JWT_VERIFY_OPTIONS, shouldExposeTokenInBody } from '../middleware/auth.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 import { logActivity, extractClientIp } from '../lib/auditLogger.js';
@@ -11,7 +11,8 @@ import { logger } from '../middleware/logger.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { AppError, UnauthorizedError, ValidationError } from '../errors/customErrors.js';
 import { safeCompareTokens } from '../lib/timingSafeCompare.js';
-import { revokeUserSessions, runInitialSetup } from '../services/auth/initialSetup.service.js';
+import { runInitialSetup } from '../services/auth/initialSetup.service.js';
+import { closeSessionOnLogout, issueSessionCookie, renewSessionCookie } from '../services/auth/userSessions.service.js';
 import {
   checkAccountLockout,
   recordFailedAttempt,
@@ -169,11 +170,8 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
     // Non-blocking
   }
 
-  const csrfToken = generateCsrfToken();
-  const token = generateToken({ id: user.id, username: user.username, role: user.role ?? '', csrfToken, tokenVersion: user.tokenVersion || 0 });
-
-  // Set secure HttpOnly cookie
-  res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
+  // 10.2 package 8 (D-07): the first admin's device gets its session row like any login
+  const { token, csrfToken } = await issueSessionCookie(req, res, user);
 
   // V3.0.6 (BUG-08) / v7.0.27 (TD-185): توکن فقط در کوکی HttpOnly؛ فیلد token تنها با EXPOSE_TOKEN_IN_BODY=true
   res.json({
@@ -220,13 +218,10 @@ router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async
   if (activeUser && isMatch) {
     await resetFailedAttempts(activeUser.id, { username: tUsername, ip: clientIp });
 
-    const csrfToken = generateCsrfToken();
-    // v10.1.37 (N-01, TD-1283): seven days for a role holding workshop.long_session, else 24 hours
+    // v10.1.37 (N-01, TD-1283): seven days for a role holding workshop.long_session, else 24 hours.
+    // 10.2 package 8 (D-07): each login is one device's session row, which the token names (`sid`)
     const lifetime = await sessionLifetimeOfRole(activeUser.role);
-    const token = generateToken({ id: activeUser.id, username: activeUser.username, role: activeUser.role ?? '', csrfToken, tokenVersion: activeUser.tokenVersion || 0 }, lifetime);
-
-    // Set secure HttpOnly cookie
-    res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req, lifetime));
+    const { token, csrfToken } = await issueSessionCookie(req, res, activeUser, lifetime);
 
     // v9.0.224 (TD-540): سجل ورود نام نقش را هم نگه می‌دارد تا جزئیات رویداد کد نقش نشان ندهد
     const [roleRow] = await orm.select({ name: roles.name }).from(roles).where(eq(roles.code, activeUser.role ?? '')).limit(1);
@@ -290,6 +285,7 @@ const logoutHandler = asyncHandler(async (req, res) => {
   let targetUserId = user?.id;
   let targetUsername = user?.username;
   let targetFullName = (user as any)?.full_name || (user as any)?.fullName || user?.username;
+  let closedSessionId: number | null = null;
 
   // V3.0.6 (BUG-08): ابطال واقعی توکن هنگام خروج — مسیر logout عمومی است و
   // authenticateToken روی آن اجرا نمی‌شود، بنابراین توکن را مستقیم از کوکی
@@ -298,7 +294,7 @@ const logoutHandler = asyncHandler(async (req, res) => {
   // v9.0.77 (TD-528): نشست معتبر فقط با سرآیند CSRF همان نشست بسته می‌شود؛ پیش‌تر فرمی از سایت دیگر همه نشست‌های کاربر
   // را باطل می‌کرد. کوکی نامعتبر یا منقضی فقط پاک می‌شود.
   const rawToken = req.cookies?.[AUTH_COOKIE_NAME] || req.cookies?.['token'];
-  type LogoutTokenPayload = { id?: number; username?: string; role?: string; csrfToken?: string };
+  type LogoutTokenPayload = { id?: number; username?: string; role?: string; csrfToken?: string; sid?: string; exp?: number; tokenVersion?: number };
   let payload: LogoutTokenPayload | null = null;
   if (rawToken) {
     try {
@@ -319,14 +315,13 @@ const logoutHandler = asyncHandler(async (req, res) => {
       targetUserId = targetUserId || payload?.id;
       targetUsername = targetUsername || payload?.username;
 
-      if (targetUserId) {
-        // v10.0.46 (L5 E7): the token version is raised under the user row lock in a service
-        const revoked = await revokeUserSessions(targetUserId);
-        if (revoked) {
-          targetUsername = targetUsername || revoked.username;
-          targetFullName = targetFullName || revoked.fullName;
-          invalidateUserAuthCache(targetUserId);
-        }
+      if (targetUserId && payload.id === targetUserId) {
+        // 10.2 package 8 (D-07, closes OBS-R1-27's «همه دستگاه‌ها»): only this device's session row is closed; the
+        // user's other devices stay signed in and are closed one by one, or all at once, from the profile
+        const closed = await closeSessionOnLogout({ ...payload, id: targetUserId }, req);
+        closedSessionId = closed.sessionId;
+        targetUsername = targetUsername || closed.username || undefined;
+        targetFullName = targetFullName || closed.fullName || undefined;
       }
     }
   } catch (err) {
@@ -349,7 +344,8 @@ const logoutHandler = asyncHandler(async (req, res) => {
       ipAddress: clientIp,
       details: {
         userAgent,
-        method: 'خروج توسط کاربر',
+        method: 'خروج از همین دستگاه',
+        sessionId: closedSessionId,
         status: 'success'
       },
       req
@@ -380,16 +376,7 @@ const meHandler = asyncHandler(async (req, res) => {
   // توکن به صورت خودکار ارتقا یافته و کوکی جدید صادر می‌شود تا هیچ درخواست جهش وضعیتی با خطای ۴۰۳ مسدود نشود.
   let csrfToken = req.user?.csrfToken || (req as unknown as { csrfToken?: string }).csrfToken;
   if (!csrfToken) {
-    csrfToken = generateCsrfToken();
-    const lifetime = await sessionLifetimeOfRole(user.role);
-    const token = generateToken({
-      id: user.id,
-      username: user.username,
-      role: user.role ?? '',
-      csrfToken,
-      tokenVersion: user.tokenVersion || 0
-    }, lifetime);
-    res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req, lifetime));
+    csrfToken = (await renewSessionCookie(req, res, user)).csrfToken;
   }
 
   // V3.0.6 (BUG-08): توکن بازتولیدشده دیگر در بدنه پاسخ برگردانده نمی‌شود
@@ -413,19 +400,9 @@ const csrfHandler = asyncHandler(async (req, res) => {
 
   let csrfToken = req.user?.csrfToken || (req as unknown as { csrfToken?: string }).csrfToken;
   if (!csrfToken) {
-    csrfToken = generateCsrfToken();
     const [user] = await orm.select().from(users).where(eq(users.id, userId)).limit(1);
-    if (user && user.isDeleted !== 1) {
-      const lifetime = await sessionLifetimeOfRole(user.role);
-      const token = generateToken({
-        id: user.id,
-        username: user.username,
-        role: user.role ?? '',
-        csrfToken,
-        tokenVersion: user.tokenVersion || 0
-      }, lifetime);
-      res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req, lifetime));
-    }
+    if (!user || user.isDeleted === 1) throw new UnauthorizedError('حساب کاربری یافت نشد یا حذف شده است');
+    csrfToken = (await renewSessionCookie(req, res, user)).csrfToken;
   }
 
   res.json({ success: true, csrfToken });
