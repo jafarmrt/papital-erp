@@ -258,16 +258,24 @@ export async function listReviewReports(executor: DbExecutor, user: WorkshopUser
 /**
  * Per stage: the done work of its schedule rows (10.2 package 12, D6: the same rule as the progress matrix, each row's live
  * work log quantity up to the row, so a log the project recorded from the schedule tab counts as an approved report does).
- * `unit` is null when the stage's rows have several units; the quantities are then not shown, only the percent.
+ * `unit` is null when the stage's rows have several units; the quantities are then null and only the percent is shown
+ * (review N4). The percent stays below 100 until the stage is complete (`completedStageIds`), as in the progress matrix,
+ * where only the tick completes a stage (review M2).
  */
-export function stageProgressOf(schedules: unknown, liveQuantities: ReadonlyMap<number, number>): WorkshopStageProgress[] {
+export function stageProgressOf(
+  schedules: unknown,
+  liveQuantities: ReadonlyMap<number, number>,
+  completedStageIds: ReadonlySet<number> = new Set(),
+): WorkshopStageProgress[] {
   const byStage = new Map<number, Array<{ unit: string; planned: number; done: number }>>();
   for (const row of workshopScheduleRows(schedules)) {
     byStage.set(row.stageId, [...(byStage.get(row.stageId) ?? []), { unit: row.unit, planned: row.quantity, done: scheduleRowDoneQuantity(row, liveQuantities) }]);
   }
   return [...byStage.entries()].sort((a, b) => a[0] - b[0]).flatMap(([stageId, rows]) => {
     const work = workProgressOf(rows);
-    return work ? [{ stageId, plannedQuantity: work.planned, approvedQuantity: work.done, unit: work.unit, percent: workPercent(work.share) }] : [];
+    if (!work) return [];
+    const percent = completedStageIds.has(stageId) ? workPercent(work.share) : Math.min(99, workPercent(work.share));
+    return [{ stageId, plannedQuantity: work.planned, approvedQuantity: work.done, unit: work.unit, percent }];
   });
 }
 
@@ -288,9 +296,11 @@ export async function projectWorkshopReports(executor: DbExecutor, user: Worksho
   const scope = canReviewKey ? await reviewableProjectIds(executor, user) : [];
   const canReview = canReviewKey && (scope === null || scope.includes(projectId));
   const logIds = workshopScheduleRows(project.stageSchedules).map(r => r.pieceworkLogId).filter((id): id is number => id !== null);
+  const completed = await executor.select({ id: projectStages.id }).from(projectStages)
+    .where(and(eq(projectStages.projectId, projectId), eq(projectStages.isDeleted, 0), eq(projectStages.status, 'completed')));
   return {
     pending: canReview ? await listReviewReports(executor, user, projectId) : [],
-    stageProgress: stageProgressOf(project.stageSchedules, await liveLogQuantities(executor, projectId, logIds)),
+    stageProgress: stageProgressOf(project.stageSchedules, await liveLogQuantities(executor, projectId, logIds), new Set(completed.map(s => s.id))),
     canReview,
   };
 }

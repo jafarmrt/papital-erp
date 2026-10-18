@@ -69,7 +69,7 @@ vi.mock('../../components/accounting/FinancialAttachmentUploader', () => ({ Fina
 import { renderProjectPage } from './helpers/projectPage';
 import { computeProgressMatrix, cellsPercent } from '../../lib/projects/progressMatrix';
 import { projectStageProgress } from '../../lib/projects/projectList';
-import { cellWorkLabel, progressPercentOf, stageProgressPercent, type ProgressCellStatus, type ProgressProduct } from '../../lib/projects/progressTicks';
+import { cellWorkLabel, progressPercentOf, stageProgressPercent, stageTickCounts, type ProgressCellStatus, type ProgressProduct } from '../../lib/projects/progressTicks';
 import { scheduleProductItemId, scheduleRowDoneQuantity, workPercent, workProgressOf } from '../../lib/workshop/scheduleWorkProgress';
 
 const CELL_ONE_TITLE = 'برش — ناتمام، کار ثبت‌شدهٔ کارگاه: ۶۰ از ۱۰۰ عدد (کلیک: تغییر تمام/ناتمام)';
@@ -106,10 +106,15 @@ describe('schedule work rules (10.2 package 12, D6)', () => {
     const mixed = workProgressOf([{ unit: 'عدد', planned: 10, done: 5 }, { unit: 'ساعت', planned: 4, done: 4 }]);
     expect(mixed?.unit).toBeNull();
     expect(mixed?.share).toBeCloseTo(0.75);
+    // review N4: no quantity that adds hours to pieces
+    expect([mixed?.planned, mixed?.done]).toEqual([null, null]);
   });
 
-  it('reads 100 percent only for work done in full', () => {
-    expect([workPercent(0), workPercent(0.004), workPercent(0.6), workPercent(0.996), workPercent(1)]).toEqual([0, 0, 60, 99, 100]);
+  it('reads 100 percent only for work done in full, and at least 1 percent for any work', () => {
+    expect([workPercent(0), workPercent(0.004), workPercent(0.6), workPercent(0.996), workPercent(1)]).toEqual([0, 1, 60, 99, 100]);
+    const products = [{ itemId: 50, itemCode: '', itemName: '', quantity: 1, unit: 'عدد', selectedOptionalStages: [] }];
+    const tiny = computeProgressMatrix(products, [{ stageOrder: 1, title: 'برش' }], [], [{ itemId: 50, stageOrder: 1, unit: 'عدد', planned: 1000, done: 4 }]);
+    expect([tiny.stageCounts[0].percent, tiny.products[0].percent]).toEqual([1, 1]);
   });
 
   it('takes a row\'s done quantity from its live work log, else its legacy flag', () => {
@@ -166,6 +171,16 @@ describe('schedule work rules (10.2 package 12, D6)', () => {
     expect(projectStageProgress([{ status: 'completed', progressPercent: 100 }, { status: 'completed', progressPercent: 100 }]).progressPercent).toBe(100);
   });
 
+  it('lets a product row without a warehouse item hold no project below 100 (review N1)', () => {
+    const products = [
+      { itemId: 50, itemCode: '', itemName: '', quantity: 1000, unit: 'عدد', selectedOptionalStages: [] },
+      { itemId: null, itemCode: '', itemName: 'بی کالا', quantity: 1, unit: 'عدد', selectedOptionalStages: [] },
+    ];
+    const matrix = computeProgressMatrix(products, [{ stageOrder: 1, title: 'برش' }], [{ itemId: 50, stageOrder: 1, status: 'completed' }]);
+    expect(matrix.allProductsDone).toBe(true);
+    expect(matrix.weightedProgress).toBe(100);
+  });
+
   it('reads the same percent on screen, unsent ticks included, and writes the work as «done of planned»', () => {
     const product = progress.products[0] as unknown as ProgressProduct;
     expect(progressPercentOf(product, new Map())).toBe(30);
@@ -174,7 +189,13 @@ describe('schedule work rules (10.2 package 12, D6)', () => {
     expect(stageProgressPercent([product], 1, new Map<string, ProgressCellStatus>([['50|1', 'completed']]))).toBe(100);
     expect(cellWorkLabel(work)).toBe('۶۰ از ۱۰۰ عدد');
     expect(cellWorkLabel(work, true)).toBe('۶۰ از ۱۰۰');
-    expect(cellWorkLabel({ planned_quantity: 14, done_quantity: 9, unit: null, share: 0.75 })).toBe('۷۵٪');
+    expect(cellWorkLabel({ planned_quantity: null, done_quantity: null, unit: null, share: 0.75 })).toBe('۷۵٪');
+  });
+
+  it('counts a stage\'s ticked products with the unsent ticks, as its percent does (review N5)', () => {
+    const product = progress.products[0] as unknown as ProgressProduct;
+    expect(stageTickCounts([product], 2, new Map())).toEqual({ done: 0, applicable: 1 });
+    expect(stageTickCounts([product], 2, new Map<string, ProgressCellStatus>([['50|2', 'completed']]))).toEqual({ done: 1, applicable: 1 });
   });
 });
 
@@ -187,6 +208,14 @@ describe('work in the project screens (10.2 package 12, D6)', () => {
     expect(screen.getByText('۶۰ از ۱۰۰')).toBeTruthy();
     expect(screen.getByText('۶۰٪')).toBeTruthy();
     expect(screen.getAllByText('۳۰٪').length).toBeGreaterThan(0);
+  });
+
+  it('counts an unsent tick in its stage chip beside the percent (review N5)', async () => {
+    setPhoneScreen(false);
+    renderProjectPage('/projects/7/progress');
+    fireEvent.click(await screen.findByTitle(CELL_TWO_TITLE));
+    expect(screen.getByText('۱/۱')).toBeTruthy();
+    expect(screen.getByText('۱۰۰٪')).toBeTruthy();
   });
 
   it('takes no tick on the desktop table while a save is under way', async () => {

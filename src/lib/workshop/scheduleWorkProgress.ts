@@ -21,10 +21,10 @@ export interface ScheduleWorkRow {
 }
 
 export interface WorkProgress {
-  /** planned quantity of the rows; meaningful only when `unit` is set (one unit) */
-  planned: number;
-  /** done quantity of the rows, each capped at its planned quantity; meaningful only when `unit` is set */
-  done: number;
+  /** planned quantity of the rows, or null when their units differ (hours and pieces never add up; review N4) */
+  planned: number | null;
+  /** done quantity of the rows, each capped at its planned quantity, or null when their units differ */
+  done: number | null;
   /** the rows' one unit, or null when their units differ */
   unit: string | null;
   /** 0 to 1: done ÷ planned for one unit, else the average share of the units */
@@ -53,19 +53,17 @@ export function workProgressOf(rows: readonly ScheduleWorkRow[]): WorkProgress |
     const [[unit, g]] = groups;
     return { planned: g.planned, done: g.done, unit, share };
   }
-  return {
-    planned: groups.reduce((acc, [, g]) => acc + g.planned, 0),
-    done: groups.reduce((acc, [, g]) => acc + g.done, 0),
-    unit: null,
-    share,
-  };
+  return { planned: null, done: null, unit: null, share };
 }
 
-/** A share as a whole percent: 100 only when every row is done, so an almost finished stage never reads «۱۰۰٪». */
+/**
+ * A share as a whole percent: 100 only when every row is done, so an almost finished stage never reads «۱۰۰٪», and at
+ * least 1 for any work, so a started stage never reads «۰٪» (review N2: 4 of 1000 is 1%, not 0%).
+ */
 export function workPercent(share: number): number {
   if (!(share > 0)) return 0;
   if (share >= 1) return 100;
-  return Math.min(99, Math.round(share * 100));
+  return Math.min(99, Math.max(1, Math.round(share * 100)));
 }
 
 /** The done quantity of one schedule row: its live log's quantity (`liveQuantities`, log id → quantity) or a legacy flag. */

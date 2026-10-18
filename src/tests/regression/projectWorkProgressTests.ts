@@ -20,6 +20,9 @@ export async function runProjectWorkProgressTests(shouldRun: ShouldRun): Promise
     ['reg_project_work_progress_main_item_d6',
       '10.2 package 12: a single-item project\'s schedule («prod-main») counts in its matrix, an approved workshop report syncs the stage and the tick suggestion names the main item; a project without a matrix keeps its status (D6, TD-1340)',
       ['d6', 'projects', 'workshop'], mainItemCase],
+    ['reg_project_work_progress_closed_d6',
+      '10.2 package 12 review H1: a work log never reopens a completed project or a completed stage, never unblocks a stage and never touches a paused project; it only updates percents and starts a waiting stage or a planned project (D6, TD-1340)',
+      ['d6', 'projects', 'piecework'], closedProjectCase],
   ]);
 }
 
@@ -76,6 +79,15 @@ async function progressView(h: Harness, projectId: number): Promise<ProgressView
   return (res.body as { data: ProgressView }).data;
 }
 
+interface PanelStage { stageId: number; plannedQuantity: number | null; approvedQuantity: number | null; unit: string | null; percent: number }
+
+/** one stage of the schedule tab's workshop panel */
+async function panelStage(h: Harness, projectId: number, stageId: number): Promise<PanelStage | undefined> {
+  const res = await h.get(`/api/workshop/projects/${projectId}/reports`);
+  if (res.status !== 200) throw new Error(`the workshop panel answered ${brief(res)}`);
+  return ((res.body as { stageProgress?: PanelStage[] }).stageProgress ?? []).find(s => s.stageId === stageId);
+}
+
 const cellOf = (view: ProgressView, stageOrder: number) => view.products[0]?.progress.find(c => c.stage_order === stageOrder);
 const stagePercentOf = (view: ProgressView, stageOrder: number) => view.summary.per_stage_counts.find(s => s.stage_order === stageOrder)?.progress_percent;
 
@@ -117,23 +129,22 @@ async function logProgressCase(h: Harness, wrong: string[]): Promise<string> {
   if (await projectStatus(h, projectId) !== 'in_progress') wrong.push(`after the log the project is ${await projectStatus(h, projectId)}, expected in_progress`);
 
   // the workshop panel of the schedule tab counts the same log
-  const panel = await h.get(`/api/workshop/projects/${projectId}/reports`);
-  const stage1 = ((panel.body as { stageProgress?: Array<{ stageId: number; plannedQuantity: number; approvedQuantity: number; unit: string | null; percent: number }> }).stageProgress ?? [])
-    .find(s => s.stageId === stageIds[0]);
-  if (panel.status !== 200 || stage1?.approvedQuantity !== 60 || stage1?.plannedQuantity !== 100 || stage1?.unit !== PIECES || stage1?.percent !== 60) {
-    wrong.push(`the workshop panel shows ${JSON.stringify(stage1 ?? null)} (${panel.status}), expected 60 of 100 pieces at 60%`);
+  const stage1 = await panelStage(h, projectId, stageIds[0]);
+  if (stage1?.approvedQuantity !== 60 || stage1?.plannedQuantity !== 100 || stage1?.unit !== PIECES || stage1?.percent !== 60) {
+    wrong.push(`the workshop panel shows ${JSON.stringify(stage1 ?? null)}, expected 60 of 100 pieces at 60%`);
   }
 
-  // the whole row done: 99%, never 100% or completed without the tick
+  // the whole row done: 99%, never 100% or completed without the tick, in the matrix and the workshop panel alike
   const full = await h.put(`/api/piecework/logs/${logId}`, { quantity: 100 });
   if (full.status !== 200) wrong.push(`raising the log to 100 answered ${brief(full)}`);
   if (stageText(await stageRows(h, projectId)) !== '1:99:in_progress 2:0:pending') wrong.push(`after the edit the stages are ${stageText(await stageRows(h, projectId))}, expected 1:99:in_progress 2:0:pending`);
   if ((await progressView(h, projectId)).products[0]?.progress_percent !== 50) wrong.push('after the edit the product does not read 50%');
+  if ((await panelStage(h, projectId, stageIds[0]))?.percent !== 99) wrong.push(`with the row done but not ticked the workshop panel reads ${(await panelStage(h, projectId, stageIds[0]))?.percent}%, expected 99%`);
 
-  // deleting the log takes its work out of the stage
+  // deleting the log takes its work out of the stage; a started stage stays started (review H1: a log only starts)
   const removed = await h.del(`/api/piecework/logs/${logId}`);
   if (removed.status !== 200) wrong.push(`deleting the log answered ${brief(removed)}`);
-  if (stageText(await stageRows(h, projectId)) !== '1:0:pending 2:0:pending') wrong.push(`after the delete the stages are ${stageText(await stageRows(h, projectId))}, expected 1:0:pending 2:0:pending`);
+  if (stageText(await stageRows(h, projectId)) !== '1:0:in_progress 2:0:pending') wrong.push(`after the delete the stages are ${stageText(await stageRows(h, projectId))}, expected 1:0:in_progress 2:0:pending`);
   if (cellOf(await progressView(h, projectId), 1)?.work?.done_quantity !== 0) wrong.push('after the delete the cell still counts the deleted log');
 
   // the row takes a new log, and only the tick completes the stage
@@ -145,6 +156,7 @@ async function logProgressCase(h: Harness, wrong: string[]): Promise<string> {
   const ticked = await h.put(`/api/projects/${projectId}/product-progress`, { items: [{ item_id: item, stage_order: 1, status: 'completed' }] });
   if (ticked.status !== 200) wrong.push(`ticking the cell answered ${brief(ticked)}`);
   if (stageText(await stageRows(h, projectId)) !== '1:100:completed 2:0:pending') wrong.push(`after the tick the stages are ${stageText(await stageRows(h, projectId))}, expected 1:100:completed 2:0:pending`);
+  if ((await panelStage(h, projectId, stageIds[0]))?.percent !== 100) wrong.push('after the tick the workshop panel does not read 100%');
 
   // moving the log to another project takes its work out of this project's cell; the tick stays
   const [other] = await h.q(`INSERT INTO production_projects (project_code, title) VALUES ($1, $2) RETURNING id`, [unique('D6O'), unique('D6 other')]);
@@ -203,4 +215,72 @@ async function mainItemCase(h: Harness, wrong: string[]): Promise<string> {
   if (plainLog.status !== 201) wrong.push(`logging a row of a project without a matrix answered ${brief(plainLog)} (${codeOf(plainLog)})`);
   if (await projectStatus(h, plain.projectId) !== 'planned') wrong.push(`a log moved a project without a matrix to ${await projectStatus(h, plain.projectId)}, expected planned`);
   return 'the single-item schedule counts in the matrix, the approval syncs the stage, and a project without a matrix is left alone';
+}
+
+/**
+ * the project's status and its stage rows with their completion times as one comparable string (not the version: the
+ * schedule link itself writes the log id into the project row, TD-736)
+ */
+async function projectState(h: Harness, projectId: number): Promise<string> {
+  const [project] = await h.q(`SELECT status FROM production_projects WHERE id = $1`, [projectId]);
+  const stages = await h.q(`SELECT stage_order, progress_percent, status, completed_at FROM project_stages WHERE project_id = $1 AND is_deleted = 0 ORDER BY stage_order`, [projectId]);
+  return `${project?.status} ${stages.map(r => `${r.stage_order}:${Number(r.progress_percent)}:${r.status}:${r.completed_at || '-'}`).join(' ')}`;
+}
+
+const DONE_AT = '2026-10-01T08:00:00.000Z';
+
+async function closedProjectCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const item = await f.item(0);
+  const task = await newTaskId(h);
+  const worker = await newWorker('D6 closed worker');
+  const row = (id: string): ScheduleRow => ({ id, taskId: task, taskTitle: 'برش D6', assignedPersonnelId: worker, quantity: 10, unit: PIECES });
+  const scheduled = () => scheduledProject(h, {
+    products: [{ id: 'prod-a', item_id: item, item_code: '', item_name: 'D6 product', quantity: 10, unit: 'عدد' }],
+    productKey: 'prod-a',
+    rows: [{ stage: 1, row: row('row-a') }, { stage: 2, row: row('row-b') }],
+  });
+  const logRow = (projectId: number, stageId: number, rowId: string, quantity: number) => h.post('/api/piecework/logs', {
+    personnelId: worker, taskId: task, projectId, date: f.today, quantity, scheduleRef: { stageId, productId: 'prod-a', rowId },
+  });
+  const idOf = (res: { body?: unknown }) => Number((res.body as { insertedIds?: number[] }).insertedIds?.[0]);
+
+  // a completed project whose matrix was never ticked in full (common before TD-739 / TD-758): create, edit and delete
+  // of a linked log leave its status, its stages and their completion times as they are
+  const done = await scheduled();
+  await h.q(`UPDATE production_projects SET status = 'completed' WHERE id = $1`, [done.projectId]);
+  await h.q(`UPDATE project_stages SET progress_percent = 100, status = 'completed', completed_at = $2 WHERE project_id = $1`, [done.projectId, DONE_AT]);
+  const doneBefore = await projectState(h, done.projectId);
+  const created = await logRow(done.projectId, done.stageIds[0], 'row-a', 10);
+  if (created.status !== 201) wrong.push(`logging a row of a completed project answered ${brief(created)}`);
+  if (await projectState(h, done.projectId) !== doneBefore) wrong.push(`a new log changed the completed project: ${await projectState(h, done.projectId)}, expected ${doneBefore}`);
+  const edited = await h.put(`/api/piecework/logs/${idOf(created)}`, { quantity: 9 });
+  if (edited.status !== 200) wrong.push(`editing the log answered ${brief(edited)}`);
+  if (await projectState(h, done.projectId) !== doneBefore) wrong.push(`a log edit reopened the completed project: ${await projectState(h, done.projectId)}, expected ${doneBefore}`);
+  const deleted = await h.del(`/api/piecework/logs/${idOf(created)}`);
+  if (deleted.status !== 200) wrong.push(`deleting the log answered ${brief(deleted)}`);
+  if (await projectState(h, done.projectId) !== doneBefore) wrong.push(`a log delete changed the completed project: ${await projectState(h, done.projectId)}, expected ${doneBefore}`);
+
+  // a running project: its completed stage keeps its percent, status and time; a blocked stage takes the percent and
+  // stays blocked; the project stays as it is
+  const running = await scheduled();
+  await h.q(`UPDATE production_projects SET status = 'in_progress' WHERE id = $1`, [running.projectId]);
+  await h.q(`UPDATE project_stages SET progress_percent = 100, status = 'completed', completed_at = $2 WHERE id = $1`, [running.stageIds[0], DONE_AT]);
+  await h.q(`UPDATE project_stages SET status = 'blocked' WHERE id = $1`, [running.stageIds[1]]);
+  const first = await logRow(running.projectId, running.stageIds[0], 'row-a', 5);
+  const second = await logRow(running.projectId, running.stageIds[1], 'row-b', 5);
+  if (first.status !== 201 || second.status !== 201) wrong.push(`logging the running project answered ${brief(first)} / ${brief(second)}`);
+  const edit = await h.put(`/api/piecework/logs/${idOf(first)}`, { quantity: 4 });
+  if (edit.status !== 200) wrong.push(`editing the running project's log answered ${brief(edit)}`);
+  const expected = `in_progress 1:100:completed:${DONE_AT} 2:50:blocked:-`;
+  if (await projectState(h, running.projectId) !== expected) wrong.push(`the running project reads ${await projectState(h, running.projectId)}, expected ${expected}`);
+
+  // a paused project is left alone
+  const paused = await scheduled();
+  await h.q(`UPDATE production_projects SET status = 'paused' WHERE id = $1`, [paused.projectId]);
+  const pausedBefore = await projectState(h, paused.projectId);
+  const pausedLog = await logRow(paused.projectId, paused.stageIds[0], 'row-a', 5);
+  if (pausedLog.status !== 201) wrong.push(`logging a row of a paused project answered ${brief(pausedLog)}`);
+  if (await projectState(h, paused.projectId) !== pausedBefore) wrong.push(`a log changed the paused project: ${await projectState(h, paused.projectId)}, expected ${pausedBefore}`);
+  return 'a work log left completed and paused projects, a completed stage and a blocked stage as they were';
 }

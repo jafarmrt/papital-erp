@@ -209,8 +209,9 @@ export function computeProgressMatrix(products: MatrixProduct[], stages: MatrixS
   const weighted = totalQty > 0
     ? Math.round(productRows.reduce((acc, p) => acc + p.percent * p.quantity, 0) / totalQty)
     : 0;
-  // 10.2 package 12 (D6): 100 only when every product reads 100 (every cell ticked), never by rounding 99.5
-  const weightedProgress = weighted >= 100 && productRows.some(p => p.percent < 100) ? 99 : weighted;
+  // 10.2 package 12 (D6): 100 only when every counted product reads 100 (every cell ticked), never by rounding 99.5;
+  // a product row without a warehouse item has no cells and never holds the cap (review N1)
+  const weightedProgress = weighted >= 100 && counted.some(p => p.percent < 100) ? 99 : weighted;
   const isDone = (p: MatrixProductProgress) => p.applicableOrders.length > 0 && p.completedCount === p.applicableOrders.length;
 
   return {

@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import { fetchJson, isAbortError } from '../api';
 import { errorMessageOf, toPersianDigits } from '../utils';
 import {
-  progressPercentOf, progressTickKey, progressTickRequestItems, resolveTickStatus, stageProgressPercent, toggledTickStatus,
+  progressPercentOf, progressTickKey, progressTickRequestItems, resolveTickStatus, stageProgressPercent, stageTickCounts, toggledTickStatus,
   type ProductProgressResponse, type ProgressCellStatus, type ProgressProduct,
 } from '../lib/projects/progressTicks';
 
@@ -71,6 +71,7 @@ export function useProductProgressTicks(projectId: number, { canEdit, onUpdate, 
   const statusOf = useCallback((p: ProgressProduct, order: number) => resolveTickStatus(p, order, edits), [edits]);
   const percentOf = useCallback((p: ProgressProduct) => progressPercentOf(p, edits), [edits]);
   const stagePercentOf = useCallback((order: number) => stageProgressPercent(products, order, edits), [products, edits]);
+  const stageCountsOf = useCallback((order: number) => stageTickCounts(products, order, edits), [products, edits]);
   const isEdited = useCallback((p: ProgressProduct, order: number) => edits.has(progressTickKey(p.item_id, order)), [edits]);
 
   // 10.2 package 12 (backlog: the desktop table ticked during a save): nothing is ticked while a save is under way,
@@ -147,7 +148,7 @@ export function useProductProgressTicks(projectId: number, { canEdit, onUpdate, 
 
   return {
     loading, saving, loadError, reload: () => void load(), data, stages, products, summary: data?.summary,
-    editCount: edits.size, hasChanges, statusOf, percentOf, stagePercentOf, isEdited,
+    editCount: edits.size, hasChanges, statusOf, percentOf, stagePercentOf, stageCountsOf, isEdited,
     toggle, setAllStagesOf, setStageForAll, reset, save,
   };
 }

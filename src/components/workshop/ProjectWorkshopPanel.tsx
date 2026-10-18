@@ -22,7 +22,7 @@ export function ProjectWorkshopPanel({ projectId, stages }: {
   const { data } = useProjectWorkshopReportsQuery(projectId, canRead);
   if (!data) return null;
   const pending = Array.isArray(data.pending) ? data.pending : [];
-  const progress = (Array.isArray(data.stageProgress) ? data.stageProgress : []).filter(s => s.plannedQuantity > 0);
+  const progress = (Array.isArray(data.stageProgress) ? data.stageProgress : []).filter(s => s.plannedQuantity === null || s.plannedQuantity > 0);
   if (pending.length === 0 && progress.length === 0) return null;
   const titleOf = (stageId: number) => stages.find(s => s.id === stageId)?.title ?? `مرحله ${formatPersianNumber(stageId)}`;
 
@@ -38,7 +38,7 @@ export function ProjectWorkshopPanel({ projectId, stages }: {
               <div className="flex justify-between text-xs text-slate-600 mb-1">
                 <span className="font-bold">{titleOf(stage.stageId)}</span>
                 <span>
-                  {stage.unit
+                  {stage.unit && stage.approvedQuantity !== null && stage.plannedQuantity !== null
                     ? <>{formatPersianNumber(stage.approvedQuantity, 4)} از {formatPersianNumber(stage.plannedQuantity, 4)} {stage.unit} · </>
                     : null}
                   {formatPersianNumber(stage.percent, 0)}٪

@@ -138,11 +138,13 @@ export interface WorkshopApproveResult {
 /** Per stage of a project: approved quantity ÷ planned quantity of its schedule rows (plan §4.3 «پیشرفت»). */
 export interface WorkshopStageProgress {
   stageId: number;
-  plannedQuantity: number;
-  /** the done work of the stage's rows (live work logs up to each row; 10.2 package 12, D6) */
-  approvedQuantity: number;
-  /** the rows' one unit, or null when they have several (only the percent is meaningful then) */
+  /** null when the rows have several units (10.2 package 12, review N4) */
+  plannedQuantity: number | null;
+  /** the done work of the stage's rows (live work logs up to each row; 10.2 package 12, D6); null with several units */
+  approvedQuantity: number | null;
+  /** the rows' one unit, or null when they have several (only the percent is given then) */
   unit: string | null;
+  /** below 100 until the stage is complete */
   percent: number;
 }
 

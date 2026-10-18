@@ -182,10 +182,9 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
             {stages.map(s => {
-              const stat = summary?.per_stage_counts.find(pc => pc.stage_order === s.stage_order);
-              const applicable = stat?.applicable_skus || 0;
-              const done = stat?.completed_count || 0;
-              // 10.2 package 12 (D6): ticked products count whole, the others their workshop work
+              // 10.2 package 12 (D6): ticked products count whole, the others their workshop work; the count and the
+              // percent both read the unsent ticks (review N5)
+              const { done, applicable } = ticks.stageCountsOf(s.stage_order);
               const pct = ticks.stagePercentOf(s.stage_order);
               return (
                 <div key={s.stage_order} className="bg-slate-50 rounded-xl border border-slate-100 p-2">

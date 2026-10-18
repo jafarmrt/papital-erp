@@ -101,3 +101,27 @@ export function matrixProjectStatus(current: string | null | undefined, input: M
   if (input.anyProgress) return status === 'planned' || status === 'completed' ? 'in_progress' : status;
   return status === 'completed' ? 'in_progress' : status;
 }
+
+/**
+ * 10.2 package 12 (D6, TD-1340, review H1): what a schedule-linked work log may change. A log is written, edited or deleted
+ * by a clerk holding only `piecework.log` (or approved from the workshop cartable), so it never decides a project's
+ * course: a completed, cancelled or paused project is left alone, and in any other project the log only updates the
+ * stage percents, starts a stage that was waiting and starts a planned project. A completed stage, a blocked stage and
+ * every other project status stay as the matrix tick, the stage form or the project form left them.
+ */
+export const WORK_SYNC_HELD_PROJECT_STATUSES: readonly string[] = ['completed', 'cancelled', 'paused'];
+
+export const workSyncHoldsProject = (status: string | null | undefined): boolean =>
+  WORK_SYNC_HELD_PROJECT_STATUSES.includes(String(status ?? ''));
+
+/** a stage's status after a work log: only «در انتظار شروع» with work becomes «در حال انجام» */
+export function workSyncStageStatus(current: string | null | undefined, percent: number): string {
+  const status = String(current ?? '') || 'pending';
+  return status === 'pending' && percent > 0 ? 'in_progress' : status;
+}
+
+/** a project's status after a work log: only a planned project with progress starts */
+export function workSyncProjectStatus(current: string | null | undefined, anyProgress: boolean): string {
+  const status = String(current ?? '') || 'planned';
+  return status === 'planned' && anyProgress ? 'in_progress' : status;
+}

@@ -13,10 +13,10 @@ import { cellsPercent } from './progressMatrix';
 
 export type ProgressCellStatus = 'pending' | 'in_progress' | 'completed' | 'blocked';
 
-/** a cell's workshop work (`scheduleWorkProgress.ts`): quantities only when `unit` is set, `share` from 0 to 1 */
+/** a cell's workshop work (`scheduleWorkProgress.ts`): quantities only when `unit` is set (else null), `share` from 0 to 1 */
 export interface ProgressCellWork {
-  planned_quantity: number;
-  done_quantity: number;
+  planned_quantity: number | null;
+  done_quantity: number | null;
   unit: string | null;
   share: number;
 }
@@ -111,9 +111,18 @@ export function stageProgressPercent(products: readonly ProgressProduct[], stage
     .map(p => cellOnScreen(p, stageOrder, edits)));
 }
 
+/**
+ * a stage's ticked products and the products it applies to, on screen: an unsent tick counts as it will after «ثبت», as
+ * the stage percent beside it does (review N5)
+ */
+export function stageTickCounts(products: readonly ProgressProduct[], stageOrder: number, edits: ProgressTickEdits): { done: number; applicable: number } {
+  const applicable = products.filter(p => p.item_id !== null && p.applicable_stage_orders.includes(stageOrder));
+  return { done: applicable.filter(p => resolveTickStatus(p, stageOrder, edits) === 'completed').length, applicable: applicable.length };
+}
+
 /** «۶۰ از ۱۰۰ عدد» for a cell of one unit, else its percent; `short` drops the unit for a narrow table cell */
 export function cellWorkLabel(work: ProgressCellWork, short = false): string {
-  if (!work.unit) return `${formatPersianNumber(workPercent(work.share), 0)}٪`;
+  if (!work.unit || work.done_quantity === null || work.planned_quantity === null) return `${formatPersianNumber(workPercent(work.share), 0)}٪`;
   const counts = `${formatPersianNumber(work.done_quantity, 4)} از ${formatPersianNumber(work.planned_quantity, 4)}`;
   return short ? counts : `${counts} ${work.unit}`;
 }
