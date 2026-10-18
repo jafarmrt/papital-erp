@@ -150,7 +150,11 @@ const PAGE_RULES = PAGE_ACCESS as Record<string, PageAccessRule>;
 /** بخش‌های یک کلید جدول: `:name` هر بخشی را می‌پذیرد و `:name?` بخشی که می‌تواند نباشد */
 function keyMatchesPath(key: string, path: string): boolean {
   const keyParts = key.split('/').filter(Boolean);
-  const pathParts = path.split('/').filter(Boolean);
+  if (!path.startsWith('/')) return false;
+  const pathParts = path.slice(1).split('/');
+  if (pathParts[pathParts.length - 1] === '' && pathParts.length > 1) pathParts.pop();
+  // an address of odd shape never reaches a rule: an empty segment («//»), «.» / «..», an encoded character or a backslash
+  if (pathParts.some(part => part === '' || part === '.' || part === '..' || /[%\\]/.test(part))) return false;
   if (pathParts.length > keyParts.length) return false;
   return keyParts.every((part, i) => {
     const given = pathParts[i];
