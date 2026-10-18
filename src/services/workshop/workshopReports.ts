@@ -12,7 +12,8 @@ import {
 import { formatPersianNumber, toPersianDigits } from '../../utils/persianNumber.js';
 import { PieceworkService } from '../piecework.service.js';
 import { assertProjectReviewer, notifyUsers, projectManagerUserIds, requireLinkedPersonnel, workerUserIds, type WorkshopActor } from './workshopAccess.js';
-import { CLOSED_PROJECT_STATUSES, liveLogIds, manualWorkLogs, productItemIdOf, productNameOf, reportView, rowHasLiveLog } from './workshopTasks.js';
+import { CLOSED_PROJECT_STATUSES, liveLogIds, manualWorkLogs, productNameOf, reportView, rowHasLiveLog } from './workshopTasks.js';
+import { scheduleProductItemId } from '../../lib/workshop/scheduleWorkProgress.js';
 
 /**
  * v10.1.39 (N-01 part 2, plan §4.3, decisions ت۲ الف, ت۵ الف, ت۶ الف and ت۷ الف): a worker's end-of-task report.
@@ -305,7 +306,7 @@ export async function approveWorkshopReport(tx: DbTransaction, actor: WorkshopAc
  * progress matrix, unless it is already completed. The tick itself stays the matrix's own route.
  */
 async function matrixTickSuggestion(tx: DbTransaction, projectId: number, approvedRow: WorkshopScheduleRow): Promise<MatrixTickSuggestion | null> {
-  const [project] = await tx.select({ stageSchedules: productionProjects.stageSchedules, products: productionProjects.products }).from(productionProjects)
+  const [project] = await tx.select({ stageSchedules: productionProjects.stageSchedules, products: productionProjects.products, itemId: productionProjects.itemId }).from(productionProjects)
     .where(eq(productionProjects.id, projectId));
   if (!project) return null;
   const siblings = workshopScheduleRows(project.stageSchedules).filter(r => r.stageId === approvedRow.stageId && r.productId === approvedRow.productId);
@@ -314,7 +315,7 @@ async function matrixTickSuggestion(tx: DbTransaction, projectId: number, approv
   const [stage] = await tx.select({ title: projectStages.title, stageOrder: projectStages.stageOrder }).from(projectStages)
     .where(and(eq(projectStages.id, approvedRow.stageId), eq(projectStages.isDeleted, 0)));
   if (!stage) return null;
-  const itemId = productItemIdOf(project.products, approvedRow.productId);
+  const itemId = scheduleProductItemId(project.products, project.itemId, approvedRow.productId);
   if (itemId !== null) {
     const done = await tx.select({ id: projectProductStageProgress.id }).from(projectProductStageProgress)
       .where(and(

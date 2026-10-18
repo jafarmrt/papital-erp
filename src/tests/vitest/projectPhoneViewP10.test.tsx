@@ -64,7 +64,7 @@ vi.mock('../../components/accounting/FinancialAttachmentUploader', () => ({ Fina
 
 import { renderProjectPage } from './helpers/projectPage';
 import { pendingProjectSteps, projectDueNote } from '../../lib/projects/projectPhoneSummary';
-import { progressTickRequestItems, splitStageColumns, tickedProgressPercent, toggledTickStatus, type ProgressProduct, type ProgressCellStatus } from '../../lib/projects/progressTicks';
+import { progressTickRequestItems, splitStageColumns, progressPercentOf, toggledTickStatus, type ProgressProduct, type ProgressCellStatus } from '../../lib/projects/progressTicks';
 import type { ProjectStep } from '../../lib/projects/projectSteps';
 
 const MATRIX_TABLE_TITLE = 'ماتریس پیشرفت فیزیکی محصولات (مرحله × کالا)';
@@ -132,8 +132,8 @@ describe('phone summary and tick rules (10.2 package 10)', () => {
     const edits = new Map<string, ProgressCellStatus>([['50|2', toggledTickStatus('pending')]]);
     expect(toggledTickStatus('completed')).toBe('pending');
     expect(toggledTickStatus('blocked')).toBe('completed');
-    expect(tickedProgressPercent(product, new Map())).toBe(50);
-    expect(tickedProgressPercent(product, edits)).toBe(100);
+    expect(progressPercentOf(product, new Map())).toBe(50);
+    expect(progressPercentOf(product, edits)).toBe(100);
     expect(progressTickRequestItems(edits)).toEqual([{ item_id: 50, stage_order: 2, status: 'completed' }]);
     const split = splitStageColumns([{ stage_order: 1, title: 'a' }, { stage_order: 3, title: 'b' }], [product]);
     expect(split.baseStages.map(s => s.stage_order)).toEqual([1]);

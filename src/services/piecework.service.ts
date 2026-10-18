@@ -8,7 +8,8 @@ import { PieceworkPayrollService } from './piecework/payroll.service.js';
 import { lockEditableWorkLog, workLogFreeOfLivePayroll } from './piecework/workLogPayrollLink.js';
 import { auditTaskCreated, auditTaskDeleted, auditTaskRestored, auditTasksCleared, auditTasksImported, auditTaskUpdated, auditWorkLogCreated, auditWorkLogDeleted, auditWorkLogUpdated, type AuditActor } from './piecework/pieceworkAudit.js';
 import { activePersonnelRate, savePersonnelRate, type PersonnelRateInput, type RateActor } from './piecework/personnelRate.js';
-import { assertScheduleRowsFree, linkScheduleRows, lockProjectsOfLogMove, lockScheduleProjects, unlinkScheduleRow } from './piecework/scheduleRowLink.js';
+import { assertScheduleRowsFree, isScheduleLinkedLog, linkScheduleRows, lockProjectsOfLogMove, lockScheduleProjects, unlinkScheduleRow } from './piecework/scheduleRowLink.js';
+import { syncScheduleProgress } from './piecework/scheduleProgressSync.js';
 import { revertWorkshopReportsOfLog } from './piecework/workshopReportRevert.js';
 import type { ScheduleRowRef } from '../lib/projects/scheduleWorkLog.js';
 import { assertWorkLogParentsLive, assertWorkLogsWithinService, normalizeWorkLogEntries, workLogId, workLogManualRate, workLogQuantity, type WorkLogEntryInput } from './piecework/workLogEntry.js';
@@ -346,6 +347,8 @@ export class PieceworkService {
         if (entry.scheduleRef && entry.projectId !== null) links.push({ projectId: entry.projectId, ref: entry.scheduleRef, logId: inserted.id });
       }
       await linkScheduleRows(tx, links, schedules);
+      // 10.2 package 12 (D6): the linked rows' work now counts in each project's progress
+      await syncScheduleProgress(tx, links.map(l => l.projectId), actor);
       return insertedIds;
     });
   }
@@ -807,8 +810,11 @@ export class PieceworkService {
         throw new ConflictError('کارکرد هم‌زمان در فیش حقوقی درج یا حذف شد؛ فهرست را دوباره بارگذاری کنید');
       }
       if (projectMoved) {
-        await unlinkScheduleRow(tx, existing.projectId, id);
+        // 10.2 package 12 (D6): the row's work leaves the earlier project's progress
+        if (await unlinkScheduleRow(tx, existing.projectId, id)) await syncScheduleProgress(tx, [existing.projectId], actor);
         await revertWorkshopReportsOfLog(tx, id, actor);
+      } else if (Number(updated.quantity) !== Number(existing.quantity) && await isScheduleLinkedLog(tx, existing.projectId, id)) {
+        await syncScheduleProgress(tx, [existing.projectId], actor);
       }
       // v9.0.285 (TD-810): فقط فیلدهای تغییرکرده با قبل و بعد
       await auditWorkLogUpdated(tx, existing, updated, actor);
@@ -833,8 +839,8 @@ export class PieceworkService {
       if (!deleted) {
         throw new ConflictError('کارکرد هم‌زمان در فیش حقوقی درج یا حذف شد؛ فهرست را دوباره بارگذاری کنید');
       }
-      // v9.0.282 (TD-736): ردیف برنامه کارکرد حذف‌شده دوباره ثبت‌شدنی است
-      await unlinkScheduleRow(tx, existing.projectId, id);
+      // v9.0.282 (TD-736): ردیف برنامه کارکرد حذف‌شده دوباره ثبت‌شدنی است؛ 10.2 بستهٔ ۱۲ (D6): پیشرفت پروژه هم
+      if (await unlinkScheduleRow(tx, existing.projectId, id)) await syncScheduleProgress(tx, [existing.projectId], actor);
       // v10.1.39 (TD-1284): the workshop report approved into this log is undone, so its row takes a new report
       await revertWorkshopReportsOfLog(tx, id, actor);
       await auditWorkLogDeleted(tx, existing, actor);

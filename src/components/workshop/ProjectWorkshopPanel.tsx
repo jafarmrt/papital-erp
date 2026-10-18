@@ -11,6 +11,8 @@ const READERS = ['projects.view', WORKSHOP_REVIEW_PERMISSION] as const;
 /**
  * v10.1.40 (N-01 part 3, plan §4.3 «پیشرفت»): in a project's workshop schedule, each stage's approved quantity against
  * its planned rows and the end-of-task reports still waiting; a manager of the project reviews them here too.
+ * 10.2 package 12 (D6): the done work is the progress matrix's rule (`scheduleWorkProgress.ts`); a stage whose rows have
+ * several units shows only its percent.
  */
 export function ProjectWorkshopPanel({ projectId, stages }: {
   projectId: number;
@@ -36,7 +38,10 @@ export function ProjectWorkshopPanel({ projectId, stages }: {
               <div className="flex justify-between text-xs text-slate-600 mb-1">
                 <span className="font-bold">{titleOf(stage.stageId)}</span>
                 <span>
-                  {formatPersianNumber(stage.approvedQuantity, 4)} از {formatPersianNumber(stage.plannedQuantity, 4)} · {formatPersianNumber(stage.percent, 0)}٪
+                  {stage.unit
+                    ? <>{formatPersianNumber(stage.approvedQuantity, 4)} از {formatPersianNumber(stage.plannedQuantity, 4)} {stage.unit} · </>
+                    : null}
+                  {formatPersianNumber(stage.percent, 0)}٪
                 </span>
               </div>
               <div className="h-2 rounded-full bg-slate-100 overflow-hidden" role="progressbar" aria-label={titleOf(stage.stageId)}

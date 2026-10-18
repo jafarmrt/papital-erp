@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import { fetchJson, isAbortError } from '../api';
 import { errorMessageOf, toPersianDigits } from '../utils';
 import {
-  progressTickKey, progressTickRequestItems, resolveTickStatus, tickedProgressPercent, toggledTickStatus,
+  progressPercentOf, progressTickKey, progressTickRequestItems, resolveTickStatus, stageProgressPercent, toggledTickStatus,
   type ProductProgressResponse, type ProgressCellStatus, type ProgressProduct,
 } from '../lib/projects/progressTicks';
 
@@ -69,18 +69,21 @@ export function useProductProgressTicks(projectId: number, { canEdit, onUpdate, 
   const products = useMemo(() => (Array.isArray(data?.products) ? data.products : []), [data]);
 
   const statusOf = useCallback((p: ProgressProduct, order: number) => resolveTickStatus(p, order, edits), [edits]);
-  const percentOf = useCallback((p: ProgressProduct) => tickedProgressPercent(p, edits), [edits]);
+  const percentOf = useCallback((p: ProgressProduct) => progressPercentOf(p, edits), [edits]);
+  const stagePercentOf = useCallback((order: number) => stageProgressPercent(products, order, edits), [products, edits]);
   const isEdited = useCallback((p: ProgressProduct, order: number) => edits.has(progressTickKey(p.item_id, order)), [edits]);
 
+  // 10.2 package 12 (backlog: the desktop table ticked during a save): nothing is ticked while a save is under way,
+  // since the save clears every unsent change when it returns
   const toggle = (p: ProgressProduct, order: number) => {
-    if (!canEdit) return;
+    if (!canEdit || saving) return;
     const next = toggledTickStatus(resolveTickStatus(p, order, edits));
     setEdits(prev => new Map(prev).set(progressTickKey(p.item_id, order), next));
   };
 
   /** every stage of the given products set to one status */
   const setAllStagesOf = (itemIds: ReadonlySet<number>, status: ProgressCellStatus) => {
-    if (!canEdit || itemIds.size === 0) return;
+    if (!canEdit || saving || itemIds.size === 0) return;
     setEdits(prev => {
       const m = new Map(prev);
       for (const p of products) {
@@ -95,7 +98,7 @@ export function useProductProgressTicks(projectId: number, { canEdit, onUpdate, 
 
   /** one stage set to one status for every product it applies to */
   const setStageForAll = (order: number, status: ProgressCellStatus) => {
-    if (!canEdit) return;
+    if (!canEdit || saving) return;
     setEdits(prev => {
       const m = new Map(prev);
       for (const p of products) {
@@ -107,6 +110,7 @@ export function useProductProgressTicks(projectId: number, { canEdit, onUpdate, 
   };
 
   const reset = () => {
+    if (saving) return;
     setEdits(new Map());
     toast('تغییرات ثبت‌نشده لغو شدند', { icon: '↩️' });
   };
@@ -143,7 +147,7 @@ export function useProductProgressTicks(projectId: number, { canEdit, onUpdate, 
 
   return {
     loading, saving, loadError, reload: () => void load(), data, stages, products, summary: data?.summary,
-    editCount: edits.size, hasChanges, statusOf, percentOf, isEdited,
+    editCount: edits.size, hasChanges, statusOf, percentOf, stagePercentOf, isEdited,
     toggle, setAllStagesOf, setStageForAll, reset, save,
   };
 }

@@ -11,6 +11,8 @@ import { registerRequisitionWorkflowAction } from '../procurement/requisitionWor
 import { procurementOrderHooks } from '../procurement/requisitionOrderSync.js';
 import { registerLinkedOrderHooks } from '../documents/linkedOrderHooks.js';
 import { registerEntityWorkflowPort } from './entityWorkflowPort.js';
+import { registerScheduleProgressSync } from '../piecework/scheduleProgressSync.js';
+import { syncProjectsAfterScheduleWork } from '../projects/projectStatusSync.js';
 import { WorkflowEngineService } from '../workflow/workflowEngineService.js';
 import { terminateOpenWorkflows } from '../workflow/workflowTermination.js';
 
@@ -36,4 +38,6 @@ export function registerWorkflowDomainActions(): void {
   registerLinkedOrderHooks(procurementOrderHooks);
   // v10.0.250 (OBS-R2-02): the accounting, treasury and item cores start and close their entity workflows through this port
   registerEntityWorkflowPort({ maybeStart: params => WorkflowEngineService.maybeStartWorkflow(params), terminateOpen: terminateOpenWorkflows });
+  // 10.2 package 12 (D6): a work log of a workshop schedule row syncs its project's progress (piecework may not import projects)
+  registerScheduleProgressSync(syncProjectsAfterScheduleWork);
 }

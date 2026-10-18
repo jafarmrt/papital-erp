@@ -139,7 +139,10 @@ export interface WorkshopApproveResult {
 export interface WorkshopStageProgress {
   stageId: number;
   plannedQuantity: number;
+  /** the done work of the stage's rows (live work logs up to each row; 10.2 package 12, D6) */
   approvedQuantity: number;
+  /** the rows' one unit, or null when they have several (only the percent is meaningful then) */
+  unit: string | null;
   percent: number;
 }
 

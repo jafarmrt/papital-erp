@@ -1,12 +1,25 @@
+import { formatPersianNumber } from '../../utils/persianNumber';
+import { workPercent } from '../workshop/scheduleWorkProgress';
+import { cellsPercent } from './progressMatrix';
+
 /**
  * v10.2.9 (10.2 package 10): the tick rules of a project's progress matrix (item × stage), shared by the desktop table
  * («۳. پیشرفت هر کالا») and the phone list, so both read the same answer of `GET /projects/:id/product-progress`,
  * flip a cell the same way and send the same `PUT` body. The server alone decides what a tick means
- * (`computeProgressMatrix` and the status sync in the tick's transaction, TD-738 / TD-739); a later rule for the
- * progress (approved workshop counts) changes these functions once for both screens.
+ * (`computeProgressMatrix` and the status sync in the tick's transaction, TD-738 / TD-739).
+ * 10.2 package 12 (D6, owner decision ت۴۲ الف): a cell also carries the done work of its workshop schedule rows, and a
+ * percent counts it (`cellsPercent`, the server's own rule), while «تمام» stays the manager's tick.
  */
 
 export type ProgressCellStatus = 'pending' | 'in_progress' | 'completed' | 'blocked';
+
+/** a cell's workshop work (`scheduleWorkProgress.ts`): quantities only when `unit` is set, `share` from 0 to 1 */
+export interface ProgressCellWork {
+  planned_quantity: number;
+  done_quantity: number;
+  unit: string | null;
+  share: number;
+}
 
 export interface ProgressStageMeta { stage_order: number; title: string; status?: string }
 
@@ -16,6 +29,8 @@ export interface ProgressCell {
   status: ProgressCellStatus;
   updated_at: string;
   updated_by_name: string;
+  /** absent from an answer before 10.2 package 12, null when the cell has no schedule row */
+  work?: ProgressCellWork | null;
 }
 
 export interface ProgressProduct {
@@ -41,7 +56,7 @@ export interface ProductProgressResponse {
     total_quantity: number;
     weighted_progress_percent: number;
     fully_completed_skus: number;
-    per_stage_counts: Array<{ stage_order: number; title: string; completed_count: number; applicable_skus: number }>;
+    per_stage_counts: Array<{ stage_order: number; title: string; completed_count: number; applicable_skus: number; progress_percent?: number }>;
     total_matrix_cells?: number;
     completed_matrix_cells?: number;
     all_matrix_completed?: boolean;
@@ -72,12 +87,35 @@ export function resolveTickStatus(product: ProgressProduct, stageOrder: number, 
 /** a tap flips a cell between «تمام» and «ناتمام»; any other status becomes «تمام» */
 export const toggledTickStatus = (current: ProgressCellStatus): ProgressCellStatus => (current === 'completed' ? 'pending' : 'completed');
 
-/** a product's percent on screen: its ticked stages among the stages that apply to it */
-export function tickedProgressPercent(product: ProgressProduct, edits: ProgressTickEdits): number {
-  const applicable = product.applicable_stage_orders;
-  if (applicable.length === 0) return 0;
-  const done = applicable.filter(order => resolveTickStatus(product, order, edits) === 'completed').length;
-  return Math.round((done / applicable.length) * 100);
+/** a cell's workshop work, when it has any */
+export const cellWorkOf = (product: ProgressProduct, stageOrder: number): ProgressCellWork | null =>
+  product.progress.find(cell => cell.stage_order === stageOrder)?.work ?? null;
+
+const cellOnScreen = (product: ProgressProduct, order: number, edits: ProgressTickEdits) => ({
+  status: resolveTickStatus(product, order, edits),
+  work: cellWorkOf(product, order),
+});
+
+/**
+ * a product's percent on screen: its stages' average, a ticked stage whole and any other its workshop work; 100 only
+ * when every stage is ticked (`cellsPercent`, the server's rule, so an unsent tick reads as it will after «ثبت»)
+ */
+export function progressPercentOf(product: ProgressProduct, edits: ProgressTickEdits): number {
+  return cellsPercent(product.applicable_stage_orders.map(order => cellOnScreen(product, order, edits)));
+}
+
+/** a stage's percent on screen over the products it applies to, by the same rule */
+export function stageProgressPercent(products: readonly ProgressProduct[], stageOrder: number, edits: ProgressTickEdits): number {
+  return cellsPercent(products
+    .filter(p => p.item_id !== null && p.applicable_stage_orders.includes(stageOrder))
+    .map(p => cellOnScreen(p, stageOrder, edits)));
+}
+
+/** «۶۰ از ۱۰۰ عدد» for a cell of one unit, else its percent; `short` drops the unit for a narrow table cell */
+export function cellWorkLabel(work: ProgressCellWork, short = false): string {
+  if (!work.unit) return `${formatPersianNumber(workPercent(work.share), 0)}٪`;
+  const counts = `${formatPersianNumber(work.done_quantity, 4)} از ${formatPersianNumber(work.planned_quantity, 4)}`;
+  return short ? counts : `${counts} ${work.unit}`;
 }
 
 /** the body rows of `PUT /projects/:id/product-progress` for the unsent changes */
