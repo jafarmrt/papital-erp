@@ -126,7 +126,7 @@ describe('project step bar (10.2 package 2, U4)', () => {
 });
 
 describe('unsaved changes on the project page (10.2 package 2, U2)', () => {
-  it('asks before leaving a tab with a change not saved, and stays on «می‌مانم»', async () => {
+  it('asks before leaving a tab with a change not saved, and stays when the user chooses to stay', async () => {
     renderProjectPage();
     fireEvent.click(await screen.findByText('ویرایش زمان‌بندی و پرسنل'));
     expect(within(tab('۱. مشخصات')).getByText('ذخیره‌نشده')).toBeTruthy();
