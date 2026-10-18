@@ -3,13 +3,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { usePersonnel } from '../../hooks/usePersonnel';
-import { personnelPageUrl } from '../../lib/personnel/personnelList';
+import { PERSONNEL_PICK_CAP_TOAST_ID, PERSONNEL_PICK_URL, personnelPageUrl, personnelPickCapNotice } from '../../lib/personnel/personnelList';
+import { useAccountingPersonnelQuery } from '../../hooks/accounting/useAccountingParties';
 
 // OBS-R2-57 (TD-1321): the personnel page reads one page from the server and every personnel only while the form or the
 // Excel window is open; the earlier hook read the whole list on open and searched and paged it in the browser
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
-vi.mock('react-hot-toast', () => ({ toast: { success: vi.fn(), error: vi.fn() }, default: { success: vi.fn(), error: vi.fn() } }));
+const toastFn = vi.hoisted(() => Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }));
+vi.mock('react-hot-toast', () => ({ toast: toastFn, default: toastFn }));
 vi.mock('../../components/ConfirmDialogHost', () => ({ confirmAction: async () => true }));
 
 const stats = { total: 40, active: 30, terminated: 6, onLeave: 4, usersCount: 12 };
@@ -30,7 +32,7 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
-afterEach(() => { cleanup(); fetchJson.mockReset(); });
+afterEach(() => { cleanup(); fetchJson.mockReset(); toastFn.mockReset(); });
 
 describe('personnel page list (OBS-R2-57)', () => {
   it('builds the page address with search and status, and leaves out an empty search or «all»', () => {
@@ -69,5 +71,28 @@ describe('personnel page list (OBS-R2-57)', () => {
     await waitFor(() => expect(fetchJson.mock.calls.map(c => String(c[0])))
       .toContain(`/personnel?page=1&limit=15&search=${encodeURIComponent('رضا')}`));
     expect(result.current.currentPage).toBe(1);
+  });
+});
+
+describe('personnel pick list cap (OBS-R1-69)', () => {
+  it('says so in Persian only when the list reached the cap', () => {
+    expect(personnelPickCapNotice(999)).toBeNull();
+    expect(personnelPickCapNotice(1000)).toContain('۱٬۰۰۰');
+  });
+
+  it('the accounting party picker reads the capped list and shows the notice once at the cap', async () => {
+    fetchJson.mockImplementation((url: string) => Promise.resolve(url === PERSONNEL_PICK_URL
+      ? Array.from({ length: 1000 }, (_, i) => row(i + 1)) : []));
+    const { result } = renderHook(() => useAccountingPersonnelQuery(), { wrapper });
+    await waitFor(() => expect(result.current.data).toHaveLength(1000));
+    expect(fetchJson.mock.calls.map(c => String(c[0]))).toEqual([PERSONNEL_PICK_URL]);
+    expect(toastFn).toHaveBeenCalledWith(personnelPickCapNotice(1000), { id: PERSONNEL_PICK_CAP_TOAST_ID });
+  });
+
+  it('a list under the cap shows no notice', async () => {
+    fetchJson.mockImplementation(() => Promise.resolve([row(1), row(2)]));
+    const { result } = renderHook(() => useAccountingPersonnelQuery(), { wrapper });
+    await waitFor(() => expect(result.current.data).toHaveLength(2));
+    expect(toastFn).not.toHaveBeenCalled();
   });
 });

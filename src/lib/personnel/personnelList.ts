@@ -34,3 +34,15 @@ export function personnelPageUrl({ page, limit, search, status }: PersonnelPageP
 }
 
 export const EMPTY_PERSONNEL_STATS: PersonnelListStats = { total: 0, active: 0, terminated: 0, onLeave: 0, usersCount: 0 };
+
+/** OBS-R1-69 (TD-1321): a personnel pick list (accounting parties, the sales seller) reads at most this many, newest first */
+export const PERSONNEL_PICK_LIMIT = 1000;
+export const PERSONNEL_PICK_URL = `/personnel?limit=${PERSONNEL_PICK_LIMIT}`;
+export const PERSONNEL_PICK_CAP_TOAST_ID = 'personnel-pick-cap';
+
+/** The Persian notice a pick list shows when the server cut it at the cap, else null */
+export function personnelPickCapNotice(count: number): string | null {
+  if (count < PERSONNEL_PICK_LIMIT) return null;
+  const cap = PERSONNEL_PICK_LIMIT.toLocaleString('fa-IR');
+  return `پرسنل بیش از ${cap} نفرند و فهرست انتخاب فقط ${cap} نفر تازه‌تر را نشان می‌دهد.`;
+}
