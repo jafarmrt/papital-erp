@@ -196,7 +196,7 @@ export async function runUrgentFixesV1020Tests(shouldRun: ShouldRun): Promise<Te
   if (shouldRun('reg_workflow_removed_permission_v10_2_0', 'v10_2_0', 'td_1289', 'workflow', 'permissions')) {
     await runCase(results, 'reg_workflow_removed_permission_v10_2_0',
       'v10.2.0: workflow actions still asking the removed key of migration 0123 ask audit.apply, published with an audit row; a definition with a draft waits',
-      'replaceRemovedWorkflowPermissions: published definition -> audit.apply in its tables and a new published version, one «طرح گردش کار» row; a second run changes nothing; a definition with a draft untouched',
+      'replaceRemovedWorkflowPermissions: published definition -> audit.apply in its tables and a new published version, one workflow design audit row; a second run changes nothing; a definition with a draft untouched',
       async (wrong) => {
         const { WorkflowDefinitionService } = await import('../../services/workflow/workflowDefinitionService.js');
         const { recordDefinitionVersion } = await import('../../services/workflow/workflowSnapshot.js');

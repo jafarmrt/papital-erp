@@ -45,7 +45,7 @@ describe('screen_cosmetics_v10_2_0', () => {
     expect(emptyChildren).toHaveLength(0);
   });
 
-  it('the login page says سامانه, never سیستم', () => {
+  it('the login page names the application with the Persian word for system the glossary asks', () => {
     const source = read('src/pages/LoginPage.tsx');
     expect(source).toContain(`'${LOGIN_BUTTON}'`);
     expect(source).not.toContain(OLD_LOGIN_WORD);
