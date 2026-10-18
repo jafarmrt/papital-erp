@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
-import { RefreshCw, Layers, Package, CheckCircle2, Circle, Clock, Ban, Save, Info, Search, CheckSquare, Square, RotateCcw, Lock } from 'lucide-react';
+import { RefreshCw, Layers, Package, CheckCircle2, Circle, Save, Info, Search, CheckSquare, Square, RotateCcw, Lock } from 'lucide-react';
 import { toPersianDigits } from '../../utils';
 import { useProjectPermissions } from '../../hooks/useProjectPermissions';
 import { useProductProgressTicks } from '../../hooks/useProductProgressTicks';
-import { PROGRESS_CELL_LABELS, splitStageColumns } from '../../lib/projects/progressTicks';
+import { cellWorkOf, splitStageColumns } from '../../lib/projects/progressTicks';
+import { ProgressMatrixCell } from './ProgressMatrixCell';
 
 // V3.1.5 — تب «پیشرفت به تفکیک کد کالا» (ماتریسی SKU × مرحله + فیلتر، انتخاب ردیف و عملیات دسته‌ای)
 // مدل: هر ردیف = یک SKU (کد کالا × کمیت)؛ وضعیت هر مرحله دودویی (تمام/ناتمام)؛
@@ -181,10 +182,10 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
             {stages.map(s => {
-              const stat = summary?.per_stage_counts.find(pc => pc.stage_order === s.stage_order);
-              const applicable = stat?.applicable_skus || 0;
-              const done = stat?.completed_count || 0;
-              const pct = applicable > 0 ? Math.round((done / applicable) * 100) : 0;
+              // 10.2 package 12 (D6): ticked products count whole, the others their workshop work; the count and the
+              // percent both read the unsent ticks (review N5)
+              const { done, applicable } = ticks.stageCountsOf(s.stage_order);
+              const pct = ticks.stagePercentOf(s.stage_order);
               return (
                 <div key={s.stage_order} className="bg-slate-50 rounded-xl border border-slate-100 p-2">
                   <div className="flex items-center justify-between mb-1">
@@ -198,7 +199,8 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
                     {canEdit ? (
                       <button
                         onClick={() => setStageForAllSkus(s.stage_order, 'completed')}
-                        className="text-emerald-600 hover:text-emerald-800 font-bold cursor-pointer"
+                        disabled={saving}
+                        className="text-emerald-600 hover:text-emerald-800 font-bold cursor-pointer disabled:opacity-50 disabled:cursor-default"
                         title="تمام کردن این مرحله برای همه اقلام اعمال‌شده"
                       >
                         تمام همه
@@ -241,7 +243,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
                   type="button"
                   onClick={resetDirty}
                   disabled={saving}
-                  className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer"
+                  className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-default"
                   title="لغو تمام تغییرات اعمال‌نشده"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
@@ -318,7 +320,8 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
                 <button
                   type="button"
                   onClick={() => setAllStagesForSelectedSkus('completed')}
-                  className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer transition-colors"
+                  disabled={saving}
+                  className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-default transition-colors"
                 >
                   <CheckCircle2 className="w-3 h-3" />
                   تمام کردن کلیه مراحل
@@ -326,7 +329,8 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
                 <button
                   type="button"
                   onClick={() => setAllStagesForSelectedSkus('pending')}
-                  className="px-2 py-0.5 bg-slate-700 hover:bg-slate-800 text-white rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer transition-colors"
+                  disabled={saving}
+                  className="px-2 py-0.5 bg-slate-700 hover:bg-slate-800 text-white rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-default transition-colors"
                 >
                   <Circle className="w-3 h-3" />
                   ریست به ناتمام
@@ -373,7 +377,8 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
                         <button
                           type="button"
                           onClick={() => setStageForAllSkus(s.stage_order, 'completed')}
-                          className="text-[9px] text-emerald-600 hover:text-emerald-800 font-bold cursor-pointer"
+                          disabled={saving}
+                          className="text-[9px] text-emerald-600 hover:text-emerald-800 font-bold cursor-pointer disabled:opacity-50 disabled:cursor-default"
                           title={`تکمیل مرحله «${s.title}» برای همه کالاها`}
                         >
                           ✓ همه
@@ -391,7 +396,8 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
                         <button
                           type="button"
                           onClick={() => setStageForAllSkus(s.stage_order, 'completed')}
-                          className="text-[9px] text-emerald-600 hover:text-emerald-800 font-bold cursor-pointer"
+                          disabled={saving}
+                          className="text-[9px] text-emerald-600 hover:text-emerald-800 font-bold cursor-pointer disabled:opacity-50 disabled:cursor-default"
                           title={`تکمیل مرحله اختیاری «${s.title}» برای همه کالاها`}
                         >
                           ✓ همه
@@ -454,62 +460,22 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
                       <td className="p-2.5 text-center font-mono font-bold text-slate-700 whitespace-nowrap">
                         {toPersianDigits(p.quantity)} {p.unit || 'عدد'}
                       </td>
-                      {baseStages.map(s => {
-                        const applicable = p.applicable_stage_orders.includes(s.stage_order);
-                        const st = applicable ? resolveStatus(p, s.stage_order) : null;
-                        const isDirty = isEdited(p, s.stage_order);
+                      {[...baseStages, ...optionalStages].map(s => {
+                        const optional = !baseStages.includes(s);
+                        if (!p.applicable_stage_orders.includes(s.stage_order)) {
+                          return <td key={`c-${s.stage_order}`} className={`p-1 text-center ${optional ? 'bg-amber-50/30' : ''}`}><span className="text-slate-200">—</span></td>;
+                        }
                         return (
-                          <td key={`c-${s.stage_order}`} className={`p-1 text-center ${isDirty ? 'bg-blue-100/50' : ''}`}>
-                            {applicable ? (
-                              <button
-                                onClick={() => toggleStatus(p, s.stage_order)}
-                                disabled={!canEdit}
-                                className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-colors cursor-pointer disabled:cursor-default ${
-                                  st === 'completed'
-                                    ? 'bg-emerald-100 text-emerald-700 border border-emerald-300 hover:bg-emerald-200'
-                                    : st === 'in_progress'
-                                    ? 'bg-blue-100 text-blue-700 border border-blue-300 hover:bg-blue-200'
-                                    : st === 'blocked'
-                                    ? 'bg-red-100 text-red-700 border border-red-300 hover:bg-red-200'
-                                    : 'bg-slate-100 text-slate-300 border border-slate-200 hover:bg-slate-200'
-                                }`}
-                                title={`${s.title} — ${st ? PROGRESS_CELL_LABELS[st] : ''} (کلیک: تغییر تمام/ناتمام)`}
-                              >
-                                {st === 'completed' ? <CheckCircle2 className="w-4 h-4" /> : st === 'in_progress' ? <Clock className="w-4 h-4" /> : st === 'blocked' ? <Ban className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
-                              </button>
-                            ) : (
-                              <span className="text-slate-200">—</span>
-                            )}
-                          </td>
-                        );
-                      })}
-                      {optionalStages.map(s => {
-                        const applicable = p.applicable_stage_orders.includes(s.stage_order);
-                        const st = applicable ? resolveStatus(p, s.stage_order) : null;
-                        const isDirty = isEdited(p, s.stage_order);
-                        return (
-                          <td key={`oc-${s.stage_order}`} className={`p-1 text-center bg-amber-50/30 ${isDirty ? 'bg-blue-100/50' : ''}`}>
-                            {applicable ? (
-                              <button
-                                onClick={() => toggleStatus(p, s.stage_order)}
-                                disabled={!canEdit}
-                                className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-colors cursor-pointer disabled:cursor-default ${
-                                  st === 'completed'
-                                    ? 'bg-emerald-100 text-emerald-700 border border-emerald-300 hover:bg-emerald-200'
-                                    : st === 'in_progress'
-                                    ? 'bg-blue-100 text-blue-700 border border-blue-300 hover:bg-blue-200'
-                                    : st === 'blocked'
-                                    ? 'bg-red-100 text-red-700 border border-red-300 hover:bg-red-200'
-                                    : 'bg-slate-100 text-slate-300 border border-slate-200 hover:bg-slate-200'
-                                }`}
-                                title={`${s.title} (اختیاری) — ${st ? PROGRESS_CELL_LABELS[st] : ''}`}
-                              >
-                                {st === 'completed' ? <CheckCircle2 className="w-4 h-4" /> : st === 'in_progress' ? <Clock className="w-4 h-4" /> : st === 'blocked' ? <Ban className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
-                              </button>
-                            ) : (
-                              <span className="text-slate-200">—</span>
-                            )}
-                          </td>
+                          <ProgressMatrixCell
+                            key={`c-${s.stage_order}`}
+                            stageTitle={s.title}
+                            optional={optional}
+                            status={resolveStatus(p, s.stage_order)}
+                            edited={isEdited(p, s.stage_order)}
+                            work={cellWorkOf(p, s.stage_order)}
+                            disabled={!canEdit || saving}
+                            onToggle={() => toggleStatus(p, s.stage_order)}
+                          />
                         );
                       })}
                       <td className="p-2 text-center">
@@ -532,6 +498,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
           <span className="flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> تمام</span>
           <span className="flex items-center gap-1"><Circle className="w-3.5 h-3.5 text-slate-300" /> ناتمام</span>
           <span className="flex items-center gap-1"><Info className="w-3.5 h-3.5 text-blue-500" /> مراحل اختیاری با نشان ◇ — فقط برای اقلامی که در فرم پروژه انتخاب شده‌اند اعمال می‌شود</span>
+          <span>عدد زیر هر خانه: کار ثبت‌شدهٔ کارگاه از برنامه؛ «تمام» را مسئول پروژه تیک می‌زند</span>
         </div>
       </div>
     </div>

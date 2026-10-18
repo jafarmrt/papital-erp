@@ -9,6 +9,7 @@ import type {
 import {
   daysUntilDeadline, taskDeadlineIso, workshopScheduleRows, type WorkshopReportStatus, type WorkshopScheduleRow,
 } from '../../lib/workshop/workshopSchedule.js';
+import { scheduleRowDoneQuantity, workPercent, workProgressOf } from '../../lib/workshop/scheduleWorkProgress.js';
 import { reviewableProjectIds, requireLinkedPersonnel, type WorkshopUser } from './workshopAccess.js';
 
 /**
@@ -46,14 +47,6 @@ export function productNameOf(products: unknown, row: Pick<WorkshopScheduleRow, 
   const list = Array.isArray(products) ? products : [];
   const found = list.find((p: { id?: unknown }) => String(p?.id) === row.productId) as { item_name?: string; itemName?: string } | undefined;
   return found?.item_name || found?.itemName || '';
-}
-
-/** The project product's warehouse item id (for the progress matrix), when it has one. */
-export function productItemIdOf(products: unknown, productId: string): number | null {
-  const list = Array.isArray(products) ? products : [];
-  const found = list.find((p: { id?: unknown }) => String(p?.id) === productId) as { item_id?: unknown; itemId?: unknown } | undefined;
-  const id = Number(found?.item_id ?? found?.itemId);
-  return Number.isInteger(id) && id > 0 ? id : null;
 }
 
 async function stageTitles(executor: DbExecutor, stageIds: number[]): Promise<Map<number, { title: string; stageOrder: number }>> {
@@ -262,17 +255,37 @@ export async function listReviewReports(executor: DbExecutor, user: WorkshopUser
   return reviewItems(executor, user, reports);
 }
 
-/** Per stage: approved quantity of approved reports whose work log is live ÷ planned quantity of the stage's schedule rows. */
-export function stageProgressOf(schedules: unknown, approved: ReadonlyArray<{ stageId: number; quantity: number }>): WorkshopStageProgress[] {
-  const planned = new Map<number, number>();
-  for (const row of workshopScheduleRows(schedules)) planned.set(row.stageId, (planned.get(row.stageId) ?? 0) + Math.max(0, row.quantity));
-  const done = new Map<number, number>();
-  for (const a of approved) done.set(a.stageId, (done.get(a.stageId) ?? 0) + a.quantity);
-  return [...planned.entries()].sort((a, b) => a[0] - b[0]).map(([stageId, plannedQuantity]) => {
-    const approvedQuantity = done.get(stageId) ?? 0;
-    const percent = plannedQuantity > 0 ? Math.min(100, Math.round((approvedQuantity / plannedQuantity) * 100)) : 0;
-    return { stageId, plannedQuantity, approvedQuantity, percent };
+/**
+ * Per stage: the done work of its schedule rows (10.2 package 12, D6: the same rule as the progress matrix, each row's live
+ * work log quantity up to the row, so a log the project recorded from the schedule tab counts as an approved report does).
+ * `unit` is null when the stage's rows have several units; the quantities are then null and only the percent is shown
+ * (review N4). The percent stays below 100 until the stage is complete (`completedStageIds`), as in the progress matrix,
+ * where only the tick completes a stage (review M2).
+ */
+export function stageProgressOf(
+  schedules: unknown,
+  liveQuantities: ReadonlyMap<number, number>,
+  completedStageIds: ReadonlySet<number> = new Set(),
+): WorkshopStageProgress[] {
+  const byStage = new Map<number, Array<{ unit: string; planned: number; done: number }>>();
+  for (const row of workshopScheduleRows(schedules)) {
+    byStage.set(row.stageId, [...(byStage.get(row.stageId) ?? []), { unit: row.unit, planned: row.quantity, done: scheduleRowDoneQuantity(row, liveQuantities) }]);
+  }
+  return [...byStage.entries()].sort((a, b) => a[0] - b[0]).flatMap(([stageId, rows]) => {
+    const work = workProgressOf(rows);
+    if (!work) return [];
+    const percent = completedStageIds.has(stageId) ? workPercent(work.share) : Math.min(99, workPercent(work.share));
+    return [{ stageId, plannedQuantity: work.planned, approvedQuantity: work.done, unit: work.unit, percent }];
   });
+}
+
+/** Quantities of the live work logs of this project among `logIds` (log id → quantity). */
+export async function liveLogQuantities(executor: DbExecutor, projectId: number, logIds: number[]): Promise<Map<number, number>> {
+  const ids = [...new Set(logIds)];
+  if (ids.length === 0) return new Map();
+  const rows = await executor.select({ id: pieceworkLogs.id, quantity: pieceworkLogs.quantity }).from(pieceworkLogs)
+    .where(and(inArray(pieceworkLogs.id, ids), eq(pieceworkLogs.isDeleted, 0), eq(pieceworkLogs.projectId, projectId)));
+  return new Map(rows.map(r => [r.id, Number(r.quantity)]));
 }
 
 /** The project schedule tab's view: pending reports (reviewers only) and each stage's approved share. */
@@ -282,12 +295,12 @@ export async function projectWorkshopReports(executor: DbExecutor, user: Worksho
   if (!project) return { pending: [], stageProgress: [], canReview: false };
   const scope = canReviewKey ? await reviewableProjectIds(executor, user) : [];
   const canReview = canReviewKey && (scope === null || scope.includes(projectId));
-  const approved = await executor.select({ stageId: workshopTaskReports.stageId, quantity: workshopTaskReports.approvedQuantity }).from(workshopTaskReports)
-    .innerJoin(pieceworkLogs, and(eq(pieceworkLogs.id, workshopTaskReports.pieceworkLogId), eq(pieceworkLogs.isDeleted, 0)))
-    .where(and(eq(workshopTaskReports.projectId, projectId), eq(workshopTaskReports.status, 'approved')));
+  const logIds = workshopScheduleRows(project.stageSchedules).map(r => r.pieceworkLogId).filter((id): id is number => id !== null);
+  const completed = await executor.select({ id: projectStages.id }).from(projectStages)
+    .where(and(eq(projectStages.projectId, projectId), eq(projectStages.isDeleted, 0), eq(projectStages.status, 'completed')));
   return {
     pending: canReview ? await listReviewReports(executor, user, projectId) : [],
-    stageProgress: stageProgressOf(project.stageSchedules, approved.map(a => ({ stageId: a.stageId, quantity: Number(a.quantity ?? 0) }))),
+    stageProgress: stageProgressOf(project.stageSchedules, await liveLogQuantities(executor, projectId, logIds), new Set(completed.map(s => s.id))),
     canReview,
   };
 }
