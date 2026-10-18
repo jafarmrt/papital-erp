@@ -136,7 +136,7 @@ describe('TD-724 bulk stock sync reports failed items', () => {
 const noop = () => {};
 function renderTab(state: ReturnType<typeof useSettings>) {
   const props = { ...state, warehouses: [], handleSaveSettings: noop, handleTestWcConnection: noop, handleSyncManualOrder: noop, loadSyncedWcOrders: noop, handleSyncAllStocks: noop };
-  return render(<WooCommerceTab {...(props as unknown as React.ComponentProps<typeof WooCommerceTab>)} />);
+  return render(<WooCommerceTab {...(props as unknown as React.ComponentProps<typeof WooCommerceTab>)} />, { wrapper });
 }
 
 describe('TD-730 WooCommerce order lists show a load error instead of «no orders yet»', () => {

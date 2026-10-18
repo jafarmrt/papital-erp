@@ -1,6 +1,5 @@
 import http from 'node:http';
 import https from 'node:https';
-import type dns from 'node:dns';
 import {
   guardedDnsLookup, isLocalEchoTarget, isTestLoopbackOrigin, UNSAFE_RESOLVED_ADDRESS,
 } from '../../lib/ssrfGuard.js';
@@ -38,20 +37,6 @@ let testTransport: WebhookTransport | null = null;
 export function setWebhookTransportForTests(transport: WebhookTransport | null, env: NodeJS.ProcessEnv = process.env): void {
   if (env.NODE_ENV !== 'test') throw new ForbiddenError('setWebhookTransportForTests is for tests only');
   testTransport = transport;
-}
-
-type LookupCallback = (err: NodeJS.ErrnoException | null, address: string | dns.LookupAddress[], family?: number) => void;
-
-/** `guardedDnsLookup` in the shape the socket asks for: a list when `all` is set, else the first address */
-export function connectTimeLookup(hostname: string, options: dns.LookupOptions, callback: LookupCallback): void {
-  guardedDnsLookup(hostname, options, (err, addresses) => {
-    if (err || !addresses || addresses.length === 0) {
-      callback(err ?? Object.assign(new Error(`No address for ${hostname}`), { code: UNSAFE_RESOLVED_ADDRESS }), '', 0);
-      return;
-    }
-    if (options.all) callback(null, addresses);
-    else callback(null, addresses[0].address, addresses[0].family);
-  });
 }
 
 function abortError(): Error {
@@ -108,7 +93,7 @@ export function guardedWebhookFetch(url: string, init: GuardedRequestInit): Prom
       method: init.method,
       headers: { ...webhookRequestHeaders(init.headers), 'Content-Length': String(Buffer.byteLength(body)) },
       agent: false,
-      ...(checked ? { lookup: connectTimeLookup as never } : {}),
+      ...(checked ? { lookup: guardedDnsLookup as never } : {}),
     }, (res) => {
       const chunks: Buffer[] = [];
       let size = 0;

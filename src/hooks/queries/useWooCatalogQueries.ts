@@ -1,0 +1,28 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { fetchJson } from '../../api';
+import type { WcCatalogReport } from '../../lib/woocommerce/wcCatalog';
+
+/** 10.2 package 6 (D-04 part A): the online shop catalog links of the WooCommerce tab */
+export const WC_CATALOG_KEY = ['woocommerce', 'catalog'] as const;
+
+export function useWcCatalogQuery() {
+  return useQuery<WcCatalogReport>({
+    queryKey: WC_CATALOG_KEY,
+    queryFn: async () => (await fetchJson('/woocommerce/catalog')) as WcCatalogReport,
+    staleTime: 0,
+  });
+}
+
+export interface WcRefreshResult {
+  success?: boolean;
+  message?: string;
+  error?: string;
+}
+
+export function useRefreshWcCatalogMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => (await fetchJson('/woocommerce/refresh-products', { method: 'POST' })) as WcRefreshResult,
+    onSettled: () => { void queryClient.invalidateQueries({ queryKey: WC_CATALOG_KEY }); },
+  });
+}

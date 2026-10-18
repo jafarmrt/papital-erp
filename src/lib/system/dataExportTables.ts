@@ -117,6 +117,8 @@ export const DATA_EXPORT_EXCLUDED_TABLES: Readonly<Record<string, string>> = {
   event_action_rule_retirements: 'پیکربندی قاعده‌های بازنشسته که ممکن است کلید داشته باشد',
   webhook_event_pattern_repairs: 'سابقه تبدیل یک‌باره الگوی رویداد اشتراک‌های وبهوک',
   woocommerce_order_logs: 'سابقه فنی همگام‌سازی سفارش‌های ووکامرس',
+  wc_product_links: 'پیوند فنی کالاها با محصولات فروشگاه اینترنتی که با بازخوانی دوباره ساخته می‌شود',
+  wc_sync_runs: 'سابقه فنی همگام‌سازی با فروشگاه اینترنتی',
   legacy_date_repairs: 'سابقه اصلاح یک‌باره تاریخ‌ها',
   ref_fiscal_year_corrections: 'سابقه اصلاح یک‌باره سال شماره اسناد',
   daily_log_visibility_repairs: 'سابقه اصلاح یک‌باره دید گزارش‌های روزانه',

@@ -910,12 +910,12 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     }
 
     // 2. Verify WooCommerce SSL configuration enforces strict rejectUnauthorized
-    const wooModule = await fs.promises.readFile(path.join(process.cwd(), 'src/routes/woocommerce.routes.ts'), 'utf8');
+    const wooModule = await fs.promises.readFile(path.join(process.cwd(), 'src/services/woocommerce/wcClient.ts'), 'utf8');
     if (wooModule.includes('rejectUnauthorized: false')) {
-      throw new Error('src/routes/woocommerce.routes.ts has rejectUnauthorized: false');
+      throw new Error('src/services/woocommerce/wcClient.ts has rejectUnauthorized: false');
     }
     if (!wooModule.includes('WOOCOMMERCE_SSL_CA_PATH')) {
-      throw new Error('src/routes/woocommerce.routes.ts does not use the WOOCOMMERCE_SSL_CA_PATH variable');
+      throw new Error('src/services/woocommerce/wcClient.ts (the one WooCommerce client) does not use the WOOCOMMERCE_SSL_CA_PATH variable');
     }
 
     // 3. Verify HTTPS agent instantiation works with strict validation

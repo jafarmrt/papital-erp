@@ -1,0 +1,93 @@
+import { readFileSync } from 'fs';
+import path from 'path';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  pushBudgetMs, refreshBudgetMs, WC_PUSH_DEADLINE_MS, WC_PUSH_MIN_BUDGET_MS,
+} from '../../lib/woocommerce/wcCatalog';
+
+/**
+ * 10.2 package 6 review M-5 (OBS-R2-81): the shop request checks the address the socket really connects to. Before, the
+ * name was resolved once by `assertSafeExternalUrl` and again by the socket, so a name answering a public address to the
+ * check and an inside one to the socket (DNS rebinding) reached the inside address. `guardedDnsLookup` is the lookup of
+ * every shop request and refuses any private or reserved address at connect time.
+ */
+const answers: Record<string, Array<{ address: string; family: number }>> = {
+  'public.shop.test': [{ address: '93.184.216.34', family: 4 }],
+  'mixed.shop.test': [{ address: '93.184.216.34', family: 4 }, { address: '10.0.0.5', family: 4 }],
+  'inside.shop.test': [{ address: '127.0.0.1', family: 4 }],
+  'v6inside.shop.test': [{ address: '::1', family: 6 }],
+  'empty.shop.test': [],
+};
+
+vi.mock('dns', () => {
+  const lookup = (host: string, opts: { all?: boolean }, cb: (err: Error | null, addrs?: unknown) => void) => {
+    const found = answers[host];
+    if (!found) cb(Object.assign(new Error(`ENOTFOUND ${host}`), { code: 'ENOTFOUND' }));
+    else cb(null, opts.all ? found : found[0]?.address);
+  };
+  const mod = { lookup, resolve4: vi.fn(), resolve6: vi.fn() };
+  return { default: mod, ...mod };
+});
+
+async function lookupOf(host: string, all = true): Promise<{ code?: string; addresses?: unknown; family?: number }> {
+  const { guardedDnsLookup } = await import('../../lib/ssrfGuard');
+  return new Promise(resolve => {
+    guardedDnsLookup(host, { all }, (err, addresses, family) =>
+      resolve(err ? { code: err.code } : family === undefined ? { addresses } : { addresses, family }));
+  });
+}
+
+describe('wc_connect_time_lookup_d04_m5', () => {
+  it('passes a public address through with every address listed', async () => {
+    expect(await lookupOf('public.shop.test')).toEqual({ addresses: answers['public.shop.test'] });
+  });
+
+  it('review N-B: answers one address and its family when the caller did not ask for all, after checking every address', async () => {
+    expect(await lookupOf('public.shop.test', false)).toEqual({ addresses: '93.184.216.34', family: 4 });
+    expect((await lookupOf('mixed.shop.test', false)).code).toBe('EUNSAFEADDRESS');
+  });
+
+  it('refuses a name that resolves to any private or reserved address at connect time', async () => {
+    for (const host of ['mixed.shop.test', 'inside.shop.test', 'v6inside.shop.test', 'empty.shop.test']) {
+      expect((await lookupOf(host)).code).toBe('EUNSAFEADDRESS');
+    }
+  });
+
+  it('keeps the resolver error of a name that does not resolve', async () => {
+    expect((await lookupOf('missing.shop.test')).code).toBe('ENOTFOUND');
+  });
+
+  it('every shop request carries the guarded lookup, a deadline signal and a size cap', () => {
+    const src = readFileSync(path.resolve(__dirname, '../../services/woocommerce/wcClient.ts'), 'utf8');
+    expect(src).toMatch(/lookup:\s*guardedDnsLookup/);
+    expect(src).toMatch(/maxContentLength:\s*WC_MAX_RESPONSE_BYTES/);
+    expect(src).toMatch(/signal/);
+    // review N-B: an environment proxy would resolve the name itself and skip the guarded lookup
+    expect(src).toMatch(/proxy:\s*false/);
+    // review N-E: a plain-HTTP shop goes through an own agent, never Node's global one that may follow HTTP_PROXY
+    expect(src).toMatch(/const httpAgent = new http\.Agent\(/);
+    expect(src).toMatch(/^\s*httpAgent,$/m);
+  });
+});
+
+describe('wc_push_shared_budget_d04_n_d', () => {
+  it('a refresh before a push leaves the push its minimum budget out of one exchange deadline', () => {
+    expect(refreshBudgetMs(0)).toBe(WC_PUSH_DEADLINE_MS - WC_PUSH_MIN_BUDGET_MS);
+    expect(refreshBudgetMs(2_000)).toBe(WC_PUSH_DEADLINE_MS - WC_PUSH_MIN_BUDGET_MS - 2_000);
+    expect(refreshBudgetMs(WC_PUSH_DEADLINE_MS)).toBe(1_000);
+  });
+
+  it('the push gets what is left, and is not started when less than its minimum budget is left', () => {
+    expect(pushBudgetMs(0)).toBe(WC_PUSH_DEADLINE_MS);
+    expect(pushBudgetMs(WC_PUSH_DEADLINE_MS - WC_PUSH_MIN_BUDGET_MS)).toBe(WC_PUSH_MIN_BUDGET_MS);
+    expect(pushBudgetMs(WC_PUSH_DEADLINE_MS - WC_PUSH_MIN_BUDGET_MS + 1)).toBeNull();
+    expect(pushBudgetMs(WC_PUSH_DEADLINE_MS + 10_000)).toBeNull();
+  });
+
+  it('both pushes run their refresh and their push on the shared budget', () => {
+    const src = readFileSync(path.resolve(__dirname, '../../services/woocommerce/wcStockPush.service.ts'), 'utf8');
+    expect(src).not.toMatch(/await refreshCatalogLocked\(actor, conn\)/);
+    expect(src.match(/refreshBeforePush\(actor, conn, startedAt\)/g)).toHaveLength(2);
+    expect(src.match(/deadlineMs: await pushBudgetOrStop\(actor, startedAt\)/g)).toHaveLength(2);
+  });
+});

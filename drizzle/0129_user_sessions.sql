@@ -1,4 +1,4 @@
--- Drizzle Migration 0128: one row per signed-in device (10.2 package 8, D-07)
+-- Drizzle Migration 0129: one row per signed-in device (10.2 package 8, D-07)
 --
 -- New table only; no existing row is written. Every login writes a user_sessions row and its token carries the row's
 -- sid, so a user can see the devices they are signed in on and close one of them (a lost phone) without signing out
