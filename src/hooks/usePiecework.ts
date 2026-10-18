@@ -75,7 +75,7 @@ export function usePiecework() {
   const [selectedPersonnelForLog, setSelectedPersonnelForLog] = useState<number | ''>('');
   const [defaultBatchProjectId, setDefaultBatchProjectId] = useState<number | ''>('');
   const [logDate, setLogDate] = useState<string>('');
-  const [batchLogRows, setBatchLogRows] = useState<BatchLogRow[]>(() => withRowKeys([
+  const [batchLogRows, setBatchLogRows] = useState<BatchLogRow[]>(() => withRowKeys<BatchLogRow>([
     { taskId: '', projectId: '', quantity: '1', unitRate: 0 }
   ]));
   const [editingLog, setEditingLog] = useState<PieceworkLog | null>(null);
@@ -261,7 +261,7 @@ export function usePiecework() {
   const handleAddLogRow = () => {
     setBatchLogRows(prev => [
       ...prev,
-      withRowKey({ taskId: '', projectId: defaultBatchProjectId || '', quantity: '1', unitRate: 0 })
+      withRowKey<BatchLogRow>({ taskId: '', projectId: defaultBatchProjectId || '', quantity: '1', unitRate: 0 })
     ]);
   };
 
@@ -274,7 +274,7 @@ export function usePiecework() {
     setEditingLog(null);
     setSelectedPersonnelForLog('');
     setDefaultBatchProjectId('');
-    setBatchLogRows(withRowKeys([{ taskId: '', projectId: '', quantity: '1', unitRate: 0 }]));
+    setBatchLogRows(withRowKeys<BatchLogRow>([{ taskId: '', projectId: '', quantity: '1', unitRate: 0 }]));
     setIsLogModalOpen(true);
   };
 

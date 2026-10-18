@@ -44,7 +44,7 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // v10.2.3 (TD-1291): کادر نادرست (نرخ تسعیر «۱۲٬۵») با خطای خودش جلوی ارسال را می‌گیرد؛ پیام «نرخ تسعیر الزامی است»
+    // v10.2.4 (TD-1291): کادر نادرست (نرخ تسعیر «۱۲٬۵») با خطای خودش جلوی ارسال را می‌گیرد؛ پیام «نرخ تسعیر الزامی است»
     // یا هر پیام دیگری کنار آن نمی‌آید، مثل فرم فاکتور
     const formEl = e.currentTarget as HTMLFormElement | null;
     if (formEl && typeof formEl.checkValidity === 'function' && !formEl.checkValidity()) {

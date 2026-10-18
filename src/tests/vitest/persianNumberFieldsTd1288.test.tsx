@@ -248,7 +248,7 @@ describe('TD-1288 number and amount fields show Persian digits and Persian thous
     const input = screen.getByRole('textbox') as HTMLInputElement;
     for (const key of ['1', '2']) typeAtEnd(input, key);
     expect(onChange).toHaveBeenLastCalledWith(12);
-    // v10.2.3 (TD-1291): like the number field, «٬» stays where it was typed with an error and the amount is empty (0)
+    // v10.2.4 (TD-1291): like the number field, «٬» stays where it was typed with an error and the amount is empty (0)
     typeAtEnd(input, '٬');
     expect(screen.getByRole('alert')).toBeTruthy();
     expect(input.value).toBe(`${SHOWN.twelve}٬`);

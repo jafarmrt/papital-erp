@@ -8,6 +8,14 @@ type FetchOpts = { signal?: AbortSignal };
 let stockItems: Item[] = [];
 const fetchJson = vi.fn(async (url: string, _opts?: FetchOpts): Promise<unknown> => {
   if (url.startsWith('/items/options')) return { data: stockItems };
+  // v10.2.3 (TD-1290): free stock figures of the asked items, with no reservation of others and nothing issued yet
+  if (url.startsWith('/projects/7/material-availability')) {
+    const ids = new Set((new URL(url, 'http://local').searchParams.get('itemIds') ?? '').split(',').map(Number));
+    return {
+      projectId: 7,
+      items: stockItems.filter(i => ids.has(i.id)).map(i => ({ itemId: i.id, stock: i.current_stock, reservedByOthers: 0, issuedToProject: 0, freeForProject: i.current_stock })),
+    };
+  }
   return [];
 });
 vi.mock('../../api', () => ({ fetchJson: (url: string, opts?: FetchOpts) => fetchJson(url, opts) }));
@@ -17,8 +25,8 @@ import { useProjectInventory } from '../../hooks/useProjectInventory';
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); stockItems = []; });
 
-const stock = (id: number, name: string, qty: number): Item =>
-  ({ id, code: `M-${id}`, name, current_stock: qty, unit: 'عدد', type: 'raw_material' }) as Item;
+const stock = (id: number, name: string, qty: number, unit = 'عدد'): Item =>
+  ({ id, code: `M-${id}`, name, current_stock: qty, unit, type: 'raw_material' }) as Item;
 
 const project = (inventoryControl?: ProductionProject['inventory_control']): ProductionProject => ({
   id: 7, version: 1, title: 'پروژه الگو', status: 'planned',
@@ -42,7 +50,9 @@ describe('inventory control presets in a project (TD-748)', () => {
   });
 
   it('marks a material the warehouse holds as available and leaves it off the purchase list', async () => {
-    stockItems = [stock(1, 'کاغذ ترنسفر', 20), stock(2, 'کارتن بسته‌بندی', 40)];
+    // v10.2.3 (TD-1290): the paper is kept in sheets, the preset's unit; a row in another unit without a conversion is
+    // refused by the finalize (TD-820), so it no longer counts as available
+    stockItems = [stock(1, 'کاغذ ترنسفر', 20, 'برگ'), stock(2, 'کارتن بسته‌بندی', 40)];
     const p = project();
     const { result } = renderHook(() => useProjectInventory(p));
     await waitFor(() => expect(result.current.purchaseList).toHaveLength(presetMaterialCount - 2));

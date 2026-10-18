@@ -167,6 +167,18 @@ function needInItemUnit(row: NeedRow, itemUnit: string): { qty: number; conversi
   return { qty: fin(row.qty).divide(rate, 4).toNumber(), conversion: { unit: row.unit, rate } };
 }
 
+/** v10.2.3 (TD-1290): the finalize's unit rule for one row of the inventory screens; false is a unit mismatch */
+export function rowUnitConvertible(row: { unit?: unknown; conversionRate?: unknown; convertedUnit?: unknown }, itemUnit: unknown): boolean {
+  const need: NeedRow = { code: '', name: '', qty: 1, unit: text(row.unit) || DEFAULT_ROW_UNIT, conversionRate: row.conversionRate, convertedUnit: row.convertedUnit };
+  return needInItemUnit(need, unitKey(itemUnit)) !== null;
+}
+
+/** v10.2.3 (TD-1290): one row's quantity in the item unit by the finalize's rule, or null on a unit mismatch */
+export function rowQtyInItemUnit(row: { unit?: unknown; conversionRate?: unknown; convertedUnit?: unknown }, qty: number, itemUnit: unknown): number | null {
+  const need: NeedRow = { code: '', name: '', qty, unit: text(row.unit) || DEFAULT_ROW_UNIT, conversionRate: row.conversionRate, convertedUnit: row.convertedUnit };
+  return needInItemUnit(need, unitKey(itemUnit))?.qty ?? null;
+}
+
 export function planProjectReservation(
   sections: unknown,
   products: unknown,

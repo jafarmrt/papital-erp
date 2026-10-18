@@ -18,7 +18,7 @@ export const INVOICE_SUBMIT_TEXT = {
 } as const;
 
 /**
- * v10.2.3 (گزینه «ج»): نوار پایین فرم. دکمه اصلی در آغاز سطر (راست) است و روی گوشی تمام‌عرض؛ در ویرایش پیش‌فاکتور
+ * v10.2.4 (گزینه «ج»): نوار پایین فرم. دکمه اصلی در آغاز سطر (راست) است و روی گوشی تمام‌عرض؛ در ویرایش پیش‌فاکتور
  * شماره آن و دکمه انصراف کنارش.
  */
 export function InvoiceSubmitBar({ isEditing, refNumber, disabled, isSaving, onCancelEdit }: InvoiceSubmitBarProps) {

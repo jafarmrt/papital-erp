@@ -1,14 +1,17 @@
 import { Boxes, Plus, Trash2, Scale, AlertCircle, CheckCircle2, FilePlus } from 'lucide-react';
 import { ProjectInventoryControlSectionData, Item } from '../../types';
-import { COMMON_UNITS } from './projectInventoryUtils';
+import { COMMON_UNITS, buildSectionPurchaseList } from './projectInventoryUtils';
 import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
 import { formatPersianNumber, toPersianDigits } from '../../utils';
-import { MaterialNameCell, CurrentStockCell, ProcurementStatusCell, NotesCell, type OpenUnitConversionModalHandler } from './inventoryRowCells';
+import { MaterialNameCell, FreeStockCell, MaterialStatusCell, NotesCell, type OpenUnitConversionModalHandler } from './inventoryRowCells';
+import { rowIsShort, type MaterialAvailabilityView } from '../../lib/projects/materialAvailability';
 import { DecimalInput } from '../common/DecimalInput';
 
 interface GlobalInventoryControlSectionProps {
   sections: ProjectInventoryControlSectionData[];
   warehouseItems: Item[];
+  /** v10.2.3 (TD-1290): موجودی آزاد و وضعیت خودکار هر ردیف با قاعدهٔ ثبت نهایی */
+  availability: MaterialAvailabilityView;
   /** v10.0.162 (TD-1211): left out for a reader without `projects.edit`, so the add buttons are not shown */
   handleOpenAddMaterialModal?: (secIdx: number, prodId?: string) => void;
   handleOpenChangeMaterialModal: (secIdx: number, itemId: string, prodId?: string, gIdx?: number) => void;
@@ -24,6 +27,7 @@ interface GlobalInventoryControlSectionProps {
 export function GlobalInventoryControlSection({
   sections,
   warehouseItems,
+  availability,
   handleOpenAddMaterialModal,
   handleOpenChangeMaterialModal,
   handleOpenUnitConversionModal,
@@ -111,10 +115,12 @@ export function GlobalInventoryControlSection({
               const currentStock = matchWh ? matchWh.current_stock : (item.stockQty ?? 0);
               const reqQty = Number(item.requiredQty || 1);
               const shortfall = Math.max(0, reqQty - currentStock);
-              if (item.status === 'needs_procurement' || shortfall > 0) {
+              if (rowIsShort(availability.rowState(item), item.status === 'needs_procurement' || shortfall > 0)) {
                 shortfallCount++;
               }
             });
+            // v10.2.3 (TD-1290): the button counts the lines the order window gets, one per item of the section
+            const purchaseLineCount = handlePurchaseSection ? buildSectionPurchaseList(sec, originalIdx, warehouseItems, availability).length : 0;
 
             return (
               <div 
@@ -155,7 +161,7 @@ export function GlobalInventoryControlSection({
 
                   <div className="flex items-center gap-2">
                     {/* V3.1.46 (TD-070): پل مستقیم خرید از ردیف بخش به سند سفارش خرید */}
-                    {shortfallCount > 0 && handlePurchaseSection && (
+                    {purchaseLineCount > 0 && handlePurchaseSection && (
                       <button
                         type="button"
                         onClick={() => handlePurchaseSection(originalIdx)}
@@ -163,7 +169,7 @@ export function GlobalInventoryControlSection({
                         title="صدور سند سفارش خرید برای کسری‌های همین بخش"
                       >
                         <FilePlus className="w-3.5 h-3.5" />
-                        <span>ثبت سفارش خرید ({toPersianDigits(shortfallCount)})</span>
+                        <span>ثبت سفارش خرید ({toPersianDigits(purchaseLineCount)})</span>
                       </button>
                     )}
                     {/* Add Material to this Global Section */}
@@ -213,7 +219,7 @@ export function GlobalInventoryControlSection({
                       <thead className="bg-slate-100/80 text-slate-700 font-bold">
                         <tr>
                           <th className="p-2.5 border-b border-slate-200">ماده اولیه / قطعه عمومی</th>
-                          <th className="p-2.5 border-b border-slate-200 text-center">موجودی انبار</th>
+                          <th className="p-2.5 border-b border-slate-200 text-center">آزاد برای این پروژه</th>
                           <th className="p-2.5 border-b border-slate-200 text-center">مقدار مورد نیاز کل سفارش</th>
                           <th className="p-2.5 border-b border-slate-200 text-center">وضعیت تامین و کسری</th>
                           <th className="p-2.5 border-b border-slate-200">یادداشت تامین</th>
@@ -232,7 +238,8 @@ export function GlobalInventoryControlSection({
                           const reqUnit = item.unit || 'عدد';
                           const reqQty = Number(item.requiredQty || 1);
                           const shortfall = Math.max(0, reqQty - currentStock);
-                          const isNeedsProcurement = item.status === 'needs_procurement' || shortfall > 0;
+                          const rowState = availability.rowState(item);
+                          const isNeedsProcurement = rowIsShort(rowState, item.status === 'needs_procurement' || shortfall > 0);
                           const displayCategory = item.category || matchWh?.category || 'عمومی';
 
                           const hasUnitMismatch = !!(
@@ -254,8 +261,8 @@ export function GlobalInventoryControlSection({
                                 onLinkWarehouse={() => handleOpenChangeMaterialModal(originalIdx, item.itemId, undefined, gIdx)}
                               />
 
-                              {/* Current Stock */}
-                              <CurrentStockCell currentStock={currentStock} unit={effectiveWarehouseUnit || reqUnit} />
+                              {/* v10.2.3 (TD-1290): free stock for this project */}
+                              <FreeStockCell state={rowState} status={availability.status} />
 
                               {/* Required Quantity & Unit & Conversion */}
                               <td className="p-2.5 text-center border-l border-slate-100 align-middle min-w-[140px]">
@@ -313,7 +320,7 @@ export function GlobalInventoryControlSection({
                               </td>
 
                               {/* Procurement Status & Shortfall */}
-                              <ProcurementStatusCell status={item.status} onChange={(v) => handleUpdateGlobalItem(originalIdx, gIdx, 'status', v)} shortfall={shortfall} unit={reqUnit} />
+                              <MaterialStatusCell state={rowState} status={availability.status} procurementStatus={item.procurementStatus} onProcurementChange={(v) => handleUpdateGlobalItem(originalIdx, gIdx, 'procurementStatus', v)} />
 
                               {/* Notes */}
                               <NotesCell value={item.notes || ''} onChange={(v) => handleUpdateGlobalItem(originalIdx, gIdx, 'notes', v)} />

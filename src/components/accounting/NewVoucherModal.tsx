@@ -72,7 +72,7 @@ export function NewVoucherModal({
     creditRef?: React.RefObject<HTMLInputElement>;
   }>>([]);
 
-  const [items, setItems] = useState<VoucherItemDraft[]>(() => withRowKeys([
+  const [items, setItems] = useState<VoucherItemDraft[]>(() => withRowKeys<VoucherItemDraft>([
     { accountId: '', detailedType: 'none', detailedId: null, detailedName: '', debit: 0, credit: 0, description: '' },
     { accountId: '', detailedType: 'none', detailedId: null, detailedName: '', debit: 0, credit: 0, description: '' },
   ]));
@@ -155,7 +155,7 @@ export function NewVoucherModal({
       setDescription('');
       setManualVoucherNumber('');
       setAttachments([]);
-      setItems(withRowKeys([
+      setItems(withRowKeys<VoucherItemDraft>([
         { accountId: '', detailedType: 'none', detailedId: null, detailedName: '', debit: 0, credit: 0, description: '' },
         { accountId: '', detailedType: 'none', detailedId: null, detailedName: '', debit: 0, credit: 0, description: '' },
       ]));
@@ -175,7 +175,7 @@ export function NewVoucherModal({
     const newRowIndex = items.length;
     setItems(prev => [
       ...prev,
-      withRowKey({
+      withRowKey<VoucherItemDraft>({
         accountId: '',
         detailedType: 'none',
         detailedId: null,

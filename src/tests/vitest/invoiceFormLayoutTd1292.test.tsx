@@ -15,7 +15,7 @@ const SRC = join(__dirname, '..', '..');
 const FORM_DIR = join(SRC, 'components', 'invoices', 'create');
 const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B50}\u{231A}-\u{23FF}]/u;
 
-/** Persian section titles and texts of the invoice form (v10.2.3, option «ج») */
+/** Persian section titles and texts of the invoice form (v10.2.4, option «ج») */
 const TEXT = {
   sections: ['مشخصات سند', 'خریدار', 'اقلام فاکتور'],
   totals: 'جمع و مالیات',

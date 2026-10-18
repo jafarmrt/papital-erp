@@ -29,6 +29,7 @@ import transactionsRoutes from './routes/transactions.routes.js';
 import dashboardRoutes from './routes/dashboard.routes.js';
 import documentsRoutes from './routes/documents.routes.js';
 import projectsRoutes from './routes/projects.routes.js';
+import projectMaterialsRoutes from './routes/projectMaterials.routes.js';
 import transfersRoutes from './routes/transfers.routes.js';
 import dailyLogsRoutes from './routes/dailyLogs.routes.js';
 import notificationsRoutes from './routes/notifications.routes.js';
@@ -358,6 +359,7 @@ export async function createApp(): Promise<express.Express> {
   app.use('/api', dashboardRoutes);
   app.use('/api', documentsRoutes);
   app.use('/api', projectsRoutes);
+  app.use('/api', projectMaterialsRoutes);
   app.use('/api', transfersRoutes);
   app.use('/api', mediaRoutes);
   app.use('/api', dailyLogsRoutes);

@@ -12,7 +12,7 @@ interface InvoiceFormSectionProps {
 }
 
 /**
- * v10.2.3 (گزینه «ج» بازبینی فرم فاکتور): بخش سرتیتردار فرم فاکتور و پیش‌فاکتور، همان سرتیتر فرم سند انبار
+ * v10.2.4 (گزینه «ج» بازبینی فرم فاکتور): بخش سرتیتردار فرم فاکتور و پیش‌فاکتور، همان سرتیتر فرم سند انبار
  * (نشانه، عنوان پررنگ و خط زیر آن).
  */
 export function InvoiceFormSection({ icon: Icon, title, hint, aside, children }: InvoiceFormSectionProps) {

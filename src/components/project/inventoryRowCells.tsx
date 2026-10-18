@@ -1,5 +1,6 @@
 import { Search, Tag } from 'lucide-react';
 import { formatPersianNumber } from '../../utils';
+import { rowNeedsAttention, type MaterialAvailabilityStatus, type MaterialRowState } from '../../lib/projects/materialAvailability';
 
 /**
  * v7.0.140: سلول‌های مشترک ردیف ماده اولیه در کنترل موجودی پروژه — پیش‌تر در GlobalInventoryControlSection (اقلام
@@ -61,51 +62,86 @@ export function MaterialNameCell({ displayCategory, effectiveName, effectiveCode
   );
 }
 
-/** موجودی فعلی انبار */
-export function CurrentStockCell({ currentStock, unit }: { currentStock: number; unit: string }) {
+const PROCUREMENT_LABELS: Record<string, string> = {
+  reserved: 'رزرو انبار',
+  fulfilled: 'تحویل‌شده',
+};
+
+/** متن ردیفی که ارقام آزاد آن خوانده نشده */
+const unknownText = (status: MaterialAvailabilityStatus): string => (status === 'error' ? 'نامعلوم' : 'در حال خواندن…');
+
+/**
+ * v10.2.3 (TD-1290، یافتهٔ D1): «آزاد برای این پروژه»: موجودی کل منهای رزرو پیش‌فاکتورهای فروش و پروژه‌های دیگر، همان رقمی
+ * که ثبت نهایی با آن رزرو می‌کند، و آنچه تاکنون به این پروژه داده شده. پیش‌تر موجودی کل انبار نشان داده می‌شد.
+ */
+export function FreeStockCell({ state, status }: { state: MaterialRowState; status: MaterialAvailabilityStatus }) {
+  if (state.kind === 'unknown' || state.kind === 'unmatched') {
+    return (
+      <td className="p-2.5 text-center whitespace-nowrap border-l border-slate-100 align-middle">
+        <span className="px-2 py-1 bg-slate-100 text-slate-500 rounded-lg border border-slate-200 text-xs">
+          {state.kind === 'unmatched' ? 'بی کالای انبار' : unknownText(status)}
+        </span>
+      </td>
+    );
+  }
   return (
     <td className="p-2.5 text-center font-mono font-bold whitespace-nowrap border-l border-slate-100 align-middle">
-      {currentStock > 0 ? (
-        <span className="px-2 py-1 bg-emerald-50 text-emerald-800 rounded-lg border border-emerald-200 text-xs">
-          {formatPersianNumber(currentStock)} {unit}
+      <div className="flex flex-col items-center gap-1">
+        <span className={`px-2 py-1 rounded-lg border text-xs ${state.free > 0 ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+          {formatPersianNumber(state.free)} {state.unit}
         </span>
-      ) : (
-        <span className="px-2 py-1 bg-slate-100 text-slate-500 rounded-lg border border-slate-200 text-xs">
-          ۰ {unit}
-        </span>
-      )}
+        {state.issued > 0 && (
+          <span className="text-[10px] font-normal text-slate-500">داده‌شده به پروژه: {formatPersianNumber(state.issued)} {state.unit}</span>
+        )}
+      </div>
     </td>
   );
 }
 
-/** وضعیت تامین (موجود / نیاز به خرید) و کسری */
-export function ProcurementStatusCell({ status, onChange, shortfall, unit }: {
-  status: string;
-  onChange: (status: string) => void;
-  shortfall: number;
-  unit: string;
+const STATUS_BADGE: Record<Exclude<MaterialRowState['kind'], 'unknown'>, { text: string; className: string }> = {
+  available: { text: '✓ موجود', className: 'bg-emerald-50 text-emerald-800 border-emerald-300' },
+  short: { text: '⚠ کسری', className: 'bg-rose-50 text-rose-700 border-rose-300' },
+  unit_mismatch: { text: '⚠ تبدیل واحد لازم', className: 'bg-amber-100 text-amber-950 border-amber-400' },
+  unmatched: { text: '⚠ بی کالای انبار', className: 'bg-amber-100 text-amber-950 border-amber-400' },
+};
+
+/**
+ * v10.2.3 (TD-1290، یافتهٔ D1): وضعیت «موجود / کسری» خودکار است و از قاعدهٔ ثبت نهایی می‌آید؛ کاربر فقط «در حال سفارش» را
+ * برای ردیف کسری یا ردیفی که پیش‌تر سفارش داده شده می‌گذارد. پیش‌تر وضعیت ردیف فهرستی دستی بود و می‌شد «موجود» گذاشت.
+ */
+export function MaterialStatusCell({ state, status, procurementStatus, onProcurementChange }: {
+  state: MaterialRowState;
+  status: MaterialAvailabilityStatus;
+  procurementStatus?: string;
+  onProcurementChange: (procurementStatus: 'pending' | 'in_progress') => void;
 }) {
-  // v10.0.146 (TD-1214): a row short of stock needs procurement whatever was stored, so the list never says «موجود» beside a shortfall
-  const shown = shortfall > 0 ? 'needs_procurement' : status;
+  const badge = state.kind === 'unknown'
+    ? { text: unknownText(status), className: 'bg-slate-100 text-slate-500 border-slate-200' }
+    : STATUS_BADGE[state.kind];
+  const fixedProcurement = procurementStatus ? PROCUREMENT_LABELS[procurementStatus] : undefined;
+  const showOrder = !fixedProcurement && (rowNeedsAttention(state) || procurementStatus === 'in_progress');
   return (
     <td className="p-2.5 border-l border-slate-100 align-middle min-w-[190px]">
       <div className="flex flex-col gap-1">
-        <select
-          value={shown}
-          onChange={(e) => onChange(e.target.value)}
-          className={`px-2 py-1 rounded-xl font-bold text-xs border focus:outline-none cursor-pointer w-full ${
-            shown === 'available'
-              ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-              : 'bg-amber-100 text-amber-950 border-amber-400'
-          }`}
-        >
-          <option value="available" disabled={shortfall > 0}>✓ موجود در انبار</option>
-          <option value="needs_procurement">⚠ نیاز به تامین / خرید</option>
-        </select>
-        {shortfall > 0 && (
+        <span className={`px-2 py-1 rounded-xl font-bold text-xs border text-center ${badge.className}`}>{badge.text}</span>
+        {state.kind === 'short' && (
           <span className="text-[10px] font-mono font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 text-center">
-            کسری خرید: {formatPersianNumber(shortfall)} {unit}
+            کسری کل پروژه: {formatPersianNumber(state.shortQty)} {state.unit}
           </span>
+        )}
+        {fixedProcurement && (
+          <span className="text-[10px] font-bold text-slate-600 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 text-center">{fixedProcurement}</span>
+        )}
+        {showOrder && (
+          <select
+            value={procurementStatus === 'in_progress' ? 'in_progress' : 'pending'}
+            onChange={(e) => onProcurementChange(e.target.value === 'in_progress' ? 'in_progress' : 'pending')}
+            aria-label="وضعیت سفارش"
+            className="px-2 py-1 rounded-xl font-bold text-[11px] border border-slate-300 bg-white text-slate-700 focus:outline-none cursor-pointer w-full"
+          >
+            <option value="pending">سفارش داده نشده</option>
+            <option value="in_progress">در حال سفارش</option>
+          </select>
         )}
       </div>
     </td>

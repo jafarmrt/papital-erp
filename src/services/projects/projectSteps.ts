@@ -1,10 +1,10 @@
-import { and, count, eq, inArray, sql } from 'drizzle-orm';
+import { and, count, countDistinct, eq } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { documents, productionProjects, projectBomAllocations, purchaseRequisitions } from '../../db/schema.js';
-import { PROJECT_ISSUE_DOCUMENT_TYPES } from '../../lib/transactions/projectIssueTypes.js';
+import { documentItems, documents, productionProjects, projectBomAllocations, purchaseRequisitions } from '../../db/schema.js';
 import { NotFoundError } from '../../errors/customErrors.js';
 import type { ProjectStepCounts } from '../../lib/projects/projectSteps.js';
 import { deliveredProjectQuantities, plannedProjectProducts } from './projectDeliveryCap.js';
+import { projectIssueAllocationConditions, projectIssueLineConditions } from './projectIssuedQuantities.js';
 
 /** requisition statuses by stage; the legacy approved, completed and cancelled read as their stage (TD-326) */
 const ORDERED_STATUSES = new Set(['ordered', 'approved']);
@@ -13,9 +13,10 @@ const CLOSED_STATUSES = new Set(['rejected', 'cancelled', 'consolidated']);
 
 /**
  * v10.2.1 (10.2 package 2, review U4): the counts of a project's step bar. Read only: the live requisitions of the
- * project by stage, its allocations not released, its live final remittances and waste (the documents that issue
- * material to a project, TD-233 / TD-945), and its final production receipts against the planned products (the
- * delivery cap's own rule). It carries no amount, so `projects.view` reads it like the project record.
+ * project by stage, its allocations not released, its live final remittances and waste with a live line (the documents
+ * that issue material to a project, TD-233 / TD-945; the rows of `projectIssuedQuantities` since v10.2.3), and its
+ * final production receipts against the planned products (the delivery cap's own rule). It carries no amount, so
+ * `projects.view` reads it like the project record.
  */
 export async function loadProjectStepCounts(projectId: number): Promise<ProjectStepCounts> {
   const [project] = await orm
@@ -38,18 +39,18 @@ export async function loadProjectStepCounts(projectId: number): Promise<ProjectS
     else if (!CLOSED_STATUSES.has(status)) requisitions.open += rows;
   }
 
+  // v10.2.3 (TD-1290): the same rows as the issued quantities and «مواد گرفته‌شده از انبار», so a document whose lines
+  // are all deleted issues nothing here either
   const allocationRows = await orm
     .select({ status: projectBomAllocations.status, rows: count() })
     .from(projectBomAllocations)
-    .where(and(eq(projectBomAllocations.projectId, projectId), eq(projectBomAllocations.isDeleted, 0), sql`${projectBomAllocations.status} IN ('allocated', 'consumed')`))
+    .where(projectIssueAllocationConditions(projectId))
     .groupBy(projectBomAllocations.status);
   const [issueRow] = await orm
-    .select({ rows: count() })
-    .from(documents)
-    .where(and(
-      eq(documents.projectId, projectId), eq(documents.isDeleted, 0), eq(documents.status, 'final'),
-      inArray(documents.type, [...PROJECT_ISSUE_DOCUMENT_TYPES]),
-    ));
+    .select({ rows: countDistinct(documents.id) })
+    .from(documentItems)
+    .innerJoin(documents, eq(documents.id, documentItems.documentId))
+    .where(projectIssueLineConditions(projectId));
   const allocations = { open: 0, consumed: 0, issueDocuments: Number(issueRow?.rows) || 0 };
   for (const row of allocationRows) {
     if (row.status === 'consumed') allocations.consumed += Number(row.rows) || 0;

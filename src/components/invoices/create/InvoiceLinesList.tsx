@@ -25,7 +25,7 @@ function lineWarehouseName(line: InvoiceDocItem, warehouses: WarehouseItem[]): s
 }
 
 /**
- * v10.2.3 (گزینه «ج»): ردیف‌های فاکتور. روی رایانه جدول (با پیمایش افقی در پهنای کم)، روی گوشی یک کارت برای هر ردیف
+ * v10.2.4 (گزینه «ج»): ردیف‌های فاکتور. روی رایانه جدول (با پیمایش افقی در پهنای کم)، روی گوشی یک کارت برای هر ردیف
  * (`usePhoneWidth`: فقط یکی از دو چیدمان ساخته می‌شود).
  */
 export function InvoiceLinesList({ lines, currency, amountDecimals, warehouses, onRemove }: InvoiceLinesListProps) {

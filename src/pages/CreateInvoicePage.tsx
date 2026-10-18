@@ -35,7 +35,7 @@ import { useHasPermission } from '../contexts/AuthContext';
 import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog';
 import { SALES_FINALIZE_PERMISSION } from '../lib/permissions/documentPermissions';
 
-// v10.2.3 (گزینه «ج»): فرم در بخش‌های سرتیتردار components/invoices/create؛ این صفحه وضعیت فرم و ثبت را نگه می‌دارد
+// v10.2.4 (گزینه «ج»): فرم در بخش‌های سرتیتردار components/invoices/create؛ این صفحه وضعیت فرم و ثبت را نگه می‌دارد
 export default function CreateInvoicePage({ user: currentUser }: { user: User }) {
   const fieldId = useId();
   // v9.0.125 (TD-541 / TD-771): گزینه «فاکتور نهایی» با همان مجوزی که سرور می‌سنجد، نه کد نقش (documentPermissions.ts)

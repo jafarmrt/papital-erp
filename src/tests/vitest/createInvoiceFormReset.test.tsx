@@ -9,7 +9,7 @@ import { INVOICE_STATUS_LABELS } from '../../components/invoices/create/InvoiceH
 import { INVOICE_BUYER_TEXT } from '../../components/invoices/create/InvoiceBuyerFields';
 import { INVOICE_LINE_TEXT } from '../../components/invoices/create/InvoiceLinePicker';
 
-/** Persian texts of the invoice form the test reads (v10.2.3: options without emoji) */
+/** Persian texts of the invoice form the test reads (v10.2.4: options without emoji) */
 const CENTRAL_WAREHOUSE = 'انبار مرکزی';
 const CASH_CUSTOMER_OPTION = /^مشتری نقدی \(/;
 

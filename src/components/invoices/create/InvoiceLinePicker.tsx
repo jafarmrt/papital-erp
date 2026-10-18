@@ -50,7 +50,7 @@ export function invoiceItemOptionLabel(it: Item, location: string, warehouses: W
 const amountOf = (text: string): Amount => (text ? Number(text) : '');
 
 /**
- * v10.2.3 (گزینه «ج»): ردیف افزودن کالای فاکتور. انتخابگر کالا یک ردیف کامل می‌گیرد و فهرست قیمت، تعداد، مبلغ واحد،
+ * v10.2.4 (گزینه «ج»): ردیف افزودن کالای فاکتور. انتخابگر کالا یک ردیف کامل می‌گیرد و فهرست قیمت، تعداد، مبلغ واحد،
  * تخفیف و دکمه افزودن در ردیف دوم‌اند؛ روی گوشی همه زیر هم.
  */
 export function InvoiceLinePicker(props: InvoiceLinePickerProps) {
