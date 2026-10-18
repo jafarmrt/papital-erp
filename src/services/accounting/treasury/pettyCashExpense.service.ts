@@ -169,8 +169,8 @@ export async function createPettyCashExpense(input: PettyCashExpenseInput): Prom
         ],
       }, tx),
       event: (rowId) => ({
-        transactionId: rowId, type: 'withdrawal', amount: total.toNumber(), currency: PETTY_CASH_CURRENCY,
-        accountId: fund.id, accountName: fund.title, description: voucherDescription, pettyCashLines: lines.length,
+        transactionId: rowId, type: 'withdrawal', currency: PETTY_CASH_CURRENCY,
+        accountId: fund.id, accountName: fund.title, pettyCashLines: lines.length,
       }),
       actor: { userId: input.userId, username: input.username },
       insufficientBalance: (balance) => new ValidationError(

@@ -9,6 +9,7 @@ import { eq } from 'drizzle-orm';
 import { safeCompareTokens } from '../lib/timingSafeCompare.js';
 import { PASSWORD_RESET_REQUIRED, PASSWORD_RESET_REQUIRED_MESSAGE, isPasswordResetAllowedPath } from '../lib/auth/passwordReset.js';
 import { DEFAULT_SESSION_SECONDS, sessionLifetimeSeconds } from '../lib/auth/sessionLifetime.js';
+import { checkSession, type SessionRequestInfo } from '../services/auth/sessionStore.js';
 
 declare global {
   namespace Express {
@@ -174,7 +175,9 @@ export type LiveSessionResult =
  * whose tokenVersion no longer matches is refused; role and full name come from the database.
  * Shared by `authenticateToken` and the metrics guard (v9.0.146, TD-599).
  */
-export async function resolveLiveSession(payload: AuthUserPayload): Promise<LiveSessionResult> {
+export const SESSION_CLOSED_MESSAGE = 'این دستگاه از حساب خارج شده است. لطفاً دوباره وارد شوید.';
+
+export async function resolveLiveSession(payload: AuthUserPayload, info: SessionRequestInfo = {}): Promise<LiveSessionResult> {
   try {
     const userIdNum = Number(payload.id);
     const now = Date.now();
@@ -218,6 +221,12 @@ export async function resolveLiveSession(payload: AuthUserPayload): Promise<Live
     if (claimVersion !== dbVersion) {
       userAuthCache.delete(userIdNum);
       return { ok: false, status: 401, error: 'نشست شما به دلیل تغییر نقش یا اطلاعات کاربری منقضی شده است. لطفاً مجدداً وارد شوید.' };
+    }
+
+    // 10.2 package 8 (D-07): the device's own session row; a closed or expired one is refused on this very request
+    const session = await checkSession(payload, dbVersion, info);
+    if (!session.ok) {
+      return { ok: false, status: 401, error: SESSION_CLOSED_MESSAGE };
     }
 
     // نقش، نام کامل و توکن CSRF همیشه از وضعیت معتبر دیتابیس/کش بازخوانی می‌شوند
@@ -267,7 +276,7 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
     const payload = decoded as AuthUserPayload;
 
     // V9-2.2 & Phase 5.3 (A-2): اعتبارسنجی زنده وضعیت کاربر با لایه کش سبک TTL (30s) جهت پیشگیری از N+1 در هر درخواست
-    const live = await resolveLiveSession(payload);
+    const live = await resolveLiveSession(payload, { userAgent: String(req.headers['user-agent'] ?? ''), ipAddress: req.ip || req.socket?.remoteAddress || '' });
     if (!live.ok) {
       return res.status(live.status).json({ error: live.error });
     }
@@ -353,7 +362,7 @@ export const csrfProtection = (req: Request, res: Response, next: NextFunction) 
 };
 
 export const generateToken = (
-  payload: AuthUserPayload | { id: number; username: string; role: string; fullName?: string; full_name?: string; csrfToken?: string; tokenVersion?: number },
+  payload: AuthUserPayload | { id: number; username: string; role: string; fullName?: string; full_name?: string; csrfToken?: string; tokenVersion?: number; sid?: string },
   lifetimeSeconds: number = DEFAULT_SESSION_SECONDS,
 ) => {
   const jwtSecret = getJwtSecret();

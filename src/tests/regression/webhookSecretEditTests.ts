@@ -22,7 +22,7 @@ export async function runWebhookSecretEditTests(shouldRun: (id: string, ...extra
   const tStart = Date.now();
   const storedKey = 'whsec_td719_stored_signing_key_0123456789abcdef';
   const targetUrl = 'https://partner-td719.example.com/hooks/erp';
-  const realFetch = globalThis.fetch;
+  const { setWebhookTransportForTests } = await import('../../services/events/guardedWebhookFetch.js');
   const sent: Array<{ url: string; headers: Record<string, string>; body: string }> = [];
   const roleIds: number[] = [];
   const userIds: number[] = [];
@@ -57,10 +57,10 @@ export async function runWebhookSecretEditTests(shouldRun: (id: string, ...extra
     }
 
     // 2. the ping of the saved webhook goes to its stored address, signed with the stored key and with its stored headers
-    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    setWebhookTransportForTests(async (input, init) => {
       sent.push({ url: String(input), headers: { ...(init?.headers as Record<string, string>) }, body: String(init?.body ?? '') });
       return new Response('ok', { status: 200 });
-    }) as typeof fetch;
+    });
     const ping = await send('post', '/api/events/webhooks/ping', { subscriptionId });
     const delivered = sent[0];
     const expected = delivered ? crypto.createHmac('sha256', storedKey).update(delivered.body, 'utf8').digest('hex') : '';
@@ -89,7 +89,7 @@ export async function runWebhookSecretEditTests(shouldRun: (id: string, ...extra
       error: err instanceof Error ? err.message : String(err),
     }));
   } finally {
-    globalThis.fetch = realFetch;
+    setWebhookTransportForTests(null);
     if (subscriptionId) await orm.delete(webhookSubscriptions).where(eq(webhookSubscriptions.id, subscriptionId)).catch(() => undefined);
     if (userIds.length > 0) await orm.update(users).set({ isDeleted: 1 }).where(inArray(users.id, userIds)).catch(() => undefined);
     if (roleIds.length > 0) await deleteTestRoles(inArray(roles.id, roleIds)).catch(() => undefined);

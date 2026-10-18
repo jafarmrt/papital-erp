@@ -27,6 +27,17 @@ interface EventActor {
   username?: string;
 }
 
+/**
+ * ۱۰.۲ بسته ۸ (TD-1297): رویداد «تراکنش خزانه تأیید شد» مبلغ، شرح و دلیل ابطال ندارد، چون به هر وبهوک و قاعده خودکاری
+ * که این رویداد را بگیرد می‌رسد و شرح ردیف نام طرف حساب و مبلغ را در خود دارد؛ فقط شناسه ردیف، نوع، ارز و حساب می‌ماند.
+ * فرم خزانه، انتقال میان حساب‌ها، صورت‌هزینه تنخواه، پرداخت ماهانه بیمه و مالیات و فیش حقوق همه از این‌جا می‌گذرند.
+ */
+export const TREASURY_EVENT_PRIVATE_KEYS: readonly string[] = ['amount', 'description', 'reason'];
+
+export function treasuryEventPayload(payload: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(payload).filter(([key]) => !TREASURY_EVENT_PRIVATE_KEYS.includes(key)));
+}
+
 /** حساب زنده خزانه را برای تغییر مانده قفل می‌کند (FOR UPDATE)؛ نخستین قفل هر نوشتن خزانه */
 export async function lockTreasuryBank(tx: DbExecutor, bankAccountId: number): Promise<TreasuryBank> {
   const [bank] = await tx.select().from(bankAccounts)
@@ -103,7 +114,7 @@ export interface TreasuryRowPosting {
   createdById?: number | null;
   /** سند ردیف را با شماره آن در همین تراکنش صادر می‌کند؛ null یعنی ردیف بی سند (فقط با مجوز TD-409) */
   voucher: ((transactionNumber: string) => Promise<{ id: number }>) | null;
-  /** داده رویداد «تراکنش خزانه تأیید شد» ردیف درج‌شده */
+  /** داده رویداد «تراکنش خزانه تأیید شد» ردیف درج‌شده (بی مبلغ و شرح، `treasuryEventPayload`) */
   event: (rowId: number) => Record<string, unknown>;
   actor: EventActor;
   /** پیام خود فراخواننده برای کمبود مانده (تنخواه)؛ پیش‌فرض `TREASURY_BALANCE_INSUFFICIENT` */
@@ -156,7 +167,7 @@ export async function postTreasuryRow(tx: DbExecutor, bank: TreasuryBank, postin
   }).returning();
 
   await OutboxService.saveToOutbox(tx, domainEventBus.createEvent(
-    DomainEventType.TREASURY_TRANSACTION_APPROVED, 'Treasury', String(row.id), posting.event(row.id),
+    DomainEventType.TREASURY_TRANSACTION_APPROVED, 'Treasury', String(row.id), treasuryEventPayload(posting.event(row.id)),
     { userId: posting.actor.userId, userName: posting.actor.username },
   ));
   return { row, transactionNumber, voucherId };
@@ -219,7 +230,7 @@ export async function reverseTreasuryRow(
     .where(eq(treasuryTransactions.id, original.id));
 
   await OutboxService.saveToOutbox(tx, domainEventBus.createEvent(
-    DomainEventType.TREASURY_TRANSACTION_APPROVED, 'Treasury', String(row.id), reversal.event(row),
+    DomainEventType.TREASURY_TRANSACTION_APPROVED, 'Treasury', String(row.id), treasuryEventPayload(reversal.event(row)),
     { userId: reversal.actor.userId, userName: reversal.actor.username },
   ));
   return row;

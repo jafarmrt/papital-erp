@@ -140,12 +140,11 @@ export interface TreasuryEventPayload {
   transactionId?: number;
   chequeId?: number;
   type: 'deposit' | 'withdrawal' | 'transfer' | 'cheque_pass' | 'cheque_return';
-  /** absent on a payslip payment and its void (`payrollId` set): a salary amount is for payroll readers only */
-  amount?: number;
+  // 10.2 package 8 (TD-1297): no amount, description or void reason, for any treasury row (the description names the
+  // party and the amount); they reach every webhook and rule of this event (`treasuryEventPayload`)
   currency: string;
   accountId?: number;
   accountName?: string;
-  description?: string;
   sayadNumber?: string;
 }
 

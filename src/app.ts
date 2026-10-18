@@ -19,6 +19,7 @@ import { applyExpress4RequestShapes, emptyBodyDefault } from './lib/express5Comp
 import { validateCorsOrigin } from './lib/corsValidator.js';
 import authRoutes from './routes/auth.routes.js';
 import usersRoutes from './routes/users.routes.js';
+import sessionsRoutes from './routes/sessions.routes.js';
 import systemRoutes from './routes/system.routes.js';
 import itemsRoutes from './routes/items.routes.js';
 import customersRoutes from './routes/customers.routes.js';
@@ -349,6 +350,7 @@ export async function createApp(): Promise<express.Express> {
   app.use('/api/woocommerce', woocommerceRoutes);
   app.use('/api', authRoutes);
   app.use('/api', usersRoutes);
+  app.use('/api', sessionsRoutes);
   app.use('/api', systemRoutes);
   app.use('/api', itemsRoutes);
   app.use('/api', customerTagsRoutes);

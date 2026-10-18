@@ -12,6 +12,7 @@ import { logger } from '../../middleware/logger.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { RuleEngineService, type RuleExpression } from '../ruleEngine.service.js';
 import { LOCAL_ECHO_PATH, assertSafeExternalUrl, isEchoSimulatorEnvironment, isLocalEchoTarget } from '../../lib/ssrfGuard.js';
+import { guardedWebhookFetch } from './guardedWebhookFetch.js';
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
 import { assertNotificationPermission, permissionHolderUserIds, roleMemberUserIds } from '../notifications/notificationRecipients.js';
 import { resolveRuleConfigSecrets } from './integrationSecrets.js';
@@ -163,13 +164,11 @@ export class EventActionEngineService {
         timestamp: new Date().toISOString()
       };
 
-      const response = await fetch(targetUrl, {
+      const response = await guardedWebhookFetch(targetUrl, {
         method,
         headers,
         body: JSON.stringify(bodyPayload),
-        signal: controller.signal,
-        // V3.0.7 (TD-057): جلوگیری از دورزدن SSRF Guard با redirect
-        redirect: 'manual'
+        signal: controller.signal
       });
 
       clearTimeout(timeoutId);
@@ -524,21 +523,9 @@ export class EventActionEngineService {
           },
           isActive: 1
         } satisfies CreateRuleInput] : []),
-        {
-          name: 'ثبت ممیزی تراکنش‌های کلان خزانه‌داری',
-          description: 'ثبت لاگ ممیزی امنیتی اختصاصی برای کلیه تراکنش‌های واریز یا برداشت بالای ۵۰۰ میلیون ریال',
-          eventType: DomainEventType.TREASURY_TRANSACTION_APPROVED,
-          conditionsJson: [
-            { field: 'payload.amount', operator: 'gte', value: 500000000 }
-          ],
-          actionType: 'audit_log',
-          actionConfigJson: {
-            category: 'خزانه‌داری:تراکنش_کلان',
-            tag: 'HIGH_VALUE_TRANSACTION',
-            descriptionTemplate: 'تراکنش خزانه‌داری با ارزش کلان {{payload.amount}} {{payload.currency}} به ثبت رسید.'
-          },
-          isActive: 1
-        }
+        // 10.2 package 8 (TD-1297): the high-value treasury audit rule («ثبت ممیزی تراکنش‌های کلان خزانه‌داری», on
+        // payload.amount) is no longer seeded, since the treasury event carries no amount; an installed copy is listed by
+        // the financial health check (`event_rule_treasury_private_fields`)
       ];
 
       for (const rule of defaultRules) {

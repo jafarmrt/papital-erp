@@ -17,7 +17,7 @@ import {
   projectReservationReleases, inventoryReconciliationAnomalies, itemWarehouseStocks,
   integrationDeliveryJobs, eventActionRuleRetirements, webhookEventPatternRepairs, itemPriceTitleCleanup,
   dailyLogVisibilityRepairs, statutoryRemittanceLines, payrollStatutoryRates, payrollEidiRates, itemCodeHistory,
-  mediaAssets, mediaSections, messengerLinkCodes, userMessengerLinks, userNotificationPreferences, messengerBots,
+  mediaAssets, mediaSections, messengerLinkCodes, userMessengerLinks, userNotificationPreferences, messengerBots, userSessions,
 } from '../../db/schema.js';
 
 /**
@@ -145,6 +145,7 @@ export const FACTORY_RESET_WIPE_ORDER: readonly FactoryResetWipe[] = [
   { name: 'user_messenger_links', table: userMessengerLinks },
   { name: 'user_notification_preferences', table: userNotificationPreferences },
   { name: 'messenger_bots', table: messengerBots },
+  { name: 'user_sessions', table: userSessions },
   { name: 'users', table: users },
 ];
 

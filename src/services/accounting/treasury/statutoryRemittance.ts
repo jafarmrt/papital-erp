@@ -217,7 +217,7 @@ export async function createStatutoryRemittance(input: CreateStatutoryRemittance
           },
         ],
       }, tx),
-      event: (rowId) => ({ transactionId: rowId, type: 'withdrawal', amount: total.toNumber(), currency: 'IRR', accountId: bank.id, accountName: bank.title, description }),
+      event: (rowId) => ({ transactionId: rowId, type: 'withdrawal', currency: 'IRR', accountId: bank.id, accountName: bank.title }),
       actor: { userId: input.userId, username: input.username },
     });
     await tx.insert(statutoryRemittanceLines).values(lines.map(l => ({

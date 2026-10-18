@@ -67,11 +67,9 @@ const TREASURY_LABELS: Record<keyof TreasuryEventPayload, string> = {
   transactionId: 'شناسه تراکنش',
   chequeId: 'شناسه چک',
   type: 'نوع تراکنش',
-  amount: 'مبلغ',
   currency: 'ارز',
   accountId: 'شناسه حساب',
   accountName: 'نام حساب',
-  description: 'شرح',
   sayadNumber: 'شماره صیادی',
 };
 
