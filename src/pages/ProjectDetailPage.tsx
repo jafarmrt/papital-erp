@@ -21,6 +21,10 @@ import ProjectInventoryTab from '../components/project/ProjectInventoryTab';
 import ProjectProductProgressTab from '../components/project/ProjectProductProgressTab';
 import ProjectScheduleTab from '../components/project/ProjectScheduleTab';
 import ProjectStockEntryTab from '../components/project/ProjectStockEntryTab';
+import { ProjectPhoneHeader } from '../components/project/phone/ProjectPhoneHeader';
+import { ProjectPhoneSummary } from '../components/project/phone/ProjectPhoneSummary';
+import { ProjectPhoneProgress } from '../components/project/phone/ProjectPhoneProgress';
+import { usePhoneWidth } from '../lib/pwa/usePhoneWidth';
 
 type DirtySetter = (dirty: boolean) => void;
 
@@ -31,6 +35,10 @@ type DirtySetter = (dirty: boolean) => void;
  * The step bar says where the project stands; a tab with an unsaved change is marked, and leaving it (another tab, the
  * list, a menu link, the browser's back button, the search or a notification, closing the browser tab) asks first. Only the tab on screen is mounted, so each one starts from the
  * project as the server last saved it.
+ * v10.2.9 (10.2 package 10, review «ث»): narrower than 768 px the page has a phone layout: a short header, the
+ * summary of the project instead of the first tab and a list per product instead of the progress matrix, both
+ * reading the same project and the same tick hook as the desktop; «نمای کامل» shows the desktop layout. Only one
+ * layout is built at a time (`usePhoneWidth`).
  */
 export default function ProjectDetailPage() {
   const params = useParams<{ projectId: string; tab?: string }>();
@@ -45,6 +53,13 @@ export default function ProjectDetailPage() {
   const projectVersion = useProjectVersion(project);
   const [dirtyTabs, setDirtyTabs] = useState<ReadonlySet<ProjectWorkspaceTab>>(new Set());
   const [specsOpen, setSpecsOpen] = useState(false);
+  const phone = usePhoneWidth();
+  const [fullView, setFullView] = useState(false);
+  const wantPhoneLayout = phone && !fullView;
+  // a phone turned sideways (wider than 768 px) keeps its layout while a tab holds unsaved ticks or edits
+  const [phoneLayout, setPhoneLayout] = useState(wantPhoneLayout);
+  // the progress tab's ticks not saved or a save under way (review M1): the tab's list exists in one layout only
+  const [progressBusy, setProgressBusy] = useState(false);
   // read from the address too, so the render before `specsOpen` is set already counts the editor as open (review N1)
   const editingSpecs = canEdit && tab === 'overview' && (specsOpen || searchParams.get('edit') === '1');
 
@@ -67,6 +82,7 @@ export default function ProjectDetailPage() {
   // another project starts with its specs closed (review S2)
   useEffect(() => {
     setSpecsOpen(false);
+    setFullView(false);
   }, [projectId]);
 
   useEffect(() => {
@@ -121,6 +137,29 @@ export default function ProjectDetailPage() {
   }, []);
 
   useUnsavedChangesGuard(dirtyTabs.size > 0);
+
+  /*
+   * the layout follows the screen width only once nothing would be lost (review M1): a tab with an unsaved change, or the
+   * progress list while its ticks wait or its save runs, keeps the layout it is in; the other layout then mounts its own
+   * list after the save, so it reads the matrix as saved
+   */
+  useEffect(() => {
+    if (dirtyTabs.size === 0 && !progressBusy) setPhoneLayout(wantPhoneLayout);
+  }, [dirtyTabs.size, progressBusy, wantPhoneLayout]);
+
+  /*
+   * «نمای کامل» and back on a phone. The two layouts build the progress tab differently, and the overview tab too unless
+   * the specs form is open (the phone shows its summary there), so an unsaved change of either asks first (review nit,
+   * delta D1); while the progress save runs the switch waits.
+   */
+  const progressSaving = tab === 'progress' && progressBusy && !dirtyTabs.has('progress');
+  const layoutRebuildsTab = tab === 'progress' || (tab === 'overview' && !editingSpecs);
+  const showFullView = async (full: boolean) => {
+    if (progressSaving) return;
+    if (layoutRebuildsTab && dirtyTabs.has(tab) && !(await confirmLeaveUnsaved())) return;
+    setFullView(full);
+    setPhoneLayout(phone && !full);
+  };
 
   const goToTab = async (next: ProjectWorkspaceTab) => {
     if (projectId === null || next === tab) return;
@@ -177,21 +216,52 @@ export default function ProjectDetailPage() {
   const items = itemsQuery.data ?? [];
   const personnel = personnelQuery.data ?? [];
 
+  const onStatusSaved = (res: unknown) => { projectVersion.remember(res); void refresh(); };
+  const inactiveNote = projectInactiveNote(project.status);
+
   return (
     <div className="p-3 sm:p-5 space-y-4 font-farsi" dir="rtl">
-      <ProjectWorkspaceHeader
-        project={project}
-        version={projectVersion.version}
-        canEdit={canEdit}
-        editingSpecs={editingSpecs}
-        onBack={() => void goBack()}
-        onEditSpecs={() => void openSpecs()}
-        onStatusSaved={(res) => { projectVersion.remember(res); void refresh(); }}
-      />
-      <ProjectStepsBar steps={steps} onOpenTab={(next) => void goToTab(next)} inactiveNote={projectInactiveNote(project.status)} />
+      {phoneLayout ? (
+        <ProjectPhoneHeader
+          project={project}
+          version={projectVersion.version}
+          canEdit={canEdit}
+          editingSpecs={editingSpecs}
+          onBack={() => void goBack()}
+          onEditSpecs={() => void openSpecs()}
+          onStatusSaved={onStatusSaved}
+        />
+      ) : (
+        <>
+          {phone && (
+            <button type="button" onClick={() => void showFullView(false)} disabled={progressSaving} className="w-full min-h-11 disabled:opacity-60 rounded-xl border border-blue-200 bg-blue-50 text-blue-800 text-xs font-bold cursor-pointer">
+              بازگشت به نمای گوشی
+            </button>
+          )}
+          <ProjectWorkspaceHeader
+            project={project}
+            version={projectVersion.version}
+            canEdit={canEdit}
+            editingSpecs={editingSpecs}
+            onBack={() => void goBack()}
+            onEditSpecs={() => void openSpecs()}
+            onStatusSaved={onStatusSaved}
+          />
+          <ProjectStepsBar steps={steps} onOpenTab={(next) => void goToTab(next)} inactiveNote={inactiveNote} />
+        </>
+      )}
       <ProjectWorkspaceTabBar active={tab} dirty={dirtyTabs} badges={badges} onSelect={(next) => void goToTab(next)} />
       <div id="project-tab-panel" role="tabpanel" aria-labelledby={`project-tab-${tab}`}>
-        {tab === 'overview' && (
+        {tab === 'overview' && phoneLayout && !editingSpecs && (
+          <ProjectPhoneSummary
+            project={project}
+            steps={steps}
+            inactiveNote={inactiveNote}
+            onOpenTab={(next) => void goToTab(next)}
+            onShowFull={() => void showFullView(true)}
+          />
+        )}
+        {tab === 'overview' && !(phoneLayout && !editingSpecs) && (
           <ProjectOverviewTab
             project={project}
             version={projectVersion.version}
@@ -205,7 +275,9 @@ export default function ProjectDetailPage() {
           />
         )}
         {tab === 'materials' && <ProjectInventoryTab project={project} itemsList={items} onUpdate={refresh} onDirtyChange={dirtySetters.materials} />}
-        {tab === 'progress' && <ProjectProductProgressTab projectId={project.id} onUpdate={refresh} onDirtyChange={dirtySetters.progress} />}
+        {tab === 'progress' && (phoneLayout
+          ? <ProjectPhoneProgress projectId={project.id} canEdit={canEdit} onUpdate={refresh} onDirtyChange={dirtySetters.progress} onBusyChange={setProgressBusy} />
+          : <ProjectProductProgressTab projectId={project.id} onUpdate={refresh} onDirtyChange={dirtySetters.progress} onBusyChange={setProgressBusy} />)}
         {tab === 'workshop' && <ProjectScheduleTab project={project} personnelList={personnel} pieceworkTasksList={[]} onUpdate={refresh} onDirtyChange={dirtySetters.workshop} />}
         {tab === 'delivery' && <ProjectStockEntryTab project={project} itemsList={items} onUpdate={refresh} />}
       </div>

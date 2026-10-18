@@ -145,10 +145,36 @@ export function passesGate(gate: PageGate, viewer: ViewerAccess | null | undefin
   return gate.anyOf.some(key => held.includes(key));
 }
 
-/** قاعده دسترسی صفحه از مسیر (بی رشته پرس‌وجو)؛ مسیر ناشناخته `undefined` */
+const PAGE_RULES = PAGE_ACCESS as Record<string, PageAccessRule>;
+
+/** بخش‌های یک کلید جدول: `:name` هر بخشی را می‌پذیرد و `:name?` بخشی که می‌تواند نباشد */
+function keyMatchesPath(key: string, path: string): boolean {
+  const keyParts = key.split('/').filter(Boolean);
+  if (!path.startsWith('/')) return false;
+  const pathParts = path.slice(1).split('/');
+  if (pathParts[pathParts.length - 1] === '' && pathParts.length > 1) pathParts.pop();
+  // an address of odd shape never reaches a rule: an empty segment («//»), «.» / «..», an encoded character or a backslash
+  if (pathParts.some(part => part === '' || part === '.' || part === '..' || /[%\\]/.test(part))) return false;
+  if (pathParts.length > keyParts.length) return false;
+  return keyParts.every((part, i) => {
+    const given = pathParts[i];
+    if (part.startsWith(':')) return given !== undefined || part.endsWith('?');
+    return given === part;
+  });
+}
+
+/**
+ * قاعده دسترسی صفحه؛ مسیر ناشناخته `undefined`. نخست خود کلید جدول (کلیدی مانند `/projects/:projectId/:tab?` نشانه «?»
+ * بخش اختیاری را دارد و نباید رشته پرس‌وجو خوانده شود؛ 10.2 بسته ۱۰، TD-1311)، سپس مسیر بی رشته پرس‌وجو و در پایان
+ * مسیری واقعی مانند `/projects/7/progress` در برابر کلیدهای پارامتردار.
+ */
 export function pageAccessRule(path: string): PageAccessRule | undefined {
+  const exact = PAGE_RULES[path];
+  if (exact) return exact;
   const bare = path.split(/[?#]/)[0];
-  return (PAGE_ACCESS as Record<string, PageAccessRule>)[bare];
+  if (PAGE_RULES[bare]) return PAGE_RULES[bare];
+  const key = Object.keys(PAGE_RULES).find(k => k.includes(':') && keyMatchesPath(k, bare));
+  return key ? PAGE_RULES[key] : undefined;
 }
 
 /** صفحه برای این کاربر باز است؛ مسیری که در جدول نیست برای هیچ کس جز مدیر سیستم باز نیست */
