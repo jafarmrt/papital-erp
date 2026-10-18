@@ -32,6 +32,8 @@ export const personnel = pgTable('personnel', {
   isTaxCovered: integer('is_tax_covered').notNull().default(0),
   // v10.1.35 (TD-1282، تصمیم ت۳۴ الف): «مشمول عیدی»؛ پرسنل موجود و تازه روشن (مهاجرت 0117)
   isEidiCovered: integer('is_eidi_covered').notNull().default(1),
+  // v10.2 بستهٔ ۹ (پیشخوان گروهی): همکاران روز و ماه تولد را می‌بینند؛ پیش‌فرض روشن و هر کس خاموشش می‌کند (مهاجرت 0130)
+  isBirthdayVisible: integer('is_birthday_visible').notNull().default(1),
   endDate: text('end_date').default(''),
   terminationReason: text('termination_reason').default(''),
   specializedSkills: text('specialized_skills').default(''),

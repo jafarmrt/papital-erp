@@ -22,6 +22,8 @@ export interface Personnel {
   isInsuranceCovered?: number;
   isTaxCovered?: number;
   isEidiCovered?: number;
+  // v10.2 package 9: «روز تولد به همکاران نشان داده شود» (0 / 1)
+  isBirthdayVisible?: number;
   endDate?: string;
   terminationReason?: string;
   specializedSkills?: string;

@@ -168,6 +168,14 @@ export function PersonnelFormModal({
                   placeholder="انتخاب تاریخ تولد"
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 font-mono"
                 />
+                <label className="mt-1.5 flex items-center gap-2 text-[11px] font-bold text-slate-600 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.isBirthdayVisible}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, isBirthdayVisible: e.target.checked }))}
+                  />
+                  روز تولد (بی سال) روی پیشخوان گروهی به همکاران نشان داده شود
+                </label>
               </div>
 
               <div>

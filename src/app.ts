@@ -34,6 +34,7 @@ import projectMaterialsRoutes from './routes/projectMaterials.routes.js';
 import transfersRoutes from './routes/transfers.routes.js';
 import dailyLogsRoutes from './routes/dailyLogs.routes.js';
 import notificationsRoutes from './routes/notifications.routes.js';
+import socialRoutes from './routes/social.routes.js';
 import messengerRoutes from './routes/messenger.routes.js';
 import crmRoutes from './routes/crm.routes.js';
 import crmAttachmentRoutes from './routes/crmAttachments.routes.js';
@@ -367,6 +368,7 @@ export async function createApp(): Promise<express.Express> {
   app.use('/api', mediaRoutes);
   app.use('/api', dailyLogsRoutes);
   app.use('/api', notificationsRoutes);
+  app.use('/api', socialRoutes);
   app.use('/api', messengerRoutes);
   app.use('/api', crmAttachmentRoutes);
   app.use('/api', crmRoutes);

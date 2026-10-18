@@ -14,6 +14,7 @@ export const NOTIFICATION_CATEGORIES = [
   'crm_won',
   'event_rule',
   'workshop',
+  'social',
 ] as const;
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
 
@@ -27,6 +28,7 @@ export const NOTIFICATION_CATEGORY_LABELS: Readonly<Record<NotificationCategory,
   crm_won: 'پرونده فروش موفق',
   event_rule: 'اعلان‌های قانون‌های خودکار',
   workshop: 'کارها و گزارش‌های کارتابل کارگاه',
+  social: 'تولد همکاران و تبریک‌ها',
 };
 
 /** One row of «در پیام‌رسان هم بفرست» in the profile (`GET /messenger/preferences/mine`) */
@@ -40,8 +42,15 @@ export function isNotificationCategory(value: unknown): value is NotificationCat
   return typeof value === 'string' && (NOTIFICATION_CATEGORIES as readonly string[]).includes(value);
 }
 
-/** The categories the profile offers a choice for: every category, since v10.1.42 each one has its producer */
-export const MESSENGER_PREFERENCE_CATEGORIES: readonly NotificationCategory[] = NOTIFICATION_CATEGORIES;
+/**
+ * v10.2 package 9 (group dashboard, owner's decision of 24 Mehr 1405): categories that stay in the bell and never go to
+ * Bale or Telegram, whatever the user's choices; `createNotifications` queues no messenger job for them.
+ */
+export const BELL_ONLY_CATEGORIES: readonly NotificationCategory[] = ['social'];
+export const isBellOnlyCategory = (category: NotificationCategory): boolean => BELL_ONLY_CATEGORIES.includes(category);
+
+/** The categories the profile offers a choice for: every category that may go to the messenger */
+export const MESSENGER_PREFERENCE_CATEGORIES: readonly NotificationCategory[] = NOTIFICATION_CATEGORIES.filter(c => !isBellOnlyCategory(c));
 
 /**
  * Allowlist (security review of part 2): only a category whose title and text the code builds from fixed words, step and
