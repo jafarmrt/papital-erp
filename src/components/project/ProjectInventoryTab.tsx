@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Boxes, ShoppingCart, CheckCircle2, Lock, Unlock, Save, FolderTree, Printer, ArrowLeft } from 'lucide-react';
-import { Item, ProjectInventoryControlSectionData, PurchaseListItem } from '../../types';
+import toast from 'react-hot-toast';
+import { Item, PurchaseListItem } from '../../types';
 import { useProjectInventory } from '../../hooks/useProjectInventory';
 import { ProductTreeInventoryCards } from './ProductTreeInventoryCards';
 import { GlobalInventoryControlSection } from './GlobalInventoryControlSection';
@@ -8,9 +9,11 @@ import { ManualPurchaseList } from './ManualPurchaseList';
 import { CreatePurchaseOrderModal } from './CreatePurchaseOrderModal';
 import { AddMaterialModal } from './AddMaterialModal';
 import { UnitConversionModal } from './UnitConversionModal';
-import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
 import { formatPersianNumber, toPersianDigits } from '../../utils';
 import { useProjectPermissions } from '../../hooks/useProjectPermissions';
+import { storedShortagesNowFree } from '../../lib/projects/materialAvailability';
+import { buildSectionPurchaseList, sectionPurchaseRows } from './projectInventoryUtils';
+import { ProjectIssuedMaterialsList } from './ProjectIssuedMaterialsList';
 
 interface ProjectInventoryTabProps {
   project: any;
@@ -75,6 +78,8 @@ export function ProjectInventoryTab({
     handleApplyUnitConversion,
     purchaseList,
     materialProgress,
+    availability,
+    reportsReloadKey,
     handleFinalizeAndReserveStock,
     handleUnfinalizeReservation,
     handlePrintPurchaseListWithCheck,
@@ -92,46 +97,28 @@ export function ProjectInventoryTab({
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   // V3.1.46 (TD-070): پل مستقیم خرید از ردیف بخش — ساخت لیست خرید موقت از کسری‌های همان بخش
+  // v10.2.3 (TD-1290): ردیف‌های یک کالا یکی می‌شوند و مقدار خرید از کسری کل پروژه بیشتر نیست (`buildSectionPurchaseList`)
   const [sectionPurchase, setSectionPurchase] = useState<{ list: PurchaseListItem[]; secIdx: number } | null>(null);
   const handlePurchaseSection = (secIdx: number) => {
-    const sec: ProjectInventoryControlSectionData | undefined = sections[secIdx];
-    if (!sec) return;
-    const items = sec.globalItems || [];
-    const bridged: PurchaseListItem[] = items
-      .map((item, gIdx) => ({ item, gIdx }))
-      .map(({ item, gIdx }) => {
-        const matchWh = findProjectItemMatch({ code: item.itemCode, name: item.name }, warehouseItems);
-        const currentStock = matchWh ? Number(matchWh.current_stock || 0) : Number(item.stockQty || 0);
-        const requiredQty = Number(item.requiredQty || 1);
-        const shortfall = Math.max(0, requiredQty - currentStock);
-        return {
-          id: `sec${secIdx}_g${gIdx}_${item.itemCode || item.name || gIdx}`,
-          itemCode: item.itemCode || matchWh?.code || '',
-          itemName: item.name || matchWh?.name || '',
-          category: sec.title || 'بخش کنترل',
-          totalRequiredQty: requiredQty,
-          unit: item.unit || matchWh?.unit || 'عدد',
-          warehouseStockQty: currentStock,
-          warehouseUnit: matchWh?.unit || item.unit,
-          toPurchaseQty: shortfall,
-          procurementStatus: item.procurementStatus || 'pending',
-          notes: item.notes
-        };
-      })
-      .filter(p => p.toPurchaseQty > 0);
-    if (bridged.length === 0) return;
-    setSectionPurchase({ list: bridged, secIdx });
+    const list = buildSectionPurchaseList(sections[secIdx], secIdx, warehouseItems, availability);
+    if (list.length === 0) {
+      toast.error('برای ردیف‌های این بخش مقداری برای خرید نمانده است؛ وضعیت ردیف‌ها و «لیست نهایی خرید و تامین» را ببینید.');
+      return;
+    }
+    setSectionPurchase({ list, secIdx });
   };
   const handleSectionPurchaseSuccess = (createdDoc: any, orderedItemIds: string[]) => {
     for (const id of orderedItemIds || []) {
-      const m = /^sec(\d+)_g(\d+)_/.exec(id);
-      if (m) {
-        handleUpdateGlobalItem(Number(m[1]), Number(m[2]), 'procurementStatus', 'in_progress');
-      }
+      const ref = sectionPurchaseRows(id);
+      if (!ref) continue;
+      for (const gIdx of ref.rows) handleUpdateGlobalItem(ref.secIdx, gIdx, 'procurementStatus', 'in_progress');
     }
     setSectionPurchase(null);
     void onUpdate?.();
   };
+
+  // v10.2.3 (TD-1290): a stored reservation does not grow when stock arrives; a re-finalize reserves the rest
+  const unreservedNowFree = storedShortagesNowFree(availability, isFinalized, reservationShortages);
 
   return (
     <div className="space-y-6 font-farsi dir-rtl">
@@ -215,14 +202,30 @@ export function ProjectInventoryTab({
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
               میزان آماده‌باش و موجود بودن مواد اولیه:
             </span>
-            <span className="text-amber-400 font-mono text-sm">{formatPersianNumber(materialProgress)}٪</span>
+            <span className="text-amber-400 font-mono text-sm">
+              {materialProgress === null ? (availability.status === 'error' ? 'نامعلوم' : '…') : `${formatPersianNumber(materialProgress)}٪`}
+            </span>
           </div>
           <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-700">
             <div 
               className="h-full bg-gradient-to-r from-amber-500 to-emerald-400 rounded-full transition-all duration-500"
-              style={{ width: `${materialProgress}%` }}
+              style={{ width: `${materialProgress ?? 0}%` }}
             />
           </div>
+          {/* v10.2.3 (TD-1290): free stock follows the finalize's rule */}
+          <p className="text-[11px] text-slate-400">
+            «آزاد برای این پروژه» موجودی کل منهای رزرو پیش‌فاکتورهای فروش و پروژه‌های دیگر است، همان رقمی که ثبت نهایی با آن رزرو می‌کند؛ وضعیت «موجود / کسری» خودکار است.
+          </p>
+          {unreservedNowFree.length > 0 && (
+            <p className="text-[11px] text-amber-300" role="status">
+              موجودی آزاد {unreservedNowFree.map(s => `«${s.itemName || s.itemCode}»`).join('، ')} اکنون نیاز پروژه را می‌پوشاند، اما رزرو ثبت نهایی با رسیدن موجودی بیشتر نمی‌شود و پیش‌فاکتور فروش هنوز می‌تواند آن را ببرد؛ برای رزرو آن، ثبت نهایی را لغو و دوباره ثبت کنید.
+            </p>
+          )}
+          {availability.status === 'error' && (
+            <p className="text-[11px] text-rose-300" role="alert">
+              موجودی آزاد مواد خوانده نشد؛ وضعیت ردیف‌ها نامعلوم است و فهرست خرید با موجودی کل ساخته شده است.
+            </p>
+          )}
         </div>
       </div>
 
@@ -292,6 +295,7 @@ export function ProjectInventoryTab({
               products={products}
               sections={sections}
               warehouseItems={warehouseItems}
+              availability={availability}
               activeStepTab={0}
               handleUpdatePerItemResult={handleUpdatePerItemResult}
               handleOpenChangeMaterialModal={handleOpenChangeMaterialModal}
@@ -305,6 +309,7 @@ export function ProjectInventoryTab({
           <GlobalInventoryControlSection
             sections={sections}
             warehouseItems={warehouseItems}
+            availability={availability}
             handleOpenAddMaterialModal={canEdit ? handleOpenAddMaterialModal : undefined}
             handleOpenChangeMaterialModal={handleOpenChangeMaterialModal}
             handleOpenUnitConversionModal={handleOpenUnitConversionModal}
@@ -315,6 +320,9 @@ export function ProjectInventoryTab({
             handleUpdateSectionDescription={handleUpdateSectionDescription}
             handlePurchaseSection={canRequestPurchase ? handlePurchaseSection : undefined}
           />
+
+          {/* v10.2.3 (TD-1290): materials already taken from stock for this project */}
+          <ProjectIssuedMaterialsList projectId={project.id} reloadKey={reportsReloadKey} />
 
           {/* Quick Jump Banner to Purchase List */}
           {purchaseList.length > 0 && (

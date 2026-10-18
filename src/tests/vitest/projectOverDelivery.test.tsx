@@ -7,6 +7,8 @@ const OVER_DELIVERY_MESSAGE = 'تحویل بیش از مقدار برنامه‌
 let deliveries = 0;
 const fetchJson = vi.fn(async (url: string, _opts?: { method?: string; body?: string }) => {
   if (url.endsWith('/product-progress')) return { summary: { total_matrix_cells: 0, completed_matrix_cells: 0, all_matrix_completed: false } };
+  // v10.2.3 (TD-1290): a reader who does not see cost, so the tab posts only what the user typed
+  if (url.endsWith('/delivery-cost')) return { projectId: 1, costVisible: false, wipBalance: null, products: [] };
   if (url.endsWith('/add-to-inventory')) {
     deliveries++;
     if (deliveries === 1) {
