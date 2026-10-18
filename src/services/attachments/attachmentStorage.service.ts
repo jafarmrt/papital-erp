@@ -133,15 +133,15 @@ export class AttachmentStorageService {
    * v10.2 package 7: whether the record an attachment belongs to is still live. A sales file or activity that was
    * deleted (or an activity of a deleted file) keeps its attachment rows, but their files are no longer served; other owners are checked by their routes.
    */
-  static async ownerIsLive(row: { entityType: string; entityId: number }, executor: DbExecutor = orm): Promise<boolean> {
+  static async ownerIsLive(row: { entityType: string; entityId: number }): Promise<boolean> {
     if (row.entityType === 'crm_lead') {
-      const [lead] = await executor.select({ id: crmLeads.id }).from(crmLeads)
+      const [lead] = await orm.select({ id: crmLeads.id }).from(crmLeads)
         .where(and(eq(crmLeads.id, row.entityId), eq(crmLeads.isDeleted, 0)));
       return Boolean(lead);
     }
     if (row.entityType === 'crm_activity') {
       // an activity of a deleted sales file is not live either (the rule of the activity routes)
-      const [activity] = await executor.select({ leadId: crmActivities.leadId, leadDeleted: crmLeads.isDeleted })
+      const [activity] = await orm.select({ leadId: crmActivities.leadId, leadDeleted: crmLeads.isDeleted })
         .from(crmActivities).leftJoin(crmLeads, eq(crmLeads.id, crmActivities.leadId))
         .where(and(eq(crmActivities.id, row.entityId), eq(crmActivities.isDeleted, 0)));
       return Boolean(activity) && (!activity.leadId || activity.leadDeleted === 0);
