@@ -95,7 +95,7 @@ export async function runTreasuryOnePathObsR252Tests(shouldRun: ShouldRun): Prom
 
   const balanceId = 'reg_payroll_payment_shared_treasury_balance_obs_r2_52';
   if (shouldRun(balanceId, 'obsr252', 'obs_r2_52', 'payroll', 'treasury', 'balance')) {
-    await runCase(results, balanceId, 'v10.2.1: a payslip payment above the bank balance is refused by the shared treasury check with code TREASURY_BALANCE_INSUFFICIENT and its own wording, like a treasury form payment, and writes nothing (OBS-R2-52)', async () => {
+    await runCase(results, balanceId, 'v10.2.2: a payslip payment above the bank balance is refused by the shared treasury check with code TREASURY_BALANCE_INSUFFICIENT and its own wording, like a treasury form payment, and writes nothing (OBS-R2-52)', async () => {
       const problems: string[] = [];
       const payrollId = await approvedPayslip('balance');
       const bankId = await emptyBank();
@@ -125,7 +125,7 @@ export async function runTreasuryOnePathObsR252Tests(shouldRun: ShouldRun): Prom
 
   const chequeId = 'reg_payroll_cheque_payment_void_restores_balance_obs_r2_52';
   if (shouldRun(chequeId, 'obsr252', 'obs_r2_52', 'payroll', 'treasury', 'void', 'cheque', 'td411')) {
-    await runCase(results, chequeId, 'v10.2.1: voiding a legacy payslip payment labelled «cheque» (before TD-411) through the shared reversal gives its money back to the bank and keeps the payslip link on the reversal row (OBS-R2-52, guard)', async () => {
+    await runCase(results, chequeId, 'v10.2.2: voiding a legacy payslip payment labelled «cheque» (before TD-411) through the shared reversal gives its money back to the bank and keeps the payslip link on the reversal row (OBS-R2-52, guard)', async () => {
       const problems: string[] = [];
       const payrollId = await approvedPayslip('cheque void');
       const bankId = await fundedBank();
@@ -158,7 +158,7 @@ export async function runTreasuryOnePathObsR252Tests(shouldRun: ShouldRun): Prom
 
   const pettyId = 'reg_petty_cash_lowercase_rial_fund_obs_r2_52';
   if (shouldRun(pettyId, 'obsr252', 'obs_r2_52', 'petty_cash', 'treasury', 'currency')) {
-    await runCase(results, pettyId, 'v10.2.1: a legacy petty cash fund whose currency is stored as «irr» still takes an expense statement through the shared treasury path, whose currency check ignores letter case (review of #320)', async () => {
+    await runCase(results, pettyId, 'v10.2.2: a legacy petty cash fund whose currency is stored as «irr» still takes an expense statement through the shared treasury path, whose currency check ignores letter case (review of #320)', async () => {
       const problems: string[] = [];
       const pettyLedger = await accountIdOf('1006');
       if (!pettyLedger) throw new Error('setup: standard account 1006 is missing from the test chart of accounts');
@@ -186,7 +186,7 @@ export async function runTreasuryOnePathObsR252Tests(shouldRun: ShouldRun): Prom
 
   const sideId = 'reg_treasury_void_refuses_payslip_side_obs_r2_52';
   if (shouldRun(sideId, 'obsr252', 'obs_r2_52', 'payroll', 'treasury', 'void', 'transfer')) {
-    await runCase(results, sideId, 'v10.2.1: voiding one side of a transfer whose other side is linked to a payslip is refused before anything is written, the same refusal as a payslip row voided from the treasury page (review of #320)', async () => {
+    await runCase(results, sideId, 'v10.2.2: voiding one side of a transfer whose other side is linked to a payslip is refused before anything is written, the same refusal as a payslip row voided from the treasury page (review of #320)', async () => {
       const problems: string[] = [];
       const payrollId = await approvedPayslip('transfer side');
       const fromId = await fundedBank();
@@ -219,7 +219,7 @@ export async function runTreasuryOnePathObsR252Tests(shouldRun: ShouldRun): Prom
 
   const ledgerId = 'reg_treasury_form_bank_without_ledger_code_obs_r2_52';
   if (shouldRun(ledgerId, 'obsr252', 'obs_r2_52', 'treasury', 'ledger')) {
-    await runCase(results, ledgerId, 'v10.2.1: a treasury form receipt into an account without a ledger account is refused with code BANK_LEDGER_ACCOUNT_INVALID, the shared path\'s check, and writes nothing (OBS-R2-52)', async () => {
+    await runCase(results, ledgerId, 'v10.2.2: a treasury form receipt into an account without a ledger account is refused with code BANK_LEDGER_ACCOUNT_INVALID, the shared path\'s check, and writes nothing (OBS-R2-52)', async () => {
       const problems: string[] = [];
       const bankId = await bankWithoutLedger();
       const api = await adminClient();
@@ -237,7 +237,7 @@ export async function runTreasuryOnePathObsR252Tests(shouldRun: ShouldRun): Prom
 
   const shapeId = 'reg_payroll_payment_voucher_and_event_shape_obs_r2_52';
   if (shouldRun(shapeId, 'obsr252', 'obs_r2_52', 'payroll', 'treasury', 'voucher', 'event')) {
-    await runCase(results, shapeId, 'v10.2.1: a payslip payment through the shared path keeps its treasury row, its two voucher rows (wages payable with the personnel / the bank ledger account with the bank) and its event keys, with no name or amount (OBS-R2-52, guard)', async () => {
+    await runCase(results, shapeId, 'v10.2.2: a payslip payment through the shared path keeps its treasury row, its two voucher rows (wages payable with the personnel / the bank ledger account with the bank) and its event keys, with no name or amount (OBS-R2-52, guard)', async () => {
       const problems: string[] = [];
       const payrollId = await approvedPayslip('shape');
       const bankId = await fundedBank();

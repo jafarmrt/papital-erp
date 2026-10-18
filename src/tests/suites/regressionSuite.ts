@@ -11148,6 +11148,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v10.2.0 package 1: urgent fixes after the 10.1 upgrade (TD-1289)
   const { runUrgentFixesV1020Tests } = await import('../regression/urgentFixesV1020Tests.js');
   results.push(...await runUrgentFixesV1020Tests(shouldRun));
+  // 10.2 package 2: the project page's step bar counts
+  const { runProjectWorkspaceStepsTests } = await import('../regression/projectWorkspaceStepsTests.js');
+  results.push(...await runProjectWorkspaceStepsTests(shouldRun));
 
   return results;
 }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { projectStatusActions } from '../../lib/projects/projectStatusActions';
 
 type FetchOpts = { method?: string; body?: string; signal?: AbortSignal };
@@ -35,14 +35,13 @@ vi.mock('../../components/project/ProjectScheduleTab', () => ({ default: () => n
 vi.mock('../../components/project/ProjectGanttTab', () => ({ default: () => null }));
 vi.mock('../../components/project/ProjectStockEntryTab', () => ({ default: () => null }));
 vi.mock('../../components/project/ProjectProductProgressTab', () => ({ default: () => null }));
-vi.mock('../../components/workflow/WorkflowStepperWidget', () => ({ WorkflowStepperWidget: () => null }));
 vi.mock('../../components/accounting/FinancialAttachmentUploader', () => ({ FinancialAttachmentUploader: () => null }));
 
-import ProjectDetailModal from '../../components/ProjectDetailModal';
+import { renderProjectPage } from './helpers/projectPage';
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); writes.length = 0; project = { ...baseProject }; canEdit = true; });
 
-const renderModal = () => render(<ProjectDetailModal projectId={7} isOpen onClose={vi.fn()} onUpdate={vi.fn()} />);
+const renderModal = () => renderProjectPage('/projects/7');
 
 // v10.0.66 (TD-1141): a project could not be paused, resumed or cancelled from any screen
 describe('project pause, resume and cancel (TD-1141)', () => {
@@ -55,7 +54,10 @@ describe('project pause, resume and cancel (TD-1141)', () => {
 
   it('cancels a project', async () => {
     renderModal();
-    fireEvent.click(await screen.findByText('لغو پروژه'));
+    // v10.2.1 (review U17): the cancel sits in the «بیشتر» menu, not beside pause
+    expect(screen.queryByText('لغو پروژه')).toBeNull();
+    fireEvent.click(await screen.findByText('بیشتر'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'لغو پروژه' }));
     await waitFor(() => expect(writes).toHaveLength(1));
     expect(writes[0].body).toEqual({ status: 'cancelled', version: 3 });
   });
@@ -80,5 +82,6 @@ describe('project pause, resume and cancel (TD-1141)', () => {
     expect(await screen.findByText('برش')).toBeTruthy();
     expect(screen.queryByText('توقف پروژه')).toBeNull();
     expect(screen.queryByText('لغو پروژه')).toBeNull();
+    expect(screen.queryByText('بیشتر')).toBeNull();
   });
 });

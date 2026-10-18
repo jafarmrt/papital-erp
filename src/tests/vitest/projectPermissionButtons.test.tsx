@@ -34,13 +34,13 @@ vi.mock('../../api', () => ({ fetchJson: (url: string, opts?: FetchOpts) => fetc
 vi.mock('react-hot-toast', () => ({ toast: { success: vi.fn(), error: vi.fn() }, default: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }));
 vi.mock('../../hooks/queries/useSettingsQueries', () => ({ useSettingsQuery: () => ({ data: [] }), useWarehousesQuery: () => ({ data: [{ id: 3, code: 'WH-A', name: 'انبار نخست' }] }) }));
 vi.mock('../../components/ProjectModal', () => ({ default: () => null }));
-vi.mock('../../components/ProjectDetailModal', () => ({ default: () => null }));
 const granted = new Set<string>();
 vi.mock('../../contexts/AuthContext', () => ({
   useHasPermission: (key: string) => granted.has(key),
   useHasAnyPermission: (keys: readonly string[]) => keys.some(key => granted.has(key)),
 }));
 
+import { MemoryRouter } from 'react-router-dom';
 import { SearchProvider } from '../../SearchContext';
 import ProjectsPage from '../../pages/ProjectsPage';
 import ProjectProductProgressTab from '../../components/project/ProjectProductProgressTab';
@@ -57,7 +57,7 @@ const grant = (...keys: string[]) => keys.forEach(k => granted.add(k));
 describe('project buttons follow the project API keys (TD-752)', () => {
   it('shows create, edit and delete on the project list only with their keys', async () => {
     grant('projects.view');
-    render(withQuery(<SearchProvider><ProjectsPage /></SearchProvider>));
+    render(withQuery(<MemoryRouter><SearchProvider><ProjectsPage /></SearchProvider></MemoryRouter>));
     expect(await screen.findByText('پروژه 5')).toBeTruthy();
     expect(screen.queryByText('تعریف پروژه جدید')).toBeNull();
     expect(screen.queryAllByTitle('ویرایش')).toHaveLength(0);
@@ -65,7 +65,7 @@ describe('project buttons follow the project API keys (TD-752)', () => {
     cleanup();
 
     grant('projects.create', 'projects.edit', 'projects.delete');
-    render(withQuery(<SearchProvider><ProjectsPage /></SearchProvider>));
+    render(withQuery(<MemoryRouter><SearchProvider><ProjectsPage /></SearchProvider></MemoryRouter>));
     expect(await screen.findByText('پروژه 5')).toBeTruthy();
     expect(screen.getByText('تعریف پروژه جدید')).toBeTruthy();
     expect(screen.queryAllByTitle('ویرایش').length).toBeGreaterThan(0);

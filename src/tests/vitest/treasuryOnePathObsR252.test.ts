@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 /**
- * v10.2.1 (OBS-R2-52، بسته ۴ برنامه ۱۰.۲): هر دریافت و پرداخت خزانه از یک راه ثبت و ابطال می‌شود،
+ * v10.2.2 (OBS-R2-52، بسته ۴ برنامه ۱۰.۲): هر دریافت و پرداخت خزانه از یک راه ثبت و ابطال می‌شود،
  * `postTreasuryRow` / `reverseTreasuryRow` در `src/services/accounting/treasury/treasuryPosting.ts`. پیش‌تر پرداخت فیش
  * حقوق و ابطال آن (`src/services/accounting/payrollPayment*.ts`) مانده بانک و ردیف خزانه را خودشان می‌نوشتند، و
  * صورت‌هزینه تنخواه و پرداخت ماهانه بیمه و مالیات هم ردیف خزانه را جدا درج می‌کردند. تنها استثنا جفت ردیف انتقال

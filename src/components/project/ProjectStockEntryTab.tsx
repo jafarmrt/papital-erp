@@ -189,7 +189,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
     const cost = unitCosts[product.id];
 
     if (markCompleted && !matrixStatus.allMatrixCompleted && !isAlreadyCompleted) {
-      toast.error(`تنها زمانی می‌توانید تیک تغییر وضعیت به تکمیل‌شده را بزنید که در بخش «پیشرفت به تفکیک کد کالا»، تمام گزینه‌های ماتریس پیشرفت فیزیکی محصولات تیک خورده باشند. (${toPersianDigits(matrixStatus.completedMatrixCells)} از ${toPersianDigits(matrixStatus.totalMatrixCells)} مورد تکمیل شده است)`);
+      toast.error(`تنها زمانی می‌توانید تیک تغییر وضعیت به تکمیل‌شده را بزنید که در زبانه «۳. پیشرفت هر کالا»، تمام گزینه‌های ماتریس پیشرفت فیزیکی محصولات تیک خورده باشند. (${toPersianDigits(matrixStatus.completedMatrixCells)} از ${toPersianDigits(matrixStatus.totalMatrixCells)} مورد تکمیل شده است)`);
       return;
     }
 
@@ -257,7 +257,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
     }
 
     if (markCompleted && !matrixStatus.allMatrixCompleted && !isAlreadyCompleted) {
-      toast.error(`تنها زمانی می‌توانید تیک تغییر وضعیت به تکمیل‌شده را بزنید که در بخش «پیشرفت به تفکیک کد کالا»، تمام گزینه‌های ماتریس پیشرفت فیزیکی محصولات تیک خورده باشند. (${toPersianDigits(matrixStatus.completedMatrixCells)} از ${toPersianDigits(matrixStatus.totalMatrixCells)} مورد تکمیل شده است)`);
+      toast.error(`تنها زمانی می‌توانید تیک تغییر وضعیت به تکمیل‌شده را بزنید که در زبانه «۳. پیشرفت هر کالا»، تمام گزینه‌های ماتریس پیشرفت فیزیکی محصولات تیک خورده باشند. (${toPersianDigits(matrixStatus.completedMatrixCells)} از ${toPersianDigits(matrixStatus.totalMatrixCells)} مورد تکمیل شده است)`);
       return;
     }
 
@@ -401,7 +401,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
                   if (!matrixStatus.allMatrixCompleted) {
                     e.preventDefault();
                     toast.error(
-                      `تنها زمانی می‌توانید تیک تغییر وضعیت به تکمیل‌شده را بزنید که در بخش «پیشرفت به تفکیک کد کالا»، تمام گزینه‌های ماتریس پیشرفت فیزیکی محصولات تیک خورده باشند. (${toPersianDigits(matrixStatus.completedMatrixCells)} از ${toPersianDigits(matrixStatus.totalMatrixCells)} گزینه تیک خورده است)`,
+                      `تنها زمانی می‌توانید تیک تغییر وضعیت به تکمیل‌شده را بزنید که در زبانه «۳. پیشرفت هر کالا»، تمام گزینه‌های ماتریس پیشرفت فیزیکی محصولات تیک خورده باشند. (${toPersianDigits(matrixStatus.completedMatrixCells)} از ${toPersianDigits(matrixStatus.totalMatrixCells)} گزینه تیک خورده است)`,
                       { id: 'progress-matrix-incomplete', duration: 4500 }
                     );
                   }
@@ -418,7 +418,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
                     ? 'پروژه قبلاً در وضعیت تکمیل‌شده قرار گرفته است'
                     : matrixStatus.allMatrixCompleted
                     ? 'تمام گزینه‌های ماتریس پیشرفت تیک خورده‌اند و امکان تغییر وضعیت فعال است'
-                    : `برای تغییر وضعیت، باید تمام ${toPersianDigits(matrixStatus.totalMatrixCells)} گزینه ماتریس پیشرفت فیزیکی محصولات در تب پیشرفت به تفکیک کد کالا تیک خورده باشند`
+                    : `برای تغییر وضعیت، باید تمام ${toPersianDigits(matrixStatus.totalMatrixCells)} گزینه ماتریس پیشرفت فیزیکی محصولات در زبانه «۳. پیشرفت هر کالا» تیک خورده باشند`
                 }
               >
                 <input

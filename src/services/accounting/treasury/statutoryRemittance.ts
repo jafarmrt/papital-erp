@@ -156,7 +156,7 @@ export async function createStatutoryRemittance(input: CreateStatutoryRemittance
     const linesTotal = lines.reduce((t, l) => t.add(l.amount), fin(0));
     const total = linesTotal.add(penalty?.amount ?? 0).round(4);
     const description = input.description?.trim() || statutoryRemittanceDescription(kind, input.jalaliYear, input.jalaliMonth);
-    // v10.2.1 (OBS-R2-52): از راه مشترک خزانه (`postTreasuryRow`): مانده حساب (هرگز منفی، `TREASURY_BALANCE_INSUFFICIENT`)،
+    // v10.2.2 (OBS-R2-52): از راه مشترک خزانه (`postTreasuryRow`): مانده حساب (هرگز منفی، `TREASURY_BALANCE_INSUFFICIENT`)،
     // شماره، سند پیش‌نویس، ردیف و رویداد آن؛ ردیف‌های هر نفر پس از آن با شناسه ردیف خزانه نوشته می‌شوند
     const { row } = await postTreasuryRow(tx, bank, {
       type: 'payment',

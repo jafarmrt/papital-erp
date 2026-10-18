@@ -120,7 +120,7 @@ export async function createPettyCashExpense(input: PettyCashExpenseInput): Prom
     const accountNames = await assertExpenseAccounts(tx, lines.map(l => l.accountId));
 
     const voucherDescription = description || `صورت‌هزینه تنخواه ${fund.title}`;
-    // v10.2.1 (OBS-R2-52): از راه مشترک خزانه (`postTreasuryRow`): مانده تنخواه با همان نگهبان مانده منفی (پیام و کد
+    // v10.2.2 (OBS-R2-52): از راه مشترک خزانه (`postTreasuryRow`): مانده تنخواه با همان نگهبان مانده منفی (پیام و کد
     // خود تنخواه)، شماره، سند پیش‌نویس، ردیف و رویداد آن؛ ردیف‌های صورت‌هزینه و پیوست‌ها پس از آن نوشته می‌شوند
     const { row } = await postTreasuryRow(tx, fund, {
       type: 'payment',
