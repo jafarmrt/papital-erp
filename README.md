@@ -11,7 +11,7 @@
 | لایه | تکنولوژی |
 |---|---|
 | Frontend | React 19 + Vite 6 + Tailwind CSS 4 + TanStack Query v5 + React Router 7 + Motion 12 + react-multi-date-picker |
-| Backend | Node.js 20+ (پیشنهادی 22 LTS) + Express 4 + TypeScript 5.8 (tsx در توسعه / esbuild در بیلد تولید) |
+| Backend | Node.js 24 + Express 5 + TypeScript 5.8 (tsx در توسعه / esbuild در بیلد تولید) |
 | Database | PostgreSQL 14+ (پیشنهادی 16/17) با Drizzle ORM 0.45 — مهاجرت اتمیک داخلی (`src/db/migrator.ts`) |
 | احراز هویت | JWT در کوکی امن HttpOnly (`auth_token`) |
 | رویدادها | Domain Event Bus + Transactional Outbox + DLQ + Webhook با امضای HMAC-SHA256 |
@@ -25,7 +25,7 @@
 
 ## پیش‌نیازها
 
-- Node.js 20+ (پیشنهادی 22 LTS)
+- Node.js 24 (`install.sh` نصب می‌کند؛ نسخهٔ قدیم‌تر کار می‌کند ولی `update.sh` هشدار می‌دهد)
 - PostgreSQL 14+ (پیشنهادی 16/17)
 - npm 9+
 
@@ -84,13 +84,15 @@ sudo ./update.sh
 ## به‌روزرسانی
 
 ```bash
-sudo ./update.sh            # پشتیبان پیش از استقرار، دریافت کد، ساخت، ری‌استارت سرویس systemd و بررسی نسخه
-sudo ./update.sh --rehearse # نخست مهاجرت‌های تازه را روی رونوشت بازگردانی‌شده آزمایش می‌کند
+cd /opt/papital-erp
+sudo ./update.sh --rehearse # پیشنهادی: پشتیبان پیش از استقرار، دریافت کد، ساخت، آزمایش مهاجرت‌های تازه روی رونوشت بازگردانی‌شده، ری‌استارت و بررسی نسخه
+sudo ./update.sh            # همان، بی آزمایش مهاجرت‌ها
+sudo bash scripts/go-live-verify.sh http://localhost:3000   # پس از هر به‌روزرسانی: باید STATUS : READY بگوید
 ```
 
-`update.sh` سرویس systemd (`papital-erp`) را ری‌استارت می‌کند؛ مهاجرت‌های تازه هنگام راه‌اندازی سرور اعمال می‌شوند. اگر گامی شکست بخورد، گام‌های بازگشت را با شناسه commit قبلی چاپ می‌کند.
+`update.sh` پیش از هر کار خودش از پایگاه‌داده پشتیبان می‌گیرد (`pre-deployment`)، سرویس systemd (`papital-erp`) را ری‌استارت می‌کند و مهاجرت‌های تازه هنگام راه‌اندازی سرور اعمال می‌شوند. اگر گامی شکست بخورد، گام‌های بازگشت را با شناسه commit قبلی چاپ می‌کند.
 
-- قبل از آپدیت، از دیتابیس backup بگیرید (`scripts/backup.sh`).
+- اگر `--rehearse` شکست بخورد، سرویس هنوز نسخهٔ قبلی را اجرا می‌کند ولی کد و ساخت تازه روی دیسک مانده‌اند: پیش از هر ری‌استارت، همان دستور `git reset --hard … && npm ci … && npm run build` را که چاپ شده بی‌درنگ اجرا کنید.
 - دکمه «خروجی داده‌های کسب‌وکاری» در تنظیمات (`GET /api/export-backup`، فقط admin) یک فایل JSON برای گزارش و بایگانی است و **قابل بازگردانی نیست**؛ رمزهای عبور و کلیدهای محرمانه در آن نیست. پشتیبان واقعی فقط با `scripts/backup.sh` و بازگردانی با `scripts/restore.sh`.
 - **هرگز `npm run db:push` اجرا نکنید** — تغییر اسکیما فقط از مهاجرت اتمیک builtin.
 - **ارتقا به v7.0.56 و بالاتر (یک‌بار، پیوست‌ها):** از این نسخه فایل پیوست‌ها روی دیسک (`public/uploads/.attachments`، داخل همان پوشه‌ای که به‌روزرسانی و پشتیبان‌گیری نگه می‌دارند) ذخیره می‌شوند و پایگاه‌داده فقط مشخصات آن‌ها را دارد. پیوست‌های قدیمی تا انتقال، مثل قبل نمایش داده می‌شوند. پس از ارتقا و یک‌بار راه‌اندازی سرور: `npm run attachments:migrate` (اجرای آزمایشی، فقط شمارش) و سپس `npm run attachments:migrate -- --apply`. در استقرار Docker همان کار با `POST /api/attachments/migrate-inline` و بدنه `{"apply": true}` توسط مدیر سیستم انجام می‌شود.
@@ -138,11 +140,14 @@ sudo ./update.sh --rehearse # نخست مهاجرت‌های تازه را رو�
 
 ### Backup روزانه
 
-`install.sh` زمان‌بندی را با `scripts/install-ops-cron.sh` در یک فایل `/etc/cron.d/papital-erp` می‌نویسد: `scripts/backup.sh` هر روز ساعت ۰۲:۳۰ (`BACKUP_HOUR` / `BACKUP_MINUTE`) و `scripts/monitor.sh` هر پنج دقیقه، با گزارش در `logs/backup.log` و `logs/monitor.log`. روی سرور قدیمی‌تر یک بار اجرا کنید:
+`install.sh` (فقط برای نصب تازه؛ روی سرور در حال کار اجرا نکنید) زمان‌بندی را با `scripts/install-ops-cron.sh` در یک فایل `/etc/cron.d/papital-erp` می‌نویسد: `scripts/backup.sh` هر روز ساعت ۰۲:۳۰ و `scripts/monitor.sh` هر پنج دقیقه، با گزارش در `logs/backup.log` و `logs/monitor.log`. فقط اگر `ls /etc/cron.d/papital-erp` چنین فایلی نشان ندهد، یک بار اجرا کنید. کاربر سرویس را `systemctl show -p User --value papital-erp` می‌گوید (خالی یعنی `root`)، و ساعت پشتیبان فقط از همین دستور خوانده می‌شود:
 
 ```bash
-sudo bash scripts/install-ops-cron.sh <service-user>
+cd /opt/papital-erp
+sudo BACKUP_HOUR=2 BACKUP_MINUTE=30 bash scripts/install-ops-cron.sh root   # root را با کاربر سرویس عوض کنید
 ```
+
+> `scripts/ensure-env-secrets.sh` را هرگز بی نام کلید اجرا نکنید: بی نام، `ERP_WEBHOOK_SECRET_TOKEN` و `METRICS_TOKEN` را هم به `.env` می‌افزاید. روی سروری که `METRICS_TOKEN` ندارد، هشدار «رویدادها خوانده نمی‌شود» از `monitor.sh` و هشدارهای `METRICS_TOKEN` و `ERP_WEBHOOK_SECRET_TOKEN` در `go-live-verify.sh` و `audit-env.sh` مورد انتظارند.
 
 رونوشت رمزگذاری‌شده بیرون از سرور و کانال هشدار: `docs/OFFSITE_BACKUP.md`.
 
@@ -157,9 +162,10 @@ ls -lt /var/backups/erp/*.dump.gz | head -3
 RESTORE_MODE=drill ./scripts/restore.sh [dump-file.dump.gz]
 # (برای نگه‌داشتن DB تمرین جهت بررسی دستی: RESTORE_KEEP=1)
 
-# restore واقعی روی DB هدف (مخرب — نیازمند تأیید صریح):
-RESTORE_MODE=apply RESTORE_CONFIRM=yes ./scripts/restore.sh <dump>.dump.gz papital_erp
-systemctl restart papital-erp
+# restore واقعی روی DB هدف (مخرب — نیازمند تأیید صریح؛ نخست سرویس را بایستانید):
+sudo systemctl stop papital-erp
+RESTORE_MODE=apply RESTORE_CONFIRM=yes bash scripts/restore.sh <dump>.dump.gz papital_erp
+sudo systemctl start papital-erp
 curl -fsS http://localhost:3000/health/ready
 ```
 
@@ -167,9 +173,11 @@ curl -fsS http://localhost:3000/health/ready
 
 ### Rollback نسخه اپلیکیشن
 
-`update.sh` در شکست، همین گام‌ها را با شناسه commit پیش از به‌روزرسانی چاپ می‌کند:
+`update.sh` در شکست، گام‌هایی مانند این‌ها را با شناسه commit پیش از به‌روزرسانی چاپ می‌کند. پس از یک به‌روزرسانی موفق، `git reflog -5` شناسهٔ commit پیشین را نشان می‌دهد:
 
 ```bash
+cd /opt/papital-erp
+git reflog -5                           # commit پیش از به‌روزرسانی
 sudo systemctl stop papital-erp
 git reset --hard <previous-commit>      # خود شاخه برمی‌گردد؛ checkout یک commit شاخه را جدا می‌کند و git pull بعدی شکست می‌خورد
 NODE_ENV=development npm ci --include=dev && npm run build
@@ -184,14 +192,14 @@ curl -fsS http://localhost:3000/health/ready
 ```bash
 journalctl -u papital-erp --since "1 hour ago" | grep -i memory
 curl -fsS http://localhost:3000/health/ready     # وضعیت pool
-psql -c "SELECT pid, query, state FROM pg_stat_activity WHERE state='active'"
-# افزایش MemoryLimit در unit یا DB_POOL_MAX در .env → daemon-reload → restart
+sudo -u postgres psql -d papital_erp -c "SELECT pid, query, state FROM pg_stat_activity WHERE state='active'"
+# افزایش MemoryMax در unit یا DB_POOL_MAX در .env → daemon-reload → restart
 ```
 
 ### Migration شکست‌خورده
 
 ```bash
-psql -c "SELECT id, hash, created_at FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 10"
+sudo -u postgres psql -d papital_erp -c "SELECT id, hash, created_at FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 10"
 # مهاجرت اتمیک است: یا کامل اجرا شده یا کامل rollback — گام موفق دوباره اجرا نمی‌شود
 systemctl restart papital-erp && curl -fsS http://localhost:3000/health/startup
 ```
@@ -201,11 +209,11 @@ systemctl restart papital-erp && curl -fsS http://localhost:3000/health/startup
 | Secret | دوره | روش |
 |---|---|---|
 | `JWT_SECRET` | هر ۳ ماه | `openssl rand -hex 48` → `.env` → restart (نشست‌ها باطل می‌شوند) |
-| `ERP_SETUP_TOKEN` | یکبار پس از setup | generate → `.env` → restart |
+| `ERP_SETUP_TOKEN` | یکبار پس از setup | `sudo sed -i "s/^ERP_SETUP_TOKEN=.*/ERP_SETUP_TOKEN=$(openssl rand -hex 24)/" .env` → restart (مقدار چاپ نمی‌شود) |
 | `DATABASE_URL` password | هر ۶ ماه | `ALTER USER` در PostgreSQL → `.env` → restart |
 | `wc_webhook_secret` | هر ۶ ماه | regenerate در WooCommerce + تنظیمات سامانه (بدون restart) |
 
-پس از هر rotation: `./scripts/smoke-test.sh http://localhost:3000`
+پس از هر rotation: `read -rs ADMIN_TOKEN` (مقدار کوکی `auth_token` نشست مدیر را بچسبانید؛ روی صفحه دیده نمی‌شود و در تاریخچه نمی‌ماند)، سپس `ADMIN_TOKEN="$ADMIN_TOKEN" bash scripts/smoke-test.sh http://localhost:3000`
 
 ---
 

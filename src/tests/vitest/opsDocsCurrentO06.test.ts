@@ -8,10 +8,12 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-const OPS_DOCS = ['README.md', 'docs/GO_LIVE_CHECKLIST.md'];
+const OPS_DOCS = ['README.md', 'docs/GO_LIVE_CHECKLIST.md', 'deploy/DEPLOY_LINUX.md', 'docs/OFFSITE_BACKUP.md'];
 const RETIRED = [
   /changelogs\/3\.ts/, /\(3 locations\)/, /git push origin master/, /\bpm2\b/, /GEMINI_API_KEY/,
-  /git revert/, /\.env\.production\.example/, /# \/etc\/cron\.d\/papital-erp-backup/,
+  /git revert/, /\.env\.production\.example/, /cron\.d\/papital-erp-backup`?:? *`?[0-9*]/,
+  // without key names it adds ERP_WEBHOOK_SECRET_TOKEN and METRICS_TOKEN, which a running server must not get by accident
+  /ensure-env-secrets\.sh \.env(?![ \w]*[A-Z_]{3})/, /<TOKEN>@github/, /ADMIN_TOKEN=<[^>]+>/, /\. \.\/\.env/, /MemoryLimit/,
   /معرفی و به‌روزرسانی‌ها/,
 ];
 

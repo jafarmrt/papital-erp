@@ -24,7 +24,7 @@
 ### روش A: نصب از ریپو گیت (سرور به GitHub دسترسی دارد)
 ```bash
 # اگر ریپو خصوصی است یک Personal Access Token بسازید و در URL بگذارید:
-git clone https://<TOKEN>@github.com/jafarmrt/papital-erp.git /opt/papital-erp
+git clone https://github.com/jafarmrt/papital-erp.git /opt/papital-erp   # مخزن عمومی است؛ توکنی در نشانی نگذارید
 cd /opt/papital-erp
 sudo bash install.sh          # REPO_URL را با Enter رد کنید یا خالی بگذارید
 ```
@@ -121,5 +121,5 @@ systemctl restart papital-erp     # ری‌استارت
 - [ ] رمز کاربر ادمین قوی + ساخت کاربر جدا برای هر نفر (لاگ audit به نام هر کاربر می‌خورد)
 - [ ] SSH: ورود با رمز را به کلید عمومی محدود کنید (`PasswordAuthentication no`)
 - [ ] پورت 3000 روی فایروال عمومی بسته باشد: `ufw deny 3000/tcp` (فقط Nginx به آن وصل است)
-- [ ] بکاپ خودکار روزانه (`/etc/cron.d/papital-erp-backup`: `0 3 * * * <کاربر سرویس> /opt/papital-erp/scripts/backup.sh >> /var/log/papital-backup.log 2>&1`؛ اسکریپت `.env` را از پوشه خودش می‌خواند) + انتقال بکاپ به محل دوم + تمرین بازیابی ماهانه (`./scripts/restore.sh`)
+- [ ] بکاپ خودکار روزانه: `install.sh` فایل `/etc/cron.d/papital-erp` را با `scripts/install-ops-cron.sh` می‌نویسد (پشتیبان ۰۲:۳۰ و پایش هر پنج دقیقه)؛ فقط اگر این فایل نیست یک بار `sudo BACKUP_HOUR=2 BACKUP_MINUTE=30 bash scripts/install-ops-cron.sh <کاربر سرویس>` + انتقال بکاپ به محل دوم + تمرین بازیابی ماهانه (`./scripts/restore.sh`)
 - [ ] `sudo certbot renew --dry-run` یک بار بعد از نصب

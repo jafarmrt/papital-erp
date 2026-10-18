@@ -105,7 +105,7 @@ ALERT_SMTP_PASSWORD=<app password>
 ALERT_EMAIL_TO=<you>@gmail.com
 ```
 
-`METRICS_TOKEN` را `bash scripts/ensure-env-secrets.sh .env` می‌سازد. پس از افزودن آن، سرویس را یک بار دوباره راه بیندازید (`sudo systemctl restart papital-erp`) تا آن را بخواند. سپس آزمایش کنید:
+`METRICS_TOKEN` را فقط `bash scripts/ensure-env-secrets.sh .env METRICS_TOKEN` می‌سازد (با نام کلید؛ بی نام، `ERP_WEBHOOK_SECRET_TOKEN` را هم می‌افزاید). روی سروری که نباید `METRICS_TOKEN` داشته باشد این گام را اجرا نکنید؛ آنجا هشدار «رویدادها خوانده نمی‌شود» از `monitor.sh` مورد انتظار است. پس از افزودن آن، سرویس را یک بار دوباره راه بیندازید (`sudo systemctl restart papital-erp`) تا آن را بخواند. سپس آزمایش کنید:
 
 ```bash
 sudo systemctl stop papital-erp; /opt/papital-erp/scripts/monitor.sh; sudo systemctl start papital-erp
