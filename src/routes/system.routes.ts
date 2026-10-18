@@ -24,6 +24,8 @@ import { toPersianDigits } from '../utils/persianNumber.js';
 import { DateCalendarReportService } from '../services/system/dateCalendarReport.service.js';
 import { buildConditionalConstraints, conditionalConstraintsResultMessage, findMissingConditionalConstraints } from '../services/system/conditionalConstraints.js';
 import { readNightlyVerifyHealth } from '../services/system/nightlyVerifyHealth.js';
+import { cleanupOrphanUploads } from '../services/system/orphanUploadsCleanup.service.js';
+import { orphanUploadsMessage } from '../lib/system/orphanUploads.js';
 
 const router = Router();
 
@@ -362,6 +364,17 @@ router.post('/system/conditional-constraints/build', requireSystemAdmin, validat
     ipAddress: extractClientIp(req),
   });
   res.json({ ...result, message: conditionalConstraintsResultMessage(result) });
+}));
+
+// v10.2.17 (OBS-R2-60): image files of public/uploads that no row names; a preview unless `apply`, by hand only
+const orphanUploadsSchema = z.object({
+  body: z.object({ apply: z.boolean({ message: 'گزینه اجرا باید درست یا نادرست باشد' }).optional() }).strict(),
+});
+
+router.post('/system/orphan-uploads', requireSystemAdmin, validate(orphanUploadsSchema), asyncHandler(async (req, res) => {
+  const { apply } = req.body as z.infer<typeof orphanUploadsSchema>['body'];
+  const report = await cleanupOrphanUploads({ apply: apply === true, req });
+  res.json({ ...report, message: orphanUploadsMessage(report) });
 }));
 
 // (v4.0.29) توابع assertTestEndpointsAllowed/assertTestEndpointsEnabled حذف شدند —

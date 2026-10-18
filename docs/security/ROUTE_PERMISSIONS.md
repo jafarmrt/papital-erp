@@ -418,6 +418,7 @@
 | GET | `/api/system/date-calendar-report` | admin |
 | GET | `/api/system/env` | admin |
 | GET | `/api/system/health` | admin |
+| POST | `/api/system/orphan-uploads` | admin |
 | GET | `/api/system/reconciliation-check` | admin |
 | POST | `/api/system/reconciliation-fix` | admin |
 | GET | `/api/transactions` | warehouse.view \| accounting.view |

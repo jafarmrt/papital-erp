@@ -8,6 +8,7 @@ import {
   FACTORY_RESET_CONFIRM_WORD, FACTORY_RESET_ERASED, FACTORY_RESET_KEPT, FACTORY_RESET_RESTORED, isFactoryResetConfirmed,
 } from '../../lib/system/factoryReset';
 import { ConditionalConstraintsCard } from './ConditionalConstraintsCard';
+import { OrphanUploadsCard } from './OrphanUploadsCard';
 import { DialogLayer } from '../common/DialogLayer';
 
 /** v9.0.212 (TD-522، تصمیم ت۴ الف): بخش‌هایی که پاک‌سازی سجلشان را پاک می‌کند، از همان فهرست سرور */
@@ -136,6 +137,8 @@ export function SystemOperationsTab({ onOpenClearModal }: SystemOperationsTabPro
 
       {/* v9.0.427 (TD-589): قیدهای شرطی جاافتاده مهاجرت‌ها */}
       <ConditionalConstraintsCard />
+
+      <OrphanUploadsCard />
 
       {/* Critical Operations Box */}
       <div className="bg-white border text-red-700 border-red-200 rounded-2xl shadow-xs p-6 space-y-4">

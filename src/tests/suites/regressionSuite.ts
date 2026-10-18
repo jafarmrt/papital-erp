@@ -10815,6 +10815,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 13 PR C (v9.0.254+): attachment download, body limits, image uploads, orphan cleanup, log length caps
   const { runAttachmentUploadTests } = await import('../regression/attachmentUploadTests.js');
   results.push(...await runAttachmentUploadTests(shouldRun));
+  // 10.2 package 13 (v10.2.17, OBS-R2-60): removing image files of public/uploads that no row names
+  const { runOrphanUploadsTests } = await import('../regression/orphanUploadsTests.js');
+  results.push(...await runOrphanUploadsTests(shouldRun));
 
   // Package 13 PR D (v9.0.259+): work time and work mode of a daily log
   const { runDailyLogWorkTimeTests } = await import('../regression/dailyLogWorkTimeTests.js');
