@@ -210,8 +210,12 @@ sudo bash scripts/go-live-verify.sh http://localhost:3000
 # → backup → keep the current source in .previous-source/ → sync the new source
 #   over /opt/papital-erp with --delete (files the new version dropped are removed;
 #   .env, .git, logs, uploads, media library, backups, node_modules and dist are
-#   neither copied nor deleted) → build in .build-next → swap → restart → health check
+#   neither copied nor deleted; the files to delete are listed first) → build in .build-next
+#   → swap → restart → health check
 # Rollback of a manual update: bash scripts/update-steps.sh restore-source /opt/papital-erp
+# Only one update runs at a time (.update.lock). A re-run with no new source builds nothing
+# (--rebuild forces it). An update killed during the swap leaves .update-swapping: the next
+# run refuses and prints the one-line repair, after which the update is run again.
 ```
 
 > **Invariants for every update path:** migrations run automatically at startup via the atomic migrator — `npm run db:push` is **banned**. `update.sh` always backs up first (`--no-backup` override exists but is discouraged).

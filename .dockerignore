@@ -17,3 +17,10 @@ papital-erp-source-*.zip
 deploy
 scripts/backup.sh
 scripts/restore.sh
+# v10.2.20 (OBS-R1-22): the side build folder, the kept previous build and source, and the update lock and swap marker
+.build-next
+.previous-source
+dist.prev
+node_modules.prev
+.update.lock
+.update-swapping

@@ -25,8 +25,17 @@ echo "$1 $(pwd) running-dist=$(cat "$STUB_APP_DIR/dist/version.txt" 2>/dev/null)
 case "$1" in
   ci) mkdir -p node_modules && echo new > node_modules/marker ;;
   install) ;;
-  run) [ -z "$STUB_BUILD_FAILS" ] || exit 1; mkdir -p dist && echo new > dist/version.txt && echo '// new' > dist/server.cjs ;;
+  run) [ -z "$STUB_BUILD_FAILS" ] || exit 1; mkdir -p dist && echo new > dist/version.txt && echo '// new' > dist/server.cjs
+       echo "build-env=$(cat .env.production 2>/dev/null)" >> "$STUB_LOG" ;;
 esac
+`;
+
+const VERIFY_STUB = '[ -z "${STUB_STARTUP_FAILS:-}" ] || { echo "startup failed"; exit 1; }\necho "startup ok"\n';
+/** A stub `mv` that fails on its STUB_MV_FAIL_AT-th call (the swap is the only place the update runs mv) */
+const MV_STUB = `#!/usr/bin/env bash
+n=$(( $(cat "$STUB_MV_COUNT" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$STUB_MV_COUNT"
+[ "$n" != "\${STUB_MV_FAIL_AT:-}" ] || exit 1
+exec /bin/mv "$@"
 `;
 
 function scratch() {
@@ -38,7 +47,7 @@ function scratch() {
     mkdirSync(path.dirname(path.join(app, f)), { recursive: true });
     copyFileSync(path.join(ROOT, f), path.join(app, f));
   }
-  write(path.join(app, 'scripts/verify-startup.sh'), 'echo "startup ok"\n');
+  write(path.join(app, 'scripts/verify-startup.sh'), VERIFY_STUB);
   // the running version
   write(path.join(app, 'package.json'), '{"version":"1.0.0"}');
   write(path.join(app, 'server.ts'), '// old');
@@ -59,20 +68,22 @@ function scratch() {
   write(path.join(src, 'update.sh'), read(path.join(app, 'update.sh')));
   write(path.join(src, 'scripts/update-steps.sh'), read(path.join(app, 'scripts/update-steps.sh')));
   write(path.join(src, 'scripts/ensure-env-secrets.sh'), read(path.join(app, 'scripts/ensure-env-secrets.sh')));
-  write(path.join(src, 'scripts/verify-startup.sh'), 'echo "startup ok"\n');
+  write(path.join(src, 'scripts/verify-startup.sh'), VERIFY_STUB);
   write(path.join(src, '.env.example'), 'PORT=3000\n');
   // stubs
   write(path.join(bin, 'npm'), NPM_STUB);
+  write(path.join(bin, 'mv'), MV_STUB);
   write(path.join(bin, 'systemctl'), '#!/usr/bin/env bash\n[ "$1" = list-unit-files ] && echo "papital-erp.service enabled"\nexit 0\n');
   write(path.join(bin, 'sudo'), '#!/usr/bin/env bash\nexec "$@"\n');
-  for (const f of ['npm', 'systemctl', 'sudo']) chmodSync(path.join(bin, f), 0o755);
+  for (const f of ['npm', 'mv', 'systemctl', 'sudo']) chmodSync(path.join(bin, f), 0o755);
   return { app, src, bin, log: path.join(dir, 'npm.log') };
 }
 
-function runUpdate(s: ReturnType<typeof scratch>, extraEnv: Record<string, string> = {}) {
-  return spawnSync('bash', [path.join(s.app, 'update.sh'), '--no-backup', '--source', s.src], {
+function runUpdate(s: ReturnType<typeof scratch>, extraEnv: Record<string, string> = {}, extraArgs: string[] = []) {
+  try { rmSync(path.join(dir, 'mv.count')); } catch { /* first run */ }
+  return spawnSync('bash', [path.join(s.app, 'update.sh'), '--no-backup', '--source', s.src, ...extraArgs], {
     cwd: dir, encoding: 'utf8',
-    env: { ...process.env, PATH: `${s.bin}:${process.env.PATH}`, APP_DIR: s.app, STUB_APP_DIR: s.app, STUB_LOG: s.log, STUB_BUILD_FAILS: '', NODE_ENV: '', ...extraEnv },
+    env: { ...process.env, PATH: `${s.bin}:${process.env.PATH}`, APP_DIR: s.app, STUB_APP_DIR: s.app, STUB_LOG: s.log, STUB_MV_COUNT: path.join(dir, 'mv.count'), STUB_BUILD_FAILS: '', NODE_ENV: '', ...extraEnv },
   });
 }
 
@@ -81,7 +92,7 @@ describe('update_side_folder_build_obs_r1_22', () => {
     const s = scratch();
     const run = runUpdate(s);
     expect(run.status, run.stdout + run.stderr).toBe(0);
-    const npm = read(s.log).trim().split('\n');
+    const npm = read(s.log).trim().split('\n').filter(l => !l.startsWith('build-env='));
     expect(npm.map(l => l.split(' ')[0])).toEqual(['ci', 'run']);
     for (const line of npm) {
       expect(line).toContain(`${path.join(s.app, '.build-next')} `);
@@ -108,6 +119,96 @@ describe('update_side_folder_build_obs_r1_22', () => {
     expect(run.stdout).toContain('Build failed - the service was NOT restarted');
     expect(run.stdout).toContain(`bash scripts/update-steps.sh restore-source ${s.app}`);
     expect(run.stdout).not.toContain('npm run build');
+    // nothing was restarted or migrated: no stop, start or backup restore steps
+    expect(run.stdout).not.toContain('systemctl stop');
+    expect(run.stdout).not.toContain('restore.sh');
+  });
+
+  it('a failed startup after the swap prints the whole rollback with the build restore and the data-loss warning', () => {
+    const s = scratch();
+    const run = runUpdate(s, { STUB_STARTUP_FAILS: '1' });
+    expect(run.status).not.toBe(0);
+    expect(run.stdout).toContain('systemctl stop papital-erp');
+    expect(run.stdout).toContain('[ ! -d dist.prev ] || { rm -rf dist && mv dist.prev dist; }');
+    expect(run.stdout).toContain('erases every change made after it');
+  });
+
+  it('links the build-time .env files into the side folder', () => {
+    const s = scratch();
+    write(path.join(s.app, '.env.production'), 'VITE_X=1');
+    const run = runUpdate(s);
+    expect(run.status, run.stdout + run.stderr).toBe(0);
+    expect(read(s.log)).toContain('build-env=VITE_X=1');
+    expect(read(path.join(s.app, '.env.production'))).toBe('VITE_X=1');
+  });
+
+  it('continues with the update.sh the new source brings', () => {
+    const s = scratch();
+    write(path.join(s.src, 'update.sh'), `${read(path.join(s.app, 'update.sh'))}\n# a later version\n`);
+    const run = runUpdate(s);
+    expect(run.status, run.stdout + run.stderr).toBe(0);
+    expect(run.stdout).toContain('The new version brings another update.sh; continuing with it.');
+    expect(run.stdout).toContain('Continuing with the update.sh of the new version');
+    expect(read(path.join(s.app, 'dist/version.txt'))).toBe('new\n');
+    expect((run.stdout.match(/Syncing source/g) ?? []).length).toBe(1);
+  });
+});
+
+describe('update_swap_interrupted_obs_r1_22', () => {
+  it('a swap stopped half way keeps the side folder, prints a restore that repairs it, and blocks the next run', () => {
+    const s = scratch();
+    // the 4th rename (the new node_modules into place) fails: dist is new, node_modules is missing
+    const run = runUpdate(s, { STUB_MV_FAIL_AT: '4' });
+    expect(run.status).not.toBe(0);
+    expect(existsSync(path.join(s.app, 'node_modules'))).toBe(false);
+    expect(existsSync(path.join(s.app, '.update-swapping'))).toBe(true);
+    expect(existsSync(path.join(s.app, '.build-next/node_modules/marker'))).toBe(true);
+    expect(run.stdout).toContain('the build swap stopped half way');
+
+    const blocked = runUpdate(s);
+    expect(blocked.status).not.toBe(0);
+    expect(blocked.stdout).toContain('An earlier update stopped while swapping the build in');
+
+    const restore = /1\) cd \S+ && (.+?) && bash scripts\/update-steps\.sh/.exec(run.stdout)?.[1];
+    expect(restore).toBeTruthy();
+    execFileSync('bash', ['-c', restore as string], { cwd: s.app });
+    expect(read(path.join(s.app, 'dist/version.txt'))).toBe('old');
+    expect(read(path.join(s.app, 'node_modules/marker'))).toBe('old');
+    expect(existsSync(path.join(s.app, '.update-swapping'))).toBe(false);
+    // the same restore on a complete swap brings both folders back, and on no swap at all changes nothing
+    execFileSync('bash', ['-c', restore as string], { cwd: s.app });
+    expect(read(path.join(s.app, 'node_modules/marker'))).toBe('old');
+  });
+});
+
+describe('update_single_run_lock_obs_r1_22', () => {
+  it('refuses a second update while one holds the lock, changing nothing', () => {
+    const s = scratch();
+    const run = spawnSync('bash', ['-c', 'exec 9>"$APP_DIR/.update.lock"; flock 9; bash "$APP_DIR/update.sh" --no-backup --source "$SRC"'], {
+      cwd: dir, encoding: 'utf8',
+      env: { ...process.env, PATH: `${s.bin}:${process.env.PATH}`, APP_DIR: s.app, SRC: s.src, STUB_APP_DIR: s.app, STUB_LOG: s.log },
+    });
+    expect(run.status).not.toBe(0);
+    expect(run.stdout).toContain('Another update is already running');
+    expect(read(path.join(s.app, 'server.ts'))).toBe('// old');
+    expect(existsSync(s.log)).toBe(false);
+  });
+});
+
+describe('update_noop_keeps_rollback_obs_r1_22', () => {
+  it('a second run of the same source builds nothing and keeps dist.prev; --rebuild builds again', () => {
+    const s = scratch();
+    expect(runUpdate(s).status).toBe(0);
+    const again = runUpdate(s);
+    expect(again.status, again.stdout + again.stderr).toBe(0);
+    expect(again.stdout).toContain('dist/ is already built from this source');
+    expect(read(path.join(s.app, 'dist.prev/version.txt'))).toBe('old');
+    expect(read(s.log).trim().split('\n').filter(l => l.startsWith('ci ')).length).toBe(1);
+
+    const rebuilt = runUpdate(s, {}, ['--rebuild']);
+    expect(rebuilt.status, rebuilt.stdout + rebuilt.stderr).toBe(0);
+    expect(read(path.join(s.app, 'dist.prev/version.txt'))).toBe('new\n');
+    expect(rebuilt.stdout).toContain('dist.prev/ holds the previous build, of manual update of');
   });
 });
 
@@ -151,6 +252,23 @@ describe('update_manual_sync_deletes_and_keeps_previous_obs_r1_17', () => {
     expect(run.status).not.toBe(0);
     expect(run.stdout + run.stderr).toContain('must be outside the application directory');
     expect(read(path.join(s.app, 'server.ts'))).toBe('// old');
+    expect(run.stdout).not.toContain('Rollback');
+    expect(existsSync(path.join(s.app, '.previous-source'))).toBe(false);
+  });
+
+  it('keeps folders .env names however they are written or reached (./, a link into the app)', () => {
+    const s = scratch();
+    write(path.join(s.app, 'media-alt/clip.mp4'), 'media');
+    write(path.join(s.app, 'att-files/a.pdf'), 'pdf');
+    execFileSync('ln', ['-s', path.join(s.app, 'att-files'), path.join(dir, 'att-link')]);
+    write(path.join(s.app, '.env'), `PORT=3999\nERP_SECRETS_KEY=${'a'.repeat(64)}\nMEDIA_DIR=${s.app}/./media-alt\nATTACHMENTS_DIR=${path.join(dir, 'att-link')}\n`);
+    const run = runUpdate(s);
+    expect(run.status, run.stdout + run.stderr).toBe(0);
+    expect(existsSync(path.join(s.app, 'media-alt/clip.mp4'))).toBe(true);
+    expect(existsSync(path.join(s.app, 'att-files/a.pdf'))).toBe(true);
+    // what the sync removes is listed before it runs
+    expect(run.stdout).toContain('are not in the new source and will be removed');
+    expect(run.stdout).toContain('src/removed-in-new.ts');
   });
 });
 
@@ -176,5 +294,19 @@ describe('update_free_space_preflight_obs_r1_22', () => {
     const git = check('git');
     expect(git).toBeGreaterThanOrEqual(4 * 1024);
     expect(check('manual')).toBeGreaterThan(git);
+  });
+
+  it('adds the pre-deployment backup when it is on the same disk and counts a stale side folder as free', () => {
+    const s = scratch();
+    const backups = path.join(dir, 'backups');
+    write(path.join(backups, 'erp_pre-deployment_20261018_010000.dump.gz'), 'x'.repeat(3 * 1024 * 1024));
+    write(path.join(backups, 'erp_pre-deployment_20261018_010000_uploads.tar.gz'), 'x'.repeat(2 * 1024 * 1024));
+    const probe = (backup: string) => execFileSync('bash', ['-c', `source scripts/update-steps.sh; UPDATE_SPACE_MARGIN_MB=0 update_space_check "$1" git "$2" 0 || true; echo "$UPDATE_SPACE_NEED_KB $UPDATE_SPACE_FREE_KB $(update_disk_free_kb "$1")"`, 'x', s.app, backup], { cwd: s.app, encoding: 'utf8', env: { ...process.env, BACKUP_DIR: backups } }).trim().split(' ').map(Number);
+    const [without] = probe('0');
+    const [withBackup] = probe('1');
+    expect(withBackup - without).toBeGreaterThanOrEqual(5 * 1024);
+    write(path.join(s.app, '.build-next/stale.bin'), 'x'.repeat(3 * 1024 * 1024));
+    const [, counted, diskFree] = probe('1');
+    expect(counted - diskFree).toBeGreaterThanOrEqual(3 * 1024);
   });
 });

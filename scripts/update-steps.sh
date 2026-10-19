@@ -15,6 +15,13 @@
 
 UPDATE_BUILD_DIR_NAME=".build-next"
 UPDATE_PREVIOUS_SOURCE_NAME=".previous-source"
+# held (flock) for the whole run, so a second update refuses at once instead of wiping the first one's side folder
+UPDATE_LOCK_NAME=".update.lock"
+# present only while the build swap runs; a later run that finds it refuses until the restore was done
+UPDATE_SWAP_MARKER_NAME=".update-swapping"
+# written into dist/ by the update: the source fingerprint and the commit the build was made from
+UPDATE_FINGERPRINT_NAME=".source-fingerprint"
+UPDATE_COMMIT_NAME=".source-commit"
 
 # Value of KEY in <app-dir>/.env read literally, as the service reads it
 update_env_value() {
@@ -39,43 +46,129 @@ update_state_excludes() {
     --exclude='/node_modules' --exclude='/node_modules.prev'
     --exclude='/dist' --exclude='/dist.prev'
     --exclude="/${UPDATE_BUILD_DIR_NAME}" --exclude="/${UPDATE_PREVIOUS_SOURCE_NAME}"
+    --exclude="/${UPDATE_LOCK_NAME}" --exclude="/${UPDATE_SWAP_MARKER_NAME}"
     --exclude='*.zip'
   )
-  # folders .env moved inside the application directory hold live state too
-  for key in MEDIA_DIR ATTACHMENTS_DIR LOG_DIR BACKUP_DIR; do
+  # folders .env moved inside the application directory hold live state too; both sides are resolved
+  # (`./`, `..`, symlinks), so a folder written another way, or reached through a link, is still excluded
+  local app_real target
+  app_real="$(realpath -m "$app_dir")"
+  for key in MEDIA_DIR ATTACHMENTS_DIR LOG_DIR BACKUP_DIR UPLOADS_DIR; do
     value="$(update_env_value "$app_dir" "$key")"
     [ -n "$value" ] || continue
     case "$value" in
-      "$app_dir"/*) rel="${value#"$app_dir"/}" ;;
-      /*) continue ;;
-      *) rel="${value#./}" ;;
+      /*) target="$(realpath -m "$value")" ;;
+      *) target="$(realpath -m "$app_dir/$value")" ;;
+    esac
+    case "$target" in
+      "$app_real"/*) rel="${target#"$app_real"/}" ;;
+      *) continue ;;
     esac
     rel="${rel%/}"
     [ -n "$rel" ] && UPDATE_EXCLUDES+=(--exclude="/${rel}")
   done
 }
 
-# OBS-R1-22: free space the update needs on the disk of <app-dir>, in KB, before anything is touched: the side folder
-# holds a copy of the source, a new node_modules and a new dist (estimated by the current ones; 1 GB of node_modules
-# when there is none), a manual update keeps one more copy of the source, and UPDATE_SPACE_MARGIN_MB (default 1024)
-# covers the npm cache and growth. Sets UPDATE_SPACE_NEED_KB / UPDATE_SPACE_FREE_KB; returns 1 when free < need.
+# KB used by <path> (0 when missing)
+update_size_kb() {
+  if [ -e "$1" ]; then du -sk "$1" 2>/dev/null | awk '{ print $1 }'; else echo 0; fi
+}
+
+# The nearest existing folder of <path> (a backup folder not made yet is checked on its parent's disk)
+update_existing_dir() {
+  local dir="$1"
+  while [ ! -d "$dir" ] && [ "$dir" != "/" ]; do dir="$(dirname "$dir")"; done
+  echo "$dir"
+}
+
+# Free KB and the mount point of the disk of <path>; whether two paths are on one disk
+update_disk_free_kb() { df -Pk "$(update_existing_dir "$1")" | awk 'NR == 2 { print $4 }'; }
+update_disk_mount() { df -Pk "$(update_existing_dir "$1")" | awk 'NR == 2 { print $6 }'; }
+update_same_disk() { [ "$(stat -c %d "$(update_existing_dir "$1")")" = "$(stat -c %d "$(update_existing_dir "$2")")" ]; }
+
+# KB the pre-deployment backup will write: the newest earlier pre-deployment set (dump, manifest and archives),
+# else the uploads folder plus 1 GB for the dump
+update_backup_need_kb() {
+  local app_dir="$1" backup_dir="$2" newest base total=0 f
+  newest="$(ls -t "$backup_dir"/erp_pre-deployment_*.dump.gz 2>/dev/null | head -1 || true)"
+  if [ -n "$newest" ]; then
+    base="${newest%.dump.gz}"
+    for f in "$base".* "$base"_*; do
+      if [ -f "$f" ]; then total=$(( total + $(update_size_kb "$f") )); fi
+    done
+    echo "$total"
+  else
+    echo $(( $(update_size_kb "$app_dir/public/uploads") + 1048576 ))
+  fi
+}
+
+# KB the upgrade rehearsal restores: twice the live database (the URL goes in the environment, never on the command line)
+update_rehearsal_need_kb() {
+  local url="$1" bytes
+  bytes="$(PGDATABASE="$url" psql -X -tA -c 'SELECT pg_database_size(current_database())' 2>/dev/null | tr -dc '0-9' || true)"
+  echo $(( ${bytes:-0} * 2 / 1024 ))
+}
+
+# OBS-R1-22: free space the update needs before anything is touched. On the disk of <app-dir>: the side folder holds
+# a copy of the source, a new node_modules and a new dist (estimated by the current ones; 1 GB of node_modules when
+# there is none), a manual update keeps one more copy of the source, and UPDATE_SPACE_MARGIN_MB (default 1024) covers
+# the npm cache and growth; a stale side folder is removed first, so it counts as free. With <backup>=1 the
+# pre-deployment backup is counted on its own disk (BACKUP_DIR, default /var/backups/erp; added to the need when it
+# is the same disk), and with <rehearse>=1 twice the database. Sets UPDATE_SPACE_MESSAGE and returns 1 when short.
 update_space_check() {
-  local app_dir="$1" mode="$2" source_kb modules_kb dist_kb margin_kb
+  local app_dir="$1" mode="$2" backup="${3:-0}" rehearse="${4:-0}"
+  local source_kb modules_kb dist_kb need free backup_dir backup_kb backup_free
+  UPDATE_SPACE_MESSAGE=""
   update_state_excludes "$app_dir"
   source_kb="$(rsync -an --stats --no-human-readable "${UPDATE_EXCLUDES[@]}" "$app_dir"/ /nonexistent-update-space-check/ 2>/dev/null \
     | awk -F: '/^Total file size/ { gsub(/[^0-9]/, "", $2); print int($2 / 1024) }')"
   source_kb="${source_kb:-0}"
-  if [ -d "$app_dir/node_modules" ]; then
-    modules_kb="$(du -sk "$app_dir/node_modules/" 2>/dev/null | awk '{ print $1 }')"
+  modules_kb=1048576
+  if [ -d "$app_dir/node_modules" ]; then modules_kb="$(update_size_kb "$app_dir/node_modules/")"; fi
+  dist_kb="$(update_size_kb "$app_dir/dist")"
+  need=$(( source_kb + modules_kb + dist_kb + ${UPDATE_SPACE_MARGIN_MB:-1024} * 1024 ))
+  if [ "$mode" = "manual" ]; then need=$(( need + source_kb )); fi
+  free=$(( $(update_disk_free_kb "$app_dir") + $(update_size_kb "$app_dir/$UPDATE_BUILD_DIR_NAME") ))
+  if [ "$rehearse" = "1" ]; then
+    need=$(( need + $(update_rehearsal_need_kb "$(update_env_value "$app_dir" DATABASE_URL)") ))
   fi
-  modules_kb="${modules_kb:-1048576}"
-  dist_kb=0
-  if [ -d "$app_dir/dist" ]; then dist_kb="$(du -sk "$app_dir/dist" 2>/dev/null | awk '{ print $1 }')"; fi
-  margin_kb=$(( ${UPDATE_SPACE_MARGIN_MB:-1024} * 1024 ))
-  UPDATE_SPACE_NEED_KB=$(( source_kb + modules_kb + ${dist_kb:-0} + margin_kb ))
-  if [ "$mode" = "manual" ]; then UPDATE_SPACE_NEED_KB=$(( UPDATE_SPACE_NEED_KB + source_kb )); fi
-  UPDATE_SPACE_FREE_KB="$(df -Pk "$app_dir" | awk 'NR == 2 { print $4 }')"
-  [ "${UPDATE_SPACE_FREE_KB:-0}" -ge "$UPDATE_SPACE_NEED_KB" ]
+  if [ "$backup" = "1" ]; then
+    backup_dir="${BACKUP_DIR:-/var/backups/erp}"
+    backup_kb="$(update_backup_need_kb "$app_dir" "$backup_dir")"
+    if update_same_disk "$app_dir" "$backup_dir"; then
+      need=$(( need + backup_kb ))
+    else
+      backup_free="$(update_disk_free_kb "$backup_dir")"
+      if [ "$backup_free" -lt "$backup_kb" ]; then
+        UPDATE_SPACE_MESSAGE="Not enough free disk space for the pre-deployment backup: it needs about $(( backup_kb / 1024 )) MB in ${backup_dir} (disk mounted at $(update_disk_mount "$backup_dir")), $(( backup_free / 1024 )) MB is free. Nothing was changed; free $(( (backup_kb - backup_free) / 1024 + 1 )) MB more on that disk (old backups) and run the update again."
+        return 1
+      fi
+    fi
+  fi
+  UPDATE_SPACE_NEED_KB="$need"
+  UPDATE_SPACE_FREE_KB="$free"
+  if [ "$free" -lt "$need" ]; then
+    UPDATE_SPACE_MESSAGE="Not enough free disk space for the update: it needs about $(( need / 1024 )) MB on the disk of ${app_dir} (mounted at $(update_disk_mount "$app_dir")), $(( free / 1024 )) MB is free. Nothing was changed; free $(( (need - free) / 1024 + 1 )) MB more on that disk (old backups, logs) and run the update again."
+    return 1
+  fi
+}
+
+# OBS-R1-17: a new source inside <app-dir> would be removed by the --delete sync half way through
+update_assert_source_outside() {
+  local src_real app_real
+  src_real="$(cd "$1" && pwd -P)"
+  app_real="$(cd "$2" && pwd -P)"
+  case "$src_real/" in
+    "$app_real"/*) echo "The new source must be outside the application directory: $1" >&2; return 1 ;;
+  esac
+}
+
+# OBS-R1-17: prints what the sync from <source-dir> will delete in <app-dir>: files the new source does not have
+update_sync_deletions() {
+  local source_dir="$1" app_dir="$2"
+  update_state_excludes "$app_dir"
+  rsync -an --checksum --delete --itemize-changes "${UPDATE_EXCLUDES[@]}" "$source_dir"/ "$app_dir"/ \
+    | sed -n 's/^\*deleting  *//p'
 }
 
 # OBS-R1-17: keeps the current source of <app-dir> in <app-dir>/.previous-source (live state left out)
@@ -89,12 +182,8 @@ update_save_previous_source() {
 # OBS-R1-17: makes the source of <app-dir> equal to <source-dir>: changed files replaced, files the new source no
 # longer has removed; live state is excluded, so it is neither copied nor deleted
 update_sync_source() {
-  local source_dir="$1" app_dir="$2" src_real app_real
-  src_real="$(cd "$source_dir" && pwd -P)"
-  app_real="$(cd "$app_dir" && pwd -P)"
-  case "$src_real/" in
-    "$app_real"/*) echo "The new source must be outside the application directory: $source_dir" >&2; return 1 ;;
-  esac
+  local source_dir="$1" app_dir="$2"
+  update_assert_source_outside "$source_dir" "$app_dir" || return 1
   update_state_excludes "$app_dir"
   rsync -a --checksum --delete "${UPDATE_EXCLUDES[@]}" "$source_dir"/ "$app_dir"/
 }
@@ -116,28 +205,56 @@ update_prepare_build_dir() {
   update_state_excludes "$app_dir"
   rsync -a "${UPDATE_EXCLUDES[@]}" "$app_dir"/ "$build_dir"/
   ln -s ../.env "$build_dir/.env"
+  # the build reads .env.local, .env.production … as it did in place (Vite); linked, never copied
+  local env_file
+  for env_file in "$app_dir"/.env.*; do
+    [ -f "$env_file" ] || continue
+    [ -e "$build_dir/$(basename "$env_file")" ] || ln -s "../$(basename "$env_file")" "$build_dir/$(basename "$env_file")"
+  done
   echo "$build_dir"
 }
 
+# A fingerprint of the source in <dir> (the side folder before the install: its files, the env links left out)
+update_source_fingerprint() {
+  (cd "$1" && find . -path ./node_modules -prune -o -path ./dist -prune -o -type f -print0 | LC_ALL=C sort -z \
+    | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)
+}
+
+# The fingerprint and the commit a built dist/ records
+update_dist_fingerprint() { cat "$1/$UPDATE_FINGERPRINT_NAME" 2>/dev/null || true; }
+update_dist_commit() {
+  local commit
+  commit="$(cat "$1/$UPDATE_COMMIT_NAME" 2>/dev/null || true)"
+  echo "${commit:-unknown (built before v10.2.20)}"
+}
+
 # OBS-R1-22: moves the built dist/ and node_modules/ of the side folder into <app-dir>, keeping the running ones as
-# dist.prev/ and node_modules.prev/; a lock file the install regenerated goes back to <app-dir>
+# dist.prev/ and node_modules.prev/; a lock file the install regenerated goes back to <app-dir>. HUP, INT and TERM
+# (a dropped SSH session) are ignored while the renames run, and a marker file stays until they all succeeded, so a
+# swap cut short (a kill, a power loss) is found by the next run and repaired by update_restore_build_command.
 update_swap_build() {
-  local app_dir="$1" build_dir="$1/$UPDATE_BUILD_DIR_NAME"
+  local app_dir="$1" build_dir="$1/$UPDATE_BUILD_DIR_NAME" rc=0
   [ -f "$build_dir/dist/server.cjs" ] && [ -d "$build_dir/node_modules" ] \
     || { echo "The side folder holds no complete build: $build_dir" >&2; return 1; }
-  rm -rf "$app_dir/dist.prev" "$app_dir/node_modules.prev"
-  if [ -e "$app_dir/dist" ]; then mv "$app_dir/dist" "$app_dir/dist.prev"; fi
-  if [ -e "$app_dir/node_modules" ] || [ -L "$app_dir/node_modules" ]; then mv "$app_dir/node_modules" "$app_dir/node_modules.prev"; fi
-  mv "$build_dir/dist" "$app_dir/dist"
-  mv "$build_dir/node_modules" "$app_dir/node_modules"
+  trap '' HUP INT TERM
+  { : > "${app_dir:?}/${UPDATE_SWAP_MARKER_NAME:?}" \
+    && rm -rf "${app_dir:?}/dist.prev" "${app_dir:?}/node_modules.prev" \
+    && { [ ! -e "$app_dir/dist" ] || mv "$app_dir/dist" "$app_dir/dist.prev"; } \
+    && { { [ ! -e "$app_dir/node_modules" ] && [ ! -L "$app_dir/node_modules" ]; } || mv "$app_dir/node_modules" "$app_dir/node_modules.prev"; } \
+    && mv "$build_dir/dist" "$app_dir/dist" \
+    && mv "$build_dir/node_modules" "$app_dir/node_modules" \
+    && rm -f "${app_dir:?}/${UPDATE_SWAP_MARKER_NAME:?}"; } || rc=1
+  trap - HUP INT TERM
+  [ "$rc" -eq 0 ] || return 1
   if [ -f "$build_dir/package-lock.json" ] && ! cmp -s "$build_dir/package-lock.json" "$app_dir/package-lock.json"; then
     cp "$build_dir/package-lock.json" "$app_dir/package-lock.json"
   fi
 }
 
-# The rollback command of the build swap
+# The rollback command of the build swap, run in <app-dir>: each folder comes back only when its .prev exists, so it
+# also repairs a swap that stopped half way and never deletes the only node_modules
 update_restore_build_command() {
-  echo "rm -rf dist node_modules && mv dist.prev dist && mv node_modules.prev node_modules"
+  echo "{ [ ! -d dist.prev ] || { rm -rf dist && mv dist.prev dist; }; } && { [ ! -d node_modules.prev ] || { rm -rf node_modules && mv node_modules.prev node_modules; }; } && rm -f ${UPDATE_SWAP_MARKER_NAME}"
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then

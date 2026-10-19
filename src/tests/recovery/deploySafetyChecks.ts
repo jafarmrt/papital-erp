@@ -23,11 +23,14 @@ const NAMES: Array<[string, string, string]> = [
     'backup.sh writes a private backup directory (0700) and files (0600) even under umask 022, and go-live-verify fails on readable backups (TD-585)',
     'directory 0700, dump, manifest and uploads archive 0600; go-live-verify passed the private directory and failed the readable one'],
   ['rec_td_586_update_build_failure_keeps_dist',
-    'a failed build during update.sh puts the previous dist/ back and prints the rollback steps with the data-loss warning (TD-586)',
-    'dist/server.cjs kept after the failed build; rollback steps printed once with the backup warning'],
+    'a failed build during update.sh keeps the running dist/ and prints the rollback steps once: only the source step, since nothing was restarted or migrated (TD-586, v10.2.20)',
+    'dist/server.cjs kept after the failed build; rollback printed once with the git reset step and no backup restore'],
   ['rec_td_587_update_port_from_env',
     'update.sh waits for startup on PORT from .env, the port the service listens on (TD-587)',
     'update.sh verified startup on the PORT written by install.sh'],
+  ['rec_obs_r1_22_update_noop_and_lock',
+    'a git update run again with nothing new builds nothing and keeps dist.prev/, and a second update refuses while one runs (OBS-R1-22)',
+    'second run skipped the build and kept the previous build in dist.prev/; a run under a held lock changed nothing'],
 ];
 
 const tsx = path.join(REPO_ROOT, 'node_modules', '.bin', 'tsx');
@@ -247,7 +250,8 @@ export async function checkUpdateBuildFailure(): Promise<string[]> {
     const server = path.join(app, 'dist', 'server.cjs');
     if (!fs.existsSync(server) || fs.readFileSync(server, 'utf8') !== 'previous build') v.push('dist/server.cjs of the previous build is gone after the failed build');
     if ((r.output.match(/Rollback:/g) ?? []).length !== 1) v.push(`rollback steps printed ${(r.output.match(/Rollback:/g) ?? []).length} times, expected once`);
-    if (!r.output.includes('erases every change made after it')) v.push('the rollback steps do not warn that restoring the backup erases later changes');
+    if (!/git reset --hard [0-9a-f]+/.test(r.output)) v.push('the rollback steps do not put the previous commit back');
+    if (r.output.includes('restore.sh')) v.push('the rollback steps of a build that never ran restore the backup');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -264,6 +268,32 @@ export async function checkUpdatePortFromEnv(): Promise<string[]> {
     fs.writeFileSync(path.join(app, '.env'), `NODE_ENV=production\nPORT=${server.port}\n`);
     const r = await runUpdate(app, fakeBin(root), {});
     if (r.code !== 0 || !r.output.includes('Update finished successfully')) v.push(`update.sh did not verify startup on PORT ${server.port} (exit ${r.code}): ${r.output.slice(-300)}`);
+  } finally {
+    await server.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+  return v;
+}
+
+export async function checkUpdateNoopAndLock(): Promise<string[]> {
+  const v: string[] = [];
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'erp-noop-'));
+  const server = await startupServer('9.9.2');
+  try {
+    const app = makeGitApp(root);
+    fs.writeFileSync(path.join(app, '.env'), `NODE_ENV=production\nPORT=${server.port}\n`);
+    const bin = fakeBin(root);
+    const first = await runUpdate(app, bin, {});
+    if (first.code !== 0) return [`first update failed (exit ${first.code}): ${first.output.slice(-300)}`];
+    const second = await runUpdate(app, bin, {});
+    if (second.code !== 0) v.push(`second update failed (exit ${second.code}): ${second.output.slice(-300)}`);
+    if (!second.output.includes('dist/ is already built from this source')) v.push('the second run built the same source again');
+    const prev = path.join(app, 'dist.prev', 'server.cjs');
+    if (!fs.existsSync(prev) || fs.readFileSync(prev, 'utf8') !== 'previous build') v.push('dist.prev/ no longer holds the build from before the update');
+    const locked = await runCommand('bash', ['-c', `exec 9>"${app}/.update.lock"; flock 9; bash "${app}/update.sh" --no-backup`], {
+      cwd: root, env: scriptEnv({ PATH: `${bin}:${process.env.PATH ?? ''}`, APP_DIR: app }), timeoutMs: 60_000,
+    });
+    if (locked.code === 0 || !locked.output.includes('Another update is already running')) v.push(`a run under a held lock was not refused: ${locked.output.slice(-200)}`);
   } finally {
     await server.close();
     fs.rmSync(root, { recursive: true, force: true });
@@ -297,5 +327,6 @@ export async function runDeploySafetyChecks(): Promise<RecoveryCheckOutcome[]> {
   }
   results.push(await checkUpdateBuildFailure());
   results.push(await checkUpdatePortFromEnv());
+  results.push(await checkUpdateNoopAndLock());
   return outcome(results);
 }
