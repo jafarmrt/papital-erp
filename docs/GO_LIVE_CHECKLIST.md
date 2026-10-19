@@ -191,7 +191,8 @@ Run each scenario end-to-end and verify the accounting/inventory side effects:
 **A) Git-based update (recommended):**
 ```bash
 cd /opt/papital-erp && sudo ./update.sh --rehearse
-# → automatic pre-deployment backup (90-day retention) → git pull --ff-only
+# → free disk space check (stops with nothing changed when the side build would not fit)
+#   → automatic pre-deployment backup (90-day retention) → git pull --ff-only
 #   → npm ci + npm run build in the side folder .build-next (the running service is untouched)
 #   → the new migrations rehearsed on a restored copy
 #   → swap dist/ and node_modules/ in (previous ones kept as dist.prev/ and node_modules.prev/)

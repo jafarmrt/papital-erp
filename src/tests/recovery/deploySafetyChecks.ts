@@ -188,7 +188,7 @@ export function makeGitApp(root: string): string {
   git(root, ['init', '-q', '--bare', '-b', 'master', origin]);
   git(root, ['clone', '-q', origin, work]);
   fs.mkdirSync(path.join(work, 'scripts'));
-  for (const rel of ['update.sh', 'scripts/verify-startup.sh', 'scripts/untrack-node-modules-link.sh']) {
+  for (const rel of ['update.sh', 'scripts/update-steps.sh', 'scripts/verify-startup.sh', 'scripts/untrack-node-modules-link.sh']) {
     fs.copyFileSync(path.join(REPO_ROOT, rel), path.join(work, rel));
   }
   fs.writeFileSync(path.join(work, 'server.ts'), '');
@@ -206,12 +206,12 @@ export function makeGitApp(root: string): string {
   return app;
 }
 
-/** npm (vite empties dist/ first, then the build fails when FAKE_BUILD_FAIL=1), systemctl and sudo */
+/** npm (`ci` writes node_modules/; vite empties dist/ first, then the build fails when FAKE_BUILD_FAIL=1), systemctl and sudo */
 export function fakeBin(root: string): string {
   const bin = path.join(root, 'bin');
   fs.mkdirSync(bin);
   const write = (name: string, body: string) => fs.writeFileSync(path.join(bin, name), `#!/bin/bash\n${body}\n`, { mode: 0o755 });
-  write('npm', `if [ "$1 $2" = "run build" ]; then rm -rf dist/*; [ -z "\${FAKE_BUILD_FAIL:-}" ] || exit 1; mkdir -p dist; echo new > dist/server.cjs; fi; exit 0`);
+  write('npm', `if [ "$1" = "ci" ]; then mkdir -p node_modules; fi; if [ "$1 $2" = "run build" ]; then rm -rf dist/*; [ -z "\${FAKE_BUILD_FAIL:-}" ] || exit 1; mkdir -p dist; echo new > dist/server.cjs; fi; exit 0`);
   write('systemctl', `[ "$1" = "list-unit-files" ] && echo "papital-erp.service enabled"; exit 0`);
   write('sudo', 'exec "$@"');
   return bin;

@@ -55,6 +55,29 @@ update_state_excludes() {
   done
 }
 
+# OBS-R1-22: free space the update needs on the disk of <app-dir>, in KB, before anything is touched: the side folder
+# holds a copy of the source, a new node_modules and a new dist (estimated by the current ones; 1 GB of node_modules
+# when there is none), a manual update keeps one more copy of the source, and UPDATE_SPACE_MARGIN_MB (default 1024)
+# covers the npm cache and growth. Sets UPDATE_SPACE_NEED_KB / UPDATE_SPACE_FREE_KB; returns 1 when free < need.
+update_space_check() {
+  local app_dir="$1" mode="$2" source_kb modules_kb dist_kb margin_kb
+  update_state_excludes "$app_dir"
+  source_kb="$(rsync -an --stats --no-human-readable "${UPDATE_EXCLUDES[@]}" "$app_dir"/ /nonexistent-update-space-check/ 2>/dev/null \
+    | awk -F: '/^Total file size/ { gsub(/[^0-9]/, "", $2); print int($2 / 1024) }')"
+  source_kb="${source_kb:-0}"
+  if [ -d "$app_dir/node_modules" ]; then
+    modules_kb="$(du -sk "$app_dir/node_modules/" 2>/dev/null | awk '{ print $1 }')"
+  fi
+  modules_kb="${modules_kb:-1048576}"
+  dist_kb=0
+  if [ -d "$app_dir/dist" ]; then dist_kb="$(du -sk "$app_dir/dist" 2>/dev/null | awk '{ print $1 }')"; fi
+  margin_kb=$(( ${UPDATE_SPACE_MARGIN_MB:-1024} * 1024 ))
+  UPDATE_SPACE_NEED_KB=$(( source_kb + modules_kb + ${dist_kb:-0} + margin_kb ))
+  if [ "$mode" = "manual" ]; then UPDATE_SPACE_NEED_KB=$(( UPDATE_SPACE_NEED_KB + source_kb )); fi
+  UPDATE_SPACE_FREE_KB="$(df -Pk "$app_dir" | awk 'NR == 2 { print $4 }')"
+  [ "${UPDATE_SPACE_FREE_KB:-0}" -ge "$UPDATE_SPACE_NEED_KB" ]
+}
+
 # OBS-R1-17: keeps the current source of <app-dir> in <app-dir>/.previous-source (live state left out)
 update_save_previous_source() {
   local app_dir="$1"

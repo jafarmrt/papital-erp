@@ -55,7 +55,8 @@ export async function checkUpdateRollbackStaysOnBranch(): Promise<string[]> {
     const app = makeGitApp(root);
     fs.writeFileSync(path.join(app, '.env'), 'NODE_ENV=production\nPORT=1\n');
     const r = await runUpdate(app, fakeBin(root), { FAKE_BUILD_FAIL: '1' });
-    const step = /2\) (git [^&\n]+?)\s*&&/.exec(r.output)?.[1];
+    // v10.2.19 (OBS-R1-22): before the build swap the step is `cd <app> && git reset --hard <commit>   (…)`
+    const step = /2\) [^\n]*?\b(git reset --hard [0-9a-f]+)/.exec(r.output)?.[1];
     if (!step) return [`no git rollback step printed: ${r.output.slice(-300)}`];
     const run = await runCommand('bash', ['-c', step], { cwd: app });
     if (run.code !== 0) v.push(`the rollback step "${step}" failed: ${run.output.slice(-200)}`);

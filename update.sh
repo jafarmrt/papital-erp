@@ -166,6 +166,14 @@ elif [[ "$KEY_STEP" == *"WARN:"* ]]; then
   warn "ERP_SECRETS_KEY is empty in .env and was left as it is; new secrets are refused until it is set."
 fi
 
+# v10.2.19 (OBS-R1-22): the side build needs room next to the running one; stop before the backup, the source or the
+# build is touched when the disk of the application directory cannot hold it
+command -v rsync >/dev/null 2>&1 || die "rsync is required to build the update in a side folder (apt-get install -y rsync)."
+if ! update_space_check "$APP_DIR" "$UPDATE_MODE"; then
+  die "Not enough free disk space for the update: it needs about $(( UPDATE_SPACE_NEED_KB / 1024 )) MB on the disk of ${APP_DIR}, $(( ${UPDATE_SPACE_FREE_KB:-0} / 1024 )) MB is free. Nothing was changed; free $(( (UPDATE_SPACE_NEED_KB - ${UPDATE_SPACE_FREE_KB:-0}) / 1024 )) MB more (old backups, logs) and run the update again."
+fi
+success "Free disk space: $(( UPDATE_SPACE_FREE_KB / 1024 )) MB (the update needs about $(( UPDATE_SPACE_NEED_KB / 1024 )) MB)."
+
 # ---------- 1) Pre-update database backup ----------
 PREVIOUS_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || true)"
 PRE_DEPLOY_DUMP=""
@@ -219,7 +227,6 @@ fi
 # NOTE: NODE_ENV=production (from the environment of an operator shell or CI) makes
 # npm omit devDependencies — but the build (vite/esbuild) REQUIRES them (v4.0.30 split).
 # Force full install for the build step only; runtime keeps NODE_ENV=production.
-command -v rsync >/dev/null 2>&1 || die "rsync is required to build the update in a side folder (apt-get install -y rsync)."
 BUILD_COMMIT="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
 BUILD_DIR="$(update_prepare_build_dir "$APP_DIR")" || die "Could not prepare the side folder ${UPDATE_BUILD_DIR_NAME}/."
 cd "$BUILD_DIR"

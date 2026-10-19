@@ -153,3 +153,28 @@ describe('update_manual_sync_deletes_and_keeps_previous_obs_r1_17', () => {
     expect(read(path.join(s.app, 'server.ts'))).toBe('// old');
   });
 });
+
+describe('update_free_space_preflight_obs_r1_22', () => {
+  it('stops before the backup, the source or the build is touched when the disk cannot hold the side build', () => {
+    const s = scratch();
+    const run = runUpdate(s, { UPDATE_SPACE_MARGIN_MB: '999999999' });
+    expect(run.status).not.toBe(0);
+    expect(run.stdout).toMatch(/Not enough free disk space for the update: it needs about \d+ MB on the disk of .+, \d+ MB is free\. Nothing was changed/);
+    expect(read(path.join(s.app, 'server.ts'))).toBe('// old');
+    expect(existsSync(path.join(s.app, 'src/removed-in-new.ts'))).toBe(true);
+    for (const untouched of ['.previous-source', '.build-next', 'dist.prev', 'node_modules.prev']) {
+      expect(existsSync(path.join(s.app, untouched)), untouched).toBe(false);
+    }
+    expect(existsSync(s.log)).toBe(false);
+    expect(run.stdout).not.toContain('Rollback:');
+  });
+
+  it('counts the side copy of the source, node_modules and dist, and one more source copy for a manual update', () => {
+    const s = scratch();
+    write(path.join(s.app, 'node_modules/big.bin'), 'x'.repeat(4 * 1024 * 1024));
+    const check = (mode: string) => Number(execFileSync('bash', ['-c', `source scripts/update-steps.sh; UPDATE_SPACE_MARGIN_MB=0 update_space_check "$1" "$2" || true; echo "$UPDATE_SPACE_NEED_KB"`, 'x', s.app, mode], { cwd: s.app, encoding: 'utf8' }).trim());
+    const git = check('git');
+    expect(git).toBeGreaterThanOrEqual(4 * 1024);
+    expect(check('manual')).toBeGreaterThan(git);
+  });
+});
