@@ -24,3 +24,13 @@ product-owner decision; a file that no longer deletes is removed from this list 
 | `src/services/workflow/workflowDesignTables.ts` | the live step and action rows of a definition being saved | the design is rewritten from the saved version; every version stays in `workflow_definition_versions` and running instances keep their snapshot |
 | `src/services/workflow/workflowTermination.ts` | the pending approvals of a terminated instance | approvals waiting on a step that no longer runs; the history and tasks stay |
 | `src/services/workflow/workflowTransitionExecutor.ts` | the pending approvals of the step being left | approvals of a step that is no longer current; the history keeps every signature |
+
+## Files on disk
+
+These remove files, not rows, so the ratchet does not count them; they are written here so that every physical delete
+the code makes has its reason. Each is run by the system admin by hand, previews by default and writes an audit row.
+
+| What it deletes | Where | Why the delete is physical |
+|---|---|---|
+| attachment files with no `file_attachments` row, older than 60 minutes | `src/services/attachments/attachmentOrphanCleanup.service.ts` | the save transaction that wrote them rolled back (TD-224); a detached attachment's file is kept |
+| image files of `public/uploads` whose UUID no row of any table names (a soft-deleted or copied record included; only the audit log is not read): first moved to `public/uploads/.orphaned/<day>/` (older than 60 minutes, only those of the confirmed preview), removed only after 30 days there and a fresh re-read of the rows; a held file named again is moved back | `src/services/system/orphanUploadsCleanup.service.ts` | a replaced image (item, transfer design, avatar, raw material request) left its old file behind (OBS-R2-60) |

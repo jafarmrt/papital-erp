@@ -24,6 +24,10 @@ import { toPersianDigits } from '../utils/persianNumber.js';
 import { DateCalendarReportService } from '../services/system/dateCalendarReport.service.js';
 import { buildConditionalConstraints, conditionalConstraintsResultMessage, findMissingConditionalConstraints } from '../services/system/conditionalConstraints.js';
 import { readNightlyVerifyHealth } from '../services/system/nightlyVerifyHealth.js';
+import { cleanupOrphanUploads } from '../services/system/orphanUploadsCleanup.service.js';
+import {
+  ORPHAN_UPLOAD_HELD_PATTERN, ORPHAN_UPLOAD_NAME_PATTERN, ORPHAN_UPLOAD_RUN_LIMIT, orphanUploadsMessage,
+} from '../lib/system/orphanUploads.js';
 
 const router = Router();
 
@@ -362,6 +366,26 @@ router.post('/system/conditional-constraints/build', requireSystemAdmin, validat
     ipAddress: extractClientIp(req),
   });
   res.json({ ...result, message: conditionalConstraintsResultMessage(result) });
+}));
+
+// v10.2.18 (OBS-R2-60): image files of public/uploads that no row names; a preview unless `apply`, which acts only on the
+// files of the preview the admin confirmed (moved aside, removed after the hold), by hand only
+const orphanUploadsSchema = z.object({
+  body: z.object({
+    apply: z.boolean({ message: 'گزینه اجرا باید درست یا نادرست باشد' }).optional(),
+    quarantine: z.array(z.string().regex(ORPHAN_UPLOAD_NAME_PATTERN, 'نام تصویر معتبر نیست')).max(ORPHAN_UPLOAD_RUN_LIMIT).optional(),
+    purge: z.array(z.string().regex(ORPHAN_UPLOAD_HELD_PATTERN, 'نام تصویر پوشهٔ جدا معتبر نیست')).max(ORPHAN_UPLOAD_RUN_LIMIT).optional(),
+  }).strict().refine(b => b.apply !== true || (b.quarantine !== undefined && b.purge !== undefined), {
+    message: 'برای اجرا، فهرست تصویرهایی که در بررسی تأیید شد لازم است',
+  }),
+});
+
+router.post('/system/orphan-uploads', requireSystemAdmin, validate(orphanUploadsSchema), asyncHandler(async (req, res) => {
+  const { apply, quarantine, purge } = req.body as z.infer<typeof orphanUploadsSchema>['body'];
+  const report = await cleanupOrphanUploads({
+    apply: apply === true, req, confirmed: { quarantine: quarantine ?? [], purge: purge ?? [] },
+  });
+  res.json({ ...report, message: orphanUploadsMessage(report) });
 }));
 
 // (v4.0.29) توابع assertTestEndpointsAllowed/assertTestEndpointsEnabled حذف شدند —
