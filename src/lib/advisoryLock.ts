@@ -40,6 +40,8 @@ export const ADVISORY_LOCK_KEYS = {
   CONDITIONAL_CONSTRAINTS: 91040,
   /** v10.1.3 (N-05 PR 4): rebuilding the light versions of the media library (`npm run media:rebuild-light`); one run at a time */
   MEDIA_LIGHT_REBUILD: 91041,
+  /** v10.2.18 (OBS-R2-60): removing the image files of `public/uploads` no row names («پاک کردن تصویرهای بی‌صاحب»); one run at a time */
+  ORPHAN_UPLOADS_CLEANUP: 91042,
   /**
    * 10.2 package 6 (D-04): one exchange with the WooCommerce shop at a time (catalog refresh, manual or automatic stock
    * push); a second one is refused (409 `WC_SYNC_BUSY`) or, for the automatic push, skipped until its next turn
