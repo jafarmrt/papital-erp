@@ -54,8 +54,9 @@ export function parsePagination(
 /** فهرست انتخاب (مدل مجوز ت۱۰): بی سقف وقتی limit نیامده، صفر یا نامعتبر است؛ وگرنه حداکثر MAX_PICK_LIST_LIMIT ردیف */
 export const MAX_PICK_LIST_LIMIT = 5000;
 
-export function parsePickListLimit(raw: unknown): number | undefined {
+export function parsePickListLimit(raw: unknown, maxLimit: number = MAX_PICK_LIST_LIMIT): number | undefined {
   const limit = Number.parseInt(String(raw ?? ''), 10);
   if (!Number.isFinite(limit) || limit <= 0) return undefined;
-  return Math.min(limit, MAX_PICK_LIST_LIMIT);
+  // TD-1321: a picker that asks one row above its cap (to know there are more) passes that as `maxLimit`
+  return Math.min(limit, maxLimit);
 }

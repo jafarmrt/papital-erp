@@ -10,6 +10,7 @@ import { IranianPhoneInput } from '../common';
 import { DecimalInput } from '../common/DecimalInput';
 import { LostReasonFields } from './LostReasonFields';
 import { DialogLayer } from '../common/DialogLayer';
+import { usePersonnelPickName } from '../../hooks/usePersonnelPickName';
 
 interface CRMLeadModalProps {
   isLeadModalOpen: boolean;
@@ -43,6 +44,13 @@ export function CRMLeadModal({
   currentLoggedInUser
 }: CRMLeadModalProps) {
   const fieldId = useId();
+  // TD-1321: a saved seller the list does not hold (left, or beyond its cap) keeps their name on the picker, never the
+  // placeholder; the name stored on the file, else the personnel's name read by id
+  const assignedId = leadForm.assignedPersonnelId ? Number(leadForm.assignedPersonnelId) : null;
+  const storedSeller = String(leadForm.assignedTo ?? '').trim();
+  const assignedMissing = isLeadModalOpen && assignedId !== null && !personnelList.some((p: { id: number }) => p.id === assignedId);
+  const fetchedSeller = usePersonnelPickName(assignedId, assignedMissing && !storedSeller);
+  const assignedFallbackLabel = assignedMissing ? (storedSeller || fetchedSeller || undefined) : undefined;
   if (!isLeadModalOpen) return null;
 
   return (
@@ -321,6 +329,7 @@ export function CRMLeadModal({
                   setLeadForm({ ...leadForm, assignedPersonnelId: id, assignedTo: selected?.fullName || leadForm.assignedTo });
                 }}
                 placeholder={`${leadForm.assignedTo || currentLoggedInUser} (بدون اتصال پرسنلی)`}
+                valueLabel={assignedFallbackLabel}
                 options={personnelList.map((p: any) => ({ value: String(p.id), label: `${p.fullName}${p.jobTitle ? ` — ${p.jobTitle}` : ''}` }))}
               />
               {currentPersonnelId && String(leadForm.assignedPersonnelId || '') !== '' && !editingLead && (

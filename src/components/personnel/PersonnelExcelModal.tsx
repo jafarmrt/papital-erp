@@ -8,12 +8,15 @@ import { paddedNationalIdNotice, readImportedNationalId } from '../../lib/person
 import { Personnel } from '../../types';
 import { PERSONNEL_IMPORT_DEFAULTS, parseEmploymentStatusCell, parseGenderCell, parseNationalityCell, personnelCellLabel } from '../../lib/personnel/personnelImportCells';
 import { DialogLayer } from '../common/DialogLayer';
+import { PERSONNEL_LIST_STATE_TEXT, type PersonnelListState } from '../../lib/personnel/personnelList';
 
 interface PersonnelExcelModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
   existingPersonnel: Personnel[];
+  /** TD-1321: a file is read only once every personnel (the existing codes) has arrived */
+  existingState?: PersonnelListState;
 }
 
 interface PersonnelPreviewRow {
@@ -54,7 +57,8 @@ export function PersonnelExcelModal({
   isOpen,
   onClose,
   onSuccess,
-  existingPersonnel
+  existingPersonnel,
+  existingState = 'ready'
 }: PersonnelExcelModalProps) {
   const [step, setStep] = useState<'upload' | 'preview' | 'result'>('upload');
   const [isExporting, setIsExporting] = useState(false);
@@ -190,6 +194,7 @@ export function PersonnelExcelModal({
 
   // Process Excel File on upload
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (existingState !== 'ready') return;
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -514,12 +519,17 @@ export function PersonnelExcelModal({
                   type="file"
                   accept=".xlsx, .xls"
                   onChange={handleFileUpload}
+                  disabled={existingState !== 'ready'}
                   className="hidden"
                   id="personnel-excel-file-input"
                 />
+                {existingState !== 'ready' && (
+                  <p role="status" className="text-xs font-bold text-slate-500 mb-3">{PERSONNEL_LIST_STATE_TEXT[existingState]}</p>
+                )}
                 <label
                   htmlFor="personnel-excel-file-input"
-                  className="flex flex-col items-center justify-center cursor-pointer space-y-3"
+                  aria-disabled={existingState !== 'ready'}
+                  className={`flex flex-col items-center justify-center space-y-3 ${existingState === 'ready' ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
                 >
                   <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center shadow-xs">
                     <Upload size={30} />

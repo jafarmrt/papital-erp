@@ -28,55 +28,14 @@ import { paddedNationalIdNotice, readImportedNationalId } from '../lib/personnel
 import { assertPersonnelCodeAvailable, guardPersonnelCode, isPersonnelCodeUniqueViolation, personnelCodeKey, personnelCodeTakenMessage } from '../services/personnel/personnelCode.js';
 import { assertPersonnelNationalIdAvailable, guardPersonnelNationalId, isPersonnelNationalIdUniqueViolation, personnelNationalIdKey, personnelNationalIdTakenMessage } from '../services/personnel/personnelNationalIdUnique.js';
 import { guardPersonnelUserLink, parsePersonnelUserId, resolvePersonnelUserLink } from '../services/personnel/personnelUserLink.js';
-import { matchesPersonnelSearch, personnelReadScope, scopePersonnelRow, withoutNobitexPassword } from '../services/personnel/personnelFieldScope.js';
+import { personnelReadScope, scopePersonnelRow, withoutNobitexPassword } from '../services/personnel/personnelFieldScope.js';
+import { PERSONNEL_DETAIL_COLUMNS, countPersonnelRows, listPersonnelRows, personnelListStats } from '../services/personnel/personnelList.js';
+import { parsePagination, parsePickListLimit } from '../lib/pagination.js';
+import { SALARY_TYPE_LABELS, salaryTypeOf } from '../lib/personnel/salaryType.js';
+import { PERSONNEL_PICK_REQUEST_LIMIT } from '../lib/personnel/personnelList.js';
 
 const router = Router();
 
-// v7.0.140: ستون‌های فهرست و جزئیات پرسنل یکی است (پیش‌تر دو بار تکرار شده بود)
-const PERSONNEL_DETAIL_COLUMNS = {
-  id: personnel.id,
-  firstName: personnel.firstName,
-  lastName: personnel.lastName,
-  fullName: personnel.fullName,
-  personnelCode: personnel.personnelCode,
-  userId: personnel.userId,
-  username: users.username,
-  userFullName: users.fullName,
-  gender: personnel.gender,
-  birthDate: personnel.birthDate,
-  nationality: personnel.nationality,
-  nationalId: personnel.nationalId,
-  phone: personnel.phone,
-  employmentStatus: personnel.employmentStatus,
-  // V1.3.3 (باگ اصلی): بدون این دو فیلد، فرم پرسنل پس از ذخیره/رفرش به پیش‌فرض برمی‌گشت
-  salaryType: personnel.salaryType,
-  monthlySalary: personnel.monthlySalary,
-  jobTitle: personnel.jobTitle,
-  education: personnel.education,
-  startDate: personnel.startDate,
-  // v10.0.210 (TD-1087): «مشمول بیمه» و «مشمول مالیات حقوق»
-  isInsuranceCovered: personnel.isInsuranceCovered,
-  isTaxCovered: personnel.isTaxCovered,
-  isEidiCovered: personnel.isEidiCovered,
-  // v10.2 بستهٔ ۹: نمایش روز و ماه تولد به همکاران در پیشخوان
-  isBirthdayVisible: personnel.isBirthdayVisible,
-  endDate: personnel.endDate,
-  terminationReason: personnel.terminationReason,
-  specializedSkills: personnel.specializedSkills,
-  otherSkills: personnel.otherSkills,
-  referralSource: personnel.referralSource,
-  cardNumber: personnel.cardNumber,
-  accountNumber: personnel.accountNumber,
-  shebaNumber: personnel.shebaNumber,
-  bankName: personnel.bankName,
-  nobitexUsername: personnel.nobitexUsername,
-  nobitexPassword: personnel.nobitexPassword,
-  address: personnel.address,
-  notes: personnel.notes,
-  createdAt: personnel.createdAt,
-  updatedAt: personnel.updatedAt,
-  version: personnel.version
-};
 
 /**
  * v7.0.139 (TD-189): رمز نوبیتکس پرسنل در پایگاه‌داده رمزنگاری‌شده (AES-256-GCM، src/lib/secretBox.ts) است.
@@ -197,6 +156,11 @@ router.get('/personnel/export', authorizePermission('personnel.manage'), asyncHa
         jobTitle: personnel.jobTitle,
         education: personnel.education,
         startDate: personnel.startDate,
+        endDate: personnel.endDate,
+        terminationReason: personnel.terminationReason,
+        isInsuranceCovered: personnel.isInsuranceCovered,
+        isTaxCovered: personnel.isTaxCovered,
+        isEidiCovered: personnel.isEidiCovered,
         specializedSkills: personnel.specializedSkills,
         otherSkills: personnel.otherSkills,
         referralSource: personnel.referralSource,
@@ -224,6 +188,16 @@ router.get('/personnel/export', authorizePermission('personnel.manage'), asyncHa
       'جنسیت': p.gender || 'مرد',
       'تاریخ تولد': isoToJalaliDate(p.birthDate) || p.birthDate || '',
       'تاریخ آغاز همکاری': isoToJalaliDate(p.startDate) || p.startDate || '',
+      // OBS-R2-57 (TD-1321): the whole dossier. The import reads only «ملیت» of these (as stored, an empty cell unchanged), so a
+      // re-imported export changes nothing
+      'ملیت': p.nationality || '',
+      'تاریخ پایان همکاری': isoToJalaliDate(p.endDate) || p.endDate || '',
+      'علت قطع همکاری': p.terminationReason || '',
+      'نوع حقوق': SALARY_TYPE_LABELS[salaryTypeOf(p.salaryType)],
+      'حقوق ماهانه': p.monthlySalary == null ? 0 : fin(p.monthlySalary).toNumber(),
+      'مشمول بیمه': Number(p.isInsuranceCovered) === 1 ? 'بله' : 'خیر',
+      'مشمول مالیات حقوق': Number(p.isTaxCovered) === 1 ? 'بله' : 'خیر',
+      'مشمول عیدی': Number(p.isEidiCovered) === 1 ? 'بله' : 'خیر',
       'تحصیلات': p.education || '',
       'شماره شبا': p.shebaNumber || '',
       'شماره کارت': p.cardNumber || '',
@@ -455,30 +429,27 @@ router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), v
 }));
 
 // GET /api/personnel - List personnel
+// OBS-R2-57 / OBS-R1-69 (TD-1321): filtered in SQL; with `page` one page `{ data, total, page, limit, stats }`, without it the
+// array the pick lists read, capped by `limit` (at most PERSONNEL_PICK_REQUEST_LIMIT); `activeOnly=1` leaves out leavers
 router.get('/personnel', authorizePermission(...READ_PERMISSIONS.personnel), asyncHandler(async (req, res) => {
-  try {
-    const search = (req.query.search as string) || '';
-    const status = (req.query.status as string) || '';
-
-    const allPersonnel = await orm
-      .select(PERSONNEL_DETAIL_COLUMNS)
-      .from(personnel)
-      .leftJoin(users, eq(personnel.userId, users.id))
-      .where(eq(personnel.isDeleted, 0))
-      .orderBy(desc(personnel.id));
-
-    // v9.0.23 (TD-434): هر ردیف فقط با فیلدهای دامنه خواننده؛ رمز نوبیتکس هرگز در فهرست نیست و جست‌وجو فقط روی فیلدهای دیدنی است
-    const [canViewSensitive, scope] = await Promise.all([canAccessSensitivePersonnelData(req.user), personnelReadScope(req.user)]);
-    const sanitizedList = allPersonnel
-      .filter(p => !status || p.employmentStatus === status)
-      .map(p => scopePersonnelRow(withoutNobitexPassword(sanitizePersonnelRecord(p, canViewSensitive)), scope))
-      .filter(p => matchesPersonnelSearch(p, search));
-
-    res.json(sanitizedList);
-  } catch (err) {
-    logger.error({ message: 'Error fetching personnel', error: err });
-    throw err;
+  const [canViewSensitive, scope] = await Promise.all([canAccessSensitivePersonnelData(req.user), personnelReadScope(req.user)]);
+  const filter = {
+    search: typeof req.query.search === 'string' ? req.query.search : '',
+    status: typeof req.query.status === 'string' ? req.query.status : '',
+    activeOnly: req.query.activeOnly === '1',
+    scope, canViewSensitive,
+  };
+  // v9.0.23 (TD-434): هر ردیف فقط با فیلدهای دامنه خواننده؛ رمز نوبیتکس هرگز در فهرست نیست
+  const view = (rows: Awaited<ReturnType<typeof listPersonnelRows>>) =>
+    rows.map(p => scopePersonnelRow(withoutNobitexPassword(sanitizePersonnelRecord(p, canViewSensitive)), scope));
+  if (req.query.page !== undefined) {
+    const { page, limit, offset } = parsePagination(req.query, { limit: 15 });
+    const [rows, total, stats] = await Promise.all([
+      listPersonnelRows(filter, { limit, offset }), countPersonnelRows(filter), personnelListStats(),
+    ]);
+    return res.json({ data: view(rows), total, page, limit, stats });
   }
+  res.json(view(await listPersonnelRows(filter, { limit: parsePickListLimit(req.query.limit, PERSONNEL_PICK_REQUEST_LIMIT) })));
 }));
 
 // GET /api/personnel/:id - Single personnel detail
