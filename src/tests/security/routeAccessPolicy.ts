@@ -62,7 +62,7 @@ export const SYSTEM_ADMIN_ONLY_ROUTES = new Set([
   // v9.0.112 (TD-490، تصمیم ت۵ الف): فعال‌سازی دوباره انبار غیرفعال فقط با مدیر سیستم
   'POST /api/warehouses/:id/reactivate',
   // v9.0.427 (TD-589، تصمیم ت۵ الف): فهرست و ساختن دستی قیدهای شرطی جاافتاده مهاجرت‌ها
-  'GET /api/system/conditional-constraints', 'POST /api/system/conditional-constraints/build',
+  'GET /api/system/conditional-constraints', 'POST /api/system/conditional-constraints/build', 'POST /api/system/orphan-uploads',
   // v10.1.38 (messenger plan part 1, ت۱ الف): the staff bots' tokens and the list of linked users
   'GET /api/messenger/bots', 'PUT /api/messenger/bots/:messenger', 'GET /api/messenger/links',
 ]);
