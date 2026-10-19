@@ -11176,6 +11176,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // 10.2 package 11: lists read one page at a time from the server (TD-1321 …)
   const { runSpeedConsistencyV102Tests } = await import('../regression/speedConsistencyV102Tests.js');
   results.push(...await runSpeedConsistencyV102Tests(shouldRun));
+  const { runActivityLogSearchIndexTests } = await import('../regression/activityLogSearchIndexTests.js');
+  results.push(...await runActivityLogSearchIndexTests(shouldRun));
   // 10.2 package 12, item 3 (D6): schedule work in the progress matrix, the stage percents and the project status (TD-1340)
   const { runProjectWorkProgressTests } = await import('../regression/projectWorkProgressTests.js');
   results.push(...await runProjectWorkProgressTests(shouldRun));
