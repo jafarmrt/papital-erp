@@ -8,6 +8,8 @@ import {
   VOUCHER_DETAILED_TYPES, VOUCHER_DETAILED_TYPE_LABELS, voucherPersonnelName, voucherProjectLabel, type VoucherDetailedType,
 } from '../../lib/accounting/voucherDetailedTypes';
 import type { BankAccountOption } from '../../types';
+import { usePersonnelPickName } from '../../hooks/usePersonnelPickName';
+import { formatPersianCode } from '../../utils/persianNumber';
 
 /**
  * v9.0.193 (TD-569، B03-27): انتخاب تفصیلی ردیف سند دستی و سند اصلاحی با همان فهرست نوع‌های سرور: مشتری، تأمین‌کننده،
@@ -89,6 +91,16 @@ export function VoucherDetailedPicker({
     if (type === 'bank_account') return (banksQuery.data ?? []).map(b => ({ id: b.id, name: b.title, label: b.bankName ? `${b.title} (${b.bankName})` : b.title }));
     return [];
   })();
+  // TD-1321: a saved row whose record the list does not hold (beyond the personnel cap, or not offered) keeps it as its own
+  // option with the stored name, else the personnel's name read by id, never the empty placeholder that drops it when touched
+  const storedId = value.detailedId;
+  const storedName = String(value.detailedName ?? '').trim();
+  const storedMissing = typeof storedId === 'number' && storedId > 0 && !options.some(o => o.id === storedId);
+  const fetchedName = usePersonnelPickName(storedId, storedMissing && type === 'personnel' && !storedName);
+  if (storedMissing && storedId !== null && type !== 'none' && type !== 'other') {
+    const name = storedName || fetchedName || `${VOUCHER_DETAILED_TYPE_LABELS[type]} شماره ${formatPersianCode(storedId)}`;
+    options.unshift({ id: storedId, name: storedName || fetchedName, label: name });
+  }
 
   return (
     <div className="flex items-center gap-1">
