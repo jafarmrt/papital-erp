@@ -1,7 +1,8 @@
 import { desc, sql, eq, and, SQL } from 'drizzle-orm';
-import { orm } from '../../db/drizzle.js';
-import { activityLogs, users } from '../../db/schema.js';
+import { orm, raiseWorkMem, type DbExecutor } from '../../db/drizzle.js';
+import { activityLogs, activityLogSearchText, users } from '../../db/schema.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
+import { withoutNul } from '../../lib/search/searchText.js';
 import { getDisplayTimezone } from '../../lib/businessClock.js';
 import { serverTimestampToUtcIso, zonedDayRangeUtc } from '../../lib/serverTimestamp.js';
 
@@ -19,6 +20,31 @@ export interface ActivityLogFilters {
   search?: string;
   startDate?: string;
   endDate?: string;
+}
+
+/**
+ * TD-1324 review: the search text without NUL, which a text column cannot hold (PostgreSQL refused the query with a 500),
+ * and without the unit separator that joins the four columns of the search expression, so a typed separator never matches
+ * the end of one column and the start of the next. A search left empty is no search, like #338's outbox search.
+ */
+export function activityLogSearchTerm(search: unknown): string {
+  return withoutNul(String(search ?? '')).replace(/\x1f/g, '');
+}
+
+/**
+ * TD-1324 review: the work_mem of a page read with a search. The planner always takes the trigram index for the search; a
+ * phrase of common words matches most rows, and at the default 4 MB the bitmap turns lossy and rechecks millions of rows
+ * (2-3 times slower than the scan before the index at 3M rows); 64 MB keeps the bitmap exact (measured 5.8 s to 1.6 s and
+ * 6.9 s to 2.2 s).
+ */
+export const ACTIVITY_LOG_SEARCH_WORK_MEM_MB = 64;
+
+/** Runs a read in a transaction whose work_mem is ACTIVITY_LOG_SEARCH_WORK_MEM_MB; the pool's connections keep their own. */
+export function withActivityLogSearchMemory<T>(read: (db: DbExecutor) => Promise<T>): Promise<T> {
+  return orm.transaction(async (tx) => {
+    await raiseWorkMem(tx, ACTIVITY_LOG_SEARCH_WORK_MEM_MB);
+    return read(tx);
+  });
 }
 
 function buildActivityLogConditions(filters: ActivityLogFilters, dayRange: { from?: string; before?: string }): SQL[] {
@@ -62,10 +88,11 @@ function buildActivityLogConditions(filters: ActivityLogFilters, dayRange: { fro
   if (dayRange.before) {
     conditions.push(sql`${activityLogs.timestamp} < ${dayRange.before}`);
   }
-  if (search) {
-    conditions.push(
-      sql`(${activityLogs.description} ILIKE ${containsLikePattern(search)} OR ${activityLogs.userFullName} ILIKE ${containsLikePattern(search)} OR ${activityLogs.username} ILIKE ${containsLikePattern(search)} OR ${activityLogs.entity} ILIKE ${containsLikePattern(search)})`
-    );
+  // OBS-R1-32 (TD-1324): one ILIKE over the indexed expression (GIN trigram, migration 0132) instead of four that read
+  // the whole table; the unit separator between the columns keeps a match inside one column, as before
+  const searchTerm = activityLogSearchTerm(search);
+  if (searchTerm) {
+    conditions.push(sql`(${activityLogSearchText(activityLogs)}) ILIKE ${containsLikePattern(searchTerm)}`);
   }
 
   return conditions;
@@ -80,30 +107,34 @@ export class ActivityLogQueryService {
     const conditions = buildActivityLogConditions(filters, dayRange);
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-    const logs = await orm.select({
-      log: activityLogs,
-      resolvedFullName: users.fullName
-    })
-      .from(activityLogs)
-      .leftJoin(users, eq(users.username, activityLogs.username))
-      .where(whereClause)
-      .orderBy(desc(activityLogs.id))
-      .limit(limit)
-      .offset(offset);
+    const readPage = async (db: DbExecutor) => {
+      const logs = await db.select({
+        log: activityLogs,
+        resolvedFullName: users.fullName
+      })
+        .from(activityLogs)
+        .leftJoin(users, eq(users.username, activityLogs.username))
+        .where(whereClause)
+        .orderBy(desc(activityLogs.id))
+        .limit(limit)
+        .offset(offset);
 
-    // یک موجودیت هویت کاربر: نام کامل ثبت‌شده > نام کامل از جدول users > username
-    // v8.0.53 (TD-315): زمان ثبت UTC است و با Z برمی‌گردد تا مرورگر آن را به وقت منطقه توافقی نشان دهد
-    const data = logs.map(({ log: l, resolvedFullName }) => ({
-      ...l,
-      timestamp: serverTimestampToUtcIso(l.timestamp),
-      userFullName: l.userFullName || resolvedFullName || l.username
-    }));
+      // یک موجودیت هویت کاربر: نام کامل ثبت‌شده > نام کامل از جدول users > username
+      // v8.0.53 (TD-315): زمان ثبت UTC است و با Z برمی‌گردد تا مرورگر آن را به وقت منطقه توافقی نشان دهد
+      const data = logs.map(({ log: l, resolvedFullName }) => ({
+        ...l,
+        timestamp: serverTimestampToUtcIso(l.timestamp),
+        userFullName: l.userFullName || resolvedFullName || l.username
+      }));
 
-    const [{ count }] = await orm.select({ count: sql<number>`count(*)` })
-      .from(activityLogs)
-      .where(whereClause);
+      const [{ count }] = await db.select({ count: sql<number>`count(*)` })
+        .from(activityLogs)
+        .where(whereClause);
 
-    return { data, count };
+      return { data, count };
+    };
+
+    return activityLogSearchTerm(filters.search) ? withActivityLogSearchMemory(readPage) : readPage(orm);
   }
 
   /**

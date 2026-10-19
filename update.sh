@@ -22,7 +22,7 @@
 set -euo pipefail
 
 ORIG_ARGS=("$@")
-# v10.2.22 (OBS-R1-22): set when this script runs again as the version the pull or sync just brought in
+# v10.2.23 (OBS-R1-22): set when this script runs again as the version the pull or sync just brought in
 UPDATE_RESUME="${UPDATE_RESUME:-}"
 if [ -n "$UPDATE_RESUME" ]; then
   # stdout already goes to the log of the first run
@@ -86,21 +86,21 @@ for key in BACKUP_DIR PRE_DEPLOY_RETENTION_DAYS RESTORE_ADMIN_URL; do
   fi
 done
 UPDATE_STARTED="${UPDATE_RESUME_STARTED:-$(date '+%Y-%m-%d %H:%M:%S')}"
-# v10.2.22 (OBS-R1-22 / OBS-R1-17): the side-folder build and the manual source sync
+# v10.2.23 (OBS-R1-22 / OBS-R1-17): the side-folder build and the manual source sync
 [ -f scripts/update-steps.sh ] || die "scripts/update-steps.sh not found in $APP_DIR"
 # shellcheck source=scripts/update-steps.sh
 source scripts/update-steps.sh
 BUILD_DIR=""
 BUILD_SWAPPED=0
 
-# v10.2.22 (OBS-R1-22): one update at a time; two runs would each wipe the other's side folder. The lock is held by
+# v10.2.23 (OBS-R1-22): one update at a time; two runs would each wipe the other's side folder. The lock is held by
 # file descriptor 9 until the process ends, the run of the new update.sh included (it inherits it).
 if [ -z "$UPDATE_RESUME" ]; then
   command -v flock >/dev/null 2>&1 || die "flock is required (apt-get install -y util-linux)."
   exec 9>"$APP_DIR/$UPDATE_LOCK_NAME"
   flock -n 9 || die "Another update is already running in ${APP_DIR} (lock file ${UPDATE_LOCK_NAME}). Nothing was changed; wait for it to finish."
 fi
-# v10.2.22 (OBS-R1-22): an earlier update stopped in the middle of the build swap (killed, power loss)
+# v10.2.23 (OBS-R1-22): an earlier update stopped in the middle of the build swap (killed, power loss)
 if [ -e "$APP_DIR/$UPDATE_SWAP_MARKER_NAME" ]; then
   die "An earlier update stopped while swapping the build in: dist/ or node_modules/ may be missing. Nothing was changed. Repair it first: cd ${APP_DIR} && $(update_restore_build_command) ; then start the service and run the update again."
 fi
@@ -108,7 +108,7 @@ fi
 # v9.0.123 (TD-586): from the moment the source changes, any failure prints the rollback steps
 SOURCE_CHANGED=0
 HINT_SHOWN=0
-# v10.2.22 (OBS-R1-22): the build in place is the running one until the swap, so only the source goes back before it
+# v10.2.23 (OBS-R1-22): the build in place is the running one until the swap, so only the source goes back before it
 previous_source_step() {
   if [ "$UPDATE_MODE" = "git" ] && [ -n "$PREVIOUS_COMMIT" ]; then
     # v9.0.181 (TD-603): reset the branch itself; a checkout of the commit detaches HEAD and the next git pull fails
@@ -155,7 +155,7 @@ on_exit() {
 }
 trap on_exit EXIT
 
-# v10.2.22 (OBS-R1-22): npm failed because the disk is full; retrying would only fill the log
+# v10.2.23 (OBS-R1-22): npm failed because the disk is full; retrying would only fill the log
 disk_full_in_log() {
   tail -n 400 "$LOG_FILE" 2>/dev/null | grep -qE 'ENOSPC|[Nn]o space left on device'
 }
@@ -198,7 +198,7 @@ else
     [ -d "$SOURCE_DIR" ] || die "Source directory not found: $SOURCE_DIR"
     [ -f "$SOURCE_DIR/package.json" ] && [ -f "$SOURCE_DIR/server.ts" ] \
       || die "Source directory does not look like an application source tree (missing package.json/server.ts)."
-    # v10.2.22 (OBS-R1-17): refused before anything is touched
+    # v10.2.23 (OBS-R1-17): refused before anything is touched
     update_assert_source_outside "$SOURCE_DIR" "$APP_DIR" || die "Nothing was changed."
     UPDATE_MODE="manual"
     log "Update mode: MANUAL (source directory: $SOURCE_DIR)"
@@ -224,7 +224,7 @@ elif [[ "$KEY_STEP" == *"WARN:"* ]]; then
   warn "ERP_SECRETS_KEY is empty in .env and was left as it is; new secrets are refused until it is set."
 fi
 
-# v10.2.22 (OBS-R1-22): the side build needs room next to the running one, and the backup and the rehearsal need
+# v10.2.23 (OBS-R1-22): the side build needs room next to the running one, and the backup and the rehearsal need
 # theirs; stop before the backup, the source or the build is touched when a disk cannot hold them
 command -v rsync >/dev/null 2>&1 || die "rsync is required to build the update in a side folder (apt-get install -y rsync)."
 if [ -z "$UPDATE_RESUME" ]; then
@@ -251,7 +251,7 @@ if [ -z "$UPDATE_RESUME" ]; then
   fi
 
   # ---------- 2) Update source ----------
-  # v10.2.22 (OBS-R1-22): bash keeps reading this file as it was when it started; if the new source brings another
+  # v10.2.23 (OBS-R1-22): bash keeps reading this file as it was when it started; if the new source brings another
   # update.sh or update-steps.sh, the rest of the update runs with the new ones
   STEPS_SUM_BEFORE="$(cat update.sh scripts/update-steps.sh 2>/dev/null | sha256sum)"
   if [ "$UPDATE_MODE" = "git" ]; then
@@ -268,7 +268,7 @@ if [ -z "$UPDATE_RESUME" ]; then
     SOURCE_CHANGED=1
   else
     log "[2/6] Syncing source from $SOURCE_DIR (state-preserving rsync)..."
-    # v10.2.22 (OBS-R1-17): the current source is kept for a rollback, then the new one replaces it with --delete, so
+    # v10.2.23 (OBS-R1-17): the current source is kept for a rollback, then the new one replaces it with --delete, so
     # files the new version does not have are removed, also files that were never part of a release; live state
     # (.env, git history, logs, uploads, media library, backups, db data, node_modules, dist, installer logs and the
     # folders .env names) is excluded, neither copied nor deleted
@@ -312,7 +312,7 @@ if [ "$UPDATE_MODE" = "git" ]; then BUILD_SOURCE="$BUILD_COMMIT"; else BUILD_SOU
 BUILD_DIR="$(update_prepare_build_dir "$APP_DIR")" || die "Could not prepare the side folder ${UPDATE_BUILD_DIR_NAME}/."
 SOURCE_FINGERPRINT="$(update_source_fingerprint "$BUILD_DIR")"
 SKIP_BUILD=0
-# v10.2.22 (OBS-R1-22): a run with nothing new keeps dist.prev/ as the rollback target instead of replacing it with a
+# v10.2.23 (OBS-R1-22): a run with nothing new keeps dist.prev/ as the rollback target instead of replacing it with a
 # second copy of the running build
 if [ "$REBUILD" -eq 0 ] && [ "$(update_dist_fingerprint "$APP_DIR/dist")" = "$SOURCE_FINGERPRINT" ]; then
   SKIP_BUILD=1
@@ -421,7 +421,7 @@ log "$STARTUP_OUTPUT"
 if [ "$RESTART_OK" -ne 1 ]; then
   die "Startup verified BUT no managed service was restarted — the running process may still be an old build. Register a systemd/pm2 service and re-run."
 fi
-# v10.2.22 (OBS-R1-17): a git update keeps no copy of the source of an earlier manual update; git history replaces it
+# v10.2.23 (OBS-R1-17): a git update keeps no copy of the source of an earlier manual update; git history replaces it
 if [ "$UPDATE_MODE" = "git" ] && [ -d "$APP_DIR/$UPDATE_PREVIOUS_SOURCE_NAME" ]; then
   rm -rf "${APP_DIR:?}/${UPDATE_PREVIOUS_SOURCE_NAME:?}" && success "Removed ${UPDATE_PREVIOUS_SOURCE_NAME}/ of an earlier manual update (git history holds the previous source)."
 fi

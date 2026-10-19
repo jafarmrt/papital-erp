@@ -13,7 +13,7 @@ import { money } from '../../lib/money.js';
 type ShouldRun = (id: string, ...extra: string[]) => boolean;
 type Row = Record<string, unknown>;
 
-async function runCase(results: TestCaseResult[], id: string, name: string, details: string, body: (wrong: string[]) => Promise<void>) {
+export async function runCase(results: TestCaseResult[], id: string, name: string, details: string, body: (wrong: string[]) => Promise<void>) {
   const tStart = Date.now();
   const wrong: string[] = [];
   try {

@@ -25,7 +25,7 @@ playwright-report/
 # v10.0.21 (N-05): media library files (MEDIA_DIR default)
 /media-library/
 
-# v10.2.22 (OBS-R1-22 / OBS-R1-17): the side-folder build of update.sh and what it keeps for a rollback
+# v10.2.23 (OBS-R1-22 / OBS-R1-17): the side-folder build of update.sh and what it keeps for a rollback
 /.build-next/
 /.previous-source/
 /dist.prev/
