@@ -29,7 +29,8 @@ if [ -n "$UPDATE_RESUME" ]; then
   LOG_FILE="${UPDATE_RESUME_LOG:?}"
 else
   LOG_FILE="$PWD/update-$(date +%Y%m%d-%H%M%S).log"
-  exec > >(tee -a "$LOG_FILE") 2>&1
+  # tee ignores HUP: a dropped SSH session must not kill the log writer, or the next log line would end the update
+  exec > >(trap '' HUP; exec tee -a "$LOG_FILE") 2>&1
 fi
 
 APP_DIR="${APP_DIR:-/opt/papital-erp}"
@@ -286,7 +287,9 @@ if [ -z "$UPDATE_RESUME" ]; then
     fi
     success "Source synced."
   fi
-  if [ "$(cat update.sh scripts/update-steps.sh 2>/dev/null | sha256sum)" != "$STEPS_SUM_BEFORE" ] && [ -f scripts/update-steps.sh ]; then
+  # only a new update.sh that knows how to continue (UPDATE_RESUME) is run again
+  if [ "$(cat update.sh scripts/update-steps.sh 2>/dev/null | sha256sum)" != "$STEPS_SUM_BEFORE" ] && [ -f scripts/update-steps.sh ] \
+    && grep -q UPDATE_RESUME update.sh; then
     log "The new version brings another update.sh; continuing with it."
     exec env UPDATE_RESUME=1 UPDATE_RESUME_LOG="$LOG_FILE" UPDATE_RESUME_MODE="$UPDATE_MODE" \
       UPDATE_RESUME_PREVIOUS_COMMIT="$PREVIOUS_COMMIT" UPDATE_RESUME_DUMP="$PRE_DEPLOY_DUMP" \
@@ -295,7 +298,7 @@ if [ -z "$UPDATE_RESUME" ]; then
 fi
 
 # the backup and the source are written now: check again what the build and the rehearsal still need
-update_space_check "$APP_DIR" git 0 "$REHEARSE" || die "$UPDATE_SPACE_MESSAGE"
+update_space_check "$APP_DIR" git 0 "$REHEARSE" 1 || die "$UPDATE_SPACE_MESSAGE"
 
 # ---------- 3) Install & build in a side folder ----------
 # v10.2.19 (OBS-R1-22): npm ci and the build used to run in place: npm ci replaced node_modules under the running
@@ -314,7 +317,7 @@ SKIP_BUILD=0
 if [ "$REBUILD" -eq 0 ] && [ "$(update_dist_fingerprint "$APP_DIR/dist")" = "$SOURCE_FINGERPRINT" ]; then
   SKIP_BUILD=1
   log "dist/ is already built from this source ($(update_dist_commit "$APP_DIR/dist")): nothing to build or swap (--rebuild builds it again)."
-  log "dist.prev/ still holds the build of $(update_dist_commit "$APP_DIR/dist.prev")."
+  if [ -d "$APP_DIR/dist.prev" ]; then log "dist.prev/ still holds the build of $(update_dist_commit "$APP_DIR/dist.prev")."; fi
 fi
 
 if [ "$SKIP_BUILD" -eq 0 ]; then
@@ -364,7 +367,11 @@ if [ "$SKIP_BUILD" -eq 0 ]; then
   log "[4c/6] Swapping the new build in (the previous one stays as dist.prev/ and node_modules.prev/)..."
   update_swap_build "$APP_DIR" || die "Could not swap the new build in."
   BUILD_SWAPPED=1
-  success "New build in place. dist.prev/ holds the previous build, of $(update_dist_commit "$APP_DIR/dist.prev")."
+  if [ -d "$APP_DIR/dist.prev" ]; then
+    success "New build in place. dist.prev/ holds the previous build, of $(update_dist_commit "$APP_DIR/dist.prev")."
+  else
+    success "New build in place (there was no previous build to keep)."
+  fi
 fi
 cd "$APP_DIR"
 

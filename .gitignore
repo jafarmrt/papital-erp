@@ -30,3 +30,5 @@ playwright-report/
 /.previous-source/
 /dist.prev/
 /node_modules.prev
+/.update.lock
+/.update-swapping

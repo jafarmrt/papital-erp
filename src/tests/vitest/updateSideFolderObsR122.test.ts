@@ -34,6 +34,9 @@ const VERIFY_STUB = '[ -z "${STUB_STARTUP_FAILS:-}" ] || { echo "startup failed"
 /** A stub `mv` that fails on its STUB_MV_FAIL_AT-th call (the swap is the only place the update runs mv) */
 const MV_STUB = `#!/usr/bin/env bash
 n=$(( $(cat "$STUB_MV_COUNT" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$STUB_MV_COUNT"
+m=0; [ ! -e "$STUB_APP_DIR/.update-swapping" ] || m=1
+o=0; [ ! -e "$STUB_APP_DIR/.build-next/.old-dist" ] && [ ! -e "$STUB_APP_DIR/.build-next/.old-node_modules" ] || o=1
+echo "$n marker=$m old=$o $*" >> "$STUB_MV_COUNT.log"
 [ "$n" != "\${STUB_MV_FAIL_AT:-}" ] || exit 1
 exec /bin/mv "$@"
 `;
@@ -308,5 +311,86 @@ describe('update_free_space_preflight_obs_r1_22', () => {
     write(path.join(s.app, '.build-next/stale.bin'), 'x'.repeat(3 * 1024 * 1024));
     const [, counted, diskFree] = probe('1');
     expect(counted - diskFree).toBeGreaterThanOrEqual(3 * 1024);
+  });
+});
+
+describe('update_swap_old_prev_before_marker_obs_r1_22', () => {
+  it('removes the older .prev folders before the swap marker exists, so a kill there leaves nothing for the repair to move in', () => {
+    const s = scratch();
+    expect(runUpdate(s).status).toBe(0);
+    rmSync(path.join(dir, 'mv.count.log'), { force: true });
+    const again = runUpdate(s, {}, ['--rebuild']);
+    expect(again.status, again.stdout + again.stderr).toBe(0);
+    const calls = read(path.join(dir, 'mv.count.log')).trim().split('\n');
+    const aside = calls.filter(c => /\.build-next\/\.old-/.test(c));
+    expect(aside.length).toBe(2);
+    for (const c of aside) expect(c).toContain('marker=0');
+    // every rename made under the marker happens after the older build is gone
+    for (const c of calls.filter(c => c.includes('marker=1'))) expect(c).toContain('old=0');
+    expect(existsSync(path.join(s.app, '.build-next/.old-dist'))).toBe(false);
+
+    // a kill while the older build is set aside: no marker, the running build and its rollback stay whole
+    const s2 = s;
+    const cut = runUpdate(s2, { STUB_MV_FAIL_AT: '2' }, ['--rebuild']);
+    expect(cut.status).not.toBe(0);
+    expect(existsSync(path.join(s2.app, '.update-swapping'))).toBe(false);
+    expect(read(path.join(s2.app, 'dist/version.txt'))).toBe('new\n');
+    expect(read(path.join(s2.app, 'node_modules.prev/marker'))).toBe('new\n');
+  });
+});
+
+describe('update_rehearsal_space_reads_database_obs_r1_22', () => {
+  it('reads the database size with the URL in the environment, never on a command line, and falls back to the newest dump', () => {
+    const s = scratch();
+    write(path.join(s.bin, 'node'), '#!/usr/bin/env bash\necho "$*" >> "$STUB_NODE_ARGS"\n[ -n "$UPDATE_DB_URL" ] && [ -z "$STUB_NODE_FAILS" ] && echo 17301504 || exit 1\n');
+    chmodSync(path.join(s.bin, 'node'), 0o755);
+    const args = path.join(dir, 'node.args');
+    const url = 'postgresql://erp:S3cret-pw@localhost:5432/erp';
+    const backups = path.join(dir, 'backups');
+    const need = (fails: string) => Number(execFileSync('bash', ['-c', 'source scripts/update-steps.sh; update_rehearsal_need_kb "$1" "$2" "$3"', 'x', s.app, url, backups], {
+      cwd: s.app, encoding: 'utf8', env: { ...process.env, PATH: `${s.bin}:${process.env.PATH}`, STUB_NODE_ARGS: args, STUB_NODE_FAILS: fails },
+    }).trim());
+    expect(need('')).toBe(Math.floor(17301504 * 2 / 1024));
+    expect(read(args)).not.toContain('S3cret-pw');
+    expect(need('1')).toBe(0);
+    write(path.join(backups, 'erp_pre-deployment_20261018_010000.dump.gz'), 'x'.repeat(1024 * 1024));
+    expect(need('1')).toBe(1024 * 1024 * 10 * 2 / 1024);
+  });
+});
+
+describe('update_followups_obs_r1_22', () => {
+  it('keeps the log writer alive when the SSH session drops', () => {
+    expect(read(path.join(ROOT, 'update.sh'))).toContain(`exec > >(trap '' HUP; exec tee -a "$LOG_FILE") 2>&1`);
+  });
+
+  it('the check after the source step says the backup and source are done and the running build is untouched', () => {
+    const s = scratch();
+    const msg = execFileSync('bash', ['-c', 'source scripts/update-steps.sh; UPDATE_SPACE_MARGIN_MB=999999999 update_space_check "$1" git 0 0 1 || echo "$UPDATE_SPACE_MESSAGE"', 'x', s.app], { cwd: s.app, encoding: 'utf8' });
+    expect(msg).toContain('the running build and the service are untouched');
+    expect(msg).not.toContain('Nothing was changed');
+  });
+
+  it('names the commit of a build made before v10.2.21 from its build-info.json and says nothing of a missing dist.prev', () => {
+    const s = scratch();
+    write(path.join(s.app, 'dist/build-info.json'), '{"version":"1.0.0","commit":"f6daa01d","builtAt":"2026-10-18"}');
+    const commit = execFileSync('bash', ['-c', 'source scripts/update-steps.sh; update_dist_commit "$1/dist"', 'x', s.app], { cwd: s.app, encoding: 'utf8' }).trim();
+    expect(commit).toBe('f6daa01d');
+    const run = runUpdate(s);
+    expect(run.status, run.stdout + run.stderr).toBe(0);
+    expect(run.stdout).toContain('dist.prev/ holds the previous build, of f6daa01d');
+    rmSync(path.join(s.app, 'dist.prev'), { recursive: true });
+    const again = runUpdate(s);
+    expect(again.stdout).toContain('dist/ is already built from this source');
+    expect(again.stdout).not.toContain('dist.prev/ still holds');
+  });
+
+  it('runs a new update.sh again only when it knows how to continue', () => {
+    const s = scratch();
+    write(path.join(s.src, 'update.sh'), '#!/usr/bin/env bash\necho "an update.sh without the resume step"\n');
+    const run = runUpdate(s);
+    expect(run.status, run.stdout + run.stderr).toBe(0);
+    expect(run.stdout).not.toContain('continuing with it');
+    expect(run.stdout).not.toContain('an update.sh without the resume step');
+    expect(read(path.join(s.app, 'dist/version.txt'))).toBe('new\n');
   });
 });

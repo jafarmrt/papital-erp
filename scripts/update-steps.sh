@@ -102,10 +102,25 @@ update_backup_need_kb() {
   fi
 }
 
-# KB the upgrade rehearsal restores: twice the live database (the URL goes in the environment, never on the command line)
+# KB the upgrade rehearsal restores: twice the live database. The size is read with the application's own pg driver
+# from <app-dir>, the URL passed in the environment (never on a command line; psql does not read a URL from
+# PGDATABASE). When it cannot be read, ten times the newest pre-deployment dump stands in for it (a gzip dump is
+# smaller than the database), else 0.
 update_rehearsal_need_kb() {
-  local url="$1" bytes
-  bytes="$(PGDATABASE="$url" psql -X -tA -c 'SELECT pg_database_size(current_database())' 2>/dev/null | tr -dc '0-9' || true)"
+  local app_dir="$1" url="$2" backup_dir="${3:-${BACKUP_DIR:-/var/backups/erp}}" bytes="" newest
+  if [ -n "$url" ]; then
+    bytes="$(cd "$app_dir" && UPDATE_DB_URL="$url" timeout 30 node -e '
+      const { Client } = require("pg");
+      const c = new Client({ connectionString: process.env.UPDATE_DB_URL });
+      c.connect()
+        .then(() => c.query("SELECT pg_database_size(current_database())::text AS b"))
+        .then((r) => { process.stdout.write(String(r.rows[0].b)); return c.end(); })
+        .catch(() => process.exit(1));' 2>/dev/null | tr -dc '0-9' || true)"
+  fi
+  if [ -z "$bytes" ]; then
+    newest="$(ls -t "$backup_dir"/erp_pre-deployment_*.dump.gz 2>/dev/null | head -1 || true)"
+    if [ -n "$newest" ]; then bytes=$(( $(update_size_kb "$newest") * 1024 * 10 )); fi
+  fi
   echo $(( ${bytes:-0} * 2 / 1024 ))
 }
 
@@ -114,9 +129,14 @@ update_rehearsal_need_kb() {
 # there is none), a manual update keeps one more copy of the source, and UPDATE_SPACE_MARGIN_MB (default 1024) covers
 # the npm cache and growth; a stale side folder is removed first, so it counts as free. With <backup>=1 the
 # pre-deployment backup is counted on its own disk (BACKUP_DIR, default /var/backups/erp; added to the need when it
-# is the same disk), and with <rehearse>=1 twice the database. Sets UPDATE_SPACE_MESSAGE and returns 1 when short.
+# is the same disk), and with <rehearse>=1 twice the database. With <after-source>=1 (the check after the backup and the
+# pull or sync) the message says those are done. Sets UPDATE_SPACE_MESSAGE and returns 1 when short.
 update_space_check() {
-  local app_dir="$1" mode="$2" backup="${3:-0}" rehearse="${4:-0}"
+  local app_dir="$1" mode="$2" backup="${3:-0}" rehearse="${4:-0}" after_source="${5:-0}"
+  local done_text="Nothing was changed"
+  if [ "$after_source" = "1" ]; then
+    done_text="The backup (when taken) and the new source are in place; the running build and the service are untouched"
+  fi
   local source_kb modules_kb dist_kb need free backup_dir backup_kb backup_free
   UPDATE_SPACE_MESSAGE=""
   update_state_excludes "$app_dir"
@@ -130,7 +150,7 @@ update_space_check() {
   if [ "$mode" = "manual" ]; then need=$(( need + source_kb )); fi
   free=$(( $(update_disk_free_kb "$app_dir") + $(update_size_kb "$app_dir/$UPDATE_BUILD_DIR_NAME") ))
   if [ "$rehearse" = "1" ]; then
-    need=$(( need + $(update_rehearsal_need_kb "$(update_env_value "$app_dir" DATABASE_URL)") ))
+    need=$(( need + $(update_rehearsal_need_kb "$app_dir" "$(update_env_value "$app_dir" DATABASE_URL)") ))
   fi
   if [ "$backup" = "1" ]; then
     backup_dir="${BACKUP_DIR:-/var/backups/erp}"
@@ -140,7 +160,7 @@ update_space_check() {
     else
       backup_free="$(update_disk_free_kb "$backup_dir")"
       if [ "$backup_free" -lt "$backup_kb" ]; then
-        UPDATE_SPACE_MESSAGE="Not enough free disk space for the pre-deployment backup: it needs about $(( backup_kb / 1024 )) MB in ${backup_dir} (disk mounted at $(update_disk_mount "$backup_dir")), $(( backup_free / 1024 )) MB is free. Nothing was changed; free $(( (backup_kb - backup_free) / 1024 + 1 )) MB more on that disk (old backups) and run the update again."
+        UPDATE_SPACE_MESSAGE="Not enough free disk space for the pre-deployment backup: it needs about $(( backup_kb / 1024 )) MB in ${backup_dir} (disk mounted at $(update_disk_mount "$backup_dir")), $(( backup_free / 1024 )) MB is free. ${done_text}; free $(( (backup_kb - backup_free) / 1024 + 1 )) MB more on that disk (old backups) and run the update again."
         return 1
       fi
     fi
@@ -148,7 +168,7 @@ update_space_check() {
   UPDATE_SPACE_NEED_KB="$need"
   UPDATE_SPACE_FREE_KB="$free"
   if [ "$free" -lt "$need" ]; then
-    UPDATE_SPACE_MESSAGE="Not enough free disk space for the update: it needs about $(( need / 1024 )) MB on the disk of ${app_dir} (mounted at $(update_disk_mount "$app_dir")), $(( free / 1024 )) MB is free. Nothing was changed; free $(( (need - free) / 1024 + 1 )) MB more on that disk (old backups, logs) and run the update again."
+    UPDATE_SPACE_MESSAGE="Not enough free disk space for the update: it needs about $(( need / 1024 )) MB on the disk of ${app_dir} (mounted at $(update_disk_mount "$app_dir")), $(( free / 1024 )) MB is free. ${done_text}; free $(( (need - free) / 1024 + 1 )) MB more on that disk (old backups, logs) and run the update again."
     return 1
   fi
 }
@@ -214,31 +234,42 @@ update_prepare_build_dir() {
   echo "$build_dir"
 }
 
-# A fingerprint of the source in <dir> (the side folder before the install: its files, the env links left out)
+# A fingerprint of the source in <dir> (the side folder before the install: its files, the env links left out). The
+# .env and .env.* files are not part of it: a build reads no VITE_ variable today, so a changed .env needs no rebuild;
+# if one ever does, run the update with --rebuild after changing it.
 update_source_fingerprint() {
   (cd "$1" && find . -path ./node_modules -prune -o -path ./dist -prune -o -type f -print0 | LC_ALL=C sort -z \
     | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)
 }
 
-# The fingerprint and the commit a built dist/ records
+# The fingerprint and the commit a built dist/ records (a build before v10.2.21: the commit of its build-info.json)
 update_dist_fingerprint() { cat "$1/$UPDATE_FINGERPRINT_NAME" 2>/dev/null || true; }
 update_dist_commit() {
   local commit
   commit="$(cat "$1/$UPDATE_COMMIT_NAME" 2>/dev/null || true)"
-  echo "${commit:-unknown (built before v10.2.21)}"
+  if [ -z "$commit" ] && [ -f "$1/build-info.json" ]; then
+    commit="$(sed -n 's/.*"commit"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$1/build-info.json" | head -1)"
+  fi
+  echo "${commit:-unknown}"
 }
 
 # OBS-R1-22: moves the built dist/ and node_modules/ of the side folder into <app-dir>, keeping the running ones as
-# dist.prev/ and node_modules.prev/; a lock file the install regenerated goes back to <app-dir>. HUP, INT and TERM
-# (a dropped SSH session) are ignored while the renames run, and a marker file stays until they all succeeded, so a
-# swap cut short (a kill, a power loss) is found by the next run and repaired by update_restore_build_command.
+# dist.prev/ and node_modules.prev/; a lock file the install regenerated goes back to <app-dir>. The older .prev
+# folders are first renamed into the side folder (one atomic rename each) and deleted there, before the marker is
+# written, so a kill during that slow delete never leaves a half-deleted .prev for the repair to move in, and the
+# repair never brings back a build older than the running one. HUP, INT and TERM (a dropped SSH session) are ignored
+# while the renames run, and the marker stays until they all succeeded, so a swap cut short (a kill, a power loss) is
+# found by the next run and repaired by update_restore_build_command.
 update_swap_build() {
   local app_dir="$1" build_dir="$1/$UPDATE_BUILD_DIR_NAME" rc=0
   [ -f "$build_dir/dist/server.cjs" ] && [ -d "$build_dir/node_modules" ] \
     || { echo "The side folder holds no complete build: $build_dir" >&2; return 1; }
   trap '' HUP INT TERM
-  { : > "${app_dir:?}/${UPDATE_SWAP_MARKER_NAME:?}" \
-    && rm -rf "${app_dir:?}/dist.prev" "${app_dir:?}/node_modules.prev" \
+  { rm -rf "${build_dir:?}/.old-dist" "${build_dir:?}/.old-node_modules" \
+    && { [ ! -e "$app_dir/dist.prev" ] || mv "$app_dir/dist.prev" "$build_dir/.old-dist"; } \
+    && { { [ ! -e "$app_dir/node_modules.prev" ] && [ ! -L "$app_dir/node_modules.prev" ]; } || mv "$app_dir/node_modules.prev" "$build_dir/.old-node_modules"; } \
+    && rm -rf "${build_dir:?}/.old-dist" "${build_dir:?}/.old-node_modules" \
+    && : > "${app_dir:?}/${UPDATE_SWAP_MARKER_NAME:?}" \
     && { [ ! -e "$app_dir/dist" ] || mv "$app_dir/dist" "$app_dir/dist.prev"; } \
     && { { [ ! -e "$app_dir/node_modules" ] && [ ! -L "$app_dir/node_modules" ]; } || mv "$app_dir/node_modules" "$app_dir/node_modules.prev"; } \
     && mv "$build_dir/dist" "$app_dir/dist" \
