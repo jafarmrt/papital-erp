@@ -200,7 +200,8 @@ export async function removedProductAndDeadlinesCase(h: Harness, wrong: string[]
     await h.q(`DELETE FROM wc_sync_runs`);
     await h.q(`INSERT INTO wc_product_links (item_id, wc_product_id, wc_variation_id, site_sku) VALUES ($1, 10, 0, $2), ($3, 30, 31, $4)`,
       [kept.id, kept.code, gone.id, gone.code]);
-    store.delayMs = 300;
+    // part B: the open orders are read first and answer at once; only the batch requests are held past the deadline
+    store.hold = { pattern: /\/batch$/, until: new Promise<void>(resolve => { setTimeout(resolve, 300); }) };
     const postsBefore = store.requests.filter(r => r.startsWith('POST')).length;
     const late = await pushStocksLocked({}, { trigger: 'all', deadlineMs: 100 });
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -209,7 +210,7 @@ export async function removedProductAndDeadlinesCase(h: Harness, wrong: string[]
     if (posts > 1) wrong.push(`${posts} batches were sent after the push deadline`);
     const runs = await h.q(`SELECT status FROM wc_sync_runs WHERE kind = 'stock_push'`);
     if (runs.length !== 1 || runs[0].status !== 'failed') wrong.push(`runs after the push deadline: ${JSON.stringify(runs)}`);
-    store.delayMs = 0;
+    store.hold = undefined;
     return 'removal, failed reader and push deadline';
   });
 }

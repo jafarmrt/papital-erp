@@ -69,6 +69,28 @@ export async function makeWcRequest(
   params: Record<string, unknown> = {},
   options: WcRequestOptions = {}
 ): Promise<unknown> {
+  return (await sendWcRequest(method, urlPath, storeUrl, key, secret, data, params, options)).data;
+}
+
+/** A list answer's `X-WP-Total` (the rows of every page), or null when the shop sent none */
+function totalHeader(headers: unknown): number | null {
+  const raw = (headers as Record<string, unknown> | undefined)?.['x-wp-total'];
+  const total = Number(Array.isArray(raw) ? raw[0] : raw);
+  return raw !== undefined && raw !== null && raw !== '' && Number.isInteger(total) && total >= 0 ? total : null;
+}
+
+export interface WcAnswer { data: unknown; total: number | null }
+
+async function sendWcRequest(
+  method: 'GET' | 'POST' | 'PUT',
+  urlPath: string,
+  storeUrl: string,
+  key: string,
+  secret: string,
+  data: unknown,
+  params: Record<string, unknown>,
+  options: WcRequestOptions,
+): Promise<WcAnswer> {
   let formattedUrl = storeUrl.trim();
   if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
     formattedUrl = 'https://' + formattedUrl;
@@ -116,7 +138,10 @@ export async function makeWcRequest(
           validateStatus: (status) => status >= 200 && status < 400
         });
         const location = response.headers?.location;
-        return { status: response.status, location: location ? String(location) : undefined, data: response.data };
+        return {
+          status: response.status, location: location ? String(location) : undefined,
+          data: { data: response.data, total: totalHeader(response.headers) },
+        };
       },
       (url) => assertSafeExternalUrl(url, { allowLocalEcho: false })
     );
@@ -165,4 +190,11 @@ export function wcRequest(
   options: WcRequestOptions = {},
 ): Promise<unknown> {
   return makeWcRequest(method, urlPath, conn.url, conn.consumerKey, conn.consumerSecret, data, params, options);
+}
+
+/** A list request with the stored connection: the body and the list's `X-WP-Total` (review M-5) */
+export function wcListRequest(
+  conn: WcConnection, urlPath: string, params: Record<string, unknown> = {}, options: WcRequestOptions = {},
+): Promise<WcAnswer> {
+  return sendWcRequest('GET', urlPath, conn.url, conn.consumerKey, conn.consumerSecret, null, params, options);
 }

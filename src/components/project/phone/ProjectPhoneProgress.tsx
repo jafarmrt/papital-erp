@@ -4,7 +4,7 @@ import { formatPersianNumber } from '../../../utils';
 import { useProductProgressTicks } from '../../../hooks/useProductProgressTicks';
 import { useOnlineStatus } from '../../../lib/pwa/useOnlineStatus';
 import { OFFLINE_SUBMIT_TITLE, PHONE_TAP_TARGET } from '../../../lib/pwa/phoneLayout';
-import { PROGRESS_CELL_LABELS, splitStageColumns, type ProgressCellStatus } from '../../../lib/projects/progressTicks';
+import { PROGRESS_CELL_LABELS, cellWorkLabel, cellWorkOf, splitStageColumns, type ProgressCellStatus } from '../../../lib/projects/progressTicks';
 
 interface ProjectPhoneProgressProps {
   projectId: number;
@@ -144,19 +144,24 @@ export function ProjectPhoneProgress({ projectId, canEdit, onUpdate, onDirtyChan
                 const status = statusOf(product, order);
                 const title = stageTitle.get(order) ?? '';
                 const edited = isEdited(product, order);
+                // 10.2 package 12 (D6): the done work of the stage's workshop rows, beside the manager's tick
+                const work = cellWorkOf(product, order);
                 return (
                   <li key={order}>
                     <button
                       type="button"
                       role="checkbox"
                       aria-checked={status === 'completed'}
-                      aria-label={`${title} برای ${name}`}
+                      aria-label={`${title} برای ${name}${work ? `، کار ثبت‌شده ${cellWorkLabel(work)}` : ''}`}
                       disabled={!canEdit || saving}
                       onClick={() => toggle(product, order)}
                       className={`w-full ${PHONE_TAP_TARGET} px-3 rounded-xl border flex items-center gap-2.5 text-right cursor-pointer disabled:cursor-default ${CELL_STYLE[status]} ${edited ? 'ring-2 ring-blue-300' : ''}`}
                     >
                       <CellIcon status={status} />
-                      <span className="flex-1 font-bold truncate">{title}</span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block font-bold truncate">{title}</span>
+                        {work && <span className="block text-[11px] text-slate-600">کار ثبت‌شده: {cellWorkLabel(work)}</span>}
+                      </span>
                       {optionalOrders.has(order) && <span className="text-[11px] text-amber-700">اختیاری</span>}
                       <span className="text-[11px] shrink-0">{edited ? 'ثبت‌نشده' : PROGRESS_CELL_LABELS[status]}</span>
                     </button>

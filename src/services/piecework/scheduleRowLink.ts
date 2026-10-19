@@ -3,6 +3,7 @@ import type { DbExecutor } from '../../db/drizzle.js';
 import { pieceworkLogs, productionProjects } from '../../db/schema.js';
 import { ConflictError, ValidationError } from '../../errors/customErrors.js';
 import { findScheduleRow, withScheduleLogLink, withoutScheduleLogLink, type ScheduleRowRef } from '../../lib/projects/scheduleWorkLog.js';
+import { workshopScheduleRows } from '../../lib/workshop/workshopSchedule.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
 
 /**
@@ -107,15 +108,27 @@ export async function lockProjectsOfLogMove(tx: DbExecutor, from: number | null,
     .where(inArray(productionProjects.id, ids)).orderBy(asc(productionProjects.id)).for('update');
 }
 
-/** کارکرد حذف شد یا به پروژه دیگر رفت: ردیف برنامه‌ای که به آن اشاره دارد دوباره ثبت‌شدنی می‌شود */
-export async function unlinkScheduleRow(tx: DbExecutor, projectId: number | null, logId: number): Promise<void> {
-  if (projectId === null) return;
+/**
+ * کارکرد حذف شد یا به پروژه دیگر رفت: ردیف برنامه‌ای که به آن اشاره دارد دوباره ثبت‌شدنی می‌شود. 10.2 بستهٔ ۱۲ (D6):
+ * برمی‌گرداند که ردیفی پیوند داشت یا نه، تا پیشرفت همان پروژه دوباره حساب شود.
+ */
+export async function unlinkScheduleRow(tx: DbExecutor, projectId: number | null, logId: number): Promise<boolean> {
+  if (projectId === null) return false;
   const [project] = await tx.select({ id: productionProjects.id, stageSchedules: productionProjects.stageSchedules, version: productionProjects.version }).from(productionProjects)
     .where(eq(productionProjects.id, projectId)).for('update');
-  if (!project) return;
+  if (!project) return false;
   const { changed, schedules } = withoutScheduleLogLink(project.stageSchedules, logId);
-  if (!changed) return;
+  if (!changed) return false;
   await tx.update(productionProjects)
     .set({ stageSchedules: schedules, version: project.version + 1 })
     .where(eq(productionProjects.id, projectId));
+  return true;
+}
+
+/** 10.2 بستهٔ ۱۲ (D6): کارکرد به ردیفی از برنامهٔ کارگاه پروژه پیوند دارد (تغییر مقدارش پیشرفت پروژه را عوض می‌کند) */
+export async function isScheduleLinkedLog(tx: DbExecutor, projectId: number | null, logId: number): Promise<boolean> {
+  if (projectId === null) return false;
+  const [project] = await tx.select({ stageSchedules: productionProjects.stageSchedules }).from(productionProjects)
+    .where(eq(productionProjects.id, projectId));
+  return !!project && workshopScheduleRows(project.stageSchedules).some(row => row.pieceworkLogId === logId);
 }

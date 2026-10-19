@@ -71,7 +71,11 @@ export interface ProjectListFilters {
   priority: string;
 }
 
-/** پیشرفت پروژه از مراحلش: میانگین درصد مراحل (مرحله تمام‌شده بی درصد ۱۰۰)، همان قاعده پرونده پروژه */
+/**
+ * پیشرفت پروژه از مراحلش: میانگین درصد مراحل (مرحله تمام‌شده بی درصد ۱۰۰)، همان قاعده پرونده پروژه. 10.2 بستهٔ ۱۲ (D6):
+ * درصد مرحله کار ثبت‌شدهٔ کارگاه را هم می‌شمرد و تا تیک «تمام» حداکثر ۹۹ است، پس میانگین هم ۱۰۰ نمی‌شود تا همه تمام شوند،
+ * و هر کار بالای صفر دست‌کم ۱ است.
+ */
 export function projectStageProgress(stages: ReadonlyArray<{ status?: string | null; progressPercent?: number | null }>): {
   totalStages: number;
   completedStages: number;
@@ -81,7 +85,9 @@ export function projectStageProgress(stages: ReadonlyArray<{ status?: string | n
   const completedStages = stages.filter(s => s.status === 'completed').length;
   if (totalStages === 0) return { totalStages, completedStages, progressPercent: 0 };
   const sum = stages.reduce((acc, s) => acc + (s.progressPercent || (s.status === 'completed' ? 100 : 0)), 0);
-  return { totalStages, completedStages, progressPercent: Math.round(sum / totalStages) };
+  const average = Math.round(sum / totalStages);
+  const progressPercent = average >= 100 && completedStages < totalStages ? 99 : average === 0 && sum > 0 ? 1 : average;
+  return { totalStages, completedStages, progressPercent };
 }
 
 /** پارامترهای درخواست یک صفحه (همان نام‌هایی که اسکیمای `GET /projects` می‌خواند) */

@@ -351,11 +351,14 @@ export function actorUserId(actor: WcActor): number | undefined {
 }
 
 /** A failed exchange with the shop stays visible in the tab (review N-1: whatever stopped it, a DNS or redirect refusal too) */
-export async function recordFailedRun(kind: 'refresh' | 'stock_push', actor: WcActor, err: unknown): Promise<void> {
+export async function recordFailedRun(
+  kind: 'refresh' | 'stock_push', actor: WcActor, err: unknown, summary?: Record<string, unknown>,
+): Promise<void> {
   const message = err instanceof AppError && err.statusCode < 500 ? err.message : 'ارتباط با سایت ناموفق بود.';
   try {
     await orm.insert(wcSyncRuns).values({
       kind, status: 'failed', userId: actorUserId(actor), finishedAt: systemNowUtcIso(), errorMessage: message.slice(0, 1000),
+      ...(summary ? { summary } : {}),
     });
   } catch (recordErr) {
     logger.warn(`[WooCommerce] failed run not recorded: ${errorMessageOf(recordErr)}`);
@@ -411,16 +414,24 @@ export async function hasLiveLinks(): Promise<boolean> {
   return Boolean(row);
 }
 
-async function lastRun(kind: 'refresh' | 'stock_push', okOnly = false): Promise<WcRunView | null> {
-  const where = okOnly ? and(eq(wcSyncRuns.kind, kind), ne(wcSyncRuns.status, 'failed')) : eq(wcSyncRuns.kind, kind);
-  const [run] = await orm.select().from(wcSyncRuns).where(where).orderBy(desc(wcSyncRuns.id)).limit(1);
-  if (!run) return null;
+/** part B: the automatic push's runs carry `trigger: 'auto'` in their summary */
+export const autoRunCondition = sql`coalesce(${wcSyncRuns.summary}->>'trigger', '') = 'auto'`;
+
+export function runView(run: typeof wcSyncRuns.$inferSelect): WcRunView {
   return {
     at: serverTimestampToUtcIso(run.finishedAt ?? run.startedAt),
     status: run.status as WcRunView['status'],
     error: run.errorMessage,
     summary: (run.summary ?? {}) as Record<string, unknown>,
   };
+}
+
+async function lastRun(kind: 'refresh' | 'stock_push', okOnly = false): Promise<WcRunView | null> {
+  // «آخرین ارسال موجودی» is the last manual push; the automatic push has its own line (part B)
+  const where = and(eq(wcSyncRuns.kind, kind), okOnly ? ne(wcSyncRuns.status, 'failed') : undefined,
+    kind === 'stock_push' ? sql`not (${autoRunCondition})` : undefined);
+  const [run] = await orm.select().from(wcSyncRuns).where(where).orderBy(desc(wcSyncRuns.id)).limit(1);
+  return run ? runView(run) : null;
 }
 
 /** What the WooCommerce tab shows about the links (`GET /woocommerce/catalog`) */

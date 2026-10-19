@@ -61,7 +61,7 @@ function answer(url: string, init?: { method?: string; body?: string }): unknown
   if (url === '/workshop/my-deliveries') return deliveriesAnswer;
   if (url === '/workshop/review/reports') return { data: [reviewAnswer] };
   if (url === '/workshop/projects/7/reports') {
-    return { pending: projectCanReview ? [reviewItem] : [], stageProgress: [{ stageId: 3, plannedQuantity: 80, approvedQuantity: 40, percent: 50 }], canReview: projectCanReview };
+    return { pending: projectCanReview ? [reviewItem] : [], stageProgress: [{ stageId: 3, plannedQuantity: 80, approvedQuantity: 40, unit: 'عدد', percent: 50 }, { stageId: 4, plannedQuantity: 14, approvedQuantity: 9, unit: null, percent: 75 }], canReview: projectCanReview };
   }
   if (url === '/workshop/reports/31/approve') {
     return { reportId: 31, pieceworkLogId: 77, matrixTickSuggestion: { projectId: 7, stageId: 3, stageOrder: 2, stageTitle: 'مونتاژ', productId: '11', productName: 'گردنبند ستاره', itemId: 11 } };
@@ -314,7 +314,10 @@ describe('workshop reports in the project schedule (N-01 part 3)', () => {
     renderPanel();
     const bar = await screen.findByRole('progressbar', { name: 'مونتاژ' });
     expect(bar.getAttribute('aria-valuenow')).toBe('50');
-    expect(screen.getByText(/۴۰ از ۸۰ · ۵۰٪/)).toBeTruthy();
+    expect(screen.getByText(/۴۰ از ۸۰ عدد · ۵۰٪/)).toBeTruthy();
+    // 10.2 package 12 (D6): a stage whose rows have several units shows only its percent
+    expect(screen.getByText('۷۵٪')).toBeTruthy();
+    expect(screen.queryByText(/۹ از ۱۴/)).toBeNull();
     expect(screen.queryByRole('button', { name: /^تأیید$/ })).toBeNull();
   });
 

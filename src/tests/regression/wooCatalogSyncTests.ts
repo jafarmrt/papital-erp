@@ -4,6 +4,11 @@ import { runReservationCases } from './stockReservationTests.js';
 import type { MockProduct } from '../fixtures/mockWooCatalogStore.js';
 import { brief, linksOf, newItem, withShop } from './wooCatalogTestKit.js';
 import { deadlineAndCapCase, emptyOrUnorderedCase, removedProductAndDeadlinesCase } from './wooCatalogReviewTests.js';
+import { autoPushBoundedFailuresCase, autoPushChangedTrackedCase, autoPushOpenOrdersCase, autoPushSwitchCase } from './wooAutoPushTests.js';
+import {
+  autoPushCapCase, autoPushOrderListMovedCase, autoPushOrderPageEdgeCase, autoPushRefusedBatchCase, autoPushRunPurgeCase, autoPushWebhookAndHourlyCase,
+} from './wooAutoPushReviewTests.js';
+import { autoPushFailedHoldCase, autoPushHandTagDigitsCase, autoPushOrderOverlapCase, autoPushOrderWithoutIdCase } from './wooAutoPushHoldTests.js';
 import { WC_LIST_LIMIT } from '../../lib/woocommerce/wcCatalog.js';
 
 /**
@@ -39,6 +44,48 @@ export async function runWooCatalogSyncTests(shouldRun: ShouldRun): Promise<Test
     ['reg_wc_catalog_empty_or_unordered_d04',
       'D-04 delta review M-B / M-C / N-1 / M-R / M-S: an empty catalog while items are linked is a failed run that closes no link, and only a reading that showed a row twice, or was out of id order and cut at the cap, keeps the links of products it did not read and says so',
       ['d04', 'woocommerce', 'catalog', 'review'], emptyOrUnorderedCase],
+    ['reg_wc_auto_push_switch_d04',
+      'D-04 part B: the automatic push is off by default, only woocommerce.manage turns it on or off with the target state, with an audit row and a complete connection',
+      ['d04', 'woocommerce', 'auto'], autoPushSwitchCase],
+    ['reg_wc_auto_push_changed_tracked_d04',
+      'D-04 part B: an automatic run sends only products whose sellable stock moved and whose stock tracking is already on, never manage_stock, and asks the shop nothing when nothing moved',
+      ['d04', 'woocommerce', 'auto'], autoPushChangedTrackedCase],
+    ['reg_wc_auto_push_open_orders_d04',
+      'D-04 part B: on-hold and processing orders without a live invoice and completed orders whose invoice failed in the last 30 days are kept off the stock the automatic and the manual push send, pending and invoiced orders and older failures are not, and unreadable orders stop the push',
+      ['d04', 'woocommerce', 'auto'], autoPushOpenOrdersCase],
+    ['reg_wc_auto_push_bounded_failures_d04',
+      'D-04 part B: a shop that is down makes each automatic run wait longer without counting against a product, a product the shop keeps refusing stops after the limit, and a run skips while the lock is taken',
+      ['d04', 'woocommerce', 'auto'], autoPushBoundedFailuresCase],
+    ['reg_wc_auto_push_order_list_moved_d04',
+      'D-04 part B review M-5 / M-6: an open order list that changes between two pages, or holds more orders than the cap, stops the push with nothing sent',
+      ['d04', 'woocommerce', 'auto'], autoPushOrderListMovedCase],
+    ['reg_wc_auto_push_order_page_edge_d04',
+      'D-04 part B delta review M-2 / N-2: an order leaving a read page while another joins, keeping the count, fails the push closed through page 1 read again; a reading slower than its budget fails',
+      ['d04', 'woocommerce', 'auto'], autoPushOrderPageEdgeCase],
+    ['reg_wc_auto_push_failed_hold_d04',
+      'D-04 part B delta review M-A: a failed completed order is kept off for 30 days from its completion in the shop, never restarted by touching its log, and a hand invoice tagged with the order is linked by a manual sync without a second invoice',
+      ['d04', 'woocommerce', 'auto'], autoPushFailedHoldCase],
+    ['reg_wc_hand_invoice_tag_digits_d04',
+      'D-04 part B delta review 3 M-1: a hand invoice tagged with the order in Persian or Arabic-Indic digits is linked by a manual order sync, and a longer number never links it',
+      ['d04', 'woocommerce', 'auto'], autoPushHandTagDigitsCase],
+    ['reg_wc_auto_push_order_overlap_d04',
+      'D-04 part B delta review N-A: open orders are read with overlapping pages, so an order leaving a later read page while an older one joins fails the push closed',
+      ['d04', 'woocommerce', 'auto'], autoPushOrderOverlapCase],
+    ['reg_wc_auto_push_order_without_id_d04',
+      'D-04 part B delta review 4 item E: an open order the shop lists without its id makes the reading unreadable and nothing is sent, with or without the shop count',
+      ['d04', 'woocommerce', 'auto'], autoPushOrderWithoutIdCase],
+    ['reg_wc_auto_push_webhook_hourly_d04',
+      'D-04 part B review M-3 / delta N-4: an order webhook (order.deleted too, through the order log) makes its products due on the next run and the hourly pass corrects an order that came without one',
+      ['d04', 'woocommerce', 'auto'], autoPushWebhookAndHourlyCase],
+    ['reg_wc_auto_push_refused_batch_d04',
+      'D-04 part B review M-4: a batch refused for its products (404) counts against each product and stops it after the limit without making the runs wait',
+      ['d04', 'woocommerce', 'auto'], autoPushRefusedBatchCase],
+    ['reg_wc_auto_push_cap_d04',
+      'D-04 part B review d: one automatic run sends at most its cap of products and the rest go on the next run',
+      ['d04', 'woocommerce', 'auto'], autoPushCapCase],
+    ['reg_wc_auto_push_run_purge_d04',
+      'D-04 part B review c / delta N-6: the daily operational purge removes automatic run rows older than 30 days and keeps manual and recent runs, and one failing purge never skips the others',
+      ['d04', 'woocommerce', 'auto'], autoPushRunPurgeCase],
     ['reg_wc_synced_orders_by_log_obs_r2_83',
       'OBS-R2-83: the synced-orders list shows the invoices the order log names, not invoices whose notes mention an online order',
       ['obs_r2_83', 'woocommerce', 'orders'], syncedOrdersCase],

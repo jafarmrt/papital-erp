@@ -5,7 +5,7 @@ import { QUERY_KEYS } from '../lib/queryKeys';
 interface PersonnelName { fullName?: string | null; firstName?: string | null; lastName?: string | null }
 
 /**
- * TD-1321 (review of v10.2.13): the name of the personnel a saved row points to when the pick list does not hold it (beyond
+ * TD-1321 (review of v10.2.14): the name of the personnel a saved row points to when the pick list does not hold it (beyond
  * the list's cap, or a personnel who left and is not offered), read from `GET /personnel/:id` only then. The picker shows that
  * person as its chosen option instead of the empty placeholder, so touching the row never drops them; a personnel that can
  * no longer be read gives '' and the caller keeps the name the row stored.

@@ -14,7 +14,7 @@ export function normalizeSearchText(value: unknown): string {
 }
 
 /**
- * TD-1321 (review of v10.2.13): a compact search for names, the rule the personnel page used in the browser before its list
+ * TD-1321 (review of v10.2.14): a compact search for names, the rule the personnel page used in the browser before its list
  * was paged (`normalizePersianText`): on top of `normalizeSearchText`, «ة» and «ۀ» are «ه», and spaces, the zero-width
  * non-joiner and other zero-width marks, «-» and «_» are dropped, so «علی زاده», «علیزاده» and «علی‌زاده» are one search.
  * `compactFoldedSearchSql` applies the same rule to a column.
