@@ -918,6 +918,13 @@
       "when": 1796134800000,
       "tag": "0130_social_dashboard",
       "breakpoints": true
+    },
+    {
+      "idx": 131,
+      "version": "7",
+      "when": 1796221200000,
+      "tag": "0131_wc_price_sku_sync",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,77 @@
+/**
+ * OBS-R2-57 (TD-1321): the contract of the paged personnel list, shared by `GET /personnel?page=` and the personnel page.
+ * Without `page` the route still answers the array the pick lists read (filtered and capped by `limit` in SQL).
+ */
+export interface PersonnelListStats {
+  total: number;
+  active: number;
+  terminated: number;
+  onLeave: number;
+  usersCount: number;
+}
+
+export interface PersonnelPage<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  stats: PersonnelListStats;
+}
+
+export interface PersonnelPageParams {
+  page: number;
+  limit: number;
+  search?: string;
+  status?: string;
+}
+
+export function personnelPageUrl({ page, limit, search, status }: PersonnelPageParams): string {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  const q = (search ?? '').trim();
+  if (q) params.set('search', q);
+  if (status && status !== 'all') params.set('status', status);
+  return `/personnel?${params.toString()}`;
+}
+
+export const EMPTY_PERSONNEL_STATS: PersonnelListStats = { total: 0, active: 0, terminated: 0, onLeave: 0, usersCount: 0 };
+
+/**
+ * OBS-R1-69 (TD-1321): a personnel pick list (accounting parties, the sales seller) keeps at most this many, newest first.
+ * It asks the server for one row more, so it knows the server had more than the cap (total above the cap), never guesses
+ * it from a list that only reached the cap.
+ */
+export const PERSONNEL_PICK_LIMIT = 5000;
+/** The highest `limit` the array form of `GET /personnel` takes: the cap and the one row that says there are more */
+export const PERSONNEL_PICK_REQUEST_LIMIT = PERSONNEL_PICK_LIMIT + 1;
+export const PERSONNEL_PICK_URL = `/personnel?limit=${PERSONNEL_PICK_REQUEST_LIMIT}`;
+/** The sales seller picker: personnel who have not left only, so a leaver takes no place under the cap */
+export const PERSONNEL_ACTIVE_PICK_URL = `${PERSONNEL_PICK_URL}&activeOnly=1`;
+export const PERSONNEL_PICK_CAP_TOAST_ID = 'personnel-pick-cap';
+export const PERSONNEL_PICK_CAP_NOTICE =
+  `بیش از ${PERSONNEL_PICK_LIMIT.toLocaleString('fa-IR')} نفر؛ برای یافتن بقیه نام را در فهرست پرسنل جست‌وجو کنید.`;
+
+let capNoticeShown = false;
+
+/**
+ * The rows a picker keeps (at most the cap) and the notice it shows: only when the server answered more rows than the cap,
+ * and once per session (each picker reloads its list, the notice is not repeated)
+ */
+export function takePersonnelPick<T>(rows: readonly T[]): { rows: T[]; notice: string | null } {
+  if (rows.length <= PERSONNEL_PICK_LIMIT) return { rows: [...rows], notice: null };
+  const notice = capNoticeShown ? null : PERSONNEL_PICK_CAP_NOTICE;
+  capNoticeShown = true;
+  return { rows: rows.slice(0, PERSONNEL_PICK_LIMIT), notice };
+}
+
+/** Tests only: the next list above the cap shows the notice again */
+export function resetPersonnelPickNotice(): void {
+  capNoticeShown = false;
+}
+
+/** TD-1321 (review): whether a window's list of every personnel has arrived, so its checks may run */
+export type PersonnelListState = 'loading' | 'ready' | 'failed';
+
+export const PERSONNEL_LIST_STATE_TEXT: Record<Exclude<PersonnelListState, 'ready'>, string> = {
+  loading: 'در حال خواندن فهرست پرسنل…',
+  failed: 'فهرست پرسنل خوانده نشد؛ پنجره را ببندید و دوباره باز کنید.',
+};

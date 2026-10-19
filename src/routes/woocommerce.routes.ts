@@ -5,18 +5,20 @@ import { appSettings, documents, woocommerceOrderLogs } from '../db/schema.js';
 import crypto from 'crypto';
 import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { authorizePermission } from '../middleware/authorize.js';
+import { authorizePermission, can } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
 import { WooOrderSyncService } from '../services/woocommerce/wooOrderSync.service.js';
 import { makeWcRequest, requireWcConnection, wcRequest } from '../services/woocommerce/wcClient.js';
 import { getWcCatalogReport, refreshWcCatalog } from '../services/woocommerce/wcCatalog.service.js';
 import { pushAllStocks, pushItemStock } from '../services/woocommerce/wcStockPush.service.js';
 import { getAutoPushView, setAutoPush } from '../services/woocommerce/wcAutoPush.service.js';
+import { setShopPriceList, setSkuRename } from '../services/woocommerce/wcFieldPush.service.js';
+import { getShopSyncView } from '../services/woocommerce/wcShopSyncView.js';
 import { catalogRefreshMessage, trackingEnabledNote } from '../lib/woocommerce/wcCatalog.js';
 import { formatPersianNumber } from '../utils/persianNumber.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
-import { ValidationError } from '../errors/customErrors.js';
+import { ForbiddenError, ValidationError } from '../errors/customErrors.js';
 import { resolveWcTestCredentials } from '../lib/woocommerce/wcConnectionTest.js';
 import { readWcConnectionSettings } from '../services/woocommerce/wcConnectionSettings.js';
 import { openSettingSecret } from '../services/settings/settingSecrets.js';
@@ -41,6 +43,14 @@ const syncItemSchema = z.object({
 
 // 10.2 package 6 (D-04 part B): the target state of «ارسال خودکار», never a toggle
 const autoPushSchema = z.object({
+  body: z.object({ enabled: z.boolean() }).strict(),
+});
+
+// part C: the price list whose prices go to the shop ('' stops the price push) and the target state of the SKU rename
+const priceListSchema = z.object({
+  body: z.object({ priceList: z.string().max(200) }).strict(),
+});
+const skuRenameSchema = z.object({
   body: z.object({ enabled: z.boolean() }).strict(),
 });
 
@@ -196,8 +206,37 @@ router.post('/sync-order-by-id', authorizePermission('woocommerce.manage'), idem
 
 // 10.2 package 6 (D-04 part A): the links between items and the shop's products, for the WooCommerce tab
 router.get('/catalog', authorizePermission('woocommerce.view'), asyncHandler(async (req, res) => {
-  const [report, autoPush] = await Promise.all([getWcCatalogReport(), getAutoPushView()]);
-  res.json({ ...report, autoPush });
+  const [report, autoPush, shopSync] = await Promise.all([getWcCatalogReport(), getAutoPushView(), getShopSyncView()]);
+  res.json({ ...report, autoPush, shopSync });
+}));
+
+// «فهرست قیمت فروشگاه» (part C; none by default): the active price of this list goes to each linked product's regular price
+// review M-3: choosing a price list also needs the key that edits prices, turning the SKU rename on the key that changes
+// item codes; turning either off needs only `woocommerce.manage`, so an operator can always stop a send (review N-3)
+router.post('/price-list', authorizePermission('woocommerce.manage'), idempotency({ scope: 'woocommerce' }), validate(priceListSchema), asyncHandler(async (req, res) => {
+  if (String(req.body.priceList).trim() !== '' && !(await can(req.user, 'products.edit_price'))) {
+    throw new ForbiddenError('برگزیدن فهرست قیمت فروشگاه مجوز «ویرایش قیمت‌ها» را هم می‌خواهد.', undefined, 'WC_PRICE_LIST_NEEDS_PRICE_EDIT');
+  }
+  const result = await setShopPriceList({ req }, String(req.body.priceList));
+  const notRead = result.priceList && result.notRead > 0
+    ? ` نوع ${formatPersianNumber(result.notRead)} محصول هنوز از سایت خوانده نشده و قیمت آن‌ها پس از «بازخوانی محصولات سایت» فرستاده می‌شود.`
+    : '';
+  res.json({
+    success: true, ...result,
+    message: (result.priceList ? `قیمت فهرست «${result.priceList}» از دقیقه بعد به سایت فرستاده می‌شود.` : 'ارسال خودکار قیمت به سایت خاموش شد.') + notRead,
+  });
+}));
+
+// «تغییر خودکار کد در سایت» on or off (part C; off by default)
+router.post('/sku-rename', authorizePermission('woocommerce.manage'), idempotency({ scope: 'woocommerce' }), validate(skuRenameSchema), asyncHandler(async (req, res) => {
+  if (req.body.enabled === true && !(await can(req.user, 'products.change_code'))) {
+    throw new ForbiddenError('روشن کردن تغییر خودکار کد در سایت مجوز «تغییر کد کالا» را هم می‌خواهد.', undefined, 'WC_SKU_RENAME_NEEDS_CODE_CHANGE');
+  }
+  const result = await setSkuRename({ req }, req.body.enabled === true);
+  res.json({
+    success: true, ...result,
+    message: result.enabled ? 'تغییر خودکار کد محصولات سایت روشن شد.' : 'تغییر خودکار کد محصولات سایت خاموش شد.',
+  });
 }));
 
 // «ارسال خودکار موجودی» on or off (part B; off by default)

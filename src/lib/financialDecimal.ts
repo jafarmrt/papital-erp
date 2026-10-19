@@ -140,6 +140,13 @@ export class FinancialDecimal {
   }
 
   /**
+   * Plain decimal text with exactly `decimalPlaces` decimals (half-up), never in exponent notation.
+   */
+  public toFixed(decimalPlaces: number): string {
+    return this.value.toFixed(decimalPlaces, Decimal.ROUND_HALF_UP);
+  }
+
+  /**
    * Format for database storage: NUMERIC(18, 4) string.
    */
   public toDbString(): string {

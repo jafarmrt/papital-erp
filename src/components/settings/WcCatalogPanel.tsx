@@ -6,6 +6,7 @@ import { catalogCapNotice, catalogOrderNotice, type WcRunView } from '../../lib/
 import { formatPersianDateTime, formatPersianNumber, getErrorMessage } from '../../utils';
 import { WcItemList, WcUnmatchedList } from './WcCatalogLists';
 import { WcAutoPushPanel } from './WcAutoPushPanel';
+import { WcShopSyncPanel } from './WcShopSyncPanel';
 
 /**
  * 10.2 package 6 (D-04 part A, OBS-R2-83): the links between items and the shop's products. «بازخوانی محصولات سایت» reads
@@ -89,6 +90,7 @@ export function WcCatalogPanel({ canManage, stockPushRunning }: { canManage: boo
             <RunLine label="آخرین ارسال موجودی" run={report.lastPush} />
           </div>
           {report.autoPush && <WcAutoPushPanel view={report.autoPush} canManage={canManage} />}
+          {report.shopSync && <WcShopSyncPanel view={report.shopSync} canManage={canManage} />}
           {!report.refreshed && (
             <p className="text-xs text-amber-800">محصولات سایت هنوز خوانده نشده است؛ نخستین ارسال موجودی ابتدا آن‌ها را می‌خواند.</p>
           )}

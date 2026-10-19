@@ -48,16 +48,3 @@ export function withoutNobitexPassword<T extends object>(row: T): Omit<T, 'nobit
   const { nobitexPassword: _secret, ...rest } = row as T & { nobitexPassword?: unknown };
   return rest;
 }
-
-const SEARCH_KEYS = [
-  'fullName', 'firstName', 'lastName', 'personnelCode', 'phone', 'nationalId', 'jobTitle', 'specializedSkills',
-  'otherSkills', 'education', 'bankName', 'notes', 'address',
-] as const;
-
-/** جست‌وجوی فهرست فقط روی فیلدهایی که خواننده می‌بیند (جست‌وجو با کد ملی، پرسنل را برای خواننده فهرست انتخاب نمی‌یابد) */
-export function matchesPersonnelSearch(row: object, search: string): boolean {
-  const q = search.trim().toLowerCase();
-  if (!q) return true;
-  const source = row as Record<string, unknown>;
-  return SEARCH_KEYS.some(k => typeof source[k] === 'string' && (source[k] as string).toLowerCase().includes(q));
-}

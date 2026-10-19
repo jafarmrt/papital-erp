@@ -40,6 +40,14 @@ export const wcProductLinks = pgTable('wc_product_links', {
   lastPushedAt: timestamp('last_pushed_at', { mode: 'string' }),
   lastError: text('last_error').notNull().default(''),
   failureCount: integer('failure_count').notNull().default(0),
+  /** D-04 part C (migration 0131): the shop product's type and regular price as last read or written */
+  siteType: text('site_type').notNull().default(''),
+  siteRegularPrice: text('site_regular_price'),
+  /** the automatic price push's and SKU rename's last refusal and refusals in a row, apart from the stock push's */
+  priceError: text('price_error').notNull().default(''),
+  priceFailureCount: integer('price_failure_count').notNull().default(0),
+  skuError: text('sku_error').notNull().default(''),
+  skuFailureCount: integer('sku_failure_count').notNull().default(0),
   isDeleted: integer('is_deleted').notNull().default(0),
   createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
@@ -52,7 +60,7 @@ export const wcProductLinks = pgTable('wc_product_links', {
 /** 10.2 package 6 (migration 0128): one catalog refresh or stock push of the WooCommerce shop and its counts */
 export const wcSyncRuns = pgTable('wc_sync_runs', {
   id: serial('id').primaryKey(),
-  kind: text('kind').notNull(), // 'refresh' | 'stock_push'
+  kind: text('kind').notNull(), // 'refresh' | 'stock_push' | 'price_push' | 'sku_push' (0131)
   status: text('status').notNull(), // 'ok' | 'partial' | 'failed'
   userId: integer('user_id').references(() => users.id),
   startedAt: timestamp('started_at', { mode: 'string' }).notNull().defaultNow(),
