@@ -27,6 +27,9 @@ const COMPACT_FOLD = new Map<string, string>(
   Array.from(SEARCH_COMPACT_FOLD_FROM).map((ch, i) => [ch, Array.from(SEARCH_COMPACT_FOLD_TO)[i]]),
 );
 
+// PostgreSQL text never holds NUL (SQLSTATE 22021), so a search carrying one drops it here, never in the SQL side
+const NUL_CHARS = /\u0000/g;
+
 export function compactSearchText(value: unknown): string {
-  return Array.from(normalizeSearchText(value), ch => COMPACT_FOLD.get(ch) ?? ch).join('').replace(COMPACT_DROP, '');
+  return Array.from(normalizeSearchText(value), ch => COMPACT_FOLD.get(ch) ?? ch).join('').replace(NUL_CHARS, '').replace(COMPACT_DROP, '');
 }

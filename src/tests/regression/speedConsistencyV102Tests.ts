@@ -2,7 +2,7 @@ import request from 'supertest';
 import { eq, inArray, sql } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { personnel, roles, users } from '../../db/schema.js';
+import { items, personnel, productionProjects, projectBomAllocations, roles, users } from '../../db/schema.js';
 import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 import { money } from '../../lib/money.js';
 
@@ -29,6 +29,8 @@ async function runCase(results: TestCaseResult[], id: string, name: string, deta
 }
 
 const TERMINATED = 'قطع همکاری';
+/** typed with the Persian «ی»; the allocation stores the Arabic «ي» */
+const PERSIAN_YEH_SEARCH = 'آبی';
 
 /** A valid Iranian national ID not used by another test run */
 function randomNationalId(): string {
@@ -133,7 +135,7 @@ export async function runSpeedConsistencyV102Tests(shouldRun: ShouldRun): Promis
     if (roleIds.length > 0) await deleteTestRoles(inArray(roles.id, roleIds)).catch(() => undefined);
   }
 
-  if (shouldRun('reg_personnel_search_cap_td_1321', 'td_1321', 'personnel', 'pagination', 'zwnj', 'obs_r1_69')) {
+  if (shouldRun('reg_personnel_search_cap_td_1321', 'td_1321', 'personnel', 'pagination')) {
     const personnelIds: number[] = [];
     await runCase(results, 'reg_personnel_search_cap_td_1321',
       'OBS-R1-69 personnel pagination: a search ignores spaces and zero-width marks, activeOnly leaves out leavers, and a pick list without a limit stays uncapped (TD-1321)',
@@ -159,6 +161,9 @@ export async function runSpeedConsistencyV102Tests(shouldRun: ShouldRun): Promis
           const found = await rows(`?search=${encodeURIComponent(search)}`);
           if (found.length !== 1) wrong.push(`the search ${JSON.stringify(search)} found ${found.length} rows`);
         }
+        // a NUL in the search answered 500 (SQLSTATE 22021): it is dropped like a space
+        const withNul = await rows(`?search=${encodeURIComponent(`علی\u0000زاده ${tag}`)}`);
+        if (withNul.length !== 1) wrong.push(`the search with a NUL character found ${withNul.length} rows`);
         const everyone = await rows(`?search=${encodeURIComponent(tag)}`);
         const active = await rows(`?search=${encodeURIComponent(tag)}&activeOnly=1`);
         if (everyone.length !== 3) wrong.push(`the tagged search found ${everyone.length} of 3`);
@@ -179,6 +184,69 @@ export async function runSpeedConsistencyV102Tests(shouldRun: ShouldRun): Promis
         }
       });
     if (personnelIds.length > 0) await orm.delete(personnel).where(inArray(personnel.id, personnelIds)).catch(() => undefined);
+  }
+
+  if (shouldRun('reg_bom_allocation_paged_list_td_1322', 'td_1322', 'allocations', 'pagination', 'obs_r2_45')) {
+    const projectIds: number[] = [];
+    const itemIds: number[] = [];
+    await runCase(results, 'reg_bom_allocation_paged_list_td_1322',
+      'OBS-R2-45: the material allocation list is searched, filtered, counted and paged in SQL; without page it still answers every filtered allocation (TD-1322)',
+      'GET /api/inventory/allocations?page= answers { allocations, total, page, limit, statusCounts }; the counts ignore the status picked; the search folds Arabic letters; no page = the whole filtered list',
+      async (wrong) => {
+        const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+        const { createTestItem } = await import('../fixtures/factories.js');
+        const app = await getTestApp();
+        const admin = await getAdminSession();
+        const tag = `AL${Date.now().toString(36)}`;
+        const [project] = await orm.insert(productionProjects).values({ projectCode: `${tag}-P`, title: `پروژه ${tag}` }).returning({ id: productionProjects.id });
+        projectIds.push(project.id);
+        const item = await createTestItem({ type: 'raw_material' });
+        itemIds.push(item.id);
+        // «ي» stored Arabic: a search typed with the Persian «ی» must still find it
+        const statuses = ['allocated', 'allocated', 'consumed', 'released'];
+        await orm.insert(projectBomAllocations).values(statuses.map((status, i) => ({
+          projectId: project.id, projectCode: `${tag}-P`, itemId: item.id, itemCode: item.code, itemName: i === 0 ? `مهره ${tag} آبي` : `سنگ ${tag}`,
+          quantity: i + 1, status, username: 'admin',
+        })));
+
+        const get = async (query: string) => {
+          const res = await request(app).get(`/api/inventory/allocations?projectId=${project.id}${query}`).set('Cookie', admin.cookie);
+          if (res.status !== 200) throw new Error(`GET /api/inventory/allocations${query} returned ${res.status}: ${JSON.stringify(res.body).slice(0, 160)}`);
+          return res.body as Row & { allocations?: Row[]; statusCounts?: Row };
+        };
+
+        const first = await get('&page=1&limit=3');
+        if ((first.allocations ?? []).length !== 3 || Number(first.total) !== 4 || Number(first.page) !== 1 || Number(first.limit) !== 3) {
+          wrong.push(`page 1 of 3: ${(first.allocations ?? []).length} rows, total ${first.total}, page ${first.page}, limit ${first.limit}`);
+        }
+        const counts = first.statusCounts ?? {};
+        if (Number(counts.all) !== 4 || Number(counts.allocated) !== 2 || Number(counts.consumed) !== 1 || Number(counts.released) !== 1) {
+          wrong.push(`status counts ${JSON.stringify(first.statusCounts)}, expected all 4, allocated 2, consumed 1, released 1`);
+        }
+        const second = await get('&page=2&limit=3');
+        if ((second.allocations ?? []).length !== 1) wrong.push(`page 2 of 3 had ${(second.allocations ?? []).length} rows, expected 1`);
+        const pagedIds = new Set([...(first.allocations ?? []), ...(second.allocations ?? [])].map(r => Number(r.id)));
+        if (pagedIds.size !== 4) wrong.push(`the two pages held ${pagedIds.size} distinct allocations, expected 4`);
+
+        const allocatedOnly = await get('&page=1&limit=10&status=allocated');
+        if (Number(allocatedOnly.total) !== 2 || (allocatedOnly.allocations ?? []).some(r => r.status !== 'allocated')) {
+          wrong.push(`the allocated filter answered total ${allocatedOnly.total} with statuses ${(allocatedOnly.allocations ?? []).map(r => r.status).join(',')}`);
+        }
+        if (Number(allocatedOnly.statusCounts?.all) !== 4) wrong.push(`the status counts followed the status filter: ${JSON.stringify(allocatedOnly.statusCounts)}`);
+
+        const searched = await get(`&page=1&limit=10&search=${encodeURIComponent(PERSIAN_YEH_SEARCH)}`);
+        if (Number(searched.total) !== 1) wrong.push(`a search with the Persian yeh found ${searched.total} allocations, expected the one stored with the Arabic yeh`);
+
+        const whole = await get('');
+        if ((whole.allocations ?? []).length !== 4 || Number(whole.total) !== 4 || 'statusCounts' in whole) {
+          wrong.push(`without page the list answered ${(whole.allocations ?? []).length} rows, total ${whole.total}`);
+        }
+      });
+    if (projectIds.length > 0) {
+      await orm.delete(projectBomAllocations).where(inArray(projectBomAllocations.projectId, projectIds)).catch(() => undefined);
+      await orm.delete(productionProjects).where(inArray(productionProjects.id, projectIds)).catch(() => undefined);
+    }
+    if (itemIds.length > 0) await orm.delete(items).where(inArray(items.id, itemIds)).catch(() => undefined);
   }
 
   return results;

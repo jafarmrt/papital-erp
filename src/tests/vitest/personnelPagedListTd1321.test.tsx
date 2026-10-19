@@ -104,6 +104,24 @@ describe('personnel page list (OBS-R2-57)', () => {
     await waitFor(() => expect(result.current.fullListReady).toBe(true));
   });
 
+  it('a failed background read keeps a full list that already arrived usable', async () => {
+    let failing = false;
+    fetchJson.mockImplementation((url: string) => {
+      if (url === '/personnel') return failing ? Promise.reject(new Error('offline')) : Promise.resolve([row(1)]);
+      return answer(url);
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const own = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const { result } = renderHook(() => usePersonnel(), { wrapper: own });
+    act(() => result.current.handleOpenAddModal());
+    await waitFor(() => expect(result.current.fullListReady).toBe(true));
+    failing = true;
+    await act(async () => { await client.refetchQueries(); });
+    await waitFor(() => expect(fetchJson.mock.calls.filter(c => c[0] === '/personnel')).toHaveLength(2));
+    expect(result.current.fullListFailed).toBe(false);
+    expect(result.current.fullListReady).toBe(true);
+  });
+
   it('the Excel window reads no file until the existing personnel arrived', () => {
     render(<PersonnelExcelModal isOpen onClose={() => {}} onSuccess={() => {}} existingPersonnel={[]} existingState="loading" />);
     expect((document.getElementById('personnel-excel-file-input') as HTMLInputElement).disabled).toBe(true);
@@ -132,6 +150,10 @@ describe('personnel pick list cap (OBS-R1-69)', () => {
     expect(PERSONNEL_PICK_CAP_NOTICE).toContain('۵٬۰۰۰');
   });
 
+  it('the notice says only who is missing, never a search on the personnel page that makes no one selectable', () => {
+    expect(PERSONNEL_PICK_CAP_NOTICE).toBe('فهرست انتخاب فقط ۵٬۰۰۰ پرسنلِ آخرِ ثبت‌شده را دارد؛ پرسنل قدیمی‌تر در این فهرست نیستند.');
+  });
+
   it('shows the notice only when the server had more rows than the cap, and once per session', () => {
     expect(takePersonnelPick(many(5000))).toEqual({ rows: many(5000), notice: null });
     const cut = takePersonnelPick(many(5001));
@@ -145,7 +167,7 @@ describe('personnel pick list cap (OBS-R1-69)', () => {
     const { result } = renderHook(() => useAccountingPersonnelQuery(), { wrapper });
     await waitFor(() => expect(result.current.data).toHaveLength(5000));
     expect(fetchJson.mock.calls.map(c => String(c[0]))).toEqual([PERSONNEL_PICK_URL]);
-    expect(toastFn).toHaveBeenCalledWith(PERSONNEL_PICK_CAP_NOTICE, { id: PERSONNEL_PICK_CAP_TOAST_ID });
+    expect(toastFn).toHaveBeenCalledWith(PERSONNEL_PICK_CAP_NOTICE, { id: PERSONNEL_PICK_CAP_TOAST_ID, duration: 8000 });
   });
 
   it('a list that only reached the cap shows no notice', async () => {
@@ -158,7 +180,7 @@ describe('personnel pick list cap (OBS-R1-69)', () => {
   it('the sales seller picker asks for personnel who have not left and shows the notice above the cap', async () => {
     fetchJson.mockImplementation((url: string) => Promise.resolve(url === PERSONNEL_ACTIVE_PICK_URL ? many(5001) : []));
     renderHook(() => useCRMData({ id: 1, username: 'u' }), { wrapper });
-    await waitFor(() => expect(toastFn).toHaveBeenCalledWith(PERSONNEL_PICK_CAP_NOTICE, { id: PERSONNEL_PICK_CAP_TOAST_ID }));
+    await waitFor(() => expect(toastFn).toHaveBeenCalledWith(PERSONNEL_PICK_CAP_NOTICE, { id: PERSONNEL_PICK_CAP_TOAST_ID, duration: 8000 }));
     const urls = fetchJson.mock.calls.map(c => String(c[0]));
     expect(urls).toContain(PERSONNEL_ACTIVE_PICK_URL);
     expect(urls).not.toContain(PERSONNEL_PICK_URL);
@@ -190,6 +212,11 @@ describe('personnel list limits and search text (TD-1321)', () => {
     expect(compactSearchText(' علي_زاده-ك ')).toBe('علیزادهک');
     expect(compactSearchText('فاطمة')).toBe('فاطمه');
     expect(compactSearchText('خانۀ')).toBe('خانه');
+  });
+
+  it('drops a NUL character, which PostgreSQL text cannot hold', () => {
+    expect(compactSearchText('علی\u0000زاده')).toBe('علیزاده');
+    expect(compactSearchText('\u0000')).toBe('');
   });
 });
 

@@ -4,7 +4,7 @@ import { fetchJson, isAbortError } from '../api';
 import { CRMLead, CRMActivity } from '../types';
 import { getTodayJalaliDate, getFutureJalaliDate, errorMessageOf, isoToJalaliDate } from '../utils';
 import toast from 'react-hot-toast';
-import { PERSONNEL_ACTIVE_PICK_URL, PERSONNEL_PICK_CAP_TOAST_ID, takePersonnelPick } from '../lib/personnel/personnelList';
+import { PERSONNEL_ACTIVE_PICK_URL, PERSONNEL_PICK_CAP_TOAST_ID, PERSONNEL_PICK_CAP_TOAST_MS, takePersonnelPick } from '../lib/personnel/personnelList';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { useCRMFilters, normalizeLeadStage, buildLeadQueryParams } from './useCRMFilters';
 import { useDebounce } from './useDebounce';
@@ -148,7 +148,7 @@ export function useCRMData(user: any, options: { withLists?: boolean } = {}) {
       pick(PERSONNEL_ACTIVE_PICK_URL, 'پرسنل', (answered) => {
         // OBS-R1-69 (TD-1321): a list cut at the cap says so once instead of hiding the rest
         const { rows, notice } = takePersonnelPick(answered);
-        if (notice) toast(notice, { id: PERSONNEL_PICK_CAP_TOAST_ID });
+        if (notice) toast(notice, { id: PERSONNEL_PICK_CAP_TOAST_ID, duration: PERSONNEL_PICK_CAP_TOAST_MS });
         setPersonnelList(crmAssignablePersonnel(rows as Array<{ employmentStatus?: string | null }>));
       }),
       pick('/users/list-simple', 'کاربران', setMentionUsers),

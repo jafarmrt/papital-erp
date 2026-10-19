@@ -123,7 +123,8 @@ export function usePersonnel(options: { fullListOpen?: boolean } = {}) {
   // TD-1321 (review): the windows that check against every personnel (linked users, existing codes) wait for these lists,
   // so a duplicate check never runs on a list that has not arrived
   const fullListReady = fullListQuery.data !== undefined;
-  const fullListFailed = fullListQuery.isError;
+  // a failed background read keeps a list that already arrived usable
+  const fullListFailed = fullListQuery.isError && fullListQuery.data === undefined;
   const usersReady = usersQuery.data !== undefined;
 
   const saveMutation = useSavePersonnelMutation();

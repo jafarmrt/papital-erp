@@ -1,10 +1,10 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { projectIssuedQuantities } from './projectIssuedQuantities.js';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { items, productionProjects } from '../../db/schema.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import {
-  planProjectReservation, type ProjectReservationPlan, type ReservationStockItem, type ReservationUnitMismatch,
+  planProjectReservation, projectNeedRefs, type ProjectReservationPlan, type ReservationStockItem, type ReservationUnitMismatch,
 } from '../../lib/projects/projectReservation.js';
 import { ADVISORY_LOCK_KEYS } from '../../lib/advisoryLock.js';
 import { ItemStockReservationService, othersReservations } from '../items/itemStockReservation.service.js';
@@ -13,8 +13,8 @@ import { fin } from '../../lib/financialDecimal.js';
 import {
   MATERIAL_AVAILABILITY_MAX_ITEMS, freeForProject, type MaterialAvailabilityReport,
 } from '../../lib/projects/materialAvailability.js';
-import { hasPresetShapedSections, projectSectionsFromPreset } from '../../lib/projects/inventoryControlSections.js';
-import { findProjectItemMatch } from '../../lib/projects/projectItemMatch.js';
+import { hasPresetShapedSections, presetMaterialRefs, projectSectionsFromPreset } from '../../lib/projects/inventoryControlSections.js';
+import { findProjectItemMatch, itemCodeKey, itemNameKey } from '../../lib/projects/projectItemMatch.js';
 
 type InventoryControl = Record<string, unknown>;
 
@@ -67,6 +67,23 @@ async function planWithOthersReservations(
   return planProjectReservation(ic.sections, products, stockItems, ic.manualPurchaseItems, reservedAt, { reservedByOthers, issuedToProject });
 }
 
+/** The live items whose code key or name key one of the refs holds (the keys of `findProjectItemMatch`), in id order */
+async function readStockItemsForRefs(executor: DbExecutor, refs: ReadonlyArray<{ code: string; name: string }>): Promise<ReservationStockItem[]> {
+  const codes = [...new Set(refs.map(r => itemCodeKey(r.code)).filter(Boolean))];
+  const names = [...new Set(refs.map(r => itemNameKey(r.name)).filter(Boolean))];
+  const conditions = [
+    codes.length > 0 ? inArray(sql`upper(btrim(${items.code}))`, codes) : undefined,
+    names.length > 0 ? inArray(sql`lower(btrim(${items.name}))`, names) : undefined,
+  ].filter((c): c is SQL => c !== undefined);
+  if (conditions.length === 0) return [];
+  const rows = await executor
+    .select({ id: items.id, code: items.code, name: items.name, category: items.category, unit: items.unit, currentStock: items.currentStock })
+    .from(items)
+    .where(and(eq(items.isDeleted, 0), or(...conditions)))
+    .orderBy(asc(items.id));
+  return rows.map(i => ({ ...i, currentStock: Number(i.currentStock) || 0 }));
+}
+
 export async function resolveServerInventoryControl(
   incoming: unknown,
   previous: unknown,
@@ -86,17 +103,16 @@ export async function resolveServerInventoryControl(
   // v9.0.373 (TD-819): ثبت نهایی‌های هم‌زمان پشت سر هم رزرو دیگران را می‌خوانند
   if (finalizing) await executor.execute(sql`SELECT pg_advisory_xact_lock(${ADVISORY_LOCK_KEYS.PROJECT_RESERVATION_FINALIZE}::bigint)`);
   // v9.0.413 (TD-748): بخش الگو (مواد در `items`) با ردیف‌های پروژه ذخیره می‌شود تا رزرو و صفحه‌ها همان ردیف‌ها را بخوانند
-  const presetShaped = hasPresetShapedSections(rest.sections);
-  const stockItems: ReservationStockItem[] = finalizing || presetShaped
-    ? (await executor
-      .select({ id: items.id, code: items.code, name: items.name, category: items.category, unit: items.unit, currentStock: items.currentStock })
-      .from(items)
-      .where(eq(items.isDeleted, 0))).map(i => ({ ...i, currentStock: Number(i.currentStock) || 0 }))
-    : [];
-  if (presetShaped) {
+  // OBS-R2-45 (TD-1322): only the live items the rows may name by code key or name key are read, never every item; a live
+  // item's code key and name key are unique (TD-653), so the match is the one the whole list gave
+  if (hasPresetShapedSections(rest.sections)) {
+    const presetStock = await readStockItemsForRefs(executor, presetMaterialRefs(rest.sections));
     rest.sections = projectSectionsFromPreset(rest.sections, Array.isArray(products) ? products : [], material =>
-      findProjectItemMatch({ code: material.code, name: material.name }, stockItems)?.currentStock);
+      findProjectItemMatch({ code: material.code, name: material.name }, presetStock)?.currentStock);
   }
+  const stockItems: ReservationStockItem[] = finalizing
+    ? await readStockItemsForRefs(executor, projectNeedRefs(rest.sections, products, rest.manualPurchaseItems))
+    : [];
 
   let reservedItems: unknown[] = prevReserved;
   let finalizedAt: unknown = prev.finalizedAt;

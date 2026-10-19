@@ -19,6 +19,12 @@ import { warehouseLabel } from '../../lib/inventory/warehouseLabel';
 import { DecimalInput } from '../common/DecimalInput';
 import { DialogLayer } from '../common/DialogLayer';
 import { RecipientPersonnelField } from '../workshop/RecipientPersonnelField';
+import { ListPager } from '../common/ListPager';
+import { useDebounce } from '../../hooks/useDebounce';
+import { EMPTY_ALLOCATION_STATUS_COUNTS, bomAllocationListUrl, type BomAllocationStatusCounts } from '../../lib/inventory/bomAllocationList';
+
+/** OBS-R2-45 (TD-1322): rows of one page of the allocation list */
+const ALLOCATION_PAGE_SIZE = 50;
 
 interface ProjectBomAllocationsTabProps {
   user?: any;
@@ -36,6 +42,13 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  // OBS-R2-45 (TD-1322): one page from the server, with the counts of every status under the search
+  const debouncedSearch = useDebounce(search);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [statusCounts, setStatusCounts] = useState<BomAllocationStatusCounts>(EMPTY_ALLOCATION_STATUS_COUNTS);
+  const [exporting, setExporting] = useState(false);
+  useEffect(() => { setPage(1); }, [debouncedSearch, statusFilter]);
 
   // Allocation Modal State
   const [showAllocateModal, setShowAllocateModal] = useState(false);
@@ -71,22 +84,23 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
   const loadAllocations = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const queryParams = new URLSearchParams();
-      if (statusFilter !== 'all') queryParams.append('status', statusFilter);
-      if (search) queryParams.append('search', search);
-
-      const res = await fetchJson(`/inventory/allocations?${queryParams.toString()}`, { signal });
+      const res = await fetchJson(
+        bomAllocationListUrl({ page, limit: ALLOCATION_PAGE_SIZE, search: debouncedSearch, status: statusFilter }), { signal });
       if (signal?.aborted) return;
-      setAllocations(res?.allocations || []);
+      setAllocations(Array.isArray(res?.allocations) ? res.allocations : []);
+      setTotal(Number(res?.total) || 0);
+      setStatusCounts(res?.statusCounts ?? EMPTY_ALLOCATION_STATUS_COUNTS);
       setLoadError(null);
     } catch (err) {
       if (isAbortError(err) || signal?.aborted) return;
       setAllocations([]);
+      setTotal(0);
+      setStatusCounts(EMPTY_ALLOCATION_STATUS_COUNTS);
       setLoadError(errorMessageOf(err) || 'خواندن تخصیص‌های مواد اولیه ممکن نشد.');
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  }, [statusFilter, search]);
+  }, [statusFilter, debouncedSearch, page]);
 
   const loadMetadata = async (signal?: AbortSignal) => {
     try {
@@ -206,8 +220,20 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
     }
   };
 
-  const handleExportExcel = () => {
-    const data = allocations.map((a, idx) => ({
+  // OBS-R2-45 (TD-1322): the export holds every allocation of the search and status, not only the page on screen
+  const handleExportExcel = async () => {
+    setExporting(true);
+    let all: typeof allocations;
+    try {
+      const res = await fetchJson(bomAllocationListUrl({ search: debouncedSearch, status: statusFilter }));
+      all = Array.isArray(res?.allocations) ? res.allocations : [];
+    } catch (err) {
+      toast.error(errorMessageOf(err) || 'خواندن تخصیص‌ها برای خروجی اکسل ممکن نشد.');
+      setExporting(false);
+      return;
+    }
+    setExporting(false);
+    const data = all.map((a, idx) => ({
       'ردیف': idx + 1,
       'شناسه تخصیص': a.id,
       'کد پروژه': a.projectCode,
@@ -229,11 +255,12 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
     xlsx.writeFile(wb, bomAllocationsExportFileName(getTodayJalaliDate()));
   };
 
-  // KPIs
-  const totalAllocatedCount = allocations.length;
-  const activeAllocatedCount = allocations.filter((a) => a.status === 'allocated').length;
-  const consumedCount = allocations.filter((a) => a.status === 'consumed').length;
-  const releasedCount = allocations.filter((a) => a.status === 'released').length;
+  // KPIs: every status under the search, from the server (OBS-R2-45)
+  const totalAllocatedCount = statusCounts.all;
+  const activeAllocatedCount = statusCounts.allocated;
+  const consumedCount = statusCounts.consumed;
+  const releasedCount = statusCounts.released;
+  const totalPages = Math.max(1, Math.ceil(total / ALLOCATION_PAGE_SIZE));
 
   return (
     <div className="space-y-6">
@@ -346,8 +373,9 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
 
         <div className="flex items-center gap-2">
           <button
-            onClick={handleExportExcel}
-            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm"
+            onClick={() => void handleExportExcel()}
+            disabled={exporting}
+            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm"
           >
             <Download size={15} />
             <span>خروجی اکسل</span>
@@ -513,6 +541,9 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
               )}
             </tbody>
           </table>
+        </div>
+        <div className="p-3">
+          <ListPager page={page} totalPages={totalPages} total={total} limit={ALLOCATION_PAGE_SIZE} onPage={setPage} disabled={loading} />
         </div>
       </div>
 

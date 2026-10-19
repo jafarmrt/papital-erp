@@ -17,7 +17,9 @@ import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { BOM_ALLOCATE_PERMISSIONS, BOM_CONSUME_PERMISSIONS, BOM_RELEASE_PERMISSIONS, PROJECT_STOCK_IN_PERMISSIONS } from '../lib/permissions/projectPermissions.js';
 import { WAC_CORRECTION_PERMISSION } from '../lib/inventoryAudit/wacCorrection.js';
 import { ITEM_COST_READ_PERMISSIONS, RESERVATION_BUYER_READ_PERMISSIONS, reservedItemsReportForAccess } from '../lib/inventory/reservedItemsReport.js';
+import { parsePagination } from '../lib/pagination.js';
 import { allocationsForCostAccess } from '../lib/inventory/projectMaterialCost.js';
+import { bomAllocationStatusCounts, countBomAllocations, listBomAllocations } from '../services/inventory/bomAllocationList.js';
 import type { AuthUserPayload } from '../types.js';
 import { actorDisplayName } from '../lib/auth/actorDisplayName.js';
 import { ITEM_KARDEX_READ_PERMISSIONS } from '../lib/permissions/stockActionPermissions.js';
@@ -85,7 +87,10 @@ export const allocationsQuerySchema = z.object({
     projectId: z.coerce.number().int().positive().optional(),
     itemId: z.coerce.number().int().positive().optional(),
     status: z.enum(['allocated', 'consumed', 'released']).optional(),
-    search: z.string().optional()
+    search: z.string().optional(),
+    // OBS-R2-45 (TD-1322): with `page` one page of the list
+    page: z.string().optional(),
+    limit: z.string().optional(),
   }).optional()
 });
 
@@ -365,20 +370,24 @@ router.get(
   authorizePermission(...READ_PERMISSIONS.bomAllocations),
   validate(allocationsQuerySchema),
   asyncHandler(async (req, res) => {
-    const projectId = req.query.projectId ? parseInt(req.query.projectId as string, 10) : undefined;
-    const itemId = req.query.itemId ? parseInt(req.query.itemId as string, 10) : undefined;
-    const status = req.query.status as string;
-    const search = req.query.search as string;
-
-    const allocations = await InventoryIntegrityService.getAllAllocations({
-      projectId,
-      itemId,
-      status,
-      search
-    });
-
+    const filter = {
+      projectId: req.query.projectId ? parseInt(req.query.projectId as string, 10) : undefined,
+      itemId: req.query.itemId ? parseInt(req.query.itemId as string, 10) : undefined,
+      status: req.query.status as string | undefined,
+      search: req.query.search as string | undefined,
+    };
     // v10.0.130 (TD-1210): بهای تخصیص فقط برای خوانندگان بهای کالا
     const canReadCost = await can(req.user, ...ITEM_COST_READ_PERMISSIONS);
+    // OBS-R2-45 (TD-1322): searched, filtered and counted in SQL; with `page` one page with the status counts, without it every
+    // allocation the filter finds (the Excel export)
+    if (req.query.page !== undefined) {
+      const { page, limit, offset } = parsePagination(req.query, { limit: 50 });
+      const [rows, total, statusCounts] = await Promise.all([
+        listBomAllocations(filter, { limit, offset }), countBomAllocations(filter), bomAllocationStatusCounts(filter),
+      ]);
+      return res.json({ allocations: allocationsForCostAccess(rows, canReadCost), total, page, limit, statusCounts });
+    }
+    const allocations = await listBomAllocations(filter);
     res.json({ allocations: allocationsForCostAccess(allocations, canReadCost), total: allocations.length });
   })
 );
