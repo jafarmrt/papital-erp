@@ -55,10 +55,23 @@ async function skippedPrices(title: string, siteCurrency: string | null): Promis
   };
 }
 
+/**
+ * The shop currency read last: in memory, else (after a restart) the one the last price run recorded, so the products a
+ * price that rounds to nothing or is in another currency leaves out are listed before the next run (review H-1)
+ */
+async function knownSiteCurrency(): Promise<string | null> {
+  const inMemory = lastSiteCurrency();
+  if (inMemory) return inMemory;
+  const recorded = sql<string>`${wcSyncRuns.summary}->>'siteCurrency'`;
+  const [row] = await orm.select({ code: recorded }).from(wcSyncRuns)
+    .where(and(eq(wcSyncRuns.kind, 'price_push'), sql`coalesce(${recorded}, '') <> ''`)).orderBy(desc(wcSyncRuns.id)).limit(1);
+  return row?.code ? String(row.code) : null;
+}
+
 export async function getShopSyncView(): Promise<WcShopSyncView> {
   const { stored, title } = await activeShopPriceList();
   const priceLists = await ItemPricingService.getPricingStrategies().catch(() => [] as string[]);
-  const siteCurrency = lastSiteCurrency();
+  const siteCurrency = await knownSiteCurrency();
   const skuOn = await isSkuRenameEnabled();
   const [price, sku, skipped, pending, [nightly]] = await Promise.all([
     fieldView('price_push', title !== '', await stoppedLinks('price')),

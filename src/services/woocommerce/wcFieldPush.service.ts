@@ -11,7 +11,7 @@ import { priceListMatcher } from '../../lib/items/excelPriceColumns.js';
 import { chunked, WC_LIST_LIMIT, WC_PUSH_DEADLINE_MS } from '../../lib/woocommerce/wcCatalog.js';
 import { WC_AUTO_MAX_LINK_FAILURES, WC_AUTO_PUSH_MAX_PRODUCTS } from '../../lib/woocommerce/wcAutoPush.js';
 import {
-  isSkuRenameOn, sameSitePrice, sitePriceOf, WC_PRICE_LIST_SETTING_KEY, WC_SKU_RENAME_SETTING_KEY,
+  isSkuRenameOn, isVariableParentType, sameSitePrice, sitePriceOf, WC_PRICE_LIST_SETTING_KEY, WC_SKU_RENAME_SETTING_KEY,
   type WcPriceSkipReason, type WcRunKind,
 } from '../../lib/woocommerce/wcShopSync.js';
 import { ItemPricingService } from '../items/itemPricing.service.js';
@@ -83,7 +83,7 @@ export async function wantedSitePrices(links: Link[], priceList: string, siteCur
   const skipped: WantedPrices['skipped'] = [];
   for (const link of links) {
     if (link.siteType === '') { skipped.push({ itemId: link.itemId, reason: 'not_read' }); continue; }
-    if (link.siteType === 'variable') { skipped.push({ itemId: link.itemId, reason: 'variable_parent' }); continue; }
+    if (isVariableParentType(link.siteType)) { skipped.push({ itemId: link.itemId, reason: 'variable_parent' }); continue; }
     const price = latest.get(link.itemId);
     const site = price ? sitePriceOf(price.price, price.currency, siteCurrency) : { skip: 'no_price' as const };
     if ('skip' in site) skipped.push({ itemId: link.itemId, reason: site.skip });
@@ -111,6 +111,7 @@ interface Planned { link: Link; fields: Record<string, unknown>; values: LinkRow
 /** Sends what the run planned and records the outcomes on the links and one run row, in one transaction */
 async function sendAndRecord(
   kind: 'price_push' | 'sku_push', plan: Planned[], totalLinks: number, extra: Record<string, unknown>, signal: AbortSignal,
+  sentDetails?: (outcomes: Array<FieldOutcome<Link>>, plan: Planned[]) => Record<string, unknown>,
 ): Promise<{ result: FieldRunResult; status: 'ok' | 'partial' | 'failed' }> {
   const conn = await requireWcConnection();
   const outcomes: Array<FieldOutcome<Link>> = await sendLinkFields(conn, plan.map(p => ({ link: p.link, fields: p.fields })), signal);
@@ -134,7 +135,7 @@ async function sendAndRecord(
     }), now);
     await tx.insert(wcSyncRuns).values({
       kind, status, startedAt: now, finishedAt: now,
-      summary: { trigger: 'auto', ...extra, totalLinks, syncedCount: result.syncedCount, failedCount: result.failedCount,
+      summary: { trigger: 'auto', ...extra, ...(sentDetails ? sentDetails(outcomes, plan) : {}), totalLinks, syncedCount: result.syncedCount, failedCount: result.failedCount,
         skippedCount: result.skippedCount, errors: errors.slice(0, 20) },
     });
   });
@@ -172,6 +173,29 @@ function outcomeOf(sent: { result: FieldRunResult; status: 'ok' | 'partial' | 'f
   return { state: sent.status === 'failed' ? 'failed' : 'pushed', result: sent.result };
 }
 
+/** The links whose shop price differs from the price list's, with the price each gets */
+async function planPrices(links: Link[], title: string, siteCurrency: string, options: FieldRunOptions): Promise<Planned[]> {
+  const { wanted } = await wantedSitePrices(links, title, siteCurrency);
+  const differing = links.filter(l => wanted.has(l.itemId) && !sameSitePrice(l.siteRegularPrice, wanted.get(l.itemId) ?? ''));
+  return differing.slice(0, options.maxProducts ?? WC_AUTO_PUSH_MAX_PRODUCTS).map((link) => {
+    const value = wanted.get(link.itemId) ?? '';
+    return { link, fields: { regular_price: value }, values: { siteRegularPrice: value, priceError: '', priceFailureCount: 0 } };
+  });
+}
+
+/** review M-2: the prices a run changed, ids and numbers only (no name or code), the first `WC_PRICE_CHANGES_KEPT` */
+export const WC_PRICE_CHANGES_KEPT = 200;
+function priceChanges(sent: Array<FieldOutcome<Link>>, plan: Planned[]): Record<string, unknown> {
+  const toOf = new Map(plan.map(p => [p.link.id, String(p.fields.regular_price ?? '')]));
+  const done = sent.filter(o => !o.error);
+  return {
+    changed: done.slice(0, WC_PRICE_CHANGES_KEPT).map(o => ({
+      productId: o.link.wcProductId, variationId: o.link.wcVariationId, from: o.link.siteRegularPrice || null, to: toOf.get(o.link.id) ?? null,
+    })),
+    changedTotal: done.length,
+  };
+}
+
 /** One automatic price run */
 export function runPricePushOnce(now: Date = new Date(), options: FieldRunOptions = {}): Promise<FieldRunOutcome> {
   return runField('price_push', async () => (await activeShopPriceList()).title !== '', now, async (signal) => {
@@ -179,15 +203,20 @@ export function runPricePushOnce(now: Date = new Date(), options: FieldRunOption
     if (!title) return { state: 'off' };
     const links = (await liveLinks()).filter(l => l.priceFailureCount < WC_AUTO_MAX_LINK_FAILURES);
     if (links.length === 0) return { state: 'nothing' };
-    const siteCurrency = await readSiteCurrency(await requireWcConnection(), signal);
-    const { wanted } = await wantedSitePrices(links, title, siteCurrency);
-    const differing = links.filter(l => wanted.has(l.itemId) && !sameSitePrice(l.siteRegularPrice, wanted.get(l.itemId) ?? ''));
-    const plan = differing.slice(0, options.maxProducts ?? WC_AUTO_PUSH_MAX_PRODUCTS).map((link) => {
-      const value = wanted.get(link.itemId) ?? '';
-      return { link, fields: { regular_price: value }, values: { siteRegularPrice: value, priceError: '', priceFailureCount: 0 } };
-    });
+    const conn = await requireWcConnection();
+    let siteCurrency = await readSiteCurrency(conn, signal);
+    let plan = await planPrices(links, title, siteCurrency, options);
+    if (plan.length > 0) {
+      // review M-1: before anything is sent, the shop currency is read again, so a shop switched between toman and rial
+      // within the cache window never gets a price in the old unit
+      const current = await readSiteCurrency(conn, signal, { fresh: true });
+      if (current !== siteCurrency) {
+        siteCurrency = current;
+        plan = await planPrices(links, title, siteCurrency, options);
+      }
+    }
     if (plan.length === 0) return { state: 'nothing' };
-    return outcomeOf(await sendAndRecord('price_push', plan, links.length, { priceList: title, siteCurrency }, signal));
+    return outcomeOf(await sendAndRecord('price_push', plan, links.length, { priceList: title, siteCurrency }, signal, priceChanges));
   });
 }
 

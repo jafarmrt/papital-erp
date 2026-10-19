@@ -117,7 +117,8 @@ function batchAnswer(store: MockWooCatalogStore, body: string, products: MockPro
       if ('sku' in row) {
         // WooCommerce refuses a SKU another product or variation holds
         const sku = String(row.sku);
-        if (shopRows(products).some(r => r.id !== row.id && r.sku === sku)) {
+        // WooCommerce compares SKUs without letter case (review N-5)
+        if (shopRows(products).some(r => r.id !== row.id && r.sku.toLowerCase() === sku.toLowerCase())) {
           return { id: row.id, error: { code: 'product_invalid_sku', message: 'شناسه محصول (SKU) تکراری است.' } };
         }
         store.skusSent.set(row.id, sku);

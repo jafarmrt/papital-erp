@@ -448,9 +448,9 @@
 | POST | `/api/woocommerce/auto-push` | woocommerce.manage |
 | GET | `/api/woocommerce/catalog` | woocommerce.view |
 | GET | `/api/woocommerce/order-logs` | woocommerce.view |
-| POST | `/api/woocommerce/price-list` | woocommerce.manage |
+| POST | `/api/woocommerce/price-list` | woocommerce.manage & products.edit_price |
 | POST | `/api/woocommerce/refresh-products` | woocommerce.manage |
-| POST | `/api/woocommerce/sku-rename` | woocommerce.manage |
+| POST | `/api/woocommerce/sku-rename` | woocommerce.manage & products.change_code |
 | POST | `/api/woocommerce/sync-all-stocks` | woocommerce.manage |
 | POST | `/api/woocommerce/sync-item` | woocommerce.manage |
 | POST | `/api/woocommerce/sync-order-by-id` | woocommerce.manage |

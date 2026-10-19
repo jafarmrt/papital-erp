@@ -1,5 +1,6 @@
 import { ValidationError } from '../../errors/customErrors.js';
 import { WC_BATCH_SIZE, WC_MAX_CATALOG_PAGES, type WcUnmatchedProduct } from '../../lib/woocommerce/wcCatalog.js';
+import { isVariableParentType } from '../../lib/woocommerce/wcShopSync.js';
 import { wcRequest, WC_SHOP_REQUEST_FAILED, type WcConnection } from './wcClient.js';
 
 /**
@@ -166,7 +167,7 @@ export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal):
       productId, variationId: 0, name, sku, stock: stockOf(p), manageStock: p.manage_stock === true,
       type: String(p.type ?? '').slice(0, 50), regularPrice: regularPriceOf(p),
     });
-    if (p.type === 'variable') variable.push({ productId, name, sku });
+    if (isVariableParentType(String(p.type ?? ''))) variable.push({ productId, name, sku });
   }
   // review N-G: the first failed variation read aborts the reads still in flight; the deadline aborts them all too
   const readers = new AbortController();

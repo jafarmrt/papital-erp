@@ -10,11 +10,11 @@ import { WC_AUTO_MAX_LINK_FAILURES } from '../../lib/woocommerce/wcAutoPush.js';
  * `POST /woocommerce/price-list` and `/sku-rename` did not exist and the shop was never read again on its own.
  */
 const SETTING_KEYS = ['wc_price_list', 'wc_sku_rename', 'wc_auto_push', 'pricing_strategies'];
-const PRICE_LIST = 'فروشگاه';
+export const PRICE_LIST = 'فروشگاه';
 /** past any wait the earlier failed runs set */
-const later = (hours: number) => new Date(Date.now() + hours * 3_600_000);
+export const later = (hours: number) => new Date(Date.now() + hours * 3_600_000);
 
-async function withSendSettings<T>(h: Harness, fn: () => Promise<T>): Promise<T> {
+export async function withSendSettings<T>(h: Harness, fn: () => Promise<T>): Promise<T> {
   const previous = await h.q(`SELECT key, value FROM app_settings WHERE key = ANY($1)`, [SETTING_KEYS]);
   const { forgetSiteCurrency } = await import('../../services/woocommerce/wcSiteCurrency.js');
   try {
@@ -29,7 +29,7 @@ async function withSendSettings<T>(h: Harness, fn: () => Promise<T>): Promise<T>
   }
 }
 
-async function setPrice(h: Harness, itemId: number, price: number, currency = 'IRR'): Promise<void> {
+export async function setPrice(h: Harness, itemId: number, price: number, currency = 'IRR'): Promise<void> {
   const updated = await h.q(`UPDATE item_prices SET price = $3, currency = $4 WHERE item_id = $1 AND title = $2 AND is_deleted = 0 RETURNING id`, [itemId, PRICE_LIST, price, currency]);
   if (updated.length === 0) await h.q(`INSERT INTO item_prices (item_id, title, price, currency) VALUES ($1, $2, $3, $4)`, [itemId, PRICE_LIST, price, currency]);
 }
@@ -38,14 +38,14 @@ async function fields() {
   return import('../../services/woocommerce/wcFieldPush.service.js');
 }
 
-async function linkFields(h: Harness, itemId: number) {
+export async function linkFields(h: Harness, itemId: number) {
   const [row] = await h.q(
     `SELECT site_sku, site_type, site_regular_price, price_error, price_failure_count, sku_error, sku_failure_count, site_stock
        FROM wc_product_links WHERE is_deleted = 0 AND item_id = $1`, [itemId]);
   return row as Record<string, unknown> | undefined;
 }
 
-interface ShopSyncBody {
+export interface ShopSyncBody {
   shopSync?: {
     priceList?: string; siteCurrency?: string | null;
     price?: { enabled?: boolean; skipped?: Array<{ itemId: number; reason: string }>; stopped?: Array<{ itemId: number }>; lastRun?: { summary?: { trigger?: string } } | null };

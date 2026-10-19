@@ -2,6 +2,7 @@ import { useId } from 'react';
 import { CalendarClock, Tag, Barcode } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { confirmAction } from '../ConfirmDialogHost';
+import { useHasPermission } from '../../contexts/AuthContext';
 import { useSetWcPriceListMutation, useSetWcSkuRenameMutation } from '../../hooks/queries/useWooCatalogQueries';
 import {
   fieldRunText, PRICE_PUSH_ENABLE_CONFIRM, siteCurrencyLabel, SKU_RENAME_ENABLE_CONFIRM, WC_NIGHTLY_HOUR, type WcFieldPushView, type WcShopSyncView,
@@ -70,6 +71,7 @@ function PriceSection({ view, canManage }: { view: WcShopSyncView; canManage: bo
       )}
       <p className="text-xs text-slate-600 leading-relaxed">
         قیمت فعال فهرست برگزیده هر دقیقه به «قیمت عادی» محصولات وصل‌شده می‌رود، فقط وقتی با قیمت سایت فرق دارد. قیمت حراج سایت دست نمی‌خورد.
+        قیمت عادی‌ای که در سایت با دست عوض شود، تا وقتی این ارسال روشن است دوباره با قیمت فهرست جایگزین می‌شود.
       </p>
       {view.price.enabled && <FieldRun label="آخرین ارسال قیمت" view={view.price} />}
       <WcPriceSkipList rows={view.price.skipped} total={view.price.skippedTotal} />
@@ -88,7 +90,7 @@ function SkuSection({ view, canManage }: { view: WcShopSyncView; canManage: bool
   const onSwitch = async () => {
     const enabled = !sku.enabled;
     if (enabled && !(await confirmAction({
-      title: 'تغییر خودکار کد در سایت', message: SKU_RENAME_ENABLE_CONFIRM, confirmText: 'روشن شود', cancelText: 'انصراف',
+      title: 'تغییر خودکار کد در سایت', message: SKU_RENAME_ENABLE_CONFIRM(sku.pending), confirmText: 'روشن شود', cancelText: 'انصراف',
     }))) return;
     try {
       const res = await setSkuRename.mutateAsync(enabled);
@@ -129,12 +131,18 @@ function SkuSection({ view, canManage }: { view: WcShopSyncView; canManage: bool
   );
 }
 
+/**
+ * `canManage` is the tab's `woocommerce.manage`; the price list also needs `products.edit_price` and the SKU rename
+ * `products.change_code`, the keys their routes ask (review M-3)
+ */
 export function WcShopSyncPanel({ view, canManage }: { view: WcShopSyncView; canManage: boolean }) {
+  const canPrice = useHasPermission('products.edit_price') && canManage;
+  const canSku = useHasPermission('products.change_code') && canManage;
   const nightly = view.lastNightly;
   return (
     <div className="bg-white border border-indigo-100 rounded-lg p-3 space-y-3" aria-label="ارسال قیمت، تغییر کد و بازخوانی شبانه">
-      <PriceSection view={view} canManage={canManage} />
-      <SkuSection view={view} canManage={canManage} />
+      <PriceSection view={view} canManage={canPrice} />
+      <SkuSection view={view} canManage={canSku} />
       <section className="space-y-2 border-t border-indigo-50 pt-2" aria-label="بازخوانی شبانه">
         <div className="text-xs font-bold text-indigo-950 flex items-center gap-2">
           <CalendarClock size={15} className="text-indigo-600" /> بازخوانی شبانه
@@ -148,7 +156,7 @@ export function WcShopSyncPanel({ view, canManage }: { view: WcShopSyncView; can
             ? `${formatPersianDateTime(nightly.at)} ${nightly.status === 'failed' ? `(ناموفق) ${nightly.error}` : `(${formatPersianNumber(view.differencesTotal)} ناهمخوانی)`}`
             : 'هنوز انجام نشده'}
         </div>
-        <WcDriftList rows={view.differences} total={view.differencesTotal} />
+        <WcDriftList rows={view.differences} total={view.differencesTotal} siteCurrency={view.siteCurrency} />
       </section>
     </div>
   );

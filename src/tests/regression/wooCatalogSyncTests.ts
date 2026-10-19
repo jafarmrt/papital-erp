@@ -9,6 +9,7 @@ import {
   autoPushCapCase, autoPushOrderListMovedCase, autoPushOrderPageEdgeCase, autoPushRefusedBatchCase, autoPushRunPurgeCase, autoPushWebhookAndHourlyCase,
 } from './wooAutoPushReviewTests.js';
 import { autoPushFailedHoldCase, autoPushHandTagDigitsCase, autoPushOrderOverlapCase, autoPushOrderWithoutIdCase } from './wooAutoPushHoldTests.js';
+import { priceReviewCase, skuAndPurgeReviewCase } from './wooShopSyncReviewTests.js';
 import { nightlyReReadCase, pricePushCase, skuRenameCase } from './wooShopSyncTests.js';
 import { WC_LIST_LIMIT } from '../../lib/woocommerce/wcCatalog.js';
 
@@ -96,6 +97,12 @@ export async function runWooCatalogSyncTests(shouldRun: ShouldRun): Promise<Test
     ['reg_wc_nightly_reread_d04',
       'D-04 part C: the nightly re-read runs once a business day from the nightly hour while a send is on, lists stock and price differences without an audit row and tries a failed reading at most three times',
       ['d04', 'woocommerce', 'nightly'], nightlyReReadCase],
+    ['reg_wc_price_review_d04',
+      'D-04 part C review H-1 / M-1 / M-2 / M-3 / N-4: a thousand-toman shop gets the exact price, the currency is read again before a price is sent, the run row names the changed prices, the price list needs products.edit_price and a variable-subscription parent is a parent',
+      ['d04', 'woocommerce', 'price'], priceReviewCase],
+    ['reg_wc_sku_purge_review_d04',
+      'D-04 part C review M-3 / N-5 / N-6: the SKU rename needs products.change_code, a SKU held in another letter case is refused and nightly run rows older than 30 days are purged',
+      ['d04', 'woocommerce', 'sku'], skuAndPurgeReviewCase],
     ['reg_wc_synced_orders_by_log_obs_r2_83',
       'OBS-R2-83: the synced-orders list shows the invoices the order log names, not invoices whose notes mention an online order',
       ['obs_r2_83', 'woocommerce', 'orders'], syncedOrdersCase],

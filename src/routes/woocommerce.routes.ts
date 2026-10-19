@@ -211,7 +211,8 @@ router.get('/catalog', authorizePermission('woocommerce.view'), asyncHandler(asy
 }));
 
 // «فهرست قیمت فروشگاه» (part C; none by default): the active price of this list goes to each linked product's regular price
-router.post('/price-list', authorizePermission('woocommerce.manage'), idempotency({ scope: 'woocommerce' }), validate(priceListSchema), asyncHandler(async (req, res) => {
+// review M-3: sending prices to the shop also needs the key that edits prices, renaming SKUs the key that changes item codes
+router.post('/price-list', authorizePermission('woocommerce.manage'), authorizePermission('products.edit_price'), idempotency({ scope: 'woocommerce' }), validate(priceListSchema), asyncHandler(async (req, res) => {
   const result = await setShopPriceList({ req }, String(req.body.priceList));
   const notRead = result.priceList && result.notRead > 0
     ? ` نوع ${formatPersianNumber(result.notRead)} محصول هنوز از سایت خوانده نشده و قیمت آن‌ها پس از «بازخوانی محصولات سایت» فرستاده می‌شود.`
@@ -223,7 +224,7 @@ router.post('/price-list', authorizePermission('woocommerce.manage'), idempotenc
 }));
 
 // «تغییر خودکار کد در سایت» on or off (part C; off by default)
-router.post('/sku-rename', authorizePermission('woocommerce.manage'), idempotency({ scope: 'woocommerce' }), validate(skuRenameSchema), asyncHandler(async (req, res) => {
+router.post('/sku-rename', authorizePermission('woocommerce.manage'), authorizePermission('products.change_code'), idempotency({ scope: 'woocommerce' }), validate(skuRenameSchema), asyncHandler(async (req, res) => {
   const result = await setSkuRename({ req }, req.body.enabled === true);
   res.json({
     success: true, ...result,

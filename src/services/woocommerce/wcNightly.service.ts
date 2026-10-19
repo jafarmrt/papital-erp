@@ -50,7 +50,8 @@ async function nightlyAttempts(businessDay: string): Promise<NightlyAttempts> {
 async function wantedPricesForNightly(signal: AbortSignal): Promise<ReadonlyMap<number, string> | undefined> {
   const { title } = await activeShopPriceList();
   if (!title) return undefined;
-  const currency = await readSiteCurrency(await requireWcConnection(), signal);
+  // review M-1: the nightly reading never relies on a currency kept from earlier in the day
+  const currency = await readSiteCurrency(await requireWcConnection(), signal, { fresh: true });
   return (await wantedSitePrices(await liveLinks(), title, currency)).wanted;
 }
 

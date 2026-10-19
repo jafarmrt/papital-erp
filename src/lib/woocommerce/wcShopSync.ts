@@ -28,17 +28,32 @@ export const WC_SITE_CURRENCY_TTL_MS = 6 * 60 * 60_000;
 /** the kinds of `wc_sync_runs` rows (migration 0131 added the price and SKU runs) */
 export type WcRunKind = 'refresh' | 'stock_push' | 'price_push' | 'sku_push';
 
-export type WcPriceSkipReason = 'no_price' | 'currency_mismatch' | 'not_positive' | 'variable_parent' | 'not_read';
+export type WcPriceSkipReason = 'no_price' | 'currency_mismatch' | 'not_positive' | 'inexact_unit' | 'variable_parent' | 'not_read';
 
 export const WC_PRICE_SKIP_LABELS: Record<WcPriceSkipReason, string> = {
   no_price: 'در فهرست قیمت فروشگاه قیمتی ندارد',
   currency_mismatch: 'ارز قیمت با واحد پول سایت یکی نیست',
   not_positive: 'قیمت در واحد پول سایت به صفر گرد می‌شود',
+  inexact_unit: 'قیمت در واحد پول سایت با چهار رقم اعشار دقیق نوشته نمی‌شود',
   variable_parent: 'محصول متغیر است و قیمت روی گونه‌های آن است',
   not_read: 'نوع محصول هنوز از سایت خوانده نشده؛ «بازخوانی محصولات سایت» را بزنید',
 };
 
-/** The shop's regular price for a program price, or why it is not sent */
+/** Decimal places of a price sent to a shop whose unit is a thousand rials or tomans */
+export const WC_SITE_PRICE_PLACES = 4;
+
+/** A decimal text without trailing zeros after its point («2.5000» → «2.5», «13.0000» → «13») */
+function withoutTrailingZeros(text: string): string {
+  return text.includes('.') ? text.replace(/0+$/, '').replace(/\.$/, '') : text;
+}
+
+/**
+ * The shop's regular price for a program price, or why it is not sent. A rial price goes to a rial-unit shop divided by its
+ * `rialUnitMultiplier`: to a rial or toman shop rounded to a whole unit (at most 5 rials off), to a thousand-rial or
+ * thousand-toman shop exactly, at most `WC_SITE_PRICE_PLACES` decimals (15,000 rials are 1.5 thousand tomans, never 2), and
+ * a price that cannot be written exactly there is not sent (review H-1). Another currency goes only to a shop of that
+ * currency, rounded to two decimals.
+ */
 export function sitePriceOf(
   price: string | number | null | undefined, priceCurrency: string | null | undefined, siteCurrency: string,
 ): { value: string } | { skip: WcPriceSkipReason } {
@@ -50,13 +65,24 @@ export function sitePriceOf(
   let value;
   if (multiplier !== undefined) {
     if (own !== 'IRR') return { skip: 'currency_mismatch' };
-    value = fin(raw).divide(multiplier, 0);
+    if (multiplier <= 10) {
+      value = fin(raw).divide(multiplier, 0);
+    } else {
+      value = fin(raw).divide(multiplier, WC_SITE_PRICE_PLACES);
+      if (!value.multiply(multiplier).equals(raw)) return { skip: 'inexact_unit' };
+    }
   } else {
     if (own !== site) return { skip: 'currency_mismatch' };
     value = fin(raw).round(2);
   }
   if (!value.isPositive()) return { skip: 'not_positive' };
-  return { value: value.toString() };
+  return { value: withoutTrailingZeros(value.toString()) };
+}
+
+/** A shop product type whose prices are on its variations (`variable`, and extensions such as `variable-subscription`) */
+export function isVariableParentType(type: string | null | undefined): boolean {
+  const t = String(type ?? '').trim().toLowerCase();
+  return t === 'variable' || t.startsWith('variable-');
 }
 
 /** Whether the shop's regular price (as the shop sends it, '' for none) already is this one */
@@ -97,6 +123,8 @@ export interface WcDriftRow {
   site: string | null;
   /** stock: the number the program last sent or read; price: the price the program sends */
   program: string | null;
+  /** the item's unit, for a stock difference (rows recorded before review N-2 have none) */
+  unit?: string;
 }
 
 export interface WcPriceSkipRow extends WcCatalogItem { reason: WcPriceSkipReason }
@@ -129,10 +157,15 @@ export interface WcShopSyncView {
 
 export const PRICE_PUSH_ENABLE_CONFIRM = (title: string) =>
   `از این پس هر دقیقه قیمت فهرست «${title}» به «قیمت عادی» محصولات وصل‌شده در سایت فرستاده می‌شود (قیمت حراج سایت دست نمی‌خورد). `
-  + 'قیمت ریالی برای سایت تومانی بر ده تقسیم و گرد می‌شود و قیمتی که ارزش با واحد پول سایت یکی نیست فرستاده نمی‌شود. روشن شود؟';
+  + 'قیمت ریالی برای سایت تومانی بر ده تقسیم و گرد می‌شود و قیمتی که ارز آن با واحد پول سایت یکی نیست فرستاده نمی‌شود. '
+  + 'قیمتی که در سایت با دست عوض شود، دوباره با قیمت فهرست جایگزین می‌شود. روشن شود؟';
 
-export const SKU_RENAME_ENABLE_CONFIRM =
-  'از این پس پس از تغییر کد هر کالا، شناسه محصول (SKU) همان محصول در سایت هم در دقیقه بعد به کد تازه تغییر می‌کند. '
+/** The question before the SKU rename is turned on; `pending` products already carry an earlier code and change at once */
+export const SKU_RENAME_ENABLE_CONFIRM = (pending: number) =>
+  (pending > 0
+    ? `کد ${formatPersianNumber(pending)} محصول در سایت هنوز کد پیشین کالاست و در دقیقهٔ بعد به کد تازه تغییر می‌کند. `
+    : '')
+  + 'از این پس هم پس از تغییر کد هر کالا، شناسه محصول (SKU) همان محصول در سایت در دقیقه بعد به کد تازه تغییر می‌کند. '
   + 'سفارشی که با کد قدیم برسد همچنان کالا را پیدا می‌کند. روشن شود؟';
 
 const RIAL_UNIT_LABELS: Record<string, string> = { IRR: 'ریال', IRT: 'تومان', TOMAN: 'تومان', IRHR: 'هزار ریال', IRHT: 'هزار تومان' };
