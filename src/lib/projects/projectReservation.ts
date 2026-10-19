@@ -16,7 +16,7 @@
  */
 
 import { fin, type FinancialDecimal } from '../financialDecimal.js';
-import { findProjectItemMatch } from './projectItemMatch.js';
+import { findProjectItemMatch, itemCodeKey, itemNameKey, type MatchableItem } from './projectItemMatch.js';
 
 /** کالای انبار برای تطبیق ردیف‌های کنترل موجودی (findProjectItemMatch: کد، سپس نام دقیق) */
 export interface ReservationStockItem {
@@ -69,10 +69,21 @@ export interface ReservationShortage {
   reservedByOthers: number;
 }
 
+/** TD-1341 (M1): a materials row that reaches no live item, summed over its section, code, name and unit (in its own unit) */
+export interface ReservationUnmatchedRow {
+  code: string;
+  name: string;
+  unit: string;
+  qty: number;
+  section?: string;
+}
+
 export interface ProjectReservationPlan {
   reserved: ProjectReservedItem[];
   shortages: ReservationShortage[];
   unitMismatches: ReservationUnitMismatch[];
+  /** rows that reach no live item; they reserve nothing (the finalize stores only `reserved` and `shortages`) */
+  unmatched: ReservationUnmatchedRow[];
 }
 
 export interface ProjectReservationOptions {
@@ -80,6 +91,17 @@ export interface ProjectReservationOptions {
   reservedByOthers?: ReadonlyMap<number, number>;
   /** v10.0.206 (TD-945): مقدار هر کالا که تاکنون به همین پروژه داده شده؛ از نیاز کم می‌شود */
   issuedToProject?: ReadonlyMap<number, number>;
+  /**
+   * TD-1341 (بستهٔ ۱۲ بند ۱، گزینهٔ ب): رزرو فعلی خود پروژه به ازای شناسه کالا، برای «تکمیل رزرو». رزرو موجود تا نیاز نگه داشته
+   * می‌شود (اول بیاید، اول ببرد؛ رزرو بعدی دیگران آن را کم نمی‌کند) و فقط موجودی آزاد پس از همهٔ رزروها افزوده می‌شود.
+   */
+  ownReserved?: ReadonlyMap<number, number>;
+  /**
+   * TD-1341 (M1): the code and name each stored reservation row keeps, as another name of the live item it holds (`id`). A row
+   * that names no live item by code or name is matched through them, code before name, so a recoded or renamed item keeps its
+   * reservation in «تکمیل رزرو»; the finalize passes none and matches exactly as before.
+   */
+  itemAliases?: ReadonlyArray<MatchableItem>;
 }
 
 type Row = Record<string, unknown>;
@@ -187,6 +209,16 @@ export function rowQtyInItemUnit(row: { unit?: unknown; conversionRate?: unknown
   return needInItemUnit(need, unitKey(itemUnit))?.qty ?? null;
 }
 
+/** A row's live item: the finalize's rule, then through an alias of a reserved item, code before name (TD-1341, M1) */
+function matchNeedRow(row: NeedRow, stockItems: ReservationStockItem[], aliases: ReadonlyArray<MatchableItem>): ReservationStockItem | undefined {
+  if (aliases.length === 0) return findProjectItemMatch({ code: row.code, name: row.name }, stockItems);
+  const viaAlias = (alias: MatchableItem | undefined) => (alias ? stockItems.find(i => i.id === alias.id) : undefined);
+  return findProjectItemMatch({ code: row.code }, stockItems)
+    ?? viaAlias(findProjectItemMatch({ code: row.code }, aliases))
+    ?? findProjectItemMatch({ name: row.name }, stockItems)
+    ?? viaAlias(findProjectItemMatch({ name: row.name }, aliases));
+}
+
 export function planProjectReservation(
   sections: unknown,
   products: unknown,
@@ -197,11 +229,19 @@ export function planProjectReservation(
 ): ProjectReservationPlan {
   const needs = new Map<number, ItemNeed>();
   const mismatches = new Map<string, ReservationUnitMismatch>();
+  const unmatched = new Map<string, ReservationUnmatchedRow>();
+  const aliases = options.itemAliases ?? [];
 
   for (const row of collectNeedRows(sections, products, manualPurchaseItems)) {
     // v9.0.363 (TD-749، TD-768): قاعده مشترک تطبیق با مرورگر؛ کد کالا بر نام کالای دیگر مقدم است
-    const match = findProjectItemMatch({ code: row.code, name: row.name }, stockItems);
-    if (!match) continue;
+    const match = matchNeedRow(row, stockItems, aliases);
+    if (!match) {
+      const key = [row.section ?? '', itemCodeKey(row.code), itemNameKey(row.name), unitKey(row.unit)].join('|');
+      const cur = unmatched.get(key);
+      if (cur) cur.qty = fin(cur.qty).add(row.qty).round(4).toNumber();
+      else unmatched.set(key, { code: row.code, name: row.name, unit: row.unit, qty: fin(row.qty).round(4).toNumber(), ...(row.section ? { section: row.section } : {}) });
+      continue;
+    }
     const itemUnit = unitKey(match.unit);
     const converted = needInItemUnit(row, itemUnit);
     if (!converted) {
@@ -232,8 +272,11 @@ export function planProjectReservation(
     if (!(required > 0)) continue;
     const stock = Number(item.currentStock) || 0;
     const others = Math.max(0, Number(options.reservedByOthers?.get(item.id)) || 0);
-    const free = Math.max(0, fin(stock).subtract(others).toNumber());
-    const reservedQty = Math.min(free, required);
+    // TD-1341: the project keeps what it already holds up to its need, and takes more only from stock nobody holds
+    const own = Math.max(0, Number(options.ownReserved?.get(item.id)) || 0);
+    const kept = Math.min(own, required);
+    const free = Math.max(0, fin(stock).subtract(others).subtract(own).toNumber());
+    const reservedQty = Math.min(required, fin(kept).add(free).toNumber());
     const unit = text(item.unit) || DEFAULT_ROW_UNIT;
     if (reservedQty < required) {
       shortages.push({
@@ -256,7 +299,7 @@ export function planProjectReservation(
       reservedAt,
     });
   }
-  return { reserved, shortages, unitMismatches: [...mismatches.values()] };
+  return { reserved, shortages, unitMismatches: [...mismatches.values()], unmatched: [...unmatched.values()] };
 }
 
 export function buildProjectReservation(

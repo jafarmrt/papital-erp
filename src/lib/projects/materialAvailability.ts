@@ -176,8 +176,8 @@ export function buildMaterialAvailabilityView(input: {
 
 /**
  * v10.2.3 (TD-1290): کالاهایی که ثبت نهایی ذخیره‌شده کمتر از نیازشان رزرو کرد و اکنون موجودی آزاد نیاز را می‌پوشاند. رزرو
- * ذخیره‌شده با رسیدن موجودی بزرگ نمی‌شود و پیش‌فاکتور فروش هنوز می‌تواند آن موجودی را ببرد؛ برای رزرو آن، ثبت نهایی لغو و
- * دوباره ثبت می‌شود.
+ * ذخیره‌شده با رسیدن موجودی خودبه‌خود بزرگ نمی‌شود و پیش‌فاکتور فروش هنوز می‌تواند آن موجودی را ببرد؛ از TD-1341 «تکمیل رزرو»
+ * آن را بی لغو ثبت نهایی رزرو می‌کند.
  */
 export function storedShortagesNowFree<T extends { itemId: number }>(view: MaterialAvailabilityView, isFinalized: boolean, storedShortages: readonly T[] | null | undefined): T[] {
   if (!isFinalized || view.status !== 'ready') return [];

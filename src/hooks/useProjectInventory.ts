@@ -24,6 +24,7 @@ import { directConversionRate } from '../lib/projects/unitConversion';
 import { storedReservationShortages } from '../lib/projects/projectReservationState';
 import { finalizeReservationOutcome, reservationShortageMessage } from '../lib/projects/reservationOutcome';
 import type { ReservationShortage } from '../lib/projects/projectReservation';
+import type { ReservationReconcileResult } from '../lib/projects/reservationReconcile';
 import { hasPresetShapedSections, projectSectionsFromPreset, type MaterialStockLookup } from '../lib/projects/inventoryControlSections';
 import { findProjectItemMatch } from '../lib/projects/projectItemMatch';
 import { EMPTY_CUSTOM_MATERIAL_FORM, pendingMaterialRequestOf, type CustomMaterialForm } from '../lib/pendingMaterials/customMaterialRequest';
@@ -738,6 +739,14 @@ export function useProjectInventory(
     }
   };
 
+  /** TD-1341: «تکمیل رزرو» ثبت شد؛ نسخه و رزرو ذخیره‌شده همان پاسخ سرور است */
+  const applyReservationReconcile = (result: ReservationReconcileResult) => {
+    projectVersion.remember(result);
+    setReservedItems(Array.isArray(result?.inventory_control?.reservedItems) ? result.inventory_control.reservedItems : []);
+    setReservationShortages(storedReservationShortages(result?.inventory_control));
+    if (onUpdate) onUpdate();
+  };
+
   const handlePrintPurchaseListWithCheck = () => {
     if (purchaseList.length === 0) {
       toast.error('هیچ کالایی برای چاپ وجود ندارد.');
@@ -904,6 +913,9 @@ export function useProjectInventory(
     reportsReloadKey: projectVersion.version,
     handleFinalizeAndReserveStock,
     handleUnfinalizeReservation,
+    applyReservationReconcile,
+    /** TD-1341: نسخه‌ای که «تکمیل رزرو» با آن ثبت می‌شود */
+    projectVersion: projectVersion.version,
     handlePrintPurchaseListWithCheck,
     handleSaveInventoryControl,
     handlePrintPurchaseList,

@@ -34,7 +34,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); route = () => []; confirmAction
 // Persian text the screens show (kept in constants: terminal output stays English)
 const SECTION_ORDER_ONE = 'ثبت سفارش خرید (۱)';
 const SECTION_ORDER = 'ثبت سفارش خرید';
-const REFINALIZE_HINT = 'ثبت نهایی را لغو و دوباره ثبت کنید';
+const REFINALIZE_HINT = 'برای رزرو آن «تکمیل رزرو» را بزنید';
 const DELIVER = 'ورود به انبار';
 const PRICE_LABEL = 'بهای واحد:';
 const OVER_DELIVERY_CONFIRM = 'ثبت تحویل با دلیل';
@@ -103,7 +103,7 @@ describe('section purchase order groups the rows of one item (TD-1290 review F1)
 
 // v10.2.3 (TD-1290, review F5): a finalized project kept its stored reservation when stock arrived, while the row turned
 // «موجود» and a sales proforma could still take that stock
-describe('a finalized project says a re-finalize reserves stock that arrived (TD-1290 review F5)', () => {
+describe('a finalized project points to the reservation reconcile for stock that arrived (TD-1290 review F5, TD-1341)', () => {
   const stored = [{ itemId: 3, itemCode: 'G-1', itemName: 'glue', unit: 'pcs', requiredQty: 5, reservedQty: 2, shortQty: 3, stock: 2, reservedByOthers: 0 }];
 
   it('lists a stored shortage only once the free stock covers it', () => {
