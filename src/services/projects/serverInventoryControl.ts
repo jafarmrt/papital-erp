@@ -87,34 +87,34 @@ async function readLiveStockItems(executor: DbExecutor, narrow?: SQL): Promise<R
   return rows.map(i => ({ ...i, currentStock: Number(i.currentStock) || 0 }));
 }
 
-/** whether the ref finds, in the narrowed list, the step of `findProjectItemMatch` it would find in every live item */
-function resolvedWithin(ref: { code: string; name: string }, list: readonly ReservationStockItem[]): boolean {
-  const code = itemCodeKey(ref.code);
-  if (code) return list.some(i => itemCodeKey(i.code) === code);
-  const name = itemNameKey(ref.name);
-  if (name) return list.some(i => itemNameKey(i.name) === name);
-  return true;
-}
+/**
+ * Code and name characters whose letter case JavaScript and the narrowed SQL key below map alike: the key compares under
+ * the "C" collation, which maps only ASCII letters, so a code with any other character, or a name with a character outside
+ * ASCII and the Arabic script (no letter case) and its joiners, is read whatever its key; for every other item the SQL key
+ * equals `itemCodeKey` / `itemNameKey`
+ */
+const CODE_KEY_UNSAFE = '[^\\u0001-\\u007f]';
+const NAME_KEY_UNSAFE = '[^\\u0001-\\u007f\\u0600-\\u06ff\\u200c\\u200d\\ufb50-\\ufdff\\ufe70-\\ufefc]';
 
 /**
- * The live items whose code key or name key one of the refs holds (the keys of `findProjectItemMatch`), in id order. The
- * SQL keys trim like JavaScript but letter case is the database's (`upper` / `lower`), which differs for some letters
- * («ß» is «SS» only in JavaScript), so when a ref finds no code (or, without a code, no name) in that list, every live item
- * is read, as before TD-1322, and the match stays the one the whole list gives.
+ * The live items that may be a ref's `findProjectItemMatch` among every live item, in id order: those whose code key or
+ * name key one of the refs holds, plus every item whose code or name holds a character the SQL key may case-map unlike
+ * JavaScript («ß» is «SS» only in JavaScript, «İ» and «Σ» differ too). The list holds every item that matches a ref in the
+ * whole list, so the first match by id, by code then by name, is the same.
  */
 async function readStockItemsForRefs(executor: DbExecutor, refs: ReadonlyArray<{ code: string; name: string }>): Promise<ReservationStockItem[]> {
-  // a key holding NUL names no stored item (PostgreSQL text never holds it) and would refuse the query; such a ref falls back
+  // a key holding NUL names no stored item (PostgreSQL text never holds it) and would refuse the query
   const storable = (key: string) => key !== '' && !key.includes('\u0000');
   const codes = [...new Set(refs.map(r => itemCodeKey(r.code)).filter(storable))];
   const names = [...new Set(refs.map(r => itemNameKey(r.name)).filter(storable))];
+  if (codes.length === 0 && names.length === 0) return [];
   const conditions = [
-    codes.length > 0 ? inArray(sql`upper(btrim(${items.code}, ${JS_TRIM_CHARS}))`, codes) : undefined,
-    names.length > 0 ? inArray(sql`lower(btrim(${items.name}, ${JS_TRIM_CHARS}))`, names) : undefined,
+    codes.length > 0 ? inArray(sql`upper(btrim(${items.code}, ${JS_TRIM_CHARS}) COLLATE "C")`, codes) : undefined,
+    names.length > 0 ? inArray(sql`lower(btrim(${items.name}, ${JS_TRIM_CHARS}) COLLATE "C")`, names) : undefined,
+    sql`${items.code} ~ ${CODE_KEY_UNSAFE}`,
+    sql`${items.name} ~ ${NAME_KEY_UNSAFE}`,
   ].filter((c): c is SQL => c !== undefined);
-  if (conditions.length === 0) return refs.every(ref => resolvedWithin(ref, [])) ? [] : readLiveStockItems(executor);
-  const narrowed = await readLiveStockItems(executor, or(...conditions));
-  if (refs.every(ref => resolvedWithin(ref, narrowed))) return narrowed;
-  return readLiveStockItems(executor);
+  return readLiveStockItems(executor, or(...conditions));
 }
 
 export async function resolveServerInventoryControl(
@@ -136,8 +136,8 @@ export async function resolveServerInventoryControl(
   // v9.0.373 (TD-819): ثبت نهایی‌های هم‌زمان پشت سر هم رزرو دیگران را می‌خوانند
   if (finalizing) await executor.execute(sql`SELECT pg_advisory_xact_lock(${ADVISORY_LOCK_KEYS.PROJECT_RESERVATION_FINALIZE}::bigint)`);
   // v9.0.413 (TD-748): بخش الگو (مواد در `items`) با ردیف‌های پروژه ذخیره می‌شود تا رزرو و صفحه‌ها همان ردیف‌ها را بخوانند
-  // OBS-R2-45 (TD-1322): only the live items the rows may name by code key or name key are read, unless a row finds none of
-  // them, when every live item is read (`readStockItemsForRefs`), so the match is the one the whole list gives
+  // OBS-R2-45 (TD-1322): only the live items that may match a row are read (`readStockItemsForRefs`): every item the rows
+  // name by code key or name key and every item whose letter case SQL may map unlike JavaScript, so the match is the whole list's
   if (hasPresetShapedSections(rest.sections)) {
     const presetStock = await readStockItemsForRefs(executor, presetMaterialRefs(rest.sections));
     rest.sections = projectSectionsFromPreset(rest.sections, Array.isArray(products) ? products : [], material =>

@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { asc, eq, inArray, sql } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { items, itemWarehouseStocks, personnel, productionProjects, projectBomAllocations, roles, users } from '../../db/schema.js';
@@ -301,6 +301,38 @@ export async function runSpeedConsistencyV102Tests(shouldRun: ShouldRun): Promis
             wrong.push(`the preset row for ${JSON.stringify(it.code)} / ${JSON.stringify(it.name)} got stock ${row?.stockQty} and ${row?.status}, expected 100 and available`);
           }
         });
+      });
+    if (itemIds.length > 0) {
+      await orm.delete(itemWarehouseStocks).where(inArray(itemWarehouseStocks.itemId, itemIds)).catch(() => undefined);
+      await orm.delete(items).where(inArray(items.id, itemIds)).catch(() => undefined);
+    }
+  }
+
+  if (shouldRun('reg_finalize_case_mapping_pair_td_1322', 'td_1322', 'finalize', 'reservation', 'obs_r2_45')) {
+    const itemIds: number[] = [];
+    await runCase(results, 'reg_finalize_case_mapping_pair_td_1322',
+      'OBS-R2-45 finalize reservation: of two items whose codes differ only by a case mapping PostgreSQL lacks («xß» and «XSS»), the narrowed read reserves the one the whole item list matches (TD-1322)',
+      'items «x<tag>ß» (lower id) and «X<tag>SS», a row naming «X<tag>SS»: the reservation goes to findProjectItemMatch over every live item',
+      async (wrong) => {
+        const { createTestItem } = await import('../fixtures/factories.js');
+        const { resolveServerInventoryControl } = await import('../../services/projects/serverInventoryControl.js');
+        const { findProjectItemMatch } = await import('../../lib/projects/projectItemMatch.js');
+        const tag = `CM${Date.now().toString(36).toUpperCase()}`;
+        for (const code of [`x${tag}ß`, `X${tag}SS`]) {
+          const item = await createTestItem({ type: 'raw_material', code, name: `${code} pair`, unit: 'عدد' });
+          itemIds.push(Number(item.id));
+        }
+        const live = await orm.select({ id: items.id, code: items.code, name: items.name }).from(items).where(eq(items.isDeleted, 0)).orderBy(asc(items.id));
+        const expected = findProjectItemMatch({ code: `X${tag}SS`, name: '' }, live)?.id;
+        if (expected !== itemIds[0]) wrong.push(`the whole list matched item ${expected}, expected the lower id ${itemIds[0]} (test setup)`);
+        const finalized = await resolveServerInventoryControl(
+          { isFinalized: true, manualPurchaseItems: [], sections: [{ id: 'sec-1', title: 'materials', checkType: 'global', globalItems: [
+            { itemId: 'row-0', itemCode: `X${tag}SS`, name: '', unit: 'عدد', requiredQty: 2 },
+          ] }] },
+          {}, [], orm, null,
+        ) as Row & { reservedItems?: Row[] };
+        const reserved = (finalized.reservedItems ?? []).map(r => `${Number(r.itemId)}:${Number(r.reservedQty)}`);
+        if (reserved.join(',') !== `${expected}:2`) wrong.push(`reserved ${JSON.stringify(reserved)}, expected ${expected}:2`);
       });
     if (itemIds.length > 0) {
       await orm.delete(itemWarehouseStocks).where(inArray(itemWarehouseStocks.itemId, itemIds)).catch(() => undefined);
