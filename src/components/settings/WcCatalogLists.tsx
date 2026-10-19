@@ -3,12 +3,12 @@ import { formatPersianCode, formatPersianNumber } from '../../utils';
 
 /** 10.2 package 6 (D-04 part A): what the catalog refresh and the stock push left for a person to look at */
 
-function MoreRow({ shown, total }: { shown: number; total: number }) {
+export function MoreRow({ shown, total }: { shown: number; total: number }) {
   if (total <= shown) return null;
   return <li className="text-slate-500">و {formatPersianNumber(total - shown)} مورد دیگر</li>;
 }
 
-function ListBox({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
+export function ListBox({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
   return (
     <details className="bg-white border border-slate-200 rounded-lg p-3 text-xs">
       <summary className="font-bold text-slate-800 cursor-pointer">{title}</summary>

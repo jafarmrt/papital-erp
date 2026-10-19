@@ -9,6 +9,7 @@ import {
   autoPushCapCase, autoPushOrderListMovedCase, autoPushOrderPageEdgeCase, autoPushRefusedBatchCase, autoPushRunPurgeCase, autoPushWebhookAndHourlyCase,
 } from './wooAutoPushReviewTests.js';
 import { autoPushFailedHoldCase, autoPushHandTagDigitsCase, autoPushOrderOverlapCase, autoPushOrderWithoutIdCase } from './wooAutoPushHoldTests.js';
+import { nightlyReReadCase, pricePushCase, skuRenameCase } from './wooShopSyncTests.js';
 import { WC_LIST_LIMIT } from '../../lib/woocommerce/wcCatalog.js';
 
 /**
@@ -86,6 +87,15 @@ export async function runWooCatalogSyncTests(shouldRun: ShouldRun): Promise<Test
     ['reg_wc_auto_push_run_purge_d04',
       'D-04 part B review c / delta N-6: the daily operational purge removes automatic run rows older than 30 days and keeps manual and recent runs, and one failing purge never skips the others',
       ['d04', 'woocommerce', 'auto'], autoPushRunPurgeCase],
+    ['reg_wc_price_push_d04',
+      'D-04 part C: the price push is off by default, sends the chosen price list in the shop unit only where it differs, never for a variable parent, an unread link or another currency, and stops a refused product after five refusals',
+      ['d04', 'woocommerce', 'price'], pricePushCase],
+    ['reg_wc_sku_rename_d04',
+      'D-04 part C: the SKU rename is off by default, gives the linked product the item\'s new code after a code change and stops a SKU the shop refuses after five refusals',
+      ['d04', 'woocommerce', 'sku'], skuRenameCase],
+    ['reg_wc_nightly_reread_d04',
+      'D-04 part C: the nightly re-read runs once a business day from the nightly hour while a send is on, lists stock and price differences without an audit row and tries a failed reading at most three times',
+      ['d04', 'woocommerce', 'nightly'], nightlyReReadCase],
     ['reg_wc_synced_orders_by_log_obs_r2_83',
       'OBS-R2-83: the synced-orders list shows the invoices the order log names, not invoices whose notes mention an online order',
       ['obs_r2_83', 'woocommerce', 'orders'], syncedOrdersCase],

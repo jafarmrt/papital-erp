@@ -27,6 +27,12 @@ const LINK_COLUMNS = {
   lastError: { column: wcProductLinks.lastError, cast: 'text' },
   failureCount: { column: wcProductLinks.failureCount, cast: 'int' },
   isDeleted: { column: wcProductLinks.isDeleted, cast: 'int' },
+  siteType: { column: wcProductLinks.siteType, cast: 'text' },
+  siteRegularPrice: { column: wcProductLinks.siteRegularPrice, cast: 'text' },
+  priceError: { column: wcProductLinks.priceError, cast: 'text' },
+  priceFailureCount: { column: wcProductLinks.priceFailureCount, cast: 'int' },
+  skuError: { column: wcProductLinks.skuError, cast: 'text' },
+  skuFailureCount: { column: wcProductLinks.skuFailureCount, cast: 'int' },
 } as const satisfies Record<string, { column: unknown; cast: CastType }>;
 
 export type LinkColumn = keyof typeof LINK_COLUMNS;

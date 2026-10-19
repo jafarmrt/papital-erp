@@ -12,6 +12,8 @@ import { makeWcRequest, requireWcConnection, wcRequest } from '../services/wooco
 import { getWcCatalogReport, refreshWcCatalog } from '../services/woocommerce/wcCatalog.service.js';
 import { pushAllStocks, pushItemStock } from '../services/woocommerce/wcStockPush.service.js';
 import { getAutoPushView, setAutoPush } from '../services/woocommerce/wcAutoPush.service.js';
+import { setShopPriceList, setSkuRename } from '../services/woocommerce/wcFieldPush.service.js';
+import { getShopSyncView } from '../services/woocommerce/wcShopSyncView.js';
 import { catalogRefreshMessage, trackingEnabledNote } from '../lib/woocommerce/wcCatalog.js';
 import { formatPersianNumber } from '../utils/persianNumber.js';
 import { z } from 'zod';
@@ -41,6 +43,14 @@ const syncItemSchema = z.object({
 
 // 10.2 package 6 (D-04 part B): the target state of «ارسال خودکار», never a toggle
 const autoPushSchema = z.object({
+  body: z.object({ enabled: z.boolean() }).strict(),
+});
+
+// part C: the price list whose prices go to the shop ('' stops the price push) and the target state of the SKU rename
+const priceListSchema = z.object({
+  body: z.object({ priceList: z.string().max(200) }).strict(),
+});
+const skuRenameSchema = z.object({
   body: z.object({ enabled: z.boolean() }).strict(),
 });
 
@@ -196,8 +206,29 @@ router.post('/sync-order-by-id', authorizePermission('woocommerce.manage'), idem
 
 // 10.2 package 6 (D-04 part A): the links between items and the shop's products, for the WooCommerce tab
 router.get('/catalog', authorizePermission('woocommerce.view'), asyncHandler(async (req, res) => {
-  const [report, autoPush] = await Promise.all([getWcCatalogReport(), getAutoPushView()]);
-  res.json({ ...report, autoPush });
+  const [report, autoPush, shopSync] = await Promise.all([getWcCatalogReport(), getAutoPushView(), getShopSyncView()]);
+  res.json({ ...report, autoPush, shopSync });
+}));
+
+// «فهرست قیمت فروشگاه» (part C; none by default): the active price of this list goes to each linked product's regular price
+router.post('/price-list', authorizePermission('woocommerce.manage'), idempotency({ scope: 'woocommerce' }), validate(priceListSchema), asyncHandler(async (req, res) => {
+  const result = await setShopPriceList({ req }, String(req.body.priceList));
+  const notRead = result.priceList && result.notRead > 0
+    ? ` نوع ${formatPersianNumber(result.notRead)} محصول هنوز از سایت خوانده نشده و قیمت آن‌ها پس از «بازخوانی محصولات سایت» فرستاده می‌شود.`
+    : '';
+  res.json({
+    success: true, ...result,
+    message: (result.priceList ? `قیمت فهرست «${result.priceList}» از دقیقه بعد به سایت فرستاده می‌شود.` : 'ارسال خودکار قیمت به سایت خاموش شد.') + notRead,
+  });
+}));
+
+// «تغییر خودکار کد در سایت» on or off (part C; off by default)
+router.post('/sku-rename', authorizePermission('woocommerce.manage'), idempotency({ scope: 'woocommerce' }), validate(skuRenameSchema), asyncHandler(async (req, res) => {
+  const result = await setSkuRename({ req }, req.body.enabled === true);
+  res.json({
+    success: true, ...result,
+    message: result.enabled ? 'تغییر خودکار کد محصولات سایت روشن شد.' : 'تغییر خودکار کد محصولات سایت خاموش شد.',
+  });
 }));
 
 // «ارسال خودکار موجودی» on or off (part B; off by default)

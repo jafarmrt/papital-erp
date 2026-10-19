@@ -17,7 +17,7 @@ import { WorkflowSlaReminderService } from './src/services/workflow/workflowSlaR
 import { MessengerUpdatePoller } from './src/services/messenger/messengerUpdatePoller.js';
 import { FormDraftService } from './src/services/drafts/formDraft.service.js';
 import { OperationalPurgeService } from './src/services/events/operationalPurge.service.js';
-import { WcAutoPushService } from './src/services/woocommerce/wcAutoPush.service.js';
+import { WcShopSyncWorker } from './src/services/woocommerce/wcSyncWorker.service.js';
 import { purgeOldAutoRuns } from './src/services/woocommerce/wcSyncRunPurge.js';
 import { pool, getDatabaseMode } from './src/db/drizzle.js';
 import { decideProcessErrorAction, processErrorMessage } from './src/lib/processErrorPolicy.js';
@@ -90,7 +90,7 @@ async function startServer() {
     OperationalPurgeService.register('wcAutoPushRuns', () => purgeOldAutoRuns());
     OperationalPurgeService.start();
     // 10.2 package 6 (D-04 part B): the automatic stock push to the online shop, a run a minute while its setting is on
-    WcAutoPushService.start();
+    WcShopSyncWorker.start();
     // v10.1.38 (messenger plan part 1): link codes and «/stop» sent to the staff bots
     MessengerUpdatePoller.start(5000);
     markStartupComplete();
@@ -147,7 +147,7 @@ async function startServer() {
       WorkflowSlaReminderService.stop();
       FormDraftService.stopCleanup();
       OperationalPurgeService.stop();
-      WcAutoPushService.stop();
+      WcShopSyncWorker.stop();
       MessengerUpdatePoller.stop();
 
       if (pool && typeof pool.end === 'function') {

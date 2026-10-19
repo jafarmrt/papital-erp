@@ -1,4 +1,4 @@
-import { and, eq, inArray, lt } from 'drizzle-orm';
+import { and, inArray, lt } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { wcSyncRuns } from '../../db/schema.js';
 import { deletedRowCount, deleteInBatches, OPERATIONAL_PURGE_BATCH_SIZE } from '../../lib/batchDelete.js';
@@ -12,7 +12,8 @@ import { autoRunCondition } from './wcCatalog.service.js';
  */
 export async function purgeOldAutoRuns(olderThanDays: number = WC_AUTO_RUN_RETENTION_DAYS): Promise<number> {
   const cutoff = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000).toISOString();
-  const purgeable = and(eq(wcSyncRuns.kind, 'stock_push'), autoRunCondition, lt(wcSyncRuns.finishedAt, cutoff));
+  // part C: the automatic price and SKU runs go the same way; nightly re-reads (refresh rows) stay
+  const purgeable = and(inArray(wcSyncRuns.kind, ['stock_push', 'price_push', 'sku_push']), autoRunCondition, lt(wcSyncRuns.finishedAt, cutoff));
   return deleteInBatches(OPERATIONAL_PURGE_BATCH_SIZE, async () => {
     const batch = orm.select({ id: wcSyncRuns.id }).from(wcSyncRuns).where(purgeable).limit(OPERATIONAL_PURGE_BATCH_SIZE);
     return deletedRowCount(await orm.delete(wcSyncRuns).where(inArray(wcSyncRuns.id, batch)));

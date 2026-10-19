@@ -37,3 +37,25 @@ export function useSetWcAutoPushMutation() {
     onSettled: () => { void queryClient.invalidateQueries({ queryKey: WC_CATALOG_KEY }); },
   });
 }
+
+/** part C: the price list whose prices go to the shop ('' stops the price push) */
+export function useSetWcPriceListMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (priceList: string) => (await fetchJson('/woocommerce/price-list', {
+      method: 'POST', body: JSON.stringify({ priceList }),
+    })) as WcRefreshResult,
+    onSettled: () => { void queryClient.invalidateQueries({ queryKey: WC_CATALOG_KEY }); },
+  });
+}
+
+/** part C: «تغییر خودکار کد در سایت» on or off, the target state */
+export function useSetWcSkuRenameMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (enabled: boolean) => (await fetchJson('/woocommerce/sku-rename', {
+      method: 'POST', body: JSON.stringify({ enabled }),
+    })) as WcRefreshResult,
+    onSettled: () => { void queryClient.invalidateQueries({ queryKey: WC_CATALOG_KEY }); },
+  });
+}

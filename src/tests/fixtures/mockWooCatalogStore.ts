@@ -6,11 +6,13 @@ import http from 'http';
  * `POST products/<id>/variations/batch`), records every request and every stock it was sent, and answers a row error for
  * the ids in `rowErrors`. No real shop is ever called.
  */
-export interface MockVariation { id: number; sku: string; stock?: number | null; manageStock?: boolean | 'parent' }
+export interface MockVariation { id: number; sku: string; stock?: number | null; manageStock?: boolean | 'parent'; regularPrice?: string }
 export interface MockProduct {
   id: number; sku: string; name?: string; stock?: number | null; variations?: MockVariation[];
   /** WooCommerce product type; `variable` when the product has variations, else `simple` */
   type?: string;
+  /** part C: the regular price as the shop holds it ('' by default) */
+  regularPrice?: string;
 }
 
 /** part B: an order the shop holds; `GET orders?status=a,b` answers those of the listed statuses, in id order (newest first
@@ -64,6 +66,11 @@ export interface MockWooCatalogStore {
   orders: MockOrder[];
   /** product or variation id → the `manage_stock` value of its last batch row (absent when the row sent none) */
   manageStockSent: Map<number, unknown>;
+  /** part C: product or variation id → the last `regular_price` / `sku` a batch row sent it (applied to the products too) */
+  pricesSent: Map<number, string>;
+  skusSent: Map<number, string>;
+  /** part C: the shop currency `GET data/currencies/current` answers (IRR by default) */
+  currency: string;
   close(): Promise<void>;
 }
 
@@ -92,17 +99,40 @@ function productPage(products: MockProduct[], url: URL, store: MockWooCatalogSto
   return page(store.newestFirst ? [...products].sort((a, b) => b.id - a.id) : products, url, store);
 }
 
-function batchAnswer(store: MockWooCatalogStore, body: string): unknown {
-  const parsed = JSON.parse(body || '{}') as { update?: Array<{ id: number; stock_quantity?: number; manage_stock?: unknown }> };
+type BatchRow = { id: number; stock_quantity?: number; manage_stock?: unknown; regular_price?: unknown; sku?: unknown };
+
+/** every product and variation of the shop, to apply a batch row to (ids are unique across both in the tests) */
+function shopRows(products: MockProduct[]): Array<MockProduct | MockVariation> {
+  return products.flatMap(p => [p, ...(p.variations ?? [])]);
+}
+
+function batchAnswer(store: MockWooCatalogStore, body: string, products: MockProduct[]): unknown {
+  const parsed = JSON.parse(body || '{}') as { update?: BatchRow[] };
   const rows = parsed.update ?? [];
   store.batchSizes.push(rows.length);
   return {
     update: rows.map(row => {
       if (store.rowErrors.has(row.id)) return { id: row.id, error: { code: 'woocommerce_rest_invalid_id', message: 'شناسه نامعتبر است.' } };
-      store.pushed.set(row.id, Number(row.stock_quantity));
-      if ('manage_stock' in row) store.manageStockSent.set(row.id, row.manage_stock);
-      else store.manageStockSent.delete(row.id);
-      return { id: row.id, stock_quantity: row.stock_quantity };
+      const target = shopRows(products).find(r => r.id === row.id);
+      if ('sku' in row) {
+        // WooCommerce refuses a SKU another product or variation holds
+        const sku = String(row.sku);
+        if (shopRows(products).some(r => r.id !== row.id && r.sku === sku)) {
+          return { id: row.id, error: { code: 'product_invalid_sku', message: 'شناسه محصول (SKU) تکراری است.' } };
+        }
+        store.skusSent.set(row.id, sku);
+        if (target) target.sku = sku;
+      }
+      if ('regular_price' in row) {
+        store.pricesSent.set(row.id, String(row.regular_price));
+        if (target) target.regularPrice = String(row.regular_price);
+      }
+      if ('stock_quantity' in row) {
+        store.pushed.set(row.id, Number(row.stock_quantity));
+        if ('manage_stock' in row) store.manageStockSent.set(row.id, row.manage_stock);
+        else store.manageStockSent.delete(row.id);
+      }
+      return { id: row.id, stock_quantity: row.stock_quantity, sku: target?.sku, regular_price: target?.regularPrice ?? '' };
     }),
   };
 }
@@ -111,7 +141,7 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
   const store = {
     pushed: new Map(), requests: [], arrivals: [], batchSizes: [], rowErrors: new Set(), failPaths: new Set(), statusPaths: new Map(),
     queries: [], maxInFlight: 0,
-    orders: [], manageStockSent: new Map(),
+    orders: [], manageStockSent: new Map(), pricesSent: new Map(), skusSent: new Map(), currency: 'IRR',
   } as unknown as MockWooCatalogStore;
   let inFlight = 0;
   const server = http.createServer((req, res) => {
@@ -144,7 +174,7 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
       if (req.method === 'GET' && path === 'products') {
         send(productPage(products, url, store).map(p => ({
           id: p.id, name: p.name ?? `محصول ${p.id}`, sku: p.sku, type: p.type ?? (p.variations ? 'variable' : 'simple'),
-          stock_quantity: p.stock ?? null, manage_stock: p.stock !== undefined && p.stock !== null,
+          stock_quantity: p.stock ?? null, manage_stock: p.stock !== undefined && p.stock !== null, regular_price: p.regularPrice ?? '',
         })));
         return;
       }
@@ -154,7 +184,7 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
         const rows = products.find(p => p.id === Number(variations[1]))?.variations ?? [];
         send(page(rows, url, store).map(v => ({
           id: v.id, sku: v.sku, stock_quantity: v.stock ?? null,
-          manage_stock: v.manageStock ?? (v.stock !== undefined && v.stock !== null),
+          manage_stock: v.manageStock ?? (v.stock !== undefined && v.stock !== null), regular_price: v.regularPrice ?? '',
         })));
         return;
       }
@@ -174,6 +204,10 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
         })));
         return;
       }
+      if (req.method === 'GET' && path === 'data/currencies/current') {
+        send({ code: store.currency, name: store.currency, symbol: store.currency });
+        return;
+      }
       const oneOrder = path.match(/^orders\/(\d+)$/);
       if (req.method === 'GET' && oneOrder) {
         const o = store.orders.find(row => row.id === Number(oneOrder[1]));
@@ -189,7 +223,7 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
         return;
       }
       if (req.method === 'POST' && (path === 'products/batch' || /^products\/\d+\/variations\/batch$/.test(path))) {
-        send(batchAnswer(store, body));
+        send(batchAnswer(store, body, products));
         return;
       }
       res.statusCode = 404;
