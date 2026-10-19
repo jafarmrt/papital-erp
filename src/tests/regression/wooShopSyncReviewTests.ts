@@ -10,6 +10,9 @@ import { later, linkFields, PRICE_LIST, setPrice, withSendSettings, zoneAtHour, 
  * `woocommerce.manage` alone chose the price list and turned the SKU rename on, a `variable-subscription` product was sent
  * a price and its variations were never linked, and nightly run rows were never purged.
  */
+/** nit N-1: the words of the refusal when the key may not read the shop settings */
+const DECIMALS_FORBIDDEN_TEXT = 'نقش مدیر فروشگاه';
+
 interface PriceRunSummary {
   siteCurrency?: string;
   changed?: Array<{ productId: number; variationId: number; from: string | null; to: string | null }>;
@@ -179,6 +182,19 @@ export async function decimalsReviewCase(h: Harness, wrong: string[]): Promise<s
       wrong.push(`unreadable decimals: run ${unreadable.state}, sent ${store.pricesSent.get(2)}, row ${JSON.stringify(failed)}`);
     }
     store.decimals = 2;
+
+    // nit N-1: a key that may not read the shop settings is named as such, never as a firewall or a wrong key
+    forgetSiteCurrency();
+    store.settingsStatus = 403;
+    await setPrice(h, b.id, 50_000);
+    const forbidden = await runPricePushOnce(later(40));
+    const [refused] = await h.q(`SELECT error_message FROM wc_sync_runs WHERE kind = 'price_push' ORDER BY id DESC LIMIT 1`);
+    const refusedText = String(refused?.error_message);
+    if (forbidden.state !== 'failed' || store.pricesSent.get(2) !== '3' || !refusedText.includes(DECIMALS_FORBIDDEN_TEXT)
+      || refusedText.includes('wp-config')) {
+      wrong.push(`settings refused: run ${forbidden.state}, sent ${store.pricesSent.get(2)}, row ${refusedText}`);
+    }
+    store.settingsStatus = undefined;
 
     // N-3: the shop key alone turns both sends off, never on
     const shopOnly = await h.sessionWith(['woocommerce.manage']);

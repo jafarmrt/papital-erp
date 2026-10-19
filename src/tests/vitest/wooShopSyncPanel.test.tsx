@@ -96,6 +96,8 @@ describe('D-04 part C: the shop price and the nightly rules', () => {
     expect(sitePriceOf('12345', 'IRR', money('IRHT', 6))).toEqual({ value: '1.2345' });
     expect(sitePriceOf('12345.6', 'IRR', money('IRHT', 6))).toEqual({ skip: 'inexact_unit' });
     expect(WC_PRICE_SKIP_LABELS.inexact_unit).toMatch(/تعداد اعشار سایت/);
+    // review nit N-2: the price left in the shop is not touched, and the shop may show it rounded to its own decimals
+    expect(WC_PRICE_SKIP_LABELS.inexact_unit).toMatch(/دست نمی‌خورد.*گرد/);
   });
 
   it('review N-1: a very large price is written in plain digits, never in exponent notation', () => {

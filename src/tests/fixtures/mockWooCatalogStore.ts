@@ -73,6 +73,8 @@ export interface MockWooCatalogStore {
   currency: string;
   /** review M-A: the price decimals `GET settings/general/woocommerce_price_num_decimals` answers (2, WooCommerce's default) */
   decimals: number | string;
+  /** review nit N-1: the settings read answers this status (a key of a user who does not manage the shop gets 403) */
+  settingsStatus?: number;
   close(): Promise<void>;
 }
 
@@ -212,6 +214,11 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
         return;
       }
       if (req.method === 'GET' && path === 'settings/general/woocommerce_price_num_decimals') {
+        if (store.settingsStatus) {
+          res.statusCode = store.settingsStatus;
+          send({ code: 'woocommerce_rest_cannot_view', message: 'Sorry, you cannot list resources.' });
+          return;
+        }
         send({ id: 'woocommerce_price_num_decimals', type: 'number', value: String(store.decimals) });
         return;
       }
