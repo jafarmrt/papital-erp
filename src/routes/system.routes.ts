@@ -23,6 +23,7 @@ import { GLOBAL_SEARCH_MAX_LENGTH } from '../lib/search/globalSearchTarget.js';
 import { toPersianDigits } from '../utils/persianNumber.js';
 import { DateCalendarReportService } from '../services/system/dateCalendarReport.service.js';
 import { buildConditionalConstraints, conditionalConstraintsResultMessage, findMissingConditionalConstraints } from '../services/system/conditionalConstraints.js';
+import { readNightlyVerifyHealth } from '../services/system/nightlyVerifyHealth.js';
 
 const router = Router();
 
@@ -268,6 +269,7 @@ router.get('/system/health', requireSystemAdmin, asyncHandler(async (req, res) =
   // 3. Subsystem Health Checks (Outbox, DLQ, Vouchers, Workflow)
   const subsystems = await SystemHealthService.collectSubsystemMetrics();
   const mediaLibrary = await SystemHealthService.checkMediaLibrary();
+  const nightlyVerify = readNightlyVerifyHealth();
 
   // 4. Check HTTPS / SSL
   const forwardedProto = (req.headers['x-forwarded-proto'] as string) || '';
@@ -283,6 +285,7 @@ router.get('/system/health', requireSystemAdmin, asyncHandler(async (req, res) =
     accounting: subsystems.accounting,
     workflow: subsystems.workflow,
     mediaLibrary,
+    nightlyVerify,
     network: {
       isHttps,
       protocol: req.protocol,
