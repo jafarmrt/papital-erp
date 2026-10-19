@@ -1,11 +1,11 @@
 import { AlertTriangle, CheckCircle2, DatabaseBackup, HelpCircle, XCircle } from 'lucide-react';
 import { formatPersianNumber } from '../../utils/persianNumber';
 import { formatPersianDateTime } from '../../utils/dateUtils';
-import { NIGHTLY_VERIFY_MESSAGES, type NightlyVerifyHealth } from '../../lib/system/nightlyVerify';
+import { NIGHTLY_VERIFY_MESSAGES, backupAgeText, type NightlyVerifyHealth } from '../../lib/system/nightlyVerify';
 
 const BADGES: Record<NightlyVerifyHealth['status'], { label: string; className: string }> = {
   ok: { label: 'سالم', className: 'bg-emerald-100 text-emerald-800' },
-  warning: { label: 'بدتر از شب پیش', className: 'bg-amber-100 text-amber-800' },
+  warning: { label: 'بدتر از آخرین شب سالم', className: 'bg-amber-100 text-amber-800' },
   failed: { label: 'ناموفق', className: 'bg-rose-100 text-rose-800' },
   stale: { label: 'اجرا نشده', className: 'bg-amber-100 text-amber-800' },
   never: { label: 'هنوز اجرا نشده', className: 'bg-slate-200 text-slate-700' },
@@ -13,8 +13,8 @@ const BADGES: Record<NightlyVerifyHealth['status'], { label: string; className: 
 };
 
 /**
- * v10.2.14 (O-04): کارت «بررسی شبانهٔ پشتیبان» در صفحه سلامت؛ آخرین بازیابی پشتیبان دیشب روی رونوشت جدا و نتیجهٔ بررسی
- * حساب‌ها و انبار روی آن. خطاهای کهنه فقط شمرده می‌شوند؛ هشدار وقتی است که چیزی از شب پیش بدتر شده باشد.
+ * v10.2.16 (O-04): کارت «بررسی شبانهٔ پشتیبان» در صفحه سلامت؛ آخرین بازیابی آخرین پشتیبان موفق روی رونوشت جدا و نتیجهٔ
+ * بررسی حساب‌ها و انبار روی آن. خطاهای کهنه فقط شمرده می‌شوند؛ هشدار وقتی است که چیزی از آخرین شب سالم بدتر شده باشد.
  */
 export function NightlyVerifyHealthCard({ nightly }: { nightly?: NightlyVerifyHealth }) {
   const status = nightly?.status ?? 'unknown';
@@ -42,6 +42,10 @@ export function NightlyVerifyHealthCard({ nightly }: { nightly?: NightlyVerifyHe
         <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-700 dark:text-slate-300">
           <dt>آخرین اجرا</dt>
           <dd data-field="finished">{formatPersianDateTime(nightly.finishedAt)}</dd>
+          <dt>زمان گرفتن پشتیبان</dt>
+          <dd data-field="backup-at">{nightly.backupAt ? formatPersianDateTime(nightly.backupAt) : 'نامعلوم'}</dd>
+          <dt>عمر پشتیبان هنگام بررسی</dt>
+          <dd data-field="backup-age">{backupAgeText(nightly.backupAt, nightly.finishedAt)}</dd>
           <dt>بررسی‌های سلامت مالی با خطا</dt>
           <dd data-field="health-errors">{count(nightly.healthErrorCount)}</dd>
           <dt>بررسی‌های سلامت مالی با هشدار</dt>

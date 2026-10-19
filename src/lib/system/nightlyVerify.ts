@@ -1,11 +1,13 @@
 import { formatPersianNumber } from '../../utils/persianNumber';
 
 /**
- * v10.2.14 (O-04, 10.2 package 13): the nightly check on a copy of the backup. `scripts/nightly-verify.sh` restores last
- * night's daily backup into a drill database, `scripts/nightly-verify.ts` runs the financial health check and the business
- * invariants on that copy and writes this report (`logs/nightly-verify.json`); the health page reads it through
- * `nightlyVerifyVerdict`. Data that was wrong before stays listed but does not fail the night: only a restore that
- * failed, a check that could not run, or a check that got worse than the night before does.
+ * v10.2.16 (O-04, 10.2 package 13): the nightly check on a copy of the backup. `scripts/nightly-verify.sh` restores the
+ * latest good daily backup (the one `.last_daily_ok` names) into a drill database, `scripts/nightly-verify.ts` runs the
+ * financial health check and the business invariants on that copy and writes this report (`logs/nightly-verify.json`);
+ * the health page reads it through `nightlyVerifyVerdict`. Data that was wrong before stays listed but does not fail the
+ * night: only a run that could not be done, a restore that failed, a check that could not run, or a check that got worse
+ * than the last healthy night does. That last healthy night is kept in each report (`baseline`), so a bad night is
+ * compared with it again the next night instead of becoming the new normal.
  */
 
 export const NIGHTLY_VERIFY_REPORT_VERSION = 1;
@@ -24,20 +26,38 @@ export interface NightlyInvariantCount {
   count: number;
 }
 
+/** Why a night could not be checked (the shell script names it; the card says it in Persian) */
+export const NIGHTLY_VERIFY_FAILURES = ['restore', 'timeout', 'no_dump', 'stale_dump', 'no_space', 'space_unknown', 'not_drill'] as const;
+export type NightlyVerifyFailure = (typeof NIGHTLY_VERIFY_FAILURES)[number];
+
+/** The counts of the last healthy night, the yardstick of «worse» */
+export interface NightlyVerifyBaseline {
+  finishedAt: string;
+  backupFile: string;
+  health: NightlyHealthCount[];
+  invariants: NightlyInvariantCount[];
+}
+
 export interface NightlyVerifyReport {
   version: number;
   /** UTC ISO time the check finished */
   finishedAt: string;
-  /** the backup file checked (base name) */
+  /** the backup file checked (base name; empty when none was found) */
   backupFile: string;
+  /** UTC ISO time that backup was taken (from `.last_daily_ok`), null when unknown */
+  backupAt: string | null;
   restoreOk: boolean;
+  /** why the night could not be checked; null when the restore and the checks ran */
+  failure: NightlyVerifyFailure | null;
   /** null when the check could not run */
   health: NightlyHealthCount[] | null;
   invariants: NightlyInvariantCount[] | null;
-  /** health check ids and invariants worse than the night before */
+  /** health check ids and invariants worse than the baseline */
   worse: string[];
   /** why a step could not run (English, for the log) */
   errors: string[];
+  /** the last healthy night this report was compared with (null: none yet) */
+  baseline: NightlyVerifyBaseline | null;
 }
 
 export type NightlyVerifyStatus = 'ok' | 'warning' | 'failed' | 'stale' | 'never' | 'unknown';
@@ -46,6 +66,8 @@ export interface NightlyVerifyHealth {
   status: NightlyVerifyStatus;
   finishedAt: string | null;
   backupFile: string | null;
+  backupAt: string | null;
+  failure: NightlyVerifyFailure | null;
   healthErrorCount: number | null;
   healthWarningCount: number | null;
   invariantViolationCount: number | null;
@@ -54,16 +76,34 @@ export interface NightlyVerifyHealth {
 }
 
 export const NIGHTLY_VERIFY_MESSAGES = {
-  ok: 'نسخهٔ پشتیبان دیشب بازیابی شد و بررسی حساب‌ها و انبار روی رونوشت آن چیزی بدتر از شب پیش نشان نداد.',
+  ok: 'آخرین نسخهٔ پشتیبان بازیابی شد و بررسی حساب‌ها و انبار روی رونوشت آن چیزی بدتر از آخرین شب سالم نشان نداد.',
   never: 'بررسی شبانهٔ پشتیبان هنوز اجرا نشده است. پس از راه‌اندازی زمان‌بندی، نخستین گزارش فردا صبح می‌آید.',
   stale: 'بررسی شبانهٔ پشتیبان بیش از یک روز است اجرا نشده؛ زمان‌بندی کارساز را بررسی کنید.',
   unknown: 'گزارش بررسی شبانهٔ پشتیبان خوانده نشد.',
-  restoreFailed: 'نسخهٔ پشتیبان دیشب بازیابی نشد؛ این پشتیبان قابل اعتماد نیست. گزارش کارساز را بررسی کنید.',
+  restoreFailed: 'آخرین نسخهٔ پشتیبان بازیابی نشد؛ این پشتیبان قابل اعتماد نیست. گزارش کارساز را بررسی کنید.',
   checkFailed: 'بررسی حساب‌ها و انبار روی رونوشت پشتیبان اجرا نشد؛ گزارش کارساز را بررسی کنید.',
 } as const;
 
+/** What the card says for a night that could not be checked */
+export const NIGHTLY_VERIFY_FAILURE_MESSAGES: Record<NightlyVerifyFailure, string> = {
+  restore: NIGHTLY_VERIFY_MESSAGES.restoreFailed,
+  timeout: 'بررسی شبانهٔ پشتیبان در زمان مجاز تمام نشد و نیمه‌کاره رها شد؛ گزارش کارساز را بررسی کنید.',
+  no_dump: 'هیچ نسخهٔ پشتیبان روزانهٔ موفقی پیدا نشد؛ پشتیبان‌گیری شبانه را بررسی کنید.',
+  stale_dump: 'آخرین نسخهٔ پشتیبان موفق بیش از یک روز پیش گرفته شده است؛ پشتیبان‌گیری شبانه را بررسی کنید.',
+  no_space: 'جای خالی دیسک برای بازیابی رونوشت پشتیبان کافی نبود و بررسی انجام نشد؛ دیسک کارساز را خالی‌تر کنید.',
+  space_unknown: 'جای خالی دیسک برای بازیابی رونوشت پشتیبان سنجیده نشد و بررسی انجام نشد؛ گزارش کارساز را بررسی کنید.',
+  not_drill: NIGHTLY_VERIFY_MESSAGES.checkFailed,
+};
+
+/** Hours from the backup to the end of the check, in Persian digits; «نامعلوم» without the backup time */
+export function backupAgeText(backupAt: string | null, finishedAt: string | null): string {
+  if (!backupAt || !finishedAt) return 'نامعلوم';
+  const hours = Math.floor((Date.parse(finishedAt) - Date.parse(backupAt)) / 3_600_000);
+  return Number.isFinite(hours) ? `${formatPersianNumber(Math.max(0, hours))} ساعت` : 'نامعلوم';
+}
+
 export function worseMessage(count: number): string {
-  return `${formatPersianNumber(count)} بررسی نسبت به شب پیش بدتر شده است؛ «بررسی سلامت مالی» را باز کنید.`;
+  return `${formatPersianNumber(count)} بررسی نسبت به آخرین شب سالم بدتر شده است؛ «بررسی سلامت مالی» را باز کنید.`;
 }
 
 function isHealthCount(v: unknown): v is NightlyHealthCount {
@@ -78,6 +118,13 @@ function isInvariantCount(v: unknown): v is NightlyInvariantCount {
 }
 
 const isStringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every(s => typeof s === 'string');
+const isIsoTime = (v: unknown): v is string => typeof v === 'string' && !Number.isNaN(Date.parse(v));
+
+function isBaseline(v: unknown): v is NightlyVerifyBaseline {
+  const b = v as NightlyVerifyBaseline;
+  return Boolean(b) && isIsoTime(b.finishedAt) && typeof b.backupFile === 'string'
+    && Array.isArray(b.health) && b.health.every(isHealthCount) && Array.isArray(b.invariants) && b.invariants.every(isInvariantCount);
+}
 
 /** The stored report, or null when the text is not a report of this version */
 export function parseNightlyReport(text: string): NightlyVerifyReport | null {
@@ -88,22 +135,39 @@ export function parseNightlyReport(text: string): NightlyVerifyReport | null {
     return null;
   }
   const r = raw as NightlyVerifyReport;
-  if (!r || r.version !== NIGHTLY_VERIFY_REPORT_VERSION || typeof r.finishedAt !== 'string' || Number.isNaN(Date.parse(r.finishedAt))) return null;
+  if (!r || r.version !== NIGHTLY_VERIFY_REPORT_VERSION || !isIsoTime(r.finishedAt)) return null;
   if (typeof r.backupFile !== 'string' || typeof r.restoreOk !== 'boolean') return null;
   if (r.health !== null && !(Array.isArray(r.health) && r.health.every(isHealthCount))) return null;
   if (r.invariants !== null && !(Array.isArray(r.invariants) && r.invariants.every(isInvariantCount))) return null;
   if (!isStringArray(r.worse) || !isStringArray(r.errors)) return null;
+  if (r.backupAt !== null && !isIsoTime(r.backupAt)) return null;
+  if (r.failure !== null && !(NIGHTLY_VERIFY_FAILURES as readonly string[]).includes(r.failure)) return null;
+  if (r.baseline !== null && !isBaseline(r.baseline)) return null;
   return r;
+}
+
+/** A night whose restore and checks ran and found nothing worse: the next nights are compared with it */
+export function isHealthyNight(r: NightlyVerifyReport): r is NightlyVerifyReport & { health: NightlyHealthCount[]; invariants: NightlyInvariantCount[] } {
+  return r.restoreOk && r.failure === null && r.health !== null && r.invariants !== null && r.worse.length === 0 && r.errors.length === 0;
+}
+
+/** The yardstick of tonight: the previous night when it was healthy, else the last healthy night it kept */
+export function nightlyBaseline(previous: NightlyVerifyReport | null): NightlyVerifyBaseline | null {
+  if (!previous) return null;
+  if (isHealthyNight(previous)) {
+    return { finishedAt: previous.finishedAt, backupFile: previous.backupFile, health: previous.health, invariants: previous.invariants };
+  }
+  return previous.baseline;
 }
 
 const STATUS_RANK: Record<NightlyHealthCount['status'], number> = { healthy: 0, warning: 1, error: 2 };
 
 /**
- * Health checks and invariants worse tonight than in the previous report: a worse status, or more findings at the same
- * non-healthy status, or more violations of an invariant. Without a previous report (or a side that did not run) nothing
- * is compared.
+ * Health checks and invariants worse tonight than in the baseline: a worse status, or more findings at the same
+ * non-healthy status, or more violations of an invariant. Without a baseline (or a side that did not run) nothing is
+ * compared.
  */
-export function nightlyWorse(previous: NightlyVerifyReport | null, next: Pick<NightlyVerifyReport, 'health' | 'invariants'>): string[] {
+export function nightlyWorse(previous: Pick<NightlyVerifyReport, 'health' | 'invariants'> | null, next: Pick<NightlyVerifyReport, 'health' | 'invariants'>): string[] {
   const worse: string[] = [];
   if (previous?.health && next.health) {
     const was = new Map(previous.health.map(h => [h.id, h]));
@@ -129,7 +193,7 @@ export function nightlyWorse(previous: NightlyVerifyReport | null, next: Pick<Ni
 export function nightlyVerifyVerdict(report: NightlyVerifyReport | null, now: Date): NightlyVerifyHealth {
   if (!report) {
     return {
-      status: 'never', finishedAt: null, backupFile: null, healthErrorCount: null, healthWarningCount: null,
+      status: 'never', finishedAt: null, backupFile: null, backupAt: null, failure: null, healthErrorCount: null, healthWarningCount: null,
       invariantViolationCount: null, worse: [], messages: [NIGHTLY_VERIFY_MESSAGES.never],
     };
   }
@@ -138,7 +202,10 @@ export function nightlyVerifyVerdict(report: NightlyVerifyReport | null, now: Da
   const invariantViolationCount = report.invariants ? report.invariants.reduce((sum, i) => sum + i.count, 0) : null;
   const messages: string[] = [];
   let status: NightlyVerifyStatus = 'ok';
-  if (!report.restoreOk) {
+  if (report.failure) {
+    status = 'failed';
+    messages.push(NIGHTLY_VERIFY_FAILURE_MESSAGES[report.failure]);
+  } else if (!report.restoreOk) {
     status = 'failed';
     messages.push(NIGHTLY_VERIFY_MESSAGES.restoreFailed);
   } else if (report.health === null || report.invariants === null) {
@@ -150,12 +217,13 @@ export function nightlyVerifyVerdict(report: NightlyVerifyReport | null, now: Da
   }
   const ageHours = (now.getTime() - Date.parse(report.finishedAt)) / 3_600_000;
   if (ageHours > NIGHTLY_VERIFY_STALE_HOURS) {
-    status = 'stale';
+    // a failed night stays failed; an old good or warned one is «not run lately»
+    if (status !== 'failed') status = 'stale';
     messages.unshift(NIGHTLY_VERIFY_MESSAGES.stale);
   }
   if (messages.length === 0) messages.push(NIGHTLY_VERIFY_MESSAGES.ok);
   return {
-    status, finishedAt: report.finishedAt, backupFile: report.backupFile,
+    status, finishedAt: report.finishedAt, backupFile: report.backupFile || null, backupAt: report.backupAt, failure: report.failure,
     healthErrorCount, healthWarningCount, invariantViolationCount, worse: report.worse, messages,
   };
 }

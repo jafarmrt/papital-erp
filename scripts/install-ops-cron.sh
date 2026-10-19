@@ -4,29 +4,47 @@
 #     when BACKUP_RCLONE_REMOTE is set in .env, its encrypted off-server copy (scripts/backup-offsite.sh);
 #   - scripts/monitor.sh every five minutes — health, disk, backup age and event queue alerts (v10.0.6);
 #   - scripts/nightly-verify.sh every day at NIGHTLY_VERIFY_HOUR:NIGHTLY_VERIFY_MINUTE (default 04:00) as root — restores
-#     last night's backup into a drill copy and checks its accounts and stock (v10.2.14, O-04); root, because creating
-#     the drill database needs `sudo -u postgres` unless .env sets RESTORE_ADMIN_URL.
+#     the latest good backup into a drill copy and checks its accounts and stock (v10.2.16, O-04); root, because
+#     creating the drill database needs `sudo -u postgres` unless .env sets RESTORE_ADMIN_URL. It starts at least 60
+#     minutes after the backup, so it never checks a backup still being written.
 # install.sh runs it; on a server installed earlier run it once by hand:
 #   sudo bash scripts/install-ops-cron.sh [service-user]
-# The file is rewritten as a whole, so running it again changes nothing. The output of both jobs goes to
-# APP_DIR/logs/backup.log and APP_DIR/logs/monitor.log.
+# The file is rewritten as a whole: a run without the time variables writes the default times again, replacing any
+# custom times set earlier; the times it wrote are printed. The output of the three jobs goes to APP_DIR/logs/backup.log,
+# APP_DIR/logs/monitor.log and APP_DIR/logs/nightly-verify.log.
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 RUN_USER="${1:-${RUN_USER:-$(id -un)}}"
 CRON_FILE="${CRON_FILE:-/etc/cron.d/papital-erp}"
+LOG_DIR="$APP_DIR/logs"
+
+if [ -z "${BACKUP_HOUR+x}${BACKUP_MINUTE+x}${NIGHTLY_VERIFY_HOUR+x}${NIGHTLY_VERIFY_MINUTE+x}" ]; then
+  echo "Note: no time variables given, so the default times are written (any custom times set earlier are replaced)"
+fi
 BACKUP_HOUR="${BACKUP_HOUR:-2}"
 BACKUP_MINUTE="${BACKUP_MINUTE:-30}"
 NIGHTLY_VERIFY_HOUR="${NIGHTLY_VERIFY_HOUR:-4}"
 NIGHTLY_VERIFY_MINUTE="${NIGHTLY_VERIFY_MINUTE:-0}"
-LOG_DIR="$APP_DIR/logs"
 
-case "$BACKUP_HOUR" in ''|*[!0-9]*) echo "ERROR: BACKUP_HOUR must be 0-23" >&2; exit 1 ;; esac
-case "$BACKUP_MINUTE" in ''|*[!0-9]*) echo "ERROR: BACKUP_MINUTE must be 0-59" >&2; exit 1 ;; esac
-[ "$BACKUP_HOUR" -le 23 ] && [ "$BACKUP_MINUTE" -le 59 ] || { echo "ERROR: backup time out of range" >&2; exit 1; }
-case "$NIGHTLY_VERIFY_HOUR" in ''|*[!0-9]*) echo "ERROR: NIGHTLY_VERIFY_HOUR must be 0-23" >&2; exit 1 ;; esac
-case "$NIGHTLY_VERIFY_MINUTE" in ''|*[!0-9]*) echo "ERROR: NIGHTLY_VERIFY_MINUTE must be 0-59" >&2; exit 1 ;; esac
-[ "$NIGHTLY_VERIFY_HOUR" -le 23 ] && [ "$NIGHTLY_VERIFY_MINUTE" -le 59 ] || { echo "ERROR: nightly check time out of range" >&2; exit 1; }
+# a whole number up to MAX, read as decimal (08 and 09 are hours, not bad octal)
+decimal_in_range() {
+  local name="$1" value="$2" max="$3"
+  case "$value" in ''|*[!0-9]*) echo "ERROR: $name must be 0-$max" >&2; exit 1 ;; esac
+  value=$((10#$value))
+  [ "$value" -le "$max" ] || { echo "ERROR: $name must be 0-$max" >&2; exit 1; }
+  echo "$value"
+}
+BACKUP_HOUR="$(decimal_in_range BACKUP_HOUR "$BACKUP_HOUR" 23)"
+BACKUP_MINUTE="$(decimal_in_range BACKUP_MINUTE "$BACKUP_MINUTE" 59)"
+NIGHTLY_VERIFY_HOUR="$(decimal_in_range NIGHTLY_VERIFY_HOUR "$NIGHTLY_VERIFY_HOUR" 23)"
+NIGHTLY_VERIFY_MINUTE="$(decimal_in_range NIGHTLY_VERIFY_MINUTE "$NIGHTLY_VERIFY_MINUTE" 59)"
+# the check restores the backup the daily job last finished: it starts 60 minutes or more after the backup starts
+GAP=$(( ((NIGHTLY_VERIFY_HOUR * 60 + NIGHTLY_VERIFY_MINUTE) - (BACKUP_HOUR * 60 + BACKUP_MINUTE) + 1440) % 1440 ))
+if [ "$GAP" -lt 60 ]; then
+  echo "ERROR: the nightly check must start at least 60 minutes after the daily backup (backup $(printf '%02d:%02d' "$BACKUP_HOUR" "$BACKUP_MINUTE"), check $(printf '%02d:%02d' "$NIGHTLY_VERIFY_HOUR" "$NIGHTLY_VERIFY_MINUTE"))" >&2
+  exit 1
+fi
 id "$RUN_USER" >/dev/null 2>&1 || { echo "ERROR: user $RUN_USER does not exist" >&2; exit 1; }
 [ -f "$APP_DIR/scripts/backup.sh" ] || { echo "ERROR: $APP_DIR/scripts/backup.sh not found" >&2; exit 1; }
 

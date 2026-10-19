@@ -3,26 +3,40 @@ import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import {
-  NIGHTLY_VERIFY_REPORT_VERSION, nightlyWorse, parseNightlyReport,
-  type NightlyHealthCount, type NightlyInvariantCount, type NightlyVerifyReport,
+  NIGHTLY_VERIFY_FAILURES, NIGHTLY_VERIFY_REPORT_VERSION, nightlyBaseline, nightlyWorse, parseNightlyReport,
+  type NightlyHealthCount, type NightlyInvariantCount, type NightlyVerifyFailure, type NightlyVerifyReport,
 } from '../src/lib/system/nightlyVerify.js';
 import { terminalLine } from '../src/lib/terminalText.js';
 
 /**
- * v10.2.14 (O-04, 10.2 package 13): the nightly check on a copy of the backup. Run only by `scripts/nightly-verify.sh`:
- *   tsx scripts/nightly-verify.ts --report <file> --backup <name>                 (DATABASE_URL = the drill copy)
- *   tsx scripts/nightly-verify.ts --report <file> --backup <name> --restore-failed
+ * v10.2.16 (O-04, 10.2 package 13): the nightly check on a copy of the backup. Run only by `scripts/nightly-verify.sh`:
+ *   tsx scripts/nightly-verify.ts --report <file> --backup <name> [--backup-at <epoch>]   (DATABASE_URL = the drill copy)
+ *   tsx scripts/nightly-verify.ts --report <file> --backup <name> [--backup-at <epoch>] --failed <reason> [--detail <text>]
  * The first form runs the financial health check and every business invariant over the whole copy, compares the counts
- * with the previous report and writes the new one; the second records a backup that did not restore. It only reads the
- * copy and refuses any database that is not a restore drill (`erp_restore_drill_*`).
- * Exit: 0 = nothing worse than the night before; 1 = a step failed or a check got worse; 2 = not a drill database.
+ * with the last healthy night and writes the new report; the second records a night that could not be checked
+ * (`NIGHTLY_VERIFY_FAILURES`: restore, timeout, no_dump, stale_dump, no_space, space_unknown). It only reads the copy
+ * and refuses any database that is not a restore drill (`erp_restore_drill_*`), writing that refusal as a failed night.
+ * Exit: 0 = nothing worse than the last healthy night; 1 = a step failed or a check got worse; 2 = not a drill database.
  */
 
-function argValue(name: string): string {
+function argValue(name: string, optional = false): string {
   const i = process.argv.indexOf(name);
   const v = i >= 0 ? process.argv[i + 1] : undefined;
-  if (!v) throw new Error(`missing ${name}`);
-  return v;
+  if (!v && !optional) throw new Error(`missing ${name}`);
+  return v ?? '';
+}
+
+function failureArg(): NightlyVerifyFailure | null {
+  if (!process.argv.includes('--failed')) return null;
+  const reason = argValue('--failed');
+  if (!(NIGHTLY_VERIFY_FAILURES as readonly string[]).includes(reason)) throw new Error(`unknown --failed reason ${reason}`);
+  return reason as NightlyVerifyFailure;
+}
+
+/** The epoch seconds `.last_daily_ok` holds, as an ISO time (null when not given or not a number) */
+function backupAtArg(): string | null {
+  const v = argValue('--backup-at', true);
+  return /^[0-9]+$/.test(v) ? new Date(Number(v) * 1000).toISOString() : null;
 }
 
 function readPrevious(file: string): NightlyVerifyReport | null {
@@ -43,13 +57,13 @@ function writeReport(file: string, report: NightlyVerifyReport): void {
 
 function baseReport(backup: string): NightlyVerifyReport {
   return {
-    version: NIGHTLY_VERIFY_REPORT_VERSION, finishedAt: new Date().toISOString(), backupFile: path.basename(backup),
-    restoreOk: true, health: null, invariants: null, worse: [], errors: [],
+    version: NIGHTLY_VERIFY_REPORT_VERSION, finishedAt: new Date().toISOString(), backupFile: backup ? path.basename(backup) : '',
+    backupAt: backupAtArg(), restoreOk: true, failure: null, health: null, invariants: null, worse: [], errors: [], baseline: null,
   };
 }
 
 async function verifyCopy(report: NightlyVerifyReport): Promise<number> {
-  // imported here so that --restore-failed needs no database
+  // imported here so that --failed needs no database
   const { pool } = await import('../src/db/drizzle.js');
   const { isRehearsalDatabase, rehearsalErrorCause, REHEARSAL_DATABASE_PREFIX } = await import('../src/db/upgradeRehearsal.js');
   try {
@@ -108,20 +122,30 @@ async function verifyCopy(report: NightlyVerifyReport): Promise<number> {
 
 async function main(): Promise<number> {
   const file = argValue('--report');
-  const report = baseReport(argValue('--backup'));
+  const report = baseReport(argValue('--backup', true));
   const previous = readPrevious(file);
-  if (process.argv.includes('--restore-failed')) {
+  report.baseline = nightlyBaseline(previous);
+  const failure = failureArg();
+  let code = 0;
+  if (failure) {
+    report.failure = failure;
+    // nothing was verified tonight
     report.restoreOk = false;
-    report.errors.push('the backup did not pass the restore drill');
+    const detail = argValue('--detail', true);
+    report.errors.push(`the night could not be checked: ${failure}${detail ? ` (${detail})` : ''}`);
   } else {
-    const code = await verifyCopy(report);
-    if (code === 2) return 2;
+    code = await verifyCopy(report);
+    if (code === 2) {
+      report.failure = 'not_drill';
+      report.errors.push('the database is not a restore-drill copy');
+    }
   }
-  report.worse = nightlyWorse(previous, report);
+  report.worse = nightlyWorse(report.baseline, report);
   report.finishedAt = new Date().toISOString();
   writeReport(file, report);
-  for (const w of report.worse) console.log(`  ✗ worse than the night before: ${w}`);
-  const failed = !report.restoreOk || report.health === null || report.invariants === null || report.worse.length > 0;
+  for (const w of report.worse) console.log(`  ✗ worse than the last healthy night: ${w}`);
+  if (code === 2) return 2;
+  const failed = report.failure !== null || !report.restoreOk || report.health === null || report.invariants === null || report.worse.length > 0;
   console.log(failed ? `Nightly check FAILED (report: ${file})` : `Nightly check passed (report: ${file})`);
   return failed ? 1 : 0;
 }
