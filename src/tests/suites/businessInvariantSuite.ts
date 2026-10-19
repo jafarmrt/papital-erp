@@ -36,7 +36,7 @@ import { DOMAIN_CHECKS } from '../invariants/domainChecks.js';
 import { checkBackdatedStockMovement, checkRebuildMatchesLiveEngine, checkReplayStartsAtZeroWac, checkRunningKardexShowsVoided, checkVoidConsumedReceiptRefused, probeRunningKardexAfterVoid, probeVoidConsumedReceipt } from '../invariants/stockDateScenarios.js';
 
 /**
- * v8.0.1 — سوئیت ناوردایی‌های منطق کاری (V8_MASTER_ROADMAP.md؛ گزارش docs/audit/BUSINESS_LOGIC_AUDIT_V8.md).
+ * v8.0.1 — سوئیت ناوردایی‌های منطق کاری (docs/roadmap/archive/V8_MASTER_ROADMAP.md؛ گزارش docs/audit/BUSINESS_LOGIC_AUDIT_V8.md).
  *
  * ۱. مسیرهای پایه بدون محرک یافته‌های شناخته‌شده هیچ ناوردایی‌ای را نقض نمی‌کنند (نبود مثبت کاذب در بررسی‌کننده).
  * ۲. شبیه‌ساز بذر ثابت و سه آزمون متمرکز دقیقاً همان کلاس‌های یافته‌ای را می‌بینند که در knownFindings.ts ثبت شده‌اند:
