@@ -80,6 +80,11 @@ export interface ProjectReservationOptions {
   reservedByOthers?: ReadonlyMap<number, number>;
   /** v10.0.206 (TD-945): مقدار هر کالا که تاکنون به همین پروژه داده شده؛ از نیاز کم می‌شود */
   issuedToProject?: ReadonlyMap<number, number>;
+  /**
+   * TD-1341 (بستهٔ ۱۲ بند ۱، گزینهٔ ب): رزرو فعلی خود پروژه به ازای شناسه کالا، برای «تکمیل رزرو». رزرو موجود تا نیاز نگه داشته
+   * می‌شود (اول بیاید، اول ببرد؛ رزرو بعدی دیگران آن را کم نمی‌کند) و فقط موجودی آزاد پس از همهٔ رزروها افزوده می‌شود.
+   */
+  ownReserved?: ReadonlyMap<number, number>;
 }
 
 type Row = Record<string, unknown>;
@@ -224,8 +229,11 @@ export function planProjectReservation(
     if (!(required > 0)) continue;
     const stock = Number(item.currentStock) || 0;
     const others = Math.max(0, Number(options.reservedByOthers?.get(item.id)) || 0);
-    const free = Math.max(0, fin(stock).subtract(others).toNumber());
-    const reservedQty = Math.min(free, required);
+    // TD-1341: the project keeps what it already holds up to its need, and takes more only from stock nobody holds
+    const own = Math.max(0, Number(options.ownReserved?.get(item.id)) || 0);
+    const kept = Math.min(own, required);
+    const free = Math.max(0, fin(stock).subtract(others).subtract(own).toNumber());
+    const reservedQty = Math.min(required, fin(kept).add(free).toNumber());
     const unit = text(item.unit) || DEFAULT_ROW_UNIT;
     if (reservedQty < required) {
       shortages.push({

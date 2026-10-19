@@ -10,7 +10,7 @@ import { ValidationError } from '../../errors/customErrors.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { RESERVING_DOCUMENT_STATUS, RESERVING_DOCUMENT_TYPES } from '../../lib/documents/reservingDocuments.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
-import { reservingProjectRows, storedReservationRows } from '../../lib/projects/projectReservationState.js';
+import { reservationQtyField, reservingProjectRows, storedReservationRows, type ReservationQtyField } from '../../lib/projects/projectReservationState.js';
 import { findProjectItemMatch, itemCodeKey, itemNameKey } from '../../lib/projects/projectItemMatch.js';
 import { proformaSourceTitle, type ItemReservedReportSummary, type ReservedItemDetail, type ReservedItemsFullReport } from '../../lib/inventory/reservedItemsReport.js';
 
@@ -51,14 +51,8 @@ export interface InventoryControlItem {
   unit?: string;
 }
 
-/** فیلدهای مقدار رزرو به ترتیب اولویت گزارش رزروها؛ اولین فیلد با مقدار مثبت، مقدار رزرو ردیف است */
-const RESERVATION_QTY_FIELDS = ['convertedReservedQty', 'convertedQty', 'reservedQty', 'warehouseStockQty', 'stockQty'] as const;
-export type ReservationQtyField = typeof RESERVATION_QTY_FIELDS[number];
-
-/** v7.0.102 (TD-233): یک قاعده برای مقدار رزرو ردیف — هم در گزارش رزروها و هم در کسر رزرو هنگام حواله خروج */
-export function reservationQtyField(row: Partial<Record<ReservationQtyField, unknown>>): ReservationQtyField | null {
-  return RESERVATION_QTY_FIELDS.find(f => Number(row[f] || 0) > 0) ?? null;
-}
+// TD-1341: the quantity field rule moved to the project reservation state, shared with the reservation reconcile
+export { reservationQtyField, type ReservationQtyField };
 
 /** کنترل موجودی پروژه (JSONB فرم پروژه): فقط رزرو ذخیره‌شده خوانده می‌شود (v9.0.371، TD-817) */
 interface InventoryControlData {

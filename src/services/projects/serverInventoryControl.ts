@@ -44,27 +44,43 @@ function unitMismatchError(rows: ReservationUnitMismatch[]): ValidationError {
 /**
  * رزرو پروژه با رزرو دیگران (TD-819): یک بار نیازها و کالاهای تطبیق‌یافته ساخته می‌شوند، رزرو دیگران فقط برای همان کالاها
  * خوانده می‌شود (خطای خواندن ثبت نهایی را رد می‌کند) و رزرو با موجودی آزاد دوباره حساب می‌شود.
+ * TD-1341: رزرو دیگران با `othersReservations` خوانده می‌شود، پس رزرو خود پروژه (ثبت نهایی‌شده، در «تکمیل رزرو») رزرو دیگران
+ * شمرده نمی‌شود؛ `ownReserved` رزرو فعلی پروژه است و کالاهای آن هم خوانده می‌شوند. در ثبت نهایی پروژه هنوز ثبت نهایی نیست و
+ * هیچ ردیفش رزرو نمی‌کند، پس نتیجه همان پیشین است.
  */
-async function planWithOthersReservations(
+export async function planReservationWithOthers(
   ic: InventoryControl,
   products: unknown,
   stockItems: ReservationStockItem[],
   reservedAt: string,
   executor: DbExecutor,
   projectId: number | null,
+  ownReserved?: ReadonlyMap<number, number>,
 ): Promise<ProjectReservationPlan> {
   const draft = planProjectReservation(ic.sections, products, stockItems, ic.manualPurchaseItems, reservedAt);
   // v9.0.372 (TD-820، تصمیم ت۴): ردیف با واحد دیگر و بی تبدیل، ثبت نهایی را رد می‌کند
   if (draft.unitMismatches.length > 0) throw unitMismatchError(draft.unitMismatches);
-  const itemIds = [...new Set([...draft.reserved, ...draft.shortages].map(r => Number(r.itemId)))].filter(id => Number.isInteger(id) && id > 0);
+  const itemIds = [...new Set([...draft.reserved, ...draft.shortages].map(r => Number(r.itemId)).concat([...(ownReserved?.keys() ?? [])]))]
+    .filter(id => Number.isInteger(id) && id > 0);
   if (itemIds.length === 0) return draft;
   const issuedToProject = projectId ? await projectIssuedQuantities(executor, projectId, itemIds) : new Map<number, number>();
   const report = await ItemStockReservationService.getReservedStockDetails(executor, true, { itemIds });
   const reservedByOthers = new Map<number, number>();
   for (const s of report.itemSummaries) {
-    if (s.itemId) reservedByOthers.set(Number(s.itemId), Number(s.totalReservedQty) || 0);
+    const itemId = Number(s.itemId);
+    if (!Number.isInteger(itemId) || itemId <= 0) continue;
+    const rows = othersReservations(s.reservations, { projectId });
+    reservedByOthers.set(itemId, rows.reduce((sum, r) => fin(sum).add(Number(r.reservedQty) || 0).toNumber(), 0));
   }
-  return planProjectReservation(ic.sections, products, stockItems, ic.manualPurchaseItems, reservedAt, { reservedByOthers, issuedToProject });
+  return planProjectReservation(ic.sections, products, stockItems, ic.manualPurchaseItems, reservedAt, { reservedByOthers, issuedToProject, ownReserved });
+}
+
+/** همهٔ کالاهای زنده برای تطبیق ردیف‌های کنترل موجودی (ثبت نهایی و «تکمیل رزرو») */
+export async function readReservationStockItems(executor: DbExecutor): Promise<ReservationStockItem[]> {
+  return (await executor
+    .select({ id: items.id, code: items.code, name: items.name, category: items.category, unit: items.unit, currentStock: items.currentStock })
+    .from(items)
+    .where(eq(items.isDeleted, 0))).map(i => ({ ...i, currentStock: Number(i.currentStock) || 0 }));
 }
 
 export async function resolveServerInventoryControl(
@@ -87,12 +103,7 @@ export async function resolveServerInventoryControl(
   if (finalizing) await executor.execute(sql`SELECT pg_advisory_xact_lock(${ADVISORY_LOCK_KEYS.PROJECT_RESERVATION_FINALIZE}::bigint)`);
   // v9.0.413 (TD-748): بخش الگو (مواد در `items`) با ردیف‌های پروژه ذخیره می‌شود تا رزرو و صفحه‌ها همان ردیف‌ها را بخوانند
   const presetShaped = hasPresetShapedSections(rest.sections);
-  const stockItems: ReservationStockItem[] = finalizing || presetShaped
-    ? (await executor
-      .select({ id: items.id, code: items.code, name: items.name, category: items.category, unit: items.unit, currentStock: items.currentStock })
-      .from(items)
-      .where(eq(items.isDeleted, 0))).map(i => ({ ...i, currentStock: Number(i.currentStock) || 0 }))
-    : [];
+  const stockItems: ReservationStockItem[] = finalizing || presetShaped ? await readReservationStockItems(executor) : [];
   if (presetShaped) {
     rest.sections = projectSectionsFromPreset(rest.sections, Array.isArray(products) ? products : [], material =>
       findProjectItemMatch({ code: material.code, name: material.name }, stockItems)?.currentStock);
@@ -103,7 +114,7 @@ export async function resolveServerInventoryControl(
   let shortages: unknown = prev.reservationShortages;
   if (finalizing) {
     finalizedAt = systemNowUtcIso();
-    const plan = await planWithOthersReservations(rest, products, stockItems, String(finalizedAt), executor, projectId);
+    const plan = await planReservationWithOthers(rest, products, stockItems, String(finalizedAt), executor, projectId);
     reservedItems = plan.reserved;
     shortages = plan.shortages;
   } else if (!nowFinal && wasFinal) {
