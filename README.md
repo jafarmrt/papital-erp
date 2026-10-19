@@ -142,7 +142,7 @@ sudo bash scripts/go-live-verify.sh http://localhost:3000   # پس از هر ب�
 
 ### Backup روزانه
 
-`install.sh` (فقط برای نصب تازه؛ روی سرور در حال کار اجرا نکنید) زمان‌بندی را با `scripts/install-ops-cron.sh` در یک فایل `/etc/cron.d/papital-erp` می‌نویسد: `scripts/backup.sh` هر روز ساعت ۰۲:۳۰ و `scripts/monitor.sh` هر پنج دقیقه، با گزارش در `logs/backup.log` و `logs/monitor.log`. اگر `ls /etc/cron.d/papital-erp` چنین فایلی نشان ندهد، یا پس از به‌روزرسانی به v10.2.16 (برای افزودن بررسی شبانه)، یک بار اجرا کنید؛ فایل از نو نوشته می‌شود و دوباره اجرا کردن آن چیزی را دو تا نمی‌کند. کاربر سرویس را `systemctl show -p User --value papital-erp` می‌گوید (خالی یعنی `root`)، و ساعت پشتیبان فقط از همین دستور خوانده می‌شود:
+`install.sh` (فقط برای نصب تازه؛ روی سرور در حال کار اجرا نکنید) زمان‌بندی را با `scripts/install-ops-cron.sh` در یک فایل `/etc/cron.d/papital-erp` می‌نویسد: `scripts/backup.sh` هر روز ساعت ۰۲:۳۰ و `scripts/monitor.sh` هر پنج دقیقه، با گزارش در `logs/backup.log` و `logs/monitor.log`. اگر `ls /etc/cron.d/papital-erp` چنین فایلی نشان ندهد، یا پس از به‌روزرسانی به v10.2.16 (برای افزودن بررسی شبانه)، یک بار اجرا کنید؛ فایل از نو نوشته می‌شود و دوباره اجرا کردن آن چیزی را دو تا نمی‌کند. کاربر سرویس را `systemctl show -p User --value papital-erp` می‌گوید (خالی یعنی `root`). ساعتی که در دستور نیاید از همان فایل پیشین خوانده می‌شود، ولی بهتر است ساعت پشتیبان را مثل نمونهٔ زیر صریح بنویسید:
 
 ```bash
 cd /opt/papital-erp
