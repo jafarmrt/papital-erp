@@ -67,20 +67,24 @@ const STEP_ENTRY_SQL = sql.raw(String.raw`h.action_key NOT LIKE '%\_SIGN'`);
 /**
  * OBS-R2-71 (TD-1323): each step entry with the hours until the instance's next entry, in (created_at, id) order. The hours
  * are whole milliseconds ÷ 3,600,000 in double precision, as the earlier loop computed them from the timestamps it read.
+ * Each instance's snapshot is hashed once (`inst`, materialized): hashing it per joined row made the report time out.
  */
 function stepDurationsCte() {
-  return sql`entries AS (
+  return sql`inst AS MATERIALIZED (
+      SELECT id, workflow_definition_id, md5(snapshot_dsl::text) AS key FROM workflow_instances
+    ),
+    entries AS (
       SELECT h.instance_id, h.to_state_id, h.created_at,
              lead(h.created_at) OVER (PARTITION BY h.instance_id ORDER BY h.created_at, h.id) AS next_at
       FROM workflow_history_logs h
       WHERE ${STEP_ENTRY_SQL}
     ),
     durations AS (
-      SELECT i.workflow_definition_id AS definition_id, md5(i.snapshot_dsl::text) AS key, e.to_state_id,
+      SELECT i.workflow_definition_id AS definition_id, i.key, e.to_state_id,
              (extract(epoch FROM date_trunc('milliseconds', e.next_at) - date_trunc('milliseconds', e.created_at)) * 1000)::float8
                / 3600000.0::float8 AS hours
       FROM entries e
-      JOIN workflow_instances i ON i.id = e.instance_id
+      JOIN inst i ON i.id = e.instance_id
       WHERE e.next_at IS NOT NULL AND e.to_state_id IS NOT NULL
     )`;
 }
@@ -267,13 +271,14 @@ export class WorkflowSlaEvaluator {
       thresholds.push({ definitionId: group.definitionId, key: group.key, stateId: group.stateId, sla: state.slaHours });
     }
     if (thresholds.length > 0) {
+      // a plain equality on the key (an md5 is never empty; a NULL snapshot is ''), so the thresholds join by hash
       const [row] = rowsOf<{ violations: number }>(await orm.execute(sql`
         WITH ${stepDurationsCte()}
         SELECT count(*)::int AS violations
         FROM durations d
         JOIN jsonb_to_recordset(${JSON.stringify(thresholds)}::jsonb)
           AS t("definitionId" int, key text, "stateId" int, sla float8)
-          ON t."definitionId" = d.definition_id AND t.key IS NOT DISTINCT FROM d.key AND t."stateId" = d.to_state_id
+          ON t."definitionId" = d.definition_id AND COALESCE(t.key, '') = COALESCE(d.key, '') AND t."stateId" = d.to_state_id
         WHERE d.hours > t.sla`));
       totalSlaViolations += Number(row?.violations ?? 0);
     }

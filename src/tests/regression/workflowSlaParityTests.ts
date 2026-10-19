@@ -147,5 +147,54 @@ export async function runWorkflowSlaParityTests(shouldRun: ShouldRun): Promise<T
     }));
   }
 
+  const volumeId = 'reg_workflow_sla_volume_td_1323';
+  if (shouldRun(volumeId, 'td_1323', 'obs_r2_71', 'workflow', 'sla', 'performance')) {
+    await runCase(results, volumeId, 'OBS-R2-71: the SLA report hashes each instance snapshot once, so many instances over many snapshot versions are read in seconds, with the numbers of the earlier loop (TD-1323)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const { createTestWorkflow } = await import('../fixtures/factories.js');
+      const { WorkflowSlaEvaluator } = await import('../../services/workflow/workflowSlaEvaluator.js');
+      const entityType = tag('wfslav_');
+      const wf = await createTestWorkflow({
+        definition: { entityType, code: tag('WFSLAV_') },
+        states: [{ key: 'draft', title: 'draft', type: 'initial' }, { key: 'review', title: 'review', type: 'normal' }, { key: 'approved', title: 'approved', type: 'terminal' }],
+        transitions: [{ fromKey: 'draft', toKey: 'review', actionKey: 'submit', title: 'submit' }, { fromKey: 'review', toKey: 'approved', actionKey: 'approve', title: 'approve' }],
+      });
+      await orm.update(workflowStates).set({ slaHours: 4 }).where(eq(workflowStates.id, wf.states.draft.id));
+      // finished instances over 60 snapshot versions of about eight kilobytes, each with three step entries
+      const instances = 3000;
+      await orm.execute(sql`
+        INSERT INTO workflow_instances (workflow_definition_id, snapshot_dsl, entity_type, entity_id, current_state_id, status, created_at)
+        SELECT ${wf.definition.id}::int, jsonb_build_object('version', g % 60, 'pad', repeat('x', 8000)), ${entityType}, g::text,
+               ${wf.states.approved.id}::int, 'COMPLETED', now() - interval '20 hours'
+        FROM generate_series(1, ${instances}) g`);
+      await orm.execute(sql`
+        INSERT INTO workflow_history_logs (instance_id, to_state_id, action_key, action_title, created_at)
+        SELECT i.id, s.state_id, s.action_key, s.action_key, now() - make_interval(secs => ((s.hours_ago + (i.id % 7)) * 3600)::float8)
+        FROM workflow_instances i
+        CROSS JOIN (VALUES (${wf.states.draft.id}::int, 'start', 20), (${wf.states.review.id}::int, 'submit', 12), (${wf.states.approved.id}::int, 'approve', 2))
+          AS s(state_id, action_key, hours_ago)
+        WHERE i.entity_type = ${entityType}`);
+
+      const started = Date.now();
+      const report = await WorkflowSlaEvaluator.getSlaAnalytics();
+      const seconds = (Date.now() - started) / 1000;
+      // about 0.3 s here; hashing the snapshot per (instance × step threshold) pair took about 12 s on the same data
+      if (seconds > 4) problems.push(`the report took ${seconds.toFixed(1)} s over ${instances} instances, expected under 4 s`);
+      const expected = await referenceSlaAnalytics();
+      if (report.kpi.slaComplianceRate !== expected.compliance) problems.push(`compliance ${report.kpi.slaComplianceRate}, expected ${expected.compliance}`);
+      for (const st of report.stateSlaReport) {
+        const want = expected.stats[st.stateId];
+        const wantAvg = want && want.transitions > 0 ? Math.round((want.hours / want.transitions) * 10) / 10 : 0;
+        if (!want || st.totalCompletedTransitions !== want.transitions || st.avgDurationHours !== wantAvg) {
+          problems.push(`step ${st.stateTitle}: transitions ${st.totalCompletedTransitions}, avg ${st.avgDurationHours}; expected ${want?.transitions}, ${wantAvg}`);
+        }
+      }
+      const draft = report.stateSlaReport.find(s => s.stateId === wf.states.draft.id);
+      if (draft?.totalCompletedTransitions !== instances) problems.push(`draft counted ${draft?.totalCompletedTransitions} transitions, expected ${instances}`);
+      assertNoProblems(problems);
+      return `${instances} instances in ${seconds.toFixed(1)} s, compliance ${report.kpi.slaComplianceRate}%`;
+    }));
+  }
+
   return results;
 }

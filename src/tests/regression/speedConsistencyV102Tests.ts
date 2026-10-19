@@ -341,6 +341,28 @@ export async function runSpeedConsistencyV102Tests(shouldRun: ShouldRun): Promis
     }
   }
 
+  if (shouldRun('reg_finalize_narrowed_read_skips_persian_td_1322', 'td_1322', 'finalize', 'reservation', 'obs_r2_45')) {
+    const itemIds: number[] = [];
+    await runCase(results, 'reg_finalize_narrowed_read_skips_persian_td_1322',
+      'OBS-R2-45 finalize reservation: the narrowed read leaves out an item with a Persian code that no row names, and reads the one a row names (TD-1322)',
+      'Persian letters and digits have no letter case, so only an item a row names by code or name is read',
+      async (wrong) => {
+        const { createTestItem } = await import('../fixtures/factories.js');
+        const { readStockItemsForRefs } = await import('../../services/projects/serverInventoryControl.js');
+        const tag = Date.now().toString(36).toUpperCase();
+        const named = await createTestItem({ type: 'raw_material', code: `کد${tag}ب۱`, name: `مهره ${tag} نامبرده`, unit: 'عدد' });
+        const other = await createTestItem({ type: 'raw_material', code: `کد${tag}الف۲`, name: `مهره ${tag} دیگر`, unit: 'عدد' });
+        itemIds.push(Number(named.id), Number(other.id));
+        const read = (await readStockItemsForRefs(orm, [{ code: ` کد${tag}ب۱ `, name: '' }])).map(i => Number(i.id));
+        if (!read.includes(Number(named.id))) wrong.push(`the item the row names (${named.id}) was not read`);
+        if (read.includes(Number(other.id))) wrong.push(`the item no row names (${other.id}) was read, so the narrowed read widened again`);
+      });
+    if (itemIds.length > 0) {
+      await orm.delete(itemWarehouseStocks).where(inArray(itemWarehouseStocks.itemId, itemIds)).catch(() => undefined);
+      await orm.delete(items).where(inArray(items.id, itemIds)).catch(() => undefined);
+    }
+  }
+
   if (shouldRun('reg_outbox_server_search_td_1323', 'td_1323', 'events', 'outbox', 'pagination', 'obs_r2_86')) {
     const eventIds: string[] = [];
     await runCase(results, 'reg_outbox_server_search_td_1323',
@@ -372,6 +394,13 @@ export async function runSpeedConsistencyV102Tests(shouldRun: ShouldRun): Promis
         if (!byLabel.ids.includes(`${tag}-a`) || byLabel.ids.includes(`${tag}-b`)) wrong.push('a search by the Persian event name did not find exactly that type');
         const second = await get(`search=${tag}&page=2&limit=1`);
         if (second.ids.length !== 1 || second.total !== 2) wrong.push(`page 2 of 1 answered ${second.ids.length} rows, total ${second.total}`);
+        // PostgreSQL text never holds NUL: the search drops it instead of answering 500
+        for (const query of ['search=%00', 'search=a%00b', `status=completed&search=%00${tag}`]) {
+          const res = await request(app).get(`/api/events/outbox?${query}`).set('Cookie', admin.cookie);
+          if (res.status !== 200) wrong.push(`GET /api/events/outbox?${query} returned ${res.status} ${res.body?.code ?? ''}`);
+        }
+        const withNul = await get(`status=completed&search=%00${tag}&page=1&limit=50`);
+        if (withNul.total !== 2) wrong.push(`a search with a NUL before the tag answered total ${withNul.total}, expected the two tagged rows`);
       });
     if (eventIds.length > 0) await orm.delete(outboxEvents).where(inArray(outboxEvents.eventId, eventIds)).catch(() => undefined);
   }

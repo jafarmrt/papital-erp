@@ -3,6 +3,7 @@ import { orm } from '../../db/drizzle.js';
 import { workflowDefinitions, workflowTransitions } from '../../db/schema.js';
 import { publishedVersionOf, recordDefinitionVersion } from './workflowSnapshot.js';
 import { logActivity } from '../../lib/auditLogger.js';
+import { REMOVED_STOCK_COUNT_START_KEY, REPLACED_PERMISSION_KEYS } from '../../lib/permissions/replacedPermissionKeys.js';
 
 /**
  * v10.2.0 (package 1 of the 10.2 start plan): migration 0123 removed the key `audit.create` («شروع دوره انبارگردانی»,
@@ -15,7 +16,6 @@ import { logActivity } from '../../lib/auditLogger.js';
  * written with `tx`. A definition holding an unpublished draft is left alone (publishing would publish the draft) and
  * stays listed by the health check. Running instances keep their own snapshot. A second run finds nothing to do.
  */
-import { REMOVED_STOCK_COUNT_START_KEY, REPLACED_PERMISSION_KEYS } from '../../lib/permissions/replacedPermissionKeys.js';
 
 export { REMOVED_STOCK_COUNT_START_KEY, REPLACED_PERMISSION_KEYS };
 

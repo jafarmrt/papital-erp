@@ -1,14 +1,16 @@
 import { inArray, or, sql, type SQL } from 'drizzle-orm';
 import { outboxEvents } from '../../db/schema.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
+import { withoutNul } from '../../lib/search/searchText.js';
 import { EVENT_AGGREGATE_LABELS, PUBLISHED_EVENT_TYPES } from '../../lib/events/eventTypeCatalog.js';
 
 /**
  * OBS-R2-86 (TD-1323): the outbox tab's search, the fields the browser searched on its one page: the event id, type and
- * aggregate, the last error, the payload text and the Persian names of the type and the aggregate.
+ * aggregate, the last error, the payload text and the Persian names of the type and the aggregate. A NUL is dropped first:
+ * PostgreSQL text never holds one.
  */
 export function outboxSearchCondition(search: string | undefined): SQL | undefined {
-  const q = String(search ?? '').trim();
+  const q = withoutNul(String(search ?? '')).trim();
   if (!q) return undefined;
   const pattern = containsLikePattern(q.toLowerCase());
   const typesByLabel = PUBLISHED_EVENT_TYPES.filter(t => t.label.includes(q)).map(t => t.value);

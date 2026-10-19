@@ -101,7 +101,7 @@ const KEY_UNSAFE_CHAR = '[^\\u0001-\\u007f\\u0600-\\u06ff\\u200c\\u200d\\ufb50-\
  * JavaScript («ß» is «SS» only in JavaScript, «İ» and «Σ» differ too). The list holds every item that matches a ref, so
  * each ref gets the lowest-id match, by code then by name.
  */
-async function readStockItemsForRefs(executor: DbExecutor, refs: ReadonlyArray<{ code: string; name: string }>): Promise<ReservationStockItem[]> {
+export async function readStockItemsForRefs(executor: DbExecutor, refs: ReadonlyArray<{ code: string; name: string }>): Promise<ReservationStockItem[]> {
   // a key holding NUL names no stored item (PostgreSQL text never holds it) and would refuse the query
   const storable = (key: string) => key !== '' && !key.includes('\u0000');
   const codes = [...new Set(refs.map(r => itemCodeKey(r.code)).filter(storable))];

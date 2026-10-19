@@ -133,7 +133,8 @@ export function useOutboxEventsQuery(
     staleTime: 5000,
     placeholderData: keepPreviousData,
     enabled: options?.enabled ?? true,
-    refetchInterval: options?.refetchInterval ?? 10000,
+    // a search reads the whole table on the server, so it is not repeated every ten seconds
+    refetchInterval: search ? false : (options?.refetchInterval ?? 10000),
   });
 }
 
