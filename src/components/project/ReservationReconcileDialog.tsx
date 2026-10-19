@@ -71,12 +71,13 @@ export function ReservationReconcileDialog({ projectId, version, initialPreview,
       toast.success(result.changed ? `رزرو با فهرست مواد برابر شد: ${reservationReconcileSummary(result.preview)}` : 'رزرو از پیش با فهرست مواد برابر بود.');
       onClose();
     } catch (err) {
-      const fresh = err instanceof ApiError && err.code === 'PROJECT_RESERVATION_PLAN_CHANGED' ? (err.details?.preview as ReservationReconcilePreview | undefined) : undefined;
+      const errorCode = err instanceof ApiError ? err.code : undefined;
+      const fresh = err instanceof ApiError && errorCode === 'PROJECT_RESERVATION_PLAN_CHANGED' ? (err.details?.preview as ReservationReconcilePreview | undefined) : undefined;
       if (fresh) {
         setPreview(fresh);
         setNotice(errorMessageOf(err));
       } else {
-        setNotice(err instanceof ApiError && err.code === 'OCC_CONFLICT' ? PROJECT_VERSION_CONFLICT_MESSAGE : (errorMessageOf(err) || 'تکمیل رزرو ثبت نشد.'));
+        setNotice(errorCode === 'OCC_CONFLICT' ? PROJECT_VERSION_CONFLICT_MESSAGE : (errorMessageOf(err) || 'تکمیل رزرو ثبت نشد.'));
       }
     } finally {
       setApplying(false);
