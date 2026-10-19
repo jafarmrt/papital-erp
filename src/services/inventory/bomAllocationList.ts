@@ -52,11 +52,6 @@ export async function listBomAllocations(filter: BomAllocationFilter, window: { 
   return (await query).map(({ alloc, tx }) => toAllocationRecord(alloc, tx));
 }
 
-export async function countBomAllocations(filter: BomAllocationFilter): Promise<number> {
-  const [row] = await orm.select({ total: count() }).from(projectBomAllocations).where(listConditions(filter));
-  return Number(row?.total ?? 0);
-}
-
 /** The tab's cards and status buttons: every status under the other filters, so they do not change with the status picked */
 export async function bomAllocationStatusCounts(filter: BomAllocationFilter): Promise<BomAllocationStatusCounts> {
   const status = projectBomAllocations.status;

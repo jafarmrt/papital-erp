@@ -67,21 +67,54 @@ async function planWithOthersReservations(
   return planProjectReservation(ic.sections, products, stockItems, ic.manualPurchaseItems, reservedAt, { reservedByOthers, issuedToProject });
 }
 
-/** The live items whose code key or name key one of the refs holds (the keys of `findProjectItemMatch`), in id order */
-async function readStockItemsForRefs(executor: DbExecutor, refs: ReadonlyArray<{ code: string; name: string }>): Promise<ReservationStockItem[]> {
-  const codes = [...new Set(refs.map(r => itemCodeKey(r.code)).filter(Boolean))];
-  const names = [...new Set(refs.map(r => itemNameKey(r.name)).filter(Boolean))];
-  const conditions = [
-    codes.length > 0 ? inArray(sql`upper(btrim(${items.code}))`, codes) : undefined,
-    names.length > 0 ? inArray(sql`lower(btrim(${items.name}))`, names) : undefined,
-  ].filter((c): c is SQL => c !== undefined);
-  if (conditions.length === 0) return [];
+/**
+ * The characters JavaScript's `trim()` removes (white space and line terminators), so the SQL keys below trim as
+ * `itemCodeKey` / `itemNameKey` do; plain `btrim` removes only the space, and a code stored with a tab or a no-break space
+ * kept its item out of the narrowed read
+ */
+export const JS_TRIM_CHARS = '\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff';
+
+const STOCK_ITEM_COLUMNS = {
+  id: items.id, code: items.code, name: items.name, category: items.category, unit: items.unit, currentStock: items.currentStock,
+};
+
+async function readLiveStockItems(executor: DbExecutor, narrow?: SQL): Promise<ReservationStockItem[]> {
   const rows = await executor
-    .select({ id: items.id, code: items.code, name: items.name, category: items.category, unit: items.unit, currentStock: items.currentStock })
+    .select(STOCK_ITEM_COLUMNS)
     .from(items)
-    .where(and(eq(items.isDeleted, 0), or(...conditions)))
+    .where(narrow ? and(eq(items.isDeleted, 0), narrow) : eq(items.isDeleted, 0))
     .orderBy(asc(items.id));
   return rows.map(i => ({ ...i, currentStock: Number(i.currentStock) || 0 }));
+}
+
+/** whether the ref finds, in the narrowed list, the step of `findProjectItemMatch` it would find in every live item */
+function resolvedWithin(ref: { code: string; name: string }, list: readonly ReservationStockItem[]): boolean {
+  const code = itemCodeKey(ref.code);
+  if (code) return list.some(i => itemCodeKey(i.code) === code);
+  const name = itemNameKey(ref.name);
+  if (name) return list.some(i => itemNameKey(i.name) === name);
+  return true;
+}
+
+/**
+ * The live items whose code key or name key one of the refs holds (the keys of `findProjectItemMatch`), in id order. The
+ * SQL keys trim like JavaScript but letter case is the database's (`upper` / `lower`), which differs for some letters
+ * («ß» is «SS» only in JavaScript), so when a ref finds no code (or, without a code, no name) in that list, every live item
+ * is read, as before TD-1322, and the match stays the one the whole list gives.
+ */
+async function readStockItemsForRefs(executor: DbExecutor, refs: ReadonlyArray<{ code: string; name: string }>): Promise<ReservationStockItem[]> {
+  // a key holding NUL names no stored item (PostgreSQL text never holds it) and would refuse the query; such a ref falls back
+  const storable = (key: string) => key !== '' && !key.includes('\u0000');
+  const codes = [...new Set(refs.map(r => itemCodeKey(r.code)).filter(storable))];
+  const names = [...new Set(refs.map(r => itemNameKey(r.name)).filter(storable))];
+  const conditions = [
+    codes.length > 0 ? inArray(sql`upper(btrim(${items.code}, ${JS_TRIM_CHARS}))`, codes) : undefined,
+    names.length > 0 ? inArray(sql`lower(btrim(${items.name}, ${JS_TRIM_CHARS}))`, names) : undefined,
+  ].filter((c): c is SQL => c !== undefined);
+  if (conditions.length === 0) return refs.every(ref => resolvedWithin(ref, [])) ? [] : readLiveStockItems(executor);
+  const narrowed = await readLiveStockItems(executor, or(...conditions));
+  if (refs.every(ref => resolvedWithin(ref, narrowed))) return narrowed;
+  return readLiveStockItems(executor);
 }
 
 export async function resolveServerInventoryControl(
@@ -103,8 +136,8 @@ export async function resolveServerInventoryControl(
   // v9.0.373 (TD-819): ثبت نهایی‌های هم‌زمان پشت سر هم رزرو دیگران را می‌خوانند
   if (finalizing) await executor.execute(sql`SELECT pg_advisory_xact_lock(${ADVISORY_LOCK_KEYS.PROJECT_RESERVATION_FINALIZE}::bigint)`);
   // v9.0.413 (TD-748): بخش الگو (مواد در `items`) با ردیف‌های پروژه ذخیره می‌شود تا رزرو و صفحه‌ها همان ردیف‌ها را بخوانند
-  // OBS-R2-45 (TD-1322): only the live items the rows may name by code key or name key are read, never every item; a live
-  // item's code key and name key are unique (TD-653), so the match is the one the whole list gave
+  // OBS-R2-45 (TD-1322): only the live items the rows may name by code key or name key are read, unless a row finds none of
+  // them, when every live item is read (`readStockItemsForRefs`), so the match is the one the whole list gives
   if (hasPresetShapedSections(rest.sections)) {
     const presetStock = await readStockItemsForRefs(executor, presetMaterialRefs(rest.sections));
     rest.sections = projectSectionsFromPreset(rest.sections, Array.isArray(products) ? products : [], material =>

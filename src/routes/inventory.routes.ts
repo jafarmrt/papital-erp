@@ -19,7 +19,8 @@ import { WAC_CORRECTION_PERMISSION } from '../lib/inventoryAudit/wacCorrection.j
 import { ITEM_COST_READ_PERMISSIONS, RESERVATION_BUYER_READ_PERMISSIONS, reservedItemsReportForAccess } from '../lib/inventory/reservedItemsReport.js';
 import { parsePagination } from '../lib/pagination.js';
 import { allocationsForCostAccess } from '../lib/inventory/projectMaterialCost.js';
-import { bomAllocationStatusCounts, countBomAllocations, listBomAllocations } from '../services/inventory/bomAllocationList.js';
+import { bomAllocationStatusCounts, listBomAllocations } from '../services/inventory/bomAllocationList.js';
+import type { BomAllocationStatus } from '../lib/inventory/bomAllocationList.js';
 import type { AuthUserPayload } from '../types.js';
 import { actorDisplayName } from '../lib/auth/actorDisplayName.js';
 import { ITEM_KARDEX_READ_PERMISSIONS } from '../lib/permissions/stockActionPermissions.js';
@@ -382,9 +383,9 @@ router.get(
     // allocation the filter finds (the Excel export)
     if (req.query.page !== undefined) {
       const { page, limit, offset } = parsePagination(req.query, { limit: 50 });
-      const [rows, total, statusCounts] = await Promise.all([
-        listBomAllocations(filter, { limit, offset }), countBomAllocations(filter), bomAllocationStatusCounts(filter),
-      ]);
+      const [rows, statusCounts] = await Promise.all([listBomAllocations(filter, { limit, offset }), bomAllocationStatusCounts(filter)]);
+      // the status picked is one of the counted statuses (the query schema), so its count is the filtered total
+      const total = filter.status ? statusCounts[filter.status as BomAllocationStatus] : statusCounts.all;
       return res.json({ allocations: allocationsForCostAccess(rows, canReadCost), total, page, limit, statusCounts });
     }
     const allocations = await listBomAllocations(filter);

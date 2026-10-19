@@ -87,8 +87,15 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
       const res = await fetchJson(
         bomAllocationListUrl({ page, limit: ALLOCATION_PAGE_SIZE, search: debouncedSearch, status: statusFilter }), { signal });
       if (signal?.aborted) return;
+      const nextTotal = Number(res?.total) || 0;
+      // a consume or release can empty the last page: go to the page that is now the last one
+      const lastPage = Math.max(1, Math.ceil(nextTotal / ALLOCATION_PAGE_SIZE));
+      if (page > lastPage) {
+        setPage(lastPage);
+        return;
+      }
       setAllocations(Array.isArray(res?.allocations) ? res.allocations : []);
-      setTotal(Number(res?.total) || 0);
+      setTotal(nextTotal);
       setStatusCounts(res?.statusCounts ?? EMPTY_ALLOCATION_STATUS_COUNTS);
       setLoadError(null);
     } catch (err) {

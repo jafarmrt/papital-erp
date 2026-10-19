@@ -8,9 +8,17 @@ export const SEARCH_FOLD_TO = 'یکی01234567890123456789';
 
 const FOLD = new Map<string, string>(Array.from(SEARCH_FOLD_FROM).map((ch, i) => [ch, Array.from(SEARCH_FOLD_TO)[i]]));
 
+// PostgreSQL text never holds NUL (SQLSTATE 22021), so a search or filter carrying one drops it here, never in the SQL side
+const NUL_CHARS = /\u0000/g;
+
+/** the text without NUL characters, for a filter value sent to SQL as is */
+export function withoutNul(value: string): string {
+  return value.replace(NUL_CHARS, '');
+}
+
 export function normalizeSearchText(value: unknown): string {
   if (value === null || value === undefined) return '';
-  return Array.from(String(value).toLowerCase(), ch => FOLD.get(ch) ?? ch).join('').trim();
+  return withoutNul(Array.from(String(value).toLowerCase(), ch => FOLD.get(ch) ?? ch).join('')).trim();
 }
 
 /**
@@ -27,9 +35,6 @@ const COMPACT_FOLD = new Map<string, string>(
   Array.from(SEARCH_COMPACT_FOLD_FROM).map((ch, i) => [ch, Array.from(SEARCH_COMPACT_FOLD_TO)[i]]),
 );
 
-// PostgreSQL text never holds NUL (SQLSTATE 22021), so a search carrying one drops it here, never in the SQL side
-const NUL_CHARS = /\u0000/g;
-
 export function compactSearchText(value: unknown): string {
-  return Array.from(normalizeSearchText(value), ch => COMPACT_FOLD.get(ch) ?? ch).join('').replace(NUL_CHARS, '').replace(COMPACT_DROP, '');
+  return Array.from(normalizeSearchText(value), ch => COMPACT_FOLD.get(ch) ?? ch).join('').replace(COMPACT_DROP, '');
 }
