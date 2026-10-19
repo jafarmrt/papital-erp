@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/update-steps.sh — v10.2.20 (OBS-R1-22 / OBS-R1-17, 10.2 package 13): the build and source steps of update.sh.
+# scripts/update-steps.sh — v10.2.21 (OBS-R1-22 / OBS-R1-17, 10.2 package 13): the build and source steps of update.sh.
 #
 # Sourced by update.sh. Run on its own only to put the previous source of a manual update back:
 #   bash scripts/update-steps.sh restore-source <app-dir>
@@ -225,7 +225,7 @@ update_dist_fingerprint() { cat "$1/$UPDATE_FINGERPRINT_NAME" 2>/dev/null || tru
 update_dist_commit() {
   local commit
   commit="$(cat "$1/$UPDATE_COMMIT_NAME" 2>/dev/null || true)"
-  echo "${commit:-unknown (built before v10.2.20)}"
+  echo "${commit:-unknown (built before v10.2.21)}"
 }
 
 # OBS-R1-22: moves the built dist/ and node_modules/ of the side folder into <app-dir>, keeping the running ones as

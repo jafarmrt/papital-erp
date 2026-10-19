@@ -8,6 +8,15 @@
 
 import type { ReservationShortage } from './projectReservation.js';
 
+/** فیلدهای مقدار رزرو به ترتیب اولویت گزارش رزروها؛ اولین فیلد با مقدار مثبت، مقدار رزرو ردیف است */
+const RESERVATION_QTY_FIELDS = ['convertedReservedQty', 'convertedQty', 'reservedQty', 'warehouseStockQty', 'stockQty'] as const;
+export type ReservationQtyField = typeof RESERVATION_QTY_FIELDS[number];
+
+/** v7.0.102 (TD-233): یک قاعده برای مقدار رزرو ردیف — گزارش رزروها، کسر رزرو با حواله خروج و تکمیل رزرو (TD-1341) */
+export function reservationQtyField(row: Partial<Record<ReservationQtyField, unknown>>): ReservationQtyField | null {
+  return RESERVATION_QTY_FIELDS.find(f => Number(row[f] || 0) > 0) ?? null;
+}
+
 const asObject = (v: unknown): Record<string, unknown> | null =>
   (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
 
