@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import type { Account, FinancialSummaryStats } from '../../types';
-import { ACCOUNTING_LIST_QUERY_OPTIONS, fetchAccountingList, silentMutationError } from './accountingQueryConfig';
+import { ACCOUNTING_LIST_QUERY_OPTIONS, fetchAccountingList, silentMutationError, type AccountingListQueryOptions } from './accountingQueryConfig';
 import { invalidateAfterAccountChange } from './accountingInvalidation';
 
 /**
@@ -13,7 +13,7 @@ import { invalidateAfterAccountChange } from './accountingInvalidation';
 /** بدنه فرم حساب (همان داده فرم ChartOfAccountsTab) */
 export type AccountPayload = object;
 
-export function useAccountingSummaryQuery() {
+export function useAccountingSummaryQuery({ enabled = true }: AccountingListQueryOptions = {}) {
   return useQuery<FinancialSummaryStats | null>({
     queryKey: QUERY_KEYS.accounting.summary(),
     queryFn: async ({ signal }) => {
@@ -26,22 +26,25 @@ export function useAccountingSummaryQuery() {
       }
     },
     ...ACCOUNTING_LIST_QUERY_OPTIONS,
+    enabled,
   });
 }
 
-export function useAccountsListQuery() {
+export function useAccountsListQuery({ enabled = true }: AccountingListQueryOptions = {}) {
   return useQuery<Account[]>({
     queryKey: QUERY_KEYS.accounting.accountsList(),
     queryFn: ({ signal }) => fetchAccountingList<Account>('/accounting/accounts', signal, 'accounts'),
     ...ACCOUNTING_LIST_QUERY_OPTIONS,
+    enabled,
   });
 }
 
-export function useAccountsTreeQuery() {
+export function useAccountsTreeQuery({ enabled = true }: AccountingListQueryOptions = {}) {
   return useQuery<Account[]>({
     queryKey: QUERY_KEYS.accounting.accountsTree(),
     queryFn: ({ signal }) => fetchAccountingList<Account>('/accounting/accounts/tree', signal, 'accounts tree'),
     ...ACCOUNTING_LIST_QUERY_OPTIONS,
+    enabled,
   });
 }
 

@@ -157,7 +157,8 @@ describe('useAccounting — mutations invalidate the affected caches', () => {
     seed(client, otherKeys);
     const spy = vi.spyOn(client, 'invalidateQueries');
 
-    const { result } = renderHook(() => useAccounting(), { wrapper: hookWrapper(client) });
+    // OBS-R2-105 (TD-1322): the treasury tab reads the bank accounts; the dashboard does not
+    const { result } = renderHook(() => useAccounting({ tab: 'treasury' }), { wrapper: hookWrapper(client) });
     await waitFor(() => expect(callsTo('/accounting/bank-accounts')).toBe(1));
 
     await act(async () => {
@@ -184,7 +185,7 @@ describe('useAccounting — mutations invalidate the affected caches', () => {
 describe('AccountingPage — reads are abortable and race-free', () => {
   it('passes an abort signal to the explorer ledger and core lists and aborts them when the page closes', async () => {
     fetchJson.mockImplementation((url: string, init?: RequestInitLike) => (
-      url.startsWith('/accounting/reports/ledger') || url === '/accounting/vouchers'
+      url.startsWith('/accounting/reports/ledger') || url === '/accounting/bank-accounts'
         ? new Promise(() => undefined)
         : Promise.resolve(baseResponse(url, init))
     ));
@@ -192,14 +193,14 @@ describe('AccountingPage — reads are abortable and race-free', () => {
     fireEvent.click(await screen.findByText('دارایی‌ها', { selector: 'div' }));
     await waitFor(() => expect(callsTo(LEDGER_ASSETS)).toBe(1));
     const ledgerSignal = signalOf(u => u === LEDGER_ASSETS);
-    const vouchersSignal = signalOf(u => u === '/accounting/vouchers');
+    const bankAccountsSignal = signalOf(u => u === '/accounting/bank-accounts');
     expect(ledgerSignal).toBeInstanceOf(AbortSignal);
     expect(ledgerSignal?.aborted).toBe(false);
 
     unmount();
 
     expect(ledgerSignal?.aborted).toBe(true);
-    expect(vouchersSignal?.aborted).toBe(true);
+    expect(bankAccountsSignal?.aborted).toBe(true);
   });
 
   it('the explorer reads no ledger until an account or party is chosen (TD-547)', async () => {

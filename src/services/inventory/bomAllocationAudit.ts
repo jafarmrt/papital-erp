@@ -1,7 +1,7 @@
 import type { DbExecutor } from '../../db/drizzle.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
-import type { ProjectBomAllocationRecord } from './projectBomAllocation.service.js';
+import type { ProjectBomAllocationRecord } from './bomAllocationRecord.js';
 
 /**
  * TD-943 (P5-M10, OBS-R2-07): the audit rows of a project material allocation, its consumption and its release are written

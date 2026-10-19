@@ -3,7 +3,7 @@ import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { safeExtractArray } from '../../utils';
 import type { Cheque } from '../../types';
-import { ACCOUNTING_LIST_QUERY_OPTIONS, fetchAccountingList, silentMutationError } from './accountingQueryConfig';
+import { ACCOUNTING_LIST_QUERY_OPTIONS, fetchAccountingList, silentMutationError, type AccountingListQueryOptions } from './accountingQueryConfig';
 import { invalidateAfterChequeChange } from './accountingInvalidation';
 import { useOnDemandReport, type OnDemandReportSpec } from './useOnDemandReport';
 
@@ -39,11 +39,12 @@ function chequesUrl(filters: ChequeFilters): string {
   return query ? `/accounting/cheques?${query}` : '/accounting/cheques';
 }
 
-export function useChequesQuery(filters: ChequeFilters = {}) {
+export function useChequesQuery(filters: ChequeFilters = {}, { enabled = true }: AccountingListQueryOptions = {}) {
   return useQuery<Cheque[]>({
     queryKey: QUERY_KEYS.accounting.cheques(filters),
     queryFn: ({ signal }) => fetchAccountingList<Cheque>(chequesUrl(filters), signal, 'cheques'),
     ...ACCOUNTING_LIST_QUERY_OPTIONS,
+    enabled,
   });
 }
 

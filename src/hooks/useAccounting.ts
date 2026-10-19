@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { QUERY_KEYS } from '../lib/queryKeys';
 import type { JournalVoucher } from '../types';
@@ -37,29 +37,61 @@ const NO_CHEQUES: never[] = [];
 const NO_CUSTOMERS: never[] = [];
 const NO_PERSONNEL: never[] = [];
 
-type AccountingTab = 'dashboard' | 'coa' | 'vouchers' | 'treasury' | 'cheques' | 'reports' | 'fiscal-closing' | 'explorer';
+export type AccountingTab = 'dashboard' | 'coa' | 'vouchers' | 'treasury' | 'cheques' | 'reports' | 'fiscal-closing' | 'explorer';
+
+type AccountingList = 'summary' | 'accounts' | 'tree' | 'vouchers' | 'bankAccounts' | 'bankAccountOptions' | 'cheques' | 'customers' | 'personnel';
+
+/**
+ * OBS-R2-105 (TD-1322): the lists each tab of the accounting page shows (the props AccountingPage passes it); a list
+ * no open tab or window shows is not read. The voucher window, open from any tab, needs the accounts and the parties.
+ */
+export const ACCOUNTING_TAB_LISTS: Record<AccountingTab, readonly AccountingList[]> = {
+  dashboard: ['summary', 'vouchers', 'cheques'],
+  coa: ['accounts', 'tree'],
+  vouchers: ['accounts', 'customers', 'personnel'],
+  explorer: ['accounts', 'customers', 'personnel', 'bankAccounts'],
+  treasury: ['bankAccounts', 'customers', 'personnel', 'accounts'],
+  cheques: ['cheques', 'bankAccountOptions', 'customers', 'personnel'],
+  reports: ['accounts'],
+  'fiscal-closing': [],
+};
+const VOUCHER_WINDOW_LISTS: readonly AccountingList[] = ['accounts', 'customers', 'personnel'];
+
+export interface UseAccountingOptions {
+  /** the tab on screen; default the dashboard */
+  tab?: AccountingTab;
+  /** false while the viewer may not open the tab: nothing is read for it */
+  allowed?: boolean;
+}
 
 /**
  * صفحه حسابداری: داده‌ها با React Query (FE-005) از هوک‌های هر بخش (حساب‌ها، اسناد، خزانه، چک‌ها، گزارش‌ها) خوانده و
  * ذخیره می‌شوند؛ این هوک همان رابط پیشین را برای AccountingPage و تب‌ها نگه می‌دارد. هر ذخیره کش بخش‌های متاثر
  * (و صفحات دیگر: اسناد، لیست حقوق) را باطل می‌کند — نگاه کنید به accounting/accountingInvalidation.ts.
  */
-export function useAccounting() {
-  const [activeTab, setActiveTab] = useState<AccountingTab>('dashboard');
+export function useAccounting({ tab = 'dashboard', allowed = true }: UseAccountingOptions = {}) {
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
 
-  const summaryQuery = useAccountingSummaryQuery();
-  const accountsQuery = useAccountsListQuery();
-  const treeQuery = useAccountsTreeQuery();
+  // Modals & Active Edit Entities
+  const [isNewVoucherModalOpen, setIsNewVoucherModalOpen] = useState(false);
+  const [editingVoucher, setEditingVoucher] = useState<JournalVoucher | null>(null);
+  const [printingVoucher, setPrintingVoucher] = useState<JournalVoucher | null>(null);
+
+  const needs = (list: AccountingList) =>
+    (allowed && ACCOUNTING_TAB_LISTS[tab].includes(list)) || (isNewVoucherModalOpen && VOUCHER_WINDOW_LISTS.includes(list));
+
+  const summaryQuery = useAccountingSummaryQuery({ enabled: needs('summary') });
+  const accountsQuery = useAccountsListQuery({ enabled: needs('accounts') });
+  const treeQuery = useAccountsTreeQuery({ enabled: needs('tree') });
   // آخرین اسناد پیشخوان حسابداری؛ برگه «اسناد حسابداری» صفحه خود را از سرور می‌خواند (v9.0.115، TD-565)
-  const vouchersQuery = useVouchersQuery();
-  const bankAccountsQuery = useBankAccountsQuery();
+  const vouchersQuery = useVouchersQuery({}, { enabled: needs('vouchers') });
+  const bankAccountsQuery = useBankAccountsQuery({ enabled: needs('bankAccounts') });
   // v9.0.97 (TD-505، ت۷): دفتر چک فقط فهرست انتخاب را می‌خواند؛ فهرست کامل فقط برای خوانندگان خزانه
-  const bankAccountOptionsQuery = useBankAccountOptionsQuery();
-  const chequesQuery = useChequesQuery();
-  const customersQuery = useAccountingCustomersQuery();
-  const personnelQuery = useAccountingPersonnelQuery();
+  const bankAccountOptionsQuery = useBankAccountOptionsQuery({ enabled: needs('bankAccountOptions') });
+  const chequesQuery = useChequesQuery({}, { enabled: needs('cheques') });
+  const customersQuery = useAccountingCustomersQuery({ enabled: needs('customers') });
+  const personnelQuery = useAccountingPersonnelQuery({ enabled: needs('personnel') });
 
   // V3.2.1 (TD-080 / Playbook Scenario 6): گزارش‌ها به هوک اختصاصی useAccountingReports منتقل شدند
   const reports = useAccountingReports();
@@ -69,44 +101,25 @@ export function useAccounting() {
   const treasuryMutations = useTreasuryMutations();
   const chequeMutations = useChequeMutations();
 
-  // Modals & Active Edit Entities
-  const [isNewVoucherModalOpen, setIsNewVoucherModalOpen] = useState(false);
-  const [editingVoucher, setEditingVoucher] = useState<JournalVoucher | null>(null);
-  const [printingVoucher, setPrintingVoucher] = useState<JournalVoucher | null>(null);
+  const listQueries = [
+    summaryQuery, accountsQuery, treeQuery, vouchersQuery, bankAccountsQuery, bankAccountOptionsQuery, chequesQuery, customersQuery, personnelQuery,
+  ];
 
-  const { refetch: refetchSummary } = summaryQuery;
-  const { refetch: refetchAccounts } = accountsQuery;
-  const { refetch: refetchTree } = treeQuery;
-  const { refetch: refetchVouchers } = vouchersQuery;
-  const { refetch: refetchBankAccounts } = bankAccountsQuery;
-  const { refetch: refetchCheques } = chequesQuery;
-  const { refetch: refetchCustomers } = customersQuery;
-  const { refetch: refetchPersonnel } = personnelQuery;
-
-  // Refresh All Data (دکمه «به‌روزرسانی» و بازنشانی خطای تب)
-  const refreshAll = useCallback(async () => {
+  // Refresh All Data (دکمه «به‌روزرسانی» و بازنشانی خطای تب): OBS-R2-105 — only the lists on screen are read again
+  const refreshAll = async () => {
     setRefreshing(true);
     try {
       await Promise.all([
-        refetchSummary(),
-        refetchAccounts(),
-        refetchTree(),
-        refetchVouchers(),
-        refetchBankAccounts(),
+        ...listQueries.filter(q => q.isEnabled).map(q => q.refetch()),
         // v9.0.102 (TD-509): جدول خزانه صفحه خودش را می‌خواند؛ «به‌روزرسانی» همان صفحه را دوباره می‌گیرد
         queryClient.refetchQueries({ queryKey: QUERY_KEYS.accounting.treasuryTransactions(), type: 'active' }),
-        refetchCheques(),
-        refetchCustomers(),
-        refetchPersonnel(),
       ]);
     } finally {
       setRefreshing(false);
     }
-  }, [refetchSummary, refetchAccounts, refetchTree, refetchVouchers, refetchBankAccounts, queryClient, refetchCheques, refetchCustomers, refetchPersonnel]);
+  };
 
-  const initialLoading = [
-    summaryQuery, accountsQuery, treeQuery, vouchersQuery, bankAccountsQuery, chequesQuery, customersQuery, personnelQuery,
-  ].some(q => q.isLoading);
+  const initialLoading = listQueries.some(q => q.isLoading);
 
   // Account Operations
   const handleCreateAccount = async (data: AccountPayload) => {
@@ -220,8 +233,6 @@ export function useAccounting() {
   };
 
   return {
-    activeTab,
-    setActiveTab,
     loading: refreshing || initialLoading || accountMutations.seedStandardAccounts.isPending || reports.reportsLoading,
     isSyncingBanks: treasuryMutations.syncAndReconcileBanks.isPending,
     stats: summaryQuery.data ?? null,
