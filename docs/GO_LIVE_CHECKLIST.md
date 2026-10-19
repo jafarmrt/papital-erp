@@ -13,9 +13,9 @@
 | 0.1 | Type check / lint | `npm run lint` | `tsc --noEmit` exits 0 — **zero errors** |
 | 0.2 | Full test suite (15 critical scenarios) | `npm run test` | All suites pass (unit, database, workflow, concurrency, integration, security, api, regression) |
 | 0.3 | Production build | `npm run build` | Build completes; `dist/server.cjs` + `dist/index.html` exist |
-| 0.4 | Version sync (3 locations) | — | `package.json` `version` == head entry of active changelog (`src/data/changelogs/3.ts` for v3.x). `/health` reads `package.json` dynamically at runtime. |
+| 0.4 | Version sync (4 locations) | `npm run check:version` | `package.json` `version` == head entry of the active changelog (`src/data/changelogs/10.ts`) == `deploy/k8s/erp-deployment.yaml` (image tag and `APP_VERSION`) == the `README.md` header. `/health` reads `package.json` at runtime. |
 | 0.5 | Source archive (if shipping by zip) | `.\package-source.ps1` (Windows) | `papital-erp-source-v<VER>.zip` produced — never commit this zip |
-| 0.6 | Push to GitHub | `git push origin master` | `git status` clean afterwards |
+| 0.6 | Push to GitHub | `git push -u origin <branch>`, then a draft pull request | `git status` clean afterwards; never push to `master` directly: merging is the product owner's step |
 
 > Gate rule: if any of 0.1–0.3 fails, **STOP**. Fix, re-run, then ship.
 
@@ -46,7 +46,7 @@ unzip papital-erp-source-v*.zip -d /opt/papital-erp
 cd /opt/papital-erp && sudo bash install.sh
 
 # Git mode
-sudo REPO_URL=https://<TOKEN>@github.com/jafarmrt/papital-erp.git bash install.sh
+sudo REPO_URL=https://github.com/jafarmrt/papital-erp.git bash install.sh   # public repository: no token in the address
 ```
 
 The installer performs: system deps (Node 24, PostgreSQL 16) → source → DB + `.env` generation (`chmod 600`) → `npm ci` → `npm run build` → systemd unit (`papital-erp`, Restart=always) → health probe.
@@ -60,7 +60,7 @@ The installer performs: system deps (Node 24, PostgreSQL 16) → source → DB +
 | 2.3 | **Retired seed flag removed** | `grep '^ALLOW_SEED_IN_PRODUCTION' .env` → no output (retired in v9.0.134: the boot seed only inserts missing base data and creates no role) |
 | 2.4 | **Danger flags absent** | `grep -E '^ERP_ALLOW_TEST_CLEANUP=1|^ENABLE_TEST_ENDPOINTS=true' .env` → no output |
 | 2.5 | `JWT_SECRET` >= 32 chars | `grep -c '^JWT_SECRET=.\{32,\}' .env` → `1` |
-| 2.6 | Env audit | `set -a; . ./.env; set +a; ./scripts/audit-env.sh` → no CRITICAL findings |
+| 2.6 | Env audit | `node --env-file=.env -e "process.exitCode = require('child_process').spawnSync('bash', ['scripts/audit-env.sh'], { stdio: 'inherit' }).status"` (`.env` read literally, as the service reads it, never run as shell code) → no `❌` line. On a server that never added `ERP_WEBHOOK_SECRET_TOKEN` the only `❌` line is `❌ MISSING: ERP_WEBHOOK_SECRET_TOKEN` (`Total errors: 1`): that is expected; do not add the token |
 | 2.7 | Service active and enabled | `systemctl is-active papital-erp && systemctl is-enabled papital-erp` → `active` / `enabled` |
 | 2.8 | Lifecycle probes | `curl -fsS localhost:3000/health/live` → `{"status":"alive"}` • `/health/ready` → `{"status":"ready"}` • `/health/startup` |
 | 2.9 | Migrations applied (atomic migrator — NEVER `db:push`) | `journalctl -u papital-erp -n 50 \| grep Migrator` shows success; `logs` free of errors |
@@ -76,7 +76,7 @@ The installer performs: system deps (Node 24, PostgreSQL 16) → source → DB +
 |---|--------|--------|
 | 3.1 | Read setup token | `grep '^ERP_SETUP_TOKEN' .env` |
 | 3.2 | Run wizard over **HTTPS** | `https://erp.yourdomain.ir/setup`, type `ERP_SETUP_TOKEN` into the form (never in the address) → create chief-admin account + company settings. **Complete this before exposing the app to users.** |
-| 3.3 | **Rotate the setup token immediately after setup** | `ERP_SETUP_TOKEN=$(openssl rand -hex 24)` → update `.env` → `sudo systemctl restart papital-erp` |
+| 3.3 | **Rotate the setup token immediately after setup** | `sudo sed -i "s/^ERP_SETUP_TOKEN=.*/ERP_SETUP_TOKEN=$(openssl rand -hex 24)/" .env` (the new token is written to `.env`, never printed) → `sudo systemctl restart papital-erp` |
 | 3.4 | Login test through the public domain | Browser: HTTPS login succeeds; cookie `auth_token` present, `Secure` + `HttpOnly` flags set (DevTools → Application → Cookies) |
 
 ---
@@ -117,7 +117,7 @@ The script installs Nginx + Certbot, configures reverse proxy → localhost:3000
 
 | # | Action | Command / expected |
 |---|--------|--------------------|
-| 6.1 | Daily backup and monitor cron installed | `install.sh` runs `scripts/install-ops-cron.sh`; on an older server run `sudo bash scripts/install-ops-cron.sh <service-user>` once. It writes `/etc/cron.d/papital-erp`: `scripts/backup.sh` daily at 02:30 server time (`BACKUP_HOUR` / `BACKUP_MINUTE`) and `scripts/monitor.sh` every five minutes, logging to `logs/backup.log` and `logs/monitor.log`, and removes the older `/etc/cron.d/papital-erp-backup` (v10.0.3) |
+| 6.1 | Daily backup and monitor cron installed | `install.sh` runs `scripts/install-ops-cron.sh`; on an older server run it once, only when `ls /etc/cron.d/papital-erp` finds no such file: `sudo BACKUP_HOUR=2 BACKUP_MINUTE=30 bash scripts/install-ops-cron.sh <service-user>` (the user from `systemctl show -p User --value papital-erp`; empty means `root`; the time is read only from these variables). It writes `/etc/cron.d/papital-erp`: `scripts/backup.sh` daily at 02:30 server time (`BACKUP_HOUR` / `BACKUP_MINUTE`) and `scripts/monitor.sh` every five minutes, logging to `logs/backup.log` and `logs/monitor.log`, and removes the older `/etc/cron.d/papital-erp-backup` (v10.0.3) |
 | 6.2 | First manual backup succeeds | `./scripts/backup.sh` → `erp_daily_<ts>.dump.gz` + `.manifest` (rows and content hash of every table, every constraint; v8.0.85) + `_uploads.tar.gz` (attachments) in `/var/backups/erp`, integrity verified (gzip + `pg_restore --list`); `.last_daily_ok` records the time |
 | 6.3 | Encrypted off-server copy | `docs/OFFSITE_BACKUP.md`: an rclone **crypt** remote over Google Drive and `BACKUP_RCLONE_REMOTE` in `.env`. Each daily backup and the `.env` (with `ERP_SECRETS_KEY`) are copied encrypted (`scripts/backup-offsite.sh`, v10.0.4); a failed copy exits 3 and the monitor alerts. Keep the crypt passwords off the server — **backups on the same disk are not a backup** |
 | 6.4 | **Recovery drill (mandatory)** | `sudo -v && ./scripts/restore.sh <latest-dump>.dump.gz` → restores into a temporary DB, prints `content identical to the backup manifest`, checks sequences and attachment files, drops the temp DB. Needs `sudo -u postgres` or `RESTORE_ADMIN_URL` (the app role cannot create databases; v8.0.86) |
@@ -141,8 +141,11 @@ Validates: env safety, systemd state, all three health probes, version match aga
 ### 7.2 API smoke test
 
 ```bash
-# ADMIN_TOKEN = value of the auth_token cookie from a logged-in admin session (DevTools → Application → Cookies)
-BASE_URL=https://erp.yourdomain.ir ADMIN_TOKEN=<cookie-value> ./scripts/smoke-test.sh
+# ADMIN_TOKEN = value of the auth_token cookie from a logged-in admin session (DevTools → Application → Cookies);
+# read -rsp takes it without showing it and keeps it out of the shell history; unset clears it afterwards
+read -rsp 'auth_token: ' ADMIN_TOKEN; echo
+BASE_URL=https://erp.yourdomain.ir ADMIN_TOKEN="$ADMIN_TOKEN" bash scripts/smoke-test.sh
+unset ADMIN_TOKEN
 ```
 
 Covers 8 steps: health/live, health/ready, `/api/stats`, vouchers list, items list, unsigned webhook rejection (401/403/503), login rate-limit (429), `/metrics`.
@@ -176,27 +179,30 @@ Run each scenario end-to-end and verify the accounting/inventory side effects:
 |---|------|--------|
 | 9.1 | Log rotation & writable LOG_DIR | Winston daily rotation into `LOG_DIR`; `logs/` writable by service user |
 | 9.2 | Metrics & monitoring | `scripts/monitor.sh` (cron, every 5 minutes; v10.0.6) alerts once on `/health/ready` failure, disk use ≥ 85 %, a daily backup or off-server copy older than 26 hours, unresolved dead-letter events or stuck outbox events (`/metrics` gauges `erp_*`, read with `METRICS_TOKEN`), and once on recovery. Channel: a Bale or Telegram bot or e-mail (`ALERT_*` in `.env`, docs/OFFSITE_BACKUP.md) |
-| 9.3 | Memory / pool limits | `MemoryLimit` in the systemd unit (default 2G commented) + `DB_POOL_MAX` in `.env` |
+| 9.3 | Memory / pool limits | add `MemoryMax=2G` under `[Service]` in the systemd unit (leave the old commented memory line as it is) + `DB_POOL_MAX` in `.env` |
 | 9.4 | Graceful shutdown verified | `sudo systemctl restart papital-erp` → journal shows `[Shutdown]` sequence, no data loss |
-| 9.5 | Secret rotation calendar | `JWT_SECRET` every 3 months • `ERP_SETUP_TOKEN` once after setup • `DATABASE_URL` password every 6 months • `wc_webhook_secret` every 6 months (README: Secrets table). After each rotation run `./scripts/smoke-test.sh` |
-| 9.6 | Known open tech debt acknowledged | `TECH_DEBT.md` open rows (TD-032, TD-081, TD-083, TD-085) reviewed — none blocking go-live |
+| 9.5 | Secret rotation calendar | `JWT_SECRET` every 3 months • `ERP_SETUP_TOKEN` once after setup • `DATABASE_URL` password every 6 months • `wc_webhook_secret` every 6 months (README: Secrets table). After each rotation run `bash scripts/smoke-test.sh` (7.2) |
+| 9.6 | Known open tech debt acknowledged | the open rows of `TECH_DEBT.md` reviewed — none blocking go-live |
 | 9.7 | On-call runbook familiarity | README "Runbook" section: OOM, failed migration, rollback, restore |
 
 ### Updating the application — two supported paths
 
 **A) Git-based update (recommended):**
 ```bash
-cd /opt/papital-erp && ./update.sh
+cd /opt/papital-erp && sudo ./update.sh --rehearse
 # → automatic pre-deployment backup (90-day retention) → git pull --ff-only
-#   → npm ci → npm run build → service restart → health verification
+#   → npm ci → npm run build → the new migrations rehearsed on a restored copy
+#   → service restart → health verification
+sudo bash scripts/go-live-verify.sh http://localhost:3000   # → STATUS : READY
 ```
 
 **B) Manual update (source zip, no git remote access):**
 ```bash
 # Upload the new source zip, extract it, then:
-sudo bash update.sh --source /root/papital-erp-source-v<NEW>/
+sudo bash update.sh --rehearse --source /root/papital-erp-source-v<NEW>/
 # or directly from the zip archive:
-sudo bash update.sh --zip /root/papital-erp-source-v<NEW>.zip
+sudo bash update.sh --rehearse --zip /root/papital-erp-source-v<NEW>.zip
+sudo bash scripts/go-live-verify.sh http://localhost:3000
 # → backup → sync source over /opt/papital-erp (preserves .env, .git, logs,
 #   uploads, backups, node_modules) → npm ci → build → restart → health check
 ```
