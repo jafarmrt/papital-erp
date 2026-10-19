@@ -23,7 +23,7 @@ const NAMES: Array<[string, string, string]> = [
     'backup.sh writes a private backup directory (0700) and files (0600) even under umask 022, and go-live-verify fails on readable backups (TD-585)',
     'directory 0700, dump, manifest and uploads archive 0600; go-live-verify passed the private directory and failed the readable one'],
   ['rec_td_586_update_build_failure_keeps_dist',
-    'a failed build during update.sh keeps the running dist/ and prints the rollback steps once: only the source step, since nothing was restarted or migrated (TD-586, v10.2.21)',
+    'a failed build during update.sh keeps the running dist/ and prints the rollback steps once: only the source step, since nothing was restarted or migrated (TD-586, v10.2.22)',
     'dist/server.cjs kept after the failed build; rollback printed once with the git reset step and no backup restore'],
   ['rec_td_587_update_port_from_env',
     'update.sh waits for startup on PORT from .env, the port the service listens on (TD-587)',

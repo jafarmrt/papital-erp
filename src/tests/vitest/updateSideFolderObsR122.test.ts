@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-// v10.2.21 (OBS-R1-22 / OBS-R1-17, 10.2 package 13): update.sh ran `npm ci` and the build in the application directory,
+// v10.2.22 (OBS-R1-22 / OBS-R1-17, 10.2 package 13): update.sh ran `npm ci` and the build in the application directory,
 // so node_modules changed under the running process and the old server served the new index.html with its old API;
 // a manual update synced the source without --delete, leaving removed files behind, and kept no previous source for
 // the rollback it printed. Now the update is installed and built in .build-next, swapped in right before the restart
@@ -370,7 +370,7 @@ describe('update_followups_obs_r1_22', () => {
     expect(msg).not.toContain('Nothing was changed');
   });
 
-  it('names the commit of a build made before v10.2.21 from its build-info.json and says nothing of a missing dist.prev', () => {
+  it('names the commit of a build made before v10.2.22 from its build-info.json and says nothing of a missing dist.prev', () => {
     const s = scratch();
     write(path.join(s.app, 'dist/build-info.json'), '{"version":"1.0.0","commit":"f6daa01d","builtAt":"2026-10-18"}');
     const commit = execFileSync('bash', ['-c', 'source scripts/update-steps.sh; update_dist_commit "$1/dist"', 'x', s.app], { cwd: s.app, encoding: 'utf8' }).trim();

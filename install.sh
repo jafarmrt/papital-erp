@@ -65,7 +65,7 @@ log "[1/7] Installing system dependencies (curl, git, OpenSSL, PostgreSQL, Node.
 
 $SUDO apt-get update -y
 # v10.0.4 (TD-957): rclone copies the daily backup off the server (scripts/backup-offsite.sh)
-# v10.2.21 (OBS-R1-22): rsync syncs a manual update's source (update.sh --source / --zip)
+# v10.2.22 (OBS-R1-22): rsync syncs a manual update's source (update.sh --source / --zip)
 $SUDO apt-get install -y curl git ca-certificates openssl gnupg rclone rsync
 
 # PostgreSQL (>=14 required; add PGDG repo when distro version is older)

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/update-steps.sh — v10.2.21 (OBS-R1-22 / OBS-R1-17, 10.2 package 13): the build and source steps of update.sh.
+# scripts/update-steps.sh — v10.2.22 (OBS-R1-22 / OBS-R1-17, 10.2 package 13): the build and source steps of update.sh.
 #
 # Sourced by update.sh. Run on its own only to put the previous source of a manual update back:
 #   bash scripts/update-steps.sh restore-source <app-dir>
@@ -242,7 +242,7 @@ update_source_fingerprint() {
     | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)
 }
 
-# The fingerprint and the commit a built dist/ records (a build before v10.2.21: the commit of its build-info.json)
+# The fingerprint and the commit a built dist/ records (a build before v10.2.22: the commit of its build-info.json)
 update_dist_fingerprint() { cat "$1/$UPDATE_FINGERPRINT_NAME" 2>/dev/null || true; }
 update_dist_commit() {
   local commit
