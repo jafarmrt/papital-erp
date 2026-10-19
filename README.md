@@ -2,7 +2,7 @@
 
 سیستم یکپارچه مدیریت کارگاه تولیدی: انبارداری با کاردکس رویدادمحور، فاکتور و پیش‌فاکتور، حسابداری دوبل (کدینگ ۴ سطحی، دفتر روزنامه، تراز آزمایشی)، خزانه‌داری و چک صیادی، CRM و قیف فروش، کنترل پروژه‌های تولید با BOM، منابع انسانی و حقوق و دستمزد، موتور گردش کار (ورکفلو) با کارتابل تاییدات، گذرگاه رویدادها (Outbox/DLQ/Webhook) و گزارش‌های BI.
 
-> **نسخه فعلی:** سری فعال `v10.x.y` (نسخه مستقر: `v10.2.15`) — نقشه راه: `V10_MASTER_ROADMAP.md` (سری‌های بسته‌شده: `V9_MASTER_ROADMAP.md`، `V8_MASTER_ROADMAP.md`، `V7_MASTER_ROADMAP.md`) • تاریخچه تغییرات: صفحه «معرفی و به‌روزرسانی‌ها» داخل سامانه + `CHANGELOG.md` + `src/data/changelogs/10.ts`
+> **نسخه فعلی:** سری فعال `v10.x.y` (نسخه مستقر: `v10.2.15`) — نقشه راه: `V10_MASTER_ROADMAP.md` (سری‌های بسته‌شده: `V9_MASTER_ROADMAP.md`، `V8_MASTER_ROADMAP.md`، `V7_MASTER_ROADMAP.md`) • تاریخچه تغییرات: `CHANGELOG.md` + `src/data/changelogs/10.ts`
 
 ---
 
@@ -11,7 +11,7 @@
 | لایه | تکنولوژی |
 |---|---|
 | Frontend | React 19 + Vite 6 + Tailwind CSS 4 + TanStack Query v5 + React Router 7 + Motion 12 + react-multi-date-picker |
-| Backend | Node.js 20+ (پیشنهادی 22 LTS) + Express 4 + TypeScript 5.8 (tsx در توسعه / esbuild در بیلد تولید) |
+| Backend | Node.js 24 + Express 5 + TypeScript 5.8 (tsx در توسعه / esbuild در بیلد تولید) |
 | Database | PostgreSQL 14+ (پیشنهادی 16/17) با Drizzle ORM 0.45 — مهاجرت اتمیک داخلی (`src/db/migrator.ts`) |
 | احراز هویت | JWT در کوکی امن HttpOnly (`auth_token`) |
 | رویدادها | Domain Event Bus + Transactional Outbox + DLQ + Webhook با امضای HMAC-SHA256 |
@@ -25,7 +25,7 @@
 
 ## پیش‌نیازها
 
-- Node.js 20+ (پیشنهادی 22 LTS)
+- Node.js 24 (`install.sh` نصب می‌کند؛ نسخهٔ قدیم‌تر کار می‌کند ولی `update.sh` هشدار می‌دهد)
 - PostgreSQL 14+ (پیشنهادی 16/17)
 - npm 9+
 
@@ -72,7 +72,9 @@ NODE_ENV=production npm start      # مهاجرت‌ها هنگام startup اع
 برای به‌روزرسانی خودکار سرور و سرویس‌های در حال اجرا در آینده نیز اسکریپت `update.sh` آماده است:
 
 ```bash
-sudo ./update.sh
+cd /opt/papital-erp
+sudo ./update.sh --rehearse   # بکاپ + build + آزمایش مهاجرت‌ها روی رونوشت + restart + health
+sudo bash scripts/go-live-verify.sh http://localhost:3000   # باید STATUS : READY بگوید
 ```
 
 ### تنظیمات اولیه پس از نصب
@@ -84,13 +86,15 @@ sudo ./update.sh
 ## به‌روزرسانی
 
 ```bash
-git pull
-npm ci
-npm run build
-# ری‌استارت سرویس (pm2 یا systemd) — مهاجرت‌های جدید در startup اعمال می‌شوند
+cd /opt/papital-erp
+sudo ./update.sh --rehearse # پیشنهادی: پشتیبان پیش از استقرار، دریافت کد، ساخت، آزمایش مهاجرت‌های تازه روی رونوشت بازگردانی‌شده، ری‌استارت و بررسی نسخه
+sudo ./update.sh            # همان، بی آزمایش مهاجرت‌ها
+sudo bash scripts/go-live-verify.sh http://localhost:3000   # پس از هر به‌روزرسانی: باید STATUS : READY بگوید
 ```
 
-- قبل از آپدیت، از دیتابیس backup بگیرید (`scripts/backup.sh`).
+`update.sh` پیش از هر کار خودش از پایگاه‌داده پشتیبان می‌گیرد (`pre-deployment`)، سرویس systemd (`papital-erp`) را ری‌استارت می‌کند و مهاجرت‌های تازه هنگام راه‌اندازی سرور اعمال می‌شوند. اگر گامی شکست بخورد، گام‌های بازگشت را با شناسه commit قبلی چاپ می‌کند.
+
+- اگر `--rehearse` شکست بخورد، سرویس هنوز نسخهٔ قبلی را اجرا می‌کند ولی کد و ساخت تازه روی دیسک مانده‌اند: پیش از هر ری‌استارت، همان دستور `git reset --hard … && npm ci … && npm run build` را که چاپ شده بی‌درنگ اجرا کنید.
 - دکمه «خروجی داده‌های کسب‌وکاری» در تنظیمات (`GET /api/export-backup`، فقط admin) یک فایل JSON برای گزارش و بایگانی است و **قابل بازگردانی نیست**؛ رمزهای عبور و کلیدهای محرمانه در آن نیست. پشتیبان واقعی فقط با `scripts/backup.sh` و بازگردانی با `scripts/restore.sh`.
 - **هرگز `npm run db:push` اجرا نکنید** — تغییر اسکیما فقط از مهاجرت اتمیک builtin.
 - **ارتقا به v7.0.56 و بالاتر (یک‌بار، پیوست‌ها):** از این نسخه فایل پیوست‌ها روی دیسک (`public/uploads/.attachments`، داخل همان پوشه‌ای که به‌روزرسانی و پشتیبان‌گیری نگه می‌دارند) ذخیره می‌شوند و پایگاه‌داده فقط مشخصات آن‌ها را دارد. پیوست‌های قدیمی تا انتقال، مثل قبل نمایش داده می‌شوند. پس از ارتقا و یک‌بار راه‌اندازی سرور: `npm run attachments:migrate` (اجرای آزمایشی، فقط شمارش) و سپس `npm run attachments:migrate -- --apply`. در استقرار Docker همان کار با `POST /api/attachments/migrate-inline` و بدنه `{"apply": true}` توسط مدیر سیستم انجام می‌شود.
@@ -115,7 +119,6 @@ npm run build
 | `LOG_LEVEL` | سطح لاگ (error/warn/info) | `info` |
 | `ERP_ALLOW_TEST_CLEANUP` | گیت پاکسازی فیکسچرهای تست (فقط dev/test) | `false` |
 | `APP_URL` | آدرس عمومی اپ (لینک‌های خودارجاع) | — |
-| `GEMINI_API_KEY` | کلید سرویس AI (اختیاری) | — |
 
 ---
 
@@ -139,10 +142,16 @@ npm run build
 
 ### Backup روزانه
 
-```cron
-# /etc/cron.d/papital-erp-backup
-0 2 * * * erp cd /opt/papital-erp && DATABASE_URL=... ./scripts/backup.sh >> /var/log/papital-backup.log 2>&1
+`install.sh` (فقط برای نصب تازه؛ روی سرور در حال کار اجرا نکنید) زمان‌بندی را با `scripts/install-ops-cron.sh` در یک فایل `/etc/cron.d/papital-erp` می‌نویسد: `scripts/backup.sh` هر روز ساعت ۰۲:۳۰ و `scripts/monitor.sh` هر پنج دقیقه، با گزارش در `logs/backup.log` و `logs/monitor.log`. فقط اگر `ls /etc/cron.d/papital-erp` چنین فایلی نشان ندهد، یک بار اجرا کنید. کاربر سرویس را `systemctl show -p User --value papital-erp` می‌گوید (خالی یعنی `root`)، و ساعت پشتیبان فقط از همین دستور خوانده می‌شود:
+
+```bash
+cd /opt/papital-erp
+sudo BACKUP_HOUR=2 BACKUP_MINUTE=30 bash scripts/install-ops-cron.sh root   # root را با کاربر سرویس عوض کنید
 ```
+
+> `scripts/ensure-env-secrets.sh` را هرگز بی نام کلید اجرا نکنید: بی نام، `ERP_WEBHOOK_SECRET_TOKEN` و `METRICS_TOKEN` را هم به `.env` می‌افزاید. روی سروری که `METRICS_TOKEN` ندارد، هشدار «وضعیت صف رویدادها خوانده نشد (METRICS_TOKEN).» از `monitor.sh` و هشدار `METRICS_TOKEN` در `go-live-verify.sh` مورد انتظارند، و `audit-env.sh` (که `METRICS_TOKEN` را بررسی نمی‌کند) نبودن `ERP_WEBHOOK_SECRET_TOKEN` را خطا (`❌ MISSING`) می‌شمارد؛ این هم مورد انتظار است و آن کلید را نیفزایید. به همین دلیل هشدار `ERP_WEBHOOK_SECRET_TOKEN missing` در `go-live-verify.sh` هم مورد انتظار است.
+
+رونوشت رمزگذاری‌شده بیرون از سرور و کانال هشدار: `docs/OFFSITE_BACKUP.md`.
 
 انواع backup در `scripts/backup.sh`: `daily` (نگه‌داری ۳۰ روز) • `pre-deployment` (۹۰ روز — `update.sh` خودکار می‌سازد) • `pre-migration` (۱۸۰ روز)
 
@@ -155,9 +164,10 @@ ls -lt /var/backups/erp/*.dump.gz | head -3
 RESTORE_MODE=drill ./scripts/restore.sh [dump-file.dump.gz]
 # (برای نگه‌داشتن DB تمرین جهت بررسی دستی: RESTORE_KEEP=1)
 
-# restore واقعی روی DB هدف (مخرب — نیازمند تأیید صریح):
-RESTORE_MODE=apply RESTORE_CONFIRM=yes ./scripts/restore.sh <dump>.dump.gz papital_erp
-systemctl restart papital-erp
+# restore واقعی روی DB هدف (مخرب — نیازمند تأیید صریح؛ نخست سرویس را بایستانید):
+sudo systemctl stop papital-erp
+RESTORE_MODE=apply RESTORE_CONFIRM=yes bash scripts/restore.sh <dump>.dump.gz papital_erp
+sudo systemctl start papital-erp
 curl -fsS http://localhost:3000/health/ready
 ```
 
@@ -165,26 +175,33 @@ curl -fsS http://localhost:3000/health/ready
 
 ### Rollback نسخه اپلیکیشن
 
+`update.sh` در شکست، گام‌هایی مانند این‌ها را با شناسه commit پیش از به‌روزرسانی چاپ می‌کند. پس از یک به‌روزرسانی موفق، commit پیشین `HEAD@{1}` است (`git reflog -5` نشانش می‌دهد). پس از برگشت، تا مشکل نسخهٔ تازه رفع نشده `update.sh` را دوباره اجرا نکنید: همان commit دوباره دریافت می‌شود.
+
 ```bash
-git log --oneline -10
-git revert <commit-hash> --no-edit
-npm run build && systemctl restart papital-erp
+cd /opt/papital-erp
+git reflog -5                           # HEAD@{1}: commit پیش از به‌روزرسانی
+sudo systemctl stop papital-erp
+git reset --hard <previous-commit>      # خود شاخه برمی‌گردد؛ checkout یک commit شاخه را جدا می‌کند و git pull بعدی شکست می‌خورد
+NODE_ENV=development npm ci --include=dev && npm run build
+sudo systemctl start papital-erp
 curl -fsS http://localhost:3000/health/ready
 ```
+
+> پشتیبان پیش از استقرار را فقط وقتی بازگردانید که نسخه تازه هنوز هیچ نوشتنی نپذیرفته است؛ بازگردانی هر تغییر پس از آن را پاک می‌کند.
 
 ### Out-of-Memory و Connection Pool
 
 ```bash
 journalctl -u papital-erp --since "1 hour ago" | grep -i memory
 curl -fsS http://localhost:3000/health/ready     # وضعیت pool
-psql -c "SELECT pid, query, state FROM pg_stat_activity WHERE state='active'"
-# افزایش MemoryLimit در unit یا DB_POOL_MAX در .env → daemon-reload → restart
+sudo -u postgres psql -d papital_erp -c "SELECT pid, query, state FROM pg_stat_activity WHERE state='active'"
+# در unit زیر [Service] خط `MemoryMax=2G` را بیفزایید (خط کامنت‌شدهٔ قدیمی حافظه را باز نکنید)، یا DB_POOL_MAX در .env → daemon-reload → restart
 ```
 
 ### Migration شکست‌خورده
 
 ```bash
-psql -c "SELECT id, hash, created_at FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 10"
+sudo -u postgres psql -d papital_erp -c "SELECT id, hash, created_at FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 10"
 # مهاجرت اتمیک است: یا کامل اجرا شده یا کامل rollback — گام موفق دوباره اجرا نمی‌شود
 systemctl restart papital-erp && curl -fsS http://localhost:3000/health/startup
 ```
@@ -193,12 +210,12 @@ systemctl restart papital-erp && curl -fsS http://localhost:3000/health/startup
 
 | Secret | دوره | روش |
 |---|---|---|
-| `JWT_SECRET` | هر ۳ ماه | `openssl rand -hex 48` → `.env` → restart (نشست‌ها باطل می‌شوند) |
-| `ERP_SETUP_TOKEN` | یکبار پس از setup | generate → `.env` → restart |
+| `JWT_SECRET` | هر ۳ ماه | `sudo sed -i "s/^JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 48)/" .env` → restart (مقدار چاپ نمی‌شود؛ نشست‌ها باطل می‌شوند) |
+| `ERP_SETUP_TOKEN` | یکبار پس از setup | `sudo sed -i "s/^ERP_SETUP_TOKEN=.*/ERP_SETUP_TOKEN=$(openssl rand -hex 24)/" .env` → restart (مقدار چاپ نمی‌شود) |
 | `DATABASE_URL` password | هر ۶ ماه | `ALTER USER` در PostgreSQL → `.env` → restart |
 | `wc_webhook_secret` | هر ۶ ماه | regenerate در WooCommerce + تنظیمات سامانه (بدون restart) |
 
-پس از هر rotation: `./scripts/smoke-test.sh http://localhost:3000`
+پس از هر rotation: `read -rsp 'auth_token: ' ADMIN_TOKEN; echo` (مقدار کوکی `auth_token` نشست مدیر را بچسبانید؛ روی صفحه دیده نمی‌شود و در تاریخچه نمی‌ماند)، سپس `ADMIN_TOKEN="$ADMIN_TOKEN" bash scripts/smoke-test.sh http://localhost:3000; unset ADMIN_TOKEN`
 
 ---
 
@@ -209,4 +226,5 @@ systemctl restart papital-erp && curl -fsS http://localhost:3000/health/startup
 - مهاجرت فقط از migrator اتمیک؛ شماره‌گذاری‌ها فقط با SEQUENCE/counter اتمیک
 - خواندن‌ها با `is_deleted = 0` (soft delete)؛ حذف‌ها فقط نرم
 - فرانت: همه فراخوانی‌ها با `fetchJson`، آرایه‌ها با گارد `Array.isArray`
-- هر تغییر کارکردی: bump نسخه + مدخل چنجلاگ در `src/data/changelogs/3.ts` (سری 3.x) یا فایل فعال مربوطه
+- هر تغییر کارکردی یک نسخه تازه با یک مدخل در چنجلاگ فعال `src/data/changelogs/10.ts` (سری 10.x) می‌گیرد؛ `npm run release -- <spec.json>` چهار محل نسخه را هم‌گام می‌کند و `npm run check:version` آن را می‌آزماید
+- تغییرها روی شاخه جدا با PR پیش‌نویس؛ هرگز push مستقیم به `master`

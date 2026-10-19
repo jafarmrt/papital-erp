@@ -77,7 +77,9 @@ rclone ls papital-crypt:
 1. در بله با `@botfather` گفت‌وگو کنید، `/newbot` بفرستید و نشانه (توکن) ربات را بگیرید.
 2. به ربات تازه یک پیام بدهید و سپس روی سرور این را اجرا کنید:
    ```bash
-   curl -s "https://tapi.bale.ai/bot<TOKEN>/getUpdates"
+   read -rsp 'bot token: ' BOT_TOKEN; echo     # نشانه را بچسبانید؛ دیده نمی‌شود و در تاریخچه نمی‌ماند
+   printf 'url = "https://tapi.bale.ai/bot%s/getUpdates"\n' "$BOT_TOKEN" | curl -s --config -
+   unset BOT_TOKEN
    ```
    عدد `chat` → `id` را بردارید.
 3. در `.env`:
@@ -94,7 +96,7 @@ ALERT_BOT2_CHAT_ID=<id>
 ALERT_BOT2_API=https://api.telegram.org
 ```
 
-برای گرفتن `id` در تلگرام، به جای نشانی بله بنویسید: `curl -s "https://api.telegram.org/bot<TOKEN>/getUpdates"`.
+برای گرفتن `id` در تلگرام، همان سه خط را با `https://api.telegram.org/bot%s/getUpdates` به جای نشانی بله اجرا کنید.
 
 **ایمیل از راه Gmail:** در حساب گوگل، تأیید دومرحله‌ای را روشن کنید و یک «App password» بسازید. سپس:
 
@@ -105,7 +107,7 @@ ALERT_SMTP_PASSWORD=<app password>
 ALERT_EMAIL_TO=<you>@gmail.com
 ```
 
-`METRICS_TOKEN` را `bash scripts/ensure-env-secrets.sh .env` می‌سازد. پس از افزودن آن، سرویس را یک بار دوباره راه بیندازید (`sudo systemctl restart papital-erp`) تا آن را بخواند. سپس آزمایش کنید:
+این سرور `METRICS_TOKEN` ندارد و آن را نمی‌افزاید؛ هشدار «وضعیت صف رویدادها خوانده نشد (METRICS_TOKEN).» مورد انتظار است؛ `ensure-env-secrets.sh` را اجرا نکنید. کانال هشدار را این‌گونه آزمایش کنید:
 
 ```bash
 sudo systemctl stop papital-erp; /opt/papital-erp/scripts/monitor.sh; sudo systemctl start papital-erp
@@ -135,4 +137,5 @@ sleep 60; /opt/papital-erp/scripts/monitor.sh
 | `MONITOR_DISK_PERCENT` | ۸۵ | آستانه پر شدن دیسک |
 | `MONITOR_BACKUP_MAX_AGE_HOURS` | ۲۶ | بیشترین سن پشتیبان و رونوشت |
 | `MONITOR_REPEAT_HOURS` | ۶ | فاصله یادآوری مشکلی که برطرف نشده |
-| `BACKUP_HOUR` / `BACKUP_MINUTE` | ۲ / ۳۰ | ساعت پشتیبان شبانه؛ با اجرای دوباره `install-ops-cron.sh` اعمال می‌شود |
+
+ساعت پشتیبان شبانه در `.env` نیست: `sudo BACKUP_HOUR=2 BACKUP_MINUTE=30 bash scripts/install-ops-cron.sh root` آن را می‌نویسد.
