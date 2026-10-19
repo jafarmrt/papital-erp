@@ -3,7 +3,7 @@
 # A new production folder gets its rule here in the same change (the ratchet refuses an unmapped server file).
 # PACKAGE_MAP — نگاشت فایل به بسته سری ۹ (فاز ۱، مبنای 5a56c4c / v9.0.1)
 # قالب هر سطر: <بسته> <glob>   — اولین قاعده منطبق برنده است («اول دامنه، بعد پوسته»).
-# بسته‌ها: 1..16 طبق V9_MASTER_ROADMAP.md §6؛ T = زیرساخت آزمون؛ G = حاکمیت و اسناد.
+# بسته‌ها: 1..16 طبق docs/roadmap/archive/V9_MASTER_ROADMAP.md §6؛ T = زیرساخت آزمون؛ G = حاکمیت و اسناد.
 # glob: `*` هر نویسه جز «/»، `**` هر مسیر (با «/»)، `?` یک نویسه. مسیرها نسبت به ریشه مخزن (خروجی git ls-files).
 # REPO_MAP، پوشش هر بسته و ratchetهای تازه همه از همین فایل می‌خوانند.
 
@@ -20,7 +20,6 @@ G  CHANGELOG.md
 G  README.md
 G  TECH_DEBT.md
 G  TECH_DEBT_ARCHIVE.md
-G  V*_MASTER_ROADMAP.md
 G  docs/**
 G  opencode.json
 G  src/data/changelogs/**
