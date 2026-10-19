@@ -21,9 +21,12 @@ interface ItemCodeChangeModalProps {
   onChanged: () => void;
 }
 
+const SITE_CODE_NOTE = 'اگر «تغییر خودکار کد در سایت» در تنظیمات ووکامرس روشن است، کد همین کالا در سایت در دقیقه بعد خودکار تغییر می‌کند؛ وگرنه آن را در سایت دستی تغییر دهید.';
+
 /**
  * v10.1.9 (D-15, TD-1264): «تغییر کد» of the item list, shown with `products.change_code`. The code is the online shop's
- * SKU: the window says the site's code is changed by hand, and lists the item's earlier codes.
+ * SKU: the window says the site's code follows only while «تغییر خودکار کد در سایت» is on (D-04 part C), else by hand, and
+ * lists the item's earlier codes.
  */
 export function ItemCodeChangeModal({ item, onClose, onChanged }: ItemCodeChangeModalProps) {
   const [code, setCode] = useState('');
@@ -55,7 +58,7 @@ export function ItemCodeChangeModal({ item, onClose, onChanged }: ItemCodeChange
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: code.trim(), reason: reason.trim(), version: item.version }),
       });
-      toast.success(`کد کالا به ${code.trim()} تغییر کرد؛ کد این کالا را در سایت هم تغییر دهید.`);
+      toast.success(`کد کالا به ${code.trim()} تغییر کرد. ${SITE_CODE_NOTE}`, { duration: 8000 });
       onChanged();
       onClose();
     } catch (err) {
@@ -99,7 +102,7 @@ export function ItemCodeChangeModal({ item, onClose, onChanged }: ItemCodeChange
             />
           </label>
           <p className="text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-2.5 leading-6">
-            کد کالا همان کد کالا در فروشگاه اینترنتی است. پس از تغییر، کد همین کالا را در سایت هم دستی تغییر دهید. سفارشی که تا آن زمان با کد قدیم برسد، کالا را پیدا می‌کند.
+            کد کالا همان کد کالا در فروشگاه اینترنتی است. {SITE_CODE_NOTE} سفارشی که با کد قدیم برسد، کالا را پیدا می‌کند.
           </p>
           {error && <p className="text-rose-700 font-bold" role="alert">{error}</p>}
           {history.length > 0 && (

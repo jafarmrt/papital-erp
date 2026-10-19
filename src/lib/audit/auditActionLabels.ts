@@ -24,6 +24,8 @@ export const AUDIT_ACTION_LABELS = {
   CHANGE_CODE: 'تغییر کد',
   WC_CATALOG_REFRESH: 'بازخوانی محصولات سایت',
   WC_STOCK_PUSH: 'ارسال موجودی به سایت',
+  WC_PRICE_PUSH: 'ارسال قیمت به سایت',
+  WC_SKU_PUSH: 'تغییر کد محصول در سایت',
 } as const satisfies Record<string, string>;
 
 export type KnownAuditAction = keyof typeof AUDIT_ACTION_LABELS;
