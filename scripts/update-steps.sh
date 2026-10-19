@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/update-steps.sh — v10.2.19 (OBS-R1-22 / OBS-R1-17, 10.2 package 13): the build and source steps of update.sh.
+# scripts/update-steps.sh — v10.2.20 (OBS-R1-22 / OBS-R1-17, 10.2 package 13): the build and source steps of update.sh.
 #
 # Sourced by update.sh. Run on its own only to put the previous source of a manual update back:
 #   bash scripts/update-steps.sh restore-source <app-dir>

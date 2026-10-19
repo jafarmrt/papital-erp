@@ -10,7 +10,7 @@ import { evaluateRuleDraft, testStoredRule } from '../services/events/ruleDraftE
 import { simulateDomainEvent } from '../services/events/eventSimulation.js';
 import { retryFailedOutboxEvents } from '../services/events/outboxRetry.js';
 import { WEBHOOK_DELIVERY_MAX_LIMIT, WebhookSubscriptionService } from '../services/events/webhookSubscriptionService.js';
-import { EventSourcingReplayService } from '../services/events/eventSourcingReplayService.js';
+import { AGGREGATE_SEARCH_MAX_LIMIT, EventSourcingReplayService } from '../services/events/eventSourcingReplayService.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { z } from 'zod';
@@ -95,12 +95,14 @@ router.get('/outbox', authorizePermission('events.view'), asyncHandler(async (re
   const { limit, offset } = parsePagination(req.query);
   const status = req.query.status as string | undefined;
   const eventType = req.query.eventType as string | undefined;
+  const search = typeof req.query.search === 'string' ? req.query.search : undefined;
 
   const result = await OutboxService.getOutboxEvents({
     limit,
     offset,
     status,
-    eventType
+    eventType,
+    search
   });
 
   res.json({
@@ -448,7 +450,9 @@ router.get(['/event-sourcing/types', '/timeline/types'], authorizePermission('ev
 router.get(['/event-sourcing/aggregates', '/timeline/aggregates'], authorizePermission('events.view'), asyncHandler(async (req, res) => {
   const type = ((req.query.type as string) || (req.query.aggregateType as string) || '').trim();
   const search = (req.query.search as string) || '';
-  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
+  // TD-1323: a missing, malformed, zero or negative limit is 20 and a larger one AGGREGATE_SEARCH_MAX_LIMIT, never a
+  // failed query answered as «no rows» or a read of the whole table
+  const limit = parsePagination(req.query, { limit: 20, maxLimit: AGGREGATE_SEARCH_MAX_LIMIT }).limit;
 
   if (!type) {
     throw new BadRequestError('پارامتر نوع موجودیت (type) الزامی است.');

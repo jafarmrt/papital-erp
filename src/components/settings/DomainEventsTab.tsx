@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { useDebounce } from '../../hooks/useDebounce';
+import { ListPager } from '../common/ListPager';
+import { LIVE_EVENT_BUFFER_SIZE } from '../../lib/events/liveEventBuffer';
 import { Zap, RefreshCw, Search, Filter, CheckCircle2, Activity, Package, FileText, GitBranch, CreditCard, ChevronDown, ChevronUp, Clock, Inbox, AlertTriangle, Play, RotateCcw, Database, Sliders, AlertOctagon, History, Globe } from 'lucide-react';
 import { formatPersianDate, errorMessageOf, formatPersianNumber, formatPersianCode, toPersianDigits } from '../../utils';
 import { eventAggregateLabel, eventTypeLabel } from '../../lib/events/eventTypeCatalog';
@@ -13,6 +16,7 @@ import {
   useDomainEventsQuery,
   useOutboxStatsQuery,
   useOutboxEventsQuery,
+  EVENT_LIST_PAGE_SIZE,
   useProcessOutboxMutation,
   useRetryFailedOutboxMutation,
   useRetrySingleOutboxEventMutation,
@@ -50,6 +54,9 @@ export function DomainEventsTab() {
   // Outbox state & queries
   const [outboxStatusFilter, setOutboxStatusFilter] = useState<string>('ALL');
   const [outboxSearchQuery, setOutboxSearchQuery] = useState<string>('');
+  // OBS-R2-86 (TD-1323): the outbox is read one page at a time and searched on the server
+  const [outboxPage, setOutboxPage] = useState(1);
+  const outboxSearch = useDebounce(outboxSearchQuery.trim());
   const [expandedOutboxId, setExpandedOutboxId] = useState<number | null>(null);
 
   const {
@@ -59,10 +66,12 @@ export function DomainEventsTab() {
   } = useOutboxStatsQuery({ enabled: activeSubTab === 'outbox' });
 
   const {
-    data: outboxEventsList = [],
+    data: outboxPageData,
     isLoading: isLoadingOutboxEvents,
+    isFetching: isFetchingOutboxEvents,
     refetch: refetchOutboxEvents,
-  } = useOutboxEventsQuery(outboxStatusFilter, { enabled: activeSubTab === 'outbox' });
+  } = useOutboxEventsQuery(outboxStatusFilter, { enabled: activeSubTab === 'outbox', page: outboxPage, search: outboxSearch });
+  const outboxTotal = outboxPageData?.total ?? 0;
 
   const isLoadingOutbox = isLoadingOutboxStats || isLoadingOutboxEvents;
 
@@ -124,21 +133,7 @@ export function DomainEventsTab() {
     );
   });
 
-  const safeOutboxEventsList = Array.isArray(outboxEventsList) ? outboxEventsList : [];
-  const filteredOutbox = safeOutboxEventsList.filter(e => {
-    if (!outboxSearchQuery) return true;
-    const q = outboxSearchQuery.toLowerCase();
-    return (
-      (e.eventId || '').toLowerCase().includes(q) ||
-      (e.eventType || '').toLowerCase().includes(q) ||
-      eventTypeLabel(e.eventType || '').includes(q) ||
-      eventAggregateLabel(e.aggregateType).includes(q) ||
-      (e.aggregateType || '').toLowerCase().includes(q) ||
-      String(e.aggregateId || '').toLowerCase().includes(q) ||
-      (e.lastError || '').toLowerCase().includes(q) ||
-      JSON.stringify(e.payload || {}).toLowerCase().includes(q)
-    );
-  });
+  const filteredOutbox = Array.isArray(outboxPageData?.events) ? outboxPageData.events : [];
 
   const getEventIcon = (type: string, agg: string) => {
     if (agg === 'Document' || type.includes('Invoice') || type.includes('Purchase')) {
@@ -329,7 +324,7 @@ export function DomainEventsTab() {
                 <Filter className="w-4 h-4 text-slate-400" />
                 <select
                   value={outboxStatusFilter}
-                  onChange={(e) => setOutboxStatusFilter(e.target.value)}
+                  onChange={(e) => { setOutboxStatusFilter(e.target.value); setOutboxPage(1); }}
                   className="text-xs bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-lg px-3 py-1.5 focus:outline-none"
                 >
                   <option value="ALL">همه وضعیت‌ها</option>
@@ -377,7 +372,7 @@ export function DomainEventsTab() {
               <input
                 type="text"
                 value={outboxSearchQuery}
-                onChange={(e) => setOutboxSearchQuery(e.target.value)}
+                onChange={(e) => { setOutboxSearchQuery(e.target.value); setOutboxPage(1); }}
                 placeholder="جست‌وجو در شناسه رویداد، نوع یا خطا…"
                 className="w-full text-xs pr-8 pl-3 py-1.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-200 focus:outline-none"
               />
@@ -388,7 +383,7 @@ export function DomainEventsTab() {
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
               <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
-                رویدادهای ذخیره‌شده در صف ارسال ({filteredOutbox.length.toLocaleString('fa-IR')} مورد)
+                رویدادهای ذخیره‌شده در صف ارسال ({formatPersianNumber(outboxTotal)} مورد)
               </span>
               <span className="text-[11px] text-slate-400 flex items-center gap-1">
                 <Clock className="w-3 h-3" />
@@ -487,6 +482,8 @@ export function DomainEventsTab() {
               </div>
             )}
           </div>
+          <ListPager page={outboxPage} totalPages={Math.max(1, Math.ceil(outboxTotal / EVENT_LIST_PAGE_SIZE))} total={outboxTotal}
+            limit={EVENT_LIST_PAGE_SIZE} onPage={setOutboxPage} disabled={isFetchingOutboxEvents} />
         </div>
       )}
 
@@ -584,7 +581,10 @@ export function DomainEventsTab() {
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
               <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
-                فهرست آخرین رویدادهای زنده سامانه ({filteredEvents.length.toLocaleString('fa-IR')} مورد)
+                فهرست آخرین رویدادهای زنده سامانه ({formatPersianNumber(filteredEvents.length)} مورد)
+              </span>
+              <span className="text-[11px] text-slate-400">
+                گذرگاه زنده فقط {formatPersianNumber(LIVE_EVENT_BUFFER_SIZE)} رویداد آخر را نگه می‌دارد؛ همه رویدادهای ثبت‌شده در «صف ارسال رویداد» صفحه‌به‌صفحه دیده می‌شوند.
               </span>
               <span className="text-[11px] text-slate-400 flex items-center gap-1">
                 <Clock className="w-3 h-3" />

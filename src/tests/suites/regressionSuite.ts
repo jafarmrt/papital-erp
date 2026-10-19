@@ -11176,6 +11176,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // 10.2 package 12, item 3 (D6): schedule work in the progress matrix, the stage percents and the project status (TD-1340)
   const { runProjectWorkProgressTests } = await import('../regression/projectWorkProgressTests.js');
   results.push(...await runProjectWorkProgressTests(shouldRun));
+  // 10.2 package 11: the workflow SLA report in SQL, same numbers (OBS-R2-71, TD-1323)
+  const { runWorkflowSlaParityTests } = await import('../regression/workflowSlaParityTests.js');
+  results.push(...await runWorkflowSlaParityTests(shouldRun));
 
   return results;
 }

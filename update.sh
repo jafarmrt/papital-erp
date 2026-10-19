@@ -70,7 +70,7 @@ for key in BACKUP_DIR PRE_DEPLOY_RETENTION_DAYS RESTORE_ADMIN_URL; do
   fi
 done
 UPDATE_STARTED="$(date '+%Y-%m-%d %H:%M:%S')"
-# v10.2.19 (OBS-R1-22 / OBS-R1-17): the side-folder build and the manual source sync
+# v10.2.20 (OBS-R1-22 / OBS-R1-17): the side-folder build and the manual source sync
 [ -f scripts/update-steps.sh ] || die "scripts/update-steps.sh not found in $APP_DIR"
 # shellcheck source=scripts/update-steps.sh
 source scripts/update-steps.sh
@@ -80,7 +80,7 @@ BUILD_SWAPPED=0
 # v9.0.123 (TD-586): from the moment the source changes, any failure prints the rollback steps
 SOURCE_CHANGED=0
 HINT_SHOWN=0
-# v10.2.19 (OBS-R1-22): the build in place is the running one until the swap, so only the source goes back before it
+# v10.2.20 (OBS-R1-22): the build in place is the running one until the swap, so only the source goes back before it
 previous_source_step() {
   if [ "$UPDATE_MODE" = "git" ] && [ -n "$PREVIOUS_COMMIT" ]; then
     # v9.0.181 (TD-603): reset the branch itself; a checkout of the commit detaches HEAD and the next git pull fails
@@ -166,7 +166,7 @@ elif [[ "$KEY_STEP" == *"WARN:"* ]]; then
   warn "ERP_SECRETS_KEY is empty in .env and was left as it is; new secrets are refused until it is set."
 fi
 
-# v10.2.19 (OBS-R1-22): the side build needs room next to the running one; stop before the backup, the source or the
+# v10.2.20 (OBS-R1-22): the side build needs room next to the running one; stop before the backup, the source or the
 # build is touched when the disk of the application directory cannot hold it
 command -v rsync >/dev/null 2>&1 || die "rsync is required to build the update in a side folder (apt-get install -y rsync)."
 if ! update_space_check "$APP_DIR" "$UPDATE_MODE"; then
@@ -207,7 +207,7 @@ if [ "$UPDATE_MODE" = "git" ]; then
 else
   log "[2/6] Syncing source from $SOURCE_DIR (state-preserving rsync)..."
   command -v rsync >/dev/null 2>&1 || die "rsync is required for manual updates (apt-get install -y rsync)."
-  # v10.2.19 (OBS-R1-17): the current source is kept for a rollback, then the new one replaces it with --delete, so
+  # v10.2.20 (OBS-R1-17): the current source is kept for a rollback, then the new one replaces it with --delete, so
   # files the new version no longer has are removed; live state (.env, git history, logs, uploads, media library,
   # backups, db data, node_modules, dist, installer logs) is excluded, neither copied nor deleted
   update_save_previous_source "$APP_DIR" || die "Could not keep the current source in ${UPDATE_PREVIOUS_SOURCE_NAME}/. Live installation is untouched."
@@ -221,7 +221,7 @@ else
 fi
 
 # ---------- 3) Install & build in a side folder ----------
-# v10.2.19 (OBS-R1-22): npm ci and the build used to run in place: npm ci replaced node_modules under the running
+# v10.2.20 (OBS-R1-22): npm ci and the build used to run in place: npm ci replaced node_modules under the running
 # process, and the old server served the new dist/index.html with its old API until the restart. Now both run in
 # .build-next; the running dist/ and node_modules/ change only at the swap right before the restart.
 # NOTE: NODE_ENV=production (from the environment of an operator shell or CI) makes

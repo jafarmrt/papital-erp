@@ -10,7 +10,9 @@ import {
   useActionRulesQuery,
   useActionStatsQuery,
   useActionLogsQuery,
+  EVENT_LIST_PAGE_SIZE,
 } from '../../hooks/queries/useEventQueries';
+import { ListPager } from '../common/ListPager';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { ruleActionTypeLabel } from '../../lib/events/ruleActionTypes';
 import { actionPreviewLines } from '../../lib/events/eventSimulationContract';
@@ -24,7 +26,9 @@ export function AutoActionsSubTab() {
   const canManage = useHasPermission('events.manage');
   const { data: rules = [], isLoading: isLoadingRules, refetch: refetchRules } = useActionRulesQuery();
   const { data: stats = null, refetch: refetchStats } = useActionStatsQuery();
-  const { data: logPage, isLoading: isLoadingLogs, refetch: refetchLogs } = useActionLogsQuery(50);
+  // OBS-R2-86 (TD-1323): the execution log is read one page at a time (it showed only its newest 50 rows)
+  const [logsPage, setLogsPage] = useState(1);
+  const { data: logPage, isLoading: isLoadingLogs, isFetching: isFetchingLogs, refetch: refetchLogs } = useActionLogsQuery(logsPage);
   const logs = logPage?.logs ?? [];
   const logsTotal = logPage?.total ?? 0;
   
@@ -286,7 +290,7 @@ export function AutoActionsSubTab() {
                 }`}
               >
                 <FileText className="w-3.5 h-3.5" />
-                <span>گزارش اجرا ({logsTotal.toLocaleString('fa-IR')})</span>
+                <span>گزارش اجرا ({formatPersianNumber(logsTotal)})</span>
               </button>
             </div>
 
@@ -554,6 +558,10 @@ export function AutoActionsSubTab() {
                 );
               })
             )}
+            <div className="p-3">
+              <ListPager page={logsPage} totalPages={Math.max(1, Math.ceil(logsTotal / EVENT_LIST_PAGE_SIZE))} total={logsTotal}
+                limit={EVENT_LIST_PAGE_SIZE} onPage={setLogsPage} disabled={isFetchingLogs} />
+            </div>
           </div>
         )}
 

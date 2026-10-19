@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-// v10.2.19 (OBS-R1-22 / OBS-R1-17, 10.2 package 13): update.sh ran `npm ci` and the build in the application directory,
+// v10.2.20 (OBS-R1-22 / OBS-R1-17, 10.2 package 13): update.sh ran `npm ci` and the build in the application directory,
 // so node_modules changed under the running process and the old server served the new index.html with its old API;
 // a manual update synced the source without --delete, leaving removed files behind, and kept no previous source for
 // the rollback it printed. Now the update is installed and built in .build-next, swapped in right before the restart
