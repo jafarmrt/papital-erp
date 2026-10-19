@@ -192,3 +192,48 @@ export async function logProjectDelivery(
     },
   });
 }
+
+/** موجودیت ممیزی رزرو پروژه، همان که کسر و بازگرداندن رزرو با حواله می‌نویسند */
+export const PROJECT_RESERVATION_AUDIT_ENTITY = 'کنترل موجودی پروژه';
+
+/** TD-1341 (N4): فقط بخش‌های ناصفر شرح؛ بی هیچ رزرو تازه و آزادسازی، فقط کمبودها به‌روز شده‌اند */
+function reconcileAuditParts(reserved: number, released: number): string {
+  const parts = [
+    reserved > 0 ? `${toPersianDigits(reserved)} کالا رزرو تازه گرفت` : '',
+    released > 0 ? `رزرو ${toPersianDigits(released)} کالا آزاد شد` : '',
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(' و ') : 'کمبودهای ثبت‌شده به‌روز شد';
+}
+
+/**
+ * TD-1341 (بستهٔ ۱۲ بند ۱): ردیف ممیزی «تکمیل رزرو» با رزرو و کمبود پیش و پس و تغییر هر کالا، با `tx` همان ثبت
+ */
+export async function logReservationReconcile(
+  tx: DbExecutor,
+  actor: ProjectActor,
+  project: Pick<ProjectRow, 'id' | 'projectCode' | 'title'>,
+  change: {
+    before: { reservedItems: unknown[]; reservationShortages: unknown[]; version: number };
+    after: { reservedItems: unknown[]; reservationShortages: unknown[]; version: number };
+    lines: ReadonlyArray<{ itemId: number; itemCode: string; itemName: string; currentQty: number; targetQty: number; requiredQty: number; shortQty: number }>;
+  },
+): Promise<void> {
+  const key = (v: number) => Math.round((Number(v) || 0) * 10_000);
+  const reserved = change.lines.filter(l => key(l.targetQty) > key(l.currentQty)).length;
+  const released = change.lines.filter(l => key(l.targetQty) < key(l.currentQty)).length;
+  await logActivity({
+    tx,
+    ...actorFields(actor),
+    action: 'UPDATE',
+    entity: PROJECT_RESERVATION_AUDIT_ENTITY,
+    entityId: String(project.id),
+    description: `تکمیل رزرو پروژه «${project.title || project.projectCode}» با فهرست مواد: ${reconcileAuditParts(reserved, released)}`,
+    details: {
+      before: change.before,
+      after: change.after,
+      changes: change.lines
+        .filter(l => key(l.targetQty) !== key(l.currentQty))
+        .map(l => ({ itemId: l.itemId, itemCode: l.itemCode, itemName: l.itemName, before: l.currentQty, after: l.targetQty, requiredQty: l.requiredQty, shortQty: l.shortQty })),
+    },
+  });
+}
