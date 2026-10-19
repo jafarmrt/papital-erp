@@ -5,14 +5,14 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { AppError } from '../../errors/customErrors.js';
 import { ADVISORY_LOCK_KEYS, withAdvisoryLock } from '../../lib/advisoryLock.js';
 import { invalidateSettingsCache } from '../../lib/memoryCache.js';
-import { serverTimestampToUtcIso } from '../../lib/serverTimestamp.js';
 import { logger } from '../../middleware/logger.js';
 import { WC_LIST_LIMIT, WC_PUSH_DEADLINE_MS, WC_PUSH_MIN_BUDGET_MS, type WcCatalogItem } from '../../lib/woocommerce/wcCatalog.js';
 import {
-  autoPushBackoffMinutes, isAutoPushOn, orderReadBudgetMs, WC_AUTO_FULL_PASS_MS, WC_AUTO_MAX_LINK_FAILURES, WC_AUTO_PUSH_INTERVAL_MS,
+  isAutoPushOn, orderReadBudgetMs, WC_AUTO_FULL_PASS_MS, WC_AUTO_MAX_LINK_FAILURES,
   WC_AUTO_PUSH_MAX_PRODUCTS, WC_AUTO_PUSH_SETTING_KEY, type WcAutoPushView,
 } from '../../lib/woocommerce/wcAutoPush.js';
 import { requireWcConnection } from './wcClient.js';
+import { autoRunBackoff } from './wcRunBackoff.js';
 import { autoRunCondition, liveLinks, recordFailedRun, runView, type WcActor } from './wcCatalog.service.js';
 import { readOpenOrders } from './wcOpenOrders.js';
 import { forgetDueMarks, isMarkedDue, markLinksDue, restoreDueMarks, takeDueMarks } from './wcAutoPushDue.js';
@@ -67,18 +67,6 @@ export async function isAutoPushEnabled(): Promise<boolean> {
 }
 
 const autoLinkWhere = (...extra: SQL[]) => and(eq(wcProductLinks.isDeleted, 0), eq(items.isDeleted, 0), ...extra);
-
-/** Automatic runs that failed in a row, newest first, and when the next one may run */
-async function backoffState(): Promise<{ failedRuns: number; nextAttemptAt: Date | null }> {
-  const runs = await orm.select({ status: wcSyncRuns.status, finishedAt: wcSyncRuns.finishedAt }).from(wcSyncRuns)
-    .where(and(eq(wcSyncRuns.kind, 'stock_push'), autoRunCondition)).orderBy(desc(wcSyncRuns.id)).limit(10);
-  let failedRuns = 0;
-  while (failedRuns < runs.length && runs[failedRuns].status === 'failed') failedRuns++;
-  if (failedRuns === 0 || !runs[0].finishedAt) return { failedRuns, nextAttemptAt: null };
-  const last = new Date(serverTimestampToUtcIso(runs[0].finishedAt) ?? '');
-  if (Number.isNaN(last.getTime())) return { failedRuns, nextAttemptAt: null };
-  return { failedRuns, nextAttemptAt: new Date(last.getTime() + autoPushBackoffMinutes(failedRuns) * 60_000) };
-}
 
 export interface AutoPushRunOptions {
   /** the most products one run sends (`WC_AUTO_PUSH_MAX_PRODUCTS`; a test passes a small cap) */
@@ -161,7 +149,7 @@ async function autoPushLocked(failedRunsBefore: number, options: AutoPushRunOpti
 /** One automatic run: off, waiting after failures, the lock taken by another exchange, or the run itself */
 export async function runAutoPushOnce(now: Date = new Date(), options: AutoPushRunOptions = {}): Promise<AutoPushOutcome> {
   if (!(await isAutoPushEnabled())) return { state: 'off' };
-  const { failedRuns, nextAttemptAt } = await backoffState();
+  const { failedRuns, nextAttemptAt } = await autoRunBackoff('stock_push');
   if (nextAttemptAt && nextAttemptAt.getTime() > now.getTime()) return { state: 'waiting' };
   const outcome = await withAdvisoryLock(ADVISORY_LOCK_KEYS.WOOCOMMERCE_SYNC, () => autoPushLocked(failedRuns, options, now.getTime()));
   return outcome.acquired ? outcome.result : { state: 'busy' };
@@ -202,7 +190,7 @@ async function linkItems(where: SQL | undefined): Promise<{ rows: WcCatalogItem[
 export async function getAutoPushView(): Promise<WcAutoPushView> {
   const [enabled, backoff, [last]] = await Promise.all([
     isAutoPushEnabled(),
-    backoffState(),
+    autoRunBackoff('stock_push'),
     orm.select().from(wcSyncRuns).where(and(eq(wcSyncRuns.kind, 'stock_push'), autoRunCondition)).orderBy(desc(wcSyncRuns.id)).limit(1),
   ]);
   const untracked = await linkItems(autoLinkWhere(ne(wcProductLinks.siteManageStock, 1)));
@@ -217,40 +205,4 @@ export async function getAutoPushView(): Promise<WcAutoPushView> {
     stopped: stopped.rows,
     stoppedTotal: stopped.total,
   };
-}
-
-/** The worker: one automatic run a minute, started and stopped by `server.ts` */
-export class WcAutoPushService {
-  private static timer: ReturnType<typeof setInterval> | null = null;
-  private static running = false;
-
-  private static runInBackground(): void {
-    if (this.running) return;
-    this.running = true;
-    runAutoPushOnce()
-      .then((outcome) => {
-        if (outcome.result) {
-          logger.info(`[WooCommerce auto push] ${outcome.result.syncedCount} product(s) updated, ${outcome.result.failedCount} failed`);
-        } else if (outcome.state === 'failed') {
-          logger.warn('[WooCommerce auto push] Run failed; the next attempt waits (see the WooCommerce tab)');
-        }
-      })
-      // terminal output is English (AGENTS §6): the Persian reason is on the run row the tab shows
-      .catch((err: unknown) => logger.error(`[WooCommerce auto push] Run failed: ${err instanceof Error ? err.name : 'unknown error'}`))
-      .finally(() => { this.running = false; });
-  }
-
-  static start(intervalMs: number = WC_AUTO_PUSH_INTERVAL_MS): void {
-    if (this.timer) return;
-    this.timer = setInterval(() => this.runInBackground(), intervalMs);
-    this.timer.unref?.();
-    logger.info(`[WooCommerce auto push] Worker started with interval ${intervalMs}ms`);
-  }
-
-  static stop(): void {
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = null;
-    }
-  }
 }

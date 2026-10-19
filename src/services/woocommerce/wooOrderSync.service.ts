@@ -18,6 +18,7 @@ import { resolveShopWarehouseCode } from './shopWarehouse.js';
 import { resolveItemsByCode } from '../items/itemCodeChange.js';
 import { markOrderLinesDue } from './wcAutoPushDue.js';
 import { oldCodeOrderNote } from '../../lib/items/itemCodeChange.js';
+import { rialUnitMultiplier } from '../../lib/woocommerce/wcCurrency.js';
 
 /**
  * v7.0.30 (TD-190 / audit P1-2): پردازش سفارش‌های ووکامرس — منتقل‌شده از woocommerce.routes.ts (RULE 01).
@@ -165,21 +166,10 @@ function orderCharges(wcOrder: WcOrderPayload): { shipping: FinancialDecimal; fe
   return shipping && fees && negativeFees && tax ? { shipping, fees, feeDiscount: negativeFees.negate(), tax } : null;
 }
 
-/**
- * واحدهای ریالی ووکامرس و ضریب تبدیلشان به ریال. V10-2.3 (TD-022): تومان (IRT / TOMAN) ضریب ۱۰.
- * v8.0.39 (TD-292): «هزار تومان» (IRHT) و «هزار ریال» (IRHR) افزونه ووکامرس فارسی ضریب ۱۰٬۰۰۰ و ۱٬۰۰۰ دارند؛ پیش‌تر ارز
- * ناشناخته به حساب می‌آمدند و سفارش با خطای «نرخ تسعیر الزامی است» رد می‌شد.
- */
-const RIAL_UNIT_MULTIPLIERS: ReadonlyMap<string, number> = new Map([
-  ['IRR', 1], ['ریال', 1],
-  ['IRT', 10], ['TOMAN', 10], ['تومان', 10],
-  ['IRHR', 1_000], ['هزار ریال', 1_000],
-  ['IRHT', 10_000], ['هزار تومان', 10_000],
-]);
-
+// واحدهای ریالی ووکامرس و ضریبشان (TD-022 / TD-292) در `src/lib/woocommerce/wcCurrency.ts`؛ ارسال قیمت بخش ج هم همان را می‌خواند
 function resolveCurrency(wcOrder: WcOrderPayload): { multiplier: number; currency: string } {
   const raw = String(wcOrder.currency || '').trim().toUpperCase();
-  const multiplier = RIAL_UNIT_MULTIPLIERS.get(raw || 'IRR');
+  const multiplier = rialUnitMultiplier(raw || 'IRR');
   return multiplier !== undefined ? { multiplier, currency: 'IRR' } : { multiplier: 1, currency: raw };
 }
 
