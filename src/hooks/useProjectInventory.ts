@@ -25,7 +25,8 @@ import { storedReservationShortages } from '../lib/projects/projectReservationSt
 import { finalizeReservationOutcome, reservationShortageMessage } from '../lib/projects/reservationOutcome';
 import type { ReservationShortage } from '../lib/projects/projectReservation';
 import type { ReservationReconcileResult } from '../lib/projects/reservationReconcile';
-import { hasPresetShapedSections, projectSectionsFromPreset, type MaterialStockLookup } from '../lib/projects/inventoryControlSections';
+import { hasPresetShapedSections, perItemProductKey, projectSectionsFromPreset, type MaterialStockLookup } from '../lib/projects/inventoryControlSections';
+import { NEW_ROW_QTY_PER_UNIT, perItemRowRequiredQty, perUnitRowFields, productOrderQuantity } from '../lib/projects/materialQuantity';
 import { findProjectItemMatch } from '../lib/projects/projectItemMatch';
 import { EMPTY_CUSTOM_MATERIAL_FORM, pendingMaterialRequestOf, type CustomMaterialForm } from '../lib/pendingMaterials/customMaterialRequest';
 import { buildMaterialAvailabilityView, projectMaterialItemIds } from '../lib/projects/materialAvailability';
@@ -98,13 +99,14 @@ export function useProjectInventory(
   // fallback فقط وقتی است که کالای اصلی پروژه واقعاً مشخص باشد.
   const products: ProjectProductItem[] = useMemo(() => {
     const raw = (Array.isArray((project as unknown as { products?: unknown[] }).products) ? (project as unknown as { products: Array<Record<string, unknown>> }).products : []) as Array<Record<string, unknown>>;
+    // TD-1343: کلید و تعداد سفارش هر محصول همان که ثبت نهایی و تکمیل رزرو می‌خوانند
     const mapped = raw.map((p, idx) => ({
-      id: String(p.id ?? `prod_${p.item_id ?? idx}`),
+      id: perItemProductKey(p, idx),
       item_id: (p.item_id ?? null) as number | null,
       item_name: String(p.item_name ?? p.itemName ?? ''),
       item_code: String(p.item_code ?? p.itemCode ?? ''),
       customer_code: String(p.customer_code ?? ''),
-      quantity: Number(p.quantity) || 1,
+      quantity: productOrderQuantity(p),
       unit: String(p.unit ?? 'عدد'),
       needs_assembly: p.needs_assembly !== false,
       selected_optional_stages: (p.selected_optional_stages ?? undefined) as string[] | undefined
@@ -369,7 +371,7 @@ export function useProjectInventory(
           itemRes.warehouseUnit = whItem.unit;
           itemRes.unit = itemRes.unit || whItem.unit || 'عدد';
           itemRes.stockQty = whItem.current_stock;
-          const req = Number(itemRes.requiredQty !== undefined ? itemRes.requiredQty : 1);
+          const req = perItemRowRequiredQty(itemRes, productOrderQuantity(products.find(p => p.id === changingItemTarget.prodId)));
           itemRes.status = whItem.current_stock >= req ? 'available' : 'needs_procurement';
 
           prodRes[changingItemTarget.itemId] = itemRes as any;
@@ -408,8 +410,9 @@ export function useProjectInventory(
         if (sec.checkType === 'per_item') {
           const perRes = { ...(sec.perItemResults || {}) };
           if (targetProdId) {
-            // Target specific product!
+            // Target specific product! TD-1343: a new row is one per unit of the product
             const prodRes = { ...(perRes[targetProdId] || {}) };
+            const qty = perUnitRowFields(NEW_ROW_QTY_PER_UNIT, productOrderQuantity(products.find(p => p.id === targetProdId)));
             prodRes[newItemId] = {
               itemId: newItemId,
               name: whItem.name,
@@ -417,15 +420,16 @@ export function useProjectInventory(
               category: whItem.category,
               unit: whItem.unit || 'عدد',
               warehouseUnit: whItem.unit,
-              requiredQty: 1, // Decoupled from order quantity!
+              ...qty,
               stockQty: whItem.current_stock,
-              status: whItem.current_stock >= 1 ? 'available' : 'needs_procurement'
+              status: whItem.current_stock >= qty.requiredQty ? 'available' : 'needs_procurement'
             };
             perRes[targetProdId] = prodRes;
           } else {
             // Fallback if no specific product was targeted
             products.forEach(p => {
               const prodRes = { ...(perRes[p.id] || {}) };
+              const qty = perUnitRowFields(NEW_ROW_QTY_PER_UNIT, productOrderQuantity(p));
               prodRes[newItemId] = {
                 itemId: newItemId,
                 name: whItem.name,
@@ -433,9 +437,9 @@ export function useProjectInventory(
                 category: whItem.category,
                 unit: whItem.unit || 'عدد',
                 warehouseUnit: whItem.unit,
-                requiredQty: 1,
+                ...qty,
                 stockQty: whItem.current_stock,
-                status: whItem.current_stock >= 1 ? 'available' : 'needs_procurement'
+                status: whItem.current_stock >= qty.requiredQty ? 'available' : 'needs_procurement'
               };
               perRes[p.id] = prodRes;
             });
@@ -895,6 +899,7 @@ export function useProjectInventory(
     handleCategoryChangeForCustom,
     handleUpdateSectionDescription,
     handleUpdatePerItemResult,
+    handleUpdatePerItemFields: updatePerItemFields,
     handleUpdateGlobalItem,
     handleOpenAddMaterialModal,
     handleOpenChangeMaterialModal,
