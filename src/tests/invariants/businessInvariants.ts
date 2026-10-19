@@ -14,7 +14,7 @@ import { checkNumberUniqueness } from './numberingInvariant.js';
 import { checkProjectReservations, checkReservationWithinStock } from './reservationInvariants.js';
 
 /**
- * v8.0.1 — ناوردایی‌های قابل اجرای منطق کاری (V8_MASTER_ROADMAP.md بخش ۴).
+ * v8.0.1 — ناوردایی‌های قابل اجرای منطق کاری (docs/roadmap/archive/V8_MASTER_ROADMAP.md بخش ۴).
  *
  * هر بررسی فقط داده‌های «دامنه» را می‌خواند: کالاهای مشخص و اسناد، اسناد حسابداری و ردیف‌های کاردکسی که پس از
  * نقطه شروع (watermark) ساخته شده‌اند. این دامنه به شبیه‌ساز اجازه می‌دهد روی پایگاه‌داده مشترک اجرای تست هم بدون
