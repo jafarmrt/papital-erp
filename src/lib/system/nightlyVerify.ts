@@ -85,6 +85,7 @@ export interface NightlyVerifyHealth {
   invariantViolationCount: number | null;
   worse: string[];
   acceptedWorse: string[];
+  newChecks: string[];
   messages: string[];
 }
 
@@ -122,6 +123,10 @@ export function worseMessage(count: number): string {
 
 export function acceptedMessage(count: number): string {
   return `${formatPersianNumber(count)} بررسی که بدتر شده بود، به‌عنوان وضع عادی تازه پذیرفته شد و از این پس مبنای مقایسه است.`;
+}
+
+export function newChecksMessage(count: number): string {
+  return `${formatPersianNumber(count)} بررسی تازه آمده که آخرین شب سالم نداشت؛ از شب سالم بعد با آن مقایسه می‌شود.`;
 }
 
 function isHealthCount(v: unknown): v is NightlyHealthCount {
@@ -168,6 +173,16 @@ export function parseNightlyReport(text: string): NightlyVerifyReport | null {
 /** A night whose restore and checks ran and found nothing worse: the next nights are compared with it */
 export function isHealthyNight(r: NightlyVerifyReport): r is NightlyVerifyReport & { health: NightlyHealthCount[]; invariants: NightlyInvariantCount[] } {
   return r.restoreOk && r.failure === null && r.health !== null && r.invariants !== null && r.worse.length === 0 && r.errors.length === 0;
+}
+
+/**
+ * The note of an accepted new normal stays until the next healthy night: a night that could not be checked keeps the
+ * one the night before carried
+ */
+export function nightlyCarriedAccepted(previous: NightlyVerifyReport | null, next: NightlyVerifyReport): string[] {
+  if (next.acceptedWorse.length > 0) return next.acceptedWorse;
+  if (!isHealthyNight(next) && previous && previous.acceptedWorse.length > 0) return previous.acceptedWorse;
+  return [];
 }
 
 /** The yardstick of tonight: the previous night when it was healthy, else the last healthy night it kept */
@@ -223,9 +238,13 @@ const countsKey = (r: Pick<NightlyVerifyReport, 'health' | 'invariants'>) => JSO
  * How many nights in a row, tonight included, were worse with these same counts: one more than the night before when
  * that night was worse with the same health and invariant counts, else 1; 0 when nothing is worse tonight.
  */
-export function nightlyRepeat(previous: NightlyVerifyReport | null, next: Pick<NightlyVerifyReport, 'health' | 'invariants' | 'worse'>): number {
+export function nightlyRepeat(previous: NightlyVerifyReport | null, next: Pick<NightlyVerifyReport, 'health' | 'invariants' | 'worse' | 'backupFile'>): number {
   if (next.worse.length === 0) return 0;
-  if (previous && previous.worse.length > 0 && countsKey(previous) === countsKey(next)) return previous.repeatNights + 1;
+  if (previous && previous.worse.length > 0 && countsKey(previous) === countsKey(next)) {
+    // Another run on the same backup is not another night
+    if (previous.backupFile !== '' && previous.backupFile === next.backupFile) return previous.repeatNights;
+    return previous.repeatNights + 1;
+  }
   return 1;
 }
 
@@ -234,7 +253,7 @@ export function nightlyVerifyVerdict(report: NightlyVerifyReport | null, now: Da
   if (!report) {
     return {
       status: 'never', finishedAt: null, backupFile: null, backupAt: null, failure: null, healthErrorCount: null, healthWarningCount: null,
-      invariantViolationCount: null, worse: [], acceptedWorse: [], messages: [NIGHTLY_VERIFY_MESSAGES.never],
+      invariantViolationCount: null, worse: [], acceptedWorse: [], newChecks: [], messages: [NIGHTLY_VERIFY_MESSAGES.never],
     };
   }
   const healthErrorCount = report.health ? report.health.filter(h => h.status === 'error').length : null;
@@ -262,9 +281,11 @@ export function nightlyVerifyVerdict(report: NightlyVerifyReport | null, now: Da
     messages.unshift(NIGHTLY_VERIFY_MESSAGES.stale);
   }
   if (messages.length === 0) messages.push(NIGHTLY_VERIFY_MESSAGES.ok);
-  if (status === 'ok' && report.acceptedWorse.length > 0) messages.push(acceptedMessage(report.acceptedWorse.length));
+  if (report.acceptedWorse.length > 0) messages.push(acceptedMessage(report.acceptedWorse.length));
+  if (report.newChecks.length > 0) messages.push(newChecksMessage(report.newChecks.length));
   return {
     status, finishedAt: report.finishedAt, backupFile: report.backupFile || null, backupAt: report.backupAt, failure: report.failure,
-    healthErrorCount, healthWarningCount, invariantViolationCount, worse: report.worse, acceptedWorse: report.acceptedWorse, messages,
+    healthErrorCount, healthWarningCount, invariantViolationCount, worse: report.worse, acceptedWorse: report.acceptedWorse,
+    newChecks: report.newChecks, messages,
   };
 }

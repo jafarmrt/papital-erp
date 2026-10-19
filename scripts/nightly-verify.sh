@@ -85,7 +85,14 @@ TSX="$APP_DIR/node_modules/.bin/tsx"
 LOCK_FILE="$APP_DIR/logs/.nightly-verify.lock"
 mkdir -p "$(dirname "$LOCK_FILE")" "$(dirname "$REPORT")"
 exec 9>"$LOCK_FILE"
-flock -n 9 || { log "SKIPPED: another nightly check is still running"; exit 0; }
+if ! flock -n 9; then
+  if [ "${1:-}" = "--accept-baseline" ]; then
+    log "NOT ACCEPTED: a nightly check is still running; run --accept-baseline again after it finishes"
+    exit 1
+  fi
+  log "SKIPPED: another nightly check is still running"
+  exit 0
+fi
 
 # the report belongs to the owner of the log directory (the service user), so the app can read it
 report_owner() {
@@ -190,6 +197,10 @@ cleanup() {
   local rc=$?
   trap - EXIT INT TERM
   stop_child
+  # what the stopped restore left in its TMPDIR (made after this run's password file)
+  if [ -n "${PGPASSFILE:-}" ] && [ -f "$PGPASSFILE" ]; then
+    find "$TMP_ROOT" -mindepth 1 -maxdepth 1 -newer "$PGPASSFILE" ! -path "$WORK_DIR" -exec rm -rf {} + 2>/dev/null || true
+  fi
   [ -n "$DRILL_DB" ] || DRILL_DB="$(drill_from_log)"
   if [ -n "$DRILL_DB" ]; then
     drop_drill "$DRILL_DB" || log "WARNING: could not drop $DRILL_DB — the next run drops it after ${DRILL_MAX_AGE_HOURS} hours"
@@ -235,7 +246,7 @@ night_failed() {
 
 # ---------- drill copies a killed run left behind ----------
 NOW=$(date +%s)
-if OLD_DRILLS="$(maint_sql "SELECT datname FROM pg_database WHERE datname LIKE 'erp\\_restore\\_drill\\_%'" 2>/dev/null)"; then
+if OLD_DRILLS="$(maint_sql "SELECT datname FROM pg_database WHERE datname ~ '^erp_restore_drill_[0-9]{8}_[0-9]{6}$'" 2>/dev/null)"; then
   while IFS= read -r db; do
     [[ "$db" =~ $DRILL_RE ]] || continue
     stamp="${db#erp_restore_drill_}"
@@ -267,6 +278,7 @@ else
     night_failed stale_dump "$(basename "$BACKUP_FILE") is $(( (NOW - BACKUP_AT) / 3600 )) hours old"
   fi
   # the same dump the previous night checked: last night's backup did not finish (a run again the same morning is fine)
+  # shellcheck disable=SC2016 # the $ is JavaScript run by node, not the shell
   PREVIOUS="$(node -e 'try { const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(`${r.backupFile || ""} ${Math.floor(Date.parse(r.finishedAt) / 1000) || 0}`); } catch { /* no report */ }' "$REPORT" 2>/dev/null || true)"
   read -r previous_file previous_at <<< "${PREVIOUS:-}" || true
   if [ "${previous_file:-}" = "$name.dump.gz" ] && [[ "${previous_at:-}" =~ ^[0-9]+$ ]] && [ $((NOW - previous_at)) -gt $((12 * 3600)) ]; then

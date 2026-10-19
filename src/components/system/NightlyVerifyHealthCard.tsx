@@ -59,11 +59,12 @@ export function NightlyVerifyHealthCard({ nightly }: { nightly?: NightlyVerifyHe
           <li key={message} className={status === 'ok' || status === 'never' ? 'text-slate-600 dark:text-slate-300' : 'text-amber-800 dark:text-amber-300 font-bold'}>{message}</li>
         ))}
       </ul>
-      {(nightly?.backupFile || (nightly?.worse.length ?? 0) > 0) && (
+      {(nightly?.backupFile || (nightly?.worse.length ?? 0) > 0 || (nightly?.newChecks?.length ?? 0) > 0) && (
         <details className="mt-2 text-[10px] text-slate-500" data-technical>
           <summary className="cursor-pointer">جزئیات فنی</summary>
           {nightly?.backupFile && <p className="truncate" dir="ltr">{nightly.backupFile}</p>}
           {nightly?.worse.map(w => <p key={w} dir="ltr">{w}</p>)}
+          {nightly?.newChecks?.map(c => <p key={`new-${c}`} dir="ltr">{c}</p>)}
         </details>
       )}
     </div>

@@ -43,7 +43,7 @@ echo "Creating database ${DRILL} (owner app)"
 case "\${FAKE_RESTORE:-ok}" in
   ok) echo "Drill database kept for inspection: ${DRILL}"; exit 0 ;;
   fail) echo "ERROR: restore FAILED"; exit 1 ;;
-  hang) sleep 30 ;;
+  hang) mkdir -p "\${TMPDIR:-/nonexistent}/restore-leftover"; sleep 30 ;;
   full) echo "pg_restore: error: could not extend file: No space left on device"; exit 1 ;;
 esac`);
     stub(path.join(app, 'node_modules/.bin/tsx'), `echo "tsx $* URL=$DATABASE_URL TMPDIR=\${TMPDIR:-}" >> "${calls}"; exit \${FAKE_CHECK_RC:-0}`);
@@ -107,6 +107,8 @@ exit 0`);
     expect(late.status).toBe(1);
     expect(slow.log()).toContain('--failed timeout');
     expect(slow.log()).toContain(`DROP DATABASE IF EXISTS "${DRILL}"`);
+    // what the stopped restore left in its TMPDIR is removed too
+    expect(fs.readdirSync(path.join(slow.backups, '.nightly-verify-tmp'))).toEqual([]);
     fs.rmSync(slow.dir, { recursive: true, force: true });
   }, 30_000);
 
@@ -123,6 +125,7 @@ exit 0`);
     // the restore (30 seconds of sleep here) is not waited for
     expect(Date.now() - stoppedAt).toBeLessThan(10_000);
     expect(f.log()).toContain(`DROP DATABASE IF EXISTS "${DRILL}"`);
+    expect(fs.readdirSync(path.join(f.backups, '.nightly-verify-tmp'))).toEqual([]);
     fs.rmSync(f.dir, { recursive: true, force: true });
   }, 30_000);
 
@@ -189,5 +192,15 @@ exit 0`);
     fs.rmSync(f.dir, { recursive: true, force: true });
     const script = fs.readFileSync(path.join(ROOT, 'scripts/nightly-verify.sh'), 'utf8');
     expect(script).toContain('scripts/(backup|upgrade-rehearsal|restore)\\.sh( |$)|(^|[ /])update\\.sh( |$)');
+  }, 30_000);
+
+  it('accepting a new normal while a check runs says it was not accepted and fails', () => {
+    const f = fakeApp();
+    const lock = path.join(f.app, 'logs/.nightly-verify.lock');
+    const run = spawnSync('flock', ['-x', lock, 'bash', f.script, '--accept-baseline'], { encoding: 'utf8', env: f.env });
+    expect(run.status).toBe(1);
+    expect(run.stdout + run.stderr).toContain('NOT ACCEPTED');
+    expect(f.log()).toBe('');
+    fs.rmSync(f.dir, { recursive: true, force: true });
   }, 30_000);
 });

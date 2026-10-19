@@ -7,7 +7,7 @@ import { cleanup, render } from '@testing-library/react';
 import { NightlyVerifyHealthCard } from '../../components/system/NightlyVerifyHealthCard';
 import {
   NIGHTLY_VERIFY_FAILURE_MESSAGES, NIGHTLY_VERIFY_MESSAGES, NIGHTLY_VERIFY_REPORT_VERSION, acceptedMessage, nightlyBaseline,
-  nightlyNewChecks, nightlyRepeat, nightlyVerifyVerdict, nightlyWorse, parseNightlyReport, type NightlyVerifyReport,
+  nightlyCarriedAccepted, newChecksMessage, nightlyNewChecks, nightlyRepeat, nightlyVerifyVerdict, nightlyWorse, parseNightlyReport, type NightlyVerifyReport,
 } from '../../lib/system/nightlyVerify';
 import { readNightlyVerifyHealth } from '../../services/system/nightlyVerifyHealth';
 
@@ -55,15 +55,23 @@ describe('nightly_verify_o_04: the nightly check on a copy of the backup', () =>
 
   it('the same worse counts night after night are counted, and accepted after three nights', () => {
     const worse = { invariants: [{ invariant: 'I1_voucher_balanced', count: 5 }], worse: ['invariant:I1_voucher_balanced'] };
+    const nextBackup = { ...worse, backupFile: 'erp_daily_20261019_023000.dump.gz' };
     expect(nightlyRepeat(null, report(worse))).toBe(1);
-    expect(nightlyRepeat(report({ ...worse, repeatNights: 1 }), report(worse))).toBe(2);
+    expect(nightlyRepeat(report({ ...worse, repeatNights: 1 }), report(nextBackup))).toBe(2);
     // other counts start again, and nothing worse is 0
-    expect(nightlyRepeat(report({ ...worse, repeatNights: 2 }), report({ ...worse, invariants: [{ invariant: 'I1_voucher_balanced', count: 6 }] }))).toBe(1);
+    expect(nightlyRepeat(report({ ...worse, repeatNights: 2 }), report({ ...nextBackup, invariants: [{ invariant: 'I1_voucher_balanced', count: 6 }] }))).toBe(1);
     expect(nightlyRepeat(report({ ...worse, repeatNights: 2 }), report())).toBe(0);
     // the night it is accepted is ok, says so, and is the next yardstick
     const accepted = report({ ...worse, worse: [], acceptedWorse: worse.worse, repeatNights: 3 });
     expect(nightlyVerifyVerdict(accepted, NOW)).toMatchObject({ status: 'ok', messages: [NIGHTLY_VERIFY_MESSAGES.ok, acceptedMessage(1)] });
     expect(nightlyBaseline(accepted)?.invariants).toEqual(worse.invariants);
+  });
+
+  it('runs on the same backup file are one night: three of them never reach the auto-accept', () => {
+    const worse = { invariants: [{ invariant: 'I1_voucher_balanced', count: 5 }], worse: ['invariant:I1_voucher_balanced'] };
+    let repeat = nightlyRepeat(null, report(worse));
+    for (let run = 0; run < 3; run++) repeat = nightlyRepeat(report({ ...worse, repeatNights: repeat }), report(worse));
+    expect(repeat).toBe(1);
   });
 
   it('a bad night is compared with the last healthy night again, never becoming the new yardstick', () => {
@@ -126,6 +134,19 @@ describe('nightly_verify_o_04: the nightly check on a copy of the backup', () =>
       if (saved === undefined) delete process.env.NIGHTLY_VERIFY_REPORT; else process.env.NIGHTLY_VERIFY_REPORT = saved;
       fs.rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it('the accepted note stays until the next healthy night, and new checks are named on the card', () => {
+    const accepted = report({ acceptedWorse: ['invariant:I1_voucher_balanced'] });
+    const noBackup = report({ failure: 'no_new_backup', restoreOk: false, health: null, invariants: null });
+    expect(nightlyCarriedAccepted(accepted, noBackup)).toEqual(accepted.acceptedWorse);
+    expect(nightlyVerifyVerdict({ ...noBackup, acceptedWorse: accepted.acceptedWorse }, NOW).messages).toContain(acceptedMessage(1));
+    expect(nightlyCarriedAccepted({ ...noBackup, acceptedWorse: accepted.acceptedWorse }, report())).toEqual([]);
+    const { container } = render(<NightlyVerifyHealthCard nightly={nightlyVerifyVerdict(report({ newChecks: ['added_by_update'] }), NOW)} />);
+    const copy = container.cloneNode(true) as HTMLElement;
+    copy.querySelectorAll('[data-technical]').forEach(el => el.remove());
+    expect(copy.textContent).toContain(newChecksMessage(1));
+    expect(copy.textContent).not.toMatch(/[A-Za-z0-9]/);
   });
 
   it('the card says it in Persian with Persian digits', () => {

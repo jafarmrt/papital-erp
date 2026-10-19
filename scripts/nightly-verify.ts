@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import {
   NIGHTLY_VERIFY_ACCEPT_AFTER_NIGHTS, NIGHTLY_VERIFY_FAILURES, NIGHTLY_VERIFY_REPORT_VERSION, nightlyBaseline, nightlyNewChecks,
-  nightlyRepeat, nightlyWorse, parseNightlyReport,
+  nightlyCarriedAccepted, nightlyRepeat, nightlyWorse, parseNightlyReport,
   type NightlyHealthCount, type NightlyInvariantCount, type NightlyVerifyFailure, type NightlyVerifyReport,
 } from '../src/lib/system/nightlyVerify.js';
 import { terminalLine } from '../src/lib/terminalText.js';
@@ -169,6 +169,7 @@ async function main(): Promise<number> {
     report.acceptedWorse = report.worse;
     report.worse = [];
   }
+  report.acceptedWorse = nightlyCarriedAccepted(previous, report);
   report.finishedAt = new Date().toISOString();
   writeReport(file, report);
   if (code === 2) return 2;
