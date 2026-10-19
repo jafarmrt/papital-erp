@@ -196,6 +196,15 @@ export async function logProjectDelivery(
 /** موجودیت ممیزی رزرو پروژه، همان که کسر و بازگرداندن رزرو با حواله می‌نویسند */
 export const PROJECT_RESERVATION_AUDIT_ENTITY = 'کنترل موجودی پروژه';
 
+/** TD-1341 (N4): فقط بخش‌های ناصفر شرح؛ بی هیچ رزرو تازه و آزادسازی، فقط کمبودها به‌روز شده‌اند */
+function reconcileAuditParts(reserved: number, released: number): string {
+  const parts = [
+    reserved > 0 ? `${toPersianDigits(reserved)} کالا رزرو تازه گرفت` : '',
+    released > 0 ? `رزرو ${toPersianDigits(released)} کالا آزاد شد` : '',
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(' و ') : 'کمبودهای ثبت‌شده به‌روز شد';
+}
+
 /**
  * TD-1341 (بستهٔ ۱۲ بند ۱): ردیف ممیزی «تکمیل رزرو» با رزرو و کمبود پیش و پس و تغییر هر کالا، با `tx` همان ثبت
  */
@@ -218,7 +227,7 @@ export async function logReservationReconcile(
     action: 'UPDATE',
     entity: PROJECT_RESERVATION_AUDIT_ENTITY,
     entityId: String(project.id),
-    description: `تکمیل رزرو پروژه «${project.title || project.projectCode}» با فهرست مواد: ${toPersianDigits(reserved)} کالا رزرو تازه گرفت و رزرو ${toPersianDigits(released)} کالا آزاد شد`,
+    description: `تکمیل رزرو پروژه «${project.title || project.projectCode}» با فهرست مواد: ${reconcileAuditParts(reserved, released)}`,
     details: {
       before: change.before,
       after: change.after,

@@ -1,4 +1,4 @@
-import { sql, eq, and, or, asc, inArray, type SQL } from 'drizzle-orm';
+import { sql, eq, and, asc, inArray } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { items, productionProjects, documents, documentItems } from '../../db/schema.js';
 import { checkOccVersion, nextVersion, OptimisticLockError } from '../../lib/occHelper.js';
@@ -10,8 +10,9 @@ import { ValidationError } from '../../errors/customErrors.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { RESERVING_DOCUMENT_STATUS, RESERVING_DOCUMENT_TYPES } from '../../lib/documents/reservingDocuments.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
+import { itemRefKeyCondition } from './itemRefKeyRead.js';
 import { reservationQtyField, reservingProjectRows, storedReservationRows, type ReservationQtyField } from '../../lib/projects/projectReservationState.js';
-import { findProjectItemMatch, itemCodeKey, itemNameKey } from '../../lib/projects/projectItemMatch.js';
+import { findProjectItemMatch, itemCodeKey, itemNameKey, itemRefKeys } from '../../lib/projects/projectItemMatch.js';
 import { proformaSourceTitle, type ItemReservedReportSummary, type ReservedItemDetail, type ReservedItemsFullReport } from '../../lib/inventory/reservedItemsReport.js';
 
 export type { ItemReservedReportSummary, ReservedItemDetail, ReservedItemsFullReport };
@@ -197,18 +198,15 @@ function refMayMatch(row: ProjectReservationRowRef, keys: { ids: Set<number>; co
   return (row.itemId !== null && keys.ids.has(row.itemId)) || keys.codes.has(itemCodeKey(row.code)) || keys.names.has(itemNameKey(row.name));
 }
 
-/** v9.0.395 (TD-831): فقط کالاهای فعالی که ردیف‌ها به آن‌ها اشاره می‌کنند، با نمایه‌های کلید کد و نام (TD-653) */
+/**
+ * v9.0.395 (TD-831): فقط کالاهای فعالی که ردیف‌ها به آن‌ها اشاره می‌کنند. TD-1341 (N1): با همان شرط خواندن ثبت نهایی و «تکمیل
+ * رزرو» (`itemRefKeyCondition`، TD-1322)، پس کالایی که کدش با فاصلهٔ نشکن یا نویسهٔ دیگری که `btrim` پایگاه‌داده نمی‌برد آغاز
+ * می‌شود هم خوانده می‌شود و گزارش همان کالایی را برای ردیف می‌یابد که فهرست کامل کالاها می‌یابد.
+ */
 async function readItemsForProjectRows(client: DbExecutor, rows: ProjectReservationRowRef[]): Promise<ReservationItemRow[]> {
-  const ids = [...new Set(rows.map(r => r.itemId).filter((id): id is number => id !== null))];
-  const codes = [...new Set(rows.map(r => itemCodeKey(r.code)).filter(Boolean))];
-  const names = [...new Set(rows.map(r => itemNameKey(r.name)).filter(Boolean))];
-  const conditions = [
-    ids.length > 0 ? inArray(items.id, ids) : undefined,
-    codes.length > 0 ? inArray(sql`upper(btrim(${items.code}))`, codes) : undefined,
-    names.length > 0 ? inArray(sql`lower(btrim(${items.name}))`, names) : undefined,
-  ].filter((c): c is SQL => c !== undefined);
-  if (conditions.length === 0) return [];
-  return client.select(RESERVATION_ITEM_COLUMNS).from(items).where(and(eq(items.isDeleted, 0), or(...conditions))).orderBy(asc(items.id));
+  const narrow = itemRefKeyCondition({ ...itemRefKeys(rows), ids: rows.map(r => r.itemId).filter((id): id is number => id !== null) });
+  if (!narrow) return [];
+  return client.select(RESERVATION_ITEM_COLUMNS).from(items).where(and(eq(items.isDeleted, 0), narrow)).orderBy(asc(items.id));
 }
 
 /**

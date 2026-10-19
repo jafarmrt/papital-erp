@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { planProjectReservation, type ReservationStockItem } from '../../lib/projects/projectReservation';
 import {
-  reservationLineChange, reservationLineChangeText, reservationReconcileSummary, type ReservationReconcilePreview,
+  UNMATCHED_ROWS_BLOCK_NOTE, reconcileBlockedByUnmatched, reservationLineChange, reservationLineChangeText, reservationReconcileSummary,
+  unmatchedRowsRefusalMessage, type ReservationReconcilePreview,
 } from '../../lib/projects/reservationReconcile';
 
 type FetchOpts = { method?: string; body?: string };
@@ -53,6 +54,36 @@ describe('the reconcile keeps the project reservation first (TD-1341)', () => {
   });
 });
 
+describe('a list row the reconcile cannot match (TD-1341, review M1)', () => {
+  // the item was recoded and renamed after the finalize; the list and the stored reservation row keep the old code and name
+  const recoded: ReservationStockItem = { id: 3, code: 'G-2', name: 'glue new', unit: 'عدد', currentStock: 12 };
+  const aliases = [{ id: 3, code: 'G-1', name: 'glue' }];
+
+  it('finds a recoded item through the code and name its stored reservation row keeps', () => {
+    const viaAlias = planProjectReservation(sections(6), [], [recoded], [], 'now', { itemAliases: aliases, ownReserved: new Map([[3, 6]]) });
+    expect(viaAlias.reserved[0]).toMatchObject({ itemId: 3, reservedQty: 6 });
+    expect(viaAlias.unmatched).toEqual([]);
+    // the finalize passes no alias: the row reaches no item and is listed, never matched by guess
+    const finalize = planProjectReservation(sections(6), [], [recoded], [], 'now');
+    expect(finalize.reserved).toEqual([]);
+    expect(finalize.unmatched).toEqual([{ code: 'G-1', name: 'glue', unit: 'عدد', qty: 6, section: 'm' }]);
+  });
+
+  it('prefers a live item holding the code to an alias, as the finalize does', () => {
+    const other: ReservationStockItem = { id: 9, code: 'G-1', name: 'other', unit: 'عدد', currentStock: 5 };
+    const p = planProjectReservation(sections(2), [], [recoded, other], [], 'now', { itemAliases: aliases });
+    expect(p.reserved.map(r => r.itemId)).toEqual([9]);
+  });
+
+  it('blocks only a plan that releases while a row reaches no item', () => {
+    const row = { code: 'کدی-1', name: 'x', unit: 'عدد', qty: 4 };
+    expect(reconcileBlockedByUnmatched({ lines: [line(4, 0)], unmatchedRows: [row] })).toBe(true);
+    expect(reconcileBlockedByUnmatched({ lines: [line(3, 10)], unmatchedRows: [row] })).toBe(false);
+    expect(reconcileBlockedByUnmatched({ lines: [line(4, 0)], unmatchedRows: [] })).toBe(false);
+    expect(unmatchedRowsRefusalMessage([row])).toContain('«x» (کدی-1)');
+  });
+});
+
 const line = (currentQty: number, targetQty: number, extra: Partial<ReservationReconcilePreview['lines'][number]> = {}) =>
   ({ itemId: 3, itemCode: 'G-1', itemName: 'glue', unit: 'عدد', requiredQty: targetQty, currentQty, targetQty, shortQty: 0, ...extra });
 
@@ -75,7 +106,7 @@ describe('the reconcile preview text (TD-1341)', () => {
 const TOKEN_A = 'a'.repeat(64);
 const TOKEN_B = 'b'.repeat(64);
 const preview = (over: Partial<ReservationReconcilePreview> = {}): ReservationReconcilePreview =>
-  ({ projectId: 7, version: 4, lines: [line(3, 10)], hasChanges: true, planToken: TOKEN_A, ...over });
+  ({ projectId: 7, version: 4, lines: [line(3, 10)], unmatchedRows: [], hasChanges: true, planToken: TOKEN_A, ...over });
 
 describe('the reconcile window (TD-1341)', () => {
   it('waits for a saved list before it opens', () => {
@@ -132,6 +163,26 @@ describe('the reconcile window (TD-1341)', () => {
     fireEvent.click(screen.getByRole('button', { name: BUTTON }));
     expect(await screen.findByText(STALE)).toBeTruthy();
     expect(screen.getByRole('button', { name: CONFIRM })).toHaveProperty('disabled', true);
+  });
+
+  it('lists the rows that reach no item and records no release while they are there', async () => {
+    const unmatchedRows = [{ code: 'کدی-1', name: 'bead', unit: 'عدد', qty: 4, section: 'm' }];
+    route = () => preview({ lines: [line(4, 0)], unmatchedRows });
+    render(<ReservationReconcileButton projectId={7} version={4} busy={false} dirty={false} onApplied={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: BUTTON }));
+    expect(await screen.findByText('«bead» (کدی-1): ۴ عدد در «m»')).toBeTruthy();
+    expect(screen.getByText(UNMATCHED_ROWS_BLOCK_NOTE)).toBeTruthy();
+    const confirm = screen.getByRole('button', { name: CONFIRM });
+    expect(confirm).toHaveProperty('disabled', true);
+    expect(confirm.getAttribute('title')).toBe(UNMATCHED_ROWS_BLOCK_NOTE);
+    cleanup();
+    // a plan that only reserves more is recorded; the rows stay listed
+    route = () => preview({ lines: [line(3, 10)], unmatchedRows });
+    render(<ReservationReconcileButton projectId={7} version={4} busy={false} dirty={false} onApplied={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: BUTTON }));
+    expect(await screen.findByText('«bead» (کدی-1): ۴ عدد در «m»')).toBeTruthy();
+    expect(screen.queryByText(UNMATCHED_ROWS_BLOCK_NOTE)).toBeNull();
+    expect(screen.getByRole('button', { name: CONFIRM })).toHaveProperty('disabled', false);
   });
 
   it('is not closed by Esc while the plan is being recorded', async () => {

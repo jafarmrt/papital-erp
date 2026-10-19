@@ -24,13 +24,20 @@ export async function runProjectReservationReconcileTests(shouldRun: ShouldRun):
       'v10.2.x: after a reconcile a remittance void restores what it deducted and the reconcile then finds nothing to change; nothing is reserved twice (TD-1341)',
       ['td1341', 'package12', 'projects', 'reservation', 'void'], voidRestoresCase],
     ['reg_project_reservation_reconcile_row_by_id_td_1341',
-      'v10.2.x: the reconcile reads its items with the finalize\'s narrowed read and still finds a stored reservation row by its item id after the item\'s code and name changed, as the whole item list does (TD-1341)',
+      'v10.2.x: after an item is recoded and renamed the reconcile finds its stored row by id and the old list row through the code and name the stored row keeps, so nothing is released (TD-1341, review M1)',
       ['td1341', 'td1322', 'package12', 'projects', 'reservation'], rowByIdCase],
+    ['reg_project_reservation_reconcile_unmatched_row_td_1341',
+      'v10.2.x: a list row that reaches no item (Persian yeh against an Arabic-yeh code) is listed in the preview and a plan that would release is 422 PROJECT_RESERVATION_ROWS_UNMATCHED with nothing written; a plan that only reserves is recorded (TD-1341, review M1)',
+      ['td1341', 'package12', 'projects', 'reservation'], unmatchedRowCase],
+    ['reg_project_reservation_report_trimmed_code_td_1341',
+      'v10.2.x: the reservation report finds the item of a stored row without an item id whose item code starts with a no-break space, as the reconcile does, so both show the same reservation (TD-1341, review N1)',
+      ['td1341', 'td1322', 'package12', 'projects', 'reservation'], trimmedCodeCase],
   ]);
 }
 
 interface Line { itemId: number; requiredQty: number; currentQty: number; targetQty: number; shortQty: number }
-interface Preview { projectId: number; version: number; lines: Line[]; hasChanges: boolean; planToken: string }
+interface Unmatched { code: string; name: string; unit: string; qty: number; section?: string }
+interface Preview { projectId: number; version: number; lines: Line[]; unmatchedRows: Unmatched[]; hasChanges: boolean; planToken: string }
 
 async function materialRow(h: Harness, itemId: number, requiredQty: number) {
   const [it] = await h.q('SELECT code, name FROM items WHERE id = $1', [itemId]);
@@ -198,7 +205,7 @@ async function voidRestoresCase(h: Harness, wrong: string[]): Promise<string> {
   return 'a void after a reconcile restores exactly what was deducted';
 }
 
-/** A stored row is matched by its item id like the whole item list, even when no ref names the item's code or name any more */
+/** A recoded and renamed item keeps its reservation: the stored row by its id, the old list row through the stored row's code and name */
 async function rowByIdCase(h: Harness, wrong: string[]): Promise<string> {
   const f = await fixture(h);
   const a = await f.item(10);
@@ -208,7 +215,67 @@ async function rowByIdCase(h: Harness, wrong: string[]): Promise<string> {
   await h.q('UPDATE items SET code = $2, name = $3 WHERE id = $1', [a, `RECODED-${h.tag}`, `recoded ${h.tag}`]);
   const p = await preview(h, project);
   const la = lineOf(p, a);
-  if (la?.currentQty !== 6 || la?.targetQty !== 0) wrong.push(`the preview of the recoded item is ${JSON.stringify(la)}, expected its stored 6 found by id and released (no list row names it)`);
-  if (!p.hasChanges) wrong.push('the preview says nothing changes');
-  return 'a stored row is found by its item id';
+  if (la?.currentQty !== 6 || la?.targetQty !== 6 || la?.requiredQty !== 6) wrong.push(`the preview of the recoded item is ${JSON.stringify(la)}, expected its stored 6 kept for the old list row`);
+  if (p.hasChanges) wrong.push(`the preview has changes: ${JSON.stringify(p.lines)}`);
+  if (p.unmatchedRows.length !== 0) wrong.push(`the old list row is listed as matching no item: ${JSON.stringify(p.unmatchedRows)}`);
+  const res = await apply(h, project, { version: await versionOf(h, project), planToken: p.planToken });
+  if (res.status !== 200 || (res.body as { changed?: boolean }).changed !== false) wrong.push(`applying answered ${brief(res)}, expected 200 changed false`);
+  if (await storedQty(h, project, a) !== 6) wrong.push(`the recoded item is reserved ${await storedQty(h, project, a)}, expected 6`);
+  return 'a recoded item keeps its reservation';
+}
+
+/** A row that reaches no item never lets the reconcile release; a plan that only reserves still goes through */
+async function unmatchedRowCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const a = await f.item(10);
+  const arabicYeh = `\u06a9\u062f\u064a-${h.tag}`;
+  const persianYeh = `\u06a9\u062f\u06cc-${h.tag}`;
+  await h.q('UPDATE items SET code = $2, name = $3 WHERE id = $1', [a, arabicYeh, `bead ${h.tag}`]);
+  const project = await createProject(h, {
+    sections: globalSection([{ itemCode: arabicYeh, name: `bead ${h.tag}`, unit: 'عدد', requiredQty: 4 }]), manualPurchaseItems: [], isFinalized: true,
+  });
+  if (await storedQty(h, project, a) !== 4) throw new Error('setup: the finalize did not reserve 4');
+  const typo = { itemCode: persianYeh, name: `typed bead ${h.tag}`, unit: 'عدد', requiredQty: 4 };
+  await saveSections(h, project, [typo]);
+  const version = await versionOf(h, project);
+
+  const p = await preview(h, project);
+  const la = lineOf(p, a);
+  if (la?.currentQty !== 4 || la?.targetQty !== 0) wrong.push(`the preview of the reserved item is ${JSON.stringify(la)}, expected 4 that the plan would release`);
+  if (p.unmatchedRows.length !== 1 || p.unmatchedRows[0]?.code !== persianYeh || p.unmatchedRows[0]?.qty !== 4) wrong.push(`the preview lists ${JSON.stringify(p.unmatchedRows)}, expected the Persian-yeh row of 4`);
+  const refused = await apply(h, project, { version, planToken: p.planToken });
+  const body = refused.body as { code?: unknown; details?: { unmatchedRows?: unknown[] } };
+  if (refused.status !== 422 || body.code !== 'PROJECT_RESERVATION_ROWS_UNMATCHED' || body.details?.unmatchedRows?.length !== 1) wrong.push(`a release beside an unmatched row answered ${brief(refused)}, expected 422 PROJECT_RESERVATION_ROWS_UNMATCHED naming the row`);
+  if (await storedQty(h, project, a) !== 4 || await versionOf(h, project) !== version) wrong.push('the refused reconcile changed the reservation or the version');
+
+  // the unmatched row stays, the item is named correctly again with a larger need: only a reservation is added
+  await saveSections(h, project, [typo, await materialRow(h, a, 6)]);
+  const more = await preview(h, project);
+  const lm = lineOf(more, a);
+  if (lm?.currentQty !== 4 || lm?.targetQty !== 6) wrong.push(`the preview after the fix is ${JSON.stringify(lm)}, expected 4 → 6`);
+  if (more.unmatchedRows.length !== 1) wrong.push(`the preview after the fix lists ${JSON.stringify(more.unmatchedRows)}, expected the Persian-yeh row still`);
+  const ok = await apply(h, project, { version: await versionOf(h, project), planToken: more.planToken });
+  if (ok.status !== 200) wrong.push(`a plan that only reserves answered ${brief(ok)}, expected 200`);
+  if (await storedQty(h, project, a) !== 6) wrong.push(`the item is reserved ${await storedQty(h, project, a)} after the reserve-only plan, expected 6`);
+  return 'an unmatched row blocks a release and lets a reserve through';
+}
+
+/** The reservation report reads a stored row's item with the reconcile's item read: a code that starts with a no-break space */
+async function trimmedCodeCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const a = await f.item(10);
+  const project = await createProject(h, { sections: globalSection([await materialRow(h, a, 5)]), manualPurchaseItems: [], isFinalized: true });
+  if (await storedQty(h, project, a) !== 5) throw new Error('setup: the finalize did not reserve 5');
+  const [it] = await h.q('SELECT code FROM items WHERE id = $1', [a]);
+  // a legacy stored row without an item id that names its item by code only, and an item code saved with a leading no-break space
+  await h.q(`UPDATE production_projects SET inventory_control = jsonb_set(inventory_control, '{reservedItems}',
+    jsonb_build_array(jsonb_build_object('itemCode', $2::text, 'itemName', $3::text, 'reservedQty', 5))) WHERE id = $1`, [project, it.code, `legacy name ${h.tag}`]);
+  await h.q('UPDATE items SET code = $2 WHERE id = $1', [a, `\u00a0${String(it.code)}`]);
+
+  const p = await preview(h, project);
+  const la = lineOf(p, a);
+  if (la?.currentQty !== 5 || p.hasChanges) wrong.push(`the reconcile previews ${JSON.stringify(la)} with changes ${String(p.hasChanges)}, expected 5 held and nothing to change`);
+  const view = await reservedOf(a);
+  if (view.project !== 5) wrong.push(`the reservation report shows ${view.project} held by the project, expected 5 as the reconcile reads`);
+  return 'the report and the reconcile find the same item';
 }

@@ -8,12 +8,12 @@ import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { hasPresetShapedSections, presetMaterialRefs, projectSectionsFromPreset } from '../../lib/projects/inventoryControlSections.js';
-import { findProjectItemMatch } from '../../lib/projects/projectItemMatch.js';
+import { findProjectItemMatch, type MatchableItem } from '../../lib/projects/projectItemMatch.js';
 import { projectNeedRefs, type ReservationShortage, type ReservationStockItem } from '../../lib/projects/projectReservation.js';
 import { isProjectFinalized, reservationQtyField, storedReservationRows, storedReservationShortages } from '../../lib/projects/projectReservationState.js';
 import { isProjectOpenForAllocation } from '../../lib/projects/projectStatus.js';
 import {
-  RESERVATION_PLAN_CHANGED_MESSAGE, reservationLineChange,
+  RESERVATION_PLAN_CHANGED_MESSAGE, reconcileBlockedByUnmatched, reservationLineChange, unmatchedRowsRefusalMessage,
   type ReservationReconcileLine, type ReservationReconcilePreview, type ReservationReconcileResult,
 } from '../../lib/projects/reservationReconcile.js';
 import { logReservationReconcile } from './projectAudit.js';
@@ -29,6 +29,9 @@ import { planReservationWithOthers, readStockItemsForRefs } from './serverInvent
  * حساب می‌کند و فقط وقتی می‌نویسد که نشانهٔ تغییرها همانی باشد که کاربر دید (وگرنه ۴۰۹ `PROJECT_RESERVATION_PLAN_CHANGED` با
  * پیش‌نمایش تازه). ردیف کالایی که عوض نمی‌شود دست نمی‌خورد، ردیف‌های کالای عوض‌شده یک ردیف با مقدار تازه می‌شوند و ردیفی که به
  * کالای زنده‌ای نمی‌رسد همان می‌ماند؛ پس هیچ رزروی بی‌صدا حذف یا دوبار شمرده نمی‌شود.
+ * بازبینی (M1): کد و نامی که ردیف رزرو ذخیره‌شده دارد نام دیگر کالای آن است، پس ردیف فهرستی که با کد یا نام پیشین کالا مانده
+ * هنوز به همان کالا می‌رسد؛ ردیف فهرستی که به هیچ کالایی نمی‌رسد در پیش‌نمایش جدا نشان داده می‌شود و تا هست هیچ رزروی آزاد
+ * نمی‌شود (۴۲۲ `PROJECT_RESERVATION_ROWS_UNMATCHED`).
  */
 
 type ProjectRow = typeof productionProjects.$inferSelect;
@@ -67,19 +70,26 @@ function assertReconcilable(project: ProjectRow): void {
   }
 }
 
-/** رزرو فعلی پروژه به ازای کالای زنده: همان ردیف‌ها و همان فیلد مقداری که گزارش رزروها و کسر حواله می‌خوانند */
-function ownReservationsByItem(rows: StoredRow[], stockItems: ReservationStockItem[]): { byItem: Map<number, number>; itemOfRow: (number | null)[] } {
+/**
+ * رزرو فعلی پروژه به ازای کالای زنده: همان ردیف‌ها و همان فیلد مقداری که گزارش رزروها و کسر حواله می‌خوانند. هر ردیفی که به
+ * کالای زنده‌ای می‌رسد (مصرف‌شده هم) کد و نامش را نام دیگر آن کالا می‌کند (M1)
+ */
+function ownReservationsByItem(rows: StoredRow[], stockItems: ReservationStockItem[]): {
+  byItem: Map<number, number>; itemOfRow: (number | null)[]; aliases: MatchableItem[];
+} {
   const byItem = new Map<number, number>();
+  const aliases: MatchableItem[] = [];
   const itemOfRow = rows.map(raw => {
+    const ref = storedRowRef(raw);
+    const match = findProjectItemMatch(ref, stockItems);
+    if (match) aliases.push({ id: match.id, code: ref.code, name: ref.name });
     const field = reservationQtyField(raw);
     const qty = field ? Number(raw[field]) : 0;
-    if (!(qty > 0) || !Number.isFinite(qty)) return null;
-    const match = findProjectItemMatch(storedRowRef(raw), stockItems);
-    if (!match) return null;
+    if (!(qty > 0) || !Number.isFinite(qty) || !match) return null;
     byItem.set(match.id, fin(byItem.get(match.id) ?? 0).add(qty).toNumber());
     return match.id;
   });
-  return { byItem, itemOfRow };
+  return { byItem, itemOfRow, aliases };
 }
 
 /** نشانهٔ کمبودها بی موجودی لحظه‌ای (موجودی و رزرو دیگران در هر خواندن عوض می‌شوند و تغییر رزرو نیستند) */
@@ -109,7 +119,7 @@ async function computeReconcile(executor: DbExecutor, project: ProjectRow): Prom
   );
   const own = ownReservationsByItem(storedRows, stockItems);
   const reservedAt = systemNowUtcIso();
-  const plan = await planReservationWithOthers(planIc, products, stockItems, reservedAt, executor, project.id, own.byItem);
+  const plan = await planReservationWithOthers(planIc, products, stockItems, reservedAt, executor, project.id, { ownReserved: own.byItem, itemAliases: own.aliases });
 
   const planRow = new Map(plan.reserved.map(r => [Number(r.itemId), r]));
   const planShort = new Map(plan.shortages.map(s => [s.itemId, s]));
@@ -158,12 +168,13 @@ async function computeReconcile(executor: DbExecutor, project: ProjectRow): Prom
     .update(JSON.stringify({
       lines: lines.map(l => [l.itemId, qtyKey(l.requiredQty), qtyKey(l.currentQty), qtyKey(l.targetQty), qtyKey(l.shortQty)]),
       shortages: shortageSignature(plan.shortages),
+      unmatched: plan.unmatched.map(r => [r.section ?? '', r.code, r.name, r.unit, qtyKey(r.qty)]),
       hasChanges,
     }))
     .digest('hex');
 
   return {
-    preview: { projectId: project.id, version: project.version ?? 1, lines, hasChanges, planToken },
+    preview: { projectId: project.id, version: project.version ?? 1, lines, unmatchedRows: plan.unmatched, hasChanges, planToken },
     reservedItems,
     reservationShortages: plan.shortages,
   };
@@ -196,6 +207,11 @@ export async function applyReservationReconcile(
     const computed = await computeReconcile(tx, project);
     if (computed.preview.planToken !== input.planToken) {
       throw new ConflictError(RESERVATION_PLAN_CHANGED_MESSAGE, { preview: computed.preview }, 'PROJECT_RESERVATION_PLAN_CHANGED');
+    }
+    // M1: a row that reaches no item may be the need of an item whose reservation would be released
+    if (reconcileBlockedByUnmatched(computed.preview)) {
+      const rows = computed.preview.unmatchedRows;
+      throw new ValidationError(unmatchedRowsRefusalMessage(rows), { unmatchedRows: rows }, 'PROJECT_RESERVATION_ROWS_UNMATCHED');
     }
     const ic = asObject(project.inventoryControl);
     const currentVersion = project.version ?? 1;

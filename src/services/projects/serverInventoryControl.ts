@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { projectIssuedQuantities } from './projectIssuedQuantities.js';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { items, productionProjects } from '../../db/schema.js';
@@ -14,7 +14,8 @@ import {
   MATERIAL_AVAILABILITY_MAX_ITEMS, freeForProject, type MaterialAvailabilityReport,
 } from '../../lib/projects/materialAvailability.js';
 import { hasPresetShapedSections, presetMaterialRefs, projectSectionsFromPreset } from '../../lib/projects/inventoryControlSections.js';
-import { findProjectItemMatch, itemCodeKey, itemNameKey } from '../../lib/projects/projectItemMatch.js';
+import { findProjectItemMatch, itemRefKeys, type MatchableItem } from '../../lib/projects/projectItemMatch.js';
+import { itemRefKeyCondition } from '../items/itemRefKeyRead.js';
 
 type InventoryControl = Record<string, unknown>;
 
@@ -32,10 +33,10 @@ const asObject = (v: unknown): InventoryControl => (v && typeof v === 'object' &
  * v9.0.373 (TD-819): ثبت نهایی فقط موجودی آزاد (کل − رزرو دیگران) را رزرو می‌کند و کمبود را در
  * `reservationShortages` می‌نویسد؛ کمبود بدنه درخواست نادیده گرفته و با خروج از ثبت نهایی پاک می‌شود.
  */
-function unitMismatchError(rows: ReservationUnitMismatch[]): ValidationError {
+function unitMismatchError(rows: ReservationUnitMismatch[], action: 'ثبت نهایی' | 'تکمیل رزرو'): ValidationError {
   const list = rows.map(r => `«${r.itemName || r.itemCode}» (کنترل موجودی: ${r.rowUnit}، کالا: ${r.itemUnit})`).join('؛ ');
   return new ValidationError(
-    `واحد این مواد با واحد کالای انبار فرق دارد و تبدیل واحد ندارد: ${list}. پیش از ثبت نهایی، تبدیل واحد هر ردیف را در کنترل موجودی ثبت کنید.`,
+    `واحد این مواد با واحد کالای انبار فرق دارد و تبدیل واحد ندارد: ${list}. پیش از ${action}، تبدیل واحد هر ردیف را در کنترل موجودی ثبت کنید.`,
     { unitMismatches: rows },
     'PROJECT_RESERVATION_UNIT_MISMATCH',
   );
@@ -45,8 +46,9 @@ function unitMismatchError(rows: ReservationUnitMismatch[]): ValidationError {
  * رزرو پروژه با رزرو دیگران (TD-819): یک بار نیازها و کالاهای تطبیق‌یافته ساخته می‌شوند، رزرو دیگران فقط برای همان کالاها
  * خوانده می‌شود (خطای خواندن ثبت نهایی را رد می‌کند) و رزرو با موجودی آزاد دوباره حساب می‌شود.
  * TD-1341: رزرو دیگران با `othersReservations` خوانده می‌شود، پس رزرو خود پروژه (ثبت نهایی‌شده، در «تکمیل رزرو») رزرو دیگران
- * شمرده نمی‌شود؛ `ownReserved` رزرو فعلی پروژه است و کالاهای آن هم خوانده می‌شوند. در ثبت نهایی پروژه هنوز ثبت نهایی نیست و
- * هیچ ردیفش رزرو نمی‌کند، پس نتیجه همان پیشین است.
+ * شمرده نمی‌شود؛ `reconcile.ownReserved` رزرو فعلی پروژه است و کالاهای آن هم خوانده می‌شوند، و `reconcile.itemAliases` کد و نامی
+ * است که هر ردیف رزرو ذخیره‌شده برای کالای خود نگه داشته (M1). در ثبت نهایی پروژه هنوز ثبت نهایی نیست و هیچ ردیفش رزرو
+ * نمی‌کند، پس نتیجه همان پیشین است.
  */
 export async function planReservationWithOthers(
   ic: InventoryControl,
@@ -55,11 +57,13 @@ export async function planReservationWithOthers(
   reservedAt: string,
   executor: DbExecutor,
   projectId: number | null,
-  ownReserved?: ReadonlyMap<number, number>,
+  reconcile?: { ownReserved: ReadonlyMap<number, number>; itemAliases: ReadonlyArray<MatchableItem> },
 ): Promise<ProjectReservationPlan> {
-  const draft = planProjectReservation(ic.sections, products, stockItems, ic.manualPurchaseItems, reservedAt);
+  const ownReserved = reconcile?.ownReserved;
+  const itemAliases = reconcile?.itemAliases;
+  const draft = planProjectReservation(ic.sections, products, stockItems, ic.manualPurchaseItems, reservedAt, itemAliases ? { itemAliases } : {});
   // v9.0.372 (TD-820، تصمیم ت۴): ردیف با واحد دیگر و بی تبدیل، ثبت نهایی را رد می‌کند
-  if (draft.unitMismatches.length > 0) throw unitMismatchError(draft.unitMismatches);
+  if (draft.unitMismatches.length > 0) throw unitMismatchError(draft.unitMismatches, reconcile ? 'تکمیل رزرو' : 'ثبت نهایی');
   const itemIds = [...new Set([...draft.reserved, ...draft.shortages].map(r => Number(r.itemId)).concat([...(ownReserved?.keys() ?? [])]))]
     .filter(id => Number.isInteger(id) && id > 0);
   if (itemIds.length === 0) return draft;
@@ -72,64 +76,32 @@ export async function planReservationWithOthers(
     const rows = othersReservations(s.reservations, { projectId });
     reservedByOthers.set(itemId, rows.reduce((sum, r) => fin(sum).add(Number(r.reservedQty) || 0).toNumber(), 0));
   }
-  return planProjectReservation(ic.sections, products, stockItems, ic.manualPurchaseItems, reservedAt, { reservedByOthers, issuedToProject, ownReserved });
+  return planProjectReservation(ic.sections, products, stockItems, ic.manualPurchaseItems, reservedAt, { reservedByOthers, issuedToProject, ownReserved, itemAliases });
 }
-
-/**
- * The characters JavaScript's `trim()` removes (white space and line terminators), so the SQL keys below trim as
- * `itemCodeKey` / `itemNameKey` do; plain `btrim` removes only the space, and a code stored with a tab or a no-break space
- * kept its item out of the narrowed read
- */
-export const JS_TRIM_CHARS = '\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff';
 
 const STOCK_ITEM_COLUMNS = {
   id: items.id, code: items.code, name: items.name, category: items.category, unit: items.unit, currentStock: items.currentStock,
 };
 
-async function readLiveStockItems(executor: DbExecutor, narrow?: SQL): Promise<ReservationStockItem[]> {
-  const rows = await executor
-    .select(STOCK_ITEM_COLUMNS)
-    .from(items)
-    .where(narrow ? and(eq(items.isDeleted, 0), narrow) : eq(items.isDeleted, 0))
-    .orderBy(asc(items.id));
-  return rows.map(i => ({ ...i, currentStock: Number(i.currentStock) || 0 }));
-}
-
 /**
- * Code and name characters whose letter case JavaScript and the narrowed SQL key below map alike: the key compares under
- * the "C" collation, which maps only ASCII letters, so a code with any other character, or a name with a character outside
- * ASCII and the Arabic script (no letter case) and its joiners, is read whatever its key; for every other item the SQL key
- * equals `itemCodeKey` / `itemNameKey`
- */
-const CODE_KEY_UNSAFE = '[^\\u0001-\\u007f]';
-const NAME_KEY_UNSAFE = '[^\\u0001-\\u007f\\u0600-\\u06ff\\u200c\\u200d\\ufb50-\\ufdff\\ufe70-\\ufefc]';
-
-/**
- * The live items that may be a ref's `findProjectItemMatch` among every live item, in id order: those whose code key or
- * name key one of the refs holds, plus every item whose code or name holds a character the SQL key may case-map unlike
- * JavaScript («ß» is «SS» only in JavaScript, «İ» and «Σ» differ too). The list holds every item that matches a ref in the
- * whole list, so the first match by id, by code then by name, is the same. TD-1341: `itemIds` are the ids refs carry (the
- * stored reservation rows of «تکمیل رزرو»); those items are read too, so a match by id is also the whole list's.
+ * The live items that may be a ref's `findProjectItemMatch` among every live item, in id order (`itemRefKeyCondition`):
+ * the list holds every item that matches a ref in the whole list, so the first match by id, by code then by name, is the
+ * same. TD-1341: `itemIds` are the ids refs carry (the stored reservation rows of «تکمیل رزرو»); those items are read too, so
+ * a match by id is also the whole list's.
  */
 export async function readStockItemsForRefs(
   executor: DbExecutor,
   refs: ReadonlyArray<{ code: string; name: string }>,
   itemIds: readonly number[] = [],
 ): Promise<ReservationStockItem[]> {
-  // a key holding NUL names no stored item (PostgreSQL text never holds it) and would refuse the query
-  const storable = (key: string) => key !== '' && !key.includes('\u0000');
-  const codes = [...new Set(refs.map(r => itemCodeKey(r.code)).filter(storable))];
-  const names = [...new Set(refs.map(r => itemNameKey(r.name)).filter(storable))];
-  const ids = [...new Set(itemIds.filter(id => Number.isSafeInteger(id) && id > 0))];
-  if (codes.length === 0 && names.length === 0 && ids.length === 0) return [];
-  const conditions = [
-    ids.length > 0 ? inArray(items.id, ids) : undefined,
-    codes.length > 0 ? inArray(sql`upper(btrim(${items.code}, ${JS_TRIM_CHARS}) COLLATE "C")`, codes) : undefined,
-    names.length > 0 ? inArray(sql`lower(btrim(${items.name}, ${JS_TRIM_CHARS}) COLLATE "C")`, names) : undefined,
-    sql`${items.code} ~ ${CODE_KEY_UNSAFE}`,
-    sql`${items.name} ~ ${NAME_KEY_UNSAFE}`,
-  ].filter((c): c is SQL => c !== undefined);
-  return readLiveStockItems(executor, or(...conditions));
+  const narrow = itemRefKeyCondition({ ...itemRefKeys(refs), ids: itemIds });
+  if (!narrow) return [];
+  const rows = await executor
+    .select(STOCK_ITEM_COLUMNS)
+    .from(items)
+    .where(and(eq(items.isDeleted, 0), narrow))
+    .orderBy(asc(items.id));
+  return rows.map(i => ({ ...i, currentStock: Number(i.currentStock) || 0 }));
 }
 
 export async function resolveServerInventoryControl(

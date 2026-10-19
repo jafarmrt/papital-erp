@@ -24,11 +24,22 @@ export interface ReservationReconcileLine {
   shortQty: number;
 }
 
+/** TD-1341 (M1): ردیفی از فهرست مواد که به هیچ کالای زندهٔ انبار نمی‌رسد؛ مقدار به واحد خود ردیف */
+export interface ReservationReconcileUnmatchedRow {
+  code: string;
+  name: string;
+  unit: string;
+  qty: number;
+  section?: string;
+}
+
 export interface ReservationReconcilePreview {
   projectId: number;
   /** نسخهٔ پروژه‌ای که پیش‌نمایش از آن ساخته شد */
   version: number;
   lines: ReservationReconcileLine[];
+  /** ردیف‌های بی کالا؛ رزروی نمی‌گیرند و تا هستند هیچ رزروی آزاد نمی‌شود */
+  unmatchedRows: ReservationReconcileUnmatchedRow[];
   /** رزرو یا کمبودی عوض می‌شود */
   hasChanges: boolean;
   /** نشانهٔ همین تغییرها؛ ثبت با نشانهٔ دیگر ۴۰۹ `PROJECT_RESERVATION_PLAN_CHANGED` است */
@@ -77,4 +88,33 @@ export function reservationReconcileSummary(preview: Pick<ReservationReconcilePr
     short > 0 ? `${formatPersianNumber(short)} کالا کمبود دارد` : '',
   ].filter(Boolean);
   return parts.length > 0 ? `${parts.join('، ')}.` : 'کمبودهای ثبت‌شده به‌روز می‌شوند.';
+}
+
+/**
+ * TD-1341 (M1): «تکمیل رزرو» تا ردیفی از فهرست به هیچ کالایی نمی‌رسد رزروی را آزاد نمی‌کند، چون شاید همان ردیف نیاز کالایی
+ * باشد که رزروش آزاد می‌شد (کد یا نامش عوض شده یا با «ي» و «ی» دیگری نوشته شده). ردیف بی کالا رزرو تازه را نمی‌بندد: ردیفی که
+ * کالایش هنوز در انبار تعریف نشده، حالت عادی پروژه است.
+ */
+export function reconcileBlockedByUnmatched(preview: Pick<ReservationReconcilePreview, 'lines' | 'unmatchedRows'>): boolean {
+  return (preview.unmatchedRows?.length ?? 0) > 0 && preview.lines.some(l => reservationLineChange(l) === 'release');
+}
+
+/** نام ردیف بی کالا برای پیام و پنجره */
+export function unmatchedRowLabel(row: Pick<ReservationReconcileUnmatchedRow, 'code' | 'name'>): string {
+  if (row.name && row.code) return `«${row.name}» (${row.code})`;
+  return `«${row.name || row.code}»`;
+}
+
+export const UNMATCHED_ROWS_NOTE = 'کد و نام این ردیف‌ها به هیچ کالای انبار نمی‌رسد، پس رزروی نمی‌گیرند.';
+
+export const UNMATCHED_ROWS_BLOCK_NOTE =
+  'تا این ردیف‌ها در فهرست مواد درست نشوند یا کالایشان در انبار تعریف نشود، هیچ رزروی آزاد نمی‌شود؛ شاید یکی از همین ردیف‌ها نیاز کالایی باشد که رزروش آزاد می‌شد.';
+
+const UNMATCHED_ROWS_SHOWN = 10;
+
+/** پیام ۴۲۲ `PROJECT_RESERVATION_ROWS_UNMATCHED` با نام ردیف‌ها */
+export function unmatchedRowsRefusalMessage(rows: ReadonlyArray<Pick<ReservationReconcileUnmatchedRow, 'code' | 'name'>>): string {
+  const shown = rows.slice(0, UNMATCHED_ROWS_SHOWN).map(unmatchedRowLabel).join('، ');
+  const more = rows.length > UNMATCHED_ROWS_SHOWN ? ` و ${formatPersianNumber(rows.length - UNMATCHED_ROWS_SHOWN)} ردیف دیگر` : '';
+  return `این ردیف‌های فهرست مواد به هیچ کالای انبار نمی‌رسند: ${shown}${more}. ${UNMATCHED_ROWS_BLOCK_NOTE}`;
 }

@@ -3,8 +3,9 @@ import { RefreshCw, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ApiError, fetchJson } from '../../api';
 import {
-  reservationLineChange, reservationLineChangeText, reservationReconcileSummary,
-  type ReservationReconcileLine, type ReservationReconcilePreview, type ReservationReconcileResult,
+  UNMATCHED_ROWS_BLOCK_NOTE, UNMATCHED_ROWS_NOTE, reconcileBlockedByUnmatched, reservationLineChange, reservationLineChangeText,
+  reservationReconcileSummary, unmatchedRowLabel,
+  type ReservationReconcileLine, type ReservationReconcilePreview, type ReservationReconcileResult, type ReservationReconcileUnmatchedRow,
 } from '../../lib/projects/reservationReconcile';
 import { PROJECT_VERSION_CONFLICT_MESSAGE } from '../../lib/projects/projectVersion';
 import { OFFLINE_SUBMIT_TITLE, PHONE_SHEET_OVERLAY, PHONE_SHEET_PANEL, PHONE_TAP_TARGET } from '../../lib/pwa/phoneLayout';
@@ -37,6 +38,24 @@ function LineRow({ line }: { line: ReservationReconcileLine }): React.ReactEleme
   );
 }
 
+/** TD-1341 (M1): ردیف‌های فهرست که به هیچ کالای انبار نمی‌رسند، جدا از جدول کالاها */
+function UnmatchedRows({ rows, blocked }: { rows: ReservationReconcileUnmatchedRow[]; blocked: boolean }): React.ReactElement {
+  return (
+    <div data-reconcile-unmatched className="border border-rose-200 bg-rose-50 rounded-xl p-3 space-y-2">
+      <p className="font-bold text-rose-800">ردیف‌هایی که به هیچ کالای انبار نمی‌رسند</p>
+      <p className="text-rose-700">{UNMATCHED_ROWS_NOTE}</p>
+      {blocked && <p className="text-rose-700 font-bold" role="alert">{UNMATCHED_ROWS_BLOCK_NOTE}</p>}
+      <ul className="space-y-1">
+        {rows.map((row, idx) => (
+          <li key={`${row.section ?? ''}|${row.code}|${row.name}|${idx}`} className="text-slate-700">
+            {unmatchedRowLabel(row)}: {formatPersianNumber(row.qty)} {row.unit}{row.section ? ` در «${row.section}»` : ''}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 interface DialogProps {
   projectId: number;
   /** نسخه‌ای که زبانهٔ مواد از آن ساخته شده؛ بی نسخه ثبت نمی‌شود */
@@ -56,6 +75,8 @@ export function ReservationReconcileDialog({ projectId, version, initialPreview,
   const [applying, setApplying] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const staleVersion = preview.version !== version;
+  const unmatchedRows = preview.unmatchedRows ?? [];
+  const blocked = reconcileBlockedByUnmatched(preview);
   const closeIfIdle = () => { if (!applying) onClose(); };
 
   const apply = async () => {
@@ -84,7 +105,7 @@ export function ReservationReconcileDialog({ projectId, version, initialPreview,
     }
   };
 
-  const confirmTitle = !online ? OFFLINE_SUBMIT_TITLE : staleVersion ? PROJECT_VERSION_CONFLICT_MESSAGE : undefined;
+  const confirmTitle = !online ? OFFLINE_SUBMIT_TITLE : staleVersion ? PROJECT_VERSION_CONFLICT_MESSAGE : blocked ? UNMATCHED_ROWS_BLOCK_NOTE : undefined;
   return (
     <div className={PHONE_SHEET_OVERLAY} role="dialog" aria-modal="true" aria-label="تکمیل رزرو با فهرست مواد">
       <DialogLayer onClose={closeIfIdle} disabled={applying} />
@@ -100,6 +121,7 @@ export function ReservationReconcileDialog({ projectId, version, initialPreview,
           </p>
           {notice && <p className="text-rose-600 font-bold" role="alert">{notice}</p>}
           {staleVersion && !notice && <p className="text-rose-600 font-bold" role="alert">{PROJECT_VERSION_CONFLICT_MESSAGE}</p>}
+          {unmatchedRows.length > 0 && <UnmatchedRows rows={unmatchedRows} blocked={blocked} />}
           {preview.lines.length > 0 && (
             <div className="overflow-x-auto border border-slate-200 rounded-xl">
               <table className="w-full text-right">
@@ -124,7 +146,7 @@ export function ReservationReconcileDialog({ projectId, version, initialPreview,
           <button
             type="button"
             onClick={() => { void apply(); }}
-            disabled={!preview.hasChanges || applying || !online || staleVersion}
+            disabled={!preview.hasChanges || applying || !online || staleVersion || blocked}
             title={confirmTitle}
             className={`px-4 rounded-lg bg-purple-600 text-white text-xs font-bold disabled:opacity-40 ${PHONE_TAP_TARGET}`}
           >
