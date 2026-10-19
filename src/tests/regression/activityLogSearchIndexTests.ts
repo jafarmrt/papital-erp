@@ -3,11 +3,14 @@ import { inArray, sql } from 'drizzle-orm';
 import { TestCaseResult } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { activityLogs, activityLogSearchText } from '../../db/schema.js';
+import { ACTIVITY_LOG_SEARCH_WORK_MEM_MB, withActivityLogSearchMemory } from '../../services/system/activityLogQuery.service.js';
 import { runCase } from './speedConsistencyV102Tests.js';
 
 /**
  * 10.2 package 11 part 2d (OBS-R1-32, TD-1324): the activity log text search is one expression over four columns that a
- * GIN trigram index serves (migration 0132). The case is red on the code before the index.
+ * GIN trigram index serves (migration 0132). The case is red on the code before the index. The review of #340 added: a
+ * typed unit separator never joins two columns, NUL is dropped (it answered 500), and a search page is read with a larger
+ * work_mem in its own transaction, so a phrase of common words does not turn the bitmap lossy.
  */
 type ShouldRun = (id: string, ...extra: string[]) => boolean;
 
@@ -46,11 +49,25 @@ export async function runActivityLogSearchIndexTests(shouldRun: ShouldRun): Prom
           [`${tag}desc`, 1], [`${tag}USER`, 1], [`${tag}full`, 1], [`${tag}entity`, 1], [tag, 2],
           // the end of one column and the start of the next are never one match
           ['ends with abc' + `${tag}full`, 0], ['test person' + `${tag}user`, 0],
+          // a typed separator is dropped, so it cannot stand for the boundary between two columns; NUL is dropped too
+          ['tail\x1ftest person', 0], [`first ${tag}desc tail\x1ftest person`, 0], [`${tag}\u0000desc`, 1],
         ];
         for (const [search, expected] of cases) {
           const got = await total(search);
           if (got !== expected) wrong.push(`the search ${JSON.stringify(search)} found ${got}, expected ${expected}`);
         }
+        // a search of separators and NUL only is no search: the whole list, like an empty search box
+        const all = await total('');
+        for (const search of ['\x1f', '\u0000', '\x1f\u0000\x1f']) {
+          const got = await total(search);
+          if (got !== all) wrong.push(`the search ${JSON.stringify(search)} found ${got}, expected the unfiltered ${all}`);
+        }
+
+        const inside = await withActivityLogSearchMemory(async (db) =>
+          String((await db.execute(sql`SELECT current_setting('work_mem') AS v`)).rows[0]?.v));
+        if (inside !== `${ACTIVITY_LOG_SEARCH_WORK_MEM_MB}MB`) wrong.push(`a search page is read with work_mem ${inside}, expected ${ACTIVITY_LOG_SEARCH_WORK_MEM_MB}MB`);
+        const outside = String((await orm.execute(sql`SELECT current_setting('work_mem') AS v`)).rows[0]?.v);
+        if (outside === `${ACTIVITY_LOG_SEARCH_WORK_MEM_MB}MB`) wrong.push('the larger work_mem stayed on a pool connection after the search transaction');
       });
     if (logIds.length > 0) await orm.delete(activityLogs).where(inArray(activityLogs.id, logIds)).catch(() => undefined);
   }
