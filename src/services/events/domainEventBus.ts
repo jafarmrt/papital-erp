@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events';
+import { LIVE_EVENT_BUFFER_SIZE } from '../../lib/events/liveEventBuffer.js';
 import { logger } from '../../middleware/logger.js';
 import { getRequestContext, requestContextStorage, type RequestContextStore } from '../../lib/requestContext.js';
 import { 
@@ -27,7 +28,7 @@ interface RegisteredHandler {
 
 class DomainEventBusEmitter extends EventEmitter {
   private recentEvents: BaseDomainEvent[] = [];
-  private readonly MAX_RECENT_EVENTS = 200;
+  private readonly MAX_RECENT_EVENTS = LIVE_EVENT_BUFFER_SIZE;
   private eventCounts: Record<string, number> = {};
   /** v7.0.25 (TD-183): ثبت خام هندلرها (بدون بلعیدن خطا) برای دیسپچ قابل‌ردیابی Outbox */
   private handlerRegistry = new Map<string, RegisteredHandler[]>();

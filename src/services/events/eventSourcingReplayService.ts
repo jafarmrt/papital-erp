@@ -29,6 +29,9 @@ export interface TimelineEventItem {
   changes?: unknown;
 }
 
+/** TD-1323: the most entities the timeline's picker reads at once */
+export const AGGREGATE_SEARCH_MAX_LIMIT = 50;
+
 export class EventSourcingReplayService {
   /**
    * Returns list of supported aggregate types with metadata and sample items.

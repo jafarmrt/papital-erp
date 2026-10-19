@@ -232,10 +232,10 @@ export const QUERY_KEYS = {
   events: {
     all: ['events'] as const,
     list: (filter?: string) => ['events', 'list', filter ?? 'ALL'] as const,
-    outbox: (status?: string) => ['events', 'outbox', status ?? 'ALL'] as const,
+    outbox: (status?: string, page?: number, search?: string) => ['events', 'outbox', status ?? 'ALL', page ?? 1, search ?? ''] as const,
     outboxStats: () => ['events', 'outbox-stats'] as const,
     actionRules: () => ['events', 'action-rules'] as const,
-    actionLogs: (limit?: number) => ['events', 'action-logs', limit ?? 50] as const,
+    actionLogs: (page?: number) => ['events', 'action-logs', page ?? 1] as const,
     actionStats: () => ['events', 'action-stats'] as const,
   },
 } as const;
