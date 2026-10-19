@@ -2,7 +2,7 @@
 
 سیستم یکپارچه مدیریت کارگاه تولیدی: انبارداری با کاردکس رویدادمحور، فاکتور و پیش‌فاکتور، حسابداری دوبل (کدینگ ۴ سطحی، دفتر روزنامه، تراز آزمایشی)، خزانه‌داری و چک صیادی، CRM و قیف فروش، کنترل پروژه‌های تولید با BOM، منابع انسانی و حقوق و دستمزد، موتور گردش کار (ورکفلو) با کارتابل تاییدات، گذرگاه رویدادها (Outbox/DLQ/Webhook) و گزارش‌های BI.
 
-> **نسخه فعلی:** سری فعال `v10.x.y` (نسخه مستقر: `v10.2.18`) — نقشه راه: `V10_MASTER_ROADMAP.md` (سری‌های بسته‌شده: `V9_MASTER_ROADMAP.md`، `V8_MASTER_ROADMAP.md`، `V7_MASTER_ROADMAP.md`) • تاریخچه تغییرات: `CHANGELOG.md` + `src/data/changelogs/10.ts`
+> **نسخه فعلی:** سری فعال `v10.x.y` (نسخه مستقر: `v10.2.19`) — نقشه راه: `V10_MASTER_ROADMAP.md` (سری‌های بسته‌شده: `V9_MASTER_ROADMAP.md`، `V8_MASTER_ROADMAP.md`، `V7_MASTER_ROADMAP.md`) • تاریخچه تغییرات: `CHANGELOG.md` + `src/data/changelogs/10.ts`
 
 ---
 
@@ -185,14 +185,16 @@ curl -fsS http://localhost:3000/health/ready
 
 ### Rollback نسخه اپلیکیشن
 
-`update.sh` در شکست، گام‌هایی مانند این‌ها را با شناسه commit پیش از به‌روزرسانی چاپ می‌کند. پس از یک به‌روزرسانی موفق، commit پیشین `HEAD@{1}` است (`git reflog -5` نشانش می‌دهد). پس از برگشت، تا مشکل نسخهٔ تازه رفع نشده `update.sh` را دوباره اجرا نکنید: همان commit دوباره دریافت می‌شود.
+`update.sh` نسخهٔ تازه را در پوشهٔ کناری `.build-next` نصب و ساخته می‌کند و `dist/` و `node_modules/` سرویس در حال کار را فقط درست پیش از راه‌اندازی دوباره جابه‌جا می‌کند؛ ساخت قبلی به نام `dist.prev/` و `node_modules.prev/` تا به‌روزرسانی بعدی می‌ماند و در به‌روزرسانی دستی (`--source` / `--zip`) کد قبلی هم در `.previous-source/` نگه داشته می‌شود. در شکست پیش از جابه‌جایی، ساخت در حال کار دست نخورده و فقط گام کد لازم است. `update.sh` در شکست، گام‌هایی مانند این‌ها را با شناسه commit پیش از به‌روزرسانی چاپ می‌کند. پس از یک به‌روزرسانی موفق، commit پیشین `HEAD@{1}` است (`git reflog -5` نشانش می‌دهد). پس از برگشت، تا مشکل نسخهٔ تازه رفع نشده `update.sh` را دوباره اجرا نکنید: همان commit دوباره دریافت می‌شود.
 
 ```bash
 cd /opt/papital-erp
 git reflog -5                           # HEAD@{1}: commit پیش از به‌روزرسانی
 sudo systemctl stop papital-erp
+rm -rf dist node_modules && mv dist.prev dist && mv node_modules.prev node_modules   # ساخت قبلی، بی ساخت دوباره
 git reset --hard <previous-commit>      # خود شاخه برمی‌گردد؛ checkout یک commit شاخه را جدا می‌کند و git pull بعدی شکست می‌خورد
-NODE_ENV=development npm ci --include=dev && npm run build
+# به‌روزرسانی دستی به جای git reset:  bash scripts/update-steps.sh restore-source /opt/papital-erp
+# بی dist.prev/ (مثلاً پس از دو برگشت پیاپی):  NODE_ENV=development npm ci --include=dev && npm run build
 sudo systemctl start papital-erp
 curl -fsS http://localhost:3000/health/ready
 ```

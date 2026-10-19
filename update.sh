@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # ============================================================
 #  Papital ERP — Updater
-#  Backs up the database, pulls the latest source, rebuilds,
-#  restarts the service and verifies health.
+#  Backs up the database, pulls the latest source, installs and
+#  builds it in a side folder (.build-next) while the service keeps
+#  running, swaps the build in, restarts the service and verifies
+#  health. The previous build stays as dist.prev/ and
+#  node_modules.prev/ (and, for a manual update, the previous source
+#  as .previous-source/) for a rollback.
 #  Migrations run automatically at startup (NEVER db:push).
 #
 #  Usage:
@@ -66,19 +70,35 @@ for key in BACKUP_DIR PRE_DEPLOY_RETENTION_DAYS RESTORE_ADMIN_URL; do
   fi
 done
 UPDATE_STARTED="$(date '+%Y-%m-%d %H:%M:%S')"
+# v10.2.19 (OBS-R1-22 / OBS-R1-17): the side-folder build and the manual source sync
+[ -f scripts/update-steps.sh ] || die "scripts/update-steps.sh not found in $APP_DIR"
+# shellcheck source=scripts/update-steps.sh
+source scripts/update-steps.sh
+BUILD_DIR=""
+BUILD_SWAPPED=0
 
 # v9.0.123 (TD-586): from the moment the source changes, any failure prints the rollback steps
 SOURCE_CHANGED=0
 HINT_SHOWN=0
+# v10.2.19 (OBS-R1-22): the build in place is the running one until the swap, so only the source goes back before it
+previous_source_step() {
+  if [ "$UPDATE_MODE" = "git" ] && [ -n "$PREVIOUS_COMMIT" ]; then
+    # v9.0.181 (TD-603): reset the branch itself; a checkout of the commit detaches HEAD and the next git pull fails
+    echo "git reset --hard ${PREVIOUS_COMMIT}"
+  elif [ "$UPDATE_MODE" = "manual" ]; then
+    echo "bash scripts/update-steps.sh restore-source ${APP_DIR}"
+  else
+    echo "put the previous source back"
+  fi
+}
 rollback_hint() {
   HINT_SHOWN=1
   log "Rollback:"
   log "  1) ${SUDO:+sudo }systemctl stop ${SERVICE_NAME}"
-  if [ "$UPDATE_MODE" = "git" ] && [ -n "$PREVIOUS_COMMIT" ]; then
-    # v9.0.181 (TD-603): reset the branch itself; a checkout of the commit detaches HEAD and the next git pull fails
-    log "  2) git reset --hard ${PREVIOUS_COMMIT} && NODE_ENV=development npm ci --include=dev && npm run build"
+  if [ "$BUILD_SWAPPED" -eq 1 ]; then
+    log "  2) cd ${APP_DIR} && $(update_restore_build_command) && $(previous_source_step)"
   else
-    log "  2) put the previous source back and rebuild (npm ci --include=dev && npm run build)"
+    log "  2) cd ${APP_DIR} && $(previous_source_step)   (the previous build is still in dist/ and node_modules/)"
   fi
   log "  3) ONLY if the new version has accepted no writes: restoring the backup erases every change made after it"
   log "     was taken (before ${UPDATE_STARTED}). If users have already worked on the new version, keep the database."
@@ -92,6 +112,8 @@ rollback_hint() {
 on_exit() {
   local rc=$?
   if [ "$rc" -ne 0 ] && [ "$SOURCE_CHANGED" -eq 1 ] && [ "$HINT_SHOWN" -eq 0 ]; then rollback_hint; fi
+  # the side folder holds a second node_modules; it is removed whatever happened (the next run builds it again)
+  if [ -n "$BUILD_DIR" ]; then rm -rf "$BUILD_DIR"; fi
 }
 trap on_exit EXIT
 
@@ -177,33 +199,31 @@ if [ "$UPDATE_MODE" = "git" ]; then
 else
   log "[2/6] Syncing source from $SOURCE_DIR (state-preserving rsync)..."
   command -v rsync >/dev/null 2>&1 || die "rsync is required for manual updates (apt-get install -y rsync)."
+  # v10.2.19 (OBS-R1-17): the current source is kept for a rollback, then the new one replaces it with --delete, so
+  # files the new version no longer has are removed; live state (.env, git history, logs, uploads, media library,
+  # backups, db data, node_modules, dist, installer logs) is excluded, neither copied nor deleted
+  update_save_previous_source "$APP_DIR" || die "Could not keep the current source in ${UPDATE_PREVIOUS_SOURCE_NAME}/. Live installation is untouched."
+  success "Current source kept in ${APP_DIR}/${UPDATE_PREVIOUS_SOURCE_NAME}"
   SOURCE_CHANGED=1
-  # Preserve live state: .env, git history, logs, uploads, backups, db data, node_modules, dist, installer logs
-  rsync -a \
-    --exclude='.env' \
-    --exclude='.git/' \
-    --exclude='logs/' \
-    --exclude='install-*.log' \
-    --exclude='update-*.log' \
-    --exclude='domain-setup-*.log' \
-    --exclude='.pgdata/' \
-    --exclude='backups/' \
-    --exclude='public/uploads/' \
-    --exclude='node_modules/' \
-    --exclude='dist/' \
-    --exclude='*.zip' \
-    "$SOURCE_DIR"/ "$APP_DIR"/ || die "Source sync failed. Live installation is untouched — investigate and retry."
+  update_sync_source "$SOURCE_DIR" "$APP_DIR" || die "Source sync failed. The running build is untouched; put the previous source back and retry."
   if [ -n "$SOURCE_ZIP" ]; then
     rm -rf "${STAGE_DIR:-}" && success "Temporary extraction directory removed."
   fi
   success "Source synced."
 fi
 
-# ---------- 3) Install & build ----------
+# ---------- 3) Install & build in a side folder ----------
+# v10.2.19 (OBS-R1-22): npm ci and the build used to run in place: npm ci replaced node_modules under the running
+# process, and the old server served the new dist/index.html with its old API until the restart. Now both run in
+# .build-next; the running dist/ and node_modules/ change only at the swap right before the restart.
 # NOTE: NODE_ENV=production (from the environment of an operator shell or CI) makes
 # npm omit devDependencies — but the build (vite/esbuild) REQUIRES them (v4.0.30 split).
 # Force full install for the build step only; runtime keeps NODE_ENV=production.
-log "[3/6] Installing dependencies (npm ci --include=dev)..."
+command -v rsync >/dev/null 2>&1 || die "rsync is required to build the update in a side folder (apt-get install -y rsync)."
+BUILD_COMMIT="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+BUILD_DIR="$(update_prepare_build_dir "$APP_DIR")" || die "Could not prepare the side folder ${UPDATE_BUILD_DIR_NAME}/."
+cd "$BUILD_DIR"
+log "[3/6] Installing dependencies in ${BUILD_DIR} (npm ci --include=dev)..."
 # AI Studio pulls delete package-lock.json; npm ci cannot run without it.
 if [ ! -f package-lock.json ]; then
   warn "package-lock.json missing — regenerating from package.json (npm install --package-lock-only)..."
@@ -216,18 +236,12 @@ NODE_ENV=development npm ci --include=dev || {
     || die "Lockfile regeneration failed."
   NODE_ENV=development npm ci --include=dev || die "npm ci failed even after lockfile regeneration."
 }
-log "[4/6] Building application..."
-# v9.0.123 (TD-586): vite empties dist/ before esbuild writes dist/server.cjs; a failed build puts the previous
-# build back so the next restart of the service still finds it
-rm -rf dist.prev
-[ ! -d dist ] || cp -a dist dist.prev
-if ! npm run build; then
-  if [ -d dist.prev ]; then
-    rm -rf dist && mv dist.prev dist && warn "Build failed - the previous build was put back in dist/."
-  fi
-  die "Build failed - the service was NOT restarted and still runs the previous build."
+log "[4/6] Building application in ${BUILD_DIR}..."
+# the side folder has no .git: the build info takes the commit of the application directory
+rm -rf dist
+if ! GIT_COMMIT_SHA="$BUILD_COMMIT" npm run build; then
+  die "Build failed - the service was NOT restarted and still runs the previous build, untouched in dist/."
 fi
-rm -rf dist.prev
 success "Build completed."
 
 # ---------- 3b) Upgrade rehearsal (v8.0.88, TD-367; --rehearse) ----------
@@ -236,18 +250,21 @@ success "Build completed."
 if [ "$REHEARSE" -eq 1 ]; then
   [ -n "$PRE_DEPLOY_DUMP" ] || die "--rehearse: no pre-deployment backup found in ${BACKUP_DIR:-/var/backups/erp}"
   log "[4b/6] Rehearsing this update's migrations on a copy of $PRE_DEPLOY_DUMP ..."
-  if ! bash scripts/upgrade-rehearsal.sh "$PRE_DEPLOY_DUMP"; then
+  # the new code's own rehearsal and dependencies, from the side folder (its .env links to the live one)
+  if ! APP_DIR="$BUILD_DIR" bash scripts/upgrade-rehearsal.sh "$PRE_DEPLOY_DUMP"; then
     HINT_SHOWN=1
-    log "The service was NOT restarted and still runs the previous build; the database is unchanged."
-    log "Put the previous source back before anything restarts the service:"
-    if [ "$UPDATE_MODE" = "git" ] && [ -n "$PREVIOUS_COMMIT" ]; then
-      log "  git reset --hard ${PREVIOUS_COMMIT} && NODE_ENV=development npm ci --include=dev && npm run build"
-    else
-      log "  restore the previous source tree and run: NODE_ENV=development npm ci --include=dev && npm run build"
-    fi
+    log "The service was NOT restarted and still runs the previous build, untouched; the database is unchanged."
+    log "Put the previous source back: cd ${APP_DIR} && $(previous_source_step)"
     die "Upgrade rehearsal failed — update NOT applied."
   fi
 fi
+
+# ---------- 3c) Swap the new build in ----------
+cd "$APP_DIR"
+log "[4c/6] Swapping the new build in (the previous one stays as dist.prev/ and node_modules.prev/)..."
+update_swap_build "$APP_DIR" || die "Could not swap the new build in."
+BUILD_SWAPPED=1
+success "New build in place."
 
 # ---------- 4) Restart service ----------
 PKG_VERSION="$(node -p "require('./package.json').version" 2>/dev/null || echo '')"
