@@ -116,6 +116,44 @@ async function orphanUploadsCase(): Promise<string> {
     const purged = await cleanupOrphanUploads({ apply: true, uploadsDir: dir, today: later, confirmed: { quarantine: [], purge: [heldName] } });
     if (purged.expired.removed !== 1 || fs.existsSync(path.join(held, files.auditOnly))) wrong.push(`removed ${purged.expired.removed}, expected 1`);
 
+    // a held copy of a file already back with the same bytes is removed; a different one is a failure, never overwritten
+    const later2 = '2026-11-20';
+    const dupDir = path.join(dir, '.orphaned', later2);
+    fs.mkdirSync(dupDir, { recursive: true });
+    const same = fileName();
+    const differs = fileName();
+    for (const f of [same, differs]) {
+      fs.writeFileSync(path.join(dir, f), 'top');
+      fs.utimesSync(path.join(dir, f), old, old);
+    }
+    fs.writeFileSync(path.join(dupDir, same), 'top');
+    fs.writeFileSync(path.join(dupDir, differs), 'other');
+    await orm.update(transfers).set({ notes: `${same} ${differs}` }).where(eq(transfers.code, codes[3]));
+    const dupRun = await cleanupOrphanUploads({ apply: true, uploadsDir: dir, today: later2, confirmed: { quarantine: [], purge: [] } });
+    if (fs.existsSync(path.join(dupDir, same)) || fs.readFileSync(path.join(dir, same), 'utf8') !== 'top') wrong.push('the identical held copy was not removed');
+    if (!fs.existsSync(path.join(dupDir, differs)) || fs.readFileSync(path.join(dir, differs), 'utf8') !== 'top') wrong.push('a different held copy was moved or overwritten');
+    if (!dupRun.failures.some(f => f.name === `${later2}/${differs}` && f.code === 'TARGET_EXISTS_DIFFERENT')) wrong.push(`duplicate failures ${JSON.stringify(dupRun.failures)}`);
+
+    // a day folder that is a link to another place is refused before any file moves
+    const linkDir = fs.mkdtempSync(path.join(os.tmpdir(), 'orphan-uploads-link-'));
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'orphan-uploads-outside-'));
+    try {
+      const stray = fileName();
+      fs.writeFileSync(path.join(linkDir, stray), 'x');
+      fs.utimesSync(path.join(linkDir, stray), old, old);
+      fs.mkdirSync(path.join(linkDir, '.orphaned'));
+      fs.symlinkSync(outside, path.join(linkDir, '.orphaned', today));
+      let code = '';
+      await cleanupOrphanUploads({ apply: true, uploadsDir: linkDir, today, confirmed: { quarantine: [stray], purge: [] } })
+        .catch((err: unknown) => { code = String((err as { code?: string }).code); });
+      if (code !== 'ORPHAN_UPLOADS_QUARANTINE_INVALID' || !fs.existsSync(path.join(linkDir, stray)) || fs.readdirSync(outside).length > 0) {
+        wrong.push(`a linked day folder answered ${code || 'success'}`);
+      }
+    } finally {
+      fs.rmSync(linkDir, { recursive: true, force: true });
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+
     const audit = await orm.select({ details: activityLogs.details }).from(activityLogs)
       .where(eq(activityLogs.entity, ORPHAN_UPLOAD_AUDIT_ENTITY));
     const ops = audit.map(a => {
@@ -145,5 +183,5 @@ async function orphanUploadsCase(): Promise<string> {
     fs.rmSync(dir, { recursive: true, force: true });
   }
   if (wrong.length > 0) throw new Error(wrong.join('; '));
-  return 'every reference form keeps its file; only confirmed, still unnamed orphans are moved aside, a file named again comes back, a held file is removed after thirty days; young, other-name and sub-folder files stay; each chunk is audited';
+  return 'every reference form keeps its file; only confirmed, still unnamed orphans are moved aside, a file named again comes back, a held file is removed after thirty days, an identical held copy of a file already back is removed and a different one never overwrites it, a linked day folder is refused; young, other-name and sub-folder files stay; each chunk is audited';
 }

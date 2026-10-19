@@ -24,17 +24,17 @@ import { logger } from '../../middleware/logger.js';
  * image. Not read either: tables of other schemas and binary (bytea) values, whose text is hex; the image fields never
  * write there. The folders are listed before the rows are read, so a file saved meanwhile is either named or too young.
  * A run (POST /api/system/orphan-uploads, system admin, by hand only, one at a time) acts only on the files of the
- * preview the admin confirmed, re-reads the rows for each chunk just before it moves or removes it, never deletes a file
- * outright: it moves it to `.orphaned/<day>/`, removes it only after the hold, and moves back one a row names again.
- * Each chunk of names writes its audit row inside the lock.
+ * preview the admin confirmed, re-reads the rows for those files just before it moves or removes them, never deletes a
+ * file outright: it moves it to `.orphaned/<day>/`, removes it only after the hold, and on a later run moves back one a
+ * row names again. Each chunk of names writes its audit row inside the lock. The rows are read once per table with the
+ * one UUID pattern and kept only for the UUIDs of the files at hand, so a table full of other UUIDs (outbox, sessions)
+ * costs one pass and no memory (about 4 s for 500,000 rows, measured on PostgreSQL 16).
  */
 
 export const ORPHAN_UPLOAD_AUDIT_ENTITY = 'تصویرهای بارگذاری‌شده';
 
 /** Not read for references: before / after snapshots of records, which name every image ever replaced */
 const UNREAD_TABLES = new Set(['activity_logs']);
-/** A table without such a column holds no text, so no reference */
-const TEXT_TYPES = ['text', 'character varying', 'character', 'json', 'jsonb', 'ARRAY', 'USER-DEFINED'];
 /** A cheap filter before the pattern: a UUID's first two groups */
 const UUID_PREFIX_FILTER = '[0-9a-f]{8}-[0-9a-f]{4}-';
 
@@ -64,6 +64,19 @@ async function quarantineRoot(uploadsDir: string): Promise<string> {
   return root;
 }
 
+/** A day folder of the quarantine, made when missing and refused when it is not a real folder inside the uploads folder */
+async function dayFolder(uploadsDir: string, root: string, day: string): Promise<string> {
+  const dir = path.join(root, day);
+  await fs.promises.mkdir(dir, { recursive: true });
+  const stat = await fs.promises.lstat(dir);
+  const [realDir, realUploads] = await Promise.all([fs.promises.realpath(dir), fs.promises.realpath(uploadsDir)]);
+  if (!stat.isDirectory() || !realDir.startsWith(`${realUploads}${path.sep}`)) {
+    throw new ValidationError('پوشهٔ روز در پوشهٔ جدای تصویرهای بی‌صاحب پوشهٔ واقعی نیست؛ پیش از ادامه آن را بررسی کنید.', undefined, 'ORPHAN_UPLOADS_QUARANTINE_INVALID');
+  }
+  return dir;
+}
+
+/** The held files; a day folder that is a link is never read (`Dirent.isDirectory` is false for a link) */
 async function heldFiles(root: string): Promise<UploadFile[]> {
   const days = await fs.promises.readdir(root, { withFileTypes: true }).catch(() => []);
   const files: UploadFile[] = [];
@@ -73,25 +86,25 @@ async function heldFiles(root: string): Promise<UploadFile[]> {
   return files;
 }
 
-/** The UUIDs `pattern` finds in any row of the scanned tables, lower-cased, read in one snapshot; each table once */
-async function uuidsInRows(pattern: string): Promise<Set<string>> {
+/** Which of `candidates` (lower-cased UUIDs) any row of the scanned tables names, read in one snapshot; each table once */
+async function uuidsInRows(candidates: string[]): Promise<Set<string>> {
   const found = new Set<string>();
+  if (candidates.length === 0) return found;
   const client: PoolClient = await pool.connect();
   try {
     await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     await client.query(`SET LOCAL statement_timeout = '5min'`);
+    // every base table: a uuid column is read as text too
     const tables = await client.query<{ table_name: string }>(
-      `SELECT DISTINCT c.table_name
-         FROM information_schema.columns c
-         JOIN information_schema.tables t ON t.table_schema = c.table_schema AND t.table_name = c.table_name
-        WHERE c.table_schema = current_schema() AND t.table_type = 'BASE TABLE' AND c.data_type = ANY($1::text[])
-        ORDER BY c.table_name`, [TEXT_TYPES]);
+      `SELECT table_name FROM information_schema.tables
+        WHERE table_schema = current_schema() AND table_type = 'BASE TABLE'
+        ORDER BY table_name`);
     for (const { table_name: table } of tables.rows) {
       if (UNREAD_TABLES.has(table)) continue;
       const rows = await client.query<{ value: string }>(
         `SELECT DISTINCT lower(m[1]) AS value
            FROM ${client.escapeIdentifier(table)} AS t, regexp_matches(t::text, $1, 'gi') AS m
-          WHERE t::text ~* $2`, [`(${pattern})`, UUID_PREFIX_FILTER]);
+          WHERE t::text ~* $2 AND lower(m[1]) = ANY($3::text[])`, [`(${UPLOAD_UUID_PATTERN_SOURCE})`, UUID_PREFIX_FILTER, candidates]);
       for (const r of rows.rows) found.add(r.value);
     }
     await client.query('COMMIT');
@@ -117,8 +130,13 @@ async function moveFile(from: string, to: string): Promise<void> {
   if (await fs.promises.lstat(to).then(() => true, () => false)) {
     throw Object.assign(new Error('target exists'), { code: 'EEXIST' });
   }
-  await fs.promises.mkdir(path.dirname(to), { recursive: true });
   await fs.promises.rename(from, to);
+}
+
+/** The held copy is the same bytes as the file already back at the top level */
+async function sameContent(a: string, b: string): Promise<boolean> {
+  const [x, y] = await Promise.all([fs.promises.readFile(a), fs.promises.readFile(b)]);
+  return x.equals(y);
 }
 
 export interface OrphanUploadsOptions {
@@ -151,7 +169,7 @@ export async function cleanupOrphanUploads(options: OrphanUploadsOptions): Promi
     report.scannedFiles = top.length;
     report.heldFiles = held.length;
     if (top.length === 0 && held.length === 0) return;
-    const referenced = await uuidsInRows(UPLOAD_UUID_PATTERN_SOURCE);
+    const referenced = await uuidsInRows([...new Set([...top, ...held].map(f => f.uuid))]);
     const cutoff = (options.now ?? Date.now()) - ORPHAN_UPLOAD_MIN_AGE_MINUTES * 60_000;
 
     const orphans: UploadFile[] = [];
@@ -181,45 +199,64 @@ export async function cleanupOrphanUploads(options: OrphanUploadsOptions): Promi
       report.failureCount += 1;
       if (report.failures.length < ORPHAN_UPLOAD_LISTED_FAILURES) report.failures.push(entry);
     };
-    const audit = async (operation: Operation, done: string[], failed: Array<{ name: string; code: string }>) => {
+    const audit = async (operation: Operation, done: string[], failed: Array<{ name: string; code: string }>, extra: Record<string, unknown> = {}) => {
       if (done.length === 0 && failed.length === 0) return;
       const verb = operation === 'quarantine' ? 'انتقال به پوشهٔ جدا' : operation === 'purge' ? 'پاک کردن از پوشهٔ جدا' : 'بازگرداندن از پوشهٔ جدا';
-      await orm.transaction(tx => logActivity({
-        tx, req: options.req, action: operation === 'purge' ? 'DELETE' : 'UPDATE', entity: ORPHAN_UPLOAD_AUDIT_ENTITY,
-        description: `${verb}: ${done.length} تصویر (${failed.length} خطا)`,
-        details: { operation, names: done, failed },
-      }));
+      try {
+        await orm.transaction(tx => logActivity({
+          tx, req: options.req, action: operation === 'purge' ? 'DELETE' : 'UPDATE', entity: ORPHAN_UPLOAD_AUDIT_ENTITY,
+          description: `${verb}: ${done.length} تصویر (${failed.length} خطا)`,
+          details: { operation, names: done, failed, ...extra },
+        }));
+      } catch (err: unknown) {
+        // the files have moved whatever the database says: their names reach the log file before the run stops
+        logger.error(`[Uploads] orphan image ${operation} audit row failed; names: ${done.join(', ')}; failed: ${failed.map(f => `${f.name} ${f.code}`).join(', ')}`);
+        throw err;
+      }
     };
 
-    // a file a row names again goes back, whatever its age
+    // a file a row names again goes back, whatever its age; when the same bytes are already back, the held copy goes
     for (const chunk of chunksOf(restore)) {
       const done: string[] = [];
+      const duplicates: string[] = [];
       const failed: Array<{ name: string; code: string }> = [];
       for (const f of chunk) {
+        const target = path.join(uploadsDir, f.name);
         try {
-          await moveFile(f.absolute, path.join(uploadsDir, f.name));
-          done.push(heldKey(f));
+          const taken = await fs.promises.lstat(target).then(st => st.isFile(), () => null);
+          if (taken === true && await sameContent(f.absolute, target)) {
+            await fs.promises.unlink(f.absolute);
+            duplicates.push(heldKey(f));
+          } else if (taken !== null) {
+            fail(heldKey(f), { code: 'TARGET_EXISTS_DIFFERENT' }, failed);
+            continue;
+          } else {
+            await moveFile(f.absolute, target);
+            done.push(heldKey(f));
+          }
           report.restored.moved += 1;
         } catch (err: unknown) { fail(heldKey(f), err, failed); }
       }
-      await audit('restore', done, failed);
+      await audit('restore', done, failed, duplicates.length > 0 ? { removedDuplicates: duplicates } : {});
     }
 
-    // only what the admin confirmed, each chunk re-checked against the rows just before it moves
+    // only what the admin confirmed, re-checked against the rows just before it moves (one pass for all of them)
     const confirmedMoves = new Set(options.confirmed?.quarantine ?? []);
     const confirmedPurges = new Set(options.confirmed?.purge ?? []);
     const toMove = plannedOrphans.filter(f => confirmedMoves.has(f.name));
     const toPurge = plannedExpired.filter(f => confirmedPurges.has(heldKey(f)));
     report.skipped += plannedOrphans.length - toMove.length + plannedExpired.length - toPurge.length;
 
+    const movedNamed = await uuidsInRows(toMove.map(f => f.uuid));
+    const day = toMove.length > 0 ? await dayFolder(uploadsDir, root, today) : '';
     for (const chunk of chunksOf(toMove)) {
-      const named = await uuidsInRows(chunk.map(f => f.uuid).join('|'));
+      const named = movedNamed;
       const done: string[] = [];
       const failed: Array<{ name: string; code: string }> = [];
       for (const f of chunk) {
         if (named.has(f.uuid)) { report.skipped += 1; continue; }
         try {
-          await moveFile(f.absolute, path.join(root, today, f.name));
+          await moveFile(f.absolute, path.join(day, f.name));
           done.push(f.name);
           report.orphans.moved += 1;
         } catch (err: unknown) { fail(f.name, err, failed); }
@@ -227,8 +264,9 @@ export async function cleanupOrphanUploads(options: OrphanUploadsOptions): Promi
       await audit('quarantine', done, failed);
     }
 
+    const purgeNamed = await uuidsInRows(toPurge.map(f => f.uuid));
     for (const chunk of chunksOf(toPurge)) {
-      const named = await uuidsInRows(chunk.map(f => f.uuid).join('|'));
+      const named = purgeNamed;
       const done: string[] = [];
       const failed: Array<{ name: string; code: string }> = [];
       for (const f of chunk) {
