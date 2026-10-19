@@ -279,7 +279,7 @@ export async function checkActivityLogTehranDay(): Promise<string[]> {
 export async function checkMovementTrendJalaliMonths(wh: string): Promise<string[]> {
   const request = (await import('supertest')).default;
   const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
-  const { invalidateDashboardBiCache } = await import('../../routes/dashboard.routes.js');
+  const { invalidateDashboardBiCache } = await import('../../services/inventory/warehouseDashboard.service.js');
   const app = await getTestApp();
   const admin = await getAdminSession();
   const [jy, jm] = isoToJalaliDate(await businessTodayIsoDate()).split('/').map(Number);

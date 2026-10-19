@@ -20,7 +20,7 @@ export async function runWarehouseItemCountTests(shouldRun: (id: string, ...extr
   try {
     const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
     const { createTestItem, createTestWarehouse } = await import('../fixtures/factories.js');
-    const { invalidateDashboardBiCache } = await import('../../routes/dashboard.routes.js');
+    const { invalidateDashboardBiCache } = await import('../../services/inventory/warehouseDashboard.service.js');
     const app = await getTestApp();
     const admin = await getAdminSession();
     const wh = await createTestWarehouse();

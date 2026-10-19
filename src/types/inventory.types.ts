@@ -86,7 +86,6 @@ export interface Transaction {
 export interface StatInfo {
   totalProducts: number;
   totalMaterials: number;
-  lowStock: number;
   recentTx: number;
 }
 

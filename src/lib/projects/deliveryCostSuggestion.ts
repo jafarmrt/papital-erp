@@ -162,10 +162,13 @@ export function deliveryCostOutlook(report: DeliveryCostReport | null | undefine
  * v10.2.3 (TD-1290، بازبینی بستهٔ ۳): ماندهٔ ۱۴۰۲ پس از گرد کردن به ریال منفی می‌شود؛ پیشنهاد چهاررقمی (۲۰۰۰ ÷ ۳) ماندهٔ
  * −۰٫۰۰۰۱ می‌دهد که هشدار نمی‌خواهد
  */
-export const wipOverdrawn = (outlook: Pick<DeliveryCostOutlook, 'remaining'>): boolean => Math.round(outlook.remaining) < 0;
+export const wipOverdrawn = (outlook: Pick<DeliveryCostOutlook, 'remaining'>): boolean => fin(outlook.remaining).round(0).isNegative();
 
-/** ماندهٔ ۱۴۰۲ پس از گرد کردن به ریال بیش از صفر است */
-export const wipLeftOver = (outlook: Pick<DeliveryCostOutlook, 'remaining'>): boolean => Math.round(outlook.remaining) > 0;
+/**
+ * ماندهٔ ۱۴۰۲ پس از گرد کردن به ریال بیش از صفر است. v10.2.28: گرد کردن نیم از صفر دور می‌شود، مثل سند حسابداری؛
+ * `Math.round(-0.5)` صفر منفی بود و برداشت نیم ریال بیش از مانده هشدار نمی‌داد.
+ */
+export const wipLeftOver = (outlook: Pick<DeliveryCostOutlook, 'remaining'>): boolean => fin(outlook.remaining).round(0).isPositive();
 
 export interface DeliveryPriceLine {
   itemId: number;

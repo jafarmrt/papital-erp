@@ -22,7 +22,7 @@ export async function runSettingValuesTests(shouldRun: (id: string, ...extra: st
   const saved = await orm.select().from(appSettings).where(inArray(appSettings.key, KEYS));
   try {
     const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
-    const { invalidateDashboardBiCache } = await import('../../routes/dashboard.routes.js');
+    const { invalidateDashboardBiCache } = await import('../../services/inventory/warehouseDashboard.service.js');
     const { invalidateSettingsCache } = await import('../../lib/memoryCache.js');
     const app = await getTestApp();
     const admin = await getAdminSession();
@@ -89,7 +89,7 @@ export async function runSettingValuesTests(shouldRun: (id: string, ...extra: st
     if (saved.length > 0) await orm.insert(appSettings).values(saved.map(r => ({ key: r.key, value: r.value }))).catch(() => undefined);
     const { invalidateSettingsCache } = await import('../../lib/memoryCache.js');
     invalidateSettingsCache();
-    const { invalidateDashboardBiCache } = await import('../../routes/dashboard.routes.js');
+    const { invalidateDashboardBiCache } = await import('../../services/inventory/warehouseDashboard.service.js');
     invalidateDashboardBiCache();
   }
   return results;
