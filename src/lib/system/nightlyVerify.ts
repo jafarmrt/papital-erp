@@ -7,10 +7,16 @@ import { formatPersianNumber } from '../../utils/persianNumber';
  * the health page reads it through `nightlyVerifyVerdict`. Data that was wrong before stays listed but does not fail the
  * night: only a run that could not be done, a restore that failed, a check that could not run, or a check that got worse
  * than the last healthy night does. That last healthy night is kept in each report (`baseline`), so a bad night is
- * compared with it again the next night instead of becoming the new normal.
+ * compared with it again the next night instead of becoming the new normal. A health check the baseline does not list
+ * (one an update added) is new, never worse. What stays worse with the same counts for
+ * `NIGHTLY_VERIFY_ACCEPT_AFTER_NIGHTS` nights in a row is accepted as the new normal that night (`acceptedWorse`), and
+ * `scripts/nightly-verify.sh --accept-baseline` accepts the last report's counts at once.
  */
 
 export const NIGHTLY_VERIFY_REPORT_VERSION = 1;
+
+/** Nights in a row with the same worse counts after which they are accepted as the new normal */
+export const NIGHTLY_VERIFY_ACCEPT_AFTER_NIGHTS = 3;
 
 /** A report older than this is «not run lately» (the job runs once a day) */
 export const NIGHTLY_VERIFY_STALE_HOURS = 36;
@@ -27,7 +33,7 @@ export interface NightlyInvariantCount {
 }
 
 /** Why a night could not be checked (the shell script names it; the card says it in Persian) */
-export const NIGHTLY_VERIFY_FAILURES = ['restore', 'timeout', 'no_dump', 'stale_dump', 'no_space', 'space_unknown', 'not_drill'] as const;
+export const NIGHTLY_VERIFY_FAILURES = ['restore', 'timeout', 'no_dump', 'stale_dump', 'no_new_backup', 'no_space', 'space_unknown', 'not_drill'] as const;
 export type NightlyVerifyFailure = (typeof NIGHTLY_VERIFY_FAILURES)[number];
 
 /** The counts of the last healthy night, the yardstick of «worse» */
@@ -54,6 +60,12 @@ export interface NightlyVerifyReport {
   invariants: NightlyInvariantCount[] | null;
   /** health check ids and invariants worse than the baseline */
   worse: string[];
+  /** consecutive nights, this one included, whose worse findings had these same counts (0: nothing worse) */
+  repeatNights: number;
+  /** worse findings accepted tonight as the new normal (after repeated nights, or by hand) */
+  acceptedWorse: string[];
+  /** health checks the baseline does not list (added by an update): new, never worse */
+  newChecks: string[];
   /** why a step could not run (English, for the log) */
   errors: string[];
   /** the last healthy night this report was compared with (null: none yet) */
@@ -72,6 +84,7 @@ export interface NightlyVerifyHealth {
   healthWarningCount: number | null;
   invariantViolationCount: number | null;
   worse: string[];
+  acceptedWorse: string[];
   messages: string[];
 }
 
@@ -88,6 +101,7 @@ export const NIGHTLY_VERIFY_MESSAGES = {
 export const NIGHTLY_VERIFY_FAILURE_MESSAGES: Record<NightlyVerifyFailure, string> = {
   restore: NIGHTLY_VERIFY_MESSAGES.restoreFailed,
   timeout: 'بررسی شبانهٔ پشتیبان در زمان مجاز تمام نشد و نیمه‌کاره رها شد؛ گزارش کارساز را بررسی کنید.',
+  no_new_backup: 'از شب پیش نسخهٔ پشتیبان تازه‌ای گرفته نشده و همان پشتیبان قبلی دوباره بررسی می‌شد؛ پشتیبان‌گیری شبانه را بررسی کنید.',
   no_dump: 'هیچ نسخهٔ پشتیبان روزانهٔ موفقی پیدا نشد؛ پشتیبان‌گیری شبانه را بررسی کنید.',
   stale_dump: 'آخرین نسخهٔ پشتیبان موفق بیش از یک روز پیش گرفته شده است؛ پشتیبان‌گیری شبانه را بررسی کنید.',
   no_space: 'جای خالی دیسک برای بازیابی رونوشت پشتیبان کافی نبود و بررسی انجام نشد؛ دیسک کارساز را خالی‌تر کنید.',
@@ -104,6 +118,10 @@ export function backupAgeText(backupAt: string | null, finishedAt: string | null
 
 export function worseMessage(count: number): string {
   return `${formatPersianNumber(count)} بررسی نسبت به آخرین شب سالم بدتر شده است؛ «بررسی سلامت مالی» را باز کنید.`;
+}
+
+export function acceptedMessage(count: number): string {
+  return `${formatPersianNumber(count)} بررسی که بدتر شده بود، به‌عنوان وضع عادی تازه پذیرفته شد و از این پس مبنای مقایسه است.`;
 }
 
 function isHealthCount(v: unknown): v is NightlyHealthCount {
@@ -139,7 +157,8 @@ export function parseNightlyReport(text: string): NightlyVerifyReport | null {
   if (typeof r.backupFile !== 'string' || typeof r.restoreOk !== 'boolean') return null;
   if (r.health !== null && !(Array.isArray(r.health) && r.health.every(isHealthCount))) return null;
   if (r.invariants !== null && !(Array.isArray(r.invariants) && r.invariants.every(isInvariantCount))) return null;
-  if (!isStringArray(r.worse) || !isStringArray(r.errors)) return null;
+  if (!isStringArray(r.worse) || !isStringArray(r.errors) || !isStringArray(r.acceptedWorse) || !isStringArray(r.newChecks)) return null;
+  if (!Number.isInteger(r.repeatNights) || r.repeatNights < 0) return null;
   if (r.backupAt !== null && !isIsoTime(r.backupAt)) return null;
   if (r.failure !== null && !(NIGHTLY_VERIFY_FAILURES as readonly string[]).includes(r.failure)) return null;
   if (r.baseline !== null && !isBaseline(r.baseline)) return null;
@@ -173,8 +192,10 @@ export function nightlyWorse(previous: Pick<NightlyVerifyReport, 'health' | 'inv
     const was = new Map(previous.health.map(h => [h.id, h]));
     for (const now of next.health) {
       const before = was.get(now.id);
-      const beforeRank = before ? STATUS_RANK[before.status] : 0;
-      const beforeCount = before && before.status === now.status ? before.count : 0;
+      // a check the baseline does not list is new (nightlyNewChecks), not worse
+      if (!before) continue;
+      const beforeRank = STATUS_RANK[before.status];
+      const beforeCount = before.status === now.status ? before.count : 0;
       if (STATUS_RANK[now.status] > beforeRank || (now.status !== 'healthy' && STATUS_RANK[now.status] === beforeRank && now.count > beforeCount)) {
         worse.push(`health:${now.id}`);
       }
@@ -189,12 +210,31 @@ export function nightlyWorse(previous: Pick<NightlyVerifyReport, 'health' | 'inv
   return worse;
 }
 
+/** Health checks tonight that the baseline does not list (an update added them) */
+export function nightlyNewChecks(previous: Pick<NightlyVerifyReport, 'health'> | null, next: Pick<NightlyVerifyReport, 'health'>): string[] {
+  if (!previous?.health || !next.health) return [];
+  const was = new Set(previous.health.map(h => h.id));
+  return next.health.filter(h => !was.has(h.id)).map(h => h.id);
+}
+
+const countsKey = (r: Pick<NightlyVerifyReport, 'health' | 'invariants'>) => JSON.stringify([r.health, r.invariants]);
+
+/**
+ * How many nights in a row, tonight included, were worse with these same counts: one more than the night before when
+ * that night was worse with the same health and invariant counts, else 1; 0 when nothing is worse tonight.
+ */
+export function nightlyRepeat(previous: NightlyVerifyReport | null, next: Pick<NightlyVerifyReport, 'health' | 'invariants' | 'worse'>): number {
+  if (next.worse.length === 0) return 0;
+  if (previous && previous.worse.length > 0 && countsKey(previous) === countsKey(next)) return previous.repeatNights + 1;
+  return 1;
+}
+
 /** The health page card from the stored report (null: none yet) at the time `now` */
 export function nightlyVerifyVerdict(report: NightlyVerifyReport | null, now: Date): NightlyVerifyHealth {
   if (!report) {
     return {
       status: 'never', finishedAt: null, backupFile: null, backupAt: null, failure: null, healthErrorCount: null, healthWarningCount: null,
-      invariantViolationCount: null, worse: [], messages: [NIGHTLY_VERIFY_MESSAGES.never],
+      invariantViolationCount: null, worse: [], acceptedWorse: [], messages: [NIGHTLY_VERIFY_MESSAGES.never],
     };
   }
   const healthErrorCount = report.health ? report.health.filter(h => h.status === 'error').length : null;
@@ -222,8 +262,9 @@ export function nightlyVerifyVerdict(report: NightlyVerifyReport | null, now: Da
     messages.unshift(NIGHTLY_VERIFY_MESSAGES.stale);
   }
   if (messages.length === 0) messages.push(NIGHTLY_VERIFY_MESSAGES.ok);
+  if (status === 'ok' && report.acceptedWorse.length > 0) messages.push(acceptedMessage(report.acceptedWorse.length));
   return {
     status, finishedAt: report.finishedAt, backupFile: report.backupFile || null, backupAt: report.backupAt, failure: report.failure,
-    healthErrorCount, healthWarningCount, invariantViolationCount, worse: report.worse, messages,
+    healthErrorCount, healthWarningCount, invariantViolationCount, worse: report.worse, acceptedWorse: report.acceptedWorse, messages,
   };
 }

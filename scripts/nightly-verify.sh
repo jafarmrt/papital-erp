@@ -3,6 +3,7 @@
 # ==============================================================================
 #   ./scripts/nightly-verify.sh [dump-file.dump.gz]   (default: the daily dump BACKUP_DIR/.last_daily_ok names; a dump
 #                                                      named by hand is not refused for its age)
+#   ./scripts/nightly-verify.sh --accept-baseline      (accepts the findings of the last report as the new normal)
 #
 #   1) restores the dump into a drill database with scripts/restore.sh (verified against the backup's manifest);
 #   2) runs the financial health check and every business invariant on that copy (scripts/nightly-verify.ts, read
@@ -16,19 +17,23 @@
 #   - one run at a time (flock), and a night is skipped (exit 0, the old report stays) while a backup, an upgrade
 #     rehearsal, an update or a restore is running;
 #   - the dump is the one backup.sh last finished (.last_daily_ok), refused when older than
-#     NIGHTLY_VERIFY_MAX_DUMP_AGE_HOURS (26);
+#     NIGHTLY_VERIFY_MAX_DUMP_AGE_HOURS (26), and a failed night when it is the same dump the previous night checked
+#     more than 12 hours ago (no new backup was taken);
 #   - before restoring, the free space of the database's data and WAL disks and of the temporary directory is compared
 #     with the database size and the dump size, keeping 10% of each disk free; not enough room is a failed night;
-#   - the temporary files go under BACKUP_DIR/.nightly-verify-tmp (the backup disk), never /tmp;
+#   - the restore's temporary files go under BACKUP_DIR/.nightly-verify-tmp (the backup disk), never /tmp;
 #   - the restore and the check run under `timeout` (NIGHTLY_VERIFY_TIMEOUT seconds, default 7200) at low CPU and disk
-#     priority (nice, ionice); the drill copy is dropped on every exit, and copies older than 12 hours left by a killed
-#     run are dropped at the next start (younger ones may be an upgrade rehearsal's and are left alone);
+#     priority (nice, ionice), every other database call and df under a 120-second limit; stopping the script stops
+#     the restore at once; the drill copy is dropped on every exit, and copies older than 12 hours are dropped at the
+#     next start (younger ones may be an upgrade rehearsal's and are left alone; an older copy kept on purpose with
+#     RESTORE_KEEP=1 or REHEARSAL_KEEP=1 is dropped too);
 #   - passwords never appear on a command line: they go to psql through a PGPASSFILE (mode 600) and to the check
 #     through its environment.
+# A failed or worse night is shown only on the system health page; no alert is sent.
 # Exit 0 = the backup restores and nothing got worse, or the night was skipped; 1 = otherwise (the report says what).
 #
-# Env: the same as restore.sh (DATABASE_URL from APP_DIR/.env, RESTORE_ADMIN_URL, BACKUP_DIR);
-#      NIGHTLY_VERIFY_REPORT (also read from .env) overrides the report file.
+# Env: the same as restore.sh (DATABASE_URL from APP_DIR/.env, RESTORE_ADMIN_URL, BACKUP_DIR); NIGHTLY_VERIFY_REPORT,
+#      NIGHTLY_VERIFY_TIMEOUT and NIGHTLY_VERIFY_MAX_DUMP_AGE_HOURS, each also read from .env (cron gives no environment).
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
@@ -51,12 +56,27 @@ export BACKUP_DIR
 # the same value the service reads (process.env with the app's .env)
 [ -n "${NIGHTLY_VERIFY_REPORT:-}" ] || NIGHTLY_VERIFY_REPORT="$(env_file_value NIGHTLY_VERIFY_REPORT)"
 REPORT="${NIGHTLY_VERIFY_REPORT:-$APP_DIR/logs/nightly-verify.json}"
-TIMEOUT_SECONDS="${NIGHTLY_VERIFY_TIMEOUT:-7200}"
-MAX_DUMP_AGE_HOURS="${NIGHTLY_VERIFY_MAX_DUMP_AGE_HOURS:-26}"
+# a whole number from .env or the environment, else the default
+setting_number() {
+  local key="$1" default="$2" value="${!1:-}"
+  [ -n "$value" ] || value="$(env_file_value "$key")"
+  if [ -z "$value" ]; then echo "$default"; return; fi
+  if ! [[ "$value" =~ ^[0-9]{1,9}$ ]] || [ $((10#$value)) -lt 1 ]; then
+    log "WARNING: $key=$value is not a whole number above zero; $default is used" >&2
+    echo "$default"
+    return
+  fi
+  echo $((10#$value))
+}
+TIMEOUT_SECONDS="$(setting_number NIGHTLY_VERIFY_TIMEOUT 7200)"
+MAX_DUMP_AGE_HOURS="$(setting_number NIGHTLY_VERIFY_MAX_DUMP_AGE_HOURS 26)"
 DRILL_MAX_AGE_HOURS=12
 FREE_MARGIN_PERCENT=10
 BUSY_PATTERN="${NIGHTLY_VERIFY_BUSY_PATTERN:-scripts/(backup|upgrade-rehearsal|restore)\.sh( |$)|(^|[ /])update\.sh( |$)}"
 DRILL_RE='^erp_restore_drill_[0-9]{8}_[0-9]{6}$'
+# a database that never answers must not hold the lock for every later night
+export PGCONNECT_TIMEOUT="${PGCONNECT_TIMEOUT:-30}"
+CALL_LIMIT=120
 
 TSX="$APP_DIR/node_modules/.bin/tsx"
 [ -x "$TSX" ] || fail "$TSX not found — install the dependencies (npm ci --include=dev)"
@@ -66,18 +86,31 @@ LOCK_FILE="$APP_DIR/logs/.nightly-verify.lock"
 mkdir -p "$(dirname "$LOCK_FILE")" "$(dirname "$REPORT")"
 exec 9>"$LOCK_FILE"
 flock -n 9 || { log "SKIPPED: another nightly check is still running"; exit 0; }
+
+# the report belongs to the owner of the log directory (the service user), so the app can read it
+report_owner() {
+  [ "$(id -u)" -eq 0 ] || return 0
+  [ -f "$REPORT" ] && chown "$(stat -c %U "$(dirname "$REPORT")")" "$REPORT" 2>/dev/null || true
+}
+
+if [ "${1:-}" = "--accept-baseline" ]; then
+  rc=0
+  (cd "$APP_DIR" && "$TSX" scripts/nightly-verify.ts --report "$REPORT" --accept-baseline) || rc=$?
+  report_owner
+  exit "$rc"
+fi
 if pgrep -f -- "$BUSY_PATTERN" >/dev/null 2>&1; then
   log "SKIPPED: a backup, an upgrade rehearsal, an update or a restore is running; the check runs again next night"
   exit 0
 fi
 
 # ---------- temporary files on the backup disk ----------
+# only restore.sh gets TMPDIR: a long path there breaks the socket tsx opens in it
 TMP_ROOT="$BACKUP_DIR/.nightly-verify-tmp"
 mkdir -p "$TMP_ROOT"
 chmod 700 "$TMP_ROOT"
 find "$TMP_ROOT" -mindepth 1 -maxdepth 1 -mmin +720 -exec rm -rf {} + 2>/dev/null || true
-export TMPDIR="$TMP_ROOT"
-WORK_DIR="$(mktemp -d)"
+WORK_DIR="$(mktemp -d -p "$TMP_ROOT")"
 
 # ---------- passwords through a PGPASSFILE, never on a command line ----------
 PGPASSFILE="$WORK_DIR/pgpass"
@@ -85,16 +118,30 @@ PGPASSFILE="$WORK_DIR/pgpass"
 export PGPASSFILE
 FULL_DATABASE_URL="$DATABASE_URL"
 URL_RE='^(postgres(ql)?://)([^:@/]+)(:([^@]*))?@([^/?]*)(.*)$'
-url_decode() { local v="${1//+/ }"; printf '%b' "${v//%/\\x}"; }
+# percent-decoding as libpq does it: a + stays a +, and a backslash is a plain character
+url_decode() { local v="${1//\\/\\\\}"; printf '%b' "${v//%/\\x}"; }
 pgpass_field() { printf '%s' "$1" | sed -e 's/[\\:]/\\&/g'; }
+# host and port of the URL's host part; an IPv6 address comes without its brackets ([::1]:5433 -> ::1 5433)
+split_hostport() {
+  local hostport="$1" host port=""
+  if [[ "$hostport" == \[* ]]; then
+    host="${hostport%%]*}"
+    host="${host#[}"
+    [[ "$hostport" == *]:* ]] && port="${hostport##*]:}"
+  else
+    host="${hostport%%:*}"
+    [ "$hostport" = "$host" ] || port="${hostport##*:}"
+  fi
+  echo "${host:-localhost} ${port:-5432}"
+}
 # prints the URL without its password and adds host:port:*:user:password to the PGPASSFILE
 strip_password() {
   local url="$1"
   if [[ "$url" =~ $URL_RE ]] && [ -n "${BASH_REMATCH[4]}" ]; then
     local scheme="${BASH_REMATCH[1]}" user="${BASH_REMATCH[3]}" pass="${BASH_REMATCH[5]}" hostport="${BASH_REMATCH[6]}" rest="${BASH_REMATCH[7]}"
-    local host="${hostport%%:*}" port="5432"
-    [ "$hostport" = "$host" ] || port="${hostport##*:}"
-    printf '%s:%s:*:%s:%s\n' "$(pgpass_field "${host:-localhost}")" "$port" "$(pgpass_field "$(url_decode "$user")")" \
+    local host port
+    read -r host port <<< "$(split_hostport "$hostport")"
+    printf '%s:%s:*:%s:%s\n' "$(pgpass_field "$host")" "$port" "$(pgpass_field "$(url_decode "$user")")" \
       "$(pgpass_field "$(url_decode "$pass")")" >> "$PGPASSFILE"
     echo "${scheme}${user}@${hostport}${rest}"
   else
@@ -115,7 +162,9 @@ url_for_db() {
   local query="${source#"$base"}"
   echo "${base%/*}/$1$query"
 }
-maint_sql() { psql "$(url_for_db postgres)" -X -q -tA -v ON_ERROR_STOP=1 -c "$1"; }
+# the maintenance database, from the URL without its password (fixed here: the check later exports the full URL)
+MAINT_URL="$(url_for_db postgres)"
+maint_sql() { timeout "$CALL_LIMIT" psql "$MAINT_URL" -X -q -tA -v ON_ERROR_STOP=1 -c "$1"; }
 
 # drops a drill copy; any other name is refused
 drop_drill() {
@@ -126,7 +175,7 @@ drop_drill() {
   fi
   maint_sql "DROP DATABASE IF EXISTS \"$db\" WITH (FORCE);" >/dev/null 2>&1 \
     || maint_sql "DROP DATABASE IF EXISTS \"$db\";" >/dev/null 2>&1 \
-    || { [ -n "${RESTORE_ADMIN_URL:-}" ] && psql "$RESTORE_ADMIN_URL" -X -q -tA -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS \"$db\";" >/dev/null 2>&1; }
+    || { [ -n "${RESTORE_ADMIN_URL:-}" ] && timeout "$CALL_LIMIT" psql "$RESTORE_ADMIN_URL" -X -q -tA -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS \"$db\";" >/dev/null 2>&1; }
 }
 
 # the drill copy restore.sh announces ("Creating database <name>") — read from its log, so a killed run finds it too
@@ -136,9 +185,11 @@ drill_from_log() {
 }
 
 DRILL_DB=""
+CHILD_PID=""
 cleanup() {
   local rc=$?
   trap - EXIT INT TERM
+  stop_child
   [ -n "$DRILL_DB" ] || DRILL_DB="$(drill_from_log)"
   if [ -n "$DRILL_DB" ]; then
     drop_drill "$DRILL_DB" || log "WARNING: could not drop $DRILL_DB — the next run drops it after ${DRILL_MAX_AGE_HOURS} hours"
@@ -146,14 +197,27 @@ cleanup() {
   rm -rf "$WORK_DIR"
   exit "$rc"
 }
+# the restore or the check running in the background: timeout leads its own process group, so the whole group is
+# stopped (timeout kills what is left 60 seconds later)
+stop_child() {
+  [ -n "$CHILD_PID" ] || return 0
+  kill -TERM -- "-$CHILD_PID" 2>/dev/null || kill -TERM "$CHILD_PID" 2>/dev/null || true
+  wait "$CHILD_PID" 2>/dev/null || true
+  CHILD_PID=""
+}
 trap cleanup EXIT
 trap 'exit 143' TERM
 trap 'exit 130' INT
 
-# the report belongs to the owner of the log directory (the service user), so the app can read it
-report_owner() {
-  [ "$(id -u)" -eq 0 ] || return 0
-  [ -f "$REPORT" ] && chown "$(stat -c %U "$(dirname "$REPORT")")" "$REPORT" 2>/dev/null || true
+# runs a command in the background under the remaining time and waits for it, so a signal stops it at once; the exit
+# code is in CHILD_RC
+CHILD_RC=0
+run_timed() {
+  timeout --kill-after=60 "$(remaining)" "$@" &
+  CHILD_PID=$!
+  CHILD_RC=0
+  wait "$CHILD_PID" || CHILD_RC=$?
+  CHILD_PID=""
 }
 
 BACKUP_FILE=""
@@ -172,14 +236,14 @@ night_failed() {
 # ---------- drill copies a killed run left behind ----------
 NOW=$(date +%s)
 if OLD_DRILLS="$(maint_sql "SELECT datname FROM pg_database WHERE datname LIKE 'erp\\_restore\\_drill\\_%'" 2>/dev/null)"; then
-  for db in $OLD_DRILLS; do
+  while IFS= read -r db; do
     [[ "$db" =~ $DRILL_RE ]] || continue
     stamp="${db#erp_restore_drill_}"
     created=$(date -d "${stamp:0:4}-${stamp:4:2}-${stamp:6:2} ${stamp:9:2}:${stamp:11:2}:${stamp:13:2}" +%s 2>/dev/null) || continue
     if [ $((NOW - created)) -gt $((DRILL_MAX_AGE_HOURS * 3600)) ]; then
       if drop_drill "$db"; then log "Dropped the drill copy $db left by an earlier run"; else log "WARNING: could not drop the old drill copy $db"; fi
     fi
-  done
+  done <<< "$OLD_DRILLS"
 else
   log "WARNING: could not list the drill copies; old ones are not dropped this night"
 fi
@@ -202,10 +266,18 @@ else
   if [ $((NOW - BACKUP_AT)) -gt $((MAX_DUMP_AGE_HOURS * 3600)) ]; then
     night_failed stale_dump "$(basename "$BACKUP_FILE") is $(( (NOW - BACKUP_AT) / 3600 )) hours old"
   fi
+  # the same dump the previous night checked: last night's backup did not finish (a run again the same morning is fine)
+  PREVIOUS="$(node -e 'try { const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(`${r.backupFile || ""} ${Math.floor(Date.parse(r.finishedAt) / 1000) || 0}`); } catch { /* no report */ }' "$REPORT" 2>/dev/null || true)"
+  read -r previous_file previous_at <<< "${PREVIOUS:-}" || true
+  if [ "${previous_file:-}" = "$name.dump.gz" ] && [[ "${previous_at:-}" =~ ^[0-9]+$ ]] && [ $((NOW - previous_at)) -gt $((12 * 3600)) ]; then
+    night_failed no_new_backup "$name.dump.gz was already checked by the previous night"
+  fi
 fi
 
 # ---------- free space ----------
-# the dump unpacked into the temporary directory, the database as large as it is now on the data disk and one GiB of WAL on the WAL disk; each disk keeps 10% free
+# the dump unpacked into the temporary directory, the database as large as it is now on the data disk and one GiB of WAL
+# on the WAL disk; each disk keeps 10% free (an estimate: indexes rebuilt and WAL written during a large restore may
+# need more, TD-1352)
 GIB=1073741824
 read -r packed unpacked _ < <(gzip -l "$BACKUP_FILE" 2>/dev/null | awk 'NR == 2') || true
 if ! [[ "${packed:-}" =~ ^[0-9]+$ ]] || ! [[ "${unpacked:-}" =~ ^[0-9]+$ ]]; then
@@ -214,18 +286,18 @@ fi
 # a size 4 GiB or more is reported modulo 4 GiB; a dump (already compressed by pg_dump) never shrinks much in gzip, so
 # a reported size well below the packed size has wrapped
 while [ $(( packed - unpacked )) -gt 1048576 ]; do unpacked=$((unpacked + 4 * GIB)); done
-DB_BYTES="$(psql "$DATABASE_URL" -X -tA -c 'SELECT pg_database_size(current_database())' 2>/dev/null || true)"
+DB_BYTES="$(timeout "$CALL_LIMIT" psql "$DATABASE_URL" -X -tA -c 'SELECT pg_database_size(current_database())' 2>/dev/null || true)"
 [[ "$DB_BYTES" =~ ^[0-9]+$ ]] || night_failed space_unknown "the size of the live database could not be read"
 
 DB_HOST=""
-[[ "$DATABASE_URL" =~ $URL_RE ]] && DB_HOST="${BASH_REMATCH[6]%%:*}"
+if [[ "$DATABASE_URL" =~ $URL_RE ]]; then read -r DB_HOST _ <<< "$(split_hostport "${BASH_REMATCH[6]}")"; fi
 DATA_DIR=""
 case "$DB_HOST" in
-  ''|localhost|127.0.0.1|'[::1]'|/*)
+  ''|localhost|127.0.0.1|::1|/*)
     q='SHOW data_directory'
-    DATA_DIR="$(psql "$DATABASE_URL" -X -tA -c "$q" 2>/dev/null || true)"
-    if [ -z "$DATA_DIR" ] && [ -n "${RESTORE_ADMIN_URL:-}" ]; then DATA_DIR="$(psql "$RESTORE_ADMIN_URL" -X -tA -c "$q" 2>/dev/null || true)"; fi
-    if [ -z "$DATA_DIR" ] && command -v sudo >/dev/null 2>&1; then DATA_DIR="$(sudo -n -u postgres psql -X -tA -d postgres -c "$q" 2>/dev/null || true)"; fi
+    DATA_DIR="$(timeout "$CALL_LIMIT" psql "$DATABASE_URL" -X -tA -c "$q" 2>/dev/null || true)"
+    if [ -z "$DATA_DIR" ] && [ -n "${RESTORE_ADMIN_URL:-}" ]; then DATA_DIR="$(timeout "$CALL_LIMIT" psql "$RESTORE_ADMIN_URL" -X -tA -c "$q" 2>/dev/null || true)"; fi
+    if [ -z "$DATA_DIR" ] && command -v sudo >/dev/null 2>&1; then DATA_DIR="$(timeout "$CALL_LIMIT" sudo -n -u postgres psql -X -tA -d postgres -c "$q" 2>/dev/null || true)"; fi
     [ -n "$DATA_DIR" ] && [ -d "$DATA_DIR" ] || night_failed space_unknown "the data directory of the local PostgreSQL could not be read"
     ;;
   *) log "The database server $DB_HOST is not this machine: only the temporary directory's disk is checked" ;;
@@ -234,7 +306,7 @@ esac
 declare -A NEED=() SIZE=() AVAIL=()
 add_need() {
   local dir="$1" bytes="$2" line size avail mount
-  line="$(df -PB1 "$dir" 2>/dev/null | awk 'NR == 2 {print $2, $4, $6}' || true)"
+  line="$(timeout "$CALL_LIMIT" df -PB1 "$dir" 2>/dev/null | awk 'NR == 2 {print $2, $4, $6}' || true)"
   [ -n "$line" ] || night_failed space_unknown "df could not read $dir"
   read -r size avail mount <<< "$line"
   SIZE[$mount]="$size"
@@ -260,36 +332,32 @@ log "Free space checked: dump $unpacked bytes unpacked, database $DB_BYTES bytes
 DEADLINE=$(( $(date +%s) + TIMEOUT_SECONDS ))
 LOW_PRIORITY=(nice -n 10)
 command -v ionice >/dev/null 2>&1 && LOW_PRIORITY+=(ionice -c 2 -n 7)
-remaining() { echo $(( DEADLINE - $(date +%s) )); }
+# at least 1: `timeout 0` would mean no limit
+remaining() { local left=$(( DEADLINE - $(date +%s) )); [ "$left" -ge 1 ] || left=1; echo "$left"; }
 timed_out() { [ "$1" -eq 124 ] || [ "$1" -eq 137 ]; }
 
 log "[1/2] Restoring $(basename "$BACKUP_FILE") into a drill database"
-set +e
-(
-  export RESTORE_MODE=drill RESTORE_KEEP=1
-  timeout --kill-after=60 "$(remaining)" "${LOW_PRIORITY[@]}" bash "$APP_DIR/scripts/restore.sh" "$BACKUP_FILE"
-) 2>&1 | tee "$WORK_DIR/restore.log"
-RESTORE_RC=${PIPESTATUS[0]}
-set -e
+RESTORE_LOG="$WORK_DIR/restore.log"
+run_timed env RESTORE_MODE=drill RESTORE_KEEP=1 TMPDIR="$TMP_ROOT" "${LOW_PRIORITY[@]}" bash "$APP_DIR/scripts/restore.sh" "$BACKUP_FILE" \
+  > "$RESTORE_LOG" 2>&1
+RESTORE_RC=$CHILD_RC
+cat "$RESTORE_LOG"
 DRILL_DB="$(drill_from_log)"
 timed_out "$RESTORE_RC" && night_failed timeout "the restore did not finish within $TIMEOUT_SECONDS seconds"
-if [ "$RESTORE_RC" -ne 0 ] || [ -z "$DRILL_DB" ] || ! grep -q "Drill database kept for inspection: $DRILL_DB" "$WORK_DIR/restore.log"; then
+if [ "$RESTORE_RC" -ne 0 ] || [ -z "$DRILL_DB" ] || ! grep -q "Drill database kept for inspection: $DRILL_DB" "$RESTORE_LOG"; then
+  # a full disk is the server's problem, not the backup's
+  grep -qi 'No space left on device' "$RESTORE_LOG" && night_failed no_space "a disk filled up during the restore (above)"
   night_failed restore "the backup did not pass the restore drill (above)"
 fi
 
 log "[2/2] Checking the accounts and stock on the copy"
-[ "$(remaining)" -gt 0 ] || night_failed timeout "no time left for the check after the restore"
-set +e
-(
-  cd "$APP_DIR"
-  # the full URL goes only through the environment
-  export LOG_DIR="$WORK_DIR/logs" DATABASE_URL
-  DATABASE_URL="$(url_for_db "$DRILL_DB" "$FULL_DATABASE_URL")"
-  timeout --kill-after=60 "$(remaining)" "${LOW_PRIORITY[@]}" "$TSX" scripts/nightly-verify.ts --report "$REPORT" \
-    --backup "$BACKUP_FILE" --backup-at "$BACKUP_AT"
-)
-CHECK_RC=$?
-set -e
+[ $(( DEADLINE - $(date +%s) )) -gt 0 ] || night_failed timeout "no time left for the check after the restore"
+# the full URL goes only through the environment, never on a command line; the steps after it use no URL
+export LOG_DIR="$WORK_DIR/logs"
+DATABASE_URL="$(url_for_db "$DRILL_DB" "$FULL_DATABASE_URL")"
+cd "$APP_DIR"
+run_timed "${LOW_PRIORITY[@]}" "$TSX" scripts/nightly-verify.ts --report "$REPORT" --backup "$BACKUP_FILE" --backup-at "$BACKUP_AT"
+CHECK_RC=$CHILD_RC
 timed_out "$CHECK_RC" && night_failed timeout "the check did not finish within $TIMEOUT_SECONDS seconds"
 report_owner
 [ "$CHECK_RC" -eq 0 ] || fail "see above; the system health page shows the same result"

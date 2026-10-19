@@ -3,7 +3,8 @@ import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import {
-  NIGHTLY_VERIFY_FAILURES, NIGHTLY_VERIFY_REPORT_VERSION, nightlyBaseline, nightlyWorse, parseNightlyReport,
+  NIGHTLY_VERIFY_ACCEPT_AFTER_NIGHTS, NIGHTLY_VERIFY_FAILURES, NIGHTLY_VERIFY_REPORT_VERSION, nightlyBaseline, nightlyNewChecks,
+  nightlyRepeat, nightlyWorse, parseNightlyReport,
   type NightlyHealthCount, type NightlyInvariantCount, type NightlyVerifyFailure, type NightlyVerifyReport,
 } from '../src/lib/system/nightlyVerify.js';
 import { terminalLine } from '../src/lib/terminalText.js';
@@ -12,10 +13,13 @@ import { terminalLine } from '../src/lib/terminalText.js';
  * v10.2.16 (O-04, 10.2 package 13): the nightly check on a copy of the backup. Run only by `scripts/nightly-verify.sh`:
  *   tsx scripts/nightly-verify.ts --report <file> --backup <name> [--backup-at <epoch>]   (DATABASE_URL = the drill copy)
  *   tsx scripts/nightly-verify.ts --report <file> --backup <name> [--backup-at <epoch>] --failed <reason> [--detail <text>]
+ *   tsx scripts/nightly-verify.ts --report <file> --accept-baseline
  * The first form runs the financial health check and every business invariant over the whole copy, compares the counts
  * with the last healthy night and writes the new report; the second records a night that could not be checked
- * (`NIGHTLY_VERIFY_FAILURES`: restore, timeout, no_dump, stale_dump, no_space, space_unknown). It only reads the copy
- * and refuses any database that is not a restore drill (`erp_restore_drill_*`), writing that refusal as a failed night.
+ * (`NIGHTLY_VERIFY_FAILURES`); the third accepts the counts of the stored report as the new normal (no database). The
+ * check only reads the copy and refuses any database that is not a restore drill (`erp_restore_drill_*`), writing that
+ * refusal as a failed night. Findings that stay worse with the same counts for `NIGHTLY_VERIFY_ACCEPT_AFTER_NIGHTS`
+ * nights in a row are accepted that night.
  * Exit: 0 = nothing worse than the last healthy night; 1 = a step failed or a check got worse; 2 = not a drill database.
  */
 
@@ -58,7 +62,8 @@ function writeReport(file: string, report: NightlyVerifyReport): void {
 function baseReport(backup: string): NightlyVerifyReport {
   return {
     version: NIGHTLY_VERIFY_REPORT_VERSION, finishedAt: new Date().toISOString(), backupFile: backup ? path.basename(backup) : '',
-    backupAt: backupAtArg(), restoreOk: true, failure: null, health: null, invariants: null, worse: [], errors: [], baseline: null,
+    backupAt: backupAtArg(), restoreOk: true, failure: null, health: null, invariants: null, worse: [], repeatNights: 0, acceptedWorse: [],
+    newChecks: [], errors: [], baseline: null,
   };
 }
 
@@ -120,8 +125,22 @@ async function verifyCopy(report: NightlyVerifyReport): Promise<number> {
   }
 }
 
+/** The stored report's findings become the new normal: the next night is compared with its counts */
+function acceptBaseline(file: string): number {
+  const stored = readPrevious(file);
+  if (!stored || stored.failure !== null || stored.health === null || stored.invariants === null || stored.errors.length > 0) {
+    console.error(`REFUSED: ${file} holds no night whose restore and checks ran; nothing to accept`);
+    return 1;
+  }
+  const accepted = [...stored.acceptedWorse, ...stored.worse];
+  writeReport(file, { ...stored, acceptedWorse: accepted, worse: [], repeatNights: 0 });
+  console.log(`Accepted as the new normal: ${accepted.length ? accepted.join(', ') : 'nothing was worse'}`);
+  return 0;
+}
+
 async function main(): Promise<number> {
   const file = argValue('--report');
+  if (process.argv.includes('--accept-baseline')) return acceptBaseline(file);
   const report = baseReport(argValue('--backup', true));
   const previous = readPrevious(file);
   report.baseline = nightlyBaseline(previous);
@@ -141,9 +160,17 @@ async function main(): Promise<number> {
     }
   }
   report.worse = nightlyWorse(report.baseline, report);
+  report.newChecks = nightlyNewChecks(report.baseline, report);
+  if (report.failure === null && report.errors.length === 0) report.repeatNights = nightlyRepeat(previous, report);
+  for (const w of report.worse) console.log(`  ✗ worse than the last healthy night: ${w}`);
+  for (const c of report.newChecks) console.log(`  new check (not compared): ${c}`);
+  if (report.repeatNights >= NIGHTLY_VERIFY_ACCEPT_AFTER_NIGHTS) {
+    console.log(`  the same findings for ${report.repeatNights} nights: accepted as the new normal`);
+    report.acceptedWorse = report.worse;
+    report.worse = [];
+  }
   report.finishedAt = new Date().toISOString();
   writeReport(file, report);
-  for (const w of report.worse) console.log(`  ✗ worse than the last healthy night: ${w}`);
   if (code === 2) return 2;
   const failed = report.failure !== null || !report.restoreOk || report.health === null || report.invariants === null || report.worse.length > 0;
   console.log(failed ? `Nightly check FAILED (report: ${file})` : `Nightly check passed (report: ${file})`);

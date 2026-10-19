@@ -34,6 +34,6 @@ export function readNightlyVerifyHealth(now: Date = new Date()): NightlyVerifyHe
 function unknown(): NightlyVerifyHealth {
   return {
     status: 'unknown', finishedAt: null, backupFile: null, backupAt: null, failure: null, healthErrorCount: null, healthWarningCount: null,
-    invariantViolationCount: null, worse: [], messages: [NIGHTLY_VERIFY_MESSAGES.unknown],
+    invariantViolationCount: null, worse: [], acceptedWorse: [], messages: [NIGHTLY_VERIFY_MESSAGES.unknown],
   };
 }

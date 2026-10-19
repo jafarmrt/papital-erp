@@ -9,8 +9,8 @@
 #     minutes after the backup, so it never checks a backup still being written.
 # install.sh runs it; on a server installed earlier run it once by hand:
 #   sudo bash scripts/install-ops-cron.sh [service-user]
-# The file is rewritten as a whole: a run without the time variables writes the default times again, replacing any
-# custom times set earlier; the times it wrote are printed. The output of the three jobs goes to APP_DIR/logs/backup.log,
+# The file is rewritten as a whole: a time variable not given keeps the time the existing file has, else takes the
+# default; the times it wrote are printed. The output of the three jobs goes to APP_DIR/logs/backup.log,
 # APP_DIR/logs/monitor.log and APP_DIR/logs/nightly-verify.log.
 set -euo pipefail
 
@@ -19,18 +19,31 @@ RUN_USER="${1:-${RUN_USER:-$(id -un)}}"
 CRON_FILE="${CRON_FILE:-/etc/cron.d/papital-erp}"
 LOG_DIR="$APP_DIR/logs"
 
-if [ -z "${BACKUP_HOUR+x}${BACKUP_MINUTE+x}${NIGHTLY_VERIFY_HOUR+x}${NIGHTLY_VERIFY_MINUTE+x}" ]; then
-  echo "Note: no time variables given, so the default times are written (any custom times set earlier are replaced)"
-fi
-BACKUP_HOUR="${BACKUP_HOUR:-2}"
-BACKUP_MINUTE="${BACKUP_MINUTE:-30}"
-NIGHTLY_VERIFY_HOUR="${NIGHTLY_VERIFY_HOUR:-4}"
-NIGHTLY_VERIFY_MINUTE="${NIGHTLY_VERIFY_MINUTE:-0}"
+# minute and hour of a job in the existing file ("" when it has none)
+existing_time() {
+  [ -f "$CRON_FILE" ] || return 0
+  awk -v job="$1" '$0 !~ /^#/ && index($0, job) { print $1, $2; exit }' "$CRON_FILE" 2>/dev/null || true
+}
+read -r OLD_BACKUP_MINUTE OLD_BACKUP_HOUR <<< "$(existing_time /scripts/backup.sh)" || true
+read -r OLD_CHECK_MINUTE OLD_CHECK_HOUR <<< "$(existing_time /scripts/nightly-verify.sh)" || true
+# a time taken from the file or the default, said aloud
+pick_time() {
+  local name="$1" old="$2" default="$3"
+  if [ -n "${!name+x}" ]; then echo "${!name}"; return; fi
+  if [ -n "$old" ]; then echo "Note: $name not given, the existing $old is kept" >&2; echo "$old"; return; fi
+  echo "Note: $name not given, the default $default is written" >&2
+  echo "$default"
+}
+BACKUP_HOUR="$(pick_time BACKUP_HOUR "${OLD_BACKUP_HOUR:-}" 2)"
+BACKUP_MINUTE="$(pick_time BACKUP_MINUTE "${OLD_BACKUP_MINUTE:-}" 30)"
+NIGHTLY_VERIFY_HOUR="$(pick_time NIGHTLY_VERIFY_HOUR "${OLD_CHECK_HOUR:-}" 4)"
+NIGHTLY_VERIFY_MINUTE="$(pick_time NIGHTLY_VERIFY_MINUTE "${OLD_CHECK_MINUTE:-}" 0)"
 
 # a whole number up to MAX, read as decimal (08 and 09 are hours, not bad octal)
 decimal_in_range() {
   local name="$1" value="$2" max="$3"
-  case "$value" in ''|*[!0-9]*) echo "ERROR: $name must be 0-$max" >&2; exit 1 ;; esac
+  # at most two digits, so a huge number never wraps into range
+  case "$value" in ''|*[!0-9]*|???*) echo "ERROR: $name must be 0-$max" >&2; exit 1 ;; esac
   value=$((10#$value))
   [ "$value" -le "$max" ] || { echo "ERROR: $name must be 0-$max" >&2; exit 1; }
   echo "$value"
