@@ -7,11 +7,13 @@ import { SubsystemHealthCards } from './system/SubsystemHealthCards';
 import { EventQueueActions, type EventQueueAction } from './system/EventQueueActions';
 import { StorageHealthCard } from './system/StorageHealthCard';
 import { MediaLibraryHealthCard } from './system/MediaLibraryHealthCard';
+import { NightlyVerifyHealthCard } from './system/NightlyVerifyHealthCard';
 import { DatabaseHealthCard, RuntimeHealthCard, type DatabaseHealthView, type ServerRuntimeView } from './system/CoreHealthCards';
 import { IntegrityCheckPanel, type IntegrityReportView } from './system/IntegrityCheckPanel';
 import type { AccountingHealth, OutboxHealth, WorkflowHealth } from '../lib/system/subsystemHealth';
 import type { StorageHealth } from '../lib/system/storageHealth';
 import type { MediaLibraryHealth } from '../lib/system/mediaLibraryHealth';
+import type { NightlyVerifyHealth } from '../lib/system/nightlyVerify';
 
 /**
  * صفحه سلامت سامانه (فقط مدیر سامانه). v9.0.388 تا v9.0.392 (TD-593، TD-619، TD-623، TD-622): هر بخش کارت خودش را دارد
@@ -24,6 +26,7 @@ interface HealthData {
   accounting?: AccountingHealth;
   workflow?: WorkflowHealth;
   mediaLibrary?: MediaLibraryHealth;
+  nightlyVerify?: NightlyVerifyHealth;
   server: ServerRuntimeView;
   checkTimestamp: string;
 }
@@ -142,6 +145,7 @@ export default function SystemHealthDiagnostic() {
         />
         <StorageHealthCard storage={health.storage} />
         <MediaLibraryHealthCard media={health.mediaLibrary} />
+        <NightlyVerifyHealthCard nightly={health.nightlyVerify} />
         <RuntimeHealthCard server={health.server} />
       </div>
 

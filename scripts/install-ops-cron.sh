@@ -2,23 +2,62 @@
 # v10.0.3 (TD-1020): installs the operations schedule of a Linux server in one cron file:
 #   - scripts/backup.sh every day at BACKUP_HOUR:BACKUP_MINUTE (server time; default 02:30) — the local backup and,
 #     when BACKUP_RCLONE_REMOTE is set in .env, its encrypted off-server copy (scripts/backup-offsite.sh);
-#   - scripts/monitor.sh every five minutes — health, disk, backup age and event queue alerts (v10.0.6).
+#   - scripts/monitor.sh every five minutes — health, disk, backup age and event queue alerts (v10.0.6);
+#   - scripts/nightly-verify.sh every day at NIGHTLY_VERIFY_HOUR:NIGHTLY_VERIFY_MINUTE (default 04:00) as root — restores
+#     the latest good backup into a drill copy and checks its accounts and stock (v10.2.16, O-04); root, because
+#     creating the drill database needs `sudo -u postgres` unless .env sets RESTORE_ADMIN_URL. It starts at least 60
+#     minutes after the backup, so it never checks a backup still being written.
 # install.sh runs it; on a server installed earlier run it once by hand:
 #   sudo bash scripts/install-ops-cron.sh [service-user]
-# The file is rewritten as a whole, so running it again changes nothing. The output of both jobs goes to
-# APP_DIR/logs/backup.log and APP_DIR/logs/monitor.log.
+# The file is rewritten as a whole: a time variable not given keeps the time the existing file has, else takes the
+# default; the times it wrote are printed. The output of the three jobs goes to APP_DIR/logs/backup.log,
+# APP_DIR/logs/monitor.log and APP_DIR/logs/nightly-verify.log.
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 RUN_USER="${1:-${RUN_USER:-$(id -un)}}"
 CRON_FILE="${CRON_FILE:-/etc/cron.d/papital-erp}"
-BACKUP_HOUR="${BACKUP_HOUR:-2}"
-BACKUP_MINUTE="${BACKUP_MINUTE:-30}"
 LOG_DIR="$APP_DIR/logs"
 
-case "$BACKUP_HOUR" in ''|*[!0-9]*) echo "ERROR: BACKUP_HOUR must be 0-23" >&2; exit 1 ;; esac
-case "$BACKUP_MINUTE" in ''|*[!0-9]*) echo "ERROR: BACKUP_MINUTE must be 0-59" >&2; exit 1 ;; esac
-[ "$BACKUP_HOUR" -le 23 ] && [ "$BACKUP_MINUTE" -le 59 ] || { echo "ERROR: backup time out of range" >&2; exit 1; }
+# minute and hour of a job in the existing file ("" when it has none)
+existing_time() {
+  [ -f "$CRON_FILE" ] || return 0
+  awk -v job="$1" '$0 !~ /^#/ && index($0, job) { print $1, $2; exit }' "$CRON_FILE" 2>/dev/null || true
+}
+read -r OLD_BACKUP_MINUTE OLD_BACKUP_HOUR <<< "$(existing_time /scripts/backup.sh)" || true
+read -r OLD_CHECK_MINUTE OLD_CHECK_HOUR <<< "$(existing_time /scripts/nightly-verify.sh)" || true
+# a time taken from the file or the default, said aloud
+pick_time() {
+  local name="$1" old="$2" default="$3"
+  if [ -n "${!name+x}" ]; then echo "${!name}"; return; fi
+  if [ -n "$old" ]; then echo "Note: $name not given, the existing $old is kept" >&2; echo "$old"; return; fi
+  echo "Note: $name not given, the default $default is written" >&2
+  echo "$default"
+}
+BACKUP_HOUR="$(pick_time BACKUP_HOUR "${OLD_BACKUP_HOUR:-}" 2)"
+BACKUP_MINUTE="$(pick_time BACKUP_MINUTE "${OLD_BACKUP_MINUTE:-}" 30)"
+NIGHTLY_VERIFY_HOUR="$(pick_time NIGHTLY_VERIFY_HOUR "${OLD_CHECK_HOUR:-}" 4)"
+NIGHTLY_VERIFY_MINUTE="$(pick_time NIGHTLY_VERIFY_MINUTE "${OLD_CHECK_MINUTE:-}" 0)"
+
+# a whole number up to MAX, read as decimal (08 and 09 are hours, not bad octal)
+decimal_in_range() {
+  local name="$1" value="$2" max="$3"
+  # at most two digits, so a huge number never wraps into range
+  case "$value" in ''|*[!0-9]*|???*) echo "ERROR: $name must be 0-$max" >&2; exit 1 ;; esac
+  value=$((10#$value))
+  [ "$value" -le "$max" ] || { echo "ERROR: $name must be 0-$max" >&2; exit 1; }
+  echo "$value"
+}
+BACKUP_HOUR="$(decimal_in_range BACKUP_HOUR "$BACKUP_HOUR" 23)"
+BACKUP_MINUTE="$(decimal_in_range BACKUP_MINUTE "$BACKUP_MINUTE" 59)"
+NIGHTLY_VERIFY_HOUR="$(decimal_in_range NIGHTLY_VERIFY_HOUR "$NIGHTLY_VERIFY_HOUR" 23)"
+NIGHTLY_VERIFY_MINUTE="$(decimal_in_range NIGHTLY_VERIFY_MINUTE "$NIGHTLY_VERIFY_MINUTE" 59)"
+# the check restores the backup the daily job last finished: it starts 60 minutes or more after the backup starts
+GAP=$(( ((NIGHTLY_VERIFY_HOUR * 60 + NIGHTLY_VERIFY_MINUTE) - (BACKUP_HOUR * 60 + BACKUP_MINUTE) + 1440) % 1440 ))
+if [ "$GAP" -lt 60 ]; then
+  echo "ERROR: the nightly check must start at least 60 minutes after the daily backup (backup $(printf '%02d:%02d' "$BACKUP_HOUR" "$BACKUP_MINUTE"), check $(printf '%02d:%02d' "$NIGHTLY_VERIFY_HOUR" "$NIGHTLY_VERIFY_MINUTE"))" >&2
+  exit 1
+fi
 id "$RUN_USER" >/dev/null 2>&1 || { echo "ERROR: user $RUN_USER does not exist" >&2; exit 1; }
 [ -f "$APP_DIR/scripts/backup.sh" ] || { echo "ERROR: $APP_DIR/scripts/backup.sh not found" >&2; exit 1; }
 
@@ -34,13 +73,14 @@ SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ${BACKUP_MINUTE} ${BACKUP_HOUR} * * * ${RUN_USER} ${APP_DIR}/scripts/backup.sh >> ${LOG_DIR}/backup.log 2>&1
 */5 * * * * ${RUN_USER} ${APP_DIR}/scripts/monitor.sh >> ${LOG_DIR}/monitor.log 2>&1
+${NIGHTLY_VERIFY_MINUTE} ${NIGHTLY_VERIFY_HOUR} * * * root ${APP_DIR}/scripts/nightly-verify.sh >> ${LOG_DIR}/nightly-verify.log 2>&1
 CRON
 # cron ignores files in /etc/cron.d that are writable by others or not owned by root
 chmod 644 "$TMP_FILE"
 mkdir -p "$(dirname "$CRON_FILE")"
 mv "$TMP_FILE" "$CRON_FILE"
 trap - EXIT
-echo "Installed $CRON_FILE: daily backup at $(printf '%02d:%02d' "$BACKUP_HOUR" "$BACKUP_MINUTE") and monitor every 5 minutes as $RUN_USER"
+echo "Installed $CRON_FILE: daily backup at $(printf '%02d:%02d' "$BACKUP_HOUR" "$BACKUP_MINUTE") and monitor every 5 minutes as $RUN_USER, nightly backup check at $(printf '%02d:%02d' "$NIGHTLY_VERIFY_HOUR" "$NIGHTLY_VERIFY_MINUTE") as root"
 # the older single-purpose file of GO_LIVE_CHECKLIST.md 6.1 would run a second backup every night
 OLD_FILE="$(dirname "$CRON_FILE")/papital-erp-backup"
 if [ -f "$OLD_FILE" ]; then
