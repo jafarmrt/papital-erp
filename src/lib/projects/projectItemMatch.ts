@@ -29,6 +29,11 @@ export const itemCodeKey = (code: unknown): string =>
 export const itemNameKey = (name: unknown): string =>
   typeof name === 'string' || typeof name === 'number' ? String(name).trim().toLowerCase() : '';
 
+/** کلیدهای کد و نام چند ردیف (TD-1341): خواندن کالاهای آن‌ها در سرور (`itemRefKeyCondition`) با همین کلیدها */
+export function itemRefKeys(refs: ReadonlyArray<{ code?: unknown; name?: unknown }>): { codes: string[]; names: string[] } {
+  return { codes: refs.map(r => itemCodeKey(r.code)), names: refs.map(r => itemNameKey(r.name)) };
+}
+
 const positiveId = (v: unknown): number | null => {
   const n = typeof v === 'number' ? v : typeof v === 'string' && /^\d+$/.test(v.trim()) ? Number(v.trim()) : NaN;
   return Number.isInteger(n) && n > 0 ? n : null;

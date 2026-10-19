@@ -14,6 +14,7 @@ import { useProjectPermissions } from '../../hooks/useProjectPermissions';
 import { storedShortagesNowFree } from '../../lib/projects/materialAvailability';
 import { buildSectionPurchaseList, sectionPurchaseRows } from './projectInventoryUtils';
 import { ProjectIssuedMaterialsList } from './ProjectIssuedMaterialsList';
+import { ReservationReconcileButton } from './ReservationReconcileDialog';
 
 interface ProjectInventoryTabProps {
   project: any;
@@ -82,6 +83,8 @@ export function ProjectInventoryTab({
     reportsReloadKey,
     handleFinalizeAndReserveStock,
     handleUnfinalizeReservation,
+    applyReservationReconcile,
+    projectVersion,
     handlePrintPurchaseListWithCheck,
     handleSaveInventoryControl,
     handleAddManualPurchaseRow,
@@ -117,7 +120,7 @@ export function ProjectInventoryTab({
     void onUpdate?.();
   };
 
-  // v10.2.3 (TD-1290): a stored reservation does not grow when stock arrives; a re-finalize reserves the rest
+  // v10.2.3 (TD-1290): a stored reservation does not grow when stock arrives; «تکمیل رزرو» (TD-1341) reserves the rest
   const unreservedNowFree = storedShortagesNowFree(availability, isFinalized, reservationShortages);
 
   return (
@@ -150,15 +153,19 @@ export function ProjectInventoryTab({
                 فقط مشاهده؛ ذخیره کنترل موجودی مجوز «ویرایش پروژه و مراحل تولید» می‌خواهد
               </span>
             ) : isFinalized ? (
-              <button
-                type="button"
-                onClick={handleUnfinalizeReservation}
-                disabled={saving}
-                className="px-3.5 py-2 bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <Unlock className="w-4 h-4 text-purple-300" />
-                لغو ثبت نهایی و آزاد کردن رزرو
-              </button>
+              <>
+                {/* TD-1341 (بستهٔ ۱۲ بند ۱): رزرو با فهرست مواد امروز برابر می‌شود، بی لغو ثبت نهایی */}
+                <ReservationReconcileButton projectId={Number(project.id)} version={projectVersion} busy={saving} dirty={isDirty} onApplied={applyReservationReconcile} />
+                <button
+                  type="button"
+                  onClick={handleUnfinalizeReservation}
+                  disabled={saving}
+                  className="px-3.5 py-2 bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Unlock className="w-4 h-4 text-purple-300" />
+                  لغو ثبت نهایی و آزاد کردن رزرو
+                </button>
+              </>
             ) : (
               <button
                 type="button"
@@ -218,7 +225,7 @@ export function ProjectInventoryTab({
           </p>
           {unreservedNowFree.length > 0 && (
             <p className="text-[11px] text-amber-300" role="status">
-              موجودی آزاد {unreservedNowFree.map(s => `«${s.itemName || s.itemCode}»`).join('، ')} اکنون نیاز پروژه را می‌پوشاند، اما رزرو ثبت نهایی با رسیدن موجودی بیشتر نمی‌شود و پیش‌فاکتور فروش هنوز می‌تواند آن را ببرد؛ برای رزرو آن، ثبت نهایی را لغو و دوباره ثبت کنید.
+              موجودی آزاد {unreservedNowFree.map(s => `«${s.itemName || s.itemCode}»`).join('، ')} اکنون نیاز پروژه را می‌پوشاند، اما رزرو ثبت نهایی با رسیدن موجودی خودبه‌خود بیشتر نمی‌شود و پیش‌فاکتور فروش هنوز می‌تواند آن را ببرد؛ برای رزرو آن «تکمیل رزرو» را بزنید.
             </p>
           )}
           {availability.status === 'error' && (
