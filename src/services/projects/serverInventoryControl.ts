@@ -85,9 +85,9 @@ const STOCK_ITEM_COLUMNS = {
 
 /**
  * The live items that may be a ref's `findProjectItemMatch` among every live item, in id order (`itemRefKeyCondition`):
- * the list holds every item that matches a ref in the whole list, so the first match by id, by code then by name, is the
- * same. TD-1341: `itemIds` are the ids refs carry (the stored reservation rows of «تکمیل رزرو»); those items are read too, so
- * a match by id is also the whole list's.
+ * the list holds every item that matches a ref, so each ref gets the lowest-id match, by code then by name. TD-1341:
+ * `itemIds` are the ids refs carry (the stored reservation rows of «تکمیل رزرو»); those items are read too, so a match by
+ * id is the same as well.
  */
 export async function readStockItemsForRefs(
   executor: DbExecutor,
@@ -124,7 +124,7 @@ export async function resolveServerInventoryControl(
   if (finalizing) await executor.execute(sql`SELECT pg_advisory_xact_lock(${ADVISORY_LOCK_KEYS.PROJECT_RESERVATION_FINALIZE}::bigint)`);
   // v9.0.413 (TD-748): بخش الگو (مواد در `items`) با ردیف‌های پروژه ذخیره می‌شود تا رزرو و صفحه‌ها همان ردیف‌ها را بخوانند
   // OBS-R2-45 (TD-1322): only the live items that may match a row are read (`readStockItemsForRefs`): every item the rows
-  // name by code key or name key and every item whose letter case SQL may map unlike JavaScript, so the match is the whole list's
+  // name by code key or name key and every item whose letter case SQL may map unlike JavaScript, so a row gets the lowest-id match
   if (hasPresetShapedSections(rest.sections)) {
     const presetStock = await readStockItemsForRefs(executor, presetMaterialRefs(rest.sections));
     rest.sections = projectSectionsFromPreset(rest.sections, Array.isArray(products) ? products : [], material =>

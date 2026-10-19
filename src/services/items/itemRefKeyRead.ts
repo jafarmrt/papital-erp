@@ -10,12 +10,11 @@ export const JS_TRIM_CHARS = '\t\n\v\f\r              �
 
 /**
  * Code and name characters whose letter case JavaScript and the narrowed SQL key below map alike: the key compares under
- * the "C" collation, which maps only ASCII letters, so a code with any other character, or a name with a character outside
- * ASCII and the Arabic script (no letter case) and its joiners, is read whatever its key; for every other item the SQL key
- * equals `itemCodeKey` / `itemNameKey`
+ * the "C" collation, which maps only ASCII letters, so a code or name with a character outside ASCII and the Arabic script
+ * (no letter case) and its joiners is read whatever its key; for every other item the SQL key equals `itemCodeKey` /
+ * `itemNameKey`
  */
-const CODE_KEY_UNSAFE = '[^\\u0001-\\u007f]';
-const NAME_KEY_UNSAFE = '[^\\u0001-\\u007f\\u0600-\\u06ff\\u200c\\u200d\\ufb50-\\ufdff\\ufe70-\\ufefc]';
+const KEY_UNSAFE_CHAR = '[^\\u0001-\\u007f\\u0600-\\u06ff\\u200c\\u200d\\ufb50-\\ufdff\\ufe70-\\ufefc]';
 
 /** The refs' code keys (`itemCodeKey`) and name keys (`itemNameKey`), computed by the caller, and the item ids they carry */
 export interface ItemRefKeys {
@@ -43,8 +42,8 @@ export function itemRefKeyCondition(keys: ItemRefKeys): SQL | undefined {
     ids.length > 0 ? inArray(items.id, ids) : undefined,
     codes.length > 0 ? inArray(sql`upper(btrim(${items.code}, ${JS_TRIM_CHARS}) COLLATE "C")`, codes) : undefined,
     names.length > 0 ? inArray(sql`lower(btrim(${items.name}, ${JS_TRIM_CHARS}) COLLATE "C")`, names) : undefined,
-    sql`${items.code} ~ ${CODE_KEY_UNSAFE}`,
-    sql`${items.name} ~ ${NAME_KEY_UNSAFE}`,
+    sql`${items.code} ~ ${KEY_UNSAFE_CHAR}`,
+    sql`${items.name} ~ ${KEY_UNSAFE_CHAR}`,
   ].filter((c): c is SQL => c !== undefined);
   return or(...conditions);
 }

@@ -45,7 +45,7 @@ function wrapper({ children }: { children: ReactNode }) {
 describe('TD-721 action logs and stats follow the server contract', () => {
   it('the hook returns the server rows and the total', async () => {
     mockServer();
-    const { result } = renderHook(() => useActionLogsQuery(50, { refetchInterval: false }), { wrapper });
+    const { result } = renderHook(() => useActionLogsQuery(1, { refetchInterval: false }), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.total).toBe(7);
     expect(result.current.data?.logs.map(l => l.id)).toEqual([1]);

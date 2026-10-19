@@ -1,11 +1,10 @@
 import { orm } from '../../db/drizzle';
 import { 
-  workflowInstances, 
   workflowStates, 
   workflowHistoryLogs,
   workflowTaskReopenLog
 } from '../../db/schema';
-import { asc, desc } from 'drizzle-orm';
+import { desc, sql } from 'drizzle-orm';
 import { isUsableSnapshot } from './workflowSnapshot.js';
 import type { WorkflowSnapshotDsl } from './workflowTransitionExecutor.js';
 
@@ -40,7 +39,7 @@ interface ResolvedState { rowId: number; title: string; color: string; slaHours:
  * جاری با همان کلید در همان تعریف شمرده می‌شود؛ ذخیره طرح گام‌ها را با شناسه تازه می‌سازد و پیش‌تر فرایند در جریان
  * «نامشخص، مهلت ۲۴» می‌شد و از شمار فعال گامش بیرون می‌افتاد. گامی که از طرح حذف شده ردیف خودش را می‌گیرد.
  */
-function createStateResolver(states: StateRow[]) {
+export function createStateResolver(states: StateRow[]) {
   const currentById = new Map(states.map(s => [s.id, s]));
   const currentByKey = new Map(states.map(s => [`${s.workflowDefinitionId}:${s.stateKey}`, s]));
   const resolve = (definitionId: number, snapshot: unknown, stateId: number | null | undefined): ResolvedState | undefined => {
@@ -61,6 +60,59 @@ function createStateResolver(states: StateRow[]) {
   };
   return resolve;
 }
+
+/** OBS-R2-72 in SQL: a history row that entered its target step, `isStepEntry` (a partial signature ends with `_SIGN`) */
+const STEP_ENTRY_SQL = sql.raw(String.raw`h.action_key NOT LIKE '%\_SIGN'`);
+
+/**
+ * OBS-R2-71 (TD-1323): each step entry with the hours until the instance's next entry, in (created_at, id) order. The hours
+ * are whole milliseconds ÷ 3,600,000 in double precision, as the earlier loop computed them from the timestamps it read.
+ * Each instance's snapshot is hashed once (`inst`, materialized): hashing it per joined row made the report time out.
+ */
+function stepDurationsCte() {
+  return sql`inst AS MATERIALIZED (
+      SELECT id, workflow_definition_id, md5(snapshot_dsl::text) AS key FROM workflow_instances
+    ),
+    entries AS (
+      SELECT h.instance_id, h.to_state_id, h.created_at,
+             lead(h.created_at) OVER (PARTITION BY h.instance_id ORDER BY h.created_at, h.id) AS next_at
+      FROM workflow_history_logs h
+      WHERE ${STEP_ENTRY_SQL}
+    ),
+    durations AS (
+      SELECT i.workflow_definition_id AS definition_id, i.key, e.to_state_id,
+             (extract(epoch FROM date_trunc('milliseconds', e.next_at) - date_trunc('milliseconds', e.created_at)) * 1000)::float8
+               / 3600000.0::float8 AS hours
+      FROM entries e
+      JOIN inst i ON i.id = e.instance_id
+      WHERE e.next_at IS NOT NULL AND e.to_state_id IS NOT NULL
+    )`;
+}
+
+interface ActiveInstanceRow {
+  id: number;
+  definitionId: number;
+  currentStateId: number | null;
+  createdAt: string | null;
+  entityType: string;
+  entityId: string;
+  startedByName: string | null;
+  key: string | null;
+  enteredAt: string | null;
+}
+
+interface DurationGroupRow {
+  definitionId: number;
+  key: string | null;
+  stateId: number;
+  transitions: number;
+  hours: number;
+}
+
+const rowsOf = <T>(result: unknown): T[] => {
+  const rows = (result as { rows?: unknown })?.rows ?? result;
+  return Array.isArray(rows) ? (rows as T[]) : [];
+};
 
 export interface OverdueInstance {
   instanceId: number;
@@ -105,23 +157,43 @@ export class WorkflowSlaEvaluator {
   }
 
   /**
-   * SLA Analytics & Process Bottleneck Analysis
+   * SLA Analytics & Process Bottleneck Analysis.
+   * OBS-R2-71 (TD-1323): the report no longer loads every instance, its snapshot and every history row. PostgreSQL counts
+   * the instances, reads the running ones with the entry time of their current step, keeps each distinct snapshot once and
+   * sums the step durations per (definition, snapshot, step); the steps are still resolved from each instance's own
+   * snapshot (`createStateResolver`), and the numbers are those of the earlier in-memory loop.
    */
   static async getSlaAnalytics() {
-    const allInstances = await orm.select().from(workflowInstances);
-    const activeInstances = allInstances.filter(i => i.status === 'IN_PROGRESS');
-    const completedInstances = allInstances.filter(i => i.status === 'COMPLETED');
-    const instanceById = new Map(allInstances.map(i => [i.id, i]));
+    const counts = rowsOf<{ total: number; active: number; completed: number }>(await orm.execute(sql`
+      SELECT count(*)::int AS total,
+             count(*) FILTER (WHERE status = 'IN_PROGRESS')::int AS active,
+             count(*) FILTER (WHERE status = 'COMPLETED')::int AS completed
+      FROM workflow_instances`))[0] ?? { total: 0, active: 0, completed: 0 };
+
+    // each distinct snapshot once: instances of one published version share it
+    const snapshots = new Map<string | null, unknown>();
+    for (const row of rowsOf<{ key: string | null; snapshot: unknown }>(await orm.execute(sql`
+      SELECT DISTINCT ON (md5(snapshot_dsl::text)) md5(snapshot_dsl::text) AS key, snapshot_dsl AS snapshot
+      FROM workflow_instances`))) {
+      snapshots.set(row.key, row.snapshot);
+    }
 
     const states = await orm.select().from(workflowStates);
     const resolve = createStateResolver(states);
-    // OBS-R2-69: rows of one transaction share `created_at`; `id` keeps their registration order
-    const historyLogs = await orm.select().from(workflowHistoryLogs).orderBy(asc(workflowHistoryLogs.createdAt), asc(workflowHistoryLogs.id));
-    const instanceLogsMap: Record<number, HistoryRow[]> = {};
-    for (const log of historyLogs) {
-      if (!instanceLogsMap[log.instanceId]) instanceLogsMap[log.instanceId] = [];
-      instanceLogsMap[log.instanceId].push(log);
-    }
+    const resolveKeyed = (definitionId: number, key: string | null, stateId: number | null) =>
+      resolve(definitionId, snapshots.get(key) ?? null, stateId);
+
+    // OBS-R2-72 / OBS-R2-69: the running instances with the latest entry row into their current step, in (created_at, id) order
+    const activeInstances = rowsOf<ActiveInstanceRow>(await orm.execute(sql`
+      SELECT i.id, i.workflow_definition_id AS "definitionId", i.current_state_id AS "currentStateId",
+             i.created_at::text AS "createdAt", i.entity_type AS "entityType", i.entity_id AS "entityId",
+             i.started_by_name AS "startedByName", md5(i.snapshot_dsl::text) AS key,
+             (SELECT h.created_at::text FROM workflow_history_logs h
+               WHERE h.instance_id = i.id AND h.to_state_id = i.current_state_id AND ${STEP_ENTRY_SQL}
+               ORDER BY h.created_at DESC, h.id DESC LIMIT 1) AS "enteredAt"
+      FROM workflow_instances i
+      WHERE i.status = 'IN_PROGRESS'
+      ORDER BY i.id`));
 
     const now = new Date().getTime();
 
@@ -151,10 +223,10 @@ export class WorkflowSlaEvaluator {
     for (const s of states) addStateRow(s.id, s.title, s.color || 'gray', s.slaHours || 24);
 
     for (const inst of activeInstances) {
-      const state = resolve(inst.workflowDefinitionId, inst.snapshotDsl, inst.currentStateId);
+      const state = resolveKeyed(inst.definitionId, inst.key, inst.currentStateId);
       const slaHours = state?.slaHours ?? 24;
       // OBS-R2-72: from the step's entry, not `updated_at` (a partial signature rewrote it and restarted the count)
-      const enteredAt = currentStepEnteredAt(inst, instanceLogsMap[inst.id] ?? []);
+      const enteredAt = inst.enteredAt ?? inst.createdAt;
       const hoursInState = Math.round(((now - new Date(enteredAt || '').getTime()) / (1000 * 60 * 60)) * 10) / 10;
       const isOverdue = hoursInState > slaHours;
 
@@ -180,29 +252,35 @@ export class WorkflowSlaEvaluator {
       }
     }
 
-    // Calculate historical durations from logs: from one step entry to the next (OBS-R2-72: a signature is no entry)
-    for (const instId in instanceLogsMap) {
-      const logs = instanceLogsMap[instId].filter(isStepEntry);
-      const inst = instanceById.get(Number(instId));
-      for (let i = 0; i < logs.length - 1; i++) {
-        const currentLog = logs[i];
-        const nextLog = logs[i + 1];
-        const state = inst ? resolve(inst.workflowDefinitionId, inst.snapshotDsl, currentLog.toStateId) : undefined;
-        if (state) {
-          if (!stateStatsMap[state.rowId]) addStateRow(state.rowId, state.title, state.color, state.slaHours);
-          const t1 = new Date(currentLog.createdAt || '').getTime();
-          const t2 = new Date(nextLog.createdAt || '').getTime();
-          const durationHours = (t2 - t1) / (1000 * 60 * 60);
-
-          stateStatsMap[state.rowId].totalCompletedTransitions++;
-          stateStatsMap[state.rowId].totalDurationHours += durationHours;
-          totalTransitionsChecked++;
-
-          if (durationHours > state.slaHours) {
-            totalSlaViolations++;
-          }
-        }
-      }
+    // Historical durations: from one step entry to the next (OBS-R2-72: a signature is no entry), summed per
+    // (definition, snapshot, step) in SQL; the violations of each group are counted against its resolved SLA
+    const groups = rowsOf<DurationGroupRow>(await orm.execute(sql`
+      WITH ${stepDurationsCte()}
+      SELECT d.definition_id AS "definitionId", d.key, d.to_state_id AS "stateId",
+             count(*)::int AS transitions, COALESCE(sum(d.hours), 0)::float8 AS hours
+      FROM durations d
+      GROUP BY d.definition_id, d.key, d.to_state_id`));
+    const thresholds: Array<{ definitionId: number; key: string | null; stateId: number; sla: number }> = [];
+    for (const group of groups) {
+      const state = resolveKeyed(group.definitionId, group.key, group.stateId);
+      if (!state) continue;
+      if (!stateStatsMap[state.rowId]) addStateRow(state.rowId, state.title, state.color, state.slaHours);
+      stateStatsMap[state.rowId].totalCompletedTransitions += group.transitions;
+      stateStatsMap[state.rowId].totalDurationHours += Number(group.hours);
+      totalTransitionsChecked += group.transitions;
+      thresholds.push({ definitionId: group.definitionId, key: group.key, stateId: group.stateId, sla: state.slaHours });
+    }
+    if (thresholds.length > 0) {
+      // a plain equality on the key (an md5 is never empty; a NULL snapshot is ''), so the thresholds join by hash
+      const [row] = rowsOf<{ violations: number }>(await orm.execute(sql`
+        WITH ${stepDurationsCte()}
+        SELECT count(*)::int AS violations
+        FROM durations d
+        JOIN jsonb_to_recordset(${JSON.stringify(thresholds)}::jsonb)
+          AS t("definitionId" int, key text, "stateId" int, sla float8)
+          ON t."definitionId" = d.definition_id AND COALESCE(t.key, '') = COALESCE(d.key, '') AND t."stateId" = d.to_state_id
+        WHERE d.hours > t.sla`));
+      totalSlaViolations += Number(row?.violations ?? 0);
     }
 
     // Compute averages
@@ -226,9 +304,9 @@ export class WorkflowSlaEvaluator {
 
     return {
       kpi: {
-        totalInstances: allInstances.length,
+        totalInstances: Number(counts.total),
         activeInstances: activeInstances.length,
-        completedInstances: completedInstances.length,
+        completedInstances: Number(counts.completed),
         overdueInstancesCount: overdueInstances.length,
         slaComplianceRate: Math.max(0, slaComplianceRate),
         bottleneckState: bottleneck ? bottleneck.stateTitle : 'بدون گلوگاه'
