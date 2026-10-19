@@ -89,18 +89,17 @@ async function readLiveStockItems(executor: DbExecutor, narrow?: SQL): Promise<R
 
 /**
  * Code and name characters whose letter case JavaScript and the narrowed SQL key below map alike: the key compares under
- * the "C" collation, which maps only ASCII letters, so a code with any other character, or a name with a character outside
- * ASCII and the Arabic script (no letter case) and its joiners, is read whatever its key; for every other item the SQL key
- * equals `itemCodeKey` / `itemNameKey`
+ * the "C" collation, which maps only ASCII letters, so a code or name with a character outside ASCII and the Arabic script
+ * (no letter case) and its joiners is read whatever its key; for every other item the SQL key equals `itemCodeKey` /
+ * `itemNameKey`
  */
-const CODE_KEY_UNSAFE = '[^\\u0001-\\u007f]';
-const NAME_KEY_UNSAFE = '[^\\u0001-\\u007f\\u0600-\\u06ff\\u200c\\u200d\\ufb50-\\ufdff\\ufe70-\\ufefc]';
+const KEY_UNSAFE_CHAR = '[^\\u0001-\\u007f\\u0600-\\u06ff\\u200c\\u200d\\ufb50-\\ufdff\\ufe70-\\ufefc]';
 
 /**
  * The live items that may be a ref's `findProjectItemMatch` among every live item, in id order: those whose code key or
  * name key one of the refs holds, plus every item whose code or name holds a character the SQL key may case-map unlike
- * JavaScript («ß» is «SS» only in JavaScript, «İ» and «Σ» differ too). The list holds every item that matches a ref in the
- * whole list, so the first match by id, by code then by name, is the same.
+ * JavaScript («ß» is «SS» only in JavaScript, «İ» and «Σ» differ too). The list holds every item that matches a ref, so
+ * each ref gets the lowest-id match, by code then by name.
  */
 async function readStockItemsForRefs(executor: DbExecutor, refs: ReadonlyArray<{ code: string; name: string }>): Promise<ReservationStockItem[]> {
   // a key holding NUL names no stored item (PostgreSQL text never holds it) and would refuse the query
@@ -111,8 +110,8 @@ async function readStockItemsForRefs(executor: DbExecutor, refs: ReadonlyArray<{
   const conditions = [
     codes.length > 0 ? inArray(sql`upper(btrim(${items.code}, ${JS_TRIM_CHARS}) COLLATE "C")`, codes) : undefined,
     names.length > 0 ? inArray(sql`lower(btrim(${items.name}, ${JS_TRIM_CHARS}) COLLATE "C")`, names) : undefined,
-    sql`${items.code} ~ ${CODE_KEY_UNSAFE}`,
-    sql`${items.name} ~ ${NAME_KEY_UNSAFE}`,
+    sql`${items.code} ~ ${KEY_UNSAFE_CHAR}`,
+    sql`${items.name} ~ ${KEY_UNSAFE_CHAR}`,
   ].filter((c): c is SQL => c !== undefined);
   return readLiveStockItems(executor, or(...conditions));
 }
@@ -137,7 +136,7 @@ export async function resolveServerInventoryControl(
   if (finalizing) await executor.execute(sql`SELECT pg_advisory_xact_lock(${ADVISORY_LOCK_KEYS.PROJECT_RESERVATION_FINALIZE}::bigint)`);
   // v9.0.413 (TD-748): بخش الگو (مواد در `items`) با ردیف‌های پروژه ذخیره می‌شود تا رزرو و صفحه‌ها همان ردیف‌ها را بخوانند
   // OBS-R2-45 (TD-1322): only the live items that may match a row are read (`readStockItemsForRefs`): every item the rows
-  // name by code key or name key and every item whose letter case SQL may map unlike JavaScript, so the match is the whole list's
+  // name by code key or name key and every item whose letter case SQL may map unlike JavaScript, so a row gets the lowest-id match
   if (hasPresetShapedSections(rest.sections)) {
     const presetStock = await readStockItemsForRefs(executor, presetMaterialRefs(rest.sections));
     rest.sections = projectSectionsFromPreset(rest.sections, Array.isArray(products) ? products : [], material =>
