@@ -1,7 +1,7 @@
 import { formatPersianNumber } from '../../utils/persianNumber';
 
 /**
- * v10.2.17 (OBS-R2-60, 10.2 package 13): image files left in `public/uploads` that no record points to any more. An image
+ * v10.2.18 (OBS-R2-60, 10.2 package 13): image files left in `public/uploads` that no record points to any more. An image
  * field (item, transfer design, avatar, raw material request) is written by `uploadBase64ToStorage` as
  * `<optional prefix->uuid.<jpg|png|webp|gif>` and the record keeps `/uploads/<name>`; replacing the image left the old file
  * on the server. «تصویرهای بی‌صاحب» of «عملیات سامانه», by hand only and after a preview the admin confirms, moves such a

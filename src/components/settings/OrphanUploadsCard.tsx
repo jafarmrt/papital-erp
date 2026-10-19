@@ -7,7 +7,7 @@ import { confirmAction } from '../ConfirmDialogHost';
 import { orphanUploadsMessage, type OrphanUploadsReport } from '../../lib/system/orphanUploads';
 
 /**
- * v10.2.17 (OBS-R2-60, 10.2 package 13): «تصویرهای بی‌صاحب». First a check, then, after a confirmation, a run that acts only on
+ * v10.2.18 (OBS-R2-60, 10.2 package 13): «تصویرهای بی‌صاحب». First a check, then, after a confirmation, a run that acts only on
  * the files the check listed: moves them aside, removes those held past the hold and brings back those named again; never on
  * a schedule.
  */

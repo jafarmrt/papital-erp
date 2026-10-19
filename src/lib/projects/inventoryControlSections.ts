@@ -59,6 +59,13 @@ function materialRow(item: InventoryControlPresetItem, stockOf?: MaterialStockLo
   };
 }
 
+/** OBS-R2-45 (TD-1322): the code and name of each material of the preset-shaped sections, the refs `materialRow` matches */
+export function presetMaterialRefs(sections: unknown): Array<{ code: string; name: string }> {
+  if (!Array.isArray(sections)) return [];
+  return sections.filter(isObject).filter(isPresetShapedSection)
+    .flatMap(section => presetItems(section).map(m => ({ code: m.itemCode ?? '', name: m.name })));
+}
+
 /**
  * بخش‌های کنترل موجودی پروژه از بخش‌های الگو: کنترل کد به کد برای هر محصول پروژه یک ردیف از هر ماده (و `itemsSchema` برای
  * محصولی که بعداً افزوده شود)، کنترل کلی یک ردیف کلی از هر ماده. بخش دیگر همان‌طور برمی‌گردد.

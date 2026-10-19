@@ -4,7 +4,7 @@ import { toast } from 'react-hot-toast';
 import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import type { JournalVoucher } from '../../types';
-import { ACCOUNTING_LIST_QUERY_OPTIONS, fetchAccountingList, silentMutationError } from './accountingQueryConfig';
+import { ACCOUNTING_LIST_QUERY_OPTIONS, fetchAccountingList, silentMutationError, type AccountingListQueryOptions } from './accountingQueryConfig';
 import { invalidateAfterVoucherChange } from './accountingInvalidation';
 import { toVoucherPage, voucherListParams, type JournalVoucherPage, type VoucherListFilters } from '../../lib/accounting/voucherList';
 import { batchFinalizeMessage, type BatchFinalizeResult } from '../../lib/accounting/voucherBatch';
@@ -49,11 +49,12 @@ function vouchersUrl(filters: VoucherFilters): string {
   return query ? `/accounting/vouchers?${query}` : '/accounting/vouchers';
 }
 
-export function useVouchersQuery(filters: VoucherFilters = {}) {
+export function useVouchersQuery(filters: VoucherFilters = {}, { enabled = true }: AccountingListQueryOptions = {}) {
   return useQuery<JournalVoucher[]>({
     queryKey: QUERY_KEYS.accounting.vouchers(filters),
     queryFn: ({ signal }) => fetchAccountingList<JournalVoucher>(vouchersUrl(filters), signal, 'vouchers'),
     ...ACCOUNTING_LIST_QUERY_OPTIONS,
+    enabled,
   });
 }
 

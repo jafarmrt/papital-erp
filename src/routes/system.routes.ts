@@ -368,7 +368,7 @@ router.post('/system/conditional-constraints/build', requireSystemAdmin, validat
   res.json({ ...result, message: conditionalConstraintsResultMessage(result) });
 }));
 
-// v10.2.17 (OBS-R2-60): image files of public/uploads that no row names; a preview unless `apply`, which acts only on the
+// v10.2.18 (OBS-R2-60): image files of public/uploads that no row names; a preview unless `apply`, which acts only on the
 // files of the preview the admin confirmed (moved aside, removed after the hold), by hand only
 const orphanUploadsSchema = z.object({
   body: z.object({

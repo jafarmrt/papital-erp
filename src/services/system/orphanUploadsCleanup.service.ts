@@ -16,7 +16,7 @@ import {
 import { logger } from '../../middleware/logger.js';
 
 /**
- * v10.2.17 (OBS-R2-60, 10.2 package 13): image files of `public/uploads` that no row names (contract and rules in
+ * v10.2.18 (OBS-R2-60, 10.2 package 13): image files of `public/uploads` that no row names (contract and rules in
  * `src/lib/system/orphanUploads.ts`). Only the files the image fields write are candidates, top level only (never
  * `.attachments`, the media library or a public asset folder). A file is named when its UUID appears anywhere in a row of
  * any base table of the current schema (the whole row read as text: a soft-deleted or copied record, a draft, a queued

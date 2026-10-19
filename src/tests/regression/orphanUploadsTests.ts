@@ -12,7 +12,7 @@ import { logActivity } from '../../lib/auditLogger.js';
 type ShouldRun = (id: string, ...extra: string[]) => boolean;
 
 /**
- * v10.2.17 (OBS-R2-60, 10.2 package 13): «تصویرهای بی‌صاحب». Before, a replaced image (item, transfer design, avatar, raw
+ * v10.2.18 (OBS-R2-60, 10.2 package 13): «تصویرهای بی‌صاحب». Before, a replaced image (item, transfer design, avatar, raw
  * material request) stayed in public/uploads for ever and nothing could remove it. The run touches only image files no
  * row names, its UUID matched wherever it stands (a trailing period, an encoded or escaped slash, another letter case, a
  * bare name), and only those of the preview the admin confirmed: it moves them to `.orphaned/<day>/`, re-reads the rows
@@ -23,7 +23,7 @@ export async function runOrphanUploadsTests(shouldRun: ShouldRun): Promise<TestC
   const id = 'reg_orphan_uploads_cleanup_obs_r2_60';
   if (!shouldRun(id, 'obs_r2_60', 'uploads', 'cleanup', 'package13')) return [];
   const tStart = Date.now();
-  const name = 'v10.2.17: orphan upload images are checked, then moved aside and removed after the hold only when no row names their UUID (OBS-R2-60)';
+  const name = 'v10.2.18: orphan upload images are checked, then moved aside and removed after the hold only when no row names their UUID (OBS-R2-60)';
   try {
     const details = await orphanUploadsCase();
     return [makeTestCase({ id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart, details })];

@@ -20,6 +20,11 @@ export const ACCOUNTING_LIST_QUERY_OPTIONS = {
   retry: false,
 } as const;
 
+/** OBS-R2-105 (TD-1322): a list is read only while a tab or window on screen shows it */
+export interface AccountingListQueryOptions {
+  enabled?: boolean;
+}
+
 export const ACCOUNTING_REPORT_QUERY_OPTIONS = {
   staleTime: FIVE_MINUTES,
   refetchOnWindowFocus: false,

@@ -41,9 +41,16 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
   };
   const canApproveVoucher = hasPerm('accounting.vouchers_approve');
 
+  const validTabs = ['dashboard', 'coa', 'vouchers', 'explorer', 'treasury', 'cheques', 'reports', 'fiscal-closing'] as const;
+  type TabType = typeof validTabs[number];
+
+  const currentTab: TabType = (tab && (validTabs as readonly string[]).includes(tab)) ? (tab as TabType) : 'dashboard';
+
+  // v9.0.131 (TD-668): هر زبانه همان دسترسی پیوند منوی خودش در جدول یکتای pageAccess را دارد؛ «کدینگ» به تنظیمات می‌رود
+  const tabRule = pageAccessRule(`/accounting/${currentTab}`);
+  const isTabAllowed = currentTab === 'coa' || canOpenPage(`/accounting/${currentTab}`, viewer);
+
   const {
-    activeTab,
-    setActiveTab,
     loading,
     isSyncingBanks,
     stats,
@@ -93,28 +100,15 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
     handleUpdateChequeStatus,
     handleDeleteCheque,
     syncAndReconcileBanks,
-  } = useAccounting();
+  // OBS-R2-105 (TD-1322): only the lists of the tab on screen are read
+  } = useAccounting({ tab: currentTab, allowed: isTabAllowed });
 
-  const validTabs = ['dashboard', 'coa', 'vouchers', 'explorer', 'treasury', 'cheques', 'reports', 'fiscal-closing'] as const;
-  type TabType = typeof validTabs[number];
-
-  const currentTab: TabType = (tab && (validTabs as readonly string[]).includes(tab)) ? (tab as TabType) : 'dashboard';
-
-  // v9.0.131 (TD-668): هر زبانه همان دسترسی پیوند منوی خودش در جدول یکتای pageAccess را دارد؛ «کدینگ» به تنظیمات می‌رود
-  const tabRule = pageAccessRule(`/accounting/${currentTab}`);
-  const isTabAllowed = currentTab === 'coa' || canOpenPage(`/accounting/${currentTab}`, viewer);
 
   useEffect(() => {
     if (tab === 'coa') {
       void navigate('/settings?tab=chart_of_accounts', { replace: true });
     }
   }, [tab, navigate]);
-
-  useEffect(() => {
-    if (currentTab !== activeTab) {
-      setActiveTab(currentTab);
-    }
-  }, [currentTab, activeTab, setActiveTab]);
 
   const handleTabChange = (newTab: string) => {
     if (newTab === 'coa') {

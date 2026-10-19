@@ -47,8 +47,11 @@ export const PERSONNEL_PICK_URL = `/personnel?limit=${PERSONNEL_PICK_REQUEST_LIM
 /** The sales seller picker: personnel who have not left only, so a leaver takes no place under the cap */
 export const PERSONNEL_ACTIVE_PICK_URL = `${PERSONNEL_PICK_URL}&activeOnly=1`;
 export const PERSONNEL_PICK_CAP_TOAST_ID = 'personnel-pick-cap';
+// a search on the personnel page makes no one selectable in a picker, so the notice only says who is missing (TD-1362)
 export const PERSONNEL_PICK_CAP_NOTICE =
-  `بیش از ${PERSONNEL_PICK_LIMIT.toLocaleString('fa-IR')} نفر؛ برای یافتن بقیه نام را در فهرست پرسنل جست‌وجو کنید.`;
+  `فهرست انتخاب فقط ${PERSONNEL_PICK_LIMIT.toLocaleString('fa-IR')} پرسنلِ آخرِ ثبت‌شده را دارد؛ پرسنل قدیمی‌تر در این فهرست نیستند.`;
+/** long enough to read the notice once */
+export const PERSONNEL_PICK_CAP_TOAST_MS = 8000;
 
 let capNoticeShown = false;
 

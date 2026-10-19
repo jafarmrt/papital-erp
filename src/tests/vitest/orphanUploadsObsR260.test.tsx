@@ -5,7 +5,7 @@ import {
   uploadUuidOf, uploadUuidsIn, type OrphanUploadsReport,
 } from '../../lib/system/orphanUploads';
 
-// v10.2.17 (OBS-R2-60, 10.2 package 13): a replaced image stayed in public/uploads for ever. «پاک کردن تصویرهای بی‌صاحب»
+// v10.2.18 (OBS-R2-60, 10.2 package 13): a replaced image stayed in public/uploads for ever. «پاک کردن تصویرهای بی‌صاحب»
 // checks first and, after a confirmation, moves aside only the files the check listed; only the names the image fields
 // write are candidates, and a file is kept when its UUID appears anywhere in a row (the server reads the rows with the
 // same pattern, UPLOAD_UUID_PATTERN_SOURCE).
