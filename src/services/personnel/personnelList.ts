@@ -2,7 +2,7 @@ import { and, count, desc, eq, or, sql, type SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { personnel, users } from '../../db/schema.js';
 import { compactFoldedSearchSql } from '../../lib/search/searchSql.js';
-import { compactSearchText } from '../../lib/search/searchText.js';
+import { compactSearchText, withoutNul } from '../../lib/search/searchText.js';
 import { TERMINATED_EMPLOYMENT_STATUS } from '../../lib/payroll/payrollPeriod.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
 import type { PersonnelReadScope } from './personnelFieldScope.js';
@@ -81,7 +81,7 @@ function searchColumns(filter: PersonnelListFilter) {
 
 export function personnelListConditions(filter: PersonnelListFilter): SQL {
   const conditions: SQL[] = [eq(personnel.isDeleted, 0)];
-  const status = (filter.status ?? '').trim();
+  const status = withoutNul(filter.status ?? '').trim();
   if (status && status !== 'all') conditions.push(eq(personnel.employmentStatus, status));
   if (filter.activeOnly) {
     conditions.push(sql`btrim(coalesce(${personnel.employmentStatus}, '')) <> ${TERMINATED_EMPLOYMENT_STATUS}`);

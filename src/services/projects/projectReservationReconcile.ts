@@ -7,9 +7,9 @@ import { ADVISORY_LOCK_KEYS } from '../../lib/advisoryLock.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { nextVersion } from '../../lib/occHelper.js';
-import { hasPresetShapedSections, projectSectionsFromPreset } from '../../lib/projects/inventoryControlSections.js';
+import { hasPresetShapedSections, presetMaterialRefs, projectSectionsFromPreset } from '../../lib/projects/inventoryControlSections.js';
 import { findProjectItemMatch } from '../../lib/projects/projectItemMatch.js';
-import type { ReservationShortage, ReservationStockItem } from '../../lib/projects/projectReservation.js';
+import { projectNeedRefs, type ReservationShortage, type ReservationStockItem } from '../../lib/projects/projectReservation.js';
 import { isProjectFinalized, reservationQtyField, storedReservationRows, storedReservationShortages } from '../../lib/projects/projectReservationState.js';
 import { isProjectOpenForAllocation } from '../../lib/projects/projectStatus.js';
 import {
@@ -19,7 +19,7 @@ import {
 import { logReservationReconcile } from './projectAudit.js';
 import { lockLiveProject, type ProjectActor } from './projectStatusSync.js';
 import { assertProjectVersion, projectVersionConflict } from './projectVersion.js';
-import { planReservationWithOthers, readReservationStockItems } from './serverInventoryControl.js';
+import { planReservationWithOthers, readStockItemsForRefs } from './serverInventoryControl.js';
 
 /**
  * TD-1341 (بستهٔ ۱۲ بند ۱، گزینهٔ ب کارت ت۴۲): «تکمیل رزرو» رزرو پروژهٔ ثبت نهایی‌شده را با فهرست مواد ذخیره‌شدهٔ امروز برابر
@@ -43,6 +43,12 @@ const refItemId = (v: unknown): number | null => {
   const n = typeof v === 'number' ? v : typeof v === 'string' && /^\d+$/.test(v.trim()) ? Number(v.trim()) : NaN;
   return Number.isSafeInteger(n) && n > 0 ? n : null;
 };
+/** ردیف رزرو ذخیره‌شده به شکل ردیف مواد، همان فیلدهایی که گزارش رزروها می‌خواند */
+const storedRowRef = (raw: StoredRow) => ({
+  itemId: refItemId(raw.itemId),
+  code: rowText(raw.itemCode) || rowText(raw.code),
+  name: rowText(raw.itemName) || rowText(raw.name),
+});
 const qtyKey = (v: number): number => Math.round((Number(v) || 0) * 10_000);
 const qty4 = (v: number): number => fin(v).round(4).toNumber();
 
@@ -68,7 +74,7 @@ function ownReservationsByItem(rows: StoredRow[], stockItems: ReservationStockIt
     const field = reservationQtyField(raw);
     const qty = field ? Number(raw[field]) : 0;
     if (!(qty > 0) || !Number.isFinite(qty)) return null;
-    const match = findProjectItemMatch({ itemId: refItemId(raw.itemId), code: rowText(raw.itemCode) || rowText(raw.code), name: rowText(raw.itemName) || rowText(raw.name) }, stockItems);
+    const match = findProjectItemMatch(storedRowRef(raw), stockItems);
     if (!match) return null;
     byItem.set(match.id, fin(byItem.get(match.id) ?? 0).add(qty).toNumber());
     return match.id;
@@ -87,12 +93,20 @@ async function computeReconcile(executor: DbExecutor, project: ProjectRow): Prom
   assertReconcilable(project);
   const ic = asObject(project.inventoryControl);
   const products: unknown = project.products;
-  const stockItems = await readReservationStockItems(executor);
-  const planIc: InventoryControl = hasPresetShapedSections(ic.sections)
-    ? { ...ic, sections: projectSectionsFromPreset(ic.sections, Array.isArray(products) ? products : [], m => findProjectItemMatch({ code: m.code, name: m.name }, stockItems)?.currentStock) }
-    : ic;
-
+  // the finalize's narrowed item read (TD-1322, `readStockItemsForRefs`): the items the preset materials, the needs and the
+  // stored reservation rows (by id too) may match, so every match is the one the whole item list gives
+  let planIc: InventoryControl = ic;
+  if (hasPresetShapedSections(ic.sections)) {
+    const presetStock = await readStockItemsForRefs(executor, presetMaterialRefs(ic.sections));
+    planIc = { ...ic, sections: projectSectionsFromPreset(ic.sections, Array.isArray(products) ? products : [], m => findProjectItemMatch({ code: m.code, name: m.name }, presetStock)?.currentStock) };
+  }
   const storedRows = storedReservationRows<StoredRow>(ic);
+  const storedRefs = storedRows.map(storedRowRef);
+  const stockItems = await readStockItemsForRefs(
+    executor,
+    [...projectNeedRefs(planIc.sections, products, planIc.manualPurchaseItems), ...storedRefs],
+    storedRefs.map(r => r.itemId).filter((id): id is number => id !== null),
+  );
   const own = ownReservationsByItem(storedRows, stockItems);
   const reservedAt = systemNowUtcIso();
   const plan = await planReservationWithOthers(planIc, products, stockItems, reservedAt, executor, project.id, own.byItem);

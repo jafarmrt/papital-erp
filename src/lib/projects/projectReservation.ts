@@ -162,6 +162,14 @@ function collectNeedRows(sections: unknown, products: unknown, manualPurchaseIte
   return rows;
 }
 
+/**
+ * OBS-R2-45 (TD-1322): the code and name of every row the finalize matches against stock items (`findProjectItemMatch` by code
+ * key, then name key), so the server reads only the items these refs may name instead of every item
+ */
+export function projectNeedRefs(sections: unknown, products: unknown, manualPurchaseItems: unknown): Array<{ code: string; name: string }> {
+  return collectNeedRows(sections, products, manualPurchaseItems).map(r => ({ code: r.code, name: r.name }));
+}
+
 /** مقدار ردیف به واحد کالا، یا null وقتی واحد فرق دارد و تبدیل معتبر نیست */
 function needInItemUnit(row: NeedRow, itemUnit: string): { qty: number; conversion?: { unit: string; rate: number } } | null {
   const rowUnit = unitKey(row.unit);

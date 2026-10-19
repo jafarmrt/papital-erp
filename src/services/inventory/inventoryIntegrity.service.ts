@@ -121,12 +121,4 @@ export class InventoryIntegrityService {
     return ProjectBomAllocationService.releaseAllocation(allocationId, opts);
   }
 
-  static async getAllAllocations(params?: {
-    projectId?: number;
-    itemId?: number;
-    status?: string;
-    search?: string;
-  }) {
-    return ProjectBomAllocationService.getAllAllocations(params);
-  }
 }

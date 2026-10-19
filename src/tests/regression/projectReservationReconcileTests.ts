@@ -23,6 +23,9 @@ export async function runProjectReservationReconcileTests(shouldRun: ShouldRun):
     ['reg_project_reservation_reconcile_void_restores_td_1341',
       'v10.2.x: after a reconcile a remittance void restores what it deducted and the reconcile then finds nothing to change; nothing is reserved twice (TD-1341)',
       ['td1341', 'package12', 'projects', 'reservation', 'void'], voidRestoresCase],
+    ['reg_project_reservation_reconcile_row_by_id_td_1341',
+      'v10.2.x: the reconcile reads its items with the finalize\'s narrowed read and still finds a stored reservation row by its item id after the item\'s code and name changed, as the whole item list does (TD-1341)',
+      ['td1341', 'td1322', 'package12', 'projects', 'reservation'], rowByIdCase],
   ]);
 }
 
@@ -193,4 +196,19 @@ async function voidRestoresCase(h: Harness, wrong: string[]): Promise<string> {
   const view = await reservedOf(a);
   if (view.project !== 5) wrong.push(`the reservation report shows ${view.project} for the project, expected 5`);
   return 'a void after a reconcile restores exactly what was deducted';
+}
+
+/** A stored row is matched by its item id like the whole item list, even when no ref names the item's code or name any more */
+async function rowByIdCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const a = await f.item(10);
+  const project = await createProject(h, { sections: globalSection([await materialRow(h, a, 6)]), manualPurchaseItems: [], isFinalized: true });
+  if (await storedQty(h, project, a) !== 6) throw new Error('setup: the finalize did not reserve 6');
+  // the item is recoded and renamed after the finalize: the list row and the stored row still carry the old code and name
+  await h.q('UPDATE items SET code = $2, name = $3 WHERE id = $1', [a, `RECODED-${h.tag}`, `recoded ${h.tag}`]);
+  const p = await preview(h, project);
+  const la = lineOf(p, a);
+  if (la?.currentQty !== 6 || la?.targetQty !== 0) wrong.push(`the preview of the recoded item is ${JSON.stringify(la)}, expected its stored 6 found by id and released (no list row names it)`);
+  if (!p.hasChanges) wrong.push('the preview says nothing changes');
+  return 'a stored row is found by its item id';
 }

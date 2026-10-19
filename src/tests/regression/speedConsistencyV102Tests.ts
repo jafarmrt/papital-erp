@@ -1,8 +1,8 @@
 import request from 'supertest';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { asc, eq, inArray, sql } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { personnel, roles, users } from '../../db/schema.js';
+import { items, itemWarehouseStocks, personnel, productionProjects, projectBomAllocations, roles, users } from '../../db/schema.js';
 import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 import { money } from '../../lib/money.js';
 
@@ -29,6 +29,8 @@ async function runCase(results: TestCaseResult[], id: string, name: string, deta
 }
 
 const TERMINATED = 'قطع همکاری';
+/** typed with the Persian «ی»; the allocation stores the Arabic «ي» */
+const PERSIAN_YEH_SEARCH = 'آبی';
 
 /** A valid Iranian national ID not used by another test run */
 function randomNationalId(): string {
@@ -133,7 +135,7 @@ export async function runSpeedConsistencyV102Tests(shouldRun: ShouldRun): Promis
     if (roleIds.length > 0) await deleteTestRoles(inArray(roles.id, roleIds)).catch(() => undefined);
   }
 
-  if (shouldRun('reg_personnel_search_cap_td_1321', 'td_1321', 'personnel', 'pagination', 'zwnj', 'obs_r1_69')) {
+  if (shouldRun('reg_personnel_search_cap_td_1321', 'td_1321', 'personnel', 'pagination')) {
     const personnelIds: number[] = [];
     await runCase(results, 'reg_personnel_search_cap_td_1321',
       'OBS-R1-69 personnel pagination: a search ignores spaces and zero-width marks, activeOnly leaves out leavers, and a pick list without a limit stays uncapped (TD-1321)',
@@ -159,6 +161,9 @@ export async function runSpeedConsistencyV102Tests(shouldRun: ShouldRun): Promis
           const found = await rows(`?search=${encodeURIComponent(search)}`);
           if (found.length !== 1) wrong.push(`the search ${JSON.stringify(search)} found ${found.length} rows`);
         }
+        // a NUL in the search answered 500 (SQLSTATE 22021): it is dropped like a space
+        const withNul = await rows(`?search=${encodeURIComponent(`علی\u0000زاده ${tag}`)}`);
+        if (withNul.length !== 1) wrong.push(`the search with a NUL character found ${withNul.length} rows`);
         const everyone = await rows(`?search=${encodeURIComponent(tag)}`);
         const active = await rows(`?search=${encodeURIComponent(tag)}&activeOnly=1`);
         if (everyone.length !== 3) wrong.push(`the tagged search found ${everyone.length} of 3`);
@@ -179,6 +184,160 @@ export async function runSpeedConsistencyV102Tests(shouldRun: ShouldRun): Promis
         }
       });
     if (personnelIds.length > 0) await orm.delete(personnel).where(inArray(personnel.id, personnelIds)).catch(() => undefined);
+  }
+
+  if (shouldRun('reg_bom_allocation_paged_list_td_1322', 'td_1322', 'allocations', 'pagination', 'obs_r2_45', 'nul')) {
+    const projectIds: number[] = [];
+    const itemIds: number[] = [];
+    await runCase(results, 'reg_bom_allocation_paged_list_td_1322',
+      'OBS-R2-45 allocations pagination: the material allocation list is searched, filtered, counted and paged in SQL; without page it still answers every filtered allocation; a NUL in a search or status is dropped (TD-1322)',
+      'GET /api/inventory/allocations?page= answers { allocations, total, page, limit, statusCounts }; the counts ignore the status picked; the search folds Arabic letters; no page = the whole filtered list; a NUL answers 200 here, in the personnel status and in the daily log search',
+      async (wrong) => {
+        const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+        const { createTestItem } = await import('../fixtures/factories.js');
+        const app = await getTestApp();
+        const admin = await getAdminSession();
+        const tag = `AL${Date.now().toString(36)}`;
+        const [project] = await orm.insert(productionProjects).values({ projectCode: `${tag}-P`, title: `پروژه ${tag}` }).returning({ id: productionProjects.id });
+        projectIds.push(project.id);
+        const item = await createTestItem({ type: 'raw_material' });
+        itemIds.push(item.id);
+        // «ي» stored Arabic: a search typed with the Persian «ی» must still find it
+        const statuses = ['allocated', 'allocated', 'consumed', 'released'];
+        await orm.insert(projectBomAllocations).values(statuses.map((status, i) => ({
+          projectId: project.id, projectCode: `${tag}-P`, itemId: item.id, itemCode: item.code, itemName: i === 0 ? `مهره ${tag} آبي` : `سنگ ${tag}`,
+          quantity: i + 1, status, username: 'admin',
+        })));
+
+        const get = async (query: string) => {
+          const res = await request(app).get(`/api/inventory/allocations?projectId=${project.id}${query}`).set('Cookie', admin.cookie);
+          if (res.status !== 200) throw new Error(`GET /api/inventory/allocations${query} returned ${res.status}: ${JSON.stringify(res.body).slice(0, 160)}`);
+          return res.body as Row & { allocations?: Row[]; statusCounts?: Row };
+        };
+
+        const first = await get('&page=1&limit=3');
+        if ((first.allocations ?? []).length !== 3 || Number(first.total) !== 4 || Number(first.page) !== 1 || Number(first.limit) !== 3) {
+          wrong.push(`page 1 of 3: ${(first.allocations ?? []).length} rows, total ${first.total}, page ${first.page}, limit ${first.limit}`);
+        }
+        const counts = first.statusCounts ?? {};
+        if (Number(counts.all) !== 4 || Number(counts.allocated) !== 2 || Number(counts.consumed) !== 1 || Number(counts.released) !== 1) {
+          wrong.push(`status counts ${JSON.stringify(first.statusCounts)}, expected all 4, allocated 2, consumed 1, released 1`);
+        }
+        const second = await get('&page=2&limit=3');
+        if ((second.allocations ?? []).length !== 1) wrong.push(`page 2 of 3 had ${(second.allocations ?? []).length} rows, expected 1`);
+        const pagedIds = new Set([...(first.allocations ?? []), ...(second.allocations ?? [])].map(r => Number(r.id)));
+        if (pagedIds.size !== 4) wrong.push(`the two pages held ${pagedIds.size} distinct allocations, expected 4`);
+
+        const allocatedOnly = await get('&page=1&limit=10&status=allocated');
+        if (Number(allocatedOnly.total) !== 2 || (allocatedOnly.allocations ?? []).some(r => r.status !== 'allocated')) {
+          wrong.push(`the allocated filter answered total ${allocatedOnly.total} with statuses ${(allocatedOnly.allocations ?? []).map(r => r.status).join(',')}`);
+        }
+        if (Number(allocatedOnly.statusCounts?.all) !== 4) wrong.push(`the status counts followed the status filter: ${JSON.stringify(allocatedOnly.statusCounts)}`);
+
+        const searched = await get(`&page=1&limit=10&search=${encodeURIComponent(PERSIAN_YEH_SEARCH)}`);
+        if (Number(searched.total) !== 1) wrong.push(`a search with the Persian yeh found ${searched.total} allocations, expected the one stored with the Arabic yeh`);
+
+        const whole = await get('');
+        if ((whole.allocations ?? []).length !== 4 || Number(whole.total) !== 4 || 'statusCounts' in whole) {
+          wrong.push(`without page the list answered ${(whole.allocations ?? []).length} rows, total ${whole.total}`);
+        }
+
+        // a NUL in a search answered 500 (SQLSTATE 22021): it is dropped like a space
+        const nulPage = await get(`&page=1&limit=10&search=${encodeURIComponent('\u0000')}`);
+        if (Number(nulPage.total) !== 4) wrong.push(`a search of only a NUL found ${nulPage.total} allocations, expected all 4`);
+        const nulExport = await get(`&search=${encodeURIComponent(`${tag}\u0000`)}`);
+        if (Number(nulExport.total) !== 4) wrong.push(`the export searched with a NUL after the tag found ${nulExport.total} allocations, expected 4`);
+        for (const path of [`/api/personnel?page=1&status=${encodeURIComponent('\u0000')}`, `/api/personnel?status=${encodeURIComponent('a\u0000b')}`, `/api/daily-logs?search=${encodeURIComponent('a\u0000b')}`]) {
+          const res = await request(app).get(path).set('Cookie', admin.cookie);
+          if (res.status !== 200) wrong.push(`GET ${path.replace('%00', '<NUL>')} answered ${res.status}, expected 200`);
+        }
+      });
+    if (projectIds.length > 0) {
+      await orm.delete(projectBomAllocations).where(inArray(projectBomAllocations.projectId, projectIds)).catch(() => undefined);
+      await orm.delete(productionProjects).where(inArray(productionProjects.id, projectIds)).catch(() => undefined);
+    }
+    if (itemIds.length > 0) await orm.delete(items).where(inArray(items.id, itemIds)).catch(() => undefined);
+  }
+
+  if (shouldRun('reg_finalize_item_match_like_whole_list_td_1322', 'td_1322', 'finalize', 'reservation', 'preset', 'obs_r2_45')) {
+    const itemIds: number[] = [];
+    await runCase(results, 'reg_finalize_item_match_like_whole_list_td_1322',
+      'OBS-R2-45 finalize reservation and preset: the narrowed item read reserves and prices every item reading all items did, codes and names with a tab, newline, no-break space, BOM or «ß» included (TD-1322)',
+      'resolveServerInventoryControl finalizing a global section reserves items stored as code «X\\t», «X\\n», «xß» (row «XSS»), name «Y\\u00a0», «\\ufeffY» and a plain code; a preset section gets their stock, never needs_procurement',
+      async (wrong) => {
+        const { createTestItem } = await import('../fixtures/factories.js');
+        const { resolveServerInventoryControl } = await import('../../services/projects/serverInventoryControl.js');
+        const tag = `FM${Date.now().toString(36).toUpperCase()}`;
+        const stored = [
+          { code: `${tag}A\t`, name: `${tag} a`, row: { itemCode: `${tag}A` } },
+          { code: `${tag}B`, name: `${tag} b\u00a0`, row: { name: `${tag} b` } },
+          { code: `${tag}C\n`, name: `${tag} c`, row: { itemCode: `${tag}C` } },
+          { code: `${tag}D`, name: `\ufeff${tag} d`, row: { name: `${tag} d` } },
+          { code: `x${tag}ß`, name: `${tag} e`, row: { itemCode: `X${tag}SS` } },
+          { code: `${tag}F`, name: `${tag} f`, row: { itemCode: `${tag}F` } },
+        ];
+        for (const it of stored) {
+          const item = await createTestItem({ type: 'raw_material', code: it.code, name: it.name, unit: 'عدد' });
+          itemIds.push(Number(item.id));
+        }
+        const rows = stored.map((it, i) => ({ itemId: `row-${i}`, itemCode: '', name: '', unit: 'عدد', requiredQty: 2, ...it.row }));
+        const finalized = await resolveServerInventoryControl(
+          { isFinalized: true, manualPurchaseItems: [], sections: [{ id: 'sec-1', title: 'materials', checkType: 'global', globalItems: rows }] },
+          {}, [], orm, null,
+        ) as Row & { reservedItems?: Row[] };
+        const reserved = new Map((finalized.reservedItems ?? []).map(r => [Number(r.itemId), Number(r.reservedQty)]));
+        stored.forEach((it, i) => {
+          if (reserved.get(itemIds[i]) !== 2) wrong.push(`the row for ${JSON.stringify(it.code)} / ${JSON.stringify(it.name)} reserved ${reserved.get(itemIds[i]) ?? 'nothing'}, expected 2`);
+        });
+
+        const preset = await resolveServerInventoryControl(
+          { isFinalized: false, sections: [{ id: 'sec-p', title: 'preset', checkType: 'global', items: stored.map(it => ({ itemCode: it.row.itemCode, name: it.row.name ?? '', unit: 'عدد' })) }] },
+          {}, [], orm, null,
+        ) as Row & { sections?: Array<Row & { globalItems?: Row[] }> };
+        const presetRows = preset.sections?.[0]?.globalItems ?? [];
+        stored.forEach((it, i) => {
+          const row = presetRows[i];
+          if (!row || Number(row.stockQty) !== 100 || row.status !== 'available') {
+            wrong.push(`the preset row for ${JSON.stringify(it.code)} / ${JSON.stringify(it.name)} got stock ${row?.stockQty} and ${row?.status}, expected 100 and available`);
+          }
+        });
+      });
+    if (itemIds.length > 0) {
+      await orm.delete(itemWarehouseStocks).where(inArray(itemWarehouseStocks.itemId, itemIds)).catch(() => undefined);
+      await orm.delete(items).where(inArray(items.id, itemIds)).catch(() => undefined);
+    }
+  }
+
+  if (shouldRun('reg_finalize_case_mapping_pair_td_1322', 'td_1322', 'finalize', 'reservation', 'obs_r2_45')) {
+    const itemIds: number[] = [];
+    await runCase(results, 'reg_finalize_case_mapping_pair_td_1322',
+      'OBS-R2-45 finalize reservation: of two items whose codes differ only by a case mapping PostgreSQL lacks («xß» and «XSS»), the narrowed read reserves the one the whole item list matches (TD-1322)',
+      'items «x<tag>ß» (lower id) and «X<tag>SS», a row naming «X<tag>SS»: the reservation goes to findProjectItemMatch over every live item',
+      async (wrong) => {
+        const { createTestItem } = await import('../fixtures/factories.js');
+        const { resolveServerInventoryControl } = await import('../../services/projects/serverInventoryControl.js');
+        const { findProjectItemMatch } = await import('../../lib/projects/projectItemMatch.js');
+        const tag = `CM${Date.now().toString(36).toUpperCase()}`;
+        for (const code of [`x${tag}ß`, `X${tag}SS`]) {
+          const item = await createTestItem({ type: 'raw_material', code, name: `${code} pair`, unit: 'عدد' });
+          itemIds.push(Number(item.id));
+        }
+        const live = await orm.select({ id: items.id, code: items.code, name: items.name }).from(items).where(eq(items.isDeleted, 0)).orderBy(asc(items.id));
+        const expected = findProjectItemMatch({ code: `X${tag}SS`, name: '' }, live)?.id;
+        if (expected !== itemIds[0]) wrong.push(`the whole list matched item ${expected}, expected the lower id ${itemIds[0]} (test setup)`);
+        const finalized = await resolveServerInventoryControl(
+          { isFinalized: true, manualPurchaseItems: [], sections: [{ id: 'sec-1', title: 'materials', checkType: 'global', globalItems: [
+            { itemId: 'row-0', itemCode: `X${tag}SS`, name: '', unit: 'عدد', requiredQty: 2 },
+          ] }] },
+          {}, [], orm, null,
+        ) as Row & { reservedItems?: Row[] };
+        const reserved = (finalized.reservedItems ?? []).map(r => `${Number(r.itemId)}:${Number(r.reservedQty)}`);
+        if (reserved.join(',') !== `${expected}:2`) wrong.push(`reserved ${JSON.stringify(reserved)}, expected ${expected}:2`);
+      });
+    if (itemIds.length > 0) {
+      await orm.delete(itemWarehouseStocks).where(inArray(itemWarehouseStocks.itemId, itemIds)).catch(() => undefined);
+      await orm.delete(items).where(inArray(items.id, itemIds)).catch(() => undefined);
+    }
   }
 
   return results;

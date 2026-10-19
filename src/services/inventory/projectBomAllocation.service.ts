@@ -24,6 +24,8 @@ import { isProjectOpenForAllocation, projectStatusLabel } from '../../lib/projec
 import { allocationStatusLabel } from '../../lib/projects/allocationLabels.js';
 import { logBomAllocation, logBomConsumption, logBomRelease } from './bomAllocationAudit.js';
 import { RECIPIENT_INVALID, RECIPIENT_INVALID_MESSAGE, RECIPIENT_TERMINATED_STATUS } from '../../lib/workshop/recipient.js';
+import { toAllocationRecord, type ProjectBomAllocationRecord } from './bomAllocationRecord.js';
+export { toAllocationRecord, type ProjectBomAllocationRecord };
 export interface BomAllocationItemInput {
   itemId: number;
   quantity: number;
@@ -31,38 +33,7 @@ export interface BomAllocationItemInput {
   notes?: string;
 }
 
-export interface ProjectBomAllocationRecord {
-  id: number;
-  projectId: number;
-  projectCode: string;
-  itemId: number;
-  itemCode: string;
-  itemName: string;
-  quantity: number;
-  unit: string;
-  sourceTransactionId: number | null;
-  sourceLocation: string;
-  status: 'allocated' | 'consumed' | 'released';
-  userId: number | null;
-  username: string;
-  notes: string;
-  allocatedAt: string | null;
-  consumedAt: string | null;
-  releasedAt: string | null;
-  /** v10.1.37 (N-01, TD-1283): the personnel who receives the materials and confirms them in the workshop cartable */
-  recipientPersonnelId: number | null;
-  /** v10.0.130 (TD-1210): بهای کاردکس خروج تخصیص به ریال (همان مبلغ سند ۱۴۰۲)؛ null وقتی حرکت منبع خروج نیست */
-  cost?: number | null;
-  transactionDetails?: {
-    date: string;
-    documentType: string;
-    documentRef: string;
-    quantity: number;
-  } | null;
-}
 
-type AllocationRow = typeof projectBomAllocations.$inferSelect;
-type TransactionRow = typeof transactions.$inferSelect;
 type ProjectRow = typeof productionProjects.$inferSelect;
 type ItemRow = typeof items.$inferSelect;
 
@@ -71,42 +42,6 @@ interface AllocationOperator {
   name: string;
 }
 
-/** ردیف تخصیص به شکل خروجی API؛ با ردیف کاردکس منبع اگر خوانده شده باشد */
-function toAllocationRecord(alloc: AllocationRow, tx?: TransactionRow | null): ProjectBomAllocationRecord {
-  const record: ProjectBomAllocationRecord = {
-    id: alloc.id,
-    projectId: alloc.projectId,
-    projectCode: alloc.projectCode,
-    itemId: alloc.itemId,
-    itemCode: alloc.itemCode,
-    itemName: alloc.itemName,
-    quantity: fin(alloc.quantity).toNumber(),
-    unit: alloc.unit || 'عدد',
-    sourceTransactionId: alloc.sourceTransactionId,
-    sourceLocation: alloc.sourceLocation || 'main',
-    status: (alloc.status || 'allocated') as ProjectBomAllocationRecord['status'],
-    userId: alloc.userId,
-    username: alloc.username || '',
-    notes: alloc.notes || '',
-    allocatedAt: alloc.allocatedAt,
-    consumedAt: alloc.consumedAt,
-    releasedAt: alloc.releasedAt,
-    recipientPersonnelId: alloc.recipientPersonnelId ?? null,
-  };
-  if (tx === undefined) return record;
-  return {
-    ...record,
-    cost: tx && tx.type === 'out' ? fin(tx.unitPrice ?? 0).multiply(tx.quantity ?? 0).toNumber() : null,
-    transactionDetails: tx
-      ? {
-          date: tx.date || '',
-          documentType: tx.documentType || '',
-          documentRef: tx.documentRef || '',
-          quantity: fin(tx.quantity).toNumber(),
-        }
-      : null,
-  };
-}
 
 function operatorOf(userId?: number, username?: string): AllocationOperator {
   return {
@@ -552,42 +487,5 @@ export class ProjectBomAllocationService {
    */
   static async getProjectAllocations(projectId: number): Promise<ProjectBomAllocationRecord[]> {
     return listAllocations([eq(projectBomAllocations.projectId, projectId)]);
-  }
-
-  /**
-   * Returns global BOM allocations with filtering and traceability.
-   */
-  static async getAllAllocations(params?: {
-    projectId?: number;
-    itemId?: number;
-    status?: string;
-    search?: string;
-  }): Promise<ProjectBomAllocationRecord[]> {
-    const conditions: SQL[] = [];
-
-    if (params?.projectId) {
-      conditions.push(eq(projectBomAllocations.projectId, params.projectId));
-    }
-    if (params?.itemId) {
-      conditions.push(eq(projectBomAllocations.itemId, params.itemId));
-    }
-    if (params?.status) {
-      conditions.push(eq(projectBomAllocations.status, params.status));
-    }
-
-    let list = await listAllocations(conditions);
-
-    if (params?.search) {
-      const q = params.search.toLowerCase().trim();
-      list = list.filter(
-        (a) =>
-          a.projectCode.toLowerCase().includes(q) ||
-          a.itemCode.toLowerCase().includes(q) ||
-          a.itemName.toLowerCase().includes(q) ||
-          a.username.toLowerCase().includes(q)
-      );
-    }
-
-    return list;
   }
 }

@@ -1,10 +1,10 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { projectIssuedQuantities } from './projectIssuedQuantities.js';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { items, productionProjects } from '../../db/schema.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import {
-  planProjectReservation, type ProjectReservationPlan, type ReservationStockItem, type ReservationUnitMismatch,
+  planProjectReservation, projectNeedRefs, type ProjectReservationPlan, type ReservationStockItem, type ReservationUnitMismatch,
 } from '../../lib/projects/projectReservation.js';
 import { ADVISORY_LOCK_KEYS } from '../../lib/advisoryLock.js';
 import { ItemStockReservationService, othersReservations } from '../items/itemStockReservation.service.js';
@@ -13,8 +13,8 @@ import { fin } from '../../lib/financialDecimal.js';
 import {
   MATERIAL_AVAILABILITY_MAX_ITEMS, freeForProject, type MaterialAvailabilityReport,
 } from '../../lib/projects/materialAvailability.js';
-import { hasPresetShapedSections, projectSectionsFromPreset } from '../../lib/projects/inventoryControlSections.js';
-import { findProjectItemMatch } from '../../lib/projects/projectItemMatch.js';
+import { hasPresetShapedSections, presetMaterialRefs, projectSectionsFromPreset } from '../../lib/projects/inventoryControlSections.js';
+import { findProjectItemMatch, itemCodeKey, itemNameKey } from '../../lib/projects/projectItemMatch.js';
 
 type InventoryControl = Record<string, unknown>;
 
@@ -75,12 +75,61 @@ export async function planReservationWithOthers(
   return planProjectReservation(ic.sections, products, stockItems, ic.manualPurchaseItems, reservedAt, { reservedByOthers, issuedToProject, ownReserved });
 }
 
-/** همهٔ کالاهای زنده برای تطبیق ردیف‌های کنترل موجودی (ثبت نهایی و «تکمیل رزرو») */
-export async function readReservationStockItems(executor: DbExecutor): Promise<ReservationStockItem[]> {
-  return (await executor
-    .select({ id: items.id, code: items.code, name: items.name, category: items.category, unit: items.unit, currentStock: items.currentStock })
+/**
+ * The characters JavaScript's `trim()` removes (white space and line terminators), so the SQL keys below trim as
+ * `itemCodeKey` / `itemNameKey` do; plain `btrim` removes only the space, and a code stored with a tab or a no-break space
+ * kept its item out of the narrowed read
+ */
+export const JS_TRIM_CHARS = '\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff';
+
+const STOCK_ITEM_COLUMNS = {
+  id: items.id, code: items.code, name: items.name, category: items.category, unit: items.unit, currentStock: items.currentStock,
+};
+
+async function readLiveStockItems(executor: DbExecutor, narrow?: SQL): Promise<ReservationStockItem[]> {
+  const rows = await executor
+    .select(STOCK_ITEM_COLUMNS)
     .from(items)
-    .where(eq(items.isDeleted, 0))).map(i => ({ ...i, currentStock: Number(i.currentStock) || 0 }));
+    .where(narrow ? and(eq(items.isDeleted, 0), narrow) : eq(items.isDeleted, 0))
+    .orderBy(asc(items.id));
+  return rows.map(i => ({ ...i, currentStock: Number(i.currentStock) || 0 }));
+}
+
+/**
+ * Code and name characters whose letter case JavaScript and the narrowed SQL key below map alike: the key compares under
+ * the "C" collation, which maps only ASCII letters, so a code with any other character, or a name with a character outside
+ * ASCII and the Arabic script (no letter case) and its joiners, is read whatever its key; for every other item the SQL key
+ * equals `itemCodeKey` / `itemNameKey`
+ */
+const CODE_KEY_UNSAFE = '[^\\u0001-\\u007f]';
+const NAME_KEY_UNSAFE = '[^\\u0001-\\u007f\\u0600-\\u06ff\\u200c\\u200d\\ufb50-\\ufdff\\ufe70-\\ufefc]';
+
+/**
+ * The live items that may be a ref's `findProjectItemMatch` among every live item, in id order: those whose code key or
+ * name key one of the refs holds, plus every item whose code or name holds a character the SQL key may case-map unlike
+ * JavaScript («ß» is «SS» only in JavaScript, «İ» and «Σ» differ too). The list holds every item that matches a ref in the
+ * whole list, so the first match by id, by code then by name, is the same. TD-1341: `itemIds` are the ids refs carry (the
+ * stored reservation rows of «تکمیل رزرو»); those items are read too, so a match by id is also the whole list's.
+ */
+export async function readStockItemsForRefs(
+  executor: DbExecutor,
+  refs: ReadonlyArray<{ code: string; name: string }>,
+  itemIds: readonly number[] = [],
+): Promise<ReservationStockItem[]> {
+  // a key holding NUL names no stored item (PostgreSQL text never holds it) and would refuse the query
+  const storable = (key: string) => key !== '' && !key.includes('\u0000');
+  const codes = [...new Set(refs.map(r => itemCodeKey(r.code)).filter(storable))];
+  const names = [...new Set(refs.map(r => itemNameKey(r.name)).filter(storable))];
+  const ids = [...new Set(itemIds.filter(id => Number.isSafeInteger(id) && id > 0))];
+  if (codes.length === 0 && names.length === 0 && ids.length === 0) return [];
+  const conditions = [
+    ids.length > 0 ? inArray(items.id, ids) : undefined,
+    codes.length > 0 ? inArray(sql`upper(btrim(${items.code}, ${JS_TRIM_CHARS}) COLLATE "C")`, codes) : undefined,
+    names.length > 0 ? inArray(sql`lower(btrim(${items.name}, ${JS_TRIM_CHARS}) COLLATE "C")`, names) : undefined,
+    sql`${items.code} ~ ${CODE_KEY_UNSAFE}`,
+    sql`${items.name} ~ ${NAME_KEY_UNSAFE}`,
+  ].filter((c): c is SQL => c !== undefined);
+  return readLiveStockItems(executor, or(...conditions));
 }
 
 export async function resolveServerInventoryControl(
@@ -102,12 +151,16 @@ export async function resolveServerInventoryControl(
   // v9.0.373 (TD-819): ثبت نهایی‌های هم‌زمان پشت سر هم رزرو دیگران را می‌خوانند
   if (finalizing) await executor.execute(sql`SELECT pg_advisory_xact_lock(${ADVISORY_LOCK_KEYS.PROJECT_RESERVATION_FINALIZE}::bigint)`);
   // v9.0.413 (TD-748): بخش الگو (مواد در `items`) با ردیف‌های پروژه ذخیره می‌شود تا رزرو و صفحه‌ها همان ردیف‌ها را بخوانند
-  const presetShaped = hasPresetShapedSections(rest.sections);
-  const stockItems: ReservationStockItem[] = finalizing || presetShaped ? await readReservationStockItems(executor) : [];
-  if (presetShaped) {
+  // OBS-R2-45 (TD-1322): only the live items that may match a row are read (`readStockItemsForRefs`): every item the rows
+  // name by code key or name key and every item whose letter case SQL may map unlike JavaScript, so the match is the whole list's
+  if (hasPresetShapedSections(rest.sections)) {
+    const presetStock = await readStockItemsForRefs(executor, presetMaterialRefs(rest.sections));
     rest.sections = projectSectionsFromPreset(rest.sections, Array.isArray(products) ? products : [], material =>
-      findProjectItemMatch({ code: material.code, name: material.name }, stockItems)?.currentStock);
+      findProjectItemMatch({ code: material.code, name: material.name }, presetStock)?.currentStock);
   }
+  const stockItems: ReservationStockItem[] = finalizing
+    ? await readStockItemsForRefs(executor, projectNeedRefs(rest.sections, products, rest.manualPurchaseItems))
+    : [];
 
   let reservedItems: unknown[] = prevReserved;
   let finalizedAt: unknown = prev.finalizedAt;
