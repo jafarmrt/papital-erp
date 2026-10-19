@@ -153,6 +153,28 @@ export function withoutScheduleLogLink(schedules: unknown, logId: number): { cha
   return { changed, schedules: next };
 }
 
+/** TD-1342: برنامه بی فیلدهای پیوند کارکرد (نشانهٔ بخش «برنامهٔ کارگاه»؛ پیوند را فقط کارساز می‌نویسد) */
+export function scheduleWithoutLogLinks(schedules: unknown): unknown {
+  if (!isObject(schedules)) return schedules;
+  return mapRows(schedules, row => Object.fromEntries(Object.entries(row).filter(([key]) => !(LINK_FIELDS as readonly string[]).includes(key))));
+}
+
+/**
+ * TD-1342: ردیف‌های ذخیره‌شده‌ای که کارکرد دارند و در برنامهٔ ارسالی نیستند. زبانهٔ برنامه ردیف ثبت‌شده را حذف نمی‌کند (TD-736)،
+ * ولی زبانه‌ای که پیش از پیوند کارکرد باز شده بود آن را ثبت‌شده نمی‌دید؛ کارساز چنین ذخیره‌ای را رد می‌کند.
+ */
+export function removedLoggedScheduleRows(incoming: unknown, saved: unknown): Array<{ stageKey: string; productId: string; rowId: string }> {
+  if (!isObject(saved)) return [];
+  const removed: Array<{ stageKey: string; productId: string; rowId: string }> = [];
+  mapRows(saved, (row, stageKey, productId) => {
+    if (isScheduleRowLogged(row) && typeof row.id === 'string' && !findScheduleRow(incoming, stageKey, productId, row.id)) {
+      removed.push({ stageKey, productId, rowId: row.id });
+    }
+    return row;
+  });
+  return removed;
+}
+
 /** ردیف بی شناسه (برنامه‌های قدیمی) پیش از ثبت کارکرد شناسه می‌گیرد تا سرور ردیف را پیدا کند و پیوند را در آن بنویسد */
 export function withScheduleRowIds<T>(schedules: T, makeId: () => string): T {
   if (!isObject(schedules)) return schedules;

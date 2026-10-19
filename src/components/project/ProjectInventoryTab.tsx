@@ -84,7 +84,7 @@ export function ProjectInventoryTab({
     handleFinalizeAndReserveStock,
     handleUnfinalizeReservation,
     applyReservationReconcile,
-    projectVersion,
+    projectWriteBase,
     handlePrintPurchaseListWithCheck,
     handleSaveInventoryControl,
     handleAddManualPurchaseRow,
@@ -155,7 +155,7 @@ export function ProjectInventoryTab({
             ) : isFinalized ? (
               <>
                 {/* TD-1341 (بستهٔ ۱۲ بند ۱): رزرو با فهرست مواد امروز برابر می‌شود، بی لغو ثبت نهایی */}
-                <ReservationReconcileButton projectId={Number(project.id)} version={projectVersion} busy={saving} dirty={isDirty} onApplied={applyReservationReconcile} />
+                <ReservationReconcileButton projectId={Number(project.id)} writeBase={projectWriteBase} busy={saving} dirty={isDirty} onApplied={applyReservationReconcile} />
                 <button
                   type="button"
                   onClick={handleUnfinalizeReservation}

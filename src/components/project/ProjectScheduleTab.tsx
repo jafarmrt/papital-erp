@@ -401,7 +401,7 @@ export default function ProjectScheduleTab({
     const res = await fetchJson<{ id?: number; version?: number }>(`/projects/${project.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stage_schedules: withIds, version: projectVersion.version })
+      body: JSON.stringify({ stage_schedules: withIds, ...projectVersion.writeBase })
     });
     if (!res?.id) {
       toast.error('برنامه کارگاه پیش از ثبت کارکرد ذخیره نشد.');
@@ -546,7 +546,7 @@ export default function ProjectScheduleTab({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           stage_schedules: schedulesMap,
-          version: projectVersion.version
+          ...projectVersion.writeBase
         })
       });
 

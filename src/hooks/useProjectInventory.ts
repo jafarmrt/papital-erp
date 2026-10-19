@@ -671,7 +671,7 @@ export function useProjectInventory(
           isFinalized: true,
           lastUpdated: new Date().toISOString()
         },
-        version: projectVersion.version
+        ...projectVersion.writeBase
       };
 
       const saved = await fetchJson<SavedProjectInventory>(`/api/projects/${project.id}`, {
@@ -715,7 +715,7 @@ export function useProjectInventory(
           isFinalized: false,
           lastUpdated: new Date().toISOString()
         },
-        version: projectVersion.version
+        ...projectVersion.writeBase
       };
 
       projectVersion.remember(await fetchJson(`/api/projects/${project.id}`, {
@@ -765,7 +765,7 @@ export function useProjectInventory(
           isFinalized,
           lastUpdated: new Date().toISOString()
         },
-        version: projectVersion.version
+        ...projectVersion.writeBase
       };
 
       const saved = await fetchJson<SavedProjectInventory>(`/api/projects/${project.id}`, {
@@ -914,8 +914,8 @@ export function useProjectInventory(
     handleFinalizeAndReserveStock,
     handleUnfinalizeReservation,
     applyReservationReconcile,
-    /** TD-1341: نسخه‌ای که «تکمیل رزرو» با آن ثبت می‌شود */
-    projectVersion: projectVersion.version,
+    /** TD-1341 / TD-1342: نسخه و نشانهٔ بخش‌هایی که «تکمیل رزرو» با آن ثبت می‌شود */
+    projectWriteBase: projectVersion.writeBase,
     handlePrintPurchaseListWithCheck,
     handleSaveInventoryControl,
     handlePrintPurchaseList,

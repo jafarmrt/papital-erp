@@ -21,6 +21,8 @@ import { MAX_STAGE_ORDER, PROJECT_PRIORITIES, PROJECT_STATUSES, STAGE_STATUSES }
 import { toPersianDigits } from '../utils/persianNumber.js';
 import { ValidationError } from '../errors/customErrors.js';
 import { PROJECT_VERSION_REQUIRED_MESSAGE } from '../lib/projects/projectVersion.js';
+import { projectPartTokensSchema } from './projectPartTokens.schemas.js';
+import { projectPartTokens } from '../services/projects/projectPartTokens.js';
 import { MAX_PROJECT_MANAGERS } from '../lib/projects/projectManagers.js';
 import { readProjectManagers } from '../services/projects/projectManagers.js';
 import { loadProjectStepCounts } from '../services/projects/projectSteps.js';
@@ -72,6 +74,8 @@ const updateProjectSchema = z.object({
   body: z.object({
     // v9.0.385 (TD-742، تصمیم ت۳ الف): نسخه‌ای که فرم از آن ساخته شده الزامی است؛ ناهمخوانی ۴۰۹ OCC_CONFLICT
     version: recordVersion.optional(),
+    // TD-1342 (بستهٔ ۱۲ بند ۴، ت۴۲ ب): با نشانهٔ بخش‌ها، نسخهٔ کهنه فقط وقتی ۴۰۹ است که همان بخش عوض شده باشد
+    partTokens: projectPartTokensSchema.optional(),
     title: z.string().optional(),
     project_code: z.string().optional(),
     customer_id: z.union([z.number(), z.string(), z.null()]).optional(),
@@ -483,7 +487,7 @@ router.get('/projects/:id', authorizePermission(...RECORD_READ_PERMISSIONS.produ
 
     // v10.1.37 (N-01, TD-1283): «مسئولان پروژه» come with the project record
     const managers = (await readProjectManagers(orm, [id])).get(id) ?? [];
-    res.json({ ...formatted, managers });
+    res.json({ ...formatted, managers, partTokens: projectPartTokens(projData.project, managers.map(m => m.userId)) });
   } catch (err) {
     throw err;
   }
@@ -560,7 +564,7 @@ router.put('/projects/:id', authorizePermission(...PROJECT_EDIT_PERMISSIONS), id
       title, customer_id, customer_name, item_id, item_code, item_name, 
       quantity, unit, start_date, end_date, status, priority, description,
       products, inventory_control, inventoryControl, stage_schedules, stageSchedules,
-      custom_stages, customStages, attachments, project_code, version, managerUserIds
+      custom_stages, customStages, attachments, project_code, version, managerUserIds, partTokens
     } = req.body;
 
     // v9.0.364 (TD-739): بررسی تکمیل با قاعده مشترک ماتریس درون تراکنش updateProject است
@@ -586,13 +590,14 @@ router.put('/projects/:id', authorizePermission(...PROJECT_EDIT_PERMISSIONS), id
       attachments,
       expectedVersion: version,
       managerUserIds,
+      partTokens,
     }, undefined, { req });
 
     const rawStages = await orm.select().from(projectStages).where(and(eq(projectStages.projectId, id), eq(projectStages.isDeleted, 0))).orderBy(asc(projectStages.stageOrder));
 
     // v9.0.383 (TD-757): ردیف ممیزی ویرایش با پیش و پس درون تراکنش updateProject نوشته می‌شود
     const managers = (await readProjectManagers(orm, [id])).get(id) ?? [];
-    res.json({ ...formatProject(updated, rawStages), managers });
+    res.json({ ...formatProject(updated, rawStages), managers, partTokens: projectPartTokens(updated, managers.map(m => m.userId)) });
   } catch (err) {
     throw err;
   }

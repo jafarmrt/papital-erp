@@ -6,7 +6,7 @@ import { items } from '../../db/schema.js';
  * `itemCodeKey` / `itemNameKey` do; plain `btrim` removes only the space, and a code stored with a tab or a no-break space
  * kept its item out of the narrowed read
  */
-export const JS_TRIM_CHARS = '\t\n\v\f\r                  　﻿';
+export const JS_TRIM_CHARS = '\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff';
 
 /**
  * Code and name characters whose letter case JavaScript and the narrowed SQL key below map alike: the key compares under
