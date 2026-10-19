@@ -92,10 +92,18 @@ export function writtenProjectParts(input: ProjectPartWrites): ProjectPart[] {
   return parts;
 }
 
+/** بدنه کنترل موجودی پروژه‌ای را که هنوز ثبت نهایی نشده ثبت نهایی می‌کند؟ */
+function finalizesInventory(existing: ProjectRow, input: ProjectPartWrites): boolean {
+  const isFinal = (value: unknown) => !!value && typeof value === 'object' && (value as { isFinalized?: unknown }).isFinalized === true;
+  return isFinal(input.inventoryControl) && !isFinal(existing.inventoryControl);
+}
+
 /**
- * ذخیره از نسخهٔ `expectedVersion` با نشانه‌های `tokens` روی ردیف قفل‌شدهٔ پروژه پذیرفته می‌شود؟ نسخهٔ برابر همیشه؛ نسخهٔ کهنه
- * فقط با نشانهٔ برابرِ همهٔ بخش‌هایی که بدنه می‌نویسد. برنامه‌ای که ردیف دارای کارکرد را از برنامهٔ امروز حذف می‌کند هم تعارض
- * همان بخش است، چون زبانهٔ کهنه آن ردیف را ثبت‌شده نمی‌دید (زبانهٔ تازه ردیف ثبت‌شده را حذف نمی‌کند، TD-736).
+ * ذخیره از نسخهٔ `expectedVersion` با نشانه‌های `tokens` روی ردیف قفل‌شدهٔ پروژه پذیرفته می‌شود؟ نسخهٔ تازه‌تر از نسخهٔ ذخیره‌شده
+ * هرگز. بدنهٔ بی نشانه (برنامهٔ قدیمی) فقط با نسخهٔ برابر. بدنهٔ نشانه‌دار فقط با نشانهٔ برابرِ همهٔ بخش‌هایی که می‌نویسد، هر نسخه‌ای
+ * که بفرستد، چون صفحه ممکن است نسخهٔ تازه را از ذخیرهٔ بخش دیگری گرفته باشد و این بخش را هنوز کهنه نشان دهد. ثبت نهایی رزرو را
+ * از محصولات پروژه هم می‌سازد، پس نشانهٔ «مشخصات» را هم می‌خواهد. برنامه‌ای که ردیف دارای کارکرد را از برنامهٔ امروز حذف می‌کند
+ * هم تعارض همان بخش است، چون زبانه آن ردیف را ثبت‌شده نمی‌دید (زبانهٔ تازه ردیف ثبت‌شده را حذف نمی‌کند، TD-736).
  */
 export async function assertProjectPartsWritable(
   executor: DbExecutor,
@@ -105,9 +113,16 @@ export async function assertProjectPartsWritable(
   input: ProjectPartWrites,
 ): Promise<void> {
   const currentVersion = existing.version ?? 1;
-  if (currentVersion === expectedVersion) return;
+  // review N1: a version the project never reached is no version a tab was built from
+  if (expectedVersion > currentVersion) throw projectVersionConflict(existing.id, expectedVersion, currentVersion);
   const parts = writtenProjectParts(input);
-  if (!tokens || parts.length === 0) throw projectVersionConflict(existing.id, expectedVersion, currentVersion);
+  // review M1: finalizing reserves the need of the project's products, which belong to the specs part
+  if (finalizesInventory(existing, input) && !parts.includes('specs')) parts.push('specs');
+  const hasTokens = !!tokens && Object.keys(tokens).length > 0;
+  if (!hasTokens || parts.length === 0) {
+    if (currentVersion === expectedVersion) return;
+    throw projectVersionConflict(existing.id, expectedVersion, currentVersion);
+  }
   const managerIds = parts.includes('specs')
     ? ((await readProjectManagers(executor, [existing.id])).get(existing.id) ?? []).map(m => m.userId)
     : [];

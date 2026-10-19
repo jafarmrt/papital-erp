@@ -71,9 +71,9 @@ describe('the version hook keeps the part tokens (TD-1342)', () => {
     const first = result.current.writeBase;
     rerender({ project: { id: 1, version: 2, partTokens: all(TOKEN_A) } });
     expect(result.current.writeBase).toBe(first);
-    act(() => result.current.remember({ id: 1, version: 3, partTokens: all(TOKEN_B) }));
+    act(() => result.current.remember({ id: 1, version: 3, partTokens: all(TOKEN_B) }, PROJECT_PARTS));
     expect(result.current.writeBase).toEqual({ version: 3, partTokens: all(TOKEN_B) });
-    act(() => result.current.remember({ id: 1, version: 4 }));
+    act(() => result.current.remember({ id: 1, version: 4 }, PROJECT_PARTS));
     expect(result.current.writeBase).toEqual({ version: 4, partTokens: all(TOKEN_B) });
     // the reloaded record is newer than any answer: its tokens win
     rerender({ project: { id: 1, version: 6, partTokens: all(TOKEN_C) } });
@@ -81,6 +81,27 @@ describe('the version hook keeps the part tokens (TD-1342)', () => {
     // a record without tokens sends the version only, the old rule
     rerender({ project: { id: 2, version: 1 } });
     expect(result.current.writeBase).toEqual({ version: 1 });
+  });
+
+  it('takes from a save answer only the tokens of the parts that save wrote (review N2)', () => {
+    const TOKEN_D = 'd'.repeat(32);
+    const TOKEN_E = 'e'.repeat(32);
+    const { result, rerender } = renderHook(({ project }) => useProjectVersion(project), {
+      initialProps: { project: { id: 1, version: 2, partTokens: all(TOKEN_A) } },
+    });
+    // a status save answered every part of version 5, two of them changed by others; the page still shows version 2 there
+    act(() => result.current.remember({ id: 1, version: 5, partTokens: all(TOKEN_B) }, ['status']));
+    expect(result.current.writeBase).toEqual({ version: 5, partTokens: { ...all(TOKEN_A), status: TOKEN_B } });
+    act(() => result.current.remember({ id: 1, version: 6, partTokens: all(TOKEN_C) }, ['inventory']));
+    expect(result.current.writeBase).toEqual({ version: 6, partTokens: { ...all(TOKEN_A), status: TOKEN_B, inventory: TOKEN_C } });
+    // a read only moves the version
+    act(() => result.current.remember({ id: 1, version: 7, partTokens: all(TOKEN_D) }, []));
+    expect(result.current.writeBase).toEqual({ version: 7, partTokens: { ...all(TOKEN_A), status: TOKEN_B, inventory: TOKEN_C } });
+    // the page reloaded the project: its tokens are what the page shows, and earlier answers no longer count
+    rerender({ project: { id: 1, version: 7, partTokens: all(TOKEN_E) } });
+    expect(result.current.writeBase).toEqual({ version: 7, partTokens: all(TOKEN_E) });
+    act(() => result.current.remember({ id: 1, version: 8, partTokens: all(TOKEN_D) }, ['schedule']));
+    expect(result.current.writeBase).toEqual({ version: 8, partTokens: { ...all(TOKEN_E), schedule: TOKEN_D } });
   });
 
   it('the status buttons send the tokens they were built from', async () => {

@@ -10,13 +10,13 @@ import { AddStageForm } from '../ProjectStageActions';
 import ProjectGanttTab from '../ProjectGanttTab';
 import { ProjectStageCard } from './ProjectStageCard';
 import { ProjectSpecsEditor } from './ProjectSpecsEditor';
-import type { ProjectWriteBase } from '../../../lib/projects/projectParts';
+import type { ProjectPart, ProjectWriteBase } from '../../../lib/projects/projectParts';
 
 interface ProjectOverviewTabProps {
   project: ProductionProject;
   /** the version and part tokens the next project save sends (TD-742 / TD-1342) */
   writeBase: ProjectWriteBase;
-  rememberVersion: (response: unknown) => void;
+  rememberVersion: (response: unknown, parts: readonly ProjectPart[]) => void;
   personnel: readonly Personnel[];
   canEdit: boolean;
   editingSpecs: boolean;
@@ -69,7 +69,7 @@ export function ProjectOverviewTab({ project, writeBase, rememberVersion, person
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ attachments, ...writeBase }),
-      }));
+      }), ['attachments']);
       toast.success('پیوست‌های پروژه ذخیره شد');
       onChanged();
     } catch (err) {

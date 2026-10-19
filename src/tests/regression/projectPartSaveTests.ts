@@ -22,6 +22,9 @@ export async function runProjectPartSaveTests(shouldRun: ShouldRun): Promise<Tes
     ['reg_project_part_save_reconcile_td_1342',
       'v10.2.x: the reservation reconcile from a tab opened before a remittance posts with its inventory token; a changed materials list is 409 naming the part; a malformed token is 400 (TD-1342)',
       ['td1342', 'td1341', 'package12', 'projects', 'reservation', 'occ'], reconcileCase],
+    ['reg_project_part_save_finalize_specs_td_1342',
+      'v10.2.x: a stale materials tab finalizes only while the products it built the need from are unchanged, a version the project never reached is 409, and a token behind the stored part is 409 even with the current version (TD-1342 review M1 / N1 / N2)',
+      ['td1342', 'package12', 'projects', 'reservation', 'occ'], finalizeSpecsCase],
   ]);
 }
 
@@ -230,4 +233,69 @@ async function reconcileCase(h: Harness, wrong: string[]): Promise<string> {
   expectPartConflict(wrong, 'a reconcile from a tab behind the materials list', stale, ['inventory'], [INVENTORY_LABEL]);
   if (await versionOf(h, project) !== before || await reservedQty(h, project, a) !== 9) wrong.push('the refused reconcile changed the project');
   return 'the reconcile follows the inventory part, not the version';
+}
+
+const SPECS_LABEL = 'مشخصات';
+
+/** a code-by-code section of one material: each product needs one unit of it */
+async function perProductSection(h: Harness, itemId: number) {
+  const [it] = await h.q('SELECT code, name FROM items WHERE id = $1', [itemId]);
+  return [{ id: 'sec-1', title: 'P12 per product', checkType: 'per_item', itemsSchema: [{ itemCode: it.code, name: it.name, unit: 'عدد' }], perItemResults: {} }];
+}
+
+const productRows = (itemId: number, count: number) =>
+  Array.from({ length: count }, (_, i) => ({ id: `prod-${i + 1}`, item_id: itemId, item_code: '', item_name: `P12 product ${i + 1}`, quantity: 1, unit: 'عدد' }));
+
+/** Review M1 / N1 / N2: the finalize reserves from the products, so it needs their token; a future version and a stale token at the current version are 409 */
+async function finalizeSpecsCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const material = await f.item(10);
+  const productItem = await f.item(0);
+  const sections = await perProductSection(h, material);
+  const project = await createProject(h, { sections, manualPurchaseItems: [], isFinalized: false }, { products: productRows(productItem, 2) });
+  const base = await baseOf(h, project, wrong);
+  const finalize = (extra: Record<string, unknown>) => h.put(`/api/projects/${project}`, {
+    inventory_control: { sections, manualPurchaseItems: [], isFinalized: true, lastUpdated: new Date().toISOString() }, ...extra,
+  });
+  const notFinal = async (what: string) => {
+    const [row] = await h.q(`SELECT inventory_control->>'isFinalized' AS f FROM production_projects WHERE id = $1`, [project]);
+    if (row?.f === 'true' || await reservedQty(h, project, material) !== 0) wrong.push(`${what} finalized the project or reserved ${await reservedQty(h, project, material)}`);
+  };
+
+  // another user adds a product: the need the tab showed (2) is no longer the project's (3)
+  const added = await h.put(`/api/projects/${project}`, { products: productRows(productItem, 3), ...base });
+  if (added.status !== 200) throw new Error(`setup: adding a product answered ${brief(added)}`);
+  const stale = await finalize({ version: base.version, partTokens: base.partTokens });
+  expectPartConflict(wrong, 'a finalize from a tab built before a product was added', stale, ['specs'], [SPECS_LABEL]);
+  await notFinal('the refused finalize');
+
+  // N1: a version above the stored one, with the current tokens
+  const fresh = await baseOf(h, project, wrong);
+  const future = await finalize({ version: fresh.version + 5, partTokens: fresh.partTokens });
+  if (future.status !== 409 || (future.body as ConflictBody).code !== 'OCC_CONFLICT') wrong.push(`a finalize from a version the project never reached answered ${brief(future)}, expected 409 OCC_CONFLICT`);
+  await notFinal('the finalize from a future version');
+
+  // N2 (server half): the current version does not excuse a part token behind the stored part
+  const listed = await h.put(`/api/projects/${project}`, {
+    inventory_control: { sections, manualPurchaseItems: [{ id: 'm-1', name: `glue ${h.tag}`, unit: 'عدد', quantity: 1 }], isFinalized: false }, ...fresh,
+  });
+  if (listed.status !== 200) throw new Error(`setup: changing the materials list answered ${brief(listed)}`);
+  const current = await versionOf(h, project);
+  const behind = await h.put(`/api/projects/${project}`, {
+    inventory_control: { sections, manualPurchaseItems: [], isFinalized: false }, version: current, partTokens: fresh.partTokens,
+  });
+  expectPartConflict(wrong, 'an inventory save at the current version with the token of the list before', behind, ['inventory'], [INVENTORY_LABEL]);
+  const [kept] = await h.q(`SELECT jsonb_array_length(inventory_control->'manualPurchaseItems') AS n FROM production_projects WHERE id = $1`, [project]);
+  if (Number(kept?.n) !== 1) wrong.push('the refused save changed the manual purchase list');
+
+  // a tab whose products and list are current finalizes from a stale version (another user changed only the status)
+  const ready = await baseOf(h, project, wrong);
+  const started = await h.put(`/api/projects/${project}`, { status: 'in_progress', ...ready });
+  if (started.status !== 200) throw new Error(`setup: the status change answered ${brief(started)}`);
+  const done = await h.put(`/api/projects/${project}`, {
+    inventory_control: { sections, manualPurchaseItems: [{ id: 'm-1', name: `glue ${h.tag}`, unit: 'عدد', quantity: 1 }], isFinalized: true }, ...ready,
+  });
+  if (done.status !== 200) wrong.push(`a finalize whose products and list are current answered ${brief(done)}, expected 200`);
+  else if (await reservedQty(h, project, material) !== 3) wrong.push(`the finalize reserved ${await reservedQty(h, project, material)}, expected 3 for three products`);
+  return 'the finalize follows the products it was built from; future versions and stale tokens are refused';
 }

@@ -680,7 +680,7 @@ export function useProjectInventory(
         body: JSON.stringify(payload)
       });
 
-      projectVersion.remember(saved);
+      projectVersion.remember(saved, ['inventory']);
       setIsDirty(false);
       setIsFinalized(true);
       setFinalizedAt(saved?.inventory_control?.finalizedAt);
@@ -722,7 +722,7 @@ export function useProjectInventory(
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
-      }));
+      }), ['inventory']);
 
       setIsDirty(false);
       setIsFinalized(false);
@@ -741,7 +741,7 @@ export function useProjectInventory(
 
   /** TD-1341: «تکمیل رزرو» ثبت شد؛ نسخه و رزرو ذخیره‌شده همان پاسخ سرور است */
   const applyReservationReconcile = (result: ReservationReconcileResult) => {
-    projectVersion.remember(result);
+    projectVersion.remember(result, ['inventory']);
     setReservedItems(Array.isArray(result?.inventory_control?.reservedItems) ? result.inventory_control.reservedItems : []);
     setReservationShortages(storedReservationShortages(result?.inventory_control));
     if (onUpdate) onUpdate();
@@ -774,7 +774,7 @@ export function useProjectInventory(
         body: JSON.stringify(payload)
       });
 
-      projectVersion.remember(saved);
+      projectVersion.remember(saved, ['inventory']);
       setIsDirty(false);
       setReservedItems(savedReservedItems(saved));
       setReservationShortages(storedReservationShortages(saved?.inventory_control));

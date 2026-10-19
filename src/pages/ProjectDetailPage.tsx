@@ -216,7 +216,7 @@ export default function ProjectDetailPage() {
   const items = itemsQuery.data ?? [];
   const personnel = personnelQuery.data ?? [];
 
-  const onStatusSaved = (res: unknown) => { projectVersion.remember(res); void refresh(); };
+  const onStatusSaved = (res: unknown) => { projectVersion.remember(res, ['status']); void refresh(); };
   const inactiveNote = projectInactiveNote(project.status);
 
   return (
