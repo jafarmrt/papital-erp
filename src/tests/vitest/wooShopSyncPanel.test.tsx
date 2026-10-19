@@ -10,7 +10,7 @@ import { fetchJson } from '../../api';
 import { confirmAction } from '../../components/ConfirmDialogHost';
 import { WcShopSyncPanel } from '../../components/settings/WcShopSyncPanel';
 import {
-  businessDayHour, isVariableParentType, nightlyDue, PRICE_PUSH_ENABLE_CONFIRM, sameSitePrice, siteCurrencyLabel, sitePriceOf,
+  businessDayHour, isVariableParentType, nightlyDue, PRICE_PUSH_ENABLE_CONFIRM, sameSitePrice, siteCurrencyLabel, sitePriceOf, sitePricePlaces,
   SKU_RENAME_ENABLE_CONFIRM, WC_NIGHTLY_MAX_ATTEMPTS, WC_NIGHTLY_RETRY_MINUTES, WC_PRICE_SKIP_LABELS, type WcShopSyncView,
 } from '../../lib/woocommerce/wcShopSync';
 import { runSyncSteps } from '../../lib/woocommerce/wcSyncSteps';
@@ -33,6 +33,7 @@ const ALL_KEYS = ['woocommerce.manage', 'products.edit_price', 'products.change_
 beforeEach(() => { granted.clear(); ALL_KEYS.forEach(k => granted.add(k)); });
 
 const PRICE_LIST = 'فروشگاه';
+const money = (currency: string, decimals = 2) => ({ currency, decimals });
 const DOLLAR_ITEM = 'گردنبند دلاری';
 const DRIFT_ITEM = 'گوشواره ناهمخوان';
 const field = { enabled: false, lastRun: null, failedRuns: 0, nextAttemptAt: null, stopped: [], stoppedTotal: 0 };
@@ -41,9 +42,12 @@ const view: WcShopSyncView = {
   priceListMissing: false,
   priceLists: [PRICE_LIST, 'عمده'],
   siteCurrency: 'IRT',
+  siteDecimals: 0,
   price: { ...field, skipped: [{ itemId: 4, code: 'PR-4', name: DOLLAR_ITEM, reason: 'currency_mismatch' }], skippedTotal: 1 },
   sku: { ...field, pending: 2 },
   lastNightly: { at: '2026-10-18T00:30:00.000Z', status: 'ok', error: '', summary: {} },
+  // review N-4: the nightly reading compared prices in the shop currency of that night, not the last one read
+  differencesCurrency: 'IRHT',
   differences: [
     { itemId: 7, code: 'PR-7', name: DRIFT_ITEM, kind: 'stock', site: '9', program: '5', unit: 'جفت' },
     { itemId: 8, code: 'PR-8', name: DRIFT_ITEM, kind: 'price', site: '120000', program: '125000' },
@@ -52,29 +56,50 @@ const view: WcShopSyncView = {
 };
 
 describe('D-04 part C: the shop price and the nightly rules', () => {
-  it('sends a rial price in the shop unit and refuses another currency or a price that rounds to nothing', () => {
-    expect(sitePriceOf('1250000', 'IRR', 'IRT')).toEqual({ value: '125000' });
-    expect(sitePriceOf('1234567', 'IRR', 'IRT')).toEqual({ value: '123457' });
-    expect(sitePriceOf('1250000', 'IRR', 'IRR')).toEqual({ value: '1250000' });
-    expect(sitePriceOf('25000000', null, 'IRHT')).toEqual({ value: '2500' });
-    expect(sitePriceOf('10', 'USD', 'IRT')).toEqual({ skip: 'currency_mismatch' });
-    expect(sitePriceOf('12.345', 'usd', 'USD')).toEqual({ value: '12.35' });
-    expect(sitePriceOf('1250000', 'IRR', 'USD')).toEqual({ skip: 'currency_mismatch' });
-    expect(sitePriceOf('4', 'IRR', 'IRT')).toEqual({ skip: 'not_positive' });
-    expect(sitePriceOf('', 'IRR', 'IRT')).toEqual({ skip: 'no_price' });
-    expect(sitePriceOf('abc', 'IRR', 'IRT')).toEqual({ skip: 'no_price' });
+  it('sends a rial price in the shop unit and refuses another currency or a price that is not exact there', () => {
+    expect(sitePriceOf('1250000', 'IRR', money('IRT', 0))).toEqual({ value: '125000' });
+    expect(sitePriceOf('1250000', 'IRR', money('IRR', 0))).toEqual({ value: '1250000' });
+    expect(sitePriceOf('25000000', null, money('IRHT', 0))).toEqual({ value: '2500' });
+    expect(sitePriceOf('10', 'USD', money('IRT'))).toEqual({ skip: 'currency_mismatch' });
+    expect(sitePriceOf('12.35', 'usd', money('USD'))).toEqual({ value: '12.35' });
+    expect(sitePriceOf('1250000', 'IRR', money('USD'))).toEqual({ skip: 'currency_mismatch' });
+    expect(sitePriceOf('0', 'IRR', money('IRT'))).toEqual({ skip: 'not_positive' });
+    expect(sitePriceOf('', 'IRR', money('IRT'))).toEqual({ skip: 'no_price' });
+    expect(sitePriceOf('abc', 'IRR', money('IRT'))).toEqual({ skip: 'no_price' });
   });
 
-  it('review H-1: sends a thousand-toman or thousand-rial price exactly, never rounded to a whole thousand', () => {
-    expect(sitePriceOf('15000', 'IRR', 'IRHT')).toEqual({ value: '1.5' });
-    expect(sitePriceOf('125000', 'IRR', 'IRHT')).toEqual({ value: '12.5' });
-    expect(sitePriceOf('4000', 'IRR', 'IRHT')).toEqual({ value: '0.4' });
-    expect(sitePriceOf('15000', 'IRR', 'IRHR')).toEqual({ value: '15' });
-    expect(sitePriceOf('125000', 'IRR', 'IRHR')).toEqual({ value: '125' });
-    expect(sitePriceOf('4000', 'IRR', 'IRHR')).toEqual({ value: '4' });
-    expect(sitePriceOf('1500', 'IRR', 'IRHR')).toEqual({ value: '1.5' });
-    expect(sitePriceOf('12345.67', 'IRR', 'IRHT')).toEqual({ skip: 'inexact_unit' });
-    expect(WC_PRICE_SKIP_LABELS.inexact_unit).toMatch(/چهار رقم اعشار/);
+  it('review M-B: a rial, toman or foreign price is never rounded, a price that is not exact is left out', () => {
+    expect(sitePriceOf('15005', 'IRR', money('IRT', 0))).toEqual({ skip: 'inexact_unit' });
+    expect(sitePriceOf('1234567', 'IRR', money('IRT', 0))).toEqual({ skip: 'inexact_unit' });
+    expect(sitePriceOf('5', 'IRR', money('IRT', 0))).toEqual({ skip: 'inexact_unit' });
+    expect(sitePriceOf('1.005', 'USD', money('USD', 2))).toEqual({ skip: 'inexact_unit' });
+    expect(sitePriceOf('12.345', 'USD', money('USD', 2))).toEqual({ skip: 'inexact_unit' });
+    expect(sitePriceOf('1250.5', 'IRR', money('IRR', 0))).toEqual({ skip: 'inexact_unit' });
+    // a shop that charges decimals takes them exactly
+    expect(sitePriceOf('15005', 'IRR', money('IRT', 1))).toEqual({ value: '1500.5' });
+    // a price longer than the arithmetic's precision is never cut
+    expect(sitePriceOf('1234567890123456789012345678901234', 'IRR', money('IRR', 0))).toEqual({ skip: 'inexact_unit' });
+  });
+
+  it('reviews H-1 / M-A: a thousand-unit price is exact at the shop decimals, never rounded to a whole thousand', () => {
+    expect(sitePriceOf('15000', 'IRR', money('IRHT', 1))).toEqual({ value: '1.5' });
+    expect(sitePriceOf('15000', 'IRR', money('IRHT', 0))).toEqual({ skip: 'inexact_unit' });
+    expect(sitePriceOf('20000', 'IRR', money('IRHT', 0))).toEqual({ value: '2' });
+    expect(sitePriceOf('125000', 'IRR', money('IRHT'))).toEqual({ value: '12.5' });
+    expect(sitePriceOf('4000', 'IRR', money('IRHT'))).toEqual({ value: '0.4' });
+    expect(sitePriceOf('15000', 'IRR', money('IRHR', 0))).toEqual({ value: '15' });
+    expect(sitePriceOf('1500', 'IRR', money('IRHR', 1))).toEqual({ value: '1.5' });
+    expect(sitePriceOf('1500', 'IRR', money('IRHR', 0))).toEqual({ skip: 'inexact_unit' });
+    expect(sitePriceOf('12345.67', 'IRR', money('IRHT', 4))).toEqual({ skip: 'inexact_unit' });
+    // at most four decimals, whatever the shop allows
+    expect(sitePricePlaces(6)).toBe(4);
+    expect(sitePriceOf('12345', 'IRR', money('IRHT', 6))).toEqual({ value: '1.2345' });
+    expect(sitePriceOf('12345.6', 'IRR', money('IRHT', 6))).toEqual({ skip: 'inexact_unit' });
+    expect(WC_PRICE_SKIP_LABELS.inexact_unit).toMatch(/تعداد اعشار سایت/);
+  });
+
+  it('review N-1: a very large price is written in plain digits, never in exponent notation', () => {
+    expect(sitePriceOf(`12${'0'.repeat(33)}`, 'IRR', money('IRHT'))).toEqual({ value: `12${'0'.repeat(29)}` });
   });
 
   it('review N-4: a variable product of any kind is a parent whose prices are on its variations', () => {
@@ -88,6 +113,10 @@ describe('D-04 part C: the shop price and the nightly rules', () => {
     expect(SKU_RENAME_ENABLE_CONFIRM(3)).toMatch(/کد ۳ محصول در سایت هنوز کد پیشین/);
     expect(SKU_RENAME_ENABLE_CONFIRM(0)).not.toMatch(/هنوز کد پیشین/);
     expect(PRICE_PUSH_ENABLE_CONFIRM(PRICE_LIST)).toMatch(/ارز آن/);
+    // review M-B: no rounding is promised any more
+    expect(PRICE_PUSH_ENABLE_CONFIRM(PRICE_LIST)).toMatch(/گرد نمی‌شود/);
+    // review N-5: the pending products change over several runs, from the next minute on
+    expect(SKU_RENAME_ENABLE_CONFIRM(3)).toMatch(/از دقیقه بعد/);
     expect(PRICE_PUSH_ENABLE_CONFIRM(PRICE_LIST)).toMatch(/با دست عوض شود/);
   });
 
@@ -141,18 +170,39 @@ describe('D-04 part C: the price, SKU and nightly panel', () => {
     expect(screen.queryByRole('button', { name: 'روشن کردن' })).toBeNull();
     expect(screen.getByText(DOLLAR_ITEM)).toBeTruthy();
     expect(screen.getAllByText(DRIFT_ITEM)).toHaveLength(2);
-    expect(screen.getByText(/واحد پول سایت: تومان/)).toBeTruthy();
+    expect(screen.getByText(/واحد پول سایت: تومان، اعشار سایت: ۰/)).toBeTruthy();
     // review N-2: the drift numbers carry their unit
     expect(screen.getByText(/موجودی در سایت ۹ جفت/)).toBeTruthy();
-    expect(screen.getByText(/قیمت عادی در سایت ۱۲۰٬۰۰۰ تومان/)).toBeTruthy();
+    expect(screen.getByText(/قیمت عادی در سایت ۱۲۰٬۰۰۰ هزار تومان/)).toBeTruthy();
   });
 
-  it('review M-3: the price list needs the price key and the SKU switch the code-change key, besides the shop key', () => {
+  it('reviews M-3 / N-2: choosing a list needs the price key and turning the SKU rename on the code-change key, and the tab says so', () => {
     granted.clear();
     granted.add('woocommerce.manage');
     render(<WcShopSyncPanel view={view} canManage />, { wrapper });
-    expect((screen.getByLabelText(/ارسال خودکار قیمت از فهرست/) as HTMLSelectElement).disabled).toBe(true);
+    const select = screen.getByLabelText(/ارسال خودکار قیمت از فهرست/) as HTMLSelectElement;
+    expect(Array.from(select.options).map(o => o.value)).toEqual(['']);
     expect(screen.queryByRole('button', { name: 'روشن کردن' })).toBeNull();
+    expect(screen.getByText(/برگزیدن فهرست قیمت مجوز «ویرایش قیمت‌ها» را هم می‌خواهد/)).toBeTruthy();
+    expect(screen.getByText(/روشن کردن تغییر خودکار کد مجوز «تغییر کد کالا» را هم می‌خواهد/)).toBeTruthy();
+  });
+
+  it('review N-3: the shop key alone turns either send off', async () => {
+    granted.clear();
+    granted.add('woocommerce.manage');
+    vi.mocked(fetchJson).mockResolvedValue({ success: true, priceList: '' });
+    const on = { ...view, priceList: PRICE_LIST, sku: { ...view.sku, enabled: true } };
+    render(<WcShopSyncPanel view={on} canManage />, { wrapper });
+    const select = screen.getByLabelText(/ارسال خودکار قیمت از فهرست/) as HTMLSelectElement;
+    expect(select.disabled).toBe(false);
+    expect(Array.from(select.options).map(o => o.value)).toEqual(['', PRICE_LIST]);
+    fireEvent.change(select, { target: { value: '' } });
+    await waitFor(() => expect(vi.mocked(fetchJson).mock.calls.filter(([url]) => url === '/woocommerce/price-list')).toHaveLength(1));
+    const [, options] = vi.mocked(fetchJson).mock.calls.find(([url]) => url === '/woocommerce/price-list') ?? [];
+    expect(JSON.parse(String((options as RequestInit).body))).toEqual({ priceList: '' });
+    expect(confirmAction).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'خاموش کردن' })).toBeTruthy();
+    expect(screen.queryByText(/مجوز «تغییر کد کالا»/)).toBeNull();
   });
 
   it('choosing a price list asks first and sends the title; a declined question sends nothing', async () => {

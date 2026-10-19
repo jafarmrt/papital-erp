@@ -79,6 +79,7 @@ export async function pricePushCase(h: Harness, wrong: string[]): Promise<string
   ];
   return withSendSettings(h, () => withShop(h, products, async (store) => {
     store.currency = 'IRT';
+    store.decimals = 0;
     const { runPricePushOnce } = await fields();
     const off = await runPricePushOnce();
     if (off.state !== 'off' || store.requests.length > 0) wrong.push(`with the setting absent the run was ${off.state} after ${store.requests.join(', ')}`);
@@ -106,15 +107,17 @@ export async function pricePushCase(h: Harness, wrong: string[]): Promise<string
 
     store.requests.length = 0;
     const first = await runPricePushOnce();
-    if (first.state !== 'pushed' || first.result?.syncedCount !== 3) wrong.push(`first run ${JSON.stringify(first)}, expected three prices sent`);
+    if (first.state !== 'pushed' || first.result?.syncedCount !== 2) wrong.push(`first run ${JSON.stringify(first)}, expected two prices sent`);
     const sent = Object.fromEntries(store.pricesSent);
-    if (sent[1] !== '125000' || sent[2] !== '123457' || sent[61] !== '200000') wrong.push(`prices sent ${JSON.stringify(sent)}, expected 125000, 123457 and 200000 in toman`);
-    for (const [id, what] of [[3, 'an equal price'], [4, 'a dollar price for a toman shop'], [5, 'a variable parent'], [7, 'an item without a price']] as const) {
+    if (sent[1] !== '125000' || sent[61] !== '200000') wrong.push(`prices sent ${JSON.stringify(sent)}, expected 125000 and 200000 in toman`);
+    // review M-B: 1,234,567 rials are not a whole number of tomans and the shop has no decimals, so nothing is rounded and sent
+    for (const [id, what] of [[2, 'a price not exact in tomans'], [3, 'an equal price'], [4, 'a dollar price for a toman shop'], [5, 'a variable parent'], [7, 'an item without a price']] as const) {
       if (store.pricesSent.has(id)) wrong.push(`${what} was sent`);
     }
     if (store.pushed.size > 0 || store.manageStockSent.size > 0) wrong.push('the price push sent stock fields');
     if (!store.requests.some(r => r.startsWith('POST products/6/variations/batch'))) wrong.push(`the variation price did not go through its parent's batch: ${store.requests.join(', ')}`);
     if (!store.requests.includes('GET data/currencies/current')) wrong.push('the shop currency was not read');
+    if (!store.requests.includes('GET settings/general/woocommerce_price_num_decimals')) wrong.push('the shop decimals were not read');
     if ((await linkFields(h, a.id))?.site_regular_price !== '125000') wrong.push(`the link kept ${JSON.stringify(await linkFields(h, a.id))}`);
 
     const batches = store.batchSizes.length;
@@ -144,6 +147,8 @@ export async function pricePushCase(h: Harness, wrong: string[]): Promise<string
     const stopped = await runPricePushOnce(later(2));
     if (stopped.state !== 'nothing') wrong.push(`a stopped product was sent again: ${JSON.stringify(stopped)}`);
 
+    const inexact = new Map((((await h.get('/api/woocommerce/catalog')).body as ShopSyncBody).shopSync?.price?.skipped ?? []).map(s => [s.itemId, s.reason]));
+    if (inexact.get(rounded.id) !== 'inexact_unit') wrong.push(`a price not exact in tomans is listed as ${inexact.get(rounded.id)}, expected inexact_unit`);
     await h.q(`UPDATE wc_product_links SET site_type = '' WHERE item_id = $1 AND is_deleted = 0`, [rounded.id]);
     const catalog = await h.get('/api/woocommerce/catalog');
     const view = (catalog.body as ShopSyncBody).shopSync;
@@ -210,7 +215,7 @@ export async function skuRenameCase(h: Harness, wrong: string[]): Promise<string
 }
 
 /** A fixed-offset time zone whose hour is `hour` now, so the case does not depend on the clock */
-function zoneAtHour(hour: number): string {
+export function zoneAtHour(hour: number): string {
   let offset = ((hour - new Date().getUTCHours()) % 24 + 24) % 24;
   if (offset > 14) offset -= 24;
   if (offset === 0) return 'UTC';

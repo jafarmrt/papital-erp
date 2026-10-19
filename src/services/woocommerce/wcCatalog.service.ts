@@ -16,7 +16,7 @@ import { requireWcConnection, WC_SHOP_REQUEST_FAILED, type WcConnection } from '
 import { updateLinkRows, type LinkRowUpdate } from './wcLinkUpdates.js';
 import { formatPersianNumber } from '../../utils/persianNumber.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
-import type { WcDriftRow, WcRunKind } from '../../lib/woocommerce/wcShopSync.js';
+import type { WcDriftRow, WcRunKind, WcSiteMoney } from '../../lib/woocommerce/wcShopSync.js';
 import { catalogDifferences, type KeptLink } from './wcCatalogDrift.js';
 import { serverTimestampToUtcIso } from '../../lib/serverTimestamp.js';
 import { readSiteCatalog, WC_CATALOG_DEADLINE_MS, type SiteCatalog, type SiteProduct } from './wcCatalogRead.js';
@@ -92,6 +92,9 @@ export interface WcRefreshSummary {
   /** part C: the nightly re-read's trigger, business day and the differences it found between the shop and the program */
   trigger?: 'nightly';
   businessDay?: string;
+  /** the shop currency and decimals the nightly prices were compared in (review N-4) */
+  siteCurrency?: string;
+  siteDecimals?: number;
   differences?: WcDriftRow[];
   differencesTotal?: number;
 }
@@ -101,6 +104,7 @@ export interface RefreshRun {
   nightly?: { businessDay: string };
   /** the regular price the program sends to each item's product (the shop's unit), when a price list goes to the shop */
   wantedPrices?: ReadonlyMap<number, string>;
+  siteMoney?: WcSiteMoney;
 }
 
 /** review M-B: the shop answered no product at all while items are linked (a plugin, a cache or a wrong address) */
@@ -174,7 +178,8 @@ export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor, ru
       // part C: what the shop holds that the program did not send (a stock or price changed by hand in the shop)
       const freshPairs = fresh.map(m => ({ link: null, itemId: m.itemId, site: m.site }));
       const drift = await catalogDifferences(tx, [...keptPairs, ...freshPairs], run.wantedPrices);
-      Object.assign(summary, { trigger: 'nightly', businessDay: run.nightly.businessDay, ...drift });
+      const money = run.siteMoney ? { siteCurrency: run.siteMoney.currency, siteDecimals: run.siteMoney.decimals } : {};
+      Object.assign(summary, { trigger: 'nightly', businessDay: run.nightly.businessDay, ...money, ...drift });
     }
     await tx.insert(wcSyncRuns).values({
       kind: 'refresh', status: 'ok', userId: actorUserId(actor), startedAt: now, finishedAt: now, summary,

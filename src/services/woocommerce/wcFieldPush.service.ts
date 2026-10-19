@@ -12,7 +12,7 @@ import { chunked, WC_LIST_LIMIT, WC_PUSH_DEADLINE_MS } from '../../lib/woocommer
 import { WC_AUTO_MAX_LINK_FAILURES, WC_AUTO_PUSH_MAX_PRODUCTS } from '../../lib/woocommerce/wcAutoPush.js';
 import {
   isSkuRenameOn, isVariableParentType, sameSitePrice, sitePriceOf, WC_PRICE_LIST_SETTING_KEY, WC_SKU_RENAME_SETTING_KEY,
-  type WcPriceSkipReason, type WcRunKind,
+  type WcPriceSkipReason, type WcRunKind, type WcSiteMoney,
 } from '../../lib/woocommerce/wcShopSync.js';
 import { ItemPricingService } from '../items/itemPricing.service.js';
 import { requireWcConnection } from './wcClient.js';
@@ -20,7 +20,7 @@ import { liveLinks, recordFailedRun, type WcActor } from './wcCatalog.service.js
 import { fieldRunStatus, sendLinkFields, type FieldOutcome } from './wcBatchUpdate.js';
 import { updateLinkRows, type LinkRowUpdate } from './wcLinkUpdates.js';
 import { autoRunBackoff } from './wcRunBackoff.js';
-import { readSiteCurrency } from './wcSiteCurrency.js';
+import { readSiteMoney } from './wcSiteCurrency.js';
 
 /**
  * 10.2 package 6 (D-04 part C). Two automatic runs beside the stock push, each behind its own setting (off by default),
@@ -71,7 +71,7 @@ export interface WantedPrices {
 }
 
 /** The regular price each link's product should have in the shop, or why none is sent */
-export async function wantedSitePrices(links: Link[], priceList: string, siteCurrency: string): Promise<WantedPrices> {
+export async function wantedSitePrices(links: Link[], priceList: string, site: WcSiteMoney): Promise<WantedPrices> {
   const latest = new Map<number, { price: string; currency: string }>();
   for (const part of chunked([...new Set(links.map(l => l.itemId))], 5000)) {
     const rows = await orm.select().from(itemPrices).where(and(inArray(itemPrices.itemId, part), eq(itemPrices.isDeleted, 0)));
@@ -85,9 +85,9 @@ export async function wantedSitePrices(links: Link[], priceList: string, siteCur
     if (link.siteType === '') { skipped.push({ itemId: link.itemId, reason: 'not_read' }); continue; }
     if (isVariableParentType(link.siteType)) { skipped.push({ itemId: link.itemId, reason: 'variable_parent' }); continue; }
     const price = latest.get(link.itemId);
-    const site = price ? sitePriceOf(price.price, price.currency, siteCurrency) : { skip: 'no_price' as const };
-    if ('skip' in site) skipped.push({ itemId: link.itemId, reason: site.skip });
-    else wanted.set(link.itemId, site.value);
+    const sitePrice = price ? sitePriceOf(price.price, price.currency, site) : { skip: 'no_price' as const };
+    if ('skip' in sitePrice) skipped.push({ itemId: link.itemId, reason: sitePrice.skip });
+    else wanted.set(link.itemId, sitePrice.value);
   }
   return { wanted, skipped };
 }
@@ -174,8 +174,8 @@ function outcomeOf(sent: { result: FieldRunResult; status: 'ok' | 'partial' | 'f
 }
 
 /** The links whose shop price differs from the price list's, with the price each gets */
-async function planPrices(links: Link[], title: string, siteCurrency: string, options: FieldRunOptions): Promise<Planned[]> {
-  const { wanted } = await wantedSitePrices(links, title, siteCurrency);
+async function planPrices(links: Link[], title: string, site: WcSiteMoney, options: FieldRunOptions): Promise<Planned[]> {
+  const { wanted } = await wantedSitePrices(links, title, site);
   const differing = links.filter(l => wanted.has(l.itemId) && !sameSitePrice(l.siteRegularPrice, wanted.get(l.itemId) ?? ''));
   return differing.slice(0, options.maxProducts ?? WC_AUTO_PUSH_MAX_PRODUCTS).map((link) => {
     const value = wanted.get(link.itemId) ?? '';
@@ -204,19 +204,20 @@ export function runPricePushOnce(now: Date = new Date(), options: FieldRunOption
     const links = (await liveLinks()).filter(l => l.priceFailureCount < WC_AUTO_MAX_LINK_FAILURES);
     if (links.length === 0) return { state: 'nothing' };
     const conn = await requireWcConnection();
-    let siteCurrency = await readSiteCurrency(conn, signal);
-    let plan = await planPrices(links, title, siteCurrency, options);
+    let site = await readSiteMoney(conn, signal);
+    let plan = await planPrices(links, title, site, options);
     if (plan.length > 0) {
-      // review M-1: before anything is sent, the shop currency is read again, so a shop switched between toman and rial
-      // within the cache window never gets a price in the old unit
-      const current = await readSiteCurrency(conn, signal, { fresh: true });
-      if (current !== siteCurrency) {
-        siteCurrency = current;
-        plan = await planPrices(links, title, siteCurrency, options);
+      // reviews M-1 / M-A: before anything is sent, the shop currency and decimals are read again, so a shop switched
+      // between toman and rial, or to fewer decimals, within the cache window never gets a price for the old setting
+      const current = await readSiteMoney(conn, signal, { fresh: true });
+      if (current.currency !== site.currency || current.decimals !== site.decimals) {
+        site = current;
+        plan = await planPrices(links, title, site, options);
       }
     }
     if (plan.length === 0) return { state: 'nothing' };
-    return outcomeOf(await sendAndRecord('price_push', plan, links.length, { priceList: title, siteCurrency }, signal, priceChanges));
+    const recorded = { priceList: title, siteCurrency: site.currency, siteDecimals: site.decimals };
+    return outcomeOf(await sendAndRecord('price_push', plan, links.length, recorded, signal, priceChanges));
   });
 }
 

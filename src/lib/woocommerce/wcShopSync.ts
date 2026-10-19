@@ -9,7 +9,7 @@ import type { WcCatalogItem, WcRunView } from './wcCatalog';
  * own setting, off by default:
  * - «فهرست قیمت فروشگاه» (`wc_price_list`): the active price of that price list goes to each linked product's regular price
  *   (plan questions ق۲ / ق۳: the sale price is never touched), converted to the shop's unit (a rial price for a toman shop is
- *   divided by ten and rounded); a price in another currency than the shop's is not sent and is listed.
+ *   divided by ten, never rounded); a price in another currency than the shop's is not sent and is listed.
  * - «تغییر خودکار کد در سایت» (`wc_sku_rename`): after an item's code changes (D-15), the linked product's SKU in the shop
  *   becomes the new code (card ت۲۹).
  * And once a business day, from `WC_NIGHTLY_HOUR`, while any of the automatic sends is on, the shop's catalog is read again:
@@ -33,50 +33,51 @@ export type WcPriceSkipReason = 'no_price' | 'currency_mismatch' | 'not_positive
 export const WC_PRICE_SKIP_LABELS: Record<WcPriceSkipReason, string> = {
   no_price: 'در فهرست قیمت فروشگاه قیمتی ندارد',
   currency_mismatch: 'ارز قیمت با واحد پول سایت یکی نیست',
-  not_positive: 'قیمت در واحد پول سایت به صفر گرد می‌شود',
-  inexact_unit: 'قیمت در واحد پول سایت با چهار رقم اعشار دقیق نوشته نمی‌شود',
+  not_positive: 'قیمت صفر است',
+  inexact_unit: 'قیمت در واحد پول سایت با تعداد اعشار سایت دقیق نوشته نمی‌شود',
   variable_parent: 'محصول متغیر است و قیمت روی گونه‌های آن است',
   not_read: 'نوع محصول هنوز از سایت خوانده نشده؛ «بازخوانی محصولات سایت» را بزنید',
 };
 
-/** Decimal places of a price sent to a shop whose unit is a thousand rials or tomans */
+/** The most decimal places a price is ever sent with, whatever the shop's decimals setting allows */
 export const WC_SITE_PRICE_PLACES = 4;
 
-/** A decimal text without trailing zeros after its point («2.5000» → «2.5», «13.0000» → «13») */
-function withoutTrailingZeros(text: string): string {
-  return text.includes('.') ? text.replace(/0+$/, '').replace(/\.$/, '') : text;
+/** The shop's money: its currency (`data/currencies/current`) and the decimals it shows and charges prices with
+ * (`woocommerce_price_num_decimals`, review M-A) */
+export interface WcSiteMoney { currency: string; decimals: number }
+
+/** The decimal places a price may carry to this shop: its own decimals, at most `WC_SITE_PRICE_PLACES` */
+export function sitePricePlaces(shopDecimals: number): number {
+  const d = Number.isFinite(shopDecimals) ? Math.floor(shopDecimals) : 0;
+  return Math.min(WC_SITE_PRICE_PLACES, Math.max(0, d));
 }
 
+/** A price as the shop takes it: plain digits, at most four decimals, never exponent notation (review N-1) */
+const SITE_PRICE_TEXT = /^\d+(\.\d{1,4})?$/;
+
 /**
- * The shop's regular price for a program price, or why it is not sent. A rial price goes to a rial-unit shop divided by its
- * `rialUnitMultiplier`: to a rial or toman shop rounded to a whole unit (at most 5 rials off), to a thousand-rial or
- * thousand-toman shop exactly, at most `WC_SITE_PRICE_PLACES` decimals (15,000 rials are 1.5 thousand tomans, never 2), and
- * a price that cannot be written exactly there is not sent (review H-1). Another currency goes only to a shop of that
- * currency, rounded to two decimals.
+ * The shop's regular price for a program price, or why it is not sent. Nothing is ever rounded (reviews H-1, M-A, M-B): a
+ * rial price goes to a rial-unit shop divided by its `rialUnitMultiplier`, another currency only to a shop of that
+ * currency, and the result must be exactly the price at the decimals the shop charges with (`sitePricePlaces`), else the
+ * product is listed as `inexact_unit` and its shop price is left alone. So 15,000 rials go to a thousand-toman shop with
+ * one or more decimals as 1.5 and are not sent to one with none, where the customer would pay 2 thousand tomans.
  */
 export function sitePriceOf(
-  price: string | number | null | undefined, priceCurrency: string | null | undefined, siteCurrency: string,
+  price: string | number | null | undefined, priceCurrency: string | null | undefined, site: WcSiteMoney,
 ): { value: string } | { skip: WcPriceSkipReason } {
   const raw = String(price ?? '').trim();
   if (raw === '' || !/^\d+(\.\d+)?$/.test(raw)) return { skip: 'no_price' };
   const own = String(priceCurrency || 'IRR').trim().toUpperCase();
-  const site = siteCurrency.trim().toUpperCase();
-  const multiplier = rialUnitMultiplier(site);
-  let value;
-  if (multiplier !== undefined) {
-    if (own !== 'IRR') return { skip: 'currency_mismatch' };
-    if (multiplier <= 10) {
-      value = fin(raw).divide(multiplier, 0);
-    } else {
-      value = fin(raw).divide(multiplier, WC_SITE_PRICE_PLACES);
-      if (!value.multiply(multiplier).equals(raw)) return { skip: 'inexact_unit' };
-    }
-  } else {
-    if (own !== site) return { skip: 'currency_mismatch' };
-    value = fin(raw).round(2);
-  }
+  const currency = site.currency.trim().toUpperCase();
+  const multiplier = rialUnitMultiplier(currency);
+  if (multiplier !== undefined ? own !== 'IRR' : own !== currency) return { skip: 'currency_mismatch' };
+  const unit = multiplier ?? 1;
+  const places = sitePricePlaces(site.decimals);
+  const value = fin(raw).divide(unit, places);
+  if (!value.multiply(unit).equals(raw)) return { skip: 'inexact_unit' };
   if (!value.isPositive()) return { skip: 'not_positive' };
-  return { value: withoutTrailingZeros(value.toString()) };
+  const text = value.toFixed(places).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+  return SITE_PRICE_TEXT.test(text) ? { value: text } : { skip: 'inexact_unit' };
 }
 
 /** A shop product type whose prices are on its variations (`variable`, and extensions such as `variable-subscription`) */
@@ -145,25 +146,28 @@ export interface WcShopSyncView {
   /** the stored price list is no longer one of the configured price lists, so no price is sent */
   priceListMissing: boolean;
   priceLists: string[];
-  /** the shop currency last read (null before the first price run) */
+  /** the shop currency and decimals last read (null before the first price run) */
   siteCurrency: string | null;
+  siteDecimals: number | null;
   price: WcFieldPushView & { skipped: WcPriceSkipRow[]; skippedTotal: number };
   sku: WcFieldPushView & { pending: number };
   /** the last nightly re-read and the differences it found */
   lastNightly: WcRunView | null;
+  /** the shop currency that nightly reading compared prices in (review N-4) */
+  differencesCurrency: string | null;
   differences: WcDriftRow[];
   differencesTotal: number;
 }
 
 export const PRICE_PUSH_ENABLE_CONFIRM = (title: string) =>
   `از این پس هر دقیقه قیمت فهرست «${title}» به «قیمت عادی» محصولات وصل‌شده در سایت فرستاده می‌شود (قیمت حراج سایت دست نمی‌خورد). `
-  + 'قیمت ریالی برای سایت تومانی بر ده تقسیم و گرد می‌شود و قیمتی که ارز آن با واحد پول سایت یکی نیست فرستاده نمی‌شود. '
+  + 'قیمت ریالی به واحد پول سایت برده می‌شود و گرد نمی‌شود: قیمتی که با تعداد اعشار سایت دقیق نوشته نشود، یا ارز آن با واحد پول سایت یکی نباشد، فرستاده نمی‌شود. '
   + 'قیمتی که در سایت با دست عوض شود، دوباره با قیمت فهرست جایگزین می‌شود. روشن شود؟';
 
 /** The question before the SKU rename is turned on; `pending` products already carry an earlier code and change at once */
 export const SKU_RENAME_ENABLE_CONFIRM = (pending: number) =>
   (pending > 0
-    ? `کد ${formatPersianNumber(pending)} محصول در سایت هنوز کد پیشین کالاست و در دقیقهٔ بعد به کد تازه تغییر می‌کند. `
+    ? `کد ${formatPersianNumber(pending)} محصول در سایت هنوز کد پیشین کالاست و از دقیقه بعد به کد تازه تغییر می‌کند. `
     : '')
   + 'از این پس هم پس از تغییر کد هر کالا، شناسه محصول (SKU) همان محصول در سایت در دقیقه بعد به کد تازه تغییر می‌کند. '
   + 'سفارشی که با کد قدیم برسد همچنان کالا را پیدا می‌کند. روشن شود؟';

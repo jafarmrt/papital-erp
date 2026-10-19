@@ -10,7 +10,8 @@ import { readWcConnectionSettings } from './wcConnectionSettings.js';
 import { requireWcConnection } from './wcClient.js';
 import { liveLinks, refreshCatalogLocked, type WcRefreshSummary } from './wcCatalog.service.js';
 import { activeShopPriceList, isSkuRenameEnabled, wantedSitePrices } from './wcFieldPush.service.js';
-import { readSiteCurrency } from './wcSiteCurrency.js';
+import { readSiteMoney } from './wcSiteCurrency.js';
+import type { WcSiteMoney } from '../../lib/woocommerce/wcShopSync.js';
 
 /**
  * 10.2 package 6 (D-04 part C, plan §5 «مقایسه شبانه»): once a business day, from `WC_NIGHTLY_HOUR` in the display time
@@ -46,13 +47,16 @@ async function nightlyAttempts(businessDay: string): Promise<NightlyAttempts> {
   };
 }
 
-/** The price each linked item's product should have, read before the catalog so the run can list price differences */
-async function wantedPricesForNightly(signal: AbortSignal): Promise<ReadonlyMap<number, string> | undefined> {
+/**
+ * The price each linked item's product should have, read before the catalog so the run can list price differences, with
+ * the shop money it was compared in (recorded on the run row for the tab's labels, review N-4)
+ */
+async function wantedPricesForNightly(signal: AbortSignal): Promise<{ wantedPrices: ReadonlyMap<number, string>; siteMoney: WcSiteMoney } | undefined> {
   const { title } = await activeShopPriceList();
   if (!title) return undefined;
-  // review M-1: the nightly reading never relies on a currency kept from earlier in the day
-  const currency = await readSiteCurrency(await requireWcConnection(), signal, { fresh: true });
-  return (await wantedSitePrices(await liveLinks(), title, currency)).wanted;
+  // reviews M-1 / M-A: the nightly reading never relies on a currency or decimals kept from earlier in the day
+  const siteMoney = await readSiteMoney(await requireWcConnection(), signal, { fresh: true });
+  return { wantedPrices: (await wantedSitePrices(await liveLinks(), title, siteMoney)).wanted, siteMoney };
 }
 
 /** One check of the nightly re-read; `now` and `timeZone` are for the tests */
@@ -69,8 +73,8 @@ export async function runNightlyOnce(
     if (!nightlyDue(hour, await nightlyAttempts(day), now.getTime())) return { state: 'not_due' as const };
     const prices = new AbortController();
     try {
-      const wantedPrices = await wantedPricesForNightly(prices.signal).catch(() => undefined);
-      const summary = await refreshCatalogLocked({}, undefined, { run: { nightly: { businessDay: day }, wantedPrices } });
+      const priced = await wantedPricesForNightly(prices.signal).catch(() => undefined);
+      const summary = await refreshCatalogLocked({}, undefined, { run: { nightly: { businessDay: day }, ...priced } });
       // products stopped after repeated price or SKU refusals try again after a reading of the shop
       await orm.update(wcProductLinks).set({ priceFailureCount: 0, skuFailureCount: 0, updatedAt: systemNowUtcIso() })
         .where(and(eq(wcProductLinks.isDeleted, 0), or(gt(wcProductLinks.priceFailureCount, 0), gt(wcProductLinks.skuFailureCount, 0))));

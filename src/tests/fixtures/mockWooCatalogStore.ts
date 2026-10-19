@@ -71,6 +71,8 @@ export interface MockWooCatalogStore {
   skusSent: Map<number, string>;
   /** part C: the shop currency `GET data/currencies/current` answers (IRR by default) */
   currency: string;
+  /** review M-A: the price decimals `GET settings/general/woocommerce_price_num_decimals` answers (2, WooCommerce's default) */
+  decimals: number | string;
   close(): Promise<void>;
 }
 
@@ -142,7 +144,7 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
   const store = {
     pushed: new Map(), requests: [], arrivals: [], batchSizes: [], rowErrors: new Set(), failPaths: new Set(), statusPaths: new Map(),
     queries: [], maxInFlight: 0,
-    orders: [], manageStockSent: new Map(), pricesSent: new Map(), skusSent: new Map(), currency: 'IRR',
+    orders: [], manageStockSent: new Map(), pricesSent: new Map(), skusSent: new Map(), currency: 'IRR', decimals: 2,
   } as unknown as MockWooCatalogStore;
   let inFlight = 0;
   const server = http.createServer((req, res) => {
@@ -207,6 +209,10 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
       }
       if (req.method === 'GET' && path === 'data/currencies/current') {
         send({ code: store.currency, name: store.currency, symbol: store.currency });
+        return;
+      }
+      if (req.method === 'GET' && path === 'settings/general/woocommerce_price_num_decimals') {
+        send({ id: 'woocommerce_price_num_decimals', type: 'number', value: String(store.decimals) });
         return;
       }
       const oneOrder = path.match(/^orders\/(\d+)$/);
