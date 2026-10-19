@@ -142,9 +142,10 @@ Validates: env safety, systemd state, all three health probes, version match aga
 
 ```bash
 # ADMIN_TOKEN = value of the auth_token cookie from a logged-in admin session (DevTools → Application → Cookies);
-# read -rs takes it without showing it and keeps it out of the shell history
-read -rs ADMIN_TOKEN
+# read -rsp takes it without showing it and keeps it out of the shell history; unset clears it afterwards
+read -rsp 'auth_token: ' ADMIN_TOKEN; echo
 BASE_URL=https://erp.yourdomain.ir ADMIN_TOKEN="$ADMIN_TOKEN" bash scripts/smoke-test.sh
+unset ADMIN_TOKEN
 ```
 
 Covers 8 steps: health/live, health/ready, `/api/stats`, vouchers list, items list, unsigned webhook rejection (401/403/503), login rate-limit (429), `/metrics`.

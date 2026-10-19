@@ -95,7 +95,8 @@ sudo bash scripts/go-live-verify.sh http://localhost:3000   # باید STATUS : 
 ```
 در حالت نصب با زیپ، زیپ تازه را به سرور بفرستید و آن را به `update.sh` بدهید؛ زیپ را روی پوشه برنامه باز نکنید:
 ```bash
-sudo bash update.sh --zip /tmp/papital-erp-source-vX.Y.Z.zip   # بکاپ + جایگزینی سورس + build + restart + health
+sudo bash update.sh --rehearse --zip /tmp/papital-erp-source-vX.Y.Z.zip   # بکاپ + جایگزینی سورس + build + آزمایش مهاجرت‌ها + restart + health
+sudo bash scripts/go-live-verify.sh http://localhost:3000   # باید STATUS : READY بگوید
 ```
 فایل `.env`، پیوست‌ها (`public/uploads`)، لاگ‌ها و بکاپ‌ها دست‌نخورده می‌مانند. پوشه‌ای که از پیش باز شده است با `--source <پوشه>` داده می‌شود.
 

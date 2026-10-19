@@ -2,7 +2,7 @@
 
 سیستم یکپارچه مدیریت کارگاه تولیدی: انبارداری با کاردکس رویدادمحور، فاکتور و پیش‌فاکتور، حسابداری دوبل (کدینگ ۴ سطحی، دفتر روزنامه، تراز آزمایشی)، خزانه‌داری و چک صیادی، CRM و قیف فروش، کنترل پروژه‌های تولید با BOM، منابع انسانی و حقوق و دستمزد، موتور گردش کار (ورکفلو) با کارتابل تاییدات، گذرگاه رویدادها (Outbox/DLQ/Webhook) و گزارش‌های BI.
 
-> **نسخه فعلی:** سری فعال `v10.x.y` (نسخه مستقر: `v10.2.14`) — نقشه راه: `V10_MASTER_ROADMAP.md` (سری‌های بسته‌شده: `V9_MASTER_ROADMAP.md`، `V8_MASTER_ROADMAP.md`، `V7_MASTER_ROADMAP.md`) • تاریخچه تغییرات: `CHANGELOG.md` + `src/data/changelogs/10.ts`
+> **نسخه فعلی:** سری فعال `v10.x.y` (نسخه مستقر: `v10.2.13`) — نقشه راه: `V10_MASTER_ROADMAP.md` (سری‌های بسته‌شده: `V9_MASTER_ROADMAP.md`، `V8_MASTER_ROADMAP.md`، `V7_MASTER_ROADMAP.md`) • تاریخچه تغییرات: `CHANGELOG.md` + `src/data/changelogs/10.ts`
 
 ---
 
@@ -72,7 +72,9 @@ NODE_ENV=production npm start      # مهاجرت‌ها هنگام startup اع
 برای به‌روزرسانی خودکار سرور و سرویس‌های در حال اجرا در آینده نیز اسکریپت `update.sh` آماده است:
 
 ```bash
-sudo ./update.sh
+cd /opt/papital-erp
+sudo ./update.sh --rehearse   # بکاپ + build + آزمایش مهاجرت‌ها روی رونوشت + restart + health
+sudo bash scripts/go-live-verify.sh http://localhost:3000   # باید STATUS : READY بگوید
 ```
 
 ### تنظیمات اولیه پس از نصب
@@ -147,7 +149,7 @@ cd /opt/papital-erp
 sudo BACKUP_HOUR=2 BACKUP_MINUTE=30 bash scripts/install-ops-cron.sh root   # root را با کاربر سرویس عوض کنید
 ```
 
-> `scripts/ensure-env-secrets.sh` را هرگز بی نام کلید اجرا نکنید: بی نام، `ERP_WEBHOOK_SECRET_TOKEN` و `METRICS_TOKEN` را هم به `.env` می‌افزاید. روی سروری که `METRICS_TOKEN` ندارد، هشدار «وضعیت صف رویدادها خوانده نشد (METRICS_TOKEN).» از `monitor.sh` و هشدار `METRICS_TOKEN` در `go-live-verify.sh` مورد انتظارند، و `audit-env.sh` (که `METRICS_TOKEN` را بررسی نمی‌کند) نبودن `ERP_WEBHOOK_SECRET_TOKEN` را خطا (`❌ MISSING`) می‌شمارد؛ این هم مورد انتظار است و آن کلید را نیفزایید.
+> `scripts/ensure-env-secrets.sh` را هرگز بی نام کلید اجرا نکنید: بی نام، `ERP_WEBHOOK_SECRET_TOKEN` و `METRICS_TOKEN` را هم به `.env` می‌افزاید. روی سروری که `METRICS_TOKEN` ندارد، هشدار «وضعیت صف رویدادها خوانده نشد (METRICS_TOKEN).» از `monitor.sh` و هشدار `METRICS_TOKEN` در `go-live-verify.sh` مورد انتظارند، و `audit-env.sh` (که `METRICS_TOKEN` را بررسی نمی‌کند) نبودن `ERP_WEBHOOK_SECRET_TOKEN` را خطا (`❌ MISSING`) می‌شمارد؛ این هم مورد انتظار است و آن کلید را نیفزایید. به همین دلیل هشدار `ERP_WEBHOOK_SECRET_TOKEN missing` در `go-live-verify.sh` هم مورد انتظار است.
 
 رونوشت رمزگذاری‌شده بیرون از سرور و کانال هشدار: `docs/OFFSITE_BACKUP.md`.
 

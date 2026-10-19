@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * v10.2.14 (O-06, draft PR #207 brought up to date): the operations documents named retired tools and steps: three version locations and the series 3
+ * v10.2.13 (O-06, draft PR #207 brought up to date): the operations documents named retired tools and steps: three version locations and the series 3
  * changelog, a push to master, pm2, `GEMINI_API_KEY` (read by no code), `git revert` instead of the reset `update.sh`
  * prints, a `.env.production.example` that does not exist, the backup-only cron file `install-ops-cron.sh` replaced and
  * the in-app changelog page removed in v10.1.15. The review added what an operator of a running server must never be
