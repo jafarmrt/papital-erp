@@ -16,6 +16,8 @@
  */
 
 import { fin, type FinancialDecimal } from '../financialDecimal.js';
+import { perItemProductKey } from './inventoryControlSections.js';
+import { perItemRowRequiredQty, productOrderQuantity } from './materialQuantity.js';
 import { findProjectItemMatch, itemCodeKey, itemNameKey, type MatchableItem } from './projectItemMatch.js';
 
 /** کالای انبار برای تطبیق ردیف‌های کنترل موجودی (findProjectItemMatch: کد، سپس نام دقیق) */
@@ -154,16 +156,18 @@ function collectNeedRows(sections: unknown, products: unknown, manualPurchaseIte
     const title = optText(sec.title);
     const perItemResults = asRow(sec.perItemResults);
     if (sec.checkType === 'per_item' && perItemResults) {
-      for (const prod of productList) {
-        const prodRes = asRow(perItemResults[text(prod.id)]) || {};
+      productList.forEach((prod, idx) => {
+        // TD-1343: کلید و تعداد سفارش محصول همان که زبانه مواد می‌سازد؛ ردیف «برای هر عدد» × تعداد سفارش، ردیف «کل» عدد خودش
+        const prodRes = asRow(perItemResults[perItemProductKey(prod, idx)]) || {};
+        const orderQty = productOrderQuantity(prod);
         const results = Object.values(prodRes).map(asRow).filter((r): r is Row => r !== null);
         const list = results.length > 0
           ? results
           : asRows(sec.itemsSchema).map(s => ({ itemCode: s.itemCode, name: s.name, unit: s.unit, requiredQty: 1 }) as Row);
         for (const r of list) {
-          push(r, Number(r.requiredQty !== undefined ? r.requiredQty : 1), r.name, optText(r.category) || title, title);
+          push(r, perItemRowRequiredQty(r, orderQty), r.name, optText(r.category) || title, title);
         }
-      }
+      });
     } else if (sec.checkType === 'global') {
       for (const g of asRows(sec.globalItems)) {
         push(g, Number(g.requiredQty || 0), g.name, optText(g.category) || title, title);

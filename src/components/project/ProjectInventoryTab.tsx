@@ -67,6 +67,7 @@ export function ProjectInventoryTab({
     handleCategoryChangeForCustom,
     handleUpdateSectionDescription,
     handleUpdatePerItemResult,
+    handleUpdatePerItemFields,
     handleUpdateGlobalItem,
     handleOpenAddMaterialModal,
     handleOpenChangeMaterialModal,
@@ -305,6 +306,7 @@ export function ProjectInventoryTab({
               availability={availability}
               activeStepTab={0}
               handleUpdatePerItemResult={handleUpdatePerItemResult}
+              handleUpdatePerItemFields={handleUpdatePerItemFields}
               handleOpenChangeMaterialModal={handleOpenChangeMaterialModal}
               handleOpenUnitConversionModal={handleOpenUnitConversionModal}
               handleRemoveItemFromSection={handleRemoveItemFromSection}
