@@ -3,11 +3,12 @@ import type { ProductionProject } from '../../../types';
 import { projectStatusLabel } from '../../../lib/projects/projectStatus';
 import { PHONE_TAP_TARGET } from '../../../lib/pwa/phoneLayout';
 import { ProjectStatusActions } from '../ProjectStatusActions';
+import type { ProjectWriteBase } from '../../../lib/projects/projectParts';
 import { PROJECT_STATUS_STYLES } from '../workspace/ProjectWorkspaceHeader';
 
 interface ProjectPhoneHeaderProps {
   project: ProductionProject;
-  version: number | undefined;
+  writeBase: ProjectWriteBase;
   canEdit: boolean;
   editingSpecs: boolean;
   onBack: () => void;
@@ -20,7 +21,7 @@ interface ProjectPhoneHeaderProps {
  * status, and the same edit and status buttons as the desktop header. The customer, the delivery date and the
  * progress are in the phone summary below it.
  */
-export function ProjectPhoneHeader({ project, version, canEdit, editingSpecs, onBack, onEditSpecs, onStatusSaved }: ProjectPhoneHeaderProps) {
+export function ProjectPhoneHeader({ project, writeBase, canEdit, editingSpecs, onBack, onEditSpecs, onStatusSaved }: ProjectPhoneHeaderProps) {
   const status = project.status || 'planned';
   return (
     <header className="bg-white rounded-2xl border border-slate-200 p-3 space-y-2.5">
@@ -42,7 +43,7 @@ export function ProjectPhoneHeader({ project, version, canEdit, editingSpecs, on
             <Edit3 className="w-4 h-4" aria-hidden="true" />
             ویرایش مشخصات
           </button>
-          <ProjectStatusActions projectId={project.id} status={project.status} version={version} onSaved={onStatusSaved} />
+          <ProjectStatusActions projectId={project.id} status={project.status} writeBase={writeBase} onSaved={onStatusSaved} />
         </div>
       )}
     </header>

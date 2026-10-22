@@ -10950,6 +10950,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10.2 package 12 item 1 (TD-1341): the reservation reconcile of a finalized project
   const { runProjectReservationReconcileTests } = await import('../regression/projectReservationReconcileTests.js');
   results.push(...await runProjectReservationReconcileTests(shouldRun));
+  // Series 10.2 package 12 item 4 (TD-1342): each project tab saves only its own part
+  const { runProjectPartSaveTests } = await import('../regression/projectPartSaveTests.js');
+  results.push(...await runProjectPartSaveTests(shouldRun));
   // Series 10.2 package 3 (v10.2.3, TD-1290): free stock, delivery cost and issued materials of a project
   const { runProjectMaterialsCostTests } = await import('../regression/projectMaterialsCostTests.js');
   results.push(...await runProjectMaterialsCostTests(shouldRun));

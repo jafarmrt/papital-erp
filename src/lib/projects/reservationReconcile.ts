@@ -7,6 +7,7 @@
  */
 
 import { formatPersianNumber } from '../../utils/persianNumber.js';
+import type { ProjectPartTokens } from './projectParts.js';
 
 /** یک کالا در پیش‌نمایش؛ مقدارها به واحد کالا */
 export interface ReservationReconcileLine {
@@ -37,6 +38,8 @@ export interface ReservationReconcilePreview {
   projectId: number;
   /** نسخهٔ پروژه‌ای که پیش‌نمایش از آن ساخته شد */
   version: number;
+  /** TD-1342: نشانهٔ بخش «کنترل موجودی» همان پروژه؛ زبانه‌ای با نشانهٔ دیگر فهرست ذخیره‌شده را نمی‌بیند */
+  inventoryToken: string;
   lines: ReservationReconcileLine[];
   /** ردیف‌های بی کالا؛ رزروی نمی‌گیرند و تا هستند هیچ رزروی آزاد نمی‌شود */
   unmatchedRows: ReservationReconcileUnmatchedRow[];
@@ -53,6 +56,8 @@ export interface ReservationReconcileResult {
   changed: boolean;
   preview: ReservationReconcilePreview;
   inventory_control: { reservedItems: unknown[]; reservationShortages: unknown[] };
+  /** TD-1342: نشانهٔ بخش‌های پروژه پس از ثبت */
+  partTokens: ProjectPartTokens;
 }
 
 export const RESERVATION_PLAN_CHANGED_MESSAGE =

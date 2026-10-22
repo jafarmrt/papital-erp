@@ -4,16 +4,18 @@ import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@t
 type FetchOpts = { method?: string; body?: string; signal?: AbortSignal };
 // a server that keeps the project version: a save from another version is refused, a save or a schedule log raises it
 let serverVersion = 2;
-const puts: Array<{ version?: number }> = [];
+// TD-1342 (review N2): when set, every answer carries part tokens, a save's differ from a read's
+let tokensFor: ((kind: 'save' | 'read') => Record<string, string>) | null = null;
+const puts: Array<{ version?: number; partTokens?: Record<string, string> }> = [];
 const fetchJson = vi.fn(async (url: string, opts?: FetchOpts) => {
   if (url === '/projects/1' && opts?.method === 'PUT') {
     const body = JSON.parse(opts.body ?? '{}') as { version?: number };
     puts.push(body);
     if (body.version !== serverVersion) throw Object.assign(new Error('OCC_CONFLICT'), { code: 'OCC_CONFLICT' });
     serverVersion += 1;
-    return { id: 1, version: serverVersion };
+    return { id: 1, version: serverVersion, ...(tokensFor ? { partTokens: tokensFor('save') } : {}) };
   }
-  if (url === '/projects/1') return { id: 1, version: serverVersion };
+  if (url === '/projects/1') return { id: 1, version: serverVersion, ...(tokensFor ? { partTokens: tokensFor('read') } : {}) };
   if (url === '/piecework/logs' && opts?.method === 'POST') {
     serverVersion += 1;
     return { status: 'ok', insertedCount: 1, insertedIds: [70] };
@@ -44,7 +46,7 @@ import { useProjectVersion } from '../../hooks/useProjectVersion';
 import { latestProjectVersion, projectVersionOf } from '../../lib/projects/projectVersion';
 import type { ProductionProject } from '../../types';
 
-beforeEach(() => { serverVersion = 2; });
+beforeEach(() => { serverVersion = 2; tokensFor = null; });
 afterEach(() => {
   cleanup();
   puts.length = 0;
@@ -79,9 +81,9 @@ describe('project version on save (TD-742)', () => {
   it('remembers the version a save answered for the same project only', () => {
     const { result, rerender } = renderHook(({ project }) => useProjectVersion(project), { initialProps: { project: { id: 1, version: 2 } } });
     expect(result.current.version).toBe(2);
-    act(() => result.current.remember({ id: 1, version: 3 }));
+    act(() => result.current.remember({ id: 1, version: 3 }, []));
     expect(result.current.version).toBe(3);
-    act(() => result.current.remember({ id: 9, version: 8 }));
+    act(() => result.current.remember({ id: 9, version: 8 }, []));
     expect(result.current.version).toBe(3);
     rerender({ project: { id: 1, version: 5 } });
     expect(result.current.version).toBe(5);
@@ -110,5 +112,20 @@ describe('project version on save (TD-742)', () => {
     await waitFor(() => expect(puts).toHaveLength(2));
     expect(puts.map(p => p.version)).toEqual([2, 4]);
     expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('after a work log the schedule keeps its own token, never the parts of the project read (TD-1342 review N2)', async () => {
+    const part = (d: string) => Object.fromEntries(['specs', 'status', 'attachments', 'inventory', 'schedule'].map(p => [p, d.repeat(32)]));
+    tokensFor = kind => part(kind === 'save' ? '1' : '2');
+    render(
+      <ProjectScheduleTab project={{ ...PROJECT, partTokens: part('0') } as ProductionProject} personnelList={[{ id: 7, fullName: 'پرسنل آزمون' }]} pieceworkTasksList={[{ id: 3, title: 'برش', defaultRate: 1000 }]} onUpdate={vi.fn()} />,
+    );
+    fireEvent.click(await screen.findByText('ثبت کارمزد'));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByText('ذخیره برنامه‌ریزی'));
+    await waitFor(() => expect(puts).toHaveLength(2));
+    expect(puts.map(p => p.version)).toEqual([2, 4]);
+    // the save before the log answered the schedule token; the read after it may hold other users' changes, so none is taken
+    expect(puts[1].partTokens).toEqual({ ...part('0'), schedule: '1'.repeat(32) });
   });
 });

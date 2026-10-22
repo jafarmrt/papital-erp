@@ -1,3 +1,4 @@
+import type { ProjectPartTokens } from '../lib/projects/projectParts';
 import type { ProjectManagerView } from '../lib/projects/projectManagers';
 import type { FinancialAttachment } from './accounting.types';
 
@@ -262,6 +263,8 @@ export interface ProductionProject {
   version?: number;
   /** v10.1.37 (N-01, TD-1283): «مسئولان پروژه»، فقط در پرونده کامل پروژه */
   managers?: ProjectManagerView[];
+  /** TD-1342: نشانهٔ هر بخش پروژه (فقط در پرونده کامل پروژه)؛ ذخیرهٔ زبانه آن را پس می‌فرستد */
+  partTokens?: ProjectPartTokens;
   // Joined or calculated fields
   item_image?: string;
   progress_percent?: number;

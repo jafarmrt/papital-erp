@@ -401,13 +401,13 @@ export default function ProjectScheduleTab({
     const res = await fetchJson<{ id?: number; version?: number }>(`/projects/${project.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stage_schedules: withIds, version: projectVersion.version })
+      body: JSON.stringify({ stage_schedules: withIds, ...projectVersion.writeBase })
     });
     if (!res?.id) {
       toast.error('برنامه کارگاه پیش از ثبت کارکرد ذخیره نشد.');
       return null;
     }
-    projectVersion.remember(res);
+    projectVersion.remember(res, ['schedule']);
     setSavedSchedulesMap(withIds);
     return withIds;
   };
@@ -419,7 +419,8 @@ export default function ProjectScheduleTab({
       body: JSON.stringify({ items })
     });
     // v9.0.385 (TD-742): ثبت کارکرد شناسه آن را در ردیف برنامه می‌نویسد و نسخه پروژه را بالا می‌برد؛ ذخیره بعدی با نسخه تازه می‌رود
-    projectVersion.remember(await fetchJson(`/projects/${project.id}`).catch(() => null));
+    // TD-1342 (review N2): only the version is taken; this read may hold other users' changes the tab does not show
+    projectVersion.remember(await fetchJson(`/projects/${project.id}`).catch(() => null), []);
     return Array.isArray(res?.insertedIds) ? res.insertedIds : [];
   };
 
@@ -546,12 +547,12 @@ export default function ProjectScheduleTab({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           stage_schedules: schedulesMap,
-          version: projectVersion.version
+          ...projectVersion.writeBase
         })
       });
 
       if (res && res.id) {
-        projectVersion.remember(res);
+        projectVersion.remember(res, ['schedule']);
         setSavedSchedulesMap(schedulesMap);
         toast.success('برنامه‌ریزی کارگاه و تخصیص پرسنل با موفقیت ذخیره شد');
         onUpdate();

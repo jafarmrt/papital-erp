@@ -32,6 +32,12 @@ export async function runProjectReservationReconcileTests(shouldRun: ShouldRun):
     ['reg_project_reservation_report_trimmed_code_td_1341',
       'v10.2.x: the reservation report finds the item of a stored row without an item id whose item code starts with a no-break space, as the reconcile does, so both show the same reservation (TD-1341, review N1)',
       ['td1341', 'td1322', 'package12', 'projects', 'reservation'], trimmedCodeCase],
+    ['reg_project_reservation_reconcile_ambiguous_alias_td_1344',
+      'v10.2.x: a code that two stored reservation rows give to two different items, held by no live item, is no alias: the list row stays unmatched and the release is 422 with nothing written (TD-1344, review N-A of TD-1341)',
+      ['td1344', 'td1341', 'package12', 'projects', 'reservation'], ambiguousAliasCase],
+    ['reg_project_reservation_reconcile_kept_shortage_td_1344',
+      'v10.2.x: while a list row reaches no item, a plan that only reserves keeps the stored shortage of an item outside the plan (TD-1344, review N-B of TD-1341)',
+      ['td1344', 'td1341', 'package12', 'projects', 'reservation'], keptShortageCase],
   ]);
 }
 
@@ -278,4 +284,55 @@ async function trimmedCodeCase(h: Harness, wrong: string[]): Promise<string> {
   const view = await reservedOf(a);
   if (view.project !== 5) wrong.push(`the reservation report shows ${view.project} held by the project, expected 5 as the reconcile reads`);
   return 'the report and the reconcile find the same item';
+}
+
+/** A saved code that stored rows give to two items reaches neither: the list row is unmatched and nothing is released */
+async function ambiguousAliasCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const a = await f.item(10);
+  const b = await f.item(10);
+  const project = await createProject(h, {
+    sections: globalSection([await materialRow(h, a, 3), await materialRow(h, b, 4)]), manualPurchaseItems: [], isFinalized: true,
+  });
+  if (await storedQty(h, project, a) !== 3 || await storedQty(h, project, b) !== 4) throw new Error('setup: the finalize did not reserve 3 and 4');
+  // both stored rows keep their item ids and one old code that no live item holds now
+  const shared = `SHARED-${h.tag}`;
+  await h.q(`UPDATE production_projects SET inventory_control = jsonb_set(inventory_control, '{reservedItems}',
+    (SELECT jsonb_agg(r || jsonb_build_object('itemCode', $2::text)) FROM jsonb_array_elements(inventory_control->'reservedItems') r)) WHERE id = $1`, [project, shared]);
+  await saveSections(h, project, [{ itemCode: shared, name: `shared row ${h.tag}`, unit: 'عدد', requiredQty: 5 }]);
+  const version = await versionOf(h, project);
+
+  const p = await preview(h, project);
+  if (p.unmatchedRows.length !== 1 || p.unmatchedRows[0]?.code !== shared) wrong.push(`the preview lists ${JSON.stringify(p.unmatchedRows)}, expected the row of the shared old code`);
+  if (lineOf(p, a)?.targetQty !== 0 || lineOf(p, b)?.targetQty !== 0) wrong.push(`the preview reaches an item through the shared code: ${JSON.stringify(p.lines)}`);
+  const res = await apply(h, project, { version, planToken: p.planToken });
+  if (res.status !== 422 || (res.body as { code?: unknown }).code !== 'PROJECT_RESERVATION_ROWS_UNMATCHED') wrong.push(`applying answered ${brief(res)}, expected 422 PROJECT_RESERVATION_ROWS_UNMATCHED`);
+  if (await storedQty(h, project, a) !== 3 || await storedQty(h, project, b) !== 4 || await versionOf(h, project) !== version) wrong.push('the refused reconcile changed a reservation or the version');
+  return 'a shared old code reaches neither item';
+}
+
+/** A reserve-only plan beside an unmatched row keeps the stored shortage of the item that row used to reach */
+async function keptShortageCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const a = await f.item(10);
+  const c = await f.item(0);
+  const project = await createProject(h, {
+    sections: globalSection([await materialRow(h, a, 3), await materialRow(h, c, 5)]), manualPurchaseItems: [], isFinalized: true,
+  });
+  const shortOf = async () => {
+    const [row] = await h.q(`SELECT inventory_control->'reservationShortages' AS s FROM production_projects WHERE id = $1`, [project]);
+    const list = Array.isArray(row?.s) ? (row.s as Array<Record<string, unknown>>) : [];
+    return Number(list.find(r => Number(r.itemId) === c)?.shortQty ?? 0);
+  };
+  if (await storedQty(h, project, a) !== 3 || await shortOf() !== 5) throw new Error('setup: the finalize did not reserve 3 and record a shortage of 5');
+  // the row of the item without stock now names no item; the other item needs more
+  await saveSections(h, project, [{ itemCode: `TYPO-${h.tag}`, name: `typo ${h.tag}`, unit: 'عدد', requiredQty: 5 }, await materialRow(h, a, 6)]);
+
+  const p = await preview(h, project);
+  if (p.unmatchedRows.length !== 1 || lineOf(p, a)?.targetQty !== 6) wrong.push(`the preview is ${JSON.stringify({ lines: p.lines, unmatched: p.unmatchedRows })}, expected a 3 → 6 and the typo row listed`);
+  const res = await apply(h, project, { version: await versionOf(h, project), planToken: p.planToken });
+  if (res.status !== 200) wrong.push(`a plan that only reserves answered ${brief(res)}, expected 200`);
+  if (await storedQty(h, project, a) !== 6) wrong.push(`the item is reserved ${await storedQty(h, project, a)}, expected 6`);
+  if (await shortOf() !== 5) wrong.push(`the stored shortage of the item outside the plan is ${await shortOf()}, expected 5 kept`);
+  return 'an unmatched row keeps the stored shortage';
 }

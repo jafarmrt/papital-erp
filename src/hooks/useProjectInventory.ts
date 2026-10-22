@@ -671,7 +671,7 @@ export function useProjectInventory(
           isFinalized: true,
           lastUpdated: new Date().toISOString()
         },
-        version: projectVersion.version
+        ...projectVersion.writeBase
       };
 
       const saved = await fetchJson<SavedProjectInventory>(`/api/projects/${project.id}`, {
@@ -680,7 +680,7 @@ export function useProjectInventory(
         body: JSON.stringify(payload)
       });
 
-      projectVersion.remember(saved);
+      projectVersion.remember(saved, ['inventory']);
       setIsDirty(false);
       setIsFinalized(true);
       setFinalizedAt(saved?.inventory_control?.finalizedAt);
@@ -715,14 +715,14 @@ export function useProjectInventory(
           isFinalized: false,
           lastUpdated: new Date().toISOString()
         },
-        version: projectVersion.version
+        ...projectVersion.writeBase
       };
 
       projectVersion.remember(await fetchJson(`/api/projects/${project.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
-      }));
+      }), ['inventory']);
 
       setIsDirty(false);
       setIsFinalized(false);
@@ -741,7 +741,7 @@ export function useProjectInventory(
 
   /** TD-1341: «تکمیل رزرو» ثبت شد؛ نسخه و رزرو ذخیره‌شده همان پاسخ سرور است */
   const applyReservationReconcile = (result: ReservationReconcileResult) => {
-    projectVersion.remember(result);
+    projectVersion.remember(result, ['inventory']);
     setReservedItems(Array.isArray(result?.inventory_control?.reservedItems) ? result.inventory_control.reservedItems : []);
     setReservationShortages(storedReservationShortages(result?.inventory_control));
     if (onUpdate) onUpdate();
@@ -765,7 +765,7 @@ export function useProjectInventory(
           isFinalized,
           lastUpdated: new Date().toISOString()
         },
-        version: projectVersion.version
+        ...projectVersion.writeBase
       };
 
       const saved = await fetchJson<SavedProjectInventory>(`/api/projects/${project.id}`, {
@@ -774,7 +774,7 @@ export function useProjectInventory(
         body: JSON.stringify(payload)
       });
 
-      projectVersion.remember(saved);
+      projectVersion.remember(saved, ['inventory']);
       setIsDirty(false);
       setReservedItems(savedReservedItems(saved));
       setReservationShortages(storedReservationShortages(saved?.inventory_control));
@@ -914,8 +914,8 @@ export function useProjectInventory(
     handleFinalizeAndReserveStock,
     handleUnfinalizeReservation,
     applyReservationReconcile,
-    /** TD-1341: نسخه‌ای که «تکمیل رزرو» با آن ثبت می‌شود */
-    projectVersion: projectVersion.version,
+    /** TD-1341 / TD-1342: نسخه و نشانهٔ بخش‌هایی که «تکمیل رزرو» با آن ثبت می‌شود */
+    projectWriteBase: projectVersion.writeBase,
     handlePrintPurchaseListWithCheck,
     handleSaveInventoryControl,
     handlePrintPurchaseList,
