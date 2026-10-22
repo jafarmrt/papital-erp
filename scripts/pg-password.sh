@@ -10,6 +10,8 @@ PG_URL_RE='^(postgres(ql)?://)([^:@/]+)(:([^@]*))?@([^/?]*)(.*)$'
 pg_url_decode() { local v="${1//\\/\\\\}"; printf '%b' "${v//%/\\x}"; }
 pg_pgpass_field() { printf '%s' "$1" | sed -e 's/[\\:]/\\&/g'; }
 # host and port of the URL's host part; an IPv6 address comes without its brackets ([::1]:5433 -> ::1 5433)
+# an empty host (a socket given as ?host=/path) is written as localhost, which libpq matches for the default
+# socket directory; a socket in another directory needs a pgpass line of its own (#346 review)
 pg_split_hostport() {
   local hostport="$1" host port=""
   if [[ "$hostport" == \[* ]]; then

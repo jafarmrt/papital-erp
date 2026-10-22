@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -56,10 +56,35 @@ describe('pg_password_file_td_1351', () => {
       const text = read(file);
       const setupAt = text.indexOf('pg_password_setup "$WORK_DIR"');
       expect(setupAt, file).toBeGreaterThan(0);
-      const firstCall = Math.min(...['psql "$', 'pg_restore --'].map(c => text.indexOf(c, text.indexOf('set -euo pipefail'))).filter(i => i >= 0));
+      // the cleanup trap that removes WORK_DIR is set before the password file is written (#346 review M1)
+      const trapAt = text.indexOf('trap cleanup EXIT');
+      expect(trapAt, file).toBeGreaterThan(text.indexOf('WORK_DIR="$(mktemp -d)"'));
+      expect(trapAt, file).toBeLessThan(setupAt);
+      const firstCall = Math.min(...['psql "$', 'pg_restore --'].map(c => text.indexOf(c, trapAt)).filter(i => i >= 0));
       expect(setupAt, file).toBeLessThan(firstCall);
     }
     // the migrations of the rehearsal still get the password, through their environment
     expect(read('scripts/upgrade-rehearsal.sh')).toContain('DATABASE_URL="$(url_for_db "$DRILL_DB" "$PG_FULL_DATABASE_URL")" "$TSX"');
+  });
+
+  it('restore.sh that stops before the restore leaves no password file behind (#346 review M1)', () => {
+    dir = mkdtempSync(path.join(tmpdir(), 'pg-password-early-'));
+    const bin = path.join(dir, 'bin');
+    const tmp = path.join(dir, 'tmp');
+    mkdirSync(bin);
+    mkdirSync(tmp);
+    // the role check answers nothing: no CREATEDB, and sudo is not allowed, so restore.sh stops at once
+    writeFileSync(path.join(bin, 'psql'), '#!/usr/bin/env bash\nexit 0\n');
+    chmodSync(path.join(bin, 'psql'), 0o755);
+    const dump = path.join(dir, 'erp_x.dump.gz');
+    writeFileSync(dump, '');
+    const r = spawnSync('bash', [path.join(ROOT, 'scripts/restore.sh'), dump], {
+      encoding: 'utf8',
+      env: { PATH: `${bin}:${process.env.PATH ?? ''}`, TMPDIR: tmp, APP_DIR: ROOT, RESTORE_ALLOW_SUDO: '0',
+        DATABASE_URL: 'postgresql://papital:early-secret@localhost:5432/papital_erp' },
+    });
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain('cannot create databases');
+    expect(readdirSync(tmp)).toEqual([]);
   });
 });

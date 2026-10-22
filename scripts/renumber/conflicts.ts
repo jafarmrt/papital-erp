@@ -2,7 +2,8 @@
  * v9.0.109 (TD-473) — automatic resolution of the merge conflicts every parallel release produces
  * (v9/PHASE4_LANES.md §7.6), used by `npm run release:renumber` before renumbering:
  *  - the active changelog and the active CHANGELOG.md section: both sides' entries are kept (sorted later); a branch
- *    entry with the version and title of a base entry replaces it (an edit of an older entry, v10.2.26);
+ *    entry with the version and title of a base entry replaces it when the base side left that entry unchanged
+ *    against the common ancestor (an edit of an older entry, v10.2.26), and is left to the operator otherwise;
  *  - the migration journal: the base's entries plus this branch's own entries (renumbered later);
  *  - TECH_DEBT.md / TECH_DEBT_ARCHIVE.md: both sides of each conflict are kept (rows), a row both sides hold once,
  *    and a row both sides changed differently is left to the operator;
@@ -19,6 +20,8 @@ export interface ConflictStages {
   ours: string;
   /** stage 3 («theirs», the merged base) */
   theirs: string;
+  /** stage 1 (the common ancestor), when git has one */
+  base?: string;
 }
 
 const JOURNAL = 'drizzle/meta/_journal.json';
@@ -63,10 +66,14 @@ function unionChangelog(s: ConflictStages): string | null {
   const theirs = entriesOf(s.theirs);
   if (!ours || !theirs) return null;
   const known = new Set(theirs.blocks);
-  // v10.2.26: a branch block with the version and title of a base block is an edit of that entry, not a new one
+  // v10.2.26: a branch block with the version and title of a base block is an edit of that entry, not a new one;
+  // it replaces the base block only while the base side left that entry as the common ancestor had it, otherwise
+  // both sides edited it and the operator decides (#346 review L2)
   const key = (b: string) => `${b.match(/version: '([^']+)'/)?.[1]}\n${b.match(/title: '([^']*)'/)?.[1]}`;
   const edited = new Map(ours.blocks.filter(b => !known.has(b)).map(b => [key(b), b]));
   const theirKeys = new Set(theirs.blocks.map(key));
+  const ancestor = new Map((s.base === undefined ? null : entriesOf(s.base))?.blocks.map(b => [key(b), b]) ?? []);
+  if (theirs.blocks.some(b => edited.has(key(b)) && ancestor.get(key(b)) !== b)) return null;
   const blocks = [
     ...ours.blocks.filter(b => !known.has(b) && !theirKeys.has(key(b))),
     ...theirs.blocks.map(b => edited.get(key(b)) ?? b),

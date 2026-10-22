@@ -171,9 +171,14 @@ describe('scripts/release-renumber.ts (TD-473)', () => {
 
     // v10.2.26: a branch edit of an older entry replaces it instead of coming back as a second entry
     const editedOurs = changelog(entry('v9.0.52', 'branch one'), entry('v9.0.51', 'old').replace('fixes: []', "fixes: ['edited']"));
-    const editedBlocks = resolveReleaseConflict(ACTIVE, '', { ours: editedOurs, theirs }, ACTIVE)!;
+    const editedBlocks = resolveReleaseConflict(ACTIVE, '', { ours: editedOurs, theirs, base: theirs }, ACTIVE)!;
     expect(editedBlocks.split("title: 'old'").length - 1).toBe(1);
     expect(editedBlocks).toContain("fixes: ['edited']");
+    // both sides edited it, or git gave no common ancestor: the operator decides (#346 review L2)
+    const theirsEdited = theirs.replace(/(title: 'old',\n\s+fixes: )\[\]/, "$1['master edit']");
+    expect(theirsEdited).not.toBe(theirs);
+    expect(resolveReleaseConflict(ACTIVE, '', { ours: editedOurs, theirs: theirsEdited, base: theirs }, ACTIVE)).toBeNull();
+    expect(resolveReleaseConflict(ACTIVE, '', { ours: editedOurs, theirs }, ACTIVE)).toBeNull();
     const pkgConflict = '{\n<<<<<<< HEAD\n  "version": "9.0.52",\n=======\n  "version": "9.0.53",\n>>>>>>> origin/master\n  "type": "module"\n}\n';
     expect(resolveReleaseConflict('package.json', pkgConflict, { ours: '', theirs: '' }, ACTIVE)).toBe('{\n  "version": "9.0.53",\n  "type": "module"\n}\n');
     // v10.2.26: the base's side of a version line, so text the base changed beside the version stays

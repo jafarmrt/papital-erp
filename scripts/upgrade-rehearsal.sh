@@ -45,11 +45,6 @@ TSX="$APP_DIR/node_modules/.bin/tsx"
 [ -x "$TSX" ] || fail "$TSX not found — install the dependencies of the new code first (npm ci --include=dev)"
 
 WORK_DIR="$(mktemp -d)"
-# v10.2.26 (TD-1351): psql and restore.sh get the password through a PGPASSFILE in WORK_DIR, not a command line;
-# the migrations (Node) get the full URL through their environment
-# shellcheck source=scripts/pg-password.sh
-. "$APP_DIR/scripts/pg-password.sh"
-pg_password_setup "$WORK_DIR"
 DRILL_DB=""
 cleanup() {
   local rc=$?
@@ -65,6 +60,11 @@ cleanup() {
   exit $rc
 }
 trap cleanup EXIT
+# v10.2.26 (TD-1351, #346 review M1: after the trap, so any exit removes it): psql and restore.sh get the password through a PGPASSFILE in WORK_DIR, not a command line;
+# the migrations (Node) get the full URL through their environment
+# shellcheck source=scripts/pg-password.sh
+. "$APP_DIR/scripts/pg-password.sh"
+pg_password_setup "$WORK_DIR"
 
 log "[1/2] Restoring the backup into a drill database"
 set +e
