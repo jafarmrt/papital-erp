@@ -9,7 +9,8 @@ import { createProject, runReservationCases, storedReservation } from './stockRe
  * order quantity of today by the finalize and the reservation reconcile; a row without `qtyPerUnit` (earlier projects) keeps
  * its stored total and a whole-order section is unchanged. A product stored without an id finds its rows under the key the
  * materials tab and the preset conversion write (`prod_<item id>`). Through the real Express routes on PostgreSQL; each
- * case is red on the code before the change (the finalize read the stored total of each row and the key of the product id).
+ * case is red on the code before the change (the finalize read the stored total of each row and the key of the product id),
+ * except the stored preset case, which guards review M1 and was red on the first version of this change.
  */
 export async function runProjectMaterialQuantityTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   return runReservationCases(shouldRun, [
@@ -22,6 +23,9 @@ export async function runProjectMaterialQuantityTests(shouldRun: ShouldRun): Pro
     ['reg_project_material_product_key_td_1343',
       'v10.2.x: a product stored without an id finds its code-by-code rows under the key prod_<item id> the materials tab writes, instead of falling back to one unit of each schema material (TD-1343)',
       ['td1343', 'package12', 'projects', 'reservation'], productKeyCase],
+    ['reg_project_material_legacy_preset_total_td_1343',
+      'v10.2.x: a code-by-code section still stored in the preset shape (finalized before v9.0.413 and never saved since) keeps its old need of one per product at the finalize and in the reconcile preview, whatever the order quantity (TD-1343 review M1)',
+      ['td1343', 'td748', 'package12', 'projects', 'reservation'], legacyPresetCase],
   ]);
 }
 
@@ -115,4 +119,25 @@ async function productKeyCase(h: Harness, wrong: string[]): Promise<string> {
   const got = await storedQty(h, project, material);
   if (got !== 6) wrong.push(`the row of the product without an id reserved ${got}, expected 2 per unit × 3 = 6`);
   return `reserved ${got}`;
+}
+
+/** Review M1: stored preset-shaped sections are older rows, so they keep the total the finalize gave them (one per product) */
+async function legacyPresetCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const material = await f.item(40);
+  const productItem = await f.item(0);
+  const [it] = await h.q('SELECT code, name FROM items WHERE id = $1', [material]);
+  const preset = [{ id: 'sec-code', title: 'کد به کد', checkType: 'per_item', items: [{ id: 'm1', name: it.name, itemCode: it.code, unit: 'عدد' }] }];
+  const project = await createProject(h, { sections: preset, manualPurchaseItems: [], isFinalized: true }, { products: [product('prod-a', productItem, 4)] });
+  const reserved = await storedQty(h, project, material);
+  if (reserved !== 1) wrong.push(`the finalize of a preset-shaped section reserved ${reserved}, expected its old total of 1 per product`);
+
+  // a project finalized before v9.0.413 and never saved since still stores its sections in the preset shape
+  await h.q(`UPDATE production_projects SET inventory_control = jsonb_set(inventory_control, '{sections}', $2::jsonb) WHERE id = $1`, [project, JSON.stringify(preset)]);
+  const previewed = await h.get(`/api/projects/${project}/reservation-reconcile`);
+  if (previewed.status !== 200) throw new Error(`the reconcile preview answered ${brief(previewed)}`);
+  const lines = (previewed.body as { lines?: Array<{ itemId: number; requiredQty: number; currentQty: number; targetQty: number }> }).lines ?? [];
+  const line = lines.find(l => l.itemId === material);
+  if (line?.requiredQty !== 1 || line?.targetQty !== 1) wrong.push(`the stored preset row previews ${JSON.stringify(line)}, expected to keep a need of 1 instead of 1 per unit × 4`);
+  return `reserved ${reserved}, preview ${JSON.stringify(line)}`;
 }

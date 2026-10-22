@@ -131,8 +131,9 @@ export function useProjectInventory(
   // v9.0.413 (TD-748): بخش الگو (مواد در items) به ردیف‌های پروژه برده می‌شود تا فهرست خرید، پیشرفت و رزرو آن را ببینند
   const [sections, setSectionsState] = useState<ProjectInventoryControlSectionData[]>(() => {
     const stored = project.inventory_control?.sections;
-    const source = Array.isArray(stored) && stored.length > 0 ? stored : DEFAULT_INVENTORY_CONTROL_SECTIONS;
-    return projectSectionsFromPreset(source, products, materialStockLookup(initialItemsList || []));
+    const hasStored = Array.isArray(stored) && stored.length > 0;
+    // TD-1343 review M1: only the presets of a project without sections start at one per unit; stored preset rows keep their total
+    return projectSectionsFromPreset(hasStored ? stored : DEFAULT_INVENTORY_CONTROL_SECTIONS, products, materialStockLookup(initialItemsList || []), { perUnit: !hasStored });
   });
 
   // Manual purchase items state
@@ -223,7 +224,7 @@ export function useProjectInventory(
         const stored = project.inventory_control?.sections;
         const hasStored = Array.isArray(stored) && stored.length > 0;
         if (!hasStored || hasPresetShapedSections(stored)) {
-          setSectionsState(projectSectionsFromPreset(hasStored ? stored : (presets ?? DEFAULT_INVENTORY_CONTROL_SECTIONS), products, materialStockLookup(loadedItems)));
+          setSectionsState(projectSectionsFromPreset(hasStored ? stored : (presets ?? DEFAULT_INVENTORY_CONTROL_SECTIONS), products, materialStockLookup(loadedItems), { perUnit: !hasStored }));
         }
       } catch (err: any) {
         if (err?.name === 'AbortError') return;

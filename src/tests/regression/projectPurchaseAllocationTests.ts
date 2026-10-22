@@ -161,16 +161,15 @@ export async function runProjectPurchaseAllocationTests(shouldRun: ShouldRun): P
       if (!perItem || 'items' in perItem || 'items' in (global ?? {})) problems.push(`the stored sections still keep their materials in items: ${brief(stored?.sections)}`);
       const productRows = (perItem?.perItemResults as Record<string, Record<string, Row>> | undefined)?.[`prod_${product.id}`];
       const heldRow = productRows?.m_held;
-      // TD-1343: a code-by-code preset row is one per unit of the product, so its need is 1 × the order quantity 2
-      if (heldRow?.name !== held.name || Number(heldRow?.qtyPerUnit) !== 1 || Number(heldRow?.requiredQty) !== 2 || heldRow?.status !== 'available' || Number(heldRow?.stockQty) !== 30) {
-        problems.push(`the code-by-code row of the product is ${brief(heldRow ?? productRows ?? perItem?.perItemResults)}, expected the held material, 1 per unit (2 in all), stock 30, available`);
+      if (heldRow?.name !== held.name || Number(heldRow?.requiredQty) !== 1 || heldRow?.status !== 'available' || Number(heldRow?.stockQty) !== 30) {
+        problems.push(`the code-by-code row of the product is ${brief(heldRow ?? productRows ?? perItem?.perItemResults)}, expected the held material, required 1, stock 30, available`);
       }
       const globalRows = (Array.isArray(global?.globalItems) ? global.globalItems : []) as Row[];
       const missingRow = globalRows.find(row => row.itemCode === missing.code);
       if (globalRows.length !== 2 || missingRow?.status !== 'needs_procurement' || Number(missingRow?.requiredQty) !== 1) problems.push(`the global rows are ${brief(globalRows)}, expected two rows with the missing material to procure`);
       const reserved = (Array.isArray(stored?.reservedItems) ? stored.reservedItems : []) as Row[];
       const heldReserved = reserved.filter(row => Number(row.itemId) === held.id).reduce((sum, row) => sum + Number(row.reservedQty), 0);
-      if (heldReserved !== 3 || reserved.some(row => Number(row.itemId) === missing.id)) problems.push(`the reservation is ${brief(reserved)}, expected 3 of the held material (one per unit of the product's 2 and one global) and nothing of the missing one`);
+      if (heldReserved !== 2 || reserved.some(row => Number(row.itemId) === missing.id)) problems.push(`the reservation is ${brief(reserved)}, expected 2 of the held material (one per product and one global) and nothing of the missing one`);
       assertNoProblems(problems);
       return 'preset sections stored as project rows with stock status; finalizing reserves their materials';
     }));

@@ -73,16 +73,21 @@ describe('quantity per unit of the product (TD-1343)', () => {
     expect(rowConvertedQty({ qtyPerUnit: 2 }, 16)).toBeUndefined();
   });
 
-  it('makes a code-by-code preset row one per unit and a whole-order preset row one in all', () => {
+  it('makes a code-by-code preset row of a new project one per unit and a whole-order preset row one in all', () => {
     const preset = [
       { id: 's1', title: 'کد به کد', checkType: 'per_item', items: [{ id: 'm1', name: 'مهره', itemCode: 'M-1', unit: 'عدد' }] },
       { id: 's2', title: 'کلی', checkType: 'global', items: [{ id: 'm2', name: 'چسب', itemCode: 'M-2', unit: 'عدد' }] },
     ];
-    const [code, whole] = projectSectionsFromPreset(preset, [{ id: 'p1', quantity: 4 }, { item_id: 9, quantity: 2 }]);
+    const products = [{ id: 'p1', quantity: 4 }, { item_id: 9, quantity: 2 }];
+    const [code, whole] = projectSectionsFromPreset(preset, products, undefined, { perUnit: true });
     expect(code.perItemResults?.p1?.m1).toMatchObject({ qtyPerUnit: 1, requiredQty: 4 });
     expect(code.perItemResults?.prod_9?.m1).toMatchObject({ qtyPerUnit: 1, requiredQty: 2 });
     expect(whole.globalItems?.[0]).toMatchObject({ requiredQty: 1 });
     expect(whole.globalItems?.[0]).not.toHaveProperty('qtyPerUnit');
+    // review M1: a section still stored in the preset shape is an older row and keeps one in all
+    const [storedCode] = projectSectionsFromPreset(preset, products);
+    expect(storedCode.perItemResults?.p1?.m1).toMatchObject({ requiredQty: 1 });
+    expect(storedCode.perItemResults?.p1?.m1).not.toHaveProperty('qtyPerUnit');
   });
 
   it('plans the finalize with the per-unit need of today\'s order quantity, under the key of a product without an id', () => {
@@ -172,5 +177,24 @@ describe('the materials tab with per-unit rows (TD-1343)', () => {
     expect(added).toHaveLength(1);
     expect(added[0]).toMatchObject({ itemCode: 'M-1', qtyPerUnit: 1, requiredQty: 3 });
     await waitFor(() => expect(result.current.purchaseList.find(l => l.itemCode === 'M-1')?.totalRequiredQty).toBe(3));
+  });
+
+  it('keeps the old total of a section still stored in the preset shape and starts a new project at one per unit (review M1)', async () => {
+    stockItems = [stock(1, 'مهره', 10)];
+    const stored = [{ id: 'sec-code', title: 'کد به کد', checkType: 'per_item', items: [{ id: 'm1', name: 'مهره', itemCode: 'M-1', unit: 'عدد' }] }];
+    const oldProject = project(stored as unknown as ProjectInventoryControlSectionData[]);
+    const old = renderHook(() => useProjectInventory(oldProject));
+    await waitFor(() => expect(fetchJson).toHaveBeenCalled());
+    await waitFor(() => expect(old.result.current.sections[0].perItemResults?.p1?.m1).toMatchObject({ requiredQty: 1 }));
+    expect(old.result.current.sections[0].perItemResults?.p1?.m1).not.toHaveProperty('qtyPerUnit');
+    old.unmount();
+
+    const freshProject = project([]);
+    const fresh = renderHook(() => useProjectInventory(freshProject));
+    await waitFor(() => expect(fetchJson).toHaveBeenCalled());
+    const firstCode = fresh.result.current.sections.find(s => s.checkType === 'per_item');
+    const rows = Object.values(firstCode?.perItemResults?.p1 ?? {});
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows[0]).toMatchObject({ qtyPerUnit: 1, requiredQty: 3 });
   });
 });

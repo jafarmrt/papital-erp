@@ -80,6 +80,13 @@ export function presetMaterialRefs(sections: unknown): Array<{ code: string; nam
 }
 
 /**
+ * `perUnit`: ردیف کد به کد «برای هر عدد» محصول باشد (الگوی تنظیمات یا پیش‌فرض برای پروژه‌ای که هنوز بخشی ندارد، TD-1343).
+ * بی آن ردیف همان عدد کل پیشین را دارد: بخشی که هنوز به شکل الگو ذخیره شده (ثبت نهایی پیش از v9.0.413) ردیف پیشین است
+ * و نیازش با به‌روزرسانی عوض نمی‌شود (بازبینی M1).
+ */
+export interface PresetConversionOptions { perUnit?: boolean }
+
+/**
  * بخش‌های کنترل موجودی پروژه از بخش‌های الگو: کنترل کد به کد برای هر محصول پروژه یک ردیف از هر ماده (و `itemsSchema` برای
  * محصولی که بعداً افزوده شود)، کنترل کلی یک ردیف کلی از هر ماده. بخش دیگر همان‌طور برمی‌گردد.
  */
@@ -87,10 +94,11 @@ export function projectSectionsFromPreset(
   sections: unknown,
   products: ReadonlyArray<{ id?: unknown; item_id?: unknown; quantity?: unknown }>,
   stockOf?: MaterialStockLookup,
+  { perUnit = false }: PresetConversionOptions = {},
 ): ProjectInventoryControlSectionData[] {
   if (!Array.isArray(sections)) return [];
   // شناسه محصول همان است که صفحه کنترل موجودی می‌سازد: شناسه ردیف، وگرنه `prod_<شناسه کالا>`
-  const productRows = products.map((p, idx) => ({ key: perItemProductKey(p, idx), orderQty: productOrderQuantity(p) }));
+  const productRows = products.map((p, idx) => ({ key: perItemProductKey(p, idx), orderQty: perUnit ? productOrderQuantity(p) : undefined }));
   return sections.filter(isObject).map(section => {
     if (!isPresetShapedSection(section)) return section as unknown as ProjectInventoryControlSectionData;
     const { items: _presetItems, ...rest } = section;
