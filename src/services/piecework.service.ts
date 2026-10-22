@@ -8,7 +8,7 @@ import { PieceworkPayrollService } from './piecework/payroll.service.js';
 import { lockEditableWorkLog, workLogFreeOfLivePayroll } from './piecework/workLogPayrollLink.js';
 import { auditTaskCreated, auditTaskDeleted, auditTaskRestored, auditTasksCleared, auditTasksImported, auditTaskUpdated, auditWorkLogCreated, auditWorkLogDeleted, auditWorkLogUpdated, type AuditActor } from './piecework/pieceworkAudit.js';
 import { activePersonnelRate, savePersonnelRate, type PersonnelRateInput, type RateActor } from './piecework/personnelRate.js';
-import { assertScheduleRowsFree, isScheduleLinkedLog, linkScheduleRows, lockProjectsOfLogMove, lockScheduleProjects, unlinkScheduleRow } from './piecework/scheduleRowLink.js';
+import { assertLinkedRowQuantity, assertScheduleRowsFree, linkScheduleRows, lockProjectsOfLogMove, lockScheduleProjects, unlinkScheduleRow } from './piecework/scheduleRowLink.js';
 import { syncScheduleProgress } from './piecework/scheduleProgressSync.js';
 import { revertWorkshopReportsOfLog } from './piecework/workshopReportRevert.js';
 import type { ScheduleRowRef } from '../lib/projects/scheduleWorkLog.js';
@@ -796,6 +796,9 @@ export class PieceworkService {
       if (newProjectId !== null && projectMoved) {
         await assertWorkLogParentsLive(tx, [{ personnelId: existing.personnelId, taskId: existing.taskId, projectId: newProjectId }]);
       }
+      // 10.2 package 12 (TD-1346): a new quantity of a schedule-linked log stays within its row, as on create (TD-955)
+      const quantityChanged = Number(newQty) !== Number(existing.quantity);
+      const scheduleLinked = !projectMoved && quantityChanged && await assertLinkedRowQuantity(tx, existing.projectId, id, newQty);
 
       const [updated] = await tx.update(pieceworkLogs).set({
         date: isoDate,
@@ -813,7 +816,7 @@ export class PieceworkService {
         // 10.2 package 12 (D6): the row's work leaves the earlier project's progress
         if (await unlinkScheduleRow(tx, existing.projectId, id)) await syncScheduleProgress(tx, [existing.projectId], actor);
         await revertWorkshopReportsOfLog(tx, id, actor);
-      } else if (Number(updated.quantity) !== Number(existing.quantity) && await isScheduleLinkedLog(tx, existing.projectId, id)) {
+      } else if (scheduleLinked) {
         await syncScheduleProgress(tx, [existing.projectId], actor);
       }
       // v9.0.285 (TD-810): فقط فیلدهای تغییرکرده با قبل و بعد

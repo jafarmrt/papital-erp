@@ -10956,6 +10956,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10.2 package 12 item 2 (TD-1343): code-by-code materials per unit of the product
   const { runProjectMaterialQuantityTests } = await import('../regression/projectMaterialQuantityTests.js');
   results.push(...await runProjectMaterialQuantityTests(shouldRun));
+  // Series 10.2 package 12, #329 review M3 and M4 (TD-1346, TD-1347): the row cap on a work log edit, the batch lock order
+  const { runWorkLogScheduleRowTests } = await import('../regression/workLogScheduleRowTests.js');
+  results.push(...await runWorkLogScheduleRowTests(shouldRun));
   // Series 10.2 package 3 (v10.2.3, TD-1290): free stock, delivery cost and issued materials of a project
   const { runProjectMaterialsCostTests } = await import('../regression/projectMaterialsCostTests.js');
   results.push(...await runProjectMaterialsCostTests(shouldRun));
