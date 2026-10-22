@@ -180,7 +180,7 @@ async function lengthCapsCase(ctx: DailyLogTestCtx): Promise<string> {
   const created = await ctx.send(author, 'post', '/api/daily-logs', { ...base, start_time: '13:00', end_time: '15:00' });
   const id = Number(created.body?.id ?? created.body?.data?.id);
   if (Number.isSafeInteger(id) && id > 0) {
-    const edit = await ctx.send(author, 'put', `/api/daily-logs/${id}`, { content: 'c'.repeat(20_001) });
+    const edit = await ctx.send(author, 'put', `/api/daily-logs/${id}`, { version: 1, content: 'c'.repeat(20_001) });
     if (edit.status !== 400) wrong.push(`edit with content of 20001 answered ${edit.status}, expected 400`);
   } else wrong.push(`create answered ${created.status} without an id`);
   if (wrong.length > 0) throw new Error(wrong.join('; '));

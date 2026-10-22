@@ -8,7 +8,7 @@ import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { DEFAULT_DAILY_LOG_VISIBILITY, idList, mentionNotifies } from '../../lib/dailyLogs/dailyLogVisibility.js';
 import { minutesOfDay, timeOfDayLabel, workHoursBetween, workTimeError } from '../../lib/dailyLogs/workHours.js';
 import { ROW_ADVISORY_LOCK_NAMESPACES } from '../../lib/advisoryLock.js';
-import { ForbiddenError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import type { AuthUserPayload } from '../../types.js';
 import type { DailyLogBody, DailyLogUpdateBody } from '../../routes/dailyLogs.schemas.js';
 import { canManageAllDailyLogs } from './dailyLogAccess.js';
@@ -186,6 +186,10 @@ export async function updateDailyLog(actor: AuthUserPayload, logId: number, body
   return orm.transaction(async (tx) => {
     const existing = await lockLog(tx, logId);
     await assertAuthorOrManager(existing, actor, 'شما فقط مجاز به ویرایش گزارش کار خود هستید');
+    // v10.2.32 (TD-1327, OBS-R2-58): an edit built from an older version would silently replace the later one
+    if (existing.version !== body.version) {
+      throw new ConflictError('این گزارش کار را کاربر دیگری تغییر داده؛ دوباره باز کنید.', { currentVersion: existing.version }, 'OCC_CONFLICT');
+    }
 
     const startTime = body.start_time !== undefined ? body.start_time : (existing.startTime ?? '');
     const endTime = body.end_time !== undefined ? body.end_time : (existing.endTime ?? '');
@@ -218,7 +222,8 @@ export async function updateDailyLog(actor: AuthUserPayload, logId: number, body
       mentions,
       visibility: body.visibility ?? existing.visibility,
       allowedUsers,
-    }).where(eq(dailyWorkLogs.id, logId)).returning();
+      version: existing.version + 1,
+    }).where(and(eq(dailyWorkLogs.id, logId), eq(dailyWorkLogs.version, existing.version))).returning();
 
     await notifyMentions(tx, updated, actor, idList(existing.mentions));
     const { diff } = computeAuditDiff(auditSnapshot(existing), auditSnapshot(updated));

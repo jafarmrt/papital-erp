@@ -9,7 +9,7 @@ import { toLatinDigits } from '../lib/numericInput.js';
  * lists are objects and arrays, and the quantities the finalize reads with `Number` are non-negative numbers: a row's
  * `requiredQty` and `qtyPerUnit` (TD-1343) and a manual row's `totalRequiredQty`. A quantity sent as text is read with
  * the number field's own rule (`readDecimalInputText`): Persian or Arabic digits, «٫», and «٬» only between groups of
- * three digits, so «۱٬۲» or «12,5» is 400, not 12 or 125, and so is a space between digits («1 2»); it is stored as its
+ * three digits, so «۱٬۲» or «12,5» is 400, not 12 or 125, and so is a space or an invisible mark (ZWNJ, LRM, RLM) between digits («1 2»); it is stored as its
  * number. An empty text or null stays as sent (the reservation reads them as it did); a `qtyPerUnit` of null is a «کل»
  * row, but an empty text there is 400, since it would silently turn the row into one. Every other field passes through
  * unchanged: the conversion rate (the finalize already treats a rate that is not a positive number as no conversion), the
@@ -51,8 +51,9 @@ function readQuantity(value: unknown, field: QuantityField): { value: unknown } 
   if (typeof value === 'number') return Number.isFinite(value) && value >= 0 ? { value } : { error: 'عدد منفی یا نامعتبر است.' };
   if (typeof value !== 'string') return { error: 'عدد نیست.' };
   if (value.trim() === '') return field === 'qtyPerUnit' ? { error: 'خالی است.' } : { value };
-  // the number field drops spaces as it is typed; a stored «1 2» is two numbers, not 12
-  if (/\d[\s\u200c]+\d/.test(toLatinDigits(value))) return { error: 'فاصله میان رقم‌ها پذیرفته نیست.' };
+  // the number field drops spaces and invisible marks as it is typed (`readDecimalInputText`); a stored «1 2», or 1 and 2
+  // with a hidden direction mark between them, is two numbers, not 12 (v10.2.32)
+  if (/\d[\s\u200c\u200e\u200f]+\d/.test(toLatinDigits(value))) return { error: 'فاصله یا نشانهٔ نامرئی میان رقم‌ها پذیرفته نیست.' };
   const read = readDecimalInputText(value, { min: 0 });
   if (read.kind === 'invalid') return { error: read.error };
   if (read.kind === 'partial' || read.text === '') return { error: 'عدد کامل نیست.' };

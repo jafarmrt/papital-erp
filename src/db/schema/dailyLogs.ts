@@ -27,6 +27,8 @@ export const dailyWorkLogs = pgTable('daily_work_logs', {
   managerNotes: text('manager_notes').default(''),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),
+  // v10.2.32 (TD-1327, OBS-R2-58, migration 0133): an edit sends the version it was built from (409 OCC_CONFLICT when stale)
+  version: integer('version').notNull().default(1),
 }, (table) => ({
   idx_dwl_user: index('idx_dwl_user').on(table.userId),
   idx_dwl_date: index('idx_dwl_date').on(table.date),

@@ -932,6 +932,13 @@
       "when": 1796297600000,
       "tag": "0132_activity_log_search_index",
       "breakpoints": true
+    },
+    {
+      "idx": 133,
+      "version": "7",
+      "when": 1796384000000,
+      "tag": "0133_daily_log_version_form_draft_key",
+      "breakpoints": true
     }
   ]
 }
