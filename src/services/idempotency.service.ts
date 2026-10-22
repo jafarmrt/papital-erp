@@ -1,9 +1,11 @@
 import { createHash } from 'crypto';
 import { eq, and, sql, lt, isNull, inArray } from 'drizzle-orm';
-import { orm } from '../db/drizzle.js';
+import { orm, type DbTransaction } from '../db/drizzle.js';
 import { idempotencyKeys } from '../db/schema.js';
 import { OPERATIONAL_PURGE_BATCH_SIZE, deleteInBatches, deletedRowCount } from '../lib/batchDelete.js';
 import { logger } from '../middleware/logger.js';
+import type { RequestIdempotencyKey } from '../lib/requestContext.js';
+import { IDEMPOTENT_REPLAY_MESSAGE } from '../lib/idempotentReplay.js';
 
 export interface AcquireKeyOptions {
   key?: string;
@@ -405,6 +407,24 @@ export class IdempotencyService {
     } catch (error) {
       logger.error(`[Idempotency] Error extending lock of key '${cleanKey}':`, error);
     }
+  }
+
+  /**
+   * v10.2.35: completes a payroll or piecework request's key inside the transaction of its write, with the notice its
+   * repeat gets (no answer of these scopes is kept, TD-1328). The write and the key commit together, so a process that dies
+   * after the commit but before the answer leaves a completed key, and a resend after the lock lapses gets the notice
+   * instead of running the payment again. The middleware still stores the real status once the answer is sent.
+   */
+  static async completeInTransaction(tx: DbTransaction, pending: RequestIdempotencyKey): Promise<void> {
+    await tx
+      .update(idempotencyKeys)
+      .set({
+        status: 'completed',
+        responseStatus: 200,
+        responseBody: { success: true, idempotentReplay: true, message: IDEMPOTENT_REPLAY_MESSAGE },
+        completedAt: new Date().toISOString()
+      })
+      .where(and(this.buildKeyCondition(pending.key, pending.scope, pending.userId), eq(idempotencyKeys.status, 'processing')));
   }
 
   /**

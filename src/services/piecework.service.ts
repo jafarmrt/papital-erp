@@ -25,6 +25,7 @@ import {
 import { money } from '../lib/money.js';
 import { fin, type DecimalValue, type FinancialDecimal } from '../lib/financialDecimal.js';
 import { parsePieceworkRate } from '../lib/piecework/pieceworkRate.js';
+import { idempotentTransaction } from '../middleware/idempotency.js';
 
 // خواندن‌ها و چرخه فیش حقوقی در src/services/piecework/ (لایه سرویس روت piecework.routes.ts)
 export { PieceworkReadService, type TaskListFilters, type WorkLogListFilters } from './piecework/pieceworkRead.service.js';
@@ -75,13 +76,14 @@ export interface TaskImportRowError {
   message: string;
 }
 
+// v10.2.35: its own transaction completes the request's resubmission key in the same commit (`idempotentTransaction`)
 async function inTransaction<T>(externalTx: DbExecutor | undefined, fn: (tx: DbExecutor) => Promise<T>): Promise<T> {
-  return externalTx ? fn(externalTx) : orm.transaction(fn);
+  return externalTx ? fn(externalTx) : idempotentTransaction(fn);
 }
 
 /** A write that notifies (a reverted workshop report) runs only in a transaction, the caller's or its own */
 async function inWriteTransaction<T>(externalTx: DbTransaction | undefined, fn: (tx: DbTransaction) => Promise<T>): Promise<T> {
-  return externalTx ? fn(externalTx) : orm.transaction(fn);
+  return externalTx ? fn(externalTx) : idempotentTransaction(fn);
 }
 
 export class PieceworkService {

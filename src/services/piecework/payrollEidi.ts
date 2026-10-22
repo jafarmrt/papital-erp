@@ -8,6 +8,7 @@ import { money } from '../../lib/money.js';
 import { eidiRatesError, isEidiMethod, payslipEidiShare, type EidiMethod, type EidiRates } from '../../lib/payroll/eidi.js';
 import { payrollStatutoryYear } from '../../lib/payroll/statutoryDeductions.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
+import { idempotentTransaction } from '../../middleware/idempotency.js';
 
 /**
  * v10.0.222 (TD-1089، طرح حقوق §۳.۸، تصمیم‌های ت۱۴ تا ت۱۶ الف): روش و نرخ عیدی هر سال جلالی، سهم عیدی فیش عادی در صدور
@@ -96,7 +97,7 @@ export async function saveEidiRates(input: SaveEidiRatesInput): Promise<EidiRate
     minDailyWage: money(String(rates.minDailyWage)),
     fixedAmount: money(String(rates.fixedAmount)),
   };
-  return orm.transaction(async (tx) => {
+  return idempotentTransaction(async (tx) => {
     const [before] = await tx.select().from(payrollEidiRates).where(eq(payrollEidiRates.jalaliYear, rates.jalaliYear)).for('update');
     let after: RatesRow;
     if (before) {

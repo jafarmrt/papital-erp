@@ -2,6 +2,18 @@ import { AsyncLocalStorage } from 'async_hooks';
 import { Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 
+/**
+ * v10.2.35: the resubmission key of a payroll or piecework request, set by the `idempotency` middleware once the key is
+ * taken. Their writes complete it inside their own transaction (`idempotentTransaction`), and `completedInTx` is set once
+ * that transaction has committed.
+ */
+export interface RequestIdempotencyKey {
+  key: string;
+  scope: string;
+  userId: number | null;
+  completedInTx: boolean;
+}
+
 export interface RequestContextStore {
   requestId: string;
   correlationId: string;
@@ -11,6 +23,7 @@ export interface RequestContextStore {
   workflowId?: string;
   transactionId?: string;
   action?: string;
+  idempotency?: RequestIdempotencyKey;
   startTime: number;
 }
 

@@ -11,6 +11,7 @@ import {
   STATUTORY_OVERRIDE_REASON_MAX, type StatutoryAmounts, type StatutoryRates, type StatutorySuggestion, type TaxBracket,
 } from '../../lib/payroll/statutoryDeductions.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
+import { idempotentTransaction } from '../../middleware/idempotency.js';
 
 /**
  * v10.0.210 (TD-1087، OBS-R2-49، طرح حقوق §۳.۳، تصمیم‌های ت۴ تا ت۶ الف): نرخ‌های سالانه بیمه و مالیات حقوق و کسورات
@@ -95,7 +96,7 @@ export async function saveStatutoryRates(input: SaveStatutoryRatesInput): Promis
     taxBrackets: brackets,
     isInsuranceDeductedFromTax: rates.deductInsuranceFromTax ? 1 : 0,
   };
-  return orm.transaction(async (tx) => {
+  return idempotentTransaction(async (tx) => {
     const [before] = await tx.select().from(payrollStatutoryRates).where(eq(payrollStatutoryRates.jalaliYear, rates.jalaliYear)).for('update');
     let after: RatesRow;
     if (before) {

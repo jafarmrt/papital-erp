@@ -1,6 +1,5 @@
 import { and, eq } from 'drizzle-orm';
 import { assertPayrollDutyNotByIssuer } from '../piecework/payrollDuties.js';
-import { orm } from '../../db/drizzle.js';
 import { bankAccounts, pieceworkLogs, pieceworkPayrolls, treasuryTransactions } from '../../db/schema.js';
 import { VoucherService } from './voucher.service.js';
 import { reverseTreasuryRow } from './treasury/treasuryPosting.js';
@@ -10,6 +9,7 @@ import { money } from '../../lib/money.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { auditPayrollPaymentVoided } from '../piecework/pieceworkAudit.js';
 import { payrollTreasuryEventPayload, recordPayrollEvent } from '../piecework/payrollEvents.js';
+import { idempotentTransaction } from '../../middleware/idempotency.js';
 
 export interface VoidPayrollPaymentInput {
   payrollId: number;
@@ -47,7 +47,7 @@ export class PayrollPaymentVoidService {
     const reason = (input.reason || '').trim();
     if (!reason) throw new ValidationError('دلیل ابطال پرداخت الزامی است');
 
-    return orm.transaction(async (tx) => {
+    return idempotentTransaction(async (tx) => {
       const [located] = await tx.select().from(treasuryTransactions)
         .where(and(eq(treasuryTransactions.id, input.transactionId), eq(treasuryTransactions.isDeleted, 0)));
       if (!located || located.payrollId !== input.payrollId || located.type !== 'payment' || located.reversalOfId !== null) {

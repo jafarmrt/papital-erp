@@ -1,5 +1,4 @@
 import { and, eq } from 'drizzle-orm';
-import { orm } from '../../db/drizzle.js';
 import { journalVouchers, personnel, pieceworkPayrolls } from '../../db/schema.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { fin } from '../../lib/financialDecimal.js';
@@ -12,6 +11,7 @@ import { VoucherService } from '../accounting/voucher.service.js';
 import { VoucherSyncService } from '../accounting/voucherSync.service.js';
 import { auditPayrollUpdated } from './pieceworkAudit.js';
 import { resolvePayrollStatutory, statutoryAuditInfo, statutoryPayrollColumns } from './payrollStatutory.js';
+import { idempotentTransaction } from '../../middleware/idempotency.js';
 
 type AmountInput = number | string;
 
@@ -39,7 +39,7 @@ export interface EditDraftPayrollInput {
  * (۴۰۹ `PAYROLL_VOUCHER_NOT_DRAFT`). کارکرد و حقوق ثابت فیش همان صدور می‌ماند؛ قاعده‌های پاداش، کسورات و مساعده همان صدورند.
  */
 export async function editDraftPayroll(id: number, input: EditDraftPayrollInput) {
-  return orm.transaction(async (tx) => {
+  return idempotentTransaction(async (tx) => {
     const [head] = await tx.select({ personnelId: pieceworkPayrolls.personnelId }).from(pieceworkPayrolls)
       .where(and(eq(pieceworkPayrolls.id, id), eq(pieceworkPayrolls.isDeleted, 0)));
     if (!head) throw new NotFoundError('فیش حقوقی یافت نشد');

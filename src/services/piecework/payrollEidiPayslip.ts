@@ -11,6 +11,7 @@ import { toPersianDigits } from '../../utils/persianNumber.js';
 import { VoucherSyncService } from '../accounting/voucherSync.service.js';
 import { auditPayrollIssued } from './pieceworkAudit.js';
 import { eidiPersonnel, eidiRatesOf, eidiRatesOfYear, eidiYearTotals, type EidiYearTotals } from './payrollEidi.js';
+import { idempotentTransaction } from '../../middleware/idempotency.js';
 
 /**
  * v10.0.222 (TD-1089، طرح حقوق §۳.۸، ت۱۵ الف): «فیش عیدی» عیدی یک سال یک پرسنل را می‌پردازد: پایان سال، یا پیش از آن برای
@@ -100,7 +101,7 @@ export interface IssueEidiPayslipInput {
 
 /** صدور فیش عیدی پیش‌نویس با سندش، زیر قفل ردیف پرسنل (همان قفل صدور فیش عادی) */
 export async function issueEidiPayslip(input: IssueEidiPayslipInput) {
-  return orm.transaction(async (tx) => {
+  return idempotentTransaction(async (tx) => {
     const person = await eidiPersonnel(tx, input.personnelId, true);
     const preview = await previewWith(tx, person, input.year);
     const suggested = preview.suggestion.amount;
