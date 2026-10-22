@@ -1364,7 +1364,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   if (shouldRun('reg_warehouse_transfer_occ_td_138', 'td138', 'occ', 'transfer')) {
   const t17Start = Date.now();
   try {
-    const activeWHs = await orm.select().from(warehouses).where(eq(warehouses.isActive, 1));
+    const activeWHs = await orm.select().from(warehouses).where(eq(warehouses.isActive, 1)).orderBy(warehouses.id);
     let wh1 = activeWHs[0]?.code;
     let wh2 = activeWHs[1]?.code;
 
