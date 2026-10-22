@@ -25,6 +25,9 @@ export async function runProjectPartSaveTests(shouldRun: ShouldRun): Promise<Tes
     ['reg_project_part_save_finalize_specs_td_1342',
       'v10.2.x: a stale materials tab finalizes only while the products it built the need from are unchanged, a version the project never reached is 409, and a token behind the stored part is 409 even with the current version (TD-1342 review M1 / N1 / N2)',
       ['td1342', 'package12', 'projects', 'reservation', 'occ'], finalizeSpecsCase],
+    ['reg_project_part_save_legacy_logged_row_td_1345',
+      'v10.2.x: a save without part tokens at the current version never removes a schedule row that has a work log; it is 409 naming the schedule and the row keeps its link, while the same save keeping the row still saves (TD-1342 review N-b, TD-1345)',
+      ['td1345', 'td1342', 'package12', 'projects', 'piecework', 'occ'], legacyLoggedRowCase],
   ]);
 }
 
@@ -187,6 +190,40 @@ async function scheduleStatusSpecsCase(h: Harness, wrong: string[]): Promise<str
   const specs = await h.put(`/api/projects/${projectId}`, { title: `P12 renamed ${h.tag}`, version: base.version, partTokens: base.partTokens });
   if (specs.status !== 200) wrong.push(`a specs save from the same base answered ${brief(specs)}, expected 200`);
   return 'a stale schedule tab saves and keeps the link; a removed logged row and a stale status action are refused';
+}
+
+/** An old page or an API script sends no part tokens, only the project's current version (a body without a version is 400) */
+async function legacyLoggedRowCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const item = await f.item(0);
+  const [taskRow] = await h.q(`INSERT INTO piecework_tasks (code, title, default_rate) VALUES ($1, $2, 1000) RETURNING id`, [unique('P12T'), unique('P12 task')]);
+  const task = Number(taskRow.id);
+  const worker = await newWorker('P12 worker');
+  const { projectId, stageId, row } = await scheduledProject(h, item, worker, task);
+  const logged = await h.post('/api/piecework/logs', {
+    personnelId: worker, taskId: task, projectId, date: f.today, quantity: 10, scheduleRef: { stageId, productId: 'prod-a', rowId: 'row-a' },
+  });
+  const logId = Number((logged.body as { insertedIds?: number[] }).insertedIds?.[0]);
+  if (logged.status !== 201 || !logId) throw new Error(`setup: logging row-a answered ${brief(logged)}`);
+
+  const plan = (tasks: unknown[]) => ({ [String(stageId)]: { 'prod-a': { productId: 'prod-a', productName: 'P12 product', tasks } } });
+  const current = await versionOf(h, projectId);
+  const atVersion = await h.put(`/api/projects/${projectId}`, { stage_schedules: plan([row('row-b', 20)]), version: current });
+  expectPartConflict(wrong, 'a save without part tokens at the current version removing the logged row', atVersion, ['schedule'], [SCHEDULE_LABEL]);
+  if (await versionOf(h, projectId) !== current) wrong.push('the refused save raised the project version');
+
+  const readTasks = async () => {
+    const [stored] = await h.q(`SELECT stage_schedules->$2->'prod-a'->'tasks' AS t FROM production_projects WHERE id = $1`, [projectId, String(stageId)]);
+    return Array.isArray(stored?.t) ? (stored.t as Array<Record<string, unknown>>) : [];
+  };
+  if (Number((await readTasks()).find(t => t.id === 'row-a')?.pieceworkLogId) !== logId) wrong.push(`the refused save dropped row-a or its work log link: ${JSON.stringify(await readTasks())}`);
+
+  const kept = await h.put(`/api/projects/${projectId}`, { stage_schedules: plan([row('row-a', 10), row('row-b', 30)]), version: current });
+  if (kept.status !== 200) wrong.push(`a save without part tokens keeping the logged row answered ${brief(kept)}, expected 200`);
+  const tasks = await readTasks();
+  if (Number(tasks.find(t => t.id === 'row-a')?.pieceworkLogId) !== logId) wrong.push(`the save keeping row-a dropped its work log link: ${JSON.stringify(tasks)}`);
+  if (Number(tasks.find(t => t.id === 'row-b')?.quantity) !== 30) wrong.push(`the save keeping row-a did not write row-b: ${JSON.stringify(tasks)}`);
+  return 'a save without part tokens keeps the logged row and its link; removing it is refused naming the schedule';
 }
 
 /** «تکمیل رزرو» from a tab opened before a remittance */
