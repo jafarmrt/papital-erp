@@ -2,8 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '../api';
 import type { DailyWorkLog } from '../types';
 import { EMPTY_DAILY_LOG_STATS, type DailyLogStats } from '../lib/dailyLogs/dailyLogStats';
-
-const DASHBOARD_DAILY_LOGS_KEY = ['dailyLogs', 'dashboard'] as const;
+import { QUERY_KEYS } from '../lib/queryKeys';
 
 const listData = (res: unknown): DailyWorkLog[] => {
   const data = (res as { data?: unknown } | null)?.data;
@@ -20,7 +19,8 @@ export function useDashboardDailyLogs(enabled: boolean): {
   logs: DailyWorkLog[]; mentionedLogs: DailyWorkLog[]; stats: DailyLogStats; loading: boolean;
 } {
   const query = <T,>(name: string, url: string, read: (res: unknown) => T) => ({
-    queryKey: [...DASHBOARD_DAILY_LOGS_KEY, name],
+    // v10.2 package 11 part 5b (TD-1360): under `daily-logs`, so a save on the daily log page refreshes the dashboard
+    queryKey: QUERY_KEYS.dailyLogs.dashboard(name),
     queryFn: async ({ signal }: { signal: AbortSignal }) => read(await fetchJson(url, { signal })),
     enabled,
     staleTime: 60 * 1000,

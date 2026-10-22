@@ -147,6 +147,9 @@ export const QUERY_KEYS = {
     all: ['daily-logs'] as const,
     list: (filters?: Record<string, unknown> | object) => ['daily-logs', 'list', filters ?? {}] as const,
     stats: () => ['daily-logs', 'stats'] as const,
+    summary: (params?: Record<string, unknown> | object) => ['daily-logs', 'summary', params ?? {}] as const,
+    /** the dashboard's calendar, mention widget and statistics (v10.2 package 11 part 5b, TD-1360) */
+    dashboard: (name: string) => ['daily-logs', 'dashboard', name] as const,
   },
 
   // Workflow Engine
