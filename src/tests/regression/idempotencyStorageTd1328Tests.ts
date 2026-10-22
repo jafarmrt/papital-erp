@@ -85,3 +85,68 @@ export async function runIdempotencyStorageTd1328Tests(shouldRun: (id: string, .
   }
   return results;
 }
+
+/**
+ * v10.2 package 11 part 5a (#351 review I1): a key whose request is still running keeps it past its window. Before, the
+ * daily purge deleted every key past `expires_at` whatever its state, and taking over a timed-out key (a retry after a
+ * crash) kept the first run's window, so a long retry could lose its key while it ran and a resend then ran the payment a
+ * second time. Now the purge keeps a `processing` key with a live lock and the takeover gives the key its whole lifetime
+ * again. Red on v10.2.33: the running key is purged and the takeover keeps the old window.
+ */
+export async function runIdempotencyRunningKeyTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
+  const results: TestCaseResult[] = [];
+  const id = 'reg_idempotency_running_key_kept_351_i1';
+  if (!shouldRun(id, 'td1328', 'idempotency', 'resubmission', 'purge', 'package11')) return results;
+
+  const name = 'v10.2.34: the purge keeps a running key past its window and a takeover of a timed-out key gives it a new window, so a resend of a long run waits (#351 review I1)';
+  const tStart = Date.now();
+  const { createHarness } = await import('../security/workflowTestHarness.js');
+  const { IdempotencyService } = await import('../../services/idempotency.service.js');
+  const h = await createHarness();
+  const running = `td-1328-i1-running-${h.tag}`;
+  const lapsed = `td-1328-i1-lapsed-${h.tag}`;
+  const retried = `td-1328-i1-retried-${h.tag}`;
+  const keys = [running, lapsed, retried];
+  const utcNow = `(now() AT TIME ZONE 'UTC')`;
+  try {
+    const [admin] = await h.q(`SELECT id FROM users WHERE username = 'pen_admin' AND is_deleted = 0`);
+    const insert = (key: string, lockedUntil: string, expiresAt: string) => h.q(
+      `INSERT INTO idempotency_keys (key, scope, status, request_method, request_path, created_by_id, locked_at, locked_until, created_at, expires_at)
+       VALUES ($1, 'td1328_i1', 'processing', 'POST', '/api/payroll/td1328-i1', $2, ${utcNow} - interval '25 hours', ${lockedUntil}, ${utcNow} - interval '25 hours', ${expiresAt})`,
+      [key, admin.id]);
+    const wrong: string[] = [];
+
+    // past its window: a run still holding its lock stays, a run whose lock lapsed goes
+    await insert(running, `${utcNow} + interval '10 minutes'`, `${utcNow} - interval '1 minute'`);
+    await insert(lapsed, `${utcNow} - interval '10 minutes'`, `${utcNow} - interval '1 minute'`);
+    await IdempotencyService.cleanupExpired();
+    const left = (await h.q('SELECT key FROM idempotency_keys WHERE key = ANY($1::text[])', [[running, lapsed]])).map((r) => String(r.key));
+    if (!left.includes(running)) wrong.push('the purge deleted a key whose request is still running');
+    if (left.includes(lapsed)) wrong.push('the purge kept a key past its window whose lock lapsed');
+
+    // a crashed run near the end of its window: the retry takes the key with a new window, and a resend waits for it
+    await insert(retried, `${utcNow} - interval '1 minute'`, `${utcNow} + interval '1 minute'`);
+    const options = { scope: 'td1328_i1', userId: Number(admin.id), requestMethod: 'POST', requestPath: '/api/payroll/td1328-i1', ttlSeconds: 24 * 60 * 60 };
+    const takeover = await IdempotencyService.acquireKey(retried, options);
+    if (takeover.action !== 'PROCESS_NEW') wrong.push(`the retry of a timed-out key got ${takeover.action}`);
+    const [row] = await h.q(`SELECT expires_at > ${utcNow} + interval '23 hours' AS renewed FROM idempotency_keys WHERE key = $1`, [retried]);
+    if (row?.renewed !== true) wrong.push('the retry kept the first run\'s window');
+    const resend = await IdempotencyService.acquireKey(retried, options);
+    if (resend.action !== 'IN_PROGRESS') wrong.push(`a resend during the retry got ${resend.action}`);
+
+    if (wrong.length > 0) throw new Error(wrong.join('; '));
+    results.push(makeTestCase({
+      id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
+      details: 'running key kept, lapsed key purged, takeover renews the window, resend waits',
+    }));
+  } catch (err) {
+    results.push(makeTestCase({
+      id, name, layer: 'regression', executionType: 'real_database', passed: false, durationMs: Date.now() - tStart,
+      error: err instanceof Error ? err.message : String(err),
+    }));
+  } finally {
+    await h.q('DELETE FROM idempotency_keys WHERE key = ANY($1::text[])', [keys]).catch(() => undefined);
+    await h.cleanup();
+  }
+  return results;
+}

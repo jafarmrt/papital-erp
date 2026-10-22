@@ -133,6 +133,15 @@ export function keepScheduleLogLinks(incoming: unknown, saved: unknown): unknown
   });
 }
 
+/**
+ * v10.2.34 (#351 review L1): the log id the server wrote into a saved row, or undefined. A repeat of a log request gets no
+ * `insertedIds` (TD-1328 keeps no piecework answer), so the tab reads the ids from the saved plan instead.
+ */
+export function scheduleLogIdOf(schedules: unknown, ref: ScheduleRowRef): number | undefined {
+  const id = Number(findScheduleRow(schedules, ref.stageId, ref.productId, ref.rowId)?.pieceworkLogId);
+  return Number.isInteger(id) && id > 0 ? id : undefined;
+}
+
 /** شناسه کارکرد را در ردیف برنامه می‌نویسد (نسخه تازه برنامه) */
 export function withScheduleLogLink<T>(schedules: T, ref: ScheduleRowRef, logId: number): T {
   const base = isObject(schedules) ? schedules : {};

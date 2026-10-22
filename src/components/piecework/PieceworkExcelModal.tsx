@@ -13,6 +13,7 @@ import {
 import { fetchJson } from '../../api';
 import toast from 'react-hot-toast';
 import { DialogLayer } from '../common/DialogLayer';
+import { isIdempotentReplay } from '../../lib/idempotentReplay';
 
 interface PieceworkExcelModalProps {
   isOpen: boolean;
@@ -43,6 +44,8 @@ export function PieceworkExcelModal({
     updatedCount: number;
     message: string;
     errors: Array<{ row: number; title: string; message: string }>;
+    /** v10.2.34 (#351 review L1): a repeat of an import that already ran; it has no counts */
+    replay?: boolean;
   } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -136,12 +139,14 @@ export function PieceworkExcelModal({
         body: JSON.stringify(payload)
       });
 
-      setImportResult({
-        createdCount: res.createdCount,
-        updatedCount: res.updatedCount,
-        message: res.message,
-        errors: Array.isArray(res.errors) ? res.errors : []
-      });
+      setImportResult(isIdempotentReplay(res)
+        ? { createdCount: 0, updatedCount: 0, message: res.message, errors: [], replay: true }
+        : {
+          createdCount: res.createdCount,
+          updatedCount: res.updatedCount,
+          message: res.message,
+          errors: Array.isArray(res.errors) ? res.errors : []
+        });
       setStep('result');
       onSuccess();
     } catch (err: any) {
@@ -452,6 +457,7 @@ export function PieceworkExcelModal({
                 </p>
               </div>
 
+              {!importResult?.replay && (
               <div className="flex items-center gap-4 bg-slate-50 border border-slate-200 px-6 py-3 rounded-2xl">
                 <div className="text-center">
                   <div className="text-xs text-slate-500 font-bold">عناوین جدید</div>
@@ -467,6 +473,7 @@ export function PieceworkExcelModal({
                   </div>
                 </div>
               </div>
+              )}
 
               {/* v9.0.279 (TD-813): ردیف‌هایی که سرور ثبت نکرد، با دلیل */}
               {importResult && importResult.errors.length > 0 && (

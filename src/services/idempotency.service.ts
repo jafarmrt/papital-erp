@@ -153,7 +153,7 @@ export class IdempotencyService {
         .limit(1);
 
       if (existing.length > 0) {
-        return this.handleExistingKey(existing[0], cleanKey, lockedUntil, nowIso, keyRequest);
+        return this.handleExistingKey(existing[0], cleanKey, lockedUntil, nowIso, keyRequest, expiresAt);
       }
 
       return { state: 'acquired', action: 'PROCESS_NEW' };
@@ -166,7 +166,7 @@ export class IdempotencyService {
           .where(this.buildKeyCondition(cleanKey, scope, userId))
           .limit(1);
         if (existing.length > 0) {
-          return this.handleExistingKey(existing[0], cleanKey, lockedUntil, nowIso, keyRequest);
+          return this.handleExistingKey(existing[0], cleanKey, lockedUntil, nowIso, keyRequest, expiresAt);
         }
       }
       logger.error(`[Idempotency] Error in acquireKey for '${cleanKey}' [scope: ${scope}, user: ${userId}]:`, error);
@@ -186,7 +186,8 @@ export class IdempotencyService {
     cleanKey: string,
     newLockedUntil: string,
     nowIso: string,
-    keyRequest: KeyRequest
+    keyRequest: KeyRequest,
+    newExpiresAt: string
   ): Promise<AcquireResult> {
     if (record.status !== 'failed' && !sameRequest(record, keyRequest)) {
       logger.warn(`[Idempotency] Key '${record.key}' reused for a different request (${keyRequest.method ?? '-'} ${keyRequest.path ?? '-'})`);
@@ -240,19 +241,25 @@ export class IdempotencyService {
 
       // Lock timed out (crash recovery) -> re-acquire using Optimistic Concurrency Control (OCC)
       logger.warn(`[Idempotency] Re-acquiring timed out processing key: ${record.key}`);
-      return this.reacquireWithOcc(record, cleanKey, newLockedUntil, nowIso, keyRequest);
+      return this.reacquireWithOcc(record, cleanKey, newLockedUntil, nowIso, keyRequest, newExpiresAt);
     }
 
     // If previously failed or in any other non-completed status, attempt re-acquire via OCC
-    return this.reacquireWithOcc(record, cleanKey, newLockedUntil, nowIso, keyRequest);
+    return this.reacquireWithOcc(record, cleanKey, newLockedUntil, nowIso, keyRequest, newExpiresAt);
   }
 
+  /**
+   * Takes a timed-out or failed key for a new run. v10.2.34 (#351 review I1): the run gets the key's whole lifetime again
+   * from now (`expires_at`), like a new key, so a retry still running when the first run's window ends keeps its key and a
+   * resend waits for it instead of running the request a second time.
+   */
   private static async reacquireWithOcc(
     record: typeof idempotencyKeys.$inferSelect,
     cleanKey: string,
     newLockedUntil: string,
     nowIso: string,
-    keyRequest: KeyRequest
+    keyRequest: KeyRequest,
+    newExpiresAt: string
   ): Promise<AcquireResult> {
     const lockedUntilCond = record.lockedUntil !== null && record.lockedUntil !== undefined
       ? eq(idempotencyKeys.lockedUntil, record.lockedUntil)
@@ -263,6 +270,7 @@ export class IdempotencyService {
       .set({
         lockedUntil: newLockedUntil,
         lockedAt: nowIso,
+        expiresAt: newExpiresAt,
         status: 'processing',
         ...(keyRequest.method ? { requestMethod: keyRequest.method } : {}),
         ...(keyRequest.path ? { requestPath: keyRequest.path } : {}),
@@ -448,11 +456,14 @@ export class IdempotencyService {
   /**
    * Deletes the idempotency keys whose window has passed and returns how many went (OBS-R2-10: run daily by
    * `OperationalPurgeService`), in batches of `batchSize`, each its own statement, so only counts reach Node.
-   * Errors reach the caller, which logs them; a failed purge is never reported as zero.
+   * Errors reach the caller, which logs them; a failed purge is never reported as zero. v10.2.34 (#351 review I1): a key
+   * whose request is still running (`processing` with a lock in the future, renewed by the middleware) stays whatever its
+   * window says, so a resend of a long payment waits for it instead of running it a second time.
    */
   static async cleanupExpired(batchSize: number = OPERATIONAL_PURGE_BATCH_SIZE): Promise<number> {
     const now = new Date().toISOString();
-    const expired = and(sql`${idempotencyKeys.expiresAt} IS NOT NULL`, lt(idempotencyKeys.expiresAt, now));
+    const running = sql`(${idempotencyKeys.status} = 'processing' AND ${idempotencyKeys.lockedUntil} IS NOT NULL AND ${idempotencyKeys.lockedUntil} > ${now})`;
+    const expired = and(sql`${idempotencyKeys.expiresAt} IS NOT NULL`, lt(idempotencyKeys.expiresAt, now), sql`NOT ${running}`);
     return deleteInBatches(batchSize, async () => {
       const batch = orm.select({ id: idempotencyKeys.id }).from(idempotencyKeys).where(expired).limit(batchSize);
       return deletedRowCount(await orm.delete(idempotencyKeys).where(inArray(idempotencyKeys.id, batch)));

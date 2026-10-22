@@ -3,6 +3,7 @@ import { IDEMPOTENCY_KEY_TTL_SECONDS, IdempotencyService, type AcquireResult } f
 import { logger } from './logger.js';
 import { asyncHandler } from './asyncHandler.js';
 import { IDEMPOTENT } from './idempotencyMark.js';
+import { IDEMPOTENT_REPLAY_MESSAGE, type IdempotentReplayBody } from '../lib/idempotentReplay.js';
 
 export interface IdempotencyMiddlewareOptions {
   scope?: string;
@@ -148,10 +149,10 @@ function parseBody(body: unknown): unknown {
  */
 export const RESPONSE_NOT_KEPT_SCOPES: ReadonlySet<string> = new Set(['payroll', 'piecework']);
 export const IDEMPOTENCY_RESPONSE_MAX_BYTES = 64 * 1024;
-export const IDEMPOTENCY_REPLAY_BODY = Object.freeze({
+export const IDEMPOTENCY_REPLAY_BODY: Readonly<IdempotentReplayBody> = Object.freeze({
   success: true,
   idempotentReplay: true,
-  message: 'این درخواست پیش‌تر ثبت شده است؛ نتیجهٔ آن را در فهرست ببینید.',
+  message: IDEMPOTENT_REPLAY_MESSAGE,
 });
 
 /** The answer kept with a key: the answer itself, or the replay body for a scope above or an answer over the limit */
