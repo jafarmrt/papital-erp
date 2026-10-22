@@ -1,5 +1,5 @@
 import { eq, and, sql, inArray, asc } from 'drizzle-orm';
-import { orm, type DbExecutor } from '../../db/drizzle.js';
+import { type DbExecutor } from '../../db/drizzle.js';
 import { pieceworkLogs, pieceworkPayrolls, personnel, journalVouchers } from '../../db/schema.js';
 import { NotFoundError, BadRequestError, ConflictError, ValidationError } from '../../errors/customErrors.js';
 import { isoToJalaliDate, toStorageDate } from '../../utils.js';
@@ -23,6 +23,7 @@ import { onPayslipApproved, onPayslipDeleted } from './payrollEvents.js';
 import { resolvePayrollStatutory, statutoryAuditInfo, statutoryPayrollColumns, type StatutoryEntryInput } from './payrollStatutory.js';
 import { isEidiCovered } from '../../lib/payroll/eidi.js';
 import { assertEidiShareNotSettled, lockPayrollPersonnel, payslipEidiColumns, resolvePayslipEidiShare } from './payrollEidi.js';
+import { idempotentTransaction } from '../../middleware/idempotency.js';
 
 /**
  * چرخه عمر فیش حقوقی پرکیسی: صدور، تغییر وضعیت، همگام‌سازی سند و ابطال.
@@ -121,7 +122,7 @@ export class PieceworkPayrollService {
     }
 
     // V4.0.4 (TD-091 / Subphase 3.1): کل چرخه صدور فیش، قفل ردیفی کارکردها، محاسبه مالی و سند دوبل داخل یک تراکنش واحد اتمیک
-    return orm.transaction(async (tx) => {
+    return idempotentTransaction(async (tx) => {
       const [pInfo] = await tx.select().from(personnel).where(and(eq(personnel.id, pId), eq(personnel.isDeleted, 0))).for('update');
       if (!pInfo) {
         return { status: 404, error: 'پرسنل انتخاب شده یافت نشد' };
@@ -336,7 +337,7 @@ export class PieceworkPayrollService {
     const currentUserId = input.userId;
     const currentUsername = input.username;
 
-    return orm.transaction(async (tx) => {
+    return idempotentTransaction(async (tx) => {
       // v10.0.222 (TD-1089): ترتیب قفل صدور فیش، پرسنل سپس فیش، تا جمع عیدی سال میان بررسی و نوشتن عوض نشود
       await lockPayrollPersonnel(tx, id);
       const [pay] = await tx.select().from(pieceworkPayrolls).where(and(eq(pieceworkPayrolls.id, id), eq(pieceworkPayrolls.isDeleted, 0))).for('update');
@@ -389,7 +390,7 @@ export class PieceworkPayrollService {
 
   /** ثبت یا همگام‌سازی صریح سند حسابداری فیش. */
   static async syncPayrollVoucher(id: number, audit: { userId?: number; username: string }) {
-    return orm.transaction(async (tx) => {
+    return idempotentTransaction(async (tx) => {
       const [pay] = await tx.select().from(pieceworkPayrolls).where(and(eq(pieceworkPayrolls.id, id), eq(pieceworkPayrolls.isDeleted, 0))).for('update');
       if (!pay) {
         return { status: 404, error: 'فیش حقوقی یافت نشد' };
@@ -523,9 +524,6 @@ export class PieceworkPayrollService {
       return updatedPay || pay;
     };
 
-    if (options?.externalTx) {
-      return await executeDelete(options.externalTx);
-    }
-    return await orm.transaction(executeDelete);
+    return options?.externalTx ? executeDelete(options.externalTx) : idempotentTransaction(executeDelete);
   }
 }

@@ -22,6 +22,7 @@ import { money } from '../../lib/money.js';
 import { isoToJalaliDate } from '../../utils.js';
 import { resolveTreasuryWriteDate } from './treasury/treasuryDate.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
+import { idempotentTransaction } from '../../middleware/idempotency.js';
 
 // V4.0.33: سرویس جامع و واحد ثبت پرداخت حقوق — پشتیبانی کامل از پرداخت‌های چندمرحله‌ای (قسطی / جزئی)
 // قواعد DB-008: کل زنجیره (قفل فیش + tx خزانه + voucher تسویه + بروزرسانی وضعیت) داخل یک database transaction است.
@@ -116,7 +117,7 @@ export class PayrollPaymentService {
     // خالی ← امروز کسب‌وکار، روز ناموجود ← 422 و تاریخ پس از امروز ← 422 `TREASURY_DATE_IN_FUTURE`، پیش از هر نوشتن.
     // پیش‌تر فقط `requireStorageDate` بود و پرداخت آینده‌دار مانده بانک، ردیف خزانه و سند حسابداری را با تاریخ آینده می‌نوشت.
     const payIso = await resolveTreasuryWriteDate(input.paymentDate, 'تاریخ پرداخت');
-    return await orm.transaction(async (tx) => {
+    return await idempotentTransaction(async (tx) => {
       // V1.4.0: ترتیب واقعی قفل: بانک (سطح ۱۰) اول، سپس فیش حقوقی (سطح ۳۰)
       validateLockOrder([
         { name: 'bankAccount', hierarchyLevel: LockHierarchyLevel.BANK_ACCOUNTS },

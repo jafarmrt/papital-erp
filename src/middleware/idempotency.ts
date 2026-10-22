@@ -1,9 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import { IDEMPOTENCY_KEY_TTL_SECONDS, IdempotencyService, type AcquireResult } from '../services/idempotency.service.js';
+import { orm, type DbTransaction } from '../db/drizzle.js';
 import { logger } from './logger.js';
 import { asyncHandler } from './asyncHandler.js';
 import { IDEMPOTENT } from './idempotencyMark.js';
-import { IDEMPOTENT_REPLAY_MESSAGE, type IdempotentReplayBody } from '../lib/idempotentReplay.js';
+import { IDEMPOTENCY_IN_FLIGHT_MESSAGE, IDEMPOTENT_REPLAY_MESSAGE, type IdempotentReplayBody } from '../lib/idempotentReplay.js';
+import { getRequestContext, type RequestIdempotencyKey } from '../lib/requestContext.js';
 
 export interface IdempotencyMiddlewareOptions {
   scope?: string;
@@ -80,13 +82,22 @@ export function idempotency(options: IdempotencyMiddlewareOptions = {}) {
     if (result.state === 'in_flight') {
       res.setHeader('Retry-After', '2');
       return res.status(409).json({
-        error: 'درخواست تکراری در حال پردازش است. لطفاً چند لحظه دیگر دوباره تلاش کنید.',
+        error: IDEMPOTENCY_IN_FLIGHT_MESSAGE,
         code: 'IDEMPOTENCY_IN_FLIGHT',
         lockedUntil: result.lockedUntil
       });
     }
 
     // State is 'acquired' - intercept response
+    // v10.2.35: a payroll or piecework write completes this key in its own transaction (`idempotentTransaction`)
+    let pending: RequestIdempotencyKey | undefined;
+    if (RESPONSE_NOT_KEPT_SCOPES.has(scope)) {
+      const context = getRequestContext();
+      if (context) {
+        pending = { key: cleanKey, scope, userId, completedInTx: false };
+        context.idempotency = pending;
+      }
+    }
     const stopHeartbeat = startLockHeartbeat(cleanKey, scope, userId, options.lockTimeoutSeconds || 60, options.ttlSeconds || IDEMPOTENCY_KEY_TTL_SECONDS);
     res.on('finish', stopHeartbeat);
     const originalJson = res.json.bind(res);
@@ -101,6 +112,10 @@ export function idempotency(options: IdempotencyMiddlewareOptions = {}) {
       try {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           await IdempotencyService.saveResponse(cleanKey, res.statusCode, keptResponseBody(scope, parseBody(body)), { scope, userId });
+        } else if (pending?.completedInTx) {
+          // v10.2.35: a write of this request has committed with the key; a later failure keeps it, so a resend does not
+          // run that write again and gets the notice instead
+          logger.warn(`[Idempotency Middleware] Key ${cleanKey} kept after status ${res.statusCode}: a write of the request already committed`);
         } else {
           await IdempotencyService.releaseKey(cleanKey, { scope, userId });
         }
@@ -184,4 +199,36 @@ function startLockHeartbeat(key: string, scope: string, userId: number | null, l
   }, Math.max(200, Math.floor((lockTimeoutSeconds * 1000) / 3)));
   timer.unref();
   return () => clearInterval(timer);
+}
+
+/** A service answer that refuses the request without throwing (`{ status, error }`, e.g. payslip generation) */
+function isRefusal(value: unknown): boolean {
+  return typeof value === 'object' && value !== null && typeof (value as { error?: unknown }).error === 'string';
+}
+
+/**
+ * v10.2.35: the transaction of a payroll or piecework write. Inside a request that holds such a key (set by the
+ * `idempotency` middleware) the key is completed in the same commit (`completeInTransaction`), unless the write refused
+ * the request by returning `{ error }` (the key is then released as before); anywhere else (a script, a request of
+ * another scope) it is a plain `orm.transaction`.
+ */
+export async function idempotentTransaction<T>(fn: (tx: DbTransaction) => Promise<T>): Promise<T> {
+  let pending = getRequestContext()?.idempotency;
+  if (pending?.claimed) {
+    // #353 review L2: a second write of one request would commit apart from the key; no route does it, so tests catch a new one
+    if (process.env.NODE_ENV !== 'production') throw new Error(`idempotentTransaction: a second transaction in one request (key ${pending.key})`);
+    pending = undefined;
+  }
+  if (pending) pending.claimed = true;
+  let completed = false;
+  const result = await orm.transaction(async (tx) => {
+    const out = await fn(tx);
+    if (pending && !isRefusal(out)) {
+      await IdempotencyService.completeInTransaction(tx, pending);
+      completed = true;
+    }
+    return out;
+  });
+  if (pending && completed) pending.completedInTx = true;
+  return result;
 }
