@@ -23,6 +23,13 @@ const idOf = (res: Res) => Number((res.body as { id?: unknown } | undefined)?.id
 const APPROVED_TITLE = 'فیش حقوق شما تأیید شد';
 const PAYSLIP_MONTH = 'اردیبهشت ۱۴۰۵';
 const TASK_TITLE = 'کار تازه در کارتابل';
+// v10.2.28: a seven-digit amount no payslip number or date can hold; the old check looked for «735» and failed whenever
+// the payslip number shown in the notice held those digits
+const PAYSLIP_AMOUNT = 7_351_973;
+/** whether a text names the amount, in Latin or Persian digits, with or without thousands separators */
+const carriesAmount = (text: string, amount: number) =>
+  text.replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٬,\s]/g, '').includes(String(amount))
+  || /ریال|تومان/.test(text);
 
 async function linkMessenger(userId: number, chatId: string): Promise<number> {
   const [row] = await q(`INSERT INTO user_messenger_links (user_id, messenger, chat_id, chat_name) VALUES ($1, 'bale', $2, 'test') RETURNING id`, [userId, chatId]);
@@ -49,13 +56,15 @@ export async function runMessengerNoticeTests(shouldRun: ShouldRun): Promise<Tes
       const approver = await sandboxClientWith(['piecework.view', 'piecework.payroll_approve']);
       const owner = await sandboxClientWith([]);
       const worker = await newWorker('notice worker');
-      await addLog(worker, await newTask(), '2026-04-08', 735_000);
+      await addLog(worker, await newTask(), '2026-04-08', PAYSLIP_AMOUNT);
       await q('UPDATE personnel SET user_id = $1 WHERE id = $2', [owner.userId, worker]);
       const linkId = await linkMessenger(owner.userId, '9101');
 
       const issued = await issuer.post('/api/piecework/payrolls/generate', { personnelId: worker, startDate: '2026-04-01', endDate: '2026-04-30' });
       const payrollId = idOf(issued);
       if (issued.status !== 201 || !payrollId) throw new Error(`setup: payslip ${brief(issued)}`);
+      const [pay] = await q('SELECT net_payable FROM piecework_payrolls WHERE id = $1', [payrollId]);
+      if (Number(pay?.net_payable) !== PAYSLIP_AMOUNT) throw new Error(`setup: the payslip pays ${String(pay?.net_payable)}, expected ${PAYSLIP_AMOUNT}`);
       if ((await bellOf(owner.userId, APPROVED_TITLE)).length !== 0) problems.push('issuing a draft payslip already notified its owner');
 
       const approved = await approver.put(`/api/piecework/payrolls/${payrollId}/status`, { status: 'approved' });
@@ -64,12 +73,12 @@ export async function runMessengerNoticeTests(shouldRun: ShouldRun): Promise<Tes
       const message = String(bell[0]?.message ?? '');
       if (bell.length !== 1) problems.push(`the approval wrote ${bell.length} bell rows for the owner, expected 1`);
       if (!message.includes(PAYSLIP_MONTH)) problems.push(`the notice does not name the month: ${message}`);
-      if (/735|۷۳۵|ریال|تومان/.test(message)) problems.push(`the notice carries an amount: ${message}`);
+      if (carriesAmount(message, PAYSLIP_AMOUNT)) problems.push(`the notice carries an amount: ${message}`);
       if (bell[0]?.link !== '/my-payslips') problems.push(`the notice links to ${String(bell[0]?.link)}, expected /my-payslips`);
       const [job] = await jobsOf(linkId);
       const payload = payloadOf(job);
       // the messenger gets the payslip's fixed sentence (security review of part 2), the month stays in the bell
-      if (payload.category !== 'payslip' || !String(payload.text ?? '').endsWith('فیش حقوق شما تأیید شد.') || /735|۷۳۵/.test(String(payload.text))
+      if (payload.category !== 'payslip' || !String(payload.text ?? '').endsWith('فیش حقوق شما تأیید شد.') || carriesAmount(String(payload.text), PAYSLIP_AMOUNT)
         || payload.link !== '/my-payslips') {
         problems.push(`the messenger job is missing or wrong: ${JSON.stringify(payload).slice(0, 200)}`);
       }

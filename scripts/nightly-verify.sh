@@ -199,7 +199,7 @@ cleanup() {
   stop_child
   # what the stopped restore left in its TMPDIR (made after this run's password file)
   if [ -n "${PGPASSFILE:-}" ] && [ -f "$PGPASSFILE" ]; then
-    find "$TMP_ROOT" -mindepth 1 -maxdepth 1 -newer "$PGPASSFILE" ! -path "$WORK_DIR" -exec rm -rf {} + 2>/dev/null || true
+    find "$TMP_ROOT" -mindepth 1 -maxdepth 1 -newer "$PGPASSFILE" ! -name "${WORK_DIR##*/}" -exec rm -rf {} + 2>/dev/null || true
   fi
   [ -n "$DRILL_DB" ] || DRILL_DB="$(drill_from_log)"
   if [ -n "$DRILL_DB" ]; then

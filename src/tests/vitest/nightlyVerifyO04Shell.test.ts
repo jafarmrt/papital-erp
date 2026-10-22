@@ -203,4 +203,24 @@ exit 0`);
     expect(f.log()).toBe('');
     fs.rmSync(f.dir, { recursive: true, force: true });
   }, 30_000);
+  // v10.2.28 (#333 review N-a): the sweep of a stopped restore's leftovers kept the work folder by its path; spelled another
+  // way (`//`, `/./`) it was swept too, with the password file the drop of the drill copy still needs
+  it('the leftover sweep keeps this run\'s work folder however its path is spelled', () => {
+    const script = fs.readFileSync(path.join(ROOT, 'scripts/nightly-verify.sh'), 'utf8');
+    const sweep = script.split('\n').find(l => l.includes('find "$TMP_ROOT" -mindepth 1 -maxdepth 1 -newer "$PGPASSFILE"'));
+    expect(sweep).toBeDefined();
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nightly-sweep-'));
+    const root = path.join(dir, '.nightly-verify-tmp');
+    fs.mkdirSync(path.join(root, 'tmp.work'), { recursive: true });
+    const pass = path.join(root, 'tmp.work', 'pgpass');
+    fs.writeFileSync(pass, 'x');
+    fs.utimesSync(pass, new Date(Date.now() - 60_000), new Date(Date.now() - 60_000));
+    fs.mkdirSync(path.join(root, 'tmp.restore-leftover'));
+    const run = spawnSync('bash', ['-c', `set -u\nTMP_ROOT="$1"\nWORK_DIR="$2"\nPGPASSFILE="$3"\n${sweep}`, 'x',
+      `${dir}//.nightly-verify-tmp`, `${dir}/./.nightly-verify-tmp/tmp.work`, pass], { encoding: 'utf8' });
+    expect(run.status, run.stderr).toBe(0);
+    expect(fs.readdirSync(root).sort()).toEqual(['tmp.work']);
+    expect(fs.existsSync(pass)).toBe(true);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
 });

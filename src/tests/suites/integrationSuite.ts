@@ -10,7 +10,7 @@ import { FormDraftService } from '../../services/drafts/formDraft.service.js';
 import { InsufficientStockError, UnbalancedVoucherError, normalizeError } from '../../errors/customErrors.js';
 import { orm } from '../../db/drizzle.js';
 import { items, workflowInstances, workflowHistoryLogs, journalVouchers, journalVoucherItems, outboxEvents, accounts, documents, appSettings, warehouses, itemWarehouseStocks } from '../../db/schema.js';
-import { eq, or, and } from 'drizzle-orm';
+import { eq, or, and, sql } from 'drizzle-orm';
 import { ItemWarehouseStockService } from '../../services/inventory/itemWarehouseStock.service.js';
 
 export async function runIntegrationTests(): Promise<TestCaseResult[]> {
@@ -1186,6 +1186,61 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       } catch {
         // Safe ignore
       }
+    }
+  }
+
+  // v10.2.28 (OBS-R2-113): the cleanup removed a synthetic project only when nothing pointed to it; a document of the
+  // project (with its row), its requisition, manager and workshop task report made the delete fail, and the error was
+  // only a warning, so the project and its rows stayed. Now every one of them goes, documents before the project.
+  if (process.env.ERP_ALLOW_TEST_CLEANUP === '1') {
+    const t18Start = Date.now();
+    const tag = `${Date.now()}`;
+    const one = async (q: ReturnType<typeof sql>) => Number(((await orm.execute(q)).rows[0] as { id: number }).id);
+    let projectId = 0;
+    try {
+      const userId = (await createTestUser()).id;
+      const personnelId = await one(sql`INSERT INTO personnel (full_name) VALUES (${`ERP-TEST-MARKER obs113 ${tag}`}) RETURNING id`);
+      const itemId = await one(sql`INSERT INTO items (type, name, code, unit) VALUES ('raw_material', 'OBS-R2-113', ${`ITEM_OBS113_${tag}`}, 'عدد') RETURNING id`);
+      projectId = await one(sql`INSERT INTO production_projects (project_code, title) VALUES (${`PROJ_OBS113_${tag}`}, 'OBS-R2-113') RETURNING id`);
+      const stageId = await one(sql`INSERT INTO project_stages (project_id, title) VALUES (${projectId}, 'stage') RETURNING id`);
+      // a document whose own reference matches no synthetic prefix: only its project makes it synthetic
+      const docId = await one(sql`INSERT INTO documents (type, ref_number, date, project_id) VALUES ('remittance', ${`MR-OBS113-${tag}`}, now(), ${projectId}) RETURNING id`);
+      await orm.execute(sql`INSERT INTO document_items (document_id, item_id, quantity) VALUES (${docId}, ${itemId}, 1)`);
+      await orm.execute(sql`INSERT INTO purchase_requisitions (code, title, project_id) VALUES (${`REQ-OBS113-${tag}`}, 'requisition', ${projectId})`);
+      await orm.execute(sql`INSERT INTO project_managers (project_id, user_id) VALUES (${projectId}, ${userId})`);
+      await orm.execute(sql`INSERT INTO workshop_task_reports (project_id, stage_id, product_id, row_id, personnel_id, quantity, created_by_id)
+        VALUES (${projectId}, ${stageId}, 'p1', 'r1', ${personnelId}, 1, ${userId})`);
+
+      await cleanupAllTestFixtures();
+
+      const left = (await orm.execute(sql`SELECT
+          (SELECT count(*) FROM production_projects WHERE id = ${projectId})::int AS projects,
+          (SELECT count(*) FROM documents WHERE ref_number = ${`MR-OBS113-${tag}`})::int AS documents,
+          (SELECT count(*) FROM document_items WHERE document_id = ${docId})::int AS document_rows,
+          (SELECT count(*) FROM purchase_requisitions WHERE code = ${`REQ-OBS113-${tag}`})::int AS requisitions,
+          (SELECT count(*) FROM project_managers WHERE project_id = ${projectId})::int AS managers,
+          (SELECT count(*) FROM workshop_task_reports WHERE project_id = ${projectId})::int AS task_reports`)).rows[0] as Record<string, number>;
+      const remaining = Object.entries(left).filter(([, n]) => Number(n) > 0).map(([k, n]) => `${k} ${n}`);
+      if (remaining.length > 0) throw new Error(`cleanup left rows of the synthetic project: ${remaining.join(', ')}`);
+      results.push(makeTestCase({
+        id: 'int_cleanup_project_fixture_obs_r2_113',
+        name: 'Fixture cleanup removes a synthetic project with its document, requisition, manager and task report',
+        layer: 'integration',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - t18Start,
+        details: 'The project, its document and row, requisition, manager and workshop task report were all removed.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'int_cleanup_project_fixture_obs_r2_113',
+        name: 'Fixture cleanup removes a synthetic project with its document, requisition, manager and task report',
+        layer: 'integration',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - t18Start,
+        error: (err as Error).message
+      }));
     }
   }
 

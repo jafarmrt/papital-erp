@@ -530,7 +530,7 @@ export default function ActivityLogsPage() {
                 <div>
                   <span className="text-slate-400 block mb-0.5">نشانی IP:</span>
                   <span className="font-mono font-bold text-slate-700 bg-slate-200/60 px-2 py-0.5 rounded text-2xs inline-block">
-                    {selectedLog.ipAddress || '127.0.0.1 (محلی)'}
+                    {selectedLog.ipAddress || 'ثبت نشده'}
                   </span>
                 </div>
               </div>

@@ -96,6 +96,9 @@
     "src/services/system/bootData.ts": 2,
     "src/services/system/dataExport.service.ts": 1
   },
+  "serviceErrorResults": {
+    "src/services/piecework/payroll.service.ts": 10
+  },
   "noopCatches": {
     "src/routes/items.crud.routes.ts": 2,
     "src/routes/items.prices.routes.ts": 3,
@@ -143,6 +146,7 @@
     "src/services/workflow/workflowTermination.ts": 1,
     "src/services/workflow/workflowTransitionExecutor.ts": 2
   },
+  "unorderedTestRows": {},
   "packageBoundary": {
     "src/db/seed.ts": 4,
     "src/errors/customErrors.ts": 1,

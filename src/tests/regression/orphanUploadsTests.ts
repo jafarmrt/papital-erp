@@ -134,7 +134,8 @@ async function orphanUploadsCase(): Promise<string> {
     if (!fs.existsSync(path.join(dupDir, differs)) || fs.readFileSync(path.join(dir, differs), 'utf8') !== 'top') wrong.push('a different held copy was moved or overwritten');
     if (!dupRun.failures.some(f => f.name === `${later2}/${differs}` && f.code === 'TARGET_EXISTS_DIFFERENT')) wrong.push(`duplicate failures ${JSON.stringify(dupRun.failures)}`);
 
-    // a day folder that is a link to another place is refused before any file moves
+    // a day folder that is a link to another place is refused before any file moves; v10.2.28 (#337 review N-e1): also
+    // before a held file a row names again goes back, so the refused run leaves everything where it was
     const linkDir = fs.mkdtempSync(path.join(os.tmpdir(), 'orphan-uploads-link-'));
     const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'orphan-uploads-outside-'));
     try {
@@ -143,11 +144,18 @@ async function orphanUploadsCase(): Promise<string> {
       fs.utimesSync(path.join(linkDir, stray), old, old);
       fs.mkdirSync(path.join(linkDir, '.orphaned'));
       fs.symlinkSync(outside, path.join(linkDir, '.orphaned', today));
+      const heldBack = fileName();
+      fs.mkdirSync(path.join(linkDir, '.orphaned', '2026-10-01'));
+      fs.writeFileSync(path.join(linkDir, '.orphaned', '2026-10-01', heldBack), 'h');
+      await orm.update(transfers).set({ notes: heldBack }).where(eq(transfers.code, codes[3]));
       let code = '';
       await cleanupOrphanUploads({ apply: true, uploadsDir: linkDir, today, confirmed: { quarantine: [stray], purge: [] } })
         .catch((err: unknown) => { code = String((err as { code?: string }).code); });
       if (code !== 'ORPHAN_UPLOADS_QUARANTINE_INVALID' || !fs.existsSync(path.join(linkDir, stray)) || fs.readdirSync(outside).length > 0) {
         wrong.push(`a linked day folder answered ${code || 'success'}`);
+      }
+      if (fs.existsSync(path.join(linkDir, heldBack)) || !fs.existsSync(path.join(linkDir, '.orphaned', '2026-10-01', heldBack))) {
+        wrong.push('a run refused for its linked day folder still brought a held file back first');
       }
     } finally {
       fs.rmSync(linkDir, { recursive: true, force: true });
