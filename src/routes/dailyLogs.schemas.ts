@@ -63,8 +63,12 @@ export const createDailyLogSchema = z.object({
   })
 });
 
-/** v10.2.32 (TD-1327, OBS-R2-58): an edit sends the version of the log it was built from */
-export const DAILY_LOG_VERSION_REQUIRED_MESSAGE = 'نسخهٔ گزارش کار فرستاده نشده است؛ گزارش را دوباره باز کنید.';
+/**
+ * v10.2.32 (TD-1327, OBS-R2-58): an edit sends the version of the log it was built from. A page loaded before that update
+ * never sends it, and reopening the log in it does not help, so the message asks for a page refresh first (v10.2.33, #350
+ * review L2).
+ */
+export const DAILY_LOG_VERSION_REQUIRED_MESSAGE = 'نسخهٔ گزارش کار فرستاده نشده است؛ صفحه را تازه کنید و گزارش را دوباره باز کنید.';
 
 export const updateDailyLogSchema = z.object({
   body: z.object({

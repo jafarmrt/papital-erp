@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { eq, and, sql, lt, isNull, inArray } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { idempotencyKeys } from '../db/schema.js';
@@ -41,6 +42,26 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(value ?? null);
 }
 
+/** How long a key is kept by default (and so the longest a running request's lock is renewed; TD-1328) */
+export const IDEMPOTENCY_KEY_TTL_SECONDS = 86400;
+
+/**
+ * v10.2.33 (TD-1328): a key keeps only the fingerprint of its request body, never the body, so an attachment of up to
+ * 14 MB or a payslip's amounts are not copied into `idempotency_keys` for a day. The fingerprint is the SHA-256 of the
+ * body's canonical JSON; a key recorded before keeps its full body and is still compared on it.
+ */
+export function requestFingerprint(payload: unknown): { requestFingerprint: string } | null {
+  if (payload === undefined || payload === null) return null;
+  return { requestFingerprint: `sha256:${createHash('sha256').update(canonicalJson(payload)).digest('hex')}` };
+}
+
+function storedFingerprint(stored: unknown): string | null {
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return null;
+  const keys = Object.keys(stored);
+  const value = (stored as { requestFingerprint?: unknown }).requestFingerprint;
+  return keys.length === 1 && typeof value === 'string' ? value : null;
+}
+
 /**
  * v8.0.79 (TD-329): کلیدی که با روش، مسیر یا بدنه دیگری ثبت شده برای این درخواست به کار نمی‌رود (پیش‌تر همان کلید با
  * مبلغ دیگر یا روی مسیر «انتقال» پاسخ ذخیره‌شده «دریافت» را می‌گرفت و اجرا نمی‌شد). فقط آنچه هر دو طرف دارند سنجیده می‌شود.
@@ -49,6 +70,8 @@ function sameRequest(record: typeof idempotencyKeys.$inferSelect, req: KeyReques
   if (req.method && record.requestMethod && req.method.toUpperCase() !== record.requestMethod.toUpperCase()) return false;
   if (req.path && record.requestPath && req.path !== record.requestPath) return false;
   if (req.payload !== undefined && req.payload !== null && record.requestPayload !== null && record.requestPayload !== undefined) {
+    const stored = storedFingerprint(record.requestPayload);
+    if (stored) return requestFingerprint(req.payload)?.requestFingerprint === stored;
     return canonicalJson(req.payload) === canonicalJson(record.requestPayload);
   }
   return true;
@@ -87,7 +110,7 @@ export class IdempotencyService {
     const scope = options.scope || 'global';
     const userId = options.userId !== undefined && options.userId !== null ? options.userId : null;
     const lockTimeoutSec = options.lockTimeoutSeconds || 60; // 60s lock
-    const ttlSec = options.ttlSeconds || 86400; // 24 hours retention
+    const ttlSec = options.ttlSeconds || IDEMPOTENCY_KEY_TTL_SECONDS;
     const now = new Date();
     const nowIso = now.toISOString();
     const lockedUntil = new Date(now.getTime() + lockTimeoutSec * 1000).toISOString();
@@ -108,7 +131,7 @@ export class IdempotencyService {
           status: 'processing',
           requestMethod: options.requestMethod || null,
           requestPath: options.requestPath || null,
-          requestPayload: options.requestPayload || options.requestBody || null,
+          requestPayload: requestFingerprint(options.requestPayload || options.requestBody || null),
           createdById: userId,
           lockedAt: nowIso,
           lockedUntil,
@@ -243,7 +266,7 @@ export class IdempotencyService {
         status: 'processing',
         ...(keyRequest.method ? { requestMethod: keyRequest.method } : {}),
         ...(keyRequest.path ? { requestPath: keyRequest.path } : {}),
-        ...(keyRequest.payload !== undefined && keyRequest.payload !== null ? { requestPayload: keyRequest.payload } : {}),
+        ...(keyRequest.payload !== undefined && keyRequest.payload !== null ? { requestPayload: requestFingerprint(keyRequest.payload) } : {}),
       })
       .where(and(
         eq(idempotencyKeys.id, record.id),
