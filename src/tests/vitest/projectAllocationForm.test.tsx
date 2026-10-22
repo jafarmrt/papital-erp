@@ -43,10 +43,10 @@ const openForm = async () => {
 /** v9.0.423 (TD-767): the project and material pickers are SearchableSelect lists; open one and read its rows */
 const openPicker = (field: HTMLElement) => {
   fireEvent.click(within(field).getByRole('button'));
-  return screen.getAllByRole('listitem').map(li => li.textContent ?? '');
+  return screen.getAllByRole('option').map(li => li.textContent ?? '');
 };
 const chooseRow = (label: string) => {
-  const row = screen.getAllByRole('listitem').find(li => li.textContent === label);
+  const row = screen.getAllByRole('option').find(li => li.textContent === label);
   if (!row) throw new Error(`no row ${label}`);
   fireEvent.click(row);
 };
@@ -60,7 +60,7 @@ describe('material allocation form (TD-759)', () => {
   it('offers only projects that may take material', async () => {
     const field = await openForm();
     await waitFor(() => expect(openPicker(field).some(t => t.includes('PRJ-OPEN'))).toBe(true));
-    const offered = screen.getAllByRole('listitem').map(o => o.textContent ?? '');
+    const offered = screen.getAllByRole('option').map(o => o.textContent ?? '');
     expect(offered.some(t => t.includes('PRJ-PAUSED'))).toBe(true);
     expect(offered.some(t => t.includes('PRJ-CANCELLED') || t.includes('PRJ-DONE'))).toBe(false);
   });

@@ -184,6 +184,8 @@ export const ModernPersianDropzone: React.FC<ModernPersianDropzoneProps> = ({
     if (readOnly) return;
 
     const handlePaste = (e: ClipboardEvent) => {
+      // TD-1325 (OBS-R2-93): a paste another dropzone already took is not read again
+      if (e.defaultPrevented) return;
       // اگر کاربر داخل اینپوت متنی مشغول تایپ است، پیست کلیپ‌بورد متنی را مختل نکنیم
       const activeElement = document.activeElement;
       if (
@@ -224,16 +226,11 @@ export const ModernPersianDropzone: React.FC<ModernPersianDropzoneProps> = ({
       }
     };
 
-    const container = dropzoneRef.current;
-    if (container) {
-      container.addEventListener('paste', handlePaste as any);
-    }
+    // TD-1325 (OBS-R2-93): one listener; a paste inside the box reaches `window` too, so a second listener on the box read
+    // every pasted image twice
     window.addEventListener('paste', handlePaste);
 
     return () => {
-      if (container) {
-        container.removeEventListener('paste', handlePaste as any);
-      }
       window.removeEventListener('paste', handlePaste);
     };
   }, [readOnly, processFiles]);

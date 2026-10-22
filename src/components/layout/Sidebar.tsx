@@ -19,6 +19,7 @@ import { useAppFavicon } from '../../hooks/useAppFavicon';
 import { SidebarSearch } from './SidebarSearch';
 import { useSidebarFavorites } from './useSidebarFavorites';
 import { InstallAppButton } from '../pwa/InstallAppButton';
+import { compactSearchText } from '../../lib/search/searchText';
 import { AppVersionLabel } from './AppVersionLabel';
 
 export interface SidebarProps {
@@ -134,8 +135,8 @@ export function Sidebar({
     }
   };
 
-  // فیلتر کردن منوها با کادر سرچ بلادرنگ
-  const normalizedQuery = searchQuery.trim().toLowerCase();
+  // TD-1325 (OBS-R2-93): the menu search folds text like the other searches (Arabic «ي/ك», digits, spaces and half-spaces)
+  const normalizedQuery = compactSearchText(searchQuery);
 
   const { filteredGroups, totalMatchesCount, allVisibleItems } = useMemo(() => {
     const allItems: (MenuItem & { groupId: string; groupTitle: string })[] = [];
@@ -160,9 +161,9 @@ export function Sidebar({
       .map(group => {
         const matchingItems = group.items.filter(item => {
           if (!item.visible) return false;
-          const matchName = item.name.toLowerCase().includes(normalizedQuery);
-          const matchPath = item.path.toLowerCase().includes(normalizedQuery);
-          const matchGroup = group.title.toLowerCase().includes(normalizedQuery);
+          const matchName = compactSearchText(item.name).includes(normalizedQuery);
+          const matchPath = compactSearchText(item.path).includes(normalizedQuery);
+          const matchGroup = compactSearchText(group.title).includes(normalizedQuery);
           return matchName || matchPath || matchGroup;
         });
 

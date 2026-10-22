@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { useDialogEscape } from '../../lib/a11y/dialogEscapeStack';
+import { useDialogFocus } from '../../lib/a11y/dialogFocus';
 import { X } from 'lucide-react';
 
 export type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | 'full';
@@ -67,6 +68,7 @@ export function Modal({
   const containerRef = useRef<HTMLDivElement>(null);
 
   useDialogEscape(onClose, isOpen, !closeOnEscape);
+  useDialogFocus(containerRef, isOpen);
 
   useEffect(() => {
     if (!isOpen) return;

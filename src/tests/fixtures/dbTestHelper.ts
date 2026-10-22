@@ -145,7 +145,7 @@ function isCleanupPermitted(): boolean {
 /** Synthetic-only document condition (ref prefixes used exclusively by suites) */
 // V3.0.7 (TD-064): الگوی وسیع '%تست%' به prefix-only محدود شد تا سند واقعی که
 // صرفاً واژه «تست» را در توضیحات دارد حذف نشود (سندهای تستی معمولاً با «تست» شروع می‌شوند)
-// v10.2.26 (OBS-R2-113): synthetic production projects; module level so the document condition below can name them
+// v10.2.28 (OBS-R2-113): synthetic production projects; module level so the document condition below can name them
 const TEST_PROJ_COND = sql`(project_code ILIKE 'PROJ_%' OR project_code ILIKE 'E2E_%' OR project_code ILIKE 'PRJ_%' OR project_code ILIKE 'TEST_%' OR title ILIKE ${MARKER_PAT} OR title ILIKE '%E2E%')`;
 
 const TEST_DOC_COND = sql`(
@@ -182,7 +182,7 @@ export async function cleanupAllTestFixtures(): Promise<void> {
   // 1. Clear workflow dependencies & instances
   try {
     // v9.0.347 (TD-691): orders point to their requisition (fk_documents_procurement_requisition); unlink them first
-    // v10.2.26 (OBS-R2-113): a requisition of a synthetic project is synthetic too, whatever its code
+    // v10.2.28 (OBS-R2-113): a requisition of a synthetic project is synthetic too, whatever its code
     const TEST_REQ_COND = sql`(code ILIKE 'PR-%' OR title ILIKE ${MARKER_PAT} OR title ILIKE '%E2E%' OR project_id IN (SELECT id FROM production_projects WHERE ${TEST_PROJ_COND}))`;
     await orm.execute(sql`UPDATE documents SET procurement_requisition_id = NULL WHERE procurement_requisition_id IN (SELECT id FROM purchase_requisitions WHERE ${TEST_REQ_COND})`);
     await orm.execute(sql`DELETE FROM purchase_requisitions WHERE ${TEST_REQ_COND}`);
@@ -220,7 +220,7 @@ export async function cleanupAllTestFixtures(): Promise<void> {
     await orm.execute(sql`DELETE FROM piecework_logs WHERE project_id IN (SELECT id FROM production_projects WHERE ${TEST_PROJ_COND})`);
     await orm.execute(sql`DELETE FROM project_bom_allocations WHERE item_id IN (SELECT id FROM items WHERE ${TEST_ITEM_COND}) OR project_id IN (SELECT id FROM production_projects WHERE ${TEST_PROJ_COND})`);
     await orm.execute(sql`DELETE FROM project_product_stage_progress WHERE project_id IN (SELECT id FROM production_projects WHERE ${TEST_PROJ_COND})`);
-    // v10.2.26 (OBS-R2-113): the other tables that point to a project (migrations 0091, 0119); a task report points to its stage too
+    // v10.2.28 (OBS-R2-113): the other tables that point to a project (migrations 0091, 0119); a task report points to its stage too
     await orm.execute(sql`DELETE FROM workshop_task_reports WHERE project_id IN (SELECT id FROM production_projects WHERE ${TEST_PROJ_COND})`);
     await orm.execute(sql`DELETE FROM project_managers WHERE project_id IN (SELECT id FROM production_projects WHERE ${TEST_PROJ_COND})`);
     await orm.execute(sql`DELETE FROM daily_work_logs WHERE project_id IN (SELECT id FROM production_projects WHERE ${TEST_PROJ_COND})`);
@@ -284,7 +284,7 @@ export async function cleanupAllTestFixtures(): Promise<void> {
     logger.error(`[TestDbHelper] Document fixtures left behind: ${err.message}`);
   }
 
-  // 5b. v10.2.26 (OBS-R2-113): synthetic projects, after their documents and requisitions; a failure is an error, not a warning
+  // 5b. v10.2.28 (OBS-R2-113): synthetic projects, after their documents and requisitions; a failure is an error, not a warning
   try {
     await orm.execute(sql`DELETE FROM production_projects WHERE ${TEST_PROJ_COND}`);
   } catch (err) {

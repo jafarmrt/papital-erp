@@ -123,7 +123,7 @@ if [ ! -f .env ]; then
   DB_USER="papital"
   DB_PASS="$(openssl rand -hex 24)"
 
-  # v10.2.26 (#344 review L1): a database that already holds tables belongs to an earlier install; a new .env has new
+  # v10.2.28 (#344 review L1): a database that already holds tables belongs to an earlier install; a new .env has new
   # ERP_SECRETS_KEY and JWT_SECRET, so the stored third-party passwords could no longer be read. Stop unless asked.
   if $SUDO -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" | grep -q 1; then
     TABLES="$($SUDO -u postgres psql -d "$DB_NAME" -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'" || echo 0)"
@@ -137,7 +137,7 @@ if [ ! -f .env ]; then
   if $SUDO -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'" | grep -q 1; then
     warn "Database role ${DB_USER} already exists; its password is replaced by the one written to the new .env."
   fi
-  # v10.2.26 (#344 review L2): this session writes no statement to the server log, which would hold the password
+  # v10.2.28 (#344 review L2): this session writes no statement to the server log, which would hold the password
   $SUDO -u postgres psql -v ON_ERROR_STOP=1 <<SQL
 SET log_statement = 'none';
 SET log_min_duration_statement = -1;

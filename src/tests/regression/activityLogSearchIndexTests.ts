@@ -1,7 +1,8 @@
 import request from 'supertest';
 import { inArray, sql } from 'drizzle-orm';
 import { TestCaseResult } from '../types.js';
-import { orm } from '../../db/drizzle.js';
+import type { PoolClient } from 'pg';
+import { orm, pool } from '../../db/drizzle.js';
 import { activityLogs, activityLogSearchText } from '../../db/schema.js';
 import { ACTIVITY_LOG_SEARCH_WORK_MEM_MB, withActivityLogSearchMemory } from '../../services/system/activityLogQuery.service.js';
 import { runCase } from './speedConsistencyV102Tests.js';
@@ -63,11 +64,29 @@ export async function runActivityLogSearchIndexTests(shouldRun: ShouldRun): Prom
           if (got !== all) wrong.push(`the search ${JSON.stringify(search)} found ${got}, expected the unfiltered ${all}`);
         }
 
-        const inside = await withActivityLogSearchMemory(async (db) =>
-          String((await db.execute(sql`SELECT current_setting('work_mem') AS v`)).rows[0]?.v));
-        if (inside !== `${ACTIVITY_LOG_SEARCH_WORK_MEM_MB}MB`) wrong.push(`a search page is read with work_mem ${inside}, expected ${ACTIVITY_LOG_SEARCH_WORK_MEM_MB}MB`);
-        const outside = String((await orm.execute(sql`SELECT current_setting('work_mem') AS v`)).rows[0]?.v);
-        if (outside === `${ACTIVITY_LOG_SEARCH_WORK_MEM_MB}MB`) wrong.push('the larger work_mem stayed on a pool connection after the search transaction');
+        const inside = await withActivityLogSearchMemory(async (db) => {
+          const row = (await db.execute(sql`SELECT current_setting('work_mem') AS v, pg_backend_pid() AS pid`)).rows[0];
+          return { workMem: String(row?.v), pid: Number(row?.pid) };
+        });
+        if (inside.workMem !== `${ACTIVITY_LOG_SEARCH_WORK_MEM_MB}MB`) wrong.push(`a search page is read with work_mem ${inside.workMem}, expected ${ACTIVITY_LOG_SEARCH_WORK_MEM_MB}MB`);
+        // the very connection the transaction used is back in the pool with its own work_mem (SET LOCAL ended with it)
+        const held: PoolClient[] = [];
+        try {
+          let same: PoolClient | undefined;
+          for (let i = 0; i < 40 && !same; i++) {
+            const client = await pool.connect();
+            held.push(client);
+            const pid = Number((await client.query('SELECT pg_backend_pid() AS pid')).rows[0]?.pid);
+            if (pid === inside.pid) same = client;
+          }
+          if (!same) wrong.push(`the search transaction's connection (backend ${inside.pid}) was not found back in the pool`);
+          else {
+            const after = String((await same.query("SELECT current_setting('work_mem') AS v")).rows[0]?.v);
+            if (after === `${ACTIVITY_LOG_SEARCH_WORK_MEM_MB}MB`) wrong.push(`the search transaction's connection kept work_mem ${after} after it ended`);
+          }
+        } finally {
+          for (const client of held) client.release();
+        }
       });
     if (logIds.length > 0) await orm.delete(activityLogs).where(inArray(activityLogs.id, logIds)).catch(() => undefined);
   }

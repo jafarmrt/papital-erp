@@ -154,7 +154,7 @@ on_exit() {
   if [ -n "$BUILD_DIR" ] && [ ! -e "$APP_DIR/$UPDATE_SWAP_MARKER_NAME" ]; then rm -rf "${BUILD_DIR:?}"; fi
 }
 trap on_exit EXIT
-# v10.2.26 (#339 review N-A): a signal (a dropped SSH session, Ctrl+C, kill) ends the run with a non-zero status, so
+# v10.2.28 (#339 review N-A): a signal (a dropped SSH session, Ctrl+C, kill) ends the run with a non-zero status, so
 # on_exit prints the rollback steps; with the default action the EXIT trap saw status 0 and printed nothing
 trap 'exit 129' HUP
 trap 'exit 130' INT

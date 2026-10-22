@@ -102,7 +102,7 @@ cleanup() {
 }
 # set before WORK_DIR holds the password file, so any exit from here on removes it (#346 review M1)
 trap cleanup EXIT
-# v10.2.26 (TD-1351): the password goes to psql and pg_restore through a PGPASSFILE in WORK_DIR (removed by cleanup), not their command line
+# v10.2.28 (TD-1351): the password goes to psql and pg_restore through a PGPASSFILE in WORK_DIR (removed by cleanup), not their command line
 # shellcheck source=scripts/pg-password.sh
 . "$APP_DIR/scripts/pg-password.sh"
 pg_password_setup "$WORK_DIR"

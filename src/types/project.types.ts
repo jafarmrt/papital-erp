@@ -105,6 +105,8 @@ export interface ProjectInventoryControlItemResult {
   warehouseUnit?: string;
   status: 'available' | 'needs_procurement' | 'not_applicable';
   requiredQty?: number;
+  /** TD-1343: مقدار برای هر عدد محصول در بخش کد به کد؛ نیاز کل = این مقدار × تعداد سفارش. ردیف بی آن عدد کل `requiredQty` است */
+  qtyPerUnit?: number;
   stockQty?: number;
   // Unit conversion fields
   convertedQty?: number;

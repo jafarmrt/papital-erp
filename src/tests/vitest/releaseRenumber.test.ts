@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { addedLineIndexes, planRenumber, sortChangelogMd, type RenumberInput } from '../../../scripts/renumber/plan';
+import { addedLineIndexes, planRenumber, planVersions, sortChangelogMd, type RenumberInput } from '../../../scripts/renumber/plan';
 import { resolveHunks, resolveReleaseConflict } from '../../../scripts/renumber/conflicts';
 
 /**
@@ -169,7 +169,7 @@ describe('scripts/release-renumber.ts (TD-473)', () => {
     const merged = planRenumber(input({ base: t.base, current: new Map([...t.base, [ACTIVE, resolveReleaseConflict(ACTIVE, '', { ours, theirs }, ACTIVE)!]]) }));
     expect(merged.versions).toEqual([['v9.0.52', 'v9.0.53']]);
 
-    // v10.2.26: a branch edit of an older entry replaces it instead of coming back as a second entry
+    // v10.2.28: a branch edit of an older entry replaces it instead of coming back as a second entry
     const editedOurs = changelog(entry('v9.0.52', 'branch one'), entry('v9.0.51', 'old').replace('fixes: []', "fixes: ['edited']"));
     const editedBlocks = resolveReleaseConflict(ACTIVE, '', { ours: editedOurs, theirs, base: theirs }, ACTIVE)!;
     expect(editedBlocks.split("title: 'old'").length - 1).toBe(1);
@@ -179,9 +179,20 @@ describe('scripts/release-renumber.ts (TD-473)', () => {
     expect(theirsEdited).not.toBe(theirs);
     expect(resolveReleaseConflict(ACTIVE, '', { ours: editedOurs, theirs: theirsEdited, base: theirs }, ACTIVE)).toBeNull();
     expect(resolveReleaseConflict(ACTIVE, '', { ours: editedOurs, theirs }, ACTIVE)).toBeNull();
+    // an entry only the base side edited keeps that edit; the branch's untouched copy is not a new entry
+    const branchOnly = changelog(entry('v9.0.52', 'branch one'), entry('v9.0.51', 'old'));
+    const kept = resolveReleaseConflict(ACTIVE, '', { ours: branchOnly, theirs: theirsEdited, base: theirs }, ACTIVE)!;
+    expect(kept.split("title: 'old'").length - 1).toBe(1);
+    expect(kept).toContain("fixes: ['master edit']");
+    expect(kept).toContain("title: 'branch one'");
+    // the renumber plan takes the edited entry as the base entry, not as a branch version
+    const baseCl = changelog(entry('v9.0.52', 'master'), entry('v9.0.51', 'old'));
+    const curCl = changelog(entry('v9.0.52', 'branch one'), entry('v9.0.52', 'master'), entry('v9.0.51', 'old').replace('fixes: []', "fixes: ['edited']"));
+    expect([...planVersions(baseCl, curCl, ACTIVE)]).toEqual([['v9.0.52', 'v9.0.53']]);
+    expect(() => planVersions(baseCl, changelog(entry('v9.0.52', 'branch one'), entry('v9.0.51', 'old')), ACTIVE)).toThrow(/missing or changed/);
     const pkgConflict = '{\n<<<<<<< HEAD\n  "version": "9.0.52",\n=======\n  "version": "9.0.53",\n>>>>>>> origin/master\n  "type": "module"\n}\n';
     expect(resolveReleaseConflict('package.json', pkgConflict, { ours: '', theirs: '' }, ACTIVE)).toBe('{\n  "version": "9.0.53",\n  "type": "module"\n}\n');
-    // v10.2.26: the base's side of a version line, so text the base changed beside the version stays
+    // v10.2.28: the base's side of a version line, so text the base changed beside the version stays
     const readmeConflict = '<<<<<<< HEAD\n> سری فعال (نسخه مستقر: `v9.0.52`) — docs/V9.md\n=======\n> سری فعال (نسخه مستقر: `v9.0.53`) — docs/roadmap/V9.md\n>>>>>>> origin/master\n';
     expect(resolveReleaseConflict('README.md', readmeConflict, { ours: '', theirs: '' }, ACTIVE)).toBe('> سری فعال (نسخه مستقر: `v9.0.53`) — docs/roadmap/V9.md\n');
     const depConflict = '<<<<<<< HEAD\n  "a": "1",\n=======\n  "a": "2",\n>>>>>>> origin/master\n';

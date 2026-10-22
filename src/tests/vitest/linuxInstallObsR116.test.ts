@@ -62,9 +62,9 @@ describe('obs_r1_16_install: install.sh', () => {
     expect(install).not.toMatch(/psql[^\n]*-c[^\n]*PASSWORD/);
   });
 
-  // v10.2.26 (#344 review L1): a reinstall without .env over a database with tables would give it new keys
+  // v10.2.28 (#344 review L1): a reinstall without .env over a database with tables would give it new keys
   it('refuses to reuse a database that holds tables unless INSTALL_REUSE_DB=1', () => {
-    const guard = block('install.sh', '# v10.2.26 (#344 review L1)', '# v10.2.24 (OBS-R1-16): a role left by an earlier install');
+    const guard = block('install.sh', '# v10.2.28 (#344 review L1)', '# v10.2.24 (OBS-R1-16): a role left by an earlier install');
     const stub = (tables: string) => `die() { echo "ERROR: $*"; exit 1; }
 SUDO=fake
 fake() { shift 2; case "$*" in *pg_database*) echo 1 ;; *information_schema*) echo ${tables} ;; esac; }
@@ -132,7 +132,7 @@ describe('obs_r1_16_setup_domain: setup-domain.sh', () => {
 
   it('binds the app to 127.0.0.1 once, keeping a value already in .env', () => {
     const d = scratch();
-    const newline = block('setup-domain.sh', '# v10.2.26 (#344 review L3)', 'if grep -q \'^ALLOWED_ORIGINS=\'');
+    const newline = block('setup-domain.sh', '# v10.2.28 (#344 review L3)', 'if grep -q \'^ALLOWED_ORIGINS=\'');
     const append = newline + block('setup-domain.sh', "if ! grep -q '^ERP_LISTEN_HOST=' \"$APP_DIR/.env\"", 'chmod 600 "$APP_DIR/.env"');
     writeFileSync(path.join(d, '.env'), 'PORT=3000\n');
     expect(bash(`APP_DIR=${JSON.stringify(d)}\nAPP_PORT=3000\nDOMAIN=erp.example.com\n${append}`).status).toBe(0);

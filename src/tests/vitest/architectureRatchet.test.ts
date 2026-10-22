@@ -85,7 +85,7 @@ describe('architecture_ratchet: phase-2 decisions may only shrink their debt', (
     expect(countSource('src/services/x.service.ts', source).auditWithoutTx).toBe(3);
   });
 
-  it('counts an error result object returned by a service (v10.2.26, OBS-R2-05)', () => {
+  it('counts an error result object returned by a service (v10.2.28, OBS-R2-05)', () => {
     const source = `
       return { status: 404, error: 'x' };
       return { status: 400, error: \`y \${a}\`, details };
@@ -97,7 +97,7 @@ describe('architecture_ratchet: phase-2 decisions may only shrink their debt', (
     expect(countSource('src/routes/x.routes.ts', source).serviceErrorResults).toBe(0);
   });
 
-  it('counts rows past the first of an unordered query in a test file (v10.2.26, OT-A-09)', () => {
+  it('counts rows past the first of an unordered query in a test file (v10.2.28, OT-A-09)', () => {
     const source = `
       async function t() {
         const rows = await orm.select().from(items).where(eq(items.id, 1));

@@ -132,13 +132,15 @@ function entryVersion(entry: string, file: string): string {
 export function planVersions(baseSrc: string, curSrc: string, file: string): Map<string, string> {
   const base = splitChangelog(baseSrc, file).entries;
   const cur = splitChangelog(curSrc, file).entries;
-  const curSet = new Set(cur);
-  const missing = base.filter(e => !curSet.has(e));
+  // v10.2.28: an entry with the version and title of a base entry is the branch's edit of it, not a new entry
+  const key = (e: string) => `${entryVersion(e, file)}\n${e.match(/^ {4}title: '([^']*)'/m)?.[1]}`;
+  const curKeys = new Set(cur.map(key));
+  const baseKeys = new Set(base.map(key));
+  const missing = base.filter(e => !curKeys.has(key(e)));
   if (missing.length > 0) {
     throw new Error(`${file}: ${missing.length} entr${missing.length === 1 ? 'y' : 'ies'} of the base (e.g. ${entryVersion(missing[0], file)}) are missing or changed here; merge the base branch first`);
   }
-  const baseSet = new Set(base);
-  const own = cur.filter(e => !baseSet.has(e)).map(e => entryVersion(e, file));
+  const own = cur.filter(e => !baseKeys.has(key(e))).map(e => entryVersion(e, file));
   if (new Set(own).size !== own.length) throw new Error(`${file}: the branch has the same version twice`);
   own.sort(compareVersions);
   const top = base.map(e => entryVersion(e, file)).sort(compareVersions).pop() ?? 'v0.0.0';

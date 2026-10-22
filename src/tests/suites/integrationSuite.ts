@@ -1189,7 +1189,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     }
   }
 
-  // v10.2.26 (OBS-R2-113): the cleanup removed a synthetic project only when nothing pointed to it; a document of the
+  // v10.2.28 (OBS-R2-113): the cleanup removed a synthetic project only when nothing pointed to it; a document of the
   // project (with its row), its requisition, manager and workshop task report made the delete fail, and the error was
   // only a warning, so the project and its rows stayed. Now every one of them goes, documents before the project.
   if (process.env.ERP_ALLOW_TEST_CLEANUP === '1') {

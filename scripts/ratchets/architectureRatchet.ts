@@ -20,9 +20,9 @@ import { boundaryState } from './packageBoundary';
  *    instead of throwing an AppError for `errorHandler`, also `res.status(cond ? 400 : 500)` (v10.0.253);
  *  - noopCatches (decision t5 A, OBS-R2-05, v10.0.253): `catch (err) { throw err; }`, a catch that only rethrows its own error;
  *  - serviceGenericErrors (decision t5 A): `throw new Error(` in `src/services/**` instead of an AppError subclass;
- *  - serviceErrorResults (decision t5 A, OBS-R2-05, v10.2.26): an error handed back as a value, an object literal with
+ *  - serviceErrorResults (decision t5 A, OBS-R2-05, v10.2.28): an error handed back as a value, an object literal with
  *    `status: 4xx|5xx` and `error` in `src/services/**` (payroll.service.ts), instead of throwing an AppError subclass;
- *  - unorderedTestRows (OT-A-09, v10.2.26): in `src/tests/**`, a row past the first (`rows[1]`, `[a, b] = await ...`) of a
+ *  - unorderedTestRows (OT-A-09, v10.2.28): in `src/tests/**`, a row past the first (`rows[1]`, `[a, b] = await ...`) of a
  *    query that has no ORDER BY: PostgreSQL returns rows in no fixed order, and such a test fails now and then in CI;
  *  - packageBoundary (decision t3 A, OBS-R2-02): server imports against the package direction of
  *    scripts/ratchets/PACKAGE_MAP.txt (scripts/ratchets/packageBoundary.ts); a server file the map does not cover is refused;
