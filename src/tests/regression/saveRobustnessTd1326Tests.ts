@@ -50,10 +50,11 @@ async function inventoryControlCase(h: Harness, wrong: string[]): Promise<string
   if (sections.status !== 400) wrong.push(`sections given as text answered ${brief(sections)}`);
   // «٬» only between groups of three digits and no space between digits, the number field's own rule: never 12 or 125
   const misplaced: string[] = [];
-  for (const typed of ['۱٬۲', '12,5', '1 2']) {
+  // v10.2.31: the invisible marks the number field drops (ZWNJ, LRM, RLM) between digits are refused like a space
+  for (const typed of ['۱٬۲', '12,5', '1 2', '1\u200f2', '1\u200e2', '۱\u200c۲']) {
     const res = await h.post('/api/projects', { title: title(), products: [], inventory_control: { sections: globalSection([row(typed)]) } });
-    if (res.status !== 400) wrong.push(`a quantity typed «${typed}» answered ${brief(res)}`);
-    misplaced.push(`${typed}→${res.status}`);
+    if (res.status !== 400) wrong.push(`a quantity typed ${JSON.stringify(typed)} answered ${brief(res)}`);
+    misplaced.push(`${JSON.stringify(typed)}→${res.status}`);
   }
   const grouped = await createProject(h, { sections: globalSection([row('۱٬۲۵۰')]) });
   const [groupedQty] = await h.q(`SELECT inventory_control->'sections'->0->'globalItems'->0->'requiredQty' AS q FROM production_projects WHERE id = $1`, [grouped]);

@@ -123,7 +123,7 @@ async function manageByPermissionCase(ctx: Ctx): Promise<string> {
   const logA = await ctx.insertLog(author, { title: 'p13 private A', content: 'secret A' });
   const review = await ctx.send(supervisor, 'put', `/api/daily-logs/${logA}/review`, { manager_notes: 'well done' });
   if (review.status !== 200) wrong.push(`manage_all review answered ${review.status}`);
-  const edit = await ctx.send(supervisor, 'put', `/api/daily-logs/${logA}`, { title: 'p13 private A edited' });
+  const edit = await ctx.send(supervisor, 'put', `/api/daily-logs/${logA}`, { version: 1, title: 'p13 private A edited' });
   if (edit.status !== 200) wrong.push(`manage_all edit answered ${edit.status}`);
   const del = await ctx.send(supervisor, 'delete', `/api/daily-logs/${logA}`);
   if (del.status !== 200) wrong.push(`manage_all delete answered ${del.status}`);
@@ -146,7 +146,7 @@ async function manageByPermissionCase(ctx: Ctx): Promise<string> {
     if (mReview.status !== 403) wrong.push(`manager without manage_all review answered ${mReview.status}${mReview.body?.content ? ` and leaked «${mReview.body.content}»` : ''}`);
     const mGet = await ctx.send(manager, 'get', `/api/daily-logs/${logB}`);
     if (mGet.status !== 404) wrong.push(`manager without manage_all read a private log: ${mGet.status}`);
-    const mEdit = await ctx.send(manager, 'put', `/api/daily-logs/${logB}`, { content: 'rewritten by manager' });
+    const mEdit = await ctx.send(manager, 'put', `/api/daily-logs/${logB}`, { version: 1, content: 'rewritten by manager' });
     if (mEdit.status !== 403) wrong.push(`manager without manage_all edit answered ${mEdit.status}`);
     const mDelete = await ctx.send(manager, 'delete', `/api/daily-logs/${logB}`);
     if (mDelete.status !== 403) wrong.push(`manager without manage_all delete answered ${mDelete.status}`);
@@ -159,7 +159,7 @@ async function manageByPermissionCase(ctx: Ctx): Promise<string> {
 
   // c) the author still edits and deletes their own log without daily_logs.manage_all
   const logC = await ctx.insertLog(author, { title: 'p13 own C' });
-  const own = await ctx.send(author, 'put', `/api/daily-logs/${logC}`, { title: 'p13 own C edited' });
+  const own = await ctx.send(author, 'put', `/api/daily-logs/${logC}`, { version: 1, title: 'p13 own C edited' });
   if (own.status !== 200) wrong.push(`author edit answered ${own.status}`);
   const ownReview = await ctx.send(author, 'put', `/api/daily-logs/${logC}/review`, { manager_notes: 'self' });
   if (ownReview.status !== 403) wrong.push(`author without manage_all review answered ${ownReview.status}`);
@@ -224,7 +224,7 @@ async function mentionsValidatedCase(ctx: Ctx): Promise<string> {
     }
     // editing a log notifies only users mentioned for the first time
     const second = await ctx.userWith(['daily_logs.view']);
-    const edit = await ctx.send(author, 'put', `/api/daily-logs/${ok.body.id}`, { mentions: [reader.id, second.id] });
+    const edit = await ctx.send(author, 'put', `/api/daily-logs/${ok.body.id}`, { version: 1, mentions: [reader.id, second.id] });
     if (edit.status !== 200) wrong.push(`edit answered ${edit.status}`);
     const readerNotes = await orm.select().from(notifications).where(eq(notifications.userId, reader.id));
     const secondNotes = await orm.select().from(notifications).where(eq(notifications.userId, second.id));

@@ -1,10 +1,10 @@
 import { orm } from '../../db/drizzle.js';
 import { formDrafts } from '../../db/schema.js';
-import { eq, and, sql, desc } from 'drizzle-orm';
+import { eq, and, sql, desc, inArray } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
-import { ValidationError } from '../../errors/customErrors.js';
+import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { ADVISORY_LOCK_KEYS, withAdvisoryLock } from '../../lib/advisoryLock.js';
-import { DRAFT_EXPIRY_DAYS, isValidDraftExpiryDays } from '../../lib/drafts/draftRules.js';
+import { DRAFT_EXPIRY_DAYS, DRAFT_MAX_PER_USER, isValidDraftExpiryDays } from '../../lib/drafts/draftRules.js';
 
 /**
  * v9.0.306 (TD-676، B16-12): پیش‌نویس زنده هنوز منقضی نشده است. ردیف قدیمی بی `expires_at` تا ۳۰ روز پس از آخرین ذخیره
@@ -68,22 +68,11 @@ export class FormDraftService {
     }
     const expiresAtIso = new Date(Date.now() + expiresInDays * DAY_MS).toISOString();
 
-    // Check if an existing active draft exists
-    let existing;
-    if (userId) {
-      existing = await orm.select()
-        .from(formDrafts)
-        .where(
-          and(
-            eq(formDrafts.userId, userId),
-            sql`${formDrafts.entityType} = ${entityType}::text`,
-            sql`${formDrafts.draftKey} = ${draftKey}::text`,
-            eq(formDrafts.isDeleted, 0)
-          )
-        )
-        .limit(1);
-    } else if (sessionId) {
-      existing = await orm.select()
+    if (userId) return this.saveUserDraft({ userId, username, sessionId, entityType, draftKey, payload, summary, expiresAtIso });
+
+    // a draft without a user (no route saves one since every drafts route needs a login) keeps the old path
+    const existing = sessionId
+      ? await orm.select()
         .from(formDrafts)
         .where(
           and(
@@ -93,11 +82,10 @@ export class FormDraftService {
             eq(formDrafts.isDeleted, 0)
           )
         )
-        .limit(1);
-    }
+        .limit(1)
+      : [];
 
-    if (existing && existing.length > 0) {
-      const draftId = existing[0].id;
+    if (existing.length > 0) {
       const [updated] = await orm.update(formDrafts)
         .set({
           payload,
@@ -107,35 +95,56 @@ export class FormDraftService {
           updatedAt: new Date().toISOString(),
           expiresAt: expiresAtIso
         })
-        .where(eq(formDrafts.id, draftId))
+        .where(eq(formDrafts.id, existing[0].id))
         .returning();
+      return { success: true, action: 'updated', draft: updated };
+    }
+    const [inserted] = await orm.insert(formDrafts)
+      .values({ userId: null, username, sessionId, entityType, draftKey, payload, summary, expiresAt: expiresAtIso, isDeleted: 0 })
+      .returning();
+    return { success: true, action: 'created', draft: inserted };
+  }
 
-      return {
-        success: true,
-        action: 'updated',
-        draft: updated
-      };
-    } else {
-      const [inserted] = await orm.insert(formDrafts)
-        .values({
-          userId: userId || null,
-          username,
-          sessionId,
-          entityType,
-          draftKey,
-          payload,
-          summary,
-          expiresAt: expiresAtIso,
-          isDeleted: 0
+  /**
+   * v10.2.31 (TD-1327, OBS-R2-98): a user's draft is one INSERT … ON CONFLICT on the live key
+   * (`uq_form_drafts_live_user_key`, migration 0133), so two concurrent saves of one form keep one draft; then, in the
+   * same transaction, the user's live drafts beyond the newest `DRAFT_MAX_PER_USER` are soft-deleted, as an expired draft
+   * is (TD-676). The answer still says whether the draft was created or updated.
+   */
+  private static async saveUserDraft(input: {
+    userId: number; username: string; sessionId: string; entityType: string; draftKey: string;
+    payload: Record<string, unknown>; summary: string; expiresAtIso: string;
+  }) {
+    const { userId, username, sessionId, entityType, draftKey, payload, summary, expiresAtIso } = input;
+    return orm.transaction(async (tx) => {
+      const nowIso = new Date().toISOString();
+      const [draft] = await tx.insert(formDrafts)
+        .values({ userId, username, sessionId, entityType, draftKey, payload, summary, expiresAt: expiresAtIso, isDeleted: 0 })
+        .onConflictDoUpdate({
+          target: [formDrafts.userId, formDrafts.entityType, formDrafts.draftKey],
+          targetWhere: sql`${formDrafts.isDeleted} = 0 AND ${formDrafts.userId} IS NOT NULL`,
+          set: {
+            payload,
+            // an empty summary, username or session keeps the stored one, as before
+            summary: summary ? summary : sql`${formDrafts.summary}`,
+            username: username ? username : sql`${formDrafts.username}`,
+            sessionId: sessionId ? sessionId : sql`${formDrafts.sessionId}`,
+            updatedAt: nowIso,
+            expiresAt: expiresAtIso,
+          },
         })
         .returning();
-
-      return {
-        success: true,
-        action: 'created',
-        draft: inserted
-      };
-    }
+      const surplus = await tx.select({ id: formDrafts.id }).from(formDrafts)
+        .where(and(eq(formDrafts.userId, userId), eq(formDrafts.isDeleted, 0)))
+        .orderBy(desc(formDrafts.updatedAt), desc(formDrafts.id))
+        .offset(DRAFT_MAX_PER_USER);
+      if (surplus.length > 0) {
+        await tx.update(formDrafts).set({ isDeleted: 1 }).where(inArray(formDrafts.id, surplus.map(r => r.id)));
+      }
+      // a row whose creation time equals its update time was just inserted
+      const created = draft.createdAt !== null && draft.createdAt === draft.updatedAt;
+      return { success: true, action: created ? 'created' : 'updated', draft };
+    });
   }
 
   /**
@@ -215,7 +224,7 @@ export class FormDraftService {
       .from(formDrafts)
       .where(and(...conditions))
       .orderBy(desc(formDrafts.updatedAt))
-      .limit(50);
+      .limit(DRAFT_MAX_PER_USER);
 
     return drafts;
   }
@@ -249,15 +258,14 @@ export class FormDraftService {
    * Delete a draft by direct numeric ID
    */
   static async deleteDraftById(id: number, userId?: number | null) {
-    const conditions = [eq(formDrafts.id, id)];
-    if (userId) {
-      conditions.push(eq(formDrafts.userId, userId));
-    }
-
-    await orm.update(formDrafts)
+    // v10.2.31 (TD-1327, OBS-R2-98): only the user's own live draft; a missing, deleted or another user's draft is 404
+    // (before, any id answered success and a call without a user could delete anyone's draft)
+    if (!userId) throw new NotFoundError('پیش‌نویس یافت نشد', undefined, 'DRAFT_NOT_FOUND');
+    const removed = await orm.update(formDrafts)
       .set({ isDeleted: 1, updatedAt: new Date().toISOString() })
-      .where(and(...conditions));
-
+      .where(and(eq(formDrafts.id, id), eq(formDrafts.userId, userId), eq(formDrafts.isDeleted, 0)))
+      .returning({ id: formDrafts.id });
+    if (removed.length === 0) throw new NotFoundError('پیش‌نویس یافت نشد', undefined, 'DRAFT_NOT_FOUND');
     return { success: true };
   }
 

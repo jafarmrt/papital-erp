@@ -63,7 +63,7 @@ async function workTimeCase(ctx: DailyLogTestCtx): Promise<string> {
     const log = read.body?.data ?? read.body;
     if (Number(log?.work_hours) !== 8.5) wrong.push(`work_hours ${log?.work_hours}, expected 8.5`);
     // an edit that moves only the end before the stored start is refused, and the stored hours stay
-    const edit = await ctx.send(author, 'put', `/api/daily-logs/${id}`, { end_time: '07:00' });
+    const edit = await ctx.send(author, 'put', `/api/daily-logs/${id}`, { version: 1, end_time: '07:00' });
     if (edit.status !== 422) wrong.push(`edit with end before the stored start answered ${edit.status}`);
   }
   if (wrong.length > 0) throw new Error(wrong.join('; '));
@@ -114,9 +114,9 @@ async function overlapCase(ctx: DailyLogTestCtx): Promise<string> {
   if ((await post(other, '10:00', '12:00')).status !== 200) wrong.push('the same time of another author was refused');
   // an edit that moves a log onto another is refused; one that keeps its time stays editable
   const touchingId = Number(touching.body?.id ?? touching.body?.data?.id);
-  const moved = await ctx.send(author, 'put', `/api/daily-logs/${touchingId}`, { start_time: '15:00' });
+  const moved = await ctx.send(author, 'put', `/api/daily-logs/${touchingId}`, { version: 1, start_time: '15:00' });
   if (moved.status !== 422 || moved.body?.code !== 'DAILY_LOG_TIME_OVERLAP') wrong.push(`an edit onto another log answered ${moved.status} ${moved.body?.code}`);
-  const retitled = await ctx.send(author, 'put', `/api/daily-logs/${touchingId}`, { title: 'p13 renamed' });
+  const retitled = await ctx.send(author, 'put', `/api/daily-logs/${touchingId}`, { version: 1, title: 'p13 renamed' });
   if (retitled.status !== 200) wrong.push(`a title edit answered ${retitled.status}`);
   // a deleted log does not count
   const firstId = Number(first.body?.id ?? first.body?.data?.id);
