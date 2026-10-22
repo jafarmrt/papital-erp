@@ -75,7 +75,7 @@ sudo bash setup-domain.sh
 ```bash
 sudo DOMAIN=erp.mycompany.ir EMAIL=me@mycompany.ir bash setup-domain.sh
 ```
-انجام خودکار: چک DNS → نصب Nginx + Certbot → کانفیگ reverse proxy به پورت 3000 → باز کردن پورت‌های 80/443 در فایروال → صدور گواهی رایگان Let's Encrypt و ریدایرکت خودکار HTTP→HTTPS → به‌روزرسانی `ALLOWED_ORIGINS` در `.env` → ری‌استارت سرویس.
+انجام خودکار: چک DNS → نصب Nginx + Certbot → کانفیگ reverse proxy به پورت 3000 → باز کردن پورت‌های 80/443 در فایروال → صدور گواهی رایگان Let's Encrypt و ریدایرکت خودکار HTTP→HTTPS → به‌روزرسانی `ALLOWED_ORIGINS` در `.env` → نوشتن `ERP_LISTEN_HOST=127.0.0.1` در `.env` (از v10.2.24، اگر مقداری نداشته باشد؛ پس از آن پورت 3000 فقط از خود سرور پاسخ می‌دهد و برنامه با دامنه باز می‌شود) → ری‌استارت سرویس. سایت پیش‌فرض Nginx فقط وقتی غیرفعال می‌شود که همان صفحهٔ دست‌نخوردهٔ بستهٔ nginx باشد.
 
 نتیجه: `https://erp.mycompany.ir` 🎉
 
@@ -121,6 +121,6 @@ systemctl restart papital-erp     # ری‌استارت
 - [ ] بعد از setup اولیه، ویزارد `/setup` قفل می‌شود — چک کنید: `curl -I http://localhost:3000/setup`
 - [ ] رمز کاربر ادمین قوی + ساخت کاربر جدا برای هر نفر (لاگ audit به نام هر کاربر می‌خورد)
 - [ ] SSH: ورود با رمز را به کلید عمومی محدود کنید (`PasswordAuthentication no`)
-- [ ] پورت 3000 روی فایروال عمومی بسته باشد: `ufw deny 3000/tcp` (فقط Nginx به آن وصل است)
+- [ ] پورت 3000 روی فایروال عمومی بسته باشد: `ufw deny 3000/tcp` (فقط Nginx به آن وصل است)؛ پس از `setup-domain.sh` باید `ss -ltn 'sport = :3000'` فقط `127.0.0.1:3000` نشان دهد
 - [ ] بکاپ خودکار روزانه: `install.sh` فایل `/etc/cron.d/papital-erp` را با `scripts/install-ops-cron.sh` می‌نویسد (پشتیبان ۰۲:۳۰ و پایش هر پنج دقیقه)؛ فقط اگر این فایل نیست یک بار `sudo BACKUP_HOUR=2 BACKUP_MINUTE=30 bash scripts/install-ops-cron.sh <کاربر سرویس>` + انتقال بکاپ به محل دوم + تمرین بازیابی ماهانه (`./scripts/restore.sh`)
 - [ ] `sudo certbot renew --dry-run` یک بار بعد از نصب

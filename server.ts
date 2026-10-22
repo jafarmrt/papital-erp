@@ -53,6 +53,8 @@ async function startServer() {
   }
 
   const PORT = parseInt(process.env.PORT || '3000', 10);
+  // v10.2.24 (OBS-R1-16): setup-domain.sh writes ERP_LISTEN_HOST=127.0.0.1 so only Nginx reaches the app port; empty = every address
+  const LISTEN_HOST = process.env.ERP_LISTEN_HOST?.trim() || '0.0.0.0';
 
   // v9.0.164 (TD-584, decision ت۲): /api answers 503 until the background startup below finishes
   beginStartup();
@@ -128,7 +130,7 @@ async function startServer() {
     }
   }
 
-  const server = app.listen(PORT, '0.0.0.0', listenCallback(PORT, logger));
+  const server = app.listen(PORT, LISTEN_HOST, listenCallback(PORT, logger));
   // v10.0.21 (N-05): a media library upload of up to 50 MB on a slow line outlasts Node's 5-minute request timeout
   server.requestTimeout = REQUEST_TIMEOUT_MS;
 

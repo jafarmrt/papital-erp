@@ -114,7 +114,7 @@ describe('Express 5 request shapes', () => {
 
   it('starts the built app through the listen callback that exits on an error', () => {
     const source = readFileSync(resolve(process.cwd(), 'server.ts'), 'utf8');
-    expect(source).toContain("app.listen(PORT, '0.0.0.0', listenCallback(PORT, logger))");
+    expect(source).toContain("app.listen(PORT, LISTEN_HOST, listenCallback(PORT, logger))");
     const calls: string[] = [];
     listenCallback(3000, { info: m => calls.push(m), error: m => calls.push(m) }, code => calls.push(`exit ${code}`))(new Error('listen EADDRINUSE'));
     expect(calls).toEqual(['Server failed to listen on port 3000: listen EADDRINUSE', 'exit 1']);
