@@ -19,6 +19,9 @@ import { planRenumber, type RenumberInput } from './renumber/plan';
  * Terminal output is English (AGENTS.md, owner rule t9).
  */
 
+/** The code of this command; a branch runs its own copy of it */
+const RENUMBER_CODE = ['scripts/release-renumber.ts', 'scripts/renumber'];
+
 function git(args: string[]): string {
   return execFileSync('git', args, { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
 }
@@ -59,6 +62,15 @@ async function main(): Promise<void> {
   const root = process.cwd();
   if (!fs.existsSync(path.join(root, 'package.json'))) throw new Error('Run from the repository root');
   if (!gitOk(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])) throw new Error(`Unknown ref "${ref}" (git fetch origin master first)`);
+  // v10.2.29: this run uses the branch's own copy of the renumber code; when only the base changed it since the fork,
+  // the older copy would resolve the merge with old rules (it duplicated entries the base had edited), so stop first
+  if (!isMerged(ref)) {
+    const fork = git(['merge-base', 'HEAD', ref]).trim();
+    const touched = (to: string) => !gitOk(['diff', '--quiet', fork, to, '--', ...RENUMBER_CODE]);
+    if (touched(ref) && !touched('HEAD')) {
+      throw new Error(`${ref} has newer renumber code; take it first: git checkout ${ref} -- ${RENUMBER_CODE.join(' ')} && git commit -m "Take the renumber code of ${ref}", then run again`);
+    }
+  }
   // read before merging: package.json and the changelog index may be conflicted afterwards
   const { ACTIVE_CHANGELOG } = await import('../src/data/changelogs/index.js');
 
