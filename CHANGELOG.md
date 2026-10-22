@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.2.25 — ابزارهای آزمون و نگهداری محکم‌تر
+- restore.sh و upgrade-rehearsal.sh گذرواژه را با scripts/pg-password.sh در PGPASSFILE می‌گذارند (TD-1351 فقط backup.sh)؛ update.sh با HUP/INT/TERM کد غیر صفر و پیام برگشت می‌دهد و build-info را با gitCommit می‌خواند؛ install.sh پایگاه‌دادهٔ دارای جدول را بی INSTALL_REUSE_DB=1 نمی‌پذیرد و گذرواژه را از گزارش PostgreSQL بیرون نگه می‌دارد؛ پاک‌سازی پروژهٔ آزمون (OBS-R2-113) و ratchet ردیف بی ترتیب آزمون‌ها (OT-A-09، TD-999 بسته)؛ release:renumber سطر نسخهٔ README شاخهٔ اصلی را نگه می‌دارد
+
 ### v10.2.24 — نصب محکم‌تر روی لینوکس و بررسی نصب روی Ubuntu 26.04
 - install.sh با /health/ready تمام می‌شود، به نقش موجود پایگاه‌داده رمز تازه می‌دهد و توکن نشانی مخزن را از .git/config برمی‌دارد؛ setup-domain.sh برنامه را با ERP_LISTEN_HOST=127.0.0.1 فقط به خود سرور می‌بندد و سایت پیش‌فرض Nginx را فقط دست‌نخورده برمی‌دارد؛ کار تازهٔ CI نصب را روی Ubuntu 26.04 می‌آزماید (OBS-R1-16، OT-A-07؛ کاربر جدای سرویس TD-1354، بردن کارهای دیگر CI به 26.04 TD-1355)
 

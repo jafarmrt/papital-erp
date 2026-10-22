@@ -145,6 +145,9 @@ function isCleanupPermitted(): boolean {
 /** Synthetic-only document condition (ref prefixes used exclusively by suites) */
 // V3.0.7 (TD-064): الگوی وسیع '%تست%' به prefix-only محدود شد تا سند واقعی که
 // صرفاً واژه «تست» را در توضیحات دارد حذف نشود (سندهای تستی معمولاً با «تست» شروع می‌شوند)
+// v10.2.25 (OBS-R2-113): synthetic production projects; module level so the document condition below can name them
+const TEST_PROJ_COND = sql`(project_code ILIKE 'PROJ_%' OR project_code ILIKE 'E2E_%' OR project_code ILIKE 'PRJ_%' OR project_code ILIKE 'TEST_%' OR title ILIKE ${MARKER_PAT} OR title ILIKE '%E2E%')`;
+
 const TEST_DOC_COND = sql`(
   ref_number ILIKE 'CP-FIN-%' OR ref_number ILIKE 'DOC\\_%' OR ref_number ILIKE 'DOC-%'
   OR ref_number ILIKE 'STRESS-%' OR ref_number ILIKE 'IDEM-%' OR ref_number ILIKE 'ROLLBACK-%'
@@ -154,6 +157,7 @@ const TEST_DOC_COND = sql`(
   OR notes ILIKE ${MARKER_PAT} OR notes ILIKE '%E2E%'
   OR buyer_name ILIKE ${MARKER_PAT} OR buyer_name ILIKE '%مسابقه نهاییسازی%'
   OR buyer_name ILIKE '%مشتری سازمانی تست%'
+  OR project_id IN (SELECT id FROM production_projects WHERE ${TEST_PROJ_COND})
 )`;
 
 /** Synthetic-only item condition */
@@ -178,8 +182,10 @@ export async function cleanupAllTestFixtures(): Promise<void> {
   // 1. Clear workflow dependencies & instances
   try {
     // v9.0.347 (TD-691): orders point to their requisition (fk_documents_procurement_requisition); unlink them first
-    await orm.execute(sql`UPDATE documents SET procurement_requisition_id = NULL WHERE procurement_requisition_id IN (SELECT id FROM purchase_requisitions WHERE code ILIKE 'PR-%' OR title ILIKE ${MARKER_PAT} OR title ILIKE '%E2E%')`);
-    await orm.execute(sql`DELETE FROM purchase_requisitions WHERE code ILIKE 'PR-%' OR title ILIKE ${MARKER_PAT} OR title ILIKE '%E2E%'`);
+    // v10.2.25 (OBS-R2-113): a requisition of a synthetic project is synthetic too, whatever its code
+    const TEST_REQ_COND = sql`(code ILIKE 'PR-%' OR title ILIKE ${MARKER_PAT} OR title ILIKE '%E2E%' OR project_id IN (SELECT id FROM production_projects WHERE ${TEST_PROJ_COND}))`;
+    await orm.execute(sql`UPDATE documents SET procurement_requisition_id = NULL WHERE procurement_requisition_id IN (SELECT id FROM purchase_requisitions WHERE ${TEST_REQ_COND})`);
+    await orm.execute(sql`DELETE FROM purchase_requisitions WHERE ${TEST_REQ_COND}`);
     await orm.execute(sql`UPDATE purchase_requisitions SET workflow_instance_id = NULL`);
     await orm.execute(sql`DELETE FROM workflow_history_logs`);
     await orm.execute(sql`DELETE FROM workflow_tasks`);
@@ -190,7 +196,7 @@ export async function cleanupAllTestFixtures(): Promise<void> {
     await orm.execute(sql`DELETE FROM workflow_states WHERE workflow_definition_id IN (SELECT id FROM workflow_definitions WHERE code ILIKE 'WF_%' OR title ILIKE ${MARKER_PAT})`);
     await orm.execute(sql`DELETE FROM workflow_definitions WHERE code ILIKE 'WF_%' OR title ILIKE ${MARKER_PAT}`);
   } catch (err: any) {
-    logger.warn(`[TestDbHelper] Error cleaning workflow fixtures: ${err.message}`);
+    logger.error(`[TestDbHelper] Workflow fixtures left behind: ${err.message}`);
   }
 
   // 2. Clear piecework artifacts BEFORE their parents (payroll/log scoped to synthetic refs)
@@ -206,19 +212,21 @@ export async function cleanupAllTestFixtures(): Promise<void> {
     logger.warn(`[TestDbHelper] Error cleaning piecework fixtures: ${err.message}`);
   }
 
-  // 3. Clear project dependencies & production projects (scoped)
+  // 3. Clear project dependencies (scoped); the projects themselves go after their documents (step 5b)
   try {
-    const TEST_PROJ_COND = sql`(project_code ILIKE 'PROJ_%' OR project_code ILIKE 'E2E_%' OR project_code ILIKE 'PRJ_%' OR project_code ILIKE 'TEST_%' OR title ILIKE ${MARKER_PAT} OR title ILIKE '%E2E%')`;
     // V3.0.7 (TD-064): شرط user-scoped کافی است؛ الگوهای واژه‌ای روی title/content
     // گزارش واقعی روزانه حاوی واژه «تست» را نیز حذف می‌کردند.
     await orm.execute(sql`DELETE FROM daily_work_logs WHERE user_id IN (SELECT id FROM users WHERE username ILIKE 'testuser_%' OR username ILIKE 'test_%' OR username ILIKE 'e2e_%')`);
     await orm.execute(sql`DELETE FROM piecework_logs WHERE project_id IN (SELECT id FROM production_projects WHERE ${TEST_PROJ_COND})`);
     await orm.execute(sql`DELETE FROM project_bom_allocations WHERE item_id IN (SELECT id FROM items WHERE ${TEST_ITEM_COND}) OR project_id IN (SELECT id FROM production_projects WHERE ${TEST_PROJ_COND})`);
     await orm.execute(sql`DELETE FROM project_product_stage_progress WHERE project_id IN (SELECT id FROM production_projects WHERE ${TEST_PROJ_COND})`);
+    // v10.2.25 (OBS-R2-113): the other tables that point to a project (migrations 0091, 0119); a task report points to its stage too
+    await orm.execute(sql`DELETE FROM workshop_task_reports WHERE project_id IN (SELECT id FROM production_projects WHERE ${TEST_PROJ_COND})`);
+    await orm.execute(sql`DELETE FROM project_managers WHERE project_id IN (SELECT id FROM production_projects WHERE ${TEST_PROJ_COND})`);
+    await orm.execute(sql`DELETE FROM daily_work_logs WHERE project_id IN (SELECT id FROM production_projects WHERE ${TEST_PROJ_COND})`);
     await orm.execute(sql`DELETE FROM project_stages WHERE project_id IN (SELECT id FROM production_projects WHERE ${TEST_PROJ_COND})`);
-    await orm.execute(sql`DELETE FROM production_projects WHERE ${TEST_PROJ_COND}`);
   } catch (err: any) {
-    logger.warn(`[TestDbHelper] Error cleaning project fixtures: ${err.message}`);
+    logger.error(`[TestDbHelper] Project dependency fixtures left behind: ${err.message}`);
   }
 
   // 4. Clear CRM scoped
@@ -273,7 +281,14 @@ export async function cleanupAllTestFixtures(): Promise<void> {
     await orm.execute(sql`DELETE FROM transactions WHERE document_id IN (SELECT id FROM documents WHERE ${TEST_DOC_COND}) OR item_id IN (SELECT id FROM items WHERE ${TEST_ITEM_COND}) OR document_ref ILIKE 'V9-%' OR document_ref ILIKE 'DIAG-%' OR document_ref ILIKE 'REVERSAL-%'`);
     await orm.execute(sql`DELETE FROM documents WHERE ${TEST_DOC_COND}`);
   } catch (err: any) {
-    logger.warn(`[TestDbHelper] Error cleaning document fixtures: ${err.message}`);
+    logger.error(`[TestDbHelper] Document fixtures left behind: ${err.message}`);
+  }
+
+  // 5b. v10.2.25 (OBS-R2-113): synthetic projects, after their documents and requisitions; a failure is an error, not a warning
+  try {
+    await orm.execute(sql`DELETE FROM production_projects WHERE ${TEST_PROJ_COND}`);
+  } catch (err) {
+    logger.error(`[TestDbHelper] Project fixtures left behind: ${(err as Error).message}`);
   }
 
   // 6. Clear item prices & synthetic items (scoped; T-%/1405-N-%/گردنبند/ماده اولیه removed as REAL-code patterns)

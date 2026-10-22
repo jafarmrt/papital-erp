@@ -33,9 +33,11 @@ env_file_value() {
 [ -n "${DATABASE_URL:-}" ] || fail "DATABASE_URL must be set (or present in $APP_DIR/.env)"
 export DATABASE_URL
 
+# a URL of another database on the same server; the second argument picks the URL (DATABASE_URL by default)
 url_for_db() {
-  local base="${DATABASE_URL%%\?*}"
-  local query="${DATABASE_URL#"$base"}"
+  local source="${2:-$DATABASE_URL}"
+  local base="${source%%\?*}"
+  local query="${source#"$base"}"
   echo "${base%/*}/$1$query"
 }
 
@@ -43,6 +45,11 @@ TSX="$APP_DIR/node_modules/.bin/tsx"
 [ -x "$TSX" ] || fail "$TSX not found — install the dependencies of the new code first (npm ci --include=dev)"
 
 WORK_DIR="$(mktemp -d)"
+# v10.2.25 (TD-1351): psql and restore.sh get the password through a PGPASSFILE in WORK_DIR, not a command line;
+# the migrations (Node) get the full URL through their environment
+# shellcheck source=scripts/pg-password.sh
+. "$APP_DIR/scripts/pg-password.sh"
+pg_password_setup "$WORK_DIR"
 DRILL_DB=""
 cleanup() {
   local rc=$?
@@ -69,7 +76,7 @@ DRILL_DB="$(grep -o 'Drill database kept for inspection: [A-Za-z0-9_]*' "$WORK_D
 [ -n "$DRILL_DB" ] || fail "restore.sh did not report the drill database"
 
 log "[2/2] Running this code's migrations on the copy and comparing before and after"
-if (cd "$APP_DIR" && DATABASE_URL="$(url_for_db "$DRILL_DB")" "$TSX" scripts/upgrade-rehearsal.ts); then
+if (cd "$APP_DIR" && DATABASE_URL="$(url_for_db "$DRILL_DB" "$PG_FULL_DATABASE_URL")" "$TSX" scripts/upgrade-rehearsal.ts); then
   log "SUCCESS: the migrations of this code run on a copy of the backup without changing business totals"
 else
   fail "see above — do NOT restart the service on this code before the cause is fixed"

@@ -25,7 +25,8 @@ echo "$1 $(pwd) running-dist=$(cat "$STUB_APP_DIR/dist/version.txt" 2>/dev/null)
 case "$1" in
   ci) mkdir -p node_modules && echo new > node_modules/marker ;;
   install) ;;
-  run) [ -z "$STUB_BUILD_FAILS" ] || exit 1; mkdir -p dist && echo new > dist/version.txt && echo '// new' > dist/server.cjs
+  run) [ -z "$STUB_BUILD_HANGS" ] || { : > "$STUB_BUILD_HANGS"; sleep 20; }
+       [ -z "$STUB_BUILD_FAILS" ] || exit 1; mkdir -p dist && echo new > dist/version.txt && echo '// new' > dist/server.cjs
        echo "build-env=$(cat .env.production 2>/dev/null)" >> "$STUB_LOG" ;;
 esac
 `;
@@ -370,9 +371,31 @@ describe('update_followups_obs_r1_22', () => {
     expect(msg).not.toContain('Nothing was changed');
   });
 
+  it('a run stopped by a signal ends non-zero and prints the rollback (N-A)', async () => {
+    const s = scratch();
+    const started = path.join(dir, 'build.started');
+    const { spawn } = await import('node:child_process');
+    const child = spawn('bash', [path.join(s.app, 'update.sh'), '--no-backup', '--source', s.src], {
+      cwd: dir, env: { ...process.env, PATH: `${s.bin}:${process.env.PATH}`, APP_DIR: s.app, STUB_APP_DIR: s.app, STUB_LOG: s.log,
+        STUB_MV_COUNT: path.join(dir, 'mv.count'), STUB_BUILD_FAILS: '', STUB_BUILD_HANGS: started, NODE_ENV: '' },
+      detached: true,
+    });
+    let out = '';
+    child.stdout.on('data', d => { out += String(d); });
+    const exited = new Promise<number | null>(resolve => child.on('exit', c => resolve(c)));
+    for (let i = 0; i < 100 && !existsSync(started); i++) await new Promise(r => setTimeout(r, 100));
+    expect(existsSync(started)).toBe(true);
+    // the whole process group, as a dropped SSH session does (the log writer ignores the hang-up)
+    process.kill(-(child.pid as number), 'SIGHUP');
+    expect(await exited).toBe(129);
+    expect(out).toContain('Rollback: the service still runs the previous build');
+    expect(read(path.join(s.app, 'dist/version.txt'))).toBe('old');
+  }, 40_000);
+
   it('names the commit of a build made before v10.2.23 from its build-info.json and says nothing of a missing dist.prev', () => {
     const s = scratch();
-    write(path.join(s.app, 'dist/build-info.json'), '{"version":"1.0.0","commit":"f6daa01d","builtAt":"2026-10-18"}');
+    // v10.2.25 (#339 review N-B): the format scripts/write-build-info.mjs writes
+    write(path.join(s.app, 'dist/build-info.json'), `${JSON.stringify({ gitCommit: 'f6daa01d', buildTime: '2026-10-18T04:30:00.000Z' }, null, 2)}\n`);
     const commit = execFileSync('bash', ['-c', 'source scripts/update-steps.sh; update_dist_commit "$1/dist"', 'x', s.app], { cwd: s.app, encoding: 'utf8' }).trim();
     expect(commit).toBe('f6daa01d');
     const run = runUpdate(s);

@@ -170,7 +170,10 @@ describe('scripts/release-renumber.ts (TD-473)', () => {
     expect(merged.versions).toEqual([['v9.0.52', 'v9.0.53']]);
 
     const pkgConflict = '{\n<<<<<<< HEAD\n  "version": "9.0.52",\n=======\n  "version": "9.0.53",\n>>>>>>> origin/master\n  "type": "module"\n}\n';
-    expect(resolveReleaseConflict('package.json', pkgConflict, { ours: '', theirs: '' }, ACTIVE)).toBe('{\n  "version": "9.0.52",\n  "type": "module"\n}\n');
+    expect(resolveReleaseConflict('package.json', pkgConflict, { ours: '', theirs: '' }, ACTIVE)).toBe('{\n  "version": "9.0.53",\n  "type": "module"\n}\n');
+    // v10.2.25: the base's side of a version line, so text the base changed beside the version stays
+    const readmeConflict = '<<<<<<< HEAD\n> سری فعال (نسخه مستقر: `v9.0.52`) — docs/V9.md\n=======\n> سری فعال (نسخه مستقر: `v9.0.53`) — docs/roadmap/V9.md\n>>>>>>> origin/master\n';
+    expect(resolveReleaseConflict('README.md', readmeConflict, { ours: '', theirs: '' }, ACTIVE)).toBe('> سری فعال (نسخه مستقر: `v9.0.53`) — docs/roadmap/V9.md\n');
     const depConflict = '<<<<<<< HEAD\n  "a": "1",\n=======\n  "a": "2",\n>>>>>>> origin/master\n';
     expect(resolveReleaseConflict('package.json', depConflict, { ours: '', theirs: '' }, ACTIVE)).toBeNull();
     expect(resolveReleaseConflict('AGENTS.md', '<<<<<<< HEAD\na\n=======\nb\n>>>>>>> m\n', { ours: 'a', theirs: 'b' }, ACTIVE)).toBeNull();

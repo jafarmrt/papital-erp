@@ -20,6 +20,10 @@ import { boundaryState } from './packageBoundary';
  *    instead of throwing an AppError for `errorHandler`, also `res.status(cond ? 400 : 500)` (v10.0.253);
  *  - noopCatches (decision t5 A, OBS-R2-05, v10.0.253): `catch (err) { throw err; }`, a catch that only rethrows its own error;
  *  - serviceGenericErrors (decision t5 A): `throw new Error(` in `src/services/**` instead of an AppError subclass;
+ *  - serviceErrorResults (decision t5 A, OBS-R2-05, v10.2.25): an error handed back as a value, an object literal with
+ *    `status: 4xx|5xx` and `error` in `src/services/**` (payroll.service.ts), instead of throwing an AppError subclass;
+ *  - unorderedTestRows (OT-A-09, v10.2.25): in `src/tests/**`, a row past the first (`rows[1]`, `[a, b] = await ...`) of a
+ *    query that has no ORDER BY: PostgreSQL returns rows in no fixed order, and such a test fails now and then in CI;
  *  - packageBoundary (decision t3 A, OBS-R2-02): server imports against the package direction of
  *    scripts/ratchets/PACKAGE_MAP.txt (scripts/ratchets/packageBoundary.ts); a server file the map does not cover is refused;
  *  - auditWithoutTx (TD-963 part 2, OBS-R2-07): a `logActivity(...)` call whose argument names no `tx`, so the audit row
@@ -32,7 +36,7 @@ import { boundaryState } from './packageBoundary';
 
 export const BASELINE_FILE = 'scripts/ratchets/architecture-baseline.json';
 
-export const METRICS = ['routeWrites', 'ormFallback', 'routeErrorResponses', 'serviceGenericErrors', 'noopCatches', 'auditWithoutTx', 'hardDeletes', 'packageBoundary'] as const;
+export const METRICS = ['routeWrites', 'ormFallback', 'routeErrorResponses', 'serviceGenericErrors', 'serviceErrorResults', 'noopCatches', 'auditWithoutTx', 'hardDeletes', 'unorderedTestRows', 'packageBoundary'] as const;
 export type Metric = (typeof METRICS)[number];
 export type ArchitectureBaseline = Record<Metric, Record<string, number>> & { unmappedServerFiles?: string[] };
 
@@ -41,6 +45,8 @@ const METRIC_ADVICE: Record<Metric, string> = {
   ormFallback: 'take the caller\'s tx instead of falling back to the pool (decision t4 B)',
   routeErrorResponses: 'throw an AppError subclass and let errorHandler answer (decision t5 A)',
   serviceGenericErrors: 'throw an AppError subclass (decision t5 A)',
+  serviceErrorResults: 'throw an AppError subclass instead of returning { status, error } (decision t5 A)',
+  unorderedTestRows: 'add ORDER BY (orderBy) to the query, or find the row by a column instead of its position (OT-A-09)',
   noopCatches: 'remove the try / catch: asyncHandler already passes the error to errorHandler (decision t5 A)',
   auditWithoutTx: 'pass the write\'s own tx to logActivity so the audit row commits or rolls back with the change (TD-963)',
   hardDeletes: 'soft-delete the row (is_deleted = 1); a delete that must stay physical is listed with its reason in scripts/ratchets/HARD_DELETES.md (OBS-R2-15)',
@@ -121,12 +127,107 @@ function isDrizzleDelete(n: ts.CallExpression): boolean {
   return ts.isPropertyAccessExpression(parent) && parent.expression === n && ['where', 'returning'].includes(parent.name.text);
 }
 
+/** `{ status: 4xx|5xx, error: ... }`: an error result object instead of a thrown AppError. */
+function isErrorResult(n: ts.ObjectLiteralExpression): boolean {
+  const names = new Map(n.properties.filter(ts.isPropertyAssignment).filter(p => ts.isIdentifier(p.name))
+    .map(p => [(p.name as ts.Identifier).text, p.initializer]));
+  const status = names.get('status');
+  return !!status && ts.isNumericLiteral(status) && Number(status.text) >= 400 && n.properties.some(p => p.name && ts.isIdentifier(p.name) && p.name.text === 'error');
+}
+
+/** Method names of a call chain, `orm.select().from(t).where(x)` -> select, from, where (`await` and parentheses skipped). */
+function chainMethods(n: ts.Expression): string[] {
+  const out: string[] = [];
+  let cur: ts.Expression = n;
+  for (;;) {
+    if (ts.isAwaitExpression(cur) || ts.isParenthesizedExpression(cur)) cur = cur.expression;
+    else if (ts.isCallExpression(cur) && ts.isPropertyAccessExpression(cur.expression)) { out.unshift(cur.expression.name.text); cur = cur.expression.expression; }
+    else if (ts.isPropertyAccessExpression(cur)) cur = cur.expression;
+    else return out;
+  }
+}
+
+/** SQL text of `x.execute(sql\`...\`)`, or null when the expression is no such call. */
+function executedSql(n: ts.Expression): string | null {
+  let cur: ts.Expression = n;
+  while (ts.isAwaitExpression(cur) || ts.isParenthesizedExpression(cur)) cur = cur.expression;
+  if (!ts.isCallExpression(cur) || !ts.isPropertyAccessExpression(cur.expression) || cur.expression.name.text !== 'execute') return null;
+  const arg = cur.arguments[0];
+  if (!arg || !ts.isTaggedTemplateExpression(arg)) return null;
+  const t = arg.template;
+  return ts.isNoSubstitutionTemplateLiteral(t) ? t.text : [t.head.text, ...t.templateSpans.map(s => s.literal.text)].join(' ');
+}
+
+/** A query whose rows come back in no fixed order: a Drizzle select without orderBy or a SQL SELECT without ORDER BY. */
+function isUnorderedQuery(n: ts.Expression): boolean {
+  const text = executedSql(n);
+  if (text !== null) return /\bSELECT\b/i.test(text) && !/\bORDER\s+BY\b/i.test(text);
+  const methods = chainMethods(n);
+  return methods.includes('from') && !methods.includes('orderBy');
+}
+
+/** OT-A-09: positions past the first row of an unordered query in a test file. */
+export function countTestSource(file: string, source: string): number {
+  const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  /** every declaration of a name, with whether it holds an unordered query, so an access finds the one in its scope */
+  const declarations = new Map<string, Array<{ node: ts.VariableDeclaration; unordered: boolean }>>();
+  let count = 0;
+  const collect = (n: ts.Node) => {
+    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name)) {
+      const unordered = !!n.initializer && ts.isAwaitExpression(n.initializer) && isUnorderedQuery(n.initializer);
+      declarations.set(n.name.text, [...(declarations.get(n.name.text) ?? []), { node: n, unordered }]);
+    }
+    if (ts.isVariableDeclaration(n) && ts.isArrayBindingPattern(n.name) && n.initializer && ts.isAwaitExpression(n.initializer)
+      && isUnorderedQuery(n.initializer) && n.name.elements.filter(e => !ts.isOmittedExpression(e)).length > 1) count++;
+    ts.forEachChild(n, collect);
+  };
+  collect(sf);
+  const scopeOf = (n: ts.Node): ts.Node => {
+    let cur = n.parent;
+    while (cur && !ts.isBlock(cur) && !ts.isSourceFile(cur) && !ts.isFunctionLike(cur)) cur = cur.parent;
+    return cur ?? sf;
+  };
+  /** the nearest earlier declaration of `name` whose scope holds the access */
+  const isUnorderedName = (name: string, at: ts.Node): boolean => {
+    const visible = (declarations.get(name) ?? []).filter(d => {
+      const scope = scopeOf(d.node);
+      return d.node.pos < at.pos && scope.pos <= at.pos && at.end <= scope.end;
+    });
+    return visible.length > 0 && visible.reduce((a, b) => (b.node.pos > a.node.pos ? b : a)).unordered;
+  };
+  /** `name[k]` or `name.rows[k]` with k >= 1 on an unordered name, or `(await <unordered>).rows[k]` */
+  const visit = (n: ts.Node) => {
+    if (ts.isElementAccessExpression(n) && ts.isNumericLiteral(n.argumentExpression) && Number(n.argumentExpression.text) >= 1) {
+      let base: ts.Expression = n.expression;
+      if (ts.isPropertyAccessExpression(base) && base.name.text === 'rows') base = base.expression;
+      while (ts.isParenthesizedExpression(base)) base = base.expression;
+      if ((ts.isIdentifier(base) && isUnorderedName(base.text, n)) || (ts.isAwaitExpression(base) && isUnorderedQuery(base))) count++;
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+  return count;
+}
+
+export function testSourceFiles(root = process.cwd()): string[] {
+  const files: string[] = [];
+  const walk = (rel: string) => {
+    for (const entry of fs.readdirSync(path.join(root, rel), { withFileTypes: true })) {
+      const child = `${rel}/${entry.name}`;
+      if (entry.isDirectory()) walk(child);
+      else if (/\.ts$/.test(entry.name) && !entry.name.endsWith('.d.ts')) files.push(child);
+    }
+  };
+  walk('src/tests');
+  return files.sort();
+}
+
 /** Counts of every metric in one source file. */
-export type SourceMetric = Exclude<Metric, 'packageBoundary'>;
+export type SourceMetric = Exclude<Metric, 'packageBoundary' | 'unorderedTestRows'>;
 
 export function countSource(file: string, source: string): Record<SourceMetric, number> {
   const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
-  const counts: Record<SourceMetric, number> = { routeWrites: 0, ormFallback: 0, routeErrorResponses: 0, serviceGenericErrors: 0, noopCatches: 0, auditWithoutTx: 0, hardDeletes: 0 };
+  const counts: Record<SourceMetric, number> = { routeWrites: 0, ormFallback: 0, routeErrorResponses: 0, serviceGenericErrors: 0, serviceErrorResults: 0, noopCatches: 0, auditWithoutTx: 0, hardDeletes: 0 };
   const tables = schemaImports(sf);
   const isTable = (n: ts.Expression) => (ts.isIdentifier(n) && tables.has(n.text))
     || (ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.expression) && tables.has(`${n.expression.text}.*`));
@@ -147,6 +248,7 @@ export function countSource(file: string, source: string): Record<SourceMetric, 
     if ((ts.isVariableDeclaration(n) || ts.isParameter(n)) && n.initializer && isOrm(n.initializer)) counts.ormFallback++;
     if (isService(file) && ts.isThrowStatement(n) && n.expression && ts.isNewExpression(n.expression)
       && ts.isIdentifier(n.expression.expression) && n.expression.expression.text === 'Error') counts.serviceGenericErrors++;
+    if (isService(file) && ts.isObjectLiteralExpression(n) && isErrorResult(n)) counts.serviceErrorResults++;
     ts.forEachChild(n, visit);
   };
   visit(sf);
@@ -158,6 +260,10 @@ export function currentState(root = process.cwd()): ArchitectureBaseline {
   for (const file of productionSourceFiles(root)) {
     const counts = countSource(file, fs.readFileSync(path.join(root, file), 'utf8'));
     for (const m of Object.keys(counts) as SourceMetric[]) if (counts[m] > 0) state[m][file] = counts[m];
+  }
+  for (const file of testSourceFiles(root)) {
+    const n = countTestSource(file, fs.readFileSync(path.join(root, file), 'utf8'));
+    if (n > 0) state.unorderedTestRows[file] = n;
   }
   const boundary = boundaryState(root);
   state.packageBoundary = boundary.packageBoundary;

@@ -91,6 +91,10 @@ ATTACHMENTS_ARCHIVE="${BACKUP_BASE}_attachments.tar.gz"
 log "Restoring from: $BACKUP_FILE (mode=$RESTORE_MODE)"
 
 WORK_DIR="$(mktemp -d)"
+# v10.2.25 (TD-1351): the password goes to psql and pg_restore through a PGPASSFILE in WORK_DIR, not their command line
+# shellcheck source=scripts/pg-password.sh
+. "$APP_DIR/scripts/pg-password.sh"
+pg_password_setup "$WORK_DIR"
 NEW_DB=""
 cleanup() {
   local rc=$?

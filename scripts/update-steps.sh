@@ -248,7 +248,7 @@ update_dist_commit() {
   local commit
   commit="$(cat "$1/$UPDATE_COMMIT_NAME" 2>/dev/null || true)"
   if [ -z "$commit" ] && [ -f "$1/build-info.json" ]; then
-    commit="$(sed -n 's/.*"commit"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$1/build-info.json" | head -1)"
+    commit="$(sed -n 's/.*"gitCommit"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$1/build-info.json" | head -1)"
   fi
   echo "${commit:-unknown}"
 }
@@ -264,6 +264,9 @@ update_swap_build() {
   local app_dir="$1" build_dir="$1/$UPDATE_BUILD_DIR_NAME" rc=0
   [ -f "$build_dir/dist/server.cjs" ] && [ -d "$build_dir/node_modules" ] \
     || { echo "The side folder holds no complete build: $build_dir" >&2; return 1; }
+  # v10.2.25 (#339 review N-A): the caller's own signal traps come back after the swap
+  local saved_traps
+  saved_traps="$(trap -p HUP INT TERM)"
   trap '' HUP INT TERM
   { rm -rf "${build_dir:?}/.old-dist" "${build_dir:?}/.old-node_modules" \
     && { [ ! -e "$app_dir/dist.prev" ] || mv "$app_dir/dist.prev" "$build_dir/.old-dist"; } \
@@ -276,6 +279,7 @@ update_swap_build() {
     && mv "$build_dir/node_modules" "$app_dir/node_modules" \
     && rm -f "${app_dir:?}/${UPDATE_SWAP_MARKER_NAME:?}"; } || rc=1
   trap - HUP INT TERM
+  eval "$saved_traps"
   [ "$rc" -eq 0 ] || return 1
   if [ -f "$build_dir/package-lock.json" ] && ! cmp -s "$build_dir/package-lock.json" "$app_dir/package-lock.json"; then
     cp "$build_dir/package-lock.json" "$app_dir/package-lock.json"

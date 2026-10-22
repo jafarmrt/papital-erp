@@ -193,6 +193,15 @@ export async function cleanupOrphanUploads(options: OrphanUploadsOptions): Promi
     if (!options.apply) return;
     await options.afterScan?.();
 
+    // only what the admin confirmed, re-checked against the rows just before it moves (one pass for all of them)
+    const confirmedMoves = new Set(options.confirmed?.quarantine ?? []);
+    const confirmedPurges = new Set(options.confirmed?.purge ?? []);
+    const toMove = plannedOrphans.filter(f => confirmedMoves.has(f.name));
+    const toPurge = plannedExpired.filter(f => confirmedPurges.has(heldKey(f)));
+    report.skipped += plannedOrphans.length - toMove.length + plannedExpired.length - toPurge.length;
+    // v10.2.25 (#337 review N-e1): today's folder is checked before anything moves, so a bad folder stops the run whole
+    const day = toMove.length > 0 ? await dayFolder(uploadsDir, root, today) : '';
+
     const fail = (name: string, err: unknown, failed: Array<{ name: string; code: string }>) => {
       const entry = { name, code: errorCode(err) };
       failed.push(entry);
@@ -240,15 +249,7 @@ export async function cleanupOrphanUploads(options: OrphanUploadsOptions): Promi
       await audit('restore', done, failed, duplicates.length > 0 ? { removedDuplicates: duplicates } : {});
     }
 
-    // only what the admin confirmed, re-checked against the rows just before it moves (one pass for all of them)
-    const confirmedMoves = new Set(options.confirmed?.quarantine ?? []);
-    const confirmedPurges = new Set(options.confirmed?.purge ?? []);
-    const toMove = plannedOrphans.filter(f => confirmedMoves.has(f.name));
-    const toPurge = plannedExpired.filter(f => confirmedPurges.has(heldKey(f)));
-    report.skipped += plannedOrphans.length - toMove.length + plannedExpired.length - toPurge.length;
-
     const movedNamed = await uuidsInRows(toMove.map(f => f.uuid));
-    const day = toMove.length > 0 ? await dayFolder(uploadsDir, root, today) : '';
     for (const chunk of chunksOf(toMove)) {
       const named = movedNamed;
       const done: string[] = [];

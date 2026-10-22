@@ -12,6 +12,7 @@ import {
   BASELINE_FILE,
   compareWithBaseline,
   countSource,
+  countTestSource,
   currentState,
   type ArchitectureBaseline,
 } from '../../../scripts/ratchets/architectureRatchet';
@@ -84,8 +85,42 @@ describe('architecture_ratchet: phase-2 decisions may only shrink their debt', (
     expect(countSource('src/services/x.service.ts', source).auditWithoutTx).toBe(3);
   });
 
+  it('counts an error result object returned by a service (v10.2.25, OBS-R2-05)', () => {
+    const source = `
+      return { status: 404, error: 'x' };
+      return { status: 400, error: \`y \${a}\`, details };
+      return { status: 200, data };
+      return { status: 500 };
+      const e = { error: 'x', status: code };
+    `;
+    expect(countSource('src/services/x.service.ts', source).serviceErrorResults).toBe(2);
+    expect(countSource('src/routes/x.routes.ts', source).serviceErrorResults).toBe(0);
+  });
+
+  it('counts rows past the first of an unordered query in a test file (v10.2.25, OT-A-09)', () => {
+    const source = `
+      async function t() {
+        const rows = await orm.select().from(items).where(eq(items.id, 1));
+        rows[0].id; rows[1].id;
+        const sorted = await orm.select().from(items).orderBy(items.id);
+        sorted[1].id;
+        const [a, b] = await orm.select().from(items);
+        const [only] = await orm.select().from(items);
+        const r = await orm.execute(sql\`SELECT id FROM items WHERE x = \${1}\`);
+        r.rows[1];
+        const o = await orm.execute(sql\`SELECT id FROM items ORDER BY id\`);
+        o.rows[2];
+        (await orm.execute(sql\`SELECT 1\`)).rows[1];
+        const list = await Service.getAll();
+        list[1];
+      }
+      async function u() { const rows = await Service.list(); rows[1]; }
+    `;
+    expect(countTestSource('src/tests/x.ts', source)).toBe(4);
+  });
+
   it('refuses a grown count and reports a lowered one', () => {
-    const empty = { routeWrites: {}, ormFallback: {}, routeErrorResponses: {}, serviceGenericErrors: {}, noopCatches: {}, auditWithoutTx: {}, hardDeletes: {}, packageBoundary: {} };
+    const empty = { routeWrites: {}, ormFallback: {}, routeErrorResponses: {}, serviceGenericErrors: {}, serviceErrorResults: {}, noopCatches: {}, auditWithoutTx: {}, hardDeletes: {}, unorderedTestRows: {}, packageBoundary: {} };
     const baseline: ArchitectureBaseline = { ...empty, routeWrites: { 'a.ts': 2, 'b.ts': 1 } };
     const report = compareWithBaseline({ ...empty, routeWrites: { 'a.ts': 3, 'c.ts': 1 } }, baseline);
     expect(report.errors).toEqual([
