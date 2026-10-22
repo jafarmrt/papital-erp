@@ -57,7 +57,7 @@ const createProjectSchema = z.object({
     description: z.string().optional(),
     initial_stages: z.array(z.object({ status: z.enum(STAGE_STATUSES).optional() }).catchall(z.unknown())).optional(),
     products: z.array(z.unknown()).optional(),
-    // v10.2.28 (TD-1326, OBS-R1-92): the inventory control's shape and row quantities are checked
+    // v10.2.30 (TD-1326, OBS-R1-92): the inventory control's shape and row quantities are checked
     inventory_control: projectInventoryControlInput,
     inventoryControl: projectInventoryControlInput,
     stage_schedules: z.unknown().optional(),
@@ -94,7 +94,7 @@ const updateProjectSchema = z.object({
     priority: z.enum(PROJECT_PRIORITIES).optional(),
     description: z.string().optional(),
     products: z.array(z.unknown()).optional(),
-    // v10.2.28 (TD-1326, OBS-R1-92): the inventory control's shape and row quantities are checked
+    // v10.2.30 (TD-1326, OBS-R1-92): the inventory control's shape and row quantities are checked
     inventory_control: projectInventoryControlInput,
     inventoryControl: projectInventoryControlInput,
     stage_schedules: z.unknown().optional(),

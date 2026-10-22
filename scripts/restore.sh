@@ -100,6 +100,12 @@ cleanup() {
   rm -rf "$WORK_DIR"
   exit $rc
 }
+# set before WORK_DIR holds the password file, so any exit from here on removes it (#346 review M1)
+trap cleanup EXIT
+# v10.2.28 (TD-1351): the password goes to psql and pg_restore through a PGPASSFILE in WORK_DIR (removed by cleanup), not their command line
+# shellcheck source=scripts/pg-password.sh
+. "$APP_DIR/scripts/pg-password.sh"
+pg_password_setup "$WORK_DIR"
 
 # ---------- Admin connection (CREATE / DROP / RENAME DATABASE) ----------
 # The maintenance database "postgres" is used so that the check also works when the target database is gone.
@@ -121,7 +127,6 @@ admin_sql() {
     sudo) sudo -n -u postgres psql -X -q -tA -v ON_ERROR_STOP=1 -d postgres -c "$1" ;;
   esac
 }
-trap cleanup EXIT
 
 # ---------- Restore into a new database owned by the application role ----------
 NEW_DB="${DB_NAME}_restore_${TIMESTAMP}"

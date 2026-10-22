@@ -1364,7 +1364,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   if (shouldRun('reg_warehouse_transfer_occ_td_138', 'td138', 'occ', 'transfer')) {
   const t17Start = Date.now();
   try {
-    const activeWHs = await orm.select().from(warehouses).where(eq(warehouses.isActive, 1));
+    const activeWHs = await orm.select().from(warehouses).where(eq(warehouses.isActive, 1)).orderBy(warehouses.id);
     let wh1 = activeWHs[0]?.code;
     let wh2 = activeWHs[1]?.code;
 
@@ -10958,6 +10958,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10.2 package 12 item 2 (TD-1343): code-by-code materials per unit of the product
   const { runProjectMaterialQuantityTests } = await import('../regression/projectMaterialQuantityTests.js');
   results.push(...await runProjectMaterialQuantityTests(shouldRun));
+  // Series 10.2 package 12, #329 review M3 and M4 (TD-1346, TD-1347): the row cap on a work log edit, the batch lock order
+  const { runWorkLogScheduleRowTests } = await import('../regression/workLogScheduleRowTests.js');
+  results.push(...await runWorkLogScheduleRowTests(shouldRun));
   // Series 10.2 package 3 (v10.2.3, TD-1290): free stock, delivery cost and issued materials of a project
   const { runProjectMaterialsCostTests } = await import('../regression/projectMaterialsCostTests.js');
   results.push(...await runProjectMaterialsCostTests(shouldRun));

@@ -11,16 +11,16 @@ import { createProject, globalSection, runReservationCases, storedReservation } 
 export async function runSaveRobustnessTd1326Tests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   return runReservationCases(shouldRun, [
     ['reg_project_inventory_control_schema_td_1326',
-      'v10.2.28: a project inventory control row quantity typed with Persian digits is stored and reserved as its number; text or a non-boolean finalize flag is 400 (TD-1326, OBS-R1-92)',
+      'v10.2.30: a project inventory control row quantity typed with Persian digits is stored and reserved as its number; text or a non-boolean finalize flag is 400 (TD-1326, OBS-R1-92)',
       ['td1326', 'obs-r1-92', 'projects', 'reservation', 'package11'], inventoryControlCase],
     ['reg_project_inventory_control_per_unit_td_1326',
-      'v10.2.28: a quantity per unit (TD-1343) is checked like the other quantities: 2 in Persian digits is stored as 2 and reserved per unit, null keeps a total row, text, a negative or an empty text is 400 (TD-1326)',
+      'v10.2.30: a quantity per unit (TD-1343) is checked like the other quantities: 2 in Persian digits is stored as 2 and reserved per unit, null keeps a total row, text, a negative or an empty text is 400 (TD-1326)',
       ['td1326', 'td1343', 'projects', 'reservation', 'package11'], perUnitCase],
     ['reg_project_inventory_control_legacy_row_td_1326',
-      'v10.2.28: a row stored before the schema with an odd quantity makes the tab\'s save 400 naming its section and row; fixing that row saves, and odd fields the server does not read pass through (TD-1326)',
+      'v10.2.30: a row stored before the schema with an odd quantity makes the tab\'s save 400 naming its section and row; fixing that row saves, and odd fields the server does not read pass through (TD-1326)',
       ['td1326', 'projects', 'upgrade', 'package11'], legacyRowCase],
     ['reg_warehouse_dashboard_service_td_1326',
-      'v10.2.28: the warehouse dashboard answers without the unused reorder alarm list, low-stock count and user count (TD-1326, OBS-R2-97)',
+      'v10.2.30: the warehouse dashboard answers without the unused reorder alarm list, low-stock count and user count (TD-1326, OBS-R2-97)',
       ['td1326', 'obs-r2-97', 'dashboard', 'inventory', 'package11'], dashboardCase],
   ]);
 }
@@ -100,7 +100,7 @@ async function perUnitCase(h: Harness, wrong: string[]): Promise<string> {
   return `stored ${stored?.q}, reserved ${reserved}; «کل» ${JSON.stringify(keptRow.qtyPerUnit)}; ${refused.join(', ')}`;
 }
 
-/** A row stored before v10.2.28 (written straight to the table, as the old route stored any body) */
+/** A row stored before v10.2.30 (written straight to the table, as the old route stored any body) */
 async function legacyRowCase(h: Harness, wrong: string[]): Promise<string> {
   const f = await fixture(h);
   const itemId = await f.item(10);

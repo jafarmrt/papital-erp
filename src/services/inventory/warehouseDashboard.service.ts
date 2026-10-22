@@ -7,7 +7,7 @@ import { dashboardMovementRows, recentDocumentCount } from './dashboardMovementS
 
 /**
  * The «وضعیت انبار» page data (`GET /stats`, `GET /dashboard-bi-stats`), read here instead of in the route
- * (v10.2.28, TD-1326, OBS-R2-97). The reorder alarm is not part of it: the page reads `GET /items/reorder-alerts`,
+ * (v10.2.30, TD-1326, OBS-R2-97). The reorder alarm is not part of it: the page reads `GET /items/reorder-alerts`,
  * which compares free stock (TD-843 / TD-1158); the uncapped total-stock list, the low-stock count and the user count
  * that no screen read are gone.
  */

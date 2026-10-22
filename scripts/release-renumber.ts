@@ -35,7 +35,8 @@ function resolveReleaseConflicts(root: string, activeFile: string): void {
   for (const rel of unmerged) {
     let content: string | null = null;
     try {
-      const stages = { ours: git(['show', `:2:${rel}`]), theirs: git(['show', `:3:${rel}`]) };
+      const base = gitOk(['cat-file', '-e', `:1:${rel}`]) ? git(['show', `:1:${rel}`]) : undefined;
+      const stages = { ours: git(['show', `:2:${rel}`]), theirs: git(['show', `:3:${rel}`]), base };
       content = resolveReleaseConflict(rel, fs.readFileSync(path.join(root, rel), 'utf8'), stages, activeFile);
     } catch {
       content = null;

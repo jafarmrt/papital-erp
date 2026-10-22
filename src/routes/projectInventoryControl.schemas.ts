@@ -4,7 +4,7 @@ import { toLatinDigits } from '../lib/numericInput.js';
 
 /**
  * The body shape of a project's inventory control (`inventory_control` / `inventoryControl` of `POST` and
- * `PUT /projects`; v10.2.28, TD-1326, OBS-R1-92). Before it was `z.unknown()`, so a row quantity typed as «۱۲» or as
+ * `PUT /projects`; v10.2.30, TD-1326, OBS-R1-92). Before it was `z.unknown()`, so a row quantity typed as «۱۲» or as
  * text reached the reservation as `NaN`. Only what the server reads is checked: the sections, their rows and the purchase
  * lists are objects and arrays, and the quantities the finalize reads with `Number` are non-negative numbers: a row's
  * `requiredQty` and `qtyPerUnit` (TD-1343) and a manual row's `totalRequiredQty`. A quantity sent as text is read with

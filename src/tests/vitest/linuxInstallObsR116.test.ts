@@ -62,6 +62,33 @@ describe('obs_r1_16_install: install.sh', () => {
     expect(install).not.toMatch(/psql[^\n]*-c[^\n]*PASSWORD/);
   });
 
+  // v10.2.28 (#344 review L1): a reinstall without .env over a database with tables would give it new keys
+  it('refuses to reuse a database that holds tables unless INSTALL_REUSE_DB=1', () => {
+    const guard = block('install.sh', '# v10.2.28 (#344 review L1)', '# v10.2.24 (OBS-R1-16): a role left by an earlier install');
+    const stub = (tables: string) => `die() { echo "ERROR: $*"; exit 1; }
+SUDO=fake
+fake() { shift 2; case "$*" in *pg_database*) echo 1 ;; *information_schema*) echo ${tables} ;; esac; }
+DB_NAME=papital_erp
+APP_DIR=/opt/papital-erp
+`;
+    const refused = bash(`${stub('130')}${guard}echo continued`);
+    expect(refused.status).toBe(1);
+    expect(refused.stdout).toContain('already holds 130 tables');
+    expect(refused.stdout).not.toContain('continued');
+    const reused = bash(`${stub('130')}${guard}echo continued`, { INSTALL_REUSE_DB: '1' });
+    expect(reused.stdout).toContain('reusing database papital_erp (130 tables)');
+    expect(reused.stdout).toContain('continued');
+    const empty = bash(`${stub('0')}${guard}echo continued`);
+    expect(empty.stdout.trim()).toBe('continued');
+  });
+
+  it('keeps the role password out of the server log (L2)', () => {
+    const sql = block('install.sh', '$SUDO -u postgres psql -v ON_ERROR_STOP=1 <<SQL', 'if ! $SUDO -u postgres psql -tAc "SELECT 1 FROM pg_database');
+    expect(sql.indexOf("SET log_statement = 'none';")).toBeGreaterThan(0);
+    expect(sql.indexOf("SET log_statement = 'none';")).toBeLessThan(sql.indexOf('PASSWORD'));
+    expect(sql).toContain('SET log_min_duration_statement = -1;');
+  });
+
   it('ends on the readiness probe, with time for the first migrations', () => {
     const probe = block('install.sh', '# ---------- 7) Health probe', 'echo ""');
     expect(probe).toContain('curl -fsS "http://localhost:${APP_PORT}/health/ready"');
@@ -105,10 +132,15 @@ describe('obs_r1_16_setup_domain: setup-domain.sh', () => {
 
   it('binds the app to 127.0.0.1 once, keeping a value already in .env', () => {
     const d = scratch();
-    const append = block('setup-domain.sh', "if ! grep -q '^ERP_LISTEN_HOST=' \"$APP_DIR/.env\"", 'chmod 600 "$APP_DIR/.env"');
+    const newline = block('setup-domain.sh', '# v10.2.28 (#344 review L3)', 'if grep -q \'^ALLOWED_ORIGINS=\'');
+    const append = newline + block('setup-domain.sh', "if ! grep -q '^ERP_LISTEN_HOST=' \"$APP_DIR/.env\"", 'chmod 600 "$APP_DIR/.env"');
     writeFileSync(path.join(d, '.env'), 'PORT=3000\n');
     expect(bash(`APP_DIR=${JSON.stringify(d)}\nAPP_PORT=3000\nDOMAIN=erp.example.com\n${append}`).status).toBe(0);
     expect(bash(`APP_DIR=${JSON.stringify(d)}\nAPP_PORT=3000\nDOMAIN=erp.example.com\n${append}`).status).toBe(0);
+    expect(readFileSync(path.join(d, '.env'), 'utf8')).toBe('PORT=3000\nERP_LISTEN_HOST=127.0.0.1\n');
+    // a .env without its final newline keeps its last line whole (L3)
+    writeFileSync(path.join(d, '.env'), 'PORT=3000');
+    bash(`APP_DIR=${JSON.stringify(d)}\nAPP_PORT=3000\nDOMAIN=erp.example.com\n${append}`);
     expect(readFileSync(path.join(d, '.env'), 'utf8')).toBe('PORT=3000\nERP_LISTEN_HOST=127.0.0.1\n');
     writeFileSync(path.join(d, '.env'), 'ERP_LISTEN_HOST=0.0.0.0\n');
     bash(`APP_DIR=${JSON.stringify(d)}\nAPP_PORT=3000\nDOMAIN=erp.example.com\n${append}`);

@@ -165,7 +165,7 @@ export function deliveryCostOutlook(report: DeliveryCostReport | null | undefine
 export const wipOverdrawn = (outlook: Pick<DeliveryCostOutlook, 'remaining'>): boolean => fin(outlook.remaining).round(0).isNegative();
 
 /**
- * ماندهٔ ۱۴۰۲ پس از گرد کردن به ریال بیش از صفر است. v10.2.28: گرد کردن نیم از صفر دور می‌شود، مثل سند حسابداری؛
+ * ماندهٔ ۱۴۰۲ پس از گرد کردن به ریال بیش از صفر است. v10.2.30: گرد کردن نیم از صفر دور می‌شود، مثل سند حسابداری؛
  * `Math.round(-0.5)` صفر منفی بود و برداشت نیم ریال بیش از مانده هشدار نمی‌داد.
  */
 export const wipLeftOver = (outlook: Pick<DeliveryCostOutlook, 'remaining'>): boolean => fin(outlook.remaining).round(0).isPositive();
