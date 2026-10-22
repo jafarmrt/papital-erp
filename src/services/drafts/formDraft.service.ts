@@ -106,7 +106,7 @@ export class FormDraftService {
   }
 
   /**
-   * v10.2.31 (TD-1327, OBS-R2-98): a user's draft is one INSERT … ON CONFLICT on the live key
+   * v10.2.32 (TD-1327, OBS-R2-98): a user's draft is one INSERT … ON CONFLICT on the live key
    * (`uq_form_drafts_live_user_key`, migration 0133), so two concurrent saves of one form keep one draft; then, in the
    * same transaction, the user's live drafts beyond the newest `DRAFT_MAX_PER_USER` are soft-deleted, as an expired draft
    * is (TD-676). The answer still says whether the draft was created or updated.
@@ -258,7 +258,7 @@ export class FormDraftService {
    * Delete a draft by direct numeric ID
    */
   static async deleteDraftById(id: number, userId?: number | null) {
-    // v10.2.31 (TD-1327, OBS-R2-98): only the user's own live draft; a missing, deleted or another user's draft is 404
+    // v10.2.32 (TD-1327, OBS-R2-98): only the user's own live draft; a missing, deleted or another user's draft is 404
     // (before, any id answered success and a call without a user could delete anyone's draft)
     if (!userId) throw new NotFoundError('پیش‌نویس یافت نشد', undefined, 'DRAFT_NOT_FOUND');
     const removed = await orm.update(formDrafts)

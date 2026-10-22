@@ -33,7 +33,7 @@ export interface DailyWorkLog {
   managerNotes?: string;
   created_at?: string;
   createdAt?: string;
-  /** v10.2.31 (TD-1327): sent back with an edit */
+  /** v10.2.32 (TD-1327): sent back with an edit */
   version?: number;
 }
 

@@ -47,7 +47,7 @@ export const formDrafts = pgTable('form_drafts', {
   idx_form_drafts_user_entity: index('idx_form_drafts_user_entity').on(table.userId, table.entityType, table.draftKey),
   idx_form_drafts_session: index('idx_form_drafts_session').on(table.sessionId),
   idx_form_drafts_updated: index('idx_form_drafts_updated').on(table.updatedAt),
-  // v10.2.31 (TD-1327, OBS-R2-98, migration 0133): one live draft per user, type and key, so a save is one upsert
+  // v10.2.32 (TD-1327, OBS-R2-98, migration 0133): one live draft per user, type and key, so a save is one upsert
   uq_form_drafts_live_user_key: uniqueIndex('uq_form_drafts_live_user_key').on(table.userId, table.entityType, table.draftKey)
     .where(sql`${table.isDeleted} = 0 AND ${table.userId} IS NOT NULL`),
 }));

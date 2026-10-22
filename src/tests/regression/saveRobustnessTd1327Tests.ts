@@ -16,10 +16,10 @@ export async function runSaveRobustnessTd1327Tests(shouldRun: ShouldRun): Promis
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (ctx: DailyLogTestCtx, draftUserIds: number[]) => Promise<string>]> = [
     ['reg_daily_log_version_td_1327',
-      'v10.2.31: a daily log edit without its version is 400 and with a stale version 409 OCC_CONFLICT, leaving the log unchanged; the right version saves and raises it (TD-1327, OBS-R2-58)',
+      'v10.2.32: a daily log edit without its version is 400 and with a stale version 409 OCC_CONFLICT, leaving the log unchanged; the right version saves and raises it (TD-1327, OBS-R2-58)',
       ['td1327', 'obs-r2-58', 'daily_log', 'package11'], dailyLogVersionCase],
     ['reg_form_draft_one_live_key_td_1327',
-      'v10.2.31: concurrent saves of one form keep one live draft, a user keeps at most the newest 50 drafts, and deleting a missing or another user\'s draft is 404 (TD-1327, OBS-R2-98)',
+      'v10.2.32: concurrent saves of one form keep one live draft, a user keeps at most the newest 50 drafts, and deleting a missing or another user\'s draft is 404 (TD-1327, OBS-R2-98)',
       ['td1327', 'obs-r2-98', 'drafts', 'package11'], formDraftCase],
   ];
   for (const [id, name, tags, run] of cases) {

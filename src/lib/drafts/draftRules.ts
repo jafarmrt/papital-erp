@@ -14,7 +14,7 @@ export const DRAFT_DEFAULT_KEY = 'default';
 export const DRAFT_EXPIRY_DAYS = { min: 1, max: 90, default: 30 } as const;
 
 /**
- * v10.2.31 (TD-1327, OBS-R2-98): a user keeps at most this many live drafts; saving one more soft-deletes the least
+ * v10.2.32 (TD-1327, OBS-R2-98): a user keeps at most this many live drafts; saving one more soft-deletes the least
  * recently saved, as the daily cleanup does with an expired draft. The drafts list shows the same number.
  */
 export const DRAFT_MAX_PER_USER = 50;

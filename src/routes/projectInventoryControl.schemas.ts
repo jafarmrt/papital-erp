@@ -52,7 +52,7 @@ function readQuantity(value: unknown, field: QuantityField): { value: unknown } 
   if (typeof value !== 'string') return { error: 'عدد نیست.' };
   if (value.trim() === '') return field === 'qtyPerUnit' ? { error: 'خالی است.' } : { value };
   // the number field drops spaces and invisible marks as it is typed (`readDecimalInputText`); a stored «1 2», or 1 and 2
-  // with a hidden direction mark between them, is two numbers, not 12 (v10.2.31)
+  // with a hidden direction mark between them, is two numbers, not 12 (v10.2.32)
   if (/\d[\s\u200c\u200e\u200f]+\d/.test(toLatinDigits(value))) return { error: 'فاصله یا نشانهٔ نامرئی میان رقم‌ها پذیرفته نیست.' };
   const read = readDecimalInputText(value, { min: 0 });
   if (read.kind === 'invalid') return { error: read.error };

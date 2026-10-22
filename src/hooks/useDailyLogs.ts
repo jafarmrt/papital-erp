@@ -296,7 +296,7 @@ export function useDailyLogs(user: User) {
 
     try {
       if (editingLog) {
-        // v10.2.31 (TD-1327): the version the form was built from; a stale one is 409 with the server's message
+        // v10.2.32 (TD-1327): the version the form was built from; a stale one is 409 with the server's message
         await fetchJson(`/daily-logs/${editingLog.id}`, {
           method: 'PUT',
           body: JSON.stringify({ ...payload, version: editingLog.version })

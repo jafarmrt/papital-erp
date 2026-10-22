@@ -25,6 +25,8 @@ export interface RenumberInput {
   /** paths that differ from <ref> (tracked changes and untracked files) */
   changed: string[];
   activeFile: string;
+  /** v10.2.31: file content at the common ancestor of the merge in progress, when there is one */
+  ancestor?(rel: string): string | null;
 }
 
 export interface RenumberResult {
@@ -129,14 +131,18 @@ function entryVersion(entry: string, file: string): string {
 }
 
 /** Old → new version of every branch entry (entries not in <ref>), in ascending order after the top of <ref>. */
-export function planVersions(baseSrc: string, curSrc: string, file: string): Map<string, string> {
+export function planVersions(baseSrc: string, curSrc: string, file: string, ancestorSrc: string | null = null): Map<string, string> {
   const base = splitChangelog(baseSrc, file).entries;
   const cur = splitChangelog(curSrc, file).entries;
-  // v10.2.28: an entry with the version and title of a base entry is the branch's edit of it, not a new entry
+  // v10.2.28: an entry with the version and title of a base entry is the branch's edit of it, not a new entry; v10.2.31
+  // (#346 review): only while the base still has that entry as the common ancestor had it, else the base's own edit
+  // would be lost to a stale branch copy. Without an ancestor (no merge in progress) every base entry must be here as is.
   const key = (e: string) => `${entryVersion(e, file)}\n${e.match(/^ {4}title: '([^']*)'/m)?.[1]}`;
+  const curSet = new Set(cur);
   const curKeys = new Set(cur.map(key));
   const baseKeys = new Set(base.map(key));
-  const missing = base.filter(e => !curKeys.has(key(e)));
+  const ancestor = new Set(ancestorSrc ? splitChangelog(ancestorSrc, file).entries : []);
+  const missing = base.filter(e => !curSet.has(e) && !(curKeys.has(key(e)) && ancestor.has(e)));
   if (missing.length > 0) {
     throw new Error(`${file}: ${missing.length} entr${missing.length === 1 ? 'y' : 'ies'} of the base (e.g. ${entryVersion(missing[0], file)}) are missing or changed here; merge the base branch first`);
   }
@@ -307,7 +313,7 @@ export function planRenumber(input: RenumberInput): RenumberResult {
   for (const rel of input.changed) {
     if (/^(<{7}|>{7}) /m.test(input.current(rel) ?? '')) throw new Error(`${rel}: unresolved merge conflict markers`);
   }
-  const versions = planVersions(baseActive, curActive, input.activeFile);
+  const versions = planVersions(baseActive, curActive, input.activeFile, input.ancestor?.(input.activeFile) ?? null);
   const baseJournal = input.base(JOURNAL);
   const curJournal = input.current(JOURNAL);
   const mig = baseJournal && curJournal ? planMigrations(baseJournal, curJournal) : { tags: new Map<string, string>(), journal: curJournal ?? '' };

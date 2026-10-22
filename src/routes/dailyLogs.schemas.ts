@@ -63,7 +63,7 @@ export const createDailyLogSchema = z.object({
   })
 });
 
-/** v10.2.31 (TD-1327, OBS-R2-58): an edit sends the version of the log it was built from */
+/** v10.2.32 (TD-1327, OBS-R2-58): an edit sends the version of the log it was built from */
 export const DAILY_LOG_VERSION_REQUIRED_MESSAGE = 'نسخهٔ گزارش کار فرستاده نشده است؛ گزارش را دوباره باز کنید.';
 
 export const updateDailyLogSchema = z.object({

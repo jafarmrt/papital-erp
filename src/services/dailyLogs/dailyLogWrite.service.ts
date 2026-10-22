@@ -186,7 +186,7 @@ export async function updateDailyLog(actor: AuthUserPayload, logId: number, body
   return orm.transaction(async (tx) => {
     const existing = await lockLog(tx, logId);
     await assertAuthorOrManager(existing, actor, 'شما فقط مجاز به ویرایش گزارش کار خود هستید');
-    // v10.2.31 (TD-1327, OBS-R2-58): an edit built from an older version would silently replace the later one
+    // v10.2.32 (TD-1327, OBS-R2-58): an edit built from an older version would silently replace the later one
     if (existing.version !== body.version) {
       throw new ConflictError('این گزارش کار را کاربر دیگری تغییر داده؛ دوباره باز کنید.', { currentVersion: existing.version }, 'OCC_CONFLICT');
     }

@@ -188,7 +188,12 @@ describe('scripts/release-renumber.ts (TD-473)', () => {
     // the renumber plan takes the edited entry as the base entry, not as a branch version
     const baseCl = changelog(entry('v9.0.52', 'master'), entry('v9.0.51', 'old'));
     const curCl = changelog(entry('v9.0.52', 'branch one'), entry('v9.0.52', 'master'), entry('v9.0.51', 'old').replace('fixes: []', "fixes: ['edited']"));
-    expect([...planVersions(baseCl, curCl, ACTIVE)]).toEqual([['v9.0.52', 'v9.0.53']]);
+    expect([...planVersions(baseCl, curCl, ACTIVE, baseCl)]).toEqual([['v9.0.52', 'v9.0.53']]);
+    // without the ancestor, or when the base edited that entry since, a branch copy that differs is refused (#346 review)
+    expect(() => planVersions(baseCl, curCl, ACTIVE)).toThrow(/missing or changed/);
+    const masterEdit = changelog(entry('v9.0.52', 'master'), entry('v9.0.51', 'old').replace('fixes: []', "fixes: ['master edit']"));
+    const staleCopy = changelog(entry('v9.0.52', 'branch one'), entry('v9.0.52', 'master'), entry('v9.0.51', 'old'));
+    expect(() => planVersions(masterEdit, staleCopy, ACTIVE, baseCl)).toThrow(/missing or changed/);
     expect(() => planVersions(baseCl, changelog(entry('v9.0.52', 'branch one'), entry('v9.0.51', 'old')), ACTIVE)).toThrow(/missing or changed/);
     const pkgConflict = '{\n<<<<<<< HEAD\n  "version": "9.0.52",\n=======\n  "version": "9.0.53",\n>>>>>>> origin/master\n  "type": "module"\n}\n';
     expect(resolveReleaseConflict('package.json', pkgConflict, { ours: '', theirs: '' }, ACTIVE)).toBe('{\n  "version": "9.0.53",\n  "type": "module"\n}\n');
@@ -211,6 +216,28 @@ describe('scripts/release-renumber.ts (TD-473)', () => {
     const mdOurs = md('### v9.0.52 — One\n- **B:** b.', '### v9.0.51 — Old\n- **O:** old.');
     const mdMerged = resolveReleaseConflict('CHANGELOG.md', '', { ours: mdOurs, theirs: t.base.get('CHANGELOG.md')! }, ACTIVE)!;
     expect([...mdMerged.matchAll(/^### (v[\d.]+ — \w+)/gm)].map(m => m[1])).toEqual(['v9.0.52 — One', 'v9.0.52 — Master', 'v9.0.51 — Old', 'v9.0.0 — pre']);
+    // v10.2.31 (#349 review): a section only the base edited keeps that edit, with no duplicate of the branch's old copy;
+    // a branch edit of a section the base did not change replaces it; both sides editing one section is refused
+    const baseMd = t.base.get('CHANGELOG.md')!;
+    const masterEdited = baseMd.replace('- **M:** master line.', '- **M:** edited.');
+    expect(masterEdited).not.toBe(baseMd);
+    const branchMd = baseMd.replace(/(## Version 9\.x Series \(Active[^\n]*\n)/, '$1### v9.0.53 — Branch\n- **B:** b.\n\n');
+    const keptEdit = resolveReleaseConflict('CHANGELOG.md', '', { ours: branchMd, theirs: masterEdited, base: baseMd }, ACTIVE)!;
+    expect(keptEdit.match(/^### v9\.0\.52 — Master/gm)).toHaveLength(1);
+    expect(keptEdit).toContain('- **M:** edited.');
+    expect(keptEdit.indexOf('### v9.0.53 — Branch')).toBeLessThan(keptEdit.indexOf('### v9.0.52 — Master'));
+    const branchEdit = branchMd.replace('- **M:** master line.', '- **M:** branch.');
+    const tookEdit = resolveReleaseConflict('CHANGELOG.md', '', { ours: branchEdit, theirs: baseMd, base: baseMd }, ACTIVE)!;
+    expect(tookEdit.match(/^### v9\.0\.52 — Master/gm)).toHaveLength(1);
+    expect(tookEdit).toContain('- **M:** branch.');
+    expect(resolveReleaseConflict('CHANGELOG.md', '', { ours: branchEdit, theirs: masterEdited, base: baseMd }, ACTIVE)).toBeNull();
+    // a duplicate section the branch removed stays removed while the base adds its own (#349)
+    const dupMd = baseMd.replace('### v9.0.51 — Old', '### v9.0.51 — Old\n- **O:** stale wording.\n\n### v9.0.51 — Old');
+    const branchDedup = baseMd.replace(/(## Version 9\.x Series \(Active[^\n]*\n)/, '$1### v9.0.53 — Branch\n- **B:** b.\n\n');
+    const masterAdds = dupMd.replace(/(## Version 9\.x Series \(Active[^\n]*\n)/, '$1### v9.0.53 — Master2\n- **M2:** m2.\n\n');
+    const dedup = resolveReleaseConflict('CHANGELOG.md', '', { ours: branchDedup, theirs: masterAdds, base: dupMd }, ACTIVE)!;
+    expect([...dedup.matchAll(/^### (v[\d.]+ — \w+)/gm)].map(m => m[1])).toEqual(['v9.0.53 — Branch', 'v9.0.53 — Master2', 'v9.0.52 — Master', 'v9.0.51 — Old', 'v9.0.0 — pre']);
+    expect(dedup).not.toContain('stale wording');
     expect(resolveHunks('a\n<<<<<<< HEAD\nb\n', () => [])).toBeNull();
   });
 });
