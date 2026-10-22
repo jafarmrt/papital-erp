@@ -97,7 +97,19 @@ server {
 NGINX
 
 ln -sf "$NGINX_SITE" "/etc/nginx/sites-enabled/${DOMAIN}"
-rm -f /etc/nginx/sites-enabled/default
+# v10.2.24 (OBS-R1-16): the default site is disabled only while it is the unchanged page of the nginx package;
+# a default site someone edited may serve another site of this server, so it stays
+DEFAULT_SITE="/etc/nginx/sites-available/default"
+if [ -e /etc/nginx/sites-enabled/default ]; then
+  STOCK_MD5="$(dpkg-query -W -f='${Conffiles}\n' nginx-common 2>/dev/null | awk -v f="$DEFAULT_SITE" '$1 == f {print $2; exit}' || true)"
+  if [ -L /etc/nginx/sites-enabled/default ] && [ "$(readlink -f /etc/nginx/sites-enabled/default)" = "$DEFAULT_SITE" ] \
+     && [ -n "$STOCK_MD5" ] && [ "$(md5sum "$DEFAULT_SITE" | awk '{print $1}')" = "$STOCK_MD5" ]; then
+    rm -f /etc/nginx/sites-enabled/default
+    log "Disabled the unchanged nginx welcome site (sites-enabled/default)."
+  else
+    log "WARN: /etc/nginx/sites-enabled/default was changed on this server and is kept; requests for ${DOMAIN} still go to the new site."
+  fi
+fi
 nginx -t || die "Nginx config test failed."
 systemctl reload nginx
 success "Reverse proxy configured."
@@ -130,11 +142,16 @@ if grep -q '^APP_URL=' "$APP_DIR/.env"; then
 else
   echo "APP_URL=https://${DOMAIN}" >> "$APP_DIR/.env"
 fi
+# v10.2.24 (OBS-R1-16): with Nginx in front, the app port answers on this server only; a value already in .env is kept
+if ! grep -q '^ERP_LISTEN_HOST=' "$APP_DIR/.env"; then
+  echo "ERP_LISTEN_HOST=127.0.0.1" >> "$APP_DIR/.env"
+  log "The app now listens on 127.0.0.1:${APP_PORT} only (ERP_LISTEN_HOST in .env); open it through https://${DOMAIN}."
+fi
 chmod 600 "$APP_DIR/.env"
 
 systemctl restart "$SERVICE_NAME"
 sleep 3
-if curl -fsS "http://localhost:${APP_PORT}/health/live" >/dev/null 2>&1; then
+if curl -fsS "http://127.0.0.1:${APP_PORT}/health/live" >/dev/null 2>&1; then
   success "Application restarted and healthy."
 else
   log "WARN: Health probe did not pass immediately — check: journalctl -u ${SERVICE_NAME} -n 50"
