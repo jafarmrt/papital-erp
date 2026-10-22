@@ -29,8 +29,8 @@ function Harness({ initial }: { initial: { province: string; city: string } }) {
 
 function pick(label: string, option: string, typed?: string) {
   fireEvent.click(screen.getByLabelText(label));
-  if (typed) fireEvent.change(screen.getByRole('textbox'), { target: { value: typed } });
-  const list = screen.getByRole('list');
+  if (typed) fireEvent.change(screen.getByRole('combobox'), { target: { value: typed } });
+  const list = screen.getByRole('listbox');
   fireEvent.click(within(list).getByText(option));
 }
 

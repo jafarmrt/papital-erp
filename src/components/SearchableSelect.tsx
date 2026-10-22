@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, ChevronDown, Loader2 } from 'lucide-react';
 import { cn } from '../utils';
 import { fetchJson } from '../api';
 import { useClickOutside } from '../hooks/useClickOutside';
 import { normalizeSearchText } from '../lib/search/searchText';
+import { usePickListKeys } from '../hooks/usePickListKeys';
+import { useDropdownPosition } from '../hooks/useDropdownPosition';
 
 interface Option {
   value: string | number;
@@ -64,53 +66,7 @@ export function SearchableSelect({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const [coords, setCoords] = useState<{ top: number; left: number; width: number; maxHeight: number; showAbove: boolean }>({
-    top: 0,
-    left: 0,
-    width: 0,
-    maxHeight: 280,
-    showAbove: false
-  });
-
-  const updatePosition = useCallback(() => {
-    if (!buttonRef.current) return;
-    const rect = buttonRef.current.getBoundingClientRect();
-    const spaceBelow = window.innerHeight - rect.bottom - 12;
-    const spaceAbove = rect.top - 12;
-
-    const showAbove = spaceBelow < 220 && spaceAbove > spaceBelow;
-    const availableSpace = showAbove ? spaceAbove : spaceBelow;
-    const maxHeight = Math.max(160, Math.min(280, availableSpace));
-
-    let left = rect.left;
-    const width = Math.max(rect.width, 240);
-    if (left + width > window.innerWidth - 12) {
-      left = Math.max(12, window.innerWidth - width - 12);
-    }
-
-    setCoords({
-      top: showAbove ? rect.top - 4 : rect.bottom + 4,
-      left,
-      width,
-      maxHeight,
-      showAbove
-    });
-  }, []);
-
-  useEffect(() => {
-    if (isOpen) {
-      updatePosition();
-      const handleScrollOrResize = () => {
-        updatePosition();
-      };
-      window.addEventListener('resize', handleScrollOrResize);
-      window.addEventListener('scroll', handleScrollOrResize, true);
-      return () => {
-        window.removeEventListener('resize', handleScrollOrResize);
-        window.removeEventListener('scroll', handleScrollOrResize, true);
-      };
-    }
-  }, [isOpen, updatePosition]);
+  const coords = useDropdownPosition(buttonRef, isOpen);
 
   useClickOutside([wrapperRef, dropdownRef], () => setIsOpen(false));
 
@@ -197,6 +153,29 @@ export function SearchableSelect({
   const foundOpt = propOptions.find(o => safeStr(o?.value) === valStr) ?? asyncOptions.find(o => safeStr(o?.value) === valStr);
   const currentLabel = !valStr ? placeholder : (foundOpt?.label || (chosen?.value === valStr ? chosen.label : '') || valueLabel || placeholder);
 
+  const close = (refocus: boolean) => {
+    setIsOpen(false);
+    setSearch('');
+    if (refocus) buttonRef.current?.focus();
+  };
+
+  const choose = (opt: Option) => {
+    if (opt.disabled) return;
+    onChange(String(opt.value), opt._raw);
+    setChosen({ value: String(opt.value), label: opt.label });
+    close(true);
+  };
+
+  // TD-1325 (OBS-R2-93): arrow keys, Enter, Esc and Tab of the list
+  const { activeIndex, setActiveIndex, listId, optionId, activeDescendant, onKeyDown } = usePickListKeys({
+    isOpen, options: displayOptions, onPick: choose, onClose: () => close(true),
+  });
+
+  const openList = () => {
+    setActiveIndex(displayOptions.findIndex((opt) => safeStr(opt.value) === valStr));
+    setIsOpen(true);
+  };
+
   return (
     <div className={cn("relative", className)} ref={wrapperRef}>
       <button
@@ -204,8 +183,16 @@ export function SearchableSelect({
         type="button"
         id={id}
         aria-describedby={id ? `${id}-value` : undefined}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
         disabled={disabled}
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => (isOpen ? close(false) : openList())}
+        onKeyDown={(event) => {
+          if (!isOpen && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+            event.preventDefault();
+            openList();
+          }
+        }}
         className={cn(
           "w-full bg-white border border-slate-200 rounded-xl shadow-2xs text-xs px-3 py-2 flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-800",
           disabled && "bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200",
@@ -232,21 +219,32 @@ export function SearchableSelect({
             <input
               type="text"
               autoFocus
+              role="combobox"
+              aria-label="جست‌وجو در فهرست"
+              aria-expanded
+              aria-controls={listId}
+              aria-autocomplete="list"
+              aria-activedescendant={activeDescendant}
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => {
+                setSearch(e.target.value);
+                setActiveIndex(e.target.value.trim() ? 0 : -1);
+              }}
+              onKeyDown={onKeyDown}
               placeholder="جست‌وجو..."
               className="w-full bg-transparent text-xs font-bold text-slate-800 focus:outline-none"
             />
             {loading && <Loader2 size={14} className="text-blue-500 animate-spin shrink-0 ml-1" />}
           </div>
-          <ul className="overflow-auto py-1 text-xs" style={{ maxHeight: `${Math.max(100, coords.maxHeight - 45)}px` }}>
+          <ul id={listId} role="listbox" className="overflow-auto py-1 text-xs" style={{ maxHeight: `${Math.max(100, coords.maxHeight - 45)}px` }}>
             <li
+              role="option"
+              aria-selected={!valStr}
               className="px-3 py-2 text-slate-500 hover:bg-slate-100 cursor-pointer font-medium"
               onClick={() => {
                 onChange('');
                 setChosen(null);
-                setIsOpen(false);
-                setSearch('');
+                close(true);
               }}
             >
               -- {placeholder} --
@@ -255,29 +253,29 @@ export function SearchableSelect({
               displayOptions.map((opt, index) => (
                 <li
                   key={`${opt.value ?? ''}-${index}`}
+                  id={optionId(index)}
+                  role="option"
+                  aria-selected={valStr === safeStr(opt.value)}
+                  aria-disabled={opt.disabled || undefined}
                   className={cn(
                     "px-3 py-2 cursor-pointer transition-colors leading-relaxed",
                     opt.disabled ? "opacity-50 cursor-not-allowed bg-slate-50" : "hover:bg-blue-50 text-slate-700",
-                    valStr === safeStr(opt.value) && "bg-blue-100/80 text-blue-900 font-bold"
+                    valStr === safeStr(opt.value) && "bg-blue-100/80 text-blue-900 font-bold",
+                    index === activeIndex && !opt.disabled && "bg-blue-50 ring-1 ring-inset ring-blue-300"
                   )}
-                  onClick={() => {
-                    if (opt.disabled) return;
-                    onChange(String(opt.value), opt._raw);
-                    setChosen({ value: String(opt.value), label: opt.label });
-                    setIsOpen(false);
-                    setSearch('');
-                  }}
+                  onMouseEnter={() => { if (!opt.disabled) setActiveIndex(index); }}
+                  onClick={() => choose(opt)}
                 >
                   {opt.label}
                 </li>
               ))
             ) : (
-              <li className="px-3 py-3 text-slate-400 text-center font-medium">
+              <li role="presentation" className="px-3 py-3 text-slate-400 text-center font-medium">
                 {loading ? 'در حال جست‌وجو...' : 'موردی یافت نشد'}
               </li>
             )}
             {displayOptions.length > 0 && propOptions.length > limit && (
-              <li className="px-3 py-1.5 text-[10px] font-medium text-slate-400 bg-slate-50 border-t border-slate-100 text-center select-none">
+              <li role="presentation" className="px-3 py-1.5 text-[10px] font-medium text-slate-400 bg-slate-50 border-t border-slate-100 text-center select-none">
                 برای مشاهده موارد بیشتر عبارت مورد نظر را جست‌وجو کنید
               </li>
             )}

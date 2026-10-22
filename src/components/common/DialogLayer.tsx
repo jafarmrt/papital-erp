@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from 'react';
 import { useDialogEscape } from '../../lib/a11y/dialogEscapeStack';
+import { useDialogFocus } from '../../lib/a11y/dialogFocus';
 
 let generatedTitleIds = 0;
 
@@ -17,10 +18,13 @@ export interface DialogLayerProps {
  */
 export function DialogLayer({ onClose, disabled = false }: DialogLayerProps) {
   const markerRef = useRef<HTMLSpanElement>(null);
+  const dialogRef = useRef<HTMLElement | null>(null);
   useDialogEscape(onClose, true, disabled);
+  useDialogFocus(dialogRef);
 
   useLayoutEffect(() => {
-    const dialog = markerRef.current?.closest('[role="dialog"], [role="alertdialog"]');
+    const dialog = markerRef.current?.closest<HTMLElement>('[role="dialog"], [role="alertdialog"]') ?? null;
+    dialogRef.current = dialog;
     if (!dialog || dialog.hasAttribute('aria-label') || dialog.hasAttribute('aria-labelledby')) return;
     const heading = dialog.querySelector('h1, h2, h3, h4');
     if (!heading) return;

@@ -1,6 +1,7 @@
 import React from 'react';
 import { ArrowRightLeft, Check, Trash2, ShieldAlert } from 'lucide-react';
 import { formatPersianNumber } from '../../utils';
+import { auditFieldLabel } from '../../lib/audit/auditFieldLabels';
 
 interface AuditDiffViewerProps {
   details: any;
@@ -117,8 +118,8 @@ export const AuditDiffViewer: React.FC<AuditDiffViewerProps> = ({ details, actio
                 {diffRows.map(({ field, before, after }) => (
                   <tr key={field} className="hover:bg-slate-50/60 transition-colors">
                     <td className="py-3 px-4 font-mono font-semibold text-slate-800 text-2xs align-top">
-                      <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 inline-block">
-                        {field}
+                      <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 inline-block" title={field}>
+                        {auditFieldLabel(field)}
                       </span>
                     </td>
                     <td className="py-3 px-4 bg-rose-50/20 text-rose-800 align-top">
@@ -198,7 +199,7 @@ export const AuditDiffViewer: React.FC<AuditDiffViewerProps> = ({ details, actio
         <div className="p-3.5 bg-rose-50/50 border border-rose-200 rounded-xl space-y-2">
           <span className="font-bold text-rose-900 flex items-center gap-1.5 text-xs">
             <Trash2 className="w-4 h-4 text-rose-600" />
-            تصویر داده رکورد پیش از حذف:
+            {action === 'DELETE' ? 'تصویر داده رکورد پیش از حذف:' : 'تصویر داده رکورد پیش از این رویداد:'}
           </span>
           <div className="bg-slate-900 text-slate-100 p-3 rounded-lg overflow-x-auto text-2xs font-mono ltr text-left max-h-56">
             <pre>{JSON.stringify(details.before, null, 2)}</pre>
@@ -211,7 +212,7 @@ export const AuditDiffViewer: React.FC<AuditDiffViewerProps> = ({ details, actio
         <div className="p-3.5 bg-emerald-50/50 border border-emerald-200 rounded-xl space-y-2">
           <span className="font-bold text-emerald-900 flex items-center gap-1.5 text-xs">
             <Check className="w-4 h-4 text-emerald-600" />
-            تصویر داده رکورد تازه:
+            {action === 'CREATE' ? 'تصویر داده رکورد تازه:' : 'تصویر داده رکورد پس از این رویداد:'}
           </span>
           <div className="bg-slate-900 text-slate-100 p-3 rounded-lg overflow-x-auto text-2xs font-mono ltr text-left max-h-56">
             <pre>{JSON.stringify(details.after, null, 2)}</pre>

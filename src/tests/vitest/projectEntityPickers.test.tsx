@@ -50,7 +50,7 @@ describe('package 11 entity pickers are searchable (TD-767)', () => {
     await waitFor(() => expect(fetchJson.mock.calls.some(([url]) => url === '/projects/1')).toBe(true));
     fireEvent.click(screen.getByRole('button', { name: /PRJ-1\]/ }));
     fireEvent.change(screen.getByPlaceholderText('جست‌وجو...'), { target: { value: 'PRJ-60' } });
-    const row = screen.getAllByRole('listitem').find(li => li.textContent?.includes('[PRJ-60]'));
+    const row = screen.getAllByRole('option').find(li => li.textContent?.includes('[PRJ-60]'));
     expect(row?.textContent).toContain('متوقف');
     fireEvent.click(row as HTMLElement);
     await waitFor(() => expect(fetchJson.mock.calls.some(([url]) => url === '/projects/60')).toBe(true));
