@@ -46,6 +46,17 @@ const keyState = async (key: string) =>
 const lapseLock = (key: string) =>
   pool.query(`UPDATE idempotency_keys SET locked_until = ${utcNow} - interval '1 minute' WHERE key = $1`, [key]);
 
+/** Waits until `count` other sessions wait on a row lock (the requests sent are parked behind the held row) */
+async function waitForLockWaiters(count: number): Promise<void> {
+  for (let i = 0; i < 200; i++) {
+    const n = Number((await pool.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND pid <> pg_backend_pid()`)).rows[0]?.n ?? 0);
+    if (n >= count) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`setup: ${count} requests never waited on the held payslip`);
+}
+
 async function runCase(results: TestCaseResult[], id: string, name: string, keys: string[], body: () => Promise<string>): Promise<void> {
   const tStart = Date.now();
   try {
@@ -96,6 +107,54 @@ export async function runIdempotencyCrashTests(shouldRun: ShouldRun): Promise<Te
       if (rows !== 1) problems.push(`${rows} treasury payments recorded, expected 1`);
       if (problems.length > 0) throw new Error(problems.join(' | '));
       return 'key completed with the payment; resend replayed; paid once';
+    });
+  }
+
+  const takeoverId = 'reg_idempotency_lapsed_lock_takeover_pays_once';
+  if (shouldRun(takeoverId, 'idempotency', 'resubmission', 'payroll', 'treasury', 'crash', 'package11')) {
+    const key = `crash-takeover-${tagOf()}`;
+    await runCase(results, takeoverId, 'v10.2.35 (#353 review M1): a payment whose lock lapses while it waits, and the resend that takes its key over, pay once; the run that completes the key second rolls back with 409', [key], async () => {
+      const problems: string[] = [];
+      const workerId = await newWorker(`ERP-TEST-MARKER crash takeover ${tagOf()}`);
+      await addLog(workerId, await newTask(), '2026-04-05', 1_000_000);
+      const issued = await issueApproved({ personnelId: workerId, startDate: '2026-04-01', endDate: '2026-04-30', username: 'crash' });
+      if (!issued.payroll) throw new Error(`setup: issuing the payslip failed (${issued.error})`);
+      const payrollId = issued.payroll.id;
+      const bankId = await fundedBank();
+      const api = await adminClient();
+      const url = `/api/piecework/payrolls/${payrollId}/register-payment`;
+      const body = { bankAccountId: bankId, method: 'bank_transfer', amount: 300_000 };
+
+      // the payslip row is held, so run A waits inside its transaction; its lock lapses and run B takes the key over
+      const holder = await pool.connect();
+      let answers: Array<{ status: number; body?: { code?: string } }>;
+      try {
+        await holder.query('BEGIN');
+        await holder.query('SELECT id FROM piecework_payrolls WHERE id = $1 FOR UPDATE', [payrollId]);
+        const runA = api.post(url, key, body).then((r) => r);
+        await waitForLockWaiters(1);
+        await lapseLock(key);
+        const runB = api.post(url, key, body).then((r) => r);
+        await waitForLockWaiters(2);
+        await holder.query('COMMIT');
+        answers = await Promise.all([runA, runB]);
+      } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
+        holder.release();
+      }
+      const statuses = answers.map((a) => a.status).sort();
+      if (statuses.join(',') !== '200,409') problems.push(`the two runs answered ${answers.map(brief).join(' and ')}, expected one 200 and one 409`);
+      const refused = answers.find((a) => a.status === 409);
+      if (refused && refused.body?.code !== 'IDEMPOTENCY_IN_FLIGHT') problems.push(`the refused run answered ${brief(refused)}, expected IDEMPOTENCY_IN_FLIGHT`);
+      const paid = (await pool.query<{ p: string }>('SELECT coalesce(paid_amount, 0)::text AS p FROM piecework_payrolls WHERE id = $1', [payrollId])).rows[0]?.p;
+      if (Number(paid) !== 300_000) problems.push(`the payslip shows ${paid} paid, expected 300000 (paid twice)`);
+      const rows = Number((await pool.query<{ n: string }>(
+        `SELECT count(*)::text AS n FROM treasury_transactions WHERE bank_account_id = $1 AND type = 'payment'`, [bankId])).rows[0]?.n ?? 0);
+      if (rows !== 1) problems.push(`${rows} treasury payments recorded, expected 1`);
+      const again = await api.post(url, key, body);
+      if (again.body?.idempotentReplay !== true) problems.push(`a third send answered ${brief(again)}, expected the replay notice`);
+      if (problems.length > 0) throw new Error(problems.join(' | '));
+      return 'one run paid, the other rolled back with 409; a third send replayed';
     });
   }
 

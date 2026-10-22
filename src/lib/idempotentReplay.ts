@@ -6,6 +6,9 @@
  */
 export const IDEMPOTENT_REPLAY_MESSAGE = 'این درخواست پیش‌تر ثبت شده است؛ نتیجهٔ آن را در فهرست ببینید.';
 
+/** The answer while another run of the same key is in progress (409 `IDEMPOTENCY_IN_FLIGHT`); a later resend gets the notice above */
+export const IDEMPOTENCY_IN_FLIGHT_MESSAGE = 'درخواست تکراری در حال پردازش است. لطفاً چند لحظه دیگر دوباره تلاش کنید.';
+
 export interface IdempotentReplayBody {
   success: true;
   idempotentReplay: true;

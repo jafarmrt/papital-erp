@@ -5,7 +5,8 @@ import { idempotencyKeys } from '../db/schema.js';
 import { OPERATIONAL_PURGE_BATCH_SIZE, deleteInBatches, deletedRowCount } from '../lib/batchDelete.js';
 import { logger } from '../middleware/logger.js';
 import type { RequestIdempotencyKey } from '../lib/requestContext.js';
-import { IDEMPOTENT_REPLAY_MESSAGE } from '../lib/idempotentReplay.js';
+import { IDEMPOTENCY_IN_FLIGHT_MESSAGE, IDEMPOTENT_REPLAY_MESSAGE } from '../lib/idempotentReplay.js';
+import { ConflictError } from '../errors/customErrors.js';
 
 export interface AcquireKeyOptions {
   key?: string;
@@ -414,9 +415,11 @@ export class IdempotencyService {
    * repeat gets (no answer of these scopes is kept, TD-1328). The write and the key commit together, so a process that dies
    * after the commit but before the answer leaves a completed key, and a resend after the lock lapses gets the notice
    * instead of running the payment again. The middleware still stores the real status once the answer is sent.
+   * The key must still be `processing`: when this run's lock lapsed and another run of the same key took it over and
+   * completed first (#353 review M1), nothing is updated and the 409 rolls this run's write back, so only one commits.
    */
   static async completeInTransaction(tx: DbTransaction, pending: RequestIdempotencyKey): Promise<void> {
-    await tx
+    const completed = await tx
       .update(idempotencyKeys)
       .set({
         status: 'completed',
@@ -424,7 +427,12 @@ export class IdempotencyService {
         responseBody: { success: true, idempotentReplay: true, message: IDEMPOTENT_REPLAY_MESSAGE },
         completedAt: new Date().toISOString()
       })
-      .where(and(this.buildKeyCondition(pending.key, pending.scope, pending.userId), eq(idempotencyKeys.status, 'processing')));
+      .where(and(this.buildKeyCondition(pending.key, pending.scope, pending.userId), eq(idempotencyKeys.status, 'processing')))
+      .returning({ key: idempotencyKeys.key });
+    if (completed.length !== 1) {
+      logger.warn(`[Idempotency] Key ${pending.key} [scope: ${pending.scope}] was completed by another run; this run's write is rolled back`);
+      throw new ConflictError(IDEMPOTENCY_IN_FLIGHT_MESSAGE, undefined, 'IDEMPOTENCY_IN_FLIGHT');
+    }
   }
 
   /**

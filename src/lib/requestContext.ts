@@ -12,6 +12,8 @@ export interface RequestIdempotencyKey {
   scope: string;
   userId: number | null;
   completedInTx: boolean;
+  /** an `idempotentTransaction` of this request has started; a request completes its key from one transaction only */
+  claimed?: boolean;
 }
 
 export interface RequestContextStore {

@@ -4,7 +4,7 @@ import { orm, type DbTransaction } from '../db/drizzle.js';
 import { logger } from './logger.js';
 import { asyncHandler } from './asyncHandler.js';
 import { IDEMPOTENT } from './idempotencyMark.js';
-import { IDEMPOTENT_REPLAY_MESSAGE, type IdempotentReplayBody } from '../lib/idempotentReplay.js';
+import { IDEMPOTENCY_IN_FLIGHT_MESSAGE, IDEMPOTENT_REPLAY_MESSAGE, type IdempotentReplayBody } from '../lib/idempotentReplay.js';
 import { getRequestContext, type RequestIdempotencyKey } from '../lib/requestContext.js';
 
 export interface IdempotencyMiddlewareOptions {
@@ -82,7 +82,7 @@ export function idempotency(options: IdempotencyMiddlewareOptions = {}) {
     if (result.state === 'in_flight') {
       res.setHeader('Retry-After', '2');
       return res.status(409).json({
-        error: 'درخواست تکراری در حال پردازش است. لطفاً چند لحظه دیگر دوباره تلاش کنید.',
+        error: IDEMPOTENCY_IN_FLIGHT_MESSAGE,
         code: 'IDEMPOTENCY_IN_FLIGHT',
         lockedUntil: result.lockedUntil
       });
@@ -213,7 +213,13 @@ function isRefusal(value: unknown): boolean {
  * another scope) it is a plain `orm.transaction`.
  */
 export async function idempotentTransaction<T>(fn: (tx: DbTransaction) => Promise<T>): Promise<T> {
-  const pending = getRequestContext()?.idempotency;
+  let pending = getRequestContext()?.idempotency;
+  if (pending?.claimed) {
+    // #353 review L2: a second write of one request would commit apart from the key; no route does it, so tests catch a new one
+    if (process.env.NODE_ENV !== 'production') throw new Error(`idempotentTransaction: a second transaction in one request (key ${pending.key})`);
+    pending = undefined;
+  }
+  if (pending) pending.claimed = true;
   let completed = false;
   const result = await orm.transaction(async (tx) => {
     const out = await fn(tx);

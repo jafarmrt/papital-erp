@@ -389,11 +389,13 @@ export class PieceworkService {
 
     // TD-246: ورود اکسل یکجاست؛ ردیفی که کد تکراری دارد کل فایل را رد می‌کند و هیچ ردیفی ثبت نمی‌شود
     // (روی تراکنش فراخواننده، savepoint)
-    return await executor.transaction(async (tx) => {
+    const importRows = async (tx: DbTransaction) => {
       const result = await PieceworkService.importTaskRows(rows, mode, userId, username, tx);
       await auditTasksImported(tx, { createdCount: result.createdCount, updatedCount: result.updatedCount, mode }, { ...actor, userId: actor.userId ?? userId, username: actor.username || username });
       return result;
-    });
+    };
+    // v10.2.35 (#353 review L1): its own transaction completes the request's resubmission key in the same commit
+    return executor === orm ? await idempotentTransaction(importRows) : await executor.transaction(importRows);
   }
 
   /**
