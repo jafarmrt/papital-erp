@@ -70,6 +70,8 @@ export const FIELD_LABELS: Record<string, string> = {
   itemId: 'شناسه کالا',
   projectCode: 'کد پروژه',
   project_code: 'کد پروژه',
+  inventory_control: 'کنترل موجودی پروژه',
+  inventoryControl: 'کنترل موجودی پروژه',
   stage_order: 'ترتیب مرحله',
   stageOrder: 'ترتیب مرحله',
   progress_percent: 'درصد پیشرفت',

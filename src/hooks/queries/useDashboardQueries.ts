@@ -21,15 +21,6 @@ export interface BIDeadStock {
   weighted_average_cost: number;
 }
 
-export interface BIAlarm {
-  id: number;
-  name: string;
-  code: string;
-  current_stock: number;
-  reorder_point: number;
-  unit: string;
-  type: string;
-}
 
 /** v8.0.54 (TD-316): گردش یک ماه شمسی (`month` = `YYYY/MM`) */
 export interface BITrend {
@@ -39,7 +30,6 @@ export interface BITrend {
 }
 
 export interface BIDashboardStats {
-  reorderAlarms: BIAlarm[];
   fastMoving: BIFastMoving[];
   slowMoving: BIDeadStock[];
   deadStock: BIDeadStock[];

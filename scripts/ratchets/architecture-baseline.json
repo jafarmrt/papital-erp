@@ -158,7 +158,7 @@
     "src/routes/accounting/reports.routes.ts": 1,
     "src/routes/accounting/treasury.routes.ts": 2,
     "src/routes/crm.routes.ts": 1,
-    "src/routes/dashboard.routes.ts": 2,
+    "src/routes/dashboard.routes.ts": 1,
     "src/routes/documents.routes.ts": 1,
     "src/routes/inventory.routes.ts": 1,
     "src/routes/items.crud.routes.ts": 4,

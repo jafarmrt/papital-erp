@@ -18,9 +18,7 @@ vi.mock('../../hooks/useAppCurrency', () => ({ useRialDisplay: () => ({ number: 
 vi.mock('../../hooks/queries', () => ({
   useDashboardStatsQuery: () => ({ data: { totalItems: 0 }, isLoading: false, isFetching: false, error: null, refetch: vi.fn() }),
   useDashboardBIStatsQuery: () => ({
-    // the dashboard's own list (total stock) disagrees with the reorder page on purpose
     data: {
-      reorderAlarms: [{ id: 9, name: 'کالای کل', code: 'TOTAL-9', current_stock: 1, reorder_point: 5, unit: 'عدد', type: 'product' }],
       fastMoving: [], slowMoving: [], deadStock: [], totalValuation: 0, locations: {}, locationItemCounts: {}, warehouses: [], monthlyTrends: [],
     },
     isLoading: false, isFetching: false, error: null, refetch: vi.fn(),
