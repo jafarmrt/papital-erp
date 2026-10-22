@@ -11,7 +11,7 @@ import {
   mediaOffsiteVerdict, parseMediaOffsiteReport, type MediaLibraryHealth,
 } from '../../lib/system/mediaLibraryHealth';
 
-// v10.2.29 (decision T43-a, 10.2 package 13 item 7): the media library (photos and videos of products) was in no
+// v10.2.30 (decision T43-a, 10.2 package 13 item 7): the media library (photos and videos of products) was in no
 // off-server copy: the daily backup leaves it out for its size. scripts/backup-media-offsite.sh now sends the new
 // originals every night to the encrypted rclone remote, and the health page shows the last complete copy. The real
 // script runs here against a fake rclone.
@@ -130,6 +130,26 @@ describe('media_offsite_t43: the nightly encrypted copy of the media library', (
       expect(calls(s)).toBe('');
     } finally {
       holder.kill();
+    }
+  });
+
+  it('the documented .env step sets the remote once, whatever the last line or an empty key (#349 review)', () => {
+    const doc = fs.readFileSync(path.join(ROOT, 'docs/OFFSITE_BACKUP.md'), 'utf8');
+    const step = doc.slice(doc.indexOf('## گام ۴')).match(/```bash\n([\s\S]*?)```/)![1];
+    expect(step).toContain("sed -i -e '$a\\' .env");
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'media-offsite-env-'));
+    const script = step.replace(/^\s+/gm, '').replace(/\bsudo /g, '').replace('cd /opt/papital-erp', `cd '${dir}'`);
+    const run = () => expect(spawnSync('bash', ['-euc', script], { encoding: 'utf8' }).status).toBe(0);
+    for (const [before, after] of [
+      ['A=1\nB=2', 'A=1\nB=2\nMEDIA_RCLONE_REMOTE=papital-crypt:\n'],
+      ['A=1\nMEDIA_RCLONE_REMOTE=\nB=2\n', 'A=1\nMEDIA_RCLONE_REMOTE=papital-crypt:\nB=2\n'],
+      ['A=1\nMEDIA_RCLONE_REMOTE=papital-crypt:\n', 'A=1\nMEDIA_RCLONE_REMOTE=papital-crypt:\n'],
+    ]) {
+      fs.writeFileSync(path.join(dir, '.env'), before);
+      run();
+      expect(fs.readFileSync(path.join(dir, '.env'), 'utf8')).toBe(after);
+      run();
+      expect(fs.readFileSync(path.join(dir, '.env'), 'utf8')).toBe(after);
     }
   });
 

@@ -26,7 +26,7 @@ export interface MediaLibraryHealth {
   diskFreeBytes: number | null;
   diskTotalBytes: number | null;
   messages: string[];
-  /** v10.2.29: the nightly copy of the originals in Google Drive */
+  /** v10.2.30: the nightly copy of the originals in Google Drive */
   offsite?: MediaOffsiteHealth;
 }
 
@@ -88,7 +88,7 @@ export function formatByteSize(bytes: number): string {
 }
 
 /**
- * v10.2.29 (decision T43-a, 10.2 package 13 item 7): the nightly encrypted copy of the library's originals in Google
+ * v10.2.30 (decision T43-a, 10.2 package 13 item 7): the nightly encrypted copy of the library's originals in Google
  * Drive, from the report `scripts/backup-media-offsite.sh` writes. No report, or a copy that is not set up, is `off` and
  * no warning; a failed copy, or none complete for more than `MEDIA_OFFSITE_STALE_HOURS`, is a warning.
  */

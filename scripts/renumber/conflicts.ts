@@ -99,8 +99,30 @@ function unionChangelogMd(s: ConflictStages, series: number): string | null {
   const theirs = activeMdBlocks(s.theirs, series);
   if (!ours || !theirs) return null;
   const known = new Set(theirs.blocks);
-  const extra = ours.blocks.filter(b => !known.has(b));
-  return extra.length === 0 ? s.theirs : `${s.theirs.slice(0, theirs.at)}${extra.map(b => `${b}\n\n`).join('')}${s.theirs.slice(theirs.at)}`;
+  // v10.2.30 (#349 review): as in the changelog, a branch section the common ancestor holds unchanged is not the
+  // branch's (the base's edit of it stays), and a branch edit of a section the base also changed is the operator's
+  const ancestorBlocks = s.base === undefined ? null : activeMdBlocks(s.base, series)?.blocks ?? null;
+  const ancestor = new Set(ancestorBlocks ?? []);
+  const header = (b: string) => b.split('\n', 1)[0];
+  const ancestorByHeader = new Map((ancestorBlocks ?? []).map(b => [header(b), b]));
+  const theirsByHeader = new Map(theirs.blocks.map(b => [header(b), b]));
+  const changed = ours.blocks.filter(b => !known.has(b) && !ancestor.has(b));
+  const edits = new Map<string, string>();
+  for (const b of changed) {
+    const base = theirsByHeader.get(header(b));
+    if (base === undefined) continue;
+    if (ancestorByHeader.get(header(b)) !== base) return null;
+    edits.set(header(b), b);
+  }
+  // each edited section replaces the base's text of it in place; the new sections still go in at the top
+  let out = s.theirs;
+  for (const [h, b] of edits) {
+    const was = theirsByHeader.get(h)!;
+    if (out.indexOf(was, theirs.at) < 0) return null;
+    out = `${out.slice(0, out.indexOf(was, theirs.at))}${b}${out.slice(out.indexOf(was, theirs.at) + was.length)}`;
+  }
+  const extra = changed.filter(b => !edits.has(header(b)));
+  return extra.length === 0 ? out : `${out.slice(0, theirs.at)}${extra.map(b => `${b}\n\n`).join('')}${out.slice(theirs.at)}`;
 }
 
 interface JournalEntry { idx: number; tag: string }

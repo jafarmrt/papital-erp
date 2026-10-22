@@ -8,7 +8,7 @@
 #     creating the drill database needs `sudo -u postgres` unless .env sets RESTORE_ADMIN_URL. It starts at least 60
 #     minutes after the backup, so it never checks a backup still being written;
 #   - scripts/backup-media-offsite.sh every day at MEDIA_OFFSITE_HOUR:MEDIA_OFFSITE_MINUTE (default 01:00) — the encrypted
-#     off-server copy of the media library's new files (v10.2.29); it does nothing until .env sets MEDIA_RCLONE_REMOTE.
+#     off-server copy of the media library's new files (v10.2.30); it does nothing until .env sets MEDIA_RCLONE_REMOTE.
 # install.sh runs it; on a server installed earlier run it once by hand:
 #   sudo bash scripts/install-ops-cron.sh [service-user]
 # The file is rewritten as a whole: a time variable not given keeps the time the existing file has, else takes the

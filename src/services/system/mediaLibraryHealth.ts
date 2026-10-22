@@ -67,7 +67,7 @@ export async function readMediaLibraryHealth(now: Date = new Date()): Promise<Me
 }
 
 /**
- * v10.2.29 (decision T43-a): the report of `scripts/backup-media-offsite.sh`, `MEDIA_OFFSITE_REPORT` (the script reads it
+ * v10.2.30 (decision T43-a): the report of `scripts/backup-media-offsite.sh`, `MEDIA_OFFSITE_REPORT` (the script reads it
  * from its environment, else from the app's .env, the value the service gets) or logs/media-offsite.json of the app.
  */
 export function mediaOffsiteReportPath(): string {
