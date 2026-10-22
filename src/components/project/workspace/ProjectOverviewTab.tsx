@@ -10,12 +10,13 @@ import { AddStageForm } from '../ProjectStageActions';
 import ProjectGanttTab from '../ProjectGanttTab';
 import { ProjectStageCard } from './ProjectStageCard';
 import { ProjectSpecsEditor } from './ProjectSpecsEditor';
+import type { ProjectPart, ProjectWriteBase } from '../../../lib/projects/projectParts';
 
 interface ProjectOverviewTabProps {
   project: ProductionProject;
-  /** the version the next project save sends (TD-742) */
-  version: number | undefined;
-  rememberVersion: (response: unknown) => void;
+  /** the version and part tokens the next project save sends (TD-742 / TD-1342) */
+  writeBase: ProjectWriteBase;
+  rememberVersion: (response: unknown, parts: readonly ProjectPart[]) => void;
   personnel: readonly Personnel[];
   canEdit: boolean;
   editingSpecs: boolean;
@@ -42,12 +43,12 @@ const CARD = 'bg-white rounded-2xl border border-slate-200 p-4 space-y-3';
  * project workflow box, which no project workflow ever filled, is gone. While the specs are being edited nothing else
  * here saves (stage edits, a new stage, the attachments card), so no reload interrupts the form.
  */
-export function ProjectOverviewTab({ project, version, rememberVersion, personnel, canEdit, editingSpecs, onCloseSpecs, onChanged, onDirtyChange }: ProjectOverviewTabProps) {
+export function ProjectOverviewTab({ project, writeBase, rememberVersion, personnel, canEdit, editingSpecs, onCloseSpecs, onChanged, onDirtyChange }: ProjectOverviewTabProps) {
   const [editingStages, setEditingStages] = useState<ReadonlySet<number>>(new Set());
   const products = projectProductRows(project);
   const stages = Array.isArray(project.stages) ? project.stages : [];
   const stagesFromMatrix = hasMatrixProducts({ products: project.products, itemId: project.item_id });
-  const projectToEdit = useMemo(() => ({ ...project, version }), [project, version]);
+  const projectToEdit = useMemo(() => ({ ...project, ...writeBase }), [project, writeBase]);
 
   const onStageEditing = useCallback((stageId: number, editing: boolean) => {
     setEditingStages(prev => {
@@ -67,8 +68,8 @@ export function ProjectOverviewTab({ project, version, rememberVersion, personne
       rememberVersion(await fetchJson(`/projects/${project.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ attachments, version }),
-      }));
+        body: JSON.stringify({ attachments, ...writeBase }),
+      }), ['attachments']);
       toast.success('پیوست‌های پروژه ذخیره شد');
       onChanged();
     } catch (err) {

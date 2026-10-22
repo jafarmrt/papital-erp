@@ -20,7 +20,9 @@ import { MAX_STAGE_ORDER } from '../lib/projects/projectStatus.js';
 import { toPersianDigits } from '../utils/persianNumber.js';
 import { normalizeDecimalString } from '../lib/numericInput.js';
 import { nextVersion } from '../lib/occHelper.js';
-import { assertProjectVersion, projectVersionConflict } from './projects/projectVersion.js';
+import { projectVersionConflict } from './projects/projectVersion.js';
+import { assertProjectPartsWritable } from './projects/projectPartTokens.js';
+import type { ProjectPartTokens } from '../lib/projects/projectParts.js';
 import { assertNoOpenAllocations } from './projects/projectOpenAllocations.js';
 import { assertProjectDeletable } from './projects/projectDeleteGuard.js';
 import { setProjectManagers } from './projects/projectManagers.js';
@@ -77,6 +79,8 @@ export interface UpdateProjectInput {
   expectedVersion?: number;
   /** v10.1.37 (N-01, TD-1283, decision ت۳ الف): «مسئولان پروژه»; missing = unchanged */
   managerUserIds?: number[];
+  /** TD-1342: نشانهٔ بخش‌هایی که زبانه از آن‌ها ساخته شده؛ با آن، نسخهٔ کهنه فقط وقتی ۴۰۹ است که همان بخش عوض شده باشد */
+  partTokens?: ProjectPartTokens;
 }
 
 export interface AddProjectToInventoryInput {
@@ -254,7 +258,9 @@ export class ProjectService {
     }
     // v9.0.385 (TD-742، تصمیم ت۳ الف): ویرایش از نسخه کهنه ۴۰۹ است و هر ذخیره نسخه را یکی بالا می‌برد؛ پیش‌تر ذخیره دوم دو
     // کاربر ذخیره اول را بی‌صدا پاک می‌کرد
-    if (input.expectedVersion !== undefined) assertProjectVersion(existing, input.expectedVersion);
+    // TD-1342 (بستهٔ ۱۲ بند ۴، ت۴۲ ب): نسخهٔ کهنه با نشانهٔ برابر بخش‌هایی که بدنه می‌نویسد پذیرفته می‌شود؛ حواله، تخصیص مواد و
+    // تأیید گزارش کارگاه فقط رزرو و پیوند کارکرد را می‌نویسند که در نشانهٔ هیچ بخشی نیست
+    if (input.expectedVersion !== undefined) await assertProjectPartsWritable(executor, existing, input.expectedVersion, input.partTokens, input);
 
     const updateData: Record<string, unknown> = { version: nextVersion(existing.version) };
     if (input.title !== undefined) updateData.title = input.title.trim();

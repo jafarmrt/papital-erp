@@ -5,6 +5,7 @@ import { formatPersianDate, formatPersianNumber } from '../../../utils';
 import { PROJECT_STATUS_LABELS } from '../../../lib/projects/projectStatus';
 import { PROJECT_WORKSPACE_TABS, PROJECT_WORKSPACE_TAB_LABELS, type ProjectWorkspaceTab } from '../../../lib/projects/projectWorkspaceTabs';
 import { ProjectStatusActions } from '../ProjectStatusActions';
+import type { ProjectWriteBase } from '../../../lib/projects/projectParts';
 import { PHONE_ONLY_TAP_TARGET } from '../../../lib/pwa/phoneLayout';
 import { usePhoneWidth } from '../../../lib/pwa/usePhoneWidth';
 
@@ -18,7 +19,7 @@ export const PROJECT_STATUS_STYLES: Record<string, string> = {
 
 interface ProjectWorkspaceHeaderProps {
   project: ProductionProject;
-  version: number | undefined;
+  writeBase: ProjectWriteBase;
   canEdit: boolean;
   editingSpecs: boolean;
   onBack: () => void;
@@ -26,7 +27,7 @@ interface ProjectWorkspaceHeaderProps {
   onStatusSaved: (response: unknown) => void;
 }
 
-export function ProjectWorkspaceHeader({ project, version, canEdit, editingSpecs, onBack, onEditSpecs, onStatusSaved }: ProjectWorkspaceHeaderProps) {
+export function ProjectWorkspaceHeader({ project, writeBase, canEdit, editingSpecs, onBack, onEditSpecs, onStatusSaved }: ProjectWorkspaceHeaderProps) {
   const status = project.status || 'planned';
   const statusLabel = (PROJECT_STATUS_LABELS as Record<string, string>)[status] ?? status;
   const progress = Math.min(100, Math.max(0, project.progress_percent || 0));
@@ -74,7 +75,7 @@ export function ProjectWorkspaceHeader({ project, version, canEdit, editingSpecs
               ویرایش مشخصات
             </button>
             {/* a status change saves and reloads the project, which would interrupt the specs form */}
-            <ProjectStatusActions projectId={project.id} status={project.status} version={version} onSaved={onStatusSaved} />
+            <ProjectStatusActions projectId={project.id} status={project.status} writeBase={writeBase} onSaved={onStatusSaved} />
             </>
           )}
         </div>

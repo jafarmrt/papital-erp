@@ -264,10 +264,13 @@ export function useProjectForm({
       const url = projectToEdit ? `/projects/${projectToEdit.id}` : '/projects';
       const method = projectToEdit ? 'PUT' : 'POST';
       // v9.0.385 (TD-742، تصمیم ت۳ الف): ویرایش نسخه‌ای را می‌فرستد که فرم از آن باز شد؛ تغییر هم‌زمان دیگری ۴۰۹ است
+      // TD-1342: با نشانهٔ بخش‌ها، فقط تغییر هم‌زمان مشخصات یا پیوست‌ها ۴۰۹ است
       const res = await fetchJson(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(projectToEdit ? { ...body, version: projectToEdit.version } : body)
+        body: JSON.stringify(projectToEdit
+          ? { ...body, version: projectToEdit.version, ...(projectToEdit.partTokens ? { partTokens: projectToEdit.partTokens } : {}) }
+          : body)
       });
 
       if (res && (res.id || res.success)) {

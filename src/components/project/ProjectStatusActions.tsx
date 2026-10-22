@@ -6,11 +6,13 @@ import { errorMessageOf } from '../../utils';
 import { confirmAction } from '../ConfirmDialogHost';
 import { projectStatusActions, type ProjectStatusAction } from '../../lib/projects/projectStatusActions';
 import { PHONE_ONLY_TAP_TARGET } from '../../lib/pwa/phoneLayout';
+import type { ProjectWriteBase } from '../../lib/projects/projectParts';
 
 interface ProjectStatusActionsProps {
   projectId: number;
   status: string | null | undefined;
-  version: number | undefined;
+  /** نسخه و نشانهٔ بخش‌هایی که سرصفحه از آن ساخته شده (TD-742 / TD-1342) */
+  writeBase: ProjectWriteBase;
   onSaved: (response: unknown) => void;
 }
 
@@ -23,7 +25,7 @@ const BUTTON = `${PHONE_ONLY_TAP_TARGET} px-3 py-1.5 bg-white hover:bg-slate-50 
  * v10.2.1 (10.2 package 2, review U17): «لغو پروژه», which no screen undoes, sits in the «بیشتر» menu instead of beside
  * «توقف پروژه», so it is not pressed by mistake; it still asks before it is sent.
  */
-export function ProjectStatusActions({ projectId, status, version, onSaved }: ProjectStatusActionsProps) {
+export function ProjectStatusActions({ projectId, status, writeBase, onSaved }: ProjectStatusActionsProps) {
   const [saving, setSaving] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuId = useId();
@@ -62,7 +64,7 @@ export function ProjectStatusActions({ projectId, status, version, onSaved }: Pr
       const res = await fetchJson(`/projects/${projectId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: action.target, version }),
+        body: JSON.stringify({ status: action.target, ...writeBase }),
       });
       toast.success('وضعیت پروژه ذخیره شد');
       onSaved(res);

@@ -8,6 +8,7 @@ import {
   type ReservationReconcileLine, type ReservationReconcilePreview, type ReservationReconcileResult, type ReservationReconcileUnmatchedRow,
 } from '../../lib/projects/reservationReconcile';
 import { PROJECT_VERSION_CONFLICT_MESSAGE } from '../../lib/projects/projectVersion';
+import { isPartBehind, type ProjectWriteBase } from '../../lib/projects/projectParts';
 import { OFFLINE_SUBMIT_TITLE, PHONE_SHEET_OVERLAY, PHONE_SHEET_PANEL, PHONE_TAP_TARGET } from '../../lib/pwa/phoneLayout';
 import { useOnlineStatus } from '../../lib/pwa/useOnlineStatus';
 import { errorMessageOf, formatPersianNumber } from '../../utils';
@@ -58,8 +59,8 @@ function UnmatchedRows({ rows, blocked }: { rows: ReservationReconcileUnmatchedR
 
 interface DialogProps {
   projectId: number;
-  /** نسخه‌ای که زبانهٔ مواد از آن ساخته شده؛ بی نسخه ثبت نمی‌شود */
-  version: number | undefined;
+  /** نسخه و نشانهٔ بخش‌هایی که زبانهٔ مواد از آن ساخته شده؛ بی نسخه ثبت نمی‌شود */
+  writeBase: ProjectWriteBase;
   initialPreview: ReservationReconcilePreview;
   onClose: () => void;
   onApplied: (result: ReservationReconcileResult) => void;
@@ -69,12 +70,13 @@ interface DialogProps {
  * TD-1341 (بستهٔ ۱۲ بند ۱، گزینهٔ ب کارت ت۴۲): پنجرهٔ تأیید «تکمیل رزرو». تغییر هر کالا را پیش از ثبت نشان می‌دهد و فقط همان
  * تغییرها را با نشانهٔ پیش‌نمایش ثبت می‌کند؛ اگر موجودی یا رزروها در این میان عوض شده باشد، فهرست تازه نشان داده می‌شود.
  */
-export function ReservationReconcileDialog({ projectId, version, initialPreview, onClose, onApplied }: DialogProps): React.ReactElement {
+export function ReservationReconcileDialog({ projectId, writeBase, initialPreview, onClose, onApplied }: DialogProps): React.ReactElement {
   const online = useOnlineStatus();
   const [preview, setPreview] = useState(initialPreview);
   const [applying, setApplying] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const staleVersion = preview.version !== version;
+  // TD-1342: حواله و تخصیص مواد فقط رزرو را کم می‌کنند و زبانه را کهنه نمی‌کنند؛ کهنه یعنی کنترل موجودی عوض شده
+  const staleVersion = isPartBehind(writeBase, 'inventory', { version: preview.version, token: preview.inventoryToken });
   const unmatchedRows = preview.unmatchedRows ?? [];
   const blocked = reconcileBlockedByUnmatched(preview);
   const closeIfIdle = () => { if (!applying) onClose(); };
@@ -86,7 +88,7 @@ export function ReservationReconcileDialog({ projectId, version, initialPreview,
       const result = await fetchJson<ReservationReconcileResult>(`/api/projects/${projectId}/reservation-reconcile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ version, planToken: preview.planToken }),
+        body: JSON.stringify({ ...writeBase, planToken: preview.planToken }),
       });
       onApplied(result);
       toast.success(result.changed ? `رزرو با فهرست مواد برابر شد: ${reservationReconcileSummary(result.preview)}` : 'رزرو از پیش با فهرست مواد برابر بود.');
@@ -98,7 +100,7 @@ export function ReservationReconcileDialog({ projectId, version, initialPreview,
         setPreview(fresh);
         setNotice(errorMessageOf(err));
       } else {
-        setNotice(errorCode === 'OCC_CONFLICT' ? PROJECT_VERSION_CONFLICT_MESSAGE : (errorMessageOf(err) || 'تکمیل رزرو ثبت نشد.'));
+        setNotice(errorCode === 'OCC_CONFLICT' ? (errorMessageOf(err) || PROJECT_VERSION_CONFLICT_MESSAGE) : (errorMessageOf(err) || 'تکمیل رزرو ثبت نشد.'));
       }
     } finally {
       setApplying(false);
@@ -160,7 +162,7 @@ export function ReservationReconcileDialog({ projectId, version, initialPreview,
 
 interface ButtonProps {
   projectId: number;
-  version: number | undefined;
+  writeBase: ProjectWriteBase;
   /** ذخیره یا ثبت دیگری در جریان است */
   busy: boolean;
   /** تغییر ذخیره‌نشده در کنترل موجودی هست */
@@ -169,7 +171,7 @@ interface ButtonProps {
 }
 
 /** دکمهٔ «تکمیل رزرو» زبانهٔ مواد پروژهٔ ثبت نهایی‌شده: پیش‌نمایش را می‌خواند و پنجرهٔ تأیید را باز می‌کند */
-export function ReservationReconcileButton({ projectId, version, busy, dirty, onApplied }: ButtonProps): React.ReactElement {
+export function ReservationReconcileButton({ projectId, writeBase, busy, dirty, onApplied }: ButtonProps): React.ReactElement {
   const online = useOnlineStatus();
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<ReservationReconcilePreview | null>(null);
@@ -199,7 +201,7 @@ export function ReservationReconcileButton({ projectId, version, busy, dirty, on
       {preview && (
         <ReservationReconcileDialog
           projectId={projectId}
-          version={version}
+          writeBase={writeBase}
           initialPreview={preview}
           onClose={() => setPreview(null)}
           onApplied={onApplied}
