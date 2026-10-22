@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm';
+import { sql, type AnyColumn, type SQL } from 'drizzle-orm';
 import { pgTable, text, serial, integer, jsonb, timestamp, index, uniqueIndex, type AnyPgColumn } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
@@ -40,6 +40,16 @@ export const roles = pgTable('roles', {
   isSystem: integer('is_system').default(0)
 });
 
+/**
+ * OBS-R1-32 (TD-1324): the text the activity log search compares, description, user full name, username and entity
+ * joined by the unit separator (chr 31) so a match never spans two columns. The GIN trigram index of migration 0132 is
+ * built on exactly this expression, so the query must use this function, never its own spelling.
+ */
+export function activityLogSearchText(table: { description: AnyColumn; userFullName: AnyColumn; username: AnyColumn; entity: AnyColumn }): SQL {
+  const sep = sql.raw(`E'\\x1f'`);
+  return sql`coalesce(${table.description}, '') || ${sep} || coalesce(${table.userFullName}, '') || ${sep} || coalesce(${table.username}, '') || ${sep} || coalesce(${table.entity}, '')`;
+}
+
 export const activityLogs = pgTable('activity_logs', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
@@ -61,6 +71,8 @@ export const activityLogs = pgTable('activity_logs', {
   idx_timestamp: index('activity_logs_timestamp').on(table.timestamp),
   idx_act_log_user: index('idx_act_log_user').on(table.userId),
   idx_trace_id: index('activity_logs_trace_id').on(table.traceId).where(sql`${table.traceId} <> ''`),
+  // OBS-R1-32 (TD-1324, migration 0132): the text search's own expression, a GIN trigram index
+  idx_search_trgm: index('activity_logs_search_trgm').using('gin', sql`(${activityLogSearchText(table)}) gin_trgm_ops`),
 }));
 
 export const migrationsLog = pgTable('migrations_log', {

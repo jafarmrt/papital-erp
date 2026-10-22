@@ -175,4 +175,14 @@ export async function extendStatementTimeout(tx: DbTransaction, timeoutMs: numbe
   await tx.execute(sql.raw(`SET LOCAL statement_timeout = ${ms}`));
 }
 
+/**
+ * 10.2 package 11 part 2d review (TD-1324): raises `work_mem` for the rest of this transaction only (`SET LOCAL`), on the
+ * transaction's own connection, like `extendStatementTimeout`. A bitmap scan of a GIN index that matches many rows turns
+ * lossy at the default 4 MB and rechecks every row of the pages it kept.
+ */
+export async function raiseWorkMem(tx: DbTransaction, megabytes: number): Promise<void> {
+  const mb = Math.max(1, Math.floor(Number(megabytes) || 0));
+  await tx.execute(sql.raw(`SET LOCAL work_mem = '${mb}MB'`));
+}
+
 export { pool, orm };
