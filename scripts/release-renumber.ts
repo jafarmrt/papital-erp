@@ -62,7 +62,7 @@ async function main(): Promise<void> {
   const root = process.cwd();
   if (!fs.existsSync(path.join(root, 'package.json'))) throw new Error('Run from the repository root');
   if (!gitOk(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])) throw new Error(`Unknown ref "${ref}" (git fetch origin master first)`);
-  // v10.2.30: this run uses the branch's own copy of the renumber code; when only the base changed it since the fork,
+  // v10.2.31: this run uses the branch's own copy of the renumber code; when only the base changed it since the fork,
   // the older copy would resolve the merge with old rules (it duplicated entries the base had edited), so stop first
   if (!isMerged(ref)) {
     const fork = git(['merge-base', 'HEAD', ref]).trim();

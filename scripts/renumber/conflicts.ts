@@ -99,7 +99,7 @@ function unionChangelogMd(s: ConflictStages, series: number): string | null {
   const theirs = activeMdBlocks(s.theirs, series);
   if (!ours || !theirs) return null;
   const known = new Set(theirs.blocks);
-  // v10.2.30 (#349 review): as in the changelog, a branch section the common ancestor holds unchanged is not the
+  // v10.2.31 (#349 review): as in the changelog, a branch section the common ancestor holds unchanged is not the
   // branch's (the base's edit of it stays), and a branch edit of a section the base also changed is the operator's
   const ancestorBlocks = s.base === undefined ? null : activeMdBlocks(s.base, series)?.blocks ?? null;
   const ancestor = new Set(ancestorBlocks ?? []);
@@ -120,6 +120,14 @@ function unionChangelogMd(s: ConflictStages, series: number): string | null {
     const was = theirsByHeader.get(h)!;
     if (out.indexOf(was, theirs.at) < 0) return null;
     out = `${out.slice(0, out.indexOf(was, theirs.at))}${b}${out.slice(out.indexOf(was, theirs.at) + was.length)}`;
+  }
+  // a section the branch deleted (the ancestor held it and the base left it unchanged) stays deleted
+  const oursSet = new Set(ours.blocks);
+  for (const b of ancestorBlocks ?? []) {
+    if (oursSet.has(b) || !known.has(b) || edits.has(header(b))) continue;
+    const at = out.indexOf(`${b}\n\n`, theirs.at);
+    if (at < 0) return null;
+    out = `${out.slice(0, at)}${out.slice(at + b.length + 2)}`;
   }
   const extra = changed.filter(b => !edits.has(header(b)));
   return extra.length === 0 ? out : `${out.slice(0, theirs.at)}${extra.map(b => `${b}\n\n`).join('')}${out.slice(theirs.at)}`;

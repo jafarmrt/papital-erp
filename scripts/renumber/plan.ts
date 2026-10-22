@@ -25,7 +25,7 @@ export interface RenumberInput {
   /** paths that differ from <ref> (tracked changes and untracked files) */
   changed: string[];
   activeFile: string;
-  /** v10.2.30: file content at the common ancestor of the merge in progress, when there is one */
+  /** v10.2.31: file content at the common ancestor of the merge in progress, when there is one */
   ancestor?(rel: string): string | null;
 }
 
@@ -134,7 +134,7 @@ function entryVersion(entry: string, file: string): string {
 export function planVersions(baseSrc: string, curSrc: string, file: string, ancestorSrc: string | null = null): Map<string, string> {
   const base = splitChangelog(baseSrc, file).entries;
   const cur = splitChangelog(curSrc, file).entries;
-  // v10.2.28: an entry with the version and title of a base entry is the branch's edit of it, not a new entry; v10.2.30
+  // v10.2.28: an entry with the version and title of a base entry is the branch's edit of it, not a new entry; v10.2.31
   // (#346 review): only while the base still has that entry as the common ancestor had it, else the base's own edit
   // would be lost to a stale branch copy. Without an ancestor (no merge in progress) every base entry must be here as is.
   const key = (e: string) => `${entryVersion(e, file)}\n${e.match(/^ {4}title: '([^']*)'/m)?.[1]}`;

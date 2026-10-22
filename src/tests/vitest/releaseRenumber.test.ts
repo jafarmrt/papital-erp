@@ -216,7 +216,7 @@ describe('scripts/release-renumber.ts (TD-473)', () => {
     const mdOurs = md('### v9.0.52 — One\n- **B:** b.', '### v9.0.51 — Old\n- **O:** old.');
     const mdMerged = resolveReleaseConflict('CHANGELOG.md', '', { ours: mdOurs, theirs: t.base.get('CHANGELOG.md')! }, ACTIVE)!;
     expect([...mdMerged.matchAll(/^### (v[\d.]+ — \w+)/gm)].map(m => m[1])).toEqual(['v9.0.52 — One', 'v9.0.52 — Master', 'v9.0.51 — Old', 'v9.0.0 — pre']);
-    // v10.2.30 (#349 review): a section only the base edited keeps that edit, with no duplicate of the branch's old copy;
+    // v10.2.31 (#349 review): a section only the base edited keeps that edit, with no duplicate of the branch's old copy;
     // a branch edit of a section the base did not change replaces it; both sides editing one section is refused
     const baseMd = t.base.get('CHANGELOG.md')!;
     const masterEdited = baseMd.replace('- **M:** master line.', '- **M:** edited.');
@@ -231,6 +231,13 @@ describe('scripts/release-renumber.ts (TD-473)', () => {
     expect(tookEdit.match(/^### v9\.0\.52 — Master/gm)).toHaveLength(1);
     expect(tookEdit).toContain('- **M:** branch.');
     expect(resolveReleaseConflict('CHANGELOG.md', '', { ours: branchEdit, theirs: masterEdited, base: baseMd }, ACTIVE)).toBeNull();
+    // a duplicate section the branch removed stays removed while the base adds its own (#349)
+    const dupMd = baseMd.replace('### v9.0.51 — Old', '### v9.0.51 — Old\n- **O:** stale wording.\n\n### v9.0.51 — Old');
+    const branchDedup = baseMd.replace(/(## Version 9\.x Series \(Active[^\n]*\n)/, '$1### v9.0.53 — Branch\n- **B:** b.\n\n');
+    const masterAdds = dupMd.replace(/(## Version 9\.x Series \(Active[^\n]*\n)/, '$1### v9.0.53 — Master2\n- **M2:** m2.\n\n');
+    const dedup = resolveReleaseConflict('CHANGELOG.md', '', { ours: branchDedup, theirs: masterAdds, base: dupMd }, ACTIVE)!;
+    expect([...dedup.matchAll(/^### (v[\d.]+ — \w+)/gm)].map(m => m[1])).toEqual(['v9.0.53 — Branch', 'v9.0.53 — Master2', 'v9.0.52 — Master', 'v9.0.51 — Old', 'v9.0.0 — pre']);
+    expect(dedup).not.toContain('stale wording');
     expect(resolveHunks('a\n<<<<<<< HEAD\nb\n', () => [])).toBeNull();
   });
 });

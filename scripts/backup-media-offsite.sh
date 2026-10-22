@@ -1,5 +1,5 @@
 #!/bin/bash
-# scripts/backup-media-offsite.sh — v10.2.30 (decision T43-a, 10.2 package 13 item 7): the encrypted off-server copy of
+# scripts/backup-media-offsite.sh — v10.2.31 (decision T43-a, 10.2 package 13 item 7): the encrypted off-server copy of
 # the media library (photos and videos of products), which the daily backup leaves out because of its size.
 #
 #   scripts/backup-media-offsite.sh            (install-ops-cron.sh runs it every night)

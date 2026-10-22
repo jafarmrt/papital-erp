@@ -5,7 +5,7 @@ import {
   MEDIA_REBUILD_LIGHT_COMMAND, formatByteSize, type MediaLibraryHealth, type MediaOffsiteHealth,
 } from '../../lib/system/mediaLibraryHealth';
 
-/** v10.2.30: the row of the nightly copy in Google Drive */
+/** v10.2.31: the row of the nightly copy in Google Drive */
 function offsiteText(offsite: MediaOffsiteHealth | undefined): string {
   if (!offsite || offsite.state === 'unknown') return 'نامعلوم';
   if (offsite.state === 'off') return 'راه‌اندازی نشده';

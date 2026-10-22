@@ -11,7 +11,7 @@ import {
   mediaOffsiteVerdict, parseMediaOffsiteReport, type MediaLibraryHealth,
 } from '../../lib/system/mediaLibraryHealth';
 
-// v10.2.30 (decision T43-a, 10.2 package 13 item 7): the media library (photos and videos of products) was in no
+// v10.2.31 (decision T43-a, 10.2 package 13 item 7): the media library (photos and videos of products) was in no
 // off-server copy: the daily backup leaves it out for its size. scripts/backup-media-offsite.sh now sends the new
 // originals every night to the encrypted rclone remote, and the health page shows the last complete copy. The real
 // script runs here against a fake rclone.

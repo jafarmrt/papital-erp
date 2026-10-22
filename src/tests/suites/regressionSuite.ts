@@ -4647,7 +4647,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const request = (await import('supertest')).default;
       const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
       const { createTestItem, createTestWarehouse } = await import('../fixtures/factories.js');
-      const { invalidateDashboardBiCache }: any = await import('../../routes/dashboard.routes.js');
+      const { invalidateDashboardBiCache }: any = await import('../../services/inventory/warehouseDashboard.service.js');
       const app = await getTestApp();
       const admin = await getAdminSession();
       const stocked = await createTestWarehouse({ name: `انبار دارای موجودی TD-219 ${Date.now()}` });
@@ -10947,6 +10947,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runProjectScreenGapsTests(shouldRun));
   const { runProjectReservationIssueTests } = await import('../regression/projectReservationIssueTests.js');
   results.push(...await runProjectReservationIssueTests(shouldRun));
+  const { runSaveRobustnessTd1326Tests } = await import('../regression/saveRobustnessTd1326Tests.js');
+  results.push(...await runSaveRobustnessTd1326Tests(shouldRun));
   // Series 10.2 package 12 item 1 (TD-1341): the reservation reconcile of a finalized project
   const { runProjectReservationReconcileTests } = await import('../regression/projectReservationReconcileTests.js');
   results.push(...await runProjectReservationReconcileTests(shouldRun));
