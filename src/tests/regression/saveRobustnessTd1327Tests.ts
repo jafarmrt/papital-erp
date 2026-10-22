@@ -3,6 +3,7 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { dailyWorkLogs, formDrafts } from '../../db/schema.js';
 import { DRAFT_MAX_PER_USER } from '../../lib/drafts/draftRules.js';
+import { DAILY_LOG_VERSION_REQUIRED_MESSAGE } from '../../routes/dailyLogs.schemas.js';
 import { makeDailyLogTestCtx, type DailyLogTestCtx } from './dailyLogAccessTests.js';
 
 type ShouldRun = (id: string, ...extra: string[]) => boolean;
@@ -55,6 +56,8 @@ async function dailyLogVersionCase(ctx: DailyLogTestCtx): Promise<string> {
 
   const missing = await ctx.send(author, 'put', `/api/daily-logs/${id}`, { content: 'td1327 without version' });
   if (missing.status !== 400) wrong.push(`an edit without a version answered ${missing.status}`);
+  // a page loaded before v10.2.32 never sends the version: the 400 asks for a refresh (#350 review L2)
+  else if (!String(missing.body?.message ?? '').includes(DAILY_LOG_VERSION_REQUIRED_MESSAGE)) wrong.push(`the 400 without a version does not ask for a refresh: ${JSON.stringify(missing.body?.message)}`);
   const stale = await ctx.send(author, 'put', `/api/daily-logs/${id}`, { version: 2, content: 'td1327 stale' });
   if (stale.status !== 409 || stale.body?.code !== 'OCC_CONFLICT') wrong.push(`an edit at version 2 answered ${stale.status} ${stale.body?.code}`);
   if ((await stored()).content !== base.content) wrong.push(`a refused edit changed the text to «${(await stored()).content}»`);

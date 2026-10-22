@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { IdempotencyService, type AcquireResult } from '../services/idempotency.service.js';
+import { IDEMPOTENCY_KEY_TTL_SECONDS, IdempotencyService, type AcquireResult } from '../services/idempotency.service.js';
 import { logger } from './logger.js';
 import { asyncHandler } from './asyncHandler.js';
 import { IDEMPOTENT } from './idempotencyMark.js';
@@ -86,7 +86,7 @@ export function idempotency(options: IdempotencyMiddlewareOptions = {}) {
     }
 
     // State is 'acquired' - intercept response
-    const stopHeartbeat = startLockHeartbeat(cleanKey, scope, userId, options.lockTimeoutSeconds || 60);
+    const stopHeartbeat = startLockHeartbeat(cleanKey, scope, userId, options.lockTimeoutSeconds || 60, options.ttlSeconds || IDEMPOTENCY_KEY_TTL_SECONDS);
     res.on('finish', stopHeartbeat);
     const originalJson = res.json.bind(res);
     const originalSend = res.send.bind(res);
@@ -99,7 +99,7 @@ export function idempotency(options: IdempotencyMiddlewareOptions = {}) {
       stopHeartbeat();
       try {
         if (res.statusCode >= 200 && res.statusCode < 300) {
-          await IdempotencyService.saveResponse(cleanKey, res.statusCode, parseBody(body), { scope, userId });
+          await IdempotencyService.saveResponse(cleanKey, res.statusCode, keptResponseBody(scope, parseBody(body)), { scope, userId });
         } else {
           await IdempotencyService.releaseKey(cleanKey, { scope, userId });
         }
@@ -141,14 +141,41 @@ function parseBody(body: unknown): unknown {
   }
 }
 
-/** بیشینه زمانی که کلید یک درخواست زنده نگه داشته می‌شود (پس از آن پنجره قفل عادی منقضی می‌شود) */
-const MAX_LOCK_HOLD_MS = 30 * 60 * 1000;
+/**
+ * v10.2.33 (TD-1328): scopes whose answers are not kept with their key (payslips and their payments, piecework logs and
+ * rates carry amounts and names), and the largest answer kept at all. A repeat of such a request gets the stored status
+ * with `IDEMPOTENCY_REPLAY_BODY` instead of the first answer; it still never runs twice.
+ */
+export const RESPONSE_NOT_KEPT_SCOPES: ReadonlySet<string> = new Set(['payroll', 'piecework']);
+export const IDEMPOTENCY_RESPONSE_MAX_BYTES = 64 * 1024;
+export const IDEMPOTENCY_REPLAY_BODY = Object.freeze({
+  success: true,
+  idempotentReplay: true,
+  message: 'این درخواست پیش‌تر ثبت شده است؛ نتیجهٔ آن را در فهرست ببینید.',
+});
 
-/** v8.0.79 (TD-329): پنجره قفل کلید را در طول اجرای درخواست، هر یک‌سوم پنجره، از نو تمدید می‌کند */
-function startLockHeartbeat(key: string, scope: string, userId: number | null, lockTimeoutSeconds: number): () => void {
+/** The answer kept with a key: the answer itself, or the replay body for a scope above or an answer over the limit */
+export function keptResponseBody(scope: string, body: unknown): unknown {
+  if (RESPONSE_NOT_KEPT_SCOPES.has(scope)) return IDEMPOTENCY_REPLAY_BODY;
+  let size: number;
+  try {
+    size = Buffer.byteLength(JSON.stringify(body ?? null) ?? '', 'utf8');
+  } catch {
+    return IDEMPOTENCY_REPLAY_BODY;
+  }
+  return size > IDEMPOTENCY_RESPONSE_MAX_BYTES ? IDEMPOTENCY_REPLAY_BODY : body;
+}
+
+/**
+ * v8.0.79 (TD-329): پنجره قفل کلید را در طول اجرای درخواست، هر یک‌سوم پنجره، از نو تمدید می‌کند.
+ * v10.2.33 (TD-1328): until the request answers, as long as the key itself lives (`ttlSeconds`), never a fixed 30 minutes,
+ * so a repeat of a request still running after half an hour waits instead of running it a second time.
+ */
+function startLockHeartbeat(key: string, scope: string, userId: number | null, lockTimeoutSeconds: number, ttlSeconds: number): () => void {
   const startedAt = Date.now();
+  const holdMs = ttlSeconds * 1000;
   const timer = setInterval(() => {
-    if (Date.now() - startedAt > MAX_LOCK_HOLD_MS) {
+    if (Date.now() - startedAt > holdMs) {
       clearInterval(timer);
       return;
     }

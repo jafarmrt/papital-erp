@@ -30,10 +30,37 @@ function prune(now: number): void {
   }
 }
 
-/** کلید این ارسال: برای همان روش، مسیر و بدنه متنی همان کلید باز؛ بدنه غیرمتنی (FormData و ...) کلید تازه می‌گیرد */
+/** A file's fingerprint: its name, size, type and last change, never its content */
+function fileFingerprint(file: Blob): string {
+  const named = file as Blob & { name?: string; lastModified?: number };
+  return `file:${named.name ?? ''}:${file.size}:${file.type}:${named.lastModified ?? ''}`;
+}
+
+/**
+ * v10.2.33 (TD-1328): the text standing for a body, so a form sent with files (`FormData`), a single file or URL
+ * parameters keeps one key until a definitive answer like a JSON form (before, each send took a new key and a resend
+ * after a lost answer was recorded twice); null for a body that cannot be read without its content (`ArrayBuffer` …).
+ */
+function bodyFingerprint(body: unknown): string | null {
+  if (body === undefined || body === null) return '';
+  if (typeof body === 'string') return body;
+  if (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) return `params:${body.toString()}`;
+  if (typeof Blob !== 'undefined' && body instanceof Blob) return fileFingerprint(body);
+  if (typeof FormData !== 'undefined' && body instanceof FormData) {
+    const parts: string[] = [];
+    body.forEach((value, name) => {
+      parts.push(`${JSON.stringify(name)}=${typeof value === 'string' ? JSON.stringify(value) : fileFingerprint(value)}`);
+    });
+    return `form:${parts.join('&')}`;
+  }
+  return null;
+}
+
+/** کلید این ارسال: برای همان روش، مسیر و بدنه همان کلید باز؛ بدنه‌ای که بی محتوایش خوانده نمی‌شود کلید تازه می‌گیرد */
 export function submissionKeyFor(method: string, endpoint: string, body: unknown): string {
-  if (body !== undefined && body !== null && typeof body !== 'string') return newKey();
-  const fingerprint = `${method.toUpperCase()} ${endpoint}\n${body ?? ''}`;
+  const text = bodyFingerprint(body);
+  if (text === null) return newKey();
+  const fingerprint = `${method.toUpperCase()} ${endpoint}\n${text}`;
   const now = Date.now();
   const existing = pending.get(fingerprint);
   if (existing && now - existing.at <= KEEP_MS) return existing.key;

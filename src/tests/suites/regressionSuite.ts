@@ -10964,6 +10964,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10.2 package 11 part 4b (TD-1327): the daily log version and one live form draft per key
   const { runSaveRobustnessTd1327Tests } = await import('../regression/saveRobustnessTd1327Tests.js');
   results.push(...await runSaveRobustnessTd1327Tests(shouldRun));
+  const { runIdempotencyStorageTd1328Tests } = await import('../regression/idempotencyStorageTd1328Tests.js');
+  results.push(...await runIdempotencyStorageTd1328Tests(shouldRun));
   // Series 10.2 package 3 (v10.2.3, TD-1290): free stock, delivery cost and issued materials of a project
   const { runProjectMaterialsCostTests } = await import('../regression/projectMaterialsCostTests.js');
   results.push(...await runProjectMaterialsCostTests(shouldRun));
