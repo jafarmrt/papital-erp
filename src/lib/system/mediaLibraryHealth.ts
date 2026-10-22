@@ -26,6 +26,8 @@ export interface MediaLibraryHealth {
   diskFreeBytes: number | null;
   diskTotalBytes: number | null;
   messages: string[];
+  /** v10.2.29: the nightly copy of the originals in Google Drive */
+  offsite?: MediaOffsiteHealth;
 }
 
 /** The terminal command that rebuilds light versions; the card shows it only among the technical details */
@@ -84,3 +86,78 @@ export function formatByteSize(bytes: number): string {
   }
   return `${formatPersianNumber(value)} بایت`;
 }
+
+/**
+ * v10.2.29 (decision T43-a, 10.2 package 13 item 7): the nightly encrypted copy of the library's originals in Google
+ * Drive, from the report `scripts/backup-media-offsite.sh` writes. No report, or a copy that is not set up, is `off` and
+ * no warning; a failed copy, or none complete for more than `MEDIA_OFFSITE_STALE_HOURS`, is a warning.
+ */
+export type MediaOffsiteState = 'off' | 'ok' | 'stale' | 'failed' | 'unknown';
+
+export interface MediaOffsiteHealth {
+  state: MediaOffsiteState;
+  /** ISO time of the last complete copy, null when there was none */
+  lastOkAt: string | null;
+  /** originals on the server at the last run */
+  fileCount: number | null;
+  message: string;
+}
+
+export interface MediaOffsiteReport {
+  state: 'ok' | 'failed' | 'off';
+  /** seconds since the epoch */
+  at: number;
+  lastOkAt: number | null;
+  files: number;
+  error: string;
+}
+
+/** Two nights without a complete copy */
+export const MEDIA_OFFSITE_STALE_HOURS = 50;
+
+export const MEDIA_OFFSITE_MESSAGES = {
+  off: 'رونوشت کتابخانه در گوگل‌درایو راه‌اندازی نشده است.',
+  ok: 'رونوشت کتابخانه در گوگل‌درایو کامل است.',
+  stale: 'رونوشت کتابخانه در گوگل‌درایو بیش از دو شب است کامل نشده است؛ گزارش رونوشت کتابخانه را در پوشه گزارش‌های کارساز ببینید.',
+  unknown: 'گزارش رونوشت کتابخانه در گوگل‌درایو خوانده نشد.',
+} as const;
+
+const MEDIA_OFFSITE_FAILURES: Record<string, string> = {
+  'no-rclone': 'برنامه ارسال به درایو روی کارساز نصب نیست',
+  'no-remote': 'مقصد درایو در تنظیمات ارسال کارساز پیدا نشد',
+  'not-crypt': 'مقصد درایو رمزگذار نیست و چیزی فرستاده نشد',
+  'bad-remote': 'نام مقصد در تنظیمات کارساز درست نیست',
+  'copy-failed': 'ارسال پرونده‌ها کامل نشد',
+  'check-failed': 'بررسی پرونده‌های فرستاده‌شده کامل نشد',
+};
+
+export function mediaOffsiteFailedMessage(code: string): string {
+  const reason = MEDIA_OFFSITE_FAILURES[code] ?? 'خطای ناشناخته';
+  return `آخرین رونوشت کتابخانه در گوگل‌درایو ناموفق بود: ${reason}. گزارش رونوشت کتابخانه را در پوشه گزارش‌های کارساز ببینید.`;
+}
+
+const isWhole = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0;
+
+/** The report, or null when the text is not one */
+export function parseMediaOffsiteReport(text: string): MediaOffsiteReport | null {
+  let raw: unknown;
+  try { raw = JSON.parse(text); } catch { return null; }
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  if (r.version !== 1 || (r.state !== 'ok' && r.state !== 'failed' && r.state !== 'off') || !isWhole(r.at) || !isWhole(r.files)) return null;
+  if (r.lastOkAt !== null && !isWhole(r.lastOkAt)) return null;
+  return { state: r.state, at: r.at, lastOkAt: r.lastOkAt, files: r.files, error: typeof r.error === 'string' ? r.error : '' };
+}
+
+export function mediaOffsiteVerdict(report: MediaOffsiteReport | null, now: Date): MediaOffsiteHealth {
+  if (!report || report.state === 'off') return { state: 'off', lastOkAt: null, fileCount: null, message: MEDIA_OFFSITE_MESSAGES.off };
+  const lastOkAt = report.lastOkAt === null ? null : new Date(report.lastOkAt * 1000).toISOString();
+  const fileCount = report.files;
+  if (report.state === 'failed') return { state: 'failed', lastOkAt, fileCount, message: mediaOffsiteFailedMessage(report.error) };
+  const ageHours = report.lastOkAt === null ? Infinity : (now.getTime() - report.lastOkAt * 1000) / 3_600_000;
+  if (ageHours > MEDIA_OFFSITE_STALE_HOURS) return { state: 'stale', lastOkAt, fileCount, message: MEDIA_OFFSITE_MESSAGES.stale };
+  return { state: 'ok', lastOkAt, fileCount, message: MEDIA_OFFSITE_MESSAGES.ok };
+}
+
+/** Whether the copy needs attention: a failed or stale copy, or an unreadable report */
+export const isMediaOffsiteWarning = (o: MediaOffsiteHealth): boolean => o.state === 'failed' || o.state === 'stale' || o.state === 'unknown';

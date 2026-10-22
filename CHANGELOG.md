@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.2.29 — رونوشت شبانهٔ کتابخانه تصاویر در گوگل‌درایو
+- scripts/backup-media-offsite.sh اصل پرونده‌های MEDIA_DIR/originals را با rclone copy --ignore-existing به remote رمزگذار MEDIA_RCLONE_REMOTE می‌فرستد و با rclone check --one-way --size-only می‌سنجد؛ install-ops-cron.sh آن را هر شب ساعت ۱ اجرا می‌کند؛ گزارش logs/media-offsite.json در کارت کتابخانه صفحه سلامت؛ راهنمای docs/OFFSITE_BACKUP.md گام ۴ (تصمیم ت۴۳ الف، بسته ۱۳ بند ۷)؛ planVersions در release:renumber مدخل ویرایش‌شده را فقط با جدّ مشترک ادغام می‌پذیرد
+
 ### v10.2.28 — ابزارهای آزمون و نگهداری محکم‌تر
 - restore.sh و upgrade-rehearsal.sh گذرواژه را با scripts/pg-password.sh در PGPASSFILE می‌گذارند (TD-1351 فقط backup.sh)؛ update.sh با HUP/INT/TERM کد غیر صفر و پیام برگشت می‌دهد و build-info را با gitCommit می‌خواند؛ install.sh پایگاه‌دادهٔ دارای جدول را بی INSTALL_REUSE_DB=1 نمی‌پذیرد و گذرواژه را از گزارش PostgreSQL بیرون نگه می‌دارد؛ پاک‌سازی پروژهٔ آزمون (OBS-R2-113) و ratchet ردیف بی ترتیب آزمون‌ها (OT-A-09، TD-999 بسته)؛ release:renumber سطر نسخهٔ README شاخهٔ اصلی را نگه می‌دارد
 

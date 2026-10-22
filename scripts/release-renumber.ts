@@ -73,8 +73,11 @@ async function main(): Promise<void> {
   const split = (s: string) => s.split('\0').filter(Boolean);
   const changed = [...new Set([...split(git(['diff', '--name-only', '-z', ref])), ...split(git(['ls-files', '--others', '--exclude-standard', '-z']))])]
     .filter(rel => fs.existsSync(path.join(root, rel)) && fs.statSync(path.join(root, rel)).isFile());
+  // the common ancestor of the merge in progress; none when the merge is already committed
+  const mergeBase = gitOk(['rev-parse', '-q', '--verify', 'MERGE_HEAD']) ? git(['merge-base', 'HEAD', 'MERGE_HEAD']).trim() : '';
   const input: RenumberInput = {
     base: rel => { try { return git(['show', `${ref}:${rel}`]); } catch { return null; } },
+    ancestor: rel => { if (!mergeBase) return null; try { return git(['show', `${mergeBase}:${rel}`]); } catch { return null; } },
     current: rel => { try { return fs.readFileSync(path.join(root, rel), 'utf8'); } catch { return null; } },
     changed,
     activeFile: ACTIVE_CHANGELOG.file,

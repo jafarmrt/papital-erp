@@ -188,7 +188,12 @@ describe('scripts/release-renumber.ts (TD-473)', () => {
     // the renumber plan takes the edited entry as the base entry, not as a branch version
     const baseCl = changelog(entry('v9.0.52', 'master'), entry('v9.0.51', 'old'));
     const curCl = changelog(entry('v9.0.52', 'branch one'), entry('v9.0.52', 'master'), entry('v9.0.51', 'old').replace('fixes: []', "fixes: ['edited']"));
-    expect([...planVersions(baseCl, curCl, ACTIVE)]).toEqual([['v9.0.52', 'v9.0.53']]);
+    expect([...planVersions(baseCl, curCl, ACTIVE, baseCl)]).toEqual([['v9.0.52', 'v9.0.53']]);
+    // without the ancestor, or when the base edited that entry since, a branch copy that differs is refused (#346 review)
+    expect(() => planVersions(baseCl, curCl, ACTIVE)).toThrow(/missing or changed/);
+    const masterEdit = changelog(entry('v9.0.52', 'master'), entry('v9.0.51', 'old').replace('fixes: []', "fixes: ['master edit']"));
+    const staleCopy = changelog(entry('v9.0.52', 'branch one'), entry('v9.0.52', 'master'), entry('v9.0.51', 'old'));
+    expect(() => planVersions(masterEdit, staleCopy, ACTIVE, baseCl)).toThrow(/missing or changed/);
     expect(() => planVersions(baseCl, changelog(entry('v9.0.52', 'branch one'), entry('v9.0.51', 'old')), ACTIVE)).toThrow(/missing or changed/);
     const pkgConflict = '{\n<<<<<<< HEAD\n  "version": "9.0.52",\n=======\n  "version": "9.0.53",\n>>>>>>> origin/master\n  "type": "module"\n}\n';
     expect(resolveReleaseConflict('package.json', pkgConflict, { ours: '', theirs: '' }, ACTIVE)).toBe('{\n  "version": "9.0.53",\n  "type": "module"\n}\n');

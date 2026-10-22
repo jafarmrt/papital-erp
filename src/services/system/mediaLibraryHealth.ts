@@ -5,7 +5,8 @@ import { orm } from '../../db/drizzle.js';
 import { mediaAssets } from '../../db/schema.js';
 import { getMediaRoot } from '../../lib/media/mediaRoot.js';
 import {
-  MEDIA_LIBRARY_HEALTH_MESSAGES, mediaLibraryVerdict, type MediaLibraryHealth,
+  MEDIA_LIBRARY_HEALTH_MESSAGES, MEDIA_OFFSITE_MESSAGES, isMediaOffsiteWarning, mediaLibraryVerdict, mediaOffsiteVerdict,
+  parseMediaOffsiteReport, type MediaLibraryHealth, type MediaOffsiteHealth,
 } from '../../lib/system/mediaLibraryHealth.js';
 import { logger } from '../../middleware/logger.js';
 import { errorMessageOf } from '../../utils.js';
@@ -17,8 +18,9 @@ export type { MediaLibraryHealth };
  * query (each content once: rows holding the same file share one copy on disk); free space from `statfs` of the library
  * directory, or of its nearest existing parent before the first upload. Nothing is created or written.
  */
-export async function readMediaLibraryHealth(): Promise<MediaLibraryHealth> {
+export async function readMediaLibraryHealth(now: Date = new Date()): Promise<MediaLibraryHealth> {
   const root = getMediaRoot();
+  const offsite = readMediaOffsiteHealth(now);
   try {
     const result = await orm.execute(sql`
       WITH live AS (
@@ -53,15 +55,43 @@ export async function readMediaLibraryHealth(): Promise<MediaLibraryHealth> {
       diskFreeBytes: disk?.free ?? null,
       diskTotalBytes: disk?.total ?? null,
     };
-    return { path: root, ...figures, ...mediaLibraryVerdict(figures) };
+    return withOffsite({ path: root, ...figures, ...mediaLibraryVerdict(figures) }, offsite);
   } catch (err) {
     logger.warn('Health check of the media library failed', { error: errorMessageOf(err) });
     return {
-      status: 'unknown', path: root, fileCount: null, imageCount: null, videoCount: null, originalBytes: null, lightBytes: null,
+      offsite, status: 'unknown', path: root, fileCount: null, imageCount: null, videoCount: null, originalBytes: null, lightBytes: null,
       thumbBytes: null, lightFailedCount: null, lightMissingCount: null, diskFreeBytes: null, diskTotalBytes: null,
       messages: [MEDIA_LIBRARY_HEALTH_MESSAGES.unknown],
     };
   }
+}
+
+/**
+ * v10.2.29 (decision T43-a): the report of `scripts/backup-media-offsite.sh`, `MEDIA_OFFSITE_REPORT` (the script reads it
+ * from its environment, else from the app's .env, the value the service gets) or logs/media-offsite.json of the app.
+ */
+export function mediaOffsiteReportPath(): string {
+  return path.resolve(process.env.MEDIA_OFFSITE_REPORT || path.join(process.cwd(), 'logs', 'media-offsite.json'));
+}
+
+export function readMediaOffsiteHealth(now: Date = new Date()): MediaOffsiteHealth {
+  let text: string;
+  try {
+    text = fs.readFileSync(mediaOffsiteReportPath(), 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return mediaOffsiteVerdict(null, now);
+    logger.warn('The media library off-server copy report could not be read', { error: errorMessageOf(err) });
+    return { state: 'unknown', lastOkAt: null, fileCount: null, message: MEDIA_OFFSITE_MESSAGES.unknown };
+  }
+  const report = parseMediaOffsiteReport(text);
+  return report ? mediaOffsiteVerdict(report, now) : { state: 'unknown', lastOkAt: null, fileCount: null, message: MEDIA_OFFSITE_MESSAGES.unknown };
+}
+
+/** A copy that needs attention makes the card a warning and adds its message */
+function withOffsite(health: MediaLibraryHealth, offsite: MediaOffsiteHealth): MediaLibraryHealth {
+  if (!isMediaOffsiteWarning(offsite)) return { ...health, offsite };
+  const messages = health.status === 'ok' ? [offsite.message] : [...health.messages, offsite.message];
+  return { ...health, offsite, status: 'warning', messages };
 }
 
 /** Free and total bytes of the disk holding `dir` (or its nearest existing parent); null when it cannot be read */
