@@ -13,6 +13,7 @@
   - دیسک بیش از ۸۵ درصد پر است؛
   - آخرین پشتیبان شبانه یا رونوشت درایو بیش از ۲۶ ساعت پیش بوده است؛
   - رویداد ناموفقی در صف خطا مانده است، یا رویدادی در پردازش گیر کرده است.
+- **هر شب ساعت ۱ (از نسخه ۱۰.۲.۳۱):** `scripts/backup-media-offsite.sh` اصل تصویرها و فیلم‌های تازهٔ کتابخانه تصاویر را با همان rclone و همان رمزگذاری به درایو می‌فرستد (گام ۴). پشتیبان شبانه کتابخانه را به خاطر حجمش ندارد.
 - هر مشکل یک بار گزارش می‌شود. اگر برطرف نشود، هر ۶ ساعت یادآوری می‌شود، و وقتی برطرف شد یک پیام «برطرف شد» می‌آید.
 
 ## گام ۱: زمان‌بندی (یک بار، روی سرورهای نصب‌شده پیش از نسخه ۱۰.۰.۱)
@@ -116,16 +117,54 @@ sleep 60; /opt/papital-erp/scripts/monitor.sh
 
 باید یک پیام «برنامه پاسخ نمی‌دهد» و سپس «برطرف شد» برسد. `sudo bash scripts/go-live-verify.sh` هم وجود رونوشت بیرونی، کانال هشدار و زمان‌بندی را بررسی می‌کند.
 
+## گام ۴: رونوشت کتابخانه تصاویر (از نسخه ۱۰.۲.۳۱)
+
+کتابخانه تصاویر (عکس و فیلم کالاها، پوشه `media-library`) در پشتیبان شبانه نیست. این گام اصل پرونده‌های آن را هر شب رمزگذاری‌شده به همان درایو می‌فرستد. برنامه یا رمز تازه‌ای لازم نیست؛ همان remote گام ۲ به کار می‌رود.
+
+1. اگر گام ۲ را پیش‌تر انجام داده‌اید، فقط مقصد را در `.env` بنویسید. این سه خط را همان‌طور اجرا کنید؛ اگر خط `MEDIA_RCLONE_REMOTE=` از پیش باشد آن را درست می‌کند و دو بار اجرا کردنش هم بی‌خطر است:
+   ```bash
+   cd /opt/papital-erp && sudo sed -i -e '$a\' .env
+   if sudo grep -q '^MEDIA_RCLONE_REMOTE=' .env; then sudo sed -i 's#^MEDIA_RCLONE_REMOTE=.*#MEDIA_RCLONE_REMOTE=papital-crypt:#' .env
+   else echo 'MEDIA_RCLONE_REMOTE=papital-crypt:' | sudo tee -a .env >/dev/null; fi
+   ```
+   اگر گام ۲ را هنوز انجام نداده‌اید، نخست آن را انجام دهید.
+2. زمان‌بندی را یک بار دوباره بنویسید تا کار تازه در آن بیاید (ساعت‌های دیگر همان می‌مانند):
+   ```bash
+   cd /opt/papital-erp && sudo bash scripts/install-ops-cron.sh root
+   ```
+3. یک بار دستی اجرا کنید و نتیجه را ببینید:
+   ```bash
+   sudo /opt/papital-erp/scripts/backup-media-offsite.sh
+   rclone size papital-crypt:media-library
+   ```
+   بار نخست همه کتابخانه فرستاده می‌شود و ممکن است ساعت‌ها طول بکشد؛ از آن پس هر شب فقط پرونده‌های تازه می‌روند. اگر اجرای پیشین هنوز تمام نشده باشد، اجرای بعدی خودش کنار می‌کشد.
+
+پرونده‌ها زیر پوشه `media-library` همان درایو می‌مانند و پشتیبان‌های شبانه جدا در سر درایو. نسخه‌های سبک و کوچک فرستاده نمی‌شوند، چون از اصل دوباره ساخته می‌شوند. پرونده‌ای که در برنامه پاک شود در درایو می‌ماند. اگر حجم از ۱۵ گیگابایت رایگان گوگل بیشتر شد، به فضای بیشتر (Google One) نیاز است.
+
+صفحه سلامت سامانه، در کارت «کتابخانه تصاویر»، زمان آخرین رونوشت کامل را نشان می‌دهد. اگر ارسال ناموفق باشد یا دو شب کامل نشود، کارت هشدار می‌دهد. گزارش هر شب در `logs/media-offsite.log` است.
+
+اگر بررسی هر شب برای یک پرونده ناموفق می‌شود (گزارش نام پرونده رمزنگاری‌نشده را با «ERROR» نشان می‌دهد)، نسخه خراب آن را از درایو پاک کنید و دوباره اجرا کنید تا از نو فرستاده شود:
+
+```bash
+rclone deletefile papital-crypt:media-library/originals/<مسیر پرونده در گزارش>
+sudo /opt/papital-erp/scripts/backup-media-offsite.sh
+```
+
 ## بازیابی روی سرور تازه
 
 1. برنامه را با `install.sh` نصب کنید و rclone را مثل گام ۲ پیکربندی کنید، با **همان دو رمز crypt** (در گام ۴ و ۵ به جای `g`، `y` بزنید و رمز نگه‌داشته را وارد کنید).
 2. آخرین رونوشت را بیاورید:
    ```bash
-   rclone lsf papital-crypt: | sort | tail -4
+   rclone lsf papital-crypt: --include "erp_daily_*" | sort | tail -4
    mkdir -p /root/restore && rclone copy papital-crypt: /root/restore --include "erp_daily_<تاریخ_ساعت>*"
    ```
 3. فایل `.env` قدیمی را جای `.env` تازه بگذارید (`cp /root/restore/erp_daily_….env /opt/papital-erp/.env`). اگر نشانی پایگاه‌داده تغییر کرده، فقط `DATABASE_URL` را درست کنید و `ERP_SECRETS_KEY` و `JWT_SECRET` را دست نزنید.
 4. فایل‌های پشتیبان را در `/var/backups/erp` بگذارید و بازیابی را طبق README («بازیابی از Backup») با `scripts/restore.sh` انجام دهید: نخست آزمایشی (drill) و سپس `apply`.
+5. اگر گام ۴ برقرار بوده، کتابخانه تصاویر را برگردانید و نسخه‌های سبک را دوباره بسازید:
+   ```bash
+   rclone copy papital-crypt:media-library/originals /opt/papital-erp/media-library/originals
+   cd /opt/papital-erp && npm run media:rebuild-light -- --apply
+   ```
 
 ## تنظیم‌های اختیاری `.env`
 
@@ -134,8 +173,10 @@ sleep 60; /opt/papital-erp/scripts/monitor.sh
 | `OFFSITE_RETENTION_DAYS` | ۳۰ | روزهای نگه‌داری رونوشت در درایو |
 | `BACKUP_OFFSITE_KINDS` | `daily` | گونه‌های پشتیبانی که به درایو می‌روند (`daily,pre-deployment`) |
 | `RCLONE_CONFIG` | پیکربندی کاربر | مسیر دیگر برای پیکربندی rclone |
+| `MEDIA_RCLONE_REMOTE` | خالی (خاموش) | مقصد رونوشت کتابخانه تصاویر (گام ۴)؛ remote بی پوشه، پوشه `media-library` می‌گیرد |
+| `MEDIA_OFFSITE_REPORT` | `logs/media-offsite.json` | گزارشی که صفحه سلامت از رونوشت کتابخانه می‌خواند |
 | `MONITOR_DISK_PERCENT` | ۸۵ | آستانه پر شدن دیسک |
 | `MONITOR_BACKUP_MAX_AGE_HOURS` | ۲۶ | بیشترین سن پشتیبان و رونوشت |
 | `MONITOR_REPEAT_HOURS` | ۶ | فاصله یادآوری مشکلی که برطرف نشده |
 
-ساعت پشتیبان شبانه در `.env` نیست: `sudo BACKUP_HOUR=2 BACKUP_MINUTE=30 bash scripts/install-ops-cron.sh root` آن را می‌نویسد.
+ساعت پشتیبان شبانه در `.env` نیست: `sudo BACKUP_HOUR=2 BACKUP_MINUTE=30 bash scripts/install-ops-cron.sh root` آن را می‌نویسد. ساعت رونوشت کتابخانه هم همین‌طور: `MEDIA_OFFSITE_HOUR` و `MEDIA_OFFSITE_MINUTE` (پیش‌فرض ۱:۰۰).

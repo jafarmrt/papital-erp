@@ -19,6 +19,9 @@ import { planRenumber, type RenumberInput } from './renumber/plan';
  * Terminal output is English (AGENTS.md, owner rule t9).
  */
 
+/** The code of this command; a branch runs its own copy of it */
+const RENUMBER_CODE = ['scripts/release-renumber.ts', 'scripts/renumber'];
+
 function git(args: string[]): string {
   return execFileSync('git', args, { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
 }
@@ -59,6 +62,15 @@ async function main(): Promise<void> {
   const root = process.cwd();
   if (!fs.existsSync(path.join(root, 'package.json'))) throw new Error('Run from the repository root');
   if (!gitOk(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])) throw new Error(`Unknown ref "${ref}" (git fetch origin master first)`);
+  // v10.2.31: this run uses the branch's own copy of the renumber code; when only the base changed it since the fork,
+  // the older copy would resolve the merge with old rules (it duplicated entries the base had edited), so stop first
+  if (!isMerged(ref)) {
+    const fork = git(['merge-base', 'HEAD', ref]).trim();
+    const touched = (to: string) => !gitOk(['diff', '--quiet', fork, to, '--', ...RENUMBER_CODE]);
+    if (touched(ref) && !touched('HEAD')) {
+      throw new Error(`${ref} has newer renumber code; take it first: git checkout ${ref} -- ${RENUMBER_CODE.join(' ')} && git commit -m "Take the renumber code of ${ref}", then run again`);
+    }
+  }
   // read before merging: package.json and the changelog index may be conflicted afterwards
   const { ACTIVE_CHANGELOG } = await import('../src/data/changelogs/index.js');
 
@@ -73,8 +85,11 @@ async function main(): Promise<void> {
   const split = (s: string) => s.split('\0').filter(Boolean);
   const changed = [...new Set([...split(git(['diff', '--name-only', '-z', ref])), ...split(git(['ls-files', '--others', '--exclude-standard', '-z']))])]
     .filter(rel => fs.existsSync(path.join(root, rel)) && fs.statSync(path.join(root, rel)).isFile());
+  // the common ancestor of the merge in progress; none when the merge is already committed
+  const mergeBase = gitOk(['rev-parse', '-q', '--verify', 'MERGE_HEAD']) ? git(['merge-base', 'HEAD', 'MERGE_HEAD']).trim() : '';
   const input: RenumberInput = {
     base: rel => { try { return git(['show', `${ref}:${rel}`]); } catch { return null; } },
+    ancestor: rel => { if (!mergeBase) return null; try { return git(['show', `${mergeBase}:${rel}`]); } catch { return null; } },
     current: rel => { try { return fs.readFileSync(path.join(root, rel), 'utf8'); } catch { return null; } },
     changed,
     activeFile: ACTIVE_CHANGELOG.file,

@@ -221,7 +221,7 @@ describe('nightly_verify_o_04: the nightly check on a copy of the backup', () =>
       encoding: 'utf8', env: { ...process.env, CRON_FILE: path.join(dir, 'times'), APP_DIR: ROOT, ...env },
     });
     // 08 and 09 are decimal hours
-    const nine = cron({ BACKUP_HOUR: '08', BACKUP_MINUTE: '09', NIGHTLY_VERIFY_HOUR: '09', NIGHTLY_VERIFY_MINUTE: '09' });
+    const nine = cron({ BACKUP_HOUR: '08', BACKUP_MINUTE: '09', NIGHTLY_VERIFY_HOUR: '09', NIGHTLY_VERIFY_MINUTE: '09', MEDIA_OFFSITE_HOUR: '01', MEDIA_OFFSITE_MINUTE: '00' });
     expect(nine.status, nine.stderr).toBe(0);
     expect(fs.readFileSync(path.join(dir, 'times'), 'utf8')).toContain(`9 9 * * * root ${ROOT}/scripts/nightly-verify.sh`);
     expect(nine.stderr).not.toContain('not given');

@@ -1,6 +1,17 @@
 import { AlertTriangle, CheckCircle2, HelpCircle, Images } from 'lucide-react';
 import { formatPersianNumber } from '../../utils/persianNumber';
-import { MEDIA_REBUILD_LIGHT_COMMAND, formatByteSize, type MediaLibraryHealth } from '../../lib/system/mediaLibraryHealth';
+import { formatPersianDateTime } from '../../utils/dateUtils';
+import {
+  MEDIA_REBUILD_LIGHT_COMMAND, formatByteSize, type MediaLibraryHealth, type MediaOffsiteHealth,
+} from '../../lib/system/mediaLibraryHealth';
+
+/** v10.2.31: the row of the nightly copy in Google Drive */
+function offsiteText(offsite: MediaOffsiteHealth | undefined): string {
+  if (!offsite || offsite.state === 'unknown') return 'نامعلوم';
+  if (offsite.state === 'off') return 'راه‌اندازی نشده';
+  const last = offsite.lastOkAt ? `آخرین رونوشت کامل: ${formatPersianDateTime(offsite.lastOkAt)}` : 'هنوز کامل نشده';
+  return offsite.state === 'ok' ? last : `${last} (ناموفق)`;
+}
 
 /**
  * v10.1.3 (N-05 PR 4): کارت کتابخانه تصاویر در صفحه سلامت؛ شمار پرونده‌ها، حجم اصل و نسخه‌های سبک، فضای آزاد دیسک و
@@ -46,6 +57,8 @@ export function MediaLibraryHealthCard({ media }: { media?: MediaLibraryHealth }
         <dd data-field="light">{media?.lightBytes == null || media?.thumbBytes == null ? 'نامعلوم' : formatByteSize(media.lightBytes + media.thumbBytes)}</dd>
         <dt>فضای آزاد دیسک</dt>
         <dd data-field="disk">{media?.diskFreeBytes == null ? 'نامعلوم' : `${formatByteSize(media.diskFreeBytes)} از ${size(media.diskTotalBytes)}`}</dd>
+        <dt>رونوشت در گوگل‌درایو</dt>
+        <dd data-field="offsite" data-state={media?.offsite?.state ?? 'unknown'}>{offsiteText(media?.offsite)}</dd>
       </dl>
       <ul className="mt-3 space-y-1 text-xs">
         {messages.map(message => (
