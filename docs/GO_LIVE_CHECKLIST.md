@@ -191,8 +191,11 @@ Run each scenario end-to-end and verify the accounting/inventory side effects:
 **A) Git-based update (recommended):**
 ```bash
 cd /opt/papital-erp && sudo ./update.sh --rehearse
-# → automatic pre-deployment backup (90-day retention) → git pull --ff-only
-#   → npm ci → npm run build → the new migrations rehearsed on a restored copy
+# → free disk space check (stops with nothing changed when the side build would not fit)
+#   → automatic pre-deployment backup (90-day retention) → git pull --ff-only
+#   → npm ci + npm run build in the side folder .build-next (the running service is untouched)
+#   → the new migrations rehearsed on a restored copy
+#   → swap dist/ and node_modules/ in (previous ones kept as dist.prev/ and node_modules.prev/)
 #   → service restart → health verification
 sudo bash scripts/go-live-verify.sh http://localhost:3000   # → STATUS : READY
 ```
@@ -204,8 +207,15 @@ sudo bash update.sh --rehearse --source /root/papital-erp-source-v<NEW>/
 # or directly from the zip archive:
 sudo bash update.sh --rehearse --zip /root/papital-erp-source-v<NEW>.zip
 sudo bash scripts/go-live-verify.sh http://localhost:3000
-# → backup → sync source over /opt/papital-erp (preserves .env, .git, logs,
-#   uploads, backups, node_modules) → npm ci → build → restart → health check
+# → backup → keep the current source in .previous-source/ → sync the new source
+#   over /opt/papital-erp with --delete (files the new version dropped are removed;
+#   .env, .git, logs, uploads, media library, backups, node_modules and dist are
+#   neither copied nor deleted; the files to delete are listed first) → build in .build-next
+#   → swap → restart → health check
+# Rollback of a manual update: bash scripts/update-steps.sh restore-source /opt/papital-erp
+# Only one update runs at a time (.update.lock). A re-run with no new source builds nothing
+# (--rebuild forces it). An update killed during the swap leaves .update-swapping: the next
+# run refuses and prints the one-line repair, after which the update is run again.
 ```
 
 > **Invariants for every update path:** migrations run automatically at startup via the atomic migrator — `npm run db:push` is **banned**. `update.sh` always backs up first (`--no-backup` override exists but is discouraged).
