@@ -8,7 +8,7 @@ import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { hasPresetShapedSections, presetMaterialRefs, projectSectionsFromPreset } from '../../lib/projects/inventoryControlSections.js';
-import { findProjectItemMatch, type MatchableItem } from '../../lib/projects/projectItemMatch.js';
+import { findProjectItemMatch, itemCodeKey, itemNameKey, type MatchableItem } from '../../lib/projects/projectItemMatch.js';
 import { projectNeedRefs, type ReservationShortage, type ReservationStockItem } from '../../lib/projects/projectReservation.js';
 import { isProjectFinalized, reservationQtyField, storedReservationRows, storedReservationShortages } from '../../lib/projects/projectReservationState.js';
 import { isProjectOpenForAllocation } from '../../lib/projects/projectStatus.js';
@@ -18,7 +18,10 @@ import {
 } from '../../lib/projects/reservationReconcile.js';
 import { logReservationReconcile } from './projectAudit.js';
 import { lockLiveProject, type ProjectActor } from './projectStatusSync.js';
-import { assertProjectVersion, projectVersionConflict } from './projectVersion.js';
+import { projectVersionConflict } from './projectVersion.js';
+import { assertProjectPartsWritable, projectPartTokens } from './projectPartTokens.js';
+import { readProjectManagers } from './projectManagers.js';
+import type { ProjectPartTokens } from '../../lib/projects/projectParts.js';
 import { planReservationWithOthers, readStockItemsForRefs } from './serverInventoryControl.js';
 
 /**
@@ -89,7 +92,27 @@ function ownReservationsByItem(rows: StoredRow[], stockItems: ReservationStockIt
     byItem.set(match.id, fin(byItem.get(match.id) ?? 0).add(qty).toNumber());
     return match.id;
   });
-  return { byItem, itemOfRow, aliases };
+  return { byItem, itemOfRow, aliases: unambiguousAliases(aliases) };
+}
+
+/**
+ * TD-1344 (بازبینی N-A): کد یا نامی که ردیف‌های ذخیره‌شده به بیش از یک کالا داده‌اند نام دیگر هیچ‌کدام نیست، پس ردیف فهرستی که
+ * فقط با آن می‌رسید بی کالا می‌ماند و تا هست چیزی آزاد نمی‌شود، نه اینکه به نخستین کالا برسد
+ */
+function unambiguousAliases(aliases: MatchableItem[]): MatchableItem[] {
+  const singleItem = (key: (a: MatchableItem) => string) => {
+    const ids = new Map<string, Set<number>>();
+    for (const a of aliases) {
+      const k = key(a);
+      if (k) ids.set(k, (ids.get(k) ?? new Set<number>()).add(a.id));
+    }
+    return (a: MatchableItem): boolean => ids.get(key(a))?.size === 1;
+  };
+  const codeHeld = singleItem(a => itemCodeKey(a.code));
+  const nameHeld = singleItem(a => itemNameKey(a.name));
+  return aliases
+    .map(a => ({ id: a.id, code: codeHeld(a) ? a.code : '', name: nameHeld(a) ? a.name : '' }))
+    .filter(a => a.code || a.name);
 }
 
 /** نشانهٔ کمبودها بی موجودی لحظه‌ای (موجودی و رزرو دیگران در هر خواندن عوض می‌شوند و تغییر رزرو نیستند) */
@@ -141,8 +164,13 @@ async function computeReconcile(executor: DbExecutor, project: ProjectRow): Prom
     };
   });
 
+  // TD-1344 (بازبینی N-B): تا ردیفی از فهرست بی کالا مانده، کمبود ذخیره‌شدهٔ کالایی که بیرون از طرح افتاده همان می‌ماند
+  const shortages = plan.unmatched.length === 0 ? plan.shortages : [
+    ...plan.shortages,
+    ...storedReservationShortages(ic).filter(s => !planRow.has(Number(s.itemId)) && !planShort.has(Number(s.itemId))),
+  ];
   const changedItems = new Set(lines.filter(l => reservationLineChange(l) !== 'unchanged').map(l => l.itemId));
-  const shortagesChanged = shortageSignature(storedReservationShortages(ic)) !== shortageSignature(plan.shortages);
+  const shortagesChanged = shortageSignature(storedReservationShortages(ic)) !== shortageSignature(shortages);
   const hasChanges = changedItems.size > 0 || shortagesChanged;
 
   // ردیف کالای بی‌تغییر و ردیف بی کالای زنده همان می‌مانند؛ ردیف‌های کالای عوض‌شده جای نخستینشان یک ردیف تازه می‌شوند
@@ -167,16 +195,16 @@ async function computeReconcile(executor: DbExecutor, project: ProjectRow): Prom
   const planToken = createHash('sha256')
     .update(JSON.stringify({
       lines: lines.map(l => [l.itemId, qtyKey(l.requiredQty), qtyKey(l.currentQty), qtyKey(l.targetQty), qtyKey(l.shortQty)]),
-      shortages: shortageSignature(plan.shortages),
+      shortages: shortageSignature(shortages),
       unmatched: plan.unmatched.map(r => [r.section ?? '', r.code, r.name, r.unit, qtyKey(r.qty)]),
       hasChanges,
     }))
     .digest('hex');
 
   return {
-    preview: { projectId: project.id, version: project.version ?? 1, lines, unmatchedRows: plan.unmatched, hasChanges, planToken },
+    preview: { projectId: project.id, version: project.version ?? 1, inventoryToken: projectPartTokens(project, []).inventory, lines, unmatchedRows: plan.unmatched, hasChanges, planToken },
     reservedItems,
-    reservationShortages: plan.shortages,
+    reservationShortages: shortages,
   };
 }
 
@@ -196,12 +224,13 @@ export async function previewReservationReconcile(projectId: number): Promise<Re
 /** ثبت «تکمیل رزرو» همان تغییرهایی که کاربر در پیش‌نمایش دید */
 export async function applyReservationReconcile(
   projectId: number,
-  input: { version: number; planToken: string },
+  input: { version: number; partTokens?: ProjectPartTokens; planToken: string },
   actor: ProjectActor,
 ): Promise<ReservationReconcileResult> {
   return orm.transaction(async tx => {
     const project = await lockLiveProject(tx, projectId);
-    assertProjectVersion(project, input.version);
+    // TD-1342 (بستهٔ ۱۲ بند ۴): نسخهٔ کهنهٔ زبانه پذیرفته است وقتی فهرست مواد ذخیره‌شده همانی است که زبانه نشان می‌دهد
+    await assertProjectPartsWritable(tx, project, input.version, input.partTokens, { inventoryControl: true });
     // همان قفل ثبت نهایی (TD-819): ثبت نهایی‌ها و تکمیل رزروهای هم‌زمان رزرو دیگران را پشت سر هم می‌خوانند
     await tx.execute(sql`SELECT pg_advisory_xact_lock(${ADVISORY_LOCK_KEYS.PROJECT_RESERVATION_FINALIZE}::bigint)`);
     const computed = await computeReconcile(tx, project);
@@ -215,6 +244,7 @@ export async function applyReservationReconcile(
     }
     const ic = asObject(project.inventoryControl);
     const currentVersion = project.version ?? 1;
+    const tokensOf = async (row: ProjectRow) => projectPartTokens(row, ((await readProjectManagers(tx, [row.id])).get(row.id) ?? []).map(m => m.userId));
     if (!computed.preview.hasChanges) {
       return {
         id: project.id,
@@ -222,6 +252,7 @@ export async function applyReservationReconcile(
         changed: false,
         preview: computed.preview,
         inventory_control: { reservedItems: storedReservationRows(ic), reservationShortages: storedReservationShortages(ic) },
+        partTokens: await tokensOf(project),
       };
     }
     const nextIc: InventoryControl = {
@@ -235,7 +266,7 @@ export async function applyReservationReconcile(
     const [updated] = await tx.update(productionProjects)
       .set({ inventoryControl: nextIc, version })
       .where(and(eq(productionProjects.id, project.id), eq(productionProjects.version, currentVersion)))
-      .returning({ id: productionProjects.id });
+      .returning();
     if (!updated) throw projectVersionConflict(project.id, input.version, currentVersion);
     await logReservationReconcile(tx, actor, project, {
       before: { reservedItems: storedReservationRows(ic), reservationShortages: storedReservationShortages(ic), version: currentVersion },
@@ -248,6 +279,7 @@ export async function applyReservationReconcile(
       changed: true,
       preview: computed.preview,
       inventory_control: { reservedItems: computed.reservedItems, reservationShortages: computed.reservationShortages },
+      partTokens: await tokensOf(updated),
     };
   });
 }

@@ -203,7 +203,7 @@ exit 0`);
     expect(f.log()).toBe('');
     fs.rmSync(f.dir, { recursive: true, force: true });
   }, 30_000);
-  // v10.2.25 (#333 review N-a): the sweep of a stopped restore's leftovers kept the work folder by its path; spelled another
+  // v10.2.26 (#333 review N-a): the sweep of a stopped restore's leftovers kept the work folder by its path; spelled another
   // way (`//`, `/./`) it was swept too, with the password file the drop of the drill copy still needs
   it('the leftover sweep keeps this run\'s work folder however its path is spelled', () => {
     const script = fs.readFileSync(path.join(ROOT, 'scripts/nightly-verify.sh'), 'utf8');

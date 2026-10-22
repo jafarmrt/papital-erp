@@ -134,7 +134,7 @@ async function orphanUploadsCase(): Promise<string> {
     if (!fs.existsSync(path.join(dupDir, differs)) || fs.readFileSync(path.join(dir, differs), 'utf8') !== 'top') wrong.push('a different held copy was moved or overwritten');
     if (!dupRun.failures.some(f => f.name === `${later2}/${differs}` && f.code === 'TARGET_EXISTS_DIFFERENT')) wrong.push(`duplicate failures ${JSON.stringify(dupRun.failures)}`);
 
-    // a day folder that is a link to another place is refused before any file moves; v10.2.25 (#337 review N-e1): also
+    // a day folder that is a link to another place is refused before any file moves; v10.2.26 (#337 review N-e1): also
     // before a held file a row names again goes back, so the refused run leaves everything where it was
     const linkDir = fs.mkdtempSync(path.join(os.tmpdir(), 'orphan-uploads-link-'));
     const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'orphan-uploads-outside-'));

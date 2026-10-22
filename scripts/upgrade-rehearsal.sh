@@ -45,7 +45,7 @@ TSX="$APP_DIR/node_modules/.bin/tsx"
 [ -x "$TSX" ] || fail "$TSX not found — install the dependencies of the new code first (npm ci --include=dev)"
 
 WORK_DIR="$(mktemp -d)"
-# v10.2.25 (TD-1351): psql and restore.sh get the password through a PGPASSFILE in WORK_DIR, not a command line;
+# v10.2.26 (TD-1351): psql and restore.sh get the password through a PGPASSFILE in WORK_DIR, not a command line;
 # the migrations (Node) get the full URL through their environment
 # shellcheck source=scripts/pg-password.sh
 . "$APP_DIR/scripts/pg-password.sh"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# v10.2.25 (#339 review N-C, TD-1351): sourced by restore.sh and upgrade-rehearsal.sh so the database password never
+# v10.2.26 (#339 review N-C, TD-1351): sourced by restore.sh and upgrade-rehearsal.sh so the database password never
 # appears on a psql / pg_restore command line, where every user of the server can read it in the process list.
 # pg_password_setup <dir> writes <dir>/pgpass (mode 600, a copy of an inherited PGPASSFILE first), exports it as
 # PGPASSFILE and removes the password from DATABASE_URL and RESTORE_ADMIN_URL; the full DATABASE_URL stays in

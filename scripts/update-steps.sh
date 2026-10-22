@@ -264,7 +264,7 @@ update_swap_build() {
   local app_dir="$1" build_dir="$1/$UPDATE_BUILD_DIR_NAME" rc=0
   [ -f "$build_dir/dist/server.cjs" ] && [ -d "$build_dir/node_modules" ] \
     || { echo "The side folder holds no complete build: $build_dir" >&2; return 1; }
-  # v10.2.25 (#339 review N-A): the caller's own signal traps come back after the swap
+  # v10.2.26 (#339 review N-A): the caller's own signal traps come back after the swap
   local saved_traps
   saved_traps="$(trap -p HUP INT TERM)"
   trap '' HUP INT TERM

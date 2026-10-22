@@ -199,7 +199,7 @@ export async function cleanupOrphanUploads(options: OrphanUploadsOptions): Promi
     const toMove = plannedOrphans.filter(f => confirmedMoves.has(f.name));
     const toPurge = plannedExpired.filter(f => confirmedPurges.has(heldKey(f)));
     report.skipped += plannedOrphans.length - toMove.length + plannedExpired.length - toPurge.length;
-    // v10.2.25 (#337 review N-e1): today's folder is checked before anything moves, so a bad folder stops the run whole
+    // v10.2.26 (#337 review N-e1): today's folder is checked before anything moves, so a bad folder stops the run whole
     const day = toMove.length > 0 ? await dayFolder(uploadsDir, root, today) : '';
 
     const fail = (name: string, err: unknown, failed: Array<{ name: string; code: string }>) => {

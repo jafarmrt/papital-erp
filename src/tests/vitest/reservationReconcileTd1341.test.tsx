@@ -105,12 +105,15 @@ describe('the reconcile preview text (TD-1341)', () => {
 
 const TOKEN_A = 'a'.repeat(64);
 const TOKEN_B = 'b'.repeat(64);
+const INV_A = 'c'.repeat(32);
+const INV_B = 'd'.repeat(32);
 const preview = (over: Partial<ReservationReconcilePreview> = {}): ReservationReconcilePreview =>
-  ({ projectId: 7, version: 4, lines: [line(3, 10)], unmatchedRows: [], hasChanges: true, planToken: TOKEN_A, ...over });
+  ({ projectId: 7, version: 4, lines: [line(3, 10)], unmatchedRows: [], hasChanges: true, planToken: TOKEN_A, inventoryToken: INV_A, ...over });
+const BASE = { version: 4, partTokens: { inventory: INV_A } };
 
 describe('the reconcile window (TD-1341)', () => {
   it('waits for a saved list before it opens', () => {
-    render(<ReservationReconcileButton projectId={7} version={4} busy={false} dirty onApplied={vi.fn()} />);
+    render(<ReservationReconcileButton projectId={7} writeBase={BASE} busy={false} dirty onApplied={vi.fn()} />);
     const button = screen.getByRole('button', { name: BUTTON });
     expect(button).toHaveProperty('disabled', true);
     expect(button.getAttribute('title')).toBe(SAVE_FIRST);
@@ -123,13 +126,13 @@ describe('the reconcile window (TD-1341)', () => {
       if (url === '/api/projects/7/reservation-reconcile' && opts?.method === 'POST') return { id: 7, version: 5, changed: true, preview: preview(), inventory_control: { reservedItems: [], reservationShortages: [] } };
       return null;
     };
-    render(<ReservationReconcileButton projectId={7} version={4} busy={false} dirty={false} onApplied={onApplied} />);
+    render(<ReservationReconcileButton projectId={7} writeBase={BASE} busy={false} dirty={false} onApplied={onApplied} />);
     fireEvent.click(screen.getByRole('button', { name: BUTTON }));
     expect(await screen.findByText('۷ عدد رزرو تازه')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: CONFIRM }));
     await waitFor(() => expect(onApplied).toHaveBeenCalledWith(expect.objectContaining({ version: 5 })));
     const post = fetchJson.mock.calls.find(c => c[1]?.method === 'POST');
-    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ version: 4, planToken: TOKEN_A });
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ version: 4, partTokens: { inventory: INV_A }, planToken: TOKEN_A });
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
@@ -141,7 +144,7 @@ describe('the reconcile window (TD-1341)', () => {
       if (posts === 1) throw new ApiError('changed', 'PROJECT_RESERVATION_PLAN_CHANGED', 409, { preview: preview({ lines: [line(3, 8)], planToken: TOKEN_B }) });
       return { id: 7, version: 5, changed: true, preview: preview(), inventory_control: { reservedItems: [], reservationShortages: [] } };
     };
-    render(<ReservationReconcileButton projectId={7} version={4} busy={false} dirty={false} onApplied={vi.fn()} />);
+    render(<ReservationReconcileButton projectId={7} writeBase={BASE} busy={false} dirty={false} onApplied={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: BUTTON }));
     fireEvent.click(await screen.findByRole('button', { name: CONFIRM }));
     expect(await screen.findByText('۵ عدد رزرو تازه')).toBeTruthy();
@@ -153,13 +156,13 @@ describe('the reconcile window (TD-1341)', () => {
 
   it('records nothing when the plan has no change or the tab is behind the project', async () => {
     route = () => preview({ hasChanges: false, lines: [line(5, 5)] });
-    render(<ReservationReconcileButton projectId={7} version={4} busy={false} dirty={false} onApplied={vi.fn()} />);
+    render(<ReservationReconcileButton projectId={7} writeBase={BASE} busy={false} dirty={false} onApplied={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: BUTTON }));
     expect(await screen.findByText(NOTHING_TO_DO)).toBeTruthy();
     expect(screen.getByRole('button', { name: CONFIRM })).toHaveProperty('disabled', true);
     cleanup();
-    route = () => preview({ version: 6 });
-    render(<ReservationReconcileButton projectId={7} version={4} busy={false} dirty={false} onApplied={vi.fn()} />);
+    route = () => preview({ version: 6, inventoryToken: INV_B });
+    render(<ReservationReconcileButton projectId={7} writeBase={BASE} busy={false} dirty={false} onApplied={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: BUTTON }));
     expect(await screen.findByText(STALE)).toBeTruthy();
     expect(screen.getByRole('button', { name: CONFIRM })).toHaveProperty('disabled', true);
@@ -168,7 +171,7 @@ describe('the reconcile window (TD-1341)', () => {
   it('lists the rows that reach no item and records no release while they are there', async () => {
     const unmatchedRows = [{ code: 'کدی-1', name: 'bead', unit: 'عدد', qty: 4, section: 'm' }];
     route = () => preview({ lines: [line(4, 0)], unmatchedRows });
-    render(<ReservationReconcileButton projectId={7} version={4} busy={false} dirty={false} onApplied={vi.fn()} />);
+    render(<ReservationReconcileButton projectId={7} writeBase={BASE} busy={false} dirty={false} onApplied={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: BUTTON }));
     expect(await screen.findByText('«bead» (کدی-1): ۴ عدد در «m»')).toBeTruthy();
     expect(screen.getByText(UNMATCHED_ROWS_BLOCK_NOTE)).toBeTruthy();
@@ -178,17 +181,32 @@ describe('the reconcile window (TD-1341)', () => {
     cleanup();
     // a plan that only reserves more is recorded; the rows stay listed
     route = () => preview({ lines: [line(3, 10)], unmatchedRows });
-    render(<ReservationReconcileButton projectId={7} version={4} busy={false} dirty={false} onApplied={vi.fn()} />);
+    render(<ReservationReconcileButton projectId={7} writeBase={BASE} busy={false} dirty={false} onApplied={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: BUTTON }));
     expect(await screen.findByText('«bead» (کدی-1): ۴ عدد در «m»')).toBeTruthy();
     expect(screen.queryByText(UNMATCHED_ROWS_BLOCK_NOTE)).toBeNull();
     expect(screen.getByRole('button', { name: CONFIRM })).toHaveProperty('disabled', false);
   });
 
+  it('is not behind when only a remittance or an allocation raised the version (TD-1342)', async () => {
+    route = () => preview({ version: 6 });
+    render(<ReservationReconcileButton projectId={7} writeBase={BASE} busy={false} dirty={false} onApplied={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: BUTTON }));
+    expect(await screen.findByText('۷ عدد رزرو تازه')).toBeTruthy();
+    expect(screen.queryByText(STALE)).toBeNull();
+    expect(screen.getByRole('button', { name: CONFIRM })).toHaveProperty('disabled', false);
+    cleanup();
+    // a tab without part tokens still compares the version
+    route = () => preview({ version: 6 });
+    render(<ReservationReconcileButton projectId={7} writeBase={{ version: 4 }} busy={false} dirty={false} onApplied={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: BUTTON }));
+    expect(await screen.findByText(STALE)).toBeTruthy();
+  });
+
   it('is not closed by Esc while the plan is being recorded', async () => {
     let finish: (v: unknown) => void = () => undefined;
     route = (_url, opts) => (opts?.method === 'POST' ? new Promise(resolve => { finish = resolve; }) : preview());
-    render(<ReservationReconcileButton projectId={7} version={4} busy={false} dirty={false} onApplied={vi.fn()} />);
+    render(<ReservationReconcileButton projectId={7} writeBase={BASE} busy={false} dirty={false} onApplied={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: BUTTON }));
     fireEvent.click(await screen.findByRole('button', { name: CONFIRM }));
     await waitFor(() => expect(fetchJson.mock.calls.some(c => c[1]?.method === 'POST')).toBe(true));

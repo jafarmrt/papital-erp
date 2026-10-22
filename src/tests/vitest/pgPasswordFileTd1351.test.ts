@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-// v10.2.25 (#339 review N-C, TD-1351): restore.sh and upgrade-rehearsal.sh put the database URL with its password on the
+// v10.2.26 (#339 review N-C, TD-1351): restore.sh and upgrade-rehearsal.sh put the database URL with its password on the
 // psql / pg_restore command line during `update.sh --rehearse`, readable by every user in the process list. They now
 // source scripts/pg-password.sh, which moves the password into a PGPASSFILE (mode 600) and strips it from the URLs.
 

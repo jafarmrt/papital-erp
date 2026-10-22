@@ -23,7 +23,7 @@ const idOf = (res: Res) => Number((res.body as { id?: unknown } | undefined)?.id
 const APPROVED_TITLE = 'فیش حقوق شما تأیید شد';
 const PAYSLIP_MONTH = 'اردیبهشت ۱۴۰۵';
 const TASK_TITLE = 'کار تازه در کارتابل';
-// v10.2.25: a seven-digit amount no payslip number or date can hold; the old check looked for «735» and failed whenever
+// v10.2.26: a seven-digit amount no payslip number or date can hold; the old check looked for «735» and failed whenever
 // the payslip number shown in the notice held those digits
 const PAYSLIP_AMOUNT = 7_351_973;
 /** whether a text names the amount, in Latin or Persian digits, with or without thousands separators */

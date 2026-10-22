@@ -346,7 +346,7 @@ jobs:
           curl -fsS http://localhost:3000/health/ready
 
       - name: Reinstall Without .env Over The Existing Database Role
-        # v10.2.25 (#344 review L1): without INSTALL_REUSE_DB=1 the installer refuses a database with tables
+        # v10.2.26 (#344 review L1): without INSTALL_REUSE_DB=1 the installer refuses a database with tables
         run: |
           mv .env .env.first-install
           if bash install.sh; then echo "::error::install.sh reused a database with tables without INSTALL_REUSE_DB=1"; exit 1; fi

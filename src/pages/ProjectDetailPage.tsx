@@ -216,7 +216,7 @@ export default function ProjectDetailPage() {
   const items = itemsQuery.data ?? [];
   const personnel = personnelQuery.data ?? [];
 
-  const onStatusSaved = (res: unknown) => { projectVersion.remember(res); void refresh(); };
+  const onStatusSaved = (res: unknown) => { projectVersion.remember(res, ['status']); void refresh(); };
   const inactiveNote = projectInactiveNote(project.status);
 
   return (
@@ -224,7 +224,7 @@ export default function ProjectDetailPage() {
       {phoneLayout ? (
         <ProjectPhoneHeader
           project={project}
-          version={projectVersion.version}
+          writeBase={projectVersion.writeBase}
           canEdit={canEdit}
           editingSpecs={editingSpecs}
           onBack={() => void goBack()}
@@ -240,7 +240,7 @@ export default function ProjectDetailPage() {
           )}
           <ProjectWorkspaceHeader
             project={project}
-            version={projectVersion.version}
+            writeBase={projectVersion.writeBase}
             canEdit={canEdit}
             editingSpecs={editingSpecs}
             onBack={() => void goBack()}
@@ -264,7 +264,7 @@ export default function ProjectDetailPage() {
         {tab === 'overview' && !(phoneLayout && !editingSpecs) && (
           <ProjectOverviewTab
             project={project}
-            version={projectVersion.version}
+            writeBase={projectVersion.writeBase}
             rememberVersion={projectVersion.remember}
             personnel={personnel}
             canEdit={canEdit}

@@ -132,7 +132,7 @@ success "HTTPS enabled with auto-renewal (systemd timer)."
 
 # ---------- 7) Update .env ALLOWED_ORIGINS + APP_URL ----------
 log "[5/5] Updating ALLOWED_ORIGINS and APP_URL in $APP_DIR/.env ..."
-# v10.2.25 (#344 review L3): a .env without a final newline would join its last line with the first one added below
+# v10.2.26 (#344 review L3): a .env without a final newline would join its last line with the first one added below
 if [ -s "$APP_DIR/.env" ] && [ -n "$(tail -c1 "$APP_DIR/.env")" ]; then echo >> "$APP_DIR/.env"; fi
 if grep -q '^ALLOWED_ORIGINS=' "$APP_DIR/.env"; then
   sed -i "s#^ALLOWED_ORIGINS=.*#ALLOWED_ORIGINS=https://${DOMAIN},http://${DOMAIN},http://localhost:${APP_PORT}#" "$APP_DIR/.env"

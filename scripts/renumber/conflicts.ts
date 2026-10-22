@@ -1,14 +1,15 @@
 /**
  * v9.0.109 (TD-473) — automatic resolution of the merge conflicts every parallel release produces
  * (v9/PHASE4_LANES.md §7.6), used by `npm run release:renumber` before renumbering:
- *  - the active changelog and the active CHANGELOG.md section: both sides' entries are kept (sorted later);
+ *  - the active changelog and the active CHANGELOG.md section: both sides' entries are kept (sorted later); a branch
+ *    entry with the version and title of a base entry replaces it (an edit of an older entry, v10.2.26);
  *  - the migration journal: the base's entries plus this branch's own entries (renumbered later);
  *  - TECH_DEBT.md / TECH_DEBT_ARCHIVE.md: both sides of each conflict are kept (rows), a row both sides hold once,
  *    and a row both sides changed differently is left to the operator;
  *    the counters and the «last review» line keep this branch's side (the counters are recounted later, and a row
  *    the merged archive holds is dropped from TECH_DEBT.md then: TD-981, renumber/plan.ts);
  *  - package.json, package-lock.json, k8s, README.md: a conflict whose lines are all version lines keeps the
- *    base's side (the version is set later; v10.2.25: the base's side, so text the base changed on a version line,
+ *    base's side (the version is set later; v10.2.26: the base's side, so text the base changed on a version line,
  *    such as the paths on the README status line, is not dropped).
  * Any other conflict is left to the operator.
  */
@@ -62,7 +63,14 @@ function unionChangelog(s: ConflictStages): string | null {
   const theirs = entriesOf(s.theirs);
   if (!ours || !theirs) return null;
   const known = new Set(theirs.blocks);
-  const blocks = [...ours.blocks.filter(b => !known.has(b)), ...theirs.blocks];
+  // v10.2.26: a branch block with the version and title of a base block is an edit of that entry, not a new one
+  const key = (b: string) => `${b.match(/version: '([^']+)'/)?.[1]}\n${b.match(/title: '([^']*)'/)?.[1]}`;
+  const edited = new Map(ours.blocks.filter(b => !known.has(b)).map(b => [key(b), b]));
+  const theirKeys = new Set(theirs.blocks.map(key));
+  const blocks = [
+    ...ours.blocks.filter(b => !known.has(b) && !theirKeys.has(key(b))),
+    ...theirs.blocks.map(b => edited.get(key(b)) ?? b),
+  ];
   return `${theirs.head}${blocks.map((b, k) => (k < blocks.length - 1 ? `${b},` : b)).join('\n')}\n${theirs.tail}`;
 }
 

@@ -394,7 +394,7 @@ describe('update_followups_obs_r1_22', () => {
 
   it('names the commit of a build made before v10.2.23 from its build-info.json and says nothing of a missing dist.prev', () => {
     const s = scratch();
-    // v10.2.25 (#339 review N-B): the format scripts/write-build-info.mjs writes
+    // v10.2.26 (#339 review N-B): the format scripts/write-build-info.mjs writes
     write(path.join(s.app, 'dist/build-info.json'), `${JSON.stringify({ gitCommit: 'f6daa01d', buildTime: '2026-10-18T04:30:00.000Z' }, null, 2)}\n`);
     const commit = execFileSync('bash', ['-c', 'source scripts/update-steps.sh; update_dist_commit "$1/dist"', 'x', s.app], { cwd: s.app, encoding: 'utf8' }).trim();
     expect(commit).toBe('f6daa01d');
