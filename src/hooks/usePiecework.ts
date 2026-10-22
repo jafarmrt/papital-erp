@@ -20,6 +20,7 @@ import { fixedSalaryPeriodEnd, fixedSalaryPeriodStart, payrollPrepaymentError, s
 import { refreshSuggestedRates, submittedRate, suggestedRate } from '../lib/payroll/workLogRate';
 import { EMPTY_STATUTORY_ENTRY, statutoryPayloadOf, type PayrollStatutoryEntry } from '../lib/payroll/statutoryForm';
 import { withRowKey, withRowKeys, type KeyedRow } from '../lib/rowKey';
+import { idempotentReplayMessage, isIdempotentReplay } from '../lib/idempotentReplay';
 import {
   exportPieceworkTasksToExcel,
   downloadPieceworkTemplate
@@ -646,9 +647,14 @@ export function usePiecework() {
         body: JSON.stringify(payload)
       });
 
-      hotToast.success(`فیش حقوقی شماره ${res.payrollNumber || ''} پیش‌نویس صادر شد؛ پرداخت آن پس از تأیید کاربر دیگری است.`);
-      if (res.statutoryWarning) hotToast(res.statutoryWarning, { icon: '⚠️' });
-      if (res.eidiWarning) hotToast(res.eidiWarning, { icon: '⚠️' });
+      // v10.2.34 (#351 review L1): a repeat of an issue that already ran has no payslip number; the list shows the payslip
+      if (isIdempotentReplay(res)) {
+        hotToast(idempotentReplayMessage(res), { icon: 'ℹ️' });
+      } else {
+        hotToast.success(`فیش حقوقی شماره ${res.payrollNumber || ''} پیش‌نویس صادر شد؛ پرداخت آن پس از تأیید کاربر دیگری است.`);
+        if (res.statutoryWarning) hotToast(res.statutoryWarning, { icon: '⚠️' });
+        if (res.eidiWarning) hotToast(res.eidiWarning, { icon: '⚠️' });
+      }
       setIsPayrollModalOpen(false);
       reloadAll();
       setActiveTab('payrolls');

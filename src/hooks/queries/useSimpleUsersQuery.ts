@@ -10,8 +10,8 @@ export interface SimpleUser { id: number; username: string; full_name?: string; 
 export function useSimpleUsersQuery(enabled = true) {
   return useQuery({
     queryKey: ['users', 'list-simple'],
-    queryFn: async () => {
-      const body = await fetchJson('/users/list-simple') as { data?: unknown } | unknown[] | null;
+    queryFn: async ({ signal }) => {
+      const body = await fetchJson('/users/list-simple', { signal }) as { data?: unknown } | unknown[] | null;
       const rows = Array.isArray(body) ? body : (Array.isArray(body?.data) ? body.data : []);
       return rows as SimpleUser[];
     },

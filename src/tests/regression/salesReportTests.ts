@@ -2,6 +2,7 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 import { createHarness, type Harness, type ShouldRun } from '../security/workflowTestHarness.js';
 import { brief, fixture } from './documentEntryTests.js';
 import type { SalesReport, SalesReportRow } from '../../lib/reports/salesReport.js';
+import { unitRange } from '../../lib/reports/reportPeriods.js';
 
 /** the online channel's label as the report shows it */
 const ONLINE_CHANNEL_LABEL = 'فروشگاه برخط';
@@ -138,7 +139,12 @@ async function salesTotalsCase(h: Harness, wrong: string[]): Promise<string> {
   const oneItem = await report(h, `${base}&itemId=${a}&groupBy=customer`);
   expectEqual(wrong, 'quantity with an item filter', oneItem.totals.quantity, 3);
   const compared = await report(h, `${base}&compare=previous`);
-  expectEqual(wrong, 'comparison of one day', `${compared.comparison?.range.to}`, new Date(Date.parse(`${f.today}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10));
+  // the day before; on the first day of a Jalali month the day is that month so far, so the previous one is the first day of the month before
+  const monthStart = unitRange(f.today, 'month');
+  const previousDay = monthStart?.from === f.today
+    ? unitRange(f.today, 'month', -1)?.from
+    : new Date(Date.parse(`${f.today}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+  expectEqual(wrong, 'comparison of one day', `${compared.comparison?.range.to}`, previousDay);
   expectEqual(wrong, 'previous net of a row', compared.rows[0]?.previousNetAfterReturns, 0);
   expectEqual(wrong, 'change without a base', compared.rows[0]?.changePercent, null);
 

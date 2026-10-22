@@ -10966,6 +10966,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runSaveRobustnessTd1327Tests(shouldRun));
   const { runIdempotencyStorageTd1328Tests } = await import('../regression/idempotencyStorageTd1328Tests.js');
   results.push(...await runIdempotencyStorageTd1328Tests(shouldRun));
+  // Series 10.2 package 11 part 5a (#351 review I1): a running key outlives its window
+  const { runIdempotencyRunningKeyTests } = await import('../regression/idempotencyStorageTd1328Tests.js');
+  results.push(...await runIdempotencyRunningKeyTests(shouldRun));
   // Series 10.2 package 3 (v10.2.3, TD-1290): free stock, delivery cost and issued materials of a project
   const { runProjectMaterialsCostTests } = await import('../regression/projectMaterialsCostTests.js');
   results.push(...await runProjectMaterialsCostTests(shouldRun));

@@ -12,6 +12,7 @@ import { PayrollDraftEditModal } from './PayrollDraftEditModal';
 import { PayrollStatutoryReportModal } from './PayrollStatutoryReportModal';
 import { PayrollEidiModal } from './PayrollEidiModal';
 import { PayrollEidiReportModal } from './PayrollEidiReportModal';
+import { idempotentReplayMessage, isIdempotentReplay } from '../../lib/idempotentReplay';
 
 interface PieceworkPayrollsTabProps {
   payrollsList: PieceworkPayroll[];
@@ -58,6 +59,10 @@ export function PieceworkPayrollsTab({
       });
       if (res && res.voucher) {
         toast.success(`سند حسابداری به شماره ${res.voucher.voucherNumber} با موفقیت ثبت/همگام شد.`);
+        (onVoucherSynced ?? onReload)?.();
+      } else if (isIdempotentReplay(res)) {
+        // v10.2.34 (#351 review L1): a repeat of a sync that already ran has no voucher; the list shows it
+        toast(idempotentReplayMessage(res), { icon: 'ℹ️' });
         (onVoucherSynced ?? onReload)?.();
       }
     } catch (err: any) {

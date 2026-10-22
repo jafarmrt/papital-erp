@@ -15,9 +15,10 @@ import { useProjectVersion } from '../../hooks/useProjectVersion';
 import { useProjectPermissions } from '../../hooks/useProjectPermissions';
 import { ProjectWorkshopPanel } from '../workshop/ProjectWorkshopPanel';
 import {
-  isScheduleRowLogged, scheduleLogItem, withPieceworkTask, withScheduleLogLink, withScheduleRowIds,
+  isScheduleRowLogged, scheduleLogIdOf, scheduleLogItem, withPieceworkTask, withScheduleLogLink, withScheduleRowIds,
   type ScheduleLogItem, type ScheduleRowRef
 } from '../../lib/projects/scheduleWorkLog';
+import { isIdempotentReplay } from '../../lib/idempotentReplay';
 import toast from 'react-hot-toast';
 import { DecimalInput } from '../common/DecimalInput';
 import { DialogLayer } from '../common/DialogLayer';
@@ -412,16 +413,21 @@ export default function ProjectScheduleTab({
     return withIds;
   };
 
-  const postScheduleLogs = async (items: ScheduleLogItem[]): Promise<number[]> => {
-    const res = await fetchJson<{ insertedIds?: number[] }>('/piecework/logs', {
+  /** The log id of each item, in order (undefined where none is known) */
+  const postScheduleLogs = async (items: ScheduleLogItem[]): Promise<Array<number | undefined>> => {
+    const res = await fetchJson<unknown>('/piecework/logs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items })
     });
     // v9.0.385 (TD-742): ثبت کارکرد شناسه آن را در ردیف برنامه می‌نویسد و نسخه پروژه را بالا می‌برد؛ ذخیره بعدی با نسخه تازه می‌رود
     // TD-1342 (review N2): only the version is taken; this read may hold other users' changes the tab does not show
-    projectVersion.remember(await fetchJson(`/projects/${project.id}`).catch(() => null), []);
-    return Array.isArray(res?.insertedIds) ? res.insertedIds : [];
+    const saved = await fetchJson<{ stage_schedules?: unknown } | null>(`/projects/${project.id}`).catch(() => null);
+    projectVersion.remember(saved, []);
+    // v10.2.34 (#351 review L1): a repeat of a request that already ran gets no ids; the server wrote them into the saved plan
+    if (isIdempotentReplay(res)) return items.map(item => scheduleLogIdOf(saved?.stage_schedules, item.scheduleRef));
+    const ids = (res as { insertedIds?: unknown } | null)?.insertedIds;
+    return Array.isArray(ids) ? ids : [];
   };
 
   const markRowsLogged = (links: Array<{ ref: ScheduleRowRef; logId: number }>) => {
@@ -512,7 +518,7 @@ export default function ProjectScheduleTab({
 
       const ids = await postScheduleLogs(itemsToLog);
       toast.success(`تعداد ${toPersianDigits(itemsToLog.length)} رکورد کارکرد برای مرحله «${stageTitle}» با موفقیت ثبت شد.`);
-      markRowsLogged(refs.map((ref, i) => ({ ref, logId: ids[i] })).filter(l => Boolean(l.logId)));
+      markRowsLogged(refs.flatMap((ref, i) => { const logId = ids[i]; return logId ? [{ ref, logId }] : []; }));
       void fetchProjectPieceworkLogs();
     } catch (err) {
       toast.error(errorMessageOf(err) || 'خطا در ثبت گروهی کارکردها');

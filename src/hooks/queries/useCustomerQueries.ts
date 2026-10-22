@@ -19,8 +19,8 @@ interface CustomersResponse {
 export function useCustomerOptionsQuery() {
   return useQuery<Customer[]>({
     queryKey: QUERY_KEYS.customers.options({ all: true }),
-    queryFn: async () => {
-      const res = await fetchJson(PICK_LIST_URLS.customers);
+    queryFn: async ({ signal }) => {
+      const res = await fetchJson(PICK_LIST_URLS.customers, { signal });
       return Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
     },
     staleTime: 60 * 1000,

@@ -10,6 +10,7 @@ import { useOnlineStatus } from '../../lib/pwa/useOnlineStatus';
 import { EIDI_METHOD_LABELS, EIDI_NOT_COVERED_NOTE, EIDI_OVERRIDE_REASON_MAX, type EidiPayslipSuggestion } from '../../lib/payroll/eidi';
 import { SearchableSelect } from '../SearchableSelect';
 import { DialogLayer } from '../common/DialogLayer';
+import { idempotentReplayMessage, isIdempotentReplay } from '../../lib/idempotentReplay';
 
 /**
  * v10.0.222 (TD-1089، طرح حقوق §۳.۸، ت۱۵ الف): صدور «فیش عیدی» پیش‌نویس یک پرسنل برای یک سال. مبلغ پیشنهادی را سرور
@@ -68,8 +69,10 @@ export function PayrollEidiModal({ personnelSelectOptions, onClose, onIssued }: 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ personnelId: Number(personnelId), year, ...(overridden ? { amount: entered, overrideReason: reason.trim() } : {}) }),
-      }) as { payrollNumber?: string };
-      toast.success(`فیش عیدی ${res.payrollNumber ?? ''} پیش‌نویس صادر شد؛ پرداخت آن پس از تأیید کاربر دیگری است.`);
+      }) as unknown;
+      // v10.2.34 (#351 review L1): a repeat of an issue that already ran has no payslip number; the list shows the payslip
+      if (isIdempotentReplay(res)) toast(idempotentReplayMessage(res), { icon: 'ℹ️' });
+      else toast.success(`فیش عیدی ${(res as { payrollNumber?: string } | null)?.payrollNumber ?? ''} پیش‌نویس صادر شد؛ پرداخت آن پس از تأیید کاربر دیگری است.`);
       onIssued();
       onClose();
     } catch (err) {

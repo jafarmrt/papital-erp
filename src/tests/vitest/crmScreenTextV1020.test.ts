@@ -35,7 +35,7 @@ describe('crm_screen_text_v10_2_0', () => {
       { id: 6, employmentStatus: ` ${LEFT}` },
     ];
     expect(crmAssignablePersonnel(people).map(p => p.id)).toEqual([1, 2, 3, 4]);
-    expect(read('src/hooks/useCRMData.ts')).toContain('crmAssignablePersonnel(rows as');
+    expect(read('src/hooks/useCRMData.ts')).toContain('crmAssignablePersonnel(personnelQuery.data');
   });
 
   it('an older English result is shown in Persian, free text as written', () => {
