@@ -104,6 +104,15 @@ else
   $SUDO git clone "$REPO_URL" "$APP_DIR"
   $SUDO chown -R "$(id -un)":"$(id -gn)" "$APP_DIR"
   cd "$APP_DIR"
+  # v10.2.24 (OBS-R1-16): a token in the clone URL (https://user:token@host/...) is not kept in .git/config
+  CLEAN_URL="$(printf '%s' "$REPO_URL" | sed -E 's#^(https?://)[^/@]+@#\1#')"
+  if [ "$CLEAN_URL" != "$REPO_URL" ]; then
+    git remote set-url origin "$CLEAN_URL"
+    warn "The access token in the repository URL was removed from .git/config. For a private repository, git pull in update.sh asks for it again; an SSH deploy key avoids that."
+  fi
+fi
+if git -C "$APP_DIR" remote get-url origin 2>/dev/null | grep -qE '^https?://[^/@]+@'; then
+  warn "The git remote of $APP_DIR holds an access token in .git/config; remove it with: git remote set-url origin <URL without the token>"
 fi
 success "Source ready at $APP_DIR"
 
@@ -114,11 +123,18 @@ if [ ! -f .env ]; then
   DB_USER="papital"
   DB_PASS="$(openssl rand -hex 24)"
 
+  # v10.2.24 (OBS-R1-16): a role left by an earlier install gets the new password too, or the new .env could not log in
+  # (the password goes through stdin, never the command line)
+  if $SUDO -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'" | grep -q 1; then
+    warn "Database role ${DB_USER} already exists; its password is replaced by the one written to the new .env."
+  fi
   $SUDO -u postgres psql -v ON_ERROR_STOP=1 <<SQL
 DO \$\$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${DB_USER}') THEN
     CREATE ROLE ${DB_USER} LOGIN PASSWORD '${DB_PASS}';
+  ELSE
+    ALTER ROLE ${DB_USER} LOGIN PASSWORD '${DB_PASS}';
   END IF;
 END
 \$\$;
@@ -169,6 +185,8 @@ ExecStart=$(command -v node) --env-file=${APP_DIR}/.env ${APP_DIR}/dist/server.c
 Environment=NODE_ENV=production
 Restart=always
 RestartSec=5
+# v10.2.24 (OBS-R1-16): the service runs as the installing user (root under plain sudo); a separate service user needs
+# update.sh to keep .env, logs and uploads owned by it, which is open in TD-1354
 User=$(id -un)
 # MemoryLimit=2G
 [Install]
@@ -188,10 +206,12 @@ $SUDO env APP_DIR="$APP_DIR" bash scripts/install-ops-cron.sh "$(id -un)" || die
 success "Daily backup and monitor schedule installed (/etc/cron.d/papital-erp)."
 
 # ---------- 7) Health probe ----------
-log "[7/7] Waiting for health probe..."
+# v10.2.24 (OBS-R1-16): /health/ready, not /health/live: ready means the database answers and the startup migrations
+# finished (a first start runs all of them), so a wrong database password or a failed migration stops the install here
+log "[7/7] Waiting for the readiness probe (the first start runs every database migration)..."
 HEALTH_OK=0
-for i in $(seq 1 30); do
-  if curl -fsS "http://localhost:${APP_PORT}/health/live" >/dev/null 2>&1; then
+for _ in $(seq 1 150); do
+  if curl -fsS "http://localhost:${APP_PORT}/health/ready" >/dev/null 2>&1; then
     HEALTH_OK=1
     break
   fi
@@ -199,10 +219,15 @@ for i in $(seq 1 30); do
 done
 
 if [ "$HEALTH_OK" -ne 1 ]; then
-  warn "Health probe did not pass within 60s. Check: journalctl -u ${SERVICE_NAME} -n 100"
+  if curl -fsS "http://localhost:${APP_PORT}/health/live" >/dev/null 2>&1; then
+    warn "The app runs but is not ready after 300s (database unreachable or migrations still running)."
+  else
+    warn "The app does not answer on port ${APP_PORT} after 300s."
+  fi
+  warn "Check: journalctl -u ${SERVICE_NAME} -n 100"
   exit 2
 fi
-success "Application is UP."
+success "Application is UP and ready."
 
 echo ""
 log "============================== INSTALLATION COMPLETE =============================="
@@ -211,6 +236,7 @@ log "  Setup wizard : http://localhost:${APP_PORT}/setup (type ERP_SETUP_TOKEN f
 log "  Service      : systemctl status ${SERVICE_NAME}"
 log "  Logs         : journalctl -u ${SERVICE_NAME} -f   |   installer log: $LOG_FILE"
 log "  Update later : ./update.sh   (never run db:push — migrations are automatic)"
+log "  Port         : ${APP_PORT} answers on every address until setup-domain.sh puts Nginx in front (it then listens on 127.0.0.1 only)"
 log "  Backups      : daily at 02:30 to /var/backups/erp; set up the encrypted Google Drive copy and alerts: docs/OFFSITE_BACKUP.md"
 log "==================================================================================="
 exit 0

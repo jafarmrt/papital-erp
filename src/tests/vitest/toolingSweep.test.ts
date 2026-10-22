@@ -240,7 +240,7 @@ describe('ot_a_08_setup_domain_port: setup-domain.sh proxies to PORT of .env', (
 
   it('the Nginx site, ALLOWED_ORIGINS and the health check use that port', () => {
     expect(script).toContain('proxy_pass http://127.0.0.1:${APP_PORT};');
-    expect(script).toContain('http://localhost:${APP_PORT}/health/live');
+    expect(script).toContain('http://127.0.0.1:${APP_PORT}/health/live');
     expect(script).not.toMatch(/127\.0\.0\.1:3000|localhost:3000/);
   });
 });

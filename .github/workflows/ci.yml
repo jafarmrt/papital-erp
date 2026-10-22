@@ -325,10 +325,52 @@ jobs:
             console.log('All ' + mods.length + ' runtime modules resolvable');
           "
 
+  # v10.2.24 (OBS-R1-16, OT-A-07): install.sh runs end to end on Ubuntu 26.04, the release a new server gets: fresh
+  # install, a reinstall over the database role of the first one, then the app port bound to 127.0.0.1 as
+  # setup-domain.sh sets it. The other jobs stay on ubuntu-24.04 (their PostgreSQL 16 setup); moving them is TD-1355.
+  linux-install:
+    name: Linux Install (Ubuntu 26.04)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 40
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v7
+
+      - name: Fresh Install (install.sh, local source mode)
+        run: bash install.sh
+
+      - name: App Port Answers On Every Address By Default
+        run: |
+          ss -ltnH 'sport = :3000'
+          ss -ltnH 'sport = :3000' | grep -qE '(0\.0\.0\.0|\*|\[::\]):3000'
+          curl -fsS http://localhost:3000/health/ready
+
+      - name: Reinstall Without .env Over The Existing Database Role
+        run: |
+          mv .env .env.first-install
+          bash install.sh
+          curl -fsS http://localhost:3000/health/ready
+
+      - name: ERP_LISTEN_HOST Binds The App To 127.0.0.1
+        run: |
+          echo 'ERP_LISTEN_HOST=127.0.0.1' >> .env
+          sudo systemctl restart papital-erp
+          for _ in $(seq 1 60); do curl -fsS http://127.0.0.1:3000/health/ready >/dev/null 2>&1 && break; sleep 2; done
+          curl -fsS http://127.0.0.1:3000/health/ready
+          ss -ltnH 'sport = :3000'
+          if ss -ltnH 'sport = :3000' | grep -vq '127\.0\.0\.1:3000'; then
+            echo "::error::the app still listens on another address"
+            exit 1
+          fi
+
+      - name: Service Log On Failure
+        if: failure()
+        run: sudo journalctl -u papital-erp -n 200 --no-pager || true
+
   # v10.0.192: the image is pushed only after every check job passed (the build check above no longer waits for them)
   docker-publish:
     name: Push Container Image
-    needs: [lint-and-typecheck, test, coverage-gate, e2e, build, docker-gate]
+    needs: [lint-and-typecheck, test, coverage-gate, e2e, build, docker-gate, linux-install]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')

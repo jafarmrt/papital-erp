@@ -49,7 +49,7 @@ cd /opt/papital-erp && sudo bash install.sh
 sudo REPO_URL=https://github.com/jafarmrt/papital-erp.git bash install.sh   # public repository: no token in the address
 ```
 
-The installer performs: system deps (Node 24, PostgreSQL 16) → source → DB + `.env` generation (`chmod 600`) → `npm ci` → `npm run build` → systemd unit (`papital-erp`, Restart=always) → health probe.
+The installer performs: system deps (Node 24, PostgreSQL 16) → source → DB + `.env` generation (`chmod 600`) → `npm ci` → `npm run build` → systemd unit (`papital-erp`, Restart=always) → readiness probe (`/health/ready`: the database answers and the startup migrations finished; up to 5 minutes). Since v10.2.24 a token in `REPO_URL` is removed from `.git/config`, and a reinstall without `.env` gives the existing `papital` database role the new password. The service runs as the user who ran the installer (root under plain `sudo`; a separate service user is TD-1354).
 
 **Post-install verification — do each one explicitly:**
 
@@ -87,7 +87,7 @@ The installer performs: system deps (Node 24, PostgreSQL 16) → source → DB +
 sudo DOMAIN=erp.yourdomain.ir EMAIL=admin@yourdomain.ir bash setup-domain.sh
 ```
 
-The script installs Nginx + Certbot, configures reverse proxy → localhost:3000, issues the Let's Encrypt certificate, enables HTTP→HTTPS redirect, and updates `ALLOWED_ORIGINS` in `.env` (service restart included).
+The script installs Nginx + Certbot, configures reverse proxy → localhost:3000, issues the Let's Encrypt certificate, enables HTTP→HTTPS redirect, and updates `ALLOWED_ORIGINS` in `.env` (service restart included). Since v10.2.24 it also writes `ERP_LISTEN_HOST=127.0.0.1` (when `.env` has no value), so port 3000 answers on the server only and the app is opened through the domain; the Nginx default site is disabled only while it is the unchanged page of the nginx package.
 
 | # | Check | Expected |
 |---|-------|----------|
@@ -96,6 +96,7 @@ The script installs Nginx + Certbot, configures reverse proxy → localhost:3000
 | 4.3 | `ALLOWED_ORIGINS` contains `https://erp.yourdomain.ir` | `grep '^ALLOWED_ORIGINS' .env` |
 | 4.4 | Auto-renewal active | `systemctl list-timers \| grep certbot` |
 | 4.5 | Certificate renewal dry-run | `sudo certbot renew --dry-run` → success |
+| 4.6 | App port closed to the outside | `ss -ltn 'sport = :3000'` → `127.0.0.1:3000` only |
 
 ---
 
