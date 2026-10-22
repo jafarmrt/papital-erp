@@ -1,7 +1,7 @@
 import { useEffect, useId, useState, type KeyboardEvent } from 'react';
 
 /**
- * Keyboard of a pick list (v10.2.26, TD-1325, OBS-R2-93), used by `SearchableSelect`: the arrow keys move the active
+ * Keyboard of a pick list (v10.2.27, TD-1325, OBS-R2-93), used by `SearchableSelect`: the arrow keys move the active
  * option and skip disabled ones, Enter picks it, Esc closes only the list (`preventDefault`, so the window under it
  * stays open; `dialogEscapeStack`) and Tab closes the list and lets focus move on from its button.
  */

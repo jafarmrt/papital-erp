@@ -8,6 +8,7 @@ import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
 import { MATERIAL_UNITS } from '../../lib/pendingMaterials/materialRequestRules';
 import { materialFiguresOf, rowIsShort, type MaterialAvailabilityView, type MaterialRowInput, type MaterialRowState } from '../../lib/projects/materialAvailability';
 import { rowQtyInItemUnit, unitKey } from '../../lib/projects/projectReservation';
+import { perItemRowRequiredQty, productOrderQuantity, rowConvertedQty } from '../../lib/projects/materialQuantity';
 import { fin } from '../../lib/financialDecimal';
 
 /** v10.0.143 (TD-1202): the same unit list as the keeper's approval window (`MATERIAL_UNITS`) */
@@ -86,6 +87,7 @@ export const buildConsolidatedPurchaseList = (
     if (sec.checkType === 'per_item' && sec.perItemResults) {
       products.forEach(prod => {
         const prodRes = sec.perItemResults?.[prod.id];
+        const orderQty = productOrderQuantity(prod);
         let itemsToProcess: Array<{
           itemId: string;
           itemCode?: string;
@@ -94,6 +96,7 @@ export const buildConsolidatedPurchaseList = (
           unit?: string;
           warehouseUnit?: string;
           requiredQty?: number;
+          qtyPerUnit?: number;
           stockQty?: number;
           status?: 'available' | 'needs_procurement' | 'not_applicable';
           convertedQty?: number;
@@ -121,7 +124,9 @@ export const buildConsolidatedPurchaseList = (
           const effectiveName = itemRes.name || '';
           if (!effectiveName && !effectiveCode) return;
 
-          const reqQty = Number(itemRes.requiredQty !== undefined ? itemRes.requiredQty : 1);
+          // TD-1343: ردیف «برای هر عدد» × تعداد سفارش محصول؛ مقدار تبدیل‌شده از همان نیاز
+          const reqQty = perItemRowRequiredQty(itemRes, orderQty);
+          const convertedQty = rowConvertedQty(itemRes, reqQty);
           const reqUnit = itemRes.unit || 'عدد';
 
           const matchWh = findProjectItemMatch({ code: effectiveCode, name: effectiveName }, warehouseItems);
@@ -144,7 +149,7 @@ export const buildConsolidatedPurchaseList = (
                 warehouseStockQty: currentStock,
                 issuedQty: figures.issued,
                 warehouseUnit: matchWh?.unit || itemRes.warehouseUnit || reqUnit,
-                convertedRequiredQty: itemRes.convertedQty ? roundToOneDecimal(itemRes.convertedQty) : undefined,
+                convertedRequiredQty: convertedQty ? roundToOneDecimal(convertedQty) : undefined,
                 convertedUnit: itemRes.convertedUnit,
                 conversionRate: itemRes.conversionRate,
                 toPurchaseQty: 0,
@@ -154,8 +159,8 @@ export const buildConsolidatedPurchaseList = (
             }
 
             map[key].totalRequiredQty += reqQty;
-            if (itemRes.convertedQty) {
-              map[key].convertedRequiredQty = (map[key].convertedRequiredQty || 0) + roundToOneDecimal(itemRes.convertedQty);
+            if (convertedQty) {
+              map[key].convertedRequiredQty = (map[key].convertedRequiredQty || 0) + roundToOneDecimal(convertedQty);
               map[key].convertedToPurchaseQty = purchaseShortfall(map[key].convertedRequiredQty || 0, map[key]);
             }
             map[key].toPurchaseQty = purchaseShortfall(map[key].totalRequiredQty, map[key]);

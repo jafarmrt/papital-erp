@@ -103,7 +103,8 @@ function finalizesInventory(existing: ProjectRow, input: ProjectPartWrites): boo
  * هرگز. بدنهٔ بی نشانه (برنامهٔ قدیمی) فقط با نسخهٔ برابر. بدنهٔ نشانه‌دار فقط با نشانهٔ برابرِ همهٔ بخش‌هایی که می‌نویسد، هر نسخه‌ای
  * که بفرستد، چون صفحه ممکن است نسخهٔ تازه را از ذخیرهٔ بخش دیگری گرفته باشد و این بخش را هنوز کهنه نشان دهد. ثبت نهایی رزرو را
  * از محصولات پروژه هم می‌سازد، پس نشانهٔ «مشخصات» را هم می‌خواهد. برنامه‌ای که ردیف دارای کارکرد را از برنامهٔ امروز حذف می‌کند
- * هم تعارض همان بخش است، چون زبانه آن ردیف را ثبت‌شده نمی‌دید (زبانهٔ تازه ردیف ثبت‌شده را حذف نمی‌کند، TD-736).
+ * هم تعارض همان بخش است، چون زبانه آن ردیف را ثبت‌شده نمی‌دید (زبانهٔ تازه ردیف ثبت‌شده را حذف نمی‌کند، TD-736)؛ بدنهٔ بی نشانه
+ * هم با نسخهٔ برابر چنین ردیفی را حذف نمی‌کند (TD-1345).
  */
 export async function assertProjectPartsWritable(
   executor: DbExecutor,
@@ -119,18 +120,19 @@ export async function assertProjectPartsWritable(
   // review M1: finalizing reserves the need of the project's products, which belong to the specs part
   if (finalizesInventory(existing, input) && !parts.includes('specs')) parts.push('specs');
   const hasTokens = !!tokens && Object.keys(tokens).length > 0;
+  const removesLoggedRow = parts.includes('schedule') && removedLoggedScheduleRows(input.stageSchedules, existing.stageSchedules).length > 0;
   if (!hasTokens || parts.length === 0) {
-    if (currentVersion === expectedVersion) return;
-    throw projectVersionConflict(existing.id, expectedVersion, currentVersion);
+    if (currentVersion !== expectedVersion) throw projectVersionConflict(existing.id, expectedVersion, currentVersion);
+    // review N-b (TD-1345): an old page sends no tokens and never knew which rows are logged, so it may not drop one either
+    if (removesLoggedRow) throw new ConflictError(projectPartConflictMessage(['schedule']), { projectId: existing.id, expectedVersion, currentVersion, parts: ['schedule'] }, 'OCC_CONFLICT');
+    return;
   }
   const managerIds = parts.includes('specs')
     ? ((await readProjectManagers(executor, [existing.id])).get(existing.id) ?? []).map(m => m.userId)
     : [];
   const current = projectPartTokens(existing, managerIds);
   const changed = parts.filter(part => tokens[part] !== current[part]);
-  if (parts.includes('schedule') && !changed.includes('schedule') && removedLoggedScheduleRows(input.stageSchedules, existing.stageSchedules).length > 0) {
-    changed.push('schedule');
-  }
+  if (removesLoggedRow && !changed.includes('schedule')) changed.push('schedule');
   if (changed.length > 0) {
     throw new ConflictError(projectPartConflictMessage(changed), { projectId: existing.id, expectedVersion, currentVersion, parts: changed }, 'OCC_CONFLICT');
   }
