@@ -98,14 +98,16 @@ const chatUpdate = (updateId: number, chatId: number, text: string): BotUpdate =
 });
 
 /**
- * Whether an answer exposes a chat id: a value equal to it (number or text) or a chat id field. 10.3: a substring check
- * of the whole answer also matched a generated username whose timestamp held the same digits (testuser_17927424…).
+ * Whether an answer exposes a chat id: a number equal to it, a text or key holding its digits as a whole number
+ * («bale:4242», { "4242": … }), or a chat id field. 10.3: a substring check of the whole answer also matched a generated
+ * username whose timestamp held the same digits (testuser_17927424…).
  */
 const exposesChatId = (body: unknown, chatId: number): boolean => {
-  if (body === chatId || body === String(chatId)) return true;
+  const digits = new RegExp(`(^|\\D)${chatId}(\\D|$)`);
+  if (body === chatId || (typeof body === 'string' && digits.test(body))) return true;
   if (Array.isArray(body)) return body.some(v => exposesChatId(v, chatId));
   if (typeof body !== 'object' || body === null) return false;
-  return Object.entries(body).some(([key, v]) => /chat_?id/i.test(key) || exposesChatId(v, chatId));
+  return Object.entries(body).some(([key, v]) => /chat_?id/i.test(key) || digits.test(key) || exposesChatId(v, chatId));
 };
 
 export async function inSandbox<T>(fn: () => Promise<T>): Promise<T> {

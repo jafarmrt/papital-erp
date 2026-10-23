@@ -13,8 +13,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 const ROOT = path.resolve(__dirname, '../../..');
 
-// 10.3 (ARCH review finding 5): update.sh copies the source with rsync. On a computer without rsync the cases that run a
-// whole update are skipped with a note instead of failing; CI has rsync, and there a missing rsync still fails them.
+// 10.3 (ARCH review finding 5): update.sh copies the source with rsync. On a computer without rsync the cases that need
+// it are skipped with a note instead of failing; CI has rsync, and there a missing rsync still fails them.
 const HAS_RSYNC = spawnSync('bash', ['-c', 'command -v rsync'], { encoding: 'utf8' }).status === 0;
 const SKIP_WITHOUT_RSYNC = !HAS_RSYNC && !process.env.CI;
 const RSYNC_MISSING = 'rsync is not installed and update.sh copies the source with it; install rsync to run this case (CI always runs it)';
