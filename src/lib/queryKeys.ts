@@ -158,6 +158,8 @@ export const QUERY_KEYS = {
     // 10.3 (ARCH review finding 3): the payroll windows read through the shared cache, so a payment, void, approval or
     // treasury change (which invalidates `piecework`) refreshes an open window too
     payrollPayments: (payrollId: number) => ['piecework', 'payrolls', payrollId, 'payments'] as const,
+    /** 10.3 (part 15): one payslip as its window shows it (`GET /piecework/payrolls/:id`) */
+    payroll: (payrollId: number) => ['piecework', 'payrolls', payrollId] as const,
     /** the signed-in user's own payslips (`GET /piecework/payrolls/mine`) */
     myPayrolls: () => ['piecework', 'payrolls', 'mine'] as const,
     advanceBalance: (personnelId: number) => ['piecework', 'advance-balance', personnelId] as const,

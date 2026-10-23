@@ -34,6 +34,11 @@ interface PieceworkPayslipModalProps {
   onReload?: () => void;
   /** مشاهده صرفاً برای پرسنل (بدون دکمه‌های پرداخت/ابطال) */
   readOnly?: boolean;
+  /**
+   * 10.3 (part 15): whether the slip on screen is the server's: while it is read again after a write, or when that read
+   * failed, its approval, return, payment and void wait, so none of them goes out with the figures of before
+   */
+  freshness?: 'current' | 'refreshing' | 'failed';
 }
 
 export function PieceworkPayslipModal({
@@ -42,7 +47,8 @@ export function PieceworkPayslipModal({
   onUpdateStatus,
   onDeletePayroll,
   onReload,
-  readOnly = false
+  readOnly = false,
+  freshness = 'current',
 }: PieceworkPayslipModalProps) {
   const rial = useRialDisplay();
   const curLbl = rial.label;
@@ -58,6 +64,7 @@ export function PieceworkPayslipModal({
   const payRefusal = payrollIssuerDutyRefusal(viewingPayroll, viewer, 'pay');
   const canReturnToDraft = viewingPayroll.status === 'approved' && !(Number(viewingPayroll.paidAmount ?? 0) > 0);
   const fixedRows = payslipFixedSalaryRows(viewingPayroll);
+  const writesWait = freshness !== 'current';
 
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
@@ -74,7 +81,7 @@ export function PieceworkPayslipModal({
             {!readOnly && canApprovePayroll && viewingPayroll.status === 'draft' && (
               <button
                 onClick={() => onUpdateStatus(viewingPayroll.id, 'approved')}
-                disabled={!!approveRefusal}
+                disabled={!!approveRefusal || writesWait}
                 title={approveRefusal ?? undefined}
                 className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
@@ -84,7 +91,8 @@ export function PieceworkPayslipModal({
             {!readOnly && canApprovePayroll && canReturnToDraft && (
               <button
                 onClick={() => onUpdateStatus(viewingPayroll.id, 'draft')}
-                className="px-3 py-1.5 bg-slate-600 hover:bg-slate-700 text-white rounded-xl text-xs font-bold cursor-pointer"
+                disabled={writesWait}
+                className="px-3 py-1.5 bg-slate-600 hover:bg-slate-700 text-white rounded-xl text-xs font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 بازگشت به پیش‌نویس
               </button>
@@ -102,16 +110,18 @@ export function PieceworkPayslipModal({
                     status: viewingPayroll.status
                   });
                 }}
-                disabled={!!payRefusal}
+                disabled={!!payRefusal || writesWait}
                 title={payRefusal ?? undefined}
                 className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 ثبت پرداخت (از خزانه)
               </button>
             )}
+            {/* a slip printed while it is read again, or after that read failed, could carry figures this window flags */}
             <button
               onClick={() => window.print()}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+              disabled={writesWait}
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Printer className="w-4 h-4" />
               <span>چاپ فیش</span>
@@ -119,7 +129,8 @@ export function PieceworkPayslipModal({
             {!readOnly && canIssuePayroll && (
               <button
                 onClick={() => onDeletePayroll(viewingPayroll.id)}
-                className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white rounded-xl text-xs font-bold cursor-pointer"
+                disabled={writesWait}
+                className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white rounded-xl text-xs font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 ابطال فیش
               </button>
@@ -129,6 +140,12 @@ export function PieceworkPayslipModal({
             </button>
           </div>
         </div>
+
+        {freshness === 'failed' && (
+          <div role="alert" className="mx-4 mt-4 p-3 rounded-xl border border-red-200 bg-red-50 text-red-700 text-xs font-bold print:hidden">
+            فیش پس از آخرین تغییر دوباره خوانده نشد و شاید رقم‌های پیشین را نشان دهد؛ پنجره را ببندید و دوباره باز کنید.
+          </div>
+        )}
 
         {/* Printable Payslip Body */}
         <div className="p-8 space-y-6 text-slate-900 font-sans" id="printable-payslip">

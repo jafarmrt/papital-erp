@@ -21,9 +21,19 @@ export interface WarehouseItem {
 }
 
 /**
+ * `readOnEveryOpening`: a screen that read the settings each time it opened (10.3, ARCH review finding 3, part 15);
+ * `enabled`: false while a view that stays mounted shows nothing
+ */
+interface SettingsReadOptions { readOnEveryOpening?: boolean; enabled?: boolean }
+const readOptionsOf = (options: SettingsReadOptions) => ({
+  enabled: options.enabled ?? true,
+  ...(options.readOnEveryOpening ? READ_ON_EVERY_OPENING : {}),
+});
+
+/**
  * Hook to query all system settings with React Query
  */
-export function useSettingsQuery() {
+export function useSettingsQuery(options: SettingsReadOptions = {}) {
   return useQuery<SettingItem[]>({
     queryKey: settingsKeys.all,
     queryFn: async () => {
@@ -33,6 +43,19 @@ export function useSettingsQuery() {
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: true,
+    ...readOptionsOf(options),
+  });
+}
+
+/** the company name, logo and currency anyone may read (`GET /public-settings`), with the setting rows they come from */
+export interface PublicSettings { companyName?: string; companyLogo?: string; currency?: string; settings?: SettingItem[] }
+
+/** 10.3 (part 15): the public settings, under `settings`, so a settings save refreshes them too */
+export function usePublicSettingsQuery(options: SettingsReadOptions = {}) {
+  return useQuery({
+    queryKey: [...settingsKeys.all, 'public'],
+    queryFn: async ({ signal }) => (await fetchJson<PublicSettings | null>('/public-settings', { signal })) ?? null,
+    ...readOptionsOf(options),
   });
 }
 

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 import { InvoiceDetailsTotals } from '../../components/invoices/list/InvoiceDetailsTotals';
 import InvoicePrintView from '../../components/InvoicePrintView';
 import { documentPayableOf, type InvoiceListDocument } from '../../lib/invoices/invoiceListDocuments';
@@ -32,7 +33,7 @@ describe('invoice service charge (TD-191)', () => {
   });
 
   it('prints the service charge row and includes it in the payable amount', () => {
-    render(<InvoicePrintView printedDoc={{ ...wooInvoice, ref_number: 'INV-9', date: '2026-10-03', items: [{ name: 'گردنبند', quantity: 2, unit_price: 1000, discount: 0 }] }} />);
+    renderWithQuery(<InvoicePrintView printedDoc={{ ...wooInvoice, ref_number: 'INV-9', date: '2026-10-03', items: [{ name: 'گردنبند', quantity: 2, unit_price: 1000, discount: 0 }] }} />);
     expect(screen.getByText(/هزینه ارسال و خدمات/)).toBeTruthy();
     expect(screen.getByText(formatPersianPrice(330))).toBeTruthy();
     expect(screen.getAllByText(new RegExp(formatPersianPrice(2560))).length).toBeGreaterThan(0);

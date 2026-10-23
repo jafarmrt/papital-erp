@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { queryOptions, useQuery } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import type { PieceworkPayroll, PieceworkTaskRateHistory } from '../../types';
 import { QUERY_KEYS } from '../../lib/queryKeys';
@@ -24,6 +24,24 @@ export interface PayrollPaymentRowData {
   bankAccountTitle?: string | null;
   trackingNumber?: string | null;
   date?: string;
+}
+
+/**
+ * 10.3 (part 15): one payslip as its window shows it. The click that opens the window reads it first (`staleTime: 0`
+ * there) and the window opens only on that answer, as before; the window never reads on its own (`staleTime: Infinity`),
+ * only when a payment, status change or void invalidates `piecework` while it is open.
+ */
+export const pieceworkPayrollQuery = (id: number) => queryOptions({
+  queryKey: QUERY_KEYS.piecework.payroll(id),
+  queryFn: ({ signal }) => fetchJson<PieceworkPayroll>(`/piecework/payrolls/${id}`, { signal }),
+  retry: false,
+  refetchOnWindowFocus: false,
+  refetchOnReconnect: false,
+  networkMode: 'always',
+});
+
+export function usePieceworkPayrollQuery(id: number | null) {
+  return useQuery({ ...pieceworkPayrollQuery(id ?? 0), enabled: id !== null, staleTime: Infinity });
 }
 
 /** the payments of a payslip (`GET /piecework/payrolls/:id/payments`); none while no payslip is open */

@@ -104,7 +104,8 @@ export function PieceworkPayrollPage() {
     payrollAdvanceDeduction,
     setPayrollAdvanceDeduction,
     viewingPayroll,
-    setViewingPayroll,
+    viewingPayrollFreshness,
+    closePayslip,
     categoriesList,
     taskSelectOptions,
     personnelSelectOptions,
@@ -337,7 +338,8 @@ export function PieceworkPayrollPage() {
       {/* MODAL 4: VIEW PAYSLIP & PRINT */}
       <PieceworkPayslipModal
         viewingPayroll={viewingPayroll}
-        onClose={() => setViewingPayroll(null)}
+        freshness={viewingPayrollFreshness}
+        onClose={closePayslip}
         onUpdateStatus={handleUpdatePayrollStatus}
         onDeletePayroll={handleDeletePayroll}
         onReload={reloadAfterPayrollChange}

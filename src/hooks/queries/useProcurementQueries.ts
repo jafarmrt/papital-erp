@@ -6,6 +6,7 @@ import { QUERY_KEYS } from '../../lib/queryKeys';
 import { invalidateDomains, INVALIDATION_PRESETS } from '../../lib/queryInvalidation';
 import type { QueryDomain } from '../../lib/queryKeys';
 import { getErrorMessage } from '../../utils';
+import { READ_ON_EVERY_OPENING } from './readOnEveryOpening';
 
 /**
  * v10.2 package 11 part 5d (TD-1363, OBS-R2-102): the procurement desk reads its summary, its requisition and order
@@ -70,6 +71,26 @@ export function useProcurementListQuery<T>(url: string | null, query: Record<str
 }
 
 /**
+ * One purchase requisition under `procurement.requisition(id)`, the entry the desk's window and the approval inbox share;
+ * an answer without it, or for another id, is an error
+ */
+async function fetchRequisition(id: number, signal: AbortSignal): Promise<PurchaseRequisition> {
+  const res = await fetchJson<{ data?: PurchaseRequisition }>(`/api/procurement/requisitions/${id}`, { signal });
+  if (!res?.data || res.data.id !== id) throw new Error('درخواست خرید خوانده نشد؛ دوباره باز کنید.');
+  return res.data;
+}
+
+/** 10.3 (ARCH review finding 3, part 15): the requisition of an approval inbox task, read again on each opening of the task */
+export function useRequisitionDetailQuery(id: number | null) {
+  return useQuery<PurchaseRequisition>({
+    queryKey: QUERY_KEYS.procurement.requisition(id ?? 0),
+    queryFn: ({ signal }) => fetchRequisition(id ?? 0, signal),
+    enabled: id !== null,
+    ...READ_ON_EVERY_OPENING,
+  });
+}
+
+/**
  * The requisition an open window shows, read again whenever procurement changes (a delivery updates its received
  * quantities); until then, and if the read fails, the row the desk opened it with.
  */
@@ -77,11 +98,7 @@ export function useRequisitionQuery(requisition: PurchaseRequisition, enabled: b
   const id = requisition?.id;
   const result = useQuery<PurchaseRequisition>({
     queryKey: QUERY_KEYS.procurement.requisition(id ?? 0),
-    queryFn: async ({ signal }) => {
-      const res = await fetchJson<{ data?: PurchaseRequisition }>(`/api/procurement/requisitions/${id}`, { signal });
-      if (!res?.data || res.data.id !== id) throw new Error('requisition not returned');
-      return res.data;
-    },
+    queryFn: ({ signal }) => fetchRequisition(id ?? 0, signal),
     enabled: enabled && Boolean(id),
     staleTime: 0,
   });
