@@ -30,7 +30,8 @@ interface ProductProgressTicksOptions {
  * 10.3 (ARCH review finding 3): the matrix comes from the shared cache (`useProductProgressQuery`), read again on each
  * opening of the tab; a save elsewhere that invalidates the project (a stock document, a workshop approval) refreshes it,
  * and the unsent ticks stay on top of the newer matrix. After «ثبت» the ticks stay on screen until the matrix they were
- * saved into is read, so none flips back meanwhile; if that read fails they stay unsent, to be sent again.
+ * saved into is read, so none flips back meanwhile; if that read fails they stay on screen as saved (never offered to
+ * send again) until a read succeeds.
  */
 export function useProductProgressTicks(projectId: number, { canEdit, onUpdate, onDirtyChange, onBusyChange }: ProductProgressTicksOptions) {
   const [sending, setSending] = useState(false);
@@ -50,11 +51,17 @@ export function useProductProgressTicks(projectId: number, { canEdit, onUpdate, 
   // 10.3 (review of part 10): when the save answered. The hook reads its matrix again right then, replacing any read
   // under way, so a read that lands later started after the save; the ticks clear only on that read's success
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  // ticks the server took whose matrix the read after the save could not bring: shown over the older matrix, not counted
+  // as unsent (no «ثبت», no leave warning), until a later read succeeds
+  const [unread, setUnread] = useState<{ ticks: Map<string, ProgressCellStatus>; since: number } | null>(null);
   if (savedAt !== null && !query.isFetching) {
-    if (query.isSuccess && query.dataUpdatedAt >= savedAt) setEdits(new Map());
+    if (!(query.isSuccess && query.dataUpdatedAt >= savedAt)) setUnread({ ticks: edits, since: savedAt });
+    setEdits(new Map());
     setSavedAt(null);
   }
+  if (unread && !query.isFetching && query.isSuccess && query.dataUpdatedAt > unread.since) setUnread(null);
   const saving = sending || savedAt !== null;
+  const shown = useMemo(() => (unread ? new Map([...unread.ticks, ...edits]) : edits), [unread, edits]);
 
   const sayLoadFailed = useEffectEvent(() => { toast.error(errorMessageOf(read.error) || 'خطا در دریافت پیشرفت تفکیکی کد کالا'); });
   useEffect(() => {
@@ -66,17 +73,17 @@ export function useProductProgressTicks(projectId: number, { canEdit, onUpdate, 
   const stages = useMemo(() => data?.stages || [], [data]);
   const products = useMemo(() => (Array.isArray(data?.products) ? data.products : []), [data]);
 
-  const statusOf = useCallback((p: ProgressProduct, order: number) => resolveTickStatus(p, order, edits), [edits]);
-  const percentOf = useCallback((p: ProgressProduct) => progressPercentOf(p, edits), [edits]);
-  const stagePercentOf = useCallback((order: number) => stageProgressPercent(products, order, edits), [products, edits]);
-  const stageCountsOf = useCallback((order: number) => stageTickCounts(products, order, edits), [products, edits]);
+  const statusOf = useCallback((p: ProgressProduct, order: number) => resolveTickStatus(p, order, shown), [shown]);
+  const percentOf = useCallback((p: ProgressProduct) => progressPercentOf(p, shown), [shown]);
+  const stagePercentOf = useCallback((order: number) => stageProgressPercent(products, order, shown), [products, shown]);
+  const stageCountsOf = useCallback((order: number) => stageTickCounts(products, order, shown), [products, shown]);
   const isEdited = useCallback((p: ProgressProduct, order: number) => edits.has(progressTickKey(p.item_id, order)), [edits]);
 
   // 10.2 package 12 (backlog: the desktop table ticked during a save): nothing is ticked while a save is under way,
   // since the save clears every unsent change when it returns
   const toggle = (p: ProgressProduct, order: number) => {
     if (!canEdit || saving) return;
-    const next = toggledTickStatus(resolveTickStatus(p, order, edits));
+    const next = toggledTickStatus(resolveTickStatus(p, order, shown));
     setEdits(prev => new Map(prev).set(progressTickKey(p.item_id, order), next));
   };
 
