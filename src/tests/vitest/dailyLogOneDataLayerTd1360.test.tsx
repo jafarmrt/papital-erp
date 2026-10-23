@@ -89,6 +89,22 @@ describe('daily_log_one_data_layer_td_1360', () => {
     expect([listUrls().length, callsOf('/daily-logs/stats')]).toEqual([2, 2]);
   });
 
+  it('a stale edit (409) reads the list again, so the form reopens on the stored version (#354 review L1)', async () => {
+    const stored = (version: number) => [{ id: 7, version, title: 'گزارش', content: 'شرح', date: '2026-10-20' }];
+    answer(stored(1));
+    const { result } = renderHook(() => useDailyLogs(user), { wrapper: wrapperOf(newClient()) });
+    await waitFor(() => expect(result.current.logs).toHaveLength(1));
+    act(() => result.current.handleOpenEditModal(result.current.logs[0]));
+    fetchJson.mockImplementation((url: string, init?: { method?: string }) => {
+      if (init?.method === 'PUT') return Promise.reject(Object.assign(new Error('گزارش را دوباره باز کنید'), { status: 409 }));
+      if (url === '/daily-logs/stats') return Promise.resolve({ todayHours: 1 });
+      if (url.startsWith('/daily-logs?')) return Promise.resolve({ data: stored(2), total: 1 });
+      return Promise.resolve([]);
+    });
+    await act(async () => { await result.current.handleSaveLog({ preventDefault: () => undefined } as FormEvent); });
+    await waitFor(() => expect((result.current.logs[0] as { version?: number }).version).toBe(2));
+  });
+
   it('a filter change on a later page asks only for page 1 of the new filter', async () => {
     answer([{ id: 1 }]);
     const { result } = renderHook(() => useDailyLogs(user), { wrapper: wrapperOf(newClient()) });

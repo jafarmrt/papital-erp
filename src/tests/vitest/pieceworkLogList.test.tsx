@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const requested: string[] = [];
 vi.mock('../../api', () => ({
@@ -35,9 +37,14 @@ afterEach(() => {
 });
 
 let hook: ReturnType<typeof usePiecework>;
-function HookProbe() {
+function Probe() {
   hook = usePiecework();
   return null;
+}
+// v10.2 package 11 part 5c (TD-1361): the page reads through React Query
+function HookProbe() {
+  const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
+  return <QueryClientProvider client={client}><Probe /></QueryClientProvider>;
 }
 const logRequests = () => requested.filter(u => u.startsWith('/piecework/logs') && !u.startsWith('/piecework/logs/summary'));
 

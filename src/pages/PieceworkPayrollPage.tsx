@@ -29,6 +29,7 @@ export function PieceworkPayrollPage() {
     payrollsList,
     loading,
     loadData,
+    reloadAfterPayrollChange,
     logs,
     logsTotal,
     logsFilteredAmount,
@@ -142,8 +143,8 @@ export function PieceworkPayrollPage() {
   } = usePiecework();
   const queryClient = useQueryClient();
   // OBS-R2-104: سند تازه فیش، فهرست فیش‌ها و حافظه سندهای حسابداری را تازه می‌کند، نه بارگذاری دوباره کل صفحه
+  // (v10.2 package 11 part 5c, TD-1361: the voucher keys include the `piecework` domain of the page)
   const handlePayrollVoucherSynced = () => {
-    loadData();
     void invalidateAfterVoucherChange(queryClient);
   };
 
@@ -250,7 +251,7 @@ export function PieceworkPayrollPage() {
           onViewPayslip={handleViewPayslip}
           onUpdateStatus={handleUpdatePayrollStatus}
           onDeletePayroll={handleDeletePayroll}
-          onReload={loadData}
+          onReload={reloadAfterPayrollChange}
           onVoucherSynced={handlePayrollVoucherSynced}
           personnelSelectOptions={personnelSelectOptions}
         />
@@ -339,7 +340,7 @@ export function PieceworkPayrollPage() {
         onClose={() => setViewingPayroll(null)}
         onUpdateStatus={handleUpdatePayrollStatus}
         onDeletePayroll={handleDeletePayroll}
-        onReload={loadData}
+        onReload={reloadAfterPayrollChange}
       />
 
       {/* MODAL 5: PIECEWORK TASKS EXCEL IMPORT & EXPORT */}
