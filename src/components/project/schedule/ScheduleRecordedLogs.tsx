@@ -32,7 +32,7 @@ export function ScheduleRecordedLogs({ recordedLogs, loadingLogs, onReload, tota
               </span>
             </h4>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              مقایسه برآورد اولیه بودجه با کارکردهای واقعی تایید و ثبت‌شده در سیستم
+              مقایسه برآورد اولیه بودجه با کارکردهای واقعی تایید و ثبت‌شده در سامانه
             </p>
           </div>
         </div>
@@ -97,7 +97,7 @@ export function ScheduleRecordedLogs({ recordedLogs, loadingLogs, onReload, tota
                   <tr key={log.id || lIdx} className="hover:bg-slate-50">
                     <td className="p-2 font-mono text-slate-500">{log.date ? formatPersianDate(log.date) : '---'}</td>
                     <td className="p-2 font-bold text-slate-800">
-                      {log.personnelName || log.personnel_name || `پرسنل #${log.personnelId || log.personnel_id}`}
+                      {log.personnelName || log.personnel_name || `پرسنل #${toPersianDigits(log.personnelId || log.personnel_id)}`}
                     </td>
                     <td className="p-2 text-slate-700">
                       {log.taskTitle || log.task_title || log.taskCode || log.notes || 'کارکرد کارمزدی'}
