@@ -29,6 +29,27 @@ describe('one VAT formula for the form, the server and the shop (10.3)', () => {
     }
   });
 
+  it('the formula keeps its amounts: whole rials, cents, a discount over the lines, a two-decimal percent', () => {
+    const cases: Array<[Array<{ quantity: number; unitPrice: number; discount?: number }>, number, string, number, number]> = [
+      // lines, percent, currency, net, VAT
+      [[{ quantity: 3, unitPrice: 1_250_000, discount: 50_000 }, { quantity: 1, unitPrice: 99_990 }], 9, 'IRR', 3_799_990, 341_999],
+      [[{ quantity: 3, unitPrice: 1_250_000, discount: 50_000 }, { quantity: 1, unitPrice: 99_990 }], 8.75, 'IRR', 3_799_990, 332_499],
+      [[{ quantity: 1, unitPrice: 15 }], 10, 'IRR', 15, 2],
+      [[{ quantity: 1, unitPrice: 15.55 }], 9, 'USD', 15.55, 1.4],
+      [[{ quantity: 1, unitPrice: 100, discount: 150 }], 10, 'IRR', 0, 0],
+      [[{ quantity: 2, unitPrice: 100 }], 0, 'IRR', 200, 0],
+    ];
+    for (const [lines, percent, currency, net, vat] of cases) {
+      const form = computeInvoiceTotals(lines, percent, currency);
+      expect([form.net, form.vatAmount]).toEqual([net, vat]);
+      expect(resolveDocumentVat({ docType: 'invoice', input: { vatPercent: percent }, lines, currency }).vatAmount.toNumber()).toBe(vat);
+    }
+  });
+
+  it('a zero percent reads no lines, as before', () => {
+    expect(resolveDocumentVat({ docType: 'invoice', input: { vatPercent: 0 }, lines: undefined as never }).vatAmount.toNumber()).toBe(0);
+  });
+
   it('the form shows the VAT the server records, over many invoices in rials and dollars', () => {
     const next = seeded(20261023);
     for (let n = 0; n < 300; n++) {
