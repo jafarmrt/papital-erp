@@ -159,10 +159,10 @@ export function issuesSessionTokens(endpoint: string): boolean {
 }
 
 /** v9.0.307 (TD-670): پیام قطع ارتباط هنگام ثبت؛ معلوم نیست کارساز ثبت را انجام داده است یا نه */
-export const UNCONFIRMED_MUTATION_MESSAGE = 'ارتباط با کارساز قطع شد و معلوم نیست ثبت انجام شد یا نه. وضعیت را بررسی کنید و اگر ثبت نشده بود، دوباره بفرستید.';
+export const UNCONFIRMED_MUTATION_MESSAGE = 'ارتباط با سرور قطع شد و معلوم نیست ثبت انجام شد یا نه. وضعیت را بررسی کنید و اگر ثبت نشده بود، دوباره بفرستید.';
 
 /** v9.0.308 (TD-679): پیام پایان انتظار برای ثبتی که کارساز هنوز انجامش می‌دهد */
-export const IN_FLIGHT_STILL_RUNNING_MESSAGE = 'ثبت پیشین هنوز در کارساز در حال انجام است. کمی بعد وضعیت را بررسی کنید؛ ارسال دوباره نتیجه همان ثبت را می‌گیرد.';
+export const IN_FLIGHT_STILL_RUNNING_MESSAGE = 'ثبت پیشین هنوز در سرور در حال انجام است. کمی بعد وضعیت را بررسی کنید؛ ارسال دوباره نتیجه همان ثبت را می‌گیرد.';
 
 /** بیشینه بار انتظار برای نتیجه درخواستی که سرور «در حال پردازش» گزارش می‌کند (هر بار به اندازه Retry-After) */
 const IN_FLIGHT_MAX_WAITS = 15;
@@ -254,7 +254,7 @@ export async function fetchJson<T = any>(endpoint: string, options?: FetchJsonOp
       return fetchJson(endpoint, sameKeyOptions(), retries - 1, inFlightWaits);
     }
     if (isMutation) throw new ApiError(UNCONFIRMED_MUTATION_MESSAGE, 'NETWORK_ERROR', 0);
-    throw new ApiError(`ارتباط با کارساز برقرار نشد: ${err?.message || 'خطای شبکه'}`, 'NETWORK_ERROR', 0);
+    throw new ApiError(`ارتباط با سرور برقرار نشد: ${err?.message || 'خطای شبکه'}`, 'NETWORK_ERROR', 0);
   }
 
   if (!res.ok) {
@@ -270,7 +270,7 @@ export async function fetchJson<T = any>(endpoint: string, options?: FetchJsonOp
       }
       settleKey(res.status);
       throw new ProtocolError(
-        `پاسخ خطای کارساز با قالب معتبر JSON دریافت نشد (وضعیت ${res.status}): ${parseErr?.message || 'خطای شیوه ارتباط'}`,
+        `پاسخ خطای سرور با قالب معتبر JSON دریافت نشد (وضعیت ${res.status}): ${parseErr?.message || 'خطای شیوه ارتباط'}`,
         res.status
       );
     }
@@ -316,7 +316,7 @@ export async function fetchJson<T = any>(endpoint: string, options?: FetchJsonOp
       data.message || 
       (typeof data.error === 'string' ? data.error : '') ||
       data.errorObject?.message || 
-      `خطا در برقراری ارتباط با کارساز (${res.status})`;
+      `خطا در برقراری ارتباط با سرور (${res.status})`;
     const details = data.details || data.errorDetails || data.errorObject?.details || null;
 
     if (res.status === 403) {
@@ -352,7 +352,7 @@ export async function fetchJson<T = any>(endpoint: string, options?: FetchJsonOp
     }
     settleKey(res.status);
     throw new ProtocolError(
-      `پاسخ کارساز قابل تفسیر به JSON نیست (وضعیت ${res.status}): ${parseErr?.message || 'خطای شیوه ارتباط'}`,
+      `پاسخ سرور قابل تفسیر به JSON نیست (وضعیت ${res.status}): ${parseErr?.message || 'خطای شیوه ارتباط'}`,
       res.status
     );
   }

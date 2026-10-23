@@ -239,7 +239,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                     value={setupToken}
                     onChange={e => { setSetupToken(e.target.value); setTokenError(''); }}
                     dir="ltr"
-                    placeholder="رمزی که در کارساز تعیین شده است"
+                    placeholder="رمزی که در سرور تعیین شده است"
                     aria-invalid={tokenError ? true : undefined}
                     aria-describedby={tokenError ? 'setup-token-error' : undefined}
                     className={`w-full pr-10 pl-3 py-2.5 bg-white border rounded-xl text-sm font-mono text-left focus:outline-none focus:ring-2 focus:ring-blue-500/50 ${
@@ -251,9 +251,9 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                   <p id="setup-token-error" role="alert" className="text-xs text-red-600 font-medium mt-1">{tokenError}</p>
                 )}
                 <p className="text-xs text-slate-500 mt-1">
-                  برای حفاظت از راه‌اندازی اولیه، رمزی را که در کارساز تعیین شده است وارد کنید. این رمز مقدار{' '}
+                  برای حفاظت از راه‌اندازی اولیه، رمزی را که در سرور تعیین شده است وارد کنید. این رمز مقدار{' '}
                   <code dir="ltr" className="font-mono bg-slate-100 px-1 rounded">ERP_SETUP_TOKEN</code> در پرونده{' '}
-                  <code dir="ltr" className="font-mono bg-slate-100 px-1 rounded">.env</code> کارساز است.
+                  <code dir="ltr" className="font-mono bg-slate-100 px-1 rounded">.env</code> سرور است.
                 </p>
               </div>
 

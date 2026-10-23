@@ -50,7 +50,7 @@ function BotCard({ bot }: { bot: MessengerBotView }) {
         </p>
       )}
       {bot.configured && !bot.tokenReadable && (
-        <p className="text-xs leading-6 text-rose-700">نشانه ذخیره‌شده با کلید رمزنگاری کنونی کارساز باز نمی‌شود؛ نشانه را دوباره وارد کنید.</p>
+        <p className="text-xs leading-6 text-rose-700">نشانه ذخیره‌شده با کلید رمزنگاری کنونی سرور باز نمی‌شود؛ نشانه را دوباره وارد کنید.</p>
       )}
       <form
         className="space-y-2"
@@ -70,7 +70,7 @@ function BotCard({ bot }: { bot: MessengerBotView }) {
           className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-mono"
         />
         <p className="text-xs leading-6 text-slate-500">
-          نشانه را از سازنده ربات {label} بگیرید (ربات تازه، جدا از ربات هشدار کارساز) و همین‌جا وارد کنید؛ آن را برای کسی نفرستید.
+          نشانه را از سازنده ربات {label} بگیرید (ربات تازه، جدا از ربات هشدار سرور) و همین‌جا وارد کنید؛ آن را برای کسی نفرستید.
           اگر ربات دیگری جای ربات کنونی بنشیند، کارکنان باید دوباره وصل شوند.
         </p>
         <div className="flex flex-wrap gap-2">

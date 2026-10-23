@@ -9,7 +9,7 @@ import { decryptSecret, encryptSecret } from '../../lib/secretBox.js';
  * بدون کلید، کلید یا سرآیند تازه ذخیره نمی‌شود (503). مقدار رمزشده‌ای که با کلید فعلی باز نمی‌شود هرگز فرستاده نمی‌شود.
  */
 
-export const UNREADABLE_WEBHOOK_SECRET_MESSAGE = 'کلید امضا یا سرآیندهای این درگاه با کلید رمزنگاری فعلی کارساز (ERP_SECRETS_KEY) باز نمی‌شود. کلید درست را به کارساز برگردانید، یا «ساخت کلید تازه» را بزنید و سرآیندها را دوباره وارد کنید.';
+export const UNREADABLE_WEBHOOK_SECRET_MESSAGE = 'کلید امضا یا سرآیندهای این درگاه با کلید رمزنگاری فعلی سرور (ERP_SECRETS_KEY) باز نمی‌شود. کلید درست را به سرور برگردانید، یا «ساخت کلید تازه» را بزنید و سرآیندها را دوباره وارد کنید.';
 
 type HeaderMap = Record<string, string>;
 
@@ -55,7 +55,7 @@ export function assertWebhookSecretsReadable(sub: { unreadableSecrets: string[] 
  * stored like a subscription's, with `encryptSecret`, and opened only inside the server. A legacy plain value is read as
  * it is until `npm run secrets:encrypt -- --apply`; a value the current key cannot open is never sent.
  */
-export const UNREADABLE_RULE_SECRET_MESSAGE = 'توکن یا سرآیندهای این قانون خودکار با کلید رمزنگاری فعلی کارساز (ERP_SECRETS_KEY) باز نمی‌شود. کلید درست را به کارساز برگردانید، یا توکن و سرآیندها را در قانون دوباره وارد کنید.';
+export const UNREADABLE_RULE_SECRET_MESSAGE = 'توکن یا سرآیندهای این قانون خودکار با کلید رمزنگاری فعلی سرور (ERP_SECRETS_KEY) باز نمی‌شود. کلید درست را به سرور برگردانید، یا توکن و سرآیندها را در قانون دوباره وارد کنید.';
 
 type RuleConfig = Record<string, unknown>;
 

@@ -42,7 +42,7 @@ const report: WcCatalogReport = {
   catalogUnordered: false,
 };
 
-function serve(refreshAnswer: unknown = { success: true, message: 'پیام کارساز' }, catalog: WcCatalogReport = report) {
+function serve(refreshAnswer: unknown = { success: true, message: 'پیام سرور' }, catalog: WcCatalogReport = report) {
   vi.mocked(fetchJson).mockImplementation(async (url: string) => {
     if (url === '/woocommerce/catalog') return catalog;
     if (url === '/woocommerce/refresh-products') return refreshAnswer;
@@ -124,7 +124,7 @@ describe('D-04 the item ↔ shop product links panel', () => {
     serve();
     render(<WcCatalogPanel canManage stockPushRunning={false} />, { wrapper });
     fireEvent.click(await screen.findByRole('button', { name: REFRESH_BUTTON }));
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('پیام کارساز', { duration: 8000 }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('پیام سرور', { duration: 8000 }));
     const calls = vi.mocked(fetchJson).mock.calls.filter(([url]) => url === '/woocommerce/refresh-products');
     expect(calls).toHaveLength(1);
     expect(calls[0][1]).toMatchObject({ method: 'POST' });

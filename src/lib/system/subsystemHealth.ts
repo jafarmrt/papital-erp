@@ -28,9 +28,9 @@ export const SUBSYSTEM_UNKNOWN_LABEL = 'نامعلوم';
 
 /** Persian messages of a subsystem whose own query failed (the error itself goes only to the server log) */
 export const SUBSYSTEM_UNKNOWN_MESSAGES: Readonly<Record<keyof SubsystemHealth, string>> = {
-  outbox: 'وضعیت صف رویدادها خوانده نشد؛ جزئیات در گزارش خطاهای کارساز ثبت شده است.',
-  accounting: 'تراز اسناد حسابداری خوانده نشد؛ جزئیات در گزارش خطاهای کارساز ثبت شده است.',
-  workflow: 'وضعیت گردش کار خوانده نشد؛ جزئیات در گزارش خطاهای کارساز ثبت شده است.',
+  outbox: 'وضعیت صف رویدادها خوانده نشد؛ جزئیات در گزارش خطاهای سرور ثبت شده است.',
+  accounting: 'تراز اسناد حسابداری خوانده نشد؛ جزئیات در گزارش خطاهای سرور ثبت شده است.',
+  workflow: 'وضعیت گردش کار خوانده نشد؛ جزئیات در گزارش خطاهای سرور ثبت شده است.',
 };
 
 /**
@@ -39,7 +39,7 @@ export const SUBSYSTEM_UNKNOWN_MESSAGES: Readonly<Record<keyof SubsystemHealth, 
  */
 export const DATABASE_HEALTH_MESSAGES = {
   ok: 'پایگاه‌داده متصل و آماده است.',
-  error: 'پایگاه‌داده پاسخ نداد؛ جزئیات در گزارش خطاهای کارساز ثبت شده است.',
+  error: 'پایگاه‌داده پاسخ نداد؛ جزئیات در گزارش خطاهای سرور ثبت شده است.',
 } as const;
 
 /** A subsystem missing from an older server's answer is unknown too, never healthy */

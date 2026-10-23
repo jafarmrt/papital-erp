@@ -51,12 +51,12 @@ export function RuntimeHealthCard({ server }: { server: ServerRuntimeView }) {
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2 font-bold text-sm text-slate-800 dark:text-slate-100">
           <Cpu size={18} className="text-blue-600" />
-          <span>حافظه کارساز</span>
+          <span>حافظه سرور</span>
         </div>
       </div>
       <div className="space-y-1 text-xs text-slate-600 dark:text-slate-300">
         <div className="flex justify-between">
-          <span>مدت کار کارساز:</span>
+          <span>مدت کار سرور:</span>
           <span className="font-medium">{formatUptime(server.uptimeSeconds)}</span>
         </div>
         <div className="flex justify-between">

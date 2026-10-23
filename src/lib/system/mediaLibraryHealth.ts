@@ -39,16 +39,16 @@ export const MEDIA_DISK_LOW_BYTES = 5 * 1024 * 1024 * 1024;
 
 export const MEDIA_LIBRARY_HEALTH_MESSAGES = {
   ok: 'کتابخانه تصاویر سالم است.',
-  unknown: 'وضعیت کتابخانه تصاویر خوانده نشد. جزئیات در گزارش خطاهای کارساز ثبت شده است.',
+  unknown: 'وضعیت کتابخانه تصاویر خوانده نشد. جزئیات در گزارش خطاهای سرور ثبت شده است.',
   diskUnknown: 'فضای آزاد دیسک کتابخانه خوانده نشد.',
 } as const;
 
 export function lightFailedMessage(count: number): string {
-  return `نسخه سبک ${formatPersianNumber(count)} تصویر ساخته نشد؛ فرمان ساخت دوباره نسخه‌های سبک را روی کارساز اجرا کنید.`;
+  return `نسخه سبک ${formatPersianNumber(count)} تصویر ساخته نشد؛ فرمان ساخت دوباره نسخه‌های سبک را روی سرور اجرا کنید.`;
 }
 
 export function lightMissingMessage(count: number): string {
-  return `${formatPersianNumber(count)} تصویر هنوز نسخه سبک ندارد؛ فرمان ساخت دوباره نسخه‌های سبک را روی کارساز اجرا کنید.`;
+  return `${formatPersianNumber(count)} تصویر هنوز نسخه سبک ندارد؛ فرمان ساخت دوباره نسخه‌های سبک را روی سرور اجرا کنید.`;
 }
 
 export function diskLowMessage(freeBytes: number): string {
@@ -118,22 +118,22 @@ export const MEDIA_OFFSITE_STALE_HOURS = 50;
 export const MEDIA_OFFSITE_MESSAGES = {
   off: 'رونوشت کتابخانه در گوگل‌درایو راه‌اندازی نشده است.',
   ok: 'رونوشت کتابخانه در گوگل‌درایو کامل است.',
-  stale: 'رونوشت کتابخانه در گوگل‌درایو بیش از دو شب است کامل نشده است؛ گزارش رونوشت کتابخانه را در پوشه گزارش‌های کارساز ببینید.',
+  stale: 'رونوشت کتابخانه در گوگل‌درایو بیش از دو شب است کامل نشده است؛ گزارش رونوشت کتابخانه را در پوشه گزارش‌های سرور ببینید.',
   unknown: 'گزارش رونوشت کتابخانه در گوگل‌درایو خوانده نشد.',
 } as const;
 
 const MEDIA_OFFSITE_FAILURES: Record<string, string> = {
-  'no-rclone': 'برنامه ارسال به درایو روی کارساز نصب نیست',
-  'no-remote': 'مقصد درایو در تنظیمات ارسال کارساز پیدا نشد',
+  'no-rclone': 'برنامه ارسال به درایو روی سرور نصب نیست',
+  'no-remote': 'مقصد درایو در تنظیمات ارسال سرور پیدا نشد',
   'not-crypt': 'مقصد درایو رمزگذار نیست و چیزی فرستاده نشد',
-  'bad-remote': 'نام مقصد در تنظیمات کارساز درست نیست',
+  'bad-remote': 'نام مقصد در تنظیمات سرور درست نیست',
   'copy-failed': 'ارسال پرونده‌ها کامل نشد',
   'check-failed': 'بررسی پرونده‌های فرستاده‌شده کامل نشد',
 };
 
 export function mediaOffsiteFailedMessage(code: string): string {
   const reason = MEDIA_OFFSITE_FAILURES[code] ?? 'خطای ناشناخته';
-  return `آخرین رونوشت کتابخانه در گوگل‌درایو ناموفق بود: ${reason}. گزارش رونوشت کتابخانه را در پوشه گزارش‌های کارساز ببینید.`;
+  return `آخرین رونوشت کتابخانه در گوگل‌درایو ناموفق بود: ${reason}. گزارش رونوشت کتابخانه را در پوشه گزارش‌های سرور ببینید.`;
 }
 
 const isWhole = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0;

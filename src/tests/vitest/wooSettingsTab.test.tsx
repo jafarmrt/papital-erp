@@ -142,7 +142,7 @@ function renderTab(state: ReturnType<typeof useSettings>) {
 describe('TD-730 WooCommerce order lists show a load error instead of «no orders yet»', () => {
   it('a 403 on the order log and a 500 on the invoices are kept and shown with the server message', async () => {
     const forbidden = 'دسترسی غیرمجاز';
-    const serverFailure = 'خطای داخلی کارساز';
+    const serverFailure = 'خطای داخلی سرور';
     mockServer((url) => {
       if (url === '/woocommerce/order-logs') return new ApiError(forbidden, 'AUTHORIZATION_ERROR', 403);
       if (url === '/woocommerce/synced-orders') return new ApiError(serverFailure, 'INTERNAL_ERROR', 500);

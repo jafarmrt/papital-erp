@@ -16,8 +16,11 @@ const DOCUMENT_UI = [
   'pages/CreateInvoicePage.tsx', 'pages/DocumentsPage.tsx', 'pages/InvoicesListPage.tsx', 'components/InvoicePrintView.tsx',
   'components/invoices/', 'components/documents/', 'hooks/documents/', 'hooks/invoices/', 'lib/invoices/',
 ];
-/** the replacement table of the package 8 front-end review (§7): سامانه، رزروشده، شماره عطف، شرط‌های جستجو، گردش کار، خودکار، پایگاه داده، فهرست */
-const REPLACED = /سیستم|فریز|رفرنس|فیلتر|ورکفلو|اتومات|سرور|ترنزیشن|دیتابیس|لیست/;
+/**
+ * the replacement table of the package 8 front-end review (§7): سامانه، رزروشده، شماره عطف، شرط‌های جستجو، گردش کار، خودکار، پایگاه داده، فهرست;
+ * v10.3.6 (owner rule): «سرور», never «کارساز»
+ */
+const REPLACED = /سیستم|فریز|رفرنس|فیلتر|ورکفلو|اتومات|(?<!خود)کارساز|ترنزیشن|دیتابیس|لیست/;
 /** a Latin word (letters, then letters or digits, such as «A4») inside Persian text */
 const LATIN_WORD = /(?<![\w.-])[A-Za-z][A-Za-z0-9]+/g;
 /** quantities the stock and invoice messages print; each goes through formatPersianNumber */
