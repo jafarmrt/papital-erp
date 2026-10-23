@@ -1,5 +1,5 @@
 import { fetchThroughStartup } from './lib/systemStarting';
-import { inFlightRetryDelayMs, isInFlightResponse, releaseSubmissionKey, settlesSubmissionKey, submissionKeyFor } from './lib/submissionKey';
+import { holdReplayedSubmissionKey, inFlightRetryDelayMs, isInFlightResponse, releaseSubmissionKey, settlesSubmissionKey, submissionKeyFor } from './lib/submissionKey';
 import { PASSWORD_RESET_REQUIRED } from './lib/auth/passwordReset';
 import { SUBMISSION_REPLAYED_EVENT, idempotentReplayMessage, isIdempotentReplay } from './lib/idempotentReplay';
 
@@ -284,7 +284,6 @@ export async function fetchJson<T = any>(endpoint: string, options?: FetchJsonOp
     if (idempotencyKey && isInFlightResponse(res.status, data?.code)) {
       throw new ApiError(IN_FLIGHT_STILL_RUNNING_MESSAGE, 'IDEMPOTENCY_IN_FLIGHT', 409, data?.details ?? null);
     }
-    settleKey(res.status);
 
     if (res.status === 401) {
       if (typeof window !== 'undefined' && !isPublicEndpoint) {
@@ -308,6 +307,9 @@ export async function fetchJson<T = any>(endpoint: string, options?: FetchJsonOp
         return fetchJson(endpoint, sameKeyOptions(), retries - 1, inFlightWaits);
       }
     }
+    // 10.3 (part 2 review L1): after the CSRF resend above, which settles the key itself; before, a 403 released it first,
+    // so a resend answered with the notice left none for the next click
+    settleKey(res.status);
 
     const code = data.code || data.errorCode || data.errorObject?.code || 'UNKNOWN_ERROR';
     const errorMessage = 
@@ -357,9 +359,10 @@ export async function fetchJson<T = any>(endpoint: string, options?: FetchJsonOp
   // 10.3 (ARCH review finding 1): the «already registered» notice answers a resend whose first run committed (its answer was
   // lost or not kept, or the server stopped before keeping it). The open lists read the record; a caller reading the answer's
   // fields gets the notice as an error, never an answer without them, unless it handles the notice itself (`acceptReplay`).
-  // The key is kept, so a form left open sends the same key again and gets the notice again, never a second record
-  // (part 2 review M1); a deliberate second write with the same content differs in a field or comes after the key's day
+  // The key is held for half an hour, so a form left open sends it again and gets the notice again, never a second record
+  // (part 2 review M1, L2)
   if (isMutation && isIdempotentReplay(jsonResponse)) {
+    if (idempotencyKey) holdReplayedSubmissionKey(idempotencyKey);
     if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(SUBMISSION_REPLAYED_EVENT));
     if (!options?.acceptReplay) throw new ApiError(idempotentReplayMessage(jsonResponse), 'IDEMPOTENT_REPLAY', res.status);
   } else {

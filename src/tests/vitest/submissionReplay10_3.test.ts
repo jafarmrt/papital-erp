@@ -105,6 +105,40 @@ describe('the «already registered» notice (10.3)', () => {
     }
   });
 
+  it('a key answered with the notice is held for half an hour, then a same write is a new one (review L2)', async () => {
+    const now = Date.now();
+    const approve = () => ({ method: 'PUT', body: '{"status":"approved"}' });
+    fetchMock.mockResolvedValueOnce(reply(200, REPLAY));
+    await expect(fetchJson('/piecework/payrolls/7/status', approve())).rejects.toThrow(IDEMPOTENT_REPLAY_MESSAGE);
+    const spy = vi.spyOn(Date, 'now').mockReturnValue(now + 29 * 60 * 1000);
+    try {
+      fetchMock.mockResolvedValueOnce(reply(200, REPLAY));
+      await expect(fetchJson('/piecework/payrolls/7/status', approve())).rejects.toThrow(IDEMPOTENT_REPLAY_MESSAGE);
+      expect(sentKey(1)).toBe(sentKey(0));
+      // each notice holds it again; the payslip went back to draft meanwhile, and approving it again half an hour after the
+      // last notice is a new write, also after a reload
+      spy.mockReturnValue(now + (29 + 31) * 60 * 1000);
+      resetSubmissionKeys(true);
+      fetchMock.mockResolvedValueOnce(reply(200, { id: 7, status: 'approved' }));
+      await fetchJson('/piecework/payrolls/7/status', approve());
+      expect(sentKey(2)).not.toBe(sentKey(0));
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('a CSRF refusal resent with the same key and answered with the notice still holds the key (review L1)', async () => {
+    fetchMock
+      .mockResolvedValueOnce(reply(403, { error: 'CSRF token invalid' }))
+      .mockResolvedValueOnce({ ...reply(200, {}), json: async () => ({ csrfToken: 'csrf-new' }) })
+      .mockResolvedValueOnce(reply(200, REPLAY));
+    await expect(fetchJson('/accounting/treasury', receipt())).rejects.toThrow(IDEMPOTENT_REPLAY_MESSAGE);
+    fetchMock.mockResolvedValueOnce(reply(200, REPLAY));
+    await expect(fetchJson('/accounting/treasury', receipt())).rejects.toThrow(IDEMPOTENT_REPLAY_MESSAGE);
+    expect(sentKey(3)).toBe(sentKey(0));
+    expect(sentKey(2)).toBe(sentKey(0));
+  });
+
   it('a screen that handles the notice gets it as the answer; a read is never taken for one', async () => {
     fetchMock.mockResolvedValueOnce(reply(200, REPLAY));
     await expect(fetchJson('/piecework/payrolls', { method: 'POST', body: '{}', acceptReplay: true })).resolves.toEqual(REPLAY);

@@ -9,6 +9,12 @@
 /** وضعیت‌هایی که شاید پاسخ برنامه نباشند (دروازه یا پراکسی): کلید برای ارسال دوباره همان محتوا نگه داشته می‌شود */
 const UNSETTLED_STATUSES = new Set([502, 503, 504]);
 const KEEP_MS = 24 * 60 * 60 * 1000;
+/**
+ * 10.3 (part 2 review L2): how long a key answered with the «already registered» notice is still sent: long enough for the
+ * clicks on a form left open, short enough that a later identical write (approving a payslip again after it went back to
+ * draft) is a new one
+ */
+const REPLAYED_HOLD_MS = 30 * 60 * 1000;
 const MAX_ENTRIES = 200;
 
 /**
@@ -20,7 +26,14 @@ const MAX_ENTRIES = 200;
  */
 export const SUBMISSION_KEYS_STORAGE_KEY = 'papital.pendingSubmissionKeys';
 
-interface PendingKey { key: string; at: number }
+interface PendingKey {
+  key: string;
+  at: number;
+  /** a key answered with the notice is sent until then (`holdReplayedSubmissionKey`) */
+  until?: number;
+}
+
+const isLive = (entry: PendingKey, now: number): boolean => now - entry.at <= KEEP_MS && (entry.until === undefined || now <= entry.until);
 
 let pending: Map<string, PendingKey> | null = null;
 
@@ -39,9 +52,9 @@ function pendingKeys(): Map<string, PendingKey> {
   try {
     const stored: unknown = JSON.parse(storage()?.getItem(SUBMISSION_KEYS_STORAGE_KEY) || '[]');
     if (Array.isArray(stored)) {
-      for (const entry of stored as Array<{ h?: unknown; key?: unknown; at?: unknown }>) {
+      for (const entry of stored as Array<{ h?: unknown; key?: unknown; at?: unknown; until?: unknown }>) {
         if (typeof entry?.h === 'string' && typeof entry.key === 'string' && typeof entry.at === 'number') {
-          pending.set(entry.h, { key: entry.key, at: entry.at });
+          pending.set(entry.h, { key: entry.key, at: entry.at, ...(typeof entry.until === 'number' ? { until: entry.until } : {}) });
         }
       }
     }
@@ -57,7 +70,7 @@ function persist(): void {
   try {
     const keys = pendingKeys();
     if (keys.size === 0) target.removeItem(SUBMISSION_KEYS_STORAGE_KEY);
-    else target.setItem(SUBMISSION_KEYS_STORAGE_KEY, JSON.stringify([...keys].map(([h, { key, at }]) => ({ h, key, at }))));
+    else target.setItem(SUBMISSION_KEYS_STORAGE_KEY, JSON.stringify([...keys].map(([h, entry]) => ({ h, ...entry }))));
   } catch {
     // quota: the keys stay in memory, and the stored list goes, so a key answered since never comes back after a reload
     // (part 2 review L2)
@@ -96,7 +109,7 @@ function newKey(): string {
 
 function prune(keys: Map<string, PendingKey>, now: number): void {
   for (const [fingerprint, entry] of keys) {
-    if (now - entry.at > KEEP_MS) keys.delete(fingerprint);
+    if (!isLive(entry, now)) keys.delete(fingerprint);
   }
   while (keys.size >= MAX_ENTRIES) {
     const oldest = keys.keys().next().value;
@@ -139,7 +152,7 @@ export function submissionKeyFor(method: string, endpoint: string, body: unknown
   const keys = pendingKeys();
   const now = Date.now();
   const existing = keys.get(fingerprint);
-  if (existing && now - existing.at <= KEEP_MS) return existing.key;
+  if (existing && isLive(existing, now)) return existing.key;
   prune(keys, now);
   const key = newKey();
   keys.set(fingerprint, { key, at: now });
@@ -160,6 +173,23 @@ export function releaseSubmissionKey(key: string): void {
     if (entry.key === key) released = keys.delete(fingerprint);
   }
   if (released) persist();
+}
+
+/**
+ * 10.3 (part 2 review M1): a write answered with the «already registered» notice keeps its key for `REPLAYED_HOLD_MS`, so
+ * a form left open sends it again on the next click and gets the notice again instead of recording a second time
+ */
+export function holdReplayedSubmissionKey(key: string): void {
+  const keys = pendingKeys();
+  const until = Date.now() + REPLAYED_HOLD_MS;
+  let held = false;
+  for (const entry of keys.values()) {
+    if (entry.key === key) {
+      entry.until = until;
+      held = true;
+    }
+  }
+  if (held) persist();
 }
 
 /** پاسخ ۴۰۹ «درخواست تکراری در حال پردازش است»: همان کلید پس از مکث دوباره فرستاده می‌شود تا نتیجه درخواست اول برسد */
