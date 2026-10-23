@@ -1,7 +1,7 @@
 import { fin, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { money, type Money } from '../../lib/money.js';
 import { ValidationError } from '../../errors/customErrors.js';
-import { currencyScale } from '../../lib/currencyScale.js';
+import { percentVatOf, vatBaseOf } from '../../lib/vatFormula.js';
 
 /**
  * v7.0.32 (TD-197 / audit P1-7): مالیات بر ارزش افزوده ساختاریافته اسناد فروش.
@@ -68,18 +68,16 @@ export function parseVatInput(input: VatInput): { vatPercent?: number; vatAmount
   return { vatPercent, vatAmount };
 }
 
-/** جمع خالص اقلام (پایه مالیات) با همان قاعده سند حسابداری فروش؛ منفی به صفر گرد می‌شود. */
+/**
+ * جمع خالص اقلام (پایه مالیات) با همان قاعده سند حسابداری فروش؛ منفی به صفر گرد می‌شود.
+ * 10.3 (ARCH review finding 6): the formula is `vatBaseOf` (src/lib/vatFormula.ts), shared with the invoice form.
+ */
 export function computeNetAmount(lines: VatLine[]): FinancialDecimal {
-  let gross = fin(0);
-  let discount = fin(0);
-  for (const line of lines) {
-    const qty = fin(line.quantity as DecimalValue);
-    const price = fin((line.unitPrice ?? line.unit_price ?? line.price ?? 0) as DecimalValue);
-    gross = gross.add(qty.multiply(price));
-    discount = discount.add(line.discount as DecimalValue);
-  }
-  const net = gross.round(4).subtract(discount.round(4));
-  return net.isNegative() ? fin(0) : net.round(4);
+  return vatBaseOf(lines.map(line => ({
+    quantity: line.quantity as DecimalValue,
+    unitPrice: (line.unitPrice ?? line.unit_price ?? line.price ?? 0) as DecimalValue,
+    discount: line.discount as DecimalValue,
+  }))).net;
 }
 
 /**
@@ -102,8 +100,7 @@ export function resolveDocumentVat(params: {
     return { vatPercent: 0, vatAmount: money(0) };
   }
   const { vatPercent, vatAmount } = parseVatInput(params.input);
-  const scale = currencyScale(params.currency);
-  const vatOf = (pct: number): FinancialDecimal => (pct > 0 ? computeNetAmount(params.lines).multiply(pct).divide(100, 12).round(scale) : fin(0));
+  const vatOf = (pct: number): FinancialDecimal => percentVatOf(computeNetAmount(params.lines), pct, params.currency);
   if (vatAmount !== undefined) {
     // v8.0.104 (TD-381): مبلغ صریح همراه درصد مثبت باید همان مبلغ درصدی سرور باشد؛ پیش‌تر هر مبلغی (درصد ۱۰ با مالیات ۱
     // ریال) ذخیره می‌شد. مبلغ صریح بی درصد (مالیات سفارش ووکامرس) همان‌طور پذیرفته می‌شود.

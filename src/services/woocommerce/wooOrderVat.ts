@@ -1,5 +1,5 @@
-import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
-import { currencyScale } from '../../lib/currencyScale.js';
+import { type FinancialDecimal } from '../../lib/financialDecimal.js';
+import { percentVatOf, vatBaseOf } from '../../lib/vatFormula.js';
 
 /** سطر فاکتور ووکامرس، همان شکلی که به ثبت سند داده می‌شود */
 export interface WooVatLine { quantity: number; unit_price: FinancialDecimal | number; discount?: FinancialDecimal | number }
@@ -11,11 +11,12 @@ export interface WooVatLine { quantity: number; unit_price: FinancialDecimal | n
  * مانند پیش. پیش‌تر هر فاکتور ووکامرس درصد ۰ و مالیات مثبت داشت و مرجوعی آن با درصد واقعی ۴۲۲ می‌گرفت (TD-774).
  */
 export function wooOrderVatPercent(lines: WooVatLine[], tax: FinancialDecimal, currency: string | null | undefined): number | undefined {
-  // خالص اقلام مانند computeNetAmount سرور: مقدار × قیمت − تخفیف سطر
-  const net = lines.reduce((sum, l) => sum.add(fin(l.quantity).multiply(fin(l.unit_price))).subtract(fin(l.discount ?? 0)), fin(0));
+  // 10.3 (ARCH review finding 6): the base and the rebuilt VAT by the server's own formula (src/lib/vatFormula.ts), so the
+  // percent kept is exactly one the document's VAT check accepts
+  const { net } = vatBaseOf(lines.map(l => ({ quantity: l.quantity, unitPrice: l.unit_price, discount: l.discount })));
   if (!net.isPositive() || !tax.isPositive()) return undefined;
   const percent = tax.multiply(100).divide(net, 12).round(2);
   if (!percent.isPositive() || percent.greaterThan(100)) return undefined;
-  const rebuilt = net.multiply(percent).divide(100, 12).round(currencyScale(currency));
+  const rebuilt = percentVatOf(net, percent.toNumber(), currency);
   return rebuilt.equals(tax.round(4)) ? percent.toNumber() : undefined;
 }

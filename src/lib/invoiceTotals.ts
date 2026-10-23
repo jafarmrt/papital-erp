@@ -1,5 +1,5 @@
 import { fin, type DecimalValue } from './financialDecimal.js';
-import { currencyScale } from './currencyScale.js';
+import { percentVatOf, vatBaseOf } from './vatFormula.js';
 
 export interface InvoiceTotalsLine {
   quantity: DecimalValue;
@@ -25,24 +25,18 @@ export interface InvoiceTotals {
  * پیش‌تر فرم آن را با ضرب اعشاری جاوااسکریپت می‌ساخت؛ از v8.0.104 (TD-381) فرم فقط درصد را می‌فرستد و سرور مبلغ را حساب می‌کند.
  * v8.0.105 (TD-382): مالیات به کوچک‌ترین واحد ارز سند گرد می‌شود (ریال بی‌اعشار، ارز خارجی سِنت)، همان قاعده سرور.
  * v10.0.260 (TD-1136): مبلغ قابل پرداخت = خالص + مالیات + هزینه ارسال و خدمات، همان `computeDocumentAmounts` سرور.
+ * 10.3 (ARCH review finding 6): the base and the VAT come from the server's own functions (`vatBaseOf`, `percentVatOf` in
+ * src/lib/vatFormula.ts), no longer from a copy of their steps.
  */
 export function computeInvoiceTotals(
   lines: readonly InvoiceTotalsLine[] | null | undefined, vatPercent: number, currency = 'IRR', serviceCharge: DecimalValue = 0,
 ): InvoiceTotals {
-  const safeLines = Array.isArray(lines) ? lines : [];
-  let gross = fin(0);
-  let discount = fin(0);
-  for (const line of safeLines) {
-    gross = gross.add(fin(line.quantity).multiply(fin(line.unitPrice)));
-    discount = discount.add(fin(line.discount));
-  }
-  const rawNet = gross.round(4).subtract(discount.round(4));
-  const net = rawNet.isNegative() ? fin(0) : rawNet.round(4);
-  const vat = vatPercent > 0 ? net.multiply(vatPercent).divide(100, 12).round(currencyScale(currency)) : fin(0);
+  const { gross, discount, net } = vatBaseOf(Array.isArray(lines) ? lines : []);
+  const vat = percentVatOf(net, vatPercent, currency);
   const service = fin(serviceCharge ?? 0);
   return {
-    gross: gross.round(4).toNumber(),
-    discount: discount.round(4).toNumber(),
+    gross: gross.toNumber(),
+    discount: discount.toNumber(),
     net: net.toNumber(),
     vatAmount: vat.toNumber(),
     serviceCharge: service.toNumber(),
