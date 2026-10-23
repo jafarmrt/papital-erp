@@ -39,6 +39,7 @@ vi.mock('../../components/project/ProjectInventoryTab', () => ({
 
 import ProjectInventoryPage from '../../pages/ProjectInventoryPage';
 import { QUERY_KEYS } from '../../lib/queryKeys';
+import { appQueryClient } from './helpers/queryWrapper';
 
 afterEach(() => {
   cleanup();
@@ -46,7 +47,8 @@ afterEach(() => {
   serverProjectTitle = 'v1';
 });
 
-const newClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
+/** the app's read defaults (fresh for five minutes): a screen must read again on its own */
+const newClient = appQueryClient;
 const shownTitle = () => screen.queryByTestId('materials-project')?.textContent;
 const pause = () => act(() => new Promise(resolve => setTimeout(resolve, 30)));
 const renderAt = (client: QueryClient, entries: string[]) => {

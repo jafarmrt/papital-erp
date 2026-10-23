@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 
 const { fetchJson, toastFn } = vi.hoisted(() => {
   const t = Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), loading: vi.fn(), dismiss: vi.fn() });
@@ -20,6 +20,7 @@ vi.mock('../../components/common/JalaliDateInput', () => ({
 }));
 
 import { NewVoucherModal } from '../../components/accounting/NewVoucherModal';
+import { appQueryClient } from './helpers/queryWrapper';
 
 /**
  * 10.3 (ARCH review finding 4 and the Ctrl+S double save of the 10.2 backlog): the voucher shortcuts act on what the form
@@ -58,7 +59,7 @@ function serveBalancedDraft() {
 async function openRestoredDraft(onSave: (data: unknown) => Promise<void>) {
   const onClose = vi.fn();
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider client={appQueryClient()}>
       <NewVoucherModal isOpen onClose={onClose} accounts={accounts as never} customers={[]} personnelList={[]} onSave={onSave} />
     </QueryClientProvider>,
   );

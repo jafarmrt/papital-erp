@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
 /**
@@ -23,13 +23,14 @@ vi.mock('../../components/ConfirmDialogHost', () => ({ confirmAction: () => new 
 
 import { useProjectInventory } from '../../hooks/useProjectInventory';
 import type { ProductionProject } from '../../types';
+import { appQueryClient } from './helpers/queryWrapper';
 
 const project = {
   id: 7, version: 3, project_code: 'PRJ-7', title: 'materials', status: 'in_progress', quantity: 2, unit: 'pcs', stages: [],
   products: [{ id: 'p1', item_id: 50, quantity: 2 }],
 } as unknown as ProductionProject;
 const wrapper = ({ children }: { children: ReactNode }) => (
-  <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{children}</QueryClientProvider>
+  <QueryClientProvider client={appQueryClient()}>{children}</QueryClientProvider>
 );
 
 describe('finalize sends the sections of the press (10.3)', () => {

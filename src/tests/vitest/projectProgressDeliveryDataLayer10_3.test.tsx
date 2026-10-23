@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { PHONE_WIDTH_QUERY } from '../../lib/pwa/usePhoneWidth';
 import { ownReads } from './helpers/ownReads';
 import { SHOWN, matrixOf, project, type FetchOpts } from './helpers/progressMatrix';
+import { appQueryClient } from './helpers/queryWrapper';
 
 /**
  * 10.3 (ARCH review finding 3, part 10): the progress tab, its phone list and the delivery tab read the progress matrix
@@ -86,7 +87,8 @@ afterEach(() => {
   delete (window as { matchMedia?: unknown }).matchMedia;
 });
 
-const newClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
+/** the app's read defaults (fresh for five minutes): a screen must read again on its own */
+const newClient = appQueryClient;
 const renderPage = (client: QueryClient, path = '/projects/7/progress') => render(
   <QueryClientProvider client={client}>
     <MemoryRouter initialEntries={[path]}>

@@ -1,63 +1,50 @@
-import { useEffect, useState } from 'react';
-import { fetchJson } from '../api';
+import { useEffect, useEffectEvent, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Item, User } from '../types';
+import { User } from '../types';
 import { Search, X, Image as ImageIcon, Loader2 } from 'lucide-react';
-import { cn, formatPersianNumber, formatPersianPrice } from '../utils';
+import { cn, errorMessageOf, formatPersianNumber, formatPersianPrice } from '../utils';
 import { SafeImage } from '../components/SafeImage';
 import { useSearch } from '../SearchContext';
 import { DialogLayer } from '../components/common/DialogLayer';
-import { galleryItemsUrl } from '../lib/gallery/galleryItems';
+import { useOpeningRead } from '../hooks/queries/readOnEveryOpening';
+import { useGalleryItemsQuery } from '../hooks/queries/useItemQueries';
+import { useCategoriesQuery } from '../hooks/queries/useSettingsQueries';
 
 export default function GalleryPage({ user }: { user: User }) {
-  const [items, setItems] = useState<Item[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
   const { searchQuery: search, setSearchQuery: setSearch, debouncedSearchQuery: debouncedSearch } = useSearch();
   const [tab, setTab] = useState<'product'|'raw_material'>('product');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [debouncedSearch, tab, selectedCategory]);
+  // a new search, tab or category starts at its first page (in the same render, so the old page is never read for it),
+  // and so does a return to an earlier one
+  const filterKey = JSON.stringify([tab, debouncedSearch, selectedCategory]);
+  const [paging, setPaging] = useState({ of: filterKey, page: 1 });
+  if (paging.of !== filterKey) setPaging({ of: filterKey, page: 1 });
+  const currentPage = paging.of === filterKey ? paging.page : 1;
+  const setCurrentPage = (page: number) => setPaging({ of: filterKey, page });
 
   // v10.1.51 (OBS-R2-62): one server page at a time (it read every item of the type at once, with its stock and reservations)
-  useEffect(() => {
-    const controller = new AbortController();
-    setIsLoading(true);
-    fetchJson(galleryItemsUrl({ tab, page: currentPage, search: debouncedSearch, category: selectedCategory }), { signal: controller.signal })
-      .then((res) => {
-        setItems(Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []));
-        setTotalPages(Math.max(1, Number(res?.totalPages) || 1));
-        setIsLoading(false);
-      })
-      .catch((err: any) => {
-        if (err?.name === 'AbortError') return;
-        console.error('Failed to load items in gallery:', err);
-        toast.error('خطا در دریافت تصاویر گالری کالاها');
-        setItems([]);
-        setIsLoading(false);
-      });
-    return () => controller.abort();
-  }, [tab, currentPage, debouncedSearch, selectedCategory]);
+  // 10.3 (ARCH review finding 3, part 16): the page and the categories read through the shared cache, again on each
+  // visit and never shown from an earlier one; an item save or a stock change refreshes the page on screen
+  const itemsRead = useOpeningRead(useGalleryItemsQuery({ tab, page: currentPage, search: debouncedSearch, category: selectedCategory }), true);
+  const categoriesRead = useOpeningRead(useCategoriesQuery(undefined, { readOnEveryOpening: true }), true);
+  const categories = categoriesRead.data ?? [];
+  // a failed refresh keeps the page on screen and says it was not refreshed
+  const itemsError = itemsRead.error
+    ? errorMessageOf(itemsRead.error) || 'تصاویر گالری کالاها خوانده نشد؛ صفحه را دوباره باز کنید.'
+    : '';
+  const isLoading = itemsRead.data === undefined && !itemsError;
+  // the page count of the last page shown stays while the next one is read
+  const [totalPages, setTotalPages] = useState(1);
+  if (itemsRead.data && itemsRead.data.totalPages !== totalPages) setTotalPages(itemsRead.data.totalPages);
 
+  const sayCategoriesFailed = useEffectEvent(() => { toast.error('خطا در دریافت دسته‌بندی‌ها'); });
   useEffect(() => {
-    const controller = new AbortController();
-    fetchJson('/categories', { signal: controller.signal })
-      .then((cats) => setCategories(Array.isArray(cats) ? cats : []))
-      .catch((e: any) => {
-        if (e?.name === 'AbortError') return;
-        console.error('Failed to load categories in gallery:', e);
-        toast.error('خطا در دریافت دسته‌بندی‌ها');
-      });
-    return () => controller.abort();
-  }, []);
+    if (categoriesRead.failedAt) sayCategoriesFailed();
+  }, [categoriesRead.failedAt]);
 
-  const paginatedItems = Array.isArray(items) ? items : [];
+  const paginatedItems = itemsRead.data?.rows ?? [];
 
   return (
     <div className="flex flex-col h-full bg-slate-50/50 space-y-6 p-4 md:p-6 max-w-[1700px] mx-auto text-right font-farsi">
@@ -125,6 +112,9 @@ export default function GalleryPage({ user }: { user: User }) {
 
       <div className="flex-1 overflow-auto p-4 md:p-6 bg-slate-100">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+          {itemsError && (
+            <div role="alert" className={cn('col-span-full text-center text-rose-600', paginatedItems.length ? 'py-3' : 'py-20')}>{itemsError}</div>
+          )}
           {!isLoading && paginatedItems.map((item, idx) => {
             const stock = Number(item.current_stock || 0);
             const wacVal = Number(item.weighted_average_cost ?? (item as any).weightedAverageCost ?? 0);
@@ -160,7 +150,8 @@ export default function GalleryPage({ user }: { user: User }) {
             </div>
           )}
 
-          {!isLoading && paginatedItems.length === 0 && (
+
+          {!isLoading && !itemsError && paginatedItems.length === 0 && (
             <div className="col-span-full py-20 text-center text-slate-500 flex flex-col items-center">
               <div className="text-4xl mb-4">🖼️</div>
               <div>موردی برای نمایش در گالری یافت نشد. باید برای کالاها تصویر بارگذاری کنید.</div>
@@ -171,7 +162,7 @@ export default function GalleryPage({ user }: { user: User }) {
         {totalPages > 1 && (
           <div className="flex justify-center items-center gap-2 mt-6">
             <button 
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
               disabled={currentPage === 1}
               className="px-3 py-1.5 rounded border bg-white disabled:opacity-50 text-sm shadow-sm"
             >
@@ -181,7 +172,7 @@ export default function GalleryPage({ user }: { user: User }) {
               صفحه {formatPersianNumber(currentPage)} از {formatPersianNumber(totalPages)}
             </span>
             <button 
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
               disabled={currentPage === totalPages}
               className="px-3 py-1.5 rounded border bg-white disabled:opacity-50 text-sm shadow-sm"
             >

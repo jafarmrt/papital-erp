@@ -58,6 +58,7 @@ vi.mock('../../contexts/AuthContext', () => ({ useHasPermission: () => true, use
 import { CRMLeadDrawer } from '../../components/crm/CRMLeadDrawer';
 import { CustomerDossierDrawer } from '../../components/crm/CustomerDossierDrawer';
 import { useCustomerAccountCardQuery } from '../../hooks/queries/useCustomerQueries';
+import { appQueryClient } from './helpers/queryWrapper';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import type { CRMLead, Customer } from '../../types';
 
@@ -73,7 +74,8 @@ afterEach(() => {
   toastError.mockClear();
 });
 
-const newClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
+/** the app's read defaults (fresh for five minutes): a screen must read again on its own */
+const newClient = appQueryClient;
 const wrapperOf = (client: QueryClient) => ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 const invalidate = (client: QueryClient, queryKey: readonly unknown[]) => act(async () => { await client.invalidateQueries({ queryKey }); });
 const readsOf = (prefix: string) => fetchJson.mock.calls.filter(([u]) => u.startsWith(prefix)).length;

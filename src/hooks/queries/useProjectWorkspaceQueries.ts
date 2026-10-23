@@ -21,7 +21,7 @@ export function useProjectStepCounts(projectId: number | null) {
 }
 
 /** the item pick list the materials and delivery tabs read (TD-888); under the items key, so a stock change refreshes it */
-export function useProjectItemOptions(enabled: boolean) {
+export function useProjectItemOptions(enabled: boolean, options: { readOnEveryOpening?: boolean } = {}) {
   return useQuery<Item[]>({
     queryKey: [...QUERY_KEYS.items.all, 'options', 'project-workspace'] as const,
     queryFn: async ({ signal }) => {
@@ -32,6 +32,8 @@ export function useProjectItemOptions(enabled: boolean) {
     },
     enabled,
     staleTime: 60 * 1000,
+    // 10.3 (part 16): the project form reads it again on each opening
+    ...(options.readOnEveryOpening ? READ_ON_EVERY_OPENING : {}),
   });
 }
 

@@ -35,6 +35,7 @@ import { invalidateAfterTreasuryChange } from '../../hooks/accounting/accounting
 import { invalidateDomain } from '../../lib/queryInvalidation';
 import { PayrollPaymentModal } from '../../components/piecework/PayrollPaymentModal';
 import { PieceworkPayrollModal } from '../../components/piecework/PieceworkPayrollModal';
+import { appQueryClient } from './helpers/queryWrapper';
 
 afterEach(() => {
   cleanup();
@@ -42,7 +43,8 @@ afterEach(() => {
 });
 
 const withClient = (client: QueryClient) => (ui: ReactElement) => <QueryClientProvider client={client}>{ui}</QueryClientProvider>;
-const newClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
+/** the app's read defaults (fresh for five minutes): a screen must read again on its own */
+const newClient = appQueryClient;
 const payment = (id: number, amount: number) => ({ id, transactionNumber: `PAY-T-${id}`, amount, status: 'completed', bankAccountTitle: SHOWN.bank, date: '2026-05-01' });
 const payrollOf = (paidAmount: number) => ({ id: 7, payrollNumber: 'PAY-7', netPayable: 1_000_000, paidAmount, status: 'partially_paid' });
 const paymentReads = () => fetchJson.mock.calls.filter(([url]) => url === '/piecework/payrolls/7/payments').length;

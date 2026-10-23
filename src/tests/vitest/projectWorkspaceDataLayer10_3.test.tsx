@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { ChangeEvent } from 'react';
 import { ownReads } from './helpers/ownReads';
+import { appQueryClient } from './helpers/queryWrapper';
 
 /**
  * 10.3 (ARCH review finding 3, part 9): the project page and its workshop tab read through the shared cache. A save
@@ -109,7 +110,8 @@ afterEach(() => {
   personnel = [{ id: 1, fullName: 'سارا کریمی' }];
 });
 
-const newClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
+/** the app's read defaults (fresh for five minutes): a screen must read again on its own */
+const newClient = appQueryClient;
 const reads = (url: string) => fetchJson.mock.calls.filter(([u, o]) => u === url && !o?.method).length;
 const renderPage = (client: QueryClient, path = '/projects/7/workshop') => render(
   <QueryClientProvider client={client}>

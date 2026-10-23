@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { ChangeEvent } from 'react';
+import { appQueryClient } from './helpers/queryWrapper';
 
 /**
  * 10.3 (ARCH review finding 3, part 9 review): «ثبت کارمزد» saves the plan first and refreshes the project only when the
@@ -104,7 +105,7 @@ const sentQuantity = () => {
 
 describe('a work log holds the project back until it is over (10.3)', () => {
   it.each([false, true])('a read started while the plan held a change never resets the logged quantity (refresh fails: %s)', async (refreshFails) => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = appQueryClient();
     renderPage(client);
     await waitFor(() => expect(quantity()).toBe('2'));
     fireEvent.change(screen.getByPlaceholderText(SHOWN.quantity), { target: { value: '3' } });

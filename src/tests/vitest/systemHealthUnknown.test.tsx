@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 const fetchJsonMock = vi.fn();
 vi.mock('react-hot-toast', () => ({ toast: { error: vi.fn(), success: vi.fn() }, default: { error: vi.fn(), success: vi.fn() } }));
@@ -34,7 +35,7 @@ describe('system health unknown subsystems (TD-593)', () => {
       if (url === '/system/reconciliation-check') return Promise.reject(new Error('not needed'));
       return Promise.reject(new Error(`unexpected ${url}`));
     });
-    const { container } = render(<SystemHealthDiagnostic />);
+    const { container } = renderWithQuery(<SystemHealthDiagnostic />);
     await screen.findByText('صف رویدادها');
 
     const outbox = cardOf('صف رویدادها');

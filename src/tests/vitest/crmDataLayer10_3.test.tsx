@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@t
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { ownReads } from './helpers/ownReads';
+import { appQueryClient } from './helpers/queryWrapper';
 
 /**
  * 10.3 (ARCH review finding 3, part 12): the sales file drawer and the attachment box read through the shared cache. Each
@@ -84,7 +85,8 @@ afterEach(() => {
   heldSends.length = 0;
 });
 
-const newClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
+/** the app's read defaults (fresh for five minutes): a screen must read again on its own */
+const newClient = appQueryClient;
 const wrapperOf = (client: QueryClient) => ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 const detailReads = () => fetchJson.mock.calls.filter(([u, o]) => u === '/crm/leads/1' && !o?.method).length;
 const keysOf = (spy: { mock: { calls: Array<[{ queryKey?: unknown }?, ...unknown[]]> } }) => spy.mock.calls.map(([filters]) => JSON.stringify(filters?.queryKey));

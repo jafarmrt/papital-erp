@@ -48,6 +48,7 @@ vi.mock('../../components/crm/crmSharedHosts', () => ({
 
 import CustomersPage from '../../pages/CustomersPage';
 import { QUERY_KEYS } from '../../lib/queryKeys';
+import { appQueryClient } from './helpers/queryWrapper';
 
 const user: User = { id: 1, username: 'sales', full_name: 'sales user', role: 'sales' };
 const customer = { id: 7, name: 'party', phone: '09121110001', partyType: 'both', version: 1 } as Customer;
@@ -75,7 +76,7 @@ const renderPage = (client: QueryClient) => render(pageOf(client));
 
 describe('the parties page account card reads on each opening (10.3)', () => {
   it('never shows the card an earlier opening left while it reads again', async () => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = appQueryClient();
     client.setQueryData(QUERY_KEYS.accounting.report('customer-account-card', { customerId: 7 }), cardOf('cached'), { updatedAt: Date.now() - 60_000 });
     holdCard = true;
     renderPage(client);
@@ -91,7 +92,7 @@ describe('the parties page account card reads on each opening (10.3)', () => {
     const toast = (await import('react-hot-toast')).toast as unknown as { error: ReturnType<typeof vi.fn> };
     toast.error.mockClear();
     failCard = true;
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = appQueryClient();
     const view = renderPage(client);
     fireEvent.click(await screen.findByText(SHOWN.open));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(SHOWN.failed));

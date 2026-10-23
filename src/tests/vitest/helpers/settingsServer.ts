@@ -4,6 +4,7 @@ import { act } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { getTodayJalaliDate } from '../../../utils';
 import { toLatinDigits } from '../../../lib/numericInput';
+import { appQueryClient } from './queryWrapper';
 
 /**
  * 10.3 (ARCH review finding 3, part 13): the server the settings screen tests talk to (`fetchJson`, mocked over
@@ -106,7 +107,8 @@ export const fetchJson = vi.fn(async (url: string, opts?: FetchOpts): Promise<un
   return read(url);
 });
 
-export const newClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
+export /** the app's read defaults (fresh for five minutes): a screen must read again on its own */
+const newClient = appQueryClient;
 export const wrapperOf = (client: QueryClient) => ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children);
 export const invalidate = (client: QueryClient, queryKey: readonly unknown[]) => act(async () => { await client.invalidateQueries({ queryKey }); });
 export const keysOf = (spy: { mock: { calls: Array<[{ queryKey?: unknown }?, ...unknown[]]> } }) => spy.mock.calls.map(([filters]) => JSON.stringify(filters?.queryKey));
