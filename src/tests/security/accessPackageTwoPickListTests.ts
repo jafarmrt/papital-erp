@@ -81,7 +81,7 @@ export async function runAccessPackageTwoPickListTests(shouldRun: ShouldRun): Pr
     await runCase(results, {
       id: 'sec_item_options_td_888',
       name: 'v9.0.121: forms of other sections read the item pick list; the full item list and the average cost need products.view (TD-888)',
-      details: 'for each form key of another section (documents.view, documents.create, warehouse.view, warehouse.in, audit.view, projects.view, crm.view, procurement.view): GET /api/items is 403 and GET /api/items/options returns the item with exactly the pick fields and its warehouse stock, without the average cost; products.view reads the full list with reorder point and the pick list with the average cost; the type filter and limit work; a key of no picking form gets 403; the reorder alerts page opens only with its page keys',
+      details: 'for each form key of another section (documents.view, documents.create, warehouse.view, warehouse.in, audit.view, projects.view, crm.view, procurement.view): GET /api/items is 403 and GET /api/items/options returns the item with exactly the pick fields and its warehouse stock, without the average cost; products.view reads the full list with reorder point and the pick list with the average cost; the type filter, limit and 10.3 `id=` (that item alone; not a number is 400) work; a key of no picking form gets 403; the reorder alerts page opens only with its page keys',
     }, async (h, wrong) => {
       const { ITEM_PICK_FIELDS, ITEM_COST_FIELDS, ITEM_WAREHOUSE_STOCK_FIELD } = await import('../../lib/permissions/pickLists.js');
       const { createTestItem, createTestWarehouse } = await import('../fixtures/factories.js');
@@ -130,6 +130,13 @@ export async function runAccessPackageTwoPickListTests(shouldRun: ShouldRun): Pr
         const limited = await h.get(`/api/items/options?limit=1`, viewer);
         const limitedRows = (limited.body as { data?: unknown[] })?.data;
         if (limited.status !== 200 || !Array.isArray(limitedRows) || limitedRows.length !== 1) wrong.push(`limit=1 returned ${limited.status} with ${Array.isArray(limitedRows) ? limitedRows.length : 'no'} rows`);
+        // 10.3: `id=` answers that item's row only (the transfer window's stock check), with the same fields
+        const byId = await h.get(`/api/items/options?id=${item.id}`, await h.sessionWith(['warehouse.view']));
+        const byIdRows = (byId.body as { data?: Row[] })?.data;
+        if (byId.status !== 200 || !Array.isArray(byIdRows) || byIdRows.length !== 1) wrong.push(`id=: returned ${byId.status} with ${Array.isArray(byIdRows) ? byIdRows.length : 'no'} rows`);
+        else checkPick('id=', byIdRows[0].id === item.id ? byIdRows[0] : undefined, false);
+        const badId = await h.get('/api/items/options?id=abc', viewer);
+        if (badId.status !== 400) wrong.push(`id=abc: returned ${badId.status}, not 400`);
 
         const refused = await h.get(`/api/items/options?${search}`, await h.sessionWith(['piecework.view']));
         if (refused.status !== 403) wrong.push(`piecework.view: GET /api/items/options returned ${refused.status}, not 403`);

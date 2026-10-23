@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Lock, 
   Search, 
@@ -14,7 +14,6 @@ import {
   ChevronUp, 
   DollarSign,
 } from 'lucide-react';
-import { fetchJson } from '../api';
 import { formatPersianNumber, formatPersianDate, getTodayJalaliDate } from '../utils';
 import * as xlsx from 'xlsx';
 import { useRialDisplay } from '../hooks/useAppCurrency';
@@ -24,47 +23,34 @@ import type { ReservedItemsFullReport } from '../lib/inventory/reservedItemsRepo
 import { reservationEntryRows, reservedItemSummaryRows, reservedItemsExportFileName } from '../lib/inventory/reservedItemsExport';
 import { EXPORT_FAILED_MESSAGE } from '../lib/inventoryAudit/exportFileNames';
 import { ReservationSourceLink } from '../components/reservedItems/ReservationSourceLink';
+import { useReservedItemsReportQuery } from '../hooks/queries/useStockWindowQueries';
+import { useOpeningRead } from '../hooks/queries/readOnEveryOpening';
 
 export default function ReservedItemsReportPage() {
   const rial = useRialDisplay();
   const curLbl = rial.label;
-  const [data, setData] = useState<ReservedItemsFullReport | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  // 10.3 (ARCH review finding 3): the report comes from the shared cache under `inventory`, so a stock document, a
+  // proforma or a project reservation saved while this page is open refreshes it; it still reads on every visit
+  const reportQuery = useReservedItemsReportQuery<ReservedItemsFullReport>();
+  // only this visit's read counts: a report or an error cached from an earlier visit is never shown
+  const reportRead = useOpeningRead(reportQuery, true);
+  const data = reportRead.data ?? null;
+  const loading = reportQuery.isFetching;
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sourceFilter, setSourceFilter] = useState<'all' | 'proforma' | 'project'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<'items' | 'ledger'>('items');
   const [expandedItemCode, setExpandedItemCode] = useState<string | null>(null);
   // v9.0.394 (TD-821): a failed report is an error panel, never a page of zero reservations
-  const [loadError, setLoadError] = useState<Error | null>(null);
+  const loadError = reportRead.error
+    ? (reportRead.error instanceof Error ? reportRead.error : new Error(String(reportRead.error)))
+    : null;
 
   // v9.0.400 (TD-829): the server sends cost and value only to item cost readers; their columns follow `access`
   const showCost = data?.access?.cost !== false;
   const columnCount = showCost ? 10 : 9;
 
-  const loadReport = async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const res = await fetchJson('/inventory/reserved-items', { signal });
-      if (res) {
-        setData(res);
-        setLoadError(null);
-      }
-    } catch (err: any) {
-      if (err?.name === 'AbortError') return;
-      console.error('Error loading reserved items report:', err);
-      setData(null);
-      setLoadError(err instanceof Error ? err : new Error(String(err)));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void loadReport(controller.signal);
-    return () => controller.abort();
-  }, []);
+  const loadReport = () => { void reportQuery.refetch(); };
 
   // Extract unique categories for filter
   const categoriesList = useMemo(() => {
@@ -376,8 +362,8 @@ export default function ReservedItemsReportPage() {
         </div>
       </div>
 
-      {/* Main Content Area */}
-      {loading ? (
+      {/* Main Content Area: a refresh keeps the rows on screen (the button spins); only the first read shows the spinner */}
+      {loading && !data ? (
         <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
           <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
           <p className="text-xs text-slate-500 font-semibold">در حال محاسبه و استخراج اقلام رزروی...</p>

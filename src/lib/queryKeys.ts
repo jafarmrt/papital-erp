@@ -22,6 +22,10 @@ export const QUERY_KEYS = {
     detail: (id: number) => ['items', 'detail', id] as const,
     // صفحه نقطه سفارش (GET /items/reorder-alerts): زیر items تا ذخیره کالا و هر تغییر موجودی (preset inventoryChange) تازه‌اش کند
     reorderAlerts: () => ['items', 'reorder-alerts'] as const,
+    /** 10.3 (ARCH review finding 3): an item's earlier codes, under its detail key so its code change refreshes them */
+    codeHistory: (id: number) => ['items', 'detail', id, 'code-history'] as const,
+    /** 10.3: the stock of the item a stock window picked, read again whenever a stock change invalidates `items` */
+    pickedStock: (id: number) => ['items', 'picked-stock', id] as const,
   },
 
   // Transfers
@@ -201,6 +205,8 @@ export const QUERY_KEYS = {
   inventory: {
     all: ['inventory'] as const,
     reservedItems: () => ['inventory', 'reserved-items'] as const,
+    /** 10.3 (ARCH review finding 3): the warehouse stock against the stock ledger (stock reconciliation panel) */
+    warehouseReconciliation: () => ['inventory', 'warehouse-stock-reconciliation'] as const,
     // صفحه انبارگردانی: گزارش سلامت سه‌طرفه و اقلام شمارش یک انبار (زیر inventory تا هر تغییر موجودی تازه‌شان کند)
     integrityAudit: () => ['inventory', 'integrity-audit'] as const,
     auditItems: (location: string) => ['inventory', 'audit-items', location] as const,

@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import { Scale, RefreshCw, FlaskConical, Wrench, AlertTriangle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
+import { QUERY_KEYS } from '../../lib/queryKeys';
 import { confirmAction } from '../ConfirmDialogHost';
 import { invalidateAfterStockAdjustment } from '../../hooks/inventoryAudit/useInventoryAuditSave';
-import { formatPersianNumber } from '../../utils';
+import { errorMessageOf, formatPersianNumber } from '../../utils';
+import { useWarehouseReconciliationQuery } from '../../hooks/queries/useStockWindowQueries';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 
 /**
  * v7.0.33 (TD-200 / audit P1-9): تطبیق موجودی تفکیکی انبارها با دفتر کاردکس و ترمیم دستی.
@@ -54,28 +57,25 @@ const STATUS_LABELS: Record<ReconRow['status'], { label: string; className: stri
 
 export function WarehouseStockReconciliationPanel() {
   const queryClient = useQueryClient();
-  const [report, setReport] = useState<ReconReport | null>(null);
-  const [loading, setLoading] = useState(false);
+  // 10.3 (ARCH review finding 3): the report comes from the shared cache under `inventory`, so a stock document or
+  // adjustment saved while the panel is open refreshes it
+  const reportQuery = useWarehouseReconciliationQuery<ReconReport>();
+  // only what this visit read counts, never a report or an error cached from an earlier one
+  const reportRead = useOpeningRead(reportQuery, true);
+  const report = reportRead.data ?? null;
+  const loading = reportQuery.isFetching;
+  const loadReport = () => { void reportQuery.refetch(); };
   const [isSaving, setIsSaving] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
 
-  const loadReport = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const res = await fetchJson<ReconReport>('/inventory/warehouse-stock-reconciliation', { signal });
-      setReport(res);
-    } catch (err: any) {
-      if (err?.name !== 'AbortError') toast.error(err?.message || 'خطا در دریافت گزارش تطبیق موجودی انبارها');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
+  // one message for each failed read
+  const reportFailedAt = reportRead.failedAt;
+  const showReportError = useEffectEvent(() => {
+    toast.error(errorMessageOf(reportRead.error) || 'خطا در دریافت گزارش تطبیق موجودی انبارها');
+  });
   useEffect(() => {
-    const controller = new AbortController();
-    void loadReport(controller.signal);
-    return () => controller.abort();
-  }, [loadReport]);
+    if (reportFailedAt) showReportError();
+  }, [reportFailedAt]);
 
   const runRepair = async (dryRun: boolean) => {
     if (!dryRun && !(await confirmAction({
@@ -95,9 +95,11 @@ export function WarehouseStockReconciliationPanel() {
       } else {
         setPreview(null);
         toast.success(res.message || 'ترمیم موجودی انبارها انجام شد');
-        // ترمیم موجودی انبارها را تغییر داده است: کش صفحات دیگر (کالاها، کاردکس، داشبورد، گزارش سلامت) باطل می‌شود
+        // ترمیم موجودی انبارها را تغییر داده است: کش صفحات دیگر (کالاها، کاردکس، داشبورد، گزارش سلامت) و همین گزارش
+        // (زیر inventory) باطل و دوباره خوانده می‌شود؛ 10.3 (review of part 8): the button waits for this report only,
+        // not for every other read the invalidation starts (the same request, not a second one)
         void invalidateAfterStockAdjustment(queryClient);
-        await loadReport();
+        await queryClient.refetchQueries({ queryKey: QUERY_KEYS.inventory.warehouseReconciliation(), exact: true }, { cancelRefetch: false });
       }
     } catch (err: any) {
       toast.error(err?.message || 'خطا در ترمیم موجودی انبارها');

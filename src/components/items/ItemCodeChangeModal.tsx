@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import toast from 'react-hot-toast';
 import { Item } from '../../types';
 import { fetchJson } from '../../api';
@@ -6,14 +6,10 @@ import { errorMessageOf, formatPersianDateTime } from '../../utils';
 import { ITEM_CODE_CHANGE_REASON_MAX, itemCodeChangeError } from '../../lib/items/itemCodeChange';
 import { PHONE_SHEET_OVERLAY, PHONE_TAP_TARGET } from '../../lib/pwa/phoneLayout';
 import { DialogLayer } from '../common/DialogLayer';
+import { useItemCodeHistoryQuery, type ItemCodeHistoryRow } from '../../hooks/queries/useStockWindowQueries';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 
-interface CodeHistoryRow {
-  oldCode: string;
-  newCode: string;
-  reason: string;
-  username: string;
-  createdAt: string;
-}
+const NO_HISTORY: ItemCodeHistoryRow[] = [];
 
 interface ItemCodeChangeModalProps {
   item: Item;
@@ -33,15 +29,8 @@ export function ItemCodeChangeModal({ item, onClose, onChanged }: ItemCodeChange
   const [reason, setReason] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [history, setHistory] = useState<CodeHistoryRow[]>([]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchJson<{ data?: CodeHistoryRow[] }>(`/items/${item.id}/code-history`, { signal: controller.signal })
-      .then(res => setHistory(Array.isArray(res?.data) ? res.data : []))
-      .catch(() => { if (!controller.signal.aborted) setHistory([]); });
-    return () => controller.abort();
-  }, [item.id]);
+  // 10.3 (ARCH review finding 3): the earlier codes come from the shared cache under the item's key
+  const history = useOpeningRead(useItemCodeHistoryQuery(item.id), true).data ?? NO_HISTORY;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();

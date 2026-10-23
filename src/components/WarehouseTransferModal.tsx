@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useId } from 'react';
+import React, { useState, useEffect, useEffectEvent, useId } from 'react';
 import { fetchJson } from '../api';
 import { X, RefreshCw, ArrowLeftRight, Warehouse, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { SearchableSelect } from './SearchableSelect';
@@ -8,6 +8,11 @@ import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 import { refNumberToSend } from '../lib/documents/documentRefRules';
 import { DecimalInput } from './common/DecimalInput';
 import { DialogLayer } from './common/DialogLayer';
+import { useWarehousesQuery, type WarehouseItem } from '../hooks/queries/useSettingsQueries';
+import { useNextDocumentRefQuery, usePickedItemStockQuery, type StockPickItem } from '../hooks/queries/useStockWindowQueries';
+import { useOpeningRead } from '../hooks/queries/readOnEveryOpening';
+
+const NO_WAREHOUSES: WarehouseItem[] = [];
 
 interface WarehouseTransferModalProps {
   isOpen: boolean;
@@ -16,15 +21,7 @@ interface WarehouseTransferModalProps {
 }
 
 /** کالای انتخاب‌شده، همان ردیف `GET /items/options` */
-interface TransferPickItem {
-  id: number;
-  name: string;
-  code: string;
-  unit: string;
-  current_stock?: number;
-  currentStock?: number;
-  stocks?: Record<string, number>;
-}
+type TransferPickItem = StockPickItem;
 
 /** v10.0.183 (OBS-R1-86): برچسب کالا در انتخابگر انتقال */
 export function transferItemOption(it: TransferPickItem) {
@@ -41,9 +38,19 @@ export default function WarehouseTransferModal({
 }: WarehouseTransferModalProps) {
   const fieldId = useId();
   // v10.0.183 (OBS-R1-86): کالا با جست‌وجوی سرور انتخاب می‌شود؛ فهرست کامل کالاها خوانده نمی‌شود
-  const [selectedItem, setSelectedItem] = useState<TransferPickItem | null>(null);
-  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [pickedItem, setSelectedItem] = useState<TransferPickItem | null>(null);
+  // 10.3 (ARCH review finding 3): the picked item's stock is read again on every opening and whenever a stock change
+  // elsewhere invalidates `items`, so the window checks the quantity against the stock as it is now
+  const pickedStock = useOpeningRead(usePickedItemStockQuery(pickedItem, isOpen), isOpen);
+  const selectedItem = pickedStock.current ?? pickedItem;
   const selectedItemId = selectedItem?.id ?? null;
+  // the warehouses (the shared list; a warehouse saved in settings refreshes it) and the next transfer number (again
+  // after any document change) are read on every opening; only what this opening read counts
+  const warehousesQuery = useWarehousesQuery({ enabled: isOpen, readOnEveryOpening: true });
+  const warehousesRead = useOpeningRead(warehousesQuery, isOpen);
+  const warehouses = warehousesRead.data ?? NO_WAREHOUSES;
+  const nextRefRead = useOpeningRead(useNextDocumentRefQuery('transfer', isOpen), isOpen);
+  const nextRef = nextRefRead.data ?? '';
   const [fromLocation, setFromLocation] = useState<string>('');
   const [toLocation, setToLocation] = useState<string>('');
   const [quantity, setQuantity] = useState<string>('');
@@ -54,46 +61,46 @@ export default function WarehouseTransferModal({
   const [suggestedRef, setSuggestedRef] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
 
-  const [loadingInit, setLoadingInit] = useState(false);
+  const loadingInit = isOpen && warehousesRead.data === undefined && warehousesQuery.isFetching;
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  // the first two warehouses are the default source and destination once on each opening
+  const [warehouseDefaultsDue, setWarehouseDefaultsDue] = useState(false);
+
+  // each opening starts clean; the next number fills the field when this opening reads it (below)
+  useEffect(() => {
+    if (!isOpen) return;
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    setWarehouseDefaultsDue(true);
+    setRefNumber('');
+    setSuggestedRef('');
+  }, [isOpen]);
 
   useEffect(() => {
-    if (isOpen) {
-      setLoadingInit(true);
-      setErrorMsg(null);
-      setSuccessMsg(null);
+    if (!warehouseDefaultsDue || warehouses.length === 0) return;
+    setWarehouseDefaultsDue(false);
+    setFromLocation(warehouses[0].code);
+    if (warehouses.length >= 2) setToLocation(warehouses[1].code);
+  }, [warehouseDefaultsDue, warehouses]);
 
-      Promise.all([
-        fetchJson('/warehouses'),
-        fetchJson('/documents/next-ref?type=transfer')
-      ])
-        .then(([whsRes, nextRefRes]) => {
-          const rawWhs = Array.isArray(whsRes) ? whsRes : [];
-          setWarehouses(rawWhs);
-          
-          if (rawWhs.length >= 2) {
-            setFromLocation(rawWhs[0].code);
-            setToLocation(rawWhs[1].code);
-          } else if (rawWhs.length === 1) {
-            setFromLocation(rawWhs[0].code);
-          }
+  // a new next number (this opening's, or a later one after a document saved elsewhere): an untouched number follows
+  // it, a number the user typed stays
+  const followNextRef = useEffectEvent((next: string) => {
+    if (!isOpen || !next) return;
+    if (refNumber === suggestedRef) setRefNumber(next);
+    setSuggestedRef(next);
+  });
+  useEffect(() => {
+    followNextRef(nextRef);
+  }, [nextRef]);
 
-          if (nextRefRes?.nextRef) {
-            setRefNumber(String(nextRefRes.nextRef));
-            setSuggestedRef(String(nextRefRes.nextRef));
-          }
-        })
-        .catch(err => {
-          console.error(err);
-          setErrorMsg('خطا در دریافت لیست کالاها و انبارها');
-        })
-        .finally(() => {
-          setLoadingInit(false);
-        });
-    }
-  }, [isOpen]);
+  // one message for each failed read
+  const failedAt = Math.max(warehousesRead.failedAt, nextRefRead.failedAt);
+  useEffect(() => {
+    if (failedAt) setErrorMsg('خطا در دریافت لیست کالاها و انبارها');
+  }, [failedAt]);
 
   const selectedItemStocks = selectedItem?.stocks || {};
   const availableSourceStock = Number(selectedItemStocks[fromLocation] || 0);

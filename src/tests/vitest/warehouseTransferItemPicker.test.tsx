@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, waitFor } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 import WarehouseTransferModal from '../../components/WarehouseTransferModal';
 
 // Package 6 ledger (OBS-R1-86): the warehouse transfer window picks its item through the item pick list's server
@@ -20,7 +21,7 @@ describe('warehouse transfer item picker (OBS-R1-86)', () => {
       if (url.startsWith('/documents/next-ref')) return { nextRef: '5' };
       return { data: [] };
     });
-    render(<WarehouseTransferModal isOpen onClose={() => undefined} onSuccess={() => undefined} />);
+    renderWithQuery(<WarehouseTransferModal isOpen onClose={() => undefined} onSuccess={() => undefined} />);
     await waitFor(() => expect(fetchJson.mock.calls.some(([url]) => String(url).startsWith('/items/options'))).toBe(true));
     const itemCalls = fetchJson.mock.calls.map(([url]) => String(url)).filter(url => url.startsWith('/items/options'));
     for (const url of itemCalls) {

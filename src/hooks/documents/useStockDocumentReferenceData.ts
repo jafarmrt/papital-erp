@@ -47,7 +47,7 @@ export function useStockDocumentReferenceData() {
   });
 
   const reservedStockQuery = useQuery<ReservedItemsResponse>({
-    queryKey: ['inventory', 'reserved-items'],
+    queryKey: QUERY_KEYS.inventory.reservedItems(),
     queryFn: async ({ signal }) => {
       const res = await fetchJson('/inventory/reserved-items', { signal });
       return res;

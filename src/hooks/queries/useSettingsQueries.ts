@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast';
 import { QUERY_KEYS, settingsKeys } from '../../lib/queryKeys';
 import { invalidatePreset, invalidateDomain } from '../../lib/queryInvalidation';
 import { Category } from '../../types';
+import { READ_ON_EVERY_OPENING } from './readOnEveryOpening';
 
 export interface SettingItem {
   key: string;
@@ -57,7 +58,12 @@ export function useCategoriesQuery(type?: string) {
 /**
  * Hook to query all warehouses with React Query
  */
-export function useWarehousesQuery() {
+/**
+ * 10.3 (ARCH review finding 3): a window that read the warehouses each time it opened passes `readOnEveryOpening` (the
+ * opening read options: read again on each opening, one request whose failure shows at once, offline included);
+ * `enabled` keeps a closed window from reading
+ */
+export function useWarehousesQuery({ enabled = true, readOnEveryOpening = false }: { enabled?: boolean; readOnEveryOpening?: boolean } = {}) {
   return useQuery<WarehouseItem[]>({
     queryKey: QUERY_KEYS.warehouses.list(),
     // سیگنال React Query: با بسته شدن صفحه، درخواست در حال اجرا لغو می‌شود
@@ -67,6 +73,8 @@ export function useWarehousesQuery() {
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
+    ...(readOnEveryOpening ? READ_ON_EVERY_OPENING : {}),
+    enabled,
   });
 }
 
