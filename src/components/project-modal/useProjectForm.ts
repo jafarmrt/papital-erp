@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useEffectEvent } from 'react';
 import toast from 'react-hot-toast';
 import { Customer, Item, FinancialAttachment } from '../../types';
 import { fetchJson } from '../../api';
@@ -14,7 +14,10 @@ import {
   presetStages,
   buildProjectPayload
 } from './projectFormHelpers';
-import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
+import { useCustomerOptionsQuery } from '../../hooks/queries/useCustomerQueries';
+import { useProjectItemOptions } from '../../hooks/queries/useProjectWorkspaceQueries';
+import { useSettingsQuery, type SettingItem } from '../../hooks/queries/useSettingsQueries';
 import { managerUserIdsOf } from '../../lib/projects/projectManagers';
 
 export function useProjectForm({
@@ -39,10 +42,13 @@ export function useProjectForm({
   // v10.1.37 (N-01, TD-1283): «مسئولان پروژه» by user id
   const [managerIds, setManagerIds] = useState<number[]>([]);
 
-  const [localCustomers, setLocalCustomers] = useState<Customer[]>([]);
-  const [localItems, setLocalItems] = useState<Item[]>([]);
+  // 10.3 (ARCH review finding 3, part 16): the pick lists and the presets read through the shared cache, again on each
+  // opening; until this opening's answer the lists the page passed in, and the default presets
+  const customersRead = useOpeningRead(useCustomerOptionsQuery({ readOnEveryOpening: true, enabled: isOpen }), isOpen);
+  const itemsRead = useOpeningRead(useProjectItemOptions(isOpen, { readOnEveryOpening: true }), isOpen);
+  const settingsRead = useOpeningRead(useSettingsQuery({ readOnEveryOpening: true, enabled: isOpen }), isOpen);
   const [productsList, setProductsList] = useState<ProductRow[]>([]);
-  const [workflowPresets, setWorkflowPresets] = useState<WorkflowPreset[]>(DEFAULT_WORKFLOW_PRESETS);
+  const workflowPresets = workflowPresetsOf(settingsRead.data);
   const [preset, setPreset] = useState<string>('');
   const [stages, setStages] = useState<ProjectStage[]>([]);
   const [saving, setSaving] = useState<boolean>(false);
@@ -51,53 +57,22 @@ export function useProjectForm({
   const availablePresets = workflowPresets.filter(
     p => !p.isArchived && p.id !== 'custom' && !p.title?.includes('سفارشی') && p.id !== 'tile_transfer' && p.id !== 'general_assembly'
   );
-  const activeCustomersList = localCustomers.length > 0 ? localCustomers : customersList;
-  const activeItemsList = localItems.length > 0 ? localItems : itemsList;
+  const activeCustomersList: Customer[] = customersRead.data?.length ? customersRead.data : customersList;
+  const activeItemsList: Item[] = itemsRead.data?.length ? itemsRead.data : itemsList;
 
   const getOptionalStageNames = () => {
     return getOptionalStageNamesForPreset(preset, availablePresets);
   };
 
+  // a failed pick list says so once for each failure
+  const sayCustomersFailed = useEffectEvent(() => { toast.error('خطا در دریافت لیست مشتریان'); });
   useEffect(() => {
-    if (!isOpen) return;
-    const controller = new AbortController();
-
-    fetchJson(PICK_LIST_URLS.customers, { signal: controller.signal })
-      .then(res => setLocalCustomers(Array.isArray(res) ? res : (res?.data && Array.isArray(res.data) ? res.data : [])))
-      .catch(err => {
-        if (err?.name === 'AbortError') return;
-        console.error('Failed to load customers in project form:', err);
-        toast.error('خطا در دریافت لیست مشتریان');
-      });
-
-    fetchJson(PICK_LIST_URLS.items, { signal: controller.signal })
-      .then(res => setLocalItems(Array.isArray(res) ? res : (res?.data && Array.isArray(res.data) ? res.data : [])))
-      .catch(err => {
-        if (err?.name === 'AbortError') return;
-        console.error('Failed to load items in project form:', err);
-        toast.error('خطا در دریافت لیست اقلام');
-      });
-
-    fetchJson('/settings', { signal: controller.signal })
-      .then(data => {
-        if (Array.isArray(data)) {
-          const p = data.find((s: any) => s.key === 'project_workflow_presets');
-          if (p?.value) {
-            const parsed = JSON.parse(p.value);
-            if (Array.isArray(parsed)) {
-              setWorkflowPresets(parsed.filter((item: any) => item.id !== 'tile_transfer' && item.id !== 'general_assembly'));
-            }
-          }
-        }
-      })
-      .catch(err => {
-        if (err?.name === 'AbortError') return;
-        console.error('Failed to load workflow presets, falling back to defaults:', err);
-        setWorkflowPresets([]);
-      });
-
-    return () => controller.abort();
-  }, [isOpen]);
+    if (customersRead.failedAt) sayCustomersFailed();
+  }, [customersRead.failedAt]);
+  const sayItemsFailed = useEffectEvent(() => { toast.error('خطا در دریافت لیست اقلام'); });
+  useEffect(() => {
+    if (itemsRead.failedAt) sayItemsFailed();
+  }, [itemsRead.failedAt]);
 
   useEffect(() => {
     if (isOpen) {
@@ -325,4 +300,20 @@ export function useProjectForm({
     handleCustomerSelect,
     handleSubmit
   };
+}
+
+/**
+ * The project presets of the settings: the defaults (none) until they are read, when the read failed or the setting is
+ * not there; none when it holds no valid JSON. The legacy presets are left out where they are offered (`availablePresets`).
+ */
+function workflowPresetsOf(rows: SettingItem[] | undefined): WorkflowPreset[] {
+  const value = rows?.find(s => s.key === 'project_workflow_presets')?.value;
+  if (!value) return DEFAULT_WORKFLOW_PRESETS;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return [];
+  }
+  return Array.isArray(parsed) ? (parsed as WorkflowPreset[]) : DEFAULT_WORKFLOW_PRESETS;
 }

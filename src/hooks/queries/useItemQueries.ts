@@ -6,6 +6,8 @@ import { toast } from 'react-hot-toast';
 import { QUERY_KEYS, itemKeys } from '../../lib/queryKeys';
 import { invalidateDomain, invalidatePreset } from '../../lib/queryInvalidation';
 import type { ItemListSort, ItemListStats } from '../../lib/items/itemListSort';
+import { galleryItemsUrl, type GalleryQuery } from '../../lib/gallery/galleryItems';
+import { READ_ON_EVERY_OPENING } from './readOnEveryOpening';
 
 export { itemKeys };
 
@@ -118,4 +120,24 @@ export function useSyncItemMutation() {
 export function useItemChangeRefresh(): () => void {
   const queryClient = useQueryClient();
   return useCallback(() => { void invalidatePreset(queryClient, 'itemChange'); }, [queryClient]);
+}
+
+/** one page of the gallery: its items with a picture, and the server's page count */
+export interface GalleryItemsPage { rows: Item[]; totalPages: number }
+
+/**
+ * 10.3 (ARCH review finding 3, part 16): a gallery page, read again on each visit and for each filter and page; under the
+ * items key, so an item save or a stock change refreshes the page on screen
+ */
+export function useGalleryItemsQuery(q: GalleryQuery) {
+  return useQuery<GalleryItemsPage>({
+    queryKey: [...QUERY_KEYS.items.all, 'gallery', q] as const,
+    queryFn: async ({ signal }) => {
+      const res = await fetchJson<unknown>(galleryItemsUrl(q), { signal });
+      const page = res as { data?: unknown; totalPages?: unknown } | null;
+      const rows = Array.isArray(page?.data) ? page.data : Array.isArray(res) ? res : [];
+      return { rows: rows as Item[], totalPages: Math.max(1, Number(page?.totalPages) || 1) };
+    },
+    ...READ_ON_EVERY_OPENING,
+  });
 }

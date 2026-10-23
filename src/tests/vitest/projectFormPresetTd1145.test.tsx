@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { QueryWrapper } from './helpers/queryWrapper';
 
 const presets = [
   { id: 'necklace', title: 'ساخت گردنبند', description: '', stages: ['آماده‌سازی مواد', { title: 'مونتاژ', isOptionalPerProduct: true }] },
@@ -21,7 +22,7 @@ afterEach(() => cleanup());
 
 describe('v10.0.69 (TD-1145): a new project form applies no stage template until the user picks one', () => {
   it('opens without a template and with one default stage, even when templates exist', async () => {
-    const { result } = renderHook(() => useProjectForm(props as never));
+    const { result } = renderHook(() => useProjectForm(props as never), { wrapper: QueryWrapper });
     await waitFor(() => expect(result.current.availablePresets).toHaveLength(2));
     expect(result.current.preset).toBe('');
     expect(titles(result.current.stages)).toEqual([NEW_PROJECT_STAGE_TITLE]);
@@ -29,7 +30,7 @@ describe('v10.0.69 (TD-1145): a new project form applies no stage template until
   });
 
   it('applies a template only when picked, and going back to no template keeps the stages', async () => {
-    const { result } = renderHook(() => useProjectForm(props as never));
+    const { result } = renderHook(() => useProjectForm(props as never), { wrapper: QueryWrapper });
     await waitFor(() => expect(result.current.availablePresets).toHaveLength(2));
     act(() => result.current.handleSelectPreset('earring'));
     expect(titles(result.current.stages)).toEqual(['برش', 'بسته‌بندی']);

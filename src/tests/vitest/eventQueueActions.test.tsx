@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 const { fetchJsonMock, confirmMock } = vi.hoisted(() => ({ fetchJsonMock: vi.fn(), confirmMock: vi.fn() }));
 vi.mock('react-hot-toast', () => ({ toast: { error: vi.fn(), success: vi.fn() }, default: { error: vi.fn(), success: vi.fn() } }));
@@ -33,7 +34,7 @@ function renderWith(outbox: Record<string, unknown>) {
     if (url === '/system/reconciliation-fix' && opts?.method === 'POST') return Promise.resolve({ success: true, message: 'انجام شد' });
     return Promise.reject(new Error(`unexpected ${url}`));
   });
-  return render(<SystemHealthDiagnostic />);
+  return renderWithQuery(<SystemHealthDiagnostic />);
 }
 
 const posts = () => fetchJsonMock.mock.calls.filter(c => (c[1] as { method?: string } | undefined)?.method === 'POST');

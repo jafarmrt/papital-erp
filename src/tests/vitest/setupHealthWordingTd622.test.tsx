@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 const { fetchJsonMock } = vi.hoisted(() => ({ fetchJsonMock: vi.fn() }));
 vi.mock('react-hot-toast', () => ({ toast: { error: vi.fn(), success: vi.fn() }, default: { error: vi.fn(), success: vi.fn() } }));
@@ -54,7 +55,7 @@ describe('health page wording (TD-622)', () => {
       if (url === '/system/reconciliation-check') return Promise.resolve(report);
       return Promise.reject(new Error(`unexpected ${url}`));
     });
-    const { container } = render(<SystemHealthDiagnostic />);
+    const { container } = renderWithQuery(<SystemHealthDiagnostic />);
     await screen.findAllByText(/۸۰|80/);
     const text = visibleText(container);
     expect(latinRuns(text)).toEqual([]);

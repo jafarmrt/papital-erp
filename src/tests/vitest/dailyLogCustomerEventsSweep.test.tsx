@@ -48,13 +48,14 @@ describe('OBS-R2-62 gallery and daily log', () => {
       return new Promise(resolve => { answer = resolve; });
     });
     const { default: GalleryPage } = await import('../../pages/GalleryPage');
-    render(<GalleryPage user={{ id: 1, username: 'u', role: 'admin' } as never} />);
+    renderWithQuery(<GalleryPage user={{ id: 1, username: 'u', role: 'admin' } as never} />);
     expect(screen.getByRole('status').textContent).toContain('در حال بارگذاری');
     expect(screen.queryByText(/موردی برای نمایش/)).toBeNull();
     await act(async () => {
       answer({ data: [{ id: 5, name: 'گردنبند ماه', code: 'P-5', image: '/a.png', current_stock: 2, unit: 'عدد' }], total: 120, totalPages: 3 });
     });
-    expect(screen.queryByRole('status')).toBeNull();
+    // 10.3: the answer reaches the page through the shared cache, which tells its screens a moment later
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
     expect(screen.getByText('گردنبند ماه')).toBeTruthy();
     expect(screen.getByText(/صفحه ۱ از ۳/)).toBeTruthy();
   });

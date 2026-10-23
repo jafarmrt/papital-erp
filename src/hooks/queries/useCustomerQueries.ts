@@ -20,7 +20,7 @@ interface CustomersResponse {
 }
 
 /** همه طرف حساب‌ها از فهرست انتخاب (فرم پروژه؛ بی یادداشت و نسخه رکورد، TD-887) */
-export function useCustomerOptionsQuery() {
+export function useCustomerOptionsQuery(options: { readOnEveryOpening?: boolean; enabled?: boolean } = {}) {
   return useQuery<Customer[]>({
     queryKey: QUERY_KEYS.customers.options({ all: true }),
     queryFn: async ({ signal }) => {
@@ -28,6 +28,9 @@ export function useCustomerOptionsQuery() {
       return Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
     },
     staleTime: 60 * 1000,
+    enabled: options.enabled ?? true,
+    // 10.3 (part 16): the project form reads it again on each opening
+    ...(options.readOnEveryOpening ? READ_ON_EVERY_OPENING : {}),
   });
 }
 

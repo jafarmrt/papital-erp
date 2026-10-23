@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../api';
 import { getDisplayTimezoneClient, errorMessageOf } from '../utils';
 import { ShieldCheck, RefreshCw, XCircle } from 'lucide-react';
@@ -8,62 +9,48 @@ import { EventQueueActions, type EventQueueAction } from './system/EventQueueAct
 import { StorageHealthCard } from './system/StorageHealthCard';
 import { MediaLibraryHealthCard } from './system/MediaLibraryHealthCard';
 import { NightlyVerifyHealthCard } from './system/NightlyVerifyHealthCard';
-import { DatabaseHealthCard, RuntimeHealthCard, type DatabaseHealthView, type ServerRuntimeView } from './system/CoreHealthCards';
-import { IntegrityCheckPanel, type IntegrityReportView } from './system/IntegrityCheckPanel';
-import type { AccountingHealth, OutboxHealth, WorkflowHealth } from '../lib/system/subsystemHealth';
-import type { StorageHealth } from '../lib/system/storageHealth';
-import type { MediaLibraryHealth } from '../lib/system/mediaLibraryHealth';
-import type { NightlyVerifyHealth } from '../lib/system/nightlyVerify';
+import { DatabaseHealthCard, RuntimeHealthCard } from './system/CoreHealthCards';
+import { IntegrityCheckPanel } from './system/IntegrityCheckPanel';
+import { useOpeningRead } from '../hooks/queries/readOnEveryOpening';
+import { SYSTEM_KEY, useIntegrityCheckQuery, useSystemHealthQuery } from '../hooks/queries/useSystemQueries';
+import { QUERY_KEYS } from '../lib/queryKeys';
 
 /**
  * صفحه سلامت سامانه (فقط مدیر سامانه). v9.0.388 تا v9.0.392 (TD-593، TD-619، TD-623، TD-622): هر بخش کارت خودش را دارد
  * (`src/components/system/`)؛ متن‌ها فارسی و عددها با رقم فارسی‌اند.
+ * 10.3 (ARCH review finding 3, part 16): the health and the integrity check read through the shared cache, again on each
+ * opening of the tab and never shown from an earlier opening; a queue fix refreshes both and the event screens.
  */
-interface HealthData {
-  database: DatabaseHealthView;
-  storage?: StorageHealth;
-  outbox?: OutboxHealth;
-  accounting?: AccountingHealth;
-  workflow?: WorkflowHealth;
-  mediaLibrary?: MediaLibraryHealth;
-  nightlyVerify?: NightlyVerifyHealth;
-  server: ServerRuntimeView;
-  checkTimestamp: string;
-}
-
 export default function SystemHealthDiagnostic() {
-  const [health, setHealth] = useState<HealthData | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string>('');
-
-  const [integrityReport, setIntegrityReport] = useState<IntegrityReportView | null>(null);
-  const [checkingIntegrity, setCheckingIntegrity] = useState<boolean>(false);
+  const queryClient = useQueryClient();
+  const healthQuery = useSystemHealthQuery();
+  const healthRead = useOpeningRead(healthQuery, true);
+  const integrityQuery = useIntegrityCheckQuery();
+  const integrityRead = useOpeningRead(integrityQuery, true);
   const [fixingAction, setFixingAction] = useState<string>('');
 
-  const loadHealthData = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      setHealth(await fetchJson('/system/health'));
-    } catch (err) {
-      setError(errorMessageOf(err) || 'وضعیت سلامت سامانه دریافت نشد. دوباره تلاش کنید.');
-      toast.error('وضعیت سلامت سرور دریافت نشد.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const health = healthRead.data ?? null;
+  const loading = healthQuery.isFetching;
+  // a read again hides the error of the last one, as the retry used to
+  const error = healthRead.error && !loading ? errorMessageOf(healthRead.error) || 'وضعیت سلامت سامانه دریافت نشد. دوباره تلاش کنید.' : '';
 
-  const runIntegrityCheck = async () => {
-    setCheckingIntegrity(true);
-    try {
-      setIntegrityReport(await fetchJson('/system/reconciliation-check'));
-      toast.success('بررسی یکپارچگی سامانه انجام شد.');
-    } catch (err) {
-      toast.error(errorMessageOf(err) || 'بررسی یکپارچگی سامانه انجام نشد. دوباره تلاش کنید.');
-    } finally {
-      setCheckingIntegrity(false);
-    }
-  };
+  // each failed or finished read of this opening says so once
+  const sayHealthFailed = useEffectEvent(() => { toast.error('وضعیت سلامت سرور دریافت نشد.'); });
+  useEffect(() => {
+    if (healthRead.failedAt) sayHealthFailed();
+  }, [healthRead.failedAt]);
+  const sayIntegrityFailed = useEffectEvent(() => {
+    toast.error(errorMessageOf(integrityRead.error) || 'بررسی یکپارچگی سامانه انجام نشد. دوباره تلاش کنید.');
+  });
+  useEffect(() => {
+    if (integrityRead.failedAt) sayIntegrityFailed();
+  }, [integrityRead.failedAt]);
+  const checkedAt = integrityRead.current !== undefined ? integrityQuery.dataUpdatedAt : 0;
+  useEffect(() => {
+    if (checkedAt) toast.success('بررسی یکپارچگی سامانه انجام شد.');
+  }, [checkedAt]);
+
+  const loadHealthData = () => void healthQuery.refetch();
 
   const handleExecuteFix = async (action: EventQueueAction) => {
     setFixingAction(action);
@@ -74,19 +61,17 @@ export default function SystemHealthDiagnostic() {
         body: JSON.stringify({ action })
       });
       toast.success(res.message || 'انجام شد.');
-      await runIntegrityCheck();
-      await loadHealthData();
+      // the fix moves events back to the outbox: the health, the integrity check and the event screens change
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: SYSTEM_KEY }),
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all }),
+      ]);
     } catch (err) {
       toast.error(errorMessageOf(err) || 'اجرای دوباره رویدادها انجام نشد. دوباره تلاش کنید.');
     } finally {
       setFixingAction('');
     }
   };
-
-  useEffect(() => {
-    void loadHealthData();
-    void runIntegrityCheck();
-  }, []);
 
   if (loading && !health) {
     return (
@@ -149,7 +134,7 @@ export default function SystemHealthDiagnostic() {
         <RuntimeHealthCard server={health.server} />
       </div>
 
-      <IntegrityCheckPanel report={integrityReport} running={checkingIntegrity} onRun={() => void runIntegrityCheck()} />
+      <IntegrityCheckPanel report={integrityRead.data ?? null} running={integrityQuery.isFetching} onRun={() => void integrityQuery.refetch()} />
     </div>
   );
 }

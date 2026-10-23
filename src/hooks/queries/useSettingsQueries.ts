@@ -22,7 +22,7 @@ export interface WarehouseItem {
 
 /**
  * `readOnEveryOpening`: a screen that read the settings each time it opened (10.3, ARCH review finding 3, part 15);
- * `enabled`: false while a view that stays mounted shows nothing
+ * `enabled`: false while a view that stays mounted shows nothing, or a window that stays mounted is closed
  */
 interface SettingsReadOptions { readOnEveryOpening?: boolean; enabled?: boolean }
 const readOptionsOf = (options: SettingsReadOptions) => ({
@@ -62,7 +62,7 @@ export function usePublicSettingsQuery(options: SettingsReadOptions = {}) {
 /**
  * Hook to query all categories with React Query
  */
-export function useCategoriesQuery(type?: string) {
+export function useCategoriesQuery(type?: string, options: { readOnEveryOpening?: boolean } = {}) {
   return useQuery<Category[]>({
     queryKey: QUERY_KEYS.categories.list(type),
     queryFn: async () => {
@@ -75,6 +75,8 @@ export function useCategoriesQuery(type?: string) {
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
+    // 10.3 (part 16): the gallery reads them again on each visit
+    ...(options.readOnEveryOpening ? READ_ON_EVERY_OPENING : {}),
   });
 }
 
