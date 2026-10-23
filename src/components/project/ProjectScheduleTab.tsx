@@ -418,7 +418,8 @@ export default function ProjectScheduleTab({
     const res = await fetchJson<unknown>('/piecework/logs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items })
+      body: JSON.stringify({ items }),
+      acceptReplay: true,
     });
     // v9.0.385 (TD-742): ثبت کارکرد شناسه آن را در ردیف برنامه می‌نویسد و نسخه پروژه را بالا می‌برد؛ ذخیره بعدی با نسخه تازه می‌رود
     // TD-1342 (review N2): only the version is taken; this read may hold other users' changes the tab does not show

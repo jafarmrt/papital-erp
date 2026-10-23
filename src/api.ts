@@ -1,6 +1,7 @@
 import { fetchThroughStartup } from './lib/systemStarting';
 import { inFlightRetryDelayMs, isInFlightResponse, releaseSubmissionKey, settlesSubmissionKey, submissionKeyFor } from './lib/submissionKey';
 import { PASSWORD_RESET_REQUIRED } from './lib/auth/passwordReset';
+import { SUBMISSION_REPLAYED_EVENT, idempotentReplayMessage, isIdempotentReplay } from './lib/idempotentReplay';
 
 export const API_URL = '/api';
 
@@ -166,10 +167,26 @@ export const IN_FLIGHT_STILL_RUNNING_MESSAGE = 'ثبت پیشین هنوز در 
 /** بیشینه بار انتظار برای نتیجه درخواستی که سرور «در حال پردازش» گزارش می‌کند (هر بار به اندازه Retry-After) */
 const IN_FLIGHT_MAX_WAITS = 15;
 
+export interface FetchJsonOptions extends RequestInit {
+  /**
+   * 10.3: the caller handles the «already registered» notice (`isIdempotentReplay`) itself; without it a write answered with
+   * the notice fails with `ApiError` code `IDEMPOTENT_REPLAY` and the notice text
+   */
+  acceptReplay?: boolean;
+}
+
+/** The options as `fetch` takes them */
+function requestInitOf(options?: FetchJsonOptions): RequestInit | undefined {
+  if (!options || !('acceptReplay' in options)) return options;
+  const init: FetchJsonOptions = { ...options };
+  delete init.acceptReplay;
+  return init;
+}
+
 /**
  * v8.0.79 (TD-329): `inFlightWaits` شمار انتظارهای انجام‌شده برای پاسخ ۴۰۹ «در حال پردازش» است (فقط فراخوانی درونی).
  */
-export async function fetchJson<T = any>(endpoint: string, options?: RequestInit, retries = 1, inFlightWaits = 0): Promise<T> {
+export async function fetchJson<T = any>(endpoint: string, options?: FetchJsonOptions, retries = 1, inFlightWaits = 0): Promise<T> {
   const method = (options?.method || 'GET').toUpperCase();
   const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
@@ -201,7 +218,7 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
     idempotencyKey = existingKey || submissionKeyFor(method, cleanEndpoint, options?.body);
     headers['Idempotency-Key'] = idempotencyKey;
   }
-  const sameKeyOptions = (): RequestInit | undefined => (idempotencyKey
+  const sameKeyOptions = (): FetchJsonOptions | undefined => (idempotencyKey
     ? { ...options, headers: { ...(options?.headers as Record<string, string>), 'Idempotency-Key': idempotencyKey } }
     : options);
   const settleKey = (status: number) => {
@@ -219,7 +236,7 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
   try {
     // v9.0.164 (TD-584): while the server finishes an update it answers 503 SYSTEM_STARTING; wait and resend
     res = await fetchThroughStartup(() => fetch(url, {
-      ...options,
+      ...requestInitOf(options),
       credentials: 'include', // Automatically passes and receives HttpOnly Secure cookies
       headers,
     }), options?.signal);
@@ -336,6 +353,13 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
       `پاسخ کارساز قابل تفسیر به JSON نیست (وضعیت ${res.status}): ${parseErr?.message || 'خطای شیوه ارتباط'}`,
       res.status
     );
+  }
+  // 10.3 (ARCH review finding 1): the «already registered» notice answers a resend whose first run committed (its answer was
+  // lost or not kept, or the server stopped before keeping it). The open lists read the record; a caller reading the answer's
+  // fields gets the notice as an error, never an answer without them, unless it handles the notice itself (`acceptReplay`)
+  if (isMutation && isIdempotentReplay(jsonResponse)) {
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(SUBMISSION_REPLAYED_EVENT));
+    if (!options?.acceptReplay) throw new ApiError(idempotentReplayMessage(jsonResponse), 'IDEMPOTENT_REPLAY', res.status);
   }
   if (issuesSessionTokens(endpoint)) {
     if ((jsonResponse as any)?.csrfToken) {

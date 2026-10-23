@@ -11,7 +11,76 @@ const UNSETTLED_STATUSES = new Set([502, 503, 504]);
 const KEEP_MS = 24 * 60 * 60 * 1000;
 const MAX_ENTRIES = 200;
 
-const pending = new Map<string, { key: string; at: number }>();
+/**
+ * 10.3 (ARCH review finding 1): the keys still waiting for a definitive answer also live in the tab's `sessionStorage`
+ * until the tab closes, so a resend after the page is reloaded (the answer was lost and the user refreshed) carries the
+ * same key and gets the first answer or the «already registered» notice instead of recording twice. Before, they lived in
+ * the page's memory only. Each is stored under a hash of the method, path and body (`fingerprintHash`) with its time, never
+ * the body itself (amounts, names); without storage (private mode, full quota) the keys live in memory as before.
+ */
+export const SUBMISSION_KEYS_STORAGE_KEY = 'papital.pendingSubmissionKeys';
+
+interface PendingKey { key: string; at: number }
+
+let pending: Map<string, PendingKey> | null = null;
+
+function storage(): Storage | null {
+  try {
+    return typeof sessionStorage === 'undefined' ? null : sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+/** The keys of this tab: read from its storage on first use */
+function pendingKeys(): Map<string, PendingKey> {
+  if (pending) return pending;
+  pending = new Map();
+  try {
+    const stored: unknown = JSON.parse(storage()?.getItem(SUBMISSION_KEYS_STORAGE_KEY) || '[]');
+    if (Array.isArray(stored)) {
+      for (const entry of stored as Array<{ h?: unknown; key?: unknown; at?: unknown }>) {
+        if (typeof entry?.h === 'string' && typeof entry.key === 'string' && typeof entry.at === 'number') {
+          pending.set(entry.h, { key: entry.key, at: entry.at });
+        }
+      }
+    }
+  } catch {
+    // damaged or unreadable: start empty
+  }
+  return pending;
+}
+
+function persist(): void {
+  try {
+    const keys = pendingKeys();
+    const target = storage();
+    if (!target) return;
+    if (keys.size === 0) target.removeItem(SUBMISSION_KEYS_STORAGE_KEY);
+    else target.setItem(SUBMISSION_KEYS_STORAGE_KEY, JSON.stringify([...keys].map(([h, { key, at }]) => ({ h, key, at }))));
+  } catch {
+    // quota or storage off: the keys stay in memory
+  }
+}
+
+/** 53 bits of a string (cyrb53) */
+function hash53(text: string, seed: number): string {
+  let h1 = 0xdeadbeef ^ seed;
+  let h2 = 0x41c6ce57 ^ seed;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+
+/** The stored stand-in of a submission's method, path and body: two 53-bit hashes, so two submissions do not share a key */
+function fingerprintHash(fingerprint: string): string {
+  return `${hash53(fingerprint, 0)}.${hash53(fingerprint, 0x9e3779b9)}`;
+}
 
 function newKey(): string {
   return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
@@ -19,14 +88,14 @@ function newKey(): string {
     : `fe_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 }
 
-function prune(now: number): void {
-  for (const [fingerprint, entry] of pending) {
-    if (now - entry.at > KEEP_MS) pending.delete(fingerprint);
+function prune(keys: Map<string, PendingKey>, now: number): void {
+  for (const [fingerprint, entry] of keys) {
+    if (now - entry.at > KEEP_MS) keys.delete(fingerprint);
   }
-  while (pending.size >= MAX_ENTRIES) {
-    const oldest = pending.keys().next().value;
+  while (keys.size >= MAX_ENTRIES) {
+    const oldest = keys.keys().next().value;
     if (oldest === undefined) break;
-    pending.delete(oldest);
+    keys.delete(oldest);
   }
 }
 
@@ -60,13 +129,15 @@ function bodyFingerprint(body: unknown): string | null {
 export function submissionKeyFor(method: string, endpoint: string, body: unknown): string {
   const text = bodyFingerprint(body);
   if (text === null) return newKey();
-  const fingerprint = `${method.toUpperCase()} ${endpoint}\n${text}`;
+  const fingerprint = fingerprintHash(`${method.toUpperCase()} ${endpoint}\n${text}`);
+  const keys = pendingKeys();
   const now = Date.now();
-  const existing = pending.get(fingerprint);
+  const existing = keys.get(fingerprint);
   if (existing && now - existing.at <= KEEP_MS) return existing.key;
-  prune(now);
+  prune(keys, now);
   const key = newKey();
-  pending.set(fingerprint, { key, at: now });
+  keys.set(fingerprint, { key, at: now });
+  persist();
   return key;
 }
 
@@ -77,9 +148,12 @@ export function settlesSubmissionKey(status: number): boolean {
 
 /** کلید را آزاد می‌کند تا ارسال بعدی همان محتوا ثبت تازه‌ای باشد */
 export function releaseSubmissionKey(key: string): void {
-  for (const [fingerprint, entry] of pending) {
-    if (entry.key === key) pending.delete(fingerprint);
+  const keys = pendingKeys();
+  let released = false;
+  for (const [fingerprint, entry] of keys) {
+    if (entry.key === key) released = keys.delete(fingerprint);
   }
+  if (released) persist();
 }
 
 /** پاسخ ۴۰۹ «درخواست تکراری در حال پردازش است»: همان کلید پس از مکث دوباره فرستاده می‌شود تا نتیجه درخواست اول برسد */
@@ -93,7 +167,13 @@ export function inFlightRetryDelayMs(retryAfter: string | null): number {
   return Number.isFinite(seconds) && seconds > 0 ? Math.min(5000, Math.max(500, seconds * 1000)) : 2000;
 }
 
-/** فقط برای آزمون‌ها */
-export function resetSubmissionKeys(): void {
-  pending.clear();
+/** فقط برای آزمون‌ها؛ `forgetMemoryOnly` یک بارگذاری دوبارهٔ صفحه را شبیه‌سازی می‌کند (حافظه پاک، sessionStorage می‌ماند) */
+export function resetSubmissionKeys(forgetMemoryOnly = false): void {
+  pending = null;
+  if (forgetMemoryOnly) return;
+  try {
+    storage()?.removeItem(SUBMISSION_KEYS_STORAGE_KEY);
+  } catch {
+    // storage off
+  }
 }
