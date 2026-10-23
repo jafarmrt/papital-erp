@@ -84,21 +84,17 @@ export interface StockPickItem {
 }
 
 /**
- * The picked item's stock as it is now: the pick list row of the item, found by its code. A stock document, transfer
- * or item save elsewhere invalidates `items`, so the stock a window checks against follows. Null when the row is not
- * among the answers (a code many newer codes contain); the window then keeps the row it picked, as before 10.3.
+ * The picked item's stock as it is now: its own row of the item pick list (`GET /items/options?id=`). A stock document,
+ * transfer or item save elsewhere invalidates `items`, so the stock a window checks against follows. Null when the item
+ * is gone; the window then keeps the row it picked, as before 10.3.
  */
-/** codes that contain the picked code, newest first; enough for any real code without reading the whole list */
-const PICKED_ITEM_SEARCH_LIMIT = 200;
-
-export function usePickedItemStockQuery(item: Pick<StockPickItem, 'id' | 'code'> | null, enabled: boolean) {
+export function usePickedItemStockQuery(item: Pick<StockPickItem, 'id'> | null, enabled: boolean) {
   return useQuery<StockPickItem | null>({
     queryKey: QUERY_KEYS.items.pickedStock(item?.id ?? 0),
     queryFn: async ({ signal }) => {
-      const picked = item as Pick<StockPickItem, 'id' | 'code'>;
-      const query = new URLSearchParams({ search: picked.code, limit: String(PICKED_ITEM_SEARCH_LIMIT) });
-      const rows = listOf<StockPickItem>(await fetchJson(`${PICK_LIST_URLS.items}?${query.toString()}`, { signal }));
-      return rows.find(row => row.id === picked.id) ?? null;
+      const id = (item as Pick<StockPickItem, 'id'>).id;
+      const rows = listOf<StockPickItem>(await fetchJson(`${PICK_LIST_URLS.items}?id=${id}&limit=1`, { signal }));
+      return rows.find(row => row.id === id) ?? null;
     },
     ...READ_ON_EVERY_OPENING,
     enabled: enabled && item !== null,

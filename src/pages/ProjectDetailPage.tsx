@@ -5,8 +5,8 @@ import { RefreshCw } from 'lucide-react';
 import type { ProductionProject } from '../types';
 import { fetchJson } from '../api';
 import { errorMessageOf, formatPersianNumber } from '../utils';
-import { QUERY_KEYS } from '../lib/queryKeys';
 import { useProjectVersion } from '../hooks/useProjectVersion';
+import { invalidateProjectChange } from '../hooks/queries/useProjectQueries';
 import { useProjectPermissions } from '../hooks/useProjectPermissions';
 import { usePersonnelListQuery } from '../hooks/queries/usePersonnelQueries';
 import { useProjectItemOptions, useProjectStepCounts } from '../hooks/queries/useProjectWorkspaceQueries';
@@ -122,8 +122,7 @@ export default function ProjectDetailPage() {
    * finding 3): the reserved items too, since a project's reservations are part of that report
    */
   const refresh = useCallback(async (signal?: AbortSignal) => {
-    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.projects.all });
-    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.inventory.reservedItems() });
+    invalidateProjectChange(queryClient);
     await loadProject(signal);
   }, [loadProject, queryClient]);
 

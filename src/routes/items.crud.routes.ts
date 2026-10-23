@@ -42,13 +42,17 @@ const itemPickListValidation = z.object({
     reserved: z.enum(['1']).optional(),
     // v10.1.9 (TD-1209): the open proforma being edited; its own reservation is not counted
     excludeDocumentId: numericIdString.optional(),
+    // 10.3 (review of ARCH finding 3 part 8): one item's row, the stock a window that picked it checks against
+    id: numericIdString.optional(),
   }).optional(),
 });
 
 // v9.0.138 (TD-888، تصمیم ت۱۰ الف): فهرست انتخاب کالا برای فرم‌های بخش‌های دیگر؛ فهرست کامل پایین فقط با مجوز بخش کالا
 router.get('/items/options', authorizePermission(...READ_PERMISSIONS.itemOptions), validate(itemPickListValidation), asyncHandler(async (req, res) => {
-  const query = req.query as { type?: string; search?: string; limit?: string; reserved?: string; excludeDocumentId?: string };
-  const picks = await listItemPicks(req.user, { type: query.type, search: query.search, limit: parsePickListLimit(query.limit) });
+  const query = req.query as { type?: string; search?: string; limit?: string; reserved?: string; excludeDocumentId?: string; id?: string };
+  const picks = await listItemPicks(req.user, {
+    type: query.type, search: query.search, limit: parsePickListLimit(query.limit), id: query.id ? Number(query.id) : undefined,
+  });
   // v10.0.258 (TD-1135): the sales invoice picker asks `reserved=1` for each item's reserved quantity; a reservation read
   // error refuses this request only (TD-821), the other forms never read reservations
   if (query.reserved === '1' && picks.length > 0) {

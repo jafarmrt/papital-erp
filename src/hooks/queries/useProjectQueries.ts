@@ -52,6 +52,15 @@ export function useProjectDetailQuery(projectId: number | null, options?: { enab
   });
 }
 
+/**
+ * 10.3 (ARCH review finding 3): after a project save or delete, the projects and the reserved items, which count a
+ * project's reservations (the reserved items report and the stock document form read them)
+ */
+export function invalidateProjectChange(queryClient: QueryClient): void {
+  void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.projects.all });
+  void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.inventory.reservedItems() });
+}
+
 export function useDeleteProjectMutation() {
   const queryClient = useQueryClient();
 
@@ -61,7 +70,7 @@ export function useDeleteProjectMutation() {
     },
     onSuccess: (res) => {
       if (res && res.success) {
-        void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.projects.all });
+        invalidateProjectChange(queryClient);
         toast.success('پروژه با موفقیت حذف شد');
       } else {
         toast.error(res?.error || 'خطا در حذف پروژه');

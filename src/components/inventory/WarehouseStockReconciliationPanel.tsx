@@ -3,6 +3,7 @@ import { Scale, RefreshCw, FlaskConical, Wrench, AlertTriangle } from 'lucide-re
 import { toast } from 'react-hot-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
+import { QUERY_KEYS } from '../../lib/queryKeys';
 import { confirmAction } from '../ConfirmDialogHost';
 import { invalidateAfterStockAdjustment } from '../../hooks/inventoryAudit/useInventoryAuditSave';
 import { errorMessageOf, formatPersianNumber } from '../../utils';
@@ -95,8 +96,10 @@ export function WarehouseStockReconciliationPanel() {
         setPreview(null);
         toast.success(res.message || 'ترمیم موجودی انبارها انجام شد');
         // ترمیم موجودی انبارها را تغییر داده است: کش صفحات دیگر (کالاها، کاردکس، داشبورد، گزارش سلامت) و همین گزارش
-        // (زیر inventory) باطل و دوباره خوانده می‌شود
-        await invalidateAfterStockAdjustment(queryClient);
+        // (زیر inventory) باطل و دوباره خوانده می‌شود؛ 10.3 (review of part 8): the button waits for this report only,
+        // not for every other read the invalidation starts (the same request, not a second one)
+        void invalidateAfterStockAdjustment(queryClient);
+        await queryClient.refetchQueries({ queryKey: QUERY_KEYS.inventory.warehouseReconciliation(), exact: true }, { cancelRefetch: false });
       }
     } catch (err: any) {
       toast.error(err?.message || 'خطا در ترمیم موجودی انبارها');
