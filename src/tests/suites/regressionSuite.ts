@@ -10972,6 +10972,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v10.2.35: a payroll or piecework write completes its key in its own commit; a crash before the answer no longer pays twice
   const { runIdempotencyCrashTests } = await import('../regression/idempotencyCrashTests.js');
   results.push(...await runIdempotencyCrashTests(shouldRun));
+  // 10.3 (ARCH review finding 1): so does every money and stock write
+  const { runIdempotencyCrashMoneyStockTests } = await import('../regression/idempotencyCrashMoneyStockTests.js');
+  results.push(...await runIdempotencyCrashMoneyStockTests(shouldRun));
   // Series 10.2 package 3 (v10.2.3, TD-1290): free stock, delivery cost and issued materials of a project
   const { runProjectMaterialsCostTests } = await import('../regression/projectMaterialsCostTests.js');
   results.push(...await runProjectMaterialsCostTests(shouldRun));

@@ -5,6 +5,7 @@ import { isDataUrl, uploadBase64ToStorage } from '../lib/storage.js';
 import { systemNowUtcIso } from '../lib/businessClock.js';
 import { BadRequestError, NotFoundError } from '../errors/customErrors.js';
 import { logActivity } from '../lib/auditLogger.js';
+import { idempotentTransaction } from '../middleware/idempotency.js';
 
 export interface SaveTransferInput {
   code: string;
@@ -100,7 +101,7 @@ export class TransferService {
       }
       return savedRecord;
     };
-    const savedRecord = executor === orm ? await orm.transaction(save) : await save(executor);
+    const savedRecord = executor === orm ? await idempotentTransaction(save) : await save(executor);
 
     return savedRecord;
   }
@@ -142,7 +143,7 @@ export class TransferService {
         details: { before: { code: cleanCode, title: existing[0].title } },
       });
     };
-    if (executor === orm) await orm.transaction(tx => run(tx));
+    if (executor === orm) await idempotentTransaction(tx => run(tx));
     else await run(executor);
   }
 }

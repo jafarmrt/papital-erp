@@ -5,6 +5,7 @@ import type { ReconcilableCheque } from '../../../lib/treasury/reconcilableChequ
 import type { Request } from 'express';
 import { BusinessLogicError, ValidationError } from '../../../errors/customErrors.js';
 import { logActivity } from '../../../lib/auditLogger.js';
+import { idempotentTransaction } from '../../../middleware/idempotency.js';
 
 export interface ReconcileParams {
   bankAccountId: number;
@@ -87,7 +88,7 @@ export async function reconcileTreasuryRows(params: ReconcileParams): Promise<Re
   const chequeIds = [...new Set(params.chequeIds ?? [])];
   if (ids.length === 0 && chequeIds.length === 0) return { success: true, updated: 0, changedIds: [], changedChequeIds: [] };
 
-  return orm.transaction(async (tx) => {
+  return idempotentTransaction(async (tx) => {
     const rows = ids.length === 0 ? [] : await tx.select({
       id: treasuryTransactions.id,
       transactionNumber: treasuryTransactions.transactionNumber,

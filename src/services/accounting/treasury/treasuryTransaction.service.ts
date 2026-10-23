@@ -27,6 +27,7 @@ import { listTreasuryTransactions, pageTreasuryTransactions, type TreasuryListFi
 import {
   assertBankCurrency, lockTreasuryBank, nextTreasuryTransactionNumber, postTreasuryRow, reverseTreasuryRow, treasuryEventPayload, isHighValueAmount, treasuryHighValueThreshold, type TreasuryBank, type TreasuryRow,
 } from './treasuryPosting.js';
+import { idempotentTransaction } from '../../../middleware/idempotency.js';
 
 /**
  * TD-105 (v4.0.31): تاریخ تراکنش‌های خزانه «سرور authoritative» است: خالی ← امروز کسب‌وکار، تاریخ آینده ← 422.
@@ -261,7 +262,7 @@ export class TreasuryTransactionService {
     // TD-105: تاریخ سرور-authoritative — پیش‌فرض business clock + اعتبارسنجی بازه
     const resolvedDate = await resolveTreasuryBusinessDate(data.date);
 
-    return await orm.transaction(async (txEngine) => {
+    return await idempotentTransaction(async (txEngine) => {
       validateLockOrder([
         { name: 'bankAccount', hierarchyLevel: LockHierarchyLevel.BANK_ACCOUNTS },
         ...(data.documentId ? [{ name: 'document', hierarchyLevel: LockHierarchyLevel.DOCUMENTS }] : []),
@@ -395,7 +396,7 @@ export class TreasuryTransactionService {
     const reason = (params.reason || '').trim();
     if (!reason) throw new ValidationError('دلیل ابطال الزامی است');
 
-    return await orm.transaction(async (txEngine) => {
+    return await idempotentTransaction(async (txEngine) => {
       validateLockOrder([
         { name: 'bankAccount', hierarchyLevel: LockHierarchyLevel.BANK_ACCOUNTS },
         { name: 'personnel', hierarchyLevel: LockHierarchyLevel.PARTIES },
@@ -551,7 +552,7 @@ export class TreasuryTransactionService {
     // TD-105: تاریخ سرور-authoritative — پیش‌فرض business clock + اعتبارسنجی بازه
     const resolvedDate = await resolveTreasuryBusinessDate(data.date);
 
-    return await orm.transaction(async (txEngine) => {
+    return await idempotentTransaction(async (txEngine) => {
       // قفل هر دو حساب در ترتیب id صعودی (جلوگیری از deadlock در همان سطح سلسله‌مراتب)
       const ids = [Number(data.fromBankAccountId), Number(data.toBankAccountId)].sort((a, b) => a - b);
       const locked = await txEngine.select().from(bankAccounts)

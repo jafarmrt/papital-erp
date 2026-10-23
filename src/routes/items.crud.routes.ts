@@ -20,7 +20,7 @@ import { itemListConditions, itemListOrder, itemListStats, listItemPicks } from 
 import { parseItemListSort } from '../lib/items/itemListSort.js';
 import { listReorderAlerts } from '../services/items/reorderAlerts.service.js';
 import { changeItemCode, listItemCodeHistory } from '../services/items/itemCodeChange.js';
-import { idempotency } from '../middleware/idempotency.js';
+import { idempotency, idempotentTransaction } from '../middleware/idempotency.js';
 
 const router = Router();
 
@@ -200,7 +200,7 @@ router.post('/items', authorizePermission('products.create'), idempotency({ scop
   // را رد می‌کند، مثل ویرایش کالا و ورود اکسل. پیش‌تر سند بیرون از تراکنش صادر و شکستش با `logger.warn` بلعیده می‌شد: کالا با
   // موجودی در کاردکس ثبت می‌شد و دفتر کل تغییری نمی‌کرد.
   const { name, code } = req.body;
-  const { created, openingVoucherId } = await orm.transaction(async (tx) => {
+  const { created, openingVoucherId } = await idempotentTransaction(async (tx) => {
     const created = await ItemCatalogService.createItem(req.body, req.user, tx);
     const wfInstance = await WorkflowEngineService.maybeStartWorkflow({
       entityType: 'item',
@@ -260,7 +260,7 @@ router.post('/items', authorizePermission('products.create'), idempotency({ scop
 // v9.0.171 (TD-654): نسخه کالا لازم است (۴۰۰ بی آن، ۴۰۹ OCC_CONFLICT برای نسخه کهنه) و ردیف ممیزی درون همان تراکنش نوشته می‌شود
 router.put('/items/:id', authorizePermission('products.edit'), idempotency({ scope: 'items' }), validate(itemUpdateSchema), asyncHandler(async (req, res) => {
   const itemId = Number(req.params.id);
-  const result = await orm.transaction(async (tx) => {
+  const result = await idempotentTransaction(async (tx) => {
     const result = await ItemCatalogService.updateItem(itemId, req.body, {
       id: req.user?.id,
       username: req.user?.username,
@@ -301,7 +301,7 @@ router.put('/items/:id', authorizePermission('products.edit'), idempotency({ sco
 router.post('/items/:id/change-code', authorizePermission('products.change_code'), idempotency({ scope: 'items' }), validate(itemCodeChangeSchema), asyncHandler(async (req, res) => {
   const itemId = Number(req.params.id);
   const { code, reason, version } = req.body as { code: string; reason: string; version: number };
-  const { item, previousCode } = await orm.transaction(tx => changeItemCode(tx, itemId, { code, reason, version }, {
+  const { item, previousCode } = await idempotentTransaction(tx => changeItemCode(tx, itemId, { code, reason, version }, {
     id: req.user?.id, username: req.user?.username, fullName: req.user?.fullName,
   }, req));
   res.json({ success: true, code: item.code, previousCode, version: item.version });

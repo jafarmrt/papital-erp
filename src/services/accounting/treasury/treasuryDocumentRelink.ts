@@ -1,12 +1,12 @@
 import { and, eq, sql } from 'drizzle-orm';
 import type { Request } from 'express';
-import { orm } from '../../../db/drizzle.js';
 import { bankAccounts, treasuryTransactions } from '../../../db/schema.js';
 import { ConflictError, NotFoundError } from '../../../errors/customErrors.js';
 import { logActivity } from '../../../lib/auditLogger.js';
 import { LockHierarchyLevel, validateLockOrder } from '../../../lib/lockOrder.js';
 import { assertTreasuryDocumentLink, resolveTreasuryPartyName } from './treasuryLinks.js';
 import { assertWithinDocumentRemaining, lockSettlementDocument } from './documentRemaining.js';
+import { idempotentTransaction } from '../../../middleware/idempotency.js';
 
 /**
  * v9.0.272 (TD-779، تصمیم ت۴ «الف» بسته ۸): دریافت یا پرداخت ثبت‌شده خزانه از سندش جدا («علی‌الحساب») یا به سند فعال
@@ -33,7 +33,7 @@ export async function relinkTreasuryDocument(params: {
   userId?: number;
   username?: string;
 }): Promise<TreasuryDocumentRelinkResult> {
-  return orm.transaction(async (tx) => {
+  return idempotentTransaction(async (tx) => {
     validateLockOrder([
       { name: 'bankAccount', hierarchyLevel: LockHierarchyLevel.BANK_ACCOUNTS },
       ...(params.documentId ? [{ name: 'document', hierarchyLevel: LockHierarchyLevel.DOCUMENTS }] : []),

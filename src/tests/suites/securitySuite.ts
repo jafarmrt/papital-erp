@@ -1385,6 +1385,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
 
   const { runRouteAccessPolicyTests } = await import('../security/routeAccessPolicy.js');
   results.push(...await runRouteAccessPolicyTests(shouldRunAccess));
+  // 10.3 (ARCH review finding 1): the money and stock writes complete their resubmission key in their own transaction
+  const { runMoneyStockWriteKeyTests } = await import('../security/moneyStockWriteKeyTests.js');
+  results.push(...await runMoneyStockWriteKeyTests(shouldRunAccess));
   const { runRecordGuardTests } = await import('../security/recordGuardTests.js');
   results.push(...await runRecordGuardTests(shouldRunAccess));
   const { runCrmCustomerLinkTests } = await import('../security/crmCustomerLinkTests.js');

@@ -41,6 +41,7 @@ import {
   mergeConsolidationRows,
 } from './procurement/requisitionConsolidation.js';
 import { actorDisplayName } from '../lib/auth/actorDisplayName.js';
+import { idempotentTransaction } from '../middleware/idempotency.js';
 
 type DbClient = DbExecutor;
 
@@ -173,7 +174,7 @@ export class ProcurementService {
     input: CreateRequisitionInput,
     user: { id?: number; username?: string; fullName?: string; role?: string }
   ): Promise<PurchaseRequisition> {
-    return orm.transaction(async (tx) => toRequisitionDto(await this.insertRequisition(tx, input, user)));
+    return idempotentTransaction(async (tx) => toRequisitionDto(await this.insertRequisition(tx, input, user)));
   }
 
   /**
@@ -301,7 +302,7 @@ export class ProcurementService {
     if (updates.title !== undefined && !updates.title.trim()) {
       throw new ValidationError('عنوان درخواست خرید را وارد کنید.');
     }
-    return orm.transaction(async (tx) => {
+    return idempotentTransaction(async (tx) => {
       const [locked] = await tx.select().from(purchaseRequisitions)
         .where(and(eq(purchaseRequisitions.id, id), eq(purchaseRequisitions.isDeleted, 0)))
         .for('update');
@@ -355,7 +356,7 @@ export class ProcurementService {
    */
   static async deleteRequisition(id: number, user: { id?: number; username?: string }): Promise<void> {
     // v9.0.40 (TD-447، ت۵): حذف و بستن فرایند در جریان درخواست در یک تراکنش، زیر قفل ردیف درخواست (وضعیت زیر قفل دوباره خوانده می‌شود)
-    await orm.transaction(async (tx) => {
+    await idempotentTransaction(async (tx) => {
       const [locked] = await tx.select().from(purchaseRequisitions)
         .where(and(eq(purchaseRequisitions.id, id), eq(purchaseRequisitions.isDeleted, 0)))
         .for('update');
@@ -431,7 +432,7 @@ export class ProcurementService {
     // v8.0.4 (TD-257): نهایی‌سازی رسید پیش‌نویس با تاریخ پیش از آخرین گردش کالا فقط با مجوز همین کاربر
     const allowBackdate = isReceive ? await userHasRoleOrPermission(user, BACKDATE_PERMISSION) : false;
 
-    const outcome = await orm.transaction(async (tx) => {
+    const outcome = await idempotentTransaction(async (tx) => {
       const [locked] = await tx.select().from(purchaseRequisitions)
         .where(and(eq(purchaseRequisitions.id, requisitionId), eq(purchaseRequisitions.isDeleted, 0)))
         .for('update');
@@ -624,7 +625,7 @@ export class ProcurementService {
     // v9.0.315 (TD-689، ت۱): حق تأیید پیش از تراکنش سنجیده می‌شود (TD-324: بی اتصال دوم درون تراکنش)
     const mayApprove = await userHasRoleOrPermission(user, ...REQUISITION_APPROVE_PERMISSIONS);
 
-    const converted = await orm.transaction(async (tx) => {
+    const converted = await idempotentTransaction(async (tx) => {
       const [locked] = await tx.select().from(purchaseRequisitions)
         .where(and(eq(purchaseRequisitions.id, requisitionId), eq(purchaseRequisitions.isDeleted, 0)))
         .for('update');
@@ -815,7 +816,7 @@ export class ProcurementService {
     // v9.0.349 (TD-694، B10-07، ت۳ الف): قفل منبع‌ها به ترتیب شناسه، ساخت درخواست تجمیعی و بستن منبع‌ها با پیوند و خاتمه
     // گردش کار، همه در یک تراکنش. پیش‌تر تجمیع بی تراکنش و قفل بود، منبع‌ها (حتی دریافت‌شده) باز می‌ماندند و شناسه
     // ناموجود بی‌صدا کنار گذاشته می‌شد.
-    return orm.transaction(async (tx) => {
+    return idempotentTransaction(async (tx) => {
       const sources = await lockConsolidationSources(tx, requisitionIds);
       const codes = sources.map(r => r.code).join('، ');
       const header = consolidationHeader(sources);
@@ -887,7 +888,7 @@ export class ProcurementService {
     // تحویل را برمی‌گرداند؛ سفارش درخواستِ تأییدنشده تحویل نمی‌شود (ت۱). پیش‌تر انتقال پس از commit، بی نقش و مجوز اجرا
     // می‌شد و شکستش با نوشتن مستقیم `workflow_instances` (COMPLETED)، حذف `workflow_pending_approvals` و بستن
     // `workflow_tasks` دور زده می‌شد (A02-03، A02-04، A02-08).
-    await orm.transaction(async (tx) => {
+    await idempotentTransaction(async (tx) => {
       const [lockedReq] = await tx.select().from(purchaseRequisitions)
         .where(and(eq(purchaseRequisitions.id, linkedReqId), eq(purchaseRequisitions.isDeleted, 0)))
         .for('update');

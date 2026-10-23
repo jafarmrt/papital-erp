@@ -27,6 +27,7 @@ import { assertNoOpenAllocations } from './projects/projectOpenAllocations.js';
 import { assertProjectDeletable } from './projects/projectDeleteGuard.js';
 import { setProjectManagers } from './projects/projectManagers.js';
 import { linkedCustomerName, resolveProjectCustomer } from './projects/projectCustomer.js';
+import { idempotentTransactionOn } from '../middleware/idempotency.js';
 
 export interface CreateProjectInput {
   title: string;
@@ -160,7 +161,7 @@ export class ProjectService {
     executor: DbExecutor = orm
   ): Promise<{ project: typeof productionProjects.$inferSelect; stages: Array<typeof projectStages.$inferSelect> }> {
     // v8.0.80 (TD-350): کد و درج پروژه در یک تراکنش زیر قفل شمارنده سال
-    return executor.transaction(tx => ProjectService.createProjectLocked(input, tx));
+    return idempotentTransactionOn(executor, tx => ProjectService.createProjectLocked(input, tx));
   }
 
   private static async createProjectLocked(
@@ -243,7 +244,7 @@ export class ProjectService {
     actor: ProjectActor = {}
   ): Promise<{ previous: typeof productionProjects.$inferSelect; current: typeof productionProjects.$inferSelect }> {
     // v8.0.58 (TD-306): قفل سطری پروژه تا رزرو فعلی (پس از کسر حواله خروج هم‌زمان) از دست نرود
-    return executor.transaction(tx => ProjectService.updateProjectLocked(id, input, tx, actor));
+    return idempotentTransactionOn(executor, tx => ProjectService.updateProjectLocked(id, input, tx, actor));
   }
 
   private static async updateProjectLocked(
@@ -343,7 +344,7 @@ export class ProjectService {
    * Soft deletes a production project and its stages
    */
   static async deleteProject(id: number, executor: DbExecutor = orm): Promise<typeof productionProjects.$inferSelect> {
-    return executor.transaction(async (tx) => {
+    return idempotentTransactionOn(executor, async (tx) => {
       // v8.0.121 (TD-412): پروژه‌ای که تخصیص مواد باز دارد حذف نمی‌شود (assertNoOpenAllocations)
       const [existing] = await tx.select().from(productionProjects)
         .where(and(eq(productionProjects.id, id), eq(productionProjects.isDeleted, 0)))
@@ -378,7 +379,7 @@ export class ProjectService {
     const id = input.projectId;
     const currentUser = input.currentUser || 'سیستم';
 
-    return executor.transaction(async (tx) => {
+    return idempotentTransactionOn(executor, async (tx) => {
       const targetItemIds = (input.itemsToAdd || []).map((e) => Number(e.itemId)).filter(Boolean);
       await withOrderedLocks(tx, [
         { table: items, ids: targetItemIds, name: 'items' },
@@ -489,7 +490,7 @@ export class ProjectService {
     actor: ProjectActor = {},
     executor: DbExecutor = orm
   ): Promise<SyncedStage> {
-    return executor.transaction(async (tx) => {
+    return idempotentTransactionOn(executor, async (tx) => {
       const project = await lockLiveProject(tx, projectId);
       const nextOrder = await ProjectService.nextStageOrder(tx, projectId);
 
@@ -611,7 +612,7 @@ export class ProjectService {
     actor: ProjectActor = {},
     executor: DbExecutor = orm
   ): Promise<SyncedStage> {
-    return executor.transaction(async (tx) => {
+    return idempotentTransactionOn(executor, async (tx) => {
       const project = await lockLiveProject(tx, projectId);
       const [existing] = await tx
         .select()
@@ -698,7 +699,7 @@ export class ProjectService {
     actor: ProjectActor = {},
     executor: DbExecutor = orm
   ): Promise<typeof projectStages.$inferSelect> {
-    return executor.transaction(async (tx) => {
+    return idempotentTransactionOn(executor, async (tx) => {
       const project = await lockLiveProject(tx, projectId);
       const [existing] = await tx
         .select()
@@ -740,7 +741,7 @@ export class ProjectService {
     actor: ProjectActor = {},
     executor: DbExecutor = orm
   ): Promise<{ applied: number; skippedInvalid: number; projectStatus: string; weightedProgress: number }> {
-    return executor.transaction(async (tx) => {
+    return idempotentTransactionOn(executor, async (tx) => {
       const project = await lockLiveProject(tx, projectId);
       const currentUser = actorName(actor);
 

@@ -16,6 +16,7 @@ import { auditTreasuryTransactionCreated, type TreasuryAuditActor } from './trea
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
 import { TreasuryTransactionService } from './treasuryTransaction.service.js';
 import { postTreasuryRow } from './treasuryPosting.js';
+import { idempotentTransaction } from '../../../middleware/idempotency.js';
 
 /**
  * v10.1.32 (D-16، تصمیم مالک محصول ت۳۰ «متغیر»): صورت‌هزینه تنخواه‌گردان. یک پرداخت خزانه از حساب تنخواه (نوع
@@ -110,7 +111,7 @@ export async function createPettyCashExpense(input: PettyCashExpenseInput): Prom
   const date = await resolveTreasuryWriteDate(input.date, 'تاریخ صورت‌هزینه');
   const description = (input.description ?? '').trim();
 
-  return await orm.transaction(async (tx) => {
+  return await idempotentTransaction(async (tx) => {
     validateLockOrder([
       { name: 'bankAccount', hierarchyLevel: LockHierarchyLevel.BANK_ACCOUNTS },
       { name: 'journalVoucher', hierarchyLevel: LockHierarchyLevel.JOURNAL_VOUCHERS },

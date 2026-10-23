@@ -1,5 +1,5 @@
 import { and, desc, eq, gt, sql } from 'drizzle-orm';
-import { orm, type DbExecutor } from '../../db/drizzle.js';
+import { type DbExecutor } from '../../db/drizzle.js';
 import { fiscalPeriods, journalVouchers } from '../../db/schema.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { ConflictError, ValidationError } from '../../errors/customErrors.js';
@@ -9,6 +9,7 @@ import { resolveFiscalClosingDates } from './fiscalYear.service.js';
 import { lockFiscalYearSequence } from './fiscalYearOrder.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
 import type { FiscalYearReopenResult } from '../../types.js';
+import { idempotentTransaction } from '../../middleware/idempotency.js';
 
 type ReopenedVoucher = FiscalYearReopenResult['voidedVouchers'][number];
 
@@ -61,7 +62,7 @@ export async function reopenFiscalYear(params: {
     throw new ValidationError('دلیل بازگشایی سال مالی را بنویسید.', { field: 'reason' }, 'FISCAL_REOPEN_REASON_REQUIRED');
   }
 
-  return orm.transaction(async (tx) => {
+  return idempotentTransaction(async (tx) => {
     await lockFiscalYearSequence(tx);
     const before = await FiscalPeriodService.lockForReopen(tx, year);
     const later = await tx.select({ fiscalYear: fiscalPeriods.fiscalYear }).from(fiscalPeriods)

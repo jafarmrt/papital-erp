@@ -25,6 +25,7 @@ import { allocationStatusLabel } from '../../lib/projects/allocationLabels.js';
 import { logBomAllocation, logBomConsumption, logBomRelease } from './bomAllocationAudit.js';
 import { RECIPIENT_INVALID, RECIPIENT_INVALID_MESSAGE, RECIPIENT_TERMINATED_STATUS } from '../../lib/workshop/recipient.js';
 import { toAllocationRecord, type ProjectBomAllocationRecord } from './bomAllocationRecord.js';
+import { idempotentTransaction } from '../../middleware/idempotency.js';
 export { toAllocationRecord, type ProjectBomAllocationRecord };
 export interface BomAllocationItemInput {
   itemId: number;
@@ -51,7 +52,7 @@ function operatorOf(userId?: number, username?: string): AllocationOperator {
 }
 
 async function inTransaction<T>(externalTx: DbExecutor | undefined, fn: (tx: DbExecutor) => Promise<T>): Promise<T> {
-  return externalTx ? fn(externalTx) : orm.transaction(fn);
+  return externalTx ? fn(externalTx) : idempotentTransaction(fn);
 }
 
 /**
@@ -370,7 +371,7 @@ export class ProjectBomAllocationService {
     if (opts?.externalTx) {
       return await executeConsume(opts.externalTx);
     }
-    return await orm.transaction(executeConsume);
+    return await idempotentTransaction(executeConsume);
   }
 
   /**
@@ -479,7 +480,7 @@ export class ProjectBomAllocationService {
     if (opts?.externalTx) {
       return await executeRelease(opts.externalTx);
     }
-    return await orm.transaction(executeRelease);
+    return await idempotentTransaction(executeRelease);
   }
 
   /**

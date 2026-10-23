@@ -12,6 +12,7 @@ import { workshopUserOf } from '../services/workshop/workshopAccess.js';
 import { confirmDelivery, listMyDeliveries } from '../services/workshop/workshopDeliveries.js';
 import { approveWorkshopReport, editWorkshopReport, rejectWorkshopReport, submitWorkshopReport, withdrawWorkshopReport } from '../services/workshop/workshopReports.js';
 import { listMyTasks, listReviewReports, projectWorkshopReports } from '../services/workshop/workshopTasks.js';
+import { idempotentTransaction } from '../middleware/idempotency.js';
 
 /**
  * v10.1.39 (N-01 part 2, mobile workshop plan §4.3): the workshop cartable. A worker (`workshop.self`) reads their open
@@ -69,27 +70,27 @@ router.get('/workshop/my-deliveries', requirePermission(WORKSHOP_SELF_PERMISSION
 
 router.post('/workshop/deliveries/confirm', requirePermission(WORKSHOP_SELF_PERMISSION), idempotency({ scope: 'workshop' }), validate(confirmSchema), asyncHandler(async (req, res) => {
   const actor = actorOf(req);
-  const confirmation = await orm.transaction(tx => confirmDelivery(tx, actor, req.body));
+  const confirmation = await idempotentTransaction(tx => confirmDelivery(tx, actor, req.body));
   res.status(201).json({ confirmation });
 }));
 
 router.post('/workshop/reports', requirePermission(WORKSHOP_SELF_PERMISSION), idempotency({ scope: 'workshop' }), validate(submitSchema), asyncHandler(async (req, res) => {
   const actor = actorOf(req);
   const body = req.body as z.infer<typeof submitSchema>['body'];
-  const report = await orm.transaction(tx => submitWorkshopReport(tx, actor, { ...body, quantity: Number(body.quantity) }));
+  const report = await idempotentTransaction(tx => submitWorkshopReport(tx, actor, { ...body, quantity: Number(body.quantity) }));
   res.status(201).json({ report });
 }));
 
 router.put('/workshop/reports/:id', requirePermission(WORKSHOP_SELF_PERMISSION), idempotency({ scope: 'workshop' }), validate(editSchema), asyncHandler(async (req, res) => {
   const actor = actorOf(req);
   const body = req.body as z.infer<typeof editSchema>['body'];
-  const report = await orm.transaction(tx => editWorkshopReport(tx, actor, Number(req.params.id), { ...body, quantity: toNumber(body.quantity) }));
+  const report = await idempotentTransaction(tx => editWorkshopReport(tx, actor, Number(req.params.id), { ...body, quantity: toNumber(body.quantity) }));
   res.json({ report });
 }));
 
 router.post('/workshop/reports/:id/withdraw', requirePermission(WORKSHOP_SELF_PERMISSION), idempotency({ scope: 'workshop' }), validate(withdrawSchema), asyncHandler(async (req, res) => {
   const actor = actorOf(req);
-  const report = await orm.transaction(tx => withdrawWorkshopReport(tx, actor, Number(req.params.id), Number(req.body.version)));
+  const report = await idempotentTransaction(tx => withdrawWorkshopReport(tx, actor, Number(req.params.id), Number(req.body.version)));
   res.json({ report });
 }));
 
@@ -101,13 +102,13 @@ router.get('/workshop/review/reports', requirePermission(WORKSHOP_REVIEW_PERMISS
 router.post('/workshop/reports/:id/approve', requirePermission(WORKSHOP_REVIEW_PERMISSION), idempotency({ scope: 'workshop' }), validate(approveSchema), asyncHandler(async (req, res) => {
   const actor = actorOf(req);
   const body = req.body as z.infer<typeof approveSchema>['body'];
-  const result = await orm.transaction(tx => approveWorkshopReport(tx, actor, Number(req.params.id), { ...body, quantity: toNumber(body.quantity) }));
+  const result = await idempotentTransaction(tx => approveWorkshopReport(tx, actor, Number(req.params.id), { ...body, quantity: toNumber(body.quantity) }));
   res.json(result);
 }));
 
 router.post('/workshop/reports/:id/reject', requirePermission(WORKSHOP_REVIEW_PERMISSION), idempotency({ scope: 'workshop' }), validate(rejectSchema), asyncHandler(async (req, res) => {
   const actor = actorOf(req);
-  const report = await orm.transaction(tx => rejectWorkshopReport(tx, actor, Number(req.params.id), req.body));
+  const report = await idempotentTransaction(tx => rejectWorkshopReport(tx, actor, Number(req.params.id), req.body));
   res.json({ report });
 }));
 

@@ -10,6 +10,7 @@ import {
   ACCOUNT_MAPPING_CONCEPTS, accountMappingConcept, accountTypeFitsConcept, conceptAccountTypesText, type AccountMappingKey,
 } from '../../lib/accounting/accountMappingConcepts.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
+import { idempotentTransaction } from '../../middleware/idempotency.js';
 
 /**
  * v9.0.199 (TD-550، B03-08): فهرست مفهوم‌ها، برچسب، کد پیش‌فرض و نوع‌های پذیرفته هر مفهوم در
@@ -94,7 +95,7 @@ export class AccountMappingService {
    * ناموجود یا حساب درآمد به جای موجودی بی‌صدا ذخیره می‌شد. با `disabled` فهرست مفهوم‌های خاموش در همان تراکنش نوشته می‌شود.
    */
   static async saveMappings(mappings: Partial<ConceptualAccountMappingConfig>, disabled?: string[]): Promise<ConceptualAccountMappingConfig> {
-    return orm.transaction(async (tx) => {
+    return idempotentTransaction(async (tx) => {
       const current = await this.getMappings(tx);
       const disabledNow = disabled ?? await this.getDisabledMappings(tx);
       const incoming = Object.fromEntries(Object.entries(mappings)
