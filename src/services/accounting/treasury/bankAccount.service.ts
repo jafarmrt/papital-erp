@@ -17,6 +17,7 @@ import { assertBankCurrencyChangeAllowed, assertBankLedgerChangeAllowed, assertB
 import { normalizeTreasuryCurrency } from '../../../lib/treasury/treasuryCurrency.js';
 import { assignTreasuryAccountCode, peekNextTreasuryAccountCode, type TreasuryAccountType } from './bankAccountCode.js';
 import { auditBankAccountChange, auditBankBalanceSync, type TreasuryAuditActor } from './treasuryAudit.js';
+import { idempotentTransaction } from '../../../middleware/idempotency.js';
 
 /** گزارش تطبیق مانده حساب‌های خزانه با دفاتر (sync-reconcile و reconciliation-report) */
 export interface BankReconciliationReport {
@@ -265,7 +266,7 @@ export class BankAccountService {
    * ۳۰۰ مانده ۷۰۰ را ۱۰۰۰ می‌کرد و پرداخت هم‌زمان گم می‌شد.
    */
   static async recalculateAndSyncBankBalances(audit?: TreasuryAuditActor): Promise<BankReconciliationReport> {
-    return await orm.transaction(async (tx) => {
+    return await idempotentTransaction(async (tx) => {
       await tx.select({ id: bankAccounts.id }).from(bankAccounts)
         .where(eq(bankAccounts.isDeleted, 0))
         .orderBy(asc(bankAccounts.id))
@@ -427,7 +428,7 @@ export class BankAccountService {
     if (externalTx) {
       return run(externalTx);
     }
-    return orm.transaction(run);
+    return idempotentTransaction(run);
   }
 
   /**
@@ -679,7 +680,7 @@ export class BankAccountService {
     if (externalTx) {
       return run(externalTx);
     }
-    return orm.transaction(run);
+    return idempotentTransaction(run);
   }
 
   /**
@@ -688,7 +689,7 @@ export class BankAccountService {
    * و حسابی که چک وصول‌شده یا صادرشده داشت هم حذف می‌شد.
    */
   static async deleteBankAccount(id: number, user?: { userId?: number; username?: string; audit?: TreasuryAuditActor }): Promise<{ success: boolean }> {
-    return orm.transaction(async (tx) => {
+    return idempotentTransaction(async (tx) => {
       const [existing] = await tx.select().from(bankAccounts)
         .where(and(eq(bankAccounts.id, id), eq(bankAccounts.isDeleted, 0)))
         .for('update');

@@ -31,6 +31,7 @@ import { getStockCountSheetItems } from '../services/inventory/stockCountSheet.j
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { assertDocumentTypeReadable, documentForReader, readableDocumentTypes } from '../services/documents/documentReadScope.js';
 import type { AuthUserPayload } from '../types.js';
+import { idempotentTransaction } from '../middleware/idempotency.js';
 
 const router = Router();
 
@@ -348,7 +349,7 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
   const allowBackdate = await userHasRoleOrPermission(req.user, BACKDATE_PERMISSION);
   // v9.0.13 (TD-424): «یک پیش‌فاکتور برای هر پرونده» زیر قفل ردیف پرونده و پیوند و علامت پرونده در همان تراکنش سند
   // (پیش‌تر بررسی بی قفل پیش از تراکنش و علامت‌گذاری پس از commit؛ پیش‌فاکتورهای هم‌زمان همه ثبت می‌شدند)
-  const { docId: newDocId, projectReservation, stored, stockWarnings } = await orm.transaction(async (tx) => {
+  const { docId: newDocId, projectReservation, stored, stockWarnings } = await idempotentTransaction(async (tx) => {
     const lead = isProforma && targetLeadId ? await lockLeadForNewProforma(tx, targetLeadId) : null;
     // V10-4.3 / v9.0.323 (TD-776): پیوند رسمی سند به پرونده فروش همراه درج سند در سرویس (نه نوشتن جدا از route)
     const created = await DocumentService.createDocumentWithDetails({ ...req.body, crmLeadId: targetLeadId, user: sessionUserLabel(req.user), externalTx: tx }, { userId: req.user?.id, allowBackdate });
@@ -484,7 +485,7 @@ router.put('/documents/:id/finalize', authorizePermission('documents.finalize', 
   const allowBackdate = await userHasRoleOrPermission(req.user, BACKDATE_PERMISSION);
   // v9.0.39 (TD-446، ت۴): سندی که بیرون از گردش کار قطعی می‌شود، فرایند تأیید در جریانش در همان تراکنش بسته می‌شود
   // (پیش‌تر ویجت سندِ قطعی «پیش‌نویس اولیه» نشان می‌داد و کارهایش در کارتابل می‌ماند)
-  await orm.transaction(async (tx) => {
+  await idempotentTransaction(async (tx) => {
     const change = await DocumentService.finalizeDocument(docId, user, tx, {
       vatAmount: !isNaN(Number(parsedVatAmount)) ? parsedVatAmount : undefined,
       vatPercent: !isNaN(Number(parsedVatPercent)) ? parsedVatPercent : undefined,
@@ -521,7 +522,7 @@ router.put('/documents/:id', authorizePermission('documents.edit'), idempotency(
   // ویرایش، بی قفل و بی قاعده «یک پیش‌فاکتور برای هر پرونده» نوشته می‌شد
   // v9.0.337 (TD-785): ویرایش و ردیف ممیزی‌اش در یک تراکنش، با سند پیش (زیر قفل ردیف) و پس از ویرایش از پایگاه‌داده؛
   // پیش‌تر پس از commit و بی «پیش از»، با نام و یادداشت بدنه درخواست
-  const stockWarnings = await orm.transaction(async (tx) => {
+  const stockWarnings = await idempotentTransaction(async (tx) => {
     const change = await DocumentService.updateDocument(docId, { ...req.body, user: sessionUserLabel(req.user) }, tx);
     await logActivity({
       req,
@@ -543,7 +544,7 @@ router.put('/documents/:id/notes', authorizePermission('documents.edit'), idempo
   const docId = Number(req.params.id);
   const { notes } = req.body;
   // v9.0.337 (TD-785): یادداشت (حتی سند قطعی) فقط همراه ردیف ممیزی پیش و پس در همان تراکنش عوض می‌شود
-  await orm.transaction(async (tx) => {
+  await idempotentTransaction(async (tx) => {
     const change = await DocumentService.updateDocumentNotes(docId, notes, tx);
     await logActivity({
       req,
@@ -572,7 +573,7 @@ router.delete('/documents/:id', authorizePermission('documents.delete'), idempot
   // v9.0.12 (TD-423): پرونده فروش سند در همان تراکنش ابطال، پیش از قفل کالاها و سند، آزاد می‌شود و «فروش موفق» برمی‌گردد
   // v9.0.337 (TD-785): تنها ردیف ممیزی ابطال را سرویس درون همین تراکنش با سند پیش از ابطال می‌نویسد (پیش‌تر ردیف دومی
   // پس از commit از این مسیر)؛ آزاد شدن پرونده فروش به شرح همان ردیف می‌رود
-  await orm.transaction(async (tx) => {
+  await idempotentTransaction(async (tx) => {
     const released = await releaseLeadOfVoidedDocument(tx, { id: docId, refNumber: beforeDoc.ref_number ?? null }, req.user?.full_name || req.user?.username || 'سیستم');
     await DocumentService.deleteDocument(docId, currentUser, tx, {
       actor: { userId: req.user?.id, username: req.user?.username, userFullName: req.user?.full_name, ipAddress: extractClientIp(req) },

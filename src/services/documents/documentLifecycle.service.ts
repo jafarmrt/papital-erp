@@ -1,7 +1,7 @@
 import { terminateOpenWorkflows } from '../workflow/workflowTermination.js';
 import { assertProjectNotCancelled } from '../accounting/projectCancelledGuard.js';
 import { eq, and, inArray, isNull } from 'drizzle-orm';
-import { orm, type DbExecutor } from '../../db/drizzle.js';
+import { type DbExecutor } from '../../db/drizzle.js';
 import { documents, documentItems, items, transactions, journalVouchers, productionProjects } from '../../db/schema.js';
 import { businessNowIsoDateTime, businessTodayIsoDate, resolveJalaliFiscalYear } from '../../lib/businessClock.js';
 import { resolveDocumentVat } from './documentVat.js';
@@ -37,6 +37,7 @@ import { documentAuditSnapshot, type DocumentAuditChange, type DocumentAuditSnap
 import { assertNameNotOtherKind } from './documentParty.js';
 import { lockRequisitionOfOrder, releaseVoidedProcurementOrder } from './procurementOrderVoid.js';
 import { documentVoidVoucherReason } from '../../lib/documents/documentTypeName.js';
+import { idempotentTransaction } from '../../middleware/idempotency.js';
 
 export class DocumentLifecycleService {
   /**
@@ -279,7 +280,7 @@ export class DocumentLifecycleService {
       return auditBefore ? { before: auditBefore, after: await documentAuditSnapshot(tx, id) } : null;
     };
 
-    return externalTx ? execute(externalTx) : orm.transaction(execute);
+    return externalTx ? execute(externalTx) : idempotentTransaction(execute);
   }
 
   /**
@@ -495,7 +496,7 @@ export class DocumentLifecycleService {
     if (externalTx) {
       await execute(externalTx);
     } else {
-      await orm.transaction(execute);
+      await idempotentTransaction(execute);
     }
   }
 }

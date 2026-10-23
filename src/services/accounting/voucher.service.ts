@@ -25,6 +25,7 @@ import { checkOccVersion } from '../../lib/occHelper.js';
 import { voucherMakerNames } from './voucherMakerNames.js';
 import type { BatchFinalizeResult } from '../../lib/accounting/voucherBatch.js';
 import { assertVoucherNotInWorkflow, voucherInWorkflowMessage, vouchersInOpenWorkflow } from './voucherWorkflowLock.js';
+import { idempotentTransaction } from '../../middleware/idempotency.js';
 export { VOUCHER_BALANCE_TOLERANCE };
 
 /** v7.0.72 (audit P3-5): حداکثر ردیف در هر INSERT چندردیفی (۱۲ پارامتر در هر ردیف، زیر سقف ۶۵۵۳۵ پارامتر PostgreSQL) */
@@ -384,7 +385,7 @@ export class VoucherService {
       return voucher.id;
     };
 
-    const createdVoucherId = externalTx ? await executeWork(externalTx) : await orm.transaction(async (tx) => await executeWork(tx));
+    const createdVoucherId = externalTx ? await executeWork(externalTx) : await idempotentTransaction(async (tx) => await executeWork(tx));
 
     return this.getJournalVoucherById(createdVoucherId, externalTx);
   }
@@ -490,7 +491,7 @@ export class VoucherService {
     if (externalTx) {
       await executeWork(externalTx);
     } else {
-      await orm.transaction(async (tx) => {
+      await idempotentTransaction(async (tx) => {
         await executeWork(tx);
       });
     }
@@ -499,7 +500,7 @@ export class VoucherService {
   }
 
   static async deleteJournalVoucher(id: number): Promise<{ success: boolean }> {
-    return await orm.transaction(async (tx) => {
+    return await idempotentTransaction(async (tx) => {
       const [existing] = await tx.select().from(journalVouchers).where(and(eq(journalVouchers.id, id), eq(journalVouchers.isDeleted, 0))).for('update');
       if (!existing) throw new NotFoundError('سند حسابداری یافت نشد');
       await assertVoucherWithoutSource(tx, existing, 'حذف نمی‌شود'); // v9.0.294 (TD-552، ت۸)
@@ -739,7 +740,7 @@ export class VoucherService {
     // V9-1.1: پشتیبانی از تراکنش خارجی برای اجرای اتمیک در تراکنش فراخواننده (حذف سند)
     const reversalVoucherId = params.externalTx
       ? await execute(params.externalTx)
-      : await orm.transaction(execute);
+      : await idempotentTransaction(execute);
 
     // V9 Phase 6: هنگام اجرا در تراکنش فراخواننده، سند معکوس هنوز commit نشده و
     // خواندن با اتصال orm آن را نمی‌بیند — بازخوانی باید با همان externalTx انجام شود.
@@ -778,7 +779,7 @@ export class VoucherService {
       throw new Error('سند اصلاحی باید حداقل شامل دو ردیف معتبر و تراز باشد');
     }
 
-    const result = await orm.transaction(async (tx) => {
+    const result = await idempotentTransaction(async (tx) => {
       // v8.0.68 (TD-321): سند مبدأ درون همین تراکنش قفل و زیر قفل خوانده و سنجیده می‌شود، مانند reverseVoucher. پیش‌تر
       // بیرون از تراکنش و بی‌قفل خوانده می‌شد و گارد «سند معکوس فعال قبلی» ردیفی برای قفل نداشت؛ دو اصلاح هم‌زمان (یا
       // اصلاح و ابطال هم‌زمان) هر دو پذیرفته می‌شدند و اثر سند دو بار برمی‌گشت.
@@ -914,7 +915,7 @@ export class VoucherService {
    * Locks the voucher permanently against any direct edits or deletions.
    */
   static async finalizeJournalVoucher(id: number, userId?: number, username?: string): Promise<JournalVoucher> {
-    await orm.transaction(async (tx) => {
+    await idempotentTransaction(async (tx) => {
       const [existing] = await tx.select().from(journalVouchers).where(eq(journalVouchers.id, id)).for('update');
       if (!existing) throw new NotFoundError('سند حسابداری یافت نشد');
       if (existing.isDeleted === 1) throw new NotFoundError('سند حذف شده است');
@@ -951,7 +952,7 @@ export class VoucherService {
     const finalized: number[] = [];
     const refused: BatchFinalizeResult['refused'] = [];
 
-    await orm.transaction(async (tx) => {
+    await idempotentTransaction(async (tx) => {
       const inWorkflow = await vouchersInOpenWorkflow(tx, sortedIds); // v10.1.11 (TD-1263)
       for (const id of sortedIds) {
         const [existing] = await tx.select().from(journalVouchers).where(eq(journalVouchers.id, id)).for('update');
@@ -988,7 +989,7 @@ export class VoucherService {
     let count = 0;
     const refused: BatchFinalizeResult['refused'] = [];
 
-    await orm.transaction(async (tx) => {
+    await idempotentTransaction(async (tx) => {
       const inWorkflow = await vouchersInOpenWorkflow(tx, sortedIds); // v10.1.11 (TD-1263)
       for (const id of sortedIds) {
         const [existing] = await tx.select().from(journalVouchers).where(eq(journalVouchers.id, id)).for('update');
@@ -1014,7 +1015,7 @@ export class VoucherService {
    * Set Voucher Status (draft, approved, permanent)
    */
   static async setVoucherStatus(id: number, status: 'draft' | 'approved' | 'permanent', userId?: number): Promise<JournalVoucher> {
-    await orm.transaction(async (tx) => {
+    await idempotentTransaction(async (tx) => {
       // v10.1.11 (TD-1263): the page path; a workflow step changes the status through applyVoucherStatus itself
       const [existing] = await tx.select({ id: journalVouchers.id, voucherNumber: journalVouchers.voucherNumber }).from(journalVouchers)
         .where(and(eq(journalVouchers.id, id), eq(journalVouchers.isDeleted, 0))).for('update');

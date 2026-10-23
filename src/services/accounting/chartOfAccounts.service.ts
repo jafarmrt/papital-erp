@@ -10,6 +10,7 @@ import { countAccountVoucherRows } from './accountPostings.js';
 import { assertAccountPlacement } from './accountPlacement.js';
 import { assertAccountCodeAvailable, guardAccountCode, requireAccountCode } from './accountCodeGuard.js';
 import { isValidAccountCode, normalizeAccountCode } from '../../lib/accounting/accountCode.js';
+import { idempotentTransaction } from '../../middleware/idempotency.js';
 
 export interface NewAccountInput {
   code: string;
@@ -260,7 +261,7 @@ export class ChartOfAccountsService {
    */
   static async createAccount(data: NewAccountInput): Promise<Account> {
     const code = requireAccountCode(data.code);
-    const insertedId = await guardAccountCode(code, () => orm.transaction(tx => this.insertAccount(tx, data, code)));
+    const insertedId = await guardAccountCode(code, () => idempotentTransaction(tx => this.insertAccount(tx, data, code)));
 
     const all = await this.getAllAccounts();
     return all.find(a => a.id === insertedId)!;
@@ -318,7 +319,7 @@ export class ChartOfAccountsService {
     isActive?: boolean;
   }>): Promise<Account> {
     const sentCode = data.code === undefined ? undefined : normalizeAccountCode(data.code);
-    await guardAccountCode(sentCode ?? '', () => orm.transaction(async (tx) => {
+    await guardAccountCode(sentCode ?? '', () => idempotentTransaction(async (tx) => {
       const [existing] = await tx.select().from(accounts).where(eq(accounts.id, id)).for('update');
       if (!existing || existing.isDeleted === 1) {
         throw new NotFoundError('حساب مورد نظر یافت نشد.', undefined, 'ACCOUNT_NOT_FOUND');
@@ -388,7 +389,7 @@ export class ChartOfAccountsService {
    */
   static async restoreAccount(id: number): Promise<Account> {
     const [current] = await orm.select({ code: accounts.code }).from(accounts).where(eq(accounts.id, id));
-    await guardAccountCode(normalizeAccountCode(current?.code), () => orm.transaction(async (tx) => {
+    await guardAccountCode(normalizeAccountCode(current?.code), () => idempotentTransaction(async (tx) => {
       const [existing] = await tx.select().from(accounts).where(eq(accounts.id, id)).for('update');
       if (!existing) {
         throw new NotFoundError('حساب مورد نظر یافت نشد.', undefined, 'ACCOUNT_NOT_FOUND');
@@ -422,7 +423,7 @@ export class ChartOfAccountsService {
    * ردیف حساب با `FOR UPDATE` قفل می‌شود؛ ردیف سند تازه قفل کلید خارجی همین ردیف را می‌خواهد، پس شمارش با ثبت هم‌زمان نمی‌لغزد.
    */
   static async deleteAccount(id: number): Promise<{ success: boolean }> {
-    return orm.transaction(async (tx) => {
+    return idempotentTransaction(async (tx) => {
       const [existing] = await tx.select().from(accounts).where(eq(accounts.id, id)).for('update');
       if (!existing || existing.isDeleted === 1) {
         throw new NotFoundError('حساب مورد نظر یافت نشد.', undefined, 'ACCOUNT_NOT_FOUND');

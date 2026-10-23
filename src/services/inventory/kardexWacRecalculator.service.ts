@@ -16,6 +16,7 @@ import { money } from '../../lib/money.js';
 import { lockStockItems } from './stockItemLocks.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { issueWacCorrectionVoucher } from '../accounting/wacCorrectionVoucher.js';
+import { idempotentTransaction } from '../../middleware/idempotency.js';
 
 export interface KardexRebuildOptions {
   userId?: number;
@@ -330,7 +331,7 @@ export class KardexWacRecalculatorService {
    */
   static async correctItemWacFromLedger(itemId: number, opts: KardexRebuildOptions = {}): Promise<KardexWacCorrectionResult> {
     const userName = opts.user || 'سیستم';
-    return await orm.transaction(async (tx) => {
+    return await idempotentTransaction(async (tx) => {
       await lockStockItems(tx, [itemId]);
       const [item] = await tx.select().from(items).where(and(eq(items.id, itemId), eq(items.isDeleted, 0)));
       if (!item) throw new NotFoundError(`کالا با شناسه ${itemId} یافت نشد.`);

@@ -1,6 +1,6 @@
 import { eq, and, inArray } from 'drizzle-orm';
 import { assertProjectNotCancelled } from '../accounting/projectCancelledGuard.js';
-import { orm, type DbExecutor } from '../../db/drizzle.js';
+import { type DbExecutor } from '../../db/drizzle.js';
 import { documents, documentItems, items, productionProjects } from '../../db/schema.js';
 import { resolveJalaliFiscalYear } from '../../lib/businessClock.js';
 import { requireDocumentTimestamp, resolveDocumentTimestamp } from '../../lib/storageDate.js';
@@ -45,6 +45,7 @@ import { assertDocumentNotInReview } from './documentReviewLock.js';
 import { assertReturnPartyOfInvoice, parseDocumentPartyId, resolveDocumentParty, returnInvoicePartyId } from './documentParty.js';
 import { documentAuditSnapshot, logDocumentCreated, type DocumentAuditActor, type DocumentAuditChange } from './documentAudit.js';
 import { assertLiveRecipient, documentRecipientInput } from './documentRecipient.js';
+import { idempotentTransaction } from '../../middleware/idempotency.js';
 
 type DocumentLineRow = typeof documentItems.$inferInsert;
 
@@ -72,7 +73,7 @@ export class DocumentCreationService {
       await tx.update(documents).set({ notes, version: nextVersion(doc.version) }).where(eq(documents.id, id));
       return { before, after: await documentAuditSnapshot(tx, id) };
     };
-    return externalTx ? execute(externalTx) : orm.transaction(execute);
+    return externalTx ? execute(externalTx) : idempotentTransaction(execute);
   }
 
   /**
@@ -315,7 +316,7 @@ export class DocumentCreationService {
       }
       return { before, after: await documentAuditSnapshot(tx, id) };
     };
-    return externalTx ? execute(externalTx) : orm.transaction(execute);
+    return externalTx ? execute(externalTx) : idempotentTransaction(execute);
   }
 
   /**
@@ -741,7 +742,7 @@ export class DocumentCreationService {
     };
 
     // V9-P0: پشتیبانی از تراکنش خارجی (externalTx) برای اجرای اتمیک در تراکنش فراخواننده
-    const docId = externalTx ? await execute(externalTx) : await orm.transaction(execute);
+    const docId = externalTx ? await execute(externalTx) : await idempotentTransaction(execute);
     return { docId, projectReservation };
   }
 }

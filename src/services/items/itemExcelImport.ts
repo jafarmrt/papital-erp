@@ -20,6 +20,7 @@ import {
   type ItemRow, type Row, type RowFields, type RowStock, type Warehouse,
 } from './itemExcelRow.js';
 import { withCodeCard } from '../media/productCardWrite.js';
+import { idempotentTransaction } from '../../middleware/idempotency.js';
 
 /** v8.0.5 (TD-264): اختلاف کمتر از ۱ ریال میان WAC فایل اکسل و WAC فعلی «همان مقدار» شمرده می‌شود (WAC فعلی می‌ماند) */
 export const EXCEL_WAC_TOLERANCE = 1;
@@ -306,7 +307,7 @@ export async function importItemsFromExcel(
   const strategies = await ItemPricingService.getPricingStrategies();
   const state: ImportState = { createdCount: 0, updatedCount: 0, pricesCount: 0, errors: [], adjustmentTransactionIds: [], openingItemIds: [] };
 
-  await orm.transaction(async (tx) => {
+  await idempotentTransaction(async (tx) => {
     // v9.0.188 (TD-615): a large import may take longer than the 1-minute statement limit of a request
     await extendStatementTimeout(tx);
     const keys = rows.map(rowCodeAndName);

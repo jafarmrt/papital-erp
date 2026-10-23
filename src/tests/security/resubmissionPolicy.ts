@@ -39,3 +39,51 @@ export function resubmissionPolicyViolations(rows: RouteGuardRow[]): string[] {
   }
   return violations;
 }
+
+/**
+ * 10.3 (ARCH review finding 1): the modules that hold the writes behind the money and stock routes, besides every route
+ * file that runs `idempotency()`. Their write transactions open with `idempotentTransaction` (or `idempotentTransactionOn`),
+ * which completes the request's key in the same commit, so a process that dies after the commit leaves a completed key
+ * and a resend gets the «already registered» notice instead of recording a second receipt, voucher, document or stock
+ * movement. Before, only payroll and piecework did (v10.2.35, TD-1365) and the key was completed after the answer.
+ */
+export const MONEY_STOCK_WRITE_MODULES = [
+  'src/services/accounting/', 'src/services/documents/', 'src/services/inventory/', 'src/services/items/',
+  'src/services/piecework/', 'src/services/projects/', 'src/services/workshop/',
+  'src/services/pendingMaterials.service.ts', 'src/services/piecework.service.ts', 'src/services/procurement.service.ts',
+  'src/services/projects.service.ts', 'src/services/transfer.service.ts', 'src/services/warehouse.service.ts',
+];
+
+/**
+ * The plain `orm.transaction` writes left in those modules, by file, with how many and why. A resend after a crash
+ * repeats nothing there, or no money or stock route reaches them; the list only shrinks.
+ */
+export const PLAIN_TRANSACTION_WRITES = new Map<string, { count: number; reason: string }>([
+  ['src/services/accounting/voucherSync.service.ts', { count: 1, reason: '«ساخت اسناد جاافتاده» runs one transaction per document and makes only the vouchers still missing, so a resend finds them made' }],
+  ['src/services/documents/documentRefNumber.service.ts', { count: 1, reason: 'a write takes its number on its own transaction; alone it only serves a number to a form' }],
+  ['src/services/inventory/kardexBackfill.service.ts', { count: 1, reason: 'adds only the opening movements still missing, under its own lock, so a resend finds them added' }],
+  ['src/services/inventory/kardexWacRecalculator.service.ts', { count: 1, reason: 'rebuilds an item\'s stock from its Kardex, one transaction per item in «بازسازی همه»; a resend rebuilds the same stock' }],
+  ['src/services/inventory/warehouseStockReconciliation.service.ts', { count: 1, reason: 'repairs one item per transaction and only where the stock differs from the Kardex, so a resend finds nothing to repair' }],
+  ['src/services/items/itemCategory.service.ts', { count: 4, reason: 'item categories (/api/categories) are outside the money and stock routes and take no resubmission key' }],
+]);
+
+/** A transaction opened on the pool: `orm.transaction(`, or that of an executor defaulting to it, unless the line opens the
+ * pool's transaction with `idempotentTransaction` and keeps this one for a caller's transaction (a savepoint) */
+const PLAIN_TRANSACTION = /\b(?:orm|executor|outer)\.transaction\(/g;
+
+/** Files whose plain `orm.transaction` writes differ from `PLAIN_TRANSACTION_WRITES` (`files` maps a path to its source) */
+export function plainTransactionViolations(files: Map<string, string>): string[] {
+  const violations: string[] = [];
+  for (const [file, source] of files) {
+    const count = source.split('\n')
+      .filter(line => !/^\s*(\/\/|\/\*|\*)/.test(line) && !/idempotentTransaction(On)?\(/.test(line))
+      .reduce((n, line) => n + (line.match(PLAIN_TRANSACTION) ?? []).length, 0);
+    const allowed = PLAIN_TRANSACTION_WRITES.get(file)?.count ?? 0;
+    if (count > allowed) violations.push(`${file}: ${count} orm.transaction write(s), ${allowed} listed; open it with idempotentTransaction`);
+    else if (count < allowed) violations.push(`${file}: ${allowed} orm.transaction write(s) listed but ${count} left; lower the list`);
+  }
+  for (const file of PLAIN_TRANSACTION_WRITES.keys()) {
+    if (!files.has(file)) violations.push(`${file}: listed in PLAIN_TRANSACTION_WRITES but not scanned`);
+  }
+  return violations;
+}

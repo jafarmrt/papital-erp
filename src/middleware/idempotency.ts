@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { IDEMPOTENCY_KEY_TTL_SECONDS, IdempotencyService, type AcquireResult } from '../services/idempotency.service.js';
-import { orm, type DbTransaction } from '../db/drizzle.js';
+import { orm, type DbExecutor, type DbTransaction } from '../db/drizzle.js';
 import { logger } from './logger.js';
 import { asyncHandler } from './asyncHandler.js';
 import { IDEMPOTENT } from './idempotencyMark.js';
@@ -89,14 +89,13 @@ export function idempotency(options: IdempotencyMiddlewareOptions = {}) {
     }
 
     // State is 'acquired' - intercept response
-    // v10.2.35: a payroll or piecework write completes this key in its own transaction (`idempotentTransaction`)
+    // v10.2.35: a payroll or piecework write completes this key in its own transaction (`idempotentTransaction`);
+    // 10.3 (ARCH review finding 1): so does the write of every other scope
     let pending: RequestIdempotencyKey | undefined;
-    if (RESPONSE_NOT_KEPT_SCOPES.has(scope)) {
-      const context = getRequestContext();
-      if (context) {
-        pending = { key: cleanKey, scope, userId, completedInTx: false };
-        context.idempotency = pending;
-      }
+    const context = getRequestContext();
+    if (context) {
+      pending = { key: cleanKey, scope, userId, completedInTx: false };
+      context.idempotency = pending;
     }
     const stopHeartbeat = startLockHeartbeat(cleanKey, scope, userId, options.lockTimeoutSeconds || 60, options.ttlSeconds || IDEMPOTENCY_KEY_TTL_SECONDS);
     res.on('finish', stopHeartbeat);
@@ -209,8 +208,13 @@ function isRefusal(value: unknown): boolean {
 /**
  * v10.2.35: the transaction of a payroll or piecework write. Inside a request that holds such a key (set by the
  * `idempotency` middleware) the key is completed in the same commit (`completeInTransaction`), unless the write refused
- * the request by returning `{ error }` (the key is then released as before); anywhere else (a script, a request of
- * another scope) it is a plain `orm.transaction`.
+ * the request by returning `{ error }` (the key is then released as before); anywhere else (a script, a request
+ * without a key) it is a plain `orm.transaction`.
+ * 10.3 (ARCH review finding 1): the write transaction of every money and stock route (treasury, cheques, vouchers,
+ * documents, transfers, stock, items, projects, procurement, workshop) opens here too, so a process that dies after
+ * the commit leaves a completed key and a resend gets the notice instead of recording a second receipt, voucher,
+ * document or stock movement. The writes left on `orm.transaction` are listed with their reason in
+ * `PLAIN_TRANSACTION_WRITES` (`src/tests/security/resubmissionPolicy.ts`).
  */
 export async function idempotentTransaction<T>(fn: (tx: DbTransaction) => Promise<T>): Promise<T> {
   let pending = getRequestContext()?.idempotency;
@@ -231,4 +235,9 @@ export async function idempotentTransaction<T>(fn: (tx: DbTransaction) => Promis
   });
   if (pending && completed) pending.completedInTx = true;
   return result;
+}
+
+/** 10.3: `idempotentTransaction` on the pool; inside a caller's transaction a savepoint of it, which completes nothing */
+export function idempotentTransactionOn<T>(executor: DbExecutor, fn: (tx: DbTransaction) => Promise<T>): Promise<T> {
+  return executor === orm ? idempotentTransaction(fn) : executor.transaction(fn);
 }

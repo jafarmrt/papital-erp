@@ -12,14 +12,14 @@ import { TestCaseResult, makeTestCase } from '../types.js';
  * then the lock is lapsed by hand. Through the real Express routes; red on v10.2.34: the resend pays again and logs again.
  */
 
-type ShouldRun = (id: string, ...extra: string[]) => boolean;
+export type ShouldRun = (id: string, ...extra: string[]) => boolean;
 
 let seq = 0;
-const tagOf = () => `${String(Date.now()).slice(-6)}${++seq}`;
-const brief = (res: { status: number; body?: unknown }) => `${res.status} ${JSON.stringify(res.body ?? null).slice(0, 220)}`;
+export const tagOf = () => `${String(Date.now()).slice(-6)}${++seq}`;
+export const brief = (res: { status: number; body?: unknown }) => `${res.status} ${JSON.stringify(res.body ?? null).slice(0, 220)}`;
 const utcNow = `(now() AT TIME ZONE 'UTC')`;
 
-async function adminClient() {
+export async function adminClient() {
   const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
   const app = await getTestApp();
   const s = await getAdminSession();
@@ -30,7 +30,7 @@ async function adminClient() {
 }
 
 /** Runs `send` as if the process died once the write committed: the middleware's own completion of the key never lands */
-async function withCrashAfterCommit<T>(send: () => Promise<T>): Promise<T> {
+export async function withCrashAfterCommit<T>(send: () => Promise<T>): Promise<T> {
   const saveResponse = IdempotencyService.saveResponse;
   IdempotencyService.saveResponse = async () => undefined;
   try {
@@ -40,10 +40,10 @@ async function withCrashAfterCommit<T>(send: () => Promise<T>): Promise<T> {
   }
 }
 
-const keyState = async (key: string) =>
+export const keyState = async (key: string) =>
   (await pool.query<{ status: string }>('SELECT status FROM idempotency_keys WHERE key = $1', [key])).rows[0]?.status ?? 'none';
 /** The lock of a crashed run has lapsed (its heartbeat died with it) */
-const lapseLock = (key: string) =>
+export const lapseLock = (key: string) =>
   pool.query(`UPDATE idempotency_keys SET locked_until = ${utcNow} - interval '1 minute' WHERE key = $1`, [key]);
 
 /** Waits until `count` other sessions wait on a row lock (the requests sent are parked behind the held row) */
@@ -57,7 +57,7 @@ async function waitForLockWaiters(count: number): Promise<void> {
   throw new Error(`setup: ${count} requests never waited on the held payslip`);
 }
 
-async function runCase(results: TestCaseResult[], id: string, name: string, keys: string[], body: () => Promise<string>): Promise<void> {
+export async function runCase(results: TestCaseResult[], id: string, name: string, keys: string[], body: () => Promise<string>): Promise<void> {
   const tStart = Date.now();
   try {
     const details = await body();

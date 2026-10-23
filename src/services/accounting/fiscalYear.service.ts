@@ -20,6 +20,7 @@ import type {
   FiscalClosingDraftVoucher,
   JournalVoucher
 } from '../../types.js';
+import { idempotentTransaction } from '../../middleware/idempotency.js';
 
 // V3.0.6 (BUG-03): کلید قفل Advisory برای سریال‌سازی همزمانی بستن سال مالی
 const FISCAL_CLOSING_LOCK_NAMESPACE = 918273;
@@ -323,7 +324,7 @@ export class FiscalYearService {
 
     // V6.0.3 (TD-141 & C-02): کل فرایند بستن سال در یک تراکنش اتمیک با قفل Advisory تراکنشی اجرا می‌شود؛
     // پیش‌نمایش و تراز آزمایشی منحصراً درون تراکنش (tx) و پس از اخذ قفل محاسبه می‌شوند.
-    await orm.transaction(async (tx) => {
+    await idempotentTransaction(async (tx) => {
       const lockRes = await tx.execute(
         sql`SELECT pg_try_advisory_xact_lock(${FISCAL_CLOSING_LOCK_NAMESPACE}, ${year}) AS acquired`
       );

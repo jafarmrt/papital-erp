@@ -7,8 +7,8 @@ import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { WarehouseService } from '../services/warehouse.service.js';
-import { orm } from '../db/drizzle.js';
 import { idempotency } from '../middleware/idempotency.js';
+import { idempotentTransaction } from '../middleware/idempotency.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -46,7 +46,7 @@ router.get('/warehouses', validate(listWarehousesValidation), asyncHandler(async
 router.post('/warehouses', authorizePermission('warehouse.manage'), idempotency({ scope: 'warehouses' }), validate(createWarehouseValidation), asyncHandler(async (req, res) => {
   try {
     const { name, code } = req.body;
-    const created = await WarehouseService.createWarehouse({ name, code });
+    const created = await idempotentTransaction(tx => WarehouseService.createWarehouse({ name, code }, tx));
 
     await logActivity({
       action: 'CREATE',
@@ -68,7 +68,7 @@ router.put('/warehouses/:id', authorizePermission('warehouse.manage'), idempoten
   try {
     const { name } = req.body;
     const id = Number(req.params.id);
-    const { previous: oldWh, current: updatedWh } = await WarehouseService.updateWarehouse(id, { name });
+    const { previous: oldWh, current: updatedWh } = await idempotentTransaction(tx => WarehouseService.updateWarehouse(id, { name }, tx));
 
     await logActivity({
       action: 'UPDATE',
@@ -86,7 +86,7 @@ router.put('/warehouses/:id', authorizePermission('warehouse.manage'), idempoten
 router.delete('/warehouses/:id', authorizePermission('warehouse.manage'), idempotency({ scope: 'warehouses' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   // v9.0.112 (TD-490): غیرفعال‌سازی و ثبت ممیزی در یک تراکنش، زیر قفل ردیف انبار
-  await orm.transaction(async (tx) => {
+  await idempotentTransaction(async (tx) => {
     const wh = await WarehouseService.deactivateWarehouse(id, tx);
     await logActivity({
       tx,
@@ -104,7 +104,7 @@ router.delete('/warehouses/:id', authorizePermission('warehouse.manage'), idempo
 // v9.0.112 (TD-490، تصمیم ت۵ الف): فعال‌سازی دوباره انبار غیرفعال، فقط مدیر سیستم، با ممیزی در همان تراکنش
 router.post('/warehouses/:id/reactivate', requireSystemAdmin, idempotency({ scope: 'warehouses' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const result = await orm.transaction(async (tx) => {
+  const result = await idempotentTransaction(async (tx) => {
     const { previous, current } = await WarehouseService.reactivateWarehouse(id, tx);
     await logActivity({
       tx,

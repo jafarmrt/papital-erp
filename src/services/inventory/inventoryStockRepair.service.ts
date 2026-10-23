@@ -1,4 +1,4 @@
-import { orm, type DbExecutor } from '../../db/drizzle.js';
+import { type DbExecutor } from '../../db/drizzle.js';
 import { documentItems, documents, items, transactions } from '../../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { fin } from '../../lib/financialDecimal.js';
@@ -11,6 +11,7 @@ import { money } from '../../lib/money.js';
 import { requireStorageDate } from '../../lib/storageDate.js';
 import { assertStockMovementDate } from './stockMovementDate.js';
 import { DocumentRefNumberService } from '../documents/documentRefNumber.service.js';
+import { idempotentTransaction } from '../../middleware/idempotency.js';
 
 /** نوع سند حواله انتقال بین انبارها (documents.type و transactions.document_type) */
 export const TRANSFER_DOCUMENT_TYPE = 'transfer';
@@ -66,7 +67,7 @@ export class InventoryStockRepairService {
     const txDate = params.date ? requireStorageDate(params.date, 'تاریخ انتقال') : await businessTodayIsoDate();
     const operatorName = params.user || params.createdBy || 'سیستم';
 
-    return await orm.transaction(async (txEngine) => {
+    return await idempotentTransaction(async (txEngine) => {
       await withOrderedLocks(txEngine, [
         { table: items, id: params.itemId, name: 'items' }
       ], async () => true);

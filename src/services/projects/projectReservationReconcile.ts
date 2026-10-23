@@ -23,6 +23,7 @@ import { assertProjectPartsWritable, projectPartTokens } from './projectPartToke
 import { readProjectManagers } from './projectManagers.js';
 import type { ProjectPartTokens } from '../../lib/projects/projectParts.js';
 import { planReservationWithOthers, readStockItemsForRefs } from './serverInventoryControl.js';
+import { idempotentTransaction } from '../../middleware/idempotency.js';
 
 /**
  * TD-1341 (بستهٔ ۱۲ بند ۱، گزینهٔ ب کارت ت۴۲): «تکمیل رزرو» رزرو پروژهٔ ثبت نهایی‌شده را با فهرست مواد ذخیره‌شدهٔ امروز برابر
@@ -227,7 +228,7 @@ export async function applyReservationReconcile(
   input: { version: number; partTokens?: ProjectPartTokens; planToken: string },
   actor: ProjectActor,
 ): Promise<ReservationReconcileResult> {
-  return orm.transaction(async tx => {
+  return idempotentTransaction(async tx => {
     const project = await lockLiveProject(tx, projectId);
     // TD-1342 (بستهٔ ۱۲ بند ۴): نسخهٔ کهنهٔ زبانه پذیرفته است وقتی فهرست مواد ذخیره‌شده همانی است که زبانه نشان می‌دهد
     await assertProjectPartsWritable(tx, project, input.version, input.partTokens, { inventoryControl: true });

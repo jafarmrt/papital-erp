@@ -26,6 +26,7 @@ import { auditChequeCreated } from './treasuryAudit.js';
 import { domainEventBus } from '../../events/domainEventBus.js';
 import { DomainEventType, type ChequeEventPayload } from '../../events/domainEvents.js';
 import { OutboxService } from '../../events/outboxService.js';
+import { idempotentTransaction } from '../../../middleware/idempotency.js';
 
 // v9.0.69: جدول انتقال وضعیت چک در `src/lib/treasury/chequeTransitions.ts` است و مرورگر هم همان را می‌خواند
 export { CHEQUE_TRANSITIONS };
@@ -234,7 +235,7 @@ export class ChequeLifecycleService {
 
     // V1.4.0: صدور چک اتمیک است — سند دوبل و ثبت چک در یک تراکنش دیتابیس؛
     // در نبود کدینگ، خطای صریح (به‌جای skip بی‌صدای قبلی) تا چک بدون رد دفتری ثبت نشود.
-    const inserted = await orm.transaction(async (txEngine) => {
+    const inserted = await idempotentTransaction(async (txEngine) => {
       // v9.0.100 (TD-510): حساب بانکی چک فعال و موجود (قفل اشتراکی سطح ۱۰ پیش از درج چک، سطح ۲۰)
       // v10.1.47 (ت۴۰): چک پرداختی فقط از حساب بانکی یا صندوق صادر می‌شود، چون از همان حساب وصول می‌شود
       const chequeBankAccountId = await requireChequeBankAccount(txEngine, data.bankAccountId, { clearing: data.type === 'paid' });
@@ -383,7 +384,7 @@ export class ChequeLifecycleService {
     /** v9.0.104 (TD-512): ممیزی درون همین تراکنش */
     audit?: ChequeAuditActor;
   }): Promise<Cheque> {
-    return await orm.transaction(async (txEngine) => {
+    return await idempotentTransaction(async (txEngine) => {
       // 1. Pre-read cheque to check target bank account if status is passed
       let targetBankId = data.bankAccountId;
       let chequeCurrency = 'IRR';
@@ -823,7 +824,7 @@ export class ChequeLifecycleService {
   }
 
   static async deleteCheque(id: number, user?: { userId?: number; username?: string; audit?: ChequeAuditActor }): Promise<{ success: boolean }> {
-    return await orm.transaction(async (txEngine) => {
+    return await idempotentTransaction(async (txEngine) => {
       validateLockOrder([
         { name: 'cheque', hierarchyLevel: LockHierarchyLevel.CHEQUES },
       ]);

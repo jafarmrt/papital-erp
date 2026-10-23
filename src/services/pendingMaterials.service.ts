@@ -15,6 +15,7 @@ import {
   PENDING_MATERIAL_MAX_PAGE_SIZE, PENDING_MATERIAL_PAGE_SIZE, PENDING_MATERIAL_STATUSES,
   type PendingMaterialListFilters, type PendingMaterialPage, type PendingMaterialStatus,
 } from '../lib/pendingMaterials/pendingMaterialList.js';
+import { idempotentTransaction } from '../middleware/idempotency.js';
 
 export interface CreatePendingMaterialInput {
   name: string;
@@ -163,7 +164,7 @@ async function requestProject(tx: DbExecutor, projectId: number | string | null 
 }
 
 const inTransaction = <T>(externalTx: DbExecutor | undefined, work: (tx: DbExecutor) => Promise<T>): Promise<T> =>
-  externalTx ? work(externalTx) : orm.transaction(work);
+  externalTx ? work(externalTx) : idempotentTransaction(work);
 
 /** A list row, with the snake_case aliases the page and older screens still read */
 export function pendingMaterialListRow(r: PendingMaterialRow) {

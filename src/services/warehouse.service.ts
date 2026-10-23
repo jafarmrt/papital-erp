@@ -4,6 +4,7 @@ import { warehouses, items, itemWarehouseStocks } from '../db/schema.js';
 import { NotFoundError, ConflictError, BadRequestError, ValidationError } from '../errors/customErrors.js';
 import { isLedgerReservedWarehouseCode } from './inventory/warehouseResolver.js';
 import { ADVISORY_LOCK_KEYS } from '../lib/advisoryLock.js';
+import { idempotentTransaction } from '../middleware/idempotency.js';
 
 export interface CreateWarehouseInput {
   name: string;
@@ -153,7 +154,7 @@ export class WarehouseService {
 
       return wh;
     };
-    return executor === orm ? orm.transaction(run) : run(executor as DbTransaction);
+    return executor === orm ? idempotentTransaction(run) : run(executor as DbTransaction);
   }
 
   /**
@@ -183,7 +184,7 @@ export class WarehouseService {
         .returning();
       return { previous: wh, current: current || { ...wh, isActive: 1 } };
     };
-    return executor === orm ? orm.transaction(run) : run(executor as DbTransaction);
+    return executor === orm ? idempotentTransaction(run) : run(executor as DbTransaction);
   }
 }
 

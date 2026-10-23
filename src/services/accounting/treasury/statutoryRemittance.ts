@@ -1,5 +1,4 @@
 import { asc, inArray } from 'drizzle-orm';
-import { orm } from '../../../db/drizzle.js';
 import { personnel, statutoryRemittanceLines } from '../../../db/schema.js';
 import { ConflictError, ValidationError } from '../../../errors/customErrors.js';
 import { fin, type DecimalValue, type FinancialDecimal } from '../../../lib/financialDecimal.js';
@@ -16,6 +15,7 @@ import { auditTreasuryTransactionCreated, type TreasuryAuditActor } from './trea
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
 import { TreasuryTransactionService } from './treasuryTransaction.service.js';
 import { lockTreasuryBank, postTreasuryRow } from './treasuryPosting.js';
+import { idempotentTransaction } from '../../../middleware/idempotency.js';
 
 /**
  * v10.1.36 (TD-1243، تصمیم مالک محصول ت۳۳ الف): «پرداخت به تأمین اجتماعی» و «پرداخت به امور مالیاتی» از «فهرست بیمه و
@@ -78,7 +78,7 @@ export async function createStatutoryRemittance(input: CreateStatutoryRemittance
   const date = await resolveTreasuryWriteDate(input.date, 'تاریخ پرداخت');
   const text = STATUTORY_REMITTANCE_TEXT[kind];
 
-  return orm.transaction(async (tx) => {
+  return idempotentTransaction(async (tx) => {
     validateLockOrder([
       { name: 'bankAccount', hierarchyLevel: LockHierarchyLevel.BANK_ACCOUNTS },
       { name: 'personnel', hierarchyLevel: LockHierarchyLevel.PARTIES },

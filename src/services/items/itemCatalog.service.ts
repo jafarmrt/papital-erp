@@ -23,6 +23,7 @@ import { PRODUCT_CARD_COLUMNS } from '../../lib/media/productCard.js';
 import type { ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
 import { EXCEL_WAC_TOLERANCE, importItemsFromExcel, type ItemImportActor, type ItemImportResult } from './itemExcelImport.js';
 import { newItemProductCard, productCardValues } from '../media/productCardWrite.js';
+import { idempotentTransaction, idempotentTransactionOn } from '../../middleware/idempotency.js';
 
 // V10-2.1: تایپ کلاینت اتصال DB برای تراکنش‌های داخلی
 type DbLike = DbExecutor;
@@ -226,7 +227,7 @@ export class ItemCatalogService {
     // v10.0.35 (TD-979، OBS-R1-73): ردیف ممیزی فراخواننده (`onReserved`) در همان تراکنش شمارنده نوشته می‌شود
     if (itemType === 'product') {
       const ctx = ItemCatalogService.resolveProductContext(input);
-      return orm.transaction(async (tx: DbLike) => {
+      return idempotentTransaction(async (tx: DbLike) => {
         const nextNum = await ItemCatalogService.consumeCounterRow(tx, itemType, ctx.counterKey, () =>
           ItemCatalogService.getMaxExistingSerial(tx, itemType, { base: ctx.base })
         );
@@ -242,7 +243,7 @@ export class ItemCatalogService {
     }
 
     const rawCtx = ItemCatalogService.resolveRawContext(input);
-    return orm.transaction(async (tx: DbLike) => {
+    return idempotentTransaction(async (tx: DbLike) => {
       const nextNumRaw = await ItemCatalogService.consumeCounterRow(tx, itemType, rawCtx.counterKey, () =>
         ItemCatalogService.getMaxExistingSerial(tx, itemType, { prefix: rawCtx.prefix })
       );
@@ -441,7 +442,7 @@ export class ItemCatalogService {
    */
   static async deleteItem(id: number, outer: DbExecutor = orm): Promise<typeof items.$inferSelect> {
     // v9.0.40 (TD-447، ت۵): حذف کالا و بستن فرایند در جریان آن در یک تراکنش، زیر قفل ردیف کالا
-    return outer.transaction(async (executor) => {
+    return idempotentTransactionOn(outer, async (executor) => {
       const itemId = Number(id);
       const [delItem] = await executor.select().from(items).where(eq(items.id, itemId)).for('no key update');
       if (!delItem || delItem.isDeleted === 1) {
@@ -581,7 +582,7 @@ export class ItemCatalogService {
     if (externalTx) {
       return await executeWork(externalTx);
     }
-    return await orm.transaction(executeWork);
+    return await idempotentTransaction(executeWork);
   }
 
   /**
@@ -772,7 +773,7 @@ export class ItemCatalogService {
     if (externalTx) {
       return await executeWork(externalTx);
     }
-    return await orm.transaction(executeWork);
+    return await idempotentTransaction(executeWork);
   }
 }
 
