@@ -36,7 +36,8 @@ export default function ProjectInventoryPage(_props: { user?: User }) {
   useEffect(() => {
     if (selectedProjectId || projects.length === 0) return;
     const firstActive = projects.find(p => p.status !== 'completed') || projects[0];
-    setSearchParams({ projectId: String(firstActive.id) });
+    // the page's own pick replaces the address, so Back leaves the page instead of landing on it again
+    setSearchParams({ projectId: String(firstActive.id) }, { replace: true });
   }, [projects, selectedProjectId, setSearchParams]);
 
   const sayProjectsFailed = useEffectEvent(() => { toast.error('خطا در بارگذاری لیست پروژه‌ها'); });

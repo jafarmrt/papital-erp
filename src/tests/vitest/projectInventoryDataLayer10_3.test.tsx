@@ -84,8 +84,10 @@ vi.mock('../../components/project/ProjectInventoryTab', () => ({
 import ProjectInventoryPage from '../../pages/ProjectInventoryPage';
 import { ProjectBomAllocationsTab } from '../../components/inventory/ProjectBomAllocationsTab';
 import { useProjectInventory } from '../../hooks/useProjectInventory';
+import { useBomAllocations } from '../../components/inventory/allocations/useBomAllocations';
+import { withAddedWarehouseItem } from '../../hooks/projectInventory/sectionEdits';
 import { QUERY_KEYS } from '../../lib/queryKeys';
-import type { ProductionProject } from '../../types';
+import type { Item, ProductionProject, ProjectInventoryControlSectionData, ProjectProductItem } from '../../types';
 
 afterEach(() => {
   cleanup();
@@ -139,6 +141,20 @@ describe('the allocation tab reads through the shared cache (10.3)', () => {
     await waitFor(() => expect(keys()).toEqual(expect.arrayContaining([
       JSON.stringify(QUERY_KEYS.inventory.all), JSON.stringify(QUERY_KEYS.items.all), JSON.stringify(QUERY_KEYS.projects.all),
     ])));
+  });
+
+  it.each(['allocate', 'release'] as const)('a write (%s) refreshes the same screens', async (write) => {
+    const client = newClient();
+    const invalidated = vi.spyOn(client, 'invalidateQueries');
+    const { result } = renderHook(() => useBomAllocations(), { wrapper: wrapperOf(client) });
+    await act(async () => {
+      if (write === 'allocate') await result.current.allocate({ projectId: 7, recipientPersonnelId: null, itemId: 9, quantity: 1, location: 'main', notes: '' });
+      else await result.current.release(allocation('P-1') as never, 'back to stock');
+    });
+    const keys = invalidated.mock.calls.map(([filters]) => JSON.stringify(filters?.queryKey));
+    expect(keys).toEqual(expect.arrayContaining([
+      JSON.stringify(QUERY_KEYS.inventory.all), JSON.stringify(QUERY_KEYS.items.all), JSON.stringify(QUERY_KEYS.projects.all),
+    ]));
   });
 });
 
@@ -211,6 +227,29 @@ describe('a materials save keeps an edit made while it was under way (10.3)', ()
     expect(result.current.sections[0]?.description).toBe('second');
     const sent = JSON.parse(String(fetchJson.mock.calls.find(([, o]) => o?.method === 'PUT')?.[1]?.body)) as { inventory_control: { sections: Array<{ description?: string }> } };
     expect(sent.inventory_control.sections[0]?.description).toBe('first');
+  });
+
+  it('keeps the unsaved mark when a manual purchase row changed while the save was under way', async () => {
+    const { result } = renderHook(() => useProjectInventory(project), { wrapper: wrapperOf(newClient()) });
+    await settled();
+    act(() => { result.current.handleUpdateSectionDescription(0, 'first'); });
+    holdPut = true;
+    let saving: Promise<void> = Promise.resolve();
+    act(() => { saving = result.current.handleSaveInventoryControl(); });
+    await waitFor(() => expect(heldPut).toHaveLength(1));
+    act(() => { result.current.handleAddManualPurchaseRow(); });
+    await act(async () => { heldPut[0]?.({ version: 4, inventory_control: {} }); await saving; });
+    expect(result.current.isDirty).toBe(true);
+  });
+});
+
+describe('a warehouse item added to every product of a section (10.3)', () => {
+  it('sizes each order line\'s row from that line, the last line winning under a shared product key, as before', () => {
+    const line = (quantity: number) => ({ id: 'prod_50', item_id: 50, quantity }) as unknown as ProjectProductItem;
+    const sections = [{ checkType: 'per_item', perItemResults: {} }] as unknown as ProjectInventoryControlSectionData[];
+    const glue = { name: 'glue', code: 'RM-9', unit: 'pcs', current_stock: 3 } as Item;
+    const added = withAddedWarehouseItem(sections, 0, null, glue, [line(2), line(7)], 'item_1');
+    expect(added[0]?.perItemResults?.prod_50?.item_1?.requiredQty).toBe(7);
   });
 });
 

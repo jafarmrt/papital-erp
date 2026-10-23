@@ -98,9 +98,10 @@ export const withAddedWarehouseItem = (
   withSection(sections, secIdx, sec => {
     if (sec.checkType === 'per_item') {
       const perRes = { ...(sec.perItemResults || {}) };
-      const targets = prodId ? [prodId] : products.map(p => p.id);
-      for (const id of targets) {
-        perRes[id] = { ...(perRes[id] || {}), [newItemId]: newPerUnitRow(newItemId, whItem, products.find(p => p.id === id)) };
+      // each order line sizes its own row; two lines under one product key keep the last line's row, as before
+      const targets = prodId ? [{ id: prodId, product: products.find(p => p.id === prodId) }] : products.map(p => ({ id: p.id, product: p }));
+      for (const { id, product } of targets) {
+        perRes[id] = { ...(perRes[id] || {}), [newItemId]: newPerUnitRow(newItemId, whItem, product) };
       }
       sec.perItemResults = perRes;
     } else {

@@ -55,10 +55,10 @@ export function useInventoryReservation({ project, projectVersion, sections, man
 
   /**
    * one `PUT /projects/:id` of the sections and manual rows with this finalize flag; `apply` shows the answer before the
-   * save is over, a failure is said
+   * save is over, a failure is said. `editsAtSend` is the edit count when the button was pressed, the moment the sections
+   * sent were taken: an edit made later (while a confirm is open) stays unsaved
    */
-  const put = async (isFinalizedNow: boolean, failure: string, logged: string, apply: (answer: SavedProjectInventory) => void) => {
-    const editsAtSend = editsNow();
+  const put = async (editsAtSend: number, isFinalizedNow: boolean, failure: string, logged: string, apply: (answer: SavedProjectInventory) => void) => {
     try {
       setSaving(true);
       const answer = await fetchJson<SavedProjectInventory>(`/api/projects/${project.id}`, {
@@ -82,6 +82,7 @@ export function useInventoryReservation({ project, projectVersion, sections, man
   };
 
   const handleFinalizeAndReserveStock = async () => {
+    const editsAtSend = editsNow();
     if (isFinalized) {
       toast.error('این فهرست پیش‌تر ثبت نهایی شده و اقلام آن در انبار رزرو شده‌اند.');
       return;
@@ -90,7 +91,7 @@ export function useInventoryReservation({ project, projectVersion, sections, man
       return;
     }
     // v8.0.58 (TD-306): رزرو را سرور از بخش‌ها می‌سازد؛ مرورگر فقط نتیجه ذخیره‌شده را نمایش می‌دهد
-    await put(true, 'خطا در ثبت نهایی و رزرو انبار', 'Error finalizing inventory reservation:', answer => {
+    await put(editsAtSend, true, 'خطا در ثبت نهایی و رزرو انبار', 'Error finalizing inventory reservation:', answer => {
       setIsFinalized(true);
       setFinalizedAt(answer.inventory_control?.finalizedAt);
       const reserved = reservedItemsOf(answer.inventory_control);
@@ -107,8 +108,9 @@ export function useInventoryReservation({ project, projectVersion, sections, man
   };
 
   const handleUnfinalizeReservation = async () => {
+    const editsAtSend = editsNow();
     if (!(await confirmAction({ title: 'لغو ثبت نهایی', message: 'آیا از لغو ثبت نهایی و آزاد کردن رزرو انبار مطمئن هستید؟' }))) return;
-    await put(false, 'خطا در آزاد کردن رزرو انبار', 'Error unfreezing reservation:', () => {
+    await put(editsAtSend, false, 'خطا در آزاد کردن رزرو انبار', 'Error unfreezing reservation:', () => {
       setIsFinalized(false);
       setFinalizedAt(undefined);
       setReservedItems([]);
@@ -118,7 +120,7 @@ export function useInventoryReservation({ project, projectVersion, sections, man
   };
 
   const handleSaveInventoryControl = async () => {
-    await put(isFinalized, 'خطا در ذخیره‌سازی کنترل موجودی پروژه', 'Error saving project inventory control:', answer => {
+    await put(editsNow(), isFinalized, 'خطا در ذخیره‌سازی کنترل موجودی پروژه', 'Error saving project inventory control:', answer => {
       setReservedItems(reservedItemsOf(answer.inventory_control));
       setReservationShortages(storedReservationShortages(answer.inventory_control));
       toast.success('اطلاعات کنترل موجودی با موفقیت ذخیره شد.');
