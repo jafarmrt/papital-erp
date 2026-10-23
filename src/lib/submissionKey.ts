@@ -52,14 +52,20 @@ function pendingKeys(): Map<string, PendingKey> {
 }
 
 function persist(): void {
+  const target = storage();
+  if (!target) return;
   try {
     const keys = pendingKeys();
-    const target = storage();
-    if (!target) return;
     if (keys.size === 0) target.removeItem(SUBMISSION_KEYS_STORAGE_KEY);
     else target.setItem(SUBMISSION_KEYS_STORAGE_KEY, JSON.stringify([...keys].map(([h, { key, at }]) => ({ h, key, at }))));
   } catch {
-    // quota or storage off: the keys stay in memory
+    // quota: the keys stay in memory, and the stored list goes, so a key answered since never comes back after a reload
+    // (part 2 review L2)
+    try {
+      target.removeItem(SUBMISSION_KEYS_STORAGE_KEY);
+    } catch {
+      // storage off
+    }
   }
 }
 

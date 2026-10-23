@@ -66,9 +66,9 @@ export const PLAIN_TRANSACTION_WRITES = new Map<string, { count: number; reason:
   ['src/services/inventory/warehouseStockReconciliation.service.ts', { count: 1, reason: 'repairs one item per transaction and only where the stock differs from the Kardex, so a resend finds nothing to repair' }],
   ['src/services/items/itemCategory.service.ts', { count: 4, reason: 'item categories (/api/categories) are outside the money and stock routes and take no resubmission key' }],
   // #359 review: the shop routes run several transactions per request and each one repeats nothing on a resend
-  ['src/services/woocommerce/wooOrderSync.service.ts', { count: 5, reason: 'an order is invoiced, voided, flagged or deferred under its locked order-log row (wc_order_id unique); a resend finds the order processed and answers alreadyExists' }],
-  ['src/services/woocommerce/wcStockPush.service.ts', { count: 2, reason: 'reads the site stocks in one snapshot and records the push run; the shop is sent absolute quantities, so a resend sends the same ones' }],
-  ['src/services/woocommerce/wcFieldPush.service.ts', { count: 3, reason: 'a failure audit row, the price push run and a setting toggle; prices are sent as absolute values and the toggle is a state' }],
+  ['src/services/woocommerce/wooOrderSync.service.ts', { count: 5, reason: 'an order is invoiced, voided, flagged or deferred, or its failure recorded, under its locked order-log row (wc_order_id unique); a resend finds an invoiced or voided order done (alreadyExists) and rewrites the same flag or deferral' }],
+  ['src/services/woocommerce/wcStockPush.service.ts', { count: 2, reason: 'a read-only snapshot of the site stocks and the push run row; the shop is sent absolute quantities, so a resend sends the same ones and only logs another run' }],
+  ['src/services/woocommerce/wcFieldPush.service.ts', { count: 3, reason: 'a failure audit row, the price or SKU push run and a setting (a toggle or the price-list name); prices and SKUs are sent as absolute values, so a resend only logs another run' }],
   ['src/services/woocommerce/wcAutoPush.service.ts', { count: 2, reason: 'a failure audit row and the automatic push toggle (a state, not a record)' }],
   ['src/services/woocommerce/wcCatalog.service.ts', { count: 1, reason: 'rewrites the item links of one catalog reading; a resend writes the same links' }],
 ]);

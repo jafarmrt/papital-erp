@@ -65,10 +65,14 @@ describe('unanswered submission keys survive a reload of the page (10.3)', () =>
     fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
     await expect(fetchJson('/accounting/treasury', receipt())).rejects.toThrow(UNCONFIRMED_MUTATION_MESSAGE);
 
+    expect(sessionStorage.getItem(SUBMISSION_KEYS_STORAGE_KEY)).toContain(sentKey(0));
+
     const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('full', 'QuotaExceededError'); });
     try {
       fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
       await expect(fetchJson('/accounting/treasury', { method: 'POST', body: '{"amount":1}' })).rejects.toThrow(UNCONFIRMED_MUTATION_MESSAGE);
+      // a full storage drops the stored list, so no key answered from now on can come back after a reload (review L2)
+      expect(sessionStorage.getItem(SUBMISSION_KEYS_STORAGE_KEY)).toBeNull();
       fetchMock.mockResolvedValueOnce(reply(201, { id: 1 }));
       await fetchJson('/accounting/treasury', { method: 'POST', body: '{"amount":1}' });
       expect(sentKey(2)).toBe(sentKey(1));
@@ -91,6 +95,10 @@ describe('the «already registered» notice (10.3)', () => {
       expect((err as ApiError).message).toBe(IDEMPOTENT_REPLAY_MESSAGE);
       expect(replayed).toHaveBeenCalledTimes(1);
       expect(invalidate).toHaveBeenCalled();
+      // the form stays open: a second click sends the same key and gets the notice again, never a second record (review M1)
+      fetchMock.mockResolvedValueOnce(reply(200, REPLAY));
+      await expect(fetchJson('/documents', { method: 'POST', body: '{"docType":"receipt"}' })).rejects.toThrow(IDEMPOTENT_REPLAY_MESSAGE);
+      expect(sentKey(1)).toBe(sentKey(0));
     } finally {
       window.removeEventListener(SUBMISSION_REPLAYED_EVENT, replayed);
       invalidate.mockRestore();
@@ -110,7 +118,7 @@ describe('the «already registered» notice (10.3)', () => {
     onError(new ApiError(IDEMPOTENT_REPLAY_MESSAGE, 'IDEMPOTENT_REPLAY', 200));
     expect(toast).toHaveBeenCalledWith(IDEMPOTENT_REPLAY_MESSAGE, { icon: 'ℹ️' });
     expect(toast.error).not.toHaveBeenCalled();
-    onError(new ApiError('موجودی کافی نیست', 'VALIDATION_ERROR', 422));
-    expect(toast.error).toHaveBeenCalledWith('موجودی کافی نیست');
+    onError(new ApiError('not enough stock', 'VALIDATION_ERROR', 422));
+    expect(toast.error).toHaveBeenCalledWith('not enough stock');
   });
 });

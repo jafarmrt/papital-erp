@@ -334,7 +334,6 @@ export async function fetchJson<T = any>(endpoint: string, options?: FetchJsonOp
     throw new ApiError(errorMessage, code, res.status, details);
   }
 
-  settleKey(res.status);
   let jsonResponse: T;
   try {
     if (res.status === 204) {
@@ -349,6 +348,7 @@ export async function fetchJson<T = any>(endpoint: string, options?: FetchJsonOp
       abortErr.name = 'AbortError';
       throw (parseErr?.name === 'AbortError' ? parseErr : abortErr);
     }
+    settleKey(res.status);
     throw new ProtocolError(
       `پاسخ کارساز قابل تفسیر به JSON نیست (وضعیت ${res.status}): ${parseErr?.message || 'خطای شیوه ارتباط'}`,
       res.status
@@ -356,10 +356,14 @@ export async function fetchJson<T = any>(endpoint: string, options?: FetchJsonOp
   }
   // 10.3 (ARCH review finding 1): the «already registered» notice answers a resend whose first run committed (its answer was
   // lost or not kept, or the server stopped before keeping it). The open lists read the record; a caller reading the answer's
-  // fields gets the notice as an error, never an answer without them, unless it handles the notice itself (`acceptReplay`)
+  // fields gets the notice as an error, never an answer without them, unless it handles the notice itself (`acceptReplay`).
+  // The key is kept, so a form left open sends the same key again and gets the notice again, never a second record
+  // (part 2 review M1); a deliberate second write with the same content differs in a field or comes after the key's day
   if (isMutation && isIdempotentReplay(jsonResponse)) {
     if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(SUBMISSION_REPLAYED_EVENT));
     if (!options?.acceptReplay) throw new ApiError(idempotentReplayMessage(jsonResponse), 'IDEMPOTENT_REPLAY', res.status);
+  } else {
+    settleKey(res.status);
   }
   if (issuesSessionTokens(endpoint)) {
     if ((jsonResponse as any)?.csrfToken) {
