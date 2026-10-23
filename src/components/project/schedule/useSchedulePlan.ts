@@ -56,7 +56,7 @@ const isAssemblyStage = (title: string) => title.includes('مونتاژ');
  * holds unsaved changes while the two differ. A newer project (after a save, or read while nothing is unsaved) starts the
  * plan again from what the server holds.
  */
-export function useSchedulePlan({ project, workflowPresets, pieceworkTasksList, personnelList, projectVersion, onUpdate, onDirtyChange, onBusyChange }: {
+export function useSchedulePlan({ project, workflowPresets, pieceworkTasksList, personnelList, projectVersion, onUpdate, onDirtyChange }: {
   project: ProductionProject;
   workflowPresets: WorkflowPreset[];
   pieceworkTasksList: PieceworkTask[];
@@ -64,8 +64,6 @@ export function useSchedulePlan({ project, workflowPresets, pieceworkTasksList, 
   projectVersion: ReturnType<typeof useProjectVersion>;
   onUpdate: () => void;
   onDirtyChange?: (dirty: boolean) => void;
-  /** an unsaved change or a save under way: the page keeps the project the plan started from until both are over */
-  onBusyChange?: (busy: boolean) => void;
 }) {
   const stages: ProjectStage[] = Array.isArray(project.stages) ? project.stages : [];
   const products = scheduleProductsOf(project);
@@ -76,8 +74,6 @@ export function useSchedulePlan({ project, workflowPresets, pieceworkTasksList, 
   const hasUnsavedSchedules = useMemo(() => JSON.stringify(schedulesMap) !== JSON.stringify(savedSchedulesMap), [schedulesMap, savedSchedulesMap]);
   useEffect(() => { onDirtyChange?.(hasUnsavedSchedules && !saving); }, [hasUnsavedSchedules, saving, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
-  useEffect(() => { onBusyChange?.(hasUnsavedSchedules || saving); }, [hasUnsavedSchedules, saving, onBusyChange]);
-  useEffect(() => () => onBusyChange?.(false), [onBusyChange]);
 
   useEffect(() => {
     if (project.stage_schedules) {
@@ -234,7 +230,7 @@ export function useSchedulePlan({ project, workflowPresets, pieceworkTasksList, 
   };
 
   return {
-    stages, products, saving, schedulesMap, setSchedulesMap, setSavedSchedulesMap, totalLaborBudget,
+    stages, products, saving, hasUnsavedSchedules, schedulesMap, setSchedulesMap, setSavedSchedulesMap, totalLaborBudget,
     getProductSchedule, updateProductSchedule, findStageDefaultTasks,
     handleApplyStagePreset, handleAddTask, handleUpdateTask, handleRemoveTask, handleSaveSchedules,
   };

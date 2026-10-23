@@ -127,7 +127,8 @@ const puts = () => fetchJson.mock.calls.filter(([u, o]) => u === '/projects/7' &
 describe('the project page reads through the shared cache (10.3)', () => {
   it('reads the project again on each visit and follows a change saved elsewhere', async () => {
     const client = newClient();
-    client.setQueryData(QUERY_KEYS.projects.detail(7), projectNamed(SHOWN.titleCached));
+    // an earlier visit's read (a minute old, so never one of this opening even within the same millisecond)
+    client.setQueryData(QUERY_KEYS.projects.detail(7), projectNamed(SHOWN.titleCached), { updatedAt: Date.now() - 60_000 });
     renderPage(client);
     expect(screen.queryByText(SHOWN.titleCached)).toBeNull();
     await waitFor(() => expect(heading()).toBe(SHOWN.titleNow));
@@ -224,7 +225,7 @@ const renderTab = (client: QueryClient) => render(
 describe('the workshop tab reads through the shared cache (10.3)', () => {
   it('shows the work logs recorded meanwhile, never the ones an earlier visit read', async () => {
     const client = newClient();
-    client.setQueryData(QUERY_KEYS.piecework.logs({ projectId: 7 }), [...logs, ...logs, ...logs]);
+    client.setQueryData(QUERY_KEYS.piecework.logs({ projectId: 7 }), [...logs, ...logs, ...logs], { updatedAt: Date.now() - 60_000 });
     renderTab(client);
     expect(screen.queryByText(SHOWN.logCount(toPersianDigits(3)))).toBeNull();
     expect(await screen.findByText(SHOWN.logCount(toPersianDigits(1)))).toBeTruthy();

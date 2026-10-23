@@ -156,7 +156,9 @@ export function useScheduleLogging({ project, plan, projectVersion, onUpdate }: 
     }
   };
 
-  return { loggingTaskId, batchLoggingStageId, logDate, setLogDate, handleLogSingleTaskToPiecework, handleBatchLogStageTasks };
+  // a work log under way saves the plan first and refreshes the project only at its end (part 9 review)
+  const busy = loggingTaskId !== null || batchLoggingStageId !== null;
+  return { loggingTaskId, batchLoggingStageId, busy, logDate, setLogDate, handleLogSingleTaskToPiecework, handleBatchLogStageTasks };
 }
 
 export type ScheduleLogging = ReturnType<typeof useScheduleLogging>;

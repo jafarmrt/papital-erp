@@ -83,7 +83,11 @@ function ProjectWorkspacePage() {
   const latest = workspace.latest;
   const loadError = workspace.missing ? 'پروژه یافت نشد' : (workspace.error ? errorMessageOf(workspace.error) || 'اطلاعات پروژه دریافت نشد' : null);
   const projectVersion = useProjectVersion(project);
-  // the header's status change starts from the newest status, and its tokens are those of the project it shows
+  /*
+   * the header's status change starts from the newest status, with the tokens of the project it shows; it never takes a
+   * save's answer (part 9 review): until the refresh lands the header still shows the old status, so a second change
+   * from it is refused by the server instead of passing with the new token
+   */
   const headerVersion = useProjectVersion(latest);
   const [specsOpen, setSpecsOpen] = useState(false);
   const phone = usePhoneWidth();
@@ -225,11 +229,7 @@ function ProjectWorkspacePage() {
   const items = itemsQuery.data ?? [];
   const personnel = personnelQuery.data ?? [];
 
-  const onStatusSaved = (res: unknown) => {
-    headerVersion.remember(res, ['status']);
-    projectVersion.remember(res, ['status']);
-    void refresh();
-  };
+  const onStatusSaved = (res: unknown) => { projectVersion.remember(res, ['status']); void refresh(); };
   const inactiveNote = projectInactiveNote(latest.status);
 
   return (

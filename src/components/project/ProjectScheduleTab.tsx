@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Users, Calendar, Check, RefreshCw, Calculator } from 'lucide-react';
 import type { ProductionProject } from '../../types';
 import { getTodayIsoDate } from '../../utils';
@@ -34,8 +34,12 @@ export default function ProjectScheduleTab({ project, onUpdate, onDirtyChange, o
   const rial = useRialDisplay();
   const projectVersion = useProjectVersion(project);
   const { workflowPresets, personnelList, pieceworkTasksList, recordedLogs, loadingLogs, reloadLogs } = useScheduleReferenceData(project.id);
-  const plan = useSchedulePlan({ project, workflowPresets, pieceworkTasksList, personnelList, projectVersion, onUpdate, onDirtyChange, onBusyChange });
+  const plan = useSchedulePlan({ project, workflowPresets, pieceworkTasksList, personnelList, projectVersion, onUpdate, onDirtyChange });
   const logging = useScheduleLogging({ project, plan, projectVersion, onUpdate });
+  // busy until a save or a work log is over: a work log marks the plan saved before its own refresh, at its end
+  const busy = plan.hasUnsavedSchedules || plan.saving || logging.busy;
+  useEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
+  useEffect(() => () => onBusyChange?.(false), [onBusyChange]);
   const [pickingTarget, setPickingTarget] = useState<{ stageId: number; productId: string; taskIdx: number } | null>(null);
   // v9.0.320 (TD-805): «ثبت کارمزد» همان کلید API ثبت کارکرد را می‌پرسد
   const { canLog: holdsPieceworkLog } = usePieceworkPermissions();
