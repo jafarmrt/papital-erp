@@ -112,6 +112,20 @@ describe('project_inventory_one_data_layer_td_1364', () => {
     await waitFor(() => expect(result.current.data?.total).toBe(2));
   });
 
+  it('a new project waits for a cached item list being read again before its sections take their stock', async () => {
+    const preset = [{ id: 's1', title: 'glue', checkType: 'global', items: [{ id: 'g', name: 'glue', itemCode: 'G-1', unit: 'pcs' }] }];
+    route = reportRoute;
+    const client = newClient();
+    client.setQueryData(settingsKeys.all, [{ key: 'inventory_control_preset_sections', value: JSON.stringify(preset) }]);
+    // the item list another tab read two minutes ago, before eight came into stock
+    client.setQueryData([...QUERY_KEYS.items.all, 'options', 'project-workspace'], [{ ...GLUE, current_stock: 0 }], { updatedAt: Date.now() - 2 * 60 * 1000 });
+    const { result } = renderHook(() => useProjectInventory(PROJECT), { wrapper: wrapperOf(client) });
+    await waitFor(() => expect(callsOf('/items/options')).toBe(1));
+    await waitFor(() => expect(result.current.warehouseItems[0]?.current_stock).toBe(8));
+    await waitFor(() => expect(result.current.sections[0]?.globalItems?.[0]?.stockQty).toBe(8));
+    expect(result.current.sections[0]?.globalItems?.[0]?.status).toBe('available');
+  });
+
   it('a later read of the item list keeps the sections the user changed', async () => {
     route = reportRoute;
     const client = newClient();

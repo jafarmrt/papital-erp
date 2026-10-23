@@ -201,9 +201,11 @@ export function useProjectInventory(
 
   // v9.0.413 (TD-748): پروژه بی بخش الگوی تنظیمات (یا پیش‌فرض) را می‌گیرد و بخش الگوی ذخیره‌شده ردیف پروژه؛ وضعیت هر ماده از موجودی.
   // Once per project as given, when its items and settings have arrived: a later read of the item list
-  // (a stock change elsewhere) never replaces the sections on screen.
+  // (a stock change elsewhere) never replaces the sections on screen. A cached item list or settings being read
+  // again is waited for (#357 review M1), so the stock statuses come from the current read, as before v10.2.39.
   const sectionsBuiltFor = useRef<{ inventoryControl: unknown; products: unknown } | null>(null);
-  const prerequisitesReady = Boolean(itemsQuery.data) && (settingsQuery.isSuccess || settingsQuery.isError);
+  const prerequisitesReady = Boolean(itemsQuery.data) && !itemsQuery.isFetching
+    && (settingsQuery.isSuccess || settingsQuery.isError) && !settingsQuery.isFetching;
   useEffect(() => {
     if (!prerequisitesReady) return;
     const built = sectionsBuiltFor.current;
