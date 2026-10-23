@@ -54,12 +54,14 @@ export function useProductProgressTicks(projectId: number, { canEdit, onUpdate, 
   // ticks the server took whose matrix the read after the save could not bring: shown over the older matrix, not counted
   // as unsent (no «ثبت», no leave warning), until a later read succeeds
   const [unread, setUnread] = useState<{ ticks: Map<string, ProgressCellStatus>; since: number } | null>(null);
+  // (the data moves only on a successful read, so its time alone says whether one landed after the save)
   if (savedAt !== null && !query.isFetching) {
-    if (!(query.isSuccess && query.dataUpdatedAt >= savedAt)) setUnread({ ticks: edits, since: savedAt });
+    // a layer left by an earlier save stays under this one: the server holds both
+    if (query.dataUpdatedAt < savedAt) setUnread({ ticks: new Map([...(unread?.ticks ?? []), ...edits]), since: savedAt });
     setEdits(new Map());
     setSavedAt(null);
   }
-  if (unread && !query.isFetching && query.isSuccess && query.dataUpdatedAt > unread.since) setUnread(null);
+  if (unread && query.dataUpdatedAt > unread.since) setUnread(null);
   const saving = sending || savedAt !== null;
   const shown = useMemo(() => (unread ? new Map([...unread.ticks, ...edits]) : edits), [unread, edits]);
 

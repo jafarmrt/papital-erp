@@ -4,6 +4,7 @@ import { formatPersianNumber } from '../../../utils';
 import { useProductProgressTicks } from '../../../hooks/useProductProgressTicks';
 import { useOnlineStatus } from '../../../lib/pwa/useOnlineStatus';
 import { OFFLINE_SUBMIT_TITLE, PHONE_TAP_TARGET } from '../../../lib/pwa/phoneLayout';
+import { StaleProgressNotice } from '../progress/StaleProgressNotice';
 import { PROGRESS_CELL_LABELS, cellWorkLabel, cellWorkOf, splitStageColumns, type ProgressCellStatus } from '../../../lib/projects/progressTicks';
 
 interface ProjectPhoneProgressProps {
@@ -102,6 +103,7 @@ export function ProjectPhoneProgress({ projectId, canEdit, onUpdate, onDirtyChan
 
   return (
     <div className="space-y-3 text-xs">
+      <StaleProgressNotice ticks={ticks} buttonClassName={`${PHONE_TAP_TARGET} px-4`} />
       <section className="bg-white rounded-2xl border border-slate-200 p-4 space-y-2" aria-label="خلاصه جدول پیشرفت">
         <div className="flex items-center justify-between">
           <span className="font-bold text-slate-700">پیشرفت وزن‌دار پروژه</span>

@@ -6,6 +6,7 @@ import { useProductProgressTicks } from '../../hooks/useProductProgressTicks';
 import { cellWorkOf, splitStageColumns } from '../../lib/projects/progressTicks';
 import { ProgressMatrixCell } from './ProgressMatrixCell';
 import { ProgressSummary } from './progress/ProgressSummary';
+import { StaleProgressNotice } from './progress/StaleProgressNotice';
 import { ProgressMatrixToolbar, type ProgressFilter } from './progress/ProgressMatrixToolbar';
 
 // V3.1.5 — تب «پیشرفت به تفکیک کد کالا» (ماتریسی SKU × مرحله + فیلتر، انتخاب ردیف و عملیات دسته‌ای)
@@ -121,6 +122,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
 
   return (
     <div className="space-y-4 text-xs animate-fadeIn">
+      <StaleProgressNotice ticks={ticks} />
       <ProgressSummary ticks={ticks} canEdit={canEdit} />
 
       {/* SKU × Stage Matrix */}

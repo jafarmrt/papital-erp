@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { PHONE_WIDTH_QUERY } from '../../lib/pwa/usePhoneWidth';
@@ -196,11 +196,36 @@ describe('the progress tab reads the matrix through the shared cache (10.3)', ()
     expect(cell(SHOWN.stageTwo, true)).toBeTruthy();
     expect(vi.mocked(toast.error)).toHaveBeenCalled();
 
-    // another browser unticks it; the next read that succeeds is what the tab shows
+    // the tab says the matrix on screen is an older read, with another try; another browser unticks the cell, and the
+    // read that succeeds is what the tab shows
+    const notice = await screen.findByText(content => content.startsWith(SHOWN.staleNotice));
     serverMatrix = matrixOf([false, false]);
-    await savedElsewhere(client);
+    fireEvent.click(within(notice.parentElement as HTMLElement).getByRole('button', { name: SHOWN.retry }));
     await waitFor(() => expect(cell(SHOWN.stageTwo, false)).toBeTruthy());
+    expect(screen.queryByText(content => content.startsWith(SHOWN.staleNotice))).toBeNull();
     expect(puts).toHaveLength(1);
+  });
+
+  it('keeps the ticks of two saves whose reads both failed', async () => {
+    setPhoneScreen(false);
+    const client = newClient();
+    renderPage(client);
+    const saveFailingRead = async (stage: string) => {
+      fireEvent.click(await screen.findByTitle(SHOWN.cell(stage, false)));
+      holdEveryMatrix = true;
+      fireEvent.click(screen.getByText(SHOWN.saveOne));
+      await waitFor(() => expect(heldMatrix.length).toBeGreaterThan(0));
+      holdEveryMatrix = false;
+      await act(async () => { for (const read of heldMatrix.splice(0)) read.reject(new Error('offline')); });
+      await waitFor(() => expect(screen.queryByText(SHOWN.saveOne)).toBeNull());
+    };
+    await saveFailingRead(SHOWN.stageTwo);
+    await saveFailingRead(SHOWN.stageOne);
+
+    // the server holds both; neither flips back on screen
+    expect(puts).toHaveLength(2);
+    expect(cell(SHOWN.stageOne, true)).toBeTruthy();
+    expect(cell(SHOWN.stageTwo, true)).toBeTruthy();
   });
 
   it('reads the matrix again on each opening of the phone list too', async () => {
@@ -226,6 +251,7 @@ describe('the progress and delivery tabs make no read of their own (10.3)', () =
     'components/project/phone/ProjectPhoneProgress.tsx',
     'components/project/progress/ProgressMatrixToolbar.tsx',
     'components/project/progress/ProgressSummary.tsx',
+    'components/project/progress/StaleProgressNotice.tsx',
     'hooks/useProductProgressTicks.ts',
     'components/project/ProjectStockEntryTab.tsx',
     'components/project/delivery/useProjectDelivery.ts',

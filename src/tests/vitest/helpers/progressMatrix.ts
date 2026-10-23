@@ -10,6 +10,8 @@ export const SHOWN = {
   saveOne: 'ثبت ۱ تغییر در سامانه',
   markCompleted: 'تغییر وضعیت پروژه به تکمیل‌شده',
   deliver: 'ورود به انبار',
+  staleNotice: 'جدول پیشرفت تازه خوانده نشد',
+  retry: 'تلاش دوباره',
 } as const;
 
 export type FetchOpts = { method?: string; body?: string; signal?: AbortSignal };
