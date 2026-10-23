@@ -579,7 +579,9 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         // 1. First failure: identical status and body for an existing and an unknown username
         const realFirst = await attempt(realUser, '198.51.100.101');
         const ghostFirst = await attempt(ghostUser, '198.51.100.102');
-        if (realFirst.status !== 401 || ghostFirst.status !== 401 || JSON.stringify(realFirst.body) !== JSON.stringify(ghostFirst.body)) {
+        // 10.3 package 3: errorHandler's answer carries the request's own traceId; everything else must match
+        const answerOf = (body: Record<string, unknown>) => JSON.stringify({ ...body, traceId: undefined });
+        if (realFirst.status !== 401 || ghostFirst.status !== 401 || answerOf(realFirst.body) !== answerOf(ghostFirst.body)) {
           throw new Error(`The failed login response must be the same: ${realFirst.status} ${JSON.stringify(realFirst.body)} / ${ghostFirst.status} ${JSON.stringify(ghostFirst.body)}`);
         }
         if (/تلاش باقی/.test(String(realFirst.body?.error || ''))) {

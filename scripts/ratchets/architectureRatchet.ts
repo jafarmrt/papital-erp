@@ -131,7 +131,9 @@ function isDrizzleDelete(n: ts.CallExpression): boolean {
 
 /**
  * 10.3 package 3 (10.2 backlog): an executor under another name (`txExecutor`, `dbClient`, `this.db`, `writeTx`) and a
- * table under another name (`entry.table`, `targetTable`) count too; a Map or Set receiver or key never ends this way.
+ * table under another name (`entry.table`, `targetTable`) count too. A Map or Set named that way (`pendingTx.delete(id)`,
+ * `seen.delete(table)`) would count as well: the ratchet then refuses it and the name is changed, which costs less than a
+ * physical delete nobody counted (none such in the code today).
  */
 const EXECUTOR_NAME_PATTERN = /^(tx|trx|db|orm)[A-Z_]|(Tx|Trx|Db|Orm|Executor|Database)$|^(executor|database)$/;
 const TABLE_NAME_PATTERN = /^table$|Table$/;

@@ -7,12 +7,16 @@ import { SECRETS_KEY_MIN_LENGTH } from '../lib/secretBox.js';
  * user name"); the runner now names what is missing and stops before it writes a schema or a row.
  * `source scripts/ci-test-env.sh` sets the values CI uses.
  */
-export type RunnerEnv = Partial<Record<'DATABASE_URL' | 'ERP_SECRETS_KEY', string | undefined>>;
+export type RunnerEnv = Partial<Record<'DATABASE_URL' | 'ERP_SECRETS_KEY' | 'SQL_HOST' | 'SQL_USER' | 'SQL_DB_NAME', string | undefined>>;
 
 export function runnerSettingProblems(env: RunnerEnv): string[] {
   const problems: string[] = [];
   const raw = (env.DATABASE_URL ?? '').trim();
-  if (isPlaceholderDatabaseUrl(raw)) {
+  if ((env.SQL_HOST ?? '').trim()) {
+    // the SQL_HOST mode the server and assertRealTestDatabase accept (src/db/databaseMode.ts) wins over DATABASE_URL
+    if (!(env.SQL_USER ?? '').trim()) problems.push('SQL_HOST is set without SQL_USER');
+    if (!(env.SQL_DB_NAME ?? '').trim()) problems.push('SQL_HOST is set without SQL_DB_NAME');
+  } else if (isPlaceholderDatabaseUrl(raw)) {
     problems.push('DATABASE_URL is not set (or is the example placeholder): set it to a real PostgreSQL test database, e.g. postgresql://<user>:<password>@localhost:5432/erp_test');
   } else {
     let url: URL | null = null;
