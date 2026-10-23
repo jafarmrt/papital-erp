@@ -48,8 +48,14 @@ export const decimalInput = (label: string) => z.union([z.number(), z.string()])
 /** v8.0.108 (TD-385): شماره‌ها و شناسه‌های متنی (شماره چک، شناسه صیادی) با ارقام لاتین ذخیره می‌شوند */
 export const latinDigitsString = z.string().transform(v => toLatinDigits(v).trim());
 
+/** v10.2.3 (TD-1290): ids are PostgreSQL integers; a larger one is 400, never a database error */
+export const PG_INT_MAX = 2_147_483_647;
+export const withinPgInt = (v: string) => v.length <= 10 && Number(v) <= PG_INT_MAX;
+
+/** 10.3: every id read with this is a PostgreSQL integer too, so an id above its range is refused with a 400 */
 export const numericIdString = z.string().min(1, 'شناسه الزامی است')
-  .regex(/^[1-9]\d*$/, 'شناسه باید عدد صحیح مثبت باشد');
+  .regex(/^[1-9]\d*$/, 'شناسه باید عدد صحیح مثبت باشد')
+  .refine(v => !/^\d+$/.test(v) || withinPgInt(v), 'شناسه بزرگ‌تر از حد مجاز است');
 
 export const paramsIdSchema = z.object({
   params: z.object({
@@ -62,6 +68,7 @@ export const createParamsIdSchema = (paramName: string = 'id', label: string = '
     params: z.object({
       [paramName]: z.string().min(1, `${label} الزامی است`)
         .regex(/^[1-9]\d*$/, `${label} باید عدد صحیح مثبت باشد`)
+        .refine(v => !/^\d+$/.test(v) || withinPgInt(v), `${label} بزرگ‌تر از حد مجاز است`)
     }).passthrough()
   }).passthrough();
 };

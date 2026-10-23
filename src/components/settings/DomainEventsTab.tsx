@@ -33,6 +33,12 @@ const OUTBOX_STATUS_BADGES: PillBadgeVariants = {
   failed: { label: 'ناموفق', icon: AlertTriangle, iconClassName: 'w-3 h-3', className: `${OUTBOX_BADGE_BASE} bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800` },
 };
 
+/** 10.3 (ARCH review): a read the server refused says why, never a zero count or «nothing found» */
+const READ_FAILED_CLASS = 'p-3 rounded-xl border border-rose-200 bg-rose-50 text-xs text-rose-700 dark:bg-rose-950/40 dark:border-rose-800/50 dark:text-rose-300';
+const readFailure = (err: unknown, fallback: string) => (err ? errorMessageOf(err) || fallback : '');
+/** a count shows «—» until it is read, never a zero that was not read */
+const countOf = (read: boolean, n: number) => (read ? n.toLocaleString('fa-IR') : '—');
+
 export function DomainEventsTab() {
   // v9.0.435 (TD-722): every change in this page asks events.manage on the server, so only its holders see the buttons
   const canManage = useHasPermission('events.manage');
@@ -45,11 +51,13 @@ export function DomainEventsTab() {
 
   const {
     data: eventsData,
+    error: eventsReadError,
     isLoading: isLoadingEvents,
     refetch: refetchEvents,
   } = useDomainEventsQuery(selectedFilter, { enabled: activeSubTab === 'events' });
   const events = eventsData?.events || [];
   const stats = eventsData?.stats || null;
+  const eventsError = readFailure(eventsReadError, 'رویدادهای زنده خوانده نشد.');
 
   // Outbox state & queries
   const [outboxStatusFilter, setOutboxStatusFilter] = useState<string>('ALL');
@@ -61,17 +69,21 @@ export function DomainEventsTab() {
 
   const {
     data: outboxStats = null,
+    error: outboxStatsReadError,
     isLoading: isLoadingOutboxStats,
     refetch: refetchOutboxStats,
   } = useOutboxStatsQuery({ enabled: activeSubTab === 'outbox' });
 
   const {
     data: outboxPageData,
+    error: outboxEventsReadError,
     isLoading: isLoadingOutboxEvents,
     isFetching: isFetchingOutboxEvents,
     refetch: refetchOutboxEvents,
   } = useOutboxEventsQuery(outboxStatusFilter, { enabled: activeSubTab === 'outbox', page: outboxPage, search: outboxSearch });
   const outboxTotal = outboxPageData?.total ?? 0;
+  const outboxStatsError = readFailure(outboxStatsReadError, 'آمار صف ارسال رویداد خوانده نشد.');
+  const outboxListError = readFailure(outboxEventsReadError, 'فهرست صف ارسال رویداد بارگذاری نشد.');
 
   const isLoadingOutbox = isLoadingOutboxStats || isLoadingOutboxEvents;
 
@@ -276,12 +288,13 @@ export function DomainEventsTab() {
       {/* ========================================================================= */}
       {activeSubTab === 'outbox' && (
         <div className="space-y-6">
+          {outboxStatsError && <div role="alert" className={READ_FAILED_CLASS}>{outboxStatsError}</div>}
           {/* Outbox KPI Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
             <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
               <div className="text-xs text-slate-500 dark:text-slate-400">کل رویدادهای صف ارسال</div>
               <div className="text-xl font-bold text-slate-800 dark:text-white mt-1">
-                {outboxStats?.total ? outboxStats.total.toLocaleString('fa-IR') : '۰'}
+                {countOf(!!outboxStats, outboxStats?.total || 0)}
               </div>
               {/* v9.0.441 (TD-733): a stopped background processor is shown as stopped, never with the green pulse */}
               {outboxStats && (
@@ -295,7 +308,7 @@ export function DomainEventsTab() {
             <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
               <div className="text-xs text-slate-500 dark:text-slate-400">در صف ارسال / پردازش</div>
               <div className="text-xl font-bold text-amber-600 dark:text-amber-400 mt-1">
-                {((outboxStats?.pending || 0) + (outboxStats?.processing || 0)).toLocaleString('fa-IR')}
+                {countOf(!!outboxStats, (outboxStats?.pending || 0) + (outboxStats?.processing || 0))}
               </div>
               <div className="text-[11px] text-slate-500 mt-1">تراکنش‌های آماده ارسال</div>
             </div>
@@ -303,7 +316,7 @@ export function DomainEventsTab() {
             <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
               <div className="text-xs text-slate-500 dark:text-slate-400">پردازش موفق و تحویل‌شده</div>
               <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-                {(outboxStats?.completed || 0).toLocaleString('fa-IR')}
+                {countOf(!!outboxStats, outboxStats?.completed || 0)}
               </div>
               <div className="text-[11px] text-slate-500 mt-1">تحویل به مشترکان سامانه</div>
             </div>
@@ -311,7 +324,7 @@ export function DomainEventsTab() {
             <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
               <div className="text-xs text-slate-500 dark:text-slate-400">ناموفق، با تلاش دوباره</div>
               <div className="text-xl font-bold text-rose-600 dark:text-rose-400 mt-1">
-                {(outboxStats?.failed || 0).toLocaleString('fa-IR')}
+                {countOf(!!outboxStats, outboxStats?.failed || 0)}
               </div>
               <div className="text-[11px] text-slate-500 mt-1">قابلیت ارسال مجدد خودکار</div>
             </div>
@@ -391,11 +404,12 @@ export function DomainEventsTab() {
               </span>
             </div>
 
-            {filteredOutbox.length === 0 ? (
+            {outboxListError && <div role="alert" className={`m-4 ${READ_FAILED_CLASS}`}>{outboxListError}</div>}
+            {filteredOutbox.length === 0 ? (!outboxListError && (
               <div className="p-8 text-center text-slate-400 text-xs">
                 هیچ رویدادی با پالایش انتخابی در صف ارسال یافت نشد.
               </div>
-            ) : (
+            )) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-700/60">
                 {filteredOutbox.map((evt) => {
                   const isExpanded = expandedOutboxId === evt.id;
@@ -492,12 +506,13 @@ export function DomainEventsTab() {
       {/* ========================================================================= */}
       {activeSubTab === 'events' && (
         <div className="space-y-6">
+          {eventsError && <div role="alert" className={READ_FAILED_CLASS}>{eventsError}</div>}
           {/* KPI Stats Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
             <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
               <div className="text-xs text-slate-500 dark:text-slate-400">مجموع رویدادهای منتشرشده</div>
               <div className="text-xl font-bold text-slate-800 dark:text-white mt-1">
-                {stats?.totalEmitted ? stats.totalEmitted.toLocaleString('fa-IR') : '۰'}
+                {countOf(!!stats, stats?.totalEmitted || 0)}
               </div>
               <div className="text-[11px] text-indigo-600 dark:text-indigo-400 mt-1 flex items-center gap-1">
                 <Activity className="w-3 h-3" />
@@ -508,7 +523,7 @@ export function DomainEventsTab() {
             <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
               <div className="text-xs text-slate-500 dark:text-slate-400">گردش موجودی و انبار</div>
               <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-                {((stats?.eventCounts?.['StockReceived'] || 0) + (stats?.eventCounts?.['StockIssued'] || 0)).toLocaleString('fa-IR')}
+                {countOf(!!stats, (stats?.eventCounts?.['StockReceived'] || 0) + (stats?.eventCounts?.['StockIssued'] || 0))}
               </div>
               <div className="text-[11px] text-slate-500 mt-1">ورود و خروج فیزیکی کالا</div>
             </div>
@@ -516,7 +531,7 @@ export function DomainEventsTab() {
             <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
               <div className="text-xs text-slate-500 dark:text-slate-400">تغییرات فرایند و گردش کار</div>
               <div className="text-xl font-bold text-indigo-600 dark:text-indigo-400 mt-1">
-                {(stats?.eventCounts?.['WorkflowTransitioned'] || 0).toLocaleString('fa-IR')}
+                {countOf(!!stats, stats?.eventCounts?.['WorkflowTransitioned'] || 0)}
               </div>
               <div className="text-[11px] text-slate-500 mt-1">پیشروی و امضای اسناد</div>
             </div>
@@ -524,7 +539,7 @@ export function DomainEventsTab() {
             <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
               <div className="text-xs text-slate-500 dark:text-slate-400">رویدادهای مالی و اسناد</div>
               <div className="text-xl font-bold text-blue-600 dark:text-blue-400 mt-1">
-                {((stats?.eventCounts?.['InvoiceApproved'] || 0) + (stats?.eventCounts?.['TreasuryTransactionApproved'] || 0)).toLocaleString('fa-IR')}
+                {countOf(!!stats, (stats?.eventCounts?.['InvoiceApproved'] || 0) + (stats?.eventCounts?.['TreasuryTransactionApproved'] || 0))}
               </div>
               <div className="text-[11px] text-slate-500 mt-1">فاکتورها و خزانه‌داری</div>
             </div>
@@ -592,11 +607,11 @@ export function DomainEventsTab() {
               </span>
             </div>
 
-            {filteredEvents.length === 0 ? (
+            {filteredEvents.length === 0 ? (!eventsError && (
               <div className="p-8 text-center text-slate-400 text-xs">
                 هیچ رویدادی با پالایش انتخابی یافت نشد.
               </div>
-            ) : (
+            )) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-700/60">
                 {filteredEvents.map((evt) => {
                   const isExpanded = expandedEventId === evt.eventId;

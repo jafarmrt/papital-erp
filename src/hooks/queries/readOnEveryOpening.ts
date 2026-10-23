@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import type { UseQueryResult } from '@tanstack/react-query';
 
 /**
@@ -52,15 +52,54 @@ export interface OpeningRead<T> {
   failedAt: number;
 }
 
+/** the opening a query's answers are measured against */
+interface OpeningState {
+  open: Opening;
+  /** when the window last opened, 0 before it ever opened */
+  at: number;
+  /** a read that began before this opening is still running: its answer, or its failure, is not this opening's */
+  leftover: boolean;
+  /** the read this opening asked for when that earlier read ended (0 when none), and whether it is still running */
+  reread: number;
+  rereading: boolean;
+}
+
 /**
  * What a query says for the current opening of a window. A window that stays mounted while closed (and a cache entry
  * that outlives it) keeps the answer and the error of an earlier opening; those never count here. The query must read
  * again on each opening (READ_ON_EVERY_OPENING or `staleTime: 0`), or its answer never becomes one of this opening.
+ *
+ * Closing a window that stays mounted only disables its query; a read still running goes on, and the next opening joins
+ * it instead of reading again. Its answer reflects the moment it began, before this opening, so it never counts: once it
+ * ends, this opening reads again and waits for that answer (10.3, review of part 16).
  */
 export function useOpeningRead<T>(query: UseQueryResult<T>, open: Opening): OpeningRead<T> {
-  const openedAt = useOpenedAt(open);
-  const read = isOpen(open) && openedAt > 0 && query.dataUpdatedAt >= openedAt;
-  const failed = isOpen(open) && openedAt > 0 && query.isError && query.errorUpdatedAt >= openedAt;
+  const running = query.fetchStatus !== 'idle';
+  const [state, setState] = useState<OpeningState>(() => ({
+    open, at: isOpen(open) ? Date.now() : 0, leftover: false, reread: 0, rereading: false,
+  }));
+  let opening = state;
+  if (state.open !== open) {
+    opening = isOpen(open)
+      ? { ...state, open, at: Date.now() }
+      : { ...state, open, leftover: running, rereading: false };
+  } else if (state.leftover && !running) {
+    opening = isOpen(open)
+      ? { ...state, leftover: false, reread: state.reread + 1, rereading: true }
+      : { ...state, leftover: false };
+  }
+  if (opening !== state) setState(opening);
+
+  const readAgain = useEffectEvent((reread: number) => {
+    void query.refetch().then(() => setState(s => (s.reread === reread ? { ...s, rereading: false } : s)));
+  });
+  useEffect(() => {
+    if (opening.reread) readAgain(opening.reread);
+  }, [opening.reread]);
+
+  const counts = isOpen(open) && opening.at > 0 && !opening.leftover && !opening.rereading;
+  const read = counts && query.dataUpdatedAt >= opening.at;
+  const failed = counts && query.isError && query.errorUpdatedAt >= opening.at;
   return {
     data: read ? query.data : undefined,
     current: read && !query.isError ? query.data : undefined,

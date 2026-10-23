@@ -101,14 +101,8 @@ export class WebhookSubscriptionService {
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error(`[Webhook Stats Error] ${errMsg}`);
-      return {
-        totalSubscriptions: 0,
-        activeSubscriptions: 0,
-        totalDeliveries: 0,
-        successfulDeliveries: 0,
-        failedDeliveries: 0,
-        successRate: 100
-      };
+      // 10.3 (ARCH review): a failed read is an error answer, never zero subscriptions and a 100% success rate
+      throw err;
     }
   }
 
@@ -125,7 +119,8 @@ export class WebhookSubscriptionService {
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error(`[Webhook Get Subscriptions Error] ${errMsg}`);
-      return [];
+      // 10.3 (ARCH review): a failed read is an error answer, never an empty list
+      throw err;
     }
   }
 
@@ -607,7 +602,8 @@ export class WebhookSubscriptionService {
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error(`[Webhook Deliveries Get Error] ${errMsg}`);
-      return { data: [], total: 0, limit: 50, offset: 0 };
+      // 10.3 (ARCH review): a failed read is an error answer, never an empty delivery log
+      throw err;
     }
   }
 }

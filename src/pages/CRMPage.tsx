@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Filter, Briefcase, PhoneCall, Clock, Building2, TrendingUp, Loader2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { fetchJson } from '../api';
 import { CRMLead, Customer } from '../types';
 import { errorMessageOf, formatPersianNumber } from '../utils';
 import { useCRMData, STAGES } from '../hooks/useCRMData';
@@ -22,6 +21,7 @@ import { CRMFunnelReport } from '../components/crm/CRMFunnelReport';
 import { LostReasonDialog } from '../components/crm/LostReasonFields';
 import { CustomerTagFilter } from '../components/customers/CustomerTags';
 import { useCustomerTagsQuery } from '../hooks/queries/useCustomerTagQueries';
+import { useConvertLeadToCustomerMutation } from '../hooks/queries/useCustomerQueries';
 
 export default function CRMPage({ user }: { user: any }) {
   const crm = useCRMData(user);
@@ -55,6 +55,7 @@ export default function CRMPage({ user }: { user: any }) {
 
   // v10.2 package 7 (OBS-R2-31): one conversion at a time; a second click while it runs does nothing
   const convertingRef = useRef(false);
+  const convertLead = useConvertLeadToCustomerMutation();
   const [convertingLeadId, setConvertingLeadId] = useState<number | null>(null);
 
   const handleConvertToInvoice = async (lead: CRMLead) => {
@@ -73,12 +74,9 @@ export default function CRMPage({ user }: { user: any }) {
     setConvertingLeadId(lead.id);
     try {
       toast.loading('در حال ثبت رسمی مشتری و انتقال به صدور پیش‌فاکتور...', { id: 'convert-lead' });
-      const res = await fetchJson(`/crm/leads/${lead.id}/convert-to-customer`, { method: 'POST' });
+      const res = await convertLead.mutateAsync(lead.id);
       toast.dismiss('convert-lead');
       toast.success('مشتری با موفقیت در حساب‌ها ثبت گردید.');
-
-      // Refresh leads list
-      void crm.loadAllData();
 
       // Navigate to create invoice page with pre-filled buyer details
       // v10.0.177 (OBS-R2-30): نشانی خریدار فقط از مشتری، نه یادداشت پرونده؛ v10.0.213 (OBS-R1-102): فرم فاکتور فروش

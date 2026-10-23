@@ -4,7 +4,7 @@ import { orm } from '../db/drizzle.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission, can } from '../middleware/authorize.js';
-import { numericIdString, validate } from '../middleware/validate.js';
+import { numericIdString, validate, withinPgInt } from '../middleware/validate.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { ITEM_COST_READ_PERMISSIONS } from '../lib/inventory/reservedItemsReport.js';
 import { MATERIAL_AVAILABILITY_MAX_ITEMS } from '../lib/projects/materialAvailability.js';
@@ -21,11 +21,7 @@ import { projectIssuedMaterials } from '../services/projects/projectIssuedMateri
 const router = Router();
 router.use(authenticateToken);
 
-/** v10.2.3 (TD-1290): ids are PostgreSQL integers; a larger one is 400, never a database error */
-const PG_INT_MAX = 2_147_483_647;
-const withinPgInt = (v: string) => v.length <= 10 && Number(v) <= PG_INT_MAX;
-
-const projectParams = z.object({ id: numericIdString.refine(withinPgInt, 'شناسهٔ پروژه نامعتبر است') });
+const projectParams = z.object({ id: numericIdString });
 
 const availabilitySchema = z.object({
   params: projectParams,
