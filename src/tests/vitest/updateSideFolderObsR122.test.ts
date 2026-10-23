@@ -12,6 +12,18 @@ import { afterEach, describe, expect, it } from 'vitest';
 // The real update.sh runs here against a scratch application directory, with npm, systemctl and sudo stubbed.
 
 const ROOT = path.resolve(__dirname, '../../..');
+
+// 10.3 (ARCH review finding 5): update.sh copies the source with rsync. On a computer without rsync the cases that need
+// it are skipped with a note instead of failing; CI has rsync, and there a missing rsync still fails them.
+const HAS_RSYNC = spawnSync('bash', ['-c', 'command -v rsync'], { encoding: 'utf8' }).status === 0;
+const SKIP_WITHOUT_RSYNC = !HAS_RSYNC && !process.env.CI;
+const RSYNC_MISSING = 'rsync is not installed and update.sh copies the source with it; install rsync to run this case (CI always runs it)';
+function itRunsUpdate(name: string, fn: () => unknown, timeout?: number) {
+  it(name, ctx => {
+    ctx.skip(SKIP_WITHOUT_RSYNC, RSYNC_MISSING);
+    return fn();
+  }, timeout);
+}
 let dir = '';
 afterEach(() => { if (dir) rmSync(dir, { recursive: true, force: true }); dir = ''; });
 
@@ -92,7 +104,7 @@ function runUpdate(s: ReturnType<typeof scratch>, extraEnv: Record<string, strin
 }
 
 describe('update_side_folder_build_obs_r1_22', () => {
-  it('installs and builds in .build-next while the running build stays, then swaps it in and keeps the previous one', () => {
+  itRunsUpdate('installs and builds in .build-next while the running build stays, then swaps it in and keeps the previous one', () => {
     const s = scratch();
     const run = runUpdate(s);
     expect(run.status, run.stdout + run.stderr).toBe(0);
@@ -112,7 +124,7 @@ describe('update_side_folder_build_obs_r1_22', () => {
     expect(run.stdout).toContain('Update finished successfully. Running v2.0.0');
   });
 
-  it('a failed build leaves the running dist and node_modules untouched and prints a rollback without a rebuild', () => {
+  itRunsUpdate('a failed build leaves the running dist and node_modules untouched and prints a rollback without a rebuild', () => {
     const s = scratch();
     const run = runUpdate(s, { STUB_BUILD_FAILS: '1' });
     expect(run.status).not.toBe(0);
@@ -128,7 +140,7 @@ describe('update_side_folder_build_obs_r1_22', () => {
     expect(run.stdout).not.toContain('restore.sh');
   });
 
-  it('a failed startup after the swap prints the whole rollback with the build restore and the data-loss warning', () => {
+  itRunsUpdate('a failed startup after the swap prints the whole rollback with the build restore and the data-loss warning', () => {
     const s = scratch();
     const run = runUpdate(s, { STUB_STARTUP_FAILS: '1' });
     expect(run.status).not.toBe(0);
@@ -137,7 +149,7 @@ describe('update_side_folder_build_obs_r1_22', () => {
     expect(run.stdout).toContain('erases every change made after it');
   });
 
-  it('links the build-time .env files into the side folder', () => {
+  itRunsUpdate('links the build-time .env files into the side folder', () => {
     const s = scratch();
     write(path.join(s.app, '.env.production'), 'VITE_X=1');
     const run = runUpdate(s);
@@ -146,7 +158,7 @@ describe('update_side_folder_build_obs_r1_22', () => {
     expect(read(path.join(s.app, '.env.production'))).toBe('VITE_X=1');
   });
 
-  it('continues with the update.sh the new source brings', () => {
+  itRunsUpdate('continues with the update.sh the new source brings', () => {
     const s = scratch();
     write(path.join(s.src, 'update.sh'), `${read(path.join(s.app, 'update.sh'))}\n# a later version\n`);
     const run = runUpdate(s);
@@ -159,7 +171,7 @@ describe('update_side_folder_build_obs_r1_22', () => {
 });
 
 describe('update_swap_interrupted_obs_r1_22', () => {
-  it('a swap stopped half way keeps the side folder, prints a restore that repairs it, and blocks the next run', () => {
+  itRunsUpdate('a swap stopped half way keeps the side folder, prints a restore that repairs it, and blocks the next run', () => {
     const s = scratch();
     // the 4th rename (the new node_modules into place) fails: dist is new, node_modules is missing
     const run = runUpdate(s, { STUB_MV_FAIL_AT: '4' });
@@ -200,7 +212,7 @@ describe('update_single_run_lock_obs_r1_22', () => {
 });
 
 describe('update_noop_keeps_rollback_obs_r1_22', () => {
-  it('a second run of the same source builds nothing and keeps dist.prev; --rebuild builds again', () => {
+  itRunsUpdate('a second run of the same source builds nothing and keeps dist.prev; --rebuild builds again', () => {
     const s = scratch();
     expect(runUpdate(s).status).toBe(0);
     const again = runUpdate(s);
@@ -217,7 +229,7 @@ describe('update_noop_keeps_rollback_obs_r1_22', () => {
 });
 
 describe('update_manual_sync_deletes_and_keeps_previous_obs_r1_17', () => {
-  it('removes files the new source no longer has, keeps live state and the previous source, and restores it', () => {
+  itRunsUpdate('removes files the new source no longer has, keeps live state and the previous source, and restores it', () => {
     const s = scratch();
     const run = runUpdate(s);
     expect(run.status, run.stdout + run.stderr).toBe(0);
@@ -260,7 +272,7 @@ describe('update_manual_sync_deletes_and_keeps_previous_obs_r1_17', () => {
     expect(existsSync(path.join(s.app, '.previous-source'))).toBe(false);
   });
 
-  it('keeps folders .env names however they are written or reached (./, a link into the app)', () => {
+  itRunsUpdate('keeps folders .env names however they are written or reached (./, a link into the app)', () => {
     const s = scratch();
     write(path.join(s.app, 'media-alt/clip.mp4'), 'media');
     write(path.join(s.app, 'att-files/a.pdf'), 'pdf');
@@ -277,7 +289,7 @@ describe('update_manual_sync_deletes_and_keeps_previous_obs_r1_17', () => {
 });
 
 describe('update_free_space_preflight_obs_r1_22', () => {
-  it('stops before the backup, the source or the build is touched when the disk cannot hold the side build', () => {
+  itRunsUpdate('stops before the backup, the source or the build is touched when the disk cannot hold the side build', () => {
     const s = scratch();
     const run = runUpdate(s, { UPDATE_SPACE_MARGIN_MB: '999999999' });
     expect(run.status).not.toBe(0);
@@ -291,7 +303,7 @@ describe('update_free_space_preflight_obs_r1_22', () => {
     expect(run.stdout).not.toContain('Rollback:');
   });
 
-  it('counts the side copy of the source, node_modules and dist, and one more source copy for a manual update', () => {
+  itRunsUpdate('counts the side copy of the source, node_modules and dist, and one more source copy for a manual update', () => {
     const s = scratch();
     write(path.join(s.app, 'node_modules/big.bin'), 'x'.repeat(4 * 1024 * 1024));
     const check = (mode: string) => Number(execFileSync('bash', ['-c', `source scripts/update-steps.sh; UPDATE_SPACE_MARGIN_MB=0 update_space_check "$1" "$2" || true; echo "$UPDATE_SPACE_NEED_KB"`, 'x', s.app, mode], { cwd: s.app, encoding: 'utf8' }).trim());
@@ -316,7 +328,7 @@ describe('update_free_space_preflight_obs_r1_22', () => {
 });
 
 describe('update_swap_old_prev_before_marker_obs_r1_22', () => {
-  it('removes the older .prev folders before the swap marker exists, so a kill there leaves nothing for the repair to move in', () => {
+  itRunsUpdate('removes the older .prev folders before the swap marker exists, so a kill there leaves nothing for the repair to move in', () => {
     const s = scratch();
     expect(runUpdate(s).status).toBe(0);
     rmSync(path.join(dir, 'mv.count.log'), { force: true });
@@ -371,7 +383,7 @@ describe('update_followups_obs_r1_22', () => {
     expect(msg).not.toContain('Nothing was changed');
   });
 
-  it('a run stopped by a signal ends non-zero and prints the rollback (N-A)', async () => {
+  itRunsUpdate('a run stopped by a signal ends non-zero and prints the rollback (N-A)', async () => {
     const s = scratch();
     const started = path.join(dir, 'build.started');
     const { spawn } = await import('node:child_process');
@@ -392,7 +404,7 @@ describe('update_followups_obs_r1_22', () => {
     expect(read(path.join(s.app, 'dist/version.txt'))).toBe('old');
   }, 40_000);
 
-  it('names the commit of a build made before v10.2.23 from its build-info.json and says nothing of a missing dist.prev', () => {
+  itRunsUpdate('names the commit of a build made before v10.2.23 from its build-info.json and says nothing of a missing dist.prev', () => {
     const s = scratch();
     // v10.2.28 (#339 review N-B): the format scripts/write-build-info.mjs writes
     write(path.join(s.app, 'dist/build-info.json'), `${JSON.stringify({ gitCommit: 'f6daa01d', buildTime: '2026-10-18T04:30:00.000Z' }, null, 2)}\n`);
@@ -407,7 +419,7 @@ describe('update_followups_obs_r1_22', () => {
     expect(again.stdout).not.toContain('dist.prev/ still holds');
   });
 
-  it('runs a new update.sh again only when it knows how to continue', () => {
+  itRunsUpdate('runs a new update.sh again only when it knows how to continue', () => {
     const s = scratch();
     write(path.join(s.src, 'update.sh'), '#!/usr/bin/env bash\necho "an update.sh without the resume step"\n');
     const run = runUpdate(s);
