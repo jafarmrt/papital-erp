@@ -1,7 +1,8 @@
 import { vi } from 'vitest';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
+import { appQueryClient } from './queryWrapper';
 
 /**
  * 10.3 (ARCH review finding 3, part 14): the server the event admin tab tests talk to (`fetchJson`, mocked over
@@ -78,7 +79,8 @@ export const fetchJson = vi.fn(async (url: string, opts?: Opts): Promise<unknown
   return read(path, new URLSearchParams(search));
 });
 
-export const newClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
+/** a client with the app's read defaults: what an earlier opening cached stays fresh unless the tab reads again */
+export const newClient = appQueryClient;
 export const renderIn = (client: QueryClient, ui: ReactNode) => render(createElement(QueryClientProvider, { client }, ui));
 /** the time an earlier opening of a tab read its data */
 export const earlier = () => ({ updatedAt: Date.now() - 60_000 });
