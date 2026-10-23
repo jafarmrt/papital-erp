@@ -235,6 +235,28 @@ describe('the attachment box reads through the shared cache (10.3)', () => {
     expect(screen.queryAllByText('b.pdf').length).toBeGreaterThan(0);
   });
 
+  it('a failed first read says so', async () => {
+    failFiles = true;
+    render(<CrmAttachmentsPanel owner="lead" ownerId={1} />, { wrapper: wrapperOf(newClient()) });
+    expect((await screen.findByRole('alert')).textContent).toBe('list failed');
+  });
+
+  it('a file the list already holds when its send answers is shown once', async () => {
+    const client = newClient();
+    const { container } = render(<CrmAttachmentsPanel owner="lead" ownerId={1} />, { wrapper: wrapperOf(client) });
+    expect((await screen.findAllByText('old.pdf')).length).toBeGreaterThan(0);
+    pick(container, [pdf('a.pdf')]);
+    await waitFor(() => expect(heldSends).toHaveLength(1));
+    // the server stored the file and a list read answered before the send's own answer
+    serverFiles = [file('f1', 'old.pdf'), file('f2', 'a.pdf')];
+    await act(async () => { await client.invalidateQueries({ queryKey: QUERY_KEYS.crm.all }); });
+    expect((await screen.findAllByText('a.pdf')).length).toBeGreaterThan(0);
+    const shown = screen.getAllByText('a.pdf').length;
+    holdNext = '/crm/leads/1/attachments';
+    await act(async () => { heldSends[0]?.({ data: file('f2', 'a.pdf') }); });
+    expect(screen.getAllByText('a.pdf')).toHaveLength(shown);
+  });
+
   it('a failed refresh keeps the list on screen and says so', async () => {
     const client = newClient();
     render(<CrmAttachmentsPanel owner="lead" ownerId={1} />, { wrapper: wrapperOf(client) });

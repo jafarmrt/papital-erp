@@ -100,7 +100,8 @@ export function CrmAttachmentsPanel({ owner, ownerId, initial, onBusyChange, onC
         const res = await sendRawFile<{ data: CrmAttachmentView }>({
           method: 'POST', url: `${API_URL}${crmAttachmentsPath(owner, ownerId)}`, body: file, contentType: type, fileName: file.name,
         });
-        await setFiles((prev) => [...prev, res.data]);
+        // a list read answered after the server stored the file already holds it
+        await setFiles((prev) => (prev.some((f) => f.id === res.data.id) ? prev : [...prev, res.data]));
       } catch (err) {
         setPickError(`«${file.name}»: ${errorMessageOf(err)}`);
         break;

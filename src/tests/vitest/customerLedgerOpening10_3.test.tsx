@@ -64,13 +64,14 @@ afterEach(() => {
   failCard = false;
 });
 
-const renderPage = (client: QueryClient) => render(
+const pageOf = (client: QueryClient) => (
   <QueryClientProvider client={client}>
     <MemoryRouter>
       <CustomersPage user={user} />
     </MemoryRouter>
-  </QueryClientProvider>,
+  </QueryClientProvider>
 );
+const renderPage = (client: QueryClient) => render(pageOf(client));
 
 describe('the parties page account card reads on each opening (10.3)', () => {
   it('never shows the card an earlier opening left while it reads again', async () => {
@@ -90,9 +91,11 @@ describe('the parties page account card reads on each opening (10.3)', () => {
     const toast = (await import('react-hot-toast')).toast as unknown as { error: ReturnType<typeof vi.fn> };
     toast.error.mockClear();
     failCard = true;
-    renderPage(new QueryClient({ defaultOptions: { queries: { retry: false } } }));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = renderPage(client);
     fireEvent.click(await screen.findByText(SHOWN.open));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(SHOWN.failed));
+    view.rerender(pageOf(client));
     await act(() => new Promise(resolve => setTimeout(resolve, 20)));
     expect(toast.error.mock.calls.filter(([m]) => m === SHOWN.failed)).toHaveLength(1);
   });

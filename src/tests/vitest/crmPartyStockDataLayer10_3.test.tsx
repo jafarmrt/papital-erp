@@ -200,8 +200,12 @@ describe('the party dossier reads through the shared cache (10.3)', () => {
     ['/customers/7/documents', SHOWN.documentsFailed],
   ])('says a failed read of %s', async (prefix, message) => {
     failing.add(prefix);
-    renderDossier(newClient());
+    const client = newClient();
+    const view = renderDossier(client);
     await waitFor(() => expect(toastError).toHaveBeenCalledWith(message));
+    view.rerender(<CustomerDossierDrawer customer={customer} onClose={noop} onOpenLeadDrawer={noop} onOpenLeadModal={noop} onOpenActivityModal={noop} />);
+    await act(() => new Promise(resolve => setTimeout(resolve, 20)));
+    expect(toastError.mock.calls.filter(([m]) => m === message)).toHaveLength(1);
   });
 
   it('the account card read takes the report however the server wraps it', async () => {
