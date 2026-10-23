@@ -1,35 +1,31 @@
-import { useCallback, useRef, useState } from 'react';
-import { fetchJson } from '../api';
+import { useEffect, useEffectEvent } from 'react';
+import toast from 'react-hot-toast';
+import { errorMessageOf } from '../utils';
 import type { CRMActivity } from '../types';
-import type { CrmAttachmentView } from '../lib/crm/crmAttachments';
+import { useCrmLeadDetailQuery } from './queries/useCrmQueries';
+import { useOpeningRead } from './queries/readOnEveryOpening';
+
+const NO_ACTIVITIES: CRMActivity[] = [];
 
 /**
  * v10.0.178 (OBS-R2-29، TD-991): تاریخچه کشوی پرونده فروش. باز کردن پرونده دیگر تاریخچه پرونده پیشین را فوراً پاک می‌کند و
- * پاسخ دیرِ درخواست پیشین نادیده گرفته می‌شود؛ پیش‌تر تاریخچه پرونده قبلی تا رسیدن پاسخ (یا پس از خطا برای همیشه) زیر
- * پرونده تازه می‌ماند و پاسخ دیر پرونده قبلی روی پرونده تازه می‌نشست. بارگذاری دوباره همان پرونده تاریخچه را پاک نمی‌کند.
+ * پاسخ دیرِ درخواست پیشین نادیده گرفته می‌شود؛ بارگذاری دوباره همان پرونده تاریخچه را پاک نمی‌کند.
+ * 10.3 (ARCH review finding 3, part 12): the detail is read through the shared cache, again on each opening of a file
+ * (never what an earlier opening left there); a change that invalidates `crm` refreshes it while the drawer is open, and
+ * the drawer shows the file as read now. A failed read is said once.
  */
-export function useLeadDrawerActivities() {
-  // v10.2 package 7 review (N-5): the detail also carries the sales file's attachments, which seed the drawer's attachment box
-  const [state, setState] = useState<{ leadId: number | null; activities: CRMActivity[]; attachments?: CrmAttachmentView[] }>({ leadId: null, activities: [] });
-  const latestRequest = useRef(0);
+export function useLeadDrawerActivities(leadId: number | null) {
+  const read = useOpeningRead(useCrmLeadDetailQuery(leadId), leadId);
+  const sayFailed = useEffectEvent(() => {
+    toast.error(errorMessageOf(read.error) || 'تاریخچهٔ پرونده فروش دریافت نشد.');
+  });
+  useEffect(() => {
+    if (read.failedAt) sayFailed();
+  }, [read.failedAt]);
 
-  const loadDrawerActivities = useCallback(async (leadId: number) => {
-    const request = ++latestRequest.current;
-    setState(prev => (prev.leadId === leadId ? prev : { leadId, activities: [] }));
-    try {
-      const res = await fetchJson(`/crm/leads/${leadId}`);
-      if (request !== latestRequest.current) return;
-      // V3.0.7 (TD-066): Array Safety Guard (قاعده #2 AGENTS)
-      setState({
-        leadId,
-        activities: Array.isArray(res?.activities) ? res.activities : [],
-        attachments: Array.isArray(res?.attachments) ? res.attachments : undefined,
-      });
-    } catch (err) {
-      if (request !== latestRequest.current) return;
-      console.error('Error fetching lead drawer detail:', err);
-    }
-  }, []);
-
-  return { drawerActivities: state.activities, drawerAttachments: state.attachments, loadDrawerActivities };
+  return {
+    drawerLead: read.data?.lead ?? null,
+    drawerActivities: read.data?.activities ?? NO_ACTIVITIES,
+    drawerAttachments: read.data?.attachments,
+  };
 }

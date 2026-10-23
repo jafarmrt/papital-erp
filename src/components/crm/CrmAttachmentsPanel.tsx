@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Download, FileText, Loader2, Paperclip, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { API_URL, fetchJson } from '../../api';
@@ -11,6 +12,10 @@ import { useOnlineStatus } from '../../lib/pwa/useOnlineStatus';
 import { OFFLINE_SUBMIT_TITLE } from '../../lib/pwa/phoneLayout';
 import { formatPersianNumber } from '../../utils/persianNumber';
 import { errorMessageOf } from '../../utils';
+import { CRM_ACTIVITY_PAGE_QUERY_KEY } from '../../lib/crm/crmListPages';
+import { CRM_FOLLOWUPS_QUERY_KEY } from '../../lib/crm/crmFollowupsQuery';
+import { CRM_LEAD_DETAIL_KEY, crmAttachmentsKey, useCrmAttachmentsQuery } from '../../hooks/queries/useCrmQueries';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 import {
   CRM_ATTACHMENT_ACCEPT,
   CRM_ATTACHMENT_FORMAT_TEXT,
@@ -38,14 +43,22 @@ interface CrmAttachmentsPanelProps {
  * show their light version and download their original; PDFs show a file card. Holders of `crm.manage` add (JPG, PNG,
  * WEBP or PDF, at most 10 files of 10 MB, checked here with the server's rule before sending) and remove files; the
  * files never enter the media library.
+ * 10.3 (ARCH review finding 3, part 12): the list is read through the shared cache, again each time the box opens (it
+ * mounts with its window or drawer), never what an earlier opening left there; a file sent or removed updates that list
+ * and refreshes the sales file detail and the activity lists that count files. A failed refresh keeps the list on screen.
  */
 export function CrmAttachmentsPanel({ owner, ownerId, initial, onBusyChange, onCountChange }: CrmAttachmentsPanelProps) {
   const canManage = useHasPermission('crm.manage');
   const online = useOnlineStatus();
   const inputId = useId();
-  const [files, setFiles] = useState<CrmAttachmentView[]>(initial ?? []);
-  const [loading, setLoading] = useState(!initial);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const read = useOpeningRead(useCrmAttachmentsQuery(owner, ownerId), true);
+  // v10.2 package 7 review (N-5): files the parent already has are shown (and counted) at once; the panel still reads
+  // the current list, so a file added since the parent's read is never missing
+  const fetched = read.data !== undefined;
+  const files = read.data ?? initial ?? [];
+  const loading = !fetched && !initial && !read.error;
+  const loadError = read.error ? errorMessageOf(read.error) || 'فهرست پیوست‌ها دریافت نشد.' : null;
   const [busy, setBusy] = useState<string | null>(null);
   const [pickError, setPickError] = useState<string | null>(null);
 
@@ -54,33 +67,20 @@ export function CrmAttachmentsPanel({ owner, ownerId, initial, onBusyChange, onC
     onBusyChange?.(value !== null);
   }, [onBusyChange]);
 
-  // v10.2 package 7 review (N-5): files the parent already has are shown (and counted) at once; the panel still reads
-  // the current list, so a file added since the parent's read is never missing
-  const [fetched, setFetched] = useState(false);
-  useEffect(() => {
-    if (initial && !fetched) {
-      setFiles(initial);
-      setLoading(false);
+  /**
+   * the box's list changed by a send or a removal: a read of the list already on its way (another sales write refreshes
+   * every sales read) may predate the change, so it is dropped first
+   */
+  const setFiles = async (change: (prev: CrmAttachmentView[]) => CrmAttachmentView[]) => {
+    await queryClient.cancelQueries({ queryKey: crmAttachmentsKey(owner, ownerId) });
+    queryClient.setQueryData<CrmAttachmentView[]>(crmAttachmentsKey(owner, ownerId), (prev) => change(prev ?? []));
+  };
+  /** after the sends or a removal: the box's list as the server holds it now, the file detail and the lists that count files */
+  const refreshCounts = () => {
+    for (const queryKey of [crmAttachmentsKey(owner, ownerId), CRM_LEAD_DETAIL_KEY, CRM_ACTIVITY_PAGE_QUERY_KEY, CRM_FOLLOWUPS_QUERY_KEY]) {
+      void queryClient.invalidateQueries({ queryKey });
     }
-  }, [initial, fetched]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    setLoadError(null);
-    setFetched(false);
-    fetchJson<{ data: CrmAttachmentView[] }>(crmAttachmentsPath(owner, ownerId), { signal: controller.signal })
-      .then((res) => {
-        setFiles(Array.isArray(res?.data) ? res.data : []);
-        setFetched(true);
-      })
-      .catch((err: unknown) => {
-        if (!controller.signal.aborted) setLoadError(errorMessageOf(err) || 'فهرست پیوست‌ها دریافت نشد.');
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [owner, ownerId]);
+  };
 
   // the count goes to the parent only once it is known, so a badge never drops to zero while the list loads
   const countKnown = fetched || Boolean(initial);
@@ -100,13 +100,15 @@ export function CrmAttachmentsPanel({ owner, ownerId, initial, onBusyChange, onC
         const res = await sendRawFile<{ data: CrmAttachmentView }>({
           method: 'POST', url: `${API_URL}${crmAttachmentsPath(owner, ownerId)}`, body: file, contentType: type, fileName: file.name,
         });
-        setFiles((prev) => [...prev, res.data]);
+        // a list read answered after the server stored the file already holds it
+        await setFiles((prev) => (prev.some((f) => f.id === res.data.id) ? prev : [...prev, res.data]));
       } catch (err) {
         setPickError(`«${file.name}»: ${errorMessageOf(err)}`);
         break;
       }
     }
     setBusyState(null);
+    refreshCounts();
   };
 
   const remove = async (file: CrmAttachmentView) => {
@@ -114,7 +116,8 @@ export function CrmAttachmentsPanel({ owner, ownerId, initial, onBusyChange, onC
     setBusyState('در حال حذف');
     try {
       await fetchJson(`${crmAttachmentsPath(owner, ownerId)}/${file.id}`, { method: 'DELETE' });
-      setFiles((prev) => prev.filter((f) => f.id !== file.id));
+      await setFiles((prev) => prev.filter((f) => f.id !== file.id));
+      refreshCounts();
       toast.success('پیوست حذف شد');
     } catch (err) {
       toast.error(errorMessageOf(err) || 'حذف پیوست ناموفق بود.');
@@ -153,11 +156,10 @@ export function CrmAttachmentsPanel({ owner, ownerId, initial, onBusyChange, onC
       </div>
       {busy && <p className="text-xs text-blue-700 flex items-center gap-1" role="status"><Loader2 size={12} className="animate-spin" /> {busy}…</p>}
       {pickError && <p className="text-xs text-rose-600" role="alert">{pickError}</p>}
+      {loadError && <p className="text-xs text-rose-600" role="alert">{loadError}</p>}
       {loading ? (
         <p className="text-xs text-slate-500 flex items-center gap-1" role="status"><Loader2 size={12} className="animate-spin" /> در حال دریافت پیوست‌ها…</p>
-      ) : loadError ? (
-        <p className="text-xs text-rose-600" role="alert">{loadError}</p>
-      ) : files.length === 0 ? (
+      ) : loadError && !fetched ? null : files.length === 0 ? (
         <p className="text-xs text-slate-400">پیوستی ندارد.</p>
       ) : (
         <ul className="grid grid-cols-2 sm:grid-cols-3 gap-2">

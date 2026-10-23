@@ -48,7 +48,7 @@ export default function CRMPage({ user }: { user: any }) {
   }, [pendingPartyId, crm.pickListsReady, crm.customersList]);
 
   useCrmDeepLink({
-    openLead: (lead) => void crm.openLeadDrawer(lead),
+    openLead: (lead) => crm.openLeadDrawer(lead),
     openParty: setPendingPartyId,
     openActivities: () => crm.setActiveTab('activities'),
   });
