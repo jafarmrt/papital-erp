@@ -71,7 +71,8 @@ export function CRMLeadDrawer({
   const warehouses = warehousesRead.data ?? NO_WAREHOUSES;
   const stockFailedAt = Math.max(itemsRead.failedAt, warehousesRead.failedAt);
   const isLoadingStock = stockOpen && (itemsRead.data === undefined || warehousesRead.data === undefined) && stockFailedAt === 0;
-  const sayStockFailed = useEffectEvent(() => { toast.error('خطا در دریافت اطلاعات موجودی انبارها'); });
+  // one message when both reads fail, each at its own moment (review N1)
+  const sayStockFailed = useEffectEvent(() => { toast.error('خطا در دریافت اطلاعات موجودی انبارها', { id: 'crm-stock-failed' }); });
   useEffect(() => {
     if (stockFailedAt) sayStockFailed();
   }, [stockFailedAt]);

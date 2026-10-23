@@ -9,7 +9,7 @@ import { useCRMFilters, buildLeadQueryParams } from './useCRMFilters';
 import { useDebounce } from './useDebounce';
 import type { CrmStats } from '../lib/crm/leadCurrencyTotals';
 import { QUERY_KEYS } from '../lib/queryKeys';
-import { useCrmActivePersonnelQuery, useCrmBoardLeadsQuery, useCrmStatsQuery } from './queries/useCrmQueries';
+import { crmLeadDetailKey, useCrmActivePersonnelQuery, useCrmBoardLeadsQuery, useCrmStatsQuery } from './queries/useCrmQueries';
 import { useCustomerOptionsQuery } from './queries/useCustomerQueries';
 import { useSimpleUsersQuery } from './queries/useSimpleUsersQuery';
 import { useHasPermission } from '../contexts/AuthContext';
@@ -317,6 +317,8 @@ export function useCRMData(user: any, options: { withLists?: boolean } = {}) {
       await fetchJson(`/crm/leads/${leadId}`, { method: 'DELETE' });
       toast.success('فرصت فروش حذف شد');
       if (selectedLeadDrawer?.id === leadId) setSelectedLeadDrawer(null);
+      // the deleted file's detail is dropped, not read again (the drawer may still watch it until it closes)
+      queryClient.removeQueries({ queryKey: crmLeadDetailKey(leadId) });
       void loadAllData();
     } catch (err) {
       // v9.0.16 (TD-425): پیام سرور (پرونده دارای سند فعال، پرونده ناموجود)

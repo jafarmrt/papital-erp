@@ -16,13 +16,24 @@ const SHOWN = {
   documentsTab: /پیش‌فاکتورها و اسناد/,
   oneRow: /\(۱ ردیف\)/,
   threeRows: /\(۳ ردیف\)/,
+  stockFailed: 'خطا در دریافت اطلاعات موجودی انبارها',
+  cardFailed: 'خطا در دریافت کارت حساب و صورت‌حساب مالی مشتری',
+  documentsFailed: 'خطا در دریافت اسناد مشتری',
 } as const;
 
 type FetchOpts = { method?: string; body?: string; signal?: AbortSignal };
 let serverItemName = 'glue';
 let serverCardRows = 1;
 let serverDocRef = 'S-1';
+let holdPrefix: string | null = null;
+const held: Array<{ resolve: (answer: unknown) => void; reject: (err: unknown) => void }> = [];
+const failing = new Set<string>();
 const fetchJson = vi.fn(async (url: string, _opts?: FetchOpts): Promise<unknown> => {
+  if (holdPrefix && url.startsWith(holdPrefix)) {
+    holdPrefix = null;
+    return new Promise((resolve, reject) => { held.push({ resolve, reject }); });
+  }
+  for (const prefix of failing) if (url.startsWith(prefix)) throw new Error(`${prefix} failed`);
   if (url.startsWith('/items/options')) return [{ id: 9, code: 'RM-9', name: serverItemName, current_stock: 3, stocks: { W1: 3 } }];
   if (url === '/warehouses') return [{ id: 1, code: 'W1', name: 'main' }];
   if (url === '/customers/7/account-card') {
@@ -56,6 +67,10 @@ afterEach(() => {
   serverItemName = 'glue';
   serverCardRows = 1;
   serverDocRef = 'S-1';
+  holdPrefix = null;
+  held.length = 0;
+  failing.clear();
+  toastError.mockClear();
 });
 
 const newClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -63,6 +78,11 @@ const wrapperOf = (client: QueryClient) => ({ children }: { children: ReactNode 
 const invalidate = (client: QueryClient, queryKey: readonly unknown[]) => act(async () => { await client.invalidateQueries({ queryKey }); });
 const readsOf = (prefix: string) => fetchJson.mock.calls.filter(([u]) => u.startsWith(prefix)).length;
 const noop = () => undefined;
+const toastError = vi.mocked((await import('react-hot-toast')).toast.error);
+const stockItemsKey = [...QUERY_KEYS.items.all, 'options', 'crm-stock'];
+const cardKey = QUERY_KEYS.accounting.report('customer-account-card', { customerId: 7 });
+const earlier = { updatedAt: Date.now() - 60_000 };
+const until = (n: number) => waitFor(() => expect(held).toHaveLength(n));
 
 describe('the sales file drawer stock tab reads through the shared cache (10.3)', () => {
   const lead = { id: 1, title: 'file', stage: 'lead' } as CRMLead;
@@ -87,6 +107,52 @@ describe('the sales file drawer stock tab reads through the shared cache (10.3)'
     fireEvent.click(screen.getByText(SHOWN.stockTab));
     await waitFor(() => expect(readsOf('/items/options')).toBe(before + 1));
   });
+
+  it('never shows the items an earlier opening of the tab left while it reads them again', async () => {
+    const client = newClient();
+    client.setQueryData(stockItemsKey, [{ id: 9, code: 'RM-9', name: 'cached', current_stock: 3, stocks: { W1: 3 } }], earlier);
+    renderDrawer(client);
+    holdPrefix = '/items/options';
+    fireEvent.click(screen.getByText(SHOWN.stockTab));
+    await until(1);
+    expect(screen.queryByText('cached')).toBeNull();
+    await act(async () => { held[0]?.resolve([{ id: 9, code: 'RM-9', name: 'glue', current_stock: 3, stocks: { W1: 3 } }]); });
+    expect(await screen.findByText('glue')).toBeTruthy();
+
+    // closing the tab and opening it again is a new opening too
+    fireEvent.click(screen.getByText(SHOWN.activitiesTab));
+    holdPrefix = '/items/options';
+    fireEvent.click(screen.getByText(SHOWN.stockTab));
+    await until(2);
+    await act(() => new Promise(resolve => setTimeout(resolve, 20)));
+    expect(screen.queryByText('glue')).toBeNull();
+  });
+
+  it('waits for the warehouses as well as the items', async () => {
+    renderDrawer(newClient());
+    holdPrefix = '/warehouses';
+    fireEvent.click(screen.getByText(SHOWN.stockTab));
+    await until(1);
+    await waitFor(() => expect(readsOf('/items/options')).toBe(1));
+    await act(() => new Promise(resolve => setTimeout(resolve, 20)));
+    expect(screen.queryByText('glue')).toBeNull();
+    await act(async () => { held[0]?.resolve([{ id: 1, code: 'W1', name: 'main' }]); });
+    expect(await screen.findByText('glue')).toBeTruthy();
+  });
+
+  it('says a failure once when both reads fail, each at its own moment', async () => {
+    failing.add('/items/options');
+    holdPrefix = '/warehouses';
+    renderDrawer(newClient());
+    fireEvent.click(screen.getByText(SHOWN.stockTab));
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    await until(1);
+    await act(() => new Promise(resolve => setTimeout(resolve, 5)));
+    await act(async () => { held[0]?.reject(new Error('warehouses failed')); });
+    await act(() => new Promise(resolve => setTimeout(resolve, 20)));
+    // react-hot-toast shows one message for one id
+    expect(new Set(toastError.mock.calls.map(([message, opts]) => `${String(message)}|${(opts as { id?: string } | undefined)?.id}`))).toEqual(new Set([`${SHOWN.stockFailed}|crm-stock-failed`]));
+  });
 });
 
 describe('the party dossier reads through the shared cache (10.3)', () => {
@@ -99,25 +165,43 @@ describe('the party dossier reads through the shared cache (10.3)', () => {
   it('never shows the account card an earlier opening left, and follows a voucher change while open', async () => {
     const client = newClient();
     const stale = { items: [{}, {}, {}], totalDebit: 3, totalCredit: 0, finalBalance: 3, currency: 'IRR' };
-    client.setQueryData(QUERY_KEYS.accounting.report('customer-account-card', { customerId: 7 }), stale, { updatedAt: Date.now() - 60_000 });
+    client.setQueryData(cardKey, stale, earlier);
+    holdPrefix = '/customers/7/account-card';
     renderDossier(client);
     fireEvent.click(screen.getByText(SHOWN.financialsTab));
-    expect(await screen.findByText(SHOWN.oneRow)).toBeTruthy();
+    await until(1);
     expect(screen.queryByText(SHOWN.threeRows)).toBeNull();
+    const card = { items: [{ id: 0, debit: 1, credit: 0, runningBalance: 1 }], totalDebit: 1, totalCredit: 0, finalBalance: 1, currency: 'IRR' };
+    await act(async () => { held[0]?.resolve({ report: card }); });
+    expect(await screen.findByText(SHOWN.oneRow)).toBeTruthy();
 
     serverCardRows = 3;
     await invalidate(client, QUERY_KEYS.accounting.reports());
     expect(await screen.findByText(SHOWN.threeRows)).toBeTruthy();
   });
 
-  it('follows a document change while open', async () => {
+  it('never shows the documents an earlier opening left, and follows a document change while open', async () => {
     const client = newClient();
+    client.setQueryData([...QUERY_KEYS.customers.detail(7), 'documents'], [{ id: 1, refNumber: 'S-0', type: 'invoice', status: 'final', date: '2026-10-01', currency: 'IRR' }], earlier);
+    holdPrefix = '/customers/7/documents';
     renderDossier(client);
     fireEvent.click(screen.getByText(SHOWN.documentsTab));
+    await until(1);
+    expect(screen.queryByText('#S-0')).toBeNull();
+    await act(async () => { held[0]?.resolve({ data: [{ id: 1, refNumber: 'S-1', type: 'invoice', status: 'final', date: '2026-10-01', currency: 'IRR' }] }); });
     expect(await screen.findByText('#S-1')).toBeTruthy();
     serverDocRef = 'S-2';
     await invalidate(client, QUERY_KEYS.customers.all);
     expect(await screen.findByText('#S-2')).toBeTruthy();
+  });
+
+  it.each([
+    ['/customers/7/account-card', SHOWN.cardFailed],
+    ['/customers/7/documents', SHOWN.documentsFailed],
+  ])('says a failed read of %s', async (prefix, message) => {
+    failing.add(prefix);
+    renderDossier(newClient());
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith(message));
   });
 
   it('the account card read takes the report however the server wraps it', async () => {

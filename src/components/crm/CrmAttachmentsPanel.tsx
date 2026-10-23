@@ -45,7 +45,7 @@ interface CrmAttachmentsPanelProps {
  * files never enter the media library.
  * 10.3 (ARCH review finding 3, part 12): the list is read through the shared cache, again each time the box opens (it
  * mounts with its window or drawer), never what an earlier opening left there; a file sent or removed updates that list
- * and refreshes the sales file detail and the activity lists that count files.
+ * and refreshes the sales file detail and the activity lists that count files. A failed refresh keeps the list on screen.
  */
 export function CrmAttachmentsPanel({ owner, ownerId, initial, onBusyChange, onCountChange }: CrmAttachmentsPanelProps) {
   const canManage = useHasPermission('crm.manage');
@@ -67,12 +67,19 @@ export function CrmAttachmentsPanel({ owner, ownerId, initial, onBusyChange, onC
     onBusyChange?.(value !== null);
   }, [onBusyChange]);
 
-  /** the box's list changed by a send or a removal; the file detail and the lists that count files are read again */
-  const setFiles = (change: (prev: CrmAttachmentView[]) => CrmAttachmentView[]) => {
+  /**
+   * the box's list changed by a send or a removal: a read of the list already on its way (another sales write refreshes
+   * every sales read) may predate the change, so it is dropped first
+   */
+  const setFiles = async (change: (prev: CrmAttachmentView[]) => CrmAttachmentView[]) => {
+    await queryClient.cancelQueries({ queryKey: crmAttachmentsKey(owner, ownerId) });
     queryClient.setQueryData<CrmAttachmentView[]>(crmAttachmentsKey(owner, ownerId), (prev) => change(prev ?? []));
   };
+  /** after the sends or a removal: the box's list as the server holds it now, the file detail and the lists that count files */
   const refreshCounts = () => {
-    for (const queryKey of [CRM_LEAD_DETAIL_KEY, CRM_ACTIVITY_PAGE_QUERY_KEY, CRM_FOLLOWUPS_QUERY_KEY]) void queryClient.invalidateQueries({ queryKey });
+    for (const queryKey of [crmAttachmentsKey(owner, ownerId), CRM_LEAD_DETAIL_KEY, CRM_ACTIVITY_PAGE_QUERY_KEY, CRM_FOLLOWUPS_QUERY_KEY]) {
+      void queryClient.invalidateQueries({ queryKey });
+    }
   };
 
   // the count goes to the parent only once it is known, so a badge never drops to zero while the list loads
@@ -93,7 +100,7 @@ export function CrmAttachmentsPanel({ owner, ownerId, initial, onBusyChange, onC
         const res = await sendRawFile<{ data: CrmAttachmentView }>({
           method: 'POST', url: `${API_URL}${crmAttachmentsPath(owner, ownerId)}`, body: file, contentType: type, fileName: file.name,
         });
-        setFiles((prev) => [...prev, res.data]);
+        await setFiles((prev) => [...prev, res.data]);
       } catch (err) {
         setPickError(`«${file.name}»: ${errorMessageOf(err)}`);
         break;
@@ -108,7 +115,7 @@ export function CrmAttachmentsPanel({ owner, ownerId, initial, onBusyChange, onC
     setBusyState('در حال حذف');
     try {
       await fetchJson(`${crmAttachmentsPath(owner, ownerId)}/${file.id}`, { method: 'DELETE' });
-      setFiles((prev) => prev.filter((f) => f.id !== file.id));
+      await setFiles((prev) => prev.filter((f) => f.id !== file.id));
       refreshCounts();
       toast.success('پیوست حذف شد');
     } catch (err) {
@@ -148,11 +155,10 @@ export function CrmAttachmentsPanel({ owner, ownerId, initial, onBusyChange, onC
       </div>
       {busy && <p className="text-xs text-blue-700 flex items-center gap-1" role="status"><Loader2 size={12} className="animate-spin" /> {busy}…</p>}
       {pickError && <p className="text-xs text-rose-600" role="alert">{pickError}</p>}
+      {loadError && <p className="text-xs text-rose-600" role="alert">{loadError}</p>}
       {loading ? (
         <p className="text-xs text-slate-500 flex items-center gap-1" role="status"><Loader2 size={12} className="animate-spin" /> در حال دریافت پیوست‌ها…</p>
-      ) : loadError ? (
-        <p className="text-xs text-rose-600" role="alert">{loadError}</p>
-      ) : files.length === 0 ? (
+      ) : loadError && !fetched ? null : files.length === 0 ? (
         <p className="text-xs text-slate-400">پیوستی ندارد.</p>
       ) : (
         <ul className="grid grid-cols-2 sm:grid-cols-3 gap-2">
