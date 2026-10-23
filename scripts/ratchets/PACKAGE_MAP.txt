@@ -49,6 +49,7 @@ G  scripts/check-version-sync.ts
 # ۱۱ تخصیص BOM درون پوشه انبار
 11 src/services/inventory/projectBomAllocation.service.ts
 11 src/components/inventory/ProjectBomAllocationsTab.tsx
+11 src/components/inventory/allocations/**
 11 src/components/settings/InventoryControlPresetTab.tsx
 11 src/constants/inventoryControlPresets.ts
 # ۷ رزرو کالا درون پوشه کالا
@@ -282,6 +283,7 @@ G  scripts/check-version-sync.ts
 11 src/components/project-modal/**
 11 src/components/ProjectModal.tsx
 11 src/hooks/useProjectInventory.ts
+11 src/hooks/projectInventory/**
 11 src/hooks/queries/useProjectQueries.ts
 11 src/hooks/queries/useProjectWorkspaceQueries.ts
 11 src/lib/projects/**

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryWrapper } from './helpers/queryWrapper';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
@@ -26,7 +27,7 @@ const ROOT = join(__dirname, '..', '..');
 /** package 11 screens with entity pickers */
 const PACKAGE_11 = [
   'pages/ProjectsPage.tsx', 'pages/ProjectInventoryPage.tsx', 'components/ProjectModal.tsx', 'pages/ProjectDetailPage.tsx',
-  'components/project/', 'components/project-modal/', 'components/inventory/ProjectBomAllocationsTab.tsx',
+  'components/project/', 'components/project-modal/', 'components/inventory/ProjectBomAllocationsTab.tsx', 'components/inventory/allocations/',
   'components/settings/WorkflowPresetsTab.tsx',
 ];
 const ENTITY_LISTS = /\b(projects|projectsList|filteredProjects|itemsList|warehouseItems|pieceworkTasksList|availableTasks|personnelList)\.map\(/;
@@ -46,7 +47,7 @@ describe('package 11 entity pickers are searchable (TD-767)', () => {
   });
 
   it('finds a project past the first rows by searching the project picker', async () => {
-    render(<MemoryRouter initialEntries={['/project-inventory']}><ProjectInventoryPage /></MemoryRouter>);
+    render(<QueryWrapper><MemoryRouter initialEntries={['/project-inventory']}><ProjectInventoryPage /></MemoryRouter></QueryWrapper>);
     await waitFor(() => expect(fetchJson.mock.calls.some(([url]) => url === '/projects/1')).toBe(true));
     fireEvent.click(screen.getByRole('button', { name: /PRJ-1\]/ }));
     fireEvent.change(screen.getByPlaceholderText('جست‌وجو...'), { target: { value: 'PRJ-60' } });

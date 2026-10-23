@@ -11,9 +11,9 @@ const LITERAL = /'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\]|\\.)*`|>[^<>
 
 const PROJECT_TEXT = [
   'pages/ProjectsPage.tsx', 'pages/ProjectInventoryPage.tsx', 'components/ProjectModal.tsx', 'pages/ProjectDetailPage.tsx',
-  'components/project/', 'components/project-modal/', 'components/inventory/ProjectBomAllocationsTab.tsx',
+  'components/project/', 'components/project-modal/', 'components/inventory/ProjectBomAllocationsTab.tsx', 'components/inventory/allocations/',
   'components/settings/InventoryControlPresetTab.tsx', 'components/settings/WorkflowPresetsTab.tsx', 'constants/inventoryControlPresets.ts',
-  'hooks/useProjectInventory.ts', 'hooks/queries/useProjectQueries.ts', 'lib/projects/', 'routes/projects.routes.ts', 'services/projects/',
+  'hooks/useProjectInventory.ts', 'hooks/projectInventory/', 'hooks/queries/useProjectQueries.ts', 'lib/projects/', 'routes/projects.routes.ts', 'services/projects/',
 ];
 
 /**

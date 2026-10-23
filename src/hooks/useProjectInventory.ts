@@ -1,93 +1,84 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { confirmAction } from '../components/ConfirmDialogHost';
-import { 
-  ProductionProject, 
-  ProjectInventoryControlSectionData, 
-  Item, 
-  Category, 
-  PurchaseListItem, 
-  ProjectProductItem 
+import {
+  ProductionProject,
+  ProjectInventoryControlSectionData,
+  Item,
+  Category,
+  PurchaseListItem,
+  ProjectInventoryControlItemResult,
+  ProjectProductItem
 } from '../types';
-import { fetchJson } from '../api';
 import { DEFAULT_INVENTORY_CONTROL_SECTIONS } from '../constants/inventoryControlPresets';
-import { 
-  buildConsolidatedPurchaseList, 
-  calculateMaterialProgress, 
-  roundToOneDecimal,
+import {
+  buildConsolidatedPurchaseList,
+  calculateMaterialProgress,
   withProcurementStatus
 } from '../components/project/projectInventoryUtils';
-import { errorMessageOf, toPersianDigits } from '../utils';
 import { useProjectVersion } from './useProjectVersion';
-import { directConversionRate } from '../lib/projects/unitConversion';
-import { storedReservationShortages } from '../lib/projects/projectReservationState';
-import { finalizeReservationOutcome, reservationShortageMessage } from '../lib/projects/reservationOutcome';
-import type { ReservationShortage } from '../lib/projects/projectReservation';
-import type { ReservationReconcileResult } from '../lib/projects/reservationReconcile';
 import { hasPresetShapedSections, perItemProductKey, projectSectionsFromPreset, type MaterialStockLookup } from '../lib/projects/inventoryControlSections';
-import { NEW_ROW_QTY_PER_UNIT, perItemRowRequiredQty, perUnitRowFields, productOrderQuantity } from '../lib/projects/materialQuantity';
+import { productOrderQuantity } from '../lib/projects/materialQuantity';
 import { findProjectItemMatch } from '../lib/projects/projectItemMatch';
-import { EMPTY_CUSTOM_MATERIAL_FORM, pendingMaterialRequestOf, type CustomMaterialForm } from '../lib/pendingMaterials/customMaterialRequest';
 import { buildMaterialAvailabilityView, projectMaterialItemIds } from '../lib/projects/materialAvailability';
 import { useProjectMaterialAvailability, type WarehouseItemsState } from './useProjectMaterialReports';
 import { useProjectItemOptions } from './queries/useProjectWorkspaceQueries';
 import { presetSectionsOfSettings, useInventoryCategoriesQuery, useInventorySettingsQuery } from './queries/useProjectInventoryQueries';
-
-/** پاسخ PUT /projects/:id؛ رزرو پروژه را سرور می‌نویسد (v8.0.58، TD-306) */
-interface SavedProjectInventory {
-  inventory_control?: { finalizedAt?: string; reservedItems?: unknown[]; reservationShortages?: unknown[] };
-}
+import { withGlobalItemFields, withoutSectionItem, withPerItemFields } from './projectInventory/sectionEdits';
+import { useMaterialPicker } from './projectInventory/useMaterialPicker';
+import { useUnitConversion } from './projectInventory/useUnitConversion';
+import { useInventoryReservation } from './projectInventory/useInventoryReservation';
 
 /** v9.0.413 (TD-748): موجودی ماده الگو با قاعده مشترک تطبیق کالا */
 const materialStockLookup = (warehouseItems: readonly Item[]): MaterialStockLookup => material =>
   findProjectItemMatch({ code: material.code, name: material.name }, warehouseItems)?.current_stock;
 
-const savedReservedItems = (saved: SavedProjectInventory | null | undefined): unknown[] =>
-  Array.isArray(saved?.inventory_control?.reservedItems) ? saved.inventory_control.reservedItems : [];
+/**
+ * V3.1.0 (باگ کاربر): قبلاً وقتی product_items موجود نبود، یک محصول جعلی با «عنوان پروژه» به‌عنوان نام کالا ساخته می‌شد —
+ * کنترل کد به کد عملاً به سطح پروژه سقوط می‌کرد. اکنون از products واقعی پروژه استفاده می‌شود و fallback فقط وقتی است که
+ * کالای اصلی پروژه واقعاً مشخص باشد.
+ */
+function projectProductsOf(project: ProductionProject): ProjectProductItem[] {
+  const raw = (Array.isArray((project as unknown as { products?: unknown[] }).products) ? (project as unknown as { products: Array<Record<string, unknown>> }).products : []) as Array<Record<string, unknown>>;
+  // TD-1343: کلید و تعداد سفارش هر محصول همان که ثبت نهایی و تکمیل رزرو می‌خوانند
+  const mapped = raw.map((p, idx) => ({
+    id: perItemProductKey(p, idx),
+    item_id: (p.item_id ?? null) as number | null,
+    item_name: String(p.item_name ?? p.itemName ?? ''),
+    item_code: String(p.item_code ?? p.itemCode ?? ''),
+    customer_code: String(p.customer_code ?? ''),
+    quantity: productOrderQuantity(p),
+    unit: String(p.unit ?? 'عدد'),
+    needs_assembly: p.needs_assembly !== false,
+    selected_optional_stages: (p.selected_optional_stages ?? undefined) as string[] | undefined
+  }));
+  if (mapped.length > 0) return mapped;
+  if (project.item_id) {
+    return [{
+      id: 'prod_main',
+      item_id: project.item_id,
+      item_name: project.item_name || '',
+      item_code: project.item_code || '',
+      customer_code: '',
+      quantity: Number(project.quantity) || 1,
+      unit: project.unit || 'عدد',
+      needs_assembly: true
+    }];
+  }
+  return [];
+}
 
+/**
+ * The materials tab of a project («کنترل موجودی و تامین مواد اولیه»): its sections and manual purchase rows, the free stock
+ * of each material, the purchase list and the saves. 10.3 (ARCH review finding 3, part 11): the material picker, the unit
+ * conversion and the saves live in `hooks/projectInventory/`; this hook holds the sections and composes them.
+ */
 export function useProjectInventory(
   project: ProductionProject,
   initialItemsList?: Item[],
   // the page's refresh may return a promise; the handlers do not wait for it (10.3, ARCH review finding 4)
   onUpdate?: () => void | Promise<void>
 ) {
-  const [saving, setSaving] = useState(false);
   const projectVersion = useProjectVersion(project);
-  const [activeStepTab, setActiveStepTab] = useState(0);
-
-  const [isFinalized, setIsFinalized] = useState<boolean>(!!project.inventory_control?.isFinalized);
-  const [finalizedAt, setFinalizedAt] = useState<string | undefined>(project.inventory_control?.finalizedAt);
-  const [reservedItems, setReservedItems] = useState<any[]>(() => Array.isArray(project.inventory_control?.reservedItems) ? project.inventory_control.reservedItems : []);
-  // v9.0.373 (TD-819): کمبود رزرو هنگام ثبت نهایی، نوشته سرور
-  const [reservationShortages, setReservationShortages] = useState<ReservationShortage[]>(() => storedReservationShortages(project.inventory_control));
-
-  // Unit Conversion Modal state
-  const [isUnitConversionModalOpen, setIsUnitConversionModalOpen] = useState(false);
-  const [conversionTarget, setConversionTarget] = useState<{
-    secIdx: number;
-    prodId?: string;
-    itemId: string;
-    gIdx?: number;
-    itemName: string;
-    itemCode?: string;
-    originalQty: number;
-    originalUnit: string;
-    warehouseUnit: string;
-  } | null>(null);
-
-  const [conversionForm, setConversionForm] = useState<{
-    targetUnit: string;
-    mode: 'rate' | 'direct';
-    rate: number;
-    directConvertedQty: number;
-    notes: string;
-  }>({
-    targetUnit: '',
-    mode: 'rate',
-    rate: 1,
-    directConvertedQty: 1,
-    notes: ''
-  });
 
   // v10.2 package 11 part 5e (TD-1364): the item pick list, categories and settings come from React Query, the keys the
   // workspace tabs, the settings screens and the other forms read, so a stock, category or settings change refreshes them
@@ -97,6 +88,7 @@ export function useProjectInventory(
   const warehouseItems = useMemo<Item[]>(() => itemsQuery.data ?? initialItemsList ?? [], [itemsQuery.data, initialItemsList]);
   // v10.2.3 (TD-1290): ارقام آزاد پس از رسیدن فهرست کالاها خوانده می‌شوند
   const warehouseItemsState: WarehouseItemsState = itemsQuery.data ? 'loaded' : (itemsQuery.isError ? 'failed' : 'loading');
+  const allCategories: Category[] = categoriesQuery.data ?? [];
   // v9.0.422 (TD-766): a settings preset that cannot be read or parsed falls back to the default preset, and the user is told
   const presetRead = useMemo<{ sections: unknown[] | null; unreadable: boolean }>(() => {
     try {
@@ -105,42 +97,8 @@ export function useProjectInventory(
       return { sections: null, unreadable: true };
     }
   }, [settingsQuery.data]);
-  const presetSections = (presetRead.sections ?? DEFAULT_INVENTORY_CONTROL_SECTIONS) as ProjectInventoryControlSectionData[];
 
-  // Derive products list from project
-  // V3.1.0 (باگ کاربر): قبلاً وقتی product_items موجود نبود، یک محصول جعلی با
-  // «عنوان پروژه» به‌عنوان نام کالا ساخته می‌شد — کنترل کد به کد عملاً به
-  // سطح پروژه سقوط می‌کرد. اکنون از products واقعی پروژه استفاده می‌شود و
-  // fallback فقط وقتی است که کالای اصلی پروژه واقعاً مشخص باشد.
-  const products: ProjectProductItem[] = useMemo(() => {
-    const raw = (Array.isArray((project as unknown as { products?: unknown[] }).products) ? (project as unknown as { products: Array<Record<string, unknown>> }).products : []) as Array<Record<string, unknown>>;
-    // TD-1343: کلید و تعداد سفارش هر محصول همان که ثبت نهایی و تکمیل رزرو می‌خوانند
-    const mapped = raw.map((p, idx) => ({
-      id: perItemProductKey(p, idx),
-      item_id: (p.item_id ?? null) as number | null,
-      item_name: String(p.item_name ?? p.itemName ?? ''),
-      item_code: String(p.item_code ?? p.itemCode ?? ''),
-      customer_code: String(p.customer_code ?? ''),
-      quantity: productOrderQuantity(p),
-      unit: String(p.unit ?? 'عدد'),
-      needs_assembly: p.needs_assembly !== false,
-      selected_optional_stages: (p.selected_optional_stages ?? undefined) as string[] | undefined
-    }));
-    if (mapped.length > 0) return mapped;
-    if (project.item_id) {
-      return [{
-        id: 'prod_main',
-        item_id: project.item_id,
-        item_name: project.item_name || '',
-        item_code: project.item_code || '',
-        customer_code: '',
-        quantity: Number(project.quantity) || 1,
-        unit: project.unit || 'عدد',
-        needs_assembly: true
-      }];
-    }
-    return [];
-  }, [project]);
+  const products = useMemo(() => projectProductsOf(project), [project]);
 
   // Main sections state
   // v9.0.413 (TD-748): بخش الگو (مواد در items) به ردیف‌های پروژه برده می‌شود تا فهرست خرید، پیشرفت و رزرو آن را ببینند
@@ -150,43 +108,27 @@ export function useProjectInventory(
     // TD-1343 review M1: only the presets of a project without sections start at one per unit; stored preset rows keep their total
     return projectSectionsFromPreset(hasStored ? stored : DEFAULT_INVENTORY_CONTROL_SECTIONS, products, materialStockLookup(initialItemsList || []), { perUnit: !hasStored });
   });
-
-  // Manual purchase items state
-  const [manualPurchaseItems, setManualPurchaseItemsState] = useState<PurchaseListItem[]>(() => {
-    return project.inventory_control?.manualPurchaseItems || [];
-  });
+  const [manualPurchaseItems, setManualPurchaseItemsState] = useState<PurchaseListItem[]>(() => project.inventory_control?.manualPurchaseItems || []);
 
   // v10.2.1 (10.2 package 2, review U2): a change the user made and has not saved; loading or syncing the project
-  // writes the state directly and leaves it clean, every edit goes through these setters and marks it
+  // writes the state directly and leaves it clean, every edit goes through these setters and marks it. 10.3 (part 11):
+  // the edits are counted, so a save clears the mark only when nothing was edited while it was under way
   const [isDirty, setIsDirty] = useState(false);
+  const editCount = useRef(0);
   const setSections = useCallback<React.Dispatch<React.SetStateAction<ProjectInventoryControlSectionData[]>>>(value => {
+    editCount.current += 1;
     setIsDirty(true);
     setSectionsState(value);
   }, []);
   const setManualPurchaseItems = useCallback<React.Dispatch<React.SetStateAction<PurchaseListItem[]>>>(value => {
+    editCount.current += 1;
     setIsDirty(true);
     setManualPurchaseItemsState(value);
   }, []);
-
-  // Modal State for adding/selecting raw materials
-  const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
-  const [materialModalSectionIdx, setMaterialModalSectionIdx] = useState<number | null>(null);
-  const [materialModalTargetProdId, setMaterialModalTargetProdId] = useState<string | null>(null);
-  const [materialModalTab, setMaterialModalTab] = useState<'warehouse' | 'custom'>('warehouse');
-  const [warehouseSearchQuery, setWarehouseSearchQuery] = useState('');
-  const [changingItemTarget, setChangingItemTarget] = useState<{
-    secIdx: number;
-    itemId: string;
-    prodId?: string;
-    gIdx?: number;
-  } | null>(null);
-
-  // Custom item form state
-  const allCategories: Category[] = categoriesQuery.data ?? [];
-  const [codePrefix, setCodePrefix] = useState<string>('');
-  const [codeNumber, setCodeNumber] = useState<string>('');
-
-  const [customMaterialForm, setCustomMaterialForm] = useState<CustomMaterialForm>(EMPTY_CUSTOM_MATERIAL_FORM);
+  const editsNow = useCallback(() => editCount.current, []);
+  const savedAsOf = useCallback((editsAtSend: number) => {
+    if (editCount.current === editsAtSend) setIsDirty(false);
+  }, []);
 
   // what failed to load is said once per failure
   const prerequisitesFailed = itemsQuery.isError || categoriesQuery.isError;
@@ -228,37 +170,7 @@ export function useProjectInventory(
       setManualPurchaseItemsState(project.inventory_control.manualPurchaseItems);
     }
     setIsDirty(false);
-    setIsFinalized(!!project.inventory_control?.isFinalized);
-    setFinalizedAt(project.inventory_control?.finalizedAt);
-    setReservedItems(Array.isArray(project.inventory_control?.reservedItems) ? project.inventory_control.reservedItems : []);
-    setReservationShortages(storedReservationShortages(project.inventory_control));
   }, [project, products]);
-
-  // Category selection handler for generating item code
-  const handleCategoryChangeForCustom = async (catName: string) => {
-    const foundCat = allCategories.find(c => c.name === catName);
-    const prefix = foundCat?.prefix || 'RAW';
-    setCodePrefix(prefix);
-
-    try {
-      const res = await fetchJson<any>(`/api/items/next-code?type=raw_material&prefix=${encodeURIComponent(prefix)}`);
-      if (res?.code && res?.serial) {
-        setCodeNumber(res.serial);
-        setCustomMaterialForm(prev => ({
-          ...prev,
-          category: catName,
-          itemCode: res.code
-        }));
-      } else {
-        setCustomMaterialForm(prev => ({ ...prev, category: catName, itemCode: `${prefix}001` }));
-      }
-    } catch (err) {
-      // v9.0.422 (TD-766): پیش‌تر بی‌صدا «پیشوند۰۰۱» گذاشته می‌شد که شاید کد کالای دیگری باشد
-      console.error('Failed to generate item code for custom material:', err);
-      setCustomMaterialForm(prev => ({ ...prev, category: catName, itemCode: '' }));
-      toast.error(`${errorMessageOf(err) || 'کد پیشنهادی کالا دریافت نشد'}؛ کد را دستی وارد کنید`);
-    }
-  };
 
   const handleUpdateSectionDescription = (secIdx: number, newDesc: string) => {
     const updated = [...sections];
@@ -268,261 +180,20 @@ export function useProjectInventory(
 
   // v10.0.105 (TD-1212): updates read the latest sections (functional update), so several fields set one after another
   // all survive; before, each call copied the same stale sections and only the last field (convertedQty) was kept
-  const updatePerItemFields = (secIdx: number, prodId: string, itemId: string, patch: Record<string, unknown>) => {
-    setSections(prev => {
-      const updated = [...prev];
-      const sec = { ...updated[secIdx] };
-      const perRes = { ...(sec.perItemResults || {}) };
-      const prodRes = { ...(perRes[prodId] || {}) };
-      prodRes[itemId] = { ...(prodRes[itemId] || { itemId, status: 'available' }), ...patch } as any;
-      perRes[prodId] = prodRes;
-      sec.perItemResults = perRes;
-      updated[secIdx] = sec;
-      return updated;
-    });
-  };
+  const updatePerItemFields = (secIdx: number, prodId: string, itemId: string, patch: Partial<ProjectInventoryControlItemResult>) =>
+    setSections(prev => withPerItemFields(prev, secIdx, prodId, itemId, patch));
+  const handleUpdatePerItemResult = (secIdx: number, prodId: string, itemId: string, field: string, value: unknown) =>
+    updatePerItemFields(secIdx, prodId, itemId, { [field]: value });
+  const updateGlobalItemFields = (secIdx: number, gIdx: number, patch: Partial<ProjectInventoryControlItemResult>) =>
+    setSections(prev => withGlobalItemFields(prev, secIdx, gIdx, patch));
+  const handleUpdateGlobalItem = (secIdx: number, gIdx: number, field: string, value: unknown) =>
+    updateGlobalItemFields(secIdx, gIdx, { [field]: value });
 
-  const handleUpdatePerItemResult = (
-    secIdx: number,
-    prodId: string,
-    itemId: string,
-    field: string,
-    value: any
-  ) => updatePerItemFields(secIdx, prodId, itemId, { [field]: value });
+  const picker = useMaterialPicker({ projectId: project.id, sections, setSections, products, warehouseItems, allCategories });
+  const conversion = useUnitConversion({ updatePerItemFields, updateGlobalItemFields });
 
-  const updateGlobalItemFields = (secIdx: number, gIdx: number, patch: Record<string, unknown>) => {
-    setSections(prev => {
-      const updated = [...prev];
-      const sec = { ...updated[secIdx] };
-      const gItems = [...(sec.globalItems || [])];
-      gItems[gIdx] = { ...gItems[gIdx], ...patch };
-      sec.globalItems = gItems;
-      updated[secIdx] = sec;
-      return updated;
-    });
-  };
-
-  const handleUpdateGlobalItem = (
-    secIdx: number,
-    gIdx: number,
-    field: string,
-    value: any
-  ) => updateGlobalItemFields(secIdx, gIdx, { [field]: value });
-
-  const handleOpenAddMaterialModal = (secIdx: number, prodId?: string) => {
-    setMaterialModalSectionIdx(secIdx);
-    setMaterialModalTargetProdId(prodId || null);
-    setChangingItemTarget(null);
-    setMaterialModalTab('warehouse');
-    setWarehouseSearchQuery('');
-    setIsMaterialModalOpen(true);
-  };
-
-  const handleOpenChangeMaterialModal = (
-    secIdx: number,
-    itemId: string,
-    prodId?: string,
-    gIdx?: number
-  ) => {
-    setMaterialModalSectionIdx(secIdx);
-    setMaterialModalTargetProdId(prodId || null);
-    setChangingItemTarget({ secIdx, itemId, prodId, gIdx });
-    setMaterialModalTab('warehouse');
-    setWarehouseSearchQuery('');
-    setIsMaterialModalOpen(true);
-  };
-
-  const handleSelectWarehouseItem = (whItem: Item) => {
-    if (materialModalSectionIdx === null) return;
-
-    const targetSecIdx = materialModalSectionIdx;
-    const targetProdId = changingItemTarget?.prodId || materialModalTargetProdId;
-
-    if (changingItemTarget) {
-      setSections(prevSections => {
-        const updated = [...prevSections];
-        const sec = { ...updated[changingItemTarget.secIdx] };
-
-        if (sec.checkType === 'per_item' && changingItemTarget.prodId) {
-          const perRes = { ...(sec.perItemResults || {}) };
-          const prodRes = { ...(perRes[changingItemTarget.prodId] || {}) };
-          const itemRes: any = { ...(prodRes[changingItemTarget.itemId] || { itemId: changingItemTarget.itemId }) };
-
-          itemRes.itemCode = whItem.code;
-          itemRes.name = whItem.name;
-          itemRes.category = whItem.category;
-          itemRes.warehouseUnit = whItem.unit;
-          itemRes.unit = itemRes.unit || whItem.unit || 'عدد';
-          itemRes.stockQty = whItem.current_stock;
-          const req = perItemRowRequiredQty(itemRes, productOrderQuantity(products.find(p => p.id === changingItemTarget.prodId)));
-          itemRes.status = whItem.current_stock >= req ? 'available' : 'needs_procurement';
-
-          prodRes[changingItemTarget.itemId] = itemRes as any;
-          perRes[changingItemTarget.prodId] = prodRes;
-          sec.perItemResults = perRes;
-        } else if (sec.checkType === 'global' && changingItemTarget.gIdx !== undefined) {
-          const gItems = [...(sec.globalItems || [])];
-          const gItem = { ...(gItems[changingItemTarget.gIdx] || {}) };
-
-          gItem.itemCode = whItem.code;
-          gItem.name = whItem.name;
-          gItem.category = whItem.category;
-          gItem.warehouseUnit = whItem.unit;
-          gItem.unit = gItem.unit || whItem.unit || 'عدد';
-          gItem.stockQty = whItem.current_stock;
-          const req = Number(gItem.requiredQty || 1);
-          gItem.status = whItem.current_stock >= req ? 'available' : 'needs_procurement';
-
-          gItems[changingItemTarget.gIdx] = gItem as any;
-          sec.globalItems = gItems;
-        }
-
-        updated[changingItemTarget.secIdx] = sec;
-        return updated;
-      });
-
-      toast.success(`ماده اولیه با کالا «${whItem.name}» جاپایابی و متصل شد.`);
-    } else {
-      // Adding a new material
-      const newItemId = `item_${Date.now()}`;
-
-      setSections(prevSections => {
-        const updated = [...prevSections];
-        const sec = { ...updated[targetSecIdx] };
-
-        if (sec.checkType === 'per_item') {
-          const perRes = { ...(sec.perItemResults || {}) };
-          if (targetProdId) {
-            // Target specific product! TD-1343: a new row is one per unit of the product
-            const prodRes = { ...(perRes[targetProdId] || {}) };
-            const qty = perUnitRowFields(NEW_ROW_QTY_PER_UNIT, productOrderQuantity(products.find(p => p.id === targetProdId)));
-            prodRes[newItemId] = {
-              itemId: newItemId,
-              name: whItem.name,
-              itemCode: whItem.code,
-              category: whItem.category,
-              unit: whItem.unit || 'عدد',
-              warehouseUnit: whItem.unit,
-              ...qty,
-              stockQty: whItem.current_stock,
-              status: whItem.current_stock >= qty.requiredQty ? 'available' : 'needs_procurement'
-            };
-            perRes[targetProdId] = prodRes;
-          } else {
-            // Fallback if no specific product was targeted
-            products.forEach(p => {
-              const prodRes = { ...(perRes[p.id] || {}) };
-              const qty = perUnitRowFields(NEW_ROW_QTY_PER_UNIT, productOrderQuantity(p));
-              prodRes[newItemId] = {
-                itemId: newItemId,
-                name: whItem.name,
-                itemCode: whItem.code,
-                category: whItem.category,
-                unit: whItem.unit || 'عدد',
-                warehouseUnit: whItem.unit,
-                ...qty,
-                stockQty: whItem.current_stock,
-                status: whItem.current_stock >= qty.requiredQty ? 'available' : 'needs_procurement'
-              };
-              perRes[p.id] = prodRes;
-            });
-          }
-          sec.perItemResults = perRes;
-        } else {
-          const gItems = [...(sec.globalItems || [])];
-          gItems.push({
-            itemId: newItemId,
-            name: whItem.name,
-            itemCode: whItem.code,
-            category: whItem.category,
-            unit: whItem.unit || 'عدد',
-            warehouseUnit: whItem.unit,
-            requiredQty: 1,
-            stockQty: whItem.current_stock,
-            status: whItem.current_stock >= 1 ? 'available' : 'needs_procurement'
-          });
-          sec.globalItems = gItems;
-        }
-
-        updated[targetSecIdx] = sec;
-        return updated;
-      });
-
-      toast.success(`ماده اولیه «${whItem.name}» افزوده شد.`);
-    }
-
-    setIsMaterialModalOpen(false);
-  };
-
-  const handleAddCustomMaterial = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (materialModalSectionIdx === null) return;
-
-    if (!customMaterialForm.name || !customMaterialForm.category) {
-      toast.error('لطفاً عنوان و دسته‌بندی ماده اولیه را وارد کنید.');
-      return;
-    }
-
-    // v9.0.398 (TD-826): a request to the warehouse review queue, not an item; the item exists only after approval
-    try {
-      await fetchJson('/api/pending-materials', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(pendingMaterialRequestOf(customMaterialForm, project.id))
-      });
-      toast.success('درخواست ماده اولیه به صف بررسی انبار رفت. پس از تأیید انباردار، آن را از «انتخاب از انبار» برگزینید.');
-      setCustomMaterialForm(EMPTY_CUSTOM_MATERIAL_FORM);
-      setMaterialModalTab('warehouse');
-    } catch (err) {
-      console.error('Error sending custom raw material request:', err);
-      toast.error(errorMessageOf(err) || 'خطا در ارسال درخواست ماده اولیه');
-    }
-  };
-
-  const handleRemoveItemFromSection = (
-    secIdx: number,
-    itemId: string,
-    prodIdOrItemIdx?: string | number,
-    itemIdx?: number
-  ) => {
-    const prodId = typeof prodIdOrItemIdx === 'string' ? prodIdOrItemIdx : undefined;
-    const effectiveItemIdx = typeof prodIdOrItemIdx === 'number' ? prodIdOrItemIdx : itemIdx;
-
-    setSections(prevSections => {
-      const updated = [...prevSections];
-      const sec = { ...updated[secIdx] };
-
-      if (sec.checkType === 'per_item') {
-        if (prodId) {
-          const perRes = { ...(sec.perItemResults || {}) };
-          const prodRes = { ...(perRes[prodId] || {}) };
-          delete prodRes[itemId];
-          perRes[prodId] = prodRes;
-          sec.perItemResults = perRes;
-        } else {
-          sec.itemsSchema = (sec.itemsSchema || []).filter(i => i.id !== itemId);
-          const perRes = { ...(sec.perItemResults || {}) };
-          Object.keys(perRes).forEach(pId => {
-            if (perRes[pId][itemId]) {
-              const copy = { ...perRes[pId] };
-              delete copy[itemId];
-              perRes[pId] = copy;
-            }
-          });
-          sec.perItemResults = perRes;
-        }
-      } else {
-        if (effectiveItemIdx !== undefined) {
-          sec.globalItems = (sec.globalItems || []).filter((_, idx) => idx !== effectiveItemIdx);
-        } else {
-          sec.globalItems = (sec.globalItems || []).filter(i => i.itemId !== itemId);
-        }
-      }
-
-      updated[secIdx] = sec;
-      return updated;
-    });
-
+  const handleRemoveItemFromSection = (secIdx: number, itemId: string, prodIdOrItemIdx?: string | number, itemIdx?: number) => {
+    setSections(prev => withoutSectionItem(prev, secIdx, itemId, prodIdOrItemIdx, itemIdx));
     toast.success('ماده اولیه از این بخش حذف شد.');
   };
 
@@ -536,7 +207,6 @@ export function useProjectInventory(
       globalItems: []
     };
     setSections([...sections, newSec]);
-    setActiveStepTab(sections.length);
     toast.success('بخش کنترل جدید اضافه شد.');
   };
 
@@ -545,80 +215,8 @@ export function useProjectInventory(
       toast.error('حداقل وجود یک بخش برای کنترل الزامی است.');
       return;
     }
-    const updated = sections.filter((_, idx) => idx !== secIdx);
-    setSections(updated);
-    setActiveStepTab(Math.max(0, activeStepTab - 1));
+    setSections(sections.filter((_, idx) => idx !== secIdx));
     toast.success('بخش مورد نظر حذف شد.');
-  };
-
-  const handleOpenUnitConversionModal = (
-    secIdx: number,
-    itemId: string,
-    prodId: string | undefined,
-    gIdx: number | undefined,
-    itemName: string,
-    itemCode: string | undefined,
-    originalQty: number,
-    originalUnit: string,
-    warehouseUnit: string,
-    convertedUnit?: string,
-    conversionRate?: number,
-    convertedQty?: number
-  ) => {
-    setConversionTarget({
-      secIdx,
-      prodId,
-      itemId,
-      gIdx,
-      itemName,
-      itemCode,
-      originalQty,
-      originalUnit,
-      warehouseUnit
-    });
-
-    setConversionForm({
-      targetUnit: convertedUnit || warehouseUnit || 'ریسه',
-      mode: 'rate',
-      rate: conversionRate || 1,
-      directConvertedQty: convertedQty || roundToOneDecimal(originalQty / (conversionRate || 1)),
-      notes: ''
-    });
-
-    setIsUnitConversionModalOpen(true);
-  };
-
-  const handleApplyUnitConversion = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!conversionTarget) return;
-
-    const { secIdx, prodId, itemId, gIdx, originalQty } = conversionTarget;
-    const { targetUnit, mode, rate, directConvertedQty } = conversionForm;
-
-    let finalConvertedQty = 0;
-    let finalRate = rate;
-
-    if (mode === 'rate') {
-      finalRate = Math.max(0.0001, rate);
-      finalConvertedQty = roundToOneDecimal(originalQty / finalRate);
-    } else {
-      finalConvertedQty = directConvertedQty;
-      // v9.0.372 (TD-820): the rate is not rounded; the server converts the requirement with it
-      finalRate = directConversionRate(originalQty, directConvertedQty);
-    }
-
-    const conversion = { convertedUnit: targetUnit, conversionRate: finalRate, convertedQty: finalConvertedQty };
-    if (prodId) updatePerItemFields(secIdx, prodId, itemId, conversion);
-    else if (gIdx !== undefined) updateGlobalItemFields(secIdx, gIdx, conversion);
-
-    setIsUnitConversionModalOpen(false);
-    toast.success(`ضریب تبدیل واحد ثبت شد: ${toPersianDigits(originalQty)} ${conversionTarget.originalUnit} ➔ ${toPersianDigits(finalConvertedQty)} ${targetUnit}`);
-  };
-
-  // v9.0.414 (TD-750): شناسه ردیف فهرست خرید (`code_…` / `name_…`) به ردیف‌های بخش‌ها می‌رسد و state درجا تغییر نمی‌کند؛
-  // به‌روزرسانی تابعی است تا چند ردیف سفارش‌داده‌شده پشت سر هم یکدیگر را پاک نکنند
-  const handleUpdateItemProcurementStatus = (rowKey: string, newStatus: NonNullable<PurchaseListItem['procurementStatus']>) => {
-    setSections(prev => withProcurementStatus(prev, rowKey, newStatus));
   };
 
   // v10.2.3 (TD-1290): موجودی آزاد هر ماده برای این پروژه و وضعیت خودکار ردیف‌ها با قاعدهٔ ثبت نهایی
@@ -628,154 +226,20 @@ export function useProjectInventory(
     sections, products, manualPurchaseItems, stockItems: warehouseItems, report: availabilityRead.report, status: availabilityRead.status,
   }), [sections, products, manualPurchaseItems, warehouseItems, availabilityRead.report, availabilityRead.status]);
 
-  // Compute purchase list
-  const purchaseList = useMemo(() => {
-    return buildConsolidatedPurchaseList(sections, products, warehouseItems, manualPurchaseItems, availability);
-  }, [sections, products, warehouseItems, manualPurchaseItems, availability]);
+  const purchaseList = useMemo(
+    () => buildConsolidatedPurchaseList(sections, products, warehouseItems, manualPurchaseItems, availability),
+    [sections, products, warehouseItems, manualPurchaseItems, availability],
+  );
+  // overall material progress % (null until the free stock figures are read)
+  const materialProgress = useMemo(() => calculateMaterialProgress(sections, products, availability), [sections, products, availability]);
 
-  // Compute overall material progress % (null until the free stock figures are read)
-  const materialProgress = useMemo(() => {
-    return calculateMaterialProgress(sections, products, availability);
-  }, [sections, products, availability]);
-
-  const handleFinalizeAndReserveStock = async () => {
-    if (isFinalized) {
-      toast.error('این فهرست پیش‌تر ثبت نهایی شده و اقلام آن در انبار رزرو شده‌اند.');
-      return;
-    }
-
-    if (!(await confirmAction({ title: 'ثبت نهایی و رزرو اقلام', message: 'آیا از ثبت نهایی و رزرو اقلام در انبار اطمینان دارید؟ پس از ثبت نهایی، موجودی این اقلام به این پروژه اختصاص خواهد یافت.' }))) {
-      return;
-    }
-
-    try {
-      setSaving(true);
-      // v8.0.58 (TD-306): رزرو را سرور از بخش‌ها می‌سازد؛ مرورگر فقط نتیجه ذخیره‌شده را نمایش می‌دهد
-      const payload = {
-        inventory_control: {
-          sections,
-          manualPurchaseItems,
-          isFinalized: true,
-          lastUpdated: new Date().toISOString()
-        },
-        ...projectVersion.writeBase
-      };
-
-      const saved = await fetchJson<SavedProjectInventory>(`/api/projects/${project.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      projectVersion.remember(saved, ['inventory']);
-      setIsDirty(false);
-      setIsFinalized(true);
-      setFinalizedAt(saved?.inventory_control?.finalizedAt);
-      const reserved = savedReservedItems(saved);
-      setReservedItems(reserved);
-      const shortages = storedReservationShortages(saved?.inventory_control);
-      setReservationShortages(shortages);
-      // v10.0.116 (TD-1149): the message follows what the server reserved, not the button that was pressed
-      const outcome = finalizeReservationOutcome(reserved, shortages);
-      if (outcome.kind === 'success') toast.success(outcome.message);
-      else toast(outcome.message, { icon: '⚠️' });
-      const shortageMessage = reserved.length > 0 ? reservationShortageMessage(shortages) : null;
-      if (shortageMessage) toast(shortageMessage, { icon: '⚠️' });
-      void onUpdate?.();
-    } catch (err) {
-      console.error('Error finalizing inventory reservation:', err);
-      toast.error(errorMessageOf(err) || 'خطا در ثبت نهایی و رزرو انبار');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleUnfinalizeReservation = async () => {
-    if (!(await confirmAction({ title: 'لغو ثبت نهایی', message: 'آیا از لغو ثبت نهایی و آزاد کردن رزرو انبار مطمئن هستید؟' }))) return;
-
-    try {
-      setSaving(true);
-      const payload = {
-        inventory_control: {
-          sections,
-          manualPurchaseItems,
-          isFinalized: false,
-          lastUpdated: new Date().toISOString()
-        },
-        ...projectVersion.writeBase
-      };
-
-      projectVersion.remember(await fetchJson(`/api/projects/${project.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      }), ['inventory']);
-
-      setIsDirty(false);
-      setIsFinalized(false);
-      setFinalizedAt(undefined);
-      setReservedItems([]);
-      setReservationShortages([]);
-      toast.success('رزرو انبار آزاد شد.');
-      void onUpdate?.();
-    } catch (err) {
-      console.error('Error unfreezing reservation:', err);
-      toast.error(errorMessageOf(err) || 'خطا در آزاد کردن رزرو انبار');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  /** TD-1341: «تکمیل رزرو» ثبت شد؛ نسخه و رزرو ذخیره‌شده همان پاسخ سرور است */
-  const applyReservationReconcile = (result: ReservationReconcileResult) => {
-    projectVersion.remember(result, ['inventory']);
-    setReservedItems(Array.isArray(result?.inventory_control?.reservedItems) ? result.inventory_control.reservedItems : []);
-    setReservationShortages(storedReservationShortages(result?.inventory_control));
-    void onUpdate?.();
-  };
+  const reservation = useInventoryReservation({ project, projectVersion, sections, manualPurchaseItems, editsNow, saved: savedAsOf, onUpdate });
 
   const handlePrintPurchaseListWithCheck = () => {
     if (purchaseList.length === 0) {
       toast.error('هیچ کالایی برای چاپ وجود ندارد.');
       return;
     }
-    window.print();
-  };
-
-  const handleSaveInventoryControl = async () => {
-    try {
-      setSaving(true);
-      const payload = {
-        inventory_control: {
-          sections,
-          manualPurchaseItems,
-          isFinalized,
-          lastUpdated: new Date().toISOString()
-        },
-        ...projectVersion.writeBase
-      };
-
-      const saved = await fetchJson<SavedProjectInventory>(`/api/projects/${project.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      projectVersion.remember(saved, ['inventory']);
-      setIsDirty(false);
-      setReservedItems(savedReservedItems(saved));
-      setReservationShortages(storedReservationShortages(saved?.inventory_control));
-      toast.success('اطلاعات کنترل موجودی با موفقیت ذخیره شد.');
-      void onUpdate?.();
-    } catch (err) {
-      console.error('Error saving project inventory control:', err);
-      toast.error(errorMessageOf(err) || 'خطا در ذخیره‌سازی کنترل موجودی پروژه');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handlePrintPurchaseList = () => {
     window.print();
   };
 
@@ -795,7 +259,7 @@ export function useProjectInventory(
     setManualPurchaseItems([...manualPurchaseItems, newItem]);
   };
 
-  const handleUpdateManualPurchaseItem = (id: string, field: keyof PurchaseListItem, value: any) => {
+  const handleUpdateManualPurchaseItem = (id: string, field: keyof PurchaseListItem, value: unknown) => {
     setManualPurchaseItems(prev => prev.map(item => (item.id === id ? { ...item, [field]: value } : item)));
   };
 
@@ -804,112 +268,43 @@ export function useProjectInventory(
     toast.success('قلم دستی حذف شد.');
   };
 
+  // v9.0.414 (TD-750): شناسه ردیف فهرست خرید (`code_…` / `name_…`) به ردیف‌های بخش‌ها می‌رسد و state درجا تغییر نمی‌کند؛
+  // به‌روزرسانی تابعی است تا چند ردیف سفارش‌داده‌شده پشت سر هم یکدیگر را پاک نکنند
   const handleUpdateProcurementStatus = (itemId: string, newStatus: NonNullable<PurchaseListItem['procurementStatus']>) => {
-    if (itemId.startsWith('manual_')) {
-      handleUpdateManualPurchaseItem(itemId, 'procurementStatus', newStatus);
-    } else {
-      handleUpdateItemProcurementStatus(itemId, newStatus);
-    }
+    if (itemId.startsWith('manual_')) handleUpdateManualPurchaseItem(itemId, 'procurementStatus', newStatus);
+    else setSections(prev => withProcurementStatus(prev, itemId, newStatus));
   };
 
-  const filteredWarehouseItems = useMemo(() => {
-    // Restrict to raw materials only; exclude finished products
-    let result = warehouseItems.filter(i => i.type === 'raw_material' || (i.type as any) !== 'product');
-    const currentModalSection = materialModalSectionIdx !== null ? sections[materialModalSectionIdx] : undefined;
-
-    if (currentModalSection && currentModalSection.filterType && currentModalSection.filterType !== 'all') {
-      if (currentModalSection.filterType === 'category' && currentModalSection.allowedCategories && currentModalSection.allowedCategories.length > 0) {
-        result = result.filter(i => i.category && currentModalSection.allowedCategories?.includes(i.category));
-      } else if (currentModalSection.filterType === 'item_code' && currentModalSection.allowedItemCodes && currentModalSection.allowedItemCodes.length > 0) {
-        result = result.filter(i => i.code && currentModalSection.allowedItemCodes?.includes(i.code));
-      }
-    }
-
-    if (!warehouseSearchQuery.trim()) return result.slice(0, 30);
-    const q = warehouseSearchQuery.trim().toLowerCase();
-    return result.filter(i =>
-      i.name.toLowerCase().includes(q) ||
-      (i.code && i.code.toLowerCase().includes(q)) ||
-      (i.category && i.category.toLowerCase().includes(q))
-    ).slice(0, 30);
-  }, [warehouseItems, warehouseSearchQuery, materialModalSectionIdx, sections]);
-
-  const currentModalSection = materialModalSectionIdx !== null ? sections[materialModalSectionIdx] : undefined;
-
   return {
+    ...picker,
+    ...conversion,
+    ...reservation,
     isDirty,
-    saving,
-    setSaving,
-    activeStepTab,
-    setActiveStepTab,
-    isFinalized,
-    setIsFinalized,
-    finalizedAt,
-    setFinalizedAt,
-    reservedItems,
-    setReservedItems,
-    reservationShortages,
-    isUnitConversionModalOpen,
-    setIsUnitConversionModalOpen,
-    conversionTarget,
-    setConversionTarget,
-    conversionForm,
-    setConversionForm,
     warehouseItems,
-    presetSections,
     products,
     sections,
     setSections,
-    manualPurchaseItems,
-    setManualPurchaseItems,
-    isMaterialModalOpen,
-    setIsMaterialModalOpen,
-    materialModalSectionIdx,
-    setMaterialModalSectionIdx,
-    materialModalTab,
-    setMaterialModalTab,
-    warehouseSearchQuery,
-    setWarehouseSearchQuery,
-    changingItemTarget,
-    setChangingItemTarget,
     allCategories,
-    codePrefix,
-    codeNumber,
-    customMaterialForm,
-    setCustomMaterialForm,
-    handleCategoryChangeForCustom,
     handleUpdateSectionDescription,
     handleUpdatePerItemResult,
     handleUpdatePerItemFields: updatePerItemFields,
     handleUpdateGlobalItem,
-    handleOpenAddMaterialModal,
-    handleOpenChangeMaterialModal,
-    handleSelectWarehouseItem,
-    handleAddCustomMaterial,
     handleRemoveItemFromSection,
     handleAddNewSectionOnTheFly,
     handleRemoveSectionOnTheFly,
-    handleOpenUnitConversionModal,
-    handleApplyUnitConversion,
-    handleUpdateItemProcurementStatus,
     purchaseList,
     materialProgress,
     availability,
     /** v10.2.3 (TD-1290): changes with each save of the project, so the materials reports are read again */
     reportsReloadKey: projectVersion.version,
-    handleFinalizeAndReserveStock,
-    handleUnfinalizeReservation,
-    applyReservationReconcile,
     /** TD-1341 / TD-1342: نسخه و نشانهٔ بخش‌هایی که «تکمیل رزرو» با آن ثبت می‌شود */
     projectWriteBase: projectVersion.writeBase,
     handlePrintPurchaseListWithCheck,
-    handleSaveInventoryControl,
-    handlePrintPurchaseList,
     handleAddManualPurchaseRow,
     handleUpdateManualPurchaseItem,
     handleRemoveManualPurchaseItem,
     handleUpdateProcurementStatus,
-    filteredWarehouseItems,
-    currentModalSection
   };
 }
+
+export type ProjectInventory = ReturnType<typeof useProjectInventory>;
