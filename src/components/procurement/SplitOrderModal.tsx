@@ -51,6 +51,16 @@ const CLOSURE_REASON_OPTIONS = [
   { value: 'other', label: 'سایر موارد و توضیحات تکمیلی تدارکات' },
 ];
 
+/** Σ quantity the packages take of a requisition row */
+function allocatedQtyOf(packages: SplitPackage[], reqItemId: string): number {
+  return sumAmounts(packages, pkg => pkg.items.find(i => i.reqItemId === reqItemId)?.quantity ?? 0);
+}
+
+/** What is left of a requisition row after the packages: below zero is more ordered than requested */
+function liveRemainingQtyOf(initialRemainings: Map<string, number>, packages: SplitPackage[], reqItemId: string): number {
+  return (initialRemainings.get(reqItemId) || 0) - allocatedQtyOf(packages, reqItemId);
+}
+
 export function SplitOrderModal({
   isOpen,
   requisition,
@@ -136,30 +146,24 @@ export function SplitOrderModal({
   }, [warehouses]);
 
   // Real-time calculation: total allocated across all packages for each requisition item
-  const getAllocatedQty = (reqItemId: string) => {
-    return sumAmounts(packages, pkg => pkg.items.find(i => i.reqItemId === reqItemId)?.quantity ?? 0);
-  };
+  const getAllocatedQty = (reqItemId: string) => allocatedQtyOf(packages, reqItemId);
 
   // Real-time calculation: live remaining for requisition item after deducting all package allocations
-  const getLiveRemainingQty = (reqItemId: string) => {
-    const initRem = initialRemainings.get(reqItemId) || 0;
-    const allocated = getAllocatedQty(reqItemId);
-    return initRem - allocated;
-  };
+  const getLiveRemainingQty = (reqItemId: string) => liveRemainingQtyOf(initialRemainings, packages, reqItemId);
 
-  // Check if any items have over or under fulfillment across packages
-
-  // Auto set recommended closure reason if discrepancy exists
+  // Auto set recommended closure reason if discrepancy exists, while the reason is still «complete»
+  // 10.3 (ARCH review finding 4): the effect reads the packages and the reason of its own render; its dependency list says so
   useEffect(() => {
-    const hasOver = requisitionItems.some(it => getLiveRemainingQty(it.id || '') < 0);
-    const hasUnder = requisitionItems.some(it => getLiveRemainingQty(it.id || '') > 0);
+    const hasOver = requisitionItems.some(it => liveRemainingQtyOf(initialRemainings, packages, it.id || '') < 0);
+    const hasUnder = requisitionItems.some(it => liveRemainingQtyOf(initialRemainings, packages, it.id || '') > 0);
 
-    if (hasOver && !hasUnder && closureReasonType === 'complete') {
-      setClosureReasonType('over_fulfillment');
-    } else if (hasUnder && !hasOver && closureReasonType === 'complete') {
-      setClosureReasonType('under_market_shortage');
-    }
-  }, [packages, requisitionItems]);
+    setClosureReasonType(current => {
+      if (current !== 'complete') return current;
+      if (hasOver && !hasUnder) return 'over_fulfillment';
+      if (hasUnder && !hasOver) return 'under_market_shortage';
+      return current;
+    });
+  }, [packages, requisitionItems, initialRemainings]);
 
   if (!isOpen) return null;
 

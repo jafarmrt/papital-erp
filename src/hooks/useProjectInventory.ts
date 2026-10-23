@@ -48,7 +48,8 @@ const savedReservedItems = (saved: SavedProjectInventory | null | undefined): un
 export function useProjectInventory(
   project: ProductionProject,
   initialItemsList?: Item[],
-  onUpdate?: () => void
+  // the page's refresh may return a promise; the handlers do not wait for it (10.3, ARCH review finding 4)
+  onUpdate?: () => void | Promise<void>
 ) {
   const [saving, setSaving] = useState(false);
   const projectVersion = useProjectVersion(project);
@@ -680,7 +681,7 @@ export function useProjectInventory(
       else toast(outcome.message, { icon: '⚠️' });
       const shortageMessage = reserved.length > 0 ? reservationShortageMessage(shortages) : null;
       if (shortageMessage) toast(shortageMessage, { icon: '⚠️' });
-      if (onUpdate) onUpdate();
+      void onUpdate?.();
     } catch (err) {
       console.error('Error finalizing inventory reservation:', err);
       toast.error(errorMessageOf(err) || 'خطا در ثبت نهایی و رزرو انبار');
@@ -716,7 +717,7 @@ export function useProjectInventory(
       setReservedItems([]);
       setReservationShortages([]);
       toast.success('رزرو انبار آزاد شد.');
-      if (onUpdate) onUpdate();
+      void onUpdate?.();
     } catch (err) {
       console.error('Error unfreezing reservation:', err);
       toast.error(errorMessageOf(err) || 'خطا در آزاد کردن رزرو انبار');
@@ -730,7 +731,7 @@ export function useProjectInventory(
     projectVersion.remember(result, ['inventory']);
     setReservedItems(Array.isArray(result?.inventory_control?.reservedItems) ? result.inventory_control.reservedItems : []);
     setReservationShortages(storedReservationShortages(result?.inventory_control));
-    if (onUpdate) onUpdate();
+    void onUpdate?.();
   };
 
   const handlePrintPurchaseListWithCheck = () => {
@@ -765,7 +766,7 @@ export function useProjectInventory(
       setReservedItems(savedReservedItems(saved));
       setReservationShortages(storedReservationShortages(saved?.inventory_control));
       toast.success('اطلاعات کنترل موجودی با موفقیت ذخیره شد.');
-      if (onUpdate) onUpdate();
+      void onUpdate?.();
     } catch (err) {
       console.error('Error saving project inventory control:', err);
       toast.error(errorMessageOf(err) || 'خطا در ذخیره‌سازی کنترل موجودی پروژه');

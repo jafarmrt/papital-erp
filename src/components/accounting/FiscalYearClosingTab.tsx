@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useId } from 'react';
+import { useState, useEffect, useEffectEvent, useMemo, useId } from 'react';
 import { Lock, CheckCircle2, AlertTriangle, TrendingUp, TrendingDown, Scale, RefreshCw, ShieldCheck, Check, Layers, Printer, ChevronDown, ChevronUp } from 'lucide-react';
 import { toPersianDigits, formatPersianDate, errorMessageOf } from '../../utils';
 import { fiscalClosingJalaliDates } from '../../lib/fiscalClosingDates';
@@ -75,8 +75,11 @@ export function FiscalYearClosingTab({ onPrintVoucher }: FiscalYearClosingTabPro
     }
   };
 
+  // A year picked (or the default year arriving) shows its preview; the dates come from the year
+  // (10.3, ARCH review finding 4: an effect event, so the preview reads the year of the latest render)
+  const previewShownYear = useEffectEvent(() => { void loadPreview(); });
   useEffect(() => {
-    if (selectedYear) void loadPreview();
+    if (selectedYear) previewShownYear();
   }, [selectedYear]);
 
   // Computed safe values from previewData

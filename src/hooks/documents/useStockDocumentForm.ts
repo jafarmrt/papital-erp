@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
@@ -141,7 +141,9 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
     }
   };
 
-  const fetchNextRef = async (signal?: AbortSignal) => {
+  // 10.3 (ARCH review finding 4): a new function only when the document type changes, so the effect below asks for the
+  // next number of the type on screen and its dependency list says so
+  const fetchNextRef = useCallback(async (signal?: AbortSignal) => {
     if (!docType) return;
     try {
       const { nextRef } = await fetchJson(`/documents/next-ref?type=${docType}`, { signal });
@@ -151,7 +153,7 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
       if ((e as { name?: string } | null)?.name === 'AbortError') return;
       console.error(e);
     }
-  };
+  }, [docType]);
 
   // v9.0.139 (TD-889): پروژه برگزیده از فهرست انتخاب پروژه؛ فرم فقط کد و عنوان آن را نشان می‌دهد و رزروهایش را از
   // /inventory/reserved-items می‌خواند، پس پرونده کامل پروژه (فقط با مجوز بخش پروژه) لازم نیست
@@ -198,7 +200,7 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
     const controller = new AbortController();
     void fetchNextRef(controller.signal);
     return () => controller.abort();
-  }, [docType]);
+  }, [fetchNextRef]);
 
   // Aggregate all global reservations across ALL projects and active proformas
   const allGlobalReservations = useMemo(

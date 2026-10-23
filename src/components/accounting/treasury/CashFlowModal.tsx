@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useEffectEvent } from 'react';
 import { TrendingUp, X, ArrowDownLeft, ArrowUpRight, Scale } from 'lucide-react';
 import { JalaliDateInput } from '../../common/JalaliDateInput';
 import { formatPersianPrice } from '../../../utils';
@@ -23,12 +23,17 @@ export const CashFlowModal: React.FC<CashFlowModalProps> = ({
     void run({ startDate: start || undefined, endDate: end || undefined });
   };
 
-  useEffect(() => {
-    if (isOpen) {
+  // Opening the window fetches the report of the dates on screen; closing it forgets the report. A date change waits for
+  // the button (10.3, ARCH review finding 4: an effect event reads the dates of the latest render)
+  const onOpenChange = useEffectEvent((open: boolean) => {
+    if (open) {
       fetchReport(dateFrom, dateTo);
     } else {
       reset();
     }
+  });
+  useEffect(() => {
+    onOpenChange(isOpen);
   }, [isOpen]);
 
   if (!isOpen) return null;
