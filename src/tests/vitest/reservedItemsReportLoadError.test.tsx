@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 import { MemoryRouter } from 'react-router-dom';
 
 const fetchJson = vi.fn();
@@ -25,7 +26,7 @@ const emptyReport = {
 describe('reserved items report shows a load error instead of zeros (TD-821)', () => {
   it('shows an error panel without the report, and the report after a successful retry', async () => {
     fetchJson.mockRejectedValueOnce(new Error('reservation read failed'));
-    render(<MemoryRouter><ReservedItemsReportPage /></MemoryRouter>);
+    renderWithQuery(<MemoryRouter><ReservedItemsReportPage /></MemoryRouter>);
 
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('گزارش اقلام رزروی ساخته نشد');

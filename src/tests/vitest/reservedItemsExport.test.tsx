@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 import { MemoryRouter } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as realXlsx from 'xlsx';
 import type { ReservedItemsFullReport } from '../../lib/inventory/reservedItemsReport';
 
@@ -50,7 +50,7 @@ const report = (cost: boolean): ReservedItemsFullReport => ({
 
 async function exportReport(cost: boolean, tab?: RegExp) {
   fetchJson.mockResolvedValueOnce(report(cost));
-  render(<MemoryRouter><ReservedItemsReportPage /></MemoryRouter>);
+  renderWithQuery(<MemoryRouter><ReservedItemsReportPage /></MemoryRouter>);
   expect(await screen.findAllByText('P-7')).toBeTruthy();
   if (tab) fireEvent.click(screen.getByText(tab));
   fireEvent.click(screen.getByText('خروجی اکسل'));
@@ -92,7 +92,7 @@ describe('reserved items report export and source links (TD-828)', () => {
 
   it('links a proforma to the searched documents list and a project to its inventory control', async () => {
     fetchJson.mockResolvedValueOnce(report(true));
-    render(<MemoryRouter><ReservedItemsReportPage /></MemoryRouter>);
+    renderWithQuery(<MemoryRouter><ReservedItemsReportPage /></MemoryRouter>);
     expect(await screen.findAllByText('P-7')).toBeTruthy();
     fireEvent.click(screen.getByText(/دفتر ریز پرونده‌های رزرو/));
     expect(screen.getByText('مشاهده پیش‌فاکتور').closest('a')?.getAttribute('href')).toBe('/invoices?search=PF%2F1001');
@@ -102,11 +102,7 @@ describe('reserved items report export and source links (TD-828)', () => {
   it('opens the documents list searched by the number in its address', async () => {
     window.history.replaceState({}, '', '/invoices?search=PF%2F1001');
     fetchJson.mockImplementation((url: string) => Promise.resolve(url.startsWith('/documents?') ? { data: [], total: 0, page: 1, totalPages: 1 } : []));
-    render(
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <SearchProvider><InvoicesListPage /></SearchProvider>
-      </QueryClientProvider>,
-    );
+    renderWithQuery(<SearchProvider><InvoicesListPage /></SearchProvider>);
     await waitFor(() => {
       const listUrls = fetchJson.mock.calls.map(c => String(c[0])).filter(u => u.startsWith('/documents?'));
       expect(listUrls.some(u => new URLSearchParams(u.split('?')[1]).get('search') === 'PF/1001')).toBe(true);

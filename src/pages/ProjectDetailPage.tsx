@@ -117,9 +117,13 @@ export default function ProjectDetailPage() {
     return () => controller.abort();
   }, [loadProject]);
 
-  /** after any save: the project again, and the list, the step bar and every project read refreshed */
+  /**
+   * after any save: the project again, and the list, the step bar and every project read refreshed; 10.3 (ARCH review
+   * finding 3): the reserved items too, since a project's reservations are part of that report
+   */
   const refresh = useCallback(async (signal?: AbortSignal) => {
     void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.projects.all });
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.inventory.reservedItems() });
     await loadProject(signal);
   }, [loadProject, queryClient]);
 

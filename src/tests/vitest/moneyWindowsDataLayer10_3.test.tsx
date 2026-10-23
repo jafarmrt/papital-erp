@@ -1,10 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ownReads } from './helpers/ownReads';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import ts from 'typescript';
 
 /**
  * 10.3 (ARCH review finding 3): the money windows (invoice settlement, payslip payment and history, payslip form, eidi,
@@ -97,7 +95,6 @@ describe('payroll windows refresh while open (10.3)', () => {
   });
 });
 
-const SRC = path.join(__dirname, '..', '..');
 const MONEY_WINDOWS = [
   'components/invoices/InvoiceSettlementModal.tsx',
   'components/piecework/PayrollEidiModal.tsx',
@@ -112,34 +109,6 @@ const MONEY_WINDOWS = [
   'components/piecework/StatutoryRemittanceModal.tsx',
   'pages/MyPayslipsPage.tsx',
 ];
-
-/**
- * The reads a file makes outside the shared cache, as file:line: a call of any `fetch…` function (`fetchJson`, `fetch`,
- * `fetchAccountingList`) that sends no method or `GET`, and a renamed import of `fetchJson` (which would hide its calls)
- */
-function ownReads(file: string): string[] {
-  const sf = ts.createSourceFile(file, readFileSync(path.join(SRC, file), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  const reads: string[] = [];
-  const at = (node: ts.Node) => `${file}:${sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1}`;
-  const methodOf = (init: ts.Expression | undefined): string | null => {
-    if (init === undefined || !ts.isObjectLiteralExpression(init)) return null;
-    const method = init.properties.find((p): p is ts.PropertyAssignment => ts.isPropertyAssignment(p) && p.name.getText(sf) === 'method');
-    if (!method) return null;
-    return ts.isStringLiteralLike(method.initializer) ? method.initializer.text.toUpperCase() : 'WRITE';
-  };
-  const visit = (node: ts.Node): void => {
-    if (ts.isImportSpecifier(node) && node.propertyName?.getText(sf) === 'fetchJson') reads.push(at(node));
-    if (ts.isCallExpression(node)) {
-      const callee = node.expression;
-      const name = ts.isIdentifier(callee) ? callee.text : ts.isPropertyAccessExpression(callee) ? callee.name.text : '';
-      const method = methodOf(node.arguments[1]);
-      if (/^fetch/.test(name) && (method === null || method === 'GET')) reads.push(at(node));
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sf);
-  return reads;
-}
 
 describe('the money windows read only through the shared cache (10.3)', () => {
   it('their own fetch calls are writes', () => {

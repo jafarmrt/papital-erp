@@ -1,7 +1,8 @@
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 const { fetchJson, toastFn } = vi.hoisted(() => {
   const t = Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), loading: vi.fn(), dismiss: vi.fn() });
@@ -60,7 +61,7 @@ describe('item code change window (D-15)', () => {
       ? Promise.resolve({ data: [{ oldCode: 'NE-090', newCode: 'NE-100', reason: 'یکسان‌سازی', username: 'مدیر', createdAt: '2026-10-01T08:00:00.000Z' }] })
       : Promise.reject(new Error(CODE_TAKEN_MESSAGE))));
     const onChanged = vi.fn();
-    render(<ItemCodeChangeModal item={item} onClose={() => undefined} onChanged={onChanged} />);
+    renderWithQuery(<ItemCodeChangeModal item={item} onClose={() => undefined} onChanged={onChanged} />);
     expect(await screen.findByText('NE-090 → NE-100')).not.toBeNull();
     fireEvent.change(screen.getByRole('textbox', { name: 'کد تازه' }), { target: { value: ' NE-200 ' } });
     fireEvent.change(screen.getByRole('textbox', { name: 'دلیل تغییر' }), { target: { value: 'کد تکراری' } });
@@ -76,11 +77,11 @@ describe('item code change window (D-15)', () => {
       sortedItems: [item], warehouses: [], sortConfig: null, requestSort: () => undefined, loading: false,
       onViewImage: () => undefined, page: 1, totalPages: 1, totalItems: 1, onPageChange: () => undefined,
     };
-    const { unmount } = render(<ItemsTable {...props} onEditItem={() => undefined} />);
+    const { unmount } = renderWithQuery(<ItemsTable {...props} onEditItem={() => undefined} />);
     expect(screen.queryByTitle('عملیات کالا')).toBeNull();
     unmount();
     const onChangeCode = vi.fn();
-    render(<ItemsTable {...props} onChangeCode={onChangeCode} />);
+    renderWithQuery(<ItemsTable {...props} onChangeCode={onChangeCode} />);
     fireEvent.click(screen.getByTitle('عملیات کالا'));
     fireEvent.click(screen.getByText('تغییر کد'));
     expect(onChangeCode).toHaveBeenCalledWith(item);

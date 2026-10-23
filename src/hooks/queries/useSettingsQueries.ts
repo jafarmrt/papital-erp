@@ -57,7 +57,11 @@ export function useCategoriesQuery(type?: string) {
 /**
  * Hook to query all warehouses with React Query
  */
-export function useWarehousesQuery() {
+/**
+ * 10.3 (ARCH review finding 3): a window that read the warehouses each time it opened passes `readOnEveryOpening`
+ * (`staleTime: 0`); `enabled` keeps a closed window from reading
+ */
+export function useWarehousesQuery({ enabled = true, readOnEveryOpening = false }: { enabled?: boolean; readOnEveryOpening?: boolean } = {}) {
   return useQuery<WarehouseItem[]>({
     queryKey: QUERY_KEYS.warehouses.list(),
     // سیگنال React Query: با بسته شدن صفحه، درخواست در حال اجرا لغو می‌شود
@@ -65,8 +69,9 @@ export function useWarehousesQuery() {
       const res = await fetchJson('/warehouses', { signal });
       return Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: readOnEveryOpening ? 0 : 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
+    enabled,
   });
 }
 
