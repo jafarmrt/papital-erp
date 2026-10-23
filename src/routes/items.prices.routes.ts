@@ -16,8 +16,7 @@ import { priceListMatcher } from '../lib/items/excelPriceColumns.js';
 import { NotFoundError, ValidationError } from '../errors/customErrors.js';
 import { listPricingPage } from '../services/items/pricingPage.js';
 import { PRICING_PAGE_MAX_LIMIT, PRICING_PAGE_SIZE, PRICING_PRICE_FILTERS } from '../lib/items/pricingPage.js';
-import { idempotency } from '../middleware/idempotency.js';
-import { idempotentTransaction } from '../middleware/idempotency.js';
+import { idempotency, idempotentTransaction } from '../middleware/idempotency.js';
 
 const router = Router();
 

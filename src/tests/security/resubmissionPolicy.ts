@@ -49,8 +49,8 @@ export function resubmissionPolicyViolations(rows: RouteGuardRow[]): string[] {
  */
 export const MONEY_STOCK_WRITE_MODULES = [
   'src/services/accounting/', 'src/services/documents/', 'src/services/inventory/', 'src/services/items/',
-  'src/services/piecework/', 'src/services/projects/', 'src/services/workshop/',
-  'src/services/pendingMaterials.service.ts', 'src/services/piecework.service.ts', 'src/services/procurement.service.ts',
+  'src/services/piecework/', 'src/services/procurement/', 'src/services/projects/', 'src/services/woocommerce/',
+  'src/services/workshop/', 'src/services/pendingMaterials.service.ts', 'src/services/piecework.service.ts', 'src/services/procurement.service.ts',
   'src/services/projects.service.ts', 'src/services/transfer.service.ts', 'src/services/warehouse.service.ts',
 ];
 
@@ -65,19 +65,27 @@ export const PLAIN_TRANSACTION_WRITES = new Map<string, { count: number; reason:
   ['src/services/inventory/kardexWacRecalculator.service.ts', { count: 1, reason: 'rebuilds an item\'s stock from its Kardex, one transaction per item in «بازسازی همه»; a resend rebuilds the same stock' }],
   ['src/services/inventory/warehouseStockReconciliation.service.ts', { count: 1, reason: 'repairs one item per transaction and only where the stock differs from the Kardex, so a resend finds nothing to repair' }],
   ['src/services/items/itemCategory.service.ts', { count: 4, reason: 'item categories (/api/categories) are outside the money and stock routes and take no resubmission key' }],
+  // #359 review: the shop routes run several transactions per request and each one repeats nothing on a resend
+  ['src/services/woocommerce/wooOrderSync.service.ts', { count: 5, reason: 'an order is invoiced, voided, flagged or deferred under its locked order-log row (wc_order_id unique); a resend finds the order processed and answers alreadyExists' }],
+  ['src/services/woocommerce/wcStockPush.service.ts', { count: 2, reason: 'reads the site stocks in one snapshot and records the push run; the shop is sent absolute quantities, so a resend sends the same ones' }],
+  ['src/services/woocommerce/wcFieldPush.service.ts', { count: 3, reason: 'a failure audit row, the price push run and a setting toggle; prices are sent as absolute values and the toggle is a state' }],
+  ['src/services/woocommerce/wcAutoPush.service.ts', { count: 2, reason: 'a failure audit row and the automatic push toggle (a state, not a record)' }],
+  ['src/services/woocommerce/wcCatalog.service.ts', { count: 1, reason: 'rewrites the item links of one catalog reading; a resend writes the same links' }],
 ]);
 
-/** A transaction opened on the pool: `orm.transaction(`, or that of an executor defaulting to it, unless the line opens the
- * pool's transaction with `idempotentTransaction` and keeps this one for a caller's transaction (a savepoint) */
-const PLAIN_TRANSACTION = /\b(?:orm|executor|outer)\.transaction\(/g;
+/** A transaction opened on the pool: `orm.transaction(`, or that of an executor or database handle defaulting to it */
+const PLAIN_TRANSACTION = /\b(?:orm|db|executor|outer)\.transaction\(/g;
+/** `executor === orm ? idempotentTransaction(fn) : executor.transaction(fn)`: the pool's transaction completes the key and
+ * the other one is a savepoint of a caller's transaction (what `idempotentTransactionOn` does) */
+const SAVEPOINT_BRANCH = /\bexecutor === orm \? (?:await )?idempotentTransaction\(\w+\) : (?:await )?executor\.transaction\(\w+\)/g;
 
 /** Files whose plain `orm.transaction` writes differ from `PLAIN_TRANSACTION_WRITES` (`files` maps a path to its source) */
 export function plainTransactionViolations(files: Map<string, string>): string[] {
   const violations: string[] = [];
   for (const [file, source] of files) {
     const count = source.split('\n')
-      .filter(line => !/^\s*(\/\/|\/\*|\*)/.test(line) && !/idempotentTransaction(On)?\(/.test(line))
-      .reduce((n, line) => n + (line.match(PLAIN_TRANSACTION) ?? []).length, 0);
+      .filter(line => !/^\s*(\/\/|\/\*|\*)/.test(line))
+      .reduce((n, line) => n + (line.replace(SAVEPOINT_BRANCH, '').match(PLAIN_TRANSACTION) ?? []).length, 0);
     const allowed = PLAIN_TRANSACTION_WRITES.get(file)?.count ?? 0;
     if (count > allowed) violations.push(`${file}: ${count} orm.transaction write(s), ${allowed} listed; open it with idempotentTransaction`);
     else if (count < allowed) violations.push(`${file}: ${allowed} orm.transaction write(s) listed but ${count} left; lower the list`);

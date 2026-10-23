@@ -20,8 +20,7 @@ import { itemListConditions, itemListOrder, itemListStats, listItemPicks } from 
 import { parseItemListSort } from '../lib/items/itemListSort.js';
 import { listReorderAlerts } from '../services/items/reorderAlerts.service.js';
 import { changeItemCode, listItemCodeHistory } from '../services/items/itemCodeChange.js';
-import { idempotency } from '../middleware/idempotency.js';
-import { idempotentTransaction } from '../middleware/idempotency.js';
+import { idempotency, idempotentTransaction } from '../middleware/idempotency.js';
 
 const router = Router();
 
