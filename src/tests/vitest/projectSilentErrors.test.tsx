@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { QueryWrapper } from './helpers/queryWrapper';
 import { act, cleanup, render, renderHook, waitFor } from '@testing-library/react';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -62,7 +63,7 @@ describe('package 11 read failures are shown (TD-766)', () => {
 
   it('says so when the next item code cannot be read instead of suggesting PREFIX001', async () => {
     failing.add('/api/items/next-code');
-    const { result } = renderHook(() => useProjectInventory(project));
+    const { result } = renderHook(() => useProjectInventory(project), { wrapper: QueryWrapper });
     await waitFor(() => expect(fetchJson.mock.calls.some(([url]) => url.startsWith('/api/categories'))).toBe(true));
     await waitFor(() => expect(result.current.handleCategoryChangeForCustom).toBeTypeOf('function'));
     await act(async () => { await result.current.handleCategoryChangeForCustom('سنگ'); });
@@ -72,7 +73,7 @@ describe('package 11 read failures are shown (TD-766)', () => {
 
   it('says so when the project work logs cannot be read', async () => {
     failing.add('/piecework/logs');
-    render(<ProjectScheduleTab project={project} personnelList={[]} pieceworkTasksList={[]} onUpdate={vi.fn()} />);
+    render(<ProjectScheduleTab project={project} personnelList={[]} pieceworkTasksList={[]} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('دسترسی ندارید'));
   });
 });

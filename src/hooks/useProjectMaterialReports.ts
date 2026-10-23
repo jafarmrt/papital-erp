@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { fetchJson } from '../api';
+import { QUERY_KEYS } from '../lib/queryKeys';
 import {
   materialAvailabilityReportOf, type MaterialAvailabilityReport, type MaterialAvailabilityStatus,
 } from '../lib/projects/materialAvailability';
@@ -7,8 +9,10 @@ import { deliveryCostReportOf, type DeliveryCostReport } from '../lib/projects/d
 import { issuedMaterialsReportOf, type IssuedMaterialsReport } from '../lib/projects/issuedMaterials';
 
 /**
- * v10.2.3 (TD-1290، بستهٔ ۳ نسخهٔ ۱۰.۲): خواندن سه گزارش فقط‌خواندنی زبانهٔ مواد و «ورود به انبار» پروژه. با `fetchJson`، نه
- * react-query، چون این زبانه‌ها بیرون از QueryClientProvider هم ساخته می‌شوند؛ درخواست پیشین با برگشت از اثر لغو می‌شود.
+ * v10.2.3 (TD-1290، بستهٔ ۳ نسخهٔ ۱۰.۲): خواندن سه گزارش فقط‌خواندنی زبانهٔ مواد و «ورود به انبار» پروژه.
+ * v10.2 package 11 part 5e (TD-1364): through React Query under the project's key, so a document change (a remittance,
+ * waste or receipt, whose preset invalidates `projects`) reads them again on an open tab; each opening of a tab reads
+ * them again as before, the request is cancelled when the tab closes, and the figures shown stay while they are read again.
  */
 export interface ProjectReadReport<T> {
   status: MaterialAvailabilityStatus;
@@ -16,26 +20,26 @@ export interface ProjectReadReport<T> {
   data: T | null;
 }
 
-function useProjectReadReport<T>(url: string | null, accept: (raw: unknown) => T | null, reloadKey: unknown): ProjectReadReport<T> {
-  const [state, setState] = useState<ProjectReadReport<T>>({ status: 'loading', data: null });
-  useEffect(() => {
-    if (url === null) return undefined;
-    const controller = new AbortController();
-    setState(prev => ({ status: 'loading', data: prev.data }));
-    void (async () => {
-      try {
-        const raw = await fetchJson<unknown>(url, { signal: controller.signal });
-        if (controller.signal.aborted) return;
-        const data = accept(raw);
-        setState(data ? { status: 'ready', data } : { status: 'error', data: null });
-      } catch {
-        if (controller.signal.aborted) return;
-        setState({ status: 'error', data: null });
-      }
-    })();
-    return () => { controller.abort(); };
-  }, [url, accept, reloadKey]);
-  return state;
+function useProjectReadReport<T>(
+  key: readonly unknown[],
+  url: string | null,
+  accept: (raw: unknown) => T | null,
+  reloadKey: unknown,
+): ProjectReadReport<T> {
+  const result = useQuery<T>({
+    queryKey: [...key, reloadKey],
+    queryFn: async ({ signal }) => {
+      const data = accept(await fetchJson<unknown>(url as string, { signal }));
+      if (!data) throw new Error('unreadable project report');
+      return data;
+    },
+    enabled: url !== null,
+    placeholderData: keepPreviousData,
+    refetchOnMount: 'always',
+  });
+  if (result.isError) return { status: 'error', data: null };
+  if (result.isFetching || !result.data) return { status: 'loading', data: result.data ?? null };
+  return { status: 'ready', data: result.data };
 }
 
 const projectIdOf = (v: unknown): number | null => {
@@ -59,7 +63,7 @@ export function useProjectMaterialAvailability(
   const pid = projectIdOf(projectId);
   const validProject = pid !== null;
   const url = validProject && itemsState === 'loaded' && idsKey ? `/projects/${pid}/material-availability?itemIds=${idsKey}` : null;
-  const read = useProjectReadReport(url, materialAvailabilityReportOf, reloadKey);
+  const read = useProjectReadReport([...QUERY_KEYS.projects.detail(pid ?? 0), 'material-availability', idsKey], url, materialAvailabilityReportOf, reloadKey);
   const emptyReport = useMemo<MaterialAvailabilityReport | null>(() => (pid !== null ? { projectId: pid, items: [] } : null), [pid]);
 
   if (!validProject || itemsState === 'failed') return { status: 'error', report: null };
@@ -72,12 +76,12 @@ export function useProjectMaterialAvailability(
 export function useProjectDeliveryCost(projectId: unknown, enabled: boolean, reloadKey: unknown): ProjectReadReport<DeliveryCostReport> {
   const pid = projectIdOf(projectId);
   const url = enabled && pid !== null ? `/projects/${pid}/delivery-cost` : null;
-  return useProjectReadReport(url, deliveryCostReportOf, reloadKey);
+  return useProjectReadReport([...QUERY_KEYS.projects.detail(pid ?? 0), 'delivery-cost'], url, deliveryCostReportOf, reloadKey);
 }
 
 /** «مواد گرفته‌شده از انبار» پروژه (`GET /projects/:id/issued-materials`) */
 export function useProjectIssuedMaterials(projectId: unknown, reloadKey: unknown): ProjectReadReport<IssuedMaterialsReport> {
   const pid = projectIdOf(projectId);
   const url = pid !== null ? `/projects/${pid}/issued-materials` : null;
-  return useProjectReadReport(url, issuedMaterialsReportOf, reloadKey);
+  return useProjectReadReport([...QUERY_KEYS.projects.detail(pid ?? 0), 'issued-materials'], url, issuedMaterialsReportOf, reloadKey);
 }

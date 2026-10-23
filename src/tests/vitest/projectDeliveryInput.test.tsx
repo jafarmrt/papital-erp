@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { QueryWrapper } from './helpers/queryWrapper';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import toast from 'react-hot-toast';
 
@@ -34,7 +35,7 @@ const deliveryCalls = () => fetchJson.mock.calls.filter(([url]) => url.endsWith(
 // v9.0.381 (TD-741): a zero delivery quantity is an error, never the planned quantity
 describe('project delivery quantity (TD-741)', () => {
   it('refuses a zero quantity instead of delivering the planned quantity', async () => {
-    render(<ProjectStockEntryTab project={PROJECT} onUpdate={vi.fn()} />);
+    render(<ProjectStockEntryTab project={PROJECT} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     const qty = (await screen.findByText('تعداد تحویلی:')).parentElement?.querySelector('input') as HTMLInputElement;
     fireEvent.change(qty, { target: { value: '0' } });
     fireEvent.click(screen.getByText('ورود به انبار'));
@@ -44,7 +45,7 @@ describe('project delivery quantity (TD-741)', () => {
   });
 
   it('sends the quantity the user entered', async () => {
-    render(<ProjectStockEntryTab project={PROJECT} onUpdate={vi.fn()} />);
+    render(<ProjectStockEntryTab project={PROJECT} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     const qty = (await screen.findByText('تعداد تحویلی:')).parentElement?.querySelector('input') as HTMLInputElement;
     fireEvent.change(qty, { target: { value: '3' } });
     fireEvent.click(screen.getByText('ورود به انبار'));

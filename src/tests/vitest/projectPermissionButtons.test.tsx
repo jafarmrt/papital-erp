@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { QueryWrapper } from './helpers/queryWrapper';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
@@ -74,7 +75,7 @@ describe('project buttons follow the project API keys (TD-752)', () => {
 
   it('keeps the progress matrix read-only without projects.edit', async () => {
     grant('projects.view');
-    render(<ProjectProductProgressTab projectId={5} />);
+    render(<ProjectProductProgressTab projectId={5} />, { wrapper: QueryWrapper });
     expect(await screen.findByText(/فقط مشاهده: تیک‌زدن مراحل/)).toBeTruthy();
     const tick = screen.getByTitle(/برش — ناتمام/);
     expect((tick as HTMLButtonElement).disabled).toBe(true);
@@ -84,7 +85,7 @@ describe('project buttons follow the project API keys (TD-752)', () => {
     cleanup();
 
     grant('projects.edit');
-    render(<ProjectProductProgressTab projectId={5} />);
+    render(<ProjectProductProgressTab projectId={5} />, { wrapper: QueryWrapper });
     fireEvent.click(await screen.findByTitle(/برش — ناتمام/));
     expect(screen.getByText(/ثبت ۱ تغییر در سامانه/)).toBeTruthy();
   });
@@ -134,13 +135,13 @@ describe('project buttons follow the project API keys (TD-752)', () => {
       products: [{ id: 'prod-9', item_id: 9, item_code: 'NK-1', item_name: 'گردنبند', customer_code: '', quantity: 3, unit: 'عدد', needs_assembly: false }],
     } as unknown as ProductionProject;
     grant('projects.view', 'projects.edit');
-    render(<ProjectStockEntryTab project={project} onUpdate={vi.fn()} />);
+    render(<ProjectStockEntryTab project={project} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     expect(await screen.findByText(/فقط مشاهده؛ ورود به انبار مجوز/)).toBeTruthy();
     expect(screen.queryByText('ورود به انبار')).toBeNull();
     cleanup();
 
     grant('warehouse.in');
-    render(<ProjectStockEntryTab project={project} onUpdate={vi.fn()} />);
+    render(<ProjectStockEntryTab project={project} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     expect(await screen.findByText('ورود به انبار')).toBeTruthy();
     expect(screen.queryByText(/فقط مشاهده؛ ورود به انبار مجوز/)).toBeNull();
   });

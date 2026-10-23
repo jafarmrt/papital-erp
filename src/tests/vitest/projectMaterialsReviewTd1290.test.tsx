@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { QueryWrapper } from './helpers/queryWrapper';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { buildMaterialAvailabilityView, storedShortagesNowFree, type AvailabilityStockItem, type MaterialAvailabilityReport } from '../../lib/projects/materialAvailability';
 import { checkDeliveryPrices, type DeliveryCostReport } from '../../lib/projects/deliveryCostSuggestion';
@@ -90,13 +91,13 @@ describe('section purchase order groups the rows of one item (TD-1290 review F1)
       warehouseItems: items(), handleOpenChangeMaterialModal: vi.fn(), handleOpenUnitConversionModal: vi.fn(), handleRemoveItemFromSection: vi.fn(),
       handleUpdateGlobalItem: vi.fn(), handleRemoveSectionOnTheFly: vi.fn(), handleUpdateSectionDescription: vi.fn(), handlePurchaseSection: onPurchase,
     };
-    const { unmount } = render(<GlobalInventoryControlSection sections={secs} availability={viewOf(secs, figures(10))} {...props} />);
+    const { unmount } = render(<GlobalInventoryControlSection sections={secs} availability={viewOf(secs, figures(10))} {...props} />, { wrapper: QueryWrapper });
     fireEvent.click(screen.getByText(SECTION_ORDER_ONE));
     expect(onPurchase).toHaveBeenCalledWith(0);
     unmount();
     // a stored «needs purchase» status with the stock covering the need: the button no longer opens an empty order
     const stale = [globalSec('a', [glueRow(0, 4, { status: 'needs_procurement' })])];
-    render(<GlobalInventoryControlSection sections={stale} availability={viewOf(stale, null, 'loading')} {...props} />);
+    render(<GlobalInventoryControlSection sections={stale} availability={viewOf(stale, null, 'loading')} {...props} />, { wrapper: QueryWrapper });
     expect(screen.queryByText(content => content.startsWith(SECTION_ORDER))).toBeNull();
   });
 });
@@ -125,7 +126,7 @@ describe('a finalized project points to the reservation reconcile for stock that
       id: 7, version: 1, title: 'materials', status: 'planned', products: [],
       inventory_control: { isFinalized: true, sections: [globalSec('a', [glueRow(0, 5)])], reservedItems: [], reservationShortages: stored },
     } as unknown as ProductionProject;
-    render(<ProjectInventoryTab project={project} />);
+    render(<ProjectInventoryTab project={project} />, { wrapper: QueryWrapper });
     expect(await screen.findByText(content => content.includes(REFINALIZE_HINT))).toBeTruthy();
   });
 });
@@ -140,7 +141,7 @@ describe('the materials taken from stock are read again after a save (TD-1290 re
       return [];
     };
     const project = { id: 7, version: 1, title: 'materials', status: 'planned', products: [], inventory_control: { sections: [globalSec('a', [glueRow(0, 4)])] } } as unknown as ProductionProject;
-    render(<ProjectInventoryTab project={project} />);
+    render(<ProjectInventoryTab project={project} />, { wrapper: QueryWrapper });
     const issuedReads = () => fetchJson.mock.calls.filter(([url]) => url === '/projects/7/issued-materials').length;
     await vi.waitFor(() => expect(issuedReads()).toBe(1));
     fireEvent.click(screen.getByText(SAVE_FORM));
@@ -199,7 +200,7 @@ describe('the delivery tab prices with a fresh balance before posting (TD-1290 r
 
   it('does not post a suggestion that changed meanwhile and posts the fresh one after the user sees it', async () => {
     route = deliveryRoute;
-    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />);
+    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     await waitFor(() => expect(priceInputs()[0].value).toBe('۸۰۰'));
     costAnswer = deliveryReport({ wipBalance: 4000 });
     fireEvent.click(deliverButton());
@@ -214,7 +215,7 @@ describe('the delivery tab prices with a fresh balance before posting (TD-1290 r
 
   it('asks before a delivery that leaves the project balance negative', async () => {
     route = deliveryRoute;
-    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />);
+    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     await waitFor(() => expect(priceInputs()[0].value).toBe('۸۰۰'));
     fireEvent.change(priceInputs()[0], { target: { value: '2000' } });
     confirmAction.mockImplementation(async () => false);
@@ -235,7 +236,7 @@ describe('the delivery tab prices with a fresh balance before posting (TD-1290 r
       if (JSON.parse(opts?.body ?? '{}').overDeliveryReason) return { success: true, addedCount: 1 };
       throw Object.assign(new Error('over'), { code: 'OVER_DELIVERY_REASON_REQUIRED', details: { overDeliveries: [{ itemId: 42, itemName: 'necklace', plannedQty: 10, deliveredQty: 0, requestedQty: 10 }] } });
     };
-    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />);
+    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     await waitFor(() => expect(priceInputs()[0].value).toBe('۸۰۰'));
     fireEvent.click(deliverButton());
     const reason = await screen.findByRole('textbox', { name: content => content.length > 0 }).catch(() => document.querySelector('textarea') as HTMLTextAreaElement);
@@ -256,7 +257,7 @@ describe('the delivery tab prices with a fresh balance before posting (TD-1290 r
     costAnswer = deliveryReport({ products: [deliveryReport().products[0], { itemId: 43, plannedQty: 5, deliveredQty: 0, weightedAverageCost: 100 }] });
     route = deliveryRoute;
     const two = { ...PROJECT, products: [PRODUCT, { ...PRODUCT, id: 'prod-2', item_id: 43, item_code: 'N-2', item_name: 'ring', quantity: 5 }] } as unknown as ProductionProject;
-    render(<ProjectStockEntryTab project={two} itemsList={ITEMS} onUpdate={vi.fn()} />);
+    render(<ProjectStockEntryTab project={two} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     await waitFor(() => expect(deliverButton(0).disabled).toBe(false));
     fireEvent.change(priceInputs()[0], { target: { value: '111' } });
     fireEvent.change(priceInputs()[1], { target: { value: '222' } });
@@ -270,7 +271,7 @@ describe('the delivery tab prices with a fresh balance before posting (TD-1290 r
   it('keeps delivery off until the first balance read answers (F6)', async () => {
     let answer: (v: unknown) => void = () => undefined;
     route = url => (url === '/projects/1/delivery-cost' ? new Promise(resolve => { answer = resolve; }) : deliveryRoute(url));
-    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />);
+    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     await vi.waitFor(() => expect(fetchJson).toHaveBeenCalledWith('/projects/1/delivery-cost', expect.anything()));
     expect(deliverButton().disabled).toBe(true);
     answer(deliveryReport());

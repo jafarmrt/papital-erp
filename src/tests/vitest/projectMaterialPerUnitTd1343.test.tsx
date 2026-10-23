@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { QueryWrapper } from './helpers/queryWrapper';
 import type { Item, ProductionProject, ProjectInventoryControlItemResult, ProjectInventoryControlSectionData } from '../../types';
 import {
   isPerUnitRow, perItemRowRequiredQty, perUnitQtyFromTotal, perUnitRowFields, productOrderQuantity, rowConvertedQty,
@@ -169,7 +170,7 @@ describe('the materials tab with per-unit rows (TD-1343)', () => {
   it('adds a new code-by-code material at one per unit of the product', async () => {
     stockItems = [stock(1, 'مهره', 0)];
     const p = project([codeSection({ p1: [] })]);
-    const { result } = renderHook(() => useProjectInventory(p));
+    const { result } = renderHook(() => useProjectInventory(p), { wrapper: QueryWrapper });
     await waitFor(() => expect(fetchJson).toHaveBeenCalled());
     act(() => result.current.handleOpenAddMaterialModal(0, 'p1'));
     act(() => result.current.handleSelectWarehouseItem(stockItems[0]));
@@ -183,14 +184,14 @@ describe('the materials tab with per-unit rows (TD-1343)', () => {
     stockItems = [stock(1, 'مهره', 10)];
     const stored = [{ id: 'sec-code', title: 'کد به کد', checkType: 'per_item', items: [{ id: 'm1', name: 'مهره', itemCode: 'M-1', unit: 'عدد' }] }];
     const oldProject = project(stored as unknown as ProjectInventoryControlSectionData[]);
-    const old = renderHook(() => useProjectInventory(oldProject));
+    const old = renderHook(() => useProjectInventory(oldProject), { wrapper: QueryWrapper });
     await waitFor(() => expect(fetchJson).toHaveBeenCalled());
     await waitFor(() => expect(old.result.current.sections[0].perItemResults?.p1?.m1).toMatchObject({ requiredQty: 1 }));
     expect(old.result.current.sections[0].perItemResults?.p1?.m1).not.toHaveProperty('qtyPerUnit');
     old.unmount();
 
     const freshProject = project([]);
-    const fresh = renderHook(() => useProjectInventory(freshProject));
+    const fresh = renderHook(() => useProjectInventory(freshProject), { wrapper: QueryWrapper });
     await waitFor(() => expect(fetchJson).toHaveBeenCalled());
     const firstCode = fresh.result.current.sections.find(s => s.checkType === 'per_item');
     const rows = Object.values(firstCode?.perItemResults?.p1 ?? {});

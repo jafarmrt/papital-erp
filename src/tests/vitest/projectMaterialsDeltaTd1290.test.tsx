@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { QueryWrapper } from './helpers/queryWrapper';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { buildMaterialAvailabilityView, type AvailabilityStockItem, type MaterialAvailabilityReport } from '../../lib/projects/materialAvailability';
 import { checkDeliveryPrices, type DeliveryCostReport } from '../../lib/projects/deliveryCostSuggestion';
@@ -83,7 +84,7 @@ describe('the over-delivery resend sends what it priced (TD-1290 delta review D1
       if (JSON.parse(opts?.body ?? '{}').overDeliveryReason) return { success: true, addedCount: 1 };
       throw overDeliveryRefusal(16);
     };
-    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />);
+    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     await waitFor(() => expect(priceInputs()[0].value).toBe('۸۰۰'));
     fireEvent.change(qtyInputs()[0], { target: { value: '16' } });
     await waitFor(() => expect(priceInputs()[0].value).toBe('۵۰۰'));
@@ -102,7 +103,7 @@ describe('the over-delivery resend sends what it priced (TD-1290 delta review D1
       if (JSON.parse(opts?.body ?? '{}').overDeliveryReason) return { success: true, addedCount: 1 };
       throw overDeliveryRefusal(16);
     };
-    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />);
+    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     await waitFor(() => expect(priceInputs()[0].value).toBe('۸۰۰'));
     fireEvent.change(qtyInputs()[0], { target: { value: '16' } });
     await waitFor(() => expect(priceInputs()[0].value).toBe('۵۰۰'));
@@ -125,7 +126,7 @@ describe('the over-delivery resend sends what it priced (TD-1290 delta review D1
       if (url === '/projects/1/delivery-cost' && fail) throw new Error('down');
       return deliveryRoute(url, opts);
     };
-    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />);
+    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     await waitFor(() => expect(deliverButton().disabled).toBe(false));
     expect(priceInputs()[0].value).toBe('');
     fail = false;
@@ -141,7 +142,7 @@ describe('the over-delivery resend sends what it priced (TD-1290 delta review D1
   it('posts the typed price without a cost read answer for a user who does not see cost', async () => {
     costAnswer = { projectId: 1, costVisible: false, wipBalance: null, products: [{ itemId: 42, plannedQty: 10, deliveredQty: 0, weightedAverageCost: null }] };
     route = deliveryRoute;
-    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />);
+    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     await waitFor(() => expect(deliverButton().disabled).toBe(false));
     fireEvent.change(priceInputs()[0], { target: { value: '300' } });
     const urls = () => fetchJson.mock.calls.map(([url]) => url);
@@ -168,7 +169,7 @@ describe('a rounded suggestion does not warn of a negative balance (TD-1290 delt
     costAnswer = thirds;
     route = deliveryRoute;
     const three = { ...PROJECT, quantity: 3, products: [{ ...PRODUCT, quantity: 3 }] } as unknown as ProductionProject;
-    render(<ProjectStockEntryTab project={three} itemsList={ITEMS} onUpdate={vi.fn()} />);
+    render(<ProjectStockEntryTab project={three} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     await waitFor(() => expect(priceInputs()[0].value).toBe('۶۶۶٫۶۶۶۷'));
     expect(screen.queryByText(content => content.includes(OVERDRAW_ALERT))).toBeNull();
     fireEvent.click(deliverButton());

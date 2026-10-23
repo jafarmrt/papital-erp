@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { QueryWrapper } from './helpers/queryWrapper';
 import { act, cleanup, render, renderHook, screen, waitFor } from '@testing-library/react';
 import type { FormEvent } from 'react';
 import type { ProductionProject } from '../../types';
@@ -28,7 +29,7 @@ describe('project custom material request (TD-826)', () => {
       if (init?.method === 'POST') { posts.push({ url, body: JSON.parse(String(init.body)) }); return Promise.resolve({ data: { id: 9 } }); }
       return Promise.resolve([]);
     });
-    const { result } = renderHook(() => useProjectInventory(project, []));
+    const { result } = renderHook(() => useProjectInventory(project, []), { wrapper: QueryWrapper });
     await waitFor(() => expect(fetchJson).toHaveBeenCalled());
     act(() => {
       result.current.handleOpenAddMaterialModal(0);
@@ -62,13 +63,13 @@ const modalProps = () => ({
 
 describe('custom material tab by permission (TD-826)', () => {
   it('offers the request only to holders of pending_materials.create and never asks for opening stock', () => {
-    render(<AddMaterialModal {...modalProps()} />);
+    render(<AddMaterialModal {...modalProps()} />, { wrapper: QueryWrapper });
     expect(screen.queryByText('درخواست ماده اولیه جدید')).toBeNull();
     expect(screen.queryByText('ارسال درخواست به انباردار')).toBeNull();
     cleanup();
 
     held.add('pending_materials.create');
-    render(<AddMaterialModal {...modalProps()} />);
+    render(<AddMaterialModal {...modalProps()} />, { wrapper: QueryWrapper });
     expect(screen.getByText('درخواست ماده اولیه جدید')).toBeTruthy();
     expect(screen.getByText('ارسال درخواست به انباردار')).toBeTruthy();
     expect(screen.queryByText(/موجودی اولیه/)).toBeNull();

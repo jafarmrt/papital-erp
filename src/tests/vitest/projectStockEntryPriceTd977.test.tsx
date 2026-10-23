@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { QueryWrapper } from './helpers/queryWrapper';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import toast from 'react-hot-toast';
 
@@ -42,7 +43,7 @@ const inputAfter = async (label: string) => (await screen.findByText(label)).par
 // v10.0.28 (TD-977): the browser's cached average cost is never sent as an entered price, and no quantity is invented
 describe('project stock entry price and quantity (TD-977)', () => {
   it('sends no unit price when the user typed none, so the server uses the current average cost', async () => {
-    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />);
+    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     expect((await inputAfter(PRICE_LABEL)).value).toBe('');
     fireEvent.click(screen.getByText(DELIVER));
     await vi.waitFor(() => expect(deliveryCalls()).toHaveLength(1));
@@ -51,7 +52,7 @@ describe('project stock entry price and quantity (TD-977)', () => {
   });
 
   it('sends the unit price the user typed', async () => {
-    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />);
+    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     fireEvent.change(await inputAfter(PRICE_LABEL), { target: { value: '7000' } });
     fireEvent.click(screen.getByText(DELIVER));
     await vi.waitFor(() => expect(deliveryCalls()).toHaveLength(1));
@@ -60,7 +61,7 @@ describe('project stock entry price and quantity (TD-977)', () => {
 
   it('starts empty for a product without a planned quantity and refuses to deliver 100', async () => {
     const noPlan = { ...PROJECT, quantity: undefined, products: [] } as unknown as ProductionProject;
-    render(<ProjectStockEntryTab project={noPlan} itemsList={ITEMS} onUpdate={vi.fn()} />);
+    render(<ProjectStockEntryTab project={noPlan} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     expect((await inputAfter(QTY_LABEL)).value).toBe('');
     fireEvent.click(screen.getByText(DELIVER));
     await Promise.resolve();
@@ -72,7 +73,7 @@ describe('project stock entry price and quantity (TD-977)', () => {
 // v10.0.174 (TD-920, decision t4 b of phase 5): labour is a period expense, so the delivery price is materials only
 describe('project stock entry says the unit price is materials only (TD-920)', () => {
   it('shows the materials-only note above the delivery lines', async () => {
-    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />);
+    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     expect((await screen.findByTestId('delivery-materials-only')).textContent).toBe(DELIVERY_MATERIALS_ONLY_NOTE);
   });
 });
