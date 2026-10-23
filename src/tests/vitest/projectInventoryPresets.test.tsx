@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { QueryWrapper } from './helpers/queryWrapper';
 import { cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { Item, ProductionProject, ProjectInventoryControlSectionData } from '../../types';
 import { DEFAULT_INVENTORY_CONTROL_SECTIONS } from '../../constants/inventoryControlPresets';
@@ -40,7 +41,7 @@ const presetMaterialCount = DEFAULT_INVENTORY_CONTROL_SECTIONS.reduce((n, s) => 
 describe('inventory control presets in a project (TD-748)', () => {
   it('puts every material of the default preset on the purchase list with zero material progress', async () => {
     const p = project();
-    const { result } = renderHook(() => useProjectInventory(p));
+    const { result } = renderHook(() => useProjectInventory(p), { wrapper: QueryWrapper });
     await waitFor(() => expect(fetchJson).toHaveBeenCalled());
     await waitFor(() => expect(result.current.purchaseList).toHaveLength(presetMaterialCount));
     expect(presetMaterialCount).toBe(10);
@@ -54,7 +55,7 @@ describe('inventory control presets in a project (TD-748)', () => {
     // refused by the finalize (TD-820), so it no longer counts as available
     stockItems = [stock(1, 'کاغذ ترنسفر', 20, 'برگ'), stock(2, 'کارتن بسته‌بندی', 40)];
     const p = project();
-    const { result } = renderHook(() => useProjectInventory(p));
+    const { result } = renderHook(() => useProjectInventory(p), { wrapper: QueryWrapper });
     await waitFor(() => expect(result.current.purchaseList).toHaveLength(presetMaterialCount - 2));
     expect(result.current.purchaseList.map(row => row.itemName)).not.toContain('کاغذ ترنسفر');
     expect(result.current.materialProgress).toBe(20);
@@ -63,7 +64,7 @@ describe('inventory control presets in a project (TD-748)', () => {
   it('converts preset-shaped sections a project saved earlier', async () => {
     const saved = [{ id: 'secGlue', title: 'چسب', checkType: 'global', items: [{ id: 'mGlue', name: 'چسب حرارتی', unit: 'لیتر' }] }];
     const p = project({ sections: saved as unknown as ProjectInventoryControlSectionData[] });
-    const { result } = renderHook(() => useProjectInventory(p));
+    const { result } = renderHook(() => useProjectInventory(p), { wrapper: QueryWrapper });
     await waitFor(() => expect(fetchJson).toHaveBeenCalled());
     await waitFor(() => expect(result.current.purchaseList.map(row => row.itemName)).toEqual(['چسب حرارتی']));
     expect(result.current.materialProgress).toBe(0);

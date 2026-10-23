@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { QueryWrapper } from './helpers/queryWrapper';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { ProductionProject, ProjectInventoryControlSectionData } from '../../types';
 
@@ -30,7 +31,7 @@ const submit = { preventDefault: () => undefined } as unknown as React.FormEvent
 // v10.0.105 (TD-1212): applying a unit conversion keeps all three fields, so the finalize converts the requirement
 describe('project unit conversion keeps every field (TD-1212)', () => {
   it('stores the converted unit, the rate and the converted quantity on a per-item row', async () => {
-    const { result } = renderHook(() => useProjectInventory(project));
+    const { result } = renderHook(() => useProjectInventory(project), { wrapper: QueryWrapper });
     await waitFor(() => expect(result.current.sections[0]?.perItemResults?.p1?.mBox).toBeTruthy());
     act(() => result.current.handleOpenUnitConversionModal(0, 'mBox', 'p1', undefined, 'box', undefined, 2, 'pack', 'pcs', 'pcs', 0.1));
     act(() => result.current.handleApplyUnitConversion(submit));
@@ -38,7 +39,7 @@ describe('project unit conversion keeps every field (TD-1212)', () => {
   });
 
   it('stores the converted unit, the rate and the converted quantity on a global row', async () => {
-    const { result } = renderHook(() => useProjectInventory(project));
+    const { result } = renderHook(() => useProjectInventory(project), { wrapper: QueryWrapper });
     await waitFor(() => expect(result.current.sections[1]?.globalItems?.[0]).toBeTruthy());
     act(() => result.current.handleOpenUnitConversionModal(1, 'mGlue', undefined, 0, 'glue', undefined, 2, 'pack', 'pcs', 'pcs', 0.1));
     act(() => result.current.handleApplyUnitConversion(submit));

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { QueryWrapper } from './helpers/queryWrapper';
 import { cleanup, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import {
   buildMaterialAvailabilityView, materialAvailabilityReportOf, projectMaterialItemIds, rowIsShort,
@@ -106,10 +107,10 @@ describe('free stock for the project (TD-1290 D1)', () => {
   });
 
   it('does not ask the server without items and reports an error for an invalid project', () => {
-    const empty = renderHook(() => useProjectMaterialAvailability(7, [], 'loaded', 1));
+    const empty = renderHook(() => useProjectMaterialAvailability(7, [], 'loaded', 1), { wrapper: QueryWrapper });
     expect(empty.result.current.status).toBe('ready');
     expect(empty.result.current.report?.items).toEqual([]);
-    const invalid = renderHook(() => useProjectMaterialAvailability('x', [3], 'loaded', 1));
+    const invalid = renderHook(() => useProjectMaterialAvailability('x', [3], 'loaded', 1), { wrapper: QueryWrapper });
     expect(invalid.result.current.status).toBe('error');
     expect(fetchJson).not.toHaveBeenCalled();
   });
@@ -129,7 +130,7 @@ const inventoryRoute = (figures: { reservedByOthers: number; issuedToProject: nu
 describe('materials tab and purchase list use the free stock (TD-1290 D1)', () => {
   it('shows the free stock and an automatic shortage where total stock covered the need', async () => {
     route = inventoryRoute({ reservedByOthers: 6, issuedToProject: 0 });
-    render(<ProjectInventoryTab project={inventoryProject()} />);
+    render(<ProjectInventoryTab project={inventoryProject()} />, { wrapper: QueryWrapper });
     expect(await screen.findByText(SHORT_BADGE)).toBeTruthy();
     expect(screen.getAllByText(FREE_HEADER).length).toBeGreaterThan(0);
     expect(screen.getByText(PROJECT_SHORT)).toBeTruthy();
@@ -141,7 +142,7 @@ describe('materials tab and purchase list use the free stock (TD-1290 D1)', () =
   it('puts the row on the purchase list with the free stock and the remaining need', async () => {
     route = inventoryRoute({ reservedByOthers: 6, issuedToProject: 1 });
     const project = inventoryProject();
-    const { result } = renderHook(() => useProjectInventory(project));
+    const { result } = renderHook(() => useProjectInventory(project), { wrapper: QueryWrapper });
     await waitFor(() => expect(result.current.availability.status).toBe('ready'));
     expect(result.current.purchaseList).toHaveLength(1);
     expect(result.current.purchaseList[0]).toMatchObject({ itemName: 'glue', warehouseStockQty: 2, issuedQty: 1, toPurchaseQty: 2 });
@@ -151,7 +152,7 @@ describe('materials tab and purchase list use the free stock (TD-1290 D1)', () =
   it('leaves a covered row off the purchase list and counts it ready', async () => {
     route = inventoryRoute({ reservedByOthers: 0, issuedToProject: 0 });
     const project = inventoryProject();
-    const { result } = renderHook(() => useProjectInventory(project));
+    const { result } = renderHook(() => useProjectInventory(project), { wrapper: QueryWrapper });
     await waitFor(() => expect(result.current.availability.status).toBe('ready'));
     expect(result.current.materialProgress).toBe(100);
     expect(result.current.purchaseList).toHaveLength(0);
@@ -160,7 +161,7 @@ describe('materials tab and purchase list use the free stock (TD-1290 D1)', () =
   it('shows the progress as unknown when the free stock cannot be read', async () => {
     route = url => (url.startsWith('/projects/7/material-availability') ? [] : inventoryRoute({ reservedByOthers: 0, issuedToProject: 0 })(url));
     const project = inventoryProject();
-    const { result } = renderHook(() => useProjectInventory(project));
+    const { result } = renderHook(() => useProjectInventory(project), { wrapper: QueryWrapper });
     await waitFor(() => expect(result.current.availability.status).toBe('error'));
     expect(result.current.materialProgress).toBeNull();
     expect(result.current.purchaseList).toHaveLength(0);
@@ -169,7 +170,7 @@ describe('materials tab and purchase list use the free stock (TD-1290 D1)', () =
   it('flags a unit mismatch instead of «available»', async () => {
     route = inventoryRoute({ reservedByOthers: 0, issuedToProject: 0 });
     const p = { ...inventoryProject(), inventory_control: { sections: globalSection(5, 'box') } } as unknown as ProductionProject;
-    render(<ProjectInventoryTab project={p} />);
+    render(<ProjectInventoryTab project={p} />, { wrapper: QueryWrapper });
     expect(await screen.findByText(UNIT_BADGE)).toBeTruthy();
     expect(screen.queryByText(AVAILABLE_BADGE)).toBeNull();
   });
@@ -181,7 +182,7 @@ const issuedRow = { key: 'allocation-1', source: 'allocation', sourceId: 1, refN
 describe('materials taken from stock (TD-1290 D3)', () => {
   it('lists what was taken and hides the cost from a reader without the cost permission', async () => {
     route = () => ({ projectId: 7, costVisible: false, rows: [{ ...issuedRow, cost: 1500 }], total: 1, totalCost: 1500 });
-    render(<ProjectIssuedMaterialsList projectId={7} />);
+    render(<ProjectIssuedMaterialsList projectId={7} />, { wrapper: QueryWrapper });
     const list = await screen.findByRole('region', { name: ISSUED_LIST });
     expect(await within(list).findByText('glue')).toBeTruthy();
     expect(within(list).queryByText(COST_HEADER)).toBeNull();
@@ -191,7 +192,7 @@ describe('materials taken from stock (TD-1290 D3)', () => {
 
   it('shows each cost and the total to a cost reader', async () => {
     route = () => ({ projectId: 7, costVisible: true, rows: [issuedRow], total: 1, totalCost: 1500 });
-    render(<ProjectIssuedMaterialsList projectId={7} />);
+    render(<ProjectIssuedMaterialsList projectId={7} />, { wrapper: QueryWrapper });
     expect(await screen.findByText(COST_TOTAL)).toBeTruthy();
     expect(screen.getByText(COST_HEADER)).toBeTruthy();
   });
@@ -254,7 +255,7 @@ const priceInput = async () => (await screen.findByText(PRICE_LABEL)).parentElem
 describe('delivery tab fills the unit cost from the project balance (TD-1290 D2)', () => {
   it('prefills the suggestion for a single product and posts it', async () => {
     route = deliveryRoute(deliveryReport());
-    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />);
+    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     await waitFor(async () => expect((await priceInput()).value).toBe('۸۰۰'));
     const panel = screen.getByTestId('project-delivery-cost');
     expect(panel.textContent).toContain('۸٬۰۰۰');
@@ -266,7 +267,7 @@ describe('delivery tab fills the unit cost from the project balance (TD-1290 D2)
 
   it('posts no price when the user clears the suggestion, so the server uses the average cost', async () => {
     route = deliveryRoute(deliveryReport());
-    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />);
+    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     await waitFor(async () => expect((await priceInput()).value).toBe('۸۰۰'));
     fireEvent.change(await priceInput(), { target: { value: '' } });
     expect((await priceInput()).value).toBe('');
@@ -277,7 +278,7 @@ describe('delivery tab fills the unit cost from the project balance (TD-1290 D2)
 
   it('warns when a delivery that completes the plan leaves a balance', async () => {
     route = deliveryRoute(deliveryReport());
-    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />);
+    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     await waitFor(async () => expect((await priceInput()).value).toBe('۸۰۰'));
     fireEvent.change(await priceInput(), { target: { value: '700' } });
     expect((await screen.findByTestId('project-delivery-cost')).textContent).toContain(RESIDUE_WARNING);
@@ -287,7 +288,7 @@ describe('delivery tab fills the unit cost from the project balance (TD-1290 D2)
     const two = deliveryReport({ products: [deliveryReport().products[0], { itemId: 43, plannedQty: 5, deliveredQty: 0, weightedAverageCost: 100 }] });
     route = deliveryRoute(two);
     const p = { ...PROJECT, products: [PROJECT.products?.[0], { id: 'prod-2', item_id: 43, item_code: 'N-2', item_name: 'ring', customer_code: '', quantity: 5, unit: 'pcs', needs_assembly: false }] } as unknown as ProductionProject;
-    render(<ProjectStockEntryTab project={p} itemsList={ITEMS} onUpdate={vi.fn()} />);
+    render(<ProjectStockEntryTab project={p} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     expect(await screen.findByText(content => content.includes(MULTI_PRODUCT_WARNING))).toBeTruthy();
     const inputs = screen.getAllByText(PRICE_LABEL).map(label => label.parentElement?.querySelector('input') as HTMLInputElement);
     expect(inputs.map(i => i.value)).toEqual(['', '']);
@@ -295,7 +296,7 @@ describe('delivery tab fills the unit cost from the project balance (TD-1290 D2)
 
   it('shows no balance and suggests nothing to a reader without the cost permission', async () => {
     route = deliveryRoute({ projectId: 1, costVisible: false, wipBalance: null, products: [{ itemId: 42, plannedQty: 10, deliveredQty: 0, weightedAverageCost: null }] });
-    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />);
+    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     await vi.waitFor(() => expect(fetchJson).toHaveBeenCalledWith('/projects/1/delivery-cost', expect.anything()));
     await waitFor(() => expect(screen.queryByTestId('project-delivery-cost')).toBeNull());
     expect((await priceInput()).value).toBe('');

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { 
@@ -18,7 +18,6 @@ import {
   withProcurementStatus
 } from '../components/project/projectInventoryUtils';
 import { errorMessageOf, toPersianDigits } from '../utils';
-import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 import { useProjectVersion } from './useProjectVersion';
 import { directConversionRate } from '../lib/projects/unitConversion';
 import { storedReservationShortages } from '../lib/projects/projectReservationState';
@@ -31,6 +30,8 @@ import { findProjectItemMatch } from '../lib/projects/projectItemMatch';
 import { EMPTY_CUSTOM_MATERIAL_FORM, pendingMaterialRequestOf, type CustomMaterialForm } from '../lib/pendingMaterials/customMaterialRequest';
 import { buildMaterialAvailabilityView, projectMaterialItemIds } from '../lib/projects/materialAvailability';
 import { useProjectMaterialAvailability, type WarehouseItemsState } from './useProjectMaterialReports';
+import { useProjectItemOptions } from './queries/useProjectWorkspaceQueries';
+import { presetSectionsOfSettings, useInventoryCategoriesQuery, useInventorySettingsQuery } from './queries/useProjectInventoryQueries';
 
 /** پاسخ PUT /projects/:id؛ رزرو پروژه را سرور می‌نویسد (v8.0.58، TD-306) */
 interface SavedProjectInventory {
@@ -87,10 +88,23 @@ export function useProjectInventory(
     notes: ''
   });
 
-  const [warehouseItems, setWarehouseItems] = useState<Item[]>(initialItemsList || []);
+  // v10.2 package 11 part 5e (TD-1364): the item pick list, categories and settings come from React Query, the keys the
+  // workspace tabs, the settings screens and the other forms read, so a stock, category or settings change refreshes them
+  const itemsQuery = useProjectItemOptions(true);
+  const categoriesQuery = useInventoryCategoriesQuery();
+  const settingsQuery = useInventorySettingsQuery();
+  const warehouseItems = useMemo<Item[]>(() => itemsQuery.data ?? initialItemsList ?? [], [itemsQuery.data, initialItemsList]);
   // v10.2.3 (TD-1290): ارقام آزاد پس از رسیدن فهرست کالاها خوانده می‌شوند
-  const [warehouseItemsState, setWarehouseItemsState] = useState<WarehouseItemsState>('loading');
-  const [presetSections, setPresetSections] = useState<ProjectInventoryControlSectionData[]>(DEFAULT_INVENTORY_CONTROL_SECTIONS as any);
+  const warehouseItemsState: WarehouseItemsState = itemsQuery.data ? 'loaded' : (itemsQuery.isError ? 'failed' : 'loading');
+  // v9.0.422 (TD-766): a settings preset that cannot be read or parsed falls back to the default preset, and the user is told
+  const presetRead = useMemo<{ sections: unknown[] | null; unreadable: boolean }>(() => {
+    try {
+      return { sections: presetSectionsOfSettings(settingsQuery.data), unreadable: false };
+    } catch {
+      return { sections: null, unreadable: true };
+    }
+  }, [settingsQuery.data]);
+  const presetSections = (presetRead.sections ?? DEFAULT_INVENTORY_CONTROL_SECTIONS) as ProjectInventoryControlSectionData[];
 
   // Derive products list from project
   // V3.1.0 (باگ کاربر): قبلاً وقتی product_items موجود نبود، یک محصول جعلی با
@@ -167,75 +181,40 @@ export function useProjectInventory(
   } | null>(null);
 
   // Custom item form state
-  const [allCategories, setAllCategories] = useState<Category[]>([]);
+  const allCategories: Category[] = categoriesQuery.data ?? [];
   const [codePrefix, setCodePrefix] = useState<string>('');
   const [codeNumber, setCodeNumber] = useState<string>('');
 
   const [customMaterialForm, setCustomMaterialForm] = useState<CustomMaterialForm>(EMPTY_CUSTOM_MATERIAL_FORM);
 
-  // Fetch items & categories on mount
+  // what failed to load is said once per failure
+  const prerequisitesFailed = itemsQuery.isError || categoriesQuery.isError;
   useEffect(() => {
-    const controller = new AbortController();
-    async function loadData() {
-      try {
-        const [itemsRes, catRes, settingsRes] = await Promise.all([
-          fetchJson<any>(PICK_LIST_URLS.items, { signal: controller.signal }),
-          fetchJson<any>('/api/categories', { signal: controller.signal }),
-          fetchJson<any>('/api/settings', { signal: controller.signal }).catch((err) => {
-            if (err?.name === 'AbortError') throw err;
-            // v9.0.422 (TD-766): شکست خواندن تنظیمات گفته می‌شود و الگوی پیش‌فرض به کار می‌رود
-            toast.error('الگوی بخش‌های کنترل موجودی از تنظیمات دریافت نشد؛ الگوی پیش‌فرض به کار رفت');
-            return null;
-          })
-        ]);
+    if (prerequisitesFailed) toast.error('خطا در دریافت اطلاعات پیش‌نیاز کنترل موجودی پروژه');
+  }, [prerequisitesFailed]);
+  useEffect(() => {
+    if (settingsQuery.isError) toast.error('الگوی بخش‌های کنترل موجودی از تنظیمات دریافت نشد؛ الگوی پیش‌فرض به کار رفت');
+  }, [settingsQuery.isError]);
+  useEffect(() => {
+    if (presetRead.unreadable) toast.error('الگوی بخش‌های کنترل موجودی در تنظیمات خوانا نیست؛ الگوی پیش‌فرض به کار رفت');
+  }, [presetRead.unreadable]);
 
-        const loadedItems: Item[] = itemsRes?.data && Array.isArray(itemsRes.data) ? itemsRes.data : (Array.isArray(itemsRes) ? itemsRes : []);
-        setWarehouseItemsState('loaded');
-        if (itemsRes?.data && Array.isArray(itemsRes.data)) {
-          setWarehouseItems(itemsRes.data);
-        } else if (Array.isArray(itemsRes)) {
-          setWarehouseItems(itemsRes);
-        }
-
-        if (catRes?.data && Array.isArray(catRes.data)) {
-          setAllCategories(catRes.data);
-        } else if (Array.isArray(catRes)) {
-          setAllCategories(catRes);
-        }
-
-        let presets: unknown[] | null = null;
-        if (settingsRes && Array.isArray(settingsRes)) {
-          const invCtrlSetting = settingsRes.find((s: any) => s?.key === 'inventory_control_preset_sections');
-          if (invCtrlSetting?.value) {
-            try {
-              const parsed = JSON.parse(invCtrlSetting.value);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                setPresetSections(parsed);
-                presets = parsed;
-              }
-            } catch {
-              // تنظیمات خراب → پیش‌فرض‌ها باقی می‌مانند و کاربر می‌داند
-              toast.error('الگوی بخش‌های کنترل موجودی در تنظیمات خوانا نیست؛ الگوی پیش‌فرض به کار رفت');
-            }
-          }
-        }
-
-        // v9.0.413 (TD-748): پروژه بی بخش الگوی تنظیمات (یا پیش‌فرض) را می‌گیرد و بخش الگوی ذخیره‌شده ردیف پروژه؛ وضعیت هر ماده از موجودی
-        const stored = project.inventory_control?.sections;
-        const hasStored = Array.isArray(stored) && stored.length > 0;
-        if (!hasStored || hasPresetShapedSections(stored)) {
-          setSectionsState(projectSectionsFromPreset(hasStored ? stored : (presets ?? DEFAULT_INVENTORY_CONTROL_SECTIONS), products, materialStockLookup(loadedItems), { perUnit: !hasStored }));
-        }
-      } catch (err: any) {
-        if (err?.name === 'AbortError') return;
-        setWarehouseItemsState('failed');
-        console.error('Error loading inventory control prerequisites:', err);
-        toast.error('خطا در دریافت اطلاعات پیش‌نیاز کنترل موجودی پروژه');
-      }
+  // v9.0.413 (TD-748): پروژه بی بخش الگوی تنظیمات (یا پیش‌فرض) را می‌گیرد و بخش الگوی ذخیره‌شده ردیف پروژه؛ وضعیت هر ماده از موجودی.
+  // Once per project as given, when its items and settings have arrived: a later read of the item list
+  // (a stock change elsewhere) never replaces the sections on screen.
+  const sectionsBuiltFor = useRef<{ inventoryControl: unknown; products: unknown } | null>(null);
+  const prerequisitesReady = Boolean(itemsQuery.data) && (settingsQuery.isSuccess || settingsQuery.isError);
+  useEffect(() => {
+    if (!prerequisitesReady) return;
+    const built = sectionsBuiltFor.current;
+    if (built && built.inventoryControl === project.inventory_control && built.products === products) return;
+    sectionsBuiltFor.current = { inventoryControl: project.inventory_control, products };
+    const stored = project.inventory_control?.sections;
+    const hasStored = Array.isArray(stored) && stored.length > 0;
+    if (!hasStored || hasPresetShapedSections(stored)) {
+      setSectionsState(projectSectionsFromPreset(hasStored ? stored : (presetRead.sections ?? DEFAULT_INVENTORY_CONTROL_SECTIONS), products, materialStockLookup(warehouseItems), { perUnit: !hasStored }));
     }
-    void loadData();
-    return () => { controller.abort(); };
-  }, [project.inventory_control, products]);
+  }, [prerequisitesReady, project.inventory_control, products, presetRead.sections, warehouseItems]);
 
   // Sync state if project changes
   useEffect(() => {
@@ -874,9 +853,7 @@ export function useProjectInventory(
     conversionForm,
     setConversionForm,
     warehouseItems,
-    setWarehouseItems,
     presetSections,
-    setPresetSections,
     products,
     sections,
     setSections,

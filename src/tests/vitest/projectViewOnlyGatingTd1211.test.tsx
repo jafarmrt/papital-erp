@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { QueryWrapper } from './helpers/queryWrapper';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -68,14 +69,14 @@ describe('project screens for a projects.view reader (TD-1211)', () => {
   });
 
   it('offers no add button in the inventory control without projects.edit', async () => {
-    render(<ProjectInventoryTab project={inventoryProject} />);
+    render(<ProjectInventoryTab project={inventoryProject} />, { wrapper: QueryWrapper });
     expect(await screen.findByText(/فقط مشاهده/)).toBeTruthy();
     for (const label of ADD_LABELS) expect(screen.queryByText(label)).toBeNull();
   });
 
   it('offers the add buttons to a holder of projects.edit', async () => {
     canEdit = true;
-    render(<ProjectInventoryTab project={inventoryProject} />);
+    render(<ProjectInventoryTab project={inventoryProject} />, { wrapper: QueryWrapper });
     for (const label of ADD_LABELS) expect(await screen.findByText(label)).toBeTruthy();
   });
 

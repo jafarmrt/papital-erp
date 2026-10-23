@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { QueryWrapper } from './helpers/queryWrapper';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 const OVER = { itemId: 42, itemName: 'گردنبند آزمون', unit: 'عدد', planned: 5, delivered: 5, requested: 2, excess: 2 };
@@ -42,7 +43,7 @@ const PROJECT = {
 describe('project over-delivery reason (TD-327)', () => {
   it('asks for a reason when the server refuses an over-delivery and resends the same delivery with it', async () => {
     const onUpdate = vi.fn();
-    render(<ProjectStockEntryTab project={PROJECT} onUpdate={onUpdate} />);
+    render(<ProjectStockEntryTab project={PROJECT} onUpdate={onUpdate} />, { wrapper: QueryWrapper });
     fireEvent.click(await screen.findByText('ورود به انبار'));
     expect(await screen.findByText('تحویل بیش از مقدار برنامه‌ریزی‌شده پروژه')).toBeTruthy();
     const confirm = screen.getByText('ثبت تحویل با دلیل').closest('button') as HTMLButtonElement;
