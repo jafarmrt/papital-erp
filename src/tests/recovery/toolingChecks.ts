@@ -199,7 +199,7 @@ export async function checkLongStatementTimeout(): Promise<string[]> {
   }
   const importer = fs.readFileSync(path.join(REPO_ROOT, 'src', 'services', 'items', 'itemExcelImport.ts'), 'utf8');
   const importBody = importer.slice(importer.indexOf('export async function importItemsFromExcel'));
-  if (!/orm\.transaction\(async \(tx\) => \{\s*(\/\/[^\n]*\n\s*)*await extendStatementTimeout\(tx\)/.test(importBody)) {
+  if (!/(?:orm\.transaction|idempotentTransaction)\(async \(tx\) => \{\s*(\/\/[^\n]*\n\s*)*await extendStatementTimeout\(tx\)/.test(importBody)) {
     v.push('the item import transaction does not extend its statement timeout first');
   }
   return v;
