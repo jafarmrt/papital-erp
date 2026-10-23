@@ -12,7 +12,7 @@ export const ENCRYPTED_SETTING_KEYS: readonly string[] = ['wc_consumer_key', 'wc
 
 const ENCRYPTED = new Set(ENCRYPTED_SETTING_KEYS);
 
-export const UNREADABLE_SETTING_SECRET_MESSAGE = 'کلیدهای ذخیره‌شده ووکامرس با کلید رمزنگاری فعلی کارساز (ERP_SECRETS_KEY) باز نمی‌شوند. کلید درست را به کارساز برگردانید، یا مدیر سیستم کلیدهای ووکامرس را دوباره وارد و ذخیره کند.';
+export const UNREADABLE_SETTING_SECRET_MESSAGE = 'کلیدهای ذخیره‌شده ووکامرس با کلید رمزنگاری فعلی سرور (ERP_SECRETS_KEY) باز نمی‌شوند. کلید درست را به سرور برگردانید، یا مدیر سیستم کلیدهای ووکامرس را دوباره وارد و ذخیره کند.';
 
 export function isEncryptedSettingKey(key: string): boolean {
   return ENCRYPTED.has(key);

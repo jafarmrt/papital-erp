@@ -29,12 +29,21 @@ const LETTER = '[\\u0621-\\u064A\\u067E\\u0686\\u0698\\u06A9\\u06AF\\u06CC]';
  * v10.1.26 (TD-1275, Vibe Farsi audit item 4): also «جستجو» (written «جست‌وجو»), and the formal «نمایید» / «می‌باشد» /
  * «نمی‌باشد» (written «کنید» / «است» / «نیست»).
  * v10.1.63 (OBS-PR-16, decision ت۴۰ item 16): also «کانبان» everywhere (written «نمای ستونی» or «تخته»).
+ * v10.3.6 (owner rule, 10.3 package 2): also «کارساز» (written «سرور»); «خودکارسازی» is a longer word and stays.
  */
 export const FORBIDDEN = new RegExp(
-  `(?<!${LETTER})((?:سیستم|کاتالوگ|فیلتر|دوبل|جستجو|کانبان)(?:‌?(?:هایی|های|ها)|ی)?|نمایید|ن?می‌باشد)(?!${LETTER})`,
+  `(?<!${LETTER})((?:سیستم|کاتالوگ|فیلتر|دوبل|جستجو|کانبان|کارساز)(?:‌?(?:هایی|های|ها)|ی)?|نمایید|ن?می‌باشد)(?!${LETTER})`,
 );
 
 export type Baseline = Record<string, number>;
+
+/**
+ * v10.3.6: the settings search keywords (`keywords: [...]`) are hidden aliases, never shown, and keep the old words so an
+ * old search still finds its tab (AGENTS.md, shell wording rule); they are not counted
+ */
+export const isHiddenSearchKeyword = (node: ts.Node, sf: ts.SourceFile): boolean =>
+  ts.isArrayLiteralExpression(node.parent) && ts.isPropertyAssignment(node.parent.parent)
+  && node.parent.parent.name.getText(sf) === 'keywords';
 
 /** Number of user-facing texts in a source file that hold a forbidden word */
 export function countFileSites(source: string, fileName = 'file.tsx'): number {
@@ -45,7 +54,7 @@ export function countFileSites(source: string, fileName = 'file.tsx'): number {
       ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateHead(node)
       || ts.isTemplateMiddle(node) || ts.isTemplateTail(node) || ts.isJsxText(node)
     ) {
-      if (FORBIDDEN.test(node.text)) count++;
+      if (FORBIDDEN.test(node.text) && !isHiddenSearchKeyword(node, sf)) count++;
     }
     ts.forEachChild(node, visit);
   };

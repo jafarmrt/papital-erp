@@ -16,8 +16,11 @@ const PROJECT_TEXT = [
   'hooks/useProjectInventory.ts', 'hooks/queries/useProjectQueries.ts', 'lib/projects/', 'routes/projects.routes.ts', 'services/projects/',
 ];
 
-/** t10 A: BOM → «فهرست مواد», freeze → «رزرو», Gantt → «نمودار زمان‌بندی», chart, server → «سامانه», item → «قلم», material, phase, catalog */
-const REPLACED = /فریز|گانت|چارت|سرور|آیتم|متریال|(?:^|[\s«(])فاز(?:[\s»)،.]|$)|کاتالوگ/;
+/**
+ * t10 A: BOM → «فهرست مواد», freeze → «رزرو», Gantt → «نمودار زمان‌بندی», chart, item → «قلم», material, phase, catalog;
+ * v10.3.6 (owner rule): the server is «سرور» (or «سامانه» for the program), never «کارساز»
+ */
+const REPLACED = /فریز|گانت|چارت|(?<!خود)کارساز|آیتم|متریال|(?:^|[\s«(])فاز(?:[\s»)،.]|$)|کاتالوگ/;
 /** a Latin word inside Persian text, except key names, file formats and the debt ids the health check names */
 const LATIN_WORD = /(?<![.\w])[A-Za-z]{2,}/g;
 const ALLOWED_LATIN = new Set(['Esc', 'Enter', 'PDF', 'IRR', 'USD', 'EUR', 'AED', 'GBP']);

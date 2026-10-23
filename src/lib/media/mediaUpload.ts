@@ -71,7 +71,7 @@ interface RawSend {
   signal?: AbortSignal;
 }
 
-const NETWORK_TEXT = 'ارتباط با کارساز قطع شد؛ وضعیت فایل را بررسی کنید و در صورت نیاز دوباره بفرستید.';
+const NETWORK_TEXT = 'ارتباط با سرور قطع شد؛ وضعیت فایل را بررسی کنید و در صورت نیاز دوباره بفرستید.';
 
 /** Sends a raw body with the session cookie, the CSRF header and the file name */
 export async function sendRawFile<T>(req: RawSend): Promise<T> {

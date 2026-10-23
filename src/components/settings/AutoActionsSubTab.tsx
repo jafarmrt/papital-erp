@@ -108,7 +108,7 @@ export function AutoActionsSubTab() {
       const what = data?.conditionMatches ? actionPreviewLines(data.preview).join('؛ ') : '';
       showNotification([data?.message || 'آزمایش قانون انجام شد؛ اقدام اجرا نشد.', what].filter(Boolean).join(' '));
     } catch (err) {
-      showNotification(errorMessageOf(err) || 'ارتباط با کارساز برقرار نشد.', 'error');
+      showNotification(errorMessageOf(err) || 'ارتباط با سرور برقرار نشد.', 'error');
     }
   });
 

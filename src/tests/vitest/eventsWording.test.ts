@@ -5,7 +5,8 @@ import { join } from 'node:path';
 // v9.0.443 (TD-734, B15-32, decision t9 a): the events, webhook, notification and WooCommerce UI text uses the decided
 // Persian words. «وب‌هوک» is the third allowed loanword; «اقدام», «آزمایش», «گزارش», «داده رویداد», «صف ارسال رویداد»,
 // «صف خطا», «پردازشگر پس‌زمینه», «سرآیند», «آزمایش اتصال», «کلید», «اشاره» and «خودکارسازی» replace the old words, and
-// the shell glossary applies too («سامانه», «کارساز», «برخط», «پایگاه‌داده», «جست‌وجو», «نشانی», «پالایش»). An English
+// the shell glossary applies too («سامانه», «سرور» since v10.3.6 by the owner's rule (never «کارساز»), «برخط», «پایگاه‌داده»,
+// «جست‌وجو», «نشانی», «پالایش»). An English
 // label of the WooCommerce or WordPress dashboard stays only inside parentheses, so the user can find it there.
 
 const ROOT = join(__dirname, '..', '..');
@@ -24,7 +25,7 @@ const PERSIAN = /[؀-ۿ]/;
 const LITERAL = /'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\]|\\.)*`|>[^<>{}]*</g;
 /** the old words (t9 and the shell glossary), each only where it starts a Persian word */
 const REPLACED = new RegExp(`(?<![؀-ۿ])(?:${[
-  'اکشن', 'تست', 'لاگ', 'پی‌لود', 'اوت‌باکس', 'ورکر', 'پینگ', 'هدر', 'توکن', 'منشن', 'اتوماسیون', 'سرور', 'سیستم',
+  'اکشن', 'تست', 'لاگ', 'پی‌لود', 'اوت‌باکس', 'ورکر', 'پینگ', 'هدر', 'توکن', 'منشن', 'اتوماسیون', 'کارساز', 'سیستم',
   'آنلاین', 'دیتابیس', 'اتمیک', 'ورکفلو', 'فیلد', 'فیلتر', 'رکورد', 'کلیپ‌بورد', 'جستجو', 'لیست', 'داشبورد', 'آدرس',
 ].join('|')})`);
 /** a Latin word in Persian text outside parentheses, except a data format, an HTTP method or the signature algorithm */

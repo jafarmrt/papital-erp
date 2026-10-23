@@ -13,8 +13,8 @@ export interface UserPermissions {
 
 /** OBS-R1-33: what the user is told when the session ends or cannot be read (shown by `App` and the login page) */
 export const SESSION_EXPIRED_MESSAGE = 'نشست شما پایان یافته است؛ دوباره وارد شوید.';
-export const LOGOUT_NOT_CONFIRMED_MESSAGE = 'خروج در کارساز تأیید نشد؛ برای اطمینان پنجره مرورگر را ببندید.';
-export const SESSION_CHECK_FAILED_MESSAGE = 'نشست شما بررسی نشد، چون اتصال یا کارساز در دسترس نیست. دوباره تلاش کنید.';
+export const LOGOUT_NOT_CONFIRMED_MESSAGE = 'خروج در سرور تأیید نشد؛ برای اطمینان پنجره مرورگر را ببندید.';
+export const SESSION_CHECK_FAILED_MESSAGE = 'نشست شما بررسی نشد، چون اتصال یا سرور در دسترس نیست. دوباره تلاش کنید.';
 export const PERMISSIONS_LOAD_FAILED_MESSAGE = 'مجوزهای کاربر خوانده نشد؛ برخی بخش‌ها نشان داده نمی‌شوند. دوباره تلاش کنید.';
 
 export interface AuthContextValue {

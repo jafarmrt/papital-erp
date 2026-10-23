@@ -5,6 +5,8 @@ import { join } from 'node:path';
 // Package 16 (TD-686 / B16-22, decision t7): the shell, dashboard and settings UI text uses the owner's Persian words.
 // Only «کاردکس», «ترنسفر» and «وبهوک» stay transliterated, and «اکسل» and «ووکامرس» are product names. Search keywords of
 // the settings tabs are hidden aliases and keep the old words so old searches still find a tab.
+// v10.3.6 (owner rule, 10.3 package 2): the computer that runs the program is «سرور», never «کارساز» (it replaces the
+// t7 word); «خودکارسازی» stays.
 
 const ROOT = join(__dirname, '..', '..');
 const SHELL_UI = [
@@ -17,7 +19,7 @@ const SHELL_UI = [
   // v10.0.16 / v10.0.17 (D-11): the installable app's banners, install guide and the phone bottom bar
   'components/pwa/PwaStatusBanners.tsx', 'components/pwa/InstallAppButton.tsx', 'components/layout/MobileBottomNav.tsx', 'components/layout/mobileNavItems.ts',
 ];
-const REPLACED = /داشبورد|ورکفلو|ورک‌فلو|تسک|متریال|آلارم|دیتابیس|سیستم|منو(?!ی[^\s])|فیلتر|سرور|پروفایل|آنلاین|آپلود|اتوماسیون|استراتژی|ماژول|پروتکل|توکن|فلگ|کانفیگ|اندپوینت|فرانت|بک‌اند|باندل|ری‌استارت/;
+const REPLACED = /داشبورد|ورکفلو|ورک‌فلو|تسک|متریال|آلارم|دیتابیس|سیستم|منو(?!ی[^\s])|فیلتر|(?<!خود)کارساز|پروفایل|آنلاین|آپلود|اتوماسیون|استراتژی|ماژول|پروتکل|توکن|فلگ|کانفیگ|اندپوینت|فرانت|بک‌اند|باندل|ری‌استارت/;
 // v10.0.56 (TD-1159): the menu and the shell say «سند حسابداری» / «دوطرفه» (TD-579 glossary) and «فهرست», never «دوبل» or «لیست».
 const ACCOUNTING_GLOSSARY = /دوبل|لیست/;
 const ENGLISH = /TOMAN|Toman|Drag & Drop|Paste \(|\bKB\b|Tech Stack|AGENTS\.md|⌘K|Invalid time value/;

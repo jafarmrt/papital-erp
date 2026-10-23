@@ -47,7 +47,7 @@ export default function SystemHealthDiagnostic() {
       setHealth(await fetchJson('/system/health'));
     } catch (err) {
       setError(errorMessageOf(err) || 'وضعیت سلامت سامانه دریافت نشد. دوباره تلاش کنید.');
-      toast.error('وضعیت سلامت کارساز دریافت نشد.');
+      toast.error('وضعیت سلامت سرور دریافت نشد.');
     } finally {
       setLoading(false);
     }

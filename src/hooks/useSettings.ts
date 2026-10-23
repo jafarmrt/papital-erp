@@ -40,7 +40,7 @@ function loadWcList(endpoint: string, setRows: (rows: unknown[]) => void, setErr
     })
     .catch((err) => {
       if (err?.name === 'AbortError') return;
-      setError(errorMessageOf(err) || 'خواندن فهرست از کارساز ممکن نشد.');
+      setError(errorMessageOf(err) || 'خواندن فهرست از سرور ممکن نشد.');
     });
 }
 

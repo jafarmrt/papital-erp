@@ -715,7 +715,7 @@ export function WebhookManagementSubTab() {
                     <input
                       id={`${fieldId}-secret-key`}
                       type="text"
-                      placeholder={editingSub ? 'کلید ذخیره‌شده بی‌تغییر می‌ماند؛ برای تغییر، کلید تازه وارد کنید' : 'خالی بماند تا کارساز کلید امن بسازد'}
+                      placeholder={editingSub ? 'کلید ذخیره‌شده بی‌تغییر می‌ماند؛ برای تغییر، کلید تازه وارد کنید' : 'خالی بماند تا سرور کلید امن بسازد'}
                       value={formData.secretKey}
                       onChange={e => setFormData({ ...formData, secretKey: e.target.value })}
                       className="w-full font-mono text-[11px] bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl px-3.5 py-2.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500 dir-ltr text-left"

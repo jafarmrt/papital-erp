@@ -80,13 +80,13 @@ export function buildSecretsAtRestHealthTest(counts: SecretsAtRestCounts): Healt
   // v10.1.68 (TD-1286): a missing key is a warning of its own, also on a server with no stored secret yet, since every
   // new WooCommerce key, messenger bot token or webhook key is refused until it is set
   const problems = stored + (noKey ? 1 : 0);
-  const setKeyFirst = 'نخست کلید ERP_SECRETS_KEY را در فایل .env کارساز بگذارید و سرویس را دوباره راه بیندازید؛ ';
+  const setKeyFirst = 'نخست کلید ERP_SECRETS_KEY را در فایل .env سرور بگذارید و سرویس را دوباره راه بیندازید؛ ';
   if (noKey) {
     items.push({
       id: 'secrets_key_missing',
-      title: 'کلید رمزنگاری ERP_SECRETS_KEY روی کارساز تعریف نشده است',
+      title: 'کلید رمزنگاری ERP_SECRETS_KEY روی سرور تعریف نشده است',
       subtitle: 'ذخیره کلید ووکامرس، نشانه ربات پیام‌رسان و کلید وب‌هوک رد می‌شود',
-      details: 'روی کارساز در پوشه برنامه «bash scripts/ensure-env-secrets.sh .env ERP_SECRETS_KEY» را اجرا کنید، سرویس را دوباره راه بیندازید و کلید تازه را جایی امن بیرون از کارساز نگه دارید. اگر رمزها پیش‌تر با کلیدی دیگر رمزنگاری شده‌اند، همان کلید پیشین را برگردانید.',
+      details: 'روی سرور در پوشه برنامه «bash scripts/ensure-env-secrets.sh .env ERP_SECRETS_KEY» را اجرا کنید، سرویس را دوباره راه بیندازید و کلید تازه را جایی امن بیرون از سرور نگه دارید. اگر رمزها پیش‌تر با کلیدی دیگر رمزنگاری شده‌اند، همان کلید پیشین را برگردانید.',
     });
   }
   if (plain > 0) {
@@ -94,7 +94,7 @@ export function buildSecretsAtRestHealthTest(counts: SecretsAtRestCounts): Healt
       id: 'plaintext_secrets',
       title: 'رمز سامانه‌های بیرونی به‌صورت متن ساده',
       subtitle: `پرسنل ${fa(counts.plaintext.personnel)}، تنظیمات ${fa(counts.plaintext.settings)}، وب‌هوک ${fa(counts.plaintext.webhooks)}`,
-      details: `${noKey ? setKeyFirst + 'سپس ' : ''}روی کارساز یک بار «npm run secrets:encrypt -- --apply» را اجرا کنید.`,
+      details: `${noKey ? setKeyFirst + 'سپس ' : ''}روی سرور یک بار «npm run secrets:encrypt -- --apply» را اجرا کنید.`,
     });
   }
   if (counts.nonBcryptPasswords > 0) {
@@ -102,7 +102,7 @@ export function buildSecretsAtRestHealthTest(counts: SecretsAtRestCounts): Healt
       id: 'non_bcrypt_passwords',
       title: 'گذرواژه کاربر بی درهم‌سازی امن',
       subtitle: `${fa(counts.nonBcryptPasswords)} کاربر`,
-      details: 'روی کارساز یک بار «npm run users:lock-plain-passwords -- --apply» را اجرا کنید و سپس به این کاربران رمز موقت تازه بدهید.',
+      details: 'روی سرور یک بار «npm run users:lock-plain-passwords -- --apply» را اجرا کنید و سپس به این کاربران رمز موقت تازه بدهید.',
     });
   }
   if (counts.unreadable > 0) {
@@ -111,7 +111,7 @@ export function buildSecretsAtRestHealthTest(counts: SecretsAtRestCounts): Healt
       title: 'رمز ذخیره‌شده‌ای که با کلید فعلی باز نمی‌شود',
       subtitle: `${fa(counts.unreadable)} مقدار`,
       details: noKey
-        ? 'کلید ERP_SECRETS_KEY روی کارساز تعریف نشده است؛ همان کلید پیشین را در فایل .env بگذارید یا این رمزها را دوباره وارد کنید.'
+        ? 'کلید ERP_SECRETS_KEY روی سرور تعریف نشده است؛ همان کلید پیشین را در فایل .env بگذارید یا این رمزها را دوباره وارد کنید.'
         : 'کلید ERP_SECRETS_KEY عوض شده است؛ کلید پیشین را برگردانید یا این رمزها را دوباره وارد کنید.',
     });
   }
@@ -126,7 +126,7 @@ export function buildSecretsAtRestHealthTest(counts: SecretsAtRestCounts): Healt
     message: stored > 0
       ? `${fa(stored)} رمز یا گذرواژه به شکل امن ذخیره نشده است.${noKey ? ' کلید ERP_SECRETS_KEY هم تعریف نشده است.' : ''}`
       : noKey
-        ? 'کلید ERP_SECRETS_KEY روی کارساز تعریف نشده است.'
+        ? 'کلید ERP_SECRETS_KEY روی سرور تعریف نشده است.'
         : 'همه رمزها رمزنگاری‌شده و همه گذرواژه‌ها درهم‌سازی‌شده‌اند.',
     items,
     metrics: {

@@ -55,9 +55,10 @@ describe('OBS-PR-17 the WooCommerce lists load only with the WooCommerce tab', (
 });
 
 describe('OBS-R2-88 the simulator rule follows the events glossary', () => {
-  it('has no retired automation or external-server words', () => {
+  it('has no retired automation or server words', () => {
     const engine = readFileSync(resolve(ROOT, 'services/events/eventActionEngineService.ts'), 'utf8');
     expect(engine).not.toContain('اتوماسیون');
-    expect(engine).not.toContain('سرور بیرونی');
+    // v10.3.6 (owner rule): the external server is «سرور بیرونی», never «کارساز بیرونی»
+    expect(engine).not.toContain('کارساز بیرونی');
   });
 });

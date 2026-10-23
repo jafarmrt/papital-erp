@@ -5,7 +5,7 @@ import { allowTestLoopbackOrigin, assertSafeExternalUrl, isTestLoopbackOrigin, w
 import { buildSecretsAtRestHealthTest } from '../../services/system/secretsAtRestHealth';
 
 const SET_KEY_FIRST = 'نخست کلید ERP_SECRETS_KEY';
-const KEY_NOT_DEFINED = 'روی کارساز تعریف نشده است';
+const KEY_NOT_DEFINED = 'روی سرور تعریف نشده است';
 
 const shop = 'http://shop.example.com/wp-json/wc/v3/products';
 
