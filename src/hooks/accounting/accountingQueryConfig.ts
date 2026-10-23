@@ -23,7 +23,10 @@ export const ACCOUNTING_LIST_QUERY_OPTIONS = {
 /** OBS-R2-105 (TD-1322): a list is read only while a tab or window on screen shows it */
 export interface AccountingListQueryOptions {
   enabled?: boolean;
-  /** 10.3 (ARCH review finding 3): a window that read the list each time it opened still does (`staleTime: 0`) */
+  /**
+   * 10.3 (ARCH review finding 3): a window that read the list each time it opened still does (`staleTime: 0`), and
+   * offline the read fails at once so the window says so (`networkMode: 'always'`)
+   */
   readOnEveryOpening?: boolean;
 }
 

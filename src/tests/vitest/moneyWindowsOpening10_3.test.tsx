@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, onlineManager, useQuery } from '@tanstack/react-query';
 import type { ReactElement, ReactNode } from 'react';
 
 /**
@@ -12,11 +12,14 @@ import type { ReactElement, ReactNode } from 'react';
 /** Persian words the tests compare with, kept apart from the assertions (AGENTS §6, terminal English) */
 const SHOWN = {
   issueEidi: /صدور فیش عیدی/,
+  advanceBalance: /مانده مساعده تسویه‌نشده پرسنل در/,
+  worker: 'کارگر',
 } as const;
 
 let failBanks = false;
 let failHistoryAll = false;
 let failEidi = false;
+let failAdvance = false;
 const BANKS = [
   { id: 1, title: 'A', type: 'bank', currency: 'IRR', code: '1' },
   { id: 2, title: 'B', type: 'bank', currency: 'IRR', code: '2' },
@@ -29,6 +32,10 @@ const fetchJson = vi.fn(async (url: string): Promise<unknown> => {
   if (url === '/piecework/tasks-history') {
     if (failHistoryAll) throw new Error('history down');
     return [];
+  }
+  if (url === '/piecework/personnel/5/advance-balance') {
+    if (failAdvance) throw new Error('advance down');
+    return { outstandingAdvance: 300, totalAdvances: 300, totalDeducted: 0 };
   }
   if (url.startsWith('/piecework/eidi-preview')) {
     if (failEidi) throw new Error('eidi down');
@@ -58,6 +65,7 @@ import { InvoiceSettlementModal } from '../../components/invoices/InvoiceSettlem
 import { PayrollPaymentModal } from '../../components/piecework/PayrollPaymentModal';
 import { PieceworkRateHistoryModal } from '../../components/piecework/PieceworkRateHistoryModal';
 import { PayrollEidiModal } from '../../components/piecework/PayrollEidiModal';
+import { PieceworkPayrollModal } from '../../components/piecework/PieceworkPayrollModal';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { invalidateDomain } from '../../lib/queryInvalidation';
 import { invalidateAfterTreasuryChange } from '../../hooks/accounting/accountingInvalidation';
@@ -71,6 +79,8 @@ afterEach(() => {
   failBanks = false;
   failHistoryAll = false;
   failEidi = false;
+  failAdvance = false;
+  onlineManager.setOnline(true);
 });
 
 const newClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -193,6 +203,33 @@ describe('money windows count only what this opening read (10.3)', () => {
     expect(screen.getByRole('button', { name: SHOWN.issueEidi }).hasAttribute('disabled')).toBe(true);
     answer({ suggestion: { method: 'labor_law', amount: '1000', entitlement: '1000', remainingAccrual: '0' }, period: { workedDays: 300 }, draftWarning: null });
     await waitFor(() => expect(screen.getByRole('button', { name: SHOWN.issueEidi }).hasAttribute('disabled')).toBe(false));
+  });
+});
+
+describe('money windows after a failed or impossible read (10.3)', () => {
+  it('the payslip form drops the advance balance after a failed refresh, as a failed read did before', async () => {
+    const client = newClient();
+    const noop = () => undefined;
+    render(withClient(client)(
+      <PieceworkPayrollModal
+        isOpen onClose={noop} onSubmit={noop} personnelSelectOptions={[{ value: '5', label: SHOWN.worker }]}
+        payrollPersonnelId={5} setPayrollPersonnelId={noop} payrollStartDate="1405/01/01" setPayrollStartDate={noop}
+        payrollEndDate="1405/01/31" setPayrollEndDate={noop} payrollBonuses={0} setPayrollBonuses={noop}
+        payrollDeductions={0} setPayrollDeductions={noop} payrollNotes="" setPayrollNotes={noop}
+        payrollPreviewLogs={[]} allowNoLogs advanceDeduction={0} setAdvanceDeduction={noop}
+      />,
+    ));
+    expect(await screen.findByText(SHOWN.advanceBalance)).toBeTruthy();
+    failAdvance = true;
+    await act(() => invalidateDomain(client, 'piecework'));
+    await waitFor(() => expect(screen.queryByText(SHOWN.advanceBalance)).toBeNull());
+  });
+
+  it('opening the settlement window offline says the accounts could not be read', async () => {
+    onlineManager.setOnline(false);
+    failBanks = true;
+    render(settle(newClient(), true));
+    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
   });
 });
 

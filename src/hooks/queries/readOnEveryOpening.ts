@@ -5,19 +5,23 @@ import type { UseQueryResult } from '@tanstack/react-query';
  * 10.3 (ARCH review finding 3): the read options of a window or page that used to read once when it opened, into its own
  * state. It now reads through the shared cache, so a write elsewhere that invalidates its key refreshes it while it is
  * open; it still reads again on every opening (`staleTime: 0`), stays out of the focus refetch (a window with a form does
- * not change under the user's hands on a tab switch) and shows a server refusal at once (no retry). Its request is
- * cancelled when it closes.
+ * not change under the user's hands on a tab switch) and shows a server refusal at once (no retry). Offline, the read
+ * fails at once and the window says so, as before, instead of waiting silently for the network (`networkMode`). Its
+ * request is cancelled when it closes.
  */
 export const READ_ON_EVERY_OPENING = {
   staleTime: 0,
   refetchOnMount: 'always',
   refetchOnWindowFocus: false,
   retry: false,
+  networkMode: 'always',
 } as const;
 
 /**
  * The moment a window last opened, 0 before it ever opened. It is set in the very render that opens the window (React's
- * "state from the previous render" pattern), so no effect of that render sees the time of an earlier opening.
+ * "state from the previous render" pattern), so no effect of that render sees the time of an earlier opening. It is the
+ * wall clock, as React Query's `dataUpdatedAt` is: an answer in the same millisecond counts (`>=`), and after the clock
+ * is set back an answer of this opening looks older and waits for the next read.
  */
 export function useOpenedAt(open: boolean): number {
   const [opening, setOpening] = useState(() => ({ open, at: open ? Date.now() : 0 }));

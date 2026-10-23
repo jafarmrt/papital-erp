@@ -34,7 +34,7 @@ export function useBankAccountOptionsQuery({ enabled = true, readOnEveryOpening 
     queryKey: QUERY_KEYS.accounting.bankAccountOptions(),
     queryFn: ({ signal }) => fetchAccountingList<BankAccountOption>('/accounting/bank-accounts/options', signal, 'bank account options'),
     ...ACCOUNTING_LIST_QUERY_OPTIONS,
-    ...(readOnEveryOpening ? { staleTime: 0 } : {}),
+    ...(readOnEveryOpening ? { staleTime: 0, networkMode: 'always' as const } : {}),
     enabled,
   });
 }
