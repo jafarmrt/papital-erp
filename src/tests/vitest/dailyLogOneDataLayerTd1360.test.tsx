@@ -96,7 +96,7 @@ describe('daily_log_one_data_layer_td_1360', () => {
     await waitFor(() => expect(result.current.logs).toHaveLength(1));
     act(() => result.current.handleOpenEditModal(result.current.logs[0]));
     fetchJson.mockImplementation((url: string, init?: { method?: string }) => {
-      if (init?.method === 'PUT') return Promise.reject(Object.assign(new Error('گزارش را دوباره باز کنید'), { status: 409 }));
+      if (init?.method === 'PUT') return Promise.reject(Object.assign(new Error('stale version'), { status: 409 }));
       if (url === '/daily-logs/stats') return Promise.resolve({ todayHours: 1 });
       if (url.startsWith('/daily-logs?')) return Promise.resolve({ data: stored(2), total: 1 });
       return Promise.resolve([]);
