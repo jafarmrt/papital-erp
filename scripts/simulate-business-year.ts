@@ -7,7 +7,7 @@ import { bootstrapTestMasterData } from '../src/tests/setup/testBootstrap.js';
 import { runBusinessYearSimulation, SimulationResult } from '../src/tests/simulation/businessYearSimulator.js';
 
 /**
- * v8.0.1 — اجرای شبیه‌ساز «یک سال کاری» روی PostgreSQL واقعی، هر بذر در یک اسکیمای ایزوله تازه (docs/roadmap/archive/V8_MASTER_ROADMAP.md).
+ * v8.0.1 — اجرای شبیه‌ساز «یک سال کاری» روی PostgreSQL واقعی، هر بذر در یک اسکیمای ایزوله تازه (docs/roadmap/archive/V3_V8_ROADMAPS_SUMMARY.md بخش ۶).
  *
  *   npm run simulate:year -- --seeds=1,2,3 --steps=400 [--check-every=10] [--users=12] [--verbose] [--close-year] [--report=dist/sim.json]
  *

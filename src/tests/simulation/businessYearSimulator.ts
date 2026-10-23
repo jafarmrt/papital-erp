@@ -13,7 +13,7 @@ import { createSimulationOperations, isoDay, OpOutcome, SimDoc, SimItem, YEAR_DA
 import { runConcurrentRounds } from './simulationConcurrentRounds.js';
 
 /**
- * v8.0.1 — شبیه‌ساز «یک سال کاری» با بذر ثابت (docs/roadmap/archive/V8_MASTER_ROADMAP.md فاز ۳).
+ * v8.0.1 — شبیه‌ساز «یک سال کاری» با بذر ثابت (docs/roadmap/archive/V3_V8_ROADMAPS_SUMMARY.md بخش ۶.۲).
  *
  * عملیات واقعی کسب‌وکار را فقط از مسیر سرویس‌های برنامه اجرا می‌کند (DocumentService.createDocument / deleteDocument،
  * انتقال بین انبار)، با تاریخ‌های سال ۱۴۰۴، ارز خارجی، تخفیف، مالیات، تاریخ عقب‌افتاده، برگشت از فروش و ابطال. پس از
