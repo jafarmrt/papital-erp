@@ -75,6 +75,9 @@ export const INVALIDATION_PRESETS = {
     'documents', 'transactions', 'accounting', 'inventory', 'items', 'dashboard', 'transfers', 'pendingMaterials', 'crm', 'projects', 'customers',
     // v10.1.8 (D-03): گزارش فروش (فاکتور، برگشت و ابطال)
     'reports',
+    // v10.2 package 11 part 5d (TD-1363): ابطال یا ویرایش سفارش خرید پیوسته، مقدار سفارش‌داده و دریافت‌شده درخواست خرید را
+    // عوض می‌کند (TD-912 / TD-913)؛ پیش‌تر میز تدارکات باز تا پنج دقیقه کهنه می‌ماند
+    'procurement',
   ] as QueryDomain[],
 
   // v9.0.341 (TD-796): تسویه فاکتور: حساب‌های بانکی، خزانه و سند حسابداری، مانده و وضعیت سند، کارت حساب طرف حساب و پیشخوان

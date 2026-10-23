@@ -4,7 +4,7 @@ import { formatPersianNumber } from '../../utils';
 import { REQUISITION_DESK_STATUS_TABS, type RequisitionStatusFilter } from '../../lib/procurement/procurementLists';
 import { REQUISITION_PRIORITIES, REQUISITION_PRIORITY_LABELS } from '../../lib/procurement/requisitionFields';
 import type { ProcurementAccess } from '../../hooks/procurement/useProcurementAccess';
-import type { ProcurementPageState } from '../../hooks/procurement/useProcurementPage';
+import type { ProcurementPageState } from '../../hooks/queries/useProcurementQueries';
 import { ProcurementPager } from './ProcurementPager';
 import { RequisitionRow } from './RequisitionRow';
 import { useRialDisplay } from '../../hooks/useAppCurrency';

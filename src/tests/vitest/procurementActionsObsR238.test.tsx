@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryWrapper } from './helpers/queryWrapper';
 import type { ProcurementOrder, PurchaseRequisition } from '../../types';
 import { BULK_DELIVERY_ALL_DELIVERED, bulkDeliveryPlan, linkedDocumentLabel, requisitionActionButtons, requisitionStage } from '../../lib/procurement/requisitionActions';
 import { REQUISITION_STATUS_BADGES } from '../../components/procurement/requisitionBadges';
@@ -49,7 +50,7 @@ function api(actions: { hasInstance: boolean; actions: { actionKey: string; titl
 }
 
 const open = (req: PurchaseRequisition) =>
-  render(<RequisitionDetailModal isOpen requisition={req} onClose={() => undefined} onRefresh={() => undefined} onOpenSplitOrder={() => undefined} />);
+  render(<RequisitionDetailModal isOpen requisition={req} onClose={() => undefined} onOpenSplitOrder={() => undefined} />, { wrapper: QueryWrapper });
 
 beforeEach(() => {
   fetchJson.mockReset();
@@ -105,7 +106,10 @@ describe('labels and delivery of the requisition window (OBS-R2-38)', () => {
     granted.add('warehouse.in');
     api({ hasInstance: true, actions: [] }, [order]);
     open(requisitionOf('ordered', [77]));
-    fireEvent.click(await screen.findByText(/تحویل کلیه اقلام به انبار/));
+    const bulk = (await screen.findByText(/تحویل کلیه اقلام به انبار/)).closest('button') as HTMLButtonElement;
+    // the button waits for the orders it would deliver
+    await waitFor(() => expect(bulk.disabled).toBe(false));
+    fireEvent.click(bulk);
     expect(toastError).toHaveBeenCalledWith(BULK_DELIVERY_ALL_DELIVERED);
     expect(bulkDeliveryPlan([{ id: 1, status: 'draft' }, { id: 2, status: 'final' }])).toEqual({ orders: [{ id: 1, status: 'draft' }] });
   });

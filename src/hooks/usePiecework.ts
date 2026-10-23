@@ -93,8 +93,11 @@ export function usePiecework() {
   const loading = personnelQuery.isPending || tasksQuery.isPending || (canViewPayrolls && payrollsQuery.isPending);
   const loadError = personnelQuery.error || tasksQuery.error || (canViewPayrolls ? payrollsQuery.error : null);
   useEffect(() => {
-    if (loadError) hotToast.error(errorMessageOf(loadError) || 'خطا در دریافت اطلاعات کارمزدی');
-  }, [loadError]);
+    if (!loadError) return;
+    // v10.2.38 (#355 review): a title list that cannot be read is named, as before v10.2.37
+    if (loadError === tasksQuery.error) hotToast.error('خطا در دریافت عناوین کاری: ' + (errorMessageOf(loadError) || ''));
+    else hotToast.error(errorMessageOf(loadError) || 'خطا در دریافت اطلاعات کارمزدی');
+  }, [loadError, tasksQuery.error]);
 
   // v9.0.330 (TD-811): فهرست کارکرد، فیلترها و جمع‌ها از سرور؛ پس از هر ثبت، ویرایش یا حذف دوباره خوانده می‌شوند
   const logList = usePieceworkLogList();

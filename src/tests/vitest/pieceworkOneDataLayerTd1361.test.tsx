@@ -22,6 +22,7 @@ vi.mock('../../hooks/usePieceworkPermissions', () => ({
   usePieceworkPermissions: () => ({ canManageTasks: true, canLog: true, canIssuePayroll: true, canPay: true }),
 }));
 
+import toast from 'react-hot-toast';
 import { usePiecework } from '../../hooks/usePiecework';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
 import { QUERY_KEYS } from '../../lib/queryKeys';
@@ -106,6 +107,14 @@ describe('piecework_one_data_layer_td_1361', () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(hook.tasksList.map(t => t.id)).toEqual([1, 2]);
     expect(hook.taskStatusFilter).toBe('all');
+  });
+
+  it('a title list that cannot be read names the titles in its error (#355 review)', async () => {
+    answer((url) => (url === '/piecework/tasks?status=archived' ? Promise.reject(new Error('offline')) : undefined));
+    render(<Page client={newClient()} />);
+    await waitFor(() => expect(hook.tasksList.map(t => t.id)).toEqual([1]));
+    act(() => hook.handleTaskStatusFilterChange('archived'));
+    await waitFor(() => expect(vi.mocked(toast.error)).toHaveBeenCalledWith('خطا در دریافت عناوین کاری: offline'));
   });
 
   it('approving a payslip refreshes the treasury and voucher screens with the page', async () => {

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryWrapper } from './helpers/queryWrapper';
 import type { ProcurementOrder, PurchaseRequisition } from '../../types';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
 import { PROCUREMENT_RECEIVE_PERMISSION } from '../../lib/permissions/procurementPermissions';
@@ -68,7 +69,7 @@ describe('procurement order fields (TD-701)', () => {
 
   it('requisition detail shows the number and the Jalali date of each purchase order', async () => {
     fetchJson.mockResolvedValue({ success: true, data: [serverOrder] });
-    render(<RequisitionDetailModal isOpen requisition={requisition} onClose={() => undefined} onRefresh={() => undefined} onOpenSplitOrder={() => undefined} />);
+    render(<RequisitionDetailModal isOpen requisition={requisition} onClose={() => undefined} onOpenSplitOrder={() => undefined} />, { wrapper: QueryWrapper });
     await waitFor(() => expect(screen.queryAllByText(/تامین الماس/).length).toBeGreaterThan(0));
     expect(screen.queryAllByText(/R-1405-0009/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/۱۴۰۵\/۰۷\/۱۴/)).not.toBeNull();
@@ -90,7 +91,7 @@ function deskApi(fail: Record<string, Error> = {}) {
 }
 
 const deskRendered = async () => {
-  render(<ProcurementDesk />);
+  render(<ProcurementDesk />, { wrapper: QueryWrapper });
   await waitFor(() => expect(fetchJson).toHaveBeenCalled());
   await waitFor(() => expect(screen.queryByText(/در حال بارگذاری کارتابل/)).toBeNull());
 };
@@ -142,13 +143,13 @@ describe('procurement desk sections and buttons (TD-702)', () => {
   it('the requisition detail offers workflow actions only to approvers', async () => {
     fetchJson.mockResolvedValue({ success: true, data: [] });
     granted.add('procurement.view');
-    const { unmount } = render(<RequisitionDetailModal isOpen requisition={pending} onClose={() => undefined} onRefresh={() => undefined} onOpenSplitOrder={() => undefined} />);
+    const { unmount } = render(<RequisitionDetailModal isOpen requisition={pending} onClose={() => undefined} onOpenSplitOrder={() => undefined} />, { wrapper: QueryWrapper });
     await waitFor(() => expect(fetchJson).toHaveBeenCalled());
     expect(screen.queryByText('رد درخواست خرید')).toBeNull();
     expect(screen.queryByText(/تایید و صدور دستور خرید/)).toBeNull();
     unmount();
     granted.add('procurement.approve');
-    render(<RequisitionDetailModal isOpen requisition={pending} onClose={() => undefined} onRefresh={() => undefined} onOpenSplitOrder={() => undefined} />);
+    render(<RequisitionDetailModal isOpen requisition={pending} onClose={() => undefined} onOpenSplitOrder={() => undefined} />, { wrapper: QueryWrapper });
     // OBS-R2-38: the buttons come from the step's actions the server allows, read after the window opens
     expect(await screen.findByText('رد درخواست خرید')).not.toBeNull();
   });
@@ -171,13 +172,13 @@ describe('delivery buttons need the stock-in permission (TD-904)', () => {
   it('the requisition detail offers delivery only with the stock-in permission', async () => {
     fetchJson.mockResolvedValue({ success: true, data: [serverOrder] });
     for (const key of ['procurement.view', 'procurement.manage', 'procurement.order']) granted.add(key);
-    const { unmount } = render(<RequisitionDetailModal isOpen requisition={requisition} onClose={() => undefined} onRefresh={() => undefined} onOpenSplitOrder={() => undefined} />);
+    const { unmount } = render(<RequisitionDetailModal isOpen requisition={requisition} onClose={() => undefined} onOpenSplitOrder={() => undefined} />, { wrapper: QueryWrapper });
     await waitFor(() => expect(screen.queryAllByText(/R-1405-0009/).length).toBeGreaterThan(0));
     expect(screen.queryByText(ROW_DELIVER)).toBeNull();
     expect(screen.queryByText(BULK_DELIVER)).toBeNull();
     unmount();
     granted.add(PROCUREMENT_RECEIVE_PERMISSION);
-    render(<RequisitionDetailModal isOpen requisition={requisition} onClose={() => undefined} onRefresh={() => undefined} onOpenSplitOrder={() => undefined} />);
+    render(<RequisitionDetailModal isOpen requisition={requisition} onClose={() => undefined} onOpenSplitOrder={() => undefined} />, { wrapper: QueryWrapper });
     await waitFor(() => expect(screen.queryByText(ROW_DELIVER)).not.toBeNull());
     expect(screen.queryByText(BULK_DELIVER)).not.toBeNull();
   });
