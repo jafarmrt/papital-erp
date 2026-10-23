@@ -6,7 +6,7 @@ import {
 } from './workflowScenarioHelpers.js';
 
 /**
- * v8.0.90 به بعد — سناریوهای سخت‌گیرانه گردش‌کار و تأیید (حوزه G، docs/roadmap/archive/V8_MASTER_ROADMAP.md بخش ۶).
+ * v8.0.90 به بعد — سناریوهای سخت‌گیرانه گردش‌کار و تأیید (حوزه G، docs/roadmap/archive/V3_V8_ROADMAPS_SUMMARY.md بخش ۶.۲).
  * هر تابع فهرست مشکلات را برمی‌گرداند؛ فهرست خالی یعنی رفتار درست.
  */
 
