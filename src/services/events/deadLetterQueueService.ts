@@ -135,110 +135,96 @@ export class DeadLetterQueueService {
    * Retrieves summary metrics and counts for the Dead Letter Queue.
    */
   static async getStats() {
-    try {
-      const allDlq = await orm
-        .select({
-          status: deadLetterEvents.status,
-          source: deadLetterEvents.source,
-          eventType: deadLetterEvents.eventType,
-          count: count()
-        })
-        .from(deadLetterEvents)
-        .groupBy(deadLetterEvents.status, deadLetterEvents.source, deadLetterEvents.eventType);
+    const allDlq = await orm
+      .select({
+        status: deadLetterEvents.status,
+        source: deadLetterEvents.source,
+        eventType: deadLetterEvents.eventType,
+        count: count()
+      })
+      .from(deadLetterEvents)
+      .groupBy(deadLetterEvents.status, deadLetterEvents.source, deadLetterEvents.eventType);
 
-      let total = 0;
-      let quarantined = 0;
-      let replayed = 0;
-      let dismissed = 0;
-      const byEventType: Record<string, number> = {};
-      const bySource: Record<string, number> = {};
+    let total = 0;
+    let quarantined = 0;
+    let replayed = 0;
+    let dismissed = 0;
+    const byEventType: Record<string, number> = {};
+    const bySource: Record<string, number> = {};
 
-      for (const row of allDlq) {
-        const rowCount = Number(row.count) || 0;
-        total += rowCount;
-        if (row.status === 'quarantined') quarantined += rowCount;
-        else if (row.status === 'replayed') replayed += rowCount;
-        else if (row.status === 'dismissed') dismissed += rowCount;
+    for (const row of allDlq) {
+      const rowCount = Number(row.count) || 0;
+      total += rowCount;
+      if (row.status === 'quarantined') quarantined += rowCount;
+      else if (row.status === 'replayed') replayed += rowCount;
+      else if (row.status === 'dismissed') dismissed += rowCount;
 
-        if (row.eventType) {
-          byEventType[row.eventType] = (byEventType[row.eventType] || 0) + rowCount;
-        }
-        if (row.source) {
-          bySource[row.source] = (bySource[row.source] || 0) + rowCount;
-        }
+      if (row.eventType) {
+        byEventType[row.eventType] = (byEventType[row.eventType] || 0) + rowCount;
       }
-
-      return {
-        total,
-        quarantined,
-        replayed,
-        dismissed,
-        byEventType,
-        bySource
-      };
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      logger.error(`[DLQ Stats Error] ${errMsg}`);
-      // 10.3 (ARCH review): a failed read is an error answer, never an empty queue
-      throw err;
+      if (row.source) {
+        bySource[row.source] = (bySource[row.source] || 0) + rowCount;
+      }
     }
+
+    return {
+      total,
+      quarantined,
+      replayed,
+      dismissed,
+      byEventType,
+      bySource
+    };
   }
 
   /**
    * Fetch paginated DLQ items with dynamic filters.
    */
   static async getEvents(filters: DLQQueryFilters = {}) {
-    try {
-      const limit = Math.min(filters.limit || 50, DLQ_MAX_LIMIT);
-      const offset = filters.offset || 0;
+    const limit = Math.min(filters.limit || 50, DLQ_MAX_LIMIT);
+    const offset = filters.offset || 0;
 
-      const conditions: SQL[] = [];
+    const conditions: SQL[] = [];
 
-      if (filters.status && filters.status !== 'all') {
-        conditions.push(eq(deadLetterEvents.status, filters.status));
-      }
-      if (filters.eventType && filters.eventType !== 'all') {
-        conditions.push(eq(deadLetterEvents.eventType, filters.eventType));
-      }
-      if (filters.source && filters.source !== 'all') {
-        conditions.push(eq(deadLetterEvents.source, filters.source));
-      }
-      if (filters.search) {
-        const searchPattern = containsLikePattern(filters.search);
-        conditions.push(
-          sql`(${deadLetterEvents.originalEventId} ILIKE ${searchPattern} OR ${deadLetterEvents.eventType} ILIKE ${searchPattern} OR ${deadLetterEvents.aggregateId} ILIKE ${searchPattern} OR ${deadLetterEvents.failureReason} ILIKE ${searchPattern})`
-        );
-      }
-
-      const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-
-      const [totalCountResult] = await orm
-        .select({ value: count() })
-        .from(deadLetterEvents)
-        .where(whereClause);
-
-      const total = Number(totalCountResult?.value) || 0;
-
-      const events = await orm
-        .select()
-        .from(deadLetterEvents)
-        .where(whereClause)
-        .orderBy(desc(deadLetterEvents.id))
-        .limit(limit)
-        .offset(offset);
-
-      return {
-        data: events,
-        total,
-        limit,
-        offset
-      };
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      logger.error(`[DLQ Get Events Error] ${errMsg}`);
-      // 10.3 (ARCH review): a failed read is an error answer, never an empty queue
-      throw err;
+    if (filters.status && filters.status !== 'all') {
+      conditions.push(eq(deadLetterEvents.status, filters.status));
     }
+    if (filters.eventType && filters.eventType !== 'all') {
+      conditions.push(eq(deadLetterEvents.eventType, filters.eventType));
+    }
+    if (filters.source && filters.source !== 'all') {
+      conditions.push(eq(deadLetterEvents.source, filters.source));
+    }
+    if (filters.search) {
+      const searchPattern = containsLikePattern(filters.search);
+      conditions.push(
+        sql`(${deadLetterEvents.originalEventId} ILIKE ${searchPattern} OR ${deadLetterEvents.eventType} ILIKE ${searchPattern} OR ${deadLetterEvents.aggregateId} ILIKE ${searchPattern} OR ${deadLetterEvents.failureReason} ILIKE ${searchPattern})`
+      );
+    }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [totalCountResult] = await orm
+      .select({ value: count() })
+      .from(deadLetterEvents)
+      .where(whereClause);
+
+    const total = Number(totalCountResult?.value) || 0;
+
+    const events = await orm
+      .select()
+      .from(deadLetterEvents)
+      .where(whereClause)
+      .orderBy(desc(deadLetterEvents.id))
+      .limit(limit)
+      .offset(offset);
+
+    return {
+      data: events,
+      total,
+      limit,
+      offset
+    };
   }
 
   /**

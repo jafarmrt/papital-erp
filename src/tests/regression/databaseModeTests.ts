@@ -41,6 +41,7 @@ process.exit(0);
   }
 }
 
+/** 10.3 package 3: the SQL_HOST pool has no port setting, so the test database's port goes in as `PGPORT` (pg's default) */
 function sqlHostParts(): Record<string, string> {
   const url = new URL(String(process.env.DATABASE_URL));
   return {
@@ -48,6 +49,7 @@ function sqlHostParts(): Record<string, string> {
     SQL_USER: decodeURIComponent(url.username),
     SQL_PASSWORD: decodeURIComponent(url.password),
     SQL_DB_NAME: url.pathname.replace(/^\//, ''),
+    PGPORT: url.port || '5432',
   };
 }
 

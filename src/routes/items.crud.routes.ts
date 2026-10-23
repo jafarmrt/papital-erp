@@ -69,132 +69,128 @@ router.get('/items/options', authorizePermission(...READ_PERMISSIONS.itemOptions
 
 // GET /items
 router.get('/items', authorizePermission(...READ_PERMISSIONS.items), asyncHandler(async (req, res) => {
-  try {
-    const type = req.query.type as string;
-    // V9-1.3: صفحه‌بندی NaN-safe با سقف (limit=0 به معنای «بدون سقف» برای خروجی باقی می‌ماند)
-    // v10.2.0: a zero or negative page is the first page (`page=-1` sent a negative OFFSET and answered 500)
-    const page = parsePageNumber(req.query.page);
-    const limitStr = req.query.limit as string;
-    let limit = limitStr === '0' ? 0 : (parseInt(limitStr) || 50);
-    if (Number.isNaN(limit) || limit < 0) limit = 50;
-    if (limit > MAX_PAGE_LIMIT) limit = MAX_PAGE_LIMIT;
-    const offset = (page - 1) * limit;
-    const search = req.query.search as string;
-    const isExport = req.query.export === 'true';
+  const type = req.query.type as string;
+  // V9-1.3: صفحه‌بندی NaN-safe با سقف (limit=0 به معنای «بدون سقف» برای خروجی باقی می‌ماند)
+  // v10.2.0: a zero or negative page is the first page (`page=-1` sent a negative OFFSET and answered 500)
+  const page = parsePageNumber(req.query.page);
+  const limitStr = req.query.limit as string;
+  let limit = limitStr === '0' ? 0 : (parseInt(limitStr) || 50);
+  if (Number.isNaN(limit) || limit < 0) limit = 50;
+  if (limit > MAX_PAGE_LIMIT) limit = MAX_PAGE_LIMIT;
+  const offset = (page - 1) * limit;
+  const search = req.query.search as string;
+  const isExport = req.query.export === 'true';
 
-    // v10.1.51 (OBS-R2-62): `image=1` keeps items with a picture and `category` one category (the gallery's page)
-    const category = typeof req.query.category === 'string' ? req.query.category.trim() : '';
-    const whereClause = itemListConditions(type, search, { withCategory: true, withImage: req.query.image === '1', category: category || undefined });
-    // v10.0.218 (OBS-R1-74): مرتب‌سازی در پایگاه‌داده روی همه کالاهای پالایش
-    const sort = parseItemListSort(req.query.sort, req.query.direction);
+  // v10.1.51 (OBS-R2-62): `image=1` keeps items with a picture and `category` one category (the gallery's page)
+  const category = typeof req.query.category === 'string' ? req.query.category.trim() : '';
+  const whereClause = itemListConditions(type, search, { withCategory: true, withImage: req.query.image === '1', category: category || undefined });
+  // v10.0.218 (OBS-R1-74): مرتب‌سازی در پایگاه‌داده روی همه کالاهای پالایش
+  const sort = parseItemListSort(req.query.sort, req.query.direction);
 
-    let query = orm.select().from(items).where(whereClause).orderBy(...itemListOrder(sort)).$dynamic();
+  let query = orm.select().from(items).where(whereClause).orderBy(...itemListOrder(sort)).$dynamic();
 
-    if (!isExport && limit > 0) {
-      query = query.limit(limit).offset(offset);
-    }
-
-    const fetchedItems = await query;
-    // v9.0.206 (TD-663، B05-17): رزرو فقط برای کالاهای همین صفحه
-    const reservedMap = await ItemsService.getReservedStocksMap({ itemIds: fetchedItems.map(it => it.id) });
-    // v7.0.48 (TD-214): نقشه موجودی انبارها (stocks و stock_<کد>) از جدول نرمال؛ شکل پاسخ برای رابط کاربری حفظ شده است
-    const listStockMap = await ItemWarehouseStockService.getStocksForItems(orm, fetchedItems.map(it => it.id));
-
-    const itemIds = fetchedItems.map(it => it.id);
-    let txItemSet = new Set<number>();
-    let docItemSet = new Set<number>();
-    let voucherItemSet = new Set<number>();
-
-    if (itemIds.length > 0) {
-      const [txRows, docRows, voucherRows] = await Promise.all([
-        orm.select({ itemId: transactions.itemId })
-          .from(transactions)
-          .where(and(inArray(transactions.itemId, itemIds), eq(transactions.isDeleted, 0)))
-          .groupBy(transactions.itemId),
-        orm.select({ itemId: documentItems.itemId })
-          .from(documentItems)
-          .where(and(inArray(documentItems.itemId, itemIds), eq(documentItems.isDeleted, 0)))
-          .groupBy(documentItems.itemId),
-        // v9.0.206 (TD-663): سند افتتاحیه کالا (سند خودش یا سند ورود اکسل) از جدول کالاهای سند افتتاحیه
-        itemIdsWithOpeningVoucher(orm, itemIds),
-      ]);
-
-      txItemSet = new Set(txRows.map(r => r.itemId));
-      docItemSet = new Set(docRows.map(r => r.itemId));
-      voucherItemSet = voucherRows;
-    }
-
-    const rawLocQuery = req.query.location ? String(req.query.location).trim() : (req.query.warehouse ? String(req.query.warehouse).trim() : '');
-    let resolvedQueryLoc: string | null = null;
-    if (rawLocQuery) {
-      try {
-        resolvedQueryLoc = await resolveWarehouseCode(orm, rawLocQuery);
-      } catch {
-        resolvedQueryLoc = null;
-      }
-    }
-
-    const mapped = fetchedItems.map(it => {
-      // v9.0.374 (TD-822): رزرو با شناسه کالا، نه کد بزرگ‌شده
-      const resInfo = reservedMap[String(it.id)] || { totalReserved: 0, reservations: [] };
-      const curStock = Number(it.currentStock || 0);
-      const reservedStock = Number(resInfo.totalReserved || 0);
-      const st: Record<string, number> = listStockMap.get(it.id)?.byCode ?? {};
-
-      let locStock: number | null = null;
-      if (resolvedQueryLoc) {
-        locStock = Number(st[resolvedQueryLoc] || 0);
-      }
-
-      const availableStock = resolvedQueryLoc !== null
-        ? Math.max(0, Math.min(locStock ?? 0, curStock - reservedStock))
-        : Math.max(0, curStock - reservedStock);
-
-      const hasTx = txItemSet.has(it.id);
-      const hasDoc = docItemSet.has(it.id);
-      const hasOpeningVoucher = voucherItemSet.has(it.id);
-      const canSetOpening = curStock <= 0 && !hasTx && !hasDoc && !hasOpeningVoucher;
-
-      const obj: Record<string, unknown> = {
-        ...it,
-        stocks: st,
-        current_stock: curStock,
-        reorder_point: it.reorderPoint,
-        weighted_average_cost: it.weightedAverageCost,
-        reserved_stock: reservedStock,
-        available_stock: availableStock,
-        location_stock: locStock,
-        reservations: resInfo.reservations,
-        canSetOpeningBalance: canSetOpening,
-        can_set_opening_balance: canSetOpening
-      };
-      for (const k of Object.keys(st)) {
-        obj[`stock_${k}`] = Number(st[k]);
-      }
-      return obj;
-    });
-
-    if (isExport) {
-      return res.json(mapped);
-    }
-
-    const totalCountQuery = await orm.select({ count: sql`count(*)`.mapWith(Number) })
-      .from(items)
-      .where(whereClause);
-
-    const total = totalCountQuery[0].count;
-
-    res.json({
-      data: mapped,
-      total,
-      stats: await itemListStats(whereClause),
-      page,
-      limit,
-      totalPages: limit > 0 ? Math.ceil(total / limit) : 1
-    });
-  } catch (err) {
-    throw err;
+  if (!isExport && limit > 0) {
+    query = query.limit(limit).offset(offset);
   }
+
+  const fetchedItems = await query;
+  // v9.0.206 (TD-663، B05-17): رزرو فقط برای کالاهای همین صفحه
+  const reservedMap = await ItemsService.getReservedStocksMap({ itemIds: fetchedItems.map(it => it.id) });
+  // v7.0.48 (TD-214): نقشه موجودی انبارها (stocks و stock_<کد>) از جدول نرمال؛ شکل پاسخ برای رابط کاربری حفظ شده است
+  const listStockMap = await ItemWarehouseStockService.getStocksForItems(orm, fetchedItems.map(it => it.id));
+
+  const itemIds = fetchedItems.map(it => it.id);
+  let txItemSet = new Set<number>();
+  let docItemSet = new Set<number>();
+  let voucherItemSet = new Set<number>();
+
+  if (itemIds.length > 0) {
+    const [txRows, docRows, voucherRows] = await Promise.all([
+      orm.select({ itemId: transactions.itemId })
+        .from(transactions)
+        .where(and(inArray(transactions.itemId, itemIds), eq(transactions.isDeleted, 0)))
+        .groupBy(transactions.itemId),
+      orm.select({ itemId: documentItems.itemId })
+        .from(documentItems)
+        .where(and(inArray(documentItems.itemId, itemIds), eq(documentItems.isDeleted, 0)))
+        .groupBy(documentItems.itemId),
+      // v9.0.206 (TD-663): سند افتتاحیه کالا (سند خودش یا سند ورود اکسل) از جدول کالاهای سند افتتاحیه
+      itemIdsWithOpeningVoucher(orm, itemIds),
+    ]);
+
+    txItemSet = new Set(txRows.map(r => r.itemId));
+    docItemSet = new Set(docRows.map(r => r.itemId));
+    voucherItemSet = voucherRows;
+  }
+
+  const rawLocQuery = req.query.location ? String(req.query.location).trim() : (req.query.warehouse ? String(req.query.warehouse).trim() : '');
+  let resolvedQueryLoc: string | null = null;
+  if (rawLocQuery) {
+    try {
+      resolvedQueryLoc = await resolveWarehouseCode(orm, rawLocQuery);
+    } catch {
+      resolvedQueryLoc = null;
+    }
+  }
+
+  const mapped = fetchedItems.map(it => {
+    // v9.0.374 (TD-822): رزرو با شناسه کالا، نه کد بزرگ‌شده
+    const resInfo = reservedMap[String(it.id)] || { totalReserved: 0, reservations: [] };
+    const curStock = Number(it.currentStock || 0);
+    const reservedStock = Number(resInfo.totalReserved || 0);
+    const st: Record<string, number> = listStockMap.get(it.id)?.byCode ?? {};
+
+    let locStock: number | null = null;
+    if (resolvedQueryLoc) {
+      locStock = Number(st[resolvedQueryLoc] || 0);
+    }
+
+    const availableStock = resolvedQueryLoc !== null
+      ? Math.max(0, Math.min(locStock ?? 0, curStock - reservedStock))
+      : Math.max(0, curStock - reservedStock);
+
+    const hasTx = txItemSet.has(it.id);
+    const hasDoc = docItemSet.has(it.id);
+    const hasOpeningVoucher = voucherItemSet.has(it.id);
+    const canSetOpening = curStock <= 0 && !hasTx && !hasDoc && !hasOpeningVoucher;
+
+    const obj: Record<string, unknown> = {
+      ...it,
+      stocks: st,
+      current_stock: curStock,
+      reorder_point: it.reorderPoint,
+      weighted_average_cost: it.weightedAverageCost,
+      reserved_stock: reservedStock,
+      available_stock: availableStock,
+      location_stock: locStock,
+      reservations: resInfo.reservations,
+      canSetOpeningBalance: canSetOpening,
+      can_set_opening_balance: canSetOpening
+    };
+    for (const k of Object.keys(st)) {
+      obj[`stock_${k}`] = Number(st[k]);
+    }
+    return obj;
+  });
+
+  if (isExport) {
+    return res.json(mapped);
+  }
+
+  const totalCountQuery = await orm.select({ count: sql`count(*)`.mapWith(Number) })
+    .from(items)
+    .where(whereClause);
+
+  const total = totalCountQuery[0].count;
+
+  res.json({
+    data: mapped,
+    total,
+    stats: await itemListStats(whereClause),
+    page,
+    limit,
+    totalPages: limit > 0 ? Math.ceil(total / limit) : 1
+  });
 }));
 
 // POST /items
@@ -317,38 +313,34 @@ router.get('/items/:id/code-history', authorizePermission(...READ_PERMISSIONS.it
 
 // DELETE /items/:id
 router.delete('/items/:id', authorizePermission('products.delete'), idempotency({ scope: 'items' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  try {
-    const itemId = Number(req.params.id);
-    const stockBeforeDelete = await ItemWarehouseStockService.getStockSnapshot(orm, itemId);
-    const delItem = await ItemCatalogService.deleteItem(itemId);
+  const itemId = Number(req.params.id);
+  const stockBeforeDelete = await ItemWarehouseStockService.getStockSnapshot(orm, itemId);
+  const delItem = await ItemCatalogService.deleteItem(itemId);
 
-    await logActivity({
-      req,
-      action: 'DELETE',
-      entity: 'کالا',
-      entityId: itemId,
-      description: `حذف کالای "${delItem.name}" با کد "${delItem.code}" (موجودی کل: ${delItem.currentStock || 0})`,
-      details: {
-        before: {
-          id: delItem.id,
-          name: delItem.name,
-          code: delItem.code,
-          type: delItem.type,
-          category: delItem.category,
-          unit: delItem.unit,
-          currentStock: delItem.currentStock,
-          stocks: stockBeforeDelete.byCode,
-          weightedAverageCost: delItem.weightedAverageCost,
-          reorderPoint: delItem.reorderPoint
-        },
-        deletedAt: new Date().toISOString()
-      }
-    });
+  await logActivity({
+    req,
+    action: 'DELETE',
+    entity: 'کالا',
+    entityId: itemId,
+    description: `حذف کالای "${delItem.name}" با کد "${delItem.code}" (موجودی کل: ${delItem.currentStock || 0})`,
+    details: {
+      before: {
+        id: delItem.id,
+        name: delItem.name,
+        code: delItem.code,
+        type: delItem.type,
+        category: delItem.category,
+        unit: delItem.unit,
+        currentStock: delItem.currentStock,
+        stocks: stockBeforeDelete.byCode,
+        weightedAverageCost: delItem.weightedAverageCost,
+        reorderPoint: delItem.reorderPoint
+      },
+      deletedAt: new Date().toISOString()
+    }
+  });
 
-    res.json({ success: true });
-  } catch (err) {
-    throw err;
-  }
+  res.json({ success: true });
 }));
 
 // V10-2.1: endpoint واحد اتمیک کد بعدی کالا

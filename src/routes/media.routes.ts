@@ -5,6 +5,7 @@ import { can, requirePermission } from '../middleware/authorize.js';
 import { validate, paramsIdSchema } from '../middleware/validate.js';
 import { logger } from '../middleware/logger.js';
 import { errorMessageOf } from '../utils/index.js';
+import { NotFoundError } from '../errors/customErrors.js';
 import { MEDIA_MAX_BYTES, MEDIA_POSTER_MAX_BYTES, type MediaShotType, type MediaVariant } from '../lib/media/mediaRules.js';
 import { MediaAssetService, type MediaActor } from '../services/media/mediaAsset.service.js';
 import { mediaTooLarge } from '../services/media/mediaStorage.js';
@@ -106,11 +107,12 @@ router.get('/media/assets/:id/file', authenticateToken, requirePermission(MEDIA_
   res.setHeader('Content-Disposition', `${disposition}; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(file.downloadName)}`);
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Cache-Control', 'private, max-age=86400');
-  await new Promise<void>((resolve) => {
+  await new Promise<void>((resolve, reject) => {
     res.sendFile(file.path, { headers: { 'Content-Type': file.mimeType }, dotfiles: 'deny' }, (err) => {
       if (err && !res.headersSent) {
         logger.warn(`[media] file of asset ${req.params.id} (${q.variant}) could not be read: ${errorMessageOf(err)}`);
-        res.status(404).json({ success: false, code: 'MEDIA_FILE_MISSING', message: 'فایل روی دیسک یافت نشد.' });
+        reject(new NotFoundError('فایل روی دیسک یافت نشد.', undefined, 'MEDIA_FILE_MISSING'));
+        return;
       }
       resolve();
     });

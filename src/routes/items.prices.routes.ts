@@ -98,44 +98,32 @@ router.get('/items/pricing-page', authorizePermission(...READ_PERMISSIONS.itemPr
 
 // GET /items/prices/all
 router.get('/items/prices/all', authorizePermission(...READ_PERMISSIONS.itemPrices), asyncHandler(async (req, res) => {
-  try {
-    const prices = await orm.select().from(itemPrices).where(eq(itemPrices.isDeleted, 0));
-    const activeStrategies = await ItemsService.getPricingStrategies();
-    const activePrices = ItemsService.filterActivePrices(prices, activeStrategies);
+  const prices = await orm.select().from(itemPrices).where(eq(itemPrices.isDeleted, 0));
+  const activeStrategies = await ItemsService.getPricingStrategies();
+  const activePrices = ItemsService.filterActivePrices(prices, activeStrategies);
 
-    const grouped: Record<number, Array<typeof itemPrices.$inferSelect>> = {};
-    for (const p of activePrices) {
-      const itId = Number(p.itemId || p.item_id);
-      if (!itId) continue;
-      if (!grouped[itId]) grouped[itId] = [];
-      grouped[itId].push(p as typeof itemPrices.$inferSelect);
-    }
-    res.json(grouped);
-  } catch (err) {
-    throw err;
+  const grouped: Record<number, Array<typeof itemPrices.$inferSelect>> = {};
+  for (const p of activePrices) {
+    const itId = Number(p.itemId || p.item_id);
+    if (!itId) continue;
+    if (!grouped[itId]) grouped[itId] = [];
+    grouped[itId].push(p as typeof itemPrices.$inferSelect);
   }
+  res.json(grouped);
 }));
 
 // GET /items/:id/prices
 router.get('/items/:id/prices', authorizePermission(...READ_PERMISSIONS.itemSalePrices), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  try {
-    const prices = await orm.select().from(itemPrices).where(and(eq(itemPrices.itemId, Number(req.params.id)), eq(itemPrices.isDeleted, 0)));
-    const activeStrategies = await ItemsService.getPricingStrategies();
-    const activePrices = ItemsService.filterActivePrices(prices, activeStrategies);
-    res.json(activePrices);
-  } catch (err) {
-    throw err;
-  }
+  const prices = await orm.select().from(itemPrices).where(and(eq(itemPrices.itemId, Number(req.params.id)), eq(itemPrices.isDeleted, 0)));
+  const activeStrategies = await ItemsService.getPricingStrategies();
+  const activePrices = ItemsService.filterActivePrices(prices, activeStrategies);
+  res.json(activePrices);
 }));
 
 // GET /items/:id/prices/history
 router.get('/items/:id/prices/history', authorizePermission(...READ_PERMISSIONS.itemPrices), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  try {
-    const prices = await orm.select().from(itemPrices).where(eq(itemPrices.itemId, Number(req.params.id))).orderBy(desc(itemPrices.id));
-    res.json(prices);
-  } catch (err) {
-    throw err;
-  }
+  const prices = await orm.select().from(itemPrices).where(eq(itemPrices.itemId, Number(req.params.id))).orderBy(desc(itemPrices.id));
+  res.json(prices);
 }));
 
 // POST /items/:id/prices

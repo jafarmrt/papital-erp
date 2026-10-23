@@ -388,44 +388,37 @@ export class OutboxService {
     failed: number;
     workerRunning: boolean;
   }> {
-    try {
-      const stats = await orm
-        .select({
-          status: outboxEvents.status,
-          count: sql<number>`count(*)::int`
-        })
-        .from(outboxEvents)
-        .groupBy(outboxEvents.status);
+    const stats = await orm
+      .select({
+        status: outboxEvents.status,
+        count: sql<number>`count(*)::int`
+      })
+      .from(outboxEvents)
+      .groupBy(outboxEvents.status);
 
-      const statusMap: Record<string, number> = {
-        pending: 0,
-        processing: 0,
-        completed: 0,
-        failed: 0
-      };
+    const statusMap: Record<string, number> = {
+      pending: 0,
+      processing: 0,
+      completed: 0,
+      failed: 0
+    };
 
-      let total = 0;
-      for (const row of stats) {
-        if (row.status) {
-          statusMap[row.status] = Number(row.count) || 0;
-          total += Number(row.count) || 0;
-        }
+    let total = 0;
+    for (const row of stats) {
+      if (row.status) {
+        statusMap[row.status] = Number(row.count) || 0;
+        total += Number(row.count) || 0;
       }
-
-      return {
-        total,
-        pending: statusMap.pending || 0,
-        processing: statusMap.processing || 0,
-        completed: statusMap.completed || 0,
-        failed: statusMap.failed || 0,
-        workerRunning: this.isWorkerRunning
-      };
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      logger.error(`[Transactional Outbox Stats Error] ${errMsg}`);
-      // 10.3 (ARCH review): a failed read is an error answer, never an empty outbox
-      throw err;
     }
+
+    return {
+      total,
+      pending: statusMap.pending || 0,
+      processing: statusMap.processing || 0,
+      completed: statusMap.completed || 0,
+      failed: statusMap.failed || 0,
+      workerRunning: this.isWorkerRunning
+    };
   }
 
   /**

@@ -163,6 +163,24 @@ describe('the gallery reads through the shared cache (10.3)', () => {
     expect(screen.getByText('fresh item')).toBeTruthy();
   });
 
+  it('the message of a failed refresh goes while the page is read again (10.3 package 3)', async () => {
+    const client = newClient();
+    visit(client);
+    expect(await screen.findByText('fresh item')).toBeTruthy();
+    reads.fail = '/items';
+    await act(async () => { await client.invalidateQueries({ queryKey: QUERY_KEYS.items.all }); });
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    reads.hold = '/items';
+    act(() => { void client.invalidateQueries({ queryKey: QUERY_KEYS.items.all }); });
+    await waitFor(() => expect(reads.held).toHaveLength(1));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByText('fresh item')).toBeTruthy();
+    server.page = { data: [item(3, 'read again')], total: 1, totalPages: 1 };
+    await act(async () => { reads.held[0]?.(server.page); });
+    expect(await screen.findByText('read again')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('an item change refreshes the page on screen', async () => {
     const client = newClient();
     visit(client);

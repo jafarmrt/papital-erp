@@ -9,7 +9,7 @@ import { validate } from '../middleware/validate.js';
 import { logActivity, extractClientIp } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { AppError, UnauthorizedError, ValidationError } from '../errors/customErrors.js';
+import { AppError, ForbiddenError, UnauthorizedError, ValidationError } from '../errors/customErrors.js';
 import { safeCompareTokens } from '../lib/timingSafeCompare.js';
 import { runInitialSetup } from '../services/auth/initialSetup.service.js';
 import { closeSessionOnLogout, issueSessionCookie, renewSessionCookie } from '../services/auth/userSessions.service.js';
@@ -18,7 +18,7 @@ import {
   recordFailedAttempt,
   resetFailedAttempts,
   verifyPasswordConstantWork,
-  lockoutMessage,
+  loginLockedError,
   GENERIC_LOGIN_FAILURE_MESSAGE
 } from '../services/auth/loginSecurity.service.js';
 import { notSyntheticTestUsername, isSyntheticTestUsername, SYNTHETIC_USERNAME_REFUSED } from '../lib/syntheticUsers.js';
@@ -206,7 +206,7 @@ router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async
       details: { reason: 'حساب به‌طور موقت مسدود است', remainingMinutes: minutes, status: 'account_locked', method: 'نام کاربری و رمز عبور', userAgent },
       req
     });
-    return res.status(429).json({ error: lockoutMessage(minutes), locked: true, remainingMinutes: minutes });
+    throw loginLockedError(minutes);
   }
 
   const [user] = await orm.select().from(users).where(eq(users.username, tUsername)).limit(1);
@@ -274,9 +274,9 @@ router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async
 
   if (failStatus.locked) {
     const minutes = failStatus.remainingMinutes || 1;
-    return res.status(429).json({ error: lockoutMessage(minutes), locked: true, remainingMinutes: minutes });
+    throw loginLockedError(minutes);
   }
-  return res.status(401).json({ error: GENERIC_LOGIN_FAILURE_MESSAGE });
+  throw new UnauthorizedError(GENERIC_LOGIN_FAILURE_MESSAGE);
 }));
 
 // Logout endpoint - Clears the HttpOnly auth cookie
@@ -306,7 +306,7 @@ const logoutHandler = asyncHandler(async (req, res) => {
   if (payload?.csrfToken) {
     const provided = String(req.headers['x-csrf-token'] || req.headers['x-xsrf-token'] || '');
     if (!provided || !safeCompareTokens(provided, payload.csrfToken)) {
-      return res.status(403).json({ error: 'CSRF token invalid', message: 'توکن امنیتی CSRF نامعتبر است یا ارسال نشده است' });
+      throw new ForbiddenError('توکن امنیتی CSRF نامعتبر است یا ارسال نشده است', undefined, 'CSRF_INVALID');
     }
   }
 

@@ -14,7 +14,7 @@ import { idempotency } from '../middleware/idempotency.js';
 import { canAccessSensitivePayrollData, sanitizePayrollRecord } from '../lib/piiMasker.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { PIECEWORK_LOG_PERMISSION, PIECEWORK_PAY_PERMISSION, PIECEWORK_PAYROLL_APPROVE_PERMISSION, PIECEWORK_PAYROLL_PERMISSION, PIECEWORK_TASKS_PERMISSION } from '../lib/permissions/pieceworkPermissions.js';
-import { ForbiddenError } from '../errors/customErrors.js';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/customErrors.js';
 import { fin } from '../lib/financialDecimal.js';
 import { parseWorkQuantity } from '../lib/piecework/workQuantity.js';
 import { WORK_LOG_PAGE_SIZE } from '../lib/piecework/workLogList.js';
@@ -312,7 +312,7 @@ router.post('/piecework/tasks/import-excel', requirePermission(PIECEWORK_TASKS_P
   try {
     const { rows, mode = 'upsert' } = req.body;
     if (!Array.isArray(rows) || rows.length === 0) {
-      return res.status(400).json({ error: 'لیست ردیف‌های واردات اکسل خالی است' });
+      throw new BadRequestError('لیست ردیف‌های واردات اکسل خالی است');
     }
 
     const result = await PieceworkService.importTasksFromExcel({
@@ -574,7 +574,7 @@ router.post('/piecework/logs', requirePermission(PIECEWORK_LOG_PERMISSION), idem
     const canSetRate = await can(req.user, PIECEWORK_TASKS_PERMISSION);
 
     if (items.length === 0) {
-      return res.status(400).json({ error: 'حداقل یک ردیف کارکرد انتخاب کنید' });
+      throw new BadRequestError('حداقل یک ردیف کارکرد انتخاب کنید');
     }
 
     const insertedIds = await PieceworkService.logWorkEntries(
@@ -670,7 +670,7 @@ router.get('/piecework/payrolls/:id', authorizePermission(...READ_PERMISSIONS.pa
     const detail = await PayrollReadService.getPayrollDetail(id);
 
     if (!detail) {
-      return res.status(404).json({ error: 'فیش حقوقی یافت نشد' });
+      throw new NotFoundError('فیش حقوقی یافت نشد');
     }
 
     const { payroll: pay, items, voucherLink } = detail;

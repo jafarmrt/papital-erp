@@ -65,63 +65,49 @@ export class WebhookSubscriptionService {
    * Retrieves summary statistics for Webhook subscriptions and deliveries.
    */
   static async getStats() {
-    try {
-      const [subsCount] = await orm
-        .select({ value: count() })
-        .from(webhookSubscriptions);
+    const [subsCount] = await orm
+      .select({ value: count() })
+      .from(webhookSubscriptions);
 
-      const [activeSubsCount] = await orm
-        .select({ value: count() })
-        .from(webhookSubscriptions)
-        .where(eq(webhookSubscriptions.isActive, 1));
+    const [activeSubsCount] = await orm
+      .select({ value: count() })
+      .from(webhookSubscriptions)
+      .where(eq(webhookSubscriptions.isActive, 1));
 
-      const [delivCount] = await orm
-        .select({ value: count() })
-        .from(webhookDeliveries);
+    const [delivCount] = await orm
+      .select({ value: count() })
+      .from(webhookDeliveries);
 
-      const [successDelivCount] = await orm
-        .select({ value: count() })
-        .from(webhookDeliveries)
-        .where(eq(webhookDeliveries.status, 'success'));
+    const [successDelivCount] = await orm
+      .select({ value: count() })
+      .from(webhookDeliveries)
+      .where(eq(webhookDeliveries.status, 'success'));
 
-      const totalSubs = Number(subsCount?.value) || 0;
-      const activeSubs = Number(activeSubsCount?.value) || 0;
-      const totalDeliveries = Number(delivCount?.value) || 0;
-      const successfulDeliveries = Number(successDelivCount?.value) || 0;
-      const successRate = totalDeliveries > 0 ? Math.round((successfulDeliveries / totalDeliveries) * 100) : 100;
+    const totalSubs = Number(subsCount?.value) || 0;
+    const activeSubs = Number(activeSubsCount?.value) || 0;
+    const totalDeliveries = Number(delivCount?.value) || 0;
+    const successfulDeliveries = Number(successDelivCount?.value) || 0;
+    const successRate = totalDeliveries > 0 ? Math.round((successfulDeliveries / totalDeliveries) * 100) : 100;
 
-      return {
-        totalSubscriptions: totalSubs,
-        activeSubscriptions: activeSubs,
-        totalDeliveries,
-        successfulDeliveries,
-        failedDeliveries: totalDeliveries - successfulDeliveries,
-        successRate
-      };
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      logger.error(`[Webhook Stats Error] ${errMsg}`);
-      // 10.3 (ARCH review): a failed read is an error answer, never zero subscriptions and a 100% success rate
-      throw err;
-    }
+    return {
+      totalSubscriptions: totalSubs,
+      activeSubscriptions: activeSubs,
+      totalDeliveries,
+      successfulDeliveries,
+      failedDeliveries: totalDeliveries - successfulDeliveries,
+      successRate
+    };
   }
 
   /**
    * List all registered webhook subscriptions.
    */
   static async getSubscriptions(): Promise<OpenWebhookSubscription[]> {
-    try {
-      const rows = await orm
-        .select()
-        .from(webhookSubscriptions)
-        .orderBy(desc(webhookSubscriptions.id));
-      return rows.map(row => openWebhookSubscription(row));
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      logger.error(`[Webhook Get Subscriptions Error] ${errMsg}`);
-      // 10.3 (ARCH review): a failed read is an error answer, never an empty list
-      throw err;
-    }
+    const rows = await orm
+      .select()
+      .from(webhookSubscriptions)
+      .orderBy(desc(webhookSubscriptions.id));
+    return rows.map(row => openWebhookSubscription(row));
   }
 
   /**
@@ -572,38 +558,31 @@ export class WebhookSubscriptionService {
    * Fetch recent delivery logs.
    */
   static async getDeliveries(options: { subscriptionId?: number; limit?: number; offset?: number } = {}) {
-    try {
-      const limit = Math.min(options.limit || 50, WEBHOOK_DELIVERY_MAX_LIMIT);
-      const offset = options.offset || 0;
+    const limit = Math.min(options.limit || 50, WEBHOOK_DELIVERY_MAX_LIMIT);
+    const offset = options.offset || 0;
 
-      const whereClause = options.subscriptionId
-        ? eq(webhookDeliveries.subscriptionId, options.subscriptionId)
-        : undefined;
+    const whereClause = options.subscriptionId
+      ? eq(webhookDeliveries.subscriptionId, options.subscriptionId)
+      : undefined;
 
-      const [totalCount] = await orm
-        .select({ value: count() })
-        .from(webhookDeliveries)
-        .where(whereClause);
+    const [totalCount] = await orm
+      .select({ value: count() })
+      .from(webhookDeliveries)
+      .where(whereClause);
 
-      const items = await orm
-        .select()
-        .from(webhookDeliveries)
-        .where(whereClause)
-        .orderBy(desc(webhookDeliveries.id))
-        .limit(limit)
-        .offset(offset);
+    const items = await orm
+      .select()
+      .from(webhookDeliveries)
+      .where(whereClause)
+      .orderBy(desc(webhookDeliveries.id))
+      .limit(limit)
+      .offset(offset);
 
-      return {
-        data: items,
-        total: Number(totalCount?.value) || 0,
-        limit,
-        offset
-      };
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      logger.error(`[Webhook Deliveries Get Error] ${errMsg}`);
-      // 10.3 (ARCH review): a failed read is an error answer, never an empty delivery log
-      throw err;
-    }
+    return {
+      data: items,
+      total: Number(totalCount?.value) || 0,
+      limit,
+      offset
+    };
   }
 }

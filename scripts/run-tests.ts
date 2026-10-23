@@ -6,6 +6,7 @@ import { Phase21TestRunner, assertRealTestDatabase, assertRunnerEnvironment } fr
 import { setupTestSchema } from '../src/tests/setup/testDb.js';
 import { bootstrapTestMasterData } from '../src/tests/setup/testBootstrap.js';
 import { REAL_EXECUTION_TYPES, realExecutionCount, runnerExitCode } from '../src/tests/runnerOutcome.js';
+import { runnerPreflightMessage, runnerSettingProblems } from '../src/tests/runnerPreflight.js';
 
 async function main() {
   const rawArgs = process.argv.slice(2);
@@ -133,6 +134,13 @@ Available Suites:
     assertRunnerEnvironment();
   } catch (err) {
     console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
+
+  // 10.3 package 3 (ARCH review finding 5): missing settings stop the runner with one clear message, before any schema
+  const settingProblems = runnerSettingProblems(process.env);
+  if (settingProblems.length > 0) {
+    console.error(runnerPreflightMessage(settingProblems));
     process.exit(1);
   }
 

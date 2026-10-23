@@ -594,7 +594,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
           realLocked = await attempt(realUser, '198.51.100.101');
           ghostLocked = await attempt(ghostUser, '198.51.100.102');
         }
-        if (realLocked?.status !== 429 || ghostLocked?.status !== 429 || realLocked.body?.remainingMinutes !== 1 || ghostLocked.body?.remainingMinutes !== 1
+        if (realLocked?.status !== 429 || ghostLocked?.status !== 429 || realLocked.body?.details?.remainingMinutes !== 1 || ghostLocked.body?.details?.remainingMinutes !== 1
           || realLocked.body?.error !== ghostLocked.body?.error) {
           throw new Error(`After 5 failed attempts both must get the same 1-minute lock: ${realLocked?.status}/${ghostLocked?.status} ${JSON.stringify(realLocked?.body)} ${JSON.stringify(ghostLocked?.body)}`);
         }

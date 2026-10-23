@@ -19,7 +19,7 @@ import { idempotency } from '../middleware/idempotency.js';
 import { PRODUCT_PROGRESS_STATUSES, type ProductProgressStatus } from '../lib/projects/progressMatrix.js';
 import { MAX_STAGE_ORDER, PROJECT_PRIORITIES, PROJECT_STATUSES, STAGE_STATUSES } from '../lib/projects/projectStatus.js';
 import { toPersianDigits } from '../utils/persianNumber.js';
-import { ValidationError } from '../errors/customErrors.js';
+import { BadRequestError, NotFoundError, ValidationError } from '../errors/customErrors.js';
 import { PROJECT_VERSION_REQUIRED_MESSAGE } from '../lib/projects/projectVersion.js';
 import { projectPartTokensSchema } from './projectPartTokens.schemas.js';
 import { projectPartTokens } from '../services/projects/projectPartTokens.js';
@@ -460,275 +460,243 @@ router.get('/projects', authorizePermission(...READ_PERMISSIONS.projects), valid
 
 // GET /api/projects/:id - Get single project details with stages
 router.get('/projects/:id', authorizePermission(...RECORD_READ_PERMISSIONS.production_project), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  try {
-    const id = parseInt(String(req.params.id), 10);
-    if (isNaN(id)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
+  const id = parseInt(String(req.params.id), 10);
+  if (isNaN(id)) throw new BadRequestError('شناسه پروژه نامعتبر است');
 
-    // v9.0.365 (TD-738): خواندن پروژه هرگز وضعیت آن یا مراحلش را نمی‌نویسد؛ همگام‌سازی فقط در مسیرهای نوشتن است
-    const [projData] = await orm
-      .select({
-        project: productionProjects,
-        itemImage: items.image,
-        itemThumbnail: items.thumbnail,
-      })
-      .from(productionProjects)
-      .leftJoin(items, eq(productionProjects.itemId, items.id))
-      .where(and(eq(productionProjects.id, id), eq(productionProjects.isDeleted, 0)));
+  // v9.0.365 (TD-738): خواندن پروژه هرگز وضعیت آن یا مراحلش را نمی‌نویسد؛ همگام‌سازی فقط در مسیرهای نوشتن است
+  const [projData] = await orm
+    .select({
+      project: productionProjects,
+      itemImage: items.image,
+      itemThumbnail: items.thumbnail,
+    })
+    .from(productionProjects)
+    .leftJoin(items, eq(productionProjects.itemId, items.id))
+    .where(and(eq(productionProjects.id, id), eq(productionProjects.isDeleted, 0)));
 
-    if (!projData) return res.status(404).json({ error: 'پروژه مورد نظر یافت نشد' });
+  if (!projData) throw new NotFoundError('پروژه مورد نظر یافت نشد');
 
-    const rawStages = await orm
-      .select()
-      .from(projectStages)
-      .where(and(eq(projectStages.projectId, id), eq(projectStages.isDeleted, 0)))
-      .orderBy(asc(projectStages.stageOrder));
+  const rawStages = await orm
+    .select()
+    .from(projectStages)
+    .where(and(eq(projectStages.projectId, id), eq(projectStages.isDeleted, 0)))
+    .orderBy(asc(projectStages.stageOrder));
 
-    const formatted = formatProject(projData.project, rawStages, {
-      itemImage: projData.itemImage,
-      itemThumbnail: projData.itemThumbnail
-    });
+  const formatted = formatProject(projData.project, rawStages, {
+    itemImage: projData.itemImage,
+    itemThumbnail: projData.itemThumbnail
+  });
 
-    // v10.1.37 (N-01, TD-1283): «مسئولان پروژه» come with the project record
-    const managers = (await readProjectManagers(orm, [id])).get(id) ?? [];
-    res.json({ ...formatted, managers, partTokens: projectPartTokens(projData.project, managers.map(m => m.userId)) });
-  } catch (err) {
-    throw err;
-  }
+  // v10.1.37 (N-01, TD-1283): «مسئولان پروژه» come with the project record
+  const managers = (await readProjectManagers(orm, [id])).get(id) ?? [];
+  res.json({ ...formatted, managers, partTokens: projectPartTokens(projData.project, managers.map(m => m.userId)) });
 }));
 
 // POST /api/projects - Create a new production project with stages
 router.post('/projects', authorizePermission(...PROJECT_CREATE_PERMISSIONS), idempotency({ scope: 'projects' }), validate(createProjectSchema), asyncHandler(async (req, res) => {
-  try {
-    const { 
-      title, customer_id, customer_name, item_id, item_code, item_name, 
-      quantity, unit, start_date, end_date, priority, description, initial_stages,
-      products, inventory_control, inventoryControl, stage_schedules, stageSchedules,
-      custom_stages, customStages, attachments, project_code, managerUserIds
-    } = req.body;
+  const { 
+    title, customer_id, customer_name, item_id, item_code, item_name, 
+    quantity, unit, start_date, end_date, priority, description, initial_stages,
+    products, inventory_control, inventoryControl, stage_schedules, stageSchedules,
+    custom_stages, customStages, attachments, project_code, managerUserIds
+  } = req.body;
 
-    const currentUser = req.user?.username || 'سیستم';
+  const currentUser = req.user?.username || 'سیستم';
 
-    const { project: newProject, stages: createdStages } = await ProjectService.createProject({
-      title,
-      projectCode: project_code,
-      customerId: customer_id,
-      customerName: customer_name,
-      itemId: item_id,
-      itemCode: item_code,
-      itemName: item_name,
-      quantity,
-      unit,
-      startDate: start_date,
-      endDate: end_date,
-      priority,
-      description,
-      initialStages: initial_stages,
-      products,
-      inventoryControl: inventoryControl || inventory_control,
-      stageSchedules: stageSchedules || stage_schedules,
-      customStages: customStages || custom_stages,
-      attachments,
-      createdBy: currentUser,
-      createdById: req.user?.id,
-      managerUserIds,
-    });
+  const { project: newProject, stages: createdStages } = await ProjectService.createProject({
+    title,
+    projectCode: project_code,
+    customerId: customer_id,
+    customerName: customer_name,
+    itemId: item_id,
+    itemCode: item_code,
+    itemName: item_name,
+    quantity,
+    unit,
+    startDate: start_date,
+    endDate: end_date,
+    priority,
+    description,
+    initialStages: initial_stages,
+    products,
+    inventoryControl: inventoryControl || inventory_control,
+    stageSchedules: stageSchedules || stage_schedules,
+    customStages: customStages || custom_stages,
+    attachments,
+    createdBy: currentUser,
+    createdById: req.user?.id,
+    managerUserIds,
+  });
 
-    await logActivity({
-      userId: req.user?.id,
-      username: currentUser,
-      userFullName: req.user?.full_name || currentUser,
-      action: 'CREATE',
-      entity: 'پروژه تولید',
-      entityId: String(newProject.id),
-      description: `تعریف پروژه تولید جدید با کد ${newProject.projectCode} (${newProject.title})`
-    });
+  await logActivity({
+    userId: req.user?.id,
+    username: currentUser,
+    userFullName: req.user?.full_name || currentUser,
+    action: 'CREATE',
+    entity: 'پروژه تولید',
+    entityId: String(newProject.id),
+    description: `تعریف پروژه تولید جدید با کد ${newProject.projectCode} (${newProject.title})`
+  });
 
-    const formattedNew = formatProject(newProject, createdStages);
-    const managers = (await readProjectManagers(orm, [newProject.id])).get(newProject.id) ?? [];
-    res.status(201).json({ ...formattedNew, managers });
-  } catch (err) {
-    throw err;
-  }
+  const formattedNew = formatProject(newProject, createdStages);
+  const managers = (await readProjectManagers(orm, [newProject.id])).get(newProject.id) ?? [];
+  res.status(201).json({ ...formattedNew, managers });
 }));
 
 // PUT /api/projects/:id - Edit project details
 router.put('/projects/:id', authorizePermission(...PROJECT_EDIT_PERMISSIONS), idempotency({ scope: 'projects' }), validate(updateProjectSchema), asyncHandler(async (req, res) => {
-  try {
-    const id = parseInt(String(req.params.id), 10);
-    if (isNaN(id)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
-    if (req.body.initial_stages !== undefined) {
-      throw new ValidationError(
-        'مراحل پروژه با ویرایش پروژه تغییر نمی‌کنند؛ افزودن، تغییر نام، جابه‌جایی و حذف مرحله را در بخش مراحل جزئیات پروژه انجام دهید.',
-        undefined, 'PROJECT_STAGES_READ_ONLY'
-      );
-    }
-
-    const { 
-      title, customer_id, customer_name, item_id, item_code, item_name, 
-      quantity, unit, start_date, end_date, status, priority, description,
-      products, inventory_control, inventoryControl, stage_schedules, stageSchedules,
-      custom_stages, customStages, attachments, project_code, version, managerUserIds, partTokens
-    } = req.body;
-
-    // v9.0.364 (TD-739): بررسی تکمیل با قاعده مشترک ماتریس درون تراکنش updateProject است
-    const { current: updated } = await ProjectService.updateProject(id, {
-      title,
-      projectCode: project_code,
-      customerId: customer_id,
-      customerName: customer_name,
-      itemId: item_id,
-      itemCode: item_code,
-      itemName: item_name,
-      quantity,
-      unit,
-      startDate: start_date,
-      endDate: end_date,
-      status,
-      priority,
-      description,
-      products,
-      inventoryControl: inventoryControl ?? inventory_control,
-      stageSchedules: stageSchedules ?? stage_schedules,
-      customStages: customStages ?? custom_stages,
-      attachments,
-      expectedVersion: version,
-      managerUserIds,
-      partTokens,
-    }, undefined, { req });
-
-    const rawStages = await orm.select().from(projectStages).where(and(eq(projectStages.projectId, id), eq(projectStages.isDeleted, 0))).orderBy(asc(projectStages.stageOrder));
-
-    // v9.0.383 (TD-757): ردیف ممیزی ویرایش با پیش و پس درون تراکنش updateProject نوشته می‌شود
-    const managers = (await readProjectManagers(orm, [id])).get(id) ?? [];
-    res.json({ ...formatProject(updated, rawStages), managers, partTokens: projectPartTokens(updated, managers.map(m => m.userId)) });
-  } catch (err) {
-    throw err;
+  const id = parseInt(String(req.params.id), 10);
+  if (isNaN(id)) throw new BadRequestError('شناسه پروژه نامعتبر است');
+  if (req.body.initial_stages !== undefined) {
+    throw new ValidationError(
+      'مراحل پروژه با ویرایش پروژه تغییر نمی‌کنند؛ افزودن، تغییر نام، جابه‌جایی و حذف مرحله را در بخش مراحل جزئیات پروژه انجام دهید.',
+      undefined, 'PROJECT_STAGES_READ_ONLY'
+    );
   }
+
+  const { 
+    title, customer_id, customer_name, item_id, item_code, item_name, 
+    quantity, unit, start_date, end_date, status, priority, description,
+    products, inventory_control, inventoryControl, stage_schedules, stageSchedules,
+    custom_stages, customStages, attachments, project_code, version, managerUserIds, partTokens
+  } = req.body;
+
+  // v9.0.364 (TD-739): بررسی تکمیل با قاعده مشترک ماتریس درون تراکنش updateProject است
+  const { current: updated } = await ProjectService.updateProject(id, {
+    title,
+    projectCode: project_code,
+    customerId: customer_id,
+    customerName: customer_name,
+    itemId: item_id,
+    itemCode: item_code,
+    itemName: item_name,
+    quantity,
+    unit,
+    startDate: start_date,
+    endDate: end_date,
+    status,
+    priority,
+    description,
+    products,
+    inventoryControl: inventoryControl ?? inventory_control,
+    stageSchedules: stageSchedules ?? stage_schedules,
+    customStages: customStages ?? custom_stages,
+    attachments,
+    expectedVersion: version,
+    managerUserIds,
+    partTokens,
+  }, undefined, { req });
+
+  const rawStages = await orm.select().from(projectStages).where(and(eq(projectStages.projectId, id), eq(projectStages.isDeleted, 0))).orderBy(asc(projectStages.stageOrder));
+
+  // v9.0.383 (TD-757): ردیف ممیزی ویرایش با پیش و پس درون تراکنش updateProject نوشته می‌شود
+  const managers = (await readProjectManagers(orm, [id])).get(id) ?? [];
+  res.json({ ...formatProject(updated, rawStages), managers, partTokens: projectPartTokens(updated, managers.map(m => m.userId)) });
 }));
 
 // POST /api/projects/:id/add-to-inventory - Add produced project products to warehouse stock
 // v9.0.454 (TD-923): the delivery is a final production receipt, so it also asks the receipt's warehouse.in
 router.post('/projects/:id/add-to-inventory', authorizePermission(...PROJECT_EDIT_PERMISSIONS), requirePermission(...PROJECT_STOCK_IN_PERMISSIONS), idempotency({ scope: 'project_delivery' }), validate(addProjectToInventorySchema), asyncHandler(async (req, res) => {
-  try {
-    const id = parseInt(String(req.params.id), 10);
-    const { itemsToAdd, markCompleted, overDeliveryReason } = req.body;
-    const currentUser = req.user?.username || 'سیستم';
+  const id = parseInt(String(req.params.id), 10);
+  const { itemsToAdd, markCompleted, overDeliveryReason } = req.body;
+  const currentUser = req.user?.username || 'سیستم';
 
-    const result = await ProjectService.addProjectToInventory({
-      projectId: id,
-      itemsToAdd,
-      markCompleted,
-      currentUser,
-      userId: req.user?.id,
-      overDeliveryReason,
-      // TD-943: the production receipt's CREATE row and the project row are written with the delivery's transaction
-      auditReq: req
-    });
+  const result = await ProjectService.addProjectToInventory({
+    projectId: id,
+    itemsToAdd,
+    markCompleted,
+    currentUser,
+    userId: req.user?.id,
+    overDeliveryReason,
+    // TD-943: the production receipt's CREATE row and the project row are written with the delivery's transaction
+    auditReq: req
+  });
 
-    res.json({
-      success: true,
-      message: 'محصولات با موفقیت به موجودی انبار افزوده شدند',
-      addedCount: result.addedCount,
-      documentId: result.documentId,
-      refNumber: result.refNumber
-    });
-  } catch (err) {
-    throw err;
-  }
+  res.json({
+    success: true,
+    message: 'محصولات با موفقیت به موجودی انبار افزوده شدند',
+    addedCount: result.addedCount,
+    documentId: result.documentId,
+    refNumber: result.refNumber
+  });
 }));
 
 // DELETE /api/projects/:id - Soft delete project and stages
 router.delete('/projects/:id', authorizePermission(...PROJECT_DELETE_PERMISSIONS), idempotency({ scope: 'projects' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  try {
-    const id = parseInt(String(req.params.id), 10);
-    if (isNaN(id)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
+  const id = parseInt(String(req.params.id), 10);
+  if (isNaN(id)) throw new BadRequestError('شناسه پروژه نامعتبر است');
 
-    const existing = await ProjectService.deleteProject(id);
+  const existing = await ProjectService.deleteProject(id);
 
-    const currentUser = req.user?.username || 'سیستم';
-    await logActivity({
-      userId: req.user?.id,
-      username: currentUser,
-      userFullName: req.user?.full_name || currentUser,
-      action: 'DELETE',
-      entity: 'پروژه تولید',
-      entityId: String(id),
-      description: `حذف پروژه تولید ${existing.projectCode} (${existing.title})`
-    });
+  const currentUser = req.user?.username || 'سیستم';
+  await logActivity({
+    userId: req.user?.id,
+    username: currentUser,
+    userFullName: req.user?.full_name || currentUser,
+    action: 'DELETE',
+    entity: 'پروژه تولید',
+    entityId: String(id),
+    description: `حذف پروژه تولید ${existing.projectCode} (${existing.title})`
+  });
 
-    res.json({ success: true, message: 'پروژه با موفقیت حذف گردید' });
-  } catch (err) {
-    throw err;
-  }
+  res.json({ success: true, message: 'پروژه با موفقیت حذف گردید' });
 }));
 
 // POST /api/projects/:id/stages - Add a stage to project
 router.post('/projects/:id/stages', authorizePermission(...PROJECT_EDIT_PERMISSIONS), idempotency({ scope: 'projects' }), validate(createProjectStageSchema), asyncHandler(async (req, res) => {
-  try {
-    const projectId = parseInt(String(req.params.id), 10);
-    const { title, status, start_date, end_date, assigned_personnel, required_resources, notes } = req.body;
+  const projectId = parseInt(String(req.params.id), 10);
+  const { title, status, start_date, end_date, assigned_personnel, required_resources, notes } = req.body;
 
-    const newStage = await ProjectService.addStage(projectId, {
-      title,
-      status,
-      startDate: start_date,
-      endDate: end_date,
-      assignedPersonnel: assigned_personnel,
-      requiredResources: required_resources,
-      notes
-    }, { req });
+  const newStage = await ProjectService.addStage(projectId, {
+    title,
+    status,
+    startDate: start_date,
+    endDate: end_date,
+    assignedPersonnel: assigned_personnel,
+    requiredResources: required_resources,
+    notes
+  }, { req });
 
-    res.status(201).json(formatStage(newStage));
-  } catch (err) {
-    throw err;
-  }
+  res.status(201).json(formatStage(newStage));
 }));
 
 // PUT /api/projects/:id/stages/:stageId - Update a stage
 router.put('/projects/:id/stages/:stageId', authorizePermission(...PROJECT_EDIT_PERMISSIONS), idempotency({ scope: 'projects' }), validate(updateProjectStageSchema), asyncHandler(async (req, res) => {
-  try {
-    const projectId = parseInt(String(req.params.id), 10);
-    const stageId = parseInt(String(req.params.stageId), 10);
-    if (isNaN(projectId) || isNaN(stageId)) {
-      return res.status(400).json({ error: 'شناسه‌ها نامعتبر هستند' });
-    }
-
-    const { 
-      title, stage_order, status, start_date, end_date, 
-      assigned_personnel, required_resources, progress_percent, notes 
-    } = req.body;
-
-    // v9.0.365 (TD-738): ویرایش مرحله و همگام‌سازی مراحل و وضعیت پروژه در یک تراکنش زیر قفل پروژه
-    const updatedStage = await ProjectService.updateStage(projectId, stageId, {
-      title,
-      stageOrder: stage_order === undefined ? undefined : Number(stage_order),
-      status,
-      startDate: start_date,
-      endDate: end_date,
-      assignedPersonnel: assigned_personnel,
-      requiredResources: required_resources,
-      progressPercent: progress_percent === undefined ? undefined : Number(progress_percent),
-      notes
-    }, { req });
-
-    res.json(formatStage(updatedStage));
-  } catch (err) {
-    throw err;
+  const projectId = parseInt(String(req.params.id), 10);
+  const stageId = parseInt(String(req.params.stageId), 10);
+  if (isNaN(projectId) || isNaN(stageId)) {
+    throw new BadRequestError('شناسه‌ها نامعتبر هستند');
   }
+
+  const { 
+    title, stage_order, status, start_date, end_date, 
+    assigned_personnel, required_resources, progress_percent, notes 
+  } = req.body;
+
+  // v9.0.365 (TD-738): ویرایش مرحله و همگام‌سازی مراحل و وضعیت پروژه در یک تراکنش زیر قفل پروژه
+  const updatedStage = await ProjectService.updateStage(projectId, stageId, {
+    title,
+    stageOrder: stage_order === undefined ? undefined : Number(stage_order),
+    status,
+    startDate: start_date,
+    endDate: end_date,
+    assignedPersonnel: assigned_personnel,
+    requiredResources: required_resources,
+    progressPercent: progress_percent === undefined ? undefined : Number(progress_percent),
+    notes
+  }, { req });
+
+  res.json(formatStage(updatedStage));
 }));
 
 // DELETE /api/projects/:id/stages/:stageId - Delete a stage
 router.delete('/projects/:id/stages/:stageId', authorizePermission(...PROJECT_EDIT_PERMISSIONS), idempotency({ scope: 'projects' }), validate(deleteProjectStageSchema), asyncHandler(async (req, res) => {
-  try {
-    const projectId = parseInt(String(req.params.id), 10);
-    const stageId = parseInt(String(req.params.stageId), 10);
+  const projectId = parseInt(String(req.params.id), 10);
+  const stageId = parseInt(String(req.params.stageId), 10);
 
-    await ProjectService.deleteStage(projectId, stageId, { req });
+  await ProjectService.deleteStage(projectId, stageId, { req });
 
-    res.json({ success: true, message: 'مرحله با موفقیت حذف شد' });
-  } catch (err) {
-    throw err;
-  }
+  res.json({ success: true, message: 'مرحله با موفقیت حذف شد' });
 }));
 
 // v10.2.1 (10.2 package 2, review U4): the counts of the project page's step bar; counts only, no amount
@@ -738,19 +706,15 @@ router.get('/projects/:id/steps', authorizePermission(...RECORD_READ_PERMISSIONS
 
 // GET /api/projects/:id/product-progress — ماتریس کامل پیشرفت SKUها
 router.get('/projects/:id/product-progress', authorizePermission('projects.view', 'projects.edit', 'projects.create', 'warehouse.view', 'documents.view'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  try {
-    const projectId = parseInt(String(req.params.id), 10);
-    if (isNaN(projectId)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
+  const projectId = parseInt(String(req.params.id), 10);
+  if (isNaN(projectId)) throw new BadRequestError('شناسه پروژه نامعتبر است');
 
-    // v9.0.365 (TD-738): فقط خواندن؛ وضعیت مراحل و پروژه را مسیرهای نوشتن همگام می‌کنند
-    // v9.0.364 (TD-739): ماتریس با قاعده مشترک (پروژه تک‌کالایی: کالای اصلی)
-    const view = await ProjectService.getProductProgressView(projectId);
-    if (!view) return res.status(404).json({ error: 'پروژه یافت نشد' });
+  // v9.0.365 (TD-738): فقط خواندن؛ وضعیت مراحل و پروژه را مسیرهای نوشتن همگام می‌کنند
+  // v9.0.364 (TD-739): ماتریس با قاعده مشترک (پروژه تک‌کالایی: کالای اصلی)
+  const view = await ProjectService.getProductProgressView(projectId);
+  if (!view) throw new NotFoundError('پروژه یافت نشد');
 
-    res.json({ success: true, data: view });
-  } catch (err) {
-    throw err;
-  }
+  res.json({ success: true, data: view });
 }));
 
 // PUT /api/projects/:id/product-progress — بولک آپسِرت وضعیت دودویی هر SKU در هر مرحله
@@ -772,34 +736,30 @@ const updateProductProgressSchema = z.object({
 });
 
 router.put('/projects/:id/product-progress', authorizePermission(...PROJECT_EDIT_PERMISSIONS), idempotency({ scope: 'projects' }), validate(updateProductProgressSchema), asyncHandler(async (req, res) => {
-  try {
-    const projectId = parseInt(String(req.params.id), 10);
-    if (isNaN(projectId)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
+  const projectId = parseInt(String(req.params.id), 10);
+  if (isNaN(projectId)) throw new BadRequestError('شناسه پروژه نامعتبر است');
 
-    const updates = req.body.items as Array<{ item_id: number | string; stage_order: number | string; stage_title?: string; status: ProductProgressStatus }>;
+  const updates = req.body.items as Array<{ item_id: number | string; stage_order: number | string; stage_title?: string; status: ProductProgressStatus }>;
 
-    // v9.0.365 (TD-738): تیک‌ها، ردیف ممیزی و همگام‌سازی مراحل و وضعیت در یک تراکنش زیر قفل پروژه
-    const { applied, skippedInvalid, projectStatus, weightedProgress } = await ProjectService.updateProductProgress(
-      projectId,
-      updates.map(u => ({
-        itemId: Number(u.item_id),
-        stageOrder: Number(u.stage_order),
-        stageTitle: u.stage_title,
-        status: u.status
-      })),
-      { req }
-    );
+  // v9.0.365 (TD-738): تیک‌ها، ردیف ممیزی و همگام‌سازی مراحل و وضعیت در یک تراکنش زیر قفل پروژه
+  const { applied, skippedInvalid, projectStatus, weightedProgress } = await ProjectService.updateProductProgress(
+    projectId,
+    updates.map(u => ({
+      itemId: Number(u.item_id),
+      stageOrder: Number(u.stage_order),
+      stageTitle: u.stage_title,
+      status: u.status
+    })),
+    { req }
+  );
 
-    res.json({ 
-      success: true, 
-      applied, 
-      skipped_invalid: skippedInvalid,
-      project_status: projectStatus,
-      weighted_progress_percent: weightedProgress
-    });
-  } catch (err) {
-    throw err;
-  }
+  res.json({ 
+    success: true, 
+    applied, 
+    skipped_invalid: skippedInvalid,
+    project_status: projectStatus,
+    weighted_progress_percent: weightedProgress
+  });
 }));
 
 export default router;

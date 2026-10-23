@@ -18,7 +18,7 @@ import { catalogRefreshMessage, trackingEnabledNote } from '../lib/woocommerce/w
 import { formatPersianNumber } from '../utils/persianNumber.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
-import { ForbiddenError, ValidationError } from '../errors/customErrors.js';
+import { AppError, ForbiddenError, ValidationError } from '../errors/customErrors.js';
 import { resolveWcTestCredentials } from '../lib/woocommerce/wcConnectionTest.js';
 import { readWcConnectionSettings } from '../services/woocommerce/wcConnectionSettings.js';
 import { openSettingSecret } from '../services/settings/settingSecrets.js';
@@ -66,6 +66,8 @@ const testConnectionSchema = z.object({
 // ==========================================
 // UNAUTHENTICATED WEBHOOK ENDPOINT (GET/POST/HEAD)
 // ==========================================
+const WEBHOOK_REFUSAL_CODES = new Set(['WC_WEBHOOK_SIGNATURE_MISSING', 'WC_WEBHOOK_SIGNATURE_INVALID', 'WC_WEBHOOK_SECRET_NOT_SET']);
+
 const handleWebhookPingOrPayload = async (req: Request, res: Response) => {
   try {
     // 1. If method is GET or HEAD (WooCommerce or browser verification)
@@ -85,10 +87,7 @@ const handleWebhookPingOrPayload = async (req: Request, res: Response) => {
     if (webhookSecret) {
       const signatureHeader = (req.headers['x-wc-webhook-signature'] || '').toString().trim();
       if (!signatureHeader) {
-        return res.status(401).json({
-          success: false,
-          error: 'امضای امنیتی وب‌هوک ووکامرس (X-WC-Webhook-Signature) در هدر درخواست ارسال نشده است.'
-        });
+        throw new AppError('امضای امنیتی وب‌هوک ووکامرس (X-WC-Webhook-Signature) در هدر درخواست ارسال نشده است.', 401, 'WC_WEBHOOK_SIGNATURE_MISSING');
       }
 
       const rawBuffer = (req as { rawBody?: Buffer }).rawBody || Buffer.from(JSON.stringify(req.body || {}));
@@ -107,10 +106,7 @@ const handleWebhookPingOrPayload = async (req: Request, res: Response) => {
       }
 
       if (!isMatch) {
-        return res.status(401).json({
-          success: false,
-          error: 'امضای محرمانه وب‌هوک ووکامرس نامعتبر است (HMAC SHA-256 Mismatch).'
-        });
+        throw new AppError('امضای محرمانه وب‌هوک ووکامرس نامعتبر است (HMAC SHA-256 Mismatch).', 401, 'WC_WEBHOOK_SIGNATURE_INVALID');
       }
     } else {
       // V9-P0 (Fail-Closed): اگر کلید امضا تنظیم نشده باشد، پردازش سفارش‌های واقعی ممنوع است
@@ -120,10 +116,7 @@ const handleWebhookPingOrPayload = async (req: Request, res: Response) => {
       const isPingLike = String(earlyTopic).includes('ping') || earlyPayload.webhook_id || earlyPayload.ping;
       const isRealOrder = !isPingLike && (earlyPayload.id || earlyPayload.number);
       if (isRealOrder) {
-        return res.status(403).json({
-          success: false,
-          error: 'کلید امضای امنیتی وب‌هوک ووکامرس (wc_webhook_secret) در تنظیمات سیستم تعیین نشده است. جهت جلوگیری از درخواست‌های جعلی، پردازش سفارش تا تنظیم این کلید از مسیر «تنظیمات ← ووکامرس» غیرفعال است.'
-        });
+        throw new AppError('کلید امضای امنیتی وب‌هوک ووکامرس (wc_webhook_secret) در تنظیمات سامانه تعیین نشده است. جهت جلوگیری از درخواست‌های جعلی، پردازش سفارش تا تنظیم این کلید از مسیر «تنظیمات ← ووکامرس» غیرفعال است.', 403, 'WC_WEBHOOK_SECRET_NOT_SET');
       }
     }
 
@@ -153,6 +146,8 @@ const handleWebhookPingOrPayload = async (req: Request, res: Response) => {
     // v10.2.0: a failure goes to the shop with the general message only; the order log keeps its details
     return res.status(200).json(wooWebhookAnswer(result));
   } catch (error) {
+    // 10.3 package 3 (OBS-R2-05): a refused signature keeps its 401 / 403 through errorHandler; only a failure is answered 200
+    if (error instanceof AppError && WEBHOOK_REFUSAL_CODES.has(error.code)) throw error;
     logger.error({ message: 'WooCommerce Webhook error', error });
     // تصمیم مالک محصول (v7.0.30): همیشه 200 — ووکامرس تحویل ناموفق را دوباره ارسال نمی‌کند و پس از ۵ پاسخ
     // غیر 2xx پیاپی وب‌هوک را غیرفعال می‌کند. شکست در woocommerce_order_logs ماندگار است و از ERP با
@@ -172,17 +167,13 @@ router.use(authenticateToken);
 
 // Get WooCommerce Order Logs History
 router.get('/order-logs', authorizePermission('woocommerce.view'), asyncHandler(async (req, res) => {
-  try {
-    const logs = await orm.select()
-      .from(woocommerceOrderLogs)
-      .orderBy(desc(woocommerceOrderLogs.id))
-      .limit(100);
+  const logs = await orm.select()
+    .from(woocommerceOrderLogs)
+    .orderBy(desc(woocommerceOrderLogs.id))
+    .limit(100);
 
-    // v9.0.436 (TD-725): the log times go to the WooCommerce tab with a Z (AGENTS §1.10)
-    res.json(withUtcTimestampKeys(logs, WOO_ORDER_LOG_TIMESTAMP_KEYS));
-  } catch (error) {
-    throw error;
-  }
+  // v9.0.436 (TD-725): the log times go to the WooCommerce tab with a Z (AGENTS §1.10)
+  res.json(withUtcTimestampKeys(logs, WOO_ORDER_LOG_TIMESTAMP_KEYS));
 }));
 
 // Get WooCommerce Synced Orders History
@@ -268,22 +259,18 @@ router.post('/sync-all-stocks', authorizePermission('woocommerce.manage'), idemp
 
 // Test Connection
 router.post('/test-connection', authorizePermission('woocommerce.manage'), validate(testConnectionSchema), asyncHandler(async (req, res) => {
-  try {
-    // v9.0.333 (TD-723): غیرمدیر کلیدها را «********» می‌بیند و نمی‌فرستد؛ کلید ذخیره‌شده فقط با نشانی ذخیره‌شده به کار می‌رود
-    const resolved = resolveWcTestCredentials(req.body, await readWcConnectionSettings());
-    if (!resolved.ok) throw new ValidationError(resolved.message, undefined, resolved.code);
-    const { url, consumerKey, consumerSecret } = resolved.credentials;
+  // v9.0.333 (TD-723): غیرمدیر کلیدها را «********» می‌بیند و نمی‌فرستد؛ کلید ذخیره‌شده فقط با نشانی ذخیره‌شده به کار می‌رود
+  const resolved = resolveWcTestCredentials(req.body, await readWcConnectionSettings());
+  if (!resolved.ok) throw new ValidationError(resolved.message, undefined, resolved.code);
+  const { url, consumerKey, consumerSecret } = resolved.credentials;
 
-    // V3.0.7 (TD-057): the shop address passes the SSRF guard inside makeWcRequest (OBS-R2-82), without the local echo
-    const data = await makeWcRequest('GET', 'products', url, consumerKey, consumerSecret, null, { per_page: 1, _t: Date.now() });
+  // V3.0.7 (TD-057): the shop address passes the SSRF guard inside makeWcRequest (OBS-R2-82), without the local echo
+  const data = await makeWcRequest('GET', 'products', url, consumerKey, consumerSecret, null, { per_page: 1, _t: Date.now() });
 
-    if (Array.isArray(data)) {
-      res.json({ success: true, message: 'اتصال به سایت وردپرسی و فروشگاه ووکامرس با موفقیت برقرار شد.' });
-    } else {
-      res.json({ success: true, message: 'اتصال برقرار شد، اما پاسخ دریافتی فرمت استاندارد ووکامرس را ندارد.' });
-    }
-  } catch (error) {
-    throw error;
+  if (Array.isArray(data)) {
+    res.json({ success: true, message: 'اتصال به سایت وردپرسی و فروشگاه ووکامرس با موفقیت برقرار شد.' });
+  } else {
+    res.json({ success: true, message: 'اتصال برقرار شد، اما پاسخ دریافتی فرمت استاندارد ووکامرس را ندارد.' });
   }
 }));
 

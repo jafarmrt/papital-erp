@@ -65,22 +65,20 @@ router.post('/warehouses', authorizePermission('warehouse.manage'), idempotency(
 }));
 
 router.put('/warehouses/:id', authorizePermission('warehouse.manage'), idempotency({ scope: 'warehouses' }), validate(updateWarehouseValidation), asyncHandler(async (req, res) => {
-  try {
-    const { name } = req.body;
-    const id = Number(req.params.id);
-    const { previous: oldWh, current: updatedWh } = await idempotentTransaction(tx => WarehouseService.updateWarehouse(id, { name }, tx));
+  const { name } = req.body;
+  const id = Number(req.params.id);
+  const { previous: oldWh, current: updatedWh } = await idempotentTransaction(tx => WarehouseService.updateWarehouse(id, { name }, tx));
 
-    await logActivity({
-      action: 'UPDATE',
-      entity: 'انبار',
-      entityId: oldWh.id,
-      description: `ویرایش نام انبار کد «${oldWh.code}» از «${oldWh.name}» به «${name}»`,
-      details: { before: { name: oldWh.name }, after: { name: updatedWh.name } },
-      req
-    });
+  await logActivity({
+    action: 'UPDATE',
+    entity: 'انبار',
+    entityId: oldWh.id,
+    description: `ویرایش نام انبار کد «${oldWh.code}» از «${oldWh.name}» به «${name}»`,
+    details: { before: { name: oldWh.name }, after: { name: updatedWh.name } },
+    req
+  });
 
-    res.json({ success: true });
-  } catch (err) { throw err; }
+  res.json({ success: true });
 }));
 
 router.delete('/warehouses/:id', authorizePermission('warehouse.manage'), idempotency({ scope: 'warehouses' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
