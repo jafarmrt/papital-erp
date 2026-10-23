@@ -1,19 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useEffectEvent } from 'react';
 import { Edit3, Trash2, Clock, Check, FileText, Search, Package, Copy, Building2 } from 'lucide-react';
 import { CRMLead, CRMActivity, Item } from '../../types';
 import { getActivityTypeBadge } from './CRMFollowupsView';
 import { ActivityRowActions } from './ActivityRowActions';
 import { formatPersianNumber, formatPersianPhone, formatPersianDate, formatPersianCode } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
-import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
 import { copyToClipboard } from '../../utils/clipboard';
-import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { useCrmStockItemsQuery } from '../../hooks/queries/useCrmQueries';
+import { useWarehousesQuery, type WarehouseItem } from '../../hooks/queries/useSettingsQueries';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 import { DialogLayer } from '../common/DialogLayer';
 import { activityResultLabel } from '../../lib/crm/crmScreenText';
 import { CrmAttachmentsPanel } from './CrmAttachmentsPanel';
 import { useHasPermission } from '../../contexts/AuthContext';
 import type { CrmAttachmentView } from '../../lib/crm/crmAttachments';
+
+const NO_ITEMS: Item[] = [];
+const NO_WAREHOUSES: WarehouseItem[] = [];
 
 interface CRMLeadDrawerProps {
   selectedLeadDrawer: CRMLead | null;
@@ -50,10 +54,7 @@ export function CRMLeadDrawer({
 }: CRMLeadDrawerProps) {
   const rial = useRialDisplay();
   const [activeTab, setActiveTab] = useState<'activities' | 'stock'>('activities');
-  const [items, setItems] = useState<Item[]>([]);
-  const [warehouses, setWarehouses] = useState<any[]>([]);
   const [stockSearchTerm, setStockSearchTerm] = useState('');
-  const [isLoadingStock, setIsLoadingStock] = useState(false);
   // v10.2 package 7: the sales file's attachments; the drawer does not close while a file is being sent
   const canViewAttachments = useHasPermission('crm.view');
   const [attachmentsBusy, setAttachmentsBusy] = useState(false);
@@ -61,25 +62,19 @@ export function CRMLeadDrawer({
     if (!attachmentsBusy) onCloseDrawer();
   };
 
+  // 10.3 (ARCH review finding 3, part 12): the stock tab reads the items and warehouses through the shared cache, again
+  // each time it opens (before, once per page visit), and a stock change refreshes it while it is open
+  const stockOpen = activeTab === 'stock' && selectedLeadDrawer !== null;
+  const itemsRead = useOpeningRead(useCrmStockItemsQuery(stockOpen), stockOpen);
+  const warehousesRead = useOpeningRead(useWarehousesQuery({ enabled: stockOpen, readOnEveryOpening: true }), stockOpen);
+  const items: Item[] = itemsRead.data ?? NO_ITEMS;
+  const warehouses = warehousesRead.data ?? NO_WAREHOUSES;
+  const stockFailedAt = Math.max(itemsRead.failedAt, warehousesRead.failedAt);
+  const isLoadingStock = stockOpen && (itemsRead.data === undefined || warehousesRead.data === undefined) && stockFailedAt === 0;
+  const sayStockFailed = useEffectEvent(() => { toast.error('خطا در دریافت اطلاعات موجودی انبارها'); });
   useEffect(() => {
-    if (activeTab === 'stock' && items.length === 0) {
-      setIsLoadingStock(true);
-      Promise.all([
-        fetchJson(PICK_LIST_URLS.items),
-        fetchJson('/warehouses')
-      ]).then(([itemsData, whData]) => {
-        const rawItems = Array.isArray(itemsData) ? itemsData : (Array.isArray(itemsData?.data) ? itemsData.data : []);
-        const rawWh = Array.isArray(whData) ? whData : (Array.isArray(whData?.data) ? whData.data : []);
-        setItems(rawItems);
-        setWarehouses(rawWh);
-      }).catch((err) => {
-        console.error('Error loading stock info:', err);
-        toast.error('خطا در دریافت اطلاعات موجودی انبارها');
-      }).finally(() => {
-        setIsLoadingStock(false);
-      });
-    }
-  }, [activeTab, items.length]);
+    if (stockFailedAt) sayStockFailed();
+  }, [stockFailedAt]);
 
   if (!selectedLeadDrawer) return null;
 

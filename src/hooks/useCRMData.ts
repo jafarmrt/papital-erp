@@ -7,9 +7,7 @@ import toast from 'react-hot-toast';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { useCRMFilters, buildLeadQueryParams } from './useCRMFilters';
 import { useDebounce } from './useDebounce';
-import { CRM_ACTIVITY_PAGE_QUERY_KEY, CRM_LEAD_PAGE_QUERY_KEY, CRM_PARTY_RECORDS_QUERY_KEY } from '../lib/crm/crmListPages';
 import type { CrmStats } from '../lib/crm/leadCurrencyTotals';
-import { CRM_FOLLOWUPS_QUERY_KEY } from '../lib/crm/crmFollowupsQuery';
 import { QUERY_KEYS } from '../lib/queryKeys';
 import { useCrmActivePersonnelQuery, useCrmBoardLeadsQuery, useCrmStatsQuery } from './queries/useCrmQueries';
 import { useCustomerOptionsQuery } from './queries/useCustomerQueries';
@@ -58,7 +56,12 @@ export function useCRMData(user: any, options: { withLists?: boolean } = {}) {
   const [selectedLeadForActivity, setSelectedLeadForActivity] = useState<CRMLead | null>(null);
 
   const [selectedLeadDrawer, setSelectedLeadDrawer] = useState<CRMLead | null>(null);
-  const { drawerActivities, drawerAttachments, loadDrawerActivities } = useLeadDrawerActivities();
+  // 10.3 (part 12): the drawer shows the file as its detail read it now, over the row it was opened from
+  const { drawerLead, drawerActivities, drawerAttachments } = useLeadDrawerActivities(selectedLeadDrawer?.id ?? null);
+  const shownLeadDrawer = useMemo(
+    () => (selectedLeadDrawer && drawerLead?.id === selectedLeadDrawer.id ? { ...selectedLeadDrawer, ...drawerLead } : selectedLeadDrawer),
+    [selectedLeadDrawer, drawerLead],
+  );
 
   // Followup completion result modal state
   const [isFollowupResultModalOpen, setIsFollowupResultModalOpen] = useState<boolean>(false);
@@ -148,12 +151,11 @@ export function useCRMData(user: any, options: { withLists?: boolean } = {}) {
   const loadProblems = withLists ? [statsQuery.isError && 'آمار', boardQuery.isError && 'پرونده‌های فروش'].filter(Boolean) : [];
   const loadError = loadProblems.length > 0 ? `دریافت ${loadProblems.join(' و ')} ناموفق بود.` : null;
 
-  // v9.0.14 (TD-428) / v10.2 package 7: the server-paged lists, the statistics and the board refresh with every reload
+  // v9.0.14 (TD-428) / v10.2 package 7: the server-paged lists, the statistics and the board refresh with every reload;
+  // 10.3 (part 12): every sales read does (`crm`): the open file drawer, its attachments, the funnel and the dashboard
+  // widget too, none of which waited for this before
   const loadAllData = useCallback(async () => {
-    await Promise.all([
-      CRM_FOLLOWUPS_QUERY_KEY, CRM_LEAD_PAGE_QUERY_KEY, CRM_ACTIVITY_PAGE_QUERY_KEY, CRM_PARTY_RECORDS_QUERY_KEY,
-      QUERY_KEYS.crm.stats(), QUERY_KEYS.crm.leads(),
-    ].map((queryKey) => queryClient.invalidateQueries({ queryKey })));
+    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.crm.all });
   }, [queryClient]);
 
   // V10-4.1: پرسنل متصل به کاربر جاری — پیش‌فرض انتخاب فروشنده
@@ -332,7 +334,6 @@ export function useCRMData(user: any, options: { withLists?: boolean } = {}) {
 
   const refreshAfterActivityChange = () => {
     void loadAllData();
-    if (selectedLeadDrawer) void openLeadDrawer(selectedLeadDrawer);
   };
 
   const handleDeleteActivity = async (act: CRMActivity) => {
@@ -412,10 +413,6 @@ export function useCRMData(user: any, options: { withLists?: boolean } = {}) {
       toast.success('اقدام/تماس با موفقیت ثبت شد');
       setIsActivityModalOpen(false);
       void loadAllData();
-
-      if (selectedLeadDrawer && selectedLeadDrawer.id === selectedLeadForActivity?.id) {
-        void openLeadDrawer(selectedLeadDrawer);
-      }
     } catch (err) {
       toast.error(errorMessageOf(err) || 'خطا در ثبت اقدام');
     } finally {
@@ -423,9 +420,8 @@ export function useCRMData(user: any, options: { withLists?: boolean } = {}) {
     }
   };
 
-  const openLeadDrawer = async (lead: CRMLead) => {
+  const openLeadDrawer = (lead: CRMLead) => {
     setSelectedLeadDrawer(lead);
-    await loadDrawerActivities(lead.id);
   };
 
   const reopeningFollowupIds = useRef(new Set<number>());
@@ -449,7 +445,6 @@ export function useCRMData(user: any, options: { withLists?: boolean } = {}) {
         await fetchJson(`/crm/activities/${act.id}/reopen-followup`, { method: 'PUT' });
         toast.success('پیگیری دوباره باز شد');
         void loadAllData();
-        if (selectedLeadDrawer) void openLeadDrawer(selectedLeadDrawer);
       } catch (err) {
         toast.error(errorMessageOf(err) || 'خطا در بازگشایی پیگیری');
       } finally {
@@ -475,7 +470,6 @@ export function useCRMData(user: any, options: { withLists?: boolean } = {}) {
       setIsFollowupResultModalOpen(false);
       setSelectedFollowupAct(null);
       void loadAllData();
-      if (selectedLeadDrawer) void openLeadDrawer(selectedLeadDrawer);
     } catch (err) {
       toast.error('خطا در ثبت نتیجه پیگیری');
     } finally {
@@ -539,7 +533,7 @@ export function useCRMData(user: any, options: { withLists?: boolean } = {}) {
     handleDeleteActivity,
     lostPromptLeadId,
     setLostPromptLeadId,
-    selectedLeadDrawer,
+    selectedLeadDrawer: shownLeadDrawer,
     setSelectedLeadDrawer,
     drawerActivities,
     drawerAttachments,

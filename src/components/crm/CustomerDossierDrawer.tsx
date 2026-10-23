@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useEffectEvent } from 'react';
 import { Building2, Users, Briefcase, Plus, PhoneCall, FileText, X, Edit2, TrendingUp, Award, ExternalLink, BookOpen, ArrowDownLeft, ArrowUpRight, Scale } from 'lucide-react';
 import { Customer, CRMLead } from '../../types';
 import { useCrmPartyRecords } from '../../hooks/useCrmPartyRecords';
@@ -10,10 +10,11 @@ import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel, formatPer
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { isRialCurrency } from '../../lib/rialDisplay';
 import { STAGES } from '../../hooks/useCRMData';
-import { fetchJson } from '../../api';
 import { serverPayableOf, payableDecimalsOf } from '../../lib/invoices/documentPayable';
-import { customerAccountCardUrl } from '../../lib/customers/customerAccountCard';
-import { customerDocumentsUrl, salesDocumentKindLabel } from '../../lib/customers/customerDocuments';
+import { salesDocumentKindLabel } from '../../lib/customers/customerDocuments';
+import { useCustomerAccountCardQuery, useCustomerDocumentsQuery, type CustomerSalesDocument } from '../../hooks/queries/useCustomerQueries';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
+import { accountCardRows } from '../../lib/accounting/accountCard';
 import { documentStatusLabelOf } from '../../lib/invoices/invoiceListDocuments';
 import { sumByCurrency } from '../../lib/crm/leadCurrencyTotals';
 import { CurrencyTotalsLines } from './CurrencyTotals';
@@ -22,6 +23,8 @@ import { splitPhones } from '../../lib/customers/contactChannels';
 import toast from 'react-hot-toast';
 import { DialogLayer } from '../common/DialogLayer';
 import { activityResultLabel } from '../../lib/crm/crmScreenText';
+
+const NO_DOCUMENTS: CustomerSalesDocument[] = [];
 
 interface CustomerDossierDrawerProps {
   customer: Customer | null;
@@ -42,10 +45,6 @@ export function CustomerDossierDrawer({
 }: CustomerDossierDrawerProps) {
   const rial = useRialDisplay();
   const [activeTab, setActiveTab] = useState<'overview' | 'leads' | 'activities' | 'documents' | 'financials' | 'contacts'>('overview');
-  const [documents, setDocuments] = useState<any[]>([]);
-  const [loadingDocs, setLoadingDocs] = useState(false);
-  const [financialReport, setFinancialReport] = useState<any | null>(null);
-  const [loadingFinancials, setLoadingFinancials] = useState(false);
 
   // v10.2 package 7 (OBS-R2-24 / OBS-R2-28): the party's files and one page of its activities come from the server
   const [activityPage, setActivityPage] = useFilterPage(String(customer?.id ?? 0));
@@ -61,42 +60,23 @@ export function CustomerDossierDrawer({
   const wonLeads = customerLeads.filter((l) => l.stage === 'won');
   const wonTotals = sumByCurrency(wonLeads);
 
-  // Load documents and accounting read model for this customer
+  // 10.3 (ARCH review finding 3, part 12): the party's sales documents and account card come from the shared cache,
+  // read again each time a party's dossier opens; a document, voucher or treasury change refreshes them while it is open
+  const partyId = customer?.id ?? null;
+  const documentsRead = useOpeningRead(useCustomerDocumentsQuery(partyId), partyId);
+  const accountCardRead = useOpeningRead(useCustomerAccountCardQuery(partyId), partyId);
+  const documents = documentsRead.data ?? NO_DOCUMENTS;
+  const loadingDocs = partyId !== null && documentsRead.data === undefined && !documentsRead.error;
+  const financialReport = accountCardRead.data ?? null;
+  const loadingFinancials = partyId !== null && accountCardRead.data === undefined && !accountCardRead.error;
+  const sayDocumentsFailed = useEffectEvent(() => { toast.error('خطا در دریافت اسناد مشتری'); });
   useEffect(() => {
-    if (!customer) return;
-    const controller = new AbortController();
-
-    setLoadingDocs(true);
-    fetchJson(customerDocumentsUrl(customer.id), { signal: controller.signal })
-      .then((res) => {
-        // V3.0.7 (TD-066): Array Safety Guard (قاعده #2 AGENTS)
-        const docs = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
-        setDocuments(docs);
-      })
-      .catch((err) => {
-        if (err?.name === 'AbortError') return;
-        console.error('Failed to load customer documents:', err);
-        toast.error('خطا در دریافت اسناد مشتری');
-        setDocuments([]);
-      })
-      .finally(() => setLoadingDocs(false));
-
-    // Load double-entry accounting read model (Subphase 11.2)
-    setLoadingFinancials(true);
-    fetchJson(customerAccountCardUrl(customer.id), { signal: controller.signal })
-      .then((rep) => {
-        setFinancialReport(rep || null);
-      })
-      .catch((err) => {
-        if (err?.name === 'AbortError') return;
-        console.error('Failed to load customer accounting card:', err);
-        toast.error('خطا در دریافت کارت حساب و صورت‌حساب مالی مشتری');
-        setFinancialReport(null);
-      })
-      .finally(() => setLoadingFinancials(false));
-
-    return () => controller.abort();
-  }, [customer]);
+    if (documentsRead.failedAt) sayDocumentsFailed();
+  }, [documentsRead.failedAt]);
+  const sayAccountCardFailed = useEffectEvent(() => { toast.error('خطا در دریافت کارت حساب و صورت‌حساب مالی مشتری'); });
+  useEffect(() => {
+    if (accountCardRead.failedAt) sayAccountCardFailed();
+  }, [accountCardRead.failedAt]);
 
   if (!customer) return null;
 
@@ -124,10 +104,9 @@ export function CustomerDossierDrawer({
   const balanceType = financialReport 
     ? (rawBalance > 0 ? 'debit' : rawBalance < 0 ? 'credit' : 'settled') 
     : 'settled';
-  const rawLedger = financialReport?.items || financialReport?.entries;
-  const ledgerItems = Array.isArray(rawLedger) ? rawLedger : [];
-  const totalDebit = financialReport?.totalDebit ?? financialReport?.debitTurnover ?? 0;
-  const totalCredit = financialReport?.totalCredit ?? financialReport?.creditTurnover ?? 0;
+  const ledgerItems = accountCardRows(financialReport);
+  const totalDebit = financialReport?.totalDebit ?? 0;
+  const totalCredit = financialReport?.totalCredit ?? 0;
 
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-xs flex justify-end">

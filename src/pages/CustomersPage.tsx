@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useEffectEvent, useState, useCallback, useRef } from 'react';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { fetchJson } from '../api';
@@ -12,7 +12,8 @@ import { CustomerExcelModal } from '../components/customers/CustomerExcelModal';
 import { useCRMData } from '../hooks/useCRMData';
 import { useCustomersQuery, useSaveCustomerMutation, useDeleteCustomerMutation } from '../hooks/queries';
 import { customerSaveBody } from '../lib/customers/customerVersion';
-import { customerAccountCardUrl } from '../lib/customers/customerAccountCard';
+import { useCustomerAccountCardQuery } from '../hooks/queries/useCustomerQueries';
+import { useOpeningRead } from '../hooks/queries/readOnEveryOpening';
 import { partyTemporaryRowsOf } from '../lib/accounting/partyTemporaryRows';
 import { PartyTemporaryRowsPanel } from '../components/accounting/reports/PartyTemporaryRowsPanel';
 import { useQueryClient } from '@tanstack/react-query';
@@ -49,8 +50,16 @@ export default function CustomersPage({ user }: { user: User }) {
   const [editingVersion, setEditingVersion] = useState<number | undefined>(undefined);
   const [selectedDossierCustomer, setSelectedDossierCustomer] = useState<Customer | null>(null);
   const [selectedLedgerCustomer, setSelectedLedgerCustomer] = useState<Customer | null>(null);
-  const [ledgerData, setLedgerData] = useState<any | null>(null);
-  const [loadingLedger, setLoadingLedger] = useState(false);
+  // 10.3 (ARCH review finding 3, part 12): the account card is read through the shared cache, again for each party opened,
+  // and a voucher, treasury entry or document refreshes it while it is open
+  const ledgerPartyId = selectedLedgerCustomer?.id ?? null;
+  const ledgerRead = useOpeningRead(useCustomerAccountCardQuery(ledgerPartyId), ledgerPartyId);
+  const ledgerData = ledgerRead.data ?? null;
+  const loadingLedger = ledgerPartyId !== null && ledgerRead.data === undefined && !ledgerRead.error;
+  const sayLedgerFailed = useEffectEvent(() => { toast.error('خطا در دریافت کارت حساب شخص'); });
+  useEffect(() => {
+    if (ledgerRead.failedAt) sayLedgerFailed();
+  }, [ledgerRead.failedAt]);
   const [page, setPage] = useState(1);
   // v10.1.23 (N-02 بخش ۳): پالایه برچسب و پنجره برچسب‌ها
   const [tagFilter, setTagFilter] = useState<number | null>(null);
@@ -308,18 +317,8 @@ export default function CustomersPage({ user }: { user: User }) {
   };
 
   // Open Account Card / Ledger Report Modal
-  const handleOpenLedger = async (c: Customer) => {
+  const handleOpenLedger = (c: Customer) => {
     setSelectedLedgerCustomer(c);
-    setLoadingLedger(true);
-    setLedgerData(null);
-    try {
-      const res = await fetchJson(customerAccountCardUrl(c.id));
-      setLedgerData(res?.report || res);
-    } catch (e) {
-      toast.error('خطا در دریافت کارت حساب شخص');
-    } finally {
-      setLoadingLedger(false);
-    }
   };
 
   return (
@@ -484,7 +483,7 @@ export default function CustomersPage({ user }: { user: User }) {
                             if (pType === 'customer' || pType === 'both') {
                               setSelectedDossierCustomer(c);
                             } else {
-                              void handleOpenLedger(c);
+                              handleOpenLedger(c);
                             }
                           }}
                           className="font-bold text-slate-900 hover:text-blue-700 hover:underline cursor-pointer text-right transition-colors"

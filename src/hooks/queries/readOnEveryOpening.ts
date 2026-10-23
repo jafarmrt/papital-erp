@@ -19,16 +19,23 @@ export const READ_ON_EVERY_OPENING = {
 } as const;
 
 /**
+ * Whether a window is open: true or false, or the id of the record it shows (null while closed), so that showing another
+ * record without closing (a drawer that moves to the next sales file) is a new opening
+ */
+export type Opening = boolean | number | null;
+const isOpen = (open: Opening) => open !== false && open !== null;
+
+/**
  * The moment a window last opened, 0 before it ever opened. It is set in the very render that opens the window (React's
  * "state from the previous render" pattern), so no effect of that render sees the time of an earlier opening. It is the
  * wall clock, as React Query's `dataUpdatedAt` is: an answer in the same millisecond counts (`>=`), and after the clock
  * is set back an answer of this opening looks older and waits for the next read.
  */
-export function useOpenedAt(open: boolean): number {
-  const [opening, setOpening] = useState(() => ({ open, at: open ? Date.now() : 0 }));
+export function useOpenedAt(open: Opening): number {
+  const [opening, setOpening] = useState(() => ({ open, at: isOpen(open) ? Date.now() : 0 }));
   let at = opening.at;
   if (opening.open !== open) {
-    at = open ? Date.now() : opening.at;
+    at = isOpen(open) ? Date.now() : opening.at;
     setOpening({ open, at });
   }
   return at;
@@ -50,10 +57,10 @@ export interface OpeningRead<T> {
  * that outlives it) keeps the answer and the error of an earlier opening; those never count here. The query must read
  * again on each opening (READ_ON_EVERY_OPENING or `staleTime: 0`), or its answer never becomes one of this opening.
  */
-export function useOpeningRead<T>(query: UseQueryResult<T>, open: boolean): OpeningRead<T> {
+export function useOpeningRead<T>(query: UseQueryResult<T>, open: Opening): OpeningRead<T> {
   const openedAt = useOpenedAt(open);
-  const read = open && openedAt > 0 && query.dataUpdatedAt >= openedAt;
-  const failed = open && openedAt > 0 && query.isError && query.errorUpdatedAt >= openedAt;
+  const read = isOpen(open) && openedAt > 0 && query.dataUpdatedAt >= openedAt;
+  const failed = isOpen(open) && openedAt > 0 && query.isError && query.errorUpdatedAt >= openedAt;
   return {
     data: read ? query.data : undefined,
     current: read && !query.isError ? query.data : undefined,

@@ -5,6 +5,10 @@ import { toast } from 'react-hot-toast';
 import { QUERY_KEYS, customerKeys } from '../../lib/queryKeys';
 import { invalidateDomain } from '../../lib/queryInvalidation';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { customerAccountCardUrl } from '../../lib/customers/customerAccountCard';
+import { customerDocumentsUrl } from '../../lib/customers/customerDocuments';
+import type { AccountCardReport } from '../../lib/accounting/accountCard';
+import { READ_ON_EVERY_OPENING } from './readOnEveryOpening';
 
 export { customerKeys };
 
@@ -105,5 +109,44 @@ export function useDeleteCustomerMutation() {
     onError: (err: any) => {
       toast.error(err?.message || 'خطا در حذف حساب مشتری');
     },
+  });
+}
+
+/**
+ * 10.3 (ARCH review finding 3, part 12): a party's account card (`GET /customers/:id/account-card`, which answers the
+ * report both as `report` and spread). It sits under the accounting reports, so a voucher, a treasury entry or a
+ * document refreshes it while the card or the dossier is open; it is read again on each opening of a party.
+ */
+export function useCustomerAccountCardQuery(customerId: number | null) {
+  return useQuery<AccountCardReport | null>({
+    queryKey: QUERY_KEYS.accounting.report('customer-account-card', { customerId }),
+    queryFn: async ({ signal }) => {
+      const res = await fetchJson<(AccountCardReport & { report?: AccountCardReport }) | null>(customerAccountCardUrl(customerId ?? 0), { signal });
+      return res?.report ?? res ?? null;
+    },
+    enabled: customerId !== null,
+    ...READ_ON_EVERY_OPENING,
+  });
+}
+
+/** a sales document of a party as its dossier lists it (`GET /customers/:id/documents`) */
+export interface CustomerSalesDocument {
+  id: number;
+  type?: string;
+  status?: string;
+  [field: string]: unknown;
+}
+
+/** 10.3 (part 12): the party's sales documents for its dossier, under the party's key, so a document change refreshes them */
+export function useCustomerDocumentsQuery(customerId: number | null) {
+  return useQuery<CustomerSalesDocument[]>({
+    queryKey: [...QUERY_KEYS.customers.detail(customerId ?? 0), 'documents'] as const,
+    queryFn: async ({ signal }) => {
+      const res = await fetchJson<unknown>(customerDocumentsUrl(customerId ?? 0), { signal });
+      const body = res as { data?: unknown } | null;
+      return (Array.isArray(res) ? res : Array.isArray(body?.data) ? body.data : []) as CustomerSalesDocument[];
+    },
+    enabled: customerId !== null,
+    ...READ_ON_EVERY_OPENING,
   });
 }
