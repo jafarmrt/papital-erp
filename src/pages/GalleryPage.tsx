@@ -16,9 +16,11 @@ export default function GalleryPage({ user }: { user: User }) {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
-  // a new search, tab or category starts at its first page (in the same render, so the old page is never read for it)
+  // a new search, tab or category starts at its first page (in the same render, so the old page is never read for it),
+  // and so does a return to an earlier one
   const filterKey = JSON.stringify([tab, debouncedSearch, selectedCategory]);
   const [paging, setPaging] = useState({ of: filterKey, page: 1 });
+  if (paging.of !== filterKey) setPaging({ of: filterKey, page: 1 });
   const currentPage = paging.of === filterKey ? paging.page : 1;
   const setCurrentPage = (page: number) => setPaging({ of: filterKey, page });
 
@@ -28,7 +30,8 @@ export default function GalleryPage({ user }: { user: User }) {
   const itemsRead = useOpeningRead(useGalleryItemsQuery({ tab, page: currentPage, search: debouncedSearch, category: selectedCategory }), true);
   const categoriesRead = useOpeningRead(useCategoriesQuery(undefined, { readOnEveryOpening: true }), true);
   const categories = categoriesRead.data ?? [];
-  const itemsError = itemsRead.data === undefined && itemsRead.error
+  // a failed refresh keeps the page on screen and says it was not refreshed
+  const itemsError = itemsRead.error
     ? errorMessageOf(itemsRead.error) || 'تصاویر گالری کالاها خوانده نشد؛ صفحه را دوباره باز کنید.'
     : '';
   const isLoading = itemsRead.data === undefined && !itemsError;
@@ -109,6 +112,9 @@ export default function GalleryPage({ user }: { user: User }) {
 
       <div className="flex-1 overflow-auto p-4 md:p-6 bg-slate-100">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+          {itemsError && (
+            <div role="alert" className={cn('col-span-full text-center text-rose-600', paginatedItems.length ? 'py-3' : 'py-20')}>{itemsError}</div>
+          )}
           {!isLoading && paginatedItems.map((item, idx) => {
             const stock = Number(item.current_stock || 0);
             const wacVal = Number(item.weighted_average_cost ?? (item as any).weightedAverageCost ?? 0);
@@ -144,9 +150,6 @@ export default function GalleryPage({ user }: { user: User }) {
             </div>
           )}
 
-          {itemsError && (
-            <div role="alert" className="col-span-full py-20 text-center text-rose-600">{itemsError}</div>
-          )}
 
           {!isLoading && !itemsError && paginatedItems.length === 0 && (
             <div className="col-span-full py-20 text-center text-slate-500 flex flex-col items-center">

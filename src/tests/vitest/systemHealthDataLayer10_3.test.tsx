@@ -182,6 +182,19 @@ describe('the health tab reads through the shared cache (10.3)', () => {
     expect(keys).toEqual(expect.arrayContaining([JSON.stringify(SYSTEM_KEY), JSON.stringify(QUERY_KEYS.events.all)]));
   });
 
+  it('the queue buttons wait for the refreshed health after a fix', async () => {
+    server.health = healthOf('before the fix', 3);
+    open();
+    const replay = await screen.findByText(SHOWN.replayFailed);
+    reads.hold = '/system/health';
+    fireEvent.click(replay);
+    await waitFor(() => expect(reads.held).toHaveLength(1));
+    expect(button(SHOWN.replayFailed).disabled).toBe(true);
+    await act(async () => { reads.held[0]?.(healthOf('after the fix', 1)); });
+    expect(await screen.findByText('after the fix')).toBeTruthy();
+    await waitFor(() => expect(button(SHOWN.replayFailed).disabled).toBe(false));
+  });
+
   it('makes no read of its own', () => {
     expect(ownReads('components/SystemHealthDiagnostic.tsx')).toEqual([]);
   });

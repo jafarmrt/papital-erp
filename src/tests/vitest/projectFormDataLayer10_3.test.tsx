@@ -85,6 +85,25 @@ describe('the project form reads its lists through the shared cache (10.3)', () 
     for (const url of LISTS) expect(readsOf(url)).toBe(2);
   });
 
+  it.each([
+    ['items', '/items/options', () => { server.items = [{ id: 3, name: 'later item' }]; }, { data: [{ id: 3, name: 'later item' }] }],
+    ['templates', '/settings', () => { server.settings = [{ key: 'project_workflow_presets', value: JSON.stringify([preset('earring')]) }]; }, null],
+  ] as const)('the first opening\'s %s wait for this opening\'s answer', async (name, url, change, answer) => {
+    const { result, rerender } = formOf(newClient());
+    await waitFor(() => expect(result.current.availablePresets.map(p => p.id)).toEqual(['necklace']));
+    await waitFor(() => expect(namesOf(result.current.activeItemsList)).toEqual(['fresh item']));
+    rerender({ open: false });
+    change();
+    reads.hold = url;
+    rerender({ open: true });
+    await waitFor(() => expect(reads.held).toHaveLength(1));
+    if (name === 'items') expect(namesOf(result.current.activeItemsList)).toEqual(['page item']);
+    else expect(result.current.availablePresets).toEqual([]);
+    await act(async () => { reads.held[0]?.(answer ?? server.settings); });
+    if (name === 'items') await waitFor(() => expect(namesOf(result.current.activeItemsList)).toEqual(['later item']));
+    else await waitFor(() => expect(result.current.availablePresets.map(p => p.id)).toEqual(['earring']));
+  });
+
   it('offers the page\'s lists, never an earlier opening\'s, until this opening\'s answer', async () => {
     const client = newClient();
     client.setQueryData(QUERY_KEYS.customers.options({ all: true }), [{ id: 4, name: 'stale customer' }], earlier());
@@ -112,11 +131,14 @@ describe('the project form reads its lists through the shared cache (10.3)', () 
 
   it('an empty list from the server keeps the page\'s list, as before', async () => {
     server.customers = [];
+    server.items = [];
     const { result } = formOf(newClient());
-    await waitFor(() => expect(namesOf(result.current.activeItemsList)).toEqual(['fresh item']));
+    await waitFor(() => expect(result.current.availablePresets.map(p => p.id)).toEqual(['necklace']));
     await waitFor(() => expect(readsOf('/customers/options')).toBe(1));
+    expect(readsOf('/items/options')).toBe(1);
     await new Promise(resolve => setTimeout(resolve, 20));
     expect(namesOf(result.current.activeCustomersList)).toEqual(['page customer']);
+    expect(namesOf(result.current.activeItemsList)).toEqual(['page item']);
   });
 
   it('a customer or item change elsewhere refreshes the open form\'s lists', async () => {
@@ -150,6 +172,7 @@ describe('the project form\'s stage templates (10.3)', () => {
     ['a failed settings read', () => { reads.fail = '/settings'; }],
     ['a setting that is not JSON', () => { server.settings = [{ key: 'project_workflow_presets', value: '{broken' }]; }],
     ['no setting', () => { server.settings = []; }],
+    ['a setting that is JSON but not a list', () => { server.settings = [{ key: 'project_workflow_presets', value: '{"necklace":1}' }]; }],
   ])('%s offers no template', async (_name, arrange) => {
     arrange();
     const { result } = formOf(newClient());
@@ -157,6 +180,12 @@ describe('the project form\'s stage templates (10.3)', () => {
     await new Promise(resolve => setTimeout(resolve, 20));
     expect(result.current.availablePresets).toEqual([]);
     expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it('a template list with an entry that is not a template offers the others', async () => {
+    server.settings = [{ key: 'project_workflow_presets', value: JSON.stringify([null, preset('necklace'), 3]) }];
+    const { result } = formOf(newClient());
+    await waitFor(() => expect(result.current.availablePresets.map(p => p.id)).toEqual(['necklace']));
   });
 
   it('a settings save refreshes the templates of the open form', async () => {

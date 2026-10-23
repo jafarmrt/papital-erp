@@ -315,5 +315,8 @@ function workflowPresetsOf(rows: SettingItem[] | undefined): WorkflowPreset[] {
   } catch {
     return [];
   }
-  return Array.isArray(parsed) ? (parsed as WorkflowPreset[]) : DEFAULT_WORKFLOW_PRESETS;
+  // an entry that is not a template (a hand-edited null) is skipped, never a crash of the form
+  return Array.isArray(parsed)
+    ? parsed.filter((p): p is WorkflowPreset => typeof p === 'object' && p !== null)
+    : DEFAULT_WORKFLOW_PRESETS;
 }

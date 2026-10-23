@@ -14,6 +14,9 @@ const SHOWN = {
   loading: /در حال بارگذاری تصاویر گالری/,
   empty: /موردی برای نمایش در گالری یافت نشد/,
   next: 'بعدی',
+  products: 'محصولات نهایی',
+  materials: 'مواد اولیه',
+  searchBox: /جست/,
   categoriesFailed: 'خطا در دریافت دسته‌بندی‌ها',
   pageOf: (page: string, total: string) => `صفحه ${page} از ${total}`,
 } as const;
@@ -43,6 +46,7 @@ vi.mock('react-hot-toast', () => {
 
 import GalleryPage from '../../pages/GalleryPage';
 import { QUERY_KEYS } from '../../lib/queryKeys';
+import { SearchProvider } from '../../SearchContext';
 
 afterEach(() => {
   cleanup();
@@ -56,7 +60,7 @@ afterEach(() => {
 /** the app's read defaults (fresh for five minutes): the screen must read again on its own */
 const newClient = appQueryClient;
 const visit = (client = newClient()) => render(
-  <QueryClientProvider client={client}><GalleryPage user={{ id: 1, username: 'u', role: 'admin' } as never} /></QueryClientProvider>,
+  <QueryClientProvider client={client}><SearchProvider><GalleryPage user={{ id: 1, username: 'u', role: 'admin' } as never} /></SearchProvider></QueryClientProvider>,
 );
 /** the time an earlier visit read its data: a moment ago, so only reading again on each visit hides it */
 const earlier = () => ({ updatedAt: Date.now() - 1_000 });
@@ -108,6 +112,55 @@ describe('the gallery reads through the shared cache (10.3)', () => {
     await waitFor(() => expect(itemReads().at(-1)?.get('category')).toBe('rings'));
     const ofRings = itemReads().filter(q => q.get('category') === 'rings');
     expect(ofRings.map(q => q.get('page'))).toEqual(['1']);
+  });
+
+  it('a return to an earlier tab starts at its first page, and pages on from there', async () => {
+    server.page = { data: [item(1, 'fresh item')], total: 120, totalPages: 3 };
+    visit();
+    expect(await screen.findByText('fresh item')).toBeTruthy();
+    fireEvent.click(screen.getByText(SHOWN.next));
+    fireEvent.click(screen.getByText(SHOWN.next));
+    await waitFor(() => expect(itemReads().at(-1)?.get('page')).toBe('3'));
+    fireEvent.click(screen.getByText(SHOWN.materials));
+    await waitFor(() => expect(itemReads().at(-1)?.get('type')).toBe('raw_material'));
+    expect(itemReads().at(-1)?.get('page')).toBe('1');
+    fireEvent.click(screen.getByText(SHOWN.products));
+    await waitFor(() => expect(itemReads().at(-1)?.get('type')).toBe('product'));
+    expect(itemReads().at(-1)?.get('page')).toBe('1');
+    await screen.findByText(SHOWN.pageOf('۱', '۳'));
+    fireEvent.click(screen.getByText(SHOWN.next));
+    await waitFor(() => expect(screen.getByText(SHOWN.pageOf('۲', '۳'))).toBeTruthy());
+  });
+
+  it('a new search reads its first page only', async () => {
+    server.page = { data: [item(1, 'fresh item')], total: 120, totalPages: 3 };
+    visit();
+    expect(await screen.findByText('fresh item')).toBeTruthy();
+    fireEvent.click(screen.getByText(SHOWN.next));
+    await waitFor(() => expect(itemReads().at(-1)?.get('page')).toBe('2'));
+    fireEvent.change(screen.getByPlaceholderText(SHOWN.searchBox), { target: { value: 'ring' } });
+    await waitFor(() => expect(itemReads().at(-1)?.get('search')).toBe('ring'));
+    expect(itemReads().filter(q => q.get('search') === 'ring').map(q => q.get('page'))).toEqual(['1']);
+  });
+
+  it('a later filter with fewer pages shows its own page count', async () => {
+    server.page = { data: [item(1, 'fresh item')], total: 120, totalPages: 3 };
+    visit();
+    expect(await screen.findByText(SHOWN.pageOf('۱', '۳'))).toBeTruthy();
+    server.page = { data: [item(2, 'one of two')], total: 60, totalPages: 2 };
+    fireEvent.click(screen.getByText(SHOWN.materials));
+    expect(await screen.findByText('one of two')).toBeTruthy();
+    expect(screen.getByText(SHOWN.pageOf('۱', '۲'))).toBeTruthy();
+  });
+
+  it('a failed refresh keeps the page on screen and says it was not refreshed', async () => {
+    const client = newClient();
+    visit(client);
+    expect(await screen.findByText('fresh item')).toBeTruthy();
+    reads.fail = '/items';
+    await act(async () => { await client.invalidateQueries({ queryKey: QUERY_KEYS.items.all }); });
+    expect((await screen.findByRole('alert')).textContent).toBe('server refused the read');
+    expect(screen.getByText('fresh item')).toBeTruthy();
   });
 
   it('an item change refreshes the page on screen', async () => {
