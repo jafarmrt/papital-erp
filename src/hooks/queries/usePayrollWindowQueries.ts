@@ -4,20 +4,15 @@ import type { PieceworkPayroll, PieceworkTaskRateHistory } from '../../types';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import type { EidiReport } from '../../lib/payroll/eidiReport';
 import type { StatutoryReport } from '../../lib/payroll/statutoryReport';
+import { READ_ON_EVERY_OPENING } from './readOnEveryOpening';
 
 /**
  * 10.3 (ARCH review finding 3): the payroll windows (payment and its history, advance balance, eidi and statutory previews
  * and reports, rate history, «my payslips») read through the shared cache under `piecework`. A payment, void, approval,
  * draft edit or any treasury or voucher change invalidates that domain, so a window that is open shows the new figures
- * instead of the ones it read when it opened. Payroll figures are money: each window reads again every time it opens
- * (`staleTime: 0`), shows a server refusal at once (no retry) and cancels its request when it closes.
+ * instead of the ones it read when it opened; each window still reads again every time it opens (READ_ON_EVERY_OPENING).
  */
-export const PAYROLL_WINDOW_READ = {
-  staleTime: 0,
-  refetchOnMount: 'always',
-  refetchOnWindowFocus: false,
-  retry: false,
-} as const;
+const PAYROLL_WINDOW_READ = READ_ON_EVERY_OPENING;
 
 const arrayOf = <T,>(res: unknown): T[] => (Array.isArray(res) ? res as T[] : []);
 

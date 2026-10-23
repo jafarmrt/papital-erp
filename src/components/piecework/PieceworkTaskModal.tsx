@@ -37,6 +37,11 @@ export function PieceworkTaskModal({
   // same entry), so a category added in settings shows here; the categories the page passes stand in until they arrive
   const categoriesQuery = usePieceworkCategoriesQuery();
   const loadingCategories = categoriesQuery.isFetching;
+  // the page keeps the entry, so each opening asks for it again, as the window did before
+  const { refetch: refetchCategories } = categoriesQuery;
+  useEffect(() => {
+    if (isOpen) void refetchCategories();
+  }, [isOpen, refetchCategories]);
   const fetched = categoriesQuery.data;
   const categories = useMemo(() => {
     const source = fetched ?? (Array.isArray(propCategories) ? propCategories : []);

@@ -4,7 +4,6 @@ import { Landmark } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { useBankAccountOptionsQuery, useContraAccountsQuery, useStatutoryRemittanceOptionsQuery } from '../../hooks/accounting/useTreasuryQueries';
-import { invalidateAfterTreasuryChange } from '../../hooks/accounting/accountingInvalidation';
 import { Modal } from '../common/Modal';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { DecimalInput, refuseInvalidDecimalInputs } from '../common/DecimalInput';
@@ -13,7 +12,8 @@ import { StatutoryUnassignedNotice } from './StatutoryUnassignedNotice';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { useOnlineStatus } from '../../lib/pwa/useOnlineStatus';
 import { OFFLINE_SUBMIT_TITLE } from '../../lib/pwa/phoneLayout';
-import { invalidatePreset } from '../../lib/queryInvalidation';
+import { INVALIDATION_PRESETS, invalidateDomains } from '../../lib/queryInvalidation';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 import { errorMessageOf, getTodayIsoDate } from '../../utils';
 import { jalaliMonthLabel } from '../../utils/calendarDate';
 import { toPersianDigits } from '../../utils/persianNumber';
@@ -51,9 +51,9 @@ export function StatutoryRemittanceModal({ kind, jalaliYear, jalaliMonth, onClos
   // replaces them in the form's own copy
   const optionsQuery = useStatutoryRemittanceOptionsQuery(kind, jalaliYear, jalaliMonth);
   // only an answer read for this opening counts, never a list or a refusal cached from an earlier one
-  const [openedAt] = useState(() => Date.now());
+  const optionsRead = useOpeningRead(optionsQuery, true);
   const [options, setOptions] = useState<StatutoryRemittanceOptions | null>(null);
-  const loadError = optionsQuery.error && optionsQuery.errorUpdatedAt >= openedAt ? errorMessageOf(optionsQuery.error) : '';
+  const loadError = optionsRead.error ? errorMessageOf(optionsRead.error) : '';
   const [lines, setLines] = useState<StatutoryRemittanceDraftLine[]>([]);
   const banksQuery = useBankAccountOptionsQuery();
   const banks = useMemo(() => (banksQuery.data ?? []).filter(b => (b.currency || 'IRR') === 'IRR' && b.hasLedgerAccount), [banksQuery.data]);
@@ -71,7 +71,7 @@ export function StatutoryRemittanceModal({ kind, jalaliYear, jalaliMonth, onClos
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const arrived = optionsQuery.data && optionsQuery.dataUpdatedAt >= openedAt ? optionsQuery.data : null;
+  const arrived = optionsRead.data ?? null;
   const taken = useRef(false);
   useEffect(() => {
     if (!arrived || taken.current) return;
@@ -104,9 +104,9 @@ export function StatutoryRemittanceModal({ kind, jalaliYear, jalaliMonth, onClos
       });
       await fetchJson('/accounting/treasury/statutory-remittance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       toast.success(`${text.button} با سند حسابداری ثبت شد؛ مانده هر نفر به نام خودش بسته شد.`);
-      void invalidatePreset(queryClient, 'settlementChange');
-      // the open payroll windows (`piecework`, the monthly list among them) and the treasury read again
-      void invalidateAfterTreasuryChange(queryClient);
+      // the documents, accounting (treasury and vouchers), parties, dashboard and reports, and the open payroll windows
+      // (`piecework`, the monthly list among them), each read again once
+      void invalidateDomains(queryClient, [...INVALIDATION_PRESETS.settlementChange, 'piecework']);
       onClose();
     } catch (err) {
       // the server names the payments without a personnel name it found: show those and ask «بررسی کردم» again

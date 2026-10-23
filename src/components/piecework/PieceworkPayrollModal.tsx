@@ -6,6 +6,7 @@ import { formatPersianNumber, formatCurrencyLabel, formatPersianPrice, isoToJala
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { useAdvanceBalanceQuery } from '../../hooks/queries/usePayrollWindowQueries';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 import { PayrollDeductionsField, deductionsNeedDescription } from './PayrollDeductionsField';
 import { PayrollPrepaymentField, prepaymentNeedsReason, type PayrollPrepaymentState } from './PayrollPrepaymentField';
 import { DecimalInput } from '../common/DecimalInput';
@@ -84,7 +85,9 @@ export function PieceworkPayrollModal({
   // 10.3 (ARCH review finding 3): the advance balance comes from the shared cache, so an advance paid or deducted while
   // the window is open (a treasury or payslip change) refreshes it; another personnel shows nothing until its own answer
   const advanceQuery = useAdvanceBalanceQuery(isOpen && payrollPersonnelId ? Number(payrollPersonnelId) : null);
-  const advanceBalance = isOpen && payrollPersonnelId ? (advanceQuery.data ?? null) : null;
+  // only a balance read in this opening whose last read succeeded counts; a failed read shows none, as before
+  const advanceRead = useOpeningRead(advanceQuery, isOpen);
+  const advanceBalance = isOpen && payrollPersonnelId ? (advanceRead.current ?? null) : null;
   // v8.0.29 (TD-282، تصمیم مالک محصول): کسر مساعده بیش از مانده مساعده پذیرفته نمی‌شود (سرور هم رد می‌کند)
   const advanceExceedsBalance = advanceBalance !== null && (advanceDeduction || 0) > advanceBalance.outstandingAdvance;
 

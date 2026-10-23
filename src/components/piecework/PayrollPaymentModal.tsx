@@ -11,7 +11,10 @@ import { DecimalInput } from '../common/DecimalInput';
 import { DialogLayer } from '../common/DialogLayer';
 import { isPayrollBankCurrency } from '../../lib/payroll/payrollCurrency';
 import { useBankAccountOptionsQuery } from '../../hooks/accounting/useTreasuryQueries';
-import { usePayrollPaymentsQuery } from '../../hooks/queries/usePayrollWindowQueries';
+import { usePayrollPaymentsQuery, type PayrollPaymentRowData } from '../../hooks/queries/usePayrollWindowQueries';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
+
+const NO_PAYMENTS: PayrollPaymentRowData[] = [];
 
 // V4.0.33: مودال واحد «پرداخت حقوق (کامل یا چندمرحله‌ای)»
 // ثبت فقط با انتخاب حساب خزانه/بانک تا تراکنش مالی + سند تسویه اتمیک صادر شود.
@@ -40,15 +43,19 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
   // v9.0.320 (TD-805): ثبت و ابطال پرداخت با «پرداخت و ابطال پرداخت فیش»؛ دیگر خوانندگان فیش فقط سابقه را می‌بینند
   const { canPay } = usePieceworkPermissions();
   // 10.3 (ARCH review finding 3): the accounts and the payments come from the shared cache, so a payment or void made
-  // elsewhere (or in this window) refreshes them while the window is open; v9.0.97 (TD-505, t7): the pick list has no
-  // account number or balance
-  const banksQuery = useBankAccountOptionsQuery({ enabled: payroll !== null && canPay });
+  // elsewhere (or in this window) refreshes them while the window is open; each opening reads both again. v9.0.97
+  // (TD-505, t7): the pick list has no account number or balance
+  const open = payroll !== null;
+  const banksQuery = useBankAccountOptionsQuery({ enabled: open && canPay, readOnEveryOpening: true });
+  const banksRead = useOpeningRead(banksQuery, open && canPay);
   const paymentsQuery = usePayrollPaymentsQuery(payroll ? payroll.id : null);
+  const paymentsRead = useOpeningRead(paymentsQuery, open);
   // OBS-R2-51: a payslip is rial only and the server refuses a bank in another currency, so only rial accounts are offered
-  const bankAccounts = useMemo(() => (banksQuery.data ?? []).filter(b => isPayrollBankCurrency(b.currency)), [banksQuery.data]);
-  const previousPayments = paymentsQuery.data ?? [];
-  const loadingBanks = banksQuery.isLoading;
-  const loadingPayments = paymentsQuery.isLoading;
+  const banks = banksRead.data;
+  const bankAccounts = useMemo(() => (banks ?? []).filter(b => isPayrollBankCurrency(b.currency)), [banks]);
+  const previousPayments = paymentsRead.data ?? NO_PAYMENTS;
+  const loadingBanks = banks === undefined && banksQuery.isFetching;
+  const loadingPayments = paymentsRead.data === undefined && paymentsQuery.isFetching;
   const [showHistory, setShowHistory] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -67,8 +74,9 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
   // مانده قابل پرداخت فیش
   const remainingPayable = useMemo(() => Math.max(0, netPayable - initialPaid), [netPayable, initialPaid]);
 
-  // each failed read of the accounts says so once; a failed read of the history leaves it empty, as before
-  const banksFailedAt = banksQuery.errorUpdatedAt;
+  // each failed read of the accounts in this opening says so once (a closed window stays quiet); a failed read of the
+  // history leaves it empty, as before
+  const banksFailedAt = banksRead.failedAt;
   useEffect(() => {
     if (banksFailedAt) toast.error('خطا در دریافت فهرست حساب‌های خزانه');
   }, [banksFailedAt]);

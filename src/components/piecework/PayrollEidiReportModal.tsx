@@ -8,6 +8,7 @@ import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { eidiMethodLabel, eidiReportFileName, eidiReportSheetRows, type EidiReport } from '../../lib/payroll/eidiReport';
 import { DialogLayer } from '../common/DialogLayer';
 import { useEidiReportQuery } from '../../hooks/queries/usePayrollWindowQueries';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 
 /**
  * v10.0.222 (TD-1089، طرح حقوق §۳.۸): گزارش «عیدی سال» — حق عیدی، سهم فیش‌های پیش‌نویس، سقف، فیش عیدی صادرشده، پرداخت‌شده
@@ -20,8 +21,10 @@ export function PayrollEidiReportModal({ onClose }: { onClose: () => void }) {
   // 10.3 (ARCH review finding 3): the list comes from the shared cache under `piecework`, so an eidi payslip issued,
   // approved or paid while it is open shows at once
   const reportQuery = useEidiReportQuery(year);
-  const report: EidiReport | null = reportQuery.data ?? null;
-  const error = reportQuery.error ? errorMessageOf(reportQuery.error) : null;
+  // a failed refresh shows its error instead of the list it could not renew (no export or action on an old list)
+  const reportRead = useOpeningRead(reportQuery, true);
+  const report: EidiReport | null = reportRead.current ?? null;
+  const error = reportRead.error ? errorMessageOf(reportRead.error) : null;
 
   const exportExcel = async () => {
     if (!report || report.rows.length === 0) return;

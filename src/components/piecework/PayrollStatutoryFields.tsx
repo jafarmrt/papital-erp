@@ -5,6 +5,7 @@ import {
   STATUTORY_ENTRY_KEYS, statutoryAmountsOf, statutoryEntryError, statutoryNeedsReason, type PayrollStatutoryEntry,
 } from '../../lib/payroll/statutoryForm';
 import { useStatutoryPreviewQuery } from '../../hooks/queries/usePayrollWindowQueries';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 
 /**
  * v10.0.210 (TD-1087، طرح حقوق §۳.۳ بندهای ۳ و ۴، تصمیم ت۶ الف): بیمه سهم کارگر، سهم کارفرما و مالیات حقوق فرم صدور و ویرایش
@@ -39,9 +40,11 @@ export function PayrollStatutoryFields({ personnelId, startDate, endDate, gross,
   const previewQuery = useStatutoryPreviewQuery<Partial<Preview> | null>(
     complete ? { personnelId: Number(personnelId), startDate, endDate, gross } : null,
   );
-  const answer = complete ? previewQuery.data : null;
+  // only a suggestion read for this form whose last read succeeded is offered (a failed refresh shows the error alone)
+  const previewRead = useOpeningRead(previewQuery, true);
+  const answer = complete ? previewRead.current : null;
   const preview = answer?.suggestion && answer.covered ? answer as Preview : null;
-  const error = complete && previewQuery.error ? errorMessageOf(previewQuery.error) : null;
+  const error = complete && previewRead.error ? errorMessageOf(previewRead.error) : null;
 
   if (!personnelId || !startDate || !endDate) return null;
   if (preview && !preview.covered.insurance && !preview.covered.tax) {

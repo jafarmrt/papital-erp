@@ -1,10 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useEffectEvent, useMemo } from 'react';
 import { X, History, TrendingUp, TrendingDown, Clock, User, Search, FileSpreadsheet, RotateCcw, CheckCircle2, Trash2, Filter, RefreshCw } from 'lucide-react';
 import { PieceworkTask, PieceworkTaskRateHistory } from '../../types';
 import { formatPersianPrice, isoToJalaliDate, formatPersianDate, toEnglishDigits, formatPersianNumber, errorMessageOf } from '../../utils';
 import { useTaskRateHistoryQuery } from '../../hooks/queries/usePayrollWindowQueries';
 import { toast as hotToast } from 'react-hot-toast';
 import { DialogLayer } from '../common/DialogLayer';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
+
+const NO_HISTORY: PieceworkTaskRateHistory[] = [];
 
 interface PieceworkRateHistoryModalProps {
   isOpen: boolean;
@@ -24,7 +27,8 @@ export const PieceworkRateHistoryModal: React.FC<PieceworkRateHistoryModalProps>
   // 10.3 (ARCH review finding 3): the history comes from the shared cache under `piecework`, so a rate change, delete or
   // restore (which invalidates that domain) refreshes an open window; «بارگذاری مجدد» reads it again
   const historyQuery = useTaskRateHistoryQuery(selectedTask?.id ?? null, isOpen);
-  const historyList: PieceworkTaskRateHistory[] = historyQuery.data ?? [];
+  const historyRead = useOpeningRead(historyQuery, isOpen);
+  const historyList: PieceworkTaskRateHistory[] = historyRead.data ?? NO_HISTORY;
   const loading = historyQuery.isFetching;
   const fetchHistory = () => { void historyQuery.refetch(); };
 
@@ -35,13 +39,15 @@ export const PieceworkRateHistoryModal: React.FC<PieceworkRateHistoryModalProps>
     }
   }, [isOpen, selectedTask]);
 
-  // each failed read says so once
-  const historyError = historyQuery.error;
+  // each failed read of this opening says so once; a closed window and an earlier opening's error stay quiet
+  const historyFailedAt = historyRead.failedAt;
+  const showHistoryError = useEffectEvent(() => {
+    console.error('Error fetching rate history:', historyRead.error);
+    hotToast.error(errorMessageOf(historyRead.error) || 'خطا در دریافت تاریخچه تغییرات نرخ');
+  });
   useEffect(() => {
-    if (!historyError) return;
-    console.error('Error fetching rate history:', historyError);
-    hotToast.error(errorMessageOf(historyError) || 'خطا در دریافت تاریخچه تغییرات نرخ');
-  }, [historyError]);
+    if (historyFailedAt) showHistoryError();
+  }, [historyFailedAt]);
 
   const filteredHistory = useMemo(() => {
     let list = Array.isArray(historyList) ? historyList : [];

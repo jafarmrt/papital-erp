@@ -12,6 +12,7 @@ import { SearchableSelect } from '../SearchableSelect';
 import { DialogLayer } from '../common/DialogLayer';
 import { idempotentReplayMessage, isIdempotentReplay } from '../../lib/idempotentReplay';
 import { useEidiPreviewQuery } from '../../hooks/queries/usePayrollWindowQueries';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 
 /**
  * v10.0.222 (TD-1089، طرح حقوق §۳.۸، ت۱۵ الف): صدور «فیش عیدی» پیش‌نویس یک پرسنل برای یک سال. مبلغ پیشنهادی را سرور
@@ -46,8 +47,11 @@ export function PayrollEidiModal({ personnelSelectOptions, onClose, onIssued }: 
   // 10.3 (ARCH review finding 3): the suggestion comes from the shared cache under `piecework`, so a payslip issued or
   // approved elsewhere while this window is open (which changes the draft warning) refreshes it
   const previewQuery = useEidiPreviewQuery<Preview>(personnelId ? Number(personnelId) : null, year);
-  const preview = personnelId ? (previewQuery.data ?? null) : null;
-  const previewError = personnelId && previewQuery.error ? errorMessageOf(previewQuery.error) : null;
+  // only a suggestion read in this window, whose last read succeeded, enables the issue (a failed refresh blocks it, as
+  // a failed read did before)
+  const previewRead = useOpeningRead(previewQuery, true);
+  const preview = personnelId ? (previewRead.current ?? null) : null;
+  const previewError = personnelId && previewRead.error ? errorMessageOf(previewRead.error) : null;
 
   const entered = normalizeDecimalString(amount);
   const suggested = preview?.suggestion.amount ?? '0';

@@ -1,0 +1,58 @@
+import { useState } from 'react';
+import type { UseQueryResult } from '@tanstack/react-query';
+
+/**
+ * 10.3 (ARCH review finding 3): the read options of a window or page that used to read once when it opened, into its own
+ * state. It now reads through the shared cache, so a write elsewhere that invalidates its key refreshes it while it is
+ * open; it still reads again on every opening (`staleTime: 0`), stays out of the focus refetch (a window with a form does
+ * not change under the user's hands on a tab switch) and shows a server refusal at once (no retry). Its request is
+ * cancelled when it closes.
+ */
+export const READ_ON_EVERY_OPENING = {
+  staleTime: 0,
+  refetchOnMount: 'always',
+  refetchOnWindowFocus: false,
+  retry: false,
+} as const;
+
+/**
+ * The moment a window last opened, 0 before it ever opened. It is set in the very render that opens the window (React's
+ * "state from the previous render" pattern), so no effect of that render sees the time of an earlier opening.
+ */
+export function useOpenedAt(open: boolean): number {
+  const [opening, setOpening] = useState(() => ({ open, at: open ? Date.now() : 0 }));
+  let at = opening.at;
+  if (opening.open !== open) {
+    at = open ? Date.now() : opening.at;
+    setOpening({ open, at });
+  }
+  return at;
+}
+
+export interface OpeningRead<T> {
+  /** the answer read during this opening; kept after a later failed refresh, like a list on screen */
+  data: T | undefined;
+  /** the answer only while the last read of this opening succeeded: what a check before a save may rely on */
+  current: T | undefined;
+  /** the error of the last read of this opening, null once a later read succeeds or while the window is closed */
+  error: unknown;
+  /** when the last read of this opening failed, 0 otherwise: an effect on it says so once for each failure */
+  failedAt: number;
+}
+
+/**
+ * What a query says for the current opening of a window. A window that stays mounted while closed (and a cache entry
+ * that outlives it) keeps the answer and the error of an earlier opening; those never count here. The query must read
+ * again on each opening (READ_ON_EVERY_OPENING or `staleTime: 0`), or its answer never becomes one of this opening.
+ */
+export function useOpeningRead<T>(query: UseQueryResult<T>, open: boolean): OpeningRead<T> {
+  const openedAt = useOpenedAt(open);
+  const read = open && openedAt > 0 && query.dataUpdatedAt >= openedAt;
+  const failed = open && openedAt > 0 && query.isError && query.errorUpdatedAt >= openedAt;
+  return {
+    data: read ? query.data : undefined,
+    current: read && !query.isError ? query.data : undefined,
+    error: failed ? query.error : null,
+    failedAt: failed ? query.errorUpdatedAt : 0,
+  };
+}

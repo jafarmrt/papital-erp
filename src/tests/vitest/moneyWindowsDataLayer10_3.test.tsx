@@ -113,16 +113,27 @@ const MONEY_WINDOWS = [
   'pages/MyPayslipsPage.tsx',
 ];
 
-/** `fetchJson` calls of a file that send no `method`, that is reads made outside the shared cache, as file:line */
+/**
+ * The reads a file makes outside the shared cache, as file:line: a call of any `fetch…` function (`fetchJson`, `fetch`,
+ * `fetchAccountingList`) that sends no method or `GET`, and a renamed import of `fetchJson` (which would hide its calls)
+ */
 function ownReads(file: string): string[] {
   const sf = ts.createSourceFile(file, readFileSync(path.join(SRC, file), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const reads: string[] = [];
+  const at = (node: ts.Node) => `${file}:${sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1}`;
+  const methodOf = (init: ts.Expression | undefined): string | null => {
+    if (init === undefined || !ts.isObjectLiteralExpression(init)) return null;
+    const method = init.properties.find((p): p is ts.PropertyAssignment => ts.isPropertyAssignment(p) && p.name.getText(sf) === 'method');
+    if (!method) return null;
+    return ts.isStringLiteralLike(method.initializer) ? method.initializer.text.toUpperCase() : 'WRITE';
+  };
   const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'fetchJson') {
-      const init = node.arguments[1];
-      const sendsMethod = init !== undefined && ts.isObjectLiteralExpression(init)
-        && init.properties.some(p => p.name !== undefined && ts.isIdentifier(p.name) && p.name.text === 'method');
-      if (!sendsMethod) reads.push(`${file}:${sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1}`);
+    if (ts.isImportSpecifier(node) && node.propertyName?.getText(sf) === 'fetchJson') reads.push(at(node));
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression;
+      const name = ts.isIdentifier(callee) ? callee.text : ts.isPropertyAccessExpression(callee) ? callee.name.text : '';
+      const method = methodOf(node.arguments[1]);
+      if (/^fetch/.test(name) && (method === null || method === 'GET')) reads.push(at(node));
     }
     ts.forEachChild(node, visit);
   };
@@ -131,7 +142,7 @@ function ownReads(file: string): string[] {
 }
 
 describe('the money windows read only through the shared cache (10.3)', () => {
-  it('their own fetchJson calls are writes', () => {
+  it('their own fetch calls are writes', () => {
     expect(MONEY_WINDOWS.flatMap(ownReads)).toEqual([]);
   });
 });

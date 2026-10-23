@@ -29,6 +29,7 @@ import { accountCurrencyOf, defaultSettlementAccountId, settlementAccountsFor, h
 import { settlementDefaultDescription } from '../../lib/invoices/settlementDescription';
 import { DialogLayer } from '../common/DialogLayer';
 import { useBankAccountOptionsQuery } from '../../hooks/accounting/useTreasuryQueries';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 import type { BankAccountOption } from '../../types';
 
 const NO_ACCOUNTS: BankAccountOption[] = [];
@@ -79,10 +80,13 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
 }) => {
   const fieldId = useId();
   // 10.3 (ARCH review finding 3): the accounts come from the shared cache (v9.0.97, TD-505, t7: pick list without account
-  // number or balance), so an account added or changed in the treasury shows here without reopening the page
-  const accountsQuery = useBankAccountOptionsQuery({ enabled: isOpen && doc !== null });
-  const bankAccounts = accountsQuery.data ?? NO_ACCOUNTS;
-  const isLoadingAccounts = accountsQuery.isLoading;
+  // number or balance), so an account added or changed in the treasury shows here; each opening reads them again
+  const showing = isOpen && doc !== null;
+  const accountsQuery = useBankAccountOptionsQuery({ enabled: showing, readOnEveryOpening: true });
+  const accountsRead = useOpeningRead(accountsQuery, showing);
+  const accounts = accountsRead.data;
+  const bankAccounts = accounts ?? NO_ACCOUNTS;
+  const isLoadingAccounts = showing && accounts === undefined && accountsQuery.isFetching;
   /** each opening picks its default account once, when the accounts are there; a later refresh keeps the user's choice */
   const defaultAccountPending = useRef(false);
   const [selectedAccountId, setSelectedAccountId] = useState<number | ''>('');
@@ -118,15 +122,15 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
     defaultAccountPending.current = true;
   }, [isOpen, doc]);
 
-  const accounts = accountsQuery.data;
   useEffect(() => {
-    if (!isOpen || !doc || !accounts || !defaultAccountPending.current) return;
+    if (!doc || !accounts || !defaultAccountPending.current) return;
     defaultAccountPending.current = false;
     // v9.0.345 (TD-802): پیش‌فرض از حساب‌های هم‌ارز فاکتور (بانک یا کارت‌خوان مقدم)
     setSelectedAccountId(defaultSettlementAccountId(accounts, doc.currency || 'IRR'));
-  }, [isOpen, doc, accounts]);
+  }, [doc, accounts]);
 
-  const accountsFailedAt = accountsQuery.errorUpdatedAt;
+  // each failed read of this opening says so once; a closed window and an earlier opening's error stay quiet
+  const accountsFailedAt = accountsRead.failedAt;
   useEffect(() => {
     if (accountsFailedAt) toast.error('خطا در دریافت فهرست حساب‌های بانکی و صندوق‌ها');
   }, [accountsFailedAt]);
