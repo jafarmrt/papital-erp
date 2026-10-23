@@ -10,7 +10,7 @@ import { validate } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { TransferService } from '../services/transfer.service.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
-import { NotFoundError } from '../errors/customErrors.js';
+import { BadRequestError, NotFoundError } from '../errors/customErrors.js';
 
 const router = Router();
 
@@ -72,7 +72,7 @@ const handleSaveTransfer = async (req: Request, res: Response) => {
     const rawCode = body.code || codeParam;
 
     if (!rawCode || typeof rawCode !== 'string' || !rawCode.trim()) {
-      return res.status(400).json({ error: 'کد ترنسفر الزامی است' });
+      throw new BadRequestError('کد ترنسفر الزامی است');
     }
 
     const { title, image, thumbnail, notes } = body;

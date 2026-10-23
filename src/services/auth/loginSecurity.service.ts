@@ -224,3 +224,8 @@ export async function resetFailedAttempts(userIdOrUsername: number | string, pai
 export function lockoutMessage(minutes: number): string {
   return usernameLockoutMessage(minutes);
 }
+
+/** 10.3 package 3 (OBS-R2-05): the 429 of a locked login, thrown for errorHandler; `details` carries `locked` and `remainingMinutes` */
+export function loginLockedError(minutes: number): AppError {
+  return new AppError(lockoutMessage(minutes), 429, 'LOGIN_LOCKED', { locked: true, remainingMinutes: minutes });
+}

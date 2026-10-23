@@ -37,6 +37,23 @@ describe('hard_delete_exceptions_obs_r2_15', () => {
     expect(countSource('src/services/x.ts', code).hardDeletes).toBe(4);
   });
 
+  it('hard_delete_blind_spots_10_3: lower-case truncate in SQL text and a delete on another executor or table name count', () => {
+    const code = [
+      'await txExecutor.delete(workflowSteps);',
+      'await this.db.delete(rows);',
+      'await client.delete(entry.table);',
+      'await writer.delete(targetTable);',
+      "await pool.query('truncate roles restart identity');",
+      'await tx.execute(sql`truncate ${roles}`);',
+      "await tx.execute(sql.raw('truncate only roles'));",
+      'listeners.delete(listener);',
+      'pendingRef.current.delete(key);',
+      'const css = "truncate font-medium";',
+      'const label = `truncate ${name}`;',
+    ].join('\n');
+    expect(countSource('src/services/x.ts', code).hardDeletes).toBe(7);
+  });
+
   it('every file with a physical delete has its written reason, and every written file still deletes', () => {
     expect(Object.keys(baseline.hardDeletes ?? {}).sort()).toEqual(listed);
   });

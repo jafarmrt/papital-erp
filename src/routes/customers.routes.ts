@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString, storageDateParam } from '../middleware/validate.js';
 import { customerBulkImportSchema } from './importRows.schemas.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { NotFoundError } from '../errors/customErrors.js';
+import { BadRequestError, NotFoundError } from '../errors/customErrors.js';
 import { parsePagination, parsePickListLimit } from '../lib/pagination.js';
 import { CustomerService } from '../services/customer.service.js';
 import { getCustomerAccountCard } from '../services/customers/customerAccountCard.js';
@@ -318,7 +318,7 @@ router.post('/customers/bulk-import', authorizePermission('customers.manage'), v
   const { rows = [], updateIfExists = true } = req.body;
 
   if (!Array.isArray(rows) || rows.length === 0) {
-    return res.status(400).json({ error: 'لیست طرفین حساب جهت ثبت ارسال نشده است.' });
+    throw new BadRequestError('لیست طرفین حساب جهت ثبت ارسال نشده است.');
   }
 
   const result = await CustomerService.bulkImport(rows, updateIfExists);

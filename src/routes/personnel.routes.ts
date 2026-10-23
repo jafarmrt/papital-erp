@@ -6,7 +6,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
-import { ConflictError } from '../errors/customErrors.js';
+import { BadRequestError, ConflictError, NotFoundError } from '../errors/customErrors.js';
 import { personnelAuditChanges, personnelAuditSnapshot } from '../services/personnel/personnelAudit.js';
 import { logger } from '../middleware/logger.js';
 import { z } from 'zod';
@@ -223,7 +223,7 @@ router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), v
     const { rows = [], updateIfExists = true } = req.body;
 
     if (!Array.isArray(rows) || rows.length === 0) {
-      return res.status(400).json({ error: 'لیست پرسنل جهت ثبت ارسال نشده است.' });
+      throw new BadRequestError('لیست پرسنل جهت ثبت ارسال نشده است.');
     }
 
     let createdCount = 0;
@@ -454,23 +454,19 @@ router.get('/personnel', authorizePermission(...READ_PERMISSIONS.personnel), asy
 
 // GET /api/personnel/:id - Single personnel detail
 router.get('/personnel/:id', authorizePermission(...READ_PERMISSIONS.personnel), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    const [record] = await orm
-      .select(PERSONNEL_DETAIL_COLUMNS)
-      .from(personnel)
-      .leftJoin(users, eq(personnel.userId, users.id))
-      .where(and(eq(personnel.id, id), eq(personnel.isDeleted, 0)));
+  const id = Number(req.params.id);
+  const [record] = await orm
+    .select(PERSONNEL_DETAIL_COLUMNS)
+    .from(personnel)
+    .leftJoin(users, eq(personnel.userId, users.id))
+    .where(and(eq(personnel.id, id), eq(personnel.isDeleted, 0)));
 
-    if (!record) {
-      return res.status(404).json({ error: 'اطلاعات پرسنل مورد نظر یافت نشد' });
-    }
-
-    const [canViewSensitive, scope] = await Promise.all([canAccessSensitivePersonnelData(req.user, record.userId), personnelReadScope(req.user)]);
-    res.json(scopePersonnelRow(sanitizePersonnelRecord(openPersonnelSecret(record), canViewSensitive), scope));
-  } catch (err) {
-    throw err;
+  if (!record) {
+    throw new NotFoundError('اطلاعات پرسنل مورد نظر یافت نشد');
   }
+
+  const [canViewSensitive, scope] = await Promise.all([canAccessSensitivePersonnelData(req.user, record.userId), personnelReadScope(req.user)]);
+  res.json(scopePersonnelRow(sanitizePersonnelRecord(openPersonnelSecret(record), canViewSensitive), scope));
 }));
 
 // POST /api/personnel - Create new personnel
@@ -596,7 +592,7 @@ router.put('/personnel/:id', authorizePermission('personnel.manage'), validate(u
       .where(and(eq(personnel.id, id), eq(personnel.isDeleted, 0)));
 
     if (!existing) {
-      return res.status(404).json({ error: 'اطلاعات پرسنل مورد نظر یافت نشد' });
+      throw new NotFoundError('اطلاعات پرسنل مورد نظر یافت نشد');
     }
 
     // v9.0.30 (TD-442): نسخه فرم باید نسخه فعلی باشد؛ نوشتن هم فقط با همان نسخه (ویرایش هم‌زمان میان خواندن و نوشتن)
@@ -748,7 +744,7 @@ router.delete('/personnel/:id', authorizePermission('personnel.manage'), validat
   });
 
   if (!deleted) {
-    return res.status(404).json({ error: 'اطلاعات پرسنل مورد نظر یافت نشد' });
+    throw new NotFoundError('اطلاعات پرسنل مورد نظر یافت نشد');
   }
   res.json({ status: 'ok', message: 'اطلاعات پرسنل با موفقیت حذف شد' });
 }));

@@ -27,11 +27,12 @@ export default function GalleryPage({ user }: { user: User }) {
   // v10.1.51 (OBS-R2-62): one server page at a time (it read every item of the type at once, with its stock and reservations)
   // 10.3 (ARCH review finding 3, part 16): the page and the categories read through the shared cache, again on each
   // visit and never shown from an earlier one; an item save or a stock change refreshes the page on screen
-  const itemsRead = useOpeningRead(useGalleryItemsQuery({ tab, page: currentPage, search: debouncedSearch, category: selectedCategory }), true);
+  const itemsQuery = useGalleryItemsQuery({ tab, page: currentPage, search: debouncedSearch, category: selectedCategory });
+  const itemsRead = useOpeningRead(itemsQuery, true);
   const categoriesRead = useOpeningRead(useCategoriesQuery(undefined, { readOnEveryOpening: true }), true);
   const categories = categoriesRead.data ?? [];
-  // a failed refresh keeps the page on screen and says it was not refreshed
-  const itemsError = itemsRead.error
+  // a failed refresh keeps the page on screen and says it was not refreshed; 10.3 package 3: not while it is read again
+  const itemsError = itemsRead.error && itemsQuery.fetchStatus === 'idle'
     ? errorMessageOf(itemsRead.error) || 'تصاویر گالری کالاها خوانده نشد؛ صفحه را دوباره باز کنید.'
     : '';
   const isLoading = itemsRead.data === undefined && !itemsError;

@@ -1,7 +1,6 @@
 import { orm } from '../../db/drizzle.js';
 import { outboxEvents, deadLetterEvents, activityLogs, documents, items, customers, treasuryTransactions, productionProjects } from '../../db/schema.js';
 import { eq, and, desc, or, ilike, inArray, sql } from 'drizzle-orm';
-import { logger } from '../../middleware/logger.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import { ruleActionTypeLabel } from '../../lib/events/ruleActionTypes.js';
 import { BaseDomainEvent, AggregateType } from './domainEvents.js';
@@ -81,123 +80,116 @@ export class EventSourcingReplayService {
    * Search recent entities of a given aggregate type to populate selector dropdown.
    */
   static async searchAggregates(aggregateType: string, search: string = '', limit: number = 20) {
-    try {
-      const searchPattern = containsLikePattern(search);
+    const searchPattern = containsLikePattern(search);
 
-      switch (aggregateType) {
-        case 'document': {
-          const rows = await orm
-            .select({
-              id: documents.id,
-              code: documents.refNumber,
-              type: documents.type,
-              extra: documents.buyerName
-            })
-            .from(documents)
-            .where(
-              search ? or(ilike(documents.refNumber, searchPattern), ilike(documents.buyerName, searchPattern)) : undefined
-            )
-            .orderBy(desc(documents.id))
-            .limit(limit);
+    switch (aggregateType) {
+      case 'document': {
+        const rows = await orm
+          .select({
+            id: documents.id,
+            code: documents.refNumber,
+            type: documents.type,
+            extra: documents.buyerName
+          })
+          .from(documents)
+          .where(
+            search ? or(ilike(documents.refNumber, searchPattern), ilike(documents.buyerName, searchPattern)) : undefined
+          )
+          .orderBy(desc(documents.id))
+          .limit(limit);
 
-          // v9.0.431 (TD-711): the id is the document id the events carry, never its number
-          return rows.map(r => ({
-            id: String(r.id),
-            title: `سند شماره ${r.code || r.id} (${r.extra || r.type || 'بدون نام'})`
-          }));
-        }
-
-        case 'customer': {
-          const rows = await orm
-            .select({
-              id: customers.id,
-              title: customers.name,
-              extra: customers.phone
-            })
-            .from(customers)
-            .where(
-              search ? or(ilike(customers.name, searchPattern), ilike(customers.phone, searchPattern)) : undefined
-            )
-            .orderBy(desc(customers.id))
-            .limit(limit);
-
-          return rows.map(r => ({
-            id: String(r.id),
-            title: `${r.title} ${r.extra ? `(${r.extra})` : ''}`
-          }));
-        }
-
-        case 'item': {
-          const rows = await orm
-            .select({
-              id: items.id,
-              code: items.code,
-              title: items.name,
-              extra: items.currentStock
-            })
-            .from(items)
-            .where(
-              search ? or(ilike(items.code, searchPattern), ilike(items.name, searchPattern)) : undefined
-            )
-            .orderBy(desc(items.id))
-            .limit(limit);
-
-          return rows.map(r => ({
-            id: String(r.id),
-            title: `[${r.code}] ${r.title} (موجودی: ${r.extra || 0})`
-          }));
-        }
-
-        case 'treasury': {
-          const rows = await orm
-            .select({
-              id: treasuryTransactions.id,
-              code: treasuryTransactions.transactionNumber,
-              title: treasuryTransactions.partyName,
-              extra: treasuryTransactions.amount
-            })
-            .from(treasuryTransactions)
-            .where(
-              search ? or(ilike(treasuryTransactions.transactionNumber, searchPattern), ilike(treasuryTransactions.partyName, searchPattern)) : undefined
-            )
-            .orderBy(desc(treasuryTransactions.id))
-            .limit(limit);
-
-          return rows.map(r => ({
-            id: String(r.id),
-            title: `تراکنش ${r.code || r.id} - ${r.title} (${Number(r.extra || 0).toLocaleString('fa-IR')})`
-          }));
-        }
-
-        case 'project': {
-          const rows = await orm
-            .select({
-              id: productionProjects.id,
-              code: productionProjects.projectCode,
-              title: productionProjects.title,
-              extra: productionProjects.status
-            })
-            .from(productionProjects)
-            .where(
-              search ? or(ilike(productionProjects.projectCode, searchPattern), ilike(productionProjects.title, searchPattern)) : undefined
-            )
-            .orderBy(desc(productionProjects.id))
-            .limit(limit);
-
-          return rows.map(r => ({
-            id: String(r.id),
-            title: `پروژه ${r.code || r.id} - ${r.title} (${r.extra || 'جاری'})`
-          }));
-        }
-
-        default:
-          return [];
+        // v9.0.431 (TD-711): the id is the document id the events carry, never its number
+        return rows.map(r => ({
+          id: String(r.id),
+          title: `سند شماره ${r.code || r.id} (${r.extra || r.type || 'بدون نام'})`
+        }));
       }
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      logger.error(`[Event Sourcing Search Aggregates Error] ${errMsg}`);
-      // 10.3 (ARCH review): a failed read is an error answer, never no matching records
-      throw err;
+
+      case 'customer': {
+        const rows = await orm
+          .select({
+            id: customers.id,
+            title: customers.name,
+            extra: customers.phone
+          })
+          .from(customers)
+          .where(
+            search ? or(ilike(customers.name, searchPattern), ilike(customers.phone, searchPattern)) : undefined
+          )
+          .orderBy(desc(customers.id))
+          .limit(limit);
+
+        return rows.map(r => ({
+          id: String(r.id),
+          title: `${r.title} ${r.extra ? `(${r.extra})` : ''}`
+        }));
+      }
+
+      case 'item': {
+        const rows = await orm
+          .select({
+            id: items.id,
+            code: items.code,
+            title: items.name,
+            extra: items.currentStock
+          })
+          .from(items)
+          .where(
+            search ? or(ilike(items.code, searchPattern), ilike(items.name, searchPattern)) : undefined
+          )
+          .orderBy(desc(items.id))
+          .limit(limit);
+
+        return rows.map(r => ({
+          id: String(r.id),
+          title: `[${r.code}] ${r.title} (موجودی: ${r.extra || 0})`
+        }));
+      }
+
+      case 'treasury': {
+        const rows = await orm
+          .select({
+            id: treasuryTransactions.id,
+            code: treasuryTransactions.transactionNumber,
+            title: treasuryTransactions.partyName,
+            extra: treasuryTransactions.amount
+          })
+          .from(treasuryTransactions)
+          .where(
+            search ? or(ilike(treasuryTransactions.transactionNumber, searchPattern), ilike(treasuryTransactions.partyName, searchPattern)) : undefined
+          )
+          .orderBy(desc(treasuryTransactions.id))
+          .limit(limit);
+
+        return rows.map(r => ({
+          id: String(r.id),
+          title: `تراکنش ${r.code || r.id} - ${r.title} (${Number(r.extra || 0).toLocaleString('fa-IR')})`
+        }));
+      }
+
+      case 'project': {
+        const rows = await orm
+          .select({
+            id: productionProjects.id,
+            code: productionProjects.projectCode,
+            title: productionProjects.title,
+            extra: productionProjects.status
+          })
+          .from(productionProjects)
+          .where(
+            search ? or(ilike(productionProjects.projectCode, searchPattern), ilike(productionProjects.title, searchPattern)) : undefined
+          )
+          .orderBy(desc(productionProjects.id))
+          .limit(limit);
+
+        return rows.map(r => ({
+          id: String(r.id),
+          title: `پروژه ${r.code || r.id} - ${r.title} (${r.extra || 'جاری'})`
+        }));
+      }
+
+      default:
+        return [];
     }
   }
 
@@ -215,92 +207,85 @@ export class EventSourcingReplayService {
     if (!scope || !aggIdStr) return timeline;
     const eventTypes = [...scope.eventAggregateTypes];
 
-    try {
-      // 1. Fetch Outbox Events for this aggregate
-      const outboxList = await orm
-        .select()
-        .from(outboxEvents)
-        .where(and(inArray(sql<string>`lower(${outboxEvents.aggregateType})`, eventTypes), eq(outboxEvents.aggregateId, aggIdStr)))
-        .orderBy(desc(outboxEvents.occurredAt));
+    // 1. Fetch Outbox Events for this aggregate
+    const outboxList = await orm
+      .select()
+      .from(outboxEvents)
+      .where(and(inArray(sql<string>`lower(${outboxEvents.aggregateType})`, eventTypes), eq(outboxEvents.aggregateId, aggIdStr)))
+      .orderBy(desc(outboxEvents.occurredAt));
 
-      for (const ev of outboxList) {
-        const meta = (ev.metadata && typeof ev.metadata === 'object') ? (ev.metadata as Record<string, unknown>) : {};
-        const actorName = String(meta.userName || meta.userFullName || 'سیستم');
-        timeline.push({
-          id: `outbox-${ev.id}`,
-          eventId: ev.eventId,
-          eventType: ev.eventType,
-          occurredAt: ev.occurredAt || new Date().toISOString(),
-          source: 'outbox',
-          actor: actorName,
-          title: this.getPersianEventTitle(ev.eventType),
-          description: this.getPersianEventSummary(ev.eventType, ev.payload),
-          status: ev.status,
-          payload: ev.payload || {},
-          metadata: ev.metadata || {}
-        });
-      }
-
-      // 2. Fetch DLQ Events for this aggregate
-      const dlqList = await orm
-        .select()
-        .from(deadLetterEvents)
-        .where(and(inArray(sql<string>`lower(${deadLetterEvents.aggregateType})`, eventTypes), eq(deadLetterEvents.aggregateId, aggIdStr)));
-
-      for (const dlq of dlqList) {
-        timeline.push({
-          id: `dlq-${dlq.id}`,
-          eventId: dlq.originalEventId,
-          eventType: dlq.eventType,
-          occurredAt: dlq.quarantinedAt || new Date().toISOString(),
-          source: 'dlq',
-          actor: 'موتور قرنطینه DLQ',
-          title: `[خطای ماندگار] ${this.getPersianEventTitle(dlq.eventType)}`,
-          description: `خطای اجرایی: ${dlq.failureReason}`,
-          status: dlq.status,
-          payload: dlq.payload || {},
-          metadata: dlq.metadata || {}
-        });
-      }
-
-      // 3. Fetch Audit Logs for this entity (its own entity names and id; only for holders of the audit log permission)
-      const auditLogs = options.includeAudit && scope.auditEntities.length > 0
-        ? await orm
-          .select()
-          .from(activityLogs)
-          .where(and(inArray(activityLogs.entity, [...scope.auditEntities]), eq(activityLogs.entityId, aggIdStr)))
-          .orderBy(desc(activityLogs.timestamp))
-          .limit(30)
-        : [];
-
-      for (const al of auditLogs) {
-        const details = (al.details && typeof al.details === 'object') ? (al.details as Record<string, unknown>) : {};
-        timeline.push({
-          id: `audit-${al.id}`,
-          eventId: `audit-log-${al.id}`,
-          eventType: `audit.${al.action.toLowerCase()}`,
-          occurredAt: al.timestamp || new Date().toISOString(),
-          source: 'audit_log',
-          actor: al.userFullName || al.username || 'سیستم',
-          title: `ثبت ممیزی: ${al.action}`,
-          description: al.description || '',
-          status: 'logged',
-          payload: al.details || {},
-          metadata: { ip: al.ipAddress, entity: al.entity, entityId: al.entityId },
-          changes: details.changes || details.before || details.after
-        });
-      }
-
-      // 4. Sort chronologically (ascending for playback/timeline, or desc)
-      timeline.sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime());
-
-      return timeline;
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      logger.error(`[Event Sourcing Timeline Error] ${errMsg}`);
-      // 10.3 (ARCH review): a failed read is an error answer, never an empty timeline
-      throw err;
+    for (const ev of outboxList) {
+      const meta = (ev.metadata && typeof ev.metadata === 'object') ? (ev.metadata as Record<string, unknown>) : {};
+      const actorName = String(meta.userName || meta.userFullName || 'سیستم');
+      timeline.push({
+        id: `outbox-${ev.id}`,
+        eventId: ev.eventId,
+        eventType: ev.eventType,
+        occurredAt: ev.occurredAt || new Date().toISOString(),
+        source: 'outbox',
+        actor: actorName,
+        title: this.getPersianEventTitle(ev.eventType),
+        description: this.getPersianEventSummary(ev.eventType, ev.payload),
+        status: ev.status,
+        payload: ev.payload || {},
+        metadata: ev.metadata || {}
+      });
     }
+
+    // 2. Fetch DLQ Events for this aggregate
+    const dlqList = await orm
+      .select()
+      .from(deadLetterEvents)
+      .where(and(inArray(sql<string>`lower(${deadLetterEvents.aggregateType})`, eventTypes), eq(deadLetterEvents.aggregateId, aggIdStr)));
+
+    for (const dlq of dlqList) {
+      timeline.push({
+        id: `dlq-${dlq.id}`,
+        eventId: dlq.originalEventId,
+        eventType: dlq.eventType,
+        occurredAt: dlq.quarantinedAt || new Date().toISOString(),
+        source: 'dlq',
+        actor: 'موتور قرنطینه DLQ',
+        title: `[خطای ماندگار] ${this.getPersianEventTitle(dlq.eventType)}`,
+        description: `خطای اجرایی: ${dlq.failureReason}`,
+        status: dlq.status,
+        payload: dlq.payload || {},
+        metadata: dlq.metadata || {}
+      });
+    }
+
+    // 3. Fetch Audit Logs for this entity (its own entity names and id; only for holders of the audit log permission)
+    const auditLogs = options.includeAudit && scope.auditEntities.length > 0
+      ? await orm
+        .select()
+        .from(activityLogs)
+        .where(and(inArray(activityLogs.entity, [...scope.auditEntities]), eq(activityLogs.entityId, aggIdStr)))
+        .orderBy(desc(activityLogs.timestamp))
+        .limit(30)
+      : [];
+
+    for (const al of auditLogs) {
+      const details = (al.details && typeof al.details === 'object') ? (al.details as Record<string, unknown>) : {};
+      timeline.push({
+        id: `audit-${al.id}`,
+        eventId: `audit-log-${al.id}`,
+        eventType: `audit.${al.action.toLowerCase()}`,
+        occurredAt: al.timestamp || new Date().toISOString(),
+        source: 'audit_log',
+        actor: al.userFullName || al.username || 'سیستم',
+        title: `ثبت ممیزی: ${al.action}`,
+        description: al.description || '',
+        status: 'logged',
+        payload: al.details || {},
+        metadata: { ip: al.ipAddress, entity: al.entity, entityId: al.entityId },
+        changes: details.changes || details.before || details.after
+      });
+    }
+
+    // 4. Sort chronologically (ascending for playback/timeline, or desc)
+    timeline.sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime());
+
+    return timeline;
   }
 
   /**

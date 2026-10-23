@@ -203,6 +203,9 @@ function alertPattern(key: string): RegExp {
   return new RegExp(line.slice(key.length + 1).split('%s').map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.+'));
 }
 
+/** The settings monitor.sh reads (`setting KEY` in scripts/monitor.sh) */
+const MONITOR_SETTING = /^(ALERT_\w+|BACKUP_DIR|BACKUP_RCLONE_REMOTE|METRICS_TOKEN|MONITOR_\w+|PORT)$/;
+
 describe('monitor_alerts_td_1021: the server monitor alerts once on app, disk, backup age and event queue problems and once on recovery (O-03)', () => {
   let srv: FakeServer;
   let dir: string;
@@ -226,10 +229,14 @@ describe('monitor_alerts_td_1021: the server monitor alerts once on app, disk, b
     srv.sent.length = 0;
     srv.sent2.length = 0;
   };
+  // 10.3 package 3: monitor.sh takes a setting from its environment before .env, so a METRICS_TOKEN or alert channel of the
+  // shell running the tests (CI's test settings, scripts/ci-test-env.sh) replaced this test's .env and the healthy run
+  // reported events_unreadable; only the settings each test gives reach the monitor
+  const shellEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => !MONITOR_SETTING.test(key)));
   const monitor = (extra: Record<string, string> = {}) => new Promise<{ code: number | null; out: string }>(resolve => {
     const child = spawn('bash', [path.join(ROOT, 'scripts/monitor.sh')], {
       env: {
-        ...process.env, APP_DIR: dir, MONITOR_URL: srv.url, ALERT_BOT_API: srv.url, BACKUP_DIR: backupDir,
+        ...shellEnv, APP_DIR: dir, MONITOR_URL: srv.url, ALERT_BOT_API: srv.url, BACKUP_DIR: backupDir,
         MONITOR_STATE_DIR: stateDir, MONITOR_DISK_PERCENT: '100', ...extra,
       },
     });

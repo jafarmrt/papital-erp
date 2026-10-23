@@ -4,7 +4,7 @@ import { authenticateToken, AuthenticatedRequest } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission, userHasRoleOrPermission } from '../middleware/authorize.js';
 import { WORKFLOW_ENTITY_READ_PERMISSIONS, WORKFLOW_WIDGET_PERMISSIONS } from '../lib/recordReadPermissions.js';
-import { ForbiddenError } from '../errors/customErrors.js';
+import { ForbiddenError, UnauthorizedError } from '../errors/customErrors.js';
 import { logger } from '../middleware/logger.js';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { getErrorMessage } from '../utils.js';
@@ -60,7 +60,7 @@ router.use((_req, res, next) => {
 router.get('/tasks/my-tasks', authorizePermission(...WORKFLOW_INBOX_PERMISSIONS), validate(myTasksQuerySchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const userId = req.user?.id;
   if (!userId) {
-    return res.status(401).json({ error: 'کاربر معتبر نیست' });
+    throw new UnauthorizedError('کاربر معتبر نیست');
   }
   const query = req.query as unknown as z.infer<typeof myTasksQuerySchema>['query'];
   const result = await WorkflowEngineService.getMyTasks({
@@ -83,7 +83,7 @@ router.get('/tasks/stats', authorizePermission(...WORKFLOW_INBOX_PERMISSIONS), a
     const userRole = req.user?.role || '';
 
     if (!userId) {
-      return res.status(401).json({ error: 'کاربر معتبر نیست' });
+      throw new UnauthorizedError('کاربر معتبر نیست');
     }
 
     const stats = await WorkflowEngineService.getTaskStats({
@@ -113,7 +113,7 @@ router.post('/tasks/:taskId/execute', authorizePermission(...WORKFLOW_EXECUTE_PE
     const userPermissions = req.user?.permissions || [];
 
     if (!userId) {
-      return res.status(401).json({ error: 'کاربر معتبر نیست' });
+      throw new UnauthorizedError('کاربر معتبر نیست');
     }
 
     const result = await WorkflowEngineService.executeTaskById({

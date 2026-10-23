@@ -3737,7 +3737,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         timeout: 120_000
       });
       const output = `${child.stdout || ''}${child.stderr || ''}`;
-      const refused = output.includes(MOCK_DATABASE_REFUSAL);
+      // 10.3 package 3: the preflight names the missing DATABASE_URL before the database check would
+      const refused = output.includes(MOCK_DATABASE_REFUSAL) || output.includes('The test runner cannot start: required settings are missing.');
       const ranSuites = output.includes('Passed Tests') || output.includes('Migrator] Drizzle database migrations completed');
       if (child.status === 0 || !refused || ranSuites) {
         throw new Error(`the runner on mockPool must stop with a non-zero exit code before migrations or suites run: ${JSON.stringify({ status: child.status, refused, ranSuites, tail: output.slice(-400) })}`);

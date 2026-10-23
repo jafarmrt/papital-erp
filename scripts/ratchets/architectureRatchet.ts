@@ -29,7 +29,7 @@ import { boundaryState } from './packageBoundary';
  *  - auditWithoutTx (TD-963 part 2, OBS-R2-07): a `logActivity(...)` call whose argument names no `tx`, so the audit row
  *    is written on its own pool connection after the change committed, and a failed insert never refuses the change;
  *  - hardDeletes (OBS-R2-15, decision ت۴۰ item 19): a physical delete, `x.delete(<schema table>)` or SQL text holding
- *    `DELETE FROM`, in any production file. Business rows are soft-deleted (AGENTS.md, DB-009); the deletes that remain
+ *    `DELETE FROM` or `TRUNCATE` (any case inside SQL text, 10.3 package 3), in any production file. Business rows are soft-deleted (AGENTS.md, DB-009); the deletes that remain
  *    are the allowed exceptions, each file with its reason in scripts/ratchets/HARD_DELETES.md, and their count only shrinks.
  * Terminal output is English (AGENTS.md, owner rule t9).
  */
@@ -122,9 +122,45 @@ const EXECUTOR_NAMES = new Set(['tx', 'trx', 'db', 'orm', 'executor', 'txEngine'
 function isDrizzleDelete(n: ts.CallExpression): boolean {
   const receiver = (n.expression as ts.PropertyAccessExpression).expression;
   const name = ts.isIdentifier(receiver) ? receiver.text : ts.isPropertyAccessExpression(receiver) ? receiver.name.text : '';
-  if (EXECUTOR_NAMES.has(name)) return true;
+  if (EXECUTOR_NAMES.has(name) || EXECUTOR_NAME_PATTERN.test(name)) return true;
+  const arg = n.arguments[0];
+  if (arg && TABLE_NAME_PATTERN.test(ts.isIdentifier(arg) ? arg.text : ts.isPropertyAccessExpression(arg) ? arg.name.text : '')) return true;
   const parent = n.parent;
   return ts.isPropertyAccessExpression(parent) && parent.expression === n && ['where', 'returning'].includes(parent.name.text);
+}
+
+/**
+ * 10.3 package 3 (10.2 backlog): an executor under another name (`txExecutor`, `dbClient`, `this.db`, `writeTx`) and a
+ * table under another name (`entry.table`, `targetTable`) count too. A Map or Set named that way (`pendingTx.delete(id)`,
+ * `seen.delete(table)`) would count as well: the ratchet then refuses it and the name is changed, which costs less than a
+ * physical delete nobody counted (none such in the code today).
+ */
+const EXECUTOR_NAME_PATTERN = /^(tx|trx|db|orm)[A-Z_]|(Tx|Trx|Db|Orm|Executor|Database)$|^(executor|database)$/;
+const TABLE_NAME_PATTERN = /^table$|Table$/;
+
+/**
+ * 10.3 package 3 (10.2 backlog): SQL handed to the database, `sql\`...\``, `sql.raw(...)`, `x.query(...)` or
+ * `x.execute(...)`; there a lower-case `truncate roles` counts too, which elsewhere is a CSS class (`truncate max-w-xs`).
+ */
+function isSqlText(n: ts.Node): boolean {
+  let cur: ts.Node = n;
+  while (ts.isTemplateHead(cur) || ts.isTemplateMiddle(cur) || ts.isTemplateTail(cur) || ts.isTemplateSpan(cur) || ts.isTemplateExpression(cur)) cur = cur.parent;
+  const parent = cur.parent;
+  if (!parent) return false;
+  if (ts.isTaggedTemplateExpression(parent) && parent.template === cur) {
+    const tag = parent.tag;
+    return (ts.isIdentifier(tag) && tag.text === 'sql') || (ts.isPropertyAccessExpression(tag) && tag.name.text === 'sql');
+  }
+  if (ts.isCallExpression(parent) && parent.arguments[0] === cur && ts.isPropertyAccessExpression(parent.expression)) {
+    return ['raw', 'query', 'execute'].includes(parent.expression.name.text);
+  }
+  return false;
+}
+
+/** SQL text that deletes rows: DELETE FROM, upper-case TRUNCATE anywhere, and TRUNCATE in any case inside SQL text */
+function isDeletingSqlText(n: ts.StringLiteral | ts.NoSubstitutionTemplateLiteral | ts.TemplateLiteralLikeNode): boolean {
+  if (/\bDELETE\s+FROM\b/i.test(n.text) || /\bTRUNCATE\s+(TABLE\s+)?(["\w$]|$)/.test(n.text) || /\btruncate\s+table\b/i.test(n.text)) return true;
+  return /\btruncate\s+(table\s+)?(only\s+)?(["\w$]|$)/i.test(n.text) && isSqlText(n);
 }
 
 /** `{ status: 4xx|5xx, error: ... }`: an error result object instead of a thrown AppError. */
@@ -242,7 +278,7 @@ export function countSource(file: string, source: string): Record<SourceMetric, 
     if (ts.isCallExpression(n) && isAuditWithoutTx(n)) counts.auditWithoutTx++;
     if (ts.isCatchClause(n) && isNoopCatch(n)) counts.noopCatches++;
     if ((ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n) || ts.isTemplateHead(n) || ts.isTemplateMiddle(n) || ts.isTemplateTail(n))
-      && (/\bDELETE\s+FROM\b/i.test(n.text) || /\bTRUNCATE\s+(TABLE\s+)?["\w$]/.test(n.text) || /\btruncate\s+table\b/i.test(n.text))) counts.hardDeletes++;
+      && isDeletingSqlText(n)) counts.hardDeletes++;
     if (ts.isBinaryExpression(n) && isOrm(n.right)
       && [ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.EqualsToken].includes(n.operatorToken.kind)) counts.ormFallback++;
     if ((ts.isVariableDeclaration(n) || ts.isParameter(n)) && n.initializer && isOrm(n.initializer)) counts.ormFallback++;

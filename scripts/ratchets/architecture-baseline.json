@@ -71,17 +71,7 @@
     "src/services/workflow/workflowRoleReview.ts": 1,
     "src/services/workflow/workflowTransitionExecutor.ts": 8
   },
-  "routeErrorResponses": {
-    "src/routes/auth.routes.ts": 4,
-    "src/routes/customers.routes.ts": 1,
-    "src/routes/media.routes.ts": 1,
-    "src/routes/personnel.routes.ts": 4,
-    "src/routes/piecework.routes.ts": 3,
-    "src/routes/projects.routes.ts": 8,
-    "src/routes/transfers.routes.ts": 1,
-    "src/routes/woocommerce.routes.ts": 3,
-    "src/routes/workflow.routes.ts": 3
-  },
+  "routeErrorResponses": {},
   "serviceGenericErrors": {
     "src/services/accounting/voucher.service.ts": 2,
     "src/services/events/deadLetterDelivery.ts": 1,
@@ -99,15 +89,7 @@
   "serviceErrorResults": {
     "src/services/piecework/payroll.service.ts": 10
   },
-  "noopCatches": {
-    "src/routes/items.crud.routes.ts": 2,
-    "src/routes/items.prices.routes.ts": 3,
-    "src/routes/personnel.routes.ts": 1,
-    "src/routes/projects.routes.ts": 10,
-    "src/routes/transactions.routes.ts": 1,
-    "src/routes/warehouses.routes.ts": 1,
-    "src/routes/woocommerce.routes.ts": 2
-  },
+  "noopCatches": {},
   "auditWithoutTx": {
     "src/routes/accounting/accounts.routes.ts": 6,
     "src/routes/accounting/fiscal.routes.ts": 1,

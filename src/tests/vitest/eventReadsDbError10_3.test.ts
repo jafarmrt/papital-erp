@@ -2,7 +2,8 @@
 /**
  * 10.3 (ARCH review, package 2 part 17): when the database failed, the event screens' reads answered as if there were
  * nothing: zero webhooks with a 100% success rate, an empty dead letter queue, an empty outbox, no matching records and
- * an empty timeline. Each read now logs the failure and passes it on, so the route answers with an error the screen shows.
+ * an empty timeline. Each read now passes the failure on, so the route answers with an error the screen shows.
+ * 10.3 package 3: the read no longer logs it too; errorHandler writes the one log line (without the SQL text, TD-1320).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -36,9 +37,8 @@ const READS: Array<[string, () => Promise<unknown>]> = [
 ];
 
 describe('event reads pass a database failure on (10.3)', () => {
-  it.each(READS)('%s: a failed read is logged and passed on, never answered as empty', async (_name, read) => {
+  it.each(READS)('%s: a failed read is passed on once, never answered as empty or logged twice', async (_name, read) => {
     await expect(read()).rejects.toThrow('connection refused');
-    expect(logged).toHaveBeenCalledTimes(1);
-    expect(String(logged.mock.calls[0]?.[0])).toContain('connection refused');
+    expect(logged).not.toHaveBeenCalled();
   });
 });

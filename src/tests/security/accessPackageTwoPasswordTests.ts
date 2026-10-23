@@ -163,7 +163,8 @@ export async function runAccessPackageTwoPasswordTests(shouldRun: ShouldRun): Pr
       try {
         let pairLock: request.Response | null = null;
         for (let i = 0; i < 5; i++) pairLock = await attempt(`td539_ghost_${h.tag}`, '198.51.100.139');
-        if (pairLock?.status !== 429 || pairLock.body?.locked !== true || pairLock.body?.remainingMinutes !== 1) {
+        // 10.3 package 3: the username lock is an AppError, so `locked` and `remainingMinutes` ride in `details` (api.ts reads both)
+        if (pairLock?.status !== 429 || pairLock.body?.details?.locked !== true || pairLock.body?.details?.remainingMinutes !== 1) {
           wrong.push(`the fifth failure for one user name answered ${pairLock?.status} ${JSON.stringify(pairLock?.body)}, not 429 locked for 1 minute`);
         } else if (pairLock.body?.error !== usernameLockoutMessage(1)) {
           wrong.push(`the user name lock says «${pairLock.body?.error}», not «${usernameLockoutMessage(1)}»`);
