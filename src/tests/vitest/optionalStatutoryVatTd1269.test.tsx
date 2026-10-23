@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
@@ -71,14 +72,14 @@ describe('monthly insurance and tax list: only personnel with insurance or tax (
 
   it('shows the note in the report window', async () => {
     fetchJson.mockResolvedValue(report());
-    render(<PayrollStatutoryReportModal onClose={() => undefined} />);
+    renderWithQuery(<PayrollStatutoryReportModal onClose={() => undefined} />);
     expect((await screen.findByTestId('statutory-report-without')).textContent).toContain('۲ نفر با ۳ فیش');
     expect(screen.getByText('کارگر بیمه‌شده')).toBeTruthy();
   });
 
   it('says so when nobody has insurance or tax in the month', async () => {
     fetchJson.mockResolvedValue(report({ rows: [], totals: { gross: '0', employeeInsurance: '0', employerInsurance: '0', incomeTax: '0' }, withoutStatutory: { personnel: 4, payslips: 4 } }));
-    render(<PayrollStatutoryReportModal onClose={() => undefined} />);
+    renderWithQuery(<PayrollStatutoryReportModal onClose={() => undefined} />);
     expect(await screen.findByText('در این ماه فیش تأییدشده‌ای با بیمه یا مالیات حقوق نیست.')).toBeTruthy();
     expect(screen.getByTestId('statutory-report-without').textContent).toContain('۴ نفر');
   });

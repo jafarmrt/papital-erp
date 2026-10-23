@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 const viewer = { current: { id: 9, isAdmin: false } as { id: number; isAdmin: boolean } | null };
 vi.mock('../../contexts/AuthContext', async () => ({
@@ -44,14 +45,14 @@ describe('the issuer of a payslip neither approves nor pays it (TD-1084)', () =>
 
   it('disables approve and pay in the list for the issuer, with the reason', () => {
     viewer.current = { id: 9, isAdmin: false };
-    render(<PieceworkPayrollsTab payrollsList={[payslip(1, 'draft', 9), payslip(2, 'approved', 9)]} onOpenPayrollModal={noop} onViewPayslip={noop}
+    renderWithQuery(<PieceworkPayrollsTab payrollsList={[payslip(1, 'draft', 9), payslip(2, 'approved', 9)]} onOpenPayrollModal={noop} onViewPayslip={noop}
       onUpdateStatus={noop} onDeletePayroll={noop} />);
     expect(button('تأیید فیش').disabled).toBe(true);
     expect(button('تأیید فیش').title).toContain('خودتان صادر کرده‌اید');
     expect(button('ثبت پرداخت').disabled).toBe(true);
     cleanup();
     viewer.current = { id: 4, isAdmin: false };
-    render(<PieceworkPayrollsTab payrollsList={[payslip(1, 'draft', 9), payslip(2, 'approved', 9)]} onOpenPayrollModal={noop} onViewPayslip={noop}
+    renderWithQuery(<PieceworkPayrollsTab payrollsList={[payslip(1, 'draft', 9), payslip(2, 'approved', 9)]} onOpenPayrollModal={noop} onViewPayslip={noop}
       onUpdateStatus={noop} onDeletePayroll={noop} />);
     expect(button('تأیید فیش').disabled).toBe(false);
     expect(button('ثبت پرداخت').disabled).toBe(false);
@@ -60,10 +61,10 @@ describe('the issuer of a payslip neither approves nor pays it (TD-1084)', () =>
   it('the payslip window disables approve and pay for the issuer and offers back to draft on an unpaid approved payslip', () => {
     viewer.current = { id: 9, isAdmin: false };
     const onUpdateStatus = vi.fn();
-    const { unmount } = render(<PieceworkPayslipModal viewingPayroll={payslip(3, 'draft', 9)} onClose={noop} onUpdateStatus={onUpdateStatus} onDeletePayroll={noop} />);
+    const { unmount } = renderWithQuery(<PieceworkPayslipModal viewingPayroll={payslip(3, 'draft', 9)} onClose={noop} onUpdateStatus={onUpdateStatus} onDeletePayroll={noop} />);
     expect(button('تأیید فیش').disabled).toBe(true);
     unmount();
-    render(<PieceworkPayslipModal viewingPayroll={payslip(4, 'approved', 9)} onClose={noop} onUpdateStatus={onUpdateStatus} onDeletePayroll={noop} />);
+    renderWithQuery(<PieceworkPayslipModal viewingPayroll={payslip(4, 'approved', 9)} onClose={noop} onUpdateStatus={onUpdateStatus} onDeletePayroll={noop} />);
     expect(button('ثبت پرداخت (از خزانه)').disabled).toBe(true);
     button('بازگشت به پیش‌نویس').click();
     expect(onUpdateStatus).toHaveBeenCalledWith(4, 'draft');

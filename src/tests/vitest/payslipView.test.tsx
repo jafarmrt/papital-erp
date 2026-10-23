@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, screen, waitFor, within } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 let minePayslips: unknown[] = [];
 vi.mock('../../api', () => ({ fetchJson: async (url: string) => (url.startsWith('/piecework/payrolls/mine') ? minePayslips : []) }));
@@ -25,7 +26,7 @@ const payslip = (over: Partial<PieceworkPayroll>): PieceworkPayroll => ({
   totalPieceworkAmount: 0, totalBonuses: 0, totalDeductions: 0, netPayable: 1000000, paidAmount: 0, status: 'approved', items: [], ...over,
 });
 const viewPayslip = (p: PieceworkPayroll) =>
-  render(<PieceworkPayslipModal viewingPayroll={p} onClose={noop} onUpdateStatus={noop} onDeletePayroll={noop} />);
+  renderWithQuery(<PieceworkPayslipModal viewingPayroll={p} onClose={noop} onUpdateStatus={noop} onDeletePayroll={noop} />);
 
 // v9.0.328 (TD-815, B12P-12): the payslip and «فیش‌های حقوقی من» show the real state, the fixed salary per month and the company name
 describe('payslip view and my payslips (TD-815)', () => {
@@ -64,7 +65,7 @@ describe('payslip view and my payslips (TD-815)', () => {
   });
 
   it('the payslip list has an advance deduction column', () => {
-    render(<PieceworkPayrollsTab payrollsList={[payslip({ advanceDeduction: 250000, netPayable: 750000 })]} onOpenPayrollModal={noop}
+    renderWithQuery(<PieceworkPayrollsTab payrollsList={[payslip({ advanceDeduction: 250000, netPayable: 750000 })]} onOpenPayrollModal={noop}
       onViewPayslip={noop} onUpdateStatus={noop} onDeletePayroll={noop} />);
     expect(screen.getByText('کسر مساعده (ریال)')).toBeTruthy();
     expect(screen.getByText('-۲۵۰٬۰۰۰')).toBeTruthy();
@@ -72,7 +73,7 @@ describe('payslip view and my payslips (TD-815)', () => {
 
   it('my payslips labels a partly paid payslip, counts it as waiting and shows the currency once', async () => {
     minePayslips = [payslip({ id: 8, payrollNumber: 'PAY-8', status: 'partially_paid', paidAmount: 600000 })];
-    render(<MyPayslipsPage />);
+    renderWithQuery(<MyPayslipsPage />);
     await waitFor(() => expect(screen.getByText('فیش مهر')).toBeTruthy());
     const row = screen.getByText('فیش مهر').closest('tr') as HTMLElement;
     expect(within(row).getByText('نیمه‌پرداخت')).toBeTruthy();

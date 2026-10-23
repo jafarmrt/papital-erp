@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 vi.mock('../../api', () => ({ fetchJson: async () => ({ outstandingAdvance: 0, totalAdvances: 0, totalDeducted: 0 }) }));
 vi.mock('../../hooks/useAppCurrency', async () => {
@@ -18,7 +19,7 @@ import type { PieceworkPayroll } from '../../types';
 afterEach(cleanup);
 
 const noop = () => undefined;
-const renderForm = (deductions: number, description: string) => render(
+const renderForm = (deductions: number, description: string) => renderWithQuery(
   <PieceworkPayrollModal
     isOpen onClose={noop} onSubmit={noop} personnelSelectOptions={[{ value: '5', label: 'کارگر' }]}
     payrollPersonnelId={5} setPayrollPersonnelId={noop} payrollStartDate="2026-09-23" setPayrollStartDate={noop}
@@ -51,7 +52,7 @@ describe('the deductions box needs a description (TD-861)', () => {
       totalPieceworkAmount: 1000000, totalBonuses: 0, totalDeductions: 150000, deductionsDescription: 'قسط وام صندوق', netPayable: 850000,
       paidAmount: 0, status: 'approved', items: [],
     };
-    render(<PieceworkPayslipModal viewingPayroll={payroll} onClose={noop} onUpdateStatus={noop} onDeletePayroll={noop} />);
+    renderWithQuery(<PieceworkPayslipModal viewingPayroll={payroll} onClose={noop} onUpdateStatus={noop} onDeletePayroll={noop} />);
     expect(screen.getByText('سایر کسورات (قسط وام صندوق):')).toBeTruthy();
   });
 });

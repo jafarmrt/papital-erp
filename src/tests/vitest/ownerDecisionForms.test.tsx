@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, screen, waitFor } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 const fetchJson = vi.fn(async (url: string, _opts?: { method?: string; body?: string }) => (url === '/accounting/bank-accounts' ? [] : {}));
 vi.mock('../../api', () => ({ fetchJson: (url: string, opts?: { method?: string; body?: string }) => fetchJson(url, opts) }));
@@ -20,10 +21,10 @@ afterEach(() => {
   granted.value = false;
 });
 
-const treasuryForm = () => render(
+const treasuryForm = () => renderWithQuery(
   <TreasuryTransactionModal isOpen onClose={() => undefined} type="receipt" bankAccounts={[]} customers={[]} personnelList={[]} appCurrency="IRR" onSave={async () => undefined} />
 );
-const settlementForm = () => render(
+const settlementForm = () => renderWithQuery(
   <InvoiceSettlementModal isOpen onClose={() => undefined} onSuccess={() => undefined}
     document={{ id: 7, refNumber: 'INV-7', type: 'invoice', currency: 'IRR', payableAmount: 1000, paidAmount: 0 }} />
 );
@@ -58,7 +59,7 @@ describe('no-voucher treasury option needs its own permission (TD-409)', () => {
 // v8.0.120 (TD-411، تصمیم مالک محصول — گزینه الف): پرداخت حقوق روش «چک» ندارد
 describe('payroll payment has no cheque method (TD-411)', () => {
   it('offers bank transfer, cash and POS only', async () => {
-    const { container } = render(<PayrollPaymentModal payroll={{ id: 7, payrollNumber: 'PAY-7', netPayable: 1000000, paidAmount: 0, status: 'approved' }} onClose={() => undefined} />);
+    const { container } = renderWithQuery(<PayrollPaymentModal payroll={{ id: 7, payrollNumber: 'PAY-7', netPayable: 1000000, paidAmount: 0, status: 'approved' }} onClose={() => undefined} />);
     await waitFor(() => expect(container.querySelector('option[value="bank_transfer"]')).toBeTruthy());
     expect(container.querySelector('option[value="cheque"]')).toBeNull();
     expect(container.querySelector('option[value="cash"]')).toBeTruthy();

@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
-import { fetchJson } from '../../api';
 import { errorMessageOf, formatCurrencyLabel, formatPersianPrice } from '../../utils';
 import type { StatutoryAmounts } from '../../lib/payroll/statutoryDeductions';
 import {
   STATUTORY_ENTRY_KEYS, statutoryAmountsOf, statutoryEntryError, statutoryNeedsReason, type PayrollStatutoryEntry,
 } from '../../lib/payroll/statutoryForm';
+import { useStatutoryPreviewQuery } from '../../hooks/queries/usePayrollWindowQueries';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 
 /**
  * v10.0.210 (TD-1087، طرح حقوق §۳.۳ بندهای ۳ و ۴، تصمیم ت۶ الف): بیمه سهم کارگر، سهم کارفرما و مالیات حقوق فرم صدور و ویرایش
@@ -34,20 +34,17 @@ export function PayrollStatutoryFields({ personnelId, startDate, endDate, gross,
   entry: PayrollStatutoryEntry;
   onChange: (next: PayrollStatutoryEntry) => void;
 }) {
-  const [preview, setPreview] = useState<Preview | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setPreview(null);
-    setError(null);
-    if (!personnelId || !startDate || !endDate) return;
-    const controller = new AbortController();
-    const query = new URLSearchParams({ personnelId: String(personnelId), startDate, endDate, gross: String(Math.max(0, gross || 0)) });
-    fetchJson(`/piecework/statutory-preview?${query.toString()}`, { signal: controller.signal })
-      .then((res: Partial<Preview> | null) => { if (!controller.signal.aborted && res?.suggestion && res.covered) setPreview(res as Preview); })
-      .catch((err: unknown) => { if (!controller.signal.aborted) setError(errorMessageOf(err)); });
-    return () => controller.abort();
-  }, [personnelId, startDate, endDate, gross]);
+  // 10.3 (ARCH review finding 3): the suggestion comes from the shared cache under `piecework`, so a payslip change that
+  // invalidates that domain refreshes an open form; each gross, period or personnel is its own entry
+  const complete = Boolean(personnelId && startDate && endDate);
+  const previewQuery = useStatutoryPreviewQuery<Partial<Preview> | null>(
+    complete ? { personnelId: Number(personnelId), startDate, endDate, gross } : null,
+  );
+  // only a suggestion read for this form whose last read succeeded is offered (a failed refresh shows the error alone)
+  const previewRead = useOpeningRead(previewQuery, true);
+  const answer = complete ? previewRead.current : null;
+  const preview = answer?.suggestion && answer.covered ? answer as Preview : null;
+  const error = complete && previewRead.error ? errorMessageOf(previewRead.error) : null;
 
   if (!personnelId || !startDate || !endDate) return null;
   if (preview && !preview.covered.insurance && !preview.covered.tax) {

@@ -1,11 +1,12 @@
-import { FormEvent, ReactNode, useEffect, useState, useId } from 'react';
+import { FormEvent, ReactNode, useId } from 'react';
 import { X, FileText, Landmark, AlertCircle } from 'lucide-react';
 import { PieceworkLog } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
 import { formatPersianNumber, formatCurrencyLabel, formatPersianPrice, isoToJalaliDate } from '../../utils';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
-import { fetchJson } from '../../api';
+import { useAdvanceBalanceQuery } from '../../hooks/queries/usePayrollWindowQueries';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 import { PayrollDeductionsField, deductionsNeedDescription } from './PayrollDeductionsField';
 import { PayrollPrepaymentField, prepaymentNeedsReason, type PayrollPrepaymentState } from './PayrollPrepaymentField';
 import { DecimalInput } from '../common/DecimalInput';
@@ -81,31 +82,14 @@ export function PieceworkPayrollModal({
   // ورودی مبلغ همیشه به ریال است (مبلغ ذخیره‌شده)
   const inputCurLbl = formatCurrencyLabel('IRR');
 
-  const [advanceBalance, setAdvanceBalance] = useState<{ outstandingAdvance: number; totalAdvances: number; totalDeducted: number } | null>(null);
+  // 10.3 (ARCH review finding 3): the advance balance comes from the shared cache, so an advance paid or deducted while
+  // the window is open (a treasury or payslip change) refreshes it; another personnel shows nothing until its own answer
+  const advanceQuery = useAdvanceBalanceQuery(isOpen && payrollPersonnelId ? Number(payrollPersonnelId) : null);
+  // only a balance read in this opening whose last read succeeded counts; a failed read shows none, as before
+  const advanceRead = useOpeningRead(advanceQuery, isOpen);
+  const advanceBalance = isOpen && payrollPersonnelId ? (advanceRead.current ?? null) : null;
   // v8.0.29 (TD-282، تصمیم مالک محصول): کسر مساعده بیش از مانده مساعده پذیرفته نمی‌شود (سرور هم رد می‌کند)
   const advanceExceedsBalance = advanceBalance !== null && (advanceDeduction || 0) > advanceBalance.outstandingAdvance;
-
-  useEffect(() => {
-    if (!payrollPersonnelId) {
-      setAdvanceBalance(null);
-      return;
-    }
-    let active = true;
-    fetchJson(`/piecework/personnel/${payrollPersonnelId}/advance-balance`)
-      .then((data: any) => {
-        if (active && data) {
-          setAdvanceBalance({
-            outstandingAdvance: Number(data.outstandingAdvance || 0),
-            totalAdvances: Number(data.totalAdvances || 0),
-            totalDeducted: Number(data.totalDeducted || 0)
-          });
-        }
-      })
-      .catch(() => {
-        if (active) setAdvanceBalance(null);
-      });
-    return () => { active = false; };
-  }, [payrollPersonnelId]);
 
   if (!isOpen) return null;
 

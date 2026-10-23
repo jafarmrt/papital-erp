@@ -9,6 +9,7 @@ import { invalidateAfterReconciliation, invalidateAfterTreasuryChange } from './
 import { useOnDemandReport, type OnDemandReportSpec } from './useOnDemandReport';
 import type { TreasuryRelinkOption } from '../../lib/treasury/treasuryRelink';
 import type { ReconcilableCheque } from '../../lib/treasury/reconcilableCheque';
+import type { StatutoryRemittanceKind, StatutoryRemittanceOptions } from '../../lib/treasury/statutoryRemittance';
 
 /**
  * خزانه‌داری: حساب‌های بانکی و تراکنش‌های خزانه با useQuery؛ حساب بانکی، دریافت/پرداخت، ابطال، انتقال بین‌بانکی،
@@ -28,11 +29,12 @@ export function useBankAccountsQuery({ enabled = true }: AccountingListQueryOpti
 }
 
 /** v9.0.97 (TD-505، ت۷): فهرست انتخاب حساب‌های خزانه (بی شماره حساب و مانده) برای دفتر چک */
-export function useBankAccountOptionsQuery({ enabled = true }: AccountingListQueryOptions = {}) {
+export function useBankAccountOptionsQuery({ enabled = true, readOnEveryOpening = false }: AccountingListQueryOptions = {}) {
   return useQuery<BankAccountOption[]>({
     queryKey: QUERY_KEYS.accounting.bankAccountOptions(),
     queryFn: ({ signal }) => fetchAccountingList<BankAccountOption>('/accounting/bank-accounts/options', signal, 'bank account options'),
     ...ACCOUNTING_LIST_QUERY_OPTIONS,
+    ...(readOnEveryOpening ? { staleTime: 0, networkMode: 'always' as const } : {}),
     enabled,
   });
 }
@@ -128,6 +130,19 @@ export function useContraAccountsQuery(enabled: boolean) {
     queryFn: ({ signal }) => fetchAccountingList<ContraAccountOption>('/accounting/treasury/contra-accounts', signal, 'contra accounts'),
     ...ACCOUNTING_LIST_QUERY_OPTIONS,
     enabled,
+  });
+}
+
+/**
+ * 10.3 (ARCH review finding 3): who has approved insurance or tax in a Jalali month and what each still owes, for the
+ * statutory remittance form (`GET /accounting/treasury/statutory-remittance/options`); read again on every opening
+ */
+export function useStatutoryRemittanceOptionsQuery(kind: StatutoryRemittanceKind, year: number, month: number) {
+  return useQuery<StatutoryRemittanceOptions>({
+    queryKey: QUERY_KEYS.accounting.statutoryRemittanceOptions(kind, year, month),
+    queryFn: ({ signal }) => fetchJson<StatutoryRemittanceOptions>(`/accounting/treasury/statutory-remittance/options?kind=${kind}&year=${year}&month=${month}`, { signal }),
+    ...ACCOUNTING_LIST_QUERY_OPTIONS,
+    staleTime: 0,
   });
 }
 

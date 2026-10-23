@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 import type { ChangeEvent } from 'react';
 
 type FetchOpts = { method?: string; body?: string; signal?: AbortSignal };
@@ -45,7 +46,7 @@ afterEach(() => {
 });
 
 const renderModal = (onClose = vi.fn()) => {
-  render(<PayrollPaymentModal payroll={{ id: 7, payrollNumber: 'PAY-7', netPayable: 900000, paidAmount: 0, status: 'approved' }} onClose={onClose} />);
+  renderWithQuery(<PayrollPaymentModal payroll={{ id: 7, payrollNumber: 'PAY-7', netPayable: 900000, paidAmount: 0, status: 'approved' }} onClose={onClose} />);
   return onClose;
 };
 

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 const calls: Array<{ url: string; options?: { method?: string; body?: string } }> = [];
 const answers: { current: (url: string) => unknown } = { current: () => ({}) };
@@ -80,7 +81,7 @@ describe('statutory form entry (TD-1087)', () => {
     answers.current = () => ({ suggestion: { ...suggestion, insuranceBase: '20000000', taxBase: '18600000', monthFraction: '1' }, warning: null, covered: BOTH });
     let entry = EMPTY_STATUTORY_ENTRY;
     const onChange = (next: typeof entry) => { entry = next; };
-    const { rerender } = render(<PayrollStatutoryFields personnelId={5} startDate="2026-03-21" endDate="2026-04-20" gross={20_000_000} entry={entry} onChange={onChange} />);
+    const { rerender } = renderWithQuery(<PayrollStatutoryFields personnelId={5} startDate="2026-03-21" endDate="2026-04-20" gross={20_000_000} entry={entry} onChange={onChange} />);
     await waitFor(() => expect(calls[0]?.url).toContain('/piecework/statutory-preview?personnelId=5'));
     expect(calls[0].url).toContain('gross=20000000');
     expect(await screen.findByPlaceholderText('۸۶۰٬۰۰۰')).toBeTruthy();
@@ -91,11 +92,11 @@ describe('statutory form entry (TD-1087)', () => {
 
   it('shows the missing-rates warning and says when the worker is not covered', async () => {
     answers.current = () => ({ suggestion: { ...suggestion, employeeInsurance: '0', employerInsurance: '0', incomeTax: '0' }, warning: 'نرخ‌های سال ۱۴۰۵ ثبت نشده است', covered: BOTH });
-    render(<PayrollStatutoryFields personnelId={5} startDate="2026-03-21" endDate="2026-04-20" gross={1} entry={EMPTY_STATUTORY_ENTRY} onChange={() => undefined} />);
+    renderWithQuery(<PayrollStatutoryFields personnelId={5} startDate="2026-03-21" endDate="2026-04-20" gross={1} entry={EMPTY_STATUTORY_ENTRY} onChange={() => undefined} />);
     expect(await screen.findByText('نرخ‌های سال ۱۴۰۵ ثبت نشده است')).toBeTruthy();
     cleanup();
     answers.current = () => ({ suggestion, warning: null, covered: { insurance: false, tax: false } });
-    render(<PayrollStatutoryFields personnelId={6} startDate="2026-03-21" endDate="2026-04-20" gross={1} entry={EMPTY_STATUTORY_ENTRY} onChange={() => undefined} />);
+    renderWithQuery(<PayrollStatutoryFields personnelId={6} startDate="2026-03-21" endDate="2026-04-20" gross={1} entry={EMPTY_STATUTORY_ENTRY} onChange={() => undefined} />);
     expect(await screen.findByText('این پرسنل مشمول بیمه و مالیات حقوق نیست؛ فیش کسور قانونی ندارد.')).toBeTruthy();
   });
 });
@@ -104,14 +105,14 @@ describe('payslip print rows (TD-1087)', () => {
   const base = { id: 1, payrollNumber: 'PAY-1', personnelId: 5, startDate: '', endDate: '', title: '', totalPieceworkAmount: 0, totalBonuses: 0, totalDeductions: 0, netPayable: 0, status: 'approved' } as PieceworkPayroll;
 
   it('prints each statutory deduction and marks the employer share as not deducted', () => {
-    render(<PayslipStatutoryRows payroll={{ ...base, employeeInsurance: '1400000', employerInsurance: '4600000', incomeTax: '860000' }} />);
+    renderWithQuery(<PayslipStatutoryRows payroll={{ ...base, employeeInsurance: '1400000', employerInsurance: '4600000', incomeTax: '860000' }} />);
     expect(screen.getByText('بیمه سهم کارگر:')).toBeTruthy();
     expect(screen.getByText('مالیات حقوق:')).toBeTruthy();
     expect(screen.getByText('بیمه سهم کارفرما (از خالص کم نمی‌شود):')).toBeTruthy();
   });
 
   it('prints nothing for a payslip without them', () => {
-    const { container } = render(<PayslipStatutoryRows payroll={base} />);
+    const { container } = renderWithQuery(<PayslipStatutoryRows payroll={base} />);
     expect(container.textContent).toBe('');
   });
 });
@@ -119,7 +120,7 @@ describe('payslip print rows (TD-1087)', () => {
 describe('rates settings tab (TD-1087)', () => {
   it('saves the year with its brackets and blocks an invalid form', async () => {
     answers.current = () => ({ data: [] });
-    render(<PayrollStatutoryRatesTab />);
+    renderWithQuery(<PayrollStatutoryRatesTab />);
     await waitFor(() => expect(calls.some(c => c.url === '/piecework/statutory-rates')).toBe(true));
     fireEvent.change(screen.getByLabelText('آغاز پله ۱'), { target: { value: '5' } });
     const save = screen.getByText(/^ذخیره نرخ‌های سال/).closest('button') as HTMLButtonElement;

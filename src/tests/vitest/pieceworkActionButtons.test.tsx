@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 const keys = { canManageTasks: false, canLog: false, canIssuePayroll: false, canApprovePayroll: false, canPay: false };
 vi.mock('../../hooks/usePieceworkPermissions', () => ({ usePieceworkPermissions: () => keys }));
@@ -20,7 +21,7 @@ afterEach(() => cleanup());
 
 const noop = () => undefined;
 const LOG = { id: 1, personnelId: 7, personnelName: 'پرسنل آزمون', taskId: 3, taskTitle: 'برش', date: '2026-10-01', quantity: 2, unitRate: 1000, totalAmount: 2000, status: 'pending' } as unknown as PieceworkLog;
-const renderLogs = () => render(
+const renderLogs = () => renderWithQuery(
   <PieceworkLogsTab
     logsList={[LOG]} loading={false} searchQuery="" onSearchChange={noop} selectedPersonnelFilter="all" onPersonnelFilterChange={noop}
     selectedProjectFilter="all" onProjectFilterChange={noop} statusFilter="all" onStatusFilterChange={noop} startDateFilter="" onStartDateChange={noop}
@@ -32,14 +33,14 @@ const payroll = (id: number, status: string, voucherNumber: number | null) => ({
   id, payrollNumber: `PR-${id}`, personnelName: 'پرسنل آزمون', startDate: '2026-09-23', endDate: '2026-10-07', status, voucherNumber,
   totalPieceworkAmount: 1000, totalBonuses: 0, totalDeductions: 0, netPayable: 1000, paidAmount: 0, notes: '',
 }) as unknown as PieceworkPayroll;
-const renderPayrolls = () => render(
+const renderPayrolls = () => renderWithQuery(
   <PieceworkPayrollsTab
     payrollsList={[payroll(1, 'draft', null), payroll(2, 'approved', 12)]} onOpenPayrollModal={noop} onViewPayslip={noop} onUpdateStatus={noop} onDeletePayroll={noop}
   />,
 );
 
 const TASK = { id: 3, title: 'برش', category: 'عمومی', unit: 'عدد', defaultRate: 1000 } as unknown as PieceworkTask;
-const renderRates = () => render(
+const renderRates = () => renderWithQuery(
   <PieceworkRatesTab personnelSelectOptions={[]} selectedPersonnelForRates={7} onSelectPersonnel={noop} tasksList={[TASK]} customRatesMap={{}} onSaveCustomRate={noop} />,
 );
 

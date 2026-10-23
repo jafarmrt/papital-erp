@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 vi.mock('../../api', () => ({ fetchJson: async () => ({}) }));
 vi.mock('../../hooks/useAppCurrency', async () => {
@@ -28,7 +29,7 @@ const payslip = (id: number, status: PieceworkPayroll['status']): PieceworkPayro
 describe('a draft payslip is not payable (TD-816)', () => {
   it('shows approve instead of pay for a draft in the payslip list', () => {
     const onUpdateStatus = vi.fn();
-    render(<PieceworkPayrollsTab payrollsList={[payslip(1, 'draft'), payslip(2, 'approved')]} onOpenPayrollModal={noop} onViewPayslip={noop}
+    renderWithQuery(<PieceworkPayrollsTab payrollsList={[payslip(1, 'draft'), payslip(2, 'approved')]} onOpenPayrollModal={noop} onViewPayslip={noop}
       onUpdateStatus={onUpdateStatus} onDeletePayroll={noop} />);
     expect(screen.getAllByText('ثبت پرداخت')).toHaveLength(1);
     fireEvent.click(screen.getByText('تأیید فیش'));
@@ -37,12 +38,12 @@ describe('a draft payslip is not payable (TD-816)', () => {
 
   it('offers no payment on a draft payslip and one on an approved payslip', () => {
     const onUpdateStatus = vi.fn();
-    const { unmount } = render(<PieceworkPayslipModal viewingPayroll={payslip(3, 'draft')} onClose={noop} onUpdateStatus={onUpdateStatus} onDeletePayroll={noop} />);
+    const { unmount } = renderWithQuery(<PieceworkPayslipModal viewingPayroll={payslip(3, 'draft')} onClose={noop} onUpdateStatus={onUpdateStatus} onDeletePayroll={noop} />);
     expect(screen.queryByText('ثبت پرداخت (از خزانه)')).toBeNull();
     fireEvent.click(screen.getByText('تأیید فیش'));
     expect(onUpdateStatus).toHaveBeenCalledWith(3, 'approved');
     unmount();
-    render(<PieceworkPayslipModal viewingPayroll={payslip(4, 'approved')} onClose={noop} onUpdateStatus={onUpdateStatus} onDeletePayroll={noop} />);
+    renderWithQuery(<PieceworkPayslipModal viewingPayroll={payslip(4, 'approved')} onClose={noop} onUpdateStatus={onUpdateStatus} onDeletePayroll={noop} />);
     expect(screen.getByText('ثبت پرداخت (از خزانه)')).toBeTruthy();
     expect(screen.queryByText('تأیید فیش')).toBeNull();
   });

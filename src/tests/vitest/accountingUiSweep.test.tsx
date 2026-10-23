@@ -1,8 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 // v10.1.x closing sweep, accounting UI: OBS-R1-51 (sync error in the error box), OBS-R1-52 (dead onViewVoucher prop),
 // OBS-R1-53 UI part (decimal money sums), OBS-R1-54 (cleared mapping clears its code), OBS-R1-55 (parties of the picked kind
@@ -71,7 +71,7 @@ const boxOf = (text: string) => screen.getByText(text).closest('div') as HTMLEle
 describe('OBS-R1-51: the voucher sync message shows an error as an error', () => {
   it('a refused sync is shown in the error box, never the green success box', async () => {
     syncState.mutateAsync.mockRejectedValue(new Error(SYNC_FAILURE));
-    render(<AccountingAuditChecklistView />);
+    renderWithQuery(<AccountingAuditChecklistView />);
     fireEvent.click(screen.getByText(SYNC_BUTTON));
     await screen.findByText(SYNC_FAILURE);
     expect(boxOf(SYNC_FAILURE).className).toContain('rose');
@@ -81,13 +81,13 @@ describe('OBS-R1-51: the voucher sync message shows an error as an error', () =>
 
   it('an answer with failed documents is an error and a full success stays green', async () => {
     syncState.mutateAsync.mockResolvedValue({ success: false, message: PARTIAL_FAILURE, syncedCount: 1 });
-    render(<AccountingAuditChecklistView />);
+    renderWithQuery(<AccountingAuditChecklistView />);
     fireEvent.click(screen.getByText(SYNC_BUTTON));
     await screen.findByText(PARTIAL_FAILURE);
     expect(boxOf(PARTIAL_FAILURE).className).toContain('rose');
     cleanup();
     syncState.mutateAsync.mockResolvedValue({ success: true, message: SYNC_SUCCESS, syncedCount: 2 });
-    render(<AccountingAuditChecklistView />);
+    renderWithQuery(<AccountingAuditChecklistView />);
     fireEvent.click(screen.getByText(SYNC_BUTTON));
     await screen.findByText(SYNC_SUCCESS);
     expect(boxOf(SYNC_SUCCESS).className).toContain('emerald');
@@ -135,7 +135,7 @@ describe('OBS-R1-54: clearing a mapping picker clears its code', () => {
       if (url === '/accounting/accounts') return [{ id: 7, code: '1201', name: 'receivables', level: 'subsidiary', accountType: 'asset', nature: 'debit', isActive: 1 }];
       return {};
     });
-    render(<AccountingSettingsTab currentUser={null} />);
+    renderWithQuery(<AccountingSettingsTab currentUser={null} />);
     const clear = await screen.findByTitle(CLEAR_PICK);
     fireEvent.click(clear);
     fireEvent.click(screen.getByText(SAVE_MAPPINGS));
@@ -146,13 +146,11 @@ describe('OBS-R1-54: clearing a mapping picker clears its code', () => {
 
 describe('OBS-R1-55: the voucher detail picker lists only parties of the picked kind', () => {
   it('no customer party means no option under customer', () => {
-    render(
-      <QueryClientProvider client={new QueryClient()}>
-        <VoucherDetailedPicker
-          value={{ detailedType: 'customer', detailedId: null, detailedName: '' }} onChange={() => undefined}
-          customers={[{ id: 4, name: SUPPLIER_NAME, partyType: 'supplier' }]} personnelList={[]}
-        />
-      </QueryClientProvider>,
+    renderWithQuery(
+      <VoucherDetailedPicker
+        value={{ detailedType: 'customer', detailedId: null, detailedName: '' }} onChange={() => undefined}
+        customers={[{ id: 4, name: SUPPLIER_NAME, partyType: 'supplier' }]} personnelList={[]}
+      />,
     );
     const select = screen.getByLabelText(PICK_CUSTOMER) as HTMLSelectElement;
     expect(select.options).toHaveLength(1);
@@ -168,7 +166,7 @@ describe('OBS-R2-104: no browser dialogs or page reloads in these screens', () =
       id: 1, payrollNumber: 'PR-1', personnelName: 'p', startDate: '2026-09-23', endDate: '2026-10-07', status: 'draft', voucherNumber: null,
       totalPieceworkAmount: 1000, totalBonuses: 0, totalDeductions: 0, netPayable: 1000, paidAmount: 0, notes: '',
     } as unknown as PieceworkPayroll;
-    render(<PieceworkPayrollsTab payrollsList={[payroll]} onOpenPayrollModal={() => undefined} onViewPayslip={() => undefined}
+    renderWithQuery(<PieceworkPayrollsTab payrollsList={[payroll]} onOpenPayrollModal={() => undefined} onViewPayslip={() => undefined}
       onUpdateStatus={() => undefined} onDeletePayroll={() => undefined} onVoucherSynced={onVoucherSynced} />);
     fireEvent.click(screen.getByText(RECORD_VOUCHER));
     await waitFor(() => expect(onVoucherSynced).toHaveBeenCalledTimes(1));

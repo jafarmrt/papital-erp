@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, screen, waitFor } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 const fetchJson = vi.fn(async (url: string) => (url === '/accounting/bank-accounts' ? [] : {}));
 vi.mock('../../api', () => ({ fetchJson: (url: string) => fetchJson(url) }));
@@ -13,7 +14,7 @@ afterEach(cleanup);
 // فاکتور روش «چک» ندارند (این روش اسناد دریافتنی را بدهکار می‌کرد ولی رکورد چکی نمی‌ساخت).
 describe('treasury cheque method removed (TD-278)', () => {
   it('the treasury form offers no cheque method', async () => {
-    const { container } = render(
+    const { container } = renderWithQuery(
       <TreasuryTransactionModal isOpen onClose={() => undefined} type="receipt" bankAccounts={[]} customers={[]} personnelList={[]} appCurrency="IRR" onSave={async () => undefined} />
     );
     await waitFor(() => expect(container.querySelector('option[value="bank_transfer"]')).toBeTruthy());
@@ -22,7 +23,7 @@ describe('treasury cheque method removed (TD-278)', () => {
   });
 
   it('the invoice settlement form offers no cheque method', async () => {
-    render(
+    renderWithQuery(
       <InvoiceSettlementModal isOpen onClose={() => undefined} onSuccess={() => undefined}
         document={{ id: 7, refNumber: 'INV-7', type: 'invoice', currency: 'IRR', payableAmount: 1000, paidAmount: 0 }} />
     );

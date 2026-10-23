@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 vi.mock('../../api', () => ({ fetchJson: async () => ({ outstandingAdvance: 500000, totalAdvances: 500000, totalDeducted: 0 }) }));
 vi.mock('../../hooks/useAppCurrency', async () => {
@@ -15,7 +16,7 @@ const noop = () => undefined;
 
 function renderModal() {
   const setters = { bonuses: vi.fn(), deductions: vi.fn(), advance: vi.fn() };
-  render(
+  renderWithQuery(
     <PieceworkPayrollModal
       isOpen onClose={noop} onSubmit={noop} personnelSelectOptions={[{ value: '5', label: 'کارگر' }]}
       payrollPersonnelId={5} setPayrollPersonnelId={noop} payrollStartDate="1405/01/01" setPayrollStartDate={noop}

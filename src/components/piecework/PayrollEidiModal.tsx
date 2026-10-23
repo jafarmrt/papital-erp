@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { X, Gift } from 'lucide-react';
 import { fetchJson } from '../../api';
@@ -11,6 +11,8 @@ import { EIDI_METHOD_LABELS, EIDI_NOT_COVERED_NOTE, EIDI_OVERRIDE_REASON_MAX, ty
 import { SearchableSelect } from '../SearchableSelect';
 import { DialogLayer } from '../common/DialogLayer';
 import { idempotentReplayMessage, isIdempotentReplay } from '../../lib/idempotentReplay';
+import { useEidiPreviewQuery } from '../../hooks/queries/usePayrollWindowQueries';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 
 /**
  * v10.0.222 (TD-1089، طرح حقوق §۳.۸، ت۱۵ الف): صدور «فیش عیدی» پیش‌نویس یک پرسنل برای یک سال. مبلغ پیشنهادی را سرور
@@ -38,22 +40,18 @@ export function PayrollEidiModal({ personnelSelectOptions, onClose, onIssued }: 
   const thisYear = Number(toLatinDigits(getTodayJalaliDate()).slice(0, 4));
   const [personnelId, setPersonnelId] = useState('');
   const [year, setYear] = useState(thisYear);
-  const [preview, setPreview] = useState<Preview | null>(null);
-  const [previewError, setPreviewError] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    setPreview(null);
-    setPreviewError(null);
-    if (!personnelId) return undefined;
-    const controller = new AbortController();
-    fetchJson(`/piecework/eidi-preview?personnelId=${personnelId}&year=${year}`, { signal: controller.signal })
-      .then((res: Preview) => { if (!controller.signal.aborted) setPreview(res); })
-      .catch((err: unknown) => { if (!controller.signal.aborted) setPreviewError(errorMessageOf(err)); });
-    return () => controller.abort();
-  }, [personnelId, year]);
+  // 10.3 (ARCH review finding 3): the suggestion comes from the shared cache under `piecework`, so a payslip issued or
+  // approved elsewhere while this window is open (which changes the draft warning) refreshes it
+  const previewQuery = useEidiPreviewQuery<Preview>(personnelId ? Number(personnelId) : null, year);
+  // only a suggestion read in this window, whose last read succeeded, enables the issue (a failed refresh blocks it, as
+  // a failed read did before)
+  const previewRead = useOpeningRead(previewQuery, true);
+  const preview = personnelId ? (previewRead.current ?? null) : null;
+  const previewError = personnelId && previewRead.error ? errorMessageOf(previewRead.error) : null;
 
   const entered = normalizeDecimalString(amount);
   const suggested = preview?.suggestion.amount ?? '0';
