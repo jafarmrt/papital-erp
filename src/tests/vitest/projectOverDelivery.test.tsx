@@ -7,7 +7,7 @@ const OVER = { itemId: 42, itemName: 'گردنبند آزمون', unit: 'عدد'
 const OVER_DELIVERY_MESSAGE = 'تحویل بیش از مقدار برنامه‌ریزی‌شده پروژه';
 let deliveries = 0;
 const fetchJson = vi.fn(async (url: string, _opts?: { method?: string; body?: string }) => {
-  if (url.endsWith('/product-progress')) return { summary: { total_matrix_cells: 0, completed_matrix_cells: 0, all_matrix_completed: false } };
+  if (url.endsWith('/product-progress')) return { products: [], stages: [], summary: { total_matrix_cells: 0, completed_matrix_cells: 0, all_matrix_completed: false } };
   // v10.2.3 (TD-1290): a reader who does not see cost, so the tab posts only what the user typed
   if (url.endsWith('/delivery-cost')) return { projectId: 1, costVisible: false, wipBalance: null, products: [] };
   if (url.endsWith('/add-to-inventory')) {
@@ -44,7 +44,10 @@ describe('project over-delivery reason (TD-327)', () => {
   it('asks for a reason when the server refuses an over-delivery and resends the same delivery with it', async () => {
     const onUpdate = vi.fn();
     render(<ProjectStockEntryTab project={PROJECT} onUpdate={onUpdate} />, { wrapper: QueryWrapper });
-    fireEvent.click(await screen.findByText('ورود به انبار'));
+    // the delivery waits for the project's cost read (TD-1290)
+    const deliver = (await screen.findByText('ورود به انبار')).closest('button') as HTMLButtonElement;
+    await waitFor(() => expect(deliver.disabled).toBe(false));
+    fireEvent.click(deliver);
     expect(await screen.findByText('تحویل بیش از مقدار برنامه‌ریزی‌شده پروژه')).toBeTruthy();
     const confirm = screen.getByText('ثبت تحویل با دلیل').closest('button') as HTMLButtonElement;
     expect(confirm.disabled).toBe(true);

@@ -1,15 +1,19 @@
 import { useState, useMemo } from 'react';
-import { RefreshCw, Layers, Package, CheckCircle2, Circle, Save, Info, Search, CheckSquare, Square, RotateCcw, Lock } from 'lucide-react';
+import { RefreshCw, Package, CheckCircle2, Circle, Info, CheckSquare, Square } from 'lucide-react';
 import { toPersianDigits } from '../../utils';
 import { useProjectPermissions } from '../../hooks/useProjectPermissions';
 import { useProductProgressTicks } from '../../hooks/useProductProgressTicks';
 import { cellWorkOf, splitStageColumns } from '../../lib/projects/progressTicks';
 import { ProgressMatrixCell } from './ProgressMatrixCell';
+import { ProgressSummary } from './progress/ProgressSummary';
+import { ProgressMatrixToolbar, type ProgressFilter } from './progress/ProgressMatrixToolbar';
 
 // V3.1.5 — تب «پیشرفت به تفکیک کد کالا» (ماتریسی SKU × مرحله + فیلتر، انتخاب ردیف و عملیات دسته‌ای)
 // مدل: هر ردیف = یک SKU (کد کالا × کمیت)؛ وضعیت هر مرحله دودویی (تمام/ناتمام)؛
 // پیشرفت کل پروژه = تجمیع وزن‌دار (Σ sku%×qty / Σ qty)
 // v10.2.9 (10.2 package 10): reading, ticking and saving live in `useProductProgressTicks`, shared with the phone list
+// 10.3 (ARCH review finding 3): the matrix stays on screen while it is read again (a save here or elsewhere); the
+// summary and the matrix bar are in `./progress`
 
 export default function ProjectProductProgressTab({ projectId, onUpdate, onDirtyChange, onBusyChange }: {
   projectId: number;
@@ -23,14 +27,13 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
   const { canEdit } = useProjectPermissions();
   const ticks = useProductProgressTicks(projectId, { canEdit, onUpdate, onDirtyChange, onBusyChange });
   const {
-    loading, saving, stages, products, editCount, hasChanges,
-    statusOf: resolveStatus, percentOf: progressPercent, isEdited, toggle: toggleStatus,
-    setStageForAll: setStageForAllSkus, reset: resetDirty, save: saveChanges,
+    loading, loadError, saving, stages, products,
+    statusOf: resolveStatus, percentOf: progressPercent, isEdited, toggle: toggleStatus, setStageForAll: setStageForAllSkus,
   } = ticks;
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterProgress, setFilterProgress] = useState<'all' | 'incomplete' | 'completed'>('all');
+  const [filterProgress, setFilterProgress] = useState<ProgressFilter>('all');
 
   // Selected SKU item_ids for batch operations
   const [selectedSkuIds, setSelectedSkuIds] = useState<Set<number>>(new Set());
@@ -79,12 +82,25 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
     }
   };
 
-  // Bulk operation: Set all stages for selected SKUs
-  const setAllStagesForSelectedSkus = (status: 'pending' | 'completed') => ticks.setAllStagesOf(selectedSkuIds, status);
+  // v9.0.422 (TD-766): a failed read is said with another try, never shown as a project without products
+  if (loadError && products.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-10 gap-3 text-center" role="alert">
+        <p className="font-bold text-rose-700">جدول پیشرفت خوانده نشد: {loadError}</p>
+        <button
+          type="button"
+          onClick={ticks.reload}
+          disabled={loading}
+          className="px-4 py-2 rounded-xl bg-blue-600 text-white font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
+          تلاش دوباره
+        </button>
+      </div>
+    );
+  }
 
-  const summary = ticks.summary;
-
-  if (loading) {
+  if (!ticks.data) {
     return (
       <div className="flex flex-col items-center justify-center py-10 text-slate-400 gap-2">
         <RefreshCw className="w-6 h-6 animate-spin text-amber-500" />
@@ -105,247 +121,20 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
 
   return (
     <div className="space-y-4 text-xs animate-fadeIn">
-      {/* Summary Band */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3">
-          <span className="text-[10px] text-amber-700 font-bold block mb-1">پیشرفت وزن‌دار کل پروژه</span>
-          <div className="flex items-center gap-2">
-            <div className="flex-1 h-2 bg-amber-100 rounded-full overflow-hidden">
-              <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: `${summary?.weighted_progress_percent || 0}%` }} />
-            </div>
-            <span className="font-mono font-bold text-amber-800 text-sm">{toPersianDigits(summary?.weighted_progress_percent || 0)}٪</span>
-          </div>
-        </div>
-        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3">
-          <span className="text-[10px] text-slate-500 font-bold block mb-1">تعداد اقلام کالا:</span>
-          <p className="font-bold font-mono text-slate-900 text-sm">{toPersianDigits(summary?.total_skus || 0)}</p>
-        </div>
-        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3">
-          <span className="text-[10px] text-emerald-700 font-bold block mb-1">اقلام تکمیل‌شده (همه مراحل):</span>
-          <p className="font-bold font-mono text-emerald-800 text-sm">{toPersianDigits(summary?.fully_completed_skus || 0)} از {toPersianDigits(summary?.total_skus || 0)}</p>
-        </div>
-        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3">
-          <span className="text-[10px] text-blue-700 font-bold block mb-1">تیراژ کل سفارش:</span>
-          <p className="font-bold font-mono text-blue-800 text-sm">{toPersianDigits(summary?.total_quantity || 0)}</p>
-        </div>
-      </div>
-
-      {/* V3.1.16 — بنر پایش شرط تغییر وضعیت پروژه به تکمیل‌شده بر اساس گزینه‌های ماتریس */}
-      {summary?.total_matrix_cells !== undefined && summary.total_matrix_cells > 0 && (
-        <div className={`p-3 rounded-2xl border flex items-center justify-between gap-3 ${
-          summary.all_matrix_completed 
-            ? 'bg-emerald-50 border-emerald-200 text-emerald-900' 
-            : 'bg-amber-50/70 border-amber-200 text-amber-900'
-        }`}>
-          <div className="flex items-center gap-2.5">
-            {summary.all_matrix_completed ? (
-              <div className="w-7 h-7 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
-                <CheckCircle2 className="w-4 h-4" />
-              </div>
-            ) : (
-              <div className="w-7 h-7 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 shrink-0">
-                <Lock className="w-4 h-4" />
-              </div>
-            )}
-            <div>
-              <div className="font-bold text-xs flex items-center gap-2">
-                <span>شرط تغییر وضعیت پروژه به «تکمیل‌شده»:</span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                  summary.all_matrix_completed ? 'bg-emerald-200 text-emerald-800' : 'bg-amber-200 text-amber-800'
-                }`}>
-                  {summary.all_matrix_completed ? 'مجاز و آماده تکمیل' : 'قفل - ماتریس کامل نیست'}
-                </span>
-              </div>
-              <p className="text-[11px] opacity-80 mt-0.5">
-                {summary.all_matrix_completed 
-                  ? `تمام ${toPersianDigits(summary.total_matrix_cells)} گزینه ماتریس فیزیکی محصولات تیک خورده‌اند و امکان ثبت پروژه به عنوان تکمیل‌شده فراهم است.`
-                  : `تنها زمانی کاربر می‌تواند وضعیت پروژه را به تکمیل‌شده تغییر دهد که تمام گزینه‌های ماتریس تیک خورده باشند (در حال حاضر ${toPersianDigits(summary.completed_matrix_cells || 0)} از ${toPersianDigits(summary.total_matrix_cells)} گزینه تیک خورده و ${toPersianDigits(summary.missing_matrix_cells || 0)} گزینه مانده است).`
-                }
-              </p>
-            </div>
-          </div>
-          <div className="text-left shrink-0 font-mono text-xs font-bold px-3 py-1 bg-white/70 rounded-xl border border-black/5">
-            {toPersianDigits(summary.completed_matrix_cells || 0)} / {toPersianDigits(summary.total_matrix_cells)}
-          </div>
-        </div>
-      )}
-
-      {/* Per-stage rollup strip */}
-      {stages.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-3">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="font-bold text-slate-700 flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-slate-400" />
-              وضعیت هر مرحله در کل اقلام
-            </h4>
-            <span className="text-[10px] text-slate-400">تعداد اقلام تکمیل‌شده در هر مرحله / کل اقلام مرتبط</span>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-            {stages.map(s => {
-              // 10.2 package 12 (D6): ticked products count whole, the others their workshop work; the count and the
-              // percent both read the unsent ticks (review N5)
-              const { done, applicable } = ticks.stageCountsOf(s.stage_order);
-              const pct = ticks.stagePercentOf(s.stage_order);
-              return (
-                <div key={s.stage_order} className="bg-slate-50 rounded-xl border border-slate-100 p-2">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-bold text-slate-700 truncate" title={s.title}>{s.title}</span>
-                    <span className="font-mono text-[10px] font-bold text-slate-500">{toPersianDigits(pct)}٪</span>
-                  </div>
-                  <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
-                  </div>
-                  <div className="flex items-center justify-between mt-1 text-[9px] text-slate-400">
-                    {canEdit ? (
-                      <button
-                        onClick={() => setStageForAllSkus(s.stage_order, 'completed')}
-                        disabled={saving}
-                        className="text-emerald-600 hover:text-emerald-800 font-bold cursor-pointer disabled:opacity-50 disabled:cursor-default"
-                        title="تمام کردن این مرحله برای همه اقلام اعمال‌شده"
-                      >
-                        تمام همه
-                      </button>
-                    ) : <span />}
-                    <span>{toPersianDigits(done)}/{toPersianDigits(applicable)}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      <ProgressSummary ticks={ticks} canEdit={canEdit} />
 
       {/* SKU × Stage Matrix */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
-        {/* Controls and Batch Operations Bar */}
-        <div className="p-3 border-b border-slate-200 bg-slate-50 flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold border border-amber-300 shadow-2xs shrink-0">
-                <Package className="w-4 h-4" />
-              </div>
-              <div>
-                <h4 className="font-bold text-slate-900 text-xs">
-                  ماتریس پیشرفت فیزیکی محصولات (مرحله × کالا)
-                </h4>
-                <p className="text-[10px] text-slate-500">
-                  کنترل و تیک‌زدن همزمان وضعیت تکمیل مراحل، فیلتر سریع و عملیات گروهی
-                </p>
-                {!canEdit && (
-                  <p className="text-[10px] font-bold text-amber-700 mt-0.5">فقط مشاهده: تیک‌زدن مراحل مجوز «ویرایش پروژه و مراحل تولید» می‌خواهد.</p>
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {hasChanges && (
-                <button
-                  type="button"
-                  onClick={resetDirty}
-                  disabled={saving}
-                  className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-default"
-                  title="لغو تمام تغییرات اعمال‌نشده"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>انصراف</span>
-                </button>
-              )}
-
-              {hasChanges && (
-                <button
-                  type="button"
-                  onClick={saveChanges}
-                  disabled={saving}
-                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-xl font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs animate-pulse"
-                >
-                  <Save className="w-3.5 h-3.5" />
-                  <span>{saving ? 'در حال ثبت...' : `ثبت ${toPersianDigits(editCount)} تغییر در سامانه`}</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Search, Filter & Quick Batch Selection */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-200/70">
-            <div className="flex items-center gap-2 flex-1 min-w-[240px] max-w-md">
-              <div className="relative flex-1">
-                <Search className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="جست‌وجو در نام، کد کالا یا کد مشتری..."
-                  className="w-full pl-3 pr-8 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-400 focus:outline-none placeholder:text-slate-400"
-                />
-              </div>
-
-              {/* Progress Filter Pills */}
-              <div className="flex items-center bg-slate-200/80 p-0.5 rounded-xl text-[10px] font-bold shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setFilterProgress('all')}
-                  className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
-                    filterProgress === 'all' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  همه ({toPersianDigits(products.length)})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterProgress('incomplete')}
-                  className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
-                    filterProgress === 'incomplete' ? 'bg-white text-amber-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  ناتمام ({toPersianDigits(products.filter(p => progressPercent(p) < 100).length)})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterProgress('completed')}
-                  className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
-                    filterProgress === 'completed' ? 'bg-white text-emerald-800 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  تکمیل ({toPersianDigits(products.filter(p => progressPercent(p) === 100).length)})
-                </button>
-              </div>
-            </div>
-
-            {/* Batch Action Toolbar when rows are selected */}
-            {canEdit && selectedSkuIds.size > 0 && (
-              <div className="flex items-center gap-1.5 bg-amber-100/80 border border-amber-300/80 px-2.5 py-1 rounded-xl text-[11px] animate-fadeIn">
-                <span className="font-bold text-amber-950">
-                  {toPersianDigits(selectedSkuIds.size)} ردیف انتخاب شده:
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setAllStagesForSelectedSkus('completed')}
-                  disabled={saving}
-                  className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-default transition-colors"
-                >
-                  <CheckCircle2 className="w-3 h-3" />
-                  تمام کردن کلیه مراحل
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAllStagesForSelectedSkus('pending')}
-                  disabled={saving}
-                  className="px-2 py-0.5 bg-slate-700 hover:bg-slate-800 text-white rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-default transition-colors"
-                >
-                  <Circle className="w-3 h-3" />
-                  ریست به ناتمام
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedSkuIds(new Set())}
-                  className="text-slate-600 hover:text-slate-900 text-[10px] font-bold px-1.5 cursor-pointer"
-                >
-                  لغو انتخاب
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+        <ProgressMatrixToolbar
+          ticks={ticks}
+          canEdit={canEdit}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          filterProgress={filterProgress}
+          setFilterProgress={setFilterProgress}
+          selectedSkuIds={selectedSkuIds}
+          setSelectedSkuIds={setSelectedSkuIds}
+        />
 
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-right text-[11px]">
@@ -413,7 +202,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
               {filteredProducts.length === 0 ? (
                 <tr>
                   <td colSpan={4 + baseStages.length + optionalStages.length + 1} className="py-8 text-center text-slate-400">
-                    هیچ محصولی با فیلتر جست‌وجوی فعلی یافت نشد.
+                    هیچ محصولی با شرط‌های جست‌وجوی فعلی یافت نشد.
                   </td>
                 </tr>
               ) : (

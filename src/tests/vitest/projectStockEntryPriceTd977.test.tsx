@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { QueryWrapper } from './helpers/queryWrapper';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import toast from 'react-hot-toast';
 
 const fetchJson = vi.fn(async (url: string, _opts?: { method?: string; body?: string }) => {
-  if (url.endsWith('/product-progress')) return { summary: { total_matrix_cells: 0, completed_matrix_cells: 0, all_matrix_completed: false } };
+  if (url.endsWith('/product-progress')) return { products: [], stages: [], summary: { total_matrix_cells: 0, completed_matrix_cells: 0, all_matrix_completed: false } };
   // v10.2.3 (TD-1290): a reader who does not see cost, so the tab posts only what the user typed
   if (url.endsWith('/delivery-cost')) return { projectId: 1, costVisible: false, wipBalance: null, products: [] };
   if (url.endsWith('/add-to-inventory')) return { success: true, addedCount: 1, refNumber: 'PR-9' };
@@ -38,6 +38,12 @@ const ITEMS = [{ id: 42, code: 'N-1', name: 'necklace', weightedAverageCost: 500
 
 const deliveryCalls = () => fetchJson.mock.calls.filter(([url]) => url.endsWith('/add-to-inventory'));
 const sentLine = (call = 0) => JSON.parse(deliveryCalls()[call][1]?.body ?? '{}').itemsToAdd[0];
+/** «ورود به انبار» once it may be pressed: it waits for the project's cost read (TD-1290) */
+const deliverButton = async () => {
+  const button = (await screen.findByText(DELIVER)).closest('button') as HTMLButtonElement;
+  await waitFor(() => expect(button.disabled).toBe(false));
+  return button;
+};
 const inputAfter = async (label: string) => (await screen.findByText(label)).parentElement?.querySelector('input') as HTMLInputElement;
 
 // v10.0.28 (TD-977): the browser's cached average cost is never sent as an entered price, and no quantity is invented
@@ -45,7 +51,7 @@ describe('project stock entry price and quantity (TD-977)', () => {
   it('sends no unit price when the user typed none, so the server uses the current average cost', async () => {
     render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     expect((await inputAfter(PRICE_LABEL)).value).toBe('');
-    fireEvent.click(screen.getByText(DELIVER));
+    fireEvent.click(await deliverButton());
     await vi.waitFor(() => expect(deliveryCalls()).toHaveLength(1));
     expect(sentLine().unitPrice).toBeUndefined();
     expect(sentLine().quantity).toBe(2);
@@ -54,7 +60,7 @@ describe('project stock entry price and quantity (TD-977)', () => {
   it('sends the unit price the user typed', async () => {
     render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     fireEvent.change(await inputAfter(PRICE_LABEL), { target: { value: '7000' } });
-    fireEvent.click(screen.getByText(DELIVER));
+    fireEvent.click(await deliverButton());
     await vi.waitFor(() => expect(deliveryCalls()).toHaveLength(1));
     expect(sentLine().unitPrice).toBe(7000);
   });
@@ -63,7 +69,7 @@ describe('project stock entry price and quantity (TD-977)', () => {
     const noPlan = { ...PROJECT, quantity: undefined, products: [] } as unknown as ProductionProject;
     render(<ProjectStockEntryTab project={noPlan} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     expect((await inputAfter(QTY_LABEL)).value).toBe('');
-    fireEvent.click(screen.getByText(DELIVER));
+    fireEvent.click(await deliverButton());
     await Promise.resolve();
     expect(deliveryCalls()).toHaveLength(0);
     expect(toast.error).toHaveBeenCalledWith(ZERO_QTY_MESSAGE);
