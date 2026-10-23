@@ -71,9 +71,11 @@ interface OpeningState {
  *
  * Closing a window that stays mounted only disables its query; a read still running goes on, and the next opening joins
  * it instead of reading again. Its answer reflects the moment it began, before this opening, so it never counts: once it
- * ends, this opening reads again and waits for that answer (10.3, review of part 16).
+ * ends, this opening reads again and waits for that answer (10.3, review of part 16). The same holds for a read another
+ * screen starts on the same entry while the window is closed (review of part 17).
  */
 export function useOpeningRead<T>(query: UseQueryResult<T>, open: Opening): OpeningRead<T> {
+  // while closed the window's query is turned off, so a running read is another screen's or one left from an earlier opening
   const running = query.fetchStatus !== 'idle';
   const [state, setState] = useState<OpeningState>(() => ({
     open, at: isOpen(open) ? Date.now() : 0, leftover: false, reread: 0, rereading: false,
@@ -83,8 +85,11 @@ export function useOpeningRead<T>(query: UseQueryResult<T>, open: Opening): Open
     opening = isOpen(open)
       ? { ...state, open, at: Date.now() }
       : { ...state, open, leftover: running, rereading: false };
+  } else if (!isOpen(open)) {
+    if (state.leftover !== running) opening = { ...state, leftover: running };
   } else if (state.leftover && !running) {
-    opening = isOpen(open)
+    // a query this opening turned off (its record was cleared) reads by itself once it is turned on again
+    opening = query.isEnabled
       ? { ...state, leftover: false, reread: state.reread + 1, rereading: true }
       : { ...state, leftover: false };
   }

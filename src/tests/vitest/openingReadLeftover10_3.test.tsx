@@ -9,7 +9,10 @@ import { READ_ON_EVERY_OPENING, useOpeningRead } from '../../hooks/queries/readO
  * 10.3 (review of part 16): a window that stays mounted only disables its query when it closes, so a read still running
  * went on and the next opening joined it: that opening showed an answer read before it opened (a customer added in
  * between was missing) and sent no read of its own. Such a read now never counts; once it ends, the opening reads again.
+ * Review of part 17: the same for a read another screen starts on the same entry while the window is closed.
  */
+const KEY = ['opening-read-leftover'];
+const settle = () => act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
 type Answer = { value: string };
 const server = { value: 'first', fail: false };
 const pending: Array<{ resolve: (a: Answer) => void; reject: (e: Error) => void }> = [];
@@ -34,7 +37,7 @@ afterEach(() => {
 function windowOf(client: QueryClient = appQueryClient(), open = true) {
   const wrapper = ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children);
   return renderHook(({ isOpen }: { isOpen: boolean }) => useOpeningRead(useQuery({
-    queryKey: ['opening-read-leftover'], queryFn: read, enabled: isOpen, ...READ_ON_EVERY_OPENING,
+    queryKey: KEY, queryFn: read, enabled: isOpen, ...READ_ON_EVERY_OPENING,
   }), isOpen), { wrapper, initialProps: { isOpen: open } });
 }
 
@@ -85,6 +88,51 @@ describe('an opening never counts a read that began before it (10.3)', () => {
     expect(read).toHaveBeenCalledTimes(2);
   });
 
+  it('a read another screen starts while the window is closed is not the next opening\'s', async () => {
+    const client = appQueryClient();
+    const { result, rerender } = windowOf(client, false);
+    hold.next = true;
+    void client.fetchQuery({ queryKey: KEY, queryFn: read, staleTime: 0 });
+    await waitFor(() => expect(pending).toHaveLength(1));
+    await settle();
+    server.value = 'with the customer added meanwhile';
+    rerender({ isOpen: true });
+    await act(async () => { pending[0]?.resolve({ value: 'first' }); });
+    await waitFor(() => expect(result.current.data).toEqual({ value: 'with the customer added meanwhile' }));
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it('a window mounted closed while another screen\'s read runs does not count that read either', async () => {
+    const client = appQueryClient();
+    hold.next = true;
+    void client.fetchQuery({ queryKey: KEY, queryFn: read, staleTime: 0 });
+    await waitFor(() => expect(pending).toHaveLength(1));
+    const { result, rerender } = windowOf(client, false);
+    server.value = 'second';
+    rerender({ isOpen: true });
+    await act(async () => { pending[0]?.resolve({ value: 'first' }); });
+    await waitFor(() => expect(result.current.data).toEqual({ value: 'second' }));
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it('a query this opening turned off (its record cleared) is not read when the earlier read ends', async () => {
+    const wrapper = ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client: appQueryClient() }, children);
+    hold.next = true;
+    const { result, rerender } = renderHook(({ isOpen, id }: { isOpen: boolean; id: number | null }) => useOpeningRead(useQuery({
+      queryKey: [...KEY, id], queryFn: read, enabled: isOpen && id !== null, ...READ_ON_EVERY_OPENING,
+    }), isOpen), { wrapper, initialProps: { isOpen: true, id: 1 as number | null } });
+    await waitFor(() => expect(pending).toHaveLength(1));
+    rerender({ isOpen: false, id: 1 });
+    rerender({ isOpen: true, id: 1 });
+    rerender({ isOpen: true, id: null });
+    await act(async () => { pending[0]?.resolve({ value: 'first' }); });
+    await settle();
+    expect(read).toHaveBeenCalledTimes(1);
+    rerender({ isOpen: true, id: 2 });
+    await waitFor(() => expect(result.current.data).toEqual({ value: 'first' }));
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
   it('each plain opening reads once and shows its own answer', async () => {
     const { result, rerender } = windowOf();
     await waitFor(() => expect(result.current.data).toEqual({ value: 'first' }));
@@ -104,7 +152,7 @@ describe('an opening never counts a read that began before it (10.3)', () => {
     await waitFor(() => expect(result.current.failedAt).toBeGreaterThan(0));
     expect((result.current.error as Error).message).toBe('server refused the read');
     server.fail = false;
-    await act(async () => { await client.invalidateQueries({ queryKey: ['opening-read-leftover'] }); });
+    await act(async () => { await client.invalidateQueries({ queryKey: KEY }); });
     await waitFor(() => expect(result.current.data).toEqual({ value: 'first' }));
     expect(result.current.error).toBeNull();
   });

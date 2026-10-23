@@ -166,5 +166,7 @@ export function useConvertLeadToCustomerMutation() {
     onSuccess: () => {
       void invalidatePreset(queryClient, 'customerChange');
     },
+    // the sales files page says a failure and ends its own progress notice, as before this hook (not the client's toast)
+    onError: () => undefined,
   });
 }
