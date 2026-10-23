@@ -20,7 +20,8 @@ export interface DeliveryMatrix {
  * Whether a delivery may also set the project «تکمیل‌شده»: only when every cell of the progress matrix («۳. پیشرفت هر
  * کالا») is ticked. 10.3 (ARCH review finding 3): the matrix is the progress tab's read (`useProductProgressQuery`),
  * read again on each opening of the tab and whenever a save invalidates the project, never one an earlier visit left in
- * the cache. A box ticked while the matrix was complete is unticked once a newer read says it is not.
+ * the cache. A box ticked while the matrix was complete is unticked once a newer read says it is not; ticking it, or a
+ * delivery refused while it was ticked, reads the matrix again, so a cell unticked in another browser unticks it too.
  */
 export function useDeliveryCompletion(projectId: number, alreadyCompleted: boolean) {
   const query = useProductProgressQuery(projectId);
@@ -37,8 +38,14 @@ export function useDeliveryCompletion(projectId: number, alreadyCompleted: boole
     missing: Math.max(0, total - completed),
   };
 
-  const [markCompleted, setMarkCompleted] = useState(false);
-  if (markCompleted && read.data !== undefined && !matrix.allCompleted) setMarkCompleted(false);
+  const [markCompleted, setMark] = useState(false);
+  if (markCompleted && read.data !== undefined && !matrix.allCompleted) setMark(false);
+  /** the matrix read again (a read under way is joined) */
+  const recheck = () => { void query.refetch({ cancelRefetch: false }); };
+  const setMarkCompleted = (on: boolean) => {
+    setMark(on);
+    if (on) recheck();
+  };
 
   // v9.0.422 (TD-766): a failed read of the matrix is said, not shown as an incomplete matrix
   const sayLoadFailed = useEffectEvent(() => { toast.error(errorMessageOf(read.error) || 'خطا در دریافت ماتریس پیشرفت پروژه'); });
@@ -52,7 +59,7 @@ export function useDeliveryCompletion(projectId: number, alreadyCompleted: boole
       ? `تنها زمانی می‌توانید تیک تغییر وضعیت به تکمیل‌شده را بزنید که در زبانه «۳. پیشرفت هر کالا»، تمام گزینه‌های ماتریس پیشرفت فیزیکی محصولات تیک خورده باشند. (${toPersianDigits(matrix.completed)} از ${toPersianDigits(matrix.total)} مورد تکمیل شده است)`
       : null;
 
-  return { matrix, markCompleted, setMarkCompleted, blockedReason };
+  return { matrix, markCompleted, setMarkCompleted, recheck, blockedReason };
 }
 
 export type DeliveryCompletion = ReturnType<typeof useDeliveryCompletion>;

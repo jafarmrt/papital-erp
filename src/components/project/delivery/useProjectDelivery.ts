@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
+import { useQueryClient } from '@tanstack/react-query';
 import type { ProductionProject, ProjectProductItem } from '../../../types';
 import { fetchJson } from '../../../api';
 import { errorMessageOf, toPersianDigits } from '../../../utils';
+import { invalidatePreset } from '../../../lib/queryInvalidation';
 import { useWarehousesQuery } from '../../../hooks/queries/useSettingsQueries';
 import { useProjectPermissions } from '../../../hooks/useProjectPermissions';
 import { readDeliveryCostNow, useProjectDeliveryCost } from '../../../hooks/useProjectMaterialReports';
@@ -71,6 +73,7 @@ export function deliveryProductsOf(project: ProductionProject): ProjectProductIt
 export function useProjectDelivery(project: ProductionProject, onUpdate: () => void) {
   // v9.0.417 (TD-752): ورود به انبار با کلیدهای `POST /projects/:id/add-to-inventory`؛ از v9.0.454 (TD-923) `projects.edit` و `warehouse.in`
   const { canDeliver } = useProjectPermissions();
+  const queryClient = useQueryClient();
   const rial = useRialDisplay();
   const alreadyCompleted = project.status === 'completed';
   const completion = useDeliveryCompletion(project.id, alreadyCompleted);
@@ -101,11 +104,18 @@ export function useProjectDelivery(project: ProductionProject, onUpdate: () => v
   // v10.2.3 (TD-1290, finding D2): a single-product project suggests its unit cost from the 1402 balance; the user may change or clear it
   const [deliveryReload, setDeliveryReload] = useState(0);
   const deliveryCost = useProjectDeliveryCost(project.id, canDeliver, deliveryReload);
-  // v10.2.3 (TD-1290): only the delivered products lose the unit cost typed for them
+  // v10.2.3 (TD-1290): only the delivered products lose the unit cost typed for them. 10.3 (review of part 10): a
+  // delivery posts a production receipt, so the stock, documents, kardex and accounting screens are refreshed as after
+  // any stock document (the product rows' stock among them), not only the project; the project's delivery cost, under
+  // the project, is read again by the same invalidation
   const delivered = (productIds: readonly string[]) => {
     setUnitCosts(prev => Object.fromEntries(Object.entries(prev).filter(([id]) => !productIds.includes(id))));
-    setDeliveryReload(n => n + 1);
+    void invalidatePreset(queryClient, 'documentChange');
     onUpdate();
+  };
+  /** a refused delivery that asked for «تکمیل‌شده» reads the matrix again: the refusal may be the matrix changed elsewhere */
+  const refused = (body: DeliveryBody) => {
+    if (body.markCompleted) completion.recheck();
   };
   const productItemId = (p: ProjectProductItem) => Number(p.item_id || project.item_id) || 0;
   const suggestedCostOf = (p: ProjectProductItem, quantity: number = producedQuantities[p.id] ?? 0): number | null =>
@@ -213,9 +223,13 @@ export function useProjectDelivery(project: ProductionProject, onUpdate: () => v
         delivered(targets.map(t => t.product.id));
       } else {
         toast.error(res?.error || failure);
+        refused(body);
       }
     } catch (err) {
-      if (!askOverDeliveryReason(err, body, targets, priced.remaining)) toast.error(errorMessageOf(err) || 'خطا در ارتباط با سامانه');
+      if (!askOverDeliveryReason(err, body, targets, priced.remaining)) {
+        toast.error(errorMessageOf(err) || 'خطا در ارتباط با سامانه');
+        refused(body);
+      }
     } finally {
       setBusy(false);
     }
@@ -282,6 +296,7 @@ export function useProjectDelivery(project: ProductionProject, onUpdate: () => v
       delivered(overDelivery.targets.map(t => t.product.id));
     } catch (err) {
       toast.error(errorMessageOf(err) || 'خطا در ارتباط با سامانه');
+      refused(overDelivery.body);
     } finally {
       setSubmitting(false);
     }

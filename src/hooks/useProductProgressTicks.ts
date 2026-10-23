@@ -30,10 +30,10 @@ interface ProductProgressTicksOptions {
  * 10.3 (ARCH review finding 3): the matrix comes from the shared cache (`useProductProgressQuery`), read again on each
  * opening of the tab; a save elsewhere that invalidates the project (a stock document, a workshop approval) refreshes it,
  * and the unsent ticks stay on top of the newer matrix. After «ثبت» the ticks stay on screen until the matrix they were
- * saved into is read, so none flips back meanwhile.
+ * saved into is read, so none flips back meanwhile; if that read fails they stay unsent, to be sent again.
  */
 export function useProductProgressTicks(projectId: number, { canEdit, onUpdate, onDirtyChange, onBusyChange }: ProductProgressTicksOptions) {
-  const [saving, setSaving] = useState(false);
+  const [sending, setSending] = useState(false);
   const query = useProductProgressQuery(projectId);
   const read = useOpeningRead(query, true);
   const data = read.data ?? null;
@@ -47,6 +47,14 @@ export function useProductProgressTicks(projectId: number, { canEdit, onUpdate, 
   const loadError = failure && query.dataUpdatedAt < failure.at ? failure.message : null;
   // pending local edits: key `${itemId}|${stageOrder}` → newStatus
   const [edits, setEdits] = useState<Map<string, ProgressCellStatus>>(new Map());
+  // 10.3 (review of part 10): when the save answered. The hook reads its matrix again right then, replacing any read
+  // under way, so a read that lands later started after the save; the ticks clear only on that read's success
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  if (savedAt !== null && !query.isFetching) {
+    if (query.isSuccess && query.dataUpdatedAt >= savedAt) setEdits(new Map());
+    setSavedAt(null);
+  }
+  const saving = sending || savedAt !== null;
 
   const sayLoadFailed = useEffectEvent(() => { toast.error(errorMessageOf(read.error) || 'خطا در دریافت پیشرفت تفکیکی کد کالا'); });
   useEffect(() => {
@@ -114,7 +122,7 @@ export function useProductProgressTicks(projectId: number, { canEdit, onUpdate, 
 
   const save = async () => {
     if (!hasChanges || saving) return;
-    setSaving(true);
+    setSending(true);
     try {
       const res = await fetchJson<{ success?: boolean; applied?: number; error?: string } | null>(`/projects/${projectId}/product-progress`, {
         method: 'PUT',
@@ -123,18 +131,16 @@ export function useProductProgressTicks(projectId: number, { canEdit, onUpdate, 
       });
       if (res?.success) {
         toast.success(`${toPersianDigits(res.applied)} تغییر وضعیت ثبت شد`);
-        // the page's refresh invalidates the project, which reads the matrix again after this save: that read is joined,
-        // not started again (without a refresh, a read started before the save answered is replaced); the ticks wait for it
         onUpdate?.();
-        await refetch({ cancelRefetch: !onUpdate });
-        setEdits(new Map());
+        setSavedAt(Date.now());
+        void refetch();
       } else {
         toast.error(res?.error || 'خطا در ثبت تغییرات');
       }
     } catch (err: unknown) {
       toast.error(errorMessageOf(err) || 'خطا در ثبت تغییرات');
     } finally {
-      setSaving(false);
+      setSending(false);
     }
   };
 
