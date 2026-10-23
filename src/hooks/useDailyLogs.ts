@@ -1,11 +1,16 @@
-import { useState, useEffect, useRef, FormEvent } from 'react';
+import { useState, useEffect, useCallback, type Dispatch, type FormEvent, type SetStateAction } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { DEFAULT_DAILY_LOG_VISIBILITY, type DailyLogVisibility } from '../lib/dailyLogs/dailyLogVisibility';
-import { EMPTY_DAILY_LOG_STATS, type DailyLogStats } from '../lib/dailyLogs/dailyLogStats';
+import { EMPTY_DAILY_LOG_STATS } from '../lib/dailyLogs/dailyLogStats';
 import { workHoursBetween, workTimeError } from '../lib/dailyLogs/workHours';
 import { SUMMARY_CSV_DOWNLOADED, buildSummaryCsv, summaryCsvFileName } from '../lib/dailyLogs/summaryCsv';
 import { fetchJson } from '../api';
 import { DailyWorkLog, User } from '../types';
-import { PICK_LIST_URLS, type ProjectPick } from '../lib/permissions/pickLists';
+import type { ProjectPick } from '../lib/permissions/pickLists';
+import { QUERY_KEYS } from '../lib/queryKeys';
+import { useDailyLogListQuery, useDailyLogStatsQuery, useDailyLogSummaryQuery } from './queries/useDailyLogQueries';
+import { useProjectPickQuery } from './queries/useProjectQueries';
+import { useSimpleUsersQuery } from './queries/useSimpleUsersQuery';
 import { toast } from 'react-hot-toast';
 import { getTodayJalaliDate, extractDateString, errorMessageOf, isoToJalaliDate } from '../utils';
 import { confirmAction } from '../components/ConfirmDialogHost';
@@ -25,16 +30,12 @@ export function getFormattedDateString(dateObj: any): string {
 }
 
 const SEARCH_DEBOUNCE_MS = 300;
+const NO_LOGS: DailyWorkLog[] = [];
+const NO_USERS: SimpleUserOption[] = [];
+const NO_PROJECTS: ProjectPick[] = [];
 
 export function useDailyLogs(user: User) {
-  const [logs, setLogs] = useState<DailyWorkLog[]>([]);
-  // v9.0.249 (TD-630): the server pages the list; `total` is every log the filters match
-  const [total, setTotal] = useState<number>(0);
-  const [stats, setStats] = useState<DailyLogStats>(EMPTY_DAILY_LOG_STATS);
-  const [systemUsers, setSystemUsers] = useState<SimpleUserOption[]>([]);
-  const [projects, setProjects] = useState<ProjectPick[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [page, setPage] = useState(1);
+  const queryClient = useQueryClient();
   const limit = 30;
 
   // Filters
@@ -46,12 +47,20 @@ export function useDailyLogs(user: User) {
     const timer = setTimeout(() => setDebouncedSearch(searchQuery.trim()), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [searchQuery]);
-  const listFilterKey = useRef('');
   const [selectedWorkMode, setSelectedWorkMode] = useState<string>('');
   const [selectedDateFilter, setSelectedDateFilter] = useState<any>(null);
-  // گارد stale-response برای درخواست‌های abort شده
-  const logsFetchSeq = useRef(0);
-  const summaryFetchSeq = useRef(0);
+
+  // a page belongs to its search conditions: a filter change starts again from page 1 with one request, never one for
+  // the old page first
+  const listFilterKey = JSON.stringify([activeTab, selectedWorkMode, getFormattedDateString(selectedDateFilter), debouncedSearch]);
+  const [pageState, setPageState] = useState({ key: listFilterKey, page: 1 });
+  const page = pageState.key === listFilterKey ? pageState.page : 1;
+  const setPage = useCallback<Dispatch<SetStateAction<number>>>((next) => {
+    setPageState((prev) => {
+      const current = prev.key === listFilterKey ? prev.page : 1;
+      return { key: listFilterKey, page: typeof next === 'function' ? next(current) : next };
+    });
+  }, [listFilterKey]);
 
   // Management Aggregated Summary States
   const todayParts = getTodayJalaliDate().split('/');
@@ -63,9 +72,51 @@ export function useDailyLogs(user: User) {
   const [summaryYear, setSummaryYear] = useState<string>(defaultYear);
   const [summaryMonth, setSummaryMonth] = useState<string>(defaultMonth);
   const [summarySelectedUserId, setSummarySelectedUserId] = useState<string>('0');
-  const [summaryReportData, setSummaryReportData] = useState<any>(null);
-  const [summaryLoading, setSummaryLoading] = useState<boolean>(false);
   const [selectedUserLogsModal, setSelectedUserLogsModal] = useState<any | null>(null);
+
+  // v10.2 package 11 part 5b (TD-1360, OBS-R2-102): the list, statistics, summary and pick lists come from React Query
+  const onSummary = activeTab === 'summary';
+  const listQuery = useDailyLogListQuery({
+    filterType: onSummary ? 'all' : activeTab,
+    page,
+    limit,
+    workMode: selectedWorkMode,
+    date: getFormattedDateString(selectedDateFilter) || '',
+    search: debouncedSearch,
+  }, !onSummary);
+  const statsQuery = useDailyLogStatsQuery();
+  const summaryQuery = useDailyLogSummaryQuery<any>({
+    mode: summaryMode,
+    date: summaryMode === 'daily' ? (getFormattedDateString(summaryDateFilter) || getTodayJalaliDate()) : '',
+    yearMonth: summaryMode === 'monthly' ? `${summaryYear}/${summaryMonth}` : '',
+    userId: summarySelectedUserId,
+  }, onSummary);
+  const usersQuery = useSimpleUsersQuery();
+  const projectsQuery = useProjectPickQuery();
+
+  const logs = listQuery.data?.rows ?? NO_LOGS;
+  // v9.0.249 (TD-630): the server pages the list; `total` is every log the filters match
+  const total = listQuery.data?.total ?? 0;
+  const stats = statsQuery.data ?? EMPTY_DAILY_LOG_STATS;
+  const systemUsers = (usersQuery.data ?? NO_USERS) as SimpleUserOption[];
+  const projects = projectsQuery.data ?? NO_PROJECTS;
+  // the first load and a new page or filter show the loading state; a refresh in the background does not
+  const loading = listQuery.isPending || listQuery.isPlaceholderData;
+  const summaryReportData = summaryQuery.data ?? null;
+  const summaryLoading = onSummary && (summaryQuery.isPending || summaryQuery.isPlaceholderData);
+
+  useEffect(() => {
+    if (listQuery.isError) toast.error('خطا در دریافت لیست گزارش کارهای روزانه');
+  }, [listQuery.isError, listQuery.errorUpdatedAt]);
+  useEffect(() => {
+    if (summaryQuery.isError) toast.error('خطا در دریافت گزارش تجمیعی مدیریت');
+  }, [summaryQuery.isError, summaryQuery.errorUpdatedAt]);
+
+  /** Reads the list, statistics, summary and the dashboard's daily logs again after a write */
+  const loadLogsAndStats = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.dailyLogs.all }),
+    [queryClient],
+  );
 
   // Form Modal State
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -89,112 +140,6 @@ export function useDailyLogs(user: User) {
   const [reviewModalLog, setReviewModalLog] = useState<DailyWorkLog | null>(null);
   const [reviewNotes, setReviewNotes] = useState<string>('');
   const [isSubmittingReview, setIsSubmittingReview] = useState<boolean>(false);
-
-  // Load System Users & Projects for Mentions/Selects
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchJson('/users/list-simple', { signal: controller.signal })
-      .then((data: SimpleUserOption[]) => {
-        if (Array.isArray(data)) setSystemUsers(data);
-      })
-      .catch(err => {
-        if (err?.name === 'AbortError') return;
-        console.error('Error loading users for mentions:', err);
-      });
-
-    fetchJson<{ data?: ProjectPick[] } | null>(PICK_LIST_URLS.projects, { signal: controller.signal })
-      .then((res) => {
-        if (Array.isArray(res?.data)) setProjects(res.data);
-      })
-      .catch(err => {
-        if (err?.name === 'AbortError') return;
-        console.error('Error loading projects:', err);
-      });
-
-    return () => controller.abort();
-  }, []);
-
-  const loadLogsAndStats = (signal?: AbortSignal) => {
-    // گارد stale-response: فقط آخرین درخواست حق تغییر state دارد
-    // (رفع باگ: پس از پاک کردن فیلتر، لیست در حالت فیلتر قبلی گیر می‌کرد)
-    const seq = ++logsFetchSeq.current;
-    setLoading(true);
-    let url = `/daily-logs?filter_type=${activeTab}&page=${page}&limit=${limit}`;
-    if (selectedWorkMode) url += `&work_mode=${selectedWorkMode}`;
-    if (selectedDateFilter) {
-      const dateStr = getFormattedDateString(selectedDateFilter);
-      if (dateStr) url += `&date=${encodeURIComponent(dateStr)}`;
-    }
-    if (debouncedSearch) url += `&search=${encodeURIComponent(debouncedSearch)}`;
-
-    Promise.all([
-      fetchJson(url, { signal }),
-      fetchJson('/daily-logs/stats', { signal })
-    ])
-      .then(([logsData, statsData]) => {
-        if (seq !== logsFetchSeq.current) return;
-        const rows = Array.isArray(logsData?.data) ? logsData.data : (Array.isArray(logsData) ? logsData : []);
-        setLogs(rows);
-        setTotal(typeof logsData?.total === 'number' ? logsData.total : rows.length);
-        if (statsData) setStats(statsData);
-        setLoading(false);
-      })
-      .catch(err => {
-        if (err?.name === 'AbortError') return;
-        if (seq !== logsFetchSeq.current) return;
-        console.error('Error loading daily logs:', err);
-        toast.error('خطا در دریافت لیست گزارش کارهای روزانه');
-        setLoading(false);
-      });
-  };
-
-  const loadSummaryReportData = (signal?: AbortSignal) => {
-    const seq = ++summaryFetchSeq.current;
-    setSummaryLoading(true);
-    let url = `/daily-logs/summary-report?report_type=${summaryMode}`;
-    if (summaryMode === 'daily') {
-      const dateStr = getFormattedDateString(summaryDateFilter) || getTodayJalaliDate();
-      url += `&date=${encodeURIComponent(dateStr)}`;
-    } else {
-      const ym = `${summaryYear}/${summaryMonth}`;
-      url += `&year_month=${encodeURIComponent(ym)}`;
-    }
-    if (summarySelectedUserId && summarySelectedUserId !== '0') {
-      url += `&user_id=${summarySelectedUserId}`;
-    }
-
-    fetchJson(url, { signal })
-      .then(data => {
-        if (seq !== summaryFetchSeq.current) return;
-        if (data) setSummaryReportData(data);
-        setSummaryLoading(false);
-      })
-      .catch(err => {
-        if (err?.name === 'AbortError') return;
-        if (seq !== summaryFetchSeq.current) return;
-        console.error('Error loading summary report:', err);
-        toast.error('خطا در دریافت گزارش تجمیعی مدیریت');
-        setSummaryLoading(false);
-      });
-  };
-
-  useEffect(() => {
-    const controller = new AbortController();
-    if (activeTab === 'summary') {
-      loadSummaryReportData(controller.signal);
-    } else {
-      // a filter change starts again from page 1 (one request, not a request for the old page first)
-      const filterKey = JSON.stringify([activeTab, selectedWorkMode, getFormattedDateString(selectedDateFilter), debouncedSearch]);
-      const filterChanged = listFilterKey.current !== '' && listFilterKey.current !== filterKey;
-      listFilterKey.current = filterKey;
-      if (filterChanged && page !== 1) {
-        setPage(1);
-        return () => controller.abort();
-      }
-      loadLogsAndStats(controller.signal);
-    }
-    return () => controller.abort();
-  }, [activeTab, selectedWorkMode, selectedDateFilter, debouncedSearch, page, summaryMode, summaryDateFilter, summaryYear, summaryMonth, summarySelectedUserId]);
 
   const handleExportSummaryCSV = () => {
     if (!summaryReportData || !Array.isArray(summaryReportData.user_summaries)) {
@@ -311,7 +256,7 @@ export function useDailyLogs(user: User) {
       }
       setIsModalOpen(false);
       resetForm();
-      loadLogsAndStats();
+      void loadLogsAndStats();
     } catch (err) {
       toast.error(errorMessageOf(err) || 'خطا در ثبت گزارش کار');
     } finally {
@@ -324,7 +269,7 @@ export function useDailyLogs(user: User) {
     try {
       await fetchJson(`/daily-logs/${logId}`, { method: 'DELETE' });
       toast.success('گزارش کار حذف شد');
-      loadLogsAndStats();
+      void loadLogsAndStats();
     } catch (err) {
       toast.error(errorMessageOf(err) || 'خطا در حذف گزارش کار');
     }
@@ -345,7 +290,7 @@ export function useDailyLogs(user: User) {
       });
       toast.success('بازخورد مدیریتی ثبت گردید');
       setReviewModalLog(null);
-      loadLogsAndStats();
+      void loadLogsAndStats();
     } catch (err) {
       toast.error(errorMessageOf(err) || 'خطا در ثبت بازخورد مدیریتی');
     } finally {

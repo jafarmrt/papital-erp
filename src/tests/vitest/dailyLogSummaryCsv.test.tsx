@@ -1,5 +1,7 @@
+import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { User } from '../../types';
 
 const toastSuccess = vi.fn();
@@ -30,8 +32,10 @@ describe('daily log summary CSV (TD-640)', () => {
       setAttribute.call(this, name, value);
     });
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
-    const { result } = renderHook(() => useDailyLogs({ id: 1, username: 'admin', role: 'admin' } as unknown as User));
-    result.current.setActiveTab('summary');
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const { result } = renderHook(() => useDailyLogs({ id: 1, username: 'admin', role: 'admin' } as unknown as User), { wrapper });
+    act(() => result.current.setActiveTab('summary'));
     await waitFor(() => expect(result.current.summaryReportData).not.toBeNull());
     result.current.handleExportSummaryCSV();
     const text = await new Promise<string>((resolve) => { const fr = new FileReader(); fr.onload = () => resolve(String(fr.result)); fr.readAsText(captured as unknown as Blob); });

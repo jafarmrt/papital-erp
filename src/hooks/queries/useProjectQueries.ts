@@ -3,6 +3,7 @@ import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { ProductionProject } from '../../types';
+import { PICK_LIST_URLS, type ProjectPick } from '../../lib/permissions/pickLists';
 import {
   PROJECT_LIST_PAGE_SIZE,
   projectListParams,
@@ -69,5 +70,20 @@ export function useDeleteProjectMutation() {
     onError: (err: any) => {
       toast.error(err?.message || 'خطا در ارتباط با سامانه هنگام حذف پروژه');
     },
+  });
+}
+
+/**
+ * The project pick list (`GET /projects/options`), the cache the stock document and voucher forms read too (v10.2 package
+ * 11 part 5b, TD-1360)
+ */
+export function useProjectPickQuery() {
+  return useQuery<ProjectPick[]>({
+    queryKey: QUERY_KEYS.projects.options(),
+    queryFn: async ({ signal }) => {
+      const res = await fetchJson(PICK_LIST_URLS.projects, { signal }) as { data?: unknown } | unknown[] | null;
+      return (Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : [])) as ProjectPick[];
+    },
+    staleTime: 5 * 60 * 1000,
   });
 }
