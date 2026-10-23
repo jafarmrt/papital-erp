@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { ShoppingBag, Plus, Layers, RefreshCw, Trash2, FileText, Truck, PackageCheck } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { PurchaseRequisition, ProcurementOrder } from '../../types';
@@ -13,10 +14,10 @@ import { ConfirmWarehouseDeliveryModal } from './ConfirmWarehouseDeliveryModal';
 import { RequisitionListPanel, type RequisitionListFilters } from './RequisitionListPanel';
 import { canConsolidateRequisition } from '../../lib/procurement/requisitionFields';
 import { PROCUREMENT_DESK_PAGE_SIZE } from '../../lib/procurement/procurementLists';
-import { useProcurementDeskData } from '../../hooks/procurement/useProcurementDeskData';
 import { useProcurementAccess } from '../../hooks/procurement/useProcurementAccess';
-import { useProcurementPage } from '../../hooks/procurement/useProcurementPage';
+import { invalidateAfterProcurementChange, useProcurementListQuery, useProcurementSummaryQuery, type ProcurementChange } from '../../hooks/queries/useProcurementQueries';
 import { useDebounce } from '../../hooks/useDebounce';
+import { QUERY_KEYS } from '../../lib/queryKeys';
 import { DialogLayer } from '../common/DialogLayer';
 
 /** شمار خلاصه، یا «—» وقتی خلاصه بارگذاری نشد */
@@ -26,7 +27,14 @@ type DeskTab = 'requisitions' | 'active_orders' | 'delivered_receipts';
 
 export function ProcurementDesk() {
   // v9.0.352 (TD-702، B10-15): هر بخش جدا بارگذاری می‌شود و هر دکمه با مجوز API خودش نشان داده می‌شود
-  const { summary, version, reload: loadData } = useProcurementDeskData();
+  // v10.2 package 11 part 5d (TD-1363): خلاصه و فهرست‌ها در React Query؛ هر تغییر فهرست‌های بخش‌های دیگری را که عوض
+  // می‌کند هم دوباره می‌خواند (تحویل: کالا، کاردکس، اسناد و سند حسابداری)
+  const queryClient = useQueryClient();
+  const summary = useProcurementSummaryQuery().data ?? null;
+  const reloadAfter = (change: ProcurementChange) => invalidateAfterProcurementChange(queryClient, change);
+  const loadData = () => reloadAfter('requisition');
+  // «به‌روزرسانی» و «تلاش دوباره» فقط میز را دوباره می‌خوانند
+  const refreshDesk = () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.procurement.all });
   const access = useProcurementAccess();
   const [activeMainTab, setActiveMainTab] = useState<DeskTab>('requisitions');
   const [deliveringOrderId, setDeliveringOrderId] = useState<number | null>(null);
@@ -41,12 +49,12 @@ export function ProcurementDesk() {
   const [orderPage, setOrderPage] = useState(1);
   const requisitionSearch = useDebounce(filters.search.trim());
   const debouncedOrderSearch = useDebounce(orderSearch.trim());
-  const requisitionList = useProcurementPage<PurchaseRequisition>('/api/procurement/requisitions', {
+  const requisitionList = useProcurementListQuery<PurchaseRequisition>('/api/procurement/requisitions', {
     status: filters.status, priority: filters.priority, search: requisitionSearch, page: filters.page, limit: PROCUREMENT_DESK_PAGE_SIZE,
-  }, version);
-  const orderList = useProcurementPage<ProcurementOrder>(activeMainTab === 'requisitions' ? null : '/api/procurement/orders', {
+  });
+  const orderList = useProcurementListQuery<ProcurementOrder>(activeMainTab === 'requisitions' ? null : '/api/procurement/orders', {
     status: activeMainTab === 'active_orders' ? 'pending_delivery' : 'final', search: debouncedOrderSearch, page: orderPage, limit: PROCUREMENT_DESK_PAGE_SIZE,
-  }, version);
+  });
   // درخواست‌های انتخاب‌شده برای تجمیع، از هر صفحه‌ای
   const [selected, setSelected] = useState<PurchaseRequisition[]>([]);
   const selectedIds = selected.map(r => r.id);
@@ -98,7 +106,7 @@ export function ProcurementDesk() {
       });
       toast.success(res.message || 'فاکتور خرید با موفقیت به انبار تحویل و رسید قطعی صادر شد.');
       setDeliveryModalOrder(null);
-      await loadData();
+      await reloadAfter('delivery');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err));
     } finally {
@@ -168,7 +176,7 @@ export function ProcurementDesk() {
 
           <button
             type="button"
-            onClick={() => void loadData()}
+            onClick={() => void refreshDesk()}
             className="p-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer border border-slate-200"
             title="تازه‌سازی"
           >
@@ -351,7 +359,7 @@ export function ProcurementDesk() {
           onSplit={setSelectedRequisitionForSplit}
           onDelete={req => setRequisitionToDelete({ id: req.id, code: req.code })}
           onShowOrders={() => openTab('active_orders')}
-          onRetry={() => void loadData()}
+          onRetry={() => void refreshDesk()}
         />
       ) : (
         <ProcurementOrderList
@@ -378,7 +386,6 @@ export function ProcurementDesk() {
           isOpen={!!selectedRequisitionForDetail}
           requisition={selectedRequisitionForDetail}
           onClose={() => setSelectedRequisitionForDetail(null)}
-          onRefresh={loadData}
           onOpenSplitOrder={(req) => {
             setSelectedRequisitionForDetail(null);
             setSelectedRequisitionForSplit(req);
@@ -392,7 +399,7 @@ export function ProcurementDesk() {
           isOpen={!!selectedRequisitionForSplit}
           requisition={selectedRequisitionForSplit}
           onClose={() => setSelectedRequisitionForSplit(null)}
-          onSuccess={loadData}
+          onSuccess={() => void reloadAfter('orders')}
         />
       )}
 
@@ -401,7 +408,7 @@ export function ProcurementDesk() {
         <CreateRequisitionModal
           isOpen={isCreateModalOpen}
           onClose={() => setIsCreateModalOpen(false)}
-          onSuccess={loadData}
+          onSuccess={() => void loadData()}
         />
       )}
 
@@ -414,7 +421,7 @@ export function ProcurementDesk() {
             setIsConsolidateModalOpen(false);
             setSelected([]);
           }}
-          onSuccess={loadData}
+          onSuccess={() => void loadData()}
         />
       )}
 

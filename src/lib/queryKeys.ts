@@ -73,6 +73,11 @@ export const QUERY_KEYS = {
   // تدارکات: درخواست‌های خرید و سفارش‌ها (صفحه نقطه سفارش درخواست خرید ثبت می‌کند)
   procurement: {
     all: ['procurement'] as const,
+    summary: () => ['procurement', 'summary'] as const,
+    // one page of requisitions or orders with its server filters (TD-1363)
+    list: (url: string, query: Record<string, string | number | undefined>) => ['procurement', 'list', url, query] as const,
+    requisition: (id: number) => ['procurement', 'requisition', id] as const,
+    workflowActions: (id: number, status: string) => ['procurement', 'workflow-actions', id, status] as const,
   },
 
   // Projects & Production

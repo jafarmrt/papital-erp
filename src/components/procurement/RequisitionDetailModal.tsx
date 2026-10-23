@@ -1,4 +1,5 @@
 import { useMemo, useState, useId } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { X, FileText, CheckCircle2, AlertTriangle, ShoppingCart, UserCheck, Check, Ban, Loader2, PackageCheck, Truck, Layers } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { PurchaseRequisition, ProcurementOrder } from '../../types';
@@ -10,9 +11,8 @@ import { useProcurementAccess } from '../../hooks/procurement/useProcurementAcce
 import { canOrderRequisition, requisitionRowRemaining } from '../../lib/procurement/requisitionFields';
 import { bulkDeliveryPlan, linkedDocumentLabel, requisitionActionButtons, requisitionActionsWithoutInstance, requisitionStage } from '../../lib/procurement/requisitionActions';
 import { lineAmount, sumAmounts } from '../../lib/procurement/procurementNumbers';
-import { useProcurementPage } from '../../hooks/procurement/useProcurementPage';
 import { PROCUREMENT_LIST_MAX_LIMIT } from '../../lib/procurement/procurementLists';
-import { useRequisitionWorkflowActions } from '../../hooks/procurement/useRequisitionWorkflowActions';
+import { invalidateAfterProcurementChange, useProcurementListQuery, useRequisitionQuery, useRequisitionWorkflowActionsQuery } from '../../hooks/queries/useProcurementQueries';
 import { REQUISITION_PRIORITY_DETAIL_BADGES, REQUISITION_PRIORITY_DETAIL_FALLBACK, REQUISITION_STATUS_BADGES, REQUISITION_STATUS_FALLBACK } from './requisitionBadges';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { DialogLayer } from '../common/DialogLayer';
@@ -21,38 +21,38 @@ interface RequisitionDetailModalProps {
   isOpen: boolean;
   requisition: PurchaseRequisition;
   onClose: () => void;
-  onRefresh: () => void;
   onOpenSplitOrder: (req: PurchaseRequisition) => void;
 }
 
 export function RequisitionDetailModal({
   isOpen,
-  requisition,
+  requisition: openedRequisition,
   onClose,
-  onRefresh,
   onOpenSplitOrder
 }: RequisitionDetailModalProps) {
   const fieldId = useId();
   const [comment, setComment] = useState('');
   const [isActing, setIsActing] = useState(false);
-  const [ordersVersion, setOrdersVersion] = useState(0);
   const [deliveryModalOrder, setDeliveryModalOrder] = useState<ProcurementOrder | null>(null);
   const [bulkDeliveryOrders, setBulkDeliveryOrders] = useState<ProcurementOrder[] | null>(null);
   const [isSubmittingDelivery, setIsSubmittingDelivery] = useState(false);
   // v9.0.352 (TD-702، B10-15): هر دکمه با مجوز API خودش؛ پیش‌تر همه دکمه‌ها برای هر بیننده‌ای نشان داده می‌شد
   const access = useProcurementAccess();
+  const queryClient = useQueryClient();
+  // v10.2 package 11 part 5d (TD-1363): درخواست باز پس از هر تغییر تدارکات (مثلاً تحویل یک سفارش) دوباره خوانده می‌شود،
+  // پس مقدار دریافت‌شده و وضعیتش تازه است؛ پیش‌تر پنجره تا بسته شدن همان ردیف میز را نشان می‌داد
+  const requisition = useRequisitionQuery(openedRequisition, isOpen);
   // OBS-R2-39 (TD-992): مبلغ ریالی در واحد نمایش (ریال یا تومان)، نه «ریال» ثابت
   const rial = useRialDisplay();
   // OBS-R2-38 (TD-992): دکمه‌های اقدام از اقدام‌های مجاز گام جاری گردش کار برای همین کاربر، نه از وضعیت درخواست
-  const workflowActions = useRequisitionWorkflowActions(requisition?.id, String(requisition?.status || ''), isOpen && access.canRunWorkflowAction);
+  const workflowActions = useRequisitionWorkflowActionsQuery(requisition?.id, String(requisition?.status || ''), isOpen && access.canRunWorkflowAction);
 
   // OBS-R2-40 (TD-992): سفارش‌های درخواست با درخواست لغوپذیر خوانده می‌شوند و خطای خواندن نشان داده می‌شود؛ پیش‌تر خطا
   // بلعیده می‌شد و پنجره «هنوز فاکتور خریدی … صادر نشده است» نشان می‌داد
   const ordersQuery = useMemo(() => ({ requisitionId: requisition?.id, limit: PROCUREMENT_LIST_MAX_LIMIT }), [requisition?.id]);
-  const ordersPage = useProcurementPage<ProcurementOrder>(isOpen && requisition?.id ? '/api/procurement/orders' : null, ordersQuery, ordersVersion);
+  const ordersPage = useProcurementListQuery<ProcurementOrder>(isOpen && requisition?.id ? '/api/procurement/orders' : null, ordersQuery);
   const linkedOrders = ordersPage.rows;
   const isLoadingOrders = ordersPage.isLoading;
-  const loadLinkedOrders = () => setOrdersVersion(v => v + 1);
 
   if (!isOpen) return null;
 
@@ -74,28 +74,30 @@ export function RequisitionDetailModal({
 
   const handleConfirmDelivery = async () => {
     setIsSubmittingDelivery(true);
+    // سفارش‌هایی که پیش از خطای یکی از آن‌ها تحویل شدند هم موجودی و اسناد را عوض کرده‌اند
+    let delivered = 0;
     try {
       if (bulkDeliveryOrders && bulkDeliveryOrders.length > 0) {
         for (const ord of bulkDeliveryOrders) {
           await fetchJson(`/api/procurement/orders/${ord.id}/deliver`, { method: 'POST' });
+          delivered += 1;
         }
         toast.success('کلیه فاکتورهای خرید با موفقیت به انبار تحویل گردید و موجودی کاردکس به‌روز شد.');
         setBulkDeliveryOrders(null);
-        onRefresh();
         onClose();
       } else if (deliveryModalOrder) {
         const res = await fetchJson<{ success: boolean; message: string }>(`/api/procurement/orders/${deliveryModalOrder.id}/deliver`, {
           method: 'POST'
         });
+        delivered += 1;
         toast.success(res.message || 'فاکتور خرید با موفقیت به انبار تحویل و رسید قطعی صادر شد.');
         setDeliveryModalOrder(null);
-        loadLinkedOrders();
-        onRefresh();
       }
     } catch (err: any) {
       toast.error(err.message || 'خطا در تحویل فاکتور خرید به انبار');
     } finally {
       setIsSubmittingDelivery(false);
+      if (delivered > 0) void invalidateAfterProcurementChange(queryClient, 'delivery');
     }
   };
 
@@ -110,7 +112,7 @@ export function RequisitionDetailModal({
 
       toast.success(res.message || 'اقدام گردش کار با موفقیت انجام شد.');
       setComment('');
-      onRefresh();
+      void invalidateAfterProcurementChange(queryClient, 'workflow');
       onClose();
     } catch (err: any) {
       toast.error(err.message || 'خطا در ثبت اقدام گردش کار');
@@ -364,7 +366,7 @@ export function RequisitionDetailModal({
                   <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
                   {`سفارش‌های خرید این درخواست خوانده نشد: ${ordersPage.error}`}
                 </span>
-                <button type="button" onClick={loadLinkedOrders} className="px-3 py-1.5 bg-white border border-rose-300 hover:bg-rose-100 text-rose-800 font-bold rounded-lg cursor-pointer shrink-0">
+                <button type="button" onClick={() => ordersPage.reload?.()} className="px-3 py-1.5 bg-white border border-rose-300 hover:bg-rose-100 text-rose-800 font-bold rounded-lg cursor-pointer shrink-0">
                   تلاش دوباره
                 </button>
               </div>
@@ -524,7 +526,7 @@ export function RequisitionDetailModal({
                 <>
                   {access.canDeliver && <button
                     type="button"
-                    disabled={isActing}
+                    disabled={isActing || isLoadingOrders}
                     onClick={handleOpenDeliverBulkModal}
                     className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50"
                   >

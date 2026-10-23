@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { QueryWrapper } from './helpers/queryWrapper';
 import type { PurchaseRequisition } from '../../types';
 
 const fetchJson = vi.fn();
@@ -31,7 +32,7 @@ const requisition: PurchaseRequisition = {
   items: [{ id: 'r1', itemId: 9, itemCode: 'RM-9', itemName: 'سنگ', unit: 'عدد', requestedQty: 1, orderedQty: 1, remainingQty: 0, unitPriceEstimate: 1000, linkedDocumentIds: [] }],
 };
 
-const open = () => render(<RequisitionDetailModal isOpen requisition={requisition} onClose={() => undefined} onRefresh={() => undefined} onOpenSplitOrder={() => undefined} />);
+const open = () => render(<RequisitionDetailModal isOpen requisition={requisition} onClose={() => undefined} onOpenSplitOrder={() => undefined} />, { wrapper: QueryWrapper });
 
 beforeEach(() => fetchJson.mockReset());
 afterEach(cleanup);
