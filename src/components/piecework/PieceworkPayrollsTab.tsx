@@ -55,7 +55,8 @@ export function PieceworkPayrollsTab({
     try {
       setSyncingId(payrollId);
       const res = await fetchJson(`/piecework/payrolls/${payrollId}/sync-voucher`, {
-        method: 'POST'
+        method: 'POST',
+        acceptReplay: true,
       });
       if (res && res.voucher) {
         toast.success(`سند حسابداری به شماره ${res.voucher.voucherNumber} با موفقیت ثبت/همگام شد.`);

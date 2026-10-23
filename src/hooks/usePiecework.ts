@@ -614,7 +614,8 @@ export function usePiecework() {
       const res = await fetchJson('/piecework/payrolls', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        acceptReplay: true,
       });
 
       // v10.2.34 (#351 review L1): a repeat of an issue that already ran has no payslip number; the list shows the payslip

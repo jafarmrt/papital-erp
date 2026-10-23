@@ -136,7 +136,8 @@ export function PieceworkExcelModal({
       }>('/piecework/tasks/import-excel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        acceptReplay: true,
       });
 
       setImportResult(isIdempotentReplay(res)

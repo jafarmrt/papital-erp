@@ -1,5 +1,6 @@
 import { QueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
+import { SUBMISSION_REPLAYED_EVENT } from './idempotentReplay';
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -27,8 +28,15 @@ export const queryClient = new QueryClient({
     mutations: {
       onError: (error: any) => {
         const message = error?.message || 'خطایی در پردازش عملیات رخ داد';
-        toast.error(message);
+        // 10.3: the «already registered» notice is no failure; the record exists
+        if (error?.code === 'IDEMPOTENT_REPLAY') toast(message, { icon: 'ℹ️' });
+        else toast.error(message);
       },
     },
   },
 });
+
+// 10.3 (ARCH review finding 1): a write answered with the «already registered» notice: the open lists read the record
+if (typeof window !== 'undefined') {
+  window.addEventListener(SUBMISSION_REPLAYED_EVENT, () => { void queryClient.invalidateQueries(); });
+}

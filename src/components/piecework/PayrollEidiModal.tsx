@@ -69,6 +69,7 @@ export function PayrollEidiModal({ personnelSelectOptions, onClose, onIssued }: 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ personnelId: Number(personnelId), year, ...(overridden ? { amount: entered, overrideReason: reason.trim() } : {}) }),
+        acceptReplay: true,
       }) as unknown;
       // v10.2.34 (#351 review L1): a repeat of an issue that already ran has no payslip number; the list shows the payslip
       if (isIdempotentReplay(res)) toast(idempotentReplayMessage(res), { icon: 'ℹ️' });
