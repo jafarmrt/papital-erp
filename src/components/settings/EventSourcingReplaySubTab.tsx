@@ -1,50 +1,46 @@
-import { useState, useEffect, useId } from 'react';
+import { useState, useId } from 'react';
 import { History, Play, RotateCcw, Search, CheckCircle2, AlertTriangle, FileText, Package, Users, Landmark, Layers, GitBranch, Clock, ShieldCheck, ChevronDown, ChevronUp, Sparkles, Zap } from 'lucide-react';
 import { formatPersianDate, errorMessageOf, formatPersianNumber } from '../../utils';
 import { fetchJson } from '../../api';
 import { useHasPermission } from '../../contexts/AuthContext';
 import { useDebounce } from '../../hooks/useDebounce';
 import { DialogLayer } from '../common/DialogLayer';
+import {
+  useAggregateSearchQuery, useAggregateTimelineQuery, useAggregateTypesQuery, type AggregateTypeOption, type TimelineItem,
+} from '../../hooks/queries/useEventAdminQueries';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 
 /** v9.0.440 (TD-731): the aggregate search waits this long after the last keystroke before it asks the server. */
 export const AGGREGATE_SEARCH_DELAY_MS = 350;
 
-interface AggregateTypeOption {
-  type: string;
-  title: string;
-  description: string;
-  icon: string;
-}
+const NO_TYPES: AggregateTypeOption[] = [];
+const NO_OPTIONS: Array<{ id: string; title: string }> = [];
+const NO_TIMELINE: TimelineItem[] = [];
 
-interface TimelineItem {
-  id: string | number;
-  eventId: string;
-  eventType: string;
-  occurredAt: string;
-  source: 'outbox' | 'dlq' | 'audit_log' | 'workflow';
-  actor: string;
-  title: string;
-  description: string;
-  status: string;
-  payload: any;
-  metadata: any;
-  changes?: any;
-}
-
+/**
+ * 10.3 (ARCH review finding 3, part 14): the aggregate types, the records matching the settled keyword and the timeline of
+ * the record picked are read through the shared cache, again on each opening of the tab; until the user picks a record,
+ * the first of the list is shown. A failed read of the timeline is shown in its place with the server's reason (TD-730).
+ */
 export function EventSourcingReplaySubTab() {
   const fieldId = useId();
   // v9.0.435 (TD-722): the replay simulation route is guarded by events.manage
   const canManage = useHasPermission('events.manage');
-  const [types, setTypes] = useState<AggregateTypeOption[]>([]);
+  const types = useOpeningRead(useAggregateTypesQuery(), true).data ?? NO_TYPES;
   const [selectedType, setSelectedType] = useState<string>('document');
   const [searchKeyword, setSearchKeyword] = useState<string>('');
-  const [aggregateOptions, setAggregateOptions] = useState<{ id: string; title: string }[]>([]);
-  const [selectedAggregateId, setSelectedAggregateId] = useState<string>('');
-  
-  const [timeline, setTimeline] = useState<TimelineItem[]>([]);
-  const [isLoadingTimeline, setIsLoadingTimeline] = useState(false);
+  const debouncedKeyword = useDebounce(searchKeyword, AGGREGATE_SEARCH_DELAY_MS);
+  const aggregateOptions = useOpeningRead(useAggregateSearchQuery(selectedType, debouncedKeyword), true).data ?? NO_OPTIONS;
+  // null until the user picks one (or after another type): the first record of the list
+  const [pickedAggregateId, setSelectedAggregateId] = useState<string | null>(null);
+  const selectedAggregateId = pickedAggregateId ?? aggregateOptions[0]?.id ?? '';
+
+  const timelineRead = useOpeningRead(useAggregateTimelineQuery(selectedType, selectedAggregateId), true);
+  const timeline = timelineRead.data?.timeline ?? NO_TIMELINE;
+  const timelineError = timelineRead.error ? errorMessageOf(timelineRead.error) || 'خط زمان بارگذاری نشد.' : '';
+  const isLoadingTimeline = selectedAggregateId !== '' && timelineRead.data === undefined && !timelineRead.error;
   // v9.0.431 (TD-711): audit rows come only to holders of the audit log permission; the server says whether they were read
-  const [auditIncluded, setAuditIncluded] = useState(true);
+  const auditIncluded = timelineRead.data?.auditIncluded ?? true;
   const [expandedTimelineId, setExpandedTimelineId] = useState<string | number | null>(null);
 
   // Simulation & Replay Modal state
@@ -59,76 +55,6 @@ export function EventSourcingReplaySubTab() {
     setToast({ text, type });
     setTimeout(() => setToast(null), 4500);
   };
-
-  const fetchTypes = async () => {
-    try {
-      const data = await fetchJson<{ success?: boolean; types?: AggregateTypeOption[] }>('/events/event-sourcing/types');
-      if (data?.success && Array.isArray(data.types)) {
-        setTypes(data.types);
-      }
-    } catch (err) {
-      console.error('Error fetching aggregate types:', err);
-    }
-  };
-
-  // v9.0.440 (TD-731): one request per settled keyword; a newer keyword or type aborts the older request, so a late answer
-  // never overwrites the newer list
-  const searchAggregates = async (type: string, keyword: string, signal: AbortSignal) => {
-    if (!type) return;
-    try {
-      const params = new URLSearchParams({ type, aggregateType: type, search: keyword, limit: '25' });
-      const data = await fetchJson<{ success?: boolean; data?: { id: string; title: string }[] }>(`/events/event-sourcing/aggregates?${params.toString()}`, { signal });
-      if (signal.aborted) return;
-      if (data?.success) {
-        const list = Array.isArray(data.data) ? data.data : [];
-        setAggregateOptions(list);
-        if (list.length > 0 && !selectedAggregateId) {
-          setSelectedAggregateId(list[0].id);
-        }
-      }
-    } catch (err) {
-      if (signal.aborted) return;
-      console.error('Error searching aggregates:', err);
-    }
-  };
-
-  const fetchTimeline = async (type: string, aggId: string) => {
-    if (!type || !aggId) return;
-    setIsLoadingTimeline(true);
-    setTimeline([]);
-    try {
-      const params = new URLSearchParams({ type, aggregateType: type, id: aggId, aggregateId: aggId });
-      const data = await fetchJson<{ success?: boolean; timeline?: TimelineItem[]; auditIncluded?: boolean; message?: string }>(`/events/event-sourcing/timeline?${params.toString()}`);
-      if (data?.success) {
-        setTimeline(Array.isArray(data.timeline) ? data.timeline : []);
-        setAuditIncluded(data.auditIncluded !== false);
-      } else {
-        showToast(data?.message || 'خطا در بارگذاری خط زمان رویدادها', 'error');
-      }
-    } catch (err) {
-      // v9.0.439 (TD-730): the server's own reason is shown, never a fixed text
-      showToast(errorMessageOf(err) || 'خط زمان بارگذاری نشد.', 'error');
-    } finally {
-      setIsLoadingTimeline(false);
-    }
-  };
-
-  useEffect(() => {
-    void fetchTypes();
-  }, []);
-
-  const debouncedKeyword = useDebounce(searchKeyword, AGGREGATE_SEARCH_DELAY_MS);
-  useEffect(() => {
-    const controller = new AbortController();
-    void searchAggregates(selectedType, debouncedKeyword, controller.signal);
-    return () => controller.abort();
-  }, [selectedType, debouncedKeyword]);
-
-  useEffect(() => {
-    if (selectedAggregateId) {
-      void fetchTimeline(selectedType, selectedAggregateId);
-    }
-  }, [selectedType, selectedAggregateId]);
 
   // v9.0.430 (TD-708, decision t5 a): the replay is only a simulation; the live replay of a made-up event is removed
   const handleSimulateReplay = async (item: TimelineItem) => {
@@ -227,7 +153,7 @@ export function EventSourcingReplaySubTab() {
               key={t.type}
               onClick={() => {
                 setSelectedType(t.type);
-                setSelectedAggregateId('');
+                setSelectedAggregateId(null);
               }}
               className={`p-3 rounded-xl text-right transition-all border flex flex-col justify-between gap-1.5 ${
                 selectedType === t.type
@@ -304,6 +230,10 @@ export function EventSourcingReplaySubTab() {
           <div className="p-12 text-center text-slate-400">
             <RotateCcw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-500" />
             در حال بازخوانی خط زمان رویدادهای موجودیت…
+          </div>
+        ) : timelineError ? (
+          <div role="alert" className="p-12 text-center text-rose-600 dark:text-rose-400">
+            {timelineError}
           </div>
         ) : !selectedAggregateId ? (
           <div className="p-12 text-center text-slate-400">
@@ -407,7 +337,7 @@ export function EventSourcingReplaySubTab() {
                           </div>
                         </div>
 
-                        {item.changes && (
+                        {Boolean(item.changes) && (
                           <div className="p-2.5 bg-indigo-50/50 dark:bg-indigo-950/30 rounded-xl border border-indigo-100 dark:border-indigo-900/40">
                             <span className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300 block mb-1">
                               تغییرات ثبت‌شده ممیزی:

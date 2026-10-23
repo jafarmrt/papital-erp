@@ -5,10 +5,11 @@
  * دسته‌ای», «خطا در حذف وب‌هوک») and a server refusal of a payload edit was shown as «فرمت JSON وارد شده نامعتبر است».
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { ApiError, fetchJson } from '../../api';
 import { DeadLetterQueueSubTab } from '../../components/settings/DeadLetterQueueSubTab';
 import { WebhookManagementSubTab } from '../../components/settings/WebhookManagementSubTab';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 vi.mock('../../components/ConfirmDialogHost', () => ({ confirmAction: vi.fn(async () => true) }));
 vi.mock('../../contexts/AuthContext', () => ({ useHasPermission: (key: string) => key === 'events.manage' }));
@@ -45,7 +46,7 @@ describe('TD-730 the event tabs show the server reason of a refused request', ()
   it('a refused batch replay shows the server reason', async () => {
     const reason = 'این رویداد هم‌اکنون در حال بازپخش است.';
     mockServer(new ApiError(reason, 'DLQ_REPLAY_IN_PROGRESS', 409));
-    const { container } = render(<DeadLetterQueueSubTab />);
+    const { container } = renderWithQuery(<DeadLetterQueueSubTab />);
     await screen.findByText('timeout');
     fireEvent.click(container.querySelector('thead button') as HTMLButtonElement);
     fireEvent.click(screen.getByText('بازپخش ۱ مورد'));
@@ -55,7 +56,7 @@ describe('TD-730 the event tabs show the server reason of a refused request', ()
   it('a refused payload edit shows the server reason, not a JSON format error', async () => {
     const reason = 'برای اصلاح بدنه رویداد مجوز مدیریت رویدادها لازم است.';
     mockServer(new ApiError(reason, 'AUTHORIZATION_ERROR', 403));
-    render(<DeadLetterQueueSubTab />);
+    renderWithQuery(<DeadLetterQueueSubTab />);
     fireEvent.click(await screen.findByTitle('اصلاح داده و بازپخش'));
     fireEvent.click(screen.getByText('صرفاً ذخیره تغییرات'));
     expect(await screen.findByText(reason)).toBeTruthy();
@@ -64,7 +65,7 @@ describe('TD-730 the event tabs show the server reason of a refused request', ()
 
   it('a payload that does not parse is still named a JSON format error and is not sent', async () => {
     mockServer(new ApiError('unexpected', 'INTERNAL_ERROR', 500));
-    render(<DeadLetterQueueSubTab />);
+    renderWithQuery(<DeadLetterQueueSubTab />);
     fireEvent.click(await screen.findByTitle('اصلاح داده و بازپخش'));
     fireEvent.change(screen.getByDisplayValue(/documentId/), { target: { value: '{ broken' } });
     fireEvent.click(screen.getByText('صرفاً ذخیره تغییرات'));
@@ -75,7 +76,7 @@ describe('TD-730 the event tabs show the server reason of a refused request', ()
   it('a refused webhook delete shows the server reason', async () => {
     const reason = 'این وب‌هوک تحویل در جریان دارد و حذف نمی‌شود.';
     mockServer(new ApiError(reason, 'VALIDATION_ERROR', 400));
-    render(<WebhookManagementSubTab />);
+    renderWithQuery(<WebhookManagementSubTab />);
     fireEvent.click(await screen.findByTitle('حذف درگاه'));
     expect(await screen.findByText(reason)).toBeTruthy();
   });

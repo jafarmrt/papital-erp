@@ -9,6 +9,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { fetchJson } from '../../api';
 import { WebhookManagementSubTab } from '../../components/settings/WebhookManagementSubTab';
 import { RuleEditorModal } from '../../components/settings/RuleEditorModal';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 vi.mock('../../components/ConfirmDialogHost', () => ({ confirmAction: vi.fn(async () => true) }));
 
@@ -47,7 +48,7 @@ function mockServer(answers: Record<string, unknown> = {}) {
 describe('TD-719 webhook edit and ping never use the masked key', () => {
   it('saving an edit without typing a key sends no secretKey', async () => {
     const writes = mockServer();
-    render(<WebhookManagementSubTab />);
+    renderWithQuery(<WebhookManagementSubTab />);
     fireEvent.click(await screen.findByTitle('ویرایش تنظیمات'));
     fireEvent.click(screen.getByText('ذخیره تغییرات درگاه'));
     await waitFor(() => expect(writes.some(w => w.method === 'PUT')).toBe(true));
@@ -59,7 +60,7 @@ describe('TD-719 webhook edit and ping never use the masked key', () => {
 
   it('the row ping sends only the webhook id, so the server signs with the stored key', async () => {
     const writes = mockServer();
-    render(<WebhookManagementSubTab />);
+    renderWithQuery(<WebhookManagementSubTab />);
     fireEvent.click(await screen.findByText('آزمایش اتصال و امضا'));
     await waitFor(() => expect(writes.some(w => w.url === '/events/webhooks/ping')).toBe(true));
     expect(writes.find(w => w.url === '/events/webhooks/ping')?.body).toEqual({ subscriptionId: 7 });
@@ -70,7 +71,7 @@ describe('TD-720 the create form leaves the signing key to the server', () => {
   it('a new webhook is sent without a key and with the entered timeout, and Math.random is never called', async () => {
     const writes = mockServer();
     const random = vi.spyOn(Math, 'random');
-    render(<WebhookManagementSubTab />);
+    renderWithQuery(<WebhookManagementSubTab />);
     fireEvent.click(await screen.findByText('تعریف وب‌هوک جدید'));
     fireEvent.change(screen.getByPlaceholderText('مثال: فروشگاه برخط ووکامرس'), { target: { value: 'شریک تازه' } });
     fireEvent.change(screen.getByPlaceholderText('https://your-domain.com/api/webhook/receiver'), { target: { value: 'https://new.example.com/hook' } });
@@ -88,7 +89,7 @@ describe('TD-720 the create form leaves the signing key to the server', () => {
 describe('TD-710 the signing key is shown once and secrets are password fields', () => {
   it('the key a new webhook gets is shown once, with a copy button, after create', async () => {
     mockServer({ 'POST /events/webhooks': { success: true, message: 'ساخته شد', data: { id: 8, name: 'شریک تازه', secretKey: 'whsec_shown_once_after_create' } } });
-    render(<WebhookManagementSubTab />);
+    renderWithQuery(<WebhookManagementSubTab />);
     fireEvent.click(await screen.findByText('تعریف وب‌هوک جدید'));
     fireEvent.change(screen.getByPlaceholderText('مثال: فروشگاه برخط ووکامرس'), { target: { value: 'شریک تازه' } });
     fireEvent.change(screen.getByPlaceholderText('https://your-domain.com/api/webhook/receiver'), { target: { value: 'https://new.example.com/hook' } });
@@ -100,7 +101,7 @@ describe('TD-710 the signing key is shown once and secrets are password fields',
 
   it('the rotate button asks the server for a new key and shows it once', async () => {
     const writes = mockServer({ 'POST /events/webhooks/7/rotate-secret': { success: true, data: { id: 7, name: 'فروشگاه شریک', secretKey: 'whsec_rotated_new_key' } } });
-    render(<WebhookManagementSubTab />);
+    renderWithQuery(<WebhookManagementSubTab />);
     fireEvent.click(await screen.findByTitle('ساخت کلید امضای تازه'));
     expect(await screen.findByText('whsec_rotated_new_key')).toBeTruthy();
     expect(writes.find(w => w.url === '/events/webhooks/7/rotate-secret')?.method).toBe('POST');

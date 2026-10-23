@@ -3,9 +3,10 @@
  * double click sent two POSTs and made two subscriptions, and every event was then delivered twice.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { fetchJson } from '../../api';
 import { WebhookManagementSubTab } from '../../components/settings/WebhookManagementSubTab';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 vi.mock('../../contexts/AuthContext', () => ({ useHasPermission: (key: string) => key === 'events.manage' }));
 vi.mock('../../components/ConfirmDialogHost', () => ({ confirmAction: vi.fn(async () => true) }));
@@ -29,7 +30,7 @@ describe('TD-728 the webhook form saves once', () => {
       if (url === '/events/webhooks') return { success: true, data: [] };
       return { success: true, data: [], stats: null };
     });
-    render(<WebhookManagementSubTab />);
+    renderWithQuery(<WebhookManagementSubTab />);
     fireEvent.click(await screen.findByText('تعریف وب‌هوک جدید'));
     fireEvent.change(screen.getByPlaceholderText('مثال: فروشگاه برخط ووکامرس'), { target: { value: 'شریک تازه' } });
     fireEvent.change(screen.getByPlaceholderText('https://your-domain.com/api/webhook/receiver'), { target: { value: 'https://new.example.com/hook' } });

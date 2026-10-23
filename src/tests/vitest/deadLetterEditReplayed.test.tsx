@@ -3,9 +3,10 @@
  * replayed. On v9.0.431 it was offered for every status, including a replayed event that already ran.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
 import { fetchJson } from '../../api';
 import { DeadLetterQueueSubTab } from '../../components/settings/DeadLetterQueueSubTab';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 // v9.0.435 (TD-722): the change buttons show only for holders of events.manage
 vi.mock('../../contexts/AuthContext', () => ({ useHasPermission: (key: string) => key === 'events.manage' }));
@@ -29,7 +30,7 @@ describe('TD-716 a replayed dead-letter row offers no payload edit', () => {
       if (url.startsWith('/events/dlq/stats')) return { success: true, stats: { total: 3, quarantined: 1, replayed: 1, dismissed: 1, byEventType: {}, bySource: {} } };
       return { success: true, data: [row(1, 'quarantined'), row(2, 'replayed'), row(3, 'dismissed')] };
     });
-    render(<DeadLetterQueueSubTab />);
+    renderWithQuery(<DeadLetterQueueSubTab />);
     // v10.1.51 (OBS-R2-87): rows show the event's Persian name
     await screen.findAllByText(INVOICE_APPROVED_LABEL);
     expect(screen.getAllByTitle(EDIT_TITLE)).toHaveLength(2);

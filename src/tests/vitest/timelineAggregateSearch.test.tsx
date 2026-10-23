@@ -5,9 +5,10 @@
  * the answer for «ف» arriving after the answer for «فا» replaced its list.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { fetchJson } from '../../api';
 import { EventSourcingReplaySubTab } from '../../components/settings/EventSourcingReplaySubTab';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 vi.mock('../../contexts/AuthContext', () => ({ useHasPermission: (key: string) => key === 'events.manage' }));
 vi.mock('../../api', async () => {
@@ -40,7 +41,7 @@ const optionTexts = () => Array.from(document.querySelectorAll('option')).map(o 
 describe('TD-731 timeline aggregate search', () => {
   it('typing two letters quickly asks the server once, for the settled keyword', async () => {
     const { searches } = mockServer();
-    render(<EventSourcingReplaySubTab />);
+    renderWithQuery(<EventSourcingReplaySubTab />);
     const input = screen.getByPlaceholderText(/جست‌وجو با کد یا عنوان/);
     fireEvent.change(input, { target: { value: 'ف' } });
     fireEvent.change(input, { target: { value: 'فا' } });
@@ -50,14 +51,16 @@ describe('TD-731 timeline aggregate search', () => {
 
   it('a late answer for an older keyword does not overwrite the list of the newer keyword', async () => {
     const { pending, searches } = mockServer();
-    render(<EventSourcingReplaySubTab />);
+    renderWithQuery(<EventSourcingReplaySubTab />);
     const input = screen.getByPlaceholderText(/جست‌وجو با کد یا عنوان/);
     fireEvent.change(input, { target: { value: 'ف' } });
     await waitFor(() => expect(searches).toEqual(['ف']));
     fireEvent.change(input, { target: { value: 'فا' } });
     await waitFor(() => expect(searches).toEqual(['ف', 'فا']));
     await act(async () => { pending['فا']({ success: true, data: [{ id: '2', title: 'فاکتور ۲' }] }); });
+    await waitFor(() => expect(optionTexts()).toContain('فاکتور ۲'));
     await act(async () => { pending['ف']({ success: true, data: [{ id: '1', title: 'فرم ۱' }] }); });
+    await act(() => new Promise(resolve => setTimeout(resolve, 20)));
     expect(optionTexts()).toContain('فاکتور ۲');
     expect(optionTexts()).not.toContain('فرم ۱');
   });

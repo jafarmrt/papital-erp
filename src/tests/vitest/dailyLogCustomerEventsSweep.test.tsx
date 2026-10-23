@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiError, fetchJson } from '../../api';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 vi.mock('../../contexts/AuthContext', () => ({ useHasPermission: (key: string) => key === 'events.manage' }));
 vi.mock('../../components/ConfirmDialogHost', () => ({ confirmAction: vi.fn(async () => true) }));
@@ -126,7 +127,7 @@ describe('OBS-R2-87 events and notification UI', () => {
       return { success: true, data: [], stats: null };
     });
     const { WebhookManagementSubTab } = await import('../../components/settings/WebhookManagementSubTab');
-    render(<WebhookManagementSubTab />);
+    renderWithQuery(<WebhookManagementSubTab />);
     fireEvent.click(await screen.findByText('تعریف وب‌هوک جدید'));
     fireEvent.change(screen.getByPlaceholderText('مثال: فروشگاه برخط ووکامرس'), { target: { value: 'شریک' } });
     fireEvent.change(screen.getByPlaceholderText('https://your-domain.com/api/webhook/receiver'), { target: { value: 'https://p.example.com/hook' } });
@@ -145,7 +146,7 @@ describe('OBS-R2-87 events and notification UI', () => {
       }] };
     });
     const { DeadLetterQueueSubTab } = await import('../../components/settings/DeadLetterQueueSubTab');
-    const { container } = render(<DeadLetterQueueSubTab />);
+    const { container } = renderWithQuery(<DeadLetterQueueSubTab />);
     await screen.findByText('صدور قطعی فاکتور فروش');
     expect(screen.getByText(/سند #۱۲/)).toBeTruthy();
     expect(screen.queryByText('InvoiceApproved')).toBeNull();
