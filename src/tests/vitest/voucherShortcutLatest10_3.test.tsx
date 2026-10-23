@@ -12,6 +12,12 @@ vi.mock('../../api', () => ({
   getAuthToken: () => null,
 }));
 vi.mock('react-hot-toast', () => ({ default: toastFn, toast: toastFn, Toaster: () => null }));
+// the Jalali date picker as a plain field holding the ISO date, so a test can change the date directly
+vi.mock('../../components/common/JalaliDateInput', () => ({
+  JalaliDateInput: ({ id, value, onChange }: { id?: string; value: string; onChange: (iso: string) => void }) => (
+    <input id={id} value={value} onChange={e => onChange(e.target.value)} />
+  ),
+}));
 
 import { NewVoucherModal } from '../../components/accounting/NewVoucherModal';
 
@@ -28,6 +34,8 @@ const SHOWN = {
   reference: 'سند فیزیکی ۹۸',
   typeLabel: 'نوع سند',
   referenceLabel: 'شماره عطف دستی (اختیاری)',
+  dateLabel: 'تاریخ سند *',
+  saveButton: 'ذخیره پیش‌نویس سند (Ctrl+S)',
 } as const;
 
 const accounts = [
@@ -65,16 +73,30 @@ beforeEach(() => { fetchJson.mockReset(); toastFn.success.mockReset(); toastFn.e
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe('voucher shortcuts act on the form on screen (10.3)', () => {
-  it('Ctrl+S after changing only the type and the reference number sends the new values', async () => {
+  it('Ctrl+S after changing only the date, the type and the reference number sends the new values', async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     await openRestoredDraft(onSave);
 
+    fireEvent.change(screen.getByLabelText(SHOWN.dateLabel), { target: { value: '2026-10-20' } });
     fireEvent.change(screen.getByLabelText(SHOWN.typeLabel), { target: { value: 'sales' } });
     fireEvent.change(screen.getByLabelText(SHOWN.referenceLabel), { target: { value: SHOWN.reference } });
     pressCtrlS();
 
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
-    expect(onSave.mock.calls[0][0]).toMatchObject({ voucherType: 'sales', manualVoucherNumber: SHOWN.reference, description: SHOWN.description });
+    expect(onSave.mock.calls[0][0]).toMatchObject({
+      date: '2026-10-20', voucherType: 'sales', manualVoucherNumber: SHOWN.reference, description: SHOWN.description,
+    });
+  });
+
+  it('Ctrl+S after the date alone sends that date', async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    await openRestoredDraft(onSave);
+
+    fireEvent.change(screen.getByLabelText(SHOWN.dateLabel), { target: { value: '2026-10-21' } });
+    pressCtrlS();
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave.mock.calls[0][0]).toMatchObject({ date: '2026-10-21' });
   });
 
   it('a second Ctrl+S or Ctrl+Enter before the answer saves nothing more; after the answer the window closes', async () => {
@@ -92,6 +114,23 @@ describe('voucher shortcuts act on the form on screen (10.3)', () => {
     await act(async () => { answer(); await Promise.resolve(); });
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
     expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it('the save button and Ctrl+S share one save: a click, Ctrl+S, a form submit and a second click record once', async () => {
+    let answer: () => void = () => undefined;
+    const onSave = vi.fn(() => new Promise<void>(resolve => { answer = resolve; }));
+    const onClose = await openRestoredDraft(onSave);
+    const button = screen.getByText(SHOWN.saveButton).closest('button') as HTMLButtonElement;
+
+    fireEvent.click(button);
+    pressCtrlS();
+    fireEvent.submit(button.closest('form') as HTMLFormElement);
+    fireEvent.click(button);
+    await act(async () => { await Promise.resolve(); });
+    expect(onSave).toHaveBeenCalledTimes(1);
+
+    await act(async () => { answer(); await Promise.resolve(); });
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
 
   it('a failed save lets the next Ctrl+S try again', async () => {
