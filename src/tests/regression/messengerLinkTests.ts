@@ -97,6 +97,17 @@ const chatUpdate = (updateId: number, chatId: number, text: string): BotUpdate =
   message: { text, chat: { id: chatId, type: 'private', first_name: 'Maryam' } },
 });
 
+/**
+ * Whether an answer exposes a chat id: a value equal to it (number or text) or a chat id field. 10.3: a substring check
+ * of the whole answer also matched a generated username whose timestamp held the same digits (testuser_17927424…).
+ */
+const exposesChatId = (body: unknown, chatId: number): boolean => {
+  if (body === chatId || body === String(chatId)) return true;
+  if (Array.isArray(body)) return body.some(v => exposesChatId(v, chatId));
+  if (typeof body !== 'object' || body === null) return false;
+  return Object.entries(body).some(([key, v]) => /chat_?id/i.test(key) || exposesChatId(v, chatId));
+};
+
 export async function inSandbox<T>(fn: () => Promise<T>): Promise<T> {
   return withIsolatedTestSchema(async () => {
     MessengerUpdatePoller.reset();
@@ -149,9 +160,9 @@ export async function runMessengerLinkTests(shouldRun: ShouldRun): Promise<TestC
 
       const mine = await user.get('/api/messenger/links/mine');
       const bale = (mine.body as { data: Array<{ messenger: string; linked: boolean; chatName: string }> }).data.find(l => l.messenger === 'bale');
-      if (!bale?.linked || bale.chatName !== 'Maryam' || JSON.stringify(mine.body).includes('4242')) throw new Error(`mine: ${brief(mine)}`);
+      if (!bale?.linked || bale.chatName !== 'Maryam' || exposesChatId(mine.body, 4242)) throw new Error(`mine: ${brief(mine)}`);
       const adminList = await admin.get('/api/messenger/links');
-      if (adminList.status !== 200 || JSON.stringify(adminList.body).includes('4242') || !JSON.stringify(adminList.body).includes('مریم احمدی')) throw new Error(`admin list: ${brief(adminList)}`);
+      if (adminList.status !== 200 || exposesChatId(adminList.body, 4242) || !JSON.stringify(adminList.body).includes('مریم احمدی')) throw new Error(`admin list: ${brief(adminList)}`);
 
       const tested = await user.post('/api/messenger/links/bale/test');
       const sent = api.calls.filter(c => c.url.endsWith('/sendMessage')).at(-1);
