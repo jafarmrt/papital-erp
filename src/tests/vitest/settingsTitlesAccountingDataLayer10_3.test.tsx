@@ -93,8 +93,8 @@ describe('the piecework titles tab reads through the payroll cache (10.3)', () =
     expect(await screen.findByText('cutting')).toBeTruthy();
   });
 
-  it('says a failed read at once, without retrying first, and once', async () => {
-    reads.failNext = TASKS;
+  it.each([TASKS, '/piecework/categories'])('says a failed read of %s at once, without retrying first, and once', async (url) => {
+    reads.failNext = url;
     render(<TaskTitlesSettingsTab />, { wrapper: wrapperOf(new QueryClient()) });
     await said(1);
     await settle();

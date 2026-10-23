@@ -242,10 +242,11 @@ describe('the eidi section reads through the shared cache (10.3)', () => {
     expect(field(SHOWN.eidiPercent).value).toBe('4');
   });
 
-  it('a failed read is said once', async () => {
+  it('a failed first read is said once and leaves the form open to fill', async () => {
     reads.failNext = EIDI;
     render(<PayrollEidiRatesSection />, { wrapper: wrapperOf(newClient()) });
     await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+    expect(locked(field(SHOWN.eidiPercent))).toBe(false);
     await settle();
     expect(toast.error).toHaveBeenCalledTimes(1);
   });
