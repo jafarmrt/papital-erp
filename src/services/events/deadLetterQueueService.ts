@@ -179,7 +179,8 @@ export class DeadLetterQueueService {
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error(`[DLQ Stats Error] ${errMsg}`);
-      return { total: 0, quarantined: 0, replayed: 0, dismissed: 0, byEventType: {}, bySource: {} };
+      // 10.3 (ARCH review): a failed read is an error answer, never an empty queue
+      throw err;
     }
   }
 
@@ -235,7 +236,8 @@ export class DeadLetterQueueService {
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error(`[DLQ Get Events Error] ${errMsg}`);
-      return { data: [], total: 0, limit: 50, offset: 0 };
+      // 10.3 (ARCH review): a failed read is an error answer, never an empty queue
+      throw err;
     }
   }
 

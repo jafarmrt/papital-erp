@@ -196,7 +196,8 @@ export class EventSourcingReplayService {
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error(`[Event Sourcing Search Aggregates Error] ${errMsg}`);
-      return [];
+      // 10.3 (ARCH review): a failed read is an error answer, never no matching records
+      throw err;
     }
   }
 
@@ -297,7 +298,8 @@ export class EventSourcingReplayService {
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error(`[Event Sourcing Timeline Error] ${errMsg}`);
-      return [];
+      // 10.3 (ARCH review): a failed read is an error answer, never an empty timeline
+      throw err;
     }
   }
 

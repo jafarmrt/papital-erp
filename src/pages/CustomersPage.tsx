@@ -17,7 +17,7 @@ import { useOpeningRead } from '../hooks/queries/readOnEveryOpening';
 import { partyTemporaryRowsOf } from '../lib/accounting/partyTemporaryRows';
 import { PartyTemporaryRowsPanel } from '../components/accounting/reports/PartyTemporaryRowsPanel';
 import { useQueryClient } from '@tanstack/react-query';
-import { QUERY_KEYS } from '../lib/queryKeys';
+import { invalidatePreset } from '../lib/queryInvalidation';
 import { formatPersianPhone, normalizePhoneNumber, validateIranianPhoneNumber, formatPersianDate, formatPersianNumber, errorMessageOf } from '../utils';
 import { useRialDisplay } from '../hooks/useAppCurrency';
 import { useHasPermission } from '../contexts/AuthContext';
@@ -821,7 +821,7 @@ export default function CustomersPage({ user }: { user: User }) {
         isOpen={showExcelModal}
         onClose={() => setShowExcelModal(false)}
         onSuccess={() => {
-          void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.customers.all });
+          void invalidatePreset(queryClient, 'customerChange');
         }}
         activeTabFilter={activeTab}
       />

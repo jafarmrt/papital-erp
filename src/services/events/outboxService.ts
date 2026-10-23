@@ -423,14 +423,8 @@ export class OutboxService {
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error(`[Transactional Outbox Stats Error] ${errMsg}`);
-      return {
-        total: 0,
-        pending: 0,
-        processing: 0,
-        completed: 0,
-        failed: 0,
-        workerRunning: this.isWorkerRunning
-      };
+      // 10.3 (ARCH review): a failed read is an error answer, never an empty outbox
+      throw err;
     }
   }
 

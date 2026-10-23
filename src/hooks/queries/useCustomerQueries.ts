@@ -3,7 +3,7 @@ import { fetchJson } from '../../api';
 import { Customer } from '../../types';
 import { toast } from 'react-hot-toast';
 import { QUERY_KEYS, customerKeys } from '../../lib/queryKeys';
-import { invalidateDomain } from '../../lib/queryInvalidation';
+import { invalidateDomain, invalidatePreset } from '../../lib/queryInvalidation';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
 import { customerAccountCardUrl } from '../../lib/customers/customerAccountCard';
 import { customerDocumentsUrl } from '../../lib/customers/customerDocuments';
@@ -87,8 +87,9 @@ export function useSaveCustomerMutation() {
       });
     },
     // v10.0.135 (TD-1226): پیام موفقیت را صفحه می‌دهد؛ پیش‌تر هوک هم پیام می‌داد و دو پیام دیده می‌شد
+    // 10.3: the sales files and the dashboard show the customer's name too
     onSuccess: () => {
-      void invalidateDomain(queryClient, 'customers');
+      void invalidatePreset(queryClient, 'customerChange');
     },
     onError: (err: any) => {
       // v10.1.51 (OBS-R2-26): after a stale version (409) the list is read again, so the form reopens on the stored version
@@ -106,7 +107,7 @@ export function useDeleteCustomerMutation() {
       return fetchJson(`/customers/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => {
-      void invalidateDomain(queryClient, 'customers');
+      void invalidatePreset(queryClient, 'customerChange');
       toast.success('حساب مشتری با موفقیت حذف شد');
     },
     onError: (err: any) => {
@@ -151,5 +152,21 @@ export function useCustomerDocumentsQuery(customerId: number | null) {
     },
     enabled: customerId !== null,
     ...READ_ON_EVERY_OPENING,
+  });
+}
+
+/**
+ * 10.3: a sales file turned into a customer adds or links a customer, so the customer lists (the invoice form it opens
+ * picks from them), the sales files and the dashboard change; it refreshed only the sales files before
+ */
+export function useConvertLeadToCustomerMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (leadId: number) => fetchJson(`/crm/leads/${leadId}/convert-to-customer`, { method: 'POST' }),
+    onSuccess: () => {
+      void invalidatePreset(queryClient, 'customerChange');
+    },
+    // the sales files page says a failure and ends its own progress notice, as before this hook (not the client's toast)
+    onError: () => undefined,
   });
 }

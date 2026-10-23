@@ -17,9 +17,7 @@ import { projectPartTokensSchema } from './projectPartTokens.schemas.js';
 const router = Router();
 router.use(authenticateToken);
 
-const PG_INT_MAX = 2_147_483_647;
-const withinPgInt = (v: string) => v.length <= 10 && Number(v) <= PG_INT_MAX;
-const projectParams = z.object({ id: numericIdString.refine(withinPgInt, 'شناسهٔ پروژه نامعتبر است') });
+const projectParams = z.object({ id: numericIdString });
 
 const previewSchema = z.object({ params: projectParams });
 const applySchema = z.object({
