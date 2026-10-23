@@ -137,9 +137,13 @@ export const QUERY_KEYS = {
   // Piecework & Work Logs
   piecework: {
     all: ['piecework'] as const,
-    tasks: () => ['piecework', 'tasks'] as const,
+    tasks: (status?: string) => (status ? ['piecework', 'tasks', status] : ['piecework', 'tasks']) as readonly string[],
     logs: (filters?: Record<string, unknown> | object) => ['piecework', 'logs', filters ?? {}] as const,
+    /** the page cards and project labor costs (`GET /piecework/logs/summary`; v10.2 package 11 part 5c, TD-1361) */
+    logSummary: () => ['piecework', 'logs', 'summary'] as const,
     payrolls: () => ['piecework', 'payrolls'] as const,
+    categories: () => ['piecework', 'categories'] as const,
+    personnelRates: (personnelId: number) => ['piecework', 'personnel-rates', personnelId] as const,
   },
 
   // Daily Logs

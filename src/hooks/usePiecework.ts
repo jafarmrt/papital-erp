@@ -1,17 +1,27 @@
-import { useState, useEffect, useMemo, FormEvent } from 'react';
+import { useState, useEffect, useMemo, useCallback, FormEvent } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { fetchJson } from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import { usePieceworkPermissions } from './usePieceworkPermissions';
 import { usePayrollPreviewLogs, usePieceworkLogList } from './usePieceworkLogList';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions';
-import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
+import { QUERY_KEYS } from '../lib/queryKeys';
+import { invalidateAfterTreasuryChange } from './accounting/accountingInvalidation';
+import { usePersonnelListQuery } from './queries/usePersonnelQueries';
+import { useProjectPickQuery } from './queries/useProjectQueries';
+import {
+  personnelRateMap,
+  usePieceworkCategoriesQuery,
+  usePieceworkPayrollsQuery,
+  usePieceworkPersonnelRatesQuery,
+  usePieceworkTasksQuery,
+} from './queries/usePieceworkQueries';
 import {
   Personnel,
   PieceworkTask,
   PieceworkLog,
-  PieceworkPayroll,
-  PieceworkPersonnelRate
+  PieceworkPayroll
 } from '../types';
 import { toast as hotToast } from 'react-hot-toast';
 import { parseQuantityOrTime, formatPersianPrice, errorMessageOf, toStorageDate, getTodayIsoDate } from '../utils';
@@ -42,7 +52,14 @@ export interface TaskFormData {
   defaultRate: number;
 }
 
+const NO_PERSONNEL: Personnel[] = [];
+const NO_TASKS: PieceworkTask[] = [];
+const NO_PAYROLLS: PieceworkPayroll[] = [];
+const NO_ROWS: any[] = [];
+const NO_RATES: Record<number, number> = {};
+
 export function usePiecework() {
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'logs' | 'tasks' | 'rates' | 'payrolls' | 'project-costs'>('logs');
 
   // v7.0.59 (TD-223، تصمیم مالک محصول): مبالغ فیش‌ها فقط برای دارندگان مجوز فیش (همان گارد API)
@@ -55,21 +72,32 @@ export function usePiecework() {
   // حوزه H (TD-300): نرخ دستی کارکرد فقط برای مدیر تعرفه‌ها (همان قاعده سرور، در ثبت و ویرایش؛ v9.0.320، TD-805)
   const { canManageTasks: canSetLogRate } = usePieceworkPermissions();
 
-  // Core Data Lists
-  const [personnelList, setPersonnelList] = useState<Personnel[]>([]);
-  const [tasksList, setTasksList] = useState<PieceworkTask[]>([]);
-  const [payrollsList, setPayrollsList] = useState<PieceworkPayroll[]>([]);
-  const [projectsList, setProjectsList] = useState<any[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-
-  // v9.0.330 (TD-811): فهرست کارکرد، فیلترها و جمع‌ها از سرور؛ پس از هر ثبت، ویرایش یا حذف دوباره خوانده می‌شوند
-  const [logsReloadKey, setLogsReloadKey] = useState<number>(0);
-  const logList = usePieceworkLogList(logsReloadKey);
-
   // Filters for Tasks
   const [taskCategoryFilter, setTaskCategoryFilter] = useState<string>('all');
   const [taskSearchQuery, setTaskSearchQuery] = useState<string>('');
   const [taskStatusFilter, setTaskStatusFilter] = useState<'active' | 'archived' | 'all'>('active');
+
+  // Core Data Lists. v10.2 package 11 part 5c (TD-1361, OBS-R2-102): React Query reads, each opening of the page reads
+  // the personnel, titles, categories and payslips again; the project pick list is the cache of the other forms
+  const personnelQuery = usePersonnelListQuery({ refetchOnMount: 'always' });
+  const tasksQuery = usePieceworkTasksQuery(taskStatusFilter);
+  const payrollsQuery = usePieceworkPayrollsQuery(canViewPayrolls);
+  const projectsQuery = useProjectPickQuery();
+  const categoriesQuery = usePieceworkCategoriesQuery();
+  const personnelList = personnelQuery.data ?? NO_PERSONNEL;
+  const tasksList = tasksQuery.data ?? NO_TASKS;
+  const payrollsList = canViewPayrolls ? (payrollsQuery.data ?? NO_PAYROLLS) : NO_PAYROLLS;
+  const projectsList: any[] = projectsQuery.data ?? NO_ROWS;
+  // a category list that cannot be read leaves the categories of the titles, as before
+  const taskCategories = categoriesQuery.data ?? NO_ROWS;
+  const loading = personnelQuery.isPending || tasksQuery.isPending || (canViewPayrolls && payrollsQuery.isPending);
+  const loadError = personnelQuery.error || tasksQuery.error || (canViewPayrolls ? payrollsQuery.error : null);
+  useEffect(() => {
+    if (loadError) hotToast.error(errorMessageOf(loadError) || 'خطا در دریافت اطلاعات کارمزدی');
+  }, [loadError]);
+
+  // v9.0.330 (TD-811): فهرست کارکرد، فیلترها و جمع‌ها از سرور؛ پس از هر ثبت، ویرایش یا حذف دوباره خوانده می‌شوند
+  const logList = usePieceworkLogList();
 
   // Modal 1: Create / Edit Work Logs
   const [isLogModalOpen, setIsLogModalOpen] = useState<boolean>(false);
@@ -98,12 +126,16 @@ export function usePiecework() {
     defaultRate: 0
   });
 
-  // Task Categories from Settings
-  const [taskCategories, setTaskCategories] = useState<{ id: number | string; name: string; description?: string }[]>([]);
-
   // Tab 3: Custom Rates
   const [selectedPersonnelForRates, setSelectedPersonnelForRates] = useState<number | ''>('');
-  const [customRatesMap, setCustomRatesMap] = useState<Record<number, number>>({});
+  const ratesTabQuery = usePieceworkPersonnelRatesQuery(selectedPersonnelForRates ? Number(selectedPersonnelForRates) : null);
+  const customRatesMap = useMemo(
+    () => (selectedPersonnelForRates && ratesTabQuery.data ? personnelRateMap(ratesTabQuery.data) : NO_RATES),
+    [selectedPersonnelForRates, ratesTabQuery.data],
+  );
+  useEffect(() => {
+    if (ratesTabQuery.error) hotToast.error(errorMessageOf(ratesTabQuery.error) || 'خطا در دریافت نرخ‌های اختصاصی');
+  }, [ratesTabQuery.error]);
 
   // Modal 3: Payroll Generation Modal
   const [isPayrollModalOpen, setIsPayrollModalOpen] = useState<boolean>(false);
@@ -128,62 +160,23 @@ export function usePiecework() {
   // Modal 4: View Payslip
   const [viewingPayroll, setViewingPayroll] = useState<PieceworkPayroll | null>(null);
 
-  // Initial Data Fetch
-  const loadData = async (signal?: AbortSignal, status: 'active' | 'archived' | 'all' = taskStatusFilter) => {
-    setLoading(true);
-    try {
-      const [pRes, tRes, payRes, projRes, catRes] = await Promise.all([
-        fetchJson('/personnel', { signal }),
-        fetchJson(`/piecework/tasks?status=${status}`, { signal }),
-        canViewPayrolls ? fetchJson('/piecework/payrolls', { signal }) : Promise.resolve([]),
-        fetchJson(PICK_LIST_URLS.projects, { signal }).catch((err) => {
-          if (err?.name === 'AbortError') throw err;
-          console.error('Failed to load projects for piecework:', err);
-          return [];
-        }),
-        fetchJson('/piecework/categories', { signal }).catch((err) => {
-          if (err?.name === 'AbortError') throw err;
-          console.error('Failed to load piecework categories:', err);
-          return [];
-        })
-      ]);
-      setPersonnelList(Array.isArray(pRes) ? pRes : []);
-      setTasksList(Array.isArray(tRes) ? tRes : []);
-      setPayrollsList(Array.isArray(payRes) ? payRes : []);
-      const projectsArr = Array.isArray(projRes?.data) ? projRes.data : (Array.isArray(projRes) ? projRes : []);
-      setProjectsList(projectsArr);
-      setTaskCategories(Array.isArray(catRes) ? catRes : []);
-    } catch (err: any) {
-      if (err?.name === 'AbortError') return;
-      console.error('Error loading piecework data:', err);
-      hotToast.error(err?.message || 'خطا در دریافت اطلاعات کارمزدی');
-    } finally {
-      setLoading(false);
-    }
-  };
+  /** Reads every piecework list of the page again (titles, categories, payslips, work logs, rates) */
+  const reloadAll = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.piecework.all });
+  }, [queryClient]);
 
-  /** داده‌های صفحه و فهرست کارکرد را دوباره می‌خواند */
-  const reloadAll = () => {
-    void loadData();
-    setLogsReloadKey(k => k + 1);
-  };
+  /**
+   * A payslip issue, approval, draft edit, delete, payment or payment void writes a voucher and, for a payment, a
+   * treasury row: the page and the accounting and treasury screens read them again (the `piecework` domain included).
+   */
+  const reloadAfterPayrollChange = useCallback(() => {
+    void invalidateAfterTreasuryChange(queryClient);
+  }, [queryClient]);
 
+  /** the titles of another status come from their own cache entry, so a late answer never shows under another status */
   const handleTaskStatusFilterChange = (status: 'active' | 'archived' | 'all') => {
     setTaskStatusFilter(status);
-    fetchJson<PieceworkTask[]>(`/piecework/tasks?status=${status}`)
-      .then((res) => {
-        setTasksList(Array.isArray(res) ? res : []);
-      })
-      .catch((err) => {
-        hotToast.error('خطا در دریافت عناوین کاری: ' + (err?.message || ''));
-      });
   };
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void loadData(controller.signal);
-    return () => controller.abort();
-  }, []);
 
   // Category list derived from settings management and existing tasks
   const categoriesList = useMemo(() => {
@@ -227,24 +220,18 @@ export function usePiecework() {
   }, [projectsList]);
 
   // v8.0.109 (TD-386): نرخ‌های اختصاصی پرسنل انتخاب‌شده در فرم ثبت کارکرد؛ نرخ ردیف‌های دستی‌نشده با آن‌ها تازه می‌شود
+  const logRatesPersonnel = isLogModalOpen && !editingLog && selectedPersonnelForLog ? Number(selectedPersonnelForLog) : null;
+  const logRatesQuery = usePieceworkPersonnelRatesQuery(logRatesPersonnel);
+  const logRatesData = logRatesPersonnel !== null ? logRatesQuery.data : undefined;
   useEffect(() => {
-    if (!isLogModalOpen || editingLog || !selectedPersonnelForLog) {
+    if (!logRatesData) {
       setLogPersonnelRates({});
       return;
     }
-    const controller = new AbortController();
-    fetchJson<PieceworkPersonnelRate[]>(`/piecework/personnel-rates/${selectedPersonnelForLog}`, { signal: controller.signal })
-      .then(res => {
-        const map: Record<number, number> = {};
-        (Array.isArray(res) ? res : []).forEach(r => { map[r.taskId] = Number(r.customRate); });
-        setLogPersonnelRates(map);
-        setBatchLogRows(rows => refreshSuggestedRates(rows, tasksList, map));
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setLogPersonnelRates({});
-      });
-    return () => controller.abort();
-  }, [isLogModalOpen, editingLog, selectedPersonnelForLog, tasksList]);
+    const map = personnelRateMap(logRatesData);
+    setLogPersonnelRates(map);
+    setBatchLogRows(rows => refreshSuggestedRates(rows, tasksList, map));
+  }, [logRatesData, tasksList]);
 
   // Handle task select in batch row
   const handleTaskChangeInRow = (idx: number, taskId: number | '') => {
@@ -496,28 +483,8 @@ export function usePiecework() {
   };
 
   // Custom Rates Actions
-  const loadCustomRates = async (personnelId: number) => {
-    try {
-      const res = await fetchJson(`/piecework/personnel-rates/${personnelId}`);
-      const map: Record<number, number> = {};
-      if (Array.isArray(res)) {
-        res.forEach((r: PieceworkPersonnelRate) => {
-          map[r.taskId] = Number(r.customRate);
-        });
-      }
-      setCustomRatesMap(map);
-    } catch (err) {
-      hotToast.error(errorMessageOf(err) || 'خطا در دریافت نرخ‌های اختصاصی');
-    }
-  };
-
   const handleSelectPersonnelForRates = (id: number | '') => {
     setSelectedPersonnelForRates(id);
-    if (id) {
-      void loadCustomRates(Number(id));
-    } else {
-      setCustomRatesMap({});
-    }
   };
 
   const handleSaveCustomRate = async (taskId: number, customRate: string) => {
@@ -533,7 +500,7 @@ export function usePiecework() {
         })
       });
       // v9.0.284 (TD-809): نرخ نمایش‌داده همان است که سرور ذخیره کرد و کارکرد می‌گیرد
-      await loadCustomRates(Number(selectedPersonnelForRates));
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.piecework.personnelRates(Number(selectedPersonnelForRates)) });
       hotToast.success('نرخ اختصاصی ثبت شد');
     } catch (err) {
       hotToast.error(errorMessageOf(err) || 'خطا در ذخیره نرخ اختصاصی');
@@ -559,7 +526,7 @@ export function usePiecework() {
   };
 
   // Preview pending logs for payroll issuance (v9.0.330، TD-811: از سرور)
-  const payrollPreviewLogs = usePayrollPreviewLogs(isPayrollModalOpen, payrollPersonnelId, payrollStartDate, payrollEndDate, logsReloadKey);
+  const payrollPreviewLogs = usePayrollPreviewLogs(isPayrollModalOpen, payrollPersonnelId, payrollStartDate, payrollEndDate);
 
   // V10-4.4: آیا پرسنل انتخاب‌شده برای صدور فیش به سهم حقوق ثابت نیازمند ردیف کارکرد نیست؟
   const selectedPayrollPerson = (personnelList as any[]).find((p: any) => String(p.id) === String(payrollPersonnelId));
@@ -656,7 +623,7 @@ export function usePiecework() {
         if (res.eidiWarning) hotToast(res.eidiWarning, { icon: '⚠️' });
       }
       setIsPayrollModalOpen(false);
-      reloadAll();
+      reloadAfterPayrollChange();
       setActiveTab('payrolls');
     } catch (err) {
       hotToast.error(errorMessageOf(err) || 'خطا در صدور فیش حقوقی');
@@ -685,7 +652,7 @@ export function usePiecework() {
       if (viewingPayroll && viewingPayroll.id === id) {
         setViewingPayroll(prev => prev ? { ...prev, status } : null);
       }
-      reloadAll();
+      reloadAfterPayrollChange();
     } catch (err) {
       hotToast.error(errorMessageOf(err) || 'خطا در به‌روزرسانی وضعیت فیش');
     }
@@ -699,7 +666,7 @@ export function usePiecework() {
         if (viewingPayroll && viewingPayroll.id === id) {
           setViewingPayroll(null);
         }
-        reloadAll();
+        reloadAfterPayrollChange();
       } catch (err) {
         hotToast.error(errorMessageOf(err) || 'خطا در ابطال فیش حقوقی');
       }
@@ -730,6 +697,7 @@ export function usePiecework() {
     projectsList,
     loading,
     loadData: reloadAll,
+    reloadAfterPayrollChange,
     ...logList,
     taskCategoryFilter,
     setTaskCategoryFilter,
@@ -771,7 +739,6 @@ export function usePiecework() {
     selectedPersonnelForRates,
     setSelectedPersonnelForRates,
     customRatesMap,
-    setCustomRatesMap,
     isPayrollModalOpen,
     setIsPayrollModalOpen,
     payrollPersonnelId,

@@ -12,17 +12,19 @@ export { personnelKeys };
  * Hook to query all personnel (the pick lists). OBS-R2-57: the personnel page reads it only while a window that needs every
  * personnel is open (`enabled`), and its table reads `usePersonnelPageQuery`.
  */
-export function usePersonnelListQuery(options: { enabled?: boolean } = {}) {
+export function usePersonnelListQuery(options: { enabled?: boolean; refetchOnMount?: boolean | 'always' } = {}) {
   return useQuery<Personnel[]>({
     enabled: options.enabled ?? true,
     queryKey: QUERY_KEYS.personnel.list(),
-    queryFn: async () => {
-      const res = await fetchJson('/personnel');
+    queryFn: async ({ signal }) => {
+      const res = await fetchJson('/personnel', { signal });
       return Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: true,
+    // v10.2 package 11 part 5c (TD-1361): the payroll page reads the salaries again on every opening, as it did before
+    ...(options.refetchOnMount !== undefined ? { refetchOnMount: options.refetchOnMount } : {}),
   });
 }
 

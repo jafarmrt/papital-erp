@@ -258,6 +258,8 @@ export function useDailyLogs(user: User) {
       resetForm();
       void loadLogsAndStats();
     } catch (err) {
+      // v10.2.37 (#354 review L1): after a stale version (409) the list is read again, so a reopened form has the stored version
+      if ((err as { status?: unknown } | null)?.status === 409) void loadLogsAndStats();
       toast.error(errorMessageOf(err) || 'خطا در ثبت گزارش کار');
     } finally {
       setIsSaving(false);
