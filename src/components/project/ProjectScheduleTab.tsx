@@ -20,6 +20,8 @@ interface ProjectScheduleTabProps {
   onUpdate: () => void;
   /** v10.2.1 (review U2): the page asks before a tab change or leaving while the plan is not saved */
   onDirtyChange?: (dirty: boolean) => void;
+  /** 10.3 (part 9 review): an unsaved change or a save under way, so the page holds the project back until both are over */
+  onBusyChange?: (busy: boolean) => void;
 }
 
 /**
@@ -28,11 +30,11 @@ interface ProjectScheduleTabProps {
  * piecework titles and work logs come from the shared cache (`./schedule/useScheduleReferenceData`), so a change saved
  * elsewhere refreshes them while the tab is open; the plan and the logging live in `./schedule`.
  */
-export default function ProjectScheduleTab({ project, onUpdate, onDirtyChange }: ProjectScheduleTabProps) {
+export default function ProjectScheduleTab({ project, onUpdate, onDirtyChange, onBusyChange }: ProjectScheduleTabProps) {
   const rial = useRialDisplay();
   const projectVersion = useProjectVersion(project);
   const { workflowPresets, personnelList, pieceworkTasksList, recordedLogs, loadingLogs, reloadLogs } = useScheduleReferenceData(project.id);
-  const plan = useSchedulePlan({ project, workflowPresets, pieceworkTasksList, personnelList, projectVersion, onUpdate, onDirtyChange });
+  const plan = useSchedulePlan({ project, workflowPresets, pieceworkTasksList, personnelList, projectVersion, onUpdate, onDirtyChange, onBusyChange });
   const logging = useScheduleLogging({ project, plan, projectVersion, onUpdate });
   const [pickingTarget, setPickingTarget] = useState<{ stageId: number; productId: string; taskIdx: number } | null>(null);
   // v9.0.320 (TD-805): «ثبت کارمزد» همان کلید API ثبت کارکرد را می‌پرسد

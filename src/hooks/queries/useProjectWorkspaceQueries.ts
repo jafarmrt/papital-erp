@@ -35,12 +35,16 @@ export function useProjectItemOptions(enabled: boolean) {
 }
 
 export interface WorkspaceProject {
-  /** the project the page and its tabs show, null until this visit read it */
+  /** the project the tabs build on, null until this visit read it */
   project: ProductionProject | null;
+  /** the newest project this visit read, for the header, the step bar and the summary, which hold no edits */
+  latest: ProductionProject | null;
   /** this visit's read answered that there is no such project */
   missing: boolean;
   /** the error of this visit's last read, null once a later read succeeds */
   error: unknown;
+  /** when the last read of this visit failed, 0 otherwise: the page says once that a refresh failed */
+  failedAt: number;
 }
 
 /**
@@ -50,7 +54,9 @@ export interface WorkspaceProject {
  * from the project, so a newer one reaches the tabs only while none of them holds an unsaved change (`settled`); until
  * then they keep the one their edits started from, as before 10.3, and the server refuses a save over a newer version.
  * A project read while a tab held a change is never shown afterwards: it predates that tab's save (the save's own refresh
- * brings the project as saved), so once the tabs settle the project is read again instead.
+ * brings the project as saved), so once the tabs settle the project is read again instead. A tab is settled only when
+ * nothing is unsaved and no save is under way, so a read that answers before the save does not reset its edits (part 9
+ * review). The header shows the newest project at once (`latest`): a status change there starts from the status on screen.
  */
 export function useWorkspaceProject(projectId: number | null, settled: boolean): WorkspaceProject {
   const query = useQuery<ProductionProject | null>({
@@ -78,7 +84,7 @@ export function useWorkspaceProject(projectId: number | null, settled: boolean):
   useEffect(() => {
     if (heldBack) void refetch({ cancelRefetch: false });
   }, [heldBack, refetch]);
-  return { project, missing: read.data === null, error: read.error };
+  return { project, latest: answer ?? project, missing: read.data === null, error: read.error, failedAt: read.failedAt };
 }
 
 /** a work log row as the workshop tab reads it; older answers named some fields in snake case */

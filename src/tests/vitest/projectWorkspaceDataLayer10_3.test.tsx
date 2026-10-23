@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { ChangeEvent } from 'react';
@@ -8,7 +8,8 @@ import { ownReads } from './helpers/ownReads';
 /**
  * 10.3 (ARCH review finding 3, part 9): the project page and its workshop tab read through the shared cache. A save
  * elsewhere refreshes an open page; a tab with an unsaved change keeps the project its edits started from until it is
- * saved; each visit reads again and never shows what an earlier visit left in the cache.
+ * saved and its save is over, while the header shows the newest read; each visit reads again and never shows what an
+ * earlier visit left in the cache.
  */
 /** Persian words the tests compare with, kept apart from the assertions (AGENTS §6, terminal English) */
 const SHOWN = {
@@ -19,16 +20,26 @@ const SHOWN = {
   save: 'ذخیره برنامه‌ریزی',
   logCount: (n: string) => `${n} رکورد`,
   pickPersonnel: 'انتخاب مسئول / مجری...',
+  unsaved: 'ذخیره‌نشده',
+  stageNow: 'برش',
+  stageLater: 'برش تازه',
+  stageSaved: 'برش نهایی',
+  myTask: 'کار من',
 } as const;
 
 type FetchOpts = { method?: string; body?: string; signal?: AbortSignal };
 const PLAN = { 11: { p1: { productId: 'p1', tasks: [{ id: 'r1', taskId: null, taskTitle: 'دستی', assignedPersonnelId: null, quantity: 2 }] } } };
-const projectNamed = (title: string, version = 3) => ({
+const projectNamed = (title: string, version = 3, stageTitle: string = SHOWN.stageNow) => ({
   id: 7, version, project_code: 'PRJ-7', title, status: 'in_progress', quantity: 5, unit: 'عدد', progress_percent: 0,
   start_date: '2026-08-23', end_date: '2026-09-22',
   products: [{ id: 'p1', item_id: 50, item_code: 'NK-1', item_name: 'گردنبند', customer_code: '', quantity: 2, unit: 'عدد', needs_assembly: false }],
-  stages: [{ id: 11, project_id: 7, stage_order: 1, title: 'برش', status: 'pending', progress_percent: 0, assigned_personnel: [], required_resources: [] }],
+  stages: [{ id: 11, project_id: 7, stage_order: 1, title: stageTitle, status: 'pending', progress_percent: 0, assigned_personnel: [], required_resources: [] }],
   stage_schedules: PLAN,
+});
+/** the project as the workshop save left it: the plan row titled by the user */
+const savedProject = (version: number) => ({
+  ...projectNamed(SHOWN.titleLater, version, SHOWN.stageSaved),
+  stage_schedules: { 11: { p1: { ...PLAN[11].p1, tasks: [{ ...PLAN[11].p1.tasks[0], taskTitle: SHOWN.myTask }] } } },
 });
 let serverProject = projectNamed(SHOWN.titleNow);
 let logs = [{ id: 1, personnelName: 'سارا', taskTitle: 'برش', quantity: 2, unitRate: 1000, date: '2026-10-01' }];
@@ -36,8 +47,14 @@ let personnel = [{ id: 1, fullName: 'سارا کریمی' }];
 /** a project read the test answers itself, later */
 let pendingRead: ((project: unknown) => void) | null = null;
 let holdReads = false;
+/** a plan save the test answers itself, later */
+let pendingPut: ((answer: unknown) => void) | null = null;
+let holdPut = false;
+let failReads = false;
 const fetchJson = vi.fn(async (url: string, opts?: FetchOpts): Promise<unknown> => {
+  if (url === '/projects/7' && opts?.method === 'PUT' && holdPut) return new Promise(resolve => { pendingPut = resolve; });
   if (url === '/projects/7' && opts?.method === 'PUT') return { id: 7, version: 5 };
+  if (url === '/projects/7' && failReads) throw new Error('read refused');
   if (url === '/projects/7' && holdReads) return new Promise(resolve => { pendingRead = resolve; });
   if (url === '/projects/7') return serverProject;
   if (url === '/projects/7/steps') return { requisitions: {}, allocations: {}, delivery: {} };
@@ -70,6 +87,7 @@ vi.mock('../../components/common/JalaliDateInput', () => ({
   ),
 }));
 
+import toast from 'react-hot-toast';
 import ProjectDetailPage from '../../pages/ProjectDetailPage';
 import ProjectScheduleTab from '../../components/project/ProjectScheduleTab';
 import { QUERY_KEYS } from '../../lib/queryKeys';
@@ -83,6 +101,10 @@ afterEach(() => {
   serverProject = projectNamed(SHOWN.titleNow);
   holdReads = false;
   pendingRead = null;
+  holdPut = false;
+  pendingPut = null;
+  failReads = false;
+  vi.mocked(toast.error).mockClear();
   logs = [{ id: 1, personnelName: 'سارا', taskTitle: 'برش', quantity: 2, unitRate: 1000, date: '2026-10-01' }];
   personnel = [{ id: 1, fullName: 'سارا کریمی' }];
 });
@@ -97,6 +119,10 @@ const renderPage = (client: QueryClient, path = '/projects/7/workshop') => rende
   </QueryClientProvider>,
 );
 const heading = () => screen.getByRole('heading', { level: 1 }).textContent;
+/** the stage cards' titles in the tab */
+const stageTitles = () => within(screen.getByRole('tabpanel')).getAllByRole('heading', { level: 4 }).map(h => h.textContent);
+const manualTitle = () => (screen.getByPlaceholderText(SHOWN.manualTitle) as HTMLInputElement).value;
+const puts = () => fetchJson.mock.calls.filter(([u, o]) => u === '/projects/7' && o?.method === 'PUT').length;
 
 describe('the project page reads through the shared cache (10.3)', () => {
   it('reads the project again on each visit and follows a change saved elsewhere', async () => {
@@ -112,28 +138,64 @@ describe('the project page reads through the shared cache (10.3)', () => {
     await waitFor(() => expect(heading()).toBe(SHOWN.titleLater));
   });
 
-  it('keeps the project the workshop edits started from until they are saved', async () => {
+  it('keeps the project the workshop edits started from until they are saved; the header shows the newest at once', async () => {
     const client = newClient();
     renderPage(client);
-    const manual = await screen.findByPlaceholderText(SHOWN.manualTitle);
-    fireEvent.change(manual, { target: { value: 'کار من' } });
+    fireEvent.change(await screen.findByPlaceholderText(SHOWN.manualTitle), { target: { value: SHOWN.myTask } });
 
-    serverProject = projectNamed(SHOWN.titleLater, 4);
+    serverProject = projectNamed(SHOWN.titleLater, 4, SHOWN.stageLater);
     await act(() => invalidatePreset(client, 'documentChange'));
-    await waitFor(() => expect(reads('/projects/7')).toBe(2));
-    expect(heading()).toBe(SHOWN.titleNow);
-    expect((screen.getByPlaceholderText(SHOWN.manualTitle) as HTMLInputElement).value).toBe('کار من');
+    await waitFor(() => expect(heading()).toBe(SHOWN.titleLater));
+    expect(stageTitles()).toContain(SHOWN.stageNow);
+    expect(manualTitle()).toBe(SHOWN.myTask);
 
     // the project read before the save predates it: it never replaces the saved plan, not even until the save's own read
     holdReads = true;
     fireEvent.click(screen.getByText(SHOWN.save));
     await waitFor(() => expect(pendingRead).not.toBeNull());
+    expect(stageTitles()).not.toContain(SHOWN.stageLater);
+    expect(manualTitle()).toBe(SHOWN.myTask);
+    // the save's read answers; had it answered before the page settled it is read once more, from the saved project
+    serverProject = savedProject(5);
+    holdReads = false;
+    await act(async () => { pendingRead?.(savedProject(5)); });
+    await waitFor(() => expect(stageTitles()).toContain(SHOWN.stageSaved));
+    expect(manualTitle()).toBe(SHOWN.myTask);
+  });
+
+  it('a project read that answers while the save is under way resets nothing, and the save is sent once', async () => {
+    const client = newClient();
+    renderPage(client);
+    fireEvent.change(await screen.findByPlaceholderText(SHOWN.manualTitle), { target: { value: SHOWN.myTask } });
+    serverProject = projectNamed(SHOWN.titleLater, 4, SHOWN.stageLater);
+    await act(() => client.invalidateQueries({ queryKey: QUERY_KEYS.projects.all }));
+    await waitFor(() => expect(reads('/projects/7')).toBe(2));
+
+    holdPut = true;
+    fireEvent.click(screen.getByText(SHOWN.save));
+    await waitFor(() => expect(pendingPut).not.toBeNull());
+    // another read (a status change in the header, a replay notice) answers before the save does
+    await act(() => client.invalidateQueries({ queryKey: QUERY_KEYS.projects.all }));
+    await waitFor(() => expect(reads('/projects/7')).toBe(3));
+    expect(stageTitles()).toContain(SHOWN.stageNow);
+    expect(manualTitle()).toBe(SHOWN.myTask);
+
+    serverProject = savedProject(5);
+    await act(async () => { pendingPut?.({ id: 7, version: 5 }); });
+    await waitFor(() => expect(stageTitles()).toContain(SHOWN.stageSaved));
+    expect(manualTitle()).toBe(SHOWN.myTask);
+    expect(screen.queryByText(SHOWN.unsaved)).toBeNull();
+    expect(puts()).toBe(1);
+  });
+
+  it('a refresh that fails is said once and the page keeps the project it shows', async () => {
+    const client = newClient();
+    renderPage(client);
+    await waitFor(() => expect(heading()).toBe(SHOWN.titleNow));
+    failReads = true;
+    await act(() => client.invalidateQueries({ queryKey: QUERY_KEYS.projects.all }));
+    await waitFor(() => expect(vi.mocked(toast.error)).toHaveBeenCalledTimes(1));
     expect(heading()).toBe(SHOWN.titleNow);
-    expect((screen.getByPlaceholderText(SHOWN.manualTitle) as HTMLInputElement).value).toBe('کار من');
-    const saved = projectNamed(SHOWN.titleLater, 5);
-    await act(async () => { pendingRead?.({ ...saved, stage_schedules: { 11: { p1: { ...PLAN[11].p1, tasks: [{ ...PLAN[11].p1.tasks[0], taskTitle: 'کار من' }] } } } }); });
-    await waitFor(() => expect(heading()).toBe(SHOWN.titleLater));
-    expect((screen.getByPlaceholderText(SHOWN.manualTitle) as HTMLInputElement).value).toBe('کار من');
   });
 
   it('a project deleted while its page is open says so', async () => {
