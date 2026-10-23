@@ -278,11 +278,6 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
             setManualOrderId={s.setManualOrderId}
             isSyncingManualOrder={s.isSyncingManualOrder}
             handleSyncManualOrder={s.handleSyncManualOrder}
-            syncedWcOrders={s.syncedWcOrders}
-            wcOrderLogs={s.wcOrderLogs}
-            syncedWcOrdersError={s.syncedWcOrdersError}
-            wcOrderLogsError={s.wcOrderLogsError}
-            loadSyncedWcOrders={s.loadSyncedWcOrders}
             handleSyncAllStocks={s.handleSyncAllStocks}
             isSyncingAllStocks={s.isSyncingAllStocks}
             access={{

@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../api';
+import { invalidatePreset } from '../lib/queryInvalidation';
 import { mutationSucceeded } from '../lib/settings/mutationSucceeded';
 import { toast } from 'react-hot-toast';
 import { normalizeRialDisplayUnit } from '../lib/rialDisplay';
 import { TREASURY_HIGH_VALUE_THRESHOLD_DEFAULT, TREASURY_HIGH_VALUE_THRESHOLD_KEY, movementDaysError, priceListNamesError, treasuryHighValueThresholdError } from '../lib/settings/settingValues';
 import { wcTestConnectionBody } from '../lib/woocommerce/wcConnectionTest';
 import { stockSyncOutcome } from '../lib/woocommerce/stockSyncOutcome';
-import { errorMessageOf } from '../utils/formatters';
 import { FACTORY_RESET_CONFIRM_WORD, isFactoryResetConfirmed } from '../lib/system/factoryReset';
 import { DEFAULT_WORKFLOW_PRESETS, WorkflowPreset } from '../constants/presets';
 import { DEFAULT_INVENTORY_CONTROL_SECTIONS, InventoryControlPresetSection } from '../constants/inventoryControlPresets';
@@ -23,6 +24,7 @@ import {
   WarehouseItem
 } from './queries/useSettingsQueries';
 import { settingsKeys } from '../lib/queryKeys';
+import { WC_CATALOG_KEY, WC_ORDERS_KEY } from './queries/useWooCatalogQueries';
 import { readPricingStrategies, serializePricingStrategies } from '../lib/items/pricingStrategies';
 import { createSettingsDirtyKeys, trackedSetter, untouchedSetting } from '../lib/settings/settingsFormSync';
 
@@ -31,22 +33,10 @@ const MASKED_SETTING_VALUE = '********';
 
 export type Warehouse = WarehouseItem;
 
-// v9.0.334 (TD-730، نیمه ووکامرس): خطای خواندن (۴۰۳، ۵۰۰) نگه داشته و در جدول نشان داده می‌شود، نه «هنوز هیچ سفارشی ثبت نشده است»
-function loadWcList(endpoint: string, setRows: (rows: unknown[]) => void, setError: (message: string) => void, signal?: AbortSignal) {
-  fetchJson(endpoint, { signal })
-    .then((res) => {
-      setRows(Array.isArray(res) ? res : []);
-      setError('');
-    })
-    .catch((err) => {
-      if (err?.name === 'AbortError') return;
-      setError(errorMessageOf(err) || 'خواندن فهرست از سرور ممکن نشد.');
-    });
-}
-
 export { settingsKeys };
 
 export function useSettings() {
+  const queryClient = useQueryClient();
   const { data: settingsData = [], isLoading: isLoadingSettings } = useSettingsQuery();
   const { data: categoriesData = [], isLoading: isLoadingCategories } = useCategoriesQuery();
   const { data: warehousesData = [], isLoading: isLoadingWarehouses } = useWarehousesQuery();
@@ -124,10 +114,6 @@ export function useSettings() {
   const [wcWebhookSecret, setWcWebhookSecret] = useState('');
   // v8.0.44 (TD-293): انبار فروشگاه اینترنتی (خالی = انبار پیش‌فرض)
   const [wcShopWarehouse, setWcShopWarehouse] = useState('');
-  const [syncedWcOrders, setSyncedWcOrders] = useState<any[]>([]);
-  const [wcOrderLogs, setWcOrderLogs] = useState<any[]>([]);
-  const [syncedWcOrdersError, setSyncedWcOrdersError] = useState('');
-  const [wcOrderLogsError, setWcOrderLogsError] = useState('');
   const [manualOrderId, setManualOrderId] = useState('');
   const [isSyncingManualOrder, setIsSyncingManualOrder] = useState(false);
   const [isSyncingAllStocks, setIsSyncingAllStocks] = useState(false);
@@ -232,11 +218,6 @@ export function useSettings() {
     if (wcShopWarehouseSetting) setWcShopWarehouse(wcShopWarehouseSetting.value);
   }, [settingsData, dirtyKeys]);
 
-  const loadSyncedWcOrders = (signal?: AbortSignal) => {
-    loadWcList('/woocommerce/synced-orders', setSyncedWcOrders, setSyncedWcOrdersError, signal);
-    loadWcList('/woocommerce/order-logs', setWcOrderLogs, setWcOrderLogsError, signal);
-  };
-
   // v10.0.227 (OBS-PR-17): فهرست‌های ووکامرس را خود زبانه ووکامرس هنگام باز شدن می‌خواند، نه هر زبانه تنظیمات برای هر کاربر
 
   const handleSyncAllStocks = async () => {
@@ -255,6 +236,8 @@ export function useSettings() {
       toast.error(err.message || 'خطا در برقراری ارتباط');
     } finally {
       setIsSyncingAllStocks(false);
+      // 10.3 (ARCH review finding 3, part 13): the push's result and the failing links of the catalog panel
+      void queryClient.invalidateQueries({ queryKey: WC_CATALOG_KEY });
     }
   };
 
@@ -270,7 +253,8 @@ export function useSettings() {
       if (res.success) {
         toast.success(res.message || 'سفارش با موفقیت دریافت و فاکتور فروش صادر شد');
         setManualOrderId('');
-        loadSyncedWcOrders();
+        // 10.3 (ARCH review finding 3, part 13): the order lists of the tab and every screen the new sales invoice changes
+        void Promise.all([queryClient.invalidateQueries({ queryKey: WC_ORDERS_KEY }), invalidatePreset(queryClient, 'documentChange')]);
       } else {
         toast.error(res.error || 'خطا در دریافت سفارش');
       }
@@ -430,8 +414,6 @@ export function useSettings() {
     inventoryControlSections, companyName, companyPhone, companyAddress, companyLogo, currency, displayTimezone,
     wcStoreUrl, wcConsumerKey, wcConsumerSecret, wcWebhookSecret, wcShopWarehouse,
     ...edit,
-    wcOrderLogs,
-    wcOrderLogsError,
     isSyncingAllStocks,
     handleSyncAllStocks,
     showCatModal, setShowCatModal,
@@ -461,12 +443,9 @@ export function useSettings() {
     handleClearData,
     isTestingWc,
     handleTestWcConnection,
-    syncedWcOrders,
-    syncedWcOrdersError,
     manualOrderId, setManualOrderId,
     isSyncingManualOrder,
     handleSyncManualOrder,
-    loadSyncedWcOrders,
     isLoading: isLoadingSettings || isLoadingCategories || isLoadingWarehouses
   };
 }

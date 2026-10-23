@@ -1,9 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import type { WcCatalogReport } from '../../lib/woocommerce/wcCatalog';
+import { READ_ON_EVERY_OPENING } from './readOnEveryOpening';
 
+/** 10.3 (ARCH review finding 3, part 13): every read of the WooCommerce tab, which a shop write refreshes together */
+export const WC_KEY = ['woocommerce'] as const;
 /** 10.2 package 6 (D-04 part A): the online shop catalog links of the WooCommerce tab */
-export const WC_CATALOG_KEY = ['woocommerce', 'catalog'] as const;
+export const WC_CATALOG_KEY = [...WC_KEY, 'catalog'] as const;
+export const WC_ORDERS_KEY = [...WC_KEY, 'orders'] as const;
 
 export function useWcCatalogQuery() {
   return useQuery<WcCatalogReport>({
@@ -59,3 +63,21 @@ export function useSetWcSkuRenameMutation() {
     onSettled: () => { void queryClient.invalidateQueries({ queryKey: WC_CATALOG_KEY }); },
   });
 }
+
+/**
+ * 10.3 (ARCH review finding 3, part 13): the invoices made from shop orders and the order log, read again on each opening
+ * of the WooCommerce tab (v10.0.227, OBS-PR-17: only that tab reads them) and refreshed by an order fetched by hand
+ */
+function useWcOrderListQuery(list: 'synced' | 'logs', url: string) {
+  return useQuery({
+    queryKey: [...WC_ORDERS_KEY, list],
+    queryFn: async ({ signal }) => {
+      const res: unknown = await fetchJson(url, { signal });
+      return Array.isArray(res) ? (res as unknown[]) : [];
+    },
+    ...READ_ON_EVERY_OPENING,
+  });
+}
+
+export const useWcSyncedOrdersQuery = () => useWcOrderListQuery('synced', '/woocommerce/synced-orders');
+export const useWcOrderLogsQuery = () => useWcOrderListQuery('logs', '/woocommerce/order-logs');

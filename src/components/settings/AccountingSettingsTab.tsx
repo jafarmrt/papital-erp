@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useMemo, useState, type SetStateAction } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
 import { RefreshCw, Save, ShieldCheck, Info, Check } from 'lucide-react';
@@ -10,6 +11,15 @@ import { postingAccountsOf } from '../../lib/accounting/postingAccount';
 import {
   ACCOUNT_MAPPING_CONCEPTS, accountTypeFitsConcept, conceptAccountTypesText, type AccountMappingConcept,
 } from '../../lib/accounting/accountMappingConcepts';
+import { ACCOUNTING_MAPPINGS_KEY, useAccountingMappingsQuery, useAccountsListQuery, type AccountingMappings } from '../../hooks/accounting/useAccountsQueries';
+import { invalidateAfterAccountChange } from '../../hooks/accounting/accountingInvalidation';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
+import { useSeededForm } from '../../hooks/useSeededForm';
+import { errorMessageOf } from '../../utils';
+
+const NO_ACCOUNTS: Account[] = [];
+type MappingsForm = Pick<AccountingMappings, 'mappings' | 'disabled'>;
+const mappingsFormOf = (read: AccountingMappings | undefined): MappingsForm => ({ mappings: read?.mappings ?? {}, disabled: read?.disabled ?? [] });
 
 // V1.7.0 — تب «تنظیمات حسابداری»: نگاشت سندهای خودکار دوبل + همگام‌سازی کدینگ پیش‌فرض.
 // v9.0.199 (TD-550، B03-08): همه ۲۶ مفهوم سرور از فهرست مشترک (پیش‌تر ۲۳ ردیف؛ کالای در جریان ساخت، حقوق ثابت و
@@ -19,42 +29,35 @@ function mappingAccountsFor(concept: AccountMappingConcept, postingAccounts: Acc
 }
 
 // v9.0.131 (TD-668): استقرار کدینگ پیش‌فرض فقط برای مدیر سیستم است (همان گارد API)؛ دیگران فقط پیام آن را می‌بینند
+// 10.3 (ARCH review finding 3, part 13): the mappings are read through the shared cache, again on each opening of the
+// tab, and the form follows a newer read until the user edits it; the accounts come from the chart's shared list
 export function AccountingSettingsTab({ currentUser, canSeedDefaults = true }: { currentUser: any; canSeedDefaults?: boolean }) {
-  const [mappings, setMappings] = useState<Record<string, string>>({});
-  const [disabled, setDisabled] = useState<string[]>([]);
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [accountsCount, setAccountsCount] = useState<number>(0);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const mappingsRead = useOpeningRead(useAccountingMappingsQuery(), true);
+  const { form, edit, refill } = useSeededForm(mappingsRead.data, mappingsFormOf);
+  const { mappings, disabled } = form;
+  const setMappings = useCallback((change: SetStateAction<Record<string, string>>) => {
+    edit(prev => ({ ...prev, mappings: typeof change === 'function' ? change(prev.mappings) : change }));
+  }, [edit]);
+  const setDisabled = useCallback((change: SetStateAction<string[]>) => {
+    edit(prev => ({ ...prev, disabled: typeof change === 'function' ? change(prev.disabled) : change }));
+  }, [edit]);
+  const accounts = useAccountsListQuery().data ?? NO_ACCOUNTS;
+  const accountsCount = mappingsRead.data?.accountsCount ?? 0;
+  const loading = mappingsRead.data === undefined && !mappingsRead.error;
   const [isSaving, setIsSaving] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
   const postingAccounts = useMemo(() => postingAccountsOf(accounts), [accounts]);
-
-  const loadData = async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const [res, accRes] = await Promise.all([
-        fetchJson('/accounting/mappings', { signal }),
-        fetchJson('/accounting/accounts', { signal }).catch(() => []),
-      ]);
-      const { disabled: dis, accountsCount: cnt, ...m } = res || {};
-      setMappings(m || {});
-      setDisabled(Array.isArray(dis) ? dis : []);
-      setAccountsCount(Number(cnt) || 0);
-      const items = Array.isArray(accRes?.data) ? accRes.data : (Array.isArray(accRes) ? accRes : []);
-      setAccounts(items);
-    } catch (err: any) {
-      if (err?.name === 'AbortError') return;
-      toast.error(err?.message || 'خطا در دریافت تنظیمات حسابداری');
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  const sayFailed = useEffectEvent(() => { toast.error(errorMessageOf(mappingsRead.error) || 'خطا در دریافت تنظیمات حسابداری'); });
   useEffect(() => {
-    const controller = new AbortController();
-    void loadData(controller.signal);
-    return () => controller.abort();
-  }, []);
+    if (mappingsRead.failedAt) sayFailed();
+  }, [mappingsRead.failedAt]);
+
+  /** the mappings and the chart as they are now; the form is filled again from them */
+  const loadData = async () => {
+    await Promise.all([queryClient.invalidateQueries({ queryKey: ACCOUNTING_MAPPINGS_KEY }), invalidateAfterAccountChange(queryClient)]);
+    refill();
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -64,6 +67,7 @@ export function AccountingSettingsTab({ currentUser, canSeedDefaults = true }: {
         body: JSON.stringify({ ...mappings, disabled }),
       });
       toast.success('نگاشت حساب‌ها ذخیره شد');
+      await loadData();
     } catch (err: any) {
       toast.error(err?.message || 'خطا در ذخیره تنظیمات');
     } finally {

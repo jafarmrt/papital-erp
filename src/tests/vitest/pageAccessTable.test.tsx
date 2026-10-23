@@ -116,7 +116,7 @@ describe('one page-access table for menu, routes, shortcuts and settings tabs (T
           wcWebhookSecret="" setWcWebhookSecret={noop} wcShopWarehouse="" setWcShopWarehouse={noop} warehouses={[]}
           handleSaveSettings={noop} isSaving={false} handleTestWcConnection={noop} isTestingWc={false}
           manualOrderId="" setManualOrderId={noop} isSyncingManualOrder={false} handleSyncManualOrder={noop}
-          syncedWcOrders={[]} wcOrderLogs={[]} loadSyncedWcOrders={noop} handleSyncAllStocks={noop} isSyncingAllStocks={false}
+          handleSyncAllStocks={noop} isSyncingAllStocks={false}
           access={{ connection: false, shopWarehouse: true, sync: false }}
         />
       </QueryClientProvider>,

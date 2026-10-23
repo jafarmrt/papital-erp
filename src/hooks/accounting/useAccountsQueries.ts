@@ -4,6 +4,7 @@ import { QUERY_KEYS } from '../../lib/queryKeys';
 import type { Account, FinancialSummaryStats } from '../../types';
 import { ACCOUNTING_LIST_QUERY_OPTIONS, fetchAccountingList, silentMutationError, type AccountingListQueryOptions } from './accountingQueryConfig';
 import { invalidateAfterAccountChange } from './accountingInvalidation';
+import { READ_ON_EVERY_OPENING } from '../queries/readOnEveryOpening';
 
 /**
  * کدینگ حساب‌ها و خلاصه داشبورد مالی: خواندن با useQuery و ایجاد/ویرایش/حذف/کدینگ استاندارد با useMutation
@@ -87,4 +88,35 @@ export function useAccountMutations() {
   });
 
   return { createAccount, updateAccount, deleteAccount, seedStandardAccounts };
+}
+
+/** `GET /accounting/mappings`: the account code of each automatic posting concept, the concepts turned off, and how many accounts exist */
+export interface AccountingMappings {
+  mappings: Record<string, string>;
+  disabled: string[];
+  accountsCount: number;
+}
+
+export const ACCOUNTING_MAPPINGS_KEY = [...QUERY_KEYS.accounting.all, 'mappings'] as const;
+
+/**
+ * 10.3 (ARCH review finding 3, part 13): the accounting settings tab's mappings, read again on each opening of the tab;
+ * under `accounting`, so a seeded chart of accounts or a change of the mappings elsewhere refreshes it
+ */
+export function useAccountingMappingsQuery() {
+  return useQuery<AccountingMappings>({
+    queryKey: ACCOUNTING_MAPPINGS_KEY,
+    queryFn: async ({ signal }) => {
+      const res = await fetchJson<Record<string, unknown> | null>('/accounting/mappings', { signal });
+      const { disabled, accountsCount, ...codes } = res ?? {};
+      const mappings: Record<string, string> = {};
+      for (const [concept, code] of Object.entries(codes)) if (typeof code === 'string') mappings[concept] = code;
+      return {
+        mappings,
+        disabled: Array.isArray(disabled) ? disabled.filter((d): d is string => typeof d === 'string') : [],
+        accountsCount: Number(accountsCount) || 0,
+      };
+    },
+    ...READ_ON_EVERY_OPENING,
+  });
 }

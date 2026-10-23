@@ -1,14 +1,6 @@
-import { useEffect, useState } from 'react';
 import { Lock, ShieldCheck, Terminal, RefreshCw } from 'lucide-react';
-import { fetchJson } from '../../api';
-
-/** V1.1.1: خروجی GET /system/env — فقط وضعیت set/not-set؛ هرگز مقدار secret ها */
-interface SystemEnvInfo {
-  db: 'set' | 'not set';
-  nodeEnv: string;
-  nodeVersion: string;
-  flags: Record<string, 'set' | 'not set'>;
-}
+import { useSystemEnvQuery } from '../../hooks/queries/useSystemQueries';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 
 /** V4.0.29: تب پیکربندی سیستمی فقط نمایشی است — روت‌های اجرای آزمون درون‌برنامه‌ای
  * حذف شده‌اند و اجرای آزمون‌ها فقط از طریق CLI استاندارد `npm run test` انجام می‌شود. */
@@ -51,20 +43,11 @@ const LOCKED_FLAGS: Array<{ key: string; label: string; reason: string }> = [
 ];
 
 export function SystemConfigTab() {
-  const [envInfo, setEnvInfo] = useState<SystemEnvInfo | null>(null);
-  const [isLoadingEnv, setIsLoadingEnv] = useState(true);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    setIsLoadingEnv(true);
-    fetchJson<SystemEnvInfo>('/system/env', { signal: controller.signal })
-      .then(setEnvInfo)
-      .catch((err) => {
-        if (err?.name === 'AbortError') return;
-      })
-      .finally(() => setIsLoadingEnv(false));
-    return () => controller.abort();
-  }, []);
+  // 10.3 (ARCH review finding 3, part 13): read through the shared cache, again on each opening of the tab; a failed read
+  // says so instead of showing the development mode as if it had been read
+  const read = useOpeningRead(useSystemEnvQuery(), true);
+  const envInfo = read.data ?? null;
+  const isLoadingEnv = envInfo === null && !read.error;
 
   const nodeEnv = envInfo?.nodeEnv || 'development';
   const nodeEnvHelp = NODE_ENV_HELP[nodeEnv] || NODE_ENV_HELP.development;
@@ -80,6 +63,8 @@ export function SystemConfigTab() {
           <div className="flex items-center gap-2 text-xs text-slate-500 py-4">
             <RefreshCw size={14} className="animate-spin" /> در حال دریافت وضعیت محیط...
           </div>
+        ) : envInfo === null ? (
+          <div role="alert" className="text-xs text-red-700 py-4">وضعیت محیط از سرور دریافت نشد؛ زبانه را دوباره باز کنید.</div>
         ) : (
           <div className="space-y-3">
             <div className="flex items-center gap-3 flex-wrap">
@@ -116,13 +101,15 @@ export function SystemConfigTab() {
                   <span className="text-sm font-bold text-slate-700">{flag.label}</span>
                   <span className="text-[10px] font-mono text-slate-400" dir="ltr">{flag.key}</span>
                 </div>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full border font-mono ${
-                  envInfo?.flags?.[flag.key] === 'set'
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : 'bg-slate-100 text-slate-500 border-slate-200'
-                }`}>
-                  {envInfo?.flags?.[flag.key] === 'set' ? 'تنظیم‌شده' : 'تنظیم‌نشده'}
-                </span>
+                {envInfo && (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full border font-mono ${
+                    envInfo.flags?.[flag.key] === 'set'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-slate-100 text-slate-500 border-slate-200'
+                  }`}>
+                    {envInfo.flags?.[flag.key] === 'set' ? 'تنظیم‌شده' : 'تنظیم‌نشده'}
+                  </span>
+                )}
               </div>
               <p className="text-[11px] text-slate-500 leading-relaxed">{flag.reason}</p>
             </div>

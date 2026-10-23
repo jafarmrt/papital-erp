@@ -1,4 +1,5 @@
-import { useEffect, useState, useId } from 'react';
+import { useEffect, useEffectEvent, useState, useId } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Landmark } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { fetchJson } from '../../api';
@@ -6,10 +7,16 @@ import { errorMessageOf, getTodayJalaliDate } from '../../utils';
 import { toPersianDigits } from '../../utils/persianNumber';
 import { normalizeDecimalString, toLatinDigits } from '../../lib/numericInput';
 import { statutoryRatesError, type TaxBracket } from '../../lib/payroll/statutoryDeductions';
+import { useStatutoryRatesQuery } from '../../hooks/queries/usePieceworkQueries';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
+import { useSeededForm } from '../../hooks/useSeededForm';
+import { invalidateDomain } from '../../lib/queryInvalidation';
 
 /**
  * v10.0.210 (TD-1087، طرح حقوق §۳.۳ بند ۱، تصمیم ت۴ الف): «نرخ‌های بیمه و مالیات حقوق» هر سال جلالی. حسابدار اعداد را از
  * بخشنامه تأمین اجتماعی و قانون بودجه همان سال وارد می‌کند؛ هیچ نرخ پیش‌فرضی نیست. ذخیره `payroll.rates_manage` می‌خواهد.
+ * 10.3 (ARCH review finding 3, part 13): the rows are read through the shared cache, again on each opening of the tab; the
+ * form follows a save made elsewhere until the user edits it, and a save refreshes everything under `piecework`.
  */
 
 interface RatesView {
@@ -31,6 +38,7 @@ interface FormState {
   version?: number;
 }
 
+const NO_YEARS: RatesView[] = [];
 const EMPTY_FORM: FormState = { employeeInsurancePercent: '', employerInsurancePercent: '', insuranceWageCap: '', taxBrackets: [{ from: '0', to: '', rate: '' }], deductInsuranceFromTax: false };
 const inputClass = 'w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono';
 const clean = (v: string) => normalizeDecimalString(v) || '0';
@@ -50,27 +58,20 @@ function formOf(view: RatesView | undefined): FormState {
 export function PayrollStatutoryRatesTab() {
   const fieldId = useId();
   const thisYear = Number(toLatinDigits(getTodayJalaliDate()).slice(0, 4));
-  const [years, setYears] = useState<RatesView[]>([]);
+  const queryClient = useQueryClient();
+  const read = useOpeningRead(useStatutoryRatesQuery<RatesView>(), true);
+  const years = read.data ?? NO_YEARS;
   const [year, setYear] = useState<number>(thisYear);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const { form, edit: setForm, refill } = useSeededForm(years.find(r => r.jalaliYear === year), formOf);
   const [saving, setSaving] = useState(false);
-
-  const load = async (selected: number) => {
-    try {
-      const res = await fetchJson('/piecework/statutory-rates') as { data?: RatesView[] };
-      const list = Array.isArray(res?.data) ? res.data : [];
-      setYears(list);
-      setForm(formOf(list.find(r => r.jalaliYear === selected)));
-    } catch (err) {
-      toast.error(errorMessageOf(err));
-    }
-  };
-
-  useEffect(() => { void load(thisYear); }, [thisYear]);
+  const sayFailed = useEffectEvent(() => { toast.error(errorMessageOf(read.error)); });
+  useEffect(() => {
+    if (read.failedAt) sayFailed();
+  }, [read.failedAt]);
 
   const pickYear = (y: number) => {
     setYear(y);
-    setForm(formOf(years.find(r => r.jalaliYear === y)));
+    refill();
   };
 
   const payload = () => ({
@@ -90,7 +91,8 @@ export function PayrollStatutoryRatesTab() {
     try {
       await fetchJson(`/piecework/statutory-rates/${year}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       toast.success(`نرخ‌های سال ${toPersianDigits(String(year))} ذخیره شد`);
-      await load(year);
+      await invalidateDomain(queryClient, 'piecework');
+      refill();
     } catch (err) {
       toast.error(errorMessageOf(err));
     } finally {

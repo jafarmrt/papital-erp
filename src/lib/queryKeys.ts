@@ -167,6 +167,9 @@ export const QUERY_KEYS = {
     eidiReport: (year: number) => ['piecework', 'reports', 'eidi', year] as const,
     /** a title's rate history, or every title's when `taskId` is null */
     taskRateHistory: (taskId: number | null) => ['piecework', 'tasks-history', taskId ?? 'all'] as const,
+    /** 10.3 (part 13): every Jalali year's insurance and payroll tax rates, and its eidi method (payroll rate settings) */
+    statutoryRates: () => ['piecework', 'statutory-rates'] as const,
+    eidiRates: () => ['piecework', 'eidi-rates'] as const,
   },
 
   // Daily Logs

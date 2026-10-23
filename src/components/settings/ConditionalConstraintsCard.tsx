@@ -1,27 +1,28 @@
 import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { DatabaseZap, RefreshCw, Wrench } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { fetchJson } from '../../api';
 import { errorMessageOf, formatPersianNumber } from '../../utils';
 import { confirmAction } from '../ConfirmDialogHost';
-import {
-  conditionalConstraintCause, type ConditionalConstraintBuildResult, type ConditionalConstraintEntry,
-} from '../../lib/system/conditionalConstraints';
+import { conditionalConstraintCause, type ConditionalConstraintBuildResult } from '../../lib/system/conditionalConstraints';
+import { CONDITIONAL_CONSTRAINTS_KEY, useConditionalConstraintsQuery } from '../../hooks/queries/useSystemQueries';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 
 /**
  * v9.0.427 (TD-589، B01-09، تصمیم ت۵ الف): قیدها و ایندکس‌های یکتای شرطی مهاجرت‌ها که روی داده ناپاک ساخته نشده‌اند، با
  * علت؛ مدیر سامانه پس از اصلاح داده آن‌ها را می‌سازد. نخست پیش‌نمایش، سپس تأیید و ساختن؛ داده هرگز عوض نمی‌شود.
+ * 10.3 (ARCH review finding 3, part 13): read again on each opening of the tab, never the list an earlier opening left.
  */
-const QUERY_KEY = ['system', 'conditional-constraints'] as const;
 
 export function ConditionalConstraintsCard() {
   const queryClient = useQueryClient();
   const [isBuilding, setIsBuilding] = useState(false);
-  const { data, isLoading, isFetching, isError, refetch } = useQuery({
-    queryKey: QUERY_KEY,
-    queryFn: ({ signal }) => fetchJson<{ missing: ConditionalConstraintEntry[] }>('/system/conditional-constraints', { signal }),
-  });
+  const query = useConditionalConstraintsQuery();
+  const { isFetching, refetch } = query;
+  const { data, error } = useOpeningRead(query, true);
+  const isLoading = data === undefined && !error;
+  const isError = error !== null;
   const missing = Array.isArray(data?.missing) ? data.missing : [];
   const readyCount = missing.filter(e => e.state === 'ready').length;
 
@@ -50,7 +51,7 @@ export function ConditionalConstraintsCard() {
       toast.error(errorMessageOf(err) || 'ساختن قیدهای جاافتاده انجام نشد؛ دوباره تلاش کنید.');
     } finally {
       setIsBuilding(false);
-      void queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      void queryClient.invalidateQueries({ queryKey: CONDITIONAL_CONSTRAINTS_KEY });
     }
   };
 

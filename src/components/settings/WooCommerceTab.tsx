@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState, useId } from 'react';
+import React, { useState, useId } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { FolderTree, ShoppingBag, Copy, Check, RefreshCw, Key, ShieldCheck, Database, FileText } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { formatPersianDateTime, formatPersianDate, formatPersianNumber } from '../../utils';
+import { errorMessageOf, formatPersianDateTime, formatPersianDate, formatPersianNumber } from '../../utils';
 import { WcOrderLogStatusBadge } from './WcOrderLogStatusBadge';
 import { ShopWarehouseSelect } from './ShopWarehouseSelect';
 import { WcListEmptyRow } from './WcListEmptyRow';
@@ -10,6 +11,8 @@ import { BULK_PUSH_OPEN_ORDERS_NOTE } from '../../lib/woocommerce/wcAutoPush';
 import type { WarehouseItem } from '../../hooks/queries/useSettingsQueries';
 import { copyToClipboard } from '../../utils/clipboard';
 import { DecimalInput } from '../common/DecimalInput';
+import { WC_ORDERS_KEY, useWcOrderLogsQuery, useWcSyncedOrdersQuery } from '../../hooks/queries/useWooCatalogQueries';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 
 interface WooCommerceTabProps {
   wcStoreUrl: string;
@@ -31,12 +34,6 @@ interface WooCommerceTabProps {
   setManualOrderId: (v: string) => void;
   isSyncingManualOrder: boolean;
   handleSyncManualOrder: (e: React.FormEvent) => void;
-  syncedWcOrders: any[];
-  wcOrderLogs: any[];
-  /** v9.0.334 (TD-730): خطای خواندن هر فهرست؛ خالی یعنی خوانده شد */
-  syncedWcOrdersError?: string;
-  wcOrderLogsError?: string;
-  loadSyncedWcOrders: (signal?: AbortSignal) => void;
   handleSyncAllStocks: () => void;
   isSyncingAllStocks: boolean;
   /** v9.0.131 (TD-668): هر بخش فقط برای کسی که API آن را می‌پذیرد فعال است (پیش‌فرض: همه، برای مدیر سیستم) */
@@ -53,6 +50,8 @@ export interface WooCommerceTabAccess {
 }
 
 const FULL_ACCESS: WooCommerceTabAccess = { connection: true, shopWarehouse: true, sync: true };
+const NO_ROWS: unknown[] = [];
+const listError = (error: unknown) => (error ? errorMessageOf(error) || 'خواندن فهرست از سرور ممکن نشد.' : '');
 
 export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
   wcStoreUrl,
@@ -74,11 +73,6 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
   setManualOrderId,
   isSyncingManualOrder,
   handleSyncManualOrder,
-  syncedWcOrders,
-  wcOrderLogs,
-  syncedWcOrdersError = '',
-  wcOrderLogsError = '',
-  loadSyncedWcOrders,
   handleSyncAllStocks,
   isSyncingAllStocks,
   access = FULL_ACCESS,
@@ -86,13 +80,15 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
   const fieldId = useId();
   const [copiedWebhook, setCopiedWebhook] = useState(false);
   // v10.0.227 (OBS-PR-17): فهرست سفارش‌ها و گزارش ووکامرس فقط وقتی این زبانه باز می‌شود خوانده می‌شوند
-  const loadListsRef = useRef(loadSyncedWcOrders);
-  loadListsRef.current = loadSyncedWcOrders;
-  useEffect(() => {
-    const controller = new AbortController();
-    loadListsRef.current(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // 10.3 (ARCH review finding 3, part 13): through the shared cache, again on each opening; a failed read stays in its
+  // table (v9.0.334, TD-730) instead of «no orders yet»
+  const queryClient = useQueryClient();
+  const ordersRead = useOpeningRead(useWcSyncedOrdersQuery(), true);
+  const logsRead = useOpeningRead(useWcOrderLogsQuery(), true);
+  const syncedWcOrders: any[] = ordersRead.data ?? NO_ROWS;
+  const wcOrderLogs: any[] = logsRead.data ?? NO_ROWS;
+  const syncedWcOrdersError = listError(ordersRead.error);
+  const wcOrderLogsError = listError(logsRead.error);
   const [activeLogSubTab, setActiveLogSubTab] = useState<'audit_logs' | 'invoices'>('audit_logs');
 
   // Generate public webhook URL
@@ -357,7 +353,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
           </div>
 
           <button
-            onClick={() => loadSyncedWcOrders()}
+            onClick={() => void queryClient.invalidateQueries({ queryKey: WC_ORDERS_KEY })}
             className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 bg-white px-2.5 py-1 rounded border border-slate-200 shadow-2xs"
           >
             <RefreshCw size={12} />

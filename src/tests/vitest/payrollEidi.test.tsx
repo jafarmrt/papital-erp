@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 const calls: Array<{ url: string; options?: { method?: string; body?: string } }> = [];
 const answers: { current: (url: string) => unknown } = { current: () => ({}) };
@@ -86,7 +87,7 @@ describe('eidi screens (TD-1089)', () => {
 
   it('saves the labor-law fields of the selected year', async () => {
     answers.current = () => ({ data: [] });
-    render(<PayrollEidiRatesSection />);
+    renderWithQuery(<PayrollEidiRatesSection />);
     await waitFor(() => expect(calls.some(c => c.url === '/piecework/eidi-rates')).toBe(true));
     fireEvent.change(screen.getByLabelText('روش'), { target: { value: 'labor_law' } });
     fireEvent.change(screen.getByLabelText('روزهای مزد عیدی'), { target: { value: '۶۰' } });

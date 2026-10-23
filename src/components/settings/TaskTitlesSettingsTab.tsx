@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useId } from 'react';
+import React, { useState, useEffect, useEffectEvent, useId } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { confirmAction } from '../ConfirmDialogHost';
 import { Layers, Plus, Edit3, Trash2, Search, FolderPlus, Tag, X } from 'lucide-react';
 import { fetchJson } from '../../api';
@@ -7,30 +8,34 @@ import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { toast } from 'react-hot-toast';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { DialogLayer } from '../common/DialogLayer';
+import type { PieceworkTask } from '../../types';
+import { usePieceworkCategoriesQuery, usePieceworkTasksQuery, type PieceworkCategory as TaskCategory } from '../../hooks/queries/usePieceworkQueries';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
+import { invalidateDomain } from '../../lib/queryInvalidation';
 
-interface TaskCategory {
-  id: number | string;
-  name: string;
-  description?: string;
-}
+const NO_TASKS: PieceworkTask[] = [];
+const NO_CATEGORIES: TaskCategory[] = [];
 
-interface PieceworkTask {
-  id: number;
-  code: string;
-  title: string;
-  category: string;
-  defaultRate: number;
-  unit: string;
-  description?: string;
-}
-
+/**
+ * The piecework titles and their categories. 10.3 (ARCH review finding 3, part 13): they are read through the shared
+ * cache of the payroll page (`piecework`), again on each opening of the tab; a change here refreshes the payroll page and
+ * the workshop tab, and a change there refreshes this tab while it is open.
+ */
 export function TaskTitlesSettingsTab() {
   const fieldId = useId();
   const rial = useRialDisplay();
   const curLbl = rial.label;
-  const [tasks, setTasks] = useState<PieceworkTask[]>([]);
-  const [categories, setCategories] = useState<TaskCategory[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const queryClient = useQueryClient();
+  const tasksRead = useOpeningRead(usePieceworkTasksQuery('active'), true);
+  const categoriesRead = useOpeningRead(usePieceworkCategoriesQuery(), true);
+  const tasks = tasksRead.data ?? NO_TASKS;
+  const categories = categoriesRead.data ?? NO_CATEGORIES;
+  const failedAt = Math.max(tasksRead.failedAt, categoriesRead.failedAt);
+  const loading = (tasksRead.data === undefined || categoriesRead.data === undefined) && failedAt === 0;
+  const sayFailed = useEffectEvent(() => { toast.error('خطا در دریافت اطلاعات عناوین کاری'); });
+  useEffect(() => {
+    if (failedAt) sayFailed();
+  }, [failedAt]);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCatFilter, setSelectedCatFilter] = useState<string>('ALL');
 
@@ -54,26 +59,8 @@ export function TaskTitlesSettingsTab() {
   const [catDesc, setCatDesc] = useState('');
   const [isSavingCat, setIsSavingCat] = useState(false);
 
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const [tData, cData] = await Promise.all([
-        fetchJson('/piecework/tasks'),
-        fetchJson('/piecework/categories')
-      ]);
-      setTasks(Array.isArray(tData) ? tData : []);
-      setCategories(Array.isArray(cData) ? cData : []);
-    } catch (err) {
-      console.error('Error loading task titles and categories:', err);
-      toast.error('خطا در دریافت اطلاعات عناوین کاری');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void loadData();
-  }, []);
+  /** after a title or category change: the payroll page, the workshop tab and this tab read them again */
+  const loadData = () => invalidateDomain(queryClient, 'piecework');
 
   // Save Task (Create or Edit)
   const handleSaveTask = async (e: React.FormEvent) => {

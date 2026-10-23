@@ -15,9 +15,10 @@ export function ownReads(file: string): string[] {
   const at = (node: ts.Node) => `${file}:${sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1}`;
   const methodOf = (init: ts.Expression | undefined): string | null => {
     if (init === undefined || !ts.isObjectLiteralExpression(init)) return null;
-    const method = init.properties.find((p): p is ts.PropertyAssignment => ts.isPropertyAssignment(p) && p.name.getText(sf) === 'method');
+    const method = init.properties.find(p => (ts.isPropertyAssignment(p) || ts.isShorthandPropertyAssignment(p)) && p.name.getText(sf) === 'method');
     if (!method) return null;
-    return ts.isStringLiteralLike(method.initializer) ? method.initializer.text.toUpperCase() : 'WRITE';
+    // a method held in a variable (`{ method }`, `method: verb`) is a write chosen at run time
+    return ts.isPropertyAssignment(method) && ts.isStringLiteralLike(method.initializer) ? method.initializer.text.toUpperCase() : 'WRITE';
   };
   const visit = (node: ts.Node): void => {
     if (ts.isImportSpecifier(node) && node.propertyName?.getText(sf) === 'fetchJson') found.push(at(node));

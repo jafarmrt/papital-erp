@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 import { ACCOUNT_MAPPING_CONCEPTS } from '../../lib/accounting/accountMappingConcepts';
 
 const { fetchJson, toastFn } = vi.hoisted(() => {
@@ -49,7 +50,7 @@ afterEach(() => cleanup());
 
 describe('account mapping page (TD-550)', () => {
   it('lists every server concept with Persian labels', async () => {
-    render(<AccountingSettingsTab currentUser={{ role: 'admin' }} />);
+    renderWithQuery(<AccountingSettingsTab currentUser={{ role: 'admin' }} />);
     expect(await screen.findByText('کالای در جریان ساخت')).toBeTruthy();
     for (const label of ['هزینه حقوق ثابت', 'سایر کسورات حقوق پرداختنی', 'بیمه پرداختنی', 'مالیات حقوق پرداختنی', 'هزینه بیمه سهم کارفرما', 'تراز اختتامیه و افتتاحیه']) expect(screen.getByText(label)).toBeTruthy();
     expect(screen.getAllByPlaceholderText('انتخاب حساب معین یا تفصیلی...')).toHaveLength(ACCOUNT_MAPPING_CONCEPTS.length);
@@ -57,7 +58,7 @@ describe('account mapping page (TD-550)', () => {
   });
 
   it('the raw materials picker offers only posting asset accounts, and a refused save shows the server reason', async () => {
-    render(<AccountingSettingsTab currentUser={{ role: 'admin' }} />);
+    renderWithQuery(<AccountingSettingsTab currentUser={{ role: 'admin' }} />);
     const row = (await screen.findByText('موجودی مواد اولیه')).closest('div.p-3') as HTMLElement;
     const picker = within(row).getByPlaceholderText('انتخاب حساب معین یا تفصیلی...');
     fireEvent.focus(picker);
