@@ -30,7 +30,8 @@ function mappingAccountsFor(concept: AccountMappingConcept, postingAccounts: Acc
 
 // v9.0.131 (TD-668): استقرار کدینگ پیش‌فرض فقط برای مدیر سیستم است (همان گارد API)؛ دیگران فقط پیام آن را می‌بینند
 // 10.3 (ARCH review finding 3, part 13): the mappings are read through the shared cache, again on each opening of the
-// tab, and the form follows a newer read until the user edits it; the accounts come from the chart's shared list
+// tab, and the form follows a newer read until the user edits it; the accounts come from the chart's shared list. It is
+// saved only once read: a save from the empty form of a failed read would turn every switched-off concept back on.
 export function AccountingSettingsTab({ currentUser, canSeedDefaults = true }: { currentUser: any; canSeedDefaults?: boolean }) {
   const queryClient = useQueryClient();
   const mappingsRead = useOpeningRead(useAccountingMappingsQuery(), true);
@@ -67,6 +68,10 @@ export function AccountingSettingsTab({ currentUser, canSeedDefaults = true }: {
         body: JSON.stringify({ ...mappings, disabled }),
       });
       toast.success('نگاشت حساب‌ها ذخیره شد');
+      // the saved mappings (the server keeps them as sent) at once, so the form filled again shows them even when the
+      // refresh after the save fails
+      await queryClient.cancelQueries({ queryKey: ACCOUNTING_MAPPINGS_KEY });
+      queryClient.setQueryData<AccountingMappings>(ACCOUNTING_MAPPINGS_KEY, prev => prev && { ...prev, mappings, disabled });
       await loadData();
     } catch (err: any) {
       toast.error(err?.message || 'خطا در ذخیره تنظیمات');
@@ -143,7 +148,7 @@ export function AccountingSettingsTab({ currentUser, canSeedDefaults = true }: {
           </div>
           <button
             onClick={handleSave}
-            disabled={isSaving || loading}
+            disabled={isSaving || mappingsRead.data === undefined}
             className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl transition disabled:opacity-50 cursor-pointer"
           >
             <Save size={14} />

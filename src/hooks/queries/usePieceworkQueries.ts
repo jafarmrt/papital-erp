@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, type QueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import type { PieceworkPayroll, PieceworkPersonnelRate, PieceworkTask } from '../../types';
 import { QUERY_KEYS } from '../../lib/queryKeys';
@@ -16,21 +16,27 @@ export interface PieceworkCategory { id: number | string; name: string; descript
 
 const arrayOf = <T,>(res: unknown): T[] => (Array.isArray(res) ? res as T[] : []);
 
-export function usePieceworkTasksQuery(status: 'active' | 'archived' | 'all') {
+/** `readOnEveryOpening`: a settings tab's read (10.3, part 13), which says a failure at once instead of retrying */
+interface PieceworkReadOptions { readOnEveryOpening?: boolean }
+const readOptionsOf = (options: PieceworkReadOptions) => (options.readOnEveryOpening ? READ_ON_EVERY_OPENING : {});
+
+export function usePieceworkTasksQuery(status: 'active' | 'archived' | 'all', options: PieceworkReadOptions = {}) {
   return useQuery<PieceworkTask[]>({
     queryKey: QUERY_KEYS.piecework.tasks(status),
     queryFn: async ({ signal }) => arrayOf<PieceworkTask>(await fetchJson(`/piecework/tasks?status=${status}`, { signal })),
     // the table keeps the titles it shows while another status loads; a late answer never lands under another status
     placeholderData: keepPreviousData,
     refetchOnMount: 'always',
+    ...readOptionsOf(options),
   });
 }
 
-export function usePieceworkCategoriesQuery() {
+export function usePieceworkCategoriesQuery(options: PieceworkReadOptions = {}) {
   return useQuery<PieceworkCategory[]>({
     queryKey: QUERY_KEYS.piecework.categories(),
     queryFn: async ({ signal }) => arrayOf<PieceworkCategory>(await fetchJson('/piecework/categories', { signal })),
     refetchOnMount: 'always',
+    ...readOptionsOf(options),
   });
 }
 
@@ -78,3 +84,15 @@ function usePayrollRateRowsQuery<T>(queryKey: readonly string[], url: string) {
 
 export const useStatutoryRatesQuery = <T,>() => usePayrollRateRowsQuery<T>(QUERY_KEYS.piecework.statutoryRates(), '/piecework/statutory-rates');
 export const useEidiRatesQuery = <T,>() => usePayrollRateRowsQuery<T>(QUERY_KEYS.piecework.eidiRates(), '/piecework/eidi-rates');
+
+/**
+ * A saved year's row (the answer of its PUT, with its new version) put into the cached rows at once, so the form filled
+ * again after the save shows what was saved and sends that version next, even when the refresh after the save fails
+ */
+export async function putPayrollRateRow<T extends { jalaliYear: number }>(queryClient: QueryClient, queryKey: readonly string[], row: T) {
+  await queryClient.cancelQueries({ queryKey });
+  queryClient.setQueryData<T[]>(queryKey, prev => {
+    const rows = prev ?? [];
+    return rows.some(r => r.jalaliYear === row.jalaliYear) ? rows.map(r => (r.jalaliYear === row.jalaliYear ? row : r)) : [...rows, row];
+  });
+}

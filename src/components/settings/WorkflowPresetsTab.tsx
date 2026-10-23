@@ -46,7 +46,7 @@ export function WorkflowPresetsTab({
   // the piecework titles of the payroll section, through its shared cache (10.3, ARCH review finding 3, part 13): read
   // again on each opening of the tab, and a title change elsewhere shows while it is open (OBS-R2-47: the request is
   // cancelled when the tab closes)
-  const tasksRead = useOpeningRead(usePieceworkTasksQuery('active'), true);
+  const tasksRead = useOpeningRead(usePieceworkTasksQuery('active', { readOnEveryOpening: true }), true);
   const availableTasks = tasksRead.data ?? NO_TASKS;
   // v9.0.422 (TD-766): فهرست خالی عناوین کارمزدی با شکست خواندن یکی نیست
   const sayTasksFailed = useEffectEvent(() => { toast.error(errorMessageOf(tasksRead.error) || 'خطا در دریافت عناوین کارمزدی'); });

@@ -26,8 +26,8 @@ export function TaskTitlesSettingsTab() {
   const rial = useRialDisplay();
   const curLbl = rial.label;
   const queryClient = useQueryClient();
-  const tasksRead = useOpeningRead(usePieceworkTasksQuery('active'), true);
-  const categoriesRead = useOpeningRead(usePieceworkCategoriesQuery(), true);
+  const tasksRead = useOpeningRead(usePieceworkTasksQuery('active', { readOnEveryOpening: true }), true);
+  const categoriesRead = useOpeningRead(usePieceworkCategoriesQuery({ readOnEveryOpening: true }), true);
   const tasks = tasksRead.data ?? NO_TASKS;
   const categories = categoriesRead.data ?? NO_CATEGORIES;
   const failedAt = Math.max(tasksRead.failedAt, categoriesRead.failedAt);
