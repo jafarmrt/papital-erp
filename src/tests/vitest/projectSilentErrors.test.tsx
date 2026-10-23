@@ -46,7 +46,7 @@ const project = {
 const ROOT = join(__dirname, '..', '..');
 const PACKAGE_11 = [
   'pages/ProjectsPage.tsx', 'components/ProjectModal.tsx', 'pages/ProjectDetailPage.tsx', 'components/project/',
-  'components/project-modal/', 'components/inventory/ProjectBomAllocationsTab.tsx', 'hooks/useProjectInventory.ts',
+  'components/project-modal/', 'components/inventory/ProjectBomAllocationsTab.tsx', 'hooks/useProjectInventory.ts', 'hooks/projectInventory/', 'components/inventory/allocations/',
   'components/settings/WorkflowPresetsTab.tsx',
 ];
 const filesUnder = (path: string): string[] => {

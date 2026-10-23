@@ -210,6 +210,8 @@ export const QUERY_KEYS = {
     // صفحه انبارگردانی: گزارش سلامت سه‌طرفه و اقلام شمارش یک انبار (زیر inventory تا هر تغییر موجودی تازه‌شان کند)
     integrityAudit: () => ['inventory', 'integrity-audit'] as const,
     auditItems: (location: string) => ['inventory', 'audit-items', location] as const,
+    /** 10.3 (ARCH review finding 3): one page of the material allocation list; under inventory, so a stock change refreshes it */
+    allocations: (params: object) => ['inventory', 'allocations', params] as const,
   },
 
   // V9 Phase 5.1 — Activity / Audit Logs

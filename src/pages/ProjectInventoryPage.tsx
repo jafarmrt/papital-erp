@@ -1,103 +1,51 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useEffectEvent, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { 
   ShoppingCart, ArrowRight, Layers, RefreshCw,
   Box,
   BarChart2
 } from 'lucide-react';
-import { ProductionProject, Item, User } from '../types';
-import { fetchJson } from '../api';
-import { formatPersianNumber, formatPersianDate } from '../utils';
+import { User } from '../types';
+import { errorMessageOf, formatPersianNumber, formatPersianDate } from '../utils';
 import toast from 'react-hot-toast';
 import ProjectInventoryTab from '../components/project/ProjectInventoryTab';
-import { PICK_LIST_URLS, type ProjectPick } from '../lib/permissions/pickLists';
+import type { ProjectPick } from '../lib/permissions/pickLists';
 import { projectStatusLabel } from '../lib/projects/projectStatus';
+import { projectIdFromParam } from '../lib/projects/projectWorkspaceTabs';
+import { QUERY_KEYS } from '../lib/queryKeys';
+import { invalidateProjectChange, useProjectPickQuery } from '../hooks/queries/useProjectQueries';
+import { useProjectItemOptions, useWorkspaceProject } from '../hooks/queries/useProjectWorkspaceQueries';
 import { SearchableSelect } from '../components/SearchableSelect';
 
-export default function ProjectInventoryPage({ user }: { user?: User }) {
+/**
+ * «برنامه‌ریزی کنترل موجودی» of one project on a page of its own, with a project picker.
+ * 10.3 (ARCH review finding 3, part 11): the project list, the project and the item list come from the shared cache
+ * (`useProjectPickQuery`, `useWorkspaceProject`, `useProjectItemOptions`), so a save elsewhere refreshes the open page.
+ * The materials tab takes a newer project only while it holds no unsaved change and no save is under way, as on the
+ * project page; each project picked is its own visit (`key`), read again and never shown from an earlier visit.
+ */
+export default function ProjectInventoryPage(_props: { user?: User }) {
   const [searchParams, setSearchParams] = useSearchParams();
-  
-  const queryProjectId = searchParams.get('projectId');
-  const [projects, setProjects] = useState<ProjectPick[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(
-    queryProjectId ? Number(queryProjectId) : null
-  );
-  
-  const [project, setProject] = useState<ProductionProject | null>(null);
-  const [itemsList, setItemsList] = useState<Item[]>([]);
-  const [loadingProjects, setLoadingProjects] = useState<boolean>(true);
-  const [loadingProjectDetail, setLoadingProjectDetail] = useState<boolean>(false);
+  const selectedProjectId = projectIdFromParam(searchParams.get('projectId') ?? undefined);
+  const projectsQuery = useProjectPickQuery();
+  const projects: ProjectPick[] = projectsQuery.data ?? [];
+  const loadingProjects = projectsQuery.isPending;
 
-  // Load list of all production projects
-  const loadProjects = async (signal?: AbortSignal) => {
-    setLoadingProjects(true);
-    try {
-      const data = await fetchJson(PICK_LIST_URLS.projects, { signal });
-      const rawList = Array.isArray(data) ? data : (data?.data && Array.isArray(data.data) ? data.data : []);
-      setProjects(rawList);
-
-      // If no project selected yet, select the first active or recent project
-      if (!selectedProjectId && rawList.length > 0) {
-        const firstActive = rawList.find((p: ProjectPick) => p.status !== 'completed') || rawList[0];
-        setSelectedProjectId(firstActive.id);
-        setSearchParams({ projectId: String(firstActive.id) });
-      }
-    } catch (err: any) {
-      if (err?.name === 'AbortError') return;
-      console.error('Error fetching projects:', err);
-      toast.error('خطا در بارگذاری لیست پروژه‌ها');
-    } finally {
-      setLoadingProjects(false);
-    }
-  };
-
-  // Load full project detail and items list
-  const loadProjectDetail = async (id: number, signal?: AbortSignal) => {
-    setLoadingProjectDetail(true);
-    try {
-      const [projData, itemsData] = await Promise.all([
-        fetchJson(`/projects/${id}`, { signal }),
-        fetchJson(PICK_LIST_URLS.items, { signal }).catch((err) => {
-          if (err?.name === 'AbortError') throw err;
-          console.error('Failed to load items in project inventory:', err);
-          toast.error('خطا در دریافت لیست اقلام کالا');
-          return [];
-        })
-      ]);
-
-      if (projData && projData.id) {
-        setProject(projData);
-      } else {
-        toast.error('اطلاعات پروژه یافت نشد');
-      }
-
-      const rawItems = Array.isArray(itemsData) ? itemsData : (itemsData?.data && Array.isArray(itemsData.data) ? itemsData.data : []);
-      setItemsList(rawItems);
-    } catch (err: any) {
-      if (err?.name === 'AbortError') return;
-      console.error('Error fetching project detail:', err);
-      toast.error('خطا در دریافت اطلاعات پروژه');
-    } finally {
-      setLoadingProjectDetail(false);
-    }
-  };
-
+  // If no project selected yet, select the first active or recent project
   useEffect(() => {
-    const controller = new AbortController();
-    void loadProjects(controller.signal);
-    return () => controller.abort();
-  }, []);
+    if (selectedProjectId || projects.length === 0) return;
+    const firstActive = projects.find(p => p.status !== 'completed') || projects[0];
+    // the page's own pick replaces the address, so Back leaves the page instead of landing on it again
+    setSearchParams({ projectId: String(firstActive.id) }, { replace: true });
+  }, [projects, selectedProjectId, setSearchParams]);
 
+  const sayProjectsFailed = useEffectEvent(() => { toast.error('خطا در بارگذاری لیست پروژه‌ها'); });
   useEffect(() => {
-    if (selectedProjectId) {
-      const controller = new AbortController();
-      void loadProjectDetail(selectedProjectId, controller.signal);
-      return () => controller.abort();
-    }
-  }, [selectedProjectId]);
+    if (projectsQuery.isError) sayProjectsFailed();
+  }, [projectsQuery.isError]);
 
   const handleSelectProject = (id: number) => {
-    setSelectedProjectId(id);
     setSearchParams({ projectId: String(id) });
   };
 
@@ -165,54 +113,97 @@ export default function ProjectInventoryPage({ user }: { user?: User }) {
       </div>
 
       {/* Main Content Area */}
-      {loadingProjectDetail ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-500 flex flex-col items-center justify-center gap-3">
-          <RefreshCw className="w-8 h-8 animate-spin text-amber-600" />
-          <span className="font-bold text-sm">در حال بارگذاری فهرست مواد و کنترل موجودی پروژه...</span>
-        </div>
-      ) : !project ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-500 space-y-3">
-          <Box className="w-12 h-12 text-slate-300 mx-auto" />
-          <p className="font-bold text-slate-700">هیچ پروژه‌ای انتخاب نشده است.</p>
-          <p className="text-xs text-slate-500">لطفاً از منوی بالای صفحه یک پروژه تولیدی انتخاب کنید.</p>
-        </div>
-      ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          {/* Active Project Banner */}
-          <div className="mb-6 p-4 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-2xl text-white flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-md">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="bg-amber-400 text-slate-950 font-black text-[11px] px-2.5 py-0.5 rounded-md font-mono">
-                  کد: {project.project_code}
-                </span>
-                <h2 className="text-base font-bold text-white">{project.title}</h2>
-              </div>
-              <p className="text-xs text-slate-300">
-                مشتری: <span className="text-amber-300 font-bold">{project.customer_name || 'ثبت‌نشده'}</span> | 
-                تاریخ تحویل: <span className="font-mono text-slate-200">{project.end_date ? formatPersianDate(project.end_date) : 'تعیین نشده'}</span> | 
-                تیراژ کل سفارش: <span className="font-mono font-bold text-emerald-400">{formatPersianNumber(project.quantity || 1)} {project.unit || 'عدد'}</span>
-              </p>
-            </div>
+      {selectedProjectId === null
+        ? <NoProjectChosen />
+        : <ProjectInventoryWorkspace key={selectedProjectId} projectId={selectedProjectId} />}
+    </div>
+  );
+}
 
-            <div className="flex items-center gap-3 border-t md:border-t-0 border-slate-700 pt-3 md:pt-0">
-              <div className="text-right">
-                <span className="text-[10px] text-slate-400 font-semibold block">پیشرفت کل پروژه:</span>
-                <span className="font-mono font-bold text-amber-400 text-sm">{formatPersianNumber(project.progress_percent || 0)}٪</span>
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-amber-400">
-                <BarChart2 size={20} />
-              </div>
-            </div>
+function NoProjectChosen() {
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-500 space-y-3">
+      <Box className="w-12 h-12 text-slate-300 mx-auto" />
+      <p className="font-bold text-slate-700">هیچ پروژه‌ای انتخاب نشده است.</p>
+      <p className="text-xs text-slate-500">لطفاً از منوی بالای صفحه یک پروژه تولیدی انتخاب کنید.</p>
+    </div>
+  );
+}
+
+/** one project's materials planning: its banner and the materials tab, which holds the project while it has an unsaved change */
+function ProjectInventoryWorkspace({ projectId }: { projectId: number }) {
+  const queryClient = useQueryClient();
+  const [dirty, setDirty] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const workspace = useWorkspaceProject(projectId, !dirty && !busy);
+  const { project, latest } = workspace;
+  const itemsQuery = useProjectItemOptions(true);
+
+  /** after a save: the project, the list and every project read refreshed; it ends when this project is read again */
+  const refresh = useCallback(async () => {
+    invalidateProjectChange(queryClient);
+    await queryClient.refetchQueries({ queryKey: QUERY_KEYS.projects.detail(projectId), exact: true }, { cancelRefetch: false });
+  }, [projectId, queryClient]);
+
+  // a read that finds no project, or fails, is said once; a failed refresh keeps the project on screen
+  const sayMissing = useEffectEvent(() => { toast.error('اطلاعات پروژه یافت نشد'); });
+  useEffect(() => {
+    if (workspace.missing) sayMissing();
+  }, [workspace.missing]);
+  const sayReadFailed = useEffectEvent(() => {
+    toast.error(project ? errorMessageOf(workspace.error) || 'اطلاعات تازهٔ پروژه دریافت نشد' : 'خطا در دریافت اطلاعات پروژه');
+  });
+  useEffect(() => {
+    if (workspace.failedAt) sayReadFailed();
+  }, [workspace.failedAt]);
+
+  if (!project || !latest) {
+    if (workspace.missing || workspace.error) return <NoProjectChosen />;
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-500 flex flex-col items-center justify-center gap-3">
+        <RefreshCw className="w-8 h-8 animate-spin text-amber-600" />
+        <span className="font-bold text-sm">در حال بارگذاری فهرست مواد و کنترل موجودی پروژه...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+      {/* Active Project Banner */}
+      <div className="mb-6 p-4 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-2xl text-white flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-md">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="bg-amber-400 text-slate-950 font-black text-[11px] px-2.5 py-0.5 rounded-md font-mono">
+              کد: {latest.project_code}
+            </span>
+            <h2 className="text-base font-bold text-white">{latest.title}</h2>
           </div>
-
-          {/* Render Full Project Inventory Tab */}
-          <ProjectInventoryTab
-            project={project}
-            itemsList={itemsList}
-            onUpdate={() => { if (selectedProjectId) void loadProjectDetail(selectedProjectId); }}
-          />
+          <p className="text-xs text-slate-300">
+            مشتری: <span className="text-amber-300 font-bold">{latest.customer_name || 'ثبت‌نشده'}</span> | 
+            تاریخ تحویل: <span className="font-mono text-slate-200">{latest.end_date ? formatPersianDate(latest.end_date) : 'تعیین نشده'}</span> | 
+            تیراژ کل سفارش: <span className="font-mono font-bold text-emerald-400">{formatPersianNumber(latest.quantity || 1)} {latest.unit || 'عدد'}</span>
+          </p>
         </div>
-      )}
+
+        <div className="flex items-center gap-3 border-t md:border-t-0 border-slate-700 pt-3 md:pt-0">
+          <div className="text-right">
+            <span className="text-[10px] text-slate-400 font-semibold block">پیشرفت کل پروژه:</span>
+            <span className="font-mono font-bold text-amber-400 text-sm">{formatPersianNumber(latest.progress_percent || 0)}٪</span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-amber-400">
+            <BarChart2 size={20} />
+          </div>
+        </div>
+      </div>
+
+      {/* Render Full Project Inventory Tab */}
+      <ProjectInventoryTab
+        project={project}
+        itemsList={itemsQuery.data ?? []}
+        onUpdate={refresh}
+        onDirtyChange={setDirty}
+        onBusyChange={setBusy}
+      />
     </div>
   );
 }

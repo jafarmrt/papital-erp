@@ -6,7 +6,7 @@ const ROOT = join(__dirname, '..', '..');
 /** package 11 screens: projects page, project forms and tabs, BOM allocations */
 const PACKAGE_11 = [
   'pages/ProjectsPage.tsx', 'components/ProjectModal.tsx', 'pages/ProjectDetailPage.tsx', 'components/project/',
-  'components/project-modal/', 'components/inventory/ProjectBomAllocationsTab.tsx', 'hooks/useProjectInventory.ts',
+  'components/project-modal/', 'components/inventory/ProjectBomAllocationsTab.tsx', 'components/inventory/allocations/', 'hooks/useProjectInventory.ts', 'hooks/projectInventory/',
 ];
 
 const filesUnder = (path: string): string[] => {

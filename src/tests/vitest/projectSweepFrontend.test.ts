@@ -24,8 +24,7 @@ describe('OBS-R2-46: the material allocation service reads money as decimals and
 
 describe('OBS-R2-47: the project screens abort their effect requests on cleanup', () => {
   const files = [
-    'src/components/inventory/ProjectBomAllocationsTab.tsx',
-    // 10.3 (ARCH review finding 3): the progress matrix of `useProductProgressTicks` is read through React Query, which
+    // 10.3 (ARCH review finding 3): the allocation list (`useBomAllocations`, part 11) and the progress matrix of `useProductProgressTicks` is read through React Query, which
     // cancels its request (`useProductProgressQuery` passes the query's `signal`)
     'src/components/settings/WorkflowPresetsTab.tsx',
   ];
@@ -40,9 +39,11 @@ describe('OBS-R2-47: the project screens abort their effect requests on cleanup'
   });
 
   it('the allocations tab buttons call the load without passing the click event as a signal', () => {
-    const source = read('src/components/inventory/ProjectBomAllocationsTab.tsx');
-    expect(source).not.toMatch(/onClick=\{loadAllocations\}/);
-    expect(source).not.toMatch(/onRetry=\{loadAllocations\}/);
+    for (const file of ['src/components/inventory/ProjectBomAllocationsTab.tsx', 'src/components/inventory/allocations/AllocationTable.tsx']) {
+      const source = read(file);
+      expect(source).not.toMatch(/onClick=\{loadAllocations\}/);
+      expect(source).not.toMatch(/onRetry=\{loadAllocations\}/);
+    }
   });
 
   it('the projects page deletes through the mutation whose onError shows the server message, never an uncaught mutateAsync', () => {

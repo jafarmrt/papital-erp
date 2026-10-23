@@ -60,7 +60,9 @@ describe('TD-1208 warehouse words of finding B-08', () => {
 
   it('puts warehouse names on the Kardex and allocation screens and type labels in the transactions export', () => {
     expect(source('src/components/RunningKardexModal.tsx')).not.toMatch(/\{entry\.location \|\||\{loc\}<\/option>|': e\.location,/);
-    expect(source('src/components/inventory/ProjectBomAllocationsTab.tsx')).not.toMatch(/\{alloc\.sourceLocation \|\||': a\.sourceLocation,/);
+    for (const file of ['ProjectBomAllocationsTab.tsx', 'allocations/AllocationTable.tsx', 'allocations/AllocationTraceDialog.tsx', 'allocations/useBomAllocations.ts']) {
+      expect(source(`src/components/inventory/${file}`)).not.toMatch(/\{alloc\.sourceLocation \|\||': a\.sourceLocation,/);
+    }
     expect(source('src/hooks/transactions/useTransactionsExport.ts')).not.toMatch(/'نوع سند': t\.document_type\n/);
   });
 });
