@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { toast } from 'react-hot-toast';
 import type { ProcurementOrder, PurchaseRequisition } from '../../types';
 
 const fetchJson = vi.fn();
@@ -125,6 +126,36 @@ describe('procurement_one_data_layer_td_1363', () => {
     fireEvent.click(await screen.findByText('تایید و صدور رسید قطعی انبار'));
     await waitFor(() => expect(deliveries).toEqual([41]));
     await waitFor(() => expect(invalidated(client)).toEqual([true, true, true, true]));
+  });
+
+  it('a desk delivery the server committed refreshes the screens even if the window then fails', async () => {
+    const client = newClient();
+    seedOtherScreens(client);
+    render(<Provider client={client}><ProcurementDesk /></Provider>);
+    await screen.findAllByText(/درخواست آزمون/);
+    fireEvent.click(screen.getByText('۲. فاکتورهای خرید (در انتظار تحویل انبار)'));
+    fireEvent.click((await screen.findAllByText('تایید و تحویل به انبار'))[0]);
+    vi.spyOn(toast, 'success').mockImplementationOnce(() => { throw new Error('toast failed'); });
+    fireEvent.click(await screen.findByText('تایید و صدور رسید قطعی انبار'));
+    await waitFor(() => expect(deliveries).toEqual([41]));
+    await waitFor(() => expect(invalidated(client)).toEqual([true, true, true, true]));
+  });
+
+  it('delivering all orders waits until the orders are loaded', async () => {
+    let releaseOrders: () => void = () => undefined;
+    const ordersLoaded = new Promise<void>(resolve => { releaseOrders = resolve; });
+    const served = fetchJson.getMockImplementation()!;
+    fetchJson.mockImplementation(async (u: unknown, init?: { method?: string }) => {
+      if (String(u ?? '').startsWith('/api/procurement/orders') && !init?.method) await ordersLoaded;
+      return served(u, init);
+    });
+    render(<Provider client={newClient()}>
+      <RequisitionDetailModal isOpen requisition={requisitionWith('ordered')} onClose={() => undefined} onOpenSplitOrder={() => undefined} />
+    </Provider>);
+    const bulk = (await screen.findByText(/تحویل کلیه اقلام به انبار/)).closest('button') as HTMLButtonElement;
+    expect(bulk.disabled).toBe(true);
+    await act(async () => { releaseOrders(); });
+    await waitFor(() => expect(bulk.disabled).toBe(false));
   });
 
   it('a bulk delivery stopped by one order still refreshes what the delivered ones changed', async () => {

@@ -100,18 +100,21 @@ export function ProcurementDesk() {
     if (!deliveryModalOrder) return;
     setIsSubmittingDelivery(true);
     setDeliveringOrderId(deliveryModalOrder.id);
+    // v10.2.39 (#356 review): once the server has delivered, the screens are refreshed even if what follows fails, as in a bulk delivery
+    let delivered = false;
     try {
       const res = await fetchJson<{ success: boolean; message: string }>(`/api/procurement/orders/${deliveryModalOrder.id}/deliver`, {
         method: 'POST'
       });
+      delivered = true;
       toast.success(res.message || 'فاکتور خرید با موفقیت به انبار تحویل و رسید قطعی صادر شد.');
       setDeliveryModalOrder(null);
-      await reloadAfter('delivery');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err));
     } finally {
       setIsSubmittingDelivery(false);
       setDeliveringOrderId(null);
+      if (delivered) void reloadAfter('delivery');
     }
   };
 
