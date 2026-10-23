@@ -1,22 +1,16 @@
-import React, { useState, useEffect, useId } from 'react';
+import React, { useState, useEffect, useEffectEvent, useId } from 'react';
 import { Layers, Plus, Trash2, ArrowUp, ArrowDown, Archive, ArchiveRestore } from 'lucide-react';
 import type { WorkflowPreset, WorkflowStageItem } from '../../constants/presets';
-import { fetchJson, isAbortError } from '../../api';
 import { errorMessageOf, formatPersianNumber, toPersianDigits } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { SearchableSelect } from '../SearchableSelect';
 import { toast } from 'react-hot-toast';
 import { newWorkflowPreset } from '../../lib/settings/workflowPresetDraft';
+import type { PieceworkTask } from '../../types';
+import { usePieceworkTasksQuery } from '../../hooks/queries/usePieceworkQueries';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 
-interface PieceworkTask {
-  id: number;
-  code: string;
-  title: string;
-  category: string;
-  defaultRate: number;
-  unit: string;
-  description?: string;
-}
+const NO_TASKS: PieceworkTask[] = [];
 
 /** A stage as an object: a legacy stage stored as its title alone becomes `{ title }` with no tasks */
 function stageItemOf(stage: string | WorkflowStageItem): WorkflowStageItem {
@@ -47,34 +41,18 @@ export function WorkflowPresetsTab({
   const fieldId = useId();
   const rial = useRialDisplay();
 
-  const [availableTasks, setAvailableTasks] = useState<PieceworkTask[]>([]);
-  const [, setLoadingTasks] = useState<boolean>(true);
   const [showArchived, setShowArchived] = useState<boolean>(false);
 
-  // Load piecework tasks from payroll/piecework section
-  // OBS-R2-47: the request is aborted on unmount, not only ignored
+  // the piecework titles of the payroll section, through its shared cache (10.3, ARCH review finding 3, part 13): read
+  // again on each opening of the tab, and a title change elsewhere shows while it is open (OBS-R2-47: the request is
+  // cancelled when the tab closes)
+  const tasksRead = useOpeningRead(usePieceworkTasksQuery('active', { readOnEveryOpening: true }), true);
+  const availableTasks = tasksRead.data ?? NO_TASKS;
+  // v9.0.422 (TD-766): فهرست خالی عناوین کارمزدی با شکست خواندن یکی نیست
+  const sayTasksFailed = useEffectEvent(() => { toast.error(errorMessageOf(tasksRead.error) || 'خطا در دریافت عناوین کارمزدی'); });
   useEffect(() => {
-    const controller = new AbortController();
-    const loadTasks = async () => {
-      setLoadingTasks(true);
-      try {
-        const res = await fetchJson('/piecework/tasks', { signal: controller.signal });
-        const data = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-        if (!controller.signal.aborted) {
-          setAvailableTasks(data);
-        }
-      } catch (err) {
-        if (isAbortError(err) || controller.signal.aborted) return;
-        console.error('Failed to load piecework tasks:', err);
-        // v9.0.422 (TD-766): فهرست خالی عناوین کارمزدی با شکست خواندن یکی نیست
-        toast.error(errorMessageOf(err) || 'خطا در دریافت عناوین کارمزدی');
-      } finally {
-        if (!controller.signal.aborted) setLoadingTasks(false);
-      }
-    };
-    void loadTasks();
-    return () => controller.abort();
-  }, []);
+    if (tasksRead.failedAt) sayTasksFailed();
+  }, [tasksRead.failedAt]);
 
   // Safe preset list with legacy defaults filtered out
   const cleanPresets = (Array.isArray(workflowPresets) ? workflowPresets : []).filter(

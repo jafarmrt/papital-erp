@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
+import { ownReads } from './helpers/ownReads';
 
 // Closing sweep, project observations of package 11: OBS-R2-46 (decimal allocation price, server clock) and OBS-R2-47
 // (the project screens abort their effect requests on cleanup; the project delete refusal reaches the user).
@@ -23,19 +24,11 @@ describe('OBS-R2-46: the material allocation service reads money as decimals and
 });
 
 describe('OBS-R2-47: the project screens abort their effect requests on cleanup', () => {
-  const files = [
-    // 10.3 (ARCH review finding 3): the allocation list (`useBomAllocations`, part 11) and the progress matrix of `useProductProgressTicks` is read through React Query, which
-    // cancels its request (`useProductProgressQuery` passes the query's `signal`)
-    'src/components/settings/WorkflowPresetsTab.tsx',
-  ];
-
-  it.each(files)('%s passes an abort signal to its loads and aborts it in the effect cleanup', (file) => {
-    const source = read(file);
-    expect(source).toContain('new AbortController()');
-    expect(source).toMatch(/return \(\) => controller\.abort\(\);/);
-    expect(source).toMatch(/, \{ signal(: controller\.signal)? \}\)/);
-    expect(source).toContain('isAbortError(err)');
-    expect(source).not.toContain('isMounted');
+  // 10.3 (ARCH review finding 3): the allocation list (`useBomAllocations`, part 11), the progress matrix of
+  // `useProductProgressTicks` and the piecework titles of the workflow presets tab (part 13) are read through React
+  // Query, which cancels the request when the screen closes (the query functions pass the query's `signal`)
+  it('the workflow presets tab reads the piecework titles only through the shared cache', () => {
+    expect(ownReads('components/settings/WorkflowPresetsTab.tsx')).toEqual([]);
   });
 
   it('the allocations tab buttons call the load without passing the click event as a signal', () => {

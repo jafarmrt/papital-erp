@@ -7,7 +7,7 @@
  * TD-733 (B15-31): the order log's buyer column was titled «نام خریدار / مبالغ» but shows no amount.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { toast } from 'react-hot-toast';
@@ -22,6 +22,8 @@ vi.mock('../../api', async () => {
   return { ...actual, fetchJson: vi.fn() };
 });
 vi.mock('react-hot-toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+// the catalog panel of the tab has its own tests (wooCatalog*); here it stays out of the order lists' way
+vi.mock('../../components/settings/WcCatalogPanel', () => ({ WcCatalogPanel: () => null }));
 afterEach(() => { cleanup(); vi.mocked(fetchJson).mockReset(); vi.mocked(toast.success).mockClear(); vi.mocked(toast.error).mockClear(); });
 
 /** GET /settings for a non-admin: the WooCommerce keys come back masked */
@@ -135,7 +137,7 @@ describe('TD-724 bulk stock sync reports failed items', () => {
 
 const noop = () => {};
 function renderTab(state: ReturnType<typeof useSettings>) {
-  const props = { ...state, warehouses: [], handleSaveSettings: noop, handleTestWcConnection: noop, handleSyncManualOrder: noop, loadSyncedWcOrders: noop, handleSyncAllStocks: noop };
+  const props = { ...state, warehouses: [], handleSaveSettings: noop, handleTestWcConnection: noop, handleSyncManualOrder: noop, handleSyncAllStocks: noop };
   return render(<WooCommerceTab {...(props as unknown as React.ComponentProps<typeof WooCommerceTab>)} />, { wrapper });
 }
 
@@ -149,13 +151,12 @@ describe('TD-730 WooCommerce order lists show a load error instead of «no order
       return undefined;
     });
     const { result } = renderHook(() => useSettings(), { wrapper });
-    // v10.0.227 (OBS-PR-17): the tab loads the lists when it opens; the hook alone reads none
-    act(() => { result.current.loadSyncedWcOrders(); });
-    await waitFor(() => expect(result.current.wcOrderLogsError).toBe(forbidden));
-    await waitFor(() => expect(result.current.syncedWcOrdersError).toBe(serverFailure));
+    // v10.0.227 (OBS-PR-17): the tab reads the lists when it opens (10.3: through the shared cache)
     renderTab(result.current);
-    expect(screen.getByRole('alert').textContent).toBe(`این فهرست خوانده نشد: ${forbidden}`);
+    expect((await screen.findByRole('alert')).textContent).toBe(`این فهرست خوانده نشد: ${forbidden}`);
     expect(screen.queryByText('هنوز هیچ سفارشی از ووکامرس پردازش نشده است.')).toBeNull();
+    fireEvent.click(screen.getByText(/فاکتورهای صادرشده/));
+    expect((await screen.findByRole('alert')).textContent).toBe(`این فهرست خوانده نشد: ${serverFailure}`);
   });
 
   it('an empty list that loaded still says no orders, and a processed order note is not styled as an error', async () => {
@@ -163,12 +164,11 @@ describe('TD-730 WooCommerce order lists show a load error instead of «no order
       ? [{ id: 1, wcOrderId: '77', status: 'processed', buyerName: 'خریدار', erpDocumentId: 9, errorMessage: 'طرف حساب تازه «علی (۰۹۳۵)» ساخته شد' }]
       : undefined));
     const { result } = renderHook(() => useSettings(), { wrapper });
-    // v10.0.227 (OBS-PR-17): the tab loads the lists when it opens; the hook alone reads none
-    act(() => { result.current.loadSyncedWcOrders(); });
-    await waitFor(() => expect(result.current.wcOrderLogs).toHaveLength(1));
-    expect(result.current.wcOrderLogsError).toBe('');
     renderTab(result.current);
-    expect(screen.getByText('طرف حساب تازه «علی (۰۹۳۵)» ساخته شد').className).not.toContain('text-rose-600');
+    expect((await screen.findByText('طرف حساب تازه «علی (۰۹۳۵)» ساخته شد')).className).not.toContain('text-rose-600');
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(screen.getByText(/فاکتورهای صادرشده/));
+    expect(screen.getByText('هنوز هیچ سفارشی از ووکامرس ثبت نشده است.')).toBeTruthy();
   });
 });
 
@@ -178,10 +178,8 @@ describe('TD-733 the WooCommerce order log headers name what the rows show', () 
       ? [{ id: 1, wcOrderId: '77', status: 'processed', buyerName: 'خریدار', erpDocumentId: 9, errorMessage: '' }]
       : undefined));
     const { result } = renderHook(() => useSettings(), { wrapper });
-    // v10.0.227 (OBS-PR-17): the tab loads the lists when it opens; the hook alone reads none
-    act(() => { result.current.loadSyncedWcOrders(); });
-    await waitFor(() => expect(result.current.wcOrderLogs).toHaveLength(1));
     renderTab(result.current);
+    await screen.findByText('#77');
     const headers = screen.getAllByRole('columnheader').map(h => h.textContent);
     expect(headers).toContain('نام خریدار');
     expect(headers.some(h => String(h).includes('مبالغ'))).toBe(false);
