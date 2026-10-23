@@ -13,6 +13,7 @@ import { fetchJson } from '../../api';
 import { DomainEventsTab } from '../../components/settings/DomainEventsTab';
 import { AutoActionsSubTab } from '../../components/settings/AutoActionsSubTab';
 import { DeadLetterQueueSubTab } from '../../components/settings/DeadLetterQueueSubTab';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 vi.mock('../../contexts/AuthContext', () => ({ useHasPermission: () => true }));
 vi.mock('../../components/ConfirmDialogHost', () => ({ confirmAction: vi.fn(async () => true) }));
@@ -112,7 +113,7 @@ describe('TD-1323 the event lists are read one page at a time', () => {
 
   it('the dead letters ask one page of 50 and a new search starts again from page 1', async () => {
     mockServer();
-    render(<DeadLetterQueueSubTab />);
+    renderWithQuery(<DeadLetterQueueSubTab />);
     await screen.findByText(PAGE_ONE_OF_THREE);
     const first = urls().find(u => u.startsWith('/events/dlq?'));
     expect(query(first ?? '').get('page')).toBe('1');

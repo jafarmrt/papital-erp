@@ -11,6 +11,7 @@ import { fetchJson } from '../../api';
 import { EventSourcingReplaySubTab } from '../../components/settings/EventSourcingReplaySubTab';
 import { EventSimulationPanel } from '../../components/settings/EventSimulationPanel';
 import { AutoActionsSubTab } from '../../components/settings/AutoActionsSubTab';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 // v9.0.435 (TD-722): the change buttons show only for holders of events.manage
 vi.mock('../../contexts/AuthContext', () => ({ useHasPermission: (key: string) => key === 'events.manage' }));
@@ -44,7 +45,7 @@ describe('TD-708 the timeline replay is only a simulation', () => {
       if (url.startsWith('/events/event-sourcing/aggregates')) return { success: true, data: [{ id: '42', title: '42' }] };
       return { success: true, timeline: [{ id: 'o1', eventId: 'evt-1', eventType: 'InvoiceApproved', occurredAt: '2026-10-06 10:00:00', source: 'outbox', actor: 'admin', title: 'x', description: '', status: 'completed', payload: { documentId: 42 }, metadata: {} }] };
     });
-    render(<EventSourcingReplaySubTab />);
+    renderWithQuery(<EventSourcingReplaySubTab />);
     fireEvent.click(await screen.findByTitle(OPEN_REPLAY));
     expect(screen.queryByText(LIVE_REPLAY)).toBeNull();
     fireEvent.click(screen.getByText(DRY_REPLAY));

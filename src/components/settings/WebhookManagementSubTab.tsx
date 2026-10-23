@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useId } from 'react';
+import React, { useState, useRef, useId } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { ALL_EVENTS_LABEL, ALL_EVENTS_PATTERN, PUBLISHED_EVENT_TYPES, eventTypeLabel } from '../../lib/events/eventTypeCatalog';
 import { confirmAction } from '../ConfirmDialogHost';
 import { Globe, Plus, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Send, Key, Trash2, Edit3, Shield, Activity } from 'lucide-react';
@@ -10,56 +11,15 @@ import { WebhookSecretRevealPanel, type RevealedWebhookSecret } from './WebhookS
 import { WEBHOOK_RETRY_LIMIT_MAX, WEBHOOK_RETRY_LIMIT_MIN, WEBHOOK_TIMEOUT_DEFAULT_MS, WEBHOOK_TIMEOUT_MAX_MS, WEBHOOK_TIMEOUT_MIN_MS, webhookFormLimits } from '../../lib/events/webhookTimeout';
 import { DecimalInput } from '../common/DecimalInput';
 import { DialogLayer } from '../common/DialogLayer';
-
-interface WebhookSubscription {
-  id: number;
-  name: string;
-  targetUrl: string;
-  secretKey: string;
-  eventPatterns: string[];
-  customHeaders?: Record<string, string>;
-  isActive: number;
-  retryLimit: number;
-  timeoutMs: number;
-  totalDeliveries: number;
-  successfulDeliveries: number;
-  failedDeliveries: number;
-  lastDeliveryAt?: string;
-  lastStatus?: string;
-  lastError?: string;
-  createdAt: string;
-}
+import {
+  WEBHOOKS_KEY, useWebhookDeliveriesQuery, useWebhookStatsQuery, useWebhookSubscriptionsQuery, type WebhookDeliveryLog, type WebhookSubscription,
+} from '../../hooks/queries/useEventAdminQueries';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 
 interface WebhookPingRequest {
   targetUrl?: string;
   secretKey?: string;
   subscriptionId?: number;
-}
-
-interface WebhookDeliveryLog {
-  id: number;
-  subscriptionId: number;
-  subscriptionName: string;
-  eventId: string;
-  eventType: string;
-  targetUrl: string;
-  statusCode: number;
-  status: 'success' | 'failed' | 'timeout';
-  responseBody?: string;
-  errorMessage?: string;
-  signature: string;
-  attempt: number;
-  durationMs: number;
-  createdAt: string;
-}
-
-interface WebhookStats {
-  totalSubscriptions: number;
-  activeSubscriptions: number;
-  totalDeliveries: number;
-  successfulDeliveries: number;
-  failedDeliveries: number;
-  successRate: number;
 }
 
 // v9.0.405 (TD-707, decision t3 a): only the event types the server publishes, with Persian labels, plus «همه رویدادها»;
@@ -69,17 +29,35 @@ const AVAILABLE_EVENT_PRESETS = [
   ...PUBLISHED_EVENT_TYPES.map(t => ({ pattern: t.value, label: `${t.category}: ${t.label}` })),
 ];
 
+const NO_SUBSCRIPTIONS: WebhookSubscription[] = [];
+const NO_DELIVERIES: WebhookDeliveryLog[] = [];
+const countOf = (n: number | undefined) => (n === undefined ? '—' : n.toLocaleString('fa-IR'));
+
+/**
+ * 10.3 (ARCH review finding 3, part 14): the stats, the webhooks and their deliveries are read through the shared cache,
+ * again on each opening of the tab (the deliveries for each webhook picked); a create, edit, toggle or removal refreshes
+ * everything under webhooks. A failed read of the webhooks is shown above the list with the server's reason (TD-730).
+ */
 export function WebhookManagementSubTab() {
   const fieldId = useId();
+  const queryClient = useQueryClient();
   // v9.0.435 (TD-722): create, edit, delete, toggle, ping and key rotation are guarded by events.manage
   const canManage = useHasPermission('events.manage');
-  const [subscriptions, setSubscriptions] = useState<WebhookSubscription[]>([]);
-  const [deliveries, setDeliveries] = useState<WebhookDeliveryLog[]>([]);
-  const [stats, setStats] = useState<WebhookStats | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [selectedSubForDeliveries, setSelectedSubForDeliveries] = useState<number | null>(null);
+  const statsRead = useOpeningRead(useWebhookStatsQuery(), true);
+  const stats = statsRead.data ?? null;
+  const statsError = statsRead.error ? errorMessageOf(statsRead.error) || 'آمار وب‌هوک‌ها خوانده نشد.' : '';
+  const subscriptionsQuery = useWebhookSubscriptionsQuery();
+  const subscriptionsRead = useOpeningRead(subscriptionsQuery, true);
+  const subscriptions = subscriptionsRead.data ?? NO_SUBSCRIPTIONS;
+  const listError = subscriptionsRead.error ? errorMessageOf(subscriptionsRead.error) || 'فهرست وب‌هوک‌ها بارگذاری نشد.' : '';
+  const isLoadingList = subscriptionsRead.data === undefined && !listError;
+  const deliveriesRead = useOpeningRead(useWebhookDeliveriesQuery(selectedSubForDeliveries), true);
+  const deliveries = deliveriesRead.data ?? NO_DELIVERIES;
+  const deliveriesError = deliveriesRead.error ? errorMessageOf(deliveriesRead.error) || 'گزارش تحویل وب‌هوک‌ها خوانده نشد.' : '';
+  const isLoadingDeliveries = deliveriesRead.data === undefined && !deliveriesError;
   // v9.0.360 (TD-710): the signing key is shown once, after create or «ساخت کلید تازه»; every list answer masks it
   const [revealedSecret, setRevealedSecret] = useState<RevealedWebhookSecret | null>(null);
-  const [selectedSubForDeliveries, setSelectedSubForDeliveries] = useState<number | null>(null);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -112,49 +90,8 @@ export function WebhookManagementSubTab() {
     setTimeout(() => setToast(null), 4500);
   };
 
-  const fetchStats = async () => {
-    try {
-      const data = await fetchJson<{ success?: boolean; stats?: WebhookStats }>('/events/webhooks/stats');
-      if (data?.success && data.stats) setStats(data.stats);
-    } catch (err) {
-      console.error('Error fetching webhook stats:', err);
-    }
-  };
-
-  const fetchSubscriptions = async () => {
-    setIsLoading(true);
-    try {
-      const data = await fetchJson<{ success?: boolean; data?: WebhookSubscription[] }>('/events/webhooks');
-      if (data?.success) {
-        setSubscriptions(Array.isArray(data.data) ? data.data : []);
-      }
-    } catch (err) {
-      // v9.0.439 (TD-730): the server's own reason is shown, never a fixed text
-      showToast(errorMessageOf(err) || 'فهرست وب‌هوک‌ها بارگذاری نشد.', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const fetchDeliveries = async (subId?: number) => {
-    try {
-      const params = new URLSearchParams({ limit: '30' });
-      if (subId) params.append('subscriptionId', String(subId));
-
-      const data = await fetchJson<{ success?: boolean; data?: WebhookDeliveryLog[] }>(`/events/webhooks/deliveries/list?${params.toString()}`);
-      if (data?.success) {
-        setDeliveries(Array.isArray(data.data) ? data.data : []);
-      }
-    } catch (err) {
-      console.error('Error fetching deliveries:', err);
-    }
-  };
-
-  useEffect(() => {
-    void fetchStats();
-    void fetchSubscriptions();
-    void fetchDeliveries();
-  }, []);
+  /** after a webhook write: the stats, the webhooks and their deliveries */
+  const refreshWebhooks = () => void queryClient.invalidateQueries({ queryKey: WEBHOOKS_KEY });
 
   const openCreateModal = () => {
     setEditingSub(null);
@@ -247,8 +184,7 @@ export function WebhookManagementSubTab() {
           setRevealedSecret({ name: data.data?.name || payload.name, secretKey: data.data.secretKey });
         }
         setIsModalOpen(false);
-        void fetchStats();
-        void fetchSubscriptions();
+        refreshWebhooks();
       } else {
         showToast(data?.message || 'خطا در ذخیره‌سازی وب‌هوک', 'error');
       }
@@ -267,8 +203,7 @@ export function WebhookManagementSubTab() {
       });
       if (data?.success) {
         showToast(data.message || 'وضعیت با موفقیت به‌روزرسانی شد.', 'success');
-        void fetchSubscriptions();
-        void fetchStats();
+        refreshWebhooks();
       }
     } catch (err) {
       showToast(errorMessageOf(err) || 'وضعیت وب‌هوک تغییر نکرد.', 'error');
@@ -283,8 +218,8 @@ export function WebhookManagementSubTab() {
       });
       if (data?.success) {
         showToast('درگاه وب‌هوک با موفقیت حذف شد.', 'success');
-        void fetchSubscriptions();
-        void fetchStats();
+        if (selectedSubForDeliveries === id) setSelectedSubForDeliveries(null);
+        refreshWebhooks();
       }
     } catch (err) {
       showToast(errorMessageOf(err) || 'وب‌هوک حذف نشد.', 'error');
@@ -370,7 +305,12 @@ export function WebhookManagementSubTab() {
         </div>
       )}
 
-      {/* Metrics Cards */}
+      {/* Metrics Cards: «—» while they are read or when they could not be, never a count or rate that was not read */}
+      {statsError && (
+        <div role="alert" className="p-3 rounded-xl border border-rose-200 bg-rose-50 text-xs text-rose-700 dark:bg-rose-950/40 dark:border-rose-800/50 dark:text-rose-300">
+          {statsError}
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
           <div className="flex items-center justify-between">
@@ -380,7 +320,7 @@ export function WebhookManagementSubTab() {
             </div>
           </div>
           <div className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
-            {stats ? stats.totalSubscriptions.toLocaleString('fa-IR') : '۰'}
+            {countOf(stats?.totalSubscriptions)}
           </div>
           <p className="text-xs text-slate-400 mt-1">درگاه‌های بیرونی ثبت‌شده</p>
         </div>
@@ -393,7 +333,7 @@ export function WebhookManagementSubTab() {
             </div>
           </div>
           <div className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
-            {stats ? stats.activeSubscriptions.toLocaleString('fa-IR') : '۰'}
+            {countOf(stats?.activeSubscriptions)}
           </div>
           <p className="text-xs text-slate-400 mt-1">دریافت‌کننده رویدادهای زنده</p>
         </div>
@@ -406,7 +346,7 @@ export function WebhookManagementSubTab() {
             </div>
           </div>
           <div className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
-            {stats ? stats.totalDeliveries.toLocaleString('fa-IR') : '۰'}
+            {countOf(stats?.totalDeliveries)}
           </div>
           <p className="text-xs text-slate-400 mt-1">بسته‌های رویداد تحویل داده‌شده</p>
         </div>
@@ -419,7 +359,7 @@ export function WebhookManagementSubTab() {
             </div>
           </div>
           <div className="mt-2 text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-            {stats ? `${formatPersianNumber(stats.successRate)}٪` : '۱۰۰٪'}
+            {stats ? `${formatPersianNumber(stats.successRate)}٪` : '—'}
           </div>
           <p className="text-xs text-slate-400 mt-1">همراه با امضای HMAC-SHA256</p>
         </div>
@@ -441,15 +381,11 @@ export function WebhookManagementSubTab() {
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => {
-              void fetchStats();
-              void fetchSubscriptions();
-              void fetchDeliveries();
-            }}
+            onClick={refreshWebhooks}
             className="p-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl transition-all"
             title="به‌روزرسانی داده‌ها"
           >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${subscriptionsQuery.isFetching ? 'animate-spin' : ''}`} />
           </button>
 
           {canManage && (
@@ -466,7 +402,16 @@ export function WebhookManagementSubTab() {
 
       {/* Subscriptions List */}
       <div className="space-y-4">
-        {subscriptions.length === 0 ? (
+        {listError && (
+          <div role="alert" className="p-3 rounded-xl border border-rose-200 bg-rose-50 text-xs text-rose-700 dark:bg-rose-950/40 dark:border-rose-800/50 dark:text-rose-300">
+            {listError}
+          </div>
+        )}
+        {isLoadingList ? (
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center text-slate-400">
+            در حال دریافت درگاه‌های وب‌هوک…
+          </div>
+        ) : subscriptions.length === 0 && !listError ? (
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center text-slate-400">
             <Globe className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
             هنوز هیچ درگاه وب‌هوکی تعریف نشده است. با کلیک بر روی "تعریف وب‌هوک جدید" اولین درگاه خود را بسازید.
@@ -517,10 +462,7 @@ export function WebhookManagementSubTab() {
                     )}
 
                     <button
-                      onClick={() => {
-                        setSelectedSubForDeliveries(selectedSubForDeliveries === sub.id ? null : sub.id);
-                        void fetchDeliveries(selectedSubForDeliveries === sub.id ? undefined : sub.id);
-                      }}
+                      onClick={() => setSelectedSubForDeliveries(selectedSubForDeliveries === sub.id ? null : sub.id)}
                       className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5"
                     >
                       <Activity className="w-3.5 h-3.5" />
@@ -608,7 +550,7 @@ export function WebhookManagementSubTab() {
             </h4>
           </div>
           <button
-            onClick={() => fetchDeliveries(selectedSubForDeliveries || undefined)}
+            onClick={() => void queryClient.invalidateQueries({ queryKey: [...WEBHOOKS_KEY, 'deliveries'] })}
             className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
           >
             <RefreshCw className="w-3 h-3" />
@@ -630,7 +572,19 @@ export function WebhookManagementSubTab() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-              {deliveries.length === 0 ? (
+              {deliveriesError ? (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center">
+                    <div role="alert" className="text-rose-600 dark:text-rose-400">{deliveriesError}</div>
+                  </td>
+                </tr>
+              ) : isLoadingDeliveries ? (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-slate-400">
+                    در حال دریافت گزارش‌های تحویل…
+                  </td>
+                </tr>
+              ) : deliveries.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="p-8 text-center text-slate-400">
                     هنوز تحویلی ثبت نشده است.

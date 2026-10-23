@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useId } from 'react';
+import React, { useState, useId } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { confirmAction } from '../ConfirmDialogHost';
 import { AlertOctagon, RefreshCw, Search, Filter, RotateCcw, CheckCircle2, XCircle, Trash2, Edit3, AlertTriangle, Layers, ChevronDown, ChevronUp, CheckSquare, Square } from 'lucide-react';
 import { formatPersianDate, errorMessageOf, formatPersianNumber, formatPersianCode, toPersianDigits } from '../../utils';
@@ -8,50 +9,50 @@ import { useHasPermission } from '../../contexts/AuthContext';
 import { DialogLayer } from '../common/DialogLayer';
 import { ListPager } from '../common/ListPager';
 import { EVENT_LIST_PAGE_SIZE } from '../../hooks/queries/useEventQueries';
+import { DLQ_KEY, useDlqPageQuery, useDlqStatsQuery, type DeadLetterItem } from '../../hooks/queries/useEventAdminQueries';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
+import { QUERY_KEYS } from '../../lib/queryKeys';
 
-interface DeadLetterItem {
-  id: number;
-  originalEventId: string;
-  eventType: string;
-  aggregateType: string;
-  aggregateId: string;
-  source: string;
-  payload: any;
-  metadata: any;
-  failureReason: string;
-  errorStack?: string;
-  retryCount: number;
-  status: 'quarantined' | 'replayed' | 'dismissed';
-  quarantinedAt: string;
-  resolvedAt?: string;
-  resolvedBy?: number;
-  resolutionNotes?: string;
-}
+const NO_ROWS: DeadLetterItem[] = [];
+const NO_IDS: number[] = [];
+const countOf = (n: number | undefined) => (n === undefined ? '—' : n.toLocaleString('fa-IR'));
 
-interface DLQStats {
-  total: number;
-  quarantined: number;
-  replayed: number;
-  dismissed: number;
-  byEventType: Record<string, number>;
-  bySource: Record<string, number>;
-}
-
+/**
+ * 10.3 (ARCH review finding 3, part 14): the stats and the page of dead letters are read through the shared cache, again
+ * on each opening of the tab and for each filter, page and submitted search; a replay, dismissal, edit or purge refreshes
+ * everything under `events`. A failed read of the list is shown above it with the server's reason (TD-730).
+ */
 export function DeadLetterQueueSubTab() {
   const fieldId = useId();
+  const queryClient = useQueryClient();
   // v9.0.435 (TD-722): replay, edit, dismiss and purge call routes guarded by events.manage
   const canManage = useHasPermission('events.manage');
-  const [items, setItems] = useState<DeadLetterItem[]>([]);
-  const [stats, setStats] = useState<DLQStats | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [search, setSearch] = useState<string>('');
   // OBS-R2-86 (TD-1323): the dead letters are read one page at a time (the list stopped at its first 100 rows)
   const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
+  const filter = { status: statusFilter, source: sourceFilter, search, page };
+  const statsRead = useOpeningRead(useDlqStatsQuery(), true);
+  const stats = statsRead.data ?? null;
+  const statsError = statsRead.error ? errorMessageOf(statsRead.error) || 'آمار صف خطا خوانده نشد.' : '';
+  const pageQuery = useDlqPageQuery(filter);
+  const pageRead = useOpeningRead(pageQuery, true);
+  const items = pageRead.data?.rows ?? NO_ROWS;
+  const total = pageRead.data?.total ?? 0;
+  const isLoading = pageRead.data === undefined && !pageRead.error;
+  const listError = pageRead.error ? errorMessageOf(pageRead.error) || 'فهرست صف خطا بارگذاری نشد.' : '';
+  // a replay, dismissal or purge that empties the last page shows the page before it
+  if (pageRead.data && items.length === 0 && page > 1) setPage(page - 1);
   const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  // v10.1.51 (OBS-R2-87): a selection never outlives the list it was made in, so a batch replays only rows on screen
+  const listKey = JSON.stringify(filter);
+  const [selection, setSelection] = useState<{ of: string; ids: number[] }>({ of: '', ids: [] });
+  // leaving a filter, search or page drops its selection, so coming back to it never checks those rows again
+  if (selection.of !== listKey && selection.ids.length > 0) setSelection({ of: listKey, ids: [] });
+  const selectedIds = selection.of === listKey ? selection.ids.filter(id => items.some(i => i.id === id)) : NO_IDS;
+  const setSelectedIds = (ids: number[]) => setSelection({ of: listKey, ids });
 
   // Action Loading states
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
@@ -72,57 +73,18 @@ export function DeadLetterQueueSubTab() {
     setTimeout(() => setToast(null), 4500);
   };
 
-  const fetchStats = async () => {
-    try {
-      const data = await fetchJson<{ success?: boolean; stats?: DLQStats }>('/events/dlq/stats');
-      if (data?.success && data.stats) {
-        setStats(data.stats);
-      }
-    } catch (err) {
-      console.error('Error fetching DLQ stats:', err);
-    }
-  };
-
-  const fetchEvents = async () => {
-    setIsLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (statusFilter !== 'all') params.append('status', statusFilter);
-      if (sourceFilter !== 'all') params.append('source', sourceFilter);
-      if (searchQuery.trim()) params.append('search', searchQuery.trim());
-      params.append('page', String(page));
-      params.append('limit', String(EVENT_LIST_PAGE_SIZE));
-
-      const data = await fetchJson<{ success?: boolean; data?: DeadLetterItem[]; total?: number; message?: string }>(`/events/dlq?${params.toString()}`);
-      if (data?.success) {
-        const rows = Array.isArray(data.data) ? data.data : [];
-        setItems(rows);
-        setTotal(Number(data.total ?? rows.length));
-        // a replay, dismissal or purge that empties the last page shows the page before it
-        if (rows.length === 0 && page > 1) setPage(page - 1);
-      } else {
-        showToast(data?.message || 'فهرست صف خطا بارگذاری نشد.', 'error');
-      }
-    } catch (err) {
-      // v9.0.439 (TD-730): the server's own reason is shown, never a fixed text
-      showToast(errorMessageOf(err) || 'فهرست صف خطا بارگذاری نشد.', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    // v10.1.51 (OBS-R2-87): a selection never outlives the list it was made in, so a batch replays only rows on screen
-    setSelectedIds([]);
-    void fetchStats();
-    void fetchEvents();
-  }, [statusFilter, sourceFilter, page]);
+  /** after a dead letter write: its stats and lists, and every event screen a replay publishes to */
+  const refreshEvents = () => void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    setSelectedIds([]);
-    if (page === 1) void fetchEvents();
-    else setPage(1);
+    setSelection({ of: '', ids: [] });
+    const next = searchQuery.trim();
+    if (next === search && page === 1) void pageQuery.refetch();
+    else {
+      setSearch(next);
+      setPage(1);
+    }
   };
 
   const handleReplaySingle = async (id: number) => {
@@ -134,8 +96,7 @@ export function DeadLetterQueueSubTab() {
       });
       if (data?.success) {
         showToast('رویداد با موفقیت بازپخش و در گذرگاه پردازش شد.', 'success');
-        void fetchStats();
-        void fetchEvents();
+        refreshEvents();
       } else {
         showToast(data?.message || 'خطا در بازپخش رویداد', 'error');
       }
@@ -156,8 +117,7 @@ export function DeadLetterQueueSubTab() {
       });
       if (data?.success) {
         showToast('رویداد از صف فعال کنار گذاشته شد.', 'success');
-        void fetchStats();
-        void fetchEvents();
+        refreshEvents();
       } else {
         showToast(data?.message || 'خطا در نادیده‌گرفتن رویداد', 'error');
       }
@@ -178,9 +138,8 @@ export function DeadLetterQueueSubTab() {
       });
       if (data?.success) {
         showToast(`بازپخش موفق: ${formatPersianNumber(data.succeeded ?? 0)} از ${formatPersianNumber(data.total ?? 0)} رویداد با موفقیت بازپخش شد.`, 'success');
-        setSelectedIds([]);
-        void fetchStats();
-        void fetchEvents();
+        setSelection({ of: '', ids: [] });
+        refreshEvents();
       } else {
         showToast(data?.message || 'خطا در بازپخش دسته‌ای', 'error');
       }
@@ -200,8 +159,7 @@ export function DeadLetterQueueSubTab() {
       });
       if (data?.success) {
         showToast(data.message || 'پاکسازی با موفقیت انجام شد.', 'success');
-        void fetchStats();
-        void fetchEvents();
+        refreshEvents();
       } else {
         showToast(data?.message || 'خطا در پاکسازی', 'error');
       }
@@ -247,7 +205,7 @@ export function DeadLetterQueueSubTab() {
         await handleReplaySingle(editingItem.id);
       } else {
         showToast('داده رویداد ذخیره شد.', 'success');
-        void fetchEvents();
+        refreshEvents();
       }
 
       setEditingItem(null);
@@ -296,7 +254,12 @@ export function DeadLetterQueueSubTab() {
         </div>
       )}
 
-      {/* Header Info & Stats */}
+      {/* Header Info & Stats: «—» while they are read or when they could not be, never a count that was not read */}
+      {statsError && (
+        <div role="alert" className="p-3 rounded-xl border border-rose-200 bg-rose-50 text-xs text-rose-700 dark:bg-rose-950/40 dark:border-rose-800/50 dark:text-rose-300">
+          {statsError}
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
           <div className="flex items-center justify-between">
@@ -306,7 +269,7 @@ export function DeadLetterQueueSubTab() {
             </div>
           </div>
           <div className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
-            {stats ? stats.quarantined.toLocaleString('fa-IR') : '۰'}
+            {countOf(stats?.quarantined)}
           </div>
           <p className="text-xs text-slate-400 mt-1">رویدادهای نیازمند بازبینی و بازپخش</p>
         </div>
@@ -319,7 +282,7 @@ export function DeadLetterQueueSubTab() {
             </div>
           </div>
           <div className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
-            {stats ? stats.replayed.toLocaleString('fa-IR') : '۰'}
+            {countOf(stats?.replayed)}
           </div>
           <p className="text-xs text-slate-400 mt-1">رویدادهای بازیابی‌شده در گذرگاه</p>
         </div>
@@ -332,7 +295,7 @@ export function DeadLetterQueueSubTab() {
             </div>
           </div>
           <div className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
-            {stats ? stats.dismissed.toLocaleString('fa-IR') : '۰'}
+            {countOf(stats?.dismissed)}
           </div>
           <p className="text-xs text-slate-400 mt-1">رویدادهای نادیده‌گرفته توسط مدیر</p>
         </div>
@@ -345,7 +308,7 @@ export function DeadLetterQueueSubTab() {
             </div>
           </div>
           <div className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
-            {stats ? stats.total.toLocaleString('fa-IR') : '۰'}
+            {countOf(stats?.total)}
           </div>
           <p className="text-xs text-slate-400 mt-1">نرخ بقا و ذخیره امن رویدادها</p>
         </div>
@@ -422,18 +385,21 @@ export function DeadLetterQueueSubTab() {
           )}
 
           <button
-            onClick={() => {
-              void fetchStats();
-              void fetchEvents();
-            }}
-            disabled={isLoading}
+            onClick={() => void queryClient.invalidateQueries({ queryKey: DLQ_KEY })}
+            disabled={pageQuery.isFetching}
             className="p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl transition-all"
             title="به‌روزرسانی جدول"
           >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${pageQuery.isFetching ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
+
+      {listError && (
+        <div role="alert" className="p-3 rounded-xl border border-rose-200 bg-rose-50 text-xs text-rose-700 dark:bg-rose-950/40 dark:border-rose-800/50 dark:text-rose-300">
+          {listError}
+        </div>
+      )}
 
       {/* Events Table */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
@@ -467,7 +433,7 @@ export function DeadLetterQueueSubTab() {
                     در حال بارگذاری صف خطا…
                   </td>
                 </tr>
-              ) : items.length === 0 ? (
+              ) : items.length === 0 && !listError ? (
                 <tr>
                   <td colSpan={8} className="p-12 text-center text-slate-400">
                     <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
@@ -650,7 +616,7 @@ export function DeadLetterQueueSubTab() {
       </div>
 
       <ListPager page={page} totalPages={Math.max(1, Math.ceil(total / EVENT_LIST_PAGE_SIZE))} total={total}
-        limit={EVENT_LIST_PAGE_SIZE} onPage={setPage} disabled={isLoading} />
+        limit={EVENT_LIST_PAGE_SIZE} onPage={setPage} disabled={pageQuery.isFetching} />
 
       {/* Edit Payload Modal */}
       {editingItem && (

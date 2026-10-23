@@ -13,6 +13,7 @@ import { DeadLetterQueueSubTab } from '../../components/settings/DeadLetterQueue
 import { DomainEventsTab } from '../../components/settings/DomainEventsTab';
 import { WebhookManagementSubTab } from '../../components/settings/WebhookManagementSubTab';
 import NotificationBell from '../../components/NotificationBell';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 vi.mock('../../contexts/AuthContext', () => ({ useHasPermission: (key: string) => key === 'events.manage' }));
 vi.mock('../../components/settings/AutoActionsSubTab', () => ({ AutoActionsSubTab: () => <div /> }));
@@ -77,7 +78,7 @@ function withQueryClient(ui: ReactNode) {
 describe('TD-732 numbers in the events screens use Persian digits', () => {
   it('the dead-letter tab counts attempts and selected rows in Persian digits', async () => {
     mockServer();
-    const { container } = render(<DeadLetterQueueSubTab />);
+    const { container } = renderWithQuery(<DeadLetterQueueSubTab />);
     await screen.findByText('timeout');
     expect(screen.getByText('تعداد تلاش: ۵ بار')).toBeTruthy();
     fireEvent.click(container.querySelector('thead button') as HTMLButtonElement);
@@ -95,7 +96,7 @@ describe('TD-732 numbers in the events screens use Persian digits', () => {
 
   it('the webhook tab shows the success rate with the Persian percent sign and a delivery in Persian digits and milliseconds', async () => {
     mockServer();
-    const { container } = render(<WebhookManagementSubTab />);
+    const { container } = renderWithQuery(<WebhookManagementSubTab />);
     await screen.findAllByText('فروشگاه شریک');
     await screen.findByText('۱۲۰ میلی‌ثانیه');
     expect(screen.getByText('۸۶٪')).toBeTruthy();

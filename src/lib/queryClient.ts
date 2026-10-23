@@ -1,13 +1,12 @@
 import { QueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { SUBMISSION_REPLAYED_EVENT } from './idempotentReplay';
+import { QUERY_DEFAULTS } from './queryDefaults';
 
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes cache fresh time
-      gcTime: 30 * 60 * 1000, // 30 minutes garbage collection time
-      refetchOnWindowFocus: true,
+      ...QUERY_DEFAULTS,
       retry: (failureCount, error: any) => {
         // Do not retry 401 or 403 authorization / authentication errors
         const status = error?.status || error?.statusCode;
