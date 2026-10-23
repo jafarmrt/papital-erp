@@ -87,8 +87,7 @@ describe('screens read a repeat notice, not missing fields (#351 L1)', () => {
   });
 
   it('the schedule tab marks a row logged from the saved plan when its log request was a repeat', async () => {
-    renderWithQuery(<ProjectScheduleTab project={PROJECT} personnelList={[{ id: 7, fullName: 'پرسنل آزمون' }]}
-      pieceworkTasksList={[{ id: 3, title: 'برش', defaultRate: 1000 }]} onUpdate={vi.fn()} />);
+    renderWithQuery(<ProjectScheduleTab project={PROJECT} onUpdate={vi.fn()} />);
     expect(screen.queryByText('ثبت‌شده')).toBeNull();
     fireEvent.click(await screen.findByText('ثبت کارمزد'));
     expect(await screen.findByText('ثبت‌شده')).toBeTruthy();

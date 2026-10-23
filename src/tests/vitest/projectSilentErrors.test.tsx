@@ -73,7 +73,7 @@ describe('package 11 read failures are shown (TD-766)', () => {
 
   it('says so when the project work logs cannot be read', async () => {
     failing.add('/piecework/logs');
-    render(<ProjectScheduleTab project={project} personnelList={[]} pieceworkTasksList={[]} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
+    render(<ProjectScheduleTab project={project} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('دسترسی ندارید'));
   });
 });

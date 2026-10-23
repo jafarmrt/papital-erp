@@ -2,14 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
-import type { ProductionProject } from '../types';
-import { fetchJson } from '../api';
 import { errorMessageOf, formatPersianNumber } from '../utils';
+import { QUERY_KEYS } from '../lib/queryKeys';
 import { useProjectVersion } from '../hooks/useProjectVersion';
 import { invalidateProjectChange } from '../hooks/queries/useProjectQueries';
 import { useProjectPermissions } from '../hooks/useProjectPermissions';
 import { usePersonnelListQuery } from '../hooks/queries/usePersonnelQueries';
-import { useProjectItemOptions, useProjectStepCounts } from '../hooks/queries/useProjectWorkspaceQueries';
+import { useProjectItemOptions, useProjectStepCounts, useWorkspaceProject } from '../hooks/queries/useProjectWorkspaceQueries';
 import { confirmLeaveUnsaved, leaveNavigateOptions, useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import { parseProjectWorkspaceTab, projectIdFromParam, projectListPath, projectWorkspacePath, PROJECT_WORKSPACE_TABS, type ProjectWorkspaceTab } from '../lib/projects/projectWorkspaceTabs';
 import { projectInactiveNote, projectSteps } from '../lib/projects/projectSteps';
@@ -39,8 +38,16 @@ type DirtySetter = (dirty: boolean) => void;
  * summary of the project instead of the first tab and a list per product instead of the progress matrix, both
  * reading the same project and the same tick hook as the desktop; «نمای کامل» shows the desktop layout. Only one
  * layout is built at a time (`usePhoneWidth`).
+ * 10.3 (ARCH review finding 3): the project comes from the shared cache (`useWorkspaceProject`), so a save elsewhere
+ * (a stock document, the workshop, another tab) refreshes the open page; the tabs take it only while none of them holds
+ * an unsaved change. Each project is its own visit: the page starts again (closed specs, its own read) for another one.
  */
 export default function ProjectDetailPage() {
+  const { projectId } = useParams<{ projectId: string }>();
+  return <ProjectWorkspacePage key={projectId ?? ''} />;
+}
+
+function ProjectWorkspacePage() {
   const params = useParams<{ projectId: string; tab?: string }>();
   const projectId = projectIdFromParam(params.projectId);
   const tab = parseProjectWorkspaceTab(params.tab);
@@ -48,10 +55,11 @@ export default function ProjectDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { canEdit } = useProjectPermissions();
-  const [project, setProject] = useState<ProductionProject | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const projectVersion = useProjectVersion(project);
   const [dirtyTabs, setDirtyTabs] = useState<ReadonlySet<ProjectWorkspaceTab>>(new Set());
+  const workspace = useWorkspaceProject(projectId, dirtyTabs.size === 0);
+  const project = workspace.project;
+  const loadError = workspace.missing ? 'پروژه یافت نشد' : (workspace.error ? errorMessageOf(workspace.error) || 'اطلاعات پروژه دریافت نشد' : null);
+  const projectVersion = useProjectVersion(project);
   const [specsOpen, setSpecsOpen] = useState(false);
   const phone = usePhoneWidth();
   const [fullView, setFullView] = useState(false);
@@ -79,12 +87,6 @@ export default function ProjectDetailPage() {
    * extra history entry and left the `?edit=1` entry under it, so «back» opened the editor again and then asked about
    * changes nobody made.
    */
-  // another project starts with its specs closed (review S2)
-  useEffect(() => {
-    setSpecsOpen(false);
-    setFullView(false);
-  }, [projectId]);
-
   useEffect(() => {
     if (searchParams.get('edit') !== '1') return;
     setSpecsOpen(true);
@@ -97,34 +99,15 @@ export default function ProjectDetailPage() {
     if (tab !== 'overview') setSpecsOpen(false);
   }, [tab]);
 
-  const loadProject = useCallback(async (signal?: AbortSignal) => {
-    if (projectId === null) return;
-    try {
-      const data = await fetchJson<ProductionProject>(`/projects/${projectId}`, { signal });
-      setProject(data && data.id ? data : null);
-      setLoadError(data && data.id ? null : 'پروژه یافت نشد');
-    } catch (err) {
-      if ((err as { name?: string } | null)?.name === 'AbortError') return;
-      setLoadError(errorMessageOf(err) || 'اطلاعات پروژه دریافت نشد');
-    }
-  }, [projectId]);
-
-  useEffect(() => {
-    setProject(null);
-    setLoadError(null);
-    const controller = new AbortController();
-    void loadProject(controller.signal);
-    return () => controller.abort();
-  }, [loadProject]);
-
   /**
-   * after any save: the project again, and the list, the step bar and every project read refreshed; 10.3 (ARCH review
-   * finding 3): the reserved items too, since a project's reservations are part of that report
+   * after any save: the project, the list, the step bar and every project read refreshed, and the reserved items, since a
+   * project's reservations are part of that report (10.3); it ends when this page's project is read again
    */
-  const refresh = useCallback(async (signal?: AbortSignal) => {
+  const refresh = useCallback(async () => {
     invalidateProjectChange(queryClient);
-    await loadProject(signal);
-  }, [loadProject, queryClient]);
+    if (projectId === null) return;
+    await queryClient.refetchQueries({ queryKey: QUERY_KEYS.projects.detail(projectId), exact: true }, { cancelRefetch: false });
+  }, [projectId, queryClient]);
 
   const dirtySetters = useMemo(() => {
     const setters = {} as Record<ProjectWorkspaceTab, DirtySetter>;
@@ -281,7 +264,7 @@ export default function ProjectDetailPage() {
         {tab === 'progress' && (phoneLayout
           ? <ProjectPhoneProgress projectId={project.id} canEdit={canEdit} onUpdate={refresh} onDirtyChange={dirtySetters.progress} onBusyChange={setProgressBusy} />
           : <ProjectProductProgressTab projectId={project.id} onUpdate={refresh} onDirtyChange={dirtySetters.progress} onBusyChange={setProgressBusy} />)}
-        {tab === 'workshop' && <ProjectScheduleTab project={project} personnelList={personnel} pieceworkTasksList={[]} onUpdate={refresh} onDirtyChange={dirtySetters.workshop} />}
+        {tab === 'workshop' && <ProjectScheduleTab project={project} onUpdate={refresh} onDirtyChange={dirtySetters.workshop} />}
         {tab === 'delivery' && <ProjectStockEntryTab project={project} itemsList={items} onUpdate={refresh} />}
       </div>
     </div>

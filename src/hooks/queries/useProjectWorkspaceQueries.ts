@@ -1,9 +1,11 @@
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
-import type { Item } from '../../types';
+import type { Item, PieceworkLog, ProductionProject } from '../../types';
 import type { ProjectStepCounts } from '../../lib/projects/projectSteps';
+import { READ_ON_EVERY_OPENING, useOpenedAt, useOpeningRead } from './readOnEveryOpening';
 
 /** the counts of a project's step bar; under the project's key, so every project save that invalidates it refreshes them */
 export const projectStepsKey = (projectId: number) => [...QUERY_KEYS.projects.detail(projectId), 'steps'] as const;
@@ -29,5 +31,73 @@ export function useProjectItemOptions(enabled: boolean) {
     },
     enabled,
     staleTime: 60 * 1000,
+  });
+}
+
+export interface WorkspaceProject {
+  /** the project the page and its tabs show, null until this visit read it */
+  project: ProductionProject | null;
+  /** this visit's read answered that there is no such project */
+  missing: boolean;
+  /** the error of this visit's last read, null once a later read succeeds */
+  error: unknown;
+}
+
+/**
+ * 10.3 (ARCH review finding 3): the project of the workspace page, through the shared cache under the project's key. Every
+ * project save, stock document and workshop change invalidates `projects`, so an open page reads it again. Only what this
+ * visit read counts, never a project an earlier visit or the list's edit form left in the cache. A tab starts its edits
+ * from the project, so a newer one reaches the tabs only while none of them holds an unsaved change (`settled`); until
+ * then they keep the one their edits started from, as before 10.3, and the server refuses a save over a newer version.
+ * A project read while a tab held a change is never shown afterwards: it predates that tab's save (the save's own refresh
+ * brings the project as saved), so once the tabs settle the project is read again instead.
+ */
+export function useWorkspaceProject(projectId: number | null, settled: boolean): WorkspaceProject {
+  const query = useQuery<ProductionProject | null>({
+    queryKey: QUERY_KEYS.projects.detail(projectId ?? 0),
+    queryFn: async ({ signal }) => {
+      const data = await fetchJson<ProductionProject | null>(`/projects/${projectId}`, { signal });
+      return data && data.id ? data : null;
+    },
+    ...READ_ON_EVERY_OPENING,
+    enabled: projectId !== null,
+  });
+  const read = useOpeningRead(query, projectId !== null);
+  // when the tabs last had nothing unsaved (the "opening" of a settled spell)
+  const settledAt = useOpenedAt(settled);
+  const [shown, setShown] = useState<ProductionProject | null>(null);
+  // undefined: nothing read in this visit yet; null: there is no such project (any more)
+  const answer = read.data;
+  let project = shown;
+  if (answer !== undefined && answer !== shown && (shown === null || (settled && query.dataUpdatedAt >= settledAt))) {
+    project = answer;
+    setShown(answer);
+  }
+  const heldBack = settled && answer !== undefined && answer !== project && query.dataUpdatedAt < settledAt;
+  const { refetch } = query;
+  useEffect(() => {
+    if (heldBack) void refetch({ cancelRefetch: false });
+  }, [heldBack, refetch]);
+  return { project, missing: read.data === null, error: read.error };
+}
+
+/** a work log row as the workshop tab reads it; older answers named some fields in snake case */
+export type ProjectWorkLog = Partial<PieceworkLog> & {
+  personnel_name?: string;
+  personnel_id?: number;
+  task_title?: string;
+  unit_rate?: number;
+};
+
+/** a project's work logs (`GET /piecework/logs?projectId=`); money, so read again on every opening of the tab */
+export function useProjectWorkLogsQuery(projectId: number) {
+  return useQuery<ProjectWorkLog[]>({
+    queryKey: QUERY_KEYS.piecework.logs({ projectId }),
+    queryFn: async ({ signal }) => {
+      const res = await fetchJson<unknown>(`/piecework/logs?projectId=${projectId}`, { signal });
+      const list = Array.isArray(res) ? res : (res as { data?: unknown } | null)?.data;
+      return Array.isArray(list) ? (list as ProjectWorkLog[]) : [];
+    },
+    ...READ_ON_EVERY_OPENING,
   });
 }
