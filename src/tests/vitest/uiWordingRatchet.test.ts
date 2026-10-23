@@ -24,6 +24,8 @@ const DOUBLE = String.fromCodePoint(0x62f, 0x648, 0x628, 0x644);
 const HA = String.fromCodePoint(0x647, 0x627);
 const YEH = String.fromCodePoint(0x6cc);
 const ZWNJ = '‌';
+const SERVER_OLD = String.fromCodePoint(0x6a9, 0x627, 0x631, 0x633, 0x627, 0x632);
+const SELF = String.fromCodePoint(0x62e, 0x648, 0x62f);
 
 // currentState() reads and parses every source file; three tests use it, so the tree is scanned once per file run
 let scanned: Baseline | undefined;
@@ -47,6 +49,17 @@ describe('ui_wording_ratchet_td_1168', () => {
     expect(countFileSites(`const a = '${FILTER}${HA}:';`, 'a.ts')).toBe(1);
     expect(countFileSites(`const a = 'x ${DOUBLE} y';`, 'a.ts')).toBe(1);
     expect(countFileSites(`const a = '${SYSTEM}${String.fromCodePoint(0x627, 0x62a, 0x6cc, 0x6a9)}';`, 'a.ts')).toBe(0);
+  });
+
+  it('v10.3.6: counts the retired server word but not the automation word that holds it', () => {
+    expect(countFileSites(`const a = 'x ${SERVER_OLD} y';`, 'a.ts')).toBe(1);
+    expect(countFileSites(`const a = '${SELF}${SERVER_OLD}${YEH}';`, 'a.ts')).toBe(0);
+  });
+
+  it('v10.3.6: skips the hidden settings search keywords, not other arrays', () => {
+    expect(countFileSites(`const tab = { label: 'x', keywords: ['${SYSTEM}', '${SERVER_OLD}'] };`, 'a.ts')).toBe(0);
+    expect(countFileSites(`const words = ['${SYSTEM}'];`, 'a.ts')).toBe(1);
+    expect(countFileSites(`const tab = { label: '${SYSTEM}', keywords: [] };`, 'a.ts')).toBe(1);
   });
 
   it('fails when a file gains a site and reports a decrease separately', () => {

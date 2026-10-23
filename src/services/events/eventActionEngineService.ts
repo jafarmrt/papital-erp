@@ -518,7 +518,7 @@ export class EventActionEngineService {
         // v9.0.357 (TD-715): the echo simulator answers only in test / development (TD-704), so only there is its rule seeded
         ...(isEchoSimulatorEnvironment() ? [{
           name: 'وب‌هوک تایید فاکتور فروش (شبیه‌ساز یکپارچگی)',
-          // v10.0.226 (OBS-R2-88): واژه‌نامه رویدادها («کارساز»، «خودکارسازی»)
+          // v10.0.226 (OBS-R2-88): واژه‌نامه رویدادها («خودکارسازی»)؛ v10.3.6: «سرور» به قاعدهٔ مالک محصول
           description: 'ارسال وب‌هوک به سرور بیرونی یا خودکارسازی سازمانی هنگام تأیید نهایی فاکتور فروش',
           eventType: DomainEventType.INVOICE_APPROVED,
           conditionsJson: [

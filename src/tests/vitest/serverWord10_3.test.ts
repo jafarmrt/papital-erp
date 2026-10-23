@@ -4,11 +4,13 @@ import path from 'node:path';
 import ts from 'typescript';
 import { IN_FLIGHT_STILL_RUNNING_MESSAGE, UNCONFIRMED_MUTATION_MESSAGE } from '../../api';
 import { SETUP_TOKEN_NOT_CONFIGURED_MESSAGE } from '../../lib/auth/setupRules';
+import { isHiddenSearchKeyword } from '../../../scripts/ui-wording-ratchet';
 
 /**
  * 10.3 (owner rule, ARCH review finding 7): the computer that runs the program is «سرور» in every text a person reads,
  * screens and server messages alike, never «کارساز» (decision t7 of v9 package 16 chose «کارساز»; the owner's later rule
- * replaces it). «خودکارسازی» is another word and stays. Comments, the changelogs and the tests are history, not shown text.
+ * replaces it). «خودکارسازی» is another word and stays. Comments, the changelogs and the tests are history, not shown text,
+ * and the hidden settings search keywords keep the old word so an old search still finds its tab.
  */
 /** Persian words the tests compare with, kept apart from the assertions (AGENTS §6, terminal English) */
 const SHOWN = {
@@ -40,7 +42,7 @@ function retiredWordSites(): string[] {
         ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateHead(node)
         || ts.isTemplateMiddle(node) || ts.isTemplateTail(node) || ts.isJsxText(node)
       ) {
-        if (SHOWN.retired.test((node as ts.LiteralLikeNode).text)) {
+        if (SHOWN.retired.test((node as ts.LiteralLikeNode).text) && !isHiddenSearchKeyword(node, sf)) {
           sites.push(`${path.relative(SRC, file)}:${sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1}`);
         }
       }

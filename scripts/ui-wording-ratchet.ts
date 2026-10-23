@@ -37,6 +37,14 @@ export const FORBIDDEN = new RegExp(
 
 export type Baseline = Record<string, number>;
 
+/**
+ * v10.3.6: the settings search keywords (`keywords: [...]`) are hidden aliases, never shown, and keep the old words so an
+ * old search still finds its tab (AGENTS.md, shell wording rule); they are not counted
+ */
+export const isHiddenSearchKeyword = (node: ts.Node, sf: ts.SourceFile): boolean =>
+  ts.isArrayLiteralExpression(node.parent) && ts.isPropertyAssignment(node.parent.parent)
+  && node.parent.parent.name.getText(sf) === 'keywords';
+
 /** Number of user-facing texts in a source file that hold a forbidden word */
 export function countFileSites(source: string, fileName = 'file.tsx'): number {
   const sf = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, fileName.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
@@ -46,7 +54,7 @@ export function countFileSites(source: string, fileName = 'file.tsx'): number {
       ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateHead(node)
       || ts.isTemplateMiddle(node) || ts.isTemplateTail(node) || ts.isJsxText(node)
     ) {
-      if (FORBIDDEN.test(node.text)) count++;
+      if (FORBIDDEN.test(node.text) && !isHiddenSearchKeyword(node, sf)) count++;
     }
     ts.forEachChild(node, visit);
   };
