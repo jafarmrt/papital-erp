@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 import { InvoiceSettlementModal } from '../../components/invoices/InvoiceSettlementModal';
 import { defaultSettlementAccountId, settlementAccountsFor } from '../../lib/invoices/settlementAccounts';
 
@@ -22,7 +23,7 @@ const accounts = [
 const usdInvoice = { id: 2, type: 'invoice', ref_number: 'INV-2', buyer_name: 'مشتری دبی', currency: 'USD', payableAmount: 200, paidAmount: 0, remainingAmount: 200 };
 
 function renderModal(doc: typeof usdInvoice) {
-  render(<InvoiceSettlementModal isOpen onClose={vi.fn()} onSuccess={vi.fn()} document={doc} />);
+  renderWithQuery(<InvoiceSettlementModal isOpen onClose={vi.fn()} onSuccess={vi.fn()} document={doc} />);
 }
 
 afterEach(() => {

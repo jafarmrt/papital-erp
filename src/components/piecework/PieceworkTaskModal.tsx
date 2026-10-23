@@ -1,9 +1,9 @@
-import React, { FormEvent, useState, useEffect, useId } from 'react';
+import React, { FormEvent, useEffect, useId, useMemo } from 'react';
 import { X, Award } from 'lucide-react';
 import { PieceworkTask } from '../../types';
 import { TaskFormData } from '../../hooks/usePiecework';
 import { formatCurrencyLabel } from '../../utils';
-import { fetchJson } from '../../api';
+import { usePieceworkCategoriesQuery } from '../../hooks/queries/usePieceworkQueries';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { DialogLayer } from '../common/DialogLayer';
 
@@ -33,43 +33,22 @@ export function PieceworkTaskModal({
   const fieldId = useId();
   // ورودی نرخ همیشه به ریال است (مبلغ ذخیره‌شده)
   const curLbl = formatCurrencyLabel('IRR');
-  const [categories, setCategories] = useState<{ id: number | string; name: string }[]>([]);
-  const [loadingCategories, setLoadingCategories] = useState<boolean>(false);
+  // 10.3 (ARCH review finding 3): the task categories of system settings come from the shared cache (the page reads the
+  // same entry), so a category added in settings shows here; the categories the page passes stand in until they arrive
+  const categoriesQuery = usePieceworkCategoriesQuery();
+  const loadingCategories = categoriesQuery.isFetching;
+  const fetched = categoriesQuery.data;
+  const categories = useMemo(() => {
+    const source = fetched ?? (Array.isArray(propCategories) ? propCategories : []);
+    return source.map(c => (typeof c === 'string' ? { id: c, name: c } : { id: c.id, name: c.name }));
+  }, [fetched, propCategories]);
 
-  // Load task categories directly from system settings task categories management
+  // a new title without a category takes the first one once the list is there
+  const firstCategory = fetched?.[0]?.name;
   useEffect(() => {
-    if (!isOpen) return;
-
-    if (Array.isArray(propCategories) && propCategories.length > 0) {
-      setCategories(
-        propCategories.map(c => typeof c === 'string' ? { id: c, name: c } : { id: c.id, name: c.name })
-      );
-    }
-
-    let isMounted = true;
-    setLoadingCategories(true);
-    fetchJson<any[]>('/piecework/categories')
-      .then((res) => {
-        if (!isMounted) return;
-        if (Array.isArray(res)) {
-          const list = res.map(c => typeof c === 'string' ? { id: c, name: c } : { id: c.id, name: c.name });
-          setCategories(list);
-          if (!taskFormData.category && list.length > 0) {
-            setTaskFormData(prev => ({ ...prev, category: list[0].name }));
-          }
-        }
-      })
-      .catch((err) => {
-        console.error('Failed to fetch task categories in modal:', err);
-      })
-      .finally(() => {
-        if (isMounted) setLoadingCategories(false);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [isOpen]);
+    if (!isOpen || !firstCategory) return;
+    setTaskFormData(prev => (prev.category ? prev : { ...prev, category: firstCategory }));
+  }, [isOpen, firstCategory, setTaskFormData]);
 
   if (!isOpen) return null;
 

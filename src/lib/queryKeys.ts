@@ -113,6 +113,8 @@ export const QUERY_KEYS = {
     // v10.1.32 (D-16): حساب‌های هزینه صورت‌هزینه تنخواه و ردیف‌های یک صورت‌هزینه
     pettyCashExpenseAccounts: () => ['accounting', 'treasury', 'petty-cash-expense-accounts'] as const,
     pettyCashLines: (id: number) => ['accounting', 'treasury', 'petty-cash-lines', id] as const,
+    /** 10.3 (ARCH review finding 3): who has approved insurance or tax in a Jalali month, and what each one still owes (statutory remittance form) */
+    statutoryRemittanceOptions: (kind: string, year: number, month: number) => ['accounting', 'treasury', 'statutory-remittance-options', kind, year, month] as const,
     // گزارش‌های مالی (تراز آزمایشی، دفتر کل، صورت‌ها، جریان نقد، ...): پارامترها بخشی از کلیدند
     reports: () => ['accounting', 'reports'] as const,
     report: (kind: string, params?: Record<string, unknown> | object) => ['accounting', 'reports', kind, params ?? {}] as const,
@@ -149,6 +151,18 @@ export const QUERY_KEYS = {
     payrolls: () => ['piecework', 'payrolls'] as const,
     categories: () => ['piecework', 'categories'] as const,
     personnelRates: (personnelId: number) => ['piecework', 'personnel-rates', personnelId] as const,
+    // 10.3 (ARCH review finding 3): the payroll windows read through the shared cache, so a payment, void, approval or
+    // treasury change (which invalidates `piecework`) refreshes an open window too
+    payrollPayments: (payrollId: number) => ['piecework', 'payrolls', payrollId, 'payments'] as const,
+    /** the signed-in user's own payslips (`GET /piecework/payrolls/mine`) */
+    myPayrolls: () => ['piecework', 'payrolls', 'mine'] as const,
+    advanceBalance: (personnelId: number) => ['piecework', 'advance-balance', personnelId] as const,
+    eidiPreview: (personnelId: number, year: number) => ['piecework', 'eidi-preview', personnelId, year] as const,
+    statutoryPreview: (params: Record<string, unknown> | object) => ['piecework', 'statutory-preview', params] as const,
+    statutoryReport: (year: number, month: number) => ['piecework', 'reports', 'statutory', year, month] as const,
+    eidiReport: (year: number) => ['piecework', 'reports', 'eidi', year] as const,
+    /** a title's rate history, or every title's when `taskId` is null */
+    taskRateHistory: (taskId: number | null) => ['piecework', 'tasks-history', taskId ?? 'all'] as const,
   },
 
   // Daily Logs

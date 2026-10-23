@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { X, FileSpreadsheet, Landmark } from 'lucide-react';
-import { fetchJson } from '../../api';
 import { errorMessageOf, getTodayJalaliDate } from '../../utils';
 import { toPersianDigits } from '../../utils/persianNumber';
 import { toLatinDigits } from '../../lib/numericInput';
@@ -11,6 +10,7 @@ import { DialogLayer } from '../common/DialogLayer';
 import { useHasPermission } from '../../contexts/AuthContext';
 import { STATUTORY_REMITTANCE_KINDS, STATUTORY_REMITTANCE_PERMISSION, STATUTORY_REMITTANCE_TEXT, type StatutoryRemittanceKind } from '../../lib/treasury/statutoryRemittance';
 import { StatutoryRemittanceModal } from './StatutoryRemittanceModal';
+import { useStatutoryReportQuery } from '../../hooks/queries/usePayrollWindowQueries';
 
 /**
  * v10.0.211 (TD-1088، طرح حقوق §۳.۳ بند ۶، تصمیم ت۷ الف): «فهرست بیمه و مالیات» یک ماه جلالی — جمع حقوق، بیمه سهم کارگر
@@ -25,20 +25,14 @@ export function PayrollStatutoryReportModal({ onClose }: { onClose: () => void }
   const today = toLatinDigits(getTodayJalaliDate());
   const [year, setYear] = useState(Number(today.slice(0, 4)));
   const [month, setMonth] = useState(Number(today.slice(5, 7)) || 1);
-  const [report, setReport] = useState<StatutoryReport | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [remitting, setRemitting] = useState<StatutoryRemittanceKind | null>(null);
   const canRemit = useHasPermission(STATUTORY_REMITTANCE_PERMISSION);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    setReport(null);
-    setError(null);
-    fetchJson(`/piecework/reports/statutory?year=${year}&month=${month}`, { signal: controller.signal })
-      .then((res: StatutoryReport) => { if (!controller.signal.aborted) setReport(res); })
-      .catch((err: unknown) => { if (!controller.signal.aborted) setError(errorMessageOf(err)); });
-    return () => controller.abort();
-  }, [year, month]);
+  // 10.3 (ARCH review finding 3): the list comes from the shared cache under `piecework`, so a payslip approved or a
+  // remittance registered while it is open (including from this window) shows at once
+  const reportQuery = useStatutoryReportQuery(year, month);
+  const report: StatutoryReport | null = reportQuery.data ?? null;
+  const error = reportQuery.error ? errorMessageOf(reportQuery.error) : null;
 
   const exportExcel = async () => {
     if (!report || report.rows.length === 0) return;

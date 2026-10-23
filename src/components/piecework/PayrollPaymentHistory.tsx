@@ -5,16 +5,9 @@ import { fetchJson } from '../../api';
 import { formatPersianPrice, formatPersianNumber, formatPersianDate, errorMessageOf, formatPersianCode } from '../../utils';
 import type { TreasuryTransaction } from '../../types';
 import { TreasuryVoidModal } from '../accounting/treasury/TreasuryVoidModal';
+import type { PayrollPaymentRowData } from '../../hooks/queries/usePayrollWindowQueries';
 
-export interface PayrollPaymentRow {
-  id: number;
-  transactionNumber?: string;
-  amount: number;
-  status?: string;
-  bankAccountTitle?: string | null;
-  trackingNumber?: string | null;
-  date?: string;
-}
+export type PayrollPaymentRow = PayrollPaymentRowData;
 
 interface PayrollPaymentHistoryProps {
   payrollId: number;

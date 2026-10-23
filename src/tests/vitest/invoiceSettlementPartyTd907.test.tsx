@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 import { InvoiceSettlementModal } from '../../components/invoices/InvoiceSettlementModal';
 
 // v9.0.459 (TD-907, finding P5-S-01 / P5-P06): the settlement form sends the document's party id with the receipt or
@@ -19,7 +20,7 @@ const invoice = { id: 9, type: 'invoice', ref_number: 'INV-9', buyer_name: BUYER
 
 async function submittedBody(doc: Record<string, unknown>): Promise<Record<string, unknown>> {
   fetchJson.mockImplementation((url: string) => Promise.resolve(url === '/accounting/bank-accounts/options' ? accounts : { success: true }));
-  render(<InvoiceSettlementModal isOpen onClose={vi.fn()} onSuccess={vi.fn()} document={doc as never} />);
+  renderWithQuery(<InvoiceSettlementModal isOpen onClose={vi.fn()} onSuccess={vi.fn()} document={doc as never} />);
   await screen.findByDisplayValue(/بانک ملت/);
   fireEvent.click(screen.getByText(doc.type === 'receipt' ? PURCHASE_SUBMIT : SALES_SUBMIT));
   await waitFor(() => expect(fetchJson).toHaveBeenCalledWith('/accounting/treasury', expect.anything()));

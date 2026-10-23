@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import { fetchJson } from '../api';
+import { useState } from 'react';
 import { Wallet, FileText, Printer, BadgeCheck, Clock, Info } from 'lucide-react';
 import { PieceworkPayroll } from '../types';
 import { formatPersianDate, formatPersianNumber, formatPersianCode } from '../utils';
@@ -7,6 +6,9 @@ import { useRialDisplay } from '../hooks/useAppCurrency';
 import { PieceworkPayslipModal } from '../components/piecework/PieceworkPayslipModal';
 import { payrollStatusLabel } from '../lib/payroll/payrollStatusLabels';
 import { isPayablePayrollStatus } from '../lib/payroll/payrollPayable';
+import { useMyPayrollsQuery } from '../hooks/queries/usePayrollWindowQueries';
+
+const NO_PAYSLIPS: PieceworkPayroll[] = [];
 
 // v9.0.328 (TD-815، B12P-12): برچسب‌ها همان برچسب‌های مشترک وضعیت فیش‌اند؛ پیش‌تر «نیمه‌پرداخت» در فهرست نبود و «پیش‌نویس» دیده می‌شد
 const statusMeta: Record<string, { cls: string; icon: typeof BadgeCheck }> = {
@@ -17,33 +19,14 @@ const statusMeta: Record<string, { cls: string; icon: typeof BadgeCheck }> = {
 };
 
 export default function MyPayslipsPage() {
-  const [payslips, setPayslips] = useState<PieceworkPayroll[]>([]);
-  const [loading, setLoading] = useState(true);
+  // 10.3 (ARCH review finding 3): the list comes from the shared cache under `piecework`, so a payslip approved or paid
+  // while this page is open shows its new status; a failed read shows the empty list, as before (an empty answer also
+  // means the user is not linked to a personnel)
+  const payslipsQuery = useMyPayrollsQuery();
+  const payslips = payslipsQuery.data ?? NO_PAYSLIPS;
+  const loading = payslipsQuery.isLoading;
   const [viewingPayroll, setViewingPayroll] = useState<PieceworkPayroll | null>(null);
   const rial = useRialDisplay();
-
-  const loadPayslips = (signal?: AbortSignal) => {
-    setLoading(true);
-    fetchJson('/piecework/payrolls/mine', { signal })
-      .then(res => {
-        const data = Array.isArray(res) ? res : [];
-        setPayslips(data);
-        setLoading(false);
-      })
-      .catch(err => {
-        if (err?.name === 'AbortError') return;
-        console.error('Error loading my payslips:', err);
-        setPayslips([]);
-        setLoading(false);
-      });
-  };
-
-  useEffect(() => {
-    const controller = new AbortController();
-    loadPayslips(controller.signal);
-    // تشخیص لینک نبودن کاربر به پرسنل (پاسخ خالی = یا لینک نیست یا فیش ندارد)
-    return () => controller.abort();
-  }, []);
 
   const paidCount = payslips.filter(p => p.status === 'paid').length;
   // فیش تأییدشده و نیمه‌پرداخت هر دو هنوز پرداخت (یا مانده پرداخت) می‌خواهند

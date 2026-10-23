@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 vi.mock('../../api', () => ({ fetchJson: async () => [] }));
 vi.mock('../../hooks/useAppCurrency', async () => {
@@ -27,7 +28,7 @@ describe('the payment form opened from a payslip takes its remainder (TD-814)', 
       id: 7, payrollNumber: 'PAY-7', personnelId: 5, personnelName: 'کارگر', startDate: '2026-08-23', endDate: '2026-09-22', title: 'فیش',
       totalPieceworkAmount: 1000000, totalBonuses: 0, totalDeductions: 0, netPayable: 1000000, paidAmount: 600000, status: 'partially_paid',
     };
-    render(<PieceworkPayslipModal viewingPayroll={payroll} onClose={noop} onUpdateStatus={noop} onDeletePayroll={noop} />);
+    renderWithQuery(<PieceworkPayslipModal viewingPayroll={payroll} onClose={noop} onUpdateStatus={noop} onDeletePayroll={noop} />);
     fireEvent.click(screen.getByText('ثبت پرداخت (از خزانه)'));
     const amount = screen.getByPlaceholderText('مبلغ پرداختی...') as HTMLInputElement;
     expect(amount.value).toBe(SHOWN_REMAINDER);

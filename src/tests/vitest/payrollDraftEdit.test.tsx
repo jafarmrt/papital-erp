@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 const calls: Array<{ url: string; options?: { method?: string; body?: string } }> = [];
 vi.mock('../../api', () => ({ fetchJson: async (url: string, options?: { method?: string; body?: string }) => { calls.push({ url, options }); return {}; } }));
@@ -29,7 +30,7 @@ const payslip = (id: number, status: PieceworkPayroll['status']): PieceworkPayro
 describe('editing a draft payslip (TD-1242)', () => {
   it('offers the edit only on a draft, only to the issue key holder, and sends the amounts', async () => {
     const onReload = vi.fn();
-    render(<PieceworkPayrollsTab payrollsList={[payslip(1, 'draft'), payslip(2, 'approved')]} onOpenPayrollModal={noop} onViewPayslip={noop}
+    renderWithQuery(<PieceworkPayrollsTab payrollsList={[payslip(1, 'draft'), payslip(2, 'approved')]} onOpenPayrollModal={noop} onViewPayslip={noop}
       onUpdateStatus={noop} onDeletePayroll={noop} onReload={onReload} />);
     const edits = screen.getAllByLabelText('ویرایش فیش پیش‌نویس');
     expect(edits).toHaveLength(1);
@@ -49,7 +50,7 @@ describe('editing a draft payslip (TD-1242)', () => {
 
   it('hides the edit without the issue key', () => {
     permissions.current = { ...permissions.current, canIssuePayroll: false };
-    render(<PieceworkPayrollsTab payrollsList={[payslip(1, 'draft')]} onOpenPayrollModal={noop} onViewPayslip={noop} onUpdateStatus={noop} onDeletePayroll={noop} />);
+    renderWithQuery(<PieceworkPayrollsTab payrollsList={[payslip(1, 'draft')]} onOpenPayrollModal={noop} onViewPayslip={noop} onUpdateStatus={noop} onDeletePayroll={noop} />);
     expect(screen.queryByLabelText('ویرایش فیش پیش‌نویس')).toBeNull();
   });
 });

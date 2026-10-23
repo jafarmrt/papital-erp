@@ -3,6 +3,8 @@ import toast from 'react-hot-toast';
 import { Landmark } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
+import { useBankAccountOptionsQuery, useContraAccountsQuery, useStatutoryRemittanceOptionsQuery } from '../../hooks/accounting/useTreasuryQueries';
+import { invalidateAfterTreasuryChange } from '../../hooks/accounting/accountingInvalidation';
 import { Modal } from '../common/Modal';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { DecimalInput, refuseInvalidDecimalInputs } from '../common/DecimalInput';
@@ -21,7 +23,6 @@ import {
   statutoryRemittanceTotal, unassignedPaymentsOfError,
   type StatutoryRemittanceDraftLine, type StatutoryRemittanceKind, type StatutoryRemittanceMethod, type StatutoryRemittanceOptions,
 } from '../../lib/treasury/statutoryRemittance';
-import type { BankAccountOption } from '../../types';
 
 interface Props {
   kind: StatutoryRemittanceKind;
@@ -30,9 +31,6 @@ interface Props {
   onClose: () => void;
 }
 
-interface ContraAccountOption { id: number; code: string; name: string; statutoryKind?: 'insurance' | 'tax' }
-
-const listOf = <T,>(res: unknown): T[] => (Array.isArray(res) ? res : (Array.isArray((res as { data?: unknown })?.data) ? (res as { data: T[] }).data : [])) as T[];
 const field = 'w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl';
 const labelClass = 'block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1';
 
@@ -48,11 +46,20 @@ export function StatutoryRemittanceModal({ kind, jalaliYear, jalaliMonth, onClos
   const queryClient = useQueryClient();
   const formRef = useRef<HTMLFormElement>(null);
   const id = useId();
+  // 10.3 (ARCH review finding 3): the list, the accounts and the penalty accounts come from the shared cache. The form
+  // takes the list once when it arrives (the lines are then the user's to edit); a refusal that names unassigned payments
+  // replaces them in the form's own copy
+  const optionsQuery = useStatutoryRemittanceOptionsQuery(kind, jalaliYear, jalaliMonth);
+  // only an answer read for this opening counts, never a list or a refusal cached from an earlier one
+  const [openedAt] = useState(() => Date.now());
   const [options, setOptions] = useState<StatutoryRemittanceOptions | null>(null);
-  const [loadError, setLoadError] = useState('');
+  const loadError = optionsQuery.error && optionsQuery.errorUpdatedAt >= openedAt ? errorMessageOf(optionsQuery.error) : '';
   const [lines, setLines] = useState<StatutoryRemittanceDraftLine[]>([]);
-  const [banks, setBanks] = useState<BankAccountOption[]>([]);
-  const [penaltyAccounts, setPenaltyAccounts] = useState<ContraAccountOption[]>([]);
+  const banksQuery = useBankAccountOptionsQuery();
+  const banks = useMemo(() => (banksQuery.data ?? []).filter(b => (b.currency || 'IRR') === 'IRR' && b.hasLedgerAccount), [banksQuery.data]);
+  // جریمه هزینه است: «بیمه پرداختنی» و «مالیات حقوق پرداختنی» سرفصل جریمه نیستند (سرور هم رد می‌کند)
+  const contraQuery = useContraAccountsQuery(true);
+  const penaltyAccounts = useMemo(() => (contraQuery.data ?? []).filter(a => !a.statutoryKind), [contraQuery.data]);
   const [bankAccountId, setBankAccountId] = useState('');
   const [date, setDate] = useState(getTodayIsoDate());
   const [method, setMethod] = useState<StatutoryRemittanceMethod>('bank_transfer');
@@ -64,21 +71,14 @@ export function StatutoryRemittanceModal({ kind, jalaliYear, jalaliMonth, onClos
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
 
+  const arrived = optionsQuery.data && optionsQuery.dataUpdatedAt >= openedAt ? optionsQuery.data : null;
+  const taken = useRef(false);
   useEffect(() => {
-    const controller = new AbortController();
-    const signal = controller.signal;
-    fetchJson(`/accounting/treasury/statutory-remittance/options?kind=${kind}&year=${jalaliYear}&month=${jalaliMonth}`, { signal })
-      .then((res: StatutoryRemittanceOptions) => { if (!signal.aborted) { setOptions(res); setLines(statutoryRemittanceDraftLines(res)); } })
-      .catch((err: unknown) => { if (!signal.aborted) setLoadError(errorMessageOf(err)); });
-    fetchJson('/accounting/bank-accounts/options', { signal })
-      .then((res: unknown) => { if (!signal.aborted) setBanks(listOf<BankAccountOption>(res).filter(b => (b.currency || 'IRR') === 'IRR' && b.hasLedgerAccount)); })
-      .catch(() => undefined);
-    fetchJson('/accounting/treasury/contra-accounts', { signal })
-      // جریمه هزینه است: «بیمه پرداختنی» و «مالیات حقوق پرداختنی» سرفصل جریمه نیستند (کارساز هم رد می‌کند)
-      .then((res: unknown) => { if (!signal.aborted) setPenaltyAccounts(listOf<ContraAccountOption>(res).filter(a => !a.statutoryKind)); })
-      .catch(() => undefined);
-    return () => controller.abort();
-  }, [kind, jalaliYear, jalaliMonth]);
+    if (!arrived || taken.current) return;
+    taken.current = true;
+    setOptions(arrived);
+    setLines(statutoryRemittanceDraftLines(arrived));
+  }, [arrived]);
 
   const total = useMemo(() => statutoryRemittanceTotal(lines, penaltyAmount), [lines, penaltyAmount]);
   const monthLabel = jalaliMonthLabel(`${jalaliYear}/${String(jalaliMonth).padStart(2, '0')}`);
@@ -105,6 +105,8 @@ export function StatutoryRemittanceModal({ kind, jalaliYear, jalaliMonth, onClos
       await fetchJson('/accounting/treasury/statutory-remittance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       toast.success(`${text.button} با سند حسابداری ثبت شد؛ مانده هر نفر به نام خودش بسته شد.`);
       void invalidatePreset(queryClient, 'settlementChange');
+      // the open payroll windows (`piecework`, the monthly list among them) and the treasury read again
+      void invalidateAfterTreasuryChange(queryClient);
       onClose();
     } catch (err) {
       // the server names the payments without a personnel name it found: show those and ask «بررسی کردم» again

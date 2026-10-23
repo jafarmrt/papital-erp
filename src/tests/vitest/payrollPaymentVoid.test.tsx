@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 const PAYMENTS = [
   { id: 11, transactionNumber: 'PAY-T-11', amount: 600000, status: 'completed', bankAccountTitle: 'بانک آزمون', date: '2026-05-01' },
@@ -24,7 +25,7 @@ afterEach(cleanup);
 describe('payroll payment void (TD-283)', () => {
   it('lists voided payments without a void button and voids a payment with a reason', async () => {
     const onPaid = vi.fn();
-    render(<PayrollPaymentModal payroll={{ id: 7, payrollNumber: 'PAY-7', netPayable: 1000000, paidAmount: 600000, status: 'partially_paid' }} onClose={() => undefined} onPaid={onPaid} />);
+    renderWithQuery(<PayrollPaymentModal payroll={{ id: 7, payrollNumber: 'PAY-7', netPayable: 1000000, paidAmount: 600000, status: 'partially_paid' }} onClose={() => undefined} onPaid={onPaid} />);
     fireEvent.click(await screen.findByText(/سابقه واریزهای قبلی/));
     const voidButtons = await screen.findAllByText('ابطال پرداخت');
     expect(voidButtons).toHaveLength(1);
@@ -40,7 +41,7 @@ describe('payroll payment void (TD-283)', () => {
   });
 
   it('opens the payment history of a fully paid payroll', async () => {
-    render(<PayrollPaymentModal payroll={{ id: 7, payrollNumber: 'PAY-7', netPayable: 1000000, paidAmount: 1000000, status: 'paid' }} onClose={() => undefined} />);
+    renderWithQuery(<PayrollPaymentModal payroll={{ id: 7, payrollNumber: 'PAY-7', netPayable: 1000000, paidAmount: 1000000, status: 'paid' }} onClose={() => undefined} />);
     expect(await screen.findByText('ابطال پرداخت')).toBeTruthy();
   });
 });

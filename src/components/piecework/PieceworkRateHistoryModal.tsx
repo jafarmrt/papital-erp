@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, History, TrendingUp, TrendingDown, Clock, User, Search, FileSpreadsheet, RotateCcw, CheckCircle2, Trash2, Filter, RefreshCw } from 'lucide-react';
 import { PieceworkTask, PieceworkTaskRateHistory } from '../../types';
-import { formatPersianPrice, isoToJalaliDate, formatPersianDate, toEnglishDigits, formatPersianNumber } from '../../utils';
-import { fetchJson } from '../../api';
+import { formatPersianPrice, isoToJalaliDate, formatPersianDate, toEnglishDigits, formatPersianNumber, errorMessageOf } from '../../utils';
+import { useTaskRateHistoryQuery } from '../../hooks/queries/usePayrollWindowQueries';
 import { toast as hotToast } from 'react-hot-toast';
 import { DialogLayer } from '../common/DialogLayer';
 
@@ -19,36 +19,29 @@ export const PieceworkRateHistoryModal: React.FC<PieceworkRateHistoryModalProps>
   selectedTask,
   onTaskRestored
 }) => {
-  const [historyList, setHistoryList] = useState<PieceworkTaskRateHistory[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filterType, setFilterType] = useState<string>('all');
-
-  const fetchHistory = async () => {
-    setLoading(true);
-    try {
-      if (selectedTask?.id) {
-        const res = await fetchJson<PieceworkTaskRateHistory[]>(`/piecework/tasks/${selectedTask.id}/history`);
-        setHistoryList(Array.isArray(res) ? res : []);
-      } else {
-        const res = await fetchJson<PieceworkTaskRateHistory[]>('/piecework/tasks-history');
-        setHistoryList(Array.isArray(res) ? res : []);
-      }
-    } catch (err: any) {
-      console.error('Error fetching rate history:', err);
-      hotToast.error(err?.message || 'خطا در دریافت تاریخچه تغییرات نرخ');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // 10.3 (ARCH review finding 3): the history comes from the shared cache under `piecework`, so a rate change, delete or
+  // restore (which invalidates that domain) refreshes an open window; «بارگذاری مجدد» reads it again
+  const historyQuery = useTaskRateHistoryQuery(selectedTask?.id ?? null, isOpen);
+  const historyList: PieceworkTaskRateHistory[] = historyQuery.data ?? [];
+  const loading = historyQuery.isFetching;
+  const fetchHistory = () => { void historyQuery.refetch(); };
 
   useEffect(() => {
     if (isOpen) {
       setSearchQuery('');
       setFilterType('all');
-      void fetchHistory();
     }
   }, [isOpen, selectedTask]);
+
+  // each failed read says so once
+  const historyError = historyQuery.error;
+  useEffect(() => {
+    if (!historyError) return;
+    console.error('Error fetching rate history:', historyError);
+    hotToast.error(errorMessageOf(historyError) || 'خطا در دریافت تاریخچه تغییرات نرخ');
+  }, [historyError]);
 
   const filteredHistory = useMemo(() => {
     let list = Array.isArray(historyList) ? historyList : [];

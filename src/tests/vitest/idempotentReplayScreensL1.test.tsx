@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 type FetchOpts = { method?: string; body?: string; signal?: AbortSignal };
 const REPLAY = { success: true, idempotentReplay: true, message: 'این درخواست پیش‌تر ثبت شده است؛ نتیجهٔ آن را در فهرست ببینید.' };
@@ -86,7 +87,7 @@ describe('screens read a repeat notice, not missing fields (#351 L1)', () => {
   });
 
   it('the schedule tab marks a row logged from the saved plan when its log request was a repeat', async () => {
-    render(<ProjectScheduleTab project={PROJECT} personnelList={[{ id: 7, fullName: 'پرسنل آزمون' }]}
+    renderWithQuery(<ProjectScheduleTab project={PROJECT} personnelList={[{ id: 7, fullName: 'پرسنل آزمون' }]}
       pieceworkTasksList={[{ id: 3, title: 'برش', defaultRate: 1000 }]} onUpdate={vi.fn()} />);
     expect(screen.queryByText('ثبت‌شده')).toBeNull();
     fireEvent.click(await screen.findByText('ثبت کارمزد'));
@@ -96,7 +97,7 @@ describe('screens read a repeat notice, not missing fields (#351 L1)', () => {
 
   it('a repeated voucher sync shows the notice and reloads the list', async () => {
     const onReload = vi.fn();
-    render(<PieceworkPayrollsTab payrollsList={[payslip(2)]} onOpenPayrollModal={vi.fn()} onViewPayslip={vi.fn()}
+    renderWithQuery(<PieceworkPayrollsTab payrollsList={[payslip(2)]} onOpenPayrollModal={vi.fn()} onViewPayslip={vi.fn()}
       onUpdateStatus={vi.fn()} onDeletePayroll={vi.fn()} onReload={onReload} />);
     fireEvent.click(screen.getByText('ثبت سند حسابداری'));
     await waitFor(() => expect(onReload).toHaveBeenCalledTimes(1));

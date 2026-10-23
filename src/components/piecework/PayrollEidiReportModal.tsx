@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { X, FileSpreadsheet } from 'lucide-react';
-import { fetchJson } from '../../api';
 import { errorMessageOf, getTodayJalaliDate } from '../../utils';
 import { toPersianDigits } from '../../utils/persianNumber';
 import { toLatinDigits } from '../../lib/numericInput';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { eidiMethodLabel, eidiReportFileName, eidiReportSheetRows, type EidiReport } from '../../lib/payroll/eidiReport';
 import { DialogLayer } from '../common/DialogLayer';
+import { useEidiReportQuery } from '../../hooks/queries/usePayrollWindowQueries';
 
 /**
  * v10.0.222 (TD-1089، طرح حقوق §۳.۸): گزارش «عیدی سال» — حق عیدی، سهم فیش‌های پیش‌نویس، سقف، فیش عیدی صادرشده، پرداخت‌شده
@@ -17,18 +17,11 @@ export function PayrollEidiReportModal({ onClose }: { onClose: () => void }) {
   const rial = useRialDisplay();
   const thisYear = Number(toLatinDigits(getTodayJalaliDate()).slice(0, 4));
   const [year, setYear] = useState(thisYear);
-  const [report, setReport] = useState<EidiReport | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    setReport(null);
-    setError(null);
-    fetchJson(`/piecework/reports/eidi?year=${year}`, { signal: controller.signal })
-      .then((res: EidiReport) => { if (!controller.signal.aborted) setReport(res); })
-      .catch((err: unknown) => { if (!controller.signal.aborted) setError(errorMessageOf(err)); });
-    return () => controller.abort();
-  }, [year]);
+  // 10.3 (ARCH review finding 3): the list comes from the shared cache under `piecework`, so an eidi payslip issued,
+  // approved or paid while it is open shows at once
+  const reportQuery = useEidiReportQuery(year);
+  const report: EidiReport | null = reportQuery.data ?? null;
+  const error = reportQuery.error ? errorMessageOf(reportQuery.error) : null;
 
   const exportExcel = async () => {
     if (!report || report.rows.length === 0) return;

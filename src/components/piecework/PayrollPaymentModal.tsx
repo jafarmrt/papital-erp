@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState, useId } from 'react';
 import toast from 'react-hot-toast';
 import { Landmark, BanknoteArrowUp, CheckCircle2, AlertCircle } from 'lucide-react';
 import { fetchJson } from '../../api';
-import type { BankAccountOption } from '../../types';
 import { getTodayIsoDate, formatPersianPrice } from '../../utils';
 import { confirmAction } from '../ConfirmDialogHost';
 import { PayrollPaymentHistory } from './PayrollPaymentHistory';
@@ -11,6 +10,8 @@ import { JalaliDateInput } from '../common/JalaliDateInput';
 import { DecimalInput } from '../common/DecimalInput';
 import { DialogLayer } from '../common/DialogLayer';
 import { isPayrollBankCurrency } from '../../lib/payroll/payrollCurrency';
+import { useBankAccountOptionsQuery } from '../../hooks/accounting/useTreasuryQueries';
+import { usePayrollPaymentsQuery } from '../../hooks/queries/usePayrollWindowQueries';
 
 // V4.0.33: مودال واحد «پرداخت حقوق (کامل یا چندمرحله‌ای)»
 // ثبت فقط با انتخاب حساب خزانه/بانک تا تراکنش مالی + سند تسویه اتمیک صادر شود.
@@ -38,10 +39,16 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
   const fieldId = useId();
   // v9.0.320 (TD-805): ثبت و ابطال پرداخت با «پرداخت و ابطال پرداخت فیش»؛ دیگر خوانندگان فیش فقط سابقه را می‌بینند
   const { canPay } = usePieceworkPermissions();
-  const [bankAccounts, setBankAccounts] = useState<BankAccountOption[]>([]);
-  const [previousPayments, setPreviousPayments] = useState<any[]>([]);
-  const [loadingBanks, setLoadingBanks] = useState(false);
-  const [loadingPayments, setLoadingPayments] = useState(false);
+  // 10.3 (ARCH review finding 3): the accounts and the payments come from the shared cache, so a payment or void made
+  // elsewhere (or in this window) refreshes them while the window is open; v9.0.97 (TD-505, t7): the pick list has no
+  // account number or balance
+  const banksQuery = useBankAccountOptionsQuery({ enabled: payroll !== null && canPay });
+  const paymentsQuery = usePayrollPaymentsQuery(payroll ? payroll.id : null);
+  // OBS-R2-51: a payslip is rial only and the server refuses a bank in another currency, so only rial accounts are offered
+  const bankAccounts = useMemo(() => (banksQuery.data ?? []).filter(b => isPayrollBankCurrency(b.currency)), [banksQuery.data]);
+  const previousPayments = paymentsQuery.data ?? [];
+  const loadingBanks = banksQuery.isLoading;
+  const loadingPayments = paymentsQuery.isLoading;
   const [showHistory, setShowHistory] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -60,42 +67,20 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
   // مانده قابل پرداخت فیش
   const remainingPayable = useMemo(() => Math.max(0, netPayable - initialPaid), [netPayable, initialPaid]);
 
+  // each failed read of the accounts says so once; a failed read of the history leaves it empty, as before
+  const banksFailedAt = banksQuery.errorUpdatedAt;
+  useEffect(() => {
+    if (banksFailedAt) toast.error('خطا در دریافت فهرست حساب‌های خزانه');
+  }, [banksFailedAt]);
+
   useEffect(() => {
     if (!payroll) return;
-    let controller = new AbortController();
-    if (canPay) {
-      setLoadingBanks(true);
-      // v9.0.97 (TD-505، ت۷): فهرست انتخاب، بی شماره حساب و مانده
-      fetchJson<{ data?: BankAccountOption[] } | BankAccountOption[]>('/accounting/bank-accounts/options', { signal: controller.signal })
-        .then((res) => {
-          const list = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
-          // OBS-R2-51: a payslip is rial only and the server refuses a bank in another currency, so only rial accounts are offered
-          setBankAccounts(list.filter(b => isPayrollBankCurrency(b.currency)));
-        })
-        .catch(() => toast.error('خطا در دریافت فهرست حساب‌های خزانه'))
-        .finally(() => setLoadingBanks(false));
-    }
-
-    // دریافت سوابق پرداخت‌های این فیش
-    setLoadingPayments(true);
-    fetchJson(`/piecework/payrolls/${payroll.id}/payments`, { signal: controller.signal })
-      .then((data: any) => {
-        const list = Array.isArray(data) ? data : [];
-        setPreviousPayments(list);
-      })
-      .catch(() => {
-        // نادیده گرفتن خطا اگر هنوز پرداختی ثبت نشده
-      })
-      .finally(() => setLoadingPayments(false));
-
     // پیش‌فرض مبلغ پرداختی برابر با کل مانده
     const rem = Math.max(0, Number(payroll.netPayable || 0) - Number(payroll.paidAmount ?? payroll.paid_amount ?? 0));
     setPayAmount(rem);
     // فیش تسویه‌شده: سابقه پرداخت‌ها (و ابطال) باز نمایش داده می‌شود
     setShowHistory(rem <= 0);
-
-    return () => controller.abort();
-  }, [payroll, canPay]);
+  }, [payroll]);
 
   const selectedBank = useMemo(
     () => bankAccounts.find(b => String(b.id) === bankAccountId),

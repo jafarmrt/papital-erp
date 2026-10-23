@@ -1,9 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
-import type { ReactNode } from 'react';
 import ts from 'typescript';
 import * as xlsx from 'xlsx';
 import type { PersonnelFormData } from '../../hooks/usePersonnel';
@@ -122,7 +121,7 @@ describe('payroll form details (OBS-R2-51)', () => {
       }
       return [];
     });
-    render(<PayrollPaymentModal payroll={{ id: 7, payrollNumber: 'PAY-7', netPayable: 900000, paidAmount: 0, status: 'approved' }} onClose={vi.fn()} />);
+    renderWithQuery(<PayrollPaymentModal payroll={{ id: 7, payrollNumber: 'PAY-7', netPayable: 900000, paidAmount: 0, status: 'approved' }} onClose={vi.fn()} />);
     await screen.findByText('صندوق ریالی');
     expect(screen.queryByText('حساب دلاری')).toBeNull();
     const bankSelect = screen.getAllByRole('combobox').find(el => el.querySelector('option[value="3"]'));
@@ -147,7 +146,7 @@ describe('personnel Excel import (OBS-R2-53)', () => {
       }
       return {};
     });
-    const { container } = render(<PersonnelExcelModal isOpen onClose={vi.fn()} onSuccess={vi.fn()} existingPersonnel={[]} />);
+    const { container } = renderWithQuery(<PersonnelExcelModal isOpen onClose={vi.fn()} onSuccess={vi.fn()} existingPersonnel={[]} />);
     const input = container.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(input, { target: { files: [xlsxFile([
       { 'نام و نام خانوادگی': 'کارگر درست', 'کد پرسنلی': 'P-1' },
@@ -187,7 +186,7 @@ describe('personnel page buttons and form (OBS-R2-55)', () => {
   it('a reader without personnel.manage sees no create, Excel, edit or delete button', async () => {
     personnelHook = personnelPageHook();
     granted.add('personnel.view');
-    render(<PersonnelPage />);
+    renderWithQuery(<PersonnelPage />);
     expect(screen.queryByText('ثبت پرسنل جدید')).toBeNull();
     expect(screen.queryByText('ورود و خروجی اکسل')).toBeNull();
     expect(screen.queryByRole('button', { name: 'ویرایش' })).toBeNull();
@@ -199,7 +198,7 @@ describe('personnel page buttons and form (OBS-R2-55)', () => {
   it('a holder of personnel.manage sees them all', async () => {
     personnelHook = personnelPageHook();
     granted.add('personnel.manage');
-    render(<PersonnelPage />);
+    renderWithQuery(<PersonnelPage />);
     expect(screen.getByText('ثبت پرسنل جدید')).toBeTruthy();
     expect(screen.getByText('ورود و خروجی اکسل')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'ویرایش' })).toBeTruthy();
@@ -212,7 +211,7 @@ describe('personnel page buttons and form (OBS-R2-55)', () => {
     const formData = new Proxy({ salaryType: 'none' } as Record<string, unknown>, {
       get: (target, key) => (typeof key === 'string' && !(key in target) ? '' : target[key as string]),
     }) as unknown as PersonnelFormData;
-    render(<PersonnelFormModal isOpen onClose={vi.fn()} onSubmit={vi.fn()} editingId={7} formData={formData}
+    renderWithQuery(<PersonnelFormModal isOpen onClose={vi.fn()} onSubmit={vi.fn()} editingId={7} formData={formData}
       setFormData={vi.fn()} usersList={[]} isSaving={false} />);
     const select = screen.getByLabelText('مدل حقوق') as HTMLSelectElement;
     expect(select.value).toBe('none');
@@ -252,8 +251,7 @@ describe('statutory remittance window (review nit)', () => {
       if (url === '/accounting/bank-accounts/options') return [{ id: 5, code: 'B1', title: 'بانک کارگاه', type: 'bank', bankName: null, currency: 'IRR', hasLedgerAccount: true }];
       return [];
     });
-    const wrap = (node: ReactNode) => <QueryClientProvider client={new QueryClient()}>{node}</QueryClientProvider>;
-    render(wrap(<StatutoryRemittanceModal kind="insurance" jalaliYear={1405} jalaliMonth={1} onClose={vi.fn()} />));
+    renderWithQuery(<StatutoryRemittanceModal kind="insurance" jalaliYear={1405} jalaliMonth={1} onClose={vi.fn()} />);
     const bank = await screen.findByLabelText(/حساب بانکی یا صندوق/) as HTMLSelectElement;
     await waitFor(() => expect(bank.options.length).toBe(2));
     fireEvent.change(bank, { target: { value: '5' } });
