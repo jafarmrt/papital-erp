@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 import InvoicePrintView from '../../components/InvoicePrintView';
 
 // TD-793 (B08-24): پیش‌فاکتور فروشی که با نوع `proforma` ذخیره شده (کاربر بی مجوز قطعی) مثل فاکتور فروش چاپ می‌شود
@@ -22,7 +23,7 @@ const base = {
 
 function renderDoc(doc: Record<string, unknown>) {
   fetchJson.mockImplementation((url: string) => Promise.resolve(url === '/public-settings' ? settings : { signatures: [] }));
-  return render(<InvoicePrintView printedDoc={doc} />);
+  return renderWithQuery(<InvoicePrintView printedDoc={doc} />);
 }
 
 afterEach(() => {

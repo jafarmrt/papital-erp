@@ -1,61 +1,36 @@
-import { useEffect, useState } from 'react';
 import { formatPersianPrice, formatPersianNumber, formatPersianCode, formatCurrencyLabel, formatPersianDate, financialAmountToPersianWords } from '../utils';
-import { fetchJson } from '../api';
+import { usePublicSettingsQuery, useSettingsQuery } from '../hooks/queries/useSettingsQueries';
+import { useDocSignaturesQuery, type DocSignature } from '../hooks/queries/useDocumentQueries';
+import { useOpeningRead } from '../hooks/queries/readOnEveryOpening';
 import { printLineAmounts, printTotalsOf } from '../lib/invoices/invoicePrintTotals';
 import { isSalesFormDocType } from '../lib/invoices/invoiceForm';
 
+const NO_SIGNATURES: DocSignature[] = [];
+const DEFAULT_COMPANY_NAME = 'سامانه جامع مدیریت کارگاه پاپیتال';
+
 export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
-  const [companyInfo, setCompanyInfo] = useState<{
-    name: string;
-    phone: string;
-    address: string;
-    logo: string;
-  }>({
-    name: 'سامانه جامع مدیریت کارگاه پاپیتال',
-    phone: '',
-    address: '',
-    logo: ''
-  });
-
-  // V10-6.2: تاییدکنندگان سند از تاریخچه ورکفلو (برای بخش امضای چاپ)
-  const [workflowSignatures, setWorkflowSignatures] = useState<Array<{ name: string; roleTitle: string; date: string }>>([]);
-
   // v10.0.128 (TD-1200): نام و نشان از `/public-settings`، ولی تلفن و نشانی فروشنده فقط در فهرست تنظیمات (`/settings`، با ورود)
-  // هستند؛ پیش‌تر هر دو از مسیر عمومی خوانده می‌شدند که آن‌ها را ندارد و چاپ «-» نشان می‌داد
-  useEffect(() => {
-    type SettingRow = { key: string; value: string };
-    type SettingsAnswer = { settings?: SettingRow[]; data?: SettingRow[]; companyName?: string; companyLogo?: string } | SettingRow[] | null;
-    const listOf = (res: SettingsAnswer): SettingRow[] => {
-      if (Array.isArray(res)) return res;
-      return Array.isArray(res?.settings) ? res.settings : (Array.isArray(res?.data) ? res.data : []);
-    };
-    void Promise.all([
-      fetchJson('/public-settings') as Promise<SettingsAnswer>,
-      (fetchJson('/settings') as Promise<SettingsAnswer>).catch(() => [] as SettingRow[]),
-    ])
-      .then(([pubAnswer, all]) => {
-        const pub = Array.isArray(pubAnswer) ? null : pubAnswer;
-        const rawSettings = [...listOf(all), ...listOf(pub)];
-        const name = pub?.companyName || rawSettings.find(s => s.key === 'company_name')?.value || 'سامانه جامع مدیریت کارگاه پاپیتال';
-        const phone = rawSettings.find(s => s.key === 'company_phone')?.value || '';
-        const address = rawSettings.find(s => s.key === 'company_address')?.value || '';
-        const logo = pub?.companyLogo || rawSettings.find(s => s.key === 'company_logo')?.value || '';
-        setCompanyInfo({ name, phone, address, logo });
-      })
-      .catch(err => console.error('Failed to load company settings for print', err));
-  }, []);
+  // هستند؛ پیش‌تر هر دو از مسیر عمومی خوانده می‌شدند که آن‌ها را ندارد و چاپ «-» نشان می‌داد.
+  // 10.3 (ARCH review finding 3, part 15): both through the shared settings cache, read again on every opening of the print
+  // (never what an earlier one read: until the answer, the default name, as before) and refreshed by a settings save; a
+  // failed settings list leaves only the public name and logo, as before. Another document shown in the same print keeps
+  // what this opening read.
+  const printing = !!printedDoc;
+  const publicSettings = useOpeningRead(usePublicSettingsQuery({ readOnEveryOpening: true, enabled: printing }), printing).data ?? null;
+  const settingsRows = useOpeningRead(useSettingsQuery({ readOnEveryOpening: true, enabled: printing }), printing).data ?? [];
+  const rawSettings = [...settingsRows, ...(Array.isArray(publicSettings?.settings) ? publicSettings.settings : [])];
+  const settingOf = (key: string) => rawSettings.find(s => s.key === key)?.value || '';
+  const companyInfo = {
+    name: publicSettings?.companyName || settingOf('company_name') || DEFAULT_COMPANY_NAME,
+    phone: settingOf('company_phone'),
+    address: settingOf('company_address'),
+    logo: publicSettings?.companyLogo || settingOf('company_logo'),
+  };
 
-  useEffect(() => {
-    const docId = printedDoc?.id || printedDoc?.docId;
-    if (!docId) return;
-    const controller = new AbortController();
-    fetchJson(`/accounting/doc-signatures?entityId=${docId}`, { signal: controller.signal })
-      .then((res: any) => {
-        setWorkflowSignatures(Array.isArray(res?.signatures) ? res.signatures : []);
-      })
-      .catch(() => setWorkflowSignatures([]));
-    return () => controller.abort();
-  }, [printedDoc?.id, printedDoc?.docId]);
+  // V10-6.2: تاییدکنندگان سند از تاریخچه ورکفلو (برای بخش امضای چاپ)؛ فقط آنچه همین بار باز شدن چاپ خوانده شد، و هیچ اگر
+  // خواندن نشد
+  const docId = Number(printedDoc?.id || printedDoc?.docId) || null;
+  const workflowSignatures = useOpeningRead(useDocSignaturesQuery(docId), docId).data ?? NO_SIGNATURES;
 
   if (!printedDoc) return null;
 

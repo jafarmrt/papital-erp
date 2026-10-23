@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 import InvoicePrintView from '../../components/InvoicePrintView';
 import { printLineAmounts, printTotalsOf } from '../../lib/invoices/invoicePrintTotals';
 import { formatPersianPrice } from '../../utils';
@@ -35,7 +36,7 @@ describe('printed foreign-currency invoice (TD-383)', () => {
   });
 
   it('prints 200.5 USD, not 201', () => {
-    render(<InvoicePrintView printedDoc={usdInvoice} />);
+    renderWithQuery(<InvoicePrintView printedDoc={usdInvoice} />);
     const unit = formatPersianPrice(200.5, undefined, 2);
     expect(unit).not.toBe(formatPersianPrice(201));
     expect(screen.getAllByText(unit).length).toBeGreaterThan(0);

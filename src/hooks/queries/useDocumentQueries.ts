@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
+import { READ_ON_EVERY_OPENING } from './readOnEveryOpening';
+import type { DocumentLineStock } from '../../lib/documents/documentLineStock';
 
 export interface DocumentFilters {
   type?: string;
@@ -35,5 +37,50 @@ export function useDocumentsQuery(filters: DocumentFilters) {
     staleTime: 60 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: false,
+  });
+}
+
+/** the approvers of a document from its workflow history, for the signature block of its print (V10-6.2) */
+export interface DocSignature { name: string; roleTitle: string; date: string }
+
+/**
+ * 10.3 (ARCH review finding 3, part 15): the signatures under the document's own key, so an approval (which refreshes
+ * `documents`) shows on a print that is open; read again on every opening of the print
+ */
+export function useDocSignaturesQuery(docId: number | null) {
+  return useQuery({
+    queryKey: [...QUERY_KEYS.documents.detail(docId ?? 0), 'signatures'],
+    queryFn: async ({ signal }) => {
+      const res = await fetchJson<{ signatures?: unknown } | null>(`/accounting/doc-signatures?entityId=${docId}`, { signal });
+      return Array.isArray(res?.signatures) ? res.signatures as DocSignature[] : [];
+    },
+    enabled: docId !== null,
+    ...READ_ON_EVERY_OPENING,
+  });
+}
+
+/**
+ * 10.3 (ARCH review finding 3, part 15): a document as the approval inbox shows it (`GET /documents/:id`, the answer as
+ * it comes), under the document's own key, which the stock windows and the invoice page share; read again on each opening
+ */
+export function useDocumentDetailQuery<T>(docId: number | null) {
+  return useQuery({
+    queryKey: QUERY_KEYS.documents.detail(docId ?? 0),
+    queryFn: async ({ signal }) => (await fetchJson<T | null>(`/documents/${docId}`, { signal })) ?? null,
+    enabled: docId !== null,
+    ...READ_ON_EVERY_OPENING,
+  });
+}
+
+/** v10.0.151 (TD-1175): the warehouse and sellable stock of a document's outgoing lines, under the document's key */
+export function useDocumentLineStockQuery(docId: number | null) {
+  return useQuery({
+    queryKey: [...QUERY_KEYS.documents.detail(docId ?? 0), 'line-stock'],
+    queryFn: async ({ signal }) => {
+      const res = await fetchJson<{ data?: DocumentLineStock[] } | null>(`/documents/${docId}/line-stock`, { signal });
+      return Array.isArray(res?.data) ? res.data : [];
+    },
+    enabled: docId !== null,
+    ...READ_ON_EVERY_OPENING,
   });
 }

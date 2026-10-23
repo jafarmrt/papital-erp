@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, FormEvent } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { fetchJson } from '../api';
@@ -17,6 +17,7 @@ import {
   usePieceworkPersonnelRatesQuery,
   usePieceworkTasksQuery,
 } from './queries/usePieceworkQueries';
+import { pieceworkPayrollQuery, usePieceworkPayrollQuery } from './queries/usePayrollWindowQueries';
 import {
   Personnel,
   PieceworkTask,
@@ -160,8 +161,18 @@ export function usePiecework() {
   const [payrollStatutory, setPayrollStatutory] = useState<PayrollStatutoryEntry>(EMPTY_STATUTORY_ENTRY);
   const [isSavingPayroll, setIsSavingPayroll] = useState<boolean>(false);
 
-  // Modal 4: View Payslip
-  const [viewingPayroll, setViewingPayroll] = useState<PieceworkPayroll | null>(null);
+  // Modal 4: View Payslip. 10.3 (ARCH review finding 3, part 15): the window shows its payslip's cache entry, so a payment,
+  // approval or return to draft made from it shows at once; before, it kept the figures it opened with (a paid slip still
+  // offered «بازگشت به پیش‌نویس» and its old remainder) until it was opened again
+  const [viewingPayrollId, setViewingPayrollId] = useState<number | null>(null);
+  const viewingPayrollRead = usePieceworkPayrollQuery(viewingPayrollId);
+  const viewingPayroll = viewingPayrollId === null ? null : viewingPayrollRead.data ?? null;
+  /** the slip on screen while it is read again after a write, or when that read failed: its writes wait */
+  const viewingPayrollFreshness = viewingPayrollRead.isFetching
+    ? 'refreshing' as const
+    : viewingPayrollRead.errorUpdatedAt > viewingPayrollRead.dataUpdatedAt ? 'failed' as const : 'current' as const;
+  /** the payslip last clicked: an earlier click's late answer never opens its window over it */
+  const askedPayslip = useRef<number | null>(null);
 
   /** Reads every piecework list of the page again (titles, categories, payslips, work logs, rates) */
   const reloadAll = useCallback(() => {
@@ -637,12 +648,18 @@ export function usePiecework() {
   };
 
   const handleViewPayslip = async (id: number) => {
+    askedPayslip.current = id;
     try {
-      const res = await fetchJson(`/piecework/payrolls/${id}`);
-      setViewingPayroll(res);
+      await queryClient.fetchQuery({ ...pieceworkPayrollQuery(id), staleTime: 0 });
+      if (askedPayslip.current === id) setViewingPayrollId(id);
     } catch (err) {
-      hotToast.error(errorMessageOf(err) || 'خطا در دریافت جزئیات فیش');
+      if (askedPayslip.current === id) hotToast.error(errorMessageOf(err) || 'خطا در دریافت جزئیات فیش');
     }
+  };
+
+  const closePayslip = () => {
+    askedPayslip.current = null;
+    setViewingPayrollId(null);
   };
 
   const handleUpdatePayrollStatus = async (id: number, status: 'draft' | 'approved' | 'paid') => {
@@ -653,9 +670,6 @@ export function usePiecework() {
         body: JSON.stringify({ status })
       });
       hotToast.success(status === 'approved' ? 'فیش تأیید شد و آماده پرداخت است.' : 'فیش به پیش‌نویس برگشت.');
-      if (viewingPayroll && viewingPayroll.id === id) {
-        setViewingPayroll(prev => prev ? { ...prev, status } : null);
-      }
       reloadAfterPayrollChange();
     } catch (err) {
       hotToast.error(errorMessageOf(err) || 'خطا در به‌روزرسانی وضعیت فیش');
@@ -667,9 +681,9 @@ export function usePiecework() {
       try {
         await fetchJson(`/piecework/payrolls/${id}`, { method: 'DELETE' });
         hotToast.success('فیش حقوقی با موفقیت ابطال و حذف شد');
-        if (viewingPayroll && viewingPayroll.id === id) {
-          setViewingPayroll(null);
-        }
+        if (viewingPayrollId === id) closePayslip();
+        // the slip is gone: its window's entry is dropped first, so the refresh never reads it again
+        queryClient.removeQueries({ queryKey: QUERY_KEYS.piecework.payroll(id), exact: true });
         reloadAfterPayrollChange();
       } catch (err) {
         hotToast.error(errorMessageOf(err) || 'خطا در ابطال فیش حقوقی');
@@ -773,7 +787,8 @@ export function usePiecework() {
     payrollAdvanceDeduction,
     setPayrollAdvanceDeduction,
     viewingPayroll,
-    setViewingPayroll,
+    viewingPayrollFreshness,
+    closePayslip,
     taskCategories,
     categoriesList,
     taskSelectOptions,

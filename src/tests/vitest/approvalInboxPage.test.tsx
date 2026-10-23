@@ -151,14 +151,15 @@ describe('TD-464 the task modal shows only the opened task entity', () => {
 
   it('a requisition task reads the requisition once', async () => {
     const row = taskRow(1, '7', { entityType: 'purchase_requisition', instance: instance(1, '7', 'purchase_requisition') });
-    routeFetch(inboxRoutes([row], (url) => (url === '/procurement/requisitions/7'
+    // 10.3 (part 15): the inbox reads it as the procurement desk does, through their shared cache entry
+    routeFetch(inboxRoutes([row], (url) => (url === '/api/procurement/requisitions/7'
       ? { success: true, data: { id: 7, code: 'PR-7', title: 'خرید', items: [] } }
       : {})));
     renderPage();
     await screen.findAllByText('تأیید سند 7');
     fireEvent.click(openButtons()[0]);
     await screen.findByText('PR-7');
-    expect(fetchJson.mock.calls.filter((c) => c[0] === '/procurement/requisitions/7')).toHaveLength(1);
+    expect(fetchJson.mock.calls.filter((c) => c[0] === '/api/procurement/requisitions/7')).toHaveLength(1);
   });
 });
 

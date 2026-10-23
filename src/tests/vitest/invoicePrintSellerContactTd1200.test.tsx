@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 import InvoicePrintView from '../../components/InvoicePrintView';
 
 // v10.0.128 (TD-1200, fresh-eyes guide test roles-c Rc9): the seller's phone and address come from the login-only settings
@@ -29,7 +30,7 @@ describe('InvoicePrintView prints the seller phone and address (TD-1200)', () =>
     fetchJson.mockImplementation((url: string) => Promise.resolve(
       url === '/public-settings' ? PUBLIC : url === '/settings' ? SETTINGS : { signatures: [] },
     ));
-    render(<InvoicePrintView printedDoc={DOC} />);
+    renderWithQuery(<InvoicePrintView printedDoc={DOC} />);
     expect(await screen.findByText(/تهران، خیابان آزادی/)).toBeTruthy();
     expect(screen.getByText(/۰۲۱۱۲۳۴۵۶۷۸/)).toBeTruthy();
   });
