@@ -4,15 +4,16 @@ import type { UseQueryResult } from '@tanstack/react-query';
 /**
  * 10.3 (ARCH review finding 3): the read options of a window or page that used to read once when it opened, into its own
  * state. It now reads through the shared cache, so a write elsewhere that invalidates its key refreshes it while it is
- * open; it still reads again on every opening (`staleTime: 0`), stays out of the focus refetch (a window with a form does
- * not change under the user's hands on a tab switch) and shows a server refusal at once (no retry). Offline, the read
- * fails at once and the window says so, as before, instead of waiting silently for the network (`networkMode`). Its
- * request is cancelled when it closes.
+ * open; it still reads again on every opening (`staleTime: 0`), stays out of the focus and reconnect refetches (a window
+ * with a form does not change under the user's hands on a tab switch or when the network comes back) and shows a server
+ * refusal at once (no retry). Offline, the read fails at once and the window says so, as before, instead of waiting
+ * silently for the network (`networkMode`). Its request is cancelled when it closes.
  */
 export const READ_ON_EVERY_OPENING = {
   staleTime: 0,
   refetchOnMount: 'always',
   refetchOnWindowFocus: false,
+  refetchOnReconnect: false,
   retry: false,
   networkMode: 'always',
 } as const;

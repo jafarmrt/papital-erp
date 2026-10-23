@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, renderHook, screen, waitFor } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 
 type FetchOpts = { method?: string; body?: string; signal?: AbortSignal };
 // a server that keeps the project version: a save from another version is refused, a save or a schedule log raises it
@@ -64,8 +65,8 @@ const PROJECT = {
   },
 } as unknown as ProductionProject;
 
-const renderTab = () => render(
-  <ProjectScheduleTab project={PROJECT} personnelList={[{ id: 7, fullName: 'پرسنل آزمون' }]} pieceworkTasksList={[{ id: 3, title: 'برش', defaultRate: 1000 }]} onUpdate={vi.fn()} />,
+const renderTab = () => renderWithQuery(
+  <ProjectScheduleTab project={PROJECT} onUpdate={vi.fn()} />,
 );
 
 // v9.0.385 (TD-742, owner decision t3 A): a project save sends the version it was built from and the next save the newer one
@@ -117,8 +118,8 @@ describe('project version on save (TD-742)', () => {
   it('after a work log the schedule keeps its own token, never the parts of the project read (TD-1342 review N2)', async () => {
     const part = (d: string) => Object.fromEntries(['specs', 'status', 'attachments', 'inventory', 'schedule'].map(p => [p, d.repeat(32)]));
     tokensFor = kind => part(kind === 'save' ? '1' : '2');
-    render(
-      <ProjectScheduleTab project={{ ...PROJECT, partTokens: part('0') } as ProductionProject} personnelList={[{ id: 7, fullName: 'پرسنل آزمون' }]} pieceworkTasksList={[{ id: 3, title: 'برش', defaultRate: 1000 }]} onUpdate={vi.fn()} />,
+    renderWithQuery(
+      <ProjectScheduleTab project={{ ...PROJECT, partTokens: part('0') } as ProductionProject} onUpdate={vi.fn()} />,
     );
     fireEvent.click(await screen.findByText('ثبت کارمزد'));
     await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1));

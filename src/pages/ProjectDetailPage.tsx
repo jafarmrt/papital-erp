@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
-import type { ProductionProject } from '../types';
-import { fetchJson } from '../api';
+import toast from 'react-hot-toast';
 import { errorMessageOf, formatPersianNumber } from '../utils';
+import { QUERY_KEYS } from '../lib/queryKeys';
 import { useProjectVersion } from '../hooks/useProjectVersion';
 import { invalidateProjectChange } from '../hooks/queries/useProjectQueries';
 import { useProjectPermissions } from '../hooks/useProjectPermissions';
 import { usePersonnelListQuery } from '../hooks/queries/usePersonnelQueries';
-import { useProjectItemOptions, useProjectStepCounts } from '../hooks/queries/useProjectWorkspaceQueries';
+import { useProjectItemOptions, useProjectStepCounts, useWorkspaceProject } from '../hooks/queries/useProjectWorkspaceQueries';
 import { confirmLeaveUnsaved, leaveNavigateOptions, useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import { parseProjectWorkspaceTab, projectIdFromParam, projectListPath, projectWorkspacePath, PROJECT_WORKSPACE_TABS, type ProjectWorkspaceTab } from '../lib/projects/projectWorkspaceTabs';
 import { projectInactiveNote, projectSteps } from '../lib/projects/projectSteps';
@@ -26,7 +26,25 @@ import { ProjectPhoneSummary } from '../components/project/phone/ProjectPhoneSum
 import { ProjectPhoneProgress } from '../components/project/phone/ProjectPhoneProgress';
 import { usePhoneWidth } from '../lib/pwa/usePhoneWidth';
 
-type DirtySetter = (dirty: boolean) => void;
+type TabFlagSetter = (on: boolean) => void;
+type TabSet = ReadonlySet<ProjectWorkspaceTab>;
+
+/** one setter per tab that adds the tab to a set or takes it out, the same function for the page's whole life */
+function tabFlagSetters(setTabs: Dispatch<SetStateAction<TabSet>>): Record<ProjectWorkspaceTab, TabFlagSetter> {
+  const setters = {} as Record<ProjectWorkspaceTab, TabFlagSetter>;
+  for (const key of PROJECT_WORKSPACE_TABS) {
+    setters[key] = (on: boolean) => setTabs(prev => {
+      if (prev.has(key) === on) return prev;
+      const next = new Set(prev);
+      if (on) next.add(key); else next.delete(key);
+      return next;
+    });
+  }
+  return setters;
+}
+
+/** a tab that starts edits from the project holds one; the progress tab reads its own matrix */
+const holdsProject = (tabs: TabSet) => [...tabs].some(t => t !== 'progress');
 
 /**
  * v10.2.1 (10.2 package 2, production projects review U1–U6): a production project is a page, `/projects/<id>/<tab>`,
@@ -39,8 +57,17 @@ type DirtySetter = (dirty: boolean) => void;
  * summary of the project instead of the first tab and a list per product instead of the progress matrix, both
  * reading the same project and the same tick hook as the desktop; «نمای کامل» shows the desktop layout. Only one
  * layout is built at a time (`usePhoneWidth`).
+ * 10.3 (ARCH review finding 3): the project comes from the shared cache (`useWorkspaceProject`), so a save elsewhere
+ * (a stock document, the workshop, another tab) refreshes the open page; the tabs take it only while none of them holds
+ * an unsaved change and no save is under way (part 9 review), while the header and the step bar show the newest read at
+ * once. Each project is its own visit: the page starts again (closed specs, its own read) for another one.
  */
 export default function ProjectDetailPage() {
+  const { projectId } = useParams<{ projectId: string }>();
+  return <ProjectWorkspacePage key={projectId ?? ''} />;
+}
+
+function ProjectWorkspacePage() {
   const params = useParams<{ projectId: string; tab?: string }>();
   const projectId = projectIdFromParam(params.projectId);
   const tab = parseProjectWorkspaceTab(params.tab);
@@ -48,10 +75,20 @@ export default function ProjectDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { canEdit } = useProjectPermissions();
-  const [project, setProject] = useState<ProductionProject | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [dirtyTabs, setDirtyTabs] = useState<TabSet>(new Set());
+  // a tab with an unsaved change or a save under way; the progress tab's also keeps the layout (review M1)
+  const [busyTabs, setBusyTabs] = useState<TabSet>(new Set());
+  const workspace = useWorkspaceProject(projectId, !holdsProject(dirtyTabs) && !holdsProject(busyTabs));
+  const project = workspace.project;
+  const latest = workspace.latest;
+  const loadError = workspace.missing ? 'پروژه یافت نشد' : (workspace.error ? errorMessageOf(workspace.error) || 'اطلاعات پروژه دریافت نشد' : null);
   const projectVersion = useProjectVersion(project);
-  const [dirtyTabs, setDirtyTabs] = useState<ReadonlySet<ProjectWorkspaceTab>>(new Set());
+  /*
+   * the header's status change starts from the newest status, with the tokens of the project it shows; it never takes a
+   * save's answer (part 9 review): until the refresh lands the header still shows the old status, so a second change
+   * from it is refused by the server instead of passing with the new token
+   */
+  const headerVersion = useProjectVersion(latest);
   const [specsOpen, setSpecsOpen] = useState(false);
   const phone = usePhoneWidth();
   const [fullView, setFullView] = useState(false);
@@ -59,7 +96,7 @@ export default function ProjectDetailPage() {
   // a phone turned sideways (wider than 768 px) keeps its layout while a tab holds unsaved ticks or edits
   const [phoneLayout, setPhoneLayout] = useState(wantPhoneLayout);
   // the progress tab's ticks not saved or a save under way (review M1): the tab's list exists in one layout only
-  const [progressBusy, setProgressBusy] = useState(false);
+  const progressBusy = busyTabs.has('progress');
   // read from the address too, so the render before `specsOpen` is set already counts the editor as open (review N1)
   const editingSpecs = canEdit && tab === 'overview' && (specsOpen || searchParams.get('edit') === '1');
 
@@ -79,12 +116,6 @@ export default function ProjectDetailPage() {
    * extra history entry and left the `?edit=1` entry under it, so «back» opened the editor again and then asked about
    * changes nobody made.
    */
-  // another project starts with its specs closed (review S2)
-  useEffect(() => {
-    setSpecsOpen(false);
-    setFullView(false);
-  }, [projectId]);
-
   useEffect(() => {
     if (searchParams.get('edit') !== '1') return;
     setSpecsOpen(true);
@@ -97,47 +128,26 @@ export default function ProjectDetailPage() {
     if (tab !== 'overview') setSpecsOpen(false);
   }, [tab]);
 
-  const loadProject = useCallback(async (signal?: AbortSignal) => {
-    if (projectId === null) return;
-    try {
-      const data = await fetchJson<ProductionProject>(`/projects/${projectId}`, { signal });
-      setProject(data && data.id ? data : null);
-      setLoadError(data && data.id ? null : 'پروژه یافت نشد');
-    } catch (err) {
-      if ((err as { name?: string } | null)?.name === 'AbortError') return;
-      setLoadError(errorMessageOf(err) || 'اطلاعات پروژه دریافت نشد');
-    }
-  }, [projectId]);
-
-  useEffect(() => {
-    setProject(null);
-    setLoadError(null);
-    const controller = new AbortController();
-    void loadProject(controller.signal);
-    return () => controller.abort();
-  }, [loadProject]);
-
   /**
-   * after any save: the project again, and the list, the step bar and every project read refreshed; 10.3 (ARCH review
-   * finding 3): the reserved items too, since a project's reservations are part of that report
+   * after any save: the project, the list, the step bar and every project read refreshed, and the reserved items, since a
+   * project's reservations are part of that report (10.3); it ends when this page's project is read again
    */
-  const refresh = useCallback(async (signal?: AbortSignal) => {
+  const refresh = useCallback(async () => {
     invalidateProjectChange(queryClient);
-    await loadProject(signal);
-  }, [loadProject, queryClient]);
+    if (projectId === null) return;
+    await queryClient.refetchQueries({ queryKey: QUERY_KEYS.projects.detail(projectId), exact: true }, { cancelRefetch: false });
+  }, [projectId, queryClient]);
 
-  const dirtySetters = useMemo(() => {
-    const setters = {} as Record<ProjectWorkspaceTab, DirtySetter>;
-    for (const key of PROJECT_WORKSPACE_TABS) {
-      setters[key] = (dirty: boolean) => setDirtyTabs(prev => {
-        if (prev.has(key) === dirty) return prev;
-        const next = new Set(prev);
-        if (dirty) next.add(key); else next.delete(key);
-        return next;
-      });
-    }
-    return setters;
-  }, []);
+  const dirtySetters = useMemo(() => tabFlagSetters(setDirtyTabs), []);
+  const busySetters = useMemo(() => tabFlagSetters(setBusyTabs), []);
+
+  // a refresh that fails while the project is on screen is said once; the page keeps what it shows
+  const sayRefreshFailed = useEffectEvent(() => {
+    if (workspace.project) toast.error(errorMessageOf(workspace.error) || 'اطلاعات تازهٔ پروژه دریافت نشد');
+  });
+  useEffect(() => {
+    if (workspace.failedAt) sayRefreshFailed();
+  }, [workspace.failedAt]);
 
   useUnsavedChangesGuard(dirtyTabs.size > 0);
 
@@ -189,8 +199,8 @@ export default function ProjectDetailPage() {
   const closeSpecs = useCallback(() => setSpecsOpen(false), []);
 
   const steps = useMemo(
-    () => (project ? projectSteps(project, stepCounts.data ?? null, stepCounts.isError) : []),
-    [project, stepCounts.data, stepCounts.isError],
+    () => (latest ? projectSteps(latest, stepCounts.data ?? null, stepCounts.isError) : []),
+    [latest, stepCounts.data, stepCounts.isError],
   );
 
   if (projectId === null || (loadError && !project)) {
@@ -202,7 +212,7 @@ export default function ProjectDetailPage() {
     );
   }
 
-  if (!project) {
+  if (!project || !latest) {
     return (
       <div className="flex items-center justify-center gap-2 py-16 text-slate-500" role="status">
         <RefreshCw className="w-5 h-5 animate-spin text-amber-500" aria-hidden="true" />
@@ -211,23 +221,23 @@ export default function ProjectDetailPage() {
     );
   }
 
-  const shortages = storedReservationShortages(project.inventory_control).length;
+  const shortages = storedReservationShortages(latest.inventory_control).length;
   const badges: Partial<Record<ProjectWorkspaceTab, string>> = {
-    overview: project.stages?.length ? `${formatPersianNumber(project.stages.filter(s => s.status === 'completed').length)} از ${formatPersianNumber(project.stages.length)} مرحله` : undefined,
+    overview: latest.stages?.length ? `${formatPersianNumber(latest.stages.filter(s => s.status === 'completed').length)} از ${formatPersianNumber(latest.stages.length)} مرحله` : undefined,
     materials: shortages > 0 ? `${formatPersianNumber(shortages)} کمبود` : undefined,
   };
   const items = itemsQuery.data ?? [];
   const personnel = personnelQuery.data ?? [];
 
   const onStatusSaved = (res: unknown) => { projectVersion.remember(res, ['status']); void refresh(); };
-  const inactiveNote = projectInactiveNote(project.status);
+  const inactiveNote = projectInactiveNote(latest.status);
 
   return (
     <div className="p-3 sm:p-5 space-y-4 font-farsi" dir="rtl">
       {phoneLayout ? (
         <ProjectPhoneHeader
-          project={project}
-          writeBase={projectVersion.writeBase}
+          project={latest}
+          writeBase={headerVersion.writeBase}
           canEdit={canEdit}
           editingSpecs={editingSpecs}
           onBack={() => void goBack()}
@@ -242,8 +252,8 @@ export default function ProjectDetailPage() {
             </button>
           )}
           <ProjectWorkspaceHeader
-            project={project}
-            writeBase={projectVersion.writeBase}
+            project={latest}
+            writeBase={headerVersion.writeBase}
             canEdit={canEdit}
             editingSpecs={editingSpecs}
             onBack={() => void goBack()}
@@ -257,7 +267,7 @@ export default function ProjectDetailPage() {
       <div id="project-tab-panel" role="tabpanel" aria-labelledby={`project-tab-${tab}`}>
         {tab === 'overview' && phoneLayout && !editingSpecs && (
           <ProjectPhoneSummary
-            project={project}
+            project={latest}
             steps={steps}
             inactiveNote={inactiveNote}
             onOpenTab={(next) => void goToTab(next)}
@@ -277,11 +287,11 @@ export default function ProjectDetailPage() {
             onDirtyChange={dirtySetters.overview}
           />
         )}
-        {tab === 'materials' && <ProjectInventoryTab project={project} itemsList={items} onUpdate={refresh} onDirtyChange={dirtySetters.materials} />}
+        {tab === 'materials' && <ProjectInventoryTab project={project} itemsList={items} onUpdate={refresh} onDirtyChange={dirtySetters.materials} onBusyChange={busySetters.materials} />}
         {tab === 'progress' && (phoneLayout
-          ? <ProjectPhoneProgress projectId={project.id} canEdit={canEdit} onUpdate={refresh} onDirtyChange={dirtySetters.progress} onBusyChange={setProgressBusy} />
-          : <ProjectProductProgressTab projectId={project.id} onUpdate={refresh} onDirtyChange={dirtySetters.progress} onBusyChange={setProgressBusy} />)}
-        {tab === 'workshop' && <ProjectScheduleTab project={project} personnelList={personnel} pieceworkTasksList={[]} onUpdate={refresh} onDirtyChange={dirtySetters.workshop} />}
+          ? <ProjectPhoneProgress projectId={project.id} canEdit={canEdit} onUpdate={refresh} onDirtyChange={dirtySetters.progress} onBusyChange={busySetters.progress} />
+          : <ProjectProductProgressTab projectId={project.id} onUpdate={refresh} onDirtyChange={dirtySetters.progress} onBusyChange={busySetters.progress} />)}
+        {tab === 'workshop' && <ProjectScheduleTab project={project} onUpdate={refresh} onDirtyChange={dirtySetters.workshop} onBusyChange={busySetters.workshop} />}
         {tab === 'delivery' && <ProjectStockEntryTab project={project} itemsList={items} onUpdate={refresh} />}
       </div>
     </div>

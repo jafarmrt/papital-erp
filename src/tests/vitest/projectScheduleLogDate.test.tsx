@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { renderWithQuery } from './helpers/queryWrapper';
 import type { ChangeEvent } from 'react';
 
 type FetchOpts = { method?: string; body?: string; signal?: AbortSignal };
@@ -58,8 +59,8 @@ const PROJECT = {
   },
 } as unknown as ProductionProject;
 
-const renderTab = () => render(
-  <ProjectScheduleTab project={PROJECT} personnelList={[{ id: 7, fullName: 'پرسنل آزمون' }]} pieceworkTasksList={[{ id: 3, title: 'برش', defaultRate: 1000 }]} onUpdate={vi.fn()} />,
+const renderTab = () => renderWithQuery(
+  <ProjectScheduleTab project={PROJECT} onUpdate={vi.fn()} />,
 );
 
 // v9.0.283 (TD-747, package 11 decision t6 «الف»): a schedule work log is dated by the picker (default today), never the row or project start

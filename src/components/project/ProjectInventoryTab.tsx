@@ -23,6 +23,8 @@ interface ProjectInventoryTabProps {
   onUpdate?: (signal?: AbortSignal) => void | Promise<void>;
   /** v10.2.1 (10.2 package 2, review U2): told whether the sections or the manual purchase rows hold an unsaved change */
   onDirtyChange?: (dirty: boolean) => void;
+  /** 10.3 (part 9 review): an unsaved change or a save under way, so the page holds the project back until both are over */
+  onBusyChange?: (busy: boolean) => void;
 }
 
 export function ProjectInventoryTab({
@@ -30,7 +32,8 @@ export function ProjectInventoryTab({
   itemsList,
   warehouseItems: initialWarehouseItems,
   onUpdate,
-  onDirtyChange
+  onDirtyChange,
+  onBusyChange
 }: ProjectInventoryTabProps) {
   const effectiveItemsList = itemsList || initialWarehouseItems || [];
 
@@ -99,6 +102,9 @@ export function ProjectInventoryTab({
   // a change being saved is not left unsaved: switching tabs mid-save does not ask
   useEffect(() => { onDirtyChange?.(isDirty && !saving); }, [isDirty, saving, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+  // but the page keeps the project the sections started from until the save is over, so a read mid-save resets nothing
+  useEffect(() => { onBusyChange?.(isDirty || saving); }, [isDirty, saving, onBusyChange]);
+  useEffect(() => () => onBusyChange?.(false), [onBusyChange]);
 
   // V3.1.46 (TD-070): پل مستقیم خرید از ردیف بخش — ساخت لیست خرید موقت از کسری‌های همان بخش
   // v10.2.3 (TD-1290): ردیف‌های یک کالا یکی می‌شوند و مقدار خرید از کسری کل پروژه بیشتر نیست (`buildSectionPurchaseList`)
