@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { ownReads } from './helpers/ownReads';
+import {
+  deadLetter, earlier, fetchJson, firstPage, keysOf, newClient, reads, readsOf, renderIn, resetServer, server, timelineItem, webhook, type Opts,
+} from './helpers/eventAdminServer';
 
 /**
  * 10.3 (ARCH review finding 3, part 14): the dead letters, webhooks and event timeline tabs read through the shared cache,
@@ -28,40 +29,10 @@ const SHOWN = {
   pickNone: '-- یک نمونه را انتخاب کنید --',
 } as const;
 
-type Opts = { method?: string; body?: string; signal?: AbortSignal };
-const deadLetter = (id: number, failureReason: string) => ({
-  id, originalEventId: `evt-${id}-abcdefghijklmnop`, eventType: 'InvoiceApproved', aggregateType: 'Document', aggregateId: String(id),
-  source: 'outbox', payload: {}, metadata: {}, failureReason, errorStack: '', retryCount: 1, status: 'quarantined', quarantinedAt: '2026-10-06 10:00:00',
+vi.mock('../../api', async () => {
+  const { fetchJson: answer } = await import('./helpers/eventAdminServer');
+  return { API_URL: '/api', fetchJson: (url: string, opts?: Opts) => answer(url, opts), isAbortError: () => false };
 });
-const webhook = (id: number, name: string) => ({
-  id, name, targetUrl: `https://hook${id}.example.com`, secretKey: '********', eventPatterns: ['*'], customHeaders: {}, isActive: 1, retryLimit: 3,
-  timeoutMs: 5000, totalDeliveries: 0, successfulDeliveries: 0, failedDeliveries: 0, createdAt: '2026-10-01T10:00:00Z',
-});
-const timelineItem = (title: string) => ({ id: title, eventId: `e-${title}`, eventType: 'InvoiceApproved', occurredAt: '2026-10-06T10:00:00Z', source: 'outbox', actor: 'a', title, description: '', status: 'ok', payload: {}, metadata: {} });
-
-const server = {
-  dlq: [deadLetter(1, 'fresh reason')], dlqTotal: 1,
-  webhooks: [webhook(1, 'fresh hook')],
-  aggregates: [{ id: '5', title: 'record five' }],
-  timeline: [timelineItem('fresh step')],
-};
-const reads = { hold: null as string | null, fail: null as string | null, held: [] as Array<(a: unknown) => void> };
-const fetchJson = vi.fn(async (url: string, opts?: Opts): Promise<unknown> => {
-  if (opts?.method) return { success: true, message: 'done', succeeded: 1, total: 1 };
-  const path = url.split('?')[0] as string;
-  if (reads.hold === path) { reads.hold = null; return new Promise(resolve => { reads.held.push(resolve); }); }
-  if (reads.fail === path) { reads.fail = null; return { success: false, message: 'server refused the read' }; }
-  if (path === '/events/dlq/stats') return { success: true, stats: { total: 1, quarantined: 1, replayed: 0, dismissed: 0, byEventType: {}, bySource: {} } };
-  if (path === '/events/dlq') return { success: true, data: server.dlq, total: server.dlqTotal };
-  if (path === '/events/webhooks/stats') return { success: true, stats: null };
-  if (path === '/events/webhooks') return { success: true, data: server.webhooks };
-  if (path === '/events/webhooks/deliveries/list') return { success: true, data: [] };
-  if (path === '/events/event-sourcing/types') return { success: true, types: [] };
-  if (path === '/events/event-sourcing/aggregates') return { success: true, data: server.aggregates };
-  if (path === '/events/event-sourcing/timeline') return { success: true, timeline: server.timeline, auditIncluded: true };
-  return { success: true };
-});
-vi.mock('../../api', () => ({ API_URL: '/api', fetchJson: (url: string, opts?: Opts) => fetchJson(url, opts), isAbortError: () => false }));
 vi.mock('../../contexts/AuthContext', () => ({ useHasPermission: () => true }));
 vi.mock('../../components/ConfirmDialogHost', () => ({ confirmAction: async () => true }));
 
@@ -74,16 +45,8 @@ import { QUERY_KEYS } from '../../lib/queryKeys';
 afterEach(() => {
   cleanup();
   fetchJson.mockClear();
-  Object.assign(server, { dlq: [deadLetter(1, 'fresh reason')], dlqTotal: 1, webhooks: [webhook(1, 'fresh hook')], aggregates: [{ id: '5', title: 'record five' }], timeline: [timelineItem('fresh step')] });
-  Object.assign(reads, { hold: null, fail: null, held: [] });
+  resetServer();
 });
-
-const newClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
-const renderIn = (client: QueryClient, ui: ReactNode) => render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
-const earlier = () => ({ updatedAt: Date.now() - 60_000 });
-const keysOf = (spy: { mock: { calls: Array<[{ queryKey?: unknown }?, ...unknown[]]> } }) => spy.mock.calls.map(([filters]) => JSON.stringify(filters?.queryKey));
-const readsOf = (path: string) => fetchJson.mock.calls.filter(([u, o]) => u.split('?')[0] === path && !o?.method).map(([u]) => new URLSearchParams(u.split('?')[1] ?? ''));
-const firstPage = { status: 'all', source: 'all', search: '', page: 1 };
 
 describe('the dead letters tab reads through the shared cache (10.3)', () => {
   it('never shows the page an earlier opening left while it reads again', async () => {

@@ -15,6 +15,7 @@ import { QUERY_KEYS } from '../../lib/queryKeys';
 
 const NO_ROWS: DeadLetterItem[] = [];
 const NO_IDS: number[] = [];
+const countOf = (n: number | undefined) => (n === undefined ? '—' : n.toLocaleString('fa-IR'));
 
 /**
  * 10.3 (ARCH review finding 3, part 14): the stats and the page of dead letters are read through the shared cache, again
@@ -33,7 +34,9 @@ export function DeadLetterQueueSubTab() {
   // OBS-R2-86 (TD-1323): the dead letters are read one page at a time (the list stopped at its first 100 rows)
   const [page, setPage] = useState(1);
   const filter = { status: statusFilter, source: sourceFilter, search, page };
-  const stats = useOpeningRead(useDlqStatsQuery(), true).data ?? null;
+  const statsRead = useOpeningRead(useDlqStatsQuery(), true);
+  const stats = statsRead.data ?? null;
+  const statsError = statsRead.error ? errorMessageOf(statsRead.error) || 'آمار صف خطا خوانده نشد.' : '';
   const pageQuery = useDlqPageQuery(filter);
   const pageRead = useOpeningRead(pageQuery, true);
   const items = pageRead.data?.rows ?? NO_ROWS;
@@ -46,6 +49,8 @@ export function DeadLetterQueueSubTab() {
   // v10.1.51 (OBS-R2-87): a selection never outlives the list it was made in, so a batch replays only rows on screen
   const listKey = JSON.stringify(filter);
   const [selection, setSelection] = useState<{ of: string; ids: number[] }>({ of: '', ids: [] });
+  // leaving a filter, search or page drops its selection, so coming back to it never checks those rows again
+  if (selection.of !== listKey && selection.ids.length > 0) setSelection({ of: listKey, ids: [] });
   const selectedIds = selection.of === listKey ? selection.ids.filter(id => items.some(i => i.id === id)) : NO_IDS;
   const setSelectedIds = (ids: number[]) => setSelection({ of: listKey, ids });
 
@@ -249,7 +254,12 @@ export function DeadLetterQueueSubTab() {
         </div>
       )}
 
-      {/* Header Info & Stats */}
+      {/* Header Info & Stats: «—» while they are read or when they could not be, never a count that was not read */}
+      {statsError && (
+        <div role="alert" className="p-3 rounded-xl border border-rose-200 bg-rose-50 text-xs text-rose-700 dark:bg-rose-950/40 dark:border-rose-800/50 dark:text-rose-300">
+          {statsError}
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
           <div className="flex items-center justify-between">
@@ -259,7 +269,7 @@ export function DeadLetterQueueSubTab() {
             </div>
           </div>
           <div className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
-            {stats ? stats.quarantined.toLocaleString('fa-IR') : '۰'}
+            {countOf(stats?.quarantined)}
           </div>
           <p className="text-xs text-slate-400 mt-1">رویدادهای نیازمند بازبینی و بازپخش</p>
         </div>
@@ -272,7 +282,7 @@ export function DeadLetterQueueSubTab() {
             </div>
           </div>
           <div className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
-            {stats ? stats.replayed.toLocaleString('fa-IR') : '۰'}
+            {countOf(stats?.replayed)}
           </div>
           <p className="text-xs text-slate-400 mt-1">رویدادهای بازیابی‌شده در گذرگاه</p>
         </div>
@@ -285,7 +295,7 @@ export function DeadLetterQueueSubTab() {
             </div>
           </div>
           <div className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
-            {stats ? stats.dismissed.toLocaleString('fa-IR') : '۰'}
+            {countOf(stats?.dismissed)}
           </div>
           <p className="text-xs text-slate-400 mt-1">رویدادهای نادیده‌گرفته توسط مدیر</p>
         </div>
@@ -298,7 +308,7 @@ export function DeadLetterQueueSubTab() {
             </div>
           </div>
           <div className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
-            {stats ? stats.total.toLocaleString('fa-IR') : '۰'}
+            {countOf(stats?.total)}
           </div>
           <p className="text-xs text-slate-400 mt-1">نرخ بقا و ذخیره امن رویدادها</p>
         </div>

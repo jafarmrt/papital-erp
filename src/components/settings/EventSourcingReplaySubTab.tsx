@@ -26,11 +26,16 @@ export function EventSourcingReplaySubTab() {
   const fieldId = useId();
   // v9.0.435 (TD-722): the replay simulation route is guarded by events.manage
   const canManage = useHasPermission('events.manage');
-  const types = useOpeningRead(useAggregateTypesQuery(), true).data ?? NO_TYPES;
+  const typesRead = useOpeningRead(useAggregateTypesQuery(), true);
+  const types = typesRead.data ?? NO_TYPES;
+  const typesError = typesRead.error ? errorMessageOf(typesRead.error) || 'نوع موجودیت‌ها خوانده نشد.' : '';
   const [selectedType, setSelectedType] = useState<string>('document');
   const [searchKeyword, setSearchKeyword] = useState<string>('');
   const debouncedKeyword = useDebounce(searchKeyword, AGGREGATE_SEARCH_DELAY_MS);
-  const aggregateOptions = useOpeningRead(useAggregateSearchQuery(selectedType, debouncedKeyword), true).data ?? NO_OPTIONS;
+  const searchRead = useOpeningRead(useAggregateSearchQuery(selectedType, debouncedKeyword), true);
+  const aggregateOptions = searchRead.data ?? NO_OPTIONS;
+  const searchError = searchRead.error ? errorMessageOf(searchRead.error) || 'جست‌وجوی موجودیت انجام نشد.' : '';
+  const isSearching = searchRead.data === undefined && !searchError;
   // null until the user picks one (or after another type): the first record of the list
   const [pickedAggregateId, setSelectedAggregateId] = useState<string | null>(null);
   const selectedAggregateId = pickedAggregateId ?? aggregateOptions[0]?.id ?? '';
@@ -147,6 +152,11 @@ export function EventSourcingReplaySubTab() {
 
       {/* Aggregate Selectors */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+        {typesError && (
+          <div role="alert" className="p-3 rounded-xl border border-rose-200 bg-rose-50 text-xs text-rose-700 dark:bg-rose-950/40 dark:border-rose-800/50 dark:text-rose-300">
+            {typesError}
+          </div>
+        )}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
           {types.map(t => (
             <button
@@ -202,6 +212,7 @@ export function EventSourcingReplaySubTab() {
                 </option>
               ))}
             </select>
+            {searchError && <p role="alert" className="text-[11px] text-rose-600 dark:text-rose-400">{searchError}</p>}
           </div>
         </div>
       </div>
@@ -237,7 +248,11 @@ export function EventSourcingReplaySubTab() {
           </div>
         ) : !selectedAggregateId ? (
           <div className="p-12 text-center text-slate-400">
-            لطفاً از کادر بالا یک موجودیت را انتخاب کنید تا تاریخچه رویدادهای آن بارگذاری شود.
+            {isSearching
+              ? 'در حال جست‌وجوی موجودیت‌ها…'
+              : searchError
+                ? 'فهرست موجودیت‌ها خوانده نشد؛ متن جست‌وجو را دوباره بنویسید.'
+                : 'لطفاً از کادر بالا یک موجودیت را انتخاب کنید تا تاریخچه رویدادهای آن بارگذاری شود.'}
           </div>
         ) : timeline.length === 0 ? (
           <div className="p-12 text-center text-slate-400">

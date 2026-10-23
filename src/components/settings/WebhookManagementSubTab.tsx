@@ -31,6 +31,7 @@ const AVAILABLE_EVENT_PRESETS = [
 
 const NO_SUBSCRIPTIONS: WebhookSubscription[] = [];
 const NO_DELIVERIES: WebhookDeliveryLog[] = [];
+const countOf = (n: number | undefined) => (n === undefined ? '—' : n.toLocaleString('fa-IR'));
 
 /**
  * 10.3 (ARCH review finding 3, part 14): the stats, the webhooks and their deliveries are read through the shared cache,
@@ -43,12 +44,18 @@ export function WebhookManagementSubTab() {
   // v9.0.435 (TD-722): create, edit, delete, toggle, ping and key rotation are guarded by events.manage
   const canManage = useHasPermission('events.manage');
   const [selectedSubForDeliveries, setSelectedSubForDeliveries] = useState<number | null>(null);
-  const stats = useOpeningRead(useWebhookStatsQuery(), true).data ?? null;
+  const statsRead = useOpeningRead(useWebhookStatsQuery(), true);
+  const stats = statsRead.data ?? null;
+  const statsError = statsRead.error ? errorMessageOf(statsRead.error) || 'آمار وب‌هوک‌ها خوانده نشد.' : '';
   const subscriptionsQuery = useWebhookSubscriptionsQuery();
   const subscriptionsRead = useOpeningRead(subscriptionsQuery, true);
   const subscriptions = subscriptionsRead.data ?? NO_SUBSCRIPTIONS;
   const listError = subscriptionsRead.error ? errorMessageOf(subscriptionsRead.error) || 'فهرست وب‌هوک‌ها بارگذاری نشد.' : '';
-  const deliveries = useOpeningRead(useWebhookDeliveriesQuery(selectedSubForDeliveries), true).data ?? NO_DELIVERIES;
+  const isLoadingList = subscriptionsRead.data === undefined && !listError;
+  const deliveriesRead = useOpeningRead(useWebhookDeliveriesQuery(selectedSubForDeliveries), true);
+  const deliveries = deliveriesRead.data ?? NO_DELIVERIES;
+  const deliveriesError = deliveriesRead.error ? errorMessageOf(deliveriesRead.error) || 'گزارش تحویل وب‌هوک‌ها خوانده نشد.' : '';
+  const isLoadingDeliveries = deliveriesRead.data === undefined && !deliveriesError;
   // v9.0.360 (TD-710): the signing key is shown once, after create or «ساخت کلید تازه»; every list answer masks it
   const [revealedSecret, setRevealedSecret] = useState<RevealedWebhookSecret | null>(null);
 
@@ -298,7 +305,12 @@ export function WebhookManagementSubTab() {
         </div>
       )}
 
-      {/* Metrics Cards */}
+      {/* Metrics Cards: «—» while they are read or when they could not be, never a count or rate that was not read */}
+      {statsError && (
+        <div role="alert" className="p-3 rounded-xl border border-rose-200 bg-rose-50 text-xs text-rose-700 dark:bg-rose-950/40 dark:border-rose-800/50 dark:text-rose-300">
+          {statsError}
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
           <div className="flex items-center justify-between">
@@ -308,7 +320,7 @@ export function WebhookManagementSubTab() {
             </div>
           </div>
           <div className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
-            {stats ? stats.totalSubscriptions.toLocaleString('fa-IR') : '۰'}
+            {countOf(stats?.totalSubscriptions)}
           </div>
           <p className="text-xs text-slate-400 mt-1">درگاه‌های بیرونی ثبت‌شده</p>
         </div>
@@ -321,7 +333,7 @@ export function WebhookManagementSubTab() {
             </div>
           </div>
           <div className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
-            {stats ? stats.activeSubscriptions.toLocaleString('fa-IR') : '۰'}
+            {countOf(stats?.activeSubscriptions)}
           </div>
           <p className="text-xs text-slate-400 mt-1">دریافت‌کننده رویدادهای زنده</p>
         </div>
@@ -334,7 +346,7 @@ export function WebhookManagementSubTab() {
             </div>
           </div>
           <div className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
-            {stats ? stats.totalDeliveries.toLocaleString('fa-IR') : '۰'}
+            {countOf(stats?.totalDeliveries)}
           </div>
           <p className="text-xs text-slate-400 mt-1">بسته‌های رویداد تحویل داده‌شده</p>
         </div>
@@ -347,7 +359,7 @@ export function WebhookManagementSubTab() {
             </div>
           </div>
           <div className="mt-2 text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-            {stats ? `${formatPersianNumber(stats.successRate)}٪` : '۱۰۰٪'}
+            {stats ? `${formatPersianNumber(stats.successRate)}٪` : '—'}
           </div>
           <p className="text-xs text-slate-400 mt-1">همراه با امضای HMAC-SHA256</p>
         </div>
@@ -395,7 +407,11 @@ export function WebhookManagementSubTab() {
             {listError}
           </div>
         )}
-        {subscriptions.length === 0 && !listError ? (
+        {isLoadingList ? (
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center text-slate-400">
+            در حال دریافت درگاه‌های وب‌هوک…
+          </div>
+        ) : subscriptions.length === 0 && !listError ? (
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center text-slate-400">
             <Globe className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
             هنوز هیچ درگاه وب‌هوکی تعریف نشده است. با کلیک بر روی "تعریف وب‌هوک جدید" اولین درگاه خود را بسازید.
@@ -556,7 +572,19 @@ export function WebhookManagementSubTab() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-              {deliveries.length === 0 ? (
+              {deliveriesError ? (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center">
+                    <div role="alert" className="text-rose-600 dark:text-rose-400">{deliveriesError}</div>
+                  </td>
+                </tr>
+              ) : isLoadingDeliveries ? (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-slate-400">
+                    در حال دریافت گزارش‌های تحویل…
+                  </td>
+                </tr>
+              ) : deliveries.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="p-8 text-center text-slate-400">
                     هنوز تحویلی ثبت نشده است.
