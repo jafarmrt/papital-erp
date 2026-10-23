@@ -228,6 +228,24 @@ describe('the progress tab reads the matrix through the shared cache (10.3)', ()
     expect(cell(SHOWN.stageTwo, true)).toBeTruthy();
   });
 
+  it('the phone list says a failed refresh too, with another try', async () => {
+    setPhoneScreen(true);
+    serverMatrix = matrixOf([false, true]);
+    const client = newClient();
+    renderPage(client);
+    await screen.findByRole('checkbox', { name: `${SHOWN.stageOne} برای گردنبند` });
+    holdEveryMatrix = true;
+    void client.invalidateQueries({ queryKey: QUERY_KEYS.projects.all });
+    await waitFor(() => expect(heldMatrix.length).toBeGreaterThan(0));
+    holdEveryMatrix = false;
+    await act(async () => { for (const read of heldMatrix.splice(0)) read.reject(new Error('offline')); });
+
+    const notice = await screen.findByText(content => content.startsWith(SHOWN.staleNotice));
+    serverMatrix = matrixOf([true, true]);
+    fireEvent.click(within(notice.parentElement as HTMLElement).getByRole('button', { name: SHOWN.retry }));
+    await waitFor(() => expect(screen.queryByText(content => content.startsWith(SHOWN.staleNotice))).toBeNull());
+  });
+
   it('reads the matrix again on each opening of the phone list too', async () => {
     setPhoneScreen(true);
     const client = newClient();
