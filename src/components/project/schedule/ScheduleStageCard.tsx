@@ -40,7 +40,7 @@ export function ScheduleStageCard({ stage: stg, plan, logging, pieceworkTasksLis
             <button
               type="button"
               onClick={() => void logging.handleBatchLogStageTasks(stg.id, stg.title)}
-              disabled={logging.batchLoggingStageId === stg.id}
+              disabled={logging.busy}
               className="px-2.5 py-1 text-[11px] font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
               title="ثبت یکباره تمامی وظایف پرسنل‌دار این مرحله به عنوان کارکرد کارمزدی"
             >

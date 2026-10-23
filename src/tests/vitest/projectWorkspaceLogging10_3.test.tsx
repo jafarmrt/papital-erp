@@ -15,6 +15,7 @@ const SHOWN = {
   titleLater: 'پروژه کارگاه تازه',
   quantity: 'تعداد',
   logOne: 'ثبت کارمزد',
+  logStage: 'ثبت گروهی کارکرد مرحله',
 } as const;
 
 type FetchOpts = { method?: string; body?: string; signal?: AbortSignal };
@@ -116,9 +117,14 @@ describe('a work log holds the project back until it is over (10.3)', () => {
     fireEvent.click(screen.getByText(SHOWN.logOne));
     await waitFor(() => expect(pendingPost).not.toBeNull());
     expect(sentQuantity()).toBe(3);
+    // one work log at a time: no other log ends this one's busy spell
+    expect((screen.getByText(SHOWN.logStage).closest('button') as HTMLButtonElement).disabled).toBe(true);
+    // the plan is clean once its PUT answered: let that render land before the old read answers
+    await act(() => new Promise(resolve => setTimeout(resolve, 30)));
 
     serverProject = projectWith(3, 5);
     await act(async () => { heldReads[0]?.(projectWith(2, 3, SHOWN.titleLater)); });
+    await act(() => new Promise(resolve => setTimeout(resolve, 30)));
     expect(quantity()).toBe('3');
 
     serverProject = projectWith(3, 6, SHOWN.title, 99);

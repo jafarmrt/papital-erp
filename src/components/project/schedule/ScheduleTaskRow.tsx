@@ -101,7 +101,7 @@ export function ScheduleTaskRow({ stageId, productId, taskIdx, task, plan, loggi
         ) : canLog && (
           <button
             type="button"
-            disabled={!task.assignedPersonnelId || !task.taskId || logging.loggingTaskId === rowKey}
+            disabled={!task.assignedPersonnelId || !task.taskId || logging.busy}
             onClick={() => void logging.handleLogSingleTaskToPiecework(stageId, productId, taskIdx, task)}
             className="px-1.5 py-0.5 bg-amber-100 hover:bg-amber-200 text-amber-900 disabled:opacity-30 rounded text-[10px] font-bold flex items-center gap-0.5 transition-colors cursor-pointer"
             title={task.assignedPersonnelId ? 'ثبت این قلم در کارتابل کارمزد پرسنل' : 'ابتدا پرسنل را انتخاب کنید'}

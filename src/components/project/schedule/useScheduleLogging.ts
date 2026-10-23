@@ -156,7 +156,8 @@ export function useScheduleLogging({ project, plan, projectVersion, onUpdate }: 
     }
   };
 
-  // a work log under way saves the plan first and refreshes the project only at its end (part 9 review)
+  // a work log under way saves the plan first and refreshes the project only at its end (part 9 review); one at a
+  // time, so no log ends another's busy spell or logs a row of a stage being logged
   const busy = loggingTaskId !== null || batchLoggingStageId !== null;
   return { loggingTaskId, batchLoggingStageId, busy, logDate, setLogDate, handleLogSingleTaskToPiecework, handleBatchLogStageTasks };
 }
