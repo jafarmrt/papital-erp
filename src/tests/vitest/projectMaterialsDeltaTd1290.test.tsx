@@ -57,7 +57,7 @@ const ITEMS = [{ id: 42, code: 'N-1', name: 'necklace', weightedAverageCost: 500
 let costAnswer: unknown = deliveryReport();
 let deliveryAnswer: (opts?: FetchOpts) => unknown = () => ({ success: true, addedCount: 1, refNumber: 'PR-9' });
 const deliveryRoute: Route = (url, opts) => {
-  if (url.endsWith('/product-progress')) return { summary: { total_matrix_cells: 0, completed_matrix_cells: 0, all_matrix_completed: false } };
+  if (url.endsWith('/product-progress')) return { products: [], stages: [], summary: { total_matrix_cells: 0, completed_matrix_cells: 0, all_matrix_completed: false } };
   if (url.endsWith('/add-to-inventory')) return deliveryAnswer(opts);
   if (url === '/projects/1/delivery-cost') return costAnswer;
   return {};

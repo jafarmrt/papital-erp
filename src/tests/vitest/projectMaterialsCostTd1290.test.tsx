@@ -243,7 +243,7 @@ const PROJECT = {
 } as unknown as ProductionProject;
 const ITEMS = [{ id: 42, code: 'N-1', name: 'necklace', weightedAverageCost: 5000 }, { id: 43, code: 'N-2', name: 'ring', weightedAverageCost: 100 }] as unknown as Item[];
 const deliveryRoute = (cost: unknown): Route => url => {
-  if (url.endsWith('/product-progress')) return { summary: { total_matrix_cells: 0, completed_matrix_cells: 0, all_matrix_completed: false } };
+  if (url.endsWith('/product-progress')) return { products: [], stages: [], summary: { total_matrix_cells: 0, completed_matrix_cells: 0, all_matrix_completed: false } };
   if (url.endsWith('/add-to-inventory')) return { success: true, addedCount: 1, refNumber: 'PR-9' };
   if (url === '/projects/1/delivery-cost') return cost;
   return {};

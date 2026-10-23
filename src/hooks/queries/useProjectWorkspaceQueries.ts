@@ -5,6 +5,7 @@ import { QUERY_KEYS } from '../../lib/queryKeys';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
 import type { Item, PieceworkLog, ProductionProject } from '../../types';
 import type { ProjectStepCounts } from '../../lib/projects/projectSteps';
+import type { ProductProgressResponse } from '../../lib/projects/progressTicks';
 import { READ_ON_EVERY_OPENING, useOpenedAt, useOpeningRead } from './readOnEveryOpening';
 
 /** the counts of a project's step bar; under the project's key, so every project save that invalidates it refreshes them */
@@ -103,6 +104,29 @@ export function useProjectWorkLogsQuery(projectId: number) {
       const res = await fetchJson<unknown>(`/piecework/logs?projectId=${projectId}`, { signal });
       const list = Array.isArray(res) ? res : (res as { data?: unknown } | null)?.data;
       return Array.isArray(list) ? (list as ProjectWorkLog[]) : [];
+    },
+    ...READ_ON_EVERY_OPENING,
+  });
+}
+
+/** an answer of the progress matrix read that has no product list */
+export const UNREADABLE_PROGRESS = 'ساختار پاسخ پیشرفت نامعتبر است';
+
+/** the progress matrix of a project, under its key so a project save, stock document or tick save refreshes it */
+export const productProgressKey = (projectId: number) => [...QUERY_KEYS.projects.detail(projectId), 'product-progress'] as const;
+
+/**
+ * 10.3 (ARCH review finding 3): a project's progress matrix (`GET /projects/:id/product-progress`), read by the progress
+ * tab, the phone list and the delivery tab's completion check; read again on each opening of any of them
+ */
+export function useProductProgressQuery(projectId: number) {
+  return useQuery<ProductProgressResponse>({
+    queryKey: productProgressKey(projectId),
+    queryFn: async ({ signal }) => {
+      const res = await fetchJson<{ data?: unknown } | null>(`/projects/${projectId}/product-progress`, { signal });
+      const payload = (res?.data ?? res) as ProductProgressResponse | null;
+      if (!payload || !Array.isArray(payload.products)) throw new Error(UNREADABLE_PROGRESS);
+      return payload;
     },
     ...READ_ON_EVERY_OPENING,
   });
