@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { ReactElement } from 'react';
+import { appQueryClient } from './helpers/queryWrapper';
 
 /**
  * 10.3 (ARCH review finding 3, part 8): the stock windows and reports read through the shared cache. A stock document,
@@ -103,7 +104,8 @@ afterEach(() => {
   repairable = 1;
 });
 
-const newClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
+/** the app's read defaults (fresh for five minutes): a screen must read again on its own */
+const newClient = appQueryClient;
 const withClient = (client: QueryClient) => (ui: ReactElement) => <QueryClientProvider client={client}>{ui}</QueryClientProvider>;
 const reads = (prefix: string) => fetchJson.mock.calls.filter(([url, options]) => url.startsWith(prefix) && !options?.method).length;
 const transfer = (client: QueryClient, open: boolean) => withClient(client)(

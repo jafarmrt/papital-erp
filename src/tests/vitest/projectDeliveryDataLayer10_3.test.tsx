@@ -49,6 +49,7 @@ import ProjectStockEntryTab from '../../components/project/ProjectStockEntryTab'
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { productProgressKey } from '../../hooks/queries/useProjectWorkspaceQueries';
 import type { ProductionProject } from '../../types';
+import { appQueryClient } from './helpers/queryWrapper';
 
 afterEach(() => {
   cleanup();
@@ -59,7 +60,8 @@ afterEach(() => {
   refuseDelivery = false;
 });
 
-const newClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
+/** the app's read defaults (fresh for five minutes): a screen must read again on its own */
+const newClient = appQueryClient;
 const matrixReads = () => fetchJson.mock.calls.filter(([u, o]) => u === '/projects/7/product-progress' && !o?.method).length;
 /** a save elsewhere (a stock document, a workshop approval) invalidates the project and what hangs under it */
 const savedElsewhere = (client: QueryClient) => act(async () => { await client.invalidateQueries({ queryKey: QUERY_KEYS.projects.all }); });

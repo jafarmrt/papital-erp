@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider, onlineManager, useQuery } from '@tanstack/react-query';
 import type { ReactElement, ReactNode } from 'react';
+import { appQueryClient } from './helpers/queryWrapper';
 
 /**
  * 10.3 (ARCH review finding 3, review of part 7): a money window counts only what it read during the current opening.
@@ -83,7 +84,8 @@ afterEach(() => {
   onlineManager.setOnline(true);
 });
 
-const newClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
+/** the app's read defaults (fresh for five minutes): a screen must read again on its own */
+const newClient = appQueryClient;
 const withClient = (client: QueryClient) => (ui: ReactElement) => <QueryClientProvider client={client}>{ui}</QueryClientProvider>;
 const settledDoc = { id: 2, type: 'invoice', ref_number: 'INV-2', buyer_name: 'x', currency: 'IRR', payableAmount: 200, paidAmount: 0, remainingAmount: 200 };
 const payslip = { id: 7, payrollNumber: 'P-7', netPayable: 10, paidAmount: 0, status: 'approved' };
