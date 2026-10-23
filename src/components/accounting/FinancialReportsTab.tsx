@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useEffectEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { 
   BarChart3, 
@@ -111,9 +111,11 @@ export function FinancialReportsTab({
   const { journalBookData, journalLoading } = journalBook;
   const { ratiosData, ratiosLoading } = ratios;
 
-  // Initial fetch of trial balance and ratios
+  // Initial fetch of the trial balance, once when the tab opens; the filter controls fetch again after that
+  // (10.3, ARCH review finding 4: an effect event, so a new fetch function from the page never fetches over the chosen filters)
+  const fetchFirstTrialBalance = useEffectEvent(() => onFetchTrialBalance(trialLevel, startDate || undefined, endDate || undefined));
   useEffect(() => {
-    void onFetchTrialBalance(trialLevel, startDate || undefined, endDate || undefined);
+    void fetchFirstTrialBalance();
   }, []);
 
   const handleApplyTrialFilter = (newLevel?: 'all' | 'group' | 'general' | 'subsidiary' | 'detailed', withClosing = includeClosing) => {

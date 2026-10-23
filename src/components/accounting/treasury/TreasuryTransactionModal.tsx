@@ -110,7 +110,8 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
     }
 
     const controller = new AbortController();
-    const timer = setTimeout(async () => {
+    // the preview catches its own errors; the timer only starts it (10.3, ARCH review finding 4)
+    const loadPreview = async () => {
       setIsPreviewLoading(true);
       try {
         // v10.0.x (TD-1237): سرور خود پیش‌نمایش را می‌فرستد، نه { success, data }
@@ -140,7 +141,8 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
       } finally {
         setIsPreviewLoading(false);
       }
-    }, 400);
+    };
+    const timer = setTimeout(() => { void loadPreview(); }, 400);
 
     return () => {
       clearTimeout(timer);

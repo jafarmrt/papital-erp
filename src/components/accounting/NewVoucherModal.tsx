@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef, useId } from 'react';
+import React, { useState, useMemo, useEffect, useEffectEvent, useRef, useId } from 'react';
 import { Plus, CheckCircle2, AlertCircle, FileText, Save, X, Scale, Zap, Copy, Keyboard, Sparkles } from 'lucide-react';
 import { formatPersianPrice, formatPersianNumber, getTodayIsoDate, toStorageDate, errorMessageOf, toPersianDigits } from '../../utils';
 import type { Account, Customer, Personnel, JournalVoucher, FinancialAttachment } from '../../types';
@@ -283,82 +283,90 @@ export function NewVoucherModal({
   };
 
   // Global Keyboard Shortcuts handler inside modal
+  // 10.3 (ARCH review finding 4): the window listener calls the handler of the latest render, so Ctrl+S sends the date,
+  // type, reference number and attachments on screen and Alt+R / Alt+C act on the rows on screen. Before, the listener kept
+  // the functions of the render that last changed a row or the description, so a date changed last went out with its old value.
+  const handleGlobalKeyDown = (e: KeyboardEvent) => {
+    // Check if saving shortcut: Ctrl+S or Ctrl+Enter
+    if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S' || e.key === 'Enter')) {
+      e.preventDefault();
+      // v10.2.4 (TD-1291): میان‌بر هم مانند دکمه ثبت، فرمی را که کادر نادرست دارد نمی‌فرستد
+      const form = formRef.current;
+      if (form && !form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+      if (isBalanced && description.trim()) {
+        void submitVoucher();
+      } else if (!isBalanced) {
+        toast.error(balance.rowsWithoutRate.length > 0 ? `نرخ تبدیل ردیف ${rowsWithoutRateText} به ریال را وارد کنید` : `سند تراز نیست! اختلاف: ${formatPersianPrice(difference, balance.currency)}`);
+      } else {
+        toast.error('لطفاً شرح سند را تکمیل کنید');
+      }
+      return;
+    }
+
+    // Alt+B or Alt+Shift+B: Auto-balance active row or add balancing row
+    if (e.altKey && (e.key === 'b' || e.key === 'B' || e.key === 'ذ')) {
+      e.preventDefault();
+      if (activeRowIndex >= 0 && activeRowIndex < items.length) {
+        handleAutoBalanceRow(activeRowIndex);
+      } else {
+        handleAddBalancingRow();
+      }
+      return;
+    }
+
+    // Alt+N or Insert: Add new row
+    if ((e.altKey && (e.key === 'n' || e.key === 'N' || e.key === 'د')) || e.key === 'Insert') {
+      e.preventDefault();
+      addRow();
+      return;
+    }
+
+    // Alt+D or Ctrl+Delete: Delete active row
+    if ((e.altKey && (e.key === 'd' || e.key === 'D' || e.key === 'ی')) || (e.ctrlKey && e.key === 'Delete')) {
+      e.preventDefault();
+      if (activeRowIndex >= 0 && activeRowIndex < items.length) {
+        removeRow(activeRowIndex);
+      }
+      return;
+    }
+
+    // Alt+R: Swap debit/credit of active row
+    if (e.altKey && (e.key === 'r' || e.key === 'R' || e.key === 'ق')) {
+      e.preventDefault();
+      if (activeRowIndex >= 0 && activeRowIndex < items.length) {
+        handleSwapDebitCredit(activeRowIndex);
+      }
+      return;
+    }
+
+    // Alt+C: Copy header desc to active row
+    if (e.altKey && (e.key === 'c' || e.key === 'C' || e.key === 'ز')) {
+      e.preventDefault();
+      if (activeRowIndex >= 0 && activeRowIndex < items.length) {
+        handleCopyHeaderDesc(activeRowIndex);
+      }
+      return;
+    }
+  };
+  const onShortcutKey = useEffectEvent(handleGlobalKeyDown);
   useEffect(() => {
     if (!isOpen) return;
-
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Check if saving shortcut: Ctrl+S or Ctrl+Enter
-      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S' || e.key === 'Enter')) {
-        e.preventDefault();
-        // v10.2.4 (TD-1291): میان‌بر هم مانند دکمه ثبت، فرمی را که کادر نادرست دارد نمی‌فرستد
-        const form = formRef.current;
-        if (form && !form.checkValidity()) {
-          form.reportValidity();
-          return;
-        }
-        if (isBalanced && description.trim()) {
-          void submitVoucher();
-        } else if (!isBalanced) {
-          toast.error(balance.rowsWithoutRate.length > 0 ? `نرخ تبدیل ردیف ${rowsWithoutRateText} به ریال را وارد کنید` : `سند تراز نیست! اختلاف: ${formatPersianPrice(difference, balance.currency)}`);
-        } else {
-          toast.error('لطفاً شرح سند را تکمیل کنید');
-        }
-        return;
-      }
-
-      // Alt+B or Alt+Shift+B: Auto-balance active row or add balancing row
-      if (e.altKey && (e.key === 'b' || e.key === 'B' || e.key === 'ذ')) {
-        e.preventDefault();
-        if (activeRowIndex >= 0 && activeRowIndex < items.length) {
-          handleAutoBalanceRow(activeRowIndex);
-        } else {
-          handleAddBalancingRow();
-        }
-        return;
-      }
-
-      // Alt+N or Insert: Add new row
-      if ((e.altKey && (e.key === 'n' || e.key === 'N' || e.key === 'د')) || e.key === 'Insert') {
-        e.preventDefault();
-        addRow();
-        return;
-      }
-
-      // Alt+D or Ctrl+Delete: Delete active row
-      if ((e.altKey && (e.key === 'd' || e.key === 'D' || e.key === 'ی')) || (e.ctrlKey && e.key === 'Delete')) {
-        e.preventDefault();
-        if (activeRowIndex >= 0 && activeRowIndex < items.length) {
-          removeRow(activeRowIndex);
-        }
-        return;
-      }
-
-      // Alt+R: Swap debit/credit of active row
-      if (e.altKey && (e.key === 'r' || e.key === 'R' || e.key === 'ق')) {
-        e.preventDefault();
-        if (activeRowIndex >= 0 && activeRowIndex < items.length) {
-          handleSwapDebitCredit(activeRowIndex);
-        }
-        return;
-      }
-
-      // Alt+C: Copy header desc to active row
-      if (e.altKey && (e.key === 'c' || e.key === 'C' || e.key === 'ز')) {
-        e.preventDefault();
-        if (activeRowIndex >= 0 && activeRowIndex < items.length) {
-          handleCopyHeaderDesc(activeRowIndex);
-        }
-        return;
-      }
-    };
-
-    window.addEventListener('keydown', handleGlobalKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [isOpen, isBalanced, description, activeRowIndex, items, difference, showShortcutsHelp, header, balance]);
+    const onKeyDown = (e: KeyboardEvent) => onShortcutKey(e);
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen]);
 
   const isPermanentVoucher = editingVoucher?.status === 'permanent';
 
+  // One save at a time: a second Ctrl+S or Ctrl+Enter before the first answer sent the voucher again (backlog: Ctrl+S
+  // double save). A ref, not `isSaving`, because two key presses can land before React draws the saving state.
+  const savingRef = useRef(false);
+
   const submitVoucher = async () => {
+    if (savingRef.current) return;
     if (isPermanentVoucher) {
       toast.error('اسناد دائم و قطعی‌شده قابل ویرایش مستقیم نیستند. از گزینه صدور سند معکوس یا اصلاحی استفاده کنید.');
       return;
@@ -393,6 +401,7 @@ export function NewVoucherModal({
       }
     }
 
+    savingRef.current = true;
     setIsSaving(true);
     try {
       const payload = {
@@ -425,6 +434,7 @@ export function NewVoucherModal({
     } catch (err) {
       toast.error(errorMessageOf(err) || 'خطا در ثبت سند حسابداری');
     } finally {
+      savingRef.current = false;
       setIsSaving(false);
     }
   };
