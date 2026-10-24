@@ -238,7 +238,7 @@ export async function resolveLiveSession(payload: AuthUserPayload, info: Session
     const fullName = liveUser.fullName || (payload as any).full_name || payload.username;
     return {
       ok: true,
-      user: { ...payload, role: liveUser.role, full_name: fullName, fullName },
+      user: { ...payload, role: liveUser.role, full_name: fullName, fullName, ...(claimVersion !== dbVersion ? { tokenGrace: true } : {}) },
       mustResetPassword: liveUser.mustResetPassword,
     };
   } catch {

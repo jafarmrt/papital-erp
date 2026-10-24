@@ -3,7 +3,7 @@ import type { DbTransaction } from '../../db/drizzle.js';
 import { users } from '../../db/schema.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
-import { TREASURY_HIGH_VALUE_THRESHOLD_DEFAULT, resolveTreasuryHighValueThreshold } from '../../lib/settings/settingValues.js';
+import { TREASURY_HIGH_VALUE_THRESHOLD_DEFAULT, readTreasuryHighValueThreshold, resolveTreasuryHighValueThreshold } from '../../lib/settings/settingValues.js';
 import { formatPersianNumber } from '../../utils/persianNumber.js';
 import { createNotifications } from '../notifications/notificationCreator.js';
 
@@ -41,13 +41,13 @@ export async function recordTreasuryThresholdChange(
     details: {
       previousThreshold: before,
       newThreshold: after,
-      previousWasDefault: stored.before === undefined,
+      previousWasDefault: readTreasuryHighValueThreshold(stored.before) === null,
       defaultThreshold: TREASURY_HIGH_VALUE_THRESHOLD_DEFAULT,
     },
   });
   const admins = await tx.select({ id: users.id }).from(users).where(and(
     eq(users.isDeleted, 0),
-    sql`lower(${users.role}) = ${SYSTEM_ADMIN_ROLE}`,
+    sql`lower(trim(${users.role})) = ${SYSTEM_ADMIN_ROLE}`,
     actor.id ? ne(users.id, actor.id) : sql`true`,
   )).orderBy(users.id);
   if (admins.length === 0) return;
