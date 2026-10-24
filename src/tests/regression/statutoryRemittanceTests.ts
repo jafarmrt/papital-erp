@@ -178,8 +178,11 @@ export async function runStatutoryRemittanceTests(shouldRun: ShouldRun): Promise
       const health = async () => (await FinancialHealthService.runHealthCheck()).tests.find(t => t.id === 'statutory_payments_without_personnel');
       const clean = await health();
       if (!clean || clean.status !== 'healthy') problems.push(`the health check is ${clean?.status} before any legacy payment`);
+      // 10.3 package 4: a rial bank saved as «irr» pays too (refused with STATUTORY_REMITTANCE_RIAL_ONLY on v10.3.18)
+      await q("UPDATE bank_accounts SET currency = 'irr' WHERE id = $1", [bankId]);
       const paid = await admin.post('/api/accounting/treasury/statutory-remittance', body);
-      if (paid.status !== 201) problems.push(`a rial payment answered ${brief(paid)}, expected 201`);
+      if (paid.status !== 201) problems.push(`a rial payment from a bank saved as irr answered ${brief(paid)}, expected 201`);
+      await q("UPDATE bank_accounts SET currency = 'IRR' WHERE id = $1", [bankId]);
       const afterRemittance = await health();
       if (!afterRemittance || afterRemittance.status !== 'healthy') problems.push(`the health check is ${afterRemittance?.status} after a remittance with personnel detail`);
 

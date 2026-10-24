@@ -272,6 +272,8 @@ export const createBankAccountSchema = z.object({
     accountCode: z.string().optional(),
     accountName: z.string().optional(),
     notes: z.string().optional(),
+    // 10.3 package 4 (OBS-R1-65): «تاریخ آغاز حساب»; the service reads it (empty = today, a later day 422)
+    openingDate: z.string().optional(),
   })
 });
 
@@ -295,6 +297,7 @@ export const updateBankAccountSchema = z.object({
     accountCode: z.string().optional(),
     accountName: z.string().optional(),
     notes: z.string().optional(),
+    openingDate: z.string().optional(),
   })
 });
 

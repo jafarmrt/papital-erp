@@ -15,3 +15,12 @@ export function normalizeTreasuryCurrency(value: unknown): unknown {
 export function isTreasuryCurrency(value: unknown): value is TreasuryCurrency {
   return typeof value === 'string' && (TREASURY_CURRENCIES as readonly string[]).includes(value);
 }
+
+/**
+ * 10.3 package 4 (10.2 backlog, second review of #320): two treasury currency codes are one currency whatever their case
+ * («irr» of an account saved before v9.0.99 is IRR), the comparison `assertBankCurrency` makes; an empty code is IRR
+ */
+export function sameTreasuryCurrency(a: string | null | undefined, b: string | null | undefined): boolean {
+  const key = (code: string | null | undefined) => (code || '').trim().toUpperCase() || 'IRR';
+  return key(a) === key(b);
+}

@@ -17,6 +17,7 @@ import { requireStorageDate } from '../../../lib/storageDate.js';
 import { isoToJalaliDate } from '../../../utils/calendarDate.js';
 import { assertNoVoucherAllowed } from './noVoucherTreasury.js';
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
+import { sameTreasuryCurrency } from '../../../lib/treasury/treasuryCurrency.js';
 import { assertChequeClearingAccountType, requireChequeBankAccount } from './bankLinks.js';
 import { normalizePartyPurpose, requireChoosableContraAccount } from './partyContraAccount.js';
 import { assertPersonnelPartyId, resolveTreasuryPartyName } from './treasuryLinks.js';
@@ -429,8 +430,9 @@ export class ChequeLifecycleService {
         if (!bank) throw new NotFoundError('حساب بانکی یافت نشد');
         assertChequeClearingAccountType(bank); // v10.1.47 (ت۴۰): فقط حساب بانکی یا صندوق
 
-        // V1.4.0: گارد هم‌ارزی ارز — چک با ارز متفاوت از حساب بانکی قابل وصول نیست
-        if (bank.currency && chequeCurrency && bank.currency !== chequeCurrency) {
+        // V1.4.0: گارد هم‌ارزی ارز — چک با ارز متفاوت از حساب بانکی قابل وصول نیست؛ 10.3 بستهٔ ۴: بی‌توجه به بزرگی و کوچکی
+        // حروف کد ذخیره‌شده («irr» حساب پیش از v9.0.99)، مانند `assertBankCurrency`
+        if (bank.currency && chequeCurrency && !sameTreasuryCurrency(bank.currency, chequeCurrency)) {
           throw new ValidationError(`ارز چک (${chequeCurrency}) با ارز حساب بانکی «${bank.title}» (${bank.currency}) هم‌خوانی ندارد`);
         }
         // v8.0.25 (TD-277): وصول به حساب بانکی بدون سرفصل معین پذیرفته نمی‌شود (مانند تراکنش خزانه). پیش‌تر وضعیت چک

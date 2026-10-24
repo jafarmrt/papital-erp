@@ -939,6 +939,13 @@
       "when": 1796384000000,
       "tag": "0133_daily_log_version_form_draft_key",
       "breakpoints": true
+    },
+    {
+      "idx": 134,
+      "version": "7",
+      "when": 1796470400000,
+      "tag": "0134_bank_account_opening_date",
+      "breakpoints": true
     }
   ]
 }

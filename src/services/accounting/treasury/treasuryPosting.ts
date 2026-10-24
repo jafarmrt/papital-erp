@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../../db/drizzle.js';
 import { bankAccounts, treasuryTransactions } from '../../../db/schema.js';
 import { NotFoundError, ValidationError } from '../../../errors/customErrors.js';
@@ -16,12 +16,21 @@ import { isHighValueAmount, treasuryHighValueThreshold, treasuryRowIsHighValue }
  * حقوق، صورت‌هزینه تنخواه و پرداخت ماهانه بیمه و مالیات، و ابطال هر کدام، همه از همین دو تابع می‌گذرند تا یک‌جور سنجیده
  * شوند: ارز ردیف همان ارز حساب، سرفصل حسابداری حساب پیش از صدور سند، مانده هرگز منفی، شماره از دنباله خزانه، سند در همان
  * تراکنش و رویداد «تراکنش خزانه تأیید شد» در صف ارسال. پیش‌تر پرداخت و ابطال پرداخت فیش مانده بانک و ردیف خزانه را خودشان
- * می‌نوشتند. فراخواننده حساب را با `lockTreasuryBank` (یا قفل هم‌ارز خودش) پیش از هر قفل دیگر می‌گیرد و قاعده‌های دامنه
+ * می‌نوشتند. فراخواننده حساب را با `lockTreasuryBank` (یا `lockTreasuryBankRow` / `lockTreasuryBanks`) پیش از هر قفل دیگر می‌گیرد و قاعده‌های دامنه
  * خودش (فیش، سند، تنخواه) را پیش از این توابع می‌سنجد؛ ردیف‌های ویژه (فیش، صورت‌هزینه) را پس از آن می‌نویسد.
  */
 
 export type TreasuryBank = typeof bankAccounts.$inferSelect;
 export type TreasuryRow = typeof treasuryTransactions.$inferSelect;
+
+declare const lockedBankBrand: unique symbol;
+/**
+ * 10.3 package 4 (10.2 backlog, review of #320): a bank row read FOR UPDATE in the caller's transaction. Only the lock
+ * helpers below make one, and the balance writers (`postTreasuryRow`, `reverseTreasuryRow`) take nothing else, so a
+ * write that forgot the bank lock does not compile; before, "the caller has locked the row" was only a comment. Vitest
+ * `lockedTreasuryBank.test.ts` refuses a cast to this type anywhere else.
+ */
+export type LockedTreasuryBank = TreasuryBank & { readonly [lockedBankBrand]: true };
 
 interface EventActor {
   userId?: number;
@@ -53,13 +62,35 @@ async function treasuryRowEventPayload(tx: DbExecutor, row: TreasuryRow, payload
   return { ...event, isHighValue: await treasuryRowIsHighValue(tx, row) };
 }
 
-/** حساب زنده خزانه را برای تغییر مانده قفل می‌کند (FOR UPDATE)؛ نخستین قفل هر نوشتن خزانه */
-export async function lockTreasuryBank(tx: DbExecutor, bankAccountId: number): Promise<TreasuryBank> {
+/**
+ * a bank row FOR UPDATE, live only unless `includeDeleted` (the void of an old payslip payment); undefined when there is
+ * none, so the caller refuses with its own message
+ */
+export async function lockTreasuryBankRow(
+  tx: DbExecutor, bankAccountId: number, options: { includeDeleted?: boolean } = {},
+): Promise<LockedTreasuryBank | undefined> {
   const [bank] = await tx.select().from(bankAccounts)
-    .where(and(eq(bankAccounts.id, bankAccountId), eq(bankAccounts.isDeleted, 0)))
+    .where(options.includeDeleted ? eq(bankAccounts.id, bankAccountId) : and(eq(bankAccounts.id, bankAccountId), eq(bankAccounts.isDeleted, 0)))
     .for('update');
+  return bank as LockedTreasuryBank | undefined;
+}
+
+/** حساب زنده خزانه را برای تغییر مانده قفل می‌کند (FOR UPDATE)؛ نخستین قفل هر نوشتن خزانه */
+export async function lockTreasuryBank(tx: DbExecutor, bankAccountId: number): Promise<LockedTreasuryBank> {
+  const bank = await lockTreasuryBankRow(tx, bankAccountId);
   if (!bank) throw new NotFoundError('حساب بانکی یا صندوق انتخاب‌شده یافت نشد');
   return bank;
+}
+
+/** the live banks of these ids FOR UPDATE in id order (one lock level, so two writers never wait on each other in a circle) */
+export async function lockTreasuryBanks(tx: DbExecutor, bankAccountIds: readonly number[]): Promise<LockedTreasuryBank[]> {
+  const ids = [...new Set(bankAccountIds)].sort((a, b) => a - b);
+  if (ids.length === 0) return [];
+  const banks = await tx.select().from(bankAccounts)
+    .where(and(inArray(bankAccounts.id, ids), eq(bankAccounts.isDeleted, 0)))
+    .orderBy(asc(bankAccounts.id))
+    .for('update');
+  return banks as LockedTreasuryBank[];
 }
 
 /** شماره ردیف خزانه از دنباله اتمیک `treasury_tx_number_seq` (هرگز شمارش یا بیشینه + ۱) */
@@ -95,7 +126,7 @@ export function movedBankBalance(row: Pick<TreasuryRow, 'method' | 'payrollId'>)
 
 async function writeBankBalance(
   tx: DbExecutor,
-  bank: TreasuryBank,
+  bank: LockedTreasuryBank,
   direction: 'in' | 'out',
   amount: FinancialDecimal,
   refusal: (balance: FinancialDecimal) => Error,
@@ -143,7 +174,7 @@ export interface PostedTreasuryRow {
 }
 
 /** یک دریافت یا پرداخت خزانه: مانده حساب، شماره، سند، ردیف و رویداد آن، همه با `tx` فراخواننده */
-export async function postTreasuryRow(tx: DbExecutor, bank: TreasuryBank, posting: TreasuryRowPosting): Promise<PostedTreasuryRow> {
+export async function postTreasuryRow(tx: DbExecutor, bank: LockedTreasuryBank, posting: TreasuryRowPosting): Promise<PostedTreasuryRow> {
   const amount = fin(posting.amount).round(4);
   if (!amount.isPositive()) throw new ValidationError('مبلغ تراکنش باید بزرگتر از صفر باشد');
   assertBankCurrency(bank, posting.currency);
@@ -205,7 +236,7 @@ export interface TreasuryRowReversal {
 export async function reverseTreasuryRow(
   tx: DbExecutor,
   original: TreasuryRow,
-  bank: TreasuryBank,
+  bank: LockedTreasuryBank,
   reversal: TreasuryRowReversal,
 ): Promise<TreasuryRow> {
   const amount = fin(original.amount);

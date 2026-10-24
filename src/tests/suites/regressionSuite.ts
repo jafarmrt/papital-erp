@@ -6732,8 +6732,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         SELECT count(*)::int AS n FROM pg_constraint pc JOIN pg_class rel ON rel.oid = pc.conrelid
         WHERE rel.relnamespace = current_schema()::regnamespace AND pc.conname LIKE 'chk%datefmt' AND pc.convalidated`) as unknown as { rows: Array<{ n: number }> }).rows;
       // v7.0.82 (TD-231): ۲۴ قید مهاجرت 0028 و ۳ قید مهاجرت 0030؛ v10.0.199 (TD-1086): ۱ قید مهاجرت 0103 (personnel.start_date)؛
-      // v10.0.254 (TD-971): ۱ قید مهاجرت 0108 (cheques.reconciled_at)
-      if (covered !== 29) violations.push(`number of validated date format constraints: ${covered} (expected 29)`);
+      // v10.0.254 (TD-971): ۱ قید مهاجرت 0108 (cheques.reconciled_at)؛ v10.3.19 (OBS-R1-65): ۱ قید مهاجرت 0134 (bank_accounts.opening_date)
+      if (covered !== 30) violations.push(`number of validated date format constraints: ${covered} (expected 30)`);
       if (missingRows.length > 0) violations.push(`without a valid format constraint: ${missingRows.map(r => `${r.table_name}.${r.column_name}`).join(', ')}`);
 
       const ROLLBACK = new Error('ROLLBACK_P3_15');
@@ -11210,6 +11210,11 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // 10.2 package 11: the workflow SLA report in SQL, same numbers (OBS-R2-71, TD-1323)
   const { runWorkflowSlaParityTests } = await import('../regression/workflowSlaParityTests.js');
   results.push(...await runWorkflowSlaParityTests(shouldRun));
+  // 10.3 package 4: the bank account start date dates its opening voucher (OBS-R1-65), and an «irr» account is rial
+  const { runBankOpeningDateTests } = await import('../regression/bankOpeningDateTests.js');
+  results.push(...await runBankOpeningDateTests(shouldRun));
+  const { runBankOpeningApprovalRaceTests } = await import('../regression/bankOpeningApprovalRaceTests.js');
+  results.push(...await runBankOpeningApprovalRaceTests(shouldRun));
 
   return results;
 }

@@ -174,6 +174,10 @@ export interface BankAccount {
   isActive?: number | null;
   is_active?: number | null;
   notes?: string | null;
+  /** 10.3 package 4 (OBS-R1-65): «تاریخ آغاز حساب», ISO; '' for an account defined before it */
+  openingDate?: string | null;
+  /** the opening voucher is issued (any status), so the start date no longer changes */
+  openingVoucherIssued?: boolean;
   createdAt?: string | null;
   isDeleted?: number | null;
   is_deleted?: number | null;
