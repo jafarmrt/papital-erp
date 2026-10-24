@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent } from 'react';
+import { useEffect, useEffectEvent, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { errorMessageOf } from '../utils';
 import type { CRMActivity } from '../types';
@@ -13,9 +13,22 @@ const NO_ACTIVITIES: CRMActivity[] = [];
  * 10.3 (ARCH review finding 3, part 12): the detail is read through the shared cache, again on each opening of a file
  * (never what an earlier opening left there); a change that invalidates `crm` refreshes it while the drawer is open, and
  * the drawer shows the file as read now. A failed read is said once.
+ * 10.3 package 7: `opening` changes on every showing of a file; showing the file the drawer already shows (a notification
+ * or the dossier naming it again) reads it again too, and the drawer keeps what it shows until that answer arrives.
  */
-export function useLeadDrawerActivities(leadId: number | null) {
-  const read = useOpeningRead(useCrmLeadDetailQuery(leadId), leadId);
+export function useLeadDrawerActivities(leadId: number | null, opening = 0) {
+  const query = useCrmLeadDetailQuery(leadId);
+  const read = useOpeningRead(query, leadId);
+  const shown = useRef({ leadId, opening });
+  const readAgain = useEffectEvent(() => {
+    void query.refetch();
+  });
+  useEffect(() => {
+    const previous = shown.current;
+    shown.current = { leadId, opening };
+    // another file, or the first showing, is read by the query itself on its new key
+    if (leadId !== null && previous.leadId === leadId && previous.opening !== opening) readAgain();
+  }, [leadId, opening]);
   const sayFailed = useEffectEvent(() => {
     toast.error(errorMessageOf(read.error) || 'تاریخچهٔ پرونده فروش دریافت نشد.');
   });

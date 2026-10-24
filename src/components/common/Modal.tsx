@@ -21,6 +21,8 @@ export interface ModalProps {
   closeOnEscape?: boolean;
   closeOnBackdropClick?: boolean;
   showCloseButton?: boolean;
+  /** The close button is disabled and looks so (10.3 package 7: while the window saves) */
+  closeDisabled?: boolean;
   hideHeader?: boolean;
   id?: string;
   ariaLabel?: string;
@@ -60,6 +62,7 @@ export function Modal({
   closeOnEscape = true,
   closeOnBackdropClick = true,
   showCloseButton = true,
+  closeDisabled = false,
   hideHeader = false,
   id,
   ariaLabel,
@@ -138,7 +141,8 @@ export function Modal({
                 type="button"
                 id={id ? `${id}-close-btn` : undefined}
                 onClick={onClose}
-                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer shrink-0"
+                disabled={closeDisabled}
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                 aria-label="بستن پنجره"
               >
                 <X className="w-5 h-5" />

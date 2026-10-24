@@ -66,7 +66,7 @@ export function CRMLeadModal({
           <button
             onClick={onCloseLeadModal}
             disabled={isSavingLead}
-            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 cursor-pointer transition-colors"
+            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             ✕
           </button>
@@ -385,7 +385,7 @@ export function CRMLeadModal({
                 type="button"
                 onClick={onCloseLeadModal}
                 disabled={isSavingLead}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 انصراف
               </button>

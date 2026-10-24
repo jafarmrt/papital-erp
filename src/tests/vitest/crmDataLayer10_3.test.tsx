@@ -118,6 +118,12 @@ describe('the sales file drawer reads through the shared cache (10.3)', () => {
     const before = detailReads();
     act(() => { result.current.openLeadDrawer(row); });
     await waitFor(() => expect(detailReads()).toBe(before + 1));
+
+    // 10.3 package 7: shown again while it is open (a notification naming it): read again
+    await settle();
+    const shown = detailReads();
+    act(() => { result.current.openLeadDrawer(row); });
+    await waitFor(() => expect(detailReads()).toBe(shown + 1));
   });
 
   it('a stage change refreshes every sales read, the open drawer and the dashboard widget included', async () => {
