@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { X, RefreshCw, ArrowDownRight, ArrowUpRight, Download, Search, Layers, ShieldCheck } from 'lucide-react';
-import * as xlsx from 'xlsx';
+import { downloadSheet } from '../lib/excel/downloadSheet';
 import { formatPersianNumber, formatPersianDate, errorMessageOf } from '../utils';
 import { kardexDocumentTypeLabel } from '../lib/documents/documentTypeTitles';
 import { warehouseLabel } from '../lib/inventory/warehouseLabel';
@@ -59,7 +59,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
     return Array.from(locs);
   }, [safeEntries]);
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!data?.item || !filteredEntries.length) return;
     try {
       const rows = filteredEntries.map((e, idx) => ({
@@ -82,10 +82,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
         'کاربر': e.createdBy
       }));
 
-      const ws = xlsx.utils.json_to_sheet(rows);
-      const wb = xlsx.utils.book_new();
-      xlsx.utils.book_append_sheet(wb, ws, 'کاردکس کالا');
-      xlsx.writeFile(wb, kardexExportFileName(data.item?.code || itemId));
+      await downloadSheet(rows, 'کاردکس کالا', kardexExportFileName(data.item?.code || itemId));
     } catch {
       toast.error(EXPORT_FAILED_MESSAGE);
     }
@@ -272,7 +269,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                     نمایش {formatPersianNumber(filteredEntries.length)} از {formatPersianNumber(safeEntries.length)} تراکنش
                   </span>
                   <button
-                    onClick={handleExport}
+                    onClick={() => void handleExport()}
                     disabled={filteredEntries.length === 0}
                     className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
                   >

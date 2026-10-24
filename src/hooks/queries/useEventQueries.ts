@@ -90,6 +90,8 @@ export function useDomainEventsQuery(filter: string = 'ALL', options?: { enabled
       };
     },
     staleTime: 5000,
+    // 10.3 package 6: each visit of the tab reads at once (its screen shows only this visit's answers, `useOpeningRead`)
+    refetchOnMount: 'always',
     enabled: options?.enabled ?? true,
     refetchInterval: options?.refetchInterval ?? DOMAIN_EVENTS_REFRESH_MS,
   });
@@ -104,6 +106,7 @@ export function useOutboxStatsQuery(options?: { enabled?: boolean; refetchInterv
       return res?.stats || null;
     },
     staleTime: 5000,
+    refetchOnMount: 'always',
     enabled: options?.enabled ?? true,
     refetchInterval: options?.refetchInterval ?? 10000,
   });
@@ -131,7 +134,8 @@ export function useOutboxEventsQuery(
       return { events, total: Number(res?.total ?? events.length) };
     },
     staleTime: 5000,
-    placeholderData: keepPreviousData,
+    // the tab shows only answers of its current visit and filter, so an earlier page is never kept on screen as a placeholder
+    refetchOnMount: 'always',
     enabled: options?.enabled ?? true,
     // a search reads the whole table on the server, so it is not repeated every ten seconds
     refetchInterval: search ? false : (options?.refetchInterval ?? 10000),

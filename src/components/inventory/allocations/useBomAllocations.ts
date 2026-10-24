@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import * as xlsx from 'xlsx';
+import { downloadSheet } from '../../../lib/excel/downloadSheet';
 import { useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../../api';
 import { isProjectOpenForAllocation } from '../../../lib/projects/projectStatus';
@@ -117,10 +117,7 @@ export function useBomAllocations() {
       'توضیحات': a.notes || ''
     }));
 
-    const ws = xlsx.utils.json_to_sheet(data);
-    const wb = xlsx.utils.book_new();
-    xlsx.utils.book_append_sheet(wb, ws, 'تخصیص مواد اولیه');
-    xlsx.writeFile(wb, bomAllocationsExportFileName(getTodayJalaliDate()));
+    await downloadSheet(data, 'تخصیص مواد اولیه', bomAllocationsExportFileName(getTodayJalaliDate()));
   };
 
   return {

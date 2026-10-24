@@ -7,7 +7,7 @@ import {
   TrendingUp, 
   RefreshCw 
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { downloadSheet } from '../../lib/excel/downloadSheet';
 import { toast } from 'react-hot-toast';
 import { confirmAction } from '../ConfirmDialogHost';
 import { errorMessageOf, getTodayJalaliDate } from '../../utils';
@@ -248,10 +248,7 @@ export function BankAndTreasuryTab({
     }
     // v9.0.106 (TD-515): برچسب فارسی روش و نوع طرف، نام فایل با تاریخ شمسی امروز (نه روز UTC)
     try {
-      const ws = XLSX.utils.json_to_sheet(treasuryExportRows(rows));
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'گردش خزانه');
-      XLSX.writeFile(wb, treasuryExportFileName(getTodayJalaliDate()));
+      await downloadSheet(treasuryExportRows(rows), 'گردش خزانه', treasuryExportFileName(getTodayJalaliDate()));
     } catch {
       toast.error('فایل اکسل ساخته نشد. دوباره تلاش کنید.');
     }

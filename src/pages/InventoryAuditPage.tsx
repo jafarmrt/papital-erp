@@ -113,7 +113,7 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
             setShowRebuildModal(true);
           } : undefined}
           onOpenKardexModal={access.canOpenKardex ? (itemId) => setKardexItemId(itemId) : undefined}
-          onExportExcel={() => exportIntegrityExcel(data.integrityReport)}
+          onExportExcel={() => void exportIntegrityExcel(data.integrityReport)}
         />
       )}
       {activeTab === 'integrity' && (

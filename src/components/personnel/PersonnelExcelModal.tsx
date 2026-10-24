@@ -1,6 +1,5 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { X, Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle2, Loader2, Info, AlertTriangle, ArrowRight, Check, Users, Search } from 'lucide-react';
-import * as xlsx from 'xlsx';
 import toast from 'react-hot-toast';
 import { fetchJson } from '../../api';
 import { formatPersianNumber, formatPersianPhone, formatPersianNationalId, normalizePhoneNumber, errorMessageOf } from '../../utils';
@@ -9,6 +8,7 @@ import { Personnel } from '../../types';
 import { PERSONNEL_IMPORT_DEFAULTS, parseEmploymentStatusCell, parseGenderCell, parseNationalityCell, personnelCellLabel, personnelHeaderKey, unreadPersonnelColumns, unreadPersonnelColumnsNotice } from '../../lib/personnel/personnelImportCells';
 import { DialogLayer } from '../common/DialogLayer';
 import { PERSONNEL_LIST_STATE_TEXT, type PersonnelListState } from '../../lib/personnel/personnelList';
+import { downloadSheet } from '../../lib/excel/downloadSheet';
 
 interface PersonnelExcelModalProps {
   isOpen: boolean;
@@ -112,6 +112,7 @@ export function PersonnelExcelModal({
         return;
       }
 
+      const xlsx = await import('xlsx');
       const ws = xlsx.utils.json_to_sheet(rows);
       // تضمین اینکه فیلدهای کد، شماره تماس، کد ملی، حساب و کارت رشته متنی باشند
       Object.keys(ws).forEach((k) => {
@@ -136,7 +137,7 @@ export function PersonnelExcelModal({
   };
 
   // Download standard empty template for personnel
-  const handleDownloadTemplate = () => {
+  const handleDownloadTemplate = async () => {
     const sampleRows = [
       {
         'کد پرسنلی': 'EMP-101',
@@ -186,11 +187,13 @@ export function PersonnelExcelModal({
       }
     ];
 
-    const ws = xlsx.utils.json_to_sheet(sampleRows);
-    const wb = xlsx.utils.book_new();
-    xlsx.utils.book_append_sheet(wb, ws, 'الگوی_پرسنل');
-    xlsx.writeFile(wb, 'الگوی_استاندارد_ورود_پرسنل.xlsx');
-    toast.success('فایل نمونه اکسل پرسنل دانلود شد.');
+    try {
+      await downloadSheet(sampleRows, 'الگوی_پرسنل', 'الگوی_استاندارد_ورود_پرسنل.xlsx');
+      toast.success('فایل نمونه اکسل پرسنل دانلود شد.');
+    } catch (err) {
+      console.error(err);
+      toast.error('فایل نمونه اکسل ساخته نشد؛ دوباره تلاش کنید.');
+    }
   };
 
   // Process Excel File on upload
@@ -200,9 +203,10 @@ export function PersonnelExcelModal({
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = (evt) => { void (async () => {
       try {
         const bstr = evt.target?.result;
+        const xlsx = await import('xlsx');
         const wb = xlsx.read(bstr, { type: 'binary' });
         const wsName = wb.SheetNames[0];
         const ws = wb.Sheets[wsName];
@@ -324,7 +328,7 @@ export function PersonnelExcelModal({
         console.error(err);
         toast.error('خطا در پردازش فایل اکسل: ' + errorMessageOf(err));
       }
-    };
+    })(); };
 
     reader.readAsBinaryString(file);
   };
@@ -486,7 +490,7 @@ export function PersonnelExcelModal({
                   </p>
                   <button
                     type="button"
-                    onClick={handleDownloadTemplate}
+                    onClick={() => void handleDownloadTemplate()}
                     className="w-full py-2.5 px-4 bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <Download size={16} />
