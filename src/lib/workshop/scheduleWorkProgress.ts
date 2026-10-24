@@ -75,19 +75,30 @@ export function scheduleRowDoneQuantity(
   return row.legacyLogged ? row.quantity : 0;
 }
 
+/** A warehouse item id: a positive number (its whole part), else null */
+export const warehouseItemId = (v: unknown): number | null => {
+  const n = Number(v);
+  return v !== null && v !== '' && Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+};
+
+/**
+ * The warehouse item of one product row of a project: `item_id`, `itemId` or the legacy `item_id_raw`, the one rule of
+ * the progress matrix (`matrixProducts`) and the workshop schedule; null when the row names none.
+ */
+export function productRowItemId(row: unknown): number | null {
+  if (!row || typeof row !== 'object' || Array.isArray(row)) return null;
+  const r = row as { item_id?: unknown; itemId?: unknown; item_id_raw?: unknown };
+  return warehouseItemId(r.item_id ?? r.itemId ?? r.item_id_raw);
+}
+
 /**
  * The warehouse item a schedule product key stands for: the project's product row of that id, else, for a project
  * without product rows, its main item under `MAIN_PRODUCT_SCHEDULE_ID`; null otherwise.
+ * 10.3 package 6 (TD-1386, review N7 of #329): a row that holds its item only as `item_id_raw` is read as the matrix reads
+ * it; before, its schedule work never reached the matrix cell the row has.
  */
 export function scheduleProductItemId(products: unknown, mainItemId: unknown, productId: string): number | null {
   const list = Array.isArray(products) ? products : [];
-  const positive = (v: unknown): number | null => {
-    const n = Number(v);
-    return v !== null && v !== '' && Number.isInteger(n) && n > 0 ? n : null;
-  };
-  if (list.length > 0) {
-    const found = list.find((p: { id?: unknown }) => String(p?.id) === productId) as { item_id?: unknown; itemId?: unknown } | undefined;
-    return positive(found?.item_id ?? found?.itemId);
-  }
-  return productId === MAIN_PRODUCT_SCHEDULE_ID ? positive(mainItemId) : null;
+  if (list.length > 0) return productRowItemId(list.find((p: { id?: unknown }) => String(p?.id) === productId));
+  return productId === MAIN_PRODUCT_SCHEDULE_ID ? warehouseItemId(mainItemId) : null;
 }
