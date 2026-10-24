@@ -54,6 +54,7 @@ import { buildWorkflowRoleReviewHealthTest, findWorkflowRoleReviews } from '../w
 import { buildRetiredRuleActionHealthTest, findRetiredActionRules } from '../events/retiredRuleActionHealth.js';
 import { buildUnpublishedRuleEventHealthTest, findRulesWithUnpublishedEvent } from '../events/unpublishedRuleEventHealth.js';
 import { buildTreasuryPrivateFieldRuleHealthTest, findTreasuryPrivateFieldRules } from './treasuryRuleFieldHealth.js';
+import { buildChequePrivateFieldRuleHealthTest, findChequePrivateFieldRules } from './chequeRuleFieldHealth.js';
 import { buildDueReminderHealthTest, findDuplicateDueReminders, hasDueReminderUniqueIndex } from '../notifications/notificationReminderHealth.js';
 import { buildPersonnelCodeHealthTest, buildPersonnelNationalIdHealthTest, findDuplicatePersonnelCodes, findDuplicatePersonnelNationalIds, hasPersonnelCodeUniqueIndex, hasPersonnelNationalIdUniqueIndex } from '../personnel/personnelCode.js';
 import { buildSyntheticUsersHealthTest, findActiveSyntheticUsers } from '../users/syntheticUserHealth.js';
@@ -1306,6 +1307,8 @@ export class FinancialHealthService {
     tests.push(unpublishedEventRuleTest);
     // 10.2 package 8 (TD-1297): automatic rules that read the amount, description or reason the treasury event no longer carries (list only)
     tests.push(buildTreasuryPrivateFieldRuleHealthTest(await findTreasuryPrivateFieldRules()));
+    // 10.3 package 5 (ت۴۷ item 3): and those that read the amount or party name the cheque status event no longer carries
+    tests.push(buildChequePrivateFieldRuleHealthTest(await findChequePrivateFieldRules()));
     // آزمون ۵۰: v9.0.427 (TD-589) قید و ایندکس یکتای شرطی مهاجرت‌ها که روی داده ناپاک ساخته نشده (فهرست با علت؛ ساختن دستی)
     tests.push(buildConditionalConstraintsHealthTest(await findMissingConditionalConstraints()));
     // آزمون ۵۱: v9.0.434 (TD-717) یادآوری سررسید پیگیری تکراری برای یک کاربر و پیوند (مهاجرت 0089؛ فقط فهرست)

@@ -15,6 +15,7 @@ import { assertManageableAccount, grantorPermissions } from '../users/grantBound
 import {
   insertSession, invalidateSessionCache, newSessionId, sessionIdOfClaims, type SessionTokenClaims,
 } from './sessionStore.js';
+import { allowPreviousTokenVersion } from './tokenVersionGrace.js';
 
 /**
  * 10.2 package 8 (D-07, TD-1295): issuing, listing and closing the sessions of `user_sessions`. Every login writes a
@@ -154,6 +155,8 @@ export async function closeOtherOwnSessions(req: Request, res: Response): Promis
     if (!row || row.isDeleted === 1) throw new NotFoundError('حساب کاربری یافت نشد');
     const tokenVersion = (row.tokenVersion || 0) + 1;
     await tx.update(users).set({ tokenVersion }).where(eq(users.id, userId));
+    // 10.3 package 5: a request this device sent a moment before still carries its previous token
+    allowPreviousTokenVersion(req.user, row.tokenVersion || 0, tokenVersion);
     const closed = await tx.update(userSessions)
       .set({ revokedAt: sql`now() AT TIME ZONE 'UTC'`, revokeReason: 'others_closed' })
       .where(and(eq(userSessions.userId, userId), isNull(userSessions.revokedAt), current ? ne(userSessions.sid, current) : sql`true`))

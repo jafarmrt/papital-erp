@@ -3,6 +3,7 @@ import { TestCaseResult } from '../types.js';
 import { runCase, type ShouldRun } from './workflowTestHarness.js';
 import { TEST_PASSWORD } from '../fixtures/factories.js';
 import { loginTestUserWithSession } from '../fixtures/httpTestHelper.js';
+import { clearTokenVersionGraceForTests } from '../../services/auth/tokenVersionGrace.js';
 import { PASSWORD_TOO_SHORT_MESSAGE } from '../../lib/auth/passwordPolicy.js';
 import { PASSWORD_RESET_REQUIRED } from '../../lib/auth/passwordReset.js';
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
@@ -60,7 +61,7 @@ export async function runAccessPackageTwoPasswordTests(shouldRun: ShouldRun): Pr
     await runCase(results, {
       id: 'sec_own_password_change_keeps_session_td_531',
       name: 'v9.0.218: changing one\'s own password keeps this session and ends the others (TD-531)',
-      details: 'B02-16 (R11): PUT /users/profile raised the token version without a new cookie, so after the success message the same session got 401; now the response sets a cookie with the new version, GET /auth/me answers 200 with it, and another session of the same user and the old cookie get 401',
+      details: 'B02-16 (R11): PUT /users/profile raised the token version without a new cookie, so after the success message the same session got 401; now the response sets a cookie with the new version, GET /auth/me answers 200 with it, and another session of the same user and (after the 10.3 package 5 grace of this device) the old cookie get 401',
     }, async (h, wrong) => {
       const member = await h.sessionWith(['documents.view']);
       const [row] = await h.q('SELECT username FROM users WHERE id = $1', [member.userId]);
@@ -79,6 +80,8 @@ export async function runAccessPackageTwoPasswordTests(shouldRun: ShouldRun): Pr
         const write = await h.put('/api/users/profile', { full_name: 'td531' }, fresh);
         if (write.status !== 200) wrong.push(`a write with the new cookie returned ${write.status}`);
       }
+      // 10.3 package 5: this device's previous token passes for a minute (a request it sent a moment before), then not
+      clearTokenVersionGraceForTests();
       if ((await h.get('/api/auth/me', member)).status !== 401) wrong.push('the old cookie of this session still works');
       if ((await h.get('/api/auth/me', other)).status !== 401) wrong.push('another session of the user still works after the password change');
     });

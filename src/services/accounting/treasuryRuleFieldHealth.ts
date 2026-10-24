@@ -4,8 +4,8 @@ import { eventActionRules } from '../../db/schema.js';
 import type { HealthCheckTestResult } from '../../types.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
 import {
-  TREASURY_PRIVATE_FIELD_PATH, TREASURY_PRIVATE_FIELD_TEXT, TREASURY_RULE_EVENT_TYPES,
-  isRuleGroupNode, isSingleRuleNode, missingFieldOutcome, ruleFieldPath, ruleGroupParts,
+  TREASURY_PRIVATE_FIELDS, isRuleGroupNode, isSingleRuleNode, missingFieldOutcome, ruleFieldPath, ruleGroupParts,
+  type PrivateFieldPattern,
 } from '../../lib/events/ruleMissingField.js';
 
 /**
@@ -36,16 +36,16 @@ interface PrivateConditionUse { fields: string[]; alwaysMatches: boolean; neverM
  * lets the rule pass, so the walk keeps the polarity of the groups above it. A part fixed at «passes» means the rule
  * may fire on every treasury event, one fixed at «fails» that it no longer does.
  */
-function walkConditions(node: unknown, negated: boolean, found: PrivateConditionUse): void {
+function walkConditions(node: unknown, negated: boolean, found: PrivateConditionUse, path: RegExp): void {
   // review N-3: the node shapes, group logic and children are read exactly as the rule engine reads them, so a
   // malformed node (it fails closed in the engine) reads no field here either
   if (Array.isArray(node)) {
-    for (const child of node) walkConditions(child, negated, found);
+    for (const child of node) walkConditions(child, negated, found, path);
     return;
   }
   if (isSingleRuleNode(node)) {
     const field = ruleFieldPath(node.field);
-    if (!TREASURY_PRIVATE_FIELD_PATH.test(field)) return;
+    if (!path.test(field)) return;
     found.fields.push(field);
     if (missingFieldOutcome(node.operator, node.value) !== negated) found.alwaysMatches = true;
     else found.neverMatches = true;
@@ -53,32 +53,44 @@ function walkConditions(node: unknown, negated: boolean, found: PrivateCondition
   }
   if (!isRuleGroupNode(node)) return;
   const { logic, children } = ruleGroupParts(node);
-  for (const child of children) walkConditions(child, negated !== (logic === 'NOT'), found);
+  for (const child of children) walkConditions(child, negated !== (logic === 'NOT'), found, path);
 }
 
-export function treasuryPrivateFieldUseOf(conditions: unknown, actionConfig: unknown): { fields: string[]; use: TreasuryPrivateFieldUse } | null {
+/** 10.3 package 5: how a rule reads the fields `pattern` names (the treasury fields, or the cheque fields of its event type) */
+export function privateFieldUseOf(
+  conditions: unknown, actionConfig: unknown, pattern: PrivateFieldPattern,
+): { fields: string[]; use: TreasuryPrivateFieldUse } | null {
   const found: PrivateConditionUse = { fields: [], alwaysMatches: false, neverMatches: false };
-  walkConditions(conditions, false, found);
-  const textFields = [...JSON.stringify(actionConfig ?? {}).matchAll(TREASURY_PRIVATE_FIELD_TEXT)].map(m => m[0]);
+  walkConditions(conditions, false, found, pattern.path);
+  const textFields = [...JSON.stringify(actionConfig ?? {}).matchAll(pattern.text)].map(m => m[0]);
   const fields = [...new Set([...found.fields, ...textFields])].sort();
   if (fields.length === 0) return null;
   const use: TreasuryPrivateFieldUse = found.alwaysMatches ? 'always_matches' : found.neverMatches ? 'never_matches' : 'text_only';
   return { fields, use };
 }
 
-export async function findTreasuryPrivateFieldRules(): Promise<TreasuryPrivateFieldRuleRow[]> {
+export function treasuryPrivateFieldUseOf(conditions: unknown, actionConfig: unknown): { fields: string[]; use: TreasuryPrivateFieldUse } | null {
+  return privateFieldUseOf(conditions, actionConfig, TREASURY_PRIVATE_FIELDS.TreasuryTransactionApproved);
+}
+
+/** the saved rules of the event types `patterns` names that read one of their fields, by rule id */
+export async function findPrivateFieldRules(patterns: Readonly<Record<string, PrivateFieldPattern>>): Promise<TreasuryPrivateFieldRuleRow[]> {
   const rules = await orm.select({
-    id: eventActionRules.id, name: eventActionRules.name, isActive: eventActionRules.isActive,
+    id: eventActionRules.id, name: eventActionRules.name, isActive: eventActionRules.isActive, eventType: eventActionRules.eventType,
     conditionsJson: eventActionRules.conditionsJson, actionConfigJson: eventActionRules.actionConfigJson,
   }).from(eventActionRules)
-    .where(inArray(eventActionRules.eventType, [...TREASURY_RULE_EVENT_TYPES]))
+    .where(inArray(eventActionRules.eventType, Object.keys(patterns)))
     .orderBy(asc(eventActionRules.id));
   const rows: TreasuryPrivateFieldRuleRow[] = [];
   for (const r of rules) {
-    const found = treasuryPrivateFieldUseOf(r.conditionsJson, r.actionConfigJson);
+    const found = privateFieldUseOf(r.conditionsJson, r.actionConfigJson, patterns[r.eventType]);
     if (found) rows.push({ ruleId: r.id, name: r.name, isActive: r.isActive === 1, ...found });
   }
   return rows;
+}
+
+export function findTreasuryPrivateFieldRules(): Promise<TreasuryPrivateFieldRuleRow[]> {
+  return findPrivateFieldRules(TREASURY_PRIVATE_FIELDS);
 }
 
 const USE_DETAILS: Record<TreasuryPrivateFieldUse, string> = {

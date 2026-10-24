@@ -11,6 +11,7 @@ import { safeCompareTokens } from '../lib/timingSafeCompare.js';
 import { PASSWORD_RESET_REQUIRED, PASSWORD_RESET_REQUIRED_MESSAGE, isPasswordResetAllowedPath } from '../lib/auth/passwordReset.js';
 import { DEFAULT_SESSION_SECONDS, sessionLifetimeSeconds } from '../lib/auth/sessionLifetime.js';
 import { checkSession, type SessionRequestInfo } from '../services/auth/sessionStore.js';
+import { previousTokenVersionAccepted } from '../services/auth/tokenVersionGrace.js';
 
 declare global {
   namespace Express {
@@ -219,7 +220,8 @@ export async function resolveLiveSession(payload: AuthUserPayload, info: Session
 
     const claimVersion = Number((payload as any).tokenVersion ?? 0);
     const dbVersion = Number(liveUser.tokenVersion ?? 0);
-    if (claimVersion !== dbVersion) {
+    // 10.3 package 5: the previous token of the device that just closed its other devices or changed its password
+    if (claimVersion !== dbVersion && !previousTokenVersionAccepted(payload, claimVersion, dbVersion)) {
       userAuthCache.delete(userIdNum);
       return { ok: false, status: 401, error: 'نشست شما به دلیل تغییر نقش یا اطلاعات کاربری منقضی شده است. لطفاً مجدداً وارد شوید.' };
     }

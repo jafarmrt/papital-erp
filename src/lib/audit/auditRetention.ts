@@ -35,6 +35,9 @@ export const CRITICAL_AUDIT_ENTITIES = [
   'پروفایل کاربر',
   'نقش و دسترسی',
   'تنظیمات سیستم',
+  // 10.3 package 5 (ت۴۷ item 5): a change of the treasury high-value threshold, and migration 0135's masking of old event rows
+  'آستانه تراکنش کلان خزانه',
+  'رویدادهای سامانه',
   'سیستم:تنظیمات_محیطی',
   'سیستم:خروجی_داده‌ها',
   'سیستم:بازنشانی کامل',

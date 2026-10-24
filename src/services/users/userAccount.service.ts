@@ -11,6 +11,7 @@ import { AVATAR_INVALID_MESSAGE, isStoredAvatarPath } from '../../lib/users/prof
 import { isSyntheticTestUsername, SYNTHETIC_USERNAME_REFUSED } from '../../lib/syntheticUsers.js';
 import { USERNAME_OF_DELETED_USER, deletedUsernameMessage } from '../../lib/users/userRestore.js';
 import { USERNAME_FORMAT_INVALID, usernameFormatError, usernameKey } from '../../lib/users/usernameRules.js';
+import { allowPreviousTokenVersion } from '../auth/tokenVersionGrace.js';
 import { passwordChangeLockMinutes, passwordChangeLockedError, recordPasswordChangeFailure, resetPasswordChangeFailures, verifyPasswordConstantWork } from '../auth/loginSecurity.service.js';
 import { lockSystemAdminSet, assertAnotherActiveAdmin, SYSTEM_ADMIN_ROLE } from './lastAdminGuard.js';
 import { assertAssignableRole, assertManageableAccount, assertNotOwnAccountRole, grantorPermissions } from './grantBoundary.js';
@@ -109,6 +110,8 @@ export async function updateOwnProfile(req: Request, userId: number, input: Prof
     if (Object.keys(updateData).length > 0) {
       await tx.update(users).set(updateData).where(eq(users.id, userId));
     }
+    // 10.3 package 5: this device's requests sent just before the change still carry its previous token
+    if (passwordChanged) allowPreviousTokenVersion(req.user, u.tokenVersion || 0, updateData.tokenVersion ?? 0);
     const [row] = await tx.select().from(users).where(eq(users.id, userId));
     await logActivity({
       req,
