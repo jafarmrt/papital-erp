@@ -111,10 +111,11 @@ export async function issueEidiPayslip(input: IssueEidiPayslipInput) {
     const reason = String(input.overrideReason ?? '').trim().slice(0, EIDI_OVERRIDE_REASON_MAX);
     const overridden = amount.subtract(suggested).abs().greaterThanOrEqual(1);
     if (overridden && !reason) {
-      throw new ValidationError(
+      throw new PrivateRefusalError(
         `مبلغ عیدی با مبلغ محاسبه‌شده (${toPersianDigits(fin(suggested).toNumber().toLocaleString('fa-IR'))} ریال) فرق دارد؛ شرح تغییر را بنویسید.`,
-        { suggestion: preview.suggestion },
+        422,
         'PAYROLL_EIDI_OVERRIDE_REASON_REQUIRED',
+        { suggestion: preview.suggestion },
       );
     }
     if (!amount.isPositive()) {

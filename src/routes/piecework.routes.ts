@@ -831,7 +831,8 @@ router.post('/piecework/payrolls/:id/register-payment', requirePermission(PIECEW
       ...result
     });
   } catch (err) {
-    logger.error({ message: 'Error registering payroll payment', error: err });
+    // TD-1386: a refusal is logged by errorHandler alone, as in generate
+    if (!(err instanceof AppError && err.statusCode < 500)) logger.error({ message: 'Error registering payroll payment', error: err });
     throw err;
   }
 }));

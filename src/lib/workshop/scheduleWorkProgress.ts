@@ -83,14 +83,13 @@ export const warehouseItemId = (v: unknown): number | null => {
 
 /**
  * The warehouse item of one product row of a project: `item_id`, `itemId` or the legacy `item_id_raw`, the one rule of
- * the progress matrix (`matrixProducts`) and the workshop schedule (the first of them that is an item id); null when the
- * row names none.
+ * the progress matrix (`matrixProducts`) and the workshop schedule; null when the row names none. The first one present
+ * decides, as the server's delivery cap reads `item_id ?? itemId`: an emptied `item_id` names no item there either.
  */
 export function productRowItemId(row: unknown): number | null {
   if (!row || typeof row !== 'object' || Array.isArray(row)) return null;
   const r = row as { item_id?: unknown; itemId?: unknown; item_id_raw?: unknown };
-  // the first of the three that is an item id: an emptied `item_id` ('' or 0) of an older row falls through to the others
-  return warehouseItemId(r.item_id) ?? warehouseItemId(r.itemId) ?? warehouseItemId(r.item_id_raw);
+  return warehouseItemId(r.item_id ?? r.itemId ?? r.item_id_raw);
 }
 
 /**

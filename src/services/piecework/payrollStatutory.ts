@@ -1,7 +1,7 @@
 import { asc, eq } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { payrollStatutoryRates, personnel } from '../../db/schema.js';
-import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
+import { ConflictError, NotFoundError, PrivateRefusalError, ValidationError } from '../../errors/customErrors.js';
 import { requireStorageDate } from '../../lib/storageDate.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { fin, type DecimalValue } from '../../lib/financialDecimal.js';
@@ -201,10 +201,12 @@ export async function resolvePayrollStatutory(
   const reason = String(input.overrideReason ?? '').trim().slice(0, STATUTORY_OVERRIDE_REASON_MAX);
   const overridden = statutoryOverridden(amounts, suggestion);
   if (overridden && !reason) {
-    throw new ValidationError(
+    // TD-1386: the suggested amounts reach the user, never the error log
+    throw new PrivateRefusalError(
       `بیمه یا مالیات فیش با مبلغ محاسبه‌شده (بیمه سهم کارگر ${toPersianDigits(suggestion.employeeInsurance)}، سهم کارفرما ${toPersianDigits(suggestion.employerInsurance)}، مالیات ${toPersianDigits(suggestion.incomeTax)} ریال) فرق دارد؛ شرح تغییر را بنویسید.`,
-      { suggestion },
+      422,
       'PAYROLL_STATUTORY_OVERRIDE_REASON_REQUIRED',
+      { suggestion },
     );
   }
   return { amounts, overrideReason: overridden ? reason : '', suggestion, jalaliYear, warning };

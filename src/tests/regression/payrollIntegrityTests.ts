@@ -11,7 +11,7 @@ import { AccountMappingService } from '../../services/accounting/accountMapping.
 import { FinancialHealthService } from '../../services/accounting/financialHealth.service.js';
 import { PieceworkPayrollService } from '../../services/piecework/payroll.service.js';
 import { findPayrollVoucherMismatches } from '../../services/piecework/payrollVoucherHealth.js';
-import { addLog, fundedBank, newTask, newWorker, payrollCount, personNet } from '../invariants/payrollScenarios.js';
+import { addLog, fundedBank, issueApproved, newTask, newWorker, payrollCount, personNet } from '../invariants/payrollScenarios.js';
 import { TestCaseResult } from '../types.js';
 import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase, sandboxAdminClient } from './fiscalClosingTests.js';
 
@@ -277,7 +277,7 @@ export async function runPayrollIntegrityTests(shouldRun: ShouldRun): Promise<Te
 
   const thrownId = 'reg_payroll_refusals_thrown_td_1386';
   if (shouldRun(thrownId, 'td1386', 'payroll', 'payslip', 'package6')) {
-    await runCase(results, thrownId, '10.3 package 6: a refused payslip request is a thrown AppError, answered with the same status and Persian message and now its code: no pending work (400 PAYROLL_NO_PENDING_WORK), an advance deduction above the balance (400 PAYROLL_ADVANCE_DEDUCTION_EXCEEDS_BALANCE, nothing written), deductions above the payslip (400 PAYROLL_NET_NEGATIVE), a period after the service ended or before it started (400 PAYROLL_SERVICE_ENDED / PAYROLL_SERVICE_NOT_STARTED), a missing payslip on status and voucher sync (404 PAYROLL_NOT_FOUND) and a missing personnel (404 PAYROLL_PERSONNEL_NOT_FOUND); the error log keeps the code of a refusal naming the personnel or an amount, never its text (TD-1386)', async () => inFiscalSandbox(async () => {
+    await runCase(results, thrownId, '10.3 package 6: a refused payslip request is a thrown AppError, answered with the same status and Persian message and now its code: no pending work (400 PAYROLL_NO_PENDING_WORK), an advance deduction above the balance (400 PAYROLL_ADVANCE_DEDUCTION_EXCEEDS_BALANCE, nothing written), deductions above the payslip (400 PAYROLL_NET_NEGATIVE), a period after the service ended or before it started (400 PAYROLL_SERVICE_ENDED / PAYROLL_SERVICE_NOT_STARTED), a payment above the remainder of the payslip (422), a missing payslip on status and voucher sync (404 PAYROLL_NOT_FOUND) and a missing personnel (404 PAYROLL_PERSONNEL_NOT_FOUND); the error log keeps the code of a refusal naming the personnel or an amount, never its text (TD-1386)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const answer = (res: { status: number; body: unknown }) => `${res.status} ${codeOf(res.body)} ${brief(res.body)}`;
@@ -309,11 +309,26 @@ export async function runPayrollIntegrityTests(shouldRun: ShouldRun): Promise<Te
       const leaver = await salariedWorker('TD-1386 leaver', { employmentStatus: 'قطع همکاری', endDate: '2026-03-15' });
       const { result: ended, logged: endedLog } = await errorLogDuring(() => admin.post('/api/piecework/payrolls/generate', { personnelId: leaver, ...PERIOD }));
       if (ended.status !== 400 || codeOf(ended.body) !== 'PAYROLL_SERVICE_ENDED') problems.push(`a period after the service ended answered ${answer(ended)}, expected 400 PAYROLL_SERVICE_ENDED`);
+      if (!endedLog.includes('PAYROLL_SERVICE_ENDED')) problems.push('the service-ended refusal was not in the error log at all (the log capture missed it)');
       if (endedLog.includes(await fullNameOf(leaver))) problems.push('the error log holds the name of the personnel whose service ended');
       const newcomer = await salariedWorker('TD-1386 newcomer', { startDate: '2026-05-10' });
       const early = await admin.post('/api/piecework/payrolls/generate', { personnelId: newcomer, ...PERIOD });
       if (early.status !== 400 || codeOf(early.body) !== 'PAYROLL_SERVICE_NOT_STARTED') problems.push(`a period before the service started answered ${answer(early)}, expected 400 PAYROLL_SERVICE_NOT_STARTED`);
       if (await payrollCount(leaver) + await payrollCount(newcomer) !== 0) problems.push('a payslip was written outside the service');
+
+      // a payment above what the payslip still owes: the same 422 with both amounts to the user, the code only in the log
+      const payee = await newWorker('TD-1386 payee');
+      await addLog(payee, await newTask(), '2026-04-05', 1_000_000);
+      const issued = await issueApproved({ personnelId: payee, ...PERIOD, username: 'reg' });
+      const payslipId = Number((issued.payroll as { id?: unknown } | undefined)?.id);
+      if (!payslipId) problems.push('setup: the approved payslip for the payment was not issued');
+      else {
+        const bankId = await fundedBank();
+        const { result: overpaid, logged: overpaidLog } = await errorLogDuring(() => admin.post(`/api/piecework/payrolls/${payslipId}/register-payment`, { bankAccountId: bankId, method: 'bank_transfer', amount: 2_000_000 }));
+        if (overpaid.status !== 422 || codeOf(overpaid.body) !== 'VALIDATION_ERROR' || !String((overpaid.body as { error?: unknown }).error).includes('مانده قابل پرداخت')) problems.push(`a payment above the payslip's remainder answered ${answer(overpaid)}, expected 422 VALIDATION_ERROR with its message`);
+        if (!overpaidLog.includes('VALIDATION_ERROR')) problems.push('the over-payment refusal was not in the error log at all (the log capture missed it)');
+        if (overpaidLog.includes('مانده قابل پرداخت')) problems.push('the error log holds the over-payment refusal text with the amounts');
+      }
 
       const missing = 2_000_000_000;
       const status = await admin.put(`/api/piecework/payrolls/${missing}/status`, { notes: 'TD-1386' });
@@ -328,7 +343,7 @@ export async function runPayrollIntegrityTests(shouldRun: ShouldRun): Promise<Te
       if (thrown !== null) problems.push(`a payslip for a missing personnel ${thrown}, expected a thrown 404 PAYROLL_PERSONNEL_NOT_FOUND`);
 
       assertNoProblems(problems);
-      return 'Every refusal of the payslip service is thrown with its status, Persian message and code; the refused requests wrote nothing; the error log held the advance and service-ended refusals by code, without the personnel name or the amounts.';
+      return 'Every refusal of the payslip service is thrown with its status, Persian message and code; the refused requests wrote nothing; the error log held the advance, service-ended and over-payment refusals by code, without the personnel name or the amounts.';
     }));
   }
 

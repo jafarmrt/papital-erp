@@ -93,13 +93,16 @@ describe('TD-1362: the server search of a cut personnel list', () => {
   it('says it is searching from the keystroke, and says when the server search failed', async () => {
     answer = async () => { throw new Error('network'); };
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    render(<SearchableSelect value="" onChange={() => undefined} options={local.map(option)} serverSearchUrl="/personnel" mapResultToOption={option} />);
-    fireEvent.click(screen.getByRole('button'));
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'قدیمی' } });
-    expect(screen.getByText('در حال جست‌وجو...')).toBeTruthy();
-    await act(async () => { await new Promise(r => setTimeout(r, 350)); });
-    await waitFor(() => expect(screen.getByText('جست‌وجو در سرور انجام نشد؛ دوباره بنویسید.')).toBeTruthy());
-    error.mockRestore();
+    try {
+      render(<SearchableSelect value="" onChange={() => undefined} options={local.map(option)} serverSearchUrl="/personnel" mapResultToOption={option} />);
+      fireEvent.click(screen.getByRole('button'));
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'قدیمی' } });
+      expect(screen.getByText('در حال جست‌وجو...')).toBeTruthy();
+      await act(async () => { await new Promise(r => setTimeout(r, 350)); });
+      await waitFor(() => expect(screen.getByText('جست‌وجو در سرور انجام نشد؛ دوباره بنویسید.')).toBeTruthy());
+    } finally {
+      error.mockRestore();
+    }
   });
 
   it('moves the voucher row on with Enter on the closed picker of a cut list, as the plain list does, and names it', () => {

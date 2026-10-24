@@ -1,7 +1,7 @@
 import { eq, and, sql, inArray, asc } from 'drizzle-orm';
 import { type DbExecutor } from '../../db/drizzle.js';
 import { pieceworkLogs, pieceworkPayrolls, personnel, journalVouchers } from '../../db/schema.js';
-import { NotFoundError, BadRequestError, ConflictError, ValidationError, PrivateRefusalError } from '../../errors/customErrors.js';
+import { AppError, NotFoundError, BadRequestError, ConflictError, ValidationError, PrivateRefusalError } from '../../errors/customErrors.js';
 import { isoToJalaliDate, toStorageDate } from '../../utils.js';
 import { requireStorageDate } from '../../lib/storageDate.js';
 import { VoucherService } from '../accounting/voucher.service.js';
@@ -33,8 +33,9 @@ import { idempotentTransaction } from '../../middleware/idempotency.js';
  */
 
 /**
- * A refusal of the payslip request, answered 400 like the route's `{ status: 400, error }` before (TD-1386). Its message
- * may name the personnel or an amount, so it never reaches the error log (`PrivateRefusalError`, review of #380)
+ * A refusal of the payslip request that names the personnel or an amount, answered 400 like the route's
+ * `{ status: 400, error }` before (TD-1386); its text never reaches the error log (`PrivateRefusalError`, review of #380).
+ * A refusal naming neither is a plain `AppError` with the same status, so the log keeps its text.
  */
 const payrollRefusal = (message: string, code: string) => new PrivateRefusalError(message, 400, code);
 
@@ -215,7 +216,7 @@ export class PieceworkPayrollService {
         if (isPrepayment) {
           throw payrollRefusal(`حقوق ثابت این بازه پیش‌تر در فیش‌های دیگر ${pInfo.fullName} داده شده است؛ فیش پیش‌پرداخت مبلغی ندارد.`, 'PAYROLL_PREPAYMENT_NOTHING_LEFT');
         }
-        throw payrollRefusal('هیچ کارکرد معوقی در این بازه زمانی برای پرسنل انتخاب‌شده پیدا نشد.', 'PAYROLL_NO_PENDING_WORK');
+        throw new AppError('هیچ کارکرد معوقی در این بازه زمانی برای پرسنل انتخاب‌شده پیدا نشد.', 400, 'PAYROLL_NO_PENDING_WORK');
       }
 
       // 3. Financial calculations with financialDecimal (TD-091)
@@ -244,7 +245,7 @@ export class PieceworkPayrollService {
         .subtract(statutory.amounts.incomeTax).subtract(totDeductionsFin).subtract(advanceDeductionFin).round(4);
 
       if (netFin.isNegative()) {
-        throw payrollRefusal('جمع بیمه، مالیات، کسورات و کسر مساعده از اجزای فیش بیشتر است — مقادیر را اصلاح کنید.', 'PAYROLL_NET_NEGATIVE');
+        throw new AppError('جمع بیمه، مالیات، کسورات و کسر مساعده از اجزای فیش بیشتر است — مقادیر را اصلاح کنید.', 400, 'PAYROLL_NET_NEGATIVE');
       }
 
       // v10.0.222 (TD-1089، طرح حقوق §۳.۸، ت۱۴ الف): سهم عیدی از کارکرد و حقوق ثابت، بی پاداش و کسورات؛ از خالص کم نمی‌شود
@@ -407,7 +408,7 @@ export class PieceworkPayrollService {
       );
 
       if (!voucher) {
-        throw payrollRefusal('ایجاد سند حسابداری برای این فیش حقوقی ناموفق بود یا سرفصل‌های معین دستمزد تعریف نشده‌اند.', 'PAYROLL_VOUCHER_NOT_CREATED');
+        throw new AppError('ایجاد سند حسابداری برای این فیش حقوقی ناموفق بود یا سرفصل‌های معین دستمزد تعریف نشده‌اند.', 400, 'PAYROLL_VOUCHER_NOT_CREATED');
       }
 
       return { status: 200, payroll: pay, voucher };

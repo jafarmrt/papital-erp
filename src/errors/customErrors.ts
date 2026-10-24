@@ -84,8 +84,8 @@ export class BusinessLogicError extends AppError {
  * personnel, an advance balance). The user reads it as any refusal; the error log keeps its code and route, never its text
  */
 export class PrivateRefusalError extends AppError {
-  constructor(message: string, statusCode: number, code: string) {
-    super(message, statusCode, code);
+  constructor(message: string, statusCode: number, code: string, details?: unknown) {
+    super(message, statusCode, code, details);
   }
 }
 
