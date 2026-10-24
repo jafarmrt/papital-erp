@@ -64,7 +64,8 @@ export async function runClosingDomainEventsTests(shouldRun: ShouldRun): Promise
       if (changed.length !== 1) problems.push(`expected 1 ChequeStatusChanged, got ${changed.length}`);
       const p = changed[0]?.payload ?? {};
       if (p.previousStatus !== 'received' || p.newStatus !== 'in_collection') problems.push(`statuses ${String(p.previousStatus)} -> ${String(p.newStatus)}`);
-      if (Number(p.amount) !== 250000 || p.chequeType !== 'received' || !p.newStatusLabel) problems.push(`payload ${JSON.stringify(p).slice(0, 200)}`);
+      // 10.3 package 5: no amount (eventLoginPrivacyTests)
+      if ('amount' in p || p.chequeType !== 'received' || !p.newStatusLabel) problems.push(`payload ${JSON.stringify(p).slice(0, 200)}`);
 
       const refused = await ChequeLifecycleService.updateChequeStatus(cheque.id, { status: 'spent', username: 'inv' }).then(() => false, () => true);
       if (!refused) problems.push('in_collection -> spent was accepted');

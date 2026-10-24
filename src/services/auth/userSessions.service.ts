@@ -15,6 +15,7 @@ import { assertManageableAccount, grantorPermissions } from '../users/grantBound
 import {
   insertSession, invalidateSessionCache, newSessionId, sessionIdOfClaims, type SessionTokenClaims,
 } from './sessionStore.js';
+import { allowPreviousTokenVersion, refuseTokenGrace } from './tokenVersionGrace.js';
 
 /**
  * 10.2 package 8 (D-07, TD-1295): issuing, listing and closing the sessions of `user_sessions`. Every login writes a
@@ -69,6 +70,7 @@ export async function issueSessionCookie(
 export async function renewSessionCookie(
   req: Request, res: Response, user: SessionUser, csrfToken: string = req.user?.csrfToken || generateCsrfToken(),
 ): Promise<{ token: string; csrfToken: string }> {
+  refuseTokenGrace(req);
   const lifetime = await sessionLifetimeOfRole(user.role);
   const sid = currentSessionId(req);
   if (!sid) return issueSessionCookie(req, res, user, lifetime);
@@ -124,6 +126,7 @@ async function closeRow(tx: DbExecutor, id: number, reason: 'logout' | 'closed_b
 
 /** «بستن» one of the user's own other devices; this device signs out with «خروج» */
 export async function closeOwnSession(req: Request, sessionId: number): Promise<void> {
+  refuseTokenGrace(req);
   const userId = Number(req.user?.id);
   const current = currentSessionId(req);
   const sid = await orm.transaction(async (tx) => {
@@ -149,7 +152,8 @@ export async function closeOwnSession(req: Request, sessionId: number): Promise<
 export async function closeOtherOwnSessions(req: Request, res: Response): Promise<{ closedCount: number; csrfToken: string; token: string }> {
   const userId = Number(req.user?.id);
   const current = currentSessionId(req);
-  const { user, closedSids } = await orm.transaction(async (tx) => {
+  refuseTokenGrace(req);
+  const { user, previousVersion, closedSids } = await orm.transaction(async (tx) => {
     const [row] = await tx.select().from(users).where(eq(users.id, userId)).for('update');
     if (!row || row.isDeleted === 1) throw new NotFoundError('حساب کاربری یافت نشد');
     const tokenVersion = (row.tokenVersion || 0) + 1;
@@ -163,8 +167,10 @@ export async function closeOtherOwnSessions(req: Request, res: Response): Promis
       description: `بستن همهٔ دستگاه‌های دیگر کاربر ${row.fullName || row.username} از نمایه (${closed.length} دستگاه)`,
       details: { closedCount: closed.length, method: 'بستن دستگاه‌های دیگر از نمایه' },
     });
-    return { user: { ...row, tokenVersion }, closedSids: closed.map(c => c.sid) };
+    return { user: { ...row, tokenVersion }, previousVersion: row.tokenVersion || 0, closedSids: closed.map(c => c.sid) };
   });
+  // 10.3 package 5: a request this device sent a moment before still carries its previous token (after commit)
+  allowPreviousTokenVersion(req.user, previousVersion, user.tokenVersion);
   invalidateUserAuthCache(userId);
   for (const sid of closedSids) invalidateSessionCache(sid);
   const session = await renewSessionCookie(req, res, user);

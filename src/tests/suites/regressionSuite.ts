@@ -11215,6 +11215,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runBankOpeningDateTests(shouldRun));
   const { runBankOpeningApprovalRaceTests } = await import('../regression/bankOpeningApprovalRaceTests.js');
   results.push(...await runBankOpeningApprovalRaceTests(shouldRun));
+  // 10.3 package 5: cheque event privacy, masked old event rows, ended session purge, treasury threshold audit
+  const { runEventLoginPrivacyTests } = await import('../regression/eventLoginPrivacyTests.js');
+  results.push(...await runEventLoginPrivacyTests(shouldRun));
 
   return results;
 }

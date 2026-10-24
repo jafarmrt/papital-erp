@@ -1419,6 +1419,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // 10.2 package 8 (D-07, TD-1295): one session row per device, closing one device
   const { runDeviceSessionTests } = await import('../security/deviceSessionTests.js');
   results.push(...await runDeviceSessionTests(shouldRunAccess));
+  // 10.3 package 5: this device's previous token after close-others or its own password change
+  const { runSessionGraceTests } = await import('../security/sessionGraceTests.js');
+  results.push(...await runSessionGraceTests(shouldRunAccess));
   const { runAccessPackageTwoDocumentTests } = await import('../security/accessPackageTwoDocumentTests.js');
   results.push(...await runAccessPackageTwoDocumentTests(shouldRunAccess));
   const { runAccessPackageTwoSensitiveTests } = await import('../security/accessPackageTwoSensitiveTests.js');

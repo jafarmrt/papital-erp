@@ -67,12 +67,12 @@ describe('webhook_connect_time_lookup_td_1296', () => {
     expect(await res.json()).toEqual({ echoed: '{"a":1}' });
   });
 
-  it('keeps the Accept and User-Agent headers fetch used to send (review N-1)', async () => {
+  it('keeps the Accept and User-Agent headers fetch used to send (review N-1), the User-Agent without the version (10.3 package 5)', async () => {
     await guardedWebhookFetch(`http://127.0.0.1:${port}/hook`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'User-Agent': 'ERP-Webhook-Dispatcher/7.0' }, body: '{}' });
     expect(seenHeaders.at(-1)).toMatchObject({ accept: '*/*', 'user-agent': 'ERP-Webhook-Dispatcher/7.0' });
     await post(`http://127.0.0.1:${port}/hook`);
     expect(seenHeaders.at(-1)?.accept).toBe('*/*');
-    expect(seenHeaders.at(-1)?.['user-agent']).toMatch(/^Papital-ERP\/\d+\.\d+\.\d+/);
+    expect(seenHeaders.at(-1)?.['user-agent']).toBe('Papital-ERP');
   });
 
   it('returns a redirect to an inside address as the 3xx without following it', async () => {

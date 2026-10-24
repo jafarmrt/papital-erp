@@ -5,7 +5,7 @@ import { invalidatePreset } from '../lib/queryInvalidation';
 import { mutationSucceeded } from '../lib/settings/mutationSucceeded';
 import { toast } from 'react-hot-toast';
 import { normalizeRialDisplayUnit } from '../lib/rialDisplay';
-import { TREASURY_HIGH_VALUE_THRESHOLD_DEFAULT, TREASURY_HIGH_VALUE_THRESHOLD_KEY, movementDaysError, priceListNamesError, treasuryHighValueThresholdError } from '../lib/settings/settingValues';
+import { TREASURY_HIGH_VALUE_THRESHOLD_DEFAULT, TREASURY_HIGH_VALUE_THRESHOLD_KEY, movementDaysError, priceListNamesError, readTreasuryHighValueThreshold, treasuryHighValueThresholdError } from '../lib/settings/settingValues';
 import { wcTestConnectionBody } from '../lib/woocommerce/wcConnectionTest';
 import { stockSyncOutcome } from '../lib/woocommerce/stockSyncOutcome';
 import { FACTORY_RESET_CONFIRM_WORD, isFactoryResetConfirmed } from '../lib/system/factoryReset';
@@ -331,8 +331,12 @@ export function useSettings() {
     // v10.0.95 (TD-1192): نام فهرست قیمت بی ویرگول لاتین و یکتا، با همان قاعده کارساز
     const priceListError = priceListNamesError(pricingStrategies, { allowLatinComma: true });
     if (priceListError) return void toast.error(priceListError);
+    // 10.3 package 5: the default threshold is not written while none is stored, so a later default still reaches this install
+    const unsetDefault = (item: { key: string; value: string }) => item.key === TREASURY_HIGH_VALUE_THRESHOLD_KEY
+      && !serverValues.has(item.key) && readTreasuryHighValueThreshold(item.value) === TREASURY_HIGH_VALUE_THRESHOLD_DEFAULT;
     const changedSettings = candidateSettings.filter(
-      (item) => item.value !== MASKED_SETTING_VALUE && (!serverValues.has(item.key) || serverValues.get(item.key) !== item.value)
+      (item) => item.value !== MASKED_SETTING_VALUE && !unsetDefault(item)
+        && (!serverValues.has(item.key) || serverValues.get(item.key) !== item.value)
     );
     if (changedSettings.length === 0) {
       dirtyKeys.clear();

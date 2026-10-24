@@ -946,6 +946,13 @@
       "when": 1796470400000,
       "tag": "0134_bank_account_opening_date",
       "breakpoints": true
+    },
+    {
+      "idx": 135,
+      "version": "7",
+      "when": 1796556800000,
+      "tag": "0135_event_privacy_settings_notice",
+      "breakpoints": true
     }
   ]
 }

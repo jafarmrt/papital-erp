@@ -23,14 +23,29 @@ export function ruleGroupParts(group: Record<string, unknown>): { logic: 'AND' |
   return { logic, children: Array.isArray(children) ? children : [] };
 }
 
-/** the event types whose rules see the treasury event: its own type and «همه رویدادها» */
-export const TREASURY_RULE_EVENT_TYPES: readonly string[] = ['TreasuryTransactionApproved', '*'];
-
 /** a treasury event field this release took out of the payload (amount, description, void reason) */
 export const TREASURY_PRIVATE_FIELD_PATH = /^payload\.(amount|description|reason)(\.|$)/;
 
 /** the same fields where an action text or setting names them */
 export const TREASURY_PRIVATE_FIELD_TEXT = /payload\.(amount|description|reason)\b/g;
+
+/** the fields a rule of each event type reads that its event no longer carries: the condition path and the action text */
+export interface PrivateFieldPattern { path: RegExp; text: RegExp }
+
+/** the event types whose rules see the treasury event: its own type and «همه رویدادها» */
+export const TREASURY_PRIVATE_FIELDS: Readonly<Record<string, PrivateFieldPattern>> = {
+  TreasuryTransactionApproved: { path: TREASURY_PRIVATE_FIELD_PATH, text: TREASURY_PRIVATE_FIELD_TEXT },
+  '*': { path: TREASURY_PRIVATE_FIELD_PATH, text: TREASURY_PRIVATE_FIELD_TEXT },
+};
+
+/**
+ * 10.3 package 5 (decision ت۴۷ item 3): the cheque status event («تغییر وضعیت چک») carries no amount and no party name
+ * either. A «*» rule's amount is already read by the treasury lists, so only the party name is added for it.
+ */
+export const CHEQUE_PRIVATE_FIELDS: Readonly<Record<string, PrivateFieldPattern>> = {
+  ChequeStatusChanged: { path: /^payload\.(amount|partyName)(\.|$)/, text: /payload\.(amount|partyName)\b/g },
+  '*': { path: /^payload\.partyName(\.|$)/, text: /payload\.partyName\b/g },
+};
 
 /** the numeric comparisons, which never match a field the event does not carry */
 export const NUMERIC_RULE_OPERATORS: ReadonlySet<string> = new Set(['>', 'gt', '>=', 'gte', '<', 'lt', '<=', 'lte']);

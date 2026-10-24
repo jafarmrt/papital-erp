@@ -9,8 +9,10 @@ import { readSettingValue, revealSettingSecrets, sealSettingValue } from './sett
 import { invalidateSettingsCache, appSettingsCache } from '../../lib/memoryCache.js';
 import {
   MOVEMENT_DAY_KEYS, currencySettingError, priceListNamesError, isMovementDayKey, movementDaysError, readMovementDays,
-  TREASURY_HIGH_VALUE_THRESHOLD_KEY, readTreasuryHighValueThreshold, treasuryHighValueThresholdError,
+  TREASURY_HIGH_VALUE_THRESHOLD_DEFAULT, TREASURY_HIGH_VALUE_THRESHOLD_KEY, readTreasuryHighValueThreshold,
+  treasuryHighValueThresholdError,
 } from '../../lib/settings/settingValues.js';
+import { recordTreasuryThresholdChange } from './treasuryThresholdChange.js';
 import { pricingStrategiesSettingError } from '../../lib/items/pricingStrategies.js';
 
 /**
@@ -136,6 +138,12 @@ async function assertKeyPermission(key: string, actor: SettingsActor): Promise<v
   }
 }
 
+/** a setting with no stored row whose value is its default: nothing to write (only the treasury threshold has one) */
+function unsetDefaultValue(key: string, before: string | null | undefined, value: string): boolean {
+  return key === TREASURY_HIGH_VALUE_THRESHOLD_KEY && (before === undefined || before === null)
+    && readTreasuryHighValueThreshold(value) === TREASURY_HIGH_VALUE_THRESHOLD_DEFAULT;
+}
+
 function redactForAudit(key: string, value: string | undefined): string | undefined {
   if (value === undefined) return undefined;
   return SENSITIVE_SETTING_PATTERN.test(key) ? '[PROTECTED]' : value;
@@ -200,6 +208,9 @@ export class SystemSettingsService {
         if (before !== undefined && before !== null && before === value) {
           continue;
         }
+        // 10.3 package 5 (10.2 backlog): the form sends the default threshold while none is stored; writing it would fix
+        // today's default in this database, so a later default would never reach it
+        if (unsetDefaultValue(item.key, before, value)) continue;
 
         await assertKeyPermission(item.key, actor);
         await validateSettingValue(tx, item.key, value);
@@ -221,6 +232,9 @@ export class SystemSettingsService {
         await tx.insert(appSettings).values({ key: change.key, value: change.stored })
           .onConflictDoUpdate({ target: appSettings.key, set: { value: change.stored } });
       }
+      // 10.3 package 5 (ت۴۷ item 5): the threshold of large treasury rows gets its own activity row and an admin notice
+      const threshold = changes.find(c => c.key === TREASURY_HIGH_VALUE_THRESHOLD_KEY);
+      if (threshold) await recordTreasuryThresholdChange(tx, actor, threshold);
       // TD-963 (بخش ۲): ردیف ممیزی با همان تراکنش نوشتن گزینه‌ها ثبت می‌شود
       if (changes.length > 0) {
         await logActivity({

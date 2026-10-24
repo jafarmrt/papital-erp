@@ -13,6 +13,7 @@ import { PERMISSION_CATALOG, PERMISSION_KEYS, isSystemAdminRole } from '../lib/p
 import { createRole, deleteRole, updateRole } from '../services/users/roleAdmin.service.js';
 import { createUser, deleteUser, restoreUser, updateOwnProfile, updateUser } from '../services/users/userAccount.service.js';
 import { closeAllUserSessionsByAdmin, closeUserSessionByAdmin, listManagedUserSessions, renewSessionCookie } from '../services/auth/userSessions.service.js';
+import { refuseTokenGraceOnWrites } from '../services/auth/tokenVersionGrace.js';
 import { workflowsRequiringRole } from '../services/workflow/transitionRoles.js';
 import { roleDisplayName } from '../lib/users/roleDisplayName.js';
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE } from '../lib/auth/passwordPolicy.js';
@@ -21,6 +22,8 @@ import { NotFoundError, UnauthorizedError } from '../errors/customErrors.js';
 
 const router = Router();
 router.use(authenticateToken); // Protect all user routes
+// 10.3 package 5 (review of #378): a request let in with this device's previous token may not change users or roles
+router.use(['/users', '/roles'], refuseTokenGraceOnWrites);
 
 const updateProfileSchema = z.object({
   body: z.object({
