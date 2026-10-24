@@ -1,7 +1,8 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../../db/drizzle.js';
 import { journalVouchers, workflowInstances } from '../../../db/schema.js';
-import { ConflictError } from '../../../errors/customErrors.js';
+import { ConflictError, ValidationError } from '../../../errors/customErrors.js';
+import { toPersianDigits } from '../../../utils/persianNumber.js';
 import { VoucherService } from '../voucher.service.js';
 
 /**
@@ -82,6 +83,46 @@ export async function assertNoPendingOpeningApproval(tx: DbExecutor, bank: { id:
     throw new ConflictError(
       `مانده اول دوره حساب «${bank.title}» در انتظار تأیید گردش‌کار است و تا پایان آن ویرایش نمی‌شود؛ ` +
       'پس از تأیید یا رد، دوباره ویرایش کنید.'
+    );
+  }
+}
+
+/** 10.3 package 4 (OBS-R1-65): the label of «تاریخ آغاز حساب» in the refusals of `resolveTreasuryWriteDate` */
+export const BANK_OPENING_DATE_LABEL = 'تاریخ آغاز حساب';
+
+/**
+ * 10.3 package 4 (OBS-R1-65): the account's opening voucher (`voucher_type` opening of `treasury_opening`, any status, a
+ * reversed one too), the one `issueTreasuryOpeningVoucher` issues once; an adjustment of the opening balance is not one.
+ */
+export async function openingVoucherOf(tx: DbExecutor, bankId: number): Promise<{ id: number; voucherNumber: number } | undefined> {
+  const [voucher] = await tx.select({ id: journalVouchers.id, voucherNumber: journalVouchers.voucherNumber })
+    .from(journalVouchers)
+    .where(and(
+      eq(journalVouchers.referenceModule, 'treasury_opening'),
+      eq(journalVouchers.referenceId, bankId),
+      eq(journalVouchers.voucherType, 'opening'),
+      eq(journalVouchers.isDeleted, 0),
+    ))
+    .orderBy(journalVouchers.id)
+    .limit(1);
+  return voucher;
+}
+
+/**
+ * 10.3 package 4 (OBS-R1-65, decision ت۴۷ item 2): the start date of a treasury account dates its opening voucher, so it
+ * changes only while that voucher is not issued: not while the account's approval workflow is open (the same rule as the
+ * opening balance, 409), and never after the voucher (422 `BANK_OPENING_DATE_LOCKED`; a draft voucher's date is edited in
+ * the voucher itself). The caller has locked the account row FOR UPDATE.
+ */
+export async function assertOpeningDateChangeAllowed(tx: DbExecutor, bank: { id: number; title: string }): Promise<void> {
+  await assertNoPendingOpeningApproval(tx, bank);
+  const voucher = await openingVoucherOf(tx, bank.id);
+  if (voucher) {
+    throw new ValidationError(
+      `${BANK_OPENING_DATE_LABEL} «${bank.title}» پس از صدور سند افتتاحیه (شمارهٔ ${toPersianDigits(voucher.voucherNumber)}) تغییر نمی‌کند؛ ` +
+      'اگر سند هنوز پیش‌نویس است، تاریخ را در خود سند ویرایش کنید.',
+      { voucherId: voucher.id },
+      'BANK_OPENING_DATE_LOCKED',
     );
   }
 }

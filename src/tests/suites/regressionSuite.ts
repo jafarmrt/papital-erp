@@ -11210,6 +11210,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // 10.2 package 11: the workflow SLA report in SQL, same numbers (OBS-R2-71, TD-1323)
   const { runWorkflowSlaParityTests } = await import('../regression/workflowSlaParityTests.js');
   results.push(...await runWorkflowSlaParityTests(shouldRun));
+  // 10.3 package 4: the bank account start date dates its opening voucher (OBS-R1-65), and an «irr» account is rial
+  const { runBankOpeningDateTests } = await import('../regression/bankOpeningDateTests.js');
+  results.push(...await runBankOpeningDateTests(shouldRun));
 
   return results;
 }

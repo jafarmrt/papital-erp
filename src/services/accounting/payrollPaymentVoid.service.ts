@@ -1,8 +1,8 @@
 import { and, eq } from 'drizzle-orm';
 import { assertPayrollDutyNotByIssuer } from '../piecework/payrollDuties.js';
-import { bankAccounts, pieceworkLogs, pieceworkPayrolls, treasuryTransactions } from '../../db/schema.js';
+import { pieceworkLogs, pieceworkPayrolls, treasuryTransactions } from '../../db/schema.js';
 import { VoucherService } from './voucher.service.js';
-import { reverseTreasuryRow } from './treasury/treasuryPosting.js';
+import { lockTreasuryBankRow, reverseTreasuryRow } from './treasury/treasuryPosting.js';
 import { LockHierarchyLevel, validateLockOrder } from '../../lib/lockOrder.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
@@ -60,9 +60,7 @@ export class PayrollPaymentVoidService {
         { name: 'payroll', hierarchyLevel: LockHierarchyLevel.PARTIES },
         { name: 'treasuryTransaction', hierarchyLevel: LockHierarchyLevel.TREASURY_TRANSACTIONS },
       ]);
-      const [bank] = await tx.select().from(bankAccounts)
-        .where(eq(bankAccounts.id, located.bankAccountId ?? 0))
-        .for('update');
+      const bank = await lockTreasuryBankRow(tx, located.bankAccountId ?? 0, { includeDeleted: true });
       if (!bank) throw new NotFoundError('حساب بانکی پرداخت یافت نشد');
       const [payroll] = await tx.select().from(pieceworkPayrolls)
         .where(and(eq(pieceworkPayrolls.id, input.payrollId), eq(pieceworkPayrolls.isDeleted, 0)))

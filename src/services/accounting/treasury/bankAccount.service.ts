@@ -7,11 +7,12 @@ import type { BankSyncStatus } from '../../../lib/treasury/bankSyncStatus.js';
 import { NotFoundError, BusinessLogicError, ValidationError } from '../../../errors/customErrors.js';
 import { AccountMappingService } from '../accountMapping.service.js';
 import { VoucherService } from '../voucher.service.js';
-import { businessTodayJalaliDash } from '../../../lib/businessClock.js';
+import { businessTodayIsoDate } from '../../../lib/businessClock.js';
 import type { JournalVoucher } from '../../../types.js';
 import { fin } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
-import { assertNoPendingOpeningApproval, voidBankOpeningVouchers } from './bankOpeningVoucher.js';
+import { BANK_OPENING_DATE_LABEL, assertNoPendingOpeningApproval, assertOpeningDateChangeAllowed, voidBankOpeningVouchers } from './bankOpeningVoucher.js';
+import { resolveTreasuryWriteDate } from './treasuryDate.js';
 import { requireBankLedgerAccount } from './bankLinks.js';
 import { assertBankCurrencyChangeAllowed, assertBankLedgerChangeAllowed, assertBankTypeChangeKeepsPaidCheques, assertPettyCashCurrency, requireTreasuryCurrency } from './bankAccountCurrency.js';
 import { normalizeTreasuryCurrency } from '../../../lib/treasury/treasuryCurrency.js';
@@ -59,6 +60,7 @@ export class BankAccountService {
       accountCode: accounts.code,
       isActive: bankAccounts.isActive,
       notes: bankAccounts.notes,
+      openingDate: bankAccounts.openingDate,
       createdAt: bankAccounts.createdAt,
     })
     .from(bankAccounts)
@@ -156,6 +158,10 @@ export class BankAccountService {
     for (const ov of draftOpenings) {
       if (ov.referenceId) draftOpeningBanks.add(Number(ov.referenceId));
     }
+    // 10.3 package 4 (OBS-R1-65): accounts whose opening voucher is issued, in any status; their start date is fixed
+    const issuedOpeningBanks = new Set((await db.select({ referenceId: journalVouchers.referenceId }).from(journalVouchers)
+      .where(and(eq(journalVouchers.referenceModule, 'treasury_opening'), eq(journalVouchers.voucherType, 'opening'), eq(journalVouchers.isDeleted, 0))))
+      .map(ov => Number(ov.referenceId)));
 
     return rawList.map(b => {
       const initBal = fin(b.initialBalance);
@@ -215,7 +221,7 @@ export class BankAccountService {
         syncStatus = waitsForDrafts ? 'pending_approval' : 'discrepant';
       }
 
-      return { row: b, initBal, currentBalance, ledgerBalance, treasuryBalance, totalDebit, totalCredit, discrepancy, syncStatus };
+      return { row: b, initBal, currentBalance, ledgerBalance, treasuryBalance, totalDebit, totalCredit, discrepancy, syncStatus, openingVoucherIssued: issuedOpeningBanks.has(b.id) };
     });
   }
 
@@ -225,11 +231,13 @@ export class BankAccountService {
 
   // قرارداد API: مبالغ در پاسخ عدد هستند (P2-6)
   private static toBankAccountDto(
-    { row: b, initBal, currentBalance, ledgerBalance, treasuryBalance, totalDebit, totalCredit, discrepancy, syncStatus }: Awaited<ReturnType<typeof BankAccountService.computeBankBalances>>[number]
+    { row: b, initBal, currentBalance, ledgerBalance, treasuryBalance, totalDebit, totalCredit, discrepancy, syncStatus, openingVoucherIssued }: Awaited<ReturnType<typeof BankAccountService.computeBankBalances>>[number]
   ): BankAccount {
     return ({
       ...b,
       type: b.type as BankAccount['type'],
+      openingDate: b.openingDate || '',
+      openingVoucherIssued,
       initialBalance: initBal.toNumber(),
       currentBalance: currentBalance.toNumber(),
       ledgerBalance: ledgerBalance.toNumber(),
@@ -355,6 +363,8 @@ export class BankAccountService {
     currency?: string;
     accountId?: number | null;
     notes?: string;
+    /** 10.3 package 4 (OBS-R1-65, decision ت۴۷ item 2): «تاریخ آغاز حساب»; empty is the business today, a later day 422 */
+    openingDate?: string;
     userId?: number;
     username?: string;
     strict?: boolean;
@@ -363,6 +373,7 @@ export class BankAccountService {
   }, externalTx?: DbExecutor): Promise<BankAccount> {
     const initialBal = money(data.initialBalance);
     const isStrict = data.strict !== false;
+    const openingDate = await resolveTreasuryWriteDate(data.openingDate, BANK_OPENING_DATE_LABEL);
     // v9.0.99 (TD-508، ت۵ الف): ارز از فهرست پشتیبانی‌شده (خالی ← ریال)
     const currency = requireTreasuryCurrency(data.currency);
     // v10.1.32 (D-16): تنخواه‌گردان فقط ریالی است
@@ -394,6 +405,7 @@ export class BankAccountService {
         accountId: ledgerAccountId,
         isActive: 1,
         notes: data.notes?.trim() || '',
+        openingDate,
       }).returning();
 
       // V2.0.0: سند افتتاحیه موجودی اولیه — DR معین بانک / CR سرمایه اولیه (4001)
@@ -414,6 +426,10 @@ export class BankAccountService {
             tx,
             strict: isStrict
           });
+        } else if (ledgerAccountId) {
+          // 10.3 package 4 (OBS-R1-65): the voucher waits for the final approval and carries the start date, so a start
+          // date in a closed fiscal year is refused now instead of at the approval
+          await VoucherService.checkFiscalPeriodOpen(openingDate, tx);
         }
       }
 
@@ -438,10 +454,10 @@ export class BankAccountService {
   static async issueTreasuryOpeningVoucher(bankId: number, params: {
     userId?: number;
     username?: string;
-    tx?: DbExecutor;
+    tx: DbExecutor;
     strict?: boolean;
-  } = {}): Promise<JournalVoucher | null> {
-    const executor = params.tx || orm;
+  }): Promise<JournalVoucher | null> {
+    const executor = params.tx;
     const isStrict = params.strict !== false;
     const [bank] = await executor.select().from(bankAccounts).where(eq(bankAccounts.id, bankId));
     if (!bank || bank.isDeleted === 1) {
@@ -477,7 +493,9 @@ export class BankAccountService {
     const isDebitBank = initialBal.isPositive(); // موجودی مثبت = بدهکار بانک
 
     const created = await VoucherService.createJournalVoucher({
-      date: await businessTodayJalaliDash(),
+      // 10.3 package 4 (OBS-R1-65, decision ت۴۷ item 2): the account's start date; an account defined before it has none
+      // and its first opening voucher is dated the business today, as before
+      date: bank.openingDate || await businessTodayIsoDate(),
       voucherType: 'opening',
       status: 'draft',
       description: `سند افتتاحیه موجودی اولیه ${bank.title} (${bank.type === 'bank' ? 'حساب بانکی' : 'صندوق'})`,
@@ -531,6 +549,8 @@ export class BankAccountService {
     accountId: number | null;
     isActive: number;
     notes: string;
+    /** 10.3 package 4 (OBS-R1-65): a new «تاریخ آغاز حساب»; empty or absent keeps the stored one */
+    openingDate: string;
     userId?: number;
     username?: string;
     strict?: boolean;
@@ -538,6 +558,9 @@ export class BankAccountService {
     audit?: TreasuryAuditActor;
   }>, externalTx?: DbExecutor): Promise<BankAccount> {
     const isStrict = data.strict !== false;
+    const requestedOpeningDate = data.openingDate?.trim()
+      ? await resolveTreasuryWriteDate(data.openingDate, BANK_OPENING_DATE_LABEL)
+      : undefined;
 
     const run = async (tx: DbExecutor) => {
       // v8.0.78 (TD-325): ردیف بانک FOR UPDATE قفل و تفاوت مانده اول دوره زیر همین قفل حساب می‌شود (پیش‌تر دو ویرایش
@@ -550,6 +573,9 @@ export class BankAccountService {
       if (data.initialBalance !== undefined && !fin(data.initialBalance).round(4).equals(fin(existing.initialBalance))) {
         await assertNoPendingOpeningApproval(tx, existing);
       }
+      // 10.3 package 4 (OBS-R1-65): the start date changes only until the opening voucher is issued
+      const openingDateChanges = requestedOpeningDate !== undefined && requestedOpeningDate !== (existing.openingDate || '');
+      if (openingDateChanges) await assertOpeningDateChangeAllowed(tx, existing);
       // v9.0.99 (TD-508، ت۵ الف): ارز ویرایش می‌شود تا نخستین گردش حساب؛ پس از آن 422 (پیش‌تر بی‌صدا نادیده گرفته می‌شد)
       const newCurrency = data.currency !== undefined ? requireTreasuryCurrency(data.currency) : undefined;
       if (newCurrency) await assertBankCurrencyChangeAllowed(tx, existing, newCurrency);
@@ -582,6 +608,7 @@ export class BankAccountService {
         ...(ledgerAccountId !== undefined ? { accountId: ledgerAccountId } : {}),
         ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
         ...(data.notes !== undefined ? { notes: data.notes.trim() } : {}),
+        ...(openingDateChanges ? { openingDate: requestedOpeningDate } : {}),
       };
       // فقط مانده اول دوره: ردیف بی‌تغییر فیلد دیگر (update خالی در drizzle خطاست)
       const [updated] = Object.keys(fields).length > 0
@@ -620,7 +647,7 @@ export class BankAccountService {
               const amount = delta.abs();
               const isIncrease = delta.isPositive();
               const adjVoucher = await VoucherService.createJournalVoucher({
-                date: await businessTodayJalaliDash(),
+                date: await businessTodayIsoDate(),
                 voucherType: 'adjustment',
                 status: 'draft',
                 description: `اصلاح موجودی اولیه ${updated.title} (${isIncrease ? '+' : ''}${delta.toString()})`,

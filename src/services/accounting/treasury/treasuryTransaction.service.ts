@@ -21,11 +21,12 @@ import type { TreasuryTransaction, Account } from '../../../types.js';
 import { NotFoundError, ValidationError, ConflictError, BusinessLogicError } from '../../../errors/customErrors.js';
 import { AttachmentStorageService } from '../../attachments/attachmentStorage.service.js';
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
+import { normalizeTreasuryCurrency, sameTreasuryCurrency } from '../../../lib/treasury/treasuryCurrency.js';
 import { reconcileTreasuryRows, type ReconcileParams, type ReconcileResult } from './bankReconciliation.js';
 import type { TreasuryVoucherPreview } from '../../../lib/treasury/treasuryVoucherPreview.js';
 import { listTreasuryTransactions, pageTreasuryTransactions, type TreasuryListFilters, type TreasuryTransactionPage } from './treasuryTransactionList.js';
 import {
-  assertBankCurrency, lockTreasuryBank, nextTreasuryTransactionNumber, postTreasuryRow, reverseTreasuryRow, treasuryEventPayload, isHighValueAmount, treasuryHighValueThreshold, type TreasuryBank, type TreasuryRow,
+  assertBankCurrency, lockTreasuryBank, lockTreasuryBanks, nextTreasuryTransactionNumber, postTreasuryRow, reverseTreasuryRow, treasuryEventPayload, isHighValueAmount, treasuryHighValueThreshold, type TreasuryBank, type TreasuryRow,
 } from './treasuryPosting.js';
 import { idempotentTransaction } from '../../../middleware/idempotency.js';
 
@@ -146,7 +147,8 @@ export class TreasuryTransactionService {
       warnings.push('این حساب بانکی/صندوق به چارت حساب‌ها متصل نیست — سند حسابداری صادر نخواهد شد. از ویرایش حساب، کدینگ معین را متصل کنید.');
     }
 
-    if (bank.currency && (data.currency || bank.currency) !== bank.currency) {
+    // 10.3 package 4: whatever the case of the stored code (an account saved as «irr» before v9.0.99), as the save compares
+    if (bank.currency && !sameTreasuryCurrency(data.currency || bank.currency, bank.currency)) {
       warnings.push(`ارز تراکنش با ارز حساب «${bank.title}» (${bank.currency}) هم‌خوانی ندارد`);
     }
 
@@ -413,11 +415,7 @@ export class TreasuryTransactionService {
       const sideIds = await this.transferSideIds(txEngine, id);
       const sidesPeek = await txEngine.select({ bankAccountId: treasuryTransactions.bankAccountId }).from(treasuryTransactions)
         .where(inArray(treasuryTransactions.id, sideIds));
-      const bankIds = [...new Set(sidesPeek.map(r => Number(r.bankAccountId || 0)))].sort((a, b) => a - b);
-      const banks = await txEngine.select().from(bankAccounts)
-        .where(and(inArray(bankAccounts.id, bankIds), eq(bankAccounts.isDeleted, 0)))
-        .orderBy(asc(bankAccounts.id))
-        .for('update');
+      const banks = await lockTreasuryBanks(txEngine, sidesPeek.map(r => Number(r.bankAccountId || 0)));
       // v10.0.58 (TD-926): پرداخت مساعده ردیف پرسنل را پس از بانک و پیش از ردیف خزانه قفل می‌کند، همان قفل صدور فیش
       const [advancePeek] = await txEngine.select({
         type: treasuryTransactions.type, partyType: treasuryTransactions.partyType, purpose: treasuryTransactions.purpose, partyId: treasuryTransactions.partyId,
@@ -554,22 +552,20 @@ export class TreasuryTransactionService {
 
     return await idempotentTransaction(async (txEngine) => {
       // قفل هر دو حساب در ترتیب id صعودی (جلوگیری از deadlock در همان سطح سلسله‌مراتب)
-      const ids = [Number(data.fromBankAccountId), Number(data.toBankAccountId)].sort((a, b) => a - b);
-      const locked = await txEngine.select().from(bankAccounts)
-        .where(and(inArray(bankAccounts.id, ids), eq(bankAccounts.isDeleted, 0)))
-        .for('update')
-        .orderBy(asc(bankAccounts.id));
+      const locked = await lockTreasuryBanks(txEngine, [Number(data.fromBankAccountId), Number(data.toBankAccountId)]);
       const from = locked.find(b => b.id === Number(data.fromBankAccountId));
       const to = locked.find(b => b.id === Number(data.toBankAccountId));
       if (!from) throw new NotFoundError('حساب مبدأ یافت نشد');
       if (!to) throw new NotFoundError('حساب مقصد یافت نشد');
 
-      const currency = data.currency || from.currency || 'IRR';
-      if (from.currency && to.currency && from.currency !== to.currency) {
-        throw new ValidationError(`انتقال بین حساب‌های با ارز متفاوت مجاز نیست (${from.currency} → ${to.currency})`);
+      // 10.3 package 4: currency codes compared and written whatever the case of the stored code (an account saved as «irr»
+      // before v9.0.99 took no transfer from an IRR account, and an IRR transfer out of it was refused)
+      const currency = String(normalizeTreasuryCurrency(data.currency || from.currency || 'IRR'));
+      if (!sameTreasuryCurrency(from.currency, to.currency)) {
+        throw new ValidationError(`انتقال بین حساب‌های با ارز متفاوت مجاز نیست (${from.currency || 'IRR'} → ${to.currency || 'IRR'})`);
       }
-      if (currency !== from.currency) {
-        throw new ValidationError(`ارز انتقال (${currency}) با ارز حساب مبدأ (${from.currency}) هم‌خوانی ندارد`);
+      if (!sameTreasuryCurrency(currency, from.currency)) {
+        throw new ValidationError(`ارز انتقال (${currency}) با ارز حساب مبدأ (${from.currency || 'IRR'}) هم‌خوانی ندارد`);
       }
       // v8.0.20 (TD-274): انتقال ارزی با نرخ تسعیر (صریح یا تنظیمات)، هرگز نرخ ۱
       const transferRate = await resolveTreasuryExchangeRate(txEngine, currency, data.exchangeRate);

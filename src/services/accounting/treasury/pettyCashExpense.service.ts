@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../../db/drizzle.js';
-import { accounts, bankAccounts, pettyCashExpenseLines, treasuryTransactions } from '../../../db/schema.js';
+import { accounts, pettyCashExpenseLines, treasuryTransactions } from '../../../db/schema.js';
 import { NotFoundError, ValidationError } from '../../../errors/customErrors.js';
 import { fin } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
@@ -15,7 +15,7 @@ import { choosableContraAccounts, type ContraAccountOption } from './partyContra
 import { auditTreasuryTransactionCreated, type TreasuryAuditActor } from './treasuryAudit.js';
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
 import { TreasuryTransactionService } from './treasuryTransaction.service.js';
-import { postTreasuryRow } from './treasuryPosting.js';
+import { lockTreasuryBankRow, postTreasuryRow } from './treasuryPosting.js';
 import { idempotentTransaction } from '../../../middleware/idempotency.js';
 
 /**
@@ -78,9 +78,7 @@ async function assertExpenseAccounts(tx: DbExecutor, accountIds: number[]): Prom
 }
 
 async function lockFund(tx: DbExecutor, fundId: number) {
-  const [fund] = await tx.select().from(bankAccounts)
-    .where(and(eq(bankAccounts.id, fundId), eq(bankAccounts.isDeleted, 0)))
-    .for('update');
+  const fund = await lockTreasuryBankRow(tx, fundId);
   if (!fund) throw new NotFoundError('تنخواه‌گردان یافت نشد', undefined, FUND_INVALID);
   if (fund.type !== PETTY_CASH_TYPE) {
     throw new ValidationError(`حساب «${fund.title}» تنخواه‌گردان نیست؛ صورت‌هزینه فقط از تنخواه‌گردان ثبت می‌شود.`, undefined, FUND_INVALID);

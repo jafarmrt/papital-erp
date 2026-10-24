@@ -185,6 +185,8 @@ export const bankAccounts = pgTable('bank_accounts', {
   accountId: integer('account_id').references(() => accounts.id),
   isActive: integer('is_active').default(1),
   notes: text('notes').default(''),
+  // 10.3 package 4 (OBS-R1-65, migration 0134): «تاریخ آغاز حساب», ISO; the opening voucher is dated with it ('' = not recorded)
+  openingDate: text('opening_date').default(''),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   version: integer('version').notNull().default(1),
   isDeleted: integer('is_deleted').default(0),

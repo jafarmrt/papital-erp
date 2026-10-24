@@ -7,6 +7,8 @@ import { fetchJson } from '../../../api';
 import type { BankAccount, BankAccountType, Account } from '../../../types';
 import { TREASURY_CURRENCIES } from '../../../lib/treasury/treasuryCurrency';
 import { DialogLayer } from '../../common/DialogLayer';
+import { JalaliDateInput } from '../../common/JalaliDateInput';
+import { getTodayIsoDate } from '../../../utils/dateUtils';
 import { PETTY_CASH_CURRENCY, PETTY_CASH_RIAL_ONLY_MESSAGE } from '../../../lib/treasury/pettyCash';
 
 /** v10.1.32 (D-16): سرفصل پیش‌فرض تنخواه‌گردان */
@@ -42,6 +44,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
     initialBalance: 0,
     currency: 'IRR' as string,
     accountId: null as number | null,
+    openingDate: '',
   });
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingCode, setIsLoadingCode] = useState(false);
@@ -84,6 +87,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
         initialBalance: editingBank.initialBalance || 0,
         currency: (editingBank.currency || 'IRR').toUpperCase(),
         accountId: editingBank.accountId || null,
+        openingDate: editingBank.openingDate || '',
       });
       setAutoCodeGenerated(false);
       setShowAllAccounts(false);
@@ -100,6 +104,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
         initialBalance: 0,
         currency: 'IRR',
         accountId: null,
+        openingDate: getTodayIsoDate(),
       });
       setAutoCodeGenerated(false);
       setShowAllAccounts(false);
@@ -126,7 +131,11 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
     setIsSaving(true);
     try {
       const serverAssignsCode = !editingBank && autoCodeGenerated && formData.code.trim() === suggestedCode;
-      await onSave(serverAssignsCode ? { ...formData, code: '' } : formData, editingBank?.id);
+      // 10.3 package 4 (OBS-R1-65): an edit sends the start date only when the user changed it
+      const { openingDate, ...rest } = formData;
+      const sendsOpeningDate = !editingBank || openingDate !== (editingBank.openingDate || '');
+      const payload = { ...rest, ...(sendsOpeningDate ? { openingDate } : {}) };
+      await onSave(serverAssignsCode ? { ...payload, code: '' } : payload, editingBank?.id);
       onClose();
     } catch {
       // Error handled in parent
@@ -386,6 +395,26 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
               showTomanEquivalent={true}
               inputClassName="!py-1.5 !text-xs"
             />
+          </div>
+
+          {/* 10.3 package 4 (OBS-R1-65, decision ت۴۷ item 2): the opening voucher is dated with the account's start date */}
+          <div>
+            <label htmlFor={`${fieldId}-opening-date`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+              تاریخ آغاز حساب
+            </label>
+            <JalaliDateInput
+              id={`${fieldId}-opening-date`}
+              value={formData.openingDate}
+              onChange={iso => setFormData(prev => ({ ...prev, openingDate: iso }))}
+              disabled={Boolean(editingBank?.openingVoucherIssued)}
+              placeholder="امروز"
+              className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
+            />
+            <p className="text-[10px] text-slate-500 mt-1">
+              {editingBank?.openingVoucherIssued
+                ? 'سند افتتاحیهٔ این حساب صادر شده است و تاریخ آغاز آن دیگر تغییر نمی‌کند.'
+                : 'سند افتتاحیهٔ موجودی اولیه با همین تاریخ صادر می‌شود؛ خالی یعنی امروز.'}
+            </p>
           </div>
 
           <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-700">

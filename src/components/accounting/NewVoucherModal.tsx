@@ -63,6 +63,7 @@ export function NewVoucherModal({
   const [activeRowIndex, setActiveRowIndex] = useState<number>(0);
 
   const formRef = useRef<HTMLFormElement>(null);
+  const descriptionRef = useRef<HTMLInputElement>(null);
 
   // Refs for keyboard focus control
   const itemRefs = useRef<Array<{
@@ -301,7 +302,7 @@ export function NewVoucherModal({
       } else if (!isBalanced) {
         toast.error(balance.rowsWithoutRate.length > 0 ? `نرخ تبدیل ردیف ${rowsWithoutRateText} به ریال را وارد کنید` : `سند تراز نیست! اختلاف: ${formatPersianPrice(difference, balance.currency)}`);
       } else {
-        toast.error('لطفاً شرح سند را تکمیل کنید');
+        refuseEmptyDescription();
       }
       return;
     }
@@ -365,6 +366,13 @@ export function NewVoucherModal({
   // double save). A ref, not `isSaving`, because two key presses can land before React draws the saving state.
   const savingRef = useRef(false);
 
+  // 10.3 package 4 (10.2 backlog): an empty description is told in Persian and the field takes the focus; the field is no
+  // longer `required`, whose check showed the browser's own bubble on Ctrl+S (the validity check stays for amount fields)
+  const refuseEmptyDescription = () => {
+    toast.error('شرح کلی سند الزامی است');
+    descriptionRef.current?.focus();
+  };
+
   const submitVoucher = async () => {
     if (savingRef.current) return;
     if (isPermanentVoucher) {
@@ -373,7 +381,7 @@ export function NewVoucherModal({
     }
 
     if (!description.trim()) {
-      toast.error('شرح کلی سند الزامی است');
+      refuseEmptyDescription();
       return;
     }
 
@@ -644,8 +652,9 @@ export function NewVoucherModal({
               <div className="relative">
                 <input
                   id={`${fieldId}-description`}
+                  ref={descriptionRef}
                   type="text"
-                  required
+                  aria-required="true"
                   value={description}
                   onChange={e => setDescription(e.target.value)}
                   placeholder="مثال: ثبت و شناسایی هزینه‌های تولید و پرداخت تنخواه مهر ماه..."
