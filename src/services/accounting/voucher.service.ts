@@ -772,11 +772,12 @@ export class VoucherService {
       username?: string;
     }
   ): Promise<{ reversalVoucher: JournalVoucher; correctedVoucher: JournalVoucher; message: string }> {
+    // 10.3 package 6 (TD-1386, decision t5 A): a refusal of the caller's input is a 422, as the route's schema answers it
     if (!params.reason || !params.reason.trim()) {
-      throw new Error('ثبت علت اصلاح سند الزامی است');
+      throw new ValidationError('ثبت علت اصلاح سند الزامی است', undefined, 'VOUCHER_CORRECTION_REASON_REQUIRED');
     }
     if (!params.newItems || params.newItems.length < 2) {
-      throw new Error('سند اصلاحی باید حداقل شامل دو ردیف معتبر و تراز باشد');
+      throw new ValidationError('سند اصلاحی باید حداقل شامل دو ردیف معتبر و تراز باشد', undefined, 'VOUCHER_CORRECTION_ROWS_REQUIRED');
     }
 
     const result = await idempotentTransaction(async (tx) => {

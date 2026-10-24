@@ -59,3 +59,23 @@ describe('10.3 package 6: the item of a schedule product (review N7 of #329)', (
     expect(matrixProducts({ products })[0].itemId).toBe(50);
   });
 });
+
+describe('10.3 package 6: service refusals are AppErrors with a code (decision t5 A)', () => {
+  it('names a broken task code sequence with its code instead of a bare Error', async () => {
+    const { allocatePieceworkTaskCode } = await import('../../services/piecework/taskCode');
+    const { AppError } = await import('../../errors/customErrors');
+    const executor = { execute: async () => ({ rows: [{ num: 'x1' }] }) } as unknown as Parameters<typeof allocatePieceworkTaskCode>[0];
+    const err = await allocatePieceworkTaskCode(executor, new Set()).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AppError);
+    expect(err).toMatchObject({ statusCode: 500, code: 'PIECEWORK_TASK_CODE_SEQUENCE_INVALID' });
+  });
+
+  it('refuses a voucher correction without a reason or rows as a 422 with its code, before any database work', async () => {
+    const { VoucherService } = await import('../../services/accounting/voucher.service');
+    const row = { accountId: 1, debit: 1, credit: 0 };
+    await expect(VoucherService.correctVoucher({ voucherId: 1, reason: ' ', newItems: [row, row] }))
+      .rejects.toMatchObject({ statusCode: 422, code: 'VOUCHER_CORRECTION_REASON_REQUIRED' });
+    await expect(VoucherService.correctVoucher({ voucherId: 1, reason: 'غلط تایپی', newItems: [row] }))
+      .rejects.toMatchObject({ statusCode: 422, code: 'VOUCHER_CORRECTION_ROWS_REQUIRED' });
+  });
+});

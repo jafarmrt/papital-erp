@@ -46,11 +46,8 @@ async function raceWorkLogChange(change: Change, payrollFirst: boolean): Promise
   const task = await newTask();
   const target = await addLog(worker, task, 100000);
   await addLog(worker, task, 100000);
-  const issue = async () => {
-    const result = await PieceworkPayrollService.generatePayroll({ personnelId: worker, ...PERIOD });
-    if ('error' in result && result.error) throw new Error(String(result.error));
-    return result;
-  };
+  // 10.3 package 6 (TD-1386): a refusal of the payslip is thrown
+  const issue = () => PieceworkPayrollService.generatePayroll({ personnelId: worker, ...PERIOD });
   const alter = () => (change === 'edit'
     ? PieceworkService.updateWorkLog(target, { quantity: 1, unitRate: 500000 })
     : PieceworkService.deleteWorkLog(target));

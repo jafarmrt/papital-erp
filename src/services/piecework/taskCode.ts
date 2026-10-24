@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { pieceworkTasks } from '../../db/schema.js';
-import { ConflictError } from '../../errors/customErrors.js';
+import { AppError, ConflictError } from '../../errors/customErrors.js';
 
 /**
  * کد خودکار عنوان کاری پرکیسی (TD-243، AGENTS §1.6): شماره از توالی اتمیک `piecework_task_code_seq`
@@ -42,8 +42,9 @@ async function nextSequenceValue(executor: DbExecutor): Promise<string> {
   const result = await executor.execute(sql`SELECT nextval('piecework_task_code_seq') AS num`);
   const raw = (result as unknown as { rows?: Array<{ num?: string | number }> }).rows?.[0]?.num;
   const num = String(raw ?? '');
+  // 10.3 package 6 (TD-1386, decision t5 A): an AppError with its code, so the error log names the broken sequence
   if (!/^\d+$/.test(num)) {
-    throw new Error(`مقدار نامعتبر از توالی ${PIECEWORK_TASK_CODE_SEQUENCE}: ${num}`);
+    throw new AppError(`مقدار نامعتبر از توالی ${PIECEWORK_TASK_CODE_SEQUENCE}: ${num}`, 500, 'PIECEWORK_TASK_CODE_SEQUENCE_INVALID');
   }
   return normalizedNumber(num);
 }

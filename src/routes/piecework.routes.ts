@@ -721,10 +721,7 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], requirePerm
       req
     });
 
-    if (result.error || !result.payroll) {
-      return res.status(result.status || 400).json({ error: result.error || 'خطا در صدور فیش حقوقی' });
-    }
-
+    // 10.3 package 6 (TD-1386): a refusal is thrown by the service and answered by errorHandler
     const { payroll, voucher } = result;
 
     res.status(201).json({
@@ -766,10 +763,6 @@ router.put('/piecework/payrolls/:id/status', requirePermission(PIECEWORK_PAYROLL
       username: currentUsername,
       req
     });
-
-    if (result.error || !result.payroll) {
-      return res.status(result.status || 400).json({ error: result.error || 'خطا در ویرایش وضعیت فیش حقوقی' });
-    }
 
     res.json({
       status: 'ok',
@@ -897,10 +890,6 @@ router.post('/piecework/payrolls/:id/sync-voucher', requirePermission(PIECEWORK_
       userId: req.user?.id,
       username: req.user?.username || 'سیستم'
     });
-
-    if (result.error || !result.voucher || !result.payroll) {
-      return res.status(result.status || 400).json({ error: result.error || 'خطا در ثبت سند فیش حقوقی' });
-    }
 
     res.json({
       success: true,

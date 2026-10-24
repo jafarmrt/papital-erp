@@ -4,6 +4,7 @@ import { personnel, pieceworkPayrolls } from '../../db/schema.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
+import { AppError } from '../../errors/customErrors.js';
 import { AccountMappingService } from '../../services/accounting/accountMapping.service.js';
 import { FinancialHealthService } from '../../services/accounting/financialHealth.service.js';
 import { PieceworkPayrollService } from '../../services/piecework/payroll.service.js';
@@ -252,6 +253,43 @@ export async function runPayrollIntegrityTests(shouldRun: ShouldRun): Promise<Te
 
       assertNoProblems(problems);
       return 'Deductions without a description refused with 422 by the route (missing and blank) and the service with nothing written; the described payslip stored the trimmed description, returned it and wrote it into its deductions voucher row; a payslip without deductions stored none.';
+    }));
+  }
+
+  const thrownId = 'reg_payroll_refusals_thrown_td_1386';
+  if (shouldRun(thrownId, 'td1386', 'payroll', 'payslip', 'package6')) {
+    await runCase(results, thrownId, '10.3 package 6: a refused payslip request is a thrown AppError, answered with the same status and Persian message and now its code: no pending work (400 PAYROLL_NO_PENDING_WORK), an advance deduction above the balance (400 PAYROLL_ADVANCE_DEDUCTION_EXCEEDS_BALANCE, nothing written), a missing payslip on status and voucher sync (404 PAYROLL_NOT_FOUND) and a missing personnel (404 PAYROLL_PERSONNEL_NOT_FOUND) (TD-1386)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      const answer = (res: { status: number; body: unknown }) => `${res.status} ${codeOf(res.body)} ${brief(res.body)}`;
+
+      const idle = await newWorker('TD-1386 idle');
+      const none = await admin.post('/api/piecework/payrolls/generate', { personnelId: idle, ...PERIOD });
+      if (none.status !== 400 || codeOf(none.body) !== 'PAYROLL_NO_PENDING_WORK' || !String((none.body as { error?: unknown }).error).includes('هیچ کارکرد معوقی')) {
+        problems.push(`a payslip without pending work answered ${answer(none)}, expected 400 PAYROLL_NO_PENDING_WORK with its message`);
+      }
+
+      const worker = await newWorker('TD-1386 advance');
+      await addLog(worker, await newTask(), '2026-04-05', 1_000_000);
+      const advance = await admin.post('/api/piecework/payrolls/generate', { personnelId: worker, ...PERIOD, advanceDeduction: 300_000 });
+      if (advance.status !== 400 || codeOf(advance.body) !== 'PAYROLL_ADVANCE_DEDUCTION_EXCEEDS_BALANCE') problems.push(`an advance deduction without an advance answered ${answer(advance)}, expected 400 PAYROLL_ADVANCE_DEDUCTION_EXCEEDS_BALANCE`);
+      if (await payrollCount(worker) !== 0) problems.push('the refused advance deduction wrote a payslip');
+      if (!fin(await personNet('1301', worker)).isZero()) problems.push('the refused advance deduction moved the advance account');
+
+      const missing = 2_000_000_000;
+      const status = await admin.put(`/api/piecework/payrolls/${missing}/status`, { notes: 'TD-1386' });
+      if (status.status !== 404 || codeOf(status.body) !== 'PAYROLL_NOT_FOUND') problems.push(`a status change of a missing payslip answered ${answer(status)}, expected 404 PAYROLL_NOT_FOUND`);
+      const sync = await admin.post(`/api/piecework/payrolls/${missing}/sync-voucher`, {});
+      if (sync.status !== 404 || codeOf(sync.body) !== 'PAYROLL_NOT_FOUND') problems.push(`a voucher sync of a missing payslip answered ${answer(sync)}, expected 404 PAYROLL_NOT_FOUND`);
+
+      const thrown = await PieceworkPayrollService.generatePayroll({ personnelId: missing, ...PERIOD, username: 'reg' }).then(
+        result => `returned ${brief(result)}`,
+        (err: unknown) => (err instanceof AppError && err.statusCode === 404 && err.code === 'PAYROLL_PERSONNEL_NOT_FOUND' ? null : `threw ${String(err)}`),
+      );
+      if (thrown !== null) problems.push(`a payslip for a missing personnel ${thrown}, expected a thrown 404 PAYROLL_PERSONNEL_NOT_FOUND`);
+
+      assertNoProblems(problems);
+      return 'Every refusal of the payslip service is thrown with its status, Persian message and code; the refused advance deduction wrote nothing.';
     }));
   }
 
