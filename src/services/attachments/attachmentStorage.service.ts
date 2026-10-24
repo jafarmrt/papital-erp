@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { MAX_ATTACHMENT_FILE_MB } from '../../lib/attachments/attachmentBodyLimit.js';
+import { ATTACHMENT_EXTENSION_BY_MIME, attachmentDownloadName } from '../../lib/attachments/attachmentDownloadName.js';
 import fs from 'fs';
 import path from 'path';
 import { getAttachmentsRoot } from '../../lib/storage.js';
@@ -36,12 +37,7 @@ export const INLINE_SAFE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MIME_PATTERN = /^[a-z0-9][a-z0-9.+-]*\/[a-z0-9][a-z0-9.+-]*$/;
-const EXTENSION_BY_MIME: Record<string, string> = {
-  'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'application/pdf': 'pdf',
-  'text/plain': 'txt', 'text/csv': 'csv', 'application/vnd.ms-excel': 'xls',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx', 'application/msword': 'doc',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
-};
+const EXTENSION_BY_MIME = ATTACHMENT_EXTENSION_BY_MIME;
 
 // همه این جدول‌ها ستون‌های id (serial) و attachments (jsonb) هم‌نوع دارند؛ نوع یکی برای تایپ عمومی کافی است.
 // v10.2 package 7: the attachments of a sales file and an activity live only in file_attachments (no JSONB column), so
@@ -114,19 +110,9 @@ export class AttachmentStorageService {
     return resolveStoragePath(storagePath);
   }
 
-  /**
-   * v10.2 package 7: the name a download is saved under ends with the extension of the stored type («فاکتور.pdf» stored
-   * as an image becomes «فاکتور.jpg»), so a browser never opens it as another kind; a type without a known extension
-   * keeps the name as sent.
-   */
+  /** the name a download is saved under (`attachmentDownloadName`) */
   static downloadName(name: string, mimeType: string): string {
-    const base = name.trim() || 'attachment';
-    const ext = EXTENSION_BY_MIME[mimeType];
-    if (!ext) return base;
-    const current = /\.([^./\\]{1,10})$/.exec(base)?.[1]?.toLowerCase();
-    if (current === ext || (ext === 'jpg' && current === 'jpeg')) return base;
-    const stem = current ? base.slice(0, -(current.length + 1)) : base;
-    return `${stem || 'attachment'}.${ext}`;
+    return attachmentDownloadName(name, mimeType);
   }
 
   /**

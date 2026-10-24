@@ -25,7 +25,7 @@ export function CrmAttachmentsWindow({ owner, ownerId, title, onClose, onCountCh
   };
   return (
     <Modal isOpen onClose={close} title={`پیوست‌های «${title}»`} icon={<Paperclip size={18} />} size="xl"
-      closeOnEscape={!busy} closeOnBackdropClick={!busy} layerClassName="z-[70]">
+      closeOnEscape={!busy} closeOnBackdropClick={!busy} closeDisabled={busy} layerClassName="z-[70]">
       <CrmAttachmentsPanel owner={owner} ownerId={ownerId} initial={initial} onBusyChange={setBusy} onCountChange={onCountChange} />
     </Modal>
   );

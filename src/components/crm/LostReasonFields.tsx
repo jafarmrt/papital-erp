@@ -67,7 +67,7 @@ export function LostReasonDialog({ leadTitle, onCancel, onConfirm }: LostReasonD
         <LostReasonFields reason={value.reason} note={value.note} onChange={setValue} />
         {error && <p className="text-[11px] text-rose-600" role="alert">{error}</p>}
         <div className="flex justify-end gap-2 pt-1">
-          <button type="button" onClick={onCancel} className="min-h-[44px] px-4 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold cursor-pointer">انصراف</button>
+          <button type="button" onClick={onCancel} disabled={saving} className="min-h-[44px] px-4 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">انصراف</button>
           <button type="submit" disabled={!value.reason || !!error || saving} className="min-h-[44px] px-4 rounded-xl bg-rose-600 text-white text-xs font-bold disabled:opacity-50 cursor-pointer">
             {saving ? 'در حال ثبت…' : 'ثبت «از دست رفته»'}
           </button>
