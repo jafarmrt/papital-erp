@@ -20,7 +20,9 @@
 #     NIGHTLY_VERIFY_MAX_DUMP_AGE_HOURS (26), and a failed night when it is the same dump the previous night checked
 #     more than 12 hours ago (no new backup was taken);
 #   - before restoring, the free space of the database's data and WAL disks and of the temporary directory is compared
-#     with the database size and the dump size, keeping 10% of each disk free; not enough room is a failed night;
+#     with what the restore writes there (v10.3.24, TD-1352: the database and its largest index again, for the sort
+#     files of the index rebuild; WAL up to twice max_wal_size, less the WAL already there; the dump unpacked), keeping 10% of
+#     each disk free; not enough room is a failed night;
 #   - the restore's temporary files go under BACKUP_DIR/.nightly-verify-tmp (the backup disk), never /tmp;
 #   - the restore and the check run under `timeout` (NIGHTLY_VERIFY_TIMEOUT seconds, default 7200) at low CPU and disk
 #     priority (nice, ionice), every other database call and df under a 120-second limit; stopping the script stops
@@ -29,7 +31,8 @@
 #     RESTORE_KEEP=1 or REHEARSAL_KEEP=1 is dropped too);
 #   - passwords never appear on a command line: they go to psql through a PGPASSFILE (mode 600) and to the check
 #     through its environment.
-# A failed or worse night is shown only on the system health page; no alert is sent.
+# A failed or worse night is shown on the system health page, and since v10.3.24 (TD-1350) scripts/monitor.sh reads the
+# report and sends the alert.
 # Exit 0 = the backup restores and nothing got worse, or the night was skipped; 1 = otherwise (the report says what).
 #
 # Env: the same as restore.sh (DATABASE_URL from APP_DIR/.env, RESTORE_ADMIN_URL, BACKUP_DIR); NIGHTLY_VERIFY_REPORT,
@@ -52,6 +55,8 @@ env_file_value() {
 [ -n "${RESTORE_ADMIN_URL:-}" ] || RESTORE_ADMIN_URL="$(env_file_value RESTORE_ADMIN_URL)"
 [ -n "${BACKUP_DIR:-}" ] || BACKUP_DIR="$(env_file_value BACKUP_DIR)"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/erp}"
+# a relative folder is under APP_DIR, whichever directory cron, update.sh or a shell starts from (v10.3.24)
+case "$BACKUP_DIR" in /*) ;; *) BACKUP_DIR="$APP_DIR/$BACKUP_DIR" ;; esac
 export BACKUP_DIR
 # the same value the service reads (process.env with the app's .env)
 [ -n "${NIGHTLY_VERIFY_REPORT:-}" ] || NIGHTLY_VERIFY_REPORT="$(env_file_value NIGHTLY_VERIFY_REPORT)"
@@ -287,9 +292,11 @@ else
 fi
 
 # ---------- free space ----------
-# the dump unpacked into the temporary directory, the database as large as it is now on the data disk and one GiB of WAL
-# on the WAL disk; each disk keeps 10% free (an estimate: indexes rebuilt and WAL written during a large restore may
-# need more, TD-1352)
+# the dump unpacked into the temporary directory; on the data disk the database as large as it is now and its largest
+# index once more (an index is rebuilt from sort files beside the data, as large as the index); on the WAL disk twice
+# max_wal_size (a checkpoint starts at max_wal_size, and WAL keeps growing while it runs) less the WAL already there
+# beyond wal_keep_size (it is recycled), at least one GiB; each disk keeps 10% free (v10.3.24, TD-1352; until then one GiB of WAL and no sort
+# files). The index size comes from pg_class, which takes no lock: an index held by a REINDEX does not stall the check
 GIB=1073741824
 read -r packed unpacked _ < <(gzip -l "$BACKUP_FILE" 2>/dev/null | awk 'NR == 2') || true
 if ! [[ "${packed:-}" =~ ^[0-9]+$ ]] || ! [[ "${unpacked:-}" =~ ^[0-9]+$ ]]; then
@@ -300,6 +307,11 @@ fi
 while [ $(( packed - unpacked )) -gt 1048576 ]; do unpacked=$((unpacked + 4 * GIB)); done
 DB_BYTES="$(timeout "$CALL_LIMIT" psql "$DATABASE_URL" -X -tA -c 'SELECT pg_database_size(current_database())' 2>/dev/null || true)"
 [[ "$DB_BYTES" =~ ^[0-9]+$ ]] || night_failed space_unknown "the size of the live database could not be read"
+q="SELECT pg_size_bytes(current_setting('max_wal_size')), pg_size_bytes(current_setting('wal_keep_size')), coalesce((SELECT max(relpages::bigint) FROM pg_class WHERE relkind = 'i'), 0) * current_setting('block_size')::bigint"
+read -r MAX_WAL_BYTES KEEP_WAL_BYTES INDEX_BYTES <<< "$(timeout "$CALL_LIMIT" psql "$DATABASE_URL" -X -tA -F ' ' -c "$q" 2>/dev/null || true)" || true
+if ! [[ "${MAX_WAL_BYTES:-}" =~ ^[0-9]+$ ]] || ! [[ "${KEEP_WAL_BYTES:-}" =~ ^[0-9]+$ ]] || ! [[ "${INDEX_BYTES:-}" =~ ^[0-9]+$ ]]; then
+  night_failed space_unknown "the WAL settings or the index sizes of the live database could not be read"
+fi
 
 DB_HOST=""
 if [[ "$DATABASE_URL" =~ $URL_RE ]]; then read -r DB_HOST _ <<< "$(split_hostport "${BASH_REMATCH[6]}")"; fi
@@ -315,6 +327,7 @@ case "$DB_HOST" in
   *) log "The database server $DB_HOST is not this machine: only the temporary directory's disk is checked" ;;
 esac
 
+WAL_BYTES=0
 declare -A NEED=() SIZE=() AVAIL=()
 add_need() {
   local dir="$1" bytes="$2" line size avail mount
@@ -327,10 +340,17 @@ add_need() {
 }
 add_need "$WORK_DIR" "$unpacked"
 if [ -n "$DATA_DIR" ]; then
-  add_need "$DATA_DIR" "$DB_BYTES"
+  add_need "$DATA_DIR" $(( DB_BYTES + INDEX_BYTES ))
   WAL_DIR="$(readlink -f "$DATA_DIR/pg_wal" 2>/dev/null || true)"
   [ -n "$WAL_DIR" ] && [ -d "$WAL_DIR" ] || WAL_DIR="$DATA_DIR"
-  add_need "$WAL_DIR" "$GIB"
+  WAL_NOW=0
+  if [ "$WAL_DIR" != "$DATA_DIR" ]; then WAL_NOW="$(timeout "$CALL_LIMIT" du -sb "$WAL_DIR/" 2>/dev/null | awk '{print $1}' || true)"; fi
+  [[ "${WAL_NOW:-}" =~ ^[0-9]+$ ]] || WAL_NOW=0
+  # what wal_keep_size keeps is not recycled
+  WAL_RECYCLED=$(( WAL_NOW > KEEP_WAL_BYTES ? WAL_NOW - KEEP_WAL_BYTES : 0 ))
+  WAL_BYTES=$(( 2 * MAX_WAL_BYTES - WAL_RECYCLED ))
+  [ "$WAL_BYTES" -ge "$GIB" ] || WAL_BYTES="$GIB"
+  add_need "$WAL_DIR" "$WAL_BYTES"
 fi
 for mount in "${!NEED[@]}"; do
   keep=$(( SIZE[$mount] * FREE_MARGIN_PERCENT / 100 ))
@@ -338,7 +358,7 @@ for mount in "${!NEED[@]}"; do
     night_failed no_space "$mount needs ${NEED[$mount]} bytes and ${FREE_MARGIN_PERCENT}% free, ${AVAIL[$mount]} bytes available"
   fi
 done
-log "Free space checked: dump $unpacked bytes unpacked, database $DB_BYTES bytes"
+log "Free space checked: dump $unpacked bytes unpacked, database $DB_BYTES bytes, largest index $INDEX_BYTES bytes, WAL $WAL_BYTES bytes"
 
 # ---------- restore and check, under one time limit and at low priority ----------
 DEADLINE=$(( $(date +%s) + TIMEOUT_SECONDS ))

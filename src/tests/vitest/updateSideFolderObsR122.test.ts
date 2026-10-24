@@ -323,7 +323,9 @@ describe('update_free_space_preflight_obs_r1_22', () => {
     expect(withBackup - without).toBeGreaterThanOrEqual(5 * 1024);
     write(path.join(s.app, '.build-next/stale.bin'), 'x'.repeat(3 * 1024 * 1024));
     const [, counted, diskFree] = probe('1');
-    expect(counted - diskFree).toBeGreaterThanOrEqual(3 * 1024);
+    // the two free-space reads are a moment apart while other test files write and remove files on the same disk
+    // (v10.3.24: 3056 KB seen in CI), so the 3 MB stale folder is proven by a 2 MB gap; without it the gap is about 0
+    expect(counted - diskFree).toBeGreaterThanOrEqual(2 * 1024);
   });
 });
 

@@ -9,6 +9,12 @@
 #   offsite  the same for its off-server copy (.last_offsite_ok), only when BACKUP_RCLONE_REMOTE is set
 #   events   /metrics (read with METRICS_TOKEN): no unresolved dead-letter event and no outbox event stuck in
 #            processing, and the queue gauges were read (src/middleware/metrics.ts)
+#   nightly  v10.3.24 (TD-1350): the report of the nightly backup check (NIGHTLY_VERIFY_REPORT, default
+#            APP_DIR/logs/nightly-verify.json, written by scripts/nightly-verify.sh): a night that could not be checked
+#            or found something worse than the last healthy night, or a report older than 36 hours, the same verdict as
+#            the «بررسی شبانهٔ پشتیبان» card (src/lib/system/nightlyVerify.ts); no report at all is a problem only when
+#            the cron file (MONITOR_CRON_FILE, default /etc/cron.d/papital-erp) runs nightly-verify.sh and the monitor
+#            has run for 36 hours
 # A check that starts failing sends one alert, a failing check is sent again every MONITOR_REPEAT_HOURS (default 6),
 # and a check that recovers sends one «resolved» line. All changes of one run go in one message. The alert texts are
 # Persian (scripts/ops/monitor-messages.fa.txt); what this script prints on the terminal is English.
@@ -22,6 +28,8 @@
 #                                                       e.g. smtps://smtp.gmail.com:465 with an app password
 # With no channel configured the alerts are only printed (and the run exits 2 so the cron log shows it).
 # State lives in MONITOR_STATE_DIR (default APP_DIR/logs/monitor-state). Exit 0 when every check passes, 1 otherwise.
+# v10.3.24 (TD-1388): the metrics token, the bot tokens and the SMTP password go to curl through its standard input
+# (curl -K -), never on its command line, where every user of the server could read them in the process list.
 set -uo pipefail
 umask 077
 
@@ -42,6 +50,8 @@ setting() {
   echo "${value:-$fallback}"
 }
 whole_number() { case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac; }
+# a value inside double quotes of a curl config file (curl -K): a backslash and a double quote are escaped
+curl_quote() { local v="${1//\\/\\\\}"; printf '"%s"' "${v//\"/\\\"}"; }
 
 PORT_VALUE="$(setting PORT 3000)"
 BASE_URL="$(setting MONITOR_URL "http://127.0.0.1:${PORT_VALUE}")"
@@ -51,6 +61,8 @@ DISK_LIMIT="$(setting MONITOR_DISK_PERCENT 85)"
 MAX_AGE_HOURS="$(setting MONITOR_BACKUP_MAX_AGE_HOURS 26)"
 REPEAT_HOURS="$(setting MONITOR_REPEAT_HOURS 6)"
 BACKUP_DIR_VALUE="$(setting BACKUP_DIR /var/backups/erp)"
+# a relative folder is under APP_DIR, whichever directory cron, update.sh or a shell starts from (v10.3.24)
+case "$BACKUP_DIR_VALUE" in /*) ;; *) BACKUP_DIR_VALUE="$APP_DIR/$BACKUP_DIR_VALUE" ;; esac
 OFFSITE_REMOTE="$(setting BACKUP_RCLONE_REMOTE)"
 STATE_DIR="$(setting MONITOR_STATE_DIR "$APP_DIR/logs/monitor-state")"
 BOT_TOKEN="$(setting ALERT_BOT_TOKEN)"
@@ -63,6 +75,8 @@ SMTP_URL="$(setting ALERT_SMTP_URL)"
 SMTP_USER="$(setting ALERT_SMTP_USER)"
 SMTP_PASSWORD="$(setting ALERT_SMTP_PASSWORD)"
 EMAIL_TO="$(setting ALERT_EMAIL_TO)"
+NIGHTLY_REPORT="$(setting NIGHTLY_VERIFY_REPORT "$APP_DIR/logs/nightly-verify.json")"
+CRON_FILE_VALUE="$(setting MONITOR_CRON_FILE /etc/cron.d/papital-erp)"
 for n in "$DISK_LIMIT" "$MAX_AGE_HOURS" "$REPEAT_HOURS"; do
   whole_number "$n" || { log "ERROR: MONITOR_DISK_PERCENT, MONITOR_BACKUP_MAX_AGE_HOURS and MONITOR_REPEAT_HOURS must be whole numbers"; exit 1; }
 done
@@ -177,7 +191,7 @@ metric() { echo "$METRICS" | awk -v n="$1" '$1 == n { printf "%d", $2; found = 1
 if [ "$APP_CODE" = "200" ]; then
   if [ -z "$METRICS_TOKEN_VALUE" ]; then
     record events fail events_unreadable "METRICS_TOKEN"
-  elif ! METRICS="$(curl -fsS -m 15 -H "X-Metrics-Token: $METRICS_TOKEN_VALUE" "$BASE_URL/metrics" 2>/dev/null)"; then
+  elif ! METRICS="$(curl -fsS -m 15 -K - "$BASE_URL/metrics" 2>/dev/null <<< "header = $(curl_quote "X-Metrics-Token: $METRICS_TOKEN_VALUE")")"; then
     record events fail events_unreadable "/metrics"
   else
     UP="$(metric erp_queue_metrics_up)" || UP=""
@@ -194,6 +208,46 @@ if [ "$APP_CODE" = "200" ]; then
   fi
 fi
 
+# --- nightly backup check (v10.3.24, TD-1350) ---
+# the verdict of nightlyVerifyVerdict (src/lib/system/nightlyVerify.ts) from the report: «failed <reason>», «worse <n>»,
+# «stale <hours>», «ok» or «unreadable»; a failed night stays failed however old its report is
+# shellcheck disable=SC2016 # the $ is JavaScript run by node, not the shell
+NIGHTLY_VERDICT_JS='
+const fs = require("fs");
+let r;
+try { r = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); } catch { console.log("unreadable"); process.exit(0); }
+const finished = Date.parse(r && r.finishedAt);
+if (!r || r.version !== 1 || !Number.isFinite(finished) || typeof r.restoreOk !== "boolean" || !Array.isArray(r.worse)) { console.log("unreadable"); process.exit(0); }
+const hours = Math.floor((Date.now() - finished) / 3600000);
+if (r.failure) console.log(`failed ${r.failure}`);
+else if (!r.restoreOk) console.log("failed restore");
+else if (r.health === null || r.invariants === null) console.log("failed check");
+else if (Date.now() - finished > 36 * 3600000) console.log(`stale ${hours}`);
+else if (r.worse.length > 0) console.log(`worse ${r.worse.length}`);
+else console.log("ok");
+'
+if [ -f "$NIGHTLY_REPORT" ]; then
+  if ! command -v node >/dev/null 2>&1; then
+    log "WARNING: node not found; the nightly backup check report is not read"
+    record nightly fail nightly_unreadable
+  else
+    read -r NIGHTLY_STATUS NIGHTLY_ARG <<< "$(node -e "$NIGHTLY_VERDICT_JS" "$NIGHTLY_REPORT" 2>/dev/null || echo unreadable)" || true
+    case "${NIGHTLY_STATUS:-unreadable}" in
+      ok) record nightly ok nightly_ok ;;
+      failed) record nightly fail nightly_failed ;;
+      worse) record nightly fail nightly_worse "${NIGHTLY_ARG:-0}" ;;
+      stale) record nightly fail nightly_stale "${NIGHTLY_ARG:-0}" ;;
+      *) record nightly fail nightly_unreadable ;;
+    esac
+  fi
+elif [ -f "$CRON_FILE_VALUE" ] && grep -v '^[[:space:]]*#' "$CRON_FILE_VALUE" 2>/dev/null | grep -q 'nightly-verify\.sh' \
+    && [ $((NOW - FIRST_RUN)) -gt $((36 * 3600)) ]; then
+  # scheduled, but no night has written its report (it stopped before writing one, e.g. without node_modules/.bin/tsx)
+  record nightly fail nightly_missing
+else
+  record nightly ok nightly_ok
+fi
+
 # --- send ---
 [ "${#LINES[@]}" -gt 0 ] || exit "$FAILED"
 HOST="$(hostname 2>/dev/null || echo server)"
@@ -205,8 +259,8 @@ SENT=0; CHANNELS=0
 send_bot() {
   [ -n "$1" ] && [ -n "$2" ] || return 0
   CHANNELS=$((CHANNELS + 1))
-  if curl -fsS -m 20 -o /dev/null -X POST "${3%/}/bot${1}/sendMessage" \
-      --data-urlencode "chat_id=${2}" --data-urlencode "text=${MESSAGE}"; then
+  if curl -fsS -m 20 -o /dev/null -X POST -K - \
+      --data-urlencode "chat_id=${2}" --data-urlencode "text=${MESSAGE}" <<< "url = $(curl_quote "${3%/}/bot${1}/sendMessage")"; then
     SENT=1
   else
     log "WARNING: the bot alert could not be sent ($4)"
@@ -227,8 +281,8 @@ if [ -n "$SMTP_URL" ] && [ -n "$EMAIL_TO" ]; then
     echo
     echo "$MESSAGE"
   } > "$MAIL_FILE"
-  if curl -fsS -m 30 --ssl-reqd --url "$SMTP_URL" --user "${SMTP_USER}:${SMTP_PASSWORD}" \
-      --mail-from "${SMTP_USER}" --mail-rcpt "$EMAIL_TO" --upload-file "$MAIL_FILE" >/dev/null; then
+  if curl -fsS -m 30 --ssl-reqd --url "$SMTP_URL" -K - \
+      --mail-from "${SMTP_USER}" --mail-rcpt "$EMAIL_TO" --upload-file "$MAIL_FILE" >/dev/null <<< "user = $(curl_quote "${SMTP_USER}:${SMTP_PASSWORD}")"; then
     SENT=1
   else
     log "WARNING: the e-mail alert could not be sent"

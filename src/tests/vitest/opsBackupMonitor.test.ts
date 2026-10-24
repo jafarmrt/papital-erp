@@ -1,11 +1,10 @@
 // @vitest-environment node
-import { spawn, spawnSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import fs from 'fs';
-import http from 'http';
-import type { AddressInfo } from 'net';
 import os from 'os';
 import path from 'path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { alertPattern, alertText, type FakeServer, monitorHarness } from './helpers/monitorHarness';
 
 // Series 10 phase 1, O-02 / O-03: the daily backup schedule, the encrypted off-server copy and the server monitor,
 // proven by running the real scripts with fake rclone, a fake application and a fake alert bot. Test names are English.
@@ -153,98 +152,15 @@ describe('offsite_backup_carries_secrets_key_td_957: the daily backup and the .e
 
 // ---------- O-03: the monitor ----------
 
-interface FakeServer { url: string; ready: number; metrics: string; sent: string[]; sent2: string[]; close: () => Promise<void> }
-
-async function fakeServer(): Promise<FakeServer> {
-  const state = { ready: 200, metrics: '', sent: [] as string[], sent2: [] as string[] };
-  const server = http.createServer((req, res) => {
-    let body = '';
-    req.on('data', c => { body += String(c); });
-    req.on('end', () => {
-      if (req.url === '/health/ready') { res.writeHead(state.ready); res.end('{}'); return; }
-      if (req.url === '/metrics') {
-        if (req.headers['x-metrics-token'] !== 'mt-1') { res.writeHead(401); res.end(); return; }
-        res.writeHead(200); res.end(state.metrics); return;
-      }
-      if (req.url === '/botBT-1/sendMessage') {
-        const params = new URLSearchParams(body);
-        if (params.get('chat_id') === '42') state.sent.push(String(params.get('text')));
-        res.writeHead(200); res.end('{"ok":true}'); return;
-      }
-      if (req.url === '/botBT-2/sendMessage') {
-        const params = new URLSearchParams(body);
-        if (params.get('chat_id') === '77') state.sent2.push(String(params.get('text')));
-        res.writeHead(200); res.end('{"ok":true}'); return;
-      }
-      if (req.url === '/botBT-DOWN/sendMessage') { res.writeHead(500); res.end(); return; }
-      res.writeHead(404); res.end();
-    });
-  });
-  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  return Object.assign(state, { url, close: () => new Promise<void>(resolve => server.close(() => resolve())) }) as FakeServer;
-}
-
-const GOOD_METRICS = 'erp_queue_metrics_up 1\nerp_dead_letter_unresolved 0\nerp_outbox_stuck 0\nerp_outbox_failed 0\n';
-const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
-const faNumber = (n: number) => String(n).replace(/\d/g, d => FA_DIGITS[Number(d)]);
-/** The alert template of KEY from the messages file, filled like monitor.sh fills it */
-function alertText(key: string, ...args: Array<string | number>): string {
-  const line = read('scripts/ops/monitor-messages.fa.txt').split('\n').find(l => l.startsWith(`${key}|`));
-  if (!line) throw new Error(`no alert text ${key}`);
-  let out = line.slice(key.length + 1);
-  for (const a of args) out = out.replace('%s', typeof a === 'number' ? faNumber(a) : a);
-  return out;
-}
-
-/** The alert template of KEY with every %s matching anything */
-function alertPattern(key: string): RegExp {
-  const line = read('scripts/ops/monitor-messages.fa.txt').split('\n').find(l => l.startsWith(`${key}|`)) ?? '';
-  return new RegExp(line.slice(key.length + 1).split('%s').map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.+'));
-}
-
-/** The settings monitor.sh reads (`setting KEY` in scripts/monitor.sh) */
-const MONITOR_SETTING = /^(ALERT_\w+|BACKUP_DIR|BACKUP_RCLONE_REMOTE|METRICS_TOKEN|MONITOR_\w+|PORT)$/;
-
 describe('monitor_alerts_td_1021: the server monitor alerts once on app, disk, backup age and event queue problems and once on recovery (O-03)', () => {
+  const h = monitorHarness();
   let srv: FakeServer;
   let dir: string;
-  let backupDir: string;
   let stateDir: string;
-
-  beforeAll(async () => { srv = await fakeServer(); });
-  afterAll(async () => { await srv.close(); });
-
-  const fresh = (envLines = '') => {
-    dir = tmp('monitor-');
-    backupDir = path.join(dir, 'backups');
-    stateDir = path.join(dir, 'state');
-    fs.mkdirSync(backupDir, { recursive: true });
-    fs.mkdirSync(path.join(dir, 'scripts', 'ops'), { recursive: true });
-    fs.copyFileSync(path.join(ROOT, 'scripts/ops/monitor-messages.fa.txt'), path.join(dir, 'scripts/ops/monitor-messages.fa.txt'));
-    fs.writeFileSync(path.join(dir, '.env'), `METRICS_TOKEN=mt-1\nALERT_BOT_TOKEN=BT-1\nALERT_CHAT_ID=42\n${envLines}`);
-    fs.writeFileSync(path.join(backupDir, '.last_daily_ok'), `${Math.floor(Date.now() / 1000) - 3600} erp_daily_x\n`);
-    srv.ready = 200;
-    srv.metrics = GOOD_METRICS;
-    srv.sent.length = 0;
-    srv.sent2.length = 0;
-  };
-  // 10.3 package 3: monitor.sh takes a setting from its environment before .env, so a METRICS_TOKEN or alert channel of the
-  // shell running the tests (CI's test settings, scripts/ci-test-env.sh) replaced this test's .env and the healthy run
-  // reported events_unreadable; only the settings each test gives reach the monitor
-  const shellEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => !MONITOR_SETTING.test(key)));
-  const monitor = (extra: Record<string, string> = {}) => new Promise<{ code: number | null; out: string }>(resolve => {
-    const child = spawn('bash', [path.join(ROOT, 'scripts/monitor.sh')], {
-      env: {
-        ...shellEnv, APP_DIR: dir, MONITOR_URL: srv.url, ALERT_BOT_API: srv.url, BACKUP_DIR: backupDir,
-        MONITOR_STATE_DIR: stateDir, MONITOR_DISK_PERCENT: '100', ...extra,
-      },
-    });
-    let out = '';
-    child.stdout.on('data', c => { out += String(c); });
-    child.stderr.on('data', c => { out += String(c); });
-    child.on('close', code => resolve({ code, out }));
-  });
+  let backupDir: string;
+  beforeAll(() => { srv = h.srv; });
+  const fresh = (envLines = '') => { h.fresh(envLines); ({ dir, stateDir, backupDir } = h); };
+  const monitor = h.monitor;
 
   it('a healthy server sends nothing and exits 0', async () => {
     fresh();

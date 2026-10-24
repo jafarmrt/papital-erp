@@ -51,8 +51,29 @@ describe('pg_password_file_td_1351', () => {
     }
   });
 
-  it('restore.sh and upgrade-rehearsal.sh set it up before their first database call', () => {
-    for (const file of ['scripts/restore.sh', 'scripts/upgrade-rehearsal.sh']) {
+  it('pg_password_home_pgpass_10_3_package8: ~/.pgpass still answers a URL without a password, after the URL\'s own lines; a socket directory is the host', () => {
+    const home = mkdtempSync(path.join(tmpdir(), 'pg-password-home-'));
+    try {
+      writeFileSync(path.join(home, '.pgpass'), '*:*:*:*:fromhome\n');
+      const bare = setup({ DATABASE_URL: 'postgresql://app@localhost:5432/erp', HOME: home });
+      expect(bare.url).toBe('postgresql://app@localhost:5432/erp');
+      expect(bare.pgpass).toBe('*:*:*:*:fromhome\n');
+      rmSync(dir, { recursive: true, force: true });
+      // libpq takes the first matching line: the URL's password stays ahead of a wildcard line of ~/.pgpass
+      const withPassword = setup({ DATABASE_URL: 'postgresql://app:fromurl@localhost:5432/erp', HOME: home });
+      expect(withPassword.pgpass).toBe('localhost:5432:*:app:fromurl\n*:*:*:*:fromhome\n');
+      rmSync(dir, { recursive: true, force: true });
+      const socket = setup({ DATABASE_URL: 'postgresql://app:pw@/erp?sslmode=disable&host=%2Fvar%2Frun%2Fpg2' });
+      expect(socket.url).toBe('postgresql://app@/erp?sslmode=disable&host=%2Fvar%2Frun%2Fpg2');
+      // libpq reads its built-in socket directory (e.g. /var/run/postgresql) as localhost, any other one by its path
+      expect(socket.pgpass).toBe('/var/run/pg2:5432:*:app:pw\nlocalhost:5432:*:app:pw\n');
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('restore.sh, upgrade-rehearsal.sh and (v10.3.24) backup.sh set it up before their first database call', () => {
+    for (const file of ['scripts/restore.sh', 'scripts/upgrade-rehearsal.sh', 'scripts/backup.sh']) {
       const text = read(file);
       const setupAt = text.indexOf('pg_password_setup "$WORK_DIR"');
       expect(setupAt, file).toBeGreaterThan(0);

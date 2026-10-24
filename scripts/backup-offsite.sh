@@ -43,6 +43,8 @@ setting() {
 REMOTE="$(setting BACKUP_RCLONE_REMOTE)"
 RETENTION="$(setting OFFSITE_RETENTION_DAYS 30)"
 BACKUP_DIR="$(setting BACKUP_DIR /var/backups/erp)"
+# a relative folder is under APP_DIR, whichever directory cron, update.sh or a shell starts from (v10.3.24)
+case "$BACKUP_DIR" in /*) ;; *) BACKUP_DIR="$APP_DIR/$BACKUP_DIR" ;; esac
 RCLONE_CONFIG_VALUE="$(setting RCLONE_CONFIG)"
 [ -z "$RCLONE_CONFIG_VALUE" ] || export RCLONE_CONFIG="$RCLONE_CONFIG_VALUE"
 
