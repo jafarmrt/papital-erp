@@ -91,7 +91,7 @@ describe('crm_polish_10_3_p7', () => {
     disabledLook(screen.getByRole('button', { name: '✕' }));
   });
 
-  it('disables «انصراف» of the lost reason window while it records', async () => {
+  it('disables the cancel button of the lost reason window while it records', async () => {
     let finish: () => void = () => undefined;
     const onCancel = vi.fn();
     render(<LostReasonDialog leadTitle="سفارش" onCancel={onCancel} onConfirm={() => new Promise<void>((resolve) => { finish = resolve; })} />);
