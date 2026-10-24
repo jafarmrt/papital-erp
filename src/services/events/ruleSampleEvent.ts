@@ -32,8 +32,10 @@ export function ruleSampleEvent(eventType: string): BaseDomainEvent {
       currentStock: 12,
       reorderPoint: 20,
       warehouseLocation: 'انبار مرکزی',
-      // 10.2 package 8 (TD-1297): a treasury event carries no amount, so a rule on it is tried without one too
-      ...(eventType === DomainEventType.TREASURY_TRANSACTION_APPROVED ? { isHighValue: true } : { amount: 600000000 }),
+      // 10.2 package 8 (TD-1297): a treasury event carries no amount, so a rule on it is tried without one too; 10.3
+      // package 5: nor does a cheque event
+      ...(eventType === DomainEventType.TREASURY_TRANSACTION_APPROVED ? { isHighValue: true }
+        : eventType === DomainEventType.CHEQUE_STATUS_CHANGED ? {} : { amount: 600000000 }),
       workflowCode: 'INVOICE_APPROVAL',
       toStateKey: 'PENDING_APPROVAL'
     },

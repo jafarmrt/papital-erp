@@ -12,6 +12,7 @@ product-owner decision; a file that no longer deletes is removed from this list 
 | File | What it deletes | Why the delete is physical |
 |---|---|---|
 | `src/lib/auditLogger.ts` | activity log rows older than 90 days of the purgeable sections | the system admin's audit purge (TD-522): only operational sections, never financial or security rows |
+| `src/services/auth/sessionPurge.ts` | sign-in session rows (`user_sessions`) closed or expired more than 90 days ago, once expired | the daily operational purge (10.3 package 5, decision ت۴۷ item 4): a row per login is a log of devices; the login and logout audit rows stay |
 | `src/services/customers/customerTags.service.ts` | the links between a party and a tag that the save removed | a link row is the state of the party's tag list; the party and the tag stay, and the audit row keeps the before and after |
 | `src/services/events/deadLetterQueueService.ts` | dead-letter rows already replayed or dismissed | queue housekeeping («پاک‌سازی صف خطا»); the event stays in the outbox |
 | `src/services/events/integrationParentDelete.ts` | a webhook subscription or an automatic rule | integration settings, not business records; its delivery jobs are cancelled and the audit row keeps the before |

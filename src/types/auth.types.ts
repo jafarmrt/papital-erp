@@ -20,6 +20,8 @@ export interface AuthUserPayload {
   /** 10.2 package 8 (D-07): the key of the token's `user_sessions` row; absent on a token issued before it */
   sid?: string;
   tokenVersion?: number;
+  /** 10.3 package 5: set on a request let in with the device's previous token version inside its grace; never signed */
+  tokenGrace?: boolean;
   iat?: number;
   exp?: number;
   mustResetPassword?: boolean | number;

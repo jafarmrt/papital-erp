@@ -15,6 +15,7 @@ export const NOTIFICATION_CATEGORIES = [
   'event_rule',
   'workshop',
   'social',
+  'settings_change',
 ] as const;
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
 
@@ -29,6 +30,8 @@ export const NOTIFICATION_CATEGORY_LABELS: Readonly<Record<NotificationCategory,
   event_rule: 'اعلان‌های قانون‌های خودکار',
   workshop: 'کارها و گزارش‌های کارتابل کارگاه',
   social: 'تولد همکاران و تبریک‌ها',
+  // 10.3 package 5 (ت۴۷ item 5): for the system admins, e.g. «آستانه تراکنش کلان خزانه» changed by another user
+  settings_change: 'تغییر تنظیمات حساس سامانه',
 };
 
 /** One row of «در پیام‌رسان هم بفرست» in the profile (`GET /messenger/preferences/mine`) */
@@ -67,6 +70,7 @@ const GENERIC_SENTENCES: Readonly<Partial<Record<NotificationCategory, string>>>
   crm_won: 'یک پرونده فروش با موفقیت نهایی شد.',
   payslip: 'فیش حقوق شما تأیید شد.',
   workshop: 'یک کار یا گزارش در کارتابل کارگاه منتظر شماست.',
+  settings_change: 'یکی از تنظیمات حساس سامانه تغییر کرد.',
 };
 const GENERIC_DEFAULT_SENTENCE = 'اعلان تازه‌ای در برنامه پاپیتال برای شما آمده است.';
 
@@ -74,7 +78,7 @@ const GENERIC_DEFAULT_SENTENCE = 'اعلان تازه‌ای در برنامه �
  * The page a messenger link opens: a full-text category keeps the notification's own path; every other one opens a fixed
  * page of its section (never a rule template's link, which may carry amounts or ids), else the app's first page.
  */
-const GENERIC_LINK_SECTIONS: readonly string[] = ['/daily-logs', '/crm', '/approval-inbox', '/workshop', '/my-payslips'];
+const GENERIC_LINK_SECTIONS: readonly string[] = ['/daily-logs', '/crm', '/approval-inbox', '/workshop', '/my-payslips', '/settings'];
 
 export function messengerLinkPath(category: NotificationCategory, path: string | null | undefined): string {
   const target = String(path ?? '').trim();

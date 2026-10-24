@@ -153,7 +153,11 @@ export interface TreasuryEventPayload {
   isHighValue?: boolean;
 }
 
-/** OBS-R2-13 (ت۴۰ بند ۱۱): a cheque's status change, recorded in the transaction of the change (`ChequeStatusChanged`) */
+/**
+ * OBS-R2-13 (ت۴۰ بند ۱۱): a cheque's status change, recorded in the transaction of the change (`ChequeStatusChanged`).
+ * 10.3 package 5 (decision ت۴۷ item 3): no amount and no party name, like the treasury and payslip events; they reached
+ * every «*» webhook and rule. A subscriber reads the cheque through the API with its own access.
+ */
 export interface ChequeEventPayload {
   chequeId: number;
   chequeNumber: string;
@@ -162,14 +166,12 @@ export interface ChequeEventPayload {
   previousStatus: string;
   newStatus: string;
   newStatusLabel: string;
-  amount: number;
   currency: string;
   dueDate: string;
   actionDate: string;
   bankAccountId: number | null;
   partyType: string;
   partyId: number | null;
-  partyName: string;
   voucherIds: number[];
 }
 

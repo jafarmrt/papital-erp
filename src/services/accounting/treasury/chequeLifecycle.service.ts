@@ -791,7 +791,8 @@ export class ChequeLifecycleService {
 
       const issuedVoucherIds = (await activeChequeVoucherIds(txEngine, id)).filter(v => !vouchersBefore.has(v));
       await auditChequeStatusChange(txEngine, data.audit, existing, updated, issuedVoucherIds);
-      // OBS-R2-13 (ت۴۰ بند ۱۱): قانون‌ها و وب‌هوک‌ها تغییر وضعیت چک را از صف رویداد در همین تراکنش می‌شنوند
+      // OBS-R2-13 (ت۴۰ بند ۱۱): قانون‌ها و وب‌هوک‌ها تغییر وضعیت چک را از صف رویداد در همین تراکنش می‌شنوند؛
+      // بی مبلغ و نام طرف حساب (۱۰.۳ بستهٔ ۵، ت۴۷ بند ۳)
       await OutboxService.saveToOutbox(txEngine, domainEventBus.createEvent<ChequeEventPayload>(
         DomainEventType.CHEQUE_STATUS_CHANGED, 'Cheque', String(updated.id), {
           chequeId: updated.id,
@@ -801,14 +802,12 @@ export class ChequeLifecycleService {
           previousStatus: existing.status || '',
           newStatus: data.status,
           newStatusLabel: chequeStatusLabel(data.status),
-          amount: updated.amount.toNumber(),
           currency: updated.currency || 'IRR',
           dueDate: updated.dueDate,
           actionDate: voucherIsoDate,
           bankAccountId: updated.bankAccountId ?? null,
           partyType: updated.partyType || 'customer',
           partyId: updated.partyId ?? null,
-          partyName: updated.partyName,
           voucherIds: issuedVoucherIds,
         },
         { userId: data.userId, userName: data.username },

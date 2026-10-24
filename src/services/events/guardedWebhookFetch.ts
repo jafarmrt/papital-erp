@@ -4,7 +4,6 @@ import {
   guardedDnsLookup, isLocalEchoTarget, isTestLoopbackOrigin, UNSAFE_RESOLVED_ADDRESS,
 } from '../../lib/ssrfGuard.js';
 import { ForbiddenError } from '../../errors/customErrors.js';
-import { APP_VERSION } from '../../lib/version.js';
 
 /**
  * 10.2 package 8 (OBS-R2-81 part 4, TD-1296): the one way a webhook subscription's delivery and ping and an event rule's
@@ -58,13 +57,16 @@ function responseHeaders(raw: http.IncomingHttpHeaders): Headers {
 
 /**
  * review N-1: the headers `fetch` added on its own are kept: `Accept: *\/*` and a `User-Agent` (the caller's, else
- * `Papital-ERP/<version>`), so a partner site that filtered on them still receives the delivery
+ * `Papital-ERP`), so a partner site that filtered on them still receives the delivery. 10.3 package 5: without the exact
+ * version, which told every receiving site which release (and so which known faults) the server runs.
  */
+export const WEBHOOK_DEFAULT_USER_AGENT = 'Papital-ERP';
+
 export function webhookRequestHeaders(headers: Record<string, string>): Record<string, string> {
   const names = new Set(Object.keys(headers).map(name => name.toLowerCase()));
   return {
     ...(names.has('accept') ? {} : { Accept: '*/*' }),
-    ...(names.has('user-agent') ? {} : { 'User-Agent': `Papital-ERP/${APP_VERSION}` }),
+    ...(names.has('user-agent') ? {} : { 'User-Agent': WEBHOOK_DEFAULT_USER_AGENT }),
     ...headers,
   };
 }

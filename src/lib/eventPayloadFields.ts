@@ -83,14 +83,12 @@ const CHEQUE_LABELS: Record<keyof ChequeEventPayload, string> = {
   previousStatus: 'وضعیت پیشین',
   newStatus: 'وضعیت تازه',
   newStatusLabel: 'نام وضعیت تازه',
-  amount: 'مبلغ',
   currency: 'ارز',
   dueDate: 'تاریخ سررسید',
   actionDate: 'تاریخ اقدام',
   bankAccountId: 'شناسه حساب بانکی',
   partyType: 'نوع طرف حساب',
   partyId: 'شناسه طرف حساب',
-  partyName: 'نام طرف حساب',
   voucherIds: 'شناسه سندهای صادرشده',
 };
 

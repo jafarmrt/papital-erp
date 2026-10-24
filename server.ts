@@ -19,6 +19,7 @@ import { FormDraftService } from './src/services/drafts/formDraft.service.js';
 import { OperationalPurgeService } from './src/services/events/operationalPurge.service.js';
 import { WcShopSyncWorker } from './src/services/woocommerce/wcSyncWorker.service.js';
 import { purgeOldAutoRuns } from './src/services/woocommerce/wcSyncRunPurge.js';
+import { purgeEndedSessions } from './src/services/auth/sessionPurge.js';
 import { pool, getDatabaseMode } from './src/db/drizzle.js';
 import { decideProcessErrorAction, processErrorMessage } from './src/lib/processErrorPolicy.js';
 import { REQUEST_TIMEOUT_MS } from './src/lib/media/mediaRules.js';
@@ -90,6 +91,8 @@ async function startServer() {
     // OBS-R2-10: daily purge of expired idempotency keys and completed outbox events older than 90 days; 10.2 package 6:
     // and of the automatic WooCommerce stock push runs older than 30 days
     OperationalPurgeService.register('wcAutoPushRuns', () => purgeOldAutoRuns());
+    // 10.3 package 5 (ت۴۷ item 4): and of the closed or expired sign-in sessions that ended more than 90 days ago
+    OperationalPurgeService.register('endedUserSessions', () => purgeEndedSessions());
     OperationalPurgeService.start();
     // 10.2 package 6 (D-04 part B): the automatic stock push to the online shop, a run a minute while its setting is on
     WcShopSyncWorker.start();

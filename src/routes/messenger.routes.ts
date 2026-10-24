@@ -7,6 +7,7 @@ import { validate } from '../middleware/validate.js';
 import { UnauthorizedError } from '../errors/customErrors.js';
 import { MESSENGERS, type Messenger } from '../lib/messenger/messengerLinks.js';
 import { MESSENGER_PREFERENCE_CATEGORIES, type NotificationCategory } from '../lib/notifications/notificationCategories.js';
+import { refuseTokenGraceOnWrites } from '../services/auth/tokenVersionGrace.js';
 import { listBotViews, saveBotToken } from '../services/messenger/messengerBots.service.js';
 import { issueLinkCode, listActiveLinksForAdmin, listMyLinks, sendTestMessage, unlinkMine } from '../services/messenger/messengerLinks.service.js';
 import { listMyPreferences, setMyPreference } from '../services/messenger/messengerPreferences.service.js';
@@ -18,6 +19,8 @@ import { listMyPreferences, setMyPreference } from '../services/messenger/messen
  */
 const router = Router();
 router.use(authenticateToken);
+// 10.3 package 5 (review of #378): a request let in with this device's previous token may not link a chat or change bots
+router.use('/messenger', refuseTokenGraceOnWrites);
 
 const messengerParam = z.object({ params: z.object({ messenger: z.enum(MESSENGERS, { message: 'پیام‌رسان باید «بله» یا «تلگرام» باشد' }) }) });
 
