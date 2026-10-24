@@ -9,6 +9,7 @@ import { useExplorerLedgerQuery, type ExplorerLedgerParams, type ExplorerLedgerR
 import { useVoucherDetailLoader } from '../../hooks/accounting/useVoucherQueries';
 import type { Account, Customer, Personnel, BankAccount, JournalVoucher } from '../../types';
 import { DialogLayer } from '../common/DialogLayer';
+import { personnelServerSearchUrl } from '../../lib/personnel/personnelList';
 
 interface AccountExplorerTabProps {
   accounts: Account[];
@@ -20,6 +21,8 @@ interface AccountExplorerTabProps {
 }
 
 type VoucherItemRow = ExplorerLedgerRow;
+
+const explorerPersonnelOption = (p: Personnel) => ({ value: String(p.id), label: `${p.fullName} (${p.jobTitle || 'پرسنل'})` });
 
 export function AccountExplorerTab({
   accounts = [],
@@ -289,10 +292,10 @@ export function AccountExplorerTab({
                   onChange={(val) => setSelectedDetailedEntityId(val)}
                   className="w-64"
                   placeholder="جست‌وجو یا انتخاب پرسنل..."
-                  options={(Array.isArray(personnelList) ? personnelList : []).map((p) => ({
-                    value: String(p.id),
-                    label: `${p.fullName} (${p.jobTitle || 'پرسنل'})`
-                  }))}
+                  options={(Array.isArray(personnelList) ? personnelList : []).map(explorerPersonnelOption)}
+                  // 10.3 package 6 (TD-1362): a list cut at the cap also searches on the server
+                  serverSearchUrl={personnelServerSearchUrl(Array.isArray(personnelList) ? personnelList : [])}
+                  mapResultToOption={explorerPersonnelOption}
                 />
               )}
 

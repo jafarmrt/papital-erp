@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, ChevronDown, Loader2 } from 'lucide-react';
 import { cn } from '../utils';
@@ -29,6 +29,13 @@ interface SearchableSelectProps {
   valueLabel?: string;
   /** Id of the opening button, so a `<label htmlFor>` names it; the chosen value is its description (v10.1.31, TD-1278). */
   id?: string;
+  /**
+   * 10.3 package 6 (TD-1362): `options` is a list cut at its cap; a typed search also reads the server's matches from this
+   * url (`pickListRequestUrl`, each mapped by `mapResultToOption`) and lists those `options` lacks after its own
+   */
+  serverSearchUrl?: string;
+  /** The opening button, for a form that moves the focus to the picker */
+  buttonRef?: React.Ref<HTMLButtonElement>;
 }
 
 /**
@@ -54,19 +61,28 @@ export function SearchableSelect({
   mapResultToOption,
   maxResults = 50,
   valueLabel,
-  id
+  id,
+  serverSearchUrl,
+  buttonRef: outerButtonRef
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [asyncResults, setAsyncResults] = useState<unknown[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [chosen, setChosen] = useState<{ value: string; label: string } | null>(null);
+  const [serverHit, setServerHit] = useState<{ query: string; rows: unknown[] } | null>(null);
+  const [serverLoading, setServerLoading] = useState(false);
   
   const wrapperRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const coords = useDropdownPosition(buttonRef, isOpen);
+  const setButton = useCallback((node: HTMLButtonElement | null) => {
+    buttonRef.current = node;
+    if (typeof outerButtonRef === 'function') outerButtonRef(node);
+    else if (outerButtonRef) outerButtonRef.current = node;
+  }, [outerButtonRef]);
 
   useClickOutside([wrapperRef, dropdownRef], () => setIsOpen(false));
 
@@ -115,6 +131,34 @@ export function SearchableSelect({
 
   const limit = maxResults || 4;
 
+  // TD-1362: the server search of a cut list, only while the list is open and something is typed
+  const serverQuery = serverSearchUrl && isOpen ? search.trim() : '';
+  useEffect(() => {
+    if (!serverSearchUrl || !serverQuery) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      setServerLoading(true);
+      fetchJson(pickListRequestUrl(serverSearchUrl, serverQuery, limit), { signal: controller.signal })
+        .then((res: unknown) => {
+          if (controller.signal.aborted) return;
+          const data = (res as { data?: unknown } | null)?.data ?? res;
+          setServerHit({ query: serverQuery, rows: Array.isArray(data) ? data.slice(0, limit) : [] });
+        })
+        .catch(err => {
+          if (err?.name === 'AbortError') return;
+          console.error('SearchableSelect server search error:', err);
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setServerLoading(false);
+        });
+    }, 300);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+      setServerLoading(false);
+    };
+  }, [serverSearchUrl, serverQuery, limit]);
+
   // v9.0.291 (TD-675): همان یکسان‌سازی جست‌وجوی سراسری سرور
   const filteredPropOptions = React.useMemo(() => {
     if (!search.trim()) {
@@ -147,7 +191,14 @@ export function SearchableSelect({
     }
   };
 
-  const displayOptions = fetchUrl ? asyncOptions : filteredPropOptions;
+  // TD-1362: the server's matches for the typed text that the cut options lack, after the options' own matches
+  const serverOptions: Option[] = (() => {
+    if (!serverHit || !mapResultToOption || !serverQuery || serverHit.query !== serverQuery) return [];
+    const listed = new Set(propOptions.map(o => safeStr(o.value)));
+    return serverHit.rows.map((item): Option => ({ ...mapResultToOption(item), _raw: item })).filter(o => !listed.has(safeStr(o.value)));
+  })();
+
+  const displayOptions = fetchUrl ? asyncOptions : [...filteredPropOptions, ...serverOptions].slice(0, limit);
   const valStr = safeStr(value);
   // v9.0.309 (TD-680): مقدار ازپیش‌انتخاب‌شده برچسبش را از نتایج `fetchUrl` هم می‌گیرد، سپس از `valueLabel`؛ هرگز متن خالی
   const foundOpt = propOptions.find(o => safeStr(o?.value) === valStr) ?? asyncOptions.find(o => safeStr(o?.value) === valStr);
@@ -179,7 +230,7 @@ export function SearchableSelect({
   return (
     <div className={cn("relative", className)} ref={wrapperRef}>
       <button
-        ref={buttonRef}
+        ref={setButton}
         type="button"
         id={id}
         aria-describedby={id ? `${id}-value` : undefined}
@@ -234,7 +285,7 @@ export function SearchableSelect({
               placeholder="جست‌وجو..."
               className="w-full bg-transparent text-xs font-bold text-slate-800 focus:outline-none"
             />
-            {loading && <Loader2 size={14} className="text-blue-500 animate-spin shrink-0 ml-1" />}
+            {(loading || serverLoading) && <Loader2 size={14} className="text-blue-500 animate-spin shrink-0 ml-1" />}
           </div>
           <ul id={listId} role="listbox" className="overflow-auto py-1 text-xs" style={{ maxHeight: `${Math.max(100, coords.maxHeight - 45)}px` }}>
             <li
@@ -271,7 +322,7 @@ export function SearchableSelect({
               ))
             ) : (
               <li role="presentation" className="px-3 py-3 text-slate-400 text-center font-medium">
-                {loading ? 'در حال جست‌وجو...' : 'موردی یافت نشد'}
+                {loading || serverLoading ? 'در حال جست‌وجو...' : 'موردی یافت نشد'}
               </li>
             )}
             {displayOptions.length > 0 && propOptions.length > limit && (
