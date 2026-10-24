@@ -83,6 +83,8 @@ function duplicatesBy(rows: readonly ItemIdentityRow[], keyOf: (r: ItemIdentityR
   const groups = new Map<string, ItemIdentityRow[]>();
   for (const r of rows) {
     const key = keyOf(r);
+    // a code or name of white space only is no key: the app finds no item by it (`itemRefKeyCondition`), so it shares nothing
+    if (key === '') continue;
     const group = groups.get(key);
     if (group) group.push(r);
     else groups.set(key, [r]);

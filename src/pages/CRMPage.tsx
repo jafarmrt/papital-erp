@@ -22,6 +22,7 @@ import { LostReasonDialog } from '../components/crm/LostReasonFields';
 import { CustomerTagFilter } from '../components/customers/CustomerTags';
 import { useCustomerTagsQuery } from '../hooks/queries/useCustomerTagQueries';
 import { useConvertLeadToCustomerMutation } from '../hooks/queries/useCustomerQueries';
+import { personnelNameOption, personnelServerSearchUrl } from '../lib/personnel/personnelList';
 
 export default function CRMPage({ user }: { user: any }) {
   const crm = useCRMData(user);
@@ -199,8 +200,11 @@ export default function CRMPage({ user }: { user: any }) {
               placeholder="همه فروشندگان"
               options={[
                 { value: '', label: 'همه فروشندگان' },
-                ...(Array.isArray(crm.personnelList) ? crm.personnelList : []).map((p: { id: number; fullName?: string }) => ({ value: String(p.id), label: p.fullName || '' })),
+                ...(Array.isArray(crm.personnelList) ? crm.personnelList : []).map(personnelNameOption),
               ]}
+              // 10.3 package 6 (TD-1362): a list cut at the cap also searches the active personnel on the server
+              serverSearchUrl={personnelServerSearchUrl(Array.isArray(crm.personnelList) ? crm.personnelList : [], { activeOnly: true })}
+              mapResultToOption={personnelNameOption}
             />
 
             <div className="flex items-center gap-1">

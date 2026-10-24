@@ -49,6 +49,9 @@ describe('10.3 package 6: the item of a schedule product (review N7 of #329)', (
     expect(productRowItemId({ item_id: null, item_id_raw: 8 })).toBe(8);
     expect(productRowItemId({ item_id: 0 })).toBeNull();
     expect(productRowItemId({ item_id: '' })).toBeNull();
+    // an emptied item_id of an older row does not hide the item it still names (review of #380)
+    expect(productRowItemId({ item_id: '', item_id_raw: 8 })).toBe(8);
+    expect(productRowItemId({ item_id: 0, itemId: 7 })).toBe(7);
     expect(productRowItemId(null)).toBeNull();
   });
 

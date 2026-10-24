@@ -1,7 +1,7 @@
 import { eq, and, sql, inArray, asc } from 'drizzle-orm';
 import { type DbExecutor } from '../../db/drizzle.js';
 import { pieceworkLogs, pieceworkPayrolls, personnel, journalVouchers } from '../../db/schema.js';
-import { AppError, NotFoundError, BadRequestError, ConflictError, ValidationError } from '../../errors/customErrors.js';
+import { NotFoundError, BadRequestError, ConflictError, ValidationError, PrivateRefusalError } from '../../errors/customErrors.js';
 import { isoToJalaliDate, toStorageDate } from '../../utils.js';
 import { requireStorageDate } from '../../lib/storageDate.js';
 import { VoucherService } from '../accounting/voucher.service.js';
@@ -32,8 +32,11 @@ import { idempotentTransaction } from '../../middleware/idempotency.js';
  * found in (the locks and any write before it), and every caller had to remember to look at it.
  */
 
-/** A refusal of the payslip request, answered 400 like the route's `{ status: 400, error }` before (TD-1386) */
-const payrollRefusal = (message: string, code: string) => new AppError(message, 400, code);
+/**
+ * A refusal of the payslip request, answered 400 like the route's `{ status: 400, error }` before (TD-1386). Its message
+ * may name the personnel or an amount, so it never reaches the error log (`PrivateRefusalError`, review of #380)
+ */
+const payrollRefusal = (message: string, code: string) => new PrivateRefusalError(message, 400, code);
 
 type AmountInput = number | string;
 
@@ -166,16 +169,16 @@ export class PieceworkPayrollService {
       const serviceStart = serviceStartOf(pInfo);
       const fixedStart = fixedEnd === null ? null : fixedSalaryPeriodStart(sDate, fixedEnd, serviceStart);
       if (isPrepayment && (!fixedIncluded || !fin(pInfo.monthlySalary || 0).greaterThan(0))) {
-        throw new ValidationError(
+        throw new PrivateRefusalError(
           `فیش پیش‌پرداخت فقط حقوق ثابت را می‌پردازد و ${pInfo.fullName} حقوق ثابت ماهانه ندارد.`,
-          undefined,
+          422,
           'PAYROLL_PREPAYMENT_FIXED_SALARY_ONLY'
         );
       }
       if (fixedIncluded && fin(pInfo.monthlySalary || 0).greaterThan(0) && serviceEnd.kind === 'unknown') {
-        throw new ValidationError(
+        throw new PrivateRefusalError(
           `${pInfo.fullName} «قطع همکاری» است ولی تاریخ پایان همکاری معتبری ندارد؛ پیش از صدور فیش با حقوق ثابت، تاریخ پایان همکاری را در پرونده پرسنل ثبت کنید.`,
-          undefined,
+          422,
           'PAYROLL_SERVICE_END_DATE_REQUIRED'
         );
       }

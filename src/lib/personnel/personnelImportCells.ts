@@ -44,12 +44,16 @@ export const PERSONNEL_UNREAD_IMPORT_COLUMNS = [
   'تاریخ پایان همکاری', 'علت قطع همکاری', 'نوع حقوق', 'حقوق ماهانه', 'مشمول بیمه', 'مشمول مالیات حقوق', 'مشمول عیدی',
 ] as const;
 
-const headerKey = (header: unknown) => cellText(header).replace(/[\s‌_\-–—:()[\]]/g, '');
+/**
+ * A sheet header's key: Arabic «ي» and «ك» read as Persian, and spaces, the zero-width non-joiner, «_», dashes, «:» and
+ * brackets dropped; the import's column aliases and the unread columns below are matched by it (10.3 package 6)
+ */
+export const personnelHeaderKey = (header: unknown): string => cellText(header).replace(/[\s\u200c_\-–—:()[\]]/g, '').toLowerCase();
 
 /** The unread columns (`PERSONNEL_UNREAD_IMPORT_COLUMNS`) among a sheet's headers, in the export's order */
 export function unreadPersonnelColumns(headers: readonly unknown[]): string[] {
-  const held = new Set(headers.map(headerKey));
-  return PERSONNEL_UNREAD_IMPORT_COLUMNS.filter(column => held.has(headerKey(column)));
+  const held = new Set(headers.map(personnelHeaderKey));
+  return PERSONNEL_UNREAD_IMPORT_COLUMNS.filter(column => held.has(personnelHeaderKey(column)));
 }
 
 /** The preview's notice for the unread columns of a file, or null when it holds none */

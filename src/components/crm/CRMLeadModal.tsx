@@ -11,7 +11,7 @@ import { DecimalInput } from '../common/DecimalInput';
 import { LostReasonFields } from './LostReasonFields';
 import { DialogLayer } from '../common/DialogLayer';
 import { usePersonnelPickName } from '../../hooks/usePersonnelPickName';
-import { personnelServerSearchUrl } from '../../lib/personnel/personnelList';
+import { personnelSellerOption, personnelServerSearchUrl } from '../../lib/personnel/personnelList';
 
 interface CRMLeadModalProps {
   isLeadModalOpen: boolean;
@@ -29,8 +29,6 @@ interface CRMLeadModalProps {
   currentPersonnelId: number | null;
   currentLoggedInUser: string;
 }
-
-const sellerOption = (p: { id: number; fullName?: string; jobTitle?: string }) => ({ value: String(p.id), label: `${p.fullName}${p.jobTitle ? ` — ${p.jobTitle}` : ''}` });
 
 export function CRMLeadModal({
   isLeadModalOpen,
@@ -333,10 +331,10 @@ export function CRMLeadModal({
                 }}
                 placeholder={`${leadForm.assignedTo || currentLoggedInUser} (بدون اتصال پرسنلی)`}
                 valueLabel={assignedFallbackLabel}
-                options={personnelList.map(sellerOption)}
+                options={personnelList.map(personnelSellerOption)}
                 // 10.3 package 6 (TD-1362): a seller list cut at the cap also searches the active personnel on the server
                 serverSearchUrl={personnelServerSearchUrl(personnelList, { activeOnly: true })}
-                mapResultToOption={sellerOption}
+                mapResultToOption={personnelSellerOption}
               />
               {currentPersonnelId && String(leadForm.assignedPersonnelId || '') !== '' && !editingLead && (
                 <p className="text-[10px] text-emerald-600 mt-1">پیش‌فرض: پرسنل متصل به حساب کاربری شما</p>

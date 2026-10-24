@@ -82,8 +82,9 @@ export function VoucherDetailedPicker({
   const inputRef = pickerRef as React.Ref<HTMLInputElement> | undefined;
   const buttonRef = pickerRef as React.Ref<HTMLButtonElement> | undefined;
   // 10.3 package 6 (TD-1362): a personnel list cut at the cap is a searchable picker that also searches on the server, so
-  // an older personnel is found by name; a list under the cap keeps the plain list and its Enter to the next field
+  // an older personnel is found by name; Enter on it moves on as on the plain list, which a list under the cap keeps
   const personnelSearchUrl = type === 'personnel' ? personnelServerSearchUrl(personnelList) : undefined;
+  const searchPickerId = React.useId();
 
   const options: Array<{ id: number; label: string; name: string }> = (() => {
     if (type === 'customer' || type === 'supplier') {
@@ -136,7 +137,10 @@ export function VoucherDetailedPicker({
 
       {personnelSearchUrl && (
         <SearchableSelect
+          id={searchPickerId}
+          ariaLabel={`انتخاب ${VOUCHER_DETAILED_TYPE_LABELS[type]}`}
           buttonRef={buttonRef}
+          onEnter={onAdvance}
           className="flex-1"
           value={value.detailedId ?? ''}
           placeholder={`انتخاب ${VOUCHER_DETAILED_TYPE_LABELS[type]}...`}

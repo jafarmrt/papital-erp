@@ -181,8 +181,12 @@ async function duplicateAppKeysCase(ctx: Ctx): Promise<string> {
   await q(`UPDATE items SET code = $2 WHERE id = $1`, [tabB, `jk-${t}\t`]);
   await q(`UPDATE items SET code = $2 WHERE id = $1`, [sharpB, `xß-${t}`]);
   await q(`UPDATE items SET name = $2 WHERE id = $1`, [nameB, `قفل نشکن ${t}\u00a0`]);
+  // two codes of white space only (a tab, a no-break space): the app reads no item by an empty key, so they are not a pair
+  const [blankA, blankB] = [await make(`BL-${t}`, `قفل خالی ${t} الف`), await make(`BL2-${t}`, `قفل خالی ${t} ب`)];
+  await q(`UPDATE items SET code = $2 WHERE id = $1`, [blankA, '\t']);
+  await q(`UPDATE items SET code = $2 WHERE id = $1`, [blankB, '\u00a0']);
   const { buildItemIdentityHealthTest, findDuplicateItemIdentities, hasItemIdentityIndexes } = await import('../../services/items/itemIdentity.js');
-  const mine = new Set([tabA, tabB, sharpA, sharpB, nameA, nameB]);
+  const mine = new Set([tabA, tabB, sharpA, sharpB, nameA, nameB, blankA, blankB]);
   const found = (await findDuplicateItemIdentities()).filter(r => mine.has(r.id));
   const pairs = found.map(r => `${r.kind}:${r.id}`).sort();
   const expected = [`code:${tabA}`, `code:${tabB}`, `code:${sharpA}`, `code:${sharpB}`, `name:${nameA}`, `name:${nameB}`].sort();

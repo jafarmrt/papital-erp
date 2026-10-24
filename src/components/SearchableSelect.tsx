@@ -36,6 +36,10 @@ interface SearchableSelectProps {
   serverSearchUrl?: string;
   /** The opening button, for a form that moves the focus to the picker */
   buttonRef?: React.Ref<HTMLButtonElement>;
+  /** Enter on the closed picker: the form's next field, as Enter on a plain list (the arrow keys open it) */
+  onEnter?: () => void;
+  /** The opening button's name when no `<label htmlFor>` names it */
+  ariaLabel?: string;
 }
 
 /**
@@ -63,15 +67,14 @@ export function SearchableSelect({
   valueLabel,
   id,
   serverSearchUrl,
-  buttonRef: outerButtonRef
+  buttonRef: outerButtonRef, onEnter, ariaLabel
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [asyncResults, setAsyncResults] = useState<unknown[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [chosen, setChosen] = useState<{ value: string; label: string } | null>(null);
-  const [serverHit, setServerHit] = useState<{ query: string; rows: unknown[] } | null>(null);
-  const [serverLoading, setServerLoading] = useState(false);
+  const [serverHit, setServerHit] = useState<{ query: string; rows: unknown[]; failed?: boolean } | null>(null);
   
   const wrapperRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -131,13 +134,14 @@ export function SearchableSelect({
 
   const limit = maxResults || 4;
 
-  // TD-1362: the server search of a cut list, only while the list is open and something is typed
+  // TD-1362: the server search of a cut list, only while the list is open and something is typed. It is pending from the
+  // keystroke until its own answer arrives (the pause included), so the list never says «موردی یافت نشد» before it ran
   const serverQuery = serverSearchUrl && isOpen ? search.trim() : '';
+  const serverPending = serverQuery !== '' && serverHit?.query !== serverQuery;
   useEffect(() => {
     if (!serverSearchUrl || !serverQuery) return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      setServerLoading(true);
       fetchJson(pickListRequestUrl(serverSearchUrl, serverQuery, limit), { signal: controller.signal })
         .then((res: unknown) => {
           if (controller.signal.aborted) return;
@@ -145,17 +149,14 @@ export function SearchableSelect({
           setServerHit({ query: serverQuery, rows: Array.isArray(data) ? data.slice(0, limit) : [] });
         })
         .catch(err => {
-          if (err?.name === 'AbortError') return;
+          if (controller.signal.aborted || err?.name === 'AbortError') return;
           console.error('SearchableSelect server search error:', err);
-        })
-        .finally(() => {
-          if (!controller.signal.aborted) setServerLoading(false);
+          setServerHit({ query: serverQuery, rows: [], failed: true });
         });
     }, 300);
     return () => {
       clearTimeout(timer);
       controller.abort();
-      setServerLoading(false);
     };
   }, [serverSearchUrl, serverQuery, limit]);
 
@@ -191,12 +192,14 @@ export function SearchableSelect({
     }
   };
 
-  // TD-1362: the server's matches for the typed text that the cut options lack, after the options' own matches
+  // TD-1362: the server's matches for the typed text after the options' own matches, each once (the server also searches
+  // fields the options' labels lack, such as the personnel code, so a listed row may be found only by it)
   const serverOptions: Option[] = (() => {
     if (!serverHit || !mapResultToOption || !serverQuery || serverHit.query !== serverQuery) return [];
-    const listed = new Set(propOptions.map(o => safeStr(o.value)));
-    return serverHit.rows.map((item): Option => ({ ...mapResultToOption(item), _raw: item })).filter(o => !listed.has(safeStr(o.value)));
+    const shown = new Set(filteredPropOptions.map(o => safeStr(o.value)));
+    return serverHit.rows.map((item): Option => ({ ...mapResultToOption(item), _raw: item })).filter(o => !shown.has(safeStr(o.value)));
   })();
+  const serverFailed = Boolean(serverQuery && serverHit?.query === serverQuery && serverHit.failed);
 
   const displayOptions = fetchUrl ? asyncOptions : [...filteredPropOptions, ...serverOptions].slice(0, limit);
   const valStr = safeStr(value);
@@ -233,6 +236,7 @@ export function SearchableSelect({
         ref={setButton}
         type="button"
         id={id}
+        aria-label={ariaLabel}
         aria-describedby={id ? `${id}-value` : undefined}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
@@ -242,6 +246,9 @@ export function SearchableSelect({
           if (!isOpen && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
             event.preventDefault();
             openList();
+          } else if (!isOpen && event.key === 'Enter' && onEnter) {
+            event.preventDefault();
+            onEnter();
           }
         }}
         className={cn(
@@ -285,7 +292,7 @@ export function SearchableSelect({
               placeholder="جست‌وجو..."
               className="w-full bg-transparent text-xs font-bold text-slate-800 focus:outline-none"
             />
-            {(loading || serverLoading) && <Loader2 size={14} className="text-blue-500 animate-spin shrink-0 ml-1" />}
+            {(loading || serverPending) && <Loader2 size={14} className="text-blue-500 animate-spin shrink-0 ml-1" />}
           </div>
           <ul id={listId} role="listbox" className="overflow-auto py-1 text-xs" style={{ maxHeight: `${Math.max(100, coords.maxHeight - 45)}px` }}>
             <li
@@ -322,7 +329,7 @@ export function SearchableSelect({
               ))
             ) : (
               <li role="presentation" className="px-3 py-3 text-slate-400 text-center font-medium">
-                {loading || serverLoading ? 'در حال جست‌وجو...' : 'موردی یافت نشد'}
+                {loading || serverPending ? 'در حال جست‌وجو...' : serverFailed ? 'جست‌وجو در سرور انجام نشد؛ دوباره بنویسید.' : 'موردی یافت نشد'}
               </li>
             )}
             {displayOptions.length > 0 && propOptions.length > limit && (

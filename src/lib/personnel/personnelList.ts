@@ -68,14 +68,25 @@ export function takePersonnelPick<T>(rows: readonly T[]): { rows: T[]; notice: s
 }
 
 /**
- * 10.3 package 6 (TD-1362): the server search of a personnel picker whose list `takePersonnelPick` cut at the cap (it
- * keeps exactly the cap): a typed search there also reads `GET /personnel?search=&limit=` (`activeOnly` for the sales
- * seller, as its list) and lists the matches the cut list lacks. A list under the cap holds every personnel, so its
- * picker searches in the browser as before and asks the server nothing.
+ * 10.3 package 6 (TD-1362): the server search of a personnel picker whose list may be cut at the cap: a list of the cap's
+ * length (`takePersonnelPick` cut it, or the server held exactly that many, which only costs a request) also reads
+ * `GET /personnel?search=&limit=` for a typed search (`activeOnly` for the CRM pickers, as their list) and lists the
+ * matches it does not show. A shorter list holds every personnel, so its picker searches in the browser as before and
+ * asks the server nothing.
  */
 export function personnelServerSearchUrl(list: readonly unknown[], { activeOnly = false }: { activeOnly?: boolean } = {}): string | undefined {
   if (list.length < PERSONNEL_PICK_LIMIT) return undefined;
   return activeOnly ? '/personnel?activeOnly=1' : '/personnel';
+}
+
+/** A personnel picker option labelled by the full name (the CRM filters), for its list and its server search */
+export function personnelNameOption(p: { id: number | string; fullName?: string | null }): { value: string; label: string } {
+  return { value: String(p.id), label: p.fullName || '' };
+}
+
+/** The same with the job title (the CRM seller and follow-up pickers) */
+export function personnelSellerOption(p: { id: number | string; fullName?: string | null; jobTitle?: string | null }): { value: string; label: string } {
+  return { value: String(p.id), label: `${p.fullName}${p.jobTitle ? ` — ${p.jobTitle}` : ''}` };
 }
 
 /** Tests only: the next list above the cap shows the notice again */

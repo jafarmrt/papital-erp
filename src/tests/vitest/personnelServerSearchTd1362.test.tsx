@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import type { ReactNode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -8,17 +9,19 @@ import { PERSONNEL_PICK_LIMIT, personnelServerSearchUrl } from '../../lib/person
 // personnel is found by name; a list under the cap searches in the browser and asks the server nothing
 const requested: string[] = [];
 const older = { id: 9, fullName: 'رضا قدیمی', jobTitle: 'زرگر' };
+const defaultAnswer = async (): Promise<unknown> => [older, { id: 1, fullName: 'رضا تازه' }];
+let answer = defaultAnswer;
 vi.mock('../../api', async (original) => ({
   ...(await original<typeof import('../../api')>()),
   fetchJson: vi.fn(async (url: string) => {
     requested.push(url);
-    return [older, { id: 1, fullName: 'رضا تازه' }];
+    return answer();
   }),
 }));
 
 const { SearchableSelect } = await import('../../components/SearchableSelect');
 const { VoucherDetailedPicker } = await import('../../components/accounting/VoucherDetailedPicker');
-afterEach(() => { cleanup(); requested.length = 0; vi.useRealTimers(); });
+afterEach(() => { cleanup(); requested.length = 0; answer = defaultAnswer; });
 
 const option = (p: { id: number; fullName?: string }) => ({ value: String(p.id), label: p.fullName ?? '' });
 const local = [{ id: 1, fullName: 'رضا تازه' }, { id: 2, fullName: 'مینا' }];
@@ -77,5 +80,45 @@ describe('TD-1362: the server search of a cut personnel list', () => {
     render(<VoucherDetailedPicker value={value} onChange={() => undefined} customers={[]} personnelList={local} />, { wrapper });
     expect(screen.getByRole('combobox', { name: 'انتخاب پرسنل' }).tagName).toBe('SELECT');
     expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  // review of #380
+  it('lists a row of the list the server finds by a field its label lacks, such as the personnel code', async () => {
+    answer = async () => [{ id: 1, fullName: 'رضا تازه' }, older];
+    render(<SearchableSelect value="" onChange={() => undefined} options={local.map(option)} serverSearchUrl="/personnel" mapResultToOption={option} />);
+    await typeSearch('EMP-7');
+    await waitFor(() => expect(screen.getAllByRole('option').map(o => o.textContent)).toEqual(['-- انتخاب کنید... --', 'رضا تازه', 'رضا قدیمی']));
+  });
+
+  it('says it is searching from the keystroke, and says when the server search failed', async () => {
+    answer = async () => { throw new Error('network'); };
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    render(<SearchableSelect value="" onChange={() => undefined} options={local.map(option)} serverSearchUrl="/personnel" mapResultToOption={option} />);
+    fireEvent.click(screen.getByRole('button'));
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'قدیمی' } });
+    expect(screen.getByText('در حال جست‌وجو...')).toBeTruthy();
+    await act(async () => { await new Promise(r => setTimeout(r, 350)); });
+    await waitFor(() => expect(screen.getByText('جست‌وجو در سرور انجام نشد؛ دوباره بنویسید.')).toBeTruthy());
+    error.mockRestore();
+  });
+
+  it('moves the voucher row on with Enter on the closed picker of a cut list, as the plain list does, and names it', () => {
+    const onAdvance = vi.fn();
+    const value = { detailedType: 'personnel' as const, detailedId: null, detailedName: '' };
+    render(<VoucherDetailedPicker value={value} onChange={() => undefined} onAdvance={onAdvance} customers={[]} personnelList={many(PERSONNEL_PICK_LIMIT)} />, { wrapper });
+    const button = screen.getByRole('button', { name: 'انتخاب پرسنل' });
+    fireEvent.keyDown(button, { key: 'Enter' });
+    expect(onAdvance).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('listbox')).toBeNull();
+  });
+
+  it('wires the server search into every picker fed by a capped personnel list', () => {
+    const files = [
+      'src/components/accounting/treasury/TreasuryTransactionModal.tsx', 'src/components/accounting/ChequesTab.tsx',
+      'src/components/accounting/AccountExplorerTab.tsx', 'src/components/accounting/VoucherDetailedPicker.tsx',
+      'src/components/crm/CRMLeadModal.tsx', 'src/components/crm/CRMInteractionModal.tsx', 'src/components/crm/CRMFollowupsPanel.tsx',
+      'src/components/crm/CRMFunnelReport.tsx', 'src/pages/CRMPage.tsx',
+    ];
+    for (const file of files) expect(readFileSync(file, 'utf8'), file).toContain('personnelServerSearchUrl(');
   });
 });

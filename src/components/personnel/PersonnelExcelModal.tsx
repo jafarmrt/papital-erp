@@ -6,7 +6,7 @@ import { fetchJson } from '../../api';
 import { formatPersianNumber, formatPersianPhone, formatPersianNationalId, normalizePhoneNumber, errorMessageOf } from '../../utils';
 import { paddedNationalIdNotice, readImportedNationalId } from '../../lib/personnel/nationalIdCell';
 import { Personnel } from '../../types';
-import { PERSONNEL_IMPORT_DEFAULTS, parseEmploymentStatusCell, parseGenderCell, parseNationalityCell, personnelCellLabel, unreadPersonnelColumns, unreadPersonnelColumnsNotice } from '../../lib/personnel/personnelImportCells';
+import { PERSONNEL_IMPORT_DEFAULTS, parseEmploymentStatusCell, parseGenderCell, parseNationalityCell, personnelCellLabel, personnelHeaderKey, unreadPersonnelColumns, unreadPersonnelColumnsNotice } from '../../lib/personnel/personnelImportCells';
 import { DialogLayer } from '../common/DialogLayer';
 import { PERSONNEL_LIST_STATE_TEXT, type PersonnelListState } from '../../lib/personnel/personnelList';
 
@@ -81,10 +81,9 @@ export function PersonnelExcelModal({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Normalized key mapping helper
-  const normalizeKey = (key: string): string => {
-    return key.replace(/[\s_\-–—:\(\)\[\]]/g, '').toLowerCase();
-  };
+  // 10.3 package 6 (TD-1386): one header rule with the unread-column notice, so «شماره كارت» (Arabic «ك») or a header with a
+  // zero-width non-joiner is read too, not dropped unnamed
+  const normalizeKey = personnelHeaderKey;
 
   // Helper to extract value by multiple possible header aliases
   const getField = (row: Record<string, any>, aliases: string[]): string => {
