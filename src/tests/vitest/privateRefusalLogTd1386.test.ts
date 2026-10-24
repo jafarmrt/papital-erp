@@ -5,6 +5,7 @@ import { errorLogEntry } from '../../middleware/logger';
 // 10.3 package 6 (TD-1386, review of #380): a payslip refusal names the personnel and amounts. The user reads the whole
 // message; the error log entry keeps its code, route and stack frames only, the stack's first line included.
 const MESSAGE = 'کسر مساعده (۳۰۰٬۰۰۰ ریال) از مانده مساعده تسویه‌نشده رضا کریمی (۰ ریال) بیشتر است.';
+const PLAIN = 'شماره فیش نامعتبر است';
 const REQ = { method: 'POST', originalUrl: '/api/piecework/payrolls/generate' };
 
 describe('private_refusal_log_td_1386', () => {
@@ -23,8 +24,8 @@ describe('private_refusal_log_td_1386', () => {
   });
 
   it('logs any other refusal as before', () => {
-    const entry = errorLogEntry(normalizeError(new BadRequestError('شماره فیش نامعتبر است')), REQ);
-    expect(entry.userMessage).toBe('شماره فیش نامعتبر است');
-    expect(String(entry.errorStack)).toContain('شماره فیش نامعتبر است');
+    const entry = errorLogEntry(normalizeError(new BadRequestError(PLAIN)), REQ);
+    expect(entry.userMessage).toBe(PLAIN);
+    expect(String(entry.errorStack)).toContain(PLAIN);
   });
 });

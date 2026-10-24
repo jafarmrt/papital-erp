@@ -37,7 +37,7 @@ describe('10.3 package 6: the personnel Excel preview names the columns it does 
   });
 
   // review of #380: the read columns follow the same header rule, so a header typed with Arabic «ي» is read, not dropped
-  it('reads a column whose header has Arabic «ي» or a zero-width non-joiner', async () => {
+  it('reads a column whose header has the Arabic letter yeh or a zero-width non-joiner', async () => {
     await upload([{ 'کد پرسنلی': 'P-3', 'نام و نام خانوادگی': 'سارا احمدی', 'عنوان شغلي': 'زرگر' }]);
     expect(screen.getByText('زرگر')).toBeTruthy();
   });
