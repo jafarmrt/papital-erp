@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
-import * as xlsx from 'xlsx';
+import { downloadSheet } from '../../lib/excel/downloadSheet';
 import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
 import { EXPORT_FAILED_MESSAGE, TRANSACTIONS_EXPORT_FILE } from '../../lib/inventoryAudit/exportFileNames';
@@ -35,7 +35,7 @@ async function exportTransactions(filters: TransactionsExportFilters): Promise<v
     ? res.data
     : (Array.isArray(res) ? res : []);
 
-  const ws = xlsx.utils.json_to_sheet(fullData.map(t => ({
+  await downloadSheet(fullData.map(t => ({
     'تاریخ': formatPersianDate(t.date),
     'کاربر': t.user || '-',
     'نوع تراکنش': t.type === 'in' ? 'ورود به انبار' : 'خروج از انبار',
@@ -46,10 +46,7 @@ async function exportTransactions(filters: TransactionsExportFilters): Promise<v
     'واحد': t.item_unit,
     'کد پیگیری/سند': t.document_ref,
     'نوع سند': kardexDocumentTypeLabel(t.document_type, t.document_ref)
-  })));
-  const wb = xlsx.utils.book_new();
-  xlsx.utils.book_append_sheet(wb, ws, 'تراکنش‌ها');
-  xlsx.writeFile(wb, TRANSACTIONS_EXPORT_FILE);
+  })), 'تراکنش‌ها', TRANSACTIONS_EXPORT_FILE);
 }
 
 export function useTransactionsExport() {

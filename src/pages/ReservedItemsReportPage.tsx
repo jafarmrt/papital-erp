@@ -15,7 +15,7 @@ import {
   DollarSign,
 } from 'lucide-react';
 import { formatPersianNumber, formatPersianDate, getTodayJalaliDate } from '../utils';
-import * as xlsx from 'xlsx';
+import { downloadSheet } from '../lib/excel/downloadSheet';
 import { useRialDisplay } from '../hooks/useAppCurrency';
 import { toast } from 'react-hot-toast';
 import { ErrorStateView } from '../components/common/ErrorStateView';
@@ -122,15 +122,13 @@ export default function ReservedItemsReportPage() {
   }, [data, searchQuery, sourceFilter, categoryFilter]);
 
   // v9.0.402 (TD-828): a real xlsx file with a Persian name and Jalali date, rows built in lib/inventory/reservedItemsExport
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (!data) return;
     try {
       const rows = activeTab === 'items'
         ? reservedItemSummaryRows(filteredItemSummaries, showCost)
         : reservationEntryRows(filteredLedgerEntries, showCost, value => formatPersianDate(value, { englishDigits: true }));
-      const workbook = xlsx.utils.book_new();
-      xlsx.utils.book_append_sheet(workbook, xlsx.utils.json_to_sheet(rows), activeTab === 'items' ? 'خلاصه کالاها' : 'ریز رزروها');
-      xlsx.writeFile(workbook, reservedItemsExportFileName(getTodayJalaliDate()));
+      await downloadSheet(rows, activeTab === 'items' ? 'خلاصه کالاها' : 'ریز رزروها', reservedItemsExportFileName(getTodayJalaliDate()));
       toast.success('فایل اکسل اقلام رزروشده دریافت شد.');
     } catch {
       toast.error(EXPORT_FAILED_MESSAGE);
@@ -181,7 +179,7 @@ export default function ReservedItemsReportPage() {
             <span>به‌روزرسانی</span>
           </button>
           <button
-            onClick={handleExportExcel}
+            onClick={() => void handleExportExcel()}
             className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all cursor-pointer"
           >
             <Download size={15} />

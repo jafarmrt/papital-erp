@@ -60,12 +60,12 @@ describe('Warehouse UI copy (TD-496)', () => {
     expect(bomAllocationsExportFileName('1405/07/15')).toBe('تخصیص-مواد-اولیه-1405-07-15.xlsx');
   });
 
-  it('tells the user when the integrity export fails and names the file in Persian when it works', () => {
+  it('tells the user when the integrity export fails and names the file in Persian when it works', async () => {
     const report = { audits: [{ itemId: 1, itemCode: 'A', itemName: 'الف', issues: [] }] } as unknown as InventoryIntegrityReport;
-    exportIntegrityExcel(report);
+    await exportIntegrityExcel(report);
     expect(writeFile.mock.calls[0]?.[1]).toBe(INTEGRITY_EXPORT_FILE);
     writeFile.mockImplementation(() => { throw new Error('disk full'); });
-    exportIntegrityExcel(report);
+    await exportIntegrityExcel(report);
     expect(toastError).toHaveBeenCalledWith(EXPORT_FAILED_MESSAGE);
   });
 });

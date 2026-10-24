@@ -1,4 +1,4 @@
-import * as xlsx from 'xlsx';
+import { downloadSheet, loadXlsx } from '../../lib/excel/downloadSheet';
 import { PieceworkTask } from '../../types';
 import { parsePieceworkRate } from '../../lib/piecework/pieceworkRate';
 
@@ -17,7 +17,7 @@ export interface ParsedPieceworkRow {
 /**
  * Downloads a blank or sample template Excel file for piecework tasks
  */
-export function downloadPieceworkTemplate() {
+export async function downloadPieceworkTemplate(): Promise<void> {
   const sampleData = [
     {
       'کد کار': 'PW-001',
@@ -45,26 +45,21 @@ export function downloadPieceworkTemplate() {
     }
   ];
 
-  const ws = xlsx.utils.json_to_sheet(sampleData);
-  // Set column widths for readability
-  ws['!cols'] = [
+  // column widths for readability
+  await downloadSheet(sampleData, 'عناوین_کاری', 'piecework-tasks-template.xlsx', [
     { wch: 12 }, // کد کار
     { wch: 30 }, // عنوان کار
     { wch: 20 }, // دسته‌بندی
     { wch: 15 }, // نرخ پایه
     { wch: 12 }, // واحد سنجش
     { wch: 45 }  // توضیحات
-  ];
-
-  const wb = xlsx.utils.book_new();
-  xlsx.utils.book_append_sheet(wb, ws, 'عناوین_کاری');
-  xlsx.writeFile(wb, 'piecework-tasks-template.xlsx');
+  ]);
 }
 
 /**
  * Exports existing piecework tasks to an Excel file (.xlsx)
  */
-export function exportPieceworkTasksToExcel(tasks: PieceworkTask[], fileName = 'piecework-tasks-export.xlsx') {
+export async function exportPieceworkTasksToExcel(tasks: PieceworkTask[], fileName = 'piecework-tasks-export.xlsx'): Promise<void> {
   const exportData = tasks.map((t, idx) => ({
     'ردیف': idx + 1,
     'کد کار': t.code || `PW-${String(t.id).padStart(3, '0')}`,
@@ -76,8 +71,7 @@ export function exportPieceworkTasksToExcel(tasks: PieceworkTask[], fileName = '
     'وضعیت': (t.isActive === 1 || (t.isActive as any) === true) ? 'فعال' : 'غیرفعال'
   }));
 
-  const ws = xlsx.utils.json_to_sheet(exportData);
-  ws['!cols'] = [
+  await downloadSheet(exportData, 'عناوین_و_نرخ_کارها', fileName, [
     { wch: 8 },  // ردیف
     { wch: 14 }, // کد کار
     { wch: 35 }, // عنوان کار
@@ -86,11 +80,7 @@ export function exportPieceworkTasksToExcel(tasks: PieceworkTask[], fileName = '
     { wch: 14 }, // واحد سنجش
     { wch: 45 }, // توضیحات
     { wch: 12 }  // وضعیت
-  ];
-
-  const wb = xlsx.utils.book_new();
-  xlsx.utils.book_append_sheet(wb, ws, 'عناوین_و_نرخ_کارها');
-  xlsx.writeFile(wb, fileName);
+  ]);
 }
 
 /**
@@ -98,6 +88,8 @@ export function exportPieceworkTasksToExcel(tasks: PieceworkTask[], fileName = '
  */
 export async function parsePieceworkExcelFile(file: File): Promise<ParsedPieceworkRow[]> {
   const arrayBuffer = await file.arrayBuffer();
+  // 10.3 package 6 (I-05): the xlsx library loads when a file is made or read, not with the page
+  const xlsx = await loadXlsx();
   const workbook = xlsx.read(arrayBuffer, { type: 'array' });
 
   if (!workbook.SheetNames || workbook.SheetNames.length === 0) {

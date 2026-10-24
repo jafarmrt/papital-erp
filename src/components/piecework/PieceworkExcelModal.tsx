@@ -165,9 +165,9 @@ export function PieceworkExcelModal({
     setSearchQuery('');
   };
 
-  const handleExportExisting = () => {
+  const handleExportExisting = async () => {
     try {
-      exportPieceworkTasksToExcel(tasksList);
+      await exportPieceworkTasksToExcel(tasksList);
       toast.success('فایل اکسل عناوین کاری دانلود شد.');
     } catch (err: any) {
       toast.error('خطا در خروجی فایل اکسل: ' + err.message);
@@ -224,7 +224,7 @@ export function PieceworkExcelModal({
                     </p>
                   </div>
                   <button
-                    onClick={downloadPieceworkTemplate}
+                    onClick={() => void downloadPieceworkTemplate().catch(() => toast.error('خطا در دانلود قالب اکسل'))}
                     className="mt-4 w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white rounded-xl text-xs font-black transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <Download size={16} />
@@ -244,7 +244,7 @@ export function PieceworkExcelModal({
                     </p>
                   </div>
                   <button
-                    onClick={handleExportExisting}
+                    onClick={() => void handleExportExisting()}
                     disabled={tasksList.length === 0}
                     className="mt-4 w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 active:scale-98 text-white rounded-xl text-xs font-black transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
                   >

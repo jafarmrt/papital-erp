@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import * as xlsx from 'xlsx';
+import { XLSX_LOAD_FAILED_MESSAGE, downloadSheet } from '../../../lib/excel/downloadSheet';
 import { useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../../api';
 import { isProjectOpenForAllocation } from '../../../lib/projects/projectStatus';
 import { allocationStatusLabel } from '../../../lib/projects/allocationLabels';
 import { warehouseLabel } from '../../../lib/inventory/warehouseLabel';
-import { bomAllocationsExportFileName } from '../../../lib/inventoryAudit/exportFileNames';
+import { EXPORT_FAILED_MESSAGE, bomAllocationsExportFileName } from '../../../lib/inventoryAudit/exportFileNames';
 import { EMPTY_ALLOCATION_STATUS_COUNTS, bomAllocationListUrl } from '../../../lib/inventory/bomAllocationList';
 import { errorMessageOf, formatPersianDate, formatPersianNumber, getTodayJalaliDate } from '../../../utils';
 import { useDebounce } from '../../../hooks/useDebounce';
@@ -117,10 +117,12 @@ export function useBomAllocations() {
       'توضیحات': a.notes || ''
     }));
 
-    const ws = xlsx.utils.json_to_sheet(data);
-    const wb = xlsx.utils.book_new();
-    xlsx.utils.book_append_sheet(wb, ws, 'تخصیص مواد اولیه');
-    xlsx.writeFile(wb, bomAllocationsExportFileName(getTodayJalaliDate()));
+    try {
+      await downloadSheet(data, 'تخصیص مواد اولیه', bomAllocationsExportFileName(getTodayJalaliDate()));
+    } catch (err) {
+      // the library's own failure text is not the user's language; only the Persian load failure is shown as it is
+      toast.error(errorMessageOf(err) === XLSX_LOAD_FAILED_MESSAGE ? XLSX_LOAD_FAILED_MESSAGE : EXPORT_FAILED_MESSAGE);
+    }
   };
 
   return {
