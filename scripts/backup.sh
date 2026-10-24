@@ -22,7 +22,6 @@ umask 077
 
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 APP_DIR="${APP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-BACKUP_DIR="${BACKUP_DIR:-/var/backups/erp}"
 RETENTION_DAYS="${RETENTION_DAYS:-30}"
 BACKUP_KIND="${BACKUP_KIND:-daily}"
 
@@ -36,6 +35,9 @@ env_file_value() {
   grep -E "^${key}=" "$file" | head -1 | cut -d= -f2- | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/" || true
 }
 
+# v10.3.21 (TD-1353): BACKUP_DIR from .env too, the folder nightly-verify.sh, monitor.sh and update.sh read
+[ -n "${BACKUP_DIR:-}" ] || BACKUP_DIR="$(env_file_value BACKUP_DIR)"
+BACKUP_DIR="${BACKUP_DIR:-/var/backups/erp}"
 if [ -z "${DATABASE_URL:-}" ]; then
   DATABASE_URL="$(env_file_value DATABASE_URL)"
 fi
@@ -64,6 +66,12 @@ cleanup() {
   fi
 }
 trap cleanup EXIT
+# v10.3.21 (TD-1351): the password goes to psql and pg_dump through a private PGPASSFILE in WORK_DIR (removed on exit),
+# never on their command line, where every user of the server could read it in the process list
+# shellcheck source=scripts/pg-password.sh
+source "$APP_DIR/scripts/pg-password.sh"
+pg_password_setup "$WORK_DIR"
+unset PG_FULL_DATABASE_URL
 
 # 1. Full dump (custom format) and its content manifest from ONE snapshot (v8.0.85, TD-361):
 #    a repeatable-read transaction exports its snapshot, pg_dump reads exactly that snapshot, and the manifest

@@ -1,3 +1,4 @@
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import pkg from 'pg';
@@ -33,6 +34,9 @@ const NAMES: Array<[string, string, CriticalScenarioId | undefined, string]> = [
   ['rec_td_957_daily_backup_goes_offsite',
     'v10.0.4: the daily backup copies its dump, manifest, attachment archive and the .env with ERP_SECRETS_KEY to the encrypted rclone remote and records both times; a failed copy keeps the local backup and exits 3 (TD-957)', undefined,
     'The remote held the four files and the .env copy; daily_ok and offsite_ok were written; with a failing upload the run exited 3 and kept the local dump'],
+  ['rec_td_1351_backup_password_not_on_command_line',
+    'v10.3.21: the backup gives the database password to psql and pg_dump through a private password file, never on their command line where the process list shows it, and takes its folder from BACKUP_DIR in the app .env too (TD-1351, TD-1353)', undefined,
+    'psql and pg_dump got the database URL without the password and the dump went to the .env folder'],
   ['rec_td_361_restore_drill_compares_content', 'v8.0.85: the restore drill compares the restored database row by row with the content manifest of the same backup; a difference, an empty main table in a backup without a manifest and a missing attachment are refused (TD-361)', 'recovery_backup_restore',
     'The restore matched the manifest; a tampered manifest, an empty users table in a backup without a manifest and a missing attachment archive were refused'],
   ['rec_td_363_drill_with_installed_role', 'v8.0.86: the restore drill with the role install.sh creates (no CREATEDB) runs with the admin connection RESTORE_ADMIN_URL, and without it stops before doing anything with clear guidance (TD-363)', undefined,
@@ -142,6 +146,42 @@ async function checkBackupGoesOffsite(ctx: Ctx): Promise<string[]> {
     if (failed.code !== 3) v.push(`A failed off-server copy exited ${failed.code} (expected 3): ${failed.output.slice(-200)}`);
     if (listBackups(failDir, '.dump.gz').length !== 1) v.push('A failed off-server copy did not keep the local dump');
     if (fs.existsSync(path.join(failDir, '.last_offsite_ok'))) v.push('A failed off-server copy wrote offsite_ok');
+  } finally {
+    fs.writeFileSync(envFile, envBefore);
+  }
+  return v;
+}
+
+/** stand-ins of psql, pg_dump and pg_restore that write their command line to a log and run the real program */
+function argvLoggers(binDir: string, logFile: string): void {
+  fs.mkdirSync(binDir, { recursive: true });
+  for (const tool of ['psql', 'pg_dump', 'pg_restore']) {
+    const real = execFileSync('bash', ['-c', `command -v ${tool}`], { encoding: 'utf8' }).trim();
+    fs.writeFileSync(path.join(binDir, tool), `#!/bin/bash\nprintf '%s\\n' "${tool} $*" >> '${logFile}'\nexec '${real}' "$@"\n`, { mode: 0o755 });
+  }
+}
+
+async function checkBackupPasswordOffCommandLine(ctx: Ctx): Promise<string[]> {
+  const v: string[] = [];
+  const { appDir, cluster } = ctx;
+  const root = path.join(cluster.tmpDir, 'argv');
+  const binDir = path.join(root, 'bin');
+  const logFile = path.join(root, 'argv.log');
+  const backupDir = path.join(root, 'backups-from-env');
+  argvLoggers(binDir, logFile);
+  const password = databaseUrlParts(cluster.appUrl).password;
+  const envFile = path.join(appDir, '.env');
+  const envBefore = fs.readFileSync(envFile, 'utf8');
+  // the folder only in .env, as a cron line has no environment
+  fs.writeFileSync(envFile, `${envBefore}BACKUP_DIR=${backupDir}\n`);
+  try {
+    const r = await runCommand('bash', [path.join(appDir, 'scripts', 'backup.sh')], { cwd: cluster.tmpDir, env: scriptEnv({ PATH: `${binDir}:${process.env.PATH}` }) });
+    if (r.code !== 0) return [`The backup with the folder in .env failed (code ${r.code}): ${r.output.slice(-300)}`];
+    if (listBackups(backupDir, '.dump.gz').length !== 1) v.push('BACKUP_DIR in .env was ignored: no dump in that folder');
+    const calls = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '';
+    if (!/^pg_dump /m.test(calls) || !/^psql /m.test(calls)) v.push(`psql and pg_dump were not seen running (log: ${calls.slice(0, 200)})`);
+    if (password && calls.includes(password)) v.push('The database password was on a psql or pg_dump command line');
+    if (password && calls.includes(encodeURIComponent(password))) v.push('The encoded database password was on a psql or pg_dump command line');
   } finally {
     fs.writeFileSync(envFile, envBefore);
   }
@@ -260,6 +300,7 @@ export async function runBackupRestoreChecks(): Promise<RecoveryCheckOutcome[]> 
     const results: string[][] = [await checkBackupFromAnyDirectory(ctx)];
     if (!ctx.dump) return outcome([results[0], ...NAMES.slice(1).map(() => ['پشتیبانی برای بازیابی ساخته نشد'])]);
     results.push(await checkBackupGoesOffsite(ctx));
+    results.push(await checkBackupPasswordOffCommandLine(ctx));
     results.push(await checkDrillComparesContent(ctx));
     results.push(await checkDrillWithInstalledRole(ctx));
     results.push(await checkUpgradeRehearsal(ctx));

@@ -53,6 +53,7 @@ echo "fake 1000000000000 100000000000 900000000000 10% /"`);
     stub(path.join(bin, 'psql'), `echo "psql $* PASSFILE=$(cat "$PGPASSFILE" 2>/dev/null | tr '\n' ' ')" >> "${calls}"
 case "$*" in
   *pg_database_size*) echo "\${FAKE_DB_BYTES:-1000}" ;;
+  *max_wal_size*) echo "\${FAKE_WAL_INDEX-2147483648 1000}" ;;
   *data_directory*) echo "${data}" ;;
   *"SELECT datname"*) printf '%s\n' erp_restore_drill_20200101_000000 "erp_restore_drill_$(date +%Y%m%d_%H%M%S)" erp_live ;;
 esac
@@ -181,6 +182,32 @@ exit 0`);
     expect(full.log()).toContain('--failed no_space');
     for (const f of [none, old, full]) expect(f.log()).not.toContain('restore DATABASE_URL');
     fs.rmSync(full.dir, { recursive: true, force: true });
+  }, 30_000);
+
+  it('free_space_estimate_td_1352: the room counts the largest index again and twice max_wal_size plus wal_keep_size', () => {
+    const good = fakeApp();
+    const ok = spawnSync('bash', [good.script], { encoding: 'utf8', env: good.env });
+    expect(ok.status, ok.stdout + ok.stderr).toBe(0);
+    expect(ok.stdout).toContain('database 1000 bytes, largest index 1000 bytes, WAL 2147483648 bytes');
+    fs.rmSync(good.dir, { recursive: true, force: true });
+
+    // 900 GB free of 1 TB: the database alone fits, its largest index on top of it does not
+    const index = fakeApp();
+    const big = spawnSync('bash', [index.script], { encoding: 'utf8', env: { ...index.env, FAKE_DB_BYTES: '500000000000', FAKE_WAL_INDEX: '2147483648 300000000000' } });
+    expect(big.status).toBe(1);
+    expect(index.log()).toContain('--failed no_space');
+    expect(index.log()).not.toContain('restore DATABASE_URL');
+    fs.rmSync(index.dir, { recursive: true, force: true });
+
+    const wal = fakeApp();
+    expect(spawnSync('bash', [wal.script], { encoding: 'utf8', env: { ...wal.env, FAKE_WAL_INDEX: '850000000000 0' } }).status).toBe(1);
+    expect(wal.log()).toContain('--failed no_space');
+    fs.rmSync(wal.dir, { recursive: true, force: true });
+
+    const unread = fakeApp();
+    expect(spawnSync('bash', [unread.script], { encoding: 'utf8', env: { ...unread.env, FAKE_WAL_INDEX: '' } }).status).toBe(1);
+    expect(unread.log()).toContain('--failed space_unknown');
+    fs.rmSync(unread.dir, { recursive: true, force: true });
   }, 30_000);
 
   it('a night is skipped while a backup, a rehearsal, an update or a restore runs', () => {
