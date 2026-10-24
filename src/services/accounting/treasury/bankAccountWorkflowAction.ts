@@ -27,8 +27,21 @@ async function bankAccountExists(tx: DbExecutor, entityId: string): Promise<bool
   return !!row;
 }
 
+/**
+ * 10.3 package 4 (OBS-R1-65): the account row before the instance row, the order of the account's own edit and delete
+ * (account row, then `terminateEntityWorkflows`). The approval locks the row again in `issueTreasuryOpeningVoucher`, so
+ * an edit of the start date waits for it; without this first lock an approval and a delete of the same account took the
+ * two rows in opposite orders and one of them ended in a deadlock.
+ */
+async function lockBankAccountRow(tx: DbExecutor, entityId: string): Promise<void> {
+  const id = workflowEntityNumericId(entityId);
+  if (id === undefined) return;
+  await tx.select({ id: bankAccounts.id }).from(bankAccounts).where(eq(bankAccounts.id, id)).for('update');
+}
+
 export function registerBankAccountWorkflowAction(): void {
   registerWorkflowTransitionAction(['bank_account'], {
+    lockEntity: lockBankAccountRow,
     run: issueApprovedTreasuryOpening,
     entityExists: bankAccountExists,
     // v9.0.35 (TD-445، ت۳): سند افتتاحیه حساب خزانه همان مجوز ساخت حساب (`POST /accounting/bank-accounts`) را می‌خواهد
