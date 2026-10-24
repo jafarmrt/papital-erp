@@ -67,7 +67,7 @@ export function OutboxSubTab({ canManage, onNotice }: { canManage: boolean; onNo
   const statsError = readFailure(statsRead.error, 'آمار صف ارسال رویداد خوانده نشد.');
   const listError = readFailure(pageRead.error, 'فهرست صف ارسال رویداد بارگذاری نشد.');
   // the refresh button waits for this visit's first answers, not for every ten-second poll
-  const reading = (!statsRead.data && statsQuery.isFetching) || (!pageRead.data && pageQuery.isFetching);
+  const reading = (statsRead.data === undefined && statsQuery.isFetching) || (pageRead.data === undefined && pageQuery.isFetching);
 
   const processOutboxMutation = useProcessOutboxMutation();
   const retryFailedMutation = useRetryFailedOutboxMutation();

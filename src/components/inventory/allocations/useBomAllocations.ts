@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { downloadSheet } from '../../../lib/excel/downloadSheet';
+import { XLSX_LOAD_FAILED_MESSAGE, downloadSheet } from '../../../lib/excel/downloadSheet';
 import { useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../../api';
 import { isProjectOpenForAllocation } from '../../../lib/projects/projectStatus';
@@ -120,7 +120,8 @@ export function useBomAllocations() {
     try {
       await downloadSheet(data, 'تخصیص مواد اولیه', bomAllocationsExportFileName(getTodayJalaliDate()));
     } catch (err) {
-      toast.error(errorMessageOf(err) || EXPORT_FAILED_MESSAGE);
+      // the library's own failure text is not the user's language; only the Persian load failure is shown as it is
+      toast.error(errorMessageOf(err) === XLSX_LOAD_FAILED_MESSAGE ? XLSX_LOAD_FAILED_MESSAGE : EXPORT_FAILED_MESSAGE);
     }
   };
 
