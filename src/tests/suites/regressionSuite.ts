@@ -7563,10 +7563,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       // v9.0.268 (TD-808): فیش دوره‌ای که هنوز تمام نشده صادر نمی‌شود، پس این آزمون از مهر به شهریور آمد
       const audit = { username: 'ERP-TEST-MARKER' };
       const first = await PieceworkPayrollService.generatePayroll({ personnelId: pers.id, startDate: '1405/06/01', endDate: '1405/06/15', ...audit });
-      if (first.status !== 201 || !('payroll' in first) || !first.payroll) throw new Error(`first payslip: ${JSON.stringify(first)}`);
+      if (first.status !== 201 || !first.payroll) throw new Error(`first payslip: ${JSON.stringify(first)}`);
       payrollIds.push(first.payroll.id);
       const second = await PieceworkPayrollService.generatePayroll({ personnelId: pers.id, startDate: '1405/06/16', endDate: '1405/06/31', ...audit });
-      if (second.status !== 201 || !('payroll' in second) || !second.payroll) throw new Error(`second payslip: ${JSON.stringify(second)}`);
+      if (second.status !== 201 || !second.payroll) throw new Error(`second payslip: ${JSON.stringify(second)}`);
       payrollIds.push(second.payroll.id);
       if (first.payroll.startDate !== toStorageDate('1405/06/01') || first.payroll.endDate !== toStorageDate('1405/06/15')) violations.push(`payslip period: ${first.payroll.startDate}, ${first.payroll.endDate}`);
       // v8.0.30 (TD-284، تصمیم مالک محصول — گزینه ب): ماه ناقص به نسبت روزها؛ دو نیمه شهریور (۳۱ روزه) روی هم دقیقاً یک ماه

@@ -6,6 +6,7 @@ import { getTodayJalaliDate, isoToJalaliDate, formatPersianDate } from '../../ut
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { MentionTextarea } from '../MentionTextarea';
 import { DialogLayer } from '../common/DialogLayer';
+import { personnelSellerOption, personnelServerSearchUrl } from '../../lib/personnel/personnelList';
 
 interface CRMInteractionModalProps {
   // Activity Modal Props
@@ -279,13 +280,17 @@ export function CRMInteractionModal({
                   <SearchableSelect
                     id={`${fieldId}-assigned-personnel-id`}
                     value={activityForm.assignedPersonnelId ? String(activityForm.assignedPersonnelId) : ''}
-                    onChange={(value) => {
+                    onChange={(value, raw?: { id: number; fullName?: string }) => {
                       const id = value ? Number(value) : null;
-                      const selected = personnelList.find((p: any) => p.id === id);
+                      const selected = personnelList.find((p: any) => p.id === id) ?? (raw && raw.id === id ? raw : undefined);
                       setActivityForm({ ...activityForm, assignedPersonnelId: id, assignedTo: selected?.fullName || '' });
                     }}
                     placeholder="انتخاب مسئول پیگیری"
-                    options={personnelList.map((p: any) => ({ value: String(p.id), label: `${p.fullName}${p.jobTitle ? ` — ${p.jobTitle}` : ''}` }))}
+                    options={personnelList.map(personnelSellerOption)}
+                    // 10.3 package 6 (TD-1362): a list cut at the cap also searches the active personnel on the server
+                    serverSearchUrl={personnelServerSearchUrl(personnelList, { activeOnly: true })}
+                    mapResultToOption={personnelSellerOption}
+                    valueLabel={activityForm.assignedTo || undefined}
                   />
                 </div>
               </div>

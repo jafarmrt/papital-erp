@@ -168,7 +168,7 @@ export async function runTreasuryEventPrivacyTests(shouldRun: ShouldRun): Promis
       const storedName = String((await pool.query<{ n: string }>('SELECT full_name AS n FROM personnel WHERE id = $1', [workerId])).rows[0]?.n);
       await addLog(workerId, await newTask(), '2026-04-05', 1_234_567);
       const issued = await issueApproved({ personnelId: workerId, startDate: '2026-04-01', endDate: '2026-04-30', username: 'td1297' });
-      if (!issued.payroll) throw new Error(`setup: issuing the payslip failed (${issued.error})`);
+      if (!issued.payroll) throw new Error('setup: issuing the payslip failed');
       const bankId = await fundedBank();
       const paid = await api.post(`/api/piecework/payrolls/${issued.payroll.id}/register-payment`, { bankAccountId: bankId, method: 'cash', amount: 345_678 });
       const transactionId = Number((paid.body as { transactionId?: unknown })?.transactionId);

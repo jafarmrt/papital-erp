@@ -21,7 +21,7 @@ import { isPayrollBankCurrency, PAYROLL_CURRENCY, payrollAmountText } from '../.
 import { money } from '../../lib/money.js';
 import { isoToJalaliDate } from '../../utils.js';
 import { resolveTreasuryWriteDate } from './treasury/treasuryDate.js';
-import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
+import { ConflictError, NotFoundError, PrivateRefusalError, ValidationError } from '../../errors/customErrors.js';
 import { idempotentTransaction } from '../../middleware/idempotency.js';
 
 // V4.0.33: سرویس جامع و واحد ثبت پرداخت حقوق — پشتیبانی کامل از پرداخت‌های چندمرحله‌ای (قسطی / جزئی)
@@ -201,8 +201,11 @@ export class PayrollPaymentService {
       }
 
       if (payAmount.greaterThan(remainingAmount)) {
-        throw new ValidationError(
-          `مبلغ پرداختی (${payrollAmountText(payAmount)}) نمی‌تواند از مانده قابل پرداخت فیش (${payrollAmountText(remainingAmount)}) بیشتر باشد.`
+        // TD-1386: the amounts reach the user, never the error log (the same status and code as before)
+        throw new PrivateRefusalError(
+          `مبلغ پرداختی (${payrollAmountText(payAmount)}) نمی‌تواند از مانده قابل پرداخت فیش (${payrollAmountText(remainingAmount)}) بیشتر باشد.`,
+          422,
+          'VALIDATION_ERROR',
         );
       }
 

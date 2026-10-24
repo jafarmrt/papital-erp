@@ -8,3 +8,8 @@ import type { Personnel } from '../../types/personnel.types';
 export function personnelPartyName(p: Pick<Personnel, 'fullName' | 'firstName' | 'lastName'>): string {
   return (p.fullName || '').trim() || `${p.firstName || ''} ${p.lastName || ''}`.trim();
 }
+
+/** A personnel party's picker option, one label for the cut list and the server's matches (10.3 package 6, TD-1362) */
+export function personnelPartyOption(p: Pick<Personnel, 'id' | 'fullName' | 'firstName' | 'lastName'>): { value: string; label: string } {
+  return { value: String(p.id), label: personnelPartyName(p) };
+}

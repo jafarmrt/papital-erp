@@ -60,7 +60,7 @@ export async function checkSalarySettlementOnlyThroughPayslip(): Promise<string[
   const name = await workerName(worker);
   const bankId = await richBank();
   const issued = await PieceworkPayrollService.generatePayroll({ personnelId: worker, ...PERIOD });
-  if (!issued.payroll) return [`the payslip was not issued: ${issued.error}`];
+  if (!issued.payroll) return ['the payslip was not issued'];
   await PieceworkPayrollService.updatePayrollStatus(issued.payroll.id, { status: 'approved', username: 'inv' });
 
   const before = await bankBalance(bankId);
@@ -105,7 +105,7 @@ export async function checkDeductedAdvanceNotVoided(): Promise<string[]> {
     purpose: 'advance', date: '2026-04-03', username: 'inv',
   });
   const issued = await PieceworkPayrollService.generatePayroll({ personnelId: worker, ...PERIOD, advanceDeduction: 2000000 });
-  if (!issued.payroll) return [`the payslip with the advance deduction was not issued: ${issued.error}`];
+  if (!issued.payroll) return ['the payslip with the advance deduction was not issued'];
 
   const before = await bankBalance(bankId);
   const refused = await errorCodeOf(() => TreasuryTransactionService.voidTreasuryTransaction(advance.id, { reason: 'TD-926', username: 'inv' }));

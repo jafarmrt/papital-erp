@@ -44,7 +44,7 @@ export async function checkPayrollNetEqualsVoucher(): Promise<string[]> {
     purpose: 'advance', date: '2026-04-02', username: 'inv',
   });
   const issued = await PieceworkPayrollService.generatePayroll({ personnelId: worker, ...PERIOD, bonuses: 50000, deductions: 150000, deductionsDescription: 'TD-804 deduction', advanceDeduction: 200000 });
-  if (!issued.payroll || !fin(issued.payroll.netPayable).equals(700000)) problems.push(`payslip with all parts: ${issued.payroll?.netPayable ?? issued.error}, expected net 700,000`);
+  if (!issued.payroll || !fin(issued.payroll.netPayable).equals(700000)) problems.push(`payslip with all parts: ${issued.payroll?.netPayable}, expected net 700,000`);
 
   // negative parts are refused before anything is written
   const negativeWorker = await newWorker('I10 negative');
@@ -69,7 +69,7 @@ export async function checkPayrollNetEqualsVoucher(): Promise<string[]> {
   const unpaid = await refusalOf(() => PayrollPaymentService.registerPayrollPayment({ payrollId: unvouchered.id, bankAccountId: bankId, paymentDate: '2026-05-01', username: 'inv' }));
   if (unpaid === null || !unpaid.includes('سند حسابداری ندارد')) problems.push(`a payslip without a voucher was paid (${unpaid ?? 'accepted'})`);
   const synced = await PieceworkPayrollService.syncPayrollVoucher(unvouchered.id, { username: 'inv' });
-  if (!synced.voucher) problems.push(`the legacy payslip got no voucher on sync (${synced.error})`);
+  if (!synced.voucher) problems.push('the legacy payslip got no voucher on sync');
   else await PayrollPaymentService.registerPayrollPayment({ payrollId: unvouchered.id, bankAccountId: bankId, paymentDate: '2026-05-01', username: 'inv' });
 
   for (const v of await checkPayrollInvariants(mark.payrollIdAfter)) problems.push(`after repair: ${v.invariant} ${v.key} ${v.message}`);
@@ -96,9 +96,10 @@ export async function checkAdvanceBalanceFromLedgerOnly(): Promise<string[]> {
   if (settlement === null) problems.push('a treasury settlement payment to personnel was accepted');
   const balance = await PayrollPaymentService.getPersonnelAdvanceBalance(worker);
   if (balance.outstandingAdvance !== 0 || balance.totalAdvances !== 0) problems.push(`advance balance after a settlement payment: ${balance.outstandingAdvance} (total ${balance.totalAdvances}), expected 0`);
-  const issued = await PieceworkPayrollService.generatePayroll({ personnelId: worker, ...PERIOD, advanceDeduction: 2000000 });
-  if (issued.payroll) problems.push(`an advance deduction of 2,000,000 was accepted without any advance (net ${issued.payroll.netPayable})`);
-  else if (!String(issued.error ?? '').includes('مساعده')) problems.push(`the refusal does not name the advance: ${issued.error}`);
+  // 10.3 package 6 (TD-1386): the refusal is thrown, no longer returned as `{ status, error }`
+  const refused = await refusalOf(() => PieceworkPayrollService.generatePayroll({ personnelId: worker, ...PERIOD, advanceDeduction: 2000000 }));
+  if (refused === null) problems.push('an advance deduction of 2,000,000 was accepted without any advance');
+  else if (!refused.includes('مساعده')) problems.push(`the refusal does not name the advance: ${refused}`);
   const ledger = await personNet('1301', worker);
   if (!fin(ledger).isZero()) problems.push(`the advance account of the worker is ${ledger}, expected 0`);
   if (await payrollCount(worker) !== 0) problems.push('a payslip was written for the refused advance deduction');

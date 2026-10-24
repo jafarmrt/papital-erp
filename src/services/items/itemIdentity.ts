@@ -1,7 +1,8 @@
-import { and, asc, eq, inArray, ne, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, ne, sql, type SQL } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { items } from '../../db/schema.js';
 import { ConflictError } from '../../errors/customErrors.js';
+import { itemCodeKey, itemNameKey } from '../../lib/items/itemKeys.js';
 import type { HealthCheckTestResult } from '../../types.js';
 
 /**
@@ -76,20 +77,35 @@ export interface DuplicateItemIdentityRow {
   kind: 'code' | 'name';
 }
 
-async function duplicatesBy(db: DbExecutor, key: SQL, kind: 'code' | 'name'): Promise<DuplicateItemIdentityRow[]> {
-  const duplicated = db.select({ k: sql<string>`${key}`.as('k') }).from(items)
-    .where(eq(items.isDeleted, 0)).groupBy(key).having(sql`COUNT(*) > 1`);
-  const rows = await db.select({ id: items.id, code: items.code, name: items.name }).from(items)
-    .where(and(eq(items.isDeleted, 0), inArray(key, duplicated)))
-    .orderBy(asc(key), asc(items.id));
-  return rows.map(r => ({ ...r, kind }));
+type ItemIdentityRow = Omit<DuplicateItemIdentityRow, 'kind'>;
+
+function duplicatesBy(rows: readonly ItemIdentityRow[], keyOf: (r: ItemIdentityRow) => string, kind: 'code' | 'name'): DuplicateItemIdentityRow[] {
+  const groups = new Map<string, ItemIdentityRow[]>();
+  for (const r of rows) {
+    const key = keyOf(r);
+    // a code or name of white space only is no key: the app finds no item by it (`itemRefKeyCondition`), so it shares nothing
+    if (key === '') continue;
+    const group = groups.get(key);
+    if (group) group.push(r);
+    else groups.set(key, [r]);
+  }
+  return [...groups.entries()]
+    .filter(([, group]) => group.length > 1)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .flatMap(([, group]) => group.map(r => ({ ...r, kind })));
 }
 
+/**
+ * The live items that share a code key or a name key. 10.3 package 6 (TD-1386): the keys are the app's own item match
+ * (`itemCodeKey` / `itemNameKey`), the rule a project row, the reservation and «تکمیل رزرو» find their item by. Before,
+ * the database grouped them by `upper(btrim(code))`: `btrim` removes only the space and `upper` maps letters by the
+ * database's collation, so two items the app reads as one (a code ending in a tab or a no-break space, «xß» and «XSS»)
+ * were never listed, though a project row of either took whichever came first.
+ */
 export async function findDuplicateItemIdentities(db: DbExecutor = orm): Promise<DuplicateItemIdentityRow[]> {
-  return [
-    ...await duplicatesBy(db, sql`upper(btrim(${items.code}))`, 'code'),
-    ...await duplicatesBy(db, sql`lower(btrim(${items.name}))`, 'name'),
-  ];
+  const rows = await db.select({ id: items.id, code: items.code, name: items.name }).from(items)
+    .where(eq(items.isDeleted, 0)).orderBy(asc(items.id));
+  return [...duplicatesBy(rows, r => itemCodeKey(r.code), 'code'), ...duplicatesBy(rows, r => itemNameKey(r.name), 'name')];
 }
 
 export async function hasItemIdentityIndexes(db: DbExecutor = orm): Promise<boolean> {
@@ -98,7 +114,7 @@ export async function hasItemIdentityIndexes(db: DbExecutor = orm): Promise<bool
 }
 
 export function buildItemIdentityHealthTest(duplicates: DuplicateItemIdentityRow[], indexesPresent: boolean): HealthCheckTestResult {
-  const keyOf = (r: DuplicateItemIdentityRow) => r.kind === 'code' ? `code:${r.code.trim().toUpperCase()}` : `name:${r.name.trim().toLowerCase()}`;
+  const keyOf = (r: DuplicateItemIdentityRow) => r.kind === 'code' ? `code:${itemCodeKey(r.code)}` : `name:${itemNameKey(r.name)}`;
   const idsByKey = new Map<string, number[]>();
   for (const r of duplicates) idsByKey.set(keyOf(r), [...(idsByKey.get(keyOf(r)) ?? []), r.id]);
   const groups = idsByKey.size;
@@ -110,8 +126,12 @@ export function buildItemIdentityHealthTest(duplicates: DuplicateItemIdentityRow
     status: groups > 0 || !indexesPresent ? 'warning' : 'healthy',
     scoreImpact: -Math.min(10, groups * 2),
     count: groups,
+    // 10.3 package 6 (TD-1386): with the unique indexes in place a listed pair differs only where the database tells
+    // them apart (a tab or a no-break space at an end, a letter such as «ß»), so the message no longer says the index is missing
     message: groups > 0
-      ? `${groups} کد یا نام بین بیش از یک کالای فعال مشترک است و قید یکتایی در پایگاه‌داده اعمال نشده است؛ کالاها خودکار تغییر نمی‌کنند و باید یکی از آن‌ها ویرایش شود.`
+      ? (indexesPresent
+        ? `${groups} کد یا نام بین بیش از یک کالای فعال مشترک است؛ فرقشان فقط در فاصله‌ای مانند «تب» یا «فاصله نشکن» در ابتدا یا انتها یا در حرفی مانند «ß» است و برنامه آن‌ها را یک کالا می‌خواند. کالاها خودکار تغییر نمی‌کنند و باید یکی از آن‌ها ویرایش شود.`
+        : `${groups} کد یا نام بین بیش از یک کالای فعال مشترک است و قید یکتایی در پایگاه‌داده اعمال نشده است؛ کالاها خودکار تغییر نمی‌کنند و باید یکی از آن‌ها ویرایش شود.`)
       : (indexesPresent
         ? 'کد و نام تکراری بین کالاهای فعال وجود ندارد و پایگاه‌داده از ثبت تکراری جلوگیری می‌کند.'
         : 'کد و نام تکراری بین کالاهای فعال وجود ندارد اما قید یکتایی در پایگاه‌داده اعمال نشده است.'),
