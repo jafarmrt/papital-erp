@@ -79,3 +79,16 @@ describe('10.3 package 6: service refusals are AppErrors with a code (decision t
       .rejects.toMatchObject({ statusCode: 422, code: 'VOUCHER_CORRECTION_ROWS_REQUIRED' });
   });
 });
+
+describe('10.3 package 6: the personnel Excel import names the export columns it does not read', () => {
+  it('lists the salary, flag and end-of-service columns a sheet holds, in the export order, whatever their spacing', async () => {
+    const { unreadPersonnelColumns, unreadPersonnelColumnsNotice } = await import('../../lib/personnel/personnelImportCells');
+    const headers = ['کد پرسنلی', 'نام', 'مشمول عیدی', ' حقوق  ماهانه ', 'مشمول‌بیمه', 'ملیت', 'تاريخ پايان همکاری'];
+    const columns = unreadPersonnelColumns(headers);
+    expect(columns).toEqual(['تاریخ پایان همکاری', 'حقوق ماهانه', 'مشمول بیمه', 'مشمول عیدی']);
+    expect(unreadPersonnelColumnsNotice(columns)).toContain('«حقوق ماهانه»');
+    expect(unreadPersonnelColumnsNotice(columns)).toContain('خوانده نمی‌شوند');
+    expect(unreadPersonnelColumns(['کد پرسنلی', 'نام', 'ملیت'])).toEqual([]);
+    expect(unreadPersonnelColumnsNotice([])).toBeNull();
+  });
+});

@@ -34,3 +34,26 @@ export function personnelCellLabel(value: string | undefined, isExistingMatch: b
   if (value) return value;
   return isExistingMatch ? 'بدون تغییر' : fallback;
 }
+
+/**
+ * 10.3 package 6 (TD-1386): the columns of the personnel export (OBS-R2-57) that the import does not read: the end of
+ * service, the salary and the insurance, payroll tax and eidi flags. They change only in each person's file, so a
+ * re-imported export (or a sheet edited by hand) changes none of them; the preview names the ones the file holds.
+ */
+export const PERSONNEL_UNREAD_IMPORT_COLUMNS = [
+  'تاریخ پایان همکاری', 'علت قطع همکاری', 'نوع حقوق', 'حقوق ماهانه', 'مشمول بیمه', 'مشمول مالیات حقوق', 'مشمول عیدی',
+] as const;
+
+const headerKey = (header: unknown) => cellText(header).replace(/[\s‌_\-–—:()[\]]/g, '');
+
+/** The unread columns (`PERSONNEL_UNREAD_IMPORT_COLUMNS`) among a sheet's headers, in the export's order */
+export function unreadPersonnelColumns(headers: readonly unknown[]): string[] {
+  const held = new Set(headers.map(headerKey));
+  return PERSONNEL_UNREAD_IMPORT_COLUMNS.filter(column => held.has(headerKey(column)));
+}
+
+/** The preview's notice for the unread columns of a file, or null when it holds none */
+export function unreadPersonnelColumnsNotice(columns: readonly string[]): string | null {
+  if (columns.length === 0) return null;
+  return `ستون‌های ${columns.map(c => `«${c}»`).join('، ')} در ورود اکسل خوانده نمی‌شوند و با این فایل چیزی در آن‌ها تغییر نمی‌کند؛ این موارد را در پرونده هر نفر ویرایش کنید.`;
+}
