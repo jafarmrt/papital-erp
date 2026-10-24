@@ -12,7 +12,8 @@ import { sameTreasuryCurrency } from '../../lib/treasury/treasuryCurrency';
  */
 const ROOT = path.resolve(__dirname, '../../..');
 const POSTING_FILE = 'src/services/accounting/treasury/treasuryPosting.ts';
-const MINT = /\bas\s+(?:unknown\s+as\s+)?LockedTreasuryBank\b/g;
+// `x as LockedTreasuryBank`, `x as unknown as LockedTreasuryBank` and the angle-bracket cast `<LockedTreasuryBank>x`
+const MINT = /\bas\s+(?:unknown\s+as\s+)?LockedTreasuryBank\b|<LockedTreasuryBank>\s*[\w(]/g;
 
 function productionFiles(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
@@ -51,6 +52,8 @@ describe('a treasury balance write takes a locked bank (10.3 package 4)', () => 
   it('the scan sees a cast elsewhere', () => {
     expect('const b = row as LockedTreasuryBank;'.match(MINT)).toHaveLength(1);
     expect('const b = row as unknown as LockedTreasuryBank;'.match(MINT)).toHaveLength(1);
+    expect('const b = <LockedTreasuryBank>row;'.match(MINT)).toHaveLength(1);
+    expect('async function f(): Promise<LockedTreasuryBank> {'.match(MINT)).toBeNull();
   });
 
   it('treasury currency codes compare whatever their case, an empty code being rial', () => {

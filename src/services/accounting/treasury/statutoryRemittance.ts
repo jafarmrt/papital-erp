@@ -3,6 +3,7 @@ import { personnel, statutoryRemittanceLines } from '../../../db/schema.js';
 import { ConflictError, ValidationError } from '../../../errors/customErrors.js';
 import { fin, type DecimalValue, type FinancialDecimal } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
+import { sameTreasuryCurrency } from '../../../lib/treasury/treasuryCurrency.js';
 import { LockHierarchyLevel, validateLockOrder } from '../../../lib/lockOrder.js';
 import {
   STATUTORY_REMITTANCE_TEXT, statutoryMonthLeft, statutoryRemittanceDescription, type StatutoryRemittanceKind,
@@ -100,7 +101,8 @@ export async function createStatutoryRemittance(input: CreateStatutoryRemittance
     }
 
     const bank = await lockTreasuryBank(tx, input.bankAccountId);
-    if ((bank.currency || 'IRR') !== 'IRR') {
+    // 10.3 package 4: a rial account saved as «irr» is rial too (`sameTreasuryCurrency`)
+    if (!sameTreasuryCurrency(bank.currency, 'IRR')) {
       throw new ValidationError(`بیمه و مالیات حقوق ریالی است؛ «${bank.title}» ریالی نیست.`, undefined, 'STATUTORY_REMITTANCE_RIAL_ONLY');
     }
     if (!bank.accountId) {

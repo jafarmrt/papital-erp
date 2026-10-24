@@ -11,7 +11,7 @@ import { businessTodayIsoDate } from '../../../lib/businessClock.js';
 import type { JournalVoucher } from '../../../types.js';
 import { fin } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
-import { BANK_OPENING_DATE_LABEL, assertNoPendingOpeningApproval, assertOpeningDateChangeAllowed, voidBankOpeningVouchers } from './bankOpeningVoucher.js';
+import { BANK_OPENING_DATE_LABEL, assertNoPendingOpeningApproval, assertOpeningDateChangeAllowed, assertOpeningYearOpen, voidBankOpeningVouchers } from './bankOpeningVoucher.js';
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
 import { requireBankLedgerAccount } from './bankLinks.js';
 import { assertBankCurrencyChangeAllowed, assertBankLedgerChangeAllowed, assertBankTypeChangeKeepsPaidCheques, assertPettyCashCurrency, requireTreasuryCurrency } from './bankAccountCurrency.js';
@@ -428,8 +428,8 @@ export class BankAccountService {
           });
         } else if (ledgerAccountId) {
           // 10.3 package 4 (OBS-R1-65): the voucher waits for the final approval and carries the start date, so a start
-          // date in a closed fiscal year is refused now instead of at the approval
-          await VoucherService.checkFiscalPeriodOpen(openingDate, tx);
+          // date in a closed fiscal year is refused now as well as at the approval
+          await assertOpeningYearOpen(tx, inserted, openingDate);
         }
       }
 
@@ -491,11 +491,13 @@ export class BankAccountService {
 
     const amount = initialBal.abs();
     const isDebitBank = initialBal.isPositive(); // موجودی مثبت = بدهکار بانک
+    // 10.3 package 4 (OBS-R1-65, decision ت۴۷ item 2): the account's start date; an account defined before it has none
+    // and its first opening voucher is dated the business today, as before
+    const openingDate = bank.openingDate || await businessTodayIsoDate();
+    await assertOpeningYearOpen(executor, bank, openingDate);
 
     const created = await VoucherService.createJournalVoucher({
-      // 10.3 package 4 (OBS-R1-65, decision ت۴۷ item 2): the account's start date; an account defined before it has none
-      // and its first opening voucher is dated the business today, as before
-      date: bank.openingDate || await businessTodayIsoDate(),
+      date: openingDate,
       voucherType: 'opening',
       status: 'draft',
       description: `سند افتتاحیه موجودی اولیه ${bank.title} (${bank.type === 'bank' ? 'حساب بانکی' : 'صندوق'})`,

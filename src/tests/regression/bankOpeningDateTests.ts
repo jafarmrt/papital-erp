@@ -45,7 +45,8 @@ async function runCase(results: TestCaseResult[], id: string, name: string, body
   } catch (err) {
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: false, durationMs: Date.now() - tStart,
-      error: err instanceof Error ? err.message : String(err),
+      // a failed query keeps the database's own reason in `cause`
+      error: err instanceof Error ? [err.message, (err.cause as Error | undefined)?.message].filter(Boolean).join(' | cause: ') : String(err),
     }));
   }
 }
@@ -158,9 +159,11 @@ export async function runBankOpeningDateTests(shouldRun: ShouldRun): Promise<Tes
 
   const workflowId = 'reg_bank_opening_start_date_workflow_obs_r1_65';
   if (shouldRun(workflowId, 'obs-r1-65', 'td-986', 'treasury', 'bank', 'opening', 'workflow', 'package4')) {
-    await runCase(results, workflowId, '10.3 package 4: the workflow approval issues the opening voucher with the account start date, and the start date does not change while the approval is open (OBS-R1-65)', async () => {
-      const { createTestWorkflow } = await import('../fixtures/factories.js');
+    await runCase(results, workflowId, '10.3 package 4: the workflow approval issues the opening voucher with the start date the account has at the approval, which may still move while the approval is open (OBS-R1-65)', async () => {
+      const { createTestUser, createTestWorkflow } = await import('../fixtures/factories.js');
       const api = await client();
+      // a real approver: the voucher's creator is a foreign key to users, and user 1 is not there in every run
+      const approver = await createTestUser({ role: 'admin' });
       const problems: string[] = [];
       const wf = await createTestWorkflow({
         definition: { entityType: 'bank_account' },
@@ -183,19 +186,100 @@ export async function runBankOpeningDateTests(shouldRun: ShouldRun): Promise<Tes
       if (instance?.status !== 'IN_PROGRESS') throw new Error(`bank workflow instance is ${instance?.status ?? 'missing'}, expected IN_PROGRESS`);
       if ((await openingVouchersOf(bankId)).length !== 0) problems.push('the bank has an opening voucher before its approval');
 
+      // no voucher yet: the start date still moves, and the approval takes the moved one
       const pending = await api.put(`/api/accounting/bank-accounts/${bankId}`, { openingDate: '2026-04-10' });
-      if (pending.status !== 409) problems.push(`moving the start date while the approval is open returned ${brief(pending)}, expected 409`);
-      if (await storedOpeningDate(bankId) !== '2026-04-09') problems.push(`the refused move left start date ${await storedOpeningDate(bankId)}`);
+      if (pending.status !== 200) problems.push(`moving the start date while the approval is open returned ${brief(pending)}, expected 200`);
+      if (await storedOpeningDate(bankId) !== '2026-04-10') problems.push(`the move left start date ${await storedOpeningDate(bankId)}, expected 2026-04-10`);
+      const balance = await api.put(`/api/accounting/bank-accounts/${bankId}`, { initialBalance: 5_000_000 });
+      if (balance.status !== 409) problems.push(`changing the opening balance while the approval is open returned ${brief(balance)}, expected 409 (TD-504)`);
 
       await WorkflowTransitionExecutor.executeTransition({
-        instanceId: instance.id, transitionId: wf.transitions[0].id, userId: 1, userName: 'obs-r1-65', userRole: 'admin', userPermissions: ['*'],
+        instanceId: instance.id, transitionId: wf.transitions[0].id, userId: approver.id, userName: approver.username, userRole: 'admin', userPermissions: ['*'],
       });
       const vouchers = await openingVouchersOf(bankId);
       if (vouchers.length !== 1) problems.push(`the approval issued ${vouchers.length} opening vouchers, expected 1`);
-      else if (vouchers[0].date !== '2026-04-09') problems.push(`the approval dated the opening voucher ${vouchers[0].date}, expected the start date 2026-04-09`);
+      else if (vouchers[0].date !== '2026-04-10') problems.push(`the approval dated the opening voucher ${vouchers[0].date}, expected the start date 2026-04-10`);
 
       if (problems.length > 0) throw new Error(problems.join(' | '));
-      return 'start date 2026-04-09 under approval: move 409, the approval issued one voucher dated 2026-04-09';
+      return 'start date 2026-04-09 under approval: moved to 2026-04-10 (200), balance change 409, the approval issued one voucher dated 2026-04-10';
+    });
+  }
+
+  const closedYearId = 'reg_bank_opening_start_date_closed_year_obs_r1_65';
+  if (shouldRun(closedYearId, 'obs-r1-65', 'td-986', 'treasury', 'bank', 'opening', 'workflow', 'fiscal', 'package4')) {
+    await runCase(results, closedYearId, '10.3 package 4: a start date in a closed fiscal year is refused with a message naming it, at create, at the approval and at the first balance, and moving it lets each go on (OBS-R1-65)', async () => {
+      const { createTestUser, createTestWorkflow } = await import('../fixtures/factories.js');
+      const { FiscalPeriodService } = await import('../../services/accounting/fiscalPeriod.service.js');
+      const api = await client();
+      const approver = await createTestUser({ role: 'admin' });
+      const problems: string[] = [];
+      // 1385 (2006-2007): a year no other test uses; closed only inside this case
+      const YEAR = 1385;
+      const before = (await pool.query('SELECT status FROM fiscal_periods WHERE fiscal_year = $1', [YEAR])).rows[0] as { status: string } | undefined;
+      const setYear = async (status: 'open' | 'closed') => {
+        await pool.query(`INSERT INTO fiscal_periods (fiscal_year, status) VALUES ($1, $2)
+          ON CONFLICT (fiscal_year) DO UPDATE SET status = EXCLUDED.status`, [YEAR, status]);
+        FiscalPeriodService.resetCache();
+      };
+      try {
+        await setYear('open');
+        // 1) under approval, the start date's year closes before the approval
+        const wf = await createTestWorkflow({
+          definition: { entityType: 'bank_account' },
+          states: [{ key: 'draft', title: 'Draft', type: 'initial' }, { key: 'approved', title: 'Approved', type: 'terminal' }],
+          transitions: [{ fromKey: 'draft', toKey: 'approved', actionKey: 'approve_obs_r1_65_year', title: 'Approve' }],
+        });
+        let bankId = 0;
+        try {
+          const res = await api.post('/api/accounting/bank-accounts', {
+            title: `Old bank ${tagOf()}`, type: 'bank', accountId: await ownLedgerAccount('Old bank'), initialBalance: 2_000_000, openingDate: '2006-06-01',
+          });
+          if (res.status !== 201) throw new Error(`bank create under the workflow returned ${brief(res)}`);
+          bankId = Number(res.body.id);
+        } finally {
+          await wf.restore();
+        }
+        const [instance] = await orm.select({ id: workflowInstances.id }).from(workflowInstances)
+          .where(and(eq(workflowInstances.entityType, 'bank_account'), eq(workflowInstances.entityId, String(bankId))));
+        if (!instance) throw new Error('the bank has no workflow instance');
+        await setYear('closed');
+        const approve = () => WorkflowTransitionExecutor.executeTransition({
+          instanceId: instance.id, transitionId: wf.transitions[0].id, userId: approver.id, userName: approver.username, userRole: 'admin', userPermissions: ['*'],
+        });
+        const refusedCode = await approve().then(() => 'none', (err: unknown) => String((err as { code?: string }).code ?? (err as Error).message));
+        if (refusedCode !== 'BANK_OPENING_DATE_YEAR_CLOSED') problems.push(`the approval in a closed start year ended with ${refusedCode}, expected BANK_OPENING_DATE_YEAR_CLOSED`);
+        if ((await openingVouchersOf(bankId)).length !== 0) problems.push('the refused approval left an opening voucher');
+        const moved = await api.put(`/api/accounting/bank-accounts/${bankId}`, { openingDate: '2026-04-09' });
+        if (moved.status !== 200) problems.push(`moving the start date out of the closed year while the approval is open returned ${brief(moved)}, expected 200`);
+        await approve();
+        const approved = await openingVouchersOf(bankId);
+        if (approved.length !== 1 || approved[0].date !== '2026-04-09') problems.push(`after the move the approval issued ${JSON.stringify(approved)}, expected one voucher dated 2026-04-09`);
+
+        // 2) a zero-balance account whose start year closed gets its first balance
+        const zero = await api.post('/api/accounting/bank-accounts', {
+          title: `Old zero bank ${tagOf()}`, type: 'bank', accountId: await ownLedgerAccount('Old zero bank'), initialBalance: 0, openingDate: '2006-06-02',
+        });
+        if (zero.status !== 201) throw new Error(`zero-balance bank create returned ${brief(zero)}`);
+        const zeroId = Number(zero.body.id);
+        const first = await api.put(`/api/accounting/bank-accounts/${zeroId}`, { initialBalance: 1_000_000 });
+        if (first.status !== 422 || errorCode(first) !== 'BANK_OPENING_DATE_YEAR_CLOSED') problems.push(`a first balance in a closed start year returned ${brief(first)}, expected 422 BANK_OPENING_DATE_YEAR_CLOSED`);
+        const firstMoved = await api.put(`/api/accounting/bank-accounts/${zeroId}`, { initialBalance: 1_000_000, openingDate: '2026-04-08' });
+        if (firstMoved.status !== 200) problems.push(`a first balance with a start date moved to an open year returned ${brief(firstMoved)}, expected 200`);
+        const zeroVouchers = await openingVouchersOf(zeroId);
+        if (zeroVouchers.length !== 1 || zeroVouchers[0].date !== '2026-04-08') problems.push(`the first balance issued ${JSON.stringify(zeroVouchers)}, expected one voucher dated 2026-04-08`);
+
+        // 3) a new account with a balance dated in the closed year
+        const direct = await api.post('/api/accounting/bank-accounts', {
+          title: `Closed year bank ${tagOf()}`, type: 'bank', accountId: await ownLedgerAccount('Closed year bank'), initialBalance: 1_000_000, openingDate: '2006-06-03',
+        });
+        if (direct.status !== 422 || errorCode(direct) !== 'BANK_OPENING_DATE_YEAR_CLOSED') problems.push(`a create with a balance in a closed start year returned ${brief(direct)}, expected 422 BANK_OPENING_DATE_YEAR_CLOSED`);
+      } finally {
+        if (before) await pool.query('UPDATE fiscal_periods SET status = $2 WHERE fiscal_year = $1', [YEAR, before.status]);
+        else await pool.query('DELETE FROM fiscal_periods WHERE fiscal_year = $1', [YEAR]);
+        FiscalPeriodService.resetCache();
+      }
+      if (problems.length > 0) throw new Error(problems.join(' | '));
+      return 'closed start year: approval 422 BANK_OPENING_DATE_YEAR_CLOSED, moved under approval then one voucher on the new date; first balance 422 then 200 with a moved date; create 422';
     });
   }
 
