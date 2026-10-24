@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useId } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { CreditCard, Plus, Search, ArrowDownLeft, ArrowUpRight, Trash2, X, History, Download, ShieldCheck, Copy, Edit3 } from 'lucide-react';
-import * as xlsx from 'xlsx';
+import { downloadSheet } from '../../lib/excel/downloadSheet';
 import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, getTodayIsoDate, formatPersianDate, errorMessageOf, toStorageDate, isoToJalaliDate, toEnglishDigits, toPersianDigits } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
 import { ActionMenu } from '../ActionMenu';
@@ -331,7 +331,7 @@ export function ChequesTab({
   };
 
   // V1.5.0: خروجی اکسل چک‌ها
-  const handleExportChequesExcel = () => {
+  const handleExportChequesExcel = async () => {
     try {
       const rows = filteredCheques.map((c, i) => {
         const days = getDueDays(c.dueDate);
@@ -353,10 +353,7 @@ export function ChequesTab({
           'شرح': c.description || '',
         };
       });
-      const ws = xlsx.utils.json_to_sheet(rows);
-      const wb = xlsx.utils.book_new();
-      xlsx.utils.book_append_sheet(wb, ws, 'دفتر چک صیادی');
-      xlsx.writeFile(wb, `Cheques-${getTodayJalaliDate().replace(/\//g, '-')}.xlsx`);
+      await downloadSheet(rows, 'دفتر چک صیادی', `Cheques-${getTodayJalaliDate().replace(/\//g, '-')}.xlsx`);
       toast.success(`${rows.length} ردیف اکسل تهیه شد`);
     } catch (err: any) {
       toast.error(err?.message || 'خطا در تهیه اکسل');
@@ -515,7 +512,7 @@ export function ChequesTab({
           </div>
 
           <button
-            onClick={handleExportChequesExcel}
+            onClick={() => void handleExportChequesExcel()}
             className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-lg transition-colors cursor-pointer shrink-0"
             title="خروجی اکسل چک‌های فیلترشده"
           >

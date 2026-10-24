@@ -5,7 +5,7 @@
 # PGPASSFILE and removes the password from DATABASE_URL and RESTORE_ADMIN_URL; the full DATABASE_URL stays in
 # PG_FULL_DATABASE_URL for a Node program, which gets it through its environment. nightly-verify.sh has an older copy of the
 # parsing (no ~/.pgpass copy, no socket directory).
-# v10.3.23 (#381 review): without an inherited PGPASSFILE the user's ~/.pgpass is copied first, since libpq reads only the
+# v10.3.24 (#381 review): without an inherited PGPASSFILE the user's ~/.pgpass is copied first, since libpq reads only the
 # file PGPASSFILE names (a URL without a password that relied on ~/.pgpass kept working), and a socket directory given
 # as ?host=/path is the host field of the line written for it.
 

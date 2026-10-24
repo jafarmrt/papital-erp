@@ -164,8 +164,11 @@ describe('OBS-R2-87 events and notification UI', () => {
     expect(eventAggregateLabel('Treasury')).toBe('خزانه');
     expect(eventAggregateLabel('constructor')).toBe('constructor');
     expect(eventTypeLabel('UnknownThing')).toBe('UnknownThing');
-    const tab = source('src/components/settings/DomainEventsTab.tsx');
-    expect(tab).not.toMatch(/^\s*\{evt\.eventType\}$|\{evt\.aggregateType\}#/m);
+    // 10.3 package 6: the outbox and live events lists moved out of the tab into their own sub-tabs
+    for (const file of ['DomainEventsTab', 'OutboxSubTab', 'LiveEventsSubTab']) {
+      const tab = source(`src/components/settings/${file}.tsx`);
+      expect(tab, file).not.toMatch(/^\s*\{evt\.eventType\}$|\{evt\.aggregateType\}#/m);
+    }
   });
 
   it('the rule window shows a save error and stays open', async () => {

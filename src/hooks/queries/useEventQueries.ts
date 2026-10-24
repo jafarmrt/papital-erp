@@ -89,7 +89,10 @@ export function useDomainEventsQuery(filter: string = 'ALL', options?: { enabled
         stats: res?.stats || null,
       };
     },
-    staleTime: 5000,
+    // 10.3 package 6: each visit of the tab, and each filter picked again during it, reads at once (its screen shows only
+    // this visit's answers, `useOpeningRead`, so an answer cached before the visit must never wait for the next poll)
+    staleTime: 0,
+    refetchOnMount: 'always',
     enabled: options?.enabled ?? true,
     refetchInterval: options?.refetchInterval ?? DOMAIN_EVENTS_REFRESH_MS,
   });
@@ -103,7 +106,8 @@ export function useOutboxStatsQuery(options?: { enabled?: boolean; refetchInterv
       const res = await fetchJson<{ success?: boolean; stats?: OutboxStats }>('/events/outbox/stats', { signal: context.signal, headers: repeatPollHeaders(context) });
       return res?.stats || null;
     },
-    staleTime: 5000,
+    staleTime: 0,
+    refetchOnMount: 'always',
     enabled: options?.enabled ?? true,
     refetchInterval: options?.refetchInterval ?? 10000,
   });
@@ -130,8 +134,10 @@ export function useOutboxEventsQuery(
       const events = Array.isArray(res?.events) ? res.events : [];
       return { events, total: Number(res?.total ?? events.length) };
     },
-    staleTime: 5000,
-    placeholderData: keepPreviousData,
+    // the tab shows only answers of its current visit and filter, so an earlier page is never kept on screen as a placeholder,
+    // and a filter, page or search picked again reads at once instead of waiting for the next poll (a search has none)
+    staleTime: 0,
+    refetchOnMount: 'always',
     enabled: options?.enabled ?? true,
     // a search reads the whole table on the server, so it is not repeated every ten seconds
     refetchInterval: search ? false : (options?.refetchInterval ?? 10000),

@@ -1,4 +1,4 @@
-import * as xlsx from 'xlsx';
+import { downloadSheet } from '../excel/downloadSheet';
 import { toast } from 'react-hot-toast';
 import { EXPORT_FAILED_MESSAGE, INTEGRITY_EXPORT_FILE } from './exportFileNames';
 import type { InventoryIntegrityReport, ItemIntegrityAuditResult } from '../../types';
@@ -68,14 +68,11 @@ export function integrityExcelRows(report: InventoryIntegrityReport | null): Arr
   }));
 }
 
-export function exportIntegrityExcel(report: InventoryIntegrityReport | null): void {
+export async function exportIntegrityExcel(report: InventoryIntegrityReport | null): Promise<void> {
   const rows = integrityExcelRows(report);
   if (rows.length === 0) return;
   try {
-    const ws = xlsx.utils.json_to_sheet(rows);
-    const wb = xlsx.utils.book_new();
-    xlsx.utils.book_append_sheet(wb, ws, 'ممیزی سلامت انبار');
-    xlsx.writeFile(wb, INTEGRITY_EXPORT_FILE);
+    await downloadSheet(rows, 'ممیزی سلامت انبار', INTEGRITY_EXPORT_FILE);
   } catch {
     toast.error(EXPORT_FAILED_MESSAGE);
   }

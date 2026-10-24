@@ -79,7 +79,7 @@ fi
 # ---------- Locate the dump file and its companions ----------
 BACKUP_FILE="${1:-}"
 if [ -z "$BACKUP_FILE" ]; then
-  # v10.3.23 (TD-1353): the folder backup.sh writes to, from .env too
+  # v10.3.24 (TD-1353): the folder backup.sh writes to, from .env too
   [ -n "${BACKUP_DIR:-}" ] || BACKUP_DIR="$(env_file_value BACKUP_DIR)"
   BACKUP_DIR="${BACKUP_DIR:-/var/backups/erp}"
   # a relative folder is under APP_DIR, whichever directory cron, update.sh or a shell starts from

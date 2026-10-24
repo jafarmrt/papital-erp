@@ -13,7 +13,8 @@ const ROOT = join(__dirname, '..', '..');
 const EVENTS_UI = [
   'components/NotificationBell.tsx', 'pages/DomainEventsPage.tsx', 'lib/eventPayloadFields.ts',
   'components/settings/AutoActionsSubTab.tsx', 'components/settings/DeadLetterQueueSubTab.tsx',
-  'components/settings/DomainEventsTab.tsx', 'components/settings/EventFieldChips.tsx',
+  'components/settings/DomainEventsTab.tsx', 'components/settings/OutboxSubTab.tsx', 'components/settings/LiveEventsSubTab.tsx',
+  'components/settings/eventMonitorShared.tsx', 'components/settings/EventFieldChips.tsx',
   'components/settings/EventSourcingReplaySubTab.tsx', 'components/settings/EventSimulationPanel.tsx',
   'components/settings/RuleEditorModal.tsx', 'components/settings/ShopWarehouseSelect.tsx',
   'components/settings/WcOrderLogStatusBadge.tsx', 'components/settings/WebhookManagementSubTab.tsx',

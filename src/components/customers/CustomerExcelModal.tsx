@@ -1,6 +1,5 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { X, Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle2, Loader2, ArrowRight, Check, Search, RefreshCw, Building2, Truck } from 'lucide-react';
-import * as xlsx from 'xlsx';
 import toast from 'react-hot-toast';
 import { fetchJson } from '../../api';
 import { formatPersianNumber } from '../../utils';
@@ -10,6 +9,7 @@ import { parsePartyTypeCell, partyTypeCellLabel, type PartyType } from '../../li
 import { bankNumberCell, phoneCellText } from '../../lib/customers/customerExcelCells';
 import { contactChannelErrors } from '../../lib/customers/contactChannels';
 import { DialogLayer } from '../common/DialogLayer';
+import { loadXlsx } from '../../lib/excel/downloadSheet';
 
 interface CustomerExcelModalProps {
   isOpen: boolean;
@@ -138,6 +138,8 @@ export function CustomerExcelModal({
         return;
       }
 
+      // 10.3 package 6 (I-05): the xlsx library loads when a file is made or read, not with the page
+      const xlsx = await loadXlsx();
       const ws = xlsx.utils.json_to_sheet(rows);
       // Auto-fit column widths
       const colWidths = [
@@ -177,7 +179,7 @@ export function CustomerExcelModal({
   };
 
   // Download standard empty/sample template
-  const handleDownloadTemplate = () => {
+  const handleDownloadTemplate = async () => {
     const sampleRows = [
       {
         'شناسه': '',
@@ -219,6 +221,14 @@ export function CustomerExcelModal({
       }
     ];
 
+    let xlsx: typeof import('xlsx');
+    try {
+      xlsx = await loadXlsx();
+    } catch (err) {
+      console.error(err);
+      toast.error('الگوی اکسل ساخته نشد؛ دوباره تلاش کنید.');
+      return;
+    }
     const ws = xlsx.utils.json_to_sheet(sampleRows);
     ws['!cols'] = [
       { wch: 10 }, { wch: 28 }, { wch: 20 }, { wch: 16 }, { wch: 15 },
@@ -240,6 +250,7 @@ export function CustomerExcelModal({
     reader.onload = (e) => { void (async () => {
       try {
         const bstr = e.target?.result;
+        const xlsx = await loadXlsx();
         const wb = xlsx.read(bstr, { type: 'binary' });
         const firstSheetName = wb.SheetNames[0];
         const ws = wb.Sheets[firstSheetName];
@@ -511,7 +522,7 @@ export function CustomerExcelModal({
                   </div>
                   <button
                     type="button"
-                    onClick={handleDownloadTemplate}
+                    onClick={() => void handleDownloadTemplate()}
                     className="mt-4 w-full py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-blue-200/60"
                   >
                     <Download size={14} />

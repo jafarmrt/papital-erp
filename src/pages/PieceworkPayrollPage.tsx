@@ -228,7 +228,7 @@ export function PieceworkPayrollPage() {
           onOpenTaskHistory={handleOpenTaskHistoryModal}
           onOpenGlobalHistory={handleOpenGlobalHistoryModal}
           onOpenExcelModal={() => setIsExcelModalOpen(true)}
-          onDownloadTemplate={handleDownloadTemplate}
+          onDownloadTemplate={() => void handleDownloadTemplate()}
         />
       )}
 

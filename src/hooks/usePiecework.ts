@@ -474,22 +474,22 @@ export function usePiecework() {
     setSelectedTaskForHistory(null);
   };
 
-  const handleExportTasksExcel = () => {
+  const handleExportTasksExcel = async () => {
     try {
       if (tasksList.length === 0) {
         hotToast.error('هیچ عنوانی برای خروجی اکسل وجود ندارد.');
         return;
       }
-      exportPieceworkTasksToExcel(tasksList);
+      await exportPieceworkTasksToExcel(tasksList);
       hotToast.success('فایل اکسل عناوین کاری دانلود شد.');
     } catch (err: any) {
       hotToast.error('خطا در صدور فایل اکسل: ' + (err?.message || ''));
     }
   };
 
-  const handleDownloadTemplate = () => {
+  const handleDownloadTemplate = async () => {
     try {
-      downloadPieceworkTemplate();
+      await downloadPieceworkTemplate();
       hotToast.success('فایل قالب نمونه اکسل دانلود شد.');
     } catch (err: any) {
       hotToast.error('خطا در دانلود قالب اکسل: ' + (err?.message || ''));

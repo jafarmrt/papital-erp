@@ -54,7 +54,8 @@ async function exportReport(cost: boolean, tab?: RegExp) {
   expect(await screen.findAllByText('P-7')).toBeTruthy();
   if (tab) fireEvent.click(screen.getByText(tab));
   fireEvent.click(screen.getByText('خروجی اکسل'));
-  expect(writeFile).toHaveBeenCalledTimes(1);
+  // 10.3 package 6: the xlsx library loads on the click, so the file is written a moment later
+  await waitFor(() => expect(writeFile).toHaveBeenCalledTimes(1));
   const [workbook, fileName] = writeFile.mock.calls[0] as [realXlsx.WorkBook, string];
   // written and read back the way Excel opens the file
   const reread = realXlsx.read(realXlsx.write(workbook, { type: 'array', bookType: 'xlsx' }), { type: 'array' });

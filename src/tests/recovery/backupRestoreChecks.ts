@@ -35,7 +35,7 @@ const NAMES: Array<[string, string, CriticalScenarioId | undefined, string]> = [
     'v10.0.4: the daily backup copies its dump, manifest, attachment archive and the .env with ERP_SECRETS_KEY to the encrypted rclone remote and records both times; a failed copy keeps the local backup and exits 3 (TD-957)', undefined,
     'The remote held the four files and the .env copy; daily_ok and offsite_ok were written; with a failing upload the run exited 3 and kept the local dump'],
   ['rec_td_1351_backup_password_not_on_command_line',
-    'v10.3.23: the backup gives the database password to psql and pg_dump through a private password file, never on their command line where the process list shows it, and takes its folder from BACKUP_DIR in the app .env too (TD-1351, TD-1353)', undefined,
+    'v10.3.24: the backup gives the database password to psql and pg_dump through a private password file, never on their command line where the process list shows it, and takes its folder from BACKUP_DIR in the app .env too (TD-1351, TD-1353)', undefined,
     'psql and pg_dump got the database URL without the password and the dump went to the .env folder'],
   ['rec_td_361_restore_drill_compares_content', 'v8.0.85: the restore drill compares the restored database row by row with the content manifest of the same backup; a difference, an empty main table in a backup without a manifest and a missing attachment are refused (TD-361)', 'recovery_backup_restore',
     'The restore matched the manifest; a tampered manifest, an empty users table in a backup without a manifest and a missing attachment archive were refused'],
