@@ -53,7 +53,7 @@ async function approvedPayslip(label: string): Promise<{ payrollId: number; bank
   const workerId = await newWorker(`ERP-TEST-MARKER A7 ${label}`);
   await addLog(workerId, await newTask(), '2026-04-05', 1_000_000);
   const issued = await issueApproved({ personnelId: workerId, startDate: '2026-04-01', endDate: '2026-04-30', username: 'a7' });
-  if (!issued.payroll) throw new Error(`setup: issuing the payslip failed (${issued.error})`);
+  if (!issued.payroll) throw new Error('setup: issuing the payslip failed');
   return { payrollId: issued.payroll.id, bankId: await fundedBank(), workerId };
 }
 

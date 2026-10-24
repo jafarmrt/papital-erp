@@ -139,8 +139,10 @@ export async function unlinkScheduleRow(tx: DbExecutor, projectId: number | null
  * after the log row (the order of a delete and of the progress sync that follows), so a schedule save cannot lower the row
  * between this check and the write; a manual log's edit still takes no project lock. A stored log already above its row is
  * left as it is; only an edit to another quantity above the row is refused.
+ * 10.3 package 6 (TD-1386, review L1 of #347): an edit that lowers a stored log already above its row is taken even while
+ * it stays above the row (50 to 40 on a row of 10), since it pays less, never more; only a raise above the row is refused.
  */
-export async function assertLinkedRowQuantity(tx: DbExecutor, projectId: number | null, logId: number, quantity: number): Promise<boolean> {
+export async function assertLinkedRowQuantity(tx: DbExecutor, projectId: number | null, logId: number, quantity: number, storedQuantity: number): Promise<boolean> {
   if (projectId === null) return false;
   const linkedRow = (schedules: unknown) => workshopScheduleRows(schedules).find(r => r.pieceworkLogId === logId);
   const read = () => tx.select({ stageSchedules: productionProjects.stageSchedules }).from(productionProjects).where(eq(productionProjects.id, projectId));
@@ -149,6 +151,6 @@ export async function assertLinkedRowQuantity(tx: DbExecutor, projectId: number 
   const [project] = await read().for('update');
   const row = project ? linkedRow(project.stageSchedules) : undefined;
   if (!row) return false;
-  assertWithinRowQuantity({ stageId: row.stageId, productId: row.productId, rowId: row.rowId }, quantity, row.quantity);
+  if (quantity > storedQuantity) assertWithinRowQuantity({ stageId: row.stageId, productId: row.productId, rowId: row.rowId }, quantity, row.quantity);
   return true;
 }

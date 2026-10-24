@@ -14,7 +14,8 @@ import { NO_VOUCHER_TREASURY_PERMISSION } from '../../../lib/noVoucherPermission
 import { needsChosenContraAccount, type PersonnelPurpose } from '../../../lib/treasury/partyPurpose';
 import { PartyPurposeFields } from './PartyPurposeFields';
 import { readTreasuryVoucherPreview, type TreasuryVoucherPreview } from '../../../lib/treasury/treasuryVoucherPreview';
-import { personnelPartyName } from '../../../lib/treasury/personnelPartyName';
+import { personnelPartyName, personnelPartyOption } from '../../../lib/treasury/personnelPartyName';
+import { personnelServerSearchUrl } from '../../../lib/personnel/personnelList';
 import type { BankAccount, Customer, Personnel, FinancialAttachment } from '../../../types';
 import { DecimalInput } from '../../common/DecimalInput';
 import { DialogLayer } from '../../common/DialogLayer';
@@ -391,13 +392,14 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                   />
                 ) : formData.partyType === 'personnel' ? (
                   <SearchableSelect
-                    options={safePersonnelList.map(p => ({
-                      value: String(p.id),
-                      label: personnelPartyName(p),
-                    }))}
+                    options={safePersonnelList.map(personnelPartyOption)}
+                    // 10.3 package 6 (TD-1362): a list cut at the cap also searches on the server; the chosen row comes as `raw`
+                    serverSearchUrl={personnelServerSearchUrl(safePersonnelList)}
+                    mapResultToOption={personnelPartyOption}
+                    valueLabel={formData.partyName || undefined}
                     value={formData.partyId ? String(formData.partyId) : ''}
-                    onChange={(val) => {
-                      const p = safePersonnelList.find(x => String(x.id) === val);
+                    onChange={(val, raw?: Personnel) => {
+                      const p = safePersonnelList.find(x => String(x.id) === val) ?? (raw && String(raw.id) === val ? raw : undefined);
                       setFormData({ ...formData, partyId: p ? p.id : null, partyName: p ? personnelPartyName(p) : '' });
                     }}
                     placeholder="جست‌وجو و انتخاب پرسنل..."

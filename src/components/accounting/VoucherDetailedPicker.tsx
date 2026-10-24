@@ -10,6 +10,8 @@ import {
 import type { BankAccountOption } from '../../types';
 import { usePersonnelPickName } from '../../hooks/usePersonnelPickName';
 import { formatPersianCode } from '../../utils/persianNumber';
+import { personnelServerSearchUrl } from '../../lib/personnel/personnelList';
+import { SearchableSelect } from '../SearchableSelect';
 
 /**
  * v9.0.193 (TD-569، B03-27): انتخاب تفصیلی ردیف سند دستی و سند اصلاحی با همان فهرست نوع‌های سرور: مشتری، تأمین‌کننده،
@@ -32,8 +34,8 @@ interface VoucherDetailedPickerProps {
   customers: readonly Party[];
   personnelList: readonly Person[];
   typeRef?: React.Ref<HTMLSelectElement>;
-  /** فیلد دوم (فهرست یا عنوان آزاد) */
-  pickerRef?: React.RefObject<HTMLSelectElement | HTMLInputElement | null>;
+  /** فیلد دوم (فهرست یا عنوان آزاد؛ پرسنلِ فهرستِ بریده‌شده: دکمه انتخابگر جست‌وجوپذیر) */
+  pickerRef?: React.RefObject<HTMLSelectElement | HTMLInputElement | HTMLButtonElement | null>;
   /** Enter در فیلد دوم */
   onAdvance?: () => void;
   /** Enter در نوع تفصیلی */
@@ -78,6 +80,11 @@ export function VoucherDetailedPicker({
   const pick = (id: number | null, name: string) => onChange({ detailedType: type, detailedId: id, detailedName: name });
   const selectRef = pickerRef as React.Ref<HTMLSelectElement> | undefined;
   const inputRef = pickerRef as React.Ref<HTMLInputElement> | undefined;
+  const buttonRef = pickerRef as React.Ref<HTMLButtonElement> | undefined;
+  // 10.3 package 6 (TD-1362): a personnel list cut at the cap is a searchable picker that also searches on the server, so
+  // an older personnel is found by name; Enter on it moves on as on the plain list, which a list under the cap keeps
+  const personnelSearchUrl = type === 'personnel' ? personnelServerSearchUrl(personnelList) : undefined;
+  const searchPickerId = React.useId();
 
   const options: Array<{ id: number; label: string; name: string }> = (() => {
     if (type === 'customer' || type === 'supplier') {
@@ -128,7 +135,28 @@ export function VoucherDetailedPicker({
         />
       )}
 
-      {type !== 'none' && type !== 'other' && (
+      {personnelSearchUrl && (
+        <SearchableSelect
+          id={searchPickerId}
+          ariaLabel={`انتخاب ${VOUCHER_DETAILED_TYPE_LABELS[type]}`}
+          buttonRef={buttonRef}
+          onEnter={onAdvance}
+          className="flex-1"
+          value={value.detailedId ?? ''}
+          placeholder={`انتخاب ${VOUCHER_DETAILED_TYPE_LABELS[type]}...`}
+          options={options.map(o => ({ value: String(o.id), label: o.label }))}
+          serverSearchUrl={personnelSearchUrl}
+          mapResultToOption={(p: Person) => ({ value: String(p.id), label: voucherPersonnelName(p) })}
+          onChange={(val, raw?: Person) => {
+            const chosen = options.find(o => String(o.id) === val);
+            if (chosen) pick(chosen.id, chosen.name);
+            else if (raw && String(raw.id) === val) pick(raw.id, voucherPersonnelName(raw));
+            else pick(null, '');
+          }}
+        />
+      )}
+
+      {type !== 'none' && type !== 'other' && !personnelSearchUrl && (
         <select
           ref={selectRef}
           aria-label={`انتخاب ${VOUCHER_DETAILED_TYPE_LABELS[type]}`}

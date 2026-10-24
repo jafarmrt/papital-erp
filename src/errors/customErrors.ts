@@ -79,6 +79,16 @@ export class BusinessLogicError extends AppError {
   }
 }
 
+/**
+ * 10.3 package 6 (TD-1386, review of #380): a refusal whose Persian message names a person or an amount (a payslip's
+ * personnel, an advance balance). The user reads it as any refusal; the error log keeps its code and route, never its text
+ */
+export class PrivateRefusalError extends AppError {
+  constructor(message: string, statusCode: number, code: string, details?: unknown) {
+    super(message, statusCode, code, details);
+  }
+}
+
 export class InsufficientStockError extends AppError {
   constructor(message = 'موجودی کالا برای اجرای این عملیات کافی نیست', details?: unknown) {
     super(message, 400, 'INSUFFICIENT_STOCK', details);
@@ -101,6 +111,8 @@ export interface NormalizedError {
   internal?: boolean;
   /** TD-1320: the database's own reason of a DATABASE_ERROR, for the log entry and the terminal line, never the answer */
   logDetails?: DatabaseErrorLogDetails;
+  /** TD-1386: the message names a person or an amount (`PrivateRefusalError`): the answer only, never the log */
+  privateMessage?: boolean;
 }
 
 /** The parts of a node-postgres error that say why the database refused, without the SQL text or its parameters */
@@ -176,6 +188,7 @@ export function normalizeError(err: unknown): NormalizedError {
       code: err.code || err.errorCode,
       details: err.details,
       stack: err.stack,
+      ...(err instanceof PrivateRefusalError ? { privateMessage: true } : {}),
     };
   }
 

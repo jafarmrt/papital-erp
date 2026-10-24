@@ -231,13 +231,15 @@ import { normalizeError, type DatabaseErrorLogDetails } from '../errors/customEr
  * the terminal with the message line replaced the same way; the full stack stays in `errorStack` for the log files.
  */
 export function errorLogEntry(
-  normalized: { message: string; statusCode: number; code?: string; stack?: string; logDetails?: DatabaseErrorLogDetails },
+  normalized: { message: string; statusCode: number; code?: string; stack?: string; logDetails?: DatabaseErrorLogDetails; privateMessage?: boolean },
   req: { method?: string; url?: string; originalUrl?: string; user?: { id?: number } },
   traceId?: string,
 ): Record<string, unknown> {
   const code = normalized.code || 'UNKNOWN_ERROR';
   const route = String(req.originalUrl ?? req.url ?? '').split('?')[0];
-  const englishMessage = normalized.message && !PERSIAN_TEXT.test(normalized.message) ? `: ${normalized.message}` : '';
+  // TD-1386: a message naming a person or an amount (`privateMessage`) stays out of every field, the stack's first line too
+  const privateText = normalized.privateMessage === true;
+  const englishMessage = !privateText && normalized.message && !PERSIAN_TEXT.test(normalized.message) ? `: ${normalized.message}` : '';
   const name = /^([A-Za-z_$][\w$]*)/.exec(normalized.stack ?? '')?.[1] ?? 'Error';
   const frames = (normalized.stack ?? '').split('\n').filter(l => /^\s+at /.test(l));
   // TD-1320: a database error's own reason (SQLSTATE, constraint, table, the database's message) goes to the log only
@@ -253,10 +255,10 @@ export function errorLogEntry(
     url: route,
     statusCode: normalized.statusCode,
     code: normalized.code,
-    userMessage: normalized.message,
+    userMessage: privateText ? undefined : normalized.message,
     ...(db ? { database: db } : {}),
     ...(normalized.statusCode >= 500 && frames.length > 0 ? { stack: [`${name} (${code})${englishMessage}${dbReason}`, ...frames].join('\n') } : {}),
-    errorStack: normalized.stack,
+    errorStack: privateText ? [`${name} (${code})`, ...frames].join('\n') : normalized.stack,
   };
 }
 

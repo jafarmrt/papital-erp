@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { journalVouchers, personnel, pieceworkPayrolls } from '../../db/schema.js';
-import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
+import { ConflictError, NotFoundError, PrivateRefusalError, ValidationError } from '../../errors/customErrors.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
 import { payrollAmountText } from '../../lib/payroll/payrollCurrency.js';
@@ -72,7 +72,7 @@ export async function editDraftPayroll(id: number, input: EditDraftPayrollInput)
       const { outstandingAdvance } = await PayrollPaymentService.getPersonnelAdvanceBalance(before.personnelId, tx);
       const ceiling = fin(outstandingAdvance).add(before.advanceDeduction ?? 0);
       if (advance.greaterThan(ceiling)) {
-        throw new ValidationError(`کسر مساعده (${payrollAmountText(advance)}) از مانده مساعده تسویه‌نشده ${person?.fullName ?? ''} (${payrollAmountText(ceiling)}) بیشتر است.`, undefined, 'PAYROLL_ADVANCE_EXCEEDS_BALANCE');
+        throw new PrivateRefusalError(`کسر مساعده (${payrollAmountText(advance)}) از مانده مساعده تسویه‌نشده ${person?.fullName ?? ''} (${payrollAmountText(ceiling)}) بیشتر است.`, 422, 'PAYROLL_ADVANCE_EXCEEDS_BALANCE');
       }
     }
     // v10.0.210 (TD-1087): کسورات قانونی با ناخالص تازه؛ مبلغی که پیش‌تر با شرح تغییر کرده می‌ماند مگر دوباره فرستاده شود

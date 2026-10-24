@@ -20,6 +20,9 @@ export async function runProjectWorkProgressTests(shouldRun: ShouldRun): Promise
     ['reg_project_work_progress_main_item_d6',
       '10.2 package 12: a single-item project\'s schedule («prod-main») counts in its matrix, an approved workshop report syncs the stage and the tick suggestion names the main item; a project without a matrix keeps its status (D6, TD-1340)',
       ['d6', 'projects', 'workshop'], mainItemCase],
+    ['reg_project_progress_same_item_rows_td_1386',
+      '10.3 package 6 (review N6 and N7 of #329): two product rows of one item are one matrix line with their quantities added and their schedule work in one cell; the tick suggestion waits for the rows of both product rows; a product row that holds its item only as item_id_raw gets its schedule work in its cell (TD-1386)',
+      ['td1386', 'n6', 'n7', 'd6', 'projects', 'workshop', 'package6'], sameItemRowsCase],
     ['reg_project_work_progress_closed_d6',
       '10.2 package 12 review H1: a work log never reopens a completed project or a completed stage, never unblocks a stage and never touches a paused project; it only updates percents and starts a waiting stage or a planned project; a later tick of another cell leaves a blocked stage with work blocked (D6, TD-1340)',
       ['d6', 'projects', 'piecework'], closedProjectCase],
@@ -167,6 +170,61 @@ async function logProgressCase(h: Harness, wrong: string[]): Promise<string> {
   if (cellOf(afterMove, 1)?.work?.done_quantity !== 0) wrong.push(`after the move the cell counts ${JSON.stringify(cellOf(afterMove, 1)?.work ?? null)}, expected 0`);
   if (stageText(await stageRows(h, projectId)) !== '1:100:completed 2:0:pending') wrong.push('the move changed the ticked stage, which only the tick decides');
   return 'schedule work counted in the matrix cell, the stage and the project; edit, delete and move re-synced in their transactions';
+}
+
+/**
+ * N6: a project with two product rows of one item showed two matrix lines sharing every cell (the progress is stored per
+ * item), so a tick on one ticked the other and the work of both rows was shown on each. N7: the schedule read a product
+ * row's item from `item_id` / `itemId` only, so the work of a row holding `item_id_raw` never reached the cell it has.
+ */
+async function sameItemRowsCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const [item, rawItem] = [await f.item(0), await f.item(0)];
+  const task = await newTaskId(h);
+  const workerSession = await h.sessionWith(['workshop.self']);
+  const worker = await newWorker('TD-1386 worker');
+  await h.q(`UPDATE personnel SET user_id = $2 WHERE id = $1`, [worker, workerSession.userId]);
+  const manager = await h.sessionWith(['workshop.review', 'projects.view']);
+  const { projectId, stageIds } = await scheduledProject(h, {
+    products: [
+      { id: 'prod-a', item_id: item, item_code: '', item_name: 'N6 product', quantity: 10, unit: 'عدد' },
+      { id: 'prod-b', item_id: item, item_code: '', item_name: 'N6 product', quantity: 5, unit: 'عدد' },
+      { id: 'prod-c', item_id_raw: rawItem, item_code: '', item_name: 'N7 product', quantity: 4, unit: 'عدد' },
+    ],
+    productKey: 'prod-a',
+    rows: [],
+  });
+  await h.q(`INSERT INTO project_managers (project_id, user_id) VALUES ($1, $2)`, [projectId, manager.userId]);
+  const row = (id: string, quantity: number): ScheduleRow => ({ id, taskId: task, taskTitle: 'برش N6', assignedPersonnelId: worker, quantity, unit: PIECES });
+  const product = (key: string, tasks: ScheduleRow[]) => ({ productId: key, productName: key, tasks });
+  await h.q(`UPDATE production_projects SET stage_schedules = $2 WHERE id = $1`, [projectId, JSON.stringify({
+    [stageIds[0]]: { 'prod-a': product('prod-a', [row('row-a', 10)]), 'prod-b': product('prod-b', [row('row-b', 5)]), 'prod-c': product('prod-c', [row('row-c', 4)]) },
+  })]);
+
+  // the first product row's only row is reported and approved: its own rows are done, the item's are not
+  const submitted = await h.post('/api/workshop/reports', { projectId, stageId: stageIds[0], productId: 'prod-a', rowId: 'row-a', quantity: 10 }, workerSession);
+  const report = (submitted.body as { report?: { id: number; version: number } }).report;
+  if (submitted.status !== 201 || !report) throw new Error(`setup: the report answered ${brief(submitted)}`);
+  const approved = await h.post(`/api/workshop/reports/${report.id}/approve`, { version: report.version }, manager);
+  if (approved.status !== 200) throw new Error(`setup: the approval answered ${brief(approved)}`);
+  const suggestion = (approved.body as { matrixTickSuggestion?: unknown }).matrixTickSuggestion;
+  if (suggestion !== null) wrong.push(`approving the row of one product row suggested the tick ${JSON.stringify(suggestion)} while the other product row of the item has work open`);
+  const rawLog = await h.post('/api/piecework/logs', {
+    personnelId: worker, taskId: task, projectId, date: f.today, quantity: 2,
+    scheduleRef: { stageId: stageIds[0], productId: 'prod-c', rowId: 'row-c' },
+  });
+  if (rawLog.status !== 201) wrong.push(`logging the item_id_raw row answered ${brief(rawLog)}`);
+
+  const view = await progressView(h, projectId);
+  const lines = view.products.map(p => p.item_id);
+  if (lines.length !== 2 || lines[0] !== item || lines[1] !== rawItem) wrong.push(`the matrix lines are items ${JSON.stringify(lines)}, expected [${item}, ${rawItem}] (one line for the two rows of item ${item})`);
+  const merged = view.products.find(p => p.item_id === item) as (ProgressView['products'][number] & { quantity?: number }) | undefined;
+  if (Number(merged?.quantity) !== 15) wrong.push(`the merged line holds quantity ${merged?.quantity}, expected 10 + 5 = 15`);
+  const mergedWork = merged?.progress.find(c => c.stage_order === 1)?.work;
+  if (mergedWork?.done_quantity !== 10 || mergedWork?.planned_quantity !== 15) wrong.push(`the merged cell carries ${JSON.stringify(mergedWork ?? null)}, expected 10 of 15`);
+  const rawWork = view.products.find(p => p.item_id === rawItem)?.progress.find(c => c.stage_order === 1)?.work;
+  if (rawWork?.done_quantity !== 2 || rawWork?.planned_quantity !== 4) wrong.push(`the item_id_raw cell carries ${JSON.stringify(rawWork ?? null)}, expected 2 of 4`);
+  return 'one line per item with the work of all its rows; the tick waits for every row of the item; item_id_raw rows count';
 }
 
 async function mainItemCase(h: Harness, wrong: string[]): Promise<string> {

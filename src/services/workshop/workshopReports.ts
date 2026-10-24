@@ -304,18 +304,22 @@ export async function approveWorkshopReport(tx: DbTransaction, actor: WorkshopAc
 /**
  * Decision ت۶ الف: once every row of the product in the stage has its work log, suggest ticking that cell of the
  * progress matrix, unless it is already completed. The tick itself stays the matrix's own route.
+ * 10.3 package 6 (TD-1386, review N6 of #329): the cell is the item's, so the rows of every product row of the same item
+ * count; before, the first product row of an item done suggested the tick while the other row's work was still open.
  */
 async function matrixTickSuggestion(tx: DbTransaction, projectId: number, approvedRow: WorkshopScheduleRow): Promise<MatrixTickSuggestion | null> {
   const [project] = await tx.select({ stageSchedules: productionProjects.stageSchedules, products: productionProjects.products, itemId: productionProjects.itemId }).from(productionProjects)
     .where(eq(productionProjects.id, projectId));
   if (!project) return null;
-  const siblings = workshopScheduleRows(project.stageSchedules).filter(r => r.stageId === approvedRow.stageId && r.productId === approvedRow.productId);
+  const itemId = scheduleProductItemId(project.products, project.itemId, approvedRow.productId);
+  const sameCell = (r: WorkshopScheduleRow) => r.productId === approvedRow.productId
+    || (itemId !== null && scheduleProductItemId(project.products, project.itemId, r.productId) === itemId);
+  const siblings = workshopScheduleRows(project.stageSchedules).filter(r => r.stageId === approvedRow.stageId && sameCell(r));
   const live = await liveLogIds(tx, siblings.map(r => r.pieceworkLogId).filter((id): id is number => id !== null));
   if (siblings.length === 0 || !siblings.every(r => rowHasLiveLog(r, live))) return null;
   const [stage] = await tx.select({ title: projectStages.title, stageOrder: projectStages.stageOrder }).from(projectStages)
     .where(and(eq(projectStages.id, approvedRow.stageId), eq(projectStages.isDeleted, 0)));
   if (!stage) return null;
-  const itemId = scheduleProductItemId(project.products, project.itemId, approvedRow.productId);
   if (itemId !== null) {
     const done = await tx.select({ id: projectProductStageProgress.id }).from(projectProductStageProgress)
       .where(and(
