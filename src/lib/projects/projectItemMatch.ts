@@ -1,3 +1,5 @@
+import { itemCodeKey, itemNameKey } from '../items/itemKeys.js';
+
 /**
  * v9.0.363 (TD-749، TD-768): تنها قاعده تطبیق ردیف مواد پروژه با کالای انبار، مشترک میان سرور (رزرو پروژه) و مرورگر
  * (کنترل موجودی، فهرست خرید، سفارش خرید). پیش‌تر این قاعده در ۱۰ جا کپی شده بود و فهرست خرید مرورگر نام را با زیررشته
@@ -21,13 +23,8 @@ export interface ProjectMaterialRef {
   name?: string | null;
 }
 
-/** کلید کد کالا، همان کلید یکتایی کالا (TD-653) */
-export const itemCodeKey = (code: unknown): string =>
-  typeof code === 'string' || typeof code === 'number' ? String(code).trim().toUpperCase() : '';
-
-/** کلید نام کالا، همان کلید یکتایی کالا (TD-653) */
-export const itemNameKey = (name: unknown): string =>
-  typeof name === 'string' || typeof name === 'number' ? String(name).trim().toLowerCase() : '';
+/** The item keys (TD-653), in `src/lib/items/itemKeys.ts` since 10.3 package 6 and still read from here by the project callers */
+export { itemCodeKey, itemNameKey };
 
 /** کلیدهای کد و نام چند ردیف (TD-1341): خواندن کالاهای آن‌ها در سرور (`itemRefKeyCondition`) با همین کلیدها */
 export function itemRefKeys(refs: ReadonlyArray<{ code?: unknown; name?: unknown }>): { codes: string[]; names: string[] } {

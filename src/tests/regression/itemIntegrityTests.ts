@@ -29,6 +29,9 @@ export async function runItemIntegrityTests(shouldRun: ShouldRun): Promise<TestC
     ['reg_item_numeric_input_validation_td_657',
       'v9.0.173: item numbers go through decimalInput: text is refused, Persian digits are read and negatives are refused (TD-657, item part)',
       ['td657', 'item', 'validation', 'package5'], numericInputCase],
+    ['reg_item_duplicate_check_app_keys_td_1386',
+      '10.3 package 6: the duplicate item health check groups live items by the app\'s own item keys, so a code that differs only by an end tab or a no-break space or by «ß» against «SS», and a name with an end no-break space, are listed as one item, with a message that does not call the unique indexes missing (TD-1386)',
+      ['td1386', 'item', 'health', 'package6'], duplicateAppKeysCase],
     ['conc_item_delete_vs_receipt_td_661',
       'v9.0.174: deleting an item while a receipt of it is being committed is refused after the receipt (TD-661)',
       ['td661', 'item', 'concurrency', 'inventory', 'package5'], deleteVsReceiptCase],
@@ -160,6 +163,37 @@ async function uniqueCodeNameCase(ctx: Ctx): Promise<string> {
     throw new Error(`health check with one legacy duplicate code: ${legacy.status}, ${legacy.count} group(s), ${(legacy.items ?? []).length} row(s)`);
   }
   return `same code ${sameCode.map(r => r.status).join(',')}; same name ${sameName.map(r => r.status).join(',')}; case ${lower.status}/${upper.status}; rename ${rename.status}`;
+}
+
+async function duplicateAppKeysCase(ctx: Ctx): Promise<string> {
+  const make = async (code: string, name: string) => {
+    const res = await ctx.post('/api/items', { type: 'raw_material', code, name, unit: 'عدد', category: 'سایر اقلام' });
+    if (res.status !== 200) throw new Error(`create ${code}: ${res.status} ${JSON.stringify(res.body)}`);
+    return res.body.id as number;
+  };
+  const t = ctx.tag;
+  const [tabA, tabB, sharpA, sharpB, nameA, nameB] = [
+    await make(`JK-${t}`, `قفل تب ${t} الف`), await make(`JK2-${t}`, `قفل تب ${t} ب`),
+    await make(`XSS-${t}`, `قفل اس ${t} الف`), await make(`XSS2-${t}`, `قفل اس ${t} ب`),
+    await make(`NB-${t}`, `قفل نشکن ${t}`), await make(`NB2-${t}`, `قفل نشکن دیگر ${t}`),
+  ];
+  // stored as an older import or a hand edit left them: the unique indexes key on upper(btrim(code)), so they take them
+  await q(`UPDATE items SET code = $2 WHERE id = $1`, [tabB, `jk-${t}\t`]);
+  await q(`UPDATE items SET code = $2 WHERE id = $1`, [sharpB, `xß-${t}`]);
+  await q(`UPDATE items SET name = $2 WHERE id = $1`, [nameB, `قفل نشکن ${t}\u00a0`]);
+  const { buildItemIdentityHealthTest, findDuplicateItemIdentities, hasItemIdentityIndexes } = await import('../../services/items/itemIdentity.js');
+  const mine = new Set([tabA, tabB, sharpA, sharpB, nameA, nameB]);
+  const found = (await findDuplicateItemIdentities()).filter(r => mine.has(r.id));
+  const pairs = found.map(r => `${r.kind}:${r.id}`).sort();
+  const expected = [`code:${tabA}`, `code:${tabB}`, `code:${sharpA}`, `code:${sharpB}`, `name:${nameA}`, `name:${nameB}`].sort();
+  if (JSON.stringify(pairs) !== JSON.stringify(expected)) throw new Error(`duplicates listed ${JSON.stringify(pairs)}, expected ${JSON.stringify(expected)}`);
+  const indexesPresent = await hasItemIdentityIndexes();
+  if (!indexesPresent) throw new Error('the unique item indexes are missing in the test schema');
+  const health = buildItemIdentityHealthTest(found, indexesPresent);
+  if (health.status !== 'warning' || health.count !== 3 || /اعمال نشده/.test(health.message)) {
+    throw new Error(`health check of the three pairs: ${health.status}, ${health.count} group(s), «${health.message}»`);
+  }
+  return `three pairs listed (${pairs.join(', ')}); ${health.status}, ${health.count} groups`;
 }
 
 async function versionLockCase(ctx: Ctx): Promise<string> {
