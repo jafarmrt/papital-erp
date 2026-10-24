@@ -234,7 +234,7 @@ async function funnelCase(h: Harness, track: Track): Promise<string> {
   return 'entries, advances, average days and lost reasons as expected for one seller and range';
 }
 
-/** Waits until a session waits on a lock of a sales file row; false when none does within about five seconds */
+/** Waits until a session waits on a lock of a sales file row, at most about five seconds */
 async function leadLockWaiter(): Promise<boolean> {
   for (let i = 0; i < 100; i++) {
     const n = Number((await pool.query<{ n: string }>(
@@ -266,12 +266,12 @@ async function leadDeleteRaceCase(h: Harness, track: Track): Promise<string> {
     await holder.query('UPDATE crm_leads SET is_deleted = 1 WHERE id = $1', [leadId]);
     const edit = h.put(`/api/crm/activities/${actId}`, { version: 1, title: 'ویرایش هم‌زمان' }).then(r => r);
     edit.catch(() => undefined); // awaited below
-    const waited = await leadLockWaiter();
+    // a sync point only: the edit waited on the file row before too (its closing update of `updated_at`)
+    await leadLockWaiter();
     await holder.query('COMMIT');
     held = false;
     const res = await edit;
     const problems: string[] = [];
-    if (!waited) problems.push('the edit never waited on the sales file row');
     if (res.status !== 404) problems.push(`the edit answered ${res.status} ${JSON.stringify(res.body).slice(0, 160)}, expected 404`);
     const [row] = await orm.select({ title: crmActivities.title }).from(crmActivities).where(eq(crmActivities.id, actId));
     if (row?.title !== 'تماس پیش از حذف') problems.push(`the activity title is «${row?.title}» after the refused edit`);

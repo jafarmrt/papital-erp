@@ -66,8 +66,9 @@ export async function lockLiveActivity(tx: DbExecutor, id: number): Promise<Acti
   if (!row) throw new NotFoundError('اقدام یا پیگیری یافت نشد', { id }, 'CRM_ACTIVITY_NOT_FOUND');
   if (row.leadId) {
     // 10.3 package 7: the sales file is locked too (always after the activity; no path locks them the other way), so a
-    // removal of the file that commits meanwhile is seen here and the change to its activity is refused
-    const [lead] = await tx.select({ isDeleted: crmLeads.isDeleted }).from(crmLeads).where(eq(crmLeads.id, row.leadId)).for('update');
+    // removal of the file that commits meanwhile is seen here and the change to its activity is refused. `NO KEY UPDATE`
+    // waits for the removal's `FOR UPDATE` but not for inserts that only reference the file (a new activity, a document).
+    const [lead] = await tx.select({ isDeleted: crmLeads.isDeleted }).from(crmLeads).where(eq(crmLeads.id, row.leadId)).for('no key update');
     if (!lead || lead.isDeleted === 1) throw new NotFoundError('پرونده فروش این اقدام حذف شده است', { id }, 'CRM_ACTIVITY_NOT_FOUND');
   }
   return row;

@@ -19,7 +19,8 @@ export const ATTACHMENT_EXTENSION_BY_MIME: Readonly<Record<string, string>> = {
 const KNOWN_EXTENSIONS: ReadonlySet<string> = new Set([
   ...Object.values(ATTACHMENT_EXTENSION_BY_MIME),
   'jpeg', 'jpe', 'jfif', 'heic', 'heif', 'avif', 'bmp', 'tif', 'tiff', 'svg',
-  'odt', 'ods', 'rtf', 'zip', 'rar', '7z', 'bin',
+  'odt', 'ods', 'odp', 'rtf', 'ppt', 'pptx', 'json', 'xml', 'md', 'log', 'tsv', 'html', 'htm',
+  'zip', 'rar', '7z', 'gz', 'tar', 'mp3', 'mp4', 'mov', 'wav', 'bin',
 ]);
 
 export function attachmentDownloadName(name: string, mimeType: string): string {

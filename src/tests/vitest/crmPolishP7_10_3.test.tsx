@@ -58,6 +58,7 @@ describe('crm_polish_10_3_p7', () => {
     expect(attachmentDownloadName('.pdf', 'application/pdf')).toBe('.pdf');
     expect(attachmentDownloadName('  ', 'application/pdf')).toBe('attachment.pdf');
     expect(attachmentDownloadName('data.bin', 'application/x-unknown')).toBe('data.bin');
+    expect(attachmentDownloadName('data.json', 'text/plain')).toBe('data.txt');
   });
 
   it('shows the close and cancel buttons of the CRM windows as disabled while they save', () => {
