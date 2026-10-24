@@ -75,7 +75,7 @@ export function CRMInteractionModal({
               <button
                 onClick={onCloseActivityModal}
                 disabled={isSavingActivity}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 cursor-pointer transition-colors"
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 ✕
               </button>
@@ -296,7 +296,7 @@ export function CRMInteractionModal({
                   type="button"
                   onClick={onCloseActivityModal}
                   disabled={isSavingActivity}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   انصراف
                 </button>
@@ -327,7 +327,7 @@ export function CRMInteractionModal({
                 type="button"
                 onClick={onCloseFollowupResultModal}
                 disabled={isSubmittingFollowupResult}
-                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 text-xs cursor-pointer"
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 text-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 ✕
               </button>
@@ -381,7 +381,7 @@ export function CRMInteractionModal({
                   type="button"
                   onClick={onCloseFollowupResultModal}
                   disabled={isSubmittingFollowupResult}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-all cursor-pointer"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   انصراف
                 </button>

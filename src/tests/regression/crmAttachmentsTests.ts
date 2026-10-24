@@ -294,6 +294,10 @@ async function downloadRulesCase(h: Harness, wrong: string[]): Promise<string> {
   if (savedName(original) !== 'گزارش.jpg') wrong.push(`image saved as «${savedName(original)}», expected «گزارش.jpg»`);
   const light = await rawGet(h, `/api/attachments/${imageId}?variant=light`).buffer(true).parse(binary);
   if (savedName(light) !== 'گزارش.webp') wrong.push(`light copy saved as «${savedName(light)}», expected «گزارش.webp»`);
+  // 10.3 package 7: a dot inside the name is not an extension; only a known one is replaced
+  await h.q(`UPDATE file_attachments SET original_name = 'Report v1.2 final' WHERE id = $1`, [pdfId]);
+  const dotted = await rawGet(h, `/api/attachments/${pdfId}`).buffer(true).parse(binary);
+  if (savedName(dotted) !== 'Report v1.2 final.pdf') wrong.push(`dotted PDF saved as «${savedName(dotted)}», expected «Report v1.2 final.pdf»`);
   const busted = await rawGet(h, `/api/attachments/${imageId}?v=2`).buffer(true).parse(binary);
   if (busted.status !== 200) wrong.push(`a download with an extra query key answered ${busted.status}, expected 200`);
 

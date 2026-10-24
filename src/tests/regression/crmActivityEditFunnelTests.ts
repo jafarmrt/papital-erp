@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
-import { orm } from '../../db/drizzle.js';
+import { orm, pool } from '../../db/drizzle.js';
 import { activityLogs, crmActivities, crmLeadStageHistory, crmLeads, notifications, personnel, users } from '../../db/schema.js';
 
 type ShouldRun = (id: string, ...extra: string[]) => boolean;
@@ -18,6 +18,7 @@ export async function runCrmActivityEditFunnelTests(shouldRun: ShouldRun): Promi
     { id: 'reg_crm_activity_edit_delete_n02', name: 'v10.1.18: a CRM activity is edited with its version (stale 409), new mentions only are notified, delete is soft and audited, crm.view cannot (N-02)', tags: ['n02', 'crm'], run: activityEditCase },
     { id: 'reg_crm_lost_reason_stage_history_n02', name: 'v10.1.18: a lead moved to lost needs a listed reason, leaving lost clears it, and every stage change is recorded (N-02)', tags: ['n02', 'crm'], run: lostReasonCase },
     { id: 'reg_crm_my_followups_n02', name: 'v10.1.18: «my follow-ups» lists only the user\'s own; only a crm.manage holder sees all or one seller (N-02, OBS-R2-27)', tags: ['n02', 'crm', 'followups'], run: myFollowupsCase },
+    { id: 'reg_crm_activity_edit_waits_lead_delete_p7', name: '10.3 package 7: an activity edit waits for a removal of its sales file that is under way and then answers 404, never 200 on a removed file', tags: ['crm', 'package7', 'concurrency'], run: leadDeleteRaceCase },
     { id: 'reg_crm_funnel_report_n02', name: 'v10.1.18: the funnel report counts entries, advances, average days and lost reasons from the stage history (N-02)', tags: ['n02', 'crm', 'funnel'], run: funnelCase },
   ];
   const selected = cases.filter(c => shouldRun(c.id, ...c.tags));
@@ -231,4 +232,53 @@ async function funnelCase(h: Harness, track: Track): Promise<string> {
 
   if (wrong.length) throw new Error(wrong.join(' | '));
   return 'entries, advances, average days and lost reasons as expected for one seller and range';
+}
+
+/** Waits until a session waits on a lock of a sales file row; false when none does within about five seconds */
+async function leadLockWaiter(): Promise<boolean> {
+  for (let i = 0; i < 100; i++) {
+    const n = Number((await pool.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND pid <> pg_backend_pid()
+         AND query ILIKE '%crm_leads%'`)).rows[0]?.n ?? 0);
+    if (n >= 1) return true;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return false;
+}
+
+/**
+ * 10.3 package 7: the activity edit read its sales file without a lock, so an edit sent while the file's removal was
+ * under way answered 200 at once and changed an activity of a removed file; it now waits for the removal and answers 404.
+ */
+async function leadDeleteRaceCase(h: Harness, track: Track): Promise<string> {
+  const leadId = await newLead(h, track, 'race');
+  const created = await h.post('/api/crm/activities', { leadId, title: 'تماس پیش از حذف', type: 'call' });
+  if (created.status !== 201) throw new Error(`activity create answered ${created.status}`);
+  const actId = Number(created.body.id);
+
+  const holder = await pool.connect();
+  let held = false;
+  try {
+    await holder.query('BEGIN');
+    held = true;
+    // the removal of the file, as `deleteLead` does it: the row locked, then marked removed
+    await holder.query('SELECT id FROM crm_leads WHERE id = $1 FOR UPDATE', [leadId]);
+    await holder.query('UPDATE crm_leads SET is_deleted = 1 WHERE id = $1', [leadId]);
+    const edit = h.put(`/api/crm/activities/${actId}`, { version: 1, title: 'ویرایش هم‌زمان' }).then(r => r);
+    edit.catch(() => undefined); // awaited below
+    const waited = await leadLockWaiter();
+    await holder.query('COMMIT');
+    held = false;
+    const res = await edit;
+    const problems: string[] = [];
+    if (!waited) problems.push('the edit never waited on the sales file row');
+    if (res.status !== 404) problems.push(`the edit answered ${res.status} ${JSON.stringify(res.body).slice(0, 160)}, expected 404`);
+    const [row] = await orm.select({ title: crmActivities.title }).from(crmActivities).where(eq(crmActivities.id, actId));
+    if (row?.title !== 'تماس پیش از حذف') problems.push(`the activity title is «${row?.title}» after the refused edit`);
+    if (problems.length) throw new Error(problems.join(' | '));
+    return 'the edit waited for the removal and answered 404; the activity is unchanged';
+  } finally {
+    if (held) await holder.query('ROLLBACK').catch(() => undefined);
+    holder.release();
+  }
 }

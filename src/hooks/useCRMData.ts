@@ -56,8 +56,10 @@ export function useCRMData(user: any, options: { withLists?: boolean } = {}) {
   const [selectedLeadForActivity, setSelectedLeadForActivity] = useState<CRMLead | null>(null);
 
   const [selectedLeadDrawer, setSelectedLeadDrawer] = useState<CRMLead | null>(null);
+  // 10.3 package 7: counts the drawer's openings, so showing the file it already shows reads it again
+  const [leadDrawerOpening, setLeadDrawerOpening] = useState(0);
   // 10.3 (part 12): the drawer shows the file as its detail read it now, over the row it was opened from
-  const { drawerLead, drawerActivities, drawerAttachments } = useLeadDrawerActivities(selectedLeadDrawer?.id ?? null);
+  const { drawerLead, drawerActivities, drawerAttachments } = useLeadDrawerActivities(selectedLeadDrawer?.id ?? null, leadDrawerOpening);
   const shownLeadDrawer = useMemo(
     () => (selectedLeadDrawer && drawerLead?.id === selectedLeadDrawer.id ? { ...selectedLeadDrawer, ...drawerLead } : selectedLeadDrawer),
     [selectedLeadDrawer, drawerLead],
@@ -424,6 +426,7 @@ export function useCRMData(user: any, options: { withLists?: boolean } = {}) {
 
   const openLeadDrawer = (lead: CRMLead) => {
     setSelectedLeadDrawer(lead);
+    setLeadDrawerOpening((n) => n + 1);
   };
 
   const reopeningFollowupIds = useRef(new Set<number>());

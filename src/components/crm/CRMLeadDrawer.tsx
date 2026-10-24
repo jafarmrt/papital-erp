@@ -125,7 +125,7 @@ export function CRMLeadDrawer({
               onClick={closeDrawer}
               disabled={attachmentsBusy}
               aria-label="بستن"
-              className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 cursor-pointer ml-1 text-xs"
+              className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ml-1 text-xs"
             >
               ✕
             </button>

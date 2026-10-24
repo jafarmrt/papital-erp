@@ -7,6 +7,7 @@ import { useHasPermission } from '../../contexts/AuthContext';
 import { AttachmentImage } from '../attachments/AttachmentImage';
 import { confirmAction } from '../ConfirmDialogHost';
 import { downloadAttachment } from '../../lib/attachments/attachmentDisplay';
+import { attachmentDownloadName } from '../../lib/attachments/attachmentDownloadName';
 import { sendRawFile } from '../../lib/media/mediaUpload';
 import { useOnlineStatus } from '../../lib/pwa/useOnlineStatus';
 import { OFFLINE_SUBMIT_TITLE } from '../../lib/pwa/phoneLayout';
@@ -127,7 +128,8 @@ export function CrmAttachmentsPanel({ owner, ownerId, initial, onBusyChange, onC
   };
 
   const download = (file: CrmAttachmentView) => {
-    downloadAttachment(file.url, file.name).catch((err: unknown) => toast.error(errorMessageOf(err) || 'دریافت پیوست ناموفق بود.'));
+    // 10.3 package 7: the link names the file itself, so it takes the same name the server would give it
+    downloadAttachment(file.url, attachmentDownloadName(file.name, file.type)).catch((err: unknown) => toast.error(errorMessageOf(err) || 'دریافت پیوست ناموفق بود.'));
   };
 
   const full = files.length >= CRM_ATTACHMENT_MAX_FILES;

@@ -68,10 +68,13 @@ export function useCrmActivityPage(query: ActivityPageQuery, enabled = true): Ac
 
 /**
  * v10.2 package 7 review (N-4): the page of a server-paged list, back to 1 in the same render its conditions change, so
- * the request of the new conditions never asks the old page; `filterKey` is every condition joined.
+ * the request of the new conditions never asks the old page; `filterKey` is every condition joined. 10.3 package 7: the
+ * reset is kept (React's "state from the previous render" pattern), so going back to earlier conditions starts on page 1
+ * too, never on the page those conditions showed before.
  */
 export function useFilterPage(filterKey: string): [number, (page: number) => void] {
   const [state, setState] = useState({ key: filterKey, page: 1 });
+  if (state.key !== filterKey) setState({ key: filterKey, page: 1 });
   const page = state.key === filterKey ? state.page : 1;
   const setPage = useCallback((next: number) => setState({ key: filterKey, page: Math.max(1, next) }), [filterKey]);
   return [page, setPage];
