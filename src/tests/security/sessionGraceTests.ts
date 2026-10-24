@@ -95,7 +95,7 @@ export async function runSessionGraceTests(shouldRun: ShouldRun): Promise<TestCa
     await runCase(results, {
       id: 'sec_grace_token_cannot_renew_or_manage_10_3_package5',
       name: 'v10.3.20: a copy of the old cookie let in by the grace cannot close the other devices, change the password or users, or take a new token (10.3 package 5, review of #378)',
-      details: 'after the owner changes the password, the previous cookie (a stolen copy) gets 409 TOKEN_GRACE_REFUSED and no cookie from close-others, PUT /users/profile, closing a session and PUT /users/:id, the token version is not raised again, and after the grace it gets 401 while the owner\'s new cookie stays signed in',
+      details: 'after the owner changes the password, the previous cookie (a stolen copy) gets 409 TOKEN_GRACE_REFUSED and no cookie from close-others, PUT /users/profile, closing a session, PUT /users/:id and a messenger link code, the token version is not raised again, and after the grace it gets 401 while the owner\'s new cookie stays signed in',
     }, async (h, wrong) => {
       clearTokenVersionGraceForTests();
       const owner = await h.sessionWith(['documents.view']);
@@ -113,6 +113,7 @@ export async function runSessionGraceTests(shouldRun: ShouldRun): Promise<TestCa
         ['a profile edit', () => h.put('/api/users/profile', { full_name: `thief ${h.tag}` }, owner)],
         ['closing a session', () => h.del(`/api/auth/sessions/${Number(row?.id ?? 0)}`, owner)],
         ['a user change', () => h.put(`/api/users/${owner.userId}`, { full_name: `thief ${h.tag}` }, owner)],
+        ['a messenger link code', () => h.post('/api/messenger/links/telegram/code', {}, owner)],
       ];
       for (const [label, send] of attempts) {
         const res = await send();
