@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # v10.2.28 (#339 review N-C, TD-1351): sourced by restore.sh and upgrade-rehearsal.sh so the database password never
 # appears on a psql / pg_restore command line, where every user of the server can read it in the process list.
-# pg_password_setup <dir> writes <dir>/pgpass (mode 600, a copy of an inherited PGPASSFILE first), exports it as
+# pg_password_setup <dir> writes <dir>/pgpass (mode 600; the URLs' passwords, then a copy of an inherited PGPASSFILE), exports it as
 # PGPASSFILE and removes the password from DATABASE_URL and RESTORE_ADMIN_URL; the full DATABASE_URL stays in
 # PG_FULL_DATABASE_URL for a Node program, which gets it through its environment. The same parsing as nightly-verify.sh.
+# v10.3.21 (#381 review): without an inherited PGPASSFILE the user's ~/.pgpass is copied first, since libpq reads only the
+# file PGPASSFILE names (a URL without a password that relied on ~/.pgpass kept working), and a socket directory given
+# as ?host=/path is the host field of the line written for it.
 
 PG_URL_RE='^(postgres(ql)?://)([^:@/]+)(:([^@]*))?@([^/?]*)(.*)$'
 # percent-decoding as libpq does it: a + stays a +, and a backslash is a plain character
@@ -24,13 +27,23 @@ pg_split_hostport() {
   fi
   echo "${host:-localhost} ${port:-5432}"
 }
+# the socket directory of a URL whose host part is empty (postgresql://u:p@/db?host=/run/pg), percent-decoded
+pg_query_socket_dir() {
+  local rest="$1" value
+  [[ "$rest" =~ [?\&]host=([^\&]*) ]] || return 0
+  value="$(pg_url_decode "${BASH_REMATCH[1]}")"
+  [[ "$value" == /* ]] && echo "$value"
+  return 0
+}
 # prints the URL without its password and adds host:port:*:user:password to the PGPASSFILE
 pg_strip_password() {
   local url="$1"
   if [[ "$url" =~ $PG_URL_RE ]] && [ -n "${BASH_REMATCH[4]}" ]; then
     local scheme="${BASH_REMATCH[1]}" user="${BASH_REMATCH[3]}" pass="${BASH_REMATCH[5]}" hostport="${BASH_REMATCH[6]}" rest="${BASH_REMATCH[7]}"
-    local host port
+    local host port socket_dir
     read -r host port <<< "$(pg_split_hostport "$hostport")"
+    socket_dir="$(pg_query_socket_dir "$rest")"
+    [ -n "$hostport" ] || [ -z "$socket_dir" ] || host="$socket_dir"
     printf '%s:%s:*:%s:%s\n' "$(pg_pgpass_field "$host")" "$port" "$(pg_pgpass_field "$(pg_url_decode "$user")")" \
       "$(pg_pgpass_field "$(pg_url_decode "$pass")")" >> "$PGPASSFILE"
     echo "${scheme}${user}@${hostport}${rest}"
@@ -43,7 +56,6 @@ pg_password_setup() {
   PG_FULL_DATABASE_URL="${PG_FULL_DATABASE_URL:-$DATABASE_URL}"
   PGPASSFILE="$1/pgpass"
   ( umask 077; : > "$PGPASSFILE" )
-  if [ -n "$inherited" ] && [ -r "$inherited" ]; then cat "$inherited" >> "$PGPASSFILE"; fi
   export PGPASSFILE PG_FULL_DATABASE_URL
   DATABASE_URL="$(pg_strip_password "$DATABASE_URL")"
   export DATABASE_URL
@@ -51,4 +63,7 @@ pg_password_setup() {
     RESTORE_ADMIN_URL="$(pg_strip_password "$RESTORE_ADMIN_URL")"
     export RESTORE_ADMIN_URL
   fi
+  # after the URLs' lines: libpq takes the first matching line, and a password in the URL wins over a password file
+  [ -n "$inherited" ] || inherited="${HOME:+$HOME/.pgpass}"
+  if [ -n "$inherited" ] && [ -r "$inherited" ]; then cat "$inherited" >> "$PGPASSFILE"; fi
 }

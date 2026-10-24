@@ -82,6 +82,8 @@ if [ -z "$BACKUP_FILE" ]; then
   # v10.3.21 (TD-1353): the folder backup.sh writes to, from .env too
   [ -n "${BACKUP_DIR:-}" ] || BACKUP_DIR="$(env_file_value BACKUP_DIR)"
   BACKUP_DIR="${BACKUP_DIR:-/var/backups/erp}"
+  # a relative folder is under APP_DIR, whichever directory cron, update.sh or a shell starts from
+  case "$BACKUP_DIR" in /*) ;; *) BACKUP_DIR="$APP_DIR/$BACKUP_DIR" ;; esac
   BACKUP_FILE=$(ls -t "$BACKUP_DIR"/erp_*.dump.gz 2>/dev/null | head -1 || true)
   [ -n "$BACKUP_FILE" ] || fail "no dump file found in $BACKUP_DIR — pass one explicitly"
 fi

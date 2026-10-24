@@ -11,8 +11,10 @@
 #            processing, and the queue gauges were read (src/middleware/metrics.ts)
 #   nightly  v10.3.21 (TD-1350): the report of the nightly backup check (NIGHTLY_VERIFY_REPORT, default
 #            APP_DIR/logs/nightly-verify.json, written by scripts/nightly-verify.sh): a night that could not be checked
-#            or found something worse than the last healthy night, or no report for NIGHTLY_STALE_HOURS (36), the same
-#            verdict as the «بررسی شبانهٔ پشتیبان» card (src/lib/system/nightlyVerify.ts); no report yet is not a problem
+#            or found something worse than the last healthy night, or a report older than 36 hours, the same verdict as
+#            the «بررسی شبانهٔ پشتیبان» card (src/lib/system/nightlyVerify.ts); no report at all is a problem only when
+#            the cron file (MONITOR_CRON_FILE, default /etc/cron.d/papital-erp) runs nightly-verify.sh and the monitor
+#            has run for 36 hours
 # A check that starts failing sends one alert, a failing check is sent again every MONITOR_REPEAT_HOURS (default 6),
 # and a check that recovers sends one «resolved» line. All changes of one run go in one message. The alert texts are
 # Persian (scripts/ops/monitor-messages.fa.txt); what this script prints on the terminal is English.
@@ -72,6 +74,7 @@ SMTP_USER="$(setting ALERT_SMTP_USER)"
 SMTP_PASSWORD="$(setting ALERT_SMTP_PASSWORD)"
 EMAIL_TO="$(setting ALERT_EMAIL_TO)"
 NIGHTLY_REPORT="$(setting NIGHTLY_VERIFY_REPORT "$APP_DIR/logs/nightly-verify.json")"
+CRON_FILE_VALUE="$(setting MONITOR_CRON_FILE /etc/cron.d/papital-erp)"
 for n in "$DISK_LIMIT" "$MAX_AGE_HOURS" "$REPEAT_HOURS"; do
   whole_number "$n" || { log "ERROR: MONITOR_DISK_PERCENT, MONITOR_BACKUP_MAX_AGE_HOURS and MONITOR_REPEAT_HOURS must be whole numbers"; exit 1; }
 done
@@ -212,18 +215,19 @@ const fs = require("fs");
 let r;
 try { r = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); } catch { console.log("unreadable"); process.exit(0); }
 const finished = Date.parse(r && r.finishedAt);
-if (!r || r.version !== 1 || !Number.isFinite(finished)) { console.log("unreadable"); process.exit(0); }
+if (!r || r.version !== 1 || !Number.isFinite(finished) || typeof r.restoreOk !== "boolean" || !Array.isArray(r.worse)) { console.log("unreadable"); process.exit(0); }
 const hours = Math.floor((Date.now() - finished) / 3600000);
 if (r.failure) console.log(`failed ${r.failure}`);
 else if (!r.restoreOk) console.log("failed restore");
 else if (r.health === null || r.invariants === null) console.log("failed check");
 else if (Date.now() - finished > 36 * 3600000) console.log(`stale ${hours}`);
-else if (Array.isArray(r.worse) && r.worse.length > 0) console.log(`worse ${r.worse.length}`);
+else if (r.worse.length > 0) console.log(`worse ${r.worse.length}`);
 else console.log("ok");
 '
 if [ -f "$NIGHTLY_REPORT" ]; then
   if ! command -v node >/dev/null 2>&1; then
     log "WARNING: node not found; the nightly backup check report is not read"
+    record nightly fail nightly_unreadable
   else
     read -r NIGHTLY_STATUS NIGHTLY_ARG <<< "$(node -e "$NIGHTLY_VERDICT_JS" "$NIGHTLY_REPORT" 2>/dev/null || echo unreadable)" || true
     case "${NIGHTLY_STATUS:-unreadable}" in
@@ -234,6 +238,12 @@ if [ -f "$NIGHTLY_REPORT" ]; then
       *) record nightly fail nightly_unreadable ;;
     esac
   fi
+elif [ -f "$CRON_FILE_VALUE" ] && grep -v '^[[:space:]]*#' "$CRON_FILE_VALUE" 2>/dev/null | grep -q 'nightly-verify\.sh' \
+    && [ $((NOW - FIRST_RUN)) -gt $((36 * 3600)) ]; then
+  # scheduled, but no night has written its report (it stopped before writing one, e.g. without node_modules/.bin/tsx)
+  record nightly fail nightly_missing
+else
+  record nightly ok nightly_ok
 fi
 
 # --- send ---

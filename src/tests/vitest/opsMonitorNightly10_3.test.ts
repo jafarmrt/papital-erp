@@ -69,6 +69,34 @@ describe('monitor_nightly_and_secrets_10_3_package8: the nightly backup check al
     fs.rmSync(h.dir, { recursive: true, force: true });
   });
 
+  it('nightly_verify_alert_td_1350: no report is a problem only when the cron file runs the check and a day and a half has passed; a malformed report is unreadable', async () => {
+    const schedule = (line: string, firstRunHoursAgo: number) => {
+      fs.mkdirSync(path.join(h.dir, 'cron.d'), { recursive: true });
+      fs.writeFileSync(path.join(h.dir, 'cron.d', 'papital-erp'), `30 2 * * * root /opt/app/scripts/backup.sh\n${line}\n`);
+      fs.mkdirSync(h.stateDir, { recursive: true });
+      fs.writeFileSync(path.join(h.stateDir, 'first_run'), `${Math.floor(Date.now() / 1000) - firstRunHoursAgo * 3600}\n`);
+    };
+    fresh();
+    schedule('0 4 * * * root /opt/app/scripts/nightly-verify.sh >> /opt/app/logs/nightly-verify.log 2>&1', 37);
+    expect((await monitor()).code).toBe(1);
+    expect(h.srv.sent[0]).toContain(alertText('nightly_missing'));
+    fs.rmSync(h.dir, { recursive: true, force: true });
+    for (const [line, hours] of [['# 0 4 * * * root /opt/app/scripts/nightly-verify.sh', 37], ['0 4 * * * root /opt/app/scripts/nightly-verify.sh', 20]] as const) {
+      fresh();
+      schedule(line, hours);
+      expect((await monitor()).code).toBe(0);
+      expect(h.srv.sent).toEqual([]);
+      fs.rmSync(h.dir, { recursive: true, force: true });
+    }
+    fresh();
+    const malformed: Record<string, unknown> = { ...nightlyReport() };
+    delete malformed.restoreOk;
+    writeNightly(JSON.stringify(malformed));
+    await monitor();
+    expect(h.srv.sent[0]).toContain(alertText('nightly_unreadable'));
+    fs.rmSync(h.dir, { recursive: true, force: true });
+  });
+
   it('nightly_verify_alert_td_1350: the alert follows the verdict of the health page card', async () => {
     const cases: Array<[NightlyVerifyReport, string | null]> = [
       [nightlyReport(), null],

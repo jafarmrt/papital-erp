@@ -21,7 +21,7 @@
 #     more than 12 hours ago (no new backup was taken);
 #   - before restoring, the free space of the database's data and WAL disks and of the temporary directory is compared
 #     with what the restore writes there (v10.3.21, TD-1352: the database and its largest index again, for the sort
-#     files of the index rebuild; twice max_wal_size plus wal_keep_size of WAL; the dump unpacked), keeping 10% of
+#     files of the index rebuild; WAL up to twice max_wal_size, less the WAL already there; the dump unpacked), keeping 10% of
 #     each disk free; not enough room is a failed night;
 #   - the restore's temporary files go under BACKUP_DIR/.nightly-verify-tmp (the backup disk), never /tmp;
 #   - the restore and the check run under `timeout` (NIGHTLY_VERIFY_TIMEOUT seconds, default 7200) at low CPU and disk
@@ -292,8 +292,9 @@ fi
 # ---------- free space ----------
 # the dump unpacked into the temporary directory; on the data disk the database as large as it is now and its largest
 # index once more (an index is rebuilt from sort files beside the data, as large as the index); on the WAL disk twice
-# max_wal_size (a checkpoint starts at max_wal_size, and WAL keeps growing while it runs) and wal_keep_size; each disk
-# keeps 10% free (v10.3.21, TD-1352; until then one GiB of WAL and no sort files)
+# max_wal_size (a checkpoint starts at max_wal_size, and WAL keeps growing while it runs) less the WAL already there (it
+# is recycled), at least one GiB; each disk keeps 10% free (v10.3.21, TD-1352; until then one GiB of WAL and no sort
+# files). The index size comes from pg_class, which takes no lock: an index held by a REINDEX does not stall the check
 GIB=1073741824
 read -r packed unpacked _ < <(gzip -l "$BACKUP_FILE" 2>/dev/null | awk 'NR == 2') || true
 if ! [[ "${packed:-}" =~ ^[0-9]+$ ]] || ! [[ "${unpacked:-}" =~ ^[0-9]+$ ]]; then
@@ -304,9 +305,9 @@ fi
 while [ $(( packed - unpacked )) -gt 1048576 ]; do unpacked=$((unpacked + 4 * GIB)); done
 DB_BYTES="$(timeout "$CALL_LIMIT" psql "$DATABASE_URL" -X -tA -c 'SELECT pg_database_size(current_database())' 2>/dev/null || true)"
 [[ "$DB_BYTES" =~ ^[0-9]+$ ]] || night_failed space_unknown "the size of the live database could not be read"
-q="SELECT 2 * pg_size_bytes(current_setting('max_wal_size')) + pg_size_bytes(current_setting('wal_keep_size')), coalesce((SELECT max(pg_relation_size(indexrelid)) FROM pg_index), 0)"
-read -r WAL_BYTES INDEX_BYTES <<< "$(timeout "$CALL_LIMIT" psql "$DATABASE_URL" -X -tA -F ' ' -c "$q" 2>/dev/null || true)" || true
-if ! [[ "${WAL_BYTES:-}" =~ ^[0-9]+$ ]] || ! [[ "${INDEX_BYTES:-}" =~ ^[0-9]+$ ]]; then
+q="SELECT pg_size_bytes(current_setting('max_wal_size')), coalesce((SELECT max(relpages::bigint) FROM pg_class WHERE relkind = 'i'), 0) * current_setting('block_size')::bigint"
+read -r MAX_WAL_BYTES INDEX_BYTES <<< "$(timeout "$CALL_LIMIT" psql "$DATABASE_URL" -X -tA -F ' ' -c "$q" 2>/dev/null || true)" || true
+if ! [[ "${MAX_WAL_BYTES:-}" =~ ^[0-9]+$ ]] || ! [[ "${INDEX_BYTES:-}" =~ ^[0-9]+$ ]]; then
   night_failed space_unknown "the WAL settings or the index sizes of the live database could not be read"
 fi
 
@@ -324,6 +325,7 @@ case "$DB_HOST" in
   *) log "The database server $DB_HOST is not this machine: only the temporary directory's disk is checked" ;;
 esac
 
+WAL_BYTES=0
 declare -A NEED=() SIZE=() AVAIL=()
 add_need() {
   local dir="$1" bytes="$2" line size avail mount
@@ -339,6 +341,11 @@ if [ -n "$DATA_DIR" ]; then
   add_need "$DATA_DIR" $(( DB_BYTES + INDEX_BYTES ))
   WAL_DIR="$(readlink -f "$DATA_DIR/pg_wal" 2>/dev/null || true)"
   [ -n "$WAL_DIR" ] && [ -d "$WAL_DIR" ] || WAL_DIR="$DATA_DIR"
+  WAL_NOW=0
+  if [ "$WAL_DIR" != "$DATA_DIR" ]; then WAL_NOW="$(timeout "$CALL_LIMIT" du -sb "$WAL_DIR/" 2>/dev/null | awk '{print $1}' || true)"; fi
+  [[ "${WAL_NOW:-}" =~ ^[0-9]+$ ]] || WAL_NOW=0
+  WAL_BYTES=$(( 2 * MAX_WAL_BYTES - WAL_NOW ))
+  [ "$WAL_BYTES" -ge "$GIB" ] || WAL_BYTES="$GIB"
   add_need "$WAL_DIR" "$WAL_BYTES"
 fi
 for mount in "${!NEED[@]}"; do

@@ -92,7 +92,7 @@ export function monitorHarness() {
     const child = spawn('bash', [path.join(ROOT, 'scripts/monitor.sh')], {
       env: {
         ...shellEnv, APP_DIR: h.dir, MONITOR_URL: h.srv.url, ALERT_BOT_API: h.srv.url, BACKUP_DIR: h.backupDir,
-        MONITOR_STATE_DIR: h.stateDir, MONITOR_DISK_PERCENT: '100', ...extra,
+        MONITOR_STATE_DIR: h.stateDir, MONITOR_DISK_PERCENT: '100', MONITOR_CRON_FILE: path.join(h.dir, 'cron.d', 'papital-erp'), ...extra,
       },
     });
     let out = '';
