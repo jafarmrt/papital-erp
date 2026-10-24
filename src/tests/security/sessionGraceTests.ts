@@ -34,7 +34,7 @@ export async function runSessionGraceTests(shouldRun: ShouldRun): Promise<TestCa
   if (shouldRun('sec_close_others_keeps_this_device_10_3_package5', 'security', 'sessions', 'grace', 'package5')) {
     await runCase(results, {
       id: 'sec_close_others_keeps_this_device_10_3_package5',
-      name: 'v10.3.20: after «بستن دستگاه‌های دیگر» a request this device sent with its previous token still passes, other devices are refused (10.3 package 5)',
+      name: 'v10.3.20: after close-other-devices a request this device sent with its previous token still passes, other devices are refused (10.3 package 5)',
       details: 'POST /auth/sessions/close-others reissues this device\'s cookie; a GET and a write with the previous cookie of the same device answer 200 inside the grace, another device of the user gets 401, and after the grace the previous cookie gets 401 while the reissued one stays signed in',
     }, async (h, wrong) => {
       clearTokenVersionGraceForTests();
