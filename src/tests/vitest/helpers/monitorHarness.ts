@@ -7,7 +7,7 @@ import path from 'path';
 import { afterAll, beforeAll } from 'vitest';
 
 /**
- * Series 10 phase 1, O-03 (moved here in v10.3.22 for the nightly check tests): scripts/monitor.sh run for real against a
+ * Series 10 phase 1, O-03 (moved here in v10.3.23 for the nightly check tests): scripts/monitor.sh run for real against a
  * fake application and a fake alert bot, in a made-up app directory with its own .env and state.
  */
 const ROOT = path.resolve(__dirname, '../../../..');

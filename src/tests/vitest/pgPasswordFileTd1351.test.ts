@@ -72,7 +72,7 @@ describe('pg_password_file_td_1351', () => {
     }
   });
 
-  it('restore.sh, upgrade-rehearsal.sh and (v10.3.22) backup.sh set it up before their first database call', () => {
+  it('restore.sh, upgrade-rehearsal.sh and (v10.3.23) backup.sh set it up before their first database call', () => {
     for (const file of ['scripts/restore.sh', 'scripts/upgrade-rehearsal.sh', 'scripts/backup.sh']) {
       const text = read(file);
       const setupAt = text.indexOf('pg_password_setup "$WORK_DIR"');

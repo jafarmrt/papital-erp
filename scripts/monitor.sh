@@ -9,7 +9,7 @@
 #   offsite  the same for its off-server copy (.last_offsite_ok), only when BACKUP_RCLONE_REMOTE is set
 #   events   /metrics (read with METRICS_TOKEN): no unresolved dead-letter event and no outbox event stuck in
 #            processing, and the queue gauges were read (src/middleware/metrics.ts)
-#   nightly  v10.3.22 (TD-1350): the report of the nightly backup check (NIGHTLY_VERIFY_REPORT, default
+#   nightly  v10.3.23 (TD-1350): the report of the nightly backup check (NIGHTLY_VERIFY_REPORT, default
 #            APP_DIR/logs/nightly-verify.json, written by scripts/nightly-verify.sh): a night that could not be checked
 #            or found something worse than the last healthy night, or a report older than 36 hours, the same verdict as
 #            the «بررسی شبانهٔ پشتیبان» card (src/lib/system/nightlyVerify.ts); no report at all is a problem only when
@@ -28,7 +28,7 @@
 #                                                       e.g. smtps://smtp.gmail.com:465 with an app password
 # With no channel configured the alerts are only printed (and the run exits 2 so the cron log shows it).
 # State lives in MONITOR_STATE_DIR (default APP_DIR/logs/monitor-state). Exit 0 when every check passes, 1 otherwise.
-# v10.3.22 (TD-1388): the metrics token, the bot tokens and the SMTP password go to curl through its standard input
+# v10.3.23 (TD-1388): the metrics token, the bot tokens and the SMTP password go to curl through its standard input
 # (curl -K -), never on its command line, where every user of the server could read them in the process list.
 set -uo pipefail
 umask 077
@@ -61,7 +61,7 @@ DISK_LIMIT="$(setting MONITOR_DISK_PERCENT 85)"
 MAX_AGE_HOURS="$(setting MONITOR_BACKUP_MAX_AGE_HOURS 26)"
 REPEAT_HOURS="$(setting MONITOR_REPEAT_HOURS 6)"
 BACKUP_DIR_VALUE="$(setting BACKUP_DIR /var/backups/erp)"
-# a relative folder is under APP_DIR, whichever directory cron, update.sh or a shell starts from (v10.3.22)
+# a relative folder is under APP_DIR, whichever directory cron, update.sh or a shell starts from (v10.3.23)
 case "$BACKUP_DIR_VALUE" in /*) ;; *) BACKUP_DIR_VALUE="$APP_DIR/$BACKUP_DIR_VALUE" ;; esac
 OFFSITE_REMOTE="$(setting BACKUP_RCLONE_REMOTE)"
 STATE_DIR="$(setting MONITOR_STATE_DIR "$APP_DIR/logs/monitor-state")"
@@ -208,7 +208,7 @@ if [ "$APP_CODE" = "200" ]; then
   fi
 fi
 
-# --- nightly backup check (v10.3.22, TD-1350) ---
+# --- nightly backup check (v10.3.23, TD-1350) ---
 # the verdict of nightlyVerifyVerdict (src/lib/system/nightlyVerify.ts) from the report: «failed <reason>», «worse <n>»,
 # «stale <hours>», «ok» or «unreadable»; a failed night stays failed however old its report is
 # shellcheck disable=SC2016 # the $ is JavaScript run by node, not the shell

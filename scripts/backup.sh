@@ -35,7 +35,7 @@ env_file_value() {
   grep -E "^${key}=" "$file" | head -1 | cut -d= -f2- | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/" || true
 }
 
-# v10.3.22 (TD-1353): BACKUP_DIR from .env too, the folder nightly-verify.sh, monitor.sh and update.sh read
+# v10.3.23 (TD-1353): BACKUP_DIR from .env too, the folder nightly-verify.sh, monitor.sh and update.sh read
 [ -n "${BACKUP_DIR:-}" ] || BACKUP_DIR="$(env_file_value BACKUP_DIR)"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/erp}"
 # a relative folder is under APP_DIR, whichever directory cron, update.sh or a shell starts from
@@ -68,7 +68,7 @@ cleanup() {
   fi
 }
 trap cleanup EXIT
-# v10.3.22 (TD-1351): the password goes to psql and pg_dump through a private PGPASSFILE in WORK_DIR (removed on exit),
+# v10.3.23 (TD-1351): the password goes to psql and pg_dump through a private PGPASSFILE in WORK_DIR (removed on exit),
 # never on their command line, where every user of the server could read it in the process list
 # shellcheck source=scripts/pg-password.sh
 source "$APP_DIR/scripts/pg-password.sh"
