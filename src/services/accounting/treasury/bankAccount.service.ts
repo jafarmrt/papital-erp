@@ -459,7 +459,10 @@ export class BankAccountService {
   }): Promise<JournalVoucher | null> {
     const executor = params.tx;
     const isStrict = params.strict !== false;
-    const [bank] = await executor.select().from(bankAccounts).where(eq(bankAccounts.id, bankId));
+    // 10.3 package 4 (OBS-R1-65): FOR UPDATE, so an approval and an edit of the start date take turns: the edit waits and
+    // then finds the voucher (422), or the approval waits and dates the voucher with the edited day (create and edit hold
+    // this row already)
+    const [bank] = await executor.select().from(bankAccounts).where(eq(bankAccounts.id, bankId)).for('update');
     if (!bank || bank.isDeleted === 1) {
       if (isStrict) throw new NotFoundError(`حساب بانکی یا صندوق با شناسه ${bankId} یافت نشد.`);
       return null;

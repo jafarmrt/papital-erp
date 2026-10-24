@@ -11213,6 +11213,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // 10.3 package 4: the bank account start date dates its opening voucher (OBS-R1-65), and an «irr» account is rial
   const { runBankOpeningDateTests } = await import('../regression/bankOpeningDateTests.js');
   results.push(...await runBankOpeningDateTests(shouldRun));
+  const { runBankOpeningApprovalRaceTests } = await import('../regression/bankOpeningApprovalRaceTests.js');
+  results.push(...await runBankOpeningApprovalRaceTests(shouldRun));
 
   return results;
 }

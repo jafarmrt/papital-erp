@@ -21,9 +21,9 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 type ShouldRun = (id: string, ...extra: string[]) => boolean;
 
 let seq = 0;
-const tagOf = () => `${String(Date.now()).slice(-6)}${++seq}`;
+export const tagOf = () => `${String(Date.now()).slice(-6)}${++seq}`;
 
-async function client() {
+export async function client() {
   const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
   const app = await getTestApp();
   const s = await getAdminSession();
@@ -34,10 +34,10 @@ async function client() {
   };
 }
 
-const brief = (res: request.Response) => `${res.status} ${JSON.stringify(res.body ?? null).slice(0, 220)}`;
-const errorCode = (res: request.Response) => String(res.body?.code ?? res.body?.error?.code ?? '');
+export const brief = (res: request.Response) => `${res.status} ${JSON.stringify(res.body ?? null).slice(0, 220)}`;
+export const errorCode = (res: request.Response) => String(res.body?.code ?? res.body?.error?.code ?? '');
 
-async function runCase(results: TestCaseResult[], id: string, name: string, body: () => Promise<string>): Promise<void> {
+export async function runCase(results: TestCaseResult[], id: string, name: string, body: () => Promise<string>): Promise<void> {
   const tStart = Date.now();
   try {
     const details = await body();
@@ -52,7 +52,7 @@ async function runCase(results: TestCaseResult[], id: string, name: string, body
 }
 
 /** a ledger account of its own under 1003, so no other test's bank touches this bank's ledger */
-async function ownLedgerAccount(title: string): Promise<number> {
+export async function ownLedgerAccount(title: string): Promise<number> {
   const [parent] = await orm.select({ id: accounts.id }).from(accounts).where(and(eq(accounts.code, '1003'), eq(accounts.isDeleted, 0)));
   const [ledger] = await orm.insert(accounts).values({
     code: `1003${tagOf()}`, name: `${title} (test ledger)`, level: 'subsidiary', parentId: parent?.id ?? null,
@@ -62,14 +62,14 @@ async function ownLedgerAccount(title: string): Promise<number> {
 }
 
 /** the opening vouchers of a bank (not its adjustments), oldest first */
-async function openingVouchersOf(bankId: number) {
+export async function openingVouchersOf(bankId: number) {
   return orm.select({ id: journalVouchers.id, date: journalVouchers.date, status: journalVouchers.status }).from(journalVouchers)
     .where(and(eq(journalVouchers.referenceModule, 'treasury_opening'), eq(journalVouchers.referenceId, bankId),
       eq(journalVouchers.voucherType, 'opening'), eq(journalVouchers.isDeleted, 0)))
     .orderBy(asc(journalVouchers.id));
 }
 
-async function storedOpeningDate(bankId: number): Promise<string> {
+export async function storedOpeningDate(bankId: number): Promise<string> {
   const [row] = await orm.select({ openingDate: bankAccounts.openingDate }).from(bankAccounts).where(eq(bankAccounts.id, bankId));
   return String(row?.openingDate ?? '');
 }
