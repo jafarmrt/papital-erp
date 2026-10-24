@@ -55,6 +55,8 @@ env_file_value() {
 [ -n "${RESTORE_ADMIN_URL:-}" ] || RESTORE_ADMIN_URL="$(env_file_value RESTORE_ADMIN_URL)"
 [ -n "${BACKUP_DIR:-}" ] || BACKUP_DIR="$(env_file_value BACKUP_DIR)"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/erp}"
+# a relative folder is under APP_DIR, whichever directory cron, update.sh or a shell starts from (v10.3.22)
+case "$BACKUP_DIR" in /*) ;; *) BACKUP_DIR="$APP_DIR/$BACKUP_DIR" ;; esac
 export BACKUP_DIR
 # the same value the service reads (process.env with the app's .env)
 [ -n "${NIGHTLY_VERIFY_REPORT:-}" ] || NIGHTLY_VERIFY_REPORT="$(env_file_value NIGHTLY_VERIFY_REPORT)"
@@ -292,8 +294,8 @@ fi
 # ---------- free space ----------
 # the dump unpacked into the temporary directory; on the data disk the database as large as it is now and its largest
 # index once more (an index is rebuilt from sort files beside the data, as large as the index); on the WAL disk twice
-# max_wal_size (a checkpoint starts at max_wal_size, and WAL keeps growing while it runs) less the WAL already there (it
-# is recycled), at least one GiB; each disk keeps 10% free (v10.3.22, TD-1352; until then one GiB of WAL and no sort
+# max_wal_size (a checkpoint starts at max_wal_size, and WAL keeps growing while it runs) less the WAL already there
+# beyond wal_keep_size (it is recycled), at least one GiB; each disk keeps 10% free (v10.3.22, TD-1352; until then one GiB of WAL and no sort
 # files). The index size comes from pg_class, which takes no lock: an index held by a REINDEX does not stall the check
 GIB=1073741824
 read -r packed unpacked _ < <(gzip -l "$BACKUP_FILE" 2>/dev/null | awk 'NR == 2') || true
@@ -305,9 +307,9 @@ fi
 while [ $(( packed - unpacked )) -gt 1048576 ]; do unpacked=$((unpacked + 4 * GIB)); done
 DB_BYTES="$(timeout "$CALL_LIMIT" psql "$DATABASE_URL" -X -tA -c 'SELECT pg_database_size(current_database())' 2>/dev/null || true)"
 [[ "$DB_BYTES" =~ ^[0-9]+$ ]] || night_failed space_unknown "the size of the live database could not be read"
-q="SELECT pg_size_bytes(current_setting('max_wal_size')), coalesce((SELECT max(relpages::bigint) FROM pg_class WHERE relkind = 'i'), 0) * current_setting('block_size')::bigint"
-read -r MAX_WAL_BYTES INDEX_BYTES <<< "$(timeout "$CALL_LIMIT" psql "$DATABASE_URL" -X -tA -F ' ' -c "$q" 2>/dev/null || true)" || true
-if ! [[ "${MAX_WAL_BYTES:-}" =~ ^[0-9]+$ ]] || ! [[ "${INDEX_BYTES:-}" =~ ^[0-9]+$ ]]; then
+q="SELECT pg_size_bytes(current_setting('max_wal_size')), pg_size_bytes(current_setting('wal_keep_size')), coalesce((SELECT max(relpages::bigint) FROM pg_class WHERE relkind = 'i'), 0) * current_setting('block_size')::bigint"
+read -r MAX_WAL_BYTES KEEP_WAL_BYTES INDEX_BYTES <<< "$(timeout "$CALL_LIMIT" psql "$DATABASE_URL" -X -tA -F ' ' -c "$q" 2>/dev/null || true)" || true
+if ! [[ "${MAX_WAL_BYTES:-}" =~ ^[0-9]+$ ]] || ! [[ "${KEEP_WAL_BYTES:-}" =~ ^[0-9]+$ ]] || ! [[ "${INDEX_BYTES:-}" =~ ^[0-9]+$ ]]; then
   night_failed space_unknown "the WAL settings or the index sizes of the live database could not be read"
 fi
 
@@ -344,7 +346,9 @@ if [ -n "$DATA_DIR" ]; then
   WAL_NOW=0
   if [ "$WAL_DIR" != "$DATA_DIR" ]; then WAL_NOW="$(timeout "$CALL_LIMIT" du -sb "$WAL_DIR/" 2>/dev/null | awk '{print $1}' || true)"; fi
   [[ "${WAL_NOW:-}" =~ ^[0-9]+$ ]] || WAL_NOW=0
-  WAL_BYTES=$(( 2 * MAX_WAL_BYTES - WAL_NOW ))
+  # what wal_keep_size keeps is not recycled
+  WAL_RECYCLED=$(( WAL_NOW > KEEP_WAL_BYTES ? WAL_NOW - KEEP_WAL_BYTES : 0 ))
+  WAL_BYTES=$(( 2 * MAX_WAL_BYTES - WAL_RECYCLED ))
   [ "$WAL_BYTES" -ge "$GIB" ] || WAL_BYTES="$GIB"
   add_need "$WAL_DIR" "$WAL_BYTES"
 fi

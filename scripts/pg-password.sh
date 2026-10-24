@@ -3,7 +3,8 @@
 # appears on a psql / pg_restore command line, where every user of the server can read it in the process list.
 # pg_password_setup <dir> writes <dir>/pgpass (mode 600; the URLs' passwords, then a copy of an inherited PGPASSFILE), exports it as
 # PGPASSFILE and removes the password from DATABASE_URL and RESTORE_ADMIN_URL; the full DATABASE_URL stays in
-# PG_FULL_DATABASE_URL for a Node program, which gets it through its environment. The same parsing as nightly-verify.sh.
+# PG_FULL_DATABASE_URL for a Node program, which gets it through its environment. nightly-verify.sh has an older copy of the
+# parsing (no ~/.pgpass copy, no socket directory).
 # v10.3.22 (#381 review): without an inherited PGPASSFILE the user's ~/.pgpass is copied first, since libpq reads only the
 # file PGPASSFILE names (a URL without a password that relied on ~/.pgpass kept working), and a socket directory given
 # as ?host=/path is the host field of the line written for it.
@@ -43,9 +44,13 @@ pg_strip_password() {
     local host port socket_dir
     read -r host port <<< "$(pg_split_hostport "$hostport")"
     socket_dir="$(pg_query_socket_dir "$rest")"
-    [ -n "$hostport" ] || [ -z "$socket_dir" ] || host="$socket_dir"
-    printf '%s:%s:*:%s:%s\n' "$(pg_pgpass_field "$host")" "$port" "$(pg_pgpass_field "$(pg_url_decode "$user")")" \
-      "$(pg_pgpass_field "$(pg_url_decode "$pass")")" >> "$PGPASSFILE"
+    # libpq reads its own default socket directory as localhost, any other one by its path: both lines are written
+    local h hosts=("$host")
+    [ -n "$hostport" ] || [ -z "$socket_dir" ] || hosts=("$socket_dir" "$host")
+    for h in "${hosts[@]}"; do
+      printf '%s:%s:*:%s:%s\n' "$(pg_pgpass_field "$h")" "$port" "$(pg_pgpass_field "$(pg_url_decode "$user")")" \
+        "$(pg_pgpass_field "$(pg_url_decode "$pass")")" >> "$PGPASSFILE"
+    done
     echo "${scheme}${user}@${hostport}${rest}"
   else
     echo "$url"

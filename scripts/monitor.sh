@@ -61,6 +61,8 @@ DISK_LIMIT="$(setting MONITOR_DISK_PERCENT 85)"
 MAX_AGE_HOURS="$(setting MONITOR_BACKUP_MAX_AGE_HOURS 26)"
 REPEAT_HOURS="$(setting MONITOR_REPEAT_HOURS 6)"
 BACKUP_DIR_VALUE="$(setting BACKUP_DIR /var/backups/erp)"
+# a relative folder is under APP_DIR, whichever directory cron, update.sh or a shell starts from (v10.3.22)
+case "$BACKUP_DIR_VALUE" in /*) ;; *) BACKUP_DIR_VALUE="$APP_DIR/$BACKUP_DIR_VALUE" ;; esac
 OFFSITE_REMOTE="$(setting BACKUP_RCLONE_REMOTE)"
 STATE_DIR="$(setting MONITOR_STATE_DIR "$APP_DIR/logs/monitor-state")"
 BOT_TOKEN="$(setting ALERT_BOT_TOKEN)"

@@ -55,7 +55,7 @@ echo "fake 1000000000000 100000000000 900000000000 10% /"`);
     stub(path.join(bin, 'psql'), `echo "psql $* PASSFILE=$(cat "$PGPASSFILE" 2>/dev/null | tr '\n' ' ')" >> "${calls}"
 case "$*" in
   *pg_database_size*) echo "\${FAKE_DB_BYTES:-1000}" ;;
-  *max_wal_size*) echo "\${FAKE_WAL_INDEX-1073741824 1000}" ;;
+  *max_wal_size*) echo "\${FAKE_WAL_INDEX-1073741824 0 1000}" ;;
   *data_directory*) echo "${data}" ;;
   *"SELECT datname"*) printf '%s\n' erp_restore_drill_20200101_000000 "erp_restore_drill_$(date +%Y%m%d_%H%M%S)" erp_live ;;
 esac
@@ -195,7 +195,7 @@ exit 0`);
 
     // 900 GB free of 1 TB: the database alone fits, its largest index on top of it does not
     const index = fakeApp();
-    const big = spawnSync('bash', [index.script], { encoding: 'utf8', env: { ...index.env, FAKE_DB_BYTES: '500000000000', FAKE_WAL_INDEX: '1073741824 300000000000' } });
+    const big = spawnSync('bash', [index.script], { encoding: 'utf8', env: { ...index.env, FAKE_DB_BYTES: '500000000000', FAKE_WAL_INDEX: '1073741824 0 300000000000' } });
     expect(big.status).toBe(1);
     expect(index.log()).toContain('--failed no_space');
     expect(index.log()).not.toContain('restore DATABASE_URL');
@@ -203,15 +203,21 @@ exit 0`);
 
     // max_wal_size 425 GB: 850 GB of WAL does not fit in 900 GB free with 100 GB kept, unless 400 GB of it is there already
     const wal = fakeApp();
-    expect(spawnSync('bash', [wal.script], { encoding: 'utf8', env: { ...wal.env, FAKE_WAL_INDEX: '425000000000 0' } }).status).toBe(1);
+    expect(spawnSync('bash', [wal.script], { encoding: 'utf8', env: { ...wal.env, FAKE_WAL_INDEX: '425000000000 0 0' } }).status).toBe(1);
     expect(wal.log()).toContain('--failed no_space');
     fs.rmSync(wal.dir, { recursive: true, force: true });
     const recycled = fakeApp();
     fs.mkdirSync(path.join(recycled.dir, 'pgdata', 'pg_wal'));
-    const reuse = spawnSync('bash', [recycled.script], { encoding: 'utf8', env: { ...recycled.env, FAKE_WAL_INDEX: '425000000000 0', FAKE_WAL_DU: '400000000000' } });
+    const reuse = spawnSync('bash', [recycled.script], { encoding: 'utf8', env: { ...recycled.env, FAKE_WAL_INDEX: '425000000000 0 0', FAKE_WAL_DU: '400000000000' } });
     expect(reuse.status, reuse.stdout + reuse.stderr).toBe(0);
     expect(reuse.stdout).toContain('WAL 450000000000 bytes');
     fs.rmSync(recycled.dir, { recursive: true, force: true });
+    // what wal_keep_size keeps is not recycled: 380 GB of the 400 GB stays, so 830 GB is needed and does not fit
+    const kept = fakeApp();
+    fs.mkdirSync(path.join(kept.dir, 'pgdata', 'pg_wal'));
+    expect(spawnSync('bash', [kept.script], { encoding: 'utf8', env: { ...kept.env, FAKE_WAL_INDEX: '425000000000 380000000000 0', FAKE_WAL_DU: '400000000000' } }).status).toBe(1);
+    expect(kept.log()).toContain('--failed no_space');
+    fs.rmSync(kept.dir, { recursive: true, force: true });
 
     const unread = fakeApp();
     expect(spawnSync('bash', [unread.script], { encoding: 'utf8', env: { ...unread.env, FAKE_WAL_INDEX: '' } }).status).toBe(1);

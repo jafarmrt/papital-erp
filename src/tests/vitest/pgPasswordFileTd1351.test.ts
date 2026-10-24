@@ -65,7 +65,8 @@ describe('pg_password_file_td_1351', () => {
       rmSync(dir, { recursive: true, force: true });
       const socket = setup({ DATABASE_URL: 'postgresql://app:pw@/erp?sslmode=disable&host=%2Fvar%2Frun%2Fpg2' });
       expect(socket.url).toBe('postgresql://app@/erp?sslmode=disable&host=%2Fvar%2Frun%2Fpg2');
-      expect(socket.pgpass).toBe('/var/run/pg2:5432:*:app:pw\n');
+      // libpq reads its built-in socket directory (e.g. /var/run/postgresql) as localhost, any other one by its path
+      expect(socket.pgpass).toBe('/var/run/pg2:5432:*:app:pw\nlocalhost:5432:*:app:pw\n');
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
