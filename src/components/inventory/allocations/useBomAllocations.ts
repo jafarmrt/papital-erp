@@ -6,7 +6,7 @@ import { fetchJson } from '../../../api';
 import { isProjectOpenForAllocation } from '../../../lib/projects/projectStatus';
 import { allocationStatusLabel } from '../../../lib/projects/allocationLabels';
 import { warehouseLabel } from '../../../lib/inventory/warehouseLabel';
-import { bomAllocationsExportFileName } from '../../../lib/inventoryAudit/exportFileNames';
+import { EXPORT_FAILED_MESSAGE, bomAllocationsExportFileName } from '../../../lib/inventoryAudit/exportFileNames';
 import { EMPTY_ALLOCATION_STATUS_COUNTS, bomAllocationListUrl } from '../../../lib/inventory/bomAllocationList';
 import { errorMessageOf, formatPersianDate, formatPersianNumber, getTodayJalaliDate } from '../../../utils';
 import { useDebounce } from '../../../hooks/useDebounce';
@@ -117,7 +117,11 @@ export function useBomAllocations() {
       'توضیحات': a.notes || ''
     }));
 
-    await downloadSheet(data, 'تخصیص مواد اولیه', bomAllocationsExportFileName(getTodayJalaliDate()));
+    try {
+      await downloadSheet(data, 'تخصیص مواد اولیه', bomAllocationsExportFileName(getTodayJalaliDate()));
+    } catch (err) {
+      toast.error(errorMessageOf(err) || EXPORT_FAILED_MESSAGE);
+    }
   };
 
   return {

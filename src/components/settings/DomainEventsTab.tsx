@@ -7,6 +7,7 @@ import { WebhookManagementSubTab } from './WebhookManagementSubTab';
 import { OutboxSubTab } from './OutboxSubTab';
 import { LiveEventsSubTab } from './LiveEventsSubTab';
 import { useHasPermission } from '../../contexts/AuthContext';
+import { NoticeBanner, type EventNotice } from './eventMonitorShared';
 
 type SubTab = 'rules' | 'outbox' | 'dlq' | 'replay' | 'webhooks' | 'events';
 
@@ -28,6 +29,12 @@ export function DomainEventsTab() {
   // v9.0.435 (TD-722): every change in this page asks events.manage on the server, so only its holders see the buttons
   const canManage = useHasPermission('events.manage');
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('rules');
+  const [notice, setNotice] = useState<EventNotice | null>(null);
+  const showNotice = (next: EventNotice) => {
+    setNotice(next);
+    // a later notice is not cut short by the timer of an earlier one
+    setTimeout(() => setNotice(shown => (shown === next ? null : shown)), 4500);
+  };
 
   return (
     <div className="space-y-6">
@@ -65,8 +72,9 @@ export function DomainEventsTab() {
         </div>
       </div>
 
+      {notice && <NoticeBanner notice={notice} />}
       {activeSubTab === 'rules' && <AutoActionsSubTab />}
-      {activeSubTab === 'outbox' && <OutboxSubTab canManage={canManage} />}
+      {activeSubTab === 'outbox' && <OutboxSubTab canManage={canManage} onNotice={showNotice} />}
       {activeSubTab === 'events' && <LiveEventsSubTab canManage={canManage} />}
       {activeSubTab === 'dlq' && <DeadLetterQueueSubTab />}
       {activeSubTab === 'replay' && <EventSourcingReplaySubTab />}

@@ -17,6 +17,7 @@ import {
 import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 import {
   EventIcon, FILTER_SELECT_CLASS, KPI_CARD_CLASS, LIST_NOTE_CLASS, READ_FAILED_CLASS, SEARCH_INPUT_CLASS, TOOLBAR_CLASS, countOf, readFailure,
+  type EventNotice,
 } from './eventMonitorShared';
 
 // v7.0.86 (TD-108): نشان وضعیت رویداد صندوق خروجی
@@ -43,7 +44,7 @@ function KpiCard({ label, value, valueClass, children }: { label: string; value:
  * reads only (`useOpeningRead`); coming back to the tab shows «—» and «در حال خواندن» until the server answers, never
  * the counts and rows of the previous visit for a moment. Each visit mounts the tab again, so each is an opening.
  */
-export function OutboxSubTab({ canManage }: { canManage: boolean }) {
+export function OutboxSubTab({ canManage, onNotice }: { canManage: boolean; onNotice: (notice: EventNotice) => void }) {
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   // OBS-R2-86 (TD-1323): the outbox is read one page at a time and searched on the server
@@ -57,20 +58,22 @@ export function OutboxSubTab({ canManage }: { canManage: boolean }) {
   const pageQuery = useOutboxEventsQuery(statusFilter, { page, search });
   const pageRead = useOpeningRead(pageQuery, true);
   const rows = Array.isArray(pageRead.data?.events) ? pageRead.data.events : [];
-  const total = pageRead.data?.total ?? 0;
+  // while another page of the same list reads, the pager keeps this visit's last total (never «از ۰ مورد»)
+  const listKey = `${statusFilter}\u0000${search}`;
+  const [lastTotal, setLastTotal] = useState({ key: listKey, total: 0 });
+  const readTotal = pageRead.data?.total;
+  if (readTotal !== undefined && (lastTotal.key !== listKey || lastTotal.total !== readTotal)) setLastTotal({ key: listKey, total: readTotal });
+  const total = readTotal ?? (lastTotal.key === listKey ? lastTotal.total : 0);
   const statsError = readFailure(statsRead.error, 'آمار صف ارسال رویداد خوانده نشد.');
   const listError = readFailure(pageRead.error, 'فهرست صف ارسال رویداد بارگذاری نشد.');
-  const reading = statsQuery.isFetching || pageQuery.isFetching;
+  // the refresh button waits for this visit's first answers, not for every ten-second poll
+  const reading = (!statsRead.data && statsQuery.isFetching) || (!pageRead.data && pageQuery.isFetching);
 
   const processOutboxMutation = useProcessOutboxMutation();
   const retryFailedMutation = useRetryFailedOutboxMutation();
   const retrySingleMutation = useRetrySingleOutboxEventMutation();
   const [retryingEventId, setRetryingEventId] = useState<string | null>(null);
-  const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const showNotice = (text: string, type: 'success' | 'error' = 'success') => {
-    setNotice({ text, type });
-    setTimeout(() => setNotice(null), 4500);
-  };
+  const showNotice = (text: string, type: EventNotice['type'] = 'success') => onNotice({ text, type });
 
   const handleProcessNow = async () => {
     try {
@@ -104,18 +107,6 @@ export function OutboxSubTab({ canManage }: { canManage: boolean }) {
 
   return (
     <div className="space-y-6">
-      {notice && (
-        <div
-          className={`p-3.5 rounded-xl border text-xs flex items-center gap-2 ${
-            notice.type === 'success'
-              ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
-              : 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300'
-          }`}
-        >
-          {notice.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
-          <span>{notice.text}</span>
-        </div>
-      )}
       {statsError && <div role="alert" className={READ_FAILED_CLASS}>{statsError}</div>}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
         <KpiCard label="کل رویدادهای صف ارسال" value={countOf(!!stats, stats?.total || 0)} valueClass="text-slate-800 dark:text-white">

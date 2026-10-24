@@ -1,4 +1,4 @@
-import { Zap, Package, FileText, GitBranch, CreditCard } from 'lucide-react';
+import { Zap, Package, FileText, GitBranch, CreditCard, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { errorMessageOf } from '../../utils';
 
 /** 10.3 (ARCH review): a read the server refused says why, never a zero count or «nothing found» */
@@ -20,4 +20,22 @@ export function EventIcon({ type, aggregate }: { type: string; aggregate: string
   if (aggregate === 'Workflow' || type.includes('Workflow')) return <GitBranch className="w-4 h-4 text-indigo-500" />;
   if (aggregate === 'Treasury' || type.includes('Payment') || type.includes('Cheque')) return <CreditCard className="w-4 h-4 text-amber-500" />;
   return <Zap className="w-4 h-4 text-purple-500" />;
+}
+
+export type EventNotice = { type: 'success' | 'error'; text: string };
+
+/** the answer of a process or retry; the page holds it, so switching sub-tab while the action runs keeps it */
+export function NoticeBanner({ notice }: { notice: EventNotice }) {
+  return (
+    <div
+      className={`p-3.5 rounded-xl border text-xs flex items-center gap-2 ${
+        notice.type === 'success'
+          ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+          : 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300'
+      }`}
+    >
+      {notice.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
+      <span>{notice.text}</span>
+    </div>
+  );
 }

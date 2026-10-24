@@ -27,6 +27,8 @@ export function LiveEventsSubTab({ canManage }: { canManage: boolean }) {
   const events = Array.isArray(eventsRead.data?.events) ? eventsRead.data.events : [];
   const stats = eventsRead.data?.stats || null;
   const eventsError = readFailure(eventsRead.error, 'رویدادهای زنده خوانده نشد.');
+  // the refresh button waits for this visit's first answer, not for every ten-second poll
+  const reading = !eventsRead.data && eventsQuery.isFetching;
 
   const q = searchQuery.toLowerCase();
   const filteredEvents = !searchQuery ? events : events.filter(e => (
@@ -90,10 +92,10 @@ export function LiveEventsSubTab({ canManage }: { canManage: boolean }) {
 
           <button
             onClick={() => void eventsQuery.refetch()}
-            disabled={eventsQuery.isFetching}
+            disabled={reading}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 rounded-lg transition-all"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${eventsQuery.isFetching ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${reading ? 'animate-spin' : ''}`} />
             <span>به‌روزرسانی</span>
           </button>
         </div>

@@ -8,26 +8,40 @@ import { describe, expect, it } from 'vitest';
  * app put the library into that page's bundle.
  */
 const ROOT = join(__dirname, '..', '..');
+/** a value import or re-export of xlsx, on one line or several; a type-only one is erased from the bundle */
+const STATIC_XLSX = /^\s*(?:import|export)\s+(?!type\b)(?:[^;'"]*\bfrom\s+)?['"]xlsx['"]/m;
 
 function sources(dir: string): string[] {
   return readdirSync(dir).flatMap(name => {
     const path = join(dir, name);
     if (statSync(path).isDirectory()) return name === 'tests' ? [] : sources(path);
-    return /\.(ts|tsx)$/.test(name) ? [path] : [];
+    return /\.(ts|tsx|js|jsx|mjs|cjs)$/.test(name) ? [path] : [];
   });
 }
 
 describe('xlsx_lazy_import_10_3', () => {
   it('no app file imports xlsx as a value', () => {
-    const staticImport = /^\s*import\s+(?!type\b)[^;]*\bfrom\s+['"]xlsx['"]/m;
-    const offenders = sources(ROOT).filter(file => staticImport.test(readFileSync(file, 'utf8'))).map(file => relative(ROOT, file));
+    const offenders = sources(ROOT).filter(file => STATIC_XLSX.test(readFileSync(file, 'utf8'))).map(file => relative(ROOT, file));
     expect(offenders).toEqual([]);
   });
 
   it('the guard would see a value import', () => {
-    const staticImport = /^\s*import\s+(?!type\b)[^;]*\bfrom\s+['"]xlsx['"]/m;
-    expect(staticImport.test("import * as xlsx from 'xlsx';")).toBe(true);
-    expect(staticImport.test("import { utils } from 'xlsx';")).toBe(true);
-    expect(staticImport.test("import type { WorkBook } from 'xlsx';")).toBe(false);
+    const seen = [
+      "import * as xlsx from 'xlsx';",
+      "import { utils } from 'xlsx';",
+      "import {\n  utils,\n  writeFile,\n} from 'xlsx';",
+      "import 'xlsx';",
+      "export * from 'xlsx';",
+      "export { utils } from \"xlsx\";",
+    ];
+    for (const source of seen) expect(STATIC_XLSX.test(source), source).toBe(true);
+    const fine = [
+      "import type { WorkBook } from 'xlsx';",
+      "export type { WorkBook } from 'xlsx';",
+      "const xlsx = await import('xlsx');",
+      "import { a } from './a';\nconst name = 'xlsx';",
+      "export const kind = 'xlsx';",
+    ];
+    for (const source of fine) expect(STATIC_XLSX.test(source), source).toBe(false);
   });
 });

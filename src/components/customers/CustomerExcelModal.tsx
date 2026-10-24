@@ -9,6 +9,7 @@ import { parsePartyTypeCell, partyTypeCellLabel, type PartyType } from '../../li
 import { bankNumberCell, phoneCellText } from '../../lib/customers/customerExcelCells';
 import { contactChannelErrors } from '../../lib/customers/contactChannels';
 import { DialogLayer } from '../common/DialogLayer';
+import { loadXlsx } from '../../lib/excel/downloadSheet';
 
 interface CustomerExcelModalProps {
   isOpen: boolean;
@@ -138,7 +139,7 @@ export function CustomerExcelModal({
       }
 
       // 10.3 package 6 (I-05): the xlsx library loads when a file is made or read, not with the page
-      const xlsx = await import('xlsx');
+      const xlsx = await loadXlsx();
       const ws = xlsx.utils.json_to_sheet(rows);
       // Auto-fit column widths
       const colWidths = [
@@ -222,7 +223,7 @@ export function CustomerExcelModal({
 
     let xlsx: typeof import('xlsx');
     try {
-      xlsx = await import('xlsx');
+      xlsx = await loadXlsx();
     } catch (err) {
       console.error(err);
       toast.error('الگوی اکسل ساخته نشد؛ دوباره تلاش کنید.');
@@ -249,7 +250,7 @@ export function CustomerExcelModal({
     reader.onload = (e) => { void (async () => {
       try {
         const bstr = e.target?.result;
-        const xlsx = await import('xlsx');
+        const xlsx = await loadXlsx();
         const wb = xlsx.read(bstr, { type: 'binary' });
         const firstSheetName = wb.SheetNames[0];
         const ws = wb.Sheets[firstSheetName];

@@ -8,7 +8,7 @@ import { Personnel } from '../../types';
 import { PERSONNEL_IMPORT_DEFAULTS, parseEmploymentStatusCell, parseGenderCell, parseNationalityCell, personnelCellLabel, personnelHeaderKey, unreadPersonnelColumns, unreadPersonnelColumnsNotice } from '../../lib/personnel/personnelImportCells';
 import { DialogLayer } from '../common/DialogLayer';
 import { PERSONNEL_LIST_STATE_TEXT, type PersonnelListState } from '../../lib/personnel/personnelList';
-import { downloadSheet } from '../../lib/excel/downloadSheet';
+import { downloadSheet, loadXlsx } from '../../lib/excel/downloadSheet';
 
 interface PersonnelExcelModalProps {
   isOpen: boolean;
@@ -112,7 +112,7 @@ export function PersonnelExcelModal({
         return;
       }
 
-      const xlsx = await import('xlsx');
+      const xlsx = await loadXlsx();
       const ws = xlsx.utils.json_to_sheet(rows);
       // تضمین اینکه فیلدهای کد، شماره تماس، کد ملی، حساب و کارت رشته متنی باشند
       Object.keys(ws).forEach((k) => {
@@ -206,7 +206,7 @@ export function PersonnelExcelModal({
     reader.onload = (evt) => { void (async () => {
       try {
         const bstr = evt.target?.result;
-        const xlsx = await import('xlsx');
+        const xlsx = await loadXlsx();
         const wb = xlsx.read(bstr, { type: 'binary' });
         const wsName = wb.SheetNames[0];
         const ws = wb.Sheets[wsName];

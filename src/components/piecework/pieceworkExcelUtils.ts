@@ -1,4 +1,4 @@
-import { downloadSheet } from '../../lib/excel/downloadSheet';
+import { downloadSheet, loadXlsx } from '../../lib/excel/downloadSheet';
 import { PieceworkTask } from '../../types';
 import { parsePieceworkRate } from '../../lib/piecework/pieceworkRate';
 
@@ -89,7 +89,7 @@ export async function exportPieceworkTasksToExcel(tasks: PieceworkTask[], fileNa
 export async function parsePieceworkExcelFile(file: File): Promise<ParsedPieceworkRow[]> {
   const arrayBuffer = await file.arrayBuffer();
   // 10.3 package 6 (I-05): the xlsx library loads when a file is made or read, not with the page
-  const xlsx = await import('xlsx');
+  const xlsx = await loadXlsx();
   const workbook = xlsx.read(arrayBuffer, { type: 'array' });
 
   if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
