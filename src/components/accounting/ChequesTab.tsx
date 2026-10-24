@@ -18,7 +18,8 @@ import { useChequeReconciliationReport } from '../../hooks/accounting/useChequeQ
 import { copyToClipboard } from '../../utils/clipboard';
 import { CHEQUE_STATUS_LABELS, chequeHasNextStep, chequeNextStatuses, chequeStatusLabel, chequeStepTakesBankAccount, isChequeClearingAccountType, paidChequeIssuingAccountFixed } from '../../lib/treasury/chequeTransitions';
 import { needsChosenContraAccount, type PersonnelPurpose } from '../../lib/treasury/partyPurpose';
-import { personnelPartyName } from '../../lib/treasury/personnelPartyName';
+import { personnelPartyName, personnelPartyOption } from '../../lib/treasury/personnelPartyName';
+import { personnelServerSearchUrl } from '../../lib/personnel/personnelList';
 import { PartyPurposeFields } from './treasury/PartyPurposeFields';
 import { DialogLayer } from '../common/DialogLayer';
 
@@ -898,15 +899,16 @@ export function ChequesTab({
                     ) : newFormData.partyType === 'personnel' ? (
                       <SearchableSelect
                         value={String(newFormData.partyId || '')}
-                        onChange={(val) => {
-                          const p = safePersonnelList.find(x => x.id === Number(val));
+                        onChange={(val, raw?: Personnel) => {
+                          const p = safePersonnelList.find(x => x.id === Number(val)) ?? (raw && String(raw.id) === val ? raw : undefined);
                           setNewFormData({ ...newFormData, partyId: p ? p.id : null, partyName: p ? personnelPartyName(p) : '' });
                         }}
                         placeholder="جست‌وجو و انتخاب پرسنل..."
-                        options={safePersonnelList.map(p => ({
-                          value: String(p.id),
-                          label: personnelPartyName(p)
-                        }))}
+                        options={safePersonnelList.map(personnelPartyOption)}
+                        // 10.3 package 6 (TD-1362): a list cut at the cap also searches on the server; the chosen row comes as `raw`
+                        serverSearchUrl={personnelServerSearchUrl(safePersonnelList)}
+                        mapResultToOption={personnelPartyOption}
+                        valueLabel={newFormData.partyName || undefined}
                       />
                     ) : (
                       <input

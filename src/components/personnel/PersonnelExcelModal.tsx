@@ -6,7 +6,7 @@ import { fetchJson } from '../../api';
 import { formatPersianNumber, formatPersianPhone, formatPersianNationalId, normalizePhoneNumber, errorMessageOf } from '../../utils';
 import { paddedNationalIdNotice, readImportedNationalId } from '../../lib/personnel/nationalIdCell';
 import { Personnel } from '../../types';
-import { PERSONNEL_IMPORT_DEFAULTS, parseEmploymentStatusCell, parseGenderCell, parseNationalityCell, personnelCellLabel } from '../../lib/personnel/personnelImportCells';
+import { PERSONNEL_IMPORT_DEFAULTS, parseEmploymentStatusCell, parseGenderCell, parseNationalityCell, personnelCellLabel, personnelHeaderKey, unreadPersonnelColumns, unreadPersonnelColumnsNotice } from '../../lib/personnel/personnelImportCells';
 import { DialogLayer } from '../common/DialogLayer';
 import { PERSONNEL_LIST_STATE_TEXT, type PersonnelListState } from '../../lib/personnel/personnelList';
 
@@ -66,6 +66,8 @@ export function PersonnelExcelModal({
   const [updateIfExists, setUpdateIfExists] = useState(true);
 
   const [previewRows, setPreviewRows] = useState<PersonnelPreviewRow[]>([]);
+  /** 10.3 package 6 (TD-1386): the export's salary, flag and end-of-service columns the file holds, which the import never reads */
+  const [unreadColumns, setUnreadColumns] = useState<string[]>([]);
   const [filterMode, setFilterMode] = useState<'all' | 'issues'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -79,10 +81,9 @@ export function PersonnelExcelModal({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Normalized key mapping helper
-  const normalizeKey = (key: string): string => {
-    return key.replace(/[\s_\-–—:\(\)\[\]]/g, '').toLowerCase();
-  };
+  // 10.3 package 6 (TD-1386): one header rule with the unread-column notice, so «شماره كارت» (Arabic «ك») or a header with a
+  // zero-width non-joiner is read too, not dropped unnamed
+  const normalizeKey = personnelHeaderKey;
 
   // Helper to extract value by multiple possible header aliases
   const getField = (row: Record<string, any>, aliases: string[]): string => {
@@ -316,6 +317,7 @@ export function PersonnelExcelModal({
         });
 
         setPreviewRows(parsed);
+        setUnreadColumns(unreadPersonnelColumns([...new Set(rawRows.flatMap(row => Object.keys(row)))]));
         setStep('preview');
         toast.success(`${formatPersianNumber(parsed.length)} ردیف از فایل اکسل با موفقیت بازخوانی شد.`);
       } catch (err) {
@@ -418,6 +420,7 @@ export function PersonnelExcelModal({
   const handleResetModal = () => {
     setStep('upload');
     setPreviewRows([]);
+    setUnreadColumns([]);
     setImportResult(null);
     setSearchQuery('');
     setFilterMode('all');
@@ -554,6 +557,7 @@ export function PersonnelExcelModal({
                   <li>ستون «کد پرسنلی» شناسه یکتا است؛ در صورت تکرار، رکورد قبلی به‌روزرسانی می‌شود.</li>
                   <li>وضعیت همکاری می‌تواند «فعال»، «مرخصی»، «تعلیق» یا «قطع همکاری» باشد.</li>
                   <li>پیش از ثبت نهایی، پیش‌نمایش جدول اطلاعات برای تایید و بررسی شما نمایش داده می‌شود.</li>
+                  <li>ستون‌های حقوق، بیمه، مالیات حقوق، عیدی و پایان همکاری فایل خروجی در ورود خوانده نمی‌شوند؛ این موارد را در پرونده هر نفر ویرایش کنید.</li>
                 </ul>
               </div>
             </div>
@@ -590,6 +594,13 @@ export function PersonnelExcelModal({
                   <AlertTriangle size={24} className="text-amber-500" />
                 </div>
               </div>
+
+              {unreadColumns.length > 0 && (
+                <div role="status" className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs font-bold text-amber-800">
+                  <Info size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                  <span>{unreadPersonnelColumnsNotice(unreadColumns)}</span>
+                </div>
+              )}
 
               {/* Filter and Search Bar */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">

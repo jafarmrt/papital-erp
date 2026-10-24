@@ -150,8 +150,9 @@ describe('personnel pick list cap (OBS-R1-69)', () => {
     expect(PERSONNEL_PICK_CAP_NOTICE).toContain('۵٬۰۰۰');
   });
 
-  it('the notice says only who is missing, never a search on the personnel page that makes no one selectable', () => {
-    expect(PERSONNEL_PICK_CAP_NOTICE).toBe('فهرست انتخاب فقط ۵٬۰۰۰ پرسنلِ آخرِ ثبت‌شده را دارد؛ پرسنل قدیمی‌تر در این فهرست نیستند.');
+  // 10.3 package 6 (TD-1362): the picker of a cut list searches on the server, so the notice points to its search
+  it('the notice says who is missing and that the picker\'s own search finds them, never the personnel page', () => {
+    expect(PERSONNEL_PICK_CAP_NOTICE).toBe('فهرست انتخاب فقط ۵٬۰۰۰ پرسنلِ آخرِ ثبت‌شده را نشان می‌دهد؛ پرسنل قدیمی‌تر را با نوشتن نامشان در جست‌وجوی انتخابگر پیدا کنید.');
   });
 
   it('shows the notice only when the server had more rows than the cap, and once per session', () => {

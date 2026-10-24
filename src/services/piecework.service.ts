@@ -802,7 +802,7 @@ export class PieceworkService {
       }
       // 10.2 package 12 (TD-1346): a new quantity of a schedule-linked log stays within its row, as on create (TD-955)
       const quantityChanged = Number(newQty) !== Number(existing.quantity);
-      const scheduleLinked = !projectMoved && quantityChanged && await assertLinkedRowQuantity(tx, existing.projectId, id, newQty);
+      const scheduleLinked = !projectMoved && quantityChanged && await assertLinkedRowQuantity(tx, existing.projectId, id, Number(newQty), Number(existing.quantity));
 
       const [updated] = await tx.update(pieceworkLogs).set({
         date: isoDate,

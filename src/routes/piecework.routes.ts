@@ -14,7 +14,7 @@ import { idempotency } from '../middleware/idempotency.js';
 import { canAccessSensitivePayrollData, sanitizePayrollRecord } from '../lib/piiMasker.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { PIECEWORK_LOG_PERMISSION, PIECEWORK_PAY_PERMISSION, PIECEWORK_PAYROLL_APPROVE_PERMISSION, PIECEWORK_PAYROLL_PERMISSION, PIECEWORK_TASKS_PERMISSION } from '../lib/permissions/pieceworkPermissions.js';
-import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/customErrors.js';
+import { AppError, BadRequestError, ForbiddenError, NotFoundError } from '../errors/customErrors.js';
 import { fin } from '../lib/financialDecimal.js';
 import { parseWorkQuantity } from '../lib/piecework/workQuantity.js';
 import { WORK_LOG_PAGE_SIZE } from '../lib/piecework/workLogList.js';
@@ -721,10 +721,7 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], requirePerm
       req
     });
 
-    if (result.error || !result.payroll) {
-      return res.status(result.status || 400).json({ error: result.error || 'خطا در صدور فیش حقوقی' });
-    }
-
+    // 10.3 package 6 (TD-1386): a refusal is thrown by the service and answered by errorHandler
     const { payroll, voucher } = result;
 
     res.status(201).json({
@@ -736,7 +733,8 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], requirePerm
       isVoucherSynced: !!voucher
     });
   } catch (err) {
-    logger.error({ message: 'Error generating payroll', error: err });
+    // TD-1386 (review of #380): a refusal is answered and logged by errorHandler alone, which keeps a payslip's private text out
+    if (!(err instanceof AppError && err.statusCode < 500)) logger.error({ message: 'Error generating payroll', error: err });
     throw err;
   }
 }));
@@ -767,10 +765,6 @@ router.put('/piecework/payrolls/:id/status', requirePermission(PIECEWORK_PAYROLL
       req
     });
 
-    if (result.error || !result.payroll) {
-      return res.status(result.status || 400).json({ error: result.error || 'خطا در ویرایش وضعیت فیش حقوقی' });
-    }
-
     res.json({
       status: 'ok',
       message: 'وضعیت فیش حقوقی به‌روزرسانی شد',
@@ -778,7 +772,8 @@ router.put('/piecework/payrolls/:id/status', requirePermission(PIECEWORK_PAYROLL
       voucherNumber: result.voucher ? result.voucher.voucherNumber : null
     });
   } catch (err) {
-    logger.error({ message: 'Error updating payroll status', error: err });
+    // TD-1386: a refusal is logged by errorHandler alone, as in generate
+    if (!(err instanceof AppError && err.statusCode < 500)) logger.error({ message: 'Error updating payroll status', error: err });
     throw err;
   }
 }));
@@ -836,7 +831,8 @@ router.post('/piecework/payrolls/:id/register-payment', requirePermission(PIECEW
       ...result
     });
   } catch (err) {
-    logger.error({ message: 'Error registering payroll payment', error: err });
+    // TD-1386: a refusal is logged by errorHandler alone, as in generate
+    if (!(err instanceof AppError && err.statusCode < 500)) logger.error({ message: 'Error registering payroll payment', error: err });
     throw err;
   }
 }));
@@ -898,17 +894,14 @@ router.post('/piecework/payrolls/:id/sync-voucher', requirePermission(PIECEWORK_
       username: req.user?.username || 'سیستم'
     });
 
-    if (result.error || !result.voucher || !result.payroll) {
-      return res.status(result.status || 400).json({ error: result.error || 'خطا در ثبت سند فیش حقوقی' });
-    }
-
     res.json({
       success: true,
       message: `سند حسابداری شماره ${result.voucher.voucherNumber} برای فیش حقوقی ${result.payroll.payrollNumber} ثبت یا همگام گردید.`,
       voucher: result.voucher
     });
   } catch (err) {
-    logger.error({ message: 'Error syncing payroll voucher', error: err });
+    // TD-1386: a refusal is logged by errorHandler alone, as in generate
+    if (!(err instanceof AppError && err.statusCode < 500)) logger.error({ message: 'Error syncing payroll voucher', error: err });
     throw err;
   }
 }));

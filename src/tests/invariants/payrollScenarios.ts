@@ -9,6 +9,7 @@ import { VoucherService } from '../../services/accounting/voucher.service.js';
 import { BankAccountService } from '../../services/accounting/treasury/bankAccount.service.js';
 import { TreasuryTransactionService } from '../../services/accounting/treasury/treasuryTransaction.service.js';
 import { PieceworkPayrollService, type GeneratePayrollInput } from '../../services/piecework/payroll.service.js';
+import { AppError } from '../../errors/customErrors.js';
 import { getErrorMessage } from '../../utils/formatters.js';
 import { miscContraAccountId } from '../fixtures/treasuryParty.js';
 
@@ -72,10 +73,24 @@ export async function fundedBank(): Promise<number> {
  * v10.0.193 (TD-1083): a payslip is issued as a draft and paid only once approved; the payment scenarios issue and
  * approve it (as the system, so no issuer rule applies). The draft itself is covered by reg_payroll_issued_as_draft_td_1083.
  */
+/** A payslip refused by the service: its HTTP status, code and Persian message (10.3 package 6, TD-1386) */
+export interface PayrollRefusal { statusCode: number; code: string; message: string }
+
+/**
+ * Issues and approves a payslip. 10.3 package 6 (TD-1386): the service throws a refusal (an AppError below 500) instead of
+ * returning `{ status, error }`; these checks read it as «no payslip» with the refusal, any other error still throws.
+ */
 export async function issueApproved(input: GeneratePayrollInput) {
-  const issued = await PieceworkPayrollService.generatePayroll(input);
-  if (issued.payroll) await PieceworkPayrollService.updatePayrollStatus(issued.payroll.id, { status: 'approved', username: input.username || 'inv' });
-  return issued;
+  let issued: Awaited<ReturnType<typeof PieceworkPayrollService.generatePayroll>>;
+  try {
+    issued = await PieceworkPayrollService.generatePayroll(input);
+  } catch (err) {
+    if (!(err instanceof AppError) || err.statusCode >= 500) throw err;
+    const refusal: PayrollRefusal = { statusCode: err.statusCode, code: err.code, message: err.message };
+    return { payroll: null, refusal };
+  }
+  await PieceworkPayrollService.updatePayrollStatus(issued.payroll.id, { status: 'approved', username: input.username || 'inv' });
+  return { ...issued, refusal: null };
 }
 
 async function generate(personnelId: number, extra: Record<string, unknown> = {}) {
@@ -104,7 +119,7 @@ export async function checkPayrollStatusKeepsLifecycle(): Promise<string[]> {
   const w1 = await newWorker('کارگر آزمون وضعیت');
   await addLog(w1, task, '2026-04-05', 1000000);
   const first = await generate(w1);
-  if (!first.payroll) return [`issuing the test payslip failed (${first.error})`];
+  if (!first.payroll) return ['issuing the test payslip failed'];
   const refusal = await refusalOf(() => PieceworkPayrollService.updatePayrollStatus(first.payroll!.id, { status: 'pending', username: 'inv' }));
   if (!refusal?.includes('مجاز نیست')) problems.push(`status "pending" for a payslip was not refused (${refusal ?? 'accepted'})`);
   const toggle = await refusalOf(async () => {
@@ -124,11 +139,11 @@ export async function checkPayrollStatusKeepsLifecycle(): Promise<string[]> {
   const w2 = await newWorker('کارگر آزمون فیش حذف‌شده');
   await addLog(w2, task, '2026-04-06', 600000);
   const orphaned = await generate(w2);
-  if (!orphaned.payroll) return [...problems, `issuing the test payslip failed (${orphaned.error})`];
+  if (!orphaned.payroll) return [...problems, 'issuing the test payslip failed'];
   await orm.update(pieceworkPayrolls).set({ isDeleted: 1 }).where(eq(pieceworkPayrolls.id, orphaned.payroll.id));
   const reissued = await generate(w2);
   if (!reissued.payroll || !fin(reissued.payroll.totalPieceworkAmount).equals(600000)) {
-    problems.push(`work log of a deleted payslip was not counted in the new payslip (${reissued.payroll?.totalPieceworkAmount ?? reissued.error})`);
+    problems.push(`work log of a deleted payslip was not counted in the new payslip (${reissued.payroll?.totalPieceworkAmount})`);
   } else {
     const third = await generate(w2);
     if (third.payroll) problems.push(`relinked work log was counted in a third payslip too (${third.payroll.totalPieceworkAmount})`);
@@ -138,7 +153,7 @@ export async function checkPayrollStatusKeepsLifecycle(): Promise<string[]> {
   const w3 = await newWorker('کارگر آزمون فیش پرداخت‌شده');
   await addLog(w3, task, '2026-04-07', 800000);
   const paid = await generate(w3);
-  if (!paid.payroll) return [...problems, `issuing the test payslip failed (${paid.error})`];
+  if (!paid.payroll) return [...problems, 'issuing the test payslip failed'];
   await PayrollPaymentService.registerPayrollPayment({ payrollId: paid.payroll.id, bankAccountId: await fundedBank(), paymentDate: '2026-05-01', username: 'inv' });
   const back = await refusalOf(() => PieceworkPayrollService.updatePayrollStatus(paid.payroll!.id, { status: 'approved', username: 'inv' }));
   if (!back?.includes('پرداخت ثبت‌شده')) problems.push(`a paid payslip went back to "approved" (${back ?? 'accepted'})`);
@@ -159,8 +174,11 @@ export async function checkAdvanceDeductionWithinBalance(): Promise<string[]> {
   const worker = await newWorker('کارگر آزمون مساعده');
   await addLog(worker, task, '2026-04-05', 1000000);
 
-  const refused = await generate(worker, { advanceDeduction: 300000 });
-  if (refused.status !== 400 || !refused.error?.includes('مانده مساعده')) problems.push(`advance deduction without an advance was not refused (${refused.status} ${refused.error ?? ''})`);
+  // 10.3 package 6 (TD-1386): the refusal is a thrown 400 with its code, no longer a returned `{ status, error }`
+  const { refusal } = await generate(worker, { advanceDeduction: 300000 });
+  if (refusal?.statusCode !== 400 || refusal.code !== 'PAYROLL_ADVANCE_DEDUCTION_EXCEEDS_BALANCE' || !refusal.message.includes('مانده مساعده')) {
+    problems.push(`advance deduction without an advance was not refused (${refusal ? `${refusal.statusCode} ${refusal.code} ${refusal.message}` : 'accepted'})`);
+  }
   if (await payrollCount(worker) !== 0) problems.push('a payslip was created for a refused advance deduction');
   if (!fin(await personNet('1301', worker)).isZero()) problems.push('the refused advance deduction credited the advance account');
 
@@ -171,10 +189,10 @@ export async function checkAdvanceDeductionWithinBalance(): Promise<string[]> {
     purpose: 'advance', date: '2026-04-02', username: 'inv',
   });
   const over = await generate(worker, { advanceDeduction: 200001 });
-  if (over.status !== 400) problems.push(`advance deduction one rial above the balance was not refused (${over.status})`);
+  if (over.refusal?.statusCode !== 400) problems.push(`advance deduction one rial above the balance was not refused (${over.refusal?.statusCode ?? 'accepted'})`);
   const accepted = await generate(worker, { advanceDeduction: 200000 });
   if (!accepted.payroll) {
-    problems.push(`advance deduction up to the balance was refused (${accepted.error})`);
+    problems.push(`advance deduction up to the balance was refused (${accepted.refusal?.message})`);
   } else if (!fin(accepted.payroll.netPayable).equals(800000)) {
     problems.push(`payslip net ${accepted.payroll.netPayable}, expected 800,000`);
   }
@@ -191,7 +209,7 @@ export async function checkFixedSalaryProratedByMonth(): Promise<string[]> {
   const problems: string[] = [];
   const salary = { salaryType: 'monthly_fixed', monthlySalary: 10000000 };
   const issue = (personnelId: number, startDate: string, endDate: string) => issueApproved({ personnelId, startDate, endDate, username: 'inv' });
-  const fixedOf = (r: Awaited<ReturnType<typeof issue>>) => (r.payroll ? fin(r.payroll.totalFixedAmount).toString() : `رد: ${r.error}`);
+  const fixedOf = (r: Awaited<ReturnType<typeof issue>>) => (r.payroll ? fin(r.payroll.totalFixedAmount).toString() : `رد: ${r.refusal?.message}`);
 
   // الف) ۱۴۰۵/۰۱/۰۱ تا ۱۴۰۵/۰۲/۳۱ ← دو ماه
   const w1 = await newWorker('کارمند آزمون دوماهه', salary);
@@ -232,7 +250,7 @@ export async function checkPayrollPaymentVoidable(): Promise<string[]> {
   const worker = await newWorker('کارگر آزمون ابطال پرداخت');
   await addLog(worker, await newTask(), '2026-04-05', 1000000);
   const issued = await generate(worker);
-  if (!issued.payroll) return [`issuing the test payslip failed (${issued.error})`];
+  if (!issued.payroll) return ['issuing the test payslip failed'];
   const payrollId = issued.payroll.id;
   const bankId = await fundedBank();
   const mark = (await pool.query<{ m: string }>('SELECT COALESCE(MAX(id), 0)::text AS m FROM journal_vouchers')).rows[0].m;
@@ -297,8 +315,8 @@ export async function probePayrollStatusDoubleCountsLogs(): Promise<boolean> {
 export async function probeAdvanceDeductionBeyondBalance(): Promise<boolean> {
   const worker = await newWorker('کارگر کاوش مساعده');
   await addLog(worker, await newTask(), '2026-04-05', 1000000);
-  const result = await refusalOf(() => generate(worker, { advanceDeduction: 300000 }));
-  if (result) return false;
+  const result = await generate(worker, { advanceDeduction: 300000 });
+  if (!result.payroll) return false;
   return fin(await personNet('1301', worker)).isNegative();
 }
 
@@ -336,7 +354,7 @@ export async function checkPayrollChequeMethodRefused(): Promise<string[]> {
   const worker = await newWorker('کارگر آزمون پرداخت چکی');
   await addLog(worker, await newTask(), '2026-04-06', 700000);
   const issued = await generate(worker);
-  if (!issued.payroll) return [`issuing the test payslip failed (${issued.error})`];
+  if (!issued.payroll) return ['issuing the test payslip failed'];
   const payrollId = issued.payroll.id;
   const bankId = await fundedBank();
   const paymentsOf = async () => Number((await pool.query<{ n: string }>('SELECT COUNT(*)::text AS n FROM treasury_transactions WHERE payroll_id = $1', [payrollId])).rows[0].n);

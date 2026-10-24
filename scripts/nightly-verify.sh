@@ -20,7 +20,7 @@
 #     NIGHTLY_VERIFY_MAX_DUMP_AGE_HOURS (26), and a failed night when it is the same dump the previous night checked
 #     more than 12 hours ago (no new backup was taken);
 #   - before restoring, the free space of the database's data and WAL disks and of the temporary directory is compared
-#     with what the restore writes there (v10.3.21, TD-1352: the database and its largest index again, for the sort
+#     with what the restore writes there (v10.3.22, TD-1352: the database and its largest index again, for the sort
 #     files of the index rebuild; WAL up to twice max_wal_size, less the WAL already there; the dump unpacked), keeping 10% of
 #     each disk free; not enough room is a failed night;
 #   - the restore's temporary files go under BACKUP_DIR/.nightly-verify-tmp (the backup disk), never /tmp;
@@ -31,7 +31,7 @@
 #     RESTORE_KEEP=1 or REHEARSAL_KEEP=1 is dropped too);
 #   - passwords never appear on a command line: they go to psql through a PGPASSFILE (mode 600) and to the check
 #     through its environment.
-# A failed or worse night is shown on the system health page, and since v10.3.21 (TD-1350) scripts/monitor.sh reads the
+# A failed or worse night is shown on the system health page, and since v10.3.22 (TD-1350) scripts/monitor.sh reads the
 # report and sends the alert.
 # Exit 0 = the backup restores and nothing got worse, or the night was skipped; 1 = otherwise (the report says what).
 #
@@ -293,7 +293,7 @@ fi
 # the dump unpacked into the temporary directory; on the data disk the database as large as it is now and its largest
 # index once more (an index is rebuilt from sort files beside the data, as large as the index); on the WAL disk twice
 # max_wal_size (a checkpoint starts at max_wal_size, and WAL keeps growing while it runs) less the WAL already there (it
-# is recycled), at least one GiB; each disk keeps 10% free (v10.3.21, TD-1352; until then one GiB of WAL and no sort
+# is recycled), at least one GiB; each disk keeps 10% free (v10.3.22, TD-1352; until then one GiB of WAL and no sort
 # files). The index size comes from pg_class, which takes no lock: an index held by a REINDEX does not stall the check
 GIB=1073741824
 read -r packed unpacked _ < <(gzip -l "$BACKUP_FILE" 2>/dev/null | awk 'NR == 2') || true

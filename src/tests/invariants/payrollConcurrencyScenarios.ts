@@ -46,11 +46,8 @@ async function raceWorkLogChange(change: Change, payrollFirst: boolean): Promise
   const task = await newTask();
   const target = await addLog(worker, task, 100000);
   await addLog(worker, task, 100000);
-  const issue = async () => {
-    const result = await PieceworkPayrollService.generatePayroll({ personnelId: worker, ...PERIOD });
-    if ('error' in result && result.error) throw new Error(String(result.error));
-    return result;
-  };
+  // 10.3 package 6 (TD-1386): a refusal of the payslip is thrown
+  const issue = () => PieceworkPayrollService.generatePayroll({ personnelId: worker, ...PERIOD });
   const alter = () => (change === 'edit'
     ? PieceworkService.updateWorkLog(target, { quantity: 1, unitRate: 500000 })
     : PieceworkService.deleteWorkLog(target));
@@ -99,7 +96,12 @@ export async function checkWorkLogFrozenInPayroll(): Promise<string[]> {
   } catch (err) {
     problems.push(`work log of a deleted payslip was not edited (${getErrorMessage(err)})`);
   }
-  await PieceworkPayrollService.generatePayroll({ personnelId: worker, ...PERIOD });
+  // TD-1386: a refused payslip is thrown, so the refusal is named here instead of ending the scenario
+  try {
+    await PieceworkPayrollService.generatePayroll({ personnelId: worker, ...PERIOD });
+  } catch (err) {
+    problems.push(`new payslip after editing a work log of a deleted payslip was refused (${getErrorMessage(err)})`);
+  }
   const state = await payrollAgainstLogs(worker);
   if (state.payrolls !== 1 || Number(state.total) !== 300000 || Number(state.linked) !== 300000) {
     problems.push(`new payslip after editing a work log of a deleted payslip is inconsistent (${JSON.stringify(state)})`);

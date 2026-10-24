@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { NIGHTLY_VERIFY_REPORT_VERSION, NIGHTLY_VERIFY_STALE_HOURS, nightlyVerifyVerdict, type NightlyVerifyReport } from '../../lib/system/nightlyVerify';
 import { alertPattern, alertText, monitorHarness } from './helpers/monitorHarness';
 
-// 10.3 package 8 (v10.3.21): the server monitor alerts on the nightly backup check (TD-1350) and gives curl its secrets on
+// 10.3 package 8 (v10.3.22): the server monitor alerts on the nightly backup check (TD-1350) and gives curl its secrets on
 // standard input, never on its command line (TD-1388). The real scripts/monitor.sh runs against a fake app and bot.
 const ROOT = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -16,7 +16,7 @@ describe('monitor_nightly_and_secrets_10_3_package8: the nightly backup check al
   const fresh = h.fresh;
   const monitor = h.monitor;
 
-  // ---------- v10.3.21 (TD-1350): the nightly backup check ----------
+  // ---------- v10.3.22 (TD-1350): the nightly backup check ----------
   const nightlyReport = (over: Partial<NightlyVerifyReport> = {}, hoursAgo = 2): NightlyVerifyReport => ({
     version: NIGHTLY_VERIFY_REPORT_VERSION, finishedAt: new Date(Date.now() - hoursAgo * 3_600_000).toISOString(),
     backupFile: 'erp_daily_x.dump.gz', backupAt: null, restoreOk: true, failure: null,

@@ -4,7 +4,7 @@
 # pg_password_setup <dir> writes <dir>/pgpass (mode 600; the URLs' passwords, then a copy of an inherited PGPASSFILE), exports it as
 # PGPASSFILE and removes the password from DATABASE_URL and RESTORE_ADMIN_URL; the full DATABASE_URL stays in
 # PG_FULL_DATABASE_URL for a Node program, which gets it through its environment. The same parsing as nightly-verify.sh.
-# v10.3.21 (#381 review): without an inherited PGPASSFILE the user's ~/.pgpass is copied first, since libpq reads only the
+# v10.3.22 (#381 review): without an inherited PGPASSFILE the user's ~/.pgpass is copied first, since libpq reads only the
 # file PGPASSFILE names (a URL without a password that relied on ~/.pgpass kept working), and a socket directory given
 # as ?host=/path is the host field of the line written for it.
 
