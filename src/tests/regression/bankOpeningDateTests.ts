@@ -113,7 +113,7 @@ export async function runBankOpeningDateTests(shouldRun: ShouldRun): Promise<Tes
       if (jalali.status !== 201) problems.push(`bank create with a Jalali start date returned ${brief(jalali)}`);
       else {
         const [voucher] = await openingVouchersOf(Number(jalali.body.id));
-        if (voucher?.date !== '2026-04-09') problems.push(`the Jalali start date ۱۴۰۵/۰۱/۲۰ dated the voucher ${voucher?.date ?? 'missing'}, expected 2026-04-09`);
+        if (voucher?.date !== '2026-04-09') problems.push(`the Jalali start date 1405/01/20 dated the voucher ${voucher?.date ?? 'missing'}, expected 2026-04-09`);
       }
       const plain = await create('Plain bank', { initialBalance: 1_000_000 });
       if (plain.status !== 201) throw new Error(`bank create without a start date returned ${brief(plain)}`);
@@ -152,7 +152,7 @@ export async function runBankOpeningDateTests(shouldRun: ShouldRun): Promise<Tes
       if (lateVoucher?.date !== '2026-04-08') problems.push(`the first opening balance issued a voucher dated ${lateVoucher?.date ?? 'missing'}, expected the start date 2026-04-08`);
 
       if (problems.length > 0) throw new Error(problems.join(' | '));
-      return 'start date 2026-04-05 dated the voucher and was listed; ۱۴۰۵/۰۱/۲۰ → 2026-04-09; none → today; a later day 422; moved after the voucher 422, same date 200; a zero-balance account moved its date and its first balance took it';
+      return 'start date 2026-04-05 dated the voucher and was listed; Jalali 1405/01/20 → 2026-04-09; none → today; a later day 422; moved after the voucher 422, same date 200; a zero-balance account moved its date and its first balance took it';
     });
   }
 
