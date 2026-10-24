@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { SearchableSelect } from '../SearchableSelect';
+import { personnelNameOption, personnelServerSearchUrl } from '../../lib/personnel/personnelList';
 import { useQuery } from '@tanstack/react-query';
 import { TrendingDown, Filter as FunnelIcon } from 'lucide-react';
 import { fetchJson } from '../../api';
@@ -59,7 +60,10 @@ export function CRMFunnelReport({ personnelList = [] }: { personnelList?: Person
           onChange={(value) => setSeller(value || 'all')}
           className="min-w-[180px]"
           placeholder="همه فروشندگان"
-          options={[{ value: 'all', label: 'همه فروشندگان' }, ...personnelList.map((p) => ({ value: String(p.id), label: p.fullName || '' }))]}
+          options={[{ value: 'all', label: 'همه فروشندگان' }, ...personnelList.map(personnelNameOption)]}
+          // 10.3 package 6 (TD-1362): a list cut at the cap also searches the active personnel on the server
+          serverSearchUrl={personnelServerSearchUrl(personnelList, { activeOnly: true })}
+          mapResultToOption={personnelNameOption}
         />
       </div>
 

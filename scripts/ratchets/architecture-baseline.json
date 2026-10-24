@@ -73,7 +73,6 @@
   },
   "routeErrorResponses": {},
   "serviceGenericErrors": {
-    "src/services/accounting/voucher.service.ts": 2,
     "src/services/events/deadLetterDelivery.ts": 1,
     "src/services/events/deadLetterQueueService.ts": 2,
     "src/services/events/domainEventBus.ts": 2,
@@ -82,13 +81,10 @@
     "src/services/events/integrationDelivery.service.ts": 1,
     "src/services/media/mediaStorage.ts": 1,
     "src/services/notifications/notificationRecipients.ts": 1,
-    "src/services/piecework/taskCode.ts": 1,
     "src/services/system/bootData.ts": 2,
     "src/services/system/dataExport.service.ts": 1
   },
-  "serviceErrorResults": {
-    "src/services/piecework/payroll.service.ts": 10
-  },
+  "serviceErrorResults": {},
   "noopCatches": {},
   "auditWithoutTx": {
     "src/routes/accounting/accounts.routes.ts": 6,

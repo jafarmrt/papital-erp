@@ -1,7 +1,7 @@
 import { eq, and, sql, inArray, asc } from 'drizzle-orm';
 import { type DbExecutor } from '../../db/drizzle.js';
 import { pieceworkLogs, pieceworkPayrolls, personnel, journalVouchers } from '../../db/schema.js';
-import { NotFoundError, BadRequestError, ConflictError, ValidationError } from '../../errors/customErrors.js';
+import { NotFoundError, BadRequestError, ConflictError, ValidationError, PrivateRefusalError } from '../../errors/customErrors.js';
 import { isoToJalaliDate, toStorageDate } from '../../utils.js';
 import { requireStorageDate } from '../../lib/storageDate.js';
 import { VoucherService } from '../accounting/voucher.service.js';
@@ -27,8 +27,16 @@ import { idempotentTransaction } from '../../middleware/idempotency.js';
 
 /**
  * چرخه عمر فیش حقوقی پرکیسی: صدور، تغییر وضعیت، همگام‌سازی سند و ابطال.
- * هر متد تراکنش، قفل‌ها و پاسخ‌های خطای { status, error } پیشین روت را بدون تغییر نگه می‌دارد.
+ * 10.3 package 6 (TD-1386, decision t5 A): a refusal is a thrown AppError with the same HTTP status and Persian message
+ * the route answered before, never a returned `{ status, error }`. A returned refusal committed the transaction it was
+ * found in (the locks and any write before it), and every caller had to remember to look at it.
  */
+
+/**
+ * A refusal of the payslip request, answered 400 like the route's `{ status: 400, error }` before (TD-1386). Its message
+ * may name the personnel or an amount, so it never reaches the error log (`PrivateRefusalError`, review of #380)
+ */
+const payrollRefusal = (message: string, code: string) => new PrivateRefusalError(message, 400, code);
 
 type AmountInput = number | string;
 
@@ -124,9 +132,7 @@ export class PieceworkPayrollService {
     // V4.0.4 (TD-091 / Subphase 3.1): کل چرخه صدور فیش، قفل ردیفی کارکردها، محاسبه مالی و سند دوبل داخل یک تراکنش واحد اتمیک
     return idempotentTransaction(async (tx) => {
       const [pInfo] = await tx.select().from(personnel).where(and(eq(personnel.id, pId), eq(personnel.isDeleted, 0))).for('update');
-      if (!pInfo) {
-        return { status: 404, error: 'پرسنل انتخاب شده یافت نشد' };
-      }
+      if (!pInfo) throw new NotFoundError('پرسنل انتخاب شده یافت نشد', undefined, 'PAYROLL_PERSONNEL_NOT_FOUND');
 
       // 1. Find pending work logs in this date range WITH ROW LOCKING (.for('update'))
       // v8.0.28 (TD-281): کارکرد فقط وقتی آزاد است که به فیش زنده‌ای پیوند نداشته باشد (بی‌فیش، یا فیشش حذف‌شده). پیش‌تر
@@ -163,16 +169,16 @@ export class PieceworkPayrollService {
       const serviceStart = serviceStartOf(pInfo);
       const fixedStart = fixedEnd === null ? null : fixedSalaryPeriodStart(sDate, fixedEnd, serviceStart);
       if (isPrepayment && (!fixedIncluded || !fin(pInfo.monthlySalary || 0).greaterThan(0))) {
-        throw new ValidationError(
+        throw new PrivateRefusalError(
           `فیش پیش‌پرداخت فقط حقوق ثابت را می‌پردازد و ${pInfo.fullName} حقوق ثابت ماهانه ندارد.`,
-          undefined,
+          422,
           'PAYROLL_PREPAYMENT_FIXED_SALARY_ONLY'
         );
       }
       if (fixedIncluded && fin(pInfo.monthlySalary || 0).greaterThan(0) && serviceEnd.kind === 'unknown') {
-        throw new ValidationError(
+        throw new PrivateRefusalError(
           `${pInfo.fullName} «قطع همکاری» است ولی تاریخ پایان همکاری معتبری ندارد؛ پیش از صدور فیش با حقوق ثابت، تاریخ پایان همکاری را در پرونده پرسنل ثبت کنید.`,
-          undefined,
+          422,
           'PAYROLL_SERVICE_END_DATE_REQUIRED'
         );
       }
@@ -201,15 +207,15 @@ export class PieceworkPayrollService {
 
       if (eligibleLogs.length === 0 && fixedPortionFin.lessThanOrEqual(0)) {
         if (fixedIncluded && serviceEnd.kind === 'ended' && fixedEnd === null) {
-          return { status: 400, error: `همکاری ${pInfo.fullName} در ${toPersianDigits(isoToJalaliDate(serviceEnd.endIso))} پایان یافته است؛ این بازه حقوق ثابت ندارد و کارکرد معوقی هم در آن نیست.` };
+          throw payrollRefusal(`همکاری ${pInfo.fullName} در ${toPersianDigits(isoToJalaliDate(serviceEnd.endIso))} پایان یافته است؛ این بازه حقوق ثابت ندارد و کارکرد معوقی هم در آن نیست.`, 'PAYROLL_SERVICE_ENDED');
         }
         if (fixedIncluded && serviceStart && fixedEnd !== null && fixedStart === null) {
-          return { status: 400, error: `همکاری ${pInfo.fullName} در ${toPersianDigits(isoToJalaliDate(serviceStart))} آغاز می‌شود؛ این بازه حقوق ثابت ندارد و کارکرد معوقی هم در آن نیست.` };
+          throw payrollRefusal(`همکاری ${pInfo.fullName} در ${toPersianDigits(isoToJalaliDate(serviceStart))} آغاز می‌شود؛ این بازه حقوق ثابت ندارد و کارکرد معوقی هم در آن نیست.`, 'PAYROLL_SERVICE_NOT_STARTED');
         }
         if (isPrepayment) {
-          return { status: 400, error: `حقوق ثابت این بازه پیش‌تر در فیش‌های دیگر ${pInfo.fullName} داده شده است؛ فیش پیش‌پرداخت مبلغی ندارد.` };
+          throw payrollRefusal(`حقوق ثابت این بازه پیش‌تر در فیش‌های دیگر ${pInfo.fullName} داده شده است؛ فیش پیش‌پرداخت مبلغی ندارد.`, 'PAYROLL_PREPAYMENT_NOTHING_LEFT');
         }
-        return { status: 400, error: 'هیچ کارکرد معوقی در این بازه زمانی برای پرسنل انتخاب‌شده پیدا نشد.' };
+        throw payrollRefusal('هیچ کارکرد معوقی در این بازه زمانی برای پرسنل انتخاب‌شده پیدا نشد.', 'PAYROLL_NO_PENDING_WORK');
       }
 
       // 3. Financial calculations with financialDecimal (TD-091)
@@ -223,10 +229,10 @@ export class PieceworkPayrollService {
       if (advanceDeductionFin.isPositive()) {
         const { outstandingAdvance } = await PayrollPaymentService.getPersonnelAdvanceBalance(pId, tx);
         if (advanceDeductionFin.greaterThan(outstandingAdvance)) {
-          return {
-            status: 400,
-            error: `کسر مساعده (${payrollAmountText(advanceDeductionFin)}) از مانده مساعده تسویه‌نشده ${pInfo.fullName} (${payrollAmountText(outstandingAdvance)}) بیشتر است؛ حداکثر همان مانده کسر می‌شود.`,
-          };
+          throw payrollRefusal(
+            `کسر مساعده (${payrollAmountText(advanceDeductionFin)}) از مانده مساعده تسویه‌نشده ${pInfo.fullName} (${payrollAmountText(outstandingAdvance)}) بیشتر است؛ حداکثر همان مانده کسر می‌شود.`,
+            'PAYROLL_ADVANCE_DEDUCTION_EXCEEDS_BALANCE',
+          );
         }
       }
 
@@ -238,7 +244,7 @@ export class PieceworkPayrollService {
         .subtract(statutory.amounts.incomeTax).subtract(totDeductionsFin).subtract(advanceDeductionFin).round(4);
 
       if (netFin.isNegative()) {
-        return { status: 400, error: 'جمع بیمه، مالیات، کسورات و کسر مساعده از اجزای فیش بیشتر است — مقادیر را اصلاح کنید.' };
+        throw payrollRefusal('جمع بیمه، مالیات، کسورات و کسر مساعده از اجزای فیش بیشتر است — مقادیر را اصلاح کنید.', 'PAYROLL_NET_NEGATIVE');
       }
 
       // v10.0.222 (TD-1089، طرح حقوق §۳.۸، ت۱۴ الف): سهم عیدی از کارکرد و حقوق ثابت، بی پاداش و کسورات؛ از خالص کم نمی‌شود
@@ -341,9 +347,7 @@ export class PieceworkPayrollService {
       // v10.0.222 (TD-1089): ترتیب قفل صدور فیش، پرسنل سپس فیش، تا جمع عیدی سال میان بررسی و نوشتن عوض نشود
       await lockPayrollPersonnel(tx, id);
       const [pay] = await tx.select().from(pieceworkPayrolls).where(and(eq(pieceworkPayrolls.id, id), eq(pieceworkPayrolls.isDeleted, 0))).for('update');
-      if (!pay) {
-        return { status: 404, error: 'فیش حقوقی یافت نشد' };
-      }
+      if (!pay) throw new NotFoundError('فیش حقوقی یافت نشد', undefined, 'PAYROLL_NOT_FOUND');
       if (targetStatus === 'draft' && pay.status !== 'draft') await assertEidiShareNotSettled(tx, pay);
       // v8.0.28 (TD-281): وضعیت فیشی که پرداخت دارد دستی عوض نمی‌شود (برگرداندنش به «approved» حذف آن را با پرداخت باقی‌مانده ممکن می‌کرد)
       if (targetStatus && (['paid', 'partially_paid'].includes(pay.status || '') || fin(pay.paidAmount ?? 0).isPositive())) {
@@ -392,9 +396,7 @@ export class PieceworkPayrollService {
   static async syncPayrollVoucher(id: number, audit: { userId?: number; username: string }) {
     return idempotentTransaction(async (tx) => {
       const [pay] = await tx.select().from(pieceworkPayrolls).where(and(eq(pieceworkPayrolls.id, id), eq(pieceworkPayrolls.isDeleted, 0))).for('update');
-      if (!pay) {
-        return { status: 404, error: 'فیش حقوقی یافت نشد' };
-      }
+      if (!pay) throw new NotFoundError('فیش حقوقی یافت نشد', undefined, 'PAYROLL_NOT_FOUND');
 
       const voucher = await VoucherSyncService.autoCreateVoucherForPayroll(
         id,
@@ -405,7 +407,7 @@ export class PieceworkPayrollService {
       );
 
       if (!voucher) {
-        return { status: 400, error: 'ایجاد سند حسابداری برای این فیش حقوقی ناموفق بود یا سرفصل‌های معین دستمزد تعریف نشده‌اند.' };
+        throw payrollRefusal('ایجاد سند حسابداری برای این فیش حقوقی ناموفق بود یا سرفصل‌های معین دستمزد تعریف نشده‌اند.', 'PAYROLL_VOUCHER_NOT_CREATED');
       }
 
       return { status: 200, payroll: pay, voucher };

@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { pieceworkPayrolls, type personnel } from '../../db/schema.js';
-import { ValidationError } from '../../errors/customErrors.js';
+import { PrivateRefusalError, ValidationError } from '../../errors/customErrors.js';
 import { fin, type DecimalValue } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
 import { daysInclusive, eidiFromAccrual, isEidiCovered, suggestEidiPayslip, EIDI_OVERRIDE_REASON_MAX, type EidiPayslipSuggestion } from '../../lib/payroll/eidi.js';
@@ -36,12 +36,12 @@ export function eidiServicePeriod(person: Pick<PersonnelRow, 'fullName' | 'start
   const serviceStart = serviceStartOf(person);
   const serviceEnd = serviceEndOf(person);
   if (serviceEnd.kind === 'unknown') {
-    throw new ValidationError(`${person.fullName} «قطع همکاری» است ولی تاریخ پایان همکاری معتبری ندارد؛ نخست آن را در پرونده پرسنل وارد کنید.`, undefined, 'PAYROLL_SERVICE_END_DATE_REQUIRED');
+    throw new PrivateRefusalError(`${person.fullName} «قطع همکاری» است ولی تاریخ پایان همکاری معتبری ندارد؛ نخست آن را در پرونده پرسنل وارد کنید.`, 422, 'PAYROLL_SERVICE_END_DATE_REQUIRED');
   }
   const startIso = serviceStart && serviceStart > bounds.firstDay ? serviceStart : bounds.firstDay;
   const endIso = serviceEnd.kind === 'ended' && serviceEnd.endIso < bounds.lastDay ? serviceEnd.endIso : bounds.lastDay;
   if (startIso > endIso) {
-    throw new ValidationError(`${person.fullName} در سال ${toPersianDigits(year)} همکاری نداشته است.`, undefined, 'PAYROLL_EIDI_NO_SERVICE');
+    throw new PrivateRefusalError(`${person.fullName} در سال ${toPersianDigits(year)} همکاری نداشته است.`, 422, 'PAYROLL_EIDI_NO_SERVICE');
   }
   return { startIso, endIso, workedDays: daysInclusive(startIso, endIso), yearDays: daysInclusive(bounds.firstDay, bounds.lastDay) };
 }
@@ -118,7 +118,7 @@ export async function issueEidiPayslip(input: IssueEidiPayslipInput) {
       );
     }
     if (!amount.isPositive()) {
-      throw new ValidationError(`عیدی سال ${toPersianDigits(input.year)} برای ${person.fullName} مبلغی ندارد که پرداخت شود.`, undefined, 'PAYROLL_EIDI_AMOUNT_ZERO');
+      throw new PrivateRefusalError(`عیدی سال ${toPersianDigits(input.year)} برای ${person.fullName} مبلغی ندارد که پرداخت شود.`, 422, 'PAYROLL_EIDI_AMOUNT_ZERO');
     }
     const fromAccrual = eidiFromAccrual(amount.toString(), preview.suggestion.remainingAccrual);
     const seqResult = await tx.execute(sql`SELECT nextval('piecework_payroll_number_seq') AS num`);

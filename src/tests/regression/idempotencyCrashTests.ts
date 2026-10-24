@@ -83,7 +83,7 @@ export async function runIdempotencyCrashTests(shouldRun: ShouldRun): Promise<Te
       const workerId = await newWorker(`ERP-TEST-MARKER crash pay ${tagOf()}`);
       await addLog(workerId, await newTask(), '2026-04-05', 1_000_000);
       const issued = await issueApproved({ personnelId: workerId, startDate: '2026-04-01', endDate: '2026-04-30', username: 'crash' });
-      if (!issued.payroll) throw new Error(`setup: issuing the payslip failed (${issued.error})`);
+      if (!issued.payroll) throw new Error('setup: issuing the payslip failed');
       const payrollId = issued.payroll.id;
       const bankId = await fundedBank();
       const api = await adminClient();
@@ -118,7 +118,7 @@ export async function runIdempotencyCrashTests(shouldRun: ShouldRun): Promise<Te
       const workerId = await newWorker(`ERP-TEST-MARKER crash takeover ${tagOf()}`);
       await addLog(workerId, await newTask(), '2026-04-05', 1_000_000);
       const issued = await issueApproved({ personnelId: workerId, startDate: '2026-04-01', endDate: '2026-04-30', username: 'crash' });
-      if (!issued.payroll) throw new Error(`setup: issuing the payslip failed (${issued.error})`);
+      if (!issued.payroll) throw new Error('setup: issuing the payslip failed');
       const payrollId = issued.payroll.id;
       const bankId = await fundedBank();
       const api = await adminClient();

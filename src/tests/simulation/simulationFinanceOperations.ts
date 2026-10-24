@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { orm, pool } from '../../db/drizzle.js';
 import { accounts, personnel, pieceworkTasks } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
+import { AppError } from '../../errors/customErrors.js';
 import { PayrollPaymentService } from '../../services/accounting/payrollPayment.service.js';
 import { PayrollPaymentVoidService } from '../../services/accounting/payrollPaymentVoid.service.js';
 import { BankAccountService } from '../../services/accounting/treasury/bankAccount.service.js';
@@ -113,8 +114,13 @@ export function createFinanceOperations(random: SimRandom, world: FinanceWorld, 
   const payroll = async (day: number): Promise<OpOutcome> => {
     if (day < payrollFrom) return { detail: 'skip:period-taken', tags: [] };
     await PieceworkService.logWorkEntries([{ personnelId: ids.workerId, taskId: ids.taskId, date: isoDay(day), quantity: between(1, 30) }]);
-    const issued = await PieceworkPayrollService.generatePayroll({ personnelId: ids.workerId, startDate: isoDay(payrollFrom), endDate: isoDay(day), username: 'sim' });
-    if (!issued.payroll) return { detail: `skip:payroll-${issued.status}`, tags: [] };
+    // 10.3 package 6 (TD-1386): a refused payslip is thrown; the day's work log stays, so the step is a skip, not a rejection
+    const issued = await PieceworkPayrollService.generatePayroll({ personnelId: ids.workerId, startDate: isoDay(payrollFrom), endDate: isoDay(day), username: 'sim' })
+      .catch((err: unknown) => {
+        if (err instanceof AppError && err.statusCode < 500) return { payroll: null, refusedWith: err.statusCode };
+        throw err;
+      });
+    if (!issued.payroll) return { detail: `skip:payroll-${'refusedWith' in issued ? issued.refusedWith : 'none'}`, tags: [] };
     payrollFrom = day + 1;
     // v10.0.193 (TD-1083): a payslip is issued as a draft and paid only once approved
     await PieceworkPayrollService.updatePayrollStatus(issued.payroll.id, { status: 'approved', username: 'sim' });

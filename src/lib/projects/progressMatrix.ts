@@ -6,9 +6,12 @@
  * محصولات ماتریس: ردیف‌های `products` پروژه، و اگر خالی باشد کالای اصلی پروژه. مراحل اختیاری: عنوان‌هایی که در
  * `selected_optional_stages` (یا `selectedOptionalStages`) دست‌کم یک محصول آمده‌اند؛ هر محصول فقط مرحله‌های اختیاری
  * انتخاب خودش را دارد. کلید هر خانه «شناسه کالا | شماره مرحله» است.
+ * 10.3 package 6 (TD-1386, review N6 of #329): the progress of a cell is stored per item (`uq_ppsp_project_item_stage`), so
+ * product rows of one item are one matrix product (their quantities added, their optional stages joined); before, each
+ * row had its own line with the same cells, a tick on one line ticked the other and their work was counted on both.
  */
 
-import { workPercent, workProgressOf, type WorkProgress } from '../workshop/scheduleWorkProgress';
+import { productRowItemId, warehouseItemId, workPercent, workProgressOf, type WorkProgress } from '../workshop/scheduleWorkProgress';
 
 export const PRODUCT_PROGRESS_STATUSES = ['pending', 'in_progress', 'completed', 'blocked'] as const;
 export type ProductProgressStatus = typeof PRODUCT_PROGRESS_STATUSES[number];
@@ -101,30 +104,45 @@ type Row = Record<string, unknown>;
 const asRow = (v: unknown): Row | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Row) : null);
 const text = (v: unknown): string => (typeof v === 'string' ? v : typeof v === 'number' ? String(v) : '');
 
-const positiveItemId = (v: unknown): number | null => {
-  const n = Number(v);
-  return v !== null && v !== '' && Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
-};
-
 const optionalStagesOf = (p: Row): string[] => {
   const sel = p.selected_optional_stages ?? p.selectedOptionalStages;
   return Array.isArray(sel) ? sel.map(t => String(t).trim()).filter(Boolean) : [];
 };
 
+/** product rows of one item as one matrix product, at the place of the first; a row without an item stays alone */
+function mergeSameItem(products: readonly MatrixProduct[]): MatrixProduct[] {
+  const merged: MatrixProduct[] = [];
+  const byItem = new Map<number, MatrixProduct>();
+  for (const p of products) {
+    const first = p.itemId === null ? undefined : byItem.get(p.itemId);
+    if (!first) {
+      const own = { ...p, selectedOptionalStages: [...p.selectedOptionalStages] };
+      if (p.itemId !== null) byItem.set(p.itemId, own);
+      merged.push(own);
+      continue;
+    }
+    first.quantity += p.quantity;
+    first.itemCode ||= p.itemCode;
+    first.itemName ||= p.itemName;
+    for (const title of p.selectedOptionalStages) if (!first.selectedOptionalStages.includes(title)) first.selectedOptionalStages.push(title);
+  }
+  return merged;
+}
+
 /** محصولات ماتریس پروژه: ردیف‌های products، وگرنه کالای اصلی */
 export function matrixProducts(project: MatrixProjectSource): MatrixProduct[] {
   const rows = Array.isArray(project.products) ? project.products.map(asRow).filter((r): r is Row => r !== null) : [];
   if (rows.length > 0) {
-    return rows.map(p => ({
-      itemId: positiveItemId(p.item_id ?? p.itemId ?? p.item_id_raw),
+    return mergeSameItem(rows.map(p => ({
+      itemId: productRowItemId(p),
       itemCode: text(p.item_code ?? p.itemCode),
       itemName: text(p.item_name ?? p.itemName),
       quantity: Number(p.quantity) || 0,
       unit: text(p.unit) || 'عدد',
       selectedOptionalStages: optionalStagesOf(p),
-    }));
+    })));
   }
-  const mainItemId = positiveItemId(project.itemId);
+  const mainItemId = warehouseItemId(project.itemId);
   if (mainItemId === null) return [];
   return [{
     itemId: mainItemId,

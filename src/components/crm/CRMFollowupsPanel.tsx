@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { SearchableSelect } from '../SearchableSelect';
+import { personnelNameOption, personnelServerSearchUrl } from '../../lib/personnel/personnelList';
 import { Clock, Search, ChevronRight, ChevronLeft } from 'lucide-react';
 import type { CRMActivity, CRMLead } from '../../types';
 import { formatPersianNumber } from '../../utils';
@@ -117,8 +118,11 @@ export function CRMFollowupsPanel({ leads = [], onToggleFollowup, personnelList 
               options={[
                 { value: 'mine', label: 'پیگیری‌های من' },
                 { value: 'all', label: 'همه مسئولان پیگیری' },
-                ...personnelList.map((p) => ({ value: String(p.id), label: p.fullName || '' })),
+                ...personnelList.map(personnelNameOption),
               ]}
+              // 10.3 package 6 (TD-1362): a list cut at the cap also searches the active personnel on the server
+              serverSearchUrl={personnelServerSearchUrl(personnelList, { activeOnly: true })}
+              mapResultToOption={personnelNameOption}
             />
           )}
         </div>

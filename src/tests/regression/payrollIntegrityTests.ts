@@ -1,9 +1,12 @@
+import { inspect } from 'node:util';
 import { eq } from 'drizzle-orm';
 import { orm, pool } from '../../db/drizzle.js';
 import { personnel, pieceworkPayrolls } from '../../db/schema.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
+import { AppError } from '../../errors/customErrors.js';
+import { logger } from '../../middleware/logger.js';
 import { AccountMappingService } from '../../services/accounting/accountMapping.service.js';
 import { FinancialHealthService } from '../../services/accounting/financialHealth.service.js';
 import { PieceworkPayrollService } from '../../services/piecework/payroll.service.js';
@@ -31,7 +34,7 @@ async function legacyPayslip(personnelId: number, amounts: { piecework: number; 
 }
 
 /** A mixed-salary personnel with 30,000,000 a month */
-async function salariedWorker(name: string, extra: { employmentStatus?: string; endDate?: string } = {}): Promise<number> {
+async function salariedWorker(name: string, extra: { employmentStatus?: string; endDate?: string; startDate?: string } = {}): Promise<number> {
   const [row] = await orm.insert(personnel).values({
     fullName: `${name} ${Date.now().toString().slice(-6)}${++seq}`, salaryType: 'mixed', monthlySalary: money(30_000_000), ...extra,
   }).returning({ id: personnel.id });
@@ -39,6 +42,23 @@ async function salariedWorker(name: string, extra: { employmentStatus?: string; 
 }
 
 const isoPlusDays = (iso: string, days: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+
+/** What `logger.error` was handed while `run` ran, as text (an error's message and stack included) */
+async function errorLogDuring<T>(run: () => Promise<T>): Promise<{ result: T; logged: string }> {
+  const original = logger.error;
+  const entries: string[] = [];
+  logger.error = ((...args: unknown[]) => {
+    entries.push(inspect(args, { depth: 8 }));
+    return (original as (...a: unknown[]) => unknown).apply(logger, args);
+  }) as typeof logger.error;
+  try {
+    return { result: await run(), logged: entries.join('\n') };
+  } finally {
+    logger.error = original;
+  }
+}
+
+const fullNameOf = async (id: number) => (await orm.select({ fullName: personnel.fullName }).from(personnel).where(eq(personnel.id, id)))[0]?.fullName ?? '';
 
 const codeOf = (body: unknown) => String((body as { code?: string } | undefined)?.code ?? '');
 const brief = (body: unknown) => JSON.stringify(body).slice(0, 200);
@@ -252,6 +272,63 @@ export async function runPayrollIntegrityTests(shouldRun: ShouldRun): Promise<Te
 
       assertNoProblems(problems);
       return 'Deductions without a description refused with 422 by the route (missing and blank) and the service with nothing written; the described payslip stored the trimmed description, returned it and wrote it into its deductions voucher row; a payslip without deductions stored none.';
+    }));
+  }
+
+  const thrownId = 'reg_payroll_refusals_thrown_td_1386';
+  if (shouldRun(thrownId, 'td1386', 'payroll', 'payslip', 'package6')) {
+    await runCase(results, thrownId, '10.3 package 6: a refused payslip request is a thrown AppError, answered with the same status and Persian message and now its code: no pending work (400 PAYROLL_NO_PENDING_WORK), an advance deduction above the balance (400 PAYROLL_ADVANCE_DEDUCTION_EXCEEDS_BALANCE, nothing written), deductions above the payslip (400 PAYROLL_NET_NEGATIVE), a period after the service ended or before it started (400 PAYROLL_SERVICE_ENDED / PAYROLL_SERVICE_NOT_STARTED), a missing payslip on status and voucher sync (404 PAYROLL_NOT_FOUND) and a missing personnel (404 PAYROLL_PERSONNEL_NOT_FOUND); the error log keeps the code of a refusal naming the personnel or an amount, never its text (TD-1386)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      const answer = (res: { status: number; body: unknown }) => `${res.status} ${codeOf(res.body)} ${brief(res.body)}`;
+
+      const idle = await newWorker('TD-1386 idle');
+      const none = await admin.post('/api/piecework/payrolls/generate', { personnelId: idle, ...PERIOD });
+      if (none.status !== 400 || codeOf(none.body) !== 'PAYROLL_NO_PENDING_WORK' || !String((none.body as { error?: unknown }).error).includes('هیچ کارکرد معوقی')) {
+        problems.push(`a payslip without pending work answered ${answer(none)}, expected 400 PAYROLL_NO_PENDING_WORK with its message`);
+      }
+
+      const worker = await newWorker('TD-1386 advance');
+      await addLog(worker, await newTask(), '2026-04-05', 1_000_000);
+      const { result: advance, logged: advanceLog } = await errorLogDuring(() => admin.post('/api/piecework/payrolls/generate', { personnelId: worker, ...PERIOD, advanceDeduction: 300_000 }));
+      if (advance.status !== 400 || codeOf(advance.body) !== 'PAYROLL_ADVANCE_DEDUCTION_EXCEEDS_BALANCE') problems.push(`an advance deduction without an advance answered ${answer(advance)}, expected 400 PAYROLL_ADVANCE_DEDUCTION_EXCEEDS_BALANCE`);
+      if (await payrollCount(worker) !== 0) problems.push('the refused advance deduction wrote a payslip');
+      if (!fin(await personNet('1301', worker)).isZero()) problems.push('the refused advance deduction moved the advance account');
+      // the answer names the personnel and both amounts; the error log keeps the code and the route only (review of #380)
+      const workerName = await fullNameOf(worker);
+      if (!String((advance.body as { error?: unknown }).error).includes(workerName)) problems.push(`the advance refusal no longer names the personnel to the user: ${brief(advance.body)}`);
+      if (!advanceLog.includes('PAYROLL_ADVANCE_DEDUCTION_EXCEEDS_BALANCE')) problems.push('the advance refusal was not in the error log at all (the log capture missed it)');
+      if (advanceLog.includes(workerName) || advanceLog.includes('مانده مساعده')) problems.push('the error log holds the advance refusal text with the personnel name and the amounts');
+
+      const deducted = await newWorker('TD-1386 net');
+      await addLog(deducted, await newTask(), '2026-04-05', 100_000);
+      const negative = await admin.post('/api/piecework/payrolls/generate', { personnelId: deducted, ...PERIOD, deductions: 200_000, deductionsDescription: 'TD-1386 deduction' });
+      if (negative.status !== 400 || codeOf(negative.body) !== 'PAYROLL_NET_NEGATIVE') problems.push(`deductions above the payslip answered ${answer(negative)}, expected 400 PAYROLL_NET_NEGATIVE`);
+      if (await payrollCount(deducted) !== 0) problems.push('the payslip with a negative net was written');
+
+      const leaver = await salariedWorker('TD-1386 leaver', { employmentStatus: 'قطع همکاری', endDate: '2026-03-15' });
+      const { result: ended, logged: endedLog } = await errorLogDuring(() => admin.post('/api/piecework/payrolls/generate', { personnelId: leaver, ...PERIOD }));
+      if (ended.status !== 400 || codeOf(ended.body) !== 'PAYROLL_SERVICE_ENDED') problems.push(`a period after the service ended answered ${answer(ended)}, expected 400 PAYROLL_SERVICE_ENDED`);
+      if (endedLog.includes(await fullNameOf(leaver))) problems.push('the error log holds the name of the personnel whose service ended');
+      const newcomer = await salariedWorker('TD-1386 newcomer', { startDate: '2026-05-10' });
+      const early = await admin.post('/api/piecework/payrolls/generate', { personnelId: newcomer, ...PERIOD });
+      if (early.status !== 400 || codeOf(early.body) !== 'PAYROLL_SERVICE_NOT_STARTED') problems.push(`a period before the service started answered ${answer(early)}, expected 400 PAYROLL_SERVICE_NOT_STARTED`);
+      if (await payrollCount(leaver) + await payrollCount(newcomer) !== 0) problems.push('a payslip was written outside the service');
+
+      const missing = 2_000_000_000;
+      const status = await admin.put(`/api/piecework/payrolls/${missing}/status`, { notes: 'TD-1386' });
+      if (status.status !== 404 || codeOf(status.body) !== 'PAYROLL_NOT_FOUND') problems.push(`a status change of a missing payslip answered ${answer(status)}, expected 404 PAYROLL_NOT_FOUND`);
+      const sync = await admin.post(`/api/piecework/payrolls/${missing}/sync-voucher`, {});
+      if (sync.status !== 404 || codeOf(sync.body) !== 'PAYROLL_NOT_FOUND') problems.push(`a voucher sync of a missing payslip answered ${answer(sync)}, expected 404 PAYROLL_NOT_FOUND`);
+
+      const thrown = await PieceworkPayrollService.generatePayroll({ personnelId: missing, ...PERIOD, username: 'reg' }).then(
+        result => `returned ${brief(result)}`,
+        (err: unknown) => (err instanceof AppError && err.statusCode === 404 && err.code === 'PAYROLL_PERSONNEL_NOT_FOUND' ? null : `threw ${String(err)}`),
+      );
+      if (thrown !== null) problems.push(`a payslip for a missing personnel ${thrown}, expected a thrown 404 PAYROLL_PERSONNEL_NOT_FOUND`);
+
+      assertNoProblems(problems);
+      return 'Every refusal of the payslip service is thrown with its status, Persian message and code; the refused requests wrote nothing; the error log held the advance and service-ended refusals by code, without the personnel name or the amounts.';
     }));
   }
 

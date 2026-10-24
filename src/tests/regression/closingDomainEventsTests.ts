@@ -83,7 +83,7 @@ export async function runClosingDomainEventsTests(shouldRun: ShouldRun): Promise
       const workerId = await newWorker(`ERP-TEST-MARKER events ${tagOf()}`);
       await addLog(workerId, await newTask(), '2026-04-05', 1_000_000);
       const issued = await PieceworkPayrollService.generatePayroll({ personnelId: workerId, startDate: '2026-04-01', endDate: '2026-04-30', username: 'inv' });
-      if (!issued.payroll) throw new Error(`setup: issuing the payslip failed (${issued.error})`);
+      if (!issued.payroll) throw new Error('setup: issuing the payslip failed');
       const id = issued.payroll.id;
       if ((await eventsOf('Payroll', id)).length !== 0) problems.push('issuing a draft wrote a payroll event');
 
@@ -124,7 +124,7 @@ export async function runClosingDomainEventsTests(shouldRun: ShouldRun): Promise
       const workerId = await newWorker(name);
       await addLog(workerId, await newTask(), '2026-04-06', 900_000);
       const issued = await PieceworkPayrollService.generatePayroll({ personnelId: workerId, startDate: '2026-04-01', endDate: '2026-04-30', username: 'inv' });
-      if (!issued.payroll) throw new Error(`setup: issuing the payslip failed (${issued.error})`);
+      if (!issued.payroll) throw new Error('setup: issuing the payslip failed');
       const id = issued.payroll.id;
       await PieceworkPayrollService.updatePayrollStatus(id, { status: 'approved', username: 'inv' });
       const api = await adminClient();

@@ -47,9 +47,10 @@ export const PERSONNEL_PICK_URL = `/personnel?limit=${PERSONNEL_PICK_REQUEST_LIM
 /** The sales seller picker: personnel who have not left only, so a leaver takes no place under the cap */
 export const PERSONNEL_ACTIVE_PICK_URL = `${PERSONNEL_PICK_URL}&activeOnly=1`;
 export const PERSONNEL_PICK_CAP_TOAST_ID = 'personnel-pick-cap';
-// a search on the personnel page makes no one selectable in a picker, so the notice only says who is missing (TD-1362)
+// 10.3 package 6 (TD-1362): a cut list's picker searches on the server too (`personnelServerSearchUrl`), so the notice
+// says how an older personnel is found
 export const PERSONNEL_PICK_CAP_NOTICE =
-  `فهرست انتخاب فقط ${PERSONNEL_PICK_LIMIT.toLocaleString('fa-IR')} پرسنلِ آخرِ ثبت‌شده را دارد؛ پرسنل قدیمی‌تر در این فهرست نیستند.`;
+  `فهرست انتخاب فقط ${PERSONNEL_PICK_LIMIT.toLocaleString('fa-IR')} پرسنلِ آخرِ ثبت‌شده را نشان می‌دهد؛ پرسنل قدیمی‌تر را با نوشتن نامشان در جست‌وجوی انتخابگر پیدا کنید.`;
 /** long enough to read the notice once */
 export const PERSONNEL_PICK_CAP_TOAST_MS = 8000;
 
@@ -64,6 +65,28 @@ export function takePersonnelPick<T>(rows: readonly T[]): { rows: T[]; notice: s
   const notice = capNoticeShown ? null : PERSONNEL_PICK_CAP_NOTICE;
   capNoticeShown = true;
   return { rows: rows.slice(0, PERSONNEL_PICK_LIMIT), notice };
+}
+
+/**
+ * 10.3 package 6 (TD-1362): the server search of a personnel picker whose list may be cut at the cap: a list of the cap's
+ * length (`takePersonnelPick` cut it, or the server held exactly that many, which only costs a request) also reads
+ * `GET /personnel?search=&limit=` for a typed search (`activeOnly` for the CRM pickers, as their list) and lists the
+ * matches it does not show. A shorter list holds every personnel, so its picker searches in the browser as before and
+ * asks the server nothing.
+ */
+export function personnelServerSearchUrl(list: readonly unknown[], { activeOnly = false }: { activeOnly?: boolean } = {}): string | undefined {
+  if (list.length < PERSONNEL_PICK_LIMIT) return undefined;
+  return activeOnly ? '/personnel?activeOnly=1' : '/personnel';
+}
+
+/** A personnel picker option labelled by the full name (the CRM filters), for its list and its server search */
+export function personnelNameOption(p: { id: number | string; fullName?: string | null }): { value: string; label: string } {
+  return { value: String(p.id), label: p.fullName || '' };
+}
+
+/** The same with the job title (the CRM seller and follow-up pickers) */
+export function personnelSellerOption(p: { id: number | string; fullName?: string | null; jobTitle?: string | null }): { value: string; label: string } {
+  return { value: String(p.id), label: `${p.fullName}${p.jobTitle ? ` — ${p.jobTitle}` : ''}` };
 }
 
 /** Tests only: the next list above the cap shows the notice again */
