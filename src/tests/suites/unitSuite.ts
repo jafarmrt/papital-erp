@@ -1405,7 +1405,7 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
 
   // v7.0.64 (audit P3-12): سازگاری اسناد حاکمیتی با کد و رجیستری بدهی
   const tGovStart = Date.now();
-  const govTestName = 'v7.0.64: the tables named in AGENTS.md and ARCHITECTURE_RULES.md exist, and the TECH_DEBT.md labels and counts are correct (P3-12)';
+  const govTestName = 'v7.0.64: the tables named in AGENTS.md and the area rules of docs/rules exist, and the TECH_DEBT.md labels and counts are correct (P3-12)';
   try {
     const fs = await import('fs');
     const path = await import('path');
@@ -1419,7 +1419,9 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     for (const f of fs.readdirSync(schemaDir).filter(n => n.endsWith('.ts'))) {
       for (const m of fs.readFileSync(path.join(schemaDir, f), 'utf8').matchAll(/pgTable\(\s*'([a-z0-9_]+)'/g)) tableNames.add(m[1]);
     }
-    for (const doc of ['AGENTS.md', 'ARCHITECTURE_RULES.md']) {
+    // v11: the core AGENTS.md and the area files of docs/rules (never its archive, which records history)
+    const ruleDocs = ['AGENTS.md', ...fs.readdirSync(path.join(root, 'docs/rules')).filter(n => n.endsWith('.md')).sort().map(n => `docs/rules/${n}`)];
+    for (const doc of ruleDocs) {
       for (const m of read(doc).matchAll(/`([a-z][a-z0-9_]*_(?:counters|stocks|periods|attachments|corrections|anomalies|vouchers|transactions|logs))`/g)) {
         if (!tableNames.has(m[1])) violations.push(`${doc}: table "${m[1]}" does not exist in the schema`);
       }

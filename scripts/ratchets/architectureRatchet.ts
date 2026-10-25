@@ -30,13 +30,16 @@ import { boundaryState } from './packageBoundary';
  *    is written on its own pool connection after the change committed, and a failed insert never refuses the change;
  *  - hardDeletes (OBS-R2-15, decision ت۴۰ item 19): a physical delete, `x.delete(<schema table>)` or SQL text holding
  *    `DELETE FROM` or `TRUNCATE` (any case inside SQL text, 10.3 package 3), in any production file. Business rows are soft-deleted (AGENTS.md, DB-009); the deletes that remain
- *    are the allowed exceptions, each file with its reason in scripts/ratchets/HARD_DELETES.md, and their count only shrinks.
+ *    are the allowed exceptions, each file with its reason in scripts/ratchets/HARD_DELETES.md, and their count only shrinks;
+ *  - rawSqlWrites (v11 governance review, rule 4 of the archived ARCHITECTURE_RULES_V10.md): a whole write statement in SQL text,
+ *    `UPDATE <table> SET` or `INSERT INTO`, in any production file. Writes go through `tx.update().set()` / `tx.insert()`;
+ *    a SQL fragment inside them (`set({ version: sql\`${t.version} + 1\` })`, `now()`) is allowed and never counts.
  * Terminal output is English (AGENTS.md, owner rule t9).
  */
 
 export const BASELINE_FILE = 'scripts/ratchets/architecture-baseline.json';
 
-export const METRICS = ['routeWrites', 'ormFallback', 'routeErrorResponses', 'serviceGenericErrors', 'serviceErrorResults', 'noopCatches', 'auditWithoutTx', 'hardDeletes', 'unorderedTestRows', 'packageBoundary'] as const;
+export const METRICS = ['routeWrites', 'ormFallback', 'routeErrorResponses', 'serviceGenericErrors', 'serviceErrorResults', 'noopCatches', 'auditWithoutTx', 'hardDeletes', 'unorderedTestRows', 'packageBoundary', 'rawSqlWrites'] as const;
 export type Metric = (typeof METRICS)[number];
 export type ArchitectureBaseline = Record<Metric, Record<string, number>> & { unmappedServerFiles?: string[] };
 
@@ -51,6 +54,7 @@ const METRIC_ADVICE: Record<Metric, string> = {
   auditWithoutTx: 'pass the write\'s own tx to logActivity so the audit row commits or rolls back with the change (TD-963)',
   hardDeletes: 'soft-delete the row (is_deleted = 1); a delete that must stay physical is listed with its reason in scripts/ratchets/HARD_DELETES.md (OBS-R2-15)',
   packageBoundary: 'import only towards a lower layer, or go through an event or the composition root (decision t3 A)',
+  rawSqlWrites: 'write with tx.update().set() / tx.insert(); a sql`` fragment inside set() is allowed (v11 rules, data rule 1)',
 };
 
 const isRoute = (file: string) => file.startsWith('src/routes/');
@@ -163,6 +167,25 @@ function isDeletingSqlText(n: ts.StringLiteral | ts.NoSubstitutionTemplateLitera
   return /\btruncate\s+(table\s+)?(only\s+)?(["\w$]|$)/i.test(n.text) && isSqlText(n);
 }
 
+/** The text of SQL handed to the database: `sql\`...\``, or the first argument of `x.raw(...)`, `x.query(...)`, `x.execute(...)`; an interpolation reads as `$`. */
+function sqlTextOf(n: ts.Node): string | null {
+  const templateText = (t: ts.TemplateLiteral) => ts.isNoSubstitutionTemplateLiteral(t) ? t.text : [t.head.text, ...t.templateSpans.map(s => s.literal.text)].join('$');
+  if (ts.isTaggedTemplateExpression(n)) {
+    const tag = n.tag;
+    const isSql = (ts.isIdentifier(tag) && tag.text === 'sql') || (ts.isPropertyAccessExpression(tag) && tag.name.text === 'sql');
+    return isSql ? templateText(n.template) : null;
+  }
+  if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && ['raw', 'query', 'execute'].includes(n.expression.name.text)) {
+    const arg = n.arguments[0];
+    if (arg && ts.isStringLiteral(arg)) return arg.text;
+    if (arg && (ts.isNoSubstitutionTemplateLiteral(arg) || ts.isTemplateExpression(arg))) return templateText(arg);
+  }
+  return null;
+}
+
+/** A whole write statement in SQL text: `UPDATE <table> SET` or `INSERT INTO` (a fragment inside a Drizzle write never holds one). */
+const isRawWriteSql = (text: string) => /\bINSERT\s+INTO\b/i.test(text) || /\bUPDATE\s+(ONLY\s+)?[\w."$]+\s+(AS\s+\w+\s+|\w+\s+)?SET\b/i.test(text);
+
 /** `{ status: 4xx|5xx, error: ... }`: an error result object instead of a thrown AppError. */
 function isErrorResult(n: ts.ObjectLiteralExpression): boolean {
   const names = new Map(n.properties.filter(ts.isPropertyAssignment).filter(p => ts.isIdentifier(p.name))
@@ -263,7 +286,7 @@ export type SourceMetric = Exclude<Metric, 'packageBoundary' | 'unorderedTestRow
 
 export function countSource(file: string, source: string): Record<SourceMetric, number> {
   const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
-  const counts: Record<SourceMetric, number> = { routeWrites: 0, ormFallback: 0, routeErrorResponses: 0, serviceGenericErrors: 0, serviceErrorResults: 0, noopCatches: 0, auditWithoutTx: 0, hardDeletes: 0 };
+  const counts: Record<SourceMetric, number> = { routeWrites: 0, ormFallback: 0, routeErrorResponses: 0, serviceGenericErrors: 0, serviceErrorResults: 0, noopCatches: 0, auditWithoutTx: 0, hardDeletes: 0, rawSqlWrites: 0 };
   const tables = schemaImports(sf);
   const isTable = (n: ts.Expression) => (ts.isIdentifier(n) && tables.has(n.text))
     || (ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.expression) && tables.has(`${n.expression.text}.*`));
@@ -277,6 +300,8 @@ export function countSource(file: string, source: string): Record<SourceMetric, 
     }
     if (ts.isCallExpression(n) && isAuditWithoutTx(n)) counts.auditWithoutTx++;
     if (ts.isCatchClause(n) && isNoopCatch(n)) counts.noopCatches++;
+    const sqlText = sqlTextOf(n);
+    if (sqlText !== null && isRawWriteSql(sqlText)) counts.rawSqlWrites++;
     if ((ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n) || ts.isTemplateHead(n) || ts.isTemplateMiddle(n) || ts.isTemplateTail(n))
       && isDeletingSqlText(n)) counts.hardDeletes++;
     if (ts.isBinaryExpression(n) && isOrm(n.right)

@@ -2,7 +2,8 @@
 /**
  * Series 10 roadmap §4 (phase-2 decisions t2 to t5): the architecture ratchet in
  * scripts/ratchets/architectureRatchet.ts counts route writes, pool fallbacks of an optional transaction, hand-written
- * route error answers, generic service errors, audit rows written without the change's transaction (TD-963) and server imports against the package direction per file, against scripts/ratchets/architecture-baseline.json; no file
+ * route error answers, generic service errors, audit rows written without the change's transaction (TD-963), whole raw SQL
+ * write statements (v11 rules) and server imports against the package direction per file, against scripts/ratchets/architecture-baseline.json; no file
  * may gain one and the baseline may only shrink.
  */
 import fs from 'fs';
@@ -97,6 +98,21 @@ describe('architecture_ratchet: phase-2 decisions may only shrink their debt', (
     expect(countSource('src/routes/x.routes.ts', source).serviceErrorResults).toBe(0);
   });
 
+  it('counts a whole raw SQL write statement, not a SQL fragment inside a Drizzle write (v11 rules, data rule 1)', () => {
+    const source = `
+      async function f(tx, t) {
+        await tx.execute(sql\`UPDATE \${t} SET a = 1 WHERE id = \${2}\`);
+        await tx.execute(sql\`insert into items (a) values (1)\`);
+        await pool.query('UPDATE items AS i SET x = 1');
+        await tx.execute(sql.raw(\`INSERT INTO logs (a) VALUES (1)\`));
+        await tx.update(items).set({ version: sql\`\${items.version} + 1\`, updatedAt: sql\`now()\` });
+        await tx.execute(sql\`SELECT id FROM items WHERE id = \${1} FOR UPDATE\`);
+        const label = 'INSERT INTO is not SQL here';
+      }
+    `;
+    expect(countSource('src/services/x.service.ts', source).rawSqlWrites).toBe(4);
+  });
+
   it('counts rows past the first of an unordered query in a test file (v10.2.28, OT-A-09)', () => {
     const source = `
       async function t() {
@@ -120,7 +136,7 @@ describe('architecture_ratchet: phase-2 decisions may only shrink their debt', (
   });
 
   it('refuses a grown count and reports a lowered one', () => {
-    const empty = { routeWrites: {}, ormFallback: {}, routeErrorResponses: {}, serviceGenericErrors: {}, serviceErrorResults: {}, noopCatches: {}, auditWithoutTx: {}, hardDeletes: {}, unorderedTestRows: {}, packageBoundary: {} };
+    const empty = { routeWrites: {}, ormFallback: {}, routeErrorResponses: {}, serviceGenericErrors: {}, serviceErrorResults: {}, noopCatches: {}, auditWithoutTx: {}, hardDeletes: {}, unorderedTestRows: {}, packageBoundary: {}, rawSqlWrites: {} };
     const baseline: ArchitectureBaseline = { ...empty, routeWrites: { 'a.ts': 2, 'b.ts': 1 } };
     const report = compareWithBaseline({ ...empty, routeWrites: { 'a.ts': 3, 'c.ts': 1 } }, baseline);
     expect(report.errors).toEqual([
