@@ -21,6 +21,9 @@ going forward.
 
 ## Version 11.x Series (Active — see `src/data/changelogs/11.ts`)
 
+### v11.0.3 — قواعد کوتاه پروژه
+- Documentation and tooling (sub-phase 1.3, PR 1, from the 24 section decisions of the v11 governance review): `AGENTS.md` becomes a short core, one line per rule with its guard, and the full rules move to area files in `docs/rules/` (20 files, version and debt tags removed, a UI glossary in `ui.md`). The old `AGENTS.md` and `ARCHITECTURE_RULES.md` are kept verbatim in `docs/rules/archive/`. The architecture rules join the core: thin routes, no whole raw SQL write statement (a `sql` fragment inside `set()` is allowed), package boundary must not grow. Lighter process: small same-kind fixes share a pull request and a version, docs-only pull requests take no version, TD rows only for remaining debt, full review only for money, stock, security and migrations. New architecture ratchet metric `rawSqlWrites` (baseline 0); the governance docs test reads `AGENTS.md` and `docs/rules/*.md`.
+
 ### v11.0.2 — تصویر پایهٔ Docker از آینهٔ گوگل
 - CI fix: Amazon ECR Public refused the Node base image with «toomanyrequests: Data limit exceeded», so the Docker Container Build Verification job failed on master and every pull request before any build step. The Dockerfile base images now come from the Google mirror of the Docker official images (`mirror.gcr.io/library/node:24-alpine`, same tag). The server is not affected (it installs with `install.sh`, not Docker). Vitest `ci_images_from_mirror_td_1169`, `node24Runtime.test.ts`.
 

@@ -32,8 +32,8 @@ export function findDebtRegistryViolations(debt: string, archive: string): strin
 /** Scripts named only to forbid them (AGENTS.md §23: `db:push` is banned). */
 const FORBIDDEN_SCRIPTS = new Set(['db:push']);
 
-/** Archived roadmaps of closed series record history, including npm scripts that no longer exist. */
-const HISTORICAL_DOC_DIRS = new Set(['docs/roadmap/archive']);
+/** Archived roadmaps and rules of closed series record history, including npm scripts that no longer exist. */
+const HISTORICAL_DOC_DIRS = new Set(['docs/roadmap/archive', 'docs/rules/archive']);
 
 /** Documents that name npm scripts: path relative to `root` → content. */
 export function npmScriptDocs(root: string): Map<string, string> {
@@ -51,7 +51,7 @@ export function npmScriptDocs(root: string): Map<string, string> {
       else if (ext.test(name)) add(rel);
     }
   };
-  for (const rel of ['AGENTS.md', 'ARCHITECTURE_RULES.md', 'README.md', 'install.sh', 'update.sh']) add(rel);
+  for (const rel of ['AGENTS.md', 'README.md', 'install.sh', 'update.sh']) add(rel);
   addDir('docs', /\.md$/);
   addDir('.github/workflows', /\.ya?ml$/);
   addDir('.claude/hooks', /\.sh$/);

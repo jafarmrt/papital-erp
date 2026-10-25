@@ -195,5 +195,6 @@
     "src/services/woocommerce/wooOrderCustomer.ts": 1,
     "src/services/woocommerce/wooOrderSync.service.ts": 1,
     "src/services/workflow/workflowDocumentAmount.ts": 1
-  }
+  },
+  "rawSqlWrites": {}
 }

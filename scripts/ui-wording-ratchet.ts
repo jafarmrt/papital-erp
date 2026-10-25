@@ -137,7 +137,7 @@ function main(): void {
   if (increased.length > 0 && !firstBaseline) {
     console.error('UI wording ratchet FAILED: these files gained a forbidden word in user-facing text:');
     for (const line of increased) console.error(`  ${line}`);
-    console.error('Use the glossary words instead (see AGENTS.md section 6); the baseline may never be raised.');
+    console.error('Use the glossary words instead (see the UI glossary in docs/rules/ui.md); the baseline may never be raised.');
     process.exit(1);
   }
   if (update) {

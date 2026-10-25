@@ -15,7 +15,6 @@ T  vitest.config.ts
 
 # ───────── G: حاکمیت، اسناد و changelog ─────────
 G  AGENTS.md
-G  ARCHITECTURE_RULES.md
 G  CHANGELOG.md
 G  README.md
 G  TECH_DEBT.md
