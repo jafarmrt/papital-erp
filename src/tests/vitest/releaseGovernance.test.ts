@@ -2,8 +2,9 @@
 import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
-import { findDebtRegistryViolations, findFrozenArchiveViolations, findMissingNpmScripts, npmScriptDocs } from '../../../scripts/governance/releaseGuards';
+import { findDebtRegistryViolations, findFrozenArchiveViolations, findMissingNpmScripts, findReleaseLayoutViolations, npmScriptDocs } from '../../../scripts/governance/releaseGuards';
 import { findChangelogSeriesViolations } from '../../../src/data/changelogs/seriesGuard';
+import { ACTIVE_CHANGELOG } from '../../../src/data/changelogs/index';
 import type { AIUpdateLog } from '../../../src/data/changelogs/types';
 
 /**
@@ -66,5 +67,28 @@ describe('npm script guard (OT-A-03)', () => {
     const docs = npmScriptDocs(process.cwd());
     expect(docs.has('docs/roadmap/V11_MASTER_ROADMAP.md')).toBe(true);
     expect([...docs.keys()].filter(rel => rel.startsWith('docs/roadmap/archive/'))).toEqual([]);
+  });
+});
+
+/** v11 (1.3, product-owner decision): a version per server update; changes wait under «### Unreleased». */
+describe('release layout gate (v11, 1.3)', () => {
+  const md = (body: string) => `## Version 11.x Series (Active — see \`src/data/changelogs/11.ts\`)\n\n${body}\n---\n\n## Version 10.x Series\n\n### Unreleased\n`;
+
+  it('accepts Unreleased at the top and versions that step by one patch or one minor', () => {
+    expect(findReleaseLayoutViolations(md('### Unreleased\n- x.\n\n### v11.1.0 — a\n- a.\n'), 11, ['v11.1.0', 'v11.0.9'])).toEqual([]);
+    expect(findReleaseLayoutViolations(md('### Unreleased\n\n### v11.0.2 — a\n'), 11, ['v11.0.2', 'v11.0.1'])).toEqual([]);
+  });
+
+  it('refuses a missing or misplaced Unreleased and a skipped version', () => {
+    expect(findReleaseLayoutViolations(md('### v11.0.2 — a\n- a.\n'), 11, ['v11.0.2'])[0]).toMatch(/Unreleased/);
+    expect(findReleaseLayoutViolations(md('### v11.0.2 — a\n\n### Unreleased\n'), 11, ['v11.0.2'])[0]).toMatch(/Unreleased/);
+    expect(findReleaseLayoutViolations(md('### Unreleased\n\n### v11.0.4 — a\n'), 11, ['v11.0.4', 'v11.0.2'])[0]).toMatch(/does not follow/);
+    expect(findReleaseLayoutViolations(md('### Unreleased\nnot a list line\n\n### v11.0.2 — a\n'), 11, ['v11.0.2'])[0]).toMatch(/must start with "- "/);
+    expect(findReleaseLayoutViolations(md('### Unreleased\n\n### Unreleased\n- x.\n'), 11, [])[0]).toMatch(/more than once/);
+  });
+
+  it('holds for the repository', () => {
+    const changelog = fs.readFileSync(path.resolve(__dirname, '../../../CHANGELOG.md'), 'utf8');
+    expect(findReleaseLayoutViolations(changelog, ACTIVE_CHANGELOG.series, ACTIVE_CHANGELOG.updates.map(u => u.version))).toEqual([]);
   });
 });

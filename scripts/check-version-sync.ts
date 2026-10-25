@@ -3,7 +3,7 @@ import path from 'path';
 import { SYSTEM_UPDATES, ACTIVE_CHANGELOG, CLOSED_CHANGELOG_SERIES } from '../src/data/changelogs/index.js';
 import { findCompactRuleViolations } from '../src/data/changelogs/compactRule.js';
 import { findChangelogSeriesViolations } from '../src/data/changelogs/seriesGuard.js';
-import { CLOSED_DEBT_FILE, FROZEN_DEBT_ARCHIVE, findDebtRegistryViolations, findFrozenArchiveViolations, findMissingNpmScripts, npmScriptDocs } from './governance/releaseGuards.js';
+import { CLOSED_DEBT_FILE, FROZEN_DEBT_ARCHIVE, findDebtRegistryViolations, findFrozenArchiveViolations, findMissingNpmScripts, findReleaseLayoutViolations, npmScriptDocs } from './governance/releaseGuards.js';
 
 /**
  * TD-111 (v7.0.0) — گیت همگام‌سازی جامع نسخه (fail-fast)
@@ -58,6 +58,14 @@ function main(): void {
   if (seriesViolations.length > 0) {
     fail(`The changelog series are inconsistent:\n   - ${seriesViolations.slice(0, 15).join('\n   - ')}`);
   }
+
+  // 3b) v11 (1.3): a version per server update; changes wait under «### Unreleased» and versions step by one
+  const layoutViolations = findReleaseLayoutViolations(
+    fs.readFileSync(path.resolve(process.cwd(), 'CHANGELOG.md'), 'utf-8'),
+    ACTIVE_CHANGELOG.series,
+    ACTIVE_CHANGELOG.updates.map(u => u.version)
+  );
+  if (layoutViolations.length > 0) fail(`The release layout is broken:\n   - ${layoutViolations.join('\n   - ')}`);
 
   // 4) v7.0.54: قاعده چنج‌لاگ کوتاه سری فعال (فقط تغییرات مهم و باگ‌های مهم و بحرانی)
   const compactViolations = findCompactRuleViolations(ACTIVE_CHANGELOG.updates);

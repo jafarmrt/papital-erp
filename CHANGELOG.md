@@ -21,6 +21,9 @@ going forward.
 
 ## Version 11.x Series (Active — see `src/data/changelogs/11.ts`)
 
+### Unreleased
+- Release process (sub-phase 1.3, PR 3, product-owner decision): a version per server update, not per change. A pull request adds its line here under Unreleased and takes no version (`npm run release` without `version`); a release cut before a server update moves these lines under the next patch, and the end of a roadmap phase takes the next minor (end of phase 1 = v11.1.0). `release:renumber` keeps both sides' Unreleased lines, and `check:version` refuses a missing Unreleased section and a skipped version. Vitest `releaseTool.test.ts`, `releaseRenumber.test.ts`, `releaseGovernance.test.ts`.
+
 ### v11.0.4 — درس‌های بدهی به‌جای بایگانی بزرگ
 - Documentation and tooling (sub-phase 1.3, PR 2): the 1.4 MB `TECH_DEBT_ARCHIVE.md` is frozen as `docs/rules/archive/TECH_DEBT_ARCHIVE_V10.md` (rows closed up to series 10). `docs/rules/DEBT_LESSONS.md` holds 15 lessons of the fixed debt that no single rule names, and the rows closed since series 11 (TD-1389 and TD-1390 move there). `npm run release`, `release:renumber` and `check:version` write and read the new file, and the frozen archive still counts for used ids and the closed-row count. The unsupported k8s example is no version location any more (placeholder image tag, no `APP_VERSION`), so a release bumps three locations.
 
