@@ -350,3 +350,24 @@ describe('scripts/release-renumber.ts with series 10 (v10.0.0)', () => {
     expect(plan.writes.get('README.md')).toBe(readme('10.0.2'));
   });
 });
+
+/** v11 (1.3): changes wait under «### Unreleased» until a release cut; parallel branches keep each other's lines. */
+describe('release:renumber keeps every branch\'s Unreleased lines (v11, 1.3)', () => {
+  const HEAD = '## Version 11.x Series (Active — see `src/data/changelogs/11.ts`)\n\n';
+  const md = (unreleased: string[], versions: string) => `# Changelog\n\n${HEAD}### Unreleased\n${unreleased.map(l => `${l}\n`).join('')}\n${versions}\n---\n`;
+  const v1 = '### v11.0.1 — One\n- one.\n';
+  const FILE = 'src/data/changelogs/11.ts';
+
+  it('keeps the base\'s lines and adds the branch\'s own', () => {
+    const base = md(['- a.'], v1);
+    const merged = resolveReleaseConflict('CHANGELOG.md', '', { ours: md(['- a.', '- branch.'], v1), theirs: md(['- a.', '- master.'], v1), base }, FILE)!;
+    expect(merged).toBe(md(['- a.', '- master.', '- branch.'], v1));
+  });
+
+  it('does not bring back lines a cut on the base released', () => {
+    const base = md(['- a.'], v1);
+    const cut = md([], `### v11.0.2 — Two\n- a.\n\n${v1}`);
+    const merged = resolveReleaseConflict('CHANGELOG.md', '', { ours: md(['- a.', '- branch.'], v1), theirs: cut, base }, FILE)!;
+    expect(merged).toBe(md(['- branch.'], `### v11.0.2 — Two\n- a.\n\n${v1}`));
+  });
+});

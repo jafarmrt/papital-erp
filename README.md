@@ -249,5 +249,5 @@ systemctl restart papital-erp && curl -fsS http://localhost:3000/health/startup
 - مهاجرت فقط از migrator اتمیک؛ شماره‌گذاری‌ها فقط با SEQUENCE/counter اتمیک
 - خواندن‌ها با `is_deleted = 0` (soft delete)؛ حذف‌ها فقط نرم
 - فرانت: همه فراخوانی‌ها با `fetchJson`، آرایه‌ها با گارد `Array.isArray`
-- هر تغییر کارکردی یک نسخه تازه با یک مدخل در چنجلاگ فعال `src/data/changelogs/11.ts` (سری 11.x) می‌گیرد؛ `npm run release -- <spec.json>` سه محل نسخه را هم‌گام می‌کند و `npm run check:version` آن را می‌آزماید
+- هر تغییر کارکردی یک خط زیر «### Unreleased» در `CHANGELOG.md` می‌نویسد و نسخه نمی‌گیرد؛ پیش از هر به‌روزرسانی سرور همهٔ تغییرات منتشرنشده با هم یک نسخه (وصلهٔ بعدی) و یک مدخل در چنجلاگ فعال `src/data/changelogs/11.ts` می‌گیرند و پایان هر فاز نقشهٔ راه رقم میانی را بالا می‌برد (`npm run release -- <spec.json>`)؛ `npm run check:version` سه محل نسخه را می‌آزماید
 - تغییرها روی شاخه جدا با PR پیش‌نویس؛ هرگز push مستقیم به `master`

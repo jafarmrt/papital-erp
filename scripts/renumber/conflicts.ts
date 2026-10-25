@@ -4,6 +4,9 @@
  *  - the active changelog and the active CHANGELOG.md section: both sides' entries are kept (sorted later); a branch
  *    entry with the version and title of a base entry replaces it when the base side left that entry unchanged
  *    against the common ancestor (an edit of an older entry, v10.2.28), and is left to the operator otherwise;
+ *  - the «### Unreleased» lines at the top of the active CHANGELOG.md section (v11, 1.3: a change takes no version
+ *    until a release cut): the base's lines, then the branch's own lines; a line the common ancestor held and the base
+ *    no longer holds was released by a cut on the base and does not come back;
  *  - the migration journal: the base's entries plus this branch's own entries (renumbered later);
  *  - TECH_DEBT.md / docs/rules/DEBT_LESSONS.md: both sides of each conflict are kept (rows), a row both sides hold once,
  *    and a row both sides changed differently is left to the operator;
@@ -136,7 +139,40 @@ function unionChangelogMd(s: ConflictStages, series: number): string | null {
     out = `${out.slice(0, at)}${out.slice(at + b.length + 2)}`;
   }
   const extra = changed.filter(b => !edits.has(header(b)));
-  return extra.length === 0 ? out : `${out.slice(0, theirs.at)}${extra.map(b => `${b}\n\n`).join('')}${out.slice(theirs.at)}`;
+  if (extra.length > 0) out = `${out.slice(0, theirs.at)}${extra.map(b => `${b}\n\n`).join('')}${out.slice(theirs.at)}`;
+  return unionUnreleased(out, s, series);
+}
+
+const UNRELEASED = '### Unreleased\n';
+
+/** The «### Unreleased» lines of the active CHANGELOG.md section and where they sit, or null without the section. */
+function unreleasedLines(src: string, series: number): { start: number; end: number; lines: string[] } | null {
+  const header = src.indexOf(`## Version ${series}.x Series (Active`);
+  if (header < 0) return null;
+  const at = src.indexOf(UNRELEASED, header);
+  const firstVersion = src.indexOf('\n### v', header);
+  if (at < 0 || (firstVersion >= 0 && at > firstVersion)) return null;
+  const start = at + UNRELEASED.length;
+  const next = src.slice(start).search(/^(### |---$|## )/m);
+  const end = next < 0 ? src.length : start + next;
+  return { start, end, lines: src.slice(start, end).split('\n').filter(l => l.trim() !== '') };
+}
+
+/** v11 (1.3): the base's Unreleased lines plus the branch's own; the ancestor's lines the base released stay out. */
+function unionUnreleased(out: string, s: ConflictStages, series: number): string {
+  const ours = unreleasedLines(s.ours, series);
+  if (!ours) return out;
+  const target = unreleasedLines(out, series);
+  const ancestor = new Set((s.base === undefined ? null : unreleasedLines(s.base, series))?.lines ?? []);
+  const theirs = new Set(target?.lines ?? []);
+  const own = ours.lines.filter(l => !theirs.has(l) && !ancestor.has(l));
+  if (own.length === 0) return out;
+  if (!target) {
+    const header = out.indexOf(`## Version ${series}.x Series (Active`);
+    const at = out.indexOf('\n\n', header) + 2;
+    return `${out.slice(0, at)}${UNRELEASED}${own.join('\n')}\n\n${out.slice(at)}`;
+  }
+  return `${out.slice(0, target.start)}${[...target.lines, ...own].join('\n')}\n\n${out.slice(target.end)}`;
 }
 
 interface JournalEntry { idx: number; tag: string }

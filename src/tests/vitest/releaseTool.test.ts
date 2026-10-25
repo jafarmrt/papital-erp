@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
 import { applyRelease, toFa, type ReleaseFiles, type ReleaseSpec } from '../../../scripts/release';
+import { isNextVersion } from '../../../scripts/governance/releaseGuards';
 import { ACTIVE_CHANGELOG } from '../../data/changelogs/index';
 
 const ROOT = path.resolve(__dirname, '../../..');
@@ -197,7 +198,7 @@ describe('scripts/release.ts with series 10 (v10.0.0)', () => {
     applyRelease(memoryFiles(store), baseSpec({ version, prev, closes: [{ td: 'TD-99999', archiveRow }] }),
       { series: ACTIVE_CHANGELOG.series, file: ACTIVE_CHANGELOG.file });
     expect(store.get(ACTIVE_CHANGELOG.file)).toContain(`export const v${major}Updates: AIUpdateLog[] = [\n  {\n    version: '${version}',`);
-    expect(store.get('CHANGELOG.md')).toContain(`## Version ${major}.x Series (Active — see \`${ACTIVE_CHANGELOG.file}\`)\n\n### ${version} — `);
+    expect(store.get('CHANGELOG.md')).toContain(`## Version ${major}.x Series (Active — see \`${ACTIVE_CHANGELOG.file}\`)\n\n### Unreleased\n\n### ${version} — `);
     expect(store.get('README.md')).toContain(`نسخه مستقر: \`${version}\``);
     expect(store.get('package.json')).toContain(`"version": "${version.slice(1)}"`);
     const archive = store.get('docs/rules/DEBT_LESSONS.md')!;
@@ -208,5 +209,57 @@ describe('scripts/release.ts with series 10 (v10.0.0)', () => {
     const end = archive.indexOf('\n## ', section);
     expect(end === -1 || at < end).toBe(true);
     expect(store.get('TECH_DEBT.md')).not.toContain('| TD-99999 |');
+  });
+});
+
+/**
+ * v11 (sub-phase 1.3, product-owner decision): a version per server update, not per change. A change without
+ * version writes its line under «### Unreleased»; a release cut moves those lines under the new version.
+ */
+const change = (over: Partial<ReleaseSpec>): ReleaseSpec => ({ mdLine: 'یک تغییر.', ...over });
+
+describe('scripts/release.ts: a version per server update (v11, 1.3)', () => {
+  it('a change without version adds its line under Unreleased and leaves every version location alone', () => {
+    const store = fixture([row('TD-414')]);
+    const files = memoryFiles(store);
+    applyRelease(files, change({ closes: [{ td: 'TD-414', archiveRow: row('TD-414', 'resolved'), knownClass: 'stock_x', testId: 'inv_td_414' }] }), ACTIVE);
+    applyRelease(files, change({ mdLine: 'تغییر دوم.' }), ACTIVE);
+    expect(store.get('CHANGELOG.md')).toContain('(Active — see `src/data/changelogs/9.ts`)\n\n### Unreleased\n- یک تغییر.\n- تغییر دوم.\n\n### v9.0.0 — آغاز');
+    expect(store.get('package.json')).toContain('"version": "9.0.0"');
+    expect(store.get('README.md')).toBe('نسخه مستقر: `v9.0.0`');
+    expect(store.get('src/data/changelogs/9.ts')).not.toContain('v9.0.1');
+    expect(store.get('TECH_DEBT.md')).not.toContain('| TD-414 |');
+    expect(store.get('src/tests/simulation/knownFindings.ts')).toContain('// TD-414 رفع شد (inv_td_414)');
+  });
+
+  it('a release cut moves the Unreleased lines under the new version and empties Unreleased', () => {
+    const store = fixture([]);
+    const files = memoryFiles(store);
+    applyRelease(files, change({}), ACTIVE);
+    applyRelease(files, change({ mdLine: 'تغییر دوم.' }), ACTIVE);
+    applyRelease(files, baseSpec({ mdLine: undefined }), ACTIVE);
+    expect(store.get('CHANGELOG.md')).toContain('### Unreleased\n\n### v9.0.1 — عنوان\n- یک تغییر.\n- تغییر دوم.\n\n### v9.0.0 — آغاز');
+    expect(store.get('package.json')).toContain('"version": "9.0.1"');
+    // the end of a phase takes the next minor
+    applyRelease(files, change({ mdLine: 'پایان فاز.' }), ACTIVE);
+    applyRelease(files, baseSpec({ version: 'v9.1.0', prev: 'v9.0.1', mdLine: undefined }), ACTIVE);
+    expect(store.get('CHANGELOG.md')).toContain('### Unreleased\n\n### v9.1.0 — عنوان\n- پایان فاز.\n\n### v9.0.1');
+    expect(store.get('README.md')).toBe('نسخه مستقر: `v9.1.0`');
+  });
+
+  it('refuses a skipped version, an empty cut and release fields on a change without version', () => {
+    expect(() => applyRelease(memoryFiles(fixture([])), baseSpec({ version: 'v9.0.2' }), ACTIVE)).toThrow(/must follow v9\.0\.0/);
+    expect(() => applyRelease(memoryFiles(fixture([])), baseSpec({ version: 'v9.1.1' }), ACTIVE)).toThrow(/must follow/);
+    expect(() => applyRelease(memoryFiles(fixture([])), baseSpec({ mdLine: undefined }), ACTIVE)).toThrow(/nothing to release/);
+    expect(() => applyRelease(memoryFiles(fixture([])), change({ prev: 'v9.0.0' }), ACTIVE)).toThrow(/release cut/);
+    expect(() => applyRelease(memoryFiles(fixture([])), change({ mdLine: undefined }), ACTIVE)).toThrow(/mdLine is required/);
+  });
+
+  it('knows the next version: the next patch, or the next minor with patch 0', () => {
+    expect(isNextVersion('v11.0.3', 'v11.0.4')).toBe(true);
+    expect(isNextVersion('v11.0.3', 'v11.1.0')).toBe(true);
+    expect(isNextVersion('v11.0.3', 'v11.0.5')).toBe(false);
+    expect(isNextVersion('v11.0.3', 'v11.1.1')).toBe(false);
+    expect(isNextVersion('v11.0.3', 'v12.0.0')).toBe(false);
   });
 });

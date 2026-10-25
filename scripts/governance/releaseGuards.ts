@@ -30,6 +30,32 @@ export function findFrozenArchiveViolations(frozen: string): string[] {
   return out;
 }
 
+/** v11 (1.3): the next version of `prev`: the next patch, or at the end of a phase the next minor */
+export function isNextVersion(prev: string, version: string): boolean {
+  const p = prev.match(/^v(\d+)\.(\d+)\.(\d+)$/);
+  const v = version.match(/^v(\d+)\.(\d+)\.(\d+)$/);
+  if (!p || !v || p[1] !== v[1]) return false;
+  const [pm, pp, vm, vp] = [p[2], p[3], v[2], v[3]].map(Number);
+  return (vm === pm && vp === pp + 1) || (vm === pm + 1 && vp === 0);
+}
+
+/**
+ * v11 (1.3, product-owner decision): a version is cut per server update, not per change. The active CHANGELOG.md
+ * section starts with «### Unreleased» (the changes since the last cut), and the newest version follows the one
+ * before it: the next patch, or the next minor with patch 0 at the end of a roadmap phase.
+ */
+export function findReleaseLayoutViolations(changelogMd: string, series: number, versions: string[]): string[] {
+  const out: string[] = [];
+  const header = changelogMd.indexOf(`## Version ${series}.x Series (Active`);
+  const end = changelogMd.indexOf('\n---', header);
+  const body = header < 0 ? '' : changelogMd.slice(header, end < 0 ? undefined : end);
+  const unreleased = body.indexOf('\n### Unreleased\n');
+  const firstVersion = body.indexOf('\n### v');
+  if (unreleased < 0 || (firstVersion >= 0 && unreleased > firstVersion)) out.push(`CHANGELOG.md: the active series ${series} section must start with "### Unreleased"`);
+  if (versions.length >= 2 && !isNextVersion(versions[1], versions[0])) out.push(`${versions[0]} does not follow ${versions[1]}: a release takes the next patch, or the next minor with patch 0 at the end of a phase`);
+  return out;
+}
+
 export function findDebtRegistryViolations(debt: string, archive: string): string[] {
   const active = debtIds(debt);
   const archived = debtIds(archive);
