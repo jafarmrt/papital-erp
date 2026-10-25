@@ -21,8 +21,11 @@ going forward.
 
 ## Version 11.x Series (Active — see `src/data/changelogs/11.ts`)
 
-### v11.0.1 — قواعد کوتاه پروژه
+### v11.0.2 — قواعد کوتاه پروژه
 - Documentation and tooling (sub-phase 1.3, PR 1, from the 24 section decisions of the v11 governance review): `AGENTS.md` becomes a short core, one line per rule with its guard, and the full rules move to area files in `docs/rules/` (20 files, version and debt tags removed, a UI glossary in `ui.md`). The old `AGENTS.md` and `ARCHITECTURE_RULES.md` are kept verbatim in `docs/rules/archive/`. The architecture rules join the core: thin routes, no whole raw SQL write statement (a `sql` fragment inside `set()` is allowed), package boundary must not grow. Lighter process: small same-kind fixes share a pull request and a version, docs-only pull requests take no version, TD rows only for remaining debt, full review only for money, stock, security and migrations. New architecture ratchet metric `rawSqlWrites` (baseline 0); the governance docs test reads `AGENTS.md` and `docs/rules/*.md`.
+
+### v11.0.1 — دکمهٔ پاک کردن شاخه‌های ادغام‌شده در GitHub
+- Tooling only: a hand-run Actions workflow «Delete merged branches» (`.github/workflows/delete-merged-branches.yml`, logic in `scripts/governance/deleteMergedBranches.ts`) deletes the branches fully merged into the default branch and keeps the default, protected and open pull request branches and any branch with its own commits; it lists only unless «delete» is ticked (TD-1390, decision t50-6). No change to the app.
 
 ### v11.0.0 — بستن سری ۱۰ و آغاز نسخهٔ ۱۱
 - Documentation and tooling: series 10 closes at v10.3.24 (`a5450c3`); `10.ts` is frozen with its fingerprint (413 entries) and `11.ts` is the active changelog. `docs/roadmap/V10_MASTER_ROADMAP.md` moves to `docs/roadmap/archive/` with a closing report (section 9) and `docs/roadmap/V11_MASTER_ROADMAP.md` opens (phases 0–6; phases 1 and 2 final, 3–6 provisional until the independent evaluation). The «what's new» card reads the active changelog instead of `10.ts` and its regression test now fails when the running version has no entry (TD-1389). Open debt carried over: TD-1294, TD-1354, TD-1355; the next id is TD-1390.
