@@ -5,7 +5,7 @@ import { businessNowIsoDateTime } from '../../lib/businessClock.js';
 import { fin, FinancialMath, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
 import { nextVersion } from '../../lib/occHelper.js';
-import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
+import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
 import { OutboxService } from '../events/outboxService.js';
@@ -97,7 +97,8 @@ export class DocumentStockEngine {
         code: items.code,
         unit: items.unit,
         weightedAverageCost: items.weightedAverageCost,
-        version: items.version
+        version: items.version,
+        isDeleted: items.isDeleted
       })
       .from(items)
       .where(eq(items.id, itemId))
@@ -105,6 +106,18 @@ export class DocumentStockEngine {
 
     if (!itemData) {
       throw new NotFoundError(`کالای مورد نظر با شناسه ${itemId} در سامانه یافت نشد.`);
+    }
+    // v11 phase 3.2 (S3): a deleted item never moves; read under the item lock, so a delete that committed first is seen.
+    // Before, a path that reached the engine with a deleted item's id (a BOM allocation release) put stock and value on an
+    // item no list, integrity check or reconciliation shows. One outflow stays: a stock count decrease, the write-off of stock
+    // left on a deleted item before this rule (Dr 7012 at its Kardex cost; health check `item_deleted_with_stock`). Voids
+    // (`applyStockReversal`) are not refused here.
+    if (itemData.isDeleted === 1 && !(inOut === 'out' && documentType === STOCK_COUNT_DOCUMENT_TYPE)) {
+      throw new ConflictError(
+        `کالای «${itemData.name}» (${itemData.code}) حذف شده است و ورود یا خروج انبار برای آن ثبت نمی‌شود.`,
+        { itemId },
+        'ITEM_DELETED',
+      );
     }
 
     // v7.0.45 (audit P2-1): موجودی پیش از حرکت از جدول نرمال (منبع حقیقت)، نه از کش JSONB

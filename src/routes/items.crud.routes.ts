@@ -315,7 +315,7 @@ router.get('/items/:id/code-history', authorizePermission(...READ_PERMISSIONS.it
 router.delete('/items/:id', authorizePermission('products.delete'), idempotency({ scope: 'items' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const itemId = Number(req.params.id);
   const stockBeforeDelete = await ItemWarehouseStockService.getStockSnapshot(orm, itemId);
-  const delItem = await ItemCatalogService.deleteItem(itemId);
+  const delItem = await ItemsService.deleteItem(itemId);
 
   await logActivity({
     req,

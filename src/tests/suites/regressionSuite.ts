@@ -5675,10 +5675,11 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         throw new Error('Approving and converting a raw material into an official item through PendingMaterialsService failed.');
       }
 
-      // 4. Verify ItemCatalogService soft-delete
-      const deletedItem = await ItemCatalogService.deleteItem(officialItem.id);
+      // 4. Verify the item soft-delete (ItemsService.deleteItem → ItemCatalogService.deleteItem with its dependents)
+      const { ItemsService } = await import('../../services/items.service.js');
+      const deletedItem = await ItemsService.deleteItem(officialItem.id);
       if (!deletedItem) {
-        throw new Error('Soft delete of an official item through ItemCatalogService.deleteItem failed.');
+        throw new Error('Soft delete of an official item through ItemsService.deleteItem failed.');
       }
 
       results.push(makeTestCase({
@@ -10761,6 +10762,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runItemExcelImportTests(shouldRun));
   const { runItemIntegrityTests } = await import('../regression/itemIntegrityTests.js');
   results.push(...await runItemIntegrityTests(shouldRun));
+  // v11 phase 3.2 (S1, S3): Excel type change of a stocked item, item delete with an open allocation or a reservation
+  const { runStockUrgentFixesTests } = await import('../regression/stockUrgentFixesTests.js');
+  results.push(...await runStockUrgentFixesTests(shouldRun));
   const { runItemPriceTests } = await import('../regression/itemPriceTests.js');
   results.push(...await runItemPriceTests(shouldRun));
   const { runItemCategoryTests } = await import('../regression/itemCategoryTests.js');
