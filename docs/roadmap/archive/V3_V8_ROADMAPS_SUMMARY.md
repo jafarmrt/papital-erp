@@ -1,7 +1,7 @@
 # خلاصهٔ نقشه‌های راه نسخه‌های ۳ تا ۸ پاپیتال ERP (بایگانی)
 
 > **وضعیت سند:** 📦 بایگانی. این فایل در v10.3.0 جای شش سند `V3_MASTER_ROADMAP.md` تا `V8_MASTER_ROADMAP.md` را گرفت؛ به خواست مالک محصول (۲۷ مهر ۱۴۰۵) محتوای آن‌ها خلاصه و اصل فایل‌ها حذف شد. متن کامل هر سند در تاریخچهٔ git مانده است (آخرین کامیت پیش از حذف: `3360a8f`، v10.2.39).
-> **سندهای بعدی (بی‌تغییر):** `docs/roadmap/archive/V9_MASTER_ROADMAP.md` ، `docs/roadmap/archive/V10_MASTER_ROADMAP.md` و نقشه راه فعال `docs/roadmap/V11_MASTER_ROADMAP.md`.
+> **سندهای بعدی (بی‌تغییر):** `docs/roadmap/archive/V9_MASTER_ROADMAP.md`، `docs/roadmap/archive/V10_MASTER_ROADMAP.md` و نقشه راه فعال `docs/roadmap/V11_MASTER_ROADMAP.md`.
 > سری‌های ۱ و ۲ هرگز نقشه راه جدا در مخزن نداشتند. چنج‌لاگ سری‌های ۱ تا ۶ در `src/data/changelogs/archive_1_6.ts` و سری‌های ۷ و ۸ در `7.ts` و `8.ts` (منجمد) است.
 
 | سری | بازه نسخه | پایان | محور اصلی |
