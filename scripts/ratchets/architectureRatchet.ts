@@ -184,7 +184,7 @@ function sqlTextOf(n: ts.Node): string | null {
 }
 
 /** A whole write statement in SQL text: `UPDATE <table> SET` or `INSERT INTO` (a fragment inside a Drizzle write never holds one). */
-const isRawWriteSql = (text: string) => /\bINSERT\s+INTO\b/i.test(text) || /\bUPDATE\s+(ONLY\s+)?[\w."$]+\s+(AS\s+\w+\s+|\w+\s+)?SET\b/i.test(text);
+const isRawWriteSql = (text: string) => /\bINSERT\s+INTO\b/i.test(text) || /\bUPDATE\s+(ONLY\s+)?[\w."$]+\s+(AS\s+[\w$]+\s+|[\w$]+\s+)?SET\b/i.test(text);
 
 /** `{ status: 4xx|5xx, error: ... }`: an error result object instead of a thrown AppError. */
 function isErrorResult(n: ts.ObjectLiteralExpression): boolean {

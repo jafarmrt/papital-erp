@@ -244,7 +244,7 @@ systemctl restart papital-erp && curl -fsS http://localhost:3000/health/startup
 
 ## قواعد توسعه (خلاصه)
 
-قواعد کامل و حاکمیت نسخه‌ها: **`AGENTS.md`** (مرجع یگانه) • آرشیو و تاریخچه: `CHANGELOG.md` • دفتر بدهی: `TECH_DEBT.md`
+قواعد پروژه: هستهٔ کوتاه **`AGENTS.md`** و متن کامل هر بخش در `docs/rules/` • آرشیو و تاریخچه: `CHANGELOG.md` • دفتر بدهی: `TECH_DEBT.md`
 
 - مهاجرت فقط از migrator اتمیک؛ شماره‌گذاری‌ها فقط با SEQUENCE/counter اتمیک
 - خواندن‌ها با `is_deleted = 0` (soft delete)؛ حذف‌ها فقط نرم
