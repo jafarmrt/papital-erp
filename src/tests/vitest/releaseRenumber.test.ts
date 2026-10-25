@@ -360,14 +360,39 @@ describe('release:renumber keeps every branch\'s Unreleased lines (v11, 1.3)', (
 
   it('keeps the base\'s lines and adds the branch\'s own', () => {
     const base = md(['- a.'], v1);
-    const merged = resolveReleaseConflict('CHANGELOG.md', '', { ours: md(['- a.', '- branch.'], v1), theirs: md(['- a.', '- master.'], v1), base }, FILE)!;
-    expect(merged).toBe(md(['- a.', '- master.', '- branch.'], v1));
+    // newest first: each side added its line at the top
+    const merged = resolveReleaseConflict('CHANGELOG.md', '', { ours: md(['- branch.', '- a.'], v1), theirs: md(['- master.', '- a.'], v1), base }, FILE)!;
+    expect(merged).toBe(md(['- branch.', '- master.', '- a.'], v1));
   });
 
   it('does not bring back lines a cut on the base released', () => {
     const base = md(['- a.'], v1);
     const cut = md([], `### v11.0.2 — Two\n- a.\n\n${v1}`);
-    const merged = resolveReleaseConflict('CHANGELOG.md', '', { ours: md(['- a.', '- branch.'], v1), theirs: cut, base }, FILE)!;
+    const merged = resolveReleaseConflict('CHANGELOG.md', '', { ours: md(['- branch.', '- a.'], v1), theirs: cut, base }, FILE)!;
     expect(merged).toBe(md(['- branch.'], `### v11.0.2 — Two\n- a.\n\n${v1}`));
+  });
+
+  it('drops from the base\'s lines the ones the branch\'s own cut released', () => {
+    const base = md(['- a.'], v1);
+    const cut = md([], `### v11.0.2 — Two\n- a.\n\n${v1}`);
+    const merged = resolveReleaseConflict('CHANGELOG.md', '', { ours: cut, theirs: md(['- master.', '- a.'], v1), base }, FILE)!;
+    expect(merged).toBe(md(['- master.'], `### v11.0.2 — Two\n- a.\n\n${v1}`));
+  });
+
+  it('reads the version sections from line starts only, whatever an Unreleased line quotes', () => {
+    const quoting = '- a line naming `### vX — title` sections.';
+    const base = md([quoting], v1);
+    const cut = md([], `### v11.0.2 — Two\n${quoting}\n\n${v1}`);
+    const merged = resolveReleaseConflict('CHANGELOG.md', '', { ours: md(['- branch.', quoting], v1), theirs: cut, base }, FILE)!;
+    expect(merged).toBe(md(['- branch.'], `### v11.0.2 — Two\n${quoting}\n\n${v1}`));
+  });
+
+  it('keeps a phase-end minor cut a minor cut after the base\'s top', () => {
+    const entry = (v: string) => `  {\n    version: '${v}',\n    title: '${v}'\n  }`;
+    const src = (...vs: string[]) => `export const v11Updates: AIUpdateLog[] = [\n${vs.map(entry).join(',\n')}\n];\n`;
+    expect([...planVersions(src('v11.0.3'), src('v11.1.0', 'v11.0.3'), FILE)]).toEqual([['v11.1.0', 'v11.1.0']]);
+    expect([...planVersions(src('v11.0.4', 'v11.0.3'), src('v11.1.0', 'v11.0.4', 'v11.0.3'), FILE)]).toEqual([['v11.1.0', 'v11.1.0']]);
+    // a patch cut behind a base that already took the minor follows it
+    expect([...planVersions(src('v11.1.0', 'v11.0.3'), src('v11.0.4', 'v11.1.0', 'v11.0.3'), FILE)]).toEqual([['v11.0.4', 'v11.1.1']]);
   });
 });

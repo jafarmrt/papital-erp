@@ -98,7 +98,8 @@ function activeMdBlocks(src: string, series: number): { at: number; blocks: stri
   const bodyStart = src.indexOf('\n', header) + 1;
   const end = src.indexOf('\n---', bodyStart);
   const body = src.slice(bodyStart, end < 0 ? src.length : end);
-  const first = body.indexOf('### v');
+  // v11 (1.3): anchored to a line start, since an Unreleased line above the versions may quote «### v…»
+  const first = body.search(/^### v/m);
   if (first < 0) return { at: bodyStart, blocks: [] };
   return { at: bodyStart + first, blocks: body.slice(first).split(/\n(?=### v)/).map(b => b.replace(/\n+$/, '')) };
 }
@@ -165,14 +166,18 @@ function unionUnreleased(out: string, s: ConflictStages, series: number): string
   const target = unreleasedLines(out, series);
   const ancestor = new Set((s.base === undefined ? null : unreleasedLines(s.base, series))?.lines ?? []);
   const theirs = new Set(target?.lines ?? []);
+  const oursSet = new Set(ours.lines);
   const own = ours.lines.filter(l => !theirs.has(l) && !ancestor.has(l));
-  if (own.length === 0) return out;
+  // a line the ancestor held and the branch no longer holds was released by the branch's own cut
+  const kept = (target?.lines ?? []).filter(l => !(ancestor.has(l) && !oursSet.has(l)));
+  if (own.length === 0 && kept.length === (target?.lines.length ?? 0)) return out;
   if (!target) {
     const header = out.indexOf(`## Version ${series}.x Series (Active`);
     const at = out.indexOf('\n\n', header) + 2;
     return `${out.slice(0, at)}${UNRELEASED}${own.join('\n')}\n\n${out.slice(at)}`;
   }
-  return `${out.slice(0, target.start)}${[...target.lines, ...own].join('\n')}\n\n${out.slice(target.end)}`;
+  const lines = [...own, ...kept];
+  return `${out.slice(0, target.start)}${lines.join('\n')}${lines.length ? '\n' : ''}\n${out.slice(target.end)}`;
 }
 
 interface JournalEntry { idx: number; tag: string }

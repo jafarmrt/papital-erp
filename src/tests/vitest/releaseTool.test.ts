@@ -219,12 +219,12 @@ describe('scripts/release.ts with series 10 (v10.0.0)', () => {
 const change = (over: Partial<ReleaseSpec>): ReleaseSpec => ({ mdLine: 'یک تغییر.', ...over });
 
 describe('scripts/release.ts: a version per server update (v11, 1.3)', () => {
-  it('a change without version adds its line under Unreleased and leaves every version location alone', () => {
+  it('a change without version adds its line at the top of Unreleased and leaves every version location alone', () => {
     const store = fixture([row('TD-414')]);
     const files = memoryFiles(store);
     applyRelease(files, change({ closes: [{ td: 'TD-414', archiveRow: row('TD-414', 'resolved'), knownClass: 'stock_x', testId: 'inv_td_414' }] }), ACTIVE);
     applyRelease(files, change({ mdLine: 'تغییر دوم.' }), ACTIVE);
-    expect(store.get('CHANGELOG.md')).toContain('(Active — see `src/data/changelogs/9.ts`)\n\n### Unreleased\n- یک تغییر.\n- تغییر دوم.\n\n### v9.0.0 — آغاز');
+    expect(store.get('CHANGELOG.md')).toContain('(Active — see `src/data/changelogs/9.ts`)\n\n### Unreleased\n- تغییر دوم.\n- یک تغییر.\n\n### v9.0.0 — آغاز');
     expect(store.get('package.json')).toContain('"version": "9.0.0"');
     expect(store.get('README.md')).toBe('نسخه مستقر: `v9.0.0`');
     expect(store.get('src/data/changelogs/9.ts')).not.toContain('v9.0.1');
@@ -238,7 +238,7 @@ describe('scripts/release.ts: a version per server update (v11, 1.3)', () => {
     applyRelease(files, change({}), ACTIVE);
     applyRelease(files, change({ mdLine: 'تغییر دوم.' }), ACTIVE);
     applyRelease(files, baseSpec({ mdLine: undefined }), ACTIVE);
-    expect(store.get('CHANGELOG.md')).toContain('### Unreleased\n\n### v9.0.1 — عنوان\n- یک تغییر.\n- تغییر دوم.\n\n### v9.0.0 — آغاز');
+    expect(store.get('CHANGELOG.md')).toContain('### Unreleased\n\n### v9.0.1 — عنوان\n- تغییر دوم.\n- یک تغییر.\n\n### v9.0.0 — آغاز');
     expect(store.get('package.json')).toContain('"version": "9.0.1"');
     // the end of a phase takes the next minor
     applyRelease(files, change({ mdLine: 'پایان فاز.' }), ACTIVE);

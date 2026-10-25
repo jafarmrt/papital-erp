@@ -49,9 +49,12 @@ export function findReleaseLayoutViolations(changelogMd: string, series: number,
   const header = changelogMd.indexOf(`## Version ${series}.x Series (Active`);
   const end = changelogMd.indexOf('\n---', header);
   const body = header < 0 ? '' : changelogMd.slice(header, end < 0 ? undefined : end);
-  const unreleased = body.indexOf('\n### Unreleased\n');
-  const firstVersion = body.indexOf('\n### v');
-  if (unreleased < 0 || (firstVersion >= 0 && unreleased > firstVersion)) out.push(`CHANGELOG.md: the active series ${series} section must start with "### Unreleased"`);
+  const lines = body.split('\n');
+  if (lines[1] !== '' || lines[2] !== '### Unreleased') out.push(`CHANGELOG.md: the active series ${series} section must start with "### Unreleased"`);
+  if (lines.filter(l => l === '### Unreleased').length > 1) out.push(`CHANGELOG.md: the active series ${series} section has "### Unreleased" more than once`);
+  const next = lines.findIndex((l, k) => k > 2 && /^(### |## |---$)/.test(l));
+  const stray = lines.slice(3, next < 0 ? undefined : next).find(l => l.trim() !== '' && !l.startsWith('- '));
+  if (stray !== undefined) out.push(`CHANGELOG.md: a line under "### Unreleased" must start with "- ": ${stray.slice(0, 60)}`);
   if (versions.length >= 2 && !isNextVersion(versions[1], versions[0])) out.push(`${versions[0]} does not follow ${versions[1]}: a release takes the next patch, or the next minor with patch 0 at the end of a phase`);
   return out;
 }

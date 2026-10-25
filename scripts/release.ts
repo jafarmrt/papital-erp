@@ -10,7 +10,7 @@ import { isNextVersion } from './governance/releaseGuards.js';
  * (جانشین scripts/v8-release.ts نسخه v8.0.45.)
  *
  * زیرفاز ۱.۳ نسخه ۱۱ (تصمیم مالک محصول): نسخه با هر به‌روزرسانی سرور، نه با هر PR. دو حالت:
- *   بی version (هر PR):    mdLine زیر «### Unreleased» بخش سری فعال CHANGELOG.md می‌رود؛ بستن و گشودن ردیف‌های TD
+ *   بی version (هر PR):    mdLine بالای خط‌های «### Unreleased» بخش سری فعال CHANGELOG.md می‌رود (تازه‌ترین بالا)؛ بستن و گشودن ردیف‌های TD
  *                           و edits مثل قبل؛ هیچ محل نسخه‌ای عوض نمی‌شود
  *   با version (برش انتشار، پیش از به‌روزرسانی سرور یا در پایان فاز): همه خط‌های Unreleased (و mdLine اگر باشد) زیر
  *                           «### vX — mdTitle» می‌روند، مدخل چنج‌لاگ فعال نوشته و سه محل نسخه عوض می‌شوند؛ version
@@ -217,7 +217,9 @@ export function applyRelease(files: ReleaseFiles, spec: ReleaseSpec, active: Act
   for (const [p, oldText, newText] of spec.edits ?? []) edit(files, p, oldText, newText);
 
   const u = unreleasedOf(files.read('CHANGELOG.md'), active);
-  const lines = [...u.lines, ...(spec.mdLine ? [`- ${spec.mdLine}`] : [])];
+  // newest first, right under the heading: a change and a cut then always edit the same spot, so a parallel merge
+  // of the two conflicts (and release:renumber sorts it out) instead of merging cleanly with the wrong lines released
+  const lines = [...(spec.mdLine ? [`- ${spec.mdLine}`] : []), ...u.lines];
   if (!cut) {
     files.write('CHANGELOG.md', `${u.md.slice(0, u.at)}${UNRELEASED}\n${lines.join('\n')}\n\n${u.md.slice(u.end)}`);
     return counts;

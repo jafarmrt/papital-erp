@@ -83,6 +83,8 @@ describe('release layout gate (v11, 1.3)', () => {
     expect(findReleaseLayoutViolations(md('### v11.0.2 — a\n- a.\n'), 11, ['v11.0.2'])[0]).toMatch(/Unreleased/);
     expect(findReleaseLayoutViolations(md('### v11.0.2 — a\n\n### Unreleased\n'), 11, ['v11.0.2'])[0]).toMatch(/Unreleased/);
     expect(findReleaseLayoutViolations(md('### Unreleased\n\n### v11.0.4 — a\n'), 11, ['v11.0.4', 'v11.0.2'])[0]).toMatch(/does not follow/);
+    expect(findReleaseLayoutViolations(md('### Unreleased\nnot a list line\n\n### v11.0.2 — a\n'), 11, ['v11.0.2'])[0]).toMatch(/must start with "- "/);
+    expect(findReleaseLayoutViolations(md('### Unreleased\n\n### Unreleased\n- x.\n'), 11, [])[0]).toMatch(/more than once/);
   });
 
   it('holds for the repository', () => {

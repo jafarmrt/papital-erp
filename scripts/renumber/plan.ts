@@ -152,8 +152,12 @@ export function planVersions(baseSrc: string, curSrc: string, file: string, ance
   if (new Set(own).size !== own.length) throw new Error(`${file}: the branch has the same version twice`);
   own.sort(compareVersions);
   const top = base.map(e => entryVersion(e, file)).sort(compareVersions).pop() ?? 'v0.0.0';
-  const [major, minor, patch] = parseVersion(top);
-  return new Map(own.map((v, k) => [v, `v${major}.${minor}.${patch + 1 + k}`]));
+  // v11 (1.3): a phase-end cut (patch 0) stays a minor cut after the base's top; any other takes the next patch
+  let [major, minor, patch] = parseVersion(top);
+  return new Map(own.map(v => {
+    if (parseVersion(v)[2] === 0) { minor += 1; patch = 0; } else patch += 1;
+    return [v, `v${major}.${minor}.${patch}`];
+  }));
 }
 
 interface JournalEntry { idx: number; version: string; when: number; tag: string; breakpoints: boolean }
