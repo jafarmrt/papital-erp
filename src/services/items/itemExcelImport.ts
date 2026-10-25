@@ -16,7 +16,7 @@ import { nextVersion } from '../../lib/occHelper.js';
 import { ITEM_IMPORT_DENIED_MESSAGES, type ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
 import {
   EXCEL_DOCUMENT_REF, ITEM_FIELD_KEYS, applyStockChange, changedRowPrices, codeFormatError, deniedStockPermissions,
-  newItemType, planStockChanges, readRowFields, readRowPrices, readRowStock, saveRowPrices, sameFieldValue, stockWithoutCostError,
+  itemTypeChangeError, newItemType, planStockChanges, readRowFields, readRowPrices, readRowStock, saveRowPrices, sameFieldValue, stockWithoutCostError,
   type ItemRow, type Row, type RowFields, type RowStock, type Warehouse,
 } from './itemExcelRow.js';
 import { withCodeCard } from '../media/productCardWrite.js';
@@ -181,6 +181,11 @@ async function updateExistingItem(ctx: ImportContext, matchedItem: ItemRow, inpu
       `(فعلی ${currentWac.toString()}، فایل ${fileWac.toString()}). میانگین موزون بها فقط با ورود کالا عوض می‌شود؛ این ردیف ثبت نشد. ` +
       'ستون «میانگین موزون بها» را خالی بگذارید یا همان مقدار فعلی را بنویسید.',
     );
+    return null;
+  }
+  const typeError = await itemTypeChangeError(tx, matchedItem, fields.itemType, existingSnapshot.total);
+  if (typeError) {
+    push(typeError);
     return null;
   }
   const itemWac = fileWac && existingSnapshot.total <= 0 ? fileWac : currentWac;

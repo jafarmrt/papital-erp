@@ -43,6 +43,7 @@ import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanc
 import { buildActiveDefinitionHealthTest, findDuplicateActiveDefinitions, hasActiveDefinitionUniqueIndex } from './workflowActiveDefinitionHealth.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
 import { buildClosedProjectWipHealthTest, findClosedProjectWipBalances } from './projectWipHealth.js';
+import { buildDeletedItemStockHealthTest, findDeletedItemsWithStock } from './deletedItemStockHealth.js';
 import { buildProjectStageHealthTest, buildProjectValueHealthTest, findProjectFreeTextValues, findProjectStageIntegrity } from '../projects/projectStageHealth.js';
 import { PROJECT_PRIORITIES, PROJECT_STATUSES, STAGE_STATUSES } from '../../lib/projects/projectStatus.js';
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
@@ -1320,6 +1321,10 @@ export class FinancialHealthService {
     const closedProjectWipTest = buildClosedProjectWipHealthTest(await findClosedProjectWipBalances(orm));
     overallScore += closedProjectWipTest.scoreImpact;
     tests.push(closedProjectWipTest);
+    // v11 phase 3.2 (S3): کالای حذف‌شده با موجودی یا تخصیص باز پروژه (فقط فهرست، بی اصلاح خودکار)
+    const deletedItemStockTest = buildDeletedItemStockHealthTest(await findDeletedItemsWithStock(orm));
+    overallScore += deletedItemStockTest.scoreImpact;
+    tests.push(deletedItemStockTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

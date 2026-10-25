@@ -29,6 +29,11 @@ export class ItemsService {
     return ItemStockReservationService.getReservedStocksMap(scope, others);
   }
 
+  /** v11 phase 3.2 (S3): the one item delete; the project reservations come from the reservation service, above the items core */
+  static async deleteItem(id: number) {
+    return ItemCatalogService.deleteItem(id, { reservingProjects: (tx, itemId) => ItemStockReservationService.reservingProjectCodes(tx, itemId) });
+  }
+
   static async getPricingStrategies(): Promise<string[]> {
     return ItemPricingService.getPricingStrategies();
   }

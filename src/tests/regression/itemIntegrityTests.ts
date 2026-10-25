@@ -272,7 +272,7 @@ async function numericInputCase(ctx: Ctx): Promise<string> {
 
 async function deleteVsReceiptCase(ctx: Ctx): Promise<string> {
   const { DocumentService } = await import('../../services/document.service.js');
-  const { ItemCatalogService } = await import('../../services/items/itemCatalog.service.js');
+  const { ItemsService } = await import('../../services/items.service.js');
   const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
   const created = await ctx.post('/api/items', { type: 'raw_material', code: `O-${ctx.tag}`, name: `کالای حذف هم‌زمان ${ctx.tag}`, unit: 'عدد', category: 'سایر اقلام', weighted_average_cost: 20000 });
   if (created.status !== 200) throw new Error(`create ${created.status} ${JSON.stringify(created.body)}`);
@@ -286,7 +286,7 @@ async function deleteVsReceiptCase(ctx: Ctx): Promise<string> {
     await sleep(600);
   });
   await sleep(150);
-  const deletion = ItemCatalogService.deleteItem(itemId).then(() => 'deleted', (e: unknown) => `refused: ${e instanceof Error ? e.message : String(e)}`);
+  const deletion = ItemsService.deleteItem(itemId).then(() => 'deleted', (e: unknown) => `refused: ${e instanceof Error ? e.message : String(e)}`);
   await receipt;
   const outcome = await deletion;
   const [row] = await orm.select({ isDeleted: items.isDeleted, stock: items.currentStock }).from(items).where(eq(items.id, itemId));
