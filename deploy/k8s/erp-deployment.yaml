@@ -1,8 +1,8 @@
 # deploy/k8s/erp-deployment.yaml — PHASE 9 (14.4)
 # UNSUPPORTED EXAMPLE (v10.1.65, OBS-R1-15, decision t40): the supported install is install.sh on one Linux server
 # (README, docs/GO_LIVE_CHECKLIST.md). This manifest is not tested or kept in step with the app: it has no
-# ERP_SECRETS_KEY, no backup path and no securityContext. It stays only because the release keeps its image tag and
-# APP_VERSION equal to package.json (check:version). Do not deploy it as it is.
+# ERP_SECRETS_KEY, no backup path and no securityContext. Since v11.0.3 it is no version location either: the image tag
+# is a placeholder and the version comes from package.json inside the image (governance review 1.2). Do not deploy it as it is.
 # Probe paths are aligned with src/app.ts: /health/live, /health/ready, /health/startup.
 #
 # Create the secret before first apply:
@@ -42,7 +42,7 @@ spec:
         emptyDir: {}
       containers:
       - name: erp
-        image: registry.example.com/erp:v11.0.3
+        image: registry.example.com/erp:vX.Y.Z
         ports:
         - containerPort: 3000
         volumeMounts:
@@ -53,8 +53,6 @@ spec:
         env:
         - name: NODE_ENV
           value: "production"
-        - name: APP_VERSION
-          value: "11.0.3"
         - name: DATABASE_URL
           valueFrom:
             secretKeyRef:

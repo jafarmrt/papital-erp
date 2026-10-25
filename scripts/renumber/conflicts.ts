@@ -31,6 +31,7 @@ export interface ConflictStages {
 
 const JOURNAL = 'drizzle/meta/_journal.json';
 const K8S_EXAMPLE = 'deploy/k8s/erp-deployment.yaml';
+const K8S_PLACEHOLDER = 'erp:vX.Y.Z';
 const VERSION_FILES = new Set(['package.json', 'package-lock.json', 'README.md']);
 const UNION_FILES = new Set(['TECH_DEBT.md', CLOSED_DEBT_FILE]);
 const VERSION_LINE = /"version": "[^"]*"|نسخه مستقر: `v\d+\.\d+\.\d+`/;
@@ -190,8 +191,9 @@ export function resolveReleaseConflict(rel: string, merged: string, stages: Conf
   if (rel === 'CHANGELOG.md') return unionChangelogMd(stages, series);
   if (rel === JOURNAL) return unionJournal(stages);
   if (UNION_FILES.has(rel)) return unionRows(merged, rel === CLOSED_DEBT_FILE);
-  // v11.0.4: the k8s example is no version location; a branch from before keeps the base's manifest
-  if (rel === K8S_EXAMPLE) return stages.theirs;
+  // v11.0.4: the k8s example is no version location: the side with the placeholder tag wins (a branch from before
+  // keeps the base's manifest, and the branch that makes it a placeholder keeps its own)
+  if (rel === K8S_EXAMPLE) return [stages.ours, stages.theirs].find(m => m.includes(K8S_PLACEHOLDER)) ?? stages.theirs;
   // the frozen archive takes no new row: an old branch's closed row goes to DEBT_LESSONS.md by hand (check:version)
   if (rel === FROZEN_DEBT_ARCHIVE) return null;
   if (VERSION_FILES.has(rel)) {
