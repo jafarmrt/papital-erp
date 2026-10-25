@@ -2,7 +2,9 @@
  * v11.0.1 (TD-1390, product-owner decision of 3 Aban 1405): deletes the remote branches that are fully merged into the
  * default branch, run by hand from the «Delete merged branches» workflow (.github/workflows/delete-merged-branches.yml).
  * A branch is kept when it is the default branch, protected, the head of an open pull request, or has any commit the
- * default branch lacks (squash-merged or unmerged work). Without `--delete` it only lists what it would delete.
+ * default branch lacks (squash-merged or unmerged work); the base branch of an open pull request is kept too. Without
+ * `--delete` it only lists what it would delete. A branch just created at the default branch's tip (no commit yet) has
+ * nothing of its own and is deleted, so run the listing first and look at it.
  * Terminal output is English (AGENTS.md, owner rule t9). Node built-ins only, run with `node` (type stripping).
  *
  *   GITHUB_TOKEN=... GITHUB_REPOSITORY=owner/repo node scripts/governance/deleteMergedBranches.ts [--delete]
@@ -24,7 +26,7 @@ export function judgeBranch(branch: BranchInfo, defaultBranch: string, openPrHea
   const keep = (reason: string): BranchVerdict => ({ name: branch.name, delete: false, reason });
   if (branch.name === defaultBranch) return keep('default branch');
   if (branch.protected) return keep('protected');
-  if (openPrHeads.has(branch.name)) return keep('head of an open pull request');
+  if (openPrHeads.has(branch.name)) return keep('head or base of an open pull request');
   if (aheadBy === null) return keep('comparison failed');
   if (aheadBy > 0) return keep(`${aheadBy} commit(s) not in ${defaultBranch}`);
   return { name: branch.name, delete: true, reason: `fully merged into ${defaultBranch}` };
@@ -48,8 +50,9 @@ export async function run(api: Api, repo: string, doDelete: boolean, log: (line:
   const defaultBranch = String((meta.body as { default_branch?: unknown })?.default_branch ?? '');
   if (meta.status !== 200 || !defaultBranch) throw new Error(`GET /repos/${repo} answered ${meta.status}`);
   const branches = await pages<BranchInfo>(api, `/repos/${repo}/branches`);
-  const prs = await pages<{ head: { ref: string; repo: { full_name: string } | null } }>(api, `/repos/${repo}/pulls?state=open`);
-  const openPrHeads = new Set(prs.filter(p => p.head.repo?.full_name === repo).map(p => p.head.ref));
+  const prs = await pages<{ head: { ref: string; repo: { full_name: string } | null }; base: { ref: string } }>(api, `/repos/${repo}/pulls?state=open`);
+  // heads of this repository's open pull requests, and every open pull request's base (deleting a base closes the PR)
+  const openPrHeads = new Set([...prs.filter(p => p.head.repo?.full_name === repo).map(p => p.head.ref), ...prs.map(p => p.base.ref)]);
 
   let deleted = 0;
   let kept = 0;
@@ -95,7 +98,13 @@ async function main(): Promise<void> {
       headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28' },
     });
     const text = await res.text();
-    return { status: res.status, body: text ? JSON.parse(text) : null };
+    let body: unknown = null;
+    try {
+      body = text ? JSON.parse(text) : null;
+    } catch {
+      body = null; // a non-JSON error page: the caller sees no ahead_by and keeps the branch
+    }
+    return { status: res.status, body };
   };
   const { failed } = await run(api, repo, process.argv.includes('--delete'), line => console.log(line));
   if (failed > 0) process.exit(1);
