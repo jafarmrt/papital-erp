@@ -11,7 +11,7 @@ import { businessTodayIsoDate } from '../../../lib/businessClock.js';
 import type { JournalVoucher } from '../../../types.js';
 import { fin } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
-import { BANK_OPENING_DATE_LABEL, assertNoPendingOpeningApproval, assertOpeningDateChangeAllowed, assertOpeningYearOpen, voidBankOpeningVouchers } from './bankOpeningVoucher.js';
+import { BANK_OPENING_DATE_LABEL, assertNoPendingOpeningApproval, assertOpeningYearOpen, moveOpeningVoucherDate, voidBankOpeningVouchers } from './bankOpeningVoucher.js';
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
 import { requireBankLedgerAccount } from './bankLinks.js';
 import { assertBankCurrencyChangeAllowed, assertBankLedgerChangeAllowed, assertBankTypeChangeKeepsPaidCheques, assertPettyCashCurrency, requireTreasuryCurrency } from './bankAccountCurrency.js';
@@ -158,10 +158,18 @@ export class BankAccountService {
     for (const ov of draftOpenings) {
       if (ov.referenceId) draftOpeningBanks.add(Number(ov.referenceId));
     }
-    // 10.3 package 4 (OBS-R1-65): accounts whose opening voucher is issued, in any status; their start date is fixed
-    const issuedOpeningBanks = new Set((await db.select({ referenceId: journalVouchers.referenceId }).from(journalVouchers)
-      .where(and(eq(journalVouchers.referenceModule, 'treasury_opening'), eq(journalVouchers.voucherType, 'opening'), eq(journalVouchers.isDeleted, 0))))
-      .map(ov => Number(ov.referenceId)));
+    // 10.3 package 4 (OBS-R1-65): accounts whose opening voucher is issued, in any status. v11 phase 3.1 (M2): the start date
+    // is fixed only once that voucher (the first, as `openingVoucherOf`) is approved; a draft moves with it
+    const issuedOpeningBanks = new Set<number>();
+    const lockedOpeningDateBanks = new Set<number>();
+    for (const ov of await db.select({ referenceId: journalVouchers.referenceId, status: journalVouchers.status }).from(journalVouchers)
+      .where(and(eq(journalVouchers.referenceModule, 'treasury_opening'), eq(journalVouchers.voucherType, 'opening'), eq(journalVouchers.isDeleted, 0)))
+      .orderBy(journalVouchers.id)) {
+      const bankId = Number(ov.referenceId);
+      if (issuedOpeningBanks.has(bankId)) continue;
+      issuedOpeningBanks.add(bankId);
+      if (ov.status !== 'draft') lockedOpeningDateBanks.add(bankId);
+    }
 
     return rawList.map(b => {
       const initBal = fin(b.initialBalance);
@@ -221,7 +229,7 @@ export class BankAccountService {
         syncStatus = waitsForDrafts ? 'pending_approval' : 'discrepant';
       }
 
-      return { row: b, initBal, currentBalance, ledgerBalance, treasuryBalance, totalDebit, totalCredit, discrepancy, syncStatus, openingVoucherIssued: issuedOpeningBanks.has(b.id) };
+      return { row: b, initBal, currentBalance, ledgerBalance, treasuryBalance, totalDebit, totalCredit, discrepancy, syncStatus, openingVoucherIssued: issuedOpeningBanks.has(b.id), openingDateLocked: lockedOpeningDateBanks.has(b.id) };
     });
   }
 
@@ -231,13 +239,14 @@ export class BankAccountService {
 
   // قرارداد API: مبالغ در پاسخ عدد هستند (P2-6)
   private static toBankAccountDto(
-    { row: b, initBal, currentBalance, ledgerBalance, treasuryBalance, totalDebit, totalCredit, discrepancy, syncStatus, openingVoucherIssued }: Awaited<ReturnType<typeof BankAccountService.computeBankBalances>>[number]
+    { row: b, initBal, currentBalance, ledgerBalance, treasuryBalance, totalDebit, totalCredit, discrepancy, syncStatus, openingVoucherIssued, openingDateLocked }: Awaited<ReturnType<typeof BankAccountService.computeBankBalances>>[number]
   ): BankAccount {
     return ({
       ...b,
       type: b.type as BankAccount['type'],
       openingDate: b.openingDate || '',
       openingVoucherIssued,
+      openingDateLocked,
       initialBalance: initBal.toNumber(),
       currentBalance: currentBalance.toNumber(),
       ledgerBalance: ledgerBalance.toNumber(),
@@ -578,9 +587,10 @@ export class BankAccountService {
       if (data.initialBalance !== undefined && !fin(data.initialBalance).round(4).equals(fin(existing.initialBalance))) {
         await assertNoPendingOpeningApproval(tx, existing);
       }
-      // 10.3 package 4 (OBS-R1-65): the start date changes only until the opening voucher is issued
+      // 10.3 package 4 (OBS-R1-65): the start date changes until the opening voucher is approved; v11 phase 3.1 (M2): a
+      // draft opening voucher takes the new date with it
       const openingDateChanges = requestedOpeningDate !== undefined && requestedOpeningDate !== (existing.openingDate || '');
-      if (openingDateChanges) await assertOpeningDateChangeAllowed(tx, existing);
+      if (openingDateChanges) await moveOpeningVoucherDate(tx, existing, requestedOpeningDate);
       // v9.0.99 (TD-508، ت۵ الف): ارز ویرایش می‌شود تا نخستین گردش حساب؛ پس از آن 422 (پیش‌تر بی‌صدا نادیده گرفته می‌شد)
       const newCurrency = data.currency !== undefined ? requireTreasuryCurrency(data.currency) : undefined;
       if (newCurrency) await assertBankCurrencyChangeAllowed(tx, existing, newCurrency);

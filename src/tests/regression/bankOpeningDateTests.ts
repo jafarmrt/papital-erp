@@ -12,8 +12,9 @@ import { TestCaseResult, makeTestCase } from '../types.js';
  * 10.3 package 4 (accounting and treasury, xhigh): real Express routes and services on PostgreSQL, each red on v10.3.18.
  *  - OBS-R1-65 (TD-986, decision ت۴۷ item 2): the opening voucher of a treasury account is dated with the account's start
  *    date («تاریخ آغاز حساب», default the business today), also when the workflow approval or a first opening balance
- *    issues it later; the start date is fixed once the voucher is issued. On v10.3.18 the voucher always took the day it
- *    was issued and the route dropped the field.
+ *    issues it later; the start date is fixed once the voucher is issued (from v11 phase 3.1, M2: once it is approved; a
+ *    draft opening voucher moves with it). On v10.3.18 the voucher always took the day it was issued and the route dropped
+ *    the field.
  *  - 10.2 backlog (second review of #320): an account saved with the currency «irr» before v9.0.99 is a rial account for
  *    the transfer and the voucher preview. On v10.3.18 a transfer between it and an IRR account was refused.
  */
@@ -87,7 +88,7 @@ export async function runBankOpeningDateTests(shouldRun: ShouldRun): Promise<Tes
 
   const datedId = 'reg_bank_opening_voucher_start_date_obs_r1_65';
   if (shouldRun(datedId, 'obs-r1-65', 'td-986', 'treasury', 'bank', 'opening', 'package4')) {
-    await runCase(results, datedId, '10.3 package 4: the opening voucher of a bank account is dated with its start date (default today), a later start date is refused, and the start date is fixed once the voucher is issued (OBS-R1-65, TD-986)', async () => {
+    await runCase(results, datedId, '10.3 package 4: the opening voucher of a bank account is dated with its start date (default today), a later start date is refused, and the start date is fixed once the voucher is approved (OBS-R1-65, TD-986; v11 M2)', async () => {
       const api = await client();
       const problems: string[] = [];
       const today = await businessTodayIsoDate();
@@ -133,11 +134,20 @@ export async function runBankOpeningDateTests(shouldRun: ShouldRun): Promise<Tes
       const futureRows = await orm.select({ id: bankAccounts.id }).from(bankAccounts).where(eq(bankAccounts.title, futureTitle));
       if (futureRows.length > 0) problems.push('the refused bank with a later start date was saved');
 
-      // 4) once the opening voucher is issued the start date is fixed; sending the same date is no change
+      // 4) v11 phase 3.1 (M2): a draft opening voucher moves with the start date (the voucher page no longer edits it); once
+      // the voucher is approved the start date is fixed; sending the same date is no change
       const moved = await api.put(`/api/accounting/bank-accounts/${datedId}`, { openingDate: '2026-04-06' });
-      if (moved.status !== 422 || errorCode(moved) !== 'BANK_OPENING_DATE_LOCKED') problems.push(`moving the start date after the voucher returned ${brief(moved)}, expected 422 BANK_OPENING_DATE_LOCKED`);
-      if (await storedOpeningDate(datedId) !== '2026-04-05') problems.push(`the refused move left start date ${await storedOpeningDate(datedId)}`);
-      const same = await api.put(`/api/accounting/bank-accounts/${datedId}`, { openingDate: '2026-04-05', title: `Dated bank renamed ${tagOf()}` });
+      if (moved.status !== 200) problems.push(`moving the start date of a draft opening voucher returned ${brief(moved)}, expected 200`);
+      const [movedVoucher] = await openingVouchersOf(datedId);
+      if (await storedOpeningDate(datedId) !== '2026-04-06' || movedVoucher?.date !== '2026-04-06') {
+        problems.push(`the move left start date ${await storedOpeningDate(datedId)} and voucher date ${movedVoucher?.date ?? 'missing'}, expected 2026-04-06`);
+      }
+      const approved = await api.put(`/api/accounting/vouchers/${movedVoucher?.id}/status`, { status: 'approved' });
+      if (approved.status !== 200) problems.push(`approving the opening voucher returned ${brief(approved)}`);
+      const locked = await api.put(`/api/accounting/bank-accounts/${datedId}`, { openingDate: '2026-04-07' });
+      if (locked.status !== 422 || errorCode(locked) !== 'BANK_OPENING_DATE_LOCKED') problems.push(`moving the start date after the approval returned ${brief(locked)}, expected 422 BANK_OPENING_DATE_LOCKED`);
+      if (await storedOpeningDate(datedId) !== '2026-04-06') problems.push(`the refused move left start date ${await storedOpeningDate(datedId)}`);
+      const same = await api.put(`/api/accounting/bank-accounts/${datedId}`, { openingDate: '2026-04-06', title: `Dated bank renamed ${tagOf()}` });
       if (same.status !== 200) problems.push(`an edit sending the same start date returned ${brief(same)}`);
 
       // 5) an account without an opening balance keeps a free start date; its first opening balance is dated with it
@@ -154,7 +164,7 @@ export async function runBankOpeningDateTests(shouldRun: ShouldRun): Promise<Tes
       if (lateVoucher?.date !== '2026-04-08') problems.push(`the first opening balance issued a voucher dated ${lateVoucher?.date ?? 'missing'}, expected the start date 2026-04-08`);
 
       if (problems.length > 0) throw new Error(problems.join(' | '));
-      return 'start date 2026-04-05 dated the voucher and was listed; Jalali 1405/01/20 → 2026-04-09; none → today; a later day 422; moved after the voucher 422, same date 200; a zero-balance account moved its date and its first balance took it';
+      return 'start date 2026-04-05 dated the voucher and was listed; Jalali 1405/01/20 → 2026-04-09; none → today; a later day 422; a draft voucher moved with its date (200), after the approval 422, same date 200; a zero-balance account moved its date and its first balance took it';
     });
   }
 

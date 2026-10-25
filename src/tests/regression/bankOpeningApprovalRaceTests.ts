@@ -3,7 +3,7 @@ import { orm, pool } from '../../db/drizzle.js';
 import { workflowInstances } from '../../db/schema.js';
 import { WorkflowTransitionExecutor } from '../../services/workflow/workflowTransitionExecutor.js';
 import { TestCaseResult } from '../types.js';
-import { brief, client, errorCode, openingVouchersOf, ownLedgerAccount, runCase, storedOpeningDate, tagOf } from './bankOpeningDateTests.js';
+import { brief, client, openingVouchersOf, ownLedgerAccount, runCase, storedOpeningDate, tagOf } from './bankOpeningDateTests.js';
 
 /**
  * 10.3 package 4 (OBS-R1-65, delta review of #377): the start date moves while the account's approval is open, so the
@@ -78,7 +78,8 @@ export async function runBankOpeningApprovalRaceTests(shouldRun: ShouldRun): Pro
         held = false;
         const [approved, edited] = await Promise.all([approval, edit]);
         if (approved !== 'approved') problems.push(`the approval ended ${approved}`);
-        if (edited.status !== 422 || errorCode(edited) !== 'BANK_OPENING_DATE_LOCKED') problems.push(`the edit during the approval returned ${brief(edited)}, expected 422 BANK_OPENING_DATE_LOCKED after the voucher`);
+        // v11 phase 3.1 (M2): the voucher the approval issued is still a draft, so the edit that waited moves it with the date
+        if (edited.status !== 200) problems.push(`the edit during the approval returned ${brief(edited)}, expected 200 moving the draft voucher with it`);
       } finally {
         if (held) await holder.query('ROLLBACK').catch(() => undefined);
         holder.release();
@@ -86,9 +87,9 @@ export async function runBankOpeningApprovalRaceTests(shouldRun: ShouldRun): Pro
       const vouchers = await openingVouchersOf(bankId);
       const startDate = await storedOpeningDate(bankId);
       if (vouchers.length !== 1) problems.push(`the approval issued ${vouchers.length} opening vouchers, expected 1`);
-      else if (vouchers[0].date !== startDate) problems.push(`the opening voucher is dated ${vouchers[0].date} but the account starts ${startDate}`);
+      else if (vouchers[0].date !== startDate || startDate !== '2026-04-10') problems.push(`the opening voucher is dated ${vouchers[0].date} and the account starts ${startDate}, expected both on 2026-04-10`);
       if (problems.length > 0) throw new Error(problems.join(' | '));
-      return `the edit waited for the approval and answered 422 BANK_OPENING_DATE_LOCKED; voucher and account both on ${startDate}`;
+      return `the edit waited for the approval and moved its draft voucher (200); voucher and account both on ${startDate}`;
     });
   }
 

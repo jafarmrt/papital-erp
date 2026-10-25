@@ -116,7 +116,7 @@ export function useVoucherMutations() {
       body: JSON.stringify(data),
     }),
     onSuccess: (res) => {
-      toast.success(res?.message || 'سند عکس و سند اصلاحی با موفقیت صادر شدند');
+      toast.success(res?.message || 'سند عکس صادر شد و سند اصلاحی پیش‌نویس ثبت شد');
       onSuccess();
     },
     onError: silentMutationError,

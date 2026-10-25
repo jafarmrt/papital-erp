@@ -13,7 +13,8 @@ import { productionSourceFiles } from '../permission-ratchet';
  * infrastructure; the cores only infrastructure. Every other import of another package is counted: a core importing a
  * consumer, workflow importing a domain listener, two domains of one layer importing each other (infrastructure packages
  * may import each other). The composition roots (`app.ts`, `server.ts`, the workflow domain actions) are left out. The shared kernel
- * (money, numeric input, the domain event bus and outbox, idempotency, storage) counts as infrastructure.
+ * (money, numeric input, the domain event bus and outbox, idempotency, storage, and since v11 phase 3.1 the fiscal-year lock,
+ * which every treasury, cheque and stock write checks, not only a voucher write) counts as infrastructure.
  * A server file that no rule maps is refused (target: 0 unmapped files).
  * Type-only imports do not count; static, dynamic `import()` and re-exports do.
  */
@@ -28,6 +29,8 @@ const SHARED_KERNEL = [
   'src/lib/money.ts', 'src/lib/financialDecimal.ts', 'src/lib/currencyScale.ts', 'src/lib/numericInput.ts',
   'src/middleware/idempotency.ts', 'src/services/events/domainEventBus.ts', 'src/services/events/domainEvents.ts',
   'src/services/events/outboxService.ts', 'src/lib/storage.ts',
+  // v11 phase 3.1 (M5, S6): the fiscal-year lock reads only infrastructure (`fiscal_periods`, the business clock)
+  'src/services/accounting/fiscalPeriod.service.ts',
 ];
 
 /** Rank of each package; an import is allowed only towards a lower rank. */

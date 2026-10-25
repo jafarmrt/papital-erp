@@ -95,8 +95,8 @@ export const BANK_OPENING_DATE_LABEL = 'تاریخ آغاز حساب';
  * 10.3 package 4 (OBS-R1-65): the account's opening voucher (`voucher_type` opening of `treasury_opening`, any status, a
  * reversed one too), the one `issueTreasuryOpeningVoucher` issues once; an adjustment of the opening balance is not one.
  */
-export async function openingVoucherOf(tx: DbExecutor, bankId: number): Promise<{ id: number; voucherNumber: number } | undefined> {
-  const [voucher] = await tx.select({ id: journalVouchers.id, voucherNumber: journalVouchers.voucherNumber })
+export async function openingVoucherOf(tx: DbExecutor, bankId: number): Promise<{ id: number; voucherNumber: number; status: string | null } | undefined> {
+  const [voucher] = await tx.select({ id: journalVouchers.id, voucherNumber: journalVouchers.voucherNumber, status: journalVouchers.status })
     .from(journalVouchers)
     .where(and(
       eq(journalVouchers.referenceModule, 'treasury_opening'),
@@ -110,22 +110,27 @@ export async function openingVoucherOf(tx: DbExecutor, bankId: number): Promise<
 }
 
 /**
- * 10.3 package 4 (OBS-R1-65, decision ت۴۷ item 2): the start date of a treasury account dates its opening voucher, so it
- * changes only while that voucher is not issued, and never after it (422 `BANK_OPENING_DATE_LOCKED`; a draft voucher's
- * date is edited in the voucher itself). It does change while the account's approval is open: the approval issues the
- * voucher with the date it then finds, and a start date whose fiscal year closed meanwhile is moved this way. The caller
- * has locked the account row FOR UPDATE.
+ * 10.3 package 4 (OBS-R1-65, decision ت۴۷ item 2): the start date of a treasury account dates its opening voucher, so the
+ * two never differ. It changes freely while that voucher is not issued (also while the account's approval is open: the
+ * approval issues the voucher with the date it then finds). v11 phase 3.1 (M2): the opening voucher is sourced and is no
+ * longer edited on the voucher page, so while it is a draft a new start date re-dates it here, in the same transaction
+ * (a start date in a closed fiscal year is refused, `assertOpeningYearOpen`); once it is approved or permanent the date is
+ * fixed (422 `BANK_OPENING_DATE_LOCKED`). Before, the draft's date was edited in the voucher itself and then differed from
+ * the account's start date. The caller has locked the account row FOR UPDATE.
  */
-export async function assertOpeningDateChangeAllowed(tx: DbExecutor, bank: { id: number; title: string }): Promise<void> {
+export async function moveOpeningVoucherDate(tx: DbExecutor, bank: { id: number; title: string }, date: string): Promise<void> {
   const voucher = await openingVoucherOf(tx, bank.id);
-  if (voucher) {
-    throw new ValidationError(
-      `${BANK_OPENING_DATE_LABEL} «${bank.title}» پس از صدور سند افتتاحیه (شمارهٔ ${toPersianDigits(voucher.voucherNumber)}) تغییر نمی‌کند؛ ` +
-      'اگر سند هنوز پیش‌نویس است، تاریخ را در خود سند ویرایش کنید.',
-      { voucherId: voucher.id },
-      'BANK_OPENING_DATE_LOCKED',
-    );
+  if (!voucher) return;
+  if (voucher.status === 'draft') {
+    await assertOpeningYearOpen(tx, bank, date);
+    await VoucherService.updateJournalVoucher(voucher.id, { date }, tx);
+    return;
   }
+  throw new ValidationError(
+    `${BANK_OPENING_DATE_LABEL} «${bank.title}» پس از تأیید سند افتتاحیه (شمارهٔ ${toPersianDigits(voucher.voucherNumber)}) تغییر نمی‌کند.`,
+    { voucherId: voucher.id },
+    'BANK_OPENING_DATE_LOCKED',
+  );
 }
 
 /**

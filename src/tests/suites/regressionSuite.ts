@@ -11222,6 +11222,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // 10.3 package 5: cheque event privacy, masked old event rows, ended session purge, treasury threshold audit
   const { runEventLoginPrivacyTests } = await import('../regression/eventLoginPrivacyTests.js');
   results.push(...await runEventLoginPrivacyTests(shouldRun));
+  // v11 phase 3.1: urgent money fixes (M1 correction draft, M2 sourced opening voucher, M4 separators, M5/S6/M23 fiscal lock)
+  const { runMoneyUrgentFixesV11Tests } = await import('../regression/moneyUrgentFixesV11Tests.js');
+  results.push(...await runMoneyUrgentFixesV11Tests(shouldRun));
 
   return results;
 }

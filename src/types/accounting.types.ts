@@ -176,8 +176,10 @@ export interface BankAccount {
   notes?: string | null;
   /** 10.3 package 4 (OBS-R1-65): «تاریخ آغاز حساب», ISO; '' for an account defined before it */
   openingDate?: string | null;
-  /** the opening voucher is issued (any status), so the start date no longer changes */
+  /** the opening voucher is issued (any status) */
   openingVoucherIssued?: boolean;
+  /** v11 phase 3.1 (M2): the opening voucher is approved, so the start date no longer changes (a draft moves with it) */
+  openingDateLocked?: boolean;
   createdAt?: string | null;
   isDeleted?: number | null;
   is_deleted?: number | null;

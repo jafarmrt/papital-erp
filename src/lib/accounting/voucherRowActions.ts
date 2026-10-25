@@ -1,5 +1,5 @@
 import { toPersianDigits } from '../../utils/persianNumber';
-import { isReversalReference, voucherSourceLabel } from './voucherSource';
+import { isReversalReference, voucherSourceHint, voucherSourceLabel } from './voucherSource';
 
 /**
  * v9.0.298 (TD-568، B03-26): منوی ردیف سند حسابداری فقط کاری را پیشنهاد می‌دهد که سرور می‌پذیرد. پیش‌تر سند تأییدشده
@@ -44,7 +44,7 @@ export function voucherRowActions(v: VoucherRowFacts, access: { canApprove?: boo
 /** چرا منوی سند قفل‌شده کار تغییر ندارد؛ برای سند آزاد null */
 export function voucherLockNote(v: VoucherRowFacts): string | null {
   const label = voucherSourceLabel(v.sourceKind);
-  if (label) return `این سند را ${label} صادر کرده است؛ برای تغییر آن، ${label} را ابطال کنید.`;
+  if (label) return `این سند را ${label} صادر کرده است؛ برای تغییر آن، ${voucherSourceHint(v.sourceKind)}.`;
   if (v.sourceFiscalYear !== null && v.sourceFiscalYear !== undefined) {
     const year = toPersianDigits(String(v.sourceFiscalYear));
     return `این سند را بستن سال مالی ${year} صادر کرده است و فقط با بازگشایی سال ${year} تغییر می‌کند.`;
@@ -69,7 +69,9 @@ export function voucherConfirmTexts(kind: VoucherConfirmKind, v: VoucherRowFacts
     case 'finalize':
       return {
         title: 'قطعی‌سازی سند حسابداری',
-        message: label
+        message: label && v.sourceKind === 'treasury_opening'
+          ? `سند شماره ${number} دائم شود؟ سند دائم ویرایش، حذف و اصلاح نمی‌شود و حساب خزانهٔ آن دیگر حذف نمی‌شود؛ مانده اول دوره فقط با سند اصلاحی همان حساب عوض می‌شود.`
+          : label
           ? `سند شماره ${number} دائم شود؟ سند دائم ویرایش، حذف و اصلاح نمی‌شود و اثر آن فقط با ابطال ${label} برمی‌گردد.`
           : `سند شماره ${number} دائم شود؟ سند دائم ویرایش، حذف و اصلاح نمی‌شود و فقط با «صدور سند برگشتی (ابطال سند)» بی‌اثر می‌شود.`,
         confirmText: 'بله، قطعی شود',

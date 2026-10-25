@@ -18,7 +18,7 @@ import { logActivity } from '../lib/auditLogger.js';
 import { logProjectDelivery, logProjectUpdate, logStageChange } from './projects/projectAudit.js';
 import { MAX_STAGE_ORDER } from '../lib/projects/projectStatus.js';
 import { toPersianDigits } from '../utils/persianNumber.js';
-import { normalizeDecimalString } from '../lib/numericInput.js';
+import { normalizeGroupedDecimalString } from '../lib/numericInput.js';
 import { nextVersion } from '../lib/occHelper.js';
 import { projectVersionConflict } from './projects/projectVersion.js';
 import { assertProjectPartsWritable } from './projects/projectPartTokens.js';
@@ -115,7 +115,7 @@ export interface AddProjectToInventoryResult {
 /** عدد ورودی با رقم فارسی و جداکننده؛ خالی یعنی فرستاده نشده (undefined) و نامعتبر null */
 const decimalOf = (value: unknown): number | null | undefined => {
   if (value === undefined || value === null) return undefined;
-  const text = normalizeDecimalString(String(value));
+  const text = normalizeGroupedDecimalString(String(value));
   if (text === '') return undefined;
   const num = Number(text);
   return Number.isFinite(num) ? num : null;
@@ -149,7 +149,7 @@ function deliveryLine(entry: AddProjectToInventoryInput['itemsToAdd'][number], i
   if (price === null || (price !== undefined && price < 0)) {
     throw new ValidationError(`${row}: بهای واحد باید عددی نامنفی باشد (مقدار دریافتی: ${String(entry.unitPrice)})`, { row: index + 1 }, 'PROJECT_DELIVERY_LINE_INVALID');
   }
-  return { itemId, qty, unitPrice: price === undefined ? null : normalizeDecimalString(String(entry.unitPrice)) };
+  return { itemId, qty, unitPrice: price === undefined ? null : normalizeGroupedDecimalString(String(entry.unitPrice)) };
 }
 
 export class ProjectService {

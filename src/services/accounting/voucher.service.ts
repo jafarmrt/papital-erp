@@ -274,7 +274,7 @@ export class VoucherService {
 
   static async createJournalVoucher(data: {
     date: string;
-    voucherType?: 'general' | 'opening' | 'closing' | 'sales' | 'purchase' | 'treasury' | 'payroll' | 'adjustment';
+    voucherType?: JournalVoucher['voucherType'];
     status?: 'draft' | 'approved' | 'permanent';
     manualVoucherNumber?: string;
     description: string;
@@ -852,45 +852,27 @@ export class VoucherService {
         description: `برگشت ردیف ${item.rowOrder || idx + 1}: ${item.description || original.description}`,
       })));
 
-      // 2. Validate new items — v9.0.190 (TD-551، ت۷): ردیف‌های جایگزین قاعده سند دستی را دارند (ارز بی ارز = ارز
-      // سند اصلی، نرخ ردیف غیرریالی الزامی، تراز چندارزی به ریال)؛ پیش‌تر ردیف بی ارز ریالی با نرخ ۱ ذخیره می‌شد
-      const { rows: newItems, totals: { sumDebit, sumCredit } } = resolveManualVoucherRows(params.newItems, original.currency);
-      await assertPostingAccounts(tx, newItems.map(item => item.accountId)); // v9.0.198 (TD-549): ردیف جایگزین هم فقط روی حساب قابل ثبت
-
-      // 3. Create Corrected Voucher
-      const corrNumber = await this.getNextVoucherNumber(tx);
+      // 2. The replacement — v11 phase 3.1 (M1): a manual draft through `createJournalVoucher` (`manualEntry`), so it enters
+      // the journal voucher workflow and is approved like any manual voucher: by another holder of
+      // `accounting.vouchers_approve`, never by the user who corrected (`assertNotApprovedByMaker`). Before, it was inserted
+      // here as `approved` with no approver, and a user who may only draft vouchers replaced an approved voucher with any
+      // accounts and amounts. Its rows keep the manual voucher rules (v9.0.190, TD-551: currency of the original voucher,
+      // a rate on every non-rial row, a rial balance; v9.0.198, TD-549: posting accounts only).
       const corrDesc = `سند اصلاحی جایگزین سند شماره ${original.voucherNumber} (علت: ${params.reason.trim()}): ${params.newDescription?.trim() || original.description}`;
-
-      const [corrVoucher] = await tx.insert(journalVouchers).values({
-        voucherNumber: corrNumber,
-        manualVoucherNumber: '',
+      const corrVoucher = await this.createJournalVoucher({
         date: correctionDate,
         voucherType: original.voucherType || 'general',
-        status: 'approved',
-        totalDebit: money(sumDebit),
-        totalCredit: money(sumCredit),
+        status: 'draft',
         description: corrDesc,
         referenceModule: original.referenceModule || 'manual',
         referenceId: original.id,
         referenceNumber: `CORR-V${original.voucherNumber}`,
         currency: original.currency || 'IRR',
-        createdById: params.userId || null,
-        createdByUsername: params.username || '',
-      }).returning();
-
-      await insertVoucherItems(tx, newItems.map((item, idx) => ({
-        voucherId: corrVoucher.id,
-        accountId: item.accountId,
-        rowOrder: idx + 1,
-        detailedType: item.detailedType || 'none',
-        detailedId: item.detailedId || null,
-        detailedName: item.detailedName?.trim() || '',
-        debit: money(item.debit),
-        credit: money(item.credit),
-        currency: item.currency || 'IRR',
-        exchangeRate: moneyOr(item.exchangeRate, 1),
-        description: item.description?.trim() || corrDesc,
-      })));
+        userId: params.userId,
+        username: params.username,
+        manualEntry: true,
+        items: params.newItems.map(item => ({ ...item, description: item.description?.trim() || corrDesc })),
+      }, tx);
 
       // v10.1.11 (TD-1263): the corrected voucher leaves its workflow
       await terminateVoucherWorkflows(tx, original.id, 'اصلاح سند حسابداری', params.userId, params.username);
@@ -907,7 +889,8 @@ export class VoucherService {
     return {
       reversalVoucher,
       correctedVoucher,
-      message: `سند معکوس شماره #${reversalVoucher.voucherNumber} و سند اصلاحی شماره #${correctedVoucher.voucherNumber} با موفقیت صادر شدند.`
+      // v11 phase 3.1 (M1): the replacement is a draft until it is approved
+      message: `سند معکوس شماره #${reversalVoucher.voucherNumber} صادر شد و سند اصلاحی شماره #${correctedVoucher.voucherNumber} پیش‌نویس ثبت شد؛ پس از تأیید در دفاتر می‌آید.`
     };
   }
 
