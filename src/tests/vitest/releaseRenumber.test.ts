@@ -23,7 +23,6 @@ const debt = (rows: string[], active: string, archived: string) =>
   `| ID | x |\n|----|---|\n${rows.join('\n')}\n\n- **فعال:** ${active} ردیف\n- **آرشیو شده (resolved):** ${archived} ردیف — تاریخچه\n`;
 const pkg = (v: string) => `{\n  "name": "x",\n  "version": "${v}",\n  "type": "module"\n}\n`;
 const lock = (v: string) => `{\n  "name": "x",\n  "version": "${v}",\n  "packages": {\n    "": {\n      "version": "${v}"\n    },\n    "node_modules/a": {\n      "version": "9.0.1"\n    }\n  }\n}\n`;
-const k8s = (v: string) => `        image: registry.example.com/erp:v${v}\n        env:\n        - name: APP_VERSION\n          value: "${v}"\n`;
 const readme = (v: string) => `> سری فعال (نسخه مستقر: \`v${v}\`)\n`;
 
 /** master released one version and migration 0060; the branch, started from the same base, released two versions and its own 0060 */
@@ -35,12 +34,11 @@ function mergedTree(): { base: Map<string, string>; current: Map<string, string>
     ['drizzle/meta/_journal.json', journal(['0059_old', 1000], ['0060_master', 2000])],
     ['drizzle/0060_master.sql', 'SELECT 1;\n'],
     ['TECH_DEBT.md', debt(['| TD-500 | a |'], '۱', '۲')],
-    ['TECH_DEBT_ARCHIVE.md', '| TD-461 | x | resolved (v9.0.51) |\n| TD-480 | y | resolved (v9.0.52) |\n'],
+    ['docs/rules/DEBT_LESSONS.md', '| TD-461 | x | resolved (v9.0.51) |\n| TD-480 | y | resolved (v9.0.52) |\n'],
     ['AGENTS.md', '- Rule A (v9.0.52, TD-480, migration 0060).\n- Rule B (v9.0.37).\n'],
     ['docs/audit/STABILITY_AUDIT_V9.md', '## ۳. بسته ۱۴\n\n### ۳.۱. خلاصه\n\n## ۴. بسته ۶\n\n### ۴.۱. خلاصه\n'],
     ['package.json', pkg('9.0.52')],
     ['package-lock.json', lock('9.0.52')],
-    ['deploy/k8s/erp-deployment.yaml', k8s('9.0.52')],
     ['README.md', readme('9.0.52')],
   ]);
   const current = new Map<string, string>([
@@ -51,13 +49,12 @@ function mergedTree(): { base: Map<string, string>; current: Map<string, string>
     ['drizzle/0060_master.sql', 'SELECT 1;\n'],
     ['drizzle/0060_branch.sql', '-- 0060_branch (v9.0.52)\nSELECT 2;\n'],
     ['TECH_DEBT.md', debt(['| TD-500 | a |', '| TD-581 | b |'], '۱', '۲')],
-    ['TECH_DEBT_ARCHIVE.md', '| TD-473 | z | resolved (v9.0.53) |\n| TD-461 | x | resolved (v9.0.51) |\n| TD-480 | y | resolved (v9.0.52) |\n'],
+    ['docs/rules/DEBT_LESSONS.md', '| TD-473 | z | resolved (v9.0.53) |\n| TD-461 | x | resolved (v9.0.51) |\n| TD-480 | y | resolved (v9.0.52) |\n'],
     ['AGENTS.md', '- Rule A (v9.0.52, TD-480, migration 0060).\n- Rule B (v9.0.37; v9.0.52, TD-473, migration 0060).\n'],
     ['docs/audit/STABILITY_AUDIT_V9.md', '## ۳. بسته ۱۴\n\n### ۳.۱. خلاصه\n\n## ۴. بسته ۶\n\n### ۴.۱. خلاصه\n\n## ۴. بسته ۱\n\n### ۴.۱. خلاصه\n\n### ۴.۲. یافته‌ها\n'],
     ['V9_MASTER_ROADMAP.md', 'phase 4: package 1 in `docs/audit/STABILITY_AUDIT_V9.md` §۴ (v9.0.53)\n'],
     ['package.json', pkg('9.0.53')],
     ['package-lock.json', lock('9.0.53')],
-    ['deploy/k8s/erp-deployment.yaml', k8s('9.0.53')],
     ['README.md', readme('9.0.53')],
   ]);
   return { base, current };
@@ -84,19 +81,19 @@ describe('scripts/release-renumber.ts (TD-473)', () => {
     expect(active.endsWith("fixes: []\n  }\n];\n")).toBe(true);
   });
 
-  it('renumbers only lines the branch added and sets the four version locations', () => {
+  it('renumbers only lines the branch added and sets the three version locations', () => {
     const plan = planRenumber(input(mergedTree()));
     const changelogMd = plan.writes.get('CHANGELOG.md')!;
     const heads = [...changelogMd.matchAll(/^### (v[\d.]+ — \w+)/gm)].map(m => m[1]);
     expect(heads).toEqual(['v9.0.54 — Two', 'v9.0.53 — One', 'v9.0.52 — Master', 'v9.0.51 — Old', 'v9.0.0 — pre']);
     expect(changelogMd).toContain('- **T:** see v9.0.53.');
     expect(changelogMd).toContain('- **B:** migration 0061 (TD-473).');
-    expect(plan.writes.get('TECH_DEBT_ARCHIVE.md')).toBe('| TD-473 | z | resolved (v9.0.54) |\n| TD-461 | x | resolved (v9.0.51) |\n| TD-480 | y | resolved (v9.0.52) |\n');
+    expect(plan.writes.get('docs/rules/DEBT_LESSONS.md')).toBe('| TD-473 | z | resolved (v9.0.54) |\n| TD-461 | x | resolved (v9.0.51) |\n| TD-480 | y | resolved (v9.0.52) |\n');
     expect(plan.writes.get('AGENTS.md')).toBe('- Rule A (v9.0.52, TD-480, migration 0060).\n- Rule B (v9.0.37; v9.0.53, TD-473, migration 0061).\n');
     expect(plan.writes.get('package.json')).toContain('"version": "9.0.54"');
     expect(plan.writes.get('package-lock.json')!.split('"version": "9.0.54"').length - 1).toBe(2);
     expect(plan.writes.get('package-lock.json')).toContain('"version": "9.0.1"');
-    expect(plan.writes.get('deploy/k8s/erp-deployment.yaml')).toBe(k8s('9.0.54'));
+    expect(plan.writes.has('deploy/k8s/erp-deployment.yaml')).toBe(false);
     expect(plan.writes.get('README.md')).toBe(readme('9.0.54'));
   });
 
@@ -122,6 +119,13 @@ describe('scripts/release-renumber.ts (TD-473)', () => {
     const plan = planRenumber(input(mergedTree()));
     expect(plan.writes.get('TECH_DEBT.md')).toContain('- **فعال:** ۲ ردیف');
     expect(plan.writes.get('TECH_DEBT.md')).toContain('- **آرشیو شده (resolved):** ۳ ردیف');
+  });
+
+  it('adds the rows of the frozen archive to the closed count (v11.0.4)', () => {
+    const t = mergedTree();
+    t.current.set('docs/rules/archive/TECH_DEBT_ARCHIVE_V10.md', '| TD-100 | a | resolved |\n| TD-101 | b | resolved |\n');
+    const plan = planRenumber(input(t));
+    expect(plan.writes.get('TECH_DEBT.md')).toContain('- **آرشیو شده (resolved):** ۵ ردیف');
   });
 
   it('changes nothing when the branch already follows the base', () => {
@@ -248,8 +252,8 @@ describe('scripts/release-renumber.ts keeps archived debt rows archived (TD-981)
     const t = mergedTree();
     // master archived TD-500; the TECH_DEBT.md conflict was resolved by keeping both sides, so TD-500 came back
     t.base.set('TECH_DEBT.md', debt([], '۰', '۳'));
-    t.base.set('TECH_DEBT_ARCHIVE.md', '| TD-500 | a | resolved (v9.0.52) |\n| TD-461 | x | resolved (v9.0.51) |\n| TD-480 | y | resolved (v9.0.52) |\n');
-    t.current.set('TECH_DEBT_ARCHIVE.md', `| TD-473 | z | resolved (v9.0.53) |\n${t.base.get('TECH_DEBT_ARCHIVE.md')!}`);
+    t.base.set('docs/rules/DEBT_LESSONS.md', '| TD-500 | a | resolved (v9.0.52) |\n| TD-461 | x | resolved (v9.0.51) |\n| TD-480 | y | resolved (v9.0.52) |\n');
+    t.current.set('docs/rules/DEBT_LESSONS.md', `| TD-473 | z | resolved (v9.0.53) |\n${t.base.get('docs/rules/DEBT_LESSONS.md')!}`);
     const plan = planRenumber(input(t));
     const active = plan.writes.get('TECH_DEBT.md')!;
     expect(active).not.toContain('| TD-500 |');
@@ -262,9 +266,22 @@ describe('scripts/release-renumber.ts keeps archived debt rows archived (TD-981)
     const conflict = '<<<<<<< HEAD\n| TD-581 | b |\n| TD-500 | a |\n=======\n| TD-500 | a |\n| TD-480 | c |\n>>>>>>> m\n';
     expect(resolveReleaseConflict('TECH_DEBT.md', conflict, { ours: '', theirs: '' }, ACTIVE)).toBe('| TD-581 | b |\n| TD-500 | a |\n| TD-480 | c |\n');
     const archive = '<<<<<<< HEAD\n| TD-473 | z |\n| TD-461 | x |\n=======\n| TD-461 | x |\n>>>>>>> m\n';
-    expect(resolveReleaseConflict('TECH_DEBT_ARCHIVE.md', archive, { ours: '', theirs: '' }, ACTIVE)).toBe('| TD-473 | z |\n| TD-461 | x |\n');
+    expect(resolveReleaseConflict('docs/rules/DEBT_LESSONS.md', archive, { ours: '', theirs: '' }, ACTIVE)).toBe('| TD-473 | z |\n| TD-461 | x |\n');
     const edited = '<<<<<<< HEAD\n| TD-500 | a (branch note) |\n=======\n| TD-500 | a (master note) |\n>>>>>>> m\n';
     expect(resolveReleaseConflict('TECH_DEBT.md', edited, { ours: '', theirs: '' }, ACTIVE)).toBeNull();
+  });
+
+  it('leaves a lesson conflict, the frozen archive and the k8s example to their own rule (v11.0.4)', () => {
+    const lesson = '<<<<<<< HEAD\n3. **A lesson.** branch words\n=======\n3. **A lesson.** master words\n>>>>>>> m\n';
+    expect(resolveReleaseConflict('docs/rules/DEBT_LESSONS.md', lesson, { ours: '', theirs: '' }, ACTIVE)).toBeNull();
+    const frozen = '<<<<<<< HEAD\n| TD-1400 | z |\n=======\n>>>>>>> m\n';
+    expect(resolveReleaseConflict('docs/rules/archive/TECH_DEBT_ARCHIVE_V10.md', frozen, { ours: '', theirs: '' }, ACTIVE)).toBeNull();
+    expect(resolveReleaseConflict('deploy/k8s/erp-deployment.yaml', '<<<<<<< HEAD\nx\n=======\ny\n>>>>>>> m\n', { ours: 'old', theirs: 'base manifest' }, ACTIVE)).toBe('base manifest');
+    // the branch that turns the manifest into the placeholder keeps it against a base that bumped its version
+    expect(resolveReleaseConflict('deploy/k8s/erp-deployment.yaml', '', { ours: 'image: erp:vX.Y.Z', theirs: 'image: erp:v11.0.3' }, ACTIVE)).toBe('image: erp:vX.Y.Z');
+    // a branch from before keeps the base's placeholder manifest; a conflict between two placeholder manifests is a real edit
+    expect(resolveReleaseConflict('deploy/k8s/erp-deployment.yaml', '', { ours: 'image: erp:v11.0.5', theirs: 'image: erp:vX.Y.Z' }, ACTIVE)).toBe('image: erp:vX.Y.Z');
+    expect(resolveReleaseConflict('deploy/k8s/erp-deployment.yaml', '', { ours: 'image: erp:vX.Y.Z\na', theirs: 'image: erp:vX.Y.Z\nb' }, ACTIVE)).toBeNull();
   });
 });
 
@@ -305,7 +322,7 @@ describe('scripts/release-renumber.ts with series 10 (v10.0.0)', () => {
   const masterMd = '### v10.0.1 — Master\n- **M:** master line.';
   const startMd = '### v10.0.0 — Start\n- **S:** start.';
   const versionFiles = (v: string): Array<[string, string]> => [
-    ['package.json', pkg(v)], ['package-lock.json', lock(v)], ['deploy/k8s/erp-deployment.yaml', k8s(v)], ['README.md', readme(v)],
+    ['package.json', pkg(v)], ['package-lock.json', lock(v)], ['README.md', readme(v)],
   ];
   const base = new Map<string, string>([
     [ACTIVE_10, changelog10(masterEntry, entry('v10.0.0', 'start'))],
@@ -334,7 +351,7 @@ describe('scripts/release-renumber.ts with series 10 (v10.0.0)', () => {
     expect(heads).toEqual(['v10.0.2 — Branch', 'v10.0.1 — Master', 'v10.0.0 — Start', 'v9.0.450 — last']);
     expect(plan.writes.get('CHANGELOG.md')).toContain('- **B:** see v10.0.2.');
     expect(plan.writes.get('package.json')).toContain('"version": "10.0.2"');
-    expect(plan.writes.get('deploy/k8s/erp-deployment.yaml')).toBe(k8s('10.0.2'));
+    expect(plan.writes.has('deploy/k8s/erp-deployment.yaml')).toBe(false);
     expect(plan.writes.get('README.md')).toBe(readme('10.0.2'));
   });
 });

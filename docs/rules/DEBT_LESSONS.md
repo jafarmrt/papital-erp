@@ -1,0 +1,30 @@
+# Debt Lessons
+
+What the fixed debt of series 1 to 10 teaches, in one place, and the debt rows closed since series 11. The core rules (`AGENTS.md`) and the area files (`docs/rules/*.md`) already hold most lessons as rules; this file keeps only the patterns that kept coming back and that no single rule names. Each lesson cites a few of the rows it comes from; their full text is in `docs/rules/archive/TECH_DEBT_ARCHIVE_V10.md` (frozen, series 1 to 10). Reviewers check a change against this list.
+
+## Lessons
+
+1. **One action, many paths.** A guard, a voucher or a limit added to one path is missing from the others that reach the same effect: a workflow transition, an Excel import, an item edit, a project delivery or a procurement shortcut. Before closing a finding, list every route, workflow action and bulk tool that causes the same change and give each the same check. (TD-904, TD-689, TD-648, TD-305, TD-285, TD-286, TD-287, TD-443)
+2. **The screen and the server disagree on the payload.** Forms sent field names, units or codes the server did not read, and reports read totals the server never sent; each failed silently as 400, zero or «nothing found». (TD-688, TD-480, TD-564, TD-565, TD-563, TD-735)
+3. **A stock value change without its voucher.** The paths that missed it were the side ones: project delivery, BOM allocation, a zero-total invoice, stock counts and Excel stock fixes. (TD-285, TD-286, TD-287, TD-906, TD-772, TD-255, TD-262)
+4. **Check, then act, without a lock.** A status or a quantity read before the transaction let two requests both pass: a request received twice, a voucher reversed twice, a deleted cheque cashed, a bank balance rewritten while a payment ran. Re-read the row under its lock inside the transaction, and check `is_deleted` and the status there. (TD-326, TD-327, TD-321, TD-322, TD-340)
+5. **Undoing what depends on something else.** A void accepted while a return, a reversal or the other side of a transfer still pointed at the document; a reversal row could itself be reversed. A void refuses while an active dependent exists, and a reversal row is never voided. (TD-773, TD-499, TD-341)
+6. **Every derived amount has a ceiling.** The ones that were missed: a negative bonus or deduction and a delivery beyond the project quantity. (TD-380, TD-804)
+7. **A soft-deleted name or code comes back to life.** Creating a user, an account or a customer with the code or name of a soft-deleted row revived that row with its history, secrets and balances. A new record never reuses a deleted row. (TD-519, TD-546)
+8. **A party is its id and its type.** A cheque from a staff member posted to the customer with the same id, and a shop order from a stranger with a customer's name was charged to that customer. (TD-497, TD-703)
+9. **State kept only in the browser.** A «registered» flag in memory, a role preselected in a form, a query cache that survives logout: the server is the only source of truth, and logout or a 401 clears the cache. (TD-736, TD-517, TD-518)
+10. **An error swallowed reads as success.** A caught workflow start, a failed customer insert only logged, a backup or an update reported «successful» from a step that proves nothing, a restore drill that compared a count with itself. On a write path no catch continues as if nothing happened, and a check verifies the result, never only that a process is alive. (TD-451, TD-703, TD-361, TD-362, TD-365)
+11. **Calendar edges.** Tests cover 30 Esfand of a leap year and a year that has not ended yet. (TD-310, TD-543, TD-544)
+12. **Migrations on real data.** The failures came from production-sized tables and order: a timeout on a large table, two starts running one migration, an out-of-order `when` skipped silently, a NOT VALID constraint breaking a later migration. (TD-366, TD-364, TD-368)
+13. **Keys built from input are bounded.** A metrics label from the raw request path grew without end. Any cache key, label or map entry built from request input has a fixed set of values or a cap. (TD-582)
+14. **CI that depends on anonymous registries.** Database and Node images pulled anonymously failed when the pull limit was reached, before any test ran. CI pulls from a mirror or with a login. (TD-1169)
+15. **Purchase discounts reach the cost.** A line discount lowered the voucher but not the weighted average cost or the Kardex row, so stock value drifted above the inventory accounts. (TD-250)
+
+## 🧭 نسخه ۱۱ — بدهی‌های بسته‌شده
+
+A row closed in series 11 moves here from `TECH_DEBT.md` (`npm run release`, `closes[]`); write it short and, when the fix teaches something new, add a lesson above.
+
+| ID | حوزه | شرح | منبع (فایل) | وضعیت |
+|----|------|-----|--------------|-------|
+| TD-1390 | GitHub، شاخه‌های کهنه (آغاز سری ۱۱، تصمیم ت۵۰-۶) | P3 — ۱۹۵ از ۲۵۷ شاخهٔ مخزن کاملاً در master ادغام شده بودند و فهرست شاخه‌ها را شلوغ می‌کردند؛ جلسه‌های ابری Claude اجازهٔ پاک کردن شاخه در GitHub ندارند، پس پاک کردن ابزار درون مخزن می‌خواست | .github/workflows/ | resolved (v11.0.1، ۳ آبان ۱۴۰۵، آغاز سری ۱۱) — کار دستی «Delete merged branches» در Actions (`.github/workflows/delete-merged-branches.yml` و `scripts/governance/deleteMergedBranches.ts`) فقط شاخه‌ای را پاک می‌کند که هیچ کامیتی بیرون از شاخهٔ پیش‌فرض ندارد، و شاخهٔ پیش‌فرض، شاخهٔ محافظت‌شده و سر یا پایهٔ هر PR باز را نگه می‌دارد؛ بی تیک «delete» فقط فهرست می‌دهد. آزمون: Vitest `deleteMergedBranches.test.ts` |
+| TD-1389 | پیشخوان، کارت «تازه‌های این نسخه» (آغاز سری ۱۱) | P3 — `whatsNewEntry` در `socialDashboard.service.ts` مدخل نسخهٔ در حال اجرا را فقط در `v10Updates` (`10.ts`) می‌جست؛ با رفتن به سری ۱۱ کارت برای هر نسخهٔ `v11.x.y` خالی می‌ماند، و آزمون `reg_social_whats_new_td_1300` نبودِ مدخل را شکست نمی‌شمرد | src/services/social/socialDashboard.service.ts | resolved (v11.0.0، ۳ آبان ۱۴۰۵، آغاز سری ۱۱) — کارت مدخل را از `ACTIVE_CHANGELOG.updates` می‌خواند، پس گذار سری بعد هم آن را نمی‌شکند؛ آزمون `reg_social_whats_new_td_1300` اکنون نبودِ مدخل نسخهٔ جاری را شکست می‌شمرد (روی کد پیشین با 11.0.0 قرمز، اکنون سبز). |

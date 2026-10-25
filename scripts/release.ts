@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { CLOSED_DEBT_FILE, FROZEN_DEBT_ARCHIVE } from './renumber/debtFiles.js';
 
 /**
  * v9.0.0 — کارهای دفتری یک انتشار در سری فعال (AGENTS.md §7، §13، §23)، از ریشه مخزن:
@@ -18,7 +19,8 @@ import path from 'path';
  *   openRows?                ردیف‌های کامل تازه «| TD-### | … |» برای جدول فعال TECH_DEBT.md (نسخه مستند)
  *   lastReview?              متن «آخرین بازبینی» TECH_DEBT.md (بی ستاره)
  *   edits?                   [[مسیر، متن قدیم (دقیقاً یک بار در فایل)، متن تازه], ...] — نقشه راه، گزارش ممیزی، AGENTS.md
- * چهار محل نسخه (package.json و package-lock.json، مدخل چنج‌لاگ فعال، k8s، README) با هم عوض می‌شوند.
+ * سه محل نسخه (package.json و package-lock.json، مدخل چنج‌لاگ فعال، README) با هم عوض می‌شوند؛ از v11.0.4 مانیفست k8s جای نسخه نیست.
+ * از v11.0.4 ردیف بسته‌شده به بخش سری فعال docs/rules/DEBT_LESSONS.md می‌رود (آرشیو تا سری ۱۰ منجمد است).
  */
 
 export interface CloseRow {
@@ -86,7 +88,7 @@ export function closeRowsOf(spec: ReleaseSpec): CloseRow[] {
   return rows;
 }
 
-/** جدول فعال TECH_DEBT.md و بخش آرشیو سری فعال در TECH_DEBT_ARCHIVE.md را به‌روز می‌کند */
+/** جدول فعال TECH_DEBT.md و بخش سری فعال ردیف‌های بسته‌شده در DEBT_LESSONS.md را به‌روز می‌کند */
 export function updateTechDebt(files: ReleaseFiles, spec: ReleaseSpec, active: ActiveSeries): { active: number; archived: number } {
   const closes = closeRowsOf(spec);
   const openRows = spec.openRows ?? [];
@@ -95,9 +97,10 @@ export function updateTechDebt(files: ReleaseFiles, spec: ReleaseSpec, active: A
     return { active: s.split('\n').filter(l => rowId(l)).length, archived: toEn(s.match(/- \*\*آرشیو شده \(resolved\):\*\* ([۰-۹0-9]+) ردیف/)?.[1] ?? '0') };
   }
 
-  const archive = files.read('TECH_DEBT_ARCHIVE.md');
+  const archive = files.read(CLOSED_DEBT_FILE);
+  const frozen = files.read(FROZEN_DEBT_ARCHIVE);
   let lines = files.read('TECH_DEBT.md').split('\n');
-  const known = new Set([...lines, ...archive.split('\n')].map(rowId).filter(Boolean));
+  const known = new Set([...lines, ...archive.split('\n'), ...frozen.split('\n')].map(rowId).filter(Boolean));
 
   for (const r of closes) {
     if (!lines.some(l => l.startsWith(`| ${r.td} |`))) throw new Error(`row ${r.td} is not in TECH_DEBT.md`);
@@ -129,10 +132,10 @@ export function updateTechDebt(files: ReleaseFiles, spec: ReleaseSpec, active: A
 
   if (closes.length > 0) {
     const section = archive.split('\n').find(l => l.startsWith('## ') && l.includes(`نسخه ${toFa(active.series)} —`));
-    if (!section) throw new Error(`TECH_DEBT_ARCHIVE.md has no section for series ${active.series}`);
+    if (!section) throw new Error(`${CLOSED_DEBT_FILE} has no section for series ${active.series}`);
     const sep = `${TABLE_SEP}\n`;
     const pos = archive.indexOf(sep, archive.indexOf(section)) + sep.length;
-    files.write('TECH_DEBT_ARCHIVE.md', archive.slice(0, pos) + closes.map(r => `${r.archiveRow}\n`).join('') + archive.slice(pos));
+    files.write(CLOSED_DEBT_FILE, archive.slice(0, pos) + closes.map(r => `${r.archiveRow}\n`).join('') + archive.slice(pos));
   }
   return { active: activeCount, archived };
 }
@@ -183,8 +186,6 @@ export function applyRelease(files: ReleaseFiles, spec: ReleaseSpec, active: Act
   const next = spec.version.slice(1);
   const prev = spec.prev.slice(1);
   edit(files, 'README.md', `نسخه مستقر: \`${spec.prev}\``, `نسخه مستقر: \`${spec.version}\``);
-  edit(files, 'deploy/k8s/erp-deployment.yaml', `erp:${spec.prev}`, `erp:${spec.version}`);
-  edit(files, 'deploy/k8s/erp-deployment.yaml', `value: "${prev}"`, `value: "${next}"`);
   edit(files, 'package.json', `"version": "${prev}"`, `"version": "${next}"`);
   const lock = files.read('package-lock.json');
   const occurrences = lock.split(`"version": "${prev}"`).length - 1;

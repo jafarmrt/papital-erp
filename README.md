@@ -2,7 +2,7 @@
 
 سیستم یکپارچه مدیریت کارگاه تولیدی: انبارداری با کاردکس رویدادمحور، فاکتور و پیش‌فاکتور، حسابداری دوبل (کدینگ ۴ سطحی، دفتر روزنامه، تراز آزمایشی)، خزانه‌داری و چک صیادی، CRM و قیف فروش، کنترل پروژه‌های تولید با BOM، منابع انسانی و حقوق و دستمزد، موتور گردش کار (ورکفلو) با کارتابل تاییدات، گذرگاه رویدادها (Outbox/DLQ/Webhook) و گزارش‌های BI.
 
-> **نسخه فعلی:** سری فعال `v11.x.y` (نسخه مستقر: `v11.0.3`) — نقشه راه: `docs/roadmap/V11_MASTER_ROADMAP.md` (سری‌های بسته‌شده: `docs/roadmap/archive/V10_MASTER_ROADMAP.md`، `docs/roadmap/archive/V9_MASTER_ROADMAP.md`، `docs/roadmap/archive/V3_V8_ROADMAPS_SUMMARY.md`) • تاریخچه تغییرات: `CHANGELOG.md` + `src/data/changelogs/11.ts`
+> **نسخه فعلی:** سری فعال `v11.x.y` (نسخه مستقر: `v11.0.4`) — نقشه راه: `docs/roadmap/V11_MASTER_ROADMAP.md` (سری‌های بسته‌شده: `docs/roadmap/archive/V10_MASTER_ROADMAP.md`، `docs/roadmap/archive/V9_MASTER_ROADMAP.md`، `docs/roadmap/archive/V3_V8_ROADMAPS_SUMMARY.md`) • تاریخچه تغییرات: `CHANGELOG.md` + `src/data/changelogs/11.ts`
 
 ---
 
@@ -249,5 +249,5 @@ systemctl restart papital-erp && curl -fsS http://localhost:3000/health/startup
 - مهاجرت فقط از migrator اتمیک؛ شماره‌گذاری‌ها فقط با SEQUENCE/counter اتمیک
 - خواندن‌ها با `is_deleted = 0` (soft delete)؛ حذف‌ها فقط نرم
 - فرانت: همه فراخوانی‌ها با `fetchJson`، آرایه‌ها با گارد `Array.isArray`
-- هر تغییر کارکردی یک نسخه تازه با یک مدخل در چنجلاگ فعال `src/data/changelogs/11.ts` (سری 11.x) می‌گیرد؛ `npm run release -- <spec.json>` چهار محل نسخه را هم‌گام می‌کند و `npm run check:version` آن را می‌آزماید
+- هر تغییر کارکردی یک نسخه تازه با یک مدخل در چنجلاگ فعال `src/data/changelogs/11.ts` (سری 11.x) می‌گیرد؛ `npm run release -- <spec.json>` سه محل نسخه را هم‌گام می‌کند و `npm run check:version` آن را می‌آزماید
 - تغییرها روی شاخه جدا با PR پیش‌نویس؛ هرگز push مستقیم به `master`

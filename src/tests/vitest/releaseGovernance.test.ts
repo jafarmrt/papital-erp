@@ -2,7 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
-import { findDebtRegistryViolations, findMissingNpmScripts, npmScriptDocs } from '../../../scripts/governance/releaseGuards';
+import { findDebtRegistryViolations, findFrozenArchiveViolations, findMissingNpmScripts, npmScriptDocs } from '../../../scripts/governance/releaseGuards';
 import { findChangelogSeriesViolations } from '../../../src/data/changelogs/seriesGuard';
 import type { AIUpdateLog } from '../../../src/data/changelogs/types';
 
@@ -18,14 +18,21 @@ describe('debt registry gate (TD-981)', () => {
   it('refuses an id that is both active and archived, or listed twice', () => {
     expect(findDebtRegistryViolations(debt('| TD-1 | a | open |'), '| TD-2 | b | resolved |\n')).toEqual([]);
     expect(findDebtRegistryViolations(debt('| TD-1 | a | open |', '| TD-2 | b | open |'), '| TD-2 | b | resolved |\n'))
-      .toEqual(['TD-2 is both active (TECH_DEBT.md) and archived (TECH_DEBT_ARCHIVE.md)']);
+      .toEqual(['TD-2 is both active (TECH_DEBT.md) and closed (docs/rules/DEBT_LESSONS.md or the frozen archive)']);
     expect(findDebtRegistryViolations(debt('| TD-1 | a |', '| TD-1 | a |'), '| TD-2 | b |\n| TD-2 | c |\n'))
-      .toEqual(['TD-1 appears 2 times in TECH_DEBT.md', 'TD-2 appears 2 times in TECH_DEBT_ARCHIVE.md']);
+      .toEqual(['TD-1 appears 2 times in TECH_DEBT.md', 'TD-2 appears 2 times among the closed rows']);
   });
 
   it('passes on the repository', () => {
     const read = (rel: string) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
-    expect(findDebtRegistryViolations(read('TECH_DEBT.md'), read('TECH_DEBT_ARCHIVE.md'))).toEqual([]);
+    expect(findDebtRegistryViolations(read('TECH_DEBT.md'), read('docs/rules/DEBT_LESSONS.md') + read('docs/rules/archive/TECH_DEBT_ARCHIVE_V10.md'))).toEqual([]);
+    expect(findFrozenArchiveViolations(read('docs/rules/archive/TECH_DEBT_ARCHIVE_V10.md'))).toEqual([]);
+  });
+
+  it('refuses a row or a series 11 section added to the frozen archive (v11.0.4)', () => {
+    const frozen = fs.readFileSync(path.join(process.cwd(), 'docs/rules/archive/TECH_DEBT_ARCHIVE_V10.md'), 'utf8');
+    expect(findFrozenArchiveViolations(`${frozen}| TD-1400 | x | resolved |\n`)[0]).toMatch(/1124 rows instead of 1123/);
+    expect(findFrozenArchiveViolations(`## 🧭 نسخه ۱۱ — x\n${frozen}`)).toHaveLength(1);
   });
 });
 

@@ -26,6 +26,12 @@ describe('unsupported_k8s_and_no_staging_obs_r1_15', () => {
     expect(manifest.split('\n').slice(0, 5).join('\n')).toContain('UNSUPPORTED EXAMPLE');
   });
 
+  it('the manifest is no version location: a placeholder image tag and no APP_VERSION (v11.0.4, governance review 1.2)', () => {
+    expect(manifest).toContain('erp:vX.Y.Z');
+    expect(manifest).not.toMatch(/erp:v\d+\.\d+\.\d+/);
+    expect(manifest).not.toContain('APP_VERSION');
+  });
+
   it('no install text points to the missing .env.production.example', () => {
     expect(fs.existsSync('.env.production.example')).toBe(false);
     expect(readme).not.toContain('.env.production.example');

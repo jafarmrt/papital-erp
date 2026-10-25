@@ -5,15 +5,21 @@
  *    entry with the version and title of a base entry replaces it when the base side left that entry unchanged
  *    against the common ancestor (an edit of an older entry, v10.2.28), and is left to the operator otherwise;
  *  - the migration journal: the base's entries plus this branch's own entries (renumbered later);
- *  - TECH_DEBT.md / TECH_DEBT_ARCHIVE.md: both sides of each conflict are kept (rows), a row both sides hold once,
+ *  - TECH_DEBT.md / docs/rules/DEBT_LESSONS.md: both sides of each conflict are kept (rows), a row both sides hold once,
  *    and a row both sides changed differently is left to the operator;
  *    the counters and the «last review» line keep this branch's side (the counters are recounted later, and a row
  *    the merged archive holds is dropped from TECH_DEBT.md then: TD-981, renumber/plan.ts);
- *  - package.json, package-lock.json, k8s, README.md: a conflict whose lines are all version lines keeps the
+ *  - deploy/k8s/erp-deployment.yaml (v11.0.4, no version location): the side with the placeholder tag `erp:vX.Y.Z`,
+ *    the base's side when neither has it, the operator when both have it (a real edit); the frozen debt archive is left
+ *    to the operator (its new row belongs in DEBT_LESSONS.md, and check:version refuses one left in the archive);
+ *  - DEBT_LESSONS.md: only hunks of debt rows are merged, a conflict in a lesson is left to the operator;
+ *  - package.json, package-lock.json, README.md: a conflict whose lines are all version lines keeps the
  *    base's side (the version is set later; v10.2.28: the base's side, so text the base changed on a version line,
  *    such as the paths on the README status line, is not dropped).
  * Any other conflict is left to the operator.
  */
+
+import { CLOSED_DEBT_FILE, FROZEN_DEBT_ARCHIVE } from './debtFiles';
 
 export interface ConflictStages {
   /** stage 2 («ours», the branch) */
@@ -25,9 +31,11 @@ export interface ConflictStages {
 }
 
 const JOURNAL = 'drizzle/meta/_journal.json';
-const VERSION_FILES = new Set(['package.json', 'package-lock.json', 'deploy/k8s/erp-deployment.yaml', 'README.md']);
-const UNION_FILES = new Set(['TECH_DEBT.md', 'TECH_DEBT_ARCHIVE.md']);
-const VERSION_LINE = /"version": "[^"]*"|erp:v\d+\.\d+\.\d+|^\s*value: "\d+\.\d+\.\d+"|نسخه مستقر: `v\d+\.\d+\.\d+`/;
+const K8S_EXAMPLE = 'deploy/k8s/erp-deployment.yaml';
+const K8S_PLACEHOLDER = 'erp:vX.Y.Z';
+const VERSION_FILES = new Set(['package.json', 'package-lock.json', 'README.md']);
+const UNION_FILES = new Set(['TECH_DEBT.md', CLOSED_DEBT_FILE]);
+const VERSION_LINE = /"version": "[^"]*"|نسخه مستقر: `v\d+\.\d+\.\d+`/;
 const SINGLE_LINES = [/^- \*\*فعال:\*\* /, /^- \*\*آرشیو شده \(resolved\):\*\* /, /^\*آخرین بازبینی: /];
 
 interface Hunk { ours: string[]; theirs: string[] }
@@ -151,10 +159,14 @@ const DEBT_ROW = /^\| TD-\d+ \|/;
 
 const rowIds = (lines: string[]) => new Map(lines.map(l => [l.match(/^\| (TD-\d+) \|/)?.[1], l] as const).filter(([id]) => id));
 
-function unionRows(merged: string): string | null {
+/** v11.0.4: DEBT_LESSONS.md also holds prose (the lessons); only a hunk of debt rows and blank lines is merged */
+const rowsOnly = (lines: string[]) => lines.every(l => l.trim() === '' || DEBT_ROW.test(l));
+
+function unionRows(merged: string, rowsOnlyHunks = false): string | null {
   // v10.0.22 (TD-981): a row both sides of a hunk hold is kept once; one row both sides edited differently is left
   // to the operator (keeping both would list the id twice)
   const resolved = resolveHunks(merged, h => {
+    if (rowsOnlyHunks && !(rowsOnly(h.ours) && rowsOnly(h.theirs))) return null;
     const ours = rowIds(h.ours);
     for (const [id, line] of rowIds(h.theirs)) if (ours.has(id) && ours.get(id) !== line) return null;
     return [...h.ours, ...h.theirs.filter(l => !(DEBT_ROW.test(l) && h.ours.includes(l)))];
@@ -179,7 +191,17 @@ export function resolveReleaseConflict(rel: string, merged: string, stages: Conf
   if (rel === activeFile) return unionChangelog(stages);
   if (rel === 'CHANGELOG.md') return unionChangelogMd(stages, series);
   if (rel === JOURNAL) return unionJournal(stages);
-  if (UNION_FILES.has(rel)) return unionRows(merged);
+  if (UNION_FILES.has(rel)) return unionRows(merged, rel === CLOSED_DEBT_FILE);
+  // v11.0.4: the k8s example is no version location: the side with the placeholder tag wins (a branch from before
+  // keeps the base's manifest, and the branch that makes it a placeholder keeps its own)
+  if (rel === K8S_EXAMPLE) {
+    const ours = stages.ours.includes(K8S_PLACEHOLDER);
+    const theirs = stages.theirs.includes(K8S_PLACEHOLDER);
+    if (ours && theirs) return null;
+    return ours ? stages.ours : stages.theirs;
+  }
+  // the frozen archive takes no new row: an old branch's closed row goes to DEBT_LESSONS.md by hand (check:version)
+  if (rel === FROZEN_DEBT_ARCHIVE) return null;
   if (VERSION_FILES.has(rel)) {
     return resolveHunks(merged, h => ([...h.ours, ...h.theirs].every(l => VERSION_LINE.test(l)) ? h.theirs : null));
   }

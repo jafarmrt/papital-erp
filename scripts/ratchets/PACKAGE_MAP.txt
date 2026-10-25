@@ -18,7 +18,6 @@ G  AGENTS.md
 G  CHANGELOG.md
 G  README.md
 G  TECH_DEBT.md
-G  TECH_DEBT_ARCHIVE.md
 G  docs/**
 G  opencode.json
 G  src/data/changelogs/**
