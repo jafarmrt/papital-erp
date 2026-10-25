@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { normalizeDecimalString, normalizeGroupedDecimalString } from '../../lib/numericInput';
+import { hasMisplacedGroupSeparator, normalizeDecimalString, normalizeGroupedDecimalString } from '../../lib/numericInput';
 import { parseNumberCell } from '../../lib/items/itemExcelCells';
 import { readDecimalInputText } from '../../lib/decimalInputText';
 import { voucherSourceHint, voucherSourceLabel } from '../../lib/accounting/voucherSource';
@@ -23,6 +23,11 @@ describe('misplaced group separators (v11 M4)', () => {
     expect(normalizeGroupedDecimalString('1,000,0')).toBe('1,000,0');
     // a first group with a leading zero is a decimal comma, not a thousands group («0,500» is not 500)
     expect(normalizeGroupedDecimalString('0,500')).toBe('0,500');
+    expect(normalizeGroupedDecimalString('00,500')).toBe('00,500');
+    // leading zeros before a real first group (typed after the 0 a number field shows) are still read
+    expect(normalizeGroupedDecimalString('05,000')).toBe('05000');
+    expect(hasMisplacedGroupSeparator('12,5')).toBe(true);
+    expect(hasMisplacedGroupSeparator('1,250')).toBe(false);
     // the lenient form of typing and display is unchanged
     expect(normalizeDecimalString('12,5')).toBe('125');
   });
@@ -42,7 +47,8 @@ describe('misplaced group separators (v11 M4)', () => {
       if (!res.success) expect(res.error.issues[0].message).toContain('جداکنندهٔ هزارگان');
     }
     // the browser reader refuses the same texts
-    for (const bad of ['12,5', '1٬00٬0', '۱٬۲']) expect(readDecimalInputText(bad).kind, bad).toBe('invalid');
+    for (const bad of ['12,5', '1٬00٬0', '۱٬۲', '0,500']) expect(readDecimalInputText(bad).kind, bad).toBe('invalid');
+    expect(readDecimalInputText('۰۵٬۰۰۰')).toMatchObject({ kind: 'value', text: '05000' });
   });
 
   it('the price, work quantity and piecework rate readers refuse a misplaced separator, never read it as 125', () => {
@@ -57,6 +63,7 @@ describe('misplaced group separators (v11 M4)', () => {
     expect(parseQuantityOrTime('12,5')).toBe(0);
     expect(parseQuantityOrTime('1,250')).toBe(1250);
     expect(parseQuantityOrTime('2:30')).toBe(2.5);
+    expect(parseQuantityOrTime('12,5:30')).toBe(0);
   });
 });
 

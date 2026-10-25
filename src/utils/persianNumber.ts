@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 import { formatCurrencyLabel } from "./formatters.js";
-import { GROUP_SEPARATOR, normalizeDecimalString, normalizeGroupedDecimalString } from "../lib/numericInput.js";
+import { hasMisplacedGroupSeparator, normalizeDecimalString } from "../lib/numericInput.js";
 
 export function toPersianDigits(val: string | number | null | undefined, maxDecimals: number = 2): string {
   if (val === null || val === undefined || typeof val === 'object') return '';
@@ -170,14 +170,14 @@ export function parseQuantityOrTime(val: string | number | null | undefined): nu
   if (typeof val === 'number') return isNaN(val) ? 0 : val;
   try {
     const str = toEnglishDigits(String(val)).trim();
+    // v11 phase 3.1 (M4): a misplaced group separator («12,5», «12,5:30») is no quantity (0, refused on save), never 125
+    if (str.split(':').some(hasMisplacedGroupSeparator)) return 0;
     if (str.includes(':')) {
       const parts = str.split(':');
       const hours = parseCleanNumber(parts[0], 0);
       const minutes = parseCleanNumber(parts[1], 0);
       return hours + (minutes / 60);
     }
-    // v11 phase 3.1 (M4): a misplaced group separator («12,5») is no quantity (0, refused on save), never 125
-    if (GROUP_SEPARATOR.test(normalizeGroupedDecimalString(str))) return 0;
     return parseCleanNumber(str, 0);
   } catch {
     return 0;

@@ -25,6 +25,7 @@ import {
   PieceworkPayroll
 } from '../types';
 import { toast as hotToast } from 'react-hot-toast';
+import { hasMisplacedGroupSeparator } from '../lib/numericInput';
 import { parseQuantityOrTime, formatPersianPrice, errorMessageOf, toStorageDate, getTodayIsoDate } from '../utils';
 import { computeFixedSalaryShares, priorFixedGrantsOf } from '../lib/payroll/fixedSalaryProration';
 import { fixedSalaryPeriodEnd, fixedSalaryPeriodStart, payrollPrepaymentError, serviceEndOf, serviceStartOf } from '../lib/payroll/payrollPeriod';
@@ -327,8 +328,8 @@ export function usePiecework() {
           return;
         }
 
-        // v11 phase 3.1 (M4): a row whose typed quantity is not read («12,5», a misplaced separator) stops the save, never dropped
-        if (batchLogRows.some(r => r.taskId && String(r.quantity ?? '').trim() !== '' && parseQuantityOrTime(r.quantity) <= 0)) {
+        // v11 phase 3.1 (M4): a row whose quantity has a misplaced group separator («12,5») stops the save, never dropped
+        if (batchLogRows.some(r => r.taskId && String(r.quantity ?? '').split(':').some(hasMisplacedGroupSeparator))) {
           hotToast.error('مقدار یا زمان یک ردیف کاری معتبر نیست؛ جداکنندهٔ هزارگان فقط میان دسته‌های سه‌رقمی می‌آید و برای ممیز «٫» بزنید.');
           setIsSavingLog(false);
           return;
