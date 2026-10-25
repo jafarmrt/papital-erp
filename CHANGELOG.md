@@ -24,11 +24,14 @@ going forward.
 ### Unreleased
 - Release process (sub-phase 1.3, PR 3, product-owner decision): a version per server update, not per change. A pull request adds its line here under Unreleased and takes no version (`npm run release` without `version`); a release cut before a server update moves these lines under the next patch, and the end of a roadmap phase takes the next minor (end of phase 1 = v11.1.0). `release:renumber` keeps both sides' Unreleased lines, and `check:version` refuses a missing Unreleased section and a skipped version. Vitest `releaseTool.test.ts`, `releaseRenumber.test.ts`, `releaseGovernance.test.ts`.
 
-### v11.0.3 — درس‌های بدهی به‌جای بایگانی بزرگ
+### v11.0.4 — درس‌های بدهی به‌جای بایگانی بزرگ
 - Documentation and tooling (sub-phase 1.3, PR 2): the 1.4 MB `TECH_DEBT_ARCHIVE.md` is frozen as `docs/rules/archive/TECH_DEBT_ARCHIVE_V10.md` (rows closed up to series 10). `docs/rules/DEBT_LESSONS.md` holds 15 lessons of the fixed debt that no single rule names, and the rows closed since series 11 (TD-1389 and TD-1390 move there). `npm run release`, `release:renumber` and `check:version` write and read the new file, and the frozen archive still counts for used ids and the closed-row count. The unsupported k8s example is no version location any more (placeholder image tag, no `APP_VERSION`), so a release bumps three locations.
 
-### v11.0.2 — قواعد کوتاه پروژه
+### v11.0.3 — قواعد کوتاه پروژه
 - Documentation and tooling (sub-phase 1.3, PR 1, from the 24 section decisions of the v11 governance review): `AGENTS.md` becomes a short core, one line per rule with its guard, and the full rules move to area files in `docs/rules/` (20 files, version and debt tags removed, a UI glossary in `ui.md`). The old `AGENTS.md` and `ARCHITECTURE_RULES.md` are kept verbatim in `docs/rules/archive/`. The architecture rules join the core: thin routes, no whole raw SQL write statement (a `sql` fragment inside `set()` is allowed), package boundary must not grow. Lighter process: small same-kind fixes share a pull request and a version, docs-only pull requests take no version, TD rows only for remaining debt, full review only for money, stock, security and migrations. New architecture ratchet metric `rawSqlWrites` (baseline 0); the governance docs test reads `AGENTS.md` and `docs/rules/*.md`.
+
+### v11.0.2 — تصویر پایهٔ Docker از آینهٔ گوگل
+- CI fix: Amazon ECR Public refused the Node base image with «toomanyrequests: Data limit exceeded», so the Docker Container Build Verification job failed on master and every pull request before any build step. The Dockerfile base images now come from the Google mirror of the Docker official images (`mirror.gcr.io/library/node:24-alpine`, same tag). The server is not affected (it installs with `install.sh`, not Docker). Vitest `ci_images_from_mirror_td_1169`, `node24Runtime.test.ts`.
 
 ### v11.0.1 — دکمهٔ پاک کردن شاخه‌های ادغام‌شده در GitHub
 - Tooling only: a hand-run Actions workflow «Delete merged branches» (`.github/workflows/delete-merged-branches.yml`, logic in `scripts/governance/deleteMergedBranches.ts`) deletes the branches fully merged into the default branch and keeps the default, protected and open pull request branches and any branch with its own commits; it lists only unless «delete» is ticked (TD-1390, decision t50-6). No change to the app.

@@ -41,7 +41,7 @@ function fixture(activeRows: string[]): Map<string, string> {
       '|----|------|-----|--------------|-------|',
       '| TD-413 | حسابداری | P3 — قدیمی | x.ts | resolved (v8.0.114) |',
     ].join('\n')],
-    // v11.0.3: rows closed up to series 10, frozen; its ids stay used
+    // v11.0.4: rows closed up to series 10, frozen; its ids stay used
     ['docs/rules/archive/TECH_DEBT_ARCHIVE_V10.md', '| TD-300 | انبار | P1 — قدیمی | x.ts | resolved (v7.0.1) |\n'],
     ['CHANGELOG.md', '## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)\n\n### v9.0.0 — آغاز\n- آغاز سری ۹.\n'],
     ['src/data/changelogs/9.ts', "export const v9Updates: AIUpdateLog[] = [\n  {\n    version: 'v9.0.0',\n  }\n];\n"],
@@ -75,7 +75,7 @@ const baseSpec = (over: Partial<ReleaseSpec>): ReleaseSpec => ({
 const row = (id: string, status = 'open') => `| ${id} | انبار | P2 — شرح | a.ts | ${status} |`;
 
 describe('scripts/release.ts (v9.0.0)', () => {
-  it('writes the entry of the active series and bumps the three version locations, never the k8s example (v11.0.3)', () => {
+  it('writes the entry of the active series and bumps the three version locations, never the k8s example (v11.0.4)', () => {
     const store = fixture([]);
     applyRelease(memoryFiles(store), baseSpec({}), ACTIVE);
     expect(store.get('src/data/changelogs/9.ts')).toMatch(/export const v9Updates: AIUpdateLog\[\] = \[\n {2}\{\n {4}version: 'v9\.0\.1'/);
@@ -127,7 +127,7 @@ describe('scripts/release.ts (v9.0.0)', () => {
     expect(() => applyRelease(memoryFiles(fixture([])), baseSpec({ version: 'v8.0.129' }), ACTIVE)).toThrow(/active series 9/);
     expect(() => applyRelease(memoryFiles(fixture([])), baseSpec({ mdLine: '- یک خط.' }), ACTIVE)).toThrow(/mdLine/);
     expect(() => applyRelease(memoryFiles(fixture([])), baseSpec({ openRows: [row('TD-413')] }), ACTIVE)).toThrow(/TD-413/);
-    // v11.0.3: an id of the frozen archive is used too
+    // v11.0.4: an id of the frozen archive is used too
     expect(() => applyRelease(memoryFiles(fixture([])), baseSpec({ openRows: [row('TD-300')] }), ACTIVE)).toThrow(/TD-300/);
     expect(() => applyRelease(memoryFiles(fixture([])), baseSpec({ td: 'TD-999', archiveRow: row('TD-999') }), ACTIVE)).toThrow(/TD-999/);
   });

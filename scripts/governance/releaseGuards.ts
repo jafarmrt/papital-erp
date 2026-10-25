@@ -21,7 +21,7 @@ function duplicates(ids: string[]): Array<[string, number]> {
   return [...count].filter(([, n]) => n > 1);
 }
 
-/** v11.0.3: the frozen archive keeps exactly its rows and gets no section of series 11 or later. */
+/** v11.0.4: the frozen archive keeps exactly its rows and gets no section of series 11 or later. */
 export function findFrozenArchiveViolations(frozen: string): string[] {
   const rows = debtIds(frozen).length;
   const out: string[] = [];

@@ -12,7 +12,7 @@
  *    and a row both sides changed differently is left to the operator;
  *    the counters and the «last review» line keep this branch's side (the counters are recounted later, and a row
  *    the merged archive holds is dropped from TECH_DEBT.md then: TD-981, renumber/plan.ts);
- *  - deploy/k8s/erp-deployment.yaml (v11.0.3, no version location): the base's side; the frozen debt archive is left
+ *  - deploy/k8s/erp-deployment.yaml (v11.0.4, no version location): the base's side; the frozen debt archive is left
  *    to the operator (its new row belongs in DEBT_LESSONS.md, and check:version refuses one left in the archive);
  *  - DEBT_LESSONS.md: only hunks of debt rows are merged, a conflict in a lesson is left to the operator;
  *  - package.json, package-lock.json, README.md: a conflict whose lines are all version lines keeps the
@@ -34,6 +34,7 @@ export interface ConflictStages {
 
 const JOURNAL = 'drizzle/meta/_journal.json';
 const K8S_EXAMPLE = 'deploy/k8s/erp-deployment.yaml';
+const K8S_PLACEHOLDER = 'erp:vX.Y.Z';
 const VERSION_FILES = new Set(['package.json', 'package-lock.json', 'README.md']);
 const UNION_FILES = new Set(['TECH_DEBT.md', CLOSED_DEBT_FILE]);
 const VERSION_LINE = /"version": "[^"]*"|نسخه مستقر: `v\d+\.\d+\.\d+`/;
@@ -198,7 +199,7 @@ const DEBT_ROW = /^\| TD-\d+ \|/;
 
 const rowIds = (lines: string[]) => new Map(lines.map(l => [l.match(/^\| (TD-\d+) \|/)?.[1], l] as const).filter(([id]) => id));
 
-/** v11.0.3: DEBT_LESSONS.md also holds prose (the lessons); only a hunk of debt rows and blank lines is merged */
+/** v11.0.4: DEBT_LESSONS.md also holds prose (the lessons); only a hunk of debt rows and blank lines is merged */
 const rowsOnly = (lines: string[]) => lines.every(l => l.trim() === '' || DEBT_ROW.test(l));
 
 function unionRows(merged: string, rowsOnlyHunks = false): string | null {
@@ -231,8 +232,9 @@ export function resolveReleaseConflict(rel: string, merged: string, stages: Conf
   if (rel === 'CHANGELOG.md') return unionChangelogMd(stages, series);
   if (rel === JOURNAL) return unionJournal(stages);
   if (UNION_FILES.has(rel)) return unionRows(merged, rel === CLOSED_DEBT_FILE);
-  // v11.0.3: the k8s example is no version location; a branch from before keeps the base's manifest
-  if (rel === K8S_EXAMPLE) return stages.theirs;
+  // v11.0.4: the k8s example is no version location: the side with the placeholder tag wins (a branch from before
+  // keeps the base's manifest, and the branch that makes it a placeholder keeps its own)
+  if (rel === K8S_EXAMPLE) return [stages.ours, stages.theirs].find(m => m.includes(K8S_PLACEHOLDER)) ?? stages.theirs;
   // the frozen archive takes no new row: an old branch's closed row goes to DEBT_LESSONS.md by hand (check:version)
   if (rel === FROZEN_DEBT_ARCHIVE) return null;
   if (VERSION_FILES.has(rel)) {
