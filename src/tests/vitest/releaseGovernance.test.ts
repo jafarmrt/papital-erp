@@ -29,7 +29,7 @@ describe('debt registry gate (TD-981)', () => {
     expect(findFrozenArchiveViolations(read('docs/rules/archive/TECH_DEBT_ARCHIVE_V10.md'))).toEqual([]);
   });
 
-  it('refuses a row or a series 11 section added to the frozen archive (v11.0.3)', () => {
+  it('refuses a row or a series 11 section added to the frozen archive (v11.0.4)', () => {
     const frozen = fs.readFileSync(path.join(process.cwd(), 'docs/rules/archive/TECH_DEBT_ARCHIVE_V10.md'), 'utf8');
     expect(findFrozenArchiveViolations(`${frozen}| TD-1400 | x | resolved |\n`)[0]).toMatch(/1124 rows instead of 1123/);
     expect(findFrozenArchiveViolations(`## 🧭 نسخه ۱۱ — x\n${frozen}`)).toHaveLength(1);

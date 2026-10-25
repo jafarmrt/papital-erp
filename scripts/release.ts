@@ -19,8 +19,8 @@ import { CLOSED_DEBT_FILE, FROZEN_DEBT_ARCHIVE } from './renumber/debtFiles.js';
  *   openRows?                ردیف‌های کامل تازه «| TD-### | … |» برای جدول فعال TECH_DEBT.md (نسخه مستند)
  *   lastReview?              متن «آخرین بازبینی» TECH_DEBT.md (بی ستاره)
  *   edits?                   [[مسیر، متن قدیم (دقیقاً یک بار در فایل)، متن تازه], ...] — نقشه راه، گزارش ممیزی، AGENTS.md
- * سه محل نسخه (package.json و package-lock.json، مدخل چنج‌لاگ فعال، README) با هم عوض می‌شوند؛ از v11.0.3 مانیفست k8s جای نسخه نیست.
- * از v11.0.3 ردیف بسته‌شده به بخش سری فعال docs/rules/DEBT_LESSONS.md می‌رود (آرشیو تا سری ۱۰ منجمد است).
+ * سه محل نسخه (package.json و package-lock.json، مدخل چنج‌لاگ فعال، README) با هم عوض می‌شوند؛ از v11.0.4 مانیفست k8s جای نسخه نیست.
+ * از v11.0.4 ردیف بسته‌شده به بخش سری فعال docs/rules/DEBT_LESSONS.md می‌رود (آرشیو تا سری ۱۰ منجمد است).
  */
 
 export interface CloseRow {

@@ -1,5 +1,5 @@
 /**
- * v11.0.3 (sub-phase 1.3): where closed debt rows live. Kept under scripts/renumber/ so a branch that takes this
+ * v11.0.4 (sub-phase 1.3): where closed debt rows live. Kept under scripts/renumber/ so a branch that takes this
  * command's code (`git checkout <ref> -- scripts/release-renumber.ts scripts/renumber`) gets the paths too.
  */
 

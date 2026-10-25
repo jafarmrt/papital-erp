@@ -12,7 +12,7 @@ import { CLOSED_DEBT_FILE, FROZEN_DEBT_ARCHIVE, findDebtRegistryViolations, find
  *   1) "version" در package.json (مرجع یگانه؛ خوانده‌شده توسط src/lib/version.ts و /health)
  *   2) مدخل نخست چنج‌لاگ فعال (SYSTEM_UPDATES[0].version در ACTIVE_CHANGELOG.file — از v11.0.0 فایل 11.ts)
  *   3) هدر مستندات README.md
- * v11.0.3: مانیفست k8s نمونهٔ پشتیبانی‌نشده است و دیگر جای نسخه نیست (تصمیم مالک محصول در بررسی حاکمیتی ۱.۲).
+ * v11.0.4: مانیفست k8s نمونهٔ پشتیبانی‌نشده است و دیگر جای نسخه نیست (تصمیم مالک محصول در بررسی حاکمیتی ۱.۲).
  * v8.0.0: نسخه در سری فعال است و سری‌های بسته‌شده منجمدند (از v11.0.0: 7.ts، 8.ts، 9.ts و 10.ts) (src/data/changelogs/seriesGuard.ts).
  */
 
