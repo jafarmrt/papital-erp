@@ -16,8 +16,11 @@ export function toLatinDigits(value: string): string {
 
 /** جداکنندهٔ هزارگان: «,»، «٬» یا «،» */
 export const GROUP_SEPARATOR = /[,٬،]/;
-/** عددی که جداکننده‌اش فقط میان دسته‌های سه‌رقمی بخش صحیح آمده است («۱٬۲۳۴٬۵۶۷٫۸») */
-export const GROUPED_TEXT = /^-?\d{1,3}([,٬،]\d{3})+(\.\d*)?$/;
+/**
+ * عددی که جداکننده‌اش فقط میان دسته‌های سه‌رقمی بخش صحیح آمده است («۱٬۲۳۴٬۵۶۷٫۸»); v11 phase 3.1 (M4): the first group
+ * never starts with 0, so «0,500» (a decimal comma) is not read as 500
+ */
+export const GROUPED_TEXT = /^-?[1-9]\d{0,2}([,٬،]\d{3})+(\.\d*)?$/;
 
 /** رشته عدد اعشاری با ارقام لاتین: ارقام فارسی و عربی، ممیز «٫»، جداکننده‌های هزارگان و فاصله‌ها نرمال می‌شوند */
 export function normalizeDecimalString(value: string): string {

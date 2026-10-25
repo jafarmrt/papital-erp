@@ -18,6 +18,7 @@ afterEach(cleanup);
  * 10.3 package 4 (OBS-R1-65, decision ت۴۷ item 2): the bank account form asks for the account's start date («تاریخ آغاز
  * حساب», default today), which dates the opening voucher; an edit sends it only when changed, and once the opening voucher
  * is issued the field is read only. Red on v10.3.18: the form had no such field and sent no start date.
+ * v11 phase 3.1 (M2): a draft opening voucher moves with the start date, so the field locks only once that voucher is approved.
  */
 const SHOWN = {
   startDate: 'تاریخ آغاز حساب',
@@ -60,9 +61,14 @@ describe('bank account start date (OBS-R1-65)', () => {
     expect(onSave.mock.calls[1][1]).toBe(7);
   });
 
-  it('after the opening voucher the start date is read only', () => {
-    const field = renderForm(savedBank({ openingDate: '2026-04-05', openingVoucherIssued: true, initialBalance: 3_000_000 }), vi.fn());
+  it('after the opening voucher is approved the start date is read only', () => {
+    const field = renderForm(savedBank({ openingDate: '2026-04-05', openingVoucherIssued: true, openingDateLocked: true, initialBalance: 3_000_000 }), vi.fn());
     expect(field.disabled).toBe(true);
     expect(field.value).toBe('2026-04-05');
+  });
+
+  it('while the opening voucher is a draft the start date still moves', () => {
+    const field = renderForm(savedBank({ openingDate: '2026-04-05', openingVoucherIssued: true, openingDateLocked: false, initialBalance: 3_000_000 }), vi.fn());
+    expect(field.disabled).toBe(false);
   });
 });

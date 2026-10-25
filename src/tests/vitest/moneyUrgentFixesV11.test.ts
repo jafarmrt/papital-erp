@@ -5,6 +5,10 @@ import { parseNumberCell } from '../../lib/items/itemExcelCells';
 import { readDecimalInputText } from '../../lib/decimalInputText';
 import { voucherSourceHint, voucherSourceLabel } from '../../lib/accounting/voucherSource';
 import { decimalInput } from '../../middleware/validate';
+import { parsePriceAmount } from '../../lib/items/priceInput';
+import { parseWorkQuantity } from '../../lib/piecework/workQuantity';
+import { parsePieceworkRate } from '../../lib/piecework/pieceworkRate';
+import { parseQuantityOrTime } from '../../utils/persianNumber';
 
 // v11 phase 3.1 (M4): one rule for the group separator on the server and in the browser
 describe('misplaced group separators (v11 M4)', () => {
@@ -17,6 +21,8 @@ describe('misplaced group separators (v11 M4)', () => {
     expect(normalizeGroupedDecimalString('1٬00٬0')).toBe('1٬00٬0');
     expect(normalizeGroupedDecimalString('۱٬۰')).toBe('1٬0');
     expect(normalizeGroupedDecimalString('1,000,0')).toBe('1,000,0');
+    // a first group with a leading zero is a decimal comma, not a thousands group («0,500» is not 500)
+    expect(normalizeGroupedDecimalString('0,500')).toBe('0,500');
     // the lenient form of typing and display is unchanged
     expect(normalizeDecimalString('12,5')).toBe('125');
   });
@@ -37,6 +43,20 @@ describe('misplaced group separators (v11 M4)', () => {
     }
     // the browser reader refuses the same texts
     for (const bad of ['12,5', '1٬00٬0', '۱٬۲']) expect(readDecimalInputText(bad).kind, bad).toBe('invalid');
+  });
+
+  it('the price, work quantity and piecework rate readers refuse a misplaced separator, never read it as 125', () => {
+    expect(parsePriceAmount('12,5')).toBeNull();
+    expect(parsePriceAmount('0,500')).toBeNull();
+    expect(parsePriceAmount('۱٬۲۵۰')).toBe('1250');
+    expect(parseWorkQuantity('12,5').ok).toBe(false);
+    expect(parseWorkQuantity('1,250')).toMatchObject({ ok: true });
+    expect(parsePieceworkRate('12,5', 'rate').ok).toBe(false);
+    expect(parsePieceworkRate('1٬250', 'rate')).toMatchObject({ ok: true });
+    // the work log form reads such a quantity as no quantity, so its save is refused
+    expect(parseQuantityOrTime('12,5')).toBe(0);
+    expect(parseQuantityOrTime('1,250')).toBe(1250);
+    expect(parseQuantityOrTime('2:30')).toBe(2.5);
   });
 });
 

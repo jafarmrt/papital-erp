@@ -1,4 +1,4 @@
-import { DECIMAL_PATTERN, normalizeDecimalString } from '../numericInput.js';
+import { DECIMAL_PATTERN, normalizeGroupedDecimalString } from '../numericInput.js';
 import { TREASURY_CURRENCIES, normalizeTreasuryCurrency } from '../treasury/treasuryCurrency.js';
 
 /**
@@ -27,7 +27,8 @@ export function priceCurrencyOf(value: unknown): PriceCurrency | null {
 export function parsePriceAmount(value: unknown): string | null {
   if (typeof value === 'number') return Number.isFinite(value) && value > 0 ? String(value) : null;
   if (typeof value !== 'string') return null;
-  const clean = normalizeDecimalString(value);
+  // v11 phase 3.1 (M4): a misplaced group separator («12,5») is not a price, never 125 (the Excel import and the price page)
+  const clean = normalizeGroupedDecimalString(value);
   return DECIMAL_PATTERN.test(clean) && Number(clean) > 0 ? clean : null;
 }
 

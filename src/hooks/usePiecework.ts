@@ -327,6 +327,12 @@ export function usePiecework() {
           return;
         }
 
+        // v11 phase 3.1 (M4): a row whose typed quantity is not read («12,5», a misplaced separator) stops the save, never dropped
+        if (batchLogRows.some(r => r.taskId && String(r.quantity ?? '').trim() !== '' && parseQuantityOrTime(r.quantity) <= 0)) {
+          hotToast.error('مقدار یا زمان یک ردیف کاری معتبر نیست؛ جداکنندهٔ هزارگان فقط میان دسته‌های سه‌رقمی می‌آید و برای ممیز «٫» بزنید.');
+          setIsSavingLog(false);
+          return;
+        }
         const validRows = batchLogRows.filter(r => r.taskId && parseQuantityOrTime(r.quantity) > 0);
         if (validRows.length === 0) {
           hotToast.error('حداقل یک ردیف کاری با عنوان و تعداد معتبر وارد کنید');

@@ -157,12 +157,13 @@ export class DocumentCreationService {
       let nextRefNumber = refChanged ? requestedRef : existingDoc.refNumber;
       let nextRefFiscalYear: number | undefined;
       const currentFiscalYear = existingDoc.refFiscalYear ?? resolveJalaliFiscalYear(existingDoc.date);
-      // v11 phase 3.1 (M23): a draft never moves into another fiscal year that is closed, where it could be saved but never
-      // finalized; a proforma is exempt, since it takes the finalize day (proformaInvoice.ts), and so is a procurement order
-      // edited inside its own year, since its delivery takes the delivery day
-      if (newDocDate && existingDoc.type !== 'proforma' && (status || existingDoc.status) !== 'proforma'
-        && resolveJalaliFiscalYear(newDocDate) !== resolveJalaliFiscalYear(existingDoc.date)) {
-        await FiscalPeriodService.assertOpen(newDocDate, tx);
+      // v11 phase 3.1 (M23): a draft never moves into another fiscal year that is closed, and a proforma never turns into a
+      // draft in one, where it could be saved but never finalized; a proforma is exempt, since it takes the finalize day
+      // (proformaInvoice.ts), and so is a procurement order edited inside its own year, since its delivery takes the delivery day
+      const draftDate = newDocDate ?? existingDoc.date;
+      if (existingDoc.type !== 'proforma' && (status || existingDoc.status) !== 'proforma'
+        && (existingDoc.status === 'proforma' || resolveJalaliFiscalYear(draftDate) !== resolveJalaliFiscalYear(existingDoc.date))) {
+        await FiscalPeriodService.assertOpen(draftDate, tx);
       }
       if (newDocDate) {
         const newFiscalYear = resolveJalaliFiscalYear(newDocDate);

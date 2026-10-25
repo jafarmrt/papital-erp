@@ -8,6 +8,7 @@ import { FiscalPeriodService } from '../../services/accounting/fiscalPeriod.serv
 import { getDefaultWarehouseCode } from '../../services/inventory/warehouseResolver.js';
 import { createTestItem, createTestWarehouse } from '../fixtures/factories.js';
 import { miscContraAccountId } from '../fixtures/treasuryParty.js';
+import { newTask, newWorker } from '../invariants/payrollScenarios.js';
 import { TestCaseResult } from '../types.js';
 import { type ShouldRun, accountIdsByCode, assertNoProblems, inFiscalSandbox, runCase, sandboxAdminClient, sandboxClientWith } from './fiscalClosingTests.js';
 
@@ -171,7 +172,13 @@ export async function runMoneyUrgentFixesV11Tests(shouldRun: ShouldRun): Promise
       if (edit.status === 409 && !textOf(edit).includes(ACCOUNT_FORM_HINT)) problems.push(`the edit refusal does not point to the account form: ${textOf(edit).slice(0, 200)}`);
       refused('deleting the draft opening voucher', await api.del(`/api/accounting/vouchers/${openingId}`));
 
-      // 2) the start date of the draft moves from the account form, the voucher with it
+      // 2) the start date of the draft moves from the account form, the voucher with it; the form leaves the field open
+      const flags = async () => {
+        const list = (await api.get('/api/accounting/bank-accounts')).body as Array<{ id: number; openingVoucherIssued?: boolean; openingDateLocked?: boolean }>;
+        const row = (Array.isArray(list) ? list : []).find(b => b.id === bankId);
+        return `issued ${String(row?.openingVoucherIssued)} locked ${String(row?.openingDateLocked)}`;
+      };
+      if (await flags() !== 'issued true locked false') problems.push(`with a draft opening voucher the account lists ${await flags()}, expected issued true locked false`);
       const moved = await api.put(`/api/accounting/bank-accounts/${bankId}`, { openingDate: '2026-04-06' });
       if (moved.status !== 200) problems.push(`moving the start date of a draft opening voucher returned ${brief(moved)}, expected 200`);
       if ((await voucherRow(openingId))?.date !== '2026-04-06') problems.push(`the draft opening voucher is dated ${(await voucherRow(openingId))?.date}, expected 2026-04-06`);
@@ -184,6 +191,7 @@ export async function runMoneyUrgentFixesV11Tests(shouldRun: ShouldRun): Promise
       refused('reversing the approved opening voucher', await api.post(`/api/accounting/vouchers/${openingId}/reverse`, { reason: 'M2 reversal' }));
       const late = await api.put(`/api/accounting/bank-accounts/${bankId}`, { openingDate: '2026-04-07' });
       if (late.status !== 422 || codeOf(late) !== 'BANK_OPENING_DATE_LOCKED') problems.push(`moving the start date after the approval returned ${brief(late)}, expected 422 BANK_OPENING_DATE_LOCKED`);
+      if (await flags() !== 'issued true locked true') problems.push(`with an approved opening voucher the account lists ${await flags()}, expected issued true locked true`);
       if (await bankState(bankId) !== 'card 3000000 ledger 3000000') problems.push(`after the refusals the bank shows ${await bankState(bankId)}, expected card 3000000 ledger 3000000`);
 
       // 4) the opening balance changes in the account form; its adjustment voucher is sourced too
@@ -205,8 +213,8 @@ export async function runMoneyUrgentFixesV11Tests(shouldRun: ShouldRun): Promise
   }
 
   const m4 = 'reg_misplaced_group_separator_refused_v11_m4';
-  if (shouldRun(m4, 'v11', 'phase3', 'm4', 'decimal', 'separator', 'voucher', 'treasury', 'document', 'transfer')) {
-    await runCase(results, m4, 'v11 phase 3.1 (M4): a misplaced group separator is refused in a voucher row, a treasury amount, a document line and a warehouse transfer, and nothing is written; groups of three are still read', () => inFiscalSandbox(async () => {
+  if (shouldRun(m4, 'v11', 'phase3', 'm4', 'decimal', 'separator', 'voucher', 'treasury', 'document', 'transfer', 'piecework')) {
+    await runCase(results, m4, 'v11 phase 3.1 (M4): a misplaced group separator is refused in a voucher row, a treasury amount, a document line, a warehouse transfer, a work log quantity and an Excel base rate, and nothing is written; groups of three are still read', () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const today = await businessTodayIsoDate();
@@ -248,8 +256,19 @@ export async function runMoneyUrgentFixesV11Tests(shouldRun: ShouldRun): Promise
       refused('a warehouse transfer of «1,2»', await api.post('/api/inventory/transfer', { itemId: item.id, fromLocation: main, toLocation: other.code, quantity: '1,2', date: today }));
       const kardex = await count(sql`SELECT count(*)::int AS n FROM transactions WHERE item_id = ${item.id} AND is_deleted = 0`);
       if (kardex !== 0) problems.push(`the refused transfer wrote ${kardex} Kardex rows`);
+
+      // 5) piecework: a work log quantity (the wage is quantity times rate) and a base rate in the Excel import
+      const worker = await newWorker('M4 worker');
+      const task = await newTask();
+      refused('a work log quantity of 12,5', await api.post('/api/piecework/logs', { personnelId: worker, taskId: task, date: today, quantity: '12,5', unitRate: 100_000 }));
+      refused('a work log quantity of Persian 1,2', await api.post('/api/piecework/logs', { personnelId: worker, taskId: task, date: today, quantity: PERSIAN_QUANTITY, unitRate: 100_000 }));
+      const logs = await count(sql`SELECT count(*)::int AS n FROM piecework_logs WHERE personnel_id = ${worker} AND is_deleted = 0`);
+      if (logs !== 0) problems.push(`the refused work logs wrote ${logs} rows`);
+      const rateTitle = `M4 rate ${tagOf()}`;
+      const imported = await api.post('/api/piecework/tasks/import-excel', { rows: [{ title: rateTitle, defaultRate: '12,5' }] });
+      if (imported.status !== 200 || imported.body?.createdCount !== 0 || (imported.body?.errors ?? []).length !== 1) problems.push(`an Excel base rate of 12,5 answered ${brief(imported)}, expected the row in errors and nothing created`);
       assertNoProblems(problems);
-      return 'voucher rows 12,5 / 1,00,0 (Persian separator) / Persian 1,0 / 1,000,0, receipt 1,0, line quantity Persian 1,2 and price 12,5, transfer 1,2: 400, nothing written; Persian 1,000 stored 1000';
+      return 'work log quantities 12,5 and Persian 1,2: 400, no row; Excel base rate 12,5 refused; voucher rows 12,5 / 1,00,0 (Persian separator) / Persian 1,0 / 1,000,0, receipt 1,0, line quantity Persian 1,2 and price 12,5, transfer 1,2: 400, nothing written; Persian 1,000 stored 1000';
     }));
   }
 
@@ -326,6 +345,18 @@ export async function runMoneyUrgentFixesV11Tests(shouldRun: ShouldRun): Promise
         docType: 'proforma', status: 'proforma', refNumber: 'auto', date: CLOSED_DAY, location: main, buyer_name: 'M23 buyer', items: line,
       });
       if (proforma.status !== 200) problems.push(`a proforma dated in the closed year returned ${brief(proforma)}, expected 200`);
+      // an invoice in proforma status takes the finalize day only while it stays a proforma, so it never turns into a draft there
+      const invoiceProforma = await api.post('/api/documents', {
+        docType: 'invoice', status: 'proforma', refNumber: 'auto', date: CLOSED_DAY, location: main, buyer_name: 'M23 buyer', items: line,
+      });
+      if (invoiceProforma.status !== 200) problems.push(`an invoice proforma dated in the closed year returned ${brief(invoiceProforma)}, expected 200`);
+      else {
+        const proformaId = Number(invoiceProforma.body?.docId);
+        const [pf] = (await orm.execute(sql`SELECT version, status FROM documents WHERE id = ${proformaId}`)).rows as Array<{ version: number; status: string }>;
+        refused('turning the closed-year invoice proforma into a draft', await api.put(`/api/documents/${proformaId}`, { status: 'draft', items: line, version: pf?.version }));
+        const [after] = (await orm.execute(sql`SELECT status FROM documents WHERE id = ${proformaId}`)).rows as Array<{ status: string }>;
+        if (after?.status !== 'proforma') problems.push(`the refused change left the invoice proforma ${after?.status}`);
+      }
       const draft = await api.post('/api/documents', {
         docType: 'invoice', status: 'draft', refNumber: 'auto', date: today, location: main, buyer_name: 'M23 buyer', items: line,
       });
@@ -338,7 +369,7 @@ export async function runMoneyUrgentFixesV11Tests(shouldRun: ShouldRun): Promise
       const kept = await api.put(`/api/documents/${draftId}`, { date: today, items: line, notes: 'M23 same year', version: (await storedDraft()).version });
       if (kept.status !== 200) problems.push(`editing the draft inside its open year returned ${brief(kept)}`);
       assertNoProblems(problems);
-      return 'closed 1387: receipt and transfer (with and without voucher), cheque without voucher, cheque step, warehouse transfer, draft invoice create and move: 422 naming the year, nothing written; proforma 200; same-year edit 200';
+      return 'closed 1387: receipt and transfer (with and without voucher), cheque without voucher, cheque step, warehouse transfer, draft invoice create and move, invoice proforma to draft: 422 naming the year, nothing written; proforma 200; same-year edit 200';
     }));
   }
 

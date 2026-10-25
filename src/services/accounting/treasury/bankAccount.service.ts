@@ -158,10 +158,18 @@ export class BankAccountService {
     for (const ov of draftOpenings) {
       if (ov.referenceId) draftOpeningBanks.add(Number(ov.referenceId));
     }
-    // 10.3 package 4 (OBS-R1-65): accounts whose opening voucher is issued, in any status; their start date is fixed
-    const issuedOpeningBanks = new Set((await db.select({ referenceId: journalVouchers.referenceId }).from(journalVouchers)
-      .where(and(eq(journalVouchers.referenceModule, 'treasury_opening'), eq(journalVouchers.voucherType, 'opening'), eq(journalVouchers.isDeleted, 0))))
-      .map(ov => Number(ov.referenceId)));
+    // 10.3 package 4 (OBS-R1-65): accounts whose opening voucher is issued, in any status. v11 phase 3.1 (M2): the start date
+    // is fixed only once that voucher (the first, as `openingVoucherOf`) is approved; a draft moves with it
+    const issuedOpeningBanks = new Set<number>();
+    const lockedOpeningDateBanks = new Set<number>();
+    for (const ov of await db.select({ referenceId: journalVouchers.referenceId, status: journalVouchers.status }).from(journalVouchers)
+      .where(and(eq(journalVouchers.referenceModule, 'treasury_opening'), eq(journalVouchers.voucherType, 'opening'), eq(journalVouchers.isDeleted, 0)))
+      .orderBy(journalVouchers.id)) {
+      const bankId = Number(ov.referenceId);
+      if (issuedOpeningBanks.has(bankId)) continue;
+      issuedOpeningBanks.add(bankId);
+      if (ov.status !== 'draft') lockedOpeningDateBanks.add(bankId);
+    }
 
     return rawList.map(b => {
       const initBal = fin(b.initialBalance);
@@ -221,7 +229,7 @@ export class BankAccountService {
         syncStatus = waitsForDrafts ? 'pending_approval' : 'discrepant';
       }
 
-      return { row: b, initBal, currentBalance, ledgerBalance, treasuryBalance, totalDebit, totalCredit, discrepancy, syncStatus, openingVoucherIssued: issuedOpeningBanks.has(b.id) };
+      return { row: b, initBal, currentBalance, ledgerBalance, treasuryBalance, totalDebit, totalCredit, discrepancy, syncStatus, openingVoucherIssued: issuedOpeningBanks.has(b.id), openingDateLocked: lockedOpeningDateBanks.has(b.id) };
     });
   }
 
@@ -231,13 +239,14 @@ export class BankAccountService {
 
   // قرارداد API: مبالغ در پاسخ عدد هستند (P2-6)
   private static toBankAccountDto(
-    { row: b, initBal, currentBalance, ledgerBalance, treasuryBalance, totalDebit, totalCredit, discrepancy, syncStatus, openingVoucherIssued }: Awaited<ReturnType<typeof BankAccountService.computeBankBalances>>[number]
+    { row: b, initBal, currentBalance, ledgerBalance, treasuryBalance, totalDebit, totalCredit, discrepancy, syncStatus, openingVoucherIssued, openingDateLocked }: Awaited<ReturnType<typeof BankAccountService.computeBankBalances>>[number]
   ): BankAccount {
     return ({
       ...b,
       type: b.type as BankAccount['type'],
       openingDate: b.openingDate || '',
       openingVoucherIssued,
+      openingDateLocked,
       initialBalance: initBal.toNumber(),
       currentBalance: currentBalance.toNumber(),
       ledgerBalance: ledgerBalance.toNumber(),

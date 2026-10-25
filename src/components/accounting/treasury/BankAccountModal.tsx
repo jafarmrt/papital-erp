@@ -406,14 +406,16 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
               id={`${fieldId}-opening-date`}
               value={formData.openingDate}
               onChange={iso => setFormData(prev => ({ ...prev, openingDate: iso }))}
-              disabled={Boolean(editingBank?.openingVoucherIssued)}
+              disabled={Boolean(editingBank?.openingDateLocked)}
               placeholder="امروز"
               className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
             />
             <p className="text-[10px] text-slate-500 mt-1">
-              {editingBank?.openingVoucherIssued
-                ? 'سند افتتاحیهٔ این حساب صادر شده است و تاریخ آغاز آن دیگر تغییر نمی‌کند.'
-                : 'سند افتتاحیهٔ موجودی اولیه با همین تاریخ صادر می‌شود؛ خالی یعنی امروز.'}
+              {editingBank?.openingDateLocked
+                ? 'سند افتتاحیهٔ این حساب تأیید شده است و تاریخ آغاز آن دیگر تغییر نمی‌کند.'
+                : editingBank?.openingVoucherIssued
+                  ? 'سند افتتاحیهٔ این حساب پیش‌نویس است و با تاریخ آغاز جابه‌جا می‌شود.'
+                  : 'سند افتتاحیهٔ موجودی اولیه با همین تاریخ صادر می‌شود؛ خالی یعنی امروز.'}
             </p>
           </div>
 

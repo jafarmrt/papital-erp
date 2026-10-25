@@ -1,4 +1,4 @@
-import { DECIMAL_PATTERN, normalizeDecimalString } from '../numericInput.js';
+import { DECIMAL_PATTERN, normalizeGroupedDecimalString } from '../numericInput.js';
 
 /**
  * v9.0.279 (TD-813، B12P-10): نرخ کارمزدی (نرخ پایه عنوان کار و نرخ اختصاصی پرسنل) عدد نامنفی است. پیش‌تر نرخ پایه «abc»
@@ -15,7 +15,7 @@ export function parsePieceworkRate(raw: unknown, label: string): PieceworkRatePa
     if (!Number.isFinite(raw)) return { ok: false, message: `${label} باید عدد معتبر باشد` };
     clean = String(raw);
   } else if (typeof raw === 'string') {
-    clean = normalizeDecimalString(raw);
+    clean = normalizeGroupedDecimalString(raw); // v11 phase 3.1 (M4): «12,5» is refused, never read as 125
   } else {
     return { ok: false, message: `${label} باید عدد معتبر باشد` };
   }
