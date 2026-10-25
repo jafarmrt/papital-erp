@@ -14,12 +14,40 @@ export function toLatinDigits(value: string): string {
   });
 }
 
+/** جداکنندهٔ هزارگان: «,»، «٬» یا «،» */
+export const GROUP_SEPARATOR = /[,٬،]/;
+/**
+ * عددی که جداکننده‌اش فقط میان دسته‌های سه‌رقمی بخش صحیح آمده است («۱٬۲۳۴٬۵۶۷٫۸»); v11 phase 3.1 (M4): the first group
+ * starts with 1-9 after any leading zeros, so «0,500» (a decimal comma) is not read as 500, while «05,000» (typed after the 0
+ * a number field shows) is still 5000
+ */
+export const GROUPED_TEXT = /^-?0*[1-9]\d{0,2}([,٬،]\d{3})+(\.\d*)?$/;
+
 /** رشته عدد اعشاری با ارقام لاتین: ارقام فارسی و عربی، ممیز «٫»، جداکننده‌های هزارگان و فاصله‌ها نرمال می‌شوند */
 export function normalizeDecimalString(value: string): string {
   return toLatinDigits(value)
     .replace(/٫/g, '.')
     .replace(/[,٬،\s‌‏‎]/g, '')
     .trim();
+}
+
+/**
+ * v11 phase 3.1 (M4): the reader of a value that is saved (`decimalInput` on every server route, the Excel import, the
+ * settings): as `normalizeDecimalString`, but a group separator is removed only between groups of three digits of the
+ * whole part (`GROUPED_TEXT`, the browser's rule in `decimalInputText.ts`); a misplaced one («12,5»، «۱٬۰») stays in the
+ * text, so `DECIMAL_PATTERN` refuses it. Before, the server dropped it and read «12,5» as 125. The lenient form above stays
+ * for typing and display, where a half-typed amount is reformatted.
+ */
+export function normalizeGroupedDecimalString(value: string): string {
+  const text = toLatinDigits(value)
+    .replace(/٫/g, '.')
+    .replace(/[\s‌‏‎]/g, '');
+  return GROUP_SEPARATOR.test(text) && !GROUPED_TEXT.test(text) ? text : normalizeDecimalString(text);
+}
+
+/** v11 phase 3.1 (M4): a group separator left outside groups of three digits («12,5»), which no saved value accepts */
+export function hasMisplacedGroupSeparator(value: string): boolean {
+  return GROUP_SEPARATOR.test(normalizeGroupedDecimalString(value));
 }
 
 export const DECIMAL_PATTERN = /^-?\d+(\.\d+)?$/;

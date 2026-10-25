@@ -240,6 +240,8 @@ export class ChequeLifecycleService {
       // v9.0.100 (TD-510): حساب بانکی چک فعال و موجود (قفل اشتراکی سطح ۱۰ پیش از درج چک، سطح ۲۰)
       // v10.1.47 (ت۴۰): چک پرداختی فقط از حساب بانکی یا صندوق صادر می‌شود، چون از همان حساب وصول می‌شود
       const chequeBankAccountId = await requireChequeBankAccount(txEngine, data.bankAccountId, { clearing: data.type === 'paid' });
+      // v11 phase 3.1 (M5): a cheque is not recorded in a closed fiscal year, with or without its voucher
+      await VoucherService.checkFiscalPeriodOpen(issueDate, txEngine);
       if (party.contraAccountId) await requireChoosableContraAccount(txEngine, party.contraAccountId);
       // شناسه طرف حساب در جدول همان نوع (B04-05)
       assertPersonnelPartyId(partyType, data.partyId);
@@ -484,6 +486,8 @@ export class ChequeLifecycleService {
       // v9.0.98 (TD-506 / TD-669، B04-10 / B16-05، ت۶ الف): تاریخ اقدام سند همه گام‌های چک است؛ خالی ← امروز کسب‌وکار،
       // روز ناموجود یا پس از امروز ← 422. پیش‌تر `normalizeDateToIso` روز ناموجود را جابه‌جا و تاریخ آینده را بی‌سقف می‌پذیرفت.
       const voucherIsoDate = await resolveTreasuryWriteDate(data.actionDate, 'تاریخ اقدام چک');
+      // v11 phase 3.1 (M5): no cheque step is dated in a closed fiscal year, whether the step issues a voucher or not
+      await VoucherService.checkFiscalPeriodOpen(voucherIsoDate, txEngine);
 
       // V1.7.0: کدینگ از مپینگ قابل‌تنظیم
       await ChartOfAccountsService.getAllAccounts(txEngine);

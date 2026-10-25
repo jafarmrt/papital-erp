@@ -1,4 +1,4 @@
-import { DECIMAL_PATTERN, normalizeDecimalString, toLatinDigits } from '../numericInput.js';
+import { DECIMAL_PATTERN, normalizeGroupedDecimalString, toLatinDigits } from '../numericInput.js';
 
 /**
  * v9.0.280 (TD-812، B12P-09): مقدار کارکرد عدد بزرگ‌تر از صفر یا زمان «ساعت:دقیقه» است. پیش‌تر «-5» با مبلغ منفی ذخیره و
@@ -18,7 +18,8 @@ export function parseWorkQuantity(raw: unknown, label = 'مقدار کارکرد
     if (time) {
       value = Number(time[1]) + Number(time[2]) / 60;
     } else {
-      const clean = normalizeDecimalString(raw);
+      // v11 phase 3.1 (M4): a misplaced group separator («12,5») is refused, never read as 125
+      const clean = normalizeGroupedDecimalString(raw);
       if (!DECIMAL_PATTERN.test(clean)) return { ok: false, message: `${label} باید عدد یا زمان «ساعت:دقیقه» باشد (مقدار دریافتی: ${raw})` };
       value = Number(clean);
     }

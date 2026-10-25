@@ -8,6 +8,7 @@ import { normalizeDateToDbTimestamp } from '../../utils.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { STOCK_BACKDATE_PERMISSION } from '../../lib/permissions/documentPermissions.js';
 import { createLedgerLocationResolver } from './warehouseResolver.js';
+import { FiscalPeriodService } from '../accounting/fiscalPeriod.service.js';
 
 /**
  * v8.0.4 (TD-257، تصمیم مالک محصول ۱۲ مهر ۱۴۰۵): تاریخ گردش انبار نباید پیش از آخرین گردش همان کالا باشد.
@@ -104,6 +105,10 @@ export async function assertStockMovementDate(tx: DbExecutor, check: StockMoveme
       { code: FUTURE_MOVEMENT_CODE, itemId: check.itemId, date: day, today }
     );
   }
+  // v11 phase 3.1 (S6): no stock movement is dated in a closed fiscal year, whether it posts a voucher or not (the year row
+  // FOR SHARE until the end of this transaction). Before, only the voucher checked it, so a transfer between warehouses,
+  // which posts none, wrote Kardex rows into a closed year.
+  await FiscalPeriodService.assertOpen(day, tx);
   const lastDay = await lastStockMovementDay(tx, check.itemId);
   if (!lastDay || day >= lastDay) return;
 

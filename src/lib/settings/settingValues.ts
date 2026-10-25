@@ -4,7 +4,7 @@
  * پیشخوان با مقدار نامعتبرِ ذخیره‌شده از پیش به پیش‌فرض برمی‌گردد، نه خطای ۵۰۰.
  */
 import { RIAL_DISPLAY_UNITS, isRialDisplayUnit } from '../rialDisplay.js';
-import { normalizeDecimalString } from '../numericInput.js';
+import { normalizeGroupedDecimalString } from '../numericInput.js';
 
 export const MOVEMENT_DAY_KEYS = ['fast_moving_days', 'slow_moving_days', 'dead_stock_days'] as const;
 export type MovementDayKey = typeof MOVEMENT_DAY_KEYS[number];
@@ -32,7 +32,7 @@ export function isMovementDayKey(key: string): key is MovementDayKey {
 
 /** روزهای گردش: عدد صحیح ۱ تا ۳۶۵۰ (ارقام فارسی پذیرفته می‌شوند)، وگرنه null */
 export function readMovementDays(raw: unknown): number | null {
-  const text = normalizeDecimalString(String(raw ?? '')).trim();
+  const text = normalizeGroupedDecimalString(String(raw ?? '')).trim();
   if (!/^\d+$/.test(text)) return null;
   const n = Number(text);
   return n >= MOVEMENT_DAY_MIN && n <= MOVEMENT_DAY_MAX ? n : null;
@@ -119,7 +119,7 @@ export const TREASURY_HIGH_VALUE_THRESHOLD_MAX = 1_000_000_000_000_000;
 
 /** the threshold as a whole number of rials above zero, else null */
 export function readTreasuryHighValueThreshold(raw: unknown): number | null {
-  const text = normalizeDecimalString(String(raw ?? ''));
+  const text = normalizeGroupedDecimalString(String(raw ?? ''));
   if (!/^\d+$/.test(text)) return null;
   const n = Number(text);
   return n > 0 && n <= TREASURY_HIGH_VALUE_THRESHOLD_MAX ? n : null;

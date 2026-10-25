@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { ZodSchema, ZodError } from 'zod';
 import { asyncHandler } from './asyncHandler.js';
 import { toStorageDate } from '../utils/calendarDate.js';
-import { DECIMAL_PATTERN, normalizeDecimalString, toLatinDigits } from '../lib/numericInput.js';
+import { DECIMAL_PATTERN, GROUP_SEPARATOR, normalizeGroupedDecimalString, toLatinDigits } from '../lib/numericInput.js';
 import { FIELD_LABELS, issueFieldKey, persianIssueMessage } from '../lib/validationMessages.js';
 
 
@@ -36,8 +36,13 @@ export const decimalInput = (label: string) => z.union([z.number(), z.string()])
     }
     return String(v);
   }
-  const clean = normalizeDecimalString(v);
+  const clean = normalizeGroupedDecimalString(v);
   if (clean === '') return undefined;
+  // v11 phase 3.1 (M4): a separator left by normalizeGroupedDecimalString is misplaced («12,5»), the same error as the browser's
+  if (GROUP_SEPARATOR.test(clean)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${label}: جداکنندهٔ هزارگان فقط میان دسته‌های سه‌رقمی می‌آید (مقدار دریافتی: ${v})؛ برای ممیز «٫» بزنید.` });
+    return z.NEVER;
+  }
   if (!DECIMAL_PATTERN.test(clean)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${label} باید عدد معتبر باشد (مقدار دریافتی: ${v})` });
     return z.NEVER;
