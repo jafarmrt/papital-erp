@@ -191,7 +191,7 @@ export function makeGitApp(root: string): string {
   git(root, ['init', '-q', '--bare', '-b', 'master', origin]);
   git(root, ['clone', '-q', origin, work]);
   fs.mkdirSync(path.join(work, 'scripts'));
-  for (const rel of ['update.sh', 'scripts/update-steps.sh', 'scripts/verify-startup.sh', 'scripts/untrack-node-modules-link.sh']) {
+  for (const rel of ['update.sh', 'scripts/update-steps.sh', 'scripts/env-file.sh', 'scripts/verify-startup.sh', 'scripts/untrack-node-modules-link.sh']) {
     fs.copyFileSync(path.join(REPO_ROOT, rel), path.join(work, rel));
   }
   fs.writeFileSync(path.join(work, 'server.ts'), '');

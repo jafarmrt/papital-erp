@@ -38,11 +38,11 @@ MESSAGES_FILE="${MONITOR_MESSAGES_FILE:-$APP_DIR/scripts/ops/monitor-messages.fa
 
 log() { echo "[$(date)] $*"; }
 
-env_file_value() {
-  local key="$1" file="$APP_DIR/.env"
-  [ -f "$file" ] || return 0
-  grep -E "^${key}=" "$file" | head -1 | cut -d= -f2- | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/" || true
-}
+# v11 (O5): read as the service reads it (node --env-file: the last line wins, «export», inline comments), one reader
+# for every script (scripts/env-file.sh)
+# shellcheck source=scripts/env-file.sh
+source "$(dirname "${BASH_SOURCE[0]}")/env-file.sh"
+env_file_value() { env_file_get "$APP_DIR/.env" "$1"; }
 setting() {
   local key="$1" fallback="${2:-}" value
   value="${!key:-}"

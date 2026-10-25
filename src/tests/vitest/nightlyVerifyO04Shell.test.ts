@@ -34,6 +34,7 @@ describe('nightly_verify_o_04 review: the shell script cleans up, checks room an
     const data = path.join(dir, 'pgdata');
     for (const d of [path.join(app, 'scripts'), path.join(app, 'node_modules/.bin'), path.join(app, 'logs'), backups, bin, data]) fs.mkdirSync(d, { recursive: true });
     fs.copyFileSync(path.join(ROOT, 'scripts/nightly-verify.sh'), path.join(app, 'scripts/nightly-verify.sh'));
+    fs.copyFileSync(path.join(ROOT, 'scripts/env-file.sh'), path.join(app, 'scripts/env-file.sh'));
     const calls = path.join(dir, 'calls.log');
     const stub = (file: string, body: string) => fs.writeFileSync(file, `#!/bin/bash
 ${body}

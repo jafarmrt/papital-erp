@@ -21,6 +21,9 @@ success()  { log "OK: $*"; }
 die()      { log "ERROR: $*"; exit 1; }
 
 APP_DIR="${APP_DIR:-/opt/papital-erp}"
+# v11 (O5): the one .env reader of every script, next to this one
+# shellcheck source=scripts/env-file.sh
+source "$(dirname "${BASH_SOURCE[0]}")/scripts/env-file.sh"
 SERVICE_NAME="papital-erp"
 APP_PORT="${APP_PORT:-}"
 DOMAIN="${DOMAIN:-}"
@@ -42,7 +45,8 @@ fi
 [ -f "$APP_DIR/.env" ] || die ".env not found in $APP_DIR — run install.sh first."
 # v9.0.124 (TD-587): the app listens on PORT from .env (install.sh writes it); Nginx must proxy to that port
 if [ -z "$APP_PORT" ]; then
-  APP_PORT="$(grep -E '^PORT=' "$APP_DIR/.env" | head -1 | cut -d= -f2- | tr -d "\"'" || true)"
+  # v11 (O5): read as the service reads it (scripts/env-file.sh: the last line wins, «export», inline comments)
+  APP_PORT="$(env_file_get "$APP_DIR/.env" PORT)"
 fi
 APP_PORT="${APP_PORT:-3000}"
 
@@ -145,7 +149,8 @@ else
   echo "APP_URL=https://${DOMAIN}" >> "$APP_DIR/.env"
 fi
 # v10.2.24 (OBS-R1-16): with Nginx in front, the app port answers on this server only; a value already in .env is kept
-if ! grep -q '^ERP_LISTEN_HOST=' "$APP_DIR/.env"; then
+# (v11, O5: in any form the service reads, «export» and leading spaces included, or the appended line would win)
+if ! grep -qE '^[[:space:]]*(export[[:space:]]+)?ERP_LISTEN_HOST[[:space:]]*=' "$APP_DIR/.env"; then
   echo "ERP_LISTEN_HOST=127.0.0.1" >> "$APP_DIR/.env"
   log "The app now listens on 127.0.0.1:${APP_PORT} only (ERP_LISTEN_HOST in .env); open it through https://${DOMAIN}."
 fi

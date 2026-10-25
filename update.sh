@@ -48,11 +48,9 @@ success()  { log "OK: $*"; }
 warn()     { log "WARN: $*"; }
 die()      { log "ERROR: $*"; exit 1; }
 
-# Value of KEY in ./.env read literally, as the service reads it (first match, surrounding quotes removed)
-env_file_value() {
-  [ -f .env ] || return 0
-  grep -E "^$1=" .env | head -1 | cut -d= -f2- | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/" || true
-}
+# Value of KEY in ./.env read literally, as the service reads it; v11 (O5): through scripts/env-file.sh (sourced below,
+# after the cd), so the last line of a key wins and «export» and inline comments count as in node --env-file
+env_file_value() { env_file_get .env "$1"; }
 
 # ---------- Parse arguments ----------
 while [ $# -gt 0 ]; do
@@ -75,6 +73,9 @@ else
 fi
 cd "$APP_DIR" || die "Application directory not found: $APP_DIR"
 [ -f .env ] || die ".env not found in $APP_DIR"
+[ -f scripts/env-file.sh ] || die "scripts/env-file.sh not found in $APP_DIR"
+# shellcheck source=scripts/env-file.sh
+source scripts/env-file.sh
 # v9.0.124 (TD-587): the service listens on PORT from .env (install.sh writes it there); the startup check watches it
 [ -n "$APP_PORT" ] || APP_PORT="$(env_file_value PORT)"
 APP_PORT="${APP_PORT:-3000}"
@@ -92,6 +93,7 @@ UPDATE_STARTED="${UPDATE_RESUME_STARTED:-$(date '+%Y-%m-%d %H:%M:%S')}"
 source scripts/update-steps.sh
 BUILD_DIR=""
 BUILD_SWAPPED=0
+MIGRATIONS_BEFORE=""
 
 # v10.2.23 (OBS-R1-22): one update at a time; two runs would each wipe the other's side folder. The lock is held by
 # file descriptor 9 until the process ends, the run of the new update.sh included (it inherits it).
@@ -134,17 +136,35 @@ rollback_hint() {
     log "  cd ${APP_DIR} && $(previous_source_step)"
     return 0
   fi
-  log "Rollback:"
-  log "  1) ${SUDO:+sudo }systemctl stop ${SERVICE_NAME}"
-  log "  2) cd ${APP_DIR} && $(update_restore_build_command) && $(previous_source_step)"
-  log "  3) ONLY if the new version has accepted no writes: restoring the backup erases every change made after it"
-  log "     was taken (before ${UPDATE_STARTED}). If users have already worked on the new version, keep the database."
-  if [ -n "$PRE_DEPLOY_DUMP" ]; then
-    log "     RESTORE_MODE=apply RESTORE_CONFIRM=yes ./scripts/restore.sh ${PRE_DEPLOY_DUMP}"
-  else
-    log "     restore the last backup taken before this update with scripts/restore.sh (RESTORE_MODE=apply)"
+  # v11 (phase 3.3, O2): the old hint offered «keep the database» with the previous build, which never starts on a
+  # database the new version migrated; the steps now follow what this run did to the database
+  local migrated
+  migrated="$(update_migrations_changed "$APP_DIR" "$MIGRATIONS_BEFORE")"
+  if [ "$migrated" = "0" ]; then
+    log "Rollback (this update changed nothing in the database, so no restore is needed):"
+    log "  1) ${SUDO:+sudo }systemctl stop ${SERVICE_NAME}"
+    log "  2) cd ${APP_DIR} && $(update_restore_build_command) && $(previous_source_step)"
+    log "  3) ${SUDO:+sudo }systemctl start ${SERVICE_NAME}"
+    return 0
   fi
-  log "  4) ${SUDO:+sudo }systemctl start ${SERVICE_NAME}"
+  if [ "$migrated" = "unknown" ]; then
+    log "This update brings new database migrations, and whether they already ran could not be read."
+  else
+    log "This update applied ${migrated} database migration(s). The previous build refuses to start on a database newer"
+    log "than itself, so the code alone cannot go back."
+  fi
+  log "Choose one:"
+  log "  A) Go forward (keeps everything users wrote): leave the database as it is and run the update again once a"
+  log "     corrected version is released. The previous build cannot be put back on this database."
+  log "  B) Go back completely: restoring the backup erases every change made after it was taken (before ${UPDATE_STARTED})."
+  log "     1) ${SUDO:+sudo }systemctl stop ${SERVICE_NAME}"
+  log "     2) cd ${APP_DIR} && $(update_restore_build_command) && $(previous_source_step)"
+  if [ -n "$PRE_DEPLOY_DUMP" ]; then
+    log "     3) RESTORE_MODE=apply RESTORE_CONFIRM=yes ./scripts/restore.sh ${PRE_DEPLOY_DUMP}"
+  else
+    log "     3) restore the last backup taken before this update with scripts/restore.sh (RESTORE_MODE=apply)"
+  fi
+  log "     4) ${SUDO:+sudo }systemctl start ${SERVICE_NAME}"
 }
 on_exit() {
   local rc=$?
@@ -268,6 +288,13 @@ if [ -z "$UPDATE_RESUME" ]; then
     fi
     # TD-472 (B01-03): releases from v9.0.25 on tracked a node_modules symlink that blocks the pull; untrack it.
     bash "$APP_DIR/scripts/untrack-node-modules-link.sh" "$APP_DIR" || die "Could not untrack the node_modules symlink."
+    # v11 (phase 3.3, O4): an earlier update could write a regenerated lock into the checkout, and that change blocked
+    # every later pull; when it is the only local change, the released lock is put back (the server never edits it)
+    if git ls-files --error-unmatch package-lock.json >/dev/null 2>&1 && ! git diff --quiet -- package-lock.json \
+      && [ -z "$(git status --porcelain --untracked-files=no | grep -v ' package-lock.json$' || true)" ]; then
+      warn "package-lock.json was changed by an earlier update (a regenerated lock file); putting the released one back before the pull."
+      git checkout -- package-lock.json || die "Could not put package-lock.json back. Nothing else was changed."
+    fi
     log "[2/6] Pulling latest source (git pull --ff-only)..."
     git pull --ff-only || die "git pull failed (local changes or divergence). Resolve manually, then re-run."
     SOURCE_CHANGED=1
@@ -334,13 +361,36 @@ if [ "$SKIP_BUILD" -eq 0 ]; then
     NODE_ENV=development npm install --include=dev --package-lock-only --no-audit --no-fund \
       || { die_if_disk_full "npm install"; die "Lockfile regeneration failed."; }
   fi
-  NODE_ENV=development npm ci --include=dev || {
+  # v11 (phase 3.3, O4): every failure of npm ci used to be taken for a lock file out of step with package.json, so a
+  # network or registry hiccup regenerated the lock, installed dependency versions no release had tested and wrote that
+  # lock into the git checkout, where it blocked the next git pull. Now only npm's own lock mismatch (EUSAGE) touches
+  # the lock, and never a lock git tracks (a released lock that does not match is a fault of the release: the update
+  # stops with the running build untouched); any other failure is retried NPM_CI_ATTEMPTS times (default 3).
+  NPM_CI_OUT="$(mktemp)"
+  NPM_CI_ATTEMPT=1
+  LOCK_REGENERATED=0
+  until NODE_ENV=development npm ci --include=dev 2>&1 | tee "$NPM_CI_OUT"; do
     die_if_disk_full "npm ci"
-    warn "npm ci failed — lockfile is likely out of sync with package.json. Regenerating and retrying..."
-    NODE_ENV=development npm install --include=dev --package-lock-only --no-audit --no-fund \
-      || { die_if_disk_full "npm install"; die "Lockfile regeneration failed."; }
-    NODE_ENV=development npm ci --include=dev || { die_if_disk_full "npm ci"; die "npm ci failed even after lockfile regeneration."; }
-  }
+    if update_npm_lock_mismatch "$NPM_CI_OUT"; then
+      if git -C "$APP_DIR" ls-files --error-unmatch package-lock.json >/dev/null 2>&1; then
+        die "npm ci refused the package-lock.json of this release: it does not match package.json. The service still runs the previous build, untouched; the lock file was not changed. This is a fault of the release: report it and do not regenerate the lock on the server."
+      fi
+      [ "$LOCK_REGENERATED" -eq 0 ] || die "npm ci failed even after lockfile regeneration."
+      warn "npm ci failed: package-lock.json is out of sync with package.json. Regenerating it and retrying..."
+      NODE_ENV=development npm install --include=dev --package-lock-only --no-audit --no-fund \
+        || { die_if_disk_full "npm install"; die "Lockfile regeneration failed."; }
+      LOCK_REGENERATED=1
+      continue
+    fi
+    if [ "$NPM_CI_ATTEMPT" -ge "${NPM_CI_ATTEMPTS:-3}" ]; then
+      die "npm ci failed ${NPM_CI_ATTEMPT} times (not a lock file mismatch: most likely the network or the npm registry). The service still runs the previous build, untouched; the lock file was not changed. Check the network and run the update again."
+    fi
+    NPM_CI_WAIT=$(( NPM_CI_ATTEMPT * ${NPM_CI_RETRY_DELAY:-20} ))
+    warn "npm ci failed (not a lock file mismatch: most likely the network or the npm registry); retrying in ${NPM_CI_WAIT}s (attempt $(( NPM_CI_ATTEMPT + 1 )) of ${NPM_CI_ATTEMPTS:-3})..."
+    sleep "$NPM_CI_WAIT"
+    NPM_CI_ATTEMPT=$(( NPM_CI_ATTEMPT + 1 ))
+  done
+  rm -f "$NPM_CI_OUT"
   log "[4/6] Building application in ${BUILD_DIR}..."
   # the side folder has no .git: the build info takes the commit of the application directory
   rm -rf dist
@@ -379,6 +429,12 @@ if [ "$SKIP_BUILD" -eq 0 ]; then
   fi
 fi
 cd "$APP_DIR"
+
+# v11 (phase 3.3, O2): how many migrations the database holds before the new build starts; a failure after the
+# restart compares it with the count then, to say whether the database changed (the previous build refuses a database
+# newer than itself, so it decides which rollback can work)
+MIGRATIONS_BEFORE=""
+if [ "$BUILD_SWAPPED" -eq 1 ]; then MIGRATIONS_BEFORE="$(update_applied_migrations "$APP_DIR")"; fi
 
 # ---------- 4) Restart service ----------
 PKG_VERSION="$(node -p "require('./package.json').version" 2>/dev/null || echo '')"

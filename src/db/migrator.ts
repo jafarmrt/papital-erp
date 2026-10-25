@@ -25,9 +25,38 @@ export interface RunMigrationsOptions {
   migrationsFolder?: string;
 }
 
+const MIGRATIONS_BASELINE_FILE = '0000_v3_baseline.sql';
+
+/**
+ * v11 (phase 3.3, O1): where the migrations are read from, given the working directory and the directory of the running
+ * module. A built server (`dist/server.cjs`, the module directory holds `server.cjs`) reads only its own copy,
+ * `dist/drizzle`, made by `npm run build`: the systemd unit runs in the application directory, and update.sh pulls the
+ * new source there minutes before it swaps the new build in, so a restart of the old build in that window (a crash, a
+ * reboot, a failed build) used to apply the new release's migrations from the source `drizzle/` under the old code. A
+ * build without its own copy gets that path anyway and its run fails on the missing baseline, never the source folder.
+ * tsx and the tests (no bundle) read the source `drizzle/` of the working directory or of the repository.
+ */
+export function resolveMigrationsFolder(
+  cwd: string,
+  moduleDir: string,
+  exists: (p: string) => boolean = fs.existsSync,
+): string {
+  const holdsMigrations = (p: string) => exists(p) && exists(path.join(p, MIGRATIONS_BASELINE_FILE));
+  if (exists(path.join(moduleDir, 'server.cjs'))) return path.resolve(moduleDir, 'drizzle');
+
+  const possiblePaths = [
+    path.resolve(cwd, 'drizzle'),
+    path.resolve(moduleDir, 'drizzle'),
+    path.resolve(moduleDir, '../drizzle'),
+    path.resolve(moduleDir, '../../drizzle'),
+    path.resolve(cwd, 'dist/drizzle'),
+  ];
+  return possiblePaths.find(holdsMigrations) ?? path.resolve(cwd, 'drizzle');
+}
+
 /**
  * Resolves the absolute path to the drizzle migrations directory.
- * Works seamlessly in tsx development (ESM), compiled dist/server.cjs (CJS), and custom cwd environments.
+ * Works in tsx development (ESM), the compiled dist/server.cjs (CJS, only its own dist/drizzle) and custom cwd environments.
  */
 export function getMigrationsFolder(): string {
   let currentDir = process.cwd();
@@ -41,23 +70,7 @@ export function getMigrationsFolder(): string {
       currentDir = process.cwd();
     }
   }
-
-  const possiblePaths = [
-    path.resolve(process.cwd(), 'drizzle'),
-    path.resolve(currentDir, 'drizzle'),
-    path.resolve(currentDir, '../drizzle'),
-    path.resolve(currentDir, '../../drizzle'),
-    path.resolve(process.cwd(), 'dist/drizzle'),
-  ];
-
-  for (const p of possiblePaths) {
-    if (fs.existsSync(p) && fs.existsSync(path.join(p, '0000_v3_baseline.sql'))) {
-      return p;
-    }
-  }
-
-  // Fallback to default relative path
-  return path.resolve(process.cwd(), 'drizzle');
+  return resolveMigrationsFolder(process.cwd(), currentDir);
 }
 
 /**
