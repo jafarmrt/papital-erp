@@ -3,12 +3,14 @@
  * v10.0.38 (TD-1169): CI pulls its images from the Amazon ECR Public mirror of the Docker official images
  * (public.ecr.aws/docker/library), never anonymously from Docker Hub, whose unauthenticated pull limit stopped every
  * database, end-to-end and coverage job before any test ran. The tags stay the same.
+ * v11.0.2: the Google mirror of Docker Hub (mirror.gcr.io/library) in place of ECR Public, whose anonymous data
+ * limit («toomanyrequests: Data limit exceeded») failed the Docker build before any step ran.
  */
 import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
 
-const MIRROR = 'public.ecr.aws/docker/library/';
+const MIRROR = 'mirror.gcr.io/library/';
 const root = process.cwd();
 const workflowDir = path.join(root, '.github/workflows');
 

@@ -21,6 +21,9 @@ going forward.
 
 ## Version 11.x Series (Active — see `src/data/changelogs/11.ts`)
 
+### v11.0.2 — تصویر پایهٔ Docker از آینهٔ گوگل
+- CI fix: Amazon ECR Public refused the Node base image with «toomanyrequests: Data limit exceeded», so the Docker Container Build Verification job failed on master and every pull request before any build step. The Dockerfile base images now come from the Google mirror of the Docker official images (`mirror.gcr.io/library/node:24-alpine`, same tag). The server is not affected (it installs with `install.sh`, not Docker). Vitest `ci_images_from_mirror_td_1169`, `node24Runtime.test.ts`.
+
 ### v11.0.1 — دکمهٔ پاک کردن شاخه‌های ادغام‌شده در GitHub
 - Tooling only: a hand-run Actions workflow «Delete merged branches» (`.github/workflows/delete-merged-branches.yml`, logic in `scripts/governance/deleteMergedBranches.ts`) deletes the branches fully merged into the default branch and keeps the default, protected and open pull request branches and any branch with its own commits; it lists only unless «delete» is ticked (TD-1390, decision t50-6). No change to the app.
 
