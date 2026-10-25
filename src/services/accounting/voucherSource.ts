@@ -3,7 +3,13 @@ import { journalVouchers } from '../../db/schema.js';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { ConflictError } from '../../errors/customErrors.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
-import { VOUCHER_SOURCE_KINDS, VOUCHER_SOURCE_LABELS, type VoucherSourceKind } from '../../lib/accounting/voucherSource.js';
+import { VOUCHER_SOURCE_KINDS, VOUCHER_SOURCE_LABELS, voucherSourceHint, type VoucherSourceKind } from '../../lib/accounting/voucherSource.js';
+
+/** v11 phase 3.1 (M2): a treasury account's opening voucher or opening-balance adjustment, as `bankAccount.service.ts` issues them */
+const TREASURY_OPENING_SQL = sql`(x.reference_module = 'treasury_opening' AND x.voucher_type IN ('opening', 'adjustment')
+        AND COALESCE(x.reference_number, '') !~ '^(REV-V|VOID-REPOST-V|RE-REV-V|CORR-V)'
+        AND EXISTS (SELECT 1 FROM journal_voucher_items i WHERE i.voucher_id = x.id AND i.is_deleted = 0
+                     AND i.detailed_type = 'bank_account' AND i.detailed_id = x.reference_id))`;
 
 /**
  * v9.0.294 (TD-552، B03-10، تصمیم ت۸ الف): منشأ هر سند حسابداری. پیوندها همان ستون‌هایی‌اند که ابطال منشأ با آن‌ها سند را
@@ -11,6 +17,11 @@ import { VOUCHER_SOURCE_KINDS, VOUCHER_SOURCE_LABELS, type VoucherSourceKind } f
  * `source_bom_allocation_id` و `treasury_transactions.voucher_id` (دریافت، پرداخت، انتقال، پرداخت فیش). سند برگشت
  * (`REV-V…`، `VOID-REPOST-V…`، `RE-REV-V…`) منشأ سند اصلی‌اش را دارد. پیوند قدیمی (`reference_module`، `reference_id`)
  * شمرده نمی‌شود، چون `reference_id` سند اصلاحی شناسه سند حسابداری است، نه منشأ.
+ *
+ * v11 phase 3.1 (M2): the opening voucher of a treasury account and the adjustments of its opening balance
+ * (`reference_module` `treasury_opening`, type opening or adjustment, `reference_id` the account, a row on that account's
+ * detail; `bankAccountService`) are sourced too, so they change only from the account. Before, the opening voucher was
+ * edited, corrected and reversed from the voucher page, and the bank card and the ledger showed two balances.
  */
 export async function voucherSourceKinds(executor: DbExecutor, voucherIds: number[]): Promise<Map<number, VoucherSourceKind>> {
   const ids = Array.from(new Set(voucherIds.filter(id => Number.isInteger(id) && id > 0)));
@@ -34,6 +45,7 @@ export async function voucherSourceKinds(executor: DbExecutor, voucherIds: numbe
              WHEN x.source_cheque_id IS NOT NULL OR EXISTS (SELECT 1 FROM cheques ch WHERE ch.voucher_id = x.id) THEN 'cheque'
              WHEN x.source_bom_allocation_id IS NOT NULL THEN 'bom_allocation'
              WHEN EXISTS (SELECT 1 FROM treasury_transactions t WHERE t.voucher_id = x.id) THEN 'treasury'
+             WHEN ${TREASURY_OPENING_SQL} THEN 'treasury_opening'
            END AS kind
       FROM chain c
       JOIN journal_vouchers x ON x.id = c.cur_id
@@ -41,6 +53,7 @@ export async function voucherSourceKinds(executor: DbExecutor, voucherIds: numbe
         OR x.source_bom_allocation_id IS NOT NULL
         OR EXISTS (SELECT 1 FROM cheques ch WHERE ch.voucher_id = x.id)
         OR EXISTS (SELECT 1 FROM treasury_transactions t WHERE t.voucher_id = x.id)
+        OR ${TREASURY_OPENING_SQL}
      ORDER BY c.voucher_id, c.depth`);
   for (const row of res.rows as Array<{ voucher_id: number | string; kind: string | null }>) {
     if (row.kind && (VOUCHER_SOURCE_KINDS as readonly string[]).includes(row.kind)) kinds.set(Number(row.voucher_id), row.kind as VoucherSourceKind);
@@ -66,9 +79,10 @@ export async function assertVoucherWithoutSource(
   const label = VOUCHER_SOURCE_LABELS[kind];
   const number = toPersianDigits(String(voucher.voucherNumber));
   const reversal = /^(REV-V|VOID-REPOST-V|RE-REV-V)/.test(voucher.referenceNumber ?? '');
+  const change = kind === 'treasury_opening' ? voucherSourceHint(kind) : `${label} را ابطال و در صورت نیاز دوباره ثبت کنید`;
   const message = reversal
     ? `سند شماره «${number}» برگشت سندی است که ${label} صادر کرده و از اسناد حسابداری ${action}؛ اثر ${label} فقط از خود آن تغییر می‌کند.`
-    : `سند شماره «${number}» را ${label} صادر کرده است و از اسناد حسابداری ${action}؛ برای تغییر آن، ${label} را ابطال و در صورت نیاز دوباره ثبت کنید.`;
+    : `سند شماره «${number}» را ${label} صادر کرده است و از اسناد حسابداری ${action}؛ برای تغییر آن، ${change}.`;
   throw new ConflictError(message, { voucherId: voucher.id, sourceKind: kind }, 'VOUCHER_HAS_SOURCE');
 }
 

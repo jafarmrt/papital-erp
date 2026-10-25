@@ -557,6 +557,8 @@ export class TreasuryTransactionService {
       const to = locked.find(b => b.id === Number(data.toBankAccountId));
       if (!from) throw new NotFoundError('حساب مبدأ یافت نشد');
       if (!to) throw new NotFoundError('حساب مقصد یافت نشد');
+      // v11 phase 3.1 (M5): a transfer without a voucher is refused in a closed fiscal year too (`postTreasuryRow`'s rule)
+      await VoucherService.checkFiscalPeriodOpen(resolvedDate, txEngine);
 
       // 10.3 package 4: currency codes compared and written whatever the case of the stored code (an account saved as «irr»
       // before v9.0.99 took no transfer from an IRR account, and an IRR transfer out of it was refused)

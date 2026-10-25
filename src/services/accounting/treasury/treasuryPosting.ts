@@ -10,6 +10,7 @@ import { domainEventBus } from '../../events/domainEventBus.js';
 import { DomainEventType } from '../../events/domainEvents.js';
 import { OutboxService } from '../../events/outboxService.js';
 import { isHighValueAmount, treasuryHighValueThreshold, treasuryRowIsHighValue } from './treasuryHighValue.js';
+import { FiscalPeriodService } from '../fiscalPeriod.service.js';
 
 /**
  * v10.2.2 (OBS-R2-52، بسته ۴ برنامه ۱۰.۲): راه یگانه ثبت و ابطال یک ردیف خزانه. دریافت و پرداخت فرم خزانه، پرداخت فیش
@@ -177,6 +178,10 @@ export interface PostedTreasuryRow {
 export async function postTreasuryRow(tx: DbExecutor, bank: LockedTreasuryBank, posting: TreasuryRowPosting): Promise<PostedTreasuryRow> {
   const amount = fin(posting.amount).round(4);
   if (!amount.isPositive()) throw new ValidationError('مبلغ تراکنش باید بزرگتر از صفر باشد');
+  // v11 phase 3.1 (M5): the row's fiscal year is open, with or without a voucher (the year row FOR SHARE until the end of
+  // this transaction, as a voucher write holds it). Before, only the voucher checked it, so a row without a voucher (the
+  // `accounting.treasury_no_voucher` permission) changed a bank balance inside a closed year.
+  await FiscalPeriodService.assertOpen(posting.date, tx);
   assertBankCurrency(bank, posting.currency);
   if (posting.voucher && !bank.accountId) {
     throw new ValidationError('حساب معین مرتبط در چارت حساب‌ها برای این حساب بانکی/صندوق تعریف نشده است', undefined, 'BANK_LEDGER_ACCOUNT_INVALID');

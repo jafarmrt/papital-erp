@@ -4,7 +4,7 @@
  * پنج می‌شد). کادر عدد متن است و اینجا خوانده می‌شود: ارقام فارسی و عربی، «٫» و جداکننده‌های هزارگان پذیرفته می‌شوند،
  * متن نامعتبر خطاست و هرگز صفر بی‌صدا نمی‌شود.
  */
-import { normalizeDecimalString, toLatinDigits } from './numericInput.js';
+import { GROUP_SEPARATOR, GROUPED_TEXT, normalizeDecimalString, toLatinDigits } from './numericInput.js';
 import { formatPersianNumber } from '../utils/persianNumber.js';
 import { persianDigitsOf, persianNumberText } from './numberFieldDisplay.js';
 
@@ -41,8 +41,6 @@ export function stepScale(step: number | string | undefined): number | undefined
   return fraction ? fraction.length : 0;
 }
 
-const GROUP_SEPARATOR = /[,٬،]/;
-const GROUPED_TEXT = /^-?\d{1,3}([,٬،]\d{3})+(\.\d*)?$/;
 const INVISIBLE = /[\s\u200c\u200e\u200f]/g;
 
 /**

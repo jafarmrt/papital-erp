@@ -11,7 +11,7 @@ import { businessTodayIsoDate } from '../../../lib/businessClock.js';
 import type { JournalVoucher } from '../../../types.js';
 import { fin } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
-import { BANK_OPENING_DATE_LABEL, assertNoPendingOpeningApproval, assertOpeningDateChangeAllowed, assertOpeningYearOpen, voidBankOpeningVouchers } from './bankOpeningVoucher.js';
+import { BANK_OPENING_DATE_LABEL, assertNoPendingOpeningApproval, assertOpeningYearOpen, moveOpeningVoucherDate, voidBankOpeningVouchers } from './bankOpeningVoucher.js';
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
 import { requireBankLedgerAccount } from './bankLinks.js';
 import { assertBankCurrencyChangeAllowed, assertBankLedgerChangeAllowed, assertBankTypeChangeKeepsPaidCheques, assertPettyCashCurrency, requireTreasuryCurrency } from './bankAccountCurrency.js';
@@ -578,9 +578,10 @@ export class BankAccountService {
       if (data.initialBalance !== undefined && !fin(data.initialBalance).round(4).equals(fin(existing.initialBalance))) {
         await assertNoPendingOpeningApproval(tx, existing);
       }
-      // 10.3 package 4 (OBS-R1-65): the start date changes only until the opening voucher is issued
+      // 10.3 package 4 (OBS-R1-65): the start date changes until the opening voucher is approved; v11 phase 3.1 (M2): a
+      // draft opening voucher takes the new date with it
       const openingDateChanges = requestedOpeningDate !== undefined && requestedOpeningDate !== (existing.openingDate || '');
-      if (openingDateChanges) await assertOpeningDateChangeAllowed(tx, existing);
+      if (openingDateChanges) await moveOpeningVoucherDate(tx, existing, requestedOpeningDate);
       // v9.0.99 (TD-508، ت۵ الف): ارز ویرایش می‌شود تا نخستین گردش حساب؛ پس از آن 422 (پیش‌تر بی‌صدا نادیده گرفته می‌شد)
       const newCurrency = data.currency !== undefined ? requireTreasuryCurrency(data.currency) : undefined;
       if (newCurrency) await assertBankCurrencyChangeAllowed(tx, existing, newCurrency);

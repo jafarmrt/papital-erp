@@ -46,6 +46,7 @@ import { assertReturnPartyOfInvoice, parseDocumentPartyId, resolveDocumentParty,
 import { documentAuditSnapshot, logDocumentCreated, type DocumentAuditActor, type DocumentAuditChange } from './documentAudit.js';
 import { assertLiveRecipient, documentRecipientInput } from './documentRecipient.js';
 import { idempotentTransaction } from '../../middleware/idempotency.js';
+import { FiscalPeriodService } from '../accounting/fiscalPeriod.service.js';
 
 type DocumentLineRow = typeof documentItems.$inferInsert;
 
@@ -156,6 +157,13 @@ export class DocumentCreationService {
       let nextRefNumber = refChanged ? requestedRef : existingDoc.refNumber;
       let nextRefFiscalYear: number | undefined;
       const currentFiscalYear = existingDoc.refFiscalYear ?? resolveJalaliFiscalYear(existingDoc.date);
+      // v11 phase 3.1 (M23): a draft never moves into another fiscal year that is closed, where it could be saved but never
+      // finalized; a proforma is exempt, since it takes the finalize day (proformaInvoice.ts), and so is a procurement order
+      // edited inside its own year, since its delivery takes the delivery day
+      if (newDocDate && existingDoc.type !== 'proforma' && (status || existingDoc.status) !== 'proforma'
+        && resolveJalaliFiscalYear(newDocDate) !== resolveJalaliFiscalYear(existingDoc.date)) {
+        await FiscalPeriodService.assertOpen(newDocDate, tx);
+      }
       if (newDocDate) {
         const newFiscalYear = resolveJalaliFiscalYear(newDocDate);
         if (newFiscalYear !== currentFiscalYear) {
@@ -405,6 +413,9 @@ export class DocumentCreationService {
       // (همان ترتیب نهایی‌سازی و ابطال)؛ پیش‌تر رسید کالاها را به ترتیب سطرها قفل می‌کرد و با فاکتور یا ابطالِ همان
       // کالاها به ترتیب دیگر به بن‌بست می‌رسید
       if (docStatus === 'final') await lockStockItems(tx, (docLines || []).map(l => l.itemId));
+      // v11 phase 3.1 (M23): a draft or final document is never dated in a closed fiscal year (a draft there could be saved but
+      // never finalized); a proforma is exempt, since it takes the finalize day (proformaInvoice.ts)
+      if (docType !== 'proforma' && docStatus !== 'proforma') await FiscalPeriodService.assertOpen(normalizedDocDate, tx);
       if (finalProjectId !== null) {
         const [projExists] = await tx
           .select({ id: productionProjects.id })

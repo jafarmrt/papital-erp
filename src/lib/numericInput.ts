@@ -14,12 +14,23 @@ export function toLatinDigits(value: string): string {
   });
 }
 
-/** رشته عدد اعشاری با ارقام لاتین: ارقام فارسی و عربی، ممیز «٫»، جداکننده‌های هزارگان و فاصله‌ها نرمال می‌شوند */
+/** جداکنندهٔ هزارگان: «,»، «٬» یا «،» */
+export const GROUP_SEPARATOR = /[,٬،]/;
+/** عددی که جداکننده‌اش فقط میان دسته‌های سه‌رقمی بخش صحیح آمده است («۱٬۲۳۴٬۵۶۷٫۸») */
+export const GROUPED_TEXT = /^-?\d{1,3}([,٬،]\d{3})+(\.\d*)?$/;
+
+/**
+ * رشته عدد اعشاری با ارقام لاتین: ارقام فارسی و عربی، ممیز «٫»، فاصله‌ها و جداکننده‌های هزارگان نرمال می‌شوند.
+ * v11 phase 3.1 (M4): a group separator is removed only between groups of three digits of the whole part; a misplaced one
+ * («12,5»، «۱٬۰») stays in the text, so `DECIMAL_PATTERN` and every reader built on it refuse it. Before, every separator
+ * was dropped wherever it stood, and the server read «12,5» as 125 in every money, rate and quantity field.
+ */
 export function normalizeDecimalString(value: string): string {
-  return toLatinDigits(value)
+  const text = toLatinDigits(value)
     .replace(/٫/g, '.')
-    .replace(/[,٬،\s‌‏‎]/g, '')
-    .trim();
+    .replace(/[\s‌‏‎]/g, '');
+  if (!GROUP_SEPARATOR.test(text) || !GROUPED_TEXT.test(text)) return text;
+  return text.replace(/[,٬،]/g, '');
 }
 
 export const DECIMAL_PATTERN = /^-?\d+(\.\d+)?$/;

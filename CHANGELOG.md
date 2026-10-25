@@ -22,6 +22,7 @@ under «### Unreleased», then one section per released version.
 ## Version 11.x Series (Active — see `src/data/changelogs/11.ts`)
 
 ### Unreleased
+- Urgent money fixes (phase 3.1, evaluation findings M1, M2, M4, M5/S6/M23): a voucher correction issues its replacement as a manual draft that another approver approves (before, a user who may only draft vouchers posted any amount straight into the books); the opening voucher of a treasury account and its opening-balance adjustments are sourced vouchers, changed only from the account form, where a draft opening voucher now moves with the start date; a misplaced group separator («12,5», «1٬00٬0») is refused by every server number field instead of being read as 125; the fiscal-year lock holds on treasury rows, transfers and cheques without a voucher, cheque steps, warehouse transfers and draft documents (a proforma is exempt). Regression `moneyUrgentFixesV11Tests.ts`, vitest `moneyUrgentFixesV11.test.ts`.
 
 ### v11.1.0 — پایان فاز ۱: قواعد تازه، نسخه با هر به‌روزرسانی سرور
 - Archive cleanup (sub-phase 1.3, owner decision): `docs/rules/archive` (old AGENTS.md, ARCHITECTURE_RULES.md, the 1.4 MB debt archive), `docs/roadmap/archive`, `docs/audit` and the CHANGELOG.md sections of series 1 to 10 are removed; they are read at commit `c3c985845ef8a925bbb04946e74951305324d477`. Only the ids of the debt rows closed up to series 10 stay, in `docs/rules/CLOSED_DEBT_IDS_V10.md`, so no id is used twice and the closed count stays whole. Vitest `releaseGovernance.test.ts`, `releaseTool.test.ts`.
