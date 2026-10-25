@@ -133,7 +133,7 @@ describe('obs_r1_16_setup_domain: setup-domain.sh', () => {
   it('binds the app to 127.0.0.1 once, keeping a value already in .env', () => {
     const d = scratch();
     const newline = block('setup-domain.sh', '# v10.2.28 (#344 review L3)', 'if grep -q \'^ALLOWED_ORIGINS=\'');
-    const append = newline + block('setup-domain.sh', "if ! grep -q '^ERP_LISTEN_HOST=' \"$APP_DIR/.env\"", 'chmod 600 "$APP_DIR/.env"');
+    const append = newline + block('setup-domain.sh', "if ! grep -qE '^[[:space:]]*(export[[:space:]]+)?ERP_LISTEN_HOST[[:space:]]*='", 'chmod 600 "$APP_DIR/.env"');
     writeFileSync(path.join(d, '.env'), 'PORT=3000\n');
     expect(bash(`APP_DIR=${JSON.stringify(d)}\nAPP_PORT=3000\nDOMAIN=erp.example.com\n${append}`).status).toBe(0);
     expect(bash(`APP_DIR=${JSON.stringify(d)}\nAPP_PORT=3000\nDOMAIN=erp.example.com\n${append}`).status).toBe(0);
@@ -145,6 +145,10 @@ describe('obs_r1_16_setup_domain: setup-domain.sh', () => {
     writeFileSync(path.join(d, '.env'), 'ERP_LISTEN_HOST=0.0.0.0\n');
     bash(`APP_DIR=${JSON.stringify(d)}\nAPP_PORT=3000\nDOMAIN=erp.example.com\n${append}`);
     expect(readFileSync(path.join(d, '.env'), 'utf8')).toBe('ERP_LISTEN_HOST=0.0.0.0\n');
+    // v11 (O5): a value in any form the service reads is kept too; an appended line would win over it
+    writeFileSync(path.join(d, '.env'), '  export ERP_LISTEN_HOST=0.0.0.0\n');
+    bash(`APP_DIR=${JSON.stringify(d)}\nAPP_PORT=3000\nDOMAIN=erp.example.com\n${append}`);
+    expect(readFileSync(path.join(d, '.env'), 'utf8')).toBe('  export ERP_LISTEN_HOST=0.0.0.0\n');
   });
 });
 
