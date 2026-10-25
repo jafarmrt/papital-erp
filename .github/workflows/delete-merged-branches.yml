@@ -1,0 +1,46 @@
+# .github/workflows/delete-merged-branches.yml — v11.0.1 (TD-1390, product-owner decision of 3 Aban 1405)
+# Run by hand only (Actions → «Delete merged branches» → Run workflow). Deletes the remote branches that are fully
+# merged into the default branch; keeps the default branch, protected branches, heads of open pull requests and any
+# branch with a commit the default branch lacks. «delete» unticked (the default) only lists what would be deleted.
+# Logic and test: scripts/governance/deleteMergedBranches.ts, Vitest deleteMergedBranches.test.ts.
+
+name: Delete merged branches
+
+on:
+  workflow_dispatch:
+    inputs:
+      delete:
+        description: 'Delete the branches (unticked: only list them)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: delete-merged-branches
+  cancel-in-progress: false
+
+jobs:
+  delete-merged-branches:
+    name: Delete merged branches
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Delete or list merged branches
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DO_DELETE: ${{ inputs.delete }}
+        run: |
+          if [ "$DO_DELETE" = "true" ]; then
+            node scripts/governance/deleteMergedBranches.ts --delete
+          else
+            node scripts/governance/deleteMergedBranches.ts
+          fi
