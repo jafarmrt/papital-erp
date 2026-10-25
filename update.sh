@@ -93,7 +93,6 @@ UPDATE_STARTED="${UPDATE_RESUME_STARTED:-$(date '+%Y-%m-%d %H:%M:%S')}"
 source scripts/update-steps.sh
 BUILD_DIR=""
 BUILD_SWAPPED=0
-MIGRATIONS_BEFORE=""
 
 # v10.2.23 (OBS-R1-22): one update at a time; two runs would each wipe the other's side folder. The lock is held by
 # file descriptor 9 until the process ends, the run of the new update.sh included (it inherits it).
@@ -139,7 +138,7 @@ rollback_hint() {
   # v11 (phase 3.3, O2): the old hint offered «keep the database» with the previous build, which never starts on a
   # database the new version migrated; the steps now follow what this run did to the database
   local migrated
-  migrated="$(update_migrations_changed "$APP_DIR" "$MIGRATIONS_BEFORE")"
+  migrated="$(update_migrations_changed "$APP_DIR")"
   if [ "$migrated" = "0" ]; then
     log "Rollback (this update changed nothing in the database, so no restore is needed):"
     log "  1) ${SUDO:+sudo }systemctl stop ${SERVICE_NAME}"
@@ -150,8 +149,8 @@ rollback_hint() {
   if [ "$migrated" = "unknown" ]; then
     log "This update brings new database migrations, and whether they already ran could not be read."
   else
-    log "This update applied ${migrated} database migration(s). The previous build refuses to start on a database newer"
-    log "than itself, so the code alone cannot go back."
+    log "The database now holds ${migrated} migration(s) newer than the previous build. It refuses to start on a database"
+    log "newer than itself, so the code alone cannot go back."
   fi
   log "Choose one:"
   log "  A) Go forward (keeps everything users wrote): leave the database as it is and run the update again once a"
@@ -366,7 +365,9 @@ if [ "$SKIP_BUILD" -eq 0 ]; then
   # lock into the git checkout, where it blocked the next git pull. Now only npm's own lock mismatch (EUSAGE) touches
   # the lock, and never a lock git tracks (a released lock that does not match is a fault of the release: the update
   # stops with the running build untouched); any other failure is retried NPM_CI_ATTEMPTS times (default 3).
-  NPM_CI_OUT="$(mktemp)"
+  [[ "${NPM_CI_ATTEMPTS:-3}" =~ ^[1-9][0-9]*$ ]] || die "NPM_CI_ATTEMPTS must be a whole number of 1 or more."
+  [[ "${NPM_CI_RETRY_DELAY:-20}" =~ ^[0-9]+$ ]] || die "NPM_CI_RETRY_DELAY must be a whole number of seconds."
+  NPM_CI_OUT="$BUILD_DIR/.npm-ci.log"
   NPM_CI_ATTEMPT=1
   LOCK_REGENERATED=0
   until NODE_ENV=development npm ci --include=dev 2>&1 | tee "$NPM_CI_OUT"; do
@@ -429,12 +430,6 @@ if [ "$SKIP_BUILD" -eq 0 ]; then
   fi
 fi
 cd "$APP_DIR"
-
-# v11 (phase 3.3, O2): how many migrations the database holds before the new build starts; a failure after the
-# restart compares it with the count then, to say whether the database changed (the previous build refuses a database
-# newer than itself, so it decides which rollback can work)
-MIGRATIONS_BEFORE=""
-if [ "$BUILD_SWAPPED" -eq 1 ]; then MIGRATIONS_BEFORE="$(update_applied_migrations "$APP_DIR")"; fi
 
 # ---------- 4) Restart service ----------
 PKG_VERSION="$(node -p "require('./package.json').version" 2>/dev/null || echo '')"

@@ -292,45 +292,52 @@ update_npm_lock_mismatch() {
   grep -qE 'code EUSAGE|package\.json and package-lock\.json or npm-shrinkwrap\.json are in sync' "$1" 2>/dev/null
 }
 
-# v11 (phase 3.3, O2): the number of migrations the database of <app-dir>/.env has recorded, read with the application's
-# own pg driver (the URL passed in the environment, never on a command line); nothing when it cannot be read
-update_applied_migrations() {
-  local app_dir="$1" url
+# v11 (phase 3.3, O2): the number of migrations the database of <app-dir>/.env has recorded with a `when` (created_at)
+# later than <after-when>, read with the application's own pg driver (the URL passed in the environment, never on a
+# command line); nothing when it cannot be read
+update_applied_migrations_after() {
+  local app_dir="$1" after_when="$2" url
   url="$(update_env_value "$app_dir" DATABASE_URL)"
   [ -n "$url" ] || return 0
-  (cd "$app_dir" && UPDATE_DB_URL="$url" timeout 30 node -e '
+  (cd "$app_dir" && UPDATE_DB_URL="$url" UPDATE_AFTER_WHEN="$after_when" timeout 30 node -e '
     const { Client } = require("pg");
     const c = new Client({ connectionString: process.env.UPDATE_DB_URL });
     c.connect()
-      .then(() => c.query("SELECT CASE WHEN to_regclass(\x27drizzle.__drizzle_migrations\x27) IS NULL THEN 0 ELSE (SELECT count(*) FROM drizzle.__drizzle_migrations) END::text AS n"))
+      .then(() => c.query("SELECT to_regclass(\x27drizzle.__drizzle_migrations\x27) IS NOT NULL AS present"))
+      .then((r) => (r.rows[0].present
+        ? c.query("SELECT count(*)::text AS n FROM drizzle.__drizzle_migrations WHERE created_at > $1", [process.env.UPDATE_AFTER_WHEN])
+        : { rows: [{ n: "0" }] }))
       .then((r) => { process.stdout.write(String(r.rows[0].n)); return c.end(); })
       .catch(() => process.exit(1));' 2>/dev/null | tr -dc '0-9' || true)
 }
 
-# The number of migrations the build in <dist-dir> carries (its drizzle/meta/_journal.json); nothing when unreadable
+# The number of migrations the build in <dist-dir> carries and the `when` of its newest one, from its
+# drizzle/meta/_journal.json, as «<count> <when>»; nothing when unreadable
 update_build_migrations() {
   local journal="$1/drizzle/meta/_journal.json"
   [ -f "$journal" ] || return 0
   UPDATE_JOURNAL="$journal" node -e '
     const j = JSON.parse(require("fs").readFileSync(process.env.UPDATE_JOURNAL, "utf8"));
-    process.stdout.write(String(Array.isArray(j.entries) ? j.entries.length : ""));' 2>/dev/null || true
+    const e = Array.isArray(j.entries) ? j.entries : null;
+    if (e) process.stdout.write(`${e.length} ${e.length ? Number(e[e.length - 1].when) || 0 : 0}`);' 2>/dev/null || true
 }
 
-# v11 (phase 3.3, O2): what the update did to the database, for the rollback steps: the number of migrations applied
-# since <before> (the count update.sh read before the restart), or, when a count cannot be read, 0 when the new build
-# brings no migration the previous one lacked, else «unknown»
+# v11 (phase 3.3, O2): whether the previous build (dist.prev/) can still start on the database, for the rollback steps.
+# It refuses a database holding a migration newer than its own newest (migrationPlan.ts), whoever applied it: this run,
+# or the previous build itself when it restarted while the new source was in place. Prints the number of such
+# migrations; when the database cannot be read, 0 if the new build brings no migration the previous one lacks, else
+# «unknown».
 update_migrations_changed() {
-  local app_dir="$1" before="$2" after new_count prev_count
-  if [ -n "$before" ]; then
-    after="$(update_applied_migrations "$app_dir")"
-    if [ -n "$after" ]; then
-      if [ "$after" -gt "$before" ]; then echo $(( after - before )); else echo 0; fi
-      return 0
-    fi
+  local app_dir="$1" prev new prev_when newer
+  prev="$(update_build_migrations "$app_dir/dist.prev")"
+  new="$(update_build_migrations "$app_dir/dist")"
+  if [ -n "$prev" ]; then
+    prev_when="${prev#* }"
+    newer="$(update_applied_migrations_after "$app_dir" "$prev_when")"
+    if [ -n "$newer" ]; then echo "$newer"; return 0; fi
+    if [ -n "$new" ] && [ "${new%% *}" -le "${prev%% *}" ]; then echo 0; return 0; fi
   fi
-  new_count="$(update_build_migrations "$app_dir/dist")"
-  prev_count="$(update_build_migrations "$app_dir/dist.prev")"
-  if [ -n "$new_count" ] && [ -n "$prev_count" ] && [ "$new_count" -le "$prev_count" ]; then echo 0; else echo unknown; fi
+  echo unknown
 }
 
 # The rollback command of the build swap, run in <app-dir>: each folder comes back only when its .prev exists, so it

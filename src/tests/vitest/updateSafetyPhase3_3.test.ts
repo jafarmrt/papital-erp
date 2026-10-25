@@ -28,7 +28,7 @@ let dir = '';
 afterEach(() => { if (dir) rmSync(dir, { recursive: true, force: true }); dir = ''; });
 const write = (file: string, text: string) => { mkdirSync(path.dirname(file), { recursive: true }); writeFileSync(file, text); };
 const read = (file: string) => readFileSync(file, 'utf8');
-const journal = (n: number) => JSON.stringify({ entries: Array.from({ length: n }, (_, idx) => ({ idx, tag: `000${idx}_m` })) });
+const journal = (n: number) => JSON.stringify({ entries: Array.from({ length: n }, (_, idx) => ({ idx, when: 1000 + idx, tag: `000${idx}_m` })) });
 
 // ---------- O1 ----------
 describe('migrations_folder_of_the_built_server_o1', () => {
@@ -165,20 +165,25 @@ describe('rollback_follows_what_the_update_did_to_the_database_o2', () => {
     expect(run.stdout).toContain('scripts/restore.sh');
   });
 
-  it('counts the migrations the run applied from the database, else from the two builds', () => {
+  it('counts the migrations in the database newer than the previous build, whoever applied them', () => {
     dir = mkdtempSync(path.join(tmpdir(), 'o2-'));
-    const changed = (before: string, after: string, newer: number, older: number) => {
+    const changed = (newerInDb: string, newer: number, older: number | null) => {
+      rmSync(path.join(dir, 'dist.prev'), { recursive: true, force: true });
       write(path.join(dir, 'dist/drizzle/meta/_journal.json'), journal(newer));
-      write(path.join(dir, 'dist.prev/drizzle/meta/_journal.json'), journal(older));
+      if (older !== null) write(path.join(dir, 'dist.prev/drizzle/meta/_journal.json'), journal(older));
       return execFileSync('bash', ['-c', `source "${path.join(ROOT, 'scripts/update-steps.sh')}"
-        update_applied_migrations() { echo "$STUB_AFTER"; }
-        update_migrations_changed "$1" "$2"`, 'x', dir, before], { encoding: 'utf8', env: { ...process.env, STUB_AFTER: after } }).trim();
+        update_applied_migrations_after() { echo "after=$2" >> "$STUB_ARGS"; echo "$STUB_NEWER"; }
+        update_migrations_changed "$1"`, 'x', dir], { encoding: 'utf8', env: { ...process.env, STUB_NEWER: newerInDb, STUB_ARGS: path.join(dir, 'args') } }).trim();
     };
-    expect(changed('136', '138', 138, 136)).toBe('2');
-    expect(changed('136', '136', 138, 136)).toBe('0');
-    expect(changed('', '', 136, 136)).toBe('0');
-    expect(changed('', '', 137, 136)).toBe('unknown');
-    expect(changed('136', '', 137, 136)).toBe('unknown');
+    expect(changed('2', 138, 136)).toBe('2');
+    // the newest migration the previous build knows is 0135, «when» 1135
+    expect(read(path.join(dir, 'args'))).toContain('after=1135');
+    // the previous build itself may have applied them before the swap (its migrator read the source drizzle/)
+    expect(changed('1', 137, 136)).toBe('1');
+    expect(changed('0', 138, 136)).toBe('0');
+    expect(changed('', 136, 136)).toBe('0');
+    expect(changed('', 137, 136)).toBe('unknown');
+    expect(changed('', 137, null)).toBe('unknown');
   });
 });
 
