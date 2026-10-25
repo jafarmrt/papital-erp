@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
-import { items, itemPrices, warehouses } from '../../db/schema.js';
+import { items, itemPrices, transactions, warehouses } from '../../db/schema.js';
 import { normalizeStrategyTitle, getStrategyCanonicalKey } from '../../utils.js';
 import { DocumentService } from '../document.service.js';
 import { money, Money } from '../../lib/money.js';
@@ -154,6 +154,25 @@ export function stockWithoutCostError(item: { name: string; code: string }, chan
   if (itemWac.isPositive() || !changes.some(c => c.diff > 0)) return null;
   return `کالای «${item.name}» (${item.code}) میانگین موزون بها ندارد و موجودی بی‌بها وارد انبار نمی‌شود، ` +
     `چون چنین کالایی هیچ فروش یا حواله‌ای را نمی‌پذیرد. ستون «${ITEM_WAC_COLUMN}» را پر کنید. ردیف ثبت نشد.`;
+}
+
+const ITEM_TYPE_LABELS: Record<ItemRow['type'], string> = { product: 'محصول نهایی', raw_material: 'ماده اولیه' };
+
+/**
+ * v11 phase 3.2 (S1): the type of an item with stock or any live Kardex row does not change from Excel (the form never
+ * changes it). The item's stock was debited to the inventory account of its type, and every later movement, void or
+ * release posts to the account of the new type, so the raw material and product accounts drift apart from the stock
+ * while their sum still matches. An item without stock and without a Kardex row may still change its type.
+ */
+export async function itemTypeChangeError(tx: DbExecutor, item: ItemRow, newType: RowFields['itemType'], stockTotal: number): Promise<string | null> {
+  if (!newType || newType === item.type) return null;
+  const hasHistory = stockTotal !== 0 || (await tx.select({ id: transactions.id }).from(transactions)
+    .where(and(eq(transactions.itemId, item.id), eq(transactions.isDeleted, 0))).limit(1)).length > 0;
+  if (!hasHistory) return null;
+  const current = ITEM_TYPE_LABELS[item.type] ?? item.type;
+  return `نوع کالای «${item.name}» (${item.code}) از اکسل عوض نمی‌شود، چون این کالا موجودی یا گردش انبار دارد و ارزشش در ` +
+    `حساب موجودی «${current}» ثبت شده است؛ تغییر نوع، حساب‌های موجودی را از انبار جدا می‌کند. ` +
+    `ستون «نوع کالا» را خالی بگذارید یا «${current}» بنویسید. ردیف ثبت نشد.`;
 }
 
 const QTY_EPSILON = 1e-6;

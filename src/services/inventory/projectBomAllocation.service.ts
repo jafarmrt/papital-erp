@@ -426,6 +426,18 @@ export class ProjectBomAllocationService {
         .where(eq(items.id, alloc.itemId))
         .for('no key update');
 
+      // v11 phase 3.2 (S3): the material of a deleted item does not come back to stock. Before, the release put the stock
+      // and, with the voided allocation voucher, its value back on an item no list or check shows. The material stays with
+      // the project; the allocation can still be recorded as consumed.
+      if (item?.isDeleted === 1) {
+        throw new ConflictError(
+          `کالای «${alloc.itemName}» (${alloc.itemCode}) حذف شده است و مواد این تخصیص به انبار برنمی‌گردد. ` +
+          'اگر این مواد در ساخت به کار رفته، تخصیص را با «مصرف شد» ثبت کنید.',
+          { itemId: alloc.itemId },
+          'ALLOCATION_ITEM_DELETED',
+        );
+      }
+
       // v8.0.33 (TD-288): مواد به بهای کاردکس خروج همان تخصیص برمی‌گردند (همان قاعده ابطال خروج، TD-254)، نه به میانگین موزون
       // روز؛ پیش‌تر پس از خرید گران‌تر، آزادسازی ارزش از هیچ می‌ساخت. تخصیصِ رسیدِ پیش از v8.0.32 (حرکت منبع «ورود») موجودی را
       // از انبار برنداشته بود و آزادسازی آن موجودی اضافه نمی‌کند.

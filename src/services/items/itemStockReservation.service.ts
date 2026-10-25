@@ -676,6 +676,16 @@ export class ItemStockReservationService {
   }
 
   /**
+   * v11 phase 3.2 (S3): codes of the finalized projects whose stored reservation names this live item, by the report's own
+   * match (id, code key, name key); the item delete refuses while one is left.
+   */
+  static async reservingProjectCodes(executor: DbExecutor, itemId: number): Promise<string[]> {
+    const report = await ItemStockReservationService.getReservedStockDetails(executor, true, { itemIds: [itemId] });
+    const codes = report.allReservationEntries.filter(e => e.sourceType === 'project' && e.itemId === itemId).map(e => e.sourceRef);
+    return [...new Set(codes)];
+  }
+
+  /**
    * رزرو هر کالا (پیش‌فاکتور فروش و پروژه ثبت نهایی‌شده)، با شناسه کالا کلید خورده (v9.0.374، TD-822؛ پیش‌تر کد بزرگ‌شده).
    * v9.0.394 (TD-821): خطای خواندن رزرو به فراخواننده می‌رسد (فهرست کالا خطا می‌دهد، نه رزرو صفر).
    */

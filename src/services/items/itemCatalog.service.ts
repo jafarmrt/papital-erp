@@ -1,7 +1,7 @@
 import { maybeStartEntityWorkflow, terminateEntityWorkflows } from '../system/entityWorkflowPort.js';
 import { eq, and, desc, ilike, asc } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
-import { items, itemPrices, warehouses, itemCodeCounters, documentItems, transactions } from '../../db/schema.js';
+import { items, itemPrices, warehouses, itemCodeCounters, documentItems, transactions, projectBomAllocations } from '../../db/schema.js';
 import { isDataUrl, uploadBase64ToStorage } from '../../lib/storage.js';
 import { normalizeStrategyTitle, getStrategyCanonicalKey } from '../../utils.js';
 import { ItemPricingService } from './itemPricing.service.js';
@@ -27,6 +27,12 @@ import { idempotentTransaction, idempotentTransactionOn } from '../../middleware
 
 // V10-2.1: تایپ کلاینت اتصال DB برای تراکنش‌های داخلی
 type DbLike = DbExecutor;
+
+/** v11 phase 3.2 (S3): what depends on an item from a package above the items core, read in the delete's transaction */
+export interface ItemDeleteDependents {
+  /** codes of the finalized projects whose stored reservation names the item */
+  reservingProjects(tx: DbExecutor, itemId: number): Promise<string[]>;
+}
 
 export interface NextItemCodeInput {
   type?: string;
@@ -438,9 +444,10 @@ export class ItemCatalogService {
   }
 
   /**
-   * Soft deletes an item after validating that it has no non-zero physical inventory and no active document references
+   * Soft deletes an item after validating that it has no non-zero physical inventory, no active document references, no
+   * open BOM allocation and no project reservation (`dependents`, read above the items core; `ItemsService.deleteItem`)
    */
-  static async deleteItem(id: number, outer: DbExecutor = orm): Promise<typeof items.$inferSelect> {
+  static async deleteItem(id: number, dependents: ItemDeleteDependents, outer: DbExecutor = orm): Promise<typeof items.$inferSelect> {
     // v9.0.40 (TD-447، ت۵): حذف کالا و بستن فرایند در جریان آن در یک تراکنش، زیر قفل ردیف کالا
     return idempotentTransactionOn(outer, async (executor) => {
       const itemId = Number(id);
@@ -467,6 +474,32 @@ export class ItemCatalogService {
       if (activeDocRefsResult) {
         throw new ConflictError(
           `حذف کالای «${delItem.name}» مجاز نیست زیرا در ردیف‌های اسناد فعال (فاکتور/رسید/حواله) استفاده شده است. برای حفظ یکپارچگی تاریخچه اسناد، ابتدا باید اسناد مرتبط حذف شوند.`
+        );
+      }
+
+      // v11 phase 3.2 (S3): an open BOM allocation took the item's stock to a project and its release brings it back, so the
+      // item stays until each allocation is consumed or released; before, the release put stock and value on a deleted item
+      const openAllocations = await executor
+        .select({ projectCode: projectBomAllocations.projectCode })
+        .from(projectBomAllocations)
+        .where(and(eq(projectBomAllocations.itemId, itemId), eq(projectBomAllocations.status, 'allocated'), eq(projectBomAllocations.isDeleted, 0)));
+      if (openAllocations.length > 0) {
+        const projects = [...new Set(openAllocations.map(a => a.projectCode))];
+        throw new ConflictError(
+          `حذف کالای «${delItem.name}» مجاز نیست زیرا تخصیص باز به پروژه ${projects.join('، ')} دارد. ` +
+          'ابتدا هر تخصیص این کالا را با «مصرف شد» یا «آزادسازی» ببندید.',
+          { projects },
+          'ITEM_HAS_OPEN_ALLOCATION',
+        );
+      }
+      // v11 phase 3.2 (S3): a finalized project that reserves the item would lose its reservation without a word
+      const reservingProjects = await dependents.reservingProjects(executor, itemId);
+      if (reservingProjects.length > 0) {
+        throw new ConflictError(
+          `حذف کالای «${delItem.name}» مجاز نیست زیرا پروژه ${reservingProjects.join('، ')} آن را رزرو کرده است. ` +
+          'ابتدا رزرو این کالا را در کنترل موجودی پروژه بردارید.',
+          { projects: reservingProjects },
+          'ITEM_HAS_PROJECT_RESERVATION',
         );
       }
 
