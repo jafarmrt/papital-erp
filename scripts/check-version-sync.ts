@@ -3,7 +3,7 @@ import path from 'path';
 import { SYSTEM_UPDATES, ACTIVE_CHANGELOG, CLOSED_CHANGELOG_SERIES } from '../src/data/changelogs/index.js';
 import { findCompactRuleViolations } from '../src/data/changelogs/compactRule.js';
 import { findChangelogSeriesViolations } from '../src/data/changelogs/seriesGuard.js';
-import { findDebtRegistryViolations, findMissingNpmScripts, npmScriptDocs } from './governance/releaseGuards.js';
+import { CLOSED_DEBT_FILE, FROZEN_DEBT_ARCHIVE, findDebtRegistryViolations, findMissingNpmScripts, npmScriptDocs } from './governance/releaseGuards.js';
 
 /**
  * TD-111 (v7.0.0) — گیت همگام‌سازی جامع نسخه (fail-fast)
@@ -11,15 +11,15 @@ import { findDebtRegistryViolations, findMissingNpmScripts, npmScriptDocs } from
  * تمامی منابع اعلام نسخه باید همیشه همگام باشند:
  *   1) "version" در package.json (مرجع یگانه؛ خوانده‌شده توسط src/lib/version.ts و /health)
  *   2) مدخل نخست چنج‌لاگ فعال (SYSTEM_UPDATES[0].version در ACTIVE_CHANGELOG.file — از v11.0.0 فایل 11.ts)
- *   3) مانیفست استقرار deploy/k8s/erp-deployment.yaml
- *   4) هدر مستندات README.md
+ *   3) هدر مستندات README.md
+ * v11.0.3: مانیفست k8s نمونهٔ پشتیبانی‌نشده است و دیگر جای نسخه نیست (تصمیم مالک محصول در بررسی حاکمیتی ۱.۲).
  * v8.0.0: نسخه در سری فعال است و سری‌های بسته‌شده منجمدند (از v11.0.0: 7.ts، 8.ts، 9.ts و 10.ts) (src/data/changelogs/seriesGuard.ts).
  */
 
 function fail(message: string): never {
   console.error('❌ Version Sync Check FAILED (TD-111):');
   console.error(`   ${message}`);
-  console.error(`   Fix: bring every version source in sync (package.json, the active changelog ${ACTIVE_CHANGELOG.file}, the k8s manifest and README).`);
+  console.error(`   Fix: bring every version source in sync (package.json, the active changelog ${ACTIVE_CHANGELOG.file} and README).`);
   process.exit(1);
 }
 
@@ -44,20 +44,7 @@ function main(): void {
     fail(`Version mismatch: package.json "${pkgVersion}" vs SYSTEM_UPDATES[0] "${changelogVersion}"`);
   }
 
-  // 2) بررسی مانیفست K8s
-  const k8sPath = path.resolve(process.cwd(), 'deploy/k8s/erp-deployment.yaml');
-  if (fs.existsSync(k8sPath)) {
-    const k8sContent = fs.readFileSync(k8sPath, 'utf-8');
-    // v7.0.18: هر دو مقدار الزامی است — APP_VERSION در src/lib/version.ts بر package.json اولویت دارد
-    // و مقدار کهنه آن باعث گزارش نسخه اشتباه در /health می‌شد (قبلاً شرط OR بود).
-    const appVersionMatch = k8sContent.match(/name:\s*APP_VERSION\s*\n\s*value:\s*"([^"]+)"/);
-    if (!k8sContent.includes(`erp:v${pkgVersion}`)) {
-      fail(`Image tag mismatch in the Kubernetes manifest deploy/k8s/erp-deployment.yaml; expected: erp:v${pkgVersion}`);
-    }
-    if (appVersionMatch && appVersionMatch[1] !== pkgVersion) {
-      fail(`APP_VERSION mismatch in the Kubernetes manifest: current "${appVersionMatch[1]}", expected "${pkgVersion}"`);
-    }
-  }
+
 
   // 2.1) بررسی هدر README.md (طبق کامنت بالای همین فایل)
   const readmePath = path.resolve(process.cwd(), 'README.md');
@@ -83,7 +70,7 @@ function main(): void {
   // 5) v10.0.22 (TD-981): no debt row is both active and archived or listed twice (parallel merges brought them back)
   const debtViolations = findDebtRegistryViolations(
     fs.readFileSync(path.resolve(process.cwd(), 'TECH_DEBT.md'), 'utf-8'),
-    fs.readFileSync(path.resolve(process.cwd(), 'TECH_DEBT_ARCHIVE.md'), 'utf-8')
+    [CLOSED_DEBT_FILE, FROZEN_DEBT_ARCHIVE].map(rel => fs.readFileSync(path.resolve(process.cwd(), rel), 'utf-8')).join('\n')
   );
   if (debtViolations.length > 0) {
     fail(`The debt registry is inconsistent (archived rows win; remove them from TECH_DEBT.md):\n   - ${debtViolations.slice(0, 15).join('\n   - ')}`);
@@ -96,7 +83,7 @@ function main(): void {
     fail(`package.json lost npm scripts that are still in use (restore them):\n   - ${missingScripts.slice(0, 15).join('\n   - ')}`);
   }
 
-  console.log(`✅ Version Sync OK (TD-111): package.json == SYSTEM_UPDATES[0] == k8s (image + APP_VERSION) == README == v${pkgVersion}`);
+  console.log(`✅ Version Sync OK (TD-111): package.json == SYSTEM_UPDATES[0] == README == v${pkgVersion}`);
   process.exit(0);
 }
 

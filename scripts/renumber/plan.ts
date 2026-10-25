@@ -7,15 +7,17 @@
  *    highest version of <ref>; every added line in the changed files follows (CHANGELOG.md, TECH_DEBT rows,
  *    AGENTS.md, roadmap, audit report, and in code files too: test names, strings, trailing and JSX comments, also
  *    written with Persian digits; v10.0.23, OT-A-01). The active changelog and the active CHANGELOG.md section are
- *    sorted newest first, and package.json, package-lock.json, k8s and README get the top version;
+ *    sorted newest first, and package.json, package-lock.json and README get the top version;
  *  - migrations: journal entries whose tag is not in <ref> move after the migrations of <ref> (file renamed, idx,
  *    tag, strictly increasing `when`) and added lines follow (the tag and the bare four-digit number; in code files
  *    only comment lines, since a four-digit number in code is usually data);
  *  - audit report: a package section the branch added («## N.») whose number <ref> already uses takes the next free
  *    number, with its subsections, and added «STABILITY_AUDIT_V9.md` §N» references follow;
- *  - TECH_DEBT.md drops every row whose id the merged TECH_DEBT_ARCHIVE.md holds (a row either side archived is
- *    closed; v10.0.22, TD-981), and its counters are recounted from both tables.
+ *  - TECH_DEBT.md drops every row whose id the merged closed-rows file (docs/rules/DEBT_LESSONS.md) holds (a row either side archived is
+ *    closed; v10.0.22, TD-981), and its counters are recounted from both tables (closed = DEBT_LESSONS.md rows + the frozen archive's).
  */
+
+import { CLOSED_DEBT_FILE, FROZEN_DEBT_ARCHIVE } from '../governance/releaseGuards';
 
 export interface RenumberInput {
   /** file content at <ref>, or null when the file does not exist there */
@@ -275,11 +277,6 @@ function setVersionLocations(input: RenumberInput, writes: Map<string, string>, 
     let n = 0;
     writes.set('package-lock.json', lock.replace(/"version": "[^"]+"/g, m => (n++ < 2 ? `"version": "${plain}"` : m)));
   }
-  const k8s = get('deploy/k8s/erp-deployment.yaml');
-  if (k8s) {
-    writes.set('deploy/k8s/erp-deployment.yaml', k8s.replace(/erp:v\d+\.\d+\.\d+/g, `erp:${top}`)
-      .replace(/(name:\s*APP_VERSION\s*\n\s*value:\s*")[^"]+(")/, `$1${plain}$2`));
-  }
   const readme = get('README.md');
   if (readme) writes.set('README.md', readme.replace(/نسخه مستقر: `v\d+\.\d+\.\d+`/, `نسخه مستقر: \`${top}\``));
 }
@@ -294,14 +291,14 @@ export function dropArchivedDebtRows(debt: string, archive: string): string {
 
 function recountTechDebt(input: RenumberInput, writes: Map<string, string>): void {
   const get = (rel: string) => writes.get(rel) ?? input.current(rel);
-  const archive = get('TECH_DEBT_ARCHIVE.md');
+  const archive = get(CLOSED_DEBT_FILE);
   const current = get('TECH_DEBT.md');
   if (!current || !archive) return;
   const debt = dropArchivedDebtRows(current, archive);
   const rows = (s: string) => s.split('\n').filter(l => debtIdOf(l) !== undefined).length;
   writes.set('TECH_DEBT.md', debt
     .replace(/- \*\*فعال:\*\* [۰-۹0-9]+ ردیف/, `- **فعال:** ${toFa(rows(debt))} ردیف`)
-    .replace(/- \*\*آرشیو شده \(resolved\):\*\* [۰-۹0-9]+ ردیف/, `- **آرشیو شده (resolved):** ${toFa(rows(archive))} ردیف`));
+    .replace(/- \*\*آرشیو شده \(resolved\):\*\* [۰-۹0-9]+ ردیف/, `- **آرشیو شده (resolved):** ${toFa(rows(archive) + rows(get(FROZEN_DEBT_ARCHIVE) ?? ''))} ردیف`));
 }
 
 /** The whole renumbering in memory; nothing is written when it throws. */

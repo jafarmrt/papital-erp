@@ -2,13 +2,18 @@
  * Release governance gates run by `npm run check:version` (scripts/check-version-sync.ts), so every
  * `npm run release:renumber` merge checks them too. Terminal output is English (AGENTS.md, owner rule t9).
  *
- * v10.0.22 (TD-981): a debt row is never both active (TECH_DEBT.md) and archived (TECH_DEBT_ARCHIVE.md), and no id
+ * v10.0.22 (TD-981): a debt row is never both active (TECH_DEBT.md) and closed (DEBT_LESSONS.md / the frozen archive), and no id
  * is listed twice in one of them; parallel merges used to bring archived rows back unnoticed.
  * v10.0.24 (OT-A-03): every `npm run <script>` the governance documents, CI and the shell scripts name exists in
  * package.json; a master merge once dropped `ratchet:permissions` and nothing noticed.
  */
 import fs from 'fs';
 import path from 'path';
+
+/** v11.0.3 (sub-phase 1.3): debt rows closed since series 11, with the debt lessons (replaces TECH_DEBT_ARCHIVE.md). */
+export const CLOSED_DEBT_FILE = 'docs/rules/DEBT_LESSONS.md';
+/** The rows closed up to series 10, frozen; read only so an id is never used twice. */
+export const FROZEN_DEBT_ARCHIVE = 'docs/rules/archive/TECH_DEBT_ARCHIVE_V10.md';
 
 const debtIds = (src: string) => src.split('\n').map(l => l.match(/^\| (TD-\d+) \|/)?.[1]).filter((id): id is string => !!id);
 
@@ -23,9 +28,9 @@ export function findDebtRegistryViolations(debt: string, archive: string): strin
   const archived = debtIds(archive);
   const archivedSet = new Set(archived);
   return [
-    ...[...new Set(active)].filter(id => archivedSet.has(id)).map(id => `${id} is both active (TECH_DEBT.md) and archived (TECH_DEBT_ARCHIVE.md)`),
+    ...[...new Set(active)].filter(id => archivedSet.has(id)).map(id => `${id} is both active (TECH_DEBT.md) and closed (${CLOSED_DEBT_FILE} or the frozen archive)`),
     ...duplicates(active).map(([id, n]) => `${id} appears ${n} times in TECH_DEBT.md`),
-    ...duplicates(archived).map(([id, n]) => `${id} appears ${n} times in TECH_DEBT_ARCHIVE.md`),
+    ...duplicates(archived).map(([id, n]) => `${id} appears ${n} times among the closed rows`),
   ];
 }
 

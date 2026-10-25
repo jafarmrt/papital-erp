@@ -21,6 +21,9 @@ going forward.
 
 ## Version 11.x Series (Active — see `src/data/changelogs/11.ts`)
 
+### v11.0.3 — درس‌های بدهی به‌جای بایگانی بزرگ
+- Documentation and tooling (sub-phase 1.3, PR 2): the 1.4 MB `TECH_DEBT_ARCHIVE.md` is frozen as `docs/rules/archive/TECH_DEBT_ARCHIVE_V10.md` (rows closed up to series 10). `docs/rules/DEBT_LESSONS.md` holds 15 lessons of the fixed debt that no single rule names, and the rows closed since series 11 (TD-1389 and TD-1390 move there). `npm run release`, `release:renumber` and `check:version` write and read the new file, and the frozen archive still counts for used ids and the closed-row count. The unsupported k8s example is no version location any more (placeholder image tag, no `APP_VERSION`), so a release bumps three locations.
+
 ### v11.0.2 — قواعد کوتاه پروژه
 - Documentation and tooling (sub-phase 1.3, PR 1, from the 24 section decisions of the v11 governance review): `AGENTS.md` becomes a short core, one line per rule with its guard, and the full rules move to area files in `docs/rules/` (20 files, version and debt tags removed, a UI glossary in `ui.md`). The old `AGENTS.md` and `ARCHITECTURE_RULES.md` are kept verbatim in `docs/rules/archive/`. The architecture rules join the core: thin routes, no whole raw SQL write statement (a `sql` fragment inside `set()` is allowed), package boundary must not grow. Lighter process: small same-kind fixes share a pull request and a version, docs-only pull requests take no version, TD rows only for remaining debt, full review only for money, stock, security and migrations. New architecture ratchet metric `rawSqlWrites` (baseline 0); the governance docs test reads `AGENTS.md` and `docs/rules/*.md`.
 
