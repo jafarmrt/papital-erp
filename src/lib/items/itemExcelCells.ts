@@ -1,4 +1,4 @@
-import { DECIMAL_PATTERN, normalizeDecimalString } from '../numericInput.js';
+import { DECIMAL_PATTERN, normalizeGroupedDecimalString } from '../numericInput.js';
 
 /**
  * v10.0.1 (TD-1010): خواندن سلول نوع ردیف اکسل کالا، مشترک سرور (`itemExcelRow.ts`) و
@@ -64,7 +64,8 @@ export function parseNumberCell(row: Record<string, unknown>, headers: readonly 
   if (typeof raw === 'number') {
     if (Number.isFinite(raw)) return { value: raw };
   } else {
-    const text = normalizeDecimalString(String(raw));
+    // v11 phase 3.1 (M4): a misplaced group separator («12,5») is not a number, as in every form
+    const text = normalizeGroupedDecimalString(String(raw));
     if (DECIMAL_PATTERN.test(text)) return { value: Number(text) };
   }
   return { error: `«${String(raw).trim()}» در ستون «${header}» عدد نیست. ردیف ثبت نشد.` };

@@ -32,6 +32,15 @@ const textOf = (res: request.Response) => JSON.stringify(res.body ?? null);
 
 type Api = Awaited<ReturnType<typeof sandboxAdminClient>> | Awaited<ReturnType<typeof sandboxClientWith>>;
 
+// Persian text compared with the application's answers, or sent as typed input
+const DRAFT_WORD = 'پیش‌نویس';
+const ACCOUNT_FORM_HINT = 'ویرایش همان حساب خزانه';
+const FISCAL_YEAR_WORD = 'سال مالی';
+const BANK_NAME = 'ملت';
+const PERSIAN_GROUPED = '۱٬۰۰۰';
+const PERSIAN_MISPLACED = '۱٬۰';
+const PERSIAN_QUANTITY = '۱٬۲';
+
 const RECORD = ['accounting.view', 'accounting.vouchers'];
 const APPROVE = [...RECORD, 'accounting.vouchers_approve'];
 
@@ -118,7 +127,7 @@ export async function runMoneyUrgentFixesV11Tests(shouldRun: ShouldRun): Promise
       if (corr?.status !== 'draft' || corr?.approvedById !== null) problems.push(`the replacement is ${corr?.status} approved by ${String(corr?.approvedById)}, expected a draft with no approver`);
       if (corr?.createdById !== clerk.userId) problems.push(`the replacement was made by ${String(corr?.createdById)}, expected the corrector ${clerk.userId}`);
       if ((await voucherRow(revId))?.status !== 'approved') problems.push('the reversal of the original is not approved');
-      if (!String(corrected.body?.message ?? '').includes('پیش‌نویس')) problems.push(`the answer does not say the replacement is a draft: ${String(corrected.body?.message)}`);
+      if (!String(corrected.body?.message ?? '').includes(DRAFT_WORD)) problems.push(`the answer does not say the replacement is a draft: ${String(corrected.body?.message)}`);
       if (await booked7001() !== '0') problems.push(`account 7001 has ${await booked7001()} in the books after the correction, expected 0 until the replacement is approved`);
 
       // 2) the recorder does not approve it; another holder of the approve key does, and only then it is in the books
@@ -159,7 +168,7 @@ export async function runMoneyUrgentFixesV11Tests(shouldRun: ShouldRun): Promise
       // 1) the draft: no edit, no delete; the refusal names the account form
       const edit = await api.put(`/api/accounting/vouchers/${openingId}`, { version: Number(detail.body?.version ?? 1), description: 'M2 edit', items: await pairOf(1) });
       refused('editing the draft opening voucher', edit);
-      if (edit.status === 409 && !textOf(edit).includes('ویرایش همان حساب خزانه')) problems.push(`the edit refusal does not point to the account form: ${textOf(edit).slice(0, 200)}`);
+      if (edit.status === 409 && !textOf(edit).includes(ACCOUNT_FORM_HINT)) problems.push(`the edit refusal does not point to the account form: ${textOf(edit).slice(0, 200)}`);
       refused('deleting the draft opening voucher', await api.del(`/api/accounting/vouchers/${openingId}`));
 
       // 2) the start date of the draft moves from the account form, the voucher with it
@@ -208,17 +217,17 @@ export async function runMoneyUrgentFixesV11Tests(shouldRun: ShouldRun): Promise
 
       // 1) voucher rows
       const vouchersBefore = await vouchers();
-      for (const bad of ['12,5', '1٬00٬0', '۱٬۰', '1,000,0']) {
+      for (const bad of ['12,5', '1٬00٬0', PERSIAN_MISPLACED, '1,000,0']) {
         refused(`a voucher row of «${bad}»`, await api.post('/api/accounting/vouchers', { date: today, description: `M4 ${bad}`, items: await pairOf(bad) }));
       }
       if (await vouchers() !== vouchersBefore) problems.push('a refused voucher was saved');
-      const grouped = await api.post('/api/accounting/vouchers', { date: today, description: 'M4 grouped', items: await pairOf('۱٬۰۰۰') });
-      if (grouped.status !== 201) problems.push(`a voucher row of «۱٬۰۰۰» returned ${brief(grouped)}`);
-      else if (fin((await voucherRow(Number(grouped.body.id)))?.totalDebit ?? 0).toString() !== '1000') problems.push(`«۱٬۰۰۰» was stored as ${(await voucherRow(Number(grouped.body.id)))?.totalDebit}`);
+      const grouped = await api.post('/api/accounting/vouchers', { date: today, description: 'M4 grouped', items: await pairOf(PERSIAN_GROUPED) });
+      if (grouped.status !== 201) problems.push(`a voucher row of Persian 1,000 returned ${brief(grouped)}`);
+      else if (fin((await voucherRow(Number(grouped.body.id)))?.totalDebit ?? 0).toString() !== '1000') problems.push(`Persian 1,000 was stored as ${(await voucherRow(Number(grouped.body.id)))?.totalDebit}`);
 
       // 2) a treasury receipt
       const bankId = await bankWith(api, 'M4 bank');
-      refused('a treasury receipt of «1٬0»', await api.post('/api/accounting/treasury', {
+      refused('a treasury receipt of 1,0 with a Persian separator', await api.post('/api/accounting/treasury', {
         type: 'receipt', method: 'bank_transfer', amount: '1٬0', bankAccountId: bankId, partyType: 'other',
         contraAccountId: await miscContraAccountId(), partyName: 'M4 party', date: today,
       }));
@@ -228,9 +237,9 @@ export async function runMoneyUrgentFixesV11Tests(shouldRun: ShouldRun): Promise
       const main = String(await getDefaultWarehouseCode(orm));
       const other = await createTestWarehouse();
       const item = await createTestItem({ type: 'raw_material', stocks: { [main]: 50 }, weightedAverageCost: 1000 });
-      refused('a receipt line quantity of «۱٬۲»', await api.post('/api/documents', {
+      refused('a receipt line quantity of Persian 1,2', await api.post('/api/documents', {
         docType: 'receipt', status: 'draft', refNumber: 'auto', date: today, location: main, buyer_name: 'M4 supplier',
-        items: [{ itemId: item.id, quantity: '۱٬۲', unit_price: 1000 }],
+        items: [{ itemId: item.id, quantity: PERSIAN_QUANTITY, unit_price: 1000 }],
       }));
       refused('a receipt line price of «12,5»', await api.post('/api/documents', {
         docType: 'receipt', status: 'draft', refNumber: 'auto', date: today, location: main, buyer_name: 'M4 supplier',
@@ -240,7 +249,7 @@ export async function runMoneyUrgentFixesV11Tests(shouldRun: ShouldRun): Promise
       const kardex = await count(sql`SELECT count(*)::int AS n FROM transactions WHERE item_id = ${item.id} AND is_deleted = 0`);
       if (kardex !== 0) problems.push(`the refused transfer wrote ${kardex} Kardex rows`);
       assertNoProblems(problems);
-      return 'voucher rows «12,5» «1٬00٬0» «۱٬۰» «1,000,0», receipt «1٬0», line quantity «۱٬۲» and price «12,5», transfer «1,2»: 400, nothing written; «۱٬۰۰۰» stored 1000';
+      return 'voucher rows 12,5 / 1,00,0 (Persian separator) / Persian 1,0 / 1,000,0, receipt 1,0, line quantity Persian 1,2 and price 12,5, transfer 1,2: 400, nothing written; Persian 1,000 stored 1000';
     }));
   }
 
@@ -255,7 +264,7 @@ export async function runMoneyUrgentFixesV11Tests(shouldRun: ShouldRun): Promise
       await orm.insert(fiscalPeriods).values({ fiscalYear: 1387, status: 'closed', closedAt: '2009-04-01 00:00:00', closedBy: 'v11-m5' });
       FiscalPeriodService.resetCache();
       const refused = (label: string, res: request.Response) => {
-        if (res.status !== 422 || !textOf(res).includes('سال مالی')) problems.push(`${label} returned ${brief(res)}, expected 422 naming the closed fiscal year`);
+        if (res.status !== 422 || !textOf(res).includes(FISCAL_YEAR_WORD)) problems.push(`${label} returned ${brief(res)}, expected 422 naming the closed fiscal year`);
       };
       const contra = await miscContraAccountId();
 
@@ -285,12 +294,12 @@ export async function runMoneyUrgentFixesV11Tests(shouldRun: ShouldRun): Promise
       const chequesBefore = await cheques();
       refused('a cheque without a voucher issued in the closed year', await api.post('/api/accounting/cheques', {
         type: 'received', chequeNumber: `M5${tagOf()}`, amount: 250_000, partyType: 'other', contraAccountId: contra, partyName: 'M5 cheque party',
-        bankName: 'ملت', issueDate: CLOSED_DAY, dueDate: '2008-07-01', createVoucher: false,
+        bankName: BANK_NAME, issueDate: CLOSED_DAY, dueDate: '2008-07-01', createVoucher: false,
       }));
       if (await cheques() !== chequesBefore) problems.push('the refused cheque was saved');
       const cheque = await api.post('/api/accounting/cheques', {
         type: 'received', chequeNumber: `M5${tagOf()}`, amount: 250_000, partyType: 'other', contraAccountId: contra, partyName: 'M5 cheque party',
-        bankName: 'ملت', issueDate: today, dueDate: today,
+        bankName: BANK_NAME, issueDate: today, dueDate: today,
       });
       if (cheque.status !== 201 && cheque.status !== 200) throw new Error(`setup: cheque ${brief(cheque)}`);
       refused('a cheque step dated in the closed year', await api.put(`/api/accounting/cheques/${cheque.body.id}/status`, { status: 'in_treasury', actionDate: CLOSED_DAY }));

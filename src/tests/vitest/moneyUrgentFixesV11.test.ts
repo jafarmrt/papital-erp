@@ -1,21 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { normalizeDecimalString } from '../../lib/numericInput';
+import { normalizeDecimalString, normalizeGroupedDecimalString } from '../../lib/numericInput';
+import { parseNumberCell } from '../../lib/items/itemExcelCells';
 import { readDecimalInputText } from '../../lib/decimalInputText';
 import { voucherSourceHint, voucherSourceLabel } from '../../lib/accounting/voucherSource';
 import { decimalInput } from '../../middleware/validate';
 
 // v11 phase 3.1 (M4): one rule for the group separator on the server and in the browser
 describe('misplaced group separators (v11 M4)', () => {
-  it('normalizeDecimalString removes a separator only between groups of three digits', () => {
-    expect(normalizeDecimalString('1٬000')).toBe('1000');
-    expect(normalizeDecimalString('۱٬۲۳۴٬۵۶۷٫۸')).toBe('1234567.8');
-    expect(normalizeDecimalString('-1,250,000')).toBe('-1250000');
-    expect(normalizeDecimalString(' 1 000 ')).toBe('1000');
-    expect(normalizeDecimalString('12,5')).toBe('12,5');
-    expect(normalizeDecimalString('1٬00٬0')).toBe('1٬00٬0');
-    expect(normalizeDecimalString('۱٬۰')).toBe('1٬0');
-    expect(normalizeDecimalString('1,000,0')).toBe('1,000,0');
+  it('the reader of a saved value removes a separator only between groups of three digits', () => {
+    expect(normalizeGroupedDecimalString('1٬000')).toBe('1000');
+    expect(normalizeGroupedDecimalString('۱٬۲۳۴٬۵۶۷٫۸')).toBe('1234567.8');
+    expect(normalizeGroupedDecimalString('-1,250,000')).toBe('-1250000');
+    expect(normalizeGroupedDecimalString(' 1 000 ')).toBe('1000');
+    expect(normalizeGroupedDecimalString('12,5')).toBe('12,5');
+    expect(normalizeGroupedDecimalString('1٬00٬0')).toBe('1٬00٬0');
+    expect(normalizeGroupedDecimalString('۱٬۰')).toBe('1٬0');
+    expect(normalizeGroupedDecimalString('1,000,0')).toBe('1,000,0');
+    // the lenient form of typing and display is unchanged
+    expect(normalizeDecimalString('12,5')).toBe('125');
+  });
+
+  it('an Excel cell with a misplaced separator is not a number', () => {
+    expect(parseNumberCell({ 'قیمت': '12,5' }, ['قیمت']).error).toBeTruthy();
+    expect(parseNumberCell({ 'قیمت': '۱٬۲۵۰' }, ['قیمت']).value).toBe(1250);
   });
 
   it('decimalInput refuses a misplaced separator with the browser rule, and still reads groups of three', () => {
