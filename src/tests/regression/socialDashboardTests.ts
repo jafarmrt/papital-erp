@@ -328,7 +328,11 @@ async function whatsNewCase(h: Harness, wrong: string[]): Promise<string> {
   const other = await h.sessionWith([]);
   const res = await h.get('/api/social/whats-new', reader);
   const data = (res.body as { data?: WhatsNew | null }).data;
-  if (!data) return 'no whats-new entry for the current version';
+  // v11.0.0: every version has an active-changelog entry, so a missing card is a failure (it read the closed 10.ts)
+  if (!data) {
+    wrong.push('no whats-new entry for the current version');
+    return wrong.join('; ');
+  }
   if (data.version.replace(/^v/, '') !== APP_VERSION.replace(/^v/, '') || !data.title || data.dismissed) wrong.push(`unexpected entry ${JSON.stringify(data)}`);
   if (data.lines.length > 4) wrong.push(`${data.lines.length} lines instead of at most four`);
   const stale = await h.post('/api/social/whats-new/dismiss', { version: '0.0.1' }, reader);

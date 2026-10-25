@@ -57,7 +57,7 @@ describe('npm script guard (OT-A-03)', () => {
 
   it('reads the active roadmap and leaves the archived roadmaps of closed series out', () => {
     const docs = npmScriptDocs(process.cwd());
-    expect(docs.has('docs/roadmap/V10_MASTER_ROADMAP.md')).toBe(true);
+    expect(docs.has('docs/roadmap/V11_MASTER_ROADMAP.md')).toBe(true);
     expect([...docs.keys()].filter(rel => rel.startsWith('docs/roadmap/archive/'))).toEqual([]);
   });
 });

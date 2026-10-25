@@ -13,12 +13,20 @@ going forward.
 | Client-bundled update center (archive) | `src/data/changelogs/7.ts` | closed `7.x.y` series (`v7.0.0` – `v7.0.140`), frozen in v8.0.0 (fingerprint checked by `npm run check:version`) |
 | Client-bundled update center (archive) | `src/data/changelogs/8.ts` | closed `8.x.y` series (`v8.0.0` – `v8.0.128`), frozen in v9.0.0 (fingerprint checked by `npm run check:version`) |
 | Client-bundled update center (archive) | `src/data/changelogs/9.ts` | closed `9.x.y` series (`v9.0.0` – `v9.0.461`), frozen in v10.0.0 (fingerprint checked by `npm run check:version`) |
-| Client-bundled update center (active) | `src/data/changelogs/10.ts` | current `10.x.y` release series (`v10.0.0` onward); short entries, important points only (v7.0.54) |
+| Client-bundled update center (archive) | `src/data/changelogs/10.ts` | closed `10.x.y` series (`v10.0.0` – `v10.3.24`), frozen in v11.0.0 (fingerprint checked by `npm run check:version`) |
+| Client-bundled update center (active) | `src/data/changelogs/11.ts` | current `11.x.y` release series (`v11.0.0` onward); short entries, important points only (v7.0.54) |
 | Root archive (this file) | `CHANGELOG.md` | summary of the pre-reset history & milestones |
 
 ---
 
-## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
+## Version 11.x Series (Active — see `src/data/changelogs/11.ts`)
+
+### v11.0.0 — بستن سری ۱۰ و آغاز نسخهٔ ۱۱
+- Documentation and tooling: series 10 closes at v10.3.24 (`a5450c3`); `10.ts` is frozen with its fingerprint (413 entries) and `11.ts` is the active changelog. `docs/roadmap/V10_MASTER_ROADMAP.md` moves to `docs/roadmap/archive/` with a closing report (section 9) and `docs/roadmap/V11_MASTER_ROADMAP.md` opens (phases 0–6; phases 1 and 2 final, 3–6 provisional until the independent evaluation). The «what's new» card reads the active changelog instead of `10.ts` and its regression test now fails when the running version has no entry (TD-1389). Open debt carried over: TD-1294, TD-1354, TD-1355; the next id is TD-1390.
+
+---
+
+## Version 10.x Series (Archived at v10.3.24)
 
 ### v10.3.24 — هشدار بررسی شبانهٔ پشتیبان، و گذرواژه و توکن‌ها بیرون از فهرست فرایندها
 - `monitor.sh` گزارش بررسی شبانه را با داوری کارت سلامت می‌خواند و شب ناموفق، بدتر یا کهنه را هشدار می‌دهد (TD-1350). `backup.sh` گذرواژه را با PGPASSFILE می‌دهد و `BACKUP_DIR` را از `.env` هم می‌خواند (TD-1351، TD-1353)، برآورد جای خالی بررسی شبانه بزرگ‌ترین نمایه و `max_wal_size` را هم می‌شمارد (TD-1352)، و `monitor.sh` رازها را از ورودی استاندارد به curl می‌دهد (TD-1388). کاربر جدای سرویس و بردن CI به Ubuntu 26.04 به تصمیم ت۴۹ به نسخهٔ ۱۱ رفتند (TD-1354، TD-1355). بستهٔ ۸ نسخهٔ ۱۰.۳.
