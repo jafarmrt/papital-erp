@@ -1,6 +1,6 @@
 # Debt Lessons
 
-What the fixed debt of series 1 to 10 teaches, in one place, and the debt rows closed since series 11. The core rules (`AGENTS.md`) and the area files (`docs/rules/*.md`) already hold most lessons as rules; this file keeps only the patterns that kept coming back and that no single rule names. Each lesson cites a few of the rows it comes from; their full text is in `docs/rules/archive/TECH_DEBT_ARCHIVE_V10.md` (frozen, series 1 to 10). Reviewers check a change against this list.
+What the fixed debt of series 1 to 10 teaches, in one place, and the debt rows closed since series 11. The core rules (`AGENTS.md`) and the area files (`docs/rules/*.md`) already hold most lessons as rules; this file keeps only the patterns that kept coming back and that no single rule names. Each lesson cites a few of the rows it comes from; their full text is in `docs/rules/archive/TECH_DEBT_ARCHIVE_V10.md` at commit `c3c9858` (series 1 to 10; only their ids stay, in `docs/rules/CLOSED_DEBT_IDS_V10.md`). Reviewers check a change against this list.
 
 ## Lessons
 

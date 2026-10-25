@@ -2,7 +2,7 @@
 
 Orders, customers, product links and the automatic stock and price push.
 
-Core rules (one line each, with their guards) are in `AGENTS.md`. This file holds the full rules of the area; the history of each rule (versions, debt rows, decisions) is in `docs/rules/archive/AGENTS_V10.md`, and a «§N» below refers to that file's numbering.
+Core rules (one line each, with their guards) are in `AGENTS.md`. This file holds the full rules of the area; the history of each rule (versions, debt rows, decisions) is in `docs/rules/archive/AGENTS_V10.md` at commit `c3c9858` (archives removed in v11.1.0), and a «§N» below refers to that file's numbering.
 
 - **Public Route Exemption:** Webhook endpoints (`/api/woocommerce/webhook/order`) must be exempted from `authenticateToken` in `src/middleware/auth.ts` for ping/payloads (GET, POST, HEAD).
 

@@ -2,7 +2,7 @@
 
 Test layers, the critical path, business invariants and how tests are run.
 
-Core rules (one line each, with their guards) are in `AGENTS.md`. This file holds the full rules of the area; the history of each rule (versions, debt rows, decisions) is in `docs/rules/archive/AGENTS_V10.md`, and a «§N» below refers to that file's numbering.
+Core rules (one line each, with their guards) are in `AGENTS.md`. This file holds the full rules of the area; the history of each rule (versions, debt rows, decisions) is in `docs/rules/archive/AGENTS_V10.md` at commit `c3c9858` (archives removed in v11.1.0), and a «§N» below refers to that file's numbering.
 
 - **Vitest for New Unit & Frontend Tests:** New pure-unit and React component tests are Vitest files in `src/tests/vitest/*.test.ts(x)` (jsdom + Testing Library), run with `npm run test:vitest` (CI lint job). Vitest runs in the `vmForks` pool (one jsdom per worker, each file in its own context) with 30 s test and hook timeouts, and `findBy*` / `waitFor` wait 5 s by default (`src/tests/vitest/setup/testingLibrary.ts`); a test file never passes a timeout below 10 s, and a ratchet test scans the repository once per file (Vitest `vitestCiStabilityTd1261.test.ts`). Database and domain suites stay on the existing runner. The test bootstrap waits for the seed lock (`runSeedWithLock({ waitForLock: true })`), because the lock is one key for every schema of the database, and a catalog read in code or tests names its schema (`current_schema()`, a `regclass` / `regnamespace` cast or a schema column; Vitest `catalogSchemaScope.test.ts`).
 

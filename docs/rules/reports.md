@@ -2,7 +2,7 @@
 
 Trial balance, account and party cards, journal book, financial statements and management reports.
 
-Core rules (one line each, with their guards) are in `AGENTS.md`. This file holds the full rules of the area; the history of each rule (versions, debt rows, decisions) is in `docs/rules/archive/AGENTS_V10.md`, and a «§N» below refers to that file's numbering.
+Core rules (one line each, with their guards) are in `AGENTS.md`. This file holds the full rules of the area; the history of each rule (versions, debt rows, decisions) is in `docs/rules/archive/AGENTS_V10.md` at commit `c3c9858` (archives removed in v11.1.0), and a «§N» below refers to that file's numbering.
 
 - **Report Currency Rule:** A voucher row's currency is its own, else its voucher's, else IRR. Reports that sum voucher rows (trial balance, account card, party ledger, project reports, financial health check) use one rule from `src/services/accounting/voucherItemAmount.ts`: the «all currencies» view converts a foreign row to IRR at that row's own exchange rate (rounded to the rial) and keeps IRR rows as they are; a single-currency view shows only that currency's rows at their own amounts. Never add a raw foreign amount to rials.
 

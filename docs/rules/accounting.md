@@ -2,7 +2,7 @@
 
 Vouchers, fiscal years and closing, account mapping, the chart of accounts and money arithmetic.
 
-Core rules (one line each, with their guards) are in `AGENTS.md`. This file holds the full rules of the area; the history of each rule (versions, debt rows, decisions) is in `docs/rules/archive/AGENTS_V10.md`, and a «§N» below refers to that file's numbering.
+Core rules (one line each, with their guards) are in `AGENTS.md`. This file holds the full rules of the area; the history of each rule (versions, debt rows, decisions) is in `docs/rules/archive/AGENTS_V10.md` at commit `c3c9858` (archives removed in v11.1.0), and a «§N» below refers to that file's numbering.
 
 8. **Money Columns are Decimal on the Server (audit P2-6 / TD-210):** Money columns are declared with `moneyNumeric` (`src/db/schema/moneyColumn.ts`; done for every money column — accounting, treasury, document lines/VAT/exchange rate, WAC, Kardex, item prices, payroll and piecework). Report totals are summed in SQL (`SUM(...)::text` → `fin()`) or accumulated with `FinancialDecimal`, never with JS `+=` on numbers (TD-210 resolved).. Their value is `Money` (`src/lib/money.ts`, a `FinancialDecimal`): do arithmetic and comparisons with its methods or `fin()`, write with `money(x)` / `moneyOr(x, fallback)`, never through `Number()` or JS operators. API JSON stays numeric (`Money.toJSON`); DTOs typed `number` convert explicitly with `.toNumber()`.
 

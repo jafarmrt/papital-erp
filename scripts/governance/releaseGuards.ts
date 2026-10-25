@@ -73,9 +73,6 @@ export function findDebtRegistryViolations(debt: string, archive: string): strin
 /** Scripts named only to forbid them (AGENTS.md §23: `db:push` is banned). */
 const FORBIDDEN_SCRIPTS = new Set(['db:push']);
 
-/** Archived roadmaps and rules of closed series record history, including npm scripts that no longer exist. */
-const HISTORICAL_DOC_DIRS = new Set(['docs/roadmap/archive', 'docs/rules/archive']);
-
 /** Documents that name npm scripts: path relative to `root` → content. */
 export function npmScriptDocs(root: string): Map<string, string> {
   const docs = new Map<string, string>();
@@ -85,7 +82,7 @@ export function npmScriptDocs(root: string): Map<string, string> {
   };
   const addDir = (dir: string, ext: RegExp) => {
     const abs = path.join(root, dir);
-    if (!fs.existsSync(abs) || HISTORICAL_DOC_DIRS.has(dir)) return;
+    if (!fs.existsSync(abs)) return;
     for (const name of fs.readdirSync(abs).sort()) {
       const rel = path.posix.join(dir, name);
       if (fs.statSync(path.join(root, rel)).isDirectory()) addDir(rel, ext);

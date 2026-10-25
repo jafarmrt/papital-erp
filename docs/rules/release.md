@@ -2,7 +2,7 @@
 
 Changelog entries, series, the release tools, the debt registry, branches and dependencies.
 
-Core rules (one line each, with their guards) are in `AGENTS.md`. This file holds the full rules of the area; the history of each rule (versions, debt rows, decisions) is in `docs/rules/archive/AGENTS_V10.md`, and a «§N» below refers to that file's numbering.
+Core rules (one line each, with their guards) are in `AGENTS.md`. This file holds the full rules of the area; the history of each rule (versions, debt rows, decisions) is in `docs/rules/archive/AGENTS_V10.md` at commit `c3c9858` (archives removed in v11.1.0), and a «§N» below refers to that file's numbering.
 
 - **A Version per Server Update (v11 sub-phase 1.3, product-owner decision):** A pull request takes no version. Whenever it modifies code, adds a feature, optimizes or fixes a bug, it adds one line at the top of «### Unreleased» (newest first; the section opens the active series section of `CHANGELOG.md`) (`npm run release -- <spec.json>` without `version`); a documentation-only change adds none. Before each server update, the thread that prepares it opens a release-cut pull request (`npm run release -- <spec.json>` with `version` and `prev`): the Unreleased lines move under the new version, the active changelog file (currently `src/data/changelogs/11.ts`) gets one entry with Jalali date, title, summary, changes and fixes, and the three version locations change. The cut takes the next patch (x.y.z+1); the cut at the end of a roadmap phase takes the next minor (x.y+1.0); a new major is a new series with its own roadmap, decided by the owner. A server update with nothing unreleased needs no cut. `npm run check:version` refuses a missing Unreleased section and a skipped version.
 
