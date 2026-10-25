@@ -9,7 +9,8 @@
  *    and a row both sides changed differently is left to the operator;
  *    the counters and the «last review» line keep this branch's side (the counters are recounted later, and a row
  *    the merged archive holds is dropped from TECH_DEBT.md then: TD-981, renumber/plan.ts);
- *  - deploy/k8s/erp-deployment.yaml (v11.0.4, no version location): the base's side; the frozen debt archive is left
+ *  - deploy/k8s/erp-deployment.yaml (v11.0.4, no version location): the side with the placeholder tag `erp:vX.Y.Z`,
+ *    the base's side when neither has it, the operator when both have it (a real edit); the frozen debt archive is left
  *    to the operator (its new row belongs in DEBT_LESSONS.md, and check:version refuses one left in the archive);
  *  - DEBT_LESSONS.md: only hunks of debt rows are merged, a conflict in a lesson is left to the operator;
  *  - package.json, package-lock.json, README.md: a conflict whose lines are all version lines keeps the
@@ -193,7 +194,12 @@ export function resolveReleaseConflict(rel: string, merged: string, stages: Conf
   if (UNION_FILES.has(rel)) return unionRows(merged, rel === CLOSED_DEBT_FILE);
   // v11.0.4: the k8s example is no version location: the side with the placeholder tag wins (a branch from before
   // keeps the base's manifest, and the branch that makes it a placeholder keeps its own)
-  if (rel === K8S_EXAMPLE) return [stages.ours, stages.theirs].find(m => m.includes(K8S_PLACEHOLDER)) ?? stages.theirs;
+  if (rel === K8S_EXAMPLE) {
+    const ours = stages.ours.includes(K8S_PLACEHOLDER);
+    const theirs = stages.theirs.includes(K8S_PLACEHOLDER);
+    if (ours && theirs) return null;
+    return ours ? stages.ours : stages.theirs;
+  }
   // the frozen archive takes no new row: an old branch's closed row goes to DEBT_LESSONS.md by hand (check:version)
   if (rel === FROZEN_DEBT_ARCHIVE) return null;
   if (VERSION_FILES.has(rel)) {
