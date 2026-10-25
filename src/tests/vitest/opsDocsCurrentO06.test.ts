@@ -13,7 +13,8 @@ import { describe, expect, it } from 'vitest';
 
 const OPS_DOCS = ['README.md', 'docs/GO_LIVE_CHECKLIST.md', 'deploy/DEPLOY_LINUX.md', 'docs/OFFSITE_BACKUP.md'];
 const RETIRED = [
-  /changelogs\/3\.ts/, /\(3 locations\)/, /git push origin master/, /\bpm2\b/, /GEMINI_API_KEY/,
+  // v11.0.4: «(3 locations)» is current again (package.json, the active changelog, README; k8s is no version location)
+  /changelogs\/3\.ts/, /git push origin master/, /\bpm2\b/, /GEMINI_API_KEY/,
   /git revert/, /\.env\.production\.example/, /cron\.d\/papital-erp-backup`?:? *`?[0-9*]/,
   // without key names it adds ERP_WEBHOOK_SECRET_TOKEN and METRICS_TOKEN, which a running server must not get by accident
   /ensure-env-secrets\.sh\s+\S*\.env"?(?!\s+ERP_SECRETS_KEY\b)/, /setup\?token=/, /cat \S*\.env\b/, /Personal Access Token/,
@@ -34,9 +35,10 @@ describe('ops_docs_current_o_06', () => {
     expect(readFileSync('.env.example', 'utf8')).not.toMatch(/GEMINI_API_KEY/);
   });
 
-  it('the documents name the four synced version locations and the active changelog', () => {
+  it('the documents name the three synced version locations and the active changelog (v11.0.4: k8s is none)', () => {
     const checklist = readFileSync('docs/GO_LIVE_CHECKLIST.md', 'utf8');
-    expect(checklist).toContain('(4 locations)');
+    expect(checklist).toContain('(3 locations)');
+    expect(checklist).not.toContain('erp-deployment.yaml` (image tag');
     expect(checklist).toContain('npm run check:version');
     expect(readFileSync('README.md', 'utf8')).toContain('src/data/changelogs/11.ts');
   });
