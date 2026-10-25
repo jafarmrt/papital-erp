@@ -2,7 +2,7 @@
 
 How data is written and locked, numbering, dates in storage, idempotency and optimistic locks, migrations and database settings.
 
-Core rules (one line each, with their guards) are in `AGENTS.md`. This file holds the full rules of the area; the history of each rule (versions, debt rows, decisions) is in `docs/rules/archive/AGENTS_V10.md`, and a «§N» below refers to that file's numbering.
+Core rules (one line each, with their guards) are in `AGENTS.md`. This file holds the full rules of the area; the history of each rule (versions, debt rows, decisions) is in `docs/rules/archive/AGENTS_V10.md` at commit `c3c9858` (archives removed in v11.1.0), and a «§N» below refers to that file's numbering.
 
 1. **NO WHOLE RAW SQL WRITE STATEMENT:** Never use `tx.execute(sql\`UPDATE ...\`)` or any other whole `UPDATE … SET` / `INSERT INTO` statement in SQL text for writes; write with `tx.update().set()` / `tx.insert()`. A `sql` fragment inside a Drizzle write for an atomic calculation (`set({ version: sql\`${t.version} + 1\` })`, `now()`) is allowed; cast a bound value whose type PostgreSQL cannot infer (`operator is not unique: unknown * unknown` in node-postgres). Guard: ratchet `rawSqlWrites` (v11 product-owner decision), which reads the SQL text written in place (`sql\`...\``, `.raw()`, `.query()`, `.execute()`) in the production files under `src`; SQL built in a variable is kept by review.
 

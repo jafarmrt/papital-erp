@@ -2,7 +2,7 @@
 
 Stock, weighted average cost, Kardex, reservations, warehouses and stock reconciliation.
 
-Core rules (one line each, with their guards) are in `AGENTS.md`. This file holds the full rules of the area; the history of each rule (versions, debt rows, decisions) is in `docs/rules/archive/AGENTS_V10.md`, and a «§N» below refers to that file's numbering.
+Core rules (one line each, with their guards) are in `AGENTS.md`. This file holds the full rules of the area; the history of each rule (versions, debt rows, decisions) is in `docs/rules/archive/AGENTS_V10.md` at commit `c3c9858` (archives removed in v11.1.0), and a «§N» below refers to that file's numbering.
 
 - **Single Source of Truth for Stock (audit P2-1 / TD-214):** Per-warehouse stock lives ONLY in `item_warehouse_stocks` (one row per item × warehouse, CHECK non-negative); a missing row means zero. The `items.stocks` JSONB column was dropped (migration 0021; old values kept in `items_stocks_archive`). `items.current_stock` is maintained ONLY by the database (`trg_iws_refresh_item_current_stock` on `item_warehouse_stocks` and `trg_items_current_stock_from_table` on `items`): application code must never write it — a direct write is replaced by `SUM(item_warehouse_stocks)`. API responses that need a per-warehouse map build `stocks` / `stock_<code>` from `ItemWarehouseStockService.getStocksForItems` (canonical warehouse codes via join); availability / count / transfer checks read the table.
 

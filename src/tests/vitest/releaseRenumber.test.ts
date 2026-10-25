@@ -123,7 +123,7 @@ describe('scripts/release-renumber.ts (TD-473)', () => {
 
   it('adds the rows of the frozen archive to the closed count (v11.0.4)', () => {
     const t = mergedTree();
-    t.current.set('docs/rules/archive/TECH_DEBT_ARCHIVE_V10.md', '| TD-100 | a | resolved |\n| TD-101 | b | resolved |\n');
+    t.current.set('docs/rules/CLOSED_DEBT_IDS_V10.md', '| TD-100 | a | resolved |\n| TD-101 | b | resolved |\n');
     const plan = planRenumber(input(t));
     expect(plan.writes.get('TECH_DEBT.md')).toContain('- **آرشیو شده (resolved):** ۵ ردیف');
   });
@@ -275,7 +275,7 @@ describe('scripts/release-renumber.ts keeps archived debt rows archived (TD-981)
     const lesson = '<<<<<<< HEAD\n3. **A lesson.** branch words\n=======\n3. **A lesson.** master words\n>>>>>>> m\n';
     expect(resolveReleaseConflict('docs/rules/DEBT_LESSONS.md', lesson, { ours: '', theirs: '' }, ACTIVE)).toBeNull();
     const frozen = '<<<<<<< HEAD\n| TD-1400 | z |\n=======\n>>>>>>> m\n';
-    expect(resolveReleaseConflict('docs/rules/archive/TECH_DEBT_ARCHIVE_V10.md', frozen, { ours: '', theirs: '' }, ACTIVE)).toBeNull();
+    expect(resolveReleaseConflict('docs/rules/CLOSED_DEBT_IDS_V10.md', frozen, { ours: '', theirs: '' }, ACTIVE)).toBeNull();
     expect(resolveReleaseConflict('deploy/k8s/erp-deployment.yaml', '<<<<<<< HEAD\nx\n=======\ny\n>>>>>>> m\n', { ours: 'old', theirs: 'base manifest' }, ACTIVE)).toBe('base manifest');
     // the branch that turns the manifest into the placeholder keeps it against a base that bumped its version
     expect(resolveReleaseConflict('deploy/k8s/erp-deployment.yaml', '', { ours: 'image: erp:vX.Y.Z', theirs: 'image: erp:v11.0.3' }, ACTIVE)).toBe('image: erp:vX.Y.Z');
