@@ -15,7 +15,7 @@ import {
 } from './perf/perfBaseline.js';
 
 /**
- * v10.0.262 (I-04): the performance baseline on realistic data (docs/roadmap/V10_MASTER_ROADMAP.md, I-04).
+ * v10.0.262 (I-04): the performance baseline on realistic data (docs/roadmap/archive/V10_MASTER_ROADMAP.md, I-04).
  *
  *   npm run perf:baseline -- [--steps=3000] [--users=8] [--activity-logs=300000] [--items=2000] [--customers=1000]
  *                            [--samples=20] [--seed=1]

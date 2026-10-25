@@ -38,6 +38,6 @@ describe('ops_docs_current_o_06', () => {
     const checklist = readFileSync('docs/GO_LIVE_CHECKLIST.md', 'utf8');
     expect(checklist).toContain('(4 locations)');
     expect(checklist).toContain('npm run check:version');
-    expect(readFileSync('README.md', 'utf8')).toContain('src/data/changelogs/10.ts');
+    expect(readFileSync('README.md', 'utf8')).toContain('src/data/changelogs/11.ts');
   });
 });

@@ -7,7 +7,7 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { APP_VERSION } from '../../lib/version.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import { COLLEAGUE_FALLBACK_NAME, lastSeenOf, presenceStatus, type PresenceColleague, type SocialPreferences, type WhatsNewAnswer } from '../../lib/social/presence.js';
-import { v10Updates } from '../../data/changelogs/10.js';
+import { ACTIVE_CHANGELOG } from '../../data/changelogs/index.js';
 import { withdrawBirthdayNotifications } from './birthdayNotificationWithdraw.js';
 
 /**
@@ -83,10 +83,10 @@ export async function setSocialPreferences(userId: number, input: { showBirthday
 
 export const WHATS_NEW_MAX_LINES = 4;
 
-/** The entry of the running version in the active changelog, or null */
+/** The entry of the running version in the active changelog, or null (v11.0.0: the active series, not a fixed file) */
 export function whatsNewEntry(version = APP_VERSION): { version: string; title: string; lines: string[] } | null {
   const key = `v${version.replace(/^v/, '')}`;
-  const entry = v10Updates.find(e => e.version === key);
+  const entry = ACTIVE_CHANGELOG.updates.find(e => e.version === key);
   if (!entry) return null;
   return { version: key, title: entry.title, lines: entry.changes.slice(0, WHATS_NEW_MAX_LINES) };
 }

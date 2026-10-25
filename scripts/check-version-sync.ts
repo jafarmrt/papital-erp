@@ -10,10 +10,10 @@ import { findDebtRegistryViolations, findMissingNpmScripts, npmScriptDocs } from
  * ====================================================
  * تمامی منابع اعلام نسخه باید همیشه همگام باشند:
  *   1) "version" در package.json (مرجع یگانه؛ خوانده‌شده توسط src/lib/version.ts و /health)
- *   2) مدخل نخست چنج‌لاگ فعال (SYSTEM_UPDATES[0].version در ACTIVE_CHANGELOG.file — از v10.0.0 فایل 10.ts)
+ *   2) مدخل نخست چنج‌لاگ فعال (SYSTEM_UPDATES[0].version در ACTIVE_CHANGELOG.file — از v11.0.0 فایل 11.ts)
  *   3) مانیفست استقرار deploy/k8s/erp-deployment.yaml
  *   4) هدر مستندات README.md
- * v8.0.0: نسخه در سری فعال است و سری‌های بسته‌شده منجمدند (از v10.0.0: 7.ts، 8.ts و 9.ts) (src/data/changelogs/seriesGuard.ts).
+ * v8.0.0: نسخه در سری فعال است و سری‌های بسته‌شده منجمدند (از v11.0.0: 7.ts، 8.ts، 9.ts و 10.ts) (src/data/changelogs/seriesGuard.ts).
  */
 
 function fail(message: string): never {
