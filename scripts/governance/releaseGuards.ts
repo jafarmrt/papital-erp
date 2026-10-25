@@ -9,11 +9,9 @@
  */
 import fs from 'fs';
 import path from 'path';
+import { CLOSED_DEBT_FILE, FROZEN_DEBT_ROWS } from '../renumber/debtFiles';
 
-/** v11.0.3 (sub-phase 1.3): debt rows closed since series 11, with the debt lessons (replaces TECH_DEBT_ARCHIVE.md). */
-export const CLOSED_DEBT_FILE = 'docs/rules/DEBT_LESSONS.md';
-/** The rows closed up to series 10, frozen; read only so an id is never used twice. */
-export const FROZEN_DEBT_ARCHIVE = 'docs/rules/archive/TECH_DEBT_ARCHIVE_V10.md';
+export { CLOSED_DEBT_FILE, FROZEN_DEBT_ARCHIVE, FROZEN_DEBT_ROWS } from '../renumber/debtFiles';
 
 const debtIds = (src: string) => src.split('\n').map(l => l.match(/^\| (TD-\d+) \|/)?.[1]).filter((id): id is string => !!id);
 
@@ -21,6 +19,15 @@ function duplicates(ids: string[]): Array<[string, number]> {
   const count = new Map<string, number>();
   for (const id of ids) count.set(id, (count.get(id) ?? 0) + 1);
   return [...count].filter(([, n]) => n > 1);
+}
+
+/** v11.0.3: the frozen archive keeps exactly its rows and gets no section of series 11 or later. */
+export function findFrozenArchiveViolations(frozen: string): string[] {
+  const rows = debtIds(frozen).length;
+  const out: string[] = [];
+  if (rows !== FROZEN_DEBT_ROWS) out.push(`the frozen debt archive holds ${rows} rows instead of ${FROZEN_DEBT_ROWS}; a row closed since series 11 belongs in docs/rules/DEBT_LESSONS.md`);
+  if (/^## .*نسخه (۱[۱-۹]|[۲-۹][۰-۹]) —/m.test(frozen)) out.push('the frozen debt archive has a section of series 11 or later; move it to docs/rules/DEBT_LESSONS.md');
+  return out;
 }
 
 export function findDebtRegistryViolations(debt: string, archive: string): string[] {

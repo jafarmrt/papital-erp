@@ -3,7 +3,7 @@ import path from 'path';
 import { SYSTEM_UPDATES, ACTIVE_CHANGELOG, CLOSED_CHANGELOG_SERIES } from '../src/data/changelogs/index.js';
 import { findCompactRuleViolations } from '../src/data/changelogs/compactRule.js';
 import { findChangelogSeriesViolations } from '../src/data/changelogs/seriesGuard.js';
-import { CLOSED_DEBT_FILE, FROZEN_DEBT_ARCHIVE, findDebtRegistryViolations, findMissingNpmScripts, npmScriptDocs } from './governance/releaseGuards.js';
+import { CLOSED_DEBT_FILE, FROZEN_DEBT_ARCHIVE, findDebtRegistryViolations, findFrozenArchiveViolations, findMissingNpmScripts, npmScriptDocs } from './governance/releaseGuards.js';
 
 /**
  * TD-111 (v7.0.0) — گیت همگام‌سازی جامع نسخه (fail-fast)
@@ -44,9 +44,7 @@ function main(): void {
     fail(`Version mismatch: package.json "${pkgVersion}" vs SYSTEM_UPDATES[0] "${changelogVersion}"`);
   }
 
-
-
-  // 2.1) بررسی هدر README.md (طبق کامنت بالای همین فایل)
+  // 2) بررسی هدر README.md (طبق کامنت بالای همین فایل)
   const readmePath = path.resolve(process.cwd(), 'README.md');
   if (fs.existsSync(readmePath)) {
     const readmeContent = fs.readFileSync(readmePath, 'utf-8');
@@ -72,6 +70,7 @@ function main(): void {
     fs.readFileSync(path.resolve(process.cwd(), 'TECH_DEBT.md'), 'utf-8'),
     [CLOSED_DEBT_FILE, FROZEN_DEBT_ARCHIVE].map(rel => fs.readFileSync(path.resolve(process.cwd(), rel), 'utf-8')).join('\n')
   );
+  debtViolations.push(...findFrozenArchiveViolations(fs.readFileSync(path.resolve(process.cwd(), FROZEN_DEBT_ARCHIVE), 'utf-8')));
   if (debtViolations.length > 0) {
     fail(`The debt registry is inconsistent (archived rows win; remove them from TECH_DEBT.md):\n   - ${debtViolations.slice(0, 15).join('\n   - ')}`);
   }

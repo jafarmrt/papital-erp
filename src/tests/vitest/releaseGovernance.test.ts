@@ -2,7 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
-import { findDebtRegistryViolations, findMissingNpmScripts, npmScriptDocs } from '../../../scripts/governance/releaseGuards';
+import { findDebtRegistryViolations, findFrozenArchiveViolations, findMissingNpmScripts, npmScriptDocs } from '../../../scripts/governance/releaseGuards';
 import { findChangelogSeriesViolations } from '../../../src/data/changelogs/seriesGuard';
 import type { AIUpdateLog } from '../../../src/data/changelogs/types';
 
@@ -26,6 +26,13 @@ describe('debt registry gate (TD-981)', () => {
   it('passes on the repository', () => {
     const read = (rel: string) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
     expect(findDebtRegistryViolations(read('TECH_DEBT.md'), read('docs/rules/DEBT_LESSONS.md') + read('docs/rules/archive/TECH_DEBT_ARCHIVE_V10.md'))).toEqual([]);
+    expect(findFrozenArchiveViolations(read('docs/rules/archive/TECH_DEBT_ARCHIVE_V10.md'))).toEqual([]);
+  });
+
+  it('refuses a row or a series 11 section added to the frozen archive (v11.0.3)', () => {
+    const frozen = fs.readFileSync(path.join(process.cwd(), 'docs/rules/archive/TECH_DEBT_ARCHIVE_V10.md'), 'utf8');
+    expect(findFrozenArchiveViolations(`${frozen}| TD-1400 | x | resolved |\n`)[0]).toMatch(/1124 rows instead of 1123/);
+    expect(findFrozenArchiveViolations(`## 🧭 نسخه ۱۱ — x\n${frozen}`)).toHaveLength(1);
   });
 });
 

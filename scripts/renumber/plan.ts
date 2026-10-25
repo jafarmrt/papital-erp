@@ -17,7 +17,7 @@
  *    closed; v10.0.22, TD-981), and its counters are recounted from both tables (closed = DEBT_LESSONS.md rows + the frozen archive's).
  */
 
-import { CLOSED_DEBT_FILE, FROZEN_DEBT_ARCHIVE } from '../governance/releaseGuards';
+import { CLOSED_DEBT_FILE, FROZEN_DEBT_ARCHIVE } from './debtFiles';
 
 export interface RenumberInput {
   /** file content at <ref>, or null when the file does not exist there */

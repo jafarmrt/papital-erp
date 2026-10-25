@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { CLOSED_DEBT_FILE, FROZEN_DEBT_ARCHIVE } from './governance/releaseGuards.js';
+import { CLOSED_DEBT_FILE, FROZEN_DEBT_ARCHIVE } from './renumber/debtFiles.js';
 
 /**
  * v9.0.0 — کارهای دفتری یک انتشار در سری فعال (AGENTS.md §7، §13، §23)، از ریشه مخزن:
@@ -98,8 +98,7 @@ export function updateTechDebt(files: ReleaseFiles, spec: ReleaseSpec, active: A
   }
 
   const archive = files.read(CLOSED_DEBT_FILE);
-  let frozen = '';
-  try { frozen = files.read(FROZEN_DEBT_ARCHIVE); } catch { /* the frozen archive only widens the set of used ids */ }
+  const frozen = files.read(FROZEN_DEBT_ARCHIVE);
   let lines = files.read('TECH_DEBT.md').split('\n');
   const known = new Set([...lines, ...archive.split('\n'), ...frozen.split('\n')].map(rowId).filter(Boolean));
 

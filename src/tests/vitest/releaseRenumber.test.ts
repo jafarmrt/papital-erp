@@ -121,6 +121,13 @@ describe('scripts/release-renumber.ts (TD-473)', () => {
     expect(plan.writes.get('TECH_DEBT.md')).toContain('- **آرشیو شده (resolved):** ۳ ردیف');
   });
 
+  it('adds the rows of the frozen archive to the closed count (v11.0.3)', () => {
+    const t = mergedTree();
+    t.current.set('docs/rules/archive/TECH_DEBT_ARCHIVE_V10.md', '| TD-100 | a | resolved |\n| TD-101 | b | resolved |\n');
+    const plan = planRenumber(input(t));
+    expect(plan.writes.get('TECH_DEBT.md')).toContain('- **آرشیو شده (resolved):** ۵ ردیف');
+  });
+
   it('changes nothing when the branch already follows the base', () => {
     const t = mergedTree();
     const once = planRenumber(input(t));
@@ -262,6 +269,14 @@ describe('scripts/release-renumber.ts keeps archived debt rows archived (TD-981)
     expect(resolveReleaseConflict('docs/rules/DEBT_LESSONS.md', archive, { ours: '', theirs: '' }, ACTIVE)).toBe('| TD-473 | z |\n| TD-461 | x |\n');
     const edited = '<<<<<<< HEAD\n| TD-500 | a (branch note) |\n=======\n| TD-500 | a (master note) |\n>>>>>>> m\n';
     expect(resolveReleaseConflict('TECH_DEBT.md', edited, { ours: '', theirs: '' }, ACTIVE)).toBeNull();
+  });
+
+  it('leaves a lesson conflict, the frozen archive and the k8s example to their own rule (v11.0.3)', () => {
+    const lesson = '<<<<<<< HEAD\n3. **A lesson.** branch words\n=======\n3. **A lesson.** master words\n>>>>>>> m\n';
+    expect(resolveReleaseConflict('docs/rules/DEBT_LESSONS.md', lesson, { ours: '', theirs: '' }, ACTIVE)).toBeNull();
+    const frozen = '<<<<<<< HEAD\n| TD-1400 | z |\n=======\n>>>>>>> m\n';
+    expect(resolveReleaseConflict('docs/rules/archive/TECH_DEBT_ARCHIVE_V10.md', frozen, { ours: '', theirs: '' }, ACTIVE)).toBeNull();
+    expect(resolveReleaseConflict('deploy/k8s/erp-deployment.yaml', '<<<<<<< HEAD\nx\n=======\ny\n>>>>>>> m\n', { ours: 'old', theirs: 'base manifest' }, ACTIVE)).toBe('base manifest');
   });
 });
 
