@@ -170,7 +170,7 @@ export async function itemTypeChangeError(tx: DbExecutor, item: ItemRow, newType
     .where(and(eq(transactions.itemId, item.id), eq(transactions.isDeleted, 0))).limit(1)).length > 0;
   if (!hasHistory) return null;
   const current = ITEM_TYPE_LABELS[item.type] ?? item.type;
-  return `نوع کالای «${item.name}» (${item.code}) از اکسل عوض نمی‌شود، چون این کالا موجودی یا گردش انبار دارد و ارزشش در ` +
+  return `نوع کالای «${item.name}» (${item.code}) از اکسل عوض نمی‌شود، چون این کالا موجودی یا گردش انبار دارد و گردش‌هایش در ` +
     `حساب موجودی «${current}» ثبت شده است؛ تغییر نوع، حساب‌های موجودی را از انبار جدا می‌کند. ` +
     `ستون «نوع کالا» را خالی بگذارید یا «${current}» بنویسید. ردیف ثبت نشد.`;
 }

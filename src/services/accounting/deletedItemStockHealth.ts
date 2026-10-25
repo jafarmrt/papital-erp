@@ -9,8 +9,8 @@ import { formatPersianPrice, toPersianDigits } from '../../utils/persianNumber.j
  * deleted while an allocation of it was open, and releasing that allocation put its stock, and through the voided allocation
  * voucher its value, back on the deleted item; the item list, the integrity audit and the warehouse reconciliation read only
  * live items, so this stock was seen nowhere. Since then the delete refuses an open allocation and no stock moves on a deleted
- * item. Nothing here changes automatically: an open allocation is closed with «مصرف شد»; stock on a deleted item needs a
- * by-hand correction.
+ * item, except a stock count decrease. Nothing here changes automatically: an open allocation is closed with «مصرف شد»; stock
+ * left on a deleted item is written off by a stock count document (`audit`) to zero, which posts its value to 7012.
  */
 export interface DeletedItemStockRow {
   itemId: number;
@@ -54,7 +54,7 @@ export function buildDeletedItemStockHealthTest(rows: DeletedItemStockRow[]): He
     scoreImpact: -Math.min(10, count * 2),
     count,
     message: count > 0
-      ? `${toPersianDigits(count)} کالای حذف‌شده هنوز موجودی یا تخصیص باز پروژه دارد. تخصیص باز را در صفحهٔ تخصیص مواد با «مصرف شد» ببندید؛ موجودی کالای حذف‌شده با پشتیبانی اصلاح می‌شود.`
+      ? `${toPersianDigits(count)} کالای حذف‌شده هنوز موجودی یا تخصیص باز پروژه دارد. تخصیص باز را در «تخصیص مواد به پروژه‌ها» با «مصرف شد» ببندید. موجودی کالای حذف‌شده با سند انبارگردانی به صفر می‌رسد؛ این کالا در برگهٔ شمارش نمی‌آید، پس برای ثبت آن با پشتیبان برنامه هماهنگ کنید.`
       : 'هیچ کالای حذف‌شده‌ای موجودی یا تخصیص باز ندارد.',
     items: rows.map(r => ({
       id: r.itemId,
@@ -62,7 +62,9 @@ export function buildDeletedItemStockHealthTest(rows: DeletedItemStockRow[]): He
       title: r.name,
       subtitle: `موجودی ${toPersianDigits(fin(r.stock).toString(), 4)} | تخصیص باز ${toPersianDigits(r.openAllocations)}`,
       amount: fin(r.value).toNumber(),
-      details: `ارزش موجودی ${formatPersianPrice(fin(r.value).toString(), 'IRR', 0)}.`,
+      details: fin(r.stock).isZero()
+        ? 'موجودی ندارد؛ مواد تخصیص باز در کالای در جریان ساخت پروژه است.'
+        : `ارزش موجودی ${formatPersianPrice(fin(r.value).toString(), 'IRR', 0)}.`,
     })),
     metrics: { deletedItemsWithStock: count },
   };

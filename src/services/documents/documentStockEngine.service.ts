@@ -109,8 +109,10 @@ export class DocumentStockEngine {
     }
     // v11 phase 3.2 (S3): a deleted item never moves; read under the item lock, so a delete that committed first is seen.
     // Before, a path that reached the engine with a deleted item's id (a BOM allocation release) put stock and value on an
-    // item no list, integrity check or reconciliation shows. Voids (`applyStockReversal`) are not refused here.
-    if (itemData.isDeleted === 1) {
+    // item no list, integrity check or reconciliation shows. One outflow stays: a stock count decrease, the write-off of stock
+    // left on a deleted item before this rule (Dr 7012 at its Kardex cost; health check `item_deleted_with_stock`). Voids
+    // (`applyStockReversal`) are not refused here.
+    if (itemData.isDeleted === 1 && !(inOut === 'out' && documentType === STOCK_COUNT_DOCUMENT_TYPE)) {
       throw new ConflictError(
         `کالای «${itemData.name}» (${itemData.code}) حذف شده است و ورود یا خروج انبار برای آن ثبت نمی‌شود.`,
         { itemId },

@@ -22,7 +22,7 @@ export async function runStockUrgentFixesTests(shouldRun: ShouldRun): Promise<Te
       'v11 phase 3.2 (S3): an item with an open BOM allocation or a project reservation is not deleted (409); once the allocation is consumed and the project closed, it is',
       ['s3', 'item', 'allocation', 'inventory', 'phase3'], deleteWithDependentsCase],
     ['reg_bom_release_deleted_item_s3',
-      'v11 phase 3.2 (S3): the release of an allocation whose item was deleted is refused (409) and moves nothing; no stock movement is recorded on a deleted item; the financial health check lists a deleted item with stock or an open allocation',
+      'v11 phase 3.2 (S3): the release of an allocation whose item was deleted is refused (409) and moves nothing; no stock movement is recorded on a deleted item except a stock count decrease, which writes off stock left on it; the financial health check lists a deleted item with stock or an open allocation',
       ['s3', 'allocation', 'inventory', 'health', 'phase3'], releaseDeletedItemCase],
   ];
   for (const [id, name, tags, run] of cases) {
@@ -237,5 +237,24 @@ async function releaseDeletedItemCase(ctx: Ctx): Promise<string> {
   if (!test || test.status !== 'warning' || !listed || Number(listed.amount) !== 1000) {
     throw new Error(`health check item_deleted_with_stock: ${JSON.stringify({ status: test?.status, listed }).slice(0, 240)}`);
   }
-  return `release → 409 ${release.body.code}, nothing moved; engine → ${engineCode}; consumed allocation unlisted; stranded stock listed at ${listed.amount}`;
+
+  // that stock is written off by a stock count to zero (Dr 7012 at its cost); a count above the book stock is refused
+  const count = (book: number, counted: number) => ctx.post('/api/documents', {
+    docType: 'audit', refNumber: 'auto', date: today, location: ctx.warehouse, status: 'final',
+    items: [{ itemId: stranded.id, system_stock: book, physical_stock: counted, quantity: counted, location: ctx.warehouse }],
+  });
+  const gain = await count(4, 6);
+  if (gain.status !== 409 || gain.body?.code !== 'ITEM_DELETED' || Number((await itemRow(stranded.id)).stock) !== 4) {
+    throw new Error(`a stock count gain on a deleted item answered ${gain.status} ${JSON.stringify(gain.body).slice(0, 160)}`);
+  }
+  const writeOff = await count(4, 0);
+  const docId = Number(writeOff.body?.docId ?? 0);
+  const [countVoucher] = docId > 0
+    ? await orm.select({ id: journalVouchers.id }).from(journalVouchers).where(and(eq(journalVouchers.sourceDocumentId, docId), eq(journalVouchers.isDeleted, 0)))
+    : [];
+  if (writeOff.status !== 200 || Number((await itemRow(stranded.id)).stock) !== 0 || !countVoucher
+    || (await findDeletedItemsWithStock(orm)).some(r => Number(r.itemId) === stranded.id)) {
+    throw new Error(`the stock count write-off of a deleted item answered ${writeOff.status} ${JSON.stringify(writeOff.body).slice(0, 160)}; stock ${(await itemRow(stranded.id)).stock}, voucher ${countVoucher?.id ?? 'none'}`);
+  }
+  return `release → 409 ${release.body.code}, nothing moved; engine → ${engineCode}; consumed allocation unlisted; stranded stock listed at ${listed.amount}, written off by a stock count (voucher ${countVoucher.id})`;
 }

@@ -497,7 +497,7 @@ export class ItemCatalogService {
       if (reservingProjects.length > 0) {
         throw new ConflictError(
           `حذف کالای «${delItem.name}» مجاز نیست زیرا پروژه ${reservingProjects.join('، ')} آن را رزرو کرده است. ` +
-          'ابتدا رزرو این کالا را در کنترل موجودی پروژه بردارید.',
+          'ابتدا این کالا را از فهرست مواد آن پروژه بردارید و «تکمیل رزرو» را بزنید، یا در آن پروژه «لغو ثبت نهایی و آزاد کردن رزرو» را بزنید.',
           { projects: reservingProjects },
           'ITEM_HAS_PROJECT_RESERVATION',
         );
