@@ -213,7 +213,10 @@ success "systemd service ${SERVICE_NAME} enabled and started."
 
 # v10.0.3 (TD-1020): the daily backup and the five-minute monitor run from one cron file; the backup directory
 # belongs to the service user and only it can read it (scripts/backup.sh, TD-585)
-BACKUP_DIR_ENV="$(grep -E '^BACKUP_DIR=' .env | head -1 | cut -d= -f2- || true)"
+# v11 (O5): .env read as the service reads it (scripts/env-file.sh)
+# shellcheck source=scripts/env-file.sh
+source scripts/env-file.sh
+BACKUP_DIR_ENV="$(env_file_get .env BACKUP_DIR)"
 $SUDO install -d -m 700 -o "$(id -un)" "${BACKUP_DIR_ENV:-/var/backups/erp}"
 $SUDO env APP_DIR="$APP_DIR" bash scripts/install-ops-cron.sh "$(id -un)" || die "Could not install the backup and monitor schedule"
 success "Daily backup and monitor schedule installed (/etc/cron.d/papital-erp)."

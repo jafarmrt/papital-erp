@@ -23,12 +23,10 @@ UPDATE_SWAP_MARKER_NAME=".update-swapping"
 UPDATE_FINGERPRINT_NAME=".source-fingerprint"
 UPDATE_COMMIT_NAME=".source-commit"
 
-# Value of KEY in <app-dir>/.env read literally, as the service reads it
-update_env_value() {
-  local app_dir="$1" key="$2"
-  [ -f "$app_dir/.env" ] || return 0
-  grep -E "^${key}=" "$app_dir/.env" | head -1 | cut -d= -f2- | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/" || true
-}
+# Value of KEY in <app-dir>/.env read literally, as the service reads it (v11, O5: the one reader of scripts/env-file.sh)
+# shellcheck source=scripts/env-file.sh
+source "$(dirname "${BASH_SOURCE[0]}")/env-file.sh"
+update_env_value() { env_file_get "$1/.env" "$2"; }
 
 # Fills the array UPDATE_EXCLUDES with the rsync filters of the live state of <app-dir>: never part of the source
 update_state_excludes() {
@@ -254,8 +252,8 @@ update_dist_commit() {
 }
 
 # OBS-R1-22: moves the built dist/ and node_modules/ of the side folder into <app-dir>, keeping the running ones as
-# dist.prev/ and node_modules.prev/; a lock file the install regenerated goes back to <app-dir>. The older .prev
-# folders are first renamed into the side folder (one atomic rename each) and deleted there, before the marker is
+# dist.prev/ and node_modules.prev/; a lock file the install regenerated goes back to <app-dir> unless git tracks it
+# there. The older .prev folders are first renamed into the side folder (one atomic rename each) and deleted there, before the marker is
 # written, so a kill during that slow delete never leaves a half-deleted .prev for the repair to move in, and the
 # repair never brings back a build older than the running one. HUP, INT and TERM (a dropped SSH session) are ignored
 # while the renames run, and the marker stays until they all succeeded, so a swap cut short (a kill, a power loss) is
@@ -281,9 +279,65 @@ update_swap_build() {
   trap - HUP INT TERM
   eval "$saved_traps"
   [ "$rc" -eq 0 ] || return 1
-  if [ -f "$build_dir/package-lock.json" ] && ! cmp -s "$build_dir/package-lock.json" "$app_dir/package-lock.json"; then
+  # v11 (phase 3.3, O4): never into a git checkout that tracks the lock: a changed tracked lock blocked the next pull
+  if [ -f "$build_dir/package-lock.json" ] && ! cmp -s "$build_dir/package-lock.json" "$app_dir/package-lock.json" \
+    && ! git -C "$app_dir" ls-files --error-unmatch package-lock.json >/dev/null 2>&1; then
     cp "$build_dir/package-lock.json" "$app_dir/package-lock.json"
   fi
+}
+
+# v11 (phase 3.3, O4): whether the npm ci output in <file> is npm's own refusal of a lock file out of step with
+# package.json (code EUSAGE), the one failure a regenerated lock can fix; a network or registry error is not
+update_npm_lock_mismatch() {
+  grep -qE 'code EUSAGE|package\.json and package-lock\.json or npm-shrinkwrap\.json are in sync' "$1" 2>/dev/null
+}
+
+# v11 (phase 3.3, O2): the number of migrations the database of <app-dir>/.env has recorded with a `when` (created_at)
+# later than <after-when>, read with the application's own pg driver (the URL passed in the environment, never on a
+# command line); nothing when it cannot be read
+update_applied_migrations_after() {
+  local app_dir="$1" after_when="$2" url
+  url="$(update_env_value "$app_dir" DATABASE_URL)"
+  [ -n "$url" ] || return 0
+  (cd "$app_dir" && UPDATE_DB_URL="$url" UPDATE_AFTER_WHEN="$after_when" timeout 30 node -e '
+    const { Client } = require("pg");
+    const c = new Client({ connectionString: process.env.UPDATE_DB_URL });
+    c.connect()
+      .then(() => c.query("SELECT to_regclass(\x27drizzle.__drizzle_migrations\x27) IS NOT NULL AS present"))
+      .then((r) => (r.rows[0].present
+        ? c.query("SELECT count(*)::text AS n FROM drizzle.__drizzle_migrations WHERE created_at > $1", [process.env.UPDATE_AFTER_WHEN])
+        : { rows: [{ n: "0" }] }))
+      .then((r) => { process.stdout.write(String(r.rows[0].n)); return c.end(); })
+      .catch(() => process.exit(1));' 2>/dev/null | tr -dc '0-9' || true)
+}
+
+# The number of migrations the build in <dist-dir> carries and the `when` of its newest one, from its
+# drizzle/meta/_journal.json, as «<count> <when>»; nothing when unreadable
+update_build_migrations() {
+  local journal="$1/drizzle/meta/_journal.json"
+  [ -f "$journal" ] || return 0
+  UPDATE_JOURNAL="$journal" node -e '
+    const j = JSON.parse(require("fs").readFileSync(process.env.UPDATE_JOURNAL, "utf8"));
+    const e = Array.isArray(j.entries) ? j.entries : null;
+    if (e) process.stdout.write(`${e.length} ${e.length ? Number(e[e.length - 1].when) || 0 : 0}`);' 2>/dev/null || true
+}
+
+# v11 (phase 3.3, O2): whether the previous build (dist.prev/) can still start on the database, for the rollback steps.
+# It refuses a database holding a migration newer than its own newest (migrationPlan.ts), whoever applied it: this run,
+# or the previous build itself when it restarted while the new source was in place. Prints the number of such
+# migrations; when the database cannot be read, 0 if the new build brings no migration the previous one lacks, else
+# «unknown».
+update_migrations_changed() {
+  local app_dir="$1" prev new prev_when newer
+  prev="$(update_build_migrations "$app_dir/dist.prev")"
+  new="$(update_build_migrations "$app_dir/dist")"
+  if [ -n "$prev" ]; then
+    prev_when="${prev#* }"
+    newer="$(update_applied_migrations_after "$app_dir" "$prev_when")"
+    if [ -n "$newer" ]; then echo "$newer"; return 0; fi
+    if [ -n "$new" ] && [ "${new%% *}" -le "${prev%% *}" ]; then echo 0; return 0; fi
+  fi
+  echo unknown
 }
 
 # The rollback command of the build swap, run in <app-dir>: each folder comes back only when its .prev exists, so it

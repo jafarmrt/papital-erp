@@ -15,6 +15,9 @@
 set -uo pipefail
 
 APP_DIR="${APP_DIR:-/opt/papital-erp}"
+# v11 (O5): the one .env reader, sourced before the cd below changes what a relative script path means
+# shellcheck source=scripts/env-file.sh
+source "$(dirname "${BASH_SOURCE[0]}")/env-file.sh"
 SERVICE_NAME="${SERVICE_NAME:-papital-erp}"
 BASE_URL="${1:-http://localhost:3000}"
 cd "$APP_DIR" 2>/dev/null || true
@@ -39,8 +42,10 @@ else
 fi
 # v9.0.183 (TD-605): .env is read literally, as the service reads it (node --env-file); it is never run as
 # shell code (a value with $, ; or a backtick used to be expanded or executed with root rights)
-env_has() { grep -qE "^$1=" "$APP_DIR/.env"; }
-env_val() { grep -E "^$1=" "$APP_DIR/.env" | head -1 | cut -d= -f2- | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/" || true; }
+# v11 (O5): through the one reader of scripts/env-file.sh, so the last line of a key wins, «export KEY=» and indented
+# lines count and an inline comment is dropped, as in the service; a key counts as set when its value is not empty
+env_val() { env_file_get "$APP_DIR/.env" "$1"; }
+env_has() { [ -n "$(env_val "$1")" ]; }
 DATABASE_URL="${DATABASE_URL:-$(env_val DATABASE_URL)}"
 BACKUP_DIR="${BACKUP_DIR:-$(env_val BACKUP_DIR)}"
 
@@ -59,10 +64,10 @@ env_has ALLOW_SEED_IN_PRODUCTION \
   || ok "ALLOW_SEED_IN_PRODUCTION not set (retired)"
 
 # Danger flags must be OFF
-grep -qE '^ERP_ALLOW_TEST_CLEANUP=1' "$APP_DIR/.env" \
+[ "$(env_val ERP_ALLOW_TEST_CLEANUP)" = "1" ] \
   && bad "ERP_ALLOW_TEST_CLEANUP=1 detected — MUST NOT be enabled in production" \
   || ok "ERP_ALLOW_TEST_CLEANUP off"
-grep -qE '^ENABLE_TEST_ENDPOINTS=true' "$APP_DIR/.env" \
+[ "$(env_val ENABLE_TEST_ENDPOINTS)" = "true" ] \
   && bad "ENABLE_TEST_ENDPOINTS=true detected — MUST NOT be enabled in production" \
   || ok "ENABLE_TEST_ENDPOINTS off"
 env_has ALLOWED_ORIGINS || warnc "ALLOWED_ORIGINS not set — CORS may block the frontend domain"

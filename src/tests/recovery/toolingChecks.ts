@@ -98,6 +98,7 @@ export async function checkEnvNeverExecuted(): Promise<string[]> {
 
     fs.mkdirSync(path.join(app, 'scripts'), { recursive: true });
     fs.copyFileSync(path.join(REPO_ROOT, 'scripts', 'go-live-verify.sh'), path.join(app, 'scripts', 'go-live-verify.sh'));
+    fs.copyFileSync(path.join(REPO_ROOT, 'scripts', 'env-file.sh'), path.join(app, 'scripts', 'env-file.sh'));
     const verify = await runCommand('bash', [path.join(app, 'scripts', 'go-live-verify.sh'), 'http://127.0.0.1:9'],
       { cwd: app, env: scriptEnv({ APP_DIR: app }), timeoutMs: 120_000 });
     if (!verify.output.includes('RESULT:')) v.push(`go-live-verify stopped before its result: ${verify.output.slice(-300)}`);

@@ -224,7 +224,8 @@ describe('ot_a_08_setup_domain_port: setup-domain.sh proxies to PORT of .env', (
     const dir = tmp('domain');
     if (envFile !== null) fs.writeFileSync(path.join(dir, '.env'), envFile);
     else fs.writeFileSync(path.join(dir, '.env'), 'NODE_ENV=production\n');
-    const r = spawnSync('bash', ['-c', `set -euo pipefail\nAPP_DIR="$1"\nAPP_PORT="$2"\n${block}\nprintf '%s' "$APP_PORT"`, 'x', dir, appPort], { encoding: 'utf8' });
+    // v11 (O5): the block reads .env through scripts/env-file.sh, which setup-domain.sh sources at its top
+    const r = spawnSync('bash', ['-c', `set -euo pipefail\nsource "$3"\nAPP_DIR="$1"\nAPP_PORT="$2"\n${block}\nprintf '%s' "$APP_PORT"`, 'x', dir, appPort, path.join(ROOT, 'scripts/env-file.sh')], { encoding: 'utf8' });
     fs.rmSync(dir, { recursive: true, force: true });
     expect(r.status).toBe(0);
     return r.stdout;
@@ -236,6 +237,8 @@ describe('ot_a_08_setup_domain_port: setup-domain.sh proxies to PORT of .env', (
     expect(portFor("# PORT=9999\nPORT='4300'\n")).toBe('4300');
     expect(portFor(null)).toBe('3000');
     expect(portFor('PORT=4100\n', '5000')).toBe('5000');
+    // v11 (O5): as the service reads it, the later line wins and an inline comment is dropped
+    expect(portFor('PORT=3000\n  export PORT=4400 # later\n')).toBe('4400');
   });
 
   it('the Nginx site, ALLOWED_ORIGINS and the health check use that port', () => {

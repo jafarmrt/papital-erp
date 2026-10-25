@@ -44,11 +44,11 @@ MANIFEST_SQL="$APP_DIR/scripts/sql/backup-manifest.sql"
 log()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 fail() { log "ERROR: $*"; exit 1; }
 
-env_file_value() {
-  local key="$1" file="$APP_DIR/.env"
-  [ -f "$file" ] || return 0
-  grep -E "^${key}=" "$file" | head -1 | cut -d= -f2- | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/" || true
-}
+# v11 (O5): read as the service reads it (node --env-file: the last line wins, «export», inline comments), one reader
+# for every script (scripts/env-file.sh)
+# shellcheck source=scripts/env-file.sh
+source "$(dirname "${BASH_SOURCE[0]}")/env-file.sh"
+env_file_value() { env_file_get "$APP_DIR/.env" "$1"; }
 
 [ -n "${DATABASE_URL:-}" ] || DATABASE_URL="$(env_file_value DATABASE_URL)"
 [ -n "${DATABASE_URL:-}" ] || fail "DATABASE_URL must be set (or present in $APP_DIR/.env)"
