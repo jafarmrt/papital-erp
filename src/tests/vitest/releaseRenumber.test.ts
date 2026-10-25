@@ -279,6 +279,9 @@ describe('scripts/release-renumber.ts keeps archived debt rows archived (TD-981)
     expect(resolveReleaseConflict('deploy/k8s/erp-deployment.yaml', '<<<<<<< HEAD\nx\n=======\ny\n>>>>>>> m\n', { ours: 'old', theirs: 'base manifest' }, ACTIVE)).toBe('base manifest');
     // the branch that turns the manifest into the placeholder keeps it against a base that bumped its version
     expect(resolveReleaseConflict('deploy/k8s/erp-deployment.yaml', '', { ours: 'image: erp:vX.Y.Z', theirs: 'image: erp:v11.0.3' }, ACTIVE)).toBe('image: erp:vX.Y.Z');
+    // a branch from before keeps the base's placeholder manifest; a conflict between two placeholder manifests is a real edit
+    expect(resolveReleaseConflict('deploy/k8s/erp-deployment.yaml', '', { ours: 'image: erp:v11.0.5', theirs: 'image: erp:vX.Y.Z' }, ACTIVE)).toBe('image: erp:vX.Y.Z');
+    expect(resolveReleaseConflict('deploy/k8s/erp-deployment.yaml', '', { ours: 'image: erp:vX.Y.Z\na', theirs: 'image: erp:vX.Y.Z\nb' }, ACTIVE)).toBeNull();
   });
 });
 
