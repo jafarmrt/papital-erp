@@ -19,7 +19,7 @@ describe('Node.js 24 everywhere (I-07)', () => {
   it('every Docker stage starts from node:24-alpine', () => {
     const bases = [...read('Dockerfile').matchAll(/^FROM\s+(\S+)/gm)].map(m => m[1]);
     expect(bases.length).toBe(3);
-    for (const base of bases) expect(base).toBe(`public.ecr.aws/docker/library/node:${NODE_MAJOR}-alpine`);
+    for (const base of bases) expect(base).toBe(`mirror.gcr.io/library/node:${NODE_MAJOR}-alpine`);
   });
 
   it('the installer installs Node 24 and upgrades an older Node', () => {

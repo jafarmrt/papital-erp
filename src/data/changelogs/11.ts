@@ -8,6 +8,16 @@ import { AIUpdateLog } from './types';
  */
 export const v11Updates: AIUpdateLog[] = [
   {
+    version: 'v11.0.2',
+    date: '۳ آبان ۱۴۰۵',
+    title: 'تصویر پایهٔ Docker از آینهٔ گوگل',
+    summary: 'ساخت آزمایشی Docker در CI دوباره کار می‌کند؛ سرور و برنامه تغییری نمی‌کنند.',
+    changes: [
+      'تصویر پایهٔ Node در Dockerfile از آینهٔ گوگل گرفته می‌شود، چون مخزن عمومی آمازون به‌خاطر سقف دادهٔ دریافت ناشناس آن را نمی‌داد'
+    ],
+    fixes: []
+  },
+  {
     version: 'v11.0.1',
     date: '۳ آبان ۱۴۰۵',
     title: 'پاک کردن شاخه‌های ادغام‌شدهٔ مخزن',
