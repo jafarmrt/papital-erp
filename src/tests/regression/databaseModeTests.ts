@@ -77,7 +77,7 @@ async function scenario(): Promise<string> {
   const placeholder = probeMode({ DATABASE_URL: 'postgresql://user:password@host:5432/dbname', NODE_ENV: 'development' });
   if (placeholder.kind !== 'refused') problems.push(`the example DATABASE_URL was accepted as ${placeholder.kind}`);
 
-  for (const nodeEnv of ['development', 'production']) {
+  for (const nodeEnv of ['development', 'test', 'production', '']) {
     const demo = probeMode({ ERP_DEMO_MODE: '1', NODE_ENV: nodeEnv });
     if (demo.kind !== 'refused' || demo.version || demo.error !== DEMO_MODE_REMOVED) {
       problems.push(`ERP_DEMO_MODE=1 without a database (NODE_ENV "${nodeEnv}") got ${JSON.stringify({ kind: demo.kind, version: demo.version, error: demo.error })}`);
