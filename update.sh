@@ -20,6 +20,8 @@
 #    ./update.sh --rebuild           # build again even when dist/ was built from this very source
 # ============================================================
 set -euo pipefail
+# v11 (phase 5.3): the new build is not writable for other users (the service user among them)
+umask 022
 
 ORIG_ARGS=("$@")
 # v10.2.23 (OBS-R1-22): set when this script runs again as the version the pull or sync just brought in

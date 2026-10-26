@@ -172,6 +172,10 @@ describe('service_user_install: install.sh makes the user, gives it only what th
     expect(install).toContain('$SUDO install -d -m 750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$dir"');
     expect(install).toContain('$SUDO install -d -m 700 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "${BACKUP_DIR_ENV:-/var/backups/erp}"');
     expect(install).toContain('bash scripts/install-ops-cron.sh "$SERVICE_USER"');
+    // the code is not writable for the service user, whatever a zip or the umask gave it
+    expect(install).toMatch(/^umask 022$/m);
+    expect(read('update.sh')).toMatch(/^umask 022$/m);
+    expect(install).toContain('-prune -o ! -type l -perm /o=w -exec chmod o-w {} +');
   });
 
   it('the unit runs as that user with the hardening options', () => {

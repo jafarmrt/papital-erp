@@ -6,6 +6,8 @@
 #  Migrations run automatically at startup (NEVER db:push).
 # ============================================================
 set -euo pipefail
+# v11 (phase 5.3): what the installer makes is not writable for other users (the service user among them)
+umask 022
 
 LOG_FILE="install-$(date +%Y%m%d-%H%M%S).log"
 ( umask 077; : >> "$LOG_FILE" )
@@ -219,10 +221,12 @@ source scripts/env-file.sh
 # what the app writes belongs to the service user: logs, uploads with their attachments, the media library
 state_dir() { case "$1" in /*) echo "$1" ;; *) echo "$APP_DIR/$1" ;; esac; }
 UPLOADS_STATE="$APP_DIR/public/uploads"
+STATE_DIRS=()
 for dir in "$(state_dir "$(env_file_get .env LOG_DIR)")" "$UPLOADS_STATE" \
   "$(state_dir "$(env_file_get .env ATTACHMENTS_DIR)")" "$UPLOADS_STATE/.attachments" \
   "$(state_dir "$(env_file_get .env MEDIA_DIR)")" "$APP_DIR/media-library" "$APP_DIR/logs"; do
   [ "$dir" != "$APP_DIR/" ] || continue
+  STATE_DIRS+=("$dir")
   case "$dir" in
     "$APP_DIR"/*) ;;
     # a folder of .env outside the app that is already there may be shared with others: it is not taken over
@@ -242,6 +246,11 @@ npm ci
 log "[5/7] Building application..."
 npm run build
 success "Build completed (dist/server.cjs)."
+# v11 (phase 5.3): the code stays out of reach of the service user whatever modes a zip or an odd umask gave it; the
+# folders of that user are left alone
+STATE_PRUNE=()
+for dir in "${STATE_DIRS[@]}"; do STATE_PRUNE+=(-path "$dir" -o); done
+find "$APP_DIR" -xdev \( "${STATE_PRUNE[@]}" -false \) -prune -o ! -type l -perm /o=w -exec chmod o-w {} + 2>/dev/null || true
 
 # ---------- 6) systemd service ----------
 log "[6/7] Registering systemd service ${SERVICE_NAME} ..."
