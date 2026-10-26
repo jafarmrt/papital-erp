@@ -188,6 +188,15 @@ die_if_disk_full() {
     die "The disk of ${APP_DIR} is full (ENOSPC): $1 could not write. The service still runs the previous build, untouched. Free space on the disk mounted at $(update_disk_mount "$APP_DIR") and run the update again."
   fi
 }
+# v11 (failed v11.2.0 update): the kernel killed <what> for lack of memory when its count of such kills grew past
+# <kills-before>; the shell only printed 'Killed'
+die_if_out_of_memory() {
+  local now
+  now="$(update_oom_kills)"
+  if [ -n "$1" ] && [ -n "$now" ] && [ "$now" -gt "$1" ]; then
+    die "The server ran out of memory: the kernel stopped $2 ('Killed'). The service still runs the previous build, untouched. The build needs about ${UPDATE_MIN_MEMORY_MB:-2048} MB of free RAM and swap together; ${UPDATE_SWAP_ADVICE}, and run the update again."
+  fi
+}
 
 if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then
   SUDO="sudo"
@@ -256,6 +265,10 @@ if [ -z "$UPDATE_RESUME" ]; then
   if [ "$SKIP_BACKUP" -eq 0 ] && [ -f scripts/backup.sh ]; then BACKUP_STEP=1; fi
   update_space_check "$APP_DIR" "$UPDATE_MODE" "$BACKUP_STEP" "$REHEARSE" || die "$UPDATE_SPACE_MESSAGE"
   success "Free disk space: $(( UPDATE_SPACE_FREE_KB / 1024 )) MB on the disk of ${APP_DIR} (the update needs about $(( UPDATE_SPACE_NEED_KB / 1024 )) MB)."
+  update_memory_check || die "$UPDATE_MEMORY_MESSAGE"
+  if [ -n "$UPDATE_MEMORY_FREE_MB" ]; then
+    success "Free memory: ${UPDATE_MEMORY_FREE_MB} MB of RAM and swap (the build needs about ${UPDATE_MIN_MEMORY_MB:-2048} MB)."
+  fi
 
   # ---------- 1) Pre-update database backup ----------
   PREVIOUS_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || true)"
@@ -352,6 +365,8 @@ if [ "$REBUILD" -eq 0 ] && [ "$(update_dist_fingerprint "$APP_DIR/dist")" = "$SO
 fi
 
 if [ "$SKIP_BUILD" -eq 0 ]; then
+  # checked again here: a first run with an older update.sh had no memory check before the pull
+  update_memory_check 1 || die "$UPDATE_MEMORY_MESSAGE"
   cd "$BUILD_DIR"
   log "[3/6] Installing dependencies in ${BUILD_DIR} (npm ci --include=dev)..."
   # AI Studio pulls delete package-lock.json; npm ci cannot run without it.
@@ -395,8 +410,10 @@ if [ "$SKIP_BUILD" -eq 0 ]; then
   log "[4/6] Building application in ${BUILD_DIR}..."
   # the side folder has no .git: the build info takes the commit of the application directory
   rm -rf dist
+  OOM_KILLS_BEFORE="$(update_oom_kills)"
   if ! GIT_COMMIT_SHA="$BUILD_COMMIT" npm run build; then
     die_if_disk_full "the build"
+    die_if_out_of_memory "$OOM_KILLS_BEFORE" "the build"
     die "Build failed - the service was NOT restarted and still runs the previous build, untouched in dist/."
   fi
   echo "$SOURCE_FINGERPRINT" > dist/"$UPDATE_FINGERPRINT_NAME"

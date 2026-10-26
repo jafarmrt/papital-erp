@@ -26,7 +26,7 @@
 | # | Check | How to verify |
 |---|-------|---------------|
 | 1.1 | Ubuntu 22.04/24.04 LTS or Debian 12 | `lsb_release -a` |
-| 1.2 | Minimum resources: 2 vCPU / 4 GB RAM / 40 GB SSD | `nproc && free -h && df -h /` |
+| 1.2 | Minimum resources: 2 vCPU / 4 GB RAM / 40 GB SSD; with less RAM add a 2 GB swap file (the update's build needs about 1.5 GB, and `update.sh` refuses below 2048 MB of free RAM and swap together: README «Out-of-Memory») | `nproc && free -h && df -h /` |
 | 1.3 | Non-root deploy user with sudo | `sudo whoami` returns `root` |
 | 1.4 | Firewall: only 22, 80, 443 open. **Port 3000 must NOT be reachable from the internet** (app is exposed via Nginx only) | `ufw status` (or provider firewall panel) |
 | 1.5 | DNS A record → server public IP, **DNS-only (no CDN proxy)** so Let's Encrypt can issue certificates | `dig +short erp.yourdomain.ir` |
