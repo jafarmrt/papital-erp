@@ -23,5 +23,8 @@ export default defineConfig({
     hookTimeout: 30_000,
     // Testing Library's findBy* / waitFor wait 5 s instead of 1 s (see the setup file)
     setupFiles: ['src/tests/vitest/setup/testingLibrary.ts'],
+    // update.sh refuses to build below 2048 MB of free RAM and swap; the tests that run it must not depend on the
+    // memory of the machine they run on (updateMemoryCheck.test.ts sets its own bar)
+    env: { UPDATE_MIN_MEMORY_MB: '0' },
   },
 });

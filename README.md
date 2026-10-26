@@ -221,6 +221,15 @@ sudo -u postgres psql -d papital_erp -c "SELECT pid, query, state FROM pg_stat_a
 # در unit زیر [Service] خط `MemoryMax=2G` را بیفزایید (خط کامنت‌شدهٔ قدیمی حافظه را باز نکنید)، یا DB_POOL_MAX در .env → daemon-reload → restart
 ```
 
+**ساخت برنامه در به‌روزرسانی «Killed» شد:** ساخت (vite) در اوجش حدود ۱.۵ گیگابایت حافظه می‌خواهد. روی سروری بدون swap، لینوکس آن را می‌بندد. `update.sh` پیش از شروع، حافظهٔ آزاد را با swap آزاد جمع می‌زند و اگر کمتر از ۲۰۴۸ مگابایت باشد کاری نمی‌کند (`sudo UPDATE_MIN_MEMORY_MB=<MB> ./update.sh` این مرز را عوض می‌کند). اگر ساخت با کمبود حافظه بسته شود، همین را می‌گوید. یک بار swap بسازید:
+
+```bash
+free -m                                   # سطر Swap صفر است؟
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab   # بعد از ری‌استارت هم بماند
+free -m                                   # سطر Swap حدود 2047 نشان می‌دهد
+```
+
 ### Migration شکست‌خورده
 
 ```bash

@@ -171,6 +171,41 @@ update_space_check() {
   fi
 }
 
+# v11 (failed v11.2.0 update): the build (vite under npm, with esbuild beside it) needs about 1.5 GB of memory at its
+# peak; on a server without swap the kernel killed it half way ('Killed'). The update now needs RAM available plus free
+# swap of at least UPDATE_MIN_MEMORY_MB (default 2048) before it starts, and says when the kernel stopped the build for
+# lack of memory. UPDATE_MEMINFO and UPDATE_VMSTAT replace the /proc files for the tests.
+UPDATE_SWAP_ADVICE="when 'swapon --show' lists nothing, add a swap file once (sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile, then add the line '/swapfile none swap sw 0 0' to /etc/fstab so it stays after a restart)"
+
+# Prints the memory the build can use, in MB: MemAvailable plus SwapFree of /proc/meminfo; fails when unreadable
+update_memory_available_mb() {
+  awk '/^MemAvailable:/ { a = $2 } /^SwapFree:/ { s = $2 } END { if (a == "") exit 1; printf "%d\n", (a + s) / 1024 }' \
+    "${UPDATE_MEMINFO:-/proc/meminfo}" 2>/dev/null
+}
+
+# update_memory_check [after-source]: 0 when the build has the memory it needs or the memory cannot be read (not
+# Linux); else sets UPDATE_MEMORY_MESSAGE and returns 1. Sets UPDATE_MEMORY_FREE_MB when it could read it.
+update_memory_check() {
+  local done_text="Nothing was changed" avail need="${UPDATE_MIN_MEMORY_MB:-2048}"
+  if [ "${1:-0}" = "1" ]; then
+    done_text="The backup (when taken) and the new source are in place; the running build and the service are untouched"
+  fi
+  UPDATE_MEMORY_MESSAGE=""
+  UPDATE_MEMORY_FREE_MB=""
+  [[ "$need" =~ ^[0-9]+$ ]] || { UPDATE_MEMORY_MESSAGE="UPDATE_MIN_MEMORY_MB must be a whole number of megabytes."; return 1; }
+  avail="$(update_memory_available_mb)" || return 0
+  UPDATE_MEMORY_FREE_MB="$avail"
+  [ "$avail" -lt "$need" ] || return 0
+  UPDATE_MEMORY_MESSAGE="Not enough memory to build the update: the build needs about ${need} MB of free RAM and swap together, ${avail} MB is free (free -m: 'available' plus free swap). ${done_text}; ${UPDATE_SWAP_ADVICE}, and run the update again (where swap cannot be added, sudo UPDATE_MIN_MEMORY_MB=<MB> ./update.sh sets a lower bar at your own risk)."
+  return 1
+}
+
+# The number of processes the kernel has killed for lack of memory since boot (oom_kill of /proc/vmstat); empty when
+# the kernel does not count them
+update_oom_kills() {
+  awk '/^oom_kill / { print $2 }' "${UPDATE_VMSTAT:-/proc/vmstat}" 2>/dev/null || true
+}
+
 # OBS-R1-17: a new source inside <app-dir> would be removed by the --delete sync half way through
 update_assert_source_outside() {
   local src_real app_real
