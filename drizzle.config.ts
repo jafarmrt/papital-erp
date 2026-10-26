@@ -2,7 +2,7 @@ import { defineConfig } from 'drizzle-kit';
 import * as dotenv from "dotenv";
 import { drizzleKitCommandRefusal } from './scripts/drizzleKitGuard';
 
-// OBS-R1-26: only the read-only drizzle-kit commands run here; generate / push / migrate would work from a stale snapshot
+// OBS-R1-26: only the read-only drizzle-kit commands run here; generate / push / migrate would rebuild what the migrations made
 const refusal = drizzleKitCommandRefusal(process.argv);
 if (refusal) throw new Error(refusal);
 

@@ -1,7 +1,7 @@
 /**
- * OBS-R1-26: `drizzle/meta` holds only the first snapshot, while the schema is built by the hand-written migrations in
- * `drizzle/*.sql` run by the atomic migrator (AGENTS §22). A drizzle-kit command that compares the schema with that stale
- * snapshot or with the database (`generate`, `push`, `migrate`, `drop`, `up`, `pull` / `introspect`) would drop or
+ * OBS-R1-26: the schema is built by the hand-written migrations in `drizzle/*.sql` run by the atomic migrator (AGENTS §22);
+ * `drizzle/meta` holds only their journal, no snapshot (v11 phase 4.1). A drizzle-kit command that compares the schema
+ * with a snapshot or with the database (`generate`, `push`, `migrate`, `drop`, `up`, `pull` / `introspect`) would drop or
  * rebuild objects the migrations made, so `drizzle.config.ts` refuses it; only the read-only `studio`, `check` and
  * `export` (prints the schema's SQL, writes nothing; v10.1.66) run.
  */

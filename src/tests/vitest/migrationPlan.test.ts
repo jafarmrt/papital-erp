@@ -132,6 +132,16 @@ describe('migrations folded into a baseline (v11 phase 4.1)', () => {
     expect(foldSquashedHistory(journal, fresh, history)).toEqual({ applied: fresh, errors: [], warnings: [] });
     expect(planMigrations(journal, fresh, new Map(), history)).toEqual({ pending: ['0001_next'], errors: [], warnings: [] });
   });
+
+  it('keeps a fresh install on the baseline after the baseline text changes (an amendment or other line endings)', () => {
+    const fresh = [{ hash: 'hbase-before', createdAt: 300 }, { hash: 'hnext', createdAt: 400 }];
+    const amended = new Map([['0000_base', ['hbase-before']]]);
+    expect(planMigrations(journal, fresh, amended, history)).toEqual({ pending: [], errors: [], warnings: [] });
+    expect(planMigrations(journal, fresh.slice(0, 1), amended, history)).toEqual({ pending: ['0001_next'], errors: [], warnings: [] });
+    const unlisted = planMigrations(journal, fresh, new Map(), history);
+    expect(unlisted.errors).toEqual([]);
+    expect(unlisted.warnings.join(' ')).toContain('0000_base');
+  });
 });
 
 describe('repository baseline (v11 phase 4.1)', () => {

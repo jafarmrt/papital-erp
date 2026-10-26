@@ -1,10 +1,11 @@
 -- v11 (phase 4.1): baseline of the series-10 schema. It replaces the 136 migrations 0000_v3_baseline ..
 -- 0135_event_privacy_settings_notice (their text: commit 41e9644, v11.2.0) and builds exactly what they built on an
 -- empty database: tables, constraints, indexes, functions, triggers, sequences and the rows those migrations wrote.
--- A database that already ran those 136 migrations never runs this file (src/db/migrationBaseline.ts).
+-- A database that already ran those 136 migrations never runs this file (foldSquashedHistory in src/db/migrationPlan.ts).
 -- Generated from pg_dump of a freshly migrated database; objects are unqualified, so the file builds the current schema.
 -- SQL functions are created in name order before the functions they call (as pg_dump restores them), so their bodies
--- are checked when they run, not when they are created; LOCAL keeps the setting inside the migration transaction.
+-- are checked when they run, not when they are created. The migrator runs every pending migration in one transaction,
+-- so the setting is put back at the end of this file and the migrations after it are checked as on any database.
 SET LOCAL check_function_bodies = false;
 --> statement-breakpoint
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -4763,3 +4764,5 @@ SELECT pg_catalog.setval('piecework_payroll_number_seq', 1001, false);
 SELECT pg_catalog.setval('roles_id_seq', 1, true);
 --> statement-breakpoint
 SELECT pg_catalog.setval('warehouses_id_seq', 1, true);
+--> statement-breakpoint
+SET LOCAL check_function_bodies = DEFAULT;
