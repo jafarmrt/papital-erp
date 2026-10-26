@@ -19,11 +19,12 @@ import { withAdvisoryLock, withAdvisoryLockWaiting, ADVISORY_LOCK_KEYS } from '.
 /** v10.0.180 (TD-959): `failedSections` names every base data section that failed; `success` is false when one did. */
 export interface SeedResult { success: boolean; message: string; failedSections: string[] }
 
-export async function runSeedWithLock(options: { waitForLock?: boolean } = {}): Promise<SeedResult> {
+export async function runSeedWithLock(options: { waitForLock?: boolean; afterMigrations?: boolean } = {}): Promise<SeedResult> {
+  const seedOptions = { afterMigrations: options.afterMigrations };
   try {
     // TD-1266: the test bootstrap waits for the lock; skipping left an isolated test schema without base data
-    if (options.waitForLock) return await withAdvisoryLockWaiting(ADVISORY_LOCK_KEYS.SEED, () => runSeed());
-    const outcome = await withAdvisoryLock(ADVISORY_LOCK_KEYS.SEED, () => runSeed());
+    if (options.waitForLock) return await withAdvisoryLockWaiting(ADVISORY_LOCK_KEYS.SEED, () => runSeed(seedOptions));
+    const outcome = await withAdvisoryLock(ADVISORY_LOCK_KEYS.SEED, () => runSeed(seedOptions));
     if (!outcome.acquired) {
       logger.info('[Seed] Another instance is seeding — skipping');
       return { success: true, message: 'Another instance is seeding — skipped', failedSections: [] };
@@ -48,7 +49,7 @@ async function isEmptyTable(table: typeof categories | typeof pieceworkTasks): P
  * می‌شود و نقشی نمی‌سازد.
  */
 export async function runSeed(
-  options: { migrate?: () => Promise<MigrationResult> } = {}
+  options: { migrate?: () => Promise<MigrationResult>; afterMigrations?: boolean } = {}
 ): Promise<SeedResult> {
   logger.info('[Seeder] Starting system master data seed process...');
   // v10.0.180 (TD-959): a failed section is still logged and the others still run (each is insert-only, so the next
@@ -58,9 +59,13 @@ export async function runSeed(
   // 1. Ensure database schema is migrated and up-to-date
   // v7.0.50 (TD-217): runMigrations خطا را برنمی‌اندازد؛ seed روی اسکیمای مهاجرت‌نشده اجرا نمی‌شود
   // (بازنشانی سیستم و initial-setup پیش‌تر پس از مهاجرت شکست‌خورده ادامه می‌دادند). options.migrate فقط برای آزمون است.
-  const migration = await (options.migrate ?? runMigrations)();
-  if (!migration.success) {
-    throw new Error(`[Seeder] Schema migrations failed; seed aborted: ${migration.errors.join('; ') || 'unknown error'}`);
+  // v11 (O17): the boot runs the migrations as its own essential step just before (bootData.ts) and says so with
+  // afterMigrations, so they are not run a second time on every start
+  if (!options.afterMigrations) {
+    const migration = await (options.migrate ?? runMigrations)();
+    if (!migration.success) {
+      throw new Error(`[Seeder] Schema migrations failed; seed aborted: ${migration.errors.join('; ') || 'unknown error'}`);
+    }
   }
 
   // 2. ۲۲ دسته استاندارد، فقط وقتی هیچ دسته‌ای نیست (v9.0.133، TD-591: دسته موجود بازنویسی و دسته حذف‌شده برگردانده نمی‌شود)

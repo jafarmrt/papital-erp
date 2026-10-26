@@ -8,7 +8,7 @@
 #
 #  Usage:
 #    sudo bash scripts/go-live-verify.sh [BASE_URL]
-#    BASE_URL defaults to http://localhost:3000
+#    BASE_URL defaults to http://localhost:<PORT of .env, else 3000>
 #  Exit code: 0 = all checks passed, 1 = one or more FAILURES.
 #  (WARN lines do not fail the run.)
 # ============================================================
@@ -19,7 +19,9 @@ APP_DIR="${APP_DIR:-/opt/papital-erp}"
 # shellcheck source=scripts/env-file.sh
 source "$(dirname "${BASH_SOURCE[0]}")/env-file.sh"
 SERVICE_NAME="${SERVICE_NAME:-papital-erp}"
-BASE_URL="${1:-http://localhost:3000}"
+# v11 (O17): the port the service listens on, as every other script reads it
+APP_PORT="$(env_file_get "$APP_DIR/.env" PORT 2>/dev/null || true)"
+BASE_URL="${1:-http://localhost:${APP_PORT:-3000}}"
 cd "$APP_DIR" 2>/dev/null || true
 
 PASS=0; FAIL=0; WARN=0
@@ -143,10 +145,12 @@ if command -v psql >/dev/null 2>&1; then
   echo "       Migrations: $MIG_INFO"
   [ "$MIG_INFO" != "?" ] && ok "migration records readable" || warnc "migration records not readable via psql"
   PENDING="$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM outbox_events WHERE status='pending';" 2>/dev/null || echo "?")"
-  DLQ="$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM dead_letter_events WHERE status='pending';" 2>/dev/null || echo "?")"
-  echo "       Outbox pending: $PENDING | DLQ pending: $DLQ"
+  # v11 (O8): the rule of the erp_dead_letter_unresolved metric (DLQ_RESOLVED_STATUSES of deadLetterQueueService.ts):
+  # an event is open until it was replayed or dismissed; the table has no 'pending' status, so the old count was always 0
+  DLQ="$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM dead_letter_events WHERE status NOT IN ('replayed', 'dismissed');" 2>/dev/null || echo "?")"
+  echo "       Outbox pending: $PENDING | DLQ unresolved: $DLQ"
   if [ "$PENDING" != "?" ] && [ "$PENDING" -le 50 ]; then ok "Outbox backlog under control ($PENDING pending)"; else warnc "Outbox backlog high or unreadable ($PENDING)"; fi
-  if [ "$DLQ" != "?" ] && [ "$DLQ" -eq 0 ]; then ok "Dead letter queue empty"; else warnc "DLQ has $DLQ pending item(s) — review /events/dlq"; fi
+  if [ "$DLQ" != "?" ] && [ "$DLQ" -eq 0 ]; then ok "Dead letter queue empty"; else warnc "DLQ has $DLQ unresolved item(s) or is unreadable — review /events/dlq"; fi
 else
   warnc "psql not installed — DB-level checks skipped"
 fi

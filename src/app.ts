@@ -340,11 +340,12 @@ export async function createApp(): Promise<express.Express> {
         uptimeSeconds: Math.floor(process.uptime()),
         timestamp: new Date().toISOString()
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      // v11 (O12): the probe is public like /health/ready, so the database error stays in the log
+      logger.warn(`Health probe: database check failed: ${err instanceof Error ? err.message : String(err)}`);
       res.status(503).json({
         status: 'error',
         message: 'Database connection check failed',
-        error: err.message,
         timestamp: new Date().toISOString()
       });
     }

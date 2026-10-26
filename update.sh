@@ -264,20 +264,31 @@ if [ "$NODE_MAJOR" -lt 24 ]; then
   warn "Node.js $(node -v 2>/dev/null || echo 'not found') is older than 24; install Node.js 24 (see install.sh) before the next update."
 fi
 
-# v10.1.68 (TD-1286): without ERP_SECRETS_KEY every new WooCommerce key, bot token or webhook key is refused (503), and
-# only install.sh used to add it; add that one key when .env lacks it (in any form the service reads), nothing else
-if ! KEY_STEP="$(bash "$APP_DIR/scripts/ensure-env-secrets.sh" "$APP_DIR/.env" ERP_SECRETS_KEY 2>&1)"; then
-  warn "ERP_SECRETS_KEY could not be checked or added ($KEY_STEP); new secrets are refused until it is set."
-elif [[ "$KEY_STEP" == *"Added ERP_SECRETS_KEY"* ]]; then
-  warn "ERP_SECRETS_KEY was missing and has been added to .env; keep a copy of it somewhere safe off this server. If secrets were encrypted with an earlier key, put that key back instead."
-elif [[ "$KEY_STEP" == *"WARN:"* ]]; then
-  warn "ERP_SECRETS_KEY is empty in .env and was left as it is; new secrets are refused until it is set."
-fi
+# v10.1.68 (TD-1286) / v11 (O10, O17): the generated .env keys (ERP_SECRETS_KEY among them) are added right before the
+# restart (update_refresh_ops_config), so a run stopped by a missing tool or by the checks below leaves .env as it was
 
 # v10.2.23 (OBS-R1-22): the side build needs room next to the running one, and the backup and the rehearsal need
 # theirs; stop before the backup, the source or the build is touched when a disk cannot hold them
 command -v rsync >/dev/null 2>&1 || die "rsync is required to build the update in a side folder (apt-get install -y rsync)."
-if [ -z "$UPDATE_RESUME" ]; then
+
+# v11 (O11): a git update with nothing new (the branch has no new commit and dist/ is built from this very source) takes
+# no backup and does not restart the service; it only adds what this version's .env and cron file lack (below)
+NOTHING_NEW=0
+if [ -z "$UPDATE_RESUME" ] && [ "$UPDATE_MODE" = "git" ] && [ "$REBUILD" -eq 0 ] && git fetch --quiet 2>/dev/null \
+  && [ "$(git rev-parse HEAD)" = "$(git rev-parse '@{u}' 2>/dev/null || true)" ]; then
+  NOOP_DIR="$(update_prepare_build_dir "$APP_DIR")" || die "Could not prepare the side folder ${UPDATE_BUILD_DIR_NAME}/."
+  # removed at exit like the side folder of a build (on_exit)
+  BUILD_DIR="$NOOP_DIR"
+  if [ "$(update_dist_fingerprint "$APP_DIR/dist")" = "$(update_source_fingerprint "$NOOP_DIR")" ]; then
+    NOTHING_NEW=1
+    PREVIOUS_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || true)"
+    PRE_DEPLOY_DUMP=""
+    log "Nothing new: ${APP_DIR} is at $(git rev-parse --short HEAD) like its branch on the remote, and dist/ is built from this source. No backup and no restart (--rebuild builds and restarts anyway)."
+    [ "$REHEARSE" -eq 0 ] || log "--rehearse: no new migration to rehearse."
+  fi
+fi
+
+if [ -z "$UPDATE_RESUME" ] && [ "$NOTHING_NEW" -eq 0 ]; then
   BACKUP_STEP=0
   if [ "$SKIP_BACKUP" -eq 0 ] && [ -f scripts/backup.sh ]; then BACKUP_STEP=1; fi
   update_space_check "$APP_DIR" "$UPDATE_MODE" "$BACKUP_STEP" "$REHEARSE" || die "$UPDATE_SPACE_MESSAGE"
@@ -359,11 +370,14 @@ if [ -z "$UPDATE_RESUME" ]; then
   fi
 fi
 
-# the backup and the source are written now: check again what the build and the rehearsal still need
-update_space_check "$APP_DIR" git 0 "$REHEARSE" 1 || die "$UPDATE_SPACE_MESSAGE"
-# checked again here: a first run with an older update.sh (the one an update starts with) had no database check
-update_database_space_check "$APP_DIR" 1 || die "$UPDATE_DB_SPACE_MESSAGE"
-if [ -n "$UPDATE_DB_SPACE_NEED_KB" ]; then
+# the backup and the source are written now: check again what the build and the rehearsal still need (nothing to build
+# or migrate when nothing is new)
+if [ "$NOTHING_NEW" -eq 0 ]; then
+  update_space_check "$APP_DIR" git 0 "$REHEARSE" 1 || die "$UPDATE_SPACE_MESSAGE"
+  # checked again here: a first run with an older update.sh (the one an update starts with) had no database check
+  update_database_space_check "$APP_DIR" 1 || die "$UPDATE_DB_SPACE_MESSAGE"
+fi
+if [ "$NOTHING_NEW" -eq 0 ] && [ -n "$UPDATE_DB_SPACE_NEED_KB" ]; then
   success "Free disk space for the database: $(( UPDATE_DB_SPACE_FREE_KB / 1024 )) MB left for it (the migrations may need about $(( UPDATE_DB_SPACE_NEED_KB / 1024 )) MB, twice the database)."
 fi
 
@@ -483,6 +497,26 @@ RESTART_OK=0
 # NOTE: string matching instead of `systemctl | grep -q` — under `set -o pipefail`,
 # grep -q exits early and SIGPIPEs systemctl, making the pipeline falsely fail.
 UNIT_LIST="$(systemctl list-unit-files 2>/dev/null || true)"
+# v11 (O10): the generated .env keys and the cron jobs of this version (scripts/update-steps.sh)
+update_refresh_ops_config "$APP_DIR"
+for note in "${UPDATE_OPS_NOTES[@]}"; do
+  [ -n "$note" ] || continue
+  case "$note" in WARN:*) warn "${note#WARN: }" ;; *) log "$note" ;; esac
+done
+# a service that did not start after an earlier update (the cause since fixed) is restarted and checked, as before
+NOOP_RUNNING=0
+if [ "$NOTHING_NEW" -eq 1 ] && bash scripts/verify-startup.sh "$APP_PORT" "${UPDATE_NOOP_CHECK_SECONDS:-15}" "$PKG_VERSION" >/dev/null 2>&1; then
+  NOOP_RUNNING=1
+fi
+if [ "$NOTHING_NEW" -eq 1 ] && [ "$NOOP_RUNNING" -eq 1 ] && [ -z "$UPDATE_ENV_KEYS_ADDED" ]; then
+  success "Nothing to update: v${PKG_VERSION} keeps running; no backup was taken and the service was not restarted."
+  exit 0
+fi
+if [ "$NOTHING_NEW" -eq 1 ] && [ "$NOOP_RUNNING" -eq 0 ]; then
+  log "Nothing new, but the service does not answer as started on port ${APP_PORT}: restarting it (nothing else changed)."
+elif [ "$NOTHING_NEW" -eq 1 ]; then
+  log "Restarting only so the service reads the keys added to .env (nothing else changed)."
+fi
 log "[5/6] Restarting service..."
 # v11 (O16): log files an older version wrote readable by every user become private to the service's user and group
 # (the new server writes them so); the folder of an older install was 0755
