@@ -1,4 +1,4 @@
-import { DECIMAL_PATTERN, computedDecimalText, normalizeGroupedDecimalString } from '../numericInput.js';
+import { DECIMAL_PATTERN, computedDecimalText, decimalTextScaleIssue, normalizeGroupedDecimalString } from '../numericInput.js';
 import { TREASURY_CURRENCIES, normalizeTreasuryCurrency } from '../treasury/treasuryCurrency.js';
 
 /**
@@ -26,8 +26,8 @@ export function priceCurrencyOf(value: unknown): PriceCurrency | null {
 /** مبلغ قیمت با ارقام لاتین (ارقام فارسی و جداکننده هزارگان پذیرفته)، یا null وقتی عدد بزرگ‌تر از صفر نیست */
 export function parsePriceAmount(value: unknown): string | null {
   // v11 phase 6.1a (reviews of #403): an Excel formula price («1850000 * 1.1» = 2035000.0000000002) is sent as its value,
-  // and a noise left over from a sum («0.1 + 0.2 - 0.3») is no price; a number with a real fifth decimal stays as it is,
-  // for the bound of the saving path to refuse
+  // and a noise left over from a sum («0.1 + 0.2 - 0.3») is no price; a number with a real fifth decimal keeps its own
+  // text, which `priceAmountFits` refuses
   if (typeof value === 'number') {
     if (!Number.isFinite(value) || value <= 0) return null;
     const text = computedDecimalText(value);
@@ -38,6 +38,15 @@ export function parsePriceAmount(value: unknown): string | null {
   // v11 phase 3.1 (M4): a misplaced group separator («12,5») is not a price, never 125 (the Excel import and the price page)
   const clean = normalizeGroupedDecimalString(value);
   return DECIMAL_PATTERN.test(clean) && Number(clean) > 0 ? clean : null;
+}
+
+/**
+ * v11 phase 6.1a (reviews of #403): an amount the `numeric(18,4)` price column holds as it is: plain decimal text with at
+ * most 14 whole digits and 4 decimals. Both Excel imports (the item import and the quick price page) refuse the cell
+ * otherwise; before, a fifth decimal was rounded by the column and «1e-7» saved a price of 0.
+ */
+export function priceAmountFits(amount: string): boolean {
+  return DECIMAL_PATTERN.test(amount) && decimalTextScaleIssue(amount) === null;
 }
 
 /** خانه ویرایش‌شده یک فهرست قیمت در صفحه قیمت‌گذاری */

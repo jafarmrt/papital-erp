@@ -97,7 +97,7 @@ export const allocationsQuerySchema = z.object({
 
 export const bomAllocationItemSchema = z.object({
   itemId: z.coerce.number().int().positive('شناسه کالا باید عدد مثبت باشد'),
-  quantity: z.coerce.number().positive('مقدار تخصیص باید بزرگتر از صفر باشد').superRefine(decimalNumberBounds('مقدار تخصیص')),
+  quantity: z.coerce.number().positive('مقدار تخصیص باید بزرگتر از صفر باشد').superRefine(decimalNumberBounds('مقدار تخصیص', { positive: true })),
   location: z.string().optional(),
   notes: z.string().optional()
 });

@@ -38,6 +38,8 @@ const BANK_NAME = 'ملت';
 const LOG_TITLE = 'گزارش آزمون';
 const LOG_TEXT = 'شرح کار آزمون';
 const LOG_TEXT_CHANGED = 'شرح کار دیگر';
+const FIRST_MANAGER_NOTES = 'C10 first manager review';
+const SECOND_MANAGER_NOTES = 'C10 second manager review';
 
 async function pairOf(amount: number | string, debitCode = '7001', creditCode = '1001') {
   const acc = await accountIdsByCode(debitCode, creditCode);
@@ -224,7 +226,7 @@ export async function runInputGuardsV11Tests(shouldRun: ShouldRun): Promise<Test
 
   const c10 = 'reg_daily_log_date_and_review_v11_6_1a_c10';
   if (shouldRun(c10, 'v11', 'phase6', 'c10', 'daily_log', 'review')) {
-    await runCase(results, c10, 'v11 phase 6.1a (C10): a work log dated after today is refused on create and edit; a reviewed log whose text changes goes back to submitted, an edit of its tags keeps the review, and a review of an older version is refused', () => inFiscalSandbox(async () => {
+    await runCase(results, c10, 'v11 phase 6.1a (C10): a work log dated after today is refused on create and edit; a reviewed log whose text changes goes back to submitted, an edit of its tags keeps the review, and a review of an older version or over another manager\'s review is refused', () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const today = await businessTodayIsoDate();
@@ -238,7 +240,7 @@ export async function runInputGuardsV11Tests(shouldRun: ShouldRun): Promise<Test
       const created = await api.post('/api/daily-logs', { date: today, start_time: '08:00', end_time: '09:00', title: LOG_TITLE, content: LOG_TEXT });
       if (created.status !== 201 && created.status !== 200) throw new Error(`setup: log ${brief(created)}`);
       const id = Number(created.body?.id ?? created.body?.log?.id);
-      const stored = async () => (await orm.select({ status: dailyWorkLogs.status, version: dailyWorkLogs.version, date: dailyWorkLogs.date })
+      const stored = async () => (await orm.select({ status: dailyWorkLogs.status, version: dailyWorkLogs.version, date: dailyWorkLogs.date, managerNotes: dailyWorkLogs.managerNotes })
         .from(dailyWorkLogs).where(eq(dailyWorkLogs.id, id)))[0];
       const movedAhead = await api.put(`/api/daily-logs/${id}`, { date: tomorrow, version: (await stored()).version });
       if (movedAhead.status !== 422 || codeOf(movedAhead) !== 'DAILY_LOG_DATE_IN_FUTURE') problems.push(`moving the log to tomorrow returned ${brief(movedAhead)}, expected 422 DAILY_LOG_DATE_IN_FUTURE`);
@@ -260,8 +262,19 @@ export async function runInputGuardsV11Tests(shouldRun: ShouldRun): Promise<Test
       const stale = await api.put(`/api/daily-logs/${id}/review`, { manager_notes: 'C10 stale review', version: (await stored()).version - 1 });
       if (stale.status !== 409 || codeOf(stale) !== 'OCC_CONFLICT') problems.push(`a review of the older version returned ${brief(stale)}, expected 409 OCC_CONFLICT`);
       if ((await stored()).status !== 'submitted') problems.push(`the stale review left the log ${(await stored()).status}`);
+      // two managers open the same log; the second review, sent with the review state its form opened, does not replace
+      // the first one (review 4 of #403)
+      const opened = await stored();
+      const reviewAs = (notes: string) => api.put(`/api/daily-logs/${id}/review`, {
+        manager_notes: notes, version: opened.version, opened_status: opened.status, opened_manager_notes: opened.managerNotes ?? '',
+      });
+      const first = await reviewAs(FIRST_MANAGER_NOTES);
+      if (first.status !== 200) problems.push(`the first manager's review returned ${brief(first)}`);
+      const second = await reviewAs(SECOND_MANAGER_NOTES);
+      if (second.status !== 409 || codeOf(second) !== 'OCC_CONFLICT') problems.push(`a review over another manager's review returned ${brief(second)}, expected 409 OCC_CONFLICT`);
+      if ((await stored()).managerNotes !== FIRST_MANAGER_NOTES) problems.push(`the second review replaced the first manager's notes with «${(await stored()).managerNotes}»`);
       assertNoProblems(problems);
-      return 'log dated tomorrow 422 on create and edit, not saved; reviewed log: tag edit from a form opened before the review keeps reviewed, text edit returns it to submitted; a review of the older version 409';
+      return 'log dated tomorrow 422 on create and edit, not saved; reviewed log: tag edit from a form opened before the review keeps reviewed, text edit returns it to submitted; a review of the older version 409; a second manager\'s review over the first 409, first notes kept';
     }));
   }
 

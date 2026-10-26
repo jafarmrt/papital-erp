@@ -1,6 +1,6 @@
 import { normalizePersianText } from '../../utils/formatters.js';
 import { extractRowPriceColumns } from './excelPriceColumns.js';
-import { parsePriceAmount, priceCurrencyOf } from './priceInput.js';
+import { parsePriceAmount, priceAmountFits, priceCurrencyOf } from './priceInput.js';
 
 /**
  * v9.0.152 (TD-647، تصمیم ت۱ الف): ورود سریع اکسل صفحه قیمت‌گذاری. فقط ستون‌های فهرست‌های قیمت تنظیم‌شده به‌روزرسانی
@@ -68,7 +68,8 @@ export function buildQuickPriceUpdates(
       // v9.0.176 (TD-657): پیش‌تر سلول «۰» حذف قیمت فرستاده می‌شد و «۲٬۵۰۰٬۰۰۰» یا ارز «XYZ» بی‌صدا رد یا ذخیره می‌شد
       const price = parsePriceAmount(cell.value);
       const currency = priceCurrencyOf(cell.currency);
-      if (price === null || currency === null) {
+      // v11 phase 6.1a (review 4 of #403): a price the column cannot hold is a bad cell, never a refusal of the whole file
+      if (price === null || !priceAmountFits(price) || currency === null) {
         invalidCells.push({ code: String(item.code ?? item.id), title: cell.title, value: String(cell.value), currency: cell.currency });
         continue;
       }

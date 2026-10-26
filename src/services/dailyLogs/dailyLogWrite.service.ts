@@ -273,12 +273,24 @@ export async function updateDailyLog(actor: AuthUserPayload, logId: number, body
 }
 
 /** Manager review (route guard `daily_logs.manage_all`): sets the notes and notifies the author */
-export async function reviewDailyLog(actor: AuthUserPayload, logId: number, managerNotes: string | undefined, version: number): Promise<DailyLogRow> {
+export async function reviewDailyLog(
+  actor: AuthUserPayload,
+  logId: number,
+  managerNotes: string | undefined,
+  version: number,
+  opened: { status?: string; managerNotes?: string } = {},
+): Promise<DailyLogRow> {
   return orm.transaction(async (tx) => {
     const existing = await lockLog(tx, logId);
     // v11 phase 6.1a (C10): a review of an older version would mark as reviewed a text the manager has not read
     if (existing.version !== version) {
-      throw new ConflictError('نویسنده این گزارش کار را پس از باز شدن آن تغییر داده؛ دوباره باز کنید و بخوانید.', { currentVersion: existing.version }, 'OCC_CONFLICT');
+      throw new ConflictError('این گزارش کار پس از باز شدن آن ویرایش شده؛ دوباره باز کنید و بخوانید.', { currentVersion: existing.version }, 'OCC_CONFLICT');
+    }
+    // review 4 of #403: another manager's review since the form opened is not silently replaced
+    const reviewChanged = (opened.status !== undefined && opened.status !== existing.status)
+      || (opened.managerNotes !== undefined && opened.managerNotes !== (existing.managerNotes || ''));
+    if (reviewChanged) {
+      throw new ConflictError('مدیر دیگری پس از باز شدن این گزارش کار بازخورد ثبت کرده؛ دوباره باز کنید و بخوانید.', { currentVersion: existing.version }, 'OCC_CONFLICT');
     }
     // review 3 of #403: a review keeps the version, so an edit form the author opened before it is not refused
     const [updated] = await tx.update(dailyWorkLogs)

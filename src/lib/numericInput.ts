@@ -76,8 +76,10 @@ const DOUBLE_NOISE = 4 * Number.EPSILON;
  * when the number really has more. A computed number carries a few units of noise in its last place («1.1 * 3» is
  * 3.3000000000000003, a price formula in Excel «1850000 * 1.1» is 2035000.0000000002), so a number that close to its
  * `maxScale`-decimal value is that value. A fifth decimal someone typed («100.00005», «12345678901.23456») is further
- * away and stays refused; only from about 1e10 up, where the noise allowed is as large as a fifth decimal, is a number
- * read as its rounded value (off by at most 0.00005). Shared by the server's reading of JSON numbers and the browser code that sends a computed number as text.
+ * away and stays refused. The noise allowed grows with the number, so a fifth decimal is always refused below about
+ * 1.1e10 and always read as the rounded value (off by at most 0.00005) from about 5.6e10; in between it depends on the
+ * digits («20000000000.00001» reads as 20000000000). Shared by the server's reading of JSON numbers and the browser code
+ * that sends a computed number as text.
  */
 export function computedDecimalText(value: number, maxScale = 4): string | null {
   if (!Number.isFinite(value)) return null;

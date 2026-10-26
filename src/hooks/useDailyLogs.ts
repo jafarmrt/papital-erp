@@ -281,8 +281,12 @@ export function useDailyLogs(user: User) {
 
   const handleOpenReviewModal = (log: DailyWorkLog) => {
     setReviewModalLog(log);
-    setReviewNotes(reviewDraft?.logId === log.id ? reviewDraft.notes : log.manager_notes || log.managerNotes || '');
-    setReviewDraft(null);
+    if (reviewDraft?.logId === log.id) {
+      setReviewNotes(reviewDraft.notes);
+      setReviewDraft(null);
+    } else {
+      setReviewNotes(log.manager_notes || log.managerNotes || '');
+    }
   };
 
   const handleSaveReview = async () => {
@@ -291,18 +295,25 @@ export function useDailyLogs(user: User) {
     try {
       await fetchJson(`/daily-logs/${reviewModalLog.id}/review`, {
         method: 'PUT',
-        body: JSON.stringify({ manager_notes: reviewNotes, version: reviewModalLog.version })
+        body: JSON.stringify({
+          manager_notes: reviewNotes,
+          version: reviewModalLog.version,
+          // review 4 of #403: the review state this form opened, so a second manager's review is not silently replaced
+          opened_status: reviewModalLog.status,
+          opened_manager_notes: reviewModalLog.manager_notes ?? reviewModalLog.managerNotes ?? '',
+        })
       });
       toast.success('بازخورد مدیریتی ثبت گردید');
       setReviewModalLog(null);
       void loadLogsAndStats();
     } catch (err) {
-      // v11 phase 6.1a (reviews of #403): after a stale version (409) the list is read again and the form closes, so the
-      // manager reads the changed log; reopening it gives its stored version and the notes typed here
+      // v11 phase 6.1a (reviews of #403): after a stale version (409) the form closes at once with the notes typed here
+      // kept for this log, and the list is read again, so the manager reads the changed log and a reopened form has its
+      // stored version and these notes
       if ((err as { status?: unknown } | null)?.status === 409) {
         setReviewDraft({ logId: reviewModalLog.id, notes: reviewNotes });
-        await loadLogsAndStats();
         setReviewModalLog(null);
+        void loadLogsAndStats();
       }
       toast.error(errorMessageOf(err) || 'خطا در ثبت بازخورد مدیریتی');
     } finally {

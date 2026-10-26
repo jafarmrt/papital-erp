@@ -123,7 +123,7 @@ export const convertToOrdersSchema = z.object({
         itemCode: z.string().max(100).optional(),
         itemName: z.string().max(300).optional(),
         unit: z.string().max(50).optional(),
-        quantity: z.number().positive().superRefine(decimalNumberBounds('مقدار')),
+        quantity: z.number().positive().superRefine(decimalNumberBounds('مقدار', { positive: true })),
         unitPrice: z.number().nonnegative().superRefine(decimalNumberBounds('قیمت واحد')),
         location: z.string().optional(),
         notes: z.string().max(500).optional()
