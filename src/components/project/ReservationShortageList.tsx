@@ -1,6 +1,6 @@
 import { AlertTriangle } from 'lucide-react';
 import type { ReservationShortage } from '../../lib/projects/projectReservation';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianNumber, formatPersianCode } from '../../utils';
 
 /**
  * v9.0.373 (TD-819، تصمیم ت۳ بسته ۷): کالاهایی که ثبت نهایی کمتر از نیاز پروژه رزرو کرد، چون بقیه موجودی را پیش‌فاکتورها یا
@@ -37,7 +37,7 @@ export function ReservationShortageList({ shortages }: { shortages: ReservationS
               <tr key={s.itemId}>
                 <td className="p-2">
                   <div className="font-bold text-slate-900">{s.itemName}</div>
-                  <div className="font-mono text-slate-500">{s.itemCode}</div>
+                  <div className="font-mono text-slate-500">{formatPersianCode(s.itemCode)}</div>
                 </td>
                 <td className="p-2 text-center">{formatPersianNumber(s.requiredQty)} {s.unit}</td>
                 <td className="p-2 text-center text-emerald-800">{formatPersianNumber(s.reservedQty)} {s.unit}</td>

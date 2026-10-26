@@ -12,6 +12,7 @@ import { WorkflowEdgeGuardFields } from './WorkflowEdgeGuardFields';
 import { WorkflowEntityTypeField } from './WorkflowEntityTypeField';
 import { designStepOrder, nextDesignStepOrder, renameDesignStateKey, workflowDesignErrors } from '../../lib/workflow/workflowDesignRules';
 import { DialogLayer } from '../common/DialogLayer';
+import { formatPersianCode } from '../../utils';
 
 interface WorkflowDesignerCanvasProps {
   definitionId: number;
@@ -285,7 +286,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
                 placeholder="عنوان گردش کار..."
               />
               <span className="text-xs bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 px-2.5 py-0.5 rounded-full font-mono">
-                کد: {def?.code}
+                کد: {formatPersianCode(def?.code)}
               </span>
               <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded">
                 نسخه {formatPersianNumber(def?.version || 1)}

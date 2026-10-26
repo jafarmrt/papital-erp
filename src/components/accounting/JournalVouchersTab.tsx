@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { FileText, Plus, Printer, ChevronDown, ChevronRight, CheckCircle2, Clock, Lock, FileCheck, MoreVertical, CheckSquare, GitFork, X } from 'lucide-react';
-import { formatPersianNumber, formatPersianDate } from '../../utils';
+import { formatPersianNumber, formatPersianDate, formatPersianCode } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import type { JournalVoucher, Account, Customer, Personnel, FinancialAttachment } from '../../types';
 import { VoucherReversalModal } from './VoucherReversalModal';
@@ -430,7 +430,7 @@ export function JournalVouchersTab({
                               <FinancialAttachmentBadge
                                 count={voucher.attachments.length}
                                 onClick={() => setViewingAttachments({
-                                  title: `اسناد و مدارک ضمیمه سند شماره #${voucher.voucherNumber}`,
+                                  title: `اسناد و مدارک ضمیمه سند شماره #${formatPersianCode(voucher.voucherNumber)}`,
                                   attachments: voucher.attachments || []
                                 })}
                               />
@@ -523,7 +523,7 @@ export function JournalVouchersTab({
                                   {(Array.isArray(voucher.items) ? voucher.items : []).map((item, idx) => (
                                     <tr key={item.id || idx}>
                                       <td className="py-1.5 px-2 text-center text-slate-400">{formatPersianNumber(idx + 1)}</td>
-                                      <td className="py-1.5 px-2 text-center font-mono font-bold">{item.accountCode || '-'}</td>
+                                      <td className="py-1.5 px-2 text-center font-mono font-bold">{formatPersianCode(item.accountCode) || '-'}</td>
                                       <td className="py-1.5 px-2 font-medium">
                                         {item.accountName}
                                         {item.detailedName && (
@@ -552,7 +552,7 @@ export function JournalVouchersTab({
                                     <button
                                       type="button"
                                       onClick={() => setViewingAttachments({
-                                        title: `اسناد و مدارک ضمیمه سند شماره #${voucher.voucherNumber}`,
+                                        title: `اسناد و مدارک ضمیمه سند شماره #${formatPersianCode(voucher.voucherNumber)}`,
                                         attachments: voucher.attachments || []
                                       })}
                                       className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline font-semibold"
@@ -563,7 +563,7 @@ export function JournalVouchersTab({
                                   <VoucherAttachmentThumbnails
                                     attachments={voucher.attachments}
                                     onOpen={() => setViewingAttachments({
-                                      title: `اسناد و مدارک ضمیمه سند شماره #${voucher.voucherNumber}`,
+                                      title: `اسناد و مدارک ضمیمه سند شماره #${formatPersianCode(voucher.voucherNumber)}`,
                                       attachments: voucher.attachments || []
                                     })}
                                   />

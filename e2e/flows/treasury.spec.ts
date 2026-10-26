@@ -18,7 +18,8 @@ const TEXT = {
   settledBadge: 'تسویه کامل',
   newCheque: 'ثبت چک صیادی جدید',
   chequeNumber: 'مثال: 123456',
-  sayad: '1234567890123456',
+  // v11 phase 6.3a (U21): numeric placeholders are in Persian digits
+  sayad: toPersianDigits('1234567890123456'),
   bankName: 'مثال: بانک ملت',
   dueDateLabel: 'تاریخ سررسید *',
   customerPicker: 'جست‌وجو و انتخاب مشتری...',

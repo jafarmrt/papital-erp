@@ -3,7 +3,7 @@ import {
   Database, X, Search, Plus, Filter, AlertCircle, Info, ArrowRight 
 } from 'lucide-react';
 import { Item, Category, ProjectInventoryControlSectionData } from '../../types';
-import { formatPersianNumber, toPersianDigits } from '../../utils';
+import { formatPersianNumber, toPersianDigits, formatPersianCode } from '../../utils';
 import { COMMON_UNITS } from './projectInventoryUtils';
 import { rawMaterialCategories } from '../../lib/pendingMaterials/materialRequestRules';
 import { MaterialNameField, MaterialUnitSelect, MaterialNumberField, MaterialAttributeFields } from './materialFormFields';
@@ -161,7 +161,7 @@ export function AddMaterialModal({
                       <div className="space-y-0.5">
                         <div className="font-bold text-slate-900 group-hover:text-amber-900 flex items-center gap-2">
                           <span>{item.name}</span>
-                          {item.code && <span className="font-mono text-[11px] text-slate-500">({item.code})</span>}
+                          {item.code && <span className="font-mono text-[11px] text-slate-500">({formatPersianCode(item.code)})</span>}
                         </div>
                         <div className="text-[11px] text-slate-500">
                           دسته‌بندی: {item.category || 'عمومی'}

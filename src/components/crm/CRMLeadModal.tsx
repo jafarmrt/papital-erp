@@ -289,7 +289,7 @@ export function CRMLeadModal({
               <input
                 id={`${fieldId}-us`}
                 type="text"
-                placeholder="0"
+                placeholder="۰"
                 inputMode="numeric"
                 value={leadForm.estimatedValue ? formatPersianNumber(leadForm.estimatedValue) : ''}
                 onChange={(e) => {

@@ -1,5 +1,5 @@
 import { DocPrintModal } from '../print/DocPrintModal';
-import { formatPersianDate, formatPersianNumber } from '../../utils';
+import { formatPersianDate, formatPersianNumber, formatPersianCode } from '../../utils';
 import type { InventoryDocumentDetail } from '../../hooks/inventoryAudit/useInventoryAuditQueries';
 
 /** v9.0.80 (TD-489): نسخه چاپی حواله انتقال بین انبارها (قالب یکدست DocPrintModal) */
@@ -33,7 +33,7 @@ export function TransferDocumentPrint({ doc, isOpen, onClose }: { doc: Inventory
           {(doc.items ?? []).map((line, idx) => (
             <tr key={idx} className="border-b border-slate-100">
               <td className="p-2">{formatPersianNumber(idx + 1)}</td>
-              <td className="p-2 font-mono">{line.code}</td>
+              <td className="p-2 font-mono">{formatPersianCode(line.code)}</td>
               <td className="p-2">{line.name}</td>
               <td className="p-2 text-center">{formatPersianNumber(Number(line.quantity) || 0)} {line.unit}</td>
             </tr>

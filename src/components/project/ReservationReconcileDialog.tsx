@@ -11,7 +11,7 @@ import { PROJECT_VERSION_CONFLICT_MESSAGE } from '../../lib/projects/projectVers
 import { isPartBehind, type ProjectWriteBase } from '../../lib/projects/projectParts';
 import { OFFLINE_SUBMIT_TITLE, PHONE_SHEET_OVERLAY, PHONE_SHEET_PANEL, PHONE_TAP_TARGET } from '../../lib/pwa/phoneLayout';
 import { useOnlineStatus } from '../../lib/pwa/useOnlineStatus';
-import { errorMessageOf, formatPersianNumber } from '../../utils';
+import { errorMessageOf, formatPersianNumber, formatPersianCode } from '../../utils';
 import { DialogLayer } from '../common/DialogLayer';
 
 const CHANGE_TONE: Record<ReturnType<typeof reservationLineChange>, string> = {
@@ -25,8 +25,8 @@ function LineRow({ line }: { line: ReservationReconcileLine }): React.ReactEleme
   return (
     <tr data-reconcile-line={line.itemId} className="border-t border-slate-100">
       <td className="px-2 py-2">
-        <div className="font-bold text-slate-800">{line.itemName || line.itemCode}</div>
-        {line.itemCode && <div className="text-[10px] text-slate-500">{line.itemCode}</div>}
+        <div className="font-bold text-slate-800">{line.itemName || formatPersianCode(line.itemCode)}</div>
+        {line.itemCode && <div className="text-[10px] text-slate-500">{formatPersianCode(line.itemCode)}</div>}
       </td>
       <td className="px-2 py-2 whitespace-nowrap">{formatPersianNumber(line.requiredQty)} {line.unit}</td>
       <td className="px-2 py-2 whitespace-nowrap">{formatPersianNumber(line.currentQty)}</td>

@@ -27,7 +27,7 @@ import { describeOverOrders, findOverOrders } from './procurement/requisitionOrd
 import { money } from '../lib/money.js';
 import { canEditRequisition, REQUISITION_PRIORITIES, requisitionActionLabel, type RequisitionPriority } from '../lib/procurement/requisitionFields.js';
 import {
-  ensureRequisitionApproved, RECEIVE_ACTION_KEYS, RECEIVED_STEP_KEY, requisitionFlow, requisitionWorkflowGraph, transitionFromStep,
+  ensureRequisitionApproved, ensureRequisitionInstance, RECEIVE_ACTION_KEYS, RECEIVED_STEP_KEY, requisitionFlow, requisitionsInitiatorCannotApprove, requisitionWorkflowGraph, transitionFromStep,
   type RequisitionActor, type WorkflowStateRef, type WorkflowTransitionRef,
 } from './procurement/requisitionApproval.js';
 import { buildRequisitionRows, resolveRequisitionProject, type RequisitionRowFields } from './procurement/requisitionRows.js';
@@ -262,14 +262,20 @@ export class ProcurementService {
    * List purchase requisitions with filtering and pagination (v9.0.353, TD-697: status groups, item search and order
    * counts in SQL, the page and limit actually used)
    */
-  static async getRequisitions(filter: GetRequisitionsFilter = {}): Promise<{ data: PurchaseRequisition[]; total: number; page: number; limit: number }> {
-    return listRequisitions(filter);
+  static async getRequisitions(
+    filter: GetRequisitionsFilter = {},
+    viewer: { id?: number; role?: string } = {},
+  ): Promise<{ data: PurchaseRequisition[]; total: number; page: number; limit: number }> {
+    const list = await listRequisitions(filter);
+    // v11 phase 6.3a (U10): the rows whose approval this user may not sign as its initiator
+    const blocked = await requisitionsInitiatorCannotApprove(orm, list.data, viewer);
+    return blocked.size === 0 ? list : { ...list, data: list.data.map(r => (blocked.has(r.id) ? { ...r, initiatorCannotApprove: true } : r)) };
   }
 
   /**
    * Get single requisition by ID with latest details
    */
-  static async getRequisitionById(id: number): Promise<PurchaseRequisition> {
+  static async getRequisitionById(id: number, viewer: { id?: number; role?: string } = {}): Promise<PurchaseRequisition> {
     const [req] = await orm
       .select()
       .from(purchaseRequisitions)
@@ -280,7 +286,11 @@ export class ProcurementService {
     }
 
     const [dto] = await requisitionDtos(orm, [req]);
-    return withRowCurrentStock(orm, dto);
+    const row = await withRowCurrentStock(orm, dto);
+    // v11 phase 6.3a (review 3 of #406, U10): the detail window reads the requisition again, so it carries the same mark
+    // as the list row
+    const blocked = await requisitionsInitiatorCannotApprove(orm, [row], viewer);
+    return blocked.has(row.id) ? { ...row, initiatorCannotApprove: true } : row;
   }
 
   /**
@@ -454,22 +464,10 @@ export class ProcurementService {
         throw new ConflictError(`درخواست خرید ${req.code} رد شده است و کالای آن وارد انبار نمی‌شود؛ ابتدا درخواست را بازگشایی کنید.`);
       }
 
-      if (!req.workflowInstanceId) {
-        // Lazy start workflow instance if not present
-        const instance = await WorkflowTransitionExecutor.startInstance({
-              entityType: 'purchase_requisition',
-          entityId: String(req.id),
-          userId: user.id,
-          userName: user.username,
-          tx
-        });
-        req.workflowInstanceId = instance.id;
-        await tx.update(purchaseRequisitions)
-          .set({ workflowInstanceId: instance.id })
-          .where(eq(purchaseRequisitions.id, req.id));
-      }
+      // v11 phase 6.3a (review of #406, U10): a missing instance starts in the requester's name, as on every other path
+      const { instanceId, sendStartNotice } = await ensureRequisitionInstance(tx, req, user.id);
 
-      const [wfInst] = await tx.select().from(workflowInstances).where(eq(workflowInstances.id, req.workflowInstanceId));
+      const [wfInst] = await tx.select().from(workflowInstances).where(eq(workflowInstances.id, instanceId));
       if (!wfInst) {
         throw new ValidationError('نمونه فرآیند گردش کار مرتبط یافت نشد');
       }
@@ -545,7 +543,7 @@ export class ProcurementService {
       }
       const transitionTitle = requisitionActionLabel(actionKey, matchedTransition.title);
       await WorkflowTransitionExecutor.executeTransition({
-        instanceId: req.workflowInstanceId,
+        instanceId,
         transitionId: matchedTransition.id,
         userId: user.id,
         userName: user.username,
@@ -562,6 +560,8 @@ export class ProcurementService {
         allowBackdate,
         tx
       });
+      // a first step this action left open (a step that wants more signatures) is announced now, never the one it finished
+      await sendStartNotice();
 
       // وضعیت و ردیف‌ها را اقدام پس از انتقال (applyRequisitionTransition) در همین تراکنش نوشته است
       const [updatedReq] = await tx.select().from(purchaseRequisitions).where(eq(purchaseRequisitions.id, req.id));
@@ -946,7 +946,7 @@ export class ProcurementService {
         .filter(order => order.status !== 'final');
       if (!alreadyReceived && openOrders.length === 0 && updatedReqItems.every(isSettledRequisitionRow)) {
         // وضعیت «دریافت‌شده» را اقدام پس از انتقال (applyRequisitionTransition) در همین تراکنش می‌نویسد
-        const flow = await requisitionFlow(tx, lockedReq, user);
+        const flow = await requisitionFlow(tx, lockedReq);
         const receive = transitionFromStep(flow, RECEIVE_ACTION_KEYS, RECEIVED_STEP_KEY);
         if (!receive) {
           throw new ConflictError(

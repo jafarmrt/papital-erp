@@ -10,6 +10,7 @@ import { RIAL_DISPLAY_UNITS, RIAL_DISPLAY_UNIT_LABELS } from '../lib/rialDisplay
 import { SETUP_TOKEN_REQUIRED_MESSAGE, setupCompanyNameError } from '../lib/auth/setupRules';
 import { USERNAME_MAX_LENGTH, usernameFormatError } from '../lib/users/usernameRules';
 import { errorMessageOf } from '../utils';
+import { persianRequired } from '../lib/ui/persianRequired';
 
 interface SetupPageProps {
   onLogin: (user: User, token: string) => void;
@@ -234,7 +235,8 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                   <KeyRound className="absolute right-3 top-3 text-slate-400" size={18} />
                   <input
                     id={`${fieldId}-setup-token`}
-                    required
+                    {...persianRequired('رمز راه‌اندازی')}
+                    autoComplete="off"
                     type="text"
                     value={setupToken}
                     onChange={e => { setSetupToken(e.target.value); setTokenError(''); }}
@@ -263,7 +265,8 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                   <UserIcon className="absolute right-3 top-3 text-slate-400" size={18} />
                   <input
                     id={`${fieldId}-full-name`}
-                    required
+                    {...persianRequired('نام و نام خانوادگی مدیر')}
+                    autoComplete="name"
                     type="text"
                     value={fullName}
                     maxLength={FULL_NAME_MAX_LENGTH}
@@ -280,7 +283,8 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                   <UserIcon className="absolute right-3 top-3 text-slate-400" size={18} />
                   <input
                     id={`${fieldId}-username`}
-                    required
+                    {...persianRequired('نام کاربری')}
+                    autoComplete="username"
                     type="text"
                     value={username}
                     onChange={e => setUsername(e.target.value)}
@@ -300,7 +304,8 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                     <Lock className="absolute right-3 top-3 text-slate-400" size={18} />
                     <input
                       id={`${fieldId}-password`}
-                      required
+                      {...persianRequired('کلمه عبور')}
+                      autoComplete="new-password"
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={e => setPassword(e.target.value)}
@@ -337,7 +342,8 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                     <Lock className="absolute right-3 top-3 text-slate-400" size={18} />
                     <input
                       id={`${fieldId}-confirm-password`}
-                      required
+                      {...persianRequired('تکرار کلمه عبور')}
+                      autoComplete="new-password"
                       type={showPassword ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={e => setConfirmPassword(e.target.value)}
@@ -377,7 +383,8 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                     <Building2 className="absolute right-3 top-3 text-slate-400" size={18} />
                     <input
                       id={`${fieldId}-company-name`}
-                      required
+                      {...persianRequired('نام فروشگاه یا شرکت')}
+                      autoComplete="organization"
                       type="text"
                       value={companyName}
                       onChange={e => setCompanyName(e.target.value)}
@@ -393,6 +400,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                     <Phone className="absolute right-3 top-3 text-slate-400" size={18} />
                     <input
                       id={`${fieldId}-phone`}
+                      autoComplete="tel"
                       type="text"
                       value={phone}
                       onChange={e => setPhone(e.target.value)}
@@ -409,6 +417,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                   <MapPin className="absolute right-3 top-3 text-slate-400" size={18} />
                   <input
                     id={`${fieldId}-address`}
+                    autoComplete="street-address"
                     type="text"
                     value={address}
                     onChange={e => setAddress(e.target.value)}
@@ -425,7 +434,8 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                     <Building2 className="absolute right-3 top-3 text-slate-400" size={18} />
                     <input
                       id={`${fieldId}-warehouse-name`}
-                      required
+                      {...persianRequired('نام انبار پیش‌فرض')}
+                      autoComplete="off"
                       type="text"
                       value={warehouseName}
                       onChange={e => setWarehouseName(e.target.value)}

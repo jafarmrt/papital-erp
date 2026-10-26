@@ -4,6 +4,7 @@ import { formatPersianNumber } from '../../utils/persianNumber';
 import { workflowEntityTypeLabel } from '../../lib/workflow/workflowEntityLabels';
 import { hasUnpublishedDraft } from '../../lib/workflow/workflowVersionDiff';
 import type { WorkflowDefinitionSummary } from '../../hooks/queries/useWorkflowLifecycle';
+import { formatPersianCode } from '../../utils';
 
 interface LifecycleActions {
   activate: (def: WorkflowDefinitionSummary) => Promise<void>;
@@ -43,7 +44,7 @@ export const WorkflowDefinitionCard: React.FC<Props> = ({ def, canSwitch, action
         <div>
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] font-mono bg-indigo-50 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 px-2 py-0.5 rounded font-bold">
-              {def.code}
+              {formatPersianCode(def.code)}
             </span>
             <StatusBadge def={def} />
           </div>

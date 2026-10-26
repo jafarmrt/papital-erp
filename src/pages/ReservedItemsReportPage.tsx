@@ -14,7 +14,7 @@ import {
   ChevronUp, 
   DollarSign,
 } from 'lucide-react';
-import { formatPersianNumber, formatPersianDate, getTodayJalaliDate } from '../utils';
+import { formatPersianNumber, formatPersianDate, getTodayJalaliDate, formatPersianCode } from '../utils';
 import { downloadSheet } from '../lib/excel/downloadSheet';
 import { useRialDisplay } from '../hooks/useAppCurrency';
 import { toast } from 'react-hot-toast';
@@ -25,6 +25,7 @@ import { EXPORT_FAILED_MESSAGE } from '../lib/inventoryAudit/exportFileNames';
 import { ReservationSourceLink } from '../components/reservedItems/ReservationSourceLink';
 import { useReservedItemsReportQuery } from '../hooks/queries/useStockWindowQueries';
 import { useOpeningRead } from '../hooks/queries/readOnEveryOpening';
+import { normalizeSearchText } from '../lib/search/searchText';
 
 export default function ReservedItemsReportPage() {
   const rial = useRialDisplay();
@@ -76,15 +77,13 @@ export default function ReservedItemsReportPage() {
 
       // Search query
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const codeMatch = summary.itemCode.toLowerCase().includes(q);
-        const nameMatch = summary.itemName.toLowerCase().includes(q);
-        const catMatch = summary.category.toLowerCase().includes(q);
-        const resMatch = summary.reservations.some(r => 
-          r.sourceRef.toLowerCase().includes(q) ||
-          r.sourceTitle.toLowerCase().includes(q) ||
-          r.buyerOrCustomer.toLowerCase().includes(q)
-        );
+        // review of #406 (U21): codes are shown in Persian digits, so a code typed in Persian digits is found too
+        const q = normalizeSearchText(searchQuery);
+        const has = (text: string) => normalizeSearchText(text).includes(q);
+        const codeMatch = has(summary.itemCode);
+        const nameMatch = has(summary.itemName);
+        const catMatch = has(summary.category);
+        const resMatch = summary.reservations.some(r => has(r.sourceRef) || has(r.sourceTitle) || has(r.buyerOrCustomer));
         return codeMatch || nameMatch || catMatch || resMatch;
       }
 
@@ -106,15 +105,9 @@ export default function ReservedItemsReportPage() {
 
       // Search query
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        return (
-          entry.itemCode.toLowerCase().includes(q) ||
-          entry.itemName.toLowerCase().includes(q) ||
-          entry.sourceRef.toLowerCase().includes(q) ||
-          entry.sourceTitle.toLowerCase().includes(q) ||
-          entry.buyerOrCustomer.toLowerCase().includes(q) ||
-          entry.category.toLowerCase().includes(q)
-        );
+        const q = normalizeSearchText(searchQuery);
+        return [entry.itemCode, entry.itemName, entry.sourceRef, entry.sourceTitle, entry.buyerOrCustomer, entry.category]
+          .some(text => normalizeSearchText(text).includes(q));
       }
 
       return true;
@@ -401,7 +394,7 @@ export default function ReservedItemsReportPage() {
                       <React.Fragment key={rowKey}>
                         <tr className={`hover:bg-slate-50 transition-colors ${isExpanded ? 'bg-amber-50/40' : ''}`}>
                           <td className="p-3.5 font-mono font-bold text-slate-900">
-                            {summary.itemCode || '---'}
+                            {formatPersianCode(summary.itemCode) || '---'}
                           </td>
                           <td className="p-3.5 font-bold text-slate-800">
                             {summary.itemName}
@@ -568,7 +561,7 @@ export default function ReservedItemsReportPage() {
                         {entry.sourceTitle}
                       </td>
                       <td className="p-3.5 font-mono text-slate-600">
-                        {entry.itemCode}
+                        {formatPersianCode(entry.itemCode)}
                       </td>
                       <td className="p-3.5 font-bold text-slate-900">
                         {entry.itemName}

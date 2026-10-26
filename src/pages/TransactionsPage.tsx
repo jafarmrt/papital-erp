@@ -171,7 +171,7 @@ export default function TransactionsPage() {
                   </td>
                   <td className="p-3">
                     <div className="font-bold text-slate-800">{t.item_name} <span className="text-xs text-slate-400 font-normal bg-slate-100 px-1.5 py-0.5 rounded">{t.item_type === 'product' ? 'محصول' : 'ماده اولیه'}</span></div>
-                    <div className="font-mono text-xs text-slate-500 mt-1">{t.item_code}</div>
+                    <div className="font-mono text-xs text-slate-500 mt-1">{formatPersianCode(t.item_code)}</div>
                   </td>
                   <td className="p-3 font-bold">
                     <span className={t.type === 'in' ? 'text-emerald-600' : 'text-rose-600'}>

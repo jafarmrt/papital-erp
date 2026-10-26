@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Ban, CheckCircle2, Circle, Clock, Package, RefreshCw, RotateCcw, Save } from 'lucide-react';
-import { formatPersianNumber } from '../../../utils';
+import { formatPersianNumber, formatPersianCode } from '../../../utils';
 import { useProductProgressTicks } from '../../../hooks/useProductProgressTicks';
 import { useOnlineStatus } from '../../../lib/pwa/useOnlineStatus';
 import { OFFLINE_SUBMIT_TITLE, PHONE_TAP_TARGET } from '../../../lib/pwa/phoneLayout';
@@ -134,7 +134,7 @@ export function ProjectPhoneProgress({ projectId, canEdit, onUpdate, onDirtyChan
               <div className="min-w-0">
                 <p className="font-bold text-slate-900 truncate">{name}</p>
                 <p className="text-slate-500">
-                  {product.item_code ? <bdi>{product.item_code}</bdi> : 'بدون کد'}
+                  {product.item_code ? <bdi>{formatPersianCode(product.item_code)}</bdi> : 'بدون کد'}
                   {product.customer_code ? <> · کد مشتری <bdi>{product.customer_code}</bdi></> : ''}
                   {` · ${formatPersianNumber(product.quantity)} ${product.unit || 'عدد'}`}
                 </p>

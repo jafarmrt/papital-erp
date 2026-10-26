@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link2 } from 'lucide-react';
-import { formatPersianDate, formatPersianPrice } from '../../../utils';
+import { formatPersianDate, formatPersianPrice, formatPersianCode } from '../../../utils';
 import type { TreasuryTransaction } from '../../../types';
 import { useTreasuryRelinkOptionsQuery } from '../../../hooks/accounting/useTreasuryQueries';
 import { DialogLayer } from '../../common/DialogLayer';
@@ -59,7 +59,7 @@ export const TreasuryRelinkModal: React.FC<{
           ) : rows.map(doc => (
             <label key={doc.id} className="flex items-center gap-3 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/40">
               <input type="radio" name="relink-document" checked={chosen === doc.id} onChange={() => setChosen(doc.id)} disabled={saving} />
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-100">سند {doc.refNumber}</span>
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-100">سند {formatPersianCode(doc.refNumber)}</span>
               <span className="text-[11px] text-slate-500">{doc.date ? formatPersianDate(doc.date) : '—'}</span>
               <span className="text-[11px] text-slate-500 truncate">{doc.buyerName}</span>
             </label>

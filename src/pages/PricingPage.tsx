@@ -16,6 +16,7 @@ import {
   formatStrategyDisplayTitle,
   cleanDecimalString,
   errorMessageOf,
+  formatPersianCode,
 } from '../utils';
 import { useSearch } from '../SearchContext';
 import { useHasPermission } from '../contexts/AuthContext';
@@ -317,7 +318,7 @@ export default function PricingPage() {
         }
         // v9.0.176 (TD-657): قیمت صفر، منفی یا نامعتبر و ارز ناشناخته فرستاده نمی‌شوند و گزارش می‌شوند
         if (invalidCells.length > 0) {
-          const sample = invalidCells.slice(0, 3).map(c => `${c.code} «${c.title}»: ${c.value} ${c.currency}`).join('، ');
+          const sample = invalidCells.slice(0, 3).map(c => `${formatPersianCode(c.code)} «${c.title}»: ${c.value} ${c.currency}`).join('، ');
           toast.error(`${formatPersianNumber(invalidCells.length)} قیمت عدد بزرگ‌تر از صفر یا ارز پشتیبانی‌شده نداشت و ثبت نشد: ${sample}`);
         }
 

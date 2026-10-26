@@ -8,6 +8,7 @@ vi.mock('react-hot-toast', () => {
 vi.mock('../../components/ConfirmDialogHost', () => ({ confirmAction: vi.fn(async () => true) }));
 
 import { ChartOfAccountsTab } from '../../components/accounting/ChartOfAccountsTab';
+import { formatPersianCode } from '../../utils';
 
 // TD-1123: the delete confirmation sends the user to deactivate an account with voucher rows, but the chart of accounts had
 // no deactivate or reactivate control; the server has accepted isActive since v9.0.200.
@@ -26,7 +27,7 @@ function renderTable(onUpdateAccount = vi.fn(async () => undefined)) {
     treeAccounts={[]} loading={false} onRefresh={() => {}} onCreateAccount={vi.fn()} onUpdateAccount={onUpdateAccount}
     onDeleteAccount={vi.fn()} onSeedStandardAccounts={vi.fn()} />);
   fireEvent.click(screen.getByText('نمای جدولی'));
-  const row = (code: string) => screen.getByText(code).closest('tr') as HTMLElement;
+  const row = (code: string) => screen.getByText(formatPersianCode(code)).closest('tr') as HTMLElement;
   return { row, onUpdateAccount };
 }
 

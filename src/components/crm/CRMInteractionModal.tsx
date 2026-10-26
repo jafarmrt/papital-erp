@@ -2,7 +2,7 @@ import React, { useId } from 'react';
 import { SearchableSelect } from '../SearchableSelect';
 import { PhoneCall, Video, MessageSquare, Mail, FileText, Clock, CheckCircle2 } from 'lucide-react';
 import { CRMLead, CRMActivity } from '../../types';
-import { getTodayJalaliDate, isoToJalaliDate, formatPersianDate } from '../../utils';
+import { getTodayJalaliDate, isoToJalaliDate, formatPersianDate, formatPersianCode } from '../../utils';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { MentionTextarea } from '../MentionTextarea';
 import { DialogLayer } from '../common/DialogLayer';
@@ -109,7 +109,7 @@ export function CRMInteractionModal({
                     اتصال به پرونده فروش
                     {(activityForm?.customerName || activityForm?.customerId) && (
                       <span className="text-[11px] font-normal text-blue-600 font-farsi mr-1">
-                        (مربوط به مشتری: {activityForm.customerName || `کد #${activityForm.customerId}`})
+                        (مربوط به مشتری: {activityForm.customerName || `کد #${formatPersianCode(activityForm.customerId)}`})
                       </span>
                     )}
                   </label>

@@ -3,7 +3,7 @@ import { Clock, X, Building2, Laptop, AtSign, Lock } from 'lucide-react';
 import { DailyWorkLog, User } from '../../types';
 import type { ProjectPick } from '../../lib/permissions/pickLists';
 import { SimpleUserOption } from '../../hooks/useDailyLogs';
-import { formatPersianNumber, getTodayJalaliDate, isoToJalaliDate } from '../../utils';
+import { formatPersianNumber, getTodayJalaliDate, isoToJalaliDate, formatPersianCode } from '../../utils';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { MentionTextarea } from '../MentionTextarea';
 import { workTimeError } from '../../lib/dailyLogs/workHours';
@@ -260,7 +260,7 @@ export function DailyLogModal({
                 <option value="">بدون پروژه (عمومی)</option>
                 {projects.map(p => (
                   <option key={p.id} value={p.id}>
-                    {p.project_code} - {p.title}
+                    {formatPersianCode(p.project_code)} - {p.title}
                   </option>
                 ))}
               </select>

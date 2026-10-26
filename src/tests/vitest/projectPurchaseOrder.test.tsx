@@ -96,7 +96,7 @@ describe('direct purchase order from a project (TD-745)', () => {
       })],
     });
     expect(calls().some(c => c.url.includes('/documents') || 'refNumber' in c.body)).toBe(false);
-    expect(toastSuccess).toHaveBeenCalledWith(expect.stringContaining('RC-1405-0012'));
+    expect(toastSuccess).toHaveBeenCalledWith(expect.stringContaining('RC-۱۴۰۵-۰۰۱۲'));
     expect(onOrderCreated).toHaveBeenCalledWith(expect.objectContaining({ id: 41 }), ['r1']);
   });
 
@@ -120,7 +120,7 @@ describe('direct purchase order from a project (TD-745)', () => {
     fireEvent.change(screen.getByLabelText('تأمین‌کننده'), { target: { value: '12' } });
     fireEvent.click(screen.getByText('صدور سفارش خرید پیش‌نویس'));
     await vi.waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
-    expect(toastError.mock.calls[0][0]).toContain('درخواست خرید PR-1405-0007 ثبت شد ولی سفارش صادر نشد');
+    expect(toastError.mock.calls[0][0]).toContain('درخواست خرید PR-۱۴۰۵-۰۰۰۷ ثبت شد ولی سفارش صادر نشد');
     expect(onOrderCreated).toHaveBeenCalledWith(expect.objectContaining({ id: 41 }), ['r1']);
   });
 

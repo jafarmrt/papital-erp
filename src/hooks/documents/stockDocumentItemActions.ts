@@ -1,5 +1,5 @@
 import { toast } from 'react-hot-toast';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianCode, formatPersianNumber } from '../../utils';
 import { Item } from '../../types';
 import type { DocItemRow } from '../../components/documents/DocItemsTable';
 import { reservationMatchesListItem, type GlobalReservation } from '../../lib/documents/stockReservations';
@@ -88,7 +88,7 @@ export function createStockDocumentItemActions(form: StockDocumentForm, itemsLis
     const matchedItem = itemsList.find(i => reservationMatchesListItem(rItem, i));
 
     if (!matchedItem) {
-      toast.error(`کالای «${rItem.itemName || rItem.itemCode}» در انبار یافت نشد.`);
+      toast.error(`کالای «${rItem.itemName || formatPersianCode(rItem.itemCode)}» در انبار یافت نشد.`);
       return;
     }
 

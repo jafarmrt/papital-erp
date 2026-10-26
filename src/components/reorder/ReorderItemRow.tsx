@@ -1,5 +1,5 @@
 import { CheckSquare, Square, Package } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianCode } from '../../utils';
 import { SafeImage } from '../SafeImage';
 import { freeStockOf, stockPercentOf, type ReorderItem } from '../../lib/reorderAlerts/reorderItems';
 import type { ReorderSectionTheme } from './reorderSectionThemes';
@@ -46,7 +46,7 @@ export function ReorderItemRow({ item, theme, isSelected, onToggle, onAction, on
         </div>
       </td>
 
-      <td className="p-3 font-mono font-bold text-slate-800">{item.code}</td>
+      <td className="p-3 font-mono font-bold text-slate-800">{formatPersianCode(item.code)}</td>
 
       <td className="p-3">
         <span className="font-bold text-slate-900 block">{item.name}</span>

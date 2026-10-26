@@ -8,7 +8,7 @@ import {
   ChevronRight, ChevronLeft, ChevronsRight, ChevronsLeft, Printer,
   Download
 } from 'lucide-react';
-import { formatPersianNumber } from '../utils';
+import { formatPersianNumber, formatPersianCode } from '../utils';
 import { compressTo300KB } from '../utils/imageCompression';
 import { DocPrintModal } from '../components/print/DocPrintModal';
 import { SafeImage } from '../components/SafeImage';
@@ -373,10 +373,10 @@ export default function TransfersPage({ user }: { user?: User }) {
                 <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
                   <div className="flex items-center gap-2">
                     <span className="bg-blue-600 text-white font-mono text-xs font-bold px-2.5 py-1 rounded-lg shadow-2xs">
-                      کد ترنسفر: {item.code}
+                      کد ترنسفر: {formatPersianCode(item.code)}
                     </span>
                     <h3 className="font-bold text-slate-800 text-xs truncate max-w-[160px]" title={item.title}>
-                      {item.title || `ترنسفر کد ${item.code}`}
+                      {item.title || `ترنسفر کد ${formatPersianCode(item.code)}`}
                     </h3>
                   </div>
 
@@ -402,19 +402,19 @@ export default function TransfersPage({ user }: { user?: User }) {
                     <>
                       <SafeImage
                         src={item.image}
-                        alt={`ترنسفر کد ${item.code}`}
+                        alt={`ترنسفر کد ${formatPersianCode(item.code)}`}
                         className="max-h-36 max-w-full object-contain rounded-xl shadow-xs transition-transform duration-300 group-hover/img:scale-105 cursor-pointer"
                         onClick={() => setLightboxData({
                           url: item.image,
-                          title: item.title || `طرح ترنسفر کد ${item.code}`,
-                          subtitle: `کد ترنسفر: ${item.code} • ${formatPersianNumber(item.productCount)} کالای متصل`
+                          title: item.title || `طرح ترنسفر کد ${formatPersianCode(item.code)}`,
+                          subtitle: `کد ترنسفر: ${formatPersianCode(item.code)} • ${formatPersianNumber(item.productCount)} کالای متصل`
                         })}
                       />
                       <button
                         onClick={() => setLightboxData({
                           url: item.image,
-                          title: item.title || `طرح ترنسفر کد ${item.code}`,
-                          subtitle: `کد ترنسفر: ${item.code} • ${formatPersianNumber(item.productCount)} کالای متصل`
+                          title: item.title || `طرح ترنسفر کد ${formatPersianCode(item.code)}`,
+                          subtitle: `کد ترنسفر: ${formatPersianCode(item.code)} • ${formatPersianNumber(item.productCount)} کالای متصل`
                         })}
                         className="absolute top-3 left-3 bg-slate-900/80 hover:bg-slate-900 text-white p-1.5 rounded-xl text-xs opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center gap-1 shadow-sm cursor-pointer"
                         title="بزرگنمایی تصویر طرح ترنسفر"
@@ -443,7 +443,7 @@ export default function TransfersPage({ user }: { user?: User }) {
                 <div className="p-4 bg-white flex-1 flex flex-col justify-between">
                   <div className="space-y-2.5">
                     <div className="flex justify-between items-center text-[11px] font-bold text-slate-500 pb-1.5 border-b border-slate-100">
-                      <span>محصولات متصل به کد {item.code}:</span>
+                      <span>محصولات متصل به کد {formatPersianCode(item.code)}:</span>
                       <span className="text-slate-400 font-mono">{formatPersianNumber(item.products.length)} کالا</span>
                     </div>
 
@@ -462,7 +462,7 @@ export default function TransfersPage({ user }: { user?: User }) {
                                     onClick={() => setLightboxData({
                                       url: prod.image || prod.thumbnail || '',
                                       title: prod.name,
-                                      subtitle: `کد محصول: ${prod.code} • دسته‌بندی: ${prod.category || '-'}`
+                                      subtitle: `کد محصول: ${formatPersianCode(prod.code)} • دسته‌بندی: ${prod.category || '-'}`
                                     })}
                                     className="relative group/prodimg shrink-0 cursor-pointer"
                                     title="کلیک برای بزرگنمایی تصویر محصول (لایت‌باکس)"
@@ -487,7 +487,7 @@ export default function TransfersPage({ user }: { user?: User }) {
                                   </span>
                                   <div className="flex items-center gap-1.5 mt-0.5">
                                     <span className="font-mono text-[10px] bg-white border border-slate-200 px-1.5 py-0.2 rounded text-slate-700 dir-ltr font-semibold">
-                                      {prod.code}
+                                      {formatPersianCode(prod.code)}
                                     </span>
                                     {prod.category && (
                                       <span className="text-[10px] text-slate-400 truncate max-w-[120px]">
@@ -515,7 +515,7 @@ export default function TransfersPage({ user }: { user?: User }) {
                       </div>
                     ) : (
                       <p className="text-[11px] text-slate-400 italic text-center py-2">
-                        هیچ محصول فعال با کد ترنسفر {item.code} ثبت نشده است.
+                        هیچ محصول فعال با کد ترنسفر {formatPersianCode(item.code)} ثبت نشده است.
                       </p>
                     )}
                   </div>
@@ -645,10 +645,10 @@ export default function TransfersPage({ user }: { user?: User }) {
             <div className="px-5 py-3.5 bg-slate-900 text-white flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2">
                 <span className="bg-amber-400 text-slate-950 font-mono text-xs font-black px-2.5 py-0.5 rounded-lg">
-                  {selectedTransfer ? `کد: ${selectedTransfer.code}` : 'طرح جدید'}
+                  {selectedTransfer ? `کد: ${formatPersianCode(selectedTransfer.code)}` : 'طرح جدید'}
                 </span>
                 <h2 className="font-bold text-sm">
-                  {selectedTransfer ? `مدیریت و تصویر ترنسفر کد ${selectedTransfer.code}` : 'ثبت طرح ترنسفر جدید'}
+                  {selectedTransfer ? `مدیریت و تصویر ترنسفر کد ${formatPersianCode(selectedTransfer.code)}` : 'ثبت طرح ترنسفر جدید'}
                 </h2>
               </div>
               <button aria-label="بستن"
@@ -775,7 +775,7 @@ export default function TransfersPage({ user }: { user?: User }) {
                     <div className="flex justify-between items-center mb-2.5">
                       <h4 className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
                         <Package size={14} className="text-purple-600" />
-                        کالاهای متصل به کد ترنسفر {selectedTransfer.code}
+                        کالاهای متصل به کد ترنسفر {formatPersianCode(selectedTransfer.code)}
                       </h4>
                       <span className="text-[10px] bg-purple-100 text-purple-700 font-bold px-2.5 py-0.5 rounded-full font-mono">
                         {formatPersianNumber(selectedTransfer.products.length)} کالا
@@ -796,7 +796,7 @@ export default function TransfersPage({ user }: { user?: User }) {
                                   onClick={() => setLightboxData({
                                     url: prod.image || prod.thumbnail || '',
                                     title: prod.name,
-                                    subtitle: `کد محصول: ${prod.code} • دسته‌بندی: ${prod.category || '-'}`
+                                    subtitle: `کد محصول: ${formatPersianCode(prod.code)} • دسته‌بندی: ${prod.category || '-'}`
                                   })}
                                   className="relative group/modalthumb shrink-0 cursor-pointer"
                                   title="کلیک برای مشاهده تصویر بزرگ محصول (لایت‌باکس)"
@@ -819,7 +819,7 @@ export default function TransfersPage({ user }: { user?: User }) {
                                 <p className="font-bold text-slate-800 text-xs truncate" title={prod.name}>{prod.name}</p>
                                 <div className="flex items-center gap-1.5 mt-0.5">
                                   <span className="text-[10px] bg-white border border-slate-200 px-1.5 py-0.2 rounded text-slate-700 font-mono dir-ltr font-semibold">
-                                    {prod.code}
+                                    {formatPersianCode(prod.code)}
                                   </span>
                                   {prod.category && (
                                     <span className="text-[10px] text-slate-400 truncate">
@@ -950,9 +950,9 @@ export default function TransfersPage({ user }: { user?: User }) {
         isOpen={printTarget !== null}
         onClose={() => setPrintTarget(null)}
         title="کارت کد ترنسفر"
-        subtitle={printTarget?.title || `ترنسفر کد ${printTarget?.code || ''}`}
+        subtitle={printTarget?.title || `ترنسفر کد ${formatPersianCode(printTarget?.code)}`}
         meta={[
-          { label: 'کد ترنسفر', value: printTarget?.code || '' },
+          { label: 'کد ترنسفر', value: formatPersianCode(printTarget?.code) },
           { label: 'عنوان', value: printTarget?.title || '-' },
           { label: 'تعداد محصولات متصل', value: formatPersianNumber(printTarget?.productCount ?? 0) }
         ]}
@@ -962,7 +962,7 @@ export default function TransfersPage({ user }: { user?: User }) {
           <div className="space-y-3">
             {printTarget.image && (
               <div className="flex justify-center py-2">
-                <img src={printTarget.image} alt={`ترنسفر ${printTarget.code}`} className="max-h-56 object-contain rounded-lg border border-slate-200" />
+                <img src={printTarget.image} alt={`ترنسفر ${formatPersianCode(printTarget.code)}`} className="max-h-56 object-contain rounded-lg border border-slate-200" />
               </div>
             )}
             <h4 className="text-xs font-bold text-slate-700">محصولات متصل به این ترنسفر:</h4>
@@ -980,7 +980,7 @@ export default function TransfersPage({ user }: { user?: User }) {
                   {(Array.isArray(printTarget.products) ? printTarget.products : []).map((prod: any, idx: number) => (
                     <tr key={prod.id}>
                       <td className="p-2 border-l border-slate-200 text-slate-500">{formatPersianNumber(idx + 1)}</td>
-                      <td className="p-2 border-l border-slate-200 font-bold">{prod.code}</td>
+                      <td className="p-2 border-l border-slate-200 font-bold">{formatPersianCode(prod.code)}</td>
                       <td className="p-2 border-l border-slate-200 font-sans font-bold">{prod.name}</td>
                       <td className="p-2 text-center font-sans">{prod.category || '-'}</td>
                     </tr>

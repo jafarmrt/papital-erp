@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import DatePicker from 'react-multi-date-picker';
 import type { DateObject } from 'react-multi-date-picker';
 import persian from 'react-date-object/calendars/persian';
@@ -21,9 +22,31 @@ interface JalaliDateInputProps {
   id?: string;
 }
 
+/** The picker's own handle: only the method this input calls */
+interface PickerHandle { closeCalendar?: () => void }
+
 export function JalaliDateInput({ value, onChange, placeholder, className, containerClassName = 'w-full', calendarPosition = 'bottom-right', disabled, id }: JalaliDateInputProps) {
+  const pickerRef = useRef<PickerHandle | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  // v11 phase 6.3a (U11, rule TD-1277): Esc with the calendar open closes only the calendar. The window's Esc listener
+  // (dialogEscapeStack) runs on `window` in the bubble phase and skips a handled key, so this capture listener marks the
+  // key handled first; before, Esc in the calendar closed the whole «پروژهٔ جدید» window and the typed fields were lost.
+  useEffect(() => {
+    if (!calendarOpen) return undefined;
+    const closeCalendarOnly = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.isComposing) return;
+      event.preventDefault();
+      pickerRef.current?.closeCalendar?.();
+      setCalendarOpen(false);
+    };
+    window.addEventListener('keydown', closeCalendarOnly, true);
+    return () => window.removeEventListener('keydown', closeCalendarOnly, true);
+  }, [calendarOpen]);
   return (
     <DatePicker
+      ref={pickerRef}
+      onOpen={() => { setCalendarOpen(true); }}
+      onClose={() => { setCalendarOpen(false); }}
       value={isoToJalaliDate(value) || ''}
       onChange={(d: DateObject | null) => onChange(d ? (toStorageDate(extractDateString(d)) || '') : '')}
       calendar={persian}

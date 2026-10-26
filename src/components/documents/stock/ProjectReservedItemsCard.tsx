@@ -1,6 +1,6 @@
 import type { DocItemRow } from '../DocItemsTable';
 import { reservationMatchesListItem, type GlobalReservation, type StockDocProject } from '../../../lib/documents/stockReservations';
-import { formatPersianNumber } from '../../../utils';
+import { formatPersianNumber, formatPersianCode } from '../../../utils';
 
 interface ProjectReservedItemsCardProps {
   project: StockDocProject;
@@ -21,7 +21,7 @@ export function ProjectReservedItemsCard({ project, reservedItems, docItems, onA
           </div>
           <div>
             <span className="font-bold text-purple-950 text-xs">
-              اقلام رزرو شده انبار برای پروژه «{project.project_code || project.title}»
+              اقلام رزرو شده انبار برای پروژه «{formatPersianCode(project.project_code) || project.title}»
             </span>
             <span className="mr-2 text-[11px] font-mono text-purple-800 font-bold bg-purple-200/80 px-2 py-0.5 rounded-full border border-purple-300">
               {formatPersianNumber(reservedItems.length)} قلم کالای رزروشده
@@ -49,7 +49,7 @@ export function ProjectReservedItemsCard({ project, reservedItems, docItems, onA
               <div key={idx} className="bg-white border border-purple-200 hover:border-purple-300 p-2.5 rounded-xl text-xs flex items-center justify-between gap-2 shadow-2xs transition-all">
                 <div className="space-y-0.5 min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-purple-900 font-mono font-bold">{rItem.itemCode || '---'}</span>
+                    <span className="text-purple-900 font-mono font-bold">{formatPersianCode(rItem.itemCode) || '---'}</span>
                     <span className="text-slate-900 font-bold truncate">{rItem.itemName}</span>
                   </div>
                   <div className="text-[11px] text-slate-500 flex items-center gap-1 font-mono">

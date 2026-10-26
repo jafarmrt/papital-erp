@@ -2,7 +2,7 @@ import React, { useState, useId } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { FolderTree, ShoppingBag, Copy, Check, RefreshCw, Key, ShieldCheck, Database, FileText } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { errorMessageOf, formatPersianDateTime, formatPersianDate, formatPersianNumber } from '../../utils';
+import { errorMessageOf, formatPersianDateTime, formatPersianDate, formatPersianNumber, formatPersianCode } from '../../utils';
 import { WcOrderLogStatusBadge } from './WcOrderLogStatusBadge';
 import { ShopWarehouseSelect } from './ShopWarehouseSelect';
 import { WcListEmptyRow } from './WcListEmptyRow';
@@ -380,7 +380,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
                 ) : (
                   wcOrderLogs.map((log: any, idx: number) => (
                     <tr key={`wc-log-${log.id || idx}-${idx}`} className="hover:bg-slate-50/80">
-                      <td className="p-3 font-mono font-bold text-slate-800 dir-ltr text-right">#{log.wcOrderId}</td>
+                      <td className="p-3 font-mono font-bold text-slate-800 dir-ltr text-right">#{formatPersianCode(log.wcOrderId)}</td>
                       <td className="p-3">
                         <WcOrderLogStatusBadge status={String(log.status || '')} />
                       </td>
@@ -388,7 +388,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
                         {log.buyerName || 'خریدار برخط'}
                       </td>
                       <td className="p-3 font-mono font-bold text-blue-600 dir-ltr text-right">
-                        {log.erpDocumentId ? `#${log.erpDocumentId}` : '—'}
+                        {log.erpDocumentId ? `#${formatPersianCode(log.erpDocumentId)}` : '—'}
                       </td>
                       <td className="p-3 text-slate-500 font-mono text-[11px]">
                         {(log.updatedAt || log.createdAt) ? formatPersianDateTime(log.updatedAt || log.createdAt) : '—'}
@@ -422,7 +422,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
                 ) : (
                   syncedWcOrders.map((doc: any, idx: number) => (
                     <tr key={`wc-doc-${doc.id || idx}-${idx}`} className="hover:bg-slate-50/80">
-                      <td className="p-3 font-bold text-blue-600 dir-ltr text-right">#{doc.refNumber}</td>
+                      <td className="p-3 font-bold text-blue-600 dir-ltr text-right">#{formatPersianCode(doc.refNumber)}</td>
                       <td className="p-3 font-medium">{doc.notes || 'سفارش ووکامرس'}</td>
                       <td className="p-3">{doc.buyerName || 'خریدار برخط'}</td>
                       <td className="p-3 text-slate-500">{formatPersianDate(doc.date)}</td>

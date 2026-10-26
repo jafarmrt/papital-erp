@@ -98,7 +98,7 @@ export function VoucherPrintModal({
                 <tr key={idx} className="border-b border-slate-200">
                   <td className="border border-slate-300 p-2 text-center font-mono">{formatPersianNumber(idx + 1)}</td>
                   <td className="border border-slate-300 p-2 font-mono text-[11px] text-slate-600">
-                    <div>{item.accountCode || '---'}</div>
+                    <div>{formatPersianCode(item.accountCode) || '---'}</div>
                     {item.detailedName && <div className="text-[10px] text-slate-400">شناسه: {formatPersianCode(item.detailedId) || '---'}</div>}
                   </td>
                   <td className="border border-slate-300 p-2">

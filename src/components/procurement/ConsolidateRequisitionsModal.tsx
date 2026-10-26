@@ -3,7 +3,7 @@ import { X, Layers, Check, Loader2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { PurchaseRequisition } from '../../types';
 import { fetchJson } from '../../api';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianNumber, formatPersianCode } from '../../utils';
 import { DialogLayer } from '../common/DialogLayer';
 
 interface ConsolidateRequisitionsModalProps {
@@ -86,7 +86,7 @@ export function ConsolidateRequisitionsModal({
             <div className="flex flex-wrap gap-1.5 p-3 bg-slate-50 border border-slate-200 rounded-xl">
               {selectedRequisitions.map(r => (
                 <span key={r.id} className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg font-mono font-bold text-slate-800">
-                  {r.code} - {r.projectName || r.title}
+                  {formatPersianCode(r.code)} - {r.projectName || r.title}
                 </span>
               ))}
             </div>

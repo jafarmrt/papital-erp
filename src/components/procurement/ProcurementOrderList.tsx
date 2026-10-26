@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { PackageCheck, Clock, CheckCircle2, Building2, Search, Truck, FileText, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { ProcurementOrder } from '../../types';
-import { formatPersianNumber, formatPersianDate } from '../../utils';
+import { formatPersianNumber, formatPersianDate, formatPersianCode } from '../../utils';
 import { ProcurementPager } from './ProcurementPager';
 import { sumAmounts } from '../../lib/procurement/procurementNumbers';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
@@ -148,7 +148,7 @@ export function ProcurementOrderList({
                         <td className="p-3">
                           <div className="flex items-center gap-1.5 font-bold text-slate-900">
                             <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                            <span>فاکتور #{order.refNumber}</span>
+                            <span>فاکتور #{formatPersianCode(order.refNumber)}</span>
                           </div>
                           <span className="text-[11px] text-slate-400 font-mono block mt-0.5">
                             {order.date ? formatPersianDate(order.date) : '---'}
@@ -175,7 +175,7 @@ export function ProcurementOrderList({
                               className="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-mono font-bold rounded-md border border-blue-200 transition-colors cursor-pointer"
                               title="مشاهده درخواست خرید متناظر"
                             >
-                              {order.requisitionCode}
+                              {formatPersianCode(order.requisitionCode)}
                             </button>
                           ) : (
                             <span className="text-slate-400 text-[11px]">مستقل</span>
@@ -251,7 +251,7 @@ export function ProcurementOrderList({
                           <td colSpan={9} className="p-4 border-t border-b border-amber-100">
                             <div className="bg-white rounded-xl border border-slate-200 p-3 space-y-2">
                               <div className="font-bold text-slate-800 text-xs flex items-center justify-between">
-                                <span>ریز اقلام فاکتور خرید #{order.refNumber} ({order.supplierName}):</span>
+                                <span>ریز اقلام فاکتور خرید #{formatPersianCode(order.refNumber)} ({order.supplierName}):</span>
                                 <span className="text-slate-400 font-normal">کاربر ثبت‌کننده: {order.user}</span>
                               </div>
                               <div className="overflow-x-auto">
@@ -274,7 +274,7 @@ export function ProcurementOrderList({
                                         <td className="p-2 font-bold text-slate-900">
                                           {line.itemName}
                                           {line.itemCode && (
-                                            <span className="text-[10px] text-slate-400 font-mono mr-1.5">({line.itemCode})</span>
+                                            <span className="text-[10px] text-slate-400 font-mono mr-1.5">({formatPersianCode(line.itemCode)})</span>
                                           )}
                                         </td>
                                         <td className="p-2 text-center font-mono font-bold text-slate-800">

@@ -6,14 +6,15 @@ import { RIAL_DISPLAY_UNITS, RIAL_DISPLAY_UNIT_LABELS } from '../../lib/rialDisp
 import { DataExportCard } from './DataExportCard';
 import { DecimalInput } from '../common/DecimalInput';
 
+/** the server's `ALLOWED_TIMEZONES`; v11 phase 6.3a (U21): each shown by its Persian name, not its English zone id */
 const TIMEZONE_OPTIONS = [
-  'Asia/Tehran',
-  'Asia/Dubai',
-  'Asia/Istanbul',
-  'Europe/Berlin',
-  'Europe/London',
-  'UTC',
-  'America/New_York'
+  { value: 'Asia/Tehran', label: 'تهران (ایران)' },
+  { value: 'Asia/Dubai', label: 'دبی (امارات)' },
+  { value: 'Asia/Istanbul', label: 'استانبول (ترکیه)' },
+  { value: 'Europe/Berlin', label: 'برلین (آلمان)' },
+  { value: 'Europe/London', label: 'لندن (بریتانیا)' },
+  { value: 'UTC', label: 'زمان هماهنگ جهانی' },
+  { value: 'America/New_York', label: 'نیویورک (آمریکا)' },
 ] as const;
 
 interface GeneralSettingsTabProps {
@@ -97,7 +98,7 @@ export function GeneralSettingsTab({
               value={companyPhone}
               onChange={(e) => setCompanyPhone(e.target.value)}
               className="w-full border rounded-lg px-3 py-2 bg-white border-slate-300 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none"
-              placeholder="02188888888"
+              placeholder="۰۲۱۸۸۸۸۸۸۸۸"
             />
           </div>
           <div className="md:col-span-2">
@@ -265,10 +266,9 @@ export function GeneralSettingsTab({
               value={displayTimezone}
               onChange={(e) => setDisplayTimezone?.(e.target.value)}
               className="w-full border rounded-lg px-3 py-2 bg-white border-slate-300 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none"
-              dir="ltr"
             >
               {TIMEZONE_OPTIONS.map(tz => (
-                <option key={tz} value={tz}>{tz}</option>
+                <option key={tz.value} value={tz.value}>{tz.label}</option>
               ))}
             </select>
             <p className="text-xs text-slate-500 mt-1">

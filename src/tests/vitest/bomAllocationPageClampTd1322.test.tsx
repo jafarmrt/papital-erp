@@ -47,6 +47,6 @@ describe('bom_allocation_page_clamp_td_1322', () => {
     await waitFor(() => expect(pagesAsked.slice(-2)).toEqual([2, 1]));
     expect(screen.queryByText(PAST_THE_END)).toBeNull();
     expect(screen.queryByText(FIRST_OF_FIFTY)).toBeNull();
-    expect((await screen.findAllByText('P-50')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('P-۵۰')).length).toBeGreaterThan(0);
   });
 });

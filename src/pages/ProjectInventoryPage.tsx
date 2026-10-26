@@ -7,7 +7,7 @@ import {
   BarChart2
 } from 'lucide-react';
 import { User } from '../types';
-import { errorMessageOf, formatPersianNumber, formatPersianDate } from '../utils';
+import { errorMessageOf, formatPersianNumber, formatPersianDate, formatPersianCode } from '../utils';
 import toast from 'react-hot-toast';
 import ProjectInventoryTab from '../components/project/ProjectInventoryTab';
 import type { ProjectPick } from '../lib/permissions/pickLists';
@@ -52,7 +52,7 @@ export default function ProjectInventoryPage(_props: { user?: User }) {
   // v9.0.423 (TD-767): انتخاب پروژه با فهرست جست‌وجوپذیر؛ برچسب وضعیت از فهرست بسته وضعیت‌ها
   const projectOptions = projects.map(p => ({
     value: p.id,
-    label: `[${p.project_code}] ${p.title} - مشتری: ${p.customer_name || 'عمومی'} (${projectStatusLabel(p.status)})`,
+    label: `[${formatPersianCode(p.project_code)}] ${p.title} - مشتری: ${p.customer_name || 'عمومی'} (${projectStatusLabel(p.status)})`,
   }));
 
   return (
@@ -174,7 +174,7 @@ function ProjectInventoryWorkspace({ projectId }: { projectId: number }) {
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span className="bg-amber-400 text-slate-950 font-black text-[11px] px-2.5 py-0.5 rounded-md font-mono">
-              کد: {latest.project_code}
+              کد: {formatPersianCode(latest.project_code)}
             </span>
             <h2 className="text-base font-bold text-white">{latest.title}</h2>
           </div>

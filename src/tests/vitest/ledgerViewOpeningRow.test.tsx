@@ -29,7 +29,7 @@ describe('account card view (TD-574)', () => {
   it('prints the server opening row once, numbers the first voucher row 1 in Persian digits and names the account in the title', () => {
     const { container } = renderLedger(1101);
     expect(screen.getAllByText('مانده ابتدای دوره')).toHaveLength(1);
-    expect(screen.getByRole('heading', { level: 4 }).textContent?.trim()).toBe('دفتر حساب معین 1101 - صندوق');
+    expect(screen.getByRole('heading', { level: 4 }).textContent?.trim()).toBe('دفتر حساب معین ۱۱۰۱ - صندوق');
     const firstVoucherRow = screen.getByText('دریافت از مشتری').closest('tr')!;
     expect(firstVoucherRow.querySelector('td')!.textContent).toBe('۱');
     expect(container.textContent).toContain('۶۰٬۰۰۰٬۰۰۰');
@@ -37,8 +37,8 @@ describe('account card view (TD-574)', () => {
 
   it('a group card says it carries its sub-accounts and names the sub-account of each row', () => {
     renderLedger(1);
-    expect(screen.getByRole('heading', { level: 4 }).textContent?.trim()).toBe('دفتر حساب گروه 1 - دارایی‌ها');
+    expect(screen.getByRole('heading', { level: 4 }).textContent?.trim()).toBe('دفتر حساب گروه ۱ - دارایی‌ها');
     expect(screen.getByText('با گردش همه زیرحساب‌ها')).toBeTruthy();
-    expect(screen.getByText('1101 - صندوق')).toBeTruthy();
+    expect(screen.getByText('۱۱۰۱ - صندوق')).toBeTruthy();
   });
 });

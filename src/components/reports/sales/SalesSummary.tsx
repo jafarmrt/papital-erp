@@ -3,7 +3,7 @@ import type { ReportMoney } from '../../../hooks/reports/useReportMoney';
 import { REPORT_COMPARE_LABELS, rangeLabel } from '../../../lib/reports/reportPeriods';
 import type { SalesReport } from '../../../lib/reports/salesReport';
 import { fin } from '../../../lib/financialDecimal';
-import { formatPersianNumber } from '../../../utils';
+import { formatPersianCode, formatPersianNumber } from '../../../utils';
 
 /**
  * v10.1.8 (D-03، طرح گزارش‌های مدیریتی §۲.۳ و §۲.۴): کارت‌های جمع گزارش فروش، مقایسه با دوره دیگر، سطر هم‌خوانی با دفتر کل
@@ -98,7 +98,7 @@ function SalesLedgerLine({ report, money }: { report: SalesReport; money: Report
   // مبلغ ردیف ارزی دفتر به ریال گرد می‌شود (TD-260)، پس تفاوت کمتر از یک ریال گرد کردن است
   const tolerance = report.currency === 'all' || report.currency === 'IRR' ? 1 : 0.01;
   const matched = fin(ledger.difference).abs().lessThan(tolerance);
-  const accounts = ledger.accounts.map(a => `${a.code} ${a.name}`).join('، ');
+  const accounts = ledger.accounts.map(a => `${formatPersianCode(a.code)} ${a.name}`).join('، ');
   return (
     <div className={`text-xs rounded-xl px-4 py-2 border ${matched
       ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200'

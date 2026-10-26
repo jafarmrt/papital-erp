@@ -1,5 +1,5 @@
 import { History, Filter, X, RefreshCw, Clock, Tag } from 'lucide-react';
-import { cn, formatPersianPrice, formatPersianNumber, formatCurrencyLabel } from '../../utils';
+import { cn, formatPersianPrice, formatPersianNumber, formatCurrencyLabel, formatPersianCode } from '../../utils';
 import { priceHistoryRegisteredAt } from '../../lib/items/priceHistory';
 import { DialogLayer } from '../common/DialogLayer';
 
@@ -71,7 +71,7 @@ export function PriceHistoryModal({
                 تاریخچه سوابق تغییرات قیمت
               </h3>
               <p className="text-[11px] text-slate-300 mt-0.5">
-                کالا: <strong className="text-indigo-200">{historyItem.name}</strong> ({historyItem.code})
+                کالا: <strong className="text-indigo-200">{historyItem.name}</strong> ({formatPersianCode(historyItem.code)})
               </p>
             </div>
           </div>

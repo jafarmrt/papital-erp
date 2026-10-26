@@ -4,7 +4,7 @@ import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { fetchJson } from '../../api';
 import { confirmAction } from '../ConfirmDialogHost';
 import { useHasPermission } from '../../contexts/AuthContext';
-import { errorMessageOf, formatPersianNumber, formatPersianPrice } from '../../utils';
+import { errorMessageOf, formatPersianNumber, formatPersianPrice, formatPersianCode } from '../../utils';
 import { WAC_CORRECTION_PERMISSION, type KardexWacDifferenceRow } from '../../lib/inventoryAudit/wacCorrection';
 
 /**
@@ -54,7 +54,7 @@ export function KardexWacDifferencesPanel({ rows, onCorrected }: { rows: KardexW
             <div key={row.itemId} className="p-2.5 flex items-center justify-between gap-2 hover:bg-slate-50">
               <div>
                 <span className="font-bold text-slate-800">{row.itemName}</span>
-                <span className="font-mono text-slate-400 mr-2">({row.itemCode})</span>
+                <span className="font-mono text-slate-400 mr-2">({formatPersianCode(row.itemCode)})</span>
                 <div className="text-[11px] text-slate-500 mt-0.5">
                   ثبت‌شده {formatPersianPrice(row.recordedWac)}، کاردکس {formatPersianPrice(row.replayWac)}، موجودی {formatPersianNumber(row.stock)}
                 </div>

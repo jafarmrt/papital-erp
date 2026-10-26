@@ -48,7 +48,7 @@ export function OpenProformasPanel({ proformas, total, page, onPageChange, editi
                 {proformas.map((p, pIdx) => (
                   <tr key={`proforma-${p.id || pIdx}-${pIdx}`} className={cn("hover:bg-slate-50", editingDocId === p.id && "bg-amber-50/60 font-bold")}>
                     <td className="p-3 font-mono font-bold">
-                      {p.ref_number}
+                      {formatPersianCode(p.ref_number)}
                       {openProformaBadge(p) && (
                         <span className={cn('mr-2 px-2 py-0.5 rounded-md text-[11px] font-sans', p.workflowRejected ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-slate-100 text-slate-600 border border-slate-200')}>
                           {openProformaBadge(p)}

@@ -47,7 +47,7 @@ describe('financial statements read the server keys (TD-563)', () => {
     expect(revenueHeader.textContent).toContain('۱٬۰۰۰٬۰۰۰٬۰۰۰');
     expect(screen.getByText('حاشیه سود خالص:').parentElement!.textContent).toContain('۲۵٪');
     const expenseBox = screen.getByText('هزینه‌های عمومی، اداری و تشکیلاتی (ج)').closest('div.border') as HTMLElement;
-    expect(within(expenseBox).getByText('6101 - هزینه حقوق اداری')).toBeTruthy();
+    expect(within(expenseBox).getByText('۶۱۰۱ - هزینه حقوق اداری')).toBeTruthy();
     expect(within(expenseBox).queryByText('ثبتی یافت نشد')).toBeNull();
     const costBox = screen.getByText('بهای تمام شده کالای فروش رفته (ب)').parentElement!;
     expect(costBox.textContent).toContain('۶۰۰٬۰۰۰٬۰۰۰');
@@ -61,10 +61,10 @@ describe('financial statements read the server keys (TD-563)', () => {
   it('balance sheet: asset, liability and equity rows and the period profit add up to both totals', () => {
     const { container } = render(<BalanceSheetView balanceSheet={balanceSheet} asOfDate="" onAsOfDateChange={() => {}} onApplyBalanceSheetFilter={() => {}} />);
     const text = container.textContent || '';
-    expect(text).toContain('1001 - صندوق');
-    expect(text).toContain('2001 - ماشین‌آلات');
-    expect(text).toContain('3001 - حساب‌های پرداختنی تجاری');
-    expect(text).toContain('4001 - سرمایه');
+    expect(text).toContain('۱۰۰۱ - صندوق');
+    expect(text).toContain('۲۰۰۱ - ماشین‌آلات');
+    expect(text).toContain('۳۰۰۱ - حساب‌های پرداختنی تجاری');
+    expect(text).toContain('۴۰۰۱ - سرمایه');
     expect(screen.getByText('سود (زیان) دوره').parentElement!.textContent).toContain('۸۰٬۰۰۰٬۰۰۰');
     expect(screen.getByText('دارایی‌های جاری').parentElement!.textContent).toContain('۳۰۰٬۰۰۰٬۰۰۰');
     expect(screen.getByText('دارایی‌های غیرجاری').parentElement!.textContent).toContain('۲۰۰٬۰۰۰٬۰۰۰');

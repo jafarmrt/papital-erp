@@ -74,7 +74,7 @@ export function ScheduleStageCard({ stage: stg, plan, logging, pieceworkTasksLis
             return (
               <div key={p.id} className="pt-2 text-slate-400 italic text-[11px] flex items-center gap-2">
                 <Tag className="w-3.5 h-3.5 text-slate-300" />
-                محصول <strong>{p.item_name}</strong> (کد: {p.customer_code || p.item_code}) نیاز به مرحله مونتاژ ندارد (رد شده).
+                محصول <strong>{p.item_name}</strong> (کد: {p.customer_code || formatPersianCode(p.item_code)}) نیاز به مرحله مونتاژ ندارد (رد شده).
               </div>
             );
           }

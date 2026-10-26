@@ -105,7 +105,7 @@ export function TaskExecuteModal({
               <span className="mx-2 text-gray-300 dark:text-gray-600">|</span>
               <span className="text-gray-500 dark:text-gray-400">موضوع: </span>
               <span className="font-bold text-indigo-700 dark:text-indigo-300">
-                {getEntityLabel()} #{String(entityId || '')}
+                {getEntityLabel()} #{formatPersianCode(entityId)}
               </span>
             </div>
             {entityType === 'document' && docDetails && (

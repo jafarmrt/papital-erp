@@ -9,7 +9,7 @@ import { ConfirmWarehouseDeliveryModal } from './ConfirmWarehouseDeliveryModal';
 import { PillBadge } from '../common/PillBadge';
 import { useProcurementAccess } from '../../hooks/procurement/useProcurementAccess';
 import { canOrderRequisition, requisitionRowRemaining } from '../../lib/procurement/requisitionFields';
-import { bulkDeliveryPlan, linkedDocumentLabel, requisitionActionButtons, requisitionActionsWithoutInstance, requisitionStage } from '../../lib/procurement/requisitionActions';
+import { INITIATOR_CANNOT_APPROVE, bulkDeliveryPlan, linkedDocumentLabel, requisitionActionButtons, requisitionActionsWithoutInstance, requisitionStage } from '../../lib/procurement/requisitionActions';
 import { lineAmount, sumAmounts } from '../../lib/procurement/procurementNumbers';
 import { PROCUREMENT_LIST_MAX_LIMIT } from '../../lib/procurement/procurementLists';
 import { invalidateAfterProcurementChange, useProcurementListQuery, useRequisitionQuery, useRequisitionWorkflowActionsQuery } from '../../hooks/queries/useProcurementQueries';
@@ -132,12 +132,21 @@ export function RequisitionDetailModal({
   const isRejectedStage = stage === 'rejected';
   const isConsolidated = stage === 'consolidated';
   const canOrderThis = canOrderRequisition(requisition, access);
+  // v11 phase 6.3a (review 3 of #406, U10): the initiator whom the approval step leaves out sees the split and order
+  // buttons off with the reason, as on the desk row, instead of filling the split form and getting a refusal
+  const splitBlocked = requisition.initiatorCannotApprove === true;
+  const splitBlockedId = `${fieldId}-split-blocked`;
+  const splitButtonState = {
+    disabled: splitBlocked,
+    title: splitBlocked ? INITIATOR_CANNOT_APPROVE : undefined,
+    'aria-describedby': splitBlocked ? splitBlockedId : undefined,
+  };
   // درخواست دریافت‌شده یا تجمیع‌شده اقدامی نمی‌گیرد (سرور رد می‌کند)
   const actionButtons = !access.canRunWorkflowAction || isReceivedStage || isConsolidated || workflowActions.status !== 'ready'
     ? []
     : workflowActions.data.hasInstance
       ? requisitionActionButtons(workflowActions.data.actions)
-      : requisitionActionsWithoutInstance(statusStr, access.canApprove);
+      : requisitionActionsWithoutInstance(statusStr, access.canApprove, splitBlocked);
   // تحویل در جریان همان سفارشی است که پنجره تأییدش باز است
   const deliveringOrderId = isSubmittingDelivery ? deliveryModalOrder?.id ?? null : null;
 
@@ -154,7 +163,7 @@ export function RequisitionDetailModal({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-black text-slate-900 text-base">
-                  جزئیات درخواست خرید {requisition.code}
+                  جزئیات درخواست خرید {formatPersianCode(requisition.code)}
                 </h3>
                 <PillBadge variants={REQUISITION_PRIORITY_DETAIL_BADGES} value={requisition.priority} fallback={REQUISITION_PRIORITY_DETAIL_FALLBACK} />
                 <PillBadge variants={REQUISITION_STATUS_BADGES} value={requisition.status} fallback={REQUISITION_STATUS_FALLBACK} />
@@ -251,7 +260,7 @@ export function RequisitionDetailModal({
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
               <span className="text-slate-500 block mb-1">پروژه متناظر:</span>
               <span className="font-bold text-slate-900">
-                {requisition.projectName ? `${requisition.projectName} (${requisition.projectCode || ''})` : 'فاقد پروژه (عمومی)'}
+                {requisition.projectName ? `${requisition.projectName} (${formatPersianCode(requisition.projectCode) || ''})` : 'فاقد پروژه (عمومی)'}
               </span>
             </div>
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
@@ -309,7 +318,7 @@ export function RequisitionDetailModal({
                         <td className="p-2.5 text-center font-mono text-slate-400">{formatPersianNumber(idx + 1)}</td>
                         <td className="p-2.5">
                           <div className="font-bold text-slate-900">{row.itemName}</div>
-                          <div className="text-[11px] text-slate-500 font-mono">{row.itemCode || 'فاقد کد'}</div>
+                          <div className="text-[11px] text-slate-500 font-mono">{formatPersianCode(row.itemCode) || 'فاقد کد'}</div>
                         </td>
                         <td className="p-2.5 text-center font-bold text-slate-700">{row.unit}</td>
                         <td className="p-2.5 text-center font-mono font-bold text-slate-900">{formatPersianNumber(reqQty)}</td>
@@ -332,7 +341,7 @@ export function RequisitionDetailModal({
                             <div className="flex items-center justify-center gap-1">
                               {row.linkedDocumentIds.map(docId => (
                                 <span key={docId} className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded text-[10px] font-mono border border-blue-200">
-                                  {linkedDocumentLabel(docId, linkedOrders, formatPersianNumber)}
+                                  {linkedDocumentLabel(docId, linkedOrders, formatPersianNumber, formatPersianCode)}
                                 </span>
                               ))}
                             </div>
@@ -384,7 +393,8 @@ export function RequisitionDetailModal({
                 {canOrderThis && <button
                   type="button"
                   onClick={() => onOpenSplitOrder(requisition)}
-                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-lg flex items-center gap-1.5 cursor-pointer shrink-0"
+                  {...splitButtonState}
+                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-lg flex items-center gap-1.5 cursor-pointer shrink-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-amber-500"
                 >
                   <ShoppingCart className="w-3.5 h-3.5" />
                   صدور فاکتور تامین‌کننده
@@ -409,7 +419,7 @@ export function RequisitionDetailModal({
                         <div className="flex items-center gap-2 flex-wrap">
                           {/* v9.0.351 (TD-701): شماره و تاریخ سفارش از refNumber و date پاسخ سرور */}
                           <span className="font-mono font-bold text-xs text-slate-900">
-                            فاکتور خرید {order.refNumber}
+                            فاکتور خرید {formatPersianCode(order.refNumber)}
                           </span>
                           <span className="font-bold text-xs text-slate-700">
                             تامین‌کننده: {order.supplierName}
@@ -486,6 +496,9 @@ export function RequisitionDetailModal({
               />
             </div>
 
+            {splitBlocked && canOrderThis && (
+              <p id={splitBlockedId} className="text-[11px] text-slate-600 leading-snug">{INITIATOR_CANNOT_APPROVE}</p>
+            )}
             {/* Transition Buttons */}
             <div className="flex flex-wrap items-center gap-2 pt-2">
               {workflowActions.status === 'loading' && access.canRunWorkflowAction && !isReceivedStage && !isConsolidated && (
@@ -515,7 +528,8 @@ export function RequisitionDetailModal({
               {isPendingStage && canOrderThis && <button
                 type="button"
                 onClick={() => onOpenSplitOrder(requisition)}
-                className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                {...splitButtonState}
+                className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-amber-500"
               >
                 <ShoppingCart className="w-4 h-4" />
                 تفکیک تأمین‌کننده و صدور سفارش خرید
@@ -541,7 +555,8 @@ export function RequisitionDetailModal({
                   {canOrderThis && <button
                     type="button"
                     onClick={() => onOpenSplitOrder(requisition)}
-                    className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                    {...splitButtonState}
+                    className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-amber-500"
                   >
                     <FileText className="w-4 h-4" />
                     مشاهده / ثبت فاکتور تامین‌کننده
@@ -562,7 +577,7 @@ export function RequisitionDetailModal({
                 <div className="w-full p-3 bg-violet-50 border border-violet-200 rounded-xl text-xs text-violet-900 font-bold flex items-center gap-2">
                   <Layers className="w-4 h-4 text-violet-600 shrink-0" />
                   {requisition.consolidatedIntoCode
-                    ? `این درخواست در درخواست تجمیعی ${requisition.consolidatedIntoCode} آمده و بسته است؛ کار را با همان درخواست ادامه دهید.`
+                    ? `این درخواست در درخواست تجمیعی ${formatPersianCode(requisition.consolidatedIntoCode)} آمده و بسته است؛ کار را با همان درخواست ادامه دهید.`
                     : 'این درخواست در درخواست تجمیعی دیگری آمده و بسته است.'}
                 </div>
               )}

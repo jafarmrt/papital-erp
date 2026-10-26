@@ -8,6 +8,7 @@ import type { User } from '../../types';
 import { INVOICE_STATUS_LABELS } from '../../components/invoices/create/InvoiceHeaderFields';
 import { INVOICE_BUYER_TEXT } from '../../components/invoices/create/InvoiceBuyerFields';
 import { INVOICE_LINE_TEXT } from '../../components/invoices/create/InvoiceLinePicker';
+import { formatPersianCode } from '../../utils';
 
 /** Persian texts of the invoice form the test reads (v10.2.4: options without emoji) */
 const CENTRAL_WAREHOUSE = 'انبار مرکزی';
@@ -93,13 +94,13 @@ const bodiesOf = (method: string, url: string) => fetchJson.mock.calls
   .map(([, i]) => JSON.parse(String((i as Init).body)) as Record<string, unknown>);
 
 async function clickEdit(ref: string) {
-  const row = (await screen.findByText(ref)).closest('tr') as HTMLElement;
+  const row = (await screen.findByText(formatPersianCode(ref))).closest('tr') as HTMLElement;
   fireEvent.click(within(row).getByText('ویرایش'));
 }
 
 async function editProforma(ref: string) {
   await clickEdit(ref);
-  await waitFor(() => expect(toast.success).toHaveBeenCalledWith(`پیش‌فاکتور شماره ${ref} جهت ویرایش بارگذاری شد.`));
+  await waitFor(() => expect(toast.success).toHaveBeenCalledWith(`پیش‌فاکتور شماره ${formatPersianCode(ref)} جهت ویرایش بارگذاری شد.`));
 }
 
 const statusSelect = () => screen.getByRole('option', { name: INVOICE_STATUS_LABELS.proforma }).closest('select') as HTMLSelectElement;
@@ -160,7 +161,7 @@ describe('CreateInvoicePage — cancelling an edit puts every field back to its 
     fireEvent.click(screen.getByText(INVOICE_BUYER_TEXT.placeholder));
     fireEvent.click(await screen.findByText(CASH_CUSTOMER_OPTION));
     fireEvent.click(screen.getByText(INVOICE_LINE_TEXT.itemPlaceholder));
-    fireEvent.click(await screen.findByText(/^P-3 - گردنبند نقره/));
+    fireEvent.click(await screen.findByText(/^P-۳ - گردنبند نقره/));
     const inputOf = (label: string) => screen.getByText(label).parentElement!.querySelector('input') as HTMLInputElement;
     fireEvent.change(inputOf('تعداد'), { target: { value: '2' } });
     fireEvent.change(inputOf('مبلغ واحد (ریال)'), { target: { value: '1000000' } });
@@ -178,7 +179,7 @@ describe('CreateInvoicePage — a document that is not a sale is not edited here
     server(false);
     renderPage();
     await clickEdit('RCP-6');
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('سند شماره RCP-6 سند فروش نیست و در این فرم ویرایش نمی‌شود.'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('سند شماره RCP-۶ سند فروش نیست و در این فرم ویرایش نمی‌شود.'));
     expect(screen.queryByText('ذخیره تغییرات پیش‌فاکتور')).toBeNull();
     expect(screen.queryByDisplayValue('RC-77')).toBeNull();
     expect(fetchJson).not.toHaveBeenCalledWith('/documents/next-ref?type=receipt', expect.anything());

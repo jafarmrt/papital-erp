@@ -62,7 +62,7 @@ describe('inventory status reorder alarm (TD-1158)', () => {
   it('counts the reorder page items by free stock for a warehouse reader', async () => {
     state.viewer = { permissions: ['warehouse.view'], isAdmin: false };
     await renderPage();
-    await waitFor(() => expect(screen.getByText('FREE-1')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('FREE-۱')).toBeTruthy());
     expect(state.urls).toContain('/items/reorder-alerts');
     expect(screen.queryByText('TOTAL-9')).toBeNull();
     expect(screen.getByText(/۲ قلم کالا نیازمند سفارش/)).toBeTruthy();

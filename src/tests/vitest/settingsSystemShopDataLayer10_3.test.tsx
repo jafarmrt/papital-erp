@@ -118,9 +118,9 @@ describe('the WooCommerce tab reads its order lists through the shared cache (10
     reads.holdNext = ORDER_LOGS;
     render(<WooCommerceTab {...shopProps} />, { wrapper: wrapperOf(client) });
     await waitFor(() => expect(reads.held).toHaveLength(1));
-    expect(screen.queryByText('#501')).toBeNull();
+    expect(screen.queryByText('#۵۰۱')).toBeNull();
     await act(async () => { reads.held[0]?.([orderLog(2, 502)]); });
-    expect(await screen.findByText('#502')).toBeTruthy();
+    expect(await screen.findByText('#۵۰۲')).toBeTruthy();
   });
 
   it('its refresh button reads the order lists again', async () => {
@@ -129,7 +129,7 @@ describe('the WooCommerce tab reads its order lists through the shared cache (10
     await waitFor(() => expect(fetchJson.mock.calls.some(([u]) => u === ORDER_LOGS)).toBe(true));
     server.orderLogs = [orderLog(3, 503)];
     fireEvent.click(screen.getByText(SHOWN.refreshOrders));
-    expect(await screen.findByText('#503')).toBeTruthy();
+    expect(await screen.findByText('#۵۰۳')).toBeTruthy();
   });
 });
 

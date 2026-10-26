@@ -1,5 +1,5 @@
 import { ClipboardCheck } from 'lucide-react';
-import { formatPersianNumber, parseCleanNumber } from '../../utils';
+import { formatPersianNumber, parseCleanNumber, formatPersianCode } from '../../utils';
 import { auditCountError } from '../../lib/inventoryAudit/auditSheet';
 import { OFFLINE_SUBMIT_TITLE, PHONE_TAP_TARGET } from '../../lib/pwa/phoneLayout';
 
@@ -97,7 +97,7 @@ export function AuditSheetCardList({ items, onChange }: CardListProps) {
               <div className="font-bold text-slate-900 text-sm">{item.name}</div>
               <div className="text-xs text-slate-500">{item.category}</div>
             </div>
-            <span className="shrink-0 font-mono font-bold text-xs text-slate-700">{item.code}</span>
+            <span className="shrink-0 font-mono font-bold text-xs text-slate-700">{formatPersianCode(item.code)}</span>
           </div>
           <div className="flex items-center justify-between text-xs">
             <span className="text-slate-500">موجودی دفتری</span>

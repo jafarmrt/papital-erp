@@ -38,6 +38,6 @@ describe('account explorer opening row (TD-1240)', () => {
     expect(within(openingRow).queryByTitle('مشاهده کامل سند حسابداری')).toBeNull();
     const voucherRow = screen.getByText('فروش نقدی').closest('tr') as HTMLTableRowElement;
     expect(within(voucherRow).getByTitle('مشاهده کامل سند حسابداری')).toBeTruthy();
-    expect(within(voucherRow).getByText('[1001]')).toBeTruthy();
+    expect(within(voucherRow).getByText('[۱۰۰۱]')).toBeTruthy();
   });
 });

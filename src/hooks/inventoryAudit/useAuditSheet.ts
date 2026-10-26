@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { User } from '../../types';
-import { errorMessageOf } from '../../utils';
+import { errorMessageOf, formatPersianCode } from '../../utils';
 import {
   auditCategories,
   buildAuditPayload,
@@ -122,7 +122,7 @@ export function useAuditSheet({ serverItems, selectedLocation, locationLabel, ne
     saveMutation.mutate(payload, {
       onSuccess: (created) => {
         // v9.0.327 (TD-783): شماره‌ای که سرور ذخیره کرد، نه شماره پیشنهادی برگه
-        setSuccessMsg(`سند انبارگردانی با شماره ${created?.refNumber || nextRef} با موفقیت ثبت و موجودی انبار به‌روزرسانی شد.`);
+        setSuccessMsg(`سند انبارگردانی با شماره ${formatPersianCode(created?.refNumber || nextRef)} با موفقیت ثبت و موجودی انبار به‌روزرسانی شد.`);
         setPendingAuditSummary(null);
         setAuditedItemsMap({});
         setNotes('');

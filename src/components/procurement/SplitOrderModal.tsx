@@ -3,7 +3,7 @@ import { X, ShoppingBag, Plus, Trash2, CheckCircle2, Building2, FileText, AlertC
 import { toast } from 'react-hot-toast';
 import { PurchaseRequisition, PurchaseRequisitionItemRow } from '../../types';
 import { fetchJson } from '../../api';
-import { formatPersianPrice, formatPersianNumber, parseCleanNumber, formatPersianDate } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, parseCleanNumber, formatPersianDate, formatPersianCode } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
 import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
 import { useSupplierSelectOptions } from '../../hooks/useEntitySelectors';
@@ -404,7 +404,7 @@ export function SplitOrderModal({
               <h3 className="font-black text-slate-900 text-base flex items-center gap-2">
                 تفکیک و صدور سفارش‌های خرید
                 <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 rounded-lg text-xs font-mono font-bold">
-                  {requisition.code}
+                  {formatPersianCode(requisition.code)}
                 </span>
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
@@ -499,7 +499,7 @@ export function SplitOrderModal({
                         <td className="p-2.5 text-center font-mono text-slate-400">{formatPersianNumber(idx + 1)}</td>
                         <td className="p-2.5">
                           <span className="font-bold text-slate-900 block">{item.itemName}</span>
-                          <span className="text-[11px] text-slate-400 font-mono">{item.itemCode || 'فاقد کد'}</span>
+                          <span className="text-[11px] text-slate-400 font-mono">{formatPersianCode(item.itemCode) || 'فاقد کد'}</span>
                         </td>
                         <td className="p-2.5 text-center font-bold text-slate-600">{item.unit || 'عدد'}</td>
                         <td className="p-2.5 text-center font-mono font-bold text-slate-800">
@@ -644,7 +644,7 @@ export function SplitOrderModal({
                         {warehouses.length > 0 ? (
                           warehouses.map(w => (
                             <option key={w.code} value={w.code}>
-                              {w.name} ({w.code})
+                              {w.name} ({formatPersianCode(w.code)})
                             </option>
                           ))
                         ) : (
@@ -734,7 +734,7 @@ export function SplitOrderModal({
                                 <td className="p-2 text-center font-mono text-slate-400">{formatPersianNumber(itIdx + 1)}</td>
                                 <td className="p-2">
                                   <span className="font-bold text-slate-900 block">{it.itemName}</span>
-                                  <span className="text-[11px] text-slate-400 font-mono">{it.itemCode}</span>
+                                  <span className="text-[11px] text-slate-400 font-mono">{formatPersianCode(it.itemCode)}</span>
                                 </td>
                                 <td className="p-2 text-center font-bold text-slate-600">{it.unit}</td>
                                 <td className="p-2 text-center">

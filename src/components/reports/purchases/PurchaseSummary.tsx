@@ -3,7 +3,7 @@ import { AlertTriangle, Package, Truck } from 'lucide-react';
 import type { ReportMoney } from '../../../hooks/reports/useReportMoney';
 import { REPORT_COMPARE_LABELS, rangeLabel } from '../../../lib/reports/reportPeriods';
 import type { PurchaseReport, PurchaseTopEntry } from '../../../lib/reports/purchaseReport';
-import { formatPersianNumber } from '../../../utils';
+import { formatPersianNumber, formatPersianCode } from '../../../utils';
 import { percentText } from '../sales/SalesSummary';
 
 /**
@@ -75,7 +75,7 @@ function TopList({ title, icon, entries, money, withQuantity }: {
               <span className="flex items-center gap-2 min-w-0">
                 <span className="w-5 text-center font-black text-slate-400">{formatPersianNumber(index + 1)}</span>
                 <span className="font-bold text-slate-800 dark:text-slate-100 truncate">{entry.label}</span>
-                {entry.code && <span className="text-[11px] text-slate-500 font-mono">{entry.code}</span>}
+                {entry.code && <span className="text-[11px] text-slate-500 font-mono">{formatPersianCode(entry.code)}</span>}
               </span>
               <span className="flex items-center gap-3 shrink-0 font-mono">
                 {withQuantity && entry.quantity !== null && (

@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ChevronDown, Check, X } from 'lucide-react';
-import { normalizePersianText, toEnglishDigits } from '../../utils';
+import { normalizePersianText, toEnglishDigits, formatPersianCode } from '../../utils';
 
 /** متن جست‌وجوی حساب: «ی» و «ک» یکسان، فاصله و نیم‌فاصله یکی و رقم فارسی و عربی لاتین */
 const accountSearchText = (value: string | null | undefined) => toEnglishDigits(normalizePersianText(value));
+/** review of #406 (U21): the chosen account in the input, with its code in Persian digits like the list below it */
+const accountInputText = (account: { code: string; name: string }) => `${formatPersianCode(account.code)} - ${account.name}`;
 import type { Account } from '../../types';
 import { useClickOutside } from '../../hooks/useClickOutside';
 
@@ -68,7 +70,7 @@ export function AccountSearchSelect({
 
   useEffect(() => {
     if (selectedAccount && !isOpen) {
-      setSearchQuery(`${selectedAccount.code} - ${selectedAccount.name}`);
+      setSearchQuery(accountInputText(selectedAccount));
     } else if (!value && !isOpen) {
       setSearchQuery('');
     }
@@ -82,7 +84,7 @@ export function AccountSearchSelect({
   useClickOutside([containerRef], () => {
     setIsOpen(false);
     if (selectedAccount) {
-      setSearchQuery(`${selectedAccount.code} - ${selectedAccount.name}`);
+      setSearchQuery(accountInputText(selectedAccount));
     } else {
       setSearchQuery('');
     }
@@ -90,7 +92,7 @@ export function AccountSearchSelect({
 
   const handleSelect = (account: Account) => {
     onChange(account.id);
-    setSearchQuery(`${account.code} - ${account.name}`);
+    setSearchQuery(accountInputText(account));
     setIsOpen(false);
     if (onAdvance) {
       setTimeout(() => onAdvance(), 50);
@@ -133,7 +135,7 @@ export function AccountSearchSelect({
       e.preventDefault();
       setIsOpen(false);
       if (selectedAccount) {
-        setSearchQuery(`${selectedAccount.code} - ${selectedAccount.name}`);
+        setSearchQuery(accountInputText(selectedAccount));
       }
     } else if (e.key === 'Tab') {
       if (isOpen && filteredAccounts[highlightedIndex] && searchQuery) {
@@ -233,7 +235,7 @@ export function AccountSearchSelect({
                   >
                     <div className="flex items-center gap-2 overflow-hidden">
                       <span className="font-mono font-bold text-xs text-slate-800 dark:text-slate-100 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded shrink-0">
-                        {acc.code}
+                        {formatPersianCode(acc.code)}
                       </span>
                       <span className="truncate">{acc.name}</span>
                     </div>

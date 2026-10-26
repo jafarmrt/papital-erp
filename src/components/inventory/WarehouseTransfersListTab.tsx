@@ -1,5 +1,5 @@
 import { ArrowLeftRight, Ban, Eye } from 'lucide-react';
-import { formatPersianNumber, formatPersianDate } from '../../utils';
+import { formatPersianNumber, formatPersianDate, formatPersianCode } from '../../utils';
 import type { DocumentListPager as Pager } from '../../hooks/inventoryAudit/useInventoryAuditQueries';
 import { DocumentListPager } from './DocumentListPager';
 
@@ -74,7 +74,7 @@ export function WarehouseTransfersListTab({
               transfers.map((t, idx) => (
                 <tr key={t.id} className="hover:bg-slate-50 transition-colors">
                   <td className="py-3 px-3 text-center font-mono text-slate-400">{formatPersianNumber(rowOffset + idx + 1)}</td>
-                  <td className="py-3 px-3 font-mono font-bold text-blue-600">{t.refNumber || `#${t.id}`}</td>
+                  <td className="py-3 px-3 font-mono font-bold text-blue-600">{formatPersianCode(t.refNumber) || `#${t.id}`}</td>
                   <td className="py-3 px-3 font-mono">{formatPersianDate(t.date)}</td>
                   <td className="py-3 px-3 font-bold text-slate-700">{t.sourceLocation || '-'}</td>
                   <td className="py-3 px-3 font-bold text-slate-700">{t.destinationLocation || '-'}</td>
