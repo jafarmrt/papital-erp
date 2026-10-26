@@ -79,11 +79,11 @@ describe('service_user_cron: the nightly check runs as root and its log is writt
 });
 
 describe('service_user_env_mode: .env stays readable for the group of the service', () => {
-  function modeAfter(group: string | null) {
+  function modeAfter(group: string | null, mode = 0o640) {
     const dir = tmp('svc-env-');
     const env = path.join(dir, '.env');
-    fs.writeFileSync(env, 'NODE_ENV=production\n', { mode: 0o640 });
-    fs.chmodSync(env, 0o640);
+    fs.writeFileSync(env, 'NODE_ENV=production\n', { mode });
+    fs.chmodSync(env, mode);
     if (group) spawnSync('chgrp', [group, env]);
     const r = spawnSync('bash', [path.join(ROOT, 'scripts/ensure-env-secrets.sh'), env, 'METRICS_TOKEN'], { encoding: 'utf8' });
     expect(r.status, r.stderr).toBe(0);
@@ -93,6 +93,8 @@ describe('service_user_env_mode: .env stays readable for the group of the servic
   it('a .env of the owner\'s own group is 600, one given to another group (install.sh) is 640', () => {
     expect(modeAfter(null)).toBe('600');
     if (isRoot) expect(modeAfter('nogroup')).toBe('640');
+    // a root .env of another group (root:adm) that nobody gave the group read keeps none
+    if (isRoot) expect(modeAfter('nogroup', 0o600)).toBe('600');
     for (const rel of ['scripts/ensure-env-secrets.sh', 'setup-domain.sh']) {
       expect(read(rel)).not.toMatch(/^chmod 600 /m);
     }
@@ -100,13 +102,34 @@ describe('service_user_env_mode: .env stays readable for the group of the servic
 });
 
 describe('service_user_restore: restore.sh puts the uploads back owned by the user that owns them', () => {
-  /** unpack_archive and place_archive of restore.sh, run on their own */
+  /** the backup readers, unpack_archive and place_archive of restore.sh, run on their own */
   function restoreFunctions() {
     const s = read('scripts/restore.sh');
-    return s.slice(s.indexOf('as_owner() {'), s.indexOf('unpack_archive "$UPLOADS_ARCHIVE" "$UPLOADS_DIR"'));
+    return s.slice(s.indexOf('as_owner() {'), s.indexOf('# end of the backup readers'))
+      + s.slice(s.indexOf('unpack_archive() {'), s.indexOf('unpack_archive "$UPLOADS_ARCHIVE" "$UPLOADS_DIR"'));
+  }
+  /** unpacks <archive> into <target> as restore.sh apply does; the dump sits beside the archive */
+  function unpackInto(dir: string, archive: string, target: string, uploads = target) {
+    return bash(`set -euo pipefail
+log() { echo "$*"; }; fail() { echo "FAIL $*"; exit 1; }
+UNPACK_DIRS=(); UPLOADS_DIR="${uploads}"; TIMESTAMP=t; WORK_DIR="$(mktemp -d)"
+BACKUP_FILE="${path.join(path.dirname(archive), 'erp_daily_1.dump.gz')}"
+${restoreFunctions()}
+unpack_archive "${archive}" "${target}"
+place_archive "${archive}" "$UNPACKED" "${target}"`);
+  }
+  /** a backup archive of one folder <name> under <dir>/src, made by <fill> */
+  function archiveOf(dir: string, name: string, fill: (folder: string) => void) {
+    const src = path.join(dir, 'src', name);
+    fs.mkdirSync(src, { recursive: true });
+    fill(src);
+    const archive = path.join(dir, `erp_daily_1_${name}.tar.gz`);
+    const r = spawnSync('tar', ['-czf', archive, '-C', path.join(dir, 'src'), name]);
+    expect(r.status, String(r.stderr)).toBe(0);
+    return archive;
   }
 
-  it.runIf(isRoot)('root unpacks without the owners of the archive and gives the files to the owner of the folder', () => {
+  it.runIf(isRoot)('the owner of the folder unpacks the files, in a folder root made for it beside them', () => {
     const dir = tmp('svc-restore-');
     fs.chmodSync(dir, 0o755);
     const app = path.join(dir, 'app');
@@ -120,12 +143,7 @@ describe('service_user_restore: restore.sh puts the uploads back owned by the us
     fs.writeFileSync(path.join(src, 'a.png'), 'a');
     const archive = path.join(dir, 'erp_daily_1_uploads.tar.gz');
     spawnSync('tar', ['-czf', archive, '-C', path.join(dir, 'src'), 'uploads']);
-    const r = bash(`set -euo pipefail
-log() { echo "$*"; }; fail() { echo "FAIL $*"; exit 1; }
-UNPACK_DIRS=(); UPLOADS_DIR="${uploads}"; TIMESTAMP=t
-${restoreFunctions()}
-unpack_archive "${archive}" "$UPLOADS_DIR"
-place_archive "${archive}" "$UNPACKED" "$UPLOADS_DIR"`);
+    const r = unpackInto(dir, archive, uploads);
     expect(r.status, r.stdout + r.stderr).toBe(0);
     expect(fs.readFileSync(path.join(uploads, 'a.png'), 'utf8')).toBe('a');
     expect(fs.statSync(uploads).uid).toBe(65534);
@@ -145,20 +163,65 @@ place_archive "${archive}" "$UNPACKED" "$UPLOADS_DIR"`);
     fs.writeFileSync(path.join(src, 'b.pdf'), 'b');
     const archive = path.join(dir, 'erp_daily_1_attachments.tar.gz');
     spawnSync('tar', ['-czf', archive, '-C', path.join(dir, 'src'), 'attachments']);
-    const r = bash(`set -euo pipefail
-log() { echo "$*"; }; fail() { echo "FAIL $*"; exit 1; }
-UNPACK_DIRS=(); UPLOADS_DIR="${dir}/elsewhere"; TIMESTAMP=t
-${restoreFunctions()}
-unpack_archive "${archive}" "${target}"
-stat -c %U "$(dirname "$UNPACKED")"
-place_archive "${archive}" "$UNPACKED" "${target}"`);
+    const r = unpackInto(dir, archive, target, `${dir}/elsewhere`);
     expect(r.status, r.stdout + r.stderr).toBe(0);
-    expect(r.stdout).toContain('nobody');
+    expect(fs.statSync(target).uid).toBe(65534);
     expect(fs.statSync(path.join(target, 'b.pdf')).uid).toBe(65534);
   });
 
   it('an archive whose one entry is a link is refused', () => {
     expect(read('scripts/restore.sh')).toContain('[ -L "$(find "$unpack" -mindepth 1 -maxdepth 1)" ]');
+  });
+
+  it('an archive holding a link is refused and nothing is changed', () => {
+    const dir = tmp('svc-restore-link-');
+    const uploads = path.join(dir, 'app/public/uploads');
+    fs.mkdirSync(uploads, { recursive: true });
+    const archive = archiveOf(dir, 'uploads', src => fs.symlinkSync('/etc/passwd', path.join(src, 'x.png')));
+    const r = unpackInto(dir, archive, uploads);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain('holds something other than folders and plain files');
+    expect(fs.readdirSync(path.dirname(uploads))).toEqual(['uploads']);
+  });
+
+  it.runIf(isRoot)('a device or a set-id file in the archive is refused, so root never makes one', () => {
+    for (const fill of [
+      (src: string) => spawnSync('mknod', [path.join(src, 'sda'), 'b', '8', '0']),
+      (src: string) => { fs.writeFileSync(path.join(src, 'run'), '#!/bin/sh\n'); fs.chmodSync(path.join(src, 'run'), 0o4755); },
+    ]) {
+      const dir = tmp('svc-restore-dev-');
+      fs.chmodSync(dir, 0o755);
+      const uploads = path.join(dir, 'app/public/uploads');
+      fs.mkdirSync(uploads, { recursive: true });
+      const r = unpackInto(dir, archiveOf(dir, 'uploads', fill), uploads);
+      expect(r.status, r.stdout + r.stderr).toBe(1);
+      expect(r.stdout).toContain('holds something other than folders and plain files');
+      expect(fs.readdirSync(path.dirname(uploads))).toEqual(['uploads']);
+    }
+  });
+
+  it.runIf(isRoot)('root does not unpack for a folder of its own an archive the service user could write, nor read a backup through a link', () => {
+    const dir = tmp('svc-restore-mixed-');
+    fs.chmodSync(dir, 0o755);
+    const backups = path.join(dir, 'backups');
+    fs.mkdirSync(backups);
+    const uploads = path.join(dir, 'app/public/uploads');
+    fs.mkdirSync(uploads, { recursive: true });
+    const archive = archiveOf(backups, 'uploads', src => fs.writeFileSync(path.join(src, 'a.png'), 'a'));
+    spawnSync('chown', ['-R', 'nobody', backups]);
+    const mixed = unpackInto(dir, archive, uploads);
+    expect(mixed.status).toBe(1);
+    expect(mixed.stdout).toContain('root does not unpack an archive another user could write');
+    // the service user's archive is a link to a file only root reads: it is read as that user, so nothing comes of it
+    spawnSync('chown', ['-R', 'nobody', uploads]);
+    const secret = path.join(dir, 'secret.tar.gz');
+    fs.renameSync(archive, secret);
+    fs.chmodSync(secret, 0o600);
+    fs.symlinkSync(secret, archive);
+    const linked = unpackInto(dir, archive, uploads);
+    expect(linked.status).toBe(1);
+    expect(linked.stdout).toContain('cannot read');
+    expect(fs.readdirSync(uploads)).toEqual([]);
   });
 });
 
@@ -170,6 +233,9 @@ describe('service_user_install: install.sh makes the user, gives it only what th
     expect(install).toContain('useradd --system --user-group --home-dir "/var/lib/${SERVICE_USER}"');
     expect(install).toMatch(/chown "\$\(id -un\):\$\{SERVICE_GROUP\}" \.env\n\s+chmod 640 \.env/);
     expect(install).toContain('$SUDO install -d -m 750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$dir"');
+    // a link in place of a state folder is left alone, and in a folder of the service user that user makes the folder
+    expect(install).toMatch(/if \[ -L "\$dir" \]; then\n\s+warn "\$dir is a link/);
+    expect(install).toContain('as_service_user install -d -m 750 "$dir"');
     expect(install).toContain('$SUDO install -d -m 700 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "${BACKUP_DIR_ENV:-/var/backups/erp}"');
     expect(install).toContain('bash scripts/install-ops-cron.sh "$SERVICE_USER"');
     // the code is not writable for the service user, whatever a zip or the umask gave it

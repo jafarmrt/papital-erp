@@ -88,13 +88,25 @@ CALL_LIMIT=120
 TSX="$APP_DIR/node_modules/.bin/tsx"
 [ -x "$TSX" ] || fail "$TSX not found — install the dependencies (npm ci --include=dev)"
 
+# v11 (phase 5.3, TD-1354): a folder of root's own for what root keeps (the lock, the temporary files): made in /var/lib,
+# where only root writes; a folder of that name that root does not own is never used
+root_state_dir() {
+  if [ -L "$1" ] || { [ -e "$1" ] && [ ! -O "$1" ]; }; then fail "$1 is a link or not owned by root; remove it or set its path"; fi
+  [ -d "$1" ] || install -d -m 700 "$1"
+}
+
 # one run at a time
 LOCK_FILE="$APP_DIR/logs/.nightly-verify.lock"
 mkdir -p "$(dirname "$LOCK_FILE")" "$(dirname "$REPORT")"
-# v11 (phase 5.3, TD-1354): logs/ belongs to the service user, which could put a link in place of a file there. The lock
-# is made only when nothing of that name exists (noclobber: O_EXCL) and opened for reading, so root never creates or
-# truncates a file through such a link
+# v11 (phase 5.3, TD-1354): logs/ belongs to the service user, which could put a link or a FIFO there (opening a FIFO
+# waits forever); root keeps its lock in a folder of its own then
+if [ "$(id -u)" -eq 0 ] && [ ! -O "$(dirname "$LOCK_FILE")" ]; then
+  LOCK_FILE="${NIGHTLY_VERIFY_ROOT_LOCK:-/var/lib/papital-erp/nightly-verify.lock}"
+  root_state_dir "$(dirname "$LOCK_FILE")"
+fi
+# made only when nothing of that name exists (noclobber: O_EXCL) and opened for reading, so no file is ever truncated
 ( set -C; : > "$LOCK_FILE" ) 2>/dev/null || true
+[ -f "$LOCK_FILE" ] && [ ! -L "$LOCK_FILE" ] || fail "the lock $LOCK_FILE is a link or not a plain file"
 exec 9<"$LOCK_FILE"
 if ! flock -n 9; then
   if [ "${1:-}" = "--accept-baseline" ]; then
@@ -118,7 +130,7 @@ as_report_owner() {
 }
 report_in() {
   # shellcheck disable=SC2016
-  as_report_owner sh -c '[ -f "$1" ] && [ ! -L "$1" ] && cat -- "$1"' report "$REPORT" > "$REPORT_WORK" 2>/dev/null || true
+  as_report_owner sh -c '[ -f "$1" ] && [ ! -L "$1" ] && head -c 16777216 -- "$1"' report "$REPORT" > "$REPORT_WORK" 2>/dev/null || true
 }
 report_out() {
   [ -s "$REPORT_WORK" ] || return 0
@@ -148,7 +160,8 @@ TMP_ROOT="${NIGHTLY_VERIFY_TMP:-$BACKUP_DIR/.nightly-verify-tmp}"
 # its files then go to a folder of root's own
 if [ -z "${NIGHTLY_VERIFY_TMP:-}" ] && [ "$(id -u)" -eq 0 ] && [ ! -O "$BACKUP_DIR" ]; then
   TMP_ROOT="${NIGHTLY_VERIFY_ROOT_TMP:-/var/lib/papital-erp/nightly-verify-tmp}"
-  install -d -m 700 -o root -g root "$(dirname "$TMP_ROOT")" "$TMP_ROOT"
+  root_state_dir "$(dirname "$TMP_ROOT")"
+  root_state_dir "$TMP_ROOT"
 fi
 mkdir -p "$TMP_ROOT"
 chmod 700 "$TMP_ROOT"

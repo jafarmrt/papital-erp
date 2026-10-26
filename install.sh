@@ -235,9 +235,20 @@ for dir in "$(state_dir "$(env_file_get .env LOG_DIR)")" "$UPLOADS_STATE" \
          continue
        fi ;;
   esac
+  # the service user may have put a link there (uploads/.attachments is inside its uploads folder): never followed
+  if [ -L "$dir" ]; then
+    warn "$dir is a link; it is left as it is (make it a folder of ${SERVICE_USER} by hand)"
+    continue
+  fi
   # files an earlier install left there (INSTALL_AGAIN=1) go to the service user too; links are not followed
   if [ -d "$dir" ] && [ "$(stat -c %U "$dir")" != "$SERVICE_USER" ]; then $SUDO chown -R -h "$SERVICE_USER:$SERVICE_GROUP" "$dir"; fi
-  $SUDO install -d -m 750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$dir"
+  # in a folder of the service user the folder is made by that user (it could swap the name for a link between a test
+  # and root's install -d); elsewhere only root writes beside it
+  if [ "$(stat -c %U "$(dirname "$dir")" 2>/dev/null)" = "$SERVICE_USER" ]; then
+    as_service_user install -d -m 750 "$dir"
+  else
+    $SUDO install -d -m 750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$dir"
+  fi
 done
 
 # ---------- 5) Install & build ----------

@@ -399,9 +399,14 @@ jobs:
 
       - name: The Nightly Check Runs As Root Over The Service User's Folders
         run: |
-          sudo bash scripts/nightly-verify.sh
+          # FIFOs the service user put in place of the locks of logs/ would hang root when it opened them
+          sudo -u papital rm -f logs/.ops-busy.lock logs/.nightly-verify.lock
+          sudo -u papital mkfifo logs/.ops-busy.lock logs/.nightly-verify.lock
+          sudo timeout 1200 bash scripts/nightly-verify.sh
+          sudo -u papital rm -f logs/.ops-busy.lock logs/.nightly-verify.lock
           test "$(sudo stat -c %U logs/nightly-verify.json)" = papital
           sudo test -d /var/lib/papital-erp/nightly-verify-tmp
+          sudo test -f /var/lib/papital-erp/nightly-verify.lock
           if sudo test -e /var/backups/erp/.nightly-verify-tmp; then echo "::error::root worked in the backup folder of papital"; exit 1; fi
 
       - name: App Port Answers On Every Address By Default
@@ -421,10 +426,17 @@ jobs:
         # v10.2.28 (#344 review L1): without INSTALL_REUSE_DB=1 the installer refuses a database with tables
         run: |
           mv .env .env.first-install
+          # a link the service user put in its uploads folder is never followed by the installer (root)
+          sudo install -d -m 755 /srv/not-papital
+          sudo -u papital rm -rf public/uploads/.attachments
+          sudo -u papital ln -s /srv/not-papital public/uploads/.attachments
           if bash install.sh; then echo "::error::install.sh reused a database with tables without INSTALL_REUSE_DB=1"; exit 1; fi
           INSTALL_REUSE_DB=1 bash install.sh
           curl -fsS http://localhost:3000/health/ready
           test "$(stat -c '%a %G' .env)" = "640 papital"
+          test "$(stat -c '%U %a' /srv/not-papital)" = "root 755" || { echo "::error::install.sh followed a link of papital"; exit 1; }
+          sudo -u papital rm public/uploads/.attachments
+          sudo -u papital mkdir -m 750 public/uploads/.attachments
 
       - name: ERP_LISTEN_HOST Binds The App To 127.0.0.1
         run: |

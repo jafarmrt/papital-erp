@@ -98,6 +98,19 @@ UPLOADS_ARCHIVE="${BACKUP_BASE}_uploads.tar.gz"
 ATTACHMENTS_ARCHIVE="${BACKUP_BASE}_attachments.tar.gz"
 log "Restoring from: $BACKUP_FILE (mode=$RESTORE_MODE)"
 
+# v11 (phase 5.3, TD-1354): the backups belong to the service user on a new install, who could put a link or a FIFO in
+# place of a file there. Root reads them as the owner of their folder, so a link reaches only what that user may read
+as_owner() {
+  local owner="$1"; shift
+  if [ "$(id -u)" -eq 0 ] && [ "$owner" != root ]; then runuser -u "$owner" -- "$@"; else "$@"; fi
+}
+BACKUP_OWNER="$(stat -c %U "$(dirname "$BACKUP_FILE")")"
+read_backup() {
+  # shellcheck disable=SC2016
+  as_owner "$BACKUP_OWNER" sh -c '[ -f "$1" ] && [ ! -L "$1" ] && exec cat -- "$1"' backup "$1"
+}
+# end of the backup readers
+
 WORK_DIR="$(mktemp -d)"
 NEW_DB=""
 UNPACK_DIRS=()
@@ -117,6 +130,8 @@ trap cleanup EXIT
 # shellcheck source=scripts/pg-password.sh
 . "$APP_DIR/scripts/pg-password.sh"
 pg_password_setup "$WORK_DIR"
+# the manifest is read once, into a copy of this run
+if read_backup "$MANIFEST_FILE" > "$WORK_DIR/manifest" 2>/dev/null; then MANIFEST_FILE="$WORK_DIR/manifest"; else MANIFEST_FILE="$WORK_DIR/no-manifest"; fi
 
 # ---------- Admin connection (CREATE / DROP / RENAME DATABASE) ----------
 # The maintenance database "postgres" is used so that the check also works when the target database is gone.
@@ -145,7 +160,7 @@ NEW_DB="${DB_NAME}_restore_${TIMESTAMP}"
 NEW_URL="$(url_for_db "$NEW_DB")"
 log "Creating database $NEW_DB (owner $DB_USER)"
 admin_sql "CREATE DATABASE \"$NEW_DB\" OWNER \"$DB_USER\";" >/dev/null || fail "cannot create database $NEW_DB"
-gunzip -c "$BACKUP_FILE" > "$WORK_DIR/restore.dump" || fail "cannot decompress $BACKUP_FILE"
+read_backup "$BACKUP_FILE" | gunzip -c > "$WORK_DIR/restore.dump" || fail "cannot decompress $BACKUP_FILE"
 if ! pg_restore --no-owner --no-privileges --no-comments --exit-on-error -d "$NEW_URL" "$WORK_DIR/restore.dump" 2> "$WORK_DIR/pg_restore.err"; then
   cat "$WORK_DIR/pg_restore.err"
   fail "restore FAILED — pg_restore stopped at the first error above; the backup is NOT restorable as is"
@@ -210,7 +225,7 @@ if [ "$ATT_TOTAL" -gt 0 ]; then
   if [ ! -f "$ATT_ARCHIVE" ]; then
     problem "$ATT_TOTAL attachment record(s) but no attachment archive next to the dump ($ATT_ARCHIVE)"
   else
-    tar -tzf "$ATT_ARCHIVE" > "$WORK_DIR/archive_list" || fail "cannot read $ATT_ARCHIVE"
+    read_backup "$ATT_ARCHIVE" | tar -tzf - > "$WORK_DIR/archive_list" || fail "cannot read $ATT_ARCHIVE"
     LOST=0
     BEFORE=0
     while IFS= read -r p; do
@@ -248,35 +263,43 @@ fi
 # which is not always the name of <dir>; it is unpacked into a new folder beside <dir> and that one folder is moved to
 # <dir>, so the files land where the log says. Both archives are unpacked and checked before the database is swapped,
 # so an archive that cannot be used stops the run while nothing was changed.
-# v11 (phase 5.3, TD-1354): the files belong to whoever owns the folder (the service user of a new install); root
-# unpacks in a folder of another user as that user, and in a folder of its own without the owners of the archive, then
-# gives the unpacked files to the owner of <dir>. Links are never followed.
-as_owner() {
-  local owner="$1"; shift
-  if [ "$(id -u)" -eq 0 ] && [ "$owner" != root ]; then runuser -u "$owner" -- "$@"; else "$@"; fi
-}
+# v11 (phase 5.3, TD-1354): the files belong to whoever owns <dir> (the service user of a new install), and that user
+# unpacks them: root unpacks only for a folder of root's own, from a backup of root's own. An archive holding anything
+# but folders and plain files without set-id bits is refused: a device or a set-id program unpacked by root would hand
+# root to whoever wrote the archive. Links are never followed.
 unpack_archive() {
-  local archive="$1" dir="$2" parent unpack entries owner target_owner
+  local archive="$1" dir="$2" parent unpack owner parent_owner entries
   UNPACKED=""
   [ -f "$archive" ] || return 0
   parent="$(dirname "$dir")"
   # never inside the uploads folder, which is itself moved aside before the attachments are put in place
   case "$parent/" in "$UPLOADS_DIR"/*) parent="$(dirname "$UPLOADS_DIR")" ;; esac
   mkdir -p "$parent"
-  owner="$(stat -c %U "$parent")"
-  unpack="$(as_owner "$owner" mktemp -d "$parent/.restore_unpack_XXXXXX")"
+  parent_owner="$(stat -c %U "$parent")"
+  if [ -d "$dir" ] && [ ! -L "$dir" ]; then owner="$(stat -c %U "$dir")"; else owner="$(stat -c %U "$(dirname "$dir")")"; fi
+  if [ "$(id -u)" -eq 0 ] && [ "$owner" = root ] && [ "$BACKUP_OWNER" != root ]; then
+    fail "$dir belongs to root and $archive to ${BACKUP_OWNER}; root does not unpack an archive another user could write (give $dir to the service user: chown -R -h <user>: $dir); nothing was changed"
+  fi
+  read_backup "$archive" | tar -tvzf - > "$WORK_DIR/archive_types" || fail "cannot read $archive; nothing was changed"
+  if grep -qvE '^[-d][-rwx]{9} ' "$WORK_DIR/archive_types"; then
+    fail "$archive holds something other than folders and plain files (a link, a device or a set-id file); nothing was changed"
+  fi
+  if [ "$(id -u)" -ne 0 ] || [ "$parent_owner" = "$owner" ]; then
+    unpack="$(as_owner "$owner" mktemp -d "$parent/.restore_unpack_XXXXXX")"
+  elif [ "$parent_owner" = root ]; then
+    # in a folder of root's, where no one else can swap it, root makes the unpack folder and gives it to the owner
+    unpack="$(mktemp -d "$parent/.restore_unpack_XXXXXX")"
+    chown "$owner" "$unpack"
+  else
+    fail "$parent belongs to $parent_owner, neither root nor the owner of $dir ($owner); nothing was changed"
+  fi
   UNPACK_DIRS+=("$unpack")
-  # the archive is read by this script and only its contents reach tar
-  as_owner "$owner" tar -xzf - --no-same-owner -C "$unpack" < "$archive" || fail "cannot unpack $archive; nothing was changed"
+  read_backup "$archive" | as_owner "$owner" tar -xzf - --no-same-owner -C "$unpack" || fail "cannot unpack $archive; nothing was changed"
   entries="$(find "$unpack" -mindepth 1 -maxdepth 1 | wc -l)"
   if [ "$entries" -ne 1 ] || [ ! -d "$(find "$unpack" -mindepth 1 -maxdepth 1)" ] || [ -L "$(find "$unpack" -mindepth 1 -maxdepth 1)" ]; then
     fail "$archive does not hold exactly one folder; nothing was changed"
   fi
   UNPACKED="$(find "$unpack" -mindepth 1 -maxdepth 1)"
-  target_owner="$(stat -c %U:%G "$dir" 2>/dev/null || true)"
-  if [ "$(id -u)" -eq 0 ] && [ "$owner" = root ] && [ -n "$target_owner" ] && [ "${target_owner%%:*}" != root ]; then
-    chown -R -h "$target_owner" "$UNPACKED" || fail "cannot give the files of $archive to ${target_owner}; nothing was changed"
-  fi
 }
 place_archive() {
   local archive="$1" unpacked="$2" dir="$3"
