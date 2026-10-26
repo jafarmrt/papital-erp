@@ -11,6 +11,16 @@ import { NIGHTLY_VERIFY_REPORT_VERSION, type NightlyVerifyReport } from '../../l
 
 const ROOT = path.resolve(__dirname, '../../..');
 
+/** Holds a flock lock (-x or -s) on <file> in another process until it is killed; resolves once the lock is held */
+async function holdLock(file: string, mode: '-x' | '-s') {
+  const { spawn } = await import('child_process');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  // its own process group, so killing it also ends the sleep that holds the lock
+  const child = spawn('flock', [mode, file, 'bash', '-c', 'echo held; sleep 30'], { stdio: ['ignore', 'pipe', 'ignore'], detached: true });
+  await new Promise<void>(resolve => child.stdout.once('data', () => resolve()));
+  return { kill: () => { try { process.kill(-(child.pid as number), 'SIGKILL'); } catch { /* already gone */ } } };
+}
+
 const report = (over: Partial<NightlyVerifyReport> = {}): NightlyVerifyReport => ({
   version: NIGHTLY_VERIFY_REPORT_VERSION, finishedAt: '2026-10-18T04:02:00Z', backupFile: 'erp_daily_20261018_023000.dump.gz',
   backupAt: '2026-10-18T02:31:00Z', restoreOk: true, failure: null,
@@ -34,7 +44,7 @@ describe('nightly_verify_o_04 review: the shell script cleans up, checks room an
     const data = path.join(dir, 'pgdata');
     for (const d of [path.join(app, 'scripts'), path.join(app, 'node_modules/.bin'), path.join(app, 'logs'), backups, bin, data]) fs.mkdirSync(d, { recursive: true });
     fs.copyFileSync(path.join(ROOT, 'scripts/nightly-verify.sh'), path.join(app, 'scripts/nightly-verify.sh'));
-    fs.copyFileSync(path.join(ROOT, 'scripts/env-file.sh'), path.join(app, 'scripts/env-file.sh'));
+    for (const f of ['env-file.sh', 'ops-lock.sh', 'pg-password.sh']) fs.copyFileSync(path.join(ROOT, 'scripts', f), path.join(app, 'scripts', f));
     const calls = path.join(dir, 'calls.log');
     const stub = (file: string, body: string) => fs.writeFileSync(file, `#!/bin/bash
 ${body}
@@ -70,7 +80,7 @@ exit 0`);
     if (over.previousReport) fs.writeFileSync(path.join(app, 'logs/nightly-verify.json'), JSON.stringify(over.previousReport));
     const env = {
       ...process.env, APP_DIR: app, BACKUP_DIR: backups, DATABASE_URL: DB_URL, PATH: `${bin}:${process.env.PATH}`,
-      NIGHTLY_VERIFY_BUSY_PATTERN: 'no-such-process-o04-x9', RESTORE_ADMIN_URL: '',
+      RESTORE_ADMIN_URL: '',
     };
     const log = () => (fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8') : '');
     return { dir, app, backups, env, log, stamp, script: path.join(app, 'scripts/nightly-verify.sh') };
@@ -226,16 +236,30 @@ exit 0`);
     fs.rmSync(unread.dir, { recursive: true, force: true });
   }, 30_000);
 
-  it('a night is skipped while a backup, a rehearsal, an update or a restore runs', () => {
+  // v11 (O13): the other jobs are seen by their locks (scripts/ops-lock.sh), never by a name in the process list: a shell
+  // or an editor whose command line named a script made the night skip
+  it('a night is skipped while an update holds its lock or a backup, rehearsal or restore holds the busy lock, not for a name', async () => {
+    for (const lock of ['.update.lock', 'logs/.ops-busy.lock']) {
+      const f = fakeApp();
+      const holder = await holdLock(path.join(f.app, lock), lock === '.update.lock' ? '-x' : '-s');
+      const run = spawnSync('bash', [f.script], { encoding: 'utf8', env: f.env });
+      holder.kill();
+      expect(run.status, lock).toBe(0);
+      expect(run.stdout, lock).toContain('SKIPPED');
+      expect(f.log(), lock).toBe('');
+      fs.rmSync(f.dir, { recursive: true, force: true });
+    }
     const f = fakeApp();
-    const run = spawnSync('bash', [f.script], { encoding: 'utf8', env: { ...f.env, NIGHTLY_VERIFY_BUSY_PATTERN: 'nightly-verify\\.sh' } });
-    expect(run.status).toBe(0);
-    expect(run.stdout).toContain('SKIPPED');
-    expect(f.log()).toBe('');
+    // a process whose command line names the scripts, holding no lock (the old pgrep pattern matched it)
+    const { spawn } = await import('child_process');
+    const named = spawn('bash', ['-c', 'sleep 20', 'scripts/backup.sh', 'update.sh'], { stdio: 'ignore' });
+    const run = spawnSync('bash', [f.script], { encoding: 'utf8', env: f.env });
+    named.kill();
+    expect(run.stdout).not.toContain('SKIPPED');
+    expect(f.log()).toContain('restore DATABASE_URL=');
     fs.rmSync(f.dir, { recursive: true, force: true });
-    const script = fs.readFileSync(path.join(ROOT, 'scripts/nightly-verify.sh'), 'utf8');
-    expect(script).toContain('scripts/(backup|upgrade-rehearsal|restore)\\.sh( |$)|(^|[ /])update\\.sh( |$)');
-  }, 30_000);
+    expect(fs.readFileSync(path.join(ROOT, 'scripts/nightly-verify.sh'), 'utf8')).not.toContain('pgrep');
+  }, 60_000);
 
   it('accepting a new normal while a check runs says it was not accepted and fails', () => {
     const f = fakeApp();

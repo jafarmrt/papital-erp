@@ -74,14 +74,16 @@ if [ "$(id -u)" -eq 0 ] && [ "$RUN_USER" != "root" ]; then chown "$RUN_USER" "$L
 
 TMP_FILE="$(mktemp)"
 trap 'rm -f "$TMP_FILE"' EXIT
+# v11 (O3): each job runs through bash, so a script whose executable bit a zip archive dropped still runs (a cron job of
+# a file without it failed with «Permission denied» every night, the monitor too, and nothing said so)
 cat > "$TMP_FILE" <<CRON
 # Papital ERP operations schedule (scripts/install-ops-cron.sh). Rewritten by that script; edit it there.
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-${BACKUP_MINUTE} ${BACKUP_HOUR} * * * ${RUN_USER} ${APP_DIR}/scripts/backup.sh >> ${LOG_DIR}/backup.log 2>&1
-*/5 * * * * ${RUN_USER} ${APP_DIR}/scripts/monitor.sh >> ${LOG_DIR}/monitor.log 2>&1
-${NIGHTLY_VERIFY_MINUTE} ${NIGHTLY_VERIFY_HOUR} * * * root ${APP_DIR}/scripts/nightly-verify.sh >> ${LOG_DIR}/nightly-verify.log 2>&1
-${MEDIA_OFFSITE_MINUTE} ${MEDIA_OFFSITE_HOUR} * * * ${RUN_USER} ${APP_DIR}/scripts/backup-media-offsite.sh >> ${LOG_DIR}/media-offsite.log 2>&1
+${BACKUP_MINUTE} ${BACKUP_HOUR} * * * ${RUN_USER} bash ${APP_DIR}/scripts/backup.sh >> ${LOG_DIR}/backup.log 2>&1
+*/5 * * * * ${RUN_USER} bash ${APP_DIR}/scripts/monitor.sh >> ${LOG_DIR}/monitor.log 2>&1
+${NIGHTLY_VERIFY_MINUTE} ${NIGHTLY_VERIFY_HOUR} * * * root bash ${APP_DIR}/scripts/nightly-verify.sh >> ${LOG_DIR}/nightly-verify.log 2>&1
+${MEDIA_OFFSITE_MINUTE} ${MEDIA_OFFSITE_HOUR} * * * ${RUN_USER} bash ${APP_DIR}/scripts/backup-media-offsite.sh >> ${LOG_DIR}/media-offsite.log 2>&1
 CRON
 # cron ignores files in /etc/cron.d that are writable by others or not owned by root
 chmod 644 "$TMP_FILE"

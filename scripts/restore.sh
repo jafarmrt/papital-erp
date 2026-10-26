@@ -49,6 +49,10 @@ fail() { log "ERROR: $*"; exit 1; }
 # shellcheck source=scripts/env-file.sh
 source "$(dirname "${BASH_SOURCE[0]}")/env-file.sh"
 env_file_value() { env_file_get "$APP_DIR/.env" "$1"; }
+# v11 (O13): the busy lock the nightly check and update.sh look for (scripts/ops-lock.sh)
+# shellcheck source=scripts/ops-lock.sh
+source "$(dirname "${BASH_SOURCE[0]}")/ops-lock.sh"
+ops_busy_hold "$APP_DIR"
 
 [ -n "${DATABASE_URL:-}" ] || DATABASE_URL="$(env_file_value DATABASE_URL)"
 [ -n "${DATABASE_URL:-}" ] || fail "DATABASE_URL must be set (or present in $APP_DIR/.env)"
@@ -96,12 +100,15 @@ log "Restoring from: $BACKUP_FILE (mode=$RESTORE_MODE)"
 
 WORK_DIR="$(mktemp -d)"
 NEW_DB=""
+UNPACK_DIRS=()
 cleanup() {
   local rc=$?
   if [ -n "$NEW_DB" ] && { [ "$RESTORE_MODE" = "apply" ] || [ "$RESTORE_KEEP" != "1" ]; }; then
     admin_sql "DROP DATABASE IF EXISTS \"$NEW_DB\";" >/dev/null 2>&1 || log "WARNING: could not drop $NEW_DB"
   fi
   rm -rf "$WORK_DIR"
+  local u
+  for u in "${UNPACK_DIRS[@]}"; do rm -rf "$u"; done
   exit $rc
 }
 # set before WORK_DIR holds the password file, so any exit from here on removes it (#346 review M1)
@@ -237,6 +244,43 @@ if [ "$RESTORE_MODE" = "drill" ]; then
 fi
 
 # ---------- apply: swap the verified database in (TD-360) ----------
+# v11 (O15): the archive holds the folder under the name it had when the backup was taken (public/uploads → uploads),
+# which is not always the name of <dir>; it is unpacked into a new folder beside <dir> and that one folder is moved to
+# <dir>, so the files land where the log says. Both archives are unpacked and checked before the database is swapped,
+# so an archive that cannot be used stops the run while nothing was changed.
+unpack_archive() {
+  local archive="$1" dir="$2" parent unpack entries
+  UNPACKED=""
+  [ -f "$archive" ] || return 0
+  parent="$(dirname "$dir")"
+  # never inside the uploads folder, which is itself moved aside before the attachments are put in place
+  case "$parent/" in "$UPLOADS_DIR"/*) parent="$(dirname "$UPLOADS_DIR")" ;; esac
+  mkdir -p "$parent"
+  unpack="$(mktemp -d "$parent/.restore_unpack_XXXXXX")"
+  UNPACK_DIRS+=("$unpack")
+  tar -xzf "$archive" -C "$unpack" || fail "cannot unpack $archive; nothing was changed"
+  entries="$(find "$unpack" -mindepth 1 -maxdepth 1 | wc -l)"
+  if [ "$entries" -ne 1 ] || [ ! -d "$(find "$unpack" -mindepth 1 -maxdepth 1)" ]; then
+    fail "$archive does not hold exactly one folder; nothing was changed"
+  fi
+  UNPACKED="$(find "$unpack" -mindepth 1 -maxdepth 1)"
+}
+place_archive() {
+  local archive="$1" unpacked="$2" dir="$3"
+  [ -n "$unpacked" ] || return 0
+  if [ -e "$dir" ]; then mv "$dir" "$dir.before_restore_${TIMESTAMP}"; log "Previous $(basename "$dir") kept as $dir.before_restore_${TIMESTAMP}"; fi
+  mv "$unpacked" "$dir"
+  rmdir "$(dirname "$unpacked")"
+  log "Files restored from $archive into $dir"
+}
+unpack_archive "$UPLOADS_ARCHIVE" "$UPLOADS_DIR"
+UPLOADS_UNPACKED="$UNPACKED"
+ATTACHMENTS_UNPACKED=""
+if [ "$ATT_KIND" = "attachments" ]; then
+  unpack_archive "$ATTACHMENTS_ARCHIVE" "$ATTACHMENTS_ROOT"
+  ATTACHMENTS_UNPACKED="$UNPACKED"
+fi
+
 TARGET_DB="${2:-$DB_NAME}"
 OLD_DB="${TARGET_DB}_before_restore_${TIMESTAMP}"
 OTHERS="$(psql "$(url_for_db "$TARGET_DB")" -X -tA -c "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()" 2>/dev/null || echo 0)"
@@ -250,18 +294,23 @@ if ! admin_sql "ALTER DATABASE \"$NEW_DB\" RENAME TO \"$TARGET_DB\";" >/dev/null
   fail "cannot rename $NEW_DB to $TARGET_DB — the original database was put back"
 fi
 NEW_DB=""
-log "Database $TARGET_DB replaced by the restored copy; the previous one is kept as ${OLD_DB} (drop it when no longer needed)"
+# v11 (O15): the line says what was done: a target that did not exist was not kept
+if [ "$TARGET_EXISTS" = "1" ]; then
+  log "Database $TARGET_DB replaced by the restored copy; the previous one is kept as ${OLD_DB}"
+else
+  log "Database $TARGET_DB created from the restored copy (there was no database of that name before)"
+fi
+# v11 (O11): the copies kept by this and earlier restores stay until someone drops them; each is named with its command
+KEPT_DBS="$(admin_sql "SELECT datname FROM pg_database WHERE datname LIKE '$(printf '%s' "$TARGET_DB" | sed 's/[_%]/\\&/g')\\_before\\_restore\\_%' ORDER BY 1")" || KEPT_DBS=""
+if [ -n "$KEPT_DBS" ]; then
+  log "Databases kept by restores (each holds a full copy of the data; drop one when it is no longer needed):"
+  while IFS= read -r kept; do
+    [ -n "$kept" ] && log "    sudo -u postgres dropdb \"$kept\""
+  done <<< "$KEPT_DBS"
+fi
 
-restore_archive() {
-  local archive="$1" dir="$2"
-  [ -f "$archive" ] || return 0
-  if [ -e "$dir" ]; then mv "$dir" "$dir.before_restore_${TIMESTAMP}"; log "Previous $(basename "$dir") kept as $dir.before_restore_${TIMESTAMP}"; fi
-  mkdir -p "$(dirname "$dir")"
-  tar -xzf "$archive" -C "$(dirname "$dir")"
-  log "Files restored from $archive into $dir"
-}
-restore_archive "$UPLOADS_ARCHIVE" "$UPLOADS_DIR"
-[ "$ATT_KIND" = "attachments" ] && restore_archive "$ATTACHMENTS_ARCHIVE" "$ATTACHMENTS_ROOT"
+place_archive "$UPLOADS_ARCHIVE" "$UPLOADS_UNPACKED" "$UPLOADS_DIR"
+place_archive "$ATTACHMENTS_ARCHIVE" "$ATTACHMENTS_UNPACKED" "$ATTACHMENTS_ROOT"
 
 log "SUCCESS: restore applied. Start the service (systemctl start papital-erp) and wait for http://localhost:3000/health/startup"
 exit 0

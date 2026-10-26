@@ -8,6 +8,7 @@
 set -euo pipefail
 
 LOG_FILE="install-$(date +%Y%m%d-%H%M%S).log"
+( umask 077; : >> "$LOG_FILE" )
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 log()      { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
@@ -114,6 +115,8 @@ fi
 if git -C "$APP_DIR" remote get-url origin 2>/dev/null | grep -qE '^https?://[^/@]+@'; then
   warn "The git remote of $APP_DIR holds an access token in .git/config; remove it with: git remote set-url origin <URL without the token>"
 fi
+# v11 (O3): the scripts of a source unpacked from a zip without unix modes are made executable again, as git keeps them
+chmod a+x ./*.sh scripts/*.sh 2>/dev/null || true
 success "Source ready at $APP_DIR"
 
 # ---------- 4) Database & .env ----------
