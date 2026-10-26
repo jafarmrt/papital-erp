@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { toPersianDigits } from '../../src/utils/persianNumber';
 import {
   adminApi, businessToday, closeDb, dataOf, db, expectBalanced, netByAccount, signIn, uniqueSuffix, voucherRowsOf,
   type AdminApi, type Json,
@@ -183,7 +184,8 @@ test('procurement order with a line discount delivered from the procurement desk
   await page.goto('/procurement');
   await page.getByRole('button', { name: UI.activeOrdersTab }).first().click();
   await page.getByPlaceholder(UI.orderSearch).fill(order.refNumber);
-  const row = page.locator('tr', { hasText: order.refNumber });
+  // v11 phase 6.3a (U21): document numbers are shown in Persian digits
+  const row = page.locator('tr', { hasText: toPersianDigits(order.refNumber) });
   await expect(row).toHaveCount(1);
   await row.getByRole('button', { name: UI.deliverOrder }).click();
   const delivered = page.waitForResponse(r => r.url().endsWith(`/api/procurement/orders/${order.id}/deliver`));
