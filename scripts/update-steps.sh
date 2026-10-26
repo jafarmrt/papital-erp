@@ -196,7 +196,7 @@ update_memory_check() {
   avail="$(update_memory_available_mb)" || return 0
   UPDATE_MEMORY_FREE_MB="$avail"
   [ "$avail" -lt "$need" ] || return 0
-  UPDATE_MEMORY_MESSAGE="Not enough memory to build the update: the build needs about ${need} MB of free RAM and swap together, ${avail} MB is free (free -m: 'available' plus free swap). ${done_text}; ${UPDATE_SWAP_ADVICE}, and run the update again (where swap cannot be added, UPDATE_MIN_MEMORY_MB=<MB> sets a lower bar at your own risk)."
+  UPDATE_MEMORY_MESSAGE="Not enough memory to build the update: the build needs about ${need} MB of free RAM and swap together, ${avail} MB is free (free -m: 'available' plus free swap). ${done_text}; ${UPDATE_SWAP_ADVICE}, and run the update again (where swap cannot be added, sudo UPDATE_MIN_MEMORY_MB=<MB> ./update.sh sets a lower bar at your own risk)."
   return 1
 }
 

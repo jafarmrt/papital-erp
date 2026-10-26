@@ -41,7 +41,7 @@ describe('update_memory_check', () => {
     expect(low.stdout).toContain('needs about 2048 MB of free RAM and swap together, 1500 MB is free');
     expect(low.stdout).toContain('Nothing was changed');
     expect(low.stdout).toContain('sudo fallocate -l 2G /swapfile');
-    expect(low.stdout).toContain('UPDATE_MIN_MEMORY_MB=<MB> sets a lower bar');
+    expect(low.stdout).toContain('sudo UPDATE_MIN_MEMORY_MB=<MB> ./update.sh sets a lower bar');
     expect(low.stdout).toContain('free=1500');
 
     write(file, meminfo(1500, 2048));
@@ -78,7 +78,8 @@ const NPM_STUB = `#!/usr/bin/env bash
 case "$1" in
   ci) if [ -n "$STUB_CI_OOM" ]; then echo "oom_kill 1" > "$UPDATE_VMSTAT"; echo "Killed"; exit 137; fi
       mkdir -p node_modules ;;
-  run) if [ -n "$STUB_OOM" ]; then echo "oom_kill 1" > "$UPDATE_VMSTAT"; echo "Killed"; exit 137; fi
+  run) [ -z "$STUB_OOM_ELSEWHERE" ] || echo "oom_kill 1" > "$UPDATE_VMSTAT"
+       if [ -n "$STUB_OOM" ]; then echo "oom_kill 1" > "$UPDATE_VMSTAT"; echo "Killed"; exit 137; fi
        [ -z "$STUB_BUILD_FAILS" ] || exit 1
        mkdir -p dist && echo '// new' > dist/server.cjs ;;
 esac
@@ -114,7 +115,7 @@ function scratch(availableMb: number) {
 function run(s: ReturnType<typeof scratch>, extraEnv: Record<string, string> = {}) {
   return spawnSync('bash', [path.join(s.app, 'update.sh'), '--no-backup', '--source', s.src], {
     cwd: dir, encoding: 'utf8',
-    env: { ...process.env, PATH: `${s.bin}:${process.env.PATH}`, APP_DIR: s.app, NODE_ENV: '', STUB_BUILD_FAILS: '', STUB_OOM: '', STUB_CI_OOM: '',
+    env: { ...process.env, PATH: `${s.bin}:${process.env.PATH}`, APP_DIR: s.app, NODE_ENV: '', STUB_BUILD_FAILS: '', STUB_OOM: '', STUB_CI_OOM: '', STUB_OOM_ELSEWHERE: '',
       NPM_CI_RETRY_DELAY: '0',
       UPDATE_MIN_MEMORY_MB: '2048', UPDATE_MEMINFO: path.join(dir, 'meminfo'), UPDATE_VMSTAT: path.join(dir, 'vmstat'), ...extraEnv },
   });
@@ -173,6 +174,14 @@ describe('update_refuses_or_explains_a_build_without_memory', () => {
     // the rollback steps put the previous source back; the running build was never touched
     expect(r.stdout).toContain('restore-source');
     expect(read(path.join(s.app, 'dist/server.cjs'))).toBe('// old');
+  });
+
+  itRunsUpdate('a build that passed while the kernel killed another process warns', () => {
+    const s = scratch(4000);
+    const r = run(s, { STUB_OOM_ELSEWHERE: '1' });
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(r.stdout).toContain('WARN: The build passed, but the kernel killed a process for lack of memory meanwhile');
+    expect(read(path.join(s.app, 'dist/server.cjs'))).toBe('// new\n');
   });
 
   itRunsUpdate('any other build failure keeps its own message', () => {
