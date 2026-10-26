@@ -61,6 +61,14 @@ if [ "$LOCAL_MODE" -eq 0 ]; then
   fi
 fi
 
+# v11 (O9): an install that already runs is updated by update.sh, which takes a backup first, builds beside the running
+# version and checks the start; running install.sh again built in place without any of that. Stopped before anything
+# changes. A folder without .env (a reinstall over a kept database) or without a build still goes on.
+if [ -f "$APP_DIR/.env" ] && [ -f "$APP_DIR/dist/server.cjs" ] && [ "${INSTALL_AGAIN:-0}" != "1" ]; then
+  die "Papital ERP is already installed in ${APP_DIR}. Update it with: cd ${APP_DIR} && sudo ./update.sh (it takes a backup first). Nothing was changed. Only to rebuild a broken install in place, without a backup: INSTALL_AGAIN=1 bash install.sh"
+fi
+[ "${INSTALL_AGAIN:-0}" != "1" ] || warn "INSTALL_AGAIN=1: installing again over ${APP_DIR} without a backup."
+
 # ---------- 2) System dependencies ----------
 log "[1/7] Installing system dependencies (curl, git, OpenSSL, PostgreSQL, Node.js 24)..."
 

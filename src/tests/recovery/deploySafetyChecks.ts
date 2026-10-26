@@ -29,8 +29,8 @@ const NAMES: Array<[string, string, string]> = [
     'update.sh waits for startup on PORT from .env, the port the service listens on (TD-587)',
     'update.sh verified startup on the PORT written by install.sh'],
   ['rec_obs_r1_22_update_noop_and_lock',
-    'a git update run again with nothing new builds nothing and keeps dist.prev/, and a second update refuses while one runs (OBS-R1-22)',
-    'second run skipped the build and kept the previous build in dist.prev/; a run under a held lock changed nothing'],
+    'a git update run again with nothing new builds nothing, takes no backup, does not restart and keeps dist.prev/; an update adds the missing generated .env keys and rewrites the cron file with its times; a second update refuses while one runs (OBS-R1-22, v11 O10 O11)',
+    'second run said nothing to update, without backup or restart, and kept the previous build in dist.prev/; METRICS_TOKEN added, cron kept 01:15 with bash; a run under a held lock changed nothing'],
 ];
 
 const tsx = path.join(REPO_ROOT, 'node_modules', '.bin', 'tsx');
@@ -191,7 +191,8 @@ export function makeGitApp(root: string): string {
   git(root, ['init', '-q', '--bare', '-b', 'master', origin]);
   git(root, ['clone', '-q', origin, work]);
   fs.mkdirSync(path.join(work, 'scripts'));
-  for (const rel of ['update.sh', 'scripts/update-steps.sh', 'scripts/env-file.sh', 'scripts/ops-lock.sh', 'scripts/verify-startup.sh', 'scripts/untrack-node-modules-link.sh']) {
+  for (const rel of ['update.sh', 'scripts/update-steps.sh', 'scripts/env-file.sh', 'scripts/ops-lock.sh', 'scripts/verify-startup.sh', 'scripts/untrack-node-modules-link.sh',
+    'scripts/ensure-env-secrets.sh', 'scripts/install-ops-cron.sh', 'scripts/backup.sh']) {
     fs.copyFileSync(path.join(REPO_ROOT, rel), path.join(work, rel));
   }
   fs.writeFileSync(path.join(work, 'server.ts'), '');
@@ -215,7 +216,7 @@ export function fakeBin(root: string): string {
   fs.mkdirSync(bin);
   const write = (name: string, body: string) => fs.writeFileSync(path.join(bin, name), `#!/bin/bash\n${body}\n`, { mode: 0o755 });
   write('npm', `if [ "$1" = "ci" ]; then mkdir -p node_modules; fi; if [ "$1 $2" = "run build" ]; then rm -rf dist/*; [ -z "\${FAKE_BUILD_FAIL:-}" ] || exit 1; mkdir -p dist; echo new > dist/server.cjs; fi; exit 0`);
-  write('systemctl', `[ "$1" = "list-unit-files" ] && echo "papital-erp.service enabled"; exit 0`);
+  write('systemctl', `[ "$1" = "list-unit-files" ] && echo "papital-erp.service enabled"; [ "$1" != "restart" ] || echo "$*" >> "${root}/restarts.log"; exit 0`);
   write('sudo', 'exec "$@"');
   return bin;
 }
@@ -234,7 +235,8 @@ export function startupServer(version: string): Promise<{ port: number; close: (
 export async function runUpdate(app: string, bin: string, extra: Record<string, string>, args: string[] = ['--no-backup']): Promise<{ code: number; output: string }> {
   return runCommand('bash', [path.join(app, 'update.sh'), ...args], {
     cwd: path.dirname(app),
-    env: scriptEnv({ PATH: `${bin}:${process.env.PATH ?? ''}`, APP_DIR: app, STARTUP_TIMEOUT: '4', STARTUP_POLL_INTERVAL: '1', ...extra }),
+    // the cron file update.sh rewrites (v11, O10) is the scratch one, never /etc/cron.d
+    env: scriptEnv({ PATH: `${bin}:${process.env.PATH ?? ''}`, APP_DIR: app, STARTUP_TIMEOUT: '4', STARTUP_POLL_INTERVAL: '1', CRON_FILE: path.join(path.dirname(app), 'cron.d', 'papital-erp'), ...extra }),
     timeoutMs: 120_000,
   });
 }
@@ -282,12 +284,29 @@ export async function checkUpdateNoopAndLock(): Promise<string[]> {
   try {
     const app = makeGitApp(root);
     fs.writeFileSync(path.join(app, '.env'), `NODE_ENV=production\nPORT=${server.port}\n`);
+    // v11 (O10): an older cron file, without bash in front and with its own backup time
+    const cronDir = path.join(root, 'cron.d');
+    fs.mkdirSync(cronDir);
+    const user = os.userInfo().username;
+    fs.writeFileSync(path.join(cronDir, 'papital-erp'), `15 1 * * * ${user} ${app}/scripts/backup.sh >> ${app}/logs/backup.log 2>&1\n`);
     const bin = fakeBin(root);
     const first = await runUpdate(app, bin, {});
     if (first.code !== 0) return [`first update failed (exit ${first.code}): ${first.output.slice(-300)}`];
+    const env = fs.readFileSync(path.join(app, '.env'), 'utf8');
+    if (!/^METRICS_TOKEN=[0-9a-f]{64}$/m.test(env) || !/^ERP_SECRETS_KEY=[0-9a-f]{64}$/m.test(env)) v.push('the update did not add the generated keys a server installed earlier lacks (O10)');
+    if (/ERP_WEBHOOK_SECRET_TOKEN/.test(env)) v.push('the update added the echo token, which would replace the one the settings hold');
+    const cron = fs.readFileSync(path.join(cronDir, 'papital-erp'), 'utf8');
+    if (!cron.includes(`15 1 * * * ${user} bash ${app}/scripts/backup.sh`)) v.push(`the cron file was not rewritten with bash and the kept backup time (O3, O10): ${cron}`);
+    if (!cron.includes('/scripts/nightly-verify.sh') || !cron.includes('/scripts/monitor.sh')) v.push('the rewritten cron file lacks the jobs of this version');
+    const restartsAfterFirst = fs.readFileSync(path.join(root, 'restarts.log'), 'utf8').split('\n').filter(Boolean).length;
     const second = await runUpdate(app, bin, {});
     if (second.code !== 0) v.push(`second update failed (exit ${second.code}): ${second.output.slice(-300)}`);
-    if (!second.output.includes('dist/ is already built from this source')) v.push('the second run built the same source again');
+    // v11 (O11): nothing new: no build, no backup, no restart
+    if (!second.output.includes('Nothing to update')) v.push(`the second run with nothing new did not say so: ${second.output.slice(-300)}`);
+    if (second.output.includes('[1/6]') || second.output.includes('[5/6] Restarting')) v.push('the second run with nothing new took a backup or restarted the service');
+    if (fs.readFileSync(path.join(root, 'restarts.log'), 'utf8').split('\n').filter(Boolean).length !== restartsAfterFirst) v.push('the service was restarted by an update with nothing new');
+    const withBackup = await runUpdate(app, bin, {}, []);
+    if (withBackup.code !== 0 || withBackup.output.includes('[1/6]')) v.push(`an update with nothing new and no --no-backup still took a backup (exit ${withBackup.code})`);
     const prev = path.join(app, 'dist.prev', 'server.cjs');
     if (!fs.existsSync(prev) || fs.readFileSync(prev, 'utf8') !== 'previous build') v.push('dist.prev/ no longer holds the build from before the update');
     const locked = await runCommand('bash', ['-c', `exec 9>"${app}/.update.lock"; flock 9; bash "${app}/update.sh" --no-backup`], {
