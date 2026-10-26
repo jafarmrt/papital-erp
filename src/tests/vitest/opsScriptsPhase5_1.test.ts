@@ -120,13 +120,39 @@ describe('ops_lock_files_readable: a non-root service still sees the locks root 
     fs.symlinkSync(target, path.join(app, 'logs/.ops-busy.lock'));
     const r = spawnSync('bash', ['-c', `source "${path.join(ROOT, 'scripts/ops-lock.sh')}"; ops_busy_hold "${app}"`], { encoding: 'utf8' });
     expect(r.status).toBe(0);
-    expect(r.stdout).toContain('is a link or cannot be read');
+    expect(r.stdout).toContain('is a link');
     expect(fs.statSync(target).mode & 0o777).toBe(0o600);
     // a dangling link: nothing is created at its target
     fs.rmSync(path.join(app, 'logs/.ops-busy.lock'));
     fs.symlinkSync(path.join(app, 'made-through-link'), path.join(app, 'logs/.ops-busy.lock'));
     spawnSync('bash', ['-c', `source "${path.join(ROOT, 'scripts/ops-lock.sh')}"; ops_busy_hold "${app}"`], { encoding: 'utf8' });
     expect(fs.existsSync(path.join(app, 'made-through-link'))).toBe(false);
+    // a FIFO in its place (or a link to one) never makes the job wait
+    fs.rmSync(path.join(app, 'logs/.ops-busy.lock'));
+    spawnSync('mkfifo', [path.join(app, 'fifo')]);
+    for (const make of [() => fs.symlinkSync(path.join(app, 'fifo'), path.join(app, 'logs/.ops-busy.lock')), () => spawnSync('mkfifo', [path.join(app, 'logs/.ops-busy.lock')])]) {
+      make();
+      const f = spawnSync('bash', ['-c', `source "${path.join(ROOT, 'scripts/ops-lock.sh')}"; ops_busy_hold "${app}"`], { encoding: 'utf8', timeout: 5000 });
+      expect(f.status, f.stdout + f.stderr).toBe(0);
+      expect(f.stdout).toContain('not a plain file');
+      fs.rmSync(path.join(app, 'logs/.ops-busy.lock'));
+    }
+  });
+
+  it('a logs/ folder of its own inside an app folder of another user gets no chmod (the user could swap logs/ for a link)', () => {
+    const shared = tmp('ops-lock-parent-');
+    fs.chmodSync(shared, 0o755);
+    const app = path.join(shared, 'app');
+    fs.mkdirSync(path.join(app, 'logs'), { recursive: true });
+    const lock = path.join(app, 'logs/.ops-busy.lock');
+    fs.writeFileSync(lock, '', { mode: 0o600 });
+    fs.chmodSync(lock, 0o600);
+    const code = `source "${path.join(ROOT, 'scripts/ops-lock.sh')}"; ops_busy_hold "${app}"`;
+    if (process.getuid?.() === 0) spawnSync('chown', ['nobody', app]);
+    else fs.chmodSync(app, 0o755);
+    const r = spawnSync('bash', ['-c', code], { encoding: 'utf8' });
+    expect(r.status).toBe(0);
+    if (process.getuid?.() === 0) expect(fs.statSync(lock).mode & 0o777).toBe(0o600);
   });
 
   it('update.sh makes .update.lock readable whatever root umask, and waits a moment for a lock check instead of refusing', () => {

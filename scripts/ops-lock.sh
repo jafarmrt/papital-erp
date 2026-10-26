@@ -24,13 +24,18 @@ ops_busy_hold() {
   local file="$1/$OPS_BUSY_LOCK_NAME"
   command -v flock >/dev/null 2>&1 || return 0
   mkdir -p "$(dirname "$file")" 2>/dev/null || true
-  # made only when no file or link of that name is there (noclobber creates with O_EXCL): root never writes through a
-  # link that the user owning logs/ put in its place
+  # only a plain file is used: a link (bash's noclobber opens an existing non-file without O_EXCL, so a link to a FIFO
+  # would hang the job) or anything else the user owning logs/ put there is skipped
+  if [ -L "$file" ] || { [ -e "$file" ] && [ ! -f "$file" ]; }; then
+    echo "[$(date)] WARNING: the operations lock $file is a link or not a plain file; this run is not seen by the nightly check and update.sh"
+    return 0
+  fi
+  # made only when no file of that name is there (noclobber creates with O_EXCL)
   ( set -C; umask 022; : > "$file" ) 2>/dev/null || true
   # readable by every user: root may have made it (a sudo restore), and a non-root backup must still see the lock; only
-  # in a folder this user owns, where no one else can swap the file for a link between the test and the chmod
-  if [ -O "$(dirname "$file")" ] && [ -O "$file" ] && [ ! -L "$file" ]; then chmod 644 "$file" 2>/dev/null || true; fi
-  if [ -L "$file" ] || [ ! -r "$file" ]; then
+  # when this user owns the app folder and logs/, so no one else can swap logs/ or the file between the test and chmod
+  if [ -O "$1" ] && [ -O "$(dirname "$file")" ] && [ -O "$file" ] && [ ! -L "$file" ]; then chmod 644 "$file" 2>/dev/null || true; fi
+  if [ -L "$file" ] || [ ! -f "$file" ] || [ ! -r "$file" ]; then
     echo "[$(date)] WARNING: the operations lock $file is a link or cannot be read; this run is not seen by the nightly check and update.sh"
     return 0
   fi
