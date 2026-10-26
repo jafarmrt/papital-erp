@@ -77,7 +77,7 @@ const DOUBLE_NOISE = 4 * Number.EPSILON;
  * 3.3000000000000003, a price formula in Excel «1850000 * 1.1» is 2035000.0000000002), so a number that close to its
  * `maxScale`-decimal value is that value. A fifth decimal someone typed («100.00005», «12345678901.23456») is further
  * away and stays refused. The noise allowed grows with the number, so a fifth decimal is always refused below about
- * 1.1e10 and always read as the rounded value (off by at most 0.00005) from about 5.6e10; in between it depends on the
+ * 1e10 and always read as the rounded value (off by at most 0.00005) from about 6e10; in between it depends on the
  * digits («20000000000.00001» reads as 20000000000). Shared by the server's reading of JSON numbers and the browser code
  * that sends a computed number as text.
  */

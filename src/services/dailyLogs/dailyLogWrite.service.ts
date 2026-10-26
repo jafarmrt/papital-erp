@@ -278,7 +278,7 @@ export async function reviewDailyLog(
   logId: number,
   managerNotes: string | undefined,
   version: number,
-  opened: { status?: string; managerNotes?: string } = {},
+  opened: { status: string; managerNotes: string },
 ): Promise<DailyLogRow> {
   return orm.transaction(async (tx) => {
     const existing = await lockLog(tx, logId);
@@ -286,11 +286,11 @@ export async function reviewDailyLog(
     if (existing.version !== version) {
       throw new ConflictError('این گزارش کار پس از باز شدن آن ویرایش شده؛ دوباره باز کنید و بخوانید.', { currentVersion: existing.version }, 'OCC_CONFLICT');
     }
-    // review 4 of #403: another manager's review since the form opened is not silently replaced
-    const reviewChanged = (opened.status !== undefined && opened.status !== existing.status)
-      || (opened.managerNotes !== undefined && opened.managerNotes !== (existing.managerNotes || ''));
+    // review 4 of #403: another manager's review since the form opened is not silently replaced (the list shows an
+    // empty status as «submitted», so it is compared as one: review 5)
+    const reviewChanged = opened.status !== (existing.status || 'submitted') || opened.managerNotes !== (existing.managerNotes || '');
     if (reviewChanged) {
-      throw new ConflictError('مدیر دیگری پس از باز شدن این گزارش کار بازخورد ثبت کرده؛ دوباره باز کنید و بخوانید.', { currentVersion: existing.version }, 'OCC_CONFLICT');
+      throw new ConflictError('بازخورد این گزارش کار پس از باز شدن آن تغییر کرده؛ دوباره باز کنید و بازخورد ثبت‌شده را بخوانید.', { currentVersion: existing.version }, 'OCC_CONFLICT');
     }
     // review 3 of #403: a review keeps the version, so an edit form the author opened before it is not refused
     const [updated] = await tx.update(dailyWorkLogs)

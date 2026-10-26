@@ -103,7 +103,8 @@ export const decimalNumberBounds = (label: string, { positive = false }: { posit
     // reviews 3-4 of #403: the number itself goes on, so on a field that must be above zero one that reads as 0
     // («1e-17») is refused rather than passing `.positive()` and being stored as a zero line; a field that may be zero
     // takes the noise of a computed zero («0.1 + 0.2 - 0.3») as 0, like `decimalInput`
-    if (positive && read === '0') ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${label} باید بزرگ‌تر از صفر باشد.` });
+    // (0 itself, or a negative number, is left to `.positive()`, so its message is not repeated)
+    if (positive && read === '0' && value > 0) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${label} باید بزرگ‌تر از صفر باشد.` });
   };
 
 /** v8.0.108 (TD-385): شماره‌ها و شناسه‌های متنی (شماره چک، شناسه صیادی) با ارقام لاتین ذخیره می‌شوند */

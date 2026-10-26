@@ -55,6 +55,30 @@ describe('daily log review after a stale version', () => {
     expect(result.current.reviewNotes).toBe(TYPED_NOTES);
   });
 
+  it('closes the form at once on a 409, without waiting for the list to be read again', async () => {
+    let listReads = 0;
+    fetchJson.mockImplementation((url: string, init?: { method?: string }) => {
+      if (init?.method === 'PUT') return Promise.reject(Object.assign(new Error('stale'), { status: 409 }));
+      if (url === '/daily-logs/stats') return Promise.resolve({ todayHours: 0 });
+      if (url.startsWith('/daily-logs?')) {
+        listReads += 1;
+        // the reload after the 409 never answers here
+        return listReads === 1 ? Promise.resolve({ data: [{ id: 7, title: 'log', version: 1, managerNotes: '' }], total: 1 }) : new Promise(() => undefined);
+      }
+      return Promise.resolve([]);
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 5 * 60 * 1000 } } });
+    const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const { result } = renderHook(() => useDailyLogs(user), { wrapper });
+    await waitFor(() => expect(result.current.logs).toHaveLength(1));
+
+    act(() => result.current.handleOpenReviewModal(result.current.logs[0] as DailyWorkLog));
+    await act(async () => {
+      await Promise.race([result.current.handleSaveReview(), new Promise(resolve => setTimeout(resolve, 300))]);
+    });
+    expect(result.current.reviewModalLog).toBeNull();
+  });
+
   it('sends the review state the form opened and keeps the draft while another log is opened', async () => {
     const puts: Record<string, unknown>[] = [];
     fetchJson.mockImplementation((url: string, init?: { method?: string; body?: string }) => {

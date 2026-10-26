@@ -26,7 +26,7 @@ describe('decimalInput bounds (M16, S10, S12)', () => {
     expect(read('00000000000000012')).toMatchObject({ success: true });
   });
 
-  it('refuses a 15th whole digit or a 5th decimal, as text or as a number (always below about 1.1e10)', () => {
+  it('refuses a 15th whole digit or a 5th decimal, as text or as a number (always below about 1e10)', () => {
     const bad = ['100000000000000', '1.23456', '0.00001', '100.00005', 1e14, 1e-5, 1e-7, 1.23456, 100.00005, 99.99999, 12345678.12345, 10 / 3, 1000 / 3,
       12345678901.23456, 10000000000.00005, -0.00001];
     for (const value of bad) expect(read(value).success, String(value)).toBe(false);
@@ -149,5 +149,7 @@ describe('number fields that stay numbers take the same bound (M16)', () => {
   it('says a quantity that reads as 0 must be above zero, not that it has too many decimals', () => {
     const issue = bomAllocationItemSchema.safeParse({ itemId: 1, quantity: 1e-17 }).error?.issues[0]?.message ?? '';
     expect(issue).toContain(ABOVE_ZERO);
+    // a quantity of 0 gets the one message of `.positive()`, not a second one (review 5 of #403)
+    expect(bomAllocationItemSchema.safeParse({ itemId: 1, quantity: 0 }).error?.issues).toHaveLength(1);
   });
 });

@@ -242,11 +242,22 @@ export async function runInputGuardsV11Tests(shouldRun: ShouldRun): Promise<Test
       const id = Number(created.body?.id ?? created.body?.log?.id);
       const stored = async () => (await orm.select({ status: dailyWorkLogs.status, version: dailyWorkLogs.version, date: dailyWorkLogs.date, managerNotes: dailyWorkLogs.managerNotes })
         .from(dailyWorkLogs).where(eq(dailyWorkLogs.id, id)))[0];
+      // the review state the manager's form opened, as the list shows it
+      const openedReviewOf = (log: { status: string | null; managerNotes: string | null }) => ({ opened_status: log.status || 'submitted', opened_manager_notes: log.managerNotes ?? '' });
+      // a review that does not say what it opened is refused, so it never replaces another manager's review unseen
+      const blind = await api.put(`/api/daily-logs/${id}/review`, { manager_notes: 'C10 blind review', version: (await stored()).version });
+      if (blind.status !== 400) problems.push(`a review without the opened review state returned ${brief(blind)}, expected 400`);
+      // a log stored with no status reads as submitted and is reviewed like one (review 5 of #403)
+      await orm.update(dailyWorkLogs).set({ status: null }).where(eq(dailyWorkLogs.id, id));
+      const unset = await api.put(`/api/daily-logs/${id}/review`, { manager_notes: 'C10 empty status review', version: (await stored()).version, opened_status: 'submitted', opened_manager_notes: '' });
+      if (unset.status !== 200) problems.push(`a review of a log stored with no status returned ${brief(unset)}`);
+      await orm.update(dailyWorkLogs).set({ status: 'submitted', managerNotes: '' }).where(eq(dailyWorkLogs.id, id));
       const movedAhead = await api.put(`/api/daily-logs/${id}`, { date: tomorrow, version: (await stored()).version });
       if (movedAhead.status !== 422 || codeOf(movedAhead) !== 'DAILY_LOG_DATE_IN_FUTURE') problems.push(`moving the log to tomorrow returned ${brief(movedAhead)}, expected 422 DAILY_LOG_DATE_IN_FUTURE`);
 
       const review = async () => {
-        const res = await api.put(`/api/daily-logs/${id}/review`, { manager_notes: 'C10 review', version: (await stored()).version });
+        const current = await stored();
+        const res = await api.put(`/api/daily-logs/${id}/review`, { manager_notes: 'C10 review', version: current.version, ...openedReviewOf(current) });
         if (res.status !== 200) throw new Error(`setup: review ${brief(res)}`);
       };
       const openedVersion = (await stored()).version;
@@ -259,14 +270,14 @@ export async function runInputGuardsV11Tests(shouldRun: ShouldRun): Promise<Test
       if (text.status !== 200) problems.push(`editing the text returned ${brief(text)}`);
       if ((await stored()).status !== 'submitted') problems.push(`after its text changed the reviewed log is ${(await stored()).status}, expected submitted`);
       // a review sent from the page the manager opened before the text changed is refused, and the log stays submitted
-      const stale = await api.put(`/api/daily-logs/${id}/review`, { manager_notes: 'C10 stale review', version: (await stored()).version - 1 });
+      const stale = await api.put(`/api/daily-logs/${id}/review`, { manager_notes: 'C10 stale review', version: (await stored()).version - 1, ...openedReviewOf(await stored()) });
       if (stale.status !== 409 || codeOf(stale) !== 'OCC_CONFLICT') problems.push(`a review of the older version returned ${brief(stale)}, expected 409 OCC_CONFLICT`);
       if ((await stored()).status !== 'submitted') problems.push(`the stale review left the log ${(await stored()).status}`);
       // two managers open the same log; the second review, sent with the review state its form opened, does not replace
       // the first one (review 4 of #403)
       const opened = await stored();
       const reviewAs = (notes: string) => api.put(`/api/daily-logs/${id}/review`, {
-        manager_notes: notes, version: opened.version, opened_status: opened.status, opened_manager_notes: opened.managerNotes ?? '',
+        manager_notes: notes, version: opened.version, ...openedReviewOf(opened),
       });
       const first = await reviewAs(FIRST_MANAGER_NOTES);
       if (first.status !== 200) problems.push(`the first manager's review returned ${brief(first)}`);
