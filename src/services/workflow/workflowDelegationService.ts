@@ -231,9 +231,7 @@ export class WorkflowDelegationService {
       toUsername: sql<string>`tu.username`,
       // v10.1.16 (D-06 part C): the scope's workflow title, so the inbox names it without the definition list
       scopeTitle: sql<string | null>`(SELECT d.title FROM workflow_definitions d WHERE lower(btrim(d.code)) = lower(btrim(${workflowDelegations.scope})) ORDER BY d.id LIMIT 1)`,
-      // V3.0.9 (TD-055/BUG): ستون‌ها `timestamp WITHOUT time zone` هستند و نود
-      // رشته‌های UTC ISO (با Z که PG نادیده می‌گیرد) را literal ذخیره می‌کند؛ بنابراین
-      // مقایسه باید با «ساعت UTC» باشد نه now() با TZ سشن (تهران) که +۳:۳۰ انحراف می‌دهد.
+      // V3.0.9 (TD-055/BUG), v11 (phase 4.2): start and end are timestamptz, so they compare with now() itself
       isActiveNow: sql<number>`(${workflowDelegations.isActive} = 1 AND ${workflowDelegations.startDate} <= now() AND ${workflowDelegations.endDate} >= now())`,
       isExpiredFlag: sql<number>`(${workflowDelegations.isActive} = 1 AND ${workflowDelegations.endDate} < now())`
     })

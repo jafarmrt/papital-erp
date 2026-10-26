@@ -213,7 +213,8 @@ export class IdempotencyService {
 
     if (record.status === 'processing') {
       // v11 (phase 4.2): locked_until is timestamptz, read as the UTC server time without an offset
-      // (withUtcTimestamptzText), so it parses as that instant whatever the process time zone is.
+      // (withUtcTimestamptzText), so it parses as that instant whatever the process time zone is (the session one
+      // stays UTC: the OCC update below compares this text with the column).
       const rawLock = record.lockedUntil as unknown;
       const lockMs = rawLock instanceof Date ? rawLock.getTime() : Date.parse(serverTimestampToUtcIso(String(rawLock)) ?? '');
       const lockExpiry = Number.isNaN(lockMs) ? 0 : lockMs;

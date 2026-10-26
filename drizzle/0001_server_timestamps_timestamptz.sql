@@ -5,7 +5,10 @@
 -- Two business dates stay plain timestamp on purpose: documents.date (and its document_date twin in
 -- ref_fiscal_year_corrections) and transactions.date are Tehran wall-clock dates that fiscal numbering, filters and
 -- "today" are built on.
--- Each ALTER TABLE rewrites its table once, so the conversion briefly needs free disk about the size of the table.
+-- Each ALTER TABLE rewrites its table and its indexes. The migrator runs every pending migration in one transaction, so
+-- the old copies stay until it commits: the conversion needs free disk about the size of the database (plus its WAL);
+-- update.sh checks for twice the database. The rewrite drops the statistics of the converted columns, so the file ends
+-- by analysing those tables again.
 ALTER TABLE _repair_0011_timestamps_backup
   ALTER COLUMN backed_up_at TYPE timestamptz USING backed_up_at AT TIME ZONE 'UTC';
 --> statement-breakpoint
@@ -463,3 +466,5 @@ BEGIN
   RETURN v_inserted;
 END
 $$;
+--> statement-breakpoint
+ANALYZE _repair_0011_timestamps_backup, accounting_settings, accounts, activity_logs, bank_accounts, birthday_greetings, cheques, crm_activities, crm_lead_stage_history, crm_leads, customer_tag_links, customer_tags, customers, daily_log_visibility_repairs, daily_work_logs, dead_letter_events, documents, event_action_logs, event_action_rule_retirements, event_action_rules, file_attachments, fiscal_periods, form_drafts, idempotency_keys, integration_delivery_jobs, inventory_reconciliation_anomalies, item_code_history, item_opening_voucher_items, item_price_title_cleanup, item_prices, item_warehouse_stocks, items, items_stocks_archive, journal_voucher_items, journal_vouchers, legacy_date_repairs, media_assets, media_sections, messenger_bots, messenger_link_codes, migrations_log, notifications, outbox_events, payroll_eidi_rates, payroll_statutory_rates, pending_materials, personnel, petty_cash_expense_lines, piecework_logs, piecework_payrolls, piecework_personnel_rates, piecework_task_rate_history, piecework_tasks, production_projects, project_bom_allocations, project_managers, project_reservation_releases, project_stages, purchase_requisitions, ref_fiscal_year_corrections, statutory_remittance_lines, stock_receipt_confirmations, task_categories, transfers, treasury_transactions, user_messenger_links, user_notification_preferences, user_sessions, users, wc_product_links, wc_sync_runs, webhook_deliveries, webhook_event_pattern_repairs, webhook_subscriptions, woocommerce_order_logs, workflow_definition_versions, workflow_definitions, workflow_delegations, workflow_history_logs, workflow_instances, workflow_pending_approvals, workflow_task_reopen_log, workflow_tasks, workshop_task_reports;
