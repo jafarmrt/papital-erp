@@ -170,7 +170,7 @@ place_archive "${archive}" "$UNPACKED" "${target}"`);
   });
 
   it('an archive of more than one folder is refused, and one folder is unpacked straight into the folder root moves', () => {
-    expect(read('scripts/restore.sh')).toContain('--strip-components=1 -C "$unpack" < "$copy"');
+    expect(read('scripts/restore.sh')).toContain('--no-same-permissions --strip-components=1 -C "$unpack" < "$copy"');
     const dir = tmp('svc-restore-two-');
     const uploads = path.join(dir, 'app/public/uploads');
     fs.mkdirSync(uploads, { recursive: true });

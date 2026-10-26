@@ -304,7 +304,7 @@ unpack_archive() {
     fail "$parent belongs to $parent_owner, neither root nor the owner of $dir ($owner); nothing was changed"
   fi
   UNPACK_DIRS+=("$unpack")
-  as_owner "$owner" tar -xzf - --no-same-owner --strip-components=1 -C "$unpack" < "$copy" || fail "cannot unpack $archive; nothing was changed"
+  as_owner "$owner" tar -xzf - --no-same-owner --no-same-permissions --strip-components=1 -C "$unpack" < "$copy" || fail "cannot unpack $archive; nothing was changed"
   as_owner "$owner" chmod "$mode" "$unpack"
   rm -f "$copy"
   UNPACKED="$unpack"
