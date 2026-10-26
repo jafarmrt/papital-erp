@@ -4,7 +4,7 @@ import type { BirthdayReaction, BirthdaysAnswer } from '../../lib/social/birthda
 import type { PresenceColleague, SocialPreferences } from '../../lib/social/presence';
 import { BACKGROUND_POLL_HEADERS } from '../../lib/social/presence';
 
-/** v10.2 package 9: the group dashboard («پیشخوان گروهی»): birthdays, greetings, presence and the whats-new card */
+/** v10.2 package 9: the group dashboard («پیشخوان گروهی»): birthdays, greetings and presence (the whats-new card was removed after v11.2.0) */
 export const SOCIAL_KEYS = {
   birthdays: ['social', 'birthdays'] as const,
   presence: ['social', 'presence'] as const,
