@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import type { BirthdayReaction, BirthdaysAnswer } from '../../lib/social/birthdays';
-import type { PresenceColleague, SocialPreferences, WhatsNewAnswer } from '../../lib/social/presence';
+import type { PresenceColleague, SocialPreferences } from '../../lib/social/presence';
 import { BACKGROUND_POLL_HEADERS } from '../../lib/social/presence';
 
 /** v10.2 package 9: the group dashboard («پیشخوان گروهی»): birthdays, greetings, presence and the whats-new card */
@@ -9,7 +9,6 @@ export const SOCIAL_KEYS = {
   birthdays: ['social', 'birthdays'] as const,
   presence: ['social', 'presence'] as const,
   preferences: ['social', 'preferences'] as const,
-  whatsNew: ['social', 'whats-new'] as const,
 };
 
 /** the presence card refreshes every minute, only while the page is visible (React Query pauses in the background) */
@@ -88,21 +87,5 @@ export function useSaveSocialPreferencesMutation() {
       queryClient.setQueryData(SOCIAL_KEYS.preferences, answer);
       void queryClient.invalidateQueries({ queryKey: SOCIAL_KEYS.birthdays });
     },
-  });
-}
-
-export function useWhatsNewQuery() {
-  return useQuery<WhatsNewAnswer | null>({
-    queryKey: SOCIAL_KEYS.whatsNew,
-    queryFn: async () => ((await fetchJson('/social/whats-new') as { data?: WhatsNewAnswer | null } | null)?.data) ?? null,
-  });
-}
-
-export function useDismissWhatsNewMutation() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (version: string) =>
-      ((await fetchJson('/social/whats-new/dismiss', { method: 'POST', body: JSON.stringify({ version }) }) as { data?: WhatsNewAnswer | null } | null)?.data) ?? null,
-    onSuccess: (answer) => { queryClient.setQueryData(SOCIAL_KEYS.whatsNew, answer); },
   });
 }

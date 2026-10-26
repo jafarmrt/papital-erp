@@ -22,6 +22,7 @@ under «### Unreleased», then one section per released version.
 ## Version 11.x Series (Active — see `src/data/changelogs/11.ts`)
 
 ### Unreleased
+- Dashboard: the «تازه‌های این نسخه» card no longer shows on the پیشخوان after an update (owner's request); `WhatsNewCard` and its two client hooks are removed. The update center page (changelog) stays as it was. The `/social/whats-new` routes, their regression case and the `users.whats_new_seen_version` column are kept unused for now, so the card can come back without a migration.
 - Update memory check (after the failed v11.2.0 server update, whose build the kernel killed for lack of memory on a server without swap): `update.sh` adds RAM available and free swap before the backup and again before the build and stops with the swap file steps below 2048 MB (`UPDATE_MIN_MEMORY_MB`), and a build or `npm ci` killed for lack of memory (`oom_kill` of `/proc/vmstat`) is named as such instead of a bare «Build failed» or three network retries; README and the go-live checklist give the swap steps. Vitest `updateMemoryCheck.test.ts`.
 
 ### v11.2.0 — پایان فاز ۳: رفع فوری پول، انبار و به‌روزرسانی سرور
