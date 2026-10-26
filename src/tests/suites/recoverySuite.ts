@@ -4,7 +4,7 @@ import { orm } from '../../db/drizzle.js';
 import { outboxEvents } from '../../db/schema.js';
 import { OutboxService } from '../../services/events/outboxService.js';
 import { runBackupRestoreChecks, type RecoveryCheckOutcome } from '../recovery/backupRestoreChecks.js';
-import { checkMigrationNoticesReported, checkMigrationSession, checkSkippedMigrationRefused, checkUpgradeFromV70137 } from '../recovery/migrationChecks.js';
+import { checkMigrationNoticesReported, checkMigrationSession, checkSkippedMigrationRefused } from '../recovery/migrationChecks.js';
 import { checkUpdateWaitsForStartup } from '../recovery/updateScriptChecks.js';
 import { runDeploySafetyChecks } from '../recovery/deploySafetyChecks.js';
 import { runToolingChecks } from '../recovery/toolingChecks.js';
@@ -17,8 +17,6 @@ async function runMigrationAndBackupChecks(results: TestCaseResult[]): Promise<v
       checkSkippedMigrationRefused, 'The late migration was refused by name, the same migration with a correct when ran, and the database ahead was refused'],
     ['rec_td_366_migration_session', 'v8.0.82: migrations run on a separate connection without the 60-second request timeout and two concurrent runs queue (TD-366)',
       checkMigrationSession, 'Two concurrent runs both succeeded with no duplicate row in the migration journal; the statement timeout in the migration is 0'],
-    ['rec_td_368_upgrade_from_v7_0_137', 'v8.0.89: upgrading a server from v7.0.137 with a cheque voucher of a closed fiscal year whose date 0044 did not convert does not break in migration 0047; the voucher is linked and its date and NOT VALID constraint stay untouched (TD-368)',
-      checkUpgradeFromV70137, 'The upgrade from level 0044 with the refused voucher succeeded; the cheque link was recorded and the date and NOT VALID constraint stayed untouched'],
     ['rec_td_365_update_waits_for_startup', 'v8.0.83: update.sh reports success only after migrations and startup end (/health/startup) with the right version (TD-365)',
       checkUpdateWaitsForStartup, 'Migrating and a stale version were refused, a started server with the right version was accepted; an unknown argument gave a clear message'],
     ['rec_td_590_test_schema_keeps_public', 'v9.0.425: building an isolated test schema drops no index or function of the same name in public (TD-590)',

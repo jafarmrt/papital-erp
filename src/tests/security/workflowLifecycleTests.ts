@@ -1,7 +1,5 @@
-import fs from 'fs';
-import path from 'path';
 import { TestCaseResult } from '../types.js';
-import { orm, pool } from '../../db/drizzle.js';
+import { orm } from '../../db/drizzle.js';
 import { runCase, type Harness, type Row, type ShouldRun } from './workflowTestHarness.js';
 
 /**
@@ -31,21 +29,6 @@ const instancesOf = (h: Harness, entityType: string, entityId: number | string):
 const pendingTasksOf = (h: Harness, instanceId: number): Promise<Row[]> =>
   h.q(`SELECT id FROM workflow_tasks WHERE instance_id = $1 AND status = 'pending'`, [instanceId]);
 
-/** مهاجرت را در تراکنشی که برگشت می‌خورد اجرا می‌کند و نتیجه `read` را پیش از برگشت برمی‌گرداند */
-export async function runMigrationRolledBack<T>(file: string, prepare: (q: (sql: string, p?: unknown[]) => Promise<Row[]>) => Promise<void>, read: (q: (sql: string, p?: unknown[]) => Promise<Row[]>) => Promise<T>): Promise<T> {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const q = async (text: string, params: unknown[] = []) => (await client.query(text, params)).rows as Row[];
-    await prepare(q);
-    await client.query(fs.readFileSync(path.join(process.cwd(), 'drizzle', file), 'utf8'));
-    return await read(q);
-  } finally {
-    await client.query('ROLLBACK').catch(() => undefined);
-    client.release();
-  }
-}
-
 export async function runWorkflowLifecycleTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
 
@@ -53,7 +36,7 @@ export async function runWorkflowLifecycleTests(shouldRun: ShouldRun): Promise<T
     await runCase(results, {
       id: 'sec_workflow_document_auto_start_td_446',
       name: 'v9.0.39: only a draft or proforma sales document enters the approval workflow, in its create transaction; the workflow instance of a final document is closed (TD-446)',
-      details: 'A final receipt and invoice and a draft receipt get no instance; a proforma and a draft invoice get one; finalizing outside the workflow and migration 0057 close the instance of a final document with a history row',
+      details: 'A final receipt and invoice and a draft receipt get no instance; a proforma and a draft invoice get one; finalizing outside the workflow closes the instance of the final document and its pending tasks',
     }, async (h, wrong) => {
       for (const [label, body] of [
         ['رسید قطعی', { docType: 'receipt', inOut: 'in', status: 'final' }],
@@ -80,26 +63,6 @@ export async function runWorkflowLifecycleTests(shouldRun: ShouldRun): Promise<T
       if (closed && (await pendingTasksOf(h, Number(closed.id))).length > 0) wrong.push('A pending task of the finalized document stayed in the inbox');
       const widget = await h.get(`/api/workflow/instance/document/${draftId}`);
       if (widget.body?.instance?.status === 'IN_PROGRESS') wrong.push('The widget showed a running instance for the final document');
-
-      // مهاجرت 0057: فرایند در جریانِ سند قطعی موجود بسته می‌شود؛ فرایند سند پیش‌نویس دست نمی‌خورد
-      const [open] = await instancesOf(h, 'document', proformaId);
-      const outcome = await runMigrationRolledBack('0057_terminate_final_document_workflows.sql', async (q) => {
-        await q(`UPDATE documents SET status = 'final' WHERE id = $1`, [draftId]);
-        await q(`UPDATE workflow_instances SET status = 'IN_PROGRESS' WHERE id = $1`, [closed?.id]);
-        await q(`UPDATE workflow_tasks SET status = 'pending' WHERE instance_id = $1`, [closed?.id]);
-      }, async (q) => ({
-        finalDoc: (await q(`SELECT status FROM workflow_instances WHERE id = $1`, [closed?.id]))[0]?.status,
-        finalTasks: (await q(`SELECT count(*)::int AS n FROM workflow_tasks WHERE instance_id = $1 AND status = 'pending'`, [closed?.id]))[0]?.n,
-        history: (await q(`SELECT comment FROM workflow_history_logs WHERE instance_id = $1 AND action_key = 'terminate' ORDER BY id DESC LIMIT 1`, [closed?.id]))[0]?.comment,
-        proforma: (await q(`SELECT status FROM workflow_instances WHERE id = $1`, [open?.id]))[0]?.status,
-      })).catch((err: unknown) => ({ error: String(err) }));
-      if ('error' in outcome) wrong.push(`Migration 0057: ${outcome.error}`);
-      else {
-        if (outcome.finalDoc !== 'TERMINATED') wrong.push(`The migration left the final document instance ${String(outcome.finalDoc)}`);
-        if (Number(outcome.finalTasks) !== 0) wrong.push(`The migration left ${String(outcome.finalTasks)} pending tasks of the final document open`);
-        if (outcome.history !== 'سند قطعی ثبت شده بود') wrong.push(`Migration history row: ${String(outcome.history)}`);
-        if (outcome.proforma !== 'IN_PROGRESS') wrong.push(`The migration set the proforma instance to ${String(outcome.proforma)}`);
-      }
     });
   }
 
@@ -107,7 +70,7 @@ export async function runWorkflowLifecycleTests(shouldRun: ShouldRun): Promise<T
     await runCase(results, {
       id: 'sec_workflow_void_closes_instance_td_447',
       name: 'v9.0.40: voiding or deleting an entity closes its running workflow instance in the same transaction; tasks are canceled and one history row is written (TD-447)',
-      details: 'Proforma, draft journal voucher, purchase requisition, item and treasury account: after void or delete the instance is TERMINATED, with no pending task and with a history row; migration 0058 closes the instance of an entity deleted earlier',
+      details: 'Proforma, draft journal voucher, purchase requisition, item and treasury account: after void or delete the instance is TERMINATED, with no pending task and with a history row',
     }, async (h, wrong) => {
       const { createTestVoucher, createTestWorkflow, createTestWorkflowInstance, createTestItem } = await import('../fixtures/factories.js');
       const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
@@ -172,28 +135,6 @@ export async function runWorkflowLifecycleTests(shouldRun: ShouldRun): Promise<T
       const delBank = await h.del(`/api/accounting/bank-accounts/${bank.id}`);
       if (delBank.status !== 200) wrong.push(`Deleting the treasury account returned ${delBank.status}: ${JSON.stringify(delBank.body).slice(0, 160)}`);
       await expectClosed('deleted treasury account', 'bank_account', Number(bank.id), TERMINATE_COMMENTS.bank);
-
-      // ۶) مهاجرت 0058: فرایند در جریانِ موجودیتی که پیش‌تر باطل یا حذف شده بسته می‌شود؛ فرایند موجودیت زنده دست نمی‌خورد
-      const liveId = await postDocument(h, { docType: 'invoice', status: 'draft' });
-      const [live] = await instancesOf(h, 'document', liveId);
-      const [old] = await instancesOf(h, 'document', proformaId);
-      const outcome = await runMigrationRolledBack('0058_terminate_deleted_entity_workflows.sql', async (q) => {
-        await q(`UPDATE workflow_instances SET status = 'IN_PROGRESS' WHERE id = $1`, [old?.id]);
-        await q(`UPDATE workflow_tasks SET status = 'pending' WHERE instance_id = $1`, [old?.id]);
-        await q(`DELETE FROM workflow_history_logs WHERE instance_id = $1 AND action_key = 'terminate'`, [old?.id]);
-      }, async (q) => ({
-        old: (await q(`SELECT status FROM workflow_instances WHERE id = $1`, [old?.id]))[0]?.status,
-        tasks: (await q(`SELECT count(*)::int AS n FROM workflow_tasks WHERE instance_id = $1 AND status = 'pending'`, [old?.id]))[0]?.n,
-        history: (await q(`SELECT comment FROM workflow_history_logs WHERE instance_id = $1 AND action_key = 'terminate'`, [old?.id]))[0]?.comment,
-        live: (await q(`SELECT status FROM workflow_instances WHERE id = $1`, [live?.id]))[0]?.status,
-      })).catch((err: unknown) => ({ error: String(err) }));
-      if ('error' in outcome) wrong.push(`Migration 0058: ${outcome.error}`);
-      else {
-        if (outcome.old !== 'TERMINATED') wrong.push(`The migration left the voided document instance ${String(outcome.old)}`);
-        if (Number(outcome.tasks) !== 0) wrong.push(`The migration left ${String(outcome.tasks)} tasks of the voided document open`);
-        if (outcome.history !== 'موجودیت پیش‌تر باطل یا حذف شده بود') wrong.push(`Migration history row: ${String(outcome.history)}`);
-        if (outcome.live !== 'IN_PROGRESS') wrong.push(`The migration set the live document instance to ${String(outcome.live)}`);
-      }
     });
   }
 

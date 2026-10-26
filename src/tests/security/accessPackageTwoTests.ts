@@ -10,11 +10,6 @@ import { deleteTestRoles } from '../fixtures/roleCleanup.js';
  * هر آزمون روی کد پیشین قرمز است.
  */
 
-/** کلیدهایی که پس از مهاجرت 0062 (v9.0.107) به کاتالوگ آمدند */
-/** Keys 0062 expanded «*» into that later left the catalog, each with the key it follows in 0062's list. */
-const KEYS_REMOVED_AFTER_0062: ReadonlyArray<readonly [string, string]> = [['audit.create', 'audit.view']];
-const KEYS_ADDED_AFTER_0062: ReadonlySet<string> = new Set(['documents.finalize', 'personnel.view_sensitive', 'payroll.view_sensitive', 'accounting.fiscal_reopen', 'piecework.pay', 'pending_materials.create', 'media.view', 'media.upload', 'media.manage', 'accounting.vouchers_approve', 'piecework.payroll_approve', 'payroll.rates_manage', 'warehouse.production_receipt', 'reports.sales', 'products.change_code', 'reports.purchases', 'workshop.self', 'workshop.review', 'workshop.long_session', 'customers.delete']);
-
 export async function runAccessPackageTwoTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
 
@@ -275,51 +270,6 @@ export async function runAccessPackageTwoTests(shouldRun: ShouldRun): Promise<Te
       else if (!/[؀-ۿ]/.test(String(health.body?.error ?? ''))) wrong.push('the system-admin-only refusal is not Persian');
       const adminHealth = await h.get('/api/system/health');
       if (adminHealth.status !== 200) wrong.push(`the system admin got ${adminHealth.status} on the system health route`);
-    });
-  }
-
-  if (shouldRun('sec_role_code_access_migration_td_516', 'security', 'td516', 'permissions', 'package2', 'migration')) {
-    await runCase(results, {
-      id: 'sec_role_code_access_migration_td_516',
-      name: 'v9.0.107: migration 0062 turns what a seed role passed only by its code into ticks, expands «*» and logs every change (TD-516)',
-      details: 'manager missing settings.manage gets it and the new pending_materials.delete; warehouse_keeper missing documents.edit gets it; a seed role that already holds a guard key and a custom role with a seed code are untouched; a «*» role gets every catalog key and loses «*»; one activity_logs row per changed role with before, after, added keys and routes',
-    }, async (h, wrong) => {
-      const { runMigrationRolledBack } = await import('./workflowLifecycleTests.js');
-      const { PERMISSION_KEYS } = await import('../../lib/permissions/permissionCatalog.js');
-      const managerBefore = PERMISSION_KEYS.filter(k => k !== 'settings.manage' && k !== 'pending_materials.delete');
-      const keeperBefore = ['products.view', 'products.create', 'products.edit', 'warehouse.view', 'warehouse.in', 'warehouse.out', 'customers.view'];
-      const starCode = `td516_star_${h.tag}`;
-      const outcome = await runMigrationRolledBack('0062_role_code_guards_to_permissions.sql', async (q) => {
-        await q(`UPDATE roles SET permissions = $1::jsonb, is_system = 1 WHERE code = 'manager'`, [JSON.stringify(managerBefore)]);
-        await q(`UPDATE roles SET permissions = $1::jsonb, is_system = 1 WHERE code = 'warehouse_keeper'`, [JSON.stringify(keeperBefore)]);
-        await q(`UPDATE roles SET permissions = '["customers.view","customers.manage","documents.view","documents.create","documents.edit"]'::jsonb, is_system = 1 WHERE code = 'sales_manager'`);
-        await q(`UPDATE roles SET permissions = '[]'::jsonb, is_system = 0 WHERE code = 'accountant'`);
-        await q(`INSERT INTO roles (name, code, permissions, is_system) VALUES ('td516 star', $1, '["legacy.key","*"]'::jsonb, 0)`, [starCode]);
-      }, async (q) => ({
-        roles: await q(`SELECT code, permissions FROM roles WHERE code IN ('manager', 'warehouse_keeper', 'sales_manager', 'accountant', $1)`, [starCode]),
-        logs: await q(`SELECT entity_id, details FROM activity_logs WHERE details->>'migration' = '0062_role_code_guards_to_permissions' ORDER BY id`),
-        ids: await q(`SELECT id, code FROM roles WHERE code IN ('manager', 'warehouse_keeper', 'sales_manager', 'accountant', $1)`, [starCode]),
-      }));
-      const permsOf = (code: string) => (outcome.roles.find(r => r.code === code)?.permissions ?? null) as string[] | null;
-      const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-      if (!same(permsOf('manager'), [...managerBefore, 'pending_materials.delete', 'settings.manage'])) wrong.push(`manager after 0062: ${JSON.stringify(permsOf('manager'))}`);
-      if (!same(permsOf('warehouse_keeper'), [...keeperBefore, 'documents.edit'])) wrong.push(`warehouse_keeper after 0062: ${JSON.stringify(permsOf('warehouse_keeper'))}`);
-      if (!same(permsOf('sales_manager'), ['customers.view', 'customers.manage', 'documents.view', 'documents.create', 'documents.edit'])) wrong.push('sales_manager, which holds every guard key, was changed');
-      if (!same(permsOf('accountant'), [])) wrong.push('a custom role coded accountant was changed');
-      // 0062 lists the catalog of v9.0.107; keys added to the catalog later are not part of its «*» expansion
-      const keysOf0062 = PERMISSION_KEYS.filter(k => !KEYS_ADDED_AFTER_0062.has(k));
-      // v10.1.60 (OBS-PR-13): a key that left the catalog after 0062 is still in 0062's own list, after its neighbour
-      for (const [removed, after] of KEYS_REMOVED_AFTER_0062) keysOf0062.splice(keysOf0062.indexOf(after) + 1, 0, removed);
-      if (!same(permsOf(starCode), ['legacy.key', ...keysOf0062])) wrong.push(`the «*» role after 0062: ${JSON.stringify(permsOf(starCode))}`);
-
-      const idOf = (code: string) => String(outcome.ids.find(r => r.code === code)?.id);
-      const logged = outcome.logs.map(l => l.entity_id as string).sort();
-      const expected = [idOf('manager'), idOf('warehouse_keeper'), idOf(starCode)].sort();
-      if (!same(logged, expected)) wrong.push(`activity_logs rows for roles ${logged.join(', ')}, expected ${expected.join(', ')}`);
-      const managerLog = outcome.logs.find(l => l.entity_id === idOf('manager'))?.details as Record<string, unknown> | undefined;
-      if (!same(managerLog?.addedPermissions, ['pending_materials.delete', 'settings.manage'])) wrong.push(`manager log addedPermissions: ${JSON.stringify(managerLog?.addedPermissions)}`);
-      if (!same(managerLog?.routes, ['DELETE /api/pending-materials/:id', 'POST /api/settings'])) wrong.push(`manager log routes: ${JSON.stringify(managerLog?.routes)}`);
-      if (!same(managerLog?.beforePermissions, managerBefore)) wrong.push('manager log beforePermissions differ from the stored ones');
     });
   }
 

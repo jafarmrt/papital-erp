@@ -14,13 +14,13 @@ export async function runDocumentDataTests(shouldRun: ShouldRun): Promise<TestCa
       'v9.0.335: a document gives its treasury rows (number, method, tracking number, bank account, description) only to treasury readers; other readers get the paid amount, the balance and the settlement status (TD-781)',
       ['td781', 'documents', 'treasury', 'settlements', 'package8'], settlementsByPermissionCase],
     ['reg_document_party_by_id_td_778',
-      'v9.0.336: a sales or purchase document keeps its party by id: the voucher, the dossier, the treasury link and the party delete guard follow the id whatever the buyer name, a return takes its invoice\'s party, and the migration links old documents by exact name (TD-778)',
+      'v9.0.336: a sales or purchase document keeps its party by id: the voucher, the dossier, the treasury link and the party delete guard follow the id whatever the buyer name, and a return takes its invoice\'s party (TD-778)',
       ['td778', 'documents', 'party', 'customers', 'package8'], documentPartyByIdCase],
     ['reg_document_audit_trail_td_785',
       'v9.0.337: every change of a document writes one audit row in its own transaction with the stored document before and after: create, edit, finalize, a final invoice\'s notes and a void (one DELETE row), and the invoice event carries the buyer name (TD-785)',
       ['td785', 'documents', 'audit', 'package8'], documentAuditTrailCase],
     ['reg_document_check_constraints_td_786',
-      'v9.0.338: the database refuses an unknown document type or status and a negative line quantity, unit price or discount (a counted zero stays possible), the service refuses an unknown type or status, a legacy row leaves its constraint NOT VALID and is listed by the health check, and documents.project_id has one index (TD-786)',
+      'v9.0.338: the database refuses an unknown document type or status and a negative line quantity, unit price or discount (a counted zero stays possible), the service refuses an unknown type or status, a legacy row under a NOT VALID constraint is listed by the health check, and documents.project_id has one index (TD-786)',
       ['td786', 'documents', 'constraint', 'package8'], documentCheckConstraintsCase],
     ['reg_document_list_paged_td_787',
       'v9.0.339: GET /documents always answers one page (50 documents by default, also for limit=0) with its total, and only export=true returns the whole list (TD-787)',
@@ -191,25 +191,7 @@ async function documentPartyByIdCase(h: Harness, wrong: string[]): Promise<strin
     .then(m => m.findUnlinkedPartyDocuments(), () => null);
   if (!unlinked?.some(d => d.id === nobody)) wrong.push(`the health check does not list invoice ${nobody} without a party`);
 
-  // 7) the migration links an old document to the single live party of exactly its name
-  const { existsSync, readFileSync } = await import('node:fs');
-  const migration = 'drizzle/0080_document_party_id.sql';
-  const backfill = existsSync(migration)
-    ? readFileSync(migration, 'utf8').split('--> statement-breakpoint').find(part => part.includes('SELECT erp_update_with_unvalidated_checks('))
-    : undefined;
-  if (!backfill) {
-    wrong.push(`the backfill statement of ${migration} was not found`);
-    return 'migration missing';
-  }
-  const live = await createTestCustomer({ name: `P8 backfill ${h.tag}` });
-  await createTestCustomer({ name: `P8 backfill ${h.tag}`, isDeleted: 1 });
-  const oldDoc = await post(f.doc('invoice', 'draft', line(1), { buyer_name: `P8 backfill ${h.tag}` }), 'old document');
-  await h.q(`UPDATE documents SET party_id = NULL WHERE id = ANY($1::int[])`, [[oldDoc, nobody]]);
-  await h.q(backfill);
-  if (Number((await partyOf(oldDoc))?.party_id) !== live.id) wrong.push(`the migration linked the old document to ${JSON.stringify(await partyOf(oldDoc))}, expected the live party ${live.id}`);
-  if ((await partyOf(nobody))?.party_id !== null) wrong.push('the migration linked a document whose name no party has');
-
-  return `invoice ${invoice} named «علي رضايي» on party ${party.id}: voucher detail ${detail.join(',')}, dossier after rename, receipt by id, delete refused naming ${draftRef}; return on the invoice's party, wrong party 422; edit by id; missing party 422; remittance 422; exact-name fallback; unknown name listed; migration backfill`;
+  return `invoice ${invoice} named «علي رضايي» on party ${party.id}: voucher detail ${detail.join(',')}, dossier after rename, receipt by id, delete refused naming ${draftRef}; return on the invoice's party, wrong party 422; edit by id; missing party 422; remittance 422; exact-name fallback; unknown name listed`;
 }
 
 /** B08-16 (TD-785): the create row logged the request, the edit row had no «before», notes had no row and a void had two */
@@ -298,8 +280,6 @@ async function documentCheckConstraintsCase(h: Harness, wrong: string[]): Promis
   const f = await fixture(h);
   const { orm } = await import('../../db/drizzle.js');
   const { sql } = await import('drizzle-orm');
-  const fs = await import('node:fs');
-  const path = await import('node:path');
   const names = ['chk_documents_type', 'chk_documents_status', 'chk_document_items_quantity', 'chk_document_items_unit_price', 'chk_document_items_discount'];
   const pgCode = (err: unknown): string | undefined => {
     for (let e: unknown = err, depth = 0; e && typeof e === 'object' && depth < 3; e = (e as { cause?: unknown }).cause, depth++) {
@@ -364,15 +344,10 @@ async function documentCheckConstraintsCase(h: Harness, wrong: string[]): Promis
   const unknownStatus = await serviceCode({ docType: 'receipt', status: 'pending' });
   if (unknownStatus !== 'DOCUMENT_STATUS_INVALID') wrong.push(`the service answered ${unknownStatus} for a receipt with status pending, expected DOCUMENT_STATUS_INVALID`);
 
-  // 5) a legacy row from before the constraint: the migration leaves that constraint NOT VALID and the health check lists it
-  //    (inside a transaction that is rolled back, so the shared test schema keeps its validated constraints)
-  const dir = path.resolve(process.cwd(), 'drizzle');
-  const file = fs.readdirSync(dir).find(name => name.endsWith('_document_check_constraints.sql'));
-  if (!file) {
-    wrong.push('the document constraint migration file is missing');
-    return 'constraints missing';
-  }
+  // 5) a legacy row from before the constraint, under that constraint added NOT VALID (as on a database that upgraded with such a
+  //    row): the health check lists it (inside a transaction that is rolled back, so the shared test schema keeps its validated constraints)
   const health = await import('../../services/documents/documentConstraintHealth.js').catch(() => null);
+  const [statusDef] = await h.q(`SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE connamespace = current_schema()::regnamespace AND conname = 'chk_documents_status'`) as Array<{ def: string }>;
   const rollback = new Error('rollback');
   let legacyReport = '';
   try {
@@ -382,12 +357,7 @@ async function documentCheckConstraintsCase(h: Harness, wrong: string[]): Promis
       await tx.execute(sql`ALTER TABLE documents DROP CONSTRAINT IF EXISTS chk_documents_status`);
       await tx.execute(sql`INSERT INTO documents (type, ref_number, date, status) VALUES ('receipt', ${`P8E-${h.tag}-legacy`}, now(), 'pending')`);
       await tx.execute(sql`INSERT INTO document_items (document_id, item_id, quantity, unit_price, discount, location) VALUES (${receiptId}, ${item}, 0, 1000, 0, ${f.wh})`);
-      await tx.execute(sql.raw(fs.readFileSync(path.join(dir, file), 'utf8')));
-      const state = await tx.execute(sql`SELECT conname, convalidated FROM pg_constraint WHERE connamespace = current_schema()::regnamespace AND conname = ANY(${sql.param(names)}::text[])`);
-      const rows = state.rows as Array<{ conname: string; convalidated: boolean }>;
-      const status = rows.find(r => r.conname === 'chk_documents_status');
-      if (status?.convalidated !== false) wrong.push(`chk_documents_status over a legacy row is ${JSON.stringify(status ?? null)}, expected NOT VALID`);
-      if (rows.filter(r => r.conname !== 'chk_documents_status').some(r => !r.convalidated)) wrong.push(`other constraints over the legacy rows: ${JSON.stringify(rows)}`);
+      await tx.execute(sql.raw(`ALTER TABLE documents ADD CONSTRAINT chk_documents_status ${statusDef.def} NOT VALID`));
       const gaps = health ? await health.findDocumentIntegrityGaps(tx) : [];
       legacyReport = gaps
         .map(g => `${g.name}:${g.state}:${g.name === 'document_items_quantity_zero' ? g.brokenRows - zeroBefore : g.brokenRows}`)
@@ -398,9 +368,9 @@ async function documentCheckConstraintsCase(h: Harness, wrong: string[]): Promis
       throw rollback;
     });
   } catch (err) {
-    if (err !== rollback) wrong.push(`the legacy rerun failed: ${String(err).slice(0, 200)}`);
+    if (err !== rollback) wrong.push(`the legacy row check failed: ${String(err).slice(0, 200)}`);
   }
-  return `constraints validated, one project_id index; type, status and negative line values refused (23514); a counted zero stored; the service refuses quote and pending; legacy rerun lists ${legacyReport}`;
+  return `constraints validated, one project_id index; type, status and negative line values refused (23514); a counted zero stored; the service refuses quote and pending; legacy rows listed as ${legacyReport}`;
 }
 
 /** B08-18: a list request without page or limit returned every document with its lines and settlements (20,050 documents: 27.9 MB) */

@@ -122,45 +122,6 @@ export async function runPieceworkPermissionTests(shouldRun: ShouldRun): Promise
     });
   }
 
-  if (shouldRun('sec_piecework_action_permissions_migration_td_805', 'security', 'td805', 'piecework', 'permissions', 'migration', 'package12')) {
-    await runCase(results, {
-      id: 'sec_piecework_action_permissions_migration_td_805',
-      name: 'v9.0.320: migration 0078 gives roles the piecework keys of what they did through personnel.manage or settings.manage, and logs it (TD-805)',
-      details: 'a personnel.manage role gets piecework.view, manage_tasks, log, payroll and pay; a role already holding some gets only the missing ones; a settings.manage role gets piecework.view and manage_tasks; a role with neither key is untouched; one activity_logs row per changed role with before, after and added keys',
-    }, async (h, wrong) => {
-      const { runMigrationRolledBack } = await import('./workflowLifecycleTests.js');
-      const codes = { manager: `td805_pm_${h.tag}`, partial: `td805_part_${h.tag}`, settings: `td805_set_${h.tag}`, plain: `td805_plain_${h.tag}` };
-      const outcome = await runMigrationRolledBack('0078_piecework_action_permissions.sql', async (q) => {
-        await q(`INSERT INTO roles (name, code, permissions, is_system) VALUES
-          ($1, $1, '["personnel.view","personnel.manage"]'::jsonb, 0),
-          ($2, $2, '["piecework.view","piecework.log","personnel.manage"]'::jsonb, 0),
-          ($3, $3, '["settings.manage"]'::jsonb, 0),
-          ($4, $4, '["projects.view","piecework.view"]'::jsonb, 0)`, [codes.manager, codes.partial, codes.settings, codes.plain]);
-      }, async (q) => ({
-        roles: await q(`SELECT id, code, permissions FROM roles WHERE code = ANY($1::text[])`, [Object.values(codes)]),
-        logs: await q(`SELECT entity_id, details FROM activity_logs WHERE details->>'migration' = '0078_piecework_action_permissions' AND entity_id = ANY(
-          SELECT id::text FROM roles WHERE code = ANY($1::text[])) ORDER BY id`, [Object.values(codes)]),
-      }));
-      const permsOf = (code: string) => JSON.stringify(outcome.roles.find(r => r.code === code)?.permissions ?? null);
-      const expect = (code: string, perms: string[]) => {
-        if (permsOf(code) !== JSON.stringify(perms)) wrong.push(`${code} after 0078: ${permsOf(code)}, expected ${JSON.stringify(perms)}`);
-      };
-      expect(codes.manager, ['personnel.view', 'personnel.manage', 'piecework.view', 'piecework.manage_tasks', 'piecework.log', 'piecework.payroll', 'piecework.pay']);
-      expect(codes.partial, ['piecework.view', 'piecework.log', 'personnel.manage', 'piecework.manage_tasks', 'piecework.payroll', 'piecework.pay']);
-      expect(codes.settings, ['settings.manage', 'piecework.view', 'piecework.manage_tasks']);
-      expect(codes.plain, ['projects.view', 'piecework.view']);
-      const idOf = (code: string) => String(outcome.roles.find(r => r.code === code)?.id);
-      const logged = outcome.logs.map(l => String(l.entity_id)).sort();
-      const expected = [idOf(codes.manager), idOf(codes.partial), idOf(codes.settings)].sort();
-      if (JSON.stringify(logged) !== JSON.stringify(expected)) wrong.push(`activity_logs rows for roles ${logged.join(', ')}, expected ${expected.join(', ')}`);
-      const partialLog = outcome.logs.find(l => String(l.entity_id) === idOf(codes.partial))?.details as { addedPermissions?: string[] } | undefined;
-      if (JSON.stringify(partialLog?.addedPermissions) !== JSON.stringify(['piecework.manage_tasks', 'piecework.payroll', 'piecework.pay'])) {
-        wrong.push(`logged keys added to the partial role: ${JSON.stringify(partialLog?.addedPermissions)}`);
-      }
-    });
-  }
-
-
   if (shouldRun('sec_piecework_rate_readers_td_806', 'security', 'td806', 'piecework', 'rates', 'permissions', 'package12')) {
     await runCase(results, {
       id: 'sec_piecework_rate_readers_td_806',

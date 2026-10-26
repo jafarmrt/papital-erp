@@ -1,5 +1,3 @@
-import fs from 'fs';
-import path from 'path';
 import request from 'supertest';
 import { and, eq, inArray, like, sql } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
@@ -10,8 +8,7 @@ import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 /**
  * v10.2.0, package 1 of the 10.2 start plan (TD-1289): urgent fixes found after the 10.1 upgrade.
  * - the item list with a negative or huge page answered 500 (negative OFFSET);
- * - users.is_deleted took NULL, and migration 0126 makes it NOT NULL DEFAULT 0 without breaking the username key;
- * - webhook retry limits outside 1 to 10 saved before v10.1.66 are brought to the number delivery already used;
+ * - users.is_deleted took NULL; it is NOT NULL DEFAULT 0 (the data fix of migration 0126 is folded into the v11 baseline);
  * - a restore racing a new user with the same username key answered a raw database error, not the friendly 409;
  * - workflow actions still asking the removed key of migration 0123 ask audit.apply after the boot step.
  * Each case is red on v10.1.72. v10.2.10 (TD-1320) adds the inbox: a task of a running instance whose snapshot still
@@ -20,13 +17,10 @@ import { deleteTestRoles } from '../fixtures/roleCleanup.js';
  */
 type ShouldRun = (id: string, ...extra: string[]) => boolean;
 
-const MIGRATION_TAG = '0126_users_deleted_flag_webhook_retry_limits';
 const REMOVED_KEY = ['audit', 'create'].join('.');
 const WORKFLOW_DESIGN_ENTITY = 'طرح گردش کار';
 const REPLACEMENT_TITLE = 'اعمال و تسویه مغایرت';
 const tail = () => `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
-
-class Rollback extends Error {}
 
 async function runCase(results: TestCaseResult[], id: string, name: string, details: string, body: (wrong: string[]) => Promise<void>) {
   const tStart = Date.now();
@@ -42,9 +36,6 @@ async function runCase(results: TestCaseResult[], id: string, name: string, deta
     }));
   }
 }
-
-const migrationStatements = () => fs.readFileSync(path.join(process.cwd(), 'drizzle', `${MIGRATION_TAG}.sql`), 'utf8')
-  .split('--> statement-breakpoint').map(s => s.trim()).filter(Boolean);
 
 export async function runUrgentFixesV1020Tests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
@@ -65,112 +56,16 @@ export async function runUrgentFixesV1020Tests(shouldRun: ShouldRun): Promise<Te
       });
   }
 
-  if (shouldRun('reg_users_deleted_not_null_v10_2_0', 'v10_2_0', 'td_1289', 'users', 'migration')) {
+  if (shouldRun('reg_users_deleted_not_null_v10_2_0', 'v10_2_0', 'td_1289', 'users', 'schema')) {
     await runCase(results, 'reg_users_deleted_not_null_v10_2_0',
-      'v10.2.0: migration 0126 turns NULL users.is_deleted into 0 or 1 without breaking the username key, then NOT NULL DEFAULT 0',
-      'with uq_users_username_key: live name -> 0; no role -> 1; key held by a live user -> 1; two NULL rows of one key -> first 0, second 1; a WARNING counts 1 + 2. Without the index only the no-role row -> 1. One audit row each; column NOT NULL DEFAULT 0',
+      'v10.2.0: users.is_deleted is NOT NULL DEFAULT 0 in the migrated schema',
+      'information_schema: users.is_deleted is not nullable and defaults to 0',
       async (wrong) => {
-        const { ensureTestRole } = await import('../fixtures/factories.js');
-        const roleCode = `v1020_role_${tail()}`;
-        await ensureTestRole(roleCode);
-        try {
-          for (const withIndex of [true, false]) {
-            const scenario = withIndex ? 'with the username index' : 'without the username index';
-            const base = `v1020null_${tail()}`;
-            const notices: string[] = [];
-            const client = await pool.connect();
-            const onNotice = (n: { severity?: string; message?: string }) => {
-              if (String(n.severity ?? '').toUpperCase() === 'WARNING') notices.push(String(n.message ?? ''));
-            };
-            client.on('notice', onNotice);
-            try {
-              await client.query('BEGIN');
-              await client.query('ALTER TABLE users ALTER COLUMN is_deleted DROP NOT NULL');
-              await client.query('ALTER TABLE users ALTER COLUMN is_deleted DROP DEFAULT');
-              await client.query(withIndex
-                ? 'CREATE UNIQUE INDEX IF NOT EXISTS uq_users_username_key ON users (lower(btrim(username))) WHERE is_deleted = 0'
-                : 'DROP INDEX IF EXISTS uq_users_username_key');
-              const insert = async (username: string, role: string | null, isDeleted: number | null) => {
-                const res = await client.query(`INSERT INTO users (username, password, full_name, role, is_deleted)
-                  VALUES ($1, 'x', 'ERP-TEST-MARKER', $2, $3) RETURNING id`, [username, role, isDeleted]);
-                return Number(res.rows[0].id);
-              };
-              const liveName = await insert(`${base}_a`, roleCode, null);
-              const noRole = await insert(`${base}_b`, null, null);
-              await insert(`${base}_c`, roleCode, 0);
-              const heldKey = await insert(` ${base.toUpperCase()}_C`, roleCode, null);
-              const firstTwin = await insert(`${base}_d`, roleCode, null);
-              const secondTwin = await insert(`${base}_D`, roleCode, null);
-              for (const statement of migrationStatements()) await client.query(statement);
-              const keyTaken = withIndex ? 1 : 0;
-              const expected: Array<[string, number, number]> = [
-                ['live name', liveName, 0], ['no role', noRole, 1], ['key held by a live user', heldKey, keyTaken],
-                ['first of two NULL rows', firstTwin, 0], ['second of two NULL rows', secondTwin, keyTaken],
-              ];
-              const flags = await client.query('SELECT id, is_deleted FROM users WHERE id = ANY($1::int[])', [expected.map(([, id]) => id)]);
-              const flagOf = (id: number) => (flags.rows as Array<{ id: number; is_deleted: number }>).find(f => Number(f.id) === id)?.is_deleted;
-              for (const [label, id, value] of expected) {
-                if (flagOf(id) !== value) wrong.push(`${scenario}, ${label}: is_deleted ${String(flagOf(id))}, expected ${value}`);
-              }
-              const logs = await client.query(`SELECT entity_id, details->>'reason' AS reason FROM activity_logs
-                WHERE details->>'migration' = $1 AND details->>'username' ILIKE $2`, [MIGRATION_TAG, `%${base}%`]);
-              const logged = (logs.rows as Array<{ entity_id: string }>).map(l => l.entity_id).sort();
-              const wanted = expected.map(([, id]) => String(id)).sort();
-              if (JSON.stringify(logged) !== JSON.stringify(wanted)) wrong.push(`${scenario}: audit rows for ${JSON.stringify(logged)}, expected ${JSON.stringify(wanted)}`);
-              const takenRows = (logs.rows as Array<{ reason: string }>).filter(l => l.reason === 'username_key_taken').length;
-              if (takenRows !== (withIndex ? 2 : 0)) wrong.push(`${scenario}: ${takenRows} audit rows say the username key is taken`);
-              const warning = notices.find(n => n.includes('marked deleted'));
-              const wantedCounts = withIndex ? ': 1 without a role, 2 whose username' : ': 1 without a role, 0 whose username';
-              if (!warning?.includes(wantedCounts)) wrong.push(`${scenario}: warning ${JSON.stringify(warning ?? null)} does not count ${wantedCounts}`);
-              const column = await client.query(`SELECT is_nullable, column_default FROM information_schema.columns
-                WHERE table_schema = current_schema() AND table_name = 'users' AND column_name = 'is_deleted'`);
-              const info = column.rows[0] as { is_nullable: string; column_default: string | null } | undefined;
-              if (info?.is_nullable !== 'NO' || !String(info?.column_default ?? '').startsWith('0')) {
-                wrong.push(`${scenario}: users.is_deleted is nullable ${String(info?.is_nullable)} with default ${String(info?.column_default)}`);
-              }
-            } finally {
-              await client.query('ROLLBACK').catch(() => undefined);
-              client.off('notice', onNotice);
-              client.release();
-            }
-          }
-        } finally {
-          await deleteTestRoles(eq(roles.code, roleCode)).catch(() => undefined);
-        }
-        const live = await orm.execute(sql`SELECT is_nullable FROM information_schema.columns
+        const column = await orm.execute(sql`SELECT is_nullable, column_default FROM information_schema.columns
           WHERE table_schema = current_schema() AND table_name = 'users' AND column_name = 'is_deleted'`);
-        if ((live as unknown as { rows: Array<{ is_nullable: string }> }).rows[0]?.is_nullable !== 'NO') wrong.push('the migrated schema leaves users.is_deleted nullable');
-      });
-  }
-
-  if (shouldRun('reg_webhook_retry_limits_v10_2_0', 'v10_2_0', 'td_1289', 'webhooks', 'migration')) {
-    await runCase(results, 'reg_webhook_retry_limits_v10_2_0',
-      'v10.2.0: migration 0126 brings webhook retry limits outside 1 to 10 to the number delivery used, with an audit row each',
-      'retry limits 0, NULL, -2, 15, 5 -> 3, 3, 1, 10, 5; four audit rows; the one inside the range untouched',
-      async (wrong) => {
-        const name = `ERP-TEST-MARKER v1020 ${tail()}`;
-        try {
-          await orm.transaction(async (tx) => {
-            const limits = [0, null, -2, 15, 5];
-            const ids: number[] = [];
-            for (const [i, limit] of limits.entries()) {
-              const [row] = await tx.insert(webhookSubscriptions).values({
-                name: `${name} ${i}`, targetUrl: 'https://example.com/hook', secretKey: 'enc:v1:test', retryLimit: limit, isActive: 0,
-              }).returning({ id: webhookSubscriptions.id });
-              ids.push(row.id);
-            }
-            for (const s of migrationStatements()) await tx.execute(sql.raw(s));
-            const rows = await tx.select({ id: webhookSubscriptions.id, retryLimit: webhookSubscriptions.retryLimit }).from(webhookSubscriptions)
-              .where(inArray(webhookSubscriptions.id, ids));
-            const got = ids.map(id => rows.find(r => r.id === id)?.retryLimit);
-            if (JSON.stringify(got) !== JSON.stringify([3, 3, 1, 10, 5])) wrong.push(`retry limits became ${JSON.stringify(got)}, expected [3,3,1,10,5]`);
-            const logs = await tx.select({ entityId: activityLogs.entityId }).from(activityLogs)
-              .where(and(sql`${activityLogs.details}->>'migration' = ${MIGRATION_TAG}`, inArray(activityLogs.entityId, ids.map(String)), like(activityLogs.entity, '%وب‌هوک%')));
-            if (logs.length !== 4) wrong.push(`${logs.length} audit rows, expected 4`);
-            throw new Rollback();
-          });
-        } catch (err) {
-          if (!(err instanceof Rollback)) throw err;
+        const info = (column as unknown as { rows: Array<{ is_nullable: string; column_default: string | null }> }).rows[0];
+        if (info?.is_nullable !== 'NO' || !String(info?.column_default ?? '').startsWith('0')) {
+          wrong.push(`users.is_deleted is nullable ${String(info?.is_nullable)} with default ${String(info?.column_default)}`);
         }
       });
   }

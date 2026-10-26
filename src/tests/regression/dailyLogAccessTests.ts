@@ -1,5 +1,3 @@
-import fs from 'fs';
-import path from 'path';
 import request from 'supertest';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
@@ -27,7 +25,7 @@ export async function runDailyLogAccessTests(shouldRun: ShouldRun): Promise<Test
       'v9.0.234: daily log mentions, allowed users and project are validated before anything is written, and the log, its notifications and its audit row commit together (TD-629)',
       ['td629', 'daily_log', 'mention', 'package13'], mentionsValidatedCase],
     ['reg_daily_log_public_visibility_removed_td_900',
-      'v9.0.236: the public daily log visibility is gone: refused on input, default mentioned_only, and the data migration moves public, all and empty logs to mentioned_only and records the old value (TD-900)',
+      'v9.0.236: the public daily log visibility is gone: refused on input, default mentioned_only, and the database CHECK on the visibility is validated (TD-900)',
       ['td900', 'daily_log', 'visibility', 'package13'], publicVisibilityRemovedCase],
   ];
   for (const [id, name, tags, run] of cases) {
@@ -254,39 +252,12 @@ async function publicVisibilityRemovedCase(ctx: Ctx): Promise<string> {
     if (byReader.status !== 404) wrong.push(`a log saved without visibility is readable by another user (${byReader.status})`);
   }
 
-  // the data migration: legacy public, all and empty logs move to mentioned_only and their old value is recorded
-  const legacyIds: Record<string, number> = {};
-  for (const legacy of ['public', 'all', '']) {
-    legacyIds[legacy || 'empty'] = await ctx.insertLog(author, { title: `p13 legacy ${legacy || 'empty'}`, visibility: 'private' });
-  }
-  const privateId = await ctx.insertLog(author, { title: 'p13 legacy private', visibility: 'private' });
-  // the legacy values cannot be written any more (CHECK), so they are written with the constraint switched off
-  await pool.query('ALTER TABLE daily_work_logs DROP CONSTRAINT IF EXISTS chk_daily_work_logs_visibility');
-  await pool.query('ALTER TABLE daily_work_logs ALTER COLUMN visibility DROP NOT NULL');
-  await pool.query(`UPDATE daily_work_logs SET visibility = 'public' WHERE id = $1`, [legacyIds.public]);
-  await pool.query(`UPDATE daily_work_logs SET visibility = 'all' WHERE id = $1`, [legacyIds.all]);
-  await pool.query('UPDATE daily_work_logs SET visibility = NULL WHERE id = $1', [legacyIds.empty]);
-  const migrationFile = fs.readdirSync(path.resolve(process.cwd(), 'drizzle')).find(f => /^\d{4}_daily_log_visibility\.sql$/.test(f));
-  if (!migrationFile) throw new Error('migration *_daily_log_visibility.sql not found');
-  const sqlText = fs.readFileSync(path.resolve(process.cwd(), 'drizzle', migrationFile), 'utf8');
-  for (const stmt of sqlText.split('--> statement-breakpoint')) await pool.query(stmt);
-
-  const rows = await orm.select({ id: dailyWorkLogs.id, visibility: dailyWorkLogs.visibility }).from(dailyWorkLogs)
-    .where(inArray(dailyWorkLogs.id, [...Object.values(legacyIds), privateId]));
-  for (const r of rows) {
-    const expected = r.id === privateId ? 'private' : 'mentioned_only';
-    if (r.visibility !== expected) wrong.push(`log ${r.id} visibility «${r.visibility}» after the migration, expected ${expected}`);
-  }
-  const recorded = await pool.query('SELECT daily_log_id, old_visibility FROM daily_log_visibility_repairs WHERE daily_log_id = ANY($1::int[]) ORDER BY daily_log_id', [[...Object.values(legacyIds), privateId]]);
-  const recordedMap = Object.fromEntries(recorded.rows.map((r: { daily_log_id: number; old_visibility: string | null }) => [r.daily_log_id, r.old_visibility]));
-  if (recordedMap[legacyIds.public] !== 'public' || recordedMap[legacyIds.all] !== 'all' || !(legacyIds.empty in recordedMap) || privateId in recordedMap) {
-    wrong.push(`recorded old values ${JSON.stringify(recordedMap)}`);
-  }
+  // the visibility CHECK is in the schema and validated
   const check = await pool.query(`SELECT convalidated FROM pg_constraint WHERE connamespace = current_schema()::regnamespace AND conname = 'chk_daily_work_logs_visibility'`);
-  if (check.rows[0]?.convalidated !== true) wrong.push('the visibility CHECK is missing or not validated after the migration');
+  if (check.rows[0]?.convalidated !== true) wrong.push('the visibility CHECK is missing or not validated');
 
   if (wrong.length > 0) throw new Error(wrong.join('; '));
-  return 'public and all refused with 400; a log without visibility is mentioned_only and hidden from others; the migration moved public, all and empty logs to mentioned_only, recorded the old values and validated the CHECK';
+  return 'public and all refused with 400; a log without visibility is mentioned_only and hidden from others; the visibility CHECK is validated';
 }
 
 /** Shared with the package 13 PR B read tests */

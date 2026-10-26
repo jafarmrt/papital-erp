@@ -1,5 +1,3 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import request from 'supertest';
@@ -10,17 +8,16 @@ import { webhookDeliveries, webhookSubscriptions } from '../../db/schema.js';
 
 /**
  * Package 15 (events and integrations), TD-707 / B15-05 (decision t3 a): webhook subscriptions use the event types the
- * server publishes. Migration *_webhook_event_patterns converts stored dotted patterns with a mapping table and records
- * the old list, deactivates a subscription left with no pattern or addressed to a documentation domain, and the service
- * refuses any other pattern. On v9.0.404 the migration did not exist, a dotted pattern was accepted and a subscription
- * to «document.invoiced» received nothing for an approved invoice.
+ * server publishes and the service refuses any other pattern (the conversion of stored dotted patterns was a migration,
+ * now folded into the v11 baseline). On v9.0.404 a dotted pattern was accepted and a subscription to «document.invoiced»
+ * received nothing for an approved invoice.
  */
 export async function runWebhookEventPatternTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
   const id = 'reg_webhook_event_patterns_real_types_td_707';
   if (!shouldRun(id, 'td707', 'b15-05', 'webhook', 'package15')) return results;
 
-  const name = 'v9.0.405: webhook subscriptions are converted to and accept only published event types, and a converted one receives the invoice event (TD-707)';
+  const name = 'v9.0.405: webhook subscriptions accept only published event types, and one with the published type receives the invoice event (TD-707)';
   const tStart = Date.now();
   const tag = `td707_${Date.now()}`;
   const savedPort = process.env.PORT;
@@ -41,54 +38,23 @@ export async function runWebhookEventPatternTests(shouldRun: (id: string, ...ext
       request(app)[method](url).set('Cookie', admin.cookie).set('x-csrf-token', admin.csrfToken).send(body);
     const wrong: string[] = [];
 
-    // 1. legacy subscriptions with the old presets, stored as they were before the migration
-    const legacy = async (label: string, eventPatterns: string[], targetUrl = target, isActive = 1) => {
+    // 1. subscriptions stored as they are: published types, «*», an inactive one with an old dotted pattern and an inactive
+    //    one addressed to a documentation domain
+    const stored = async (label: string, eventPatterns: string[], targetUrl = target, isActive = 1) => {
       const created = await WebhookSubscriptionService.createSubscription({ name: `${tag} ${label}`, targetUrl: target, eventPatterns: ['*'], timeoutMs: 3000 });
       await pool.query('UPDATE webhook_subscriptions SET event_patterns = $1::jsonb, target_url = $2, is_active = $3 WHERE id = $4',
         [JSON.stringify(eventPatterns), targetUrl, isActive, created.id]);
       subIds.push(created.id);
       return created.id;
     };
-    const invoicedId = await legacy('invoiced', ['document.invoiced', 'inventory.stock_out']);
-    const wildId = await legacy('wild', ['inventory.*', 'treasury.*']);
-    const settledId = await legacy('settled', ['document.settled']);
-    const demoId = await legacy('demo', ['document.invoiced'], 'https://shop.example.com/wp-json/erp/v1/webhook');
-    const validId = await legacy('valid', ['StockIssued', 'InvoiceApproved']);
-    const allId = await legacy('all', ['document.*', '*']);
+    const invoicedId = await stored('invoiced', ['InvoiceApproved', 'StockIssued']);
+    const wildId = await stored('wild', ['InventoryReorderAlert', 'StockAdjusted', 'StockIssued', 'StockReceived', 'TreasuryTransactionApproved']);
+    const settledId = await stored('settled', ['document.settled'], target, 0);
+    const demoId = await stored('demo', ['InvoiceApproved'], 'https://shop.example.com/wp-json/erp/v1/webhook', 0);
+    const validId = await stored('valid', ['StockIssued', 'InvoiceApproved']);
+    const allId = await stored('all', ['*']);
 
-    const migrationFile = fs.readdirSync(path.resolve(process.cwd(), 'drizzle')).find(f => /^\d{4}_webhook_event_patterns\.sql$/.test(f));
-    if (migrationFile) {
-      const sqlText = fs.readFileSync(path.resolve(process.cwd(), 'drizzle', migrationFile), 'utf8');
-      for (let run = 0; run < 2; run++) for (const stmt of sqlText.split('--> statement-breakpoint')) await pool.query(stmt);
-    } else {
-      wrong.push('migration *_webhook_event_patterns.sql not found');
-    }
-    const rows = await orm.select({ id: webhookSubscriptions.id, eventPatterns: webhookSubscriptions.eventPatterns, isActive: webhookSubscriptions.isActive })
-      .from(webhookSubscriptions).where(inArray(webhookSubscriptions.id, subIds));
-    const of = (sid: number) => rows.find(r => r.id === sid);
-    const expect = (sid: number, label: string, patterns: string[], active: number) => {
-      const row = of(sid);
-      const got = [...((row?.eventPatterns as string[] | null) ?? [])].sort();
-      if (JSON.stringify(got) !== JSON.stringify([...patterns].sort()) || row?.isActive !== active) {
-        wrong.push(`${label}: patterns ${JSON.stringify(got)} active ${row?.isActive}, expected ${JSON.stringify(patterns)} active ${active}`);
-      }
-    };
-    expect(invoicedId, 'document.invoiced + inventory.stock_out', ['InvoiceApproved', 'StockIssued'], 1);
-    expect(wildId, 'inventory.* + treasury.*', ['InventoryReorderAlert', 'StockAdjusted', 'StockIssued', 'StockReceived', 'TreasuryTransactionApproved'], 1);
-    expect(settledId, 'document.settled', ['document.settled'], 0);
-    expect(demoId, 'example.com subscription', ['InvoiceApproved'], 0);
-    expect(validId, 'already valid', ['InvoiceApproved', 'StockIssued'], 1);
-    expect(allId, 'with *', ['*'], 1);
-    if (migrationFile) {
-      const repairs = await pool.query('SELECT subscription_id, old_patterns, dropped_patterns, deactivated FROM webhook_event_pattern_repairs WHERE subscription_id = ANY($1::int[])', [subIds]);
-      const repaired = new Map(repairs.rows.map((r: { subscription_id: number; old_patterns: string[]; dropped_patterns: string[]; deactivated: number }) => [r.subscription_id, r]));
-      if (repaired.has(validId) || repaired.size !== 5) wrong.push(`repair rows for ${[...repaired.keys()].join(',')}`);
-      const settled = repaired.get(settledId);
-      if (!settled || settled.deactivated !== 1 || JSON.stringify(settled.dropped_patterns) !== '["document.settled"]') wrong.push(`settled repair: ${JSON.stringify(settled)}`);
-      if (JSON.stringify(repaired.get(invoicedId)?.old_patterns) !== '["document.invoiced","inventory.stock_out"]') wrong.push(`old patterns not recorded: ${JSON.stringify(repaired.get(invoicedId))}`);
-    }
-
-    // 2. the converted subscription receives an approved invoice event
+    // 2. a subscription to the published type receives an approved invoice event
     const now = new Date().toISOString();
     const event = {
       eventId: `${tag}_invoice`, eventType: 'InvoiceApproved', aggregateType: 'Document' as const, aggregateId: '707',
@@ -119,7 +85,7 @@ export async function runWebhookEventPatternTests(shouldRun: (id: string, ...ext
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'dotted patterns converted (rerun idempotent), document.settled and example.com subscriptions deactivated and recorded; the converted subscription received InvoiceApproved; unknown patterns refused 422 on create, edit and activation',
+      details: 'the subscriptions to InvoiceApproved and «*» received it, inactive and unrelated ones did not; unknown patterns refused 422 on create, edit and activation',
     }));
   } catch (err) {
     results.push(makeTestCase({
@@ -131,7 +97,6 @@ export async function runWebhookEventPatternTests(shouldRun: (id: string, ...ext
     receiver.closeAllConnections();
     await new Promise<void>(resolve => receiver.close(() => resolve()));
     if (subIds.length > 0) {
-      await pool.query('DELETE FROM webhook_event_pattern_repairs WHERE subscription_id = ANY($1::int[])', [subIds]).catch(() => undefined);
       await pool.query('DELETE FROM integration_delivery_jobs WHERE kind = $1 AND target_id = ANY($2::int[])', ['webhook', subIds]).catch(() => undefined);
       await orm.delete(webhookDeliveries).where(inArray(webhookDeliveries.subscriptionId, subIds)).catch(() => undefined);
       await orm.delete(webhookSubscriptions).where(inArray(webhookSubscriptions.id, subIds)).catch(() => undefined);

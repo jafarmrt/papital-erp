@@ -1,9 +1,6 @@
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
 import request from 'supertest';
 import { and, eq, inArray } from 'drizzle-orm';
-import { orm, pool } from '../../db/drizzle.js';
+import { orm } from '../../db/drizzle.js';
 import { journalVouchers } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { jalaliYearBounds } from '../../utils/calendarDate.js';
@@ -12,10 +9,8 @@ import { FiscalPeriodService } from '../../services/accounting/fiscalPeriod.serv
 import { FiscalYearService } from '../../services/accounting/fiscalYear.service.js';
 import { AccountingReportService } from '../../services/accounting/accountingReport.service.js';
 import { VoucherService } from '../../services/accounting/voucher.service.js';
-import { setupTestSchema, withIsolatedTestSchema } from '../setup/testDb.js';
+import { withIsolatedTestSchema } from '../setup/testDb.js';
 import { createTestRole, createTestUser } from '../fixtures/factories.js';
-import { migrationsCopyUpTo, runMigrationsIn } from '../recovery/migrationChecks.js';
-import { REPO_ROOT } from '../recovery/scratchDatabase.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 
 /**
@@ -291,55 +286,6 @@ export async function runFiscalClosingTests(shouldRun: ShouldRun): Promise<TestC
       assertNoProblems(problems);
       return `the closing run of ${year} stays as issued`;
     }));
-  }
-
-  const backfillId = 'reg_closing_voucher_year_link_backfill_td_545';
-  if (shouldRun(backfillId, 'td545', 'fiscal', 'closing', 'migration', 'package3')) {
-    await runCase(results, backfillId, 'v9.0.120: the upgrade links only the vouchers a fiscal-year closing issued to the closed year, not manual vouchers of type closing or a later voucher with the same reference (TD-545)', async () => {
-      const problems: string[] = [];
-      const fresh = await setupTestSchema({ migrate: async () => ({ success: true, appliedCount: 0, errors: [] }) });
-      const q = (text: string) => pool.query(text.replace(/\$S\./g, `"${fresh.schema}".`));
-      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'erp-p03-mig-'));
-      try {
-        // the migration before the link column (its number changes when other lanes merge first)
-        const journal = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'drizzle', 'meta', '_journal.json'), 'utf8')) as { entries: Array<{ idx: number; tag: string }> };
-        const linkIdx = journal.entries.find(e => e.tag.endsWith('_journal_voucher_source_fiscal_year'))?.idx;
-        if (linkIdx === undefined) throw new Error('the journal_voucher_source_fiscal_year migration is missing');
-        migrationsCopyUpTo(root, linkIdx - 1);
-        const before = await runMigrationsIn(root);
-        if (!before.success) throw new Error(`migrations before ${linkIdx} failed: ${before.errors.join('; ')}`);
-        await q(`INSERT INTO $S.fiscal_periods (fiscal_year, status) VALUES (1395, 'closed'), (1396, 'open')`);
-        const rows: Array<[number, string, string, string, string, number]> = [
-          // number, date, type, module, reference, is_deleted
-          [880001, '2017-03-20', 'closing', 'manual', 'CLOSE-TEMP-1395', 1], // a deleted earlier run: never linked
-          [880002, '2017-03-20', 'closing', 'manual', 'CLOSE-TEMP-1395', 0],
-          [880003, '2017-03-20', 'closing', 'manual', 'CLOSE-PROFIT-1395', 0],
-          [880004, '2017-03-20', 'closing', 'manual', 'CLOSING-1395', 0],
-          [880005, '2017-03-21', 'opening', 'manual', 'OPENING-1396', 0],
-          [880006, '2017-03-20', 'closing', 'manual', 'CLOSING-1395', 0], // a later manual voucher with the same reference
-          [880007, '2016-03-25', 'closing', 'manual', 'OPEN-BAL', 0], // the old form saved opening balances as «closing»
-          [880008, '2018-03-20', 'closing', 'manual', 'CLOSE-TEMP-1396', 0], // year 1396 is open
-          [880009, '2017-03-20', 'closing', 'invoice', 'CLOSING-1395', 0], // not the closing run's module
-          [880010, '2016-06-01', 'closing', 'manual', 'CLOSE-TEMP-1395', 0], // a later voucher with the run's reference
-        ];
-        for (const [n, date, type, module, ref, deleted] of rows) {
-          await q(`INSERT INTO $S.journal_vouchers (voucher_number, date, description, voucher_type, status, reference_module, reference_number, is_deleted)
-                   VALUES (${n}, '${date}', 'td545 backfill', '${type}', 'permanent', '${module}', '${ref}', ${deleted})`);
-        }
-        migrationsCopyUpTo(root, Number.MAX_SAFE_INTEGER);
-        const upgrade = await runMigrationsIn(root);
-        if (!upgrade.success) throw new Error(`upgrade failed: ${upgrade.errors.join('; ').slice(0, 300)}`);
-        const linked = (await q(`SELECT voucher_number, source_fiscal_year FROM $S.journal_vouchers WHERE voucher_number BETWEEN 880001 AND 880010 ORDER BY 1`)).rows as Array<{ voucher_number: number; source_fiscal_year: number | null }>;
-        const got = linked.map(r => `${r.voucher_number}:${r.source_fiscal_year ?? '-'}`).join(',');
-        const expected = '880001:-,880002:1395,880003:1395,880004:1395,880005:1395,880006:-,880007:-,880008:-,880009:-,880010:-';
-        if (got !== expected) problems.push(`links after upgrade ${got}, expected ${expected}`);
-      } finally {
-        fs.rmSync(root, { recursive: true, force: true });
-        await fresh.teardown();
-      }
-      assertNoProblems(problems);
-      return 'only the closing run of 1395 is linked';
-    });
   }
 
   return results;

@@ -1,9 +1,7 @@
-import fs from 'fs';
-import path from 'path';
 import request from 'supertest';
 import { and, eq, gt, inArray, sql } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
-import { orm, pool } from '../../db/drizzle.js';
+import { orm } from '../../db/drizzle.js';
 import { activityLogs, itemPrices, items, roles, users, warehouses } from '../../db/schema.js';
 import { withTestMarker } from '../fixtures/testMarker.js';
 import { money } from '../../lib/money.js';
@@ -20,7 +18,7 @@ export async function runItemExcelImportTests(shouldRun: ShouldRun): Promise<Tes
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (ctx: Ctx) => Promise<string>]> = [
     ['reg_excel_roundtrip_no_cost_price_list_td_647',
-      'v9.0.152: only configured price lists are prices in Excel import, the pricing quick import and the invoice price list; migration 0068 cleans the three non-price titles (TD-647)',
+      'v9.0.152: only configured price lists are prices in Excel import, the pricing quick import and the invoice price list, and the health check lists an unknown price title (TD-647)',
       ['td647', 'excel', 'price', 'package5'], priceListColumnsCase],
     ['reg_excel_reimport_keeps_price_history_td_662',
       'v9.0.153: re-importing an unchanged Excel file rewrites no price row (TD-662)',
@@ -377,25 +375,18 @@ async function priceListColumnsCase(ctx: Ctx): Promise<string> {
   const single = await ctx.post(`/api/items/${it.id}/prices`, { title: 'میانگین خرید (WAC)', price: 1250000 });
   if (single.status !== 422) wrong.push(`POST /items/:id/prices with the "purchase average (WAC)" title answered ${single.status}`);
 
-  // d) legacy rows: hidden from the invoice price list, cleaned by migration 0068 or listed by the health check
-  const legacy = await orm.insert(itemPrices).values([
+  // d) legacy rows: hidden from the invoice price list and an unknown title listed by the health check
+  await orm.insert(itemPrices).values([
     { itemId: it.id, title: 'میانگین خرید (WAC)', price: money(1250000), currency: 'IRR', isDeleted: 0 },
     { itemId: it.id, title: 'موجودی کل', price: money(12), currency: 'IRR', isDeleted: 0 },
     { itemId: it.id, title: 'تخفیف نمایشگاه td647', price: money(800000), currency: 'IRR', isDeleted: 0 },
-  ]).returning({ id: itemPrices.id, title: itemPrices.title });
+  ]);
   const api2 = await ctx.get(`/api/items/${it.id}/prices`);
   const apiTitles2 = (api2.body as Row[]).map(p => String(p.title)).sort();
   if (JSON.stringify(apiTitles2) !== JSON.stringify(['عمده', 'فروشگاه'])) wrong.push(`legacy titles reach the invoice price list ${JSON.stringify(apiTitles2)}`);
-  const sqlText = fs.readFileSync(path.resolve(process.cwd(), 'drizzle/0068_item_price_non_list_titles.sql'), 'utf8');
-  for (const stmt of sqlText.split('--> statement-breakpoint').slice(1)) await pool.query(stmt);
-  const after = await orm.select({ id: itemPrices.id, isDeleted: itemPrices.isDeleted }).from(itemPrices).where(inArray(itemPrices.id, legacy.map(l => l.id)));
-  const deleted = after.filter(r => r.isDeleted === 1).map(r => legacy.find(l => l.id === r.id)?.title).sort();
-  if (JSON.stringify(deleted) !== JSON.stringify(['موجودی کل', 'میانگین خرید (WAC)'].sort())) wrong.push(`migration 0068 soft-deleted ${JSON.stringify(deleted)}`);
-  const recorded = await pool.query('SELECT item_price_id, price::text FROM item_price_title_cleanup WHERE item_id = $1 ORDER BY item_price_id', [it.id]);
-  if (recorded.rowCount !== 2) wrong.push(`migration 0068 recorded ${recorded.rowCount} rows`);
   const unknown = await findUnknownPriceTitles();
   if (!unknown.some(u => u.title === 'تخفیف نمایشگاه td647')) wrong.push('health check does not list the unknown title');
 
   if (wrong.length > 0) throw new Error(wrong.join('; '));
-  return `round trip kept ${JSON.stringify(titles)}; unknown column reported; quick import 1 update; batch «موجودی کل» 422; migration cleaned 2, health lists the rest`;
+  return `round trip kept ${JSON.stringify(titles)}; unknown column reported; quick import 1 update; batch «موجودی کل» 422; legacy rows hidden, health lists the unknown title`;
 }

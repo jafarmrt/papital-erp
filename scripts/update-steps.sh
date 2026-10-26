@@ -360,8 +360,9 @@ update_build_migrations() {
 # v11 (phase 3.3, O2): whether the previous build (dist.prev/) can still start on the database, for the rollback steps.
 # It refuses a database holding a migration newer than its own newest (migrationPlan.ts), whoever applied it: this run,
 # or the previous build itself when it restarted while the new source was in place. Prints the number of such
-# migrations; when the database cannot be read, 0 if the new build brings no migration the previous one lacks, else
-# «unknown».
+# migrations; when the database cannot be read, 0 if the new build brings no migration newer than the previous one's
+# newest, else «unknown». v11 (phase 4.1): newest «when», not the entry count, since the baseline file replaced 136
+# entries with one and a build after it has fewer entries than v11.2 but newer migrations.
 update_migrations_changed() {
   local app_dir="$1" prev new prev_when newer
   prev="$(update_build_migrations "$app_dir/dist.prev")"
@@ -370,7 +371,7 @@ update_migrations_changed() {
     prev_when="${prev#* }"
     newer="$(update_applied_migrations_after "$app_dir" "$prev_when")"
     if [ -n "$newer" ]; then echo "$newer"; return 0; fi
-    if [ -n "$new" ] && [ "${new%% *}" -le "${prev%% *}" ]; then echo 0; return 0; fi
+    if [ -n "$new" ] && [ "${new#* }" -le "${prev#* }" ]; then echo 0; return 0; fi
   fi
   echo unknown
 }

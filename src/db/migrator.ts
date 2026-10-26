@@ -10,6 +10,7 @@ import { logger } from '../middleware/logger.js';
 import { ADVISORY_LOCK_KEYS } from '../lib/advisoryLock.js';
 import { planMigrations, type AppliedMigrationRow, type MigrationJournalEntry } from './migrationPlan.js';
 import { previousMigrationHashes } from './migrationAmendments.js';
+import { V10_MIGRATION_HISTORY } from './v10MigrationHistory.js';
 import { migrationNoticeWarning, type MigrationNotice } from './migrationNotices.js';
 
 export interface MigrationResult {
@@ -25,7 +26,7 @@ export interface RunMigrationsOptions {
   migrationsFolder?: string;
 }
 
-const MIGRATIONS_BASELINE_FILE = '0000_v3_baseline.sql';
+const MIGRATIONS_BASELINE_FILE = '0000_v11_baseline.sql';
 
 /**
  * v11 (phase 3.3, O1): where the migrations are read from, given the working directory and the directory of the running
@@ -190,7 +191,7 @@ export async function runMigrations(options: RunMigrationsOptions = {}): Promise
 
     // V3.0.9 (TD-063): appliedCount واقعی از روی رکوردهای __drizzle_migrations
     const applied = await readAppliedMigrations(client);
-    const plan = planMigrations(entries, applied, previousMigrationHashes());
+    const plan = planMigrations(entries, applied, previousMigrationHashes(), V10_MIGRATION_HISTORY);
     for (const warning of plan.warnings) logger.warn(`[Migrator] ${warning}`);
     if (plan.errors.length > 0) {
       for (const error of plan.errors) logger.error(`[Migrator] ${error}`);

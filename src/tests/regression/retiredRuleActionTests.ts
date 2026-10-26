@@ -1,18 +1,15 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import request from 'supertest';
 import { eq, inArray, like } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
-import { orm, pool } from '../../db/drizzle.js';
+import { orm } from '../../db/drizzle.js';
 import { activityLogs, eventActionRules, notifications } from '../../db/schema.js';
 
 /**
  * Package 15 (events and integrations), TD-712 / B15-10 (decision t4 a): the rule actions «workflow_trigger» (did nothing,
- * reported «queued») and «sms_simulation» (wrote a log line) are removed. Migration *_retired_rule_actions deactivates
- * existing rules of those types and records them, the health check lists them, a rule is never created or activated
- * with them, and the draft evaluation really evaluates without any effect. On v9.0.376 the migration did not exist,
- * such rules were created and run as «success», and test-draft answered success for an invalid operator and an unknown
- * event type.
+ * reported «queued») and «sms_simulation» (wrote a log line) are removed. Stored rules of those types (deactivated by a
+ * migration now folded into the v11 baseline) are listed by the health check, a rule is never created or activated
+ * with them, and the draft evaluation really evaluates without any effect. On v9.0.376 such rules were created and run
+ * as «success», and test-draft answered success for an invalid operator and an unknown event type.
  */
 export async function runRetiredRuleActionTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
@@ -31,31 +28,17 @@ export async function runRetiredRuleActionTests(shouldRun: (id: string, ...extra
       request(app)[method](url).set('Cookie', admin.cookie).set('x-csrf-token', admin.csrfToken).send(body);
     const wrong: string[] = [];
 
-    // 1. legacy rules of the removed types are deactivated and recorded by the migration; another rule is untouched
-    const insertRule = async (actionType: string, actionConfigJson: object) => {
+    // 1. stored rules of the removed types (inactive, as they are on an upgraded database) and another active rule
+    const insertRule = async (actionType: string, actionConfigJson: object, isActive: number) => {
       const [row] = await orm.insert(eventActionRules).values({
-        name: `${tag} ${actionType}`, eventType: 'InvoiceApproved', conditionsJson: [], actionType, actionConfigJson, isActive: 1,
+        name: `${tag} ${actionType}`, eventType: 'InvoiceApproved', conditionsJson: [], actionType, actionConfigJson, isActive,
       }).returning({ id: eventActionRules.id });
       ruleIds.push(row.id);
       return row.id;
     };
-    const wfId = await insertRule('workflow_trigger', { workflowCode: 'INVOICE_APPROVAL', entityType: 'invoice', entityIdField: 'payload.documentId' });
-    const smsId = await insertRule('sms_simulation', { recipientPhoneTemplate: '09120000000', messageTemplate: 'x' });
-    const keepId = await insertRule('audit_log', { descriptionTemplate: 'kept' });
-    const migrationFile = fs.readdirSync(path.resolve(process.cwd(), 'drizzle')).find(f => /^\d{4}_retired_rule_actions\.sql$/.test(f));
-    if (migrationFile) {
-      const sqlText = fs.readFileSync(path.resolve(process.cwd(), 'drizzle', migrationFile), 'utf8');
-      for (let run = 0; run < 2; run++) for (const stmt of sqlText.split('--> statement-breakpoint')) await pool.query(stmt);
-    } else {
-      wrong.push('migration *_retired_rule_actions.sql not found');
-    }
-    const after = await orm.select({ id: eventActionRules.id, isActive: eventActionRules.isActive }).from(eventActionRules).where(inArray(eventActionRules.id, [wfId, smsId, keepId]));
-    const activeOf = (rid: number) => after.find(r => r.id === rid)?.isActive;
-    if (activeOf(wfId) !== 0 || activeOf(smsId) !== 0 || activeOf(keepId) !== 1) wrong.push(`after migration active: wf ${activeOf(wfId)}, sms ${activeOf(smsId)}, audit ${activeOf(keepId)}`);
-    if (migrationFile) {
-      const recorded = await pool.query('SELECT rule_id, action_type, was_active FROM event_action_rule_retirements WHERE rule_id = ANY($1::int[]) ORDER BY rule_id', [[wfId, smsId, keepId]]);
-      if (recorded.rows.length !== 2 || !recorded.rows.every((r: { was_active: number }) => r.was_active === 1)) wrong.push(`retirement rows: ${JSON.stringify(recorded.rows)}`);
-    }
+    const wfId = await insertRule('workflow_trigger', { workflowCode: 'INVOICE_APPROVAL', entityType: 'invoice', entityIdField: 'payload.documentId' }, 0);
+    const smsId = await insertRule('sms_simulation', { recipientPhoneTemplate: '09120000000', messageTemplate: 'x' }, 0);
+    const keepId = await insertRule('audit_log', { descriptionTemplate: 'kept' }, 1);
 
     // 2. the health check lists them
     const healthModule = await import('../../services/events/retiredRuleActionHealth.js').catch(() => null);
@@ -108,7 +91,7 @@ export async function runRetiredRuleActionTests(shouldRun: (id: string, ...extra
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'migration deactivated and recorded 2 legacy rules (rerun idempotent); health lists them; create / toggle / activate refused 422, rename and conversion allowed; invalid drafts 422, valid drafts evaluated with no audit row or notification',
+      details: 'health lists the 2 stored rules of removed types and not the other rule; create / toggle / activate refused 422, rename and conversion allowed; invalid drafts 422, valid drafts evaluated with no audit row or notification',
     }));
   } catch (err) {
     results.push(makeTestCase({
@@ -117,7 +100,6 @@ export async function runRetiredRuleActionTests(shouldRun: (id: string, ...extra
     }));
   } finally {
     if (ruleIds.length > 0) {
-      await pool.query('DELETE FROM event_action_rule_retirements WHERE rule_id = ANY($1::int[])', [ruleIds]).catch(() => undefined);
       await orm.delete(eventActionRules).where(inArray(eventActionRules.id, ruleIds)).catch(() => undefined);
     }
   }

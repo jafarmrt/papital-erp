@@ -35,10 +35,10 @@ describe('migrations_folder_of_the_built_server_o1', () => {
   it('a built server reads only its own dist/drizzle, never the newer source drizzle/ of its working directory', () => {
     dir = mkdtempSync(path.join(tmpdir(), 'o1-'));
     const app = path.join(dir, 'app');
-    write(path.join(app, 'drizzle/0000_v3_baseline.sql'), '-- baseline');
-    write(path.join(app, 'drizzle/0136_new_release.sql'), '-- a migration of the next release, pulled before the swap');
+    write(path.join(app, 'drizzle/0000_v11_baseline.sql'), '-- baseline');
+    write(path.join(app, 'drizzle/0001_new_release.sql'), '-- a migration of the next release, pulled before the swap');
     write(path.join(app, 'dist/server.cjs'), '// the running build');
-    write(path.join(app, 'dist/drizzle/0000_v3_baseline.sql'), '-- baseline');
+    write(path.join(app, 'dist/drizzle/0000_v11_baseline.sql'), '-- baseline');
     expect(resolveMigrationsFolder(app, path.join(app, 'dist'))).toBe(path.join(app, 'dist/drizzle'));
     // a build without its own copy fails on the missing baseline instead of falling back to the source
     rmSync(path.join(app, 'dist/drizzle'), { recursive: true });
@@ -47,7 +47,7 @@ describe('migrations_folder_of_the_built_server_o1', () => {
 
   it('tsx and the tests (no bundle) keep reading the source drizzle/', () => {
     dir = mkdtempSync(path.join(tmpdir(), 'o1-'));
-    write(path.join(dir, 'drizzle/0000_v3_baseline.sql'), '-- baseline');
+    write(path.join(dir, 'drizzle/0000_v11_baseline.sql'), '-- baseline');
     expect(resolveMigrationsFolder(dir, path.join(dir, 'src/db'))).toBe(path.join(dir, 'drizzle'));
     expect(resolveMigrationsFolder(path.join(dir, 'elsewhere'), path.join(dir, 'src/db'))).toBe(path.join(dir, 'drizzle'));
     expect(resolveMigrationsFolder(ROOT, path.join(ROOT, 'src/db'))).toBe(path.join(ROOT, 'drizzle'));
@@ -184,6 +184,18 @@ describe('rollback_follows_what_the_update_did_to_the_database_o2', () => {
     expect(changed('', 136, 136)).toBe('0');
     expect(changed('', 137, 136)).toBe('unknown');
     expect(changed('', 137, null)).toBe('unknown');
+
+    // v11 (phase 4.1): one baseline entry (at the newest series-10 «when») replaced 136 entries; a later build has fewer
+    // entries than the previous one and still brings newer migrations
+    const squashed = (whens: number[]) => JSON.stringify({ entries: whens.map((when, idx) => ({ idx, when, tag: `000${idx}_m` })) });
+    write(path.join(dir, 'dist.prev/drizzle/meta/_journal.json'), journal(136));
+    write(path.join(dir, 'dist/drizzle/meta/_journal.json'), squashed([1135]));
+    const unread = () => execFileSync('bash', ['-c', `source "${path.join(ROOT, 'scripts/update-steps.sh')}"
+      update_applied_migrations_after() { echo ""; }
+      update_migrations_changed "$1"`, 'x', dir], { encoding: 'utf8' }).trim();
+    expect(unread()).toBe('0');
+    write(path.join(dir, 'dist/drizzle/meta/_journal.json'), squashed([1135, 2000]));
+    expect(unread()).toBe('unknown');
   });
 });
 

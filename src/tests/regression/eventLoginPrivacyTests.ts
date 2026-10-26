@@ -1,5 +1,3 @@
-import fs from 'fs';
-import path from 'path';
 import request from 'supertest';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { orm, pool } from '../../db/drizzle.js';
@@ -12,7 +10,7 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 
 /**
  * 10.3 package 5 (event and login privacy, decisions ت۴۷ items 3 to 5): the cheque status event carries no amount or
- * party name and the stored old event rows are masked (migration 0135), rules that read those fields are listed by the
+ * party name (the stored old event rows were masked by migration 0135, now folded into the v11 baseline), rules that read those fields are listed by the
  * health check, ended sign-in sessions older than 90 days are purged, and a change of the treasury high-value
  * threshold writes its own activity row and notifies the other system admins, while the default is never written.
  * Each case is red on v10.3.19.
@@ -35,12 +33,6 @@ async function runCase(results: TestCaseResult[], id: string, name: string, body
       error: err instanceof Error ? err.message : String(err),
     }));
   }
-}
-
-async function runMigration0135(): Promise<void> {
-  const file = path.join(process.cwd(), 'drizzle', '0135_event_privacy_settings_notice.sql');
-  const statements = fs.readFileSync(file, 'utf8').split('--> statement-breakpoint').map(s => s.trim()).filter(Boolean);
-  await orm.transaction(async (tx) => { for (const s of statements) await tx.execute(sql.raw(s)); });
 }
 
 async function adminClient() {
@@ -83,55 +75,14 @@ export async function runEventLoginPrivacyTests(shouldRun: ShouldRun): Promise<T
   }
 
   const maskId = 'reg_event_queue_masked_migration_0135_10_3_package5';
-  if (shouldRun(maskId, 'package5', 'migration', 'event', 'privacy', 'outbox')) {
-    await runCase(results, maskId, 'v10.3.20: migration 0135 removes the amount, description, reason and remaining balance of old treasury events and the amount and party name of old cheque events from the outbox, the dead letter queue and the delivery jobs, keeps every row and every other key, and lets a user keep the settings notice out of the messenger (10.3 package 5)', async () => {
-      const tag = tagOf();
-      const treasury = { transactionId: 1, type: 'withdrawal', amount: 911_000, currency: 'IRR', accountId: 2, accountName: 'بانک', description: 'شرح محرمانه', reason: 'دلیل', remainingAmount: 5 };
-      const cheque = { chequeId: 3, newStatus: 'passed', amount: 922_000, partyType: 'customer', partyId: 4, partyName: PARTY_NAME, currency: 'IRR' };
-      const invoice = { documentId: 5, totalAmount: 933_000, amount: 933_000, buyerName: 'خریدار' };
-      const outbox = await orm.execute(sql`INSERT INTO outbox_events (event_id, event_type, aggregate_type, aggregate_id, status, payload) VALUES
-        (${`m135t_${tag}`}, 'TreasuryTransactionApproved', 'Treasury', ${tag}, 'completed', ${JSON.stringify(treasury)}::jsonb),
-        (${`m135c_${tag}`}, 'ChequeStatusChanged', 'Cheque', ${tag}, 'failed', ${JSON.stringify(cheque)}::jsonb),
-        (${`m135i_${tag}`}, 'InvoiceApproved', 'Document', ${tag}, 'completed', ${JSON.stringify(invoice)}::jsonb) RETURNING id`);
-      await orm.execute(sql`INSERT INTO dead_letter_events (original_event_id, event_type, aggregate_type, aggregate_id, payload, failure_reason)
-        VALUES (${`m135d_${tag}`}, 'ChequeStatusChanged', 'Cheque', ${tag}, ${JSON.stringify(cheque)}::jsonb, 'test')`);
-      const job = { eventId: `m135j_${tag}`, eventType: 'TreasuryTransactionApproved', payload: treasury, metadata: {} };
-      await orm.execute(sql`INSERT INTO integration_delivery_jobs (kind, target_id, event_id, event_type, event, status)
-        VALUES ('webhook', 999999, ${`m135j_${tag}`}, 'TreasuryTransactionApproved', ${JSON.stringify(job)}::jsonb, 'succeeded')`);
-      try {
-        await runMigration0135();
-        await runMigration0135();
-        const read = async (q: ReturnType<typeof sql>) => ((await orm.execute(q)).rows as Array<{ p: Record<string, unknown> }>).map(r => r.p);
-        const [t] = await read(sql`SELECT payload AS p FROM outbox_events WHERE event_id = ${`m135t_${tag}`}`);
-        const [c] = await read(sql`SELECT payload AS p FROM outbox_events WHERE event_id = ${`m135c_${tag}`}`);
-        const [i] = await read(sql`SELECT payload AS p FROM outbox_events WHERE event_id = ${`m135i_${tag}`}`);
-        const [d] = await read(sql`SELECT payload AS p FROM dead_letter_events WHERE original_event_id = ${`m135d_${tag}`}`);
-        const [j] = await read(sql`SELECT event AS p FROM integration_delivery_jobs WHERE event_id = ${`m135j_${tag}`}`);
-        const problems: string[] = [];
-        const keysOf = (o: Record<string, unknown> | undefined) => Object.keys(o ?? {}).sort().join(',');
-        if (keysOf(t) !== 'accountId,accountName,currency,transactionId,type') problems.push(`outbox treasury keys ${keysOf(t)}`);
-        if (keysOf(c) !== 'chequeId,currency,newStatus,partyId,partyType') problems.push(`outbox cheque keys ${keysOf(c)}`);
-        if (keysOf(d) !== 'chequeId,currency,newStatus,partyId,partyType') problems.push(`dead letter cheque keys ${keysOf(d)}`);
-        if (keysOf(j?.payload as Record<string, unknown>) !== 'accountId,accountName,currency,transactionId,type' || j?.eventId !== `m135j_${tag}`) {
-          problems.push(`delivery job ${JSON.stringify(j).slice(0, 200)}`);
-        }
-        if (keysOf(i) !== keysOf(invoice) || Number(i?.amount) !== 933_000) problems.push(`the invoice event changed: ${JSON.stringify(i)}`);
-        const kept = await pool.query(`SELECT status FROM outbox_events WHERE event_id = ANY($1::text[]) ORDER BY event_id`, [[`m135c_${tag}`, `m135i_${tag}`, `m135t_${tag}`]]);
-        if (kept.rows.map(r => r.status).join(',') !== 'failed,completed,completed') problems.push(`outbox rows ${JSON.stringify(kept.rows)}`);
-        const log = await pool.query(`SELECT details FROM activity_logs WHERE entity_id = '0135' AND entity = 'رویدادهای سامانه' ORDER BY id DESC LIMIT 1`);
-        if (!log.rows[0]) problems.push('no activity row recorded the masking');
-
-        const user = await createTestUser({ role: 'admin' });
-        await pool.query(`INSERT INTO user_notification_preferences (user_id, category, send_to_messenger) VALUES ($1, 'settings_change', 0)`, [user.id])
-          .catch((err: unknown) => problems.push(`a settings_change preference was refused: ${err instanceof Error ? err.message : String(err)}`));
-        if (problems.length) throw new Error(problems.join(' | '));
-        return 'old treasury and cheque rows masked in all three tables, other events and statuses unchanged, twice is a no-op';
-      } finally {
-        const ids = (outbox.rows as Array<{ id: number }>).map(r => r.id);
-        await pool.query('DELETE FROM outbox_events WHERE id = ANY($1::int[])', [ids]);
-        await pool.query('DELETE FROM dead_letter_events WHERE original_event_id = $1', [`m135d_${tag}`]);
-        await pool.query('DELETE FROM integration_delivery_jobs WHERE event_id = $1', [`m135j_${tag}`]);
-      }
+  if (shouldRun(maskId, 'package5', 'event', 'privacy', 'settings')) {
+    await runCase(results, maskId, 'v10.3.20: a user can keep the settings change notice out of the messenger (10.3 package 5)', async () => {
+      const problems: string[] = [];
+      const user = await createTestUser({ role: 'admin' });
+      await pool.query(`INSERT INTO user_notification_preferences (user_id, category, send_to_messenger) VALUES ($1, 'settings_change', 0)`, [user.id])
+        .catch((err: unknown) => problems.push(`a settings_change preference was refused: ${err instanceof Error ? err.message : String(err)}`));
+      if (problems.length) throw new Error(problems.join(' | '));
+      return 'a settings_change preference without the messenger is stored';
     });
   }
 
