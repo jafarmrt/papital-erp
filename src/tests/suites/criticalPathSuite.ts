@@ -7,6 +7,7 @@ import { orm } from '../../db/drizzle.js';
 import { sql } from 'drizzle-orm';
 import { journalVoucherItems, journalVouchers, cheques, documents, documentItems, transactions, items } from '../../db/schema.js';
 import { eq, inArray } from 'drizzle-orm';
+import { closeDocumentWorkflow } from '../fixtures/documentWorkflow.js';
 
 function extractId(body: any): number | undefined {
   const raw = body?.id ?? body?.docId ?? body?.data?.id ?? body?.data?.docId ?? body?.voucher?.id ?? body?.document?.id;
@@ -161,6 +162,8 @@ export async function runCriticalPathTests(): Promise<TestCaseResult[]> {
       const docId = extractId(createRes.body);
       if (!docId) throw new Error('document id was not returned');
 
+      // v11 phase 6.1p (C2): the draft entered the approval workflow; the direct finalize applies once it is closed
+      await closeDocumentWorkflow(docId);
       // 10 concurrent finalize requests — only one must apply the stock movement
       const promises: any[] = [];
       for (let i = 0; i < 10; i++) {

@@ -2,6 +2,7 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 import { createHarness, type Harness, type ShouldRun } from '../security/workflowTestHarness.js';
 import { brief, docVersion, fixture } from './documentEntryTests.js';
 import { proformaInvoiceNote } from '../../lib/documents/proformaInvoiceNote.js';
+import { closeDocumentWorkflow } from '../fixtures/documentWorkflow.js';
 
 /**
  * Series 10 phase 3, lane L2 PR B2 (owner decisions ت۶ الف, ت۷ الف and TD-972 «بله»): the balance of an invoice with
@@ -137,6 +138,7 @@ async function proformaInvoiceFinalizeDateCase(h: Harness, wrong: string[]): Pro
   const before = await head(id);
   if (before.type !== 'invoice' || before.status !== 'proforma') throw new Error(`setup: the proforma is ${before.type}/${before.status}, expected invoice/proforma`);
 
+  await closeDocumentWorkflow(id);
   const finalized = await h.put(`/api/documents/${id}/finalize`, {});
   const after = await head(id);
   if (finalized.status !== 200) wrong.push(`finalizing the proforma answered ${brief(finalized)}, expected 200`);

@@ -1,6 +1,7 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { createHarness, type Harness, type ShouldRun } from '../security/workflowTestHarness.js';
 import { brief, fixture } from './documentEntryTests.js';
+import { closeDocumentWorkflow } from '../fixtures/documentWorkflow.js';
 
 /**
  * Package 15 (events and integrations), TD-713 / B15-11: the sales and purchase document events carry the document's
@@ -51,6 +52,7 @@ export async function runDocumentEventAmountTests(shouldRun: ShouldRun): Promise
 
     // 3) a draft finalized later: the finalize event carries the amount too
     const draftId = await record('draft invoice', f.doc('invoice', 'draft', [{ itemId: item, quantity: 3, unit_price: 500, location: f.wh }], { vatPercent: 10 }));
+    await closeDocumentWorkflow(draftId);
     const finalized = await h.put(`/api/documents/${draftId}/finalize`, {});
     if (finalized.status !== 200) wrong.push(`finalize: ${brief(finalized)}`);
     else expectAmounts('finalized invoice', await eventOf(draftId, 'InvoiceApproved'), { totalAmount: 1_650, netAmount: 1_500, vatAmount: 150, totalAmountIrr: 1_650 });

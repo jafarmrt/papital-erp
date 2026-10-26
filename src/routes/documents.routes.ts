@@ -7,6 +7,7 @@ import { findFinalDocumentIdByRef } from '../services/documents/documentRefLooku
 import { documentAuditDetails, documentAuditSnapshot, documentLineSummary } from '../services/documents/documentAudit.js';
 import { proformaStockWarnings } from '../services/documents/documentSellableGate.js';
 import { documentLineStock } from '../services/documents/documentSellableGate.js';
+import { assertDocumentWorkflowClosed } from '../services/documents/documentOpenWorkflow.js';
 import { recordedSalesType } from '../lib/documents/recordedSalesType.js';
 import { DOCUMENT_TYPE_TITLES } from '../lib/documents/documentTypeTitles.js';
 import { isAutoRefNumber } from '../lib/documents/documentRefRules.js';
@@ -19,7 +20,6 @@ import { validate, paramsIdSchema, numericIdString, storageDateParam, decimalInp
 import { idempotency } from '../middleware/idempotency.js';
 import { DocumentService } from '../services/document.service.js';
 import { WorkflowEngineService } from '../services/workflow/workflowEngineService.js';
-import { terminateOpenWorkflows } from '../services/workflow/workflowTermination.js';
 import { needsApprovalWorkflow } from '../services/documents/documentApprovalScope.js';
 import { NotFoundError, ForbiddenError, ValidationError } from '../errors/customErrors.js';
 import { extractClientIp, logActivity } from '../lib/auditLogger.js';
@@ -483,9 +483,11 @@ router.put('/documents/:id/finalize', authorizePermission('documents.finalize', 
   const parsedVatPercent = vatPercent !== undefined && vatPercent !== null ? Number(vatPercent) : undefined;
 
   const allowBackdate = await userHasRoleOrPermission(req.user, BACKDATE_PERMISSION);
-  // v9.0.39 (TD-446، ت۴): سندی که بیرون از گردش کار قطعی می‌شود، فرایند تأیید در جریانش در همان تراکنش بسته می‌شود
-  // (پیش‌تر ویجت سندِ قطعی «پیش‌نویس اولیه» نشان می‌داد و کارهایش در کارتابل می‌ماند)
+  // v11 phase 6.1پ (C2, ت۵۲-۴): a document whose approval workflow is running is finalized only from the inbox (409
+  // DOCUMENT_WORKFLOW_OPEN). Before (v9.0.39, TD-446), finalizing here closed the running instance and skipped its steps.
+  const documentLabel = `${docTypeTitles[storedType] ?? 'سند'} «${beforeDoc.refNumber || docId}»`;
   await idempotentTransaction(async (tx) => {
+    await assertDocumentWorkflowClosed(tx, docId, documentLabel);
     const change = await DocumentService.finalizeDocument(docId, user, tx, {
       vatAmount: !isNaN(Number(parsedVatAmount)) ? parsedVatAmount : undefined,
       vatPercent: !isNaN(Number(parsedVatPercent)) ? parsedVatPercent : undefined,
@@ -493,10 +495,8 @@ router.put('/documents/:id/finalize', authorizePermission('documents.finalize', 
       // v8.0.4 (TD-257): نهایی‌سازی پیش‌نویسِ با تاریخ پیش از آخرین گردش کالا فقط با مجوز
       allowBackdate,
     });
-    await terminateOpenWorkflows(tx, {
-      entityType: 'document', entityId: docId, actionKey: 'terminate', actionTitle: 'بستن فرایند سند قطعی',
-      comment: 'سند بیرون از گردش کار قطعی شد', userId: req.user?.id, userName: req.user?.full_name || req.user?.username,
-    });
+    // again under the document lock finalize took: a workflow started meanwhile (entity, then instance) is seen here
+    await assertDocumentWorkflowClosed(tx, docId, documentLabel);
     // V10-2.2 (TD-020): سند دوبل حسابداری به صورت اتمیک درون تراکنش DocumentService.finalizeDocument صادر/به‌روزرسانی می‌شود
     // v9.0.337 (TD-785): ردیف ممیزی درون همین تراکنش با سند پیش و پس از نهایی‌سازی؛ سندی که از پیش قطعی بود ردیفی نمی‌گیرد
     if (change) {

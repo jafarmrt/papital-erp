@@ -35,8 +35,8 @@ export async function runWorkflowLifecycleTests(shouldRun: ShouldRun): Promise<T
   if (shouldRun('sec_workflow_document_auto_start_td_446', 'security', 'td446', 'workflow', 'package14')) {
     await runCase(results, {
       id: 'sec_workflow_document_auto_start_td_446',
-      name: 'v9.0.39: only a draft or proforma sales document enters the approval workflow, in its create transaction; the workflow instance of a final document is closed (TD-446)',
-      details: 'A final receipt and invoice and a draft receipt get no instance; a proforma and a draft invoice get one; finalizing outside the workflow closes the instance of the final document and its pending tasks',
+      name: 'v9.0.39: only a draft or proforma sales document enters the approval workflow, in its create transaction; v11 phase 6.1p: a document with a running instance is finalized only from the inbox (TD-446, C2)',
+      details: 'A final receipt and invoice and a draft receipt get no instance; a proforma and a draft invoice get one; a direct finalize of the draft invoice is 409 DOCUMENT_WORKFLOW_OPEN naming the step and leaves the document, the instance and its tasks alone; once the instance is closed the direct finalize goes through',
     }, async (h, wrong) => {
       for (const [label, body] of [
         ['رسید قطعی', { docType: 'receipt', inOut: 'in', status: 'final' }],
@@ -55,14 +55,28 @@ export async function runWorkflowLifecycleTests(shouldRun: ShouldRun): Promise<T
         if (inst.length !== 1 || inst[0].status !== 'IN_PROGRESS') wrong.push(`${label} got ${JSON.stringify(inst)}, not one running instance`);
       }
 
-      // قطعی‌سازی بیرون از گردش کار: فرایند بسته و کارها لغو
+      // v11 phase 6.1p (C2, decision t52-4): a running workflow is not skipped; the document waits for its inbox step.
+      // Before, this finalize closed the instance and canceled its tasks.
+      const [running] = await instancesOf(h, 'document', draftId);
+      const [step] = await h.q(`SELECT s.title FROM workflow_instances i JOIN workflow_states s ON s.id = i.current_state_id WHERE i.id = $1`, [running?.id]);
+      const refused = await h.put(`/api/documents/${draftId}/finalize`, {});
+      if (refused.status !== 409 || refused.body?.code !== 'DOCUMENT_WORKFLOW_OPEN') {
+        wrong.push(`Finalizing the draft invoice under a running workflow returned ${refused.status} ${JSON.stringify(refused.body).slice(0, 160)}, expected 409 DOCUMENT_WORKFLOW_OPEN`);
+      } else if (step?.title && !String(refused.body?.error ?? '').includes(String(step.title))) {
+        wrong.push(`The refusal does not name the current step: ${String(refused.body?.error).slice(0, 160)}`);
+      }
+      const [afterRefusal] = await instancesOf(h, 'document', draftId);
+      if (afterRefusal?.status !== 'IN_PROGRESS') wrong.push(`The refused finalize left the instance ${String(afterRefusal?.status)}, not IN_PROGRESS`);
+      if (running && (await pendingTasksOf(h, Number(running.id))).length === 0) wrong.push('The refused finalize canceled the pending tasks');
+      const [stillDraft] = await h.q(`SELECT status FROM documents WHERE id = $1`, [draftId]);
+      if (stillDraft?.status !== 'draft') wrong.push(`The refused finalize left the document ${String(stillDraft?.status)}, not draft`);
+
+      // an instance that no longer runs (here closed by hand) leaves the direct finalize as before
+      await h.q(`UPDATE workflow_instances SET status = 'TERMINATED' WHERE id = $1`, [running?.id]);
       const fin = await h.put(`/api/documents/${draftId}/finalize`, {});
-      if (fin.status !== 200) wrong.push(`Finalizing the draft invoice returned ${fin.status}: ${JSON.stringify(fin.body).slice(0, 160)}`);
-      const [closed] = await instancesOf(h, 'document', draftId);
-      if (closed?.status !== 'TERMINATED') wrong.push(`The workflow instance of the finalized document stayed ${String(closed?.status)}, not TERMINATED`);
-      if (closed && (await pendingTasksOf(h, Number(closed.id))).length > 0) wrong.push('A pending task of the finalized document stayed in the inbox');
-      const widget = await h.get(`/api/workflow/instance/document/${draftId}`);
-      if (widget.body?.instance?.status === 'IN_PROGRESS') wrong.push('The widget showed a running instance for the final document');
+      if (fin.status !== 200) wrong.push(`Finalizing the draft invoice after its workflow closed returned ${fin.status}: ${JSON.stringify(fin.body).slice(0, 160)}`);
+      const [finalDoc] = await h.q(`SELECT status FROM documents WHERE id = $1`, [draftId]);
+      if (finalDoc?.status !== 'final') wrong.push(`The document is ${String(finalDoc?.status)} after the direct finalize, not final`);
     });
   }
 

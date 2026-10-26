@@ -2,6 +2,7 @@ import type { TestCaseResult } from '../types.js';
 import type { Harness, ShouldRun } from '../security/workflowTestHarness.js';
 import { brief, fixture } from './documentEntryTests.js';
 import { createProject, globalSection, postDoc, reservedOf, runReservationCases, storedReservation } from './stockReservationTests.js';
+import { closeDocumentWorkflow } from '../fixtures/documentWorkflow.js';
 
 /**
  * Series 9 phase 5 (closing review), PR «الف»: the side paths that move project stock — material allocation, its release
@@ -74,6 +75,7 @@ async function allocationSellableGateCase(h: Harness, wrong: string[]): Promise<
   const takeH = await allocate(p2, hItem, 5);
   if (takeH.status !== 400 || takeH.body?.code !== 'INSUFFICIENT_STOCK') wrong.push(`allocating the 5 units a sales proforma holds answered ${brief(takeH)}, expected 400 INSUFFICIENT_STOCK`);
   if (!errorText(takeH.body).includes('رزرو')) wrong.push(`the refusal does not name the reservation: ${errorText(takeH.body).slice(0, 160)}`);
+  await closeDocumentWorkflow(Number(proforma.body?.docId));
   const finalize = await h.put(`/api/documents/${Number(proforma.body?.docId)}/finalize`, {});
   if (finalize.status !== 200) wrong.push(`finalizing the sales proforma after the refused allocation answered ${brief(finalize)}, expected 200`);
 
