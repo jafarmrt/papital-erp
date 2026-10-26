@@ -411,6 +411,14 @@ export class WorkflowTransitionExecutor {
   }
 
   /**
+   * v9.0.37 (TD-455): starts of one entity queue behind this transaction lock until the caller's transaction ends.
+   * v11 phase 6.3a (review 5 of #406): exported so a caller can see under it whether the start finds an open instance.
+   */
+  static async lockEntityStart(tx: DbClient, entityType: string, entityId: string): Promise<void> {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${ROW_ADVISORY_LOCK_NAMESPACES.WORKFLOW_ENTITY_START}::int, hashtext(${`${entityType}:${entityId}`}::text))`);
+  }
+
+  /**
    * Start a new workflow instance with immutable snapshot DSL from explicit published version
    */
   static async startInstance(params: {
@@ -467,7 +475,7 @@ export class WorkflowTransitionExecutor {
       // v9.0.37 (TD-455): شروع‌های هم‌زمان یک موجودیت پشت هم می‌آیند (قفل تراکنشی تا پایان تراکنش فراخواننده) و فرایند
       // در جریانِ هر تعریفی دیده می‌شود؛ شاخص یکتای جزئی uq_workflow_instances_open_entity (مهاجرت 0056) پشتوانه است.
       // پیش‌تر بررسی سپس درج بی قفل بود و شش شروع هم‌زمان دو فرایند در جریان می‌ساخت.
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(${ROW_ADVISORY_LOCK_NAMESPACES.WORKFLOW_ENTITY_START}::int, hashtext(${`${params.entityType}:${String(params.entityId)}`}::text))`);
+      await WorkflowTransitionExecutor.lockEntityStart(tx, params.entityType, String(params.entityId));
       const [existing] = await tx.select().from(workflowInstances).where(and(
         eq(workflowInstances.entityType, params.entityType),
         eq(workflowInstances.entityId, String(params.entityId)),

@@ -237,6 +237,49 @@ export async function runPurchaseWorkflowGuardTests(shouldRun: ShouldRun): Promi
     }));
   }
 
+  if (shouldRun('reg_lazy_requisition_start_notice_quorum_v11_6_3a_u10', 'u10', 'workflow', 'procurement', 'notice')) {
+    await runCase(results, 'reg_lazy_requisition_start_notice_quorum_v11_6_3a_u10', 'v11 phase 6.3a (review 5 of #406, U10): when the approval that starts a missing workflow instance leaves the first step open (it wants two signatures), the held notice of that step reaches the other approver, not the approver who signed', () => inFiscalSandbox(async () => {
+      await WorkflowEngineService.seedDefaultWorkflows();
+      const [definition] = await orm.select().from(workflowDefinitions)
+        .where(and(eq(workflowDefinitions.entityType, 'purchase_requisition'), eq(workflowDefinitions.isActive, 1)))
+        .orderBy(asc(workflowDefinitions.id)).limit(1);
+      expect(Boolean(definition), 'no active purchase requisition workflow');
+      // the approval of the first step wants two signatures, in the step tables and in a published version made from them
+      await orm.update(workflowTransitions).set({ approvalRuleType: 'K_OF_N', kValue: 2 })
+        .where(and(eq(workflowTransitions.workflowDefinitionId, definition.id), eq(workflowTransitions.actionKey, 'approve_request')));
+      await pool.query(`UPDATE workflow_definition_versions v
+        SET dsl_json = jsonb_set(v.dsl_json, '{transitions}', (SELECT jsonb_agg(CASE WHEN t ->> 'actionKey' = 'approve_request'
+          THEN t || '{"approvalRuleType": "K_OF_N", "kValue": 2}'::jsonb ELSE t END) FROM jsonb_array_elements(v.dsl_json -> 'transitions') t))
+        WHERE v.definition_id = $1 AND v.status = 'published'`, [definition.id]);
+
+      const keys = ['procurement.view', 'procurement.create', 'procurement.approve', 'procurement.order'];
+      const maker = await clientWith(keys);
+      const checker = await clientWith([...keys, 'workflow.approve']);
+      const otherApprover = await clientWith([...keys, 'workflow.approve']);
+      const created = await maker.post('/api/procurement/requisitions', {
+        title: 'Lazy instance quorum notice test', priority: 'normal',
+        items: [{ itemName: 'Quorum notice test service', unit: 'عدد', requestedQty: 1, unitPriceEstimate: 1000 }],
+      });
+      expect(created.status === 201, `requisition create returned ${brief(created)}`);
+      const id = Number(created.body?.data?.id);
+      const [row] = await orm.select().from(purchaseRequisitions).where(eq(purchaseRequisitions.id, id));
+      await orm.update(workflowInstances).set({ status: 'TERMINATED' }).where(eq(workflowInstances.id, Number(row.workflowInstanceId)));
+      await orm.update(purchaseRequisitions).set({ workflowInstanceId: null }).where(eq(purchaseRequisitions.id, id));
+
+      const taskNotices = async () => Promise.all([checker, otherApprover, maker].map(async client =>
+        Number((await pool.query(`SELECT count(*)::int AS n FROM notifications WHERE user_id = $1 AND type = 'task'`, [client.userId])).rows[0]?.n ?? 0)));
+      const [checkerBefore, otherBefore, makerBefore] = await taskNotices();
+      const signed = await checker.post(`/api/procurement/requisitions/${id}/workflow-action`, { actionKey: 'approve_request' });
+      expect(signed.status === 200, `the first signature returned ${brief(signed)}`);
+      expect(await stepOf(id) === 'pending', 'the first of two signatures moved the requisition on');
+      const [checkerAfter, otherAfter, makerAfter] = await taskNotices();
+      expect(otherAfter === otherBefore + 1, `the other approver got ${otherAfter - otherBefore} notices of the open first step, expected 1`);
+      expect(checkerAfter === checkerBefore, `the approver who signed got ${checkerAfter - checkerBefore} notices of the step they signed`);
+      expect(makerAfter === makerBefore, `the requester got ${makerAfter - makerBefore} task notices`);
+      return 'first of two signatures: step still open, the other approver told once, the signer and the requester not';
+    }));
+  }
+
   if (shouldRun('reg_requisition_mark_published_design_v11_6_3a_u10', 'u10', 'workflow', 'procurement')) {
     await runCase(results, 'reg_requisition_mark_published_design_v11_6_3a_u10', 'v11 phase 6.3a (review 4 of #406, U10): the initiator mark of a requisition without a workflow instance follows the published design, as its start does, not a draft saved in the designer', () => inFiscalSandbox(async () => {
       await WorkflowEngineService.seedDefaultWorkflows();

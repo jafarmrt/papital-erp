@@ -73,13 +73,23 @@ export interface RequisitionInstance {
  * An older requisition with no requester (`requestedById` empty) starts with no initiator, so no approver is left out (and
  * a step only its initiator may take is then left to the system admin). The caller acts on the instance in the same
  * transaction, so the task-arrived notice of the first step waits for `sendStartNotice` after that action: it goes only
- * for the first-step tasks still open (a step the action finished is not announced), never to `actorId`.
+ * for the first-step tasks still open (a step the action finished is not announced), never to `actorId`, and only for an
+ * instance started here (review 5 of #406: an open instance the requisition row lost the link to was announced when it
+ * started, so it is linked again with no notice).
  */
-export async function ensureRequisitionInstance(tx: DbExecutor, req: RequisitionFlowRow, actorId?: number): Promise<RequisitionInstance> {
-  if (req.workflowInstanceId) return { instanceId: req.workflowInstanceId, sendStartNotice: async () => undefined };
+export async function ensureRequisitionInstance(tx: DbTransaction, req: RequisitionFlowRow, actorId?: number): Promise<RequisitionInstance> {
+  const noNotice = async () => undefined;
+  if (req.workflowInstanceId) return { instanceId: req.workflowInstanceId, sendStartNotice: noNotice };
   const [requester] = req.requestedById
     ? await tx.select({ id: users.id, username: users.username }).from(users).where(eq(users.id, req.requestedById))
     : [];
+  // under the start lock `startInstance` takes too, so no other start comes between this read and the start
+  await WorkflowTransitionExecutor.lockEntityStart(tx, 'purchase_requisition', String(req.id));
+  const [open] = await tx.select({ id: workflowInstances.id }).from(workflowInstances).where(and(
+    eq(workflowInstances.entityType, 'purchase_requisition'),
+    eq(workflowInstances.entityId, String(req.id)),
+    eq(workflowInstances.status, 'IN_PROGRESS'),
+  ));
   const started = await WorkflowTransitionExecutor.startInstance({
     entityType: 'purchase_requisition',
     entityId: String(req.id),
@@ -90,28 +100,27 @@ export async function ensureRequisitionInstance(tx: DbExecutor, req: Requisition
   });
   req.workflowInstanceId = started.id;
   await tx.update(purchaseRequisitions).set({ workflowInstanceId: started.id }).where(eq(purchaseRequisitions.id, req.id));
+  if (open?.id === started.id) return { instanceId: started.id, sendStartNotice: noNotice };
   const pendingTasks = () => tx.select().from(workflowTasks)
     .where(and(eq(workflowTasks.instanceId, started.id), eq(workflowTasks.status, 'pending')));
   const startTaskIds = new Set((await pendingTasks()).map(task => task.id));
   return {
     instanceId: started.id,
     sendStartNotice: async () => {
-      const open = (await pendingTasks()).filter(task => startTaskIds.has(task.id));
-      if (open.length > 0) await notifyWorkflowTasksArrived(tx as DbTransaction, started.id, open, { actorUserId: actorId });
+      const stillOpen = (await pendingTasks()).filter(task => startTaskIds.has(task.id));
+      if (stillOpen.length > 0) await notifyWorkflowTasksArrived(tx, started.id, stillOpen, { actorUserId: actorId });
     },
   };
 }
 
 /**
- * نمونه گردش‌کار درخواست (زیر قفل ردیف درخواست که فراخواننده گرفته است) و گام جاری‌اش؛ درخواستی که نمونه ندارد
- * (`ensureRequisitionInstance`) در همین تراکنش نمونه می‌گیرد.
+ * نمونه گردش‌کار درخواست (زیر قفل ردیف درخواست که فراخواننده گرفته است) و گام جاری‌اش. v11 phase 6.3a (review 5 of
+ * #406): it only reads; the caller starts a missing instance first with `ensureRequisitionInstance`, in the requester's
+ * name and with its own notice, so a read never starts one without its acting user.
  */
 export async function requisitionFlow(tx: DbExecutor, req: RequisitionFlowRow): Promise<RequisitionFlow> {
-  // a caller that acts on the flow starts a missing instance itself first (`ensureRequisitionInstance`); one started here
-  // is not acted on, so its notice goes at once
-  const { instanceId, sendStartNotice } = await ensureRequisitionInstance(tx, req);
-  await sendStartNotice();
-  const [instance] = await tx.select().from(workflowInstances).where(eq(workflowInstances.id, instanceId));
+  if (!req.workflowInstanceId) throw new ValidationError('درخواست خرید نمونه فرایند گردش کار ندارد.');
+  const [instance] = await tx.select().from(workflowInstances).where(eq(workflowInstances.id, req.workflowInstanceId));
   if (!instance) throw new ValidationError('نمونه فرایند گردش کار درخواست خرید یافت نشد.');
   const { states, transitions } = await requisitionWorkflowGraph(instance, tx);
   const step = states.find(s => s.id === instance.currentStateId);
@@ -150,7 +159,7 @@ interface ApprovalOptions {
  * «تأییدشده» (یا پس از سفارش بخشی، به «در انتظار»، A02-15) می‌نوشت، بی انتقال و بی ردیف تاریخچه.
  */
 export async function ensureRequisitionApproved(
-  tx: DbExecutor,
+  tx: DbTransaction,
   req: RequisitionFlowRow & { code: string },
   user: RequisitionActor,
   opts: ApprovalOptions,
