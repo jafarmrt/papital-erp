@@ -99,15 +99,21 @@ ATTACHMENTS_ARCHIVE="${BACKUP_BASE}_attachments.tar.gz"
 log "Restoring from: $BACKUP_FILE (mode=$RESTORE_MODE)"
 
 # v11 (phase 5.3, TD-1354): the backups belong to the service user on a new install, who could put a link or a FIFO in
-# place of a file there. Root reads them as the owner of their folder, so a link reaches only what that user may read
+# place of a file there. Root reads a backup file as the owner of its folder (the folder a link leads to) or, in a folder
+# of root's, as the owner of the file, so a link reaches only what that user may read
 as_owner() {
   local owner="$1"; shift
   if [ "$(id -u)" -eq 0 ] && [ "$owner" != root ]; then runuser -u "$owner" -- "$@"; else "$@"; fi
 }
-BACKUP_OWNER="$(stat -c %U "$(dirname "$BACKUP_FILE")")"
+backup_reader() {
+  local owner
+  owner="$(stat -L -c %U "$(dirname "$1")" 2>/dev/null || echo root)"
+  [ "$owner" != root ] || owner="$(stat -c %U "$1" 2>/dev/null || echo root)"
+  echo "$owner"
+}
 read_backup() {
   # shellcheck disable=SC2016
-  as_owner "$BACKUP_OWNER" sh -c '[ -f "$1" ] && [ ! -L "$1" ] && exec cat -- "$1"' backup "$1"
+  as_owner "$(backup_reader "$1")" sh -c '[ -f "$1" ] && [ ! -L "$1" ] && exec cat -- "$1"' backup "$1"
 }
 # end of the backup readers
 
@@ -264,11 +270,12 @@ fi
 # <dir>, so the files land where the log says. Both archives are unpacked and checked before the database is swapped,
 # so an archive that cannot be used stops the run while nothing was changed.
 # v11 (phase 5.3, TD-1354): the files belong to whoever owns <dir> (the service user of a new install), and that user
-# unpacks them: root unpacks only for a folder of root's own, from a backup of root's own. An archive holding anything
-# but folders and plain files without set-id bits is refused: a device or a set-id program unpacked by root would hand
-# root to whoever wrote the archive. Links are never followed.
+# unpacks them. The archive is read once, into a copy of this run that no one else can change, and refused when it holds
+# anything but folders and plain files without set-id bits (a device or a set-id program unpacked by root would hand
+# root to whoever wrote the archive) or more than one folder at its top. Its folder's contents go straight into the
+# unpack folder, which root then moves to <dir> itself: no name the owner could swap for a link is ever followed.
 unpack_archive() {
-  local archive="$1" dir="$2" parent unpack owner parent_owner entries
+  local archive="$1" dir="$2" parent unpack owner parent_owner copy mode
   UNPACKED=""
   [ -f "$archive" ] || return 0
   parent="$(dirname "$dir")"
@@ -276,13 +283,16 @@ unpack_archive() {
   case "$parent/" in "$UPLOADS_DIR"/*) parent="$(dirname "$UPLOADS_DIR")" ;; esac
   mkdir -p "$parent"
   parent_owner="$(stat -c %U "$parent")"
-  if [ -d "$dir" ] && [ ! -L "$dir" ]; then owner="$(stat -c %U "$dir")"; else owner="$(stat -c %U "$(dirname "$dir")")"; fi
-  if [ "$(id -u)" -eq 0 ] && [ "$owner" = root ] && [ "$BACKUP_OWNER" != root ]; then
-    fail "$dir belongs to root and $archive to ${BACKUP_OWNER}; root does not unpack an archive another user could write (give $dir to the service user: chown -R -h <user>: $dir); nothing was changed"
-  fi
-  read_backup "$archive" | tar -tvzf - > "$WORK_DIR/archive_types" || fail "cannot read $archive; nothing was changed"
+  if [ -d "$dir" ] && [ ! -L "$dir" ]; then owner="$(stat -c %U "$dir")"; mode="$(stat -c %a "$dir")"; else owner="$(stat -c %U "$(dirname "$dir")")"; mode=750; fi
+  copy="$WORK_DIR/$(basename "$archive")"
+  read_backup "$archive" > "$copy" || fail "cannot read $archive; nothing was changed"
+  tar -tvzf "$copy" > "$WORK_DIR/archive_types" || fail "cannot read $archive; nothing was changed"
   if grep -qvE '^[-d][-rwx]{9} ' "$WORK_DIR/archive_types"; then
     fail "$archive holds something other than folders and plain files (a link, a device or a set-id file); nothing was changed"
+  fi
+  tar -tzf "$copy" > "$WORK_DIR/archive_names" || fail "cannot read $archive; nothing was changed"
+  if [ "$(cut -d/ -f1 "$WORK_DIR/archive_names" | sort -u | wc -l)" -ne 1 ] || ! head -1 "$WORK_DIR/archive_types" | grep -q '^d'; then
+    fail "$archive does not hold exactly one folder; nothing was changed"
   fi
   if [ "$(id -u)" -ne 0 ] || [ "$parent_owner" = "$owner" ]; then
     unpack="$(as_owner "$owner" mktemp -d "$parent/.restore_unpack_XXXXXX")"
@@ -294,19 +304,16 @@ unpack_archive() {
     fail "$parent belongs to $parent_owner, neither root nor the owner of $dir ($owner); nothing was changed"
   fi
   UNPACK_DIRS+=("$unpack")
-  read_backup "$archive" | as_owner "$owner" tar -xzf - --no-same-owner -C "$unpack" || fail "cannot unpack $archive; nothing was changed"
-  entries="$(find "$unpack" -mindepth 1 -maxdepth 1 | wc -l)"
-  if [ "$entries" -ne 1 ] || [ ! -d "$(find "$unpack" -mindepth 1 -maxdepth 1)" ] || [ -L "$(find "$unpack" -mindepth 1 -maxdepth 1)" ]; then
-    fail "$archive does not hold exactly one folder; nothing was changed"
-  fi
-  UNPACKED="$(find "$unpack" -mindepth 1 -maxdepth 1)"
+  as_owner "$owner" tar -xzf - --no-same-owner --strip-components=1 -C "$unpack" < "$copy" || fail "cannot unpack $archive; nothing was changed"
+  as_owner "$owner" chmod "$mode" "$unpack"
+  rm -f "$copy"
+  UNPACKED="$unpack"
 }
 place_archive() {
   local archive="$1" unpacked="$2" dir="$3"
   [ -n "$unpacked" ] || return 0
   if [ -e "$dir" ] || [ -L "$dir" ]; then mv -T "$dir" "$dir.before_restore_${TIMESTAMP}"; log "Previous $(basename "$dir") kept as $dir.before_restore_${TIMESTAMP}"; fi
   mv -T "$unpacked" "$dir"
-  rmdir "$(dirname "$unpacked")"
   log "Files restored from $archive into $dir"
 }
 unpack_archive "$UPLOADS_ARCHIVE" "$UPLOADS_DIR"

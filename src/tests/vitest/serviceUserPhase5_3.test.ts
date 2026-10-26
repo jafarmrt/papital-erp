@@ -169,8 +169,19 @@ place_archive "${archive}" "$UNPACKED" "${target}"`);
     expect(fs.statSync(path.join(target, 'b.pdf')).uid).toBe(65534);
   });
 
-  it('an archive whose one entry is a link is refused', () => {
-    expect(read('scripts/restore.sh')).toContain('[ -L "$(find "$unpack" -mindepth 1 -maxdepth 1)" ]');
+  it('an archive of more than one folder is refused, and one folder is unpacked straight into the folder root moves', () => {
+    expect(read('scripts/restore.sh')).toContain('--strip-components=1 -C "$unpack" < "$copy"');
+    const dir = tmp('svc-restore-two-');
+    const uploads = path.join(dir, 'app/public/uploads');
+    fs.mkdirSync(uploads, { recursive: true });
+    const src = path.join(dir, 'src');
+    for (const d of ['uploads', 'other']) { fs.mkdirSync(path.join(src, d), { recursive: true }); fs.writeFileSync(path.join(src, d, 'a'), d); }
+    const archive = path.join(dir, 'erp_daily_1_uploads.tar.gz');
+    spawnSync('tar', ['-czf', archive, '-C', src, 'uploads', 'other']);
+    const r = unpackInto(dir, archive, uploads);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain('does not hold exactly one folder');
+    expect(fs.readdirSync(path.dirname(uploads))).toEqual(['uploads']);
   });
 
   it('an archive holding a link is refused and nothing is changed', () => {
@@ -200,7 +211,7 @@ place_archive "${archive}" "$UNPACKED" "${target}"`);
     }
   });
 
-  it.runIf(isRoot)('root does not unpack for a folder of its own an archive the service user could write, nor read a backup through a link', () => {
+  it.runIf(isRoot)('root reads a backup of the service user as that user, so a link there reaches nothing of root\'s', () => {
     const dir = tmp('svc-restore-mixed-');
     fs.chmodSync(dir, 0o755);
     const backups = path.join(dir, 'backups');
@@ -208,12 +219,8 @@ place_archive "${archive}" "$UNPACKED" "${target}"`);
     const uploads = path.join(dir, 'app/public/uploads');
     fs.mkdirSync(uploads, { recursive: true });
     const archive = archiveOf(backups, 'uploads', src => fs.writeFileSync(path.join(src, 'a.png'), 'a'));
-    spawnSync('chown', ['-R', 'nobody', backups]);
-    const mixed = unpackInto(dir, archive, uploads);
-    expect(mixed.status).toBe(1);
-    expect(mixed.stdout).toContain('root does not unpack an archive another user could write');
+    spawnSync('chown', ['-R', 'nobody', backups, uploads]);
     // the service user's archive is a link to a file only root reads: it is read as that user, so nothing comes of it
-    spawnSync('chown', ['-R', 'nobody', uploads]);
     const secret = path.join(dir, 'secret.tar.gz');
     fs.renameSync(archive, secret);
     fs.chmodSync(secret, 0o600);
