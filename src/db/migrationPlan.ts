@@ -48,8 +48,9 @@ export interface SquashedMigrationHistory {
  * folded migration has the baseline; one that ran only some of them (an install older than `lastVersion`) is refused,
  * since this build no longer carries the migrations it lacks and the baseline would run on its existing tables. The
  * baseline's own row (a database installed from it) shares the newest folded `when`: it is the row at that `when` with
- * the baseline's hash, or with any hash when no other folded migration ran (a baseline amended after release, or its
- * text read with other line endings, still marks the database as installed from it).
+ * the baseline's hash, or with another hash that is not the newest folded migration's when no other folded migration ran
+ * (a baseline amended after release, or its text read with other line endings, still marks the database as installed
+ * from it).
  */
 export function foldSquashedHistory(
   entries: MigrationJournalEntry[],
@@ -59,8 +60,9 @@ export function foldSquashedHistory(
   const baseline = entries.find(e => e.tag === history.baselineTag);
   const folded = new Map(history.migrations.map(([tag, when, hashes]) => [when, { tag, hashes }]));
   const ranFolded = applied.some(r => folded.has(r.createdAt) && r.createdAt !== baseline?.when);
-  const isBaselineRow = (r: AppliedMigrationRow) =>
-    baseline !== undefined && r.createdAt === baseline.when && (r.hash === baseline.hash || !ranFolded);
+  const newestFoldedHashes = baseline ? folded.get(baseline.when)?.hashes ?? [] : [];
+  const isBaselineRow = (r: AppliedMigrationRow) => baseline !== undefined && r.createdAt === baseline.when
+    && (r.hash === baseline.hash || (!ranFolded && !newestFoldedHashes.includes(r.hash)));
   const old = applied.filter(r => folded.has(r.createdAt) && !isBaselineRow(r));
   if (old.length === 0 || !baseline) return { applied, errors: [], warnings: [] };
 

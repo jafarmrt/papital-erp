@@ -141,6 +141,7 @@ describe('migrations folded into a baseline (v11 phase 4.1)', () => {
     const unlisted = planMigrations(journal, fresh, new Map(), history);
     expect(unlisted.errors).toEqual([]);
     expect(unlisted.warnings.join(' ')).toContain('0000_base');
+    expect(planMigrations(journal, [oldRows[2]], new Map(), history).errors.join(' ')).toContain('1 of the 3');
   });
 });
 
